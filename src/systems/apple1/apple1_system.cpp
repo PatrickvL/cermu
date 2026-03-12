@@ -233,7 +233,7 @@ bool Apple1System::initialize() {
     // DDR left at 0x00 after init — the Woz Monitor sets DDRB = $7F
     // via STY $D012 during its boot sequence (control bit 2 = 0 → DDR mode).
     
-    setup_connector_ports();
+    setup_ports();
 
     // Register chips for the Hardware menu (transfers ownership of memory chips)
     register_chip(static_cast<ChipBase*>(cpu_),
@@ -782,32 +782,32 @@ void Apple1System::convert_2513_to_8x8_font(const uint8_t* char_rom, uint8_t* fo
 // separately sold card that plugged into the expansion slot; modeled as
 // its own port since nearly all Apple 1 setups included it).
 
-static const ConnectorDefinition apple1_expansion_def = {
-    ConnectorType::EXPANSION_PORT,
+static const PortDefinition apple1_expansion_def = {
+    PortType::EXPANSION_PORT,
     "Expansion Connector",
-    ConnectorSignals::APPLE1_EXPANSION_SIGNALS,
-    ConnectorSignals::APPLE1_EXPANSION_SIGNAL_COUNT,
+    PortSignals::APPLE1_EXPANSION_SIGNALS,
+    PortSignals::APPLE1_EXPANSION_SIGNAL_COUNT,
     false, false
 };
 
-static const ConnectorDefinition apple1_cassette_def = {
-    ConnectorType::CASSETTE_PORT,
+static const PortDefinition apple1_cassette_def = {
+    PortType::CASSETTE_PORT,
     "Cassette Interface (ACI)",
-    ConnectorSignals::APPLE1_CASSETTE_SIGNALS,
-    ConnectorSignals::APPLE1_CASSETTE_SIGNAL_COUNT,
+    PortSignals::APPLE1_CASSETTE_SIGNALS,
+    PortSignals::APPLE1_CASSETTE_SIGNAL_COUNT,
     false, false
 };
 
-void Apple1System::setup_connector_ports() {
-    connector_ports_.clear();
+void Apple1System::setup_ports() {
+    ports_.clear();
 
     // Port 0 — Expansion Connector (44-pin edge, full 6502 bus)
-    add_connector_port(apple1_expansion_def, 0);
+    add_port(apple1_expansion_def, 0);
 
     // Port 1 — Cassette Interface (ACI card, audio in/out)
-    add_connector_port(apple1_cassette_def, 0);
+    add_port(apple1_cassette_def, 0);
 
-    printf("Apple1: Created %zu connector ports\n", connector_ports_.size());
+    printf("Apple1: Created %zu ports\n", ports_.size());
 }
 
 // ============================================================================

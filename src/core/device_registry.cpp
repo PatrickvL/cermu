@@ -31,17 +31,17 @@ void DeviceRegistry::register_device(const DeviceDescriptor& descriptor, DeviceF
     devices_.emplace_back(descriptor, std::move(factory));
     printf("DeviceRegistry: Registered device '%s' (%s) for %s\n",
            descriptor.id, descriptor.name,
-           connector_type_name(descriptor.connector_type));
+           port_type_name(descriptor.port_type));
 }
 
 // ============================================================================
 // QUERIES
 // ============================================================================
 
-std::vector<const DeviceDescriptor*> DeviceRegistry::get_compatible_devices(ConnectorType type) const {
+std::vector<const DeviceDescriptor*> DeviceRegistry::get_compatible_devices(PortType type) const {
     std::vector<const DeviceDescriptor*> result;
     for (const auto& [desc, _] : devices_) {
-        if (desc.connector_type == type) {
+        if (desc.port_type == type) {
             result.push_back(&desc);
         }
     }

@@ -48,8 +48,8 @@ void Commodore1351Mouse::move(int dx, int dy) {
 
 #ifdef CERMU_HAS_GUI
 void Commodore1351Mouse::render_device_ui() {
-    bool lmb = is_signal_asserted(ConnectorSignals::JOY_FIRE);
-    bool rmb = is_signal_asserted(ConnectorSignals::JOY_UP);
+    bool lmb = is_signal_asserted(PortSignals::JOY_FIRE);
+    bool rmb = is_signal_asserted(PortSignals::JOY_UP);
 
     ImGui::Text("  POT X:%3d  Y:%3d  LMB:%s RMB:%s",
                 pot_x_, pot_y_, lmb ? "Y" : ".", rmb ? "Y" : ".");
@@ -64,7 +64,7 @@ static const DeviceDescriptor mouse_1351_descriptor = {
     "mouse_1351",
     "Commodore 1351 Mouse",
     "Commodore 1351 proportional mouse — uses SID POT inputs for position",
-    ConnectorType::CONTROL_PORT_DB9,
+    PortType::CONTROL_PORT_DB9,
     false
 };
 

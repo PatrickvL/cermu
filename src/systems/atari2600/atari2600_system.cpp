@@ -22,7 +22,7 @@
 #include "systems/atari2600/atari2600_system.hpp"
 #include "systems/atari2600/mappers/a2600_mapper_factory.hpp"
 #include "core/system_registry.hpp"
-#include "core/connector.hpp"
+#include "core/port.hpp"
 #include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <cstdio>
@@ -195,7 +195,7 @@ bool Atari2600System::initialize() {
     console_switches_ = 0xFF;  // All bits high = not pressed (active-low)
 
     // Setup connector ports for joysticks
-    setup_connector_ports();
+    setup_ports();
 
     // Register chips for debug/hardware menu
     register_chip(static_cast<ChipBase*>(cpu_),
@@ -494,7 +494,7 @@ void Atari2600System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     }
 
     // All joystick input flows through the peripheral device system
-    // (ControlPortInputDevice → ConnectorPort signals), not through keyboard events.
+    // (ControlPortInputDevice → Port signals), not through keyboard events.
 }
 
 // ============================================================================
@@ -518,25 +518,25 @@ void Atari2600System::update_joystick_state() {
     joystick_state_ = 0xFF;  // All bits high = all directions released
 
     // Player 0 (connector port 0)
-    if (connector_ports_.size() > 0) {
-        uint32_t sig0 = connector_ports_[0]->read_signals();
+    if (ports_.size() > 0) {
+        uint32_t sig0 = ports_[0]->read_signals();
         // Active-low: bit is 0 when pressed
-        if (!(sig0 & (1u << ConnectorSignals::JOY_UP)))    joystick_state_ &= ~0x10;
-        if (!(sig0 & (1u << ConnectorSignals::JOY_DOWN)))  joystick_state_ &= ~0x20;
-        if (!(sig0 & (1u << ConnectorSignals::JOY_LEFT)))  joystick_state_ &= ~0x40;
-        if (!(sig0 & (1u << ConnectorSignals::JOY_RIGHT))) joystick_state_ &= ~0x80;
+        if (!(sig0 & (1u << PortSignals::JOY_UP)))    joystick_state_ &= ~0x10;
+        if (!(sig0 & (1u << PortSignals::JOY_DOWN)))  joystick_state_ &= ~0x20;
+        if (!(sig0 & (1u << PortSignals::JOY_LEFT)))  joystick_state_ &= ~0x40;
+        if (!(sig0 & (1u << PortSignals::JOY_RIGHT))) joystick_state_ &= ~0x80;
         // Fire button → TIA INPT4 (active-low: 0=pressed, 1=not pressed)
-        tia_->read_regs_[TIA_INPT4] = (sig0 & (1u << ConnectorSignals::JOY_FIRE)) ? 0x80 : 0x00;
+        tia_->read_regs_[TIA_INPT4] = (sig0 & (1u << PortSignals::JOY_FIRE)) ? 0x80 : 0x00;
     }
 
     // Player 1 (connector port 1)
-    if (connector_ports_.size() > 1) {
-        uint32_t sig1 = connector_ports_[1]->read_signals();
-        if (!(sig1 & (1u << ConnectorSignals::JOY_UP)))    joystick_state_ &= ~0x01;
-        if (!(sig1 & (1u << ConnectorSignals::JOY_DOWN)))  joystick_state_ &= ~0x02;
-        if (!(sig1 & (1u << ConnectorSignals::JOY_LEFT)))  joystick_state_ &= ~0x04;
-        if (!(sig1 & (1u << ConnectorSignals::JOY_RIGHT))) joystick_state_ &= ~0x08;
-        tia_->read_regs_[TIA_INPT5] = (sig1 & (1u << ConnectorSignals::JOY_FIRE)) ? 0x80 : 0x00;
+    if (ports_.size() > 1) {
+        uint32_t sig1 = ports_[1]->read_signals();
+        if (!(sig1 & (1u << PortSignals::JOY_UP)))    joystick_state_ &= ~0x01;
+        if (!(sig1 & (1u << PortSignals::JOY_DOWN)))  joystick_state_ &= ~0x02;
+        if (!(sig1 & (1u << PortSignals::JOY_LEFT)))  joystick_state_ &= ~0x04;
+        if (!(sig1 & (1u << PortSignals::JOY_RIGHT))) joystick_state_ &= ~0x08;
+        tia_->read_regs_[TIA_INPT5] = (sig1 & (1u << PortSignals::JOY_FIRE)) ? 0x80 : 0x00;
     }
 
     // Write joystick state to RIOT Port A and console switches to Port B
@@ -548,32 +548,32 @@ void Atari2600System::update_joystick_state() {
 // CONNECTOR PORTS
 // ============================================================================
 
-void Atari2600System::setup_connector_ports() {
-    connector_ports_.clear();
+void Atari2600System::setup_ports() {
+    ports_.clear();
 
     // The Atari 2600 uses the same DB-9 joystick connector as Commodore systems.
-    // We use CONTROL_PORT_DB9 ConnectorType since JoystickDevice already
+    // We use CONTROL_PORT_DB9 PortType since JoystickDevice already
     // registers as compatible with this connector type.
-    static const ConnectorDefinition atari_joy_1_def = {
-        ConnectorType::CONTROL_PORT_DB9,
+    static const PortDefinition atari_joy_1_def = {
+        PortType::CONTROL_PORT_DB9,
         "Left Controller",
-        ConnectorSignals::CONTROL_PORT_SIGNALS,
-        ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT,
+        PortSignals::CONTROL_PORT_SIGNALS,
+        PortSignals::CONTROL_PORT_SIGNAL_COUNT,
         false, false
     };
 
-    static const ConnectorDefinition atari_joy_2_def = {
-        ConnectorType::CONTROL_PORT_DB9,
+    static const PortDefinition atari_joy_2_def = {
+        PortType::CONTROL_PORT_DB9,
         "Right Controller",
-        ConnectorSignals::CONTROL_PORT_SIGNALS,
-        ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT,
+        PortSignals::CONTROL_PORT_SIGNALS,
+        PortSignals::CONTROL_PORT_SIGNAL_COUNT,
         false, false
     };
 
-    add_connector_port(atari_joy_1_def, 1);  // Player 1
-    add_connector_port(atari_joy_2_def, 2);  // Player 2
+    add_port(atari_joy_1_def, 1);  // Player 1
+    add_port(atari_joy_2_def, 2);  // Player 2
 
-    printf("Atari2600: Created %zu connector ports\n", connector_ports_.size());
+    printf("Atari2600: Created %zu ports\n", ports_.size());
 
     // Attach default peripherals (joysticks) and auto-bind host inputs
     attach_default_peripherals();

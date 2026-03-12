@@ -108,9 +108,9 @@ uint32_t Drive1541Device::get_output_signals() const {
 IECBusState Drive1541Device::read_iec_bus() const {
     uint32_t signals = port_ ? port_->read_signals() : 0xFFFFFFFF;
     return {
-        !(signals & (1u << ConnectorSignals::IEC_ATN)),   // Active-low: 0 = asserted
-        !(signals & (1u << ConnectorSignals::IEC_CLK)),
-        !(signals & (1u << ConnectorSignals::IEC_DATA)),
+        !(signals & (1u << PortSignals::IEC_ATN)),   // Active-low: 0 = asserted
+        !(signals & (1u << PortSignals::IEC_CLK)),
+        !(signals & (1u << PortSignals::IEC_DATA)),
     };
 }
 
@@ -119,10 +119,10 @@ void Drive1541Device::drive_iec_lines(bool data_out, bool clk_out) {
     uint32_t new_signals = 0xFFFFFFFF;
 
     if (data_out) {
-        new_signals &= ~(1u << ConnectorSignals::IEC_DATA);  // Assert DATA (pull low)
+        new_signals &= ~(1u << PortSignals::IEC_DATA);  // Assert DATA (pull low)
     }
     if (clk_out) {
-        new_signals &= ~(1u << ConnectorSignals::IEC_CLK);   // Assert CLK (pull low)
+        new_signals &= ~(1u << PortSignals::IEC_CLK);   // Assert CLK (pull low)
     }
 
     if (new_signals != output_signals_) {
@@ -1044,7 +1044,7 @@ static const DeviceDescriptor drive_1541_descriptor = {
     "1541",
     "1541 Disk Drive",
     "Commodore 1541 floppy disk drive — connects via IEC serial bus, reads D64 images",
-    ConnectorType::IEC_SERIAL,
+    PortType::IEC_SERIAL,
     true   // Bus device: multiple can share the IEC bus
 };
 

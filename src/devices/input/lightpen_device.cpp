@@ -118,7 +118,7 @@ static const DeviceDescriptor lightpen_descriptor = {
     "lightpen",
     "Light Pen",
     "Light pen — triggers VIC-II lightpen latch at screen coordinates",
-    ConnectorType::CONTROL_PORT_DB9,
+    PortType::CONTROL_PORT_DB9,
     false
 };
 

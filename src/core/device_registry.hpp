@@ -9,11 +9,11 @@
  *
  * The registry provides:
  * - Enumeration of all registered devices
- * - Querying devices compatible with a given ConnectorType
+ * - Querying devices compatible with a given PortType
  * - Factory creation of device instances by ID
  */
 
-#include "core/connector.hpp"
+#include "core/port.hpp"
 #include <functional>
 #include <memory>
 #include <string>
@@ -31,7 +31,7 @@ struct DeviceDescriptor {
     const char*     id;             ///< Unique machine-readable ID (e.g. "joystick", "1541")
     const char*     name;           ///< Human-readable display name
     const char*     description;    ///< Brief description / tooltip text
-    ConnectorType   connector_type; ///< Required connector type
+    PortType   port_type; ///< Required connector type
     bool            is_bus_device;  ///< True if multiple instances share one bus (e.g. IEC devices)
 };
 
@@ -51,7 +51,7 @@ using DeviceFactory = std::function<std::unique_ptr<PeripheralDevice>()>;
  *
  * Usage:
  *   // Query compatible devices for a port
- *   auto devices = DeviceRegistry::instance().get_compatible_devices(ConnectorType::CONTROL_PORT_DB9);
+ *   auto devices = DeviceRegistry::instance().get_compatible_devices(PortType::CONTROL_PORT_DB9);
  *
  *   // Create a device by ID
  *   auto joy = DeviceRegistry::instance().create_device("joystick");
@@ -69,7 +69,7 @@ public:
     }
 
     /// Get all device descriptors compatible with a given connector type.
-    std::vector<const DeviceDescriptor*> get_compatible_devices(ConnectorType type) const;
+    std::vector<const DeviceDescriptor*> get_compatible_devices(PortType type) const;
 
     /// Create a device instance by its unique ID.  Returns nullptr if not found.
     std::unique_ptr<PeripheralDevice> create_device(const char* device_id) const;

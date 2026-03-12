@@ -37,11 +37,11 @@ public:
     // --- PeripheralDevice interface ------------------------------------
     const char* get_name() const override { return "NES Four Score"; }
     const char* get_id()   const override { return "nes_four_score"; }
-    ConnectorType get_connector_type() const override { return ConnectorType::CONTROLLER_NES; }
+    PortType get_port_type() const override { return PortType::CONTROLLER_NES; }
     void reset() override;
 
     // --- Lifecycle ------------------------------------------------------
-    void on_attach(ConnectorPort* port) override;
+    void on_attach(Port* port) override;
 
     // --- Signal protocol -----------------------------------------------
     void on_signal_change(uint32_t signal_state) override;

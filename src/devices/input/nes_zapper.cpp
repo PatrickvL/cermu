@@ -18,7 +18,7 @@
 #include <cstdio>
 #include <SDL_events.h>
 
-using ConnectorSignals::NESControllerBit;
+using PortSignals::NESControllerBit;
 
 // ============================================================================
 // CONSTRUCTION / RESET
@@ -126,7 +126,7 @@ static const DeviceDescriptor nes_zapper_descriptor = {
     "nes_zapper",
     "NES Zapper",
     "NES-005 light gun — detects bright pixels at aim point, trigger on mouse click",
-    ConnectorType::CONTROLLER_NES,
+    PortType::CONTROLLER_NES,
     false
 };
 

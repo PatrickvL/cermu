@@ -304,7 +304,7 @@ bool NintendoSystem<V>::initialize() {
     // Connect bus to PPU for page-pointer VRAM access
     ppu_->connect_bus(&bus_);
 
-    setup_connector_ports();
+    setup_ports();
 
     // Register chips for the Hardware menu and debug windows
     register_nes_chips();
@@ -663,9 +663,9 @@ void NintendoSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 
 template<NintendoVariant V>
 void NintendoSystem<V>::handle_controller_event(int controller, int button, bool pressed) {
-    if (controller < 0 || controller >= static_cast<int>(connector_ports_.size())) return;
+    if (controller < 0 || controller >= static_cast<int>(ports_.size())) return;
 
-    auto* dev = connector_ports_[controller]->get_attached_device();
+    auto* dev = ports_[controller]->get_attached_device();
     if (auto* pad = dynamic_cast<NesStandardController*>(dev)) {
         pad->set_button_state(static_cast<NesStandardController::Button>(button), pressed);
     }
@@ -1073,24 +1073,24 @@ void NintendoSystem<V>::tick() {
             } else if (block == nes_bus::BLOCK_APU_IO) {
                 // APU/IO registers ($4000-$4FFF)
                 if (addr == 0x4016 || addr == 0x4017) {
-                    // Controller read via ConnectorPort signal protocol.
+                    // Controller read via Port signal protocol.
                     // Read D0 from device, then pulse CLK to shift next bit.
                     // Hardware returns controller data in D0-D4, open bus
                     // (last value on data bus) in D5-D7.
                     const int p = addr & 1;  // 0 for $4016, 1 for $4017
                     uint8_t result = 0;
-                    if (p < static_cast<int>(connector_ports_.size())) {
-                        auto* dev = connector_ports_[p]->get_attached_device();
+                    if (p < static_cast<int>(ports_.size())) {
+                        auto* dev = ports_[p]->get_attached_device();
                         if (dev) {
                             uint32_t sigs = dev->get_output_signals();
                             // D0 is active-low: bit clear = button pressed → result bit 0 = 1
-                            if (!(sigs & (1u << ConnectorSignals::NESControllerBit::NES_D0)))
+                            if (!(sigs & (1u << PortSignals::NESControllerBit::NES_D0)))
                                 result = 1;
                         }
                         // Pulse CLK high then low to advance shift register
-                        const uint32_t clk_mask = 1u << ConnectorSignals::NESControllerBit::NES_CLK;
-                        connector_ports_[p]->write_system_signals(clk_mask, clk_mask);
-                        connector_ports_[p]->write_system_signals(clk_mask, 0);
+                        const uint32_t clk_mask = 1u << PortSignals::NESControllerBit::NES_CLK;
+                        ports_[p]->write_system_signals(clk_mask, clk_mask);
+                        ports_[p]->write_system_signals(clk_mask, 0);
                     }
                     // D0-D4: controller/expansion data, D5-D7: open bus
                     uint8_t open_bus = BUS_GET_DATA(pins_);
@@ -1132,10 +1132,10 @@ void NintendoSystem<V>::tick() {
                 } else if (addr == 0x4016) {
                     // Drive LATCH signal on both controller ports.
                     // Bit 0 of data: 1 = LATCH high, 0 = LATCH low.
-                    const uint32_t latch_mask = 1u << ConnectorSignals::NESControllerBit::NES_LATCH;
+                    const uint32_t latch_mask = 1u << PortSignals::NESControllerBit::NES_LATCH;
                     const uint32_t latch_val  = (data & 1) ? latch_mask : 0;
-                    for (size_t cp = 0; cp < 2 && cp < connector_ports_.size(); cp++)
-                        connector_ports_[cp]->write_system_signals(latch_mask, latch_val);
+                    for (size_t cp = 0; cp < 2 && cp < ports_.size(); cp++)
+                        ports_[cp]->write_system_signals(latch_mask, latch_val);
                 }
                 // Other APU writes ($4000-$4013, $4015, $4017) handled by CPU PHI1
             } else {
@@ -1218,9 +1218,9 @@ void NintendoSystem<V>::tick() {
 
 template<NintendoVariant V>
 void NintendoSystem<V>::set_controller_state(int controller, uint8_t state) {
-    if (controller < 0 || controller >= static_cast<int>(connector_ports_.size())) return;
+    if (controller < 0 || controller >= static_cast<int>(ports_.size())) return;
 
-    auto* dev = connector_ports_[controller]->get_attached_device();
+    auto* dev = ports_[controller]->get_attached_device();
     if (auto* pad = dynamic_cast<NesStandardController*>(dev)) {
         for (int i = 0; i < 8; i++) {
             pad->set_button_state(
@@ -1351,25 +1351,25 @@ void NintendoSystem<V>::power_cycle() {
 // ============================================================================
 // NES has: 2× front controller ports (7-pin) and 1× bottom expansion port (48-pin).
 // Controller ports use a serial shift-register protocol (LATCH + CLK + D0).
-// Connector definitions are now in src/connectors/nes_connectors.h (shared).
-#include "connectors/nes_connectors.hpp"
+// Connector definitions are now in src/ports/nes_ports.h (shared).
+#include "ports/nes_ports.hpp"
 
 template<NintendoVariant V>
-void NintendoSystem<V>::setup_connector_ports() {
-    connector_ports_.clear();
+void NintendoSystem<V>::setup_ports() {
+    ports_.clear();
 
     if constexpr (Traits::is_famicom) {
         // Famicom: hardwired controllers, 15-pin expansion port
-        add_connector_port(NesConnectors::FC_CONTROLLER_1, 1);
-        add_connector_port(NesConnectors::FC_CONTROLLER_2, 2);
-        add_connector_port(NesConnectors::FC_EXPANSION, 0);
-        printf("%s: Created %zu connector ports\n", Traits::name, connector_ports_.size());
+        add_port(NesPorts::FC_CONTROLLER_1, 1);
+        add_port(NesPorts::FC_CONTROLLER_2, 2);
+        add_port(NesPorts::FC_EXPANSION, 0);
+        printf("%s: Created %zu ports\n", Traits::name, ports_.size());
     } else {
         // NES: removable controller ports, bottom expansion
-        add_connector_port(NesConnectors::NES_CONTROLLER_1, 1);
-        add_connector_port(NesConnectors::NES_CONTROLLER_2, 2);
-        add_connector_port(NesConnectors::NES_EXPANSION, 0);
-        printf("%s: Created %zu connector ports\n", Traits::name, connector_ports_.size());
+        add_port(NesPorts::NES_CONTROLLER_1, 1);
+        add_port(NesPorts::NES_CONTROLLER_2, 2);
+        add_port(NesPorts::NES_EXPANSION, 0);
+        printf("%s: Created %zu ports\n", Traits::name, ports_.size());
     }
 
     // Attach default peripherals declared by get_default_peripherals().

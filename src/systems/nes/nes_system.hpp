@@ -219,7 +219,7 @@ public:
     void set_cpu_pc(uint16_t addr);
     
 private:
-    void setup_connector_ports();
+    void setup_ports();
     std::vector<DefaultPeripheral> get_default_peripherals() const override;
 
     /// Register all NES chips into registered_chips_ for the Hardware menu.

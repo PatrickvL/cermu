@@ -9,11 +9,11 @@
  * sizes in the ImGui menu bar.
  */
 
-#include "gui/connector_icons.hpp"
+#include "gui/port_icons.hpp"
 #include <cstring>
 #include <cstdio>
 
-namespace ConnectorIcons {
+namespace PortIcons {
 
 // ============================================================================
 // BITMAP DATA — 16 rows of 16 bits each (MSB = leftmost pixel)
@@ -163,7 +163,7 @@ static const uint16_t ICON_GENERIC[16] = {
 // TEXTURE STORAGE
 // ============================================================================
 
-static GLuint textures_[static_cast<int>(ConnectorType::COUNT)] = {};
+static GLuint textures_[static_cast<int>(PortType::COUNT)] = {};
 static bool   initialised_ = false;
 
 /// Expand a 16×16 monochrome bitmap into an RGBA texture.
@@ -203,24 +203,24 @@ void init() {
     memset(textures_, 0, sizeof(textures_));
 
     // Distinct colours per connector family for quick visual identification
-    textures_[static_cast<int>(ConnectorType::CONTROL_PORT_DB9)]  = create_icon_texture(ICON_JOYSTICK,  180, 220, 255);  // light blue
-    textures_[static_cast<int>(ConnectorType::IEC_SERIAL)]        = create_icon_texture(ICON_FLOPPY,    255, 220, 130);  // amber
-    textures_[static_cast<int>(ConnectorType::CASSETTE_PORT)]     = create_icon_texture(ICON_CASSETTE,  200, 200, 200);  // silver
-    textures_[static_cast<int>(ConnectorType::USER_PORT)]         = create_icon_texture(ICON_USERPORT,  180, 255, 180);  // light green
-    textures_[static_cast<int>(ConnectorType::EXPANSION_PORT)]    = create_icon_texture(ICON_CARTRIDGE, 255, 180, 180);  // light red
-    textures_[static_cast<int>(ConnectorType::CONTROLLER_NES)]    = create_icon_texture(ICON_NES_PAD,   220, 180, 255);  // light purple
-    textures_[static_cast<int>(ConnectorType::CONTROLLER_SNES)]   = create_icon_texture(ICON_NES_PAD,   220, 180, 255);  // same shape
-    textures_[static_cast<int>(ConnectorType::CONTROLLER_ATARI)]  = create_icon_texture(ICON_JOYSTICK,  255, 200, 150);  // warm
-    textures_[static_cast<int>(ConnectorType::CUSTOM)]            = create_icon_texture(ICON_GENERIC,   200, 200, 200);  // gray
+    textures_[static_cast<int>(PortType::CONTROL_PORT_DB9)]  = create_icon_texture(ICON_JOYSTICK,  180, 220, 255);  // light blue
+    textures_[static_cast<int>(PortType::IEC_SERIAL)]        = create_icon_texture(ICON_FLOPPY,    255, 220, 130);  // amber
+    textures_[static_cast<int>(PortType::CASSETTE_PORT)]     = create_icon_texture(ICON_CASSETTE,  200, 200, 200);  // silver
+    textures_[static_cast<int>(PortType::USER_PORT)]         = create_icon_texture(ICON_USERPORT,  180, 255, 180);  // light green
+    textures_[static_cast<int>(PortType::EXPANSION_PORT)]    = create_icon_texture(ICON_CARTRIDGE, 255, 180, 180);  // light red
+    textures_[static_cast<int>(PortType::CONTROLLER_NES)]    = create_icon_texture(ICON_NES_PAD,   220, 180, 255);  // light purple
+    textures_[static_cast<int>(PortType::CONTROLLER_SNES)]   = create_icon_texture(ICON_NES_PAD,   220, 180, 255);  // same shape
+    textures_[static_cast<int>(PortType::CONTROLLER_ATARI)]  = create_icon_texture(ICON_JOYSTICK,  255, 200, 150);  // warm
+    textures_[static_cast<int>(PortType::CUSTOM)]            = create_icon_texture(ICON_GENERIC,   200, 200, 200);  // gray
 
     initialised_ = true;
-    printf("ConnectorIcons: Initialised %d icon textures\n",
-           static_cast<int>(ConnectorType::COUNT));
+    printf("PortIcons: Initialised %d icon textures\n",
+           static_cast<int>(PortType::COUNT));
 }
 
 void cleanup() {
     if (!initialised_) return;
-    for (int i = 0; i < static_cast<int>(ConnectorType::COUNT); i++) {
+    for (int i = 0; i < static_cast<int>(PortType::COUNT); i++) {
         if (textures_[i]) {
             glDeleteTextures(1, &textures_[i]);
             textures_[i] = 0;
@@ -229,10 +229,10 @@ void cleanup() {
     initialised_ = false;
 }
 
-GLuint get_icon(ConnectorType type) {
+GLuint get_icon(PortType type) {
     int idx = static_cast<int>(type);
-    if (idx < 0 || idx >= static_cast<int>(ConnectorType::COUNT)) return 0;
+    if (idx < 0 || idx >= static_cast<int>(PortType::COUNT)) return 0;
     return textures_[idx];
 }
 
-} // namespace ConnectorIcons
+} // namespace PortIcons

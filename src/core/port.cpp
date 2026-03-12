@@ -1,37 +1,82 @@
 /**
- * connector.cpp - Generic Connector Framework Implementation
+ * port.cpp - Generic Port Framework Implementation
  */
 
-#include "core/connector.hpp"
+#include "core/port.hpp"
+#include "core/port_registry.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
 
 // ============================================================================
+// SELF-REGISTER STANDARD CONNECTOR DEFINITIONS
+// ============================================================================
+// All predefined signal tables are registered in the PortRegistry so
+// boards can look up definitions by PortType at runtime.
+
+using namespace PortSignals;
+
+REGISTER_PORT(PortDefinition{
+    PortType::CONTROL_PORT_DB9, "Control Port (DB-9)",
+    CONTROL_PORT_SIGNALS, CONTROL_PORT_SIGNAL_COUNT, false, false
+})
+
+REGISTER_PORT(PortDefinition{
+    PortType::IEC_SERIAL, "IEC Serial Bus",
+    IEC_SERIAL_SIGNALS, IEC_SERIAL_SIGNAL_COUNT, false, true
+})
+
+REGISTER_PORT(PortDefinition{
+    PortType::CASSETTE_PORT, "Cassette Port",
+    CASSETTE_PORT_SIGNALS, CASSETTE_PORT_SIGNAL_COUNT, false, false
+})
+
+REGISTER_PORT(PortDefinition{
+    PortType::USER_PORT, "User Port",
+    USER_PORT_SIGNALS, USER_PORT_SIGNAL_COUNT, false, false
+})
+
+// Video/audio output connector types — no signal lines, used for output descriptors
+REGISTER_PORT(PortDefinition{
+    PortType::VIDEO_COMPOSITE, "Composite Video",
+    nullptr, 0, false, false
+})
+
+REGISTER_PORT(PortDefinition{
+    PortType::AUDIO_MONO, "Audio (Mono)",
+    nullptr, 0, false, false
+})
+
+REGISTER_PORT(PortDefinition{
+    PortType::AUDIO_STEREO, "Audio (Stereo)",
+    nullptr, 0, false, false
+})
+
+// ============================================================================
 // CONNECTOR TYPE NAMES
 // ============================================================================
 
-const char* connector_type_name(ConnectorType type) {
+const char* port_type_name(PortType type) {
     switch (type) {
-        case ConnectorType::CONTROL_PORT_DB9: return "Control Port (DB-9)";
-        case ConnectorType::IEC_SERIAL:       return "IEC Serial Bus";
-        case ConnectorType::CASSETTE_PORT:    return "Cassette Port";
-        case ConnectorType::USER_PORT:        return "User Port";
-        case ConnectorType::EXPANSION_PORT:   return "Expansion Port";
-        case ConnectorType::CONTROLLER_NES:   return "NES Controller";
-        case ConnectorType::CONTROLLER_SNES:  return "SNES Controller";
-        case ConnectorType::CONTROLLER_ATARI: return "Atari Controller";
-        case ConnectorType::VIDEO_COMPOSITE:  return "Composite Video";
-        case ConnectorType::VIDEO_SVIDEO:     return "S-Video";
-        case ConnectorType::VIDEO_RGB:        return "RGB Video";
-        case ConnectorType::VIDEO_RGBI:       return "RGBI Video";
-        case ConnectorType::VIDEO_COMPONENT:  return "Component Video";
-        case ConnectorType::VIDEO_HDMI:       return "HDMI Video";
-        case ConnectorType::AUDIO_MONO:       return "Audio (Mono)";
-        case ConnectorType::AUDIO_STEREO:     return "Audio (Stereo)";
-        case ConnectorType::AUDIO_SPDIF:      return "S/PDIF Audio";
-        case ConnectorType::AUDIO_HDMI:       return "HDMI Audio";
-        case ConnectorType::CUSTOM:           return "Custom";
+        case PortType::CONTROL_PORT_DB9: return "Control Port (DB-9)";
+        case PortType::IEC_SERIAL:       return "IEC Serial Bus";
+        case PortType::CASSETTE_PORT:    return "Cassette Port";
+        case PortType::USER_PORT:        return "User Port";
+        case PortType::EXPANSION_PORT:   return "Expansion Port";
+        case PortType::CONTROLLER_NES:   return "NES Controller";
+        case PortType::CONTROLLER_SNES:  return "SNES Controller";
+        case PortType::CONTROLLER_ATARI: return "Atari Controller";
+        case PortType::VIDEO_COMPOSITE:  return "Composite Video";
+        case PortType::VIDEO_SVIDEO:     return "S-Video";
+        case PortType::VIDEO_RGB:        return "RGB Video";
+        case PortType::VIDEO_RGBI:       return "RGBI Video";
+        case PortType::VIDEO_COMPONENT:  return "Component Video";
+        case PortType::VIDEO_HDMI:       return "HDMI Video";
+        case PortType::AUDIO_MONO:       return "Audio (Mono)";
+        case PortType::AUDIO_STEREO:     return "Audio (Stereo)";
+        case PortType::AUDIO_SPDIF:      return "S/PDIF Audio";
+        case PortType::AUDIO_HDMI:       return "HDMI Audio";
+        case PortType::CUSTOM:           return "Custom";
         default:                              return "Unknown";
     }
 }
@@ -40,7 +85,7 @@ const char* connector_type_name(ConnectorType type) {
 // PREDEFINED SIGNAL LINE TABLES
 // ============================================================================
 
-namespace ConnectorSignals {
+namespace PortSignals {
 
 // --- Control Port (DB-9) ---
 const SignalLine CONTROL_PORT_SIGNALS[] = {
@@ -135,13 +180,13 @@ const SignalLine APPLE1_CASSETTE_SIGNALS[] = {
 };
 const uint8_t APPLE1_CASSETTE_SIGNAL_COUNT = sizeof(APPLE1_CASSETTE_SIGNALS) / sizeof(APPLE1_CASSETTE_SIGNALS[0]);
 
-} // namespace ConnectorSignals
+} // namespace PortSignals
 
 // ============================================================================
 // CONNECTOR PORT IMPLEMENTATION
 // ============================================================================
 
-ConnectorPort::ConnectorPort(const ConnectorDefinition& def, int port_index)
+Port::Port(const PortDefinition& def, int port_index)
     : definition_(def)
     , port_index_(port_index)
     , system_signals_(0xFFFFFFFF)   // All lines idle (high)
@@ -149,21 +194,21 @@ ConnectorPort::ConnectorPort(const ConnectorDefinition& def, int port_index)
 {
 }
 
-ConnectorPort::~ConnectorPort() {
+Port::~Port() {
     // Don't call detach_device() here — it accesses device objects
     // (get_name, on_detach) that may already be destroyed when the
     // owning System's destructor runs (owned_devices_ is
-    // destroyed before connector_ports_ due to member declaration order).
+    // destroyed before ports_ due to member declaration order).
     attached_devices_.clear();
 }
 
-uint32_t ConnectorPort::read_signals() const {
+uint32_t Port::read_signals() const {
     // Wired-AND: system output AND combined device outputs.
     // A line is LOW (asserted) if ANY participant pulls it low.
     return system_signals_ & combined_device_signals_;
 }
 
-void ConnectorPort::write_system_signals(uint32_t mask, uint32_t value) {
+void Port::write_system_signals(uint32_t mask, uint32_t value) {
     system_signals_ = (system_signals_ & ~mask) | (value & mask);
 
     // Notify all attached devices of the new combined state
@@ -173,16 +218,16 @@ void ConnectorPort::write_system_signals(uint32_t mask, uint32_t value) {
     }
 }
 
-bool ConnectorPort::attach_device(PeripheralDevice* device) {
+bool Port::attach_device(PeripheralDevice* device) {
     if (!device) return false;
 
     // Type compatibility check
-    if (device->get_connector_type() != definition_.type) {
-        printf("Connector: Cannot attach '%s' — incompatible connector type "
+    if (device->get_port_type() != definition_.type) {
+        printf("Port: Cannot attach '%s' — incompatible port type "
                "(device needs %s, port is %s)\n",
                device->get_name(),
-               connector_type_name(device->get_connector_type()),
-               connector_type_name(definition_.type));
+               port_type_name(device->get_port_type()),
+               port_type_name(definition_.type));
         return false;
     }
 
@@ -194,7 +239,7 @@ bool ConnectorPort::attach_device(PeripheralDevice* device) {
     // Check for duplicate attachment
     for (auto* d : attached_devices_) {
         if (d == device) {
-            printf("Connector: '%s' already attached to %s (port %d)\n",
+            printf("Port: '%s' already attached to %s (port %d)\n",
                    device->get_name(), definition_.name, port_index_);
             return false;
         }
@@ -204,19 +249,19 @@ bool ConnectorPort::attach_device(PeripheralDevice* device) {
     recompute_device_signals();
     device->on_attach(this);
 
-    printf("Connector: '%s' attached to %s (port %d)%s\n",
+    printf("Port: '%s' attached to %s (port %d)%s\n",
            device->get_name(), definition_.name, port_index_,
            definition_.is_bus ? " [bus]" : "");
     return true;
 }
 
-void ConnectorPort::detach_device(PeripheralDevice* device) {
+void Port::detach_device(PeripheralDevice* device) {
     if (attached_devices_.empty()) return;
 
     if (device == nullptr) {
         // Detach ALL devices
         for (auto* d : attached_devices_) {
-            printf("Connector: '%s' detached from %s (port %d)\n",
+            printf("Port: '%s' detached from %s (port %d)\n",
                    d->get_name(), definition_.name, port_index_);
             d->on_detach();
         }
@@ -226,7 +271,7 @@ void ConnectorPort::detach_device(PeripheralDevice* device) {
         auto it = std::find(attached_devices_.begin(), attached_devices_.end(), device);
         if (it == attached_devices_.end()) return;
 
-        printf("Connector: '%s' detached from %s (port %d)\n",
+        printf("Port: '%s' detached from %s (port %d)\n",
                device->get_name(), definition_.name, port_index_);
         device->on_detach();
         attached_devices_.erase(it);
@@ -240,7 +285,7 @@ void ConnectorPort::detach_device(PeripheralDevice* device) {
     }
 }
 
-void ConnectorPort::notify_device_output_changed(uint32_t /*device_signals*/) {
+void Port::notify_device_output_changed(uint32_t /*device_signals*/) {
     // A device changed its output — recompute the AND of all device outputs
     recompute_device_signals();
 
@@ -249,7 +294,7 @@ void ConnectorPort::notify_device_output_changed(uint32_t /*device_signals*/) {
     }
 }
 
-void ConnectorPort::recompute_device_signals() {
+void Port::recompute_device_signals() {
     uint32_t combined = 0xFFFFFFFF;
     for (auto* d : attached_devices_) {
         combined &= d->get_output_signals();

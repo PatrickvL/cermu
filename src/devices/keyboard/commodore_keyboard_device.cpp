@@ -24,7 +24,7 @@ static const DeviceDescriptor keyboard_descriptor = {
     "commodore_keyboard",
     "Keyboard",
     "Commodore keyboard matrix — internal device, always attached",
-    ConnectorType::CUSTOM,
+    PortType::CUSTOM,
     false
 };
 

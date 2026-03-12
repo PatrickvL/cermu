@@ -1,22 +1,22 @@
 #pragma once
 /**
- * connector.h - Generic Connector Framework
+ * port.hpp - Generic Port Framework
  *
- * Provides a hardware-accurate abstraction for physical connectors (ports/jacks)
- * on emulated systems.  Every connector has a set of named signal lines that
+ * Provides a hardware-accurate abstraction for physical ports (jacks/connectors)
+ * on emulated systems.  Every port has a set of named signal lines that
  * bridge between the system's internal chips and externally attached peripheral
  * devices.  Signal lines are active-low (matching real hardware pull-ups), so
  * an idle/unconnected state is all-ones.
  *
  * Architecture:
- *   System Chips  <-->  ConnectorPort  <-->  PeripheralDevice
+ *   System Chips  <-->  Port  <-->  PeripheralDevice
  *
- * - The system writes its output signals into the ConnectorPort.
+ * - The system writes its output signals into the Port.
  * - The PeripheralDevice reads them and updates its own output signals.
  * - When either side reads the combined state, both contributions are AND-ed
  *   (open-collector/wired-AND, matching real hardware bus behaviour).
  *
- * ConnectorType enumerates all known physical connector standards so that the
+ * PortType enumerates all known physical connector standards so that the
  * DeviceRegistry can match peripherals to compatible ports.
  */
 
@@ -47,7 +47,7 @@ enum class SignalDirection {
 // ============================================================================
 
 /// Physical connector standard.
-enum class ConnectorType {
+enum class PortType {
     // --- Commodore family ---
     CONTROL_PORT_DB9,   ///< DB-9 joystick/paddle/lightpen/mouse (C64, VIC-20, Amiga, Atari)
     IEC_SERIAL,         ///< Commodore IEC serial bus (DIN-6) — disk drives, printers
@@ -82,8 +82,8 @@ enum class ConnectorType {
     COUNT               ///< Sentinel — total number of types
 };
 
-/// Human-readable name for a ConnectorType.
-const char* connector_type_name(ConnectorType type);
+/// Human-readable name for a PortType.
+const char* port_type_name(PortType type);
 
 // ============================================================================
 // OUTPUT SIGNAL TYPES
@@ -148,8 +148,8 @@ struct SignalLine {
 // ============================================================================
 
 /// Static descriptor for a connector type — shared by all ports of the same kind.
-struct ConnectorDefinition {
-    ConnectorType       type;
+struct PortDefinition {
+    PortType       type;
     const char*         name;           ///< E.g. "Control Port 1", "IEC Serial Bus"
     const SignalLine*   signals;        ///< Array of signal line descriptors
     uint8_t             signal_count;   ///< Number of entries in `signals`
@@ -180,21 +180,21 @@ class PeripheralDevice;
  * An optional callback (on_device_output_changed) lets the system react
  * immediately when the device drives new signal values.
  */
-class ConnectorPort : public ComponentBase {
+class Port : public ComponentBase {
 public:
     /// Callback: invoked when the attached device's output signals change.
-    using SignalChangeCallback = std::function<void(ConnectorPort* port, uint32_t combined_state)>;
+    using SignalChangeCallback = std::function<void(Port* port, uint32_t combined_state)>;
 
-    explicit ConnectorPort(const ConnectorDefinition& def, int port_index = 0);
-    ~ConnectorPort() override;
+    explicit Port(const PortDefinition& def, int port_index = 0);
+    ~Port() override;
 
     // --- ComponentBase interface ----------------------------------------
     const char* name() const override { return get_name(); }
 
     // --- Identification ------------------------------------------------
 
-    const ConnectorDefinition& get_definition() const { return definition_; }
-    ConnectorType get_type() const { return definition_.type; }
+    const PortDefinition& get_definition() const { return definition_; }
+    PortType get_type() const { return definition_.type; }
     const char* get_name() const { return definition_.name; }
     int get_port_index() const { return port_index_; }
 
@@ -264,7 +264,7 @@ public:
     const AudioOutput* audio_output() const { return audio_output_ ? &*audio_output_ : nullptr; }
 
 private:
-    ConnectorDefinition                 definition_;
+    PortDefinition                 definition_;
     int                                 port_index_;        ///< E.g. port 1 vs port 2
     uint32_t                            system_signals_;    ///< System-side output (all 1s = idle)
     uint32_t                            combined_device_signals_;  ///< AND of all device outputs
@@ -283,7 +283,7 @@ private:
 
 /**
  * Abstract base class for all peripheral devices that can be attached to a
- * ConnectorPort.
+ * Port.
  *
  * Concrete devices (joystick, 1541 drive, datasette, lightpen, …) derive from
  * this and implement the required virtual methods.
@@ -301,12 +301,12 @@ public:
     virtual const char* get_id() const = 0;
 
     /// Which connector type this device requires.
-    virtual ConnectorType get_connector_type() const = 0;
+    virtual PortType get_port_type() const = 0;
 
     // --- Lifecycle ------------------------------------------------------
 
     /// Called once after being attached to a port.
-    virtual void on_attach(ConnectorPort* port) { port_ = port; }
+    virtual void on_attach(Port* port) { port_ = port; }
 
     /// Called just before being detached.
     virtual void on_detach() { port_ = nullptr; }
@@ -355,16 +355,16 @@ public:
 #endif
 
 protected:
-    ConnectorPort* port_ = nullptr;   ///< Port this device is attached to (set by on_attach)
+    Port* port_ = nullptr;   ///< Port this device is attached to (set by on_attach)
 };
 
 // ============================================================================
 // PREDEFINED SIGNAL LINE TABLES
 // ============================================================================
 // These define the signal layout for each connector type.
-// Systems reference them when constructing ConnectorPort instances.
+// Systems reference them when constructing Port instances.
 
-namespace ConnectorSignals {
+namespace PortSignals {
 
 // --- Control Port (DB-9) ---
 // Matched to Commodore 64 / VIC-20 / Atari joystick wiring.
@@ -481,4 +481,4 @@ enum Apple1CassetteBit : uint8_t {
 extern const SignalLine APPLE1_CASSETTE_SIGNALS[];
 extern const uint8_t    APPLE1_CASSETTE_SIGNAL_COUNT;
 
-} // namespace ConnectorSignals
+} // namespace PortSignals

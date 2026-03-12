@@ -256,9 +256,14 @@ set(CORE_SOURCES
     src/core/system_registry.cpp
     src/core/framebuffer_renderer.cpp
     src/core/text_terminal.cpp
-    src/core/connector.cpp
+    src/core/port.cpp
     src/core/device_registry.cpp
     src/core/chip_registry.cpp
+    src/core/port_registry.cpp
+    src/core/connection.cpp
+    src/core/session.cpp
+    # Ports — cross-system port registrations
+    src/ports/nes_ports.cpp
     # Devices — input peripherals
     src/devices/input/joystick_device.cpp
     src/devices/input/commodore_1351_mouse.cpp
@@ -488,7 +493,7 @@ if(BUILD_GUI)
         src/gui/emulator_host.cpp
         src/gui/session_gui.cpp
         src/gui/system_selection_dialog.cpp
-        src/gui/connector_icons.cpp
+        src/gui/port_icons.cpp
         src/gui/vfs_file_system.cpp
     )
 endif()

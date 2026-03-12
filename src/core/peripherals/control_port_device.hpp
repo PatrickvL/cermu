@@ -27,7 +27,7 @@ public:
     ControlPortInputDevice() : signal_state_(0xFFFFFFFF) {}
     ~ControlPortInputDevice() override = default;
 
-    ConnectorType get_connector_type() const override { return ConnectorType::CONTROL_PORT_DB9; }
+    PortType get_port_type() const override { return PortType::CONTROL_PORT_DB9; }
 
     void reset() override {
         signal_state_ = 0xFFFFFFFF;  // All lines released (idle)

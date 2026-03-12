@@ -396,44 +396,44 @@ static void c16_mem_write_block(void* ctx, uint16_t addr,
 // Connector Definitions (non-template file-scope statics)
 // ============================================================================
 
-static const ConnectorDefinition c16_joy_port_1_def = {
-    ConnectorType::CONTROL_PORT_DB9,
+static const PortDefinition c16_joy_port_1_def = {
+    PortType::CONTROL_PORT_DB9,
     "Joystick Port 1",
-    ConnectorSignals::CONTROL_PORT_SIGNALS,
-    ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT,
+    PortSignals::CONTROL_PORT_SIGNALS,
+    PortSignals::CONTROL_PORT_SIGNAL_COUNT,
     false, false
 };
 
-static const ConnectorDefinition c16_joy_port_2_def = {
-    ConnectorType::CONTROL_PORT_DB9,
+static const PortDefinition c16_joy_port_2_def = {
+    PortType::CONTROL_PORT_DB9,
     "Joystick Port 2",
-    ConnectorSignals::CONTROL_PORT_SIGNALS,
-    ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT,
+    PortSignals::CONTROL_PORT_SIGNALS,
+    PortSignals::CONTROL_PORT_SIGNAL_COUNT,
     false, false
 };
 
-static const ConnectorDefinition c16_iec_serial_def = {
-    ConnectorType::IEC_SERIAL,
+static const PortDefinition c16_iec_serial_def = {
+    PortType::IEC_SERIAL,
     "IEC Serial Bus",
-    ConnectorSignals::IEC_SERIAL_SIGNALS,
-    ConnectorSignals::IEC_SERIAL_SIGNAL_COUNT,
+    PortSignals::IEC_SERIAL_SIGNALS,
+    PortSignals::IEC_SERIAL_SIGNAL_COUNT,
     false,  // is_internal
     true    // is_bus — shared bus, multiple drives/printers
 };
 
-static const ConnectorDefinition c16_cassette_def = {
-    ConnectorType::CASSETTE_PORT,
+static const PortDefinition c16_cassette_def = {
+    PortType::CASSETTE_PORT,
     "Cassette Port",
-    ConnectorSignals::CASSETTE_PORT_SIGNALS,
-    ConnectorSignals::CASSETTE_PORT_SIGNAL_COUNT,
+    PortSignals::CASSETTE_PORT_SIGNALS,
+    PortSignals::CASSETTE_PORT_SIGNAL_COUNT,
     false, false
 };
 
-static const ConnectorDefinition plus4_user_port_def = {
-    ConnectorType::USER_PORT,
+static const PortDefinition plus4_user_port_def = {
+    PortType::USER_PORT,
     "User Port",
-    ConnectorSignals::USER_PORT_SIGNALS,
-    ConnectorSignals::USER_PORT_SIGNAL_COUNT,
+    PortSignals::USER_PORT_SIGNALS,
+    PortSignals::USER_PORT_SIGNAL_COUNT,
     false, false
 };
 
@@ -441,8 +441,8 @@ static const SignalLine c16_expansion_signals[] = {
     { "/RESET", SignalDirection::OUTPUT, 0 },
     { "/IRQ",   SignalDirection::INPUT,  1 },
 };
-static const ConnectorDefinition c16_expansion_def = {
-    ConnectorType::EXPANSION_PORT,
+static const PortDefinition c16_expansion_def = {
+    PortType::EXPANSION_PORT,
     "Expansion Port",
     c16_expansion_signals,
     2,
@@ -614,7 +614,7 @@ bool Commodore264System<V>::initialize() {
         printf("%s: Warning - keyboard matrix creation failed\n", Traits::name);
     }
     
-    setup_connector_ports();
+    setup_ports();
 
     // Register chips for the Hardware menu and debug windows
     register_chip(static_cast<ChipBase*>(cpu_),
@@ -1234,46 +1234,46 @@ void Commodore264System<V>::set_cpu_pc(void* user_data, uint16_t addr) {
 // ============================================================================
 
 template<C264SeriesVariant V>
-void Commodore264System<V>::setup_connector_ports() {
-    connector_ports_.clear();
+void Commodore264System<V>::setup_ports() {
+    ports_.clear();
 
     // Port 0 — Joystick Port 1
-    add_connector_port(c16_joy_port_1_def, 1);
+    add_port(c16_joy_port_1_def, 1);
 
     // Port 1 — Joystick Port 2
-    add_connector_port(c16_joy_port_2_def, 2);
+    add_port(c16_joy_port_2_def, 2);
 
     // Port 2 — IEC Serial Bus
-    add_connector_port(c16_iec_serial_def, 0);
+    add_port(c16_iec_serial_def, 0);
 
     // Port 3 — Cassette Port
-    add_connector_port(c16_cassette_def, 0);
+    add_port(c16_cassette_def, 0);
 
     // Port 4 — User Port (Plus/4 only)
     if constexpr (Traits::has_user_port) {
-        add_connector_port(plus4_user_port_def, 0);
+        add_port(plus4_user_port_def, 0);
     }
 
     // Port 5 — Expansion Port (cartridge slot)
-    add_connector_port(c16_expansion_def, 0);
+    add_port(c16_expansion_def, 0);
 
     // Internal Keyboard (always attached)
-    static const ConnectorDefinition c16_keyboard_def = {
-        ConnectorType::CUSTOM, "Keyboard", nullptr, 0, true, false
+    static const PortDefinition c16_keyboard_def = {
+        PortType::CUSTOM, "Keyboard", nullptr, 0, true, false
     };
-    int kb_port = add_connector_port(c16_keyboard_def, 0);
+    int kb_port = add_port(c16_keyboard_def, 0);
 
     // Attach internal keyboard device
     auto kb_device = std::make_unique<CommodoreKeyboardDevice>(keyboard_);
     auto* kb_raw = kb_device.get();
-    connector_ports_[kb_port]->attach_device(kb_raw);
+    ports_[kb_port]->attach_device(kb_raw);
     owned_devices_.push_back(std::move(kb_device));
 
     // Default: attach peripheral devices via declarative list
     attach_default_peripherals();
 
-    printf("%s: Created %zu connector ports\n",
-           Traits::name, connector_ports_.size());
+    printf("%s: Created %zu ports\n",
+           Traits::name, ports_.size());
 }
 
 template<C264SeriesVariant V>

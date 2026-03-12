@@ -206,7 +206,7 @@ private:
     void configure_bus_memory_map();
 
     // Connector port setup
-    void setup_connector_ports();
+    void setup_ports();
     std::vector<DefaultPeripheral> get_default_peripherals() const override;
 
     // Read joystick signals from connector ports into RIOT/TIA

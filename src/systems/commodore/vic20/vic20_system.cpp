@@ -670,7 +670,7 @@ bool VIC20System::initialize() {
     }
     
     // Setup connector ports (generic framework from System)
-    setup_connector_ports();
+    setup_ports();
 
     // Register all manifest-created chips for the Hardware menu and debug windows
     register_bus_chips(bus_mem_);
@@ -1308,84 +1308,84 @@ uint8_t VIC20System::vic20_via2_port_b_read(void* context, uint8_t port_b_output
 // VIC-20 has: 1× Control Port (DB-9), IEC Serial Bus, Cassette Port,
 // User Port, and Expansion Port (cartridge slot).
 
-static const ConnectorDefinition vic20_control_port_def = {
-    ConnectorType::CONTROL_PORT_DB9,
+static const PortDefinition vic20_control_port_def = {
+    PortType::CONTROL_PORT_DB9,
     "Control Port",
-    ConnectorSignals::CONTROL_PORT_SIGNALS,
-    ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT,
+    PortSignals::CONTROL_PORT_SIGNALS,
+    PortSignals::CONTROL_PORT_SIGNAL_COUNT,
     false, false
 };
 
-static const ConnectorDefinition vic20_iec_serial_def = {
-    ConnectorType::IEC_SERIAL,
+static const PortDefinition vic20_iec_serial_def = {
+    PortType::IEC_SERIAL,
     "IEC Serial Bus",
-    ConnectorSignals::IEC_SERIAL_SIGNALS,
-    ConnectorSignals::IEC_SERIAL_SIGNAL_COUNT,
+    PortSignals::IEC_SERIAL_SIGNALS,
+    PortSignals::IEC_SERIAL_SIGNAL_COUNT,
     false,  // is_internal
     true    // is_bus — shared bus, multiple drives/printers
 };
 
-static const ConnectorDefinition vic20_cassette_def = {
-    ConnectorType::CASSETTE_PORT,
+static const PortDefinition vic20_cassette_def = {
+    PortType::CASSETTE_PORT,
     "Cassette Port",
-    ConnectorSignals::CASSETTE_PORT_SIGNALS,
-    ConnectorSignals::CASSETTE_PORT_SIGNAL_COUNT,
+    PortSignals::CASSETTE_PORT_SIGNALS,
+    PortSignals::CASSETTE_PORT_SIGNAL_COUNT,
     false, false
 };
 
-static const ConnectorDefinition vic20_user_port_def = {
-    ConnectorType::USER_PORT,
+static const PortDefinition vic20_user_port_def = {
+    PortType::USER_PORT,
     "User Port",
-    ConnectorSignals::USER_PORT_SIGNALS,
-    ConnectorSignals::USER_PORT_SIGNAL_COUNT,
+    PortSignals::USER_PORT_SIGNALS,
+    PortSignals::USER_PORT_SIGNAL_COUNT,
     false, false
 };
 
 static const SignalLine vic20_expansion_signals[] = {
     { "RESET", SignalDirection::OUTPUT, 0 },
 };
-static const ConnectorDefinition vic20_expansion_def = {
-    ConnectorType::EXPANSION_PORT,
+static const PortDefinition vic20_expansion_def = {
+    PortType::EXPANSION_PORT,
     "Expansion Port",
     vic20_expansion_signals,
     1,
     false, false
 };
 
-void VIC20System::setup_connector_ports() {
-    connector_ports_.clear();
+void VIC20System::setup_ports() {
+    ports_.clear();
 
     // Port 0 — Control Port (joystick/paddles/lightpen)
-    add_connector_port(vic20_control_port_def, 1);
+    add_port(vic20_control_port_def, 1);
 
     // Port 1 — IEC Serial Bus (disk drive, printer)
-    add_connector_port(vic20_iec_serial_def, 0);
+    add_port(vic20_iec_serial_def, 0);
 
     // Port 2 — Cassette Port (datasette)
-    add_connector_port(vic20_cassette_def, 0);
+    add_port(vic20_cassette_def, 0);
 
     // Port 3 — User Port (modems, RS-232, custom peripherals)
-    add_connector_port(vic20_user_port_def, 0);
+    add_port(vic20_user_port_def, 0);
 
     // Port 4 — Expansion Port (cartridge)
-    add_connector_port(vic20_expansion_def, 0);
+    add_port(vic20_expansion_def, 0);
 
     // Port 5 — Internal Keyboard (always attached)
-    static const ConnectorDefinition vic20_keyboard_def = {
-        ConnectorType::CUSTOM, "Keyboard", nullptr, 0, true, false
+    static const PortDefinition vic20_keyboard_def = {
+        PortType::CUSTOM, "Keyboard", nullptr, 0, true, false
     };
-    int kb_port = add_connector_port(vic20_keyboard_def, 0);
+    int kb_port = add_port(vic20_keyboard_def, 0);
 
     // Attach internal keyboard device
     auto kb_device = std::make_unique<CommodoreKeyboardDevice>(keyboard_);
     auto* kb_raw = kb_device.get();
-    connector_ports_[kb_port]->attach_device(kb_raw);
+    ports_[kb_port]->attach_device(kb_raw);
     owned_devices_.push_back(std::move(kb_device));
 
     // Default: attach peripheral devices via declarative list
     attach_default_peripherals();
 
-    printf("VIC20: Created %zu connector ports\n", connector_ports_.size());
+    printf("VIC20: Created %zu ports\n", ports_.size());
 }
 
 std::vector<System::DefaultPeripheral>

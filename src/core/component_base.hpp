@@ -2,7 +2,7 @@
 /**
  * component_base.h — Abstract root for all board-level components
  *
- * ChipBase (emulated chips) and ConnectorPort (physical jacks) both derive
+ * ChipBase (emulated chips) and Port (physical jacks) both derive
  * from this so that Board can hold a flat std::vector<ComponentBase*> without
  * knowing concrete types.
  *
