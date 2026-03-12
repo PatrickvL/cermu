@@ -690,26 +690,17 @@ void VIC20System::shutdown() {
 void VIC20System::reset() {
     printf("VIC20: Resetting system\n");
     
-    // Reset VIC chip (clears registers, video state, audio state)
+    // Reset all manifest chips (VIC, VIA1, VIA2; RAM/ROM/CPU are no-op)
+    bus_mem_.reset_chips();
+    
+    // Re-establish VIC callbacks (reset clears them)
     if (vic_) {
-        vic_->reset();
-        // Re-establish memory callbacks (reset clears them)
         vic_->set_memory_callbacks(
             VIC20System::vic_mem_read, this,
             VIC20System::vic_color_read, this);
-        // Re-establish framebuffer pointer
         if (rgba_framebuffer_) {
             vic_->set_framebuffer(rgba_framebuffer_, rgba_width_, rgba_height_);
         }
-    }
-    
-    // Reset VIA chips (clears timers, interrupt flags, port registers)
-    // interrupt_bit is preserved by mos6522_reset — it's hardware wiring, not state
-    if (via1_) {
-        via1_->reset();
-    }
-    if (via2_) {
-        via2_->reset();
     }
     
     // Clear RAM (zero page, stack, main RAM $0000-$7FFF) but preserve ROMs

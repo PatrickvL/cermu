@@ -246,9 +246,9 @@ void AcornAtomSystem::reset() {
     if (!cpu_) return;
     pins_ = cpu_->reset(pins_);
     vdg_.init();
-    ppi_.init();
+    // Reset all manifest chips (PPI, VIA; RAM/ROM are no-op)
+    bus_mem_.reset_chips();
     ppi_.set_port_b_read_callback(ppi_keyboard_scan, this);
-    via_.reset();
     via_.interrupt_bit = BUS_IRQ_BIT;
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 }

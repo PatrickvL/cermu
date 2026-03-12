@@ -257,8 +257,8 @@ void Apple1System::shutdown() {
 void Apple1System::reset() {
     printf("Apple1: Resetting system\n");
     
-    // Reset PIA to power-on state (control regs = 0, DDR mode selected)
-    pia_.reset();
+    // Reset all manifest chips (PIA; RAM/ROM are no-op)
+    bus_mem_.reset_chips();
     pia_.user_data = this;
     pia_.on_port_a_read = pia_keyboard_read;
     pia_.on_port_b_write = pia_display_write;
