@@ -1,4 +1,6 @@
 #include "pia6820.h"
+#include "../../core/chip_manifest.hpp"
+#include "../../core/chip_registry.h"
 #include <cstring>
 
 // PIA 6820 Register offsets
@@ -389,6 +391,4 @@ uint8_t pia6820_t::read_port_with_direction(uint8_t output_reg, uint8_t ddr,
     return result;
 }
 
-#include "../../core/chip_manifest.hpp"
-#include "../../core/chip_registry.h"
 REGISTER_CHIP_TYPE("PIA6820", pia6820_t)

@@ -1,5 +1,7 @@
 #include "memory_chip_base.h"
 #include "../../core/chip_layout.h"
+#include "../../core/chip_manifest.hpp"
+#include "../../core/chip_registry.h"
 #include "../../core/pin_macros.h"
 #ifdef CERMU_HAS_GUI
 #include "../../gui/chip_visualization.h"
@@ -359,8 +361,6 @@ void MemoryChipBase::register_debug_fields() {
 
 #include "ram_chip.h"
 #include "rom_chip.h"
-#include "../../core/chip_manifest.hpp"
-#include "../../core/chip_registry.h"
 
 ChipBase* RAMChip::create_from_slot(const ChipSlot& slot,
                                      const bus_state_t* system_bus,
