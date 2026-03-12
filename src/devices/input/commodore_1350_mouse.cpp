@@ -62,10 +62,10 @@ void Commodore1350Mouse::move(int dx, int dy) {
     if (up || down)    accum_y_ = 0;
 
     // Batch-update direction signals to avoid per-line port notifications
-    set_signal_batch(ConnectorSignals::JOY_LEFT,  left);
-    set_signal_batch(ConnectorSignals::JOY_RIGHT, right);
-    set_signal_batch(ConnectorSignals::JOY_UP,    up);
-    set_signal_batch(ConnectorSignals::JOY_DOWN,  down);
+    set_signal_batch(PortSignals::JOY_LEFT,  left);
+    set_signal_batch(PortSignals::JOY_RIGHT, right);
+    set_signal_batch(PortSignals::JOY_UP,    up);
+    set_signal_batch(PortSignals::JOY_DOWN,  down);
     notify_port();
 }
 
@@ -75,11 +75,11 @@ void Commodore1350Mouse::move(int dx, int dy) {
 
 #ifdef CERMU_HAS_GUI
 void Commodore1350Mouse::render_device_ui() {
-    bool u = is_signal_asserted(ConnectorSignals::JOY_UP);
-    bool d = is_signal_asserted(ConnectorSignals::JOY_DOWN);
-    bool l = is_signal_asserted(ConnectorSignals::JOY_LEFT);
-    bool r = is_signal_asserted(ConnectorSignals::JOY_RIGHT);
-    bool f = is_signal_asserted(ConnectorSignals::JOY_FIRE);
+    bool u = is_signal_asserted(PortSignals::JOY_UP);
+    bool d = is_signal_asserted(PortSignals::JOY_DOWN);
+    bool l = is_signal_asserted(PortSignals::JOY_LEFT);
+    bool r = is_signal_asserted(PortSignals::JOY_RIGHT);
+    bool f = is_signal_asserted(PortSignals::JOY_FIRE);
 
     ImGui::Text("  %s %s %s %s  LMB:%s",
                 u ? "U" : ".", d ? "D" : ".", l ? "L" : ".",
@@ -95,7 +95,7 @@ static const DeviceDescriptor mouse_1350_descriptor = {
     "mouse_1350",
     "Commodore 1350 Mouse",
     "Commodore 1350 digital mouse — emulates joystick via direction pulses",
-    ConnectorType::CONTROL_PORT_DB9,
+    PortType::CONTROL_PORT_DB9,
     false
 };
 

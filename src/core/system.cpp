@@ -18,7 +18,7 @@
 
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
-#include "gui/connector_icons.hpp"
+#include "gui/port_icons.hpp"
 #endif
 
 // ============================================================================
@@ -135,11 +135,11 @@ bool System::initialize() {
 
 void System::shutdown() {
     // Detach all devices from ports before clearing (clean teardown)
-    for (auto& port : connector_ports_) {
+    for (auto& port : ports_) {
         port->detach_device();
     }
     owned_devices_.clear();
-    connector_ports_.clear();
+    ports_.clear();
     registered_chips_.clear();
     owned_chip_adapters_.clear();
 }
@@ -333,9 +333,9 @@ void System::set_audio_sample_rate(int /*sample_rate_hz*/) {
 // CONNECTOR PORT & PERIPHERAL DEVICE MANAGEMENT (generic)
 // ============================================================================
 
-int System::add_connector_port(const ConnectorDefinition& def, int port_number) {
-    int index = static_cast<int>(connector_ports_.size());
-    connector_ports_.push_back(std::make_unique<ConnectorPort>(def, port_number));
+int System::add_port(const PortDefinition& def, int port_number) {
+    int index = static_cast<int>(ports_.size());
+    ports_.push_back(std::make_unique<Port>(def, port_number));
     return index;
 }
 
@@ -408,12 +408,12 @@ void System::auto_assign_controller_keymaps() {
 }
 
 bool System::attach_device_to_port(int port_index, const char* device_id) {
-    if (port_index < 0 || port_index >= static_cast<int>(connector_ports_.size())) {
+    if (port_index < 0 || port_index >= static_cast<int>(ports_.size())) {
         printf("System: Invalid port index %d\n", port_index);
         return false;
     }
 
-    auto& port = connector_ports_[port_index];
+    auto& port = ports_[port_index];
 
     // Create device from registry
     auto device = DeviceRegistry::instance().create_device(device_id);
@@ -444,9 +444,9 @@ bool System::attach_device_to_port(int port_index, const char* device_id) {
 }
 
 void System::detach_device_from_port(int port_index) {
-    if (port_index < 0 || port_index >= static_cast<int>(connector_ports_.size())) return;
+    if (port_index < 0 || port_index >= static_cast<int>(ports_.size())) return;
 
-    auto& port = connector_ports_[port_index];
+    auto& port = ports_[port_index];
     auto devices_copy = port->get_attached_devices();  // Copy — detach modifies the vector
     if (devices_copy.empty()) return;
 
@@ -469,10 +469,10 @@ void System::detach_device_from_port(int port_index) {
 }
 
 void System::detach_device_from_port(int port_index, PeripheralDevice* device) {
-    if (port_index < 0 || port_index >= static_cast<int>(connector_ports_.size())) return;
+    if (port_index < 0 || port_index >= static_cast<int>(ports_.size())) return;
     if (!device) return;
 
-    auto& port = connector_ports_[port_index];
+    auto& port = ports_[port_index];
     printf("System: Detached '%s' from %s\n", device->get_name(), port->get_name());
     port->detach_device(device);
 
@@ -499,16 +499,16 @@ bool System::process_sdl_event_for_devices(const SDL_Event& event) {
     return consumed;
 }
 
-void System::render_peripheral_connector_ui() {
+void System::render_peripheral_port_ui() {
 #ifdef CERMU_HAS_GUI
-    if (connector_ports_.empty()) return;
+    if (ports_.empty()) return;
 
     auto& registry = DeviceRegistry::instance();
 
     // Check if there's anything worth showing (external ports with devices,
     // or internal ports with attached devices that have UI)
     bool any_visible = false;
-    for (auto& port : connector_ports_) {
+    for (auto& port : ports_) {
         const auto& def = port->get_definition();
         if (def.is_internal) {
             if (port->get_attached_device()) any_visible = true;
@@ -523,8 +523,8 @@ void System::render_peripheral_connector_ui() {
     ImGui::Text("Peripheral Connectors");
     ImGui::Spacing();
 
-    for (int i = 0; i < static_cast<int>(connector_ports_.size()); i++) {
-        auto& port = connector_ports_[i];
+    for (int i = 0; i < static_cast<int>(ports_.size()); i++) {
+        auto& port = ports_[i];
         const auto& def = port->get_definition();
         auto* attached = port->get_attached_device();
 
@@ -730,13 +730,13 @@ void System::render_host_input_binding_ui(InputPeripheralDevice* device) {
 }
 
 /// Return a context-appropriate noun for devices on this connector type.
-static const char* connector_device_noun(ConnectorType type) {
+static const char* port_device_noun(PortType type) {
     switch (type) {
-        case ConnectorType::CONTROLLER_NES:
-        case ConnectorType::CONTROLLER_SNES:
-        case ConnectorType::CONTROLLER_ATARI:
+        case PortType::CONTROLLER_NES:
+        case PortType::CONTROLLER_SNES:
+        case PortType::CONTROLLER_ATARI:
             return "Controller";
-        case ConnectorType::CONTROL_PORT_DB9:
+        case PortType::CONTROL_PORT_DB9:
             return "Peripheral";
         default:
             return "Device";
@@ -747,27 +747,27 @@ static const char* connector_device_noun(ConnectorType type) {
 // CONNECTOR MENU BAR ICONS — Right-aligned icon buttons with popup menus
 // ============================================================================
 
-float System::render_connector_menu_bar_icons() {
+float System::render_port_menu_bar_icons() {
 #ifdef CERMU_HAS_GUI
-    if (connector_ports_.empty()) return 0.0f;
+    if (ports_.empty()) return 0.0f;
 
     auto& registry = DeviceRegistry::instance();
 
     // --- 1. Collect visible (external) ports --------------------------------
     struct VisiblePort {
         int            index;
-        ConnectorPort* port;
+        Port* port;
     };
     std::vector<VisiblePort> visible;
-    for (int i = 0; i < static_cast<int>(connector_ports_.size()); i++) {
-        const auto& def = connector_ports_[i]->get_definition();
+    for (int i = 0; i < static_cast<int>(ports_.size()); i++) {
+        const auto& def = ports_[i]->get_definition();
         if (def.is_internal) continue;  // Skip keyboard etc.
-        visible.push_back({ i, connector_ports_[i].get() });
+        visible.push_back({ i, ports_[i].get() });
     }
     if (visible.empty()) return 0.0f;
 
     // --- 2. Calculate total width -------------------------------------------
-    const float icon_sz  = static_cast<float>(ConnectorIcons::ICON_SIZE);
+    const float icon_sz  = static_cast<float>(PortIcons::ICON_SIZE);
     const float btn_pad  = 4.0f;   // padding inside ImageButton
     const float spacing  = 2.0f;   // gap between buttons
     const float btn_w    = icon_sz + btn_pad * 2.0f;
@@ -784,8 +784,8 @@ float System::render_connector_menu_bar_icons() {
         auto& vp = visible[vi];
         auto* port = vp.port;
         const auto& def  = port->get_definition();
-        GLuint tex = ConnectorIcons::get_icon(def.type);
-        if (!tex) tex = ConnectorIcons::get_icon(ConnectorType::CUSTOM);
+        GLuint tex = PortIcons::get_icon(def.type);
+        if (!tex) tex = PortIcons::get_icon(PortType::CUSTOM);
         if (!tex) continue;
 
         ImGui::PushID(vp.index);
@@ -947,7 +947,7 @@ float System::render_connector_menu_bar_icons() {
                         }
                     }
                 } else {
-                    const char* noun = connector_device_noun(def.type);
+                    const char* noun = port_device_noun(def.type);
                     char no_msg[64];
                     snprintf(no_msg, sizeof(no_msg), "No %s attached", noun);
                     no_msg[3] = static_cast<char>(tolower(no_msg[3]));
@@ -957,7 +957,7 @@ float System::render_connector_menu_bar_icons() {
                 // Switch / attach device submenu
                 if (!compatible.empty()) {
                     ImGui::Separator();
-                    const char* noun = connector_device_noun(def.type);
+                    const char* noun = port_device_noun(def.type);
                     char submenu_label[64];
                     snprintf(submenu_label, sizeof(submenu_label),
                              attached ? "Swap %s..." : "Attach %s...", noun);

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "systems/commodore/commodore_system.hpp"
-#include "core/connector.hpp"
+#include "core/port.hpp"
 #include "core/device_registry.hpp"
 #include "core/formats/format_handler.hpp"
 #include "core/formats/sid_format.hpp"
@@ -72,7 +72,7 @@ public:
     // Connector ports, owned devices, attach/detach, and the generic
     // peripheral connector UI are all provided by the System base
     // class.  The C64 only defines its port layout constants and the
-    // system-specific setup_connector_ports() initializer below.
+    // system-specific setup_ports() initializer below.
     //
 
     // =========================================================================
@@ -158,7 +158,7 @@ private:
     // CONNECTOR PORTS — C64-SPECIFIC LAYOUT
     // =========================================================================
 public:
-    // Indices into connector_ports_ for quick access (public for CIA1 callbacks)
+    // Indices into ports_ for quick access (public for CIA1 callbacks)
     static constexpr int PORT_CONTROL1   = 0;
     static constexpr int PORT_CONTROL2   = 1;
     static constexpr int PORT_IEC_SERIAL = 2;
@@ -174,7 +174,7 @@ public:
 
 private:
     /// Create and wire up all C64 connector ports (CIA1 joystick callbacks etc).
-    void setup_connector_ports();
+    void setup_ports();
     std::vector<DefaultPeripheral> get_default_peripherals() const override;
 
     /// Register all C64 chips into registered_chips_ for the Hardware menu.

@@ -29,7 +29,7 @@ public:
 #endif
 
     // --- Mouse-specific API --------------------------------------------
-    void set_left_button(bool pressed)  { set_signal(ConnectorSignals::JOY_FIRE, pressed); }
-    void set_right_button(bool pressed) { set_signal(ConnectorSignals::JOY_UP, pressed); }
+    void set_left_button(bool pressed)  { set_signal(PortSignals::JOY_FIRE, pressed); }
+    void set_right_button(bool pressed) { set_signal(PortSignals::JOY_UP, pressed); }
     void move(int dx, int dy);  ///< Relative mouse movement
 };

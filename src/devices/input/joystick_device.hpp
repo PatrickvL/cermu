@@ -17,7 +17,7 @@
 /**
  * Digital joystick device (Atari-compatible).
  *
- * DirectionBit layout matches ConnectorSignals::ControlPortBit:
+ * DirectionBit layout matches PortSignals::ControlPortBit:
  *   bit 0 = UP, bit 1 = DOWN, bit 2 = LEFT, bit 3 = RIGHT, bit 6 = FIRE
  */
 class JoystickDevice : public ControlPortInputDevice {
@@ -53,11 +53,11 @@ public:
     void set_direction(uint8_t bit_index, bool pressed) { set_signal(bit_index, pressed); }
 
     /// Convenience setters matching common controller events.
-    void set_up(bool pressed)    { set_signal(ConnectorSignals::JOY_UP,    pressed); }
-    void set_down(bool pressed)  { set_signal(ConnectorSignals::JOY_DOWN,  pressed); }
-    void set_left(bool pressed)  { set_signal(ConnectorSignals::JOY_LEFT,  pressed); }
-    void set_right(bool pressed) { set_signal(ConnectorSignals::JOY_RIGHT, pressed); }
-    void set_fire(bool pressed)  { set_signal(ConnectorSignals::JOY_FIRE,  pressed); }
+    void set_up(bool pressed)    { set_signal(PortSignals::JOY_UP,    pressed); }
+    void set_down(bool pressed)  { set_signal(PortSignals::JOY_DOWN,  pressed); }
+    void set_left(bool pressed)  { set_signal(PortSignals::JOY_LEFT,  pressed); }
+    void set_right(bool pressed) { set_signal(PortSignals::JOY_RIGHT, pressed); }
+    void set_fire(bool pressed)  { set_signal(PortSignals::JOY_FIRE,  pressed); }
 
     /// Get raw button state (active-low: 0 = pressed).
     uint32_t get_state() const { return signal_state_; }

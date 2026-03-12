@@ -60,7 +60,7 @@ uint32_t Datasette1530Device::get_output_signals() const {
 
 void Datasette1530Device::on_signal_change(uint32_t signals) {
     // The MOTOR signal is active-low: 0 = motor running
-    bool motor = !(signals & (1u << ConnectorSignals::CASS_MOTOR));
+    bool motor = !(signals & (1u << PortSignals::CASS_MOTOR));
     if (motor != motor_on_) {
         motor_on_ = motor;
     }
@@ -147,7 +147,7 @@ void Datasette1530Device::press_play() {
     playing_ = true;
 
     // SENSE line: active-low, 0 = button pressed
-    state_ &= ~(1u << ConnectorSignals::CASS_SENSE);
+    state_ &= ~(1u << PortSignals::CASS_SENSE);
     if (port_) port_->notify_device_output_changed(state_);
 }
 
@@ -156,10 +156,10 @@ void Datasette1530Device::press_stop() {
     playing_ = false;
 
     // SENSE line: released (button not pressed)
-    state_ |= (1u << ConnectorSignals::CASS_SENSE);
+    state_ |= (1u << PortSignals::CASS_SENSE);
 
     // READ line: released
-    state_ |= (1u << ConnectorSignals::CASS_READ);
+    state_ |= (1u << PortSignals::CASS_READ);
     read_level_ = true;
 
     if (port_) port_->notify_device_output_changed(state_);
@@ -222,9 +222,9 @@ void Datasette1530Device::tick() {
 
         // Update READ signal line
         if (read_level_) {
-            state_ |= (1u << ConnectorSignals::CASS_READ);
+            state_ |= (1u << PortSignals::CASS_READ);
         } else {
-            state_ &= ~(1u << ConnectorSignals::CASS_READ);
+            state_ &= ~(1u << PortSignals::CASS_READ);
         }
         if (port_) port_->notify_device_output_changed(state_);
     }
@@ -266,7 +266,7 @@ static const DeviceDescriptor datasette_descriptor = {
     "datasette",
     "Datasette (1530)",
     "Commodore 1530 (C2N) cassette tape drive — plays back TAP files",
-    ConnectorType::CASSETTE_PORT,
+    PortType::CASSETTE_PORT,
     false
 };
 

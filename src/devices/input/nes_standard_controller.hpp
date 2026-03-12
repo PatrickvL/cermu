@@ -92,7 +92,7 @@ public:
     // --- PeripheralDevice interface ------------------------------------
     const char* get_name() const override { return "NES Standard Controller"; }
     const char* get_id()   const override { return "nes_gamepad"; }
-    ConnectorType get_connector_type() const override { return ConnectorType::CONTROLLER_NES; }
+    PortType get_port_type() const override { return PortType::CONTROLLER_NES; }
     void reset() override;
 
     // --- Signal protocol -----------------------------------------------

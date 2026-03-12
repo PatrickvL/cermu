@@ -19,7 +19,7 @@ public:
 
     const char* get_name() const override { return "Datasette (1530)"; }
     const char* get_id() const override   { return "datasette"; }
-    ConnectorType get_connector_type() const override { return ConnectorType::CASSETTE_PORT; }
+    PortType get_port_type() const override { return PortType::CASSETTE_PORT; }
     void reset() override;
     void tick() override;                      ///< Drive the TAP playback clock
     void on_signal_change(uint32_t signals) override;

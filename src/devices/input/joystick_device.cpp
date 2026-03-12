@@ -132,11 +132,11 @@ int JoystickDevice::get_active_keymap_preset() const {
 #ifdef CERMU_HAS_GUI
 void JoystickDevice::render_device_ui() {
     // Joystick state display
-    bool up    = is_signal_asserted(ConnectorSignals::JOY_UP);
-    bool down  = is_signal_asserted(ConnectorSignals::JOY_DOWN);
-    bool left  = is_signal_asserted(ConnectorSignals::JOY_LEFT);
-    bool right = is_signal_asserted(ConnectorSignals::JOY_RIGHT);
-    bool fire  = is_signal_asserted(ConnectorSignals::JOY_FIRE);
+    bool up    = is_signal_asserted(PortSignals::JOY_UP);
+    bool down  = is_signal_asserted(PortSignals::JOY_DOWN);
+    bool left  = is_signal_asserted(PortSignals::JOY_LEFT);
+    bool right = is_signal_asserted(PortSignals::JOY_RIGHT);
+    bool fire  = is_signal_asserted(PortSignals::JOY_FIRE);
 
     ImGui::Text("  %s %s %s %s %s",
                 up ? "U" : ".", down ? "D" : ".", left ? "L" : ".",
@@ -154,7 +154,7 @@ static const DeviceDescriptor joystick_descriptor = {
     "joystick",
     "Digital Joystick",
     "Atari-compatible digital joystick (Competition Pro, TAC-2, etc.)",
-    ConnectorType::CONTROL_PORT_DB9,
+    PortType::CONTROL_PORT_DB9,
     false  // Not a bus device
 };
 

@@ -23,7 +23,7 @@
  *     }
  */
 
-#include "core/connector.hpp"
+#include "core/port.hpp"
 #include "core/host_input.hpp"
 
 #include <cstdio>

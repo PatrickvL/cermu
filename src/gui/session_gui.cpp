@@ -1,5 +1,5 @@
 #include "gui/session_gui.hpp"
-#include "gui/connector_icons.hpp"
+#include "gui/port_icons.hpp"
 #include "gui/vfs_file_system.hpp"
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include <imgui.h>
@@ -79,7 +79,7 @@ SessionGUI::~SessionGUI() {
     stop_emu_thread();
     close_audio_device();
     teardown_current_system();
-    ConnectorIcons::cleanup();
+    PortIcons::cleanup();
 }
 
 // ============================================================================
@@ -96,7 +96,7 @@ bool SessionGUI::init(const char* window_title, int width, int height) {
     allocate_framebuffer();
 
     // Create connector icon textures (shared across all systems)
-    ConnectorIcons::init();
+    PortIcons::init();
 
     // Open SDL audio for the current system (if it has audio)
     open_audio_device();
@@ -262,7 +262,7 @@ void SessionGUI::handle_events() {
 bool SessionGUI::has_virtual_mouse_attached() const {
     if (!system_) return false;
 
-    for (auto& port : system_->get_connector_ports()) {
+    for (auto& port : system_->get_ports()) {
         for (auto* dev : port->get_attached_devices()) {
             auto* input = dev->as_input_device();
             if (!input) continue;
@@ -529,7 +529,7 @@ void SessionGUI::render_menu_bar() {
     // into submenus (2+ entries) or shown as prefixed items (1 entry).
     if (system_) {
         auto& chips = system_->get_registered_chips();
-        auto& ports = system_->get_connector_ports();
+        auto& ports = system_->get_ports();
         auto& devices = system_->get_owned_devices();
 
         // Count non-internal connector ports (only external ports are shown)
@@ -672,7 +672,7 @@ void SessionGUI::render_menu_bar() {
         };
 
         // Helper — render connector port info as a menu item.
-        auto render_connector_entry = [](const ConnectorPort& port) {
+        auto render_port_entry = [](const Port& port) {
             const auto& def = port.get_definition();
             auto* dev = port.get_attached_device();
             if (dev) {
@@ -719,7 +719,7 @@ void SessionGUI::render_menu_bar() {
                     if (ImGui::BeginMenu("Connectors")) {
                         for (auto& p : ports) {
                             if (!p->get_definition().is_internal)
-                                render_connector_entry(*p);
+                                render_port_entry(*p);
                         }
                         ImGui::EndMenu();
                     }
@@ -819,7 +819,7 @@ void SessionGUI::render_menu_bar() {
 
         // Count external ports to estimate icon area width
         int ext_port_count = 0;
-        for (auto& p : system_->get_connector_ports())
+        for (auto& p : system_->get_ports())
             if (!p->get_definition().is_internal) ext_port_count++;
         float icon_area_w = ext_port_count > 0
             ? (ext_port_count * 24.0f + (ext_port_count - 1) * 2.0f + 8.0f)
@@ -827,7 +827,7 @@ void SessionGUI::render_menu_bar() {
 
         if (ext_port_count > 0) {
             ImGui::SameLine(icons_start - icon_area_w);
-            system_->render_connector_menu_bar_icons();
+            system_->render_port_menu_bar_icons();
         }
 
         ImGui::SameLine(bar_width - status_text_w);
@@ -989,7 +989,7 @@ void SessionGUI::render_settings() {
         system_->render_configuration_ui();
 
         // Generic peripheral connector UI (available for all systems)
-        system_->render_peripheral_connector_ui();
+        system_->render_peripheral_port_ui();
     }
     
     ImGui::End();
@@ -1680,7 +1680,7 @@ void SessionGUI::poll_drive_file_dialog_requests() {
     std::unique_lock<std::mutex> lock(emu_mutex_, std::try_to_lock);
     if (!lock.owns_lock()) return;
 
-    for (auto& port : system_->get_connector_ports()) {
+    for (auto& port : system_->get_ports()) {
         if (!port->get_definition().is_bus) continue;
         for (auto* dev : port->get_attached_devices()) {
             auto* drive = dynamic_cast<Drive1541Device*>(dev);

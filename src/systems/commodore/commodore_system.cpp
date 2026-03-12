@@ -219,7 +219,7 @@ void CommodoreSystem::apply_pending_load() {
         Drive1541Device* drive = nullptr;
 
         if (iec_port >= 0) {
-            auto* port = get_connector_port(iec_port);
+            auto* port = get_port(iec_port);
             if (port) {
                 for (auto* dev : port->get_attached_devices()) {
                     drive = dynamic_cast<Drive1541Device*>(dev);
@@ -270,7 +270,7 @@ void CommodoreSystem::apply_pending_load() {
         Datasette1530Device* datasette = nullptr;
 
         if (cass_port >= 0) {
-            auto* port = get_connector_port(cass_port);
+            auto* port = get_port(cass_port);
             if (port) {
                 datasette = dynamic_cast<Datasette1530Device*>(
                     port->get_attached_device());
@@ -328,7 +328,7 @@ bool CommodoreSystem::attach_media(const char* filepath) {
             return false;
         }
 
-        auto* port = get_connector_port(iec_port);
+        auto* port = get_port(iec_port);
         if (!port) return false;
 
         Drive1541Device* drive = nullptr;
@@ -369,7 +369,7 @@ bool CommodoreSystem::attach_media(const char* filepath) {
             return false;
         }
 
-        auto* port = get_connector_port(cass_port);
+        auto* port = get_port(cass_port);
         if (!port) return false;
 
         auto* datasette = dynamic_cast<Datasette1530Device*>(port->get_attached_device());

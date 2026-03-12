@@ -56,7 +56,7 @@ enum class IECState {
     CLOSE,          ///< CLOSE secondary address
 };
 
-/// IEC bus signal reading (matches ConnectorSignals::IECBit)
+/// IEC bus signal reading (matches PortSignals::IECBit)
 struct IECBusState {
     bool atn;       ///< ATN line state (true = asserted/low)
     bool clk;       ///< CLK line state
@@ -96,7 +96,7 @@ public:
     // --- PeripheralDevice interface ------------------------------------
     const char* get_name() const override { return name_.c_str(); }
     const char* get_id() const override   { return "1541"; }
-    ConnectorType get_connector_type() const override { return ConnectorType::IEC_SERIAL; }
+    PortType get_port_type() const override { return PortType::IEC_SERIAL; }
     void reset() override;
     void tick() override;
     void on_signal_change(uint32_t signal_state) override;

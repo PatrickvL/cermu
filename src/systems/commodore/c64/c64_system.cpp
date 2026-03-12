@@ -488,7 +488,7 @@ bool C64System::initialize() {
     // CPU I/O port → PLA memory banking (per-instance, no global descriptor mutation)
     // (callback is set on the CPU instance, not on a shared descriptor)
 
-    // NOTE: CIA1 keyboard callbacks are NOT set here — setup_connector_ports()
+    // NOTE: CIA1 keyboard callbacks are NOT set here — setup_ports()
     // installs joystick-aware versions that supersede the basic ones.
 
     // CIA2 interrupt line → NMI (CIA1 defaults to IRQ)
@@ -533,7 +533,7 @@ bool C64System::initialize() {
     }
 
     // Set up connector ports and wire them to the C64 hardware
-    setup_connector_ports();
+    setup_ports();
 
     // Register chips for the Hardware menu and debug windows
     register_c64_chips();
@@ -675,7 +675,7 @@ static constexpr uint8_t IEC_DEVNR_MASK    = 0x0F;
 
 Drive1541Device* C64System::find_iec_drive(int device_number) {
     if (device_number < 4) return nullptr;
-    auto* port = get_connector_port(PORT_IEC_SERIAL);
+    auto* port = get_port(PORT_IEC_SERIAL);
     if (!port) return nullptr;
     for (auto* dev : port->get_attached_devices()) {
         auto* drive = dynamic_cast<Drive1541Device*>(dev);
@@ -1230,7 +1230,7 @@ void C64System::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode,
     // Disc flip hotkeys — Alt+N (next) / Alt+P (prev) on drive 8
     if (pressed && !repeat && (mod & KMOD_ALT)) {
         if (key == SDLK_n || key == SDLK_p) {
-            auto* iec_port = get_connector_port(PORT_IEC_SERIAL);
+            auto* iec_port = get_port(PORT_IEC_SERIAL);
             if (iec_port) {
                 for (auto* dev : iec_port->get_attached_devices()) {
                     auto* drive = dynamic_cast<Drive1541Device*>(dev);
@@ -1264,8 +1264,8 @@ void C64System::handle_controller_event(int controller, int button, bool pressed
     // joystick port for single-player games), controller 1 → Port 1.
     int port_index = (controller == 0) ? PORT_CONTROL2 : PORT_CONTROL1;
 
-    if (port_index < static_cast<int>(connector_ports_.size())) {
-        auto* device = connector_ports_[port_index]->get_attached_device();
+    if (port_index < static_cast<int>(ports_.size())) {
+        auto* device = ports_[port_index]->get_attached_device();
         auto* joy = dynamic_cast<JoystickDevice*>(device);
         if (joy) {
             // Map SDL controller buttons to joystick directions
@@ -1477,7 +1477,7 @@ void C64System::render_configuration_ui() {
     // internal state are tightly coupled to the chosen revision.
 
     // Peripheral connector UI is rendered generically by the GUI layer
-    // via System::render_peripheral_connector_ui() — no C64-specific
+    // via System::render_peripheral_port_ui() — no C64-specific
     // duplication needed here.
 #endif
 }
@@ -1487,44 +1487,44 @@ void C64System::render_configuration_ui() {
 // ============================================================================
 
 // Connector definitions for C64 system ports
-static const ConnectorDefinition c64_control_port_1_def = {
-    ConnectorType::CONTROL_PORT_DB9,
+static const PortDefinition c64_control_port_1_def = {
+    PortType::CONTROL_PORT_DB9,
     "Control Port 1",
-    ConnectorSignals::CONTROL_PORT_SIGNALS,
-    ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT,
+    PortSignals::CONTROL_PORT_SIGNALS,
+    PortSignals::CONTROL_PORT_SIGNAL_COUNT,
     false, false
 };
 
-static const ConnectorDefinition c64_control_port_2_def = {
-    ConnectorType::CONTROL_PORT_DB9,
+static const PortDefinition c64_control_port_2_def = {
+    PortType::CONTROL_PORT_DB9,
     "Control Port 2",
-    ConnectorSignals::CONTROL_PORT_SIGNALS,
-    ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT,
+    PortSignals::CONTROL_PORT_SIGNALS,
+    PortSignals::CONTROL_PORT_SIGNAL_COUNT,
     false, false
 };
 
-static const ConnectorDefinition c64_iec_serial_def = {
-    ConnectorType::IEC_SERIAL,
+static const PortDefinition c64_iec_serial_def = {
+    PortType::IEC_SERIAL,
     "IEC Serial Bus",
-    ConnectorSignals::IEC_SERIAL_SIGNALS,
-    ConnectorSignals::IEC_SERIAL_SIGNAL_COUNT,
+    PortSignals::IEC_SERIAL_SIGNALS,
+    PortSignals::IEC_SERIAL_SIGNAL_COUNT,
     false,  // is_internal
     true    // is_bus — shared bus, multiple drives/printers
 };
 
-static const ConnectorDefinition c64_cassette_def = {
-    ConnectorType::CASSETTE_PORT,
+static const PortDefinition c64_cassette_def = {
+    PortType::CASSETTE_PORT,
     "Cassette Port",
-    ConnectorSignals::CASSETTE_PORT_SIGNALS,
-    ConnectorSignals::CASSETTE_PORT_SIGNAL_COUNT,
+    PortSignals::CASSETTE_PORT_SIGNALS,
+    PortSignals::CASSETTE_PORT_SIGNAL_COUNT,
     false, false
 };
 
-static const ConnectorDefinition c64_user_port_def = {
-    ConnectorType::USER_PORT,
+static const PortDefinition c64_user_port_def = {
+    PortType::USER_PORT,
     "User Port",
-    ConnectorSignals::USER_PORT_SIGNALS,
-    ConnectorSignals::USER_PORT_SIGNAL_COUNT,
+    PortSignals::USER_PORT_SIGNALS,
+    PortSignals::USER_PORT_SIGNAL_COUNT,
     false, false
 };
 
@@ -1534,8 +1534,8 @@ static const SignalLine expansion_signals[] = {
     { "GAME",  SignalDirection::INPUT,  1 },
     { "RESET", SignalDirection::OUTPUT, 2 },
 };
-static const ConnectorDefinition c64_expansion_def = {
-    ConnectorType::EXPANSION_PORT,
+static const PortDefinition c64_expansion_def = {
+    PortType::EXPANSION_PORT,
     "Expansion Port",
     expansion_signals,
     3,
@@ -1579,16 +1579,16 @@ static uint8_t c64_cia1_port_a_read_with_joystick(void* context, uint8_t port_a_
     // Joystick connector signals map to CIA1 PA:
     //   JOY_UP(0)→PA0, JOY_DOWN(1)→PA1, JOY_LEFT(2)→PA2, JOY_RIGHT(3)→PA3, JOY_FIRE(6)→PA4
     if (ctx->system) {
-        auto* port = ctx->system->get_connector_port(C64System::PORT_CONTROL2);
+        auto* port = ctx->system->get_port(C64System::PORT_CONTROL2);
         if (port && port->get_attached_device()) {
             uint32_t dev_signals = port->get_attached_device()->get_output_signals();
             // Map connector signal bits to CIA1 PA bits
             uint8_t joy_mask = 0xFF;
-            if (!(dev_signals & (1u << ConnectorSignals::JOY_UP)))    joy_mask &= ~0x01;
-            if (!(dev_signals & (1u << ConnectorSignals::JOY_DOWN)))  joy_mask &= ~0x02;
-            if (!(dev_signals & (1u << ConnectorSignals::JOY_LEFT)))  joy_mask &= ~0x04;
-            if (!(dev_signals & (1u << ConnectorSignals::JOY_RIGHT))) joy_mask &= ~0x08;
-            if (!(dev_signals & (1u << ConnectorSignals::JOY_FIRE)))  joy_mask &= ~0x10;
+            if (!(dev_signals & (1u << PortSignals::JOY_UP)))    joy_mask &= ~0x01;
+            if (!(dev_signals & (1u << PortSignals::JOY_DOWN)))  joy_mask &= ~0x02;
+            if (!(dev_signals & (1u << PortSignals::JOY_LEFT)))  joy_mask &= ~0x04;
+            if (!(dev_signals & (1u << PortSignals::JOY_RIGHT))) joy_mask &= ~0x08;
+            if (!(dev_signals & (1u << PortSignals::JOY_FIRE)))  joy_mask &= ~0x10;
             col_state &= joy_mask;
         }
     }
@@ -1615,15 +1615,15 @@ static uint8_t c64_cia1_port_b_read_with_joystick(void* context, uint8_t port_b_
 
     // AND-in Control Port 1 joystick state (bits 0-4 of CIA1 PB)
     if (ctx->system) {
-        auto* port = ctx->system->get_connector_port(C64System::PORT_CONTROL1);
+        auto* port = ctx->system->get_port(C64System::PORT_CONTROL1);
         if (port && port->get_attached_device()) {
             uint32_t dev_signals = port->get_attached_device()->get_output_signals();
             uint8_t joy_mask = 0xFF;
-            if (!(dev_signals & (1u << ConnectorSignals::JOY_UP)))    joy_mask &= ~0x01;
-            if (!(dev_signals & (1u << ConnectorSignals::JOY_DOWN)))  joy_mask &= ~0x02;
-            if (!(dev_signals & (1u << ConnectorSignals::JOY_LEFT)))  joy_mask &= ~0x04;
-            if (!(dev_signals & (1u << ConnectorSignals::JOY_RIGHT))) joy_mask &= ~0x08;
-            if (!(dev_signals & (1u << ConnectorSignals::JOY_FIRE)))  joy_mask &= ~0x10;
+            if (!(dev_signals & (1u << PortSignals::JOY_UP)))    joy_mask &= ~0x01;
+            if (!(dev_signals & (1u << PortSignals::JOY_DOWN)))  joy_mask &= ~0x02;
+            if (!(dev_signals & (1u << PortSignals::JOY_LEFT)))  joy_mask &= ~0x04;
+            if (!(dev_signals & (1u << PortSignals::JOY_RIGHT))) joy_mask &= ~0x08;
+            if (!(dev_signals & (1u << PortSignals::JOY_FIRE)))  joy_mask &= ~0x10;
             row_state &= joy_mask;
         }
     }
@@ -1646,37 +1646,37 @@ static bool c64_vicii_lp_pin_read(void* context) {
     return lightpen->get_lp_pin_state(beam_x, beam_y);
 }
 
-void C64System::setup_connector_ports() {
-    connector_ports_.clear();
+void C64System::setup_ports() {
+    ports_.clear();
 
     // PORT_CONTROL1 = 0 — Control Port 1 (directly connected to CIA1 Port B bits 0-4)
-    add_connector_port(c64_control_port_1_def, 1);
+    add_port(c64_control_port_1_def, 1);
 
     // PORT_CONTROL2 = 1 — Control Port 2 (directly connected to CIA1 Port A bits 0-4)
-    add_connector_port(c64_control_port_2_def, 2);
+    add_port(c64_control_port_2_def, 2);
 
     // PORT_IEC_SERIAL = 2 — IEC Serial Bus (connected to CIA2 Port A bits 3-5)
-    add_connector_port(c64_iec_serial_def, 0);
+    add_port(c64_iec_serial_def, 0);
 
     // PORT_CASSETTE = 3 — Cassette Port (CPU I/O port + CIA1 FLAG)
-    add_connector_port(c64_cassette_def, 0);
+    add_port(c64_cassette_def, 0);
 
     // PORT_USER = 4 — User Port (CIA2 Port B + control lines)
-    add_connector_port(c64_user_port_def, 0);
+    add_port(c64_user_port_def, 0);
 
     // PORT_EXPANSION = 5 — Expansion Port (cartridge slot)
-    add_connector_port(c64_expansion_def, 0);
+    add_port(c64_expansion_def, 0);
 
     // PORT_KEYBOARD = 6 — Internal Keyboard (always attached)
-    static const ConnectorDefinition c64_keyboard_def = {
-        ConnectorType::CUSTOM, "Keyboard", nullptr, 0, true, false  // is_internal, not bus
+    static const PortDefinition c64_keyboard_def = {
+        PortType::CUSTOM, "Keyboard", nullptr, 0, true, false  // is_internal, not bus
     };
-    int kb_port = add_connector_port(c64_keyboard_def, 0);
+    int kb_port = add_port(c64_keyboard_def, 0);
 
     // Attach internal keyboard device
     auto kb_device = std::make_unique<CommodoreKeyboardDevice>(initialized_ ? this->keyboard : nullptr);
     auto* kb_raw = kb_device.get();
-    connector_ports_[kb_port]->attach_device(kb_raw);
+    ports_[kb_port]->attach_device(kb_raw);
     owned_devices_.push_back(std::move(kb_device));
 
     // Default devices: mouse in Port 1, joystick in Port 2, 1541 on IEC,
@@ -1704,7 +1704,7 @@ void C64System::setup_connector_ports() {
         printf("C64: Wired VIC-II lightpen pin callback\n");
     }
 
-    printf("C64: Created %zu connector ports\n", connector_ports_.size());
+    printf("C64: Created %zu ports\n", ports_.size());
 }
 
 void C64System::update_lightpen_display_rect() {
@@ -1727,7 +1727,7 @@ void C64System::on_port_device_changed(int port_index) {
     // Update cached lightpen for Control Port 1
     if (port_index == PORT_CONTROL1) {
         cached_lightpen_ = nullptr;
-        auto* port = get_connector_port(PORT_CONTROL1);
+        auto* port = get_port(PORT_CONTROL1);
         if (port) {
             auto* device = port->get_attached_device();
             if (device && strcmp(device->get_id(), "lightpen") == 0) {
@@ -1739,7 +1739,7 @@ void C64System::on_port_device_changed(int port_index) {
     // Update serial-traps-enabled flag when IEC serial port changes
     if (port_index == PORT_IEC_SERIAL) {
         serial_traps_enabled_ = false;
-        auto* port = get_connector_port(PORT_IEC_SERIAL);
+        auto* port = get_port(PORT_IEC_SERIAL);
         if (port) {
             for (auto* dev : port->get_attached_devices()) {
                 if (dynamic_cast<Drive1541Device*>(dev)) {

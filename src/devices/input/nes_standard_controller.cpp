@@ -17,7 +17,7 @@
 #include <SDL_events.h>
 #include <SDL_gamecontroller.h>
 
-using ConnectorSignals::NESControllerBit;
+using PortSignals::NESControllerBit;
 
 // ============================================================================
 // CONSTRUCTION / RESET
@@ -92,7 +92,7 @@ void NesStandardController::on_signal_change(uint32_t signal_state) {
         output_signals_ |= (1u << NESControllerBit::NES_D0);
     }
 
-    // Keep ConnectorPort cache in sync so read_signals() returns fresh D0
+    // Keep Port cache in sync so read_signals() returns fresh D0
     if (port_) port_->notify_device_output_changed(output_signals_);
 }
 
@@ -250,7 +250,7 @@ static const DeviceDescriptor nes_gamepad_descriptor = {
     "nes_gamepad",
     "NES Standard Controller",
     "Standard NES-004 gamepad with D-pad, Select, Start, B, and A buttons",
-    ConnectorType::CONTROLLER_NES,
+    PortType::CONTROLLER_NES,
     false  // Not a bus device
 };
 

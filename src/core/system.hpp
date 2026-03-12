@@ -9,7 +9,7 @@
 #include <SDL_keycode.h>
 #include "core/hardware_traits.hpp"
 #include "core/chip.hpp"     // ChipBase, ChipInfo
-#include "core/connector.hpp"
+#include "core/port.hpp"
 #include "core/peripherals/input_peripheral_device.hpp"
 #include "core/device_registry.hpp"
 
@@ -232,13 +232,13 @@ protected:
     // CONNECTOR PORTS & PERIPHERAL DEVICES (generic for all systems)
     // =========================================================================
     /// Connector ports registered by each system during initialization.
-    std::vector<std::unique_ptr<ConnectorPort>> connector_ports_;
+    std::vector<std::unique_ptr<Port>> ports_;
 
     /// Peripheral device instances owned by the system (attached to ports).
     std::vector<std::unique_ptr<PeripheralDevice>> owned_devices_;
 
     /// Helper: add a connector port (called by derived systems in initialize).
-    int add_connector_port(const ConnectorDefinition& def, int port_number = 0);
+    int add_port(const PortDefinition& def, int port_number = 0);
 
     /// Tick all attached peripheral devices (call once per frame).
     void tick_peripherals();
@@ -255,7 +255,7 @@ protected:
     /// on system start-up.  Systems declare their defaults by overriding
     /// get_default_peripherals().
     struct DefaultPeripheral {
-        int         port_index;   ///< Index into connector_ports_
+        int         port_index;   ///< Index into ports_
         const char* device_id;    ///< DeviceRegistry ID (e.g. "joystick")
     };
 
@@ -268,7 +268,7 @@ protected:
 
     /// Attach every peripheral listed by get_default_peripherals() and
     /// then run auto_bind_host_inputs() once.  Typically the last call
-    /// inside setup_connector_ports().
+    /// inside setup_ports().
     void attach_default_peripherals();
 
     // =========================================================================
@@ -316,14 +316,14 @@ public:
     // --- Connector Port Access (generic, available for all systems) ---------
 
     /// Get all connector ports on this system.
-    const std::vector<std::unique_ptr<ConnectorPort>>& get_connector_ports() const {
-        return connector_ports_;
+    const std::vector<std::unique_ptr<Port>>& get_ports() const {
+        return ports_;
     }
 
     /// Get a connector port by index (nullptr if out of range).
-    ConnectorPort* get_connector_port(int index) {
-        if (index >= 0 && index < static_cast<int>(connector_ports_.size()))
-            return connector_ports_[index].get();
+    Port* get_port(int index) {
+        if (index >= 0 && index < static_cast<int>(ports_.size()))
+            return ports_[index].get();
         return nullptr;
     }
 
@@ -349,7 +349,7 @@ public:
     bool process_sdl_event_for_devices(const SDL_Event& event);
 
     /// Render the generic peripheral connector UI (called from GUI layer).
-    void render_peripheral_connector_ui();
+    void render_peripheral_port_ui();
 
     /// Render right-aligned connector icons in the ImGui main menu bar.
     /// Each icon opens a popup menu for managing the attached peripheral
@@ -357,7 +357,7 @@ public:
     /// BeginMainMenuBar() and EndMainMenuBar().
     /// Returns the total width consumed so the caller can position the
     /// status text accordingly.
-    float render_connector_menu_bar_icons();
+    float render_port_menu_bar_icons();
 
     /// Render host input binding selector for a device (called from connector UI).
     void render_host_input_binding_ui(InputPeripheralDevice* device);

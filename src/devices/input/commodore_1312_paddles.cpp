@@ -82,8 +82,8 @@ bool Commodore1312Paddles::process_sdl_event(const SDL_Event& event) {
 
 #ifdef CERMU_HAS_GUI
 void Commodore1312Paddles::render_device_ui() {
-    bool fire_x = is_signal_asserted(ConnectorSignals::JOY_FIRE);
-    bool fire_y = is_signal_asserted(ConnectorSignals::JOY_UP);
+    bool fire_x = is_signal_asserted(PortSignals::JOY_FIRE);
+    bool fire_y = is_signal_asserted(PortSignals::JOY_UP);
 
     ImGui::Text("  X:%3d  Y:%3d  Fire A:%s  B:%s",
                 pot_x_, pot_y_, fire_x ? "Y" : ".", fire_y ? "Y" : ".");
@@ -98,7 +98,7 @@ static const DeviceDescriptor paddles_1312_descriptor = {
     "paddles_1312",
     "Commodore 1312 Paddles",
     "Commodore 1312 paddle controller pair — analog potentiometers + fire buttons",
-    ConnectorType::CONTROL_PORT_DB9,
+    PortType::CONTROL_PORT_DB9,
     false
 };
 

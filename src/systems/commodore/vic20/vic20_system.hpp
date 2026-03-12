@@ -199,7 +199,7 @@ private:
     static uint8_t vic20_via2_port_b_read(void* context, uint8_t port_b_output);
     
     // Connector port setup (registers VIC-20 connector ports with base class)
-    void setup_connector_ports();
+    void setup_ports();
     std::vector<DefaultPeripheral> get_default_peripherals() const override;
 
     // Legacy integration methods (deprecated, kept for compatibility)

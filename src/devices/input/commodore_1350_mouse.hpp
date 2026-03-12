@@ -43,8 +43,8 @@ public:
     void move(int dx, int dy);
 
     /// Buttons map to joystick lines.
-    void set_left_button(bool pressed)  { set_signal(ConnectorSignals::JOY_FIRE, pressed); }
-    void set_right_button(bool pressed) { set_signal(ConnectorSignals::JOY_UP, pressed); }
+    void set_left_button(bool pressed)  { set_signal(PortSignals::JOY_FIRE, pressed); }
+    void set_right_button(bool pressed) { set_signal(PortSignals::JOY_UP, pressed); }
 
 private:
     int accum_x_ = 0;  ///< Accumulated X motion between ticks

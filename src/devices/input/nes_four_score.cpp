@@ -19,7 +19,7 @@
 #include <cstdio>
 #include <SDL_events.h>
 
-using ConnectorSignals::NESControllerBit;
+using PortSignals::NESControllerBit;
 
 // ============================================================================
 // CONSTRUCTION / RESET
@@ -52,7 +52,7 @@ void NesFourScore::reset() {
 // LIFECYCLE
 // ============================================================================
 
-void NesFourScore::on_attach(ConnectorPort* port) {
+void NesFourScore::on_attach(Port* port) {
     PeripheralDevice::on_attach(port);
 
     // Auto-detect signature from port index:
@@ -247,7 +247,7 @@ static const DeviceDescriptor nes_four_score_descriptor = {
     "nes_four_score",
     "NES Four Score",
     "NES-034 Four Score 4-player adapter (provides 2 controller slots per port)",
-    ConnectorType::CONTROLLER_NES,
+    PortType::CONTROLLER_NES,
     false
 };
 

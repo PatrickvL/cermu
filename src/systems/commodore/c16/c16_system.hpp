@@ -229,7 +229,7 @@ private:
     bus_state_t io_tick(bus_state_t s);         // $FD00-$FDFF I/O dispatch
     void setup_ram_mirroring();                 // configure page pointers for current ram_size_
     void update_rom_banking();                  // switch read pages on rom_enabled change
-    void setup_connector_ports();
+    void setup_ports();
     std::vector<DefaultPeripheral> get_default_peripherals() const override;
     static uint8_t io_port_in(void* user_data);
     static void io_port_out(uint8_t data, void* user_data);

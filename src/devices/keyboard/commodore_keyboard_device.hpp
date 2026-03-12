@@ -20,7 +20,7 @@ public:
 
     const char* get_name() const override { return "Keyboard"; }
     const char* get_id() const override   { return "commodore_keyboard"; }
-    ConnectorType get_connector_type() const override { return ConnectorType::CUSTOM; }
+    PortType get_port_type() const override { return PortType::CUSTOM; }
     void reset() override;
     uint32_t get_output_signals() const override { return 0xFFFFFFFF; }
 

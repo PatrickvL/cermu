@@ -90,10 +90,10 @@ void NEOSMouse::output_nibble(uint8_t nibble) {
     //   bit 2 → JOY_LEFT (pin 3)
     //   bit 3 → JOY_FIRE (pin 6)
     // Lines active-low: assert (pull LOW) when bit is set.
-    set_signal_batch(ConnectorSignals::JOY_UP,   (nibble & 0x01) != 0);
-    set_signal_batch(ConnectorSignals::JOY_DOWN,  (nibble & 0x02) != 0);
-    set_signal_batch(ConnectorSignals::JOY_LEFT,  (nibble & 0x04) != 0);
-    set_signal_batch(ConnectorSignals::JOY_FIRE,  (nibble & 0x08) != 0);
+    set_signal_batch(PortSignals::JOY_UP,   (nibble & 0x01) != 0);
+    set_signal_batch(PortSignals::JOY_DOWN,  (nibble & 0x02) != 0);
+    set_signal_batch(PortSignals::JOY_LEFT,  (nibble & 0x04) != 0);
+    set_signal_batch(PortSignals::JOY_FIRE,  (nibble & 0x08) != 0);
     // RIGHT line is used as strobe by the host — we don't drive it
     notify_port();
 }
@@ -119,7 +119,7 @@ static const DeviceDescriptor neos_mouse_descriptor = {
     "mouse_neos",
     "NEOS Mouse",
     "NEOS mouse — third-party bit-bang protocol via CIA port lines",
-    ConnectorType::CONTROL_PORT_DB9,
+    PortType::CONTROL_PORT_DB9,
     false
 };
 

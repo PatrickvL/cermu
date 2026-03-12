@@ -36,6 +36,6 @@ public:
     void set_paddle_y(uint8_t value) { pot_y_ = value; }
 
     /// Fire buttons (active-low).
-    void set_fire_x(bool pressed) { set_signal(ConnectorSignals::JOY_FIRE, pressed); }
-    void set_fire_y(bool pressed) { set_signal(ConnectorSignals::JOY_UP, pressed); }
+    void set_fire_x(bool pressed) { set_signal(PortSignals::JOY_FIRE, pressed); }
+    void set_fire_y(bool pressed) { set_signal(PortSignals::JOY_UP, pressed); }
 };

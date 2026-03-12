@@ -13,7 +13,7 @@
  *   - Disc/tape fliplist for quick media cycling
  */
 
-#include "core/connector.hpp"
+#include "core/port.hpp"
 #include <cstdint>
 #include <string>
 #include <vector>
