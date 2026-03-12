@@ -197,6 +197,7 @@ void SpectrumSystem<V>::reset() {
     bank_select_ = 0;
     bank_locked_ = false;
     frame_tstate_counter_ = 0;
+    std::memset(keyboard_rows_, 0xFF, sizeof(keyboard_rows_));
 }
 
 // ============================================================================
@@ -570,11 +571,12 @@ void SpectrumSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 
     for (const auto& m : mappings) {
         if (m.sdl_key == key) {
-            uint8_t row_state = ula_.read_keyboard_row(m.row);
+            uint8_t row_state = keyboard_rows_[m.row];
             if (pressed)
                 row_state &= ~(1 << m.bit);  // Active-low: clear bit
             else
                 row_state |= (1 << m.bit);   // Release: set bit
+            keyboard_rows_[m.row] = row_state;
             ula_.set_keyboard_row(m.row, row_state);
         }
     }
