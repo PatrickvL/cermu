@@ -69,7 +69,7 @@
 // Cartridge ROM is loaded into the RAM buffer and write-protected via page pointers.
 //
 // Non-bus chips (CPU, VIC, VIAs) are declared with size_bytes=0 — they are
-// factory-created by BusMemory::create_chips() but not mapped into the bus.
+// factory-created by Board::create_chips() but not mapped into the bus.
 // Conditional chips use condition tags evaluated at create_chips() time.
 //
 
@@ -150,7 +150,7 @@ private:
     
     // ── Memory bus (declarative manifest + page-pointer dispatch) ────────
     using Bus = MemoryBus<VIC20BusTraits::Spec>;
-    using Mem = BusMemory<VIC20BusTraits::Spec>;
+    using Mem = Board<VIC20BusTraits::Spec>;
     Bus mem_bus_;
     Mem bus_mem_{kVIC20Chips};
 

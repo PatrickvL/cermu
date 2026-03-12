@@ -115,12 +115,12 @@ public:
 private:
     // ── Bus ──────────────────────────────────────────────────────────────
     using Bus    = MemoryBus<PETBusTraits::Spec>;
-    using BusMem = BusMemory<PETBusTraits::Spec>;
+    using BusMem = Board<PETBusTraits::Spec>;
     Bus    bus_;
     BusMem bus_mem_{kPETChips};
     bus_state_t pins_ = PET_BUS_DEFAULT_STATE;
 
-    // ── Memory chips (owned by registered_chips_, managed via BusMemory) ─
+    // ── Memory chips (owned by registered_chips_, managed via Board) ─
     RAMChip* main_ram_chip_      = nullptr;  // 32 KB main RAM
     RAMChip* screen_ram_chip_    = nullptr;  // 1 KB screen RAM
     ROMChip* basic_rom_b_chip_   = nullptr;  // 4 KB BASIC $B000

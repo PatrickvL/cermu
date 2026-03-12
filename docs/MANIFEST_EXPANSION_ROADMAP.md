@@ -3,7 +3,7 @@
 **Date:** 2026-07-22
 **Purpose:** Incremental plan to evolve chip manifests into full board declarations,
 bridging the gap between current C++ systems and data-driven TOML system definitions.
-**Builds On:** Current `ChipManifest` / `BusMemory` infrastructure, `CONFIGURABLE_SYSTEM_ARCHITECTURE.md`
+**Builds On:** Current `ChipManifest` / `Board` infrastructure, `CONFIGURABLE_SYSTEM_ARCHITECTURE.md`
 
 ---
 
@@ -12,7 +12,7 @@ bridging the gap between current C++ systems and data-driven TOML system definit
 ### What Manifests Declare Today
 
 Manifests describe **memory-mapped chips** in address space: RAM, ROM, and (in newer
-systems) MMIO-only I/O chips.  `BusMemory` owns the unified buffer, auto-wires page
+systems) MMIO-only I/O chips.  `Board` owns the unified buffer, auto-wires page
 tables, and manages chip lifetimes via factory creation or pre-binding.
 
 | System      | Manifest contains                              | Non-manifest chips (manual)              |
@@ -31,7 +31,7 @@ tables, and manages chip lifetimes via factory creation or pre-binding.
 
 ### Generic Lifecycle: `reset_chips()`
 
-`BusMemory::reset_chips()` iterates all bound slots and calls `ChipBase::reset()`.
+`Board::reset_chips()` iterates all bound slots and calls `ChipBase::reset()`.
 Currently used by: VIC-20, Atari 2600, Apple 1, Acorn Atom.  Safe for all chip types
 (RAM/ROM/CPU have no-op `reset()`).
 
@@ -122,10 +122,10 @@ class ChipBase {
 };
 ```
 
-### BusMemory lifecycle API growth
+### Board lifecycle API growth
 
 ```cpp
-class BusMemory {
+class Board {
     // Existing:
     void reset_chips() noexcept;     // Calls reset() on all bound chips
 
@@ -175,7 +175,7 @@ Some systems have multiple physical boards:
 - **Bomb Jack**: main board + sound board (separate CPUs)
 - **C64 + 1541**: main board + disk drive board
 
-Each board has its own `BusMemory` instance and tick schedule.
+Each board has its own `Board` instance and tick schedule.
 
 ### Component types beyond chips
 

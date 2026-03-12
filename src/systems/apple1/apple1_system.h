@@ -115,10 +115,10 @@ private:
     ROMChip* basic_rom_   = nullptr;  // Optional Apple 1 BASIC (4KB at various addresses)
     ROMChip* char_rom_    = nullptr;  // Signetics 2513 character ROM (512 bytes)
     
-    // MemoryBus — declarative setup via chip manifest + BusMemory::apply()
+    // MemoryBus — declarative setup via chip manifest + Board::apply()
     using Bus = MemoryBus<Apple1BusSpec>;
     using PT  = PackingTraits<Apple1BusSpec>;
-    using Mem = BusMemory<Apple1BusSpec>;
+    using Mem = Board<Apple1BusSpec>;
     Bus bus_;
     Mem bus_mem_{kApple1Chips};
 

@@ -162,11 +162,11 @@ private:
     bool mapper_snoop_ = false;             // Cached: mapper needs bus_snoop() calls
 
     // ========================================================================
-    // MEMORY BUS — declarative setup via chip manifest + BusMemory::apply()
+    // MEMORY BUS — declarative setup via chip manifest + Board::apply()
     // ========================================================================
 
     using Bus = MemoryBus<Atari2600BusSpec>;
-    using Mem = BusMemory<Atari2600BusSpec>;
+    using Mem = Board<Atari2600BusSpec>;
 
     Bus bus_;
     Mem bus_mem_{kAtari2600Chips};

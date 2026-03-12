@@ -110,7 +110,7 @@ private:
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using Bus = MemoryBus<BBCMicroBusSpec>;
     using PT  = PackingTraits<BBCMicroBusSpec>;
-    using Mem = BusMemory<BBCMicroBusSpec>;
+    using Mem = Board<BBCMicroBusSpec>;
     Bus bus_;
     Mem bus_mem_{kBBCMicroChips};
 

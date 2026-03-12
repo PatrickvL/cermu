@@ -379,8 +379,8 @@ protected:
                        const char* display_name, const char* short_name,
                        const char* category, uint16_t base_address = 0);
 
-    /// Register all factory-created chips from a BusMemory instance.
-    /// Each chip is registered as a borrowed pointer (BusMemory owns them).
+    /// Register all factory-created chips from a Board instance.
+    /// Each chip is registered as a borrowed pointer (Board owns them).
     /// Uses the self-describing register_chip(ChipBase*) path — chips carry
     /// their own display_name, short_name, category, and base_address.
     template<typename BusMem>

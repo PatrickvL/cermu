@@ -105,17 +105,17 @@ public:
     ChipDebugRegistry debug_registry_;
 #endif
 
-    // --- Bus chip identity (assigned by BusMemory during bind) ---
+    // --- Bus chip identity (assigned by Board during bind) ---
     uint16_t bus_chip_id() const { return bus_chip_id_; }
     void set_bus_chip_id(uint16_t id) { bus_chip_id_ = id; }
 
-    // --- Placement metadata setters (used by BusMemory::create_chips) ---
+    // --- Placement metadata setters (used by Board::create_chips) ---
     void set_display_name(const char* name) { display_name_ = name; }
     void set_short_name(const char* name) { short_name_ = name; }
     void set_base_address(uint16_t addr) { base_address_ = addr; }
 
     // --- Chip reset (opt-in via override) ---
-    // Called by BusMemory::reset_chips() during system reset.
+    // Called by Board::reset_chips() during system reset.
     // Chips with internal state override this to clear registers, timers, etc.
     // CPUs use a separate pin-based reset protocol and leave this as no-op.
     // reset() is inherited from ComponentBase with an empty default.

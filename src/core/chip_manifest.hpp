@@ -16,7 +16,7 @@
 //                       Systems declare a manifest and get a BusSpec for free:
 //                         using Spec = ManifestBusSpec<kMyChips, 16, 8>;
 //
-//   BusMemory<Spec>   — runtime owner of the unified buffer.  After binding
+//   Board<Spec>       — runtime owner of the unified buffer.  After binding
 //                       runtime ChipBase* instances to slots, a single apply()
 //                       call programs all page tables, creates sub-tables, and
 //                       registers MMIO handlers automatically.
@@ -40,7 +40,7 @@
 //
 //   1.  Define a constexpr ChipManifest using typed Slot<T> entries.
 //   2.  Derive a BusSpec: using Spec = ManifestBusSpec<kManifest, 16, 8>;
-//   3.  Construct a BusMemory<Spec> from the manifest; it allocates the buffer.
+//   3.  Construct a Board<Spec> from the manifest; it allocates the buffer.
 //   4.  Bind ChipBase* instances via initialize(bus, chips...) — one call
 //       binds all slots, auto-calls MemoryChipBase::bind(), and wires the bus.
 //   5.  Load ROM/RAM content via mem.load() or mem.chip_buffer().
@@ -88,7 +88,7 @@ struct ChipSlot {
 
     // Factory — creates a chip of the type declared in the corresponding
     // Slot<T>.  Stored by make_chip_manifest() and called by
-    // BusMemory::create_chips().  nullptr means the slot must be manually
+    // Board::create_chips().  nullptr means the slot must be manually
     // bound before create_chips() (e.g. for chips that need system-specific
     // initialization).
     using FactoryFn = ChipBase* (*)(const ChipSlot& slot,
@@ -194,7 +194,7 @@ constexpr ChipSlot::FactoryFn resolve_slot_factory() {
 // what this assignment guarantees.
 //
 // An optional dynamic pool of num_dynamic_pages pages is appended at the end
-// of the buffer.  BusMemory uses this pool for runtime chip addition (hot-swap).
+// of the buffer.  Board uses this pool for runtime chip addition (hot-swap).
 //
 // Constexpr query methods enable ManifestBusSpec to auto-derive all BusSpec
 // fields from the manifest alone.
@@ -415,7 +415,7 @@ struct ManifestBusSpec {
 
 
 // =============================================================================
-// §4  BusMemory<Spec> — runtime chip owner, buffer manager, auto-wiring
+// §4  Board<Spec> — runtime chip owner, buffer manager, auto-wiring
 // =============================================================================
 //
 // Owns the flat unified buffer.  Provides pointer access into the buffer for
@@ -429,7 +429,7 @@ struct ManifestBusSpec {
 //
 
 template<BusSpecConcept Spec>
-class BusMemory {
+class Board {
 public:
     using Bus         = MemoryBus<Spec>;
     using ChipId      = typename Bus::ChipId;
@@ -470,7 +470,7 @@ public:
     //
 
     template<size_t N>
-    explicit BusMemory(const ChipManifest<N>& manifest) {
+    explicit Board(const ChipManifest<N>& manifest) {
         const size_t total = manifest.total_pages(kPageBits);
         buffer_.assign(total * kPageSize, uint8_t(0xFF));  // default: 0xFF = pulled-high
 
@@ -1061,7 +1061,7 @@ private:
 //  using Apple1Spec = ManifestBusSpec<kApple1Chips, 16, 8>;
 //
 //  // At runtime:
-//  BusMemory<Apple1Spec> mem{kApple1Chips};
+//  Board<Apple1Spec> mem{kApple1Chips};
 //  MemoryBus<Apple1Spec> bus;
 //
 //  // Single call: bind all chips, auto-call MemoryChipBase::bind(), wire bus

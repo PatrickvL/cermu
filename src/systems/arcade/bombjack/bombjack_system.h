@@ -124,7 +124,7 @@ private:
     // ── Sound ────────────────────────────────────────────────────────────
     ay_3_8910_t ay_[3];                  // 3× AY-3-8910 PSG
 
-    // Memory chips are auto-created by BusMemory::create_chips() and accessed
+    // Memory chips are auto-created by Board::create_chips() and accessed
     // via bus_mem_.chip_as<T>(slot_index).  No manual pointers needed.
 
     // ── Graphics ROM — NOT bus-mapped (display rendering only) ───────────
@@ -134,13 +134,13 @@ private:
 
     // ── Main bus ─────────────────────────────────────────────────────────
     using MainBus = MemoryBus<BombJackMainBusTraits::Spec>;
-    using MainMem = BusMemory<BombJackMainBusTraits::Spec>;
+    using MainMem = Board<BombJackMainBusTraits::Spec>;
     MainBus main_bus_;
     MainMem main_bus_mem_{kBombJackMainChips};
 
     // ── Sound bus ────────────────────────────────────────────────────────
     using SoundBus = MemoryBus<BombJackSoundBusTraits::Spec>;
-    using SoundMem = BusMemory<BombJackSoundBusTraits::Spec>;
+    using SoundMem = Board<BombJackSoundBusTraits::Spec>;
     SoundBus sound_bus_;
     SoundMem sound_bus_mem_{kBombJackSoundChips};
 

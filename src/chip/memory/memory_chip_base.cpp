@@ -354,7 +354,7 @@ void MemoryChipBase::register_debug_fields() {
 #endif // CERMU_HAS_CHIP_DEBUG
 
 // ============================================================================
-// Slot factories — used by BusMemory::create_chips()
+// Slot factories — used by Board::create_chips()
 // ============================================================================
 // Defined here rather than in the thin subclass headers to keep ChipSlot
 // (and its host chip_manifest.hpp) out of the header dependency graph.

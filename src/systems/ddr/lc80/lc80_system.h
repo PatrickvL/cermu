@@ -86,7 +86,7 @@ private:
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using Bus = MemoryBus<LC80BusSpec>;
     using PT  = PackingTraits<LC80BusSpec>;
-    using Mem = BusMemory<LC80BusSpec>;
+    using Mem = Board<LC80BusSpec>;
     Bus bus_;
     Mem bus_mem_{kLC80Chips};
 
