@@ -2,7 +2,7 @@
 
 #include "../commodore_system.h"
 #include "pet_constants.h"
-#include "../../../core/chip_manifest.hpp"
+#include "../../../core/board.hpp"
 #include "../../../chip/cpu/fam65xx/mos6502.h"
 #include "../../../chip/io/pia6820.h"
 #include "../../../chip/io/mos6522.h"

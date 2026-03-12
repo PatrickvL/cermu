@@ -3,7 +3,7 @@
 #include "../../core/system.h"
 #include "../../core/system_lines.h"
 #include "../../core/text_terminal.h"
-#include "../../core/chip_manifest.hpp"
+#include "../../core/board.hpp"
 #include "../../chip/cpu/fam65xx/mos6502.h"
 #include "../../chip/io/pia6820.h"
 #include "../../chip/memory/memory_chip.h"

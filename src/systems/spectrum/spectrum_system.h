@@ -25,7 +25,7 @@
 
 #include "../../core/system.h"
 #include "../../core/system_lines.h"
-#include "../../core/chip_manifest.hpp"
+#include "../../core/board.hpp"
 #include "../../chip/cpu/z80/zilog_z80a.h"
 #include "../../chip/video/spectrum_ula/ferranti_ula.h"
 #include "../../chip/sound/ay_3_8910.h"
