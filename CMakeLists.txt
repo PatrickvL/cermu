@@ -72,6 +72,7 @@ if(MSVC)
     add_compile_options(
         /W4                     # Enable all warnings
         /WX                     # Treat warnings as errors
+        /utf-8                  # Source and execution character set UTF-8
         /wd4324                 # Disable "structure was padded" warning
         /wd4459                 # Disable declaration hiding global declaration warnings
         /wd4201                 # Disable nameless struct/union warning (ImGui compatibility)
