@@ -452,6 +452,8 @@ set(CORE_UTIL_SOURCES
     src/core/formats/sna_format.cpp
     src/core/formats/spectrum_tap_format.cpp
     src/core/formats/z80_snapshot_format.cpp
+    src/core/formats/scl_format.cpp
+    src/core/formats/trd_format.cpp
     src/systems/commodore/commodore_load_helpers.cpp
     src/core/os/os_filesystem.cpp
     src/core/os/os_archive.cpp
