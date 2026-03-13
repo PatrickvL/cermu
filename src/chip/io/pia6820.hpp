@@ -137,9 +137,7 @@ private:
     void register_debug_fields() {
         using PI = const pia6820_t;
         debug_registry_
-            .set_decl_order(PIA_DECL_ORDER.data(), PIA_DECL_ORDER.size(),
-                            PIA_FLD_INFO, PIA_NUM_FIELDS,
-                            nullptr, 0, nullptr);
+            .set_decl_entries(PIA_DECL_ENTRIES.data(), PIA_DECL_ENTRIES.size());
 
         // Control register bitfields are now in the DECL walk.
         // Port visualization (.port) and external state flags remain as builder chains.

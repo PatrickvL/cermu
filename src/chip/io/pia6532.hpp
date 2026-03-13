@@ -147,9 +147,7 @@ private:
     void register_debug_fields() {
         using PI = const pia6532_t;
         debug_registry_
-            .set_decl_order(RIOT_DECL_ORDER.data(), RIOT_DECL_ORDER.size(),
-                            nullptr, 0,
-                            nullptr, 0, nullptr);
+            .set_decl_entries(RIOT_DECL_ENTRIES.data(), RIOT_DECL_ENTRIES.size());
 
         // Register values are shown in the DECL walk.
         // Port visualization, external inputs, timer, and RAM remain as builder chains.

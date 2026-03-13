@@ -196,9 +196,7 @@ private:
         using S = const namco_wsg_t;
         auto& r = debug_registry_;
         r.set_registers(regs_, wsg_regs::REG_COUNT, WSG_REG_INFO);
-        r.set_decl_order(WSG_DECL_ORDER.data(), WSG_DECL_ORDER.size(),
-                         WSG_FLD_INFO, WSG_NUM_FIELDS,
-                         nullptr, 0, nullptr);
+        r.set_decl_entries(WSG_DECL_ENTRIES.data(), WSG_DECL_ENTRIES.size());
 
         // Waveform/volume fields are in the DECL walk (WAVEVOL FLDs).
         // Combined 20-bit frequency values from 5 registers remain.

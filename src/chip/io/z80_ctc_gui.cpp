@@ -27,9 +27,7 @@ void z80_ctc_t::register_debug_fields() {
     using S = const z80_ctc_t;
     auto& r = debug_registry_;
     r.set_registers(regs_, z80_ctc_regs::REG_COUNT, Z80_CTC_REG_INFO);
-    r.set_decl_order(Z80_CTC_DECL_ORDER.data(), Z80_CTC_DECL_ORDER.size(),
-                     nullptr, 0,
-                     nullptr, 0, nullptr);
+    r.set_decl_entries(Z80_CTC_DECL_ENTRIES.data(), Z80_CTC_DECL_ENTRIES.size());
 
     // Control word and time constant values are in the DECL walk.
     // Live counters and internal state flags remain as builder chains.

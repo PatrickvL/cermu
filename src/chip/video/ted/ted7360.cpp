@@ -1481,9 +1481,7 @@ void ted7360_t::register_debug_fields() {
     using TD = const ted7360_t;
     auto& r = debug_registry_;
     r.set_registers(regs_, TED_NUM_REGS, TED_REG_INFO, 0xFF00);
-    r.set_decl_order(TED_DECL_ORDER.data(), TED_DECL_ORDER.size(),
-                     TED_FLD_INFO, TED_NUM_FIELDS,
-                     nullptr, 0, nullptr);
+    r.set_decl_entries(TED_DECL_ENTRIES.data(), TED_DECL_ENTRIES.size());
     const uint32_t* palette = get_palette();
 
     static constexpr const char* gfx_mode_names[] = {

@@ -193,9 +193,7 @@ private:
         using VI = const mos6522_t;
 
         // ACR/PCR/IFR/IER bitfields are now in the DECL walk.
-        debug_registry_.set_decl_order(MOS6522_DECL_ORDER.data(), MOS6522_DECL_ORDER.size(),
-                                       MOS6522_FLD_INFO, MOS6522_NUM_FIELDS,
-                                       nullptr, 0, nullptr);
+        debug_registry_.set_decl_entries(MOS6522_DECL_ENTRIES.data(), MOS6522_DECL_ENTRIES.size());
 
         // --- Data Ports ---
         debug_registry_.category("Data Ports")

@@ -25,9 +25,7 @@ void i8255_t::register_debug_fields() {
     using S = const i8255_t;
     auto& r = debug_registry_;
     r.set_registers(regs_, i8255_regs::REG_COUNT, I8255_REG_INFO);
-    r.set_decl_order(I8255_DECL_ORDER.data(), I8255_DECL_ORDER.size(),
-                     I8255_FLD_INFO, I8255_NUM_FIELDS,
-                     nullptr, 0, nullptr);
+    r.set_decl_entries(I8255_DECL_ENTRIES.data(), I8255_DECL_ENTRIES.size());
 
     // Port output latches and control bitfields are now in the DECL walk.
     // Only external input pins (not in the register mirror) remain as builder chains.

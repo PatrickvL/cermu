@@ -198,9 +198,7 @@ private:
         using S = const mc6847_t;
         auto& r = debug_registry_;
         r.set_registers(regs_, mc6847_const::REG_COUNT, MC6847_REG_INFO);
-        r.set_decl_order(MC6847_DECL_ORDER.data(), MC6847_DECL_ORDER.size(),
-                         MC6847_FLD_INFO, MC6847_NUM_FIELDS,
-                         nullptr, 0, nullptr);
+        r.set_decl_entries(MC6847_DECL_ENTRIES.data(), MC6847_DECL_ENTRIES.size());
 
         r.category("Video Timing");
         r.value("Scanline", +[](const ChipBase* c) -> uint32_t {
