@@ -50,12 +50,16 @@ inline constexpr auto kBombJackMainChips = make_chip_manifest(
     Slot<RAMChip>{0x9000,  1024, 0, "FG Tilemap"},
     Slot<RAMChip>{0x9400,  1024, 0, "FG Attributes"},
     Slot<RAMChip>{0x9800,   256, 0, "Sprite Area"},
-    Slot<RAMChip>{0x9C00,   256, 0, "Palette RAM"}
+    Slot<RAMChip>{0x9C00,   256, 0, "Palette RAM"},
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<ZilogZ80A>{0, 0, 0, "Main CPU"}
 );
 
 inline constexpr auto kBombJackSoundChips = make_chip_manifest(
     Slot<ROMChip>{0x0000,  8192, 0, "Sound ROM"},
-    Slot<RAMChip>{0x4000,  1024, 0, "Sound RAM"}
+    Slot<RAMChip>{0x4000,  1024, 0, "Sound RAM"},
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<ZilogZ80A>{0, 0, 0, "Sound CPU"}
 );
 
 namespace bj_main {
@@ -65,10 +69,12 @@ namespace bj_main {
     inline constexpr size_t kFgAttr      = 3;
     inline constexpr size_t kSpriteArea  = 4;
     inline constexpr size_t kPaletteRam  = 5;
+    inline constexpr size_t kMainCpu     = 6;
 }
 namespace bj_sound {
     inline constexpr size_t kSoundRom = 0;
     inline constexpr size_t kSoundRam = 1;
+    inline constexpr size_t kSoundCpu = 2;
 }
 
 // ── Bus traits — one per CPU ─────────────────────────────────────────────
@@ -118,8 +124,8 @@ public:
 
 private:
     // ── CPUs ─────────────────────────────────────────────────────────────
-    ZilogZ80A*  main_cpu_  = nullptr;    // Z80A @ 4 MHz (main)
-    ZilogZ80A*  sound_cpu_ = nullptr;    // Z80A @ 3 MHz (sound)
+    ZilogZ80A*  main_cpu_  = nullptr;    // Z80A @ 4 MHz (main) — owned by main_board_
+    ZilogZ80A*  sound_cpu_ = nullptr;    // Z80A @ 3 MHz (sound) — owned by sound_board_
 
     // ── Sound ────────────────────────────────────────────────────────────
     ay_3_8910_t ay_[3];                  // 3× AY-3-8910 PSG

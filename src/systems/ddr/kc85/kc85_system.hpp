@@ -39,6 +39,7 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_2> {
     static constexpr const char* caos_version    = "2.2";
     // Slot indices into kKC852Chips
     static constexpr size_t kCaosRomSlot         = 2;
+    static constexpr size_t kCpuSlot             = 3;
 };
 
 template<> struct KC85VariantTraits<KC85Variant::KC85_3> {
@@ -52,6 +53,7 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_3> {
     // Slot indices into kKC853Chips
     static constexpr size_t kBasicRomSlot        = 2;
     static constexpr size_t kCaosRomSlot         = 3;
+    static constexpr size_t kCpuSlot             = 4;
 };
 
 template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
@@ -65,6 +67,7 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
     // Slot indices into kKC854Chips
     static constexpr size_t kBasicRomSlot        = 2;
     static constexpr size_t kCaosRomSlot         = 3;
+    static constexpr size_t kCpuSlot             = 4;
 };
 
 // ============================================================================
@@ -103,21 +106,27 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
 inline constexpr auto kKC852Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 16384, 0, "RAM"},
     Slot<RAMChip>{0x8000, 16384, 0, "IRM"},
-    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM"}
+    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM"},
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<U880>   {0, 0, 0, "U880"}
 );
 
 inline constexpr auto kKC853Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 16384, 0, "RAM"},
     Slot<RAMChip>{0x8000, 16384, 0, "IRM"},
     Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM"},
-    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM"}
+    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM"},
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<U880>   {0, 0, 0, "U880"}
 );
 
 inline constexpr auto kKC854Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 32768, 0, "RAM"},
     Slot<RAMChip>{0x8000, 65536, 0, "IRM"},
     Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM"},
-    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM"}
+    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM"},
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<U880>   {0, 0, 0, "U880"}
 );
 
 // BusTraits — selects the correct manifest per variant
@@ -175,7 +184,7 @@ public:
 
 private:
     // ── Chips ────────────────────────────────────────────────────────────
-    U880*                cpu_  = nullptr;     // U880 @ 1.7734 MHz
+    U880*                cpu_  = nullptr;     // U880 @ 1.7734 MHz — owned by board_
     z80_pio_t            pio1_;               // U855 PIO (system + keyboard)
     z80_pio_t            pio2_;               // U855 PIO (module system)
     z80_ctc_t            ctc_;                // U857 CTC (timing + sound + tape)

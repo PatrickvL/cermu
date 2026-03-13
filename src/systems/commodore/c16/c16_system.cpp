@@ -553,6 +553,7 @@ bool Commodore264System<V>::initialize() {
     ram_        = board_.chip_as<RAMChip>(c264_slot::kRam);
     basic_rom_  = board_.chip_as<ROMChip>(c264_slot::kBasicRom);
     kernal_rom_ = board_.chip_as<ROMChip>(c264_slot::kKernalRom);
+    cpu_        = board_.chip_as<CSG7501>(c264_slot::kCpuSlot);
     
     // Load ROMs using common ROM loader
     bool roms_loaded = load_roms();
@@ -560,10 +561,9 @@ bool Commodore264System<V>::initialize() {
         printf("%s: Warning - ROMs not loaded, system may not function correctly\n", Traits::name);
     }
     
-    // Initialize MOS 7501 CPU — direct C++ instantiation for inlining
-    cpu_ = new CSG7501();
+    // Initialize MOS 7501 CPU — owned by board_, retrieved via chip_as
     if (!cpu_) {
-        printf("%s: Failed to create MOS 7501 CPU\n", Traits::name);
+        printf("%s: Failed to get MOS 7501 CPU from board\n", Traits::name);
         return false;
     }
     
@@ -618,8 +618,6 @@ bool Commodore264System<V>::initialize() {
     setup_ports();
 
     // Register chips for the Hardware menu and debug windows
-    register_chip(static_cast<ChipBase*>(cpu_),
-        "MOS 7501/8501 CPU", "7501", "CPU", 0x0000);
     register_chip(ted_,
         "TED 7360 (Video/Audio/I/O)", "TED", "Video", 0xFF00);
     register_bus_chips(board_);
@@ -634,12 +632,6 @@ bool Commodore264System<V>::initialize() {
 template<C264SeriesVariant V>
 void Commodore264System<V>::shutdown() {
     printf("%s: Shutting down system\n", Traits::name);
-    
-    // Destroy MOS 7501 CPU
-    if (cpu_) {
-        delete cpu_;
-        cpu_ = nullptr;
-    }
     
     // Destroy TED 7360
     if (ted_) {

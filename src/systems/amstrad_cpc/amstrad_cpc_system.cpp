@@ -82,7 +82,7 @@ AmstradCPCSystem<M>::AmstradCPCSystem()
 }
 
 template<CPCModel M>
-AmstradCPCSystem<M>::~AmstradCPCSystem() { delete cpu_; }
+AmstradCPCSystem<M>::~AmstradCPCSystem() {}
 
 template<CPCModel M>
 const SystemDescriptor& AmstradCPCSystem<M>::get_descriptor() const {
@@ -112,7 +112,7 @@ bool AmstradCPCSystem<M>::initialize() {
     configure_bus_memory_map();
 
     // ── Init chips ──────────────────────────────────────────────────────
-    cpu_ = new ZilogZ80A();
+    cpu_ = board_.template chip_as<ZilogZ80A>(cpc_chips::kCpuSlot);
     pins_ = cpu_->init();
     crtc_.init();
     // Gate array drives interrupts from CRTC HSYNC (every 52 HSYNCs)
@@ -130,8 +130,6 @@ bool AmstradCPCSystem<M>::initialize() {
     load_roms();
 
     // ── Register chips for Hardware menu ────────────────────────────────
-    register_chip(static_cast<ChipBase*>(cpu_),
-        "Zilog Z80A CPU", "Z80A", "CPU", 0x0000);
     register_chip(&crtc_,
         "MC6845 CRTC", "MC6845", "Video", 0);
     register_chip(&ppi_,
@@ -146,7 +144,7 @@ bool AmstradCPCSystem<M>::initialize() {
 }
 
 template<CPCModel M>
-void AmstradCPCSystem<M>::shutdown() { delete cpu_; cpu_ = nullptr; system_ready_ = false; }
+void AmstradCPCSystem<M>::shutdown() { cpu_ = nullptr; system_ready_ = false; }
 
 template<CPCModel M>
 void AmstradCPCSystem<M>::reset() {

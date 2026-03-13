@@ -132,7 +132,6 @@ BBCMicroSystem::BBCMicroSystem()
 }
 
 BBCMicroSystem::~BBCMicroSystem() {
-    delete cpu_;    cpu_ = nullptr;
     delete crtc_;   crtc_ = nullptr;
     delete psg_;    psg_ = nullptr;
     // memory_ points into the flat mem (owned by board_); don't free.
@@ -173,6 +172,7 @@ bool BBCMicroSystem::initialize() {
     ram_chip_        = board_.chip_as<RAMChip>(bbc_chips::kRamSlot);
     paged_rom_chip_  = board_.chip_as<ROMChip>(bbc_chips::kPagedRomSlot);
     os_rom_chip_     = board_.chip_as<ROMChip>(bbc_chips::kOsRomSlot);
+    cpu_             = board_.chip_as<MOS6502>(bbc_chips::kCpuSlot);
 
     // ── Convenience pointer for rendering functions ─────────────────────
     memory_ = ram_chip_->data();
@@ -188,7 +188,6 @@ bool BBCMicroSystem::initialize() {
     }
 
     // ---- CPU (MOS 6502 @ 2 MHz) ----
-    cpu_ = new MOS6502();
     cpu_->init();
     cpu_->reset(0);
 
@@ -1033,8 +1032,6 @@ bool BBCMicroSystem::load_roms() {
 // ============================================================================
 
 void BBCMicroSystem::register_chips() {
-    register_chip(static_cast<ChipBase*>(cpu_),
-        "MOS 6502A CPU", "6502A", "CPU", 0x0000);
     register_chip(static_cast<ChipBase*>(crtc_),
         "MC6845 CRTC", "MC6845", "Video", bbc_constants::CRTC_BASE);
     register_chip(static_cast<ChipBase*>(psg_),

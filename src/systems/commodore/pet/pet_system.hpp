@@ -68,8 +68,14 @@ inline constexpr auto kPETChips = make_chip_manifest(
     Slot<ROMChip>{0xC000,  4096, 0, "BASIC ROM $C000"},
     Slot<ROMChip>{0xD000,  4096, 0, "BASIC ROM $D000"},
     Slot<ROMChip>{0xE000,  2048, 0, "Editor ROM"},
-    Slot<ROMChip>{0xF000,  4096, 0, "Kernal ROM"}
+    Slot<ROMChip>{0xF000,  4096, 0, "Kernal ROM"},
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<MOS6502>{0, 0, 0, "MOS 6502"}
 );
+
+namespace pet_chips {
+    inline constexpr size_t kCpuSlot = 7;
+}
 
 struct PETBusTraits {
     static constexpr const auto& kManifest = kPETChips;
@@ -133,7 +139,7 @@ private:
     uint8_t char_rom_[4096] = {};
 
     // Chip instances
-    MOS6502*    cpu_  = nullptr;    // MOS 6502 CPU @ 1 MHz
+    MOS6502*    cpu_  = nullptr;    // MOS 6502 CPU @ 1 MHz — owned by board_
     pia6820_t*  pia1_ = nullptr;    // PIA 1 — keyboard matrix + cassette sense
     pia6820_t*  pia2_ = nullptr;    // PIA 2 — IEEE-488 bus interface
     mos6522_t*  via_  = nullptr;    // VIA — user port, timers, CB2 speaker

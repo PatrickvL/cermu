@@ -46,7 +46,7 @@ BombJackSystem::BombJackSystem()
     bombjack_descriptor.hardware_traits = traits;
 }
 
-BombJackSystem::~BombJackSystem() { delete main_cpu_; delete sound_cpu_; }
+BombJackSystem::~BombJackSystem() {}
 
 const SystemDescriptor& BombJackSystem::get_descriptor() const { return bombjack_descriptor; }
 bool BombJackSystem::set_configuration(const SystemConfiguration& config) { config_ = config; return true; }
@@ -64,8 +64,8 @@ bool BombJackSystem::initialize() {
     sound_board_.apply(sound_bus_);
 
     // ── Init chips ───────────────────────────────────────────────────────
-    main_cpu_  = new ZilogZ80A();
-    sound_cpu_ = new ZilogZ80A();
+    main_cpu_  = main_board_.chip_as<ZilogZ80A>(bj_main::kMainCpu);
+    sound_cpu_ = sound_board_.chip_as<ZilogZ80A>(bj_sound::kSoundCpu);
     main_pins_  = main_cpu_->init();
     sound_pins_ = sound_cpu_->init();
     for (auto& ay : ay_) ay.init();
@@ -73,10 +73,7 @@ bool BombJackSystem::initialize() {
     load_roms();
 
     // ── Register chips for Hardware menu ─────────────────────────────────
-    register_chip(static_cast<ChipBase*>(main_cpu_),
-        "Main Z80A CPU", "Z80A", "CPU", 0x0000);
-    register_chip(static_cast<ChipBase*>(sound_cpu_),
-        "Sound Z80A CPU", "Z80A", "CPU", 0x0000);
+
     register_bus_chips(main_board_);
     register_bus_chips(sound_board_);
 
@@ -85,8 +82,8 @@ bool BombJackSystem::initialize() {
 }
 
 void BombJackSystem::shutdown() {
-    delete main_cpu_;  main_cpu_  = nullptr;
-    delete sound_cpu_; sound_cpu_ = nullptr;
+    main_cpu_  = nullptr;
+    sound_cpu_ = nullptr;
     system_ready_ = false;
 }
 

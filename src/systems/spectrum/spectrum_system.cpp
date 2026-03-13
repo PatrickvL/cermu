@@ -155,8 +155,6 @@ SpectrumSystem<V>::SpectrumSystem()
 
 template<SpectrumVariant V>
 SpectrumSystem<V>::~SpectrumSystem() {
-    delete cpu_;
-    cpu_ = nullptr;
 }
 
 // ============================================================================
@@ -201,7 +199,7 @@ bool SpectrumSystem<V>::initialize() {
     configure_bus_memory_map();
 
     // ── Init chips ──────────────────────────────────────────────────────
-    cpu_ = new ZilogZ80A();
+    cpu_ = board_.template chip_as<ZilogZ80A>(spectrum_chips::kCpuSlot);
     pins_ = cpu_->init();
     ula_.init();
     if constexpr (Traits::has_ay_sound) {
@@ -217,8 +215,6 @@ bool SpectrumSystem<V>::initialize() {
     }
 
     // ── Register chips for Hardware menu ────────────────────────────────
-    register_chip(static_cast<ChipBase*>(cpu_),
-        "Zilog Z80A CPU", "Z80A", "CPU", 0x0000);
     register_chip(&ula_,
         "Ferranti ULA", "ULA", "Video", spectrum_constants::SCREEN_BASE);
     if constexpr (Traits::has_ay_sound) {
@@ -234,7 +230,6 @@ bool SpectrumSystem<V>::initialize() {
 
 template<SpectrumVariant V>
 void SpectrumSystem<V>::shutdown() {
-    delete cpu_;
     cpu_ = nullptr;
     system_ready_ = false;
 }

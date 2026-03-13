@@ -56,7 +56,7 @@ NamcoArcadeSystem<G>::NamcoArcadeSystem()
 }
 
 template<NamcoGame G>
-NamcoArcadeSystem<G>::~NamcoArcadeSystem() { delete cpu_; }
+NamcoArcadeSystem<G>::~NamcoArcadeSystem() {}
 
 template<NamcoGame G>
 const SystemDescriptor& NamcoArcadeSystem<G>::get_descriptor() const {
@@ -77,7 +77,7 @@ bool NamcoArcadeSystem<G>::initialize() {
     board_.apply(bus_);
 
     // ── Init CPU + sound ────────────────────────────────────────────────
-    cpu_ = new ZilogZ80A();
+    cpu_ = board_.template chip_as<ZilogZ80A>(namco_chips::kCpuSlot);
     pins_ = cpu_->init();
     wsg_.init();
 
@@ -91,8 +91,6 @@ bool NamcoArcadeSystem<G>::initialize() {
     load_roms();
 
     // ── Register chips for Hardware menu ────────────────────────────────
-    register_chip(static_cast<ChipBase*>(cpu_),
-        "Z80A CPU", "Z80A", "CPU", 0x0000);
     register_bus_chips(board_);
 
     printf("%s: System initialized (ROM: %d KB)\n",
@@ -101,7 +99,7 @@ bool NamcoArcadeSystem<G>::initialize() {
     return true;
 }
 
-template<NamcoGame G> void NamcoArcadeSystem<G>::shutdown() { delete cpu_; cpu_ = nullptr; system_ready_ = false; }
+template<NamcoGame G> void NamcoArcadeSystem<G>::shutdown() { cpu_ = nullptr; system_ready_ = false; }
 template<NamcoGame G> void NamcoArcadeSystem<G>::reset() {
     if (!cpu_) return;
     pins_ = cpu_->reset(pins_);

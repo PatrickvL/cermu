@@ -78,15 +78,23 @@ inline constexpr auto kPacManChips = make_chip_manifest(
     Slot<ROMChip>{0x0000, 16384, 0, "Program ROM"},
     Slot<RAMChip>{0x4000,  1024, 0, "Video RAM"},
     Slot<RAMChip>{0x4400,  1024, 0, "Color RAM"},
-    Slot<RAMChip>{0x4C00,  1024, 0, "Work RAM"}
+    Slot<RAMChip>{0x4C00,  1024, 0, "Work RAM"},
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<ZilogZ80A>{0, 0, 0, "Z80A"}
 );
 
 inline constexpr auto kPengoChips = make_chip_manifest(
     Slot<ROMChip>{0x0000, 32768, 0, "Program ROM"},
     Slot<RAMChip>{0x8000,  1024, 0, "Video RAM"},
     Slot<RAMChip>{0x8400,  1024, 0, "Color RAM"},
-    Slot<RAMChip>{0x8C00,  1024, 0, "Work RAM"}
+    Slot<RAMChip>{0x8C00,  1024, 0, "Work RAM"},
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<ZilogZ80A>{0, 0, 0, "Z80A"}
 );
+
+namespace namco_chips {
+    inline constexpr size_t kCpuSlot = 4;
+}
 
 // BusTraits — selects the correct manifest per game
 template<NamcoGame G> struct NamcoBusTraits;
@@ -138,7 +146,7 @@ public:
 
 private:
     // ── Chips ────────────────────────────────────────────────────────────
-    ZilogZ80A*       cpu_ = nullptr;     // Z80A @ 3.072 MHz
+    ZilogZ80A*       cpu_ = nullptr;     // Z80A @ 3.072 MHz — owned by board_
     namco_wsg_t      wsg_;               // Namco WSG3 wavetable sound
 
     // ── Graphics ROM — NOT bus-mapped (display rendering only) ───────────
