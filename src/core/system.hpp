@@ -183,10 +183,7 @@ protected:
     struct ScreenRect { float x = 0, y = 0, w = 0, h = 0; };
     ScreenRect display_screen_rect_;
 
-    // Primary board — owns connector ports as a value member (no pointer
-    // indirection).  Created automatically; derived systems just call
-    // add_port() during initialize().
-    BoardBase primary_board_;
+
 
     // =========================================================================
     // REGISTERED CHIPS (generic for all systems)
@@ -239,27 +236,26 @@ protected:
     // BOARD & PORT OWNERSHIP
     // =========================================================================
     //
-    // Connector ports (physical jacks) live on primary_board_, a BoardBase
-    // value member.  All port creation goes through add_port() which always
-    // delegates to primary_board_.  No conditional, no indirection.
+    // Each derived system owns one or more Board value members (e.g.
+    // Board<Spec> board_) and registers them via register_board().
+    // The first registered board is the "main board" — it owns the
+    // connector ports.  Port operations (add_port, get_port, get_ports)
+    // delegate to main_board().
     //
-    // Systems that have a Board<Spec> (board_) for memory dispatch register
-    // it via register_board() so that generic code can iterate all boards.
-    // Device ownership stays on System (peripherals are user-attached, not
-    // board-soldered components).
+    // Device ownership stays on System (peripherals are user-attached,
+    // not board-soldered components).
     //
 
-    /// All boards on this system.  primary_board_ is always boards_[0];
-    /// additional boards (e.g. board_) are appended via register_board().
+    /// All boards on this system.  boards_[0] is the main board;
+    /// additional boards are appended via register_board().
     std::vector<BoardBase*> boards_;
 
-    /// Register an additional board (e.g. board_) for iteration.
-    /// The primary_board_ is always registered automatically.
+    /// Register a board.  The first call establishes the main board.
     void register_board(BoardBase* board) { boards_.push_back(board); }
 
-    /// The primary board (owns connector ports, always valid).
-    [[nodiscard]] BoardBase& primary_board() { return primary_board_; }
-    [[nodiscard]] const BoardBase& primary_board() const { return primary_board_; }
+    /// The main board (boards_[0]) — owns connector ports.
+    [[nodiscard]] BoardBase& main_board() { return *boards_[0]; }
+    [[nodiscard]] const BoardBase& main_board() const { return *boards_[0]; }
 
     /// Peripheral device instances owned by the system (attached to ports).
     std::vector<std::unique_ptr<PeripheralDevice>> owned_devices_;
@@ -282,7 +278,7 @@ protected:
     /// on system start-up.  Systems declare their defaults by overriding
     /// get_default_peripherals().
     struct DefaultPeripheral {
-        int         port_index;   ///< Index into primary_board_ ports
+        int         port_index;   ///< Index into main_board() ports
         const char* device_id;    ///< DeviceRegistry ID (e.g. "joystick")
     };
 
@@ -341,19 +337,19 @@ public:
     }
     const ScreenRect& get_display_screen_rect() const { return display_screen_rect_; }
 
-    // --- Port Access (always via primary_board_) --------------------------
+    // --- Port Access (always via main_board()) ---------------------------
 
     /// Get all connector ports on this system.
     const std::vector<std::unique_ptr<Port>>& get_ports() const {
-        return primary_board_.get_ports();
+        return main_board().get_ports();
     }
 
     /// Get a connector port by index (nullptr if out of range).
     Port* get_port(int index) {
-        return primary_board_.get_port(index);
+        return main_board().get_port(index);
     }
 
-    /// Get all boards (primary_board_ first, then registered additional boards).
+    /// Get all boards (main board first, then additional boards).
     const std::vector<BoardBase*>& get_boards() const { return boards_; }
 
     /// Get all owned peripheral device instances.

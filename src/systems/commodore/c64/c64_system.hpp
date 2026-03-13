@@ -97,6 +97,7 @@ public:
     ROMChip* kernal = nullptr;       // Kernal ROM $E000-$FFFF (8KB)
 
 private:
+    BoardBase board_;                   // Main board (owns connector ports)
     bool initialized_ = false;          // True when initialize() has succeeded
     vicii_standard_t created_vicii_standard_ = VIC_PAL;  // Actual VIC-II standard at creation time
     sid_revision_t pending_sid_revision_ = SID_REVISION_6581_R4AR;  // Applied after SID creation

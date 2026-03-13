@@ -281,6 +281,9 @@ bool NintendoSystem<V>::initialize() {
     
     printf("%s: Initializing system (%s)\n", Traits::name,
            is_pal_ ? "PAL" : "NTSC");
+
+    // Register main board (owns connector ports)
+    register_board(&board_);
     
     // Create CPU with integrated APU
     cpu_ = new RICOH_2A03();

@@ -327,6 +327,9 @@ Chip8System::Chip8System()
     , pitch_register_(64)
     , has_audio_pattern_(false)
 {
+    // Register main board (no ports, but required by System)
+    register_board(&board_);
+
     hardware_traits_ = create_chip8_hardware_traits();
     current_palette_ = hardware_traits_.display.default_palette;
     memset(rpl_flags_, 0, sizeof(rpl_flags_));

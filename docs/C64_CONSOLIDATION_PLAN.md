@@ -38,7 +38,7 @@ System
             ├─ ROMChip* cartridge_roml, cartridge_romh
             ├─ MOS2114* colorram
             ├─ (SID player state)
-            └─ (port wiring — via primary_board_)
+            └─ (port wiring — via main_board())
 ```
 
 No `c64_t` struct.  No `gui_state_t`.  No `system_8bit_t`.  All chip pointers are
