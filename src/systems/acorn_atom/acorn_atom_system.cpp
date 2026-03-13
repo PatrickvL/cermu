@@ -186,7 +186,7 @@ AcornAtomSystem::AcornAtomSystem() : System(), pins_(ATOM_BUS_DEFAULT_STATE) {
     atom_descriptor.hardware_traits = traits;
 }
 
-AcornAtomSystem::~AcornAtomSystem() { delete cpu_; }
+AcornAtomSystem::~AcornAtomSystem() = default;
 
 const SystemDescriptor& AcornAtomSystem::get_descriptor() const { return atom_descriptor; }
 bool AcornAtomSystem::set_configuration(const SystemConfiguration& config) { config_ = config; return true; }
@@ -209,7 +209,7 @@ bool AcornAtomSystem::initialize() {
         static_cast<PT::ChipId>(acorn_atom_chips::kVideoRamId));
 
     // ── Init chips ──────────────────────────────────────────────────────
-    cpu_ = new MOS6502();
+    cpu_ = bus_mem_.chip_as<MOS6502>(acorn_atom_chips::kCpuSlot);
     pins_ = cpu_->init();
     vdg_.init();
     ppi_.init();
@@ -227,13 +227,7 @@ bool AcornAtomSystem::initialize() {
         printf("Acorn Atom: Warning — ROMs not loaded, system will not boot correctly\n");
     }
 
-    // ── Register chips for Hardware menu ────────────────────────────────
-    register_chip(static_cast<ChipBase*>(cpu_),
-        "MOS 6502 CPU", "6502", "CPU", 0x0000);
-    register_chip(&ppi_,
-        "Intel 8255 PPI", "8255", "I/O", acorn_atom_constants::PPI_BASE);
-    register_chip(&via_,
-        "MOS 6522 VIA", "6522", "I/O", acorn_atom_constants::VIA_BASE);
+    // ── Register all manifest-created chips for Hardware menu ────────
     register_bus_chips(bus_mem_);
 
     printf("Acorn Atom: System initialized (RAM: %dKB)\n", ram_size_kb_);
@@ -241,7 +235,7 @@ bool AcornAtomSystem::initialize() {
     return true;
 }
 
-void AcornAtomSystem::shutdown() { delete cpu_; cpu_ = nullptr; system_ready_ = false; }
+void AcornAtomSystem::shutdown() { system_ready_ = false; }
 
 void AcornAtomSystem::reset() {
     if (!cpu_) return;

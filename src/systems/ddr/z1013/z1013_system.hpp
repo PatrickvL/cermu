@@ -34,6 +34,7 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_01> {
     // Slot indices into kZ1013_16K_Chips
     static constexpr size_t kVideoRamSlot   = 1;
     static constexpr size_t kMonitorRomSlot = 2;
+    static constexpr size_t kCpuSlot        = 3;
 };
 
 template<> struct Z1013VariantTraits<Z1013Variant::Z1013_16> {
@@ -44,6 +45,7 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_16> {
     static constexpr bool        has_basic_rom   = false;
     static constexpr size_t kVideoRamSlot   = 1;
     static constexpr size_t kMonitorRomSlot = 2;
+    static constexpr size_t kCpuSlot        = 3;
 };
 
 template<> struct Z1013VariantTraits<Z1013Variant::Z1013_64> {
@@ -56,6 +58,7 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_64> {
     static constexpr size_t kBasicRomHiSlot = 2;
     static constexpr size_t kVideoRamSlot   = 3;
     static constexpr size_t kMonitorRomSlot = 4;
+    static constexpr size_t kCpuSlot        = 5;
 };
 
 // ============================================================================
@@ -85,7 +88,9 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_64> {
 inline constexpr auto kZ1013_16K_Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 16384, 0, "RAM"},
     Slot<RAMChip>{0xEC00,  1024, 0, "Video RAM"},
-    Slot<ROMChip>{0xF000,  2048, 0, "Monitor ROM"}
+    Slot<ROMChip>{0xF000,  2048, 0, "Monitor ROM"},
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<U880>   {0, 0, 0, "U880"}
 );
 
 inline constexpr auto kZ1013_64K_Chips = make_chip_manifest(
@@ -93,7 +98,9 @@ inline constexpr auto kZ1013_64K_Chips = make_chip_manifest(
     Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM lo"},
     Slot<ROMChip>{0xE000,  2048, 0, "BASIC ROM hi"},
     Slot<RAMChip>{0xEC00,  1024, 0, "Video RAM"},
-    Slot<ROMChip>{0xF000,  2048, 0, "Monitor ROM"}
+    Slot<ROMChip>{0xF000,  2048, 0, "Monitor ROM"},
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<U880>   {0, 0, 0, "U880"}
 );
 
 // BusTraits — selects the correct manifest per variant
@@ -151,7 +158,7 @@ public:
 
 private:
     // ── Chips ────────────────────────────────────────────────────────────
-    U880*       cpu_  = nullptr;     // U880 (Z80A clone) @ 2 MHz
+    U880*       cpu_  = nullptr;     // U880 (Z80A clone) — owned by bus_mem_
     z80_pio_t   pio_;                // U855 PIO (keyboard + cassette)
 
     // ── Memory — chip pointers for post-init access (owned by Board) ─

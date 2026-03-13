@@ -133,12 +133,7 @@ Atari2600System::Atari2600System()
     current_palette_ = hardware_traits_.display.default_palette;
 }
 
-Atari2600System::~Atari2600System() {
-    // CPU is manually new'd — clean up.
-    // TIA, RIOT, CartChip are owned by bus_mem_ (factory-created).
-    delete cpu_;
-    cpu_ = nullptr;
-}
+Atari2600System::~Atari2600System() = default;
 
 // ============================================================================
 // SYSTEM IDENTIFICATION
@@ -169,25 +164,19 @@ bool Atari2600System::initialize() {
     printf("Atari2600: Initializing system\n");
     register_board(&bus_mem_);
 
-    // ── Factory-create TIA, RIOT, and CartChip from the manifest ────────
+    // ── Factory-create ALL chips from the manifest ──────────────────────
     bus_mem_.create_chips(&pins_);
     tia_       = bus_mem_.chip_as<tia_t>(atari2600_chips::kTiaSlot);
     riot_      = bus_mem_.chip_as<pia6532_t>(atari2600_chips::kRiotSlot);
     cart_chip_ = bus_mem_.chip_as<Atari2600CartChip>(atari2600_chips::kCartSlot);
+    cpu_       = bus_mem_.chip_as<MOS6507>(atari2600_chips::kCpuSlot);
 
     // ── Configure MemoryBus page tables (mirrors + cart pages) ──────────
     configure_bus_memory_map();
 
-    // ── Create CPU — direct instantiation (not in manifest) ─────────────
-    cpu_ = new MOS6507();
-    if (!cpu_) {
-        printf("Atari2600: Failed to create MOS6507 CPU\n");
-        return false;
-    }
+    // ── Initialize chips ───────────────────────────────────────────
     cpu_->init();
     cpu_->reset(0);
-
-    // Initialize TIA and RIOT
     tia_->init();
     tia_->set_audio_sample_rate(atari2600_constants::DEFAULT_SAMPLE_RATE);
     riot_->init();
@@ -198,9 +187,7 @@ bool Atari2600System::initialize() {
     // Setup connector ports for joysticks
     setup_ports();
 
-    // Register chips for debug/hardware menu
-    register_chip(static_cast<ChipBase*>(cpu_),
-        "MOS 6507 CPU", "6507", "CPU", 0x0000);
+    // Register all manifest-created chips for the Hardware menu
     register_bus_chips(bus_mem_);
 
     printf("Atari2600: System initialized\n");

@@ -39,7 +39,7 @@ LC80System::LC80System() : System(), pins_(LC80_BUS_DEFAULT_STATE) {
     lc80_descriptor.hardware_traits = traits;
 }
 
-LC80System::~LC80System() { delete cpu_; }
+LC80System::~LC80System() = default;
 
 const SystemDescriptor& LC80System::get_descriptor() const { return lc80_descriptor; }
 bool LC80System::set_configuration(const SystemConfiguration& config) { config_ = config; return true; }
@@ -61,7 +61,7 @@ bool LC80System::initialize() {
     configure_bus_memory_map();
 
     // ── Init chips ──────────────────────────────────────────────────────
-    cpu_ = new U880();
+    cpu_ = bus_mem_.chip_as<U880>(lc80_chips::kCpuSlot);
     pins_ = cpu_->init();
     pio1_.init();
     pio2_.init();
@@ -69,9 +69,7 @@ bool LC80System::initialize() {
 
     load_roms();
 
-    // ── Register chips for Hardware menu ────────────────────────────────
-    register_chip(static_cast<ChipBase*>(cpu_),
-        "U880 CPU", "U880", "CPU", 0x0000);
+    // ── Register chips for Hardware menu ────────────────────────
     register_chip(&pio1_,
         "U855 PIO #1", "U855", "I/O", lc80_constants::PIO1_PORT_A);
     register_chip(&pio2_,
@@ -84,7 +82,7 @@ bool LC80System::initialize() {
     return true;
 }
 
-void LC80System::shutdown() { delete cpu_; cpu_ = nullptr; system_ready_ = false; }
+void LC80System::shutdown() { system_ready_ = false; }
 
 void LC80System::reset() {
     if (!cpu_) return;

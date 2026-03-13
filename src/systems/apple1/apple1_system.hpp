@@ -33,7 +33,9 @@ inline constexpr auto kApple1Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
     Slot<ROMChip>{0xFF00,   256, 0, "Monitor"},
     Slot<ROMChip>{0xE000,  4096, 0, "BASIC"},
-    Slot<pia6820_t> {0xD010,     0, 0xFFFC}                // MMIO-only, 4-byte window
+    Slot<pia6820_t> {0xD010,     0, 0xFFFC},               // MMIO-only, 4-byte window
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<MOS6502>   {0, 0, 0, "MOS 6502"}
 );
 
 // BusSpec auto-derived from the manifest
@@ -44,6 +46,7 @@ namespace apple1_chips {
     inline constexpr size_t kMonitorSlot = 1;
     inline constexpr size_t kBasicSlot   = 2;
     inline constexpr size_t kPiaSlot     = 3;
+    inline constexpr size_t kCpuSlot     = 4;
 
     // Compile-time chip ids (from manifest prefix-sum)
     inline constexpr size_t kRamId       = kApple1Chips.base_id(kRamSlot, Apple1BusSpec::PageBits);      // 0
@@ -106,8 +109,8 @@ public:
 
 private:
     // Chip instances
-    MOS6502* cpu_ = nullptr;         // MOS6502 CPU instance @ 1 MHz
-    pia6820_t pia_;                  // PIA 6820 for keyboard and display I/O
+    MOS6502* cpu_ = nullptr;         // MOS6502 CPU — owned by bus_mem_
+    pia6820_t pia_;                  // PIA 6820 — pre-bound member
     TextTerminal* terminal_;         // Text terminal (40x24)
     
     // Memory chips — owned by bus_mem_, borrowed here for post-init access

@@ -84,7 +84,9 @@ private:
 inline constexpr auto kAtari2600Chips = make_chip_manifest(
     Slot<tia_t>             {0x0000, 0, 0x0080},
     Slot<pia6532_t>         {0x0080, 0, 0x0080},
-    Slot<Atari2600CartChip> {0x1000, 0}
+    Slot<Atari2600CartChip> {0x1000, 0},
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<MOS6507>           {0, 0, 0, "MOS 6507"}
 );
 
 // BusSpec auto-derived from the manifest (13-bit address, 256-byte pages)
@@ -94,6 +96,7 @@ namespace atari2600_chips {
     inline constexpr size_t kTiaSlot  = 0;
     inline constexpr size_t kRiotSlot = 1;
     inline constexpr size_t kCartSlot = 2;
+    inline constexpr size_t kCpuSlot  = 3;
 }
 
 class Atari2600System : public System {
@@ -147,7 +150,7 @@ private:
     // CHIPS — owned by bus_mem_, borrowed here for direct access
     // ========================================================================
 
-    MOS6507*           cpu_       = nullptr;  // MOS 6507 CPU (6502, 13-bit address bus)
+    MOS6507*           cpu_       = nullptr;  // MOS 6507 CPU — owned by bus_mem_
     tia_t*             tia_       = nullptr;  // TIA — Television Interface Adapter
     pia6532_t*         riot_      = nullptr;  // PIA 6532 RIOT — RAM, I/O, Timer
     Atari2600CartChip* cart_chip_ = nullptr;  // Cart MMIO adapter (wraps mapper)
