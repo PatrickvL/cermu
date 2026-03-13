@@ -4,6 +4,7 @@
 
 #include "core/port.hpp"
 #include "core/port_registry.hpp"
+#include "core/cermu.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -249,9 +250,10 @@ bool Port::attach_device(PeripheralDevice* device) {
     recompute_device_signals();
     device->on_attach(this);
 
-    printf("Port: '%s' attached to %s (port %d)%s\n",
-           device->get_name(), definition_.name, port_index_,
-           definition_.is_bus ? " [bus]" : "");
+    if (g_verbose)
+        printf("Port: '%s' attached to %s (port %d)%s\n",
+               device->get_name(), definition_.name, port_index_,
+               definition_.is_bus ? " [bus]" : "");
     return true;
 }
 
@@ -261,8 +263,9 @@ void Port::detach_device(PeripheralDevice* device) {
     if (device == nullptr) {
         // Detach ALL devices
         for (auto* d : attached_devices_) {
-            printf("Port: '%s' detached from %s (port %d)\n",
-                   d->get_name(), definition_.name, port_index_);
+            if (g_verbose)
+                printf("Port: '%s' detached from %s (port %d)\n",
+                       d->get_name(), definition_.name, port_index_);
             d->on_detach();
         }
         attached_devices_.clear();
@@ -271,8 +274,9 @@ void Port::detach_device(PeripheralDevice* device) {
         auto it = std::find(attached_devices_.begin(), attached_devices_.end(), device);
         if (it == attached_devices_.end()) return;
 
-        printf("Port: '%s' detached from %s (port %d)\n",
-               device->get_name(), definition_.name, port_index_);
+        if (g_verbose)
+            printf("Port: '%s' detached from %s (port %d)\n",
+                   device->get_name(), definition_.name, port_index_);
         device->on_detach();
         attached_devices_.erase(it);
     }

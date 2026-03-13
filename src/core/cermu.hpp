@@ -375,6 +375,15 @@ template<std::unsigned_integral T, T Taps>
 }
 
 /* ========================================================================== */
+/* RUNTIME VERBOSITY                                                          */
+/* ========================================================================== */
+
+/* When true, registries and subsystems print informational messages during
+   startup ("Registered ...", "Attached ...", etc.).  Off by default;
+   enable with --verbose / -v on the command line. */
+inline bool g_verbose = false;
+
+/* ========================================================================== */
 /* FEATURE FLAGS — AUTOMATIC IMPLICATIONS                                     */
 /* ========================================================================== */
 

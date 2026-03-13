@@ -3,6 +3,7 @@
  */
 
 #include "core/device_registry.hpp"
+#include "core/cermu.hpp"
 #include <cstdio>
 #include <cstring>
 
@@ -29,9 +30,10 @@ void DeviceRegistry::register_device(const DeviceDescriptor& descriptor, DeviceF
     }
 
     devices_.emplace_back(descriptor, std::move(factory));
-    printf("DeviceRegistry: Registered device '%s' (%s) for %s\n",
-           descriptor.id, descriptor.name,
-           port_type_name(descriptor.port_type));
+    if (g_verbose)
+        printf("DeviceRegistry: Registered device '%s' (%s) for %s\n",
+               descriptor.id, descriptor.name,
+               port_type_name(descriptor.port_type));
 }
 
 // ============================================================================
