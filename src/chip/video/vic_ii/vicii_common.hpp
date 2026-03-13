@@ -164,7 +164,11 @@ namespace vicii_regs {
     constexpr uint16_t ADDR_D021 = 0xD021;  // Background color 0
 }
 
-DECL_EXTRACT_ALL(VICII, VICII_DECL)
+// VIC-II uses DECL_EXTRACT_ directly (not DECL_EXTRACT_ALL) because the
+// DECL table includes CMP rows that reference vicii_regs:: register symbols.
+#define DECL_CMP_NS_ vicii_regs
+DECL_EXTRACT_(VICII, VICII_DECL, DECL_X_ENTRY_CMP_)
+#undef DECL_CMP_NS_
 
 // --- Extract FLD constants ---
 // Produces: VICII_C1_YSCROLL_SHIFT, VICII_C1_YSCROLL_WIDTH, VICII_C1_YSCROLL_MASK
@@ -174,30 +178,6 @@ DECL_EXTRACT_ALL(VICII, VICII_DECL)
     static constexpr uint32_t VICII_##reg##_##fld##_MASK  = BF_MASK(hilo);
 VICII_DECL(DECL_REG_NOP, VICII_X_FLD_CONST_, DECL_CMP_NOP)
 #undef VICII_X_FLD_CONST_
-
-// --- Extract CMP compound array ---
-#define VICII_X_CMP_(sym, desc, kind, bits, ds, dm, r1, hilo1, dst1, r2, hilo2, dst2) \
-    { #sym, desc, DataKind::kind, bits, 2, \
-      {{ vicii_regs::r1, (uint8_t)BF_HI(hilo1), (uint8_t)BF_LO(hilo1), (uint8_t)(dst1) }, \
-       { vicii_regs::r2, (uint8_t)BF_HI(hilo2), (uint8_t)BF_LO(hilo2), (uint8_t)(dst2) }} },
-static constexpr CompoundEntry<vicii_reg_traits> VICII_COMPOUNDS[] = {
-    VICII_DECL(DECL_REG_NOP, DECL_FLD_NOP, VICII_X_CMP_)
-};
-#undef VICII_X_CMP_
-
-static constexpr size_t VICII_NUM_COMPOUNDS = sizeof(VICII_COMPOUNDS) / sizeof(VICII_COMPOUNDS[0]);
-
-static constexpr size_t VICII_DECL_ORDER_COUNT = VICII_DECL_ORDER.size();
-
-// --- Extract compound info (non-templated metadata for renderer) ---
-#define VICII_X_CMP_INFO_(sym, desc, kind, bits, ds, dm, r1, h1, d1, r2, h2, d2) \
-    { #sym, desc, DataKind::kind, (uint8_t)(bits), (uint8_t)(ds), (uint16_t)(dm) },
-static constexpr CompoundInfo VICII_COMPOUND_INFO[] = {
-    VICII_DECL(DECL_REG_NOP, DECL_FLD_NOP, VICII_X_CMP_INFO_)
-};
-#undef VICII_X_CMP_INFO_
-
-static constexpr size_t VICII_NUM_COMPOUND_INFO = sizeof(VICII_COMPOUND_INFO) / sizeof(VICII_COMPOUND_INFO[0]);
 
 // Control register 1 ($d011) bit masks
 #define VICII_C1_YSCROLL  0x07  // Smooth Scroll to Y Pos

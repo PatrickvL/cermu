@@ -2639,19 +2639,11 @@ void vicii_t::set_framebuffer(uint32_t* framebuffer, int width, int height) {
 
 #ifdef CERMU_HAS_CHIP_DEBUG
 
-// Type-erased compound reader for the DECL-order renderer
-static uint32_t vicii_read_compound(const uint8_t* regs, uint16_t idx) {
-    return compound_get<vicii_reg_traits>(regs, VICII_COMPOUNDS[idx]);
-}
-
 void vicii_t::register_debug_fields() {
     using VI = const vicii_t;
     auto& r = debug_registry_;
     r.set_registers(regs_, 66, VICII_REG_INFO, 0xD000);
-    r.set_decl_order(VICII_DECL_ORDER.data(), VICII_DECL_ORDER.size(),
-                     VICII_FLD_INFO, VICII_NUM_FIELDS,
-                     VICII_COMPOUND_INFO, VICII_NUM_COMPOUND_INFO,
-                     vicii_read_compound);
+    r.set_decl_entries(VICII_DECL_ENTRIES.data(), VICII_DECL_ENTRIES.size());
     r.set_palette(get_default_palette(), 16);
 
     // Screen mode names indexed by (ECM<<2 | BMM<<1 | MCM)
