@@ -38,7 +38,6 @@ namespace bbc_chips {
     inline constexpr size_t kRamSlot       = 0;
     inline constexpr size_t kPagedRomSlot  = 1;
     inline constexpr size_t kOsRomSlot     = 2;
-    inline constexpr size_t kCpuSlot       = 3;
 }
 
 using BBCMicroBusSpec = ManifestBusSpec<kBBCMicroChips, 16, 8>;

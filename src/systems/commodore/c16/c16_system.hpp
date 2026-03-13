@@ -93,7 +93,6 @@ namespace c264_slot {
     inline constexpr size_t kRam       = 0;
     inline constexpr size_t kBasicRom  = 1;
     inline constexpr size_t kKernalRom = 2;
-    inline constexpr size_t kCpuSlot   = 3;
 }
 
 struct C264BusTraits {

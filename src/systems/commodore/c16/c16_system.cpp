@@ -553,7 +553,7 @@ bool Commodore264System<V>::initialize() {
     ram_        = board_.chip_as<RAMChip>(c264_slot::kRam);
     basic_rom_  = board_.chip_as<ROMChip>(c264_slot::kBasicRom);
     kernal_rom_ = board_.chip_as<ROMChip>(c264_slot::kKernalRom);
-    cpu_        = board_.chip_as<CSG7501>(c264_slot::kCpuSlot);
+    cpu_        = board_.cpu<CSG7501>();
     
     // Load ROMs using common ROM loader
     bool roms_loaded = load_roms();

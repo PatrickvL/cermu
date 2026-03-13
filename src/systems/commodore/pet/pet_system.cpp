@@ -255,7 +255,7 @@ bool PETSystem::initialize() {
     basic_rom_d_chip_ = board_.template chip_as<ROMChip>(4);
     editor_rom_chip_  = board_.template chip_as<ROMChip>(5);
     kernal_rom_chip_  = board_.template chip_as<ROMChip>(6);
-    cpu_              = board_.template chip_as<MOS6502>(pet_chips::kCpuSlot);
+    cpu_              = board_.template cpu<MOS6502>();
 
     // Screen RAM mirror at $8400-$87FF and configure memory map
     configure_memory_map();

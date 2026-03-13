@@ -169,7 +169,7 @@ bool Atari2600System::initialize() {
     tia_       = board_.chip_as<tia_t>(atari2600_chips::kTiaSlot);
     riot_      = board_.chip_as<pia6532_t>(atari2600_chips::kRiotSlot);
     cart_chip_ = board_.chip_as<Atari2600CartChip>(atari2600_chips::kCartSlot);
-    cpu_       = board_.chip_as<MOS6507>(atari2600_chips::kCpuSlot);
+    cpu_       = board_.cpu<MOS6507>();
 
     // ── Configure MemoryBus page tables (mirrors + cart pages) ──────────
     configure_bus_memory_map();

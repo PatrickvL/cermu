@@ -61,7 +61,7 @@ bool LC80System::initialize() {
     configure_bus_memory_map();
 
     // ── Init chips ──────────────────────────────────────────────────────
-    cpu_ = board_.chip_as<U880>(lc80_chips::kCpuSlot);
+    cpu_ = board_.cpu<U880>();
     pins_ = cpu_->init();
     pio1_.init();
     pio2_.init();

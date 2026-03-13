@@ -85,7 +85,7 @@ bool Z1013System<V>::initialize() {
     }
 
     // ── Init chips ──────────────────────────────────────────────────────
-    cpu_ = board_.template chip_as<U880>(Traits::kCpuSlot);
+    cpu_ = board_.template cpu<U880>();
     pins_ = cpu_->init();
     pio_.init();
 

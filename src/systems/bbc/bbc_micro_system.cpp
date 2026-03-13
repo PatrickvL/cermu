@@ -172,7 +172,7 @@ bool BBCMicroSystem::initialize() {
     ram_chip_        = board_.chip_as<RAMChip>(bbc_chips::kRamSlot);
     paged_rom_chip_  = board_.chip_as<ROMChip>(bbc_chips::kPagedRomSlot);
     os_rom_chip_     = board_.chip_as<ROMChip>(bbc_chips::kOsRomSlot);
-    cpu_             = board_.chip_as<MOS6502>(bbc_chips::kCpuSlot);
+    cpu_             = board_.cpu<MOS6502>();
 
     // ── Convenience pointer for rendering functions ─────────────────────
     memory_ = ram_chip_->data();

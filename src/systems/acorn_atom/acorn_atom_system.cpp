@@ -209,7 +209,7 @@ bool AcornAtomSystem::initialize() {
         static_cast<PT::ChipId>(acorn_atom_chips::kVideoRamId));
 
     // ── Init chips ──────────────────────────────────────────────────────
-    cpu_ = board_.chip_as<MOS6502>(acorn_atom_chips::kCpuSlot);
+    cpu_ = board_.cpu<MOS6502>();
     pins_ = cpu_->init();
     vdg_.init();
     ppi_.init();

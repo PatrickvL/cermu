@@ -34,7 +34,6 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_01> {
     // Slot indices into kZ1013_16K_Chips
     static constexpr size_t kVideoRamSlot   = 1;
     static constexpr size_t kMonitorRomSlot = 2;
-    static constexpr size_t kCpuSlot        = 3;
 };
 
 template<> struct Z1013VariantTraits<Z1013Variant::Z1013_16> {
@@ -45,7 +44,6 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_16> {
     static constexpr bool        has_basic_rom   = false;
     static constexpr size_t kVideoRamSlot   = 1;
     static constexpr size_t kMonitorRomSlot = 2;
-    static constexpr size_t kCpuSlot        = 3;
 };
 
 template<> struct Z1013VariantTraits<Z1013Variant::Z1013_64> {
@@ -58,7 +56,6 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_64> {
     static constexpr size_t kBasicRomHiSlot = 2;
     static constexpr size_t kVideoRamSlot   = 3;
     static constexpr size_t kMonitorRomSlot = 4;
-    static constexpr size_t kCpuSlot        = 5;
 };
 
 // ============================================================================

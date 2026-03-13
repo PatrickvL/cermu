@@ -96,7 +96,6 @@ namespace atari2600_chips {
     inline constexpr size_t kTiaSlot  = 0;
     inline constexpr size_t kRiotSlot = 1;
     inline constexpr size_t kCartSlot = 2;
-    inline constexpr size_t kCpuSlot  = 3;
 }
 
 class Atari2600System : public System {

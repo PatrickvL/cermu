@@ -77,7 +77,7 @@ bool NamcoArcadeSystem<G>::initialize() {
     board_.apply(bus_);
 
     // ── Init CPU + sound ────────────────────────────────────────────────
-    cpu_ = board_.template chip_as<ZilogZ80A>(namco_chips::kCpuSlot);
+    cpu_ = board_.template cpu<ZilogZ80A>();
     pins_ = cpu_->init();
     wsg_.init();
 

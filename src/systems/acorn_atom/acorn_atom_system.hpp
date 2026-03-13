@@ -79,7 +79,6 @@ namespace acorn_atom_chips {
     inline constexpr size_t kOsRomSlot    = 4;
     inline constexpr size_t kPpiSlot      = 5;
     inline constexpr size_t kViaSlot      = 6;
-    inline constexpr size_t kCpuSlot      = 7;
 
     // Compile-time chip ids (from manifest prefix-sum)
     inline constexpr size_t kRamId      = kAcornAtomChips.base_id(kRamSlot, AcornAtomBusSpec::PageBits);

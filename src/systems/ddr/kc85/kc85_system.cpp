@@ -81,7 +81,7 @@ bool KC85System<V>::initialize() {
     if constexpr (Traits::has_basic_rom) {
         basic_rom_chip_ = board_.template chip_as<ROMChip>(Traits::kBasicRomSlot);
     }
-    cpu_ = board_.template chip_as<U880>(Traits::kCpuSlot);
+    cpu_ = board_.template cpu<U880>();
 
     // ── Set initial banking state ───────────────────────────────────────
     caos_rom_on_  = true;
