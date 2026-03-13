@@ -808,7 +808,7 @@ void Apple1System::setup_ports() {
     // Port 1 — Cassette Interface (ACI card, audio in/out)
     add_port(apple1_cassette_def, 0);
 
-    printf("Apple1: Created %zu ports\n", ports_.size());
+    printf("Apple1: Created %zu ports\n", get_ports().size());
 }
 
 // ============================================================================

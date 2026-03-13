@@ -1267,14 +1267,14 @@ void Commodore264System<V>::setup_ports() {
     // Attach internal keyboard device
     auto kb_device = std::make_unique<CommodoreKeyboardDevice>(keyboard_);
     auto* kb_raw = kb_device.get();
-    ports_[kb_port]->attach_device(kb_raw);
+    get_port(kb_port)->attach_device(kb_raw);
     owned_devices_.push_back(std::move(kb_device));
 
     // Default: attach peripheral devices via declarative list
     attach_default_peripherals();
 
     printf("%s: Created %zu ports\n",
-           Traits::name, ports_.size());
+           Traits::name, get_ports().size());
 }
 
 template<C264SeriesVariant V>

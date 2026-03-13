@@ -663,9 +663,9 @@ void NintendoSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 
 template<NintendoVariant V>
 void NintendoSystem<V>::handle_controller_event(int controller, int button, bool pressed) {
-    if (controller < 0 || controller >= static_cast<int>(ports_.size())) return;
+    if (controller < 0 || controller >= static_cast<int>(get_ports().size())) return;
 
-    auto* dev = ports_[controller]->get_attached_device();
+    auto* dev = get_port(controller)->get_attached_device();
     if (auto* pad = dynamic_cast<NesStandardController*>(dev)) {
         pad->set_button_state(static_cast<NesStandardController::Button>(button), pressed);
     }
@@ -1079,8 +1079,8 @@ void NintendoSystem<V>::tick() {
                     // (last value on data bus) in D5-D7.
                     const int p = addr & 1;  // 0 for $4016, 1 for $4017
                     uint8_t result = 0;
-                    if (p < static_cast<int>(ports_.size())) {
-                        auto* dev = ports_[p]->get_attached_device();
+                    if (p < static_cast<int>(get_ports().size())) {
+                        auto* dev = get_port(p)->get_attached_device();
                         if (dev) {
                             uint32_t sigs = dev->get_output_signals();
                             // D0 is active-low: bit clear = button pressed → result bit 0 = 1
@@ -1089,8 +1089,8 @@ void NintendoSystem<V>::tick() {
                         }
                         // Pulse CLK high then low to advance shift register
                         const uint32_t clk_mask = 1u << PortSignals::NESControllerBit::NES_CLK;
-                        ports_[p]->write_system_signals(clk_mask, clk_mask);
-                        ports_[p]->write_system_signals(clk_mask, 0);
+                        get_port(p)->write_system_signals(clk_mask, clk_mask);
+                        get_port(p)->write_system_signals(clk_mask, 0);
                     }
                     // D0-D4: controller/expansion data, D5-D7: open bus
                     uint8_t open_bus = BUS_GET_DATA(pins_);
@@ -1134,8 +1134,8 @@ void NintendoSystem<V>::tick() {
                     // Bit 0 of data: 1 = LATCH high, 0 = LATCH low.
                     const uint32_t latch_mask = 1u << PortSignals::NESControllerBit::NES_LATCH;
                     const uint32_t latch_val  = (data & 1) ? latch_mask : 0;
-                    for (size_t cp = 0; cp < 2 && cp < ports_.size(); cp++)
-                        ports_[cp]->write_system_signals(latch_mask, latch_val);
+                    for (size_t cp = 0; cp < 2 && cp < get_ports().size(); cp++)
+                        get_port(cp)->write_system_signals(latch_mask, latch_val);
                 }
                 // Other APU writes ($4000-$4013, $4015, $4017) handled by CPU PHI1
             } else {
@@ -1218,9 +1218,9 @@ void NintendoSystem<V>::tick() {
 
 template<NintendoVariant V>
 void NintendoSystem<V>::set_controller_state(int controller, uint8_t state) {
-    if (controller < 0 || controller >= static_cast<int>(ports_.size())) return;
+    if (controller < 0 || controller >= static_cast<int>(get_ports().size())) return;
 
-    auto* dev = ports_[controller]->get_attached_device();
+    auto* dev = get_port(controller)->get_attached_device();
     if (auto* pad = dynamic_cast<NesStandardController*>(dev)) {
         for (int i = 0; i < 8; i++) {
             pad->set_button_state(
@@ -1363,13 +1363,13 @@ void NintendoSystem<V>::setup_ports() {
         add_port(NesPorts::FC_CONTROLLER_1, 1);
         add_port(NesPorts::FC_CONTROLLER_2, 2);
         add_port(NesPorts::FC_EXPANSION, 0);
-        printf("%s: Created %zu ports\n", Traits::name, ports_.size());
+        printf("%s: Created %zu ports\n", Traits::name, get_ports().size());
     } else {
         // NES: removable controller ports, bottom expansion
         add_port(NesPorts::NES_CONTROLLER_1, 1);
         add_port(NesPorts::NES_CONTROLLER_2, 2);
         add_port(NesPorts::NES_EXPANSION, 0);
-        printf("%s: Created %zu ports\n", Traits::name, ports_.size());
+        printf("%s: Created %zu ports\n", Traits::name, get_ports().size());
     }
 
     // Attach default peripherals declared by get_default_peripherals().
