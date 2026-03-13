@@ -63,7 +63,9 @@ inline constexpr auto kAcornAtomChips = make_chip_manifest(
     Slot<ROMChip>{0xD000,  2048, 0, "FP ROM"},
     Slot<ROMChip>{0xF000,  4096, 0, "OS ROM"},
     Slot<i8255_t>   {0xB000,     0, 0xFFFC},           // MMIO-only, 4-byte window
-    Slot<mos6522_t> {0xB800,     0, 0xFFF0}            // MMIO-only, 16-byte window
+    Slot<mos6522_t> {0xB800,     0, 0xFFF0},           // MMIO-only, 16-byte window
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<MOS6502>   {0, 0, 0, "MOS 6502"}
 );
 
 // BusSpec auto-derived from the manifest
@@ -77,6 +79,7 @@ namespace acorn_atom_chips {
     inline constexpr size_t kOsRomSlot    = 4;
     inline constexpr size_t kPpiSlot      = 5;
     inline constexpr size_t kViaSlot      = 6;
+    inline constexpr size_t kCpuSlot      = 7;
 
     // Compile-time chip ids (from manifest prefix-sum)
     inline constexpr size_t kRamId      = kAcornAtomChips.base_id(kRamSlot, AcornAtomBusSpec::PageBits);
@@ -121,8 +124,8 @@ public:
 
 private:
     // ── Chips ────────────────────────────────────────────────────────────
-    MOS6502*    cpu_  = nullptr;     // MOS 6502 @ 1 MHz
-    mc6847_t    vdg_;                // MC6847 Video Display Generator
+    MOS6502*    cpu_  = nullptr;     // MOS 6502 — owned by bus_mem_
+    mc6847_t    vdg_;                // MC6847 Video Display Generator — stack member
     i8255_t     ppi_;                // Intel 8255 PPI (keyboard + cassette ctrl)
     mos6522_t   via_;                // MOS 6522 VIA (timers, cassette, printer)
 

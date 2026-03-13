@@ -55,7 +55,7 @@ Z1013System<V>::Z1013System() : System(), pins_(Z1013_BUS_DEFAULT_STATE) {
 }
 
 template<Z1013Variant V>
-Z1013System<V>::~Z1013System() { delete cpu_; }
+Z1013System<V>::~Z1013System() = default;
 
 template<Z1013Variant V>
 const SystemDescriptor& Z1013System<V>::get_descriptor() const {
@@ -85,7 +85,7 @@ bool Z1013System<V>::initialize() {
     }
 
     // ── Init chips ──────────────────────────────────────────────────────
-    cpu_ = new U880();
+    cpu_ = bus_mem_.template chip_as<U880>(Traits::kCpuSlot);
     pins_ = cpu_->init();
     pio_.init();
 
@@ -100,8 +100,6 @@ bool Z1013System<V>::initialize() {
     }
 
     // ── Register chips for Hardware menu ────────────────────────────────
-    register_chip(static_cast<ChipBase*>(cpu_),
-        "U880 CPU", "U880", "CPU", 0x0000);
     register_chip(&pio_,
         "U855 PIO", "U855", "I/O", z1013_constants::PIO_PORT_A);
     register_bus_chips(bus_mem_);
@@ -110,7 +108,7 @@ bool Z1013System<V>::initialize() {
     return true;
 }
 
-template<Z1013Variant V> void Z1013System<V>::shutdown() { delete cpu_; cpu_ = nullptr; system_ready_ = false; }
+template<Z1013Variant V> void Z1013System<V>::shutdown() { cpu_ = nullptr; system_ready_ = false; }
 template<Z1013Variant V> void Z1013System<V>::reset() {
     if (!cpu_) return;
     pins_ = cpu_->reset(pins_);

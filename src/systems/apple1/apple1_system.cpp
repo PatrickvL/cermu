@@ -136,12 +136,6 @@ Apple1System::Apple1System()
 }
 
 Apple1System::~Apple1System() {
-    // Destroy CPU
-    if (cpu_) {
-        delete cpu_;
-        cpu_ = nullptr;
-    }
-    
     // Destroy terminal
     if (terminal_) {
         delete terminal_;
@@ -184,11 +178,12 @@ bool Apple1System::initialize() {
     printf("Apple1: Initializing system\n");
     register_board(&bus_mem_);
     
-    // ── Pre-bind PIA, then factory-create memory chips ────────────────
+    // ── Pre-bind PIA, then factory-create all chips (memory + CPU) ───
     bus_mem_.bind_chip(apple1_chips::kPiaSlot, &pia_);
     bus_mem_.create_chips(&pins_);
     monitor_rom_ = bus_mem_.chip_as<ROMChip>(apple1_chips::kMonitorSlot);
     basic_rom_   = bus_mem_.chip_as<ROMChip>(apple1_chips::kBasicSlot);
+    cpu_         = bus_mem_.chip_as<MOS6502>(apple1_chips::kCpuSlot);
 
     // Character ROM — not on the bus (used by terminal renderer only).
     auto char_chip = std::make_unique<ROMChip>(
@@ -213,17 +208,8 @@ bool Apple1System::initialize() {
     // configure_bus_memory_map() then trims to actual RAM size.
     configure_bus_memory_map();
     
-    // Create CPU (MOS6502) — direct C++ instantiation
-    cpu_ = new MOS6502();
-    if (!cpu_) {
-        printf("Apple1: Failed to create MOS6502 CPU\n");
-        return false;
-    }
-    
     // Initialize CPU (descriptor-free — memory I/O is handled via bus_state_t pins)
     cpu_->init();
-    
-    // Reset CPU to initialize state
     cpu_->reset(0);
     
     // Reset PIA with callbacks
@@ -236,14 +222,10 @@ bool Apple1System::initialize() {
     
     setup_ports();
 
-    // Register chips for the Hardware menu (transfers ownership of memory chips)
-    register_chip(static_cast<ChipBase*>(cpu_),
-        "MOS 6502 CPU", "6502", "CPU", 0x0000);
-    register_chip(&pia_,
-        "PIA 6820 (Keyboard/Display)", "PIA", "I/O", apple1_constants::PIA_BASE);
+    // Register chips for the Hardware menu
+    register_bus_chips(bus_mem_);
     register_chip(std::make_unique<ChipPlaceholder>(
         ChipInfo{"Terminal", "Custom"}, "Text Terminal (40x24)", "Terminal", "Video"));
-    register_bus_chips(bus_mem_);
     register_chip(std::move(char_chip));
     
     printf("Apple1: System initialized (RAM: %dKB)\n", ram_size_ / 1024);

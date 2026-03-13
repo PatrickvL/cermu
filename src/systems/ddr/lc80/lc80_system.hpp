@@ -33,12 +33,15 @@
 //
 inline constexpr auto kLC80Chips = make_chip_manifest(
     Slot<ROMChip>{0x0000, 2048, 0, "Monitor ROM"},
-    Slot<RAMChip>{0x2000, 1024, 0, "RAM"}
+    Slot<RAMChip>{0x2000, 1024, 0, "RAM"},
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<U880>   {0, 0, 0, "U880"}
 );
 
 namespace lc80_chips {
     inline constexpr size_t kRomSlot = 0;
     inline constexpr size_t kRamSlot = 1;
+    inline constexpr size_t kCpuSlot = 2;
 }
 
 using LC80BusSpec = ManifestBusSpec<kLC80Chips, 16, 8>;
@@ -78,7 +81,7 @@ public:
 
 private:
     // ── Chips ────────────────────────────────────────────────────────────
-    U880*       cpu_  = nullptr;     // U880 (Z80A clone) @ 900 kHz
+    U880*       cpu_  = nullptr;     // U880 (Z80A clone) — owned by bus_mem_
     z80_pio_t   pio1_;               // U855 PIO #1 (LED display + keyboard)
     z80_pio_t   pio2_;               // U855 PIO #2 (keyboard scan + cassette)
     z80_ctc_t   ctc_;                // U857 CTC (speaker on channel 2)
