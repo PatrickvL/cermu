@@ -31,6 +31,8 @@
 #include "core/formats/sna_format.hpp"
 #include "core/formats/z80_snapshot_format.hpp"
 #include "core/formats/spectrum_tap_format.hpp"
+#include "core/formats/scl_format.hpp"
+#include "core/formats/trd_format.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -76,6 +78,8 @@ static const format_descriptor_t* const spectrum_formats[] = {
     &SNA_FORMAT_DESCRIPTOR,
     &Z80_SNAPSHOT_FORMAT_DESCRIPTOR,
     &SPECTRUM_TAP_FORMAT_DESCRIPTOR,
+    &SCL_FORMAT_DESCRIPTOR,
+    &TRD_FORMAT_DESCRIPTOR,
     nullptr
 };
 
