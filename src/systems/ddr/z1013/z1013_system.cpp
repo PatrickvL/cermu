@@ -86,8 +86,9 @@ bool Z1013System<V>::initialize() {
 
     // ── Init chips ──────────────────────────────────────────────────────
     cpu_ = board_.template cpu<U880>();
+    pio_ = board_.template chip_as<z80_pio_t>(Traits::kPioSlot);
     pins_ = board_.cpu_chip()->init();
-    pio_.init();
+    pio_->init();
 
     // Character ROM — not bus-mapped, used for display rendering only
     char_rom_.resize(z1013_constants::CHAR_ROM_SIZE, 0xFF);
@@ -100,8 +101,6 @@ bool Z1013System<V>::initialize() {
     }
 
     // ── Register chips for Hardware menu ────────────────────────────────
-    register_chip(&pio_,
-        "U855 PIO", "U855", "I/O", z1013_constants::PIO_PORT_A);
     register_bus_chips(board_);
 
     system_ready_ = true;
@@ -111,8 +110,8 @@ bool Z1013System<V>::initialize() {
 template<Z1013Variant V> void Z1013System<V>::shutdown() { cpu_ = nullptr; system_ready_ = false; }
 template<Z1013Variant V> void Z1013System<V>::reset() {
     if (!cpu_) return;
+    board_.reset_chips();
     pins_ = board_.cpu_chip()->reset(pins_);
-    pio_.init();
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
     keyboard_column_select_ = 0xFF;
 }
@@ -261,16 +260,16 @@ bus_state_t Z1013System<V>::io_tick(bus_state_t pins) {
                         cols &= keyboard_matrix_[r];
                     }
                 }
-                pio_.set_input(0, cols);
+                pio_->set_input(0, cols);
             }
-            uint8_t data = pio_.read_data(port_sel);
+            uint8_t data = pio_->read_data(port_sel);
             BUS_SET_DATA(pins, data);
         } else {
             uint8_t data = BUS_GET_DATA(pins);
             if (is_ctrl) {
-                pio_.write_control(port_sel, data);
+                pio_->write_control(port_sel, data);
             } else {
-                pio_.write_data(port_sel, data);
+                pio_->write_data(port_sel, data);
             }
         }
     } else if (port == z1013_constants::KEYBOARD_SEL_PORT) {

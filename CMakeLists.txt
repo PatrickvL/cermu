@@ -352,6 +352,9 @@ list(APPEND CHIP_SOURCES
     
     # Video - TIA (Atari 2600)
     src/chip/video/tia/tia.cpp
+
+    # Video - Registry (header-only chips)
+    src/chip/video/video_registry.cpp
 )
 # System sources
 set(SYSTEM_SOURCES

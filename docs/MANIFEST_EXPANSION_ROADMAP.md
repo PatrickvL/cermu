@@ -46,21 +46,21 @@ factory creation or pre-binding.
 | System | Manifest contains | Non-manifest chips (manual) |
 |---|---|---|
 | VIC-20 | RAM, ROM ×3, CPU, VIC (PAL/NTSC conditional), VIA ×2 — **gold standard** | — |
-| Atari 2600 | TIA (MMIO), RIOT (MMIO), CartChip (MMIO) | CPU |
-| Apple 1 | RAM, ROM ×2, PIA (MMIO) | CPU, terminal |
-| Acorn Atom | RAM ×2, ROM ×3, PPI (MMIO), VIA (MMIO) | CPU, VDG |
-| BBC Micro | RAM, ROM ×2 | CPU, CRTC, PSG, VIA ×2 |
-| Spectrum | RAM, ROM (variant-gated 48K/128K) | CPU, ULA, AY |
-| C16/Plus4 | RAM, ROM ×2 | CPU, TED |
-| PET | RAM ×2, ROM ×5 | CPU, VIA |
-| Amstrad CPC | RAM, ROM ×2 (variant-gated 464/6128) | CPU, CRTC, PSG |
-| DDR KC85 | RAM, IRM, ROM ×1–2 (variant-gated /2, /3, /4) | CPU |
-| DDR Z9001/KC87 | RAM, ROM ×1–4, Video RAM, Color RAM (variant-gated) | CPU |
-| DDR LC80 | ROM, RAM | CPU |
-| DDR Z1013 | RAM, ROM, Video RAM (variant-gated 16K/64K) | CPU |
-| Bomb Jack | Main: ROM, RAM ×4.  Sound: ROM, RAM — **dual `Board<Spec>`** | CPU ×2 (main + sound) |
-| Namco Arcade | ROM, RAM ×3 (variant-gated Pac-Man/Pengo) | CPU |
-| C64 | **none** — all chips manual, legacy `c64_bus_t` dispatch | CPU, VIC-II, SID, CIA ×2, Color RAM, RAM, ROM ×4, keyboard |
+| Atari 2600 | TIA (MMIO), RIOT (MMIO), CartChip (MMIO), CPU | — |
+| Apple 1 | RAM, ROM ×2, PIA (MMIO), CPU | terminal, char ROM (rendering-only) |
+| Acorn Atom | RAM ×2, ROM ×3, PPI (MMIO), VIA (MMIO), CPU | VDG (stack member) |
+| BBC Micro | RAM, ROM ×2, CPU | CRTC, PSG, VIA ×2 |
+| Spectrum | RAM, ROM (variant-gated 48K/128K), CPU | ULA, AY |
+| C16/Plus4 | RAM, ROM ×2, CPU | TED |
+| PET | RAM ×2, ROM ×5, CPU | VIA |
+| Amstrad CPC | RAM, ROM ×2 (variant-gated 464/6128), CPU | CRTC, PSG, gate array |
+| DDR KC85 | RAM, IRM, ROM ×1–2 (variant-gated /2, /3, /4), CPU | PIO ×2, CTC, module system |
+| DDR Z9001/KC87 | RAM, ROM ×1–4, Video RAM, Color RAM (variant-gated), CPU | PIO ×2, CTC |
+| DDR LC80 | ROM, RAM, CPU | PIO ×2, CTC |
+| DDR Z1013 | RAM, ROM, Video RAM (variant-gated 16K/64K), CPU | PIO, char ROM (vector) |
+| Bomb Jack | Main: ROM, RAM ×4, CPU.  Sound: ROM, RAM, CPU — **dual `Board<Spec>`** | AY ×3 |
+| Namco Arcade | ROM, RAM ×3 (variant-gated Pac-Man/Pengo), CPU | WSG sound |
+| C64 | **none** — all chips manual, legacy `c64_bus_t` dispatch | VIC-II, SID, CIA ×2, Color RAM, RAM, ROM ×4, keyboard |
 | NES | **none** — all chips manual, separate PPU bus | CPU, PPU, APU, RAM, CIRAM, CD4021 ×2, mapper/cartridge |
 | CHIP-8 | **N/A** — pure interpreter, no bus model | ChipPlaceholders for GUI only |
 
@@ -68,7 +68,10 @@ factory creation or pre-binding.
 
 `Board<Spec>::reset_chips()` iterates all `owned_chips_` and calls `ChipBase::reset()`.
 Currently used by: VIC-20, Atari 2600, Apple 1, Acorn Atom.  Safe for all chip types
-(RAM/ROM/CPU have no-op `reset()`).
+(RAM/ROM/CPU have no-op `reset()`; Z80 PIO/CTC/VDG delegate to `init()`).
+
+`CpuChipBase` provides virtual `init()` and `reset(pins = 0)`.  All migrated systems
+call `board_.cpu_chip()->init()` and `board_.cpu_chip()->reset()` for CPU lifecycle.
 
 `BoardBase::power_on()` exists as an empty virtual — no system overrides it yet.
 
@@ -420,20 +423,20 @@ Systems ordered by migration complexity (easiest first):
 | Priority | System | Effort | Chips to add | Notes |
 |----------|--------|--------|---|---|
 | ✅ Done | VIC-20 | — | — | Gold standard: all chips in manifest including CPU, conditional VIC |
-| Low | Atari 2600 | Small | CPU | TIA + RIOT + CartChip already MMIO; just add `Slot<MOS6507>{0,0,0}` |
-| Low | Apple 1 | Small | CPU | RAM, ROM ×2, PIA (MMIO) done; add `Slot<MOS6502>{0,0,0}` |
-| Low | Acorn Atom | Small | CPU, VDG | RAM ×2, ROM ×3, PPI (MMIO), VIA (MMIO) done; add non-bus slots |
-| Low | DDR LC80 | Small | CPU | ROM + RAM done; add `Slot<Z80>{0,0,0}` |
-| Low | DDR Z1013 | Small | CPU | RAM + ROM + Video RAM (variant-gated); add Z80 slot |
-| Medium | DDR KC85 | Medium | CPU, PIO | RAM + IRM + ROM (variant-gated); Z80 PIO needs MMIO |
-| Medium | DDR Z9001/KC87 | Medium | CPU, PIO, CTC | Variant-gated manifests; Z80 PIO + CTC need MMIO |
-| Medium | Namco Arcade | Medium | CPU | ROM + RAM ×3 (variant-gated); add Z80 slot |
-| Medium | Bomb Jack | Medium | CPU ×2 | Already dual `Board<Spec>`; just add CPU slots to each manifest |
-| Medium | BBC Micro | Medium | CPU, CRTC, PSG, VIA ×2 | `mc6845_t`, `sn76489_t` need MMIO; VIA already has it |
-| Medium | PET | Medium | CPU, CRTC, VIA | `mc6845_t` needs MMIO; `mos6522_t` already has it |
-| Medium | C16/Plus4 | Medium | CPU, TED | `ted7360_t` needs MMIO |
-| Medium | Spectrum | Medium | CPU, ULA, AY | `ferranti_ula_t`, `ay_3_8910_t` need MMIO |
-| Medium | Amstrad CPC | Medium–High | CPU, CRTC, PSG, gate array | Gate array needs ChipBase extraction + MMIO; `mc6845_t`, `ay_3_8910_t` need MMIO |
+| ✅ Done | Atari 2600 | — | — | All chips in manifest (TIA, RIOT, Cart, CPU); uses `reset_chips()` |
+| Low | Apple 1 | Tiny | char ROM | RAM, ROM ×2, PIA, CPU done; char ROM is rendering-only, terminal non-chip |
+| Low | Acorn Atom | Tiny | VDG | RAM ×2, ROM ×3, PPI, VIA, CPU done; VDG needs registry + non-bus slot |
+| Low | DDR LC80 | Small | PIO ×2, CTC | ROM, RAM, CPU done; PIOs + CTC are Z80 I/O-port-dispatched (not MMIO) |
+| Low | DDR Z1013 | Small | PIO | RAM, ROM, Video RAM, CPU done; PIO is Z80 I/O-port-dispatched |
+| Medium | DDR KC85 | Medium | PIO ×2, CTC, modules | CPU done; Z80 PIOs + CTC are I/O-port-dispatched |
+| Medium | DDR Z9001/KC87 | Medium | PIO ×2, CTC | CPU done; variant-gated manifests; Z80 peripherals I/O-dispatched |
+| ✅ Done | Namco Arcade | — | — | All memory + CPU in manifest; WSG sound is tick-driven (non-bus) |
+| ✅ Done | Bomb Jack | — | — | Dual `Board<Spec>`, both CPUs in manifest; AY sound tick-driven |
+| Medium | BBC Micro | Medium | CRTC, PSG, VIA ×2 | CPU done; `mc6845_t`, `sn76489_t` need MMIO; VIA already has it |
+| Medium | PET | Medium | CRTC, VIA | CPU done; `mc6845_t` needs MMIO; `mos6522_t` already has it |
+| Medium | C16/Plus4 | Medium | TED | CPU done; `ted7360_t` needs MMIO |
+| Medium | Spectrum | Medium | ULA, AY | CPU done; `ferranti_ula_t`, `ay_3_8910_t` need MMIO |
+| Medium | Amstrad CPC | Medium–High | CRTC, PSG, gate array | CPU done; gate array needs ChipBase extraction + MMIO; `mc6845_t`, `ay_3_8910_t` need MMIO |
 | High | C64 | High | All 12 chips | See C64 Migration Plan above; `c64_bus_t` absorbed into `Board<Spec>` |
 | Deferred | NES | High | All 7+ chips | Two independent buses (16-bit CPU + 14-bit PPU) on one PCB; dual `Board<Spec>` with mapper bridging both; see NES Architecture Notes above |
 | N/A | CHIP-8 | — | — | Pure interpreter, no bus model; not a candidate for manifest migration |
