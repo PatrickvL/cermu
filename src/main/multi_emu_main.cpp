@@ -182,6 +182,9 @@ int main(int argc, char** argv) {
                    system->get_descriptor().name);
             return 1;
         }
+
+        // Attach default peripheral devices declared by the system
+        system->attach_default_peripherals();
         
         // Load file if specified
         if (file_path != nullptr) {
@@ -215,6 +218,9 @@ int main(int argc, char** argv) {
                        system->get_descriptor().name);
                 return 1;
             }
+
+            // Attach default peripheral devices declared by the system
+            system->attach_default_peripherals();
             
             // Load the file
             if (!system->load_file(file_path)) {

@@ -1271,6 +1271,9 @@ void SessionGUI::switch_system(const char* system_name, int memory_option, int r
         return;
     }
 
+    // Attach default peripheral devices declared by the system
+    system_->attach_default_peripherals();
+
     // Auto-bind available host input devices (gamepads, mouse) to peripherals
     system_->auto_bind_host_inputs();
 

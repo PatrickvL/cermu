@@ -53,6 +53,7 @@ int main(int argc, char** argv) {
             printf("ERROR: Failed to initialize system\n");
             return 1;
         }
+        system->attach_default_peripherals();
         printf("System initialized successfully\n\n");
         
         // Load file

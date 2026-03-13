@@ -1382,9 +1382,6 @@ void VIC20System::setup_ports() {
     get_port(kb_port)->attach_device(kb_raw);
     owned_devices_.push_back(std::move(kb_device));
 
-    // Default: attach peripheral devices via declarative list
-    attach_default_peripherals();
-
     printf("VIC20: Created %zu ports\n", get_ports().size());
 }
 
