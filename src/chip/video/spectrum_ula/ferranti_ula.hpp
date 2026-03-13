@@ -213,6 +213,7 @@ public:
     // === State queries ===
 
     uint8_t  border_color()  const { return border_color_; }
+    void     set_border_color(uint8_t c) { border_color_ = c & spectrum_ula::BORDER_MASK; }
     bool     flash_state()   const { return flash_state_; }
     uint32_t frame_counter() const { return frame_counter_; }
     int      scanline()      const { return scanline_; }
