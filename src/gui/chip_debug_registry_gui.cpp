@@ -542,14 +542,19 @@ void render_decl_sub_entry(const DeclEntry& entry, uint32_t val,
     if (entry.display_scale) display_val *= entry.display_scale;
 
     char prefix[64];
-    snprintf(prefix, sizeof(prefix), "       %-14s %-22s", entry.label, entry.desc);
+    snprintf(prefix, sizeof(prefix), "       %-14s", entry.label);
 
     switch (entry.kind) {
-        case DataKind::Flag:    emit_flag_row(prefix, val != 0);                             return;
-        case DataKind::Address: emit_address_row(prefix, display_val);                       return;
-        case DataKind::Color:   emit_color_row(prefix, val, palette, palette_size);          return;
-        case DataKind::Counter: emit_counter_row(prefix, display_val, entry.bit_width);      return;
-        default:                emit_value_row(prefix, display_val);                         return;
+        case DataKind::Flag:    emit_flag_row(prefix, val != 0);                             break;
+        case DataKind::Address: emit_address_row(prefix, display_val);                       break;
+        case DataKind::Color:   emit_color_row(prefix, val, palette, palette_size);          break;
+        case DataKind::Counter: emit_counter_row(prefix, display_val, entry.bit_width);      break;
+        default:                emit_value_row(prefix, display_val);                         break;
+    }
+    // Description rightmost
+    if (entry.desc && entry.desc[0]) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), " %s", entry.desc);
     }
 }
 
@@ -570,13 +575,13 @@ void render_decl_walk(const ChipDebugRegistry& reg, const ChipBase* /*chip*/) {
                 if (!e.desc || e.desc[0] == '-') continue;  // skip unnamed slots
                 char line[128];
                 if (base_addr)
-                    snprintf(line, sizeof(line), "$%04X  %-14s %-22s $%02X",
-                             (unsigned)(base_addr + e.reg_offset), e.label, e.desc,
-                             reg_data[e.reg_offset]);
+                    snprintf(line, sizeof(line), "$%04X  %-14s $%02X  %s",
+                             (unsigned)(base_addr + e.reg_offset), e.label,
+                             reg_data[e.reg_offset], e.desc);
                 else
-                    snprintf(line, sizeof(line), "  $%02X  %-14s %-22s $%02X",
-                             (unsigned)e.reg_offset, e.label, e.desc,
-                             reg_data[e.reg_offset]);
+                    snprintf(line, sizeof(line), "  $%02X  %-14s $%02X  %s",
+                             (unsigned)e.reg_offset, e.label,
+                             reg_data[e.reg_offset], e.desc);
                 ImGui::TextUnformatted(line);
                 // Inline DataKind visualization for kind-annotated registers
                 if (e.kind == DataKind::Color && palette && e.bit_width > 0) {
@@ -635,11 +640,11 @@ void ChipDebugRegistry::render(const ChipBase* chip) const {
                     if (!entry.desc || entry.desc[0] == '-') continue;  // skip unnamed slots
                     char line[128];
                     if (reg_base_address_)
-                        snprintf(line, sizeof(line), "$%04X  %-14s %-22s $%02X",
-                                 (unsigned)(reg_base_address_ + i), entry.label, entry.desc, reg_data_[i]);
+                        snprintf(line, sizeof(line), "$%04X  %-14s $%02X  %s",
+                                 (unsigned)(reg_base_address_ + i), entry.label, reg_data_[i], entry.desc);
                     else
-                        snprintf(line, sizeof(line), "  $%02X  %-14s %-22s $%02X",
-                                 (unsigned)i, entry.label, entry.desc, reg_data_[i]);
+                        snprintf(line, sizeof(line), "  $%02X  %-14s $%02X  %s",
+                                 (unsigned)i, entry.label, reg_data_[i], entry.desc);
                     ImGui::TextUnformatted(line);
                 }
             } else {
