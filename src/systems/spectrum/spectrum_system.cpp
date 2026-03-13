@@ -576,11 +576,20 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
 
     // ── Spectrum TAP ────────────────────────────────────────────────────
     if (result.format == &SPECTRUM_TAP_FORMAT_DESCRIPTOR) {
-        // Load all blocks into RAM and track the last CODE block's address
+        // Metadata layout: [count:u8][spectrum_tap_header_t...]
+        // One header per loadable block, in the same order as files[].
+        const uint8_t* meta = result.metadata;
+        int header_count = (result.metadata_size > 0) ? meta[0] : 0;
+        const auto* headers = reinterpret_cast<const spectrum_tap_header_t*>(meta + 1);
+
         uint16_t code_addr = 0;
         bool has_code = false;
+        uint16_t basic_len = 0;
+        uint16_t basic_var_offset = 0;
+        uint16_t autostart_line = 0xFFFF;  // >= 32768 means no autostart
+        bool has_basic = false;
 
-        auto load_block = [&](const program_data_t& prog) {
+        auto load_block = [&](const program_data_t& prog, int block_idx) {
             if (!prog.data || prog.data_size == 0) return;
             uint16_t addr = prog.load_addr;
             size_t len = prog.data_size;
@@ -588,26 +597,115 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
             std::memcpy(ram + addr, prog.data, len);
             printf("%s: TAP loaded %zu bytes at $%04X\n", Traits::name, len, addr);
 
-            // Track CODE blocks for jump target
-            if (addr >= 0x8000 || len > 100) {
-                code_addr = addr;
-                has_code = true;
+            // Use header type info to classify blocks
+            if (block_idx < header_count) {
+                const auto& hdr = headers[block_idx];
+                if (hdr.type == SPECTRUM_TAP_CODE) {
+                    code_addr = addr;
+                    has_code = true;
+                } else if (hdr.type == SPECTRUM_TAP_PROGRAM) {
+                    has_basic = true;
+                    basic_len = static_cast<uint16_t>(len);
+                    basic_var_offset = hdr.param2;
+                    if (hdr.param1 < 32768)
+                        autostart_line = hdr.param1;
+                }
             }
         };
 
         if (result.type == FORMAT_LOAD_PROGRAM) {
-            load_block(result.program);
+            load_block(result.program, 0);
         } else if (result.type == FORMAT_LOAD_ARCHIVE) {
             for (int i = 0; i < result.file_count; ++i)
-                load_block(result.files[i]);
+                load_block(result.files[i], i);
         }
 
-        // For CODE-containing tapes, jump directly to the last CODE block
+        // Set up BASIC system variables so the ROM can find the program.
+        // Standard Spectrum memory layout after PROG ($5CCB):
+        //   PROG ... PROG+var_offset-1  → BASIC program lines
+        //   PROG+var_offset ... end     → Variables (already in the block)
+        //   VARS+1                      → E_LINE (edit line: $0D $80)
+        if (has_basic) {
+            constexpr uint16_t PROG_ADDR = 0x5CCB;
+            uint16_t vars_addr = PROG_ADDR + basic_var_offset;
+            uint16_t eline_addr = PROG_ADDR + basic_len;
+
+            // Write end-of-edit-line markers
+            if (eline_addr + 1 < 0x10000) {
+                ram[eline_addr]     = 0x0D;  // Newline
+                ram[eline_addr + 1] = 0x80;  // End marker
+            }
+
+            // Helper to poke a 16-bit LE value into RAM
+            auto poke16 = [&](uint16_t sysvar, uint16_t val) {
+                ram[sysvar]     = val & 0xFF;
+                ram[sysvar + 1] = val >> 8;
+            };
+
+            poke16(0x5C53, PROG_ADDR);        // PROG  — start of BASIC program
+            poke16(0x5C4B, vars_addr);         // VARS  — start of variables
+            poke16(0x5C59, eline_addr);        // E_LINE — command being edited
+            uint16_t worksp = eline_addr + 2;
+            poke16(0x5C61, worksp);            // WORKSP — temporary workspace
+            poke16(0x5C63, worksp);            // STKBOT — calculator stack bottom
+            poke16(0x5C65, worksp);            // STKEND — calculator stack end
+
+            // Autostart: set NEWPPC/NSPPC so the ROM jumps to the line
+            if (autostart_line < 32768) {
+                poke16(0x5C42, autostart_line); // NEWPPC — line to jump to
+                ram[0x5C44] = 0;                // NSPPC  — statement 0
+            } else {
+                poke16(0x5C42, 0xFFFE);         // NEWPPC — no auto-run
+                ram[0x5C44] = 0xFF;             // NSPPC  — direct mode
+            }
+
+            if (autostart_line < 32768)
+                printf("%s: BASIC program loaded (vars=$%04X, eline=$%04X, autostart=%u)\n",
+                       Traits::name, vars_addr, eline_addr, autostart_line);
+            else
+                printf("%s: BASIC program loaded (vars=$%04X, eline=$%04X, no autostart)\n",
+                       Traits::name, vars_addr, eline_addr);
+        }
+
+        // Jump target: prefer CODE blocks (machine code entry point),
+        // otherwise enter the ROM's main execution loop for BASIC.
         if (has_code) {
             cpu_->set_pc(code_addr);
-            printf("%s: Jumping to $%04X\n", Traits::name, code_addr);
+            printf("%s: Jumping to CODE at $%04X\n", Traits::name, code_addr);
+        } else if (has_basic) {
+            // Enter the ROM main execution loop — it will honour NEWPPC/NSPPC
+            cpu_->set_pc(0x12A2);  // MAIN-EXEC in the 48K ROM
+            printf("%s: Entering BASIC via ROM MAIN-EXEC ($12A2)\n", Traits::name);
         }
 
+        result.release();
+        return true;
+    }
+
+    // ── SCL / TRD (TR-DOS containers) ────────────────────────────────
+    if (result.format == &SCL_FORMAT_DESCRIPTOR ||
+        result.format == &TRD_FORMAT_DESCRIPTOR) {
+        if (result.type == FORMAT_LOAD_PROGRAM && result.program.data) {
+            uint16_t addr = result.program.load_addr;
+            size_t len = result.program.data_size;
+            if (addr + len > 0x10000) len = 0x10000 - addr;
+            std::memcpy(ram + addr, result.program.data, len);
+
+            // Check metadata for file type
+            const trdos::file_entry_t* entry = nullptr;
+            if (result.metadata_size >= sizeof(trdos::file_entry_t))
+                entry = reinterpret_cast<const trdos::file_entry_t*>(result.metadata);
+
+            bool is_code = entry && entry->type == 'C';
+            if (is_code) {
+                cpu_->set_pc(addr);
+                printf("%s: %s Code loaded %zu bytes at $%04X — jumping\n",
+                       Traits::name, result.format->name, len, addr);
+            } else {
+                printf("%s: %s loaded %zu bytes at $%04X\n",
+                       Traits::name, result.format->name, len, addr);
+            }
+        }
         result.release();
         return true;
     }
