@@ -35,7 +35,7 @@ struct NsfPlayer {
                                 uint16_t subtune);
 
     /// Build 6502 stubs in CPU RAM, write vectors to ROM buffer, reset CPU.
-    /// @param prg_rom      Mutable pointer to NSF ROM in unified buffer
+    /// @param prg_rom      Mutable pointer to NSF ROM in flat mem
     /// @param prg_rom_size  Size of the ROM buffer
     /// @param bankswitched  Whether NSF uses bank switching
     /// @param bank_regs     Current bank register values (for vector mapping)

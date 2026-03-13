@@ -22,7 +22,7 @@ public:
     bool is_read_only() const override { return true; }
 
     /// Factory for Board::create_chips() — creates a ROMChip from a
-    /// manifest slot, binds it to the unified buffer, and returns it.
+    /// manifest slot, binds it to the flat mem, and returns it.
     static ChipBase* create_from_slot(const ChipSlot& slot,
                                       const bus_state_t* system_bus,
                                       uint8_t* buffer);

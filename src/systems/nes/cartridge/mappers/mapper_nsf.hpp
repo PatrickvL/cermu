@@ -97,11 +97,11 @@ public:
         }
 
         // Writable PRG pages mirror the read pages (NSF self-modification).
-        // prg_rom_ is const but the unified buffer copy is mutable — the
+        // prg_rom_ is const but the flat mem copy is mutable — the
         // Cartridge layer casts the pointers for the write config since
-        // NSF ROM lives in the unified buffer as writable memory.
+        // NSF ROM lives in the flat mem as writable memory.
         // We use the prg_ram_ trick: Cartridge sets prg_rom_ to the
-        // mutable unified buffer copy, so const_cast is safe here.
+        // mutable flat mem copy, so const_cast is safe here.
         for (int i = 0; i < 8; i++) {
             config.prg_write_pages[i] = config.prg_pages[i]
                 ? const_cast<uint8_t*>(config.prg_pages[i])

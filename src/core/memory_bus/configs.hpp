@@ -12,7 +12,7 @@
 
 // ── Commodore 64 ──────────────────────────────────────────────────────────────
 //
-// Chip ids 0–9 map to the ten chips in the unified buffer (ROML, ROMH,
+// Chip ids 0–9 map to the ten chips in the flat mem (ROML, ROMH,
 // KERNAL, BASIC, CHARROM, RAM, …), matching the CHIP_* constants in
 // c64_chips.h.
 //
@@ -156,7 +156,7 @@ using VicView_C64 = BusView<C64BusSpec, C64BusSpec::Vic>;
 //
 //    chip_id = chip_table[page_of(addr)]
 //    if chip_id < kNoChipSelected:
-//        data = unified_buf[(chip_id << PageBits) | offset]
+//        data = flat_mem[(chip_id << PageBits) | offset]
 //
 //  Values ≥ kNoChipSelected are sentinels: open-bus, sub-table dispatch,
 //  or MMIO handler.  This is the software equivalent of a PLA asserting
@@ -328,7 +328,7 @@ using VicView_C64 = BusView<C64BusSpec, C64BusSpec::Vic>;
 //    }
 //
 //    service_read/service_write extract the chip id from the CS field (already
-//    embedded by resolve) and perform the unified-buffer transfer.  This
+//    embedded by resolve) and perform the flat-mem transfer.  This
 //    avoids a redundant page-table lookup.
 //
 //  Non-CS systems (CsLineBits absent or 0) use the callback workflow:

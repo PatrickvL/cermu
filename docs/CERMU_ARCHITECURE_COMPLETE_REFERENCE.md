@@ -27,7 +27,7 @@ ComponentBase
 └── Port           — signal ports; registered in BoardBase::components_
 
 BoardBase : ComponentBase   — non-templated base; owns component list
-└── Board<Spec>             — owns chips, ports, unified buffer, BusMap
+└── Board<Spec>             — owns chips, ports, flat mem, BusMap
     └── (e.g. VIC20Board)   — concrete board implementation
 
 System                      — one or more BoardBase instances + inter-board Connections
@@ -182,7 +182,7 @@ private:
 
 Extracted from `Board` (formerly `BusMemory`). Owns address-decode logic only — page table wiring, MMIO handler registration, sub-table management. Holds no chip lifetime, no buffer ownership.
 
-`BusMap` takes a non-owning pointer to the unified buffer (owned by `Board`) and non-owning chip pointers (owned by `Board`) during `apply()`.
+`BusMap` takes a non-owning pointer to the flat mem (owned by `Board`) and non-owning chip pointers (owned by `Board`) during `apply()`.
 
 ```cpp
 template<BusSpecConcept Spec>
@@ -195,7 +195,7 @@ public:
 
     // Wire page tables, MMIO handlers, and sub-tables from bound chips.
     // Buffer pointer comes from Board — BusMap does not own it.
-    void apply(Bus& bus, uint8_t* unified_buffer, size_t viewer_id = 0);
+    void apply(Bus& bus, uint8_t* flat_mem, size_t viewer_id = 0);
 
     // Manual page mapping helpers (for bank switching etc.)
     void map_chip_read (Bus& bus, size_t viewer_id, size_t first_page, ChipId base_id) const noexcept;
@@ -270,7 +270,7 @@ private:
 };
 ```
 
-`Board<Spec>` is the renamed and refactored `BusMemory<Spec>`. It retains everything from the current `BusMemory` except the address-decode logic, which moves to `BusMap`. Chip ownership, unified buffer ownership, factory creation, dynamic chip pool, and ROM loading all stay here.
+`Board<Spec>` is the renamed and refactored `BusMemory<Spec>`. It retains everything from the current `BusMemory` except the address-decode logic, which moves to `BusMap`. Chip ownership, flat mem ownership, factory creation, dynamic chip pool, and ROM loading all stay here.
 
 ```cpp
 template<BusSpecConcept Spec>

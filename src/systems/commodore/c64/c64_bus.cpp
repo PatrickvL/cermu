@@ -41,7 +41,7 @@ static inline int8_t c64_get_address_bank(uint16_t address) {
 
 // ULTRA-OPTIMIZED VIC-II MEMORY READ - Better performance than CPU version
 // VIC-II uses pre-selected active array (indexed by CHIP), can only read, never write
-// Uses unified memory buffer for branchless access to ROM and RAM
+// Uses flat memory for branchless access to ROM and RAM
 bus_state_t c64_bus_t::vic_read(bus_state_t bus_state, uint16_t address) {
     c64_bus_t* c64_bus = this;
     BUS_SET_ADDR(bus_state, address); // Perhaps this is no longer needed
@@ -73,8 +73,8 @@ bus_state_t c64_bus_t::vic_read(bus_state_t bus_state, uint16_t address) {
  * NOTE: I/O port addresses (0-1) are now handled directly by mos6510_tick()
  * early in the CPU tick to prevent memory system from overwriting I/O port data.
  *
- * PHASE 4.1: Enhanced fast path implementation for all unified buffer chips
- * - Direct unified buffer access for CHIP_RAM, CHIP_BASIC, CHIP_KERNAL, CHIP_CHARROM, CHIP_ROML, CHIP_ROMH
+ * PHASE 4.1: Enhanced fast path implementation for all flat mem chips
+ * - Direct flat mem access for CHIP_RAM, CHIP_BASIC, CHIP_KERNAL, CHIP_CHARROM, CHIP_ROML, CHIP_ROMH
  * - Bypass callback system for ROM/RAM access using pointer arithmetic
  *
  * @param c64_bus Pointer to the C64 bus controller
@@ -111,10 +111,10 @@ bus_state_t REGISTER_CALL c64_bus_t::memory_tick(bus_state_t bus_state) {
             decode_read_chip(c64_bus->cpu_encoded_chip_per_bank[address_bank]) :
             c64_bus->vicii_chip_per_bank[address_bank];
 
-        // ENHANCED FAST PATH: Direct unified buffer access for all memory chips
+        // ENHANCED FAST PATH: Direct flat mem access for all memory chips
         // Fast path handles: CHIP_ROML, CHIP_ROMH, CHIP_KERNAL, CHIP_BASIC, CHIP_CHARROM, CHIP_RAM
         if (likely(chip <= CHIP_RAM)) {
-            // Use unified buffer read helper for all ROM/RAM types
+            // Use flat mem read helper for all ROM/RAM types
             const uint8_t data = read_chip_byte(chip, address);
             BUS_SET_DATA(bus_state, data);
         } else if (chip == CHIP_IO) {
@@ -137,7 +137,7 @@ bus_state_t REGISTER_CALL c64_bus_t::memory_tick(bus_state_t bus_state) {
         // consecutive write operations before halting on the first read access.
         const uint8_t chip = decode_write_chip(c64_bus->cpu_encoded_chip_per_bank[address_bank]);
 
-        // ENHANCED FAST PATH: Handle all writable unified buffer regions
+        // ENHANCED FAST PATH: Handle all writable flat mem regions
         if (likely(chip == CHIP_RAM)) {
             const uint8_t data = BUS_GET_DATA(bus_state);
 
@@ -194,7 +194,7 @@ void c64_bus_t::write_memory(uint16_t addr, uint8_t value) {
     memory_tick(write_state);
 }
 
-// Destructor — frees unified memory buffer
+// Destructor — frees flat memory
 c64_bus_t::~c64_bus_t() {
     if (allocated_buffer) {
         cermu_aligned_free(allocated_buffer);
@@ -205,8 +205,8 @@ c64_bus_t::~c64_bus_t() {
 void c64_bus_t::system_attach(C64System* c64) {
     this->c64 = c64;
 
-    // Initialize ROM/RAM pointers and allocate unified buffer (no cartridge ROMs by default)
-    init_unified_pointers(c64);
+    // Initialize ROM/RAM pointers and allocate flat mem (no cartridge ROMs by default)
+    init_flat_mem_pointers(c64);
 
     // Initialize compact IO page handlers for efficient I/O access
     init_io_handlers();
@@ -529,7 +529,7 @@ const char* c64_bus_size_to_str(size_t size) {
     return buf;
 }
 /**
- * Initialize RAM/ROM pointers to point into the unified memory buffer.
+ * Initialize RAM/ROM pointers to point into the flat memory.
  * This eliminates separate memory allocations and ensures consistency.
  * Uses configuration structure to determine cartridge ROM presence.
  *
@@ -537,7 +537,7 @@ const char* c64_bus_size_to_str(size_t size) {
  * @param c64_system Pointer to the C64 system (for pointer updates)
  * @param config Pointer to the C64 system configuration structure
  */
-void c64_bus_t::init_unified_pointers(C64System* c64_system, bool roml_present, bool romh_present) {
+void c64_bus_t::init_flat_mem_pointers(C64System* c64_system, bool roml_present, bool romh_present) {
     c64_bus_t* c64_bus = this;
     if (!c64_bus || !c64_system) return;
     
@@ -548,10 +548,10 @@ void c64_bus_t::init_unified_pointers(C64System* c64_system, bool roml_present, 
     // If buffer already exists, just update the ROM pointers to preserve loaded data
     if (c64_bus->allocated_buffer) {
         C64System* c64 = c64_system;
-        uint8_t* buffer = c64_bus->unified_memory_buffer;
+        uint8_t* buffer = c64_bus->flat_mem;
         
         // Update chip pointers — bind() copies existing data to the
-        // unified buffer and redirects the chip's storage there.
+        // flat mem and redirects the chip's storage there.
 #define DO(c64_device, offset, present_flag) \
     if (c64_device && present_flag) { \
         c64_device->bind(buffer + offset); \
@@ -568,7 +568,7 @@ void c64_bus_t::init_unified_pointers(C64System* c64_system, bool roml_present, 
         DO(c64->ram, 0x9000, true);
 #undef DO
         
-        printf("c64_bus: Updated ROM pointers in existing unified buffer\n");
+        printf("c64_bus: Updated ROM pointers in existing flat mem\n");
         return;
     }
     
@@ -604,20 +604,20 @@ void c64_bus_t::init_unified_pointers(C64System* c64_system, bool roml_present, 
     c64_bus->allocated_buffer = (uint8_t*)cermu_aligned_alloc(64, required_size);
     
     if (!c64_bus->allocated_buffer) {
-        printf("c64_bus: ERROR - Failed to allocate unified memory buffer (%zu KB)\n", required_size / 1024);
+        printf("c64_bus: ERROR - Failed to allocate flat memory (%zu KB)\n", required_size / 1024);
         return;
     }
     
     c64_bus->allocated_size = required_size;
     
     // Apply offset for missing cartridge ROMs (pointer arithmetic for memory savings)
-    c64_bus->unified_memory_buffer = c64_bus->allocated_buffer - offset;
+    c64_bus->flat_mem = c64_bus->allocated_buffer - offset;
     
     // Initialize allocated memory to zero
     memset(c64_bus->allocated_buffer, 0, required_size);
     
     C64System* c64 = c64_system;
-    uint8_t* buffer = c64_bus->unified_memory_buffer;
+    uint8_t* buffer = c64_bus->flat_mem;
     
 #define DO(c64_device, offset, present_flag) \
     if (c64_device && present_flag) { \
@@ -626,7 +626,7 @@ void c64_bus_t::init_unified_pointers(C64System* c64_system, bool roml_present, 
         c64_device->release(); \
     }
 
-    // Point the following devices to their respective unified buffer offset
+    // Point the following devices to their respective flat mem offset
     // Strategic layout: ROML=0x0000, ROMH=0x2000, KERNAL=0x4000, BASIC=0x6000, CHARROM=0x8000, RAM=0x9000
     DO(c64->cartridge_roml, 0x0000, c64_bus->roml_present); // CHIP_ROML = 0 -> 0x0000 - optional
     DO(c64->cartridge_romh, 0x2000, c64_bus->romh_present); // CHIP_ROMH = 2 -> 0x2000 - optional
@@ -636,7 +636,7 @@ void c64_bus_t::init_unified_pointers(C64System* c64_system, bool roml_present, 
     DO(c64->ram, 0x9000, true);                             // CHIP_RAM = 9 -> 0x9000 - always present
 #undef DO
     
-    printf("c64_bus: Allocated %zu KB unified buffer (saved %zu KB), ROML:%s ROMH:%s\n",
+    printf("c64_bus: Allocated %zu KB flat mem (saved %zu KB), ROML:%s ROMH:%s\n",
            required_size / 1024,
            (100 * 1024 - required_size) / 1024,
            roml_present ? "yes" : "no",

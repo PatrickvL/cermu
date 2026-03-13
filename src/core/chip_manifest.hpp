@@ -1,5 +1,5 @@
 // =============================================================================
-// chip_manifest.hpp — Chip manifest, unified buffer ownership, auto-wiring
+// chip_manifest.hpp — Chip manifest, flat memory ownership, auto-wiring
 // =============================================================================
 //
 // Declarative chip-memory layout for emulated systems.  A constexpr manifest
@@ -16,7 +16,7 @@
 //                       Systems declare a manifest and get a BusSpec for free:
 //                         using Spec = ManifestBusSpec<kMyChips, 16, 8>;
 //
-//   Board<Spec>       — runtime owner of the unified buffer.  After binding
+//   Board<Spec>       — runtime owner of the flat memory.  After binding
 //                       runtime ChipBase* instances to slots, a single apply()
 //                       call programs all page tables, creates sub-tables, and
 //                       registers MMIO handlers automatically.
@@ -189,7 +189,7 @@ constexpr ChipSlot::FactoryFn resolve_slot_factory() {
 // The hot-path formula for a chip_id → buffer offset is:
 //   offset = (chip_id << PageBits) | page_local_offset
 // which requires that the first page of chip K sits at the page-granular
-// position sum(chips[0..K-1].pages()) in the unified buffer — exactly
+// position sum(chips[0..K-1].pages()) in the flat memory — exactly
 // what this assignment guarantees.
 //
 // An optional dynamic pool of num_dynamic_pages pages is appended at the end
@@ -243,7 +243,7 @@ struct ChipManifest {
         return static_pages(page_bits);
     }
 
-    // Total pages in the unified buffer (static + dynamic pool).
+    // Total pages in the flat memory (static + dynamic pool).
     [[nodiscard]] constexpr size_t total_pages(size_t page_bits) const noexcept {
         return static_pages(page_bits) + num_dynamic_pages;
     }

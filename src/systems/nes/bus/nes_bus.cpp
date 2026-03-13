@@ -1,7 +1,7 @@
 /*
  * nes_bus.cpp -- NES bus implementation
  *
- * Unified buffer allocation, bank map update, and reset logic.
+ * Flat mem allocation, bank map update, and reset logic.
  * The hot-path read/write helpers are inline in nes_bus.h.
  */
 
@@ -14,12 +14,12 @@
 namespace nes_bus {
 
 // ============================================================================
-// Destructor -- free unified buffer
+// Destructor -- free flat mem
 // ============================================================================
 
 nes_bus_t::~nes_bus_t() {
-    delete[] unified_buf;
-    unified_buf = nullptr;
+    delete[] flat_mem;
+    flat_mem = nullptr;
     cpu_ram = nullptr;
     ciram = nullptr;
     prg_ram = nullptr;
@@ -33,17 +33,17 @@ nes_bus_t::~nes_bus_t() {
 
 void nes_bus_t::init() {
     // Free any existing buffer (e.g. from a previous cartridge load)
-    delete[] unified_buf;
+    delete[] flat_mem;
 
     // Allocate fixed region: WRAM + CIRAM + reserved + PRG-RAM
-    unified_buf_size = FIXED_SIZE;
-    unified_buf = new uint8_t[unified_buf_size]();  // zero-init
+    flat_mem_size = FIXED_SIZE;
+    flat_mem = new uint8_t[flat_mem_size]();  // zero-init
     total_blocks = FIXED_BLOCKS;
 
     // Set convenience pointers into fixed region
-    cpu_ram = unified_buf + BLOCK_WRAM * BLOCK_SIZE;
-    ciram = unified_buf + BLOCK_CIRAM * BLOCK_SIZE;
-    prg_ram = unified_buf + BLOCK_PRG_RAM * BLOCK_SIZE;
+    cpu_ram = flat_mem + BLOCK_WRAM * BLOCK_SIZE;
+    ciram = flat_mem + BLOCK_CIRAM * BLOCK_SIZE;
+    prg_ram = flat_mem + BLOCK_PRG_RAM * BLOCK_SIZE;
     prg_ram_size = 0;
     chr_data_ptr = nullptr;
     prg_rom_ptr = nullptr;
@@ -74,10 +74,10 @@ void nes_bus_t::init() {
 }
 
 // ============================================================================
-// Unified buffer extension -- allocate space for cartridge ROM/RAM
+// Flat mem extension -- allocate space for cartridge ROM/RAM
 // ============================================================================
 
-void nes_bus_t::init_unified_buffer(const uint8_t* prg_rom_data, size_t prg_rom_sz,
+void nes_bus_t::init_flat_mem(const uint8_t* prg_rom_data, size_t prg_rom_sz,
                                      const uint8_t* chr_data_in, size_t chr_sz,
                                      bool chr_is_ram_in,
                                      const uint8_t* prg_ram_data, size_t prg_ram_sz) {
@@ -91,24 +91,24 @@ void nes_bus_t::init_unified_buffer(const uint8_t* prg_rom_data, size_t prg_rom_
     // Preserve fixed-region data (WRAM may have been written to by NSF stubs
     // or test code between init() and this call)
     uint8_t saved_fixed[FIXED_SIZE];
-    if (unified_buf) {
-        std::memcpy(saved_fixed, unified_buf, FIXED_SIZE);
+    if (flat_mem) {
+        std::memcpy(saved_fixed, flat_mem, FIXED_SIZE);
     } else {
         std::memset(saved_fixed, 0, FIXED_SIZE);
     }
 
     // Reallocate
-    delete[] unified_buf;
-    unified_buf = new uint8_t[new_size]();  // zero-init
-    unified_buf_size = new_size;
+    delete[] flat_mem;
+    flat_mem = new uint8_t[new_size]();  // zero-init
+    flat_mem_size = new_size;
 
     // Restore fixed region
-    std::memcpy(unified_buf, saved_fixed, FIXED_SIZE);
+    std::memcpy(flat_mem, saved_fixed, FIXED_SIZE);
 
     // Convenience pointers -- fixed region
-    cpu_ram = unified_buf + BLOCK_WRAM * BLOCK_SIZE;
-    ciram = unified_buf + BLOCK_CIRAM * BLOCK_SIZE;
-    prg_ram = unified_buf + BLOCK_PRG_RAM * BLOCK_SIZE;
+    cpu_ram = flat_mem + BLOCK_WRAM * BLOCK_SIZE;
+    ciram = flat_mem + BLOCK_CIRAM * BLOCK_SIZE;
+    prg_ram = flat_mem + BLOCK_PRG_RAM * BLOCK_SIZE;
     prg_ram_size = static_cast<uint32_t>(std::min(prg_ram_sz, static_cast<size_t>(PRG_RAM_MAX)));
 
     // Copy PRG-RAM initial data (from cartridge SRAM load)
@@ -118,7 +118,7 @@ void nes_bus_t::init_unified_buffer(const uint8_t* prg_rom_data, size_t prg_rom_
 
     // Dynamic region: CHR data
     chr_base_block = BLOCK_DYNAMIC;
-    chr_data_ptr = unified_buf + chr_base_block * BLOCK_SIZE;
+    chr_data_ptr = flat_mem + chr_base_block * BLOCK_SIZE;
     if (chr_data_in && chr_sz > 0) {
         std::memcpy(chr_data_ptr, chr_data_in, chr_sz);
     }
@@ -127,7 +127,7 @@ void nes_bus_t::init_unified_buffer(const uint8_t* prg_rom_data, size_t prg_rom_
 
     // Dynamic region: PRG-ROM
     prg_rom_base_block = chr_base_block + chr_blocks;
-    uint8_t* prg_buf = unified_buf + prg_rom_base_block * BLOCK_SIZE;
+    uint8_t* prg_buf = flat_mem + prg_rom_base_block * BLOCK_SIZE;
     if (prg_rom_data && prg_rom_sz > 0) {
         std::memcpy(prg_buf, prg_rom_data, prg_rom_sz);
     }

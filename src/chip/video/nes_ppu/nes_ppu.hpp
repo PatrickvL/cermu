@@ -82,7 +82,7 @@ public:
 
     // PPU memory
     //
-    // CIRAM (2KB nametable VRAM) now lives in the unified buffer (nes_bus_t).
+    // CIRAM (2KB nametable VRAM) now lives in the flat mem (nes_bus_t).
     // ciram_ is a non-owning pointer set by connect_bus().
     static constexpr size_t CIRAM_SIZE = nes_bus::CIRAM_SIZE;
     uint8_t* ciram_ = nullptr;

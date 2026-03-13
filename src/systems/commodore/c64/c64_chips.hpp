@@ -13,7 +13,7 @@ struct c64_bus_t;
 // Basic CHIP Type Definitions
 // =============================
 
-// CHIP IDs strategically numbered for branchless unified memory buffer address calculation
+// CHIP IDs strategically numbered for branchless flat memory address calculation
 enum chip_id_t {
     // Strategic numbering with 4KB step size: offset = chip << 12 (chip * 4096)
     // 8KB regions take 2 steps each: ROML(0), ROMH(2), KERNAL(4), BASIC(6), CHARROM(7), RAM(9)
@@ -46,8 +46,8 @@ enum chip_id_t {
     CHIP_RAM          = 9,   // 64KB RAM - maps to offset 0x9000 (9 << 12 = 0x9000)
 
     // Non-offset values (not used in address calculation)
-    CHIP_UNMAPPED     = 10,  // Unmapped regions (not in unified buffer)
-    CHIP_IO           = 11,  // I/O region ($D000-$DFFF) - special case, not in unified buffer
+    CHIP_UNMAPPED     = 10,  // Unmapped regions (not in flat mem)
+    CHIP_IO           = 11,  // I/O region ($D000-$DFFF) - special case, not in flat mem
 };
 
 // Array of valid CHIP IDs for iteration (due to irregular numbering)

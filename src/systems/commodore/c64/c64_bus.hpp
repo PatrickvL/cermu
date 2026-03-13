@@ -37,13 +37,13 @@ struct c64_bus_t {
     // Current PLA banking mode (0-31) derived from CPU port + cartridge signals
     uint8_t pla_banking_mode;  // Current banking mode for fast switching
 
-    // UNIFIED MEMORY BUFFER FOR OPTIMIZED OPCODE FETCH - STRATEGIC LAYOUT
+    // FLAT MEMORY FOR OPTIMIZED OPCODE FETCH - STRATEGIC LAYOUT
     // Layout optimized for branchless calculation: ROML + ROMH + KERNAL + BASIC + CHARROM + RAM
     // Offsets: ROML=0x0000, ROMH=0x2000, KERNAL=0x4000, BASIC=0x6000, CHARROM=0x8000, RAM=0x9000
-    // Total: Up to 100KB unified buffer (36KB ROM space + 64KB RAM) for branchless memory access
+    // Total: Up to 100KB flat mem (36KB ROM space + 64KB RAM) for branchless memory access
     // Strategic CHIP numbering enables pure arithmetic: offset = chip << 12 (chip * 4096)
     // Dynamic allocation skips unused cartridge ROMs at buffer start to save memory
-    uint8_t* unified_memory_buffer;   // Points to usable memory (may be offset from allocated memory)
+    uint8_t* flat_mem;   // Points to usable memory (may be offset from allocated memory)
     uint8_t* allocated_buffer;        // Points to actual allocated memory
     size_t allocated_size;            // Actual allocated size
     bool roml_present;                // Whether ROML cartridge ROM is attached
@@ -82,7 +82,7 @@ struct c64_bus_t {
     uint8_t generate_pla_mode(uint8_t cpu_port_bits);
     bus_state_t vic_read(bus_state_t bus_state, uint16_t address);
     bus_state_t REGISTER_CALL memory_tick(bus_state_t bus_state);
-    void init_unified_pointers(C64System* c64_system, bool roml_present = false, bool romh_present = false);
+    void init_flat_mem_pointers(C64System* c64_system, bool roml_present = false, bool romh_present = false);
     void system_attach(C64System* c64);
     void set_exrom_signal(bool active);
     void set_game_signal(bool active);
@@ -98,15 +98,15 @@ struct c64_bus_t {
     uint8_t read_memory(uint16_t addr);
     void write_memory(uint16_t addr, uint8_t value);
 
-    // Ultra-optimized unified address calculation — pure branchless arithmetic
-    static uint32_t unified_address_calc(uint8_t chip, uint16_t addr) {
+    // Ultra-optimized flat mem address calculation — pure branchless arithmetic
+    static uint32_t flat_mem_addr_calc(uint8_t chip, uint16_t addr) {
         const uint32_t base = (uint32_t)chip << 12;
         const uint32_t mask = 0x1FFF | -(chip == CHIP_RAM);
         return base + (addr & mask);
     }
 
     void write_chip_byte(uint8_t chip, uint16_t address, uint8_t value) {
-        unified_memory_buffer[unified_address_calc(chip, address)] = value;
+        flat_mem[flat_mem_addr_calc(chip, address)] = value;
     }
 
     void write_ram_byte(uint16_t address, uint8_t value) {
@@ -114,7 +114,7 @@ struct c64_bus_t {
     }
 
     uint8_t read_chip_byte(uint8_t chip, uint16_t address) const {
-        return unified_memory_buffer[unified_address_calc(chip, address)];
+        return flat_mem[flat_mem_addr_calc(chip, address)];
     }
 
     uint8_t read_kernal_byte(uint16_t address) const {

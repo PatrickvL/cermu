@@ -321,7 +321,7 @@ template<NintendoVariant V>
 void NintendoSystem<V>::shutdown() {
     // Save battery-backed SRAM before shutdown
     if (cartridge_ && cartridge_->battery_backed) {
-        // Sync PRG-RAM from unified buffer back to cartridge vector for save
+        // Sync PRG-RAM from flat mem back to cartridge vector for save
         if (bus_.prg_ram && bus_.prg_ram_size > 0 && !cartridge_->prg_ram.empty()) {
             std::memcpy(cartridge_->prg_ram.data(), bus_.prg_ram,
                         std::min(static_cast<size_t>(bus_.prg_ram_size),
@@ -338,7 +338,7 @@ void NintendoSystem<V>::shutdown() {
     // Release shared chips before base clears registered_chips_ — the
     // PPU and Cartridge are registered as borrowed ChipBase* pointers,
     // so they must outlive the registration entries or be released first.
-    // Cartridge's mapper pointers reference the unified buffer which
+    // Cartridge's mapper pointers reference the flat mem which
     // bus_.init() will reallocate on re-initialize, so the cartridge is
     // stale anyway.
     ppu_.reset();
@@ -499,18 +499,18 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         // Assign mapper via Cartridge's internal mechanism — we need to
         // set it up the same way load_from_buffer does.  Since Cartridge
         // doesn't have a public set_mapper(), we use update_bank_map
-        // after init_unified_buffer has been called and memory pointers
-        // reference the unified buffer copy.
+        // after init_flat_mem has been called and memory pointers
+        // reference the flat mem copy.
 
-        // ---- Allocate unified buffer ----
+        // ---- Allocate flat mem ----
         ppu_->connect_cartridge(cartridge_.get());
-        bus_.init_unified_buffer(
+        bus_.init_flat_mem(
             cartridge_->prg_memory.data(), cartridge_->prg_memory.size(),
             nullptr, 0,            // no CHR-ROM data
             true,                  // CHR is RAM
             cartridge_->prg_ram.data(), cartridge_->prg_ram.size());
 
-        // Give mapper pointers into the unified buffer copy
+        // Give mapper pointers into the flat mem copy
         nsf_mapper->set_memory_pointers(
             bus_.prg_rom_ptr, bus_.prg_rom_size,
             bus_.chr_data_ptr, bus_.chr_data_size,
@@ -580,15 +580,15 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         // Connect cartridge to PPU and set up page-pointer bank maps
         ppu_->connect_cartridge(cartridge_.get());
 
-        // Allocate unified buffer with cartridge ROM/RAM data
-        bus_.init_unified_buffer(
+        // Allocate flat mem with cartridge ROM/RAM data
+        bus_.init_flat_mem(
             cartridge_->prg_memory.data(), cartridge_->prg_memory.size(),
             cartridge_->chr_memory.data(), cartridge_->chr_memory.size(),
             cartridge_->chr_memory.size() == 0 ||
                 (cartridge_->get_mapper() && cartridge_->get_mapper()->chr_is_ram()),
             cartridge_->prg_ram.data(), cartridge_->prg_ram.size());
 
-        // Re-set mapper memory pointers to reference the unified buffer copy
+        // Re-set mapper memory pointers to reference the flat mem copy
         // so that bank configs return pointers the bus can convert to block numbers.
         if (auto* m = cartridge_->get_mapper()) {
             m->set_memory_pointers(
@@ -798,14 +798,14 @@ void NintendoSystem<V>::register_nes_chips() {
     auto ram = std::make_unique<RAMChip>(
         ChipInfo{"SRAM", "Various"}, nes_constants::CPU_RAM_SIZE, RAMChip::SRAM, &pins_,
         "RAM", 0x0000);
-    ram->bind(bus_.cpu_ram);  // Point at unified bus RAM for live debug view
+    ram->bind(bus_.cpu_ram);  // Point at flat mem RAM for live debug view
     register_chip(std::move(ram));
 
     // CIRAM (2KB nametable VRAM on NES motherboard)
     auto ciram = std::make_unique<RAMChip>(
         ChipInfo{"SRAM", "Various"}, 2048, RAMChip::SRAM, &pins_,
         "CIRAM", 0x2000);
-    ciram->bind(bus_.ciram);  // Point at unified buffer CIRAM for live debug view
+    ciram->bind(bus_.ciram);  // Point at flat mem CIRAM for live debug view
     register_chip(std::move(ciram));
 
     // Cartridge — now a proper ChipBase subclass
@@ -1277,7 +1277,7 @@ bool NintendoSystem<V>::save_state(const std::string& filename) const {
     f.write(reinterpret_cast<const char*>(&dma_flags), 1);
     f.write(reinterpret_cast<const char*>(&system_clock_counter_), sizeof(system_clock_counter_));
 
-    // PRG RAM (if present -- saved from unified buffer)
+    // PRG RAM (if present -- saved from flat mem)
     if (bus_.prg_ram && bus_.prg_ram_size > 0) {
         uint32_t ram_size = bus_.prg_ram_size;
         f.write(reinterpret_cast<const char*>(&ram_size), sizeof(ram_size));

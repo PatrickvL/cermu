@@ -18,7 +18,7 @@
 // Performance advantages:
 // - Single array lookup (vs 2 bitmap extractions)
 // - Branch-friendly: (type >= VIC20_TYPE_ROM) catches both RAM and ROM
-// - Direct buffer access: buffer[addr] for all RAM/ROM
+// - Direct flat mem access: flat_mem[addr] for all RAM/ROM
 // - I/O dispatches via handler array with minimal overhead
 
 // ============================================================================
@@ -154,9 +154,9 @@ static void vic20_memory_chip_destroy(void* chip) {
     vic20_memory_t* mem = (vic20_memory_t*)chip;
     if (!mem) return;
     
-    if (mem->buffer) {
-        cermu_aligned_free(mem->buffer);
-        mem->buffer = NULL;
+    if (mem->flat_mem) {
+        cermu_aligned_free(mem->flat_mem);
+        mem->flat_mem = NULL;
     }
     
     free(mem);
@@ -169,28 +169,28 @@ vic20_memory_t* vic20_memory_create(uint8_t expansion_flags, bool cartridge_pres
     mem->expansion_flags = expansion_flags;
     mem->cartridge_present = cartridge_present;
     
-    // Allocate 64KB unified buffer (aligned for cache efficiency)
-    mem->buffer_size = 65536;
-    mem->buffer = (uint8_t*)cermu_aligned_alloc(64, mem->buffer_size);
-    if (!mem->buffer) {
-        printf("VIC20 Memory: Failed to allocate 64KB unified buffer\n");
+    // Allocate 64KB flat mem (aligned for cache efficiency)
+    mem->flat_mem_size = 65536;
+    mem->flat_mem = (uint8_t*)cermu_aligned_alloc(64, mem->flat_mem_size);
+    if (!mem->flat_mem) {
+        printf("VIC20 Memory: Failed to allocate 64KB flat mem\n");
         free(mem);
         return NULL;
     }
     
-    // Initialize buffer to zero (RAM starts cleared)
-    memset(mem->buffer, 0, mem->buffer_size);
+    // Initialize flat mem to zero (RAM starts cleared)
+    memset(mem->flat_mem, 0, mem->flat_mem_size);
     
-    // Initialize Color RAM to default color (at $9400 in unified buffer)
+    // Initialize Color RAM to default color (at $9400 in flat mem)
     // Color RAM is 4-bit wide, initialize to cyan (3) - standard VIC-20 text color
     // KERNAL will set proper colors during boot, but cyan on blue background is visible
-    memset(mem->buffer + VIC20_BASE_COLOR_RAM, VIC_COLOR_CYAN, 1024);
+    memset(mem->flat_mem + VIC20_BASE_COLOR_RAM, VIC_COLOR_CYAN, 1024);
     
     // Initialize bank maps
     vic20_bank_map_init(&mem->cpu_bank_map, expansion_flags, cartridge_present);
     vic20_bank_map_init_vic(&mem->vic_bank_map, expansion_flags);
     
-    printf("VIC20 Memory: Created 64KB unified buffer, expansion=$%02X, cart=%s\n",
+    printf("VIC20 Memory: Created 64KB flat mem, expansion=$%02X, cart=%s\n",
            expansion_flags, cartridge_present ? "yes" : "no");
     
     return mem;
@@ -320,8 +320,8 @@ static bus_state_t vic20_io_colorram_read(void* ctx, bus_state_t bus_state) {
     uint16_t addr = BUS_GET_ADDR(bus_state);
     uint16_t offset = addr & 0x03FF;  // 1KB mask
     
-    // Read from unified buffer at $9400, upper bits are garbage
-    uint8_t data = mem->buffer[VIC20_BASE_COLOR_RAM + offset] | 0xF0;
+    // Read from flat mem at $9400, upper bits are garbage
+    uint8_t data = mem->flat_mem[VIC20_BASE_COLOR_RAM + offset] | 0xF0;
     BUS_SET_DATA(bus_state, data);
     return bus_state;
 }
@@ -333,7 +333,7 @@ static bus_state_t vic20_io_colorram_write(void* ctx, bus_state_t bus_state) {
     uint8_t data = BUS_GET_DATA(bus_state);
     
     // Only store lower 4 bits
-    mem->buffer[VIC20_BASE_COLOR_RAM + offset] = data & 0x0F;
+    mem->flat_mem[VIC20_BASE_COLOR_RAM + offset] = data & 0x0F;
     return bus_state;
 }
 
@@ -375,7 +375,7 @@ void vic20_memory_init_io_handlers(vic20_memory_t* mem) {
  * Ultra-optimized CPU memory tick function.
  * Uses encoded bank types for minimal branch overhead.
  * 
- * Fast path: RAM and ROM access via direct buffer[addr] lookup
+ * Fast path: RAM and ROM access via direct flat_mem[addr] lookup
  * I/O path: Handler dispatch via pre-initialized handler array
  * 
  * @param mem Pointer to memory system
@@ -395,8 +395,8 @@ bus_state_t REGISTER_CALL vic20_memory_cpu_tick(vic20_memory_t* mem, bus_state_t
         const uint8_t read_type = vic20_decode_read_type(encoded);
         
         if (likely(read_type >= VIC20_TYPE_ROM)) {
-            // RAM or ROM - most common path: direct buffer access
-            BUS_SET_DATA(bus_state, mem->buffer[addr]);
+            // RAM or ROM - most common path: direct flat mem access
+            BUS_SET_DATA(bus_state, mem->flat_mem[addr]);
         } else if (read_type == VIC20_TYPE_IO) {
             // I/O region - dispatch to handler
             // Handler index: (addr >> 10) & 3 gives 0-3 for $9000-$9FFF
@@ -410,8 +410,8 @@ bus_state_t REGISTER_CALL vic20_memory_cpu_tick(vic20_memory_t* mem, bus_state_t
         const uint8_t write_type = vic20_decode_write_type(encoded);
         
         if (likely(write_type == VIC20_TYPE_RAM)) {
-            // RAM - direct buffer write
-            mem->buffer[addr] = BUS_GET_DATA(bus_state);
+            // RAM - direct flat mem write
+            mem->flat_mem[addr] = BUS_GET_DATA(bus_state);
         } else if (write_type == VIC20_TYPE_IO) {
             // I/O region - dispatch to handler
             const uint8_t io_page = (addr >> 10) & 3;
@@ -430,8 +430,8 @@ bus_state_t REGISTER_CALL vic20_memory_cpu_tick(vic20_memory_t* mem, bus_state_t
  * The VIC has a 14-bit address bus (VA0-VA13) giving a 16KB window.
  * The 16-bank pattern is repeated 4x in the 64-entry bank map, so we can
  * use (addr >> 10) directly without masking - any 6-bit result is valid.
- *   - Banks 0-7 ($0000-$1FFF): CHARROM → buffer[$8000 + (addr & 0x0FFF)]
- *   - Banks 8-15 ($2000-$3FFF): RAM → buffer[addr & 0x1FFF]
+ *   - Banks 0-7 ($0000-$1FFF): CHARROM → flat_mem[$8000 + (addr & 0x0FFF)]
+ *   - Banks 8-15 ($2000-$3FFF): RAM → flat_mem[addr & 0x1FFF]
  * 
  * @param mem Pointer to memory system
  * @param addr 14-bit address from VIC
@@ -452,7 +452,7 @@ uint8_t vic20_memory_vic_read(vic20_memory_t* mem, uint16_t addr) {
         const bool is_charrom = (read_type == VIC20_TYPE_CHARROM);
         const uint16_t base = is_charrom ? VIC20_BASE_CHARROM : 0;
         const uint16_t mask = is_charrom ? 0x0FFF : 0x1FFF;
-        return mem->buffer[base + (addr & mask)];
+        return mem->flat_mem[base + (addr & mask)];
     }
 
     // Unmapped (expansion block 0 at $0400-$0FFF when not expanded)
@@ -462,10 +462,10 @@ uint8_t vic20_memory_vic_read(vic20_memory_t* mem, uint16_t addr) {
 uint8_t vic20_memory_color_read(vic20_memory_t* mem, uint16_t addr) {
     if (!mem) return 0x0F;
     
-    // Color RAM is at $9400 in unified buffer, 1KB size
+    // Color RAM is at $9400 in flat mem, 1KB size
     const uint16_t offset = addr & 0x03FF;
 
-    return mem->buffer[VIC20_BASE_COLOR_RAM + offset] & 0x0F;
+    return mem->flat_mem[VIC20_BASE_COLOR_RAM + offset] & 0x0F;
 }
 
 uint8_t vic20_memory_read_byte(vic20_memory_t* mem, uint16_t addr) {
@@ -503,8 +503,8 @@ bool vic20_memory_load_rom(vic20_memory_t* mem, uint16_t addr, const uint8_t* da
         return false;
     }
     
-    // Direct copy to unified buffer (bypass write protection)
-    memcpy(mem->buffer + addr, data, size);
+    // Direct copy to flat mem (bypass write protection)
+    memcpy(mem->flat_mem + addr, data, size);
     
     // Note: We do NOT mirror Character ROM to $9000 because that would
     // overwrite Color RAM at $9400-$97FF and I/O registers at $9000-$93FF.
@@ -515,12 +515,12 @@ bool vic20_memory_load_rom(vic20_memory_t* mem, uint16_t addr, const uint8_t* da
 
 uint8_t* vic20_memory_get_ptr(vic20_memory_t* mem, uint16_t addr) {
     if (!mem) return NULL;
-    return mem->buffer + addr;
+    return mem->flat_mem + addr;
 }
 
 uint8_t* vic20_memory_get_colorram_ptr(vic20_memory_t* mem) {
     if (!mem) return NULL;
-    return mem->buffer + VIC20_BASE_COLOR_RAM;
+    return mem->flat_mem + VIC20_BASE_COLOR_RAM;
 }
 
 void vic20_memory_set_expansion(vic20_memory_t* mem, uint8_t expansion_flags) {

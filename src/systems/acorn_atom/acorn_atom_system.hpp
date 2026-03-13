@@ -134,7 +134,7 @@ private:
     ROMChip* fp_rom_    = nullptr;  // 2 KB at $D000
     ROMChip* os_rom_    = nullptr;  // 4 KB at $F000
 
-    // Direct pointer into unified buffer for VDG rendering
+    // Direct pointer into flat mem for VDG rendering
     uint8_t* video_ram_ptr_ = nullptr;
 
     // ── MemoryBus — declarative setup via chip manifest ──────────────────

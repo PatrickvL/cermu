@@ -103,7 +103,7 @@ ChipBase* chip = ChipRegistry::instance().create("MOS6502", slot, system_bus, bu
 ### ChipManifest + Board\<Spec\> + BusMap\<Spec\>
 
 `ChipManifest<N>` is a compile-time array of `ChipSlot` entries.  `Board<Spec>`
-owns the unified memory buffer and chip lifetimes.  `BusMap<Spec>` handles address
+owns the flat memory and chip lifetimes.  `BusMap<Spec>` handles address
 decode — page-pointer tables for RAM/ROM, MMIO trampoline handlers for I/O chips,
 masked sub-tables for sub-page decode.
 

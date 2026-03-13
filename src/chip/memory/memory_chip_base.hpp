@@ -19,7 +19,7 @@
 //   * By default the constructor allocates (calloc) the buffer — `owns_data_`
 //     is true and the destructor frees it.
 //   * `bind(ptr)` redirects the chip's data pointer to an external buffer
-//     (e.g. a unified memory buffer for cache-friendly access).  Any owned
+//     (e.g. a flat memory for cache-friendly access).  Any owned
 //     data is copied to the target first, then freed.  After binding,
 //     `owns_data_` is false.
 //   * `release()` drops the data pointer (freeing if owned) without

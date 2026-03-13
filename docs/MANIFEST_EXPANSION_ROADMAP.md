@@ -39,7 +39,7 @@ changes the baseline assumptions for every phase below:
 ### What Manifests Declare Today
 
 Manifests describe **memory-mapped chips** in address space: RAM, ROM, and (in newer
-systems) MMIO-only I/O chips.  `Board<Spec>` owns the unified buffer, `BusMap<Spec>`
+systems) MMIO-only I/O chips.  `Board<Spec>` owns the flat mem, `BusMap<Spec>`
 auto-wires page tables / MMIO handlers, and `Board<Spec>` manages chip lifetimes via
 factory creation or pre-binding.
 
@@ -206,7 +206,7 @@ as a single declarative unit.
 
 `Board<Spec>` adds:
 - Chip ownership (`owned_chips_`, factory creation via `create_chips()`)
-- Unified buffer ownership
+- Flat mem ownership
 - `BusMap<Spec>` delegation for address-decode
 - `register_board_components()` to populate component index
 
@@ -272,7 +272,7 @@ TOML schema design.  Key bridge from Phase 3:
 ### Current architecture
 
 `C64System` embeds a `c64_bus_t` struct that implements a hand-rolled bus model:
-- **Unified memory buffer** — single allocation for RAM + all ROMs
+- **Flat memory** — single allocation for RAM + all ROMs
 - **PLA banking tables** — `cpu_encoded_chip_per_bank_per_mode[32][16]` precomputed
   from the PLA for all 32 modes, copied into active mapping on mode switch
 - **I/O page handlers** — function pointer table `io_handlers[16]` covering $D000–$DFFF
@@ -325,7 +325,7 @@ These chips need `has_mmio()` / `on_bus_read()` / `on_bus_write()`:
 
 #### Step 3: Absorb c64_bus_t into C64System
 
-Move the PLA banking tables, I/O handler dispatch, and unified buffer access from
+Move the PLA banking tables, I/O handler dispatch, and flat mem access from
 `c64_bus_t` into C64System's `Board<C64BusSpec>`:
 - PLA table generation → method on C64System or a Board subclass
 - `io_handlers[16]` → `BusMap` MMIO handlers or custom MaskedSubTable

@@ -182,7 +182,7 @@ private:
     // MEMORY — owned by Board
     // ========================================================================
 
-    // Direct pointer into unified buffer for screen rendering
+    // Direct pointer into flat mem for screen rendering
     uint8_t* screen_ram_ptr_ = nullptr;
 
     // ── MemoryBus — declarative setup via chip manifest ──────────────────

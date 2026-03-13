@@ -135,8 +135,8 @@ BBCMicroSystem::~BBCMicroSystem() {
     delete cpu_;    cpu_ = nullptr;
     delete crtc_;   crtc_ = nullptr;
     delete psg_;    psg_ = nullptr;
-    // memory_ points into the unified buffer (owned by board_); don't free.
-    // Paged ROM data lives in the unified buffer; no manual cleanup.
+    // memory_ points into the flat mem (owned by board_); don't free.
+    // Paged ROM data lives in the flat mem; no manual cleanup.
 }
 
 // ============================================================================
@@ -181,7 +181,7 @@ bool BBCMicroSystem::initialize() {
     rom_select_ = 15;
     configure_bus_memory_map();
 
-    // Load ROMs (into unified buffer via chip data pointers)
+    // Load ROMs (into flat mem via chip data pointers)
     bool roms_loaded = load_roms();
     if (!roms_loaded) {
         printf("BBC Micro: Warning — ROMs not loaded, system will not boot correctly\n");
@@ -989,7 +989,7 @@ bool BBCMicroSystem::load_roms() {
 
     printf("BBC Micro: ROM root: %s\n", rom_root);
 
-    // OS ROM (MOS 1.20 — 16 KB) → into unified buffer via os_rom_chip_
+    // OS ROM (MOS 1.20 — 16 KB) → into flat mem via os_rom_chip_
     uint8_t* os_rom_data = os_rom_chip_->data();
     const char* os_files[] = {
         "os12.rom",

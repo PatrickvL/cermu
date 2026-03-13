@@ -83,7 +83,7 @@ public:
     //
     // MMIO-only chips handle register access in-place during their tick.
     // Buffer-backed chips (RAM, ROM) call service_read/service_write to
-    // perform the unified-buffer transfer.
+    // perform the flat-mem transfer.
     //
     // When CsLineBits = 0 this function is not available — use read()/write()
     // or tick() with callback-based MMIO handlers instead.
@@ -120,7 +120,7 @@ public:
     //
     // Called by buffer-backed chips (RAM, ROM) during their tick, after
     // resolve() has embedded the chip id in the CS field.  Extracts CS from
-    // bus, performs the unified-buffer read or write.
+    // bus, performs the flat-mem read or write.
     //
     // For MMIO chips this is unnecessary — they handle registers in-place.
     //
@@ -429,12 +429,12 @@ public:
     }
 
     // =========================================================================
-    // §1.10  Unified buffer management
+    // §1.10  Flat memory management
     // =========================================================================
 
-    void set_unified_buffer(uint8_t* buf) noexcept { unified_buf_ = buf; }
-    [[nodiscard]] uint8_t*       unified_buffer()       noexcept { return unified_buf_; }
-    [[nodiscard]] const uint8_t* unified_buffer() const noexcept { return unified_buf_; }
+    void set_flat_mem(uint8_t* buf) noexcept { flat_mem_ = buf; }
+    [[nodiscard]] uint8_t*       flat_mem()       noexcept { return flat_mem_; }
+    [[nodiscard]] const uint8_t* flat_mem() const noexcept { return flat_mem_; }
 
     // =========================================================================
     // §1.11  Low-level viewer access
@@ -691,7 +691,7 @@ private:
         const Addr     addr    = Addr(BUS_GET_ADDR(bus));
         const size_t   offset  = (size_t(chip_id) << Spec::PageBits)
                                  | Viewer::offset_of(addr);
-        const DataType mem_val = static_cast<DataType>(unified_buf_[offset]);
+        const DataType mem_val = static_cast<DataType>(flat_mem_[offset]);
 
         if constexpr (kCsLines) { set_cs(bus, size_t(chip_id)); }
 
@@ -719,14 +719,14 @@ private:
         if constexpr (kPartialBus) {
             const DataType mask = bus_masks_.write(size_t(chip_id));
             if (unlikely(mask != DataBusMasks<Spec>::kFullMask)) {
-                const DataType old_val = static_cast<DataType>(unified_buf_[offset]);
-                unified_buf_[offset] =
+                const DataType old_val = static_cast<DataType>(flat_mem_[offset]);
+                flat_mem_[offset] =
                     static_cast<uint8_t>(bitmix(bus_val, old_val, mask));
                 return bus;
             }
         }
 
-        unified_buf_[offset] = static_cast<uint8_t>(bus_val);
+        flat_mem_[offset] = static_cast<uint8_t>(bus_val);
         return bus;
     }
 
@@ -738,7 +738,7 @@ private:
         const Addr     addr    = Addr(BUS_GET_ADDR(bus));
         const size_t   offset  = (size_t(chip_id) << Spec::PageBits)
                                  | Viewer::offset_of(addr);
-        const DataType mem_val = static_cast<DataType>(unified_buf_[offset]);
+        const DataType mem_val = static_cast<DataType>(flat_mem_[offset]);
 
         if constexpr (kPartialBus) {
             const DataType mask = bus_masks_.read(size_t(chip_id));
@@ -762,14 +762,14 @@ private:
         if constexpr (kPartialBus) {
             const DataType mask = bus_masks_.write(size_t(chip_id));
             if (unlikely(mask != DataBusMasks<Spec>::kFullMask)) {
-                const DataType old_val = static_cast<DataType>(unified_buf_[offset]);
-                unified_buf_[offset] =
+                const DataType old_val = static_cast<DataType>(flat_mem_[offset]);
+                flat_mem_[offset] =
                     static_cast<uint8_t>(bitmix(bus_val, old_val, mask));
                 return bus;
             }
         }
 
-        unified_buf_[offset] = static_cast<uint8_t>(bus_val);
+        flat_mem_[offset] = static_cast<uint8_t>(bus_val);
         return bus;
     }
 
@@ -921,7 +921,7 @@ private:
     // §6  State
     // =========================================================================
 
-    uint8_t* unified_buf_ = nullptr;
+    uint8_t* flat_mem_ = nullptr;
 
     std::array<Viewer, kNumViewers> viewers_{};
 
