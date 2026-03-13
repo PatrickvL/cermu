@@ -2,14 +2,14 @@
 
 #include "gui/emulator_host.hpp"
 #include "gui/system_selection_dialog.hpp"
-#include "core/system.hpp"
+#include "core/session.hpp"
 #include <memory>
 #include <string>
 
 class Drive1541Device;  // Forward declaration for drive file dialog
 
 /**
- * SessionGUI - Owns an System and implements EmulatorHost hooks
+ * SessionGUI - Owns a Session (which owns systems) and implements EmulatorHost hooks
  *
  * Routes input queue events to the focused system, manages system switching,
  * drag-and-drop file loading, and display scaling. Systems extend menus
@@ -20,7 +20,8 @@ class Drive1541Device;  // Forward declaration for drive file dialog
  */
 class SessionGUI : public EmulatorHost {
 private:
-    std::unique_ptr<System> system_;
+    Session  session_;             // Owns all systems and inter-system connections
+    System*  system_ = nullptr;    // Non-owning convenience pointer to focused system
 
     // System selection dialog
     SystemSelectionDialog system_selection_dialog_;

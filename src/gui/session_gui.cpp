@@ -54,10 +54,15 @@ static SDL_Keycode normalize_fkey_keysym(SDL_Keycode sym, SDL_Scancode sc) {
 
 SessionGUI::SessionGUI(std::unique_ptr<System> system, const char* pending_file)
     : EmulatorHost()
-    , system_(std::move(system))
+    , session_()
     , system_selection_dialog_()
     , pending_file_path_(pending_file ? pending_file : "")
 {
+    if (system) {
+        const char* name = system->get_descriptor().short_name;
+        system_ = session_.add_system(name ? name : "default", std::move(system));
+    }
+
     // Set emulation running if we already have a system loaded
     if (system_) {
         emulation_running_.store(true);
@@ -1162,7 +1167,8 @@ void SessionGUI::teardown_current_system() {
     if (system_) {
         printf("Tearing down current system: %s\n", system_->get_descriptor().name);
         system_->shutdown();
-        system_.reset();
+        system_ = nullptr;
+        session_ = Session{};  // destroy the old session (and the system it owns)
     }
 
     // Release cached archive data (no point keeping it across system switches)
@@ -1193,12 +1199,14 @@ void SessionGUI::switch_system(const char* system_name, int memory_option, int r
     teardown_current_system();
     
     // Create new system
-    system_ = SystemRegistry::instance().create_system_by_name(system_name);
+    auto new_system = SystemRegistry::instance().create_system_by_name(system_name);
     
-    if (!system_) {
+    if (!new_system) {
         printf("ERROR: Failed to create system: %s\n", system_name);
         return;
     }
+
+    system_ = session_.add_system(system_name, std::move(new_system));
     
     printf("Created system: %s (%s)\n",
            system_->get_descriptor().name,
@@ -1258,7 +1266,8 @@ void SessionGUI::switch_system(const char* system_name, int memory_option, int r
     if (!system_->initialize()) {
         printf("ERROR: Failed to initialize %s system\n",
                system_->get_descriptor().name);
-        system_.reset();
+        system_ = nullptr;
+        session_ = Session{};
         return;
     }
 
