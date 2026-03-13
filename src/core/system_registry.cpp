@@ -19,7 +19,8 @@ SystemRegistry& SystemRegistry::instance() {
 }
 
 void SystemRegistry::register_system(const SystemDescriptor& descriptor, SystemFactory factory) {
-    printf("SystemRegistry: Registering system: %s (%s)\n", descriptor.name, descriptor.short_name);
+    if (g_verbose)
+        printf("SystemRegistry: Registering system: %s (%s)\n", descriptor.name, descriptor.short_name);
     systems_.push_back({descriptor, factory});
 }
 
@@ -130,7 +131,8 @@ std::unique_ptr<System> SystemRegistry::create_system_for_file(const char* filep
         return nullptr;
     }
 
-    printf("SystemRegistry: %zu systems registered\n", systems_.size());
+    if (g_verbose)
+        printf("SystemRegistry: %zu systems registered\n", systems_.size());
 
     // Read file content via format layer — handles both VFS archive paths
     // and Commodore container paths (e.g. "archive.zip!/disk.d64!/GAME")
@@ -141,15 +143,17 @@ std::unique_ptr<System> SystemRegistry::create_system_for_file(const char* filep
         return nullptr;
     }
 
-    printf("SystemRegistry: File size: %zu bytes\n", file_size);
+    if (g_verbose)
+        printf("SystemRegistry: File size: %zu bytes\n", file_size);
 
     // Delegate to the two-phase identification authority
     auto match = identify_system(filepath, data, file_size);
     free(data);
 
-    printf("SystemRegistry: Best match: %s (confidence: %.2f)\n",
-           match.system_name.empty() ? "none" : match.system_name.c_str(),
-           match.confidence);
+    if (g_verbose)
+        printf("SystemRegistry: Best match: %s (confidence: %.2f)\n",
+               match.system_name.empty() ? "none" : match.system_name.c_str(),
+               match.confidence);
 
     // Require at least 50% confidence
     if (match.confidence < 0.5f) return nullptr;

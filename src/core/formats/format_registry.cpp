@@ -6,6 +6,7 @@
  */
 
 #include "core/formats/format_registry.hpp"
+#include "core/cermu.hpp"
 #include "core/formats/format_handler.hpp"
 #include "core/vfs/vfs.hpp"
 #include <cstring>
@@ -23,8 +24,9 @@ FormatRegistry& FormatRegistry::instance() {
 
 void FormatRegistry::register_format(const format_descriptor_t* descriptor) {
     if (!descriptor) return;
-    printf("FormatRegistry: Registered format: %s (%s)\n",
-           descriptor->name, descriptor->description);
+    if (g_verbose)
+        printf("FormatRegistry: Registered format: %s (%s)\n",
+               descriptor->name, descriptor->description);
     formats_.push_back(descriptor);
 }
 

@@ -265,9 +265,10 @@ void KeyboardMapper::register_default_synthetic_mappings() {
         add_synthetic_mapping(SDLK_d, del, "INST/DEL");
     }
 
-    printf("KeyboardMapper: Registered %zu synthetic mappings (modifier: %s)\n",
-           synthetic_mappings_.size(),
-           SDL_GetKeyName(emu_modifier_key_));
+    if (g_verbose)
+        printf("KeyboardMapper: Registered %zu synthetic mappings (modifier: %s)\n",
+               synthetic_mappings_.size(),
+               SDL_GetKeyName(emu_modifier_key_));
 }
 
 // ============================================================================

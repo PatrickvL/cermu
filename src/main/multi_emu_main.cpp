@@ -110,6 +110,8 @@ int main(int argc, char** argv) {
             vicii_dump_mode = true;
             system_name = "C64";
             printf("VIC-II dump mode enabled\n");
+        } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {
+            g_verbose = true;
         } else if (strcmp(argv[i], "--skip-memtest") == 0) {
             skip_memtest = true;
             printf("KERNAL memory test skip enabled\n");
@@ -138,6 +140,7 @@ int main(int argc, char** argv) {
             printf("  --sid-log <file>      Capture SID register writes to binary log (headless)\n");
             printf("  --seconds <N>         Duration for --sid-log capture (default: 60)\n");
             printf("  --skip-memtest        Patch C64 KERNAL to skip RAMTAS memory test\n");
+            printf("  --verbose, -v         Enable verbose startup messages\n");
             printf("  --help, -h            Show this help message\n");
             printf("\nAvailable systems:\n");
             for (const auto& desc : SystemRegistry::instance().get_all_descriptors()) {
