@@ -490,7 +490,7 @@ VIC20System::~VIC20System() {
         keyboard_ = nullptr;
     }
     
-    // CPU, VIC, VIA1, VIA2, and memory chips are all owned by bus_mem_
+    // CPU, VIC, VIA1, VIA2, and memory chips are all owned by board_
     // and cleaned up automatically via its owned_chips_ vector.
 }
 
@@ -562,7 +562,7 @@ bool VIC20System::initialize() {
     if (initialized_) return true;
     
     printf("VIC20: Initializing system\n");
-    register_board(&bus_mem_);
+    register_board(&board_);
     
     // ── Condition callback for PAL/NTSC variant selection ────────────────
     auto vic20_condition = [](uint16_t cond, const void* ctx) -> bool {
@@ -576,18 +576,18 @@ bool VIC20System::initialize() {
     };
 
     // ── Create ALL chips from manifest (memory + CPU + VIC + VIAs) ──────
-    bus_mem_.create_chips(&bus_.state, vic20_condition, &config_);
-    bus_mem_.apply(mem_bus_);
+    board_.create_chips(&bus_.state, vic20_condition, &config_);
+    board_.apply(mem_bus_);
 
     // ── Retrieve typed convenience pointers ──────────────────────────────
-    ram_        = bus_mem_.chip_as<RAMChip>(vic20_slot::kRam);
-    charrom_    = bus_mem_.chip_as<ROMChip>(vic20_slot::kCharRom);
-    basic_rom_  = bus_mem_.chip_as<ROMChip>(vic20_slot::kBasicRom);
-    kernal_rom_ = bus_mem_.chip_as<ROMChip>(vic20_slot::kKernalRom);
-    cpu_        = bus_mem_.chip_as<MOS6502>(vic20_slot::kCpu);
-    vic_        = bus_mem_.first_chip<vic_base_t>({vic20_slot::kVicPal, vic20_slot::kVicNtsc});
-    via1_       = bus_mem_.chip_as<mos6522_t>(vic20_slot::kVia1);
-    via2_       = bus_mem_.chip_as<mos6522_t>(vic20_slot::kVia2);
+    ram_        = board_.chip_as<RAMChip>(vic20_slot::kRam);
+    charrom_    = board_.chip_as<ROMChip>(vic20_slot::kCharRom);
+    basic_rom_  = board_.chip_as<ROMChip>(vic20_slot::kBasicRom);
+    kernal_rom_ = board_.chip_as<ROMChip>(vic20_slot::kKernalRom);
+    cpu_        = board_.chip_as<MOS6502>(vic20_slot::kCpu);
+    vic_        = board_.first_chip<vic_base_t>({vic20_slot::kVicPal, vic20_slot::kVicNtsc});
+    via1_       = board_.chip_as<mos6522_t>(vic20_slot::kVia1);
+    via2_       = board_.chip_as<mos6522_t>(vic20_slot::kVia2);
     
     // Initialize Color RAM to cyan (color 3) for proper text visibility
     // Color RAM lives in the RAM buffer at $9400 (within the I/O-handled region)
@@ -615,9 +615,9 @@ bool VIC20System::initialize() {
         return false;
     }
     // init() is on the concrete types, not on vic_base_t — call via the slot
-    if (auto* pal = bus_mem_.chip_as<mos6561_t>(vic20_slot::kVicPal))
+    if (auto* pal = board_.chip_as<mos6561_t>(vic20_slot::kVicPal))
         pal->init();
-    else if (auto* ntsc = bus_mem_.chip_as<mos6560_t>(vic20_slot::kVicNtsc))
+    else if (auto* ntsc = board_.chip_as<mos6560_t>(vic20_slot::kVicNtsc))
         ntsc->init();
     printf("VIC20: Created %s VIC chip\n",
            (config_.region_option_index <= 0) ? "MOS6561 (PAL)" : "MOS6560 (NTSC)");
@@ -674,7 +674,7 @@ bool VIC20System::initialize() {
     setup_ports();
 
     // Register all manifest-created chips for the Hardware menu and debug windows
-    register_bus_chips(bus_mem_);
+    register_bus_chips(board_);
     
     // Set up page pointers for current expansion and ROM banking
     setup_expansion_map();
@@ -692,7 +692,7 @@ void VIC20System::reset() {
     printf("VIC20: Resetting system\n");
     
     // Reset all manifest chips (VIC, VIA1, VIA2; RAM/ROM/CPU are no-op)
-    bus_mem_.reset_chips();
+    board_.reset_chips();
     
     // Re-establish VIC callbacks (reset clears them)
     if (vic_) {
@@ -1143,7 +1143,7 @@ void VIC20System::setup_expansion_map() {
     constexpr size_t kRamBase = kVIC20Chips.base_id(vic20_slot::kRam, 8);
 
     // Reset: apply() gives us full 64KB RAM + ROM overlays
-    bus_mem_.apply(mem_bus_);
+    board_.apply(mem_bus_);
 
     // $9000-$9FFF (pages $90-$9F): I/O — handled manually in mem_tick/io_tick
     // Pages don't matter since they're intercepted, but set to no-chip for correctness

@@ -20,7 +20,7 @@ changes the baseline assumptions for every phase below:
 | `BusMap<Spec>` extraction | ✅ Done | Address-decode logic separated from chip lifetime in `Board<Spec>` |
 | `ManifestBusSpec` auto-derivation | ✅ Done | Compile-time `BusSpec` derived from `ChipManifest` — no manual spec writing |
 | `System::primary_board_` (value member) | ✅ Done | Port ops always go through `primary_board_`; no pointer chase, no conditional |
-| `System::register_board()` | ✅ Done | Systems with `Board<Spec>` register via `register_board(&bus_mem_)` for generic iteration |
+| `System::register_board()` | ✅ Done | Systems with `Board<Spec>` register via `register_board(&board_)` for generic iteration |
 | `System::get_boards()` | ✅ Done | Returns all boards (primary first, then registered additional boards) |
 | `PortRegistry` + `REGISTER_PORT` | ✅ Done | Singleton `PortType` → `PortDefinition`; standard ports self-register |
 | `VideoOutput` / `AudioOutput` descriptors | ✅ Done | Optional output signal metadata on `Port` instances |
@@ -93,9 +93,9 @@ For each system, the migration pattern is:
 
 1. Add `Slot<ChipType>` entries to the manifest (MMIO-only for I/O, zero-size for non-mapped)
 2. Remove manual `new ChipType()` calls — let `create_chips()` factory handle creation
-3. Replace manual `chip_ = new X()` with `chip_ = bus_mem_.chip_as<X>(kSlot)`
+3. Replace manual `chip_ = new X()` with `chip_ = board_.chip_as<X>(kSlot)`
 4. Move `register_chip()` calls → `register_bus_chips()` handles them automatically
-5. Replace individual `chip->reset()` calls → `bus_mem_.reset_chips()` + post-reset fixups
+5. Replace individual `chip->reset()` calls → `board_.reset_chips()` + post-reset fixups
 
 ### Chips needing MMIO interface additions
 

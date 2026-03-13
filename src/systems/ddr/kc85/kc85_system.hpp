@@ -189,9 +189,9 @@ private:
     using BT  = KC85BusTraits<V>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using Mem = Board<typename BT::Spec>;
+    using MainBoard = Board<typename BT::Spec>;
     Bus bus_;
-    Mem bus_mem_{BT::kManifest};
+    MainBoard board_{BT::kManifest};
 
     // ── Display ──────────────────────────────────────────────────────────
     uint32_t framebuffer_[kc85_constants::FB_WIDTH *

@@ -70,16 +70,16 @@ template<KC85Variant V> bool KC85System<V>::apply_configuration() { return true;
 template<KC85Variant V>
 bool KC85System<V>::initialize() {
     printf("%s: Initializing system (CAOS %s)\n", Traits::name, Traits::caos_version);
-    register_board(&bus_mem_);
+    register_board(&board_);
 
     // ── Create chips via factory, wire the bus ────────────────────────
-    bus_mem_.create_chips(&pins_);
-    bus_mem_.apply(bus_);
+    board_.create_chips(&pins_);
+    board_.apply(bus_);
 
     // Retrieve typed pointers for chips accessed after initialize()
-    caos_rom_chip_ = bus_mem_.template chip_as<ROMChip>(Traits::kCaosRomSlot);
+    caos_rom_chip_ = board_.template chip_as<ROMChip>(Traits::kCaosRomSlot);
     if constexpr (Traits::has_basic_rom) {
-        basic_rom_chip_ = bus_mem_.template chip_as<ROMChip>(Traits::kBasicRomSlot);
+        basic_rom_chip_ = board_.template chip_as<ROMChip>(Traits::kBasicRomSlot);
     }
 
     // ── Set initial banking state ───────────────────────────────────────
@@ -112,7 +112,7 @@ bool KC85System<V>::initialize() {
         "U855 PIO #2", "U855", "I/O", 0x00);
     register_chip(&ctc_,
         "U857 CTC", "U857", "I/O", kc85_constants::CTC_CH0);
-    register_bus_chips(bus_mem_);
+    register_bus_chips(board_);
 
     printf("%s: System initialized (RAM: %d KB, IRM: %d KB)\n",
            Traits::name, Traits::ram_size / 1024,
@@ -148,7 +148,7 @@ void KC85System<V>::configure_bus_memory_map() {
     using WriteChipId = typename PT::WriteChipId;
 
     // apply() maps all slots per the manifest.  We adjust for initial banking.
-    bus_mem_.apply(bus_);
+    board_.apply(bus_);
 
     // ── KC85/4: Trim IRM write pages that spill into ROM area ───────────
     // The 64 KB IRM at $8000 maps write pages $80-$FF (128 pages, clipped).

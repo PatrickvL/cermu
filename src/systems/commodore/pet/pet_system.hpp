@@ -115,9 +115,9 @@ public:
 private:
     // ── Bus ──────────────────────────────────────────────────────────────
     using Bus    = MemoryBus<PETBusTraits::Spec>;
-    using BusMem = Board<PETBusTraits::Spec>;
+    using MainBoard = Board<PETBusTraits::Spec>;
     Bus    bus_;
-    BusMem bus_mem_{kPETChips};
+    MainBoard board_{kPETChips};
     bus_state_t pins_ = PET_BUS_DEFAULT_STATE;
 
     // ── Memory chips (owned by registered_chips_, managed via Board) ─

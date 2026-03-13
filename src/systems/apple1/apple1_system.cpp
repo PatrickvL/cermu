@@ -176,14 +176,14 @@ bool Apple1System::apply_configuration() {
 // ============================================================================
 bool Apple1System::initialize() {
     printf("Apple1: Initializing system\n");
-    register_board(&bus_mem_);
+    register_board(&board_);
     
     // ── Pre-bind PIA, then factory-create all chips (memory + CPU) ───
-    bus_mem_.bind_chip(apple1_chips::kPiaSlot, &pia_);
-    bus_mem_.create_chips(&pins_);
-    monitor_rom_ = bus_mem_.chip_as<ROMChip>(apple1_chips::kMonitorSlot);
-    basic_rom_   = bus_mem_.chip_as<ROMChip>(apple1_chips::kBasicSlot);
-    cpu_         = bus_mem_.chip_as<MOS6502>(apple1_chips::kCpuSlot);
+    board_.bind_chip(apple1_chips::kPiaSlot, &pia_);
+    board_.create_chips(&pins_);
+    monitor_rom_ = board_.chip_as<ROMChip>(apple1_chips::kMonitorSlot);
+    basic_rom_   = board_.chip_as<ROMChip>(apple1_chips::kBasicSlot);
+    cpu_         = board_.chip_as<MOS6502>(apple1_chips::kCpuSlot);
 
     // Character ROM — not on the bus (used by terminal renderer only).
     auto char_chip = std::make_unique<ROMChip>(
@@ -223,7 +223,7 @@ bool Apple1System::initialize() {
     setup_ports();
 
     // Register chips for the Hardware menu
-    register_bus_chips(bus_mem_);
+    register_bus_chips(board_);
     register_chip(std::make_unique<ChipPlaceholder>(
         ChipInfo{"Terminal", "Custom"}, "Text Terminal (40x24)", "Terminal", "Video"));
     register_chip(std::move(char_chip));
@@ -241,7 +241,7 @@ void Apple1System::reset() {
     printf("Apple1: Resetting system\n");
     
     // Reset all manifest chips (PIA; RAM/ROM are no-op)
-    bus_mem_.reset_chips();
+    board_.reset_chips();
     pia_.user_data = this;
     pia_.on_port_a_read = pia_keyboard_read;
     pia_.on_port_b_write = pia_display_write;
@@ -454,7 +454,7 @@ void Apple1System::configure_bus_memory_map() {
     //   - Monitor ROM overlays read page $FF
     //   - BASIC ROM overlays read pages $E0–$EF
     //   - PIA MMIO via MaskedSubTable on page $D0
-    bus_mem_.apply(bus_);
+    board_.apply(bus_);
 
     // ── Trim RAM to actual size ─────────────────────────────────────────────
     // Selectively unmap pages beyond actual RAM that aren't ROM-covered or
@@ -498,7 +498,7 @@ void Apple1System::configure_bus_memory_map() {
     // ── PIA page ($D0) — update MaskedSubTable base chip ────────────────────
     // apply() created the sub-table with base = RAM $D0.  If RAM doesn't
     // reach $D0, switch the base to open bus.
-    const int pia_sub = bus_mem_.slot(apple1_chips::kPiaSlot).sub_table_idx;
+    const int pia_sub = board_.slot(apple1_chips::kPiaSlot).sub_table_idx;
     if (pia_sub >= 0) {
         if (ram_pages > 0xD0) {
             bus_.set_masked_base(0, size_t(pia_sub),

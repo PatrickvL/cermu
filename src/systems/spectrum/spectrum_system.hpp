@@ -189,9 +189,9 @@ private:
     using BT  = SpectrumBusTraits<V>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using Mem = Board<typename BT::Spec>;
+    using MainBoard = Board<typename BT::Spec>;
     Bus bus_;
-    Mem bus_mem_{BT::kManifest};
+    MainBoard board_{BT::kManifest};
 
     // 128K banking state
     uint8_t  bank_select_ = 0;       // Port $7FFD latch

@@ -125,7 +125,7 @@ private:
     ay_3_8910_t ay_[3];                  // 3× AY-3-8910 PSG
 
     // Memory chips are auto-created by Board::create_chips() and accessed
-    // via bus_mem_.chip_as<T>(slot_index).  No manual pointers needed.
+    // via board_.chip_as<T>(slot_index).  No manual pointers needed.
 
     // ── Graphics ROM — NOT bus-mapped (display rendering only) ───────────
     std::vector<uint8_t> char_rom_;      // Character/tile ROM
@@ -134,15 +134,15 @@ private:
 
     // ── Main bus ─────────────────────────────────────────────────────────
     using MainBus = MemoryBus<BombJackMainBusTraits::Spec>;
-    using MainMem = Board<BombJackMainBusTraits::Spec>;
+    using MainBoard = Board<BombJackMainBusTraits::Spec>;
     MainBus main_bus_;
-    MainMem main_bus_mem_{kBombJackMainChips};
+    MainBoard main_board_{kBombJackMainChips};
 
     // ── Sound bus ────────────────────────────────────────────────────────
     using SoundBus = MemoryBus<BombJackSoundBusTraits::Spec>;
-    using SoundMem = Board<BombJackSoundBusTraits::Spec>;
+    using SoundBoard = Board<BombJackSoundBusTraits::Spec>;
     SoundBus sound_bus_;
-    SoundMem sound_bus_mem_{kBombJackSoundChips};
+    SoundBoard sound_board_{kBombJackSoundChips};
 
     // ── Inter-CPU communication ──────────────────────────────────────────
     uint8_t sound_latch_ = 0;           // Main → Sound command latch

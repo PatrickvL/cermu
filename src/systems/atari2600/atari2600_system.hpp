@@ -147,10 +147,10 @@ public:
 
 private:
     // ========================================================================
-    // CHIPS — owned by bus_mem_, borrowed here for direct access
+    // CHIPS — owned by board_, borrowed here for direct access
     // ========================================================================
 
-    MOS6507*           cpu_       = nullptr;  // MOS 6507 CPU — owned by bus_mem_
+    MOS6507*           cpu_       = nullptr;  // MOS 6507 CPU — owned by board_
     tia_t*             tia_       = nullptr;  // TIA — Television Interface Adapter
     pia6532_t*         riot_      = nullptr;  // PIA 6532 RIOT — RAM, I/O, Timer
     Atari2600CartChip* cart_chip_ = nullptr;  // Cart MMIO adapter (wraps mapper)
@@ -169,10 +169,10 @@ private:
     // ========================================================================
 
     using Bus = MemoryBus<Atari2600BusSpec>;
-    using Mem = Board<Atari2600BusSpec>;
+    using MainBoard = Board<Atari2600BusSpec>;
 
     Bus bus_;
-    Mem bus_mem_{kAtari2600Chips};
+    MainBoard board_{kAtari2600Chips};
 
     // ========================================================================
     // SYSTEM STATE

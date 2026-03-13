@@ -70,22 +70,22 @@ template<Z1013Variant V> bool Z1013System<V>::apply_configuration() { return tru
 template<Z1013Variant V>
 bool Z1013System<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
-    register_board(&bus_mem_);
+    register_board(&board_);
 
     // ── Create memory chips from manifest and wire bus ────────────────────
-    bus_mem_.create_chips(&pins_);
-    bus_mem_.apply(bus_);
+    board_.create_chips(&pins_);
+    board_.apply(bus_);
 
     // Retain pointers for post-init access (rendering, ROM loading)
-    video_ram_chip_   = bus_mem_.template chip_as<RAMChip>(Traits::kVideoRamSlot);
-    monitor_rom_chip_ = bus_mem_.template chip_as<ROMChip>(Traits::kMonitorRomSlot);
+    video_ram_chip_   = board_.template chip_as<RAMChip>(Traits::kVideoRamSlot);
+    monitor_rom_chip_ = board_.template chip_as<ROMChip>(Traits::kMonitorRomSlot);
     if constexpr (Traits::has_basic_rom) {
-        basic_rom_lo_chip_ = bus_mem_.template chip_as<ROMChip>(Traits::kBasicRomLoSlot);
-        basic_rom_hi_chip_ = bus_mem_.template chip_as<ROMChip>(Traits::kBasicRomHiSlot);
+        basic_rom_lo_chip_ = board_.template chip_as<ROMChip>(Traits::kBasicRomLoSlot);
+        basic_rom_hi_chip_ = board_.template chip_as<ROMChip>(Traits::kBasicRomHiSlot);
     }
 
     // ── Init chips ──────────────────────────────────────────────────────
-    cpu_ = bus_mem_.template chip_as<U880>(Traits::kCpuSlot);
+    cpu_ = board_.template chip_as<U880>(Traits::kCpuSlot);
     pins_ = cpu_->init();
     pio_.init();
 
@@ -102,7 +102,7 @@ bool Z1013System<V>::initialize() {
     // ── Register chips for Hardware menu ────────────────────────────────
     register_chip(&pio_,
         "U855 PIO", "U855", "I/O", z1013_constants::PIO_PORT_A);
-    register_bus_chips(bus_mem_);
+    register_bus_chips(board_);
 
     system_ready_ = true;
     return true;

@@ -543,16 +543,16 @@ bool Commodore264System<V>::initialize() {
     }
     
     printf("%s: Initializing system\n", Traits::name);
-    register_board(&bus_mem_);
+    register_board(&board_);
     
     // ── Create memory chips from manifest and wire bus ───────────────────
-    bus_mem_.create_chips(&bus_state_);
-    bus_mem_.apply(bus_);
+    board_.create_chips(&bus_state_);
+    board_.apply(bus_);
 
     // Convenience pointers for direct buffer access (ROM loading, KERNAL checks, etc.)
-    ram_        = bus_mem_.chip_as<RAMChip>(c264_slot::kRam);
-    basic_rom_  = bus_mem_.chip_as<ROMChip>(c264_slot::kBasicRom);
-    kernal_rom_ = bus_mem_.chip_as<ROMChip>(c264_slot::kKernalRom);
+    ram_        = board_.chip_as<RAMChip>(c264_slot::kRam);
+    basic_rom_  = board_.chip_as<ROMChip>(c264_slot::kBasicRom);
+    kernal_rom_ = board_.chip_as<ROMChip>(c264_slot::kKernalRom);
     
     // Load ROMs using common ROM loader
     bool roms_loaded = load_roms();
@@ -622,7 +622,7 @@ bool Commodore264System<V>::initialize() {
         "MOS 7501/8501 CPU", "7501", "CPU", 0x0000);
     register_chip(ted_,
         "TED 7360 (Video/Audio/I/O)", "TED", "Video", 0xFF00);
-    register_bus_chips(bus_mem_);
+    register_bus_chips(board_);
 
     // Set up page pointers for current RAM size and ROM banking state
     setup_ram_mirroring();

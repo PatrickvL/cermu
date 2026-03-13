@@ -70,11 +70,11 @@ template<NamcoGame G> bool NamcoArcadeSystem<G>::apply_configuration() { return 
 template<NamcoGame G>
 bool NamcoArcadeSystem<G>::initialize() {
     printf("%s: Initializing arcade system\n", Traits::name);
-    register_board(&bus_mem_);
+    register_board(&board_);
 
     // ── Create memory chips from manifest and wire bus ────────────────
-    bus_mem_.create_chips(&pins_);
-    bus_mem_.apply(bus_);
+    board_.create_chips(&pins_);
+    board_.apply(bus_);
 
     // ── Init CPU + sound ────────────────────────────────────────────────
     cpu_ = new ZilogZ80A();
@@ -93,7 +93,7 @@ bool NamcoArcadeSystem<G>::initialize() {
     // ── Register chips for Hardware menu ────────────────────────────────
     register_chip(static_cast<ChipBase*>(cpu_),
         "Z80A CPU", "Z80A", "CPU", 0x0000);
-    register_bus_chips(bus_mem_);
+    register_bus_chips(board_);
 
     printf("%s: System initialized (ROM: %d KB)\n",
            Traits::name, Traits::rom_size / 1024);

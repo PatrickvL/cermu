@@ -51,17 +51,17 @@ bool LC80System::apply_configuration() { return true; }
 
 bool LC80System::initialize() {
     printf("LC 80: Initializing system\n");
-    register_board(&bus_mem_);
+    register_board(&board_);
 
     // ── Create memory chips from manifest and wire bus ────────────────────
-    bus_mem_.create_chips(&pins_);
-    bus_mem_.apply(bus_);
+    board_.create_chips(&pins_);
+    board_.apply(bus_);
 
     // ── Configure page tables (mirroring) ───────────────────────────────
     configure_bus_memory_map();
 
     // ── Init chips ──────────────────────────────────────────────────────
-    cpu_ = bus_mem_.chip_as<U880>(lc80_chips::kCpuSlot);
+    cpu_ = board_.chip_as<U880>(lc80_chips::kCpuSlot);
     pins_ = cpu_->init();
     pio1_.init();
     pio2_.init();
@@ -76,7 +76,7 @@ bool LC80System::initialize() {
         "U855 PIO #2", "U855", "I/O", lc80_constants::PIO2_PORT_A);
     register_chip(&ctc_,
         "U857 CTC", "U857", "Timer", lc80_constants::CTC_CH0);
-    register_bus_chips(bus_mem_);
+    register_bus_chips(board_);
 
     system_ready_ = true;
     return true;

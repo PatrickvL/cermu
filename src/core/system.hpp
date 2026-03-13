@@ -221,9 +221,9 @@ protected:
     /// Each chip is registered as a borrowed pointer (Board owns them).
     /// Uses the self-describing register_chip(ChipBase*) path — chips carry
     /// their own display_name, short_name, category, and base_address.
-    template<typename BusMem>
-    void register_bus_chips(BusMem& mem) {
-        for (const auto& chip : mem.owned_chips()) {
+    template<typename BoardT>
+    void register_bus_chips(BoardT& board) {
+        for (const auto& chip : board.owned_chips()) {
             SystemChip sc;
             sc.chip = chip.get();
             sc.display_name  = chip->display_name();
@@ -243,17 +243,17 @@ protected:
     // value member.  All port creation goes through add_port() which always
     // delegates to primary_board_.  No conditional, no indirection.
     //
-    // Systems that have a Board<Spec> (bus_mem_) for memory dispatch register
+    // Systems that have a Board<Spec> (board_) for memory dispatch register
     // it via register_board() so that generic code can iterate all boards.
     // Device ownership stays on System (peripherals are user-attached, not
     // board-soldered components).
     //
 
     /// All boards on this system.  primary_board_ is always boards_[0];
-    /// additional boards (e.g. bus_mem_) are appended via register_board().
+    /// additional boards (e.g. board_) are appended via register_board().
     std::vector<BoardBase*> boards_;
 
-    /// Register an additional board (e.g. bus_mem_) for iteration.
+    /// Register an additional board (e.g. board_) for iteration.
     /// The primary_board_ is always registered automatically.
     void register_board(BoardBase* board) { boards_.push_back(board); }
 

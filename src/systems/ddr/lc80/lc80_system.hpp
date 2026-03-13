@@ -81,7 +81,7 @@ public:
 
 private:
     // ── Chips ────────────────────────────────────────────────────────────
-    U880*       cpu_  = nullptr;     // U880 (Z80A clone) — owned by bus_mem_
+    U880*       cpu_  = nullptr;     // U880 (Z80A clone) — owned by board_
     z80_pio_t   pio1_;               // U855 PIO #1 (LED display + keyboard)
     z80_pio_t   pio2_;               // U855 PIO #2 (keyboard scan + cassette)
     z80_ctc_t   ctc_;                // U857 CTC (speaker on channel 2)
@@ -89,9 +89,9 @@ private:
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using Bus = MemoryBus<LC80BusSpec>;
     using PT  = PackingTraits<LC80BusSpec>;
-    using Mem = Board<LC80BusSpec>;
+    using MainBoard = Board<LC80BusSpec>;
     Bus bus_;
-    Mem bus_mem_{kLC80Chips};
+    MainBoard board_{kLC80Chips};
 
     // ── LED display ──────────────────────────────────────────────────────
     // Segment data for each of the 6 digits (bit 0..6 = a..g, bit 7 = dp)

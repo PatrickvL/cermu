@@ -62,21 +62,21 @@ template<Z9001Variant V> bool Z9001System<V>::apply_configuration() { return tru
 template<Z9001Variant V>
 bool Z9001System<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
-    register_board(&bus_mem_);
+    register_board(&board_);
 
     // ── Create chips via factory, wire the bus ────────────────────────
-    bus_mem_.create_chips(&pins_);
-    bus_mem_.apply(bus_);
+    board_.create_chips(&pins_);
+    board_.apply(bus_);
 
     // Retrieve typed pointers for chips accessed after initialize()
-    video_ram_chip_ = bus_mem_.template chip_as<RAMChip>(Traits::kVideoRamSlot);
-    os_rom_chip_    = bus_mem_.template chip_as<ROMChip>(Traits::kOsRomSlot);
+    video_ram_chip_ = board_.template chip_as<RAMChip>(Traits::kVideoRamSlot);
+    os_rom_chip_    = board_.template chip_as<ROMChip>(Traits::kOsRomSlot);
     if constexpr (Traits::has_basic_rom) {
-        basic_rom_lo_chip_ = bus_mem_.template chip_as<ROMChip>(Traits::kBasicRomLoSlot);
-        basic_rom_hi_chip_ = bus_mem_.template chip_as<ROMChip>(Traits::kBasicRomHiSlot);
+        basic_rom_lo_chip_ = board_.template chip_as<ROMChip>(Traits::kBasicRomLoSlot);
+        basic_rom_hi_chip_ = board_.template chip_as<ROMChip>(Traits::kBasicRomHiSlot);
     }
     if constexpr (Traits::has_color_ram) {
-        color_ram_chip_ = bus_mem_.template chip_as<RAMChip>(Traits::kColorRamSlot);
+        color_ram_chip_ = board_.template chip_as<RAMChip>(Traits::kColorRamSlot);
     }
 
     // ── Trim RAM pages for KC87 (48 KB out of 64 KB allocated) ──────────
@@ -107,7 +107,7 @@ bool Z9001System<V>::initialize() {
         "U855 PIO #2", "U855", "I/O", z9001_constants::PIO2_PORT_A);
     register_chip(&ctc_,
         "U857 CTC", "U857", "I/O", z9001_constants::CTC_CH0);
-    register_bus_chips(bus_mem_);
+    register_bus_chips(board_);
 
     printf("%s: System initialized (RAM: %d KB)\n", Traits::name, Traits::ram_size / 1024);
     system_ready_ = true;

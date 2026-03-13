@@ -103,10 +103,10 @@ bool AmstradCPCSystem<M>::apply_configuration() { return true; }
 template<CPCModel M>
 bool AmstradCPCSystem<M>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
-    register_board(&bus_mem_);
+    register_board(&board_);
 
     // ── Factory-create memory chips from manifest ─────────────────────
-    bus_mem_.create_chips(&pins_);
+    board_.create_chips(&pins_);
 
     // ── Configure page tables for this variant ──────────────────────────
     configure_bus_memory_map();
@@ -138,7 +138,7 @@ bool AmstradCPCSystem<M>::initialize() {
         "Intel 8255 PPI", "i8255", "I/O", 0);
     register_chip(&ay_,
         "AY-3-8912 PSG", "AY-3-8912", "Sound", 0);
-    register_bus_chips(bus_mem_);
+    register_bus_chips(board_);
 
     printf("%s: System initialized (%dKB RAM)\n", Traits::name, Traits::ram_size_kb);
     system_ready_ = true;
@@ -222,7 +222,7 @@ void AmstradCPCSystem<M>::configure_bus_memory_map() {
     //   RAM pages 0-255 (read+write), Lower ROM overlays read pages 0-63,
     //   Upper ROM overlays read pages C0-FF.
     //   Writes always go to RAM (ROMs are read-only -> no write pages).
-    bus_mem_.apply(bus_);
+    board_.apply(bus_);
 
     if constexpr (Traits::ram_size_kb == 128) {
         // 6128: remap RAM banks per current gate_array_.ram_config.

@@ -214,9 +214,9 @@ private:
     using BT  = CPCBusTraits<M>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using Mem = Board<typename BT::Spec>;
+    using MainBoard = Board<typename BT::Spec>;
     Bus bus_;
-    Mem bus_mem_{BT::kManifest};
+    MainBoard board_{BT::kManifest};
 
     // ========================================================================
     // SYSTEM STATE
