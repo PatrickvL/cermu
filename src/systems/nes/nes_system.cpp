@@ -1371,13 +1371,6 @@ void NintendoSystem<V>::setup_ports() {
         printf("%s: Created %zu ports\n", Traits::name, get_ports().size());
     }
 
-    // Attach default peripherals declared by get_default_peripherals().
-    // auto_bind_host_inputs() (called from attach_device_to_port) assigns
-    // connected host gamepads first; if none are available it falls back to
-    // keyboard.  auto_assign_controller_keymaps() (called at the end of
-    // attach_default_peripherals) picks WASD for P1, IJKL for P2 via the
-    // generic collision-scoring framework.
-    attach_default_peripherals();
 }
 
 template<NintendoVariant V>

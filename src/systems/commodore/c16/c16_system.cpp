@@ -1269,9 +1269,6 @@ void Commodore264System<V>::setup_ports() {
     get_port(kb_port)->attach_device(kb_raw);
     owned_devices_.push_back(std::move(kb_device));
 
-    // Default: attach peripheral devices via declarative list
-    attach_default_peripherals();
-
     printf("%s: Created %zu ports\n",
            Traits::name, get_ports().size());
 }

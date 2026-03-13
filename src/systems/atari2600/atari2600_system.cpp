@@ -574,9 +574,6 @@ void Atari2600System::setup_ports() {
     add_port(atari_joy_2_def, 2);  // Player 2
 
     printf("Atari2600: Created %zu ports\n", get_ports().size());
-
-    // Attach default peripherals (joysticks) and auto-bind host inputs
-    attach_default_peripherals();
 }
 
 std::vector<System::DefaultPeripheral>

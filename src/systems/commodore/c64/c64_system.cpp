@@ -1679,12 +1679,6 @@ void C64System::setup_ports() {
     get_port(kb_port)->attach_device(kb_raw);
     owned_devices_.push_back(std::move(kb_device));
 
-    // Default devices: mouse in Port 1, joystick in Port 2, 1541 on IEC,
-    // datasette on cassette port.  Port 2 is the standard game port;
-    // Port 1 provides mouse for GEOS/etc.
-    // Users can manually swap these via the connector menu.
-    attach_default_peripherals();
-
     // Wire joystick-aware CIA1 callbacks (replace the defaults set during initialize)
     if (initialized_ && this->cia1) {
         s_port_callback_ctx.c64 = this;

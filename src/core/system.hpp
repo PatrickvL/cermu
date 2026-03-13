@@ -293,11 +293,6 @@ protected:
         return {};
     }
 
-    /// Attach every peripheral listed by get_default_peripherals() and
-    /// then run auto_bind_host_inputs() once.  Typically the last call
-    /// inside setup_ports().
-    void attach_default_peripherals();
-
     // =========================================================================
     // GUEST KEYBOARD COLLISION CONTEXT
     // =========================================================================
@@ -318,6 +313,12 @@ protected:
 public:
     System();
     virtual ~System() = default;
+
+    /// Attach every peripheral listed by get_default_peripherals() and
+    /// then run auto_assign_controller_keymaps().  Called automatically by
+    /// the framework after initialize(); systems no longer need to call
+    /// this explicitly.
+    void attach_default_peripherals();
     
     // Non-virtual implementations (identical for all systems - cannot override)
     const SystemConfiguration& get_configuration() const;
