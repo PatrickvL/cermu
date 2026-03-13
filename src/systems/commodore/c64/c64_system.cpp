@@ -507,7 +507,7 @@ bool C64System::initialize() {
     // Reset the CPU to start the hardware-accurate 7-cycle RESET sequence.
     // The deferred hijack will fetch the KERNAL reset vector ($FFFC/$FFFD)
     // through the bus, routing through the PLA — no manual load needed.
-    cpu->reset(0);
+    cpu->reset();
 
     // Sync PLA banking with the freshly-reset IO port so KERNAL ROM is
     // visible during the vector fetch ticks.
@@ -605,7 +605,7 @@ void C64System::reset() {
         // causes a segfault when emulation resumes with an inconsistent pipeline.
         if (this->mos6510) {
             auto* cpu = this->mos6510;
-            cpu->reset(0);
+            cpu->reset();
             cpu->bank_change_fn = cpu_banking_callback;
             cpu->bank_change_ctx = this;
 

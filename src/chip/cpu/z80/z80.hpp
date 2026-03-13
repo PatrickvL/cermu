@@ -131,7 +131,7 @@ public:
     // === Lifecycle ===
 
     /// Initialize CPU state. Returns default bus state.
-    bus_state_t init() {
+    bus_state_t init() override {
         std::memset(&regs_, 0, sizeof(regs_));
         regs_.sp = 0xFFFF;
         regs_.af = 0xFFFF;  // Documented power-on state
@@ -150,7 +150,7 @@ public:
     }
 
     /// Reset CPU (active-low RESET held for at least 3 clock cycles).
-    bus_state_t reset(bus_state_t pins) {
+    bus_state_t reset(bus_state_t pins = 0) override {
         regs_.pc = 0x0000;
         regs_.sp = 0xFFFF;
         regs_.af = 0xFFFF;

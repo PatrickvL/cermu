@@ -268,7 +268,7 @@ bool PETSystem::initialize() {
 
     // ---- CPU (MOS 6502) ----
     cpu_->init();
-    cpu_->reset(0);
+    cpu_->reset();
 
     // ---- CRTC (MC6845) ----
     crtc_ = new mc6845_t();
@@ -384,7 +384,7 @@ void PETSystem::reset() {
     screen_pixel_y_ = 0;
 
     // Reset CPU last
-    if (cpu_) cpu_->reset(0);
+    if (cpu_) cpu_->reset();
 
     pins_ = PET_BUS_DEFAULT_STATE;
     total_cycles_ = 0;
