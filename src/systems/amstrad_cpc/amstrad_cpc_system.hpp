@@ -121,15 +121,15 @@ struct amstrad_gate_array_t {
 // All I/O is Z80 port-based (IORQ) — no MMIO slots needed.
 //
 inline constexpr auto kCPC464Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},            // RAM: 64 KB
-    Slot<ROMChip>{0x0000, 16384, 0, "Lower ROM"},      // Lower ROM: 16 KB overlay at $0000
-    Slot<ROMChip>{0xC000, 16384, 0, "Upper ROM"}       // Upper ROM: 16 KB overlay at $C000
+    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
+    Slot<ROMChip>{0x0000, 16384, 0, "Lower ROM"},  // overlay
+    Slot<ROMChip>{0xC000, 16384, 0, "Upper ROM"}   // overlay
 );
 
 inline constexpr auto kCPC6128Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 131072, 0, "RAM"},           // RAM: 128 KB (8 banks)
-    Slot<ROMChip>{0x0000,  16384, 0, "Lower ROM"},     // Lower ROM: 16 KB overlay at $0000
-    Slot<ROMChip>{0xC000,  16384, 0, "Upper ROM"}      // Upper ROM: 16 KB overlay at $C000
+    Slot<RAMChip>{0x0000, 131072, 0, "RAM"},        // 128 KB (8 banks)
+    Slot<ROMChip>{0x0000,  16384, 0, "Lower ROM"},  // overlay
+    Slot<ROMChip>{0xC000,  16384, 0, "Upper ROM"}   // overlay
 );
 
 namespace cpc_chips {
