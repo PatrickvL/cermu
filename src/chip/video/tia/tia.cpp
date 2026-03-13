@@ -769,9 +769,7 @@ void tia_t::register_debug_fields() {
     using T = const tia_t;
     auto& r = debug_registry_;
     r.set_registers(regs_, TIA_W_NUM_REGS, TIA_W_REG_INFO, 0x00);
-    r.set_decl_order(TIA_W_DECL_ORDER.data(), TIA_W_DECL_ORDER.size(),
-                     TIA_W_FLD_INFO, TIA_W_NUM_FIELDS,
-                     nullptr, 0, nullptr);
+    r.set_decl_entries(TIA_W_DECL_ENTRIES.data(), TIA_W_DECL_ENTRIES.size());
 
     // Write register values, control bitfields, audio, etc. are all in
     // the DECL walk above.  Categories below cover non-register state.

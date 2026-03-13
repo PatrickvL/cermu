@@ -180,9 +180,7 @@ private:
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
         debug_registry_.set_registers(regs_, kc85_mod_regs::REG_COUNT, KC85_MOD_REG_INFO);
-        debug_registry_.set_decl_order(KC85_MOD_DECL_ORDER.data(), KC85_MOD_DECL_ORDER.size(),
-                                       KC85_MOD_FLD_INFO, KC85_MOD_NUM_FIELDS,
-                                       nullptr, 0, nullptr);
+        debug_registry_.set_decl_entries(KC85_MOD_DECL_ENTRIES.data(), KC85_MOD_DECL_ENTRIES.size());
         // All slot control values and Active/WProt flags are in the DECL walk.
     }
 #endif

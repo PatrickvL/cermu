@@ -251,9 +251,7 @@ private:
         using S = const ferranti_ula_t;
         auto& r = debug_registry_;
         r.set_registers(regs_, spectrum_ula::REG_COUNT, SPECTRUM_ULA_REG_INFO);
-        r.set_decl_order(SPECTRUM_ULA_DECL_ORDER.data(), SPECTRUM_ULA_DECL_ORDER.size(),
-                         SPECTRUM_ULA_FLD_INFO, SPECTRUM_ULA_NUM_FIELDS,
-                         nullptr, 0, nullptr);
+        r.set_decl_entries(SPECTRUM_ULA_DECL_ENTRIES.data(), SPECTRUM_ULA_DECL_ENTRIES.size());
         r.set_palette(spectrum_ula::PALETTE, 16);
 
         r.category("Port $FE Input");

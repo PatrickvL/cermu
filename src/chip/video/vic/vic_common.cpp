@@ -601,9 +601,7 @@ void vic_base_t::register_debug_fields() {
     using V = const vic_base_t;
     auto& r = debug_registry_;
     r.set_registers(regs_, VIC_NUM_REGS, VIC_REG_INFO, 0x9000);
-    r.set_decl_order(VIC_DECL_ORDER.data(), VIC_DECL_ORDER.size(),
-                     VIC_FLD_INFO, VIC_NUM_FIELDS,
-                     nullptr, 0, nullptr);
+    r.set_decl_entries(VIC_DECL_ENTRIES.data(), VIC_DECL_ENTRIES.size());
     uint32_t* palette = get_default_palette();
 
     // Register values, control bitfields, audio enables/freq, and volume

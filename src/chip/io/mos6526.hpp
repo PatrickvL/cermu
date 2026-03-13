@@ -233,9 +233,7 @@ private:
         using CI = const mos6526_t;
 
         debug_registry_.set_registers(regs_, CIA_REGS_SIZE, CIA_REG_INFO);
-        debug_registry_.set_decl_order(CIA_DECL_ORDER.data(), CIA_DECL_ORDER.size(),
-                                       CIA_FLD_INFO, CIA_NUM_FIELDS,
-                                       nullptr, 0, nullptr);
+        debug_registry_.set_decl_entries(CIA_DECL_ENTRIES.data(), CIA_DECL_ENTRIES.size());
 
         // ICR/CRA/CRB bitfields and TOD/SDR register values are in the DECL walk.
         // Port visualization, live timers, and internal interrupt mask remain.

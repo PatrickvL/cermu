@@ -28,9 +28,7 @@ void ay_3_8910_t::register_debug_fields() {
     using S = const ay_3_8910_t;
     auto& r = debug_registry_;
     r.set_registers(regs_, ay_regs::REG_COUNT, AY_REG_INFO);
-    r.set_decl_order(AY_DECL_ORDER.data(), AY_DECL_ORDER.size(),
-                     AY_FLD_INFO, AY_NUM_FIELDS,
-                     nullptr, 0, nullptr);
+    r.set_decl_entries(AY_DECL_ENTRIES.data(), AY_DECL_ENTRIES.size());
 
     // Mixer enables, amplitude/env-mode bits, and envelope shape are in the DECL walk.
     // Combined multi-register values (tone periods, envelope period) remain.

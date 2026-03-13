@@ -878,9 +878,7 @@ void PPU::register_debug_fields() {
     using P = const PPU;
     auto& r = debug_registry_;
     r.set_registers(regs_, REG_COUNT, NES_PPU_REG_INFO, 0x2000);
-    r.set_decl_order(NES_PPU_DECL_ORDER.data(), NES_PPU_DECL_ORDER.size(),
-                     NES_PPU_FLD_INFO, NES_PPU_NUM_FIELDS,
-                     nullptr, 0, nullptr);
+    r.set_decl_entries(NES_PPU_DECL_ENTRIES.data(), NES_PPU_DECL_ENTRIES.size());
 
     // Control/mask/status register values and bitfields are in the DECL walk.
     // Timing, internal state, and palette RAM remain as categories.
