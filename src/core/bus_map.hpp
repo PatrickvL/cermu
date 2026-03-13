@@ -216,7 +216,17 @@ public:
                     }
                 }
 
-                // Full-page MMIO (or no masked sub-table support)
+                // Full-page MMIO (or no masked sub-table support).
+                //
+                // Skip page-table mapping for chips with base_addr=0 and no
+                // mask — these are non-bus chips whose I/O is dispatched
+                // manually by the system (e.g. VIC-20 VIAs handled in
+                // io_tick()).  The handler is still registered above so the
+                // system can route to it explicitly if desired.
+                if (slot.base_addr == 0 && slot.addr_mask == 0
+                    && slot.num_pages == 0)
+                    continue;
+
                 const size_t first_page = slot.base_addr >> kPageBits;
                 const size_t count = slot.num_pages > 0 ? slot.num_pages : 1;
                 bus.map_register_file(
