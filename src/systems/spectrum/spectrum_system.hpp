@@ -204,6 +204,7 @@ private:
     bus_state_t pins_;
     bool        system_ready_ = false;
     uint32_t    frame_tstate_counter_ = 0;
+    int         int_counter_ = 0;      // T-states remaining for INT assertion (0 = deasserted)
     uint8_t     keyboard_rows_[8]{};   // Shadow of ULA keyboard matrix (active-low, 0xFF = no keys)
 
     // ========================================================================
