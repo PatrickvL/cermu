@@ -51,7 +51,17 @@ static float tap_identify(const uint8_t* data, size_t file_size, const char* ext
             memcmp(data, "C16-TAPE-RAW", 12) == 0)
             return 0.95f;
     }
-    if (extension && format_ext_match(extension, ".tap")) return 0.8f;
+    if (extension && format_ext_match(extension, ".tap")) {
+        // Spectrum TAP files share the .tap extension but have no magic.
+        // Detect the Spectrum block structure (first block: length=19, flag=$00)
+        // and yield so the Spectrum TAP handler can claim it instead.
+        if (data && file_size >= 21) {
+            uint16_t first_len = (uint16_t)data[0] | ((uint16_t)data[1] << 8);
+            if (first_len == 19 && data[2] == 0x00)
+                return 0.1f;
+        }
+        return 0.8f;
+    }
     return 0.0f;
 }
 
