@@ -104,7 +104,7 @@ public:
     //
     // Pass nullptr for unbound slots (e.g. optional ROM not loaded).
     //
-    //   bus_mem_.initialize(bus_, ram_, monitor_rom_, basic_rom_, &pia_);
+    //   board_.initialize(bus_, ram_, monitor_rom_, basic_rom_, &pia_);
     //
 
     template<typename... Chips>
@@ -133,12 +133,12 @@ public:
     // After create_chips(), call apply(bus) to wire page tables + MMIO.
     //
     // Usage:
-    //   bus_mem_.bind_chip(kPiaSlot, &pia_);   // pre-bind custom chip
-    //   bus_mem_.create_chips(&pins_);          // auto-create the rest
-    //   bus_mem_.apply(bus_);
+    //   board_.bind_chip(kPiaSlot, &pia_);   // pre-bind custom chip
+    //   board_.create_chips(&pins_);          // auto-create the rest
+    //   board_.apply(bus_);
     //
     // With conditions:
-    //   bus_mem_.create_chips(&pins_, my_condition_fn, &config_);
+    //   board_.create_chips(&pins_, my_condition_fn, &config_);
     //
 
     /// Condition evaluation callback — returns true if the chip should be
@@ -209,7 +209,7 @@ public:
     // exactly one of several conditional slots was created (e.g. PAL/NTSC
     // video chip variants).
     //
-    //   vic_ = bus_mem_.first_chip<vic_base_t>({kVicPal, kVicNtsc});
+    //   vic_ = board_.first_chip<vic_base_t>({kVicPal, kVicNtsc});
     //
 
     template<typename T>
@@ -574,11 +574,11 @@ private:
 //  }
 //
 //  // At runtime — all chips created from manifest:
-//  bus_mem_.create_chips(&bus_.state, vic20_condition, &config_);
-//  bus_mem_.apply(mem_bus_);
+//  board_.create_chips(&bus_.state, vic20_condition, &config_);
+//  board_.apply(mem_bus_);
 //
 //  // Typed access — exact slot or variant lookup:
-//  cpu_ = bus_mem_.chip_as<MOS6502>(kCpu);
-//  vic_ = bus_mem_.first_chip<vic_base_t>({kVicPal, kVicNtsc});
+//  cpu_ = board_.chip_as<MOS6502>(kCpu);
+//  vic_ = board_.first_chip<vic_base_t>({kVicPal, kVicNtsc});
 //
 // =============================================================================

@@ -150,11 +150,11 @@ private:
     
     // ── Memory bus (declarative manifest + page-pointer dispatch) ────────
     using Bus = MemoryBus<VIC20BusTraits::Spec>;
-    using Mem = Board<VIC20BusTraits::Spec>;
+    using MainBoard = Board<VIC20BusTraits::Spec>;
     Bus mem_bus_;
-    Mem bus_mem_{kVIC20Chips};
+    MainBoard board_{kVIC20Chips};
 
-    // Convenience chip pointers (all owned by bus_mem_, accessed via chip_as/first_chip)
+    // Convenience chip pointers (all owned by board_, accessed via chip_as/first_chip)
     RAMChip* ram_         = nullptr;  // 64 KB unified buffer
     ROMChip* charrom_     = nullptr;  // Character ROM $8000-$8FFF (4 KB)
     ROMChip* basic_rom_   = nullptr;  // BASIC ROM $C000-$DFFF (8 KB)

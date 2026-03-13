@@ -162,14 +162,14 @@ bool Atari2600System::apply_configuration() {
 
 bool Atari2600System::initialize() {
     printf("Atari2600: Initializing system\n");
-    register_board(&bus_mem_);
+    register_board(&board_);
 
     // ── Factory-create ALL chips from the manifest ──────────────────────
-    bus_mem_.create_chips(&pins_);
-    tia_       = bus_mem_.chip_as<tia_t>(atari2600_chips::kTiaSlot);
-    riot_      = bus_mem_.chip_as<pia6532_t>(atari2600_chips::kRiotSlot);
-    cart_chip_ = bus_mem_.chip_as<Atari2600CartChip>(atari2600_chips::kCartSlot);
-    cpu_       = bus_mem_.chip_as<MOS6507>(atari2600_chips::kCpuSlot);
+    board_.create_chips(&pins_);
+    tia_       = board_.chip_as<tia_t>(atari2600_chips::kTiaSlot);
+    riot_      = board_.chip_as<pia6532_t>(atari2600_chips::kRiotSlot);
+    cart_chip_ = board_.chip_as<Atari2600CartChip>(atari2600_chips::kCartSlot);
+    cpu_       = board_.chip_as<MOS6507>(atari2600_chips::kCpuSlot);
 
     // ── Configure MemoryBus page tables (mirrors + cart pages) ──────────
     configure_bus_memory_map();
@@ -188,7 +188,7 @@ bool Atari2600System::initialize() {
     setup_ports();
 
     // Register all manifest-created chips for the Hardware menu
-    register_bus_chips(bus_mem_);
+    register_bus_chips(board_);
 
     printf("Atari2600: System initialized\n");
     return true;
@@ -203,7 +203,7 @@ void Atari2600System::reset() {
     printf("Atari2600: Reset\n");
 
     // Reset all manifest chips (TIA, RIOT; CartChip is no-op)
-    bus_mem_.reset_chips();
+    board_.reset_chips();
 
     if (cpu_) {
         cpu_->reset(0);
@@ -314,12 +314,12 @@ void Atari2600System::tick_cpu() {
 void Atari2600System::configure_bus_memory_map() {
     // apply() auto-wires page 0 with a MaskedSubTable (TIA + RIOT regions)
     // and maps page 16 to the cart MMIO handler.
-    bus_mem_.apply(bus_);
+    board_.apply(bus_);
 
     // ── Mirror non-cart pages (1-15) to the same sub-table as page 0 ────
     // The Atari 2600 uses incomplete address decoding: A12=0 pages all have
     // the same TIA (A7=0) / RIOT (A7=1) split.  Pages 1-15 mirror page 0.
-    int sub_idx = bus_mem_.slot(atari2600_chips::kTiaSlot).sub_table_idx;
+    int sub_idx = board_.slot(atari2600_chips::kTiaSlot).sub_table_idx;
     if (sub_idx >= 0) {
         for (size_t page = 1; page < 16; ++page)
             bus_.map_to_masked_sub(0, page, size_t(sub_idx));
@@ -327,7 +327,7 @@ void Atari2600System::configure_bus_memory_map() {
 
     // ── Mirror cart pages (17-31) to the same MMIO handler as page 16 ───
     // A12=1 always selects the cartridge; pages 17-31 are mirrors of page 16.
-    int cart_mmio = bus_mem_.slot(atari2600_chips::kCartSlot).mmio_idx;
+    int cart_mmio = board_.slot(atari2600_chips::kCartSlot).mmio_idx;
     if (cart_mmio >= 0) {
         for (size_t page = 17; page < 32; ++page)
             bus_.map_register_file(0, page, 1, size_t(cart_mmio));

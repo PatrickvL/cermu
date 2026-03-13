@@ -124,7 +124,7 @@ public:
 
 private:
     // ── Chips ────────────────────────────────────────────────────────────
-    MOS6502*    cpu_  = nullptr;     // MOS 6502 — owned by bus_mem_
+    MOS6502*    cpu_  = nullptr;     // MOS 6502 — owned by board_
     mc6847_t    vdg_;                // MC6847 Video Display Generator — stack member
     i8255_t     ppi_;                // Intel 8255 PPI (keyboard + cassette ctrl)
     mos6522_t   via_;                // MOS 6522 VIA (timers, cassette, printer)
@@ -140,9 +140,9 @@ private:
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using Bus = MemoryBus<AcornAtomBusSpec>;
     using PT  = PackingTraits<AcornAtomBusSpec>;
-    using Mem = Board<AcornAtomBusSpec>;
+    using MainBoard = Board<AcornAtomBusSpec>;
     Bus bus_;
-    Mem bus_mem_{kAcornAtomChips};
+    MainBoard board_{kAcornAtomChips};
 
     // ── Display ──────────────────────────────────────────────────────────
     uint32_t framebuffer_[acorn_atom_constants::FB_WIDTH *

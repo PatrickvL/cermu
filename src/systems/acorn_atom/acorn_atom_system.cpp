@@ -194,22 +194,22 @@ bool AcornAtomSystem::apply_configuration() { return true; }
 
 bool AcornAtomSystem::initialize() {
     printf("Acorn Atom: Initializing system\n");
-    register_board(&bus_mem_);
+    register_board(&board_);
 
     // ── Pre-bind MMIO chips, then factory-create memory chips ──────────
-    bus_mem_.bind_chip(acorn_atom_chips::kPpiSlot, &ppi_);
-    bus_mem_.bind_chip(acorn_atom_chips::kViaSlot, &via_);
-    bus_mem_.create_chips(&pins_);
-    basic_rom_ = bus_mem_.chip_as<ROMChip>(acorn_atom_chips::kBasicSlot);
-    fp_rom_    = bus_mem_.chip_as<ROMChip>(acorn_atom_chips::kFpRomSlot);
-    os_rom_    = bus_mem_.chip_as<ROMChip>(acorn_atom_chips::kOsRomSlot);
+    board_.bind_chip(acorn_atom_chips::kPpiSlot, &ppi_);
+    board_.bind_chip(acorn_atom_chips::kViaSlot, &via_);
+    board_.create_chips(&pins_);
+    basic_rom_ = board_.chip_as<ROMChip>(acorn_atom_chips::kBasicSlot);
+    fp_rom_    = board_.chip_as<ROMChip>(acorn_atom_chips::kFpRomSlot);
+    os_rom_    = board_.chip_as<ROMChip>(acorn_atom_chips::kOsRomSlot);
 
     // Direct pointer for MC6847 rendering
-    video_ram_ptr_ = bus_mem_.chip_buffer(
+    video_ram_ptr_ = board_.chip_buffer(
         static_cast<PT::ChipId>(acorn_atom_chips::kVideoRamId));
 
     // ── Init chips ──────────────────────────────────────────────────────
-    cpu_ = bus_mem_.chip_as<MOS6502>(acorn_atom_chips::kCpuSlot);
+    cpu_ = board_.chip_as<MOS6502>(acorn_atom_chips::kCpuSlot);
     pins_ = cpu_->init();
     vdg_.init();
     ppi_.init();
@@ -228,7 +228,7 @@ bool AcornAtomSystem::initialize() {
     }
 
     // ── Register all manifest-created chips for Hardware menu ────────
-    register_bus_chips(bus_mem_);
+    register_bus_chips(board_);
 
     printf("Acorn Atom: System initialized (RAM: %dKB)\n", ram_size_kb_);
     system_ready_ = true;
@@ -242,7 +242,7 @@ void AcornAtomSystem::reset() {
     pins_ = cpu_->reset(pins_);
     vdg_.init();
     // Reset all manifest chips (PPI, VIA; RAM/ROM are no-op)
-    bus_mem_.reset_chips();
+    board_.reset_chips();
     ppi_.set_port_b_read_callback(ppi_keyboard_scan, this);
     via_.interrupt_bit = BUS_IRQ_BIT;
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
@@ -405,7 +405,7 @@ void AcornAtomSystem::configure_bus_memory_map() {
     //   - OS ROM 16 pages ($F000–$FFFF)
     //   - PPI MMIO via MaskedSubTable on page $B0
     //   - VIA MMIO via MaskedSubTable on page $B8
-    bus_mem_.apply(bus_);
+    board_.apply(bus_);
 
     // ── Trim RAM to actual configured size ──────────────────────────────
     // Pages above the real RAM size get unmapped.  ROM overlays and MMIO
@@ -426,14 +426,14 @@ void AcornAtomSystem::configure_bus_memory_map() {
     // ── PPI page ($B0) — update MaskedSubTable base chip ────────────────
     // apply() captured the base as RAM page $B0.  If RAM doesn't reach
     // that page, switch the base to open bus.
-    const int ppi_sub = bus_mem_.slot(acorn_atom_chips::kPpiSlot).sub_table_idx;
+    const int ppi_sub = board_.slot(acorn_atom_chips::kPpiSlot).sub_table_idx;
     if (ppi_sub >= 0 && ram_pages <= 0xB0) {
         bus_.set_masked_base(0, size_t(ppi_sub),
             PT::kNoChipSelected, PT::kNoChipSelectedWrite);
     }
 
     // ── VIA page ($B8) — same treatment ─────────────────────────────────
-    const int via_sub = bus_mem_.slot(acorn_atom_chips::kViaSlot).sub_table_idx;
+    const int via_sub = board_.slot(acorn_atom_chips::kViaSlot).sub_table_idx;
     if (via_sub >= 0 && ram_pages <= 0xB8) {
         bus_.set_masked_base(0, size_t(via_sub),
             PT::kNoChipSelected, PT::kNoChipSelectedWrite);

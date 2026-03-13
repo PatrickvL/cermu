@@ -109,11 +109,11 @@ public:
 
 private:
     // Chip instances
-    MOS6502* cpu_ = nullptr;         // MOS6502 CPU — owned by bus_mem_
+    MOS6502* cpu_ = nullptr;         // MOS6502 CPU — owned by board_
     pia6820_t pia_;                  // PIA 6820 — pre-bound member
     TextTerminal* terminal_;         // Text terminal (40x24)
     
-    // Memory chips — owned by bus_mem_, borrowed here for post-init access
+    // Memory chips — owned by board_, borrowed here for post-init access
     ROMChip* monitor_rom_ = nullptr;  // Woz Monitor ROM at $FF00-$FFFF (256 bytes)
     ROMChip* basic_rom_   = nullptr;  // Optional Apple 1 BASIC (4KB at various addresses)
     ROMChip* char_rom_    = nullptr;  // Signetics 2513 character ROM (512 bytes)
@@ -121,9 +121,9 @@ private:
     // MemoryBus — declarative setup via chip manifest + Board::apply()
     using Bus = MemoryBus<Apple1BusSpec>;
     using PT  = PackingTraits<Apple1BusSpec>;
-    using Mem = Board<Apple1BusSpec>;
+    using MainBoard = Board<Apple1BusSpec>;
     Bus bus_;
-    Mem bus_mem_{kApple1Chips};
+    MainBoard board_{kApple1Chips};
 
     // System state
     uint32_t cycles_per_frame_;

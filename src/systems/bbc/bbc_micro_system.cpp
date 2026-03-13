@@ -135,7 +135,7 @@ BBCMicroSystem::~BBCMicroSystem() {
     delete cpu_;    cpu_ = nullptr;
     delete crtc_;   crtc_ = nullptr;
     delete psg_;    psg_ = nullptr;
-    // memory_ points into the unified buffer (owned by bus_mem_); don't free.
+    // memory_ points into the unified buffer (owned by board_); don't free.
     // Paged ROM data lives in the unified buffer; no manual cleanup.
 }
 
@@ -166,13 +166,13 @@ bool BBCMicroSystem::apply_configuration() {
 
 bool BBCMicroSystem::initialize() {
     printf("BBC Micro: Initializing system\n");
-    register_board(&bus_mem_);
+    register_board(&board_);
 
     // ── Factory-create memory chips from manifest ─────────────────────
-    bus_mem_.create_chips(&pins_);
-    ram_chip_        = bus_mem_.chip_as<RAMChip>(bbc_chips::kRamSlot);
-    paged_rom_chip_  = bus_mem_.chip_as<ROMChip>(bbc_chips::kPagedRomSlot);
-    os_rom_chip_     = bus_mem_.chip_as<ROMChip>(bbc_chips::kOsRomSlot);
+    board_.create_chips(&pins_);
+    ram_chip_        = board_.chip_as<RAMChip>(bbc_chips::kRamSlot);
+    paged_rom_chip_  = board_.chip_as<ROMChip>(bbc_chips::kPagedRomSlot);
+    os_rom_chip_     = board_.chip_as<ROMChip>(bbc_chips::kOsRomSlot);
 
     // ── Convenience pointer for rendering functions ─────────────────────
     memory_ = ram_chip_->data();
@@ -246,7 +246,7 @@ bool BBCMicroSystem::initialize() {
     register_chips();
 
     // Register memory and ROM chips — transfer ownership
-    register_bus_chips(bus_mem_);
+    register_bus_chips(board_);
 
     printf("BBC Micro: System initialized\n");
     return true;
@@ -369,7 +369,7 @@ void BBCMicroSystem::configure_bus_memory_map() {
     //   $C0-$FF: OS ROM (read) — overrides clipped paged ROM pages
     //
     // We fix up: write-protect ROM regions, unmap I/O pages, select active bank.
-    bus_mem_.apply(bus_);
+    board_.apply(bus_);
 
     // Write-protect ROM regions ($80-$FF)
     for (size_t page = 0x80; page < 0x100; ++page)

@@ -139,11 +139,11 @@ bool SpectrumSystem<V>::apply_configuration() {
 template<SpectrumVariant V>
 bool SpectrumSystem<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
-    register_board(&bus_mem_);
+    register_board(&board_);
 
     // ── Create chips via factory, wire the bus ────────────────────────
-    bus_mem_.create_chips(&pins_);
-    bus_mem_.apply(bus_);
+    board_.create_chips(&pins_);
+    board_.apply(bus_);
 
     // ── Configure page tables for this variant ──────────────────────────
     configure_bus_memory_map();
@@ -173,7 +173,7 @@ bool SpectrumSystem<V>::initialize() {
         register_chip(&ay_,
             "AY-3-8912 Sound", "AY-3-8912", "Sound", 0);
     }
-    register_bus_chips(bus_mem_);
+    register_bus_chips(board_);
 
     printf("%s: System initialized (%dKB RAM)\n", Traits::name, Traits::ram_size_kb);
     system_ready_ = true;
@@ -281,7 +281,7 @@ void SpectrumSystem<V>::configure_bus_memory_map() {
     // apply() establishes the default map from the manifest:
     //   48K:  RAM pages 0-255 (read+write), ROM overlays read pages 0-63
     //   128K: RAM pages 0-255 (read+write from first 64KB), ROM overlays read pages 0-63
-    bus_mem_.apply(bus_);
+    board_.apply(bus_);
 
     // ROM region ($0000-$3FFF): no writes — unmap write pages
     for (size_t page = 0; page < 64; ++page)
@@ -314,10 +314,10 @@ void SpectrumSystem<V>::configure_bus_memory_map() {
         constexpr size_t kPagesPerBank = 64;
         bool use_bank7 = (bank_select_ & 0x08) != 0;
         size_t screen_bank = use_bank7 ? 7 : 5;
-        screen_ram_ptr_ = bus_mem_.chip_buffer(ChipId(screen_bank * kPagesPerBank));
+        screen_ram_ptr_ = board_.chip_buffer(ChipId(screen_bank * kPagesPerBank));
     } else {
         // 48K: screen starts at $4000 = page $40 = chip ID 64
-        screen_ram_ptr_ = bus_mem_.chip_buffer(ChipId(0x40));
+        screen_ram_ptr_ = board_.chip_buffer(ChipId(0x40));
     }
 }
 
@@ -344,7 +344,7 @@ void SpectrumSystem<V>::update_banking() {
     // Screen bank: bit 3 selects bank 5 or 7
     bool use_bank7 = (bank_select_ & 0x08) != 0;
     size_t screen_bank = use_bank7 ? 7 : 5;
-    screen_ram_ptr_ = bus_mem_.chip_buffer(ChipId(screen_bank * kPagesPerBank));
+    screen_ram_ptr_ = board_.chip_buffer(ChipId(screen_bank * kPagesPerBank));
 }
 
 // ============================================================================
@@ -610,7 +610,7 @@ bool SpectrumSystem<V>::load_roms() {
         return false;
     }
 
-    auto* rom = bus_mem_.template chip_as<ROMChip>(spectrum_chips::kRomSlot);
+    auto* rom = board_.template chip_as<ROMChip>(spectrum_chips::kRomSlot);
     if (!rom) {
         printf("Spectrum: ROM chip not created\n");
         return false;

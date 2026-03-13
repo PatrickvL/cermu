@@ -110,11 +110,11 @@ private:
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using Bus = MemoryBus<BBCMicroBusSpec>;
     using PT  = PackingTraits<BBCMicroBusSpec>;
-    using Mem = Board<BBCMicroBusSpec>;
+    using MainBoard = Board<BBCMicroBusSpec>;
     Bus bus_;
-    Mem bus_mem_{kBBCMicroChips};
+    MainBoard board_{kBBCMicroChips};
 
-    // Memory chip pointers (into registered_chips_; bus_mem_ owns buffer)
+    // Memory chip pointers (into registered_chips_; board_ owns buffer)
     RAMChip* ram_chip_       = nullptr;
     ROMChip* paged_rom_chip_ = nullptr;   // 256 KB pool (16 × 16 KB sideways slots)
     ROMChip* os_rom_chip_    = nullptr;

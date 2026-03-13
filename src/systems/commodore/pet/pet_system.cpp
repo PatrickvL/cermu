@@ -243,19 +243,19 @@ bool PETSystem::apply_configuration() {
 
 bool PETSystem::initialize() {
     printf("PET: Initializing system\n");
-    register_board(&bus_mem_);
+    register_board(&board_);
 
     // ── Create memory chips from manifest and wire bus ─────────────────
-    bus_mem_.create_chips(&pins_);
-    bus_mem_.apply(bus_);
+    board_.create_chips(&pins_);
+    board_.apply(bus_);
 
-    main_ram_chip_    = bus_mem_.template chip_as<RAMChip>(0);
-    screen_ram_chip_  = bus_mem_.template chip_as<RAMChip>(1);
-    basic_rom_b_chip_ = bus_mem_.template chip_as<ROMChip>(2);
-    basic_rom_c_chip_ = bus_mem_.template chip_as<ROMChip>(3);
-    basic_rom_d_chip_ = bus_mem_.template chip_as<ROMChip>(4);
-    editor_rom_chip_  = bus_mem_.template chip_as<ROMChip>(5);
-    kernal_rom_chip_  = bus_mem_.template chip_as<ROMChip>(6);
+    main_ram_chip_    = board_.template chip_as<RAMChip>(0);
+    screen_ram_chip_  = board_.template chip_as<RAMChip>(1);
+    basic_rom_b_chip_ = board_.template chip_as<ROMChip>(2);
+    basic_rom_c_chip_ = board_.template chip_as<ROMChip>(3);
+    basic_rom_d_chip_ = board_.template chip_as<ROMChip>(4);
+    editor_rom_chip_  = board_.template chip_as<ROMChip>(5);
+    kernal_rom_chip_  = board_.template chip_as<ROMChip>(6);
 
     // Screen RAM mirror at $8400-$87FF and configure memory map
     configure_memory_map();
@@ -343,7 +343,7 @@ bool PETSystem::initialize() {
         "PIA 2 (IEEE-488)", "6820", "I/O", pet_constants::PIA2_BASE);
     register_chip(static_cast<ChipBase*>(via_),
         "MOS 6522 VIA", "6522", "I/O", pet_constants::VIA_BASE);
-    register_bus_chips(bus_mem_);
+    register_bus_chips(board_);
 
     printf("PET: Initialization complete\n");
     return true;

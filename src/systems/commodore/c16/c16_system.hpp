@@ -194,11 +194,11 @@ private:
 
     // ── Memory bus (declarative manifest + page-pointer dispatch) ────────
     using Bus = MemoryBus<C264BusTraits::Spec>;
-    using Mem = Board<C264BusTraits::Spec>;
+    using MainBoard = Board<C264BusTraits::Spec>;
     Bus bus_;
-    Mem bus_mem_{kC264Chips};
+    MainBoard board_{kC264Chips};
 
-    // Convenience chip pointers (owned by bus_mem_, accessed via chip_as)
+    // Convenience chip pointers (owned by board_, accessed via chip_as)
     RAMChip* ram_         = nullptr;  // Up to 64KB RAM (C16/C116 use 16KB, Plus/4 uses 64KB)
     ROMChip* basic_rom_   = nullptr;  // BASIC ROM $8000-$BFFF (16KB)
     ROMChip* kernal_rom_  = nullptr;  // Kernal ROM $C000-$FFFF (16KB)

@@ -54,14 +54,14 @@ bool BombJackSystem::apply_configuration() { return true; }
 
 bool BombJackSystem::initialize() {
     printf("Bomb Jack: Initializing arcade system\n");
-    register_board(&main_bus_mem_);
+    register_board(&main_board_);
 
     // ── Create memory chips from manifest and wire buses ─────────────────
-    main_bus_mem_.create_chips(&main_pins_);
-    main_bus_mem_.apply(main_bus_);
+    main_board_.create_chips(&main_pins_);
+    main_board_.apply(main_bus_);
 
-    sound_bus_mem_.create_chips(&sound_pins_);
-    sound_bus_mem_.apply(sound_bus_);
+    sound_board_.create_chips(&sound_pins_);
+    sound_board_.apply(sound_bus_);
 
     // ── Init chips ───────────────────────────────────────────────────────
     main_cpu_  = new ZilogZ80A();
@@ -77,8 +77,8 @@ bool BombJackSystem::initialize() {
         "Main Z80A CPU", "Z80A", "CPU", 0x0000);
     register_chip(static_cast<ChipBase*>(sound_cpu_),
         "Sound Z80A CPU", "Z80A", "CPU", 0x0000);
-    register_bus_chips(main_bus_mem_);
-    register_bus_chips(sound_bus_mem_);
+    register_bus_chips(main_board_);
+    register_bus_chips(sound_board_);
 
     system_ready_ = true;
     return true;

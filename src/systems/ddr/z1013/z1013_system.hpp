@@ -158,7 +158,7 @@ public:
 
 private:
     // ── Chips ────────────────────────────────────────────────────────────
-    U880*       cpu_  = nullptr;     // U880 (Z80A clone) — owned by bus_mem_
+    U880*       cpu_  = nullptr;     // U880 (Z80A clone) — owned by board_
     z80_pio_t   pio_;                // U855 PIO (keyboard + cassette)
 
     // ── Memory — chip pointers for post-init access (owned by Board) ─
@@ -174,9 +174,9 @@ private:
     using BT  = Z1013BusTraits<V>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using Mem = Board<typename BT::Spec>;
+    using MainBoard = Board<typename BT::Spec>;
     Bus bus_;
-    Mem bus_mem_{BT::kManifest};
+    MainBoard board_{BT::kManifest};
 
     // ── Display ──────────────────────────────────────────────────────────
     uint32_t framebuffer_[z1013_constants::FB_WIDTH *
