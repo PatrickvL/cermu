@@ -202,7 +202,6 @@ PETSystem::PETSystem()
 }
 
 PETSystem::~PETSystem() {
-    delete cpu_;   cpu_  = nullptr;
     delete pia1_;  pia1_ = nullptr;
     delete pia2_;  pia2_ = nullptr;
     delete via_;   via_  = nullptr;
@@ -256,6 +255,7 @@ bool PETSystem::initialize() {
     basic_rom_d_chip_ = board_.template chip_as<ROMChip>(4);
     editor_rom_chip_  = board_.template chip_as<ROMChip>(5);
     kernal_rom_chip_  = board_.template chip_as<ROMChip>(6);
+    cpu_              = board_.template chip_as<MOS6502>(pet_chips::kCpuSlot);
 
     // Screen RAM mirror at $8400-$87FF and configure memory map
     configure_memory_map();
@@ -267,7 +267,6 @@ bool PETSystem::initialize() {
     }
 
     // ---- CPU (MOS 6502) ----
-    cpu_ = new MOS6502();
     cpu_->init();
     cpu_->reset(0);
 
@@ -333,8 +332,6 @@ bool PETSystem::initialize() {
     }
 
     // Register chips for the Hardware debug menu
-    register_chip(static_cast<ChipBase*>(cpu_),
-        "MOS 6502 CPU", "6502", "CPU", 0x0000);
     register_chip(static_cast<ChipBase*>(crtc_),
         "MC6845 CRTC", "6845", "Video", pet_constants::CRTC_BASE);
     register_chip(static_cast<ChipBase*>(pia1_),

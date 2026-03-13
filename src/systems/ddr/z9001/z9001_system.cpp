@@ -48,7 +48,7 @@ Z9001System<V>::Z9001System() : System(), pins_(Z9001_BUS_DEFAULT_STATE) {
 }
 
 template<Z9001Variant V>
-Z9001System<V>::~Z9001System() { delete cpu_; }
+Z9001System<V>::~Z9001System() {}
 
 template<Z9001Variant V>
 const SystemDescriptor& Z9001System<V>::get_descriptor() const {
@@ -78,12 +78,12 @@ bool Z9001System<V>::initialize() {
     if constexpr (Traits::has_color_ram) {
         color_ram_chip_ = board_.template chip_as<RAMChip>(Traits::kColorRamSlot);
     }
+    cpu_ = board_.template chip_as<U880>(Traits::kCpuSlot);
 
     // ── Trim RAM pages for KC87 (48 KB out of 64 KB allocated) ──────────
     configure_bus_memory_map();
 
     // ── Init chips ──────────────────────────────────────────────────────
-    cpu_ = new U880();
     pins_ = cpu_->init();
     pio1_.init();
     pio2_.init();
@@ -99,8 +99,6 @@ bool Z9001System<V>::initialize() {
     }
 
     // ── Register chips for Hardware menu ────────────────────────────────
-    register_chip(static_cast<ChipBase*>(cpu_),
-        "U880 CPU", "U880", "CPU", 0x0000);
     register_chip(&pio1_,
         "U855 PIO #1", "U855", "I/O", z9001_constants::PIO1_PORT_A);
     register_chip(&pio2_,
@@ -114,7 +112,7 @@ bool Z9001System<V>::initialize() {
     return true;
 }
 
-template<Z9001Variant V> void Z9001System<V>::shutdown() { delete cpu_; cpu_ = nullptr; system_ready_ = false; }
+template<Z9001Variant V> void Z9001System<V>::shutdown() { cpu_ = nullptr; system_ready_ = false; }
 template<Z9001Variant V> void Z9001System<V>::reset() {
     if (!cpu_) return;
     pins_ = cpu_->reset(pins_);

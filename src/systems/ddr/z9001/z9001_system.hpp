@@ -37,6 +37,7 @@ template<> struct Z9001VariantTraits<Z9001Variant::Z9001> {
     // Slot indices into kZ9001Chips
     static constexpr size_t kVideoRamSlot        = 1;
     static constexpr size_t kOsRomSlot           = 2;
+    static constexpr size_t kCpuSlot             = 3;
 };
 
 template<> struct Z9001VariantTraits<Z9001Variant::KC87> {
@@ -52,6 +53,7 @@ template<> struct Z9001VariantTraits<Z9001Variant::KC87> {
     static constexpr size_t kColorRamSlot        = 3;
     static constexpr size_t kVideoRamSlot        = 4;
     static constexpr size_t kOsRomSlot           = 5;
+    static constexpr size_t kCpuSlot             = 6;
 };
 
 // ============================================================================
@@ -82,7 +84,9 @@ template<> struct Z9001VariantTraits<Z9001Variant::KC87> {
 inline constexpr auto kZ9001Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 16384, 0, "RAM"},
     Slot<RAMChip>{0xEC00,  1024, 0, "Video RAM"},
-    Slot<ROMChip>{0xF000,  4096, 0, "OS ROM"}
+    Slot<ROMChip>{0xF000,  4096, 0, "OS ROM"},
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<U880>   {0, 0, 0, "U880"}
 );
 
 inline constexpr auto kKC87Chips = make_chip_manifest(
@@ -91,7 +95,9 @@ inline constexpr auto kKC87Chips = make_chip_manifest(
     Slot<ROMChip>{0xE000,  2048, 0, "BASIC ROM hi"},
     Slot<RAMChip>{0xE800,  1024, 0, "Color RAM"},
     Slot<RAMChip>{0xEC00,  1024, 0, "Video RAM"},
-    Slot<ROMChip>{0xF000,  4096, 0, "OS ROM"}
+    Slot<ROMChip>{0xF000,  4096, 0, "OS ROM"},
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<U880>   {0, 0, 0, "U880"}
 );
 
 // BusTraits — selects the correct manifest per variant
@@ -144,7 +150,7 @@ public:
 
 private:
     // ── Chips ────────────────────────────────────────────────────────────
-    U880*       cpu_  = nullptr;     // U880 @ 2.4576 MHz
+    U880*       cpu_  = nullptr;     // U880 @ 2.4576 MHz — owned by board_
     z80_pio_t   pio1_;               // U855 PIO #1 (keyboard + system control)
     z80_pio_t   pio2_;               // U855 PIO #2 (keyboard + cassette)
     z80_ctc_t   ctc_;                // U857 CTC (timing + sound)

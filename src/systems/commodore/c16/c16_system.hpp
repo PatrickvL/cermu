@@ -84,13 +84,16 @@ template<> struct C264SeriesVariantTraits<C264SeriesVariant::PLUS4> {
 inline constexpr auto kC264Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
     Slot<ROMChip>{0x8000, 16384, 0, "BASIC ROM"},
-    Slot<ROMChip>{0xC000, 16384, 0, "KERNAL ROM"}
+    Slot<ROMChip>{0xC000, 16384, 0, "KERNAL ROM"},
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<CSG7501>{0, 0, 0, "CSG 7501"}
 );
 
 namespace c264_slot {
     inline constexpr size_t kRam       = 0;
     inline constexpr size_t kBasicRom  = 1;
     inline constexpr size_t kKernalRom = 2;
+    inline constexpr size_t kCpuSlot   = 3;
 }
 
 struct C264BusTraits {
@@ -188,7 +191,7 @@ public:
 
 private:
     // Chip instances
-    CSG7501* cpu_ = nullptr;
+    CSG7501* cpu_ = nullptr;          // MOS 7501/8501 CPU — owned by board_
     ted7360_t* ted_;
     bus_state_t bus_state_;
 

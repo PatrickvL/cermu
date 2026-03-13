@@ -55,7 +55,7 @@ KC85System<V>::KC85System() : System(), pins_(KC85_BUS_DEFAULT_STATE) {
 }
 
 template<KC85Variant V>
-KC85System<V>::~KC85System() { delete cpu_; }
+KC85System<V>::~KC85System() {}
 
 template<KC85Variant V>
 const SystemDescriptor& KC85System<V>::get_descriptor() const {
@@ -81,6 +81,7 @@ bool KC85System<V>::initialize() {
     if constexpr (Traits::has_basic_rom) {
         basic_rom_chip_ = board_.template chip_as<ROMChip>(Traits::kBasicRomSlot);
     }
+    cpu_ = board_.template chip_as<U880>(Traits::kCpuSlot);
 
     // ── Set initial banking state ───────────────────────────────────────
     caos_rom_on_  = true;
@@ -92,7 +93,6 @@ bool KC85System<V>::initialize() {
     configure_bus_memory_map();
 
     // ── Init chips ──────────────────────────────────────────────────────
-    cpu_ = new U880();
     pins_ = cpu_->init();
     pio1_.init();
     pio2_.init();
@@ -104,8 +104,6 @@ bool KC85System<V>::initialize() {
     load_roms();
 
     // ── Register chips for Hardware menu ────────────────────────────────
-    register_chip(static_cast<ChipBase*>(cpu_),
-        "U880 CPU", "U880", "CPU", 0x0000);
     register_chip(&pio1_,
         "U855 PIO #1", "U855", "I/O", kc85_constants::PIO_A_DATA);
     register_chip(&pio2_,
@@ -121,7 +119,7 @@ bool KC85System<V>::initialize() {
     return true;
 }
 
-template<KC85Variant V> void KC85System<V>::shutdown() { delete cpu_; cpu_ = nullptr; system_ready_ = false; }
+template<KC85Variant V> void KC85System<V>::shutdown() { cpu_ = nullptr; system_ready_ = false; }
 template<KC85Variant V> void KC85System<V>::reset() {
     if (!cpu_) return;
     pins_ = cpu_->reset(pins_);

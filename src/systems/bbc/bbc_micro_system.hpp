@@ -29,13 +29,16 @@
 inline constexpr auto kBBCMicroChips = make_chip_manifest(
     Slot<RAMChip>{0x0000,  32768, 0, "RAM"},
     Slot<ROMChip>{0x8000, 262144, 0, "Paged ROM"},      // 16 × 16 KB banks
-    Slot<ROMChip>{0xC000,  16384, 0, "MOS ROM"}
+    Slot<ROMChip>{0xC000,  16384, 0, "MOS ROM"},
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<MOS6502>{0, 0, 0, "MOS 6502"}
 );
 
 namespace bbc_chips {
     inline constexpr size_t kRamSlot       = 0;
     inline constexpr size_t kPagedRomSlot  = 1;
     inline constexpr size_t kOsRomSlot     = 2;
+    inline constexpr size_t kCpuSlot       = 3;
 }
 
 using BBCMicroBusSpec = ManifestBusSpec<kBBCMicroChips, 16, 8>;
@@ -101,7 +104,7 @@ public:
 
 private:
     // Chip instances
-    MOS6502*    cpu_ = nullptr;
+    MOS6502*    cpu_ = nullptr;         // MOS6502 CPU — owned by board_
     mc6845_t*   crtc_ = nullptr;
     sn76489_t*  psg_ = nullptr;
     mos6522_t   system_via_;        // System VIA ($FE40-$FE5F)

@@ -91,17 +91,22 @@ template<> struct SpectrumVariantTraits<SpectrumVariant::ZX128K> {
 //
 inline constexpr auto kSpectrum48KChips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
-    Slot<ROMChip>{0x0000, 16384, 0, "ROM"}
+    Slot<ROMChip>{0x0000, 16384, 0, "ROM"},
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<ZilogZ80A>{0, 0, 0, "Z80A"}
 );
 
 inline constexpr auto kSpectrum128KChips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 131072, 0, "RAM"},
-    Slot<ROMChip>{0x0000,  32768, 0, "ROM"}
+    Slot<ROMChip>{0x0000,  32768, 0, "ROM"},
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<ZilogZ80A>{0, 0, 0, "Z80A"}
 );
 
 namespace spectrum_chips {
     inline constexpr size_t kRamSlot = 0;
     inline constexpr size_t kRomSlot = 1;
+    inline constexpr size_t kCpuSlot = 2;
 }
 
 // BusTraits — selects the correct manifest per variant
@@ -174,7 +179,7 @@ private:
     // CHIPS
     // ========================================================================
 
-    ZilogZ80A*      cpu_ = nullptr;   // Z80A CPU @ 3.5 MHz
+    ZilogZ80A*      cpu_ = nullptr;   // Z80A CPU @ 3.5 MHz — owned by board_
     ferranti_ula_t  ula_;             // Ferranti ULA (video, keyboard, tape, contention)
     ay_3_8910_t     ay_;              // AY-3-8912 sound (128K only, but always present for simplicity)
 
