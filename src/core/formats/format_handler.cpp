@@ -79,6 +79,20 @@ static uint8_t* format_try_container_extract(const char* filepath, size_t* out_s
 
     if (container_path.empty() || entry_name.empty()) return nullptr;
 
+    // The file dialog appends "##<index>" to container entry names for
+    // ImGui ID uniqueness.  If present, extract the index directly for
+    // reliable lookup (avoids ambiguity when entries share a name).
+    int direct_index = -1;
+    size_t hash_pos = entry_name.find("##");
+    if (hash_pos != std::string::npos && hash_pos + 2 < entry_name.size()) {
+        char* end = nullptr;
+        long idx = strtol(entry_name.c_str() + hash_pos + 2, &end, 10);
+        if (end && *end == '\0' && idx >= 0) {
+            direct_index = static_cast<int>(idx);
+        }
+        entry_name.erase(hash_pos);  // strip suffix for fallback name match
+    }
+
     // Check if the container has a known container-format extension.
     std::string container_ext = vfs_extension(container_path.c_str());
     if (container_ext.empty()) return nullptr;
@@ -98,10 +112,24 @@ static uint8_t* format_try_container_extract(const char* filepath, size_t* out_s
                                   entries, FORMAT_CONTAINER_MAX_ENTRIES);
 
     int match_index = -1;
-    for (int i = 0; i < count; ++i) {
-        if (cermu_strcasecmp(entries[i].display_name, entry_name.c_str()) == 0) {
-            match_index = entries[i].index;
-            break;
+
+    // Prefer direct index lookup from the ##<index> suffix.
+    if (direct_index >= 0) {
+        for (int i = 0; i < count; ++i) {
+            if (entries[i].index == direct_index) {
+                match_index = direct_index;
+                break;
+            }
+        }
+    }
+
+    // Fall back to name-based matching (for paths without ##<index>).
+    if (match_index < 0) {
+        for (int i = 0; i < count; ++i) {
+            if (cermu_strcasecmp(entries[i].display_name, entry_name.c_str()) == 0) {
+                match_index = entries[i].index;
+                break;
+            }
         }
     }
 
@@ -138,6 +166,11 @@ uint8_t* format_read_entire_file(const char* filepath, size_t* out_size) {
 
 std::string format_effective_extension(const char* filepath) {
     std::string ext = vfs_extension(filepath);
+    // Strip any "##<index>" suffix appended by the file dialog for ImGui
+    // ID uniqueness (container entries may have duplicate names).
+    size_t hash_pos = ext.find("##");
+    if (hash_pos != std::string::npos)
+        ext.erase(hash_pos);
     if (!ext.empty()) return ext;
 
     // Files inside Commodore container formats (D64, T64, LNX) have no

@@ -28,6 +28,28 @@
 #include <ctime>
 #include <algorithm>
 #include <fstream>
+#include <unordered_map>
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/// Disambiguate duplicate fileNameExt values in a scan result so that IGFD
+/// never sees two entries with the same label (which causes duplicate ImGui
+/// IDs).  Appends " (2)", " (3)", … to repeated names.  The first
+/// occurrence keeps its original name.  Skips ".." since it should only
+/// appear once (ensured by not emitting it from the OS scan).
+static void deduplicate_names(std::vector<IGFD::FileInfos>& entries) {
+    std::unordered_map<std::string, int> seen;
+    for (auto& e : entries) {
+        if (e.fileNameExt == ".." || e.fileNameExt == ".") continue;
+        int& count = seen[e.fileNameExt];
+        ++count;
+        if (count > 1) {
+            e.fileNameExt += " (" + std::to_string(count) + ")";
+        }
+    }
+}
 
 // ============================================================================
 // Static state
@@ -481,6 +503,11 @@ std::vector<IGFD::FileInfos> VfsFileSystem::scan_real_directory(const std::strin
     if (n > 0 && files) {
         for (int i = 0; i < n; ++i) {
             struct dirent* ent = files[i];
+
+            // Skip "." and ".." — we already emit ".." manually above,
+            // and scandir (unlike std::filesystem) returns both.
+            if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) continue;
+
             IGFD::FileType ft;
 
             switch (ent->d_type) {
@@ -569,6 +596,7 @@ std::vector<IGFD::FileInfos> VfsFileSystem::scan_vfs_entries(
         res.push_back(info);
     }
 
+    deduplicate_names(res);
     return res;
 }
 
@@ -605,10 +633,15 @@ std::vector<IGFD::FileInfos> VfsFileSystem::scan_container_entries(
 
         IGFD::FileInfos info;
         info.filePath    = dialog_dir;
-        info.fileNameExt = entry.display_name;
+        // Append ##<index> so ImGui generates a unique ID per entry even
+        // when multiple container entries share the same display_name
+        // (common on D64/T64).  ImGui hides everything after "##" in
+        // the rendered label.  The extraction code parses this suffix
+        // to locate the entry by index rather than by name.
+        info.fileNameExt = std::string(entry.display_name) + "##" + std::to_string(entry.index);
         info.fileType.SetContent(IGFD::FileType::ContentType::File);
 
-        cached_sizes_[dialog_dir + "/" + entry.display_name] = entry.size;
+        cached_sizes_[dialog_dir + "/" + info.fileNameExt] = entry.size;
         res.push_back(info);
     }
 
