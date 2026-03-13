@@ -19,6 +19,7 @@
 //
 
 #include "core/component_base.hpp"
+#include "chip/cpu/cpu_chip_base.hpp"  // CpuChipBase for cpu_chip_
 
 #include <cstring>
 #include <memory>
@@ -120,6 +121,25 @@ public:
     /// Remove all ports from this board.
     void clear_ports();
 
+    // ── Main CPU ────────────────────────────────────────────────────────────
+    //
+    // Cached pointer to the first CpuChipBase-derived chip on this board.
+    // Set by Board::create_chips() via the is_cpu flag in the manifest.
+    // nullptr for boards with no CPU (e.g. a peripheral expansion board).
+    //
+
+    /// Raw accessor — returns the CpuChipBase pointer (or nullptr).
+    [[nodiscard]] CpuChipBase* cpu_chip() noexcept { return cpu_chip_; }
+    [[nodiscard]] const CpuChipBase* cpu_chip() const noexcept { return cpu_chip_; }
+
+    /// Typed accessor — returns the CPU cast to the requested concrete type.
+    /// The caller must ensure T matches the actual CPU type on this board.
+    template<typename T>
+    [[nodiscard]] T* cpu() noexcept { return static_cast<T*>(cpu_chip_); }
+
+    template<typename T>
+    [[nodiscard]] const T* cpu() const noexcept { return static_cast<const T*>(cpu_chip_); }
+
 protected:
     void register_component(ComponentBase* c) {
         if (c) components_.push_back(c);
@@ -130,6 +150,7 @@ protected:
     }
 
     std::vector<std::unique_ptr<Port>> ports_;
+    CpuChipBase* cpu_chip_ = nullptr;  // First CpuChipBase-derived chip (set by Board::create_chips)
 
 private:
     std::vector<ComponentBase*> components_;  // non-owning; lifetime in Board<Spec>

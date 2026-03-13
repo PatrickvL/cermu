@@ -179,6 +179,11 @@ public:
 
             bind_chip(i, chip);
             owned_chips_.emplace_back(chip);
+
+            // Cache the first CPU chip on this board.
+            if (auto* as_cpu = dynamic_cast<CpuChipBase*>(chip);
+                !cpu_chip_ && as_cpu)
+                cpu_chip_ = as_cpu;
         }
     }
 

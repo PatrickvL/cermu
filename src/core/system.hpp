@@ -183,8 +183,6 @@ protected:
     struct ScreenRect { float x = 0, y = 0, w = 0, h = 0; };
     ScreenRect display_screen_rect_;
 
-
-
     // =========================================================================
     // REGISTERED CHIPS (generic for all systems)
     // =========================================================================
