@@ -496,6 +496,7 @@ if(BUILD_GUI)
         src/gui/system_selection_dialog.cpp
         src/gui/port_icons.cpp
         src/gui/vfs_file_system.cpp
+        src/gui/performance_gui.cpp
     )
 endif()
 

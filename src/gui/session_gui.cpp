@@ -439,6 +439,9 @@ void SessionGUI::render_frame() {
         render_about();
     }
     
+    // Performance metrics window
+    render_performance_window();
+
     // Let system render its debug windows (try_lock: skip if emu thread is busy)
     if (system_) {
         system_->render_debug_windows(nullptr, emu_mutex_);
@@ -766,6 +769,32 @@ void SessionGUI::render_menu_bar() {
     // View menu
     if (ImGui::BeginMenu("View")) {
         render_view_menu_generic();
+        ImGui::Separator();
+        if (ImGui::BeginMenu("Performance Statistics")) {
+            if (ImGui::MenuItem("Show Performance Graphs", nullptr, show_performance_)) {
+                show_performance_ = !show_performance_;
+            }
+            ImGui::Separator();
+            ImGui::BeginDisabled(!show_performance_);
+            if (ImGui::MenuItem("Show Frame Times", nullptr, show_perf_frame_time_))
+                show_perf_frame_time_ = !show_perf_frame_time_;
+            if (ImGui::MenuItem("Show VBlank Times", nullptr, show_perf_vblank_))
+                show_perf_vblank_ = !show_perf_vblank_;
+            if (ImGui::MenuItem("Show Headroom Bar", nullptr, show_perf_headroom_))
+                show_perf_headroom_ = !show_perf_headroom_;
+            if (ImGui::MenuItem("Show VPS", nullptr, show_perf_vps_))
+                show_perf_vps_ = !show_perf_vps_;
+            if (ImGui::MenuItem("Show FPS", nullptr, show_perf_fps_))
+                show_perf_fps_ = !show_perf_fps_;
+            if (ImGui::MenuItem("Show % Speed", nullptr, show_perf_speed_))
+                show_perf_speed_ = !show_perf_speed_;
+            ImGui::BeginDisabled(!show_perf_speed_);
+            if (ImGui::MenuItem("Show Speed Colors", nullptr, show_perf_colors_))
+                show_perf_colors_ = !show_perf_colors_;
+            ImGui::EndDisabled();
+            ImGui::EndDisabled();
+            ImGui::EndMenu();
+        }
         ImGui::EndMenu();
     }
     
@@ -1519,6 +1548,7 @@ void SessionGUI::emu_thread_func() {
     uint64_t pace_counter = 0;
     double accumulator = 0.0;
     bool was_running = false;
+    uint64_t last_frame_counter = 0;  // For frame-interval measurement
     std::vector<SDL_Event> events;  // Reuse allocation across loop iterations
 
     while (emu_thread_running_.load()) {
@@ -1538,6 +1568,10 @@ void SessionGUI::emu_thread_func() {
             pace_counter = SDL_GetPerformanceCounter();
             accumulator = 0.0;
             was_running = true;
+            last_frame_counter = pace_counter;
+            perf_metrics_.reset();
+            perf_metrics_.start_timestamp_s = static_cast<double>(pace_counter) /
+                static_cast<double>(SDL_GetPerformanceFrequency());
         }
 
         // ----- Drain input queue (brief input_mutex_ only) -----
@@ -1623,6 +1657,28 @@ void SessionGUI::emu_thread_func() {
                     ? static_cast<uint32_t>(frame_us)
                     : static_cast<uint32_t>(prev * 0.95 + frame_us * 0.05);
                 emu_frame_time_us_.store(smoothed, std::memory_order_relaxed);
+
+                // ---- Performance metrics ----
+                double now_s = static_cast<double>(t1) / freq;
+                double frame_ms = frame_us * 0.001;
+                perf_metrics_.frame_time.push(now_s, frame_ms);
+                perf_metrics_.frame_time_long.push(now_s, frame_ms);
+                // Actual wall-clock interval since the previous frame
+                double interval_since_last = static_cast<double>(t1 - last_frame_counter) / freq * 1000.0;
+                last_frame_counter = t1;
+                perf_metrics_.frame_interval.push(now_s, interval_since_last);
+                perf_metrics_.total_frames++;
+                perf_metrics_.uptime_s = now_s - perf_metrics_.start_timestamp_s;
+
+                // Speed: target / actual interval.  >100% means faster than real-time.
+                double interval_ms = perf_metrics_.frame_interval.ema();
+                double target_ms = target_frame_time * 1000.0;
+                if (interval_ms > 0.0)
+                    perf_metrics_.speed_percent = (target_ms / interval_ms) * 100.0;
+                // Max speed: target / emu time (headroom without throttle sleep)
+                if (frame_ms > 0.0)
+                    perf_metrics_.max_speed_percent = (target_ms / frame_ms) * 100.0;
+                perf_metrics_.target_fps = target_fps;
             }
 
             // Compute how many audio samples to generate (under lock for
@@ -1657,8 +1713,20 @@ void SessionGUI::emu_thread_func() {
         }
 
         // Write audio to ring buffer (lock-free SPSC, outside any mutex)
-        if (audio_got > 0)
-            audio_ring_->write(emu_audio_tmp_.data(), audio_got);
+        if (audio_got > 0) {
+            size_t written = audio_ring_->write(emu_audio_tmp_.data(), audio_got);
+            // Track overruns (samples dropped because ring was full)
+            if (written < audio_got)
+                perf_metrics_.audio_overruns.fetch_add(1, std::memory_order_relaxed);
+        }
+
+        // Track audio buffer fullness (% of ring capacity)
+        if (audio_ring_ && audio_ring_->capacity() > 0) {
+            double fill_pct = static_cast<double>(audio_ring_->available()) /
+                              static_cast<double>(audio_ring_->capacity()) * 100.0;
+            double now_s = static_cast<double>(SDL_GetPerformanceCounter()) / freq;
+            perf_metrics_.audio_buffer_fill.push(now_s, fill_pct);
+        }
 
         // ----- Yield CPU if we're ahead of schedule -----
         if (accumulator < target_frame_time * 0.5) {
