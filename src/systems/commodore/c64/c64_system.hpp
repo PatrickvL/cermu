@@ -158,7 +158,7 @@ private:
     // CONNECTOR PORTS — C64-SPECIFIC LAYOUT
     // =========================================================================
 public:
-    // Indices into ports_ for quick access (public for CIA1 callbacks)
+    // Indices into get_port() for quick access (public for CIA1 callbacks)
     static constexpr int PORT_CONTROL1   = 0;
     static constexpr int PORT_CONTROL2   = 1;
     static constexpr int PORT_IEC_SERIAL = 2;

@@ -1356,7 +1356,6 @@ void NintendoSystem<V>::power_cycle() {
 
 template<NintendoVariant V>
 void NintendoSystem<V>::setup_ports() {
-    ports_.clear();
 
     if constexpr (Traits::is_famicom) {
         // Famicom: hardwired controllers, 15-pin expansion port

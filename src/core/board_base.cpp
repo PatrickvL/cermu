@@ -35,3 +35,7 @@ const Port* BoardBase::get_port(int index) const {
         return ports_[index].get();
     return nullptr;
 }
+
+void BoardBase::clear_ports() {
+    ports_.clear();
+}

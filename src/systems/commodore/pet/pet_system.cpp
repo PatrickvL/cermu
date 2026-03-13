@@ -243,7 +243,7 @@ bool PETSystem::apply_configuration() {
 
 bool PETSystem::initialize() {
     printf("PET: Initializing system\n");
-    set_primary_board(&bus_mem_);
+    register_board(&bus_mem_);
 
     // ── Create memory chips from manifest and wire bus ─────────────────
     bus_mem_.create_chips(&pins_);

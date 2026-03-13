@@ -167,7 +167,7 @@ bool Atari2600System::apply_configuration() {
 
 bool Atari2600System::initialize() {
     printf("Atari2600: Initializing system\n");
-    set_primary_board(&bus_mem_);
+    register_board(&bus_mem_);
 
     // ── Factory-create TIA, RIOT, and CartChip from the manifest ────────
     bus_mem_.create_chips(&pins_);
@@ -550,7 +550,6 @@ void Atari2600System::update_joystick_state() {
 // ============================================================================
 
 void Atari2600System::setup_ports() {
-    ports_.clear();
 
     // The Atari 2600 uses the same DB-9 joystick connector as Commodore systems.
     // We use CONTROL_PORT_DB9 PortType since JoystickDevice already

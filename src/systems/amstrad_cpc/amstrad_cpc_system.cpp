@@ -103,7 +103,7 @@ bool AmstradCPCSystem<M>::apply_configuration() { return true; }
 template<CPCModel M>
 bool AmstradCPCSystem<M>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
-    set_primary_board(&bus_mem_);
+    register_board(&bus_mem_);
 
     // ── Factory-create memory chips from manifest ─────────────────────
     bus_mem_.create_chips(&pins_);

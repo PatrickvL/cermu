@@ -197,8 +197,8 @@ Port::Port(const PortDefinition& def, int port_index)
 Port::~Port() {
     // Don't call detach_device() here — it accesses device objects
     // (get_name, on_detach) that may already be destroyed when the
-    // owning System's destructor runs (owned_devices_ is
-    // destroyed before ports_ due to member declaration order).
+    // owning System's destructor runs (owned_devices_ is destroyed
+    // before primary_board_ which owns the ports).
     attached_devices_.clear();
 }
 

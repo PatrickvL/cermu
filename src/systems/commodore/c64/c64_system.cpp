@@ -1264,8 +1264,9 @@ void C64System::handle_controller_event(int controller, int button, bool pressed
     // joystick port for single-player games), controller 1 → Port 1.
     int port_index = (controller == 0) ? PORT_CONTROL2 : PORT_CONTROL1;
 
-    if (port_index < static_cast<int>(ports_.size())) {
-        auto* device = ports_[port_index]->get_attached_device();
+    auto* port = get_port(port_index);
+    if (port) {
+        auto* device = port->get_attached_device();
         auto* joy = dynamic_cast<JoystickDevice*>(device);
         if (joy) {
             // Map SDL controller buttons to joystick directions
@@ -1647,7 +1648,6 @@ static bool c64_vicii_lp_pin_read(void* context) {
 }
 
 void C64System::setup_ports() {
-    ports_.clear();
 
     // PORT_CONTROL1 = 0 — Control Port 1 (directly connected to CIA1 Port B bits 0-4)
     add_port(c64_control_port_1_def, 1);
@@ -1676,7 +1676,7 @@ void C64System::setup_ports() {
     // Attach internal keyboard device
     auto kb_device = std::make_unique<CommodoreKeyboardDevice>(initialized_ ? this->keyboard : nullptr);
     auto* kb_raw = kb_device.get();
-    ports_[kb_port]->attach_device(kb_raw);
+    get_port(kb_port)->attach_device(kb_raw);
     owned_devices_.push_back(std::move(kb_device));
 
     // Default devices: mouse in Port 1, joystick in Port 2, 1541 on IEC,
@@ -1704,7 +1704,7 @@ void C64System::setup_ports() {
         printf("C64: Wired VIC-II lightpen pin callback\n");
     }
 
-    printf("C64: Created %zu ports\n", ports_.size());
+    printf("C64: Created %zu ports\n", get_ports().size());
 }
 
 void C64System::update_lightpen_display_rect() {

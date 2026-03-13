@@ -62,7 +62,7 @@ template<Z9001Variant V> bool Z9001System<V>::apply_configuration() { return tru
 template<Z9001Variant V>
 bool Z9001System<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
-    set_primary_board(&bus_mem_);
+    register_board(&bus_mem_);
 
     // ── Create chips via factory, wire the bus ────────────────────────
     bus_mem_.create_chips(&pins_);
