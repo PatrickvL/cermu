@@ -98,14 +98,6 @@ struct ChipRegTraits {
     uint16_t base_address   = 0;     // I/O base address for debug display
 };
 
-// Derive the offset type from the register count — chips with ≤256 registers
-// use uint8_t (zero overhead for 8-bit era chips), larger chips get uint16_t
-// or uint32_t automatically.
-template<const ChipRegTraits& T>
-using reg_offset_t = std::conditional_t<(T.num_registers <= 256), uint8_t,
-                     std::conditional_t<(T.num_registers <= 65536), uint16_t,
-                     uint32_t>>;
-
 // ============================================================================
 // BITFIELD ACCESSOR MACROS — NV-style hi:lo ternary trick
 // ============================================================================
@@ -163,87 +155,74 @@ using reg_offset_t = std::conditional_t<(T.num_registers <= 256), uint8_t,
 #define DECL_X_REG_INFO_(...)  CERMU_PP_OVERLOAD_(DECL_X_REG_INFO_, __VA_ARGS__)
 #endif
 
-// Field info extractor — produces FieldEntry initializers with reg_index=0
-// (resolved later by assign_field_reg_indices from the DECL order)
-#define DECL_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
-    { #fld, desc, 0, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
-
-// Declaration order extractors
-#define DECL_X_ORD_REG_(a, s, l, ...)                                 { DeclRowType::Reg, (uint16_t)(a) },
-#define DECL_X_ORD_FLD_(r, s, hilo, d, k, ds, dm)                    { DeclRowType::Field, 0 },
-#define DECL_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)  { DeclRowType::Compound, 0 },
-
 // ============================================================================
-// FIELD ENTRY — bitfield within a register (from FLD X-macro)
+// UNIFIED DECL ENTRY — single type for REG, FLD, and CMP rows
 // ============================================================================
 //
-// Produced by a FLD extractor macro.  Describes a named bit range inside a
-// single register, with a semantic DataKind for the debug renderer.
+// Replaces the former FieldEntry, CompoundInfo, CompoundEntry<T>, and
+// DeclOrderEntry types with a single flat struct.  Each entry in the
+// DECL table becomes one DeclEntry, walked by the renderer in order.
 //
-// Example FLD row:  FLD(CONTROL1, INTERLACE, 7:7, "Interlace", Flag, 0, 0)
-//   → FieldEntry { "INTERLACE", "Interlace", 17, 7, 1, DataKind::Flag, 0, 0 }
+// REG entries:  type=Reg,   reg_offset=byte offset, bit_width=value_bits
+// FLD entries:  type=Field, reg_offset=parent reg (resolved), bit_offset/bit_width
+// CMP entries:  type=Compound, fragment_count>0, fragments[] populated
 
-struct FieldEntry {
-    const char* label;       // Field symbol name (stringified)
-    const char* desc;        // Human-readable description
-    uint16_t    reg_index;   // Register index in the bank (for renderer association)
-    uint8_t     shift;       // LSB position within the register
-    uint8_t     width;       // Bit count (1..32)
-    DataKind    kind;        // Semantic type
-    uint8_t     display_shift = 0;  // Left-shift applied to extracted value for display
-    uint16_t    display_scale = 0;  // Multiplier for display (0 = 1, no scaling)
+enum class DeclRowType : uint8_t { Reg, Field, Compound };
+
+static constexpr uint8_t DECL_MAX_FRAGMENTS = 4;
+
+struct DeclFragment {
+    uint16_t reg_offset;    // Register byte offset (index into reg_data)
+    uint8_t  src_hi;        // High bit position in source register
+    uint8_t  src_lo;        // Low bit position in source register
+    uint8_t  dst_lo;        // Destination bit position in assembled result
 };
 
-// ============================================================================
-// COMPOUND VALUE — assembled from bit ranges across multiple registers
-// ============================================================================
-//
-// For values like VIC-II sprite X (9-bit: 8 bits from M0X + 1 bit from MX8),
-// where the logical value is scattered across multiple physical registers.
-// The fragment list describes how to assemble the result from pieces.
-//
-// Template parameter T (ChipRegTraits NTTP) determines the offset type, so
-// 8-bit era chips pay zero storage overhead while future chips with large
-// register files get wider offsets automatically.
-
-static constexpr size_t COMPOUND_MAX_FRAGMENTS = 4;
-
-template<const ChipRegTraits& T>
-struct CompoundFragment {
-    reg_offset_t<T> reg_index;    // Register index in the bank (NOT byte offset)
-    uint8_t         src_hi;       // High bit position in source register
-    uint8_t         src_lo;       // Low bit position in source register
-    uint8_t         dst_lo;       // Destination bit position in assembled result
+struct DeclEntry {
+    DeclRowType type;
+    const char* label;
+    const char* desc;
+    DataKind    kind           = DataKind::Value;
+    uint16_t    reg_offset     = 0;      // REG: byte offset; FLD: parent reg (resolved)
+    uint8_t     bit_offset     = 0;      // FLD: LSB position within register
+    uint8_t     bit_width      = 0;      // REG: value_bits; FLD: field width; CMP: total_bits
+    uint8_t     display_shift  = 0;      // FLD/CMP: left-shift for display
+    uint16_t    display_scale  = 0;      // FLD/CMP: multiplier (0 = none)
+    uint8_t     fragment_count = 0;      // CMP: number of fragments (0 for REG/FLD)
+    DeclFragment fragments[DECL_MAX_FRAGMENTS] = {};
 };
 
-template<const ChipRegTraits& T>
-struct CompoundEntry {
-    const char*           label;
-    const char*           desc;
-    DataKind              kind;            // Semantic type of the assembled value
-    uint8_t               total_bits;      // Width of assembled result (e.g. 9)
-    uint8_t               fragment_count;
-    CompoundFragment<T>   fragments[COMPOUND_MAX_FRAGMENTS];
-};
+// constexpr helper: resolve FLD reg_offset from the preceding REG row.
+// FLD entries are produced with reg_offset=0; this pass fills them in.
+template<size_t N>
+constexpr std::array<DeclEntry, N> resolve_decl_entries(const DeclEntry (&raw)[N]) {
+    std::array<DeclEntry, N> result{};
+    for (size_t i = 0; i < N; ++i) result[i] = raw[i];
+    uint16_t cur_reg = 0;
+    for (size_t i = 0; i < N; ++i) {
+        if (result[i].type == DeclRowType::Reg)
+            cur_reg = result[i].reg_offset;
+        else if (result[i].type == DeclRowType::Field)
+            result[i].reg_offset = cur_reg;
+    }
+    return result;
+}
 
-// Generic extraction — assembles a compound value from register fragments.
-// Handles multi-byte registers via T.register_width.
-template<const ChipRegTraits& T>
-static inline uint32_t compound_get(const uint8_t* regs,
-                                    const CompoundEntry<T>& c) {
+// Non-templated compound reader — assembles a value from DeclEntry fragments.
+static inline uint32_t decl_compound_get(const uint8_t* regs,
+                                         const DeclEntry& entry,
+                                         uint8_t register_width = 1) {
     uint32_t result = 0;
-    for (uint8_t i = 0; i < c.fragment_count; i++) {
-        const auto& f = c.fragments[i];
-        // Read the full register value (1–4 bytes, little-endian)
+    for (uint8_t i = 0; i < entry.fragment_count; i++) {
+        const auto& f = entry.fragments[i];
         uint32_t reg_val = 0;
-        if constexpr (T.register_width == 1) {
-            reg_val = regs[f.reg_index];
+        if (register_width == 1) {
+            reg_val = regs[f.reg_offset];
         } else {
-            size_t byte_idx = static_cast<size_t>(f.reg_index) * T.register_width;
-            for (uint8_t b = 0; b < T.register_width; b++)
+            size_t byte_idx = static_cast<size_t>(f.reg_offset) * register_width;
+            for (uint8_t b = 0; b < register_width; b++)
                 reg_val |= static_cast<uint32_t>(regs[byte_idx + b]) << (b * 8);
         }
-        // Extract the bitfield and place it at the destination position
         uint8_t  width = f.src_hi - f.src_lo + 1;
         uint32_t mask  = ((1u << width) - 1u) << f.src_lo;
         result |= ((reg_val & mask) >> f.src_lo) << f.dst_lo;
@@ -251,133 +230,65 @@ static inline uint32_t compound_get(const uint8_t* regs,
     return result;
 }
 
-// ============================================================================
-// DECLARATION ORDER — type-erased walk for renderers
-// ============================================================================
-//
-// The DECL(REG, FLD, CMP) table interleaves three row types.  Each chip
-// extracts a DeclOrderEntry[] that preserves the declaration order, allowing
-// the renderer to walk registers, their bitfields, and compound values in
-// the exact order the hardware programmer defined them.
-//
-// The order array pairs each entry with an index into the typed array for
-// that row type (REG_INFO, FLD_INFO, COMPOUND_INFO).
+// ---- DeclEntry extraction macros ----
+// These produce DeclEntry initializers from DECL(REG, FLD, CMP) rows.
 
-enum class DeclRowType : uint8_t { Reg, Field, Compound };
+#ifdef CERMU_HAS_VA_OPT
+#define DECL_X_ENTRY_REG_(a, s, l, ...)  \
+    { DeclRowType::Reg, #s, l __VA_OPT__(, DataKind::REG_KIND_(__VA_ARGS__), (uint16_t)(a), 0, (uint8_t)BF_WIDTH(REG_HILO_(__VA_ARGS__))) },
+#define DECL_X_ENTRY_REG_PLAIN_(a, s, l) \
+    { DeclRowType::Reg, #s, l, DataKind::Value, (uint16_t)(a) },
+#else
+#define DECL_X_ENTRY_REG_3(a, s, l) \
+    { DeclRowType::Reg, #s, l, DataKind::Value, (uint16_t)(a) },
+#define DECL_X_ENTRY_REG_5(a, s, l, k, hilo) \
+    { DeclRowType::Reg, #s, l, DataKind::k, (uint16_t)(a), 0, (uint8_t)BF_WIDTH(hilo) },
+#define DECL_X_ENTRY_REG_(...) CERMU_PP_OVERLOAD_(DECL_X_ENTRY_REG_, __VA_ARGS__)
+#endif
 
-struct DeclOrderEntry {
-    DeclRowType type;
-    uint16_t    index;   // REG: register offset, FLD: into FLD_INFO[], CMP: into COMPOUND_INFO[]
-};
+#define DECL_X_ENTRY_FLD_(reg, fld, hilo, desc, kind, ds, dm) \
+    { DeclRowType::Field, #fld, desc, DataKind::kind, 0, \
+      (uint8_t)BF_LO(hilo), (uint8_t)BF_WIDTH(hilo), (uint8_t)(ds), (uint16_t)(dm) },
 
-// Non-templated compound metadata — enough for the renderer to display
-// a compound value without knowing the ChipRegTraits template parameter.
-struct CompoundInfo {
-    const char* label;
-    const char* desc;
-    DataKind    kind;
-    uint8_t     total_bits;
-    uint8_t     display_shift = 0;  // Left-shift applied to assembled value for display
-    uint16_t    display_scale = 0;  // Multiplier for display (0 = 1, no scaling)
-};
+// CMP entry — requires DECL_CMP_NS_ to be defined before the DECL_EXTRACT_
+// call.  The namespace resolves register symbols (r1, r2) to byte offsets.
+#define DECL_X_ENTRY_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2) \
+    { DeclRowType::Compound, #s, d, DataKind::k, 0, 0, (uint8_t)(b), \
+      (uint8_t)(ds), (uint16_t)(dm), 2, \
+      {{ (uint16_t)DECL_CMP_NS_::r1, (uint8_t)BF_HI(h1), (uint8_t)BF_LO(h1), (uint8_t)(d1) }, \
+       { (uint16_t)DECL_CMP_NS_::r2, (uint8_t)BF_HI(h2), (uint8_t)BF_LO(h2), (uint8_t)(d2) }} },
 
-// Type-erased compound value reader.  The chip provides a function that
-// calls compound_get<T>() internally.
-using CompoundReadFn = uint32_t (*)(const uint8_t* regs, uint16_t compound_index);
-
-// constexpr helper: assign sequential FLD/CMP indices to a raw order array.
-// REG rows keep their register offset (set by the macro); FLD and CMP rows
-// get placeholder 0 in the macro expansion and are sequentially numbered here.
-template<size_t N>
-constexpr std::array<DeclOrderEntry, N> assign_decl_indices(const DeclOrderEntry (&raw)[N]) {
-    std::array<DeclOrderEntry, N> result{};
-    uint16_t fld_idx = 0, cmp_idx = 0;
-    for (size_t i = 0; i < N; ++i) {
-        result[i] = raw[i];
-        switch (raw[i].type) {
-            case DeclRowType::Reg:      break;
-            case DeclRowType::Field:    result[i].index = fld_idx++; break;
-            case DeclRowType::Compound: result[i].index = cmp_idx++; break;
-        }
-    }
-    return result;
-}
-
-// constexpr helper: assign reg_index to FieldEntry items based on the
-// declaration order.  FLD rows produced by DECL_X_FLD_INFO_ have reg_index=0;
-// this function resolves them from the preceding REG row's register offset.
-template<size_t NO, size_t NF>
-constexpr std::array<FieldEntry, NF> assign_field_reg_indices(
-    const DeclOrderEntry (&order)[NO],
-    const FieldEntry (&raw)[NF])
-{
-    std::array<FieldEntry, NF> result{};
-    for (size_t i = 0; i < NF; ++i) result[i] = raw[i];
-    uint16_t cur_reg = 0;
-    size_t fld_idx = 0;
-    for (size_t i = 0; i < NO; ++i) {
-        if (order[i].type == DeclRowType::Reg)
-            cur_reg = order[i].index;
-        else if (order[i].type == DeclRowType::Field && fld_idx < NF)
-            result[fld_idx++].reg_index = cur_reg;
-    }
-    return result;
-}
+// CMP NOP for DeclEntry context — swallows CMP rows for chips without compounds.
+#define DECL_ENTRY_CMP_NOP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)
 
 // ============================================================================
-// DECL_EXTRACT_ALL — one-macro extraction for chip headers
+// DECL_EXTRACT_ — internal extraction macro
 // ============================================================================
-//
-// Usage (chip header):
-//   #define CHIP_DECL(REG, FLD, CMP) ...   // unique DECL table
-//   DECL_EXTRACT_ALL(CHIP, CHIP_DECL)
 //
 // Generates (all static constexpr, header-safe):
-//   CHIP_REG_INFO[]     — RegEntry array
-//   CHIP_NUM_REGS       — uint16_t register count
-//   CHIP_FLD_INFO       — const FieldEntry* (nullptr if no fields)
-//   CHIP_NUM_FIELDS     — uint16_t field count
-//   CHIP_DECL_ORDER     — std::array<DeclOrderEntry, N>
+//   PREFIX_REG_INFO[]      — RegEntry array (for set_registers / flat fallback)
+//   PREFIX_NUM_REGS        — uint16_t register count
+//   PREFIX_DECL_RAW_[]     — raw DeclEntry array (internal, FLD unresolved)
+//   PREFIX_DECL_ENTRIES    — std::array<DeclEntry, N> with resolved field parents
 //
-// Constants namespace and backward-compat REG_TABLE are NOT generated;
-// define those per-chip as needed.
-//
-// For chips with CMP (compound) entries, add the CMP extraction manually
-// after DECL_EXTRACT_ALL — the compound read function is chip-specific.
-//
-// Requires ≥1 FLD entry in the DECL table.  For REG-only chips (no FLD),
-// use DECL_EXTRACT_REGS_ONLY instead.
+// The third arg (CMP_CB) selects compound handling:
+//   DECL_ENTRY_CMP_NOP_    — drop CMP rows (most chips)
+//   DECL_X_ENTRY_CMP_      — include CMP rows (requires DECL_CMP_NS_)
 
-#define DECL_EXTRACT_ALL(PREFIX, DECL)                                         \
+#define DECL_EXTRACT_(PREFIX, DECL, CMP_CB)                                    \
     static constexpr RegEntry PREFIX##_REG_INFO[] =                            \
         { DECL(DECL_X_REG_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };              \
     constexpr uint16_t PREFIX##_NUM_REGS =                                     \
         sizeof(PREFIX##_REG_INFO) / sizeof(PREFIX##_REG_INFO[0]);              \
-    static constexpr DeclOrderEntry PREFIX##_DECL_ORD_RAW_[] =                 \
-        { DECL(DECL_X_ORD_REG_, DECL_X_ORD_FLD_, DECL_X_ORD_CMP_) };        \
-    static constexpr auto PREFIX##_DECL_ORDER =                                \
-        assign_decl_indices(PREFIX##_DECL_ORD_RAW_);                           \
-    static constexpr FieldEntry PREFIX##_FLD_RAW_[] =                          \
-        { DECL(DECL_REG_NOP, DECL_X_FLD_INFO_, DECL_CMP_NOP) };              \
-    static constexpr auto PREFIX##_FLD_ARR_ =                                  \
-        assign_field_reg_indices(PREFIX##_DECL_ORD_RAW_, PREFIX##_FLD_RAW_);   \
-    static constexpr const FieldEntry* PREFIX##_FLD_INFO =                     \
-        PREFIX##_FLD_ARR_.data();                                              \
-    constexpr uint16_t PREFIX##_NUM_FIELDS =                                   \
-        (uint16_t)PREFIX##_FLD_ARR_.size();
+    static constexpr DeclEntry PREFIX##_DECL_RAW_[] =                          \
+        { DECL(DECL_X_ENTRY_REG_, DECL_X_ENTRY_FLD_, CMP_CB) };              \
+    static constexpr auto PREFIX##_DECL_ENTRIES =                              \
+        resolve_decl_entries(PREFIX##_DECL_RAW_);
 
-// Variant for chips with only REG entries (no FLD or CMP).
-#define DECL_EXTRACT_REGS_ONLY(PREFIX, DECL)                                   \
-    static constexpr RegEntry PREFIX##_REG_INFO[] =                            \
-        { DECL(DECL_X_REG_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };              \
-    constexpr uint16_t PREFIX##_NUM_REGS =                                     \
-        sizeof(PREFIX##_REG_INFO) / sizeof(PREFIX##_REG_INFO[0]);              \
-    static constexpr DeclOrderEntry PREFIX##_DECL_ORD_RAW_[] =                 \
-        { DECL(DECL_X_ORD_REG_, DECL_X_ORD_FLD_, DECL_X_ORD_CMP_) };        \
-    static constexpr auto PREFIX##_DECL_ORDER =                                \
-        assign_decl_indices(PREFIX##_DECL_ORD_RAW_);                           \
-    static constexpr const FieldEntry* PREFIX##_FLD_INFO = nullptr;            \
-    constexpr uint16_t PREFIX##_NUM_FIELDS = 0;
+// Public wrappers — both work identically for all chips (REG-only or with FLD).
+// The former DECL_EXTRACT_ALL/DECL_EXTRACT_REGS_ONLY distinction is gone.
+#define DECL_EXTRACT_ALL(PREFIX, DECL)       DECL_EXTRACT_(PREFIX, DECL, DECL_ENTRY_CMP_NOP_)
+#define DECL_EXTRACT_REGS_ONLY(PREFIX, DECL) DECL_EXTRACT_(PREFIX, DECL, DECL_ENTRY_CMP_NOP_)
 
 /// Read from a contiguous register array:
 ///   byte_offset  = byte index into the array
@@ -745,29 +656,19 @@ public:
 
     // ---- Declaration-order rendering (DECL table walk) ----
     // Chips with a unified DECL(REG, FLD, CMP) table call this once after
-    // set_registers().  The renderer walks the order array instead of
-    // showing a flat register dump, rendering fields and compounds inline.
-    void set_decl_order(const DeclOrderEntry* order, size_t order_count,
-                        const FieldEntry* fields, size_t field_count,
-                        const CompoundInfo* compounds, size_t compound_count,
-                        CompoundReadFn compound_reader) {
-        decl_order_           = order;
-        decl_order_count_     = order_count;
-        decl_fields_          = fields;
-        decl_field_count_     = field_count;
-        decl_compounds_       = compounds;
-        decl_compound_count_  = compound_count;
-        decl_compound_reader_ = compound_reader;
+    // set_registers().  The renderer walks the DeclEntry array in declaration
+    // order, rendering registers, fields, and compounds inline.
+    void set_decl_entries(const DeclEntry* entries, size_t count,
+                          uint8_t register_width = 1) {
+        decl_entries_       = entries;
+        decl_entry_count_   = count;
+        register_width_     = register_width;
     }
 
-    bool              has_decl_order()      const { return decl_order_ != nullptr; }
-    const DeclOrderEntry* decl_order()      const { return decl_order_; }
-    size_t            decl_order_count()    const { return decl_order_count_; }
-    const FieldEntry* decl_fields()         const { return decl_fields_; }
-    size_t            decl_field_count()    const { return decl_field_count_; }
-    const CompoundInfo* decl_compounds()    const { return decl_compounds_; }
-    size_t            decl_compound_count() const { return decl_compound_count_; }
-    CompoundReadFn    decl_compound_reader() const { return decl_compound_reader_; }
+    bool             has_decl_entries()     const { return decl_entries_ != nullptr; }
+    const DeclEntry* decl_entries()         const { return decl_entries_; }
+    size_t           decl_entry_count()     const { return decl_entry_count_; }
+    uint8_t          register_width()       const { return register_width_; }
 
     // ---- System palette (for Color kind rendering) ----
     void set_palette(const uint32_t* palette, uint16_t palette_size) {
@@ -799,14 +700,10 @@ private:
     std::vector<DebugCategory>  categories_;
     uint8_t                     current_indent_ = 0;
 
-    // Declaration-order walk data (set via set_decl_order)
-    const DeclOrderEntry*       decl_order_           = nullptr;
-    size_t                      decl_order_count_     = 0;
-    const FieldEntry*           decl_fields_          = nullptr;
-    size_t                      decl_field_count_     = 0;
-    const CompoundInfo*         decl_compounds_       = nullptr;
-    size_t                      decl_compound_count_  = 0;
-    CompoundReadFn              decl_compound_reader_ = nullptr;
+    // Declaration-order walk data (set via set_decl_entries)
+    const DeclEntry*            decl_entries_         = nullptr;
+    size_t                      decl_entry_count_     = 0;
+    uint8_t                     register_width_       = 1;
 
     // System palette for Color kind rendering
     const uint32_t*             palette_              = nullptr;
