@@ -139,7 +139,7 @@ bool SpectrumSystem<V>::apply_configuration() {
 template<SpectrumVariant V>
 bool SpectrumSystem<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
-    set_primary_board(&bus_mem_);
+    register_board(&bus_mem_);
 
     // ── Create chips via factory, wire the bus ────────────────────────
     bus_mem_.create_chips(&pins_);

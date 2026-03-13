@@ -54,7 +54,7 @@ bool BombJackSystem::apply_configuration() { return true; }
 
 bool BombJackSystem::initialize() {
     printf("Bomb Jack: Initializing arcade system\n");
-    set_primary_board(&main_bus_mem_);
+    register_board(&main_bus_mem_);
 
     // ── Create memory chips from manifest and wire buses ─────────────────
     main_bus_mem_.create_chips(&main_pins_);

@@ -182,7 +182,7 @@ bool Apple1System::apply_configuration() {
 // ============================================================================
 bool Apple1System::initialize() {
     printf("Apple1: Initializing system\n");
-    set_primary_board(&bus_mem_);
+    register_board(&bus_mem_);
     
     // ── Pre-bind PIA, then factory-create memory chips ────────────────
     bus_mem_.bind_chip(apple1_chips::kPiaSlot, &pia_);
@@ -800,7 +800,6 @@ static const PortDefinition apple1_cassette_def = {
 };
 
 void Apple1System::setup_ports() {
-    ports_.clear();
 
     // Port 0 — Expansion Connector (44-pin edge, full 6502 bus)
     add_port(apple1_expansion_def, 0);

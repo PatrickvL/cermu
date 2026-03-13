@@ -117,6 +117,9 @@ public:
         return static_cast<int>(ports_.size());
     }
 
+    /// Remove all ports from this board.
+    void clear_ports();
+
 protected:
     void register_component(ComponentBase* c) {
         if (c) components_.push_back(c);

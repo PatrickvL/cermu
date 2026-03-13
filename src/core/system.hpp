@@ -183,9 +183,10 @@ protected:
     struct ScreenRect { float x = 0, y = 0, w = 0, h = 0; };
     ScreenRect display_screen_rect_;
 
-    // Primary board — owns ports and chips.  Set by derived classes via
-    // set_primary_board() during initialize().  nullptr until wired.
-    BoardBase* primary_board_ = nullptr;
+    // Primary board — owns connector ports as a value member (no pointer
+    // indirection).  Created automatically; derived systems just call
+    // add_port() during initialize().
+    BoardBase primary_board_;
 
     // =========================================================================
     // REGISTERED CHIPS (generic for all systems)
@@ -238,26 +239,27 @@ protected:
     // BOARD & PORT OWNERSHIP
     // =========================================================================
     //
-    // Physical ports (connector jacks) live on the Board — see BoardBase.
-    // Systems wire their primary board via set_primary_board() so that the
-    // generic System port API (add_port, get_port, get_ports) delegates to
-    // the board.  Device ownership stays on System (peripherals are user-
-    // attached, not board-soldered components).
+    // Connector ports (physical jacks) live on primary_board_, a BoardBase
+    // value member.  All port creation goes through add_port() which always
+    // delegates to primary_board_.  No conditional, no indirection.
     //
-    // The local ports_ fallback exists for transitional compatibility and
-    // is empty when primary_board_ is set.
+    // Systems that have a Board<Spec> (bus_mem_) for memory dispatch register
+    // it via register_board() so that generic code can iterate all boards.
+    // Device ownership stays on System (peripherals are user-attached, not
+    // board-soldered components).
     //
 
-    /// Set the primary board that owns this system's ports and chips.
-    /// Call early in derived-class initialize(), before add_port().
-    void set_primary_board(BoardBase* board) { primary_board_ = board; }
+    /// All boards on this system.  primary_board_ is always boards_[0];
+    /// additional boards (e.g. bus_mem_) are appended via register_board().
+    std::vector<BoardBase*> boards_;
 
-    /// The board this system's ports live on (nullptr if not yet wired).
-    [[nodiscard]] BoardBase* primary_board() const { return primary_board_; }
+    /// Register an additional board (e.g. bus_mem_) for iteration.
+    /// The primary_board_ is always registered automatically.
+    void register_board(BoardBase* board) { boards_.push_back(board); }
 
-    /// Connector ports — local fallback for systems that haven't migrated to
-    /// board-based port ownership yet.  Empty when primary_board_ is set.
-    std::vector<std::unique_ptr<Port>> ports_;
+    /// The primary board (owns connector ports, always valid).
+    [[nodiscard]] BoardBase& primary_board() { return primary_board_; }
+    [[nodiscard]] const BoardBase& primary_board() const { return primary_board_; }
 
     /// Peripheral device instances owned by the system (attached to ports).
     std::vector<std::unique_ptr<PeripheralDevice>> owned_devices_;
@@ -280,7 +282,7 @@ protected:
     /// on system start-up.  Systems declare their defaults by overriding
     /// get_default_peripherals().
     struct DefaultPeripheral {
-        int         port_index;   ///< Index into ports_
+        int         port_index;   ///< Index into primary_board_ ports
         const char* device_id;    ///< DeviceRegistry ID (e.g. "joystick")
     };
 
@@ -338,20 +340,20 @@ public:
     }
     const ScreenRect& get_display_screen_rect() const { return display_screen_rect_; }
 
-    // --- Port Access (delegates to primary_board_ when available) ----------
+    // --- Port Access (always via primary_board_) --------------------------
 
     /// Get all connector ports on this system.
     const std::vector<std::unique_ptr<Port>>& get_ports() const {
-        return primary_board_ ? primary_board_->get_ports() : ports_;
+        return primary_board_.get_ports();
     }
 
     /// Get a connector port by index (nullptr if out of range).
     Port* get_port(int index) {
-        if (primary_board_) return primary_board_->get_port(index);
-        if (index >= 0 && index < static_cast<int>(ports_.size()))
-            return ports_[index].get();
-        return nullptr;
+        return primary_board_.get_port(index);
     }
+
+    /// Get all boards (primary_board_ first, then registered additional boards).
+    const std::vector<BoardBase*>& get_boards() const { return boards_; }
 
     /// Get all owned peripheral device instances.
     const std::vector<std::unique_ptr<PeripheralDevice>>& get_owned_devices() const {

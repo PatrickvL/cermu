@@ -562,7 +562,7 @@ bool VIC20System::initialize() {
     if (initialized_) return true;
     
     printf("VIC20: Initializing system\n");
-    set_primary_board(&bus_mem_);
+    register_board(&bus_mem_);
     
     // ── Condition callback for PAL/NTSC variant selection ────────────────
     auto vic20_condition = [](uint16_t cond, const void* ctx) -> bool {
@@ -1354,7 +1354,6 @@ static const PortDefinition vic20_expansion_def = {
 };
 
 void VIC20System::setup_ports() {
-    ports_.clear();
 
     // Port 0 — Control Port (joystick/paddles/lightpen)
     add_port(vic20_control_port_def, 1);

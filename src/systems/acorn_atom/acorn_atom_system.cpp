@@ -194,7 +194,7 @@ bool AcornAtomSystem::apply_configuration() { return true; }
 
 bool AcornAtomSystem::initialize() {
     printf("Acorn Atom: Initializing system\n");
-    set_primary_board(&bus_mem_);
+    register_board(&bus_mem_);
 
     // ── Pre-bind MMIO chips, then factory-create memory chips ──────────
     bus_mem_.bind_chip(acorn_atom_chips::kPpiSlot, &ppi_);

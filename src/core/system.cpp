@@ -33,6 +33,7 @@ System::System()
     , speed_multiplier_(1.0f)
     , quit_requested_(false)
 {
+    boards_.push_back(&primary_board_);
 }
 
 // Final implementations (identical for all systems)
@@ -139,7 +140,7 @@ void System::shutdown() {
         port->detach_device();
     }
     owned_devices_.clear();
-    ports_.clear();  // local fallback only; board ports die with the board
+    primary_board_.clear_ports();
     registered_chips_.clear();
     owned_chip_adapters_.clear();
 }
@@ -334,12 +335,7 @@ void System::set_audio_sample_rate(int /*sample_rate_hz*/) {
 // ============================================================================
 
 int System::add_port(const PortDefinition& def, int port_number) {
-    if (primary_board_)
-        return primary_board_->add_port(def, port_number);
-    // Fallback for systems that haven't migrated to board-based port ownership.
-    int index = static_cast<int>(ports_.size());
-    ports_.push_back(std::make_unique<Port>(def, port_number));
-    return index;
+    return primary_board_.add_port(def, port_number);
 }
 
 void System::tick_peripherals() {

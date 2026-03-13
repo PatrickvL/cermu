@@ -543,7 +543,7 @@ bool Commodore264System<V>::initialize() {
     }
     
     printf("%s: Initializing system\n", Traits::name);
-    set_primary_board(&bus_mem_);
+    register_board(&bus_mem_);
     
     // ── Create memory chips from manifest and wire bus ───────────────────
     bus_mem_.create_chips(&bus_state_);
@@ -1236,7 +1236,6 @@ void Commodore264System<V>::set_cpu_pc(void* user_data, uint16_t addr) {
 
 template<C264SeriesVariant V>
 void Commodore264System<V>::setup_ports() {
-    ports_.clear();
 
     // Port 0 — Joystick Port 1
     add_port(c16_joy_port_1_def, 1);
