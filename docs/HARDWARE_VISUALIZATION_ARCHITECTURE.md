@@ -4,6 +4,13 @@
 **Purpose:** Complete architecture for data-driven hardware visualization, board layouts, and multi-board systems  
 **Scope:** Applies to all emulated systems (C64, VIC-20, Apple1, arcade systems, peripherals)
 
+> **Note (2026-03-13):** This document's TOML-driven visualization architecture remains
+> the design target. Some naming has evolved since writing:
+> - `EmulatedSystem` → `System` (src/core/system.hpp)
+> - Physical connectors in the emulation layer are now modeled by `Port` + `PeripheralDevice`
+>   (src/core/port.hpp). `BoardConnector` in this document refers to the *visual* representation
+>   of those connectors on the PCB layout, which is a separate concern from the emulation port model.
+
 ---
 
 ## Table of Contents
@@ -482,7 +489,7 @@ floppy_1541.connect_boards("LOGIC_BOARD", "DRIVE_BOARD", {
 ### C++ Emulation Code (Clean)
 
 ```cpp
-class C64System : public EmulatedSystem {
+class C64System : public System {
 private:
     // ONLY emulation state
     std::unique_ptr<vicii_t> vicii_;
