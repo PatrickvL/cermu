@@ -12,6 +12,7 @@
 // =============================================================================
 #pragma once
 
+#include "core/board_base.hpp"
 #include "core/bus_map.hpp"
 
 // §4  Board<Spec> — runtime chip owner, buffer manager
@@ -20,6 +21,10 @@
 // Owns the flat unified buffer and chip lifetimes.  Delegates address-decode
 // logic (page table wiring, MMIO handlers, sub-tables) to BusMap<Spec>.
 //
+// Inherits BoardBase for:
+//   - Non-owning component index (chips + ports)
+//   - Port ownership (vector<unique_ptr<Port>>)
+//
 // Template parameter Spec must satisfy BusSpecConcept.
 //
 // Thread safety: none.  External synchronisation required if add/remove_chip
@@ -27,7 +32,7 @@
 //
 
 template<BusSpecConcept Spec>
-class Board {
+class Board : public BoardBase {
 public:
     using Map         = BusMap<Spec>;
     using Bus         = MemoryBus<Spec>;
@@ -231,6 +236,23 @@ public:
 
     [[nodiscard]] std::span<const std::unique_ptr<ChipBase>> owned_chips() const noexcept {
         return owned_chips_;
+    }
+
+    // =====================================================================
+    // §4.4c′  Component registration
+    // =====================================================================
+    //
+    // Rebuilds the BoardBase component index from owned chips and ports.
+    // Call after create_chips() / add_port() to make all components
+    // discoverable via find_component().
+    //
+
+    void register_board_components() {
+        clear_components();
+        for (auto& chip : owned_chips_)
+            register_component(chip.get());
+        for (auto& port : ports_)
+            register_component(port.get());
     }
 
     // =====================================================================
@@ -510,9 +532,9 @@ private:
 // ── NES cartridge hot-swap ────────────────────────────────────────────────────
 //
 //  inline constexpr auto kNesChips = make_chip_manifest(
-//      Slot<RAMChip>{0x0000, 2048},       // WRAM:  2 KB at $0000
-//      Slot<RAMChip>{0x2000, 2048},       // CIRAM: 2 KB nametable RAM
-//      Slot<RAMChip>{0x6000, 8192}        // SRAM:  8 KB battery-backed RAM
+//      Slot<RAMChip>{0x0000, 2048, 0, "WRAM"},"
+//      Slot<RAMChip>{0x2000, 2048, 0, "CIRAM"},  // nametable RAM
+//      Slot<RAMChip>{0x6000, 8192, 0, "SRAM"}    // battery-backed RAM
 //  ).with_dynamic_pool(256);
 //
 //  // Dynamic cartridge insertion at runtime:

@@ -135,11 +135,11 @@ bool System::initialize() {
 
 void System::shutdown() {
     // Detach all devices from ports before clearing (clean teardown)
-    for (auto& port : ports_) {
+    for (const auto& port : get_ports()) {
         port->detach_device();
     }
     owned_devices_.clear();
-    ports_.clear();
+    ports_.clear();  // local fallback only; board ports die with the board
     registered_chips_.clear();
     owned_chip_adapters_.clear();
 }
@@ -334,6 +334,9 @@ void System::set_audio_sample_rate(int /*sample_rate_hz*/) {
 // ============================================================================
 
 int System::add_port(const PortDefinition& def, int port_number) {
+    if (primary_board_)
+        return primary_board_->add_port(def, port_number);
+    // Fallback for systems that haven't migrated to board-based port ownership.
     int index = static_cast<int>(ports_.size());
     ports_.push_back(std::make_unique<Port>(def, port_number));
     return index;
@@ -408,12 +411,11 @@ void System::auto_assign_controller_keymaps() {
 }
 
 bool System::attach_device_to_port(int port_index, const char* device_id) {
-    if (port_index < 0 || port_index >= static_cast<int>(ports_.size())) {
+    Port* port = get_port(port_index);
+    if (!port) {
         printf("System: Invalid port index %d\n", port_index);
         return false;
     }
-
-    auto& port = ports_[port_index];
 
     // Create device from registry
     auto device = DeviceRegistry::instance().create_device(device_id);
@@ -444,9 +446,9 @@ bool System::attach_device_to_port(int port_index, const char* device_id) {
 }
 
 void System::detach_device_from_port(int port_index) {
-    if (port_index < 0 || port_index >= static_cast<int>(ports_.size())) return;
+    Port* port = get_port(port_index);
+    if (!port) return;
 
-    auto& port = ports_[port_index];
     auto devices_copy = port->get_attached_devices();  // Copy — detach modifies the vector
     if (devices_copy.empty()) return;
 
@@ -469,10 +471,9 @@ void System::detach_device_from_port(int port_index) {
 }
 
 void System::detach_device_from_port(int port_index, PeripheralDevice* device) {
-    if (port_index < 0 || port_index >= static_cast<int>(ports_.size())) return;
-    if (!device) return;
+    Port* port = get_port(port_index);
+    if (!port || !device) return;
 
-    auto& port = ports_[port_index];
     printf("System: Detached '%s' from %s\n", device->get_name(), port->get_name());
     port->detach_device(device);
 
@@ -501,14 +502,15 @@ bool System::process_sdl_event_for_devices(const SDL_Event& event) {
 
 void System::render_peripheral_port_ui() {
 #ifdef CERMU_HAS_GUI
-    if (ports_.empty()) return;
+    const auto& ports = get_ports();
+    if (ports.empty()) return;
 
     auto& registry = DeviceRegistry::instance();
 
     // Check if there's anything worth showing (external ports with devices,
     // or internal ports with attached devices that have UI)
     bool any_visible = false;
-    for (auto& port : ports_) {
+    for (const auto& port : ports) {
         const auto& def = port->get_definition();
         if (def.is_internal) {
             if (port->get_attached_device()) any_visible = true;
@@ -523,8 +525,8 @@ void System::render_peripheral_port_ui() {
     ImGui::Text("Peripheral Connectors");
     ImGui::Spacing();
 
-    for (int i = 0; i < static_cast<int>(ports_.size()); i++) {
-        auto& port = ports_[i];
+    for (int i = 0; i < static_cast<int>(ports.size()); i++) {
+        const auto& port = ports[i];
         const auto& def = port->get_definition();
         auto* attached = port->get_attached_device();
 
@@ -749,7 +751,8 @@ static const char* port_device_noun(PortType type) {
 
 float System::render_port_menu_bar_icons() {
 #ifdef CERMU_HAS_GUI
-    if (ports_.empty()) return 0.0f;
+    const auto& ports = get_ports();
+    if (ports.empty()) return 0.0f;
 
     auto& registry = DeviceRegistry::instance();
 
@@ -759,10 +762,10 @@ float System::render_port_menu_bar_icons() {
         Port* port;
     };
     std::vector<VisiblePort> visible;
-    for (int i = 0; i < static_cast<int>(ports_.size()); i++) {
-        const auto& def = ports_[i]->get_definition();
+    for (int i = 0; i < static_cast<int>(ports.size()); i++) {
+        const auto& def = ports[i]->get_definition();
         if (def.is_internal) continue;  // Skip keyboard etc.
-        visible.push_back({ i, ports_[i].get() });
+        visible.push_back({ i, ports[i].get() });
     }
     if (visible.empty()) return 0.0f;
 

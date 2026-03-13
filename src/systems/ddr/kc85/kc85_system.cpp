@@ -70,6 +70,7 @@ template<KC85Variant V> bool KC85System<V>::apply_configuration() { return true;
 template<KC85Variant V>
 bool KC85System<V>::initialize() {
     printf("%s: Initializing system (CAOS %s)\n", Traits::name, Traits::caos_version);
+    set_primary_board(&bus_mem_);
 
     // ── Create chips via factory, wire the bus ────────────────────────
     bus_mem_.create_chips(&pins_);

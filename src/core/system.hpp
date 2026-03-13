@@ -16,6 +16,8 @@
 // Forward-declare format descriptor so SystemDescriptor can reference it
 struct format_descriptor_t;
 
+#include "core/board_base.hpp"
+
 /**
  * Result of probing a file for system-specific compatibility.
  *
@@ -181,6 +183,10 @@ protected:
     struct ScreenRect { float x = 0, y = 0, w = 0, h = 0; };
     ScreenRect display_screen_rect_;
 
+    // Primary board — owns ports and chips.  Set by derived classes via
+    // set_primary_board() during initialize().  nullptr until wired.
+    BoardBase* primary_board_ = nullptr;
+
     // =========================================================================
     // REGISTERED CHIPS (generic for all systems)
     // =========================================================================
@@ -229,9 +235,28 @@ protected:
     }
 
     // =========================================================================
-    // CONNECTOR PORTS & PERIPHERAL DEVICES (generic for all systems)
+    // BOARD & PORT OWNERSHIP
     // =========================================================================
-    /// Connector ports registered by each system during initialization.
+    //
+    // Physical ports (connector jacks) live on the Board — see BoardBase.
+    // Systems wire their primary board via set_primary_board() so that the
+    // generic System port API (add_port, get_port, get_ports) delegates to
+    // the board.  Device ownership stays on System (peripherals are user-
+    // attached, not board-soldered components).
+    //
+    // The local ports_ fallback exists for transitional compatibility and
+    // is empty when primary_board_ is set.
+    //
+
+    /// Set the primary board that owns this system's ports and chips.
+    /// Call early in derived-class initialize(), before add_port().
+    void set_primary_board(BoardBase* board) { primary_board_ = board; }
+
+    /// The board this system's ports live on (nullptr if not yet wired).
+    [[nodiscard]] BoardBase* primary_board() const { return primary_board_; }
+
+    /// Connector ports — local fallback for systems that haven't migrated to
+    /// board-based port ownership yet.  Empty when primary_board_ is set.
     std::vector<std::unique_ptr<Port>> ports_;
 
     /// Peripheral device instances owned by the system (attached to ports).
@@ -313,15 +338,16 @@ public:
     }
     const ScreenRect& get_display_screen_rect() const { return display_screen_rect_; }
 
-    // --- Connector Port Access (generic, available for all systems) ---------
+    // --- Port Access (delegates to primary_board_ when available) ----------
 
     /// Get all connector ports on this system.
     const std::vector<std::unique_ptr<Port>>& get_ports() const {
-        return ports_;
+        return primary_board_ ? primary_board_->get_ports() : ports_;
     }
 
     /// Get a connector port by index (nullptr if out of range).
     Port* get_port(int index) {
+        if (primary_board_) return primary_board_->get_port(index);
         if (index >= 0 && index < static_cast<int>(ports_.size()))
             return ports_[index].get();
         return nullptr;

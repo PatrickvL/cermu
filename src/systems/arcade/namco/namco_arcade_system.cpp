@@ -70,6 +70,7 @@ template<NamcoGame G> bool NamcoArcadeSystem<G>::apply_configuration() { return 
 template<NamcoGame G>
 bool NamcoArcadeSystem<G>::initialize() {
     printf("%s: Initializing arcade system\n", Traits::name);
+    set_primary_board(&bus_mem_);
 
     // ── Create memory chips from manifest and wire bus ────────────────
     bus_mem_.create_chips(&pins_);

@@ -166,6 +166,7 @@ bool BBCMicroSystem::apply_configuration() {
 
 bool BBCMicroSystem::initialize() {
     printf("BBC Micro: Initializing system\n");
+    set_primary_board(&bus_mem_);
 
     // ── Factory-create memory chips from manifest ─────────────────────
     bus_mem_.create_chips(&pins_);
