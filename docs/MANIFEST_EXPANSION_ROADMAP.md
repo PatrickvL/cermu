@@ -356,6 +356,63 @@ Option A is lower risk and preserves the current branchless hot path.
 
 ---
 
+## NES Architecture Notes
+
+The NES is deferred but architecturally significant — its dual-bus design is unique
+among our emulated systems and will inform how `Board<Spec>` handles multi-bus PCBs.
+
+### Physical board layout
+
+The NES has a **single main PCB** (the motherboard).  The cartridge plugs into it via
+a 72-pin connector (60-pin on the Famicom) and is a second PCB, but the console
+itself is one board.
+
+### Dual independent buses
+
+The NES has two genuinely separate, independent buses — not two views of the same bus
+(unlike the C64's CPU/VIC-II viewer model):
+
+- **CPU bus** — 16-bit address, 8-bit data.  Sees the 2A03 CPU, 2 KB WRAM, PRG-ROM
+  (via cartridge), APU registers, I/O ports ($4016/$4017), and the PPU's register
+  window at $2000–$2007.
+
+- **PPU bus** — 14-bit address, 8-bit data.  Sees CHR-ROM/RAM (via cartridge), 2 KB
+  nametable VRAM on the NES board, and the PPU's internal palette RAM.  The CPU has
+  **zero direct visibility** into this address space.
+
+The two buses are connected only through the narrow 8-register interface ($2000–$2007
+on the CPU side), which acts as a mailbox.  The CPU writes to PPU registers and
+accesses VRAM indirectly via PPUADDR/PPUDATA; the PPU drives its own bus entirely
+independently during rendering.
+
+### Emulation implications
+
+- Two separate `MemoryBus` instances with independent read/write dispatch tables and
+  address decoding logic.
+- Separate "open bus" / floating bus behaviour — the PPU bus has its own data latch
+  distinct from the CPU bus latch.
+- The PPU's register window ($2000–$2007) is an MMIO chip on the CPU bus, bridging
+  into the PPU bus — a natural `BusMap` MMIO handler.
+- The cartridge connector spans **both** buses (PRG on CPU bus, CHR on PPU bus) — the
+  mapper sits at the junction and must be visible to both `Board<Spec>` instances.
+- This is distinct from the C64's multi-viewer approach (one bus, two viewers).  The
+  NES genuinely needs two `Board<Spec>` instances on one logical PCB — similar to
+  Bomb Jack's dual-board pattern but within a single physical board.
+
+### Mapping to cermu architecture
+
+```
+NESBoard (logical, wraps two Board<Spec>)
+├── Board<CPUBusSpec>     ← 16-bit, CPU + WRAM + PRG-ROM + APU + I/O + PPU regs
+├── Board<PPUBusSpec>     ← 14-bit, CHR-ROM/RAM + CIRAM + palette
+└── Mapper                ← bridges both buses, handles bank switching
+```
+
+The Bomb Jack migration (dual `Board<Spec>`, separate CPUs) is a direct stepping
+stone — lessons learned there transfer directly to the NES's dual-bus model.
+
+---
+
 ## Migration Priority
 
 Systems ordered by migration complexity (easiest first):
@@ -378,5 +435,5 @@ Systems ordered by migration complexity (easiest first):
 | Medium | Spectrum | Medium | CPU, ULA, AY | `ferranti_ula_t`, `ay_3_8910_t` need MMIO |
 | Medium | Amstrad CPC | Medium–High | CPU, CRTC, PSG, gate array | Gate array needs ChipBase extraction + MMIO; `mc6845_t`, `ay_3_8910_t` need MMIO |
 | High | C64 | High | All 12 chips | See C64 Migration Plan above; `c64_bus_t` absorbed into `Board<Spec>` |
-| Deferred | NES | High | All 7+ chips | Two buses on one PCB (CPU bus + PPU bus); Bomb Jack dual-board pattern is a stepping stone; mapper complexity significant |
+| Deferred | NES | High | All 7+ chips | Two independent buses (16-bit CPU + 14-bit PPU) on one PCB; dual `Board<Spec>` with mapper bridging both; see NES Architecture Notes above |
 | N/A | CHIP-8 | — | — | Pure interpreter, no bus model; not a candidate for manifest migration |

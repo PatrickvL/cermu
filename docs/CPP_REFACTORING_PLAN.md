@@ -199,18 +199,21 @@ Phase 4.
 - Removed dead `mos7501_set_bank_change_context()` calls from `c16_system.cpp`
 
 **Remaining (blocked, deferred to Phase 4):**
-- `desc->bus_attach()` still called in `c64.cpp` line 756 (System8Bit chip iteration)
-- `desc->create()` / `desc->destroy()` still used by `c64.cpp` and `system.cpp`
-- `ChipDescriptor` struct cannot be deleted until `System8Bit` is eliminated
-- 19 static `chip_descriptor_t` definitions still exist (needed by above)
+- ~~`desc->bus_attach()` still called in `c64.cpp` line 756 (System8Bit chip iteration)~~ ✅
+- ~~`desc->create()` / `desc->destroy()` still used by `c64.cpp` and `system.cpp`~~ ✅
+- ~~`ChipDescriptor` struct cannot be deleted until `System8Bit` is eliminated~~ ✅
+- ~~19 static `chip_descriptor_t` definitions still exist (needed by above)~~ ✅
+
+All remaining items completed — `ChipDescriptor`, `System8Bit`, and all 19 static descriptor
+definitions have been removed from the codebase.
 
 ---
 
-### Phase 3: Convert C-Struct Chips to C++ Classes Inheriting `ChipBase`
+### Phase 3: Convert C-Struct Chips to C++ Classes Inheriting `ChipBase` ✅ COMPLETE
 
-**Effort:** Large (1–2 days total, but each chip is independent)
-**Risk:** Medium — largest structural change
-**Files affected:** ~30–50
+**Status:** All chips now inherit from `ChipBase` via category base classes
+(`VideoChipBase`, `SoundChipBase`, `IoChipBase`, `InputChipBase`, `CpuChipBase`,
+`MemoryChipBase`).  `CChipAdapter` has been deleted.
 
 **Goal:** Each chip is a proper C++ class that directly inherits `ChipBase` and implements
 its GUI rendering as virtual overrides. `CChipAdapter` becomes unnecessary.
@@ -361,11 +364,11 @@ never calls virtual methods. The vtable pointer is the only cost. This is accept
 
 ---
 
-### Phase 4: Eliminate `System8Bit` — Migrate Test Framework
+### Phase 4: Eliminate `System8Bit` — Migrate Test Framework ✅ COMPLETE
 
-**Effort:** Medium (3–5 hours)
-**Risk:** Medium — test framework is a critical verification tool
-**Files affected:** ~8
+**Status:** `System8Bit`, `system_8bit_t`, `ChipEntry`, `ChipDescriptor`, `c64.h`/`c64.cpp`
+have all been removed. The C64 test framework now uses `C64System` directly.
+The `c64_t` struct is gone — chips are direct members on `C64System`.
 
 **Problem:** The C64 test framework (`c64_test_framework.cpp`, `c64_test_runner.cpp`,
 VICII test harnesses) uses the C-style API from `c64.cpp`:
@@ -399,11 +402,11 @@ API. This eliminates the translation layer entirely and removes the last consume
 
 ---
 
-### Phase 5: Template-Based Chip Families
+### Phase 5: Template-Based Chip Families ⏳ PARTIALLY COMPLETE
 
-**Effort:** Medium-Large per family (2–4 hours each)
-**Risk:** Low — pure refactoring, no behavioral change
-**Files affected:** Varies per family
+**Status:** fam65xx CPU family uses the NTTP template pattern. Commodore 264 system
+(`Commodore264System<V>`) is templated on variant. VIC-II, VIC, CIA, SID template
+conversions remain as future work.
 
 Leverage the fam65xx NTTP pattern for other chip families that have PAL/NTSC or
 feature variants:
@@ -445,10 +448,11 @@ dimensions and layout differences between C64, VIC-20, and C16.
 
 ---
 
-### Phase 6: Ownership and Lifetime Cleanup
+### Phase 6: Ownership and Lifetime Cleanup ⏳ PARTIALLY COMPLETE
 
-**Effort:** Small-Medium (2–3 hours)
-**Risk:** Low
+**Status:** `unique_ptr<ChipBase>` ownership used in `Board<Spec>::owned_chips_` and
+`System::owned_chip_adapters_`. Raw `void*` and `malloc`/`free` for chip lifecycle
+are eliminated. Some chips still use raw pointers in legacy system integrations (C64).
 
 | Task | Details |
 |------|---------|

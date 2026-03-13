@@ -1,5 +1,17 @@
 # Multi-System Emulator Architecture
 
+> **⚠️ LARGELY SUPERSEDED** — This document was written during early multi-system
+> prototyping (2025-07). The architecture has since evolved significantly:
+>
+> - `IEmulatedSystem` → `System` (base class in `src/core/system.hpp`)
+> - `gui_state_t` / `imgui_interface.cpp` → `SessionGUI` / `EmulatorHost`
+> - `code/cpp/` file paths → `src/`
+> - `c64_t*` wrapper → chips are direct members on `C64System`
+> - `SystemRegistry` + `REGISTER_SYSTEM` → still exist, modernized
+> - All "Pending Work" items below have been completed (differently than described)
+>
+> See `CERMU_ARCHITECURE_COMPLETE_REFERENCE.md` for the current architecture.
+
 ## Overview
 This document describes the plugin-style multi-system architecture for the emulator, allowing multiple emulated systems (CHIP-8, C64, NES, etc.) to coexist with automatic system detection.
 

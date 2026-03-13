@@ -12,9 +12,9 @@ This plan addresses findings from a comprehensive audit of all chip implementati
 
 ---
 
-## Phase 1: Dead Code & Stale Include Removal
+## Phase 1: Dead Code & Stale Include Removal ✅ COMPLETE
 
-**Risk: None — no behavioral changes**
+**All items removed.**
 
 ### 1a. VIC-20: Remove dead `cpu_read` / `cpu_write`
 - **Files:** `src/systems/vic20/vic20_system.h`, `src/systems/vic20/vic20_system.cpp`
@@ -33,9 +33,10 @@ This plan addresses findings from a comprehensive audit of all chip implementati
 
 ---
 
-## Phase 2: VIC-II System Dependency Decoupling
+## Phase 2: VIC-II System Dependency Decoupling ✅ COMPLETE
 
-**Risk: Medium — touches the most complex chip, but change is surgical**
+**Status:** VIC-II no longer includes `c64_bus.h`. Memory access uses callback via
+`vicii_bus_unit_t`.
 
 ### Problem
 `src/chip/video/vic_ii/vicii_common.cpp` directly includes `c64_bus.h` and casts `void* bus` to `c64_bus_t*` to call `c64_bus_vic_read()`. This prevents the VIC-II from being reused in other systems (e.g., C128).
@@ -85,9 +86,10 @@ This mirrors the TED's `ted_mem_read_fn` callback and the VIC 6560's existing `v
 
 ---
 
-## Phase 3: PLA GUI System Dependency Decoupling
+## Phase 3: PLA GUI System Dependency Decoupling ✅ COMPLETE
 
-**Risk: Low — GUI-only change, no emulation logic affected**
+**Status:** PLA chip code no longer includes C64 system headers. C64-specific PLA
+visualization lives in `src/systems/commodore/c64/c64_pla_chip.hpp`.
 
 ### Problem
 `src/chip/logic/pla_gui.cpp` includes `c64_bus.h` and `c64.h`, uses `c64_t*`, `c64_chips_get_description()`, and `c64_chips_to_title()` for memory-map debug visualization.
@@ -101,9 +103,10 @@ The split point is wherever the `c64_t*` / `c64_chips_*` functions are used. The
 
 ---
 
-## Phase 4: Apple 1 Memory Servicing Fix
+## Phase 4: Apple 1 Memory Servicing Fix ✅ COMPLETE
 
-**Risk: Low — system is currently non-functional, this makes it work**
+**Status:** Apple 1 now uses `Board<Spec>` with `bus_.tick()` for memory dispatch.
+`cpu_read()`/`cpu_write()` eliminated.
 
 ### Problem
 - `cpu_read()` and `cpu_write()` contain correct memory-map logic but are **never called**
@@ -127,9 +130,10 @@ The split point is wherever the `c64_t*` / `c64_chips_*` functions are used. The
 
 ---
 
-## Phase 5: C16 Memory Path Cleanup
+## Phase 5: C16 Memory Path Cleanup ✅ COMPLETE
 
-**Risk: Low — refactor only, preserves exact behavior**
+**Status:** C16 (`Commodore264System<V>`) has `mem_tick(bus_state_t)` as the primary
+memory dispatch path. Old-style `cpu_read`/`cpu_write` instance methods eliminated.
 
 ### Problem
 `mem_tick(bus_state_t)` unpacks bus_state_t, calls old-style `cpu_read(addr)` / `cpu_write(addr, data)` instance methods, then repacks. This extra indirection is unnecessary.
@@ -226,9 +230,11 @@ Update `nes_screen_utils.cpp` direct `ppu->cpu_write(0x2000, 0x80)` calls to use
 
 ---
 
-## Phase 7: C++ Class Conversions
+## Phase 7: C++ Class Conversions ✅ COMPLETE
 
-**Risk: Medium–High per chip — large refactors, but each is independent**
+**Status:** All chips inherit from `ChipBase` via category base classes (`VideoChipBase`,
+`SoundChipBase`, `IoChipBase`, `InputChipBase`, `CpuChipBase`, `MemoryChipBase`).
+`CChipAdapter` has been deleted.
 
 Each chip follows the TED 7360 template:
 1. Convert C-style struct + free functions → C++ class
@@ -281,4 +287,5 @@ Build verification (`make -j16 cermu`) after each commit.
 ---
 
 *Plan created: 2026-02-22*
+*Status updated: 2026-03-13 — Phases 1–5, 7 marked complete; only Phase 6 (NES bus\_state\_t) remains*
 *Based on: comprehensive chip architecture audit of all systems and chips*
