@@ -579,9 +579,9 @@ Multiple video outputs on the same board each get their own buffer. The GUI pres
 | 2 | ~~Rename `GenericEmulatorGUI` → `EmulatorHost`; `SystemGUI` → `SessionGUI`~~ |
 | 3 | ~~Rename `EmulatedSystem` → `System`~~ |
 | 4 | ~~`PortType` A/V output variants; `VideoOutput` / `AudioOutput` descriptors; `Port` optional output fields~~ |
-| 5 | ~~Rename `BusMemory` → `Board`~~; ~~`BoardBase` non-owning component index~~; extract `BusMap` from address-decode logic; chip and port ownership on `Board` |
+| 5 | ~~Rename `BusMemory` → `Board`~~; ~~`BoardBase` non-owning component index~~; ~~extract `BusMap` from address-decode logic~~; ~~chip and port ownership on `Board`~~ |
 | 6 | Deferred — `VIC20Board` migration; `VIC20System` stripped to system-level concerns |
-| 7 | ~~`Session` composes systems~~; `System` composes boards; `SessionGUI` owns `Session` |
+| 7 | ~~`Session` composes systems~~; ~~`System` composes boards~~; `SessionGUI` owns `Session` |
 | 8 | ~~`PortRegistry`; `REGISTER_PORT`; standard ports self-register~~ |
 | 9 | ~~`DirectConnection`; inter-board wiring~~ |
 | 10 | Internal device auto-attachment via `DeviceRegistry` during board init |
