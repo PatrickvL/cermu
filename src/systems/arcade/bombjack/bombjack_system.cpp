@@ -66,8 +66,8 @@ bool BombJackSystem::initialize() {
     // ── Init chips ───────────────────────────────────────────────────────
     main_cpu_  = main_board_.cpu<ZilogZ80A>();
     sound_cpu_ = sound_board_.cpu<ZilogZ80A>();
-    main_pins_  = main_cpu_->init();
-    sound_pins_ = sound_cpu_->init();
+    main_pins_  = main_board_.cpu_chip()->init();
+    sound_pins_ = sound_board_.cpu_chip()->init();
     for (auto& ay : ay_) ay.init();
 
     load_roms();
@@ -88,16 +88,16 @@ void BombJackSystem::shutdown() {
 }
 
 void BombJackSystem::reset() {
-    if (!main_cpu_ || !sound_cpu_) return;
-    main_pins_  = main_cpu_->reset(main_pins_);
-    sound_pins_ = sound_cpu_->reset(sound_pins_);
+    if (!main_board_.cpu_chip() || !sound_board_.cpu_chip()) return;
+    main_pins_  = main_board_.cpu_chip()->reset(main_pins_);
+    sound_pins_ = sound_board_.cpu_chip()->reset(sound_pins_);
     for (auto& ay : ay_) ay.reset();
     sound_latch_ = 0;
     sound_nmi_ = false;
 }
 
 void BombJackSystem::tick() {
-    if (!main_cpu_ || !sound_cpu_) return;
+    if (!main_board_.cpu_chip() || !sound_board_.cpu_chip()) return;
 
     // Main CPU tick
     main_pins_ = main_cpu_->tick(main_pins_);

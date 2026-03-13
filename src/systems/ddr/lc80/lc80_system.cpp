@@ -62,7 +62,7 @@ bool LC80System::initialize() {
 
     // ── Init chips ──────────────────────────────────────────────────────
     cpu_ = board_.cpu<U880>();
-    pins_ = cpu_->init();
+    pins_ = board_.cpu_chip()->init();
     pio1_.init();
     pio2_.init();
     ctc_.init();
@@ -86,7 +86,7 @@ void LC80System::shutdown() { system_ready_ = false; }
 
 void LC80System::reset() {
     if (!cpu_) return;
-    pins_ = cpu_->reset(pins_);
+    pins_ = board_.cpu_chip()->reset(pins_);
     pio1_.init();
     pio2_.init();
     ctc_.init();

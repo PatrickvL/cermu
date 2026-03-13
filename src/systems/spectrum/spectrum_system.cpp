@@ -200,7 +200,7 @@ bool SpectrumSystem<V>::initialize() {
 
     // ── Init chips ──────────────────────────────────────────────────────
     cpu_ = board_.template cpu<ZilogZ80A>();
-    pins_ = cpu_->init();
+    pins_ = board_.cpu_chip()->init();
     ula_.init();
     if constexpr (Traits::has_ay_sound) {
         ay_.init();
@@ -237,7 +237,7 @@ void SpectrumSystem<V>::shutdown() {
 template<SpectrumVariant V>
 void SpectrumSystem<V>::reset() {
     if (!cpu_) return;
-    pins_ = cpu_->reset(pins_);
+    pins_ = board_.cpu_chip()->reset(pins_);
     ula_.reset();
     if constexpr (Traits::has_ay_sound) {
         ay_.reset();

@@ -78,7 +78,7 @@ bool NamcoArcadeSystem<G>::initialize() {
 
     // ── Init CPU + sound ────────────────────────────────────────────────
     cpu_ = board_.template cpu<ZilogZ80A>();
-    pins_ = cpu_->init();
+    pins_ = board_.cpu_chip()->init();
     wsg_.init();
 
     // Graphics ROMs — not bus-mapped
@@ -102,7 +102,7 @@ bool NamcoArcadeSystem<G>::initialize() {
 template<NamcoGame G> void NamcoArcadeSystem<G>::shutdown() { cpu_ = nullptr; system_ready_ = false; }
 template<NamcoGame G> void NamcoArcadeSystem<G>::reset() {
     if (!cpu_) return;
-    pins_ = cpu_->reset(pins_);
+    pins_ = board_.cpu_chip()->reset(pins_);
     wsg_.reset();
     int_enable_ = false;
     sound_enable_ = false;

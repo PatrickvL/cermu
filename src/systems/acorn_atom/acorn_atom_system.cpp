@@ -210,7 +210,7 @@ bool AcornAtomSystem::initialize() {
 
     // ── Init chips ──────────────────────────────────────────────────────
     cpu_ = board_.cpu<MOS6502>();
-    pins_ = cpu_->init();
+    pins_ = board_.cpu_chip()->init();
     vdg_.init();
     ppi_.init();
     ppi_.set_port_b_read_callback(ppi_keyboard_scan, this);
@@ -239,7 +239,7 @@ void AcornAtomSystem::shutdown() { system_ready_ = false; }
 
 void AcornAtomSystem::reset() {
     if (!cpu_) return;
-    pins_ = cpu_->reset(pins_);
+    pins_ = board_.cpu_chip()->reset(pins_);
     vdg_.init();
     // Reset all manifest chips (PPI, VIA; RAM/ROM are no-op)
     board_.reset_chips();

@@ -113,7 +113,7 @@ bool AmstradCPCSystem<M>::initialize() {
 
     // ── Init chips ──────────────────────────────────────────────────────
     cpu_ = board_.template cpu<ZilogZ80A>();
-    pins_ = cpu_->init();
+    pins_ = board_.cpu_chip()->init();
     crtc_.init();
     // Gate array drives interrupts from CRTC HSYNC (every 52 HSYNCs)
     crtc_.on_hsync = [this]() {
@@ -149,7 +149,7 @@ void AmstradCPCSystem<M>::shutdown() { cpu_ = nullptr; system_ready_ = false; }
 template<CPCModel M>
 void AmstradCPCSystem<M>::reset() {
     if (!cpu_) return;
-    pins_ = cpu_->reset(pins_);
+    pins_ = board_.cpu_chip()->reset(pins_);
     crtc_.init();
     ppi_.init();
     ay_.reset();

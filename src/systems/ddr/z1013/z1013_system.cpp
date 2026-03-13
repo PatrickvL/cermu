@@ -86,7 +86,7 @@ bool Z1013System<V>::initialize() {
 
     // ── Init chips ──────────────────────────────────────────────────────
     cpu_ = board_.template cpu<U880>();
-    pins_ = cpu_->init();
+    pins_ = board_.cpu_chip()->init();
     pio_.init();
 
     // Character ROM — not bus-mapped, used for display rendering only
@@ -111,7 +111,7 @@ bool Z1013System<V>::initialize() {
 template<Z1013Variant V> void Z1013System<V>::shutdown() { cpu_ = nullptr; system_ready_ = false; }
 template<Z1013Variant V> void Z1013System<V>::reset() {
     if (!cpu_) return;
-    pins_ = cpu_->reset(pins_);
+    pins_ = board_.cpu_chip()->reset(pins_);
     pio_.init();
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
     keyboard_column_select_ = 0xFF;

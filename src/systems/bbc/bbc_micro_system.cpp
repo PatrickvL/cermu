@@ -188,8 +188,8 @@ bool BBCMicroSystem::initialize() {
     }
 
     // ---- CPU (MOS 6502 @ 2 MHz) ----
-    cpu_->init();
-    cpu_->reset();
+    board_.cpu_chip()->init();
+    board_.cpu_chip()->reset();
 
     // ---- CRTC (MC6845) ----
     crtc_ = new mc6845_t();
@@ -260,7 +260,7 @@ void BBCMicroSystem::reset() {
     printf("BBC Micro: Resetting\n");
 
     // Reset all chips
-    if (cpu_)  { cpu_->reset(); }
+    if (board_.cpu_chip())  { board_.cpu_chip()->reset(); }
     if (crtc_) { crtc_->reset(); }
     if (psg_)  { psg_->reset(); }
     system_via_.reset();
