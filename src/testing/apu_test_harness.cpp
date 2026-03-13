@@ -261,6 +261,9 @@ int test_length_counter_table(harness_t* h) {
         // Write timer high with length counter index i
         write_reg(h, REG_SQ1_HI, (i << 3));
 
+        // Clock one cycle to resolve the deferred length counter reload
+        clock_cycles(h, 1);
+
         // The length counter should be loaded with expected[i]
         uint8_t loaded = h->apu->pulse1.length.value();
         if (loaded != expected[i]) {
@@ -289,6 +292,7 @@ int test_length_counter_halt(harness_t* h) {
     write_reg(h, REG_SQ1_LO, 0x00);
     enable_channel(h, 0x01);
     write_reg(h, REG_SQ1_HI, (3 << 3)); // Length = 2
+    clock_cycles(h, 1); // Resolve deferred length counter reload
 
     // Verify initial length
     if (h->apu->pulse1.length.value() != 2) {
@@ -339,6 +343,7 @@ int test_length_counter_enable(harness_t* h) {
     write_reg(h, REG_SQ1_LO, 0x00);
     enable_channel(h, 0x01);
     write_reg(h, REG_SQ1_HI, (1 << 3)); // Length = 254
+    clock_cycles(h, 1); // Resolve deferred length counter reload
 
     if (!h->apu->pulse1.length.active()) {
         printf("    FAIL: Pulse1 length should be active after load\n");
@@ -982,6 +987,7 @@ int test_frame_counter_4step(harness_t* h) {
     write_reg(h, REG_SQ1_LO, 0x80);
     enable_channel(h, 0x01);
     write_reg(h, REG_SQ1_HI, (0 << 3) | 0x01); // Length table index 0 = 10, period high = 1
+    clock_cycles(h, 1); // Resolve deferred length counter reload
 
     uint8_t initial_len = h->apu->pulse1.length.value();
     if (initial_len != 10) {
@@ -1152,6 +1158,7 @@ int test_status_register(harness_t* h) {
     write_reg(h, REG_TRI_HI, (1 << 3));
     write_reg(h, REG_NOISE_VOL, 0x3F);
     write_reg(h, REG_NOISE_HI, (1 << 3));
+    clock_cycles(h, 1); // Resolve deferred length counter reloads
 
     status = read_status(h);
     if ((status & 0x0F) != 0x0F) {
