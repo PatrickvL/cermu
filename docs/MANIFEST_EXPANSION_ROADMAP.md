@@ -1,9 +1,36 @@
 # Manifest Expansion Roadmap
 
-**Date:** 2026-07-22
+**Date:** 2026-03-13 (revised)
 **Purpose:** Incremental plan to evolve chip manifests into full board declarations,
 bridging the gap between current C++ systems and data-driven TOML system definitions.
-**Builds On:** Current `ChipManifest` / `Board` infrastructure, `CONFIGURABLE_SYSTEM_ARCHITECTURE.md`
+**Builds On:** Current `ChipManifest` / `Board` / `BusMap` infrastructure,
+`CERMU_ARCHITECURE_COMPLETE_REFERENCE.md`, `CONFIGURABLE_SYSTEM_ARCHITECTURE.md`
+
+---
+
+## Infrastructure Completed Since Original Roadmap
+
+The following architectural work has landed since this document was first written and
+changes the baseline assumptions for every phase below:
+
+| Work item | Status | Impact |
+|-----------|--------|--------|
+| `ComponentBase` base class | ✅ Done | `ChipBase` and `Port` derive from it; enables generic component iteration |
+| `BoardBase` (non-templated) | ✅ Done | Port ownership, component registry, lifecycle hooks (`reset()`, `power_on()`, `tick()`) |
+| `BusMap<Spec>` extraction | ✅ Done | Address-decode logic separated from chip lifetime in `Board<Spec>` |
+| `ManifestBusSpec` auto-derivation | ✅ Done | Compile-time `BusSpec` derived from `ChipManifest` — no manual spec writing |
+| `System::primary_board_` (value member) | ✅ Done | Port ops always go through `primary_board_`; no pointer chase, no conditional |
+| `System::register_board()` | ✅ Done | Systems with `Board<Spec>` register via `register_board(&bus_mem_)` for generic iteration |
+| `System::get_boards()` | ✅ Done | Returns all boards (primary first, then registered additional boards) |
+| `PortRegistry` + `REGISTER_PORT` | ✅ Done | Singleton `PortType` → `PortDefinition`; standard ports self-register |
+| `VideoOutput` / `AudioOutput` descriptors | ✅ Done | Optional output signal metadata on `Port` instances |
+| `Session` + `DirectConnection` | ✅ Done | Multi-system composition with bidirectional inter-port wiring |
+| `ChipRegistry` + `REGISTER_CHIP` | ✅ Done | Runtime string → factory; two-path resolution (compile-time + registry) |
+| `DeviceRegistry` + `REGISTER_DEVICE` | ✅ Done | Runtime peripheral device factories; `get_compatible_devices(PortType)` |
+| `SystemRegistry` | ✅ Done | Two-phase file identification, alias-boost, confidence scoring |
+| Rename `BusMemory` → `Board` | ✅ Done | Terminology alignment; `Board<Spec>` is the templated owner |
+| Rename `EmulatedSystem` → `System` | ✅ Done | Clean naming |
+| Rename `GenericEmulatorGUI` → `EmulatorHost`; `SystemGUI` → `SessionGUI` | ✅ Done | GUI host substrate separation |
 
 ---
 
@@ -12,41 +39,51 @@ bridging the gap between current C++ systems and data-driven TOML system definit
 ### What Manifests Declare Today
 
 Manifests describe **memory-mapped chips** in address space: RAM, ROM, and (in newer
-systems) MMIO-only I/O chips.  `Board` owns the unified buffer, auto-wires page
-tables, and manages chip lifetimes via factory creation or pre-binding.
+systems) MMIO-only I/O chips.  `Board<Spec>` owns the unified buffer, `BusMap<Spec>`
+auto-wires page tables / MMIO handlers, and `Board<Spec>` manages chip lifetimes via
+factory creation or pre-binding.
 
-| System      | Manifest contains                              | Non-manifest chips (manual)              |
-|-------------|------------------------------------------------|------------------------------------------|
-| VIC-20      | RAM, ROM ×3, CPU, VIC, VIA ×2 (gold standard)  | —                                        |
-| Atari 2600  | TIA (MMIO), RIOT (MMIO), CartChip (MMIO)       | CPU (manual `new`)                       |
-| Apple 1     | RAM, ROM ×2, PIA (MMIO, bound)                 | CPU (manual `new`), terminal             |
-| Acorn Atom  | RAM ×2, ROM ×3, PPI (MMIO, bound), VIA (bound) | CPU (manual `new`), VDG                  |
-| BBC Micro   | RAM, ROM ×2                                    | CPU, CRTC, PSG, VIA ×2                   |
-| Spectrum    | RAM, ROM                                       | CPU, ULA, AY                             |
-| C16/Plus4   | RAM, ROM ×2                                    | CPU, TED, keyboard                       |
-| PET         | RAM ×2, ROM ×5                                 | CPU, CRTC, PIA ×2, VIA                   |
-| Amstrad CPC | RAM, ROM ×2                                    | CPU, CRTC, PPI, AY, gate array           |
-| DDR systems | RAM, ROM (memory-only)                         | CPU, PIO, CTC (all embedded)             |
-| Arcade      | RAM, ROM (memory-only)                         | CPU(s), sound chips (all embedded)       |
+| System | Manifest contains | Non-manifest chips (manual) |
+|---|---|---|
+| VIC-20 | RAM, ROM ×3, CPU, VIC (PAL/NTSC conditional), VIA ×2 — **gold standard** | — |
+| Atari 2600 | TIA (MMIO), RIOT (MMIO), CartChip (MMIO) | CPU |
+| Apple 1 | RAM, ROM ×2, PIA (MMIO) | CPU, terminal |
+| Acorn Atom | RAM ×2, ROM ×3, PPI (MMIO), VIA (MMIO) | CPU, VDG |
+| BBC Micro | RAM, ROM ×2 | CPU, CRTC, PSG, VIA ×2 |
+| Spectrum | RAM, ROM (variant-gated 48K/128K) | CPU, ULA, AY |
+| C16/Plus4 | RAM, ROM ×2 | CPU, TED |
+| PET | RAM ×2, ROM ×5 | CPU, VIA |
+| Amstrad CPC | RAM, ROM ×2 (variant-gated 464/6128) | CPU, CRTC, PSG |
+| DDR KC85 | RAM, IRM, ROM ×1–2 (variant-gated /2, /3, /4) | CPU |
+| DDR Z9001/KC87 | RAM, ROM ×1–4, Video RAM, Color RAM (variant-gated) | CPU |
+| DDR LC80 | ROM, RAM | CPU |
+| DDR Z1013 | RAM, ROM, Video RAM (variant-gated 16K/64K) | CPU |
+| Bomb Jack | Main: ROM, RAM ×4.  Sound: ROM, RAM — **dual `Board<Spec>`** | CPU ×2 (main + sound) |
+| Namco Arcade | ROM, RAM ×3 (variant-gated Pac-Man/Pengo) | CPU |
+| C64 | **none** — all chips manual, legacy `c64_bus_t` dispatch | CPU, VIC-II, SID, CIA ×2, Color RAM, RAM, ROM ×4, keyboard |
+| NES | **none** — all chips manual, separate PPU bus | CPU, PPU, APU, RAM, CIRAM, CD4021 ×2, mapper/cartridge |
+| CHIP-8 | **N/A** — pure interpreter, no bus model | ChipPlaceholders for GUI only |
 
 ### Generic Lifecycle: `reset_chips()`
 
-`Board::reset_chips()` iterates all bound slots and calls `ChipBase::reset()`.
+`Board<Spec>::reset_chips()` iterates all `owned_chips_` and calls `ChipBase::reset()`.
 Currently used by: VIC-20, Atari 2600, Apple 1, Acorn Atom.  Safe for all chip types
 (RAM/ROM/CPU have no-op `reset()`).
+
+`BoardBase::power_on()` exists as an empty virtual — no system overrides it yet.
 
 ---
 
 ## Phase 1: Expand Manifests with All Chips
 
-**Goal:** Move ALL manually-created chips into manifests as MMIO-only slots.
+**Goal:** Move ALL manually-created chips into manifests as non-bus or MMIO-only slots.
 
 ### Requirements per chip type
 
 | Chip type | Needs for manifest inclusion |
 |-----------|------------------------------|
 | Memory-mapped I/O | `has_mmio()`, `on_bus_read()`, `on_bus_write()` overrides |
-| Non-memory-mapped (CPU, sound) | MMIO-only slot `{0, 0, 0, "label"}` — no address decode needed |
+| Non-memory-mapped (CPU, sound) | Non-bus slot `{0, 0, 0, "label"}` — no address decode needed |
 | Conditional (PAL/NTSC) | `condition` tag on slot + `ConditionFn` in `create_chips()` |
 | Descriptor-initialized | `create_from_slot()` factory, or pre-bind for complex init |
 
@@ -69,10 +106,13 @@ need them before they can be placed in manifests with address-decode:
 - `mc6845_t` — CRTC for BBC Micro, PET, Amstrad CPC
 - `sn76489_t` — PSG for BBC Micro
 - `ay_3_8910_t` — sound for Spectrum, Amstrad CPC, arcade
-- `amstrad_gate_array_t` — gate array for Amstrad CPC
 - `ferranti_ula_t` — ULA for Spectrum
 - DDR Z80 peripherals: `z80_pio_t`, `z80_ctc_t`
-- NES chips: PPU, APU (use separate bus, not memory bus)
+
+Chips needing extraction into `ChipBase` subclass before manifest inclusion:
+- **Amstrad CPC gate array** — currently an embedded `gate_array_` struct in `AmstradCPCSystem`,
+  not a `ChipBase` subclass.  Must be extracted into a standalone chip (e.g. `amstrad_ga_t`)
+  with `has_mmio()` / `on_bus_read()` / `on_bus_write()` before it can appear in manifests.
 
 Chips that DON'T need MMIO (non-memory-mapped, pure logic):
 - CPUs: already have `Slot<MOS6502>{0, 0, 0}` pattern (VIC-20 gold standard)
@@ -99,13 +139,15 @@ Slot<RAMChip>{0x0400, 3072, 0, "3K Expansion", kExpansion3K},
 
 **Goal:** Extend `reset_chips()` pattern to cover all lifecycle events.
 
-### Current ChipBase lifecycle methods
+### Current lifecycle methods
 
-| Method      | Virtual? | Signature             | Generic-callable?             |
-|-------------|----------|-----------------------|-------------------------------|
-| `reset()`   | Yes      | `void reset()`        | **Yes** — already done        |
-| Constructor | No       | Varies                | No — handled by factory       |
-| Destructor  | Yes      | `virtual ~ChipBase()` | Yes — handled by `unique_ptr` |
+| Class | Method | Virtual? | Status |
+|-------|--------|----------|--------|
+| `ChipBase` | `reset()` | Yes | **Done** — iteratable via `Board::reset_chips()` |
+| `ChipBase` | `~ChipBase()` | Yes | **Done** — handled by `unique_ptr` |
+| `BoardBase` | `reset()` | Yes | **Done** — pure virtual, overridden per board |
+| `BoardBase` | `power_on()` | Yes | **Done** — empty virtual, no overrides yet |
+| `BoardBase` | `tick()` | Yes | **Done** — pure virtual, overridden per board |
 
 ### Future lifecycle additions to ChipBase
 
@@ -135,47 +177,55 @@ class Board {
 };
 ```
 
-### EmulatedSystem generic chip iteration
+### System generic chip iteration
 
 ```cpp
-class EmulatedSystem {
+class System {
     // Future: iterate all registered chips (not just bus-owned)
     // void reset_all_chips();        // registered_chips_ iteration
+    //
+    // Could also walk get_boards() → board->reset_chips() for unified reset
+    // across primary_board_ and registered Board<Spec> instances.
 };
 ```
 
 ---
 
-## Phase 3: Board Declarations
+## Phase 3: Board Declarations — Remaining Work
 
-**Goal:** Systems declare boards containing chips, connectors, and other components.
+**Goal:** Systems declare boards containing chips, ports, and other components
+as a single declarative unit.
 
-### Board concept
+### What already exists
 
-A board is a named collection of:
-- **Chips** — from the manifest (memory + I/O + CPU + support)
-- **Ports** — physical ports (joystick, cartridge, serial, power)
-- **Embedded components** — keyboards, LEDs, speakers, DIP switches
-- **Bus wiring** — which chips share which bus, address decoding rules
+`BoardBase` already provides:
+- Port ownership (`add_port()`, `get_port()`, `clear_ports()`)
+- Component registry (non-owning `ComponentBase*` index over chips + ports)
+- Lifecycle hooks (`reset()`, `power_on()`, `tick()`)
+- Component lookup (`find_component<T>()`, `find_components<T>()`)
 
-```cpp
-struct BoardDeclaration {
-    const char* name;                    // "C64 Main Board", "NES CPU Board"
-    ChipManifest<N> chips;               // All chips on this board
-    std::span<const PortDef> ports;  // Physical ports
-    std::span<const ComponentDef> components;  // Non-chip components
-    // Bus wiring is implicit from the manifest's address map
-};
-```
+`Board<Spec>` adds:
+- Chip ownership (`owned_chips_`, factory creation via `create_chips()`)
+- Unified buffer ownership
+- `BusMap<Spec>` delegation for address-decode
+- `register_board_components()` to populate component index
+
+### What's missing
+
+| Missing piece | Description | Blocking? |
+|---------------|-------------|-----------|
+| Non-chip components | Keyboards, LED displays, speakers, DIP switches — not `ChipBase` subclasses | No — can be added as `ComponentBase` subtypes |
+| Multi-board scheduling | Board-level tick scheduling with clock dividers | Blocks multi-board systems |
+| Board naming | Human-readable board name (e.g. "C64 Main Board") | Cosmetic |
 
 ### Multi-board systems
 
-Some systems have multiple physical boards:
-- **NES**: CPU board + cartridge board (mapper)
-- **Bomb Jack**: main board + sound board (separate CPUs)
-- **C64 + 1541**: main board + disk drive board
+Some systems have multiple buses on one physical PCB or multiple physical boards:
+- **NES**: CPU bus + PPU bus on one PCB (two `Board<Spec>` instances, see NES section)
+- **Bomb Jack**: main board + sound board (separate CPUs, already dual `Board<Spec>`)
+- **C64 + 1541**: main board + disk drive board (separate system in future `Session`)
 
-Each board has its own `Board` instance and tick schedule.
+Each board has its own `Board<Spec>` instance and tick schedule.
 
 ### Component types beyond chips
 
@@ -202,13 +252,107 @@ TOML schema design.  Key bridge from Phase 3:
 4. Existing C++ systems become "reference implementations" — TOML equivalents
    can be generated from them
 
-### Prerequisites (not yet built)
+### Prerequisites
 
-- Generic tick scheduler (clock dividers, multi-CPU coordination)
-- Chip registry (string name → factory function mapping)
-- Port registry (string name → PortDefinition)
-- Bus wiring DSL (address decode rules in TOML)
-- Callback wiring (chip-to-chip signal routing without C++ glue)
+| Prerequisite | Status | Notes |
+|---|---|---|
+| Chip registry (string → factory) | ✅ Done | `ChipRegistry` + `REGISTER_CHIP` / `REGISTER_CHIP_TYPE` |
+| Port registry (string → `PortDefinition`) | ✅ Done | `PortRegistry` + `REGISTER_PORT`; standard ports self-register |
+| Generic tick scheduler | Not started | Clock dividers, multi-CPU coordination |
+| Bus wiring DSL | Not started | Address decode rules in TOML |
+| Callback wiring | Not started | Chip-to-chip signal routing without C++ glue |
+
+---
+
+## C64 Migration Plan
+
+**Goal:** Replace the legacy `c64_bus_t` manual dispatch with `Board<Spec>` +
+`ChipManifest`, absorbing `c64_bus_t` into `C64System`.
+
+### Current architecture
+
+`C64System` embeds a `c64_bus_t` struct that implements a hand-rolled bus model:
+- **Unified memory buffer** — single allocation for RAM + all ROMs
+- **PLA banking tables** — `cpu_encoded_chip_per_bank_per_mode[32][16]` precomputed
+  from the PLA for all 32 modes, copied into active mapping on mode switch
+- **I/O page handlers** — function pointer table `io_handlers[16]` covering $D000–$DFFF
+  in 256-byte pages (VIC-II, SID, Color RAM, CIA1, CIA2, I/O1, I/O2)
+- **VIC-II separate read path** — `vicii_chip_per_bank[16]` table with Character ROM
+  visible at $1000–$1FFF (not $D000)
+- All 11+ chips owned as raw `new` pointers on `C64System` member fields
+
+The `c64_bus_t` back-references `C64System*` via a raw pointer.
+
+### Migration strategy
+
+The migration replaces `c64_bus_t` with a `Board<C64BusSpec>` while preserving the
+C64's critical performance characteristics: branchless page dispatch, precomputed
+PLA banking tables, and zero-overhead I/O handler dispatch.
+
+#### Step 1: Define the manifest
+
+```cpp
+inline constexpr auto kC64Chips = make_chip_manifest(
+    // Memory
+    Slot<RAMChip>  {0x0000, 65536, 0, "RAM"},
+    Slot<ROMChip>  {0x0000,  8192, 0, "BASIC ROM"},     // $A000, banked
+    Slot<ROMChip>  {0x0000,  4096, 0, "Character ROM"},  // $D000 (CPU) / $1000 (VIC-II)
+    Slot<ROMChip>  {0x0000,  8192, 0, "Kernal ROM"},     // $E000, banked
+    Slot<ROMChip>  {0x0000,  8192, 0, "Cartridge ROML"}, // $8000, conditional
+    Slot<ROMChip>  {0x0000,  8192, 0, "Cartridge ROMH"}, // $A000/$E000, conditional
+    // I/O (MMIO-only, dispatch via io_handlers)
+    Slot<vicii_t>     {0xD000, 0, 0xFC00, "VIC-II"},
+    Slot<mos6581_t>   {0xD400, 0, 0xFC00, "SID"},
+    Slot<MOS2114>     {0xD800, 0, 0xFC00, "Color RAM"},
+    Slot<mos6526_t>   {0xDC00, 0, 0xFF00, "CIA 1"},
+    Slot<mos6526_t>   {0xDD00, 0, 0xFF00, "CIA 2"},
+    // Non-bus
+    Slot<MOS6510>  {0, 0, 0, "MOS 6510"},
+);
+```
+
+**Note:** ROM base addresses are set to 0 because the PLA banking logic handles all
+mapping — `Board<Spec>` owns the buffer but the C64's custom `memory_tick()` drives
+page table programming, not the default `BusMap::apply()`.
+
+#### Step 2: Add MMIO interfaces to C64 I/O chips
+
+These chips need `has_mmio()` / `on_bus_read()` / `on_bus_write()`:
+- `vicii_t` (VIC-II)
+- `mos6581_t` (SID)
+- `MOS2114` (Color RAM)
+- `mos6526_t` (CIA) — shared with future systems
+
+#### Step 3: Absorb c64_bus_t into C64System
+
+Move the PLA banking tables, I/O handler dispatch, and unified buffer access from
+`c64_bus_t` into C64System's `Board<C64BusSpec>`:
+- PLA table generation → method on C64System or a Board subclass
+- `io_handlers[16]` → `BusMap` MMIO handlers or custom MaskedSubTable
+- `memory_tick()` → C64System's bus dispatch (may need custom `Board<Spec>` subclass
+  to preserve the precomputed table approach)
+- Remove `c64_bus_t` struct and its back-pointer to `C64System*`
+
+#### Step 4: Evaluate BusMap fit
+
+The C64's multi-viewer banking (32 PLA modes × CPU/VIC-II) may exceed what
+`BusMap::apply()` provides out of the box.  Two options:
+- **Option A:** Use `BusMap` for chip ownership + buffer management only, keep
+  custom page table programming via `map_chip_read()` / `map_chip_write()` calls
+  driven by PLA mode switch.
+- **Option B:** Subclass `Board<C64BusSpec>` to override `apply()` with PLA-aware
+  logic, using the existing `MemoryBus` multi-viewer infrastructure.
+
+Option A is lower risk and preserves the current branchless hot path.
+
+#### Complexity notes
+
+- The C64 I/O region ($D000–$DFFF) is split into 16 × 256-byte handler pages — this
+  maps cleanly to `BusMap` MMIO handlers with masked sub-tables.
+- VIC-II's separate memory view (Character ROM at $1000, not $D000) requires a second
+  viewer in `MemoryBus` — `ManifestBusSpec` supports `NViewers > 1`.
+- Cartridge ROML/ROMH are conditional on EXROM/GAME signals — use manifest `condition`
+  tags or manage as dynamic chips.
 
 ---
 
@@ -216,18 +360,23 @@ TOML schema design.  Key bridge from Phase 3:
 
 Systems ordered by migration complexity (easiest first):
 
-| Priority | System | Effort | Notes |
-|----------|--------|--------|-------|
-| ✅ Done | VIC-20 | — | Gold standard, all chips in manifest |
-| ✅ Done | Atari 2600 | — | TIA + RIOT + CartChip in manifest |
-| Low | Apple 1 | Small | CPU only remaining chip outside manifest |
-| Low | Acorn Atom | Small | CPU + VDG outside manifest |
-| Medium | BBC Micro | Medium | 5 chips to add (CPU, CRTC, PSG, VIA ×2) |
-| Medium | PET | Medium | 5 chips to add (CPU, CRTC, PIA ×2, VIA) |
-| Medium | C16/Plus4 | Medium | 3 chips to add (CPU, TED, keyboard) |
-| Medium | Spectrum | Medium | 3 chips to add (CPU, ULA, AY) |
-| Medium | Amstrad CPC | Medium | 5 chips to add (CPU, CRTC, PPI, AY, GA) |
-| High | DDR systems | High | Z80 peripherals need MMIO; 4–6 systems |
-| High | Arcade | High | Multi-CPU, custom wiring |
-| Deferred | C64 | Large | Complex PLA banking, no bus_mem_ yet |
-| Deferred | NES | Large | Separate PPU bus, mapper complexity |
+| Priority | System | Effort | Chips to add | Notes |
+|----------|--------|--------|---|---|
+| ✅ Done | VIC-20 | — | — | Gold standard: all chips in manifest including CPU, conditional VIC |
+| Low | Atari 2600 | Small | CPU | TIA + RIOT + CartChip already MMIO; just add `Slot<MOS6507>{0,0,0}` |
+| Low | Apple 1 | Small | CPU | RAM, ROM ×2, PIA (MMIO) done; add `Slot<MOS6502>{0,0,0}` |
+| Low | Acorn Atom | Small | CPU, VDG | RAM ×2, ROM ×3, PPI (MMIO), VIA (MMIO) done; add non-bus slots |
+| Low | DDR LC80 | Small | CPU | ROM + RAM done; add `Slot<Z80>{0,0,0}` |
+| Low | DDR Z1013 | Small | CPU | RAM + ROM + Video RAM (variant-gated); add Z80 slot |
+| Medium | DDR KC85 | Medium | CPU, PIO | RAM + IRM + ROM (variant-gated); Z80 PIO needs MMIO |
+| Medium | DDR Z9001/KC87 | Medium | CPU, PIO, CTC | Variant-gated manifests; Z80 PIO + CTC need MMIO |
+| Medium | Namco Arcade | Medium | CPU | ROM + RAM ×3 (variant-gated); add Z80 slot |
+| Medium | Bomb Jack | Medium | CPU ×2 | Already dual `Board<Spec>`; just add CPU slots to each manifest |
+| Medium | BBC Micro | Medium | CPU, CRTC, PSG, VIA ×2 | `mc6845_t`, `sn76489_t` need MMIO; VIA already has it |
+| Medium | PET | Medium | CPU, CRTC, VIA | `mc6845_t` needs MMIO; `mos6522_t` already has it |
+| Medium | C16/Plus4 | Medium | CPU, TED | `ted7360_t` needs MMIO |
+| Medium | Spectrum | Medium | CPU, ULA, AY | `ferranti_ula_t`, `ay_3_8910_t` need MMIO |
+| Medium | Amstrad CPC | Medium–High | CPU, CRTC, PSG, gate array | Gate array needs ChipBase extraction + MMIO; `mc6845_t`, `ay_3_8910_t` need MMIO |
+| High | C64 | High | All 12 chips | See C64 Migration Plan above; `c64_bus_t` absorbed into `Board<Spec>` |
+| Deferred | NES | High | All 7+ chips | Two buses on one PCB (CPU bus + PPU bus); Bomb Jack dual-board pattern is a stepping stone; mapper complexity significant |
+| N/A | CHIP-8 | — | — | Pure interpreter, no bus model; not a candidate for manifest migration |
