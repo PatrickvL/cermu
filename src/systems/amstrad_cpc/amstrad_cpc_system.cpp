@@ -105,7 +105,10 @@ bool AmstradCPCSystem<M>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
     register_board(&board_);
 
-    // ── Factory-create memory chips from manifest ─────────────────────
+    // ── Pre-bind stack-member chips, then factory-create all chips ─────
+    board_.bind_chip(cpc_chips::kCrtcSlot, &crtc_);
+    board_.bind_chip(cpc_chips::kPpiSlot,  &ppi_);
+    board_.bind_chip(cpc_chips::kAySlot,   &ay_);
     board_.create_chips(&pins_);
 
     // ── Configure page tables for this variant ──────────────────────────
@@ -129,13 +132,7 @@ bool AmstradCPCSystem<M>::initialize() {
 
     load_roms();
 
-    // ── Register chips for Hardware menu ────────────────────────────────
-    register_chip(&crtc_,
-        "MC6845 CRTC", "MC6845", "Video", 0);
-    register_chip(&ppi_,
-        "Intel 8255 PPI", "i8255", "I/O", 0);
-    register_chip(&ay_,
-        "AY-3-8912 PSG", "AY-3-8912", "Sound", 0);
+    // ── Register all manifest chips for Hardware menu ────────────────
     register_bus_chips(board_);
 
     printf("%s: System initialized (%dKB RAM)\n", Traits::name, Traits::ram_size_kb);
@@ -149,10 +146,9 @@ void AmstradCPCSystem<M>::shutdown() { cpu_ = nullptr; system_ready_ = false; }
 template<CPCModel M>
 void AmstradCPCSystem<M>::reset() {
     if (!cpu_) return;
+    // Reset all manifest chips (CRTC, PPI, AY; RAM/ROM are no-op)
+    board_.reset_chips();
     pins_ = board_.cpu_chip()->reset(pins_);
-    crtc_.init();
-    ppi_.init();
-    ay_.reset();
     gate_array_.reset();
     configure_bus_memory_map();
 }
