@@ -562,6 +562,7 @@ bool VIC20System::initialize() {
     if (initialized_) return true;
     
     printf("VIC20: Initializing system\n");
+    set_primary_board(&bus_mem_);
     
     // ── Condition callback for PAL/NTSC variant selection ────────────────
     auto vic20_condition = [](uint16_t cond, const void* ctx) -> bool {

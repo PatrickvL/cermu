@@ -1,12 +1,18 @@
 #pragma once
 // =============================================================================
-// board_base.h — Non-templated base for all boards
+// board_base.hpp — Non-templated base for all boards
 // =============================================================================
 //
 // BoardBase is the abstract base class for Board<Spec> and concrete board
-// subclasses (e.g. VIC20Board).  It owns a non-owning component index into
-// the chips and connectors that the derived Board<Spec> owns, enabling
-// type-erased iteration from System and SessionGUI.
+// subclasses (e.g. VIC20Board).  It owns:
+//
+//   - A non-owning component index into the chips and ports that the
+//     derived Board<Spec> owns, enabling type-erased iteration from
+//     System and SessionGUI.
+//
+//   - Port storage (vector<unique_ptr<Port>>) — physical connector jacks
+//     soldered onto the board.  Template-independent, so it lives here
+//     rather than in the templated Board<Spec>.
 //
 // Inherits ComponentBase so that boards themselves can participate in the
 // component hierarchy (e.g. a Drive1541Board attached as a peripheral).
@@ -15,12 +21,19 @@
 #include "core/component_base.hpp"
 
 #include <cstring>
+#include <memory>
 #include <span>
 #include <string_view>
 #include <vector>
 
+// Forward declarations — full definitions in port.hpp.
+class Port;
+struct PortDefinition;
+
 class BoardBase : public ComponentBase {
 public:
+    ~BoardBase() override;  // defined in board_base.cpp for unique_ptr<Port>
+
     // ── ComponentBase overrides ──────────────────────────────────────────
 
     // Default name — concrete boards should override with a meaningful label.
@@ -45,9 +58,9 @@ public:
 
     // ── Component registry ───────────────────────────────────────────────
     //
-    // Non-owning index of all chips and connectors on this board.  Populated
+    // Non-owning index of all chips and ports on this board.  Populated
     // by Board<Spec>::register_board_components() after chip creation and
-    // connector construction.
+    // port construction.
     //
 
     [[nodiscard]] std::span<ComponentBase* const> components() const {
@@ -75,6 +88,35 @@ public:
         return result;
     }
 
+    // ── Port ownership ───────────────────────────────────────────────────
+    //
+    // Physical connector jacks on this board.  Ports are template-independent,
+    // so ownership lives here in the non-templated base rather than in
+    // Board<Spec>.  Ports created via add_port() are automatically included
+    // in register_board_components().
+    //
+
+    /// Add a port from a definition (creates the Port internally).
+    /// Returns the port index.
+    int add_port(const PortDefinition& def, int port_number = 0);
+
+    /// Add a pre-constructed port (takes ownership).  Returns the port index.
+    int add_port(std::unique_ptr<Port> port);
+
+    /// Get a port by index (nullptr if out of range).
+    [[nodiscard]] Port* get_port(int index);
+    [[nodiscard]] const Port* get_port(int index) const;
+
+    /// Get all ports on this board.
+    [[nodiscard]] const std::vector<std::unique_ptr<Port>>& get_ports() const {
+        return ports_;
+    }
+
+    /// Number of ports on this board.
+    [[nodiscard]] int port_count() const {
+        return static_cast<int>(ports_.size());
+    }
+
 protected:
     void register_component(ComponentBase* c) {
         if (c) components_.push_back(c);
@@ -83,6 +125,8 @@ protected:
     void clear_components() {
         components_.clear();
     }
+
+    std::vector<std::unique_ptr<Port>> ports_;
 
 private:
     std::vector<ComponentBase*> components_;  // non-owning; lifetime in Board<Spec>

@@ -182,6 +182,7 @@ bool Apple1System::apply_configuration() {
 // ============================================================================
 bool Apple1System::initialize() {
     printf("Apple1: Initializing system\n");
+    set_primary_board(&bus_mem_);
     
     // ── Pre-bind PIA, then factory-create memory chips ────────────────
     bus_mem_.bind_chip(apple1_chips::kPiaSlot, &pia_);

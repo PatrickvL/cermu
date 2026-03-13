@@ -51,6 +51,7 @@ bool LC80System::apply_configuration() { return true; }
 
 bool LC80System::initialize() {
     printf("LC 80: Initializing system\n");
+    set_primary_board(&bus_mem_);
 
     // ── Create memory chips from manifest and wire bus ────────────────────
     bus_mem_.create_chips(&pins_);

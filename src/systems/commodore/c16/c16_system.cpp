@@ -543,6 +543,7 @@ bool Commodore264System<V>::initialize() {
     }
     
     printf("%s: Initializing system\n", Traits::name);
+    set_primary_board(&bus_mem_);
     
     // ── Create memory chips from manifest and wire bus ───────────────────
     bus_mem_.create_chips(&bus_state_);

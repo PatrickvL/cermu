@@ -167,6 +167,7 @@ bool Atari2600System::apply_configuration() {
 
 bool Atari2600System::initialize() {
     printf("Atari2600: Initializing system\n");
+    set_primary_board(&bus_mem_);
 
     // ── Factory-create TIA, RIOT, and CartChip from the manifest ────────
     bus_mem_.create_chips(&pins_);
