@@ -421,6 +421,17 @@ std::vector<IGFD::FileInfos> VfsFileSystem::ScanDirectory(const std::string& vPa
 std::vector<IGFD::FileInfos> VfsFileSystem::scan_real_directory(const std::string& path) {
     std::vector<IGFD::FileInfos> res;
 
+    // Always emit ".." so IGFD can navigate to the parent directory.
+    // std::filesystem::directory_iterator never yields "." or "..",
+    // and IGFD's stock FileSystemStd adds ".." explicitly.
+    {
+        IGFD::FileInfos dotdot;
+        dotdot.filePath    = path;
+        dotdot.fileNameExt = "..";
+        dotdot.fileType.SetContent(IGFD::FileType::ContentType::Directory);
+        res.push_back(dotdot);
+    }
+
 #ifdef CERMU_USE_STD_FILESYSTEM
     std::error_code ec;
     for (const auto& entry : cermu_fs::directory_iterator(path, ec)) {
