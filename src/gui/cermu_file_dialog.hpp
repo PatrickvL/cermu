@@ -78,15 +78,22 @@ protected:
                     }
                 }
                 // --- stock IGFD behavior for regular directories ---
+                // With NavEnableKeyboard, single-click navigates into
+                // directories (IGFD's "little fix for mouse behavior in
+                // nav system").  Guard with !pathClicked so the double-
+                // click event that may fire in the same frame can't
+                // overwrite a successful navigation with a failed one.
                 else if (ImGui::GetIO().ConfigFlags &
                          ImGuiConfigFlags_NavEnableKeyboard) {
                     if (ImGui::IsMouseDoubleClicked(0)) {
-                        fdi.pathClicked = fdi.SelectDirectory(vInfos);
+                        if (!fdi.pathClicked)
+                            fdi.pathClicked = fdi.SelectDirectory(vInfos);
                     } else if (fdi.dLGDirectoryMode) {
                         fdi.SelectOrDeselectFileName(m_FileDialogInternal,
                                                      vInfos);
                     } else {
-                        fdi.pathClicked = fdi.SelectDirectory(vInfos);
+                        if (!fdi.pathClicked)
+                            fdi.pathClicked = fdi.SelectDirectory(vInfos);
                     }
                 } else {
                     if (ImGui::IsMouseDoubleClicked(0)) {

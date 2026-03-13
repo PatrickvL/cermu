@@ -58,6 +58,8 @@ data/**/*.crt
 data/**/*.d64
 data/**/*.d71
 data/**/*.d81
+data/**/*.dsk
+data/**/*.fdi
 data/**/*.gz
 data/**/*.img
 data/**/*.jpg
@@ -71,10 +73,18 @@ data/**/*.prg
 data/**/*.rom
 data/**/*.s
 data/**/*.sav
+data/**/*.scl
 data/**/*.sid
+data/**/*.sna
+data/**/*.sp
+data/**/*.spg
+data/**/*.szx
 data/**/*.t64
 data/**/*.tap
+data/**/*.trd
 data/**/*.txt
+data/**/*.tzx
+data/**/*.z80
 data/**/*.zip
 !data/**/README.md
 
