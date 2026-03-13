@@ -34,7 +34,7 @@ constexpr uint32_t CPU_FREQ_PAL = 1662607;
 // Length counter lookup table
 constexpr uint8_t APU_LENGTH_TABLE[32] = {
     10, 254, 20, 2,  40, 4,  80, 6,  160, 8,  60,  10, 14, 12, 26, 14,
-    12, 16,  24, 18, 48, 20, 96, 22, 192, 24, 72,  26, 16, 28, 32, 30,
+    30, 16,  12, 18, 24, 20, 48, 22, 96,  24, 192, 26, 72, 28, 16, 30,
 };
 
 // Noise channel period lookup tables
@@ -53,10 +53,10 @@ constexpr uint16_t DMC_PERIOD_PAL[16] = {398, 354, 316, 298, 276, 236, 210, 198,
 
 // Duty cycle sequences for pulse channels
 constexpr uint8_t DUTY_TABLE[4][8] = {
-    {0, 0, 0, 0, 0, 0, 0, 1}, // 12.5%
-    {0, 0, 0, 0, 0, 0, 1, 1}, // 25%
-    {0, 0, 0, 0, 1, 1, 1, 1}, // 50%
-    {1, 1, 1, 1, 1, 1, 0, 0}, // 75% (negated 25%)
+    {0, 1, 0, 0, 0, 0, 0, 0}, // 12.5%
+    {0, 1, 1, 0, 0, 0, 0, 0}, // 25%
+    {0, 1, 1, 1, 1, 0, 0, 0}, // 50%
+    {1, 0, 0, 1, 1, 1, 1, 1}, // 75% (negated 25%)
 };
 
 // Triangle channel waveform
@@ -201,6 +201,14 @@ public:
 
   // Called at the end of APU::tick() to latch halt for next cycle's clock.
   void update_prev_halt() { prev_halt_ = halt; }
+
+  void reset() {
+    counter = 0;
+    pending_reload_ = false;
+    pending_reload_index_ = 0;
+    prev_halt_ = false;
+    halt = false;
+  }
 
   void set_enabled(bool enable) {
     enabled = enable;
@@ -878,6 +886,10 @@ public:
   /// Power-on reset: disables all channels, writes $00 to $4017 with delay.
   void reset_to_power_up_state() {
     // All channels start disabled at power-on
+    pulse1.length.reset();
+    pulse2.length.reset();
+    triangle.length.reset();
+    noise.length.reset();
     pulse1.length.set_enabled(false);
     pulse2.length.set_enabled(false);
     triangle.length.set_enabled(false);
