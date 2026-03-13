@@ -198,6 +198,7 @@ void SpectrumSystem<V>::reset() {
     bank_select_ = 0;
     bank_locked_ = false;
     frame_tstate_counter_ = 0;
+    int_counter_ = 0;
     std::memset(keyboard_rows_, 0xFF, sizeof(keyboard_rows_));
 }
 
@@ -212,9 +213,15 @@ void SpectrumSystem<V>::tick() {
     // ULA tick (same clock as CPU — one T-state)
     ula_.tick();
 
-    // Frame interrupt: ULA asserts INT at start of frame (held for 32 T-states)
+    // Frame interrupt: ULA asserts INT at start of frame, held for 32 T-states
     if (ula_.check_frame_interrupt()) {
         BUS_CLR_BIT(pins_, BUS_IRQ_BIT);  // Assert INT (active-low)
+        int_counter_ = 32;
+    }
+    if (int_counter_ > 0) {
+        if (--int_counter_ == 0) {
+            BUS_SET_BIT(pins_, BUS_IRQ_BIT);  // Deassert INT
+        }
     }
 
     // Memory contention (ULA stalls CPU during screen fetch)
@@ -411,7 +418,7 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
 
 template<SpectrumVariant V>
 uint32_t* SpectrumSystem<V>::get_framebuffer() {
-    return framebuffer_;
+    return rgba_framebuffer_ ? rgba_framebuffer_ : framebuffer_;
 }
 
 template<SpectrumVariant V>
@@ -422,11 +429,14 @@ void SpectrumSystem<V>::get_display_dimensions(int* width, int* height) const {
 
 template<SpectrumVariant V>
 void SpectrumSystem<V>::set_framebuffer(uint32_t* buffer, int width, int height) {
-    (void)buffer; (void)width; (void)height;
+    rgba_framebuffer_ = buffer;
+    rgba_width_ = width;
+    rgba_height_ = height;
 }
 
 template<SpectrumVariant V>
 void SpectrumSystem<V>::update_framebuffer() {
+    uint32_t* fb = rgba_framebuffer_ ? rgba_framebuffer_ : framebuffer_;
     const uint32_t border = spectrum_ula::PALETTE[ula_.border_color()];
     const bool flash = ula_.flash_state();
 
@@ -439,18 +449,18 @@ void SpectrumSystem<V>::update_framebuffer() {
 
     // Fill top border
     for (int i = 0; i < BT * W; ++i)
-        framebuffer_[i] = border;
+        fb[i] = border;
 
     // Fill bottom border
     for (int i = (BT + SH) * W; i < spectrum_constants::TOTAL_HEIGHT * W; ++i)
-        framebuffer_[i] = border;
+        fb[i] = border;
 
     // Render screen area (192 lines)
     const uint8_t* bitmap = screen_ram_ptr_;           // $4000
     const uint8_t* attrs  = screen_ram_ptr_ + 0x1800;  // $5800
 
     for (int y = 0; y < SH; ++y) {
-        uint32_t* line = &framebuffer_[(BT + y) * W];
+        uint32_t* line = &fb[(BT + y) * W];
 
         // Left border
         for (int i = 0; i < BL; ++i)
