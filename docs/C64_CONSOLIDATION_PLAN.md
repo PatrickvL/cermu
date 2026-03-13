@@ -50,7 +50,7 @@ with a typed `C64System*` back-pointer.
 | File | Purpose | Status |
 |------|---------|--------|
 | `c64_system.hpp` / `.cpp` | Main system class — tick loop, init, reset | Active |
-| `c64_bus.hpp` / `.cpp` | Bus controller — unified buffer, PLA banking, I/O dispatch | Active |
+| `c64_bus.hpp` / `.cpp` | Bus controller — flat mem, PLA banking, I/O dispatch | Active |
 | `c64_chips.hpp` / `.cpp` | Chip ID enum + descriptors, address routing constants | Active |
 | `c64_config.hpp` / `.cpp` | `c64_config_t` — C64-specific config struct | **To be consolidated** |
 | `c64_hardware_config.hpp` / `.cpp` | Extended config for VICE test framework | Active |

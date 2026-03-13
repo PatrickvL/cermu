@@ -155,7 +155,7 @@ private:
     MainBoard board_{kVIC20Chips};
 
     // Convenience chip pointers (all owned by board_, accessed via chip_as/first_chip)
-    RAMChip* ram_         = nullptr;  // 64 KB unified buffer
+    RAMChip* ram_         = nullptr;  // 64 KB flat mem
     ROMChip* charrom_     = nullptr;  // Character ROM $8000-$8FFF (4 KB)
     ROMChip* basic_rom_   = nullptr;  // BASIC ROM $C000-$DFFF (8 KB)
     ROMChip* kernal_rom_  = nullptr;  // KERNAL ROM $E000-$FFFF (8 KB)

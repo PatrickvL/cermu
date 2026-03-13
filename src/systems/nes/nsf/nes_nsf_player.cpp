@@ -333,7 +333,7 @@ void NsfPlayer::switch_subtune(
         bool is_pal) {
     if (!cpu || !ppu || !cpu_ram || !prg_rom || !nsf) return;
 
-    // Reload NSF data into unified buffer (in case tune self-modified)
+    // Reload NSF data into flat mem (in case tune self-modified)
     if (payload && payload_size > 0) {
         size_t copy_size = (payload_size < prg_rom_size) ? payload_size : prg_rom_size;
         std::memset(prg_rom, 0, prg_rom_size);

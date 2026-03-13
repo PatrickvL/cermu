@@ -6,7 +6,7 @@ Restructure the NES/Famicom emulation from a monolithic `nes_system.cpp` + `nes_
 
 1. Each chip is a separate `ChipBase`-derived type in its own header
 2. Two `bus_state_t` words model the CPU bus and PPU bus independently (matching hardware)
-3. A unified memory buffer + bank map replaces cascading if-else dispatch (C64 pattern)
+3. A flat memory + bank map replaces cascading if-else dispatch (C64 pattern)
 4. Hardware-accurate pin layouts live in `_gui` files, compiled only when `CERMU_HAS_GUI` is defined
 5. Code is header-only where possible, with limited visibility (`private`/`protected`)
 6. No global or free functions — everything lives inside types
@@ -43,12 +43,12 @@ The current `MemoryBus::mem_tick()` uses cascading `if (addr <= 0x1FFF) ... else
 - **2 virtual calls** for cartridge reads (cpu_bus_tick → mapper::cpu_map_read)
 - A separate `ppu_read()` path that re-dispatches through mapper virtuals
 
-The C64 system solved this with a unified buffer + precomputed bank tables:
+The C64 system solved this with a flat mem + precomputed bank tables:
 
 ```
 offset = chip_id << PAGE_SHIFT
 mask   = PAGE_MASK | -(chip == CHIP_RAM)
-result = unified_buffer[offset + (addr & mask)]
+result = flat_mem[offset + (addr & mask)]
 ```
 
 Zero branches for RAM/ROM reads. I/O and register pages dispatch through direct function pointers. Mode switches are a 16-byte `memcpy`.
@@ -65,7 +65,7 @@ src/systems/nes/
 ├── README.md                         # Architecture overview
 │
 ├── bus/                              # Bus infrastructure
-│   ├── nes_bus.h                     #   nes_bus_t — unified buffer, bank map, mem_tick
+│   ├── nes_bus.h                     #   nes_bus_t — flat mem, bank map, mem_tick
 │   ├── nes_bus.cpp                   #   Bus implementation, bank table generation
 │   ├── nes_bus_chips.h               #   CHIP ID enum (strategic numbering)
 │   └── nes_bus_signals.h             #   NES-specific bus_state_t bit definitions,
@@ -180,7 +180,7 @@ src/devices/input/                    # Cross-system peripheral devices
 Following the C64 pattern, CHIP IDs encode buffer offsets via `chip << PAGE_SHIFT`:
 
 ```cpp
-// nes_bus_chips.h — NES chip IDs for unified buffer addressing
+// nes_bus_chips.h — NES chip IDs for flat mem addressing
 //
 // Buffer layout (PAGE_SHIFT = 11, 2KB pages):
 //
@@ -192,24 +192,24 @@ Following the C64 pattern, CHIP IDs encode buffer offsets via `chip << PAGE_SHIF
 //   CHIP_PRG_ROM   = 11  →  offset 0x5800   (up to 512KB, mapped via bank pointers)
 //   CHIP_CHR_ROM   = 12  →  offset 0x6000   (up to 512KB, mapped via bank pointers)
 //
-// For PRG-ROM and CHR-ROM, we do NOT store them in the unified buffer
+// For PRG-ROM and CHR-ROM, we do NOT store them in the flat mem
 // (they can be megabytes). Instead the bank map points into the cartridge's
 // own ROM vector. Only WRAM, CIRAM, palette, PRG-RAM, and CHR-RAM live
-// in the unified buffer.
+// in the flat mem.
 //
 // The bank map tables use 8-bit entries where each entry is either:
 //   - A pointer index into a page_pointers[] array (for ROM banks)
 //   - A CHIP ID + page offset (for fixed RAM regions)
 
 enum nes_chip_id_t : uint8_t {
-    // Fixed regions in unified buffer
+    // Fixed regions in flat mem
     NES_CHIP_WRAM       = 0,    // 2KB CPU internal RAM
     NES_CHIP_CIRAM      = 1,    // 2KB PPU internal VRAM (nametables)
     NES_CHIP_PALETTE    = 2,    // 32B palette RAM (page-padded)
     NES_CHIP_PRG_RAM    = 3,    // 8KB cartridge work RAM ($6000-$7FFF)
     NES_CHIP_CHR_RAM    = 7,    // 8KB CHR-RAM (PPU pattern tables)
 
-    // Bank-mapped (pointer-based, not in unified buffer)
+    // Bank-mapped (pointer-based, not in flat mem)
     NES_CHIP_PRG_ROM    = 11,   // Cartridge PRG-ROM (variable size)
     NES_CHIP_CHR_ROM    = 12,   // Cartridge CHR-ROM (variable size)
 
@@ -224,10 +224,10 @@ enum nes_chip_id_t : uint8_t {
 
 ```cpp
 struct nes_bus_t {
-    // Unified buffer — contiguous allocation for all on-board RAM
+    // Flat mem — contiguous allocation for all on-board RAM
     // Layout: WRAM(2KB) + CIRAM(2KB) + palette(2KB pad) + PRG-RAM(8KB) + CHR-RAM(8KB)
     // Total: 22KB fixed allocation
-    uint8_t* unified_buffer;
+    uint8_t* flat_mem;
     uint8_t* allocated_buffer;
 
     // === CPU address space: 16 × 4KB pages ===
@@ -293,8 +293,8 @@ When a mapper updates its internal bank registers, it calls back into the bus to
 // Called by mapper after any register write that changes banking
 void nes_bus_t::update_cpu_banks(const MapperBankConfig& config) {
     // Pages 0-1: $0000-$1FFF → WRAM (mirrored, always)
-    cpu_read_page[0]  = cpu_read_page[1]  = &unified_buffer[WRAM_OFFSET];
-    cpu_write_page[0] = cpu_write_page[1] = &unified_buffer[WRAM_OFFSET];
+    cpu_read_page[0]  = cpu_read_page[1]  = &flat_mem[WRAM_OFFSET];
+    cpu_write_page[0] = cpu_write_page[1] = &flat_mem[WRAM_OFFSET];
 
     // Pages 2-3: $2000-$3FFF → PPU registers (nullptr → I/O dispatch)
     cpu_read_page[2] = cpu_read_page[3] = nullptr;
@@ -334,7 +334,7 @@ void nes_bus_t::update_ppu_banks(const MapperChrConfig& config) {
 
     // 4 × 1KB nametable pages ($2000-$2FFF) — mirroring
     for (int i = 0; i < 4; i++) {
-        uint8_t* ciram_page = &unified_buffer[CIRAM_OFFSET + config.nt_page[i] * 0x400];
+        uint8_t* ciram_page = &flat_mem[CIRAM_OFFSET + config.nt_page[i] * 0x400];
         ppu_read_page[8 + i]  = ciram_page;
         ppu_write_page[8 + i] = ciram_page;
     }

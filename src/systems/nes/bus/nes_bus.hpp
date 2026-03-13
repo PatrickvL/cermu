@@ -1,9 +1,9 @@
 #pragma once
 /*
- * nes_bus.h -- NES unified bus structure with block-number dispatch
+ * nes_bus.h -- NES flat mem bus structure with block-number dispatch
  *
- * All NES memory lives in a contiguous unified buffer of 1KB blocks.
- * CPU and PPU reads resolve to: unified_buf[(block << BLOCK_SHIFT) | sub_addr]
+ * All NES memory lives in a contiguous flat mem of 1KB blocks.
+ * CPU and PPU reads resolve to: flat_mem[(block << BLOCK_SHIFT) | sub_addr]
  *
  * CPU address space: 16 x 4KB pages ($0000-$FFFF)
  *   Pages 0-1  ($0000-$1FFF): WRAM (fast path, & 0x07FF mirroring)
@@ -25,7 +25,7 @@
 
 #include "core/cermu.hpp"         // likely/unlikely
 #include "core/system_lines.hpp"  // bus_state_t, BUS_* macros
-#include "systems/nes/bus/nes_bus_chips.hpp"               // BLOCK_*, unified buffer constants
+#include "systems/nes/bus/nes_bus_chips.hpp"               // BLOCK_*, flat mem constants
 #include "systems/nes/cartridge/nes_mapper.hpp"     // MapperBankConfig, MapperChrConfig
 
 namespace nes_bus {
@@ -47,7 +47,7 @@ inline constexpr uint32_t PPU_PAGE_MASK  = 0x03FF; // 1KB - 1
 // ============================================================================
 
 struct nes_bus_t {
-    // Non-copyable (owns unified buffer)
+    // Non-copyable (owns flat mem)
     nes_bus_t() = default;
     ~nes_bus_t();
     nes_bus_t(const nes_bus_t&) = delete;
@@ -58,17 +58,17 @@ struct nes_bus_t {
     // Layout: [WRAM|CIRAM|reserved|PRG-RAM|CHR...|PRG-ROM...]
     // See nes_bus_chips.h for block assignments and sizing.
     // ====================================================================
-    uint8_t* unified_buf = nullptr;
-    uint32_t unified_buf_size = 0;
+    uint8_t* flat_mem = nullptr;
+    uint32_t flat_mem_size = 0;
 
-    // Convenience pointers into unified buffer (set by init / init_unified_buffer)
+    // Convenience pointers into flat mem (set by init / init_flat_mem)
     uint8_t* cpu_ram = nullptr;        // -> BLOCK_WRAM   (WRAM_SIZE bytes)
     uint8_t* ciram = nullptr;          // -> BLOCK_CIRAM  (CIRAM_SIZE bytes)
     uint8_t* prg_ram = nullptr;        // -> BLOCK_PRG_RAM (prg_ram_size bytes)
     uint8_t* chr_data_ptr = nullptr;   // -> dynamic CHR region
-    uint8_t* prg_rom_ptr = nullptr;       // -> dynamic PRG-ROM region (unified buf copy)
+    uint8_t* prg_rom_ptr = nullptr;       // -> dynamic PRG-ROM region (flat mem copy)
 
-    // Region sizes (set by init_unified_buffer)
+    // Region sizes (set by init_flat_mem)
     uint32_t prg_ram_size = 0;
     uint32_t chr_data_size = 0;
     bool     chr_is_ram = false;
@@ -84,9 +84,9 @@ struct nes_bus_t {
     // ====================================================================
     //
     // CPU: 16 x 4KB pages. Each entry is the first of 4 consecutive
-    //      1KB blocks. Read: unified_buf[(block << 10) | (addr & 0xFFF)]
+    //      1KB blocks. Read: flat_mem[(block << 10) | (addr & 0xFFF)]
     // PPU: 16 x 1KB pages. Each entry is a single block number.
-    //      Read: unified_buf[(block << 10) | (addr & 0x3FF)]
+    //      Read: flat_mem[(block << 10) | (addr & 0x3FF)]
     //
     // Sentinel values (>= BLOCK_SENTINEL_MIN) trigger I/O dispatch.
     //
@@ -105,10 +105,10 @@ struct nes_bus_t {
     /// Must be called once before any bus access.
     void init();
 
-    /// Extend unified buffer with cartridge ROM/RAM data.
+    /// Extend flat mem with cartridge ROM/RAM data.
     /// Reallocates to include CHR + PRG-ROM alongside fixed regions.
     /// Preserves any existing WRAM content.
-    void init_unified_buffer(const uint8_t* prg_rom_data, size_t prg_rom_sz,
+    void init_flat_mem(const uint8_t* prg_rom_data, size_t prg_rom_sz,
                               const uint8_t* chr_data_in, size_t chr_sz,
                               bool chr_is_ram_in,
                               const uint8_t* prg_ram_data, size_t prg_ram_sz);
@@ -128,12 +128,12 @@ struct nes_bus_t {
     // Block helpers
     // ====================================================================
 
-    /// Convert a pointer into the unified buffer to a block number.
+    /// Convert a pointer into the flat mem to a block number.
     /// Returns BLOCK_OPEN_BUS for null or out-of-range pointers.
     inline uint16_t ptr_to_block(const uint8_t* ptr) const {
-        if (!ptr || !unified_buf) return BLOCK_OPEN_BUS;
-        ptrdiff_t offset = ptr - unified_buf;
-        if (offset < 0 || offset >= static_cast<ptrdiff_t>(unified_buf_size))
+        if (!ptr || !flat_mem) return BLOCK_OPEN_BUS;
+        ptrdiff_t offset = ptr - flat_mem;
+        if (offset < 0 || offset >= static_cast<ptrdiff_t>(flat_mem_size))
             return BLOCK_OPEN_BUS;
         return static_cast<uint16_t>(offset >> BLOCK_SHIFT);
     }
@@ -146,14 +146,14 @@ struct nes_bus_t {
     /// so bits 10-11 of sub_addr can overlap with the block field.
     inline uint8_t cpu_block_read(uint16_t block, uint16_t addr) const {
         const uint16_t mask = CPU_PAGE_MASK ^ (0x0800u * (block < BLOCK_CIRAM));
-        return unified_buf[(static_cast<uint32_t>(block) << BLOCK_SHIFT) + (addr & mask)];
+        return flat_mem[(static_cast<uint32_t>(block) << BLOCK_SHIFT) + (addr & mask)];
     }
 
     /// CPU block write -- 4KB page from block number.
     /// block must be < BLOCK_SENTINEL_MIN (caller checks).
     inline void cpu_block_write(uint16_t block, uint16_t addr, uint8_t data) {
         const uint16_t mask = CPU_PAGE_MASK ^ (0x0800u * (block < BLOCK_CIRAM));
-        unified_buf[(static_cast<uint32_t>(block) << BLOCK_SHIFT) + (addr & mask)] = data;
+        flat_mem[(static_cast<uint32_t>(block) << BLOCK_SHIFT) + (addr & mask)] = data;
     }
 
     // ====================================================================
@@ -180,12 +180,12 @@ struct nes_bus_t {
     /// PPU block read -- 1KB page from block number.
     /// block must be < BLOCK_SENTINEL_MIN (caller checks).
     inline uint8_t ppu_block_read(uint16_t block, uint16_t addr) const {
-        return unified_buf[(static_cast<uint32_t>(block) << BLOCK_SHIFT) | (addr & PPU_PAGE_MASK)];
+        return flat_mem[(static_cast<uint32_t>(block) << BLOCK_SHIFT) | (addr & PPU_PAGE_MASK)];
     }
 
     /// PPU block write -- 1KB page from block number.
     inline void ppu_block_write(uint16_t block, uint16_t addr, uint8_t data) {
-        unified_buf[(static_cast<uint32_t>(block) << BLOCK_SHIFT) | (addr & PPU_PAGE_MASK)] = data;
+        flat_mem[(static_cast<uint32_t>(block) << BLOCK_SHIFT) | (addr & PPU_PAGE_MASK)] = data;
     }
 };
 

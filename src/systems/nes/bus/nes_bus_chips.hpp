@@ -1,9 +1,9 @@
 #pragma once
 /*
- * nes_bus_chips.h — NES memory block layout for unified buffer addressing
+ * nes_bus_chips.h — NES memory block layout for flat mem addressing
  *
  * All NES memory lives in a single contiguous buffer of 1KB blocks.
- * Hot-path address calculation: unified_buf[(block << BLOCK_SHIFT) | sub_addr]
+ * Hot-path address calculation: flat_mem[(block << BLOCK_SHIFT) | sub_addr]
  *
  *   CPU dispatch:  block = cpu_read_block[addr >> 12], sub_addr = addr & 0x0FFF
  *   PPU dispatch:  block = ppu_read_block[addr >> 10], sub_addr = addr & 0x03FF

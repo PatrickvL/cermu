@@ -45,7 +45,7 @@ struct has_packed_rw_override<C, std::void_t<decltype(C::PackedRW)>>
 //   AddressBits    — number of address bits (e.g. 16, 14, 24)
 //   PageBits       — log2(page size in bytes); must be in [1, AddressBits)
 //   NumViewers     — number of independent bus agents (CPU, VIC-II, …)
-//   MaxChipId      — highest chip id that maps directly into the unified buffer
+//   MaxChipId      — highest chip id that maps directly into the flat mem
 //                    on the read side.
 //   MaxWriteChipId — same for the write side.  Must be ≤ MaxChipId.
 //   EnableMmio     — true to enable the register-file (MMIO) handler table
@@ -184,7 +184,7 @@ struct DefaultBusSpec {
     static constexpr size_t AddressBits    = 16;
     static constexpr size_t PageBits       = 8;
     static constexpr size_t NumViewers     = 1;
-    static constexpr size_t MaxChipId      = 255;  // 256 chip-id slots in unified buffer
+    static constexpr size_t MaxChipId      = 255;  // 256 chip-id slots in flat mem
     static constexpr size_t MaxWriteChipId = 255;
     static constexpr bool   EnableMmio     = true;
     static constexpr size_t MaxMmioHandlers= 4;

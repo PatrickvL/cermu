@@ -20,7 +20,7 @@
  * - Single array lookup (vs 2 bitmap extractions)
  * - Simpler decode: (type >= 2) catches both RAM and ROM
  * - 64 bytes fits in single cache line
- * - Direct unified buffer access: buffer[addr] for all RAM/ROM
+ * - Direct flat mem access: flat_mem[addr] for all RAM/ROM
  * - No offset calculation needed (unlike C64's strategic chip numbering)
  */
 
@@ -55,12 +55,12 @@ struct vic20_memory_t {
     // ========================================================================
     // UNIFIED 64KB BUFFER
     // ========================================================================
-    // Single buffer for all RAM and ROM access at natural addresses
-    // buffer[addr] for all RAM/ROM - no offset calculation needed
+    // Single flat mem for all RAM and ROM access at natural addresses
+    // flat_mem[addr] for all RAM/ROM - no offset calculation needed
     // ROM writes are blocked except during loading
-    // I/O and UNMAPPED types don't access this buffer
-    uint8_t* buffer;              // 64KB unified memory buffer (allocated aligned)
-    size_t buffer_size;           // Allocated buffer size
+    // I/O and UNMAPPED types don't access flat mem
+    uint8_t* flat_mem;              // 64KB flat memory (allocated aligned)
+    size_t flat_mem_size;           // Allocated flat mem size
     
     // ========================================================================
     // I/O HANDLERS
@@ -77,7 +77,7 @@ struct vic20_memory_t {
     void* via1_chip;  // mos6522_t*
     void* via2_chip;  // mos6522_t*
     
-    // Color RAM (1KB, 4-bit wide) - stored in unified buffer at $9400
+    // Color RAM (1KB, 4-bit wide) - stored in flat mem at $9400
     // Upper 4 bits read as garbage/undefined
     
     // ========================================================================
@@ -122,7 +122,7 @@ void vic20_memory_init_io_handlers(vic20_memory_t* mem);
  * Ultra-optimized CPU memory tick function - handles memory access from CPU.
  * Uses encoded bank types for minimal branch overhead.
  * 
- * Fast path: RAM and ROM access via direct buffer[addr] lookup
+ * Fast path: RAM and ROM access via direct flat_mem[addr] lookup
  * I/O path: Handler dispatch via pre-initialized handler array
  * 
  * @param mem Pointer to memory system
@@ -152,13 +152,13 @@ uint8_t vic20_memory_vic_read(vic20_memory_t* mem, uint16_t addr);
 uint8_t vic20_memory_color_read(vic20_memory_t* mem, uint16_t addr);
 
 /**
- * Direct read from unified buffer at a given address.
+ * Direct read from flat mem at a given address.
  * Used for debugging and ROM vector reading.
  */
 uint8_t vic20_memory_read_byte(vic20_memory_t* mem, uint16_t addr);
 
 /**
- * Direct write to unified buffer at a given address.
+ * Direct write to flat mem at a given address.
  * Used for initialization and debugging.
  */
 void vic20_memory_write_byte(vic20_memory_t* mem, uint16_t addr, uint8_t value);
@@ -176,13 +176,13 @@ void vic20_memory_write_byte(vic20_memory_t* mem, uint16_t addr, uint8_t value);
 bool vic20_memory_load_rom(vic20_memory_t* mem, uint16_t addr, const uint8_t* data, size_t size);
 
 /**
- * Get pointer to a memory region in the unified buffer.
+ * Get pointer to a memory region in the flat mem.
  * Used for direct ROM/RAM access (e.g., reading reset vector).
  */
 uint8_t* vic20_memory_get_ptr(vic20_memory_t* mem, uint16_t addr);
 
 /**
- * Get pointer to a ROM region in the unified buffer.
+ * Get pointer to a ROM region in the flat mem.
  * Alias for vic20_memory_get_ptr for semantic clarity.
  */
 static inline uint8_t* vic20_memory_get_rom_ptr(vic20_memory_t* mem, uint16_t addr) {
@@ -190,7 +190,7 @@ static inline uint8_t* vic20_memory_get_rom_ptr(vic20_memory_t* mem, uint16_t ad
 }
 
 /**
- * Get pointer to Color RAM (at $9400 in unified buffer).
+ * Get pointer to Color RAM (at $9400 in flat mem).
  */
 uint8_t* vic20_memory_get_colorram_ptr(vic20_memory_t* mem);
 

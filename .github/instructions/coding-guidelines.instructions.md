@@ -36,7 +36,7 @@ PeripheralDevice                            (src/core/port.hpp)
 - All memory and I/O access flows through `bus_state_t`. Functions receive it, service it, return it.
 - Access via macros only: `BUS_GET_DATA()`, `BUS_SET_DATA()`, `BUS_GET_ADDR()`, `BUS_SET_ADDR()`, `BUS_GET_BIT()`, `BUS_SET_BIT()`, `BUS_CLR_BIT()`.
 - Systems may define additional bus words (e.g. `ppu_bus_state_t` for NES PPU bus) with shared bit positions for bridging signals, enabling zero-cost bitmixing.
-- Unified memory buffer + page-pointer bank map for fast dispatch (no cascading if-else). See C64's `c64_bus_t` as gold standard.
+- Flat memory + page-pointer bank map for fast dispatch (no cascading if-else). See C64's `c64_bus_t` as gold standard.
 - Edge detection: compare current bus against `bus_snapshot_` (stored at end of previous tick). No callbacks.
 
 ### Cross-System Sharing Rule
@@ -119,7 +119,7 @@ C++17. Use `if constexpr`, structured bindings, `std::string_view`, fold express
 - `std::unique_ptr` for sole ownership.
 - `std::shared_ptr` for shared ownership across subsystems.
 - Raw pointers for **non-owning references** and C-callback contexts — never for ownership.
-- Raw `uint8_t*` acceptable for hot-path unified memory buffers with manual lifecycle.
+- Raw `uint8_t*` acceptable for hot-path flat memory buffers with manual lifecycle.
 - `alignas()` for performance-critical data structures.
 
 ### Error Handling
@@ -210,7 +210,7 @@ src/
 
 | Concern | Reference | Why |
 |---------|-----------|-----|
-| Bus dispatch | C64 `c64_bus_t` / `c64_memory_tick()` | Unified buffer, page pointers, I/O handler table |
+| Bus dispatch | C64 `c64_bus_t` / `c64_memory_tick()` | Flat memory, page pointers, I/O handler table |
 | CPU template | `fam65xx_t<CPUTraits>` | NTTP + `if constexpr` for zero-overhead variant dispatch |
 | C++ chip conversion | TED 7360 | ChipBase inheritance, callbacks via descriptor, proper encapsulation |
 | Chip debug/settings | MOS 6581 SID | Left panel (chip viz) + right panel (registers), collapsible sections |

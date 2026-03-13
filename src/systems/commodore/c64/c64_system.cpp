@@ -477,7 +477,7 @@ bool C64System::initialize() {
     // Attach bus and load ROMs from configured paths
     this->bus.system_attach(this);
     memory_init();
-    this->bus.init_unified_pointers(this);
+    this->bus.init_flat_mem_pointers(this);
 
     // =========================================================================
     // Wire callbacks and initialize CPU

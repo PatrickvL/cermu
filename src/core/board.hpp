@@ -2,7 +2,7 @@
 // board.hpp — Board<Spec>: runtime chip owner, buffer manager, auto-wiring
 // =============================================================================
 //
-// Owns the flat unified buffer and chip lifetimes.  Provides pointer access
+// Owns the flat memory and chip lifetimes.  Provides pointer access
 // into the buffer for each chip, handles dynamic chip add/remove for hot-swap,
 // and delegates address-decode wiring to its BusMap<Spec> member.
 //
@@ -18,7 +18,7 @@
 // §4  Board<Spec> — runtime chip owner, buffer manager
 // =============================================================================
 //
-// Owns the flat unified buffer and chip lifetimes.  Delegates address-decode
+// Owns the flat memory and chip lifetimes.  Delegates address-decode
 // logic (page table wiring, MMIO handlers, sub-tables) to BusMap<Spec>.
 //
 // Inherits BoardBase for:
@@ -47,7 +47,7 @@ public:
     // §4.1  Construction from a ChipManifest
     // =====================================================================
     //
-    // Allocates the unified buffer to exactly fit all static chips plus the
+    // Allocates the flat mem to exactly fit all static chips plus the
     // dynamic pool declared in the manifest.  Slot records are built by
     // bus_map_.
     //
@@ -56,7 +56,7 @@ public:
     explicit Board(const ChipManifest<N>& manifest)
         : bus_map_(manifest) {
         const size_t total = manifest.total_pages(kPageBits);
-        buffer_.assign(total * kPageSize, uint8_t(0xFF));  // default: 0xFF = pulled-high
+        flat_mem_.assign(total * kPageSize, uint8_t(0xFF));  // default: 0xFF = pulled-high
 
         // Initialise dynamic allocator
         if (manifest.num_dynamic_pages > 0) {
@@ -71,7 +71,7 @@ public:
     //
     // Associates a runtime ChipBase* with a manifest slot.  Delegates slot
     // record updates to bus_map_ and returns a pointer to the chip's region
-    // in the unified buffer (for MemoryChipBase::bind(), etc.), or nullptr
+    // in the flat mem (for MemoryChipBase::bind(), etc.), or nullptr
     // for MMIO-only slots.
     //
 
@@ -90,7 +90,7 @@ public:
     //
 
     void apply(Bus& bus, size_t viewer_id = 0) {
-        bus_map_.apply(bus, buffer_.data(), viewer_id);
+        bus_map_.apply(bus, flat_mem_.data(), viewer_id);
     }
 
     // =====================================================================
@@ -120,7 +120,7 @@ public:
     // =====================================================================
     //
     // Iterates all manifest slots and calls each slot's factory function to
-    // create the chip, bind it to the unified buffer, and take ownership.
+    // create the chip, bind it to the flat mem, and take ownership.
     // Slots that are already bound (via bind_chip() or initialize()) are
     // skipped — this allows systems to pre-bind MMIO chips that need
     // custom initialization before calling create_chips().
@@ -280,13 +280,13 @@ public:
     // §4.5  Buffer and chip access
     // =====================================================================
 
-    // Pointer to the start of the chip's region in the unified buffer.
+    // Pointer to the start of the chip's region in the flat mem.
     [[nodiscard]] uint8_t* chip_buffer(ChipId base_id) noexcept {
-        return buffer_.data() + size_t(base_id) * kPageSize;
+        return flat_mem_.data() + size_t(base_id) * kPageSize;
     }
 
     [[nodiscard]] const uint8_t* chip_buffer(ChipId base_id) const noexcept {
-        return buffer_.data() + size_t(base_id) * kPageSize;
+        return flat_mem_.data() + size_t(base_id) * kPageSize;
     }
 
     // Total size of a chip's buffer region in bytes.
@@ -381,12 +381,12 @@ public:
     // §4.7  Connect to a MemoryBus (standalone, without full apply)
     // =====================================================================
     //
-    // Passes the unified buffer pointer to the bus.  Called automatically by
+    // Passes the flat mem pointer to the bus.  Called automatically by
     // apply(), but can also be used standalone for manual page-table setup.
     //
 
     void connect(Bus& bus) noexcept {
-        bus.set_unified_buffer(buffer_.data());
+        bus.set_flat_mem(flat_mem_.data());
     }
 
     // =====================================================================
@@ -414,12 +414,12 @@ public:
     }
 
     // =====================================================================
-    // §4.9  Buffer introspection
+    // §4.9  Flat memory introspection
     // =====================================================================
 
-    [[nodiscard]] uint8_t*       buffer()       noexcept { return buffer_.data(); }
-    [[nodiscard]] const uint8_t* buffer() const noexcept { return buffer_.data(); }
-    [[nodiscard]] size_t buffer_size() const noexcept { return buffer_.size(); }
+    [[nodiscard]] uint8_t*       flat_mem()       noexcept { return flat_mem_.data(); }
+    [[nodiscard]] const uint8_t* flat_mem() const noexcept { return flat_mem_.data(); }
+    [[nodiscard]] size_t flat_mem_size() const noexcept { return flat_mem_.size(); }
 
     // =====================================================================
     // §4.10  Convenience: manual page mapping
@@ -481,7 +481,7 @@ private:
     // ── State ─────────────────────────────────────────────────────────────
 
     Map                      bus_map_;
-    std::vector<uint8_t>     buffer_;
+    std::vector<uint8_t>     flat_mem_;
 
     // Chips created by create_chips() — owned here for lifetime management.
     std::vector<std::unique_ptr<ChipBase>> owned_chips_;

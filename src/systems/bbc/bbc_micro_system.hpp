@@ -119,7 +119,7 @@ private:
     ROMChip* paged_rom_chip_ = nullptr;   // 256 KB pool (16 × 16 KB sideways slots)
     ROMChip* os_rom_chip_    = nullptr;
 
-    // Convenience pointers into the unified buffer
+    // Convenience pointers into the flat mem
     uint8_t*    memory_ = nullptr;       // → ram_chip_->data() (for rendering)
 
     // Paged ROM state

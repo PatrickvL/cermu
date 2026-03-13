@@ -222,7 +222,7 @@ bool AcornAtomSystem::initialize() {
     // ── Trim page tables to current RAM config ──────────────────────────
     configure_bus_memory_map();
 
-    // ── Load ROMs into unified buffer ───────────────────────────────────
+    // ── Load ROMs into flat mem ───────────────────────────────────
     if (!load_roms()) {
         printf("Acorn Atom: Warning — ROMs not loaded, system will not boot correctly\n");
     }

@@ -2,7 +2,7 @@
 // bus_map.hpp — BusMap<Spec>: address-decode logic extracted from Board
 // =============================================================================
 //
-// Owns slot records and page-table wiring.  Does NOT own the unified buffer
+// Owns slot records and page-table wiring.  Does NOT own the flat mem
 // (owned by Board) or chip lifetimes (owned by Board).  Receives buffer and
 // bus references through method parameters.
 //
@@ -126,11 +126,11 @@ public:
     // Safe to call multiple times (e.g. after RAM size reconfiguration).
     // MMIO handlers are re-used on subsequent calls (update, not re-register).
     //
-    // unified_buffer: pointer to the flat buffer owned by Board.
+    // flat_mem: pointer to the flat buffer owned by Board.
     //
 
-    void apply(Bus& bus, uint8_t* unified_buffer, size_t viewer_id = 0) {
-        bus.set_unified_buffer(unified_buffer);
+    void apply(Bus& bus, uint8_t* flat_mem, size_t viewer_id = 0) {
+        bus.set_flat_mem(flat_mem);
         bus.reset_viewer(viewer_id);
         if constexpr (Bus::kHasMaskedSub) bus.reset_masked_subs(viewer_id);
 
