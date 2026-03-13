@@ -708,6 +708,9 @@ void EmulatorHost::sdl_audio_callback(void* userdata, uint8_t* stream, int len) 
         written = static_cast<uint32_t>(
             gui->audio_ring_->read(out, static_cast<size_t>(sample_count)));
     }
+    // Track underruns (SDL wanted samples but ring was empty/insufficient)
+    if (written < static_cast<uint32_t>(sample_count))
+        gui->perf_metrics_.audio_underruns.fetch_add(1, std::memory_order_relaxed);
     // Fill remainder with silence
     for (uint32_t i = written; i < static_cast<uint32_t>(sample_count); i++) {
         out[i] = 0.0f;

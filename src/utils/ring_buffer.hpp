@@ -22,6 +22,9 @@ public:
     explicit RingBuffer(size_t capacity)
         : buf_(capacity), cap_(capacity) {}
 
+    /// Maximum number of elements the buffer can hold.
+    size_t capacity() const { return cap_; }
+
     /// Number of elements available for reading.
     size_t available() const {
         size_t w = write_.load(std::memory_order_acquire);

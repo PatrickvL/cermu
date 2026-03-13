@@ -15,6 +15,7 @@
 #endif
 
 #include "utils/ring_buffer.hpp"
+#include "utils/performance_metrics.hpp"
 
 // Forward declarations
 struct ImGuiIO;
@@ -147,6 +148,18 @@ protected:
     /// Per-frame emulation time (microseconds, exponential moving average).
     std::atomic<uint32_t> emu_frame_time_us_{0};
 
+    /// Aggregated performance metrics (time-series + counters).
+    /// Pushed by emu thread, read by GUI thread for the performance window.
+    PerformanceMetrics perf_metrics_;
+    bool show_performance_     = false;
+    bool show_perf_frame_time_ = true;
+    bool show_perf_vblank_     = true;
+    bool show_perf_headroom_   = true;
+    bool show_perf_vps_        = true;
+    bool show_perf_fps_        = true;
+    bool show_perf_speed_      = true;
+    bool show_perf_colors_     = false;
+
     /// Frame pacing (private to emu thread)
     uint64_t frame_pace_counter_;
     double frame_time_accumulator_;
@@ -239,6 +252,12 @@ protected:
     virtual void render_debugger() {}
     virtual void render_settings() {}
     virtual void render_about() {}
+
+    /**
+     * Render the performance metrics overlay window.
+     * Always available (not virtual — generic across all systems).
+     */
+    void render_performance_window();
     
     /**
      * Per-frame delay for timing control
