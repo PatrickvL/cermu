@@ -519,8 +519,8 @@ void Atari2600System::update_joystick_state() {
     joystick_state_ = 0xFF;  // All bits high = all directions released
 
     // Player 0 (connector port 0)
-    if (ports_.size() > 0) {
-        uint32_t sig0 = ports_[0]->read_signals();
+    if (get_ports().size() > 0) {
+        uint32_t sig0 = get_port(0)->read_signals();
         // Active-low: bit is 0 when pressed
         if (!(sig0 & (1u << PortSignals::JOY_UP)))    joystick_state_ &= ~0x10;
         if (!(sig0 & (1u << PortSignals::JOY_DOWN)))  joystick_state_ &= ~0x20;
@@ -531,8 +531,8 @@ void Atari2600System::update_joystick_state() {
     }
 
     // Player 1 (connector port 1)
-    if (ports_.size() > 1) {
-        uint32_t sig1 = ports_[1]->read_signals();
+    if (get_ports().size() > 1) {
+        uint32_t sig1 = get_port(1)->read_signals();
         if (!(sig1 & (1u << PortSignals::JOY_UP)))    joystick_state_ &= ~0x01;
         if (!(sig1 & (1u << PortSignals::JOY_DOWN)))  joystick_state_ &= ~0x02;
         if (!(sig1 & (1u << PortSignals::JOY_LEFT)))  joystick_state_ &= ~0x04;
@@ -574,7 +574,7 @@ void Atari2600System::setup_ports() {
     add_port(atari_joy_1_def, 1);  // Player 1
     add_port(atari_joy_2_def, 2);  // Player 2
 
-    printf("Atari2600: Created %zu ports\n", ports_.size());
+    printf("Atari2600: Created %zu ports\n", get_ports().size());
 
     // Attach default peripherals (joysticks) and auto-bind host inputs
     attach_default_peripherals();
