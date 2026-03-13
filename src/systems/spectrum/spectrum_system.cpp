@@ -27,6 +27,10 @@
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
+#include "core/formats/format_registry.hpp"
+#include "core/formats/sna_format.hpp"
+#include "core/formats/z80_snapshot_format.hpp"
+#include "core/formats/spectrum_tap_format.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -66,15 +70,63 @@ static HardwareTraits create_spectrum_hardware_traits() {
 // SYSTEM DESCRIPTORS
 // ============================================================================
 
+// ── Supported format descriptors ─────────────────────────────────────────────
+
+static const format_descriptor_t* const spectrum_formats[] = {
+    &SNA_FORMAT_DESCRIPTOR,
+    &Z80_SNAPSHOT_FORMAT_DESCRIPTOR,
+    &SPECTRUM_TAP_FORMAT_DESCRIPTOR,
+    nullptr
+};
+
+// ── Probe callback — inspects matched format content for system confidence ───
+
+static SystemProbeResult spectrum_probe_file(
+    const format_descriptor_t* matched_format,
+    const char* /*filepath*/,
+    const uint8_t* data, size_t size) {
+
+    SystemProbeResult result;
+    result.confidence = 0.0f;
+
+    if (!matched_format) return result;
+
+    // SNA and Z80 snapshots are always Spectrum files
+    if (matched_format == &SNA_FORMAT_DESCRIPTOR ||
+        matched_format == &Z80_SNAPSHOT_FORMAT_DESCRIPTOR) {
+        result.confidence = 1.0f;
+
+        // Detect 128K from format metadata
+        if (matched_format == &SNA_FORMAT_DESCRIPTOR && size > 49179) {
+            result.configuration.custom_settings["variant"] = "128K";
+        } else if (matched_format == &Z80_SNAPSHOT_FORMAT_DESCRIPTOR && data && size >= 30) {
+            z80_snapshot_header_t hdr;
+            if (z80_snapshot_parse_header(data, size, &hdr) && hdr.is_128k)
+                result.configuration.custom_settings["variant"] = "128K";
+        }
+        return result;
+    }
+
+    // Spectrum TAP — high confidence (already identified as Spectrum TAP, not Commodore)
+    if (matched_format == &SPECTRUM_TAP_FORMAT_DESCRIPTOR) {
+        result.confidence = 0.95f;
+        return result;
+    }
+
+    return result;
+}
+
+// ── System descriptors ──────────────────────────────────────────────────────
+
 static SystemDescriptor spectrum48k_descriptor = {
     "ZX Spectrum 48K",
     "Spectrum48K",
     "Sinclair ZX Spectrum 48K — Z80A, ULA, 48KB RAM (1982)",
     "spectrum",
     {"Spectrum", "Spectrum48K", "ZXSpectrum", "ZX48K", "Speccy"},
-    nullptr,
+    spectrum_formats,
     create_spectrum_hardware_traits<SpectrumVariant::ZX48K>(),
-    nullptr  // probe
+    spectrum_probe_file
 };
 
 static SystemDescriptor spectrum128k_descriptor = {
@@ -83,9 +135,9 @@ static SystemDescriptor spectrum128k_descriptor = {
     "Sinclair ZX Spectrum 128K — Z80A, ULA, AY sound, 128KB RAM (1985)",
     "spectrum",
     {"Spectrum128K", "ZX128K", "Spectrum128"},
-    nullptr,
+    spectrum_formats,
     create_spectrum_hardware_traits<SpectrumVariant::ZX128K>(),
-    nullptr  // probe
+    spectrum_probe_file
 };
 
 // ============================================================================
@@ -407,8 +459,162 @@ bus_state_t SpectrumSystem<V>::io_tick(bus_state_t pins) {
 
 template<SpectrumVariant V>
 bool SpectrumSystem<V>::load_file(const char* filepath) {
-    // TODO: Support .tap, .tzx, .sna, .z80, .szx snapshot formats
-    (void)filepath;
+    if (!filepath || !cpu_) return false;
+
+    format_load_result_t result;
+    if (!format_load_file(filepath, &result)) {
+        printf("%s: Failed to load file: %s\n", Traits::name, result.error_msg);
+        return false;
+    }
+
+    using ChipId = typename PT::ChipId;
+    uint8_t* ram = board_.chip_buffer(ChipId(0));
+
+    // ── SNA snapshot ────────────────────────────────────────────────────
+    if (result.format == &SNA_FORMAT_DESCRIPTOR && result.metadata_size >= sizeof(sna_header_t)) {
+        const auto& hdr = *reinterpret_cast<const sna_header_t*>(result.metadata);
+
+        // Reset system first
+        reset();
+
+        // Copy 48K RAM to $4000-$FFFF (page $40 = chip offset $4000)
+        if (result.program.data && result.program.data_size >= 49152) {
+            std::memcpy(ram + 0x4000, result.program.data, 49152);
+        }
+
+        // Restore Z80 registers
+        cpu_->set_i(hdr.i_reg);
+        cpu_->set_r(hdr.r_reg);
+        cpu_->set_af(hdr.af);
+        cpu_->set_bc(hdr.bc);
+        cpu_->set_de(hdr.de);
+        cpu_->set_hl_direct(hdr.hl);
+        cpu_->set_ix(hdr.ix);
+        cpu_->set_iy(hdr.iy);
+        cpu_->set_af_prime(hdr.af_prime);
+        cpu_->set_bc_prime(hdr.bc_prime);
+        cpu_->set_de_prime(hdr.de_prime);
+        cpu_->set_hl_prime(hdr.hl_prime);
+        cpu_->set_sp(hdr.sp);
+        cpu_->set_im(hdr.int_mode);
+        cpu_->set_iff1((hdr.iff2 & 0x04) != 0);
+        cpu_->set_iff2((hdr.iff2 & 0x04) != 0);
+
+        // SNA 48K: PC is on the stack — pop it
+        uint16_t sp = hdr.sp;
+        uint16_t pc_lo = ram[sp];
+        uint16_t pc_hi = ram[(uint16_t)(sp + 1)];
+        cpu_->set_pc(pc_lo | (pc_hi << 8));
+        cpu_->set_sp(sp + 2);
+
+        // Restore border color
+        ula_.set_border_color(hdr.border & 0x07);
+
+        printf("%s: SNA loaded — PC=$%04X SP=$%04X\n", Traits::name,
+               cpu_->pc(), cpu_->sp());
+        result.release();
+        return true;
+    }
+
+    // ── Z80 snapshot ────────────────────────────────────────────────────
+    if (result.format == &Z80_SNAPSHOT_FORMAT_DESCRIPTOR &&
+        result.metadata_size >= sizeof(z80_snapshot_header_t)) {
+        const auto& hdr = *reinterpret_cast<const z80_snapshot_header_t*>(result.metadata);
+
+        reset();
+
+        // Copy RAM
+        if (hdr.is_128k && result.program.data_size >= 131072) {
+            // 128K: 8 banks × 16KB stored sequentially in program.data
+            if constexpr (Traits::has_banking) {
+                constexpr size_t BANK_SIZE = 16384;
+                constexpr size_t kPagesPerBank = 64;
+                for (int bank = 0; bank < 8; ++bank) {
+                    uint8_t* dst = board_.chip_buffer(ChipId(bank * kPagesPerBank));
+                    std::memcpy(dst, result.program.data + bank * BANK_SIZE, BANK_SIZE);
+                }
+                bank_select_ = hdr.port_7ffd;
+                bank_locked_ = false;
+                update_banking();
+            } else {
+                // 48K system loading 128K snapshot — take banks 5, 2, 0
+                std::memcpy(ram + 0x4000, result.program.data + 5 * 16384, 16384); // bank 5 → $4000
+                std::memcpy(ram + 0x8000, result.program.data + 2 * 16384, 16384); // bank 2 → $8000
+                std::memcpy(ram + 0xC000, result.program.data + 0 * 16384, 16384); // bank 0 → $C000
+            }
+        } else if (result.program.data && result.program.data_size >= 49152) {
+            // 48K: direct RAM copy to $4000-$FFFF
+            std::memcpy(ram + 0x4000, result.program.data, 49152);
+        }
+
+        // Restore Z80 registers
+        cpu_->set_af(hdr.af);
+        cpu_->set_bc(hdr.bc);
+        cpu_->set_de(hdr.de);
+        cpu_->set_hl_direct(hdr.hl);
+        cpu_->set_ix(hdr.ix);
+        cpu_->set_iy(hdr.iy);
+        cpu_->set_sp(hdr.sp);
+        cpu_->set_pc(hdr.pc);
+        cpu_->set_i(hdr.i_reg);
+        cpu_->set_r(hdr.r_reg);
+        cpu_->set_im(hdr.im_mode);
+        cpu_->set_iff1(hdr.iff1 != 0);
+        cpu_->set_iff2(hdr.iff2 != 0);
+        cpu_->set_af_prime(hdr.af_prime);
+        cpu_->set_bc_prime(hdr.bc_prime);
+        cpu_->set_de_prime(hdr.de_prime);
+        cpu_->set_hl_prime(hdr.hl_prime);
+
+        // Restore border color
+        ula_.set_border_color(hdr.border & 0x07);
+
+        printf("%s: Z80 v%d loaded — PC=$%04X SP=$%04X\n", Traits::name,
+               hdr.version, cpu_->pc(), cpu_->sp());
+        result.release();
+        return true;
+    }
+
+    // ── Spectrum TAP ────────────────────────────────────────────────────
+    if (result.format == &SPECTRUM_TAP_FORMAT_DESCRIPTOR) {
+        // Load all blocks into RAM and track the last CODE block's address
+        uint16_t code_addr = 0;
+        bool has_code = false;
+
+        auto load_block = [&](const program_data_t& prog) {
+            if (!prog.data || prog.data_size == 0) return;
+            uint16_t addr = prog.load_addr;
+            size_t len = prog.data_size;
+            if (addr + len > 0x10000) len = 0x10000 - addr;
+            std::memcpy(ram + addr, prog.data, len);
+            printf("%s: TAP loaded %zu bytes at $%04X\n", Traits::name, len, addr);
+
+            // Track CODE blocks for jump target
+            if (addr >= 0x8000 || len > 100) {
+                code_addr = addr;
+                has_code = true;
+            }
+        };
+
+        if (result.type == FORMAT_LOAD_PROGRAM) {
+            load_block(result.program);
+        } else if (result.type == FORMAT_LOAD_ARCHIVE) {
+            for (int i = 0; i < result.file_count; ++i)
+                load_block(result.files[i]);
+        }
+
+        // For CODE-containing tapes, jump directly to the last CODE block
+        if (has_code) {
+            cpu_->set_pc(code_addr);
+            printf("%s: Jumping to $%04X\n", Traits::name, code_addr);
+        }
+
+        result.release();
+        return true;
+    }
+
+    printf("%s: Unsupported format for file: %s\n", Traits::name, filepath);
+    result.release();
     return false;
 }
 
