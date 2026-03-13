@@ -203,6 +203,7 @@ bool AcornAtomSystem::initialize() {
     basic_rom_ = board_.chip_as<ROMChip>(acorn_atom_chips::kBasicSlot);
     fp_rom_    = board_.chip_as<ROMChip>(acorn_atom_chips::kFpRomSlot);
     os_rom_    = board_.chip_as<ROMChip>(acorn_atom_chips::kOsRomSlot);
+    vdg_       = board_.chip_as<mc6847_t>(acorn_atom_chips::kVdgSlot);
 
     // Direct pointer for MC6847 rendering
     video_ram_ptr_ = board_.chip_buffer(
@@ -211,7 +212,7 @@ bool AcornAtomSystem::initialize() {
     // ── Init chips ──────────────────────────────────────────────────────
     cpu_ = board_.cpu<MOS6502>();
     pins_ = board_.cpu_chip()->init();
-    vdg_.init();
+    vdg_->init();
     ppi_.init();
     ppi_.set_port_b_read_callback(ppi_keyboard_scan, this);
     via_.reset();
@@ -240,8 +241,7 @@ void AcornAtomSystem::shutdown() { system_ready_ = false; }
 void AcornAtomSystem::reset() {
     if (!cpu_) return;
     pins_ = board_.cpu_chip()->reset(pins_);
-    vdg_.init();
-    // Reset all manifest chips (PPI, VIA; RAM/ROM are no-op)
+    // Reset all manifest chips (VDG, PPI, VIA; RAM/ROM are no-op)
     board_.reset_chips();
     ppi_.set_port_b_read_callback(ppi_keyboard_scan, this);
     via_.interrupt_bit = BUS_IRQ_BIT;
@@ -274,8 +274,8 @@ void AcornAtomSystem::tick() {
     BUS_SET_BIT(pins_, BUS_RW_BIT);
 
     // ---- VDG timing: one pixel clock per CPU cycle ----
-    vdg_.tick();
-    if (vdg_.check_fs()) {
+    vdg_->tick();
+    if (vdg_->check_fs()) {
         render_frame();
     }
 
@@ -477,7 +477,7 @@ void AcornAtomSystem::render_frame() {
     static constexpr int VCOLS   = acorn_atom_constants::TEXT_COLS;
     static constexpr int VROWS   = acorn_atom_constants::TEXT_ROWS;
 
-    if (vdg_.is_graphics_mode()) {
+    if (vdg_->is_graphics_mode()) {
         // Full-graphics modes: clear to black (placeholder)
         std::memset(framebuffer_, 0, sizeof(framebuffer_));
         return;

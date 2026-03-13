@@ -27,20 +27,29 @@
 //
 // Slot 0: ROM — 2 KB at $0000 (monitor, mirrored through $0000-$1FFF)
 // Slot 1: RAM — 1 KB at $2000 (mirrored through $2000-$3FFF)
+// Slot 2: CPU — U880 (Z80A clone), non-bus
+// Slot 3: PIO #1 — U855, Z80 port-based I/O at $F4-$F7
+// Slot 4: PIO #2 — U855, Z80 port-based I/O at $F8-$FB
+// Slot 5: CTC   — U857, Z80 port-based I/O at $EC-$EF
 //
-// All I/O is Z80 port-based (IORQ) — no MMIO slots needed.
-// Addresses above $3FFF are unmapped (reads return bus default).
+// All I/O is Z80 port-based (IORQ) — PIO/CTC slots are non-bus (no MMIO).
 //
 inline constexpr auto kLC80Chips = make_chip_manifest(
     Slot<ROMChip>{0x0000, 2048, 0, "Monitor ROM"},
     Slot<RAMChip>{0x2000, 1024, 0, "RAM"},
-    // Non-bus chip — factory-created, not address-decoded
-    Slot<U880>   {0, 0, 0, "U880"}
+    // Non-bus chips — factory-created, not address-decoded
+    Slot<U880>      {0, 0, 0, "U880"},
+    Slot<z80_pio_t> {0, 0, 0, "U855 PIO #1"},
+    Slot<z80_pio_t> {0, 0, 0, "U855 PIO #2"},
+    Slot<z80_ctc_t> {0, 0, 0, "U857 CTC"}
 );
 
 namespace lc80_chips {
-    inline constexpr size_t kRomSlot = 0;
-    inline constexpr size_t kRamSlot = 1;
+    inline constexpr size_t kRomSlot  = 0;
+    inline constexpr size_t kRamSlot  = 1;
+    inline constexpr size_t kPio1Slot = 3;
+    inline constexpr size_t kPio2Slot = 4;
+    inline constexpr size_t kCtcSlot  = 5;
 }
 
 using LC80BusSpec = ManifestBusSpec<kLC80Chips, 16, 8>;
@@ -81,9 +90,9 @@ public:
 private:
     // ── Chips ────────────────────────────────────────────────────────────
     U880*       cpu_  = nullptr;     // U880 (Z80A clone) — owned by board_
-    z80_pio_t   pio1_;               // U855 PIO #1 (LED display + keyboard)
-    z80_pio_t   pio2_;               // U855 PIO #2 (keyboard scan + cassette)
-    z80_ctc_t   ctc_;                // U857 CTC (speaker on channel 2)
+    z80_pio_t*  pio1_ = nullptr;     // U855 PIO #1 (LED display + keyboard)
+    z80_pio_t*  pio2_ = nullptr;     // U855 PIO #2 (keyboard scan + cassette)
+    z80_ctc_t*  ctc_  = nullptr;     // U857 CTC (speaker on channel 2)
 
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using Bus = MemoryBus<LC80BusSpec>;
