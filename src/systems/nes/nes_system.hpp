@@ -110,6 +110,9 @@ class NintendoSystem : public System {
     using Traits = NintendoVariantTraits<V>;
 
 private:
+    // Main board (owns connector ports)
+    BoardBase board_;
+
     // Core components
     RICOH_2A03* cpu_;
     bus_state_t pins_;               // Persistent CPU bus state across ticks

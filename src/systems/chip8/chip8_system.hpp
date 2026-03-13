@@ -65,6 +65,9 @@ public:
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
 
 private:
+    // Main board (no ports, but required by System)
+    BoardBase board_;
+
     // ── Interpreter mode ────────────────────────────────────────────────
     Chip8Mode mode_;                 // Active interpreter level
 

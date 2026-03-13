@@ -381,7 +381,7 @@ private:
 4. setup_ports()
      ├─ For each [[ports]] entry:
      │     PortRegistry::instance().lookup(port_type)
-     │     primary_board_.add_port(definition)
+     │     main_board().add_port(definition)
      └─ Attach default peripherals via DeviceRegistry
 
 5. wire_connections()

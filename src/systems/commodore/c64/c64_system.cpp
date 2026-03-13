@@ -359,6 +359,9 @@ bool C64System::initialize() {
 
     initialized_ = true;
 
+    // Register main board (owns connector ports)
+    register_board(&board_);
+
     // =========================================================================
     // System infrastructure
     // =========================================================================

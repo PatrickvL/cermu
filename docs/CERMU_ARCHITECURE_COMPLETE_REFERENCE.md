@@ -456,8 +456,8 @@ class System {
 public:
     void add_board(std::unique_ptr<BoardBase> board);
 
-    BoardBase*       primary_board()       { return boards_.front().get(); }
-    const BoardBase* primary_board() const { return boards_.front().get(); }
+    BoardBase&       main_board()       { return *boards_.front(); }
+    const BoardBase& main_board() const { return *boards_.front(); }
 
     std::span<const std::unique_ptr<BoardBase>> boards() const { return boards_; }
 

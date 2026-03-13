@@ -19,7 +19,7 @@ changes the baseline assumptions for every phase below:
 | `BoardBase` (non-templated) | ✅ Done | Port ownership, component registry, lifecycle hooks (`reset()`, `power_on()`, `tick()`) |
 | `BusMap<Spec>` extraction | ✅ Done | Address-decode logic separated from chip lifetime in `Board<Spec>` |
 | `ManifestBusSpec` auto-derivation | ✅ Done | Compile-time `BusSpec` derived from `ChipManifest` — no manual spec writing |
-| `System::primary_board_` (value member) | ✅ Done | Port ops always go through `primary_board_`; no pointer chase, no conditional |
+| `System::main_board()` (value member) | ✅ Done | Port ops always go through `main_board()`; no pointer chase, no conditional |
 | `System::register_board()` | ✅ Done | Systems with `Board<Spec>` register via `register_board(&board_)` for generic iteration |
 | `System::get_boards()` | ✅ Done | Returns all boards (primary first, then registered additional boards) |
 | `PortRegistry` + `REGISTER_PORT` | ✅ Done | Singleton `PortType` → `PortDefinition`; standard ports self-register |
@@ -185,7 +185,7 @@ class System {
     // void reset_all_chips();        // registered_chips_ iteration
     //
     // Could also walk get_boards() → board->reset_chips() for unified reset
-    // across primary_board_ and registered Board<Spec> instances.
+    // across main_board() and registered Board<Spec> instances.
 };
 ```
 
