@@ -606,8 +606,8 @@ bool VIC20System::initialize() {
         printf("VIC20: Failed to create MOS6502 CPU\n");
         return false;
     }
-    cpu_->init();
-    cpu_->reset();
+    board_.cpu_chip()->init();
+    board_.cpu_chip()->reset();
     
     // VIC — region-dependent variant was selected by condition callback
     if (!vic_) {
@@ -717,9 +717,8 @@ void VIC20System::reset() {
     }
     
     // Reset CPU last (so it picks up clean bus state)
-    if (cpu_) {
-        auto* cpu = cpu_;
-        cpu->reset();
+    if (board_.cpu_chip()) {
+        board_.cpu_chip()->reset();
     }
     
     // Reset bus state

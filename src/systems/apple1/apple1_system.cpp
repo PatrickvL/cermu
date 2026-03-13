@@ -209,8 +209,8 @@ bool Apple1System::initialize() {
     configure_bus_memory_map();
     
     // Initialize CPU (descriptor-free — memory I/O is handled via bus_state_t pins)
-    cpu_->init();
-    cpu_->reset();
+    board_.cpu_chip()->init();
+    board_.cpu_chip()->reset();
     
     // Reset PIA with callbacks
     pia_.init();
@@ -254,8 +254,8 @@ void Apple1System::reset() {
         terminal_->set_cursor(0, 0);
     }
     
-    if (cpu_) {
-        cpu_->reset();
+    if (board_.cpu_chip()) {
+        board_.cpu_chip()->reset();
     }
     pins_ = APPLE1_BUS_DEFAULT_STATE;
     total_cycles_ = 0;

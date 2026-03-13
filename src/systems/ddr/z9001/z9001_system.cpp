@@ -84,7 +84,7 @@ bool Z9001System<V>::initialize() {
     configure_bus_memory_map();
 
     // ── Init chips ──────────────────────────────────────────────────────
-    pins_ = cpu_->init();
+    pins_ = board_.cpu_chip()->init();
     pio1_.init();
     pio2_.init();
     ctc_.init();
@@ -115,7 +115,7 @@ bool Z9001System<V>::initialize() {
 template<Z9001Variant V> void Z9001System<V>::shutdown() { cpu_ = nullptr; system_ready_ = false; }
 template<Z9001Variant V> void Z9001System<V>::reset() {
     if (!cpu_) return;
-    pins_ = cpu_->reset(pins_);
+    pins_ = board_.cpu_chip()->reset(pins_);
     pio1_.init();
     pio2_.init();
     ctc_.init();

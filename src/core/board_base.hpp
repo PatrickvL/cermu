@@ -129,8 +129,8 @@ public:
     //
 
     /// Raw accessor — returns the CpuChipBase pointer (or nullptr).
-    [[nodiscard]] CpuChipBase* cpu_chip() noexcept { return cpu_chip_; }
-    [[nodiscard]] const CpuChipBase* cpu_chip() const noexcept { return cpu_chip_; }
+    [[nodiscard]] FORCE_INLINE CpuChipBase* cpu_chip() noexcept { return cpu_chip_; }
+    [[nodiscard]] FORCE_INLINE const CpuChipBase* cpu_chip() const noexcept { return cpu_chip_; }
 
     /// Typed accessor — returns the CPU cast to the requested concrete type.
     /// The caller must ensure T matches the actual CPU type on this board.
