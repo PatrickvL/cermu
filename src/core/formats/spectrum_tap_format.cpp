@@ -133,6 +133,13 @@ static bool spectrum_tap_load(const uint8_t* data, size_t size,
     // at its correct address.
     out->file_count = 0;
 
+    // Metadata layout: [count:u8][header0][header1]...
+    // Each header is a spectrum_tap_header_t so the system can inspect
+    // block types, autostart lines, and variable offsets.
+    static_assert(sizeof(spectrum_tap_header_t) < FORMAT_METADATA_MAX_SIZE,
+                  "spectrum_tap_header_t must fit in metadata blob");
+    size_t meta_offset = 1;  // Reserve byte 0 for count
+
     for (int i = 0; i < block_count - 1; ++i) {
         spectrum_tap_header_t header;
         if (!tap_parse_header(blocks[i], &header)) continue;
@@ -169,16 +176,17 @@ static bool spectrum_tap_load(const uint8_t* data, size_t size,
             out->file_count++;
         }
 
-        // Store the first header in metadata (for system-level inspection)
-        if (out->file_count == 1) {
-            static_assert(sizeof(spectrum_tap_header_t) <= FORMAT_METADATA_MAX_SIZE,
-                          "spectrum_tap_header_t must fit in metadata blob");
-            std::memcpy(out->metadata, &header, sizeof(header));
-            out->metadata_size = sizeof(header);
+        // Store this header in metadata (one per loadable block)
+        if (meta_offset + sizeof(spectrum_tap_header_t) <= FORMAT_METADATA_MAX_SIZE) {
+            std::memcpy(out->metadata + meta_offset, &header, sizeof(header));
+            meta_offset += sizeof(header);
         }
 
         i++;  // Skip the data block
     }
+
+    out->metadata[0] = static_cast<uint8_t>(out->file_count);
+    out->metadata_size = meta_offset;
 
     if (out->file_count == 0) {
         snprintf(out->error_msg, sizeof(out->error_msg),
