@@ -69,12 +69,10 @@ namespace bj_main {
     inline constexpr size_t kFgAttr      = 3;
     inline constexpr size_t kSpriteArea  = 4;
     inline constexpr size_t kPaletteRam  = 5;
-    inline constexpr size_t kMainCpu     = 6;
 }
 namespace bj_sound {
     inline constexpr size_t kSoundRom = 0;
     inline constexpr size_t kSoundRam = 1;
-    inline constexpr size_t kSoundCpu = 2;
 }
 
 // ── Bus traits — one per CPU ─────────────────────────────────────────────

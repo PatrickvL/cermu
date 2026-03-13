@@ -73,10 +73,6 @@ inline constexpr auto kPETChips = make_chip_manifest(
     Slot<MOS6502>{0, 0, 0, "MOS 6502"}
 );
 
-namespace pet_chips {
-    inline constexpr size_t kCpuSlot = 7;
-}
-
 struct PETBusTraits {
     static constexpr const auto& kManifest = kPETChips;
     using Spec = ManifestBusSpec<kPETChips, 16, 8>;

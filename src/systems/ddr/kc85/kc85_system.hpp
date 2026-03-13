@@ -39,7 +39,6 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_2> {
     static constexpr const char* caos_version    = "2.2";
     // Slot indices into kKC852Chips
     static constexpr size_t kCaosRomSlot         = 2;
-    static constexpr size_t kCpuSlot             = 3;
 };
 
 template<> struct KC85VariantTraits<KC85Variant::KC85_3> {
@@ -53,7 +52,6 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_3> {
     // Slot indices into kKC853Chips
     static constexpr size_t kBasicRomSlot        = 2;
     static constexpr size_t kCaosRomSlot         = 3;
-    static constexpr size_t kCpuSlot             = 4;
 };
 
 template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
@@ -67,7 +65,6 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
     // Slot indices into kKC854Chips
     static constexpr size_t kBasicRomSlot        = 2;
     static constexpr size_t kCaosRomSlot         = 3;
-    static constexpr size_t kCpuSlot             = 4;
 };
 
 // ============================================================================

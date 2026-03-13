@@ -41,7 +41,6 @@ inline constexpr auto kLC80Chips = make_chip_manifest(
 namespace lc80_chips {
     inline constexpr size_t kRomSlot = 0;
     inline constexpr size_t kRamSlot = 1;
-    inline constexpr size_t kCpuSlot = 2;
 }
 
 using LC80BusSpec = ManifestBusSpec<kLC80Chips, 16, 8>;

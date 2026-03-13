@@ -46,7 +46,6 @@ namespace apple1_chips {
     inline constexpr size_t kMonitorSlot = 1;
     inline constexpr size_t kBasicSlot   = 2;
     inline constexpr size_t kPiaSlot     = 3;
-    inline constexpr size_t kCpuSlot     = 4;
 
     // Compile-time chip ids (from manifest prefix-sum)
     inline constexpr size_t kRamId       = kApple1Chips.base_id(kRamSlot, Apple1BusSpec::PageBits);      // 0

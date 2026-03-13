@@ -199,7 +199,7 @@ bool SpectrumSystem<V>::initialize() {
     configure_bus_memory_map();
 
     // ── Init chips ──────────────────────────────────────────────────────
-    cpu_ = board_.template chip_as<ZilogZ80A>(spectrum_chips::kCpuSlot);
+    cpu_ = board_.template cpu<ZilogZ80A>();
     pins_ = cpu_->init();
     ula_.init();
     if constexpr (Traits::has_ay_sound) {

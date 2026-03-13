@@ -112,7 +112,7 @@ bool AmstradCPCSystem<M>::initialize() {
     configure_bus_memory_map();
 
     // ── Init chips ──────────────────────────────────────────────────────
-    cpu_ = board_.template chip_as<ZilogZ80A>(cpc_chips::kCpuSlot);
+    cpu_ = board_.template cpu<ZilogZ80A>();
     pins_ = cpu_->init();
     crtc_.init();
     // Gate array drives interrupts from CRTC HSYNC (every 52 HSYNCs)

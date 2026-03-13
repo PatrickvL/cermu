@@ -98,7 +98,6 @@ namespace vic20_slot {
     inline constexpr size_t kCharRom   = 1;
     inline constexpr size_t kBasicRom  = 2;
     inline constexpr size_t kKernalRom = 3;
-    inline constexpr size_t kCpu       = 4;
     inline constexpr size_t kVicPal    = 5;
     inline constexpr size_t kVicNtsc   = 6;
     inline constexpr size_t kVia1      = 7;

@@ -64,8 +64,8 @@ bool BombJackSystem::initialize() {
     sound_board_.apply(sound_bus_);
 
     // ── Init chips ───────────────────────────────────────────────────────
-    main_cpu_  = main_board_.chip_as<ZilogZ80A>(bj_main::kMainCpu);
-    sound_cpu_ = sound_board_.chip_as<ZilogZ80A>(bj_sound::kSoundCpu);
+    main_cpu_  = main_board_.cpu<ZilogZ80A>();
+    sound_cpu_ = sound_board_.cpu<ZilogZ80A>();
     main_pins_  = main_cpu_->init();
     sound_pins_ = sound_cpu_->init();
     for (auto& ay : ay_) ay.init();

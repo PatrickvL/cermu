@@ -140,7 +140,6 @@ namespace cpc_chips {
     inline constexpr size_t kRamSlot      = 0;
     inline constexpr size_t kLowerRomSlot = 1;
     inline constexpr size_t kUpperRomSlot = 2;
-    inline constexpr size_t kCpuSlot      = 3;
 }
 
 // BusTraits — selects the correct manifest per CPC model

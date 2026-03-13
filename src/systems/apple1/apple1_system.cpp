@@ -183,7 +183,7 @@ bool Apple1System::initialize() {
     board_.create_chips(&pins_);
     monitor_rom_ = board_.chip_as<ROMChip>(apple1_chips::kMonitorSlot);
     basic_rom_   = board_.chip_as<ROMChip>(apple1_chips::kBasicSlot);
-    cpu_         = board_.chip_as<MOS6502>(apple1_chips::kCpuSlot);
+    cpu_         = board_.cpu<MOS6502>();
 
     // Character ROM — not on the bus (used by terminal renderer only).
     auto char_chip = std::make_unique<ROMChip>(

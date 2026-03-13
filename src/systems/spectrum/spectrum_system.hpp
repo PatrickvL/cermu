@@ -106,7 +106,6 @@ inline constexpr auto kSpectrum128KChips = make_chip_manifest(
 namespace spectrum_chips {
     inline constexpr size_t kRamSlot = 0;
     inline constexpr size_t kRomSlot = 1;
-    inline constexpr size_t kCpuSlot = 2;
 }
 
 // BusTraits — selects the correct manifest per variant

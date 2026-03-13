@@ -584,7 +584,7 @@ bool VIC20System::initialize() {
     charrom_    = board_.chip_as<ROMChip>(vic20_slot::kCharRom);
     basic_rom_  = board_.chip_as<ROMChip>(vic20_slot::kBasicRom);
     kernal_rom_ = board_.chip_as<ROMChip>(vic20_slot::kKernalRom);
-    cpu_        = board_.chip_as<MOS6502>(vic20_slot::kCpu);
+    cpu_        = board_.cpu<MOS6502>();
     vic_        = board_.first_chip<vic_base_t>({vic20_slot::kVicPal, vic20_slot::kVicNtsc});
     via1_       = board_.chip_as<mos6522_t>(vic20_slot::kVia1);
     via2_       = board_.chip_as<mos6522_t>(vic20_slot::kVia2);

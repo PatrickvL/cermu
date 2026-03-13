@@ -92,10 +92,6 @@ inline constexpr auto kPengoChips = make_chip_manifest(
     Slot<ZilogZ80A>{0, 0, 0, "Z80A"}
 );
 
-namespace namco_chips {
-    inline constexpr size_t kCpuSlot = 4;
-}
-
 // BusTraits — selects the correct manifest per game
 template<NamcoGame G> struct NamcoBusTraits;
 

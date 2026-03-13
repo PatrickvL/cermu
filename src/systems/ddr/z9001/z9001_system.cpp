@@ -78,7 +78,7 @@ bool Z9001System<V>::initialize() {
     if constexpr (Traits::has_color_ram) {
         color_ram_chip_ = board_.template chip_as<RAMChip>(Traits::kColorRamSlot);
     }
-    cpu_ = board_.template chip_as<U880>(Traits::kCpuSlot);
+    cpu_ = board_.template cpu<U880>();
 
     // ── Trim RAM pages for KC87 (48 KB out of 64 KB allocated) ──────────
     configure_bus_memory_map();
