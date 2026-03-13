@@ -202,10 +202,8 @@ PETSystem::PETSystem()
 }
 
 PETSystem::~PETSystem() {
-    delete pia1_;  pia1_ = nullptr;
-    delete pia2_;  pia2_ = nullptr;
-    delete via_;   via_  = nullptr;
-    delete crtc_;  crtc_ = nullptr;
+    // I/O chips owned by board_ — no manual cleanup.
+    // memory chips owned by board_ — no manual cleanup.
 
     if (keyboard_) {
         delete keyboard_;
@@ -248,14 +246,18 @@ bool PETSystem::initialize() {
     board_.create_chips(&pins_);
     board_.apply(bus_);
 
-    main_ram_chip_    = board_.template chip_as<RAMChip>(0);
-    screen_ram_chip_  = board_.template chip_as<RAMChip>(1);
-    basic_rom_b_chip_ = board_.template chip_as<ROMChip>(2);
-    basic_rom_c_chip_ = board_.template chip_as<ROMChip>(3);
-    basic_rom_d_chip_ = board_.template chip_as<ROMChip>(4);
-    editor_rom_chip_  = board_.template chip_as<ROMChip>(5);
-    kernal_rom_chip_  = board_.template chip_as<ROMChip>(6);
+    main_ram_chip_    = board_.template chip_as<RAMChip>(pet_chips::kMainRamSlot);
+    screen_ram_chip_  = board_.template chip_as<RAMChip>(pet_chips::kScreenRamSlot);
+    basic_rom_b_chip_ = board_.template chip_as<ROMChip>(pet_chips::kBasicBSlot);
+    basic_rom_c_chip_ = board_.template chip_as<ROMChip>(pet_chips::kBasicCSlot);
+    basic_rom_d_chip_ = board_.template chip_as<ROMChip>(pet_chips::kBasicDSlot);
+    editor_rom_chip_  = board_.template chip_as<ROMChip>(pet_chips::kEditorRomSlot);
+    kernal_rom_chip_  = board_.template chip_as<ROMChip>(pet_chips::kKernalRomSlot);
     cpu_              = board_.template cpu<MOS6502>();
+    crtc_             = board_.template chip_as<mc6845_t>(pet_chips::kCrtcSlot);
+    pia1_             = board_.template chip_as<pia6820_t>(pet_chips::kPia1Slot);
+    pia2_             = board_.template chip_as<pia6820_t>(pet_chips::kPia2Slot);
+    via_              = board_.template chip_as<mos6522_t>(pet_chips::kViaSlot);
 
     // Screen RAM mirror at $8400-$87FF and configure memory map
     configure_memory_map();
@@ -271,7 +273,6 @@ bool PETSystem::initialize() {
     board_.cpu_chip()->reset();
 
     // ---- CRTC (MC6845) ----
-    crtc_ = new mc6845_t();
     crtc_->init();
 
     // Program CRTC with PET-standard 40×25 register values (BASIC 4.0 editor ROM does this,
@@ -296,7 +297,6 @@ bool PETSystem::initialize() {
     crtc_->on_hsync = [this]() { this->crtc_hsync(); };
 
     // ---- PIA 1 (keyboard + cassette sense) ----
-    pia1_ = new pia6820_t();
     pia1_->init();
     pia1_->user_data       = this;
     pia1_->on_port_a_read  = pia1_port_a_read;
@@ -305,13 +305,11 @@ bool PETSystem::initialize() {
     pia1_->on_port_b_write = pia1_port_b_write;
 
     // ---- PIA 2 (IEEE-488 bus) ----
-    pia2_ = new pia6820_t();
     pia2_->init();
     pia2_->user_data = this;
     // IEEE-488 callbacks not wired yet — returns open bus ($FF)
 
     // ---- VIA (timers, CB2 speaker, user port) ----
-    via_ = new mos6522_t();
     via_->reset();
     via_->interrupt_bit = BUS_IRQ_BIT;
 
@@ -331,15 +329,7 @@ bool PETSystem::initialize() {
         keyboard_mapper_.reset(mapper);
     }
 
-    // Register chips for the Hardware debug menu
-    register_chip(static_cast<ChipBase*>(crtc_),
-        "MC6845 CRTC", "6845", "Video", pet_constants::CRTC_BASE);
-    register_chip(static_cast<ChipBase*>(pia1_),
-        "PIA 1 (Keyboard)", "6820", "I/O", pet_constants::PIA1_BASE);
-    register_chip(static_cast<ChipBase*>(pia2_),
-        "PIA 2 (IEEE-488)", "6820", "I/O", pet_constants::PIA2_BASE);
-    register_chip(static_cast<ChipBase*>(via_),
-        "MOS 6522 VIA", "6522", "I/O", pet_constants::VIA_BASE);
+    // Register all manifest-created chips for Hardware debug menu
     register_bus_chips(board_);
 
     printf("PET: Initialization complete\n");
@@ -354,11 +344,8 @@ void PETSystem::shutdown() {
 void PETSystem::reset() {
     printf("PET: Resetting system\n");
 
-    // Reset all chips
-    if (crtc_) crtc_->reset();
-    if (pia1_) pia1_->reset();
-    if (pia2_) pia2_->reset();
-    if (via_)  via_->reset();
+    // Reset all manifest chips (CRTC, PIAs, VIA; RAM/ROM are no-op)
+    board_.reset_chips();
 
     // Clear RAM but preserve ROMs
     if (main_ram_chip_) {
@@ -384,7 +371,7 @@ void PETSystem::reset() {
     screen_pixel_y_ = 0;
 
     // Reset CPU last
-    if (board_.cpu_chip()) board_.cpu_chip()->reset();
+    if (board_.cpu_chip()) { board_.cpu_chip()->reset(); }
 
     pins_ = PET_BUS_DEFAULT_STATE;
     total_cycles_ = 0;

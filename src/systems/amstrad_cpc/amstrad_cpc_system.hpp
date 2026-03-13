@@ -124,22 +124,33 @@ inline constexpr auto kCPC464Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
     Slot<ROMChip>{0x0000, 16384, 0, "Lower ROM"},  // overlay
     Slot<ROMChip>{0xC000, 16384, 0, "Upper ROM"},  // overlay
-    // Non-bus chip — factory-created, not address-decoded
-    Slot<ZilogZ80A>{0, 0, 0, "Z80A"}
+    // Non-bus chips — factory-created, not address-decoded
+    Slot<ZilogZ80A>    {0, 0, 0, "Z80A"},
+    Slot<mc6845_t>     {0, 0, 0, "MC6845 CRTC"},
+    Slot<i8255_t>      {0, 0, 0, "8255 PPI"},
+    Slot<ay_3_8910_t>  {0, 0, 0, "AY-3-8912 PSG"}
 );
 
 inline constexpr auto kCPC6128Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 131072, 0, "RAM"},        // 128 KB (8 banks)
     Slot<ROMChip>{0x0000,  16384, 0, "Lower ROM"},  // overlay
     Slot<ROMChip>{0xC000,  16384, 0, "Upper ROM"},  // overlay
-    // Non-bus chip — factory-created, not address-decoded
-    Slot<ZilogZ80A>{0, 0, 0, "Z80A"}
+    // Non-bus chips — factory-created, not address-decoded
+    Slot<ZilogZ80A>    {0, 0, 0, "Z80A"},
+    Slot<mc6845_t>     {0, 0, 0, "MC6845 CRTC"},
+    Slot<i8255_t>      {0, 0, 0, "8255 PPI"},
+    Slot<ay_3_8910_t>  {0, 0, 0, "AY-3-8912 PSG"}
 );
 
 namespace cpc_chips {
     inline constexpr size_t kRamSlot      = 0;
     inline constexpr size_t kLowerRomSlot = 1;
     inline constexpr size_t kUpperRomSlot = 2;
+    // Non-bus chip slots
+    inline constexpr size_t kCpuSlot      = 3;
+    inline constexpr size_t kCrtcSlot     = 4;
+    inline constexpr size_t kPpiSlot      = 5;
+    inline constexpr size_t kAySlot       = 6;
 }
 
 // BusTraits — selects the correct manifest per CPC model
@@ -205,9 +216,9 @@ private:
     // ========================================================================
 
     ZilogZ80A*              cpu_ = nullptr;   // Z80A CPU — owned by board_
-    mc6845_t                crtc_;        // MC6845 CRTC (via existing chip)
-    i8255_t                 ppi_;         // Intel 8255 PPI
-    ay_3_8910_t             ay_;          // AY-3-8912 PSG
+    mc6845_t                crtc_;        // MC6845 CRTC — pre-bound into board_
+    i8255_t                 ppi_;         // Intel 8255 PPI — pre-bound into board_
+    ay_3_8910_t             ay_;          // AY-3-8912 PSG — pre-bound into board_
     amstrad_gate_array_t    gate_array_;  // Amstrad custom gate array
 
     // ========================================================================

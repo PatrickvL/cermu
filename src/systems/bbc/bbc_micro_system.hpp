@@ -30,14 +30,22 @@ inline constexpr auto kBBCMicroChips = make_chip_manifest(
     Slot<RAMChip>{0x0000,  32768, 0, "RAM"},
     Slot<ROMChip>{0x8000, 262144, 0, "Paged ROM"},      // 16 × 16 KB banks
     Slot<ROMChip>{0xC000,  16384, 0, "MOS ROM"},
-    // Non-bus chip — factory-created, not address-decoded
-    Slot<MOS6502>{0, 0, 0, "MOS 6502"}
+    // Non-bus chips — factory-created, not address-decoded
+    Slot<MOS6502>   {0, 0, 0, "MOS 6502"},
+    Slot<mc6845_t>  {0, 0, 0, "MC6845 CRTC"},
+    Slot<sn76489_t> {0, 0, 0, "SN76489 PSG"},
+    Slot<mos6522_t> {0, 0, 0, "System VIA"},
+    Slot<mos6522_t> {0, 0, 0, "User VIA"}
 );
 
 namespace bbc_chips {
     inline constexpr size_t kRamSlot       = 0;
     inline constexpr size_t kPagedRomSlot  = 1;
     inline constexpr size_t kOsRomSlot     = 2;
+    inline constexpr size_t kCrtcSlot      = 4;
+    inline constexpr size_t kPsgSlot       = 5;
+    inline constexpr size_t kSysViaSlot    = 6;
+    inline constexpr size_t kUserViaSlot   = 7;
 }
 
 using BBCMicroBusSpec = ManifestBusSpec<kBBCMicroChips, 16, 8>;
@@ -104,10 +112,10 @@ public:
 private:
     // Chip instances
     MOS6502*    cpu_ = nullptr;         // MOS6502 CPU — owned by board_
-    mc6845_t*   crtc_ = nullptr;
-    sn76489_t*  psg_ = nullptr;
-    mos6522_t   system_via_;        // System VIA ($FE40-$FE5F)
-    mos6522_t   user_via_;          // User VIA ($FE60-$FE7F)
+    mc6845_t*   crtc_ = nullptr;        // MC6845 CRTC — owned by board_
+    sn76489_t*  psg_ = nullptr;         // SN76489 PSG — owned by board_
+    mos6522_t   system_via_;            // System VIA ($FE40-$FE5F) — pre-bound
+    mos6522_t   user_via_;              // User VIA ($FE60-$FE7F) — pre-bound
 
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using Bus = MemoryBus<BBCMicroBusSpec>;
@@ -189,7 +197,4 @@ private:
     // Keyboard mapping
     void update_key_matrix(SDL_Keycode key, bool pressed);
     uint8_t scan_keyboard(uint8_t column) const;
-
-    // Chip registration (for debug hardware menu)
-    void register_chips();
 };

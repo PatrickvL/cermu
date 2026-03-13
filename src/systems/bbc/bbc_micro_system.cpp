@@ -132,10 +132,8 @@ BBCMicroSystem::BBCMicroSystem()
 }
 
 BBCMicroSystem::~BBCMicroSystem() {
-    delete crtc_;   crtc_ = nullptr;
-    delete psg_;    psg_ = nullptr;
+    // All chips owned by board_ — no manual cleanup.
     // memory_ points into the flat mem (owned by board_); don't free.
-    // Paged ROM data lives in the flat mem; no manual cleanup.
 }
 
 // ============================================================================
@@ -167,12 +165,16 @@ bool BBCMicroSystem::initialize() {
     printf("BBC Micro: Initializing system\n");
     register_board(&board_);
 
-    // ── Factory-create memory chips from manifest ─────────────────────
+    // ── Pre-bind stack-member chips, then factory-create all chips ──────
+    board_.bind_chip(bbc_chips::kSysViaSlot,  &system_via_);
+    board_.bind_chip(bbc_chips::kUserViaSlot, &user_via_);
     board_.create_chips(&pins_);
     ram_chip_        = board_.chip_as<RAMChip>(bbc_chips::kRamSlot);
     paged_rom_chip_  = board_.chip_as<ROMChip>(bbc_chips::kPagedRomSlot);
     os_rom_chip_     = board_.chip_as<ROMChip>(bbc_chips::kOsRomSlot);
     cpu_             = board_.cpu<MOS6502>();
+    crtc_            = board_.chip_as<mc6845_t>(bbc_chips::kCrtcSlot);
+    psg_             = board_.chip_as<sn76489_t>(bbc_chips::kPsgSlot);
 
     // ── Convenience pointer for rendering functions ─────────────────────
     memory_ = ram_chip_->data();
@@ -192,7 +194,6 @@ bool BBCMicroSystem::initialize() {
     board_.cpu_chip()->reset();
 
     // ---- CRTC (MC6845) ----
-    crtc_ = new mc6845_t();
     crtc_->init();
 
     // Program CRTC with Mode 7 register values (the MOS does this too, but
@@ -209,7 +210,6 @@ bool BBCMicroSystem::initialize() {
     crtc_->on_hsync = [this]() { this->crtc_hsync(); };
 
     // ---- Sound (SN76489) ----
-    psg_ = new sn76489_t(SN76489Variant::SN76489);
     psg_->init();
     psg_->set_clock_frequency(bbc_constants::SN76489_CLOCK);
     psg_->set_audio_sample_rate(bbc_constants::DEFAULT_SAMPLE_RATE);
@@ -241,10 +241,7 @@ bool BBCMicroSystem::initialize() {
     any_key_pressed_ = false;
     addressable_latch_ = 0;
 
-    // Register chips for Hardware debug menu
-    register_chips();
-
-    // Register memory and ROM chips — transfer ownership
+    // Register all manifest-created chips for Hardware debug menu
     register_bus_chips(board_);
 
     printf("BBC Micro: System initialized\n");
@@ -259,17 +256,16 @@ void BBCMicroSystem::shutdown() {
 void BBCMicroSystem::reset() {
     printf("BBC Micro: Resetting\n");
 
-    // Reset all chips
+    // Reset all manifest chips (CRTC, PSG, VIAs; RAM/ROM are no-op)
+    board_.reset_chips();
     if (board_.cpu_chip())  { board_.cpu_chip()->reset(); }
-    if (crtc_) { crtc_->reset(); }
-    if (psg_)  { psg_->reset(); }
-    system_via_.reset();
+
+    // Re-establish VIA callbacks (reset clears them)
     system_via_.interrupt_bit = BUS_IRQ_BIT;
     system_via_.port_a_read_callback = sys_via_port_a_read;
     system_via_.port_a_read_context = this;
     system_via_.port_b_read_callback = sys_via_port_b_read;
     system_via_.port_b_read_context = this;
-    user_via_.reset();
     user_via_.interrupt_bit = BUS_IRQ_BIT;
 
     // Reset state
@@ -1025,19 +1021,4 @@ bool BBCMicroSystem::load_roms() {
     }
 
     return os_ok;  // System won't boot without OS ROM
-}
-
-// ============================================================================
-// Chip Registration
-// ============================================================================
-
-void BBCMicroSystem::register_chips() {
-    register_chip(static_cast<ChipBase*>(crtc_),
-        "MC6845 CRTC", "MC6845", "Video", bbc_constants::CRTC_BASE);
-    register_chip(static_cast<ChipBase*>(psg_),
-        "SN76489 PSG", "SN76489", "Sound", 0);
-    register_chip(&system_via_,
-        "System VIA (6522)", "VIA-S", "I/O", bbc_constants::SYSTEM_VIA_BASE);
-    register_chip(&user_via_,
-        "User VIA (6522)", "VIA-U", "I/O", bbc_constants::USER_VIA_BASE);
 }
