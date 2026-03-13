@@ -574,7 +574,7 @@ bool Commodore264System<V>::initialize() {
 
     // Reset the CPU to start the hardware-accurate RESET sequence.
     // The deferred hijack fetches $FFFC/$FFFD through the bus on first tick.
-    cpu->reset(0);
+    cpu->reset();
     
     // Note: C16 doesn't use the io_port_mixin bank_change path.
     // Banking is handled by TED register writes.
@@ -660,7 +660,7 @@ void Commodore264System<V>::reset() {
     // CPU mid-instruction, which causes a segfault when emulation resumes
     // with an inconsistent pipeline.
     if (cpu_) {
-        cpu_->reset(0);
+        cpu_->reset();
     }
     
     // Reset TED 7360

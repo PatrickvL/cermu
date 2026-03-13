@@ -1655,7 +1655,7 @@ public:
    * randomises them.  The stack pointer decrements by 3 (the three
    * suppressed pushes) and the I flag is set — both handled by op_brk.
    */
-  bus_state_t reset(bus_state_t pins) {
+  bus_state_t reset(bus_state_t pins = 0) override {
     // Reset interrupt state
     this->nmi_prev = 0;
     this->nmi_edge_latch = 0;
@@ -1979,7 +1979,7 @@ public:
   // CONSTRUCTOR AND INITIALIZATION
   // ========================================================================
 
-  bus_state_t init() {
+  bus_state_t init() override {
     // Initialize processor-specific features
     this->init_conditional_features();
 

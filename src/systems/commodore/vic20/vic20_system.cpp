@@ -607,7 +607,7 @@ bool VIC20System::initialize() {
         return false;
     }
     cpu_->init();
-    cpu_->reset(0);
+    cpu_->reset();
     
     // VIC — region-dependent variant was selected by condition callback
     if (!vic_) {
@@ -719,7 +719,7 @@ void VIC20System::reset() {
     // Reset CPU last (so it picks up clean bus state)
     if (cpu_) {
         auto* cpu = cpu_;
-        cpu->reset(0);
+        cpu->reset();
     }
     
     // Reset bus state

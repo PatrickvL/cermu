@@ -176,7 +176,7 @@ bool Atari2600System::initialize() {
 
     // ── Initialize chips ───────────────────────────────────────────
     cpu_->init();
-    cpu_->reset(0);
+    cpu_->reset();
     tia_->init();
     tia_->set_audio_sample_rate(atari2600_constants::DEFAULT_SAMPLE_RATE);
     riot_->init();
@@ -206,7 +206,7 @@ void Atari2600System::reset() {
     board_.reset_chips();
 
     if (cpu_) {
-        cpu_->reset(0);
+        cpu_->reset();
     }
     pins_ = ATARI2600_BUS_DEFAULT_STATE;
     total_cycles_ = 0;
