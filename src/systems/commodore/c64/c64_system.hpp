@@ -12,7 +12,7 @@
 #include "chip/io/mos6526.hpp"
 #include "chip/video/vic_ii/vicii_common.hpp"
 #include "chip/input/commodore_keyboard.hpp"
-#include "systems/commodore/c64/c64_bus.hpp"
+#include "systems/commodore/c64/c64_manifest.hpp"
 #include "systems/commodore/c64/c64_config.hpp"
 #include <string>
 #include <vector>
@@ -79,7 +79,6 @@ public:
     // CHIP INSTANCES
     // =========================================================================
 public:
-    c64_bus_t bus{};                    // C64 bus controller (embedded, not heap-allocated)
     MOS6510* mos6510 = nullptr;         // MOS6510 CPU instance
     RAMChip* ram = nullptr;          // RAM memory $0000-$FFFF (64KB)
     ROMChip* cartridge_roml = nullptr; // Cartridge ROM Low $8000-$9FFF (8KB)
@@ -96,8 +95,46 @@ public:
     void* io2 = nullptr;               // Cartridge I/O 2 ($DF00-$DFFF)
     ROMChip* kernal = nullptr;       // Kernal ROM $E000-$FFFF (8KB)
 
+    // =========================================================================
+    // PLA debug accessors (for PlaChip GUI)
+    // =========================================================================
+    uint8_t get_pla_banking_mode() const { return pla_banking_mode_; }
+    bus_state_t get_bus_state() const { return bus_state_; }
+
+    // Cartridge signal accessors
+    void set_exrom_signal(bool active);
+    void set_game_signal(bool active);
+    void set_cartridge_signals(bool exrom_active, bool game_active);
+    bool get_exrom_signal() const;
+    bool get_game_signal() const;
+
+    // Debug memory access (reads/writes through current PLA configuration)
+    uint8_t read_memory(uint16_t addr);
+    void write_memory(uint16_t addr, uint8_t value);
+
+    // Banking change — also used by test framework
+    void on_banking_change(uint8_t banking_state);
+
+    // ==========================================================================
+    // MANIFEST-DRIVEN BUS
+    // =========================================================================
+    C64Bus   bus_;                       // MemoryBus<C64BusSpec> — page-table dispatch
+    C64Board board_{kC64Chips};          // Board<C64BusSpec> — owns flat mem, chip binding
+
+    // PLA banking — 32 modes × 2 viewers (CPU + VIC-II)
+    std::array<C64Snapshot, kC64NumPlaModes> cpu_snapshots_;    // Viewer 0
+    std::array<C64Snapshot, kC64NumPlaModes> vicii_snapshots_;  // Viewer 1
+    uint8_t pla_banking_mode_ = 0;      // Current PLA mode (0-31)
+    uint8_t system_lines_     = 0;      // EXROM/GAME cartridge signals
+    bus_state_t default_state_ = 0;     // Pull-up defaults for each cycle
+    bus_state_t bus_state_     = 0;     // Current bus state (end of previous tick)
+
+    // PLA debug tables — raw chip_id_t per mode per 4KB bank (for PLA GUI)
+    uint8_t pla_cpu_read_chip_[32][16];   // CPU read chip per [mode][bank]
+    uint8_t pla_cpu_write_chip_[32][16];  // CPU write chip per [mode][bank]
+    uint8_t pla_vicii_read_chip_[32][16]; // VIC-II read chip per [mode][bank]
+
 private:
-    BoardBase board_;                   // Main board (owns connector ports)
     bool initialized_ = false;          // True when initialize() has succeeded
     vicii_standard_t created_vicii_standard_ = VIC_PAL;  // Actual VIC-II standard at creation time
     sid_revision_t pending_sid_revision_ = SID_REVISION_6581_R4AR;  // Applied after SID creation
@@ -120,6 +157,15 @@ private:
 
     /** Generate PLA memory maps and set initial banking mode. */
     bool pla_maps_generate();
+
+    /** Switch to a PLA banking mode — loads snapshots for both viewers. */
+    void mode_switch(uint8_t mode);
+
+    /** Compute PLA mode from CPU port bits + cartridge signals. */
+    uint8_t generate_pla_mode(uint8_t cpu_port_bits) const;
+
+    /** Wire the IndexedSubTable and MMIO handlers for $D000-$DFFF. */
+    void init_io_dispatch();
 
     /** Initialize RAM, color RAM, and load ROMs from configured paths. */
     void memory_init();

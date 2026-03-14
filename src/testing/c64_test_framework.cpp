@@ -40,20 +40,21 @@ bus_state_t io_write_intercept_handler(void* context, bus_state_t bus_state) {
     return intercept->original_write_handler(intercept->original_chip_instance, bus_state);
 }
 
-// Install the $D7FF debug register interceptor on SID IO page 7
+// Install the $D7FF debug register interceptor on SID MMIO handler
 void TestFramework::install_debug_intercept(C64System* c64) {
     if (debug_intercept_installed_) return;
 
-    auto& page = c64->bus.io_handlers[DEBUG_REGISTER_IO_PAGE];
-    debug_intercept_.original_write_handler = page.write_handler;
-    debug_intercept_.original_chip_instance = page.chip_instance;
+    // SID is registered as handler index 1 (see init_io_dispatch order)
+    auto& h = c64->bus_.handler(DEBUG_REGISTER_MMIO_HANDLER);
+    debug_intercept_.original_write_handler = h.on_write;
+    debug_intercept_.original_chip_instance = h.ctx;
     debug_intercept_.watch_address = DEBUG_REGISTER;
     debug_intercept_.written = false;
     debug_intercept_.value = 0;
 
-    // Patch the io_handlers entry to route through the interceptor
-    page.write_handler = io_write_intercept_handler;
-    page.chip_instance = &debug_intercept_;
+    // Patch the MMIO handler to route writes through the interceptor
+    h.on_write = io_write_intercept_handler;
+    h.ctx = &debug_intercept_;
     debug_intercept_installed_ = true;
 }
 
@@ -61,9 +62,9 @@ void TestFramework::install_debug_intercept(C64System* c64) {
 void TestFramework::uninstall_debug_intercept(C64System* c64) {
     if (!debug_intercept_installed_) return;
 
-    auto& page = c64->bus.io_handlers[DEBUG_REGISTER_IO_PAGE];
-    page.write_handler = debug_intercept_.original_write_handler;
-    page.chip_instance = debug_intercept_.original_chip_instance;
+    auto& h = c64->bus_.handler(DEBUG_REGISTER_MMIO_HANDLER);
+    h.on_write = debug_intercept_.original_write_handler;
+    h.ctx = debug_intercept_.original_chip_instance;
     debug_intercept_installed_ = false;
 }
 
@@ -636,21 +637,9 @@ TestEnvironment TestFramework::detect_test_environment(const TestDescriptor& tes
 bool TestFramework::execute_kernal_boot(C64System* c64) {
     auto* cpu = c64->mos6510;
     
-    // Read KERNAL reset vector from ROM
-    // The bus read will automatically route to KERNAL ROM at $FFFC-$FFFD
-    bus_state_t read_state = c64->bus.state;
-    
-    // Read low byte of reset vector
-    BUS_SET_ADDR(read_state, 0xFFFC);
-    BUS_SET_BIT(read_state, BUS_RW_BIT);  // Read mode
-    read_state = c64->bus.memory_tick(read_state);
-    uint8_t reset_low = BUS_GET_DATA(read_state);
-    
-    // Read high byte of reset vector
-    BUS_SET_ADDR(read_state, 0xFFFD);
-    BUS_SET_BIT(read_state, BUS_RW_BIT);  // Read mode
-    read_state = c64->bus.memory_tick(read_state);
-    uint8_t reset_high = BUS_GET_DATA(read_state);
+    // Read KERNAL reset vector from ROM via the new MemoryBus
+    uint8_t reset_low  = c64->read_memory(0xFFFC);
+    uint8_t reset_high = c64->read_memory(0xFFFD);
     
     uint16_t reset_vector = reset_low | (reset_high << 8);
     
@@ -811,7 +800,7 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
     // Banking mode 0x07: LORAM=1, HIRAM=1, CHAREN=1 (standard C64 boot configuration)
     c64->ram->data()[0x00] = 0x2F;  // DDR: bits 0-2 output, others input
     c64->ram->data()[0x01] = 0x37;  // Data: LORAM=1, HIRAM=1, CHAREN=1
-    c64->bus.on_banking_change(0x07);
+    c64->on_banking_change(0x07);
     
     auto* cpu = c64->mos6510;
     if (!cpu) {

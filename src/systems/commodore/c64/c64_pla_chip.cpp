@@ -1,7 +1,6 @@
 #include "chip/logic/pla.hpp"
 #include "systems/commodore/c64/c64_pla_chip.hpp"
 #include "core/chip_layout.hpp"
-#include "systems/commodore/c64/c64_bus.hpp"
 #include "systems/commodore/c64/c64_system.hpp"
 // Native Dear ImGui C++ - conditional compilation for GUI availability
 #ifdef CERMU_HAS_GUI
@@ -174,7 +173,7 @@ void PlaChip::render_debug_content() {
     if (!c64) return;
 
     // PLA is combinational logic — no tick function — snapshot bus state at render time
-    bus_snapshot_ = c64->bus.state;
+    bus_snapshot_ = c64->get_bus_state();
     // Create two-column layout: chip visualization on left, debugging info on right
     ImVec2 window_size = ImGui::GetWindowSize();
     
@@ -196,7 +195,7 @@ void PlaChip::render_debug_content() {
         
         // Tick PLA with current bus state and banking mode
         pla_906114_01_t pla;
-        tick_pla_for_rendering(pla, bus_snapshot_, c64->bus.pla_banking_mode);
+        tick_pla_for_rendering(pla, bus_snapshot_, c64->get_pla_banking_mode());
         
         // Get pin states using generic bus population + PLA overlay
         std::vector<PinSignalState> pin_states = get_pla_pin_states(layout, pla, bus_snapshot_);
@@ -216,7 +215,7 @@ void PlaChip::render_debug_content() {
         ImGui::Separator();
 
         // Mode tracking and control
-        uint8_t current_mode = c64->bus.pla_banking_mode;
+        uint8_t current_mode = c64->get_pla_banking_mode();
         
         // Static state for PLA debug window
         static bool auto_track_mode = true;
@@ -299,15 +298,13 @@ void PlaChip::render_debug_content() {
                         uint16_t bank_start = bank * 0x1000;
                         uint16_t bank_end = bank_start + 0x0FFF;
                         
-                        // Get encoded value for this bank and mode - this is the key to PLA-aware mapping
-                        uint8_t encoded = 0;
+                        // Get read/write chip for this bank and mode from PLA debug tables
+                        uint8_t read_chip = CHIP_RAM;
+                        uint8_t write_chip = CHIP_RAM;
                         if (pla_debug_selected_mode < 32) {
-                            encoded = c64->bus.cpu_encoded_chip_per_bank_per_mode[pla_debug_selected_mode][bank];
+                            read_chip  = c64->pla_cpu_read_chip_[pla_debug_selected_mode][bank];
+                            write_chip = c64->pla_cpu_write_chip_[pla_debug_selected_mode][bank];
                         }
-                        
-                        // Decode chips from the PLA-generated encoding
-                        uint8_t read_chip = decode_read_chip(encoded);
-                        uint8_t write_chip = decode_write_chip(encoded);
                         
                         // Special handling for I/O area - this changes based on PLA mode
                         if (read_chip == CHIP_IO || write_chip == CHIP_IO) {
@@ -325,8 +322,8 @@ void PlaChip::render_debug_content() {
                                 
                                 chip_description_t read_desc = {.base = 0, .size = 0, .label = nullptr};
                                 chip_description_t write_desc = {.base = 0, .size = 0, .label = nullptr};
-                                c64_chips_get_description(&c64->bus, page_read_chip, &read_desc);
-                                c64_chips_get_description(&c64->bus, page_write_chip, &write_desc);
+                                c64_chips_get_description(page_read_chip, &read_desc);
+                                c64_chips_get_description(page_write_chip, &write_desc);
                                 uint16_t read_offset = (read_desc.base <= page_start) ? (page_start - read_desc.base) : 0;
                                 uint16_t write_offset = (write_desc.base <= page_start) ? (page_start - write_desc.base) : 0;
     
@@ -339,7 +336,7 @@ void PlaChip::render_debug_content() {
                                 ImGui::TableSetColumnIndex(1);
                                 ImGui::Text("$%04X-$%04X", page_start, page_end);
                                 ImGui::TableSetColumnIndex(2);
-                                ImGui::Text("%02X", encoded);
+                                ImGui::Text("R:%02d W:%02d", read_chip, write_chip);
                                 ImGui::TableSetColumnIndex(3);
                                 ImGui::Text("%s", get_io_chip_detail(page_read_chip));
                                 ImGui::TableSetColumnIndex(4);
@@ -375,8 +372,8 @@ void PlaChip::render_debug_content() {
                             // Regular bank - chip mapping depends on PLA mode
                             chip_description_t read_desc = {.base = 0, .size = 0, .label = nullptr};
                             chip_description_t write_desc = {.base = 0, .size = 0, .label = nullptr};
-                            c64_chips_get_description(&c64->bus, read_chip, &read_desc);
-                            c64_chips_get_description(&c64->bus, write_chip, &write_desc);
+                            c64_chips_get_description(read_chip, &read_desc);
+                            c64_chips_get_description(write_chip, &write_desc);
                             
                             // Calculate offsets - these can vary based on chip remapping
                             uint16_t read_offset = (read_desc.base <= bank_start) ? (bank_start - read_desc.base) : 0;
@@ -395,7 +392,7 @@ void PlaChip::render_debug_content() {
                             ImGui::TableSetColumnIndex(1);
                             ImGui::Text("$%04X-$%04X", bank_start, bank_end);
                             ImGui::TableSetColumnIndex(2);
-                            ImGui::Text("%02X", encoded);
+                            ImGui::Text("R:%02d W:%02d", read_chip, write_chip);
                             ImGui::TableSetColumnIndex(3);
                             ImGui::Text("%s", c64_chips_to_title(read_chip));
                             ImGui::TableSetColumnIndex(4);
@@ -467,7 +464,7 @@ void PlaChip::render_debug_content() {
                         // Get chip for this VIC-II bank and mode - PLA-dependent!
                         uint8_t read_chip = CHIP_RAM; // Default to RAM
                         if (pla_debug_selected_mode < 32) {
-                            read_chip = c64->bus.vicii_chip_per_bank_per_mode[pla_debug_selected_mode][bank];
+                            read_chip = c64->pla_vicii_read_chip_[pla_debug_selected_mode][bank];
                         }
 
                         ImGui::Text("%02d", read_chip);
@@ -484,7 +481,7 @@ void PlaChip::render_debug_content() {
                         ImGui::TableSetColumnIndex(4);
 
                         chip_description_t read_desc = {.base = 0, .size = 0, .label = nullptr};
-                        c64_chips_get_description(&c64->bus, read_chip, &read_desc);
+                        c64_chips_get_description(read_chip, &read_desc);
                         uint16_t read_offset = (read_desc.base <= bank_start) ? (bank_start - read_desc.base) : 0;
 
                         ImGui::Text("$%04X", read_offset);
@@ -528,7 +525,7 @@ void PlaChip::render_debug_content() {
                 ImGui::TableSetColumnIndex(1);
 
                 chip_description_t desc = {.base = 0, .size = 0, .label = nullptr};
-                bool has_desc = c64_chips_get_description(&c64->bus, chip, &desc);
+                bool has_desc = c64_chips_get_description(chip, &desc);
                 if (has_desc && desc.size > 0) {
                     ImGui::Text("$%04X-$%04X", desc.base, (uint16_t)(desc.base + desc.size - 1));
                 } else {
@@ -572,7 +569,7 @@ void PlaChip::render_settings_content() {
     ImGui::Text("Extended PLA Debug Information");
     ImGui::Separator();
     
-    uint8_t current_mode = c64->bus.pla_banking_mode;
+    uint8_t current_mode = c64->get_pla_banking_mode();
     ImGui::Text("Current Banking Mode: %d ($%02X)", current_mode, current_mode);
     ImGui::Text("Configuration: %s", get_pla_mode_cpu_description(current_mode));
     
@@ -645,11 +642,11 @@ std::vector<PinSignalState> PlaChip::get_layout_pin_states(ChipLayout& layout) {
     if (!c64_) return {};
 
     // PLA is combinational logic — no tick function — snapshot bus state at render time
-    bus_snapshot_ = c64_->bus.state;
+    bus_snapshot_ = c64_->get_bus_state();
 
     // Tick PLA with current bus state and banking mode
     pla_906114_01_t pla;
-    tick_pla_for_rendering(pla, bus_snapshot_, c64_->bus.pla_banking_mode);
+    tick_pla_for_rendering(pla, bus_snapshot_, c64_->get_pla_banking_mode());
 
     // Get pin states using generic bus population + PLA overlay
     return get_pla_pin_states(layout, pla, bus_snapshot_);
@@ -671,27 +668,27 @@ void PlaChip::register_debug_fields() {
         .category("PLA State")
         .value("Banking Mode", +[](const ChipBase* c) -> uint32_t {
             auto* self = static_cast<P*>(c);
-            return self->c64_ ? self->c64_->bus.pla_banking_mode : 0;
+            return self->c64_ ? self->c64_->get_pla_banking_mode() : 0;
         })
         .flag("#LORAM", +[](const ChipBase* c) -> uint32_t {
             auto* self = static_cast<P*>(c);
-            return self->c64_ && (self->c64_->bus.pla_banking_mode & 0x01) == 0;
+            return self->c64_ && (self->c64_->get_pla_banking_mode() & 0x01) == 0;
         })
         .flag("#HIRAM", +[](const ChipBase* c) -> uint32_t {
             auto* self = static_cast<P*>(c);
-            return self->c64_ && (self->c64_->bus.pla_banking_mode & 0x02) == 0;
+            return self->c64_ && (self->c64_->get_pla_banking_mode() & 0x02) == 0;
         })
         .flag("#CHAREN", +[](const ChipBase* c) -> uint32_t {
             auto* self = static_cast<P*>(c);
-            return self->c64_ && (self->c64_->bus.pla_banking_mode & 0x04) == 0;
+            return self->c64_ && (self->c64_->get_pla_banking_mode() & 0x04) == 0;
         })
         .flag("#EXROM", +[](const ChipBase* c) -> uint32_t {
             auto* self = static_cast<P*>(c);
-            return self->c64_ && (self->c64_->bus.pla_banking_mode & 0x08) == 0;
+            return self->c64_ && (self->c64_->get_pla_banking_mode() & 0x08) == 0;
         })
         .flag("#GAME", +[](const ChipBase* c) -> uint32_t {
             auto* self = static_cast<P*>(c);
-            return self->c64_ && (self->c64_->bus.pla_banking_mode & 0x10) == 0;
+            return self->c64_ && (self->c64_->get_pla_banking_mode() & 0x10) == 0;
         });
 }
 #endif // CERMU_HAS_CHIP_DEBUG

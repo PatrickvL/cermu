@@ -1,5 +1,4 @@
 #include "systems/commodore/c64/c64_chips.hpp"
-#include "systems/commodore/c64/c64_bus.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -39,8 +38,8 @@ static const size_t CHIP_ENTRY_COUNT = sizeof(c64_chip_to_entry) / sizeof(c64_ch
 // Basic CHIP Description Function Implementation
 // =============================
 
-bool c64_chips_get_description(const c64_bus_t* bus, uint8_t chip, chip_description_t* out) {
-    if (!bus || !out) return false;
+bool c64_chips_get_description(uint8_t chip, chip_description_t* out) {
+    if (!out) return false;
 
     memset(out, 0, sizeof(*out));
 

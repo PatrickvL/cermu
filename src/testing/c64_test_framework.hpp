@@ -266,7 +266,7 @@ private:
     
     // Debug register monitoring via IO write intercept (zero-cost to main emulator)
     static constexpr uint16_t DEBUG_REGISTER = 0xD7FF;
-    static constexpr uint8_t  DEBUG_REGISTER_IO_PAGE = 7; // IO page for $D700-$D7FF
+    static constexpr size_t   DEBUG_REGISTER_MMIO_HANDLER = 1; // SID handler index (see init_io_dispatch order)
     io_write_intercept_t debug_intercept_;  // Intercept state for $D7FF
     bool debug_intercept_installed_;        // Whether intercept is currently active
 

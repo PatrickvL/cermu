@@ -44,6 +44,10 @@
 #include <algorithm>
 #include "systems/commodore/c64/c64_constants.hpp"
 
+// Bitmasks for cartridge control lines stored in system_lines_
+static constexpr uint8_t SYS_MASK_EXROM = 0x01;
+static constexpr uint8_t SYS_MASK_GAME  = 0x02;
+
 /**
  * C64 System Implementation
  *
@@ -350,7 +354,7 @@ static void cia2_port_a_bank_callback(void* context, uint8_t port_a_value) {
 // CPU I/O port banking callback — updates PLA memory mode
 static void cpu_banking_callback(void* context, uint8_t banking_state) {
     C64System* c64 = static_cast<C64System*>(context);
-    c64->bus.on_banking_change(banking_state);
+    c64->on_banking_change(banking_state);
 }
 bool C64System::initialize() {
     if (initialized_) {
@@ -359,21 +363,19 @@ bool C64System::initialize() {
 
     initialized_ = true;
 
-    // Register main board (owns connector ports)
+    // Register main board (owns flat mem and chip binding)
     register_board(&board_);
 
     // =========================================================================
     // System infrastructure
     // =========================================================================
 
-    // Cleanup helper for error paths — destroys keyboard + all created chips,
-    // resets the pointer and zeroes the embedded struct for re-use.
+    // Cleanup helper for error paths — destroys keyboard + all created chips.
     auto cleanup = [this]() {
         if (this->keyboard) {
             delete this->keyboard;
             this->keyboard = nullptr;
         }
-        // Destroy each chip individually using typed destroyers
         delete this->kernal;
         delete this->cia2;
         delete this->cia1;
@@ -387,26 +389,25 @@ bool C64System::initialize() {
         delete this->mos6510; this->mos6510 = nullptr;
         delete this->ram;
         initialized_ = false;
-        // Chip pointers already nulled above
     };
 
-    // Initialize bus as embedded struct (not heap-allocated)
-    this->bus.c64 = this;
-
     // Bus pull-up defaults and cartridge lines (no cartridge)
-    this->bus.default_state = C64_BUS_DEFAULT_STATE();
-    this->bus.state = this->bus.default_state;
-    this->bus.system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;
+    // Equivalent of old C64_BUS_DEFAULT_STATE macro — sets all pull-up lines
+    default_state_ = MOS6510::default_bus_state()
+                   | BUS_BIT(BUS_BA_BIT) | BUS_BIT(BUS_CNT_BIT)
+                   | BUS_BIT(BUS_FLAG_BIT) | BUS_DATA_MASK;
+    bus_state_     = default_state_;
+    system_lines_  = SYS_MASK_EXROM | SYS_MASK_GAME;
 
     // =========================================================================
-    // Create all chips
+    // Create all chips (manually — they need custom initialization)
     // =========================================================================
-    this->ram = new RAMChip(ChipInfo{"4164", "Various"}, 65536, RAMChip::RAM, &bus.state, "RAM", 0x0000);
+    this->ram = new RAMChip(ChipInfo{"4164", "Various"}, 65536, RAMChip::RAM, &bus_state_, "RAM", 0x0000);
     if (!(this->mos6510 = new MOS6510())) { cleanup(); return false; }
-    this->cartridge_roml = new ROMChip(ChipInfo{"ROM", "Various"}, c64_constants::BASIC_ROM_SIZE, ROMChip::ROM, &bus.state, "ROML", c64_constants::ROML_BASE);
-    this->basic = new ROMChip(ChipInfo{"MOS 901226-01", "Commodore"}, c64_constants::BASIC_ROM_SIZE, ROMChip::ROM, &bus.state, "BASIC", c64_constants::BASIC_ROM_BASE);
-    this->cartridge_romh = new ROMChip(ChipInfo{"ROM", "Various"}, c64_constants::BASIC_ROM_SIZE, ROMChip::ROM, &bus.state, "ROMH", c64_constants::BASIC_ROM_BASE);
-    this->charrom = new ROMChip(ChipInfo{"MOS 901225-01", "Commodore"}, c64_constants::CHAR_ROM_SIZE, ROMChip::ROM, &bus.state, "CHARROM", c64_constants::CHAR_ROM_BASE);
+    this->cartridge_roml = new ROMChip(ChipInfo{"ROM", "Various"}, c64_constants::BASIC_ROM_SIZE, ROMChip::ROM, &bus_state_, "ROML", c64_constants::ROML_BASE);
+    this->basic = new ROMChip(ChipInfo{"MOS 901226-01", "Commodore"}, c64_constants::BASIC_ROM_SIZE, ROMChip::ROM, &bus_state_, "BASIC", c64_constants::BASIC_ROM_BASE);
+    this->cartridge_romh = new ROMChip(ChipInfo{"ROM", "Various"}, c64_constants::BASIC_ROM_SIZE, ROMChip::ROM, &bus_state_, "ROMH", c64_constants::BASIC_ROM_BASE);
+    this->charrom = new ROMChip(ChipInfo{"MOS 901225-01", "Commodore"}, c64_constants::CHAR_ROM_SIZE, ROMChip::ROM, &bus_state_, "CHARROM", c64_constants::CHAR_ROM_BASE);
     this->vicii = new vicii_t();
     this->vicii->init(vicii_t::get_default_config(get_vicii_standard() == VIC_PAL), vicii_t::memory_bank_change);
     if (!this->vicii) { cleanup(); return false; }
@@ -423,14 +424,6 @@ bool C64System::initialize() {
 
     this->colorram = new MOS2114();
     this->vicii->colorram = this->colorram;
-
-    // VIC-II bank selection via bank_base offset; no bus-level callback needed
-    this->vicii->bus.bus = &this->bus;
-    this->vicii->bus.bank_change = nullptr;
-    this->vicii->bus.mem_read = [](void* ctx, bus_state_t bus, uint16_t addr) -> bus_state_t {
-        return static_cast<c64_bus_t*>(ctx)->vic_read(bus, addr);
-    };
-    this->vicii->bus.mem_read_ctx = &this->bus;
 
     this->cia1 = new mos6526_t();
     this->cia1->configured_interrupt_bit = BUS_IRQ_BIT;
@@ -455,29 +448,63 @@ bool C64System::initialize() {
     }
     printf("C64: Keyboard matrix initialized (all keys released)\n");
 
-    this->kernal = new ROMChip(ChipInfo{"MOS 901227-03", "Commodore"}, c64_constants::KERNAL_ROM_SIZE, ROMChip::ROM, &bus.state, "KERNAL", c64_constants::KERNAL_BASE);
+    this->kernal = new ROMChip(ChipInfo{"MOS 901227-03", "Commodore"}, c64_constants::KERNAL_ROM_SIZE, ROMChip::ROM, &bus_state_, "KERNAL", c64_constants::KERNAL_BASE);
 
     // No cartridge I/O by default
     this->io1 = nullptr;
     this->io2 = nullptr;
 
     // =========================================================================
-    // PLA memory maps and bus initialization
+    // Bind chips to Board — flat mem allocation + chip_info setup
+    // =========================================================================
+    board_.bind_chip(c64_slots::kRam,     this->ram);
+    board_.bind_chip(c64_slots::kRoml,    this->cartridge_roml);
+    board_.bind_chip(c64_slots::kRomh,    this->cartridge_romh);
+    board_.bind_chip(c64_slots::kBasic,   this->basic);
+    board_.bind_chip(c64_slots::kKernal,  this->kernal);
+    board_.bind_chip(c64_slots::kCharrom, this->charrom);
+    board_.bind_chip(c64_slots::kCpu,     this->mos6510);
+    board_.bind_chip(c64_slots::kVicii,   this->vicii);
+    board_.bind_chip(c64_slots::kSid,     this->sid);
+    board_.bind_chip(c64_slots::kColram,  this->colorram);
+    board_.bind_chip(c64_slots::kCia1,    this->cia1);
+    board_.bind_chip(c64_slots::kCia2,    this->cia2);
+
+    // Bind memory chips to flat mem regions
+    this->ram->bind(board_.chip_buffer(C64ChipId(c64_chip_ids::kRam)));
+    this->cartridge_roml->bind(board_.chip_buffer(C64ChipId(c64_chip_ids::kRoml)));
+    this->cartridge_romh->bind(board_.chip_buffer(C64ChipId(c64_chip_ids::kRomh)));
+    this->basic->bind(board_.chip_buffer(C64ChipId(c64_chip_ids::kBasic)));
+    this->kernal->bind(board_.chip_buffer(C64ChipId(c64_chip_ids::kKernal)));
+    this->charrom->bind(board_.chip_buffer(C64ChipId(c64_chip_ids::kCharrom)));
+
+    // Apply: sets up chip_info (Phase 0) — Phase 1 skipped (all overlay_group=1)
+    board_.apply(bus_);
+
+    // =========================================================================
+    // Wire I/O dispatch — IndexedSubTable + MMIO handlers
+    // =========================================================================
+    init_io_dispatch();
+
+    // VIC-II memory read callback — routes through MemoryBus viewer 1
+    this->vicii->bus.bus = nullptr;   // No longer using c64_bus_t
+    this->vicii->bus.bank_change = nullptr;
+    this->vicii->bus.mem_read = [](void* ctx, bus_state_t bus, uint16_t addr) -> bus_state_t {
+        auto* sys = static_cast<C64System*>(ctx);
+        // Use peek_byte for VIC-II viewer (viewer 1) — returns 0xFF for unmapped
+        uint8_t data = sys->bus_.peek_byte(C64BusSpec::Vic, addr);
+        BUS_SET_DATA(bus, data);
+        return bus;
+    };
+    this->vicii->bus.mem_read_ctx = this;
+
+    // =========================================================================
+    // PLA memory maps — generate 32×2 ModeSnapshots
     // =========================================================================
     if (!pla_maps_generate()) { cleanup(); return false; }
 
-    printf("VIC-II memory mapping for mode 0x07:\n");
-    for (int bank = 0; bank < 16; bank++) {
-        uint8_t chip = this->bus.vicii_chip_per_bank[bank];
-        printf("  Bank %d (0x%04X-0x%04X): CHIP=%d (%s)\n",
-               bank, bank * 0x1000, (bank + 1) * 0x1000 - 1,
-               chip, c64_chips_to_title(chip));
-    }
-
-    // Attach bus and load ROMs from configured paths
-    this->bus.system_attach(this);
+    // Load ROMs from configured paths
     memory_init();
-    this->bus.init_flat_mem_pointers(this);
 
     // =========================================================================
     // Wire callbacks and initialize CPU
@@ -487,12 +514,6 @@ bool C64System::initialize() {
     this->cia2->port_a_change_callback = cia2_port_a_bank_callback;
     this->cia2->port_a_callback_context = this;
     cia2_port_a_bank_callback(this, this->cia2->port_a_value);  // Set initial bank
-
-    // CPU I/O port → PLA memory banking (per-instance, no global descriptor mutation)
-    // (callback is set on the CPU instance, not on a shared descriptor)
-
-    // NOTE: CIA1 keyboard callbacks are NOT set here — setup_ports()
-    // installs joystick-aware versions that supersede the basic ones.
 
     // CIA2 interrupt line → NMI (CIA1 defaults to IRQ)
     this->cia2->configured_interrupt_bit = BUS_NMI_BIT;
@@ -505,8 +526,6 @@ bool C64System::initialize() {
     cpu->bank_change_ctx = this;
 
     // Reset the CPU to start the hardware-accurate 7-cycle RESET sequence.
-    // The deferred hijack will fetch the KERNAL reset vector ($FFFC/$FFFD)
-    // through the bus, routing through the PLA — no manual load needed.
     cpu->reset();
 
     // Sync PLA banking with the freshly-reset IO port so KERNAL ROM is
@@ -867,12 +886,11 @@ bool C64System::serial_trap_ready() {
 
 void C64System::system_tick() {
     total_cycles_++;
-    c64_bus_t* bus_ptr = &bus;
 
     // Start each cycle with pull-up resistors (default_state: IRQ=1, NMI=1, BA=1, AEC=1, RDY=1)
-    bus_state_t s = bus_ptr->default_state;
-    BUS_SET_ADDR(s, BUS_GET_ADDR(bus_ptr->state));
-    BUS_SET_DATA(s, BUS_GET_DATA(bus_ptr->state));
+    bus_state_t s = default_state_;
+    BUS_SET_ADDR(s, BUS_GET_ADDR(bus_state_));
+    BUS_SET_DATA(s, BUS_GET_DATA(bus_state_));
 
     // PHASE 1: VIC-II PHI1 — g-access read, pixel sequencing
     s = vicii->tick_phi1(s);
@@ -891,8 +909,15 @@ void C64System::system_tick() {
     auto* cpu = mos6510;
     s = cpu->tick<MOS6510::Phase::PHI2>(s);
 
-    // PHASE 3: Memory service (AEC determines CPU vs VIC-II bus ownership)
-    s = bus_ptr->memory_tick(s);
+    // PHASE 3: Memory service — AEC determines CPU vs VIC-II bus ownership
+    // Writes always use CPU viewer (viewer 0).  Reads use VIC-II viewer
+    // (viewer 1) when AEC is low (VIC-II DMA cycle).
+    {
+        const bool is_write = !BUS_GET_BIT(s, BUS_RW_BIT);
+        const size_t viewer = (is_write || BUS_GET_BIT(s, BUS_AEC_BIT))
+                                  ? C64BusSpec::Cpu : C64BusSpec::Vic;
+        s = bus_.tick(viewer, s);
+    }
 
     // NMI edge detection — sample after bus dispatch (post-dispatch state)
     cpu->sample_nmi_pin(s);
@@ -924,7 +949,7 @@ void C64System::system_tick() {
     // PHASE 5: SID — sound generation
     s = sid->tick(s);
 
-    bus_ptr->state = s;
+    bus_state_ = s;
 }
 
 void C64System::tick() {
@@ -1774,30 +1799,254 @@ bool C64System::patch_skip_memtest() {
 // PLA Memory Map Generation
 // ============================================================================
 
-bool C64System::pla_maps_generate() {
-    c64_bus_t* bus = &(this->bus);
+// Convert PLA output signals to a CHIP type constant.
+// Used during PLA mode snapshot generation to map hardware decoder outputs
+// to the chip_id_t values used by the MemoryBus page tables.
+static uint8_t pla_906114_01_outputs_to_chip(pla_906114_01_t* pla) {
+    if (!pla->outputs.n_casram)  return CHIP_RAM;
+    if (!pla->outputs.n_basic)   return CHIP_BASIC;
+    if (!pla->outputs.n_kernal)  return CHIP_KERNAL;
+    if (!pla->outputs.n_io)      return CHIP_IO;
+    if (!pla->outputs.n_charrom) return CHIP_CHARROM;
+    if (!pla->outputs.n_roml)    return CHIP_ROML;
+    if (!pla->outputs.n_romh)    return CHIP_ROMH;
+    return CHIP_UNMAPPED;
+}
 
+bool C64System::pla_maps_generate() {
     // Create a temporary PLA instance for generating memory maps
     pla_906114_01_t* pla = pla_906114_01_create();
-    if (!pla)
-        return false;
+    if (!pla) return false;
 
-    // Generate all 32 memory modes using PLA
-    bus->generate_all_pla_modes((struct pla_906114_01_t*)pla);
+    // The IndexedSubTable sentinel for the I/O page — used in PLA modes
+    // where the $D000 page routes to the I/O sub-table.
+    const auto io_sub_read  = C64Bus::indexed_sub_chip(0);
+    const auto io_sub_write = C64Bus::indexed_sub_write_chip(0);
+    const auto no_chip_rd   = C64ChipId(C64PT::kNoChipSelected);
+    const auto no_chip_wr   = C64WriteId(C64PT::kNoChipSelectedWrite);
 
-    // Clean up PLA instance
+    // Helper: map PLA output CHIP type → MemoryBus chip id
+    auto pla_to_read_chip = [&](uint8_t pla_chip) -> C64ChipId {
+        switch (pla_chip) {
+            case CHIP_RAM:     return C64ChipId(c64_chip_ids::kRam);
+            case CHIP_BASIC:   return C64ChipId(c64_chip_ids::kBasic);
+            case CHIP_KERNAL:  return C64ChipId(c64_chip_ids::kKernal);
+            case CHIP_CHARROM: return C64ChipId(c64_chip_ids::kCharrom);
+            case CHIP_ROML:    return C64ChipId(c64_chip_ids::kRoml);
+            case CHIP_ROMH:    return C64ChipId(c64_chip_ids::kRomh);
+            case CHIP_IO:      return io_sub_read;
+            default:           return no_chip_rd;  // CHIP_UNMAPPED
+        }
+    };
+
+    auto pla_to_write_chip = [&](uint8_t pla_chip) -> C64WriteId {
+        switch (pla_chip) {
+            case CHIP_RAM: return C64WriteId(c64_chip_ids::kRam);
+            case CHIP_IO:  return io_sub_write;
+            default:       return no_chip_wr;  // ROMs and unmapped ignore writes
+        }
+    };
+
+    // Generate all 32 modes for both viewers
+    for (int mode = 0; mode < 32; mode++) {
+        pla_906114_01_set_banking_mode(pla, (uint8_t)mode);
+
+        // ── CPU viewer (viewer 0) ────────────────────────────────────────
+        pla->inputs.n_cas = false;
+        bus_.reset_viewer(C64BusSpec::Cpu);
+
+        for (uint32_t bank = 0; bank < 16; bank++) {
+            bus_state_t pla_bus = 0;
+            BUS_SET_ADDR(pla_bus, bank << 12);
+            BUS_SET_BIT(pla_bus, BUS_AEC_BIT);
+            BUS_SET_BIT(pla_bus, BUS_BA_BIT);
+
+            // Read: R/W high
+            BUS_SET_BIT(pla_bus, BUS_RW_BIT);
+            pla_906114_01_tick(pla, pla_bus);
+            uint8_t read_chip = pla_906114_01_outputs_to_chip(pla);
+
+            // Write: R/W low
+            BUS_CLR_BIT(pla_bus, BUS_RW_BIT);
+            pla_906114_01_tick(pla, pla_bus);
+            uint8_t write_chip = pla_906114_01_outputs_to_chip(pla);
+
+            // Store raw PLA outputs for debug GUI
+            pla_cpu_read_chip_[mode][bank]  = read_chip;
+            pla_cpu_write_chip_[mode][bank] = write_chip;
+
+            bus_.set_page(C64BusSpec::Cpu, bank,
+                          pla_to_read_chip(read_chip),
+                          pla_to_write_chip(write_chip));
+        }
+        bus_.save_snapshot(C64BusSpec::Cpu, cpu_snapshots_[mode]);
+
+        // ── VIC-II viewer (viewer 1) ─────────────────────────────────────
+        pla->inputs.n_cas = false;
+        bus_.reset_viewer(C64BusSpec::Vic);
+
+        for (uint32_t bank = 0; bank < 16; bank++) {
+            pla->inputs.va12   = (bank & 0x01) != 0;
+            pla->inputs.va13   = (bank & 0x02) != 0;
+            pla->inputs.n_va14 = (bank & 0x04) == 0;
+
+            bus_state_t pla_bus = 0;
+            BUS_SET_ADDR(pla_bus, bank << 12);
+            BUS_SET_BIT(pla_bus, BUS_RW_BIT);
+            pla_906114_01_tick(pla, pla_bus);
+            uint8_t read_chip = pla_906114_01_outputs_to_chip(pla);
+
+            // Store raw PLA output for debug GUI
+            pla_vicii_read_chip_[mode][bank] = read_chip;
+
+            // VIC-II only reads — set read page, write stays no-chip
+            bus_.set_read_page(C64BusSpec::Vic, bank,
+                               pla_to_read_chip(read_chip));
+        }
+        bus_.save_snapshot(C64BusSpec::Vic, vicii_snapshots_[mode]);
+    }
+
     pla_906114_01_destroy(pla);
 
-    // Calculate initial PLA mode from system_lines (EXROM/GAME) and default CPU port value
-    // CPU I/O port initializes to $17 (bits 0-2 = 0b111 = LORAM=1, HIRAM=1, CHAREN=1)
-    // Combined with system_lines (EXROM=1, GAME=1) this gives mode $1F
-    uint8_t cpu_port_bits = 0x07;  // Default from init_io_port(): $17 & $07 = $07
-    uint8_t initial_pla_mode = bus->generate_pla_mode(cpu_port_bits);
-    bus->mode_switch(initial_pla_mode);
+    // Set initial mode ($1F = standard, no cartridge)
+    uint8_t initial_mode = generate_pla_mode(0x07);
+    mode_switch(initial_mode);
 
-    printf("C64 initial banking: PLA mode=$%02X (standard config, no cartridge)\n", initial_pla_mode);
-
+    printf("C64: PLA banking initialized (mode=$%02X, %zu snapshots per viewer)\n",
+           initial_mode, kC64NumPlaModes);
     return true;
+}
+
+// ============================================================================
+// I/O DISPATCH — IndexedSubTable + MMIO handlers
+// ============================================================================
+
+void C64System::init_io_dispatch() {
+    // Register MMIO handlers for each I/O chip
+    int hVicII  = bus_.register_handler({this->vicii,    vicii_t::registers_read,    vicii_t::registers_write});
+    int hSid    = bus_.register_handler({this->sid,      mos6581_t::registers_read,  mos6581_t::registers_write});
+    int hColRam = bus_.register_handler({this->colorram, MOS2114::bus_read,          MOS2114::bus_write});
+    int hCia1   = bus_.register_handler({this->cia1,     mos6526_t::registers_read,  mos6526_t::registers_write});
+    int hCia2   = bus_.register_handler({this->cia2,     mos6526_t::registers_read,  mos6526_t::registers_write});
+
+    // Floating bus handlers for I/O1 and I/O2 expansion areas
+    auto unmapped_read  = [](void*, bus_state_t bus) -> bus_state_t { return bus; };
+    auto unmapped_write = [](void*, bus_state_t bus) -> bus_state_t { return bus; };
+    int hIO1 = bus_.register_handler({nullptr, unmapped_read, unmapped_write});
+    int hIO2 = bus_.register_handler({nullptr, unmapped_read, unmapped_write});
+
+    // Create the IndexedSubTable for the I/O page ($D000-$DFFF)
+    // 4 bits → 16 × 256 B entries, bit_shift=8 (extract bits 11-8)
+    const int io_sub = bus_.add_indexed_sub_table(C64BusSpec::Cpu, 4, 8);
+    // Also add it for VIC-II viewer (though VIC-II rarely hits I/O)
+    (void)bus_.add_indexed_sub_table(C64BusSpec::Vic, 4, 8);
+
+    // Helper to create MMIO sentinel chip ids
+    auto mmio_rd = [](int h) { return C64ChipId(C64PT::kRegChipBase + h); };
+    auto mmio_wr = [](int h) { return C64WriteId(C64PT::kRegChipBaseWrite + h); };
+
+    // Populate sub-table entries
+    // VIC-II: $D000-$D3FF (pages 0-3)
+    for (int i = 0; i < 4; ++i)
+        bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, i, mmio_rd(hVicII), mmio_wr(hVicII));
+    // SID: $D400-$D7FF (pages 4-7)
+    for (int i = 4; i < 8; ++i)
+        bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, i, mmio_rd(hSid), mmio_wr(hSid));
+    // Color RAM: $D800-$DBFF (pages 8-11)
+    for (int i = 8; i < 12; ++i)
+        bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, i, mmio_rd(hColRam), mmio_wr(hColRam));
+    // CIA1: $DC00-$DCFF (page 12)
+    bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, 12, mmio_rd(hCia1), mmio_wr(hCia1));
+    // CIA2: $DD00-$DDFF (page 13)
+    bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, 13, mmio_rd(hCia2), mmio_wr(hCia2));
+    // I/O1: $DE00-$DEFF (page 14) — expansion port
+    bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, 14, mmio_rd(hIO1), mmio_wr(hIO1));
+    // I/O2: $DF00-$DFFF (page 15) — expansion port
+    bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, 15, mmio_rd(hIO2), mmio_wr(hIO2));
+
+    printf("C64: I/O dispatch initialized (IndexedSubTable with %d MMIO handlers)\n", 7);
+}
+
+// ============================================================================
+// BANKING — mode_switch, on_banking_change, generate_pla_mode
+// ============================================================================
+
+void C64System::mode_switch(uint8_t mode) {
+    pla_banking_mode_ = mode & 0x1F;
+    bus_.load_snapshot(C64BusSpec::Cpu, cpu_snapshots_[pla_banking_mode_]);
+    bus_.load_snapshot(C64BusSpec::Vic, vicii_snapshots_[pla_banking_mode_]);
+}
+
+void C64System::on_banking_change(uint8_t banking_state) {
+    uint8_t pla_mode = generate_pla_mode(banking_state & 0x07);
+    mode_switch(pla_mode);
+}
+
+uint8_t C64System::generate_pla_mode(uint8_t cpu_port_bits) const {
+    uint8_t pla_mode = cpu_port_bits & 0x07;
+    pla_mode |= ((system_lines_ & SYS_MASK_EXROM) ? 0x08 : 0);
+    pla_mode |= ((system_lines_ & SYS_MASK_GAME)  ? 0x10 : 0);
+    return pla_mode;
+}
+
+// ============================================================================
+// CARTRIDGE SIGNALS — EXROM/GAME
+// ============================================================================
+
+void C64System::set_exrom_signal(bool active) {
+    if (active)
+        system_lines_ &= ~SYS_MASK_EXROM;
+    else
+        system_lines_ |= SYS_MASK_EXROM;
+    // Re-derive PLA mode from current CPU port bits + new cartridge signals
+    uint8_t cpu_port_bits = pla_banking_mode_ & 0x07;
+    mode_switch(generate_pla_mode(cpu_port_bits));
+}
+
+void C64System::set_game_signal(bool active) {
+    if (active)
+        system_lines_ &= ~SYS_MASK_GAME;
+    else
+        system_lines_ |= SYS_MASK_GAME;
+    uint8_t cpu_port_bits = pla_banking_mode_ & 0x07;
+    mode_switch(generate_pla_mode(cpu_port_bits));
+}
+
+void C64System::set_cartridge_signals(bool exrom_active, bool game_active) {
+    if (exrom_active) system_lines_ &= ~SYS_MASK_EXROM;
+    else              system_lines_ |= SYS_MASK_EXROM;
+    if (game_active)  system_lines_ &= ~SYS_MASK_GAME;
+    else              system_lines_ |= SYS_MASK_GAME;
+    uint8_t cpu_port_bits = pla_banking_mode_ & 0x07;
+    mode_switch(generate_pla_mode(cpu_port_bits));
+}
+
+bool C64System::get_exrom_signal() const {
+    return (system_lines_ & SYS_MASK_EXROM) == 0;
+}
+
+bool C64System::get_game_signal() const {
+    return (system_lines_ & SYS_MASK_GAME) == 0;
+}
+
+// ============================================================================
+// DEBUG MEMORY ACCESS
+// ============================================================================
+
+uint8_t C64System::read_memory(uint16_t addr) {
+    bus_state_t s = bus_state_;
+    BUS_SET_ADDR(s, addr);
+    BUS_SET_BIT(s, BUS_RW_BIT);
+    s = bus_.tick(C64BusSpec::Cpu, s);
+    return BUS_GET_DATA(s);
+}
+
+void C64System::write_memory(uint16_t addr, uint8_t value) {
+    bus_state_t s = bus_state_;
+    BUS_SET_ADDR(s, addr);
+    BUS_SET_DATA(s, value);
+    BUS_CLR_BIT(s, BUS_RW_BIT);
+    (void)bus_.tick(C64BusSpec::Cpu, s);
 }
 
 // ============================================================================
