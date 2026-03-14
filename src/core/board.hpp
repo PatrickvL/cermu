@@ -59,7 +59,7 @@ public:
 
         // Precompute per-chip-id byte offsets for chip_buffer().
         const size_t total_ids = manifest.total_ids(kPageBits);
-        bank_byte_offsets_.resize(total_ids);
+        chip_byte_offsets_.resize(total_ids);
         size_t byte_off = 0;
         ChipId chip_id  = ChipId(0);
         for (size_t i = 0; i < N; ++i) {
@@ -68,12 +68,12 @@ public:
             const size_t eff_bs    = chip.bank_size > 0 ? chip.bank_size : kPageSize;
             const size_t num_banks = chip.size_bytes / eff_bs;
             for (size_t b = 0; b < num_banks; ++b)
-                bank_byte_offsets_[chip_id++] = byte_off + b * eff_bs;
+                chip_byte_offsets_[chip_id++] = byte_off + b * eff_bs;
             byte_off += chip.size_bytes;
         }
         // Dynamic pool: one bank per page
         for (size_t d = 0; d < manifest.num_dynamic_pages; ++d)
-            bank_byte_offsets_[chip_id++] = byte_off + d * kPageSize;
+            chip_byte_offsets_[chip_id++] = byte_off + d * kPageSize;
 
         // Initialise dynamic allocator
         if (manifest.num_dynamic_pages > 0) {
@@ -318,11 +318,11 @@ public:
 
     // Pointer to the start of the chip's region in the flat mem.
     [[nodiscard]] uint8_t* chip_buffer(ChipId base_id) noexcept {
-        return flat_mem_.data() + bank_byte_offsets_[size_t(base_id)];
+        return flat_mem_.data() + chip_byte_offsets_[size_t(base_id)];
     }
 
     [[nodiscard]] const uint8_t* chip_buffer(ChipId base_id) const noexcept {
-        return flat_mem_.data() + bank_byte_offsets_[size_t(base_id)];
+        return flat_mem_.data() + chip_byte_offsets_[size_t(base_id)];
     }
 
     // Total size of a chip's buffer region in bytes.
@@ -546,7 +546,7 @@ private:
 
     Map                      bus_map_;
     std::vector<uint8_t>     flat_mem_;
-    std::vector<size_t>      bank_byte_offsets_; // ChipId → byte offset in flat_mem
+    std::vector<size_t>      chip_byte_offsets_; // ChipId → byte offset in flat_mem
 
     // Chips created by create_chips() — owned here for lifetime management.
     std::vector<std::unique_ptr<ChipBase>> owned_chips_;
