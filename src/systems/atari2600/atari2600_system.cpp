@@ -312,26 +312,12 @@ void Atari2600System::tick_cpu() {
 // ============================================================================
 
 void Atari2600System::configure_bus_memory_map() {
-    // apply() auto-wires page 0 with a MaskedSubTable (TIA + RIOT regions)
-    // and maps page 16 to the cart MMIO handler.
+    // apply() auto-wires everything declaratively:
+    //   - Pages 0-15: MaskedSubTable with TIA (A7=0) + RIOT (A7=1) regions,
+    //     mirrored via bank_size=4096 on the TIA/RIOT slots.
+    //   - Pages 16-31: full-page MMIO for the cartridge mapper,
+    //     mirrored via bank_size=4096 on the Cart slot.
     board_.apply(bus_);
-
-    // ── Mirror non-cart pages (1-15) to the same sub-table as page 0 ────
-    // The Atari 2600 uses incomplete address decoding: A12=0 pages all have
-    // the same TIA (A7=0) / RIOT (A7=1) split.  Pages 1-15 mirror page 0.
-    int sub_idx = board_.slot(atari2600_chips::kTiaSlot).sub_table_idx;
-    if (sub_idx >= 0) {
-        for (size_t page = 1; page < 16; ++page)
-            bus_.map_to_masked_sub(0, page, size_t(sub_idx));
-    }
-
-    // ── Mirror cart pages (17-31) to the same MMIO handler as page 16 ───
-    // A12=1 always selects the cartridge; pages 17-31 are mirrors of page 16.
-    int cart_mmio = board_.slot(atari2600_chips::kCartSlot).mmio_idx;
-    if (cart_mmio >= 0) {
-        for (size_t page = 17; page < 32; ++page)
-            bus_.map_register_file(0, page, 1, size_t(cart_mmio));
-    }
 }
 
 // ============================================================================

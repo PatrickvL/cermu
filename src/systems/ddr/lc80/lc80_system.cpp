@@ -135,37 +135,13 @@ void LC80System::set_speed_multiplier(float m) { speed_multiplier_ = m; }
 // ============================================================================
 
 void LC80System::configure_bus_memory_map() {
-    using ChipId      = PT::ChipId;
-    using WriteChipId = PT::WriteChipId;
-
-    // apply() maps:
-    //   ROM: pages $00-$07 (read only, $0000-$07FF)
-    //   RAM: pages $20-$23 (read+write, $2000-$23FF)
-    // We need to add mirrors for the full decoded address ranges.
-
-    // ROM is 2 KB = 8 pages, mirrored 4x through $0000-$1FFF (32 pages)
-    constexpr size_t rom_pages = lc80_constants::ROM_SIZE / 256;   // 8
-    constexpr size_t rom_range = 0x2000 / 256;                     // 32 pages
-    for (size_t base = rom_pages; base < rom_range; base += rom_pages) {
-        for (size_t p = 0; p < rom_pages; ++p) {
-            bus_.set_read_page(0, base + p, ChipId(p));
-        }
-    }
-
-    // RAM is 1 KB = 4 pages, mirrored 8x through $2000-$3FFF (32 pages)
-    constexpr size_t ram_base_id = kLC80Chips.base_id(lc80_chips::kRamSlot, LC80BusSpec::PageBits);
-    constexpr size_t ram_pages   = lc80_constants::RAM_SIZE_MIN / 256;  // 4
-    constexpr size_t ram_first   = 0x2000 / 256;                        // page 32
-    constexpr size_t ram_range   = 0x2000 / 256;                        // 32 pages
-    for (size_t base = ram_pages; base < ram_range; base += ram_pages) {
-        for (size_t p = 0; p < ram_pages; ++p) {
-            auto id = ChipId(ram_base_id + p);
-            bus_.set_read_page (0, ram_first + base + p, id);
-            bus_.set_write_page(0, ram_first + base + p, WriteChipId(id));
-        }
-    }
-
-    // Pages $40-$FF ($4000-$FFFF) remain unmapped — reads return bus default
+    // ROM mirroring ($0000-$1FFF, 2 KB mirrored 4×) and RAM mirroring
+    // ($2000-$3FFF, 1 KB mirrored 8×) are now handled declaratively by the
+    // manifest: each slot declares the full address range as size_bytes
+    // with addr_mask set to the physical chip size minus one, so apply()
+    // wraps all accesses automatically.
+    //
+    // Pages $40-$FF ($4000-$FFFF) remain unmapped — reads return bus default.
 }
 
 // ============================================================================

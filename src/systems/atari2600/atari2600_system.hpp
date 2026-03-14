@@ -75,16 +75,16 @@ private:
 // Slot 1: RIOT — MMIO-only, sub-page decode via A7 (addr_mask=0x0080, match A7=1)
 // Slot 2: Cart — MMIO-only, full-page, wraps A2600Mapper
 //
-// After apply():
-//   - Page 0 gets a MaskedSubTable with two regions (TIA + RIOT)
-//   - Pages 1-15 are manually mirrored to the same sub-table
-//   - Page 16 gets full-page MMIO for cartridge
-//   - Pages 17-31 are manually mirrored to the same cart MMIO handler
+// apply() auto-wires:
+//   - Pages 0-15 get a shared MaskedSubTable (TIA + RIOT), mirrored via
+//     bank_size = 4096 (incomplete A12=0 address decode)
+//   - Pages 16-31 get full-page MMIO for the cartridge mapper, mirrored
+//     via bank_size = 4096 (A12=1 always selects cart)
 //
 inline constexpr auto kAtari2600Chips = make_chip_manifest(
-    Slot<tia_t>             {0x0000, 0, 0x0080},
-    Slot<pia6532_t>         {0x0080, 0, 0x0080},
-    Slot<Atari2600CartChip> {0x1000, 0},
+    Slot<tia_t>             {0x0000, 0, 0x0080, nullptr, 0, 4096},
+    Slot<pia6532_t>         {0x0080, 0, 0x0080, nullptr, 0, 4096},
+    Slot<Atari2600CartChip> {0x1000, 0, 0, nullptr, 0, 4096},
     // Non-bus chip — factory-created, not address-decoded
     Slot<MOS6507>           {0, 0, 0, "MOS 6507"}
 );

@@ -25,8 +25,8 @@
 // LC80 chip manifest — declarative memory layout
 // =============================================================================
 //
-// Slot 0: ROM — 2 KB at $0000 (monitor, mirrored through $0000-$1FFF)
-// Slot 1: RAM — 1 KB at $2000 (mirrored through $2000-$3FFF)
+// Slot 0: ROM — 2 KB at $0000 (mirrored 4× through $0000-$1FFF via addr_mask)
+// Slot 1: RAM — 1 KB at $2000 (mirrored 8× through $2000-$3FFF via addr_mask)
 // Slot 2: CPU — U880 (Z80A clone), non-bus
 // Slot 3: PIO #1 — U855, Z80 port-based I/O at $F4-$F7
 // Slot 4: PIO #2 — U855, Z80 port-based I/O at $F8-$FB
@@ -35,8 +35,8 @@
 // All I/O is Z80 port-based (IORQ) — PIO/CTC slots are non-bus (no MMIO).
 //
 inline constexpr auto kLC80Chips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 2048, 0, "Monitor ROM"},
-    Slot<RAMChip>{0x2000, 1024, 0, "RAM"},
+    Slot<ROMChip>{0x0000, 8192, 0x07FF, "Monitor ROM"},
+    Slot<RAMChip>{0x2000, 8192, 0x03FF, "RAM"},
     // Non-bus chips — factory-created, not address-decoded
     Slot<U880>      {0, 0, 0, "U880"},
     Slot<z80_pio_t> {0, 0, 0, "U855 PIO #1"},

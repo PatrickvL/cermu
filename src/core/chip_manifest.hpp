@@ -75,16 +75,26 @@
 //   size_bytes — chip buffer size in bytes; must be 0 or a power of two.
 //                0 means MMIO-only (no buffer allocation).
 //   base_addr  — default base address in the bus address space
-//   addr_mask  — sub-page address decode mask (0 = full-page decode)
-//                When non-zero, (addr & addr_mask) == (base_addr & addr_mask)
-//                selects this chip.  Triggers MaskedSubTable auto-creation.
+//   addr_mask  — For MMIO-only slots (size_bytes == 0):
+//                  sub-page address decode mask (0 = full-page decode).
+//                  When non-zero, (addr & addr_mask) == (base_addr & addr_mask)
+//                  selects this chip.  Triggers MaskedSubTable auto-creation.
+//                For buffer slots (size_bytes > 0):
+//                  hardware mirroring mask.  When non-zero, all banks share
+//                  the same base offset and use addr_mask instead of the
+//                  bank-size derived mask, so the larger address range wraps
+//                  to the physical chip size.  E.g. a 1 KB chip mirrored
+//                  across 2 KB: size_bytes = 2048, addr_mask = 0x03FF.
 //
 
 struct ChipSlot {
     uint32_t base_addr  = 0;
     size_t   size_bytes = 0;
     uint32_t addr_mask  = 0;
-    size_t   bank_size  = 0;     // Bank granularity in bytes (0 = one bank per page)
+    size_t   bank_size  = 0;     // Buffer slots: bank granularity in bytes (0 = one bank per page).
+                                 // MMIO-only slots: total address-decode range in bytes.
+                                 //   When > page size, apply() mirrors the MMIO handler
+                                 //   (or sub-table) to all pages in the range.
     uint8_t  overlay_group = 0;  // 0 = always visible (base layer, e.g. RAM)
                                  // >0 = banking group: visible when that group's
                                  //       bit is set in the mode index.  Read-only
