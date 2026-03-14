@@ -1060,7 +1060,10 @@ bus_state_t Commodore264System<V>::mem_tick(bus_state_t s) {
 // ── RAM mirroring ────────────────────────────────────────────────────────
 // Called after apply() and when ram_size_ changes.
 // For 16KB models, every 16KB of address space mirrors the same RAM.
-// For 64KB models, the apply() default mapping is already correct for writes.
+// For 64KB models, the apply() default mapping is already correct.
+//
+// Mirroring is handled by the chip_info_ address mask: a 16KB model uses
+// mask 0x3FFF so all accesses wrap to the first 16KB of the 64KB buffer.
 //
 // Pages $FD and $FF are MMIO sentinels (I/O page and TED sub-table) set by
 // apply() — we must not overwrite them with RAM chip ids.
@@ -1070,27 +1073,25 @@ bus_state_t Commodore264System<V>::mem_tick(bus_state_t s) {
 template<C264SeriesVariant V>
 void Commodore264System<V>::setup_ram_mirroring() {
     constexpr size_t kRamBase = kC264Chips.base_id(c264_slot::kRam, 8);
+    using CId  = typename Bus::ChipId;
+    using WCId = typename Bus::WriteChipId;
 
-    if (ram_size_ < 65536) {
-        // 16KB: page N maps to RAM page (N & mirror_mask)
-        uint8_t mirror_mask = uint8_t((ram_size_ >> 8) - 1);
-        for (uint16_t p = 0; p < 256; ++p) {
-            // Viewer 0: preserve MMIO sentinel pages set by apply()
-            if (p != 0xFD && p != 0xFF) {
-                auto id = typename Bus::ChipId(kRamBase + (p & mirror_mask));
-                bus_.set_write_page(0, p, typename Bus::WriteChipId(id));
-                bus_.set_read_page(0, p, id);
-            }
-            // Viewer 1 (TED video): no MMIO, pure RAM mirroring on all pages
-            auto vid = typename Bus::ChipId(kRamBase + (p & mirror_mask));
-            bus_.set_read_page(c264_viewer::kTedVideo, p, vid);
-        }
-    } else {
-        // 64K: viewer 1 (TED video) maps all 256 pages to RAM
-        for (uint16_t p = 0; p < 256; ++p)
-            bus_.set_read_page(c264_viewer::kTedVideo, p,
-                               typename Bus::ChipId(kRamBase + p));
-    }
+    // Update chip_info_ address mask to reflect actual RAM size.
+    // 16KB: mask = 0x3FFF → hardware address mirroring.
+    // 64KB: mask = 0xFFFF → full buffer (already set by apply()).
+    const auto& ci = bus_.chip_info(kRamBase);
+    bus_.set_chip_info(kRamBase, ci.base,
+                       static_cast<typename Bus::MaskT>(ram_size_ - 1));
+
+    // Viewer 0 (CPU): all pages to single RAM bank, skip MMIO sentinels.
+    bus_.fill_read_constant (0, 0x00, 0xFD, CId(kRamBase));    // $00-$FC
+    bus_.fill_write_constant(0, 0x00, 0xFD, WCId(kRamBase));
+    bus_.set_read_page (0, 0xFE, CId(kRamBase));                // $FE
+    bus_.set_write_page(0, 0xFE, WCId(kRamBase));
+    // $FD and $FF are MMIO sentinels — don't touch
+
+    // Viewer 1 (TED video): all 256 pages to RAM (no MMIO on this viewer).
+    bus_.fill_read_constant(c264_viewer::kTedVideo, 0, 256, CId(kRamBase));
 }
 
 // ── Banking mode snapshots ───────────────────────────────────────────────
@@ -1107,7 +1108,6 @@ void Commodore264System<V>::setup_ram_mirroring() {
 //
 template<C264SeriesVariant V>
 void Commodore264System<V>::build_banking_snapshots() {
-    constexpr size_t kRamBase    = kC264Chips.base_id(c264_slot::kRam, 8);
     constexpr size_t kBasicBase  = kC264Chips.base_id(c264_slot::kBasicRom, 8);
     constexpr size_t kKernalBase = kC264Chips.base_id(c264_slot::kKernalRom, 8);
     using CId = typename Bus::ChipId;
@@ -1121,9 +1121,9 @@ void Commodore264System<V>::build_banking_snapshots() {
     // Overlay BASIC ROM at $8000-$BFFF and KERNAL ROM at $C000-$FEFF
     // on top of the current RAM state.  Pages $FD and $FF are sub-table
     // sentinels and remain unchanged.
-    bus_.fill_read_pages(c264_viewer::kCpu, 0x80, 0x40, CId(kBasicBase));
-    bus_.fill_read_pages(c264_viewer::kCpu, 0xC0, 0x3D, CId(kKernalBase));
-    bus_.set_read_page(c264_viewer::kCpu, 0xFE, CId(kKernalBase + 0x3E));
+    bus_.fill_read_constant(c264_viewer::kCpu, 0x80, 0x40, CId(kBasicBase));
+    bus_.fill_read_constant(c264_viewer::kCpu, 0xC0, 0x3D, CId(kKernalBase));
+    bus_.set_read_page(c264_viewer::kCpu, 0xFE, CId(kKernalBase));
     bus_.save_snapshot(c264_viewer::kCpu, cpu_snapshots_[1]);
 
     // Restore viewer 0 to RAM state (build is non-destructive)
@@ -1136,8 +1136,8 @@ void Commodore264System<V>::build_banking_snapshots() {
     // ── TED video viewer mode 1: ROM at $8000+ ─────────────────────────
     // BASIC ROM visible at $8000-$BFFF, KERNAL ROM at $C000-$FFFF.
     // Pages below $8000 remain RAM (character/screen data lives there).
-    bus_.fill_read_pages(c264_viewer::kTedVideo, 0x80, 0x40, CId(kBasicBase));
-    bus_.fill_read_pages(c264_viewer::kTedVideo, 0xC0, 0x40, CId(kKernalBase));
+    bus_.fill_read_constant(c264_viewer::kTedVideo, 0x80, 0x40, CId(kBasicBase));
+    bus_.fill_read_constant(c264_viewer::kTedVideo, 0xC0, 0x40, CId(kKernalBase));
     bus_.save_snapshot(c264_viewer::kTedVideo, ted_snapshots_[1]);
 
     // Restore viewer 1 to RAM state
@@ -1159,22 +1159,15 @@ void Commodore264System<V>::apply_cpu_banking() {
 
     // Update MaskedSubTable base for page $FF — not captured by snapshot.
     // When ROM is visible, reads outside TED regs fall through to KERNAL.
-    // When RAM is visible, reads fall through to RAM (possibly mirrored).
+    // When RAM is visible, reads fall through to RAM.
+    // The chip_info_ address mask handles both mirroring (16KB) and direct
+    // mapping (64KB), so we always use the single bank_id.
     if (rom_on) {
         bus_.set_masked_base(0, c264_sub::kTedPage,
-                             CId(kKernalBase + 0x3F),
-                             WCId(kRamBase + 0xFF));
+                             CId(kKernalBase), WCId(kRamBase));
     } else {
-        if (ram_size_ >= 65536) {
-            bus_.set_masked_base(0, c264_sub::kTedPage,
-                                 CId(kRamBase + 0xFF),
-                                 WCId(kRamBase + 0xFF));
-        } else {
-            uint8_t mirror_mask = uint8_t((ram_size_ >> 8) - 1);
-            bus_.set_masked_base(0, c264_sub::kTedPage,
-                                 CId(kRamBase + (0xFF & mirror_mask)),
-                                 WCId(kRamBase + (0xFF & mirror_mask)));
-        }
+        bus_.set_masked_base(0, c264_sub::kTedPage,
+                             CId(kRamBase), WCId(kRamBase));
     }
 }
 

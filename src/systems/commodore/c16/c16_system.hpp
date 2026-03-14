@@ -138,9 +138,9 @@ public:
 // RAM size varies: 16 KB (C16/C116) with mirroring, 64 KB (Plus/4).
 //
 inline constexpr auto kC264Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
-    Slot<ROMChip>{0x8000, 16384, 0, "BASIC ROM"},
-    Slot<ROMChip>{0xC000, 16384, 0, "KERNAL ROM"},
+    Slot<RAMChip>{0x0000, 65536, 0, "RAM",        0, 65536},
+    Slot<ROMChip>{0x8000, 16384, 0, "BASIC ROM",  0, 16384},
+    Slot<ROMChip>{0xC000, 16384, 0, "KERNAL ROM", 0, 16384},
     // Non-bus chip — factory-created, not address-decoded
     Slot<CSG7501>               {0, 0, 0, "CSG 7501"},
     // MMIO chips — address-decoded by MemoryBus via MaskedSubTables
