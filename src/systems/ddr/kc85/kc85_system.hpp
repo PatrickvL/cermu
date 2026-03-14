@@ -114,8 +114,8 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
 //
 inline constexpr auto kKC852Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 16384, 0, "RAM"},
-    Slot<RAMChip>{0x8000, 16384, 0, "IRM"},
-    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM"},
+    Slot<RAMChip>{0x8000, 16384, 0, "IRM",      0, 0, 1},  // overlay group 1
+    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM", 0, 0, 2},  // overlay group 2
     // Non-bus chips — factory-created, not address-decoded
     Slot<U880>                {0, 0, 0, "U880"},
     Slot<z80_pio_t>           {0, 0, 0, "U855 PIO #1"},
@@ -126,9 +126,9 @@ inline constexpr auto kKC852Chips = make_chip_manifest(
 
 inline constexpr auto kKC853Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 16384, 0, "RAM"},
-    Slot<RAMChip>{0x8000, 16384, 0, "IRM"},
-    Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM"},
-    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM"},
+    Slot<RAMChip>{0x8000, 16384, 0, "IRM",       0, 0, 1},  // overlay group 1
+    Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM", 0, 0, 2},  // overlay group 2
+    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM",  0, 0, 3},  // overlay group 3
     // Non-bus chips — factory-created, not address-decoded
     Slot<U880>                {0, 0, 0, "U880"},
     Slot<z80_pio_t>           {0, 0, 0, "U855 PIO #1"},
@@ -139,9 +139,9 @@ inline constexpr auto kKC853Chips = make_chip_manifest(
 
 inline constexpr auto kKC854Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 32768, 0, "RAM"},
-    Slot<RAMChip>{0x8000, 65536, 0, "IRM"},
-    Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM"},
-    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM"},
+    Slot<RAMChip>{0x8000, 65536, 0, "IRM"},                   // base layer (bank-selected)
+    Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM", 0, 0, 1},   // overlay group 1
+    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM",  0, 0, 2},   // overlay group 2
     // Non-bus chips — factory-created, not address-decoded
     Slot<U880>                {0, 0, 0, "U880"},
     Slot<z80_pio_t>           {0, 0, 0, "U855 PIO #1"},
@@ -248,6 +248,13 @@ private:
     // ── Internal helpers ─────────────────────────────────────────────────
     void        configure_bus_memory_map();   // Initial banking setup after apply()
     void        update_bank_state();          // Remap pages on PIO B / port write
+    void        apply_banking();              // Load overlay snapshot + manual IRM
     bus_state_t io_tick(bus_state_t pins);
     bool        load_roms();
+
+    // Pre-computed overlay snapshots.
+    // KC85/2: 4 modes (IRM×CAOS), KC85/3: 8 modes (IRM×BASIC×CAOS),
+    // KC85/4: 4 modes (BASIC×CAOS, IRM stays manual).
+    static constexpr size_t kNumOverlayModes = BT::kManifest.overlay_mode_count();
+    std::array<std::array<typename Bus::Snapshot, kNumOverlayModes>, 1> snapshots_;
 };
