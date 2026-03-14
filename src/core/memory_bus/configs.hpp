@@ -59,13 +59,15 @@ struct C16BusSpec {
     using AddrType = uint16_t;
     static constexpr size_t AddressBits        = 16;
     static constexpr size_t PageBits           = 8;    // 256 B pages → 256 pages
-    static constexpr size_t NumViewers         = 1;
+    static constexpr size_t NumViewers         = 2;    // CPU=0, TED video=1
     static constexpr size_t MaxChipId          = 15;   // RAM + BASIC + KERNAL + function ROMs
     static constexpr size_t MaxWriteChipId     = 15;
     static constexpr bool   EnableMmio         = true;
     static constexpr size_t MaxMmioHandlers    = 4;    // TED, PIO, ACIA, spare
     static constexpr size_t MaxMaskedSubTables = 1;    // $FF page TED overlay
     static constexpr size_t MaxMaskedRegions   = 2;    // TED regs + ROM/RAM latch
+
+    enum ViewerId : size_t { Cpu = 0, TedVideo = 1 };
 };
 
 // ── NES / Famicom — CPU bus ───────────────────────────────────────────────────

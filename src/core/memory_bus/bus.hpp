@@ -201,7 +201,30 @@ public:
     }
 
     // =========================================================================
-    // §1.4  Chip mapping API
+    // §1.4a  Lightweight byte peek (no bus_state_t overhead)
+    // =========================================================================
+    //
+    // Returns the byte at `addr` through the given viewer's page table,
+    // performing a single chip-table lookup + flat_mem index.  Useful for
+    // video chips that do their own memory fetches (TED, VIC-II) where the
+    // full bus_state_t round-trip is unnecessary.
+    //
+    // Only handles buffer-backed chips (RAM, ROM).  Returns 0xFF for
+    // sentinel / MMIO / unmapped addresses.
+    //
+
+    [[nodiscard]] FORCE_INLINE
+    uint8_t peek_byte(size_t viewer_id, Addr addr) const noexcept {
+        const ChipId chip_id = viewers_[viewer_id].read_chip(Viewer::page_of(addr));
+        if (likely(chip_id < PT::kReadSentinelMin)) {
+            const size_t offset = (size_t(chip_id) << Spec::PageBits) | Viewer::offset_of(addr);
+            return flat_mem_[offset];
+        }
+        return 0xFF; // sentinel / open bus
+    }
+
+    // =========================================================================
+    // §1.5  Chip mapping API
     // =========================================================================
     //
     // Programs the per-viewer chip tables — the emulator's equivalent of wiring

@@ -246,6 +246,24 @@ typedef uint8_t (*ted_keyboard_scan_fn)(void* user_data, uint8_t column);
  */
 typedef uint8_t (*ted_mem_read_fn)(void* user_data, uint16_t address);
 
+/**
+ * Banking change notification bits.
+ * Passed to the banking_change callback to identify which state changed.
+ */
+static constexpr uint8_t TED_BANK_ROM_LATCH    = 0x01;  // rom_enabled toggled ($FF3E/$FF3F)
+static constexpr uint8_t TED_BANK_VIDEO_ROMSEL = 0x02;  // video ROM select changed ($FF12 bit 2)
+
+/**
+ * Banking state change callback.
+ * Called when CPU-visible ROM/RAM banking ($FF3E/$FF3F) or TED's video
+ * ROM select ($FF12 bit 2) changes.  The system uses this to update
+ * pre-computed page tables for instant bank switching.
+ *
+ * @param user_data  Context pointer (typically system instance)
+ * @param changes    Bitmask of TED_BANK_* indicating which state changed
+ */
+typedef void (*ted_banking_change_fn)(void* user_data, uint8_t changes);
+
 // ============================================================================
 // DESCRIPTOR
 // ============================================================================
@@ -256,6 +274,8 @@ struct ted7360_desc_t {
     void* keyboard_user_data;           // Context pointer passed to keyboard_scan
     ted_mem_read_fn mem_read;           // Memory read callback for TED's own PHI1 accesses
     void* mem_read_user_data;           // Context pointer passed to mem_read
+    ted_banking_change_fn banking_change;   // Banking state notification (may be nullptr)
+    void* banking_change_user_data;         // Context pointer passed to banking_change
 };
 
 // ============================================================================
@@ -541,6 +561,10 @@ struct ted7360_t : public VideoChipBase {
 
     // Memory banking
     bool rom_enabled = false;           // true = ROM bank visible; false = RAM visible
+
+    // Banking change notification
+    ted_banking_change_fn banking_change      = nullptr;
+    void*                 banking_change_user_data = nullptr;
 
     // Keyboard
     ted_keyboard_scan_fn keyboard_scan      = nullptr; // Keyboard matrix scan callback

@@ -782,6 +782,8 @@ ted7360_t::ted7360_t(const ted7360_desc_t& desc) {
     keyboard_user_data     = desc.keyboard_user_data;
     bus.mem_read           = desc.mem_read;
     bus.mem_read_user_data = desc.mem_read_user_data;
+    banking_change             = desc.banking_change;
+    banking_change_user_data   = desc.banking_change_user_data;
 
     if (timing.is_pal) {
         timing.lines_per_frame      = 312;
@@ -818,6 +820,8 @@ void ted7360_t::reset() {
     void* const                kb_data  = keyboard_user_data;
     const ted_mem_read_fn      mem      = bus.mem_read;
     void* const                mem_data = bus.mem_read_user_data;
+    const ted_banking_change_fn bc      = banking_change;
+    void* const                bc_data  = banking_change_user_data;
     uint8_t* const             cline    = pixel.color_line;
     uint32_t* const            fb       = pixel.framebuffer;
     const int                  fb_w     = pixel.fb_width;
@@ -850,6 +854,8 @@ void ted7360_t::reset() {
     keyboard_user_data         = kb_data;
     bus.mem_read               = mem;
     bus.mem_read_user_data     = mem_data;
+    banking_change             = bc;
+    banking_change_user_data   = bc_data;
     pixel.color_line           = cline;
     pixel.framebuffer          = fb;
     pixel.fb_width             = fb_w;
@@ -1257,8 +1263,20 @@ bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
     const uint8_t data = BUS_GET_DATA(bus_state);
 
     // ROM/RAM banking latches — not mirrored, handled directly
-    if (reg == TED_REG_ROM_LATCH) { rom_enabled = true;  return bus_state; }
-    if (reg == TED_REG_RAM_LATCH) { rom_enabled = false; return bus_state; }
+    if (reg == TED_REG_ROM_LATCH) {
+        if (!rom_enabled) {
+            rom_enabled = true;
+            if (banking_change) banking_change(banking_change_user_data, TED_BANK_ROM_LATCH);
+        }
+        return bus_state;
+    }
+    if (reg == TED_REG_RAM_LATCH) {
+        if (rom_enabled) {
+            rom_enabled = false;
+            if (banking_change) banking_change(banking_change_user_data, TED_BANK_ROM_LATCH);
+        }
+        return bus_state;
+    }
 
     if (reg >= TED_REG_MIRROR_START) {
         reg &= TED_REG_UNMIRROR_MASK;
@@ -1433,14 +1451,19 @@ bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
             break;
         }
 
-        case TED_REG_MEM_CTRL:
+        case TED_REG_MEM_CTRL: {
             // $FF12: bits [1:0] = channel 1 frequency high bits [9:8]
             //        bits [7:2] = memory control (character/bitmap base, ROM bank)
+            uint8_t old_romsel = regs_[reg] & 0x04;
             regs_[reg] = data;
             sound.freq1 = static_cast<uint16_t>(
                 regs_[TED_REG_SOUND1_LO] | ((data & 0x03u) << 8));
             update_memory_addresses();
+            if ((data & 0x04) != old_romsel) {
+                if (banking_change) banking_change(banking_change_user_data, TED_BANK_VIDEO_ROMSEL);
+            }
             break;
+        }
 
         case TED_REG_CHAR_HI:
         case TED_REG_BITMAP_ADDR:

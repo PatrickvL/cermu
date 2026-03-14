@@ -160,8 +160,14 @@ namespace c264_sub {
 
 struct C264BusTraits {
     static constexpr const auto& kManifest = kC264Chips;
-    using Spec = ManifestBusSpec<kC264Chips, 16, 8>;
+    using Spec = ManifestBusSpec<kC264Chips, 16, 8, 2>;  // 2 viewers: CPU + TED video
 };
+
+// Viewer IDs for the C264 bus
+namespace c264_viewer {
+    inline constexpr size_t kCpu      = 0;  // CPU memory map (controlled by rom_enabled)
+    inline constexpr size_t kTedVideo = 1;  // TED video fetches (controlled by video_romsel)
+}
 
 // ============================================================================
 // Commodore264System — Commodore 264 Series Emulator (C16, C116, Plus/4)
@@ -293,14 +299,21 @@ private:
     bool load_roms();
     bus_state_t mem_tick(bus_state_t s);
     void setup_ram_mirroring();                 // configure page pointers for current ram_size_
-    void update_rom_banking();                  // switch read pages on rom_enabled change
+    void build_banking_snapshots();             // pre-compute all CPU + TED video banking modes
+    void apply_cpu_banking();                   // load CPU viewer snapshot for current rom_enabled
+    void apply_ted_video_banking();             // load TED viewer snapshot for current video_romsel
     void setup_ports();
     std::vector<DefaultPeripheral> get_default_peripherals() const override;
     static uint8_t io_port_in(void* user_data);
     static void io_port_out(uint8_t data, void* user_data);
     static uint8_t ted_keyboard_scan(void* user_data, uint8_t column);
     static uint8_t ted_mem_read(void* user_data, uint16_t address);
+    static void ted_banking_changed(void* user_data, uint8_t changes);
     static void set_cpu_pc(void* user_data, uint16_t addr);
+
+    // Pre-computed banking mode snapshots for instant mode switching
+    Bus::Snapshot cpu_snapshots_[2];    // [0]=RAM only, [1]=ROM overlaid
+    Bus::Snapshot ted_snapshots_[2];    // [0]=all RAM,  [1]=ROM at $8000+
 };
 
 // Convenience type aliases
