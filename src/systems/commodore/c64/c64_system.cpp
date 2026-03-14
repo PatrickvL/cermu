@@ -370,24 +370,12 @@ bool C64System::initialize() {
     // System infrastructure
     // =========================================================================
 
-    // Cleanup helper for error paths — destroys keyboard + all created chips.
+    // Cleanup helper for error paths.
     auto cleanup = [this]() {
         if (this->keyboard) {
             delete this->keyboard;
             this->keyboard = nullptr;
         }
-        delete this->kernal;
-        delete this->cia2;
-        delete this->cia1;
-        delete this->colorram;
-        delete this->sid;
-        delete this->vicii;
-        delete this->charrom;
-        delete this->cartridge_romh;
-        delete this->basic;
-        delete this->cartridge_roml;
-        delete this->mos6510; this->mos6510 = nullptr;
-        delete this->ram;
         initialized_ = false;
     };
 
@@ -400,21 +388,37 @@ bool C64System::initialize() {
     system_lines_  = SYS_MASK_EXROM | SYS_MASK_GAME;
 
     // =========================================================================
-    // Create all chips (manually — they need custom initialization)
+    // Factory-create all manifest chips (Board owns lifetimes)
     // =========================================================================
-    this->ram = new RAMChip(ChipInfo{"4164", "Various"}, 65536, RAMChip::RAM, &bus_state_, "RAM", 0x0000);
-    if (!(this->mos6510 = new MOS6510())) { cleanup(); return false; }
-    this->cartridge_roml = new ROMChip(ChipInfo{"ROM", "Various"}, c64_constants::BASIC_ROM_SIZE, ROMChip::ROM, &bus_state_, "ROML", c64_constants::ROML_BASE);
-    this->basic = new ROMChip(ChipInfo{"MOS 901226-01", "Commodore"}, c64_constants::BASIC_ROM_SIZE, ROMChip::ROM, &bus_state_, "BASIC", c64_constants::BASIC_ROM_BASE);
-    this->cartridge_romh = new ROMChip(ChipInfo{"ROM", "Various"}, c64_constants::BASIC_ROM_SIZE, ROMChip::ROM, &bus_state_, "ROMH", c64_constants::BASIC_ROM_BASE);
-    this->charrom = new ROMChip(ChipInfo{"MOS 901225-01", "Commodore"}, c64_constants::CHAR_ROM_SIZE, ROMChip::ROM, &bus_state_, "CHARROM", c64_constants::CHAR_ROM_BASE);
-    this->vicii = new vicii_t();
-    this->vicii->init(vicii_t::get_default_config(get_vicii_standard() == VIC_PAL), vicii_t::memory_bank_change);
-    if (!this->vicii) { cleanup(); return false; }
-    this->sid = new mos6581_t();
-    sid->init();
+    board_.create_chips(&bus_state_);
+    board_.apply(bus_);
 
-    // Configure SID timing to match C64 CPU clock
+    // Retrieve typed convenience pointers (Board owns, these are non-owning)
+    this->ram             = board_.chip_as<RAMChip>(c64_slots::kRam);
+    this->cartridge_roml  = board_.chip_as<ROMChip>(c64_slots::kRoml);
+    this->cartridge_romh  = board_.chip_as<ROMChip>(c64_slots::kRomh);
+    this->basic           = board_.chip_as<ROMChip>(c64_slots::kBasic);
+    this->kernal          = board_.chip_as<ROMChip>(c64_slots::kKernal);
+    this->charrom         = board_.chip_as<ROMChip>(c64_slots::kCharrom);
+    this->mos6510         = board_.chip_as<MOS6510>(c64_slots::kCpu);
+    this->vicii           = board_.chip_as<vicii_t>(c64_slots::kVicii);
+    this->sid             = board_.chip_as<mos6581_t>(c64_slots::kSid);
+    this->colorram        = board_.chip_as<MOS2114>(c64_slots::kColram);
+    this->cia1            = board_.chip_as<mos6526_t>(c64_slots::kCia1);
+    this->cia2            = board_.chip_as<mos6526_t>(c64_slots::kCia2);
+
+    if (!this->mos6510) { cleanup(); return false; }
+
+    // =========================================================================
+    // Post-creation chip initialization (callbacks, timing, etc.)
+    // =========================================================================
+
+    // VIC-II
+    this->vicii->init(vicii_t::get_default_config(get_vicii_standard() == VIC_PAL), vicii_t::memory_bank_change);
+    this->vicii->colorram = this->colorram;
+
+    // SID — clock, timing, revision
+    this->sid->init();
     {
         bool is_pal = (get_vicii_standard() == VIC_PAL);
         float cpu_clock = is_pal ? static_cast<float>(c64_constants::CPU_FREQ_PAL) : static_cast<float>(c64_constants::CPU_FREQ_NTSC);
@@ -422,16 +426,13 @@ bool C64System::initialize() {
         this->sid->set_timing(is_pal);
     }
 
-    this->colorram = new MOS2114();
-    this->vicii->colorram = this->colorram;
-
-    this->cia1 = new mos6526_t();
+    // CIA1 — IRQ, TOD timing
     this->cia1->configured_interrupt_bit = BUS_IRQ_BIT;
     this->cia1->cycles_tod[0] = 1000000 / 60;
     this->cia1->cycles_tod[1] = 1000000 / 50;
     this->cia1->reset();
 
-    this->cia2 = new mos6526_t();
+    // CIA2 — NMI, TOD timing
     this->cia2->configured_interrupt_bit = BUS_NMI_BIT;
     this->cia2->cycles_tod[0] = 1000000 / 60;
     this->cia2->cycles_tod[1] = 1000000 / 50;
@@ -448,38 +449,9 @@ bool C64System::initialize() {
     }
     printf("C64: Keyboard matrix initialized (all keys released)\n");
 
-    this->kernal = new ROMChip(ChipInfo{"MOS 901227-03", "Commodore"}, c64_constants::KERNAL_ROM_SIZE, ROMChip::ROM, &bus_state_, "KERNAL", c64_constants::KERNAL_BASE);
-
     // No cartridge I/O by default
     this->io1 = nullptr;
     this->io2 = nullptr;
-
-    // =========================================================================
-    // Bind chips to Board — flat mem allocation + chip_info setup
-    // =========================================================================
-    board_.bind_chip(c64_slots::kRam,     this->ram);
-    board_.bind_chip(c64_slots::kRoml,    this->cartridge_roml);
-    board_.bind_chip(c64_slots::kRomh,    this->cartridge_romh);
-    board_.bind_chip(c64_slots::kBasic,   this->basic);
-    board_.bind_chip(c64_slots::kKernal,  this->kernal);
-    board_.bind_chip(c64_slots::kCharrom, this->charrom);
-    board_.bind_chip(c64_slots::kCpu,     this->mos6510);
-    board_.bind_chip(c64_slots::kVicii,   this->vicii);
-    board_.bind_chip(c64_slots::kSid,     this->sid);
-    board_.bind_chip(c64_slots::kColram,  this->colorram);
-    board_.bind_chip(c64_slots::kCia1,    this->cia1);
-    board_.bind_chip(c64_slots::kCia2,    this->cia2);
-
-    // Bind memory chips to flat mem regions
-    this->ram->bind(board_.chip_buffer(C64ChipId(c64_chip_ids::kRam)));
-    this->cartridge_roml->bind(board_.chip_buffer(C64ChipId(c64_chip_ids::kRoml)));
-    this->cartridge_romh->bind(board_.chip_buffer(C64ChipId(c64_chip_ids::kRomh)));
-    this->basic->bind(board_.chip_buffer(C64ChipId(c64_chip_ids::kBasic)));
-    this->kernal->bind(board_.chip_buffer(C64ChipId(c64_chip_ids::kKernal)));
-    this->charrom->bind(board_.chip_buffer(C64ChipId(c64_chip_ids::kCharrom)));
-
-    // Apply: sets up chip_info (Phase 0) — Phase 1 skipped (all overlay_group=1)
-    board_.apply(bus_);
 
     // =========================================================================
     // Wire I/O dispatch — IndexedSubTable + MMIO handlers
@@ -558,7 +530,8 @@ bool C64System::initialize() {
     setup_ports();
 
     // Register chips for the Hardware menu and debug windows
-    register_c64_chips();
+    register_bus_chips(board_);
+    register_chip(std::make_unique<PlaChip>(this));
 
     printf("C64: System initialized successfully\n");
     return true;
@@ -571,29 +544,27 @@ void C64System::shutdown() {
         pending_load_.active = false;
     }
     if (initialized_) {
-        // Destroy keyboard
+        // Destroy keyboard (not a manifest chip — manually managed)
         if (this->keyboard) {
             delete this->keyboard;
             this->keyboard = nullptr;
         }
-        // Destroy all chips individually
-        delete this->kernal;
-        delete this->cia2;
-        delete this->cia1;
-        delete this->colorram;
-        delete this->sid;
-        delete this->vicii;
-        delete this->charrom;
-        delete this->cartridge_romh;
-        delete this->basic;
-        delete this->cartridge_roml;
-        delete this->mos6510;
+
+        // Null out convenience pointers (Board owns the chip lifetimes)
+        this->ram = nullptr;
+        this->cartridge_roml = nullptr;
+        this->cartridge_romh = nullptr;
+        this->basic = nullptr;
+        this->kernal = nullptr;
+        this->charrom = nullptr;
         this->mos6510 = nullptr;
-        delete this->ram;
+        this->vicii = nullptr;
+        this->sid = nullptr;
+        this->colorram = nullptr;
+        this->cia1 = nullptr;
+        this->cia2 = nullptr;
 
         initialized_ = false;
-        // Zero the embedded struct for clean re-initialization
-        // Chip pointers already nulled above
     }
 
     System::shutdown();
@@ -1388,68 +1359,6 @@ void C64System::render_debug_windows(void* gui_state, std::mutex& emu_mutex) {
 // ============================================================================
 // Chip Registration — populate registered_chips_ for Hardware menu + debug
 // ============================================================================
-
-void C64System::register_c64_chips() {
-    if (!initialized_) return;
-
-    auto* cpu = this->mos6510;
-    auto* vicii = this->vicii;
-    auto* sid = this->sid;
-    auto* cia1 = this->cia1;
-    auto* cia2 = this->cia2;
-    auto* colorram = this->colorram;
-    auto* c64 = this;
-
-    // CPU — fam65xx is a native C++ ChipBase, register directly
-    register_chip(static_cast<ChipBase*>(cpu),
-        "MOS 6510 CPU", "6510", "CPU", 0x0000);
-
-    // VIC-II — native C++ ChipBase, register directly
-    register_chip(vicii,
-        "VIC-II (MOS 6569/6567)", "VIC-II", "Video", c64_constants::CHAR_ROM_BASE);
-
-    // SID — MOS6581 is a native C++ ChipBase, register directly
-    register_chip(sid,
-        "SID (MOS 6581/8580)", "SID", "Audio", 0xD400);
-
-    // CIA 1 — MOS6526 is a native C++ ChipBase, register directly
-    register_chip(cia1,
-        "CIA 1 (MOS 6526)", "CIA 1", "I/O", 0xDC00);
-    // CIA 2
-    register_chip(cia2,
-        "CIA 2 (MOS 6526)", "CIA 2", "I/O", 0xDD00);
-
-    // Color RAM — MOS2114 is a native C++ ChipBase, register directly
-    register_chip(colorram,
-        "Color RAM (MOS 2114)", "Color RAM", "I/O", 0xD800);
-
-    // RAM — RAMChip with layout rendering
-    register_chip(this->ram,
-        "RAM (4164)", "RAM", "Memory", 0x0000);
-
-    // BASIC ROM
-    register_chip(this->basic,
-        "BASIC ROM (MOS 901226-01)", "BASIC", "Memory", c64_constants::BASIC_ROM_BASE);
-
-    // KERNAL ROM
-    register_chip(this->kernal,
-        "KERNAL ROM (MOS 901227-03)", "KERNAL", "Memory", c64_constants::KERNAL_BASE);
-
-    // Character ROM
-    register_chip(this->charrom,
-        "Character ROM (MOS 901225-01)", "CHARROM", "Memory", c64_constants::CHAR_ROM_BASE);
-
-    // Cartridge ROM Low
-    register_chip(this->cartridge_roml,
-        "Cartridge ROML", "ROML", "Memory", c64_constants::ROML_BASE);
-
-    // Cartridge ROM High
-    register_chip(this->cartridge_romh,
-        "Cartridge ROMH", "ROMH", "Memory", c64_constants::BASIC_ROM_BASE);
-
-    // PLA — native ChipBase (PlaChip holds c64_t* for GUI context)
-    register_chip(std::make_unique<PlaChip>(c64));
-}
 
 // Note: get_target_fps() and set_speed_multiplier() are now provided by
 // CommodoreSystem base class.
