@@ -138,20 +138,16 @@ template<KC85Variant V> void KC85System<V>::reset() {
 
 template<KC85Variant V>
 void KC85System<V>::configure_bus_memory_map() {
-    // apply() maps base-layer chips (RAM, plus IRM for KC85/4) and skips
-    // overlay_group > 0 slots (IRM for /2-/3, ROMs for all variants).
-    board_.apply(bus_);
-
-    // ── KC85/4: Trim IRM write pages that spill into ROM area ───────────
-    // The 64 KB IRM at $8000 maps R/W pages $80-$FF (128 pages, clipped).
-    // Pages $C0-$FF overlap with BASIC/CAOS ROM — unmap those writes and
-    // reads so the base state has open bus at $C000+.
+    // KC85/4: limit IRM Phase 1 mapping to one 16 KB bank ($80-$BF).
+    // The full 64 KB buffer is still available for select_bank_at().
     if constexpr (Traits::has_extended_video) {
-        for (size_t page = 0xC0; page < 0x100; ++page) {
-            bus_.set_read_page(0, page, PT::kNoChipSelected);
-            bus_.set_write_page(0, page, PT::kNoChipSelectedWrite);
-        }
+        constexpr size_t kIrmSlot = 1;
+        board_.set_effective_size(kIrmSlot, 16384);
     }
+
+    // apply() maps base-layer chips (RAM, plus IRM bank 0 for KC85/4) and
+    // skips overlay_group > 0 slots (IRM for /2-/3, ROMs for all variants).
+    board_.apply(bus_);
 
     // Build overlay snapshots from the manifest's overlay_group tags.
     board_.build_overlay_snapshots(bus_, 1, snapshots_);
@@ -193,22 +189,12 @@ void KC85System<V>::apply_banking() {
     // ── KC85/4: manual IRM handling (not in overlay groups) ─────────────
     if constexpr (Traits::has_extended_video) {
         if (irm_enabled_) {
-            using ChipId      = typename PT::ChipId;
-            using WriteChipId = typename PT::WriteChipId;
-
             constexpr size_t kIrmSlot = 1;
-            constexpr size_t kIrmBaseId = BT::kManifest.base_id(kIrmSlot, BT::Spec::PageBits);
-            constexpr size_t kPagesPerBank = 64;
             uint8_t bank = bank_ctrl_ & 0x03;
-            bus_.fill_pages(0, 0x80, kPagesPerBank,
-                ChipId(kIrmBaseId + bank * kPagesPerBank),
-                WriteChipId(kIrmBaseId + bank * kPagesPerBank));
+            board_.select_bank_at(bus_, 0, kIrmSlot, bank, 0x80);
         } else {
-            // IRM disabled — unmap $80-$BF (snapshot has IRM bank 0 from base)
-            for (size_t p = 0x80; p < 0xC0; ++p) {
-                bus_.set_read_page(0, p, PT::kNoChipSelected);
-                bus_.set_write_page(0, p, PT::kNoChipSelectedWrite);
-            }
+            // IRM disabled — unmap $80-$BF
+            bus_.map_no_chip_selected(0, 0x80, 0x40);
         }
         active_plane_ = bank_ctrl_ & 0x01;
     }
@@ -338,9 +324,6 @@ bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
     // KC85/4: additional banking control ports
     if constexpr (Traits::has_extended_video) {
         if (port == kc85_constants::KC4_CTRL_PORT && !is_read) {
-            using ChipId      = typename PT::ChipId;
-            using WriteChipId = typename PT::WriteChipId;
-
             uint8_t old_bank = bank_ctrl_ & 0x03;
             bank_ctrl_ = data;
             uint8_t new_bank = bank_ctrl_ & 0x03;
@@ -348,11 +331,7 @@ bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
             // Remap IRM bank if changed and IRM is enabled
             if (new_bank != old_bank && irm_enabled_) {
                 constexpr size_t kIrmSlot = 1;
-                constexpr size_t kIrmBaseId = BT::kManifest.base_id(kIrmSlot, BT::Spec::PageBits);
-                constexpr size_t kPagesPerBank = 64;
-                bus_.fill_pages(0, 0x80, kPagesPerBank,
-                    ChipId(kIrmBaseId + new_bank * kPagesPerBank),
-                    WriteChipId(kIrmBaseId + new_bank * kPagesPerBank));
+                board_.select_bank_at(bus_, 0, kIrmSlot, new_bank, 0x80);
             }
             active_plane_ = bank_ctrl_ & 0x01;
             return pins;
