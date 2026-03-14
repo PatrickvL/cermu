@@ -53,6 +53,16 @@ public:
     using BlockId     = typename PT::BlockId;
     using PageSlot    = typename PT::PageSlot;
 
+    using BaseT       = spec_base_type_t<Spec>;
+    using MaskT       = spec_mask_type_t<Spec>;
+
+    // Per-bank info entry — maps a chip/bank id to its byte offset in
+    // flat_mem and an address mask that clips to the bank's range.
+    struct ChipInfo {
+        BaseT base{};  // Byte offset of this bank's data in flat_mem
+        MaskT mask{};  // Address mask (addr & mask → offset within bank)
+    };
+
     static constexpr bool   kPartialBus     = spec_partial_bus_v<Spec>;
     static constexpr bool   kCsLines        = PT::kCsLines;
     static constexpr size_t kCsLineBits     = PT::kCsLineBits;
@@ -217,8 +227,8 @@ public:
     uint8_t peek_byte(size_t viewer_id, Addr addr) const noexcept {
         const ChipId chip_id = viewers_[viewer_id].read_chip(Viewer::page_of(addr));
         if (likely(chip_id < PT::kReadSentinelMin)) {
-            const size_t offset = (size_t(chip_id) << Spec::PageBits) | Viewer::offset_of(addr);
-            return flat_mem_[offset];
+            const auto& ci = chip_info_[size_t(chip_id)];
+            return flat_mem_[size_t(ci.base) + (size_t(addr) & size_t(ci.mask))];
         }
         return 0xFF; // sentinel / open bus
     }
@@ -458,6 +468,23 @@ public:
     void set_flat_mem(uint8_t* buf) noexcept { flat_mem_ = buf; }
     [[nodiscard]] uint8_t*       flat_mem()       noexcept { return flat_mem_; }
     [[nodiscard]] const uint8_t* flat_mem() const noexcept { return flat_mem_; }
+
+    // =========================================================================
+    // §1.10a  Chip info table (bank-id → flat_mem mapping)
+    // =========================================================================
+    //
+    // Each entry maps a bank_id to (byte_offset, addr_mask) in flat_mem.
+    // Populated by BusMap::apply() before any bus access.
+    //
+
+    void set_chip_info(size_t chip_id, BaseT base, MaskT mask) noexcept {
+        assert(chip_id < chip_info_.size());
+        chip_info_[chip_id] = {base, mask};
+    }
+
+    [[nodiscard]] const ChipInfo& chip_info(size_t chip_id) const noexcept {
+        return chip_info_[chip_id];
+    }
 
     // =========================================================================
     // §1.11  Low-level viewer access
@@ -712,8 +739,8 @@ private:
     [[nodiscard]] FORCE_INLINE
     bus_state_t read_flat_mem(ChipId chip_id, bus_state_t bus) const noexcept {
         const Addr     addr    = Addr(BUS_GET_ADDR(bus));
-        const size_t   offset  = (size_t(chip_id) << Spec::PageBits)
-                                 | Viewer::offset_of(addr);
+        const auto&    ci      = chip_info_[size_t(chip_id)];
+        const size_t   offset  = size_t(ci.base) + (size_t(addr) & size_t(ci.mask));
         const DataType mem_val = static_cast<DataType>(flat_mem_[offset]);
 
         if constexpr (kCsLines) { set_cs(bus, size_t(chip_id)); }
@@ -733,8 +760,8 @@ private:
     FORCE_INLINE
     bus_state_t write_flat_mem(WriteChipId chip_id, bus_state_t bus) noexcept {
         const Addr     addr    = Addr(BUS_GET_ADDR(bus));
-        const size_t   offset  = (size_t(chip_id) << Spec::PageBits)
-                                 | Viewer::offset_of(addr);
+        const auto&    ci      = chip_info_[size_t(chip_id)];
+        const size_t   offset  = size_t(ci.base) + (size_t(addr) & size_t(ci.mask));
         const DataType bus_val = static_cast<DataType>(BUS_GET_DATA(bus));
 
         if constexpr (kCsLines) { set_cs(bus, size_t(chip_id)); }
@@ -759,8 +786,8 @@ private:
     [[nodiscard]] FORCE_INLINE
     bus_state_t read_buffer_no_cs(ChipId chip_id, bus_state_t bus) const noexcept {
         const Addr     addr    = Addr(BUS_GET_ADDR(bus));
-        const size_t   offset  = (size_t(chip_id) << Spec::PageBits)
-                                 | Viewer::offset_of(addr);
+        const auto&    ci      = chip_info_[size_t(chip_id)];
+        const size_t   offset  = size_t(ci.base) + (size_t(addr) & size_t(ci.mask));
         const DataType mem_val = static_cast<DataType>(flat_mem_[offset]);
 
         if constexpr (kPartialBus) {
@@ -778,8 +805,8 @@ private:
     FORCE_INLINE
     bus_state_t write_buffer_no_cs(WriteChipId chip_id, bus_state_t bus) noexcept {
         const Addr     addr    = Addr(BUS_GET_ADDR(bus));
-        const size_t   offset  = (size_t(chip_id) << Spec::PageBits)
-                                 | Viewer::offset_of(addr);
+        const auto&    ci      = chip_info_[size_t(chip_id)];
+        const size_t   offset  = size_t(ci.base) + (size_t(addr) & size_t(ci.mask));
         const DataType bus_val = static_cast<DataType>(BUS_GET_DATA(bus));
 
         if constexpr (kPartialBus) {
@@ -945,6 +972,12 @@ private:
     // =========================================================================
 
     uint8_t* flat_mem_ = nullptr;
+
+    // Per-bank info — maps chip/bank id → (flat_mem byte offset, addr mask).
+    // Indexed by chip_id; only entries [0, MaxChipId] are valid.
+    static constexpr size_t kChipInfoSize =
+        (Spec::MaxChipId > 0 ? Spec::MaxChipId + 1 : 1);
+    std::array<ChipInfo, kChipInfoSize> chip_info_{};
 
     std::array<Viewer, kNumViewers> viewers_{};
 

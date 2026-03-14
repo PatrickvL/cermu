@@ -173,7 +173,28 @@ struct spec_max_masked_regions<C, std::void_t<decltype(C::MaxMaskedRegions)>>
 
 template<typename C>
 inline constexpr size_t spec_max_masked_regions_v = spec_max_masked_regions<C>::value;
+// ── BaseType ──────────────────────────────────────────────────────────────────
+// Type for byte offsets into flat memory (ChipInfo::base).
+// Default: size_t (safe for any buffer size).
+template<typename C, typename = void>
+struct spec_base_type { using type = size_t; };
+template<typename C>
+struct spec_base_type<C, std::void_t<typename C::BaseType>>
+    { using type = typename C::BaseType; };
 
+template<typename C>
+using spec_base_type_t = typename spec_base_type<C>::type;
+
+// ── MaskType ──────────────────────────────────────────────────────────────────
+// Type for address masks in ChipInfo.  Default: AddrType.
+template<typename C, typename = void>
+struct spec_mask_type { using type = typename C::AddrType; };
+template<typename C>
+struct spec_mask_type<C, std::void_t<typename C::MaskType>>
+    { using type = typename C::MaskType; };
+
+template<typename C>
+using spec_mask_type_t = typename spec_mask_type<C>::type;
 
 // =============================================================================
 // §4  Default bus spec
