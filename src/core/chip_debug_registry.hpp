@@ -250,7 +250,7 @@ static inline uint32_t decl_compound_get(const uint8_t* regs,
     { DeclRowType::Field, #fld, desc, DataKind::kind, 0, \
       (uint8_t)BF_LO(hilo), (uint8_t)BF_WIDTH(hilo), (uint8_t)(ds), (uint16_t)(dm) },
 
-// CMP entry — requires DECL_CMP_NS_ to be defined before the DECL_EXTRACT_
+// CMP entry — requires DECL_CMP_NS_ to be defined before the DECL_EXTRACT
 // call.  The namespace resolves register symbols (r1, r2) to byte offsets.
 #define DECL_X_ENTRY_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2) \
     { DeclRowType::Compound, #s, d, DataKind::k, 0, 0, (uint8_t)(b), \
@@ -262,7 +262,7 @@ static inline uint32_t decl_compound_get(const uint8_t* regs,
 #define DECL_ENTRY_CMP_NOP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)
 
 // ============================================================================
-// DECL_EXTRACT_ — internal extraction macro
+// DECL_EXTRACT — register extraction macro
 // ============================================================================
 //
 // Generates (all static constexpr, header-safe):
@@ -272,23 +272,24 @@ static inline uint32_t decl_compound_get(const uint8_t* regs,
 //   PREFIX_DECL_ENTRIES    — std::array<DeclEntry, N> with resolved field parents
 //
 // The third arg (CMP_CB) selects compound handling:
-//   DECL_ENTRY_CMP_NOP_    — drop CMP rows (most chips)
+//   DECL_ENTRY_CMP_NOP_    — drop CMP rows (most chips, default when omitted)
 //   DECL_X_ENTRY_CMP_      — include CMP rows (requires DECL_CMP_NS_)
 
-#define DECL_EXTRACT_(PREFIX, DECL, CMP_CB)                                    \
+#define DECL_EXTRACT_3(PREFIX, DECL, CMP_CB)                                  \
     static constexpr RegEntry PREFIX##_REG_INFO[] =                            \
-        { DECL(DECL_X_REG_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };              \
+        { DECL(DECL_X_REG_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };                \
     constexpr uint16_t PREFIX##_NUM_REGS =                                     \
         sizeof(PREFIX##_REG_INFO) / sizeof(PREFIX##_REG_INFO[0]);              \
     static constexpr DeclEntry PREFIX##_DECL_RAW_[] =                          \
-        { DECL(DECL_X_ENTRY_REG_, DECL_X_ENTRY_FLD_, CMP_CB) };              \
+        { DECL(DECL_X_ENTRY_REG_, DECL_X_ENTRY_FLD_, CMP_CB) };                \
     static constexpr auto PREFIX##_DECL_ENTRIES =                              \
         resolve_decl_entries(PREFIX##_DECL_RAW_);
 
-// Public wrappers — both work identically for all chips (REG-only or with FLD).
-// The former DECL_EXTRACT_ALL/DECL_EXTRACT_REGS_ONLY distinction is gone.
-#define DECL_EXTRACT_ALL(PREFIX, DECL)       DECL_EXTRACT_(PREFIX, DECL, DECL_ENTRY_CMP_NOP_)
-#define DECL_EXTRACT_REGS_ONLY(PREFIX, DECL) DECL_EXTRACT_(PREFIX, DECL, DECL_ENTRY_CMP_NOP_)
+// 2-arg convenience: default CMP callback to NOP (most chips have no compounds)
+#define DECL_EXTRACT_2(PREFIX, DECL) DECL_EXTRACT_3(PREFIX, DECL, DECL_ENTRY_CMP_NOP_)
+
+// Variadic dispatch: DECL_EXTRACT(PREFIX, DECL) or DECL_EXTRACT(PREFIX, DECL, CMP_CB)
+#define DECL_EXTRACT(...) CERMU_PP_OVERLOAD_(DECL_EXTRACT_, __VA_ARGS__)
 
 /// Read from a contiguous register array:
 ///   byte_offset  = byte index into the array

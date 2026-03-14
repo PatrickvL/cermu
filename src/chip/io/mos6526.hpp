@@ -97,7 +97,7 @@ enum mos6526_pin_t {
       FLD(CIA_REG_CRB, CRB_PBON_B,    1:1, "PB7 output enable",   Flag, 0, 0)  \
       FLD(CIA_REG_CRB, CRB_START_B,   0:0, "Timer B start",       Flag, 0, 0)
 
-DECL_EXTRACT_ALL(CIA, CIA_DECL)
+DECL_EXTRACT(CIA, CIA_DECL)
 
 struct mos6526_t : public IoChipBase {
     mos6526_t() : IoChipBase(ChipInfo{"MOS6526", "MOS Technology"}) {

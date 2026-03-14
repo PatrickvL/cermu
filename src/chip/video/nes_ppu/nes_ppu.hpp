@@ -39,15 +39,15 @@ namespace nes_system {
 
 // DECL(REG, FLD, CMP) — 8 registers, 18 fields (PPUCTRL/PPUMASK/PPUSTATUS bits)
 #define NES_PPU_DECL(REG, FLD, CMP) \
-    REG(0, PPUCTRL,   "NMI/sprite sz/BG base")                                  \
-      FLD(PPUCTRL, NMI_EN,      7:7, "NMI enable",                   Flag, 0,0) \
-      FLD(PPUCTRL, PPU_SELECT,  6:6, "PPU master/slave",             Flag, 0,0) \
+    REG(0, PPUCTRL,   "NMI/sprite sz/BG base")                                 \
+      FLD(PPUCTRL, NMI_EN,      7:7, "NMI enable",                  Flag, 0,0) \
+      FLD(PPUCTRL, PPU_SELECT,  6:6, "PPU master/slave",            Flag, 0,0) \
       FLD(PPUCTRL, SPRITE_SZ,   5:5, "Sprite size (1=8x16)",        Flag, 0,0) \
       FLD(PPUCTRL, BG_PT_BASE,  4:4, "BG pattern base (1=$1000)",   Flag, 0,0) \
       FLD(PPUCTRL, SPR_PT_BASE, 3:3, "SPR pattern base (1=$1000)",  Flag, 0,0) \
       FLD(PPUCTRL, VRAM_INC,    2:2, "VRAM increment (1=+32)",      Flag, 0,0) \
       FLD(PPUCTRL, NT_SELECT,   1:0, "Base nametable",              Value,0,0) \
-    REG(1, PPUMASK,   "Render/grayscale")                                        \
+    REG(1, PPUMASK,   "Render/grayscale")                                      \
       FLD(PPUMASK, EMPH_B,      7:7, "Emphasize blue",              Flag, 0,0) \
       FLD(PPUMASK, EMPH_G,      6:6, "Emphasize green",             Flag, 0,0) \
       FLD(PPUMASK, EMPH_R,      5:5, "Emphasize red",               Flag, 0,0) \
@@ -56,17 +56,17 @@ namespace nes_system {
       FLD(PPUMASK, LEFT_SPR,    2:2, "Show sprites left 8px",       Flag, 0,0) \
       FLD(PPUMASK, LEFT_BG,     1:1, "Show BG left 8px",            Flag, 0,0) \
       FLD(PPUMASK, GREYSCALE,   0:0, "Greyscale",                   Flag, 0,0) \
-    REG(2, PPUSTATUS, "VBlank/spr0/overflow")                                    \
+    REG(2, PPUSTATUS, "VBlank/spr0/overflow")                                  \
       FLD(PPUSTATUS, VBLANK,    7:7, "In VBlank",                   Flag, 0,0) \
-      FLD(PPUSTATUS, SPR0_HIT,  6:6, "Sprite 0 hit",               Flag, 0,0) \
+      FLD(PPUSTATUS, SPR0_HIT,  6:6, "Sprite 0 hit",                Flag, 0,0) \
       FLD(PPUSTATUS, SPR_OVF,   5:5, "Sprite overflow",             Flag, 0,0) \
-    REG(3, OAMADDR,   "OAM address")                                             \
-    REG(4, OAMDATA,   "OAM data R/W")                                            \
-    REG(5, PPUSCROLL, "Fine scroll X/Y")                                         \
-    REG(6, PPUADDR,   "VRAM address")                                            \
+    REG(3, OAMADDR,   "OAM address")                                           \
+    REG(4, OAMDATA,   "OAM data R/W")                                          \
+    REG(5, PPUSCROLL, "Fine scroll X/Y")                                       \
+    REG(6, PPUADDR,   "VRAM address")                                          \
     REG(7, PPUDATA,   "VRAM data R/W")
 
-DECL_EXTRACT_ALL(NES_PPU, NES_PPU_DECL)
+DECL_EXTRACT(NES_PPU, NES_PPU_DECL)
 
 namespace nes_system {
 

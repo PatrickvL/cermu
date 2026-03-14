@@ -99,7 +99,7 @@ namespace ay_regs {
     constexpr uint8_t REG_COUNT = 16;
 } // namespace ay_regs
 
-DECL_EXTRACT_ALL(AY, AY_DECL)
+DECL_EXTRACT(AY, AY_DECL)
 
 // ============================================================================
 // AY-3-8910 Sound Chip

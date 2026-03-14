@@ -63,7 +63,7 @@
 // --- Extract address constants ---
 VIC_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
-DECL_EXTRACT_ALL(VIC, VIC_DECL)
+DECL_EXTRACT(VIC, VIC_DECL)
 
 // Control register 1 bit masks
 #define VIC_C1_INTERLACE 0x80

@@ -176,7 +176,7 @@ namespace sid_regs {
 }
 
 #ifdef CERMU_HAS_CHIP_DEBUG
-DECL_EXTRACT_ALL(SID, SID_DECL)
+DECL_EXTRACT(SID, SID_DECL)
 #endif
 
 // RESON register (0x17) bit fields

@@ -52,7 +52,7 @@ namespace z80_pio_regs {
     constexpr uint8_t REG_COUNT = 10;
 } // namespace z80_pio_regs
 
-DECL_EXTRACT_REGS_ONLY(Z80_PIO, Z80_PIO_DECL)
+DECL_EXTRACT(Z80_PIO, Z80_PIO_DECL)
 
 // ============================================================================
 // Z80 PIO Port Mode

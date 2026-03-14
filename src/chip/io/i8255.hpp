@@ -46,7 +46,7 @@ namespace i8255_regs {
     constexpr uint8_t REG_COUNT = 4;
 } // namespace i8255_regs
 
-DECL_EXTRACT_ALL(I8255, I8255_DECL)
+DECL_EXTRACT(I8255, I8255_DECL)
 
 class i8255_t : public IoChipBase {
 public:

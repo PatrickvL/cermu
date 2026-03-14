@@ -164,10 +164,9 @@ namespace vicii_regs {
     constexpr uint16_t ADDR_D021 = 0xD021;  // Background color 0
 }
 
-// VIC-II uses DECL_EXTRACT_ directly (not DECL_EXTRACT_ALL) because the
-// DECL table includes CMP rows that reference vicii_regs:: register symbols.
+// VIC-II DECL table includes CMP rows that reference vicii_regs:: register symbols.
 #define DECL_CMP_NS_ vicii_regs
-DECL_EXTRACT_(VICII, VICII_DECL, DECL_X_ENTRY_CMP_)
+DECL_EXTRACT(VICII, VICII_DECL, DECL_X_ENTRY_CMP_)
 #undef DECL_CMP_NS_
 
 // --- Extract FLD constants ---

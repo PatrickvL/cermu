@@ -97,7 +97,7 @@
 // --- Extract address constants ---
 TED_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
-DECL_EXTRACT_ALL(TED, TED_DECL)
+DECL_EXTRACT(TED, TED_DECL)
 
 // Video counter / address masks
 #define TED_VC_MASK              0x3FF    // 10-bit video counter (VC/VCBASE) mask: 0..1023 (40×25 = 1000 char positions)

@@ -42,7 +42,7 @@ static constexpr uint16_t RIOT_TIM1024T = 0x17;   // Divide by 1024
 // --- Extract address constants ---
 RIOT_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
-DECL_EXTRACT_REGS_ONLY(RIOT, RIOT_DECL)
+DECL_EXTRACT(RIOT, RIOT_DECL)
 
 struct pia6532_t : public IoChipBase {
     pia6532_t() : IoChipBase(ChipInfo{"PIA6532", "MOS Technology"}) {

@@ -123,7 +123,7 @@
 // --- Extract write register constants ---
 TIA_WRITE_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
-DECL_EXTRACT_ALL(TIA_W, TIA_WRITE_DECL)
+DECL_EXTRACT(TIA_W, TIA_WRITE_DECL)
 
 // ============================================================================
 // TIA READ REGISTER TABLE ($00-$0D) — single source of truth
@@ -171,7 +171,7 @@ DECL_EXTRACT_ALL(TIA_W, TIA_WRITE_DECL)
 // --- Extract read register constants ---
 TIA_READ_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
-DECL_EXTRACT_ALL(TIA_R, TIA_READ_DECL)
+DECL_EXTRACT(TIA_R, TIA_READ_DECL)
 
 // ============================================================================
 // TIA CONSTANTS
