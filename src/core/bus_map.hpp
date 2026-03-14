@@ -62,6 +62,14 @@ public:
         const char*         label     = nullptr;
         uint16_t            condition = 0;
         uint8_t             overlay_group = 0;
+
+        // Effective buffer size for Phase 1 mapping.  0 = use byte_size
+        // (the default).  When set to a value < byte_size, apply() maps
+        // only this many bytes.  Phase 0 chip_info covers the full
+        // byte_size so bank switching beyond the visible window works.
+        // Use set_effective_size() before apply() to trim RAM to a
+        // configuration-dependent amount.
+        size_t              effective_size = 0;
     };
 
     // =====================================================================
@@ -124,6 +132,23 @@ public:
     }
 
     // =====================================================================
+    // §3.2b  Effective size
+    // =====================================================================
+    //
+    // Limits how many bytes of a buffer slot are mapped by apply()'s
+    // Phase 1.  Call before apply() to trim a chip to a configuration-
+    // dependent size (e.g. RAM that can be 2 KB–64 KB).  Phase 0
+    // chip_info covers the full byte_size so bank switching beyond the
+    // visible window still works.
+    //
+
+    void set_effective_size(size_t slot_index, size_t bytes) noexcept {
+        assert(slot_index < slots_.size());
+        assert(bytes <= slots_[slot_index].byte_size);
+        slots_[slot_index].effective_size = bytes;
+    }
+
+    // =====================================================================
     // §3.3  Auto-wiring: apply()
     // =====================================================================
     //
@@ -183,10 +208,12 @@ public:
         for (const auto& slot : slots_) {
             if (slot.byte_size == 0 || slot.dynamic || slot.overlay_group > 0)
                 continue;
+            const size_t effective  = slot.effective_size > 0
+                                        ? slot.effective_size : slot.byte_size;
             const size_t first_page = slot.base_addr >> kPageBits;
             const size_t bank_sz    = slot.bank_size > 0 ? slot.bank_size : kPageSize;
             const size_t bank_pages = bank_sz >> kPageBits;
-            const size_t num_banks  = slot.byte_size / bank_sz;
+            const size_t num_banks  = effective / bank_sz;
 
             for (size_t b = 0; b < num_banks; ++b) {
                 const size_t page = first_page + b * bank_pages;
@@ -303,7 +330,34 @@ public:
     }
 
     // =====================================================================
-    // §3.4  Convenience: manual page mapping
+    // §3.4  Bank selection
+    // =====================================================================
+    //
+    // Maps a single bank from a multi-bank slot to an arbitrary target
+    // address.  The slot must have bank_size set (one chip_id per bank).
+    // Respects the slot's read_only flag for write-page mapping.
+    //
+    // This is the preferred API for runtime bank switching — it replaces
+    // manual fill_read_pages / fill_write_pages calls with a type-safe,
+    // slot-aware operation.
+    //
+
+    void select_bank_at(Bus& bus, size_t viewer_id,
+                        size_t slot_idx, size_t bank_idx,
+                        size_t target_page) const noexcept {
+        const auto& s = slots_[slot_idx];
+        assert(s.bank_size > 0);
+        const size_t bank_pages = s.bank_size >> kPageBits;
+        const size_t count = std::min(bank_pages, Bus::kNumPages - target_page);
+        const ChipId bid = ChipId(size_t(s.base_id) + bank_idx);
+        bus.fill_read_constant(viewer_id, target_page, count, bid);
+        if (!s.read_only)
+            bus.fill_write_constant(viewer_id, target_page, count,
+                                    WriteChipId(bid));
+    }
+
+    // =====================================================================
+    // §3.5  Convenience: manual page mapping
     // =====================================================================
     //
     // Helpers for systems that need manual page-table manipulation beyond
@@ -334,7 +388,7 @@ public:
     }
 
     // =====================================================================
-    // §3.5  Slot lookup and access
+    // §3.6  Slot lookup and access
     // =====================================================================
 
     [[nodiscard]] const SlotRecord* find(ChipId base_id) const noexcept {
@@ -368,7 +422,7 @@ public:
     }
 
     // =====================================================================
-    // §3.6  Overlay snapshot generation
+    // §3.7  Overlay snapshot generation
     // =====================================================================
     //
     // Builds pre-computed banking snapshots for all viewer × overlay-group
@@ -505,7 +559,7 @@ public:
     }
 
     // =====================================================================
-    // §3.7  Dynamic slot management (for Board's hot-swap pool)
+    // §3.8  Dynamic slot management (for Board's hot-swap pool)
     // =====================================================================
     //
     // Board owns the free-list allocator and calls these to insert/remove

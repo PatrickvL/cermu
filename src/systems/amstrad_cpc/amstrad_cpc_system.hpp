@@ -144,7 +144,7 @@ inline constexpr auto kCPC464Chips = make_chip_manifest(
 );
 
 inline constexpr auto kCPC6128Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 131072, 0, "RAM"},                    // 128 KB (8 banks)
+    Slot<RAMChip>{0x0000, 131072, 0, "RAM", 0, 16384},          // 128 KB (8 × 16 KB banks)
     Slot<ROMChip>{0x0000,  16384, 0, "Lower ROM", 0, 0, 1},    // overlay group 1
     Slot<ROMChip>{0xC000,  16384, 0, "Upper ROM", 0, 0, 2},    // overlay group 2
     // Non-bus chips — factory-created or pre-bound, not address-decoded

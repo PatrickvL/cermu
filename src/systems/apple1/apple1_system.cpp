@@ -449,29 +449,10 @@ void Apple1System::configure_bus_memory_map() {
 
     const size_t ram_pages = ram_size_ / Bus::kPageSize;  // 16 (4K), 32 (8K), or 256 (64K)
 
-    // apply() establishes the full default map from the manifest:
-    //   - All 256 RAM pages (read + write)
-    //   - Monitor ROM overlays read page $FF
-    //   - BASIC ROM overlays read pages $E0–$EF
-    //   - PIA MMIO via MaskedSubTable on page $D0
+    // effective_size trims RAM in Phase 1 and gives MMIO sub-tables
+    // (PIA at $D0) an open-bus base when RAM doesn't reach that page.
+    board_.set_effective_size(apple1_chips::kRamSlot, ram_size_);
     board_.apply(bus_);
-
-    // ── Trim RAM to actual size ─────────────────────────────────────────────
-    // Selectively unmap pages beyond actual RAM that aren't ROM-covered or
-    // PIA sub-table–routed.  Check each page's current chip id to avoid
-    // clobbering ROM overlays or sub-table sentinels.
-    if (ram_pages < 256) {
-        for (size_t page = ram_pages; page < 256; ++page) {
-            auto rd = bus_.viewer(0).read_chip(page);
-            auto wr = bus_.viewer(0).write_chip(page);
-
-            // Only unmap if this page still points to its RAM chip id
-            if (size_t(rd) < 256 && size_t(rd) == page)
-                bus_.set_read_page(0, page, PT::kNoChipSelected);
-            if (size_t(wr) < 256 && size_t(wr) == page)
-                bus_.set_write_page(0, page, PT::kNoChipSelectedWrite);
-        }
-    }
 
     // ── BASIC ROM — unmap if not loaded ─────────────────────────────────────
     if (!has_basic_) {
@@ -492,20 +473,6 @@ void Apple1System::configure_bus_memory_map() {
         if (has_basic_) {
             for (size_t i = 0; i < 16; ++i)
                 bus_.set_write_page(0, 0xE0 + i, WriteChipId(0xE0 + i));
-        }
-    }
-
-    // ── PIA page ($D0) — update MaskedSubTable base chip ────────────────────
-    // apply() created the sub-table with base = RAM $D0.  If RAM doesn't
-    // reach $D0, switch the base to open bus.
-    const int pia_sub = board_.slot(apple1_chips::kPiaSlot).sub_table_idx;
-    if (pia_sub >= 0) {
-        if (ram_pages > 0xD0) {
-            bus_.set_masked_base(0, size_t(pia_sub),
-                ChipId(0xD0), WriteChipId(0xD0));
-        } else {
-            bus_.set_masked_base(0, size_t(pia_sub),
-                PT::kNoChipSelected, PT::kNoChipSelectedWrite);
         }
     }
 }

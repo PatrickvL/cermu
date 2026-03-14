@@ -374,13 +374,8 @@ void BBCMicroSystem::configure_bus_memory_map() {
 }
 
 void BBCMicroSystem::update_paged_rom() {
-    using ChipId = typename PT::ChipId;
-
-    constexpr size_t kPagesPerBank = bbc_constants::PAGED_ROM_SIZE / Bus::kPageSize;  // 64
-    constexpr size_t kRomPoolBase  = kBBCMicroChips.base_id(bbc_chips::kPagedRomSlot, 8);
-
-    size_t bank_offset = (rom_select_ & 0x0F) * kPagesPerBank;
-    bus_.fill_read_pages(0, 0x80, kPagesPerBank, ChipId(kRomPoolBase + bank_offset));
+    board_.select_bank_at(bus_, 0, bbc_chips::kPagedRomSlot,
+                           rom_select_ & 0x0F, 0x80);
 }
 
 // ============================================================================

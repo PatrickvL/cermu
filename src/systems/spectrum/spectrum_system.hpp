@@ -99,8 +99,8 @@ inline constexpr auto kSpectrum48KChips = make_chip_manifest(
 );
 
 inline constexpr auto kSpectrum128KChips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 131072, 0, "RAM"},
-    Slot<ROMChip>{0x0000,  32768, 0, "ROM"},
+    Slot<RAMChip>{0x0000, 131072, 0, "RAM", 0, 16384},
+    Slot<ROMChip>{0x0000,  32768, 0, "ROM", 0, 16384},
     // Non-bus chips — factory-created or pre-bound, not address-decoded
     Slot<ZilogZ80A>     {0, 0, 0, "Z80A"},
     Slot<ferranti_ula_t>{0, 0, 0, "Ferranti ULA"},

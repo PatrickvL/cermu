@@ -456,7 +456,36 @@ public:
     [[nodiscard]] size_t flat_mem_size() const noexcept { return flat_mem_.size(); }
 
     // =====================================================================
-    // §4.10  Convenience: manual page mapping
+    // §4.10  Effective size (pre-apply RAM trimming)
+    // =====================================================================
+    //
+    // Limits Phase 1 page mapping for a slot to fewer bytes than the full
+    // allocation.  Set before apply() for configuration-dependent sizes
+    // (e.g. RAM that can be 2 KB–64 KB).  Phase 0 chip_info still covers
+    // the full byte_size so bank switching beyond the visible window works.
+    //
+
+    void set_effective_size(size_t slot_index, size_t bytes) noexcept {
+        bus_map_.set_effective_size(slot_index, bytes);
+    }
+
+    // =====================================================================
+    // §4.11  Bank selection (runtime bank switching)
+    // =====================================================================
+    //
+    // Maps one bank from a multi-bank slot to a target page in the address
+    // space.  Requires bank_size > 0 on the slot.  Uses fill_read_constant/
+    // fill_write_constant for optimal performance (single chip_id per bank).
+    //
+
+    void select_bank_at(Bus& bus, size_t viewer_id,
+                        size_t slot_idx, size_t bank_idx,
+                        size_t target_page) const noexcept {
+        bus_map_.select_bank_at(bus, viewer_id, slot_idx, bank_idx, target_page);
+    }
+
+    // =====================================================================
+    // §4.12  Convenience: manual page mapping
     // =====================================================================
     //
     // Helpers for systems that need manual page-table manipulation beyond
