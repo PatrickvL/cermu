@@ -110,6 +110,19 @@ public:
         bus_map_.apply(bus, flat_mem_.data(), viewer_id);
     }
 
+    // Delegates to BusMap::build_overlay_snapshots() — generates banking
+    // mode snapshots for all viewer × overlay-group combinations.
+    // Prerequisites: apply() must have been called on viewer 0 first.
+
+    template<size_t MaxViewers, size_t MaxModes>
+    void build_overlay_snapshots(
+        Bus& bus,
+        size_t num_viewers,
+        std::array<std::array<typename Bus::Snapshot, MaxModes>, MaxViewers>& out) const
+    {
+        bus_map_.build_overlay_snapshots(bus, num_viewers, out);
+    }
+
     // =====================================================================
     // §4.4  Variadic initialization: bind + buffer-bind + apply
     // =====================================================================
@@ -181,8 +194,8 @@ public:
 
             // Reconstruct a ChipSlot from the SlotRecord for the factory call.
             ChipSlot slot{rec.base_addr, rec.byte_size,
-                          rec.addr_mask, rec.bank_size, rec.factory,
-                          rec.label, rec.condition};
+                          rec.addr_mask, rec.bank_size, rec.overlay_group,
+                          rec.factory, rec.label, rec.condition};
             ChipBase* chip = rec.factory(slot, system_bus, buf);
 
             // Apply placement metadata from the manifest slot.

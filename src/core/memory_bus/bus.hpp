@@ -678,6 +678,13 @@ public:
         return masked_subs_[viewer_id][table_idx];
     }
 
+    [[nodiscard]] size_t masked_sub_count(size_t viewer_id) const noexcept
+        requires(kHasMaskedSub)
+    {
+        assert(viewer_id < kNumViewers);
+        return masked_sub_count_[viewer_id];
+    }
+
     // =========================================================================
     // §1.14  Sub-table reset
     // =========================================================================

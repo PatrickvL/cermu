@@ -61,6 +61,7 @@ public:
         ChipSlot::FactoryFn factory   = nullptr;
         const char*         label     = nullptr;
         uint16_t            condition = 0;
+        uint8_t             overlay_group = 0;
     };
 
     // =====================================================================
@@ -94,6 +95,7 @@ public:
                 s.factory,
                 s.label,
                 s.condition,
+                s.overlay_group,
             });
             byte_off += s.size_bytes;
         }
@@ -337,7 +339,142 @@ public:
     }
 
     // =====================================================================
-    // §3.6  Dynamic slot management (for Board's hot-swap pool)
+    // §3.6  Overlay snapshot generation
+    // =====================================================================
+    //
+    // Builds pre-computed banking snapshots for all viewer × overlay-group
+    // combinations.  Overlay groups are read-only layers (e.g. ROM) that
+    // can be banked in/out on top of the base layer (group 0, e.g. RAM).
+    //
+    // For each viewer, mode 0 is the base state (only group-0 chips).
+    // Higher modes activate overlay groups according to the mode bitmask:
+    // bit 0 → group 1, bit 1 → group 2, etc.
+    //
+    // Viewer 0 is assumed to be a CPU viewer (preserves sub-table sentinels
+    // from apply()).  Viewers 1+ are set up as pure memory viewers: all
+    // address-space pages are filled with group-0 buffer chips (no MMIO
+    // sub-tables).
+    //
+    // Sub-table bases are updated when an overlay chip covers the sub-table
+    // page, but only if the current base is a buffer chip (not kNoChipSelected).
+    //
+    // Prerequisites: apply() must have been called on viewer 0 first.
+    //
+    // Parameters:
+    //   bus         — the MemoryBus to operate on
+    //   num_viewers — number of viewers to generate snapshots for
+    //   out         — output array: out[viewer][mode], sized [num_viewers][mode_count]
+    //   mode_count  — number of modes per viewer (must be >= overlay_mode_count())
+    //
+
+    template<size_t MaxViewers, size_t MaxModes>
+    void build_overlay_snapshots(
+        Bus& bus,
+        size_t num_viewers,
+        std::array<std::array<typename Bus::Snapshot, MaxModes>, MaxViewers>& out) const
+    {
+        using CId         = ChipId;
+        using WCId        = WriteChipId;
+        static constexpr size_t kNumPages = Bus::kNumPages;
+
+        // Count overlay groups from slot records.
+        uint8_t max_group = 0;
+        for (const auto& s : slots_)
+            if (s.overlay_group > max_group)
+                max_group = s.overlay_group;
+        const size_t mode_count = size_t(1) << max_group;
+        assert(mode_count <= MaxModes);
+        assert(num_viewers <= MaxViewers);
+
+        // ── Phase A: Set up base state (group 0 only) for viewers 1+ ────
+        //
+        // Viewer 0 is already set up by apply().  For viewers 1+, fill all
+        // pages with group-0 buffer chips (pure memory, no MMIO sentinels).
+        //
+        for (size_t v = 1; v < num_viewers; ++v) {
+            bus.reset_viewer(v);
+            for (const auto& slot : slots_) {
+                if (slot.byte_size == 0 || slot.dynamic || slot.overlay_group != 0)
+                    continue;
+                const size_t bank_sz   = slot.bank_size > 0 ? slot.bank_size : kPageSize;
+                const size_t bank_pgs  = bank_sz >> kPageBits;
+                const size_t num_banks = slot.byte_size / bank_sz;
+                const size_t first_pg  = slot.base_addr >> kPageBits;
+                for (size_t b = 0; b < num_banks; ++b) {
+                    const size_t pg = first_pg + b * bank_pgs;
+                    if (pg >= kNumPages) break;
+                    const size_t cnt = std::min(bank_pgs, kNumPages - pg);
+                    const CId bid = CId(size_t(slot.base_id) + b);
+                    bus.fill_read_constant(v, pg, cnt, bid);
+                    if (!slot.read_only)
+                        bus.fill_write_constant(v, pg, cnt, WCId(bid));
+                }
+            }
+        }
+
+        // ── Phase B: Build snapshots for each viewer × mode combo ────────
+        //
+        for (size_t v = 0; v < num_viewers; ++v) {
+            // Save base state (mode 0 — overlays off)
+            bus.save_snapshot(v, out[v][0]);
+
+            for (size_t mode = 1; mode < mode_count; ++mode) {
+                // Restore base state before layering this mode's overlays
+                bus.load_snapshot(v, out[v][0]);
+
+                for (const auto& slot : slots_) {
+                    if (slot.byte_size == 0 || slot.dynamic || slot.overlay_group == 0)
+                        continue;
+                    // Check if this slot's group is active in this mode
+                    if (!(mode & (size_t(1) << (slot.overlay_group - 1))))
+                        continue;
+
+                    const size_t bank_sz   = slot.bank_size > 0 ? slot.bank_size : kPageSize;
+                    const size_t bank_pgs  = bank_sz >> kPageBits;
+                    const size_t num_banks = slot.byte_size / bank_sz;
+                    const size_t first_pg  = slot.base_addr >> kPageBits;
+
+                    for (size_t b = 0; b < num_banks; ++b) {
+                        const size_t pg = first_pg + b * bank_pgs;
+                        if (pg >= kNumPages) break;
+                        const size_t cnt = std::min(bank_pgs, kNumPages - pg);
+                        const CId bid = CId(size_t(slot.base_id) + b);
+
+                        for (size_t p = pg; p < pg + cnt; ++p) {
+                            CId cur = bus.viewer(v).read_chip(p);
+
+                            // Check if this page is a masked sub-table sentinel
+                            if constexpr (Bus::kHasMaskedSub) {
+                                constexpr auto sub_base = size_t(PT::kMaskedSubBase);
+                                if (size_t(cur) >= sub_base &&
+                                    size_t(cur) < sub_base + Bus::kMaxMaskedSubs) {
+                                    // Update sub-table base_read, but only if
+                                    // it currently points to a buffer chip
+                                    // (not kNoChipSelected / open bus).
+                                    size_t sub_idx = size_t(cur) - sub_base;
+                                    auto& sub = bus.masked_sub(v, sub_idx);
+                                    if (sub.base_read != PT::kNoChipSelected)
+                                        sub.set_base(bid, sub.base_write);
+                                    continue;
+                                }
+                            }
+
+                            // Regular page — overlay read chip
+                            bus.set_read_page(v, p, bid);
+                        }
+                    }
+                }
+
+                bus.save_snapshot(v, out[v][mode]);
+            }
+
+            // Restore to base state after snapshot building
+            bus.load_snapshot(v, out[v][0]);
+        }
+    }
+
+    // =====================================================================
+    // §3.7  Dynamic slot management (for Board's hot-swap pool)
     // =====================================================================
     //
     // Board owns the free-list allocator and calls these to insert/remove
