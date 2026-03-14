@@ -194,7 +194,8 @@ public:
 
             // Reconstruct a ChipSlot from the SlotRecord for the factory call.
             ChipSlot slot{rec.base_addr, rec.byte_size,
-                          rec.addr_mask, rec.bank_size, rec.overlay_group,
+                          rec.addr_mask, rec.bank_size, 0 /*effective_size*/,
+                          rec.overlay_group,
                           rec.factory, rec.label, rec.condition};
             ChipBase* chip = rec.factory(slot, system_bus, buf);
 

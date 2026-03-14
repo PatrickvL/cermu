@@ -82,8 +82,8 @@ template<> struct Z9001VariantTraits<Z9001Variant::KC87> {
 //
 // BASIC ROM is split into 8 KB + 2 KB because ChipSlot requires power-of-2
 // sizes and the original 10 KB ($2800) is not a power of 2.
-// RAM for KC87 is allocated as 64 KB (power of 2); configure_bus_memory_map()
-// trims write pages above 48 KB ($C000+).
+// RAM for KC87 is allocated as 64 KB (power of 2); effective_size in the
+// manifest limits Phase 1 to 48 KB ($C000), leaving $C000+ for ROM/I/O.
 //
 inline constexpr auto kZ9001Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 16384, 0, "RAM"},
@@ -97,7 +97,7 @@ inline constexpr auto kZ9001Chips = make_chip_manifest(
 );
 
 inline constexpr auto kKC87Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
+    Slot<RAMChip>{0x0000, 65536, 0, "RAM", 0, 0, 0, 0xC000},  // 48 KB visible of 64 KB
     Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM lo"},
     Slot<ROMChip>{0xE000,  2048, 0, "BASIC ROM hi"},
     Slot<RAMChip>{0xE800,  1024, 0, "Color RAM"},

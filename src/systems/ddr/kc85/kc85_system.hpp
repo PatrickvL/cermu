@@ -139,7 +139,7 @@ inline constexpr auto kKC853Chips = make_chip_manifest(
 
 inline constexpr auto kKC854Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 32768, 0, "RAM"},
-    Slot<RAMChip>{0x8000, 65536, 0, "IRM", 0, 16384},          // 4 × 16 KB banks (pixel0/1, color0/1)
+    Slot<RAMChip>{0x8000, 65536, 0, "IRM", 0, 16384, 0, 16384}, // 4 × 16 KB banks, 1 visible
     Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM", 0, 0, 1},   // overlay group 1
     Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM",  0, 0, 2},   // overlay group 2
     // Non-bus chips — factory-created, not address-decoded

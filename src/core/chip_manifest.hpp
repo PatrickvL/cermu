@@ -95,6 +95,15 @@ struct ChipSlot {
                                  // MMIO-only slots: total address-decode range in bytes.
                                  //   When > page size, apply() mirrors the MMIO handler
                                  //   (or sub-table) to all pages in the range.
+    size_t   effective_size = 0; // 0 = use size_bytes (default).
+                                 // When > 0 and < size_bytes, apply() Phase 1 maps
+                                 // only this many bytes.  Phase 0 chip_info covers
+                                 // the full size_bytes so bank switching and buffer
+                                 // access beyond the visible window still work.
+                                 // Use for slots whose visible size is a compile-time
+                                 // constant smaller than the allocation (e.g. KC85/4
+                                 // IRM: 64 KB allocated, 16 KB visible at a time).
+                                 // For runtime-variable sizes, use set_effective_size().
     uint8_t  overlay_group = 0;  // 0 = always visible (base layer, e.g. RAM)
                                  // >0 = banking group: visible when that group's
                                  //       bit is set in the mode index.  Read-only
@@ -151,6 +160,7 @@ struct Slot {
     uint16_t    condition  = 0;
     size_t      bank_size  = 0;
     uint8_t     overlay_group = 0;
+    size_t      effective_size = 0;  // 0 = use size_bytes.  See ChipSlot::effective_size.
 };
 
 
@@ -433,6 +443,7 @@ make_chip_manifest(Slot<Chips>... slots) noexcept
       manifest.chips[i++] = ChipSlot{
           slots.base_addr, slots.size_bytes, slots.addr_mask,
           slots.bank_size,
+          slots.effective_size,
           slots.overlay_group,
           resolve_slot_factory<Chips>(),
           slots.label,
