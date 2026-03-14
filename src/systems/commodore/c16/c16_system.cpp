@@ -584,6 +584,13 @@ bool Commodore264System<V>::initialize() {
     pio2_       = board_.chip_as<mos6529_t>(c264_slot::kPio2);
     rom_bank_   = board_.chip_as<c264_rom_bank_select_t>(c264_slot::kRomBank);
 
+    // Wire ROM bank select callback — fires on $FDD0-$FDDF writes when
+    // low_bank or high_bank actually changes.
+    rom_bank_->on_change = [](void* ctx) {
+        static_cast<Commodore264System<V>*>(ctx)->apply_cpu_banking();
+    };
+    rom_bank_->on_change_user_data = this;
+
     // Page $FD is always I/O — unmatched addresses return open bus.
     // The MaskedSubTable base was captured from the underlying ROM/RAM page
     // by apply(); override it to no-chip (open bus reads, writes dropped).
@@ -1039,10 +1046,6 @@ bool Commodore264System<V>::load_roms() {
 template<C264SeriesVariant V>
 bus_state_t Commodore264System<V>::mem_tick(bus_state_t s) {
     s = bus_.tick(0, s);
-    if (unlikely(rom_bank_->dirty)) {
-        rom_bank_->dirty = false;
-        apply_cpu_banking();
-    }
     // Debug cart capture ($FDCF) — VICE test convention, not real hardware.
     // Writes to unmatched $FD addresses are silently dropped by the bus
     // (open-bus base), so we intercept here.

@@ -74,7 +74,10 @@ template<> struct C264SeriesVariantTraits<C264SeriesVariant::PLUS4> {
 //   A1:A0 = low ROM bank  (0=BASIC, 1=Function LO, 2=Cartridge LO)
 //   A3:A2 = high ROM bank (0=KERNAL, 1=Function HI, 2=Cartridge HI)
 //
-// Reads return open bus.  A dirty flag signals the system to update banking.
+// Reads return open bus.  On write, fires an optional callback so the system
+// can update banking immediately (no per-tick polling).
+
+using rom_bank_change_fn = void (*)(void* user_data);
 
 class c264_rom_bank_select_t : public ChipBase {
 public:
@@ -91,21 +94,26 @@ public:
 
     bus_state_t on_bus_write(bus_state_t bus) noexcept override {
         uint8_t nibble = BUS_GET_ADDR(bus) & 0x0F;
-        low_bank  = nibble & 0x03;
-        high_bank = (nibble >> 2) & 0x03;
-        dirty = true;
+        uint8_t new_low  = nibble & 0x03;
+        uint8_t new_high = (nibble >> 2) & 0x03;
+        if (new_low != low_bank || new_high != high_bank) {
+            low_bank  = new_low;
+            high_bank = new_high;
+            if (on_change) on_change(on_change_user_data);
+        }
         return bus;
     }
 
     void reset() override {
         low_bank  = 0;   // BASIC
         high_bank = 0;   // KERNAL
-        dirty = false;
+        // on_change / on_change_user_data are preserved across reset
     }
 
     uint8_t low_bank  = 0;     // 0=BASIC, 1=Function LO, 2=Cartridge LO
     uint8_t high_bank = 0;     // 0=KERNAL, 1=Function HI, 2=Cartridge HI
-    bool    dirty     = false;  // Set on write, cleared by system after banking update
+    rom_bank_change_fn on_change = nullptr;
+    void* on_change_user_data    = nullptr;
 };
 
 // ============================================================================
