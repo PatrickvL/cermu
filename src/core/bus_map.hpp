@@ -171,7 +171,8 @@ public:
         //
         static constexpr size_t kNumPages = Bus::kNumPages;
         for (const auto& slot : slots_) {
-            if (slot.byte_size == 0 || slot.dynamic) continue;
+            if (slot.byte_size == 0 || slot.dynamic || slot.overlay_group > 0)
+                continue;
             const size_t first_page = slot.base_addr >> kPageBits;
             const size_t bank_sz    = slot.bank_size > 0 ? slot.bank_size : kPageSize;
             const size_t bank_pages = bank_sz >> kPageBits;
@@ -459,8 +460,10 @@ public:
                                 }
                             }
 
-                            // Regular page — overlay read chip
+                            // Regular page — overlay chip
                             bus.set_read_page(v, p, bid);
+                            if (!slot.read_only)
+                                bus.set_write_page(v, p, WCId(bid));
                         }
                     }
                 }

@@ -211,21 +211,27 @@ template<CPCModel M> void AmstradCPCSystem<M>::set_speed_multiplier(float m) { s
 
 template<CPCModel M>
 void AmstradCPCSystem<M>::configure_bus_memory_map() {
-    // apply() establishes the default map from the manifest:
-    //   RAM pages 0-255 (read+write), Lower ROM overlays read pages 0-63,
-    //   Upper ROM overlays read pages C0-FF.
-    //   Writes always go to RAM (ROMs are read-only -> no write pages).
+    // apply() maps base-layer chips (RAM) and skips overlay_group > 0 (ROMs).
     board_.apply(bus_);
 
     if constexpr (Traits::ram_size_kb == 128) {
         // 6128: remap RAM banks per current gate_array_.ram_config.
-        // Default config 0 = {0,1,2,3} -- identity, matches apply() output.
+        // Default config 0 = {0,1,2,3} — identity, matches apply() output.
         update_banking();
     }
-    // For 464/664, ROM overlays from apply() match the initial state
-    // (lower_rom_enabled = true, upper_rom_enabled = true).
+
+    // Build overlay snapshots from the manifest's overlay_group tags.
+    // 4 modes: {none, lower, upper, both} — derived from groups 1+2.
+    board_.build_overlay_snapshots(bus_, 1, snapshots_);
+
+    // Apply current ROM overlay state.
+    apply_rom_overlay();
 }
 
+// ── RAM banking (CPC 6128 only) + rebuild overlay snapshots ──────────────
+// Called when gate_array_.ram_config changes (Gate Array opcode 11xxxxxx).
+// Remaps RAM bank assignments, rebuilds overlay snapshots for the new base
+// state, then re-applies the current ROM overlay.
 template<CPCModel M>
 void AmstradCPCSystem<M>::update_banking() {
     using ChipId      = typename PT::ChipId;
@@ -233,7 +239,6 @@ void AmstradCPCSystem<M>::update_banking() {
 
     constexpr size_t kPagesPerBank = 64;  // 16384 / 256
 
-    // ── Step 1: Map all 4 x 16 KB regions to RAM ────────────────────────
     if constexpr (Traits::ram_size_kb == 128) {
         // CPC 6128: 8 banking configurations mapping 4 logical pages to 8 physical banks
         static constexpr uint8_t bank_table[8][4] = {
@@ -248,26 +253,21 @@ void AmstradCPCSystem<M>::update_banking() {
             bus_.fill_read_pages (0, first, kPagesPerBank, id);
             bus_.fill_write_pages(0, first, kPagesPerBank, WriteChipId(id));
         }
-    } else {
-        // CPC 464/664: identity RAM mapping (no banking)
-        for (int pg = 0; pg < 4; ++pg) {
-            size_t first = pg * kPagesPerBank;
-            auto id = ChipId(first);
-            bus_.fill_read_pages (0, first, kPagesPerBank, id);
-            bus_.fill_write_pages(0, first, kPagesPerBank, WriteChipId(id));
-        }
     }
 
-    // ── Step 2: Overlay ROM reads where enabled ─────────────────────────
-    // Writes still route to RAM (write pages untouched above).
-    constexpr auto& manifest = BT::kManifest;
-    constexpr auto lower_rom_base = ChipId(manifest.base_id(cpc_chips::kLowerRomSlot, BT::Spec::PageBits));
-    constexpr auto upper_rom_base = ChipId(manifest.base_id(cpc_chips::kUpperRomSlot, BT::Spec::PageBits));
+    // Rebuild overlay snapshots for the new RAM base state, then apply.
+    board_.build_overlay_snapshots(bus_, 1, snapshots_);
+    apply_rom_overlay();
+}
 
-    if (gate_array_.lower_rom_enabled)
-        bus_.fill_read_pages(0, 0x00, kPagesPerBank, lower_rom_base);
-    if (gate_array_.upper_rom_enabled)
-        bus_.fill_read_pages(0, 0xC0, kPagesPerBank, upper_rom_base);
+// ── ROM overlay snapshot selection ───────────────────────────────────────
+// Loads the pre-computed snapshot for the current ROM enable state.
+// Mode bits: 0 = lower ROM (group 1), 1 = upper ROM (group 2).
+template<CPCModel M>
+void AmstradCPCSystem<M>::apply_rom_overlay() {
+    size_t mode = (gate_array_.lower_rom_enabled ? 1 : 0)
+               |  (gate_array_.upper_rom_enabled ? 2 : 0);
+    bus_.load_snapshot(0, snapshots_[0][mode]);
 }
 
 // ============================================================================
@@ -309,12 +309,12 @@ bus_state_t AmstradCPCSystem<M>::io_tick(bus_state_t pins) {
                     gate_array_.interrupt_pending = false;
                     BUS_SET_BIT(pins, BUS_IRQ_BIT);
                 }
-                update_banking();  // ROM visibility changed
+                apply_rom_overlay();  // ROM visibility changed
                 break;
             case 3:  // RAM banking (CPC6128 only)
                 if constexpr (Traits::ram_size_kb == 128) {
                     gate_array_.ram_config = data & 0x3F;
-                    update_banking();  // RAM bank configuration changed
+                    update_banking();  // RAM bank configuration changed → rebuild + apply
                 }
                 break;
         }
