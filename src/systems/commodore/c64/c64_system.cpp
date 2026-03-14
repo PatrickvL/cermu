@@ -1801,7 +1801,7 @@ bool C64System::patch_skip_memtest() {
 
 // Convert PLA output signals to a manifest chip ID.
 // Returns c64_chip_ids values (0-5 for buffer chips, kIo, kUnmapped).
-static uint8_t pla_906114_01_outputs_to_chip(pla_906114_01_t* pla) {
+static C64PlaChipId pla_906114_01_outputs_to_chip(pla_906114_01_t* pla) {
     using namespace c64_chip_ids;
     if (!pla->outputs.n_casram)  return kRam;
     if (!pla->outputs.n_basic)   return kBasic;
@@ -1827,7 +1827,7 @@ bool C64System::pla_maps_generate() {
 
     // Map PLA output chip ID → MemoryBus read chip.
     // Buffer chip IDs (0-5) map directly; kIo→sub-table, kUnmapped→no-chip.
-    auto pla_to_read_chip = [&](uint8_t chip) -> C64ChipId {
+    auto pla_to_read_chip = [&](C64PlaChipId chip) -> C64ChipId {
         if (chip == c64_chip_ids::kIo)       return io_sub_read;
         if (chip == c64_chip_ids::kUnmapped) return no_chip_rd;
         return C64ChipId(chip);  // 0-5 are MemoryBus chip IDs directly
@@ -1835,7 +1835,7 @@ bool C64System::pla_maps_generate() {
 
     // Map PLA output chip ID → MemoryBus write chip.
     // Only RAM and I/O are writable; ROMs and unmapped ignore writes.
-    auto pla_to_write_chip = [&](uint8_t chip) -> C64WriteId {
+    auto pla_to_write_chip = [&](C64PlaChipId chip) -> C64WriteId {
         if (chip == c64_chip_ids::kRam) return C64WriteId(chip);
         if (chip == c64_chip_ids::kIo)  return io_sub_write;
         return no_chip_wr;
@@ -1858,12 +1858,12 @@ bool C64System::pla_maps_generate() {
             // Read: R/W high
             BUS_SET_BIT(pla_bus, BUS_RW_BIT);
             pla_906114_01_tick(pla, pla_bus);
-            uint8_t read_chip = pla_906114_01_outputs_to_chip(pla);
+            C64PlaChipId read_chip = pla_906114_01_outputs_to_chip(pla);
 
             // Write: R/W low
             BUS_CLR_BIT(pla_bus, BUS_RW_BIT);
             pla_906114_01_tick(pla, pla_bus);
-            uint8_t write_chip = pla_906114_01_outputs_to_chip(pla);
+            C64PlaChipId write_chip = pla_906114_01_outputs_to_chip(pla);
 
             // Store raw PLA outputs for debug GUI
             pla_cpu_read_chip_[mode][bank]  = read_chip;
@@ -1888,7 +1888,7 @@ bool C64System::pla_maps_generate() {
             BUS_SET_ADDR(pla_bus, bank << 12);
             BUS_SET_BIT(pla_bus, BUS_RW_BIT);
             pla_906114_01_tick(pla, pla_bus);
-            uint8_t read_chip = pla_906114_01_outputs_to_chip(pla);
+            C64PlaChipId read_chip = pla_906114_01_outputs_to_chip(pla);
 
             // Store raw PLA output for debug GUI
             pla_vicii_read_chip_[mode][bank] = read_chip;

@@ -86,7 +86,22 @@ namespace c64_slots {
 }
 
 // =============================================================================
-// §3  Chip IDs (constexpr, derived from manifest)
+// §3  Type Aliases
+// =============================================================================
+
+using C64Bus      = MemoryBus<C64BusSpec>;
+using C64Board    = Board<C64BusSpec>;
+using C64Snapshot = C64Bus::Snapshot;
+using C64PT       = PackingTraits<C64BusSpec>;
+using C64ChipId   = C64PT::ChipId;      // MemoryBus read-side chip/bank ID
+using C64WriteId  = C64PT::WriteChipId;  // MemoryBus write-side chip/bank ID
+
+// PLA output chip identifier — superset of MemoryBus buffer ChipIds (0-5)
+// plus PLA-specific sentinels (kIo=0xFE, kUnmapped=0xFF).
+using C64PlaChipId = uint8_t;
+
+// =============================================================================
+// §3b  Chip IDs (constexpr, derived from manifest)
 // =============================================================================
 //
 // These replace the legacy CHIP_ROML=0,CHIP_RAM=9 strategic numbering.
@@ -94,36 +109,36 @@ namespace c64_slots {
 //
 
 namespace c64_chip_ids {
-    inline constexpr size_t kRam     = kC64Chips.base_id(c64_slots::kRam,     12);  // 0
-    inline constexpr size_t kRoml    = kC64Chips.base_id(c64_slots::kRoml,    12);  // 1
-    inline constexpr size_t kRomh    = kC64Chips.base_id(c64_slots::kRomh,    12);  // 2
-    inline constexpr size_t kBasic   = kC64Chips.base_id(c64_slots::kBasic,   12);  // 3
-    inline constexpr size_t kKernal  = kC64Chips.base_id(c64_slots::kKernal,  12);  // 4
-    inline constexpr size_t kCharrom = kC64Chips.base_id(c64_slots::kCharrom, 12);  // 5
+    inline constexpr C64ChipId kRam     = C64ChipId(kC64Chips.base_id(c64_slots::kRam,     12));  // 0
+    inline constexpr C64ChipId kRoml    = C64ChipId(kC64Chips.base_id(c64_slots::kRoml,    12));  // 1
+    inline constexpr C64ChipId kRomh    = C64ChipId(kC64Chips.base_id(c64_slots::kRomh,    12));  // 2
+    inline constexpr C64ChipId kBasic   = C64ChipId(kC64Chips.base_id(c64_slots::kBasic,   12));  // 3
+    inline constexpr C64ChipId kKernal  = C64ChipId(kC64Chips.base_id(c64_slots::kKernal,  12));  // 4
+    inline constexpr C64ChipId kCharrom = C64ChipId(kC64Chips.base_id(c64_slots::kCharrom, 12));  // 5
 
     // Sentinel values for PLA outputs that don't map to buffer chips
-    inline constexpr uint8_t kIo       = 0xFE;  // I/O region ($D000-$DFFF)
-    inline constexpr uint8_t kUnmapped = 0xFF;  // Unmapped / open bus
+    inline constexpr C64PlaChipId kIo       = 0xFE;  // I/O region ($D000-$DFFF)
+    inline constexpr C64PlaChipId kUnmapped = 0xFF;  // Unmapped / open bus
 
     // Buffer-backed chip count (for iteration over kRam..kCharrom)
     inline constexpr size_t kBufferChipCount = 6;
 }
 
 // =============================================================================
-// §3b  Chip Display Helpers (PLA debug GUI)
+// §3c  Chip Display Helpers (PLA debug GUI)
 // =============================================================================
 
-// All chip IDs that can appear in PLA tables (for legend/iteration)
-inline constexpr uint8_t kC64AllChipIds[] = {
-    uint8_t(c64_chip_ids::kRam),  uint8_t(c64_chip_ids::kRoml),
-    uint8_t(c64_chip_ids::kRomh), uint8_t(c64_chip_ids::kBasic),
-    uint8_t(c64_chip_ids::kKernal), uint8_t(c64_chip_ids::kCharrom),
+// All PLA chip IDs that can appear in PLA tables (for legend/iteration)
+inline constexpr C64PlaChipId kC64AllChipIds[] = {
+    C64PlaChipId(c64_chip_ids::kRam),  C64PlaChipId(c64_chip_ids::kRoml),
+    C64PlaChipId(c64_chip_ids::kRomh), C64PlaChipId(c64_chip_ids::kBasic),
+    C64PlaChipId(c64_chip_ids::kKernal), C64PlaChipId(c64_chip_ids::kCharrom),
     c64_chip_ids::kIo, c64_chip_ids::kUnmapped
 };
 inline constexpr size_t kC64AllChipIdCount = sizeof(kC64AllChipIds) / sizeof(kC64AllChipIds[0]);
 
 // Short chip name for display
-inline const char* c64_chip_title(uint8_t chip_id) {
+inline const char* c64_chip_title(C64PlaChipId chip_id) {
     using namespace c64_chip_ids;
     switch (chip_id) {
         case kRam:      return "RAM";
@@ -145,8 +160,8 @@ struct C64ChipInfo {
     const char* label;
 };
 
-// Fetch display info for a chip ID.  Returns true if valid.
-inline bool c64_chip_info(uint8_t chip_id, C64ChipInfo* out) {
+// Fetch display info for a PLA chip ID.  Returns true if valid.
+inline bool c64_chip_info(C64PlaChipId chip_id, C64ChipInfo* out) {
     using namespace c64_chip_ids;
     static constexpr struct { uint16_t base; size_t size; const char* label; } kInfo[] = {
         {0x0000, 65536, "RAM"},               // kRam     = 0
@@ -165,17 +180,6 @@ inline bool c64_chip_info(uint8_t chip_id, C64ChipInfo* out) {
     *out = {0, 0, "?"};
     return false;
 }
-
-// =============================================================================
-// §4  Type Aliases
-// =============================================================================
-
-using C64Bus      = MemoryBus<C64BusSpec>;
-using C64Board    = Board<C64BusSpec>;
-using C64Snapshot = C64Bus::Snapshot;
-using C64PT       = PackingTraits<C64BusSpec>;
-using C64ChipId   = C64PT::ChipId;
-using C64WriteId  = C64PT::WriteChipId;
 
 // Number of PLA banking modes (5-bit: LORAM, HIRAM, CHAREN, EXROM, GAME)
 inline constexpr size_t kC64NumPlaModes = 32;

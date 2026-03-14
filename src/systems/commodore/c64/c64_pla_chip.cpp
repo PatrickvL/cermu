@@ -300,8 +300,8 @@ void PlaChip::render_debug_content() {
                         uint16_t bank_end = bank_start + 0x0FFF;
                         
                         // Get read/write chip for this bank and mode from PLA debug tables
-                        uint8_t read_chip = uint8_t(kRam);
-                        uint8_t write_chip = uint8_t(kRam);
+                        C64PlaChipId read_chip = C64PlaChipId(kRam);
+                        C64PlaChipId write_chip = C64PlaChipId(kRam);
                         if (pla_debug_selected_mode < 32) {
                             read_chip  = c64->pla_cpu_read_chip_[pla_debug_selected_mode][bank];
                             write_chip = c64->pla_cpu_write_chip_[pla_debug_selected_mode][bank];
@@ -432,7 +432,7 @@ void PlaChip::render_debug_content() {
                         ImGui::TableSetColumnIndex(2);
 
                         // Get chip for this VIC-II bank and mode - PLA-dependent!
-                        uint8_t read_chip = uint8_t(c64_chip_ids::kRam);
+                        C64PlaChipId read_chip = C64PlaChipId(c64_chip_ids::kRam);
                         if (pla_debug_selected_mode < 32) {
                             read_chip = c64->pla_vicii_read_chip_[pla_debug_selected_mode][bank];
                         }
@@ -488,7 +488,7 @@ void PlaChip::render_debug_content() {
             
             // Show all chip IDs from manifest
             for (size_t i = 0; i < kC64AllChipIdCount; i++) {
-                uint8_t chip = kC64AllChipIds[i];
+                C64PlaChipId chip = kC64AllChipIds[i];
                 ImGui::TableNextRow(ImGuiTableRowFlags_None, 0.0f);
                 ImGui::TableSetColumnIndex(0);
                 ImGui::Text("%02d", chip);
