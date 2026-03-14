@@ -39,6 +39,10 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_2> {
     static constexpr const char* caos_version    = "2.2";
     // Slot indices into kKC852Chips
     static constexpr size_t kCaosRomSlot         = 2;
+    static constexpr size_t kPio1Slot            = 4;
+    static constexpr size_t kPio2Slot            = 5;
+    static constexpr size_t kCtcSlot             = 6;
+    static constexpr size_t kModulesSlot         = 7;
 };
 
 template<> struct KC85VariantTraits<KC85Variant::KC85_3> {
@@ -52,6 +56,10 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_3> {
     // Slot indices into kKC853Chips
     static constexpr size_t kBasicRomSlot        = 2;
     static constexpr size_t kCaosRomSlot         = 3;
+    static constexpr size_t kPio1Slot            = 5;
+    static constexpr size_t kPio2Slot            = 6;
+    static constexpr size_t kCtcSlot             = 7;
+    static constexpr size_t kModulesSlot         = 8;
 };
 
 template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
@@ -65,6 +73,10 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
     // Slot indices into kKC854Chips
     static constexpr size_t kBasicRomSlot        = 2;
     static constexpr size_t kCaosRomSlot         = 3;
+    static constexpr size_t kPio1Slot            = 5;
+    static constexpr size_t kPio2Slot            = 6;
+    static constexpr size_t kCtcSlot             = 7;
+    static constexpr size_t kModulesSlot         = 8;
 };
 
 // ============================================================================
@@ -104,8 +116,12 @@ inline constexpr auto kKC852Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 16384, 0, "RAM"},
     Slot<RAMChip>{0x8000, 16384, 0, "IRM"},
     Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM"},
-    // Non-bus chip — factory-created, not address-decoded
-    Slot<U880>   {0, 0, 0, "U880"}
+    // Non-bus chips — factory-created, not address-decoded
+    Slot<U880>                {0, 0, 0, "U880"},
+    Slot<z80_pio_t>           {0, 0, 0, "U855 PIO #1"},
+    Slot<z80_pio_t>           {0, 0, 0, "U855 PIO #2"},
+    Slot<z80_ctc_t>           {0, 0, 0, "U857 CTC"},
+    Slot<kc85_module_system_t>{0, 0, 0, "Module System"}
 );
 
 inline constexpr auto kKC853Chips = make_chip_manifest(
@@ -113,8 +129,12 @@ inline constexpr auto kKC853Chips = make_chip_manifest(
     Slot<RAMChip>{0x8000, 16384, 0, "IRM"},
     Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM"},
     Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM"},
-    // Non-bus chip — factory-created, not address-decoded
-    Slot<U880>   {0, 0, 0, "U880"}
+    // Non-bus chips — factory-created, not address-decoded
+    Slot<U880>                {0, 0, 0, "U880"},
+    Slot<z80_pio_t>           {0, 0, 0, "U855 PIO #1"},
+    Slot<z80_pio_t>           {0, 0, 0, "U855 PIO #2"},
+    Slot<z80_ctc_t>           {0, 0, 0, "U857 CTC"},
+    Slot<kc85_module_system_t>{0, 0, 0, "Module System"}
 );
 
 inline constexpr auto kKC854Chips = make_chip_manifest(
@@ -122,8 +142,12 @@ inline constexpr auto kKC854Chips = make_chip_manifest(
     Slot<RAMChip>{0x8000, 65536, 0, "IRM"},
     Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM"},
     Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM"},
-    // Non-bus chip — factory-created, not address-decoded
-    Slot<U880>   {0, 0, 0, "U880"}
+    // Non-bus chips — factory-created, not address-decoded
+    Slot<U880>                {0, 0, 0, "U880"},
+    Slot<z80_pio_t>           {0, 0, 0, "U855 PIO #1"},
+    Slot<z80_pio_t>           {0, 0, 0, "U855 PIO #2"},
+    Slot<z80_ctc_t>           {0, 0, 0, "U857 CTC"},
+    Slot<kc85_module_system_t>{0, 0, 0, "Module System"}
 );
 
 // BusTraits — selects the correct manifest per variant
@@ -181,11 +205,11 @@ public:
 
 private:
     // ── Chips ────────────────────────────────────────────────────────────
-    U880*                cpu_  = nullptr;     // U880 @ 1.7734 MHz — owned by board_
-    z80_pio_t            pio1_;               // U855 PIO (system + keyboard)
-    z80_pio_t            pio2_;               // U855 PIO (module system)
-    z80_ctc_t            ctc_;                // U857 CTC (timing + sound + tape)
-    kc85_module_system_t modules_;            // Expansion module slot controller
+    U880*                cpu_     = nullptr;  // U880 @ 1.7734 MHz — owned by board_
+    z80_pio_t*           pio1_    = nullptr;  // U855 PIO (system + keyboard) — owned by board_
+    z80_pio_t*           pio2_    = nullptr;  // U855 PIO (module system) — owned by board_
+    z80_ctc_t*           ctc_     = nullptr;  // U857 CTC (timing + sound + tape) — owned by board_
+    kc85_module_system_t* modules_ = nullptr; // Expansion module slot controller — owned by board_
 
     // ── Memory — owned by Board, accessed via chip_as<>() ────────────
     ROMChip* basic_rom_chip_ = nullptr;   // KC85/3, /4 only

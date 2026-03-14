@@ -195,7 +195,9 @@ bool SpectrumSystem<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
     register_board(&board_);
 
-    // ── Create chips via factory, wire the bus ────────────────────────
+    // ── Pre-bind stack-member chips, then factory-create all chips ─────
+    board_.bind_chip(spectrum_chips::kUlaSlot, &ula_);
+    board_.bind_chip(spectrum_chips::kAySlot,  &ay_);
     board_.create_chips(&pins_);
     board_.apply(bus_);
 
@@ -219,12 +221,7 @@ bool SpectrumSystem<V>::initialize() {
     }
 
     // ── Register chips for Hardware menu ────────────────────────────────
-    register_chip(&ula_,
-        "Ferranti ULA", "ULA", "Video", spectrum_constants::SCREEN_BASE);
-    if constexpr (Traits::has_ay_sound) {
-        register_chip(&ay_,
-            "AY-3-8912 Sound", "AY-3-8912", "Sound", 0);
-    }
+
     register_bus_chips(board_);
 
     printf("%s: System initialized (%dKB RAM)\n", Traits::name, Traits::ram_size_kb);
@@ -241,11 +238,8 @@ void SpectrumSystem<V>::shutdown() {
 template<SpectrumVariant V>
 void SpectrumSystem<V>::reset() {
     if (!cpu_) return;
+    board_.reset_chips();
     pins_ = board_.cpu_chip()->reset(pins_);
-    ula_.reset();
-    if constexpr (Traits::has_ay_sound) {
-        ay_.reset();
-    }
     bank_select_ = 0;
     bank_locked_ = false;
     frame_tstate_counter_ = 0;

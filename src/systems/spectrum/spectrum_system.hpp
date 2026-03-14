@@ -92,20 +92,26 @@ template<> struct SpectrumVariantTraits<SpectrumVariant::ZX128K> {
 inline constexpr auto kSpectrum48KChips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
     Slot<ROMChip>{0x0000, 16384, 0, "ROM"},
-    // Non-bus chip — factory-created, not address-decoded
-    Slot<ZilogZ80A>{0, 0, 0, "Z80A"}
+    // Non-bus chips — factory-created or pre-bound, not address-decoded
+    Slot<ZilogZ80A>     {0, 0, 0, "Z80A"},
+    Slot<ferranti_ula_t>{0, 0, 0, "Ferranti ULA"},
+    Slot<ay_3_8910_t>   {0, 0, 0, "AY-3-8912"}
 );
 
 inline constexpr auto kSpectrum128KChips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 131072, 0, "RAM"},
     Slot<ROMChip>{0x0000,  32768, 0, "ROM"},
-    // Non-bus chip — factory-created, not address-decoded
-    Slot<ZilogZ80A>{0, 0, 0, "Z80A"}
+    // Non-bus chips — factory-created or pre-bound, not address-decoded
+    Slot<ZilogZ80A>     {0, 0, 0, "Z80A"},
+    Slot<ferranti_ula_t>{0, 0, 0, "Ferranti ULA"},
+    Slot<ay_3_8910_t>   {0, 0, 0, "AY-3-8912"}
 );
 
 namespace spectrum_chips {
     inline constexpr size_t kRamSlot = 0;
     inline constexpr size_t kRomSlot = 1;
+    inline constexpr size_t kUlaSlot = 3;
+    inline constexpr size_t kAySlot  = 4;
 }
 
 // BusTraits — selects the correct manifest per variant
