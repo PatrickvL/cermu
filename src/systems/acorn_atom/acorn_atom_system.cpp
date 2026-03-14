@@ -395,49 +395,12 @@ void AcornAtomSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 // ============================================================================
 
 void AcornAtomSystem::configure_bus_memory_map() {
-    const size_t ram_pages = (ram_size_kb_ * 1024) / Bus::kPageSize;
-
-    // apply() establishes the full default map from the manifest:
-    //   - RAM 128 pages ($0000–$7FFF)
-    //   - Video RAM 32 pages ($8000–$9FFF)
-    //   - BASIC ROM 16 pages ($C000–$CFFF)
-    //   - FP ROM 8 pages ($D000–$D7FF)
-    //   - OS ROM 16 pages ($F000–$FFFF)
-    //   - PPI MMIO via MaskedSubTable on page $B0
-    //   - VIA MMIO via MaskedSubTable on page $B8
+    // Trim RAM to configured size BEFORE apply() — effective_size limits
+    // Phase 1 page mapping.  MMIO sub-tables on pages beyond the effective
+    // range automatically capture kNoChipSelected as their base chip.
+    board_.set_effective_size(acorn_atom_chips::kRamSlot,
+                              ram_size_kb_ * 1024);
     board_.apply(bus_);
-
-    // ── Trim RAM to actual configured size ──────────────────────────────
-    // Pages above the real RAM size get unmapped.  ROM overlays and MMIO
-    // sub-tables on higher pages are left alone (they have different chip ids).
-    if (ram_pages < 128) {
-        for (size_t page = ram_pages; page < 128; ++page) {
-            auto rd = bus_.viewer(0).read_chip(page);
-            auto wr = bus_.viewer(0).write_chip(page);
-
-            // Only unmap if this page still points to its RAM chip id
-            if (size_t(rd) == acorn_atom_chips::kRamId + page)
-                bus_.set_read_page(0, page, PT::kNoChipSelected);
-            if (size_t(wr) == acorn_atom_chips::kRamId + page)
-                bus_.set_write_page(0, page, PT::kNoChipSelectedWrite);
-        }
-    }
-
-    // ── PPI page ($B0) — update MaskedSubTable base chip ────────────────
-    // apply() captured the base as RAM page $B0.  If RAM doesn't reach
-    // that page, switch the base to open bus.
-    const int ppi_sub = board_.slot(acorn_atom_chips::kPpiSlot).sub_table_idx;
-    if (ppi_sub >= 0 && ram_pages <= 0xB0) {
-        bus_.set_masked_base(0, size_t(ppi_sub),
-            PT::kNoChipSelected, PT::kNoChipSelectedWrite);
-    }
-
-    // ── VIA page ($B8) — same treatment ─────────────────────────────────
-    const int via_sub = board_.slot(acorn_atom_chips::kViaSlot).sub_table_idx;
-    if (via_sub >= 0 && ram_pages <= 0xB8) {
-        bus_.set_masked_base(0, size_t(via_sub),
-            PT::kNoChipSelected, PT::kNoChipSelectedWrite);
-    }
 }
 
 // ============================================================================

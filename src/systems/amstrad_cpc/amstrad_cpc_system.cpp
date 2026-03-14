@@ -234,11 +234,6 @@ void AmstradCPCSystem<M>::configure_bus_memory_map() {
 // state, then re-applies the current ROM overlay.
 template<CPCModel M>
 void AmstradCPCSystem<M>::update_banking() {
-    using ChipId      = typename PT::ChipId;
-    using WriteChipId = typename PT::WriteChipId;
-
-    constexpr size_t kPagesPerBank = 64;  // 16384 / 256
-
     if constexpr (Traits::ram_size_kb == 128) {
         // CPC 6128: 8 banking configurations mapping 4 logical pages to 8 physical banks
         static constexpr uint8_t bank_table[8][4] = {
@@ -246,12 +241,11 @@ void AmstradCPCSystem<M>::update_banking() {
             {0, 4, 2, 3}, {0, 5, 2, 3}, {0, 6, 2, 3}, {0, 7, 2, 3}
         };
         uint8_t config = gate_array_.ram_config & 7;
+        constexpr size_t kPagesPerBank = 64;  // 16384 / 256
         for (int pg = 0; pg < 4; ++pg) {
-            uint8_t bank = bank_table[config][pg];
-            size_t first = pg * kPagesPerBank;
-            auto id = ChipId(bank * kPagesPerBank);
-            bus_.fill_read_pages (0, first, kPagesPerBank, id);
-            bus_.fill_write_pages(0, first, kPagesPerBank, WriteChipId(id));
+            board_.select_bank_at(bus_, 0, cpc_chips::kRamSlot,
+                                   bank_table[config][pg],
+                                   pg * kPagesPerBank);
         }
     }
 

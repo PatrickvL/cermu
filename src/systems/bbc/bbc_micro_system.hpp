@@ -28,7 +28,7 @@
 //
 inline constexpr auto kBBCMicroChips = make_chip_manifest(
     Slot<RAMChip>{0x0000,  32768, 0, "RAM"},
-    Slot<ROMChip>{0x8000, 262144, 0, "Paged ROM"},      // 16 × 16 KB banks
+    Slot<ROMChip>{0x8000, 262144, 0, "Paged ROM", 0, 16384},      // 16 × 16 KB banks
     Slot<ROMChip>{0xC000,  16384, 0, "MOS ROM"},
     // Non-bus chips — factory-created, not address-decoded
     Slot<MOS6502>   {0, 0, 0, "MOS 6502"},

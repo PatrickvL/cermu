@@ -327,31 +327,21 @@ void SpectrumSystem<V>::run_frame() {
 
 template<SpectrumVariant V>
 void SpectrumSystem<V>::configure_bus_memory_map() {
-    using ChipId      = typename PT::ChipId;
-    using WriteChipId = typename PT::WriteChipId;
+    using ChipId = typename PT::ChipId;
 
     // apply() establishes the default map from the manifest:
     //   48K:  RAM pages 0-255 (read+write), ROM overlays read pages 0-63
-    //   128K: RAM pages 0-255 (read+write from first 64KB), ROM overlays read pages 0-63
+    //   128K: RAM banks 0-3 mapped linearly, ROM bank 0 overlays reads
     board_.apply(bus_);
 
     if constexpr (Traits::has_banking) {
         // 128K: remap fixed banks and current paging state.
-        // RAM base_id is always 0 (slot 0), 64 pages per 16KB bank.
-        //
         //   $4000-$7FFF: always bank 5
         //   $8000-$BFFF: always bank 2
         //   $C000-$FFFF: selected by bank_select_ bits 0-2
         //   $0000-$3FFF: ROM bank selected by bank_select_ bit 4
-        constexpr size_t kPagesPerBank = 64;  // 16384 / 256
-
-        // Bank 5 at $4000
-        bus_.fill_read_pages (0, 0x40, kPagesPerBank, ChipId(5 * kPagesPerBank));
-        bus_.fill_write_pages(0, 0x40, kPagesPerBank, WriteChipId(5 * kPagesPerBank));
-
-        // Bank 2 at $8000
-        bus_.fill_read_pages (0, 0x80, kPagesPerBank, ChipId(2 * kPagesPerBank));
-        bus_.fill_write_pages(0, 0x80, kPagesPerBank, WriteChipId(2 * kPagesPerBank));
+        board_.select_bank_at(bus_, 0, spectrum_chips::kRamSlot, 5, 0x40);
+        board_.select_bank_at(bus_, 0, spectrum_chips::kRamSlot, 2, 0x80);
 
         // Switchable bank at $C000 + ROM bank at $0000
         update_banking();
@@ -359,10 +349,10 @@ void SpectrumSystem<V>::configure_bus_memory_map() {
 
     // Screen RAM pointer — bank 5 for 128K (default), $4000 offset for 48K
     if constexpr (Traits::has_banking) {
-        constexpr size_t kPagesPerBank = 64;
         bool use_bank7 = (bank_select_ & 0x08) != 0;
         size_t screen_bank = use_bank7 ? 7 : 5;
-        screen_ram_ptr_ = board_.chip_buffer(ChipId(screen_bank * kPagesPerBank));
+        screen_ram_ptr_ = board_.chip_buffer(
+            ChipId(size_t(board_.slot(spectrum_chips::kRamSlot).base_id) + screen_bank));
     } else {
         // 48K: screen starts at $4000 = page $40 = chip ID 64
         screen_ram_ptr_ = board_.chip_buffer(ChipId(0x40));
@@ -373,26 +363,21 @@ template<SpectrumVariant V>
 void SpectrumSystem<V>::update_banking() {
     if constexpr (!Traits::has_banking) return;
 
-    using ChipId      = typename PT::ChipId;
-    using WriteChipId = typename PT::WriteChipId;
-
-    constexpr size_t kPagesPerBank = 64;  // 16384 / 256
+    using ChipId = typename PT::ChipId;
 
     // Switchable RAM bank at $C000-$FFFF (bits 0-2 of bank_select_)
     uint8_t ram_bank = bank_select_ & 0x07;
-    bus_.fill_read_pages (0, 0xC0, kPagesPerBank, ChipId(ram_bank * kPagesPerBank));
-    bus_.fill_write_pages(0, 0xC0, kPagesPerBank, WriteChipId(ram_bank * kPagesPerBank));
+    board_.select_bank_at(bus_, 0, spectrum_chips::kRamSlot, ram_bank, 0xC0);
 
     // ROM bank at $0000-$3FFF (bit 4 of bank_select_)
-    constexpr size_t rom_base = kSpectrum128KChips.base_id(
-        spectrum_chips::kRomSlot, SpectrumBusTraits<SpectrumVariant::ZX128K>::Spec::PageBits);
     uint8_t rom_bank = (bank_select_ & 0x10) ? 1 : 0;
-    bus_.fill_read_pages(0, 0x00, kPagesPerBank, ChipId(rom_base + rom_bank * kPagesPerBank));
+    board_.select_bank_at(bus_, 0, spectrum_chips::kRomSlot, rom_bank, 0x00);
 
     // Screen bank: bit 3 selects bank 5 or 7
     bool use_bank7 = (bank_select_ & 0x08) != 0;
     size_t screen_bank = use_bank7 ? 7 : 5;
-    screen_ram_ptr_ = board_.chip_buffer(ChipId(screen_bank * kPagesPerBank));
+    screen_ram_ptr_ = board_.chip_buffer(
+        ChipId(size_t(board_.slot(spectrum_chips::kRamSlot).base_id) + screen_bank));
 }
 
 // ============================================================================
