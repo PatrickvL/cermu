@@ -971,15 +971,9 @@ bool PETSystem::load_roms() {
 // ============================================================================
 
 void PETSystem::configure_memory_map() {
-    using ChipId      = Bus::ChipId;
-    using WriteChipId = Bus::WriteChipId;
-
-    // Screen RAM mirror ($8400-$87FF → same data as $8000-$83FF)
-    // Slot 1 (screen RAM) base_id gives the chip_id for pages $80-$83.
-    // Map pages $84-$87 to the same chip pages.
-    constexpr auto screen_base = ChipId(kPETChips.base_id(1, 8));
-    bus_.fill_read_pages(0, 0x84, 4, screen_base);
-    bus_.fill_write_pages(0, 0x84, 4, WriteChipId(screen_base));
+    // Screen RAM mirror ($8400-$87FF) is now handled declaratively by the
+    // manifest: the slot declares size_bytes=2048 with addr_mask=0x03FF,
+    // so apply() wraps all accesses to the physical 1 KB chip.
 }
 
 // ============================================================================

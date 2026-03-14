@@ -51,7 +51,7 @@
 //
 // Memory-mapped chips:
 //   Slot 0: Main RAM       — 32 KB at $0000
-//   Slot 1: Screen RAM     —  1 KB at $8000  (mirrored at $8400 post-apply)
+//   Slot 1: Screen RAM     —  1 KB at $8000  (mirrored at $8400 via addr_mask)
 //   Slot 2: BASIC ROM low  —  4 KB at $B000  (901465-23)
 //   Slot 3: BASIC ROM mid  —  4 KB at $C000  (901465-20)
 //   Slot 4: BASIC ROM high —  4 KB at $D000  (901465-21)
@@ -63,7 +63,7 @@
 //
 inline constexpr auto kPETChips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 32768, 0, "Main RAM"},
-    Slot<RAMChip>{0x8000,  1024, 0, "Screen RAM"},
+    Slot<RAMChip>{0x8000,  2048, 0x03FF, "Screen RAM"},
     Slot<ROMChip>{0xB000,  4096, 0, "BASIC ROM $B000"},
     Slot<ROMChip>{0xC000,  4096, 0, "BASIC ROM $C000"},
     Slot<ROMChip>{0xD000,  4096, 0, "BASIC ROM $D000"},

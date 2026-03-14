@@ -149,15 +149,25 @@ public:
         // Each bank of each chip gets a ChipInfo entry with the byte offset
         // in flat_mem and an address mask that clips to the bank's range.
         //
+        // When a buffer slot has addr_mask > 0, it describes incomplete
+        // address decoding (hardware mirroring): the physical chip is
+        // smaller than the address range it occupies.  All banks share the
+        // same base offset and use addr_mask so that accesses anywhere in
+        // the range wrap to the physical chip's size.
+        //
         for (const auto& slot : slots_) {
             if (slot.byte_size == 0 || slot.dynamic) continue;
             const size_t bank_sz   = slot.bank_size > 0 ? slot.bank_size : kPageSize;
             const size_t num_banks = slot.byte_size / bank_sz;
-            const auto   mask_val  = static_cast<typename Bus::MaskT>(bank_sz - 1);
+            const bool   mirrored  = slot.addr_mask > 0 && slot.byte_size > 0;
+            const auto   mask_val  = static_cast<typename Bus::MaskT>(
+                mirrored ? slot.addr_mask : (bank_sz - 1));
             for (size_t b = 0; b < num_banks; ++b) {
                 bus.set_chip_info(
                     size_t(slot.base_id) + b,
-                    static_cast<typename Bus::BaseT>(slot.byte_offset + b * bank_sz),
+                    static_cast<typename Bus::BaseT>(
+                        mirrored ? slot.byte_offset
+                                 : (slot.byte_offset + b * bank_sz)),
                     mask_val);
             }
         }
@@ -204,6 +214,13 @@ public:
                 if (!slot.chip || !slot.chip->has_mmio() || slot.dynamic)
                     continue;
 
+                // For MMIO-only slots, bank_size declares the total
+                // address-decode range — compute the page count for
+                // mirroring.  A value of 0 or <= page size means "1 page".
+                const size_t mmio_pages =
+                    (slot.byte_size == 0 && slot.bank_size > kPageSize)
+                        ? (slot.bank_size >> kPageBits) : 0;
+
                 // Register (or update) MMIO handler
                 MmioHandler handler{
                     slot.chip,
@@ -240,6 +257,16 @@ public:
                             bus.map_to_masked_sub(
                                 viewer_id, page, size_t(sub_idx));
                             sub_infos[num_subs++] = {page, sub_idx};
+
+                            // Mirror the sub-table to all pages in the
+                            // address-decode range (incomplete decode).
+                            if (mmio_pages > 1) {
+                                for (size_t p = 1;
+                                     p < mmio_pages && (page + p) < kNumPages;
+                                     ++p)
+                                    bus.map_to_masked_sub(
+                                        viewer_id, page + p, size_t(sub_idx));
+                            }
                         }
 
                         slot.sub_table_idx = sub_idx;
@@ -263,11 +290,12 @@ public:
                 // io_tick()).  The handler is still registered above so the
                 // system can route to it explicitly if desired.
                 if (slot.base_addr == 0 && slot.addr_mask == 0
-                    && slot.num_pages == 0)
+                    && slot.num_pages == 0 && mmio_pages == 0)
                     continue;
 
                 const size_t first_page = slot.base_addr >> kPageBits;
-                const size_t count = slot.num_pages > 0 ? slot.num_pages : 1;
+                const size_t count = mmio_pages > 0 ? mmio_pages
+                    : (slot.num_pages > 0 ? slot.num_pages : 1);
                 bus.map_register_file(
                     viewer_id, first_page, count, size_t(slot.mmio_idx));
             }
