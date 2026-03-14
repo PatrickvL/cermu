@@ -7,7 +7,7 @@
 #include "chip/memory/rom_chip.hpp"
 #include "chip/video/ted/ted7360.hpp"
 #include "chip/cpu/fam65xx/mos7501.hpp"
-#include "core/chip.hpp"
+#include "chip/io/mos6529.hpp"
 
 // C264 series (C16/C116/Plus4) default bus state — derived from CPU.
 // CSG7501 provides: RW, RDY, IRQ, AEC.  (No NMI — NO_NMI_LINE flag.)
@@ -66,58 +66,46 @@ template<> struct C264SeriesVariantTraits<C264SeriesVariant::PLUS4> {
 };
 
 // ============================================================================
-// C264 I/O page chip ($FD00-$FDFF) — PIO2 + debug cart
+// C264 ROM Bank Select ($FDD0-$FDDF) — address-decoded latch
 // ============================================================================
 //
-// The $FD page on the C264 series contains several I/O registers:
-//   $FD00-$FD0F  PIO1 (MOS 6529B) — keyboard column (active-low latched)
-//   $FD10-$FD1F  ROM bank select (active ROM socket, Plus/4 only)
-//   $FD30-$FD3F  PIO2 (MOS 6529B) — keyboard row select register
-//   $FDCF        Debug cart register (VICE convention for test programs)
+// Writing to $FDDx selects the active ROM bank pair.  The written data byte
+// is irrelevant — only the address bits A0-A3 matter:
+//   A1:A0 = low ROM bank  (0=BASIC, 1=Function LO, 2=Cartridge LO)
+//   A3:A2 = high ROM bank (0=KERNAL, 1=Function HI, 2=Cartridge HI)
 //
-// This chip owns the PIO2 and debug-cart state.  Dispatched via full-page
-// MMIO from MemoryBus — no manual io_tick() required.
+// Reads return open bus.  A dirty flag signals the system to update banking.
 
-class c264_io_page_t : public ChipBase {
+class c264_rom_bank_select_t : public ChipBase {
 public:
-    c264_io_page_t() : ChipBase(ChipInfo{"C264 I/O Page", "I/O"}) {
-        category_ = "I/O";
+    c264_rom_bank_select_t()
+        : ChipBase(ChipInfo{"ROM Bank Select", "ROM Bank"}) {
+        category_ = "Logic";
     }
 
     bool has_mmio() const override { return true; }
 
     bus_state_t on_bus_read(bus_state_t bus) noexcept override {
-        uint16_t addr = BUS_GET_ADDR(bus);
-        uint8_t data = 0xFF;
-        if ((addr & 0xFFF0) == 0xFD30) {
-            data = pio2_kbd;
-        }
-        BUS_SET_DATA(bus, data);
-        return bus;
+        return bus;   // write-only; reads return open bus
     }
 
     bus_state_t on_bus_write(bus_state_t bus) noexcept override {
-        uint16_t addr = BUS_GET_ADDR(bus);
-        uint8_t data = BUS_GET_DATA(bus);
-        if ((addr & 0xFFF0) == 0xFD30) {
-            pio2_kbd = data;
-        } else if (debug_cart_enabled && addr == 0xFDCF) {
-            debug_cart_value = data;
-            debug_cart_written = true;
-        }
+        uint8_t nibble = BUS_GET_ADDR(bus) & 0x0F;
+        low_bank  = nibble & 0x03;
+        high_bank = (nibble >> 2) & 0x03;
+        dirty = true;
         return bus;
     }
 
     void reset() override {
-        pio2_kbd = 0xFF;
-        debug_cart_written = false;
-        debug_cart_value = 0;
+        low_bank  = 0;   // BASIC
+        high_bank = 0;   // KERNAL
+        dirty = false;
     }
 
-    uint8_t pio2_kbd          = 0xFF;   // All rows deselected on reset
-    bool    debug_cart_enabled  = false;
-    bool    debug_cart_written  = false;
-    uint8_t debug_cart_value    = 0;
+    uint8_t low_bank  = 0;     // 0=BASIC, 1=Function LO, 2=Cartridge LO
+    uint8_t high_bank = 0;     // 0=KERNAL, 1=Function HI, 2=Cartridge HI
+    bool    dirty     = false;  // Set on write, cleared by system after banking update
 };
 
 // ============================================================================
@@ -128,12 +116,17 @@ public:
 //   $0000-$7FFF  RAM (always)
 //   $8000-$BFFF  BASIC ROM (read, when ROM enabled) / RAM
 //   $C000-$FCFF  KERNAL ROM (read, when ROM enabled) / RAM
-//   $FD00-$FDFF  I/O area — full-page MMIO (c264_io_page_t)
+//   $FD00-$FDFF  I/O area — MaskedSubTable with individual chip MMIO:
+//                  $FD10-$FD1F  PIO1 (MOS 6529B) — user port / tape sense
+//                  $FD30-$FD3F  PIO2 (MOS 6529B) — keyboard row select
+//                  $FDD0-$FDDF  ROM bank select — address-decoded latch
+//                  Other $FD addresses → open bus (no chip)
 //   $FE00-$FEFF  KERNAL ROM (cont.) / RAM
-//   $FF00-$FF3F  TED registers — sub-page MMIO via MaskedSubTable
+//   $FF00-$FF3F  TED registers — MaskedSubTable sub-page MMIO
 //   $FF40-$FFFF  KERNAL ROM (cont.) / RAM — MaskedSubTable base
 //
 // ROM banking is controlled by TED latch writes ($FF3E/$FF3F).
+// ROM bank pair selected by writes to $FDD0-$FDDF.
 // RAM size varies: 16 KB (C16/C116) with mirroring, 64 KB (Plus/4).
 //
 inline constexpr auto kC264Chips = make_chip_manifest(
@@ -141,10 +134,12 @@ inline constexpr auto kC264Chips = make_chip_manifest(
     Slot<ROMChip>{0x8000, 16384, 0, "BASIC ROM"},
     Slot<ROMChip>{0xC000, 16384, 0, "KERNAL ROM"},
     // Non-bus chip — factory-created, not address-decoded
-    Slot<CSG7501>       {0, 0, 0, "CSG 7501"},
-    // MMIO chips — address-decoded by MemoryBus
-    Slot<ted7360_t>     {0xFF00, 0, 0xFFC0, "TED 7360"},   // sub-page: (addr & 0xFFC0) == 0xFF00
-    Slot<c264_io_page_t>{0xFD00, 0, 0,      "I/O Page"}    // full-page: $FD00-$FDFF
+    Slot<CSG7501>               {0, 0, 0, "CSG 7501"},
+    // MMIO chips — address-decoded by MemoryBus via MaskedSubTables
+    Slot<ted7360_t>             {0xFF00, 0, 0xFFC0, "TED 7360"},          // page $FF sub-table 0
+    Slot<mos6529_t>             {0xFD10, 0, 0xFFF0, "MOS 6529B PIO1"},    // page $FD sub-table 1
+    Slot<mos6529_t>             {0xFD30, 0, 0xFFF0, "MOS 6529B PIO2"},    // page $FD sub-table 1
+    Slot<c264_rom_bank_select_t>{0xFDD0, 0, 0xFFF0, "ROM Bank Select"}    // page $FD sub-table 1
 );
 
 namespace c264_slot {
@@ -152,7 +147,15 @@ namespace c264_slot {
     inline constexpr size_t kBasicRom  = 1;
     inline constexpr size_t kKernalRom = 2;
     inline constexpr size_t kTed       = 4;
-    inline constexpr size_t kIoPage    = 5;
+    inline constexpr size_t kPio1      = 5;
+    inline constexpr size_t kPio2      = 6;
+    inline constexpr size_t kRomBank   = 7;
+}
+
+// MaskedSubTable indices (determined by manifest slot order during apply())
+namespace c264_sub {
+    inline constexpr size_t kTedPage = 0;    // page $FF — TED registers
+    inline constexpr size_t kIoPage  = 1;    // page $FD — PIO1, PIO2, ROM bank select
 }
 
 struct C264BusTraits {
@@ -234,10 +237,11 @@ public:
     // Debug cart ($FDCF) — VICE convention for Plus4 test programs.
     // When enabled, writes to $FDCF are captured instead of being silently ignored.
     // $00 = test passed, $FF = test failed (matching C64 $D7FF convention).
-    void    enable_debug_cart(bool enable) { if (io_) io_->debug_cart_enabled = enable; }
-    bool    debug_cart_written() const     { return io_ && io_->debug_cart_written; }
-    uint8_t debug_cart_value() const       { return io_ ? io_->debug_cart_value : 0; }
-    void    clear_debug_cart()             { if (io_) { io_->debug_cart_written = false; io_->debug_cart_value = 0; } }
+    // Not real hardware — captured in mem_tick() post-processing.
+    void    enable_debug_cart(bool enable) { debug_cart_enabled_ = enable; }
+    bool    debug_cart_written() const     { return debug_cart_written_; }
+    uint8_t debug_cart_value() const       { return debug_cart_value_; }
+    void    clear_debug_cart()             { debug_cart_written_ = false; debug_cart_value_ = 0; }
 
     // File probe — returns confidence + optimal configuration for this TED variant
     static SystemProbeResult probe_file_static(
@@ -264,8 +268,15 @@ private:
     RAMChip* ram_         = nullptr;  // Up to 64KB RAM (C16/C116 use 16KB, Plus/4 uses 64KB)
     ROMChip* basic_rom_   = nullptr;  // BASIC ROM $8000-$BFFF (16KB)
     ROMChip* kernal_rom_  = nullptr;  // Kernal ROM $C000-$FFFF (16KB)
-    c264_io_page_t* io_   = nullptr;  // I/O page chip ($FD00-$FDFF) — MMIO, owned by board_
+    mos6529_t* pio1_      = nullptr;  // MOS 6529B PIO1 ($FD10) — user port + tape sense
+    mos6529_t* pio2_      = nullptr;  // MOS 6529B PIO2 ($FD30) — keyboard row select
+    c264_rom_bank_select_t* rom_bank_ = nullptr;  // ROM bank select ($FDD0)
     size_t  ram_size_ = 16384;           // Cached configured RAM size (updated in apply_configuration)
+
+    // Debug cart state (VICE test convention, not real hardware)
+    bool    debug_cart_enabled_ = false;
+    bool    debug_cart_written_ = false;
+    uint8_t debug_cart_value_   = 0;
 
     // System state
     bool initialized_;
