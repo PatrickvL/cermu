@@ -169,7 +169,7 @@ public:
         const ChipId chip_id = viewers_[viewer_id].read_chip(Viewer::page_of(addr));
 
         if (likely(chip_id < PT::kReadSentinelMin))
-            return read_buffer(chip_id, bus);
+            return read_flat_mem(chip_id, bus);
 
         return read_slow(viewer_id, chip_id, bus);
     }
@@ -184,7 +184,7 @@ public:
         const WriteChipId chip_id = viewers_[viewer_id].write_chip(Viewer::page_of(addr));
 
         if (likely(chip_id < PT::kWriteSentinelMin))
-            return write_buffer(chip_id, bus);
+            return write_flat_mem(chip_id, bus);
 
         return write_slow(viewer_id, chip_id, bus);
     }
@@ -706,11 +706,11 @@ private:
     // §2  Buffer read/write helpers (shared by hot path and slow path)
     // =========================================================================
 
-    // read_buffer / write_buffer: used by tick()/read()/write() (non-CS path).
+    // read_flat_mem / write_flat_mem: used by tick()/read()/write() (non-CS path).
     // They optionally set CS as a side-effect when kCsLines is enabled.
 
     [[nodiscard]] FORCE_INLINE
-    bus_state_t read_buffer(ChipId chip_id, bus_state_t bus) const noexcept {
+    bus_state_t read_flat_mem(ChipId chip_id, bus_state_t bus) const noexcept {
         const Addr     addr    = Addr(BUS_GET_ADDR(bus));
         const size_t   offset  = (size_t(chip_id) << Spec::PageBits)
                                  | Viewer::offset_of(addr);
@@ -731,7 +731,7 @@ private:
     }
 
     FORCE_INLINE
-    bus_state_t write_buffer(WriteChipId chip_id, bus_state_t bus) noexcept {
+    bus_state_t write_flat_mem(WriteChipId chip_id, bus_state_t bus) noexcept {
         const Addr     addr    = Addr(BUS_GET_ADDR(bus));
         const size_t   offset  = (size_t(chip_id) << Spec::PageBits)
                                  | Viewer::offset_of(addr);
@@ -904,7 +904,7 @@ private:
             chip_id = resolve_read_chip(viewer_id, chip_id,
                                         Addr(BUS_GET_ADDR(bus)));
             if (chip_id < PT::kReadSentinelMin)
-                return read_buffer(chip_id, bus);
+                return read_flat_mem(chip_id, bus);
             if (chip_id == PT::kNoChipSelected)
                 return bus;
         }
@@ -927,7 +927,7 @@ private:
             chip_id = resolve_write_chip(viewer_id, chip_id,
                                          Addr(BUS_GET_ADDR(bus)));
             if (chip_id < PT::kWriteSentinelMin)
-                return write_buffer(chip_id, bus);
+                return write_flat_mem(chip_id, bus);
             if (chip_id == PT::kNoChipSelectedWrite)
                 return bus;
         }

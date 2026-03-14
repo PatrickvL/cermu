@@ -40,36 +40,6 @@ struct C64BusSpec {
     enum ViewerId : size_t { Cpu = 0, Vic = 1 };
 };
 
-// ── Commodore C16/C116/Plus4 (C264 series) ────────────────────────────────────
-//
-// The C264 series uses TED 7360/8360 for video, sound, and I/O.  Memory
-// banking is controlled by TED register writes to $FF3E (ROM enable) and
-// $FF3F (RAM enable), not by the CPU I/O port.
-//
-// The $FF00–$FF3F range (64 bytes) is a TED MMIO window that always overlays
-// the underlying memory (KERNAL ROM or RAM depending on rom_enabled state).
-// Modelled as a masked sub-table on the $FF page with one region:
-//   (addr & 0xFFC0) == 0xFF00  →  TED MMIO handler
-//   else                       →  base chip (KERNAL or RAM)
-//
-// The $FD00–$FDFF range is an I/O page with PIO, ACIA, and other peripherals.
-// With PageBits=8, $FD is its own 256 B page → direct MMIO handler, no sub-table.
-//
-struct C16BusSpec {
-    using AddrType = uint16_t;
-    static constexpr size_t AddressBits        = 16;
-    static constexpr size_t PageBits           = 8;    // 256 B pages → 256 pages
-    static constexpr size_t NumViewers         = 2;    // CPU=0, TED video=1
-    static constexpr size_t MaxChipId          = 15;   // RAM + BASIC + KERNAL + function ROMs
-    static constexpr size_t MaxWriteChipId     = 15;
-    static constexpr bool   EnableMmio         = true;
-    static constexpr size_t MaxMmioHandlers    = 4;    // TED, PIO, ACIA, spare
-    static constexpr size_t MaxMaskedSubTables = 1;    // $FF page TED overlay
-    static constexpr size_t MaxMaskedRegions   = 2;    // TED regs + ROM/RAM latch
-
-    enum ViewerId : size_t { Cpu = 0, TedVideo = 1 };
-};
-
 // ── NES / Famicom — CPU bus ───────────────────────────────────────────────────
 //
 // Chip ids 0–512 address up to 512 KB of PRG-ROM in 1 KB pages.
@@ -141,7 +111,6 @@ struct MinimalBusSpec {
 using C64Bus    = MemoryBus<C64BusSpec>;
 using NesCpuBus = MemoryBus<NesCpuBusSpec>;
 using NesPpuBus = MemoryBus<NesPpuBusSpec>;
-using C16Bus    = MemoryBus<C16BusSpec>;
 
 using CpuView_C64 = BusView<C64BusSpec, C64BusSpec::Cpu>;
 using VicView_C64 = BusView<C64BusSpec, C64BusSpec::Vic>;
