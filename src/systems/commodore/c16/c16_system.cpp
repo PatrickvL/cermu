@@ -16,8 +16,6 @@
 #include "devices/keyboard/commodore_keyboard_device.hpp"
 #include "devices/storage/drive_1541.hpp"
 #include "devices/storage/datasette_1530.hpp"
-// CPU is now a native ChipBase (via fam65xx_t<Traits> inheritance)
-#include "core/chip.hpp"
 #include "systems/commodore/prg_content_analysis.hpp"
 #include <cstring>
 #include <cstdio>
@@ -576,6 +574,7 @@ bool Commodore264System<V>::initialize() {
     basic_rom_  = board_.chip_as<ROMChip>(c264_slot::kBasicRom);
     kernal_rom_ = board_.chip_as<ROMChip>(c264_slot::kKernalRom);
     cpu_        = board_.cpu<CSG7501>();
+    io_         = board_.chip_as<c264_io_page_t>(c264_slot::kIoPage);
     
     // Load ROMs using common ROM loader
     bool roms_loaded = load_roms();
@@ -653,14 +652,11 @@ template<C264SeriesVariant V>
 void Commodore264System<V>::reset() {
     printf("%s: Resetting system\n", Traits::name);
     
-    // Reset all manifest chips (CPU, TED, RAM/ROM are no-op)
+    // Reset all manifest chips (CPU, TED, I/O page, RAM/ROM are no-op)
     board_.reset_chips();
     
     // Reset bus state
     bus_state_ = C264_BUS_DEFAULT_STATE;
-    
-    // Reset PIO2 (keyboard row select — all deselected)
-    pio2_kbd_ = 0xFF;
     
     // Reset keyboard matrix
     if (keyboard_) {
@@ -1007,70 +1003,26 @@ bool Commodore264System<V>::load_roms() {
 // BUS MEMORY SERVICE
 // ============================================================================
 
-// Page $FD — I/O area ($FD00-$FDFF): PIO2, ACIA, debug cart.
-// Handled separately because these are active I/O ports with side effects.
-template<C264SeriesVariant V>
-bus_state_t Commodore264System<V>::io_tick(bus_state_t s) {
-    uint16_t addr = BUS_GET_ADDR(s);
-
-    if (BUS_GET_BIT(s, BUS_RW_BIT)) {
-        // Read
-        uint8_t data = 0xFF;
-        if (addr >= 0xFD30 && addr <= 0xFD3F) {
-            // PIO2 (6529B) — keyboard row select register
-            data = pio2_kbd_;
-        }
-        // Other I/O ports not yet implemented (ACIA, PIO1, ROM banking)
-        BUS_SET_DATA(s, data);
-    } else {
-        // Write
-        uint8_t data = BUS_GET_DATA(s);
-        if (addr >= 0xFD30 && addr <= 0xFD3F) {
-            // PIO2 (6529B) — keyboard row select register
-            pio2_kbd_ = data;
-        }
-        // Debug cart register at $FDCF (VICE convention for Plus4 test programs)
-        else if (unlikely(debug_cart_enabled_ && addr == 0xFDCF)) {
-            debug_cart_value_ = data;
-            debug_cart_written_ = true;
-        }
-        // Other I/O ports not yet implemented (ACIA, PIO1, ROM banking)
-    }
-    return s;
-}
-
-// Unified bus dispatch: TED and I/O are handled manually (sub-page MMIO),
-// everything else goes through MemoryBus page-pointer dispatch.
+// Unified bus dispatch: TED ($FF00-$FF3F) and I/O ($FD00-$FDFF) are handled
+// by MMIO handlers registered via the manifest.  ROM banking side-effect
+// from TED register writes ($FF3E/$FF3F) is detected by snapshotting
+// rom_enabled before the tick and comparing after.
 template<C264SeriesVariant V>
 bus_state_t Commodore264System<V>::mem_tick(bus_state_t s) {
-    uint16_t addr = BUS_GET_ADDR(s);
-    uint8_t page = addr >> 8;
-
-    // TED registers at $FF00-$FF3F (always visible, both reads and writes)
-    if (page == 0xFF && addr <= 0xFF3F) {
-        if (BUS_GET_BIT(s, BUS_RW_BIT)) {
-            return ted_->registers_read(s);
-        } else {
-            bool old_rom = ted_->rom_enabled;
-            s = ted_->registers_write(s);
-            if (ted_->rom_enabled != old_rom)
-                update_rom_banking();
-            return s;
-        }
-    }
-
-    // I/O area $FD00-$FDFF (always visible — PIO2, ACIA, debug cart)
-    if (page == 0xFD)
-        return io_tick(s);
-
-    // Everything else: MemoryBus page-pointer dispatch
-    return bus_.tick(0, s);
+    bool old_rom = ted_->rom_enabled;
+    s = bus_.tick(0, s);
+    if (ted_->rom_enabled != old_rom)
+        update_rom_banking();
+    return s;
 }
 
 // ── RAM mirroring ────────────────────────────────────────────────────────
 // Called after apply() and when ram_size_ changes.
 // For 16KB models, every 16KB of address space mirrors the same RAM.
 // For 64KB models, the apply() default mapping is already correct for writes.
+//
+// Pages $FD and $FF are MMIO sentinels (I/O page and TED sub-table) set by
+// apply() — we must not overwrite them with RAM chip ids.
 template<C264SeriesVariant V>
 void Commodore264System<V>::setup_ram_mirroring() {
     constexpr size_t kRamBase = kC264Chips.base_id(c264_slot::kRam, 8);
@@ -1079,6 +1031,8 @@ void Commodore264System<V>::setup_ram_mirroring() {
         // 16KB: page N maps to RAM page (N & mirror_mask)
         uint8_t mirror_mask = uint8_t((ram_size_ >> 8) - 1);
         for (uint16_t p = 0; p < 256; ++p) {
+            // Preserve MMIO sentinel pages set by apply()
+            if (p == 0xFD || p == 0xFF) continue;
             auto id = typename Bus::ChipId(kRamBase + (p & mirror_mask));
             bus_.set_write_page(0, p, typename Bus::WriteChipId(id));
             bus_.set_read_page(0, p, id);
@@ -1092,29 +1046,48 @@ void Commodore264System<V>::setup_ram_mirroring() {
 // ── ROM banking ──────────────────────────────────────────────────────────
 // Switches read pages $80-$FF between ROM and RAM based on TED latch state.
 // Write pages always point to RAM (ROM is read-only from the CPU's view).
+//
+// Pages with MMIO sentinels are handled specially:
+//   $FD — full-page MMIO (I/O chip): never touched by banking.
+//   $FF — MaskedSubTable (TED sub-page): base updated via set_masked_base().
 template<C264SeriesVariant V>
 void Commodore264System<V>::update_rom_banking() {
     constexpr size_t kRamBase    = kC264Chips.base_id(c264_slot::kRam, 8);
     constexpr size_t kBasicBase  = kC264Chips.base_id(c264_slot::kBasicRom, 8);
     constexpr size_t kKernalBase = kC264Chips.base_id(c264_slot::kKernalRom, 8);
-    using CId = typename Bus::ChipId;
+    using CId  = typename Bus::ChipId;
+    using WCId = typename Bus::WriteChipId;
 
     if (ted_ && ted_->rom_enabled) {
         // BASIC ROM visible at $8000-$BFFF (pages $80-$BF)
         bus_.fill_read_pages(0, 0x80, 0x40, CId(kBasicBase));
-        // KERNAL ROM visible at $C000-$FFFF (pages $C0-$FF)
-        // Note: page $FD (I/O) and $FF00-$FF3F (TED) are handled before the
-        // bus in mem_tick(), so these page pointers only matter for the
-        // non-special addresses on those pages (e.g. $FF40-$FFFF → KERNAL).
-        bus_.fill_read_pages(0, 0xC0, 0x40, CId(kKernalBase));
+        // KERNAL ROM visible at $C000-$FCFF (pages $C0-$FC — skip $FD MMIO)
+        bus_.fill_read_pages(0, 0xC0, 0x3D, CId(kKernalBase));
+        // KERNAL ROM page $FE ($FE00-$FEFF)
+        bus_.set_read_page(0, 0xFE, CId(kKernalBase + 0x3E));
+        // Page $FF MaskedSubTable base → KERNAL ROM page $3F ($FF40-$FFFF fallback)
+        bus_.set_masked_base(0, 0, CId(kKernalBase + 0x3F),
+                             WCId(kRamBase + 0xFF));
     } else {
         // RAM visible: switch read pages back to RAM
         if (ram_size_ >= 65536) {
-            bus_.fill_read_pages(0, 0x80, 0x80, CId(kRamBase + 0x80));
+            // Pages $80-$FC
+            bus_.fill_read_pages(0, 0x80, 0x7D, CId(kRamBase + 0x80));
+            // Page $FE
+            bus_.set_read_page(0, 0xFE, CId(kRamBase + 0xFE));
+            // Page $FF MaskedSubTable base → RAM page $FF
+            bus_.set_masked_base(0, 0, CId(kRamBase + 0xFF),
+                                 WCId(kRamBase + 0xFF));
         } else {
             uint8_t mirror_mask = uint8_t((ram_size_ >> 8) - 1);
-            for (uint16_t p = 0x80; p < 0x100; ++p)
+            for (uint16_t p = 0x80; p < 0x100; ++p) {
+                if (p == 0xFD || p == 0xFF) continue;
                 bus_.set_read_page(0, p, CId(kRamBase + (p & mirror_mask)));
+            }
+            // Page $FF MaskedSubTable base → mirrored RAM
+            bus_.set_masked_base(0, 0,
+                                 CId(kRamBase + (0xFF & mirror_mask)),
+                                 WCId(kRamBase + (0xFF & mirror_mask)));
         }
     }
 }
@@ -1152,7 +1125,7 @@ uint8_t Commodore264System<V>::ted_keyboard_scan(void* user_data, uint8_t column
     // (active-low).  The value written to $FF08 (the 'column' parameter)
     // only controls joystick port selection — the keyboard row select comes
     // from PIO2.  See VICE ted-mem.c ted08_store() for reference.
-    uint8_t row_select = sys->pio2_kbd_;
+    uint8_t row_select = sys->io_ ? sys->io_->pio2_kbd : 0xFF;
     uint8_t result = 0xFF;
     for (int row = 0; row < 8; row++) {
         if (!(row_select & (1 << row))) {

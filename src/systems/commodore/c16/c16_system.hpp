@@ -7,6 +7,7 @@
 #include "chip/memory/rom_chip.hpp"
 #include "chip/video/ted/ted7360.hpp"
 #include "chip/cpu/fam65xx/mos7501.hpp"
+#include "core/chip.hpp"
 
 // C264 series (C16/C116/Plus4) default bus state — derived from CPU.
 // CSG7501 provides: RW, RDY, IRQ, AEC.  (No NMI — NO_NMI_LINE flag.)
@@ -65,6 +66,61 @@ template<> struct C264SeriesVariantTraits<C264SeriesVariant::PLUS4> {
 };
 
 // ============================================================================
+// C264 I/O page chip ($FD00-$FDFF) — PIO2 + debug cart
+// ============================================================================
+//
+// The $FD page on the C264 series contains several I/O registers:
+//   $FD00-$FD0F  PIO1 (MOS 6529B) — keyboard column (active-low latched)
+//   $FD10-$FD1F  ROM bank select (active ROM socket, Plus/4 only)
+//   $FD30-$FD3F  PIO2 (MOS 6529B) — keyboard row select register
+//   $FDCF        Debug cart register (VICE convention for test programs)
+//
+// This chip owns the PIO2 and debug-cart state.  Dispatched via full-page
+// MMIO from MemoryBus — no manual io_tick() required.
+
+class c264_io_page_t : public ChipBase {
+public:
+    c264_io_page_t() : ChipBase(ChipInfo{"C264 I/O Page", "I/O"}) {
+        category_ = "I/O";
+    }
+
+    bool has_mmio() const override { return true; }
+
+    bus_state_t on_bus_read(bus_state_t bus) noexcept override {
+        uint16_t addr = BUS_GET_ADDR(bus);
+        uint8_t data = 0xFF;
+        if ((addr & 0xFFF0) == 0xFD30) {
+            data = pio2_kbd;
+        }
+        BUS_SET_DATA(bus, data);
+        return bus;
+    }
+
+    bus_state_t on_bus_write(bus_state_t bus) noexcept override {
+        uint16_t addr = BUS_GET_ADDR(bus);
+        uint8_t data = BUS_GET_DATA(bus);
+        if ((addr & 0xFFF0) == 0xFD30) {
+            pio2_kbd = data;
+        } else if (debug_cart_enabled && addr == 0xFDCF) {
+            debug_cart_value = data;
+            debug_cart_written = true;
+        }
+        return bus;
+    }
+
+    void reset() override {
+        pio2_kbd = 0xFF;
+        debug_cart_written = false;
+        debug_cart_value = 0;
+    }
+
+    uint8_t pio2_kbd          = 0xFF;   // All rows deselected on reset
+    bool    debug_cart_enabled  = false;
+    bool    debug_cart_written  = false;
+    uint8_t debug_cart_value    = 0;
+};
+
+// ============================================================================
 // C264 chip manifest — declarative memory layout
 // ============================================================================
 //
@@ -72,22 +128,23 @@ template<> struct C264SeriesVariantTraits<C264SeriesVariant::PLUS4> {
 //   $0000-$7FFF  RAM (always)
 //   $8000-$BFFF  BASIC ROM (read, when ROM enabled) / RAM
 //   $C000-$FCFF  KERNAL ROM (read, when ROM enabled) / RAM
-//   $FD00-$FDFF  I/O area (PIO2, ACIA — handled manually, not in manifest)
+//   $FD00-$FDFF  I/O area — full-page MMIO (c264_io_page_t)
 //   $FE00-$FEFF  KERNAL ROM (cont.) / RAM
-//   $FF00-$FF3F  TED registers (always visible — handled manually)
-//   $FF40-$FFFF  KERNAL ROM (cont.) / RAM
+//   $FF00-$FF3F  TED registers — sub-page MMIO via MaskedSubTable
+//   $FF40-$FFFF  KERNAL ROM (cont.) / RAM — MaskedSubTable base
 //
 // ROM banking is controlled by TED latch writes ($FF3E/$FF3F).
 // RAM size varies: 16 KB (C16/C116) with mirroring, 64 KB (Plus/4).
-// Page $FD and TED registers are dispatched before the bus in mem_tick().
 //
 inline constexpr auto kC264Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
     Slot<ROMChip>{0x8000, 16384, 0, "BASIC ROM"},
     Slot<ROMChip>{0xC000, 16384, 0, "KERNAL ROM"},
-    // Non-bus chips — factory-created or pre-bound, not address-decoded
-    Slot<CSG7501>   {0, 0, 0, "CSG 7501"},
-    Slot<ted7360_t> {0, 0, 0, "TED 7360"}
+    // Non-bus chip — factory-created, not address-decoded
+    Slot<CSG7501>       {0, 0, 0, "CSG 7501"},
+    // MMIO chips — address-decoded by MemoryBus
+    Slot<ted7360_t>     {0xFF00, 0, 0xFFC0, "TED 7360"},   // sub-page: (addr & 0xFFC0) == 0xFF00
+    Slot<c264_io_page_t>{0xFD00, 0, 0,      "I/O Page"}    // full-page: $FD00-$FDFF
 );
 
 namespace c264_slot {
@@ -95,6 +152,7 @@ namespace c264_slot {
     inline constexpr size_t kBasicRom  = 1;
     inline constexpr size_t kKernalRom = 2;
     inline constexpr size_t kTed       = 4;
+    inline constexpr size_t kIoPage    = 5;
 }
 
 struct C264BusTraits {
@@ -176,10 +234,10 @@ public:
     // Debug cart ($FDCF) — VICE convention for Plus4 test programs.
     // When enabled, writes to $FDCF are captured instead of being silently ignored.
     // $00 = test passed, $FF = test failed (matching C64 $D7FF convention).
-    void    enable_debug_cart(bool enable) { debug_cart_enabled_ = enable; }
-    bool    debug_cart_written() const     { return debug_cart_written_; }
-    uint8_t debug_cart_value() const       { return debug_cart_value_; }
-    void    clear_debug_cart()             { debug_cart_written_ = false; debug_cart_value_ = 0; }
+    void    enable_debug_cart(bool enable) { if (io_) io_->debug_cart_enabled = enable; }
+    bool    debug_cart_written() const     { return io_ && io_->debug_cart_written; }
+    uint8_t debug_cart_value() const       { return io_ ? io_->debug_cart_value : 0; }
+    void    clear_debug_cart()             { if (io_) { io_->debug_cart_written = false; io_->debug_cart_value = 0; } }
 
     // File probe — returns confidence + optimal configuration for this TED variant
     static SystemProbeResult probe_file_static(
@@ -206,15 +264,8 @@ private:
     RAMChip* ram_         = nullptr;  // Up to 64KB RAM (C16/C116 use 16KB, Plus/4 uses 64KB)
     ROMChip* basic_rom_   = nullptr;  // BASIC ROM $8000-$BFFF (16KB)
     ROMChip* kernal_rom_  = nullptr;  // Kernal ROM $C000-$FFFF (16KB)
+    c264_io_page_t* io_   = nullptr;  // I/O page chip ($FD00-$FDFF) — MMIO, owned by board_
     size_t  ram_size_ = 16384;           // Cached configured RAM size (updated in apply_configuration)
-
-    // PIO2 ($FD30) — keyboard row select (active-low)
-    uint8_t pio2_kbd_ = 0xFF;            // All rows deselected on reset
-
-    // Debug cart state (enabled by test framework, captures writes to $FDCF)
-    bool    debug_cart_enabled_ = false;
-    bool    debug_cart_written_ = false;
-    uint8_t debug_cart_value_   = 0;
 
     // System state
     bool initialized_;
@@ -230,7 +281,6 @@ private:
     // Helper methods
     bool load_roms();
     bus_state_t mem_tick(bus_state_t s);
-    bus_state_t io_tick(bus_state_t s);         // $FD00-$FDFF I/O dispatch
     void setup_ram_mirroring();                 // configure page pointers for current ram_size_
     void update_rom_banking();                  // switch read pages on rom_enabled change
     void setup_ports();
