@@ -77,9 +77,6 @@ void pla_906114_01_set_cpu_address_bank(pla_906114_01_t* pla, uint8_t addr_high)
 // VIC address bus input (combines VA13-VA12)
 void pla_906114_01_set_vicii_address_bank(pla_906114_01_t* pla, uint8_t va_high);
 
-// Convert PLA output signals to CHIP values
-uint8_t pla_906114_01_outputs_to_chip(pla_906114_01_t* pla);
-
 // Tick the PLA with a bus state — extracts A12-A15, R/W, AEC, BA from
 // bus_state and evaluates all product-term outputs.  Banking inputs
 // (LORAM, HIRAM, CHAREN, EXROM, GAME) and VIC-specific inputs (VA12,

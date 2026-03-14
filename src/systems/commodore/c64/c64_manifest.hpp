@@ -1,0 +1,118 @@
+#pragma once
+// =============================================================================
+// c64_manifest.hpp — C64 declarative chip manifest and bus configuration
+// =============================================================================
+//
+// Defines the Commodore 64 chip memory layout for the manifest-driven
+// Board<C64BusSpec> + MemoryBus<C64BusSpec> architecture.
+//
+// Chip layout (buffer-backed, 4 KB page size):
+//   Slot 0: RAM      — 64 KB at $0000  (ID 0)
+//   Slot 1: ROML     —  8 KB at $8000  (ID 1)   Cartridge ROM Low
+//   Slot 2: ROMH     —  8 KB at $A000  (ID 2)   Cartridge ROM High
+//   Slot 3: BASIC    —  8 KB at $A000  (ID 3)   BASIC ROM
+//   Slot 4: KERNAL   —  8 KB at $E000  (ID 4)   KERNAL ROM
+//   Slot 5: CHARROM  —  4 KB at $D000  (ID 5)   Character ROM
+//
+// All buffer chips use overlay_group=1 so that apply() only populates
+// chip_info (Phase 0) without mapping any pages (Phase 1).  Page tables
+// are fully PLA-driven — each of the 32 banking modes is a ModeSnapshot
+// that programs the correct chip at each 4 KB bank.
+//
+// I/O dispatch ($D000–$DFFF):
+//   An IndexedSubTable with 4 bits (16 × 256 B entries) routes accesses
+//   to MMIO handlers for VIC-II, SID, Color RAM, CIA1, CIA2, I/O1, I/O2.
+//   In PLA modes where I/O is visible, page $D points to the sub-table
+//   sentinel; in modes with CHARROM or RAM, it points to the buffer chip.
+//
+// =============================================================================
+
+#include "core/chip_manifest.hpp"
+#include "core/memory_bus/configs.hpp"
+#include "core/board.hpp"
+#include "chip/memory/memory_chip.hpp"
+#include "chip/cpu/fam65xx/mos6510.hpp"
+#include "chip/video/vic_ii/vicii_common.hpp"
+#include "chip/sound/mos6581.hpp"
+#include "chip/memory/mos2114.hpp"
+#include "chip/io/mos6526.hpp"
+#include "systems/commodore/c64/c64_chips.hpp"
+
+
+// =============================================================================
+// §1  Chip Manifest
+// =============================================================================
+//
+// bank_size = chip_size so each chip consumes exactly one chip ID.
+// addr_mask = 0 (not mirrored) → BusMap derives mask from bank_size.
+// overlay_group = 1 for all buffer chips → Phase 1 skips them.
+//
+
+inline constexpr auto kC64Chips = make_chip_manifest(
+    // ── Buffer-backed chips (PLA-switched) ───────────────────────────────
+    //                       base    size   mask  label         cond  bank_sz  ovl
+    Slot<RAMChip>  {0x0000, 65536,    0, "RAM",         0, 65536, 1},  // Slot 0
+    Slot<ROMChip>  {0x8000,  8192,    0, "ROML",        0,  8192, 1},  // Slot 1
+    Slot<ROMChip>  {0xA000,  8192,    0, "ROMH",        0,  8192, 1},  // Slot 2
+    Slot<ROMChip>  {0xA000,  8192,    0, "BASIC ROM",   0,  8192, 1},  // Slot 3
+    Slot<ROMChip>  {0xE000,  8192,    0, "KERNAL",      0,  8192, 1},  // Slot 4
+    Slot<ROMChip>  {0xD000,  4096,    0, "CHARROM",     0,  4096, 1},  // Slot 5
+
+    // ── Non-bus chips (CPU, I/O — no buffer in flat mem) ─────────────────
+    Slot<MOS6510>  {0, 0, 0, "MOS 6510"},       // Slot 6 — CPU
+    Slot<vicii_t>  {0, 0, 0, "VIC-II"},          // Slot 7
+    Slot<mos6581_t>{0, 0, 0, "SID"},             // Slot 8
+    Slot<MOS2114>  {0, 0, 0, "Color RAM"},       // Slot 9
+    Slot<mos6526_t>{0, 0, 0, "CIA1"},            // Slot 10
+    Slot<mos6526_t>{0, 0, 0, "CIA2"}             // Slot 11
+);
+
+// =============================================================================
+// §2  Manifest Slot Indices
+// =============================================================================
+
+namespace c64_slots {
+    inline constexpr size_t kRam     = 0;
+    inline constexpr size_t kRoml    = 1;
+    inline constexpr size_t kRomh    = 2;
+    inline constexpr size_t kBasic   = 3;
+    inline constexpr size_t kKernal  = 4;
+    inline constexpr size_t kCharrom = 5;
+    inline constexpr size_t kCpu     = 6;
+    inline constexpr size_t kVicii   = 7;
+    inline constexpr size_t kSid     = 8;
+    inline constexpr size_t kColram  = 9;
+    inline constexpr size_t kCia1    = 10;
+    inline constexpr size_t kCia2    = 11;
+}
+
+// =============================================================================
+// §3  Chip IDs (constexpr, derived from manifest)
+// =============================================================================
+//
+// These replace the legacy CHIP_ROML=0,CHIP_RAM=9 strategic numbering.
+// MemoryBus uses chip_info[id].base + (addr & mask) — no arithmetic tricks.
+//
+
+namespace c64_chip_ids {
+    inline constexpr size_t kRam     = kC64Chips.base_id(c64_slots::kRam,     12);  // 0
+    inline constexpr size_t kRoml    = kC64Chips.base_id(c64_slots::kRoml,    12);  // 1
+    inline constexpr size_t kRomh    = kC64Chips.base_id(c64_slots::kRomh,    12);  // 2
+    inline constexpr size_t kBasic   = kC64Chips.base_id(c64_slots::kBasic,   12);  // 3
+    inline constexpr size_t kKernal  = kC64Chips.base_id(c64_slots::kKernal,  12);  // 4
+    inline constexpr size_t kCharrom = kC64Chips.base_id(c64_slots::kCharrom, 12);  // 5
+}
+
+// =============================================================================
+// §4  Type Aliases
+// =============================================================================
+
+using C64Bus      = MemoryBus<C64BusSpec>;
+using C64Board    = Board<C64BusSpec>;
+using C64Snapshot = C64Bus::Snapshot;
+using C64PT       = PackingTraits<C64BusSpec>;
+using C64ChipId   = C64PT::ChipId;
+using C64WriteId  = C64PT::WriteChipId;
+
+// Number of PLA banking modes (5-bit: LORAM, HIRAM, CHAREN, EXROM, GAME)
+inline constexpr size_t kC64NumPlaModes = 32;

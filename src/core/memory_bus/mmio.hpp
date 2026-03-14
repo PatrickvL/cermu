@@ -16,7 +16,7 @@
 
 
 struct MmioHandler {
-    using HandlerFn = bus_state_t (*)(void* ctx, bus_state_t bus) noexcept;
+    using HandlerFn = bus_state_t (*)(void* ctx, bus_state_t bus);
 
     void*     ctx      = nullptr;
     HandlerFn on_read  = nullptr;

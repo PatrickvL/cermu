@@ -84,17 +84,17 @@ static inline uint32_t fb_pixel(const uint32_t* fb, int width, int x, int y) {
 
 // Write a VIC-II register through the bus (triggers side effects)
 static void write_vic(C64System* c64, uint8_t reg, uint8_t val) {
-    c64->bus.write_memory(0xD000 + (reg & 0x3F), val);
+    c64->write_memory(0xD000 + (reg & 0x3F), val);
 }
 
 // Read a VIC-II register through the bus
 static uint8_t read_vic(C64System* c64, uint8_t reg) {
-    return c64->bus.read_memory(0xD000 + (reg & 0x3F));
+    return c64->read_memory(0xD000 + (reg & 0x3F));
 }
 
 // Write to color RAM ($D800-$DBFF)
 static void write_colorram(C64System* c64, uint16_t offset, uint8_t val) {
-    c64->bus.write_memory(0xD800 + offset, val);
+    c64->write_memory(0xD800 + offset, val);
 }
 
 // Write directly to RAM (bypasses banking/IO)
@@ -146,8 +146,8 @@ static void reset_vic_state(C64System* c64) {
     }
 
     // CIA2 port A: default VIC bank 0 ($0000-$3FFF)
-    c64->bus.write_memory(0xDD00,
-        (c64->bus.read_memory(0xDD00) & 0xFC) | 0x03);
+    c64->write_memory(0xDD00,
+        (c64->read_memory(0xDD00) & 0xFC) | 0x03);
 }
 
 // Set up custom charset at $3000 in RAM (VIC bank 0) and point $D018 to it.
@@ -872,8 +872,8 @@ static void test_vic_bank(C64System* c64, System* sys, check_ctx_t& ctx) {
 
     // Switch to VIC bank 1 ($4000-$7FFF)
     // CIA2 $DD00 bits 0-1: %10 → bank 1 ($4000)
-    uint8_t dd00 = c64->bus.read_memory(0xDD00);
-    c64->bus.write_memory(0xDD00, (dd00 & 0xFC) | 0x02);
+    uint8_t dd00 = c64->read_memory(0xDD00);
+    c64->write_memory(0xDD00, (dd00 & 0xFC) | 0x02);
 
     // Screen in bank 1 at $4000 + screen offset
     // $D018 screen offset 0 → $4000
@@ -900,7 +900,7 @@ static void test_vic_bank(C64System* c64, System* sys, check_ctx_t& ctx) {
                 "VIC bank 1: custom char at $5000 = white");
 
     // Restore bank 0
-    c64->bus.write_memory(0xDD00, (dd00 & 0xFC) | 0x03);
+    c64->write_memory(0xDD00, (dd00 & 0xFC) | 0x03);
 }
 
 // P20: Invalid mode — ECM+BMM produces black in display area

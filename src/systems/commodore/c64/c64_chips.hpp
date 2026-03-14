@@ -2,8 +2,6 @@
 
 #include <cstddef>
 #include <cstdint>
-// Forward declaration for bus structure
-struct c64_bus_t;
 
 // ============================================================================
 // C64 CHIP MANAGEMENT - Basic CHIP Definitions and Management
@@ -72,8 +70,8 @@ struct chip_description_t {
 // Basic CHIP Function Declarations
 // =============================
 
-// Fetch descriptor for a given CHIP from registered chips or synthesize for I/O/special
-bool c64_chips_get_description(const c64_bus_t* bus, uint8_t chip, chip_description_t* out);
+// Fetch descriptor for a given CHIP from the static lookup table
+bool c64_chips_get_description(uint8_t chip, chip_description_t* out);
 
 // Map CHIP to a concise type/title string (not address/size)
 const char* c64_chips_to_title(uint8_t chip);
@@ -81,24 +79,4 @@ const char* c64_chips_to_title(uint8_t chip);
 // Utility: Convert a size in bytes to a human-readable string ("256B", "4KB", etc.)
 const char* c64_chips_size_to_str(size_t size);
 
-// =============================
-// CHIP Encoding/Decoding Functions
-// =============================
-
-// Encoding macros for packing read/write CHIPs into single byte
-// Order: I/O pages (0-15), then writable chips (16-19), then read-only (20-24)
-// Non-I/O CHIPs 16-24 become 1-9 in encoded form, which fits in 4 bits.
-// Writable CHIPs 16-19 become 1-4 in encoded form, which fits in 3 bits.
-// Output byte format: [7:5] write code (3 bits), [4] unused (1 bit), [3:0] read code (4 bits)
-static inline uint8_t encode_chip_rw(uint8_t read_chip, uint8_t write_chip) {
-    uint8_t encoded = read_chip | (write_chip << 4);
-    return encoded;
-}
-
-static inline uint8_t decode_read_chip(uint8_t encoded) {
-    return encoded & 0x0F; // Lower 4 bits are the read chip
-}
-
-static inline uint8_t decode_write_chip(uint8_t encoded) {
-    return (encoded >> 4) & 0x0F; // Upper 4 bits are the write chip
-}
+// (Encoding/decoding functions removed — MemoryBus uses separate read/write chip IDs)
