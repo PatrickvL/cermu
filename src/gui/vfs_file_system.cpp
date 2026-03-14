@@ -28,28 +28,6 @@
 #include <ctime>
 #include <algorithm>
 #include <fstream>
-#include <unordered_map>
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/// Disambiguate duplicate fileNameExt values in a scan result so that IGFD
-/// never sees two entries with the same label (which causes duplicate ImGui
-/// IDs).  Appends " (2)", " (3)", … to repeated names.  The first
-/// occurrence keeps its original name.  Skips ".." since it should only
-/// appear once (ensured by not emitting it from the OS scan).
-static void deduplicate_names(std::vector<IGFD::FileInfos>& entries) {
-    std::unordered_map<std::string, int> seen;
-    for (auto& e : entries) {
-        if (e.fileNameExt == ".." || e.fileNameExt == ".") continue;
-        int& count = seen[e.fileNameExt];
-        ++count;
-        if (count > 1) {
-            e.fileNameExt += " (" + std::to_string(count) + ")";
-        }
-    }
-}
 
 // ============================================================================
 // Static state
@@ -596,7 +574,6 @@ std::vector<IGFD::FileInfos> VfsFileSystem::scan_vfs_entries(
         res.push_back(info);
     }
 
-    deduplicate_names(res);
     return res;
 }
 
