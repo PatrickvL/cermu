@@ -138,15 +138,10 @@ template<KC85Variant V> void KC85System<V>::reset() {
 
 template<KC85Variant V>
 void KC85System<V>::configure_bus_memory_map() {
-    // KC85/4: limit IRM Phase 1 mapping to one 16 KB bank ($80-$BF).
-    // The full 64 KB buffer is still available for select_bank_at().
-    if constexpr (Traits::has_extended_video) {
-        constexpr size_t kIrmSlot = 1;
-        board_.set_effective_size(kIrmSlot, 16384);
-    }
-
     // apply() maps base-layer chips (RAM, plus IRM bank 0 for KC85/4) and
     // skips overlay_group > 0 slots (IRM for /2-/3, ROMs for all variants).
+    // KC85/4 IRM effective_size=16384 limits Phase 1 to one 16 KB bank;
+    // the full 64 KB buffer is still available for select_bank_at().
     board_.apply(bus_);
 
     // Build overlay snapshots from the manifest's overlay_group tags.

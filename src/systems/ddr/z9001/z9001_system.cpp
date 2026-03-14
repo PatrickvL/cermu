@@ -66,12 +66,6 @@ bool Z9001System<V>::initialize() {
 
     // ── Create chips via factory, wire the bus ────────────────────────
     board_.create_chips(&pins_);
-    if constexpr (V == Z9001Variant::KC87) {
-        // KC87 allocates 64 KB RAM but real hardware has 48 KB ($0000-$BFFF).
-        // Limit Phase 1 mapping so write pages above $C000 are only set by
-        // Color/Video RAM (not the full 64 KB RAM pool).
-        board_.set_effective_size(0, z9001_constants::RAM_SIZE_KC87);
-    }
     board_.apply(bus_);
 
     // Retrieve typed pointers for chips accessed after initialize()
@@ -130,9 +124,8 @@ template<Z9001Variant V> void Z9001System<V>::reset() {
 
 template<Z9001Variant V>
 void Z9001System<V>::configure_bus_memory_map() {
-    // KC87 RAM trimming is handled by set_effective_size() before apply()
-    // in initialize().  Nothing to do here.
-    // Z9001: RAM is exactly 16 KB, manifest allocates exactly 16 KB — no trimming needed.
+    // KC87 RAM trimming is now declarative (effective_size in manifest).
+    // Z9001: RAM is exactly 16 KB — no trimming needed.
 }
 
 // ============================================================================

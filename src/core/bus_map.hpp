@@ -104,6 +104,7 @@ public:
                 s.label,
                 s.condition,
                 s.overlay_group,
+                s.effective_size,
             });
             byte_off += s.size_bytes;
         }
