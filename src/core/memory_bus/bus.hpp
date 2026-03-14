@@ -417,9 +417,11 @@ public:
     // §1.8  Mode snapshot support
     // =========================================================================
     //
-    // Snapshots capture main-level chip tables only — data-bus masks are fixed
-    // physical wiring and sub-table contents are secondary decode configuration.
-    // Both are orthogonal to bank switching.
+    // Snapshots capture page-level chip tables and masked sub-table bases.
+    // Data-bus masks are fixed physical wiring and sub-table *regions* are
+    // secondary decode configuration — both are orthogonal to bank switching.
+    // Sub-table bases, however, can be banking-dependent (e.g. C264 TED page
+    // ROM/RAM fallthrough) so they are included in the snapshot.
     //
 
     void save_snapshot(size_t viewer_id, Snapshot& snap) const noexcept {
@@ -430,6 +432,12 @@ public:
         if constexpr (!PT::kPackedRW)
             std::memcpy(snap.write_chip_table.data(), v.write_chip_table_.data(),
                         kNumPages * sizeof(BlockId));
+        if constexpr (kHasMaskedSub) {
+            for (size_t i = 0; i < masked_sub_count_[viewer_id]; ++i) {
+                snap.masked_sub_bases[i].read  = masked_subs_[viewer_id][i].base_read;
+                snap.masked_sub_bases[i].write = masked_subs_[viewer_id][i].base_write;
+            }
+        }
     }
 
     void load_snapshot(size_t viewer_id, const Snapshot& snap) noexcept {
@@ -440,6 +448,12 @@ public:
         if constexpr (!PT::kPackedRW)
             std::memcpy(v.write_chip_table_.data(), snap.write_chip_table.data(),
                         kNumPages * sizeof(BlockId));
+        if constexpr (kHasMaskedSub) {
+            for (size_t i = 0; i < masked_sub_count_[viewer_id]; ++i) {
+                masked_subs_[viewer_id][i].base_read  = snap.masked_sub_bases[i].read;
+                masked_subs_[viewer_id][i].base_write = snap.masked_sub_bases[i].write;
+            }
+        }
     }
 
     // =========================================================================

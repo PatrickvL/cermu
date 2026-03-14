@@ -125,15 +125,29 @@ struct ViewerState {
 
 template<BusSpecConcept Spec>
 struct ModeSnapshot {
+    using PT       = PackingTraits<Spec>;
     using V        = ViewerState<Spec>;
     using PageSlot = typename V::PageSlot;
-    using BlockId  = typename PackingTraits<Spec>::BlockId;
+    using BlockId  = typename PT::BlockId;
     static constexpr size_t N = V::kNumPages;
 
     std::array<PageSlot, N> chip_table{};
 
     [[no_unique_address]]
-    std::conditional_t<!PackingTraits<Spec>::kPackedRW,
+    std::conditional_t<!PT::kPackedRW,
         std::array<BlockId, N>,
         std::monostate> write_chip_table{};
+
+    // Masked sub-table bases — captured alongside page tables so banking
+    // snapshots can include sub-table fallthrough chip selection (e.g. C264
+    // TED page ROM/RAM toggle).  Zero storage when no masked subs.
+    struct SubBase {
+        typename PT::ChipId      read  = PT::kNoChipSelected;
+        typename PT::WriteChipId write = PT::kNoChipSelectedWrite;
+    };
+
+    [[no_unique_address]]
+    std::conditional_t<PT::kHasMaskedSub,
+        std::array<SubBase, PT::kMaxMaskedSubs>,
+        std::monostate> masked_sub_bases{};
 };
