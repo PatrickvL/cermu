@@ -524,8 +524,12 @@ bool Commodore264System<V>::apply_configuration() {
     }
     
     // Reconfigure page pointers for new RAM size / banking state
-    if (initialized_)
+    if (initialized_) {
         setup_ram_mirroring();
+        build_banking_snapshots();
+        apply_cpu_banking();
+        apply_ted_video_banking();
+    }
     
     return true;
 }
@@ -545,7 +549,7 @@ bool Commodore264System<V>::initialize() {
     
     // Initialize TED 7360 (video, sound, timers, keyboard scanning)
     // TED requires a descriptor — create it before board_.create_chips() and pre-bind.
-    {
+    {   
         bool is_pal_region = (config_.region_option_index <= 0);
         ted7360_desc_t ted_desc = {};
         ted_desc.is_pal = is_pal_region;
@@ -553,6 +557,8 @@ bool Commodore264System<V>::initialize() {
         ted_desc.keyboard_user_data = this;
         ted_desc.mem_read = ted_mem_read;
         ted_desc.mem_read_user_data = this;
+        ted_desc.banking_change = ted_banking_changed;
+        ted_desc.banking_change_user_data = this;
         ted_ = new ted7360_t(ted_desc);
         if (ted_) {
             printf("%s: Created TED 7360 (%s)\n", Traits::name, is_pal_region ? "PAL" : "NTSC");
@@ -632,6 +638,13 @@ bool Commodore264System<V>::initialize() {
     // Set up page pointers for current RAM size and ROM banking state
     setup_ram_mirroring();
 
+    // Pre-compute banking mode snapshots for both viewers
+    build_banking_snapshots();
+
+    // Apply initial banking state (rom_enabled=true after TED reset)
+    apply_cpu_banking();
+    apply_ted_video_banking();
+
     initialized_ = true;
     return true;
 }
@@ -690,6 +703,10 @@ void Commodore264System<V>::reset() {
     // Reset debug cart state (not real hardware, not part of board_.reset_chips())
     debug_cart_written_ = false;
     debug_cart_value_ = 0;
+
+    // Sync page tables to post-reset banking state (rom_enabled=true, video_romsel=0)
+    apply_cpu_banking();
+    apply_ted_video_banking();
 
     // Reset deferred loading state
     reset_load_state();
@@ -1017,15 +1034,14 @@ bool Commodore264System<V>::load_roms() {
 // ============================================================================
 
 // Unified bus dispatch: TED ($FF00-$FF3F), PIO1/PIO2, and ROM bank select
-// are all handled by MMIO handlers registered via the manifest.  Side-effects
-// (ROM banking changes, debug cart writes) are detected after dispatch.
+// are all handled by MMIO handlers registered via the manifest.  Banking
+// changes are callback-driven from TED register writes — no per-tick polling.
 template<C264SeriesVariant V>
 bus_state_t Commodore264System<V>::mem_tick(bus_state_t s) {
-    bool old_rom = ted_->rom_enabled;
     s = bus_.tick(0, s);
-    if (ted_->rom_enabled != old_rom || rom_bank_->dirty) {
+    if (unlikely(rom_bank_->dirty)) {
         rom_bank_->dirty = false;
-        update_rom_banking();
+        apply_cpu_banking();
     }
     // Debug cart capture ($FDCF) — VICE test convention, not real hardware.
     // Writes to unmatched $FD addresses are silently dropped by the bus
@@ -1045,6 +1061,9 @@ bus_state_t Commodore264System<V>::mem_tick(bus_state_t s) {
 //
 // Pages $FD and $FF are MMIO sentinels (I/O page and TED sub-table) set by
 // apply() — we must not overwrite them with RAM chip ids.
+//
+// Sets up both viewer 0 (CPU) and viewer 1 (TED video).
+// Viewer 1 is the TED video fetch path — pure RAM (no MMIO, no sub-tables).
 template<C264SeriesVariant V>
 void Commodore264System<V>::setup_ram_mirroring() {
     constexpr size_t kRamBase = kC264Chips.base_id(c264_slot::kRam, 8);
@@ -1053,65 +1072,116 @@ void Commodore264System<V>::setup_ram_mirroring() {
         // 16KB: page N maps to RAM page (N & mirror_mask)
         uint8_t mirror_mask = uint8_t((ram_size_ >> 8) - 1);
         for (uint16_t p = 0; p < 256; ++p) {
-            // Preserve MMIO sentinel pages set by apply()
-            if (p == 0xFD || p == 0xFF) continue;
-            auto id = typename Bus::ChipId(kRamBase + (p & mirror_mask));
-            bus_.set_write_page(0, p, typename Bus::WriteChipId(id));
-            bus_.set_read_page(0, p, id);
+            // Viewer 0: preserve MMIO sentinel pages set by apply()
+            if (p != 0xFD && p != 0xFF) {
+                auto id = typename Bus::ChipId(kRamBase + (p & mirror_mask));
+                bus_.set_write_page(0, p, typename Bus::WriteChipId(id));
+                bus_.set_read_page(0, p, id);
+            }
+            // Viewer 1 (TED video): no MMIO, pure RAM mirroring on all pages
+            auto vid = typename Bus::ChipId(kRamBase + (p & mirror_mask));
+            bus_.set_read_page(c264_viewer::kTedVideo, p, vid);
         }
+    } else {
+        // 64K: viewer 1 (TED video) maps all 256 pages to RAM
+        for (uint16_t p = 0; p < 256; ++p)
+            bus_.set_read_page(c264_viewer::kTedVideo, p,
+                               typename Bus::ChipId(kRamBase + p));
     }
-
-    // Overlay ROM banking on top of the RAM base
-    update_rom_banking();
 }
 
-// ── ROM banking ──────────────────────────────────────────────────────────
-// Switches read pages $80-$FF between ROM and RAM based on TED latch state.
-// Write pages always point to RAM (ROM is read-only from the CPU's view).
+// ── Banking mode snapshots ───────────────────────────────────────────────
+// Pre-computes all banking modes for both viewers (CPU and TED video).
+// Called once during initialize() and after ram_size_ changes.
 //
-// Pages with MMIO sentinels are handled specially:
-//   $FD — MaskedSubTable (PIO1, PIO2, ROM bank): never touched by banking.
-//   $FF — MaskedSubTable (TED sub-page): base updated via set_masked_base().
+// CPU viewer (0): 2 modes indexed by rom_enabled:
+//   [0] = RAM only (rom_enabled = false)
+//   [1] = ROM overlaid (rom_enabled = true): BASIC $80-$BF, KERNAL $C0-$FE
+//
+// TED video viewer (1): 2 modes indexed by video_romsel ($FF12 bit 2):
+//   [0] = All RAM (video_romsel = 0)
+//   [1] = ROM at $8000+ (video_romsel = 1): BASIC $80-$BF, KERNAL $C0-$FF
+//
 template<C264SeriesVariant V>
-void Commodore264System<V>::update_rom_banking() {
+void Commodore264System<V>::build_banking_snapshots() {
     constexpr size_t kRamBase    = kC264Chips.base_id(c264_slot::kRam, 8);
     constexpr size_t kBasicBase  = kC264Chips.base_id(c264_slot::kBasicRom, 8);
+    constexpr size_t kKernalBase = kC264Chips.base_id(c264_slot::kKernalRom, 8);
+    using CId = typename Bus::ChipId;
+
+    // ── CPU viewer mode 0: RAM only ─────────────────────────────────────
+    // setup_ram_mirroring() left viewer 0 in all-RAM state (with MMIO
+    // sentinels on $FD/$FF preserved).  Snapshot that as mode 0.
+    bus_.save_snapshot(c264_viewer::kCpu, cpu_snapshots_[0]);
+
+    // ── CPU viewer mode 1: ROM overlaid ─────────────────────────────────
+    // Overlay BASIC ROM at $8000-$BFFF and KERNAL ROM at $C000-$FEFF
+    // on top of the current RAM state.  Pages $FD and $FF are sub-table
+    // sentinels and remain unchanged.
+    bus_.fill_read_pages(c264_viewer::kCpu, 0x80, 0x40, CId(kBasicBase));
+    bus_.fill_read_pages(c264_viewer::kCpu, 0xC0, 0x3D, CId(kKernalBase));
+    bus_.set_read_page(c264_viewer::kCpu, 0xFE, CId(kKernalBase + 0x3E));
+    bus_.save_snapshot(c264_viewer::kCpu, cpu_snapshots_[1]);
+
+    // Restore viewer 0 to RAM state (build is non-destructive)
+    bus_.load_snapshot(c264_viewer::kCpu, cpu_snapshots_[0]);
+
+    // ── TED video viewer mode 0: all RAM ────────────────────────────────
+    // setup_ram_mirroring() already set viewer 1 to pure RAM.
+    bus_.save_snapshot(c264_viewer::kTedVideo, ted_snapshots_[0]);
+
+    // ── TED video viewer mode 1: ROM at $8000+ ─────────────────────────
+    // BASIC ROM visible at $8000-$BFFF, KERNAL ROM at $C000-$FFFF.
+    // Pages below $8000 remain RAM (character/screen data lives there).
+    bus_.fill_read_pages(c264_viewer::kTedVideo, 0x80, 0x40, CId(kBasicBase));
+    bus_.fill_read_pages(c264_viewer::kTedVideo, 0xC0, 0x40, CId(kKernalBase));
+    bus_.save_snapshot(c264_viewer::kTedVideo, ted_snapshots_[1]);
+
+    // Restore viewer 1 to RAM state
+    bus_.load_snapshot(c264_viewer::kTedVideo, ted_snapshots_[0]);
+}
+
+// ── Apply CPU banking ────────────────────────────────────────────────────
+// Loads the pre-computed snapshot for the current rom_enabled state.
+// Also updates the MaskedSubTable base for page $FF (TED overlay).
+template<C264SeriesVariant V>
+void Commodore264System<V>::apply_cpu_banking() {
+    constexpr size_t kRamBase    = kC264Chips.base_id(c264_slot::kRam, 8);
     constexpr size_t kKernalBase = kC264Chips.base_id(c264_slot::kKernalRom, 8);
     using CId  = typename Bus::ChipId;
     using WCId = typename Bus::WriteChipId;
 
-    if (ted_ && ted_->rom_enabled) {
-        // BASIC ROM visible at $8000-$BFFF (pages $80-$BF)
-        bus_.fill_read_pages(0, 0x80, 0x40, CId(kBasicBase));
-        // KERNAL ROM visible at $C000-$FCFF (pages $C0-$FC — skip $FD MMIO)
-        bus_.fill_read_pages(0, 0xC0, 0x3D, CId(kKernalBase));
-        // KERNAL ROM page $FE ($FE00-$FEFF)
-        bus_.set_read_page(0, 0xFE, CId(kKernalBase + 0x3E));
-        // Page $FF MaskedSubTable base → KERNAL ROM page $3F ($FF40-$FFFF fallback)
-        bus_.set_masked_base(0, c264_sub::kTedPage, CId(kKernalBase + 0x3F),
+    bool rom_on = ted_ && ted_->rom_enabled;
+    bus_.load_snapshot(c264_viewer::kCpu, cpu_snapshots_[rom_on ? 1 : 0]);
+
+    // Update MaskedSubTable base for page $FF — not captured by snapshot.
+    // When ROM is visible, reads outside TED regs fall through to KERNAL.
+    // When RAM is visible, reads fall through to RAM (possibly mirrored).
+    if (rom_on) {
+        bus_.set_masked_base(0, c264_sub::kTedPage,
+                             CId(kKernalBase + 0x3F),
                              WCId(kRamBase + 0xFF));
     } else {
-        // RAM visible: switch read pages back to RAM
         if (ram_size_ >= 65536) {
-            // Pages $80-$FC
-            bus_.fill_read_pages(0, 0x80, 0x7D, CId(kRamBase + 0x80));
-            // Page $FE
-            bus_.set_read_page(0, 0xFE, CId(kRamBase + 0xFE));
-            // Page $FF MaskedSubTable base → RAM page $FF
-            bus_.set_masked_base(0, c264_sub::kTedPage, CId(kRamBase + 0xFF),
+            bus_.set_masked_base(0, c264_sub::kTedPage,
+                                 CId(kRamBase + 0xFF),
                                  WCId(kRamBase + 0xFF));
         } else {
             uint8_t mirror_mask = uint8_t((ram_size_ >> 8) - 1);
-            for (uint16_t p = 0x80; p < 0x100; ++p) {
-                if (p == 0xFD || p == 0xFF) continue;
-                bus_.set_read_page(0, p, CId(kRamBase + (p & mirror_mask)));
-            }
-            // Page $FF MaskedSubTable base → mirrored RAM
             bus_.set_masked_base(0, c264_sub::kTedPage,
                                  CId(kRamBase + (0xFF & mirror_mask)),
                                  WCId(kRamBase + (0xFF & mirror_mask)));
         }
     }
+}
+
+// ── Apply TED video banking ──────────────────────────────────────────────
+// Loads the pre-computed snapshot for the current video_romsel state.
+// No sub-tables to update — viewer 1 is pure page table.
+template<C264SeriesVariant V>
+void Commodore264System<V>::apply_ted_video_banking() {
+    bool romsel = ted_ && (ted_->regs_[TED_REG_MEM_CTRL] & 0x04) != 0;
+    bus_.load_snapshot(c264_viewer::kTedVideo, ted_snapshots_[romsel ? 1 : 0]);
 }
 
 // ============================================================================
@@ -1161,33 +1231,28 @@ uint8_t Commodore264System<V>::ted_keyboard_scan(void* user_data, uint8_t column
 // TED MEMORY READ CALLBACK
 // ============================================================================
 
+// TED video memory reads go through viewer 1 (pre-computed page table).
+// The active snapshot (ted_snapshots_[0] or [1]) is selected by the
+// banking_change callback when $FF12 bit 2 (video_romsel) changes.
 template<C264SeriesVariant V>
 uint8_t Commodore264System<V>::ted_mem_read(void* user_data, uint16_t address) {
     auto* sys = static_cast<Commodore264System<V>*>(user_data);
+    return sys->bus_.peek_byte(c264_viewer::kTedVideo, address);
+}
 
-    // Video ROM select ($FF12 bit 2) — controls TED's own memory reads
-    // (character generator, bitmap data).  When set, addresses >= $8000
-    // read from ROM; addresses < $8000 fall through to RAM.
-    // On real hardware, ROMSEL only remaps the upper 32KB (A15=1) to ROM;
-    // the lower 32KB (A15=0) always reads RAM regardless of ROMSEL state.
-    // This matters for color/screen attribute fetches whose addresses are
-    // typically below $8000.
-    bool video_romsel = (sys->ted_->regs_[TED_REG_MEM_CTRL] & 0x04) != 0;
+// ============================================================================
+// TED BANKING CHANGE CALLBACK
+// ============================================================================
 
-    if (video_romsel) {
-        if (address >= 0xC000) {
-            return (*sys->kernal_rom_)[address - 0xC000];
-        } else if (address >= 0x8000) {
-            return (*sys->basic_rom_)[address - 0x8000];
-        }
-        // A15=0: fall through to RAM read below
-    }
-
-    // RAM access (mirror for 16KB models: address & 0x3FFF)
-    if (sys->ram_size_ < 65536) {
-        return (*sys->ram_)[address & (sys->ram_size_ - 1)];
-    }
-    return (*sys->ram_)[address & 0xFFFF];
+// Called by TED when rom_enabled or video_romsel changes.
+// Loads the appropriate pre-computed snapshot for the affected viewer.
+template<C264SeriesVariant V>
+void Commodore264System<V>::ted_banking_changed(void* user_data, uint8_t changes) {
+    auto* sys = static_cast<Commodore264System<V>*>(user_data);
+    if (changes & TED_BANK_ROM_LATCH)
+        sys->apply_cpu_banking();
+    if (changes & TED_BANK_VIDEO_ROMSEL)
+        sys->apply_ted_video_banking();
 }
 
 // ============================================================================
