@@ -360,7 +360,6 @@ list(APPEND CHIP_SOURCES
 # System sources
 set(SYSTEM_SOURCES
     # C64 system
-    src/systems/commodore/c64/c64_chips.cpp
     src/systems/commodore/c64/c64_config.cpp
     src/systems/commodore/c64/c64_system.cpp
     src/systems/commodore/c64/c64_kernal_patches.cpp

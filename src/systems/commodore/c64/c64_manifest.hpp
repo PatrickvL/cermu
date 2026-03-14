@@ -36,7 +36,6 @@
 #include "chip/sound/mos6581.hpp"
 #include "chip/memory/mos2114.hpp"
 #include "chip/io/mos6526.hpp"
-#include "systems/commodore/c64/c64_chips.hpp"
 
 
 // =============================================================================
@@ -101,6 +100,70 @@ namespace c64_chip_ids {
     inline constexpr size_t kBasic   = kC64Chips.base_id(c64_slots::kBasic,   12);  // 3
     inline constexpr size_t kKernal  = kC64Chips.base_id(c64_slots::kKernal,  12);  // 4
     inline constexpr size_t kCharrom = kC64Chips.base_id(c64_slots::kCharrom, 12);  // 5
+
+    // Sentinel values for PLA outputs that don't map to buffer chips
+    inline constexpr uint8_t kIo       = 0xFE;  // I/O region ($D000-$DFFF)
+    inline constexpr uint8_t kUnmapped = 0xFF;  // Unmapped / open bus
+
+    // Buffer-backed chip count (for iteration over kRam..kCharrom)
+    inline constexpr size_t kBufferChipCount = 6;
+}
+
+// =============================================================================
+// §3b  Chip Display Helpers (PLA debug GUI)
+// =============================================================================
+
+// All chip IDs that can appear in PLA tables (for legend/iteration)
+inline constexpr uint8_t kC64AllChipIds[] = {
+    uint8_t(c64_chip_ids::kRam),  uint8_t(c64_chip_ids::kRoml),
+    uint8_t(c64_chip_ids::kRomh), uint8_t(c64_chip_ids::kBasic),
+    uint8_t(c64_chip_ids::kKernal), uint8_t(c64_chip_ids::kCharrom),
+    c64_chip_ids::kIo, c64_chip_ids::kUnmapped
+};
+inline constexpr size_t kC64AllChipIdCount = sizeof(kC64AllChipIds) / sizeof(kC64AllChipIds[0]);
+
+// Short chip name for display
+inline const char* c64_chip_title(uint8_t chip_id) {
+    using namespace c64_chip_ids;
+    switch (chip_id) {
+        case kRam:      return "RAM";
+        case kRoml:     return "ROML";
+        case kRomh:     return "ROMH";
+        case kBasic:    return "BASIC";
+        case kKernal:   return "KERNAL";
+        case kCharrom:  return "CHARROM";
+        case kIo:       return "I/O";
+        case kUnmapped: return "-";
+        default:        return "?";
+    }
+}
+
+// Chip descriptor for PLA debug tables
+struct C64ChipInfo {
+    uint16_t base;
+    size_t   size;
+    const char* label;
+};
+
+// Fetch display info for a chip ID.  Returns true if valid.
+inline bool c64_chip_info(uint8_t chip_id, C64ChipInfo* out) {
+    using namespace c64_chip_ids;
+    static constexpr struct { uint16_t base; size_t size; const char* label; } kInfo[] = {
+        {0x0000, 65536, "RAM"},               // kRam     = 0
+        {0x8000,  8192, "Cartridge ROM Low"}, // kRoml    = 1
+        {0xA000,  8192, "Cartridge ROM High"},// kRomh    = 2
+        {0xA000,  8192, "BASIC ROM"},         // kBasic   = 3
+        {0xE000,  8192, "KERNAL ROM"},        // kKernal  = 4
+        {0xD000,  4096, "Character ROM"},     // kCharrom = 5
+    };
+    if (chip_id < kBufferChipCount) {
+        *out = {kInfo[chip_id].base, kInfo[chip_id].size, kInfo[chip_id].label};
+        return true;
+    }
+    if (chip_id == kIo)       { *out = {0xD000, 4096, "I/O"};      return true; }
+    if (chip_id == kUnmapped) { *out = {0, 0, "Unmapped"};         return true; }
+    *out = {0, 0, "?"};
+    return false;
 }
 
 // =============================================================================
