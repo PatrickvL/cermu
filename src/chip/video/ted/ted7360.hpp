@@ -477,6 +477,14 @@ struct ted7360_t : public VideoChipBase {
     bus_state_t registers_write(bus_state_t bus_state);
 
     // ========================================================================
+    // ChipBase MMIO interface — enables Board bus dispatch for TED registers
+    // ========================================================================
+
+    bool has_mmio() const override { return true; }
+    bus_state_t on_bus_read (bus_state_t bus) noexcept override { return registers_read(bus); }
+    bus_state_t on_bus_write(bus_state_t bus) noexcept override { return registers_write(bus); }
+
+    // ========================================================================
     // Public API — IRQ query
     // ========================================================================
 
