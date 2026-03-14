@@ -387,13 +387,13 @@ private:
         return data;
     }
 
-    // Internal rendering functions
-    void increment_scroll_x();
-    void increment_scroll_y();
-    void transfer_address_x();
-    void transfer_address_y();
-    void load_background_shifters();
-    void update_shifters();
+    // Internal rendering functions (defined inline in nes_ppu_clock.inl)
+    inline void increment_scroll_x();
+    inline void increment_scroll_y();
+    inline void transfer_address_x();
+    inline void transfer_address_y();
+    inline void load_background_shifters();
+    inline void update_shifters();
 
     // Flush already-rendered pixels [scanline_flush_x_, cycle-1) with the
     // current pixel_lut_ before a palette or mask change invalidates it.
@@ -420,11 +420,9 @@ private:
             pixel_lut_[i] = active_palette_[palette[pal_mirror_[i]] & 0x3F];
     }
 
-    // Sprite evaluation — monolithic (finds first 8 in-range sprites for
-    // secondary OAM at cycle 257) + per-cycle state machine (sets overflow
-    // flag at the correct dot during cycles 65-256 with buggy behavior).
-    void evaluate_sprites();
-    void sprite_eval_step();
+    // Sprite evaluation (defined inline in nes_ppu_clock.inl)
+    inline void evaluate_sprites();
+    inline void sprite_eval_step();
 
     // Sprite pattern address calculation — returns the low-byte pattern
     // table address for the given sprite slot.  High byte is addr + 8.
@@ -486,5 +484,10 @@ private:
     void register_debug_fields();
 #endif
 };
+
+// Hot-path inline implementations — called 89,342× per NTSC frame.
+// Kept in a separate .inl for readability; included here so the compiler
+// can inline clock() and helpers into the system tick loop.
+#include "chip/video/nes_ppu/nes_ppu_clock.inl"
 
 } // namespace nes_system
