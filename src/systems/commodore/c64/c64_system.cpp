@@ -1799,18 +1799,18 @@ bool C64System::patch_skip_memtest() {
 // PLA Memory Map Generation
 // ============================================================================
 
-// Convert PLA output signals to a CHIP type constant.
-// Used during PLA mode snapshot generation to map hardware decoder outputs
-// to the chip_id_t values used by the MemoryBus page tables.
+// Convert PLA output signals to a manifest chip ID.
+// Returns c64_chip_ids values (0-5 for buffer chips, kIo, kUnmapped).
 static uint8_t pla_906114_01_outputs_to_chip(pla_906114_01_t* pla) {
-    if (!pla->outputs.n_casram)  return CHIP_RAM;
-    if (!pla->outputs.n_basic)   return CHIP_BASIC;
-    if (!pla->outputs.n_kernal)  return CHIP_KERNAL;
-    if (!pla->outputs.n_io)      return CHIP_IO;
-    if (!pla->outputs.n_charrom) return CHIP_CHARROM;
-    if (!pla->outputs.n_roml)    return CHIP_ROML;
-    if (!pla->outputs.n_romh)    return CHIP_ROMH;
-    return CHIP_UNMAPPED;
+    using namespace c64_chip_ids;
+    if (!pla->outputs.n_casram)  return kRam;
+    if (!pla->outputs.n_basic)   return kBasic;
+    if (!pla->outputs.n_kernal)  return kKernal;
+    if (!pla->outputs.n_io)      return kIo;
+    if (!pla->outputs.n_charrom) return kCharrom;
+    if (!pla->outputs.n_roml)    return kRoml;
+    if (!pla->outputs.n_romh)    return kRomh;
+    return kUnmapped;
 }
 
 bool C64System::pla_maps_generate() {
@@ -1825,26 +1825,20 @@ bool C64System::pla_maps_generate() {
     const auto no_chip_rd   = C64ChipId(C64PT::kNoChipSelected);
     const auto no_chip_wr   = C64WriteId(C64PT::kNoChipSelectedWrite);
 
-    // Helper: map PLA output CHIP type → MemoryBus chip id
-    auto pla_to_read_chip = [&](uint8_t pla_chip) -> C64ChipId {
-        switch (pla_chip) {
-            case CHIP_RAM:     return C64ChipId(c64_chip_ids::kRam);
-            case CHIP_BASIC:   return C64ChipId(c64_chip_ids::kBasic);
-            case CHIP_KERNAL:  return C64ChipId(c64_chip_ids::kKernal);
-            case CHIP_CHARROM: return C64ChipId(c64_chip_ids::kCharrom);
-            case CHIP_ROML:    return C64ChipId(c64_chip_ids::kRoml);
-            case CHIP_ROMH:    return C64ChipId(c64_chip_ids::kRomh);
-            case CHIP_IO:      return io_sub_read;
-            default:           return no_chip_rd;  // CHIP_UNMAPPED
-        }
+    // Map PLA output chip ID → MemoryBus read chip.
+    // Buffer chip IDs (0-5) map directly; kIo→sub-table, kUnmapped→no-chip.
+    auto pla_to_read_chip = [&](uint8_t chip) -> C64ChipId {
+        if (chip == c64_chip_ids::kIo)       return io_sub_read;
+        if (chip == c64_chip_ids::kUnmapped) return no_chip_rd;
+        return C64ChipId(chip);  // 0-5 are MemoryBus chip IDs directly
     };
 
-    auto pla_to_write_chip = [&](uint8_t pla_chip) -> C64WriteId {
-        switch (pla_chip) {
-            case CHIP_RAM: return C64WriteId(c64_chip_ids::kRam);
-            case CHIP_IO:  return io_sub_write;
-            default:       return no_chip_wr;  // ROMs and unmapped ignore writes
-        }
+    // Map PLA output chip ID → MemoryBus write chip.
+    // Only RAM and I/O are writable; ROMs and unmapped ignore writes.
+    auto pla_to_write_chip = [&](uint8_t chip) -> C64WriteId {
+        if (chip == c64_chip_ids::kRam) return C64WriteId(chip);
+        if (chip == c64_chip_ids::kIo)  return io_sub_write;
+        return no_chip_wr;
     };
 
     // Generate all 32 modes for both viewers
