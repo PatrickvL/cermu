@@ -129,10 +129,10 @@ public:
     bus_state_t default_state_ = 0;     // Pull-up defaults for each cycle
     bus_state_t bus_state_     = 0;     // Current bus state (end of previous tick)
 
-    // PLA debug tables — raw chip_id_t per mode per 4KB bank (for PLA GUI)
-    uint8_t pla_cpu_read_chip_[32][16];   // CPU read chip per [mode][bank]
-    uint8_t pla_cpu_write_chip_[32][16];  // CPU write chip per [mode][bank]
-    uint8_t pla_vicii_read_chip_[32][16]; // VIC-II read chip per [mode][bank]
+    // PLA debug tables — PLA chip ID per mode per 4KB bank (for PLA GUI)
+    C64PlaChipId pla_cpu_read_chip_[32][16];   // CPU read chip per [mode][bank]
+    C64PlaChipId pla_cpu_write_chip_[32][16];  // CPU write chip per [mode][bank]
+    C64PlaChipId pla_vicii_read_chip_[32][16]; // VIC-II read chip per [mode][bank]
 
 private:
     bool initialized_ = false;          // True when initialize() has succeeded
