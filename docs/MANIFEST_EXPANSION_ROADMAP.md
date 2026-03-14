@@ -48,16 +48,16 @@ factory creation or pre-binding.
 | VIC-20 | RAM, ROM ×3, CPU, VIC (PAL/NTSC conditional), VIA ×2 — **gold standard** | — |
 | Atari 2600 | TIA (MMIO), RIOT (MMIO), CartChip (MMIO), CPU | — |
 | Apple 1 | RAM, ROM ×2, PIA (MMIO), CPU | terminal, char ROM (rendering-only) |
-| Acorn Atom | RAM ×2, ROM ×3, PPI (MMIO), VIA (MMIO), CPU | VDG (stack member) |
-| BBC Micro | RAM, ROM ×2, CPU | CRTC, PSG, VIA ×2 |
-| Spectrum | RAM, ROM (variant-gated 48K/128K), CPU | ULA, AY |
-| C16/Plus4 | RAM, ROM ×2, CPU | TED |
-| PET | RAM ×2, ROM ×5, CPU | VIA |
-| Amstrad CPC | RAM, ROM ×2 (variant-gated 464/6128), CPU | CRTC, PSG, gate array |
-| DDR KC85 | RAM, IRM, ROM ×1–2 (variant-gated /2, /3, /4), CPU | PIO ×2, CTC, module system |
-| DDR Z9001/KC87 | RAM, ROM ×1–4, Video RAM, Color RAM (variant-gated), CPU | PIO ×2, CTC |
-| DDR LC80 | ROM, RAM, CPU | PIO ×2, CTC |
-| DDR Z1013 | RAM, ROM, Video RAM (variant-gated 16K/64K), CPU | PIO, char ROM (vector) |
+| Acorn Atom | RAM ×2, ROM ×3, PPI (MMIO), VIA (MMIO), CPU, VDG | — |
+| BBC Micro | RAM, ROM ×2, CPU, CRTC, PSG, VIA ×2 | — |
+| Spectrum | RAM, ROM (variant-gated 48K/128K), CPU, ULA (pre-bound), AY (pre-bound) | — |
+| C16/Plus4 | RAM, ROM ×2, CPU, TED (pre-bound) | — |
+| PET | RAM ×2, ROM ×5, CPU, CRTC, PIA ×2, VIA | — |
+| Amstrad CPC | RAM, ROM ×2 (variant-gated 464/6128), CPU, CRTC, PPI, AY, Gate Array (pre-bound) | — |
+| DDR KC85 | RAM, IRM, ROM ×1–2 (variant-gated /2, /3, /4), CPU, PIO ×2, CTC, Module System | — |
+| DDR Z9001/KC87 | RAM, ROM ×1–4, Video RAM, Color RAM (variant-gated), CPU, PIO ×2, CTC | — |
+| DDR LC80 | ROM, RAM, CPU, PIO ×2, CTC | — |
+| DDR Z1013 | RAM, ROM, Video RAM (variant-gated 16K/64K), CPU, PIO | char ROM (vector) |
 | Bomb Jack | Main: ROM, RAM ×4, CPU.  Sound: ROM, RAM, CPU — **dual `Board<Spec>`** | AY ×3 |
 | Namco Arcade | ROM, RAM ×3 (variant-gated Pac-Man/Pengo), CPU | WSG sound |
 | C64 | **none** — all chips manual, legacy `c64_bus_t` dispatch | VIC-II, SID, CIA ×2, Color RAM, RAM, ROM ×4, keyboard |
@@ -67,8 +67,10 @@ factory creation or pre-binding.
 ### Generic Lifecycle: `reset_chips()`
 
 `Board<Spec>::reset_chips()` iterates all `owned_chips_` and calls `ChipBase::reset()`.
-Currently used by: VIC-20, Atari 2600, Apple 1, Acorn Atom.  Safe for all chip types
-(RAM/ROM/CPU have no-op `reset()`; Z80 PIO/CTC/VDG delegate to `init()`).
+Currently used by: VIC-20, Atari 2600, Apple 1, Acorn Atom, BBC Micro, PET, C16/Plus4,
+Spectrum, Amstrad CPC, LC80, Z1013, KC85, Z9001/KC87, Namco Arcade, Bomb Jack.  Safe
+for all chip types (RAM/ROM/CPU have no-op `reset()`; Z80 PIO/CTC/VDG delegate to
+`init()`; gate array overrides `reset()`).
 
 `CpuChipBase` provides virtual `init()` and `reset(pins = 0)`.  All migrated systems
 call `board_.cpu_chip()->init()` and `board_.cpu_chip()->reset()` for CPU lifecycle.
@@ -102,20 +104,22 @@ For each system, the migration pattern is:
 
 ### Chips needing MMIO interface additions
 
-These chips currently lack `has_mmio()` / `on_bus_read()` / `on_bus_write()` and
-need them before they can be placed in manifests with address-decode:
+These chips are memory-mapped in some systems but currently lack `has_mmio()` /
+`on_bus_read()` / `on_bus_write()`.  They have been added to manifests as **non-bus**
+slots (Z80 port-based I/O, or pre-bound) and work correctly, but would need MMIO
+interfaces if they were ever placed at address-decode-capable positions:
 
-- `ted7360_t` — TED video/I/O for C16/Plus4
-- `mc6845_t` — CRTC for BBC Micro, PET, Amstrad CPC
-- `sn76489_t` — PSG for BBC Micro
-- `ay_3_8910_t` — sound for Spectrum, Amstrad CPC, arcade
-- `ferranti_ula_t` — ULA for Spectrum
-- DDR Z80 peripherals: `z80_pio_t`, `z80_ctc_t`
+- `ted7360_t` — TED video/I/O for C16/Plus4 (pre-bound, non-bus slot)
+- `mc6845_t` — CRTC for BBC Micro, PET, Amstrad CPC (non-bus slot)
+- `sn76489_t` — PSG for BBC Micro (non-bus slot)
+- `ay_3_8910_t` — sound for Spectrum, Amstrad CPC, arcade (non-bus slot)
+- `ferranti_ula_t` — ULA for Spectrum (non-bus slot)
+- DDR Z80 peripherals: `z80_pio_t`, `z80_ctc_t` (Z80 port-based I/O, non-bus slots)
 
-Chips needing extraction into `ChipBase` subclass before manifest inclusion:
-- **Amstrad CPC gate array** — currently an embedded `gate_array_` struct in `AmstradCPCSystem`,
-  not a `ChipBase` subclass.  Must be extracted into a standalone chip (e.g. `amstrad_ga_t`)
-  with `has_mmio()` / `on_bus_read()` / `on_bus_write()` before it can appear in manifests.
+Chip extraction completed:
+- **Amstrad CPC gate array** — ✅ extracted into `amstrad_gate_array_t : ChipBase`
+  subclass with `reset()` override.  Pre-bound into manifest as non-bus slot.
+  (Gate array I/O is Z80 port-based, so MMIO interfaces are not needed.)
 
 Chips that DON'T need MMIO (non-memory-mapped, pure logic):
 - CPUs: already have `Slot<MOS6502>{0, 0, 0}` pattern (VIC-20 gold standard)
@@ -424,19 +428,19 @@ Systems ordered by migration complexity (easiest first):
 |----------|--------|--------|---|---|
 | ✅ Done | VIC-20 | — | — | Gold standard: all chips in manifest including CPU, conditional VIC |
 | ✅ Done | Atari 2600 | — | — | All chips in manifest (TIA, RIOT, Cart, CPU); uses `reset_chips()` |
-| Low | Apple 1 | Tiny | char ROM | RAM, ROM ×2, PIA, CPU done; char ROM is rendering-only, terminal non-chip |
-| Low | Acorn Atom | Tiny | VDG | RAM ×2, ROM ×3, PPI, VIA, CPU done; VDG needs registry + non-bus slot |
-| Low | DDR LC80 | Small | PIO ×2, CTC | ROM, RAM, CPU done; PIOs + CTC are Z80 I/O-port-dispatched (not MMIO) |
-| Low | DDR Z1013 | Small | PIO | RAM, ROM, Video RAM, CPU done; PIO is Z80 I/O-port-dispatched |
-| Medium | DDR KC85 | Medium | PIO ×2, CTC, modules | CPU done; Z80 PIOs + CTC are I/O-port-dispatched |
-| Medium | DDR Z9001/KC87 | Medium | PIO ×2, CTC | CPU done; variant-gated manifests; Z80 peripherals I/O-dispatched |
+| ✅ Done | Apple 1 | — | — | RAM, ROM ×2, PIA, CPU all in manifest; char ROM is rendering-only, terminal non-chip |
+| ✅ Done | Acorn Atom | — | — | RAM ×2, ROM ×3, PPI, VIA, CPU, VDG all in manifest |
+| ✅ Done | DDR LC80 | — | — | ROM, RAM, CPU, PIOs ×2, CTC all in manifest; uses `reset_chips()` |
+| ✅ Done | DDR Z1013 | — | — | RAM, ROM, Video RAM, CPU, PIO all in manifest; uses `reset_chips()` |
+| ✅ Done | DDR KC85 | — | — | All chips in manifest (RAM, IRM, ROMs, CPU, PIOs ×2, CTC, Module System); uses `reset_chips()` |
+| ✅ Done | DDR Z9001/KC87 | — | — | All chips in manifest (RAM, ROMs, CPU, PIOs ×2, CTC); uses `reset_chips()` |
 | ✅ Done | Namco Arcade | — | — | All memory + CPU in manifest; WSG sound is tick-driven (non-bus) |
 | ✅ Done | Bomb Jack | — | — | Dual `Board<Spec>`, both CPUs in manifest; AY sound tick-driven |
-| Medium | BBC Micro | Medium | CRTC, PSG, VIA ×2 | CPU done; `mc6845_t`, `sn76489_t` need MMIO; VIA already has it |
-| Medium | PET | Medium | CRTC, VIA | CPU done; `mc6845_t` needs MMIO; `mos6522_t` already has it |
-| Medium | C16/Plus4 | Medium | TED | CPU done; `ted7360_t` needs MMIO |
-| Medium | Spectrum | Medium | ULA, AY | CPU done; `ferranti_ula_t`, `ay_3_8910_t` need MMIO |
-| Medium | Amstrad CPC | Medium–High | CRTC, PSG, gate array | CPU done; gate array needs ChipBase extraction + MMIO; `mc6845_t`, `ay_3_8910_t` need MMIO |
+| ✅ Done | BBC Micro | — | — | All chips in manifest (RAM, ROMs, CPU, CRTC, PSG, VIAs ×2); uses `reset_chips()` |
+| ✅ Done | PET | — | — | All chips in manifest (RAM, Screen RAM, ROMs ×5, CPU, CRTC, PIAs ×2, VIA); uses `reset_chips()` |
+| ✅ Done | C16/Plus4 | — | — | All chips in manifest (RAM, ROMs, CPU, TED pre-bound); uses `reset_chips()` |
+| ✅ Done | Spectrum | — | — | All chips in manifest (RAM, ROM, CPU, ULA + AY pre-bound); uses `reset_chips()` |
+| ✅ Done | Amstrad CPC | — | — | All chips in manifest (RAM, ROMs, CPU, CRTC, PPI, AY pre-bound, Gate Array extracted to ChipBase + pre-bound); uses `reset_chips()` |
 | High | C64 | High | All 12 chips | See C64 Migration Plan above; `c64_bus_t` absorbed into `Board<Spec>` |
 | Deferred | NES | High | All 7+ chips | Two independent buses (16-bit CPU + 14-bit PPU) on one PCB; dual `Board<Spec>` with mapper bridging both; see NES Architecture Notes above |
 | N/A | CHIP-8 | — | — | Pure interpreter, no bus model; not a candidate for manifest migration |

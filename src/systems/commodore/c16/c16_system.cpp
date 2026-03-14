@@ -545,6 +545,28 @@ bool Commodore264System<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
     register_board(&board_);
     
+    // Initialize TED 7360 (video, sound, timers, keyboard scanning)
+    // TED requires a descriptor — create it before board_.create_chips() and pre-bind.
+    {
+        bool is_pal_region = (config_.region_option_index <= 0);
+        ted7360_desc_t ted_desc = {};
+        ted_desc.is_pal = is_pal_region;
+        ted_desc.keyboard_scan = ted_keyboard_scan;
+        ted_desc.keyboard_user_data = this;
+        ted_desc.mem_read = ted_mem_read;
+        ted_desc.mem_read_user_data = this;
+        ted_ = new ted7360_t(ted_desc);
+        if (ted_) {
+            printf("%s: Created TED 7360 (%s)\n", Traits::name, is_pal_region ? "PAL" : "NTSC");
+            // Initialize sound subsystem: TED master clock is 2× CPU clock
+            uint32_t ted_clock = is_pal_region ? TED_PAL_CLOCK_HZ : TED_NTSC_CLOCK_HZ;
+            ted_->audio_reset(ted_clock, c16_constants::AUDIO_SAMPLE_RATE);
+            board_.bind_chip(c264_slot::kTed, ted_);
+        } else {
+            printf("%s: Warning - TED 7360 creation failed\n", Traits::name);
+        }
+    }
+
     // ── Create memory chips from manifest and wire bus ───────────────────
     board_.create_chips(&bus_state_);
     board_.apply(bus_);
@@ -581,26 +603,6 @@ bool Commodore264System<V>::initialize() {
     // Initialize bus state with default pin levels
     bus_state_ = C264_BUS_DEFAULT_STATE;
     
-    // Initialize TED 7360 (video, sound, timers, keyboard scanning)
-    {
-        bool is_pal_region = (config_.region_option_index <= 0);
-        ted7360_desc_t ted_desc = {};
-        ted_desc.is_pal = is_pal_region;
-        ted_desc.keyboard_scan = ted_keyboard_scan;
-        ted_desc.keyboard_user_data = this;
-        ted_desc.mem_read = ted_mem_read;
-        ted_desc.mem_read_user_data = this;
-        ted_ = new ted7360_t(ted_desc);
-        if (ted_) {
-            printf("%s: Created TED 7360 (%s)\n", Traits::name, is_pal_region ? "PAL" : "NTSC");
-            // Initialize sound subsystem: TED master clock is 2× CPU clock
-            uint32_t ted_clock = is_pal_region ? TED_PAL_CLOCK_HZ : TED_NTSC_CLOCK_HZ;
-            ted_->audio_reset(ted_clock, c16_constants::AUDIO_SAMPLE_RATE);
-        } else {
-            printf("%s: Warning - TED 7360 creation failed\n", Traits::name);
-        }
-    }
-    
     // Create keyboard matrix (8x8, scanned by TED)
     keyboard_ = new commodore_keyboard_t();
     if (!keyboard_->init(&c16_keyboard_config)) {
@@ -617,8 +619,6 @@ bool Commodore264System<V>::initialize() {
     setup_ports();
 
     // Register chips for the Hardware menu and debug windows
-    register_chip(ted_,
-        "TED 7360 (Video/Audio/I/O)", "TED", "Video", 0xFF00);
     register_bus_chips(board_);
 
     // Set up page pointers for current RAM size and ROM banking state
@@ -653,19 +653,8 @@ template<C264SeriesVariant V>
 void Commodore264System<V>::reset() {
     printf("%s: Resetting system\n", Traits::name);
     
-    // Reset MOS 7501 CPU — use mos7501_reset (not mos7501_init) to properly
-    // reset the instruction decoder state (current_handler, half_cycle,
-    // opcode_entry).  init() only reinitialises the IO port — it leaves the
-    // CPU mid-instruction, which causes a segfault when emulation resumes
-    // with an inconsistent pipeline.
-    if (board_.cpu_chip()) {
-        board_.cpu_chip()->reset();
-    }
-    
-    // Reset TED 7360
-    if (ted_) {
-        ted_->reset();
-    }
+    // Reset all manifest chips (CPU, TED, RAM/ROM are no-op)
+    board_.reset_chips();
     
     // Reset bus state
     bus_state_ = C264_BUS_DEFAULT_STATE;

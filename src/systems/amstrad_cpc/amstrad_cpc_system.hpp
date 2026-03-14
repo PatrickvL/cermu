@@ -73,20 +73,22 @@ template<> struct CPCModelTraits<CPCModel::CPC6128> {
 };
 
 // ============================================================================
-// Amstrad Gate Array (custom ASIC)
+// Amstrad Gate Array (custom ASIC) — ChipBase subclass for manifest inclusion
 // ============================================================================
+//
+// The Amstrad gate array is a custom ASIC unique to the CPC series.
+// It handles pen/ink color mapping, screen mode selection, ROM overlay
+// control, RAM banking (6128), and interrupt generation from CRTC HSYNC.
+// All I/O is Z80 port-based (IORQ) — no MMIO.
 
-struct amstrad_gate_array_t {
-    uint8_t  pen_select = 0;                        // Selected pen (0-16, 16=border)
-    uint8_t  ink[amstrad_cpc_constants::GA_PEN_COUNT]{};  // Pen->hardware color mapping
-    uint8_t  screen_mode = 1;                       // 0, 1, or 2
-    bool     lower_rom_enabled = true;              // BIOS ROM at $0000-$3FFF
-    bool     upper_rom_enabled = true;              // BASIC ROM at $C000-$FFFF
-    uint8_t  ram_config = 0;                        // 6128 RAM banking register
-    uint8_t  interrupt_counter = 0;                 // Counts HSYNC, fires IRQ every 52
-    bool     interrupt_pending = false;
+class amstrad_gate_array_t : public ChipBase {
+public:
+    amstrad_gate_array_t() : ChipBase(ChipInfo{"Amstrad Gate Array", "Gate Array"}) {
+        category_ = "Logic";
+    }
 
-    void reset() {
+    // ChipBase override — called by Board::reset_chips()
+    void reset() override {
         pen_select = 0;
         std::memset(ink, 0, sizeof(ink));
         screen_mode = 1;
@@ -96,6 +98,15 @@ struct amstrad_gate_array_t {
         interrupt_counter = 0;
         interrupt_pending = false;
     }
+
+    uint8_t  pen_select = 0;                        // Selected pen (0-16, 16=border)
+    uint8_t  ink[amstrad_cpc_constants::GA_PEN_COUNT]{};  // Pen->hardware color mapping
+    uint8_t  screen_mode = 1;                       // 0, 1, or 2
+    bool     lower_rom_enabled = true;              // BIOS ROM at $0000-$3FFF
+    bool     upper_rom_enabled = true;              // BASIC ROM at $C000-$FFFF
+    uint8_t  ram_config = 0;                        // 6128 RAM banking register
+    uint8_t  interrupt_counter = 0;                 // Counts HSYNC, fires IRQ every 52
+    bool     interrupt_pending = false;
 };
 
 // ============================================================================
@@ -124,22 +135,24 @@ inline constexpr auto kCPC464Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
     Slot<ROMChip>{0x0000, 16384, 0, "Lower ROM"},  // overlay
     Slot<ROMChip>{0xC000, 16384, 0, "Upper ROM"},  // overlay
-    // Non-bus chips — factory-created, not address-decoded
-    Slot<ZilogZ80A>    {0, 0, 0, "Z80A"},
-    Slot<mc6845_t>     {0, 0, 0, "MC6845 CRTC"},
-    Slot<i8255_t>      {0, 0, 0, "8255 PPI"},
-    Slot<ay_3_8910_t>  {0, 0, 0, "AY-3-8912 PSG"}
+    // Non-bus chips — factory-created or pre-bound, not address-decoded
+    Slot<ZilogZ80A>           {0, 0, 0, "Z80A"},
+    Slot<mc6845_t>            {0, 0, 0, "MC6845 CRTC"},
+    Slot<i8255_t>             {0, 0, 0, "8255 PPI"},
+    Slot<ay_3_8910_t>         {0, 0, 0, "AY-3-8912 PSG"},
+    Slot<amstrad_gate_array_t>{0, 0, 0, "Gate Array"}
 );
 
 inline constexpr auto kCPC6128Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 131072, 0, "RAM"},        // 128 KB (8 banks)
     Slot<ROMChip>{0x0000,  16384, 0, "Lower ROM"},  // overlay
     Slot<ROMChip>{0xC000,  16384, 0, "Upper ROM"},  // overlay
-    // Non-bus chips — factory-created, not address-decoded
-    Slot<ZilogZ80A>    {0, 0, 0, "Z80A"},
-    Slot<mc6845_t>     {0, 0, 0, "MC6845 CRTC"},
-    Slot<i8255_t>      {0, 0, 0, "8255 PPI"},
-    Slot<ay_3_8910_t>  {0, 0, 0, "AY-3-8912 PSG"}
+    // Non-bus chips — factory-created or pre-bound, not address-decoded
+    Slot<ZilogZ80A>           {0, 0, 0, "Z80A"},
+    Slot<mc6845_t>            {0, 0, 0, "MC6845 CRTC"},
+    Slot<i8255_t>             {0, 0, 0, "8255 PPI"},
+    Slot<ay_3_8910_t>         {0, 0, 0, "AY-3-8912 PSG"},
+    Slot<amstrad_gate_array_t>{0, 0, 0, "Gate Array"}
 );
 
 namespace cpc_chips {
@@ -151,6 +164,7 @@ namespace cpc_chips {
     inline constexpr size_t kCrtcSlot     = 4;
     inline constexpr size_t kPpiSlot      = 5;
     inline constexpr size_t kAySlot       = 6;
+    inline constexpr size_t kGaSlot       = 7;
 }
 
 // BusTraits — selects the correct manifest per CPC model

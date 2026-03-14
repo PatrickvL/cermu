@@ -85,14 +85,16 @@ inline constexpr auto kC264Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
     Slot<ROMChip>{0x8000, 16384, 0, "BASIC ROM"},
     Slot<ROMChip>{0xC000, 16384, 0, "KERNAL ROM"},
-    // Non-bus chip — factory-created, not address-decoded
-    Slot<CSG7501>{0, 0, 0, "CSG 7501"}
+    // Non-bus chips — factory-created or pre-bound, not address-decoded
+    Slot<CSG7501>   {0, 0, 0, "CSG 7501"},
+    Slot<ted7360_t> {0, 0, 0, "TED 7360"}
 );
 
 namespace c264_slot {
     inline constexpr size_t kRam       = 0;
     inline constexpr size_t kBasicRom  = 1;
     inline constexpr size_t kKernalRom = 2;
+    inline constexpr size_t kTed       = 4;
 }
 
 struct C264BusTraits {

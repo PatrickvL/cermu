@@ -109,6 +109,7 @@ bool AmstradCPCSystem<M>::initialize() {
     board_.bind_chip(cpc_chips::kCrtcSlot, &crtc_);
     board_.bind_chip(cpc_chips::kPpiSlot,  &ppi_);
     board_.bind_chip(cpc_chips::kAySlot,   &ay_);
+    board_.bind_chip(cpc_chips::kGaSlot,   &gate_array_);
     board_.create_chips(&pins_);
 
     // ── Configure page tables for this variant ──────────────────────────
@@ -128,7 +129,6 @@ bool AmstradCPCSystem<M>::initialize() {
     };
     ppi_.init();
     ay_.init();
-    gate_array_.reset();
 
     load_roms();
 
@@ -146,10 +146,9 @@ void AmstradCPCSystem<M>::shutdown() { cpu_ = nullptr; system_ready_ = false; }
 template<CPCModel M>
 void AmstradCPCSystem<M>::reset() {
     if (!cpu_) return;
-    // Reset all manifest chips (CRTC, PPI, AY; RAM/ROM are no-op)
+    // Reset all manifest chips (CRTC, PPI, AY, Gate Array; RAM/ROM are no-op)
     board_.reset_chips();
     pins_ = board_.cpu_chip()->reset(pins_);
-    gate_array_.reset();
     configure_bus_memory_map();
 }
 

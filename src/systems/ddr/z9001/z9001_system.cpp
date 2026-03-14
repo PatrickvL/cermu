@@ -79,15 +79,18 @@ bool Z9001System<V>::initialize() {
         color_ram_chip_ = board_.template chip_as<RAMChip>(Traits::kColorRamSlot);
     }
     cpu_ = board_.template cpu<U880>();
+    pio1_ = board_.template chip_as<z80_pio_t>(Traits::kPio1Slot);
+    pio2_ = board_.template chip_as<z80_pio_t>(Traits::kPio2Slot);
+    ctc_  = board_.template chip_as<z80_ctc_t>(Traits::kCtcSlot);
 
     // ── Trim RAM pages for KC87 (48 KB out of 64 KB allocated) ──────────
     configure_bus_memory_map();
 
-    // ── Init chips ──────────────────────────────────────────────────────
+    // ── Init chips ──────────────────────────────────────────────────────────
     pins_ = board_.cpu_chip()->init();
-    pio1_.init();
-    pio2_.init();
-    ctc_.init();
+    pio1_->init();
+    pio2_->init();
+    ctc_->init();
 
     // Character ROM — not bus-mapped, used for display rendering only
     char_rom_.resize(z9001_constants::CHAR_ROM_SIZE, 0xFF);
@@ -99,12 +102,7 @@ bool Z9001System<V>::initialize() {
     }
 
     // ── Register chips for Hardware menu ────────────────────────────────
-    register_chip(&pio1_,
-        "U855 PIO #1", "U855", "I/O", z9001_constants::PIO1_PORT_A);
-    register_chip(&pio2_,
-        "U855 PIO #2", "U855", "I/O", z9001_constants::PIO2_PORT_A);
-    register_chip(&ctc_,
-        "U857 CTC", "U857", "I/O", z9001_constants::CTC_CH0);
+
     register_bus_chips(board_);
 
     printf("%s: System initialized (RAM: %d KB)\n", Traits::name, Traits::ram_size / 1024);
@@ -115,10 +113,8 @@ bool Z9001System<V>::initialize() {
 template<Z9001Variant V> void Z9001System<V>::shutdown() { cpu_ = nullptr; system_ready_ = false; }
 template<Z9001Variant V> void Z9001System<V>::reset() {
     if (!cpu_) return;
+    board_.reset_chips();
     pins_ = board_.cpu_chip()->reset(pins_);
-    pio1_.init();
-    pio2_.init();
-    ctc_.init();
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 }
 
@@ -318,18 +314,18 @@ bus_state_t Z9001System<V>::io_tick(bus_state_t pins) {
         if (is_rd) {
             // Port A output holds the keyboard row select; Port B returns column data
             if (port_sel == 0) {
-                uint8_t row  = pio1_.get_output(0) & 0x07;
+                uint8_t row  = pio1_->get_output(0) & 0x07;
                 uint8_t cols = keyboard_matrix_[row];
-                pio1_.set_input(1, cols);
+                pio1_->set_input(1, cols);
             }
-            uint8_t data = pio1_.read_data(port_sel);
+            uint8_t data = pio1_->read_data(port_sel);
             BUS_SET_DATA(pins, data);
         } else {
             uint8_t data = BUS_GET_DATA(pins);
             if (is_ctrl) {
-                pio1_.write_control(port_sel, data);
+                pio1_->write_control(port_sel, data);
             } else {
-                pio1_.write_data(port_sel, data);
+                pio1_->write_data(port_sel, data);
             }
         }
     }
@@ -339,14 +335,14 @@ bus_state_t Z9001System<V>::io_tick(bus_state_t pins) {
         int     port_sel = pio_idx & 0x01;
         bool    is_ctrl  = (pio_idx & 0x02) != 0;
         if (is_rd) {
-            uint8_t data = pio2_.read_data(port_sel);
+            uint8_t data = pio2_->read_data(port_sel);
             BUS_SET_DATA(pins, data);
         } else {
             uint8_t data = BUS_GET_DATA(pins);
             if (is_ctrl) {
-                pio2_.write_control(port_sel, data);
+                pio2_->write_control(port_sel, data);
             } else {
-                pio2_.write_data(port_sel, data);
+                pio2_->write_data(port_sel, data);
             }
         }
     }

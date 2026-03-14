@@ -81,7 +81,11 @@ bool KC85System<V>::initialize() {
     if constexpr (Traits::has_basic_rom) {
         basic_rom_chip_ = board_.template chip_as<ROMChip>(Traits::kBasicRomSlot);
     }
-    cpu_ = board_.template cpu<U880>();
+    cpu_     = board_.template cpu<U880>();
+    pio1_    = board_.template chip_as<z80_pio_t>(Traits::kPio1Slot);
+    pio2_    = board_.template chip_as<z80_pio_t>(Traits::kPio2Slot);
+    ctc_     = board_.template chip_as<z80_ctc_t>(Traits::kCtcSlot);
+    modules_ = board_.template chip_as<kc85_module_system_t>(Traits::kModulesSlot);
 
     // ── Set initial banking state ───────────────────────────────────────
     caos_rom_on_  = true;
@@ -94,22 +98,16 @@ bool KC85System<V>::initialize() {
 
     // ── Init chips ──────────────────────────────────────────────────────
     pins_ = board_.cpu_chip()->init();
-    pio1_.init();
-    pio2_.init();
-    ctc_.init();
-    modules_.init();
+    pio1_->init();
+    pio2_->init();
+    ctc_->init();
+    modules_->init();
 
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 
     load_roms();
 
-    // ── Register chips for Hardware menu ────────────────────────────────
-    register_chip(&pio1_,
-        "U855 PIO #1", "U855", "I/O", kc85_constants::PIO_A_DATA);
-    register_chip(&pio2_,
-        "U855 PIO #2", "U855", "I/O", 0x00);
-    register_chip(&ctc_,
-        "U857 CTC", "U857", "I/O", kc85_constants::CTC_CH0);
+    // ── Register chips for Hardware menu ──────────────────────────────
     register_bus_chips(board_);
 
     printf("%s: System initialized (RAM: %d KB, IRM: %d KB)\n",
@@ -122,11 +120,9 @@ bool KC85System<V>::initialize() {
 template<KC85Variant V> void KC85System<V>::shutdown() { cpu_ = nullptr; system_ready_ = false; }
 template<KC85Variant V> void KC85System<V>::reset() {
     if (!cpu_) return;
+    board_.reset_chips();
     pins_ = board_.cpu_chip()->reset(pins_);
-    pio1_.init();
-    pio2_.init();
-    ctc_.init();
-    modules_.init();
+    modules_->init();
     bank_ctrl_ = 0;
     bank_ctrl2_ = 0;
     caos_rom_on_ = true;
@@ -207,7 +203,7 @@ void KC85System<V>::update_bank_state() {
     using ChipId      = typename PT::ChipId;
     using WriteChipId = typename PT::WriteChipId;
 
-    uint8_t pio_b = pio1_.get_output(1);
+    uint8_t pio_b = pio1_->get_output(1);
 
     bool new_caos = (pio_b & 0x01) != 0;
     bool new_irm  = (pio_b & 0x04) != 0;
@@ -293,7 +289,7 @@ void KC85System<V>::tick() {
         pins_ = io_tick(pins_);
     }
 
-    ctc_.tick();
+    ctc_->tick();
     total_cycles_++;
 }
 
@@ -322,8 +318,8 @@ template<KC85Variant V>
 bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
     // Interrupt acknowledge: IORQ + M1
     if (!BUS_GET_BIT(pins, Z80_M1_BIT)) {
-        if (ctc_.interrupt_pending()) {
-            BUS_SET_DATA(pins, ctc_.interrupt_vector());
+        if (ctc_->interrupt_pending()) {
+            BUS_SET_DATA(pins, ctc_->interrupt_vector());
         } else {
             BUS_SET_DATA(pins, 0xFF);
         }
@@ -339,12 +335,12 @@ bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
         int port_idx = port & 0x01;
         bool is_ctrl = (port >> 1) & 0x01;
         if (is_read) {
-            BUS_SET_DATA(pins, pio1_.read_data(port_idx));
+            BUS_SET_DATA(pins, pio1_->read_data(port_idx));
         } else {
             if (is_ctrl) {
-                pio1_.write_control(port_idx, data);
+                pio1_->write_control(port_idx, data);
             } else {
-                pio1_.write_data(port_idx, data);
+                pio1_->write_data(port_idx, data);
             }
             // PIO 1 Port B controls memory banking
             if (!is_ctrl && port_idx == 1) {
@@ -358,9 +354,9 @@ bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
     if ((port & 0xFC) == kc85_constants::CTC_CH0) {
         int channel = port & 0x03;
         if (is_read) {
-            BUS_SET_DATA(pins, ctc_.read(channel));
+            BUS_SET_DATA(pins, ctc_->read(channel));
         } else {
-            ctc_.write(channel, data);
+            ctc_->write(channel, data);
         }
         return pins;
     }
