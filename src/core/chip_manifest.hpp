@@ -85,6 +85,10 @@ struct ChipSlot {
     size_t   size_bytes = 0;
     uint32_t addr_mask  = 0;
     size_t   bank_size  = 0;     // Bank granularity in bytes (0 = one bank per page)
+    uint8_t  overlay_group = 0;  // 0 = always visible (base layer, e.g. RAM)
+                                 // >0 = banking group: visible when that group's
+                                 //       bit is set in the mode index.  Read-only
+                                 //       overlay (writes pass through to group 0).
 
     // Factory — creates a chip of the type declared in the corresponding
     // Slot<T>.  Stored by make_chip_manifest() and called by
@@ -136,6 +140,7 @@ struct Slot {
     const char* label      = nullptr;
     uint16_t    condition  = 0;
     size_t      bank_size  = 0;
+    uint8_t     overlay_group = 0;
 };
 
 
@@ -303,6 +308,21 @@ struct ChipManifest {
     // Convenience: number of static chips.
     [[nodiscard]] static constexpr size_t num_chips() noexcept { return N; }
 
+    // Number of distinct non-zero overlay groups in the manifest.
+    [[nodiscard]] constexpr size_t num_overlay_groups() const noexcept {
+        uint8_t max_g = 0;
+        for (size_t i = 0; i < N; ++i)
+            if (chips[i].overlay_group > max_g)
+                max_g = chips[i].overlay_group;
+        return max_g;
+    }
+
+    // Number of overlay modes: 2^num_overlay_groups.
+    // Mode 0 = base only.  Mode k has overlay groups active for each set bit.
+    [[nodiscard]] constexpr size_t overlay_mode_count() const noexcept {
+        return size_t(1) << num_overlay_groups();
+    }
+
     // ── BusSpec derivation helpers ─────────────────────────────────────────
 
     // Count of MMIO-only slots (size_bytes == 0).
@@ -403,6 +423,7 @@ make_chip_manifest(Slot<Chips>... slots) noexcept
       manifest.chips[i++] = ChipSlot{
           slots.base_addr, slots.size_bytes, slots.addr_mask,
           slots.bank_size,
+          slots.overlay_group,
           resolve_slot_factory<Chips>(),
           slots.label,
           slots.condition
