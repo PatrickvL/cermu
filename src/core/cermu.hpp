@@ -44,6 +44,18 @@
 #endif
 
 /* ========================================================================== */
+/* ARCHITECTURE IDENTIFICATION                                                */
+/* ========================================================================== */
+
+#if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
+    #define CERMU_ARCH_X86 1
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    #define CERMU_ARCH_ARM64 1
+#elif defined(__arm__) || defined(_M_ARM)
+    #define CERMU_ARCH_ARM32 1
+#endif
+
+/* ========================================================================== */
 /* PREPROCESSOR CAPABILITIES                                                  */
 /* ========================================================================== */
 
