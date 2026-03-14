@@ -346,6 +346,19 @@ using uint_least_bits_t =
     std::conditional_t<(Bits <= 32), uint32_t,
     uint64_t>>>;
 
+/* Generate a mask of Shift low bits.  Full-width safe: when Shift equals
+   the bit width of T, returns ~T(0) (all ones).  Shift > bit width is a
+   compile-time error.
+   Example: make_mask<uint16_t, 14>() == 0x3FFF.  */
+template<std::unsigned_integral T, unsigned Shift>
+[[nodiscard]] constexpr T make_mask() noexcept {
+    static_assert(Shift <= sizeof(T) * 8, "make_mask: Shift exceeds bit width of type");
+    if constexpr (Shift >= sizeof(T) * 8)
+        return ~T(0);
+    else
+        return ~(~T(0) << Shift);
+}
+
 /* ========================================================================== */
 /* LFSR — Galois linear-feedback shift registers                              */
 /* ========================================================================== */

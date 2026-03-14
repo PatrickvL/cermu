@@ -43,14 +43,17 @@ public:
 
     struct SlotRecord {
         std::string_view name;                // From bound chip (or provided for dynamic)
-        ChipId           base_id;             // First chip id (prefix sum)
+        ChipId           base_id;             // First chip id (prefix sum of banks)
         size_t           num_pages;           // Buffer pages (0 = MMIO-only)
-        uint32_t         base_addr  = 0;      // Default address in bus space
-        uint32_t         addr_mask  = 0;      // Sub-page decode mask
-        bool             read_only  = false;  // Derived from bound chip
-        bool             dynamic    = false;  // Runtime-added (can be removed)
-        ChipBase*        chip       = nullptr; // Bound chip instance
-        int              mmio_idx   = -1;     // Assigned MMIO handler index (-1 = none)
+        size_t           bank_size   = 0;     // Bank granularity (0 = page-per-bank)
+        size_t           byte_size   = 0;     // Chip buffer size in bytes
+        size_t           byte_offset = 0;     // Byte offset of chip in flat_mem
+        uint32_t         base_addr   = 0;     // Default address in bus space
+        uint32_t         addr_mask   = 0;     // Sub-page decode mask
+        bool             read_only   = false; // Derived from bound chip
+        bool             dynamic     = false; // Runtime-added (can be removed)
+        ChipBase*        chip        = nullptr; // Bound chip instance
+        int              mmio_idx    = -1;    // Assigned MMIO handler index (-1 = none)
         int              sub_table_idx = -1;  // Assigned MaskedSubTable index (-1 = none)
 
         // Factory and label — copied from ChipSlot at construction.
@@ -71,12 +74,16 @@ public:
     template<size_t N>
     explicit BusMap(const ChipManifest<N>& manifest) {
         slots_.reserve(N);
+        size_t byte_off = 0;
         for (size_t i = 0; i < N; ++i) {
             const ChipSlot& s = manifest.chips[i];
             slots_.push_back({
                 {},                             // name: set during bind_chip
                 ChipId(manifest.base_id(i, kPageBits)),
                 s.pages(kPageBits),
+                s.bank_size,
+                s.size_bytes,
+                byte_off,
                 s.base_addr,
                 s.addr_mask,
                 false,                          // read_only: set during bind_chip
@@ -88,6 +95,7 @@ public:
                 s.label,
                 s.condition,
             });
+            byte_off += s.size_bytes;
         }
     }
 
@@ -134,21 +142,49 @@ public:
         bus.reset_viewer(viewer_id);
         if constexpr (Bus::kHasMaskedSub) bus.reset_masked_subs(viewer_id);
 
+        // ── Phase 0: Populate chip_info_ for all buffer chips ─────────────
+        //
+        // Each bank of each chip gets a ChipInfo entry with the byte offset
+        // in flat_mem and an address mask that clips to the bank's range.
+        //
+        for (const auto& slot : slots_) {
+            if (slot.byte_size == 0 || slot.dynamic) continue;
+            const size_t bank_sz   = slot.bank_size > 0 ? slot.bank_size : kPageSize;
+            const size_t num_banks = slot.byte_size / bank_sz;
+            const auto   mask_val  = static_cast<typename Bus::MaskT>(bank_sz - 1);
+            for (size_t b = 0; b < num_banks; ++b) {
+                bus.set_chip_info(
+                    size_t(slot.base_id) + b,
+                    static_cast<typename Bus::BaseT>(slot.byte_offset + b * bank_sz),
+                    mask_val);
+            }
+        }
+
         // ── Phase 1: Map buffer chips ─────────────────────────────────────
         //
-        // Clip num_pages to the address space so that bank-switching pools
-        // (buffer larger than the visible window) don't overflow the page
-        // table.  The system's configure_bus_memory_map() remaps banks later.
+        // Each bank's pages are filled with the same bank_id; the address
+        // mask in chip_info_ handles offset computation.  Clip to the
+        // address space so that bank-switching pools (buffer larger than
+        // the visible window) don't overflow the page table.
         //
         static constexpr size_t kNumPages = Bus::kNumPages;
         for (const auto& slot : slots_) {
-            if (slot.num_pages == 0 || slot.dynamic) continue;
+            if (slot.byte_size == 0 || slot.dynamic) continue;
             const size_t first_page = slot.base_addr >> kPageBits;
-            const size_t mappable   = std::min(slot.num_pages, kNumPages - first_page);
-            bus.fill_read_pages(viewer_id, first_page, mappable, slot.base_id);
-            if (!slot.read_only) {
-                bus.fill_write_pages(viewer_id, first_page, mappable,
-                                     WriteChipId(slot.base_id));
+            const size_t bank_sz    = slot.bank_size > 0 ? slot.bank_size : kPageSize;
+            const size_t bank_pages = bank_sz >> kPageBits;
+            const size_t num_banks  = slot.byte_size / bank_sz;
+
+            for (size_t b = 0; b < num_banks; ++b) {
+                const size_t page = first_page + b * bank_pages;
+                if (page >= kNumPages) break;
+                const size_t count = std::min(bank_pages, kNumPages - page);
+                const ChipId bid = ChipId(size_t(slot.base_id) + b);
+                bus.fill_read_constant(viewer_id, page, count, bid);
+                if (!slot.read_only) {
+                    bus.fill_write_constant(viewer_id, page, count,
+                                            WriteChipId(bid));
+                }
             }
         }
 

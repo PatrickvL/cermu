@@ -55,8 +55,25 @@ public:
     template<size_t N>
     explicit Board(const ChipManifest<N>& manifest)
         : bus_map_(manifest) {
-        const size_t total = manifest.total_pages(kPageBits);
-        flat_mem_.assign(total * kPageSize, uint8_t(0xFF));  // default: 0xFF = pulled-high
+        flat_mem_.assign(manifest.buffer_bytes(kPageBits), uint8_t(0xFF));
+
+        // Precompute per-bank byte offsets for chip_buffer().
+        const size_t total_ids = manifest.total_ids(kPageBits);
+        bank_byte_offsets_.resize(total_ids);
+        size_t byte_off = 0;
+        size_t bank_id  = 0;
+        for (size_t i = 0; i < N; ++i) {
+            const auto& chip = manifest.chips[i];
+            if (chip.size_bytes == 0) continue;
+            const size_t eff_bs    = chip.bank_size > 0 ? chip.bank_size : kPageSize;
+            const size_t num_banks = chip.size_bytes / eff_bs;
+            for (size_t b = 0; b < num_banks; ++b)
+                bank_byte_offsets_[bank_id++] = byte_off + b * eff_bs;
+            byte_off += chip.size_bytes;
+        }
+        // Dynamic pool: one bank per page
+        for (size_t d = 0; d < manifest.num_dynamic_pages; ++d)
+            bank_byte_offsets_[bank_id++] = byte_off + d * kPageSize;
 
         // Initialise dynamic allocator
         if (manifest.num_dynamic_pages > 0) {
@@ -163,9 +180,9 @@ public:
             uint8_t* buf = rec.num_pages > 0 ? chip_buffer(rec.base_id) : nullptr;
 
             // Reconstruct a ChipSlot from the SlotRecord for the factory call.
-            ChipSlot slot{rec.base_addr, rec.num_pages * kPageSize,
-                          rec.addr_mask, rec.factory, rec.label,
-                          rec.condition};
+            ChipSlot slot{rec.base_addr, rec.byte_size,
+                          rec.addr_mask, rec.bank_size, rec.factory,
+                          rec.label, rec.condition};
             ChipBase* chip = rec.factory(slot, system_bus, buf);
 
             // Apply placement metadata from the manifest slot.
@@ -287,11 +304,11 @@ public:
 
     // Pointer to the start of the chip's region in the flat mem.
     [[nodiscard]] uint8_t* chip_buffer(ChipId base_id) noexcept {
-        return flat_mem_.data() + size_t(base_id) * kPageSize;
+        return flat_mem_.data() + bank_byte_offsets_[size_t(base_id)];
     }
 
     [[nodiscard]] const uint8_t* chip_buffer(ChipId base_id) const noexcept {
-        return flat_mem_.data() + size_t(base_id) * kPageSize;
+        return flat_mem_.data() + bank_byte_offsets_[size_t(base_id)];
     }
 
     // Total size of a chip's buffer region in bytes.
@@ -311,8 +328,7 @@ public:
     bool load(ChipId base_id, std::span<const uint8_t> data) noexcept {
         const SlotRecord* info = bus_map_.find(base_id);
         if (!info) return false;
-        const size_t capacity = info->num_pages * kPageSize;
-        if (data.size() > capacity) return false;
+        if (data.size() > info->byte_size) return false;
         std::memcpy(chip_buffer(base_id), data.data(), data.size());
         return true;
     }
@@ -321,7 +337,7 @@ public:
     void fill(ChipId base_id, uint8_t value = 0xFF) noexcept {
         const SlotRecord* info = bus_map_.find(base_id);
         if (!info) return;
-        std::memset(chip_buffer(base_id), value, info->num_pages * kPageSize);
+        std::memset(chip_buffer(base_id), value, info->byte_size);
     }
 
     // =====================================================================
@@ -487,6 +503,7 @@ private:
 
     Map                      bus_map_;
     std::vector<uint8_t>     flat_mem_;
+    std::vector<size_t>      bank_byte_offsets_; // bank_id → byte offset in flat_mem
 
     // Chips created by create_chips() — owned here for lifetime management.
     std::vector<std::unique_ptr<ChipBase>> owned_chips_;

@@ -84,6 +84,7 @@ struct ChipSlot {
     uint32_t base_addr  = 0;
     size_t   size_bytes = 0;
     uint32_t addr_mask  = 0;
+    size_t   bank_size  = 0;     // Bank granularity in bytes (0 = one bank per page)
 
     // Factory — creates a chip of the type declared in the corresponding
     // Slot<T>.  Stored by make_chip_manifest() and called by
@@ -134,6 +135,7 @@ struct Slot {
     uint32_t    addr_mask  = 0;
     const char* label      = nullptr;
     uint16_t    condition  = 0;
+    size_t      bank_size  = 0;
 };
 
 
@@ -183,14 +185,15 @@ constexpr ChipSlot::FactoryFn resolve_slot_factory() {
 // §2  ChipManifest<N> — compile-time chip-id assignment
 // =============================================================================
 //
-// Chip ids are assigned as the prefix sum of page counts across the array.
-// A chip of M pages occupies ids [base_id, base_id + M - 1].
+// Chip ids are assigned as bank ids: each chip of K banks occupies ids
+// [base_id, base_id + K - 1].  The bank granularity is set per-chip via
+// ChipSlot::bank_size:
 //
-// The hot-path formula for a chip_id → buffer offset is:
-//   offset = (chip_id << PageBits) | page_local_offset
-// which requires that the first page of chip K sits at the page-granular
-// position sum(chips[0..K-1].pages()) in the flat memory — exactly
-// what this assignment guarantees.
+//   bank_size > 0  → explicit: K = size_bytes / bank_size
+//   bank_size = 0  → legacy page-per-bank: K = size_bytes >> page_bits
+//
+// Each bank_id maps to a region in the flat memory through a ChipInfo
+// entry (base byte offset + address mask), populated by BusMap::apply().
 //
 // An optional dynamic pool of num_dynamic_pages pages is appended at the end
 // of the buffer.  Board uses this pool for runtime chip addition (hot-swap).
@@ -198,7 +201,7 @@ constexpr ChipSlot::FactoryFn resolve_slot_factory() {
 // Constexpr query methods enable ManifestBusSpec to auto-derive all BusSpec
 // fields from the manifest alone.
 //
-// Example — Apple 1:
+// Example — Apple 1 (page-per-bank, bank_size=0):
 //
 //   inline constexpr auto kApple1Chips = make_chip_manifest(
 //       Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
@@ -207,11 +210,18 @@ constexpr ChipSlot::FactoryFn resolve_slot_factory() {
 //       Slot<pia6820_t>{0xD010, 0, 0xFFFC, "PIA"} // MMIO-only, 4-byte window
 //   );
 //
-//   // With PageBits = 8 (256-byte pages):
+//   // With PageBits = 8 (256-byte pages), bank_size=0 → bank = page:
 //   constexpr auto kRamId      = kApple1Chips.base_id(0, 8);   // = 0
 //   constexpr auto kMonitorId  = kApple1Chips.base_id(1, 8);   // = 256
 //   constexpr auto kBasicId    = kApple1Chips.base_id(2, 8);   // = 257
-//   // PIA has no buffer pages → no chip id assignment
+//   // PIA has no buffer → no chip id assignment
+//
+// Example — C264 (whole-chip banks, bank_size = size_bytes):
+//
+//   Slot<RAMChip>{0x0000, 65536, 0, "RAM", 0, 65536}     → 1 bank, id 0
+//   Slot<ROMChip>{0x8000, 16384, 0, "BASIC", 0, 16384}   → 1 bank, id 1
+//   Slot<ROMChip>{0xC000, 16384, 0, "KERNAL", 0, 16384}  → 1 bank, id 2
+//   // MaxChipId = 2 (vs. 383 with page-per-bank)
 //
 
 template<size_t N>
@@ -221,43 +231,73 @@ struct ChipManifest {
 
     // ── Chip-id assignment ─────────────────────────────────────────────────
     //
-    // All page-count-dependent queries take page_bits so that manifests
-    // declared with size_bytes remain page-size-independent.
+    // Chip ids are assigned as bank ids: each chip with bank_size > 0
+    // occupies size_bytes / bank_size consecutive ids.  When bank_size == 0
+    // the chip falls back to one bank per page (backward compatible with
+    // the legacy page-index model).
     //
+    // All queries take page_bits for the fallback page size.
+    //
+
+    // Number of bank ids consumed by chip `i`.
+    [[nodiscard]] constexpr size_t bank_count(size_t i, size_t page_bits) const noexcept {
+        if (chips[i].size_bytes == 0) return 0;
+        const size_t bs = chips[i].bank_size > 0
+            ? chips[i].bank_size : (size_t(1) << page_bits);
+        return chips[i].size_bytes / bs;
+    }
+
+    // Effective bank size for chip `i` (bank_size=0 → page size).
+    [[nodiscard]] constexpr size_t effective_bank_size(size_t i, size_t page_bits) const noexcept {
+        return chips[i].bank_size > 0 ? chips[i].bank_size : (size_t(1) << page_bits);
+    }
 
     // Base chip id of chip at index chip_index (0-based).
     [[nodiscard]] constexpr size_t base_id(size_t chip_index, size_t page_bits) const noexcept {
         size_t id = 0;
         for (size_t i = 0; i < chip_index; ++i)
-            id += chips[i].pages(page_bits);
+            id += bank_count(i, page_bits);
         return id;
     }
 
-    // Total pages occupied by all static chips.
-    [[nodiscard]] constexpr size_t static_pages(size_t page_bits) const noexcept {
+    // Total bank ids across all static chips.
+    [[nodiscard]] constexpr size_t total_banks(size_t page_bits) const noexcept {
         return base_id(N, page_bits);
     }
 
-    // First chip id in the dynamic pool (= one past the last static chip id).
+    // First chip id in the dynamic pool (= one past the last static bank id).
     [[nodiscard]] constexpr size_t dynamic_base_id(size_t page_bits) const noexcept {
-        return static_pages(page_bits);
+        return total_banks(page_bits);
     }
 
-    // Total pages in the flat memory (static + dynamic pool).
-    [[nodiscard]] constexpr size_t total_pages(size_t page_bits) const noexcept {
-        return static_pages(page_bits) + num_dynamic_pages;
+    // Total chip ids in use (static banks + dynamic pool pages).
+    [[nodiscard]] constexpr size_t total_ids(size_t page_bits) const noexcept {
+        return total_banks(page_bits) + num_dynamic_pages;
     }
 
     // Highest chip id that will ever appear in a page table.
     // Set MaxChipId in your BusSpec to this value.
     [[nodiscard]] constexpr size_t max_chip_id(size_t page_bits) const noexcept {
-        const size_t tp = total_pages(page_bits);
-        return tp > 0 ? tp - 1 : 0;
+        const size_t ti = total_ids(page_bits);
+        return ti > 0 ? ti - 1 : 0;
     }
 
-    // Buffer size in bytes for a given page size.
+    // Byte offset of chip at index chip_index in the flat memory.
+    [[nodiscard]] constexpr size_t byte_offset(size_t chip_index) const noexcept {
+        size_t off = 0;
+        for (size_t i = 0; i < chip_index; ++i)
+            off += chips[i].size_bytes;
+        return off;
+    }
+
+    // Total static buffer bytes (sum of all chip size_bytes).
+    [[nodiscard]] constexpr size_t total_buffer_bytes() const noexcept {
+        return byte_offset(N);
+    }
+
+    // Buffer size in bytes (static chips + dynamic pool).
     [[nodiscard]] constexpr size_t buffer_bytes(size_t page_bits) const noexcept {
-        return total_pages(page_bits) << page_bits;
+        return total_buffer_bytes() + (num_dynamic_pages << page_bits);
     }
 
     // Convenience: number of static chips.
@@ -362,6 +402,7 @@ make_chip_manifest(Slot<Chips>... slots) noexcept
     ((assert(slots.size_bytes == 0 || (slots.size_bytes & (slots.size_bytes - 1)) == 0),
       manifest.chips[i++] = ChipSlot{
           slots.base_addr, slots.size_bytes, slots.addr_mask,
+          slots.bank_size,
           resolve_slot_factory<Chips>(),
           slots.label,
           slots.condition
@@ -394,11 +435,17 @@ template<const auto& Manifest,
 struct ManifestBusSpec {
     using AddrType = uint_least_bits_t<AddrBits>;
 
+    // Compact type for ChipInfo byte offsets into flat memory.
+    using BaseType = uint_least_bits_t<std::bit_width(
+        Manifest.buffer_bytes(PgBits) > 0 ? Manifest.buffer_bytes(PgBits) - 1 : size_t(0))>;
+    // Address mask type (same as address width).
+    using MaskType = AddrType;
+
     static constexpr size_t AddressBits    = AddrBits;
     static constexpr size_t PageBits       = PgBits;
     static constexpr size_t NumViewers     = NViewers;
 
-    // Chip id range — derived from manifest prefix-sum layout.
+    // Chip id range — derived from manifest bank-id layout.
     // MaxWriteChipId = MaxChipId (conservative; is_read_only() known at runtime only).
     static constexpr size_t MaxChipId      = Manifest.max_chip_id(PgBits);
     static constexpr size_t MaxWriteChipId = MaxChipId;
