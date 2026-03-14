@@ -335,10 +335,6 @@ void SpectrumSystem<V>::configure_bus_memory_map() {
     //   128K: RAM pages 0-255 (read+write from first 64KB), ROM overlays read pages 0-63
     board_.apply(bus_);
 
-    // ROM region ($0000-$3FFF): no writes — unmap write pages
-    for (size_t page = 0; page < 64; ++page)
-        bus_.set_write_page(0, page, PT::kNoChipSelectedWrite);
-
     if constexpr (Traits::has_banking) {
         // 128K: remap fixed banks and current paging state.
         // RAM base_id is always 0 (slot 0), 64 pages per 16KB bank.
