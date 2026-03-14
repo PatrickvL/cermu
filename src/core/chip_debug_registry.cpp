@@ -31,7 +31,7 @@ uint32_t ChipDebugRegistry::read(const UIntSource& src, const ChipBase* chip) co
     if (auto* rs = std::get_if<RegSource>(&src)) {
         if (!reg_data_ || rs->byte_offset >= reg_size_) return 0;
         uint32_t raw = 0;
-        if (rs->byte_count >= 2 && (rs->byte_offset + 1) < reg_size_) {
+        if (rs->byte_count >= 2 && (static_cast<size_t>(rs->byte_offset) + 1) < reg_size_) {
             raw = reg_data_[rs->byte_offset] | (static_cast<uint32_t>(reg_data_[rs->byte_offset + 1]) << 8);
         } else {
             raw = reg_data_[rs->byte_offset];
