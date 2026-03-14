@@ -366,10 +366,6 @@ void BBCMicroSystem::configure_bus_memory_map() {
     // We fix up: write-protect ROM regions, unmap I/O pages, select active bank.
     board_.apply(bus_);
 
-    // Write-protect ROM regions ($80-$FF)
-    for (size_t page = 0x80; page < 0x100; ++page)
-        bus_.set_write_page(0, page, PT::kNoChipSelectedWrite);
-
     // Unmap FRED ($FC), JIM ($FD), SHEILA ($FE) — handled by sheila_tick()
     bus_.map_no_chip_selected(0, 0xFC, 3);
 
