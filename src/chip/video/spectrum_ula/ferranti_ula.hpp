@@ -96,7 +96,7 @@ namespace spectrum_ula {
 
 } // namespace spectrum_ula
 
-DECL_EXTRACT_ALL(SPECTRUM_ULA, SPECTRUM_ULA_DECL)
+DECL_EXTRACT(SPECTRUM_ULA, SPECTRUM_ULA_DECL)
 
 // ============================================================================
 // Ferranti ULA Chip

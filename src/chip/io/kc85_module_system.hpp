@@ -64,7 +64,7 @@ namespace kc85_mod_regs {
     constexpr uint8_t REG_COUNT = 8;
 } // namespace kc85_mod_regs
 
-DECL_EXTRACT_ALL(KC85_MOD, KC85_MOD_DECL)
+DECL_EXTRACT(KC85_MOD, KC85_MOD_DECL)
 
 // ============================================================================
 // KC85 Module Types

@@ -51,7 +51,7 @@ namespace z80_ctc_regs {
     constexpr uint8_t REG_COUNT = 9;
 } // namespace z80_ctc_regs
 
-DECL_EXTRACT_REGS_ONLY(Z80_CTC, Z80_CTC_DECL)
+DECL_EXTRACT(Z80_CTC, Z80_CTC_DECL)
 
 // ============================================================================
 // Z80 CTC Channel Control Bits

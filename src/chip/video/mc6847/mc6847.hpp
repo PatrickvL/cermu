@@ -80,7 +80,7 @@ namespace mc6847_const {
 
 } // namespace mc6847_const
 
-DECL_EXTRACT_ALL(MC6847, MC6847_DECL)
+DECL_EXTRACT(MC6847, MC6847_DECL)
 
 // ============================================================================
 // MC6847 Video Display Generator

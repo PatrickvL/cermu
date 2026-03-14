@@ -53,7 +53,7 @@ MC6845_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
 static constexpr int MC6845_NUM_REGISTERS = 18;
 
-DECL_EXTRACT_ALL(MC6845, MC6845_DECL)
+DECL_EXTRACT(MC6845, MC6845_DECL)
 
 // ============================================================================
 // MC6845 CHIP STRUCTURE

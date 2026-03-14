@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/cermu.hpp"  // Compiler compatibility macros
-#include "core/chip_debug_registry.hpp"  // Always included: DECL_EXTRACT_ALL/REGS_ONLY
+#include "core/chip_debug_registry.hpp"  // Always included: DECL_EXTRACT
                                   // macros are used at file scope in chip headers
                                   // and need RegEntry/FieldEntry types even in
                                   // non-debug builds.  All data is constexpr —

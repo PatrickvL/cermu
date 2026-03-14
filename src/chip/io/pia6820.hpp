@@ -43,7 +43,7 @@
 // --- Extract address constants ---
 PIA_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
-DECL_EXTRACT_ALL(PIA, PIA_DECL)
+DECL_EXTRACT(PIA, PIA_DECL)
 
 struct pia6820_t : public IoChipBase {
     pia6820_t() : IoChipBase(ChipInfo{"PIA6820", "Motorola"}) {

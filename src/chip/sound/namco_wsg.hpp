@@ -78,7 +78,7 @@ namespace wsg_regs {
     constexpr uint8_t REG_COUNT = 0x15;
 } // namespace wsg_regs
 
-DECL_EXTRACT_ALL(WSG, WSG_DECL)
+DECL_EXTRACT(WSG, WSG_DECL)
 
 // ============================================================================
 // Namco WSG Sound Generator
