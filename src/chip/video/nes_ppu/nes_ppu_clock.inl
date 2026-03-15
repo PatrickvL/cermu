@@ -111,7 +111,7 @@ inline void PPU::commit_sprite_eval() {
     auto& ev = internal.sprite_eval;
     // Swap: the back buffer (where eval just wrote) becomes the new front.
     internal.sec_oam_front_ = 1 - internal.sec_oam_front_;
-    internal.sprite_count = ev.sec_wr >> 2;
+    internal.sprite_count = (ev.state & 0x1Fu) >> 2;
     internal.sprite_zero_hit_possible = ev.has_sprite_zero;
 
     // Precompute sprite pattern addresses for all 8 slots.
@@ -131,71 +131,59 @@ inline void PPU::commit_sprite_eval() {
 // Templated on sprite Height (8 or 16) so comparisons use constexpr and
 // the compiler can fully unroll inner loops.
 //
-// Phase 1: Finding sprites for secondary OAM (up to 8).
-//   Uses the latched 64-bit visibility mask — a single bit-test per
-//   sprite instead of Y subtraction + comparison.  In-range sprites
-//   are copied one byte per step into pending_oam[].
-//   - In range: sec_wr & 3 == 0 copies Y byte, sec_wr & 3 != 0 copies tile/attr/X.
-//   - Not in range: 1 step, advance to next sprite.
-//   - When 8 sprites found → Phase 2.
+// Phase 0 (finding): sec_wr & 3 derived copy step.  Bitmask-accelerated.
+// Phase 1 (overflow): OAM[n*4+m] read with PPU hardware m-bug.
+// Done: bit 6 set → single-bit early-out.
 //
-// Phase 2: Overflow check with PPU hardware bug.
-//   - Read OAM[n6m2] directly as Y (buggy when m != 0).
-//   - In range → set overflow flag, → Phase 3.
-//   - Not in range → increment n AND m (the sprite overflow bug!).
+// Packed state layout (uint16_t):
+//   [15]   = n overflow    [14:9] = n    [8:7] = m
+//   [6]    = done          [5]    = phase (0=finding, 1=overflow)
+//   [4:0]  = sec_wr
 //
-// Phase 3: Done.  Dummy reads until cycle 257.
+// sec_wr carry (31→32) naturally sets bit 5 (finding→overflow).
+// m carry (3→0) naturally increments n.  state=0 is valid cold start.
 // ============================================================================
 template<uint8_t Height>
 inline void PPU::sprite_eval_step() {
     auto& ev = internal.sprite_eval;
 
-    if (ev.phase >= 3) return;  // Done — no work
+    if (ev.state & 0x40u) return;  // done — single bit test
 
-    if (ev.phase == 1) {
-        // ---- Phase 1: finding sprites (bitmask-accelerated) ----
-        if (ev.sec_wr & 3) {
-            // Copying bytes 1-3 (tile_id, attributes, x).
-            // OAM source: sprite base (n6m2, aligned) | byte offset (sec_wr & 3).
-            internal.sec_oam_back().bytes[ev.sec_wr] =
-                oam.bytes[(ev.n6m2 & 0xFC) | (ev.sec_wr & 3)];
-            ev.sec_wr++;
-            if ((ev.sec_wr & 3) == 0) {
-                ev.n6m2 += 4;  // next sprite
-                if (ev.n6m2 == 0)         { ev.phase = 3; return; }  // wrapped past 63
-                if (ev.sec_wr >= 32)      { ev.phase = 2; return; }  // 8 found
-            }
+    if (!(ev.state & 0x20u)) {
+        // ---- Phase 0: finding sprites (bitmask-accelerated) ----
+        if (ev.state & 0x180u) {
+            // m != 0 → copy byte, advance sec_wr and m in one add
+            internal.sec_oam_back().bytes[ev.state & 0x1Fu] =
+                oam.bytes[ev.state >> 7];
+            ev.state += 0x81u;
+            // carry from sec_wr [4:0] → phase 0→1 when sec OAM fills (natural)
+            // carry from m      [8:7] → n++       when 4-byte copy ends (natural)
+            if (!(ev.state & 0x180u))                          // m wrapped → copy done
+                if (ev.state >= 0x8000u) ev.state |= 0x40u;   // n==64 → done
             return;
         }
 
-        // Comparing: single bit-test — is sprite visible on this scanline?
-        if (ev.mask & (1ULL << (ev.n6m2 >> 2))) {
-            // In range — copy Y byte, begin 4-step copy
-            if (ev.n6m2 == 0) ev.has_sprite_zero = true;
-            internal.sec_oam_back().bytes[ev.sec_wr] = oam.bytes[ev.n6m2];  // Y byte
-            ev.sec_wr++;  // sec_wr & 3 now != 0 → next call enters copy path
+        // m == 0 → visibility test
+        if (ev.mask & (1ULL << (ev.state >> 9))) {
+            if (ev.state < 0x200u) ev.has_sprite_zero = true;  // n == 0
+            internal.sec_oam_back().bytes[ev.state & 0x1Fu] =
+                oam.bytes[ev.state >> 7];
+            ev.state += 0x81u;   // sec_wr++, m = 1 → begin copy
         } else {
-            // Not in range — 1-step skip
-            ev.n6m2 += 4;
-            if (ev.n6m2 == 0) ev.phase = 3;  // wrapped past sprite 63
+            ev.state += 0x200u;  // n++, m stays 0
+            if (ev.state >= 0x8000u) ev.state |= 0x40u;  // n==64 → done
         }
     } else {
-        // ---- Phase 2: overflow check with buggy m offset ----
-        // Read OAM[n6m2] directly — when low 2 bits != 0 this reads
-        // tile/attr/X bytes instead of Y.  That's the hardware bug.
-        const uint8_t y = oam.bytes[ev.n6m2];
-
-        // Unsigned subtraction: if scanline < y, wraps to a large value
-        // that fails the < Height comparison.  No branch on height.
+        // ---- Phase 1: overflow check (hardware m-bug: reads OAM[n*4+m]) ----
+        const uint8_t y = oam.bytes[ev.state >> 7];
         if (static_cast<unsigned>(scanline - y) < Height) {
-            // In range — set overflow flag
-            regs_[PPUSTATUS] |= 0x20;
-            ev.phase = 3;
+            regs_[PPUSTATUS] |= 0x20u;
+            ev.state |= 0x40u;   // done
         } else {
-            // Not in range — bug: increment both n AND m independently
-            // n6m2 = (n+1)*4 | ((m+1) & 3)
-            ev.n6m2 = ((ev.n6m2 + 4) & 0xFC) | ((ev.n6m2 + 1) & 3);
-            if ((ev.n6m2 & 0xFC) == 0) ev.phase = 3;  // n wrapped past 63
+            // n and m increment independently — the hardware bug
+            const uint16_t m_new = (((ev.state >> 7) + 1u) & 3u) << 7;
+            ev.state = ((ev.state & ~0x180u) + 0x200u) | m_new;
+            if (ev.state >= 0x8000u) ev.state |= 0x40u;  // n==64 → done
         }
     }
 }
@@ -342,7 +330,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                         std::memset(internal.sec_oam_back().bytes, 0xFF, 32);
                         internal.sprite_eval = {
                             sprite_masks_[scanline],  // latch bitmask
-                            0, 1, 0, false  // n6m2,phase,sec_wr,spr0
+                            0, false  // state=0 (finding, n=0, m=0, sec_wr=0)
                         };
                     } else if (cycle >= 66 && (cycle & 1) == 0) {
                         if (regs_[PPUCTRL] & 0x20)

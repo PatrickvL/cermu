@@ -175,18 +175,21 @@ public:
         // during dots 65-256 on visible scanlines for accurate overflow
         // flag timing and the PPU's buggy overflow byte-offset behavior.
         //
-        // Phase 1 uses a latched 64-bit visibility mask (from
-        // sprite_masks_[]) for a single bit-test instead of Y comparison.
-        // Phase 2 (overflow) uses n6m2 directly as OAM byte index with
-        // the hardware bug's m-offset in the low 2 bits.
+        // Packed into a single uint16_t `state`:
+        //   [15]   = n overflow (n==64 → done)
+        //   [14:9] = n  (sprite index, 0-63)
+        //   [8:7]  = m  (overflow byte offset, 0-3)
+        //   [6]    = done flag
+        //   [5]    = phase (0=finding, 1=overflow check)
+        //   [4:0]  = sec_wr (secondary OAM write pointer, 0-31)
         //
-        // copy_step is derived from sec_wr & 3 (0=comparing, 1-3=copying).
+        // state=0 is a valid cold start (finding, sprite 0, sec_wr=0).
+        // sec_wr carry (31→32) naturally sets the phase bit (finding→overflow).
+        // m carry (3→0) naturally increments n.  Done = single bit test (0x40).
         struct SpriteEval {
-            uint64_t mask     = 0;  // Latched visibility bitmask for this scanline
-            uint8_t n6m2      = 0;  // OAM byte index: bits 7:2=sprite n, 1:0=overflow m
-            uint8_t phase     = 0;  // 0=idle, 1=finding, 2=overflow check, 3=done
-            uint8_t sec_wr    = 0;  // Write pointer into back sec OAM bytes (0-31)
-            bool    has_sprite_zero = false; // Sprite 0 found during this eval
+            uint64_t mask  = 0;     // Latched visibility bitmask for this scanline
+            uint16_t state = 0;     // Packed evaluation state (see bit layout above)
+            bool has_sprite_zero = false; // Sprite 0 found during this eval
         } sprite_eval;
     } internal = {};
 
