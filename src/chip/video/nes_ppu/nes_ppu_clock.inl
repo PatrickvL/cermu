@@ -101,7 +101,9 @@ inline void PPU::update_shifters(uint8_t mask) {
 // ============================================================================
 inline void PPU::commit_sprite_eval() {
     auto& ev = internal.sprite_eval;
-    internal.sprite_count              = (ev.state & SE_WR) >> 2;
+    // When all 8 sprite slots fill, the 5-bit write pointer wraps to 0
+    // and carry sets SE_OVF — so (SE_WR >> 2) would yield 0 instead of 8.
+    internal.sprite_count              = (ev.state & SE_OVF) ? 8 : (ev.state & SE_WR) >> 2;
     internal.sprite_zero_hit_possible  = static_cast<unsigned>(scanline - oam.entries[0].y) < ev.sprite_height;
 
     // Copy x values and attributes from SecOam entries into flat arrays.
