@@ -274,9 +274,11 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                     break;
                 case 3:
                     // Capture attribute byte + quadrant shift
+                    // Branchless: bit 1 of v gives 0 or 2 directly,
+                    //             bit 6 of v shifted to position 2 gives 0 or 4.
                     internal.at_byte = vram_data_latch_;
-                    internal.at_byte >>= ((internal.v & 0x0002) ? 2 : 0)
-                                      | ((internal.v & 0x0040) ? 4 : 0);
+                    internal.at_byte >>= (internal.v & 2)
+                                       | ((internal.v >> 4) & 4);
                     break;
                 case 4: {
                     // Output BG pattern table low byte address
