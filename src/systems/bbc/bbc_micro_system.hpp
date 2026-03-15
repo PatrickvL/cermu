@@ -6,6 +6,7 @@
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/io/mos6522.hpp"
 #include "chip/video/mc6845/mc6845.hpp"
+#include "chip/video/video_pixel_unit.hpp"
 #include "chip/sound/sn76489/sn76489.hpp"
 #include "chip/memory/memory_chip.hpp"
 #include "systems/bbc/bbc_micro_constants.hpp"
@@ -139,9 +140,12 @@ private:
     uint8_t     video_ula_control_ = 0;  // $FE20 control register
     uint8_t     video_ula_palette_[16]{}; // Logical→physical color mapping
 
-    // Display state
-    uint32_t    screen_pixel_x_ = 0;
-    uint32_t    screen_pixel_y_ = 0;
+    // Display — own framebuffer + GPU indexed rendering
+    uint32_t    framebuffer_[bbc_constants::DISPLAY_WIDTH *
+                             bbc_constants::DISPLAY_HEIGHT] = {};
+    VideoPixelUnit pixel_;
+    uint8_t     frame_indices_[bbc_constants::DISPLAY_WIDTH *
+                               bbc_constants::DISPLAY_HEIGHT] = {};
 
     // Keyboard matrix (10 columns × 8 rows)
     // Each element: true = key pressed

@@ -209,6 +209,12 @@ bool BBCMicroSystem::initialize() {
     crtc_->on_vsync = [this]() { this->crtc_vsync(); };
     crtc_->on_hsync = [this]() { this->crtc_hsync(); };
 
+    // GPU indexed palette rendering
+    pixel_.set_framebuffer(framebuffer_,
+                           bbc_constants::DISPLAY_WIDTH,
+                           bbc_constants::DISPLAY_HEIGHT);
+    register_gpu_palette(&pixel_, bbc_constants::PALETTE, 8);
+
     // ---- Sound (SN76489) ----
     psg_->init();
     psg_->set_clock_frequency(bbc_constants::SN76489_CLOCK);
@@ -485,7 +491,7 @@ bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
 // ============================================================================
 
 void BBCMicroSystem::crtc_display_char(uint16_t ma, uint8_t ra, bool cursor) {
-    if (!rgba_framebuffer_ || !memory_) return;
+    if (!memory_) return;
 
     int mode = get_display_mode();
 
@@ -499,9 +505,8 @@ void BBCMicroSystem::crtc_display_char(uint16_t ma, uint8_t ra, bool cursor) {
 }
 
 void BBCMicroSystem::crtc_vsync() {
-    // VSYNC — start of new frame
-    screen_pixel_x_ = 0;
-    screen_pixel_y_ = 0;
+    // Flush indexed frame through VideoPixelUnit at VSYNC
+    pixel_.flush_indexed_frame(frame_indices_, bbc_constants::PALETTE);
 
     // On real hardware, VSYNC connects to System VIA CA1 input.
     // The VIA detects the edge and sets the CA1 interrupt flag.
@@ -557,19 +562,19 @@ void BBCMicroSystem::render_mode7_char(uint16_t screen_offset, uint8_t ra, bool 
     uint32_t pixel_x = char_col * 16;
     uint32_t pixel_y = char_row * 10 + (ra / 2);  // 20 scanlines → 10 pixels visible
 
-    if (pixel_y >= static_cast<uint32_t>(rgba_height_)) return;
-    if (pixel_x + 16 > static_cast<uint32_t>(rgba_width_)) return;
+    if (pixel_y >= bbc_constants::DISPLAY_HEIGHT) return;
+    if (pixel_x + 16 > bbc_constants::DISPLAY_WIDTH) return;
 
-    uint32_t fg_color = 0xFFFFFFFF;  // White
-    uint32_t bg_color = 0xFF000000;  // Black
-    uint32_t* row_ptr = rgba_framebuffer_ + pixel_y * rgba_width_;
+    uint8_t fg_idx = 7;  // White
+    uint8_t bg_idx = 0;  // Black
+    uint8_t* row_ptr = frame_indices_ + pixel_y * bbc_constants::DISPLAY_WIDTH;
 
     // Render 8 source pixels, doubled to 16 output pixels
     for (int bit = 7; bit >= 0; bit--) {
-        uint32_t color = (pixel_row & (1 << bit)) ? fg_color : bg_color;
+        uint8_t idx = (pixel_row & (1 << bit)) ? fg_idx : bg_idx;
         uint32_t px = pixel_x + (7 - bit) * 2;
-        if (px < static_cast<uint32_t>(rgba_width_)) row_ptr[px] = color;
-        if (px + 1 < static_cast<uint32_t>(rgba_width_)) row_ptr[px + 1] = color;
+        if (px < bbc_constants::DISPLAY_WIDTH) row_ptr[px] = idx;
+        if (px + 1 < bbc_constants::DISPLAY_WIDTH) row_ptr[px + 1] = idx;
     }
 }
 
@@ -615,9 +620,9 @@ void BBCMicroSystem::render_bitmap_pixels(uint16_t ma, uint8_t ra, bool cursor) 
     uint32_t pixel_x = col * ppb * pixel_width;
     uint32_t pixel_y = row * 8 + ra;
 
-    if (pixel_y >= static_cast<uint32_t>(rgba_height_)) return;
+    if (pixel_y >= bbc_constants::DISPLAY_HEIGHT) return;
 
-    uint32_t* row_ptr = rgba_framebuffer_ + pixel_y * rgba_width_;
+    uint8_t* row_ptr = frame_indices_ + pixel_y * bbc_constants::DISPLAY_WIDTH;
 
     // Unpack screen byte into pixels based on bits-per-pixel
     for (int p = 0; p < ppb; p++) {
@@ -647,21 +652,14 @@ void BBCMicroSystem::render_bitmap_pixels(uint16_t ma, uint8_t ra, bool cursor) 
             }
         }
 
-        // Map logical color through Video ULA palette to physical color
+        // Map logical color through Video ULA palette to physical color index
         uint8_t physical = video_ula_palette_[color_index & 0x0F] & 0x07;
-        uint32_t rgba = 0xFF000000;
-        if (physical < static_cast<uint8_t>(current_palette_.size())) {
-            rgba = (0xFF << 24) |
-                   (current_palette_[physical].b << 16) |
-                   (current_palette_[physical].g << 8) |
-                   current_palette_[physical].r;
-        }
 
-        // Write pixel(s) to framebuffer
+        // Write pixel(s) as palette index to frame_indices_
         for (int w = 0; w < pixel_width; w++) {
             uint32_t px = pixel_x + p * pixel_width + w;
-            if (px < static_cast<uint32_t>(rgba_width_)) {
-                row_ptr[px] = rgba;
+            if (px < bbc_constants::DISPLAY_WIDTH) {
+                row_ptr[px] = physical;
             }
         }
     }
@@ -889,7 +887,7 @@ bool BBCMicroSystem::load_file(const char* filepath) {
 // ============================================================================
 
 uint32_t* BBCMicroSystem::get_framebuffer() {
-    return rgba_framebuffer_;
+    return framebuffer_;
 }
 
 void BBCMicroSystem::get_display_dimensions(int* width, int* height) const {
@@ -897,10 +895,8 @@ void BBCMicroSystem::get_display_dimensions(int* width, int* height) const {
     *height = bbc_constants::DISPLAY_HEIGHT;
 }
 
-void BBCMicroSystem::set_framebuffer(uint32_t* buffer, int width, int height) {
-    rgba_framebuffer_ = buffer;
-    rgba_width_ = width;
-    rgba_height_ = height;
+void BBCMicroSystem::set_framebuffer(uint32_t*, int, int) {
+    // BBC Micro owns its framebuffer — external assignment ignored.
 }
 
 // ============================================================================
