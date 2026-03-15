@@ -137,7 +137,7 @@ struct AudioCommand {
     uint8_t  value;        // data byte
     uint8_t  pad;          // alignment
 };
-static_assert(sizeof(AudioCommand) == 12);
+static_assert(sizeof(AudioCommand) == 16);
 ```
 
 The queue is a fixed-capacity ring buffer of `AudioCommand`.  Capacity should be
