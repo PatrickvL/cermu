@@ -652,6 +652,9 @@ bool Commodore264System<V>::initialize() {
     apply_cpu_banking();
     apply_ted_video_banking();
 
+    // GPU indexed palette rendering — 128-color TED palette
+    register_gpu_palette(&ted_->pixel, ted7360_t::get_palette(), 128);
+
     initialized_ = true;
     return true;
 }
@@ -881,29 +884,6 @@ void Commodore264System<V>::set_framebuffer(uint32_t* buffer, int width, int hei
     if (ted_) {
         ted_->set_framebuffer(buffer, width, height);
     }
-}
-
-// ============================================================================
-// GPU Indexed Palette Rendering
-// ============================================================================
-
-template<C264SeriesVariant V>
-bool Commodore264System<V>::supports_gpu_indexed_rendering() const { return true; }
-
-template<C264SeriesVariant V>
-int Commodore264System<V>::get_gpu_palette_size() const { return 128; }
-
-template<C264SeriesVariant V>
-const uint32_t* Commodore264System<V>::get_gpu_palette_data() const { return ted7360_t::get_palette(); }
-
-template<C264SeriesVariant V>
-const uint8_t* Commodore264System<V>::get_index_buffer() const {
-    return ted_ ? ted_->pixel.index_buffer : nullptr;
-}
-
-template<C264SeriesVariant V>
-void Commodore264System<V>::set_index_buffer(uint8_t* buffer) {
-    if (ted_) ted_->pixel.set_index_buffer(buffer);
 }
 
 // ============================================================================

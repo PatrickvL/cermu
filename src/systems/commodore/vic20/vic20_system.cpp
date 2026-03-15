@@ -678,6 +678,9 @@ bool VIC20System::initialize() {
     
     // Set up page pointers for current expansion and ROM banking
     setup_expansion_map();
+
+    // GPU indexed palette rendering — 16-color VIC palette
+    register_gpu_palette(&vic_->pixel, vic_base_t::get_default_palette(), 16);
     
     initialized_ = true;
     return true;
@@ -1092,22 +1095,6 @@ void VIC20System::set_framebuffer(uint32_t* buffer, int width, int height) {
     } else {
         printf("VIC20: Warning - cannot set framebuffer (vic_=%p buffer=%p)\n", (void*)vic_, (void*)buffer);
     }
-}
-
-// ============================================================================
-// GPU Indexed Palette Rendering
-// ============================================================================
-
-bool VIC20System::supports_gpu_indexed_rendering() const { return true; }
-int VIC20System::get_gpu_palette_size() const { return 16; }
-const uint32_t* VIC20System::get_gpu_palette_data() const { return vic_base_t::get_default_palette(); }
-
-const uint8_t* VIC20System::get_index_buffer() const {
-    return vic_ ? vic_->pixel.index_buffer : nullptr;
-}
-
-void VIC20System::set_index_buffer(uint8_t* buffer) {
-    if (vic_) vic_->pixel.set_index_buffer(buffer);
 }
 
 // ============================================================================

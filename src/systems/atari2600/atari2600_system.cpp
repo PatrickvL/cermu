@@ -190,6 +190,9 @@ bool Atari2600System::initialize() {
     // Register all manifest-created chips for the Hardware menu
     register_bus_chips(board_);
 
+    // GPU indexed palette rendering — 128-color TIA NTSC palette
+    register_gpu_palette(&tia_->pixel, tia_->palette_rgba_, 128);
+
     printf("Atari2600: System initialized\n");
     return true;
 }
@@ -420,22 +423,6 @@ void Atari2600System::set_framebuffer(uint32_t* buffer, int width, int height) {
 
     // Pass framebuffer to TIA for direct rendering
     tia_->set_framebuffer(buffer, width, height);
-}
-
-// ============================================================================
-// GPU Indexed Palette Rendering
-// ============================================================================
-
-bool Atari2600System::supports_gpu_indexed_rendering() const { return true; }
-int Atari2600System::get_gpu_palette_size() const { return 128; }
-const uint32_t* Atari2600System::get_gpu_palette_data() const { return tia_ ? tia_->palette_rgba_ : nullptr; }
-
-const uint8_t* Atari2600System::get_index_buffer() const {
-    return tia_ ? tia_->pixel.index_buffer : nullptr;
-}
-
-void Atari2600System::set_index_buffer(uint8_t* buffer) {
-    if (tia_) tia_->pixel.set_index_buffer(buffer);
 }
 
 // ============================================================================
