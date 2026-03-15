@@ -135,12 +135,12 @@ inline void PPU::commit_sprite_eval() {
 //   Uses the latched 64-bit visibility mask — a single bit-test per
 //   sprite instead of Y subtraction + comparison.  In-range sprites
 //   are copied one byte per step into pending_oam[].
-//   - In range: step 0 = copy Y byte, steps 1-3 = copy tile/attr/X.
+//   - In range: sec_wr & 3 == 0 copies Y byte, sec_wr & 3 != 0 copies tile/attr/X.
 //   - Not in range: 1 step, advance to next sprite.
 //   - When 8 sprites found → Phase 2.
 //
 // Phase 2: Overflow check with PPU hardware bug.
-//   - Compare OAM[n*4+m] with scanline via unsigned subtraction.
+//   - Read OAM[n6m2] directly as Y (buggy when m != 0).
 //   - In range → set overflow flag, → Phase 3.
 //   - Not in range → increment n AND m (the sprite overflow bug!).
 //
@@ -154,37 +154,36 @@ inline void PPU::sprite_eval_step() {
 
     if (ev.phase == 1) {
         // ---- Phase 1: finding sprites (bitmask-accelerated) ----
-        if (ev.copy_step > 0) {
-            // Copy next byte from primary OAM to back secondary OAM.
-            internal.sec_oam_back().bytes[ev.sec_wr] = oam.bytes[ev.n * 4 + ev.copy_step];
+        if (ev.sec_wr & 3) {
+            // Copying bytes 1-3 (tile_id, attributes, x).
+            // OAM source: sprite base (n6m2, aligned) | byte offset (sec_wr & 3).
+            internal.sec_oam_back().bytes[ev.sec_wr] =
+                oam.bytes[(ev.n6m2 & 0xFC) | (ev.sec_wr & 3)];
             ev.sec_wr++;
-            ev.copy_step++;
-            if (ev.copy_step > 3) {
-                ev.copy_step = 0;
-                ev.n++;
-                if (ev.n >= 64)       { ev.phase = 3; return; }
-                if (ev.sec_wr >= 32)  { ev.phase = 2; ev.m = 0; return; }
+            if ((ev.sec_wr & 3) == 0) {
+                ev.n6m2 += 4;  // next sprite
+                if (ev.n6m2 == 0)         { ev.phase = 3; return; }  // wrapped past 63
+                if (ev.sec_wr >= 32)      { ev.phase = 2; return; }  // 8 found
             }
             return;
         }
 
-        // Single bit-test: is sprite n visible on this scanline?
-        if (ev.mask & (1ULL << ev.n)) {
+        // Comparing: single bit-test — is sprite visible on this scanline?
+        if (ev.mask & (1ULL << (ev.n6m2 >> 2))) {
             // In range — copy Y byte, begin 4-step copy
-            if (ev.n == 0) ev.has_sprite_zero = true;
-            internal.sec_oam_back().bytes[ev.sec_wr] = oam.bytes[ev.n * 4];  // Y byte
-            ev.sec_wr++;
-            ev.copy_step = 1;  // next step copies tile_id
+            if (ev.n6m2 == 0) ev.has_sprite_zero = true;
+            internal.sec_oam_back().bytes[ev.sec_wr] = oam.bytes[ev.n6m2];  // Y byte
+            ev.sec_wr++;  // sec_wr & 3 now != 0 → next call enters copy path
         } else {
             // Not in range — 1-step skip
-            ev.n++;
-            if (ev.n >= 64) ev.phase = 3;
+            ev.n6m2 += 4;
+            if (ev.n6m2 == 0) ev.phase = 3;  // wrapped past sprite 63
         }
     } else {
         // ---- Phase 2: overflow check with buggy m offset ----
-        // Compare OAM[n*4+m] as if it were a Y coordinate.  When m != 0
-        // this reads tile/attr/X bytes — that’s the hardware bug.
-        const uint8_t y = oam.bytes[ev.n * 4 + ev.m];
+        // Read OAM[n6m2] directly — when low 2 bits != 0 this reads
+        // tile/attr/X bytes instead of Y.  That's the hardware bug.
+        const uint8_t y = oam.bytes[ev.n6m2];
 
         // Unsigned subtraction: if scanline < y, wraps to a large value
         // that fails the < Height comparison.  No branch on height.
@@ -193,10 +192,10 @@ inline void PPU::sprite_eval_step() {
             regs_[PPUSTATUS] |= 0x20;
             ev.phase = 3;
         } else {
-            // Not in range — bug: increment both n AND m
-            ev.n++;
-            ev.m = (ev.m + 1) & 3;
-            if (ev.n >= 64) ev.phase = 3;
+            // Not in range — bug: increment both n AND m independently
+            // n6m2 = (n+1)*4 | ((m+1) & 3)
+            ev.n6m2 = ((ev.n6m2 + 4) & 0xFC) | ((ev.n6m2 + 1) & 3);
+            if ((ev.n6m2 & 0xFC) == 0) ev.phase = 3;  // n wrapped past 63
         }
     }
 }
@@ -343,7 +342,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                         std::memset(internal.sec_oam_back().bytes, 0xFF, 32);
                         internal.sprite_eval = {
                             sprite_masks_[scanline],  // latch bitmask
-                            0, 0, 0, 1, 0, false  // n,m,copy,phase,sec_wr,spr0
+                            0, 1, 0, false  // n6m2,phase,sec_wr,spr0
                         };
                     } else if (cycle >= 66 && (cycle & 1) == 0) {
                         if (regs_[PPUCTRL] & 0x20)
