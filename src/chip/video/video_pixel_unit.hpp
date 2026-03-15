@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 #include <algorithm>
 
 // ============================================================================
@@ -14,11 +15,23 @@
 // The struct holds only pointers and dimensions — buffer allocation is
 // chip-specific.  Systems provide the framebuffer via set_framebuffer().
 //
+// Two rendering modes:
+//
+//   CPU mode (default):
+//     flush writes palette[color_line[x]] → framebuffer (RGBA).
+//
+//   GPU indexed mode (gpu_indexed = true):
+//     flush copies raw palette indices → index_buffer.
+//     The palette lookup is deferred to a GPU fragment shader,
+//     eliminating per-pixel CPU work and reducing the texture upload
+//     from 4 bytes/pixel (RGBA) to 1 byte/pixel (R8).
+//
 // Usage:
 //   1. Chip allocates color_line (e.g. static array or malloc).
 //   2. System calls set_framebuffer() with the RGBA output buffer.
-//   3. During rendering, chip writes palette indices to color_line[x].
-//   4. At scanline end, chip calls flush_indexed_line(row, palette, width).
+//   3. (Optional) Host calls set_index_buffer() to enable GPU indexed mode.
+//   4. During rendering, chip writes palette indices to color_line[x].
+//   5. At scanline end, chip calls flush_indexed_line(row, palette, width).
 //
 // Chips that need additional per-line buffers (e.g. priority, collision)
 // extend this struct via inheritance or composition.
@@ -30,11 +43,24 @@ struct VideoPixelUnit {
     int       fb_width    = 0;         // Framebuffer width in pixels
     int       fb_height   = 0;         // Framebuffer height in pixels (raster lines)
 
-    // Set the destination framebuffer.
+    // GPU indexed rendering — when enabled, flush copies raw indices to
+    // index_buffer instead of performing palette lookup into framebuffer.
+    // The host allocates index_buffer and provides it via set_index_buffer().
+    bool      gpu_indexed  = false;
+    uint8_t*  index_buffer = nullptr;  // Full-frame index buffer (host-owned)
+
+    // Set the destination framebuffer (CPU mode).
     inline void set_framebuffer(uint32_t* fb, int width, int height) {
         framebuffer = fb;
         fb_width    = width;
         fb_height   = height;
+    }
+
+    // Set the index buffer for GPU indexed mode.
+    // Passing nullptr disables GPU indexed mode.
+    inline void set_index_buffer(uint8_t* buf) {
+        index_buffer = buf;
+        gpu_indexed  = (buf != nullptr);
     }
 
     // Flush line_width indices from color_line into framebuffer row,
@@ -45,20 +71,27 @@ struct VideoPixelUnit {
     }
 
     // Flush a sub-range [x_start, x_end) of color_line into a framebuffer
-    // row, performing palette lookup.  Useful when palette changes mid-
-    // scanline and pixels already emitted must be flushed with the old LUT
-    // before rebuilding.  x_start/x_end are clamped to [0, fb_width).
+    // row, performing palette lookup (CPU mode) or copying raw indices
+    // (GPU indexed mode).  x_start/x_end are clamped to [0, fb_width).
     inline void flush_indexed_line_range(int row, const uint32_t* palette,
                                          int x_start, int x_end) const {
-        if (!framebuffer || !color_line || !palette) return;
+        if (!color_line) return;
         if (row < 0 || row >= fb_height) return;
 
         x_start = std::max(x_start, 0);
         x_end   = std::min(x_end, fb_width);
 
-        uint32_t* const row_ptr = framebuffer + row * fb_width;
-        for (int x = x_start; x < x_end; ++x) {
-            row_ptr[x] = palette[color_line[x]];
+        if (gpu_indexed && index_buffer) {
+            // GPU path — copy raw indices; palette applied by fragment shader.
+            // memcpy is significantly cheaper than per-pixel LUT lookups.
+            std::memcpy(index_buffer + row * fb_width + x_start,
+                        color_line + x_start, x_end - x_start);
+        } else if (framebuffer && palette) {
+            // CPU path — resolve palette now.
+            uint32_t* const row_ptr = framebuffer + row * fb_width;
+            for (int x = x_start; x < x_end; ++x) {
+                row_ptr[x] = palette[color_line[x]];
+            }
         }
     }
 };

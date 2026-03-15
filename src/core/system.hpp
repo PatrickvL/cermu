@@ -506,6 +506,38 @@ public:
     // The system should adjust its audio generation to match.
     // Default implementation does nothing.
     virtual void set_audio_sample_rate(int sample_rate_hz);
+
+    // ---- GPU indexed rendering -----------------------------------------
+    // Systems whose video chip has a fixed (or rarely-changing) palette
+    // can defer the palette lookup to a GPU fragment shader.  This
+    // eliminates per-pixel CPU work and reduces the texture upload from
+    // 4 bytes/pixel (RGBA) to 1 byte/pixel (R8).
+    //
+    // Override these to opt in:
+    //   supports_gpu_indexed_rendering() → true
+    //   get_gpu_palette_size()           → number of palette entries
+    //   get_gpu_palette_data()           → pointer to RGBA palette array
+    //
+    // The host calls set_index_buffer() after set_framebuffer() when the
+    // system advertises support.  The system forwards it to its video
+    // chip's VideoPixelUnit::set_index_buffer().
+
+    /// Whether this system supports GPU indexed palette rendering.
+    virtual bool supports_gpu_indexed_rendering() const { return false; }
+
+    /// Number of palette entries (e.g. 16 for C64, 128 for TED/TIA).
+    virtual int get_gpu_palette_size() const { return 0; }
+
+    /// Pointer to the RGBA palette array (must have get_gpu_palette_size() entries).
+    /// The host uploads this to a 256×1 GPU texture once per frame.
+    virtual const uint32_t* get_gpu_palette_data() const { return nullptr; }
+
+    /// Pointer to the full-frame index buffer populated by flush_indexed_line().
+    virtual const uint8_t* get_index_buffer() const { return nullptr; }
+
+    /// Provide a host-allocated index buffer for GPU indexed rendering.
+    /// The system forwards this to its video chip's VideoPixelUnit.
+    virtual void set_index_buffer(uint8_t* /*buffer*/) {}
 };
 
 // Include SystemRegistry (moved to separate file)
