@@ -104,13 +104,14 @@ inline void PPU::commit_sprite_eval() {
     internal.sprite_count              = (ev.state & SE_WR) >> 2;
     internal.sprite_zero_hit_possible  = sprite_masks_[scanline] & 1u;
 
-    // Copy x values from front SecOam entries into flat array for cache locality.
-    // update_shifters and pixel rendering access sprite_x[] every visible dot;
-    // keeping it contiguous with the shifter arrays avoids striding through
-    // 4-byte OAM entries.
+    // Copy x values and attributes from front SecOam entries into flat arrays.
+    // Pixel rendering accesses these every visible dot; keeping them contiguous
+    // avoids striding through 4-byte OAM entries during the inner loop.
     const auto& front = internal.sec_oam_front();
-    for (uint8_t i = 0; i < internal.sprite_count; i++)
-        internal.sprite_x[i] = front.entries[i].x;
+    for (uint8_t i = 0; i < internal.sprite_count; i++) {
+        internal.sprite_x[i]    = front.entries[i].x;
+        internal.sprite_attr[i] = front.entries[i].attributes;
+    }
 
     // Precompute sprite pattern addresses for all 8 slots.
     // Avoids recomputing the branchy address calc twice per slot
@@ -383,7 +384,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                         case 5: { // Capture sprite pattern low byte
                             uint8_t data = vram_data_latch_;
                             if (idx < internal.sprite_count) {
-                                if (internal.sec_oam_front().entries[idx].attributes & 0x40)
+                                if (internal.sprite_attr[idx] & 0x40)
                                     data = flip_byte(data);
                                 internal.sprite_shifter_pattern_lo[idx] = data;
                             }
@@ -395,7 +396,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                         case 7: { // Capture sprite pattern high byte
                             uint8_t data = vram_data_latch_;
                             if (idx < internal.sprite_count) {
-                                if (internal.sec_oam_front().entries[idx].attributes & 0x40)
+                                if (internal.sprite_attr[idx] & 0x40)
                                     data = flip_byte(data);
                                 internal.sprite_shifter_pattern_hi[idx] = data;
                             }
@@ -469,7 +470,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                         const uint8_t px = ((internal.sprite_shifter_pattern_lo[i] >> bit) & 1)
                                          | (((internal.sprite_shifter_pattern_hi[i] >> bit) & 1) << 1);
                         if (px != 0) {
-                            const uint8_t attr = internal.sec_oam_front().entries[i].attributes;
+                            const uint8_t attr = internal.sprite_attr[i];
                             fg_idx      = px | ((attr & 3) << 2) | 0x10;
                             fg_priority = !(attr & 0x20);
                             if (i == 0) internal.sprite_zero_being_rendered = true;
