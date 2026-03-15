@@ -1,4 +1,5 @@
 #include "gui/session_gui.hpp"
+#include "gui/indexed_shader.hpp"
 #include "gui/port_icons.hpp"
 #include "gui/vfs_file_system.hpp"
 #define IMGUI_DEFINE_MATH_OPERATORS
@@ -23,6 +24,42 @@
 #define HAS_IMGUIFILEDIALOG 1
 #endif
 #endif
+
+// ============================================================================
+// GPU Indexed Palette Rendering — ImGui draw callback
+// ============================================================================
+
+struct IndexedShaderCallbackData {
+    GLuint shader;
+    GLint  loc_proj;
+    GLuint palette_tex;
+};
+
+static void indexed_shader_bind_callback(const ImDrawList*, const ImDrawCmd* cmd) {
+    auto* d = static_cast<const IndexedShaderCallbackData*>(cmd->UserCallbackData);
+
+    // Switch to indexed palette shader
+    indexed_shader::glUseProgram(d->shader);
+
+    // Compute the same ortho projection ImGui uses
+    ImDrawData* draw_data = ImGui::GetDrawData();
+    float L = draw_data->DisplayPos.x;
+    float R = draw_data->DisplayPos.x + draw_data->DisplaySize.x;
+    float T = draw_data->DisplayPos.y;
+    float B = draw_data->DisplayPos.y + draw_data->DisplaySize.y;
+    const float ortho[4][4] = {
+        { 2.0f/(R-L),   0.0f,         0.0f,   0.0f },
+        { 0.0f,         2.0f/(T-B),   0.0f,   0.0f },
+        { 0.0f,         0.0f,        -1.0f,   0.0f },
+        { (R+L)/(L-R),  (T+B)/(B-T),  0.0f,   1.0f },
+    };
+    indexed_shader::glUniformMatrix4fv(d->loc_proj, 1, GL_FALSE, &ortho[0][0]);
+
+    // Bind palette texture to slot 1 (index texture goes to slot 0 via ImGui)
+    indexed_shader::glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, d->palette_tex);
+    indexed_shader::glActiveTexture(GL_TEXTURE0);
+}
 
 // ============================================================================
 // Helpers
@@ -924,27 +961,42 @@ void SessionGUI::render_screen() {
     // Only re-upload the texture when a new frame is available; otherwise
     // the GPU keeps displaying the previously uploaded texture.
     bool have_new_frame = fb_new_frame_.exchange(false, std::memory_order_acquire);
-    if (have_new_frame && fb_snapshot_ && screen_textures_[0]) {
+    if (have_new_frame) {
         // Hold fb_mutex_ for the *entire* texture upload so the emu thread
         // cannot memcpy a new frame into fb_snapshot_ while glTexSubImage2D
         // is reading from it.  The previous code released the lock before
         // update_screen_texture(), creating a data-race window.
         std::lock_guard<std::mutex> lock(fb_mutex_);
 
-        // Double-buffered texture upload: write to the current write
-        // texture while the GPU may still be reading from the other one.
-        GLuint upload_tex = screen_textures_[texture_write_idx_];
-        update_screen_texture(upload_tex, fb_width_, fb_height_, fb_snapshot_);
+        if (use_gpu_indexed_ && index_textures_[0]) {
+            // GPU indexed path — upload 1 byte/pixel R8 index texture
+            GLuint upload_tex = index_textures_[texture_write_idx_];
+            update_index_texture(upload_tex, fb_width_, fb_height_, index_snapshot_);
+            // Re-upload palette (cheap: max 256×4 bytes; supports palette changes)
+            update_palette_texture(system_->get_gpu_palette_data(), gpu_palette_size_);
+        } else if (fb_snapshot_ && screen_textures_[0]) {
+            // CPU path — upload 4 bytes/pixel RGBA texture
+            GLuint upload_tex = screen_textures_[texture_write_idx_];
+            update_screen_texture(upload_tex, fb_width_, fb_height_, fb_snapshot_);
+        }
 
         // Swap write index for next frame
         texture_write_idx_ ^= 1;
         // Keep base-class id in sync for filter-change code
         screen_texture_id_ = screen_textures_[texture_write_idx_];
     }
+
     // Always render the most recently uploaded texture (read index = opposite of write)
-    if (screen_textures_[0]) {
-        GLuint display_tex = screen_textures_[texture_write_idx_ ^ 1];
-        
+    GLuint display_tex = 0;
+    bool use_indexed_shader = false;
+    if (use_gpu_indexed_ && index_textures_[0]) {
+        display_tex = index_textures_[texture_write_idx_ ^ 1];
+        use_indexed_shader = true;
+    } else if (screen_textures_[0]) {
+        display_tex = screen_textures_[texture_write_idx_ ^ 1];
+    }
+
+    if (display_tex) {
         // Get hardware traits to determine PAL/NTSC (default to PAL for most systems)
         const auto& traits = system_->get_hardware_traits();
         bool is_pal = true;  // Default to PAL, systems can override via traits
@@ -957,12 +1009,24 @@ void SessionGUI::render_screen() {
             (float)fb_width_, (float)fb_height_,
             is_pal, use_pixel_aspect,
             &display_w, &display_h, &pos_x, &pos_y);
-        
+
+        // GPU indexed: inject custom shader via ImGui draw callback
+        ImDrawList* draw_list = use_indexed_shader ? ImGui::GetWindowDrawList() : nullptr;
+        if (use_indexed_shader) {
+            IndexedShaderCallbackData cb = { indexed_shader_, indexed_loc_proj_, palette_texture_ };
+            draw_list->AddCallback(indexed_shader_bind_callback, &cb, sizeof(cb));
+        }
+
         // Set cursor position and render from the last-uploaded texture
         ImGui::SetCursorPos(ImVec2(pos_x, pos_y));
         ImGui::Image((ImTextureID)(intptr_t)display_tex,
                     ImVec2(display_w, display_h));
-        
+
+        // Restore ImGui's default shader after our indexed draw
+        if (use_indexed_shader) {
+            draw_list->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+        }
+
         // Store display rect in SDL window coordinates for peripheral devices
         // (e.g. lightpen uses this to map mouse position to emulated screen)
         if (system_) {
@@ -1059,10 +1123,15 @@ void SessionGUI::step_emulation() {
         std::lock_guard<std::mutex> lock(emu_mutex_);
         system_->tick();
         // Snapshot the framebuffer so the GUI sees the result
-        if (framebuffer_ && fb_snapshot_) {
+        {
             std::lock_guard<std::mutex> flock(fb_mutex_);
-            memcpy(fb_snapshot_, framebuffer_,
-                   static_cast<size_t>(fb_width_) * fb_height_ * sizeof(uint32_t));
+            if (use_gpu_indexed_ && index_framebuffer_ && index_snapshot_) {
+                memcpy(index_snapshot_, index_framebuffer_,
+                       static_cast<size_t>(fb_width_) * fb_height_);
+            } else if (framebuffer_ && fb_snapshot_) {
+                memcpy(fb_snapshot_, framebuffer_,
+                       static_cast<size_t>(fb_width_) * fb_height_ * sizeof(uint32_t));
+            }
         }
         printf("Single step executed\n");
     }
@@ -1148,6 +1217,24 @@ void SessionGUI::allocate_framebuffer() {
         screen_texture_id_ = screen_textures_[0];
         printf("Allocated %dx%d framebuffer with double-buffered textures %u/%u\n",
                fb_width_, fb_height_, screen_textures_[0], screen_textures_[1]);
+
+        // GPU indexed palette rendering — if the system supports it, allocate
+        // R8 index buffers and textures, compile the palette shader, and hand
+        // the index buffer to the system so video chips write raw indices.
+        if (system_->supports_gpu_indexed_rendering()) {
+            size_t idx_bytes = static_cast<size_t>(fb_width_) * fb_height_;
+            index_framebuffer_ = new uint8_t[idx_bytes]();
+            index_snapshot_    = new uint8_t[idx_bytes]();
+            index_textures_[0] = create_index_texture(fb_width_, fb_height_);
+            index_textures_[1] = create_index_texture(fb_width_, fb_height_);
+            palette_texture_   = create_palette_texture();
+            compile_indexed_shader();
+            gpu_palette_size_ = system_->get_gpu_palette_size();
+            update_palette_texture(system_->get_gpu_palette_data(), gpu_palette_size_);
+            system_->set_index_buffer(index_framebuffer_);
+            use_gpu_indexed_ = true;
+            printf("GPU indexed palette rendering enabled (%d colors)\n", gpu_palette_size_);
+        }
     } else {
         printf("Allocated %dx%d framebuffer (texture creation deferred until init)\n", fb_width_, fb_height_);
     }
@@ -1716,8 +1803,13 @@ void SessionGUI::emu_thread_func() {
 
         // ----- Snapshot framebuffer (separate fb_mutex_) -----
         if (frames_ran > 0) {
-            if (framebuffer_ && fb_snapshot_) {
-                std::lock_guard<std::mutex> lock(fb_mutex_);
+            std::lock_guard<std::mutex> lock(fb_mutex_);
+            if (use_gpu_indexed_ && index_framebuffer_ && index_snapshot_) {
+                // GPU indexed mode — copy 1 byte/pixel index buffer
+                memcpy(index_snapshot_, index_framebuffer_,
+                       static_cast<size_t>(fb_width_) * fb_height_);
+                fb_new_frame_.store(true, std::memory_order_release);
+            } else if (framebuffer_ && fb_snapshot_) {
                 memcpy(fb_snapshot_, framebuffer_,
                        static_cast<size_t>(fb_width_) * fb_height_ * sizeof(uint32_t));
                 fb_new_frame_.store(true, std::memory_order_release);
