@@ -86,9 +86,10 @@ inline void PPU::update_shifters() {
     }
     
     if (regs_[PPUMASK] & 0x10 && cycle < 258) {
+        auto& front = internal.sec_oam_[internal.sec_oam_front_];
         for (uint8_t i = 0; i < internal.sprite_count; i++) {
-            if (internal.sprite_scanline[i].x > 0) {
-                internal.sprite_scanline[i].x--;
+            if (front.entries[i].x > 0) {
+                front.entries[i].x--;
             } else {
                 internal.sprite_shifter_pattern_lo[i] <<= 1;
                 internal.sprite_shifter_pattern_hi[i] <<= 1;
@@ -97,92 +98,77 @@ inline void PPU::update_shifters() {
     }
 }
 
-inline void PPU::evaluate_sprites() {
-    // Clear secondary OAM — on real hardware this fills with $FF.
-    // y=$FF places sprites offscreen; x=$FF ensures sprite counters
-    // never reach 0 during visible dots, preventing unused slots
-    // from rendering garbage tile-0 pixels at the left edge.
-    internal.sprite_scanline.fill({0xFF, 0xFF, 0xFF, 0xFF});
-    internal.sprite_count = 0;
-    
-    internal.sprite_zero_hit_possible = false;
-    uint8_t count = 0;
-    
-    for (uint8_t i = 0; i < 64 && count < 8; i++) {
-        uint8_t sprite_y = oam[i * 4 + 0];
-        uint8_t sprite_height = (regs_[PPUCTRL] & 0x20) ? 16 : 8;
-        
-        if ((scanline >= sprite_y) && (scanline < (sprite_y + sprite_height))) {
-            if (i == 0) {
-                internal.sprite_zero_hit_possible = true;
-            }
-            
-            internal.sprite_scanline[count].y = sprite_y;
-            internal.sprite_scanline[count].tile_id = oam[i * 4 + 1];
-            internal.sprite_scanline[count].attributes = oam[i * 4 + 2];
-            internal.sprite_scanline[count].x = oam[i * 4 + 3];
-            count++;
-        }
-    }
-    
-    internal.sprite_count = count;
-    // NOTE: Overflow flag is set by sprite_eval_step() during cycles 65-256,
-    // not here.  This function only populates secondary OAM for rendering.
+// ============================================================================
+// Commit secondary OAM — called at cycle 257.
+//
+// During cycles 65-256, sprite_eval_step<Height>() builds the secondary
+// OAM one byte at a time in the back buffer (sec_oam_back()).  At
+// cycle 257 we swap the double-buffer index so the sprite-fetch window
+// (258-320) and the next scanline's pixel compositor read from the
+// freshly-built buffer.  No memcpy — just toggle an index.
+// ============================================================================
+inline void PPU::commit_sprite_eval() {
+    auto& ev = internal.sprite_eval;
+    // Swap: the back buffer (where eval just wrote) becomes the new front.
+    internal.sec_oam_front_ = 1 - internal.sec_oam_front_;
+    internal.sprite_count = ev.sec_wr >> 2;
+    internal.sprite_zero_hit_possible = ev.has_sprite_zero;
 }
 
-// ----------------------------------------------------------------------------
+// ============================================================================
 // Sprite evaluation state machine — one step per 2 PPU cycles.
 //
 // On real hardware, sprite evaluation runs during cycles 65-256 (192 PPU
-// cycles = 96 read/write pairs).  Odd cycles read from primary OAM; even
-// cycles write to secondary OAM or perform the comparison.  We advance
-// the state machine on even cycles so the overflow flag is set at the
-// correct dot.
+// cycles = 96 read/write pairs).  We advance the state machine on even
+// cycles so the overflow flag is set at the correct dot.
+//
+// Templated on sprite Height (8 or 16) so comparisons use constexpr and
+// the compiler can fully unroll inner loops.
 //
 // Phase 1: Finding sprites for secondary OAM (up to 8).
-//   - Compare sprite Y with scanline; in-range means 4 steps (Y + 3 copy).
+//   Uses the latched 64-bit visibility mask — a single bit-test per
+//   sprite instead of Y subtraction + comparison.  In-range sprites
+//   are copied one byte per step into pending_oam[].
+//   - In range: step 0 = copy Y byte, steps 1-3 = copy tile/attr/X.
 //   - Not in range: 1 step, advance to next sprite.
 //   - When 8 sprites found → Phase 2.
 //
 // Phase 2: Overflow check with PPU hardware bug.
-//   - Compare OAM[n*4+m] with scanline (m starts at 0).
+//   - Compare OAM[n*4+m] with scanline via unsigned subtraction.
 //   - In range → set overflow flag, → Phase 3.
 //   - Not in range → increment n AND m (the sprite overflow bug!).
 //
-// Phase 3: Done.  Dummy reads until cycles 257.
-// ----------------------------------------------------------------------------
+// Phase 3: Done.  Dummy reads until cycle 257.
+// ============================================================================
+template<uint8_t Height>
 inline void PPU::sprite_eval_step() {
     auto& ev = internal.sprite_eval;
 
     if (ev.phase >= 3) return;  // Done — no work
 
-    const uint8_t sprite_height = (regs_[PPUCTRL] & 0x20) ? 16 : 8;
-
     if (ev.phase == 1) {
-        // ---- Phase 1: finding sprites ----
+        // ---- Phase 1: finding sprites (bitmask-accelerated) ----
         if (ev.copy_step > 0) {
-            // Continue copying the remaining bytes of an in-range sprite.
-            // We just burn cycles here — the actual data copy happens in
-            // evaluate_sprites() at cycle 257.  But we must count 4 steps
-            // per in-range sprite for correct overflow timing.
+            // Copy next byte from primary OAM to back secondary OAM.
+            internal.sec_oam_back().bytes[ev.sec_wr] = oam.bytes[ev.n * 4 + ev.copy_step];
+            ev.sec_wr++;
             ev.copy_step++;
             if (ev.copy_step > 3) {
                 ev.copy_step = 0;
-                ev.found++;
                 ev.n++;
-                if (ev.n >= 64)      { ev.phase = 3; return; }
-                if (ev.found >= 8)   { ev.phase = 2; ev.m = 0; return; }
+                if (ev.n >= 64)       { ev.phase = 3; return; }
+                if (ev.sec_wr >= 32)  { ev.phase = 2; ev.m = 0; return; }
             }
             return;
         }
 
-        // Compare Y of sprite n with current scanline
-        const uint8_t sprite_y = oam[ev.n * 4];
-
-        if (scanline >= sprite_y &&
-            scanline < (uint16_t)(sprite_y + sprite_height)) {
-            // In range — begin 4-step "copy" (Y compare was step 0)
-            ev.copy_step = 1;
+        // Single bit-test: is sprite n visible on this scanline?
+        if (ev.mask & (1ULL << ev.n)) {
+            // In range — copy Y byte, begin 4-step copy
+            if (ev.n == 0) ev.has_sprite_zero = true;
+            internal.sec_oam_back().bytes[ev.sec_wr] = oam.bytes[ev.n * 4];  // Y byte
+            ev.sec_wr++;
+            ev.copy_step = 1;  // next step copies tile_id
         } else {
             // Not in range — 1-step skip
             ev.n++;
@@ -190,10 +176,13 @@ inline void PPU::sprite_eval_step() {
         }
     } else {
         // ---- Phase 2: overflow check with buggy m offset ----
-        const uint8_t byte = oam[ev.n * 4 + ev.m];
+        // Compare OAM[n*4+m] as if it were a Y coordinate.  When m != 0
+        // this reads tile/attr/X bytes — that’s the hardware bug.
+        const uint8_t y = oam.bytes[ev.n * 4 + ev.m];
 
-        if (scanline >= byte &&
-            scanline < (uint16_t)(byte + sprite_height)) {
+        // Unsigned subtraction: if scanline < y, wraps to a large value
+        // that fails the < Height comparison.  No branch on height.
+        if (static_cast<unsigned>(scanline - y) < Height) {
             // In range — set overflow flag
             regs_[PPUSTATUS] |= 0x20;
             ev.phase = 3;
@@ -345,26 +334,42 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                 // cycles 65-256 with one read/write pair per 2 PPU cycles.
                 if (scanline >= 0 && (mask & 0x18)) {
                     if (cycle == 0) {
-                        internal.sprite_eval = {0, 0, 0, 0, 1};  // phase=1
+                        // Clear back secondary OAM and latch visibility mask.
+                        std::memset(internal.sec_oam_back().bytes, 0xFF, 32);
+                        internal.sprite_eval = {
+                            sprite_masks_[scanline],  // latch bitmask
+                            0, 0, 0, 1, 0, false  // n,m,copy,phase,sec_wr,spr0
+                        };
                     } else if (cycle >= 66 && (cycle & 1) == 0) {
-                        sprite_eval_step();
+                        if (regs_[PPUCTRL] & 0x20)
+                            sprite_eval_step<16>();
+                        else
+                            sprite_eval_step<8>();
                     }
                 }
                 scanline_event_ += (cycle == 256 - 1);
                 break;
             case 1: // cycle 256
                 increment_scroll_y();
-                // Last sprite evaluation step at cycle 256
-                if (scanline >= 0 && (mask & 0x18)) sprite_eval_step();
+                // Sprite eval step at cycle 256
+                if (scanline >= 0 && (mask & 0x18)) {
+                    if (regs_[PPUCTRL] & 0x20) sprite_eval_step<16>();
+                    else                       sprite_eval_step<8>();
+                }
                 scanline_event_++;
                 break;
             case 2: // cycle == 257
                 load_background_shifters();
                 transfer_address_x();
-                // Sprite evaluation only occurs when rendering is enabled.
-                // When rendering is off ($2001 & $18 == 0), no evaluation
-                // happens — overflow flag won't be set, sprite data stale.
-                if (scanline >= 0 && (regs_[PPUMASK] & 0x18)) evaluate_sprites();
+                // Commit the secondary OAM built by the per-cycle evaluator
+                // during dots 65-256.  When rendering is off ($2001 & $18 == 0),
+                // no evaluation ran — secondary OAM stays $FF (offscreen).
+                if (scanline >= 0 && (regs_[PPUMASK] & 0x18)) {
+                    // Last sprite evaluation step at cycle 257
+                    if (regs_[PPUCTRL] & 0x20) sprite_eval_step<16>();
+                    else                       sprite_eval_step<8>();
+                    commit_sprite_eval();
+                }
                 // Sprite 0, sub-cycle 0: output garbage nametable address (A12 = 0).
                 // Starts the 64-cycle sprite fetch window (257-320).
                 PPU_BUS_SET_ADDR(ppu_bus, 0x2000 | (internal.v & 0x0FFF));
@@ -400,7 +405,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                         case 5: { // Capture sprite pattern low byte
                             uint8_t data = vram_data_latch_;
                             if (idx < internal.sprite_count) {
-                                if (internal.sprite_scanline[idx].attributes & 0x40)
+                                if (internal.sec_oam_front().entries[idx].attributes & 0x40)
                                     data = flip_byte(data);
                                 internal.sprite_shifter_pattern_lo[idx] = data;
                             }
@@ -412,7 +417,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                         case 7: { // Capture sprite pattern high byte
                             uint8_t data = vram_data_latch_;
                             if (idx < internal.sprite_count) {
-                                if (internal.sprite_scanline[idx].attributes & 0x40)
+                                if (internal.sec_oam_front().entries[idx].attributes & 0x40)
                                     data = flip_byte(data);
                                 internal.sprite_shifter_pattern_hi[idx] = data;
                             }
@@ -484,14 +489,14 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                 internal.sprite_zero_being_rendered = false;
 
                 for (uint8_t i = 0; i < internal.sprite_count; i++) {
-                    if (internal.sprite_scanline[i].x == 0) {
+                    if (internal.sec_oam_front().entries[i].x == 0) {
                         // Shift-and-mask: bit 7 >> 7 gives 0 or 1
                         const uint8_t fg_pixel_lo = (internal.sprite_shifter_pattern_lo[i] >> 7) & 1;
                         const uint8_t fg_pixel_hi = (internal.sprite_shifter_pattern_hi[i] >> 7) & 1;
                         fg_pixel = (fg_pixel_hi << 1) | fg_pixel_lo;
 
-                        fg_palette  = (internal.sprite_scanline[i].attributes & 0x03) + 0x04;
-                        fg_priority = (internal.sprite_scanline[i].attributes & 0x20) == 0;
+                        fg_palette  = (internal.sec_oam_front().entries[i].attributes & 0x03) + 0x04;
+                        fg_priority = (internal.sec_oam_front().entries[i].attributes & 0x20) == 0;
 
                         if (fg_pixel != 0) {
                             if (i == 0) internal.sprite_zero_being_rendered = true;

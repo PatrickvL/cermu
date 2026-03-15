@@ -933,7 +933,7 @@ void NintendoSystem<V>::tick() {
                 } else {
                     // DMA write to OAM — destination starts at current
                     // OAMADDR and wraps.  OAMADDR itself is NOT modified.
-                    ppu_->oam[(ppu_->regs_[PPU::OAMADDR] + dma_addr_) & 0xFF] = dma_data_;
+                    ppu_->oam_write((ppu_->regs_[PPU::OAMADDR] + dma_addr_) & 0xFF, dma_data_);
                     dma_addr_++;
                     if (dma_addr_ == 0x00) {
                         dma_transfer_ = false;
@@ -1261,7 +1261,7 @@ bool NintendoSystem<V>::save_state(const std::string& filename) const {
     // PPU state
     f.write(reinterpret_cast<const char*>(&ppu_->regs_), ppu_->num_regs_);
     f.write(reinterpret_cast<const char*>(bus_.ciram), nes_bus::CIRAM_SIZE);
-    f.write(reinterpret_cast<const char*>(ppu_->oam.data()), ppu_->oam.size());
+    f.write(reinterpret_cast<const char*>(ppu_->oam.bytes), sizeof(ppu_->oam.bytes));
     f.write(reinterpret_cast<const char*>(ppu_->palette.data()), ppu_->palette.size());
     f.write(reinterpret_cast<const char*>(&ppu_->internal), sizeof(ppu_->internal));
     int16_t sl = ppu_->scanline; f.write(reinterpret_cast<const char*>(&sl), sizeof(sl));
@@ -1311,7 +1311,8 @@ bool NintendoSystem<V>::load_state(const std::string& filename) {
     // PPU state
     f.read(reinterpret_cast<char*>(&ppu_->regs_), ppu_->num_regs_);
     f.read(reinterpret_cast<char*>(bus_.ciram), nes_bus::CIRAM_SIZE);
-    f.read(reinterpret_cast<char*>(ppu_->oam.data()), ppu_->oam.size());
+    f.read(reinterpret_cast<char*>(ppu_->oam.bytes), sizeof(ppu_->oam.bytes));
+    ppu_->rebuild_sprite_masks();  // Masks must reflect loaded OAM state
     f.read(reinterpret_cast<char*>(ppu_->palette.data()), ppu_->palette.size());
     f.read(reinterpret_cast<char*>(&ppu_->internal), sizeof(ppu_->internal));
     int16_t sl; f.read(reinterpret_cast<char*>(&sl), sizeof(sl)); ppu_->scanline = sl;

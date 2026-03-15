@@ -110,7 +110,7 @@ std::pair<bus_state_t, ppu_bus_state_t> PPU::service_cpu_bus(
                 update_nmi_output(ppu_bus);  // NMI level changes (VBL cleared)
                 break;
             case 0x2004: { // OAM Data
-                uint8_t data = oam[regs_[OAMADDR]];
+                uint8_t data = oam.bytes[regs_[OAMADDR]];
                 // Attribute byte (offset 2 in each 4-byte entry): bits 2-4
                 // are unimplemented in hardware and always read back as 0.
                 if ((regs_[OAMADDR] & 3) == 2) data &= 0xE3;
@@ -162,6 +162,8 @@ std::pair<bus_state_t, ppu_bus_state_t> PPU::service_cpu_bus(
                     uint8_t old_ctrl = regs_[PPUCTRL];
                     regs_[PPUCTRL] = data;
                     internal.t = (internal.t & 0xF3FF) | ((data & 0x03) << 10);
+                    // Sprite height changed — rebuild all visibility masks
+                    if ((old_ctrl ^ data) & 0x20) rebuild_sprite_masks();
                     update_nmi_output(ppu_bus);  // NMI enable may have changed
                 }
                 break;
@@ -176,7 +178,7 @@ std::pair<bus_state_t, ppu_bus_state_t> PPU::service_cpu_bus(
                 regs_[OAMADDR] = data;
                 break;
             case 0x2004: // OAM Data
-                oam[regs_[OAMADDR]] = data;
+                oam_write(regs_[OAMADDR], data);
                 regs_[OAMADDR]++;
                 break;
             case 0x2005: // Scroll
@@ -228,7 +230,7 @@ uint8_t PPU::cpu_peek(uint16_t addr) const {
     const uint8_t decayed = decayed_latch_data();
     switch (addr & 0x2007) {
         case 0x2002: return (regs_[PPUSTATUS] & 0xE0) | (decayed & 0x1F);
-        case 0x2004: return oam[regs_[OAMADDR]];
+        case 0x2004: return oam.bytes[regs_[OAMADDR]];
         case 0x2007: return regs_[PPUDATA];
         default:     return decayed;
     }
