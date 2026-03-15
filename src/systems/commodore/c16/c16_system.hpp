@@ -226,13 +226,6 @@ public:
     void get_display_dimensions(int* width, int* height) const override;
     void set_framebuffer(uint32_t* buffer, int width, int height) override;
 
-    // GPU indexed palette rendering
-    bool supports_gpu_indexed_rendering() const override;
-    int get_gpu_palette_size() const override;
-    const uint32_t* get_gpu_palette_data() const override;
-    const uint8_t* get_index_buffer() const override;
-    void set_index_buffer(uint8_t* buffer) override;
-
     // Audio
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
     void set_audio_sample_rate(int sample_rate_hz) override;
