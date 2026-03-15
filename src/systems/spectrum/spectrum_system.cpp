@@ -307,7 +307,7 @@ void SpectrumSystem<V>::tick() {
         if constexpr (Traits::has_ay_sound) {
             sample += ay_.get_sample() * 0.5f;
         }
-        audio_buffer_.push_back(sample);
+        audio_ring_buf_.write(&sample, 1);
     }
 
     // Frame counter
@@ -794,13 +794,9 @@ void SpectrumSystem<V>::update_framebuffer() {
 
 template<SpectrumVariant V>
 uint32_t SpectrumSystem<V>::get_audio_samples(float* buffer, uint32_t max_samples) {
-    uint32_t count = static_cast<uint32_t>(audio_buffer_.size());
-    if (count > max_samples) count = max_samples;
-    if (count > 0) {
-        std::memcpy(buffer, audio_buffer_.data(), count * sizeof(float));
-        audio_buffer_.erase(audio_buffer_.begin(), audio_buffer_.begin() + count);
-    }
-    return count;
+    if (!buffer || max_samples == 0) return 0;
+    return static_cast<uint32_t>(
+        audio_ring_buf_.read(buffer, static_cast<size_t>(max_samples)));
 }
 
 template<SpectrumVariant V>

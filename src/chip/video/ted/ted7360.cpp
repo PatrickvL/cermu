@@ -321,9 +321,7 @@ void ted7360_t::audio_reset(uint32_t ted_clock_hz, uint32_t sample_rate_hz) {
     sound.lowpass_buf  = 0.0f;
     sound.highpass_buf = 0.0f;
 
-    sound.write_pos = 0;
-    sound.read_pos  = 0;
-    for (auto& s : sound.buffer) s = 0.0f;
+    sound.audio_buffer.reset();
 }
 
 void ted7360_t::audio_tick() {
@@ -409,11 +407,7 @@ void ted7360_t::audio_tick() {
             if (out < -1.0f) out = -1.0f;
 
             // Write to ring buffer (drop sample if full)
-            uint32_t next_write = (sound.write_pos + 1) & TED_AUDIO_BUFFER_MASK;
-            if (next_write != sound.read_pos) {
-                sound.buffer[sound.write_pos] = out;
-                sound.write_pos = next_write;
-            }
+            sound.audio_buffer.write(&out, 1);
 
             sound.sample_accum = 0;
             sound.sample_tick_count = 0;
@@ -422,18 +416,13 @@ void ted7360_t::audio_tick() {
 }
 
 uint32_t ted7360_t::audio_available() const {
-    return (sound.write_pos + TED_AUDIO_BUFFER_SIZE - sound.read_pos)
-         & TED_AUDIO_BUFFER_MASK;
+    return static_cast<uint32_t>(sound.audio_buffer.available());
 }
 
 uint32_t ted7360_t::audio_read(float* dest, uint32_t max_samples) {
     if (!dest || max_samples == 0) return 0;
-    uint32_t count = 0;
-    while (count < max_samples && sound.read_pos != sound.write_pos) {
-        dest[count++] = sound.buffer[sound.read_pos];
-        sound.read_pos = (sound.read_pos + 1) & TED_AUDIO_BUFFER_MASK;
-    }
-    return count;
+    return static_cast<uint32_t>(
+        sound.audio_buffer.read(dest, static_cast<size_t>(max_samples)));
 }
 
 // ============================================================================
@@ -841,7 +830,10 @@ void ted7360_t::reset() {
     sequencer   = {};
     border      = {};
     memory      = {};
-    sound       = {};
+    // Reset sound unit — zero POD fields, reset ring buffer separately
+    // (AudioRingBuffer contains std::atomic, so aggregate assignment is deleted)
+    memset(&sound, 0, offsetof(ted_sound_unit_t, audio_buffer));
+    sound.audio_buffer.reset();
     bus         = {};
     // pixel is not zeroed — framebuffer pointer and color_line are owned externally.
 

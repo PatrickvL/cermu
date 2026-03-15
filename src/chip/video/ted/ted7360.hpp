@@ -36,6 +36,7 @@
 #include "chip/video/video_chip_base.hpp"
 #include "core/system_lines.hpp"
 #include "chip/video/video_pixel_unit.hpp"
+#include "utils/ring_buffer.hpp"
 
 // ============================================================================
 // TED REGISTER TABLE — single source of truth
@@ -388,8 +389,7 @@ struct ted_bus_unit_t {
 //       analysis).  Clocked by channel 2's counter underflow.  When noise
 //       is active, bit 0 of the shift register drives the output.
 
-#define TED_AUDIO_BUFFER_SIZE  (1 << 11)                    // 2048 — ring buffer capacity (float samples)
-#define TED_AUDIO_BUFFER_MASK  (TED_AUDIO_BUFFER_SIZE - 1)   // 0x7FF — wrap mask
+static constexpr uint32_t TED_AUDIO_BUFFER_SIZE = 2048;
 
 // Sound control register bit masks ($FF11)
 #define TED_SND_VOLUME_MASK    0x0F   // bits [3:0]: volume (0-8, 9-15 same as 8)
@@ -429,9 +429,7 @@ struct ted_sound_unit_t {
     float    output_gain;               // Maps filtered output to float range
 
     // --- Output ring buffer (mono float, -1.0..+1.0) ---
-    float    buffer[TED_AUDIO_BUFFER_SIZE];
-    uint32_t write_pos;
-    uint32_t read_pos;
+    AudioRingBuffer audio_buffer{TED_AUDIO_BUFFER_SIZE};
 };
 
 // Alias used by tick_one_timer() in ted7360.cpp
