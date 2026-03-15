@@ -87,8 +87,37 @@ public:
     static constexpr size_t CIRAM_SIZE = nes_bus::CIRAM_SIZE;
     uint8_t* ciram_ = nullptr;
 
-    std::array<uint8_t, 256> oam{};                   // 256 bytes OAM (Object Attribute Memory)
+    // OAM entry — 4-byte POD mapping directly to NES hardware layout.
+    // Used for both primary OAM (64 entries) and secondary OAM (8 entries).
+    struct OamEntry {
+        uint8_t y;
+        uint8_t tile_id;
+        uint8_t attributes;
+        uint8_t x;
+    };
+    static_assert(sizeof(OamEntry) == 4, "OamEntry must be exactly 4 bytes");
+
+    // Primary OAM — 64 sprites × 4 bytes = 256 bytes.
+    // Union provides both byte-level access (indexed read/write, DMA) and
+    // structured access (per-sprite field reads via .entries[]).
+    union {
+        uint8_t  bytes[256];
+        OamEntry entries[64];
+    } oam{};
+
     std::array<uint8_t, 32> palette{};                // 32 bytes palette RAM
+
+    // Scanline sprite visibility masks — one 64-bit word per scanline,
+    // bit i set iff sprite i is in Y-range for that scanline.  Updated
+    // incrementally on OAM Y-byte writes; latched per-scanline at cycle 0
+    // for bitmask-accelerated phase-1 evaluation.
+    //
+    // 256 entries cover all possible Y values (0-255).  16 additional
+    // padding entries absorb writes from sprites at Y positions near the
+    // bottom (Y + 15 for 8×16 sprites) without bounds checks.
+    // Only entries [0..239] are read during evaluation.
+    static constexpr unsigned SPRITE_MASK_ENTRIES = 272;
+    uint64_t sprite_masks_[SPRITE_MASK_ENTRIES]{};
 
     // Internal state
     struct InternalState {
@@ -111,15 +140,20 @@ public:
         uint16_t bg_shifter_attrib_lo = 0;
         uint16_t bg_shifter_attrib_hi = 0;
 
-        // Sprite rendering
-        struct Sprite {
-            uint8_t y = 0;
-            uint8_t tile_id = 0;
-            uint8_t attributes = 0;
-            uint8_t x = 0;
+        // Secondary OAM — double-buffered.
+        // Front buffer is read by the renderer/sprite-fetch; back buffer
+        // is written by the evaluator.  Commit swaps the index (no memcpy).
+        union SecOam {
+            uint8_t  bytes[32];
+            OamEntry entries[8];
         };
+        SecOam   sec_oam_[2];           // Two secondary OAM buffers
+        uint8_t  sec_oam_front_ = 0;    // Index of the buffer the renderer reads
 
-        std::array<Sprite, 8> sprite_scanline;  // Sprites for current scanline
+        // Convenience accessors — renderer reads front, eval writes back.
+        SecOam&       sec_oam_back()        { return sec_oam_[1 - sec_oam_front_]; }
+        const SecOam& sec_oam_front() const { return sec_oam_[sec_oam_front_]; }
+
         uint8_t sprite_count = 0;                  // Sprites found during evaluation
         uint8_t sprite_shifter_pattern_lo[8] = {};
         uint8_t sprite_shifter_pattern_hi[8] = {};
@@ -130,12 +164,19 @@ public:
         // Sprite evaluation state machine — models per-cycle evaluation
         // during dots 65-256 on visible scanlines for accurate overflow
         // flag timing and the PPU's buggy overflow byte-offset behavior.
+        //
+        // Phase 1 uses a latched 64-bit visibility mask (from
+        // sprite_masks_[]) for a single bit-test instead of Y comparison.
+        // Phase 2 (overflow) uses a running byte index with the hardware
+        // bug's m-offset, comparing via unsigned subtraction.
         struct SpriteEval {
+            uint64_t mask     = 0;  // Latched visibility bitmask for this scanline
             uint8_t n         = 0;  // Primary OAM sprite index (0-63)
             uint8_t m         = 0;  // Byte offset for overflow bug (0-3)
-            uint8_t found     = 0;  // In-range sprites found (0-8)
             uint8_t copy_step = 0;  // 0=comparing, 1-3=copying remaining bytes
             uint8_t phase     = 0;  // 0=idle, 1=finding, 2=overflow check, 3=done
+            uint8_t sec_wr    = 0;  // Write pointer into back sec OAM bytes (0-31)
+            bool    has_sprite_zero = false; // Sprite 0 found during this eval
         } sprite_eval;
     } internal = {};
 
@@ -265,7 +306,9 @@ public:
         screen.resize(256 * 240, 0);
         scanline_pixel_.color_line = scanline_color_line_;
         scanline_pixel_.set_framebuffer(screen.data(), 256, 240);
-        internal.sprite_scanline.fill({0xFF, 0xFF, 0xFF, 0xFF});
+        std::memset(internal.sec_oam_[0].bytes, 0xFF, 32);
+        std::memset(internal.sec_oam_[1].bytes, 0xFF, 32);
+        internal.sec_oam_front_ = 0;
         internal.sprite_count = 0;
 
         build_palette_cache(is_pal, palette_cache_);
@@ -297,9 +340,12 @@ public:
 
         // Clear memory
         if (ciram_) std::memset(ciram_, 0, CIRAM_SIZE);
-        oam.fill(0);
+        std::memset(oam.bytes, 0, sizeof(oam.bytes));
         palette.fill(0);
         std::fill(screen.begin(), screen.end(), 0);
+
+        // All sprites at Y=0 — rebuild masks from scratch
+        rebuild_sprite_masks();
 
         build_palette_cache(is_pal, palette_cache_);
         rebuild_pixel_lut();
@@ -420,16 +466,68 @@ private:
             pixel_lut_[i] = active_palette_[palette[pal_mirror_[i]] & 0x3F];
     }
 
-    // Sprite evaluation (defined inline in nes_ppu_clock.inl)
-    inline void evaluate_sprites();
-    inline void sprite_eval_step();
+    // Sprite evaluation (defined inline in nes_ppu_clock.inl).
+    // Templated on sprite height for constexpr loop unrolling.
+    // commit_sprite_eval() copies the pending secondary OAM built by
+    // the per-cycle evaluator into the rendering buffer at cycle 257.
+    inline void commit_sprite_eval();
+    template<uint8_t Height> inline void sprite_eval_step();
 
+    // Sprite visibility mask maintenance — called on OAM Y-byte writes.
+    // Clears old_y's range, sets new_y's range in sprite_masks_[].
+    // Height is a template parameter so the compiler fully unrolls the
+    // 8 or 16 iterations.
+    template<uint8_t Height>
+    inline void update_sprite_mask(uint8_t sprite_idx, uint8_t old_y, uint8_t new_y) {
+        const uint64_t bit     = 1ULL << sprite_idx;
+        const uint64_t not_bit = ~bit;
+        for (unsigned s = old_y; s < (unsigned)old_y + Height; s++)
+            sprite_masks_[s] &= not_bit;
+        for (unsigned s = new_y; s < (unsigned)new_y + Height; s++)
+            sprite_masks_[s] |= bit;
+    }
+
+    // Full rebuild of all 272 sprite visibility masks from current OAM.
+    // Called after reset, bulk OAM changes, or sprite-height mode change.
+    void rebuild_sprite_masks_impl() {
+        std::memset(sprite_masks_, 0, sizeof(sprite_masks_));
+        const bool tall = regs_[PPUCTRL] & 0x20;
+        for (unsigned i = 0; i < 64; i++) {
+            const uint8_t y = oam.entries[i].y;
+            const uint64_t bit = 1ULL << i;
+            const unsigned h = tall ? 16 : 8;
+            for (unsigned s = y; s < (unsigned)y + h; s++)
+                sprite_masks_[s] |= bit;
+        }
+    }
+
+public:
+    // Write a byte to primary OAM with incremental mask maintenance.
+    // Only updates masks when a Y byte changes (addr & 3 == 0).
+    // Public — the system DMA controller writes OAM directly.
+    inline void oam_write(uint8_t addr, uint8_t data) {
+        const uint8_t old = oam.bytes[addr];
+        oam.bytes[addr] = data;
+        if ((addr & 3) == 0 && old != data) {
+            const uint8_t sprite_idx = addr >> 2;
+            if (regs_[PPUCTRL] & 0x20)
+                update_sprite_mask<16>(sprite_idx, old, data);
+            else
+                update_sprite_mask<8>(sprite_idx, old, data);
+        }
+    }
+
+    // Full rebuild of all sprite visibility masks from current OAM.
+    // Public for load_state() and external callers.
+    inline void rebuild_sprite_masks() { rebuild_sprite_masks_impl(); }
+
+private:
     // Sprite pattern address calculation — returns the low-byte pattern
     // table address for the given sprite slot.  High byte is addr + 8.
     // Works for all 8 slots: unused slots ($FF OAM) produce valid PPU
     // bus addresses for correct A12 transitions.
     inline uint16_t compute_sprite_pattern_addr(uint8_t i) const {
-        const auto& spr = internal.sprite_scanline[i];
+        const auto& spr = internal.sec_oam_front().entries[i];
         if (regs_[PPUCTRL] & 0x20) {
             // 8x16 sprites
             int row = (scanline - spr.y) & 0x0F;
