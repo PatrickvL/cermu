@@ -31,6 +31,7 @@
 #include "chip/sound/ay_3_8910.hpp"
 #include "chip/memory/memory_chip.hpp"
 #include "systems/spectrum/spectrum_constants.hpp"
+#include "utils/ring_buffer.hpp"
 #include <cstdint>
 #include <memory>
 
@@ -234,7 +235,7 @@ private:
     uint32_t audio_sample_rate_ = spectrum_constants::DEFAULT_SAMPLE_RATE;
     uint32_t audio_sample_counter_ = 0;
     uint32_t audio_sample_period_ = 0;
-    std::vector<float> audio_buffer_;
+    AudioRingBuffer audio_ring_buf_{8192};
 
     // ========================================================================
     // HELPERS
