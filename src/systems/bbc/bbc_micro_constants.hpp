@@ -83,6 +83,18 @@ namespace bbc_constants {
     // Default audio sample rate
     inline constexpr uint32_t DEFAULT_SAMPLE_RATE   = 44100;
 
+    // 8-color physical palette (RGBA) — 3-bit RGB via Video ULA
+    inline constexpr uint32_t PALETTE[8] = {
+        0xFF000000,  // 0: Black
+        0xFF0000FF,  // 1: Red
+        0xFF00FF00,  // 2: Green
+        0xFF00FFFF,  // 3: Yellow
+        0xFFFF0000,  // 4: Blue
+        0xFFFF00FF,  // 5: Magenta
+        0xFFFFFF00,  // 6: Cyan
+        0xFFFFFFFF,  // 7: White
+    };
+
     // Video ULA registers (written at $FE20-$FE21)
     // $FE20: Control register
     //   bits 6-4: characters per line (determines pixel width)
