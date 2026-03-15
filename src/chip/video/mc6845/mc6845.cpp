@@ -104,13 +104,50 @@ void mc6845_t::tick() {
     // ====================================================================
     // If we're in the active display area, notify the host system to render
     // the character at the current address and scan line.
-    if (h_display_active && v_display_active && on_display_char) {
+    if (h_display_active && v_display_active) {
         // Check cursor position
         bool at_cursor = cursor_visible && (linear_address == cursor_address()) &&
                          (v_scanline_counter >= (regs_[MC6845_R10_CURSOR_START] & 0x1F)) &&
                          (v_scanline_counter <= regs_[MC6845_R11_CURSOR_END]);
 
-        on_display_char(linear_address, v_scanline_counter, at_cursor);
+        // ---- Built-in indexed character renderer ----
+        if (char_render_rom_ && char_render_vram_ && char_render_indices_) {
+            uint16_t screen_offset = linear_address & char_render_vram_mask_;
+            uint8_t char_code = char_render_vram_[screen_offset];
+
+            // Invert handling (e.g. PET uses bit 7)
+            bool inverted = char_render_invert_bit_ &&
+                            (char_code & char_render_invert_bit_) != 0;
+            uint8_t glyph_index = char_code & static_cast<uint8_t>(~char_render_invert_bit_);
+            uint8_t pixel_row = char_render_rom_[(glyph_index * char_render_char_h_) + v_scanline_counter];
+
+            if (inverted) pixel_row = ~pixel_row;
+            if (at_cursor) pixel_row = ~pixel_row;
+
+            // Calculate framebuffer position
+            uint32_t char_col = screen_offset % static_cast<uint32_t>(char_render_cols_);
+            uint32_t char_row = screen_offset / static_cast<uint32_t>(char_render_cols_);
+            uint32_t pixel_x = char_col * 8;
+            uint32_t pixel_y = char_row * static_cast<uint32_t>(char_render_char_h_) + v_scanline_counter;
+            int fb_w = char_render_fb_w_;
+
+            if (pixel_y < static_cast<uint32_t>(char_render_pixel_->fb_height)) {
+                uint8_t* row_ptr = char_render_indices_ + pixel_y * fb_w;
+                uint8_t fg = char_render_fg_;
+                uint8_t bg = char_render_bg_;
+                for (int bit = 7; bit >= 0; --bit) {
+                    uint32_t px = pixel_x + static_cast<uint32_t>(7 - bit);
+                    if (px < static_cast<uint32_t>(fb_w)) {
+                        row_ptr[px] = (pixel_row & (1 << bit)) ? fg : bg;
+                    }
+                }
+            }
+        }
+
+        // ---- System-provided callback (always fires if set) ----
+        if (on_display_char) {
+            on_display_char(linear_address, v_scanline_counter, at_cursor);
+        }
     }
 
     // ====================================================================
@@ -191,6 +228,12 @@ void mc6845_t::tick() {
 
                 // VSYNC callback
                 if (on_vsync) on_vsync();
+
+                // Flush indexed character rendering at end of frame
+                if (char_render_pixel_ && char_render_indices_ && char_render_palette_) {
+                    char_render_pixel_->flush_indexed_frame(
+                        char_render_indices_, char_render_palette_);
+                }
             }
         } else {
             // Normal scan line advance within character row

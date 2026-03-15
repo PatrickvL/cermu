@@ -52,9 +52,7 @@
 // PET Monochrome Display Colors (green phosphor CRT)
 // ============================================================================
 
-// PET green phosphor — foreground = bright green, background = black
-static constexpr uint32_t PET_COLOR_FG = 0xFF33FF33;   // ABGR: bright green
-static constexpr uint32_t PET_COLOR_BG = 0xFF000000;   // ABGR: black
+// PET palette moved to pet_constants::PALETTE (indexed rendering)
 
 // ============================================================================
 // Hardware Traits Definition
@@ -289,10 +287,24 @@ bool PETSystem::initialize() {
     crtc_->regs_[MC6845_R12_START_ADDR_HI] = 0x10; // Display start = $1000 (screen RAM offset)
     crtc_->regs_[MC6845_R13_START_ADDR_LO] = 0x00;
 
-    // Wire CRTC callbacks for display rendering
-    crtc_->on_display_char = [this](uint16_t ma, uint8_t ra, bool cursor) {
-        this->crtc_display_char(ma, ra, cursor);
-    };
+    // GPU indexed palette rendering via CRTC's built-in character renderer
+    pixel_.set_framebuffer(framebuffer_,
+                           pet_constants::DISPLAY_WIDTH,
+                           pet_constants::DISPLAY_HEIGHT);
+    crtc_->configure_char_render(
+        &pixel_, frame_indices_,
+        char_rom_, screen_ram_chip_->data(),
+        pet_constants::SCREEN_COLS,
+        pet_constants::PET_CHAR_HEIGHT,
+        pet_constants::DISPLAY_WIDTH,
+        1, 0,  // fg=1 (green), bg=0 (black)
+        pet_constants::PALETTE, 2,
+        0x03FF,  // vram_mask — 1K screen RAM
+        0x80     // invert_bit — bit 7 selects inverted charset
+    );
+    register_gpu_palette(&pixel_, pet_constants::PALETTE, 2);
+
+    // VSYNC/HSYNC callbacks (display rendering handled by CRTC internally)
     crtc_->on_vsync = [this]() { this->crtc_vsync(); };
     crtc_->on_hsync = [this]() { this->crtc_hsync(); };
 
@@ -356,19 +368,14 @@ void PETSystem::reset() {
     }
 
     // Clear framebuffer
-    if (rgba_framebuffer_ && rgba_width_ > 0 && rgba_height_ > 0) {
-        memset(rgba_framebuffer_, 0, (size_t)rgba_width_ * rgba_height_ * sizeof(uint32_t));
-    }
+    memset(framebuffer_, 0, sizeof(framebuffer_));
+    memset(frame_indices_, 0, sizeof(frame_indices_));
 
     // Reset audio state
     speaker_state_ = false;
     audio_write_pos_ = 0;
     audio_read_pos_ = 0;
     audio_cycle_counter_ = 0;
-
-    // Reset display position
-    screen_pixel_x_ = 0;
-    screen_pixel_y_ = 0;
 
     // Reset CPU last
     if (board_.cpu_chip()) { board_.cpu_chip()->reset(); }
@@ -552,60 +559,14 @@ void PETSystem::run_frame() {
 // CRTC Display Callbacks
 // ============================================================================
 
-void PETSystem::crtc_display_char(uint16_t ma, uint8_t ra, bool cursor) {
-    if (!rgba_framebuffer_ || !screen_ram_chip_) return;
-
-    // ma = character address from CRTC (relative to display start).
-    // On PET, screen RAM is at $8000.  The CRTC display start (R12:R13) is
-    // typically $1000 (so ma ranges from $1000 to $13E7 for 40×25).
-    // We mask to get the offset within screen RAM.
-    uint16_t screen_offset = ma & 0x03FF;           // 1000 chars max
-    uint8_t char_code = screen_ram_chip_->data()[screen_offset];
-
-    // Look up character ROM for this scan line
-    // Character ROM is 4KB: 256 chars × 8 bytes (normal) + 256 chars × 8 (inverted)
-    // Bits 7 of the character code select the inverted set
-    bool inverted = (char_code & 0x80) != 0;
-    uint8_t glyph_index = char_code & 0x7F;
-    uint8_t pixel_row = char_rom_[(glyph_index * 8) + ra];
-
-    if (inverted) {
-        pixel_row = ~pixel_row;
-    }
-
-    // XOR with cursor if active
-    if (cursor) {
-        pixel_row = ~pixel_row;
-    }
-
-    // Calculate framebuffer position
-    // screen_offset = row * 40 + col
-    uint32_t char_col = screen_offset % pet_constants::SCREEN_COLS;
-    uint32_t char_row = screen_offset / pet_constants::SCREEN_COLS;
-
-    if (char_row >= static_cast<uint32_t>(pet_constants::SCREEN_ROWS)) return;
-    if (char_col >= static_cast<uint32_t>(pet_constants::SCREEN_COLS)) return;
-
-    uint32_t pixel_x = char_col * pet_constants::PET_CHAR_WIDTH;
-    uint32_t pixel_y = char_row * pet_constants::PET_CHAR_HEIGHT + ra;
-
-    if (pixel_y >= static_cast<uint32_t>(rgba_height_)) return;
-
-    uint32_t* row_ptr = rgba_framebuffer_ + pixel_y * rgba_width_;
-
-    // Render 8 pixels from the character ROM byte
-    for (int bit = 7; bit >= 0; bit--) {
-        uint32_t px = pixel_x + (7 - bit);
-        if (px < static_cast<uint32_t>(rgba_width_)) {
-            row_ptr[px] = (pixel_row & (1 << bit)) ? PET_COLOR_FG : PET_COLOR_BG;
-        }
-    }
+void PETSystem::crtc_display_char(uint16_t /* ma */, uint8_t /* ra */, bool /* cursor */) {
+    // Character rendering is now handled by MC6845's built-in indexed
+    // renderer (configure_char_render).  This callback is retained for
+    // potential future per-character effects but is currently a no-op.
 }
 
 void PETSystem::crtc_vsync() {
-    // VSYNC — new frame starts.  Reset display position tracking.
-    screen_pixel_x_ = 0;
-    screen_pixel_y_ = 0;
+    // VSYNC — frame rendering + flush handled by MC6845 internally.
 }
 
 void PETSystem::crtc_hsync() {
@@ -671,7 +632,7 @@ void PETSystem::via_cb2_output(void* user_data, bool state) {
 // ============================================================================
 
 uint32_t* PETSystem::get_framebuffer() {
-    return rgba_framebuffer_;
+    return framebuffer_;
 }
 
 void PETSystem::get_display_dimensions(int* width, int* height) const {
@@ -679,10 +640,8 @@ void PETSystem::get_display_dimensions(int* width, int* height) const {
     *height = pet_constants::DISPLAY_HEIGHT;
 }
 
-void PETSystem::set_framebuffer(uint32_t* buffer, int width, int height) {
-    rgba_framebuffer_ = buffer;
-    rgba_width_ = width;
-    rgba_height_ = height;
+void PETSystem::set_framebuffer(uint32_t*, int, int) {
+    // PET owns its framebuffer — external assignment ignored.
 }
 
 // ============================================================================
