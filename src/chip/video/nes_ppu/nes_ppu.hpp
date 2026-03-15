@@ -167,6 +167,7 @@ public:
         uint16_t sprite_pattern_addr[8] = {};          // Cached pattern-table low addresses
         uint8_t sprite_shifter_pattern_lo[8] = {};
         uint8_t sprite_shifter_pattern_hi[8] = {};
+        uint8_t sprite_x[8] = {};                      // Sprite x countdown (populated at commit)
 
         bool sprite_zero_hit_possible = false;
         bool sprite_zero_being_rendered = false;

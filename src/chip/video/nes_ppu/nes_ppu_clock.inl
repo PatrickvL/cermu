@@ -84,18 +84,10 @@ inline void PPU::update_shifters(uint8_t mask) {
         internal.bg_shifter_attrib_lo <<= 1;
         internal.bg_shifter_attrib_hi <<= 1;
     }
-    
-    if (mask & 0x10 && cycle < 258) {
-        auto& front = internal.sec_oam_[internal.sec_oam_front_];
-        for (uint8_t i = 0; i < internal.sprite_count; i++) {
-            if (front.entries[i].x > 0) {
-                front.entries[i].x--;
-            } else {
-                internal.sprite_shifter_pattern_lo[i] <<= 1;
-                internal.sprite_shifter_pattern_hi[i] <<= 1;
-            }
-        }
-    }
+    // Sprite shifters are NOT shifted here.  sprite_x[] holds the original
+    // OAM x position (read-only); the pixel renderer computes the bit index
+    // on the fly via (x - sprite_x[i]).  This eliminates up to 24 store
+    // operations per dot (8 x decrements + 16 shifter shifts).
 }
 
 // ============================================================================
@@ -111,6 +103,14 @@ inline void PPU::commit_sprite_eval() {
     internal.sec_oam_front_            = 1 - internal.sec_oam_front_;
     internal.sprite_count              = (ev.state & SE_WR) >> 2;
     internal.sprite_zero_hit_possible  = sprite_masks_[scanline] & 1u;
+
+    // Copy x values from front SecOam entries into flat array for cache locality.
+    // update_shifters and pixel rendering access sprite_x[] every visible dot;
+    // keeping it contiguous with the shifter arrays avoids striding through
+    // 4-byte OAM entries.
+    const auto& front = internal.sec_oam_front();
+    for (uint8_t i = 0; i < internal.sprite_count; i++)
+        internal.sprite_x[i] = front.entries[i].x;
 
     // Precompute sprite pattern addresses for all 8 slots.
     // Avoids recomputing the branchy address calc twice per slot
@@ -461,14 +461,15 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
         if ((mask & 0x10) && internal.sprite_count > 0) {
             if ((mask & 0x04) || cycle >= 9) {
                 internal.sprite_zero_being_rendered = false;
-                const auto& front = internal.sec_oam_front();
 
                 for (uint8_t i = 0; i < internal.sprite_count; i++) {
-                    if (front.entries[i].x == 0) {
-                        const uint8_t px = ((internal.sprite_shifter_pattern_lo[i] >> 7) & 1)
-                                         | ((internal.sprite_shifter_pattern_hi[i] >> 6) & 2);
+                    const unsigned dx = (unsigned)x - internal.sprite_x[i];
+                    if (dx < 8) {
+                        const uint8_t bit = 7 - dx;
+                        const uint8_t px = ((internal.sprite_shifter_pattern_lo[i] >> bit) & 1)
+                                         | (((internal.sprite_shifter_pattern_hi[i] >> bit) & 1) << 1);
                         if (px != 0) {
-                            const uint8_t attr = front.entries[i].attributes;
+                            const uint8_t attr = internal.sec_oam_front().entries[i].attributes;
                             fg_idx      = px | ((attr & 3) << 2) | 0x10;
                             fg_priority = !(attr & 0x20);
                             if (i == 0) internal.sprite_zero_being_rendered = true;
