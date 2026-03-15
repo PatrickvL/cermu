@@ -59,7 +59,12 @@ public:
     
     // Rendering
     void render(uint32_t* framebuffer, int fb_width, int fb_height);
-    
+
+    /// Render terminal to a palette-index buffer (one byte per pixel).
+    /// fg_idx/bg_idx are palette indices for foreground/background.
+    void render_indexed(uint8_t* indices, int fb_width, int fb_height,
+                        uint8_t fg_idx, uint8_t bg_idx);
+
     // Character ROM (8x8 font data)
     static const uint8_t* get_default_font();
     void set_font(const uint8_t* font_data);  // 8x8 font, 256 characters, 8 bytes each
