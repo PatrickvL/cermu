@@ -22,4 +22,12 @@ namespace chip8_constants {
 
     // Timer rate
     inline constexpr uint32_t TIMER_HZ               = 60;
+
+    // Default 4-color palette (XO-CHIP dual-plane)
+    inline constexpr uint32_t PALETTE[4] = {
+        0xFF000000,  // 0: Background (black)
+        0xFF00FF00,  // 1: Plane 0 (green)
+        0xFFFF0000,  // 2: Plane 1 (blue)
+        0xFFFFFFFF,  // 3: Both planes (white)
+    };
 }

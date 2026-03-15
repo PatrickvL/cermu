@@ -338,6 +338,14 @@ Chip8System::Chip8System()
 
     // Register logical chips for the Hardware menu (no debug windows)
     register_chip8_chips();
+
+    // GPU indexed palette rendering
+    for (int i = 0; i < 4 && i < static_cast<int>(current_palette_.size()); i++)
+        rgba_palette_[i] = current_palette_[i].to_rgba32();
+    pixel_.set_framebuffer(framebuffer_,
+                           chip8_constants::HIRES_WIDTH,
+                           chip8_constants::HIRES_HEIGHT);
+    register_gpu_palette(&pixel_, rgba_palette_, 4);
 }
 
 // ============================================================================
@@ -390,6 +398,9 @@ bool Chip8System::set_configuration(const SystemConfiguration& config) {
                 PaletteColor(0xA0, 0x98, 0xFF, 255)
             };
         }
+        // Sync GPU palette
+        for (int i = 0; i < 4 && i < static_cast<int>(current_palette_.size()); i++)
+            rgba_palette_[i] = current_palette_[i].to_rgba32();
     }
     
     // Apply mode selection
@@ -553,9 +564,40 @@ void Chip8System::run_frame() {
     }
     update_timers();
 
-    // Convert planes_ to RGBA framebuffer so the emu thread snapshot
-    // picks up the latest display state.
-    get_framebuffer();
+    // Convert planes_ to palette indices and flush
+    static constexpr int w = chip8_constants::HIRES_WIDTH;
+    static constexpr int h = chip8_constants::HIRES_HEIGHT;
+
+    if (hires_) {
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int byte_idx = y * (w / 8) + (x / 8);
+                int bit_idx = 7 - (x % 8);
+                uint8_t idx = 0;
+                if ((planes_[0][byte_idx] >> bit_idx) & 1) idx |= 1;
+                if ((planes_[1][byte_idx] >> bit_idx) & 1) idx |= 2;
+                frame_indices_[y * w + x] = idx;
+            }
+        }
+    } else {
+        // Lo-res: 64×32 doubled to 128×64
+        for (int y = 0; y < 32; y++) {
+            for (int x = 0; x < 64; x++) {
+                int byte_idx = y * 8 + (x / 8);
+                int bit_idx = 7 - (x % 8);
+                uint8_t idx = 0;
+                if ((planes_[0][byte_idx] >> bit_idx) & 1) idx |= 1;
+                if ((planes_[1][byte_idx] >> bit_idx) & 1) idx |= 2;
+                int dx = x * 2, dy = y * 2;
+                frame_indices_[dy * w + dx]         = idx;
+                frame_indices_[dy * w + dx + 1]     = idx;
+                frame_indices_[(dy + 1) * w + dx]   = idx;
+                frame_indices_[(dy + 1) * w + dx + 1] = idx;
+            }
+        }
+    }
+
+    pixel_.flush_indexed_frame(frame_indices_, rgba_palette_);
 }
 
 // ============================================================================
@@ -606,61 +648,12 @@ bool Chip8System::load_file(const char* filepath) {
 // ============================================================================
 
 uint32_t* Chip8System::get_framebuffer() {
-    if (!rgba_framebuffer_) return nullptr;
-    
-    const int w = 128;
-    const int h = 64;
-    
-    if (hires_) {
-        // Hi-res: direct 128×64, combine planes
-        for (int y = 0; y < h && y < rgba_height_; y++) {
-            for (int x = 0; x < w && x < rgba_width_; x++) {
-                int byte_idx = y * (w / 8) + (x / 8);
-                int bit_idx = 7 - (x % 8);
-                
-                int color_idx = 0;
-                if ((planes_[0][byte_idx] >> bit_idx) & 1) color_idx |= 1;
-                if ((planes_[1][byte_idx] >> bit_idx) & 1) color_idx |= 2;
-                
-                // Ensure we have enough palette entries
-                if (color_idx < static_cast<int>(current_palette_.size()))
-                    rgba_framebuffer_[y * rgba_width_ + x] = current_palette_[color_idx].to_rgba32();
-            }
-        }
-    } else {
-        // Lo-res: 64×32 doubled to 128×64
-        for (int y = 0; y < 32; y++) {
-            for (int x = 0; x < 64; x++) {
-                int byte_idx = y * 8 + (x / 8);
-                int bit_idx = 7 - (x % 8);
-                
-                int color_idx = 0;
-                if ((planes_[0][byte_idx] >> bit_idx) & 1) color_idx |= 1;
-                if ((planes_[1][byte_idx] >> bit_idx) & 1) color_idx |= 2;
-                
-                uint32_t rgba = (color_idx < static_cast<int>(current_palette_.size()))
-                    ? current_palette_[color_idx].to_rgba32()
-                    : 0xFF000000;
-                
-                // Double each pixel: 2×2 block
-                int dx = x * 2, dy = y * 2;
-                if (dy + 1 < rgba_height_ && dx + 1 < rgba_width_) {
-                    rgba_framebuffer_[dy * rgba_width_ + dx] = rgba;
-                    rgba_framebuffer_[dy * rgba_width_ + dx + 1] = rgba;
-                    rgba_framebuffer_[(dy + 1) * rgba_width_ + dx] = rgba;
-                    rgba_framebuffer_[(dy + 1) * rgba_width_ + dx + 1] = rgba;
-                }
-            }
-        }
-    }
-    
-    return rgba_framebuffer_;
+    return framebuffer_;
 }
 
 void Chip8System::get_display_dimensions(int* width, int* height) const {
-    // Always report 128×64 — lo-res is pixel-doubled
-    *width = 128;
-    *height = 64;
+    *width = chip8_constants::HIRES_WIDTH;
+    *height = chip8_constants::HIRES_HEIGHT;
 }
 
 void Chip8System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
