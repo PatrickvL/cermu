@@ -486,16 +486,17 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
         if ((mask & 0x10) && internal.sprite_count > 0) {
             if ((mask & 0x04) || cycle >= 9) {  // Hide leftmost 8 pixels unless bit set
                 internal.sprite_zero_being_rendered = false;
+                const auto& front = internal.sec_oam_front();
 
                 for (uint8_t i = 0; i < internal.sprite_count; i++) {
-                    if (internal.sec_oam_front().entries[i].x == 0) {
+                    if (front.entries[i].x == 0) {
                         // Shift-and-mask: bit 7 >> 7 gives 0 or 1
                         const uint8_t fg_pixel_lo = (internal.sprite_shifter_pattern_lo[i] >> 7) & 1;
                         const uint8_t fg_pixel_hi = (internal.sprite_shifter_pattern_hi[i] >> 7) & 1;
                         fg_pixel = (fg_pixel_hi << 1) | fg_pixel_lo;
 
-                        fg_palette  = (internal.sec_oam_front().entries[i].attributes & 0x03) + 0x04;
-                        fg_priority = (internal.sec_oam_front().entries[i].attributes & 0x20) == 0;
+                        fg_palette  = (front.entries[i].attributes & 0x03) + 0x04;
+                        fg_priority = (front.entries[i].attributes & 0x20) == 0;
 
                         if (fg_pixel != 0) {
                             if (i == 0) internal.sprite_zero_being_rendered = true;
