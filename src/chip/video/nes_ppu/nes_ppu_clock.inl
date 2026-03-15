@@ -527,6 +527,10 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                 x != 255 &&
                 ((mask & 0x06) == 0x06 || cycle >= 9)) {
                 regs_[PPUSTATUS] |= 0x40;
+                // Hit detected — clear the flag so subsequent dots skip
+                // the entire hit-detection block at the cheaper
+                // sprite_zero_hit_possible check (set per-scanline at commit).
+                internal.sprite_zero_hit_possible = false;
             }
         }
 
