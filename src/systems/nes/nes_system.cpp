@@ -386,7 +386,7 @@ void NintendoSystem<V>::reset() {
     // Flush any buffered audio samples so old game audio doesn't bleed
     // into the new cartridge.  The ring buffer in the GUI layer is reset
     // separately when the emulation thread restarts.
-    audio_buffer_.clear();
+    audio_ring_buf_.reset();
 }
 
 template<NintendoVariant V>
@@ -859,16 +859,8 @@ void NintendoSystem<V>::set_speed_multiplier(float multiplier) {
 template<NintendoVariant V>
 uint32_t NintendoSystem<V>::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
-
-    uint32_t avail = static_cast<uint32_t>(audio_buffer_.size());
-    uint32_t to_copy = avail < max_samples ? avail : max_samples;
-    if (to_copy > 0) {
-        memcpy(buffer, audio_buffer_.data(), to_copy * sizeof(float));
-        // Remove consumed samples (shift remainder to front)
-        audio_buffer_.erase(audio_buffer_.begin(),
-                            audio_buffer_.begin() + to_copy);
-    }
-    return to_copy;
+    return static_cast<uint32_t>(
+        audio_ring_buf_.read(buffer, static_cast<size_t>(max_samples)));
 }
 
 template<NintendoVariant V>
@@ -995,7 +987,7 @@ void NintendoSystem<V>::tick() {
             if (--audio_sample_counter_ == 0) {
                 audio_sample_counter_ = audio_sample_period_;
                 float sample = cpu_->generate_audio_sample();
-                audio_buffer_.push_back(sample);
+                audio_ring_buf_.write(&sample, 1);
             }
         }
         system_clock_counter_++;
@@ -1206,7 +1198,7 @@ void NintendoSystem<V>::tick() {
     if (--audio_sample_counter_ == 0) {
         audio_sample_counter_ = audio_sample_period_;
         float sample = cpu_->generate_audio_sample();
-        audio_buffer_.push_back(sample);
+        audio_ring_buf_.write(&sample, 1);
     }
 
     // ====================================================================
