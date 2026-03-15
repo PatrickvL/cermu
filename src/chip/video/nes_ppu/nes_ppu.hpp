@@ -119,6 +119,14 @@ public:
     static constexpr unsigned SPRITE_MASK_ENTRIES = 272;
     uint64_t sprite_masks_[SPRITE_MASK_ENTRIES]{};
 
+    // Deferred sprite mask maintenance — instead of updating sprite_masks_[]
+    // immediately on every OAM Y-byte write, we record which sprites changed
+    // and flush before the masks are actually consumed (cycle 0 latch).
+    // Improves cache locality during DMA (256 OAM byte writes stay in OAM
+    // cache lines; sprite_masks_[] touched once at flush).
+    uint64_t sprite_mask_dirty_ = 0;         // Bit i set = sprite i needs mask update
+    uint8_t  sprite_old_y_[64] = {};          // Shadow: Y value before first dirty write
+
     // Internal state
     struct InternalState {
         uint16_t v = 0;       // Current VRAM address (15 bits)
@@ -473,6 +481,28 @@ private:
     inline void commit_sprite_eval();
     template<uint8_t Height> inline void sprite_eval_step();
 
+    // Flush deferred sprite mask updates.  Called at cycle 0 of each
+    // visible scanline before latching the bitmask.  If many sprites
+    // changed (> 32), a full rebuild is cheaper than per-sprite updates.
+    inline void flush_sprite_mask_dirty() {
+        uint64_t dirty = sprite_mask_dirty_;
+        if (!dirty) return;
+        if (__builtin_popcountll(dirty) > 32) {
+            rebuild_sprite_masks_impl();
+        } else {
+            const bool tall = regs_[PPUCTRL] & 0x20;
+            while (dirty) {
+                const unsigned i = __builtin_ctzll(dirty);
+                if (tall)
+                    update_sprite_mask<16>(i, sprite_old_y_[i], oam.entries[i].y);
+                else
+                    update_sprite_mask<8>(i, sprite_old_y_[i], oam.entries[i].y);
+                dirty &= dirty - 1;  // clear lowest set bit
+            }
+        }
+        sprite_mask_dirty_ = 0;
+    }
+
     // Sprite visibility mask maintenance — called on OAM Y-byte writes.
     // Clears old_y's range, sets new_y's range in sprite_masks_[].
     // Height is a template parameter so the compiler fully unrolls the
@@ -502,24 +532,28 @@ private:
     }
 
 public:
-    // Write a byte to primary OAM with incremental mask maintenance.
-    // Only updates masks when a Y byte changes (addr & 3 == 0).
+    // Write a byte to primary OAM with deferred mask maintenance.
+    // Only marks dirty when a Y byte changes (addr & 3 == 0).
     // Public — the system DMA controller writes OAM directly.
     inline void oam_write(uint8_t addr, uint8_t data) {
         const uint8_t old = oam.bytes[addr];
         oam.bytes[addr] = data;
         if ((addr & 3) == 0 && old != data) {
             const uint8_t sprite_idx = addr >> 2;
-            if (regs_[PPUCTRL] & 0x20)
-                update_sprite_mask<16>(sprite_idx, old, data);
-            else
-                update_sprite_mask<8>(sprite_idx, old, data);
+            const uint64_t bit = 1ULL << sprite_idx;
+            if (!(sprite_mask_dirty_ & bit)) {
+                sprite_old_y_[sprite_idx] = old;
+                sprite_mask_dirty_ |= bit;
+            }
         }
     }
 
     // Full rebuild of all sprite visibility masks from current OAM.
     // Public for load_state() and external callers.
-    inline void rebuild_sprite_masks() { rebuild_sprite_masks_impl(); }
+    inline void rebuild_sprite_masks() {
+        rebuild_sprite_masks_impl();
+        sprite_mask_dirty_ = 0;
+    }
 
 private:
     // Sprite pattern address calculation — returns the low-byte pattern
