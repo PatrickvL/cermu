@@ -21,6 +21,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include "utils/ring_buffer.hpp"
 
 // ============================================================================
 // NES SYSTEM CONSTANTS
@@ -144,8 +145,8 @@ private:
     uint8_t  cpu_div_ = 0;               // PPU->CPU countdown (0 = CPU tick this cycle)
     bool     dma_odd_cycle_ = false;     // DMA even/odd toggle
     
-    // Audio buffer
-    std::vector<float> audio_buffer_;
+    // Audio buffer — lock-free SPSC ring (prepares for audio thread separation)
+    AudioRingBuffer audio_ring_buf_{8192};
     uint32_t audio_sample_rate_;
     uint32_t audio_sample_counter_;
     uint32_t audio_sample_period_;      // cached: NTSC=37, PAL=33
@@ -206,8 +207,7 @@ public:
     void power_cycle();
     void set_controller_state(int controller, uint8_t state);
     const std::vector<uint32_t>& get_screen() const;
-    const std::vector<float>& get_audio_buffer() const { return audio_buffer_; }
-    void clear_audio_buffer() { audio_buffer_.clear(); audio_sample_counter_ = audio_sample_period_; }
+    void clear_audio_buffer() { audio_ring_buf_.reset(); audio_sample_counter_ = audio_sample_period_; }
     void set_audio_sample_rate(uint32_t rate);
     bool save_state(const std::string& filename) const;
     bool load_state(const std::string& filename);

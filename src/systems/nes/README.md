@@ -69,8 +69,9 @@ nes.run_frame();
 // Get screen buffer (256x240 RGB32)
 const std::vector<uint32_t>& screen = nes.get_screen();
 
-// Get audio buffer (44.1kHz float samples)
-const std::vector<float>& audio = nes.get_audio_buffer();
+// Get audio samples (44.1kHz float, ring-buffered)
+float audio[1024];
+uint32_t got = nes.get_audio_samples(audio, 1024);
 
 // Handle input
 nes.press_button(0, Controller::A);    // Player 1, A button
@@ -192,17 +193,15 @@ void save_screen(const NESSystem& nes, const std::string& filename) {
 
 // Process audio samples
 void handle_audio(NESSystem& nes) {
-    const auto& audio_buffer = nes.get_audio_buffer();
+    float audio[4096];
+    uint32_t count = nes.get_audio_samples(audio, 4096);
     
     // Send to audio system (SDL, ALSA, etc.)
-    for (float sample : audio_buffer) {
+    for (uint32_t i = 0; i < count; ++i) {
         // Process sample (typically convert to 16-bit PCM)
-        int16_t pcm_sample = static_cast<int16_t>(sample * 32767.0f);
+        int16_t pcm_sample = static_cast<int16_t>(audio[i] * 32767.0f);
         // Send pcm_sample to audio output...
     }
-    
-    // Clear buffer for next frame
-    nes.clear_audio_buffer();
 }
 ```
 
