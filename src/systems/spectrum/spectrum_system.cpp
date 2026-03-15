@@ -224,6 +224,12 @@ bool SpectrumSystem<V>::initialize() {
 
     register_bus_chips(board_);
 
+    // GPU indexed palette rendering — per-frame VideoPixelUnit
+    pixel_.set_framebuffer(framebuffer_,
+                           spectrum_constants::TOTAL_WIDTH,
+                           spectrum_constants::TOTAL_HEIGHT);
+    register_gpu_palette(&pixel_, spectrum_ula::PALETTE, 16);
+
     printf("%s: System initialized (%dKB RAM)\n", Traits::name, Traits::ram_size_kb);
     system_ready_ = true;
     return true;
@@ -710,12 +716,15 @@ void SpectrumSystem<V>::set_framebuffer(uint32_t* buffer, int width, int height)
     rgba_framebuffer_ = buffer;
     rgba_width_ = width;
     rgba_height_ = height;
+    // Keep VideoPixelUnit in sync — flush_indexed_frame writes here in CPU mode
+    pixel_.set_framebuffer(buffer ? buffer : framebuffer_,
+                           buffer ? width  : spectrum_constants::TOTAL_WIDTH,
+                           buffer ? height : spectrum_constants::TOTAL_HEIGHT);
 }
 
 template<SpectrumVariant V>
 void SpectrumSystem<V>::update_framebuffer() {
-    uint32_t* fb = rgba_framebuffer_ ? rgba_framebuffer_ : framebuffer_;
-    const uint32_t border = spectrum_ula::PALETTE[ula_.border_color()];
+    const uint8_t border_idx = ula_.border_color();
     const bool flash = ula_.flash_state();
 
     // Border: top (48 lines), bottom (56 lines), left/right (48 px each)
@@ -726,23 +735,21 @@ void SpectrumSystem<V>::update_framebuffer() {
     constexpr int SH = 192;  // screen height
 
     // Fill top border
-    for (int i = 0; i < BT * W; ++i)
-        fb[i] = border;
+    std::memset(frame_indices_, border_idx, BT * W);
 
     // Fill bottom border
-    for (int i = (BT + SH) * W; i < spectrum_constants::TOTAL_HEIGHT * W; ++i)
-        fb[i] = border;
+    std::memset(frame_indices_ + (BT + SH) * W, border_idx,
+                (spectrum_constants::TOTAL_HEIGHT - BT - SH) * W);
 
     // Render screen area (192 lines)
     const uint8_t* bitmap = screen_ram_ptr_;           // $4000
     const uint8_t* attrs  = screen_ram_ptr_ + 0x1800;  // $5800
 
     for (int y = 0; y < SH; ++y) {
-        uint32_t* line = &fb[(BT + y) * W];
+        uint8_t* line = &frame_indices_[(BT + y) * W];
 
         // Left border
-        for (int i = 0; i < BL; ++i)
-            line[i] = border;
+        std::memset(line, border_idx, BL);
 
         // Bitmap addressing: the Spectrum interleaves scanlines within each
         // character row third.  Address bits: [Y7 Y6] [Y2 Y1 Y0] [Y5 Y4 Y3] [X4..X0]
@@ -766,20 +773,19 @@ void SpectrumSystem<V>::update_framebuffer() {
             // FLASH swaps ink and paper when flash_state_ is active
             if (fl && flash) { uint8_t tmp = ink; ink = paper; paper = tmp; }
 
-            uint32_t ink_rgba   = spectrum_ula::PALETTE[ink];
-            uint32_t paper_rgba = spectrum_ula::PALETTE[paper];
-
-            // Render 8 pixels (MSB first)
-            uint32_t* px = &line[BL + col * 8];
+            // Render 8 pixels (MSB first) as palette indices
+            uint8_t* px = &line[BL + col * 8];
             for (int bit = 7; bit >= 0; --bit) {
-                *px++ = (byte & (1 << bit)) ? ink_rgba : paper_rgba;
+                *px++ = (byte & (1 << bit)) ? ink : paper;
             }
         }
 
         // Right border
-        for (int i = BL + SW; i < W; ++i)
-            line[i] = border;
+        std::memset(line + BL + SW, border_idx, W - BL - SW);
     }
+
+    // Flush: GPU mode → index_buffer, CPU mode → RGBA framebuffer
+    pixel_.flush_indexed_frame(frame_indices_, spectrum_ula::PALETTE);
 }
 
 // ============================================================================

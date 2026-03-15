@@ -35,6 +35,19 @@ inline constexpr int FB_WIDTH                  = 320;       // 40×8 × 24×8
 inline constexpr int FB_HEIGHT                 = 192;
 inline constexpr int COLOR_COUNT               = 8;
 
+// 8 CGA-like colors + pure white for monochrome fallback (index 8)
+inline constexpr uint32_t PALETTE[9] = {
+    0xFF000000,  // 0: Black
+    0xFF0000AA,  // 1: Blue
+    0xFF00AA00,  // 2: Green
+    0xFF00AAAA,  // 3: Cyan
+    0xFFAA0000,  // 4: Red
+    0xFFAA00AA,  // 5: Magenta
+    0xFFAA5500,  // 6: Brown/Dark Yellow
+    0xFFAAAAAA,  // 7: Light Grey
+    0xFFFFFFFF,  // 8: White (monochrome fallback)
+};
+
 // ── I/O ─────────────────────────────────────────────────────────────────
 inline constexpr uint8_t PIO1_PORT_A           = 0x88;
 inline constexpr uint8_t PIO1_CTRL_B           = 0x8B;

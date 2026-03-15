@@ -39,6 +39,13 @@ inline constexpr int FB_HEIGHT                 = 192;
 // MC6847 palette: 8+1 colors (CSS selects green/buff or red/blue set)
 inline constexpr int COLOR_COUNT               = 9;
 
+// MC6847 palette for indexed rendering
+// Index 0 = black, index 1 = green (phosphor)
+inline constexpr uint32_t PALETTE[2] = {
+    0xFF000000,  // 0: Black
+    0xFF00CC00,  // 1: Green (MC6847 phosphor green)
+};
+
 // ── Timing ──────────────────────────────────────────────────────────────
 inline constexpr int CYCLES_PER_FRAME_PAL      = 312 * 64;  // 19968
 inline constexpr int DEFAULT_SAMPLE_RATE       = 44100;

@@ -184,6 +184,11 @@ private:
     uint32_t framebuffer_[z1013_constants::FB_WIDTH *
                           z1013_constants::FB_HEIGHT] = {};
 
+    // GPU indexed palette rendering — per-frame path
+    VideoPixelUnit pixel_;
+    uint8_t frame_indices_[z1013_constants::FB_WIDTH *
+                           z1013_constants::FB_HEIGHT] = {};
+
     // ── Keyboard ─────────────────────────────────────────────────────────
     uint8_t keyboard_matrix_[z1013_constants::KEYBOARD_ROWS] = {};
     uint8_t keyboard_column_select_ = 0xFF;

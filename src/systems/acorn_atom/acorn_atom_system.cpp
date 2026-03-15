@@ -231,6 +231,12 @@ bool AcornAtomSystem::initialize() {
     // ── Register all manifest-created chips for Hardware menu ────────
     register_bus_chips(board_);
 
+    // GPU indexed palette rendering — per-frame VideoPixelUnit
+    pixel_.set_framebuffer(framebuffer_,
+                           acorn_atom_constants::FB_WIDTH,
+                           acorn_atom_constants::FB_HEIGHT);
+    register_gpu_palette(&pixel_, acorn_atom_constants::PALETTE, 2);
+
     printf("Acorn Atom: System initialized (RAM: %dKB)\n", ram_size_kb_);
     system_ready_ = true;
     return true;
@@ -442,7 +448,8 @@ void AcornAtomSystem::render_frame() {
 
     if (vdg_->is_graphics_mode()) {
         // Full-graphics modes: clear to black (placeholder)
-        std::memset(framebuffer_, 0, sizeof(framebuffer_));
+        std::memset(frame_indices_, 0, sizeof(frame_indices_));
+        pixel_.flush_indexed_frame(frame_indices_, acorn_atom_constants::PALETTE);
         return;
     }
 
@@ -461,13 +468,13 @@ void AcornAtomSystem::render_frame() {
                 // Bits 5–4 select the color set (CSS=0: green/yellow/blue/red,
                 // CSS=1: buff/cyan/magenta/orange).  Full color expansion is
                 // reserved for a future update; for now, render in green.
-                uint32_t fg = kMC6847Green;
-                uint32_t bg = kMC6847Black;
+                uint8_t fg_idx = 1;  // green
+                uint8_t bg_idx = 0;  // black
                 // Quadrant bits: bit3=TL, bit2=TR, bit1=BL, bit0=BR
                 for (int qr = 0; qr < 2; qr++) {       // top/bottom half
                     for (int qc = 0; qc < 2; qc++) {   // left/right half
                         int bit = (1 - qr) * 2 + (1 - qc);
-                        uint32_t col_pix = (chr & (1 << bit)) ? fg : bg;
+                        uint8_t idx = (chr & (1 << bit)) ? fg_idx : bg_idx;
                         int px0 = fb_x + qc * (CELL_W / 2);
                         int py0 = fb_y + qr * (CELL_H / 2);
                         for (int dy = 0; dy < CELL_H / 2; dy++) {
@@ -476,7 +483,7 @@ void AcornAtomSystem::render_frame() {
                                 int py = py0 + dy;
                                 if (px < acorn_atom_constants::FB_WIDTH &&
                                     py < acorn_atom_constants::FB_HEIGHT)
-                                    framebuffer_[py * acorn_atom_constants::FB_WIDTH + px] = col_pix;
+                                    frame_indices_[py * acorn_atom_constants::FB_WIDTH + px] = idx;
                             }
                         }
                     }
@@ -484,8 +491,8 @@ void AcornAtomSystem::render_frame() {
             } else {
                 // Alpha mode: render character from internal MC6847 font ROM
                 const uint8_t* glyph = kMC6847Font[chr];
-                uint32_t fg = inv ? kMC6847Black : kMC6847Green;
-                uint32_t bg = inv ? kMC6847Green : kMC6847Black;
+                uint8_t fg_idx = inv ? 0 : 1;  // inverted: black on green
+                uint8_t bg_idx = inv ? 1 : 0;
 
                 for (int gy = 0; gy < CELL_H; gy++) {
                     // Font rows 0–7 mapped to cell rows 2–9, blank above/below
@@ -494,12 +501,15 @@ void AcornAtomSystem::render_frame() {
                         int    px  = fb_x + gx;
                         int    py  = fb_y + gy;
                         bool   set = (bits & (0x80u >> gx)) != 0;
-                        framebuffer_[py * acorn_atom_constants::FB_WIDTH + px] = set ? fg : bg;
+                        frame_indices_[py * acorn_atom_constants::FB_WIDTH + px] = set ? fg_idx : bg_idx;
                     }
                 }
             }
         }
     }
+
+    // Flush: GPU mode → index_buffer, CPU mode → RGBA framebuffer
+    pixel_.flush_indexed_frame(frame_indices_, acorn_atom_constants::PALETTE);
 }
 
 // ============================================================================
