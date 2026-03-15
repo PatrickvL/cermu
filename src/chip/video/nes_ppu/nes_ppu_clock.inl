@@ -300,21 +300,18 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                     const uint16_t bg_base  = (uint16_t)(regs_[PPUCTRL] & 0x10) << 8;
                     const uint16_t fine_y   = (internal.v >> 12) & 0x07;
                     const uint16_t tile_row = (uint16_t)internal.nt_byte << 4;
-                    PPU_BUS_SET_ADDR(ppu_bus, bg_base + tile_row + fine_y);
+                    internal.bg_pattern_lo_addr = bg_base + tile_row + fine_y;
+                    PPU_BUS_SET_ADDR(ppu_bus, internal.bg_pattern_lo_addr);
                     break;
                 }
                 case 5:
                     // Capture BG pattern low byte from bus
                     internal.bg_lo_byte = vram_data_latch_;
                     break;
-                case 6: {
+                case 6:
                     // Output BG pattern table high byte address (low + 8)
-                    const uint16_t bg_base  = (uint16_t)(regs_[PPUCTRL] & 0x10) << 8;
-                    const uint16_t fine_y   = (internal.v >> 12) & 0x07;
-                    const uint16_t tile_row = (uint16_t)internal.nt_byte << 4;
-                    PPU_BUS_SET_ADDR(ppu_bus, bg_base + tile_row + fine_y + 8);
+                    PPU_BUS_SET_ADDR(ppu_bus, internal.bg_pattern_lo_addr + 8);
                     break;
-                }
                 case 7:
                     // Capture BG pattern high byte from bus
                     internal.bg_hi_byte = vram_data_latch_;

@@ -141,6 +141,7 @@ public:
         uint8_t at_byte = 0;      // Attribute table byte
         uint8_t bg_lo_byte = 0;   // Background pattern table low
         uint8_t bg_hi_byte = 0;   // Background pattern table high
+        uint16_t bg_pattern_lo_addr = 0; // Cached pattern table low address (case 4→6)
 
         // Background shift registers
         uint16_t bg_shifter_pattern_lo = 0;
