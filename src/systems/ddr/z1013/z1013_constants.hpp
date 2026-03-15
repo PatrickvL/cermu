@@ -33,6 +33,12 @@ inline constexpr uint16_t CHAR_ROM_SIZE        = 0x0800;    // 256 chars × 8 by
 inline constexpr int FB_WIDTH                  = 256;       // 32×8 × 32×8
 inline constexpr int FB_HEIGHT                 = 256;
 
+// Monochrome palette: index 0 = background (black), index 1 = foreground (white)
+inline constexpr uint32_t PALETTE[2] = {
+    0xFF000000,  // 0: Black
+    0xFFFFFFFF,  // 1: White
+};
+
 // ── I/O ─────────────────────────────────────────────────────────────────
 inline constexpr uint8_t PIO_PORT_A            = 0x00;      // Keyboard column data
 inline constexpr uint8_t PIO_CTRL_B            = 0x03;

@@ -94,4 +94,30 @@ struct VideoPixelUnit {
             }
         }
     }
+
+    // ====================================================================
+    // Per-frame flush — for systems that render the entire frame at once
+    // (character-display machines, full-screen bitmap renderers) rather
+    // than per-scanline.
+    //
+    // The caller fills an external frame_indices buffer (one byte per
+    // pixel, fb_width × fb_height) with palette indices, then calls
+    // this to route them:
+    //   GPU mode → memcpy into index_buffer (palette applied by shader)
+    //   CPU mode → palette lookup into framebuffer (RGBA)
+    // ====================================================================
+
+    inline void flush_indexed_frame(const uint8_t* frame_indices,
+                                    const uint32_t* palette) const {
+        const int total = fb_width * fb_height;
+        if (total <= 0) return;
+
+        if (gpu_indexed && index_buffer) {
+            std::memcpy(index_buffer, frame_indices, total);
+        } else if (framebuffer && palette) {
+            for (int i = 0; i < total; ++i) {
+                framebuffer[i] = palette[frame_indices[i]];
+            }
+        }
+    }
 };

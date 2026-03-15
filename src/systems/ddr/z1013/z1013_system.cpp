@@ -103,6 +103,12 @@ bool Z1013System<V>::initialize() {
     // ── Register chips for Hardware menu ────────────────────────────────
     register_bus_chips(board_);
 
+    // GPU indexed palette rendering — per-frame VideoPixelUnit
+    pixel_.set_framebuffer(framebuffer_,
+                           z1013_constants::FB_WIDTH,
+                           z1013_constants::FB_HEIGHT);
+    register_gpu_palette(&pixel_, z1013_constants::PALETTE, 2);
+
     system_ready_ = true;
     return true;
 }
@@ -300,9 +306,6 @@ void Z1013System<V>::render_frame() {
     static constexpr int CW   = 8;
     static constexpr int CH   = 8;
 
-    static constexpr uint32_t FG = 0xFFFFFFFF;  // White text
-    static constexpr uint32_t BG = 0xFF000000;  // Black background
-
     const uint8_t* vram = video_ram_chip_ ? video_ram_chip_->data() : nullptr;
     if (!vram) return;
 
@@ -319,11 +322,14 @@ void Z1013System<V>::render_frame() {
                     int    px  = fb_x + gx;
                     int    py  = fb_y + gy;
                     bool   set = (bits & (0x80u >> gx)) != 0;
-                    framebuffer_[py * z1013_constants::FB_WIDTH + px] = set ? FG : BG;
+                    frame_indices_[py * z1013_constants::FB_WIDTH + px] = set ? 1 : 0;
                 }
             }
         }
     }
+
+    // Flush: GPU mode → index_buffer, CPU mode → RGBA framebuffer
+    pixel_.flush_indexed_frame(frame_indices_, z1013_constants::PALETTE);
 }
 
 // ============================================================================

@@ -105,6 +105,12 @@ bool Z9001System<V>::initialize() {
 
     register_bus_chips(board_);
 
+    // GPU indexed palette rendering — per-frame VideoPixelUnit
+    pixel_.set_framebuffer(framebuffer_,
+                           z9001_constants::FB_WIDTH,
+                           z9001_constants::FB_HEIGHT);
+    register_gpu_palette(&pixel_, z9001_constants::PALETTE, 9);
+
     printf("%s: System initialized (RAM: %d KB)\n", Traits::name, Traits::ram_size / 1024);
     system_ready_ = true;
     return true;
@@ -355,18 +361,6 @@ void Z9001System<V>::render_frame() {
     static constexpr int CW   = 8;
     static constexpr int CH   = 8;
 
-    // Z9001/KC87 color palette (8 standard CGA-like colors)
-    static constexpr uint32_t kPalette[8] = {
-        0xFF000000,  // 0: Black
-        0xFF0000AA,  // 1: Blue
-        0xFF00AA00,  // 2: Green
-        0xFF00AAAA,  // 3: Cyan
-        0xFFAA0000,  // 4: Red
-        0xFFAA00AA,  // 5: Magenta
-        0xFFAA5500,  // 6: Brown/Dark Yellow
-        0xFFAAAAAA,  // 7: Light Grey
-    };
-
     const uint8_t* vram = video_ram_chip_ ? video_ram_chip_->data() : nullptr;
     if (!vram) return;
 
@@ -382,20 +376,20 @@ void Z9001System<V>::render_frame() {
             int fb_x = col * CW;
             int fb_y = row * CH;
 
-            // Determine foreground / background colors
-            uint32_t fg, bg;
+            // Determine foreground / background palette indices
+            uint8_t fg_idx, bg_idx;
             if constexpr (Traits::has_color_ram) {
                 if (cram) {
                     uint8_t attr = cram[pos];
-                    fg = kPalette[attr & 0x07];
-                    bg = kPalette[(attr >> 3) & 0x07];
+                    fg_idx = attr & 0x07;
+                    bg_idx = (attr >> 3) & 0x07;
                 } else {
-                    fg = 0xFFFFFFFF;
-                    bg = 0xFF000000;
+                    fg_idx = 8;   // white (monochrome fallback)
+                    bg_idx = 0;   // black
                 }
             } else {
-                fg = 0xFFFFFFFF;   // White on black (monochrome)
-                bg = 0xFF000000;
+                fg_idx = 8;   // white (monochrome)
+                bg_idx = 0;   // black
             }
 
             for (int gy = 0; gy < CH; gy++) {
@@ -404,11 +398,14 @@ void Z9001System<V>::render_frame() {
                     int    px  = fb_x + gx;
                     int    py  = fb_y + gy;
                     bool   set = (bits & (0x80u >> gx)) != 0;
-                    framebuffer_[py * z9001_constants::FB_WIDTH + px] = set ? fg : bg;
+                    frame_indices_[py * z9001_constants::FB_WIDTH + px] = set ? fg_idx : bg_idx;
                 }
             }
         }
     }
+
+    // Flush: GPU mode → index_buffer, CPU mode → RGBA framebuffer
+    pixel_.flush_indexed_frame(frame_indices_, z9001_constants::PALETTE);
 }
 
 // ============================================================================

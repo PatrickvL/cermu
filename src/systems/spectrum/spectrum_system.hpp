@@ -223,6 +223,10 @@ private:
 
     uint32_t framebuffer_[spectrum_constants::TOTAL_WIDTH * spectrum_constants::TOTAL_HEIGHT]{};
 
+    // GPU indexed palette rendering — per-frame path
+    VideoPixelUnit pixel_;
+    uint8_t frame_indices_[spectrum_constants::TOTAL_WIDTH * spectrum_constants::TOTAL_HEIGHT]{};
+
     // ========================================================================
     // AUDIO
     // ========================================================================

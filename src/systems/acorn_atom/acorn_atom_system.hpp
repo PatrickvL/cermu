@@ -149,6 +149,11 @@ private:
     uint32_t framebuffer_[acorn_atom_constants::FB_WIDTH *
                           acorn_atom_constants::FB_HEIGHT] = {};
 
+    // GPU indexed palette rendering — per-frame path
+    VideoPixelUnit pixel_;
+    uint8_t frame_indices_[acorn_atom_constants::FB_WIDTH *
+                           acorn_atom_constants::FB_HEIGHT] = {};
+
     // ── Keyboard ─────────────────────────────────────────────────────────
     uint8_t keyboard_matrix_[acorn_atom_constants::KEYBOARD_ROWS] = {};
 
