@@ -902,7 +902,13 @@ void NintendoSystem<V>::tick() {
     // on the bus, performs block dispatch (CHR/nametable read) and A12
     // edge detection (mapper IRQ), then places data on the bus.  The
     // PPU captures the data at the start of the next clock() call.
-    if (cartridge_) {
+    //
+    // During VBlank (scanline >= 240), the PPU's fast path doesn't
+    // output any bus addresses — the address lines are stale.  Skip
+    // the cartridge dispatch to avoid 6,820 wasted read cycles per
+    // frame.  CPU-initiated $2007 reads/writes during VBlank are
+    // handled separately in the CPU bus dispatch section.
+    if (cartridge_ && ppu_->scanline < 240) {
         ppu_->bus_snapshot_ = cartridge_->ppu_memory_tick(
             ppu_->bus_snapshot_, &bus_, ppu_->ppu_dot_count_);
     }
