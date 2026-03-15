@@ -334,6 +334,8 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                 // cycles 65-256 with one read/write pair per 2 PPU cycles.
                 if (scanline >= 0 && (mask & 0x18)) {
                     if (cycle == 0) {
+                        // Flush any deferred sprite mask updates before latching.
+                        flush_sprite_mask_dirty();
                         // Clear back secondary OAM and latch visibility mask.
                         std::memset(internal.sec_oam_back().bytes, 0xFF, 32);
                         internal.sprite_eval = {
