@@ -1195,6 +1195,22 @@ void C64System::set_framebuffer(uint32_t* buffer, int width, int height) {
     rgba_height_ = height;
 }
 
+// ============================================================================
+// GPU Indexed Palette Rendering
+// ============================================================================
+
+bool C64System::supports_gpu_indexed_rendering() const { return true; }
+int C64System::get_gpu_palette_size() const { return 16; }
+const uint32_t* C64System::get_gpu_palette_data() const { return vicii_t::get_default_palette(); }
+
+const uint8_t* C64System::get_index_buffer() const {
+    return vicii ? vicii->pixel.index_buffer : nullptr;
+}
+
+void C64System::set_index_buffer(uint8_t* buffer) {
+    if (vicii) vicii->pixel.set_index_buffer(buffer);
+}
+
 void C64System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     // Legacy path â€” still used when handle_keyboard_event_ex is not called
     // (e.g., from the old C64-only GUI, test harness, or non-SDL input)
