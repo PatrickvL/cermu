@@ -1095,6 +1095,22 @@ void VIC20System::set_framebuffer(uint32_t* buffer, int width, int height) {
 }
 
 // ============================================================================
+// GPU Indexed Palette Rendering
+// ============================================================================
+
+bool VIC20System::supports_gpu_indexed_rendering() const { return true; }
+int VIC20System::get_gpu_palette_size() const { return 16; }
+const uint32_t* VIC20System::get_gpu_palette_data() const { return vic_base_t::get_default_palette(); }
+
+const uint8_t* VIC20System::get_index_buffer() const {
+    return vic_ ? vic_->pixel.index_buffer : nullptr;
+}
+
+void VIC20System::set_index_buffer(uint8_t* buffer) {
+    if (vic_) vic_->pixel.set_index_buffer(buffer);
+}
+
+// ============================================================================
 // Input
 // ============================================================================
 
