@@ -1,4 +1,5 @@
 #include "gui/emulator_host.hpp"
+#include "gui/indexed_shader.hpp"
 #include <imgui.h>
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl2.h>
@@ -144,6 +145,9 @@ bool EmulatorHost::init(const char* window_title, int width, int height) {
     
     SDL_GL_MakeCurrent(window_, gl_context_);
     SDL_GL_SetSwapInterval(1); // VSync — paces the GUI render loop (~60Hz)
+
+    // Load GL 2.0+ function pointers (needed for shader-based indexed rendering)
+    indexed_shader::load_gl();
     
     // Show the window
     SDL_ShowWindow(window_);
@@ -398,8 +402,6 @@ void EmulatorHost::update_screen_texture(GLuint texture_id, int width, int heigh
 // GPU Indexed Palette Rendering
 // ============================================================================
 
-#include "indexed_shader.hpp"
-
 GLuint EmulatorHost::create_index_texture(int width, int height) {
     GLuint tex = 0;
     glGenTextures(1, &tex);
@@ -454,7 +456,7 @@ bool EmulatorHost::compile_indexed_shader() {
 }
 
 void EmulatorHost::cleanup_indexed_resources() {
-    if (indexed_shader_) { glDeleteProgram(indexed_shader_); indexed_shader_ = 0; }
+    if (indexed_shader_) { indexed_shader::glDeleteProgram(indexed_shader_); indexed_shader_ = 0; }
     if (palette_texture_) { glDeleteTextures(1, &palette_texture_); palette_texture_ = 0; }
     if (index_textures_[0]) { glDeleteTextures(2, index_textures_); index_textures_[0] = index_textures_[1] = 0; }
     delete[] index_framebuffer_; index_framebuffer_ = nullptr;
@@ -739,6 +741,9 @@ void EmulatorHost::free_framebuffer() {
         }
     }
     screen_texture_id_ = 0;
+
+    // Clean up GPU indexed palette resources
+    cleanup_indexed_resources();
 }
 
 // ============================================================================
