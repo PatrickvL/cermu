@@ -177,13 +177,13 @@ public:
         //
         // Phase 1 uses a latched 64-bit visibility mask (from
         // sprite_masks_[]) for a single bit-test instead of Y comparison.
-        // Phase 2 (overflow) uses a running byte index with the hardware
-        // bug's m-offset, comparing via unsigned subtraction.
+        // Phase 2 (overflow) uses n6m2 directly as OAM byte index with
+        // the hardware bug's m-offset in the low 2 bits.
+        //
+        // copy_step is derived from sec_wr & 3 (0=comparing, 1-3=copying).
         struct SpriteEval {
             uint64_t mask     = 0;  // Latched visibility bitmask for this scanline
-            uint8_t n         = 0;  // Primary OAM sprite index (0-63)
-            uint8_t m         = 0;  // Byte offset for overflow bug (0-3)
-            uint8_t copy_step = 0;  // 0=comparing, 1-3=copying remaining bytes
+            uint8_t n6m2      = 0;  // OAM byte index: bits 7:2=sprite n, 1:0=overflow m
             uint8_t phase     = 0;  // 0=idle, 1=finding, 2=overflow check, 3=done
             uint8_t sec_wr    = 0;  // Write pointer into back sec OAM bytes (0-31)
             bool    has_sprite_zero = false; // Sprite 0 found during this eval
