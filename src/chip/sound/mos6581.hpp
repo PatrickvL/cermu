@@ -3,6 +3,7 @@
 #include "chip/sound/sound_chip_base.hpp"
 #include "core/bus_cycle_interface.hpp"
 #include "core/system_lines.hpp" // For bus_state_t
+#include "utils/ring_buffer.hpp"
 #include <atomic>
 #include <cstdint>
 
@@ -206,8 +207,8 @@ DECL_EXTRACT(SID, SID_DECL)
 // SID constants — pulse / noise
 #define NOISE_LFSR_MASK             0x7FFFFF   // 23-bit LFSR mask
 
-// SID constants — sample buffer
-#define SAMPLE_BUFFER_SIZE          8192       // SPSC ring buffer size
+// SID constants — sample buffer size
+static constexpr uint32_t SID_SAMPLE_BUFFER_SIZE = 8192;
 
 // SID constants — filter
 #define FILTER_RESONANCE_MAX        15.0f
@@ -240,24 +241,7 @@ DECL_EXTRACT(SID, SID_DECL)
 // Combined waveform lookup table size
 
 // Ring buffer for sample output (SPSC: emulation thread writes, audio thread reads).
-// write_pos and read_pos use std::atomic with release/acquire ordering to ensure
-// correct cross-thread visibility with minimal overhead on x86 (acquire/release
-// are free on x86; on ARM they emit the appropriate barriers).
-struct ring_buffer_t {
-    float* buffer;
-    uint32_t size;
-    std::atomic<uint32_t> write_pos;
-    std::atomic<uint32_t> read_pos;
-    uint32_t mask;
-
-    // Methods
-    void init(uint32_t size);
-    void destroy();
-    void write(float sample);
-    float read();
-    bool empty();
-    uint32_t available() const;
-};
+// Uses the shared AudioRingBuffer from src/utils/ring_buffer.hpp.
 
 // Filter state structure
 struct filter_state_t {
@@ -414,7 +398,7 @@ struct mos6581_t : public SoundChipBase {
     float sid_rate = 0.0f;            // Internal SID update rate
     
     // Sample output
-    ring_buffer_t sample_buffer = {}; // Ring buffer for samples
+    AudioRingBuffer sample_buffer{SID_SAMPLE_BUFFER_SIZE};
     
     // Chip revision and features
     sid_revision_t revision = SID_REVISION_6581_R4AR; // SID chip revision

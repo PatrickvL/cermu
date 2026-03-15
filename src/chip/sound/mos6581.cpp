@@ -497,66 +497,6 @@ void mos6581_t::write_resonance_control_register_value(uint8_t value) {
 // master_volume — updated on register write for per-cycle use.
 
 // =============================================================================
-// RING BUFFER IMPLEMENTATION
-// =============================================================================
-
-void ring_buffer_t::init(uint32_t size) {
-    // Round size up to next power of 2
-    size--;
-    size |= size >> 1;
-    size |= size >> 2;
-    size |= size >> 4;
-    size |= size >> 8;
-    size |= size >> 16;
-    size++;
-    
-    this->size = size;
-    mask = size - 1;
-    buffer = (float*)calloc(size, sizeof(float));
-    write_pos.store(0, std::memory_order_relaxed);
-    read_pos.store(0, std::memory_order_relaxed);
-}
-
-void ring_buffer_t::destroy() {
-    free(buffer);
-    buffer = NULL;
-    size = 0;
-    mask = 0;
-    write_pos.store(0, std::memory_order_relaxed);
-    read_pos.store(0, std::memory_order_relaxed);
-}
-
-void ring_buffer_t::write(float sample) {
-    // SPSC safety: only the writer touches write_pos, only the reader touches read_pos.
-    uint32_t wp = write_pos.load(std::memory_order_relaxed);
-    uint32_t next = (wp + 1) & mask;
-    if (next == read_pos.load(std::memory_order_acquire)) return; // full — drop sample
-
-    buffer[wp] = sample;
-    write_pos.store(next, std::memory_order_release);  // publish
-}
-
-bool ring_buffer_t::empty() {
-    return read_pos.load(std::memory_order_relaxed) == write_pos.load(std::memory_order_relaxed);
-}
-
-float ring_buffer_t::read() {
-    uint32_t rp = read_pos.load(std::memory_order_relaxed);
-    uint32_t wp = write_pos.load(std::memory_order_acquire);
-    if (rp == wp) return 0.0f;  // empty
-
-    float sample = buffer[rp];
-    read_pos.store((rp + 1) & mask, std::memory_order_release);  // publish
-    return sample;
-}
-
-uint32_t ring_buffer_t::available() const {
-    uint32_t wp = write_pos.load(std::memory_order_acquire);
-    uint32_t rp = read_pos.load(std::memory_order_relaxed);
-    return (wp - rp) & mask;
-}
-
-// =============================================================================
 // WAVEFORM GENERATION
 // =============================================================================
 
@@ -896,7 +836,7 @@ inline bus_state_t mos6581_t::advance_cycle(bus_state_t bus_state) {
         if (mixed > 1.0f) mixed = 1.0f;
         if (mixed < -1.0f) mixed = -1.0f;
 
-        sample_buffer.write(mixed);
+        sample_buffer.write(&mixed, 1);
         samples_generated++;
     }
 
@@ -913,8 +853,11 @@ inline bus_state_t mos6581_t::advance_cycle(bus_state_t bus_state) {
 void mos6581_t::generate_samples(float* output, uint32_t sample_count) {
     if (!output) return;
     
-    for (uint32_t i = 0; i < sample_count; i++) {
-        output[i] = sample_buffer.read();
+    uint32_t got = static_cast<uint32_t>(
+        sample_buffer.read(output, static_cast<size_t>(sample_count)));
+    // Silence-fill any remaining slots (preserves old read()-returns-0.0f behavior)
+    for (uint32_t i = got; i < sample_count; i++) {
+        output[i] = 0.0f;
     }
 }
 
@@ -1261,9 +1204,6 @@ void mos6581_t::init() {
     enable_distortion = true;
     enable_digiboost = true;
     
-    // Initialize ring buffer
-    sample_buffer.init(SAMPLE_BUFFER_SIZE);
-    
     // Initialize filter
     filter_init();
     
@@ -1386,8 +1326,7 @@ void mos6581_t::reset() {
 
     // Flush the sample ring buffer so the audio callback doesn't replay
     // stale data from the previous session.
-    sample_buffer.write_pos.store(0, std::memory_order_relaxed);
-    sample_buffer.read_pos.store(0, std::memory_order_relaxed);
+    sample_buffer.reset();
     
     // Reset decoded SIGVOL fields + cached volume
     voice3_off = false;
@@ -1412,9 +1351,8 @@ void mos6581_t::reset() {
     set_timing(pal_timing);
 }
 
-// Destructor — clean up dynamically allocated ring buffer
+// Destructor
 mos6581_t::~mos6581_t() {
-    sample_buffer.destroy();
 }
 
 /**
