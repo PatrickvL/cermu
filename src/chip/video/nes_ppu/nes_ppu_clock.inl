@@ -113,6 +113,12 @@ inline void PPU::commit_sprite_eval() {
     internal.sec_oam_front_ = 1 - internal.sec_oam_front_;
     internal.sprite_count = ev.sec_wr >> 2;
     internal.sprite_zero_hit_possible = ev.has_sprite_zero;
+
+    // Precompute sprite pattern addresses for all 8 slots.
+    // Avoids recomputing the branchy address calc twice per slot
+    // during the sprite fetch window (sub-cycles 4 and 6).
+    for (uint8_t i = 0; i < 8; i++)
+        internal.sprite_pattern_addr[i] = compute_sprite_pattern_addr(i);
 }
 
 // ============================================================================
@@ -399,7 +405,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                                 ((internal.v >> 2) & 0x07));
                             break;
                         case 4: // Output sprite pattern table low byte address
-                            PPU_BUS_SET_ADDR(ppu_bus, compute_sprite_pattern_addr(idx));
+                            PPU_BUS_SET_ADDR(ppu_bus, internal.sprite_pattern_addr[idx]);
                             break;
                         case 5: { // Capture sprite pattern low byte
                             uint8_t data = vram_data_latch_;
@@ -411,7 +417,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                             break;
                         }
                         case 6: // Output sprite pattern table high byte address
-                            PPU_BUS_SET_ADDR(ppu_bus, compute_sprite_pattern_addr(idx) + 8);
+                            PPU_BUS_SET_ADDR(ppu_bus, internal.sprite_pattern_addr[idx] + 8);
                             break;
                         case 7: { // Capture sprite pattern high byte
                             uint8_t data = vram_data_latch_;
