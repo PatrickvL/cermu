@@ -171,7 +171,6 @@ public:
         uint8_t sprite_attr[8] = {};                    // Cached attributes (populated at commit)
 
         bool sprite_zero_hit_possible = false;
-        bool sprite_zero_being_rendered = false;
 
         // Sprite evaluation state machine — models per-cycle evaluation
         // during dots 65-256 on visible scanlines for accurate overflow
