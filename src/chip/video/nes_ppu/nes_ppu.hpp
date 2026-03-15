@@ -434,12 +434,12 @@ private:
     }
 
     // Internal rendering functions (defined inline in nes_ppu_clock.inl)
-    inline void increment_scroll_x();
-    inline void increment_scroll_y();
-    inline void transfer_address_x();
-    inline void transfer_address_y();
+    inline void increment_scroll_x(uint8_t mask);
+    inline void increment_scroll_y(uint8_t mask);
+    inline void transfer_address_x(uint8_t mask);
+    inline void transfer_address_y(uint8_t mask);
     inline void load_background_shifters();
-    inline void update_shifters();
+    inline void update_shifters(uint8_t mask);
 
     // Flush already-rendered pixels [scanline_flush_x_, cycle-1) with the
     // current pixel_lut_ before a palette or mask change invalidates it.

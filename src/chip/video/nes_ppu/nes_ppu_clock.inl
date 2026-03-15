@@ -16,8 +16,8 @@
 // PPU — Scroll / address helpers
 // ============================================================================
 
-inline void PPU::increment_scroll_x() {
-    if (regs_[PPUMASK] & 0x18) {
+inline void PPU::increment_scroll_x(uint8_t mask) {
+    if (mask & 0x18) {
         if ((internal.v & 0x001F) == 31) {
             internal.v &= ~0x001F;
             internal.v ^= 0x0400;
@@ -27,8 +27,8 @@ inline void PPU::increment_scroll_x() {
     }
 }
 
-inline void PPU::increment_scroll_y() {
-    if (regs_[PPUMASK] & 0x18) {
+inline void PPU::increment_scroll_y(uint8_t mask) {
+    if (mask & 0x18) {
         if ((internal.v & 0x7000) != 0x7000) {
             internal.v += 0x1000;
         } else {
@@ -47,15 +47,15 @@ inline void PPU::increment_scroll_y() {
     }
 }
 
-inline void PPU::transfer_address_x() {
-    if (regs_[PPUMASK] & 0x18) {
+inline void PPU::transfer_address_x(uint8_t mask) {
+    if (mask & 0x18) {
         // XOR-AND-XOR bitmix (3 ops) — merge t's coarse X + nametable X into v
         internal.v = internal.v ^ ((internal.v ^ internal.t) & 0x041F);
     }
 }
 
-inline void PPU::transfer_address_y() {
-    if (regs_[PPUMASK] & 0x18) {
+inline void PPU::transfer_address_y(uint8_t mask) {
+    if (mask & 0x18) {
         // XOR-AND-XOR bitmix (3 ops) — merge t's fine Y + coarse Y + nametable Y into v
         internal.v = internal.v ^ ((internal.v ^ internal.t) & 0x7BE0);
     }
@@ -77,15 +77,15 @@ inline void PPU::load_background_shifters() {
                                    (-((internal.at_byte >> 1) & 0x01) & 0xFF);
 }
 
-inline void PPU::update_shifters() {
-    if (regs_[PPUMASK] & 0x08) {
+inline void PPU::update_shifters(uint8_t mask) {
+    if (mask & 0x08) {
         internal.bg_shifter_pattern_lo <<= 1;
         internal.bg_shifter_pattern_hi <<= 1;
         internal.bg_shifter_attrib_lo <<= 1;
         internal.bg_shifter_attrib_hi <<= 1;
     }
     
-    if (regs_[PPUMASK] & 0x10 && cycle < 258) {
+    if (mask & 0x10 && cycle < 258) {
         auto& front = internal.sec_oam_[internal.sec_oam_front_];
         for (uint8_t i = 0; i < internal.sprite_count; i++) {
             if (front.entries[i].x > 0) {
@@ -265,7 +265,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
         }
 
         if ((cycle >= 2 && cycle < 258) || (cycle >= 321 && cycle < 338)) {
-            update_shifters();
+            update_shifters(mask);
 
             // Background tile fetch — bus-mediated pipeline.
             // Even sub-cycles (0,2,4,6): output address on PPU bus.
@@ -318,7 +318,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                 case 7:
                     // Capture BG pattern high byte from bus
                     internal.bg_hi_byte = vram_data_latch_;
-                    increment_scroll_x();
+                    increment_scroll_x(mask);
                     break;
             }
         }
@@ -350,7 +350,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                 scanline_event_ += (cycle == 256 - 1);
                 break;
             case 1: // cycle 256
-                increment_scroll_y();
+                increment_scroll_y(mask);
                 // Sprite eval step at cycle 256
                 if (scanline >= 0 && (mask & 0x18)) {
                     if (regs_[PPUCTRL] & 0x20) sprite_eval_step<16>();
@@ -360,7 +360,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                 break;
             case 2: // cycle == 257
                 load_background_shifters();
-                transfer_address_x();
+                transfer_address_x(mask);
                 // Commit the secondary OAM built by the per-cycle evaluator
                 // during dots 65-256.  When rendering is off ($2001 & $18 == 0),
                 // no evaluation ran — secondary OAM stays $FF (offscreen).
@@ -428,7 +428,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                     // Pre-render: transfer_address_y overlaps with sprite
                     // fetch window (cycles 280-304 ⊂ 258-320).
                     if (scanline == -1 && cycle >= 280 && cycle <= 304) {
-                        transfer_address_y();
+                        transfer_address_y(mask);
                     }
 
                     if (cycle == 320) scanline_event_++;
