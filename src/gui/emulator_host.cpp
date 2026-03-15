@@ -395,6 +395,75 @@ void EmulatorHost::update_screen_texture(GLuint texture_id, int width, int heigh
 }
 
 // ============================================================================
+// GPU Indexed Palette Rendering
+// ============================================================================
+
+#include "indexed_shader.hpp"
+
+GLuint EmulatorHost::create_index_texture(int width, int height) {
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    // R8: single-channel 8-bit normalized texture
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0,
+                 GL_RED, GL_UNSIGNED_BYTE, nullptr);
+    printf("Created R8 index texture %u (%dx%d)\n", tex, width, height);
+    return tex;
+}
+
+void EmulatorHost::update_index_texture(GLuint texture_id, int width, int height,
+                                        const uint8_t* indices) {
+    if (texture_id == 0 || !indices) return;
+    glBindTexture(GL_TEXTURE_2D, texture_id);
+    // Ensure 1-byte row alignment (R8 rows may not be 4-byte aligned)
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height,
+                    GL_RED, GL_UNSIGNED_BYTE, indices);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);  // restore default
+}
+
+GLuint EmulatorHost::create_palette_texture() {
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    // 256×1 RGBA — large enough for any system's palette
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, 1, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    printf("Created 256x1 palette texture %u\n", tex);
+    return tex;
+}
+
+void EmulatorHost::update_palette_texture(const uint32_t* palette, int count) {
+    if (palette_texture_ == 0 || !palette || count <= 0) return;
+    glBindTexture(GL_TEXTURE_2D, palette_texture_);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, count, 1,
+                    GL_RGBA, GL_UNSIGNED_BYTE, palette);
+}
+
+bool EmulatorHost::compile_indexed_shader() {
+    indexed_shader_ = indexed_shader::create_program(&indexed_loc_proj_, nullptr);
+    return indexed_shader_ != 0;
+}
+
+void EmulatorHost::cleanup_indexed_resources() {
+    if (indexed_shader_) { glDeleteProgram(indexed_shader_); indexed_shader_ = 0; }
+    if (palette_texture_) { glDeleteTextures(1, &palette_texture_); palette_texture_ = 0; }
+    if (index_textures_[0]) { glDeleteTextures(2, index_textures_); index_textures_[0] = index_textures_[1] = 0; }
+    delete[] index_framebuffer_; index_framebuffer_ = nullptr;
+    delete[] index_snapshot_; index_snapshot_ = nullptr;
+    use_gpu_indexed_ = false;
+    gpu_palette_size_ = 0;
+}
+
+// ============================================================================
 // Display Scaling Helper
 // ============================================================================
 
