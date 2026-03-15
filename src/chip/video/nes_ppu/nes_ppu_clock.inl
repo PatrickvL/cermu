@@ -94,20 +94,20 @@ inline void PPU::update_shifters(uint8_t mask) {
 // Commit secondary OAM — called at cycle 257.
 //
 // During cycles 65-256, sprite_eval_step() builds the secondary OAM one
-// byte at a time in the back buffer.  At cycle 257 we swap the double-buffer
-// index so the sprite-fetch window (258-320) and the next scanline's pixel
-// compositor read from the freshly-built buffer.  No memcpy — just toggle.
+// byte at a time.  At cycle 257 we extract all rendering data (x, attr,
+// pattern addresses) into flat arrays.  After commit, sec_oam_ is not
+// touched again until the next scanline's cycle 0 clear — no double
+// buffering needed.
 // ============================================================================
 inline void PPU::commit_sprite_eval() {
     auto& ev = internal.sprite_eval;
-    internal.sec_oam_front_            = 1 - internal.sec_oam_front_;
     internal.sprite_count              = (ev.state & SE_WR) >> 2;
     internal.sprite_zero_hit_possible  = sprite_masks_[scanline] & 1u;
 
-    // Copy x values and attributes from front SecOam entries into flat arrays.
+    // Copy x values and attributes from SecOam entries into flat arrays.
     // Pixel rendering accesses these every visible dot; keeping them contiguous
     // avoids striding through 4-byte OAM entries during the inner loop.
-    const auto& front = internal.sec_oam_front();
+    const auto& front = internal.sec_oam_;
     for (uint8_t i = 0; i < internal.sprite_count; i++) {
         internal.sprite_x[i]    = front.entries[i].x;
         internal.sprite_attr[i] = front.entries[i].attributes;
@@ -154,7 +154,7 @@ inline void PPU::sprite_eval_step() {
     if (!(ev.state & SE_OVF)) {
         // ---- Finding: copy visible sprites to sec OAM (bitmask-accelerated) ----
         if ((ev.state & SE_BYTE) || (sprite_masks_[scanline] & (1ULL << (ev.state >> SE_SPRITE_SHF)))) {
-            internal.sec_oam_back().bytes[ev.state & SE_WR] = oam.bytes[oam_idx];
+            internal.sec_oam_.bytes[ev.state & SE_WR] = oam.bytes[oam_idx];
             // addend already SE_INC
         } else {
             addend = SE_SPRITE_INC;  // not visible — sprite++, byte offset stays 0
@@ -320,7 +320,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                         // Flush any deferred sprite mask updates before latching.
                         flush_sprite_mask_dirty();
                         // Clear back secondary OAM and latch visibility mask.
-                        std::memset(internal.sec_oam_back().bytes, 0xFF, 32);
+                        std::memset(internal.sec_oam_.bytes, 0xFF, 32);
                         internal.sprite_eval = {
                             0,                                          // state: finding, n=0, m=0, sec_wr=0
                             (uint8_t)(regs_[PPUCTRL] & 0x20 ? 16 : 8)  // sprite_height latched from PPUCTRL
