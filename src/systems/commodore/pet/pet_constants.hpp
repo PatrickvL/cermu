@@ -62,6 +62,14 @@ inline constexpr uint16_t KBD_BUFFER        = 0x026F;    // KERNAL keyboard buff
 inline constexpr uint16_t KBD_BUFFER_SIZE   = 10;        // Max 10 characters
 inline constexpr uint16_t KBD_BUFFER_COUNT  = 0x009E;    // Number of chars in keyboard buffer
 // ============================================================================
+// PALETTE (indexed rendering: black + green phosphor)
+// ============================================================================
+inline constexpr uint32_t PALETTE[2] = {
+    0xFF000000,  // 0: Black
+    0xFF33FF33,  // 1: Green phosphor
+};
+
+// ============================================================================
 // PET MODEL VARIANTS
 // ============================================================================
 enum class PetModel : uint8_t {

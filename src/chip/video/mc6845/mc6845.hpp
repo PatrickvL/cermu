@@ -16,6 +16,7 @@
  */
 
 #include "chip/video/video_chip_base.hpp"
+#include "chip/video/video_pixel_unit.hpp"
 #include <cstdint>
 #include <functional>
 
@@ -144,6 +145,74 @@ struct mc6845_t : public VideoChipBase {
     // Called at the start of each new scan line (including blanked lines).
     using hsync_callback_t = std::function<void()>;
     hsync_callback_t on_hsync = nullptr;
+
+    // ========================================================================
+    // INDEXED CHARACTER RENDERING (optional)
+    // ========================================================================
+    //
+    // When configured, the CRTC renders character pixels as palette indices
+    // directly during tick(), eliminating the need for a per-character
+    // display callback in the system.  The system supplies:
+    //
+    //   - char_render_pixel_   VideoPixelUnit for flush (set framebuffer on it)
+    //   - char_render_indices_ Pointer to frame index buffer (W×H bytes)
+    //   - char_render_rom_     Character ROM pointer (glyph bitmaps)
+    //   - char_render_vram_    Screen RAM pointer (character codes)
+    //   - char_render_cols_    Display width in characters (e.g. 40)
+    //   - char_render_char_h_  Character cell height in pixels (e.g. 8)
+    //   - char_render_fb_w_    Framebuffer width in pixels
+    //   - char_render_fg_      Foreground palette index
+    //   - char_render_bg_      Background palette index
+    //   - char_render_palette_ RGBA palette for flush
+    //   - char_render_palette_size_  palette entry count
+    //   - char_render_vram_mask_     AND mask for screen_offset → VRAM index
+    //   - char_render_invert_bit_    Bit in char code that means "invert" (0x80 for PET, 0 to disable)
+    //
+    // When char_render_rom_ is non-null, the built-in character renderer
+    // fires instead of (and in addition to) on_display_char.  At VSYNC
+    // the frame is flushed through the VideoPixelUnit.
+    //
+    // This is the pattern for PET, BBC Micro (text modes), and any future
+    // MC6845-based system with a fixed character ROM and monochrome or
+    // color-attribute display.
+
+    VideoPixelUnit* char_render_pixel_   = nullptr;
+    uint8_t*        char_render_indices_ = nullptr;
+    const uint8_t*  char_render_rom_     = nullptr;
+    const uint8_t*  char_render_vram_    = nullptr;
+    int             char_render_cols_    = 40;
+    int             char_render_char_h_  = 8;
+    int             char_render_fb_w_    = 320;
+    uint8_t         char_render_fg_      = 1;
+    uint8_t         char_render_bg_      = 0;
+    const uint32_t* char_render_palette_ = nullptr;
+    int             char_render_palette_size_ = 0;
+    uint16_t        char_render_vram_mask_   = 0x03FF;
+    uint8_t         char_render_invert_bit_  = 0x80;
+
+    /// Configure indexed character rendering.  Call once after init().
+    /// Pass nullptr for rom to disable.
+    void configure_char_render(VideoPixelUnit* pixel, uint8_t* indices,
+                               const uint8_t* rom, const uint8_t* vram,
+                               int cols, int char_h, int fb_w,
+                               uint8_t fg, uint8_t bg,
+                               const uint32_t* palette, int palette_size,
+                               uint16_t vram_mask = 0x03FF,
+                               uint8_t invert_bit = 0x80) {
+        char_render_pixel_   = pixel;
+        char_render_indices_ = indices;
+        char_render_rom_     = rom;
+        char_render_vram_    = vram;
+        char_render_cols_    = cols;
+        char_render_char_h_  = char_h;
+        char_render_fb_w_    = fb_w;
+        char_render_fg_      = fg;
+        char_render_bg_      = bg;
+        char_render_palette_ = palette;
+        char_render_palette_size_ = palette_size;
+        char_render_vram_mask_   = vram_mask;
+        char_render_invert_bit_  = invert_bit;
+    }
 
     // ========================================================================
     // INTERFACE

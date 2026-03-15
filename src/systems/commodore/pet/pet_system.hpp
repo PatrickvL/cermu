@@ -7,6 +7,7 @@
 #include "chip/io/pia6820.hpp"
 #include "chip/io/mos6522.hpp"
 #include "chip/video/mc6845/mc6845.hpp"
+#include "chip/video/video_pixel_unit.hpp"
 #include "chip/memory/memory_chip.hpp"
 
 #include <cstdint>
@@ -161,9 +162,12 @@ private:
     mos6522_t*  via_  = nullptr;    // VIA — user port, timers, CB2 speaker
     mc6845_t*   crtc_ = nullptr;    // MC6845 CRTC — display timing
 
-    // Display state
-    uint32_t screen_pixel_x_ = 0;   // Current pixel X position in framebuffer
-    uint32_t screen_pixel_y_ = 0;   // Current pixel Y position in framebuffer
+    // Display — own framebuffer + GPU indexed rendering via CRTC
+    uint32_t framebuffer_[pet_constants::DISPLAY_WIDTH *
+                          pet_constants::DISPLAY_HEIGHT] = {};
+    VideoPixelUnit pixel_;
+    uint8_t frame_indices_[pet_constants::DISPLAY_WIDTH *
+                           pet_constants::DISPLAY_HEIGHT] = {};
 
     // Audio state — CB2 square wave speaker
     bool     speaker_state_ = false;    // Current CB2 output level
