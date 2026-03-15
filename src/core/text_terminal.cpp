@@ -415,3 +415,43 @@ void TextTerminal::render(uint32_t* framebuffer, int fb_width, int fb_height) {
         }
     }
 }
+
+void TextTerminal::render_indexed(uint8_t* indices, int fb_width, int fb_height,
+                                  uint8_t fg_idx, uint8_t bg_idx) {
+    if (!indices || !font_data_) return;
+
+    // Clear to background index
+    std::memset(indices, bg_idx, static_cast<size_t>(fb_width) * fb_height);
+
+    for (int row = 0; row < rows_; row++) {
+        for (int col = 0; col < cols_; col++) {
+            int idx = get_buffer_index(col, row);
+            if (idx < 0) continue;
+
+            uint8_t ch = static_cast<uint8_t>(text_buffer_[idx]);
+            const uint8_t* glyph = &font_data_[ch * 8];
+
+            int x = col * char_width_;
+            int y = row * char_height_;
+
+            for (int py = 0; py < char_height_ && (y + py) < fb_height; py++) {
+                uint8_t row_data = glyph[py];
+                uint8_t* dst = indices + (y + py) * fb_width + x;
+                for (int px = 0; px < char_width_ && (x + px) < fb_width; px++) {
+                    dst[px] = (row_data & (0x80 >> px)) ? fg_idx : bg_idx;
+                }
+            }
+
+            // Cursor: full-width bar on bottom scanline of character cell
+            if (cursor_visible_ && col == cursor_col_ && row == cursor_row_) {
+                int cursor_y = y + char_height_ - 1;
+                if (cursor_y < fb_height) {
+                    uint8_t* dst = indices + cursor_y * fb_width + x;
+                    for (int px = 0; px < char_width_ && (x + px) < fb_width; px++) {
+                        dst[px] = fg_idx;
+                    }
+                }
+            }
+        }
+    }
+}

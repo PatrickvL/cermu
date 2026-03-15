@@ -15,6 +15,12 @@ namespace apple1_constants {
     inline constexpr uint32_t DISPLAY_WIDTH           = 320;       // 40 × 8
     inline constexpr uint32_t DISPLAY_HEIGHT          = 192;       // 24 × 8
 
+    // Palette: monochrome green phosphor
+    inline constexpr uint32_t PALETTE[2] = {
+        0xFF000000,  // 0: Black
+        0xFF00CC00,  // 1: Green phosphor
+    };
+
     // Memory sizes
     inline constexpr uint32_t RAM_8K                  = 8192;      // Default
     inline constexpr uint32_t RAM_64K                 = 65536;

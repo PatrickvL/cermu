@@ -4,8 +4,10 @@
 #include "core/system_lines.hpp"
 #include "core/text_terminal.hpp"
 #include "core/board.hpp"
+#include "systems/apple1/apple1_constants.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/io/pia6820.hpp"
+#include "chip/video/video_pixel_unit.hpp"
 #include "chip/memory/memory_chip.hpp"
 #include <cstdint>
 #include <memory>
@@ -123,6 +125,13 @@ private:
     using MainBoard = Board<Apple1BusSpec>;
     Bus bus_;
     MainBoard board_{kApple1Chips};
+
+    // Display — own framebuffer + GPU indexed rendering
+    uint32_t framebuffer_[apple1_constants::DISPLAY_WIDTH *
+                          apple1_constants::DISPLAY_HEIGHT] = {};
+    VideoPixelUnit pixel_;
+    uint8_t frame_indices_[apple1_constants::DISPLAY_WIDTH *
+                           apple1_constants::DISPLAY_HEIGHT] = {};
 
     // System state
     uint32_t cycles_per_frame_;
