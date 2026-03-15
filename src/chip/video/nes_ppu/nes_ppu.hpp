@@ -149,19 +149,19 @@ public:
         uint16_t bg_shifter_attrib_lo = 0;
         uint16_t bg_shifter_attrib_hi = 0;
 
-        // Secondary OAM — double-buffered.
-        // Front buffer is read by the renderer/sprite-fetch; back buffer
-        // is written by the evaluator.  Commit swaps the index (no memcpy).
+        // Secondary OAM — single buffer.
+        // Sprite eval writes during cycles 65-256; commit_sprite_eval() at
+        // cycle 257 extracts all rendering data into flat arrays.  After
+        // commit, sec_oam_ is untouched until the next scanline's cycle 0 clear.
         union SecOam {
             uint8_t  bytes[32];
             OamEntry entries[8];
         };
-        SecOam   sec_oam_[2];           // Two secondary OAM buffers
-        uint8_t  sec_oam_front_ = 0;    // Index of the buffer the renderer reads
-
-        // Convenience accessors — renderer reads front, eval writes back.
-        SecOam&       sec_oam_back()        { return sec_oam_[1 - sec_oam_front_]; }
-        const SecOam& sec_oam_front() const { return sec_oam_[sec_oam_front_]; }
+        SecOam   sec_oam_;               // Single secondary OAM buffer
+        // No double buffering needed: commit_sprite_eval() copies all
+        // rendering data (x, attr, pattern addrs) into flat arrays at
+        // cycle 257.  After commit, nothing reads sec_oam_ until the
+        // next scanline's cycle 0 clear.
 
         uint8_t sprite_count = 0;                  // Sprites found during evaluation
         uint16_t sprite_pattern_addr[8] = {};          // Cached pattern-table low addresses
@@ -320,9 +320,7 @@ public:
         screen.resize(256 * 240, 0);
         scanline_pixel_.color_line = scanline_color_line_;
         scanline_pixel_.set_framebuffer(screen.data(), 256, 240);
-        std::memset(internal.sec_oam_[0].bytes, 0xFF, 32);
-        std::memset(internal.sec_oam_[1].bytes, 0xFF, 32);
-        internal.sec_oam_front_ = 0;
+        std::memset(internal.sec_oam_.bytes, 0xFF, 32);
         internal.sprite_count = 0;
 
         build_palette_cache(is_pal, palette_cache_);
@@ -577,7 +575,7 @@ private:
     // Works for all 8 slots: unused slots ($FF OAM) produce valid PPU
     // bus addresses for correct A12 transitions.
     inline uint16_t compute_sprite_pattern_addr(uint8_t i) const {
-        const auto& spr = internal.sec_oam_front().entries[i];
+        const auto& spr = internal.sec_oam_.entries[i];
         if (regs_[PPUCTRL] & 0x20) {
             // 8x16 sprites
             int row = (scanline - spr.y) & 0x0F;
