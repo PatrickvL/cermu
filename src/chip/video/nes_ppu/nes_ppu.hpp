@@ -164,6 +164,7 @@ public:
         const SecOam& sec_oam_front() const { return sec_oam_[sec_oam_front_]; }
 
         uint8_t sprite_count = 0;                  // Sprites found during evaluation
+        uint16_t sprite_pattern_addr[8] = {};          // Cached pattern-table low addresses
         uint8_t sprite_shifter_pattern_lo[8] = {};
         uint8_t sprite_shifter_pattern_hi[8] = {};
 
