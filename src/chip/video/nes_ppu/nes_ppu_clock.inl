@@ -479,10 +479,10 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
         // fg_idx is 0 when no sprite pixel is opaque (transparent = backdrop).
         uint8_t fg_idx      = 0;
         uint8_t fg_priority = 0;
+        bool sprite_zero_being_rendered = false;
 
         if ((mask & 0x10) && internal.sprite_count > 0) {
             if ((mask & 0x04) || cycle >= 9) {
-                internal.sprite_zero_being_rendered = false;
 
                 for (uint8_t i = 0; i < internal.sprite_count; i++) {
                     const unsigned dx = (unsigned)x - internal.sprite_x[i];
@@ -494,7 +494,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                             const uint8_t attr = internal.sprite_attr[i];
                             fg_idx      = px | ((attr & 3) << 2) | 0x10;
                             fg_priority = !(attr & 0x20);
-                            if (i == 0) internal.sprite_zero_being_rendered = true;
+                            sprite_zero_being_rendered = (i == 0);
                             break;
                         }
                     }
@@ -522,7 +522,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
             // Hardware never sets hit at x=255 (cycle 256).
             if (!(regs_[PPUSTATUS] & 0x40) &&
                 internal.sprite_zero_hit_possible &&
-                internal.sprite_zero_being_rendered &&
+                sprite_zero_being_rendered &&
                 (mask & 0x18) == 0x18 &&
                 x != 255 &&
                 ((mask & 0x06) == 0x06 || cycle >= 9)) {
