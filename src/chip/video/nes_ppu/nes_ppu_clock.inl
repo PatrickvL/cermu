@@ -366,7 +366,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                 // Commit the secondary OAM built by the per-cycle evaluator
                 // during dots 65-256.  When rendering is off ($2001 & $18 == 0),
                 // no evaluation ran — secondary OAM stays $FF (offscreen).
-                if (scanline >= 0 && (regs_[PPUMASK] & 0x18)) {
+                if (scanline >= 0 && (mask & 0x18)) {
                     // Last sprite evaluation step at cycle 257
                     sprite_eval_step();
                     commit_sprite_eval();
