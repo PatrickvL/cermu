@@ -439,45 +439,38 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
         // Precompute x once; used for array index and bit mux below.
         const int x = cycle - 1;
 
-        uint8_t bg_pixel   = 0x00;
-        uint8_t bg_palette = 0x00;
-
-        // Background rendering
+        // Combined 4-bit BG index: bits [3:2]=palette, [1:0]=pixel.
+        // Extracting all four shifters in one expression avoids intermediate
+        // pixel/palette temporaries and the final (palette<<2)|pixel recombination.
+        uint8_t bg_idx = 0;
         if (mask & 0x08) {
-            if ((mask & 0x02) || cycle >= 9) {  // Hide leftmost 8 pixels unless bit set
-                // Extract BG pixel bits via shift-and-mask (avoids > 0 comparison)
-                const uint8_t shift = 15 - internal.x;
-                const uint8_t p0 = (internal.bg_shifter_pattern_lo >> shift) & 1;
-                const uint8_t p1 = (internal.bg_shifter_pattern_hi >> shift) & 1;
-                bg_pixel = (p1 << 1) | p0;
-
-                const uint8_t a0 = (internal.bg_shifter_attrib_lo >> shift) & 1;
-                const uint8_t a1 = (internal.bg_shifter_attrib_hi >> shift) & 1;
-                bg_palette = (a1 << 1) | a0;
+            if ((mask & 0x02) || cycle >= 9) {
+                const uint8_t s = 15 - internal.x;
+                bg_idx = ((internal.bg_shifter_pattern_lo  >> s)       & 1)
+                       | ((internal.bg_shifter_pattern_hi  >> (s - 1)) & 2)
+                       | ((internal.bg_shifter_attrib_lo   >> (s - 2)) & 4)
+                       | ((internal.bg_shifter_attrib_hi   >> (s - 3)) & 8);
             }
         }
 
-        // Sprite rendering
-        uint8_t fg_pixel    = 0x00;
-        uint8_t fg_palette  = 0x00;
-        uint8_t fg_priority = 0x00;
+        // Combined sprite index: bits [4:2]=palette (4-7), [1:0]=pixel.
+        // fg_idx is 0 when no sprite pixel is opaque (transparent = backdrop).
+        uint8_t fg_idx      = 0;
+        uint8_t fg_priority = 0;
 
         if ((mask & 0x10) && internal.sprite_count > 0) {
-            if ((mask & 0x04) || cycle >= 9) {  // Hide leftmost 8 pixels unless bit set
+            if ((mask & 0x04) || cycle >= 9) {
                 internal.sprite_zero_being_rendered = false;
                 const auto& front = internal.sec_oam_front();
 
                 for (uint8_t i = 0; i < internal.sprite_count; i++) {
                     if (front.entries[i].x == 0) {
-                        // Shift-and-mask: bit 7 >> 7 gives 0 or 1
-                        const uint8_t fg_pixel_lo = (internal.sprite_shifter_pattern_lo[i] >> 7) & 1;
-                        const uint8_t fg_pixel_hi = (internal.sprite_shifter_pattern_hi[i] >> 7) & 1;
-                        fg_pixel = (fg_pixel_hi << 1) | fg_pixel_lo;
-
-                        fg_palette  = (front.entries[i].attributes & 0x03) + 0x04;
-                        fg_priority = (front.entries[i].attributes & 0x20) == 0;
-
-                        if (fg_pixel != 0) {
+                        const uint8_t px = ((internal.sprite_shifter_pattern_lo[i] >> 7) & 1)
+                                         | ((internal.sprite_shifter_pattern_hi[i] >> 6) & 2);
+                        if (px != 0) {
+                            const uint8_t attr = front.entries[i].attributes;
+                            fg_idx      = px | ((attr & 3) << 2) | 0x10;
+                            fg_priority = !(attr & 0x20);
                             if (i == 0) internal.sprite_zero_being_rendered = true;
                             break;
                         }
@@ -486,27 +479,20 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
             }
         }
 
-        // Pixel priority selection — combines BG and sprite with priority logic.
-        // Uses a streamlined branch structure:
-        //   - If both transparent → backdrop
-        //   - If only one is opaque → use that one
-        //   - If both opaque → priority decides, plus sprite-0 hit check
-        uint8_t pixel;
-        uint8_t palette_val;
+        // Priority composition — direct color index, no intermediate split.
+        //   bg_idx & 3: BG pixel (0 = transparent)
+        //   fg_idx & 3: sprite pixel (0 = transparent, fg_idx==0 = no sprite)
+        uint8_t color_idx;
+        const uint8_t bg_px = bg_idx & 3;
+        const uint8_t fg_px = fg_idx & 3;
 
-        if (bg_pixel == 0) {
-            // No BG pixel — use sprite or backdrop
-            pixel       = fg_pixel;
-            palette_val = (fg_pixel != 0) ? fg_palette : 0;
-        } else if (fg_pixel == 0) {
-            // No sprite pixel — use BG
-            pixel = bg_pixel;
-            palette_val = bg_palette;
+        if (bg_px == 0) {
+            color_idx = fg_px ? fg_idx : 0;
+        } else if (fg_px == 0) {
+            color_idx = bg_idx;
         } else {
-            // Both opaque — priority decides winner (ternary avoids branch pair)
-            const bool fg_wins = fg_priority;
-            pixel       = fg_wins ? fg_pixel   : bg_pixel;
-            palette_val = fg_wins ? fg_palette : bg_palette;
+            // Both opaque — priority decides winner
+            color_idx = fg_priority ? fg_idx : bg_idx;
 
             // Sprite-0 hit detection (only when both BG and sprite are opaque).
             // Once detected (status bit 6 set), skip for rest of frame.
@@ -521,8 +507,8 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
             }
         }
 
-        // Store palette index in scanline buffer — deferred to flush at cycle 257.
-        scanline_color_line_[x] = ((palette_val << 2) | pixel) & 0x1F;
+        // Store combined palette+pixel index directly — no recombination needed.
+        scanline_color_line_[x] = color_idx;
     }
 
     // Flush remaining pixels of the visible scanline to screen buffer.
