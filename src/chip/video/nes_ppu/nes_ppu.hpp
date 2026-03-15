@@ -107,26 +107,6 @@ public:
 
     std::array<uint8_t, 32> palette{};                // 32 bytes palette RAM
 
-    // Scanline sprite visibility masks — one 64-bit word per scanline,
-    // bit i set iff sprite i is in Y-range for that scanline.  Updated
-    // incrementally on OAM Y-byte writes; latched per-scanline at cycle 0
-    // for bitmask-accelerated phase-1 evaluation.
-    //
-    // 256 entries cover all possible Y values (0-255).  16 additional
-    // padding entries absorb writes from sprites at Y positions near the
-    // bottom (Y + 15 for 8×16 sprites) without bounds checks.
-    // Only entries [0..239] are read during evaluation.
-    static constexpr unsigned SPRITE_MASK_ENTRIES = 272;
-    uint64_t sprite_masks_[SPRITE_MASK_ENTRIES]{};
-
-    // Deferred sprite mask maintenance — instead of updating sprite_masks_[]
-    // immediately on every OAM Y-byte write, we record which sprites changed
-    // and flush before the masks are actually consumed (cycle 0 latch).
-    // Improves cache locality during DMA (256 OAM byte writes stay in OAM
-    // cache lines; sprite_masks_[] touched once at flush).
-    uint64_t sprite_mask_dirty_ = 0;         // Bit i set = sprite i needs mask update
-    uint8_t  sprite_old_y_[64] = {};          // Shadow: Y value before first dirty write
-
     // Internal state
     struct InternalState {
         uint16_t v = 0;       // Current VRAM address (15 bits)
@@ -199,6 +179,7 @@ public:
     uint64_t frame_count = 0; // Frame counter
     bool frame_complete = false;
     uint64_t last_vbl_detect_dot_ = 0; // Total dots when last $2002 VBL detect
+
 
     // PPU bus state flows through arguments.  bus_snapshot_ (inherited
     // from ChipBase) stores the PPU bus state between ticks — the system
@@ -355,9 +336,6 @@ public:
         palette.fill(0);
         std::fill(screen.begin(), screen.end(), 0);
 
-        // All sprites at Y=0 — rebuild masks from scratch
-        rebuild_sprite_masks();
-
         build_palette_cache(is_pal, palette_cache_);
         rebuild_pixel_lut();
     }
@@ -494,78 +472,11 @@ private:
     inline void commit_sprite_eval();
     inline void sprite_eval_step();
 
-    // Flush deferred sprite mask updates.  Called at cycle 0 of each
-    // visible scanline before latching the bitmask.  If many sprites
-    // changed (> 32), a full rebuild is cheaper than per-sprite updates.
-    inline void flush_sprite_mask_dirty() {
-        uint64_t dirty = sprite_mask_dirty_;
-        if (!dirty) return;
-        if (__builtin_popcountll(dirty) > 32) {
-            rebuild_sprite_masks_impl();
-        } else {
-            const bool tall = regs_[PPUCTRL] & 0x20;
-            while (dirty) {
-                const unsigned i = __builtin_ctzll(dirty);
-                if (tall)
-                    update_sprite_mask<16>(i, sprite_old_y_[i], oam.entries[i].y);
-                else
-                    update_sprite_mask<8>(i, sprite_old_y_[i], oam.entries[i].y);
-                dirty &= dirty - 1;  // clear lowest set bit
-            }
-        }
-        sprite_mask_dirty_ = 0;
-    }
-
-    // Sprite visibility mask maintenance — called on OAM Y-byte writes.
-    // Clears old_y's range, sets new_y's range in sprite_masks_[].
-    // Height is a template parameter so the compiler fully unrolls the
-    // 8 or 16 iterations.
-    template<uint8_t Height>
-    inline void update_sprite_mask(uint8_t sprite_idx, uint8_t old_y, uint8_t new_y) {
-        const uint64_t bit     = 1ULL << sprite_idx;
-        const uint64_t not_bit = ~bit;
-        for (unsigned s = old_y; s < (unsigned)old_y + Height; s++)
-            sprite_masks_[s] &= not_bit;
-        for (unsigned s = new_y; s < (unsigned)new_y + Height; s++)
-            sprite_masks_[s] |= bit;
-    }
-
-    // Full rebuild of all 272 sprite visibility masks from current OAM.
-    // Called after reset, bulk OAM changes, or sprite-height mode change.
-    void rebuild_sprite_masks_impl() {
-        std::memset(sprite_masks_, 0, sizeof(sprite_masks_));
-        const bool tall = regs_[PPUCTRL] & 0x20;
-        for (unsigned i = 0; i < 64; i++) {
-            const uint8_t y = oam.entries[i].y;
-            const uint64_t bit = 1ULL << i;
-            const unsigned h = tall ? 16 : 8;
-            for (unsigned s = y; s < (unsigned)y + h; s++)
-                sprite_masks_[s] |= bit;
-        }
-    }
-
 public:
-    // Write a byte to primary OAM with deferred mask maintenance.
-    // Only marks dirty when a Y byte changes (addr & 3 == 0).
+    // Write a byte to primary OAM.
     // Public — the system DMA controller writes OAM directly.
     inline void oam_write(uint8_t addr, uint8_t data) {
-        const uint8_t old = oam.bytes[addr];
         oam.bytes[addr] = data;
-        if ((addr & 3) == 0 && old != data) {
-            const uint8_t sprite_idx = addr >> 2;
-            const uint64_t bit = 1ULL << sprite_idx;
-            if (!(sprite_mask_dirty_ & bit)) {
-                sprite_old_y_[sprite_idx] = old;
-                sprite_mask_dirty_ |= bit;
-            }
-        }
-    }
-
-    // Full rebuild of all sprite visibility masks from current OAM.
-    // Public for load_state() and external callers.
-    inline void rebuild_sprite_masks() {
-        rebuild_sprite_masks_impl();
-        sprite_mask_dirty_ = 0;
     }
 
 private:

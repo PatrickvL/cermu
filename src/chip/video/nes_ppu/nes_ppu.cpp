@@ -158,14 +158,9 @@ std::pair<bus_state_t, ppu_bus_state_t> PPU::service_cpu_bus(
 
         switch (addr) {
             case 0x2000: // Control
-                {
-                    uint8_t old_ctrl = regs_[PPUCTRL];
-                    regs_[PPUCTRL] = data;
-                    internal.t = (internal.t & 0xF3FF) | ((data & 0x03) << 10);
-                    // Sprite height changed — rebuild all visibility masks
-                    if ((old_ctrl ^ data) & 0x20) rebuild_sprite_masks();
-                    update_nmi_output(ppu_bus);  // NMI enable may have changed
-                }
+                regs_[PPUCTRL] = data;
+                internal.t = (internal.t & 0xF3FF) | ((data & 0x03) << 10);
+                update_nmi_output(ppu_bus);  // NMI enable may have changed
                 break;
             case 0x2001: // Mask
                 flush_scanline_segment();   // Flush pixels rendered with old mask

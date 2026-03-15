@@ -1318,7 +1318,6 @@ bool NintendoSystem<V>::load_state(const std::string& filename) {
     f.read(reinterpret_cast<char*>(&ppu_->regs_), ppu_->num_regs_);
     f.read(reinterpret_cast<char*>(bus_.ciram), nes_bus::CIRAM_SIZE);
     f.read(reinterpret_cast<char*>(ppu_->oam.bytes), sizeof(ppu_->oam.bytes));
-    ppu_->rebuild_sprite_masks();  // Masks must reflect loaded OAM state
     f.read(reinterpret_cast<char*>(ppu_->palette.data()), ppu_->palette.size());
     f.read(reinterpret_cast<char*>(&ppu_->internal), sizeof(ppu_->internal));
     int16_t sl; f.read(reinterpret_cast<char*>(&sl), sizeof(sl)); ppu_->scanline = sl;

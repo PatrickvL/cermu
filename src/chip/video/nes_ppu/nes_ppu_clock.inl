@@ -102,7 +102,7 @@ inline void PPU::update_shifters(uint8_t mask) {
 inline void PPU::commit_sprite_eval() {
     auto& ev = internal.sprite_eval;
     internal.sprite_count              = (ev.state & SE_WR) >> 2;
-    internal.sprite_zero_hit_possible  = sprite_masks_[scanline] & 1u;
+    internal.sprite_zero_hit_possible  = static_cast<unsigned>(scanline - oam.entries[0].y) < ev.sprite_height;
 
     // Copy x values and attributes from SecOam entries into flat arrays.
     // Pixel rendering accesses these every visible dot; keeping them contiguous
@@ -153,7 +153,7 @@ inline void PPU::sprite_eval_step() {
 
     if (!(ev.state & SE_OVF)) {
         // ---- Finding: copy visible sprites to sec OAM (bitmask-accelerated) ----
-        if ((ev.state & SE_BYTE) || (sprite_masks_[scanline] & (1ULL << (ev.state >> SE_SPRITE_SHF)))) {
+        if ((ev.state & SE_BYTE) || (static_cast<unsigned>(scanline - oam.bytes[oam_idx]) < ev.sprite_height)) {
             internal.sec_oam_.bytes[ev.state & SE_WR] = oam.bytes[oam_idx];
             // addend already SE_INC
         } else {
@@ -339,9 +339,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                 // cycles 65-256 with one read/write pair per 2 PPU cycles.
                 if (scanline >= 0 && (mask & 0x18)) {
                     if (cycle == 0) {
-                        // Flush any deferred sprite mask updates before latching.
-                        flush_sprite_mask_dirty();
-                        // Clear back secondary OAM and latch visibility mask.
+                        // Clear secondary OAM for new scanline's evaluation.
                         std::memset(internal.sec_oam_.bytes, 0xFF, 32);
                         internal.sprite_eval = {
                             0,                                          // state: finding, n=0, m=0, sec_wr=0
