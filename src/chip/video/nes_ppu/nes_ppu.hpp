@@ -176,20 +176,19 @@ public:
         // flag timing and the PPU's buggy overflow byte-offset behavior.
         //
         // Packed into a single uint16_t `state`:
-        //   [15]   = n overflow (n==64 → done)
+        //   [15]   = done (also set naturally when n==64)
         //   [14:9] = n  (sprite index, 0-63)
         //   [8:7]  = m  (overflow byte offset, 0-3)
-        //   [6]    = done flag
-        //   [5]    = phase (0=finding, 1=overflow check)
+        //   [5]    = overflow phase (0=finding, 1=overflow check)
         //   [4:0]  = sec_wr (secondary OAM write pointer, 0-31)
         //
         // state=0 is a valid cold start (finding, sprite 0, sec_wr=0).
-        // sec_wr carry (31→32) naturally sets the phase bit (finding→overflow).
-        // m carry (3→0) naturally increments n.  Done = single bit test (0x40).
+        // sec_wr carry (31→32) naturally sets SE_OVF (finding→overflow).
+        // m carry (3→0) naturally increments n.
+        // n carry (63→64) naturally sets SE_DONE.
         struct SpriteEval {
-            uint64_t mask  = 0;     // Latched visibility bitmask for this scanline
-            uint16_t state = 0;     // Packed evaluation state (see bit layout above)
-            bool has_sprite_zero = false; // Sprite 0 found during this eval
+            uint16_t state         = 0;  // packed evaluation state (see layout above)
+            uint8_t  sprite_height = 8;  // 8 or 16; latched from PPUCTRL at scanline start
         } sprite_eval;
     } internal = {};
 
@@ -479,12 +478,22 @@ private:
             pixel_lut_[i] = active_palette_[palette[pal_mirror_[i]] & 0x3F];
     }
 
+    // Packed state field constants for SpriteEval::state
+    static constexpr uint16_t SE_DONE       = 0x8000u;  // [15]   done; also set naturally when n==64
+    static constexpr uint16_t SE_SPRITE     = 0x7E00u;  // [14:9] primary OAM sprite index (0-63)
+    static constexpr uint16_t SE_SPRITE_INC = 0x0200u;  // sprite index unit increment
+    static constexpr uint16_t SE_BYTE       = 0x0180u;  // [8:7]  byte offset within sprite (0-3)
+    static constexpr uint16_t SE_INC        = 0x0081u;  // byte offset++ and write pointer++ in one add
+    static constexpr uint16_t SE_OVF        = 0x0020u;  // [5]    0=finding, 1=overflow check
+    static constexpr uint16_t SE_WR         = 0x001Fu;  // [4:0]  write pointer into sec OAM (0-31)
+    static constexpr uint8_t  SE_OAM_SHF    = 7;        // state >> SE_OAM_SHF = n*4+m (OAM byte index)
+    static constexpr uint8_t  SE_SPRITE_SHF = 9;        // state >> SE_SPRITE_SHF = n   (bitmask index)
+
     // Sprite evaluation (defined inline in nes_ppu_clock.inl).
-    // Templated on sprite height for constexpr loop unrolling.
-    // commit_sprite_eval() copies the pending secondary OAM built by
-    // the per-cycle evaluator into the rendering buffer at cycle 257.
+    // commit_sprite_eval() swaps the double-buffered secondary OAM
+    // and precomputes sprite pattern addresses at cycle 257.
     inline void commit_sprite_eval();
-    template<uint8_t Height> inline void sprite_eval_step();
+    inline void sprite_eval_step();
 
     // Flush deferred sprite mask updates.  Called at cycle 0 of each
     // visible scanline before latching the bitmask.  If many sprites

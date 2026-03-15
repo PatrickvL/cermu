@@ -101,18 +101,16 @@ inline void PPU::update_shifters(uint8_t mask) {
 // ============================================================================
 // Commit secondary OAM — called at cycle 257.
 //
-// During cycles 65-256, sprite_eval_step<Height>() builds the secondary
-// OAM one byte at a time in the back buffer (sec_oam_back()).  At
-// cycle 257 we swap the double-buffer index so the sprite-fetch window
-// (258-320) and the next scanline's pixel compositor read from the
-// freshly-built buffer.  No memcpy — just toggle an index.
+// During cycles 65-256, sprite_eval_step() builds the secondary OAM one
+// byte at a time in the back buffer.  At cycle 257 we swap the double-buffer
+// index so the sprite-fetch window (258-320) and the next scanline's pixel
+// compositor read from the freshly-built buffer.  No memcpy — just toggle.
 // ============================================================================
 inline void PPU::commit_sprite_eval() {
     auto& ev = internal.sprite_eval;
-    // Swap: the back buffer (where eval just wrote) becomes the new front.
-    internal.sec_oam_front_ = 1 - internal.sec_oam_front_;
-    internal.sprite_count = (ev.state & 0x1Fu) >> 2;
-    internal.sprite_zero_hit_possible = ev.has_sprite_zero;
+    internal.sec_oam_front_            = 1 - internal.sec_oam_front_;
+    internal.sprite_count              = (ev.state & SE_WR) >> 2;
+    internal.sprite_zero_hit_possible  = sprite_masks_[scanline] & 1u;
 
     // Precompute sprite pattern addresses for all 8 slots.
     // Avoids recomputing the branchy address calc twice per slot
@@ -131,61 +129,53 @@ inline void PPU::commit_sprite_eval() {
 // Templated on sprite Height (8 or 16) so comparisons use constexpr and
 // the compiler can fully unroll inner loops.
 //
-// Phase 0 (finding): sec_wr & 3 derived copy step.  Bitmask-accelerated.
-// Phase 1 (overflow): OAM[n*4+m] read with PPU hardware m-bug.
-// Done: bit 6 set → single-bit early-out.
+// Finding:  iterate primary OAM via bitmask; copy matching sprites to sec OAM.
+// Overflow: check remaining sprites for range with hardware byte-offset bug.
+// Done:     SE_DONE set → single-bit early-out; also triggered naturally by n==64.
 //
 // Packed state layout (uint16_t):
-//   [15]   = n overflow    [14:9] = n    [8:7] = m
-//   [6]    = done          [5]    = phase (0=finding, 1=overflow)
-//   [4:0]  = sec_wr
+//   [15]   = done (n==64 sentinel)   [14:9] = sprite index   [8:7] = byte offset
+//   [5]    = overflow (0=finding)    [4:0]  = sec OAM write pointer
 //
-// sec_wr carry (31→32) naturally sets bit 5 (finding→overflow).
-// m carry (3→0) naturally increments n.  state=0 is valid cold start.
+// sec OAM write pointer carry (31→32) naturally sets SE_OVF  (finding→overflow).
+// byte offset carry           (3→0)   naturally increments sprite index.
+// sprite index carry          (63→64) naturally sets SE_DONE.
+// state=0 is valid cold start.
 // ============================================================================
-template<uint8_t Height>
 inline void PPU::sprite_eval_step() {
     auto& ev = internal.sprite_eval;
 
-    if (ev.state & 0x40u) return;  // done — single bit test
+    if (ev.state & SE_DONE) return;
 
-    if (!(ev.state & 0x20u)) {
-        // ---- Phase 0: finding sprites (bitmask-accelerated) ----
-        if (ev.state & 0x180u) {
-            // m != 0 → copy byte, advance sec_wr and m in one add
-            internal.sec_oam_back().bytes[ev.state & 0x1Fu] =
-                oam.bytes[ev.state >> 7];
-            ev.state += 0x81u;
-            // carry from sec_wr [4:0] → phase 0→1 when sec OAM fills (natural)
-            // carry from m      [8:7] → n++       when 4-byte copy ends (natural)
-            if (!(ev.state & 0x180u))                          // m wrapped → copy done
-                if (ev.state >= 0x8000u) ev.state |= 0x40u;   // n==64 → done
-            return;
-        }
+    const uint8_t oam_idx = ev.state >> SE_OAM_SHF;
+    uint16_t addend = SE_INC;  // most common: mid-copy
 
-        // m == 0 → visibility test
-        if (ev.mask & (1ULL << (ev.state >> 9))) {
-            if (ev.state < 0x200u) ev.has_sprite_zero = true;  // n == 0
-            internal.sec_oam_back().bytes[ev.state & 0x1Fu] =
-                oam.bytes[ev.state >> 7];
-            ev.state += 0x81u;   // sec_wr++, m = 1 → begin copy
+    if (!(ev.state & SE_OVF)) {
+        // ---- Finding: copy visible sprites to sec OAM (bitmask-accelerated) ----
+        if ((ev.state & SE_BYTE) || (sprite_masks_[scanline] & (1ULL << (ev.state >> SE_SPRITE_SHF)))) {
+            internal.sec_oam_back().bytes[ev.state & SE_WR] = oam.bytes[oam_idx];
+            // addend already SE_INC
         } else {
-            ev.state += 0x200u;  // n++, m stays 0
-            if (ev.state >= 0x8000u) ev.state |= 0x40u;  // n==64 → done
+            addend = SE_SPRITE_INC;  // not visible — sprite++, byte offset stays 0
         }
+        // carry from write pointer [4:0] → SE_OVF  when sec OAM fills  (natural)
+        // carry from byte offset   [8:7] → sprite++ when copy ends      (natural)
+        // carry from sprite index [14:9] → SE_DONE when n==64           (natural)
     } else {
-        // ---- Phase 1: overflow check (hardware m-bug: reads OAM[n*4+m]) ----
-        const uint8_t y = oam.bytes[ev.state >> 7];
-        if (static_cast<unsigned>(scanline - y) < Height) {
+        // ---- Overflow check: OAM[n*4+m] with hardware byte-offset bug ----
+        const uint8_t y = oam.bytes[oam_idx];
+        if (static_cast<unsigned>(scanline - y) < ev.sprite_height) {
             regs_[PPUSTATUS] |= 0x20u;
-            ev.state |= 0x40u;   // done
+            addend = SE_DONE;
         } else {
-            // n and m increment independently — the hardware bug
-            const uint16_t m_new = (((ev.state >> 7) + 1u) & 3u) << 7;
-            ev.state = ((ev.state & ~0x180u) + 0x200u) | m_new;
-            if (ev.state >= 0x8000u) ev.state |= 0x40u;  // n==64 → done
+            // sprite index and byte offset increment independently — the hardware bug.
+            // when byte offset==3, +0x80 carries naturally into sprite index;
+            // otherwise explicit sprite_inc is needed.
+            addend = 0x0080u | (uint16_t)(((oam_idx & 3u) != 3u) << 9);
         }
     }
+
+    ev.state += addend;
 }
 
 // ============================================================================
@@ -329,14 +319,11 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                         // Clear back secondary OAM and latch visibility mask.
                         std::memset(internal.sec_oam_back().bytes, 0xFF, 32);
                         internal.sprite_eval = {
-                            sprite_masks_[scanline],  // latch bitmask
-                            0, false  // state=0 (finding, n=0, m=0, sec_wr=0)
+                            0,                                          // state: finding, n=0, m=0, sec_wr=0
+                            (uint8_t)(regs_[PPUCTRL] & 0x20 ? 16 : 8)  // sprite_height latched from PPUCTRL
                         };
                     } else if (cycle >= 66 && (cycle & 1) == 0) {
-                        if (regs_[PPUCTRL] & 0x20)
-                            sprite_eval_step<16>();
-                        else
-                            sprite_eval_step<8>();
+                        sprite_eval_step();
                     }
                 }
                 scanline_event_ += (cycle == 256 - 1);
@@ -344,10 +331,8 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
             case 1: // cycle 256
                 increment_scroll_y(mask);
                 // Sprite eval step at cycle 256
-                if (scanline >= 0 && (mask & 0x18)) {
-                    if (regs_[PPUCTRL] & 0x20) sprite_eval_step<16>();
-                    else                       sprite_eval_step<8>();
-                }
+                if (scanline >= 0 && (mask & 0x18))
+                    sprite_eval_step();
                 scanline_event_++;
                 break;
             case 2: // cycle == 257
@@ -358,8 +343,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                 // no evaluation ran — secondary OAM stays $FF (offscreen).
                 if (scanline >= 0 && (regs_[PPUMASK] & 0x18)) {
                     // Last sprite evaluation step at cycle 257
-                    if (regs_[PPUCTRL] & 0x20) sprite_eval_step<16>();
-                    else                       sprite_eval_step<8>();
+                    sprite_eval_step();
                     commit_sprite_eval();
                 }
                 // Sprite 0, sub-cycle 0: output garbage nametable address (A12 = 0).
