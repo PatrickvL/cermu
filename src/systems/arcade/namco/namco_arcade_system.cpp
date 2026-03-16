@@ -78,6 +78,8 @@ bool NamcoArcadeSystem<G>::initialize() {
 
     // ── Init CPU + sound ────────────────────────────────────────────────
     cpu_ = board_.template cpu<ZilogZ80A>();
+    vram_chip_ = board_.template chip_as<RAMChip>(1);  // Slot 1: Video RAM
+    cram_chip_ = board_.template chip_as<RAMChip>(2);  // Slot 2: Color RAM
     pins_ = board_.cpu_chip()->init();
     wsg_.init();
 
@@ -89,6 +91,14 @@ bool NamcoArcadeSystem<G>::initialize() {
     waveform_rom_.resize(namco_arcade_constants::WAVEFORM_ROM_SIZE, 0x00);
 
     load_roms();
+    decode_palette();
+
+    // ── GPU indexed palette rendering ───────────────────────────────
+    pixel_.set_framebuffer(framebuffer_,
+                           namco_arcade_constants::FB_WIDTH,
+                           namco_arcade_constants::FB_HEIGHT);
+    register_gpu_palette(&pixel_, rgba_palette_,
+                         namco_arcade_constants::PALETTE_ENTRIES);
 
     // ── Register chips for Hardware menu ────────────────────────────────
     register_bus_chips(board_);
@@ -160,6 +170,7 @@ void NamcoArcadeSystem<G>::tick() {
 
 template<NamcoGame G> void NamcoArcadeSystem<G>::run_frame() {
     for (uint32_t i = 0; i < namco_arcade_constants::TSTATES_PER_FRAME; ++i) tick();
+    render_frame();
 }
 
 template<NamcoGame G> bool NamcoArcadeSystem<G>::load_file(const char*) { return false; }
@@ -174,6 +185,123 @@ template<NamcoGame G> void NamcoArcadeSystem<G>::handle_keyboard_event(SDL_Keyco
 template<NamcoGame G> void NamcoArcadeSystem<G>::render_system_menu_items() {}
 template<NamcoGame G> void NamcoArcadeSystem<G>::render_configuration_ui() {}
 template<NamcoGame G> void NamcoArcadeSystem<G>::set_speed_multiplier(float m) { speed_multiplier_ = m; }
+
+// ============================================================================
+// PALETTE DECODE — build RGBA palette from palette PROM
+// ============================================================================
+//
+// Each palette PROM byte encodes one color using resistor-weighted DAC:
+//   bits [2:0] = red   (3-bit, weights 0x21/0x47/0x97)
+//   bits [5:3] = green (3-bit, weights 0x21/0x47/0x97)
+//   bits [7:6] = blue  (2-bit, weights 0x51/0xAE)
+
+template<NamcoGame G>
+void NamcoArcadeSystem<G>::decode_palette() {
+    for (int i = 0; i < namco_arcade_constants::PALETTE_ENTRIES; i++) {
+        uint8_t entry = (i < static_cast<int>(palette_prom_.size())) ? palette_prom_[i] : 0;
+        int r = 0x21 * ((entry >> 0) & 1) + 0x47 * ((entry >> 1) & 1) + 0x97 * ((entry >> 2) & 1);
+        int g = 0x21 * ((entry >> 3) & 1) + 0x47 * ((entry >> 4) & 1) + 0x97 * ((entry >> 5) & 1);
+        int b = 0x51 * ((entry >> 6) & 1) + 0xAE * ((entry >> 7) & 1);
+        rgba_palette_[i] = 0xFF000000u
+                         | (static_cast<uint32_t>(b) << 16)
+                         | (static_cast<uint32_t>(g) << 8)
+                         | static_cast<uint32_t>(r);
+    }
+}
+
+// ============================================================================
+// VIDEO RENDERING — decode tilemap into indexed framebuffer
+// ============================================================================
+//
+// The Namco Pac-Man board has a 36×28 tile display (288×224 pixels)
+// rotated 90° CW.  The framebuffer is 224 wide × 288 tall.
+//
+// VRAM layout (1024 bytes, 32×32 grid):
+//   Rows 0-1  (0x000-0x03F): bottom score strips → screen rows 34-35
+//   Rows 2-29 (0x040-0x3BF): main playfield (rotated)
+//   Rows 30-31(0x3C0-0x3FF): top score strips → screen rows 0-1
+//
+// Char ROM tile format (2bpp, 8×8 pixels, 16 bytes per tile):
+//   Each byte contains 4 pixels × 2 planes packed:
+//     bits [3:0] = plane 0 for 4 pixels, bits [7:4] = plane 1
+//   Bytes 0-7: right half (x=4-7) rows 0-7
+//   Bytes 8-15: left half (x=0-3) rows 0-7
+//
+// Color lookup: colortable_prom[(color_attr & 0x3F) * 4 + pixel_2bit] → palette index
+
+template<NamcoGame G>
+void NamcoArcadeSystem<G>::render_frame() {
+    if (!vram_chip_ || !cram_chip_) return;
+
+    const uint8_t* vram = vram_chip_->data();
+    const uint8_t* cram = cram_chip_->data();
+    const uint8_t* chars = char_rom_.data();
+    const uint8_t* ctable = colortable_prom_.data();
+    const int char_count = static_cast<int>(char_rom_.size()) / 16;
+
+    std::memset(frame_indices_, 0, sizeof(frame_indices_));
+
+    // Render all 1024 VRAM entries
+    for (int offs = 0; offs < 1024; offs++) {
+        int mx = offs & 0x1F;       // VRAM column (0-31)
+        int my = offs >> 5;          // VRAM row (0-31)
+
+        // Map VRAM position → screen tile position after 90° rotation
+        int sx, sy;
+        if (my < 2) {
+            // Bottom score strip
+            sx = mx - 2;
+            sy = 34 + my;
+        } else if (my >= 30) {
+            // Top score strip
+            sx = mx - 2;
+            sy = my - 30;
+        } else {
+            // Main playfield (rotated)
+            sx = 29 - my;
+            sy = mx + 2;
+        }
+
+        // Bounds check (some entries fall outside visible 28×36)
+        if (sx < 0 || sx >= 28 || sy < 0 || sy >= 36) continue;
+
+        uint8_t tile_idx = vram[offs];
+        uint8_t color_attr = cram[offs] & 0x3F;
+
+        // Skip if tile index exceeds available char ROM
+        if (tile_idx >= char_count) tile_idx = 0;
+
+        const uint8_t* tile = chars + tile_idx * 16;
+
+        // Decode 8×8 tile pixels
+        int fb_x = sx * 8;
+        int fb_y = sy * 8;
+        for (int ty = 0; ty < 8; ty++) {
+            uint8_t* dst = frame_indices_ + (fb_y + ty) * namco_arcade_constants::FB_WIDTH + fb_x;
+            // Right half (x=4-7) in bytes 0-7, left half (x=0-3) in bytes 8-15
+            uint8_t right = tile[ty];       // pixels x=4-7
+            uint8_t left  = tile[ty + 8];   // pixels x=0-3
+            // Left half (x=0-3): plane 0 in bits [3:0], plane 1 in bits [7:4]
+            for (int tx = 0; tx < 4; tx++) {
+                uint8_t p0 = (left >> tx) & 1;
+                uint8_t p1 = (left >> (tx + 4)) & 1;
+                uint8_t pixel = p0 | (p1 << 1);
+                uint8_t pal_idx = ctable[color_attr * 4 + pixel];
+                dst[3 - tx] = pal_idx & 0x1F;
+            }
+            // Right half (x=4-7)
+            for (int tx = 0; tx < 4; tx++) {
+                uint8_t p0 = (right >> tx) & 1;
+                uint8_t p1 = (right >> (tx + 4)) & 1;
+                uint8_t pixel = p0 | (p1 << 1);
+                uint8_t pal_idx = ctable[color_attr * 4 + pixel];
+                dst[7 - tx] = pal_idx & 0x1F;
+            }
+        }
+    }
+
+    pixel_.flush_indexed_frame(frame_indices_, rgba_palette_);
+}
 
 // ============================================================================
 // I/O DISPATCH
