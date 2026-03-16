@@ -68,20 +68,21 @@ public:
     //   - crtc_start: CRTC display start address (R12:R13)
 
     void render_frame(const uint8_t* ram, uint16_t crtc_start) {
-        if (!ram) return;
+        if (!ram || !display_) return;
 
         // Gate Array maps CRTC address bits [13:12] → 16 KB bank
         uint32_t screen_base = (crtc_start & 0x3000) << 2;
 
         constexpr int FB_W = amstrad_cpc_constants::FB_WIDTH;
 
-        std::memset(frame_indices_, 0, sizeof(frame_indices_));
+        uint8_t* fb = display_->indices();
+        std::memset(fb, 0, FB_W * amstrad_cpc_constants::FB_HEIGHT);
 
         for (int y = 0; y < 200; y++) {
             // Interleaved address: scan lines within character row spaced 2048 bytes apart
             uint32_t line_base = screen_base + (y / 8) * 80 + (y % 8) * 2048;
-            uint8_t* dst0 = frame_indices_ + (y * 2) * FB_W;
-            uint8_t* dst1 = frame_indices_ + (y * 2 + 1) * FB_W;
+            uint8_t* dst0 = fb + (y * 2) * FB_W;
+            uint8_t* dst1 = fb + (y * 2 + 1) * FB_W;
 
             for (int x_byte = 0; x_byte < 80; x_byte++) {
                 uint8_t byte = ram[(line_base + x_byte) & 0xFFFF];
@@ -145,7 +146,7 @@ public:
             }
         }
 
-        if (display_) display_->flush_frame(frame_indices_, amstrad_cpc_constants::HARDWARE_PALETTE);
+        display_->flush(amstrad_cpc_constants::HARDWARE_PALETTE);
     }
 
     // Display output — set by system via set_display().
@@ -153,7 +154,4 @@ public:
     void set_display(IndexedFrameBuffer* d) { display_ = d; }
 
 private:
-    // Per-frame index buffer for rendering (one byte per pixel)
-    uint8_t frame_indices_[amstrad_cpc_constants::FB_WIDTH *
-                           amstrad_cpc_constants::FB_HEIGHT] = {};
 };
