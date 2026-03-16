@@ -266,16 +266,10 @@ public:
     // Rebuilt on construction, reset, and PAL/NTSC change.
     uint32_t palette_cache_[16][64] = {};
 
-    // Precomputed pixel LUT — 32 entries, one per palette slot.
-    // Collapses the per-pixel triple indirection (pal_mirror_ → palette →
-    // active_palette) into a single array lookup.  Rebuilt lazily on first
-    // render-path access after palette RAM writes or PPUMASK changes.
-    uint32_t pixel_lut_[32] = {};
-
-    // Per-scanline palette index buffer — stores 5-bit pixel_lut_ offsets.
-    // Flushed to screen[] at end of each visible scanline (cycle 257).
-    // Mid-scanline palette/mask changes trigger partial flushes so that
-    // pixels already rendered use the palette in effect when they were drawn.
+    // Per-scanline color buffer — stores 6-bit NES master color indices.
+    // Resolved from palette RAM (via pal_mirror_) at pixel time; flushed
+    // to display at cycle 257.  Mid-scanline emphasis changes trigger
+    // partial flushes so pixels use the emphasis variant in effect when drawn.
     uint8_t scanline_color_line_[256] = {};
     int     scanline_flush_x_ = 0;          // Next x to flush (0–256)
 
@@ -283,10 +277,10 @@ public:
     // set_display().  Replaces the former VideoPixelUnit + screen vector.
     IndexedFrameBuffer* display_ = nullptr;
 
-    // Active palette variant — pointer into palette_cache_.  Set to nullptr
-    // to mark pixel_lut_ as stale; the render path checks this once per dot
-    // with an unlikely branch and rebuilds on demand.  Coalesces rapid
-    // palette/mask writes (common during setup) into a single rebuild.
+    // Active palette variant — pointer into palette_cache_[].  Set to nullptr
+    // to mark as stale; the render path checks this once per dot with an
+    // unlikely branch and reselects the variant on demand.  Coalesces rapid
+    // emphasis/mask writes (common during setup) into a single reselection.
     const uint32_t* active_palette_ = nullptr;
 
 public:
@@ -331,7 +325,7 @@ public:
         palette.fill(0);
 
         build_palette_cache(is_pal, palette_cache_);
-        rebuild_pixel_lut();
+        rebuild_active_palette();
     }
 
     // Service a CPU bus cycle targeting the PPU register window ($2000-$2007).
@@ -425,28 +419,24 @@ private:
     inline void update_shifters(uint8_t mask);
 
     // Flush already-rendered pixels [scanline_flush_x_, cycle-1) with the
-    // current pixel_lut_ before a palette or mask change invalidates it.
+    // current active_palette_ before an emphasis change invalidates it.
     // Called from service_cpu_bus when a write to $2001 or palette RAM
     // occurs during visible rendering.  No-op outside the visible window.
     inline void flush_scanline_segment() {
         if (scanline < 0 || scanline >= 240) return;
         const int x_end = cycle - 1;  // last rendered pixel = cycle-2, range is [flush_x, cycle-1)
         if (x_end <= scanline_flush_x_) return;
-        if (!active_palette_) rebuild_pixel_lut();
+        if (!active_palette_) rebuild_active_palette();
         if (display_) display_->flush_line_range(
-            scanline, scanline_color_line_, pixel_lut_, scanline_flush_x_, x_end);
+            scanline, scanline_color_line_, active_palette_, scanline_flush_x_, x_end);
         scanline_flush_x_ = x_end;
     }
 
-    // Invalidate pixel LUT — called on $2001 writes, palette RAM writes,
-    // and reset.  The actual rebuild is deferred to the render path.
-    // Lazily rebuild pixel_lut_ from current palette RAM and PPUMASK.
-    // Only called when active_palette_ is null (i.e. after invalidation).
-    void rebuild_pixel_lut() {
+    // Reselect the active emphasis/greyscale palette variant from PPUMASK.
+    // Called lazily when active_palette_ is null (after invalidation).
+    void rebuild_active_palette() {
         const uint8_t variant = ((regs_[PPUMASK] >> 5) & 0x07) | ((regs_[PPUMASK] & 0x01) << 3);
         active_palette_ = palette_cache_[variant];
-        for (int i = 0; i < 32; ++i)
-            pixel_lut_[i] = active_palette_[palette[pal_mirror_[i]] & 0x3F];
     }
 
     // Packed state field constants for SpriteEval::state
