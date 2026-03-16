@@ -27,6 +27,7 @@
 #include "chip/io/i8255.hpp"
 #include "chip/sound/ay_3_8910.hpp"
 #include "chip/memory/memory_chip.hpp"
+#include "chip/video/amstrad_gate_array/amstrad_gate_array.hpp"
 #include "systems/amstrad_cpc/amstrad_cpc_constants.hpp"
 #include <cstdint>
 #include <memory>
@@ -70,43 +71,6 @@ template<> struct CPCModelTraits<CPCModel::CPC6128> {
     static constexpr int   ram_size_kb        = 128;
     static constexpr bool  has_disc           = true;
     static std::vector<const char*> get_aliases() { return {"CPC6128"}; }
-};
-
-// ============================================================================
-// Amstrad Gate Array (custom ASIC) — ChipBase subclass for manifest inclusion
-// ============================================================================
-//
-// The Amstrad gate array is a custom ASIC unique to the CPC series.
-// It handles pen/ink color mapping, screen mode selection, ROM overlay
-// control, RAM banking (6128), and interrupt generation from CRTC HSYNC.
-// All I/O is Z80 port-based (IORQ) — no MMIO.
-
-class amstrad_gate_array_t : public ChipBase {
-public:
-    amstrad_gate_array_t() : ChipBase(ChipInfo{"Amstrad Gate Array", "Gate Array"}) {
-        category_ = "Logic";
-    }
-
-    // ChipBase override — called by Board::reset_chips()
-    void reset() override {
-        pen_select = 0;
-        std::memset(ink, 0, sizeof(ink));
-        screen_mode = 1;
-        lower_rom_enabled = true;
-        upper_rom_enabled = true;
-        ram_config = 0;
-        interrupt_counter = 0;
-        interrupt_pending = false;
-    }
-
-    uint8_t  pen_select = 0;                        // Selected pen (0-16, 16=border)
-    uint8_t  ink[amstrad_cpc_constants::GA_PEN_COUNT]{};  // Pen->hardware color mapping
-    uint8_t  screen_mode = 1;                       // 0, 1, or 2
-    bool     lower_rom_enabled = true;              // BIOS ROM at $0000-$3FFF
-    bool     upper_rom_enabled = true;              // BASIC ROM at $C000-$FFFF
-    uint8_t  ram_config = 0;                        // 6128 RAM banking register
-    uint8_t  interrupt_counter = 0;                 // Counts HSYNC, fires IRQ every 52
-    bool     interrupt_pending = false;
 };
 
 // ============================================================================
@@ -209,9 +173,7 @@ public:
 
     bool load_file(const char* filepath) override;
 
-    uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
-    void set_framebuffer(uint32_t* buffer, int width, int height) override;
 
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
     void set_audio_sample_rate(int sample_rate_hz) override;
@@ -255,12 +217,14 @@ private:
     bool        system_ready_ = false;
 
     // ========================================================================
-    // DISPLAY
+    // DISPLAY — chip-owned pattern: Gate Array owns pixel + frame_indices_
     // ========================================================================
 
-    uint32_t framebuffer_[amstrad_cpc_constants::FB_WIDTH * amstrad_cpc_constants::FB_HEIGHT]{};
-    VideoPixelUnit pixel_;
-    uint8_t frame_indices_[amstrad_cpc_constants::FB_WIDTH * amstrad_cpc_constants::FB_HEIGHT]{};
+    uint32_t framebuffer_[amstrad_cpc_constants::FB_WIDTH *
+                          amstrad_cpc_constants::FB_HEIGHT] = {};
+
+    uint32_t* get_framebuffer() override;
+    void set_framebuffer(uint32_t* buffer, int width, int height) override;
 
     // ========================================================================
     // AUDIO
