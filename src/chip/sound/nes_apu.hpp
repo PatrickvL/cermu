@@ -1134,6 +1134,57 @@ public:
     return bus_state;
   }
 
+  /// MMIO-only tick for multi-threaded audio mode.
+  ///
+  /// Runs on the emulation thread to maintain IRQ, DMA, and $4015 state.
+  /// Audio signal generation (envelopes, oscillators, sweep) is skipped —
+  /// those run on the audio thread via a second APU instance.
+  ///
+  /// In single-threaded mode, use tick() instead which does everything.
+  void tick_mmio() {
+    uint8_t events = frame.clock();
+    bool had_half_frame = false;
+
+    // Quarter frame: envelopes and linear counter are audio-only — skip
+
+    if (events & 2) { // Half frame
+      had_half_frame = true;
+      // Length counters affect $4015 readback — must track on emu thread
+      pulse1.length.clock();
+      pulse2.length.clock();
+      triangle.length.clock();
+      noise.length.clock();
+      // Sweep is audio-only — skip
+    }
+
+    // Resolve pending length reloads (affects $4015 active bits)
+    pulse1.length.resolve_pending_reload(had_half_frame);
+    pulse2.length.resolve_pending_reload(had_half_frame);
+    triangle.length.resolve_pending_reload(had_half_frame);
+    noise.length.resolve_pending_reload(had_half_frame);
+
+    // DMC timing: drives needs_sample (DMA) and irq_flag.
+    // The output unit state (output_level, shift_register) is also
+    // updated but not read by any MMIO query — harmless dead weight.
+    dmc.clock();
+
+    // Oscillator timers (pulse, triangle, noise) are audio-only — skip
+
+    cycle_counter++;
+
+    pulse1.length.update_prev_halt();
+    pulse2.length.update_prev_halt();
+    triangle.length.update_prev_halt();
+    noise.length.update_prev_halt();
+  }
+
+  /// Simplified register write for command-queue use (audio thread).
+  /// @param reg  Register offset 0x00–0x17 (relative to $4000).
+  /// @param value  Data byte.
+  void write_register(uint8_t reg, uint8_t value) {
+    write(0x4000 | reg, value, 0);
+  }
+
   // Generate audio sample using precomputed NES mixer lookup tables
   // Reference: https://www.nesdev.org/wiki/APU_Mixer
   float sample() const {

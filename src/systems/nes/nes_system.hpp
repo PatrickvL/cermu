@@ -23,6 +23,8 @@
 #include <string>
 #include "utils/ring_buffer.hpp"
 #include "core/indexed_frame_buffer.hpp"
+#include "core/audio_thread.hpp"
+#include "chip/sound/nes_apu_synth_engine.hpp"
 
 // ============================================================================
 // NES SYSTEM CONSTANTS
@@ -147,11 +149,16 @@ private:
     uint8_t  cpu_div_ = 0;               // PPU->CPU countdown (0 = CPU tick this cycle)
     bool     dma_odd_cycle_ = false;     // DMA even/odd toggle
     
-    // Audio buffer — lock-free SPSC ring (prepares for audio thread separation)
+    // Audio buffer — lock-free SPSC ring (single-threaded mode)
     AudioRingBuffer audio_ring_buf_{8192};
     uint32_t audio_sample_rate_;
     uint32_t audio_sample_counter_;
     uint32_t audio_sample_period_;      // cached: NTSC=37, PAL=33
+
+    // Audio thread separation — when active, synthesis runs off the emu thread.
+    // In single-threaded mode both are null/stopped and the legacy path applies.
+    AudioThread audio_thread_;
+    std::unique_ptr<NesApuSynthEngine> apu_synth_engine_;
     
     // Timing
     double residual_time_;

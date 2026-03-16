@@ -11,6 +11,7 @@
 #include "chip/cpu/fam65xx/fam65xx_types.hpp" // For bus_state_t
 #include "chip/sound/nes_apu.hpp"  // For nes6502_apu::APU class
 #include "core/ioport.hpp" // For io_port<Mask> and io_port_state
+#include "utils/audio_cmd_queue.hpp"  // For AudioCommandQueue (used by apu_mixin_t inline methods)
 #include <cstdint>
 #include <cstdio>          // For printf in debug output
 #include <type_traits>
@@ -88,13 +89,24 @@ template <const CPUTraits &Traits> struct io_port_mixin_t {
 // APU MIXIN (NES 6502 Audio Processing Unit)
 // ============================================================================
 
-// APU functionality for NES 6502 processors with integrated audio
+// APU functionality for NES 6502 processors with integrated audio.
+//
+// Supports two operating modes:
+//   Single-threaded (cmd_queue == nullptr):
+//     clock_apu() runs the full APU tick; generate_audio_sample() returns a
+//     mixed sample.  This is the legacy path.
+//   Multi-threaded  (cmd_queue != nullptr):
+//     clock_apu() runs tick_mmio() only (IRQ, DMA, $4015 state).  Register
+//     writes and DMC sample bytes are enqueued for the audio thread which
+//     runs a second APU instance via NesApuSynthEngine.
 template <const CPUTraits &Traits> struct apu_mixin_t {
   // APU instance (aligned for performance)
   struct alignas(8) {
     nes6502_apu::APU *apu_instance = nullptr;
+    AudioCommandQueue *cmd_queue = nullptr;  // null → single-threaded mode
+    uint64_t cycle_count = 0;                // monotonic CPU cycle counter
     bool is_pal = false;
-    uint8_t _padding[6]{};     // Align to 8 bytes
+    uint8_t _padding[7]{};
   } apu_state;
 
   // Initialize APU (first-time creation only)
@@ -109,6 +121,7 @@ template <const CPUTraits &Traits> struct apu_mixin_t {
     if (apu_state.apu_instance) {
       apu_state.apu_instance->reset_to_soft_state();
     }
+    apu_state.cycle_count = 0;
   }
 
   // Cleanup APU
@@ -119,15 +132,31 @@ template <const CPUTraits &Traits> struct apu_mixin_t {
     }
   }
 
+  /// Connect a command queue to enable multi-threaded audio mode.
+  /// Pass nullptr to revert to single-threaded mode.
+  void set_audio_cmd_queue(AudioCommandQueue* queue) {
+    apu_state.cmd_queue = queue;
+  }
+
+  /// Current CPU cycle count (for AudioThread::signal_progress).
+  uint64_t apu_cycle_count() const { return apu_state.cycle_count; }
+
   // APU register write handler ($4000-$4017)
   bool write_apu_register(uint16_t addr, uint8_t value) {
     if (addr >= 0x4000 && addr <= 0x4017) {
       if (apu_state.apu_instance) {
-        // Create a bus state with the address and data set
+        // Always apply to the emu-thread APU (maintains MMIO state)
         bus_state_t bus_state = 0;
         FAM65XX_SET_ADDR(bus_state, addr);
         FAM65XX_SET_DATA(bus_state, value);
         apu_state.apu_instance->write(addr, value, bus_state);
+      }
+      // Multi-threaded: also enqueue for the audio thread's APU
+      if (apu_state.cmd_queue) {
+        apu_state.cmd_queue->push_write(
+            apu_state.cycle_count,
+            static_cast<uint8_t>(addr & 0x1F),
+            value);
       }
       return true; // Handled
     }
@@ -138,7 +167,7 @@ template <const CPUTraits &Traits> struct apu_mixin_t {
   bool read_apu_register(uint16_t addr, uint8_t &value) {
     if (addr == 0x4015) {
       if (apu_state.apu_instance) {
-        // Create a bus state with the address set
+        // Read from the emu-thread APU (both modes)
         bus_state_t bus_state = 0;
         FAM65XX_SET_ADDR(bus_state, addr);
         bus_state = apu_state.apu_instance->read(addr, bus_state);
@@ -151,16 +180,27 @@ template <const CPUTraits &Traits> struct apu_mixin_t {
     return false; // Not APU register
   }
 
-  // Clock APU (called every CPU cycle)
+  // Clock APU (called every CPU cycle).
+  // Single-threaded: runs the full tick (synthesis + MMIO).
+  // Multi-threaded:  runs tick_mmio() only (IRQ, DMA, $4015).
   bus_state_t clock_apu(bus_state_t bus_state) {
     if (apu_state.apu_instance) {
-      return apu_state.apu_instance->tick(bus_state);
+      if (apu_state.cmd_queue) {
+        apu_state.apu_instance->tick_mmio();
+      } else {
+        apu_state.apu_instance->tick(bus_state);
+      }
     }
+    apu_state.cycle_count++;
     return bus_state;
   }
 
-  // Generate audio sample
+  // Generate audio sample (single-threaded mode only).
+  // In multi-threaded mode returns 0 — audio comes from the synth engine.
   float generate_audio_sample() {
+    if (apu_state.cmd_queue) {
+      return 0.0f;
+    }
     if (apu_state.apu_instance) {
       return apu_state.apu_instance->sample();
     }
@@ -180,6 +220,10 @@ template <const CPUTraits &Traits> struct apu_mixin_t {
   void apu_load_dma_sample(uint8_t data) {
     if (apu_state.apu_instance) {
       apu_state.apu_instance->dmc_load_sample(data);
+    }
+    // Multi-threaded: also enqueue for the audio thread's APU
+    if (apu_state.cmd_queue) {
+      apu_state.cmd_queue->push_dmc_sample(apu_state.cycle_count, data);
     }
   }
 
