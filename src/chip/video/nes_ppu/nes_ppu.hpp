@@ -292,11 +292,19 @@ public:
         std::memset(internal.sec_oam_.bytes, 0xFF, 32);
         internal.sprite_count = 0;
 
+        set_named_palettes(NES_NAMED_PALETTES, NES_NAMED_PALETTE_COUNT);
         build_palette_cache(is_pal, palette_cache_);
         reset();
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
+    }
+
+    // Switch the base 64-color table and rebuild the emphasis cache.
+    // Called by the system when the user selects a different palette.
+    void set_base_palette(const uint32_t base[64]) {
+        build_palette_cache(is_pal, palette_cache_, base);
+        active_palette_ = nullptr;  // Force reselection on next dot
     }
 
     void reset() {
