@@ -5,6 +5,7 @@
 build/
 tests/build/
 _deps/
+vcpkg_installed/
 
 # CMake generated files (should never be committed)
 CMakeCache.txt

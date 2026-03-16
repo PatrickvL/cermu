@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "cermu",
+  "version-string": "0.1.0",
+  "description": "cermu — multi-system retro hardware emulator",
+  "builtin-baseline": "7c11b72a6f810293d0ce234de126b99e9ab6fa7a",
+  "dependencies": [
+    {
+      "name": "libarchive",
+      "version>=": "3.7.4"
+    }
+  ]
+}
