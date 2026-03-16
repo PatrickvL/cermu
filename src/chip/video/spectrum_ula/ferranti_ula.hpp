@@ -236,8 +236,9 @@ public:
     // into a pixel stream.  Moving it here keeps the system tick loop clean.
 
     void render_frame(const uint8_t* screen_ram) {
-        if (!screen_ram) return;
+        if (!screen_ram || !display_) return;
 
+        uint8_t* fb = display_->indices();
         const uint8_t border_idx = border_color_;
         const bool flash = flash_state_;
 
@@ -248,10 +249,10 @@ public:
         constexpr int SH = spectrum_ula::SCREEN_HEIGHT;   // 192
 
         // Fill top border
-        std::memset(frame_indices_, border_idx, BT * W);
+        std::memset(fb, border_idx, BT * W);
 
         // Fill bottom border
-        std::memset(frame_indices_ + (BT + SH) * W, border_idx,
+        std::memset(fb + (BT + SH) * W, border_idx,
                     (spectrum_ula::TOTAL_HEIGHT - BT - SH) * W);
 
         // Render screen area (192 lines)
@@ -259,7 +260,7 @@ public:
         const uint8_t* attrs  = screen_ram + 0x1800;
 
         for (int y = 0; y < SH; ++y) {
-            uint8_t* line = &frame_indices_[(BT + y) * W];
+            uint8_t* line = &fb[(BT + y) * W];
 
             // Left border
             std::memset(line, border_idx, BL);
@@ -299,7 +300,7 @@ public:
         }
 
         // Flush: GPU mode → index_buffer, CPU mode → RGBA framebuffer
-        if (display_) display_->flush_frame(frame_indices_, spectrum_ula::PALETTE);
+        display_->flush(spectrum_ula::PALETTE);
     }
 
     // Display output — set by system via set_display().
@@ -331,9 +332,6 @@ private:
     // Keyboard matrix (8 half-rows × 5 keys, active-low)
     uint8_t   keyboard_state_[8]{};
 
-    // Per-frame index buffer for rendering (one byte per pixel)
-    uint8_t   frame_indices_[spectrum_ula::TOTAL_WIDTH *
-                             spectrum_ula::TOTAL_HEIGHT] = {};
 
     // Register mirror (backed by ChipBase::regs_)
 

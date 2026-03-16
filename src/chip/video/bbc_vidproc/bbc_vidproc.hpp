@@ -51,7 +51,7 @@ public:
         control_ = 0;
         std::memset(palette_, 0, sizeof(palette_));
         memory_ = nullptr;
-        std::memset(frame_indices_, 0, sizeof(frame_indices_));
+        if (display_) display_->clear();
     }
 
     // === Palette ===
@@ -132,7 +132,7 @@ public:
     /// @param cursor    True if cursor is active at this position
     /// @param crtc_r9   MC6845 R9 — needed for Mode 7 detection
     void display_char(uint16_t ma, uint8_t ra, bool cursor, uint8_t crtc_r9) {
-        if (!memory_) return;
+        if (!memory_ || !display_) return;
 
         int mode = get_display_mode(crtc_r9);
 
@@ -145,12 +145,12 @@ public:
 
     /// Called at VSYNC — flushes the indexed frame buffer.
     void vsync() {
-        if (display_) display_->flush_frame(frame_indices_, bbc_constants::PALETTE);
+        if (display_) display_->flush(bbc_constants::PALETTE);
     }
 
     /// Clear the frame buffer (called at start of frame or on mode change)
     void clear() {
-        std::memset(frame_indices_, 0, sizeof(frame_indices_));
+        if (display_) display_->clear();
     }
 
     // Display output — set by system via set_display().
@@ -207,7 +207,7 @@ private:
 
         uint8_t fg_idx = 7;  // White
         uint8_t bg_idx = 0;  // Black
-        uint8_t* row_ptr = frame_indices_ + pixel_y * bbc_constants::DISPLAY_WIDTH;
+        uint8_t* row_ptr = display_->indices() + pixel_y * bbc_constants::DISPLAY_WIDTH;
 
         // Render 8 source pixels, doubled to 16 output pixels
         for (int bit = 7; bit >= 0; bit--) {
@@ -248,7 +248,7 @@ private:
 
         if (pixel_y >= bbc_constants::DISPLAY_HEIGHT) return;
 
-        uint8_t* row_ptr = frame_indices_ + pixel_y * bbc_constants::DISPLAY_WIDTH;
+        uint8_t* row_ptr = display_->indices() + pixel_y * bbc_constants::DISPLAY_WIDTH;
 
         // Unpack screen byte into pixels based on bits-per-pixel
         for (int p = 0; p < ppb; p++) {
@@ -297,8 +297,4 @@ private:
 
     // === Memory access ===
     const uint8_t* memory_ = nullptr;  // Pointer to system RAM (set by system)
-
-    // === Frame buffer ===
-    uint8_t frame_indices_[bbc_constants::DISPLAY_WIDTH *
-                           bbc_constants::DISPLAY_HEIGHT] = {};
 };

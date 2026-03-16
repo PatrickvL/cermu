@@ -275,12 +275,14 @@ public:
         static constexpr int COLS  = mc6847_const::TEXT_COLS;        // 32
         static constexpr int ROWS  = mc6847_const::TEXT_ROWS;        // 16
 
-        if (!vram) return;
+        if (!vram || !display_) return;
+
+        uint8_t* fb = display_->indices();
 
         if (mode_ag_) {
             // Full-graphics modes: clear to black (placeholder)
-            std::memset(frame_indices_, 0, sizeof(frame_indices_));
-            if (display_) display_->flush_frame(frame_indices_, mc6847_font::PALETTE);
+            std::memset(fb, 0, W * H);
+            display_->flush(mc6847_font::PALETTE);
             return;
         }
 
@@ -306,7 +308,7 @@ public:
                             int py0 = fb_y + qr * (CELL_H / 2);
                             for (int dy = 0; dy < CELL_H / 2; dy++) {
                                 for (int dx = 0; dx < CELL_W / 2; dx++) {
-                                    frame_indices_[(py0 + dy) * W + (px0 + dx)] = idx;
+                                    fb[(py0 + dy) * W + (px0 + dx)] = idx;
                                 }
                             }
                         }
@@ -322,14 +324,14 @@ public:
                         uint8_t bits = (gy >= 2 && gy < 10) ? glyph[gy - 2] : 0x00;
                         for (int gx = 0; gx < CELL_W; gx++) {
                             bool set = (bits & (0x80u >> gx)) != 0;
-                            frame_indices_[(fb_y + gy) * W + (fb_x + gx)] = set ? fg_idx : bg_idx;
+                            fb[(fb_y + gy) * W + (fb_x + gx)] = set ? fg_idx : bg_idx;
                         }
                     }
                 }
             }
         }
 
-        if (display_) display_->flush_frame(frame_indices_, mc6847_font::PALETTE);
+        display_->flush(mc6847_font::PALETTE);
     }
 
     /// Get the palette for GPU indexed rendering registration.
@@ -364,9 +366,7 @@ private:
     bool     fs_ = false;
     bool     hs_ = false;
 
-    // Per-frame index buffer for rendering (one byte per pixel)
-    uint8_t frame_indices_[mc6847_const::DISPLAY_WIDTH *
-                           mc6847_const::DISPLAY_HEIGHT] = {};
+
 
     // Register mirror (packed mode pins — backed by ChipBase::regs_)
 
