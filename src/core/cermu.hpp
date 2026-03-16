@@ -79,8 +79,8 @@
 #define CERMU_PP_EXPAND_(...)  __VA_ARGS__
 #define CERMU_PP_CAT_(a, b)    CERMU_PP_CAT_I_(a, b)
 #define CERMU_PP_CAT_I_(a, b)  a##b
-#define CERMU_PP_NARGS_(...)   CERMU_PP_EXPAND_(CERMU_PP_NARGS_I_(__VA_ARGS__, 5, 4, 3, 2, 1))
-#define CERMU_PP_NARGS_I_(_1, _2, _3, _4, _5, N, ...)  N
+#define CERMU_PP_NARGS_(...)   CERMU_PP_EXPAND_(CERMU_PP_NARGS_I_(_, ##__VA_ARGS__, 5,4,3,2,1,0))
+#define CERMU_PP_NARGS_I_(_0,_1,_2,_3,_4,_5,N,...) N
 #define CERMU_PP_OVERLOAD_(prefix, ...) \
     CERMU_PP_EXPAND_(CERMU_PP_CAT_(prefix, CERMU_PP_NARGS_(__VA_ARGS__))(__VA_ARGS__))
 
@@ -252,10 +252,10 @@
 #if defined(CERMU_COMPILER_MSVC) && (defined(_M_IX86) || defined(_M_X64))
     #define REGISTER_CALL __fastcall
 #elif defined(CERMU_COMPILER_GCC) || defined(CERMU_COMPILER_CLANG)
-    #if defined(__i386__) || defined(__x86_64__)
+    #if defined(__i386__)
         #define REGISTER_CALL __attribute__((regparm(3)))
     #else
-        #define REGISTER_CALL
+        #define REGISTER_CALL   // x86-64: SysV ABI already uses registers
     #endif
 #else
     #define REGISTER_CALL
