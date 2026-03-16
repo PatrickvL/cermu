@@ -11,7 +11,7 @@
  * @param out_size Actual size of loaded ROM file
  * @return true if ROM was successfully loaded, false otherwise
  */
-bool rom_loader_load_file(const char* file_paths[], size_t expected_size, 
+bool rom_loader_load_file(const char* const file_paths[], size_t expected_size, 
                          uint8_t** out_buffer, size_t* out_size);
 
 /**
@@ -24,7 +24,7 @@ bool rom_loader_load_file(const char* file_paths[], size_t expected_size,
  * @param dest_size Size of destination buffer
  * @return true if ROM was successfully loaded and copied, false otherwise
  */
-bool rom_loader_load_from_root(const char* rom_root_path, const char* filenames[], 
+bool rom_loader_load_from_root(const char* rom_root_path, const char* const filenames[], 
                               size_t expected_size, uint8_t* dest_buffer, size_t dest_size);
 
 /**
@@ -36,7 +36,7 @@ bool rom_loader_load_from_root(const char* rom_root_path, const char* filenames[
  * @param dest_size Size of destination buffer
  * @return true if ROM was successfully loaded and copied, false otherwise
  */
-bool rom_loader_load_to_buffer(const char* file_paths[], size_t expected_size,
+bool rom_loader_load_to_buffer(const char* const file_paths[], size_t expected_size,
                               uint8_t* dest_buffer, size_t dest_size);
 
 /**

@@ -325,17 +325,8 @@ bool Z1013System<V>::load_roms() {
         return false;
     }
 
-    bool ok = true;
-
-    // Monitor ROM (2 KB at $F000)
-    const char* mon_names[] = {"z1013_mon.rom", "monitor.rom", "MON.ROM", nullptr};
-    if (!rom_loader_load_from_root(rom_root, mon_names,
-                                   z1013_constants::MONITOR_ROM_SIZE,
-                                   monitor_rom_chip_->data(),
-                                   monitor_rom_chip_->size_bytes())) {
-        printf("%s: Monitor ROM not loaded\n", Traits::name);
-        ok = false;
-    }
+    // Load manifest-declared ROMs (Monitor ROM)
+    bool ok = board_.load_roms(rom_root, Traits::name);
 
     // Character ROM (2 KB) — not bus-mapped, used for rendering
     const char* char_names[] = {"z1013_char.rom", "charrom.bin", "CHAR.ROM", nullptr};

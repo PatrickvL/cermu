@@ -837,43 +837,7 @@ bool SpectrumSystem<V>::load_roms() {
         printf("Spectrum: Could not find ROM root folder\n");
         return false;
     }
-
-    auto* rom = board_.template chip_as<ROMChip>(spectrum_chips::kRomSlot);
-    if (!rom) {
-        printf("Spectrum: ROM chip not created\n");
-        return false;
-    }
-
-    if constexpr (V == SpectrumVariant::ZX48K) {
-        const char* filenames[] = {
-            "spectrum48k.rom", "48.rom", "spectrum.rom", "zx48.rom", nullptr
-        };
-        bool ok = rom_loader_load_from_root(
-            rom_root, filenames,
-            rom->size_bytes(), rom->data(), rom->size_bytes()
-        );
-        if (!ok) {
-            printf("Spectrum 48K: Failed to load ROM\n");
-            return false;
-        }
-        printf("Spectrum 48K: ROM loaded (%zu bytes)\n", rom->size_bytes());
-    } else {
-        // 128K: two 16KB ROMs (ROM 0 = 128K editor, ROM 1 = 48K BASIC)
-        const char* filenames[] = {
-            "spectrum128k.rom", "128.rom", "128-0.rom", nullptr
-        };
-        bool ok = rom_loader_load_from_root(
-            rom_root, filenames,
-            rom->size_bytes(), rom->data(), rom->size_bytes()
-        );
-        if (!ok) {
-            printf("Spectrum 128K: Failed to load ROM\n");
-            return false;
-        }
-        printf("Spectrum 128K: ROM loaded (%zu bytes)\n", rom->size_bytes());
-    }
-
-    return true;
+    return board_.load_roms(rom_root, Traits::name);
 }
 
 // ============================================================================

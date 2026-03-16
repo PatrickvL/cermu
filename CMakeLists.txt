@@ -417,7 +417,6 @@ set(SYSTEM_SOURCES
     # VIC-20 system (clean CHIP-8-style implementation)
     src/systems/commodore/vic20/vic20_system.cpp
     src/systems/commodore/vic20/vic20_keyboard_matrix.cpp
-    src/systems/commodore/vic20/vic20_memory.cpp
     
     # Commodore shared base class (keyboard mapper, config, speed control)
     src/systems/commodore/commodore_system.cpp

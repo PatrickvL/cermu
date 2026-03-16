@@ -137,10 +137,22 @@ public:
 // ROM bank pair selected by writes to $FDD0-$FDDF.
 // RAM size varies: 16 KB (C16/C116) with mirroring, 64 KB (Plus/4).
 //
+namespace c264_rom {
+    inline constexpr const char* kBasicRomFiles[] = {
+        "basic.318006-01.bin", "basic.rom", "318006-01.bin", nullptr
+    };
+    inline constexpr RomFileInfo kBasicRom{kBasicRomFiles};
+
+    inline constexpr const char* kKernalRomFiles[] = {
+        "kernal.318004-05.bin", "kernal.rom", "318004-05.bin", nullptr
+    };
+    inline constexpr RomFileInfo kKernalRom{kKernalRomFiles};
+}
+
 inline constexpr auto kC264Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 65536, 0, "RAM",        0, 65536},
-    Slot<ROMChip>{0x8000, 16384, 0, "BASIC ROM",  0, 16384, 1},   // overlay group 1
-    Slot<ROMChip>{0xC000, 16384, 0, "KERNAL ROM", 0, 16384, 1},   // overlay group 1
+    Slot<ROMChip>{0x8000, 16384, 0, "BASIC ROM",  0, 16384, 1}.with_rom(&c264_rom::kBasicRom),   // overlay group 1
+    Slot<ROMChip>{0xC000, 16384, 0, "KERNAL ROM", 0, 16384, 1}.with_rom(&c264_rom::kKernalRom), // overlay group 1
     // Non-bus chip — factory-created, not address-decoded
     Slot<CSG7501>               {0, 0, 0, "CSG 7501"},
     // MMIO chips — address-decoded by MemoryBus via MaskedSubTables

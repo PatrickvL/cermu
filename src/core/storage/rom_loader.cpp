@@ -4,7 +4,7 @@
 #include <cstdlib>
 #include <cstring>
 
-bool rom_loader_load_file(const char* file_paths[], size_t expected_size, 
+bool rom_loader_load_file(const char* const file_paths[], size_t expected_size, 
                          uint8_t** out_buffer, size_t* out_size) {
     if (!file_paths || !out_buffer || !out_size) {
         return false;
@@ -65,7 +65,7 @@ bool rom_loader_load_file(const char* file_paths[], size_t expected_size,
     return false;
 }
 
-bool rom_loader_load_to_buffer(const char* file_paths[], size_t expected_size,
+bool rom_loader_load_to_buffer(const char* const file_paths[], size_t expected_size,
                               uint8_t* dest_buffer, size_t dest_size) {
     if (!dest_buffer || dest_size == 0) {
         return false;
@@ -95,7 +95,7 @@ bool rom_loader_load_to_buffer(const char* file_paths[], size_t expected_size,
     return true;
 }
 
-bool rom_loader_load_from_root(const char* rom_root_path, const char* filenames[], 
+bool rom_loader_load_from_root(const char* rom_root_path, const char* const filenames[], 
                               size_t expected_size, uint8_t* dest_buffer, size_t dest_size) {
     if (!rom_root_path || !filenames || !dest_buffer || dest_size == 0) {
         return false;

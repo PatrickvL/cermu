@@ -1414,98 +1414,12 @@ uint8_t VIC20System::vic_color_read(void* user_data, uint16_t addr) {
 // ============================================================================
 
 bool VIC20System::load_roms() {
-    if (!charrom_ || !basic_rom_ || !kernal_rom_) {
-        printf("VIC20: Cannot load ROMs - memory chips not initialized\n");
-        return false;
-    }
-    
-    // Discover ROM root path for VIC-20 system
     char rom_root[1024];
-    bool rom_root_found = system_config_discover_rom_root("vic20", rom_root, sizeof(rom_root));
-    
-    if (!rom_root_found) {
+    if (!system_config_discover_rom_root("vic20", rom_root, sizeof(rom_root))) {
         printf("VIC20: ROM root directory not found\n");
         return false;
     }
-    
-    printf("VIC20: ROM root discovered: %s\n", rom_root);
-    
-    // Temporary buffers for ROM loading
-    uint8_t char_buf[4096];
-    uint8_t basic_buf[8192];
-    uint8_t kernal_buf[8192];
-    
-    // Load Character ROM (4KB at $8000-$8FFF)
-    const char* char_files[] = {
-        "characters.901460-03.bin",
-        "chargen.rom",
-        "901460-03.bin",
-        nullptr
-    };
-    
-    bool char_ok = rom_loader_load_from_root(
-        rom_root, char_files,
-        sizeof(char_buf), char_buf, sizeof(char_buf)
-    );
-    
-    if (char_ok) {
-        memcpy(charrom_->data(), char_buf, sizeof(char_buf));
-    } else {
-        printf("VIC20: Failed to load Character ROM\n");
-    }
-    
-    // Load BASIC ROM (8KB at $C000-$DFFF)
-    const char* basic_files[] = {
-        "basic.901486-01.bin",
-        "basic.rom",
-        "901486-01.bin",
-        nullptr
-    };
-    
-    bool basic_ok = rom_loader_load_from_root(
-        rom_root, basic_files,
-        sizeof(basic_buf), basic_buf, sizeof(basic_buf)
-    );
-    
-    if (basic_ok) {
-        memcpy(basic_rom_->data(), basic_buf, sizeof(basic_buf));
-    } else {
-        printf("VIC20: Failed to load BASIC ROM\n");
-    }
-    
-    // Load KERNAL ROM (8KB at $E000-$FFFF)
-    const char* kernal_files[] = {
-        "kernal.901486-07.bin",
-        "kernal.rom",
-        "901486-07.bin",
-        nullptr
-    };
-    
-    bool kernal_ok = rom_loader_load_from_root(
-        rom_root, kernal_files,
-        sizeof(kernal_buf), kernal_buf, sizeof(kernal_buf)
-    );
-    
-    if (kernal_ok) {
-        memcpy(kernal_rom_->data(), kernal_buf, sizeof(kernal_buf));
-    } else {
-        printf("VIC20: Failed to load KERNAL ROM\n");
-    }
-    
-    return (kernal_ok && basic_ok && char_ok);
-}
-
-void VIC20System::memory_init(const rom_config_t* rom_config) {
-    // Reload ROMs if configuration provided
-    if (rom_config) {
-        reload_roms(rom_config);
-    }
-}
-
-bool VIC20System::reload_roms(const rom_config_t* rom_config) {
-    // Reload ROMs using provided configuration
-    (void)rom_config;  // TODO: Use rom_config paths if provided
-    return load_roms();
+    return board_.load_roms(rom_root, "VIC20");
 }
 
 // ============================================================================

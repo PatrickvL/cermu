@@ -86,10 +86,17 @@ template<> struct Z9001VariantTraits<Z9001Variant::KC87> {
 // RAM for KC87 is allocated as 64 KB (power of 2); effective_size in the
 // manifest limits Phase 1 to 48 KB ($C000), leaving $C000+ for ROM/I/O.
 //
+namespace z9001_rom {
+    inline constexpr const char* kOsRomFiles[] = {
+        "z9001_os.rom", "os.rom", "OS.ROM", nullptr
+    };
+    inline constexpr RomFileInfo kOsRom{kOsRomFiles};
+}
+
 inline constexpr auto kZ9001Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 16384, 0, "RAM"},
     Slot<RAMChip>{0xEC00,  1024, 0, "Video RAM"},
-    Slot<ROMChip>{0xF000,  4096, 0, "OS ROM"},
+    Slot<ROMChip>{0xF000,  4096, 0, "OS ROM"}.with_rom(&z9001_rom::kOsRom),
     // Non-bus chips — factory-created, not address-decoded
     Slot<U880>      {0, 0, 0, "U880"},
     Slot<z80_pio_t> {0, 0, 0, "U855 PIO #1"},
@@ -103,7 +110,7 @@ inline constexpr auto kKC87Chips = make_chip_manifest(
     Slot<ROMChip>{0xE000,  2048, 0, "BASIC ROM hi"},
     Slot<RAMChip>{0xE800,  1024, 0, "Color RAM"},
     Slot<RAMChip>{0xEC00,  1024, 0, "Video RAM"},
-    Slot<ROMChip>{0xF000,  4096, 0, "OS ROM"},
+    Slot<ROMChip>{0xF000,  4096, 0, "OS ROM"}.with_rom(&z9001_rom::kOsRom),
     // Non-bus chips — factory-created, not address-decoded
     Slot<U880>      {0, 0, 0, "U880"},
     Slot<z80_pio_t> {0, 0, 0, "U855 PIO #1"},

@@ -401,16 +401,8 @@ bool Z9001System<V>::load_roms() {
         return false;
     }
 
-    bool ok = true;
-
-    // OS ROM (4 KB at $F000)
-    const char* os_names[] = {"z9001_os.rom", "os.rom", "OS.ROM", nullptr};
-    if (!rom_loader_load_from_root(rom_root, os_names,
-                                   z9001_constants::OS_ROM_SIZE,
-                                   os_rom_chip_->data(), os_rom_chip_->size_bytes())) {
-        printf("%s: OS ROM not loaded\n", Traits::name);
-        ok = false;
-    }
+    // Load manifest-declared ROMs (OS ROM)
+    bool ok = board_.load_roms(rom_root, Traits::name);
 
     // Character ROM (2 KB, not bus-mapped)
     const char* char_names[] = {"z9001_char.rom", "charrom.bin", "CHAR.ROM", nullptr};
@@ -421,7 +413,6 @@ bool Z9001System<V>::load_roms() {
     // BASIC ROM (10 KB split into 8 KB + 2 KB, KC 87 only)
     if constexpr (Traits::has_basic_rom) {
         const char* basic_names[] = {"z9001_basic.rom", "BASIC.ROM", nullptr};
-        // Try loading the full 10 KB ROM into a temp buffer, then split
         std::vector<uint8_t> full_basic(z9001_constants::BASIC_ROM_SIZE, 0xFF);
         if (rom_loader_load_from_root(rom_root, basic_names,
                                       z9001_constants::BASIC_ROM_SIZE,

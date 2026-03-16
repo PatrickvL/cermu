@@ -56,12 +56,29 @@
 // trims actual read/write pages to the configured size (2/5/8/12 KB).
 // Video RAM is 8 KB (power of 2); only $8000–$97FF is used by the MC6847.
 //
+namespace acorn_atom_rom {
+    inline constexpr const char* kBasicFiles[] = {
+        "atom_basic.rom", "BASIC.ROM", "basic.rom", nullptr
+    };
+    inline constexpr RomFileInfo kBasicRom{kBasicFiles};
+
+    inline constexpr const char* kFpRomFiles[] = {
+        "atom_fp.rom", "FP.ROM", "fp.rom", nullptr
+    };
+    inline constexpr RomFileInfo kFpRom{kFpRomFiles, /*optional=*/true};
+
+    inline constexpr const char* kOsRomFiles[] = {
+        "atom_os.rom", "ABASIC.ROM", "os.rom", nullptr
+    };
+    inline constexpr RomFileInfo kOsRom{kOsRomFiles};
+}
+
 inline constexpr auto kAcornAtomChips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 32768, 0, "RAM"},
     Slot<RAMChip>{0x8000,  8192, 0, "Video RAM"},
-    Slot<ROMChip>{0xC000,  4096, 0, "BASIC"},
-    Slot<ROMChip>{0xD000,  2048, 0, "FP ROM"},
-    Slot<ROMChip>{0xF000,  4096, 0, "OS ROM"},
+    Slot<ROMChip>{0xC000,  4096, 0, "BASIC"}.with_rom(&acorn_atom_rom::kBasicRom),
+    Slot<ROMChip>{0xD000,  2048, 0, "FP ROM"}.with_rom(&acorn_atom_rom::kFpRom),
+    Slot<ROMChip>{0xF000,  4096, 0, "OS ROM"}.with_rom(&acorn_atom_rom::kOsRom),
     Slot<i8255_t>   {0xB000,     0, 0xFFFC},           // MMIO-only, 4-byte window
     Slot<mos6522_t> {0xB800,     0, 0xFFF0},           // MMIO-only, 16-byte window
     // Non-bus chips — factory-created, not address-decoded

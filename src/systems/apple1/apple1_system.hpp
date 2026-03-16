@@ -30,10 +30,22 @@
 // (4K/8K modes unmap ROM read pages; 64K mode never maps ROM at all).
 // Page $D0 uses an auto-created MaskedSubTable for PIA ($D010–$D013).
 //
+namespace apple1_rom {
+    inline constexpr const char* kMonitorFiles[] = {
+        "apple1.rom", "monitor.rom", "wozmon.rom", nullptr
+    };
+    inline constexpr RomFileInfo kMonitorRom{kMonitorFiles};
+
+    inline constexpr const char* kBasicFiles[] = {
+        "apple1basic.rom", "basic.rom", nullptr
+    };
+    inline constexpr RomFileInfo kBasicRom{kBasicFiles, /*optional=*/true};
+}
+
 inline constexpr auto kApple1Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
-    Slot<ROMChip>{0xFF00,   256, 0, "Monitor"},
-    Slot<ROMChip>{0xE000,  4096, 0, "BASIC"},
+    Slot<ROMChip>{0xFF00,   256, 0, "Monitor"}.with_rom(&apple1_rom::kMonitorRom),
+    Slot<ROMChip>{0xE000,  4096, 0, "BASIC"}.with_rom(&apple1_rom::kBasicRom),
     Slot<pia6820_t> {0xD010,     0, 0xFFFC},               // MMIO-only, 4-byte window
     // Non-bus chip — factory-created, not address-decoded
     Slot<MOS6502>   {0, 0, 0, "MOS 6502"}

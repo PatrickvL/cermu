@@ -794,6 +794,9 @@ bool PETSystem::load_roms() {
 
     printf("PET: ROM root discovered: %s\n", rom_root);
 
+    // Load manifest-declared ROMs (Editor ROM at $E000, Kernal ROM at $F000)
+    bool ok = board_.load_roms(rom_root, "PET");
+
     // Character ROM — loaded into separate buffer, not main address space.
     // PET 4032 uses a 2KB character ROM (901447-10); we mirror it to fill 4KB.
     // PET 8032 uses a 4KB character ROM (901640-01).
@@ -875,44 +878,7 @@ bool PETSystem::load_roms() {
         }
     }
 
-    // Editor ROM (2KB at $E000-$E7FF — 40-col normal keyboard variant)
-    uint8_t editor_buf[2048];
-    const char* editor_files[] = {
-        "edit-4-40-n-50Hz.901498-01.bin",
-        "edit-4-40-n-60Hz.901499-01.bin",
-        "editor.rom",
-        "901498-01.bin",
-        "901499-01.bin",
-        nullptr
-    };
-    bool editor_ok = rom_loader_load_from_root(rom_root, editor_files,
-                                                sizeof(editor_buf), editor_buf, sizeof(editor_buf));
-    if (editor_ok) {
-        memcpy(editor_rom_chip_->data(), editor_buf, sizeof(editor_buf));
-        printf("PET: Editor ROM loaded\n");
-    } else {
-        printf("PET: Failed to load Editor ROM\n");
-    }
-
-    // Kernal ROM (4KB at $F000-$FFFF)
-    uint8_t kernal_buf[4096];
-    const char* kernal_files[] = {
-        "kernal-4.901465-22.bin",           // VICE naming ✓
-        "kernal4.rom",
-        "kernal.rom",
-        "901465-22.bin",
-        nullptr
-    };
-    bool kernal_ok = rom_loader_load_from_root(rom_root, kernal_files,
-                                                sizeof(kernal_buf), kernal_buf, sizeof(kernal_buf));
-    if (kernal_ok) {
-        memcpy(kernal_rom_chip_->data(), kernal_buf, sizeof(kernal_buf));
-        printf("PET: Kernal ROM loaded\n");
-    } else {
-        printf("PET: Failed to load Kernal ROM\n");
-    }
-
-    return (kernal_ok && basic_ok && char_ok);
+    return (ok && basic_ok && char_ok);
 }
 
 // ============================================================================

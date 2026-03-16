@@ -70,6 +70,10 @@ public:
         // Use set_effective_size() before apply() to trim RAM to a
         // configuration-dependent amount.
         size_t              effective_size = 0;
+
+        // ROM file loading metadata — propagated from ChipSlot::rom.
+        // When non-null, Board::load_roms() will auto-load this slot.
+        const RomFileInfo*  rom = nullptr;
     };
 
     // =====================================================================
@@ -105,6 +109,7 @@ public:
                 s.condition,
                 s.overlay_group,
                 s.effective_size,
+                s.rom,
             });
             byte_off += s.size_bytes;
         }

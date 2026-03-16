@@ -66,6 +66,23 @@
 
 
 // =============================================================================
+// §0.1  RomFileInfo — ROM file loading metadata
+// =============================================================================
+//
+// Attached to a ChipSlot to enable automatic ROM loading via
+// Board::load_roms().  The filenames array is tried in order by
+// rom_loader_load_from_root() until one succeeds.  Optional ROMs
+// (e.g. Apple 1 BASIC) set optional=true so the loader reports
+// but does not fail the system.
+//
+
+struct RomFileInfo {
+    const char* const* filenames;  // Null-terminated array of candidate filenames
+    bool optional = false;         // false = required for boot; true = nice-to-have
+};
+
+
+// =============================================================================
 // §1  ChipSlot — compile-time description of one memory-mapped region
 // =============================================================================
 //
@@ -132,6 +149,10 @@ struct ChipSlot {
     // expansions, optional sound chips, etc.
     uint16_t condition = 0;
 
+    // ROM file loading metadata — null for non-ROM slots and ROM slots
+    // that need custom loading logic (e.g. split ROMs, banked offsets).
+    const RomFileInfo* rom = nullptr;
+
     // Page count for a given page size (size_bytes >> page_bits).
     [[nodiscard]] constexpr size_t pages(size_t page_bits) const noexcept {
         return size_bytes >> page_bits;
@@ -162,6 +183,14 @@ struct Slot {
     size_t      bank_size  = 0;
     uint8_t     overlay_group = 0;
     size_t      effective_size = 0;  // 0 = use size_bytes.  See ChipSlot::effective_size.
+    const RomFileInfo* rom = nullptr;  // ROM file metadata (null = no auto-loading)
+
+    // Returns a copy with ROM file metadata attached.
+    [[nodiscard]] constexpr Slot with_rom(const RomFileInfo* r) const noexcept {
+        auto copy = *this;
+        copy.rom = r;
+        return copy;
+    }
 };
 
 
@@ -448,7 +477,8 @@ make_chip_manifest(Slot<Chips>... slots) noexcept
           slots.overlay_group,
           resolve_slot_factory<Chips>(),
           slots.label,
-          slots.condition
+          slots.condition,
+          slots.rom
       }), ...);
     return manifest;
 }

@@ -9,7 +9,6 @@
 #include "chip/video/vic/mos6561.hpp"
 #include "chip/video/vic/vic_common.hpp"
 #include "systems/commodore/vic20/vic20_bus.hpp"
-#include "systems/commodore/vic20/vic20_config.hpp"
 #include "systems/commodore/vic20/vic20_chips.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 
@@ -79,12 +78,29 @@ namespace vic20_cond {
     inline constexpr uint16_t kNTSC = 2;   // NTSC region (MOS 6560)
 }
 
+namespace vic20_rom {
+    inline constexpr const char* kCharRomFiles[] = {
+        "characters.901460-03.bin", "chargen.rom", "901460-03.bin", nullptr
+    };
+    inline constexpr RomFileInfo kCharRom{kCharRomFiles};
+
+    inline constexpr const char* kBasicRomFiles[] = {
+        "basic.901486-01.bin", "basic.rom", "901486-01.bin", nullptr
+    };
+    inline constexpr RomFileInfo kBasicRom{kBasicRomFiles};
+
+    inline constexpr const char* kKernalRomFiles[] = {
+        "kernal.901486-07.bin", "kernal.rom", "901486-07.bin", nullptr
+    };
+    inline constexpr RomFileInfo kKernalRom{kKernalRomFiles};
+}
+
 inline constexpr auto kVIC20Chips = make_chip_manifest(
-    // ── Bus-mapped memory chips ──────────────────────────────────────────
+    // ── Bus-mapped memory chips ──────────────────────────────────────────────────
     Slot<RAMChip>   {0x0000, 65536, 0, "RAM"},
-    Slot<ROMChip>   {0x8000,  4096, 0, "CHARROM"},
-    Slot<ROMChip>   {0xC000,  8192, 0, "BASIC ROM"},
-    Slot<ROMChip>   {0xE000,  8192, 0, "KERNAL ROM"},
+    Slot<ROMChip>   {0x8000,  4096, 0, "CHARROM"}.with_rom(&vic20_rom::kCharRom),
+    Slot<ROMChip>   {0xC000,  8192, 0, "BASIC ROM"}.with_rom(&vic20_rom::kBasicRom),
+    Slot<ROMChip>   {0xE000,  8192, 0, "KERNAL ROM"}.with_rom(&vic20_rom::kKernalRom),
     // ── Non-bus chips (factory-created, not mapped) ──────────────────────
     Slot<MOS6502>   {0, 0, 0, "MOS 6502"},
     Slot<mos6561_t> {0, 0, 0, "MOS 6561 (PAL)",  vic20_cond::kPAL},
@@ -199,8 +215,4 @@ private:
     // Connector port setup (registers VIC-20 connector ports with base class)
     void setup_ports();
     std::vector<DefaultPeripheral> get_default_peripherals() const override;
-
-    // Legacy integration methods (deprecated, kept for compatibility)
-    void memory_init(const rom_config_t* rom_config);
-    bool reload_roms(const rom_config_t* rom_config);
 };

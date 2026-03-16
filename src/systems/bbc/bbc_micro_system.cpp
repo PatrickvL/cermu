@@ -772,23 +772,8 @@ bool BBCMicroSystem::load_roms() {
 
     printf("BBC Micro: ROM root: %s\n", rom_root);
 
-    // OS ROM (MOS 1.20 — 16 KB) → into flat mem via os_rom_chip_
-    uint8_t* os_rom_data = os_rom_chip_->data();
-    const char* os_files[] = {
-        "os12.rom",
-        "os.rom",
-        "OS-1.20.rom",
-        "MOS120.rom",
-        "bbc_os.rom",
-        "os1.2.rom",
-        nullptr
-    };
-    bool os_ok = rom_loader_load_from_root(rom_root, os_files,
-                                           bbc_constants::OS_ROM_SIZE,
-                                           os_rom_data, bbc_constants::OS_ROM_SIZE);
-    if (!os_ok) {
-        printf("BBC Micro: OS ROM not found\n");
-    }
+    // Load manifest-declared ROMs (MOS ROM at slot 2)
+    bool os_ok = board_.load_roms(rom_root, "BBC Micro");
 
     // BASIC ROM (BBC BASIC II — 16 KB) → into paged ROM pool slot 15
     uint8_t* basic_rom_data = paged_rom_chip_->data()

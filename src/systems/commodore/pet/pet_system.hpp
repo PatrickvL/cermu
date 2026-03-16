@@ -61,14 +61,27 @@
 // I/O at $E800–$E8FF handled separately (PIA1, PIA2, VIA, CRTC).
 // Character ROM is NOT bus-mapped.
 //
+namespace pet_rom {
+    inline constexpr const char* kEditorRomFiles[] = {
+        "edit-4-40-n-50Hz.901498-01.bin", "edit-4-40-n-60Hz.901499-01.bin",
+        "editor.rom", "901498-01.bin", "901499-01.bin", nullptr
+    };
+    inline constexpr RomFileInfo kEditorRom{kEditorRomFiles};
+
+    inline constexpr const char* kKernalRomFiles[] = {
+        "kernal-4.901465-22.bin", "kernal4.rom", "kernal.rom", "901465-22.bin", nullptr
+    };
+    inline constexpr RomFileInfo kKernalRom{kKernalRomFiles};
+}
+
 inline constexpr auto kPETChips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 32768, 0, "Main RAM"},
     Slot<RAMChip>{0x8000,  2048, 0x03FF, "Screen RAM"},
     Slot<ROMChip>{0xB000,  4096, 0, "BASIC ROM $B000"},
     Slot<ROMChip>{0xC000,  4096, 0, "BASIC ROM $C000"},
     Slot<ROMChip>{0xD000,  4096, 0, "BASIC ROM $D000"},
-    Slot<ROMChip>{0xE000,  2048, 0, "Editor ROM"},
-    Slot<ROMChip>{0xF000,  4096, 0, "Kernal ROM"},
+    Slot<ROMChip>{0xE000,  2048, 0, "Editor ROM"}.with_rom(&pet_rom::kEditorRom),
+    Slot<ROMChip>{0xF000,  4096, 0, "Kernal ROM"}.with_rom(&pet_rom::kKernalRom),
     // Non-bus chips — factory-created, not address-decoded
     Slot<MOS6502>   {0, 0, 0, "MOS 6502"},
     Slot<mc6845_t>  {0, 0, 0, "MC6845 CRTC"},

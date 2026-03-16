@@ -86,10 +86,17 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_64> {
 // apply() maps them correctly: RAM first (base layer), BASIC ROM overlays
 // RAM reads, then Video RAM and Monitor ROM overlay the remaining gaps.
 //
+namespace z1013_rom {
+    inline constexpr const char* kMonitorFiles[] = {
+        "z1013_mon.rom", "monitor.rom", "MON.ROM", nullptr
+    };
+    inline constexpr RomFileInfo kMonitorRom{kMonitorFiles};
+}
+
 inline constexpr auto kZ1013_16K_Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 16384, 0, "RAM"},
     Slot<RAMChip>{0xEC00,  1024, 0, "Video RAM"},
-    Slot<ROMChip>{0xF000,  2048, 0, "Monitor ROM"},
+    Slot<ROMChip>{0xF000,  2048, 0, "Monitor ROM"}.with_rom(&z1013_rom::kMonitorRom),
     // Non-bus chips — factory-created, not address-decoded
     Slot<U880>      {0, 0, 0, "U880"},
     Slot<z80_pio_t> {0, 0, 0, "U855 PIO"}
@@ -100,7 +107,7 @@ inline constexpr auto kZ1013_64K_Chips = make_chip_manifest(
     Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM lo"},
     Slot<ROMChip>{0xE000,  2048, 0, "BASIC ROM hi"},
     Slot<RAMChip>{0xEC00,  1024, 0, "Video RAM"},
-    Slot<ROMChip>{0xF000,  2048, 0, "Monitor ROM"},
+    Slot<ROMChip>{0xF000,  2048, 0, "Monitor ROM"}.with_rom(&z1013_rom::kMonitorRom),
     // Non-bus chips — factory-created, not address-decoded
     Slot<U880>      {0, 0, 0, "U880"},
     Slot<z80_pio_t> {0, 0, 0, "U855 PIO"}
