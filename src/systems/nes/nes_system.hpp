@@ -22,6 +22,7 @@
 #include <vector>
 #include <string>
 #include "utils/ring_buffer.hpp"
+#include "core/indexed_frame_buffer.hpp"
 
 // ============================================================================
 // NES SYSTEM CONSTANTS
@@ -120,6 +121,7 @@ private:
     std::shared_ptr<PPU> ppu_;
     std::shared_ptr<Cartridge> cartridge_;
     nes_bus::nes_bus_t bus_;                     // Page-pointer bus (replaces MemoryBus)
+    IndexedFrameBuffer nes_display_;             // Unified display output (256×240)
     
     // System state
     bool is_pal_;
@@ -204,7 +206,6 @@ public:
     void eject_cartridge();
     void power_cycle();
     void set_controller_state(int controller, uint8_t state);
-    const std::vector<uint32_t>& get_screen() const;
     void clear_audio_buffer() { audio_ring_buf_.reset(); audio_sample_counter_ = audio_sample_period_; }
     void set_audio_sample_rate(uint32_t rate);
     bool save_state(const std::string& filename) const;
@@ -242,10 +243,6 @@ private:
     /** Handle NSF player keyboard shortcuts (subtune selection).
      *  Returns true if the key was consumed (should not be forwarded). */
     bool handle_nsf_player_key(SDL_Keycode key);
-
-    /// Copy the PPU's internal 256×240 screen into the GUI-provided
-    /// RGBA framebuffer so the host can display the rendered frame.
-    void blit_ppu_to_framebuffer();
 };
 
 // Convenience type aliases

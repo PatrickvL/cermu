@@ -312,6 +312,12 @@ bool NintendoSystem<V>::initialize() {
     // Register chips for the Hardware menu and debug windows
     register_nes_chips();
 
+    // Initialize display output — 256×240 indexed framebuffer
+    nes_display_.init(256, 240);
+    nes_display_.set_palette(NES_COLOR_TABLE, 64);
+    ppu_->set_display(&nes_display_);
+    register_display(&nes_display_);
+
     initialized_ = true;
     
     return true;
@@ -397,10 +403,6 @@ void NintendoSystem<V>::run_frame() {
     while (!ppu_->frame_complete) {
         tick();
     }
-
-    // Copy PPU screen into the GUI-provided framebuffer so the emu
-    // thread's snapshot sees the rendered frame.
-    blit_ppu_to_framebuffer();
 
     // Tick all attached peripheral devices
     tick_peripherals();
@@ -616,22 +618,6 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
     } catch (const std::exception& e) {
         printf("%s: Failed to load cartridge: %s\n", Traits::name, e.what());
         return false;
-    }
-}
-
-template<NintendoVariant V>
-void NintendoSystem<V>::blit_ppu_to_framebuffer() {
-    if (!ppu_ || !rgba_framebuffer_) return;
-    
-    // Copy full 256×240 PPU screen into the GUI framebuffer.
-    // The PPU handles PPUMASK-based left-column hiding internally
-    // (rendering backdrop color when sprites/BG are masked), so no
-    // additional cropping is needed here.
-    const std::vector<uint32_t>& nes_screen = ppu_->get_screen();
-    if (!nes_screen.empty()) {
-        constexpr int W = 256;
-        constexpr int H = 240;
-        std::memcpy(rgba_framebuffer_, nes_screen.data(), W * H * sizeof(uint32_t));
     }
 }
 
@@ -1222,12 +1208,6 @@ void NintendoSystem<V>::set_controller_state(int controller, uint8_t state) {
                 (state >> i) & 1);
         }
     }
-}
-
-template<NintendoVariant V>
-const std::vector<uint32_t>& NintendoSystem<V>::get_screen() const {
-    static std::vector<uint32_t> empty_screen;
-    return ppu_ ? ppu_->get_screen() : empty_screen;
 }
 
 template<NintendoVariant V>

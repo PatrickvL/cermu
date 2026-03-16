@@ -15,7 +15,7 @@
 //   CPU path:  palette[index] → RGBA framebuffer   (32-bit texture upload)
 //   GPU path:  raw indices → R8 index buffer        (8-bit texture + shader)
 //
-// Replaces the previous DisplaySurface + VideoPixelUnit split.  Every
+// Replaces the previous DisplaySurface split.  Every
 // emulated system creates one IndexedFrameBuffer in its System subclass
 // and registers it with the base class via register_display().
 //

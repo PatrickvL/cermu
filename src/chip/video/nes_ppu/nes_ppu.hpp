@@ -23,7 +23,7 @@
 
 #include "chip/video/video_chip_base.hpp"
 #include "core/system_lines.hpp"
-#include "chip/video/video_pixel_unit.hpp"
+#include "core/indexed_frame_buffer.hpp"
 #include "systems/nes/bus/nes_bus.hpp"
 #include "systems/nes/bus/nes_bus_signals.hpp"
 #include "chip/video/nes_ppu/nes_palette.hpp"
@@ -279,8 +279,9 @@ public:
     uint8_t scanline_color_line_[256] = {};
     int     scanline_flush_x_ = 0;          // Next x to flush (0–256)
 
-    // Scanline pixel unit — wraps screen vector and provides shared flush.
-    VideoPixelUnit scanline_pixel_;
+    // Display output — system-owned IndexedFrameBuffer, registered via
+    // set_display().  Replaces the former VideoPixelUnit + screen vector.
+    IndexedFrameBuffer* display_ = nullptr;
 
     // Active palette variant — pointer into palette_cache_.  Set to nullptr
     // to mark pixel_lut_ as stale; the render path checks this once per dot
@@ -288,18 +289,12 @@ public:
     // palette/mask writes (common during setup) into a single rebuild.
     const uint32_t* active_palette_ = nullptr;
 
-    // Frame buffer (RGB888)
-    std::vector<uint32_t> screen;
-
 public:
     PPU(bool pal = false) : is_pal(pal),
         total_scanlines_minus_one_(pal ? 311 : 261) {  // PAL: 312-1, NTSC: 262-1
         init_regs(REG_COUNT);
         info_ = ChipInfo{pal ? "RP2C07" : "RP2C02", "Ricoh"};
         // Initialize PPU memory (std::array zero-initialized by {})
-        screen.resize(256 * 240, 0);
-        scanline_pixel_.color_line = scanline_color_line_;
-        scanline_pixel_.set_framebuffer(screen.data(), 256, 240);
         std::memset(internal.sec_oam_.bytes, 0xFF, 32);
         internal.sprite_count = 0;
 
@@ -334,7 +329,6 @@ public:
         if (ciram_) std::memset(ciram_, 0, CIRAM_SIZE);
         std::memset(oam.bytes, 0, sizeof(oam.bytes));
         palette.fill(0);
-        std::fill(screen.begin(), screen.end(), 0);
 
         build_palette_cache(is_pal, palette_cache_);
         rebuild_pixel_lut();
@@ -368,8 +362,8 @@ public:
         if (bus) ciram_ = bus->ciram;
     }
 
-    // Get frame buffer
-    const std::vector<uint32_t>& get_screen() const { return screen; }
+    // Set the display output (system-owned IndexedFrameBuffer).
+    void set_display(IndexedFrameBuffer* d) { display_ = d; }
 
     // NMI output level — true when /NMI is asserted (active LOW).
     // Reads from the caller-provided ppu_bus; the system passes the
@@ -439,8 +433,8 @@ private:
         const int x_end = cycle - 1;  // last rendered pixel = cycle-2, range is [flush_x, cycle-1)
         if (x_end <= scanline_flush_x_) return;
         if (!active_palette_) rebuild_pixel_lut();
-        scanline_pixel_.flush_indexed_line_range(
-            scanline, pixel_lut_, scanline_flush_x_, x_end);
+        if (display_) display_->flush_line_range(
+            scanline, scanline_color_line_, pixel_lut_, scanline_flush_x_, x_end);
         scanline_flush_x_ = x_end;
     }
 
