@@ -72,6 +72,7 @@ data/**/*.pdf
 data/**/*.png
 data/**/*.prg
 data/**/*.rom
+data/**/*.ROM
 data/**/*.s
 data/**/*.sav
 data/**/*.scl
