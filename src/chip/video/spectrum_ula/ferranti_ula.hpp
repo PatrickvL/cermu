@@ -27,7 +27,7 @@
  */
 
 #include "chip/video/video_chip_base.hpp"
-#include "chip/video/video_pixel_unit.hpp"
+#include "core/indexed_frame_buffer.hpp"
 #include "core/system_lines.hpp"
 #include <cstdint>
 #include <cstring>
@@ -299,11 +299,12 @@ public:
         }
 
         // Flush: GPU mode → index_buffer, CPU mode → RGBA framebuffer
-        pixel.flush_indexed_frame(frame_indices_, spectrum_ula::PALETTE);
+        if (display_) display_->flush_frame(frame_indices_, spectrum_ula::PALETTE);
     }
 
-    // VideoPixelUnit — systems set framebuffer/index_buffer on this.
-    VideoPixelUnit pixel;
+    // Display output — set by system via set_display().
+    IndexedFrameBuffer* display_ = nullptr;
+    void set_display(IndexedFrameBuffer* d) { display_ = d; }
 
     // === ChipBase GUI virtuals ===
 #ifdef CERMU_HAS_GUI

@@ -131,7 +131,7 @@ void mc6845_t::tick() {
             uint32_t pixel_y = char_row * static_cast<uint32_t>(char_render_char_h_) + v_scanline_counter;
             int fb_w = char_render_fb_w_;
 
-            if (pixel_y < static_cast<uint32_t>(char_render_pixel_->fb_height)) {
+            if (pixel_y < static_cast<uint32_t>(char_render_display_->height())) {
                 uint8_t* row_ptr = char_render_indices_ + pixel_y * fb_w;
                 uint8_t fg = char_render_fg_;
                 uint8_t bg = char_render_bg_;
@@ -230,8 +230,8 @@ void mc6845_t::tick() {
                 if (on_vsync) on_vsync();
 
                 // Flush indexed character rendering at end of frame
-                if (char_render_pixel_ && char_render_indices_ && char_render_palette_) {
-                    char_render_pixel_->flush_indexed_frame(
+                if (char_render_display_ && char_render_indices_ && char_render_palette_) {
+                    char_render_display_->flush_frame(
                         char_render_indices_, char_render_palette_);
                 }
             }

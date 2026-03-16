@@ -35,8 +35,9 @@
 
 #include "chip/video/video_chip_base.hpp"
 #include "core/system_lines.hpp"
-#include "chip/video/video_pixel_unit.hpp"
 #include "utils/ring_buffer.hpp"
+
+class IndexedFrameBuffer;
 
 // ============================================================================
 // TED REGISTER TABLE — single source of truth
@@ -450,7 +451,7 @@ struct ted7360_t : public VideoChipBase {
     /** Destructor — frees internal color index line buffer. */
     ~ted7360_t();
 
-    // Non-copyable, non-movable (owns pixel.color_line allocation)
+    // Non-copyable, non-movable (owns color_line_ allocation)
     ted7360_t(const ted7360_t&) = delete;
     ted7360_t& operator=(const ted7360_t&) = delete;
 
@@ -513,8 +514,8 @@ struct ted7360_t : public VideoChipBase {
     // Public API — Framebuffer
     // ========================================================================
 
-    /** Attach an RGBA output framebuffer for pixel rendering. */
-    void set_framebuffer(uint32_t* buffer, int width, int height);
+    /** Set the display output target (called by system during init). */
+    void set_display(IndexedFrameBuffer* d) { display_ = d; }
 
     // ========================================================================
     // Public API — Color palette (compile-time computed, rodata)
@@ -550,8 +551,11 @@ struct ted7360_t : public VideoChipBase {
     TedTimer               timer2;      // No auto-reload: wraps to $FFFF on underflow
     TedTimer               timer3;      // No auto-reload: wraps to $FFFF on underflow
     ted_sound_unit_t       sound;
-    VideoPixelUnit         pixel;
     ted_bus_unit_t         bus;
+
+    // Display output (non-owning pointer set by system)
+    IndexedFrameBuffer*    display_ = nullptr;
+    uint8_t*               color_line_ = nullptr;  // Per-pixel palette index buffer (owned)
 
     // IRQ state (mirrors register file but kept separate for quick access)
     uint8_t irq_status = 0;             // Latched IRQ source bits (see TED_IRQ_*)

@@ -25,8 +25,9 @@
 
 #include "chip/video/video_chip_base.hpp"
 #include "utils/ring_buffer.hpp"
-#include "chip/video/video_pixel_unit.hpp"
 #include <cstdint>
+
+class IndexedFrameBuffer;
 
 // ============================================================================
 // TIA WRITE REGISTER TABLE ($00-$2C) — single source of truth
@@ -340,7 +341,8 @@ struct tia_t : public VideoChipBase {
     // FRAMEBUFFER
     // ========================================================================
 
-    VideoPixelUnit pixel;
+    IndexedFrameBuffer* display_ = nullptr;
+    void set_display(IndexedFrameBuffer* d) { display_ = d; }
     uint8_t color_line_buffer[tia_constants::DISPLAY_WIDTH] = {};
 
     // Pre-swizzled palette in ABGR format (GL_RGBA little-endian convention).
@@ -372,9 +374,6 @@ struct tia_t : public VideoChipBase {
 
     /// Write a TIA register.
     void write(uint16_t addr, uint8_t data);
-
-    /// Set the framebuffer for rendering.
-    void set_framebuffer(uint32_t* buf, int w, int h);
 
     /// Audio interface
     uint32_t audio_available() const;

@@ -1,4 +1,5 @@
 #include "chip/video/vic_ii/vicii_common.hpp"
+#include "core/indexed_frame_buffer.hpp"
 #include "chip/memory/mos2114.hpp"
 #include "core/system_lines.hpp"
 #include "core/cermu.hpp"
@@ -687,19 +688,16 @@ static inline int vicii_raster_to_fb_row(const vicii_t* vicii, uint16_t raster) 
 }
 
 void vicii_pixel_flush_line(vicii_t* vicii, const uint32_t* palette, int y) {
-    if (!palette) return;
+    if (!palette || !vicii->display_) return;
     
     // color_line is pre-filled with border_color_index at line start
     // (vicii_line_buffer_reset), then overwritten by per-cycle rendering
     // for content/sprite pixels.  Flush the full visible width.
-    vicii->pixel.flush_indexed_line(y, palette,
-                                    vicii->config->visible_pixels_per_line);
+    vicii->display_->flush_line(y, vicii->pixel.color_line, palette,
+                                vicii->config->visible_pixels_per_line);
 }
 
-static inline void vicii_pixel_set_framebuffer(vicii_pixel_unit_t* pixel, uint32_t* framebuffer, 
-                                             int width, int height) {
-    pixel->set_framebuffer(framebuffer, width, height);
-}
+// vicii_pixel_set_framebuffer removed — system manages display via set_display() + IndexedFrameBuffer.
 
 // ========================================================================================
 // LIGHTPEN
@@ -1144,7 +1142,7 @@ void vicii_timing_advance(vicii_t* vicii) {
     // at the correct Y position (which is still the OLD raster_counter value).
     const uint16_t completed_raster = vicii->timing.raster_counter;
     const int fb_row = vicii_raster_to_fb_row(vicii, completed_raster);
-    if (vicii->pixel.framebuffer && fb_row < vicii->pixel.fb_height) {
+    if (vicii->display_ && fb_row < vicii->display_->height()) {
         vicii_pixel_flush_line(vicii, vicii_t::get_default_palette(), fb_row);
     }
     
@@ -1956,7 +1954,7 @@ bus_state_t vicii_t::tick_phi1(bus_state_t bus_state) {
     // This uses the graphics data that was JUST loaded above AND the border flip-flop state updated above
     {
         const int fb_row = vicii_raster_to_fb_row(vicii, vicii->timing.raster_counter);
-        if (vicii->pixel.framebuffer && fb_row < vicii->pixel.fb_height) {
+        if (vicii->display_ && fb_row < vicii->display_->height()) {
             vicii_pixel_sequencer(vicii);
         }
     }
@@ -2586,12 +2584,10 @@ vicii_t::~vicii_t() {
 void vicii_t::reset() {
     // Preserve externally-owned pointers and configuration that survive reset.
     // vicii_initialize() memsets every unit to zero, so anything the system
-    // wired up (callbacks, framebuffer, color RAM) must be saved/restored.
+    // wired up (callbacks, display, color RAM) must be saved/restored.
     const vicii_chip_config_t* saved_config = config;
     const vicii_bus_unit_t saved_bus = bus;       // entire bus unit (mem_read, bank_change, etc.)
-    uint32_t* saved_framebuffer = pixel.framebuffer;
-    int saved_fb_width = pixel.fb_width;
-    int saved_fb_height = pixel.fb_height;
+    IndexedFrameBuffer* saved_display = display_;
     MOS2114* saved_colorram = colorram;
 
     // Re-initialize all state (zeroes + defaults)
@@ -2608,9 +2604,7 @@ void vicii_t::reset() {
     bus.ba_prediction_shift_reg = 0;
     bus.ba_low_count = 0;
     bus.bus_line_mask = 0;
-    pixel.framebuffer = saved_framebuffer;
-    pixel.fb_width = saved_fb_width;
-    pixel.fb_height = saved_fb_height;
+    display_ = saved_display;
     colorram = saved_colorram;
 }
 
@@ -2619,18 +2613,7 @@ const vicii_chip_config_t* vicii_t::get_default_config(bool is_pal) {
     return is_pal ? &MOS6569_config : &MOS6567R8_config;
 }
 
-void vicii_t::set_framebuffer(uint32_t* framebuffer, int width, int height) {
-    vicii_pixel_set_framebuffer(&pixel, framebuffer, width, height);
-    // Border color should come from register, not hardcoded
-    border.border_pixel.priority = VICII_PRIORITY_BORDER;
-    border.border_pixel.color = static_cast<vicii_color_t>(regs_[vicii_regs::EC]);
-    if (pixel.color_line && config->visible_pixels_per_line > 0) {
-        // Initialize buffer with current border color
-        const uint8_t border_color = regs_[vicii_regs::EC] & 0x0F;
-        memset(pixel.pixel_line_priority, VICII_PRIORITY_BORDER, config->visible_pixels_per_line);
-        memset(pixel.color_line, border_color, config->visible_pixels_per_line);
-    }
-}
+// set_framebuffer removed — system manages display via set_display() + IndexedFrameBuffer.
 
 // ============================================================================
 // Debug field registration (populates ChipDebugRegistry for the default
