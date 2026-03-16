@@ -4,7 +4,8 @@
 
 #include "chip/video/video_chip_base.hpp"
 #include "core/system_lines.hpp"
-#include "chip/video/video_pixel_unit.hpp"
+
+class IndexedFrameBuffer;
 
 // ============================================================================
 // VIC 6560/6561 REGISTER TABLE — single source of truth
@@ -263,8 +264,9 @@ struct vic_base_t : public VideoChipBase {
     uint8_t color_line_buffer[VIC_MAX_LINE_WIDTH] = {};  // Per-pixel palette index buffer
     int pixel_line_index = 0;
 
-    // Pixel output unit (framebuffer + shared flush)
-    VideoPixelUnit pixel;
+    // Display output (non-owning pointer set by system)
+    IndexedFrameBuffer* display_ = nullptr;
+    void set_display(IndexedFrameBuffer* d) { display_ = d; }
 
     // Configuration
     bool is_pal = false;
@@ -303,7 +305,6 @@ struct vic_base_t : public VideoChipBase {
     // --- Public methods ---
     virtual void reset();
     bus_state_t tick(bus_state_t bus_state);
-    void set_framebuffer(uint32_t* framebuffer, int width, int height);
     void set_memory_callbacks(vic_mem_read_fn_t mem_read, void* mem_user_data,
                               vic_mem_read_fn_t color_read, void* color_user_data);
     virtual bus_state_t registers_read(bus_state_t bus_state);

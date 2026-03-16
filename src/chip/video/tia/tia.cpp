@@ -20,6 +20,7 @@
  */
 
 #include "chip/video/tia/tia.hpp"
+#include "core/indexed_frame_buffer.hpp"
 #include <cstring>
 #include <algorithm>
 
@@ -147,10 +148,7 @@ void tia_t::reset() {
 // FRAMEBUFFER
 // ============================================================================
 
-void tia_t::set_framebuffer(uint32_t* buf, int w, int h) {
-    pixel.set_framebuffer(buf, w, h);
-    pixel.color_line = color_line_buffer;
-}
+// set_framebuffer removed — system manages display via set_display() + IndexedFrameBuffer.
 
 // ============================================================================
 // AUDIO
@@ -388,12 +386,12 @@ uint8_t tia_t::get_missile_pixel(int x, uint8_t pos, uint8_t size_bits, bool ena
 void tia_t::render_pixel() {
     int x = h_counter - tia_constants::HBLANK_CLOCKS;
     if (x < 0 || x >= tia_constants::DISPLAY_WIDTH) return;
-    if (!pixel.framebuffer) return;
+    if (!display_) return;
 
     // Use visible_row (tracks only non-VBLANK lines) so the first
     // visible scanline maps to framebuffer row 0.
     int row = visible_row;
-    if (row < 0 || row >= pixel.fb_height) return;
+    if (row < 0 || row >= display_->height()) return;
 
     // Determine which objects are present at this pixel.
     // Each function returns its bitmask constant (PX_*) or 0.
@@ -529,8 +527,8 @@ void tia_t::tick_color_clock() {
 
         // Flush indexed scanline to framebuffer at end of visible line
         if (!vblank && visible_row >= 0) {
-            pixel.flush_indexed_line(visible_row, palette_rgba_,
-                                     tia_constants::DISPLAY_WIDTH);
+            display_->flush_line(visible_row, color_line_buffer, palette_rgba_,
+                                 tia_constants::DISPLAY_WIDTH);
         }
 
         // Track visible row for framebuffer mapping.

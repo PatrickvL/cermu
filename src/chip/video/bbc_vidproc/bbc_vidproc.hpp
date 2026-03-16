@@ -34,7 +34,7 @@
  */
 
 #include "chip/video/video_chip_base.hpp"
-#include "chip/video/video_pixel_unit.hpp"
+#include "core/indexed_frame_buffer.hpp"
 #include "systems/bbc/bbc_micro_constants.hpp"
 #include <cstdint>
 #include <cstring>
@@ -143,9 +143,9 @@ public:
         }
     }
 
-    /// Called at VSYNC — flushes the indexed frame buffer through the pixel unit.
+    /// Called at VSYNC — flushes the indexed frame buffer.
     void vsync() {
-        pixel.flush_indexed_frame(frame_indices_, bbc_constants::PALETTE);
+        if (display_) display_->flush_frame(frame_indices_, bbc_constants::PALETTE);
     }
 
     /// Clear the frame buffer (called at start of frame or on mode change)
@@ -153,8 +153,9 @@ public:
         std::memset(frame_indices_, 0, sizeof(frame_indices_));
     }
 
-    // VideoPixelUnit — systems set framebuffer on this.
-    VideoPixelUnit pixel;
+    // Display output — set by system via set_display().
+    IndexedFrameBuffer* display_ = nullptr;
+    void set_display(IndexedFrameBuffer* d) { display_ = d; }
 
 private:
     // === Mode 7 Teletext rendering ===

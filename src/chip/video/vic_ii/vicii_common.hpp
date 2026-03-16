@@ -5,7 +5,8 @@
 #include <cstdint>
 #include "core/system_lines.hpp" // For bus_state_t
 #include "chip/memory/mos2114.hpp"  // For MOS2114
-#include "chip/video/video_pixel_unit.hpp"
+
+class IndexedFrameBuffer;
 // ============================================================================
 // VIC-II UNIFIED DECLARATION TABLE — single source of truth
 // ============================================================================
@@ -499,11 +500,11 @@ struct vicii_sprites_unit_t {
     uint8_t pending_mxye_crunch;  // Bitmask of sprites needing crunch in cycle 15 PHI2
 };
 
-// Pixel Output Unit - Pixel line generation and framebuffer
-struct vicii_pixel_unit_t : VideoPixelUnit {
-    // Single line buffers for pixel generation
+// Pixel Output Unit — line buffers for pixel generation and collision detection
+struct vicii_pixel_unit_t {
+    // Single line buffers for pixel generation (chip-owned, malloc’d)
+    uint8_t* color_line = nullptr;             // Per-pixel palette index (0-15)
     vicii_priority_t* pixel_line_priority = nullptr;
-    // color_line is inherited from VideoPixelUnit — stores color INDICES (0-15)
     
     // Collision detection buffers (independent of display priority)
     // The VIC-II detects collisions based on raw sequencer output, not display.
@@ -577,6 +578,10 @@ struct vicii_t : public VideoChipBase {
     vicii_lightpen_unit_t lightpen = {};
     vicii_bus_unit_t bus = {};
 
+    // Display output (non-owning pointer set by system)
+    IndexedFrameBuffer* display_ = nullptr;
+    void set_display(IndexedFrameBuffer* d) { display_ = d; }
+
     // Destructor — cleans up dynamically allocated pixel line buffers
     ~vicii_t() override;
 
@@ -603,9 +608,6 @@ struct vicii_t : public VideoChipBase {
 
     // Memory bank change (static — used as callback from CIA2)
     static void memory_bank_change(void* chip, uint8_t bank);
-
-    // Framebuffer management
-    void set_framebuffer(uint32_t* framebuffer, int width, int height);
 
     // Configuration and utility
     static const vicii_chip_config_t* get_default_config(bool is_pal);

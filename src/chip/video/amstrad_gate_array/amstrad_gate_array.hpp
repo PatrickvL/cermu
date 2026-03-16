@@ -18,7 +18,7 @@
  */
 
 #include "chip/video/video_chip_base.hpp"
-#include "chip/video/video_pixel_unit.hpp"
+#include "core/indexed_frame_buffer.hpp"
 #include "systems/amstrad_cpc/amstrad_cpc_constants.hpp"
 #include <cstdint>
 #include <cstring>
@@ -145,11 +145,12 @@ public:
             }
         }
 
-        pixel.flush_indexed_frame(frame_indices_, amstrad_cpc_constants::HARDWARE_PALETTE);
+        if (display_) display_->flush_frame(frame_indices_, amstrad_cpc_constants::HARDWARE_PALETTE);
     }
 
-    // VideoPixelUnit — systems set framebuffer/index_buffer on this.
-    VideoPixelUnit pixel;
+    // Display output — set by system via set_display().
+    IndexedFrameBuffer* display_ = nullptr;
+    void set_display(IndexedFrameBuffer* d) { display_ = d; }
 
 private:
     // Per-frame index buffer for rendering (one byte per pixel)

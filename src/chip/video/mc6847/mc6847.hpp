@@ -23,7 +23,7 @@
  */
 
 #include "chip/video/video_chip_base.hpp"
-#include "chip/video/video_pixel_unit.hpp"
+#include "core/indexed_frame_buffer.hpp"
 #include "core/system_lines.hpp"
 #include <cstdint>
 #include <cstring>
@@ -251,7 +251,7 @@ public:
     // The MC6847 owns the palette, internal font ROM, and rendering logic.
     // Systems call render_frame(vram) once per field sync; the chip fills
     // frame_indices with palette indices, then flushes through the
-    // VideoPixelUnit (GPU path → index_buffer, CPU path → RGBA framebuffer).
+    // IndexedFrameBuffer (GPU path → index_buffer, CPU path → RGBA framebuffer).
     //
     // This renders the 256×192 active display area only (no border).
     //
@@ -280,7 +280,7 @@ public:
         if (mode_ag_) {
             // Full-graphics modes: clear to black (placeholder)
             std::memset(frame_indices_, 0, sizeof(frame_indices_));
-            pixel.flush_indexed_frame(frame_indices_, mc6847_font::PALETTE);
+            if (display_) display_->flush_frame(frame_indices_, mc6847_font::PALETTE);
             return;
         }
 
@@ -329,15 +329,16 @@ public:
             }
         }
 
-        pixel.flush_indexed_frame(frame_indices_, mc6847_font::PALETTE);
+        if (display_) display_->flush_frame(frame_indices_, mc6847_font::PALETTE);
     }
 
     /// Get the palette for GPU indexed rendering registration.
     static const uint32_t* get_palette()     { return mc6847_font::PALETTE; }
     static int             get_palette_size() { return mc6847_font::PALETTE_SIZE; }
 
-    // VideoPixelUnit — systems set framebuffer/index_buffer on this.
-    VideoPixelUnit pixel;
+    // Display output — set by system via set_display().
+    IndexedFrameBuffer* display_ = nullptr;
+    void set_display(IndexedFrameBuffer* d) { display_ = d; }
 
     // === ChipBase GUI virtuals ===
 #ifdef CERMU_HAS_GUI

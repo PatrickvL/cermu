@@ -1,4 +1,5 @@
 #include "chip/video/vic/vic_common.hpp"
+#include "core/indexed_frame_buffer.hpp"
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
@@ -119,11 +120,7 @@ void vic_base_t::reset() {
     color_user_data = NULL;
 }
 
-// Set framebuffer function
-void vic_base_t::set_framebuffer(uint32_t* fb, int width, int height) {
-    pixel.set_framebuffer(fb, width, height);
-    pixel.color_line = color_line_buffer;
-}
+// set_framebuffer removed — system manages display via set_display() + IndexedFrameBuffer.
 
 // Register read function
 bus_state_t vic_base_t::registers_read(bus_state_t bus_state) {
@@ -213,21 +210,18 @@ void vic_base_t::emit_pixel(uint8_t color_index) {
 
 // Flush accumulated pixel line to framebuffer
 void vic_base_t::flush_pixel_line(int raster_line) {
-    if (!pixel.framebuffer) return;
-    if (raster_line < 0 || raster_line >= pixel.fb_height) return;
+    if (!display_) return;
+    if (raster_line < 0 || raster_line >= display_->height()) return;
 
-    // Flush indexed pixels via palette lookup
-    pixel.flush_indexed_line(raster_line, vic_palette,
-                             std::min(pixel_line_index, pixel.fb_width));
-
-    // Fill remaining pixels with border color if line is shorter
-    if (pixel_line_index < pixel.fb_width) {
-        uint32_t border_rgba = vic_palette[cached_border_color];
-        uint32_t* dest = pixel.framebuffer + (raster_line * pixel.fb_width);
-        for (int i = pixel_line_index; i < pixel.fb_width; i++) {
-            dest[i] = border_rgba;
-        }
+    // Fill remaining pixels with border color index if line is shorter than display width
+    const int fb_w = display_->width();
+    for (int i = pixel_line_index; i < fb_w && i < VIC_MAX_LINE_WIDTH; i++) {
+        color_line_buffer[i] = cached_border_color;
     }
+
+    // Flush full visible line through unified path
+    display_->flush_line(raster_line, color_line_buffer, vic_palette,
+                         std::min(fb_w, (int)VIC_MAX_LINE_WIDTH));
 
     // Reset pixel line index for next line
     pixel_line_index = 0;

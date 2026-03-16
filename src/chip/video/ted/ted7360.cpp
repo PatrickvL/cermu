@@ -31,6 +31,7 @@
  */
 
 #include "chip/video/ted/ted7360.hpp"
+#include "core/indexed_frame_buffer.hpp"
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -446,7 +447,7 @@ uint32_t ted7360_t::audio_read(float* dest, uint32_t max_samples) {
 
 void ted7360_t::pixel_sequencer() {
     // Hoist null check: entire function is a no-op if no output buffer.
-    uint8_t* const cline = pixel.color_line;
+    uint8_t* const cline = color_line_;
     if (!cline) [[unlikely]] return;
 
     const uint16_t x_base  = timing.x_pixel;
@@ -693,15 +694,15 @@ void ted7360_t::pixel_sequencer() {
 // ============================================================================
 
 void ted7360_t::flush_line(uint16_t raster_line) {
-    if (!pixel.framebuffer || !pixel.color_line) return;
+    if (!display_ || !color_line_) return;
 
     // Map TED raster counter to framebuffer row via visible-area offset.
     // Rasters wrap: PAL first_visible=275, so raster 275→row 0, 0→row 37, etc.
     const int fb_row = (raster_line + timing.lines_per_frame
                         - timing.first_visible_line) % timing.lines_per_frame;
 
-    pixel.flush_indexed_line(fb_row, TED_PALETTE.data(),
-                             static_cast<int>(TED_VISIBLE_WIDTH));
+    display_->flush_line(fb_row, color_line_, TED_PALETTE.data(),
+                         static_cast<int>(TED_VISIBLE_WIDTH));
 }
 
 // ============================================================================
@@ -750,8 +751,8 @@ void ted7360_t::timing_advance() {
     check_raster_interrupt();
 
     // Clear color index buffer for the new scanline
-    if (pixel.color_line) {
-        memset(pixel.color_line, 0, TED_VISIBLE_WIDTH);
+    if (color_line_) {
+        memset(color_line_, 0, TED_VISIBLE_WIDTH);
     }
 }
 
@@ -784,7 +785,7 @@ ted7360_t::ted7360_t(const ted7360_desc_t& desc) {
         timing.cpu_cycles_per_line  = 57;
     }
 
-    pixel.color_line = new uint8_t[TED_VISIBLE_WIDTH]();
+    color_line_ = new uint8_t[TED_VISIBLE_WIDTH]();
 
     reset();
 #ifdef CERMU_HAS_CHIP_DEBUG
@@ -793,8 +794,8 @@ ted7360_t::ted7360_t(const ted7360_desc_t& desc) {
 }
 
 ted7360_t::~ted7360_t() {
-    delete[] pixel.color_line;
-    pixel.color_line = nullptr;
+    delete[] color_line_;
+    color_line_ = nullptr;
 }
 
 void ted7360_t::reset() {
@@ -811,10 +812,8 @@ void ted7360_t::reset() {
     void* const                mem_data = bus.mem_read_user_data;
     const ted_banking_change_fn bc      = banking_change;
     void* const                bc_data  = banking_change_user_data;
-    uint8_t* const             cline    = pixel.color_line;
-    uint32_t* const            fb       = pixel.framebuffer;
-    const int                  fb_w     = pixel.fb_width;
-    const int                  fb_h     = pixel.fb_height;
+    uint8_t* const             cline    = color_line_;
+    IndexedFrameBuffer* const  saved_display = display_;
 
     // Preserve audio configuration (set by audio_reset(), survives chip reset)
     const uint32_t             snd_cps  = sound.cycles_per_sample_fp;
@@ -835,7 +834,7 @@ void ted7360_t::reset() {
     memset(&sound, 0, offsetof(ted_sound_unit_t, audio_buffer));
     sound.audio_buffer.reset();
     bus         = {};
-    // pixel is not zeroed — framebuffer pointer and color_line are owned externally.
+    // color_line_ and display_ are not zeroed — they are direct members, not inside any unit.
 
     // Restore construction-time configuration
     timing.is_pal              = is_pal;
@@ -848,10 +847,8 @@ void ted7360_t::reset() {
     bus.mem_read_user_data     = mem_data;
     banking_change             = bc;
     banking_change_user_data   = bc_data;
-    pixel.color_line           = cline;
-    pixel.framebuffer          = fb;
-    pixel.fb_width             = fb_w;
-    pixel.fb_height            = fb_h;
+    color_line_                = cline;
+    display_                   = saved_display;
 
     // Restore audio configuration and initial shift register
     sound.cycles_per_sample_fp = snd_cps;
@@ -907,8 +904,8 @@ void ted7360_t::reset() {
     update_memory_addresses();
 
     // Clear color index line buffer
-    if (pixel.color_line) {
-        memset(pixel.color_line, 0, TED_VISIBLE_WIDTH);
+    if (color_line_) {
+        memset(color_line_, 0, TED_VISIBLE_WIDTH);
     }
 }
 
@@ -1482,9 +1479,7 @@ bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
 // FRAMEBUFFER
 // ============================================================================
 
-void ted7360_t::set_framebuffer(uint32_t* buffer, int width, int height) {
-    pixel.set_framebuffer(buffer, width, height);
-}
+// set_framebuffer removed — system manages display via set_display() + IndexedFrameBuffer.
 
 // ============================================================================
 // Debug field registration (populates ChipDebugRegistry for the default
