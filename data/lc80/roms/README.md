@@ -1,13 +1,19 @@
 # LC80 ROM Files
 
 > **Note:** The LC80 emulation is not yet functional. ROM loading is not
-> implemented. This README will be updated when the system is complete.
+> implemented. The ROM is included for when the system is complete.
 
 The LC80 (Lerncomputer 80) was an educational single-board computer produced
 by VEB Mikroelektronik Mühlhausen in the DDR (East Germany).
 
-## Expected ROMs
+## Included ROMs
 
 | Filename | Size | Description |
 |----------|------|-------------|
-| TBD | 2 KB | Monitor ROM at $0000 |
+| `lc80_mon.rom` | 2,048 bytes | Monitor ROM at $0000 (mirrored via addr_mask) |
+
+## Source
+
+ROM sourced from the [floooh/chips-test](https://github.com/floooh/chips-test)
+project. The LC80 ROM originates from VEB Mikroelektronik Mühlhausen, a
+state-owned enterprise that ceased to exist after German reunification in 1990.
