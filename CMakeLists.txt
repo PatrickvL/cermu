@@ -263,6 +263,7 @@ set(CORE_SOURCES
     src/core/connection.cpp
     src/core/session.cpp
     src/core/board_base.cpp
+    src/core/audio_thread.cpp
     # Ports — cross-system port registrations
     src/ports/nes_ports.cpp
     # Devices — input peripherals
