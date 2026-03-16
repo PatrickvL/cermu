@@ -70,6 +70,7 @@ set(CMAKE_CONFIGURATION_TYPES "Debug;Release;RelWithDebInfo;MinSizeRel" CACHE ST
 if(MSVC)
     # MSVC specific settings
     add_compile_options(
+        /Zc:preprocessor        # Use conforming preprocessor (__VA_OPT__, correct __VA_ARGS__)
         /W4                     # Enable all warnings
         /WX                     # Treat warnings as errors
         /utf-8                  # Source and execution character set UTF-8
