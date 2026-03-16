@@ -4,23 +4,21 @@ The Z1013 was a single-board home computer produced by VEB Robotron in
 the DDR (East Germany). The original manufacturer no longer exists. ROMs
 are freely distributed by preservation communities.
 
-## Required ROMs
+## Included ROMs
 
 | Filename | Size | Variants | Description |
 |----------|------|----------|-------------|
-| `z1013_mon.rom` | 2 KB | All | Monitor ROM at $F000–$F7FF |
+| `z1013_mon.rom` | 2,048 bytes | All | Monitor 2.02 ROM at $F000–$F7FF |
+| `z1013_char.rom` | 2,048 bytes | All | Character generator ROM (not bus-mapped) |
 
-### Z1013.64 only
+## Not Included
 
-| Filename | Size | Description |
-|----------|------|-------------|
-| `z1013_basic.rom` | 10 KB | BASIC ROM (split across $C000–$E7FF) |
+| Filename | Size | Variants | Description |
+|----------|------|----------|-------------|
+| `z1013_basic.rom` | 10,240 bytes | Z1013.64 | BASIC ROM (split across $C000–$E7FF) |
 
-## Optional ROMs
-
-| Filename | Size | Description |
-|----------|------|-------------|
-| `z1013_char.rom` | 2 KB | Character generator ROM (not bus-mapped) |
+The Z1013 BASIC ROM is not included. It can be sourced from the Z1013
+preservation community (see below).
 
 ## Alternative Filenames Accepted
 
@@ -28,14 +26,12 @@ are freely distributed by preservation communities.
 - **Character ROM:** `z1013_char.rom`, `charrom.bin`, `CHAR.ROM`
 - **BASIC:** `z1013_basic.rom`, `BASIC.ROM`
 
-## Where to Obtain
+## Source
 
-The Z1013 ROMs originate from VEB Robotron, a state-owned enterprise that
-ceased to exist after German reunification. They are freely distributed by
-the Z1013 community:
+Included ROMs sourced from the [floooh/chips-test](https://github.com/floooh/chips-test)
+project. The Z1013 ROMs originate from VEB Robotron, a state-owned enterprise
+that ceased to exist after German reunification in 1990.
 
-- **z1013.de** — Z1013 preservation and community
-  - https://www.z1013.de/
-- **Robotron-net** — DDR computer preservation
-  - https://www.robotrontechnik.de/
+For the BASIC ROM:
+- **z1013.de** — https://www.z1013.de/
 - **MAME ROM set** — `z1013.zip`

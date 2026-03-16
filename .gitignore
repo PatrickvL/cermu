@@ -90,6 +90,13 @@ data/**/*.z80
 data/**/*.zip
 !data/**/README.md
 
+# DDR computer ROMs — manufacturers dissolved after German reunification;
+# no active copyright claimant. Included for preservation.
+!data/kc85/roms/*.rom
+!data/z1013/roms/*.rom
+!data/z9001/roms/*.rom
+!data/lc80/roms/*.rom
+
 # External dependencies - ignore by default, unignore committed items
 # Submodules (ImGuiFileDialog, tomlplusplus, toonplusplus, LJON) are
 # handled by .gitmodules and unaffected by this rule.
