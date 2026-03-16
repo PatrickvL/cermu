@@ -37,9 +37,9 @@ struct c64_test_binary_config_t {
  * Holds paths to required ROM files with multiple alternatives per ROM type.
  */
 struct rom_config_t {
-    const char* basic_rom_filenames[5];    // BASIC ROM filename alternatives (null-terminated array)
-    const char* kernal_rom_filenames[5];   // KERNAL ROM filename alternatives  
-    const char* chargen_rom_filenames[6];  // Character generator ROM filename alternatives
+    const char* basic_rom_filenames;    // Pipe-separated filename alternatives
+    const char* kernal_rom_filenames;   // Pipe-separated filename alternatives
+    const char* chargen_rom_filenames;  // Pipe-separated filename alternatives
 };
 
 /**

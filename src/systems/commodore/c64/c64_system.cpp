@@ -2001,10 +2001,10 @@ void C64System::memory_init() {
     // -------------------------------------------------------------------------
     // Load ROMs from files
     // -------------------------------------------------------------------------
-    struct { ROMChip* rom; const char** filenames; uint16_t size; const char* name; } roms[] = {
-        { this->basic,   rom_config ? (const char**)rom_config->basic_rom_filenames   : nullptr, c64_constants::BASIC_ROM_SIZE, "BASIC" },
-        { this->kernal,  rom_config ? (const char**)rom_config->kernal_rom_filenames  : nullptr, c64_constants::KERNAL_ROM_SIZE, "KERNAL" },
-        { this->charrom, rom_config ? (const char**)rom_config->chargen_rom_filenames : nullptr, c64_constants::CHAR_ROM_SIZE, "Character" },
+    struct { ROMChip* rom; const char* filenames; uint16_t size; const char* name; } roms[] = {
+        { this->basic,   rom_config ? rom_config->basic_rom_filenames   : nullptr, c64_constants::BASIC_ROM_SIZE, "BASIC" },
+        { this->kernal,  rom_config ? rom_config->kernal_rom_filenames  : nullptr, c64_constants::KERNAL_ROM_SIZE, "KERNAL" },
+        { this->charrom, rom_config ? rom_config->chargen_rom_filenames : nullptr, c64_constants::CHAR_ROM_SIZE, "Character" },
     };
 
     for (auto& r : roms) {

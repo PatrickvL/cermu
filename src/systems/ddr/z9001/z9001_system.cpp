@@ -405,16 +405,16 @@ bool Z9001System<V>::load_roms() {
     bool ok = board_.load_roms(rom_root, Traits::name);
 
     // Character ROM (2 KB, not bus-mapped)
-    const char* char_names[] = {"z9001_char.rom", "charrom.bin", "CHAR.ROM", nullptr};
-    rom_loader_load_from_root(rom_root, char_names,
+    rom_loader_load_from_root(rom_root,
+                              "z9001_char.rom|charrom.bin|CHAR.ROM",
                               z9001_constants::CHAR_ROM_SIZE,
                               char_rom_.data(), char_rom_.size());  // optional
 
     // BASIC ROM (10 KB split into 8 KB + 2 KB, KC 87 only)
     if constexpr (Traits::has_basic_rom) {
-        const char* basic_names[] = {"z9001_basic.rom", "BASIC.ROM", nullptr};
         std::vector<uint8_t> full_basic(z9001_constants::BASIC_ROM_SIZE, 0xFF);
-        if (rom_loader_load_from_root(rom_root, basic_names,
+        if (rom_loader_load_from_root(rom_root,
+                                      "z9001_basic.rom|BASIC.ROM",
                                       z9001_constants::BASIC_ROM_SIZE,
                                       full_basic.data(), full_basic.size())) {
             // Split: first 8 KB → basic_rom_lo, next 2 KB → basic_rom_hi

@@ -113,18 +113,10 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
 //   CAOS ROM at $E000-$FFFF: enabled/disabled via PIO B bit 0
 //   KC85/4 IRM bank: selected via port $84 bits 0-1
 //
-namespace kc85_rom {
-    inline constexpr const char* kCaosFiles[] = {"caos.rom", "CAOS.ROM", nullptr};
-    inline constexpr RomFileInfo kCaosRom{kCaosFiles};
-
-    inline constexpr const char* kBasicFiles[] = {"basic.rom", "BASIC.ROM", nullptr};
-    inline constexpr RomFileInfo kBasicRom{kBasicFiles};
-}
-
 inline constexpr auto kKC852Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 16384, 0, "RAM"},
     Slot<RAMChip>{0x8000, 16384, 0, "IRM",      0, 0, 1},  // overlay group 1
-    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM", 0, 0, 2}.with_rom(&kc85_rom::kCaosRom),  // overlay group 2
+    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM", 0, 0, 2}.with_rom("caos.rom|CAOS.ROM"),  // overlay group 2
     // Non-bus chips — factory-created, not address-decoded
     Slot<U880>                {0, 0, 0, "U880"},
     Slot<z80_pio_t>           {0, 0, 0, "U855 PIO #1"},
@@ -136,8 +128,8 @@ inline constexpr auto kKC852Chips = make_chip_manifest(
 inline constexpr auto kKC853Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 16384, 0, "RAM"},
     Slot<RAMChip>{0x8000, 16384, 0, "IRM",       0, 0, 1},  // overlay group 1
-    Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM", 0, 0, 2}.with_rom(&kc85_rom::kBasicRom),  // overlay group 2
-    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM",  0, 0, 3}.with_rom(&kc85_rom::kCaosRom),  // overlay group 3
+    Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM", 0, 0, 2}.with_rom("basic.rom|BASIC.ROM"),  // overlay group 2
+    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM",  0, 0, 3}.with_rom("caos.rom|CAOS.ROM"),  // overlay group 3
     // Non-bus chips — factory-created, not address-decoded
     Slot<U880>                {0, 0, 0, "U880"},
     Slot<z80_pio_t>           {0, 0, 0, "U855 PIO #1"},
@@ -149,8 +141,8 @@ inline constexpr auto kKC853Chips = make_chip_manifest(
 inline constexpr auto kKC854Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 32768, 0, "RAM"},
     Slot<RAMChip>{0x8000, 65536, 0, "IRM", 0, 16384, 0, 16384}, // 4 × 16 KB banks, 1 visible
-    Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM", 0, 0, 1}.with_rom(&kc85_rom::kBasicRom),   // overlay group 1
-    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM",  0, 0, 2}.with_rom(&kc85_rom::kCaosRom),   // overlay group 2
+    Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM", 0, 0, 1}.with_rom("basic.rom|BASIC.ROM"),   // overlay group 1
+    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM",  0, 0, 2}.with_rom("caos.rom|CAOS.ROM"),   // overlay group 2
     // Non-bus chips — factory-created, not address-decoded
     Slot<U880>                {0, 0, 0, "U880"},
     Slot<z80_pio_t>           {0, 0, 0, "U855 PIO #1"},

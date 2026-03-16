@@ -778,17 +778,11 @@ bool BBCMicroSystem::load_roms() {
     // BASIC ROM (BBC BASIC II — 16 KB) → into paged ROM pool slot 15
     uint8_t* basic_rom_data = paged_rom_chip_->data()
                             + 15 * bbc_constants::PAGED_ROM_SIZE;
-    const char* basic_files[] = {
-        "basic2.rom",
-        "BASIC2.rom",
-        "basic.rom",
-        "bbc_basic.rom",
-        "BASIC-2.rom",
-        nullptr
-    };
-    bool basic_ok = rom_loader_load_from_root(rom_root, basic_files,
-                                              bbc_constants::PAGED_ROM_SIZE,
-                                              basic_rom_data, bbc_constants::PAGED_ROM_SIZE);
+    bool basic_ok = rom_loader_load_from_root(
+        rom_root,
+        "basic2.rom|BASIC2.rom|basic.rom|bbc_basic.rom|BASIC-2.rom",
+        bbc_constants::PAGED_ROM_SIZE,
+        basic_rom_data, bbc_constants::PAGED_ROM_SIZE);
     if (!basic_ok) {
         printf("BBC Micro: BASIC ROM not found\n");
     }

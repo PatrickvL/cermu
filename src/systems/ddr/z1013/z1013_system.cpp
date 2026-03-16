@@ -329,17 +329,17 @@ bool Z1013System<V>::load_roms() {
     bool ok = board_.load_roms(rom_root, Traits::name);
 
     // Character ROM (2 KB) — not bus-mapped, used for rendering
-    const char* char_names[] = {"z1013_char.rom", "charrom.bin", "CHAR.ROM", nullptr};
-    rom_loader_load_from_root(rom_root, char_names,
+    rom_loader_load_from_root(rom_root,
+                              "z1013_char.rom|charrom.bin|CHAR.ROM",
                               z1013_constants::CHAR_ROM_SIZE,
                               char_rom_.data(), char_rom_.size());  // optional
 
     // BASIC ROM (10 KB, Z1013.64 only — split into 8 KB + 2 KB chips)
     if constexpr (Traits::has_basic_rom) {
-        const char* basic_names[] = {"z1013_basic.rom", "BASIC.ROM", nullptr};
         uint8_t basic_buf[z1013_constants::BASIC_ROM_SIZE];
         std::memset(basic_buf, 0xFF, sizeof(basic_buf));
-        if (rom_loader_load_from_root(rom_root, basic_names,
+        if (rom_loader_load_from_root(rom_root,
+                                       "z1013_basic.rom|BASIC.ROM",
                                        z1013_constants::BASIC_ROM_SIZE,
                                        basic_buf, sizeof(basic_buf))) {
             std::memcpy(basic_rom_lo_chip_->data(), basic_buf, 8192);

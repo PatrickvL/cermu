@@ -625,16 +625,9 @@ bool Apple1System::load_roms() {
     has_basic_ = basic_rom_ && basic_rom_->data()[0] != 0xFF;
 
     // Load Signetics 2513 Character ROM (512 bytes, not bus-mapped)
-    const char* char_files[] = {
-        "2513.rom",
-        "signetics2513.bin",
-        "chargen.rom",
-        "342-0036-00.c1",
-        nullptr
-    };
-    
     bool char_ok = rom_loader_load_from_root(
-        rom_root, char_files,
+        rom_root,
+        "2513.rom|signetics2513.bin|chargen.rom|342-0036-00.c1",
         char_rom_->size_bytes(), char_rom_->data(), char_rom_->size_bytes()
     );
     

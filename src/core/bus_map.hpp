@@ -72,8 +72,8 @@ public:
         size_t              effective_size = 0;
 
         // ROM file loading metadata — propagated from ChipSlot::rom.
-        // When non-null, Board::load_roms() will auto-load this slot.
-        const RomFileInfo*  rom = nullptr;
+        // When has_rom() is true, Board::load_roms() will auto-load this slot.
+        RomFileInfo rom;
     };
 
     // =====================================================================
