@@ -163,6 +163,14 @@ private:
     // ── Display ──────────────────────────────────────────────────────────
     uint32_t framebuffer_[namco_arcade_constants::FB_WIDTH *
                           namco_arcade_constants::FB_HEIGHT] = {};
+    VideoPixelUnit pixel_;
+    uint8_t frame_indices_[namco_arcade_constants::FB_WIDTH *
+                           namco_arcade_constants::FB_HEIGHT] = {};
+    uint32_t rgba_palette_[namco_arcade_constants::PALETTE_ENTRIES] = {};
+
+    // ── Memory chips (cached for hot-path rendering) ────────────
+    RAMChip* vram_chip_ = nullptr;  // Video RAM (tile indices)
+    RAMChip* cram_chip_ = nullptr;  // Color RAM (palette attributes)
 
     // ── I/O state ────────────────────────────────────────────────────────
     uint8_t in0_        = 0xFF;          // Input port 0 (P1 + coins)
@@ -183,4 +191,6 @@ private:
     // ── Internal helpers ─────────────────────────────────────────────────
     bus_state_t io_tick(bus_state_t pins);   // Handle I/O region ($5xxx/$9xxx)
     bool load_roms();
+    void decode_palette();                   // Build rgba_palette_ from palette PROM
+    void render_frame();                     // Decode tilemap into indexed framebuffer
 };
