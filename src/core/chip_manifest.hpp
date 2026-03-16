@@ -77,8 +77,10 @@
 //
 
 struct RomFileInfo {
-    const char* const* filenames;  // Null-terminated array of candidate filenames
-    bool optional = false;         // false = required for boot; true = nice-to-have
+    const char* filenames = nullptr;  // Pipe-separated candidate filenames ("name1|name2|name3")
+    bool optional = false;            // false = required for boot; true = nice-to-have
+
+    [[nodiscard]] constexpr bool has_rom() const noexcept { return filenames != nullptr; }
 };
 
 
@@ -149,9 +151,9 @@ struct ChipSlot {
     // expansions, optional sound chips, etc.
     uint16_t condition = 0;
 
-    // ROM file loading metadata — null for non-ROM slots and ROM slots
-    // that need custom loading logic (e.g. split ROMs, banked offsets).
-    const RomFileInfo* rom = nullptr;
+    // ROM file loading metadata — filenames==nullptr for non-ROM slots
+    // and ROM slots that need custom loading logic (e.g. split ROMs).
+    RomFileInfo rom;
 
     // Page count for a given page size (size_bytes >> page_bits).
     [[nodiscard]] constexpr size_t pages(size_t page_bits) const noexcept {
@@ -183,12 +185,14 @@ struct Slot {
     size_t      bank_size  = 0;
     uint8_t     overlay_group = 0;
     size_t      effective_size = 0;  // 0 = use size_bytes.  See ChipSlot::effective_size.
-    const RomFileInfo* rom = nullptr;  // ROM file metadata (null = no auto-loading)
+    RomFileInfo rom;                   // ROM file metadata (filenames==nullptr → no auto-load)
 
     // Returns a copy with ROM file metadata attached.
-    [[nodiscard]] constexpr Slot with_rom(const RomFileInfo* r) const noexcept {
+    // filenames is a pipe-separated string: "name1|name2|name3"
+    [[nodiscard]] constexpr Slot with_rom(const char* filenames,
+                                          bool optional = false) const noexcept {
         auto copy = *this;
-        copy.rom = r;
+        copy.rom = {filenames, optional};
         return copy;
     }
 };

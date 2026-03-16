@@ -78,29 +78,12 @@ namespace vic20_cond {
     inline constexpr uint16_t kNTSC = 2;   // NTSC region (MOS 6560)
 }
 
-namespace vic20_rom {
-    inline constexpr const char* kCharRomFiles[] = {
-        "characters.901460-03.bin", "chargen.rom", "901460-03.bin", nullptr
-    };
-    inline constexpr RomFileInfo kCharRom{kCharRomFiles};
-
-    inline constexpr const char* kBasicRomFiles[] = {
-        "basic.901486-01.bin", "basic.rom", "901486-01.bin", nullptr
-    };
-    inline constexpr RomFileInfo kBasicRom{kBasicRomFiles};
-
-    inline constexpr const char* kKernalRomFiles[] = {
-        "kernal.901486-07.bin", "kernal.rom", "901486-07.bin", nullptr
-    };
-    inline constexpr RomFileInfo kKernalRom{kKernalRomFiles};
-}
-
 inline constexpr auto kVIC20Chips = make_chip_manifest(
     // ── Bus-mapped memory chips ──────────────────────────────────────────────────
     Slot<RAMChip>   {0x0000, 65536, 0, "RAM"},
-    Slot<ROMChip>   {0x8000,  4096, 0, "CHARROM"}.with_rom(&vic20_rom::kCharRom),
-    Slot<ROMChip>   {0xC000,  8192, 0, "BASIC ROM"}.with_rom(&vic20_rom::kBasicRom),
-    Slot<ROMChip>   {0xE000,  8192, 0, "KERNAL ROM"}.with_rom(&vic20_rom::kKernalRom),
+    Slot<ROMChip>   {0x8000,  4096, 0, "CHARROM"}.with_rom("characters.901460-03.bin|chargen.rom|901460-03.bin"),
+    Slot<ROMChip>   {0xC000,  8192, 0, "BASIC ROM"}.with_rom("basic.901486-01.bin|basic.rom|901486-01.bin"),
+    Slot<ROMChip>   {0xE000,  8192, 0, "KERNAL ROM"}.with_rom("kernal.901486-07.bin|kernal.rom|901486-07.bin"),
     // ── Non-bus chips (factory-created, not mapped) ──────────────────────
     Slot<MOS6502>   {0, 0, 0, "MOS 6502"},
     Slot<mos6561_t> {0, 0, 0, "MOS 6561 (PAL)",  vic20_cond::kPAL},

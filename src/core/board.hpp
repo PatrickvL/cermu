@@ -374,13 +374,13 @@ public:
         bool all_ok = true;
         for (size_t i = 0; i < bus_map_.slot_count(); ++i) {
             const auto& rec = bus_map_.slot(i);
-            if (!rec.rom) continue;           // No ROM metadata on this slot
+            if (!rec.rom.has_rom()) continue; // No ROM metadata on this slot
             if (!rec.chip) continue;          // Chip not created (conditional, skipped)
             if (rec.byte_size == 0) continue; // MMIO-only slot
 
             uint8_t* buf = chip_buffer(rec.base_id);
             bool ok = rom_loader_load_from_root(
-                rom_root, rec.rom->filenames,
+                rom_root, rec.rom.filenames,
                 rec.byte_size, buf, rec.byte_size
             );
 
@@ -388,7 +388,7 @@ public:
             if (ok) {
                 if (system_name)
                     printf("%s: %s loaded (%zu bytes)\n", system_name, label, rec.byte_size);
-            } else if (rec.rom->optional) {
+            } else if (rec.rom.optional) {
                 if (system_name)
                     printf("%s: %s not found (optional)\n", system_name, label);
             } else {

@@ -90,21 +90,9 @@ template<> struct SpectrumVariantTraits<SpectrumVariant::ZX128K> {
 //                                  $C000=switchable via port $7FFD)
 //   Slot 1: ROM —  32 KB at $0000 (2 × 16 KB banks; selected by $7FFD bit 4)
 //
-namespace spectrum_rom {
-    inline constexpr const char* k48kFiles[] = {
-        "spectrum48k.rom", "48.rom", "spectrum.rom", "zx48.rom", nullptr
-    };
-    inline constexpr RomFileInfo k48kRom{k48kFiles};
-
-    inline constexpr const char* k128kFiles[] = {
-        "spectrum128k.rom", "128.rom", "128-0.rom", nullptr
-    };
-    inline constexpr RomFileInfo k128kRom{k128kFiles};
-}
-
 inline constexpr auto kSpectrum48KChips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
-    Slot<ROMChip>{0x0000, 16384, 0, "ROM"}.with_rom(&spectrum_rom::k48kRom),
+    Slot<ROMChip>{0x0000, 16384, 0, "ROM"}.with_rom("spectrum48k.rom|48.rom|spectrum.rom|zx48.rom"),
     // Non-bus chips — factory-created or pre-bound, not address-decoded
     Slot<ZilogZ80A>     {0, 0, 0, "Z80A"},
     Slot<ferranti_ula_t>{0, 0, 0, "Ferranti ULA"},
@@ -113,7 +101,7 @@ inline constexpr auto kSpectrum48KChips = make_chip_manifest(
 
 inline constexpr auto kSpectrum128KChips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 131072, 0, "RAM", 0, 16384},
-    Slot<ROMChip>{0x0000,  32768, 0, "ROM", 0, 16384}.with_rom(&spectrum_rom::k128kRom),
+    Slot<ROMChip>{0x0000,  32768, 0, "ROM", 0, 16384}.with_rom("spectrum128k.rom|128.rom|128-0.rom"),
     // Non-bus chips — factory-created or pre-bound, not address-decoded
     Slot<ZilogZ80A>     {0, 0, 0, "Z80A"},
     Slot<ferranti_ula_t>{0, 0, 0, "Ferranti ULA"},

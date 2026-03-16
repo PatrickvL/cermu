@@ -4,7 +4,23 @@
 #include <cstdlib>
 #include <cstring>
 
-bool rom_loader_load_file(const char* const file_paths[], size_t expected_size, 
+// All filename/path arguments use pipe-separated format:
+// "name1|name2|name3" — pipe (|) is forbidden in filenames on
+// Windows and practically forbidden on Linux.
+
+// Advance to the next pipe-separated entry.  Copies up to buf_size-1
+// characters of the current entry into buf (null-terminated).  Returns
+// a pointer past the separator, or to the terminating '\0'.
+static const char* next_entry(const char* p, char* buf, size_t buf_size) {
+    const char* sep = strchr(p, ROM_FILENAME_SEPARATOR);
+    size_t len = sep ? (size_t)(sep - p) : strlen(p);
+    if (len >= buf_size) len = buf_size - 1;
+    memcpy(buf, p, len);
+    buf[len] = '\0';
+    return sep ? sep + 1 : p + len;
+}
+
+bool rom_loader_load_file(const char* file_paths, size_t expected_size, 
                          uint8_t** out_buffer, size_t* out_size) {
     if (!file_paths || !out_buffer || !out_size) {
         return false;
@@ -14,10 +30,14 @@ bool rom_loader_load_file(const char* const file_paths[], size_t expected_size,
     *out_size = 0;
     
     // Try each file path until one succeeds
-    for (int i = 0; file_paths[i] != NULL; i++) {
-        FILE* file = fopen(file_paths[i], "rb");
+    char path[1024];
+    const char* p = file_paths;
+    while (*p) {
+        p = next_entry(p, path, sizeof(path));
+        if (!path[0]) continue;
+        FILE* file = fopen(path, "rb");
         if (!file) {
-            continue; // Try next path
+            continue;
         }
         
         // Get file size
@@ -33,7 +53,7 @@ bool rom_loader_load_file(const char* const file_paths[], size_t expected_size,
         // Check expected size if specified
         if (expected_size > 0 && (size_t)file_size != expected_size) {
             printf("ROM file %s has incorrect size: %ld bytes (expected %zu)\n", 
-                   file_paths[i], file_size, expected_size);
+                   p, file_size, expected_size);
             fclose(file);
             continue;
         }
@@ -56,7 +76,7 @@ bool rom_loader_load_file(const char* const file_paths[], size_t expected_size,
         // Success!
         *out_buffer = buffer;
         *out_size = (size_t)file_size;
-        printf("Successfully loaded ROM: %s (%zu bytes)\n", file_paths[i], *out_size);
+        printf("Successfully loaded ROM: %s (%zu bytes)\n", path, *out_size);
         return true;
     }
     
@@ -65,7 +85,7 @@ bool rom_loader_load_file(const char* const file_paths[], size_t expected_size,
     return false;
 }
 
-bool rom_loader_load_to_buffer(const char* const file_paths[], size_t expected_size,
+bool rom_loader_load_to_buffer(const char* file_paths, size_t expected_size,
                               uint8_t* dest_buffer, size_t dest_size) {
     if (!dest_buffer || dest_size == 0) {
         return false;
@@ -95,37 +115,31 @@ bool rom_loader_load_to_buffer(const char* const file_paths[], size_t expected_s
     return true;
 }
 
-bool rom_loader_load_from_root(const char* rom_root_path, const char* const filenames[], 
+bool rom_loader_load_from_root(const char* rom_root_path, const char* filenames, 
                               size_t expected_size, uint8_t* dest_buffer, size_t dest_size) {
     if (!rom_root_path || !filenames || !dest_buffer || dest_size == 0) {
         return false;
     }
     
-    // Count number of filenames to construct paths array
-    int filename_count = 0;
-    while (filenames[filename_count] != NULL && filename_count < 10) {
-        filename_count++;
+    // Build pipe-separated string of full paths
+    char path_buf[10 * 1024];  // 10 KB should be plenty
+    char* out = path_buf;
+    char* end = path_buf + sizeof(path_buf) - 1;  // Reserve space for null terminator
+
+    char name[256];
+    const char* p = filenames;
+    while (*p && out < end) {
+        p = next_entry(p, name, sizeof(name));
+        if (!name[0]) continue;
+        if (out > path_buf) *out++ = ROM_FILENAME_SEPARATOR;
+        int n = snprintf(out, (size_t)(end - out), "%s%c%s",
+                         rom_root_path, CERMU_PATH_SEPARATOR, name);
+        if (n < 0 || out + n >= end) break;
+        out += n;
     }
-    
-    if (filename_count == 0) {
-        return false;
-    }
-    
-    // Construct full paths by combining rom_root_path with each filename
-    const char* full_paths[11];  // filename_count + 1 for NULL terminator
-    char path_buffers[10][1024];  // Static buffers for constructed paths
-    
-    for (int i = 0; i < filename_count; i++) {
-        snprintf(path_buffers[i], sizeof(path_buffers[i]), "%s%c%s", 
-                 rom_root_path, 
-                 CERMU_PATH_SEPARATOR,
-                 filenames[i]);
-        full_paths[i] = path_buffers[i];
-    }
-    full_paths[filename_count] = NULL;
-    
-    // Use existing rom_loader_load_to_buffer function
-    return rom_loader_load_to_buffer(full_paths, expected_size, dest_buffer, dest_size);
+    *out = '\0';
+
+    return rom_loader_load_to_buffer(path_buf, expected_size, dest_buffer, dest_size);
 }
 
 bool rom_loader_verify_md5(const uint8_t* buffer, size_t size, const char* expected_md5) {

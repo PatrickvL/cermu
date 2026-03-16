@@ -801,25 +801,15 @@ bool PETSystem::load_roms() {
     // PET 4032 uses a 2KB character ROM (901447-10); we mirror it to fill 4KB.
     // PET 8032 uses a 4KB character ROM (901640-01).
     uint8_t char_buf[4096];
-    const char* char_files_4k[] = {
-        "characters.901640-01.bin",         // 4KB (8032/SuperPET)
-        nullptr
-    };
-    bool char_ok = rom_loader_load_from_root(rom_root, char_files_4k,
+    bool char_ok = rom_loader_load_from_root(rom_root,
+                                              "characters.901640-01.bin",
                                               4096, char_buf, sizeof(char_buf));
     if (!char_ok) {
         // Try 2KB character ROM (PET 4032 and earlier)
         uint8_t char_buf_2k[2048];
-        const char* char_files_2k[] = {
-            "characters-2.901447-10.bin",   // VICE naming
-            "characters.901447-10.bin",
-            "chargen",
-            "chargen.rom",
-            "901447-10.bin",
-            nullptr
-        };
-        char_ok = rom_loader_load_from_root(rom_root, char_files_2k,
-                                             2048, char_buf_2k, sizeof(char_buf_2k));
+        char_ok = rom_loader_load_from_root(rom_root,
+            "characters-2.901447-10.bin|characters.901447-10.bin|chargen|chargen.rom|901447-10.bin",
+            2048, char_buf_2k, sizeof(char_buf_2k));
         if (char_ok) {
             // Mirror 2KB ROM into 4KB buffer
             memcpy(char_buf, char_buf_2k, 2048);
@@ -836,11 +826,8 @@ bool PETSystem::load_roms() {
     // BASIC 4.0 ROM (12KB at $B000-$DFFF)
     // Consists of three 4KB chips: 901465-23 ($B000), 901465-20 ($C000), 901465-21 ($D000)
     uint8_t basic_buf[12288];
-    const char* basic_files[] = {
-        "basic-4.901465-23-20-21.bin",      // VICE combined 12KB
-        nullptr
-    };
-    bool basic_ok = rom_loader_load_from_root(rom_root, basic_files,
+    bool basic_ok = rom_loader_load_from_root(rom_root,
+                                               "basic-4.901465-23-20-21.bin",
                                                sizeof(basic_buf), basic_buf, sizeof(basic_buf));
     if (basic_ok) {
         memcpy(basic_rom_b_chip_->data(), basic_buf, 4096);
@@ -850,12 +837,9 @@ bool PETSystem::load_roms() {
     } else {
         // Try loading as three 4KB ROMs
         uint8_t rom_b[4096], rom_c[4096], rom_d[4096];
-        const char* rom_b_files[] = { "basic-4-b000.901465-23.bin", "901465-23.bin", nullptr };
-        const char* rom_c_files[] = { "basic-4-c000.901465-20.bin", "901465-20.bin", nullptr };
-        const char* rom_d_files[] = { "basic-4-d000.901465-21.bin", "901465-21.bin", nullptr };
-        bool b_ok = rom_loader_load_from_root(rom_root, rom_b_files, 4096, rom_b, sizeof(rom_b));
-        bool c_ok = rom_loader_load_from_root(rom_root, rom_c_files, 4096, rom_c, sizeof(rom_c));
-        bool d_ok = rom_loader_load_from_root(rom_root, rom_d_files, 4096, rom_d, sizeof(rom_d));
+        bool b_ok = rom_loader_load_from_root(rom_root, "basic-4-b000.901465-23.bin|901465-23.bin", 4096, rom_b, sizeof(rom_b));
+        bool c_ok = rom_loader_load_from_root(rom_root, "basic-4-c000.901465-20.bin|901465-20.bin", 4096, rom_c, sizeof(rom_c));
+        bool d_ok = rom_loader_load_from_root(rom_root, "basic-4-d000.901465-21.bin|901465-21.bin", 4096, rom_d, sizeof(rom_d));
         if (b_ok && c_ok && d_ok) {
             memcpy(basic_rom_b_chip_->data(), rom_b, 4096);
             memcpy(basic_rom_c_chip_->data(), rom_c, 4096);
@@ -865,8 +849,7 @@ bool PETSystem::load_roms() {
         } else {
             // Last resort: try 8KB combined at $C000 (missing $B000 bank)
             uint8_t basic8k[8192];
-            const char* basic8k_files[] = { "basic4.rom", nullptr };
-            bool ok8 = rom_loader_load_from_root(rom_root, basic8k_files, 8192, basic8k, sizeof(basic8k));
+            bool ok8 = rom_loader_load_from_root(rom_root, "basic4.rom", 8192, basic8k, sizeof(basic8k));
             if (ok8) {
                 memcpy(basic_rom_c_chip_->data(), basic8k, 4096);
                 memcpy(basic_rom_d_chip_->data(), basic8k + 4096, 4096);
