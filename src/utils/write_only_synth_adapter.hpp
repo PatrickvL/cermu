@@ -4,7 +4,9 @@
  *                                write-only sound chips
  *
  * Wraps any sound chip that exposes:
- *   - write(uint8_t data)   — single-byte register write
+ *   - write(uint8_t data)   — single-byte register write  (Addressed=false)
+ *     OR
+ *   - write_register(uint8_t reg, uint8_t data)            (Addressed=true)
  *   - tick()                — advance one internal clock cycle
  *   - reset()               — reset chip state
  *
@@ -15,10 +17,10 @@
  * The audio thread calls process_until() which drains commands (applying
  * writes at the correct cycle) and ticks the chip forward.
  *
- * Template parameter Chip must provide:
- *   - void write(uint8_t data)
- *   - void tick()
- *   - void reset()   (or init())
+ * Template parameters:
+ *   Chip      — the sound chip type
+ *   Addressed — false: chip has write(uint8_t data)   (e.g. SN76489)
+ *               true:  chip has write_register(reg, data) (e.g. Namco WSG)
  *
  * cpu_cycles_per_tick specifies how many CPU cycles elapse per chip tick(),
  * allowing the adapter to convert CPU cycle timestamps into chip ticks.
@@ -31,7 +33,7 @@
 
 #include <cstdint>
 
-template<typename Chip>
+template<typename Chip, bool Addressed = false>
 class WriteOnlySynthAdapter : public AudioSynthEngine {
 public:
     /// Construct adapter wrapping an existing chip instance.
@@ -59,7 +61,11 @@ public:
         queue_.drain_until(target_cycle, [&](const AudioCommand& cmd) {
             advance_to(cmd.cycle);
             if (cmd.type == static_cast<uint8_t>(AudioCmdType::REGISTER_WRITE)) {
-                chip_->write(cmd.value);
+                if constexpr (Addressed) {
+                    chip_->write_register(cmd.reg, cmd.value);
+                } else {
+                    chip_->write(cmd.value);
+                }
             } else if (cmd.type == static_cast<uint8_t>(AudioCmdType::RESET)) {
                 chip_->reset();
                 current_cycle_ = cmd.cycle;

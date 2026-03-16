@@ -14,7 +14,10 @@
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/sound/namco_wsg.hpp"
 #include "chip/memory/memory_chip.hpp"
+#include "core/audio_thread.hpp"
+#include "utils/write_only_synth_adapter.hpp"
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #define NAMCO_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
@@ -144,6 +147,10 @@ private:
     // ── Chips ────────────────────────────────────────────────────────────
     ZilogZ80A*       cpu_ = nullptr;     // Z80A @ 3.072 MHz — owned by board_
     namco_wsg_t      wsg_;               // Namco WSG3 wavetable sound
+
+    // Audio thread — WSG synthesis runs off the emulation thread
+    AudioThread audio_thread_;
+    std::unique_ptr<WriteOnlySynthAdapter<namco_wsg_t, true>> wsg_adapter_;
 
     // ── Graphics ROM — NOT bus-mapped (display rendering only) ───────────
     std::vector<uint8_t> char_rom_;
