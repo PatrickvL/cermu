@@ -18,12 +18,37 @@
 constexpr int16_t VICII_PIPELINE_DELAY_PIXELS = 12;
 constexpr int16_t VICII_X_CENTERING_PIXELS = -14;
 // C64 color palette - RGBA format
-static const uint32_t c64_palette[16] = {
+// Source: unusedino.de/ec64/technical/misc/vic656x/colors
+static const uint32_t c64_palette_unusedino[16] = {
     0xFF000000, 0xFFFFFFFF, 0xFF2B3768, 0xFFB2A470,
     0xFF863D6F, 0xFF438D58, 0xFF792835, 0xFF6FC7B8,
     0xFF254F6F, 0xFF003943, 0xFF59679A, 0xFF444444,
     0xFF6C6C6C, 0xFF84D29A, 0xFFB55E6C, 0xFF959595
 };
+
+// Source: lospec.com/palette-list/commodore64
+static const uint32_t c64_palette_lospec[16] = {
+    0xFF000000, 0xFFFFFFFF, 0xFF444E9F, 0xFFCDBF6A,
+    0xFFA357A0, 0xFF5EAB5C, 0xFF9B4550, 0xFF87D4C9,
+    0xFF12546D, 0xFF3C68A1, 0xFF757ECB, 0xFF626262,
+    0xFF898989, 0xFF9BE29A, 0xFFCD7E88, 0xFFADADAD
+};
+
+// Source: c64-wiki.com/wiki/Color
+static const uint32_t c64_palette_c64wiki[16] = {
+    0xFF000000, 0xFFFFFFFF, 0xFF000088, 0xFFEEFFAA,
+    0xFFCC44CC, 0xFF55CC00, 0xFFAA0000, 0xFF77EEEE,
+    0xFF5588DD, 0xFF004466, 0xFF7777FF, 0xFF333333,
+    0xFF777777, 0xFF66FFAA, 0xFFFF8800, 0xFFBBBBBB
+};
+
+// Named palette registry — indexed by vicii_t::get_named_palettes()
+static const NamedPalette c64_named_palettes[] = {
+    { "unusedino", "Unusedino",  c64_palette_unusedino, 16 },
+    { "lospec",    "Lospec",     c64_palette_lospec,    16 },
+    { "c64wiki",   "C64 Wiki",   c64_palette_c64wiki,   16 },
+};
+static constexpr int c64_named_palette_count = 3;
 
 // ========================================================================================
 // INLINE UTILITY FUNCTIONS
@@ -31,7 +56,7 @@ static const uint32_t c64_palette[16] = {
 
 // Get default palette
 const uint32_t* vicii_t::get_default_palette() {
-    return (uint32_t*)c64_palette;
+    return c64_palette_unusedino;
 }
 
 // ========================================================================================
@@ -1143,7 +1168,7 @@ void vicii_timing_advance(vicii_t* vicii) {
     const uint16_t completed_raster = vicii->timing.raster_counter;
     const int fb_row = vicii_raster_to_fb_row(vicii, completed_raster);
     if (vicii->display_ && fb_row < vicii->display_->height()) {
-        vicii_pixel_flush_line(vicii, vicii_t::get_default_palette(), fb_row);
+        vicii_pixel_flush_line(vicii, vicii->system_palette(), fb_row);
     }
     
     vicii_set_x_cycle(vicii, 0);
@@ -2566,8 +2591,7 @@ void vicii_t::init(const vicii_chip_config_t* config, void (*bank_change)(void*,
     info_ = ChipInfo{pal ? "MOS6569" : "MOS6567", "MOS Technology"};
     vicii_initialize(this);
     vicii_initialize_timing(this, config);
-    system_palette_ = get_default_palette();
-    palette_size_   = 16;
+    set_named_palettes(c64_named_palettes, c64_named_palette_count);
 #ifdef CERMU_HAS_CHIP_DEBUG
     register_debug_fields();
 #endif

@@ -7,6 +7,7 @@
 // system menu items are inlined, test binary dialog removed.
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
+#include "gui/palette_selector.hpp"
 #endif
 #include "core/formats/format_registry.hpp"
 #include "core/formats/prg_format.hpp"
@@ -1391,20 +1392,26 @@ bool C64System::apply_configuration() {
         pending_sid_revision_ = rev;
     }
 
+    // Apply display palette selection
+    auto pal_it = config_.custom_settings.find("display_palette");
+    if (pal_it != config_.custom_settings.end() && initialized_ && this->vicii) {
+        if (auto* np = this->vicii->select_palette(pal_it->second.c_str())) {
+            display_.set_palette(np->data, np->count);
+        }
+    }
+
     return true;
 }
 
 
 void C64System::render_configuration_ui() {
 #ifdef CERMU_HAS_GUI
-    // SID revision is a creation-time setting — selectable only in the
-    // system selection dialog via custom_options / custom_settings.
-    // It cannot be changed at runtime because the SID filter model and
-    // internal state are tightly coupled to the chosen revision.
-
-    // Peripheral connector UI is rendered generically by the GUI layer
-    // via System::render_peripheral_port_ui() — no C64-specific
-    // duplication needed here.
+    if (initialized_ && this->vicii) {
+        if (palette_selector::render(*this->vicii, config_.custom_settings)) {
+            set_configuration(config_);
+            apply_configuration();
+        }
+    }
 #endif
 }
 
