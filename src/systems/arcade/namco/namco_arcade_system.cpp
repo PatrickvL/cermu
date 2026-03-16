@@ -57,7 +57,9 @@ NamcoArcadeSystem<G>::NamcoArcadeSystem()
 }
 
 template<NamcoGame G>
-NamcoArcadeSystem<G>::~NamcoArcadeSystem() {}
+NamcoArcadeSystem<G>::~NamcoArcadeSystem() {
+    audio_thread_.stop();
+}
 
 template<NamcoGame G>
 const SystemDescriptor& NamcoArcadeSystem<G>::get_descriptor() const {
@@ -87,6 +89,11 @@ bool NamcoArcadeSystem<G>::initialize() {
     wsg_.set_clock_frequency(namco_arcade_constants::CPU_FREQ_HZ / 32);
     wsg_.set_audio_sample_rate(namco_arcade_constants::DEFAULT_SAMPLE_RATE);
 
+    // Wire WSG to audio thread — WSG clocked at CPU/32
+    wsg_adapter_ = std::make_unique<WriteOnlySynthAdapter<namco_wsg_t, true>>(&wsg_, 32);
+    audio_thread_.register_engine(wsg_adapter_.get());
+    audio_thread_.start();
+
     // Graphics ROMs — not bus-mapped
     char_rom_.resize(Traits::char_rom_size, 0xFF);
     sprite_rom_.resize(namco_arcade_constants::SPRITE_ROM_SIZE, 0xFF);
@@ -111,11 +118,17 @@ bool NamcoArcadeSystem<G>::initialize() {
     return true;
 }
 
-template<NamcoGame G> void NamcoArcadeSystem<G>::shutdown() { cpu_ = nullptr; system_ready_ = false; }
+template<NamcoGame G> void NamcoArcadeSystem<G>::shutdown() {
+    audio_thread_.stop();
+    cpu_ = nullptr;
+    system_ready_ = false;
+}
 template<NamcoGame G> void NamcoArcadeSystem<G>::reset() {
     if (!cpu_) return;
     pins_ = board_.cpu_chip()->reset(pins_);
-    wsg_.reset();
+    audio_thread_.stop();
+    if (wsg_adapter_) wsg_adapter_->reset();
+    audio_thread_.start();
     int_enable_ = false;
     sound_enable_ = false;
     scanline_ = 0;
@@ -162,16 +175,14 @@ void NamcoArcadeSystem<G>::tick() {
         BUS_SET_BIT(pins_, BUS_IRQ_BIT);
     }
 
-    // WSG tick (~96 kHz = CPU_FREQ / 32)
-    if ((total_cycles_ & 31) == 0) {
-        wsg_.tick();
-    }
-
+    // WSG synthesis is driven by the audio thread — no direct tick here.
     total_cycles_++;
 }
 
 template<NamcoGame G> void NamcoArcadeSystem<G>::run_frame() {
     for (uint32_t i = 0; i < namco_arcade_constants::TSTATES_PER_FRAME; ++i) tick();
+    // Signal audio thread once per frame with accumulated cycle count
+    audio_thread_.signal_progress(total_cycles_);
     render_frame();
 }
 
@@ -347,21 +358,11 @@ bus_state_t NamcoArcadeSystem<G>::io_tick(bus_state_t pins) {
             else if (reg == 3) flip_screen_  = data & 0x01;
             // reg 7 = watchdog (ignored)
         }
-        // WSG sound registers at $x040-$x05F
+        // WSG sound registers at $x040-$x05F — enqueue for audio thread
         else if (addr >= Traits::io_base + 0x40 && addr < Traits::io_base + 0x60) {
             uint8_t offset = addr - (Traits::io_base + 0x40);
-            if (offset < 5) {
-                wsg_.write_freq(0, offset, data);
-            } else if (offset < 10) {
-                wsg_.write_freq(1, offset - 5, data);
-            } else if (offset < 15) {
-                wsg_.write_freq(2, offset - 10, data);
-            } else if (offset == 0x0F) {
-                wsg_.write_wave_vol(0, (data >> 4) & 0x07, data & 0x0F);
-            } else if (offset == 0x10) {
-                wsg_.write_wave_vol(1, (data >> 4) & 0x07, data & 0x0F);
-            } else if (offset == 0x14) {
-                wsg_.write_wave_vol(2, (data >> 4) & 0x07, data & 0x0F);
+            if (wsg_adapter_) {
+                wsg_adapter_->cmd_queue().push_write(total_cycles_, offset, data);
             }
         }
         // Sprite positions at $x060-$x06F (write-only from CPU side)
