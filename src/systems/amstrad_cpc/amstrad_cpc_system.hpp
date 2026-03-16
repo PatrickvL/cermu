@@ -259,6 +259,8 @@ private:
     // ========================================================================
 
     uint32_t framebuffer_[amstrad_cpc_constants::FB_WIDTH * amstrad_cpc_constants::FB_HEIGHT]{};
+    VideoPixelUnit pixel_;
+    uint8_t frame_indices_[amstrad_cpc_constants::FB_WIDTH * amstrad_cpc_constants::FB_HEIGHT]{};
 
     // ========================================================================
     // AUDIO
@@ -276,6 +278,10 @@ private:
     void apply_rom_overlay();        // Load ROM overlay snapshot for current ga state
     bus_state_t io_tick(bus_state_t pins);
     bool load_roms();
+    void render_frame();             // Decode screen RAM into indexed framebuffer
+
+    // Cached chip pointer for hot-path rendering
+    RAMChip* ram_chip_ = nullptr;
 
     // Pre-computed ROM overlay snapshots.
     // Indexed as snapshots_[0][mode] where mode bits: 0=lower ROM, 1=upper ROM.

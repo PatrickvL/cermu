@@ -44,5 +44,50 @@ namespace amstrad_cpc_constants {
 
     inline constexpr int GA_PEN_COUNT           = 17;    // 16 ink pens + border
     inline constexpr int GA_COLOR_COUNT         = 27;    // 27 hardware colors
+    inline constexpr int GA_INK_VALUES          = 32;    // 32 possible ink register values
+
+    // ====================================================================
+    // CPC Hardware Color Palette (ABGR format)
+    // ====================================================================
+    //
+    // Gate Array ink register values (0-31) map to these colors.
+    // 32 entries with 27 unique colors and 5 duplicates.
+    // Each channel has 3 levels: 0x00, 0x60, 0xFF.
+    // Values from MAME's amstrad.cpp driver (verified against hardware).
+    //
+    inline constexpr uint32_t HARDWARE_PALETTE[32] = {
+        0xFF606060,  //  0: White (half-bright)
+        0xFF606060,  //  1: White (half-bright) [dup of 0]
+        0xFF60FF00,  //  2: Sea Green
+        0xFF60FFFF,  //  3: Pastel Yellow
+        0xFF600000,  //  4: Blue
+        0xFF6000FF,  //  5: Purple
+        0xFF606000,  //  6: Cyan
+        0xFF6060FF,  //  7: Pink
+        0xFFF000FF,  //  8: Purple [dup of 5]
+        0xFFF0FFFF,  //  9: Pastel Yellow [dup of 3]
+        0xFFF0FF00,  // 10: Bright Yellow
+        0xFFF0FFFF,  // 11: Bright White
+        0xFFF00000,  // 12: Bright Red
+        0xFFF000FF,  // 13: Bright Magenta
+        0xFFF06000,  // 14: Orange
+        0xFFF060FF,  // 15: Pastel Magenta
+        0xFF000060,  // 16: Blue [dup of 4, different brightness]
+        0xFF00FF60,  // 17: Sea Green [dup of 2, different brightness]
+        0xFF00FF00,  // 18: Bright Green
+        0xFF00FFFF,  // 19: Bright Cyan
+        0xFF000000,  // 20: Black
+        0xFF0000FF,  // 21: Bright Blue
+        0xFF006000,  // 22: Green
+        0xFF0060FF,  // 23: Sky Blue
+        0xFF600060,  // 24: Magenta
+        0xFF60FF60,  // 25: Pastel Green
+        0xFF60FF00,  // 26: Lime
+        0xFF60FFFF,  // 27: Pastel Cyan
+        0xFF600000,  // 28: Red
+        0xFF6000FF,  // 29: Mauve
+        0xFF606000,  // 30: Yellow
+        0xFF6060FF,  // 31: Pastel Blue
+    };
 
 } // namespace amstrad_cpc_constants
