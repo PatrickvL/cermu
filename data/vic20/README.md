@@ -1,9 +1,10 @@
 # VIC-20 Data Directory
 
-This directory is reserved for future VIC-20 emulation support.
+This directory contains data files for the VIC-20 emulator.
 
-## Planned Structure
-- `roms/` - VIC-20 system ROMs
-- `cartridges/` - VIC-20 cartridge images
+## Directory Structure
 
-VIC-20 emulation is not currently implemented but this structure is prepared for future development.
+- `roms/` — System ROMs (BASIC, KERNAL, CHARGEN) — see [roms/README.md](roms/README.md)
+- `cartridges/` — Cartridge ROM images
+- `demos/` — Demo programs and disk images
+- `games/` — Game software
