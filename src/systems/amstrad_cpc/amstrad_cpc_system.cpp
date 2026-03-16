@@ -134,13 +134,12 @@ bool AmstradCPCSystem<M>::initialize() {
     // ── Cache RAM chip pointer for rendering ───────────────────────
     ram_chip_ = board_.template chip_as<RAMChip>(cpc_chips::kRamSlot);
 
-    // ── GPU indexed palette rendering ───────────────────────────────
-    pixel_.set_framebuffer(framebuffer_,
-                           amstrad_cpc_constants::FB_WIDTH,
-                           amstrad_cpc_constants::FB_HEIGHT);
-    register_gpu_palette(&pixel_,
-                         amstrad_cpc_constants::HARDWARE_PALETTE,
-                         amstrad_cpc_constants::GA_INK_VALUES);
+    // ── GPU indexed palette rendering — chip-owned pattern ─────────────
+    gate_array_.pixel.set_framebuffer(framebuffer_,
+        amstrad_cpc_constants::FB_WIDTH, amstrad_cpc_constants::FB_HEIGHT);
+    register_gpu_palette(&gate_array_.pixel,
+        amstrad_gate_array_t::get_palette(),
+        amstrad_gate_array_t::get_palette_size());
     // ── Register all manifest chips for Hardware menu ────────────────
     register_bus_chips(board_);
 
@@ -203,11 +202,9 @@ void AmstradCPCSystem<M>::run_frame() {
 }
 
 template<CPCModel M> bool AmstradCPCSystem<M>::load_file(const char*) { return false; }
-template<CPCModel M> uint32_t* AmstradCPCSystem<M>::get_framebuffer() { return framebuffer_; }
 template<CPCModel M> void AmstradCPCSystem<M>::get_display_dimensions(int* w, int* h) const {
     *w = amstrad_cpc_constants::FB_WIDTH; *h = amstrad_cpc_constants::FB_HEIGHT;
 }
-template<CPCModel M> void AmstradCPCSystem<M>::set_framebuffer(uint32_t*, int, int) {}
 template<CPCModel M> uint32_t AmstradCPCSystem<M>::get_audio_samples(float*, uint32_t) { return 0; }
 template<CPCModel M> void AmstradCPCSystem<M>::set_audio_sample_rate(int hz) { audio_sample_rate_ = hz; }
 template<CPCModel M> void AmstradCPCSystem<M>::handle_keyboard_event(SDL_Keycode, bool) {}
@@ -216,116 +213,34 @@ template<CPCModel M> void AmstradCPCSystem<M>::render_configuration_ui() {}
 template<CPCModel M> void AmstradCPCSystem<M>::set_speed_multiplier(float m) { speed_multiplier_ = m; }
 
 // ============================================================================
-// VIDEO RENDERING — decode screen RAM into indexed framebuffer
+// VIDEO RENDERING — delegate to Gate Array chip
 // ============================================================================
-//
-// CPC screen memory layout (standard 320×200 mode 1):
-//   80 bytes per line, 200 visible lines, interleaved in 2 KB blocks:
-//     Lines 0,8,16,24... at offset 0
-//     Lines 1,9,17,25... at offset 2048
-//     Lines 2,10,18...   at offset 4096
-//     etc. (8 blocks of 2 KB = 16 KB total)
-//
-//   Address for pixel line y, byte x:
-//     addr = screen_base + (y / 8) * 80 + x + (y % 8) * 2048
-//
-//   Screen base derived from CRTC R12:R13 (typically $C000 = R12=0x30, R13=0x00)
-//
-// Pixel decoding by mode (all modes use interleaved bit planes within each byte):
-//   Mode 0: 2 pixels/byte (4bpp), bits: px0={b7,b5,b3,b1}, px1={b6,b4,b2,b0}
-//   Mode 1: 4 pixels/byte (2bpp), bits: px0={b7,b3}, px1={b6,b2}, px2={b5,b1}, px3={b4,b0}
-//   Mode 2: 8 pixels/byte (1bpp), bits: px0=b7, px1=b6, ..., px7=b0
-//
-// Color: pixel value → pen index → gate_array_.ink[pen] → hardware color (0-31)
-// Framebuffer: 640×400 (mode 2 resolution, each native line drawn twice)
 
 template<CPCModel M>
 void AmstradCPCSystem<M>::render_frame() {
     if (!ram_chip_) return;
 
-    const uint8_t* ram = ram_chip_->data();
-    const uint8_t* ink = gate_array_.ink;
-    int mode = gate_array_.screen_mode;
-
-    // Screen base from CRTC display start address (R12:R13)
+    // CRTC display start address (R12:R13)
     uint16_t crtc_start = (crtc_.regs_[MC6845_R12_START_ADDR_HI] << 8)
                         | crtc_.regs_[MC6845_R13_START_ADDR_LO];
-    // Gate Array maps CRTC address bits [13:12] → 16 KB bank
-    uint32_t screen_base = (crtc_start & 0x3000) << 2;  // bits 13:12 → address bits 15:14
 
-    constexpr int FB_W = amstrad_cpc_constants::FB_WIDTH;
+    gate_array_.render_frame(ram_chip_->data(), crtc_start);
+}
 
-    std::memset(frame_indices_, 0, sizeof(frame_indices_));
+// ============================================================================
+// FRAMEBUFFER ACCESS — chip-owned pattern (forward to Gate Array pixel unit)
+// ============================================================================
 
-    for (int y = 0; y < 200; y++) {
-        // Interleaved address: scan lines within character row spaced 2048 bytes apart
-        uint32_t line_base = screen_base + (y / 8) * 80 + (y % 8) * 2048;
-        uint8_t* dst0 = frame_indices_ + (y * 2) * FB_W;
-        uint8_t* dst1 = frame_indices_ + (y * 2 + 1) * FB_W;
+template<CPCModel M>
+uint32_t* AmstradCPCSystem<M>::get_framebuffer() {
+    return rgba_framebuffer_ ? rgba_framebuffer_ : framebuffer_;
+}
 
-        for (int x_byte = 0; x_byte < 80; x_byte++) {
-            uint8_t byte = ram[(line_base + x_byte) & 0xFFFF];
-            int fb_x;
-
-            switch (mode) {
-                case 0: {
-                    // Mode 0: 2 pixels per byte, 16 colors
-                    // pixel 0: bits {7,5,3,1} → value 0-15, pixel 1: bits {6,4,2,0}
-                    uint8_t px0 = ((byte >> 7) & 1) | (((byte >> 5) & 1) << 1)
-                                | (((byte >> 3) & 1) << 2) | (((byte >> 1) & 1) << 3);
-                    uint8_t px1 = ((byte >> 6) & 1) | (((byte >> 4) & 1) << 1)
-                                | (((byte >> 2) & 1) << 2) | (((byte >> 0) & 1) << 3);
-                    uint8_t c0 = ink[px0 & 0x0F] & 0x1F;
-                    uint8_t c1 = ink[px1 & 0x0F] & 0x1F;
-                    // Each mode 0 pixel = 4 framebuffer pixels wide
-                    fb_x = x_byte * 8;
-                    dst0[fb_x] = dst0[fb_x+1] = dst0[fb_x+2] = dst0[fb_x+3] = c0;
-                    dst0[fb_x+4] = dst0[fb_x+5] = dst0[fb_x+6] = dst0[fb_x+7] = c1;
-                    dst1[fb_x] = dst1[fb_x+1] = dst1[fb_x+2] = dst1[fb_x+3] = c0;
-                    dst1[fb_x+4] = dst1[fb_x+5] = dst1[fb_x+6] = dst1[fb_x+7] = c1;
-                    break;
-                }
-                case 1: {
-                    // Mode 1: 4 pixels per byte, 4 colors
-                    // px0={b7,b3}, px1={b6,b2}, px2={b5,b1}, px3={b4,b0}
-                    uint8_t px0 = ((byte >> 7) & 1) | (((byte >> 3) & 1) << 1);
-                    uint8_t px1 = ((byte >> 6) & 1) | (((byte >> 2) & 1) << 1);
-                    uint8_t px2 = ((byte >> 5) & 1) | (((byte >> 1) & 1) << 1);
-                    uint8_t px3 = ((byte >> 4) & 1) | (((byte >> 0) & 1) << 1);
-                    uint8_t c0 = ink[px0] & 0x1F;
-                    uint8_t c1 = ink[px1] & 0x1F;
-                    uint8_t c2 = ink[px2] & 0x1F;
-                    uint8_t c3 = ink[px3] & 0x1F;
-                    // Each mode 1 pixel = 2 framebuffer pixels wide
-                    fb_x = x_byte * 8;
-                    dst0[fb_x] = dst0[fb_x+1] = c0;
-                    dst0[fb_x+2] = dst0[fb_x+3] = c1;
-                    dst0[fb_x+4] = dst0[fb_x+5] = c2;
-                    dst0[fb_x+6] = dst0[fb_x+7] = c3;
-                    dst1[fb_x] = dst1[fb_x+1] = c0;
-                    dst1[fb_x+2] = dst1[fb_x+3] = c1;
-                    dst1[fb_x+4] = dst1[fb_x+5] = c2;
-                    dst1[fb_x+6] = dst1[fb_x+7] = c3;
-                    break;
-                }
-                default:
-                case 2: {
-                    // Mode 2: 8 pixels per byte, 2 colors
-                    fb_x = x_byte * 8;
-                    for (int bit = 7; bit >= 0; --bit) {
-                        uint8_t px = (byte >> bit) & 1;
-                        uint8_t c = ink[px] & 0x1F;
-                        dst0[fb_x] = c;
-                        dst1[fb_x] = c;
-                        fb_x++;
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    pixel_.flush_indexed_frame(frame_indices_, amstrad_cpc_constants::HARDWARE_PALETTE);
+template<CPCModel M>
+void AmstradCPCSystem<M>::set_framebuffer(uint32_t* buffer, int width, int height) {
+    System::set_framebuffer(buffer, width, height);
+    gate_array_.pixel.set_framebuffer(buffer ? buffer : framebuffer_,
+        amstrad_cpc_constants::FB_WIDTH, amstrad_cpc_constants::FB_HEIGHT);
 }
 
 // ============================================================================
