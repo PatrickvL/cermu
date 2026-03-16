@@ -28,6 +28,8 @@
 #include "chip/sound/ay_3_8910.hpp"
 #include "chip/memory/memory_chip.hpp"
 #include "chip/video/amstrad_gate_array/amstrad_gate_array.hpp"
+#include "core/audio_thread.hpp"
+#include "utils/write_only_synth_adapter.hpp"
 #include "systems/amstrad_cpc/amstrad_cpc_constants.hpp"
 #include <cstdint>
 #include <memory>
@@ -232,6 +234,11 @@ private:
 
     uint32_t audio_sample_rate_ = amstrad_cpc_constants::DEFAULT_SAMPLE_RATE;
     std::vector<float> audio_buffer_;
+
+    // ── Audio thread — AY synthesis runs off the emu thread ─────────────
+    AudioThread audio_thread_;
+    std::unique_ptr<WriteOnlySynthAdapter<ay_3_8910_t, true>> ay_adapter_;
+    uint8_t ay_latch_ = 0;              // Cached latched register (emu thread)
 
     // ========================================================================
     // HELPERS

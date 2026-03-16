@@ -161,10 +161,27 @@ public:
     }
 
     /// Direct addressed write (for AudioThread adapter).
-    /// Combines latch_address + write_register in one call.
+    /// Does NOT touch latch_addr_ — safe for audio-thread use while the
+    /// emu thread owns latch_addr_ for read_register() / latch_address().
     void write_register(uint8_t reg, uint8_t data) {
-        latch_addr_ = reg & 0x0F;
-        write_register(data);
+        uint8_t r = reg & 0x0F;
+        regs_[r] = data;
+        if (r == ay_regs::ENV_SHAPE) {
+            // Writing envelope shape resets the envelope generator
+            env_step_ = 0;
+            env_counter_ = 0;
+            env_holding_ = false;
+            env_ascending_ = (data & 0x04) != 0;  // ATT bit
+            env_volume_ = env_ascending_ ? 0 : 15;
+        }
+    }
+
+    /// Shadow write — updates regs_[] only (no side effects).
+    /// Call from the emu thread so read_register() returns current data,
+    /// while the full write (with envelope reset etc.) is enqueued for
+    /// the audio thread.
+    void write_register_shadow(uint8_t data) {
+        regs_[latch_addr_] = data;
     }
 
     uint8_t read_register() const {
