@@ -9,6 +9,8 @@
 #include "chip/video/video_pixel_unit.hpp"
 #include "chip/sound/sn76489/sn76489.hpp"
 #include "chip/memory/memory_chip.hpp"
+#include "core/audio_thread.hpp"
+#include "utils/write_only_synth_adapter.hpp"
 #include "systems/bbc/bbc_micro_constants.hpp"
 #include <cstdint>
 #include <memory>
@@ -117,6 +119,10 @@ private:
     sn76489_t*  psg_ = nullptr;         // SN76489 PSG — owned by board_
     mos6522_t   system_via_;            // System VIA ($FE40-$FE5F) — pre-bound
     mos6522_t   user_via_;              // User VIA ($FE60-$FE7F) — pre-bound
+
+    // Audio thread — SN76489 synthesis runs off the emulation thread
+    AudioThread audio_thread_;
+    std::unique_ptr<WriteOnlySynthAdapter<sn76489_t>> psg_adapter_;
 
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using Bus = MemoryBus<BBCMicroBusSpec>;

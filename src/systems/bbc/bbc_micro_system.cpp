@@ -132,6 +132,8 @@ BBCMicroSystem::BBCMicroSystem()
 }
 
 BBCMicroSystem::~BBCMicroSystem() {
+    // Stop audio thread before chips are destroyed.
+    audio_thread_.stop();
     // All chips owned by board_ — no manual cleanup.
     // memory_ points into the flat mem (owned by board_); don't free.
 }
@@ -220,6 +222,12 @@ bool BBCMicroSystem::initialize() {
     psg_->set_clock_frequency(bbc_constants::SN76489_CLOCK);
     psg_->set_audio_sample_rate(bbc_constants::DEFAULT_SAMPLE_RATE);
 
+    // Wire SN76489 to audio thread — PSG is clocked at CRTC rate (1 MHz),
+    // CPU runs at 2 MHz → 2 CPU cycles per PSG tick.
+    psg_adapter_ = std::make_unique<WriteOnlySynthAdapter<sn76489_t>>(psg_, 2);
+    audio_thread_.register_engine(psg_adapter_.get());
+    audio_thread_.start();
+
     // ---- System VIA ($FE40-$FE5F) ----
     system_via_.reset();
     system_via_.interrupt_bit = BUS_IRQ_BIT;
@@ -256,6 +264,7 @@ bool BBCMicroSystem::initialize() {
 
 void BBCMicroSystem::shutdown() {
     printf("BBC Micro: Shutting down\n");
+    audio_thread_.stop();
     System::shutdown();
 }
 
@@ -273,6 +282,11 @@ void BBCMicroSystem::reset() {
     system_via_.port_b_read_callback = sys_via_port_b_read;
     system_via_.port_b_read_context = this;
     user_via_.interrupt_bit = BUS_IRQ_BIT;
+
+    // Reset audio thread adapter (both threads quiescent during reset)
+    audio_thread_.stop();
+    if (psg_adapter_) psg_adapter_->reset();
+    audio_thread_.start();
 
     // Reset state
     pins_ = BBC_BUS_DEFAULT_STATE;
@@ -300,13 +314,8 @@ void BBCMicroSystem::tick() {
         if (crtc_) {
             crtc_->tick();
         }
-        // SN76489 internal clock is master/16 = 250 kHz = 1 tick per 4 CRTC clocks
-        // But we approximate by ticking PSG at 1 MHz (= CRTC rate) and adjusting
-        // the sample rate math.  The SN76489 internal divider is already handled
-        // by the counter reload values being relative to the internal clock.
-        if (psg_) {
-            psg_->tick();
-        }
+        // SN76489 synthesis is now driven by the audio thread — no direct
+        // tick here.  signal_progress() is called once per CPU tick below.
     }
 
     // ---- VIA tick (both VIAs) ----
@@ -356,6 +365,8 @@ void BBCMicroSystem::run_frame() {
     for (uint32_t i = 0; i < adjusted_cycles; i++) {
         tick();
     }
+    // Signal audio thread once per frame with the accumulated cycle count
+    audio_thread_.signal_progress(total_cycles_);
     tick_peripherals();
 }
 
@@ -457,10 +468,22 @@ bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
                 // Addressable latch: PB0-PB2 = address, PB3 = data
                 uint8_t latch_addr = data & 0x07;
                 bool latch_data = (data >> 3) & 0x01;
+                uint8_t old_latch = addressable_latch_;
                 if (latch_data) {
                     addressable_latch_ |= (1 << latch_addr);
                 } else {
                     addressable_latch_ &= ~(1 << latch_addr);
+                }
+
+                // SN76489 /WE is active-low on latch bit 0.
+                // Trigger write on falling edge: old bit 0 was HIGH, now LOW.
+                if (latch_addr == 0 && (old_latch & 0x01) && !latch_data) {
+                    if (psg_adapter_) {
+                        // Data comes from System VIA Port A output register.
+                        // Enqueue timestamped write for the audio thread.
+                        uint8_t psg_data = system_via_.regs_[MOS6522_PORTA];
+                        psg_adapter_->cmd_queue().push_write(total_cycles_, 0, psg_data);
+                    }
                 }
             }
         }
