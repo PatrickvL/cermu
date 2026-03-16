@@ -191,7 +191,11 @@ bool Atari2600System::initialize() {
     register_bus_chips(board_);
 
     // GPU indexed palette rendering — 128-color TIA NTSC palette
-    register_gpu_palette(&tia_->pixel, tia_->palette_rgba_, 128);
+    display_.init(atari2600_constants::DISPLAY_WIDTH,
+                  atari2600_constants::FB_HEIGHT);
+    display_.set_palette(tia_->palette_rgba_, 128);
+    tia_->set_display(&display_);
+    register_display(&display_);
 
     printf("Atari2600: System initialized\n");
     return true;
@@ -276,9 +280,6 @@ void Atari2600System::run_frame() {
     if (!frame_complete_) {
         tia_->scanline = 0;
     }
-
-    // Copy framebuffer
-    get_framebuffer();
 
     // Tick all attached peripheral devices
     tick_peripherals();
@@ -406,23 +407,9 @@ bool Atari2600System::load_file(const char* filepath) {
 // DISPLAY
 // ============================================================================
 
-uint32_t* Atari2600System::get_framebuffer() {
-    // TIA renders directly into the framebuffer
-    return rgba_framebuffer_;
-}
-
 void Atari2600System::get_display_dimensions(int* width, int* height) const {
     *width  = atari2600_constants::DISPLAY_WIDTH;
     *height = atari2600_constants::DISPLAY_HEIGHT;
-}
-
-void Atari2600System::set_framebuffer(uint32_t* buffer, int width, int height) {
-    rgba_framebuffer_ = buffer;
-    rgba_width_ = width;
-    rgba_height_ = height;
-
-    // Pass framebuffer to TIA for direct rendering
-    tia_->set_framebuffer(buffer, width, height);
 }
 
 // ============================================================================

@@ -291,7 +291,7 @@ bool PETSystem::initialize() {
     display_.init(pet_constants::DISPLAY_WIDTH, pet_constants::DISPLAY_HEIGHT);
     display_.set_palette(pet_constants::PALETTE, 2);
     crtc_->configure_char_render(
-        &display_.pixel(), display_.indices(),
+        &display_, display_.indices(),
         char_rom_, screen_ram_chip_->data(),
         pet_constants::SCREEN_COLS,
         pet_constants::PET_CHAR_HEIGHT,

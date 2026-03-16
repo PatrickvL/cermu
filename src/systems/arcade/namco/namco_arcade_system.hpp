@@ -166,7 +166,7 @@ private:
     MainBoard board_{BT::kManifest};
 
     // ── Display ──────────────────────────────────────────────────────────
-    DisplaySurface display_;
+    IndexedFrameBuffer display_;
 
     // ── Memory chips (cached for hot-path rendering) ────────────
     RAMChip* vram_chip_ = nullptr;  // Video RAM (tile indices)

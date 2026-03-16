@@ -680,7 +680,11 @@ bool VIC20System::initialize() {
     setup_expansion_map();
 
     // GPU indexed palette rendering — 16-color VIC palette
-    register_gpu_palette(&vic_->pixel, vic_base_t::get_default_palette(), 16);
+    display_.init(vic20_constants::DISPLAY_WIDTH,
+                  vic20_constants::DISPLAY_HEIGHT);
+    display_.set_palette(vic_base_t::get_default_palette(), 16);
+    vic_->set_display(&display_);
+    register_display(&display_);
     
     initialized_ = true;
     return true;
@@ -702,9 +706,6 @@ void VIC20System::reset() {
         vic_->set_memory_callbacks(
             VIC20System::vic_mem_read, this,
             VIC20System::vic_color_read, this);
-        if (rgba_framebuffer_) {
-            vic_->set_framebuffer(rgba_framebuffer_, rgba_width_, rgba_height_);
-        }
     }
     
     // Clear RAM (zero page, stack, main RAM $0000-$7FFF) but preserve ROMs
@@ -1074,27 +1075,9 @@ bool VIC20System::pre_apply_pending_load() {
 // Display
 // ============================================================================
 
-uint32_t* VIC20System::get_framebuffer() {
-    return rgba_framebuffer_;
-}
-
 void VIC20System::get_display_dimensions(int* width, int* height) const {
     *width = vic20_constants::DISPLAY_WIDTH;
     *height = vic20_constants::DISPLAY_HEIGHT;
-}
-
-void VIC20System::set_framebuffer(uint32_t* buffer, int width, int height) {
-    rgba_framebuffer_ = buffer;
-    rgba_width_ = width;
-    rgba_height_ = height;
-    
-    // Update VIC chip with new framebuffer (critical for display!)
-    if (vic_ && buffer) {
-        printf("VIC20: Setting framebuffer on VIC chip: %dx%d buffer=%p\n", width, height, (void*)buffer);
-        vic_->set_framebuffer(buffer, width, height);
-    } else {
-        printf("VIC20: Warning - cannot set framebuffer (vic_=%p buffer=%p)\n", (void*)vic_, (void*)buffer);
-    }
 }
 
 // ============================================================================

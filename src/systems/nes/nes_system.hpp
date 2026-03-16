@@ -179,9 +179,7 @@ public:
     bool load_file(const char* filepath) override;
     
     // System interface - Display
-    uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
-    void set_framebuffer(uint32_t* buffer, int width, int height) override;
     
     // System interface - Input
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
@@ -244,6 +242,10 @@ private:
     /** Handle NSF player keyboard shortcuts (subtune selection).
      *  Returns true if the key was consumed (should not be forwarded). */
     bool handle_nsf_player_key(SDL_Keycode key);
+
+    /// Copy the PPU's internal 256×240 screen into the GUI-provided
+    /// RGBA framebuffer so the host can display the rendered frame.
+    void blit_ppu_to_framebuffer();
 };
 
 // Convenience type aliases

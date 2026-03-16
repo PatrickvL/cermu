@@ -222,9 +222,7 @@ public:
     void run_frame() override;
 
     // Display
-    uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
-    void set_framebuffer(uint32_t* buffer, int width, int height) override;
 
     // Audio
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
@@ -270,6 +268,7 @@ private:
     // Chip instances
     CSG7501* cpu_ = nullptr;          // MOS 7501/8501 CPU — owned by board_
     ted7360_t* ted_;
+    IndexedFrameBuffer display_;       // Display output for GPU indexed rendering
     bus_state_t bus_state_;
 
     // ── Memory bus (declarative manifest + page-pointer dispatch) ────────

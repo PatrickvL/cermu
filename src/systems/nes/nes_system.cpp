@@ -400,7 +400,7 @@ void NintendoSystem<V>::run_frame() {
 
     // Copy PPU screen into the GUI-provided framebuffer so the emu
     // thread's snapshot sees the rendered frame.
-    get_framebuffer();
+    blit_ppu_to_framebuffer();
 
     // Tick all attached peripheral devices
     tick_peripherals();
@@ -620,21 +620,19 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
 }
 
 template<NintendoVariant V>
-uint32_t* NintendoSystem<V>::get_framebuffer() {
-    if (!ppu_ || !rgba_framebuffer_) return rgba_framebuffer_;
+void NintendoSystem<V>::blit_ppu_to_framebuffer() {
+    if (!ppu_ || !rgba_framebuffer_) return;
     
     // Copy full 256×240 PPU screen into the GUI framebuffer.
     // The PPU handles PPUMASK-based left-column hiding internally
     // (rendering backdrop color when sprites/BG are masked), so no
     // additional cropping is needed here.
     const std::vector<uint32_t>& nes_screen = ppu_->get_screen();
-    if (!nes_screen.empty() && rgba_framebuffer_) {
+    if (!nes_screen.empty()) {
         constexpr int W = 256;
         constexpr int H = 240;
         std::memcpy(rgba_framebuffer_, nes_screen.data(), W * H * sizeof(uint32_t));
     }
-    
-    return rgba_framebuffer_;
 }
 
 template<NintendoVariant V>
@@ -643,12 +641,7 @@ void NintendoSystem<V>::get_display_dimensions(int* width, int* height) const {
     *height = 240;
 }
 
-template<NintendoVariant V>
-void NintendoSystem<V>::set_framebuffer(uint32_t* buffer, int width, int height) {
-    rgba_framebuffer_ = buffer;
-    rgba_width_ = width;
-    rgba_height_ = height;
-}
+
 
 template<NintendoVariant V>
 void NintendoSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {

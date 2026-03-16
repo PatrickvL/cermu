@@ -130,9 +130,7 @@ public:
     void run_frame() override;
     
     // Display
-    uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
-    void set_framebuffer(uint32_t* buffer, int width, int height) override;
     
     // Input
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
@@ -146,6 +144,7 @@ public:
 
 private:
     vic20_bus_t bus_;
+    IndexedFrameBuffer display_;  // Display output for GPU indexed rendering
     
     // ── Memory bus (declarative manifest + page-pointer dispatch) ────────
     using Bus = MemoryBus<VIC20BusTraits::Spec>;

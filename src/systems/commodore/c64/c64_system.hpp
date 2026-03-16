@@ -39,9 +39,7 @@ public:
     void reset() override;
     void tick() override;
     void run_frame() override;
-    uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
-    void set_framebuffer(uint32_t* buffer, int width, int height) override;
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
     void handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) override;
     void handle_controller_event(int controller, int button, bool pressed) override;
@@ -136,6 +134,7 @@ public:
 
 private:
     bool initialized_ = false;          // True when initialize() has succeeded
+    IndexedFrameBuffer display_;         // Display output for GPU indexed rendering
     vicii_standard_t created_vicii_standard_ = VIC_PAL;  // Actual VIC-II standard at creation time
     sid_revision_t pending_sid_revision_ = SID_REVISION_6581_R4AR;  // Applied after SID creation
 

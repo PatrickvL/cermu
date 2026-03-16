@@ -160,7 +160,7 @@ private:
     mc6845_t*   crtc_ = nullptr;    // MC6845 CRTC — display timing
 
     // Display — own framebuffer + GPU indexed rendering via CRTC
-    DisplaySurface display_;
+    IndexedFrameBuffer display_;
 
     // Audio state — CB2 square wave speaker
     bool     speaker_state_ = false;    // Current CB2 output level

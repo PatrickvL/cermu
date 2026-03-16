@@ -109,9 +109,7 @@ public:
 
     bool load_file(const char* filepath) override;
 
-    uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
-    void set_framebuffer(uint32_t* buffer, int width, int height) override;
 
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
     void set_audio_sample_rate(int sample_rate_hz) override;
@@ -146,8 +144,7 @@ private:
     MainBoard board_{kAcornAtomChips};
 
     // ── Display ──────────────────────────────────────────────────────────
-    uint32_t framebuffer_[acorn_atom_constants::FB_WIDTH *
-                          acorn_atom_constants::FB_HEIGHT] = {};
+    IndexedFrameBuffer display_;
 
     // ── Keyboard ─────────────────────────────────────────────────────────
     uint8_t keyboard_matrix_[acorn_atom_constants::KEYBOARD_ROWS] = {};

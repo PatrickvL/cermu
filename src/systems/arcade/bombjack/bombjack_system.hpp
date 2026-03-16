@@ -160,7 +160,7 @@ private:
     bool    sound_nmi_   = false;       // NMI to sound CPU on latch write
 
     // ── Display ──────────────────────────────────────────────────────────
-    DisplaySurface display_;
+    IndexedFrameBuffer display_;
     uint8_t bg_image_select_ = 0;       // Active background (0–4)
 
     // ── Inputs ───────────────────────────────────────────────────────────

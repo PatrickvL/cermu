@@ -212,13 +212,13 @@ bool BBCMicroSystem::initialize() {
     crtc_->on_vsync = [this]() { this->crtc_vsync(); };
     crtc_->on_hsync = [this]() { this->crtc_hsync(); };
 
-    // GPU indexed palette rendering — chip-owned pattern (VIDPROC owns pixel + indices)
+    // GPU indexed palette rendering — display_ owns palette + RGBA fallback.
     vidproc_.set_memory(memory_);
-    vidproc_.pixel.set_framebuffer(framebuffer_,
-        bbc_constants::DISPLAY_WIDTH, bbc_constants::DISPLAY_HEIGHT);
-    register_gpu_palette(&vidproc_.pixel,
-        bbc_vidproc_t::get_palette(),
-        bbc_vidproc_t::get_palette_size());
+    display_.init(bbc_constants::DISPLAY_WIDTH, bbc_constants::DISPLAY_HEIGHT);
+    display_.set_palette(bbc_vidproc_t::get_palette(),
+                         bbc_vidproc_t::get_palette_size());
+    vidproc_.set_display(&display_);
+    register_display(&display_);
 
     // ---- Sound (SN76489) ----
     psg_->init();
@@ -528,20 +528,6 @@ void BBCMicroSystem::crtc_vsync() {
 
 void BBCMicroSystem::crtc_hsync() {
     // HSYNC — new scan line (no action needed for basic rendering)
-}
-
-// ============================================================================
-// FRAMEBUFFER ACCESS — chip-owned pattern (forward to VIDPROC pixel unit)
-// ============================================================================
-
-uint32_t* BBCMicroSystem::get_framebuffer() {
-    return rgba_framebuffer_ ? rgba_framebuffer_ : framebuffer_;
-}
-
-void BBCMicroSystem::set_framebuffer(uint32_t* buffer, int width, int height) {
-    System::set_framebuffer(buffer, width, height);
-    vidproc_.pixel.set_framebuffer(buffer ? buffer : framebuffer_,
-        bbc_constants::DISPLAY_WIDTH, bbc_constants::DISPLAY_HEIGHT);
 }
 
 // ============================================================================

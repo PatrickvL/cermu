@@ -653,7 +653,11 @@ bool Commodore264System<V>::initialize() {
     apply_ted_video_banking();
 
     // GPU indexed palette rendering — 128-color TED palette
-    register_gpu_palette(&ted_->pixel, ted7360_t::get_palette(), 128);
+    display_.init(c16_constants::DISPLAY_WIDTH,
+                  c16_constants::DISPLAY_HEIGHT);
+    display_.set_palette(ted7360_t::get_palette(), 128);
+    ted_->set_display(&display_);
+    register_display(&display_);
 
     initialized_ = true;
     return true;
@@ -864,26 +868,9 @@ void Commodore264System<V>::inject_keys(const char* str) {
 // ============================================================================
 
 template<C264SeriesVariant V>
-uint32_t* Commodore264System<V>::get_framebuffer() {
-    return rgba_framebuffer_;
-}
-
-template<C264SeriesVariant V>
 void Commodore264System<V>::get_display_dimensions(int* width, int* height) const {
     *width = c16_constants::DISPLAY_WIDTH;
     *height = c16_constants::DISPLAY_HEIGHT;
-}
-
-template<C264SeriesVariant V>
-void Commodore264System<V>::set_framebuffer(uint32_t* buffer, int width, int height) {
-    rgba_framebuffer_ = buffer;
-    rgba_width_ = width;
-    rgba_height_ = height;
-    
-    // Set TED framebuffer for pixel output
-    if (ted_) {
-        ted_->set_framebuffer(buffer, width, height);
-    }
 }
 
 // ============================================================================

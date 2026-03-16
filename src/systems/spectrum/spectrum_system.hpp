@@ -160,9 +160,7 @@ public:
     bool load_file(const char* filepath) override;
 
     // Display
-    uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
-    void set_framebuffer(uint32_t* buffer, int width, int height) override;
 
     // Audio
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
@@ -222,11 +220,9 @@ private:
     // DISPLAY
     // ========================================================================
 
-    // Fallback framebuffer for headless/test operation.
-    // GUI provides external buffer via set_framebuffer(); the ULA chip's
-    // pixel unit writes to whichever buffer is active.
-    uint32_t framebuffer_[spectrum_constants::TOTAL_WIDTH *
-                          spectrum_constants::TOTAL_HEIGHT]{};
+    // Display output — IndexedFrameBuffer owns palette + RGBA fallback.
+    // ULA chip's pixel unit writes scanlines; display_ handles GPU routing.
+    IndexedFrameBuffer display_;
 
     // ========================================================================
     // AUDIO

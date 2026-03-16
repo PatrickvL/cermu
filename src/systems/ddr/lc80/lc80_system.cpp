@@ -120,7 +120,6 @@ void LC80System::run_frame() {
 }
 
 bool LC80System::load_file(const char*) { return false; }
-uint32_t* LC80System::get_framebuffer() { return framebuffer_; }
 void LC80System::get_display_dimensions(int* w, int* h) const { *w = FB_WIDTH; *h = FB_HEIGHT; }
 void LC80System::set_framebuffer(uint32_t*, int, int) {}
 uint32_t LC80System::get_audio_samples(float*, uint32_t) { return 0; }

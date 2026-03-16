@@ -7,6 +7,7 @@
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
+#include "utils/tile_decoder.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -285,31 +286,12 @@ void NamcoArcadeSystem<G>::render_frame() {
 
         const uint8_t* tile = chars + tile_idx * 16;
 
-        // Decode 8×8 tile pixels
+        // Decode 8×8 tile via shared Namco interleaved 2bpp decoder
         int fb_x = sx * 8;
         int fb_y = sy * 8;
-        for (int ty = 0; ty < 8; ty++) {
-            uint8_t* dst = display_.indices() + (fb_y + ty) * namco_arcade_constants::FB_WIDTH + fb_x;
-            // Right half (x=4-7) in bytes 0-7, left half (x=0-3) in bytes 8-15
-            uint8_t right = tile[ty];       // pixels x=4-7
-            uint8_t left  = tile[ty + 8];   // pixels x=0-3
-            // Left half (x=0-3): plane 0 in bits [3:0], plane 1 in bits [7:4]
-            for (int tx = 0; tx < 4; tx++) {
-                uint8_t p0 = (left >> tx) & 1;
-                uint8_t p1 = (left >> (tx + 4)) & 1;
-                uint8_t pixel = p0 | (p1 << 1);
-                uint8_t pal_idx = ctable[color_attr * 4 + pixel];
-                dst[3 - tx] = pal_idx & 0x1F;
-            }
-            // Right half (x=4-7)
-            for (int tx = 0; tx < 4; tx++) {
-                uint8_t p0 = (right >> tx) & 1;
-                uint8_t p1 = (right >> (tx + 4)) & 1;
-                uint8_t pixel = p0 | (p1 << 1);
-                uint8_t pal_idx = ctable[color_attr * 4 + pixel];
-                dst[7 - tx] = pal_idx & 0x1F;
-            }
-        }
+        uint8_t* dst = display_.indices() + fb_y * namco_arcade_constants::FB_WIDTH + fb_x;
+        tile_decoder::decode_namco_tile(tile, dst, namco_arcade_constants::FB_WIDTH,
+                                        ctable, color_attr);
     }
 
     display_.flush();
