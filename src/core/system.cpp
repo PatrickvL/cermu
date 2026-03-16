@@ -73,24 +73,11 @@ void System::set_framebuffer(uint32_t* buffer, int width, int height) {
     rgba_framebuffer_ = buffer;
     rgba_width_ = width;
     rgba_height_ = height;
-    // If a DisplaySurface is registered, forward the external framebuffer to
-    // its pixel unit so flush_indexed_frame writes directly there.
-    // When buffer is null, fall back to the DisplaySurface's own buffer.
-    if (display_surface_) {
-        if (buffer) {
-            display_surface_->pixel().set_framebuffer(buffer, width, height);
-        } else {
-            display_surface_->pixel().set_framebuffer(
-                display_surface_->framebuffer(),
-                display_surface_->width(),
-                display_surface_->height());
-        }
+    // Forward to the registered IndexedFrameBuffer so it tracks the
+    // external RGBA destination (or reverts to its own internal buffer).
+    if (display_) {
+        display_->set_framebuffer(buffer, width, height);
     }
-}
-
-uint32_t* System::get_framebuffer() {
-    if (display_surface_) return display_surface_->framebuffer();
-    return rgba_framebuffer_;
 }
 
 // ============================================================================

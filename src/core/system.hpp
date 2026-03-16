@@ -16,8 +16,7 @@
 // Forward-declare format descriptor so SystemDescriptor can reference it
 struct format_descriptor_t;
 
-#include "chip/video/video_pixel_unit.hpp"
-#include "core/display_surface.hpp"
+#include "core/indexed_frame_buffer.hpp"
 #include "core/board_base.hpp"
 
 /**
@@ -169,34 +168,16 @@ protected:
     int rgba_width_;
     int rgba_height_;
 
-    // GPU indexed palette rendering — stored by register_gpu_palette().
-    VideoPixelUnit* gpu_pixel_unit_ = nullptr;
-    const uint32_t* gpu_palette_    = nullptr;
-    int             gpu_palette_size_ = 0;
+    // Display output — set by register_display() during initialize().
+    // When non-null, GPU palette accessors and set_framebuffer()
+    // delegate through this automatically.
+    IndexedFrameBuffer* display_ = nullptr;
 
-    // DisplaySurface-based rendering — set by register_display().
-    // When non-null, GPU palette accessors, set_framebuffer(), and
-    // get_framebuffer() delegate through this automatically.
-    DisplaySurface* display_surface_ = nullptr;
-
-    /// Register a DisplaySurface for GPU indexed rendering.
-    /// Replaces register_gpu_palette() for systems that use DisplaySurface.
-    /// Also enables automatic set_framebuffer() and get_framebuffer() delegation.
-    void register_display(DisplaySurface* surface) {
-        display_surface_ = surface;
-        gpu_pixel_unit_  = &surface->pixel();
-        gpu_palette_     = surface->palette_data();
-        gpu_palette_size_ = surface->palette_size();
-    }
-
-    /// Register the video chip's pixel unit and palette for GPU indexed
-    /// rendering.  Call once in initialize() after the video chip is created.
-    /// Systems that don't call this stay on the default CPU path.
-    void register_gpu_palette(VideoPixelUnit* pixel_unit,
-                              const uint32_t* palette, int palette_size) {
-        gpu_pixel_unit_  = pixel_unit;
-        gpu_palette_     = palette;
-        gpu_palette_size_ = palette_size;
+    /// Register an IndexedFrameBuffer as this system's display output.
+    /// Call once in initialize() after the display is created and its
+    /// palette has been set.  Enables GPU indexed rendering automatically.
+    void register_display(IndexedFrameBuffer* display) {
+        display_ = display;
     }
     
     // Emulation state
@@ -477,7 +458,6 @@ public:
     /// Returns empty string when not applicable.
     virtual std::string get_subtitle_info() const { return {}; }
 
-    virtual uint32_t* get_framebuffer();
     virtual void get_display_dimensions(int* width, int* height) const = 0;
     virtual void handle_keyboard_event(SDL_Keycode key, bool pressed) = 0;
     virtual void render_system_menu_items() = 0;
@@ -545,42 +525,39 @@ public:
     // eliminates per-pixel CPU work and reduces the texture upload from
     // 4 bytes/pixel (RGBA) to 1 byte/pixel (R8).
     //
-    // Systems opt in by calling register_gpu_palette() during initialize(),
-    // providing a pointer to the video chip's VideoPixelUnit and the
-    // palette data.  The base class implements all accessors automatically.
+    // Systems opt in by calling register_display() during initialize(),
+    // providing an IndexedFrameBuffer with a palette set.  The base
+    // class implements all accessors automatically.
     //
     // The host calls set_index_buffer() after set_framebuffer() when the
-    // system advertises support.  The base class forwards it to the
-    // registered VideoPixelUnit.
+    // system advertises support.  Scanline-based systems override
+    // set_index_buffer() to also forward to their chip's pixel unit.
 
     /// Whether this system supports GPU indexed palette rendering.
     bool supports_gpu_indexed_rendering() const {
-        return display_surface_ ? display_surface_->palette_size() > 0
-                                : gpu_palette_ != nullptr;
+        return display_ && display_->palette_size() > 0;
     }
 
     /// Number of palette entries (e.g. 16 for C64, 128 for TED/TIA).
     int get_gpu_palette_size() const {
-        return display_surface_ ? display_surface_->palette_size()
-                                : gpu_palette_size_;
+        return display_ ? display_->palette_size() : 0;
     }
 
     /// Pointer to the RGBA palette array (must have get_gpu_palette_size() entries).
     /// The host uploads this to a 256×1 GPU texture once per frame.
     const uint32_t* get_gpu_palette_data() const {
-        return display_surface_ ? display_surface_->palette_data()
-                                : gpu_palette_;
+        return display_ ? display_->palette_data() : nullptr;
     }
 
-    /// Pointer to the full-frame index buffer populated by flush_indexed_line().
+    /// Pointer to the full-frame index buffer (when GPU indexed mode is active).
     const uint8_t* get_index_buffer() const {
-        return gpu_pixel_unit_ ? gpu_pixel_unit_->index_buffer : nullptr;
+        return display_ ? display_->index_buffer() : nullptr;
     }
 
     /// Provide a host-allocated index buffer for GPU indexed rendering.
-    /// The base class forwards this to the registered VideoPixelUnit.
-    void set_index_buffer(uint8_t* buffer) {
-        if (gpu_pixel_unit_) gpu_pixel_unit_->set_index_buffer(buffer);
+    /// Scanline-based systems override to also forward to their chip.
+    virtual void set_index_buffer(uint8_t* buffer) {
+        if (display_) display_->set_index_buffer(buffer);
     }
 };
 

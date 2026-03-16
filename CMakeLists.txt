@@ -254,7 +254,6 @@ set(CORE_SOURCES
     src/core/system.cpp
     src/utils/stb_impl.cpp
     src/core/system_registry.cpp
-    src/core/framebuffer_renderer.cpp
     src/core/text_terminal.cpp
     src/core/port.cpp
     src/core/device_registry.cpp
