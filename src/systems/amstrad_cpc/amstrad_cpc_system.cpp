@@ -129,6 +129,14 @@ bool AmstradCPCSystem<M>::initialize() {
     };
     ppi_.init();
     ay_.init();
+    // AY clock = CPU / 4 = 1 MHz
+    ay_.set_clock_frequency(amstrad_cpc_constants::CPU_FREQ_HZ / 4);
+    ay_.set_audio_sample_rate(amstrad_cpc_constants::DEFAULT_SAMPLE_RATE);
+
+    // Wire AY to audio thread — cpu_cycles_per_tick=4 (AY = CPU / 4)
+    ay_adapter_ = std::make_unique<WriteOnlySynthAdapter<ay_3_8910_t, true>>(&ay_, 4);
+    audio_thread_.register_engine(ay_adapter_.get());
+    audio_thread_.start();
 
     load_roms();
     // ── Cache RAM chip pointer for rendering ───────────────────────
@@ -149,15 +157,22 @@ bool AmstradCPCSystem<M>::initialize() {
 }
 
 template<CPCModel M>
-void AmstradCPCSystem<M>::shutdown() { cpu_ = nullptr; system_ready_ = false; }
+void AmstradCPCSystem<M>::shutdown() {
+    audio_thread_.stop();
+    cpu_ = nullptr;
+    system_ready_ = false;
+}
 
 template<CPCModel M>
 void AmstradCPCSystem<M>::reset() {
     if (!cpu_) return;
+    audio_thread_.stop();
     // Reset all manifest chips (CRTC, PPI, AY, Gate Array; RAM/ROM are no-op)
     board_.reset_chips();
+    if (ay_adapter_) ay_adapter_->reset();
     pins_ = board_.cpu_chip()->reset(pins_);
     configure_bus_memory_map();
+    audio_thread_.start();
 }
 
 // ============================================================================
@@ -186,10 +201,10 @@ void AmstradCPCSystem<M>::tick() {
         BUS_CLR_BIT(pins_, BUS_IRQ_BIT);
     }
 
-    // CRTC + AY tick at 1 MHz (CPU clock / 4)
+    // CRTC ticks at 1 MHz (CPU clock / 4).
+    // AY synthesis is driven by the audio thread — no direct tick here.
     if ((total_cycles_ & 3) == 0) {
         crtc_.tick();
-        ay_.tick();
     }
 
     total_cycles_++;
@@ -198,6 +213,7 @@ void AmstradCPCSystem<M>::tick() {
 template<CPCModel M>
 void AmstradCPCSystem<M>::run_frame() {
     for (uint32_t i = 0; i < amstrad_cpc_constants::TSTATES_PER_FRAME; ++i) tick();
+    audio_thread_.signal_progress(total_cycles_);
     render_frame();
 }
 
@@ -205,8 +221,14 @@ template<CPCModel M> bool AmstradCPCSystem<M>::load_file(const char*) { return f
 template<CPCModel M> void AmstradCPCSystem<M>::get_display_dimensions(int* w, int* h) const {
     *w = amstrad_cpc_constants::FB_WIDTH; *h = amstrad_cpc_constants::FB_HEIGHT;
 }
-template<CPCModel M> uint32_t AmstradCPCSystem<M>::get_audio_samples(float*, uint32_t) { return 0; }
-template<CPCModel M> void AmstradCPCSystem<M>::set_audio_sample_rate(int hz) { audio_sample_rate_ = hz; }
+template<CPCModel M> uint32_t AmstradCPCSystem<M>::get_audio_samples(float* buffer, uint32_t max_samples) {
+    if (!buffer || max_samples == 0) return 0;
+    return ay_.audio_read(buffer, max_samples);
+}
+template<CPCModel M> void AmstradCPCSystem<M>::set_audio_sample_rate(int hz) {
+    audio_sample_rate_ = hz;
+    ay_.set_audio_sample_rate(hz);
+}
 template<CPCModel M> void AmstradCPCSystem<M>::handle_keyboard_event(SDL_Keycode, bool) {}
 template<CPCModel M> void AmstradCPCSystem<M>::render_system_menu_items() {}
 template<CPCModel M> void AmstradCPCSystem<M>::render_configuration_ui() {}
@@ -380,9 +402,13 @@ bus_state_t AmstradCPCSystem<M>::io_tick(bus_state_t pins) {
             bool bdir = (port_c >> 7) & 1;
             bool bc1  = (port_c >> 6) & 1;
             if (bdir && bc1) {
+                ay_latch_ = ppi_.get_port_a_output() & 0x0F;
                 ay_.latch_address(ppi_.get_port_a_output());
             } else if (bdir && !bc1) {
-                ay_.write_register(ppi_.get_port_a_output());
+                // Shadow write for immediate readback, enqueue for audio thread
+                uint8_t val = ppi_.get_port_a_output();
+                ay_.write_register_shadow(val);
+                ay_adapter_->cmd_queue().push_write(total_cycles_, ay_latch_, val);
             } else if (!bdir && bc1) {
                 ppi_.set_port_a_input(ay_.read_register());
             }

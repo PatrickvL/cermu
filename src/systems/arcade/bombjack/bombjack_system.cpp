@@ -72,7 +72,20 @@ bool BombJackSystem::initialize() {
     palette_ram_chip_ = main_board_.chip_as<RAMChip>(bj_main::kPaletteRam);
     main_pins_  = main_board_.cpu_chip()->init();
     sound_pins_ = sound_board_.cpu_chip()->init();
-    for (auto& ay : ay_) ay.init();
+    for (auto& ay : ay_) {
+        ay.init();
+        // AY clock = sound CPU / 2 = 1.5 MHz
+        ay.set_clock_frequency(1500000);
+        ay.set_audio_sample_rate(bombjack_constants::DEFAULT_SAMPLE_RATE);
+    }
+
+    // Wire 3× AY to audio thread — cpu_cycles_per_tick=2 (AY = sound CPU / 2)
+    for (int i = 0; i < 3; i++) {
+        ay_adapter_[i] = std::make_unique<WriteOnlySynthAdapter<ay_3_8910_t, true>>(
+            &ay_[i], 2);
+        audio_thread_.register_engine(ay_adapter_[i].get());
+    }
+    audio_thread_.start();
 
     load_roms();
 
@@ -91,6 +104,7 @@ bool BombJackSystem::initialize() {
 }
 
 void BombJackSystem::shutdown() {
+    audio_thread_.stop();
     main_cpu_  = nullptr;
     sound_cpu_ = nullptr;
     system_ready_ = false;
@@ -100,9 +114,15 @@ void BombJackSystem::reset() {
     if (!main_board_.cpu_chip() || !sound_board_.cpu_chip()) return;
     main_pins_  = main_board_.cpu_chip()->reset(main_pins_);
     sound_pins_ = sound_board_.cpu_chip()->reset(sound_pins_);
-    for (auto& ay : ay_) ay.reset();
+    audio_thread_.stop();
+    for (int i = 0; i < 3; i++) {
+        ay_[i].reset();
+        if (ay_adapter_[i]) ay_adapter_[i]->reset();
+    }
+    audio_thread_.start();
     sound_latch_ = 0;
     sound_nmi_ = false;
+    sound_cycles_ = 0;
 }
 
 void BombJackSystem::tick() {
@@ -149,10 +169,9 @@ void BombJackSystem::tick() {
             sound_pins_ = sound_io_tick(sound_pins_);
         }
 
-        // AY chips tick at ~1.5 MHz (sound CPU / 2)
-        if (total_cycles_ & 1) {
-            for (auto& ay : ay_) ay.tick();
-        }
+        // AY synthesis is driven by the audio thread — track sound CPU cycles
+        // for timestamping register writes.
+        sound_cycles_++;
     }
 
     // VBLANK NMI to main CPU (edge-triggered, once per frame)
@@ -168,6 +187,7 @@ void BombJackSystem::tick() {
 
 void BombJackSystem::run_frame() {
     for (uint32_t i = 0; i < bombjack_constants::MAIN_CYCLES_PER_FRAME; ++i) tick();
+    audio_thread_.signal_progress(sound_cycles_);
     decode_palette();
     render_frame();
 }
@@ -176,8 +196,46 @@ bool BombJackSystem::load_file(const char*) { return false; }
 void BombJackSystem::get_display_dimensions(int* w, int* h) const {
     *w = bombjack_constants::FB_WIDTH; *h = bombjack_constants::FB_HEIGHT;
 }
-uint32_t BombJackSystem::get_audio_samples(float*, uint32_t) { return 0; }
-void BombJackSystem::set_audio_sample_rate(int hz) { audio_sample_rate_ = hz; }
+uint32_t BombJackSystem::get_audio_samples(float* buffer, uint32_t max_samples) {
+    if (!buffer || max_samples == 0) return 0;
+
+    // Read minimum available from all 3 AYs for synchronization
+    uint32_t avail = std::min({ay_[0].audio_available(),
+                               ay_[1].audio_available(),
+                               ay_[2].audio_available()});
+    uint32_t count = std::min(avail, max_samples);
+    if (count == 0) return 0;
+
+    // Read first AY into output buffer
+    count = ay_[0].audio_read(buffer, count);
+
+    // Mix in remaining AYs
+    constexpr uint32_t MIX_CHUNK = 256;
+    float tmp[MIX_CHUNK];
+    for (int chip = 1; chip < 3; chip++) {
+        uint32_t remaining = count;
+        uint32_t offset = 0;
+        while (remaining > 0) {
+            uint32_t n = std::min(MIX_CHUNK, remaining);
+            ay_[chip].audio_read(tmp, n);
+            for (uint32_t i = 0; i < n; i++)
+                buffer[offset + i] += tmp[i];
+            offset += n;
+            remaining -= n;
+        }
+    }
+
+    // Normalize: average of 3 channels
+    constexpr float inv3 = 1.0f / 3.0f;
+    for (uint32_t i = 0; i < count; i++)
+        buffer[i] *= inv3;
+
+    return count;
+}
+void BombJackSystem::set_audio_sample_rate(int hz) {
+    audio_sample_rate_ = hz;
+    for (auto& ay : ay_) ay.set_audio_sample_rate(hz);
+}
 void BombJackSystem::handle_keyboard_event(SDL_Keycode, bool) {}
 void BombJackSystem::render_system_menu_items() {}
 void BombJackSystem::render_configuration_ui() {}
@@ -320,10 +378,14 @@ bus_state_t BombJackSystem::sound_io_tick(bus_state_t pins) {
             if (is_read) {
                 BUS_SET_DATA(pins, ay_[ay_idx].read_register());
             } else {
-                ay_[ay_idx].write_register(data);
+                // Shadow write for immediate readback, enqueue for audio thread
+                ay_[ay_idx].write_register_shadow(data);
+                ay_adapter_[ay_idx]->cmd_queue().push_write(
+                    sound_cycles_, ay_latch_[ay_idx], data);
             }
         } else {
             if (!is_read) {
+                ay_latch_[ay_idx] = data & 0x0F;
                 ay_[ay_idx].latch_address(data);
             }
         }

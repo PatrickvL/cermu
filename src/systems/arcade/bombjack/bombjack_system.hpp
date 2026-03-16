@@ -19,7 +19,10 @@
 #include "chip/sound/ay_3_8910.hpp"
 #include "chip/memory/ram_chip.hpp"
 #include "chip/memory/rom_chip.hpp"
+#include "core/audio_thread.hpp"
+#include "utils/write_only_synth_adapter.hpp"
 #include <cstdint>
+#include <memory>
 
 #define BOMBJACK_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
 
@@ -125,6 +128,12 @@ private:
 
     // ── Sound ────────────────────────────────────────────────────────────
     ay_3_8910_t ay_[3];                  // 3× AY-3-8910 PSG
+
+    // ── Audio thread — synthesis runs off the emu thread ────────────────
+    AudioThread audio_thread_;
+    std::unique_ptr<WriteOnlySynthAdapter<ay_3_8910_t, true>> ay_adapter_[3];
+    uint8_t   ay_latch_[3]{};            // Cached latched register per AY (emu thread)
+    uint64_t  sound_cycles_ = 0;         // Monotonic sound-CPU cycle counter (3 MHz)
 
     // Memory chips are auto-created by Board::create_chips() and accessed
     // via board_.chip_as<T>(slot_index).  No manual pointers needed.
