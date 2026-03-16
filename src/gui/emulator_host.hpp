@@ -176,6 +176,7 @@ protected:
     bool show_perf_fps_        = true;
     bool show_perf_speed_      = true;
     bool show_perf_colors_     = false;
+    bool show_perf_audio_      = true;
 
     /// Frame pacing (private to emu thread)
     uint64_t frame_pace_counter_;

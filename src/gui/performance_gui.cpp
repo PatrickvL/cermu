@@ -88,6 +88,8 @@ void EmulatorHost::render_performance_window() {
             show_perf_vblank_ = !show_perf_vblank_;
         if (ImGui::MenuItem("Show Headroom Bar", nullptr, show_perf_headroom_))
             show_perf_headroom_ = !show_perf_headroom_;
+        if (ImGui::MenuItem("Show Audio", nullptr, show_perf_audio_))
+            show_perf_audio_ = !show_perf_audio_;
         if (ImGui::MenuItem("Show VPS", nullptr, show_perf_vps_))
             show_perf_vps_ = !show_perf_vps_;
         if (ImGui::MenuItem("Show FPS", nullptr, show_perf_fps_))
@@ -281,6 +283,133 @@ void EmulatorHost::render_performance_window() {
         ImGui::Dummy(ImVec2(avail_w, bar_h + ImGui::GetTextLineHeight() + 2.0f));
     }
 
+    // ---- Audio Buffer Fill + Generation Time Graph -----------------------
+    if (show_perf_audio_)
+    {
+        static float fill_vals[512];
+        static float gen_vals[512];
+        size_t fill_n = pm.audio_buffer_fill.copy_values(fill_vals, 512);
+        size_t gen_n  = pm.audio_gen_time.copy_values(gen_vals, 512);
+
+        // Fixed 0–100% Y axis for fill; auto-scale for gen time
+        float fill_y_max = 100.0f;
+
+        float gen_y_max = static_cast<float>(
+            std::max(pm.audio_gen_time.average() + 3.0 * pm.audio_gen_time.stddev(), 10.0));
+        // Snap to nice steps
+        if (gen_y_max < 25.0f)       gen_y_max = 25.0f;
+        else if (gen_y_max < 50.0f)  gen_y_max = 50.0f;
+        else if (gen_y_max < 100.0f) gen_y_max = 100.0f;
+        else if (gen_y_max < 250.0f) gen_y_max = 250.0f;
+        else if (gen_y_max < 500.0f) gen_y_max = 500.0f;
+        else                          gen_y_max = std::ceil(gen_y_max / 100.0f) * 100.0f;
+
+        float label_margin = ImGui::CalcTextSize("100%").x + ImGui::CalcTextSize("W").x + 4.0f;
+        float graph_w = ImGui::GetContentRegionAvail().x - label_margin;
+        float graph_h = 80.0f;
+
+        ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
+        ImVec2 graph_origin = ImVec2(cursor_pos.x + label_margin, cursor_pos.y);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+
+        // Dark graph background + border
+        dl->AddRectFilled(graph_origin,
+            ImVec2(graph_origin.x + graph_w, graph_origin.y + graph_h),
+            IM_COL32(10, 10, 10, 180), 4.0f);
+        dl->AddRect(graph_origin,
+            ImVec2(graph_origin.x + graph_w, graph_origin.y + graph_h),
+            IM_COL32(140, 140, 140, 200), 4.0f);
+
+        // Y-axis ticks for fill % (left side)
+        float notch_w = ImGui::CalcTextSize("W").x;
+        float label_h = ImGui::GetTextLineHeight();
+        ImU32 tick_col = IM_COL32(140, 140, 140, 200);
+        const char* fill_ticks[] = {"25%", "50%", "75%"};
+        float fill_fracs[] = {0.25f, 0.50f, 0.75f};
+        for (int i = 0; i < 3; i++) {
+            float y_pos = graph_origin.y + graph_h * (1.0f - fill_fracs[i]);
+            dl->AddLine(
+                ImVec2(graph_origin.x - notch_w, y_pos),
+                ImVec2(graph_origin.x, y_pos),
+                tick_col, 1.0f);
+            dl->AddText(
+                ImVec2(graph_origin.x - notch_w - ImGui::CalcTextSize(fill_ticks[i]).x - 2.0f,
+                       y_pos - label_h * 0.5f),
+                IM_COL32(220, 220, 220, 220), fill_ticks[i]);
+            // Faint horizontal guide lines
+            dl->AddLine(
+                ImVec2(graph_origin.x, y_pos),
+                ImVec2(graph_origin.x + graph_w, y_pos),
+                IM_COL32(80, 80, 80, 80), 1.0f);
+        }
+
+        // Plot helpers
+        auto plot_fill = [&](const float* vals, size_t n, ImU32 color) {
+            if (n < 2) return;
+            float x_step = graph_w / static_cast<float>(n - 1);
+            for (size_t i = 1; i < n; i++) {
+                float x0 = graph_origin.x + x_step * static_cast<float>(i - 1);
+                float x1 = graph_origin.x + x_step * static_cast<float>(i);
+                float f0 = std::min(vals[i - 1] / fill_y_max, 1.0f);
+                float f1 = std::min(vals[i] / fill_y_max, 1.0f);
+                dl->AddLine(
+                    ImVec2(x0, graph_origin.y + graph_h * (1.0f - f0)),
+                    ImVec2(x1, graph_origin.y + graph_h * (1.0f - f1)),
+                    color, 1.5f);
+            }
+        };
+        auto plot_gen = [&](const float* vals, size_t n, ImU32 color) {
+            if (n < 2) return;
+            float x_step = graph_w / static_cast<float>(n - 1);
+            for (size_t i = 1; i < n; i++) {
+                float x0 = graph_origin.x + x_step * static_cast<float>(i - 1);
+                float x1 = graph_origin.x + x_step * static_cast<float>(i);
+                float f0 = std::min(vals[i - 1] / gen_y_max, 1.0f);
+                float f1 = std::min(vals[i] / gen_y_max, 1.0f);
+                dl->AddLine(
+                    ImVec2(x0, graph_origin.y + graph_h * (1.0f - f0)),
+                    ImVec2(x1, graph_origin.y + graph_h * (1.0f - f1)),
+                    color, 1.5f);
+            }
+        };
+
+        ImU32 col_fill = IM_COL32(100, 220, 100, 220);  // green
+        ImU32 col_gen  = IM_COL32(220, 100, 220, 200);  // magenta
+        plot_fill(fill_vals, fill_n, col_fill);
+        plot_gen(gen_vals, gen_n, col_gen);
+
+        // Legend (bottom-right inside graph)
+        {
+            float sq = ImGui::GetTextLineHeight() - 2.0f;
+            float lh = ImGui::GetTextLineHeightWithSpacing();
+            float lp = 5.0f;
+
+            char lb1[48], lb2[48];
+            snprintf(lb1, sizeof(lb1), "Fill %%  (avg %.0f%%)", pm.audio_buffer_fill.average());
+            snprintf(lb2, sizeof(lb2), "Gen \xc2\xb5s (avg %.0f)", pm.audio_gen_time.average());
+            ImVec2 s1 = ImGui::CalcTextSize(lb1);
+            ImVec2 s2 = ImGui::CalcTextSize(lb2);
+            float lw = std::max(s1.x, s2.x) + sq + 6.0f + lp * 2.0f;
+            float lht = lh * 2.0f + lp * 2.0f;
+
+            float lx = graph_origin.x + graph_w - lw - 3.0f;
+            float ly = graph_origin.y + graph_h - lht - 3.0f;
+            dl->AddRectFilled(ImVec2(lx, ly), ImVec2(lx + lw, ly + lht),
+                              IM_COL32(0, 0, 0, 150), 3.0f);
+            dl->AddRect(ImVec2(lx, ly), ImVec2(lx + lw, ly + lht),
+                        IM_COL32(140, 140, 140, 200), 3.0f);
+
+            float ey = ly + lp;
+            dl->AddRectFilled(ImVec2(lx + lp, ey + 1), ImVec2(lx + lp + sq, ey + 1 + sq), col_fill);
+            dl->AddText(ImVec2(lx + lp + sq + 4, ey), IM_COL32(220, 220, 220, 255), lb1);
+            ey += lh;
+            dl->AddRectFilled(ImVec2(lx + lp, ey + 1), ImVec2(lx + lp + sq, ey + 1 + sq), col_gen);
+            dl->AddText(ImVec2(lx + lp + sq + 4, ey), IM_COL32(220, 220, 220, 255), lb2);
+        }
+
+        ImGui::Dummy(ImVec2(label_margin + graph_w, graph_h));
+    }
+
     // Capture window bounds before ending, for stat boxes below
     ImVec2 win_pos  = ImGui::GetWindowPos();
     ImVec2 win_size = ImGui::GetWindowSize();
@@ -307,7 +436,7 @@ void EmulatorHost::render_performance_window() {
             const char* lines[3];
             ImVec4      colors[3];
         };
-        char l_vps[3][32], l_fps[3][32], l_spd[3][32];
+        char l_vps[3][32], l_fps[3][32], l_spd[3][32], l_aud[3][32];
         snprintf(l_vps[0], 32, "VPS:%7.2f",        vps);
         snprintf(l_vps[1], 32, "dt:%6.2fms",       pm.frame_interval.average());
         snprintf(l_vps[2], 32, "\xc2\xa0\xc2\xb1:%6.2fms", pm.frame_interval.stddev());
@@ -318,15 +447,24 @@ void EmulatorHost::render_performance_window() {
         snprintf(l_spd[0], 32, "Speed:%4.0f%%",    pm.speed_percent);
         snprintf(l_spd[1], 32, "Max:%6.0f%%",      pm.max_speed_percent);
         l_spd[2][0] = '\0';
+        uint32_t underruns = pm.audio_underruns.load(std::memory_order_relaxed);
+        uint32_t overruns  = pm.audio_overruns.load(std::memory_order_relaxed);
+        snprintf(l_aud[0], 32, "Buf:%5.0f%%",      pm.audio_buffer_fill.average());
+        snprintf(l_aud[1], 32, "Gen:%5.0f\xc2\xb5s", pm.audio_gen_time.average());
+        snprintf(l_aud[2], 32, "U:%u O:%u",        underruns, overruns);
+        // Colour audio stat box based on underruns
+        ImVec4 aud_col = (underruns == 0) ? cyan_text
+            : ImVec4{1.0f, 0.6f, 0.2f, 1.0f};
 
         // Determine which boxes to show
         struct BoxEntry { BoxCol col; bool visible; float width; };
-        BoxEntry entries[3] = {
+        BoxEntry entries[4] = {
             {{{l_vps[0], l_vps[1], l_vps[2]}, {cyan_text, cyan_text, cyan_text}}, show_perf_vps_, 0.0f},
             {{{l_fps[0], l_fps[1], l_fps[2]}, {cyan_text, cyan_text, cyan_text}}, show_perf_fps_, 0.0f},
             {{{l_spd[0], l_spd[1], l_spd[2]}, {show_perf_colors_ ? sc : cyan_text,
                                                 show_perf_colors_ ? mc : cyan_text,
                                                 cyan_text}}, show_perf_speed_, 0.0f},
+            {{{l_aud[0], l_aud[1], l_aud[2]}, {aud_col, cyan_text, aud_col}}, show_perf_audio_, 0.0f},
         };
 
         // Measure each box width from its content
@@ -382,6 +520,8 @@ void EmulatorHost::render_performance_window() {
                     show_perf_vblank_ = !show_perf_vblank_;
                 if (ImGui::MenuItem("Show Headroom Bar", nullptr, show_perf_headroom_))
                     show_perf_headroom_ = !show_perf_headroom_;
+                if (ImGui::MenuItem("Show Audio", nullptr, show_perf_audio_))
+                    show_perf_audio_ = !show_perf_audio_;
                 if (ImGui::MenuItem("Show VPS", nullptr, show_perf_vps_))
                     show_perf_vps_ = !show_perf_vps_;
                 if (ImGui::MenuItem("Show FPS", nullptr, show_perf_fps_))
@@ -400,7 +540,7 @@ void EmulatorHost::render_performance_window() {
             ImU32 box_bg = IM_COL32(10, 10, 10, 160);
 
             float bx = right_x;
-            for (int b = 2; b >= 0; b--) {
+            for (int b = 3; b >= 0; b--) {
                 if (!entries[b].visible) continue;
                 auto& bdata = entries[b].col;
                 bx -= entries[b].width;

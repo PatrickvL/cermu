@@ -1798,7 +1798,13 @@ void SessionGUI::emu_thread_func() {
         if (samples_needed > 0) {
             if (samples_needed > static_cast<uint32_t>(emu_audio_tmp_.size()))
                 emu_audio_tmp_.resize(samples_needed);
+            uint64_t audio_t0 = SDL_GetPerformanceCounter();
             audio_got = system_->get_audio_samples(emu_audio_tmp_.data(), samples_needed);
+            uint64_t audio_t1 = SDL_GetPerformanceCounter();
+            double audio_us = static_cast<double>(audio_t1 - audio_t0) / freq * 1e6;
+            double now_s = static_cast<double>(audio_t1) / freq;
+            perf_metrics_.audio_gen_time.push(now_s, audio_us);
+            perf_metrics_.audio_samples_total.fetch_add(audio_got, std::memory_order_relaxed);
         }
 
         // ----- Snapshot framebuffer (separate fb_mutex_) -----
