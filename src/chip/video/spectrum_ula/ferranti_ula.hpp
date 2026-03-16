@@ -27,6 +27,7 @@
  */
 
 #include "chip/video/video_chip_base.hpp"
+#include "chip/video/video_pixel_unit.hpp"
 #include "core/system_lines.hpp"
 #include <cstdint>
 #include <cstring>
@@ -219,6 +220,91 @@ public:
     int      scanline()      const { return scanline_; }
     int      t_state_pos()   const { return t_state_; }
 
+    // === Palette ===
+
+    static const uint32_t* get_palette()     { return spectrum_ula::PALETTE; }
+    static int             get_palette_size() { return 16; }
+
+    // === Frame rendering ===
+    //
+    // Renders the full Spectrum display (border + 256×192 bitmap + attributes)
+    // into the internal frame_indices_ buffer, then flushes through the pixel
+    // unit.  The system calls this once per frame, passing a pointer to the
+    // current 6912-byte screen area ($4000-$5AFF).
+    //
+    // This is the real ULA's primary function: converting bitmap+attribute RAM
+    // into a pixel stream.  Moving it here keeps the system tick loop clean.
+
+    void render_frame(const uint8_t* screen_ram) {
+        if (!screen_ram) return;
+
+        const uint8_t border_idx = border_color_;
+        const bool flash = flash_state_;
+
+        constexpr int W  = spectrum_ula::TOTAL_WIDTH;     // 352
+        constexpr int BL = spectrum_ula::BORDER_LEFT;     // 48
+        constexpr int BT = spectrum_ula::BORDER_TOP;      // 48
+        constexpr int SW = spectrum_ula::SCREEN_WIDTH;    // 256
+        constexpr int SH = spectrum_ula::SCREEN_HEIGHT;   // 192
+
+        // Fill top border
+        std::memset(frame_indices_, border_idx, BT * W);
+
+        // Fill bottom border
+        std::memset(frame_indices_ + (BT + SH) * W, border_idx,
+                    (spectrum_ula::TOTAL_HEIGHT - BT - SH) * W);
+
+        // Render screen area (192 lines)
+        const uint8_t* bitmap = screen_ram;
+        const uint8_t* attrs  = screen_ram + 0x1800;
+
+        for (int y = 0; y < SH; ++y) {
+            uint8_t* line = &frame_indices_[(BT + y) * W];
+
+            // Left border
+            std::memset(line, border_idx, BL);
+
+            // Bitmap addressing: the Spectrum interleaves scanlines within each
+            // character row third.
+            // Address bits: [Y7 Y6] [Y2 Y1 Y0] [Y5 Y4 Y3] [X4..X0]
+            uint16_t bmp_offset = ((y & 0xC0) << 5) | ((y & 0x07) << 8) | ((y & 0x38) << 2);
+
+            // Attribute addressing: one byte per 8×8 cell
+            uint16_t attr_row = ((y >> 3) << 5);  // (y / 8) * 32
+
+            for (int col = 0; col < 32; ++col) {
+                uint8_t byte = bitmap[bmp_offset + col];
+                uint8_t attr = attrs[attr_row + col];
+
+                uint8_t ink   = attr & 0x07;
+                uint8_t paper = (attr >> 3) & 0x07;
+                bool    bright = (attr & 0x40) != 0;
+                bool    fl     = (attr & 0x80) != 0;
+
+                // BRIGHT shifts colors into the upper 8 entries of the palette
+                if (bright) { ink += 8; paper += 8; }
+
+                // FLASH swaps ink and paper when flash_state is active
+                if (fl && flash) { uint8_t tmp = ink; ink = paper; paper = tmp; }
+
+                // Render 8 pixels (MSB first) as palette indices
+                uint8_t* px = &line[BL + col * 8];
+                for (int bit = 7; bit >= 0; --bit) {
+                    *px++ = (byte & (1 << bit)) ? ink : paper;
+                }
+            }
+
+            // Right border
+            std::memset(line + BL + SW, border_idx, W - BL - SW);
+        }
+
+        // Flush: GPU mode → index_buffer, CPU mode → RGBA framebuffer
+        pixel.flush_indexed_frame(frame_indices_, spectrum_ula::PALETTE);
+    }
+
+    // VideoPixelUnit — systems set framebuffer/index_buffer on this.
+    VideoPixelUnit pixel;
+
     // === ChipBase GUI virtuals ===
 #ifdef CERMU_HAS_GUI
     ChipLayout* create_chip_layout() const override;
@@ -243,6 +329,10 @@ private:
 
     // Keyboard matrix (8 half-rows × 5 keys, active-low)
     uint8_t   keyboard_state_[8]{};
+
+    // Per-frame index buffer for rendering (one byte per pixel)
+    uint8_t   frame_indices_[spectrum_ula::TOTAL_WIDTH *
+                             spectrum_ula::TOTAL_HEIGHT] = {};
 
     // Register mirror (backed by ChipBase::regs_)
 
