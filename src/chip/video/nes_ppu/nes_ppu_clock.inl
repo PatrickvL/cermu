@@ -534,17 +534,19 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
             }
         }
 
-        // Store combined palette+pixel index directly — no recombination needed.
-        scanline_color_line_[x] = color_idx;
+        // Resolve through palette RAM + mirror — stores NES master color (0-63).
+        // This makes scanline_color_line_[] directly indexable by both the CPU
+        // palette lookup (active_palette_[]) and the GPU indexed shader.
+        scanline_color_line_[x] = palette[pal_mirror_[color_idx]] & 0x3F;
     }
 
     // Flush remaining pixels of the visible scanline to screen buffer.
     // Pixels [0, scanline_flush_x_) were already flushed by mid-scanline
     // palette/mask changes; flush the tail [scanline_flush_x_, 256).
     if (scanline >= 0 && cycle == 257) {
-        if (unlikely(!active_palette_)) rebuild_pixel_lut();
+        if (unlikely(!active_palette_)) rebuild_active_palette();
         if (display_) display_->flush_line_range(
-            scanline, scanline_color_line_, pixel_lut_, scanline_flush_x_, 256);
+            scanline, scanline_color_line_, active_palette_, scanline_flush_x_, 256);
         scanline_flush_x_ = 256;  // Prevent re-flush from HBlank palette writes
     }
 
