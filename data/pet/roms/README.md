@@ -19,6 +19,11 @@ The ROM loader also accepts these alternative names:
 - BASIC ROM: individual chips `901465-23.bin` ($B000), `901465-20.bin` ($C000), `901465-21.bin` ($D000)
 - Kernal ROM: `kernal4.rom`, `kernal.rom`, `901465-22.bin`
 
-## Source
+## Where to Obtain
 
-ROM files can be obtained from the VICE emulator distribution (`data/PET/` directory).
+These ROMs are copyrighted by Commodore and are **not** included in this repository.
+
+- **Cloanto C64 Forever** — officially licensed ROM collections (includes PET)
+  - https://www.c64forever.com/
+- **VICE emulator** — ships ROMs under license from Cloanto (`data/PET/`)
+  - https://vice-emu.sourceforge.io/

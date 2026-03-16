@@ -40,10 +40,11 @@ You can verify your ROM files using these MD5 checksums:
 - Size: 4096 bytes  
 - MD5: `adc7c31e18c7c7413d54802ef2f4193da6c8e6f1`
 
-## Legal Notice
+## Where to Obtain
 
-These ROM files are copyrighted by Commodore and must be obtained legally.
+These ROMs are copyrighted by Commodore and are **not** included in this repository.
 
-## Test ROMs
-
-https://www.zimmers.net/anonftp/pub/cbm/firmware/computers/c64/
+- **Cloanto C64 Forever** — officially licensed ROM collections
+  - https://www.c64forever.com/
+- **VICE emulator** — ships ROMs under license from Cloanto
+  - https://vice-emu.sourceforge.io/
