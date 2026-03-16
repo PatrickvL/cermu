@@ -142,12 +142,13 @@ bool AmstradCPCSystem<M>::initialize() {
     // ── Cache RAM chip pointer for rendering ───────────────────────
     ram_chip_ = board_.template chip_as<RAMChip>(cpc_chips::kRamSlot);
 
-    // ── GPU indexed palette rendering — chip-owned pattern ─────────────
-    gate_array_.pixel.set_framebuffer(framebuffer_,
-        amstrad_cpc_constants::FB_WIDTH, amstrad_cpc_constants::FB_HEIGHT);
-    register_gpu_palette(&gate_array_.pixel,
-        amstrad_gate_array_t::get_palette(),
-        amstrad_gate_array_t::get_palette_size());
+    // ── GPU indexed palette rendering — display_ owns palette + RGBA fallback ───
+    display_.init(amstrad_cpc_constants::FB_WIDTH,
+                  amstrad_cpc_constants::FB_HEIGHT);
+    display_.set_palette(amstrad_gate_array_t::get_palette(),
+                         amstrad_gate_array_t::get_palette_size());
+    gate_array_.set_display(&display_);
+    register_display(&display_);
     // ── Register all manifest chips for Hardware menu ────────────────
     register_bus_chips(board_);
 
@@ -247,22 +248,6 @@ void AmstradCPCSystem<M>::render_frame() {
                         | crtc_.regs_[MC6845_R13_START_ADDR_LO];
 
     gate_array_.render_frame(ram_chip_->data(), crtc_start);
-}
-
-// ============================================================================
-// FRAMEBUFFER ACCESS — chip-owned pattern (forward to Gate Array pixel unit)
-// ============================================================================
-
-template<CPCModel M>
-uint32_t* AmstradCPCSystem<M>::get_framebuffer() {
-    return rgba_framebuffer_ ? rgba_framebuffer_ : framebuffer_;
-}
-
-template<CPCModel M>
-void AmstradCPCSystem<M>::set_framebuffer(uint32_t* buffer, int width, int height) {
-    System::set_framebuffer(buffer, width, height);
-    gate_array_.pixel.set_framebuffer(buffer ? buffer : framebuffer_,
-        amstrad_cpc_constants::FB_WIDTH, amstrad_cpc_constants::FB_HEIGHT);
 }
 
 // ============================================================================

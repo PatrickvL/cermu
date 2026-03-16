@@ -219,14 +219,11 @@ private:
     bool        system_ready_ = false;
 
     // ========================================================================
-    // DISPLAY — chip-owned pattern: Gate Array owns pixel + frame_indices_
+    // DISPLAY — IndexedFrameBuffer owns palette + RGBA fallback.
+    // Gate Array chip writes scanlines; display_ handles GPU routing.
     // ========================================================================
 
-    uint32_t framebuffer_[amstrad_cpc_constants::FB_WIDTH *
-                          amstrad_cpc_constants::FB_HEIGHT] = {};
-
-    uint32_t* get_framebuffer() override;
-    void set_framebuffer(uint32_t* buffer, int width, int height) override;
+    IndexedFrameBuffer display_;
 
     // ========================================================================
     // AUDIO

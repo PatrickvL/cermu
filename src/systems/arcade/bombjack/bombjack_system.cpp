@@ -4,6 +4,7 @@
 
 #include "systems/arcade/bombjack/bombjack_system.hpp"
 #include "utils/resistor_dac.hpp"
+#include "utils/tile_decoder.hpp"
 #include "core/system_registry.hpp"
 #include <cstring>
 #include <cstdio>
@@ -288,6 +289,7 @@ void BombJackSystem::render_frame() {
     std::memset(display_.indices(), 0, bombjack_constants::FB_WIDTH * bombjack_constants::FB_HEIGHT);
 
     // Render 32×28 visible foreground tiles
+    // 3bpp planar: 24 bytes/tile (3 planes × 8 rows), plane_stride=8
     for (int ty = 0; ty < 28; ty++) {
         for (int tx = 0; tx < 32; tx++) {
             int offs = ty * 32 + tx;
@@ -300,26 +302,14 @@ void BombJackSystem::render_frame() {
             if (tile_idx >= char_count && char_count > 0) tile_idx = 0;
 
             const uint8_t* tile = chars + tile_idx * 24;
-            int fb_x = tx * 8;
-            int fb_y = ty * 8;
+            uint8_t* dst = display_.indices()
+                         + ty * 8 * bombjack_constants::FB_WIDTH + tx * 8;
 
-            for (int py = 0; py < 8; py++) {
-                int src_y = flip_y ? (7 - py) : py;
-                uint8_t p0 = (char_count > 0) ? tile[src_y]      : 0;
-                uint8_t p1 = (char_count > 0) ? tile[src_y + 8]  : 0;
-                uint8_t p2 = (char_count > 0) ? tile[src_y + 16] : 0;
-
-                uint8_t* dst = display_.indices()
-                             + (fb_y + py) * bombjack_constants::FB_WIDTH + fb_x;
-
-                for (int px = 0; px < 8; px++) {
-                    int src_x = flip_x ? px : (7 - px);
-                    uint8_t pixel = ((p0 >> src_x) & 1)
-                                  | (((p1 >> src_x) & 1) << 1)
-                                  | (((p2 >> src_x) & 1) << 2);
-                    dst[px] = (pal_group * 8 + pixel) & 0x7F;
-                }
-            }
+            tile_decoder::decode_planar_tile(
+                tile, 1, 8, 3, 8, 8,
+                dst, bombjack_constants::FB_WIDTH,
+                static_cast<uint8_t>(pal_group * 8),
+                flip_x, flip_y, 0x7F);
         }
     }
 

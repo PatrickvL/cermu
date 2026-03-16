@@ -12,7 +12,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/display_surface.hpp"
+
 #include "chip/cpu/z80/u880.hpp"
 #include "chip/cpu/z80/z80.hpp"   // Z80_MREQ_BIT / Z80_IORQ_BIT
 #include "chip/io/z80_pio.hpp"
@@ -183,7 +183,7 @@ private:
     MainBoard board_{BT::kManifest};
 
     // ── Display ──────────────────────────────────────────────────────────
-    DisplaySurface display_;
+    IndexedFrameBuffer display_;
 
     // ── Keyboard ─────────────────────────────────────────────────────────
     uint8_t keyboard_matrix_[z9001_constants::KEYBOARD_ROWS] = {};

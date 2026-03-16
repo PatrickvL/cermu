@@ -85,13 +85,13 @@ bool AcornAtomSystem::initialize() {
     // ── Register all manifest-created chips for Hardware menu ────────
     register_bus_chips(board_);
 
-    // GPU indexed palette rendering — via MC6847 chip's VideoPixelUnit
-    vdg_->pixel.set_framebuffer(framebuffer_,
-                                acorn_atom_constants::FB_WIDTH,
-                                acorn_atom_constants::FB_HEIGHT);
-    register_gpu_palette(&vdg_->pixel,
-                         mc6847_t::get_palette(),
+    // GPU indexed palette rendering — display_ owns palette + RGBA fallback.
+    display_.init(acorn_atom_constants::FB_WIDTH,
+                  acorn_atom_constants::FB_HEIGHT);
+    display_.set_palette(mc6847_t::get_palette(),
                          mc6847_t::get_palette_size());
+    vdg_->set_display(&display_);
+    register_display(&display_);
 
     printf("Acorn Atom: System initialized (RAM: %dKB)\n", ram_size_kb_);
     system_ready_ = true;
@@ -152,20 +152,8 @@ void AcornAtomSystem::run_frame() {
 
 bool AcornAtomSystem::load_file(const char*) { return false; }
 
-uint32_t* AcornAtomSystem::get_framebuffer() {
-    return rgba_framebuffer_ ? rgba_framebuffer_ : framebuffer_;
-}
-
 void AcornAtomSystem::get_display_dimensions(int* w, int* h) const {
     *w = acorn_atom_constants::FB_WIDTH; *h = acorn_atom_constants::FB_HEIGHT;
-}
-void AcornAtomSystem::set_framebuffer(uint32_t* buffer, int width, int height) {
-    System::set_framebuffer(buffer, width, height);
-    if (vdg_) {
-        vdg_->pixel.set_framebuffer(buffer ? buffer : framebuffer_,
-                                    buffer ? width  : acorn_atom_constants::FB_WIDTH,
-                                    buffer ? height : acorn_atom_constants::FB_HEIGHT);
-    }
 }
 
 uint32_t AcornAtomSystem::get_audio_samples(float*, uint32_t) { return 0; }
@@ -306,7 +294,7 @@ uint8_t AcornAtomSystem::ppi_keyboard_scan(void* context, uint8_t port_a_output)
 
 void AcornAtomSystem::render_frame() {
     // Delegate rendering to the MC6847 chip — it owns the font ROM,
-    // palette, frame index buffer, and VideoPixelUnit.
+    // palette, and frame index buffer.
     vdg_->render_frame(video_ram_ptr_);
 }
 

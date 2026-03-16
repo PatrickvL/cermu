@@ -1402,7 +1402,7 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
     
     // Get VIC-II framebuffer
     vicii_t* vicii = static_cast<vicii_t*>(c64->vicii);
-    if (!vicii || !vicii->pixel.framebuffer) {
+    if (!vicii || !vicii->display_) {
         result.status = TestStatus::ERROR;
         result.message = "VIC-II framebuffer not available";
         return result;
@@ -1453,13 +1453,13 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
         
         // Check if we need to resave screenshot with exact reference dimensions
         // This handles cases where reference has different crop than our default
-        if (ref_info.width != vicii->pixel.fb_width ||
-            ref_info.height != vicii->pixel.fb_height) {
+        if (ref_info.width != vicii->display_->width() ||
+            ref_info.height != vicii->display_->height()) {
             
             if (verbose_) {
                 printf("  Reference dimensions (%dx%d) differ from framebuffer (%dx%d)\n",
                        ref_info.width, ref_info.height,
-                       vicii->pixel.fb_width, vicii->pixel.fb_height);
+                       vicii->display_->width(), vicii->display_->height());
             }
             
             // Use VICE-aligned crop offsets to extract the correct display window.
@@ -1471,8 +1471,8 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
             int crop_h = ref_info.height;
             int crop_x, crop_y;
             
-            int fb_w = vicii->pixel.fb_width;
-            int fb_h = vicii->pixel.fb_height;
+            int fb_w = vicii->display_->width();
+            int fb_h = vicii->display_->height();
             
             // VICE PAL: first_displayed_line=16, display is 384x272
             if (ref_info.width == 384 && ref_info.height == 272) {
@@ -1876,8 +1876,8 @@ std::vector<TestResult> TestFramework::run_tests_with_auto_config(const std::vec
             }
             
             // Get framebuffer pointer (already allocated by create_system_for_test)
-            if (current_c64->vicii && current_c64->vicii->pixel.framebuffer) {
-                current_framebuffer = current_c64->vicii->pixel.framebuffer;
+            if (current_c64->vicii && current_c64->vicii->display_) {
+                current_framebuffer = current_c64->vicii->display_->framebuffer();
             }
         }
         

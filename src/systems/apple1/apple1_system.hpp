@@ -124,7 +124,7 @@ private:
     MainBoard board_{kApple1Chips};
 
     // Display — own framebuffer + GPU indexed rendering
-    DisplaySurface display_;
+    IndexedFrameBuffer display_;
 
     // System state
     uint32_t cycles_per_frame_;

@@ -145,12 +145,9 @@ private:
     // Video ULA chip (VIDPROC) — owns rendering + palette
     bbc_vidproc_t   vidproc_;           // Video ULA — pre-bound into board_
 
-    // Display — chip-owned pattern: VIDPROC owns pixel + frame_indices_
-    uint32_t framebuffer_[bbc_constants::DISPLAY_WIDTH *
-                          bbc_constants::DISPLAY_HEIGHT] = {};
-
-    uint32_t* get_framebuffer() override;
-    void set_framebuffer(uint32_t* buffer, int width, int height) override;
+    // Display — IndexedFrameBuffer owns palette + RGBA fallback.
+    // VIDPROC chip writes scanlines; display_ handles GPU routing.
+    IndexedFrameBuffer display_;
 
     // Keyboard matrix (10 columns × 8 rows)
     // Each element: true = key pressed

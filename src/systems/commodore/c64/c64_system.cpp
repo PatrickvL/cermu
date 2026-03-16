@@ -63,9 +63,7 @@ static constexpr uint8_t SYS_MASK_GAME  = 0x02;
  *
  * FRAMEBUFFER MANAGEMENT:
  * =======================
- * - VIC-II owns the framebuffer: this->vicii->pixel.framebuffer
- * - get_framebuffer() returns pointer to VIC-II's buffer
- * - set_framebuffer() calls vicii_set_framebuffer() directly
+ * - VIC-II renders to IndexedFrameBuffer via set_display()
  */
 
 /** Check if load address is a typical C64 address */
@@ -534,7 +532,11 @@ bool C64System::initialize() {
     register_chip(std::make_unique<PlaChip>(this));
 
     // GPU indexed palette rendering — 16-color VIC-II palette
-    register_gpu_palette(&vicii->pixel, vicii_t::get_default_palette(), 16);
+    display_.init(c64_constants::DISPLAY_WIDTH_PAL,
+                  c64_constants::DISPLAY_HEIGHT_PAL);
+    display_.set_palette(vicii_t::get_default_palette(), 16);
+    vicii->set_display(&display_);
+    register_display(&display_);
 
     printf("C64: System initialized successfully\n");
     return true;
@@ -1175,27 +1177,10 @@ void C64System::ensure_compatible_for_sid(const sid_header_t* sid) {
 }
 
 // ============================================================================
-uint32_t* C64System::get_framebuffer() {
-    if (initialized_ && this->vicii) {
-        return this->vicii->pixel.framebuffer;
-    }
-    return nullptr;
-}
-
 void C64System::get_display_dimensions(int* width, int* height) const {
     // VIC-II visible area (284 visible lines for PAL per documentation Section 3.4)
     *width = c64_constants::DISPLAY_WIDTH_PAL;
     *height = c64_constants::DISPLAY_HEIGHT_PAL;
-}
-
-void C64System::set_framebuffer(uint32_t* buffer, int width, int height) {
-    if (initialized_ && this->vicii && buffer) {
-        this->vicii->set_framebuffer(buffer, width, height);
-    }
-    // Also update base class fields so save_screenshot() works in headless mode
-    rgba_framebuffer_ = buffer;
-    rgba_width_ = width;
-    rgba_height_ = height;
 }
 
 void C64System::handle_keyboard_event(SDL_Keycode key, bool pressed) {

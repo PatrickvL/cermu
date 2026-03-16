@@ -224,14 +224,13 @@ bool SpectrumSystem<V>::initialize() {
 
     register_bus_chips(board_);
 
-    // GPU indexed palette rendering — ULA chip owns pixel unit + frame indices.
-    // System provides the RGBA framebuffer for headless fallback.
-    ula_.pixel.set_framebuffer(framebuffer_,
-                               spectrum_constants::TOTAL_WIDTH,
-                               spectrum_constants::TOTAL_HEIGHT);
-    register_gpu_palette(&ula_.pixel,
-                         ferranti_ula_t::get_palette(),
+    // GPU indexed palette rendering — display_ owns palette + RGBA fallback.
+    display_.init(spectrum_constants::TOTAL_WIDTH,
+                  spectrum_constants::TOTAL_HEIGHT);
+    display_.set_palette(ferranti_ula_t::get_palette(),
                          ferranti_ula_t::get_palette_size());
+    ula_.set_display(&display_);
+    register_display(&display_);
 
     printf("%s: System initialized (%dKB RAM)\n", Traits::name, Traits::ram_size_kb);
     system_ready_ = true;
@@ -704,22 +703,9 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
 // ============================================================================
 
 template<SpectrumVariant V>
-uint32_t* SpectrumSystem<V>::get_framebuffer() {
-    return rgba_framebuffer_ ? rgba_framebuffer_ : framebuffer_;
-}
-
-template<SpectrumVariant V>
 void SpectrumSystem<V>::get_display_dimensions(int* width, int* height) const {
     *width = spectrum_constants::TOTAL_WIDTH;
     *height = spectrum_constants::TOTAL_HEIGHT;
-}
-
-template<SpectrumVariant V>
-void SpectrumSystem<V>::set_framebuffer(uint32_t* buffer, int width, int height) {
-    System::set_framebuffer(buffer, width, height);
-    ula_.pixel.set_framebuffer(buffer ? buffer : framebuffer_,
-                               buffer ? width  : spectrum_constants::TOTAL_WIDTH,
-                               buffer ? height : spectrum_constants::TOTAL_HEIGHT);
 }
 
 // ============================================================================

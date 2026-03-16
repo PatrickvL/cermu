@@ -2,7 +2,6 @@
 
 #include "systems/chip8/chip8_constants.hpp"
 #include "core/system.hpp"
-#include "core/framebuffer_renderer.hpp"
 #include <cstdint>
 #include <cstring>
 #include <vector>
@@ -93,7 +92,7 @@ private:
     uint8_t active_plane_mask_;      // bitmask: bit0=plane0, bit1=plane1
 
     // GPU indexed rendering
-    DisplaySurface display_;
+    IndexedFrameBuffer display_;
 
     // ── Input ───────────────────────────────────────────────────────────
     uint8_t keys_[16];               // 16-key keypad state

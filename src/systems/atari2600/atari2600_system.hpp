@@ -123,9 +123,7 @@ public:
     bool load_file(const char* filepath) override;
 
     // Display
-    uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
-    void set_framebuffer(uint32_t* buffer, int width, int height) override;
 
     // Audio
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
@@ -153,6 +151,7 @@ private:
     tia_t*             tia_       = nullptr;  // TIA — Television Interface Adapter
     pia6532_t*         riot_      = nullptr;  // PIA 6532 RIOT — RAM, I/O, Timer
     Atari2600CartChip* cart_chip_ = nullptr;  // Cart MMIO adapter (wraps mapper)
+    IndexedFrameBuffer display_;               // Display output for GPU indexed rendering
 
     // ========================================================================
     // CARTRIDGE ROM
