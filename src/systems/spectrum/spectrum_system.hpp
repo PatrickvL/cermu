@@ -222,11 +222,11 @@ private:
     // DISPLAY
     // ========================================================================
 
-    uint32_t framebuffer_[spectrum_constants::TOTAL_WIDTH * spectrum_constants::TOTAL_HEIGHT]{};
-
-    // GPU indexed palette rendering — per-frame path
-    VideoPixelUnit pixel_;
-    uint8_t frame_indices_[spectrum_constants::TOTAL_WIDTH * spectrum_constants::TOTAL_HEIGHT]{};
+    // Fallback framebuffer for headless/test operation.
+    // GUI provides external buffer via set_framebuffer(); the ULA chip's
+    // pixel unit writes to whichever buffer is active.
+    uint32_t framebuffer_[spectrum_constants::TOTAL_WIDTH *
+                          spectrum_constants::TOTAL_HEIGHT]{};
 
     // ========================================================================
     // AUDIO
@@ -244,6 +244,5 @@ private:
     void configure_bus_memory_map();
     void update_banking();           // 128K: remap pages after $7FFD write
     bus_state_t io_tick(bus_state_t pins);
-    void update_framebuffer();
     bool load_roms();
 };
