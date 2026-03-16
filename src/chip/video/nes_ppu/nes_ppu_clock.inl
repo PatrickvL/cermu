@@ -543,8 +543,8 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
     // palette/mask changes; flush the tail [scanline_flush_x_, 256).
     if (scanline >= 0 && cycle == 257) {
         if (unlikely(!active_palette_)) rebuild_pixel_lut();
-        scanline_pixel_.flush_indexed_line_range(
-            scanline, pixel_lut_, scanline_flush_x_, 256);
+        if (display_) display_->flush_line_range(
+            scanline, scanline_color_line_, pixel_lut_, scanline_flush_x_, 256);
         scanline_flush_x_ = 256;  // Prevent re-flush from HBlank palette writes
     }
 
