@@ -6,6 +6,7 @@
  */
 
 #include "systems/nes/nes_system.hpp"
+#include "chip/sound/nes_apu_synth_engine.hpp"
 #include "chip/video/nes_ppu/nes_palette.hpp"
 #include "systems/nes/nsf/nes_nsf_player.hpp"
 #include "systems/nes/cartridge/mappers/mapper_nsf.hpp"
@@ -329,7 +330,14 @@ bool NintendoSystem<V>::initialize() {
     
     // Set APU region
     cpu_->set_apu_region(is_pal_);
-    
+
+    // Wire audio thread for off-emu-thread synthesis
+    apu_synth_engine_ = std::make_unique<NesApuSynthEngine>(
+        is_pal_, nes_constants::AUDIO_SAMPLE_RATE);
+    audio_thread_.register_engine(apu_synth_engine_.get());
+    audio_thread_.start();
+    cpu_->set_audio_cmd_queue(&apu_synth_engine_->cmd_queue());
+
     // Create PPU
     ppu_ = std::make_shared<PPU>(is_pal_);
     
@@ -367,6 +375,11 @@ void NintendoSystem<V>::shutdown() {
         }
         cartridge_->save_sram(cartridge_->sram_path_for_rom(cartridge_->get_rom_filepath()));
     }
+    // Tear down audio thread before destroying CPU (which owns the emu-thread APU)
+    audio_thread_.stop();
+    audio_thread_.clear_engines();
+    apu_synth_engine_.reset();
+
     if (cpu_) {
         printf("%s: Shutting down system\n", Traits::name);
         delete cpu_;
@@ -425,6 +438,13 @@ void NintendoSystem<V>::reset() {
     // into the new cartridge.  The ring buffer in the GUI layer is reset
     // separately when the emulation thread restarts.
     audio_ring_buf_.reset();
+
+    // Reset audio thread synthesis state
+    if (apu_synth_engine_) {
+        audio_thread_.stop();
+        apu_synth_engine_->reset();
+        audio_thread_.start();
+    }
 }
 
 template<NintendoVariant V>
@@ -434,6 +454,11 @@ void NintendoSystem<V>::run_frame() {
     ppu_->frame_complete = false;
     while (!ppu_->frame_complete) {
         tick();
+    }
+
+    // Signal audio thread with accumulated CPU cycles
+    if (apu_synth_engine_) {
+        audio_thread_.signal_progress(cpu_->apu_cycle_count());
     }
 
     // Tick all attached peripheral devices
@@ -879,6 +904,11 @@ void NintendoSystem<V>::set_speed_multiplier(float multiplier) {
 template<NintendoVariant V>
 uint32_t NintendoSystem<V>::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
+    // Multi-threaded: read from synth engine's ring buffer
+    if (apu_synth_engine_) {
+        return apu_synth_engine_->audio_read(buffer, max_samples);
+    }
+    // Single-threaded fallback: read from system ring buffer
     return static_cast<uint32_t>(
         audio_ring_buf_.read(buffer, static_cast<size_t>(max_samples)));
 }
@@ -1004,10 +1034,13 @@ void NintendoSystem<V>::tick() {
             }
 
             // Audio sample generation (keep sample rate steady during DMA)
-            if (--audio_sample_counter_ == 0) {
-                audio_sample_counter_ = audio_sample_period_;
-                float sample = cpu_->generate_audio_sample();
-                audio_ring_buf_.write(&sample, 1);
+            // In multi-threaded mode the audio thread produces samples.
+            if (!apu_synth_engine_) {
+                if (--audio_sample_counter_ == 0) {
+                    audio_sample_counter_ = audio_sample_period_;
+                    float sample = cpu_->generate_audio_sample();
+                    audio_ring_buf_.write(&sample, 1);
+                }
             }
         }
         system_clock_counter_++;
@@ -1214,11 +1247,14 @@ void NintendoSystem<V>::tick() {
 
     // ====================================================================
     // Audio sample generation
+    // In multi-threaded mode the audio thread produces samples.
     // ====================================================================
-    if (--audio_sample_counter_ == 0) {
-        audio_sample_counter_ = audio_sample_period_;
-        float sample = cpu_->generate_audio_sample();
-        audio_ring_buf_.write(&sample, 1);
+    if (!apu_synth_engine_) {
+        if (--audio_sample_counter_ == 0) {
+            audio_sample_counter_ = audio_sample_period_;
+            float sample = cpu_->generate_audio_sample();
+            audio_ring_buf_.write(&sample, 1);
+        }
     }
 
     // ====================================================================
