@@ -106,9 +106,7 @@ public:
 
     bool load_file(const char* filepath) override;
 
-    uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
-    void set_framebuffer(uint32_t* buffer, int width, int height) override;
 
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
     void set_audio_sample_rate(int sample_rate_hz) override;
@@ -153,12 +151,7 @@ private:
     bool    sound_nmi_   = false;       // NMI to sound CPU on latch write
 
     // ── Display ──────────────────────────────────────────────────────────
-    uint32_t framebuffer_[bombjack_constants::FB_WIDTH *
-                          bombjack_constants::FB_HEIGHT] = {};
-    VideoPixelUnit pixel_;
-    uint8_t frame_indices_[bombjack_constants::FB_WIDTH *
-                           bombjack_constants::FB_HEIGHT] = {};
-    uint32_t rgba_palette_[bombjack_constants::PALETTE_ENTRIES] = {};
+    DisplaySurface display_;
     uint8_t bg_image_select_ = 0;       // Active background (0–4)
 
     // ── Inputs ───────────────────────────────────────────────────────────
@@ -180,7 +173,7 @@ private:
     bus_state_t main_io_tick(bus_state_t pins);   // $B000+ I/O registers
     bus_state_t sound_io_tick(bus_state_t pins);   // AY-3-8910 port I/O
     bool load_roms();
-    void decode_palette();                         // Rebuild rgba_palette_ from palette RAM
+    void decode_palette();                         // Rebuild palette from palette RAM
     void render_frame();                           // Decode FG tilemap into indexed framebuffer
 
     // Chip pointers (cached for rendering hot path)

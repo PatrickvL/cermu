@@ -288,11 +288,10 @@ bool PETSystem::initialize() {
     crtc_->regs_[MC6845_R13_START_ADDR_LO] = 0x00;
 
     // GPU indexed palette rendering via CRTC's built-in character renderer
-    pixel_.set_framebuffer(framebuffer_,
-                           pet_constants::DISPLAY_WIDTH,
-                           pet_constants::DISPLAY_HEIGHT);
+    display_.init(pet_constants::DISPLAY_WIDTH, pet_constants::DISPLAY_HEIGHT);
+    display_.set_palette(pet_constants::PALETTE, 2);
     crtc_->configure_char_render(
-        &pixel_, frame_indices_,
+        &display_.pixel(), display_.indices(),
         char_rom_, screen_ram_chip_->data(),
         pet_constants::SCREEN_COLS,
         pet_constants::PET_CHAR_HEIGHT,
@@ -302,7 +301,7 @@ bool PETSystem::initialize() {
         0x03FF,  // vram_mask — 1K screen RAM
         0x80     // invert_bit — bit 7 selects inverted charset
     );
-    register_gpu_palette(&pixel_, pet_constants::PALETTE, 2);
+    register_display(&display_);
 
     // VSYNC/HSYNC callbacks (display rendering handled by CRTC internally)
     crtc_->on_vsync = [this]() { this->crtc_vsync(); };
@@ -368,8 +367,7 @@ void PETSystem::reset() {
     }
 
     // Clear framebuffer
-    memset(framebuffer_, 0, sizeof(framebuffer_));
-    memset(frame_indices_, 0, sizeof(frame_indices_));
+    display_.clear();
 
     // Reset audio state
     speaker_state_ = false;
@@ -631,17 +629,9 @@ void PETSystem::via_cb2_output(void* user_data, bool state) {
 // Display
 // ============================================================================
 
-uint32_t* PETSystem::get_framebuffer() {
-    return framebuffer_;
-}
-
 void PETSystem::get_display_dimensions(int* width, int* height) const {
     *width  = pet_constants::DISPLAY_WIDTH;
     *height = pet_constants::DISPLAY_HEIGHT;
-}
-
-void PETSystem::set_framebuffer(uint32_t*, int, int) {
-    // PET owns its framebuffer — external assignment ignored.
 }
 
 // ============================================================================

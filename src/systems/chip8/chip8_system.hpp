@@ -3,7 +3,6 @@
 #include "systems/chip8/chip8_constants.hpp"
 #include "core/system.hpp"
 #include "core/framebuffer_renderer.hpp"
-#include "chip/video/video_pixel_unit.hpp"
 #include <cstdint>
 #include <cstring>
 #include <vector>
@@ -49,7 +48,6 @@ public:
     bool load_file(const char* filepath) override;
     
     // Display
-    uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
     
     // Input
@@ -95,12 +93,7 @@ private:
     uint8_t active_plane_mask_;      // bitmask: bit0=plane0, bit1=plane1
 
     // GPU indexed rendering
-    uint32_t framebuffer_[chip8_constants::HIRES_WIDTH *
-                          chip8_constants::HIRES_HEIGHT] = {};
-    VideoPixelUnit pixel_;
-    uint8_t frame_indices_[chip8_constants::HIRES_WIDTH *
-                           chip8_constants::HIRES_HEIGHT] = {};
-    uint32_t rgba_palette_[4] = {};  // Current palette as RGBA (synced from current_palette_)
+    DisplaySurface display_;
 
     // ── Input ───────────────────────────────────────────────────────────
     uint8_t keys_[16];               // 16-key keypad state

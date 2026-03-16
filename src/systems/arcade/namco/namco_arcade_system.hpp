@@ -129,9 +129,7 @@ public:
 
     bool load_file(const char* filepath) override;
 
-    uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
-    void set_framebuffer(uint32_t* buffer, int width, int height) override;
 
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
     void set_audio_sample_rate(int sample_rate_hz) override;
@@ -168,12 +166,7 @@ private:
     MainBoard board_{BT::kManifest};
 
     // ── Display ──────────────────────────────────────────────────────────
-    uint32_t framebuffer_[namco_arcade_constants::FB_WIDTH *
-                          namco_arcade_constants::FB_HEIGHT] = {};
-    VideoPixelUnit pixel_;
-    uint8_t frame_indices_[namco_arcade_constants::FB_WIDTH *
-                           namco_arcade_constants::FB_HEIGHT] = {};
-    uint32_t rgba_palette_[namco_arcade_constants::PALETTE_ENTRIES] = {};
+    DisplaySurface display_;
 
     // ── Memory chips (cached for hot-path rendering) ────────────
     RAMChip* vram_chip_ = nullptr;  // Video RAM (tile indices)
@@ -198,6 +191,6 @@ private:
     // ── Internal helpers ─────────────────────────────────────────────────
     bus_state_t io_tick(bus_state_t pins);   // Handle I/O region ($5xxx/$9xxx)
     bool load_roms();
-    void decode_palette();                   // Build rgba_palette_ from palette PROM
+    void decode_palette();                   // Build palette from palette PROM
     void render_frame();                     // Decode tilemap into indexed framebuffer
 };

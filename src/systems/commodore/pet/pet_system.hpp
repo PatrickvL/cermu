@@ -7,7 +7,6 @@
 #include "chip/io/pia6820.hpp"
 #include "chip/io/mos6522.hpp"
 #include "chip/video/mc6845/mc6845.hpp"
-#include "chip/video/video_pixel_unit.hpp"
 #include "chip/memory/memory_chip.hpp"
 
 #include <cstdint>
@@ -120,9 +119,7 @@ public:
     void run_frame() override;
 
     // Display
-    uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
-    void set_framebuffer(uint32_t* buffer, int width, int height) override;
 
     // Input
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
@@ -163,11 +160,7 @@ private:
     mc6845_t*   crtc_ = nullptr;    // MC6845 CRTC — display timing
 
     // Display — own framebuffer + GPU indexed rendering via CRTC
-    uint32_t framebuffer_[pet_constants::DISPLAY_WIDTH *
-                          pet_constants::DISPLAY_HEIGHT] = {};
-    VideoPixelUnit pixel_;
-    uint8_t frame_indices_[pet_constants::DISPLAY_WIDTH *
-                           pet_constants::DISPLAY_HEIGHT] = {};
+    DisplaySurface display_;
 
     // Audio state — CB2 square wave speaker
     bool     speaker_state_ = false;    // Current CB2 output level
