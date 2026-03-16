@@ -29,10 +29,18 @@
 // Slot 2: OS ROM — 16 KB at $C000-$FFFF
 //         $FC00-$FEFF (FRED/JIM/SHEILA) handled by sheila_tick(), not the bus.
 //
+namespace bbc_rom {
+    inline constexpr const char* kOsRomFiles[] = {
+        "os12.rom", "OS12.ROM", "os.rom", "OS-1.20.rom", "MOS120.rom",
+        "bbc_os.rom", "os1.2.rom", nullptr
+    };
+    inline constexpr RomFileInfo kOsRom{kOsRomFiles};
+}
+
 inline constexpr auto kBBCMicroChips = make_chip_manifest(
     Slot<RAMChip>{0x0000,  32768, 0, "RAM"},
     Slot<ROMChip>{0x8000, 262144, 0, "Paged ROM", 0, 16384},      // 16 × 16 KB banks
-    Slot<ROMChip>{0xC000,  16384, 0, "MOS ROM"},
+    Slot<ROMChip>{0xC000,  16384, 0, "MOS ROM"}.with_rom(&bbc_rom::kOsRom),
     // Non-bus chips — factory-created, not address-decoded
     Slot<MOS6502>     {0, 0, 0, "MOS 6502"},
     Slot<mc6845_t>    {0, 0, 0, "MC6845 CRTC"},

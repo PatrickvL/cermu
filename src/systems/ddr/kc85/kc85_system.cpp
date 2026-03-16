@@ -426,30 +426,7 @@ bool KC85System<V>::load_roms() {
         printf("%s: ROM path not found\n", Traits::name);
         return false;
     }
-
-    bool ok = true;
-
-    // CAOS (OS) ROM (8 KB at $E000)
-    const char* caos_names[] = {"caos.rom", "CAOS.ROM", nullptr};
-    if (!rom_loader_load_from_root(rom_root, caos_names,
-                                   kc85_constants::OS_ROM_SIZE,
-                                   caos_rom_chip_->data(), caos_rom_chip_->size_bytes())) {
-        printf("%s: CAOS ROM not loaded\n", Traits::name);
-        ok = false;
-    }
-
-    // BASIC ROM (8 KB, KC85/3 and /4 only)
-    if constexpr (Traits::has_basic_rom) {
-        const char* basic_names[] = {"basic.rom", "BASIC.ROM", nullptr};
-        if (!rom_loader_load_from_root(rom_root, basic_names,
-                                       kc85_constants::BASIC_ROM_SIZE,
-                                       basic_rom_chip_->data(), basic_rom_chip_->size_bytes())) {
-            printf("%s: BASIC ROM not loaded\n", Traits::name);
-            ok = false;
-        }
-    }
-
-    return ok;
+    return board_.load_roms(rom_root, Traits::name);
 }
 
 // ============================================================================

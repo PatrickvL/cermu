@@ -981,49 +981,12 @@ void Commodore264System<V>::render_configuration_ui() {
 
 template<C264SeriesVariant V>
 bool Commodore264System<V>::load_roms() {
-    // Discover ROM root path using the standard path discovery mechanism
     char rom_root[1024];
-    bool rom_root_found = system_config_discover_rom_root("c16", rom_root, sizeof(rom_root));
-    if (!rom_root_found) {
+    if (!system_config_discover_rom_root("c16", rom_root, sizeof(rom_root))) {
         printf("%s: ROM root not found — cannot load ROMs\n", Traits::name);
         return false;
     }
-    
-    // Load KERNAL ROM (16KB at $C000-$FFFF)
-    const char* kernal_files[] = {
-        "kernal.318004-05.bin",
-        "kernal.rom",
-        "318004-05.bin",
-        nullptr
-    };
-    
-    bool kernal_ok = rom_loader_load_from_root(
-        rom_root, kernal_files,
-        kernal_rom_->size_bytes(), kernal_rom_->data(), kernal_rom_->size_bytes()
-    );
-    
-    if (!kernal_ok) {
-        printf("%s: Failed to load KERNAL ROM\n", Traits::name);
-    }
-    
-    // Load BASIC ROM (16KB at $8000-$BFFF)
-    const char* basic_files[] = {
-        "basic.318006-01.bin",
-        "basic.rom",
-        "318006-01.bin",
-        nullptr
-    };
-    
-    bool basic_ok = rom_loader_load_from_root(
-        rom_root, basic_files,
-        basic_rom_->size_bytes(), basic_rom_->data(), basic_rom_->size_bytes()
-    );
-    
-    if (!basic_ok) {
-        printf("%s: Failed to load BASIC ROM\n", Traits::name);
-    }
-    
-    return (kernal_ok && basic_ok);
+    return board_.load_roms(rom_root, Traits::name);
 }
 
 // ============================================================================

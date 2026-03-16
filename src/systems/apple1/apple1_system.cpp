@@ -612,32 +612,19 @@ void Apple1System::pump_paste_queue() {
 }
 
 bool Apple1System::load_roms() {
-    // Discover ROM root using the same upward-search from executable/CWD
-    // that other systems (C64, C16) use — avoids CWD dependency.
     char rom_root[1024];
     if (!system_config_discover_rom_root("apple1", rom_root, sizeof(rom_root))) {
         printf("Apple1: Could not find ROM root folder\n");
         return false;
     }
-    
-    // Load Woz Monitor ROM (256 bytes at $FF00-$FFFF)
-    const char* monitor_files[] = {
-        "apple1.rom",
-        "monitor.rom",
-        "wozmon.rom",
-        nullptr
-    };
-    
-    bool monitor_ok = rom_loader_load_from_root(
-        rom_root, monitor_files,
-        monitor_rom_->size_bytes(), monitor_rom_->data(), monitor_rom_->size_bytes()
-    );
-    
-    if (!monitor_ok) {
-        printf("Apple1: Failed to load Monitor ROM\n");
-    }
-    
-    // Load Signetics 2513 Character ROM (512 bytes)
+
+    // Load manifest-declared ROMs (Monitor at $FF00, optional BASIC at $E000)
+    bool ok = board_.load_roms(rom_root, "Apple1");
+
+    // Detect whether optional BASIC ROM was loaded (buffer starts as 0xFF)
+    has_basic_ = basic_rom_ && basic_rom_->data()[0] != 0xFF;
+
+    // Load Signetics 2513 Character ROM (512 bytes, not bus-mapped)
     const char* char_files[] = {
         "2513.rom",
         "signetics2513.bin",
@@ -661,28 +648,8 @@ bool Apple1System::load_roms() {
     } else {
         printf("Apple1: Character ROM not found, using built-in font\n");
     }
-    
-    // Optional: Load Apple 1 BASIC ROM (4KB)
-    const char* basic_files[] = {
-        "apple1basic.rom",
-        "basic.rom",
-        nullptr
-    };
-    
-    bool basic_ok = rom_loader_load_from_root(
-        rom_root, basic_files,
-        basic_rom_->size_bytes(), basic_rom_->data(), basic_rom_->size_bytes()
-    );
-    
-    if (basic_ok) {
-        printf("Apple1: BASIC ROM loaded\n");
-        has_basic_ = true;
-    } else {
-        printf("Apple1: BASIC ROM not found (optional)\n");
-        has_basic_ = false;
-    }
-    
-    return monitor_ok;  // Only monitor ROM is required
+
+    return ok;  // Only monitor ROM is required
 }
 
 // Convert Signetics 2513 character ROM to 8x8 font for TextTerminal

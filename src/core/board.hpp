@@ -14,6 +14,8 @@
 
 #include "core/board_base.hpp"
 #include "core/bus_map.hpp"
+#include "core/storage/rom_loader.hpp"
+#include <cstdio>
 
 // §4  Board<Spec> — runtime chip owner, buffer manager
 // =============================================================================
@@ -352,6 +354,50 @@ public:
         const SlotRecord* info = bus_map_.find(base_id);
         if (!info) return;
         std::memset(chip_buffer(base_id), value, info->byte_size);
+    }
+
+    // =====================================================================
+    // §4.5a  Generic ROM loading from manifest metadata
+    // =====================================================================
+    //
+    // Iterates all manifest slots with non-null RomFileInfo metadata and
+    // loads ROM files from the given root directory into their chip buffers.
+    // Returns true if all required (non-optional) ROMs loaded successfully.
+    //
+    // The system is responsible for discovering rom_root via
+    // system_config_discover_rom_root() and passing it here.  Slots
+    // without RomFileInfo are untouched — systems can load those manually
+    // before or after calling this method.
+    //
+
+    bool load_roms(const char* rom_root, const char* system_name = nullptr) {
+        bool all_ok = true;
+        for (size_t i = 0; i < bus_map_.slot_count(); ++i) {
+            const auto& rec = bus_map_.slot(i);
+            if (!rec.rom) continue;           // No ROM metadata on this slot
+            if (!rec.chip) continue;          // Chip not created (conditional, skipped)
+            if (rec.byte_size == 0) continue; // MMIO-only slot
+
+            uint8_t* buf = chip_buffer(rec.base_id);
+            bool ok = rom_loader_load_from_root(
+                rom_root, rec.rom->filenames,
+                rec.byte_size, buf, rec.byte_size
+            );
+
+            const char* label = rec.label ? rec.label : "(unnamed)";
+            if (ok) {
+                if (system_name)
+                    printf("%s: %s loaded (%zu bytes)\n", system_name, label, rec.byte_size);
+            } else if (rec.rom->optional) {
+                if (system_name)
+                    printf("%s: %s not found (optional)\n", system_name, label);
+            } else {
+                if (system_name)
+                    printf("%s: Failed to load %s\n", system_name, label);
+                all_ok = false;
+            }
+        }
+        return all_ok;
     }
 
     // =====================================================================

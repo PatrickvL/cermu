@@ -309,34 +309,7 @@ bool AcornAtomSystem::load_roms() {
         printf("Acorn Atom: ROM path not found\n");
         return false;
     }
-
-    bool ok = true;
-
-    // Atom BASIC ROM (~4 KB at $C000)
-    const char* basic_names[] = {"atom_basic.rom", "BASIC.ROM", "basic.rom", nullptr};
-    if (!rom_loader_load_from_root(rom_root, basic_names,
-                                   acorn_atom_constants::BASIC_ROM_SIZE,
-                                   basic_rom_->data(), basic_rom_->size_bytes())) {
-        printf("Acorn Atom: BASIC ROM not loaded\n");
-        ok = false;
-    }
-
-    // Floating-point ROM (~2 KB at $D000, optional)
-    const char* fp_names[] = {"atom_fp.rom", "FP.ROM", "fp.rom", nullptr};
-    rom_loader_load_from_root(rom_root, fp_names,
-                              acorn_atom_constants::FP_ROM_SIZE,
-                              fp_rom_->data(), fp_rom_->size_bytes());  // optional
-
-    // OS / Monitor ROM (~4 KB at $F000)
-    const char* os_names[] = {"atom_os.rom", "ABASIC.ROM", "os.rom", nullptr};
-    if (!rom_loader_load_from_root(rom_root, os_names,
-                                   acorn_atom_constants::OS_ROM_SIZE,
-                                   os_rom_->data(), os_rom_->size_bytes())) {
-        printf("Acorn Atom: OS ROM not loaded\n");
-        ok = false;
-    }
-
-    return ok;
+    return board_.load_roms(rom_root, "Acorn Atom");
 }
 
 // ============================================================================
