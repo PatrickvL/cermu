@@ -25,6 +25,7 @@
 
 #include "chip/sound/sound_chip_base.hpp"
 #include "core/system_lines.hpp"
+#include "utils/ring_buffer.hpp"
 #include <cstdint>
 #include <cstring>
 
@@ -112,6 +113,7 @@ public:
               ay_variant_traits[static_cast<int>(variant)].part_number,
               ay_variant_traits[static_cast<int>(variant)].manufacturer))
         , variant_(variant)
+        , audio_buffer_(4096)
     {
         init_regs(ay_regs::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG
@@ -128,9 +130,14 @@ public:
         noise_shift_ = 1;  // LFSR seed
         env_counter_ = 0;
         env_step_ = 0;
+        env_volume_ = 0;
+        env_ascending_ = false;
         env_holding_ = false;
         io_port_a_ = 0xFF;
         io_port_b_ = 0xFF;
+        audio_buffer_.reset();
+        audio_cycle_accum_ = 0.0;
+        audio_cycles_per_sample_ = 0.0;
     }
 
     void reset() { init(); }
@@ -144,11 +151,20 @@ public:
     void write_register(uint8_t data) {
         regs_[latch_addr_] = data;
         if (latch_addr_ == ay_regs::ENV_SHAPE) {
-            // Writing envelope shape resets the envelope counter
+            // Writing envelope shape resets the envelope generator
             env_step_ = 0;
             env_counter_ = 0;
             env_holding_ = false;
+            env_ascending_ = (data & 0x04) != 0;  // ATT bit
+            env_volume_ = env_ascending_ ? 0 : 15;
         }
+    }
+
+    /// Direct addressed write (for AudioThread adapter).
+    /// Combines latch_address + write_register in one call.
+    void write_register(uint8_t reg, uint8_t data) {
+        latch_addr_ = reg & 0x0F;
+        write_register(data);
     }
 
     uint8_t read_register() const {
@@ -167,19 +183,89 @@ public:
     // === Audio generation ===
 
     /// Tick at the AY clock rate (typically 1.7734 MHz or CPU_CLK/2).
-    /// Generates one sample step.  Call at the PSG clock rate.
+    /// Advances tone, noise, and envelope generators by one step.
     void tick() {
-        // TODO: Full audio generation implementation
-        // Tone counters, noise LFSR, envelope generator, mixer, DAC
+        // --- Tone generators (3 channels) ---
+        for (int ch = 0; ch < 3; ch++) {
+            uint16_t period = ((regs_[ch * 2 + 1] & 0x0F) << 8) | regs_[ch * 2];
+            if (period == 0) period = 1;
+            if (++tone_counter_[ch] >= period) {
+                tone_counter_[ch] = 0;
+                tone_output_[ch] ^= 1;
+            }
+        }
+
+        // --- Noise generator (17-bit LFSR) ---
+        {
+            uint8_t np = regs_[ay_regs::NOISE_PERIOD] & 0x1F;
+            if (np == 0) np = 1;
+            if (++noise_counter_ >= np) {
+                noise_counter_ = 0;
+                // 17-bit LFSR: feedback = bit0 XOR bit3
+                uint32_t fb = ((noise_shift_ ^ (noise_shift_ >> 3)) & 1);
+                noise_shift_ = (noise_shift_ >> 1) | (fb << 16);
+            }
+        }
+
+        // --- Envelope generator ---
+        if (!env_holding_) {
+            uint16_t ep = (regs_[ay_regs::ENV_COARSE] << 8) | regs_[ay_regs::ENV_FINE];
+            if (ep == 0) ep = 1;
+            if (++env_counter_ >= ep) {
+                env_counter_ = 0;
+                advance_envelope();
+            }
+        }
+
+        // Emit decimated sample into ring buffer (if sample rate configured)
+        buffer_sample();
     }
 
-    /// Get mixed mono sample (float, -1.0 to +1.0)
+    /// Get mixed mono sample (float, -1.0 to +1.0).
+    /// Used for direct polling (e.g. Spectrum beeper+AY mix).
     float get_sample() const {
-        // TODO: DAC table lookup + channel mixing
-        return 0.0f;
+        uint8_t mixer = regs_[ay_regs::MIXER];
+        float mix = 0.0f;
+
+        for (int ch = 0; ch < 3; ch++) {
+            // Mixer bits are active-low: 0 = enabled
+            // When disabled, the signal is forced HIGH (always "on")
+            bool tone_out  = (mixer & (1 << ch))       ? true : (bool)tone_output_[ch];
+            bool noise_out = (mixer & (1 << (ch + 3))) ? true : (bool)(noise_shift_ & 1);
+            // Channel contributes volume when BOTH gates are high
+            if (tone_out && noise_out) {
+                uint8_t amp_reg = regs_[ay_regs::AMP_A + ch];
+                bool env_mode = amp_reg & 0x10;
+                uint8_t level = env_mode ? env_volume_ : (amp_reg & 0x0F);
+                mix += dac_table_[level & 0x0F];
+            }
+        }
+
+        // 3 channels each max 1.0 → normalize to [-1.0, +1.0]
+        return (mix / 3.0f) * 2.0f - 1.0f;
     }
 
     AYVariant variant() const { return variant_; }
+
+    // === Audio output (ring buffer for systems using chip-level drain) ===
+
+    void set_clock_frequency(uint32_t internal_hz) {
+        internal_clock_hz_ = internal_hz;
+        update_cycles_per_sample();
+    }
+
+    void set_audio_sample_rate(int sample_rate_hz) {
+        audio_sample_rate_ = sample_rate_hz;
+        update_cycles_per_sample();
+    }
+
+    uint32_t audio_read(float* buffer, uint32_t max_samples) {
+        return audio_buffer_.read(buffer, max_samples);
+    }
+
+    uint32_t audio_available() const {
+        return audio_buffer_.available();
+    }
 
     // === ChipBase GUI virtuals ===
 #ifdef CERMU_HAS_GUI
@@ -203,11 +289,78 @@ private:
     // Envelope generator
     uint16_t  env_counter_ = 0;
     uint8_t   env_step_ = 0;
+    uint8_t   env_volume_ = 0;
+    bool      env_ascending_ = false;
     bool      env_holding_ = false;
 
     // I/O ports
     uint8_t   io_port_a_ = 0xFF;
     uint8_t   io_port_b_ = 0xFF;
+
+    // Audio output — decimated from AY clock to audio sample rate
+    AudioRingBuffer audio_buffer_;
+    uint32_t internal_clock_hz_ = 0;
+    int      audio_sample_rate_ = 0;
+    double   audio_cycles_per_sample_ = 0.0;
+    double   audio_cycle_accum_ = 0.0;
+
+    // AY-3-8910 DAC table — logarithmic 16-level amplitude
+    // Values measured from real hardware (Matthew Westcott)
+    static constexpr float dac_table_[16] = {
+        0.0000f, 0.0137f, 0.0205f, 0.0291f, 0.0423f, 0.0618f, 0.0847f, 0.1369f,
+        0.1691f, 0.2647f, 0.3527f, 0.4499f, 0.5704f, 0.6873f, 0.8482f, 1.0000f
+    };
+
+    void update_cycles_per_sample() {
+        if (audio_sample_rate_ > 0 && internal_clock_hz_ > 0) {
+            audio_cycles_per_sample_ =
+                static_cast<double>(internal_clock_hz_) / audio_sample_rate_;
+        }
+    }
+
+    /// Emit a decimated sample into the ring buffer if sample rate is configured.
+    void buffer_sample() {
+        if (audio_cycles_per_sample_ <= 0.0) return;  // No sample rate → skip
+        audio_cycle_accum_ += 1.0;
+        if (audio_cycle_accum_ < audio_cycles_per_sample_) return;
+        audio_cycle_accum_ -= audio_cycles_per_sample_;
+        float sample = get_sample();
+        audio_buffer_.write(&sample, 1);
+    }
+
+    /// Advance the envelope generator one step.
+    void advance_envelope() {
+        env_step_++;
+        if (env_step_ < 16) {
+            env_volume_ = env_ascending_ ? env_step_ : (15 - env_step_);
+            return;
+        }
+
+        // End of a 16-step cycle — handle shape
+        uint8_t shape = regs_[ay_regs::ENV_SHAPE] & 0x0F;
+        bool cont = shape & 0x08;
+        bool alt  = shape & 0x02;
+        bool hold = shape & 0x01;
+
+        if (!cont) {
+            // Non-continue: volume drops to 0
+            env_volume_ = 0;
+            env_holding_ = true;
+        } else if (hold) {
+            // Continue + hold: stay at final level
+            env_volume_ = (env_ascending_ != (bool)alt) ? 15 : 0;
+            env_holding_ = true;
+        } else if (alt) {
+            // Continue + alternate: reverse direction, restart
+            env_ascending_ = !env_ascending_;
+            env_step_ = 0;
+            env_volume_ = env_ascending_ ? 0 : 15;
+        } else {
+            // Continue + restart same direction (sawtooth)
+            env_step_ = 0;
+            env_volume_ = env_ascending_ ? 0 : 15;
+        }
+    }
 
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields();
