@@ -152,12 +152,21 @@ void AcornAtomSystem::run_frame() {
 
 bool AcornAtomSystem::load_file(const char*) { return false; }
 
-uint32_t* AcornAtomSystem::get_framebuffer() { return framebuffer_; }
+uint32_t* AcornAtomSystem::get_framebuffer() {
+    return rgba_framebuffer_ ? rgba_framebuffer_ : framebuffer_;
+}
 
 void AcornAtomSystem::get_display_dimensions(int* w, int* h) const {
     *w = acorn_atom_constants::FB_WIDTH; *h = acorn_atom_constants::FB_HEIGHT;
 }
-void AcornAtomSystem::set_framebuffer(uint32_t*, int, int) {}
+void AcornAtomSystem::set_framebuffer(uint32_t* buffer, int width, int height) {
+    System::set_framebuffer(buffer, width, height);
+    if (vdg_) {
+        vdg_->pixel.set_framebuffer(buffer ? buffer : framebuffer_,
+                                    buffer ? width  : acorn_atom_constants::FB_WIDTH,
+                                    buffer ? height : acorn_atom_constants::FB_HEIGHT);
+    }
+}
 
 uint32_t AcornAtomSystem::get_audio_samples(float*, uint32_t) { return 0; }
 void AcornAtomSystem::set_audio_sample_rate(int hz) { audio_sample_rate_ = hz; }

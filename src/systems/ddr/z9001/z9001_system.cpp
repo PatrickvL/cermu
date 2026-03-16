@@ -6,6 +6,7 @@
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
+#include "utils/charset_renderer.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -105,11 +106,10 @@ bool Z9001System<V>::initialize() {
 
     register_bus_chips(board_);
 
-    // GPU indexed palette rendering — per-frame VideoPixelUnit
-    pixel_.set_framebuffer(framebuffer_,
-                           z9001_constants::FB_WIDTH,
-                           z9001_constants::FB_HEIGHT);
-    register_gpu_palette(&pixel_, z9001_constants::PALETTE, 9);
+    // Display surface — owns index buffer, framebuffer, palette, pixel unit
+    display_.init(z9001_constants::FB_WIDTH, z9001_constants::FB_HEIGHT);
+    display_.set_palette(z9001_constants::PALETTE, 9);
+    register_display(&display_);
 
     printf("%s: System initialized (RAM: %d KB)\n", Traits::name, Traits::ram_size / 1024);
     system_ready_ = true;
@@ -170,11 +170,9 @@ template<Z9001Variant V> void Z9001System<V>::run_frame() {
 }
 
 template<Z9001Variant V> bool Z9001System<V>::load_file(const char*) { return false; }
-template<Z9001Variant V> uint32_t* Z9001System<V>::get_framebuffer() { return framebuffer_; }
 template<Z9001Variant V> void Z9001System<V>::get_display_dimensions(int* w, int* h) const {
     *w = z9001_constants::FB_WIDTH; *h = z9001_constants::FB_HEIGHT;
 }
-template<Z9001Variant V> void Z9001System<V>::set_framebuffer(uint32_t*, int, int) {}
 template<Z9001Variant V> uint32_t Z9001System<V>::get_audio_samples(float*, uint32_t) { return 0; }
 template<Z9001Variant V> void Z9001System<V>::set_audio_sample_rate(int hz) { audio_sample_rate_ = hz; }
 template<Z9001Variant V> void Z9001System<V>::render_system_menu_items() {}
@@ -358,54 +356,36 @@ template<Z9001Variant V>
 void Z9001System<V>::render_frame() {
     static constexpr int COLS = z9001_constants::TEXT_COLS;
     static constexpr int ROWS = z9001_constants::TEXT_ROWS;
-    static constexpr int CW   = 8;
-    static constexpr int CH   = 8;
 
     const uint8_t* vram = video_ram_chip_ ? video_ram_chip_->data() : nullptr;
     if (!vram) return;
 
-    const uint8_t* cram = nullptr;
+    display_.clear();
+
     if constexpr (Traits::has_color_ram) {
-        cram = color_ram_chip_ ? color_ram_chip_->data() : nullptr;
-    }
-
-    for (int row = 0; row < ROWS; row++) {
-        for (int col = 0; col < COLS; col++) {
-            int    pos  = row * COLS + col;
-            uint8_t chr = vram[pos];
-            int fb_x = col * CW;
-            int fb_y = row * CH;
-
-            // Determine foreground / background palette indices
-            uint8_t fg_idx, bg_idx;
-            if constexpr (Traits::has_color_ram) {
-                if (cram) {
-                    uint8_t attr = cram[pos];
-                    fg_idx = attr & 0x07;
-                    bg_idx = (attr >> 3) & 0x07;
-                } else {
-                    fg_idx = 8;   // white (monochrome fallback)
-                    bg_idx = 0;   // black
-                }
-            } else {
-                fg_idx = 8;   // white (monochrome)
-                bg_idx = 0;   // black
-            }
-
-            for (int gy = 0; gy < CH; gy++) {
-                uint8_t bits = char_rom_[chr * 8 + gy];
-                for (int gx = 0; gx < CW; gx++) {
-                    int    px  = fb_x + gx;
-                    int    py  = fb_y + gy;
-                    bool   set = (bits & (0x80u >> gx)) != 0;
-                    frame_indices_[py * z9001_constants::FB_WIDTH + px] = set ? fg_idx : bg_idx;
-                }
-            }
+        const uint8_t* cram = color_ram_chip_ ? color_ram_chip_->data() : nullptr;
+        if (cram) {
+            // KC87: per-character fg (bits 2:0) and bg (bits 5:3) from color RAM
+            charset_renderer::render_screen_attr(
+                display_.indices(), z9001_constants::FB_WIDTH,
+                vram, char_rom_.data(), cram,
+                0x07, 0,    // fg: bits 2:0, no shift
+                0x38, 3,    // bg: bits 5:3, shift 3
+                COLS, ROWS, 8, 8);
+        } else {
+            // Color RAM not available — monochrome fallback
+            charset_renderer::render_screen(display_.indices(), z9001_constants::FB_WIDTH,
+                                            vram, char_rom_.data(),
+                                            COLS, ROWS, 8, 8, 8, 0);
         }
+    } else {
+        // Z9001: monochrome (white on black)
+        charset_renderer::render_screen(display_.indices(), z9001_constants::FB_WIDTH,
+                                        vram, char_rom_.data(),
+                                        COLS, ROWS, 8, 8, 8, 0);
     }
 
-    // Flush: GPU mode → index_buffer, CPU mode → RGBA framebuffer
-    pixel_.flush_indexed_frame(frame_indices_, z9001_constants::PALETTE);
+    display_.flush();
 }
 
 // ============================================================================

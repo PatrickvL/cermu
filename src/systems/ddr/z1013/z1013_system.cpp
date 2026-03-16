@@ -5,6 +5,7 @@
 #include "systems/ddr/z1013/z1013_system.hpp"
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
+#include "utils/charset_renderer.hpp"
 #include "core/config/path_discovery.hpp"
 #include <cstring>
 #include <cstdio>
@@ -103,11 +104,10 @@ bool Z1013System<V>::initialize() {
     // ── Register chips for Hardware menu ────────────────────────────────
     register_bus_chips(board_);
 
-    // GPU indexed palette rendering — per-frame VideoPixelUnit
-    pixel_.set_framebuffer(framebuffer_,
-                           z1013_constants::FB_WIDTH,
-                           z1013_constants::FB_HEIGHT);
-    register_gpu_palette(&pixel_, z1013_constants::PALETTE, 2);
+    // Display surface — owns index buffer, framebuffer, palette, pixel unit
+    display_.init(z1013_constants::FB_WIDTH, z1013_constants::FB_HEIGHT);
+    display_.set_palette(z1013_constants::PALETTE, 2);
+    register_display(&display_);
 
     system_ready_ = true;
     return true;
@@ -154,11 +154,9 @@ template<Z1013Variant V> void Z1013System<V>::run_frame() {
 }
 
 template<Z1013Variant V> bool Z1013System<V>::load_file(const char*) { return false; }
-template<Z1013Variant V> uint32_t* Z1013System<V>::get_framebuffer() { return framebuffer_; }
 template<Z1013Variant V> void Z1013System<V>::get_display_dimensions(int* w, int* h) const {
     *w = z1013_constants::FB_WIDTH; *h = z1013_constants::FB_HEIGHT;
 }
-template<Z1013Variant V> void Z1013System<V>::set_framebuffer(uint32_t*, int, int) {}
 template<Z1013Variant V> uint32_t Z1013System<V>::get_audio_samples(float*, uint32_t) { return 0; }
 template<Z1013Variant V> void Z1013System<V>::set_audio_sample_rate(int hz) { audio_sample_rate_ = hz; }
 template<Z1013Variant V> void Z1013System<V>::render_system_menu_items() {}
@@ -303,33 +301,15 @@ template<Z1013Variant V>
 void Z1013System<V>::render_frame() {
     static constexpr int COLS = z1013_constants::TEXT_COLS;
     static constexpr int ROWS = z1013_constants::TEXT_ROWS;
-    static constexpr int CW   = 8;
-    static constexpr int CH   = 8;
 
     const uint8_t* vram = video_ram_chip_ ? video_ram_chip_->data() : nullptr;
     if (!vram) return;
 
-    for (int row = 0; row < ROWS; row++) {
-        for (int col = 0; col < COLS; col++) {
-            uint8_t chr = vram[row * COLS + col];
-            int fb_x = col * CW;
-            int fb_y = row * CH;
-
-            for (int gy = 0; gy < CH; gy++) {
-                // char ROM: 256 chars × 8 bytes. Each byte = one row of 8 pixels.
-                uint8_t bits = char_rom_[chr * 8 + gy];
-                for (int gx = 0; gx < CW; gx++) {
-                    int    px  = fb_x + gx;
-                    int    py  = fb_y + gy;
-                    bool   set = (bits & (0x80u >> gx)) != 0;
-                    frame_indices_[py * z1013_constants::FB_WIDTH + px] = set ? 1 : 0;
-                }
-            }
-        }
-    }
-
-    // Flush: GPU mode → index_buffer, CPU mode → RGBA framebuffer
-    pixel_.flush_indexed_frame(frame_indices_, z1013_constants::PALETTE);
+    display_.clear();
+    charset_renderer::render_screen(display_.indices(), z1013_constants::FB_WIDTH,
+                                    vram, char_rom_.data(),
+                                    COLS, ROWS, 8, 8, 1, 0);
+    display_.flush();
 }
 
 // ============================================================================

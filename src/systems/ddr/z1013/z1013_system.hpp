@@ -11,6 +11,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/display_surface.hpp"
 #include "chip/cpu/z80/u880.hpp"
 #include "chip/cpu/z80/z80.hpp"   // Z80_MREQ_BIT / Z80_IORQ_BIT
 #include "chip/io/z80_pio.hpp"
@@ -144,9 +145,7 @@ public:
 
     bool load_file(const char* filepath) override;
 
-    uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
-    void set_framebuffer(uint32_t* buffer, int width, int height) override;
 
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
     void set_audio_sample_rate(int sample_rate_hz) override;
@@ -181,13 +180,7 @@ private:
     MainBoard board_{BT::kManifest};
 
     // ── Display ──────────────────────────────────────────────────────────
-    uint32_t framebuffer_[z1013_constants::FB_WIDTH *
-                          z1013_constants::FB_HEIGHT] = {};
-
-    // GPU indexed palette rendering — per-frame path
-    VideoPixelUnit pixel_;
-    uint8_t frame_indices_[z1013_constants::FB_WIDTH *
-                           z1013_constants::FB_HEIGHT] = {};
+    DisplaySurface display_;
 
     // ── Keyboard ─────────────────────────────────────────────────────────
     uint8_t keyboard_matrix_[z1013_constants::KEYBOARD_ROWS] = {};

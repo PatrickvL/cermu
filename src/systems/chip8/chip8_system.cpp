@@ -340,12 +340,14 @@ Chip8System::Chip8System()
     register_chip8_chips();
 
     // GPU indexed palette rendering
-    for (int i = 0; i < 4 && i < static_cast<int>(current_palette_.size()); i++)
-        rgba_palette_[i] = current_palette_[i].to_rgba32();
-    pixel_.set_framebuffer(framebuffer_,
-                           chip8_constants::HIRES_WIDTH,
-                           chip8_constants::HIRES_HEIGHT);
-    register_gpu_palette(&pixel_, rgba_palette_, 4);
+    display_.init(chip8_constants::HIRES_WIDTH, chip8_constants::HIRES_HEIGHT);
+    {
+        uint32_t pal[4] = {};
+        for (int i = 0; i < 4 && i < static_cast<int>(current_palette_.size()); i++)
+            pal[i] = current_palette_[i].to_rgba32();
+        display_.set_palette(pal, 4);
+    }
+    register_display(&display_);
 }
 
 // ============================================================================
@@ -400,7 +402,7 @@ bool Chip8System::set_configuration(const SystemConfiguration& config) {
         }
         // Sync GPU palette
         for (int i = 0; i < 4 && i < static_cast<int>(current_palette_.size()); i++)
-            rgba_palette_[i] = current_palette_[i].to_rgba32();
+            display_.palette().set_entry(i, current_palette_[i].to_rgba32());
     }
     
     // Apply mode selection
@@ -567,6 +569,7 @@ void Chip8System::run_frame() {
     // Convert planes_ to palette indices and flush
     static constexpr int w = chip8_constants::HIRES_WIDTH;
     static constexpr int h = chip8_constants::HIRES_HEIGHT;
+    uint8_t* indices = display_.indices();
 
     if (hires_) {
         for (int y = 0; y < h; y++) {
@@ -576,7 +579,7 @@ void Chip8System::run_frame() {
                 uint8_t idx = 0;
                 if ((planes_[0][byte_idx] >> bit_idx) & 1) idx |= 1;
                 if ((planes_[1][byte_idx] >> bit_idx) & 1) idx |= 2;
-                frame_indices_[y * w + x] = idx;
+                indices[y * w + x] = idx;
             }
         }
     } else {
@@ -589,15 +592,15 @@ void Chip8System::run_frame() {
                 if ((planes_[0][byte_idx] >> bit_idx) & 1) idx |= 1;
                 if ((planes_[1][byte_idx] >> bit_idx) & 1) idx |= 2;
                 int dx = x * 2, dy = y * 2;
-                frame_indices_[dy * w + dx]         = idx;
-                frame_indices_[dy * w + dx + 1]     = idx;
-                frame_indices_[(dy + 1) * w + dx]   = idx;
-                frame_indices_[(dy + 1) * w + dx + 1] = idx;
+                indices[dy * w + dx]         = idx;
+                indices[dy * w + dx + 1]     = idx;
+                indices[(dy + 1) * w + dx]   = idx;
+                indices[(dy + 1) * w + dx + 1] = idx;
             }
         }
     }
 
-    pixel_.flush_indexed_frame(frame_indices_, rgba_palette_);
+    display_.flush();
 }
 
 // ============================================================================
@@ -646,10 +649,6 @@ bool Chip8System::load_file(const char* filepath) {
 // ============================================================================
 // Display
 // ============================================================================
-
-uint32_t* Chip8System::get_framebuffer() {
-    return framebuffer_;
-}
 
 void Chip8System::get_display_dimensions(int* width, int* height) const {
     *width = chip8_constants::HIRES_WIDTH;

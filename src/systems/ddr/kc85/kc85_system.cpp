@@ -112,10 +112,10 @@ bool KC85System<V>::initialize() {
     register_bus_chips(board_);
 
     // ── GPU indexed palette rendering ───────────────────────────────
-    pixel_.set_framebuffer(framebuffer_,
-                           kc85_constants::FB_WIDTH,
-                           kc85_constants::FB_HEIGHT);
-    register_gpu_palette(&pixel_, kc85_constants::PALETTE, kc85_constants::COLOR_COUNT);
+    // Display surface
+    display_.init(kc85_constants::FB_WIDTH, kc85_constants::FB_HEIGHT);
+    display_.set_palette(kc85_constants::PALETTE, kc85_constants::COLOR_COUNT);
+    register_display(&display_);
 
     printf("%s: System initialized (RAM: %d KB, IRM: %d KB)\n",
            Traits::name, Traits::ram_size / 1024,
@@ -253,11 +253,9 @@ template<KC85Variant V> void KC85System<V>::run_frame() {
 }
 
 template<KC85Variant V> bool KC85System<V>::load_file(const char*) { return false; }
-template<KC85Variant V> uint32_t* KC85System<V>::get_framebuffer() { return framebuffer_; }
 template<KC85Variant V> void KC85System<V>::get_display_dimensions(int* w, int* h) const {
     *w = kc85_constants::FB_WIDTH; *h = kc85_constants::FB_HEIGHT;
 }
-template<KC85Variant V> void KC85System<V>::set_framebuffer(uint32_t*, int, int) {}
 template<KC85Variant V> uint32_t KC85System<V>::get_audio_samples(float*, uint32_t) { return 0; }
 template<KC85Variant V> void KC85System<V>::set_audio_sample_rate(int hz) { audio_sample_rate_ = hz; }
 template<KC85Variant V> void KC85System<V>::handle_keyboard_event(SDL_Keycode, bool) {}
@@ -295,7 +293,7 @@ void KC85System<V>::render_frame() {
         const uint8_t* color_base = irm + (2 + active_plane_) * 16384;
 
         for (int y = 0; y < kc85_constants::FB_HEIGHT; y++) {
-            uint8_t* dst = frame_indices_ + y * kc85_constants::FB_WIDTH;
+            uint8_t* dst = display_.indices() + y * kc85_constants::FB_WIDTH;
             for (int col = 0; col < kc85_constants::KC4_PIXEL_COLS; col++) {
                 uint8_t pixels = pixel_base[col * 256 + y];
                 uint8_t color  = color_base[col * 256 + y];
@@ -310,10 +308,10 @@ void KC85System<V>::render_frame() {
     } else {
         // KC85/2,3: 256×256, centered in 320-pixel framebuffer
         // Clear border columns to black (palette index 0)
-        std::memset(frame_indices_, 0, sizeof(frame_indices_));
+        display_.clear();
 
         for (int y = 0; y < kc85_constants::FB_HEIGHT; y++) {
-            uint8_t* dst = frame_indices_ + y * kc85_constants::FB_WIDTH
+            uint8_t* dst = display_.indices() + y * kc85_constants::FB_WIDTH
                          + kc85_constants::KC23_BORDER_X;
             for (int col = 0; col < kc85_constants::KC23_PIXEL_COLS; col++) {
                 uint8_t pixels = irm[col * 256 + y];
@@ -330,7 +328,7 @@ void KC85System<V>::render_frame() {
         }
     }
 
-    pixel_.flush_indexed_frame(frame_indices_, kc85_constants::PALETTE);
+    display_.flush();
 }
 
 // ============================================================================

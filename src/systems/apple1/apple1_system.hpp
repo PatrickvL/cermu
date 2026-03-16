@@ -7,7 +7,6 @@
 #include "systems/apple1/apple1_constants.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/io/pia6820.hpp"
-#include "chip/video/video_pixel_unit.hpp"
 #include "chip/memory/memory_chip.hpp"
 #include <cstdint>
 #include <memory>
@@ -93,9 +92,7 @@ public:
     bool load_file(const char* filepath) override;
     
     // Display
-    uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
-    void set_framebuffer(uint32_t* buffer, int width, int height) override;
     
     // Input
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
@@ -127,11 +124,7 @@ private:
     MainBoard board_{kApple1Chips};
 
     // Display — own framebuffer + GPU indexed rendering
-    uint32_t framebuffer_[apple1_constants::DISPLAY_WIDTH *
-                          apple1_constants::DISPLAY_HEIGHT] = {};
-    VideoPixelUnit pixel_;
-    uint8_t frame_indices_[apple1_constants::DISPLAY_WIDTH *
-                           apple1_constants::DISPLAY_HEIGHT] = {};
+    DisplaySurface display_;
 
     // System state
     uint32_t cycles_per_frame_;

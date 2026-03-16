@@ -3,6 +3,7 @@
  */
 
 #include "systems/arcade/bombjack/bombjack_system.hpp"
+#include "utils/resistor_dac.hpp"
 #include "core/system_registry.hpp"
 #include <cstring>
 #include <cstdio>
@@ -76,12 +77,9 @@ bool BombJackSystem::initialize() {
     load_roms();
 
     // ── GPU indexed palette rendering ───────────────────────────────
-    pixel_.set_framebuffer(framebuffer_,
-                           bombjack_constants::FB_WIDTH,
-                           bombjack_constants::FB_HEIGHT);
+    display_.init(bombjack_constants::FB_WIDTH, bombjack_constants::FB_HEIGHT);
     decode_palette();
-    register_gpu_palette(&pixel_, rgba_palette_,
-                         bombjack_constants::PALETTE_ENTRIES);
+    register_display(&display_);
 
     // ── Register chips for Hardware menu ─────────────────────────────────
 
@@ -175,11 +173,9 @@ void BombJackSystem::run_frame() {
 }
 
 bool BombJackSystem::load_file(const char*) { return false; }
-uint32_t* BombJackSystem::get_framebuffer() { return framebuffer_; }
 void BombJackSystem::get_display_dimensions(int* w, int* h) const {
     *w = bombjack_constants::FB_WIDTH; *h = bombjack_constants::FB_HEIGHT;
 }
-void BombJackSystem::set_framebuffer(uint32_t*, int, int) {}
 uint32_t BombJackSystem::get_audio_samples(float*, uint32_t) { return 0; }
 void BombJackSystem::set_audio_sample_rate(int hz) { audio_sample_rate_ = hz; }
 void BombJackSystem::handle_keyboard_event(SDL_Keycode, bool) {}
@@ -200,16 +196,8 @@ void BombJackSystem::set_speed_multiplier(float m) { speed_multiplier_ = m; }
 void BombJackSystem::decode_palette() {
     if (!palette_ram_chip_) return;
     const uint8_t* pal = palette_ram_chip_->data();
-    for (int i = 0; i < bombjack_constants::PALETTE_ENTRIES; i++) {
-        uint8_t entry = pal[i];
-        int r = 0x21 * ((entry >> 0) & 1) + 0x47 * ((entry >> 1) & 1) + 0x97 * ((entry >> 2) & 1);
-        int g = 0x21 * ((entry >> 3) & 1) + 0x47 * ((entry >> 4) & 1) + 0x97 * ((entry >> 5) & 1);
-        int b = 0x51 * ((entry >> 6) & 1) + 0xAE * ((entry >> 7) & 1);
-        rgba_palette_[i] = 0xFF000000u
-                         | (static_cast<uint32_t>(b) << 16)
-                         | (static_cast<uint32_t>(g) << 8)
-                         | static_cast<uint32_t>(r);
-    }
+    display_.palette().decode_from(pal, bombjack_constants::PALETTE_ENTRIES,
+                                   resistor_dac::decode_3_3_2);
 }
 
 // ============================================================================
@@ -239,7 +227,7 @@ void BombJackSystem::render_frame() {
     const int char_count = char_rom_.empty() ? 0
                          : static_cast<int>(char_rom_.size()) / 24;
 
-    std::memset(frame_indices_, 0, sizeof(frame_indices_));
+    std::memset(display_.indices(), 0, bombjack_constants::FB_WIDTH * bombjack_constants::FB_HEIGHT);
 
     // Render 32×28 visible foreground tiles
     for (int ty = 0; ty < 28; ty++) {
@@ -263,7 +251,7 @@ void BombJackSystem::render_frame() {
                 uint8_t p1 = (char_count > 0) ? tile[src_y + 8]  : 0;
                 uint8_t p2 = (char_count > 0) ? tile[src_y + 16] : 0;
 
-                uint8_t* dst = frame_indices_
+                uint8_t* dst = display_.indices()
                              + (fb_y + py) * bombjack_constants::FB_WIDTH + fb_x;
 
                 for (int px = 0; px < 8; px++) {
@@ -277,7 +265,7 @@ void BombJackSystem::render_frame() {
         }
     }
 
-    pixel_.flush_indexed_frame(frame_indices_, rgba_palette_);
+    display_.flush();
 }
 
 // ============================================================================

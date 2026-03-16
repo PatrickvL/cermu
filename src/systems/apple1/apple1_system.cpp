@@ -229,10 +229,9 @@ bool Apple1System::initialize() {
     register_chip(std::move(char_chip));
 
     // GPU indexed palette rendering
-    pixel_.set_framebuffer(framebuffer_,
-                           apple1_constants::DISPLAY_WIDTH,
-                           apple1_constants::DISPLAY_HEIGHT);
-    register_gpu_palette(&pixel_, apple1_constants::PALETTE, 2);
+    display_.init(apple1_constants::DISPLAY_WIDTH, apple1_constants::DISPLAY_HEIGHT);
+    display_.set_palette(apple1_constants::PALETTE, 2);
+    register_display(&display_);
     
     printf("Apple1: System initialized (RAM: %dKB)\n", ram_size_ / 1024);
     return true;
@@ -290,11 +289,11 @@ void Apple1System::run_frame() {
 
     // Render terminal to indexed frame buffer
     if (terminal_) {
-        terminal_->render_indexed(frame_indices_,
+        terminal_->render_indexed(display_.indices(),
                                   apple1_constants::DISPLAY_WIDTH,
                                   apple1_constants::DISPLAY_HEIGHT,
                                   1, 0);  // fg=1 (green), bg=0 (black)
-        pixel_.flush_indexed_frame(frame_indices_, apple1_constants::PALETTE);
+        display_.flush();
     }
 }
 
@@ -326,17 +325,9 @@ bool Apple1System::load_file(const char* filepath) {
 // Display
 // ============================================================================
 
-uint32_t* Apple1System::get_framebuffer() {
-    return framebuffer_;
-}
-
 void Apple1System::get_display_dimensions(int* width, int* height) const {
     *width = apple1_constants::DISPLAY_WIDTH;
     *height = apple1_constants::DISPLAY_HEIGHT;
-}
-
-void Apple1System::set_framebuffer(uint32_t*, int, int) {
-    // Apple 1 owns its framebuffer — external assignment ignored.
 }
 
 // ============================================================================
