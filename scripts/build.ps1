@@ -160,8 +160,17 @@ function Build-Project {
 
     Push-Location $ProjectDir
     try {
-        # Configure
-        cmake -B build -S . -DCMAKE_BUILD_TYPE=$Configuration
+        # Configure — pass vcpkg toolchain when VCPKG_ROOT is set
+        $cmakeArgs = @("-B", "build", "-S", ".", "-DCMAKE_BUILD_TYPE=$Configuration")
+        if ($env:VCPKG_ROOT -and (Test-Path "$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake")) {
+            $toolchain = "$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" -replace '\\', '/'
+            $tripletDir = "$ProjectDir\cmake\triplets" -replace '\\', '/'
+            $cmakeArgs += "-DCMAKE_TOOLCHAIN_FILE=$toolchain"
+            $cmakeArgs += "-DVCPKG_TARGET_TRIPLET=x64-windows-static-md"
+            $cmakeArgs += "-DVCPKG_OVERLAY_TRIPLETS=$tripletDir"
+            Write-Ok "Using vcpkg toolchain from $env:VCPKG_ROOT"
+        }
+        cmake @cmakeArgs
         if ($LASTEXITCODE -ne 0) {
             Write-Err "CMake configuration failed"
             exit $LASTEXITCODE

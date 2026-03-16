@@ -202,7 +202,15 @@ build_project() {
     mkdir -p "$BUILD_DIR"
 
     cd "$PROJECT_DIR"
-    cmake -B build -S . -DCMAKE_BUILD_TYPE="$cmake_type"
+
+    # Pass vcpkg toolchain when VCPKG_ROOT is set
+    local cmake_extra=()
+    if [ -n "${VCPKG_ROOT:-}" ] && [ -f "${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" ]; then
+        cmake_extra+=("-DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
+        echo "    Using vcpkg toolchain from ${VCPKG_ROOT}"
+    fi
+
+    cmake -B build -S . -DCMAKE_BUILD_TYPE="$cmake_type" "${cmake_extra[@]}"
 
     # Determine targets
     local targets=()

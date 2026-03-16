@@ -1,5 +1,22 @@
 cmake_minimum_required(VERSION 3.16)
 
+# ---- vcpkg integration (optional) -----------------------------------------
+# When the vcpkg toolchain is active (passed via -DCMAKE_TOOLCHAIN_FILE or the
+# VCPKG_ROOT environment variable), use our custom triplet overlay so that
+# Windows gets static libs with dynamic CRT (x64-windows-static-md).
+if(DEFINED ENV{VCPKG_ROOT} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+        CACHE STRING "vcpkg toolchain file")
+endif()
+if(WIN32 OR MSVC)
+    set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/triplets"
+        CACHE STRING "vcpkg triplet overlay")
+    if(NOT DEFINED VCPKG_TARGET_TRIPLET)
+        set(VCPKG_TARGET_TRIPLET "x64-windows-static-md"
+            CACHE STRING "vcpkg target triplet")
+    endif()
+endif()
+
 # Project definition
 project(cermu
     VERSION 0.1.0
@@ -17,22 +34,48 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(tomlplusplus)
 
 # Find libarchive (archive reading — ZIP, 7z, RAR, tar, etc.)
-# Try PkgConfig first, then CMake's FindLibArchive, then fall back to stubs.
+# Strategy: CMake find_package first (works with vcpkg and system installs),
+# then PkgConfig (Linux), then fall back to stubs.
 set(LIBARCHIVE_FOUND FALSE)
-find_package(PkgConfig QUIET)
-if(PkgConfig_FOUND)
-    pkg_check_modules(LIBARCHIVE QUIET libarchive)
-    if(LIBARCHIVE_FOUND)
-        message(STATUS "Found libarchive via pkg-config")
-    endif()
-endif()
-if(NOT LIBARCHIVE_FOUND)
-    find_package(LibArchive QUIET)
-    if(LibArchive_FOUND)
+find_package(LibArchive QUIET)
+if(LibArchive_FOUND)
+    set(LIBARCHIVE_FOUND TRUE)
+    # Prefer the imported target when available (vcpkg, modern CMake).
+    # Set LIBARCHIVE_LIBRARIES so every target_link_libraries() call works
+    # whether we got the imported target or the raw .lib path.
+    if(TARGET LibArchive::LibArchive)
+        # Fix multi-config (MSVC) debug/release selection.  CMake's built-in
+        # FindLibArchive sets a single IMPORTED_LOCATION from find_library(),
+        # which may pick the debug lib.  When vcpkg provides both debug and
+        # release static libs, patch the target with per-config locations so
+        # the linker gets the right CRT flavour.
+        get_target_property(_la_loc LibArchive::LibArchive IMPORTED_LOCATION)
+        if(_la_loc MATCHES "/debug/")
+            string(REPLACE "/debug/" "/" _la_release "${_la_loc}")
+            if(EXISTS "${_la_release}")
+                set_target_properties(LibArchive::LibArchive PROPERTIES
+                    IMPORTED_LOCATION                 "${_la_release}"
+                    IMPORTED_LOCATION_RELEASE         "${_la_release}"
+                    IMPORTED_LOCATION_RELWITHDEBINFO  "${_la_release}"
+                    IMPORTED_LOCATION_MINSIZEREL      "${_la_release}"
+                    IMPORTED_LOCATION_DEBUG            "${_la_loc}")
+            endif()
+        endif()
+        set(LIBARCHIVE_LIBRARIES LibArchive::LibArchive)
+        set(LIBARCHIVE_INCLUDE_DIRS "")  # target carries its own includes
+    else()
         set(LIBARCHIVE_INCLUDE_DIRS ${LibArchive_INCLUDE_DIRS})
         set(LIBARCHIVE_LIBRARIES ${LibArchive_LIBRARIES})
-        set(LIBARCHIVE_FOUND TRUE)
-        message(STATUS "Found libarchive via CMake find_package")
+    endif()
+    message(STATUS "Found libarchive via CMake find_package")
+endif()
+if(NOT LIBARCHIVE_FOUND)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(LIBARCHIVE QUIET libarchive)
+        if(LIBARCHIVE_FOUND)
+            message(STATUS "Found libarchive via pkg-config")
+        endif()
     endif()
 endif()
 if(NOT LIBARCHIVE_FOUND)
