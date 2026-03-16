@@ -66,11 +66,22 @@ bool BombJackSystem::initialize() {
     // ── Init chips ───────────────────────────────────────────────────────
     main_cpu_  = main_board_.cpu<ZilogZ80A>();
     sound_cpu_ = sound_board_.cpu<ZilogZ80A>();
+    fg_tilemap_chip_  = main_board_.chip_as<RAMChip>(bj_main::kFgTilemap);
+    fg_attr_chip_     = main_board_.chip_as<RAMChip>(bj_main::kFgAttr);
+    palette_ram_chip_ = main_board_.chip_as<RAMChip>(bj_main::kPaletteRam);
     main_pins_  = main_board_.cpu_chip()->init();
     sound_pins_ = sound_board_.cpu_chip()->init();
     for (auto& ay : ay_) ay.init();
 
     load_roms();
+
+    // ── GPU indexed palette rendering ───────────────────────────────
+    pixel_.set_framebuffer(framebuffer_,
+                           bombjack_constants::FB_WIDTH,
+                           bombjack_constants::FB_HEIGHT);
+    decode_palette();
+    register_gpu_palette(&pixel_, rgba_palette_,
+                         bombjack_constants::PALETTE_ENTRIES);
 
     // ── Register chips for Hardware menu ─────────────────────────────────
 
@@ -159,6 +170,8 @@ void BombJackSystem::tick() {
 
 void BombJackSystem::run_frame() {
     for (uint32_t i = 0; i < bombjack_constants::MAIN_CYCLES_PER_FRAME; ++i) tick();
+    decode_palette();
+    render_frame();
 }
 
 bool BombJackSystem::load_file(const char*) { return false; }
@@ -173,6 +186,99 @@ void BombJackSystem::handle_keyboard_event(SDL_Keycode, bool) {}
 void BombJackSystem::render_system_menu_items() {}
 void BombJackSystem::render_configuration_ui() {}
 void BombJackSystem::set_speed_multiplier(float m) { speed_multiplier_ = m; }
+
+// ============================================================================
+// PALETTE DECODE — rebuild RGBA palette from palette RAM each frame
+// ============================================================================
+//
+// Palette RAM at $9C00 (128 bytes used): each byte encodes one color
+// using the same 3-3-2 resistor DAC as Pac-Man hardware.
+//   bits [2:0] = red   (3-bit, weights 0x21/0x47/0x97)
+//   bits [5:3] = green (3-bit, weights 0x21/0x47/0x97)
+//   bits [7:6] = blue  (2-bit, weights 0x51/0xAE)
+
+void BombJackSystem::decode_palette() {
+    if (!palette_ram_chip_) return;
+    const uint8_t* pal = palette_ram_chip_->data();
+    for (int i = 0; i < bombjack_constants::PALETTE_ENTRIES; i++) {
+        uint8_t entry = pal[i];
+        int r = 0x21 * ((entry >> 0) & 1) + 0x47 * ((entry >> 1) & 1) + 0x97 * ((entry >> 2) & 1);
+        int g = 0x21 * ((entry >> 3) & 1) + 0x47 * ((entry >> 4) & 1) + 0x97 * ((entry >> 5) & 1);
+        int b = 0x51 * ((entry >> 6) & 1) + 0xAE * ((entry >> 7) & 1);
+        rgba_palette_[i] = 0xFF000000u
+                         | (static_cast<uint32_t>(b) << 16)
+                         | (static_cast<uint32_t>(g) << 8)
+                         | static_cast<uint32_t>(r);
+    }
+}
+
+// ============================================================================
+// VIDEO RENDERING — decode FG tilemap into indexed framebuffer
+// ============================================================================
+//
+// Bomb Jack display: 256×224, visible area 32×28 foreground tiles (8×8).
+//
+// FG tilemap at $9000 (1024 bytes, 32×32 grid, only 32×28 visible):
+//   Tile index byte → character ROM lookup
+//
+// FG attributes at $9400 (1024 bytes):
+//   bits [3:0] = palette group (selects 8 colors from 128-entry palette)
+//   bit 6 = flip X, bit 7 = flip Y
+//
+// Char ROM tile format — 3bpp, 8×8 pixels, 24 bytes per tile:
+//   Plane 0: bytes 0-7, Plane 1: bytes 8-15, Plane 2: bytes 16-23
+//
+// Palette index = palette_group * 8 + pixel_3bit (0-127)
+
+void BombJackSystem::render_frame() {
+    if (!fg_tilemap_chip_ || !fg_attr_chip_) return;
+
+    const uint8_t* tilemap = fg_tilemap_chip_->data();
+    const uint8_t* attr_map = fg_attr_chip_->data();
+    const uint8_t* chars = char_rom_.data();
+    const int char_count = char_rom_.empty() ? 0
+                         : static_cast<int>(char_rom_.size()) / 24;
+
+    std::memset(frame_indices_, 0, sizeof(frame_indices_));
+
+    // Render 32×28 visible foreground tiles
+    for (int ty = 0; ty < 28; ty++) {
+        for (int tx = 0; tx < 32; tx++) {
+            int offs = ty * 32 + tx;
+            uint8_t tile_idx = tilemap[offs];
+            uint8_t attr = attr_map[offs];
+            uint8_t pal_group = attr & 0x0F;
+            bool flip_x = (attr & 0x40) != 0;
+            bool flip_y = (attr & 0x80) != 0;
+
+            if (tile_idx >= char_count && char_count > 0) tile_idx = 0;
+
+            const uint8_t* tile = chars + tile_idx * 24;
+            int fb_x = tx * 8;
+            int fb_y = ty * 8;
+
+            for (int py = 0; py < 8; py++) {
+                int src_y = flip_y ? (7 - py) : py;
+                uint8_t p0 = (char_count > 0) ? tile[src_y]      : 0;
+                uint8_t p1 = (char_count > 0) ? tile[src_y + 8]  : 0;
+                uint8_t p2 = (char_count > 0) ? tile[src_y + 16] : 0;
+
+                uint8_t* dst = frame_indices_
+                             + (fb_y + py) * bombjack_constants::FB_WIDTH + fb_x;
+
+                for (int px = 0; px < 8; px++) {
+                    int src_x = flip_x ? px : (7 - px);
+                    uint8_t pixel = ((p0 >> src_x) & 1)
+                                  | (((p1 >> src_x) & 1) << 1)
+                                  | (((p2 >> src_x) & 1) << 2);
+                    dst[px] = (pal_group * 8 + pixel) & 0x7F;
+                }
+            }
+        }
+    }
+
+    pixel_.flush_indexed_frame(frame_indices_, rgba_palette_);
+}
 
 // ============================================================================
 // I/O DISPATCH — Main CPU ($B000-$BFFF memory-mapped registers)

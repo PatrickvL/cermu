@@ -155,6 +155,10 @@ private:
     // ── Display ──────────────────────────────────────────────────────────
     uint32_t framebuffer_[bombjack_constants::FB_WIDTH *
                           bombjack_constants::FB_HEIGHT] = {};
+    VideoPixelUnit pixel_;
+    uint8_t frame_indices_[bombjack_constants::FB_WIDTH *
+                           bombjack_constants::FB_HEIGHT] = {};
+    uint32_t rgba_palette_[bombjack_constants::PALETTE_ENTRIES] = {};
     uint8_t bg_image_select_ = 0;       // Active background (0–4)
 
     // ── Inputs ───────────────────────────────────────────────────────────
@@ -176,4 +180,11 @@ private:
     bus_state_t main_io_tick(bus_state_t pins);   // $B000+ I/O registers
     bus_state_t sound_io_tick(bus_state_t pins);   // AY-3-8910 port I/O
     bool load_roms();
+    void decode_palette();                         // Rebuild rgba_palette_ from palette RAM
+    void render_frame();                           // Decode FG tilemap into indexed framebuffer
+
+    // Chip pointers (cached for rendering hot path)
+    RAMChip* fg_tilemap_chip_ = nullptr;
+    RAMChip* fg_attr_chip_    = nullptr;
+    RAMChip* palette_ram_chip_ = nullptr;
 };
