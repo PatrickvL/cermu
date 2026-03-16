@@ -1144,6 +1144,18 @@ void C64System::ensure_compatible_for_sid(const sid_header_t* sid) {
                needed_standard == VIC_NTSC ? "NTSC" : "PAL",
                get_vicii_standard() == VIC_NTSC ? "NTSC" : "PAL");
 
+        // Save current peripheral assignments before shutdown
+        // destroys owned_devices_ and ports.
+        std::vector<std::pair<int, std::string>> saved_devices;
+        {
+            const auto& ports = get_ports();
+            for (int i = 0; i < static_cast<int>(ports.size()); ++i) {
+                if (auto* dev = ports[i]->get_attached_device()) {
+                    saved_devices.emplace_back(i, dev->get_id());
+                }
+            }
+        }
+
         shutdown();
 
         // Update the configuration before recreation
@@ -1156,6 +1168,16 @@ void C64System::ensure_compatible_for_sid(const sid_header_t* sid) {
         if (!initialize()) {
             printf("C64: ERROR — failed to reinitialize after region change\n");
             return;
+        }
+
+        // Re-attach peripherals that were present before the reinit
+        if (!saved_devices.empty()) {
+            for (auto& [port_idx, dev_id] : saved_devices) {
+                attach_device_to_port(port_idx, dev_id.c_str());
+            }
+            auto_assign_controller_keymaps();
+        } else {
+            attach_default_peripherals();
         }
     } else {
         // Same region — just update SID revision in-place and reset
