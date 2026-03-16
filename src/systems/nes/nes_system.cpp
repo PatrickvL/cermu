@@ -253,8 +253,30 @@ bool NintendoSystem<V>::set_configuration(const SystemConfiguration& config) {
             is_pal_ = new_is_pal;
             // Need to recreate system with new region
             if (initialized_) {
+                // Save current peripheral assignments before shutdown
+                // destroys owned_devices_ and ports.
+                std::vector<std::pair<int, std::string>> saved_devices;
+                {
+                    const auto& ports = get_ports();
+                    for (int i = 0; i < static_cast<int>(ports.size()); ++i) {
+                        if (auto* dev = ports[i]->get_attached_device()) {
+                            saved_devices.emplace_back(i, dev->get_id());
+                        }
+                    }
+                }
+
                 shutdown();
                 initialize();
+
+                // Re-attach peripherals that were present before the reinit
+                if (!saved_devices.empty()) {
+                    for (auto& [port_idx, dev_id] : saved_devices) {
+                        attach_device_to_port(port_idx, dev_id.c_str());
+                    }
+                    auto_assign_controller_keymaps();
+                } else {
+                    attach_default_peripherals();
+                }
             }
         }
     }
