@@ -24,7 +24,8 @@ struct PerformanceMetrics {
     PerformanceTracker<2048> frame_time{2.0, 0.05};      // run_frame() wall time (ms)
     PerformanceTracker<2048> frame_interval{2.0, 0.05};   // time between frames (ms)
     PerformanceTracker<1024> frame_time_long{15.0, 0.002}; // run_frame() wall time, 15s window (for headroom bar)
-    PerformanceTracker<512>  audio_buffer_fill{4.0, 0.1};  // ring buffer fill % (0–100)
+    PerformanceTracker<512>  audio_buffer_fill{4.0, 0.1};  // host ring buffer fill % (0–100)
+    PerformanceTracker<512>  audio_gen_time{2.0, 0.1};     // get_audio_samples() wall time (µs)
 
     // ---- Scalar speed metrics (updated per-frame by the emu thread) ----
     double speed_percent     = 0.0;   // emulated time / wall time × 100
@@ -34,6 +35,7 @@ struct PerformanceMetrics {
     // ---- Audio health (atomics — SDL callback thread writes, GUI reads) ----
     std::atomic<uint32_t> audio_underruns{0};  // ring empty when SDL wanted samples
     std::atomic<uint32_t> audio_overruns{0};   // ring full when emu tried to write
+    std::atomic<uint32_t> audio_samples_total{0};  // total samples produced this session
 
     // ---- Totals ----
     uint64_t total_frames = 0;
@@ -47,6 +49,7 @@ struct PerformanceMetrics {
         frame_interval.reset();
         frame_time_long.reset();
         audio_buffer_fill.reset();
+        audio_gen_time.reset();
 
         speed_percent     = 0.0;
         max_speed_percent = 0.0;
@@ -54,6 +57,7 @@ struct PerformanceMetrics {
 
         audio_underruns.store(0, std::memory_order_relaxed);
         audio_overruns.store(0, std::memory_order_relaxed);
+        audio_samples_total.store(0, std::memory_order_relaxed);
 
         total_frames      = 0;
         uptime_s          = 0.0;
@@ -67,12 +71,14 @@ struct PerformanceMetrics {
         frame_time.start_csv_log((base + "_frame_time.csv").c_str());
         frame_interval.start_csv_log((base + "_frame_interval.csv").c_str());
         audio_buffer_fill.start_csv_log((base + "_audio_fill.csv").c_str());
+        audio_gen_time.start_csv_log((base + "_audio_gen_time.csv").c_str());
     }
 
     void stop_csv_log() {
         frame_time.stop_csv_log();
         frame_interval.stop_csv_log();
         audio_buffer_fill.stop_csv_log();
+        audio_gen_time.stop_csv_log();
     }
 
     [[nodiscard]] bool is_logging() const {
@@ -88,6 +94,7 @@ struct PerformanceMetrics {
         frame_interval.write_snapshot(os);
         frame_time_long.write_snapshot(os);
         audio_buffer_fill.write_snapshot(os);
+        audio_gen_time.write_snapshot(os);
         // Scalar state
         os.write(reinterpret_cast<const char*>(&speed_percent), sizeof(speed_percent));
         os.write(reinterpret_cast<const char*>(&max_speed_percent), sizeof(max_speed_percent));
@@ -107,6 +114,7 @@ struct PerformanceMetrics {
         frame_interval.read_snapshot(is);
         frame_time_long.read_snapshot(is);
         audio_buffer_fill.read_snapshot(is);
+        audio_gen_time.read_snapshot(is);
         is.read(reinterpret_cast<char*>(&speed_percent), sizeof(speed_percent));
         is.read(reinterpret_cast<char*>(&max_speed_percent), sizeof(max_speed_percent));
         is.read(reinterpret_cast<char*>(&target_fps), sizeof(target_fps));
