@@ -26,6 +26,7 @@
  */
 
 #include "chip/sound/sound_chip_base.hpp"
+#include "utils/ring_buffer.hpp"
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -92,6 +93,7 @@ public:
               "Namco"))
         , variant_(variant)
         , num_channels_(variant == WSGVariant::WSG3 ? 3 : 8)
+        , audio_buffer_(4096)
     {
         init_regs(wsg_regs::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG
@@ -105,6 +107,9 @@ public:
         }
         std::memset(regs_, 0, num_regs_);
         std::memset(waveform_rom_, 0, sizeof(waveform_rom_));
+        audio_buffer_.reset();
+        audio_cycle_accum_ = 0.0;
+        audio_cycles_per_sample_ = 0.0;
     }
 
     void reset() { init(); }
@@ -153,6 +158,7 @@ public:
             }
             ch.accumulator = (ch.accumulator + freq) & 0xFFFFF;
         }
+        generate_sample();
     }
 
     /// Get mixed mono sample (float, -1.0 to +1.0).
@@ -177,6 +183,50 @@ public:
     WSGVariant variant()     const { return variant_; }
     int        num_channels() const { return num_channels_; }
 
+    // === Audio output ===
+
+    /// Set the WSG internal clock frequency.
+    void set_clock_frequency(uint32_t internal_hz) {
+        internal_clock_hz_ = internal_hz;
+        update_cycles_per_sample();
+    }
+
+    /// Set the target audio sample rate (call when SDL audio opens).
+    void set_audio_sample_rate(int sample_rate_hz) {
+        audio_sample_rate_ = sample_rate_hz;
+        update_cycles_per_sample();
+    }
+
+    /// Read audio samples into buffer.  Returns number of samples written.
+    uint32_t audio_read(float* buffer, uint32_t max_samples) {
+        return audio_buffer_.read(buffer, max_samples);
+    }
+
+    /// Number of audio samples available.
+    uint32_t audio_available() const {
+        return audio_buffer_.available();
+    }
+
+    // === Addressed register write (for AudioThread adapter) ===
+
+    /// Write a register by address (0x00–0x14), matching the memory-mapped
+    /// layout.  Dispatches to write_freq / write_wave_vol.
+    void write_register(uint8_t reg, uint8_t data) {
+        if (reg < 0x05) {
+            write_freq(0, reg, data);
+        } else if (reg < 0x0A) {
+            write_freq(1, reg - 5, data);
+        } else if (reg < 0x0F) {
+            write_freq(2, reg - 10, data);
+        } else if (reg == 0x0F) {
+            write_wave_vol(0, (data >> 4) & 0x07, data & 0x0F);
+        } else if (reg == 0x10) {
+            write_wave_vol(1, (data >> 4) & 0x07, data & 0x0F);
+        } else if (reg == 0x14) {
+            write_wave_vol(2, (data >> 4) & 0x07, data & 0x0F);
+        }
+    }
+
 private:
     struct Channel {
         uint8_t  freq[5]{};        // 5 × 4-bit frequency nibbles
@@ -190,6 +240,30 @@ private:
     Channel    channels_[8]{};        // Max 8 channels (WSG8)
 
     uint8_t    waveform_rom_[256]{};  // 8 waveforms × 32 nibble-samples (packed)
+
+    // Audio output — decimated from WSG clock to audio sample rate
+    AudioRingBuffer audio_buffer_;
+    uint32_t internal_clock_hz_ = 0;
+    int      audio_sample_rate_ = 0;
+    double   audio_cycles_per_sample_ = 0.0;
+    double   audio_cycle_accum_ = 0.0;
+
+    void update_cycles_per_sample() {
+        if (audio_sample_rate_ > 0 && internal_clock_hz_ > 0) {
+            audio_cycles_per_sample_ =
+                static_cast<double>(internal_clock_hz_) / audio_sample_rate_;
+        }
+    }
+
+    void generate_sample() {
+        audio_cycle_accum_ += 1.0;
+        if (audio_cycles_per_sample_ <= 0.0) return;
+        if (audio_cycle_accum_ < audio_cycles_per_sample_) return;
+        audio_cycle_accum_ -= audio_cycles_per_sample_;
+
+        float sample = get_sample();
+        audio_buffer_.write(&sample, 1);
+    }
 
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {

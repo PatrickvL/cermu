@@ -3,6 +3,7 @@
  */
 
 #include "systems/arcade/namco/namco_arcade_system.hpp"
+#include "utils/resistor_dac.hpp"
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
@@ -82,6 +83,9 @@ bool NamcoArcadeSystem<G>::initialize() {
     cram_chip_ = board_.template chip_as<RAMChip>(2);  // Slot 2: Color RAM
     pins_ = board_.cpu_chip()->init();
     wsg_.init();
+    // WSG clock = CPU / 32 = 96 kHz
+    wsg_.set_clock_frequency(namco_arcade_constants::CPU_FREQ_HZ / 32);
+    wsg_.set_audio_sample_rate(namco_arcade_constants::DEFAULT_SAMPLE_RATE);
 
     // Graphics ROMs — not bus-mapped
     char_rom_.resize(Traits::char_rom_size, 0xFF);
@@ -94,11 +98,9 @@ bool NamcoArcadeSystem<G>::initialize() {
     decode_palette();
 
     // ── GPU indexed palette rendering ───────────────────────────────
-    pixel_.set_framebuffer(framebuffer_,
-                           namco_arcade_constants::FB_WIDTH,
-                           namco_arcade_constants::FB_HEIGHT);
-    register_gpu_palette(&pixel_, rgba_palette_,
-                         namco_arcade_constants::PALETTE_ENTRIES);
+    display_.init(namco_arcade_constants::FB_WIDTH, namco_arcade_constants::FB_HEIGHT);
+    decode_palette();
+    register_display(&display_);
 
     // ── Register chips for Hardware menu ────────────────────────────────
     register_bus_chips(board_);
@@ -174,13 +176,17 @@ template<NamcoGame G> void NamcoArcadeSystem<G>::run_frame() {
 }
 
 template<NamcoGame G> bool NamcoArcadeSystem<G>::load_file(const char*) { return false; }
-template<NamcoGame G> uint32_t* NamcoArcadeSystem<G>::get_framebuffer() { return framebuffer_; }
 template<NamcoGame G> void NamcoArcadeSystem<G>::get_display_dimensions(int* w, int* h) const {
     *w = namco_arcade_constants::FB_WIDTH; *h = namco_arcade_constants::FB_HEIGHT;
 }
-template<NamcoGame G> void NamcoArcadeSystem<G>::set_framebuffer(uint32_t*, int, int) {}
-template<NamcoGame G> uint32_t NamcoArcadeSystem<G>::get_audio_samples(float*, uint32_t) { return 0; }
-template<NamcoGame G> void NamcoArcadeSystem<G>::set_audio_sample_rate(int hz) { audio_sample_rate_ = hz; }
+template<NamcoGame G> uint32_t NamcoArcadeSystem<G>::get_audio_samples(float* buffer, uint32_t max_samples) {
+    if (!buffer || max_samples == 0) return 0;
+    return wsg_.audio_read(buffer, max_samples);
+}
+template<NamcoGame G> void NamcoArcadeSystem<G>::set_audio_sample_rate(int hz) {
+    audio_sample_rate_ = hz;
+    wsg_.set_audio_sample_rate(hz);
+}
 template<NamcoGame G> void NamcoArcadeSystem<G>::handle_keyboard_event(SDL_Keycode, bool) {}
 template<NamcoGame G> void NamcoArcadeSystem<G>::render_system_menu_items() {}
 template<NamcoGame G> void NamcoArcadeSystem<G>::render_configuration_ui() {}
@@ -197,16 +203,10 @@ template<NamcoGame G> void NamcoArcadeSystem<G>::set_speed_multiplier(float m) {
 
 template<NamcoGame G>
 void NamcoArcadeSystem<G>::decode_palette() {
-    for (int i = 0; i < namco_arcade_constants::PALETTE_ENTRIES; i++) {
-        uint8_t entry = (i < static_cast<int>(palette_prom_.size())) ? palette_prom_[i] : 0;
-        int r = 0x21 * ((entry >> 0) & 1) + 0x47 * ((entry >> 1) & 1) + 0x97 * ((entry >> 2) & 1);
-        int g = 0x21 * ((entry >> 3) & 1) + 0x47 * ((entry >> 4) & 1) + 0x97 * ((entry >> 5) & 1);
-        int b = 0x51 * ((entry >> 6) & 1) + 0xAE * ((entry >> 7) & 1);
-        rgba_palette_[i] = 0xFF000000u
-                         | (static_cast<uint32_t>(b) << 16)
-                         | (static_cast<uint32_t>(g) << 8)
-                         | static_cast<uint32_t>(r);
-    }
+    const uint8_t* prom = palette_prom_.data();
+    int count = std::min(static_cast<int>(palette_prom_.size()),
+                         namco_arcade_constants::PALETTE_ENTRIES);
+    display_.palette().decode_from(prom, count, resistor_dac::decode_3_3_2);
 }
 
 // ============================================================================
@@ -239,7 +239,8 @@ void NamcoArcadeSystem<G>::render_frame() {
     const uint8_t* ctable = colortable_prom_.data();
     const int char_count = static_cast<int>(char_rom_.size()) / 16;
 
-    std::memset(frame_indices_, 0, sizeof(frame_indices_));
+    std::memset(display_.indices(), 0,
+                namco_arcade_constants::FB_WIDTH * namco_arcade_constants::FB_HEIGHT);
 
     // Render all 1024 VRAM entries
     for (int offs = 0; offs < 1024; offs++) {
@@ -277,7 +278,7 @@ void NamcoArcadeSystem<G>::render_frame() {
         int fb_x = sx * 8;
         int fb_y = sy * 8;
         for (int ty = 0; ty < 8; ty++) {
-            uint8_t* dst = frame_indices_ + (fb_y + ty) * namco_arcade_constants::FB_WIDTH + fb_x;
+            uint8_t* dst = display_.indices() + (fb_y + ty) * namco_arcade_constants::FB_WIDTH + fb_x;
             // Right half (x=4-7) in bytes 0-7, left half (x=0-3) in bytes 8-15
             uint8_t right = tile[ty];       // pixels x=4-7
             uint8_t left  = tile[ty + 8];   // pixels x=0-3
@@ -300,7 +301,7 @@ void NamcoArcadeSystem<G>::render_frame() {
         }
     }
 
-    pixel_.flush_indexed_frame(frame_indices_, rgba_palette_);
+    display_.flush();
 }
 
 // ============================================================================
