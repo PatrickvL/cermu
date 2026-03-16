@@ -214,6 +214,7 @@ private:
     // ── Memory — owned by Board, accessed via chip_as<>() ────────────
     ROMChip* basic_rom_chip_ = nullptr;   // KC85/3, /4 only
     ROMChip* caos_rom_chip_  = nullptr;
+    RAMChip* irm_chip_       = nullptr;   // Image RAM (video memory)
 
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using BT  = KC85BusTraits<V>;
@@ -226,6 +227,9 @@ private:
     // ── Display ──────────────────────────────────────────────────────────
     uint32_t framebuffer_[kc85_constants::FB_WIDTH *
                           kc85_constants::FB_HEIGHT] = {};
+    VideoPixelUnit pixel_;
+    uint8_t frame_indices_[kc85_constants::FB_WIDTH *
+                           kc85_constants::FB_HEIGHT] = {};
 
     // ── Keyboard ─────────────────────────────────────────────────────────
     uint8_t keyboard_matrix_[kc85_constants::KEYBOARD_ROWS] = {};
@@ -251,6 +255,7 @@ private:
     void        apply_banking();              // Load overlay snapshot + manual IRM
     bus_state_t io_tick(bus_state_t pins);
     bool        load_roms();
+    void        render_frame();               // Decode IRM into indexed framebuffer
 
     // Pre-computed overlay snapshots.
     // KC85/2: 4 modes (IRM×CAOS), KC85/3: 8 modes (IRM×BASIC×CAOS),

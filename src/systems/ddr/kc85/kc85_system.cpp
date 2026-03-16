@@ -81,6 +81,7 @@ bool KC85System<V>::initialize() {
     if constexpr (Traits::has_basic_rom) {
         basic_rom_chip_ = board_.template chip_as<ROMChip>(Traits::kBasicRomSlot);
     }
+    irm_chip_ = board_.template chip_as<RAMChip>(1);  // IRM always at slot 1
     cpu_     = board_.template cpu<U880>();
     pio1_    = board_.template chip_as<z80_pio_t>(Traits::kPio1Slot);
     pio2_    = board_.template chip_as<z80_pio_t>(Traits::kPio2Slot);
@@ -109,6 +110,12 @@ bool KC85System<V>::initialize() {
 
     // ── Register chips for Hardware menu ──────────────────────────────
     register_bus_chips(board_);
+
+    // ── GPU indexed palette rendering ───────────────────────────────
+    pixel_.set_framebuffer(framebuffer_,
+                           kc85_constants::FB_WIDTH,
+                           kc85_constants::FB_HEIGHT);
+    register_gpu_palette(&pixel_, kc85_constants::PALETTE, kc85_constants::COLOR_COUNT);
 
     printf("%s: System initialized (RAM: %d KB, IRM: %d KB)\n",
            Traits::name, Traits::ram_size / 1024,
@@ -242,6 +249,7 @@ void KC85System<V>::tick() {
 
 template<KC85Variant V> void KC85System<V>::run_frame() {
     for (uint32_t i = 0; i < kc85_constants::TSTATES_PER_FRAME; ++i) tick();
+    render_frame();
 }
 
 template<KC85Variant V> bool KC85System<V>::load_file(const char*) { return false; }
@@ -256,6 +264,74 @@ template<KC85Variant V> void KC85System<V>::handle_keyboard_event(SDL_Keycode, b
 template<KC85Variant V> void KC85System<V>::render_system_menu_items() {}
 template<KC85Variant V> void KC85System<V>::render_configuration_ui() {}
 template<KC85Variant V> void KC85System<V>::set_speed_multiplier(float m) { speed_multiplier_ = m; }
+
+// ============================================================================
+// VIDEO RENDERING — decode IRM into indexed framebuffer
+// ============================================================================
+//
+// KC85/2,3: IRM = 16 KB at $8000-$BFFF, column-major layout
+//   Pixel data: irm[col * 256 + row]  (col = 0..31, row = 0..255) = 8192 bytes
+//   Color data: irm[$2800 + col * 64 + (row / 4)] = 2048 bytes
+//   Each pixel byte = 8 horizontal pixels (MSB = leftmost)
+//   Each color byte: bits [3:0] = foreground (16 colors), bits [6:4] = background (8 colors), bit 7 = blink
+//   Display: 256×256 pixels, centered in 320×256 framebuffer (32-pixel border each side)
+//
+// KC85/4: IRM = 64 KB in 4 × 16 KB banks, column-major layout
+//   Bank 0: pixel plane 0, Bank 1: pixel plane 1
+//   Bank 2: color plane 0, Bank 3: color plane 1
+//   Pixel data: bank_base[col * 256 + row]  (col = 0..39) = 10240 bytes used
+//   Color data: same layout in color bank, per-byte color resolution
+//   Display: 320×256 pixels, full framebuffer width
+
+template<KC85Variant V>
+void KC85System<V>::render_frame() {
+    if (!irm_chip_) return;
+
+    const uint8_t* irm = irm_chip_->data();
+
+    if constexpr (Traits::has_extended_video) {
+        // KC85/4: 320×256, dual-plane with per-byte color
+        const uint8_t* pixel_base = irm + active_plane_ * 16384;
+        const uint8_t* color_base = irm + (2 + active_plane_) * 16384;
+
+        for (int y = 0; y < kc85_constants::FB_HEIGHT; y++) {
+            uint8_t* dst = frame_indices_ + y * kc85_constants::FB_WIDTH;
+            for (int col = 0; col < kc85_constants::KC4_PIXEL_COLS; col++) {
+                uint8_t pixels = pixel_base[col * 256 + y];
+                uint8_t color  = color_base[col * 256 + y];
+                uint8_t fg = color & 0x0F;
+                uint8_t bg = (color >> 4) & 0x07;
+                int x = col * 8;
+                for (int bit = 7; bit >= 0; --bit) {
+                    dst[x++] = (pixels & (1 << bit)) ? fg : bg;
+                }
+            }
+        }
+    } else {
+        // KC85/2,3: 256×256, centered in 320-pixel framebuffer
+        // Clear border columns to black (palette index 0)
+        std::memset(frame_indices_, 0, sizeof(frame_indices_));
+
+        for (int y = 0; y < kc85_constants::FB_HEIGHT; y++) {
+            uint8_t* dst = frame_indices_ + y * kc85_constants::FB_WIDTH
+                         + kc85_constants::KC23_BORDER_X;
+            for (int col = 0; col < kc85_constants::KC23_PIXEL_COLS; col++) {
+                uint8_t pixels = irm[col * 256 + y];
+                // Color cells are 8×4 pixels: one color byte per 4 scanlines
+                uint8_t color  = irm[kc85_constants::KC23_COLOR_OFFSET
+                                     + col * 64 + (y >> 2)];
+                uint8_t fg = color & 0x0F;
+                uint8_t bg = (color >> 4) & 0x07;
+                int x = col * 8;
+                for (int bit = 7; bit >= 0; --bit) {
+                    dst[x++] = (pixels & (1 << bit)) ? fg : bg;
+                }
+            }
+        }
+    }
+
+    pixel_.flush_indexed_frame(frame_indices_, kc85_constants::PALETTE);
+}
 
 // ============================================================================
 // I/O BUS DISPATCH
