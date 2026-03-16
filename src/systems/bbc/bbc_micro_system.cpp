@@ -170,6 +170,7 @@ bool BBCMicroSystem::initialize() {
     // ── Pre-bind stack-member chips, then factory-create all chips ──────
     board_.bind_chip(bbc_chips::kSysViaSlot,  &system_via_);
     board_.bind_chip(bbc_chips::kUserViaSlot, &user_via_);
+    board_.bind_chip(bbc_chips::kVidprocSlot, &vidproc_);
     board_.create_chips(&pins_);
     ram_chip_        = board_.chip_as<RAMChip>(bbc_chips::kRamSlot);
     paged_rom_chip_  = board_.chip_as<ROMChip>(bbc_chips::kPagedRomSlot);
@@ -211,11 +212,13 @@ bool BBCMicroSystem::initialize() {
     crtc_->on_vsync = [this]() { this->crtc_vsync(); };
     crtc_->on_hsync = [this]() { this->crtc_hsync(); };
 
-    // GPU indexed palette rendering
-    pixel_.set_framebuffer(framebuffer_,
-                           bbc_constants::DISPLAY_WIDTH,
-                           bbc_constants::DISPLAY_HEIGHT);
-    register_gpu_palette(&pixel_, bbc_constants::PALETTE, 8);
+    // GPU indexed palette rendering — chip-owned pattern (VIDPROC owns pixel + indices)
+    vidproc_.set_memory(memory_);
+    vidproc_.pixel.set_framebuffer(framebuffer_,
+        bbc_constants::DISPLAY_WIDTH, bbc_constants::DISPLAY_HEIGHT);
+    register_gpu_palette(&vidproc_.pixel,
+        bbc_vidproc_t::get_palette(),
+        bbc_vidproc_t::get_palette_size());
 
     // ---- Sound (SN76489) ----
     psg_->init();
@@ -243,11 +246,11 @@ bool BBCMicroSystem::initialize() {
     user_via_.interrupt_bit = BUS_IRQ_BIT;
 
     // ---- Video ULA defaults ----
-    video_ula_control_ = 0x00;
-    std::memset(video_ula_palette_, 0, sizeof(video_ula_palette_));
     // Default palette: identity mapping (logical N → physical N)
     for (int i = 0; i < 16; i++) {
-        video_ula_palette_[i] = i & 0x07;
+        // write_palette format: high nibble = logical, low nibble = encoded physical
+        // Physical = ((data >> 1) & 7) ^ 7, so to get physical i: data = ((i ^ 7) << 1)
+        vidproc_.write_palette((i << 4) | (((i & 0x07) ^ 0x07) << 1));
     }
 
     // ---- Keyboard ----
@@ -292,7 +295,6 @@ void BBCMicroSystem::reset() {
     pins_ = BBC_BUS_DEFAULT_STATE;
     rom_select_ = 15;
     configure_bus_memory_map();
-    video_ula_control_ = 0x00;
     addressable_latch_ = 0;
     std::memset(key_matrix_, 0, sizeof(key_matrix_));
     any_key_pressed_ = false;
@@ -441,15 +443,10 @@ bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
             crtc_->write(addr, data);
         }
         else if (addr == bbc_constants::VIDEO_ULA_CONTROL) {
-            video_ula_control_ = data;
+            vidproc_.write_control(data);
         }
         else if (addr == bbc_constants::VIDEO_ULA_PALETTE) {
-            // Palette register: bits 7-4 = logical color, bits 3-1 = physical color (EOR)
-            // bit 0 is complement of bit 0 of physical
-            uint8_t logical = (data >> 4) & 0x0F;
-            // Physical color: bits 3-1 directly, bit 0 is inverted
-            uint8_t physical = ((data >> 1) & 0x07) ^ 0x07;
-            video_ula_palette_[logical] = physical;
+            vidproc_.write_palette(data);
         }
         else if (addr == bbc_constants::ROM_SELECT_REG) {
             rom_select_ = data & 0x0F;
@@ -514,22 +511,13 @@ bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
 // ============================================================================
 
 void BBCMicroSystem::crtc_display_char(uint16_t ma, uint8_t ra, bool cursor) {
-    if (!memory_) return;
-
-    int mode = get_display_mode();
-
-    if (mode == 7) {
-        // Mode 7: Teletext — character-based display
-        render_mode7_char(ma & 0x03FF, ra, cursor);
-    } else {
-        // Modes 0-6: Bitmap display
-        render_bitmap_pixels(ma, ra, cursor);
-    }
+    if (!crtc_) return;
+    vidproc_.display_char(ma, ra, cursor, crtc_->regs_[MC6845_R9_MAX_SCANLINE]);
 }
 
 void BBCMicroSystem::crtc_vsync() {
-    // Flush indexed frame through VideoPixelUnit at VSYNC
-    pixel_.flush_indexed_frame(frame_indices_, bbc_constants::PALETTE);
+    // Flush indexed frame through VIDPROC pixel unit at VSYNC
+    vidproc_.vsync();
 
     // On real hardware, VSYNC connects to System VIA CA1 input.
     // The VIA detects the edge and sets the CA1 interrupt flag.
@@ -543,206 +531,17 @@ void BBCMicroSystem::crtc_hsync() {
 }
 
 // ============================================================================
-// Mode 7 (Teletext) Rendering
+// FRAMEBUFFER ACCESS — chip-owned pattern (forward to VIDPROC pixel unit)
 // ============================================================================
 
-void BBCMicroSystem::render_mode7_char(uint16_t screen_offset, uint8_t ra, bool cursor) {
-    // Mode 7 screen RAM is at $7C00-$7FFF (1000 bytes for 40×25)
-    // Characters are 6-bit (bits 6:0) Teletext codes.
-    // For now, render as simple ASCII-like text using a built-in font.
-    static constexpr uint16_t MODE7_SCREEN_RAM = 0x7C00;
-
-    if (screen_offset >= 1000) return;
-
-    uint8_t char_code = memory_[MODE7_SCREEN_RAM + screen_offset];
-
-    // Simple ASCII rendering for characters 0x20-0x7F
-    // Teletext control codes (0x00-0x1F) are used for color switching etc.
-    // For initial implementation, render printable chars white on black
-    uint8_t pixel_row = 0;
-    bool is_control = (char_code < 0x20);
-
-    if (!is_control) {
-        // Use a minimal built-in 8×8 font for printable ASCII
-        // (The real SAA5050 Teletext chip has a 12×20 character cell
-        //  but for initial bring-up, 8-pixel-wide chars are sufficient)
-        // TODO: Implement SAA5050 Teletext character generator
-        pixel_row = 0;  // Placeholder — all blank until font is loaded
-    }
-
-    if (cursor && ra < 8) {
-        pixel_row = ~pixel_row;
-    }
-
-    // Calculate framebuffer position
-    uint32_t char_col = screen_offset % bbc_constants::MODE7_COLS;
-    uint32_t char_row = screen_offset / bbc_constants::MODE7_COLS;
-
-    if (char_row >= bbc_constants::MODE7_ROWS) return;
-
-    // Mode 7: each character is 16×20 pixels (to fill 640×500 → scaled to 640×256)
-    // But we render at native DISPLAY_HEIGHT=256, so scale vertically
-    uint32_t pixel_x = char_col * 16;
-    uint32_t pixel_y = char_row * 10 + (ra / 2);  // 20 scanlines → 10 pixels visible
-
-    if (pixel_y >= bbc_constants::DISPLAY_HEIGHT) return;
-    if (pixel_x + 16 > bbc_constants::DISPLAY_WIDTH) return;
-
-    uint8_t fg_idx = 7;  // White
-    uint8_t bg_idx = 0;  // Black
-    uint8_t* row_ptr = frame_indices_ + pixel_y * bbc_constants::DISPLAY_WIDTH;
-
-    // Render 8 source pixels, doubled to 16 output pixels
-    for (int bit = 7; bit >= 0; bit--) {
-        uint8_t idx = (pixel_row & (1 << bit)) ? fg_idx : bg_idx;
-        uint32_t px = pixel_x + (7 - bit) * 2;
-        if (px < bbc_constants::DISPLAY_WIDTH) row_ptr[px] = idx;
-        if (px + 1 < bbc_constants::DISPLAY_WIDTH) row_ptr[px + 1] = idx;
-    }
+uint32_t* BBCMicroSystem::get_framebuffer() {
+    return rgba_framebuffer_ ? rgba_framebuffer_ : framebuffer_;
 }
 
-// ============================================================================
-// Bitmap Mode Rendering (Modes 0-6)
-// ============================================================================
-
-void BBCMicroSystem::render_bitmap_pixels(uint16_t ma, uint8_t ra, bool cursor) {
-    // Bitmap modes: the CRTC address (MA) and raster address (RA) combine
-    // to address screen RAM.  The Video ULA unpacks bytes into pixels
-    // according to the mode's bits-per-pixel setting.
-    //
-    // Screen RAM address calculation:
-    //   byte_addr = ((MA & 0x1FFF) | (RA & 0x07) << 13) * 8 (approximately)
-    //   The exact mapping depends on the mode.
-    //
-    // For initial implementation, we use a simplified mapping.
-
-    // Screen RAM starts at different addresses depending on mode:
-    //   Mode 0: $3000 (20 KB), Mode 1: $3000 (20 KB), Mode 2: $3000 (20 KB)
-    //   Mode 3: $4000 (16 KB), Mode 4: $5800 (10 KB), Mode 5: $5800 (10 KB)
-    //   Mode 6: $6000 (8 KB)
-
-    uint16_t byte_addr = (ma * 8) + ra;
-    if (byte_addr >= bbc_constants::RAM_SIZE) return;
-
-    uint8_t screen_byte = memory_[byte_addr];
-
-    if (cursor) screen_byte = ~screen_byte;
-
-    int ppb = get_pixels_per_byte();
-    int colors = get_colors_per_mode();
-
-    // Determine pixel width (how many framebuffer pixels per source pixel)
-    int pixel_width = bbc_constants::DISPLAY_WIDTH / (ppb * 40);
-    if (pixel_width < 1) pixel_width = 1;
-
-    // Calculate screen position from CRTC counters
-    // (Simplified: use ma to determine column/row)
-    uint32_t col = (ma % 40);
-    uint32_t row = (ma / 40);
-
-    uint32_t pixel_x = col * ppb * pixel_width;
-    uint32_t pixel_y = row * 8 + ra;
-
-    if (pixel_y >= bbc_constants::DISPLAY_HEIGHT) return;
-
-    uint8_t* row_ptr = frame_indices_ + pixel_y * bbc_constants::DISPLAY_WIDTH;
-
-    // Unpack screen byte into pixels based on bits-per-pixel
-    for (int p = 0; p < ppb; p++) {
-        uint8_t color_index = 0;
-
-        if (colors == 2) {
-            // 1 bpp: 8 pixels per byte (Mode 0, 3, 4, 6)
-            color_index = (screen_byte >> (7 - p)) & 0x01;
-        } else if (colors == 4) {
-            // 2 bpp: 4 pixels per byte (Mode 1, 5)
-            // Bits are interleaved: pixel N uses bits (7-N) and (3-N)
-            int bit_hi = (screen_byte >> (7 - p)) & 0x01;
-            int bit_lo = (screen_byte >> (3 - p)) & 0x01;
-            color_index = (bit_hi << 1) | bit_lo;
-        } else if (colors == 16) {
-            // 4 bpp: 2 pixels per byte (Mode 2)
-            if (p == 0) {
-                color_index = ((screen_byte >> 7) & 1) << 3 |
-                              ((screen_byte >> 5) & 1) << 2 |
-                              ((screen_byte >> 3) & 1) << 1 |
-                              ((screen_byte >> 1) & 1);
-            } else {
-                color_index = ((screen_byte >> 6) & 1) << 3 |
-                              ((screen_byte >> 4) & 1) << 2 |
-                              ((screen_byte >> 2) & 1) << 1 |
-                              ((screen_byte >> 0) & 1);
-            }
-        }
-
-        // Map logical color through Video ULA palette to physical color index
-        uint8_t physical = video_ula_palette_[color_index & 0x0F] & 0x07;
-
-        // Write pixel(s) as palette index to frame_indices_
-        for (int w = 0; w < pixel_width; w++) {
-            uint32_t px = pixel_x + p * pixel_width + w;
-            if (px < bbc_constants::DISPLAY_WIDTH) {
-                row_ptr[px] = physical;
-            }
-        }
-    }
-}
-
-// ============================================================================
-// Video ULA Helpers
-// ============================================================================
-
-int BBCMicroSystem::get_display_mode() const {
-    // The display mode is determined by the Video ULA control register
-    // and CRTC programming.  Bits 4-6 of the control register determine
-    // the number of characters per line, which maps to modes:
-    //   Mode 0: 80 chars, 2 colors    (640×256)
-    //   Mode 1: 40 chars, 4 colors    (320×256)
-    //   Mode 2: 20 chars, 16 colors   (160×256)
-    //   Mode 3: 80 chars, 2 colors    (640×250, text with gaps)
-    //   Mode 4: 40 chars, 2 colors    (320×256)
-    //   Mode 5: 20 chars, 4 colors    (160×256)
-    //   Mode 6: 40 chars, 2 colors    (320×250, text with gaps)
-    //   Mode 7: Teletext (SAA5050)    (40×25 characters)
-    //
-    // For now, detect Mode 7 by checking CRTC R9 (max scanline):
-    // Mode 7 uses 18 scanlines per row; other modes use 7.
-    if (crtc_ && crtc_->regs_[MC6845_R9_MAX_SCANLINE] >= 18) {
-        return 7;
-    }
-    // Use bits 4-6 of video ULA control for other modes
-    uint8_t chars_per_line_sel = (video_ula_control_ >> 4) & 0x07;
-    // Approximate mapping — the real hardware also considers clock rate bit
-    switch (chars_per_line_sel) {
-        case 0: return 0;  // 10 chars → Mode 2 (16 colors)
-        case 1: return 5;  // 20 chars → Mode 5 (4 colors)
-        case 2: return 1;  // 20 chars → Mode 1 (4 colors)
-        case 3: return 4;  // 40 chars → Mode 4 (2 colors)
-        case 4: return 6;  // 40 chars → Mode 6 (text)
-        case 5: return 3;  // 40 chars → Mode 3 (text)
-        case 6: return 0;  // 80 chars → Mode 0 (2 colors)
-        default: return 0;
-    }
-}
-
-int BBCMicroSystem::get_pixels_per_byte() const {
-    int mode = get_display_mode();
-    switch (mode) {
-        case 0: case 3: case 4: case 6: return 8;   // 1 bpp
-        case 1: case 5:                 return 4;   // 2 bpp
-        case 2:                         return 2;   // 4 bpp
-        default:                        return 8;
-    }
-}
-
-int BBCMicroSystem::get_colors_per_mode() const {
-    int mode = get_display_mode();
-    switch (mode) {
-        case 0: case 3: case 4: case 6: return 2;
-        case 1: case 5:                 return 4;
-        case 2:                         return 16;
-        default:                        return 2;
-    }
+void BBCMicroSystem::set_framebuffer(uint32_t* buffer, int width, int height) {
+    System::set_framebuffer(buffer, width, height);
+    vidproc_.pixel.set_framebuffer(buffer ? buffer : framebuffer_,
+        bbc_constants::DISPLAY_WIDTH, bbc_constants::DISPLAY_HEIGHT);
 }
 
 // ============================================================================
@@ -909,17 +708,9 @@ bool BBCMicroSystem::load_file(const char* filepath) {
 // Display
 // ============================================================================
 
-uint32_t* BBCMicroSystem::get_framebuffer() {
-    return framebuffer_;
-}
-
 void BBCMicroSystem::get_display_dimensions(int* width, int* height) const {
     *width = bbc_constants::DISPLAY_WIDTH;
     *height = bbc_constants::DISPLAY_HEIGHT;
-}
-
-void BBCMicroSystem::set_framebuffer(uint32_t*, int, int) {
-    // BBC Micro owns its framebuffer — external assignment ignored.
 }
 
 // ============================================================================
@@ -956,7 +747,8 @@ void BBCMicroSystem::render_system_menu_items() {
     }
     ImGui::Separator();
     ImGui::Text("ROM Bank: %d", rom_select_);
-    ImGui::Text("Video Mode: %d", get_display_mode());
+    ImGui::Text("Video Mode: %d",
+        vidproc_.get_display_mode(crtc_ ? crtc_->regs_[MC6845_R9_MAX_SCANLINE] : 0));
 #endif
 }
 

@@ -6,7 +6,7 @@
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/io/mos6522.hpp"
 #include "chip/video/mc6845/mc6845.hpp"
-#include "chip/video/video_pixel_unit.hpp"
+#include "chip/video/bbc_vidproc/bbc_vidproc.hpp"
 #include "chip/sound/sn76489/sn76489.hpp"
 #include "chip/memory/memory_chip.hpp"
 #include "core/audio_thread.hpp"
@@ -34,11 +34,12 @@ inline constexpr auto kBBCMicroChips = make_chip_manifest(
     Slot<ROMChip>{0x8000, 262144, 0, "Paged ROM", 0, 16384},      // 16 × 16 KB banks
     Slot<ROMChip>{0xC000,  16384, 0, "MOS ROM"},
     // Non-bus chips — factory-created, not address-decoded
-    Slot<MOS6502>   {0, 0, 0, "MOS 6502"},
-    Slot<mc6845_t>  {0, 0, 0, "MC6845 CRTC"},
-    Slot<sn76489_t> {0, 0, 0, "SN76489 PSG"},
-    Slot<mos6522_t> {0, 0, 0, "System VIA"},
-    Slot<mos6522_t> {0, 0, 0, "User VIA"}
+    Slot<MOS6502>     {0, 0, 0, "MOS 6502"},
+    Slot<mc6845_t>    {0, 0, 0, "MC6845 CRTC"},
+    Slot<sn76489_t>   {0, 0, 0, "SN76489 PSG"},
+    Slot<mos6522_t>   {0, 0, 0, "System VIA"},
+    Slot<mos6522_t>   {0, 0, 0, "User VIA"},
+    Slot<bbc_vidproc_t>{0, 0, 0, "Video ULA"}
 );
 
 namespace bbc_chips {
@@ -49,6 +50,7 @@ namespace bbc_chips {
     inline constexpr size_t kPsgSlot       = 5;
     inline constexpr size_t kSysViaSlot    = 6;
     inline constexpr size_t kUserViaSlot   = 7;
+    inline constexpr size_t kVidprocSlot   = 8;
 }
 
 using BBCMicroBusSpec = ManifestBusSpec<kBBCMicroChips, 16, 8>;
@@ -94,9 +96,7 @@ public:
     bool load_file(const char* filepath) override;
 
     // Display
-    uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
-    void set_framebuffer(uint32_t* buffer, int width, int height) override;
 
     // Input
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
@@ -142,16 +142,15 @@ private:
     // Paged ROM state
     uint8_t     rom_select_ = 0;         // Currently selected paged ROM bank (0-15)
 
-    // Video ULA state
-    uint8_t     video_ula_control_ = 0;  // $FE20 control register
-    uint8_t     video_ula_palette_[16]{}; // Logical→physical color mapping
+    // Video ULA chip (VIDPROC) — owns rendering + palette
+    bbc_vidproc_t   vidproc_;           // Video ULA — pre-bound into board_
 
-    // Display — own framebuffer + GPU indexed rendering
-    uint32_t    framebuffer_[bbc_constants::DISPLAY_WIDTH *
-                             bbc_constants::DISPLAY_HEIGHT] = {};
-    VideoPixelUnit pixel_;
-    uint8_t     frame_indices_[bbc_constants::DISPLAY_WIDTH *
-                               bbc_constants::DISPLAY_HEIGHT] = {};
+    // Display — chip-owned pattern: VIDPROC owns pixel + frame_indices_
+    uint32_t framebuffer_[bbc_constants::DISPLAY_WIDTH *
+                          bbc_constants::DISPLAY_HEIGHT] = {};
+
+    uint32_t* get_framebuffer() override;
+    void set_framebuffer(uint32_t* buffer, int width, int height) override;
 
     // Keyboard matrix (10 columns × 8 rows)
     // Each element: true = key pressed
@@ -181,21 +180,10 @@ private:
     void configure_bus_memory_map();          // Post-apply() page table fixups
     void update_paged_rom();                  // Remap $8000-$BFFF after rom_select_ change
 
-    // CRTC display callbacks
+    // CRTC display callbacks — forward to VIDPROC
     void crtc_display_char(uint16_t ma, uint8_t ra, bool cursor);
     void crtc_vsync();
     void crtc_hsync();
-
-    // Render a single character in Mode 7 (teletext)
-    void render_mode7_char(uint16_t screen_offset, uint8_t ra, bool cursor);
-
-    // Render bitmap mode pixels (Modes 0-6)
-    void render_bitmap_pixels(uint16_t ma, uint8_t ra, bool cursor);
-
-    // Video ULA helpers
-    int  get_display_mode() const;       // Current display mode (0-7)
-    int  get_pixels_per_byte() const;    // Pixels packed per byte (mode-dependent)
-    int  get_colors_per_mode() const;    // Number of colors available in current mode
 
     // VIA callbacks (System VIA)
     static uint8_t sys_via_port_a_read(void* ctx, uint8_t output);
