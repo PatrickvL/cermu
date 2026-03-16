@@ -32,6 +32,7 @@ NesProfileCounters g_nes_profile;
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #include <SDL.h>
+#include "gui/palette_selector.hpp"
 #endif
 
 namespace nes_system {
@@ -269,7 +270,16 @@ bool NintendoSystem<V>::apply_configuration() {
         const VideoStandardConfig& std_cfg = hardware_traits_.video_standard_configs[config_.region_option_index];
         cycles_per_frame_ = std_cfg.timing.cycles_per_frame;
     }
-    
+
+    // Apply display palette selection
+    auto pal_it = config_.custom_settings.find("display_palette");
+    if (pal_it != config_.custom_settings.end() && ppu_) {
+        if (auto* np = ppu_->select_palette(pal_it->second.c_str())) {
+            ppu_->set_base_palette(np->data);
+            nes_display_.set_palette(np->data, np->count);
+        }
+    }
+
     return true;
 }
 
@@ -826,6 +836,15 @@ void NintendoSystem<V>::render_configuration_ui() {
         ImGui::Text("Cartridge: Loaded");
     } else {
         ImGui::TextDisabled("Cartridge: None");
+    }
+
+    // Palette selection
+    if (ppu_) {
+        ImGui::Separator();
+        if (palette_selector::render(*ppu_, config_.custom_settings)) {
+            set_configuration(config_);
+            apply_configuration();
+        }
     }
 #endif
 }
