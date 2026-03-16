@@ -70,7 +70,8 @@ namespace spectrum_ula {
 
     // Color palette (GRB → RGB conversion, 15 colors + black)
     // 8 normal + 8 bright, with bright black = normal black
-    inline constexpr uint32_t PALETTE[16] = {
+    // Standard: 0xCD normal, 0xFF bright — canonical emulator values
+    inline constexpr uint32_t PALETTE_STANDARD[16] = {
         0xFF000000,  // Black (normal)
         0xFF0000CD,  // Blue
         0xFFCD0000,  // Red
@@ -89,11 +90,41 @@ namespace spectrum_ula {
         0xFFFFFFFF,  // Bright White
     };
 
+    // Warm CRT: slightly brighter normal (0xD7), approximates CRT phosphor
+    inline constexpr uint32_t PALETTE_WARM[16] = {
+        0xFF000000,  // Black
+        0xFF0000D7,  // Blue
+        0xFFD70000,  // Red
+        0xFFD700D7,  // Magenta
+        0xFF00D700,  // Green
+        0xFF00D7D7,  // Cyan
+        0xFFD7D700,  // Yellow
+        0xFFD7D7D7,  // White
+        0xFF000000,  // Black (bright)
+        0xFF0000FF,  // Bright Blue
+        0xFFFF0000,  // Bright Red
+        0xFFFF00FF,  // Bright Magenta
+        0xFF00FF00,  // Bright Green
+        0xFF00FFFF,  // Bright Cyan
+        0xFFFFFF00,  // Bright Yellow
+        0xFFFFFFFF,  // Bright White
+    };
+
+    // Default alias — points to the standard palette
+    inline constexpr auto& PALETTE = PALETTE_STANDARD;
+
     // I/O port $FE bit positions
     inline constexpr uint8_t BORDER_MASK   = 0x07;  // Bits 2-0: border color
     inline constexpr uint8_t MIC_BIT       = 0x08;  // Bit 3: MIC output
     inline constexpr uint8_t EAR_BIT       = 0x10;  // Bit 4: EAR/speaker output
     inline constexpr uint8_t EAR_IN_BIT    = 0x40;  // Bit 6: EAR input (read)
+
+    // Named palette registry
+    inline constexpr int NAMED_PALETTE_COUNT = 2;
+    inline const NamedPalette NAMED_PALETTES[NAMED_PALETTE_COUNT] = {
+        { "standard", "Standard",  PALETTE_STANDARD, 16 },
+        { "warm",     "Warm CRT",  PALETTE_WARM,     16 },
+    };
 
 } // namespace spectrum_ula
 
@@ -109,6 +140,8 @@ public:
         : VideoChipBase(ChipInfo("6C001E-7", "Ferranti"))
     {
         init_regs(spectrum_ula::REG_COUNT);
+        set_named_palettes(spectrum_ula::NAMED_PALETTES,
+                           spectrum_ula::NAMED_PALETTE_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
@@ -222,8 +255,8 @@ public:
 
     // === Palette ===
 
-    static const uint32_t* get_palette()     { return spectrum_ula::PALETTE; }
-    static int             get_palette_size() { return 16; }
+    const uint32_t* get_palette() const { return system_palette(); }
+    static int      get_palette_size()  { return 16; }
 
     // === Frame rendering ===
     //
@@ -300,7 +333,7 @@ public:
         }
 
         // Flush: GPU mode → index_buffer, CPU mode → RGBA framebuffer
-        display_->flush(spectrum_ula::PALETTE);
+        display_->flush(system_palette());
     }
 
     // Display output — set by system via set_display().
@@ -341,7 +374,7 @@ private:
         auto& r = debug_registry_;
         r.set_registers(regs_, spectrum_ula::REG_COUNT, SPECTRUM_ULA_REG_INFO);
         r.set_decl_entries(SPECTRUM_ULA_DECL_ENTRIES.data(), SPECTRUM_ULA_DECL_ENTRIES.size());
-        r.set_palette(spectrum_ula::PALETTE, 16);
+        r.set_palette(system_palette(), 16);
 
         r.category("Port $FE Input");
         r.flag("EAR In", +[](const ChipBase* c) -> uint32_t {

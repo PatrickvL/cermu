@@ -36,6 +36,11 @@
 #include <cstring>
 #include <cstdio>
 
+#ifdef CERMU_HAS_GUI
+#include <imgui.h>
+#include "gui/palette_selector.hpp"
+#endif
+
 // ============================================================================
 // HARDWARE TRAITS
 // ============================================================================
@@ -183,6 +188,13 @@ bool SpectrumSystem<V>::set_configuration(const SystemConfiguration& config) {
 
 template<SpectrumVariant V>
 bool SpectrumSystem<V>::apply_configuration() {
+    // Apply display palette selection
+    auto pal_it = config_.custom_settings.find("display_palette");
+    if (pal_it != config_.custom_settings.end()) {
+        if (auto* np = ula_.select_palette(pal_it->second.c_str())) {
+            display_.set_palette(np->data, np->count);
+        }
+    }
     return true;
 }
 
@@ -227,8 +239,7 @@ bool SpectrumSystem<V>::initialize() {
     // GPU indexed palette rendering — display_ owns palette + RGBA fallback.
     display_.init(spectrum_constants::TOTAL_WIDTH,
                   spectrum_constants::TOTAL_HEIGHT);
-    display_.set_palette(ferranti_ula_t::get_palette(),
-                         ferranti_ula_t::get_palette_size());
+    display_.set_palette(ula_.get_palette(), ula_.get_palette_size());
     ula_.set_display(&display_);
     register_display(&display_);
 
@@ -801,7 +812,14 @@ template<SpectrumVariant V>
 void SpectrumSystem<V>::render_system_menu_items() {}
 
 template<SpectrumVariant V>
-void SpectrumSystem<V>::render_configuration_ui() {}
+void SpectrumSystem<V>::render_configuration_ui() {
+#ifdef CERMU_HAS_GUI
+    if (palette_selector::render(ula_, config_.custom_settings)) {
+        set_configuration(config_);
+        apply_configuration();
+    }
+#endif
+}
 
 template<SpectrumVariant V>
 void SpectrumSystem<V>::set_speed_multiplier(float multiplier) {
