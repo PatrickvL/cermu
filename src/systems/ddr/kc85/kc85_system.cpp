@@ -136,6 +136,7 @@ bool KC85System<V>::initialize() {
 
     // ── Init chips ──────────────────────────────────────────────────────
     pins_ = board_.cpu_chip()->init();
+    cpu_->set_pc(0xF000);   // CAOS cold-start entry (real HW forces this via address latch)
     pio1_->init();
     pio2_->init();
     ctc_->init();
@@ -175,6 +176,7 @@ template<KC85Variant V> void KC85System<V>::reset() {
     if (!cpu_) return;
     board_.reset_chips();
     pins_ = board_.cpu_chip()->reset(pins_);
+    cpu_->set_pc(0xF000);   // CAOS cold-start entry
     modules_->init();
     bank_ctrl_ = 0;
     bank_ctrl2_ = 0;
