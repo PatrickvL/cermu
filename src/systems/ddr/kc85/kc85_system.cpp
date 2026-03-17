@@ -9,6 +9,10 @@
 #include <cstring>
 #include <cstdio>
 
+#ifdef CERMU_HAS_GUI
+#include <imgui.h>
+#endif
+
 // ============================================================================
 // SYSTEM DESCRIPTORS
 // ============================================================================
@@ -64,7 +68,17 @@ const SystemDescriptor& KC85System<V>::get_descriptor() const {
     else return kc85_4_descriptor;
 }
 
-template<KC85Variant V> bool KC85System<V>::set_configuration(const SystemConfiguration& config) { config_ = config; return true; }
+template<KC85Variant V> bool KC85System<V>::set_configuration(const SystemConfiguration& config) {
+    config_ = config;
+    auto it = config.custom_settings.find("keyboard_mode");
+    if (it != config.custom_settings.end()) {
+        if (it->second == "serial_pio")
+            kbd_mode_ = KC85KeyboardMode::SERIAL_PIO;
+        else
+            kbd_mode_ = KC85KeyboardMode::MEMORY_INJECT;
+    }
+    return true;
+}
 template<KC85Variant V> bool KC85System<V>::apply_configuration() { return true; }
 
 template<KC85Variant V>
@@ -254,7 +268,88 @@ void KC85System<V>::tick() {
 
 template<KC85Variant V> void KC85System<V>::run_frame() {
     for (uint32_t i = 0; i < kc85_constants::TSTATES_PER_FRAME; ++i) tick();
+    if (kbd_mode_ == KC85KeyboardMode::MEMORY_INJECT) {
+        handle_keyboard();
+    }
     render_frame();
+}
+
+// ============================================================================
+// KEYBOARD — CAOS memory patching
+// ============================================================================
+//
+// Simplified version of the PIO-B interrupt service routine.
+// Instead of emulating the serial keyboard encoder hardware, we patch
+// the key code directly into CAOS OS variables at offsets from IX.
+// See: https://github.com/floooh/yakc/blob/master/misc/kc85_3_kbdint.md
+//
+//   IX+$08: key status (bit 0=ready, bit 3=timeout, bit 4=repeat)
+//   IX+$0A: repeat counter
+//   IX+$0D: current key code
+
+template<KC85Variant V>
+void KC85System<V>::handle_keyboard() {
+    if (!cpu_ || !cpu_->iff1()) return;
+
+    RAMChip* ram = board_.template chip_as<RAMChip>(0);  // RAM at slot 0
+    if (!ram) return;
+    uint8_t* mem = ram->data();
+    const uint32_t ram_size = Traits::ram_size;
+
+    auto r8 = [&](uint16_t addr) -> uint8_t {
+        return (addr < ram_size) ? mem[addr] : 0xFF;
+    };
+    auto w8 = [&](uint16_t addr, uint8_t val) {
+        if (addr < ram_size) mem[addr] = val;
+    };
+
+    const uint16_t ix = cpu_->ix();
+    const uint16_t addr_status  = ix + 0x08;
+    const uint16_t addr_repeat  = ix + 0x0A;
+    const uint16_t addr_keycode = ix + 0x0D;
+
+    constexpr uint8_t READY_BIT   = 1 << 0;
+    constexpr uint8_t TIMEOUT_BIT = 1 << 3;
+    constexpr uint8_t REPEAT_BIT  = 1 << 4;
+    constexpr uint8_t SHORT_REPEAT = 8;
+    constexpr uint8_t LONG_REPEAT  = 60;
+
+    // Decrement sticky counter
+    if (key_sticky_count_ > 0) {
+        key_sticky_count_ = (key_sticky_count_ > kc85_constants::TSTATES_PER_FRAME)
+                          ? key_sticky_count_ - kc85_constants::TSTATES_PER_FRAME : 0;
+    }
+
+    const uint8_t key = (key_sticky_count_ > 0) ? cur_key_code_ : 0;
+
+    if (key == 0) {
+        // No key — timeout
+        w8(addr_status, r8(addr_status) | TIMEOUT_BIT);
+        w8(addr_keycode, 0);
+    } else {
+        // Key pressed
+        w8(addr_status, r8(addr_status) & ~TIMEOUT_BIT);
+
+        if (key != r8(addr_keycode)) {
+            // New key
+            w8(addr_keycode, key);
+            w8(addr_status, (r8(addr_status) & ~REPEAT_BIT) | READY_BIT);
+            w8(addr_repeat, 0);
+        } else {
+            // Same key held — handle repeat
+            w8(addr_repeat, r8(addr_repeat) + 1);
+            if (r8(addr_status) & REPEAT_BIT) {
+                // Short repeat
+                if (r8(addr_repeat) < SHORT_REPEAT) return;
+            } else {
+                // First long repeat
+                if (r8(addr_repeat) < LONG_REPEAT) return;
+                w8(addr_status, r8(addr_status) | REPEAT_BIT);
+            }
+            w8(addr_status, r8(addr_status) | READY_BIT);
+            w8(addr_repeat, 0);
+        }
+    }
 }
 
 template<KC85Variant V> bool KC85System<V>::load_file(const char*) { return false; }
@@ -263,9 +358,108 @@ template<KC85Variant V> void KC85System<V>::get_display_dimensions(int* w, int* 
 }
 template<KC85Variant V> uint32_t KC85System<V>::get_audio_samples(float*, uint32_t) { return 0; }
 template<KC85Variant V> void KC85System<V>::set_audio_sample_rate(int hz) { audio_sample_rate_ = hz; }
-template<KC85Variant V> void KC85System<V>::handle_keyboard_event(SDL_Keycode, bool) {}
+template<KC85Variant V>
+void KC85System<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
+    // Map SDL keycodes to KC85 key codes (CAOS encoding).
+    // The KC85 uses its own key encoding which is roughly ASCII for
+    // printable characters, with special codes for cursor/control keys.
+    uint8_t kc85_key = 0;
+
+    if (pressed) {
+        switch (key) {
+        // Letters A-Z → uppercase ASCII
+        case SDLK_a: kc85_key = 'A'; break;
+        case SDLK_b: kc85_key = 'B'; break;
+        case SDLK_c: kc85_key = 'C'; break;
+        case SDLK_d: kc85_key = 'D'; break;
+        case SDLK_e: kc85_key = 'E'; break;
+        case SDLK_f: kc85_key = 'F'; break;
+        case SDLK_g: kc85_key = 'G'; break;
+        case SDLK_h: kc85_key = 'H'; break;
+        case SDLK_i: kc85_key = 'I'; break;
+        case SDLK_j: kc85_key = 'J'; break;
+        case SDLK_k: kc85_key = 'K'; break;
+        case SDLK_l: kc85_key = 'L'; break;
+        case SDLK_m: kc85_key = 'M'; break;
+        case SDLK_n: kc85_key = 'N'; break;
+        case SDLK_o: kc85_key = 'O'; break;
+        case SDLK_p: kc85_key = 'P'; break;
+        case SDLK_q: kc85_key = 'Q'; break;
+        case SDLK_r: kc85_key = 'R'; break;
+        case SDLK_s: kc85_key = 'S'; break;
+        case SDLK_t: kc85_key = 'T'; break;
+        case SDLK_u: kc85_key = 'U'; break;
+        case SDLK_v: kc85_key = 'V'; break;
+        case SDLK_w: kc85_key = 'W'; break;
+        case SDLK_x: kc85_key = 'X'; break;
+        case SDLK_y: kc85_key = 'Y'; break;
+        case SDLK_z: kc85_key = 'Z'; break;
+        // Digits 0-9
+        case SDLK_0: kc85_key = '0'; break;
+        case SDLK_1: kc85_key = '1'; break;
+        case SDLK_2: kc85_key = '2'; break;
+        case SDLK_3: kc85_key = '3'; break;
+        case SDLK_4: kc85_key = '4'; break;
+        case SDLK_5: kc85_key = '5'; break;
+        case SDLK_6: kc85_key = '6'; break;
+        case SDLK_7: kc85_key = '7'; break;
+        case SDLK_8: kc85_key = '8'; break;
+        case SDLK_9: kc85_key = '9'; break;
+        // Space and Return
+        case SDLK_SPACE:  kc85_key = 0x20; break;
+        case SDLK_RETURN: kc85_key = 0x0D; break;
+        // Cursor keys
+        case SDLK_RIGHT:  kc85_key = 0x09; break;  // cursor right / TAB
+        case SDLK_LEFT:   kc85_key = 0x08; break;  // cursor left / BS
+        case SDLK_DOWN:   kc85_key = 0x0A; break;  // cursor down / LF
+        case SDLK_UP:     kc85_key = 0x0B; break;  // cursor up / VT
+        // Editing
+        case SDLK_BACKSPACE: kc85_key = 0x01; break;  // DEL (rubout)
+        case SDLK_ESCAPE:    kc85_key = 0x03; break;  // BRK / STOP
+        case SDLK_DELETE:    kc85_key = 0x7F; break;  // INS/DEL
+        case SDLK_HOME:      kc85_key = 0x10; break;  // CLR (home)
+        // Punctuation
+        case SDLK_PERIOD:    kc85_key = '.'; break;
+        case SDLK_COMMA:     kc85_key = ','; break;
+        case SDLK_SEMICOLON: kc85_key = ';'; break;
+        case SDLK_MINUS:     kc85_key = '-'; break;
+        case SDLK_EQUALS:    kc85_key = '='; break;
+        case SDLK_SLASH:     kc85_key = '/'; break;
+        case SDLK_PLUS:      kc85_key = '+'; break;
+        case SDLK_ASTERISK:  kc85_key = '*'; break;
+        // Function keys → F1-F6 mapped to CAOS function keys
+        case SDLK_F1: kc85_key = 0xF1; break;
+        case SDLK_F2: kc85_key = 0xF2; break;
+        case SDLK_F3: kc85_key = 0xF3; break;
+        case SDLK_F4: kc85_key = 0xF4; break;
+        case SDLK_F5: kc85_key = 0xF5; break;
+        case SDLK_F6: kc85_key = 0xF6; break;
+        default: break;
+        }
+    }
+
+    if (kc85_key != 0) {
+        cur_key_code_ = kc85_key;
+        // Hold key for ~2 frames to give CAOS time to sample it
+        key_sticky_count_ = 2 * kc85_constants::TSTATES_PER_FRAME;
+    } else if (!pressed) {
+        cur_key_code_ = 0;
+        key_sticky_count_ = 0;
+    }
+}
 template<KC85Variant V> void KC85System<V>::render_system_menu_items() {}
-template<KC85Variant V> void KC85System<V>::render_configuration_ui() {}
+template<KC85Variant V> void KC85System<V>::render_configuration_ui() {
+#ifdef CERMU_HAS_GUI
+    ImGui::Text("Keyboard Emulation:");
+    static const char* kbd_names[] = { "Memory inject (fast)", "Serial PIO (accurate, TODO)" };
+    int selected = (kbd_mode_ == KC85KeyboardMode::SERIAL_PIO) ? 1 : 0;
+    if (ImGui::Combo("##kbd_mode", &selected, kbd_names, 2)) {
+        SystemConfiguration new_config = config_;
+        new_config.custom_settings["keyboard_mode"] = (selected == 1) ? "serial_pio" : "memory_inject";
+        set_configuration(new_config);
+    }
+#endif
+}
 template<KC85Variant V> void KC85System<V>::set_speed_multiplier(float m) { speed_multiplier_ = m; }
 
 // ============================================================================
