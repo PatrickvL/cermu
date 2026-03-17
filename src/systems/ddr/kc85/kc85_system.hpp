@@ -236,6 +236,7 @@ private:
     bool    caos_rom_on_   = true;   // PIO B bit 0: CAOS ROM enabled
     bool    basic_rom_on_  = false;  // PIO B bit 6: BASIC ROM enabled
     uint8_t active_plane_  = 0;      // Display plane (KC85/4: 0 or 1)
+    bool    blink_flag_    = true;   // Toggled by CTC CH2 zero-count; drives foreground blink
 
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t pins_       = KC85_BUS_DEFAULT_STATE;
