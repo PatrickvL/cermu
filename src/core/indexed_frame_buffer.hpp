@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/palette_table.hpp"
+#include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <algorithm>
@@ -117,6 +118,7 @@ public:
     /// Provide an external RGBA framebuffer from the host.
     /// Pass nullptr to revert to the internal fallback buffer.
     void set_framebuffer(uint32_t* buf, int width, int height) {
+        assert(!buf || (width >= width_ && height >= height_));
         ext_rgba_  = buf;
         ext_width_ = width;
         ext_height_ = height;
