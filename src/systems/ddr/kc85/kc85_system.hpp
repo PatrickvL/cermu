@@ -169,6 +169,12 @@ template<> struct KC85BusTraits<KC85Variant::KC85_4> {
     using Spec = ManifestBusSpec<kKC854Chips, 16, 8>;
 };
 
+// ── Keyboard emulation modes ─────────────────────────────────────────────────
+enum class KC85KeyboardMode {
+    MEMORY_INJECT,   // Patch keycodes directly into CAOS OS variables (fast, default)
+    SERIAL_PIO,      // Emulate serial keyboard encoder via PIO-B interrupts (accurate, TODO)
+};
+
 // ── System ───────────────────────────────────────────────────────────────
 template<KC85Variant V>
 class KC85System : public System {
@@ -228,6 +234,9 @@ private:
 
     // ── Keyboard ─────────────────────────────────────────────────────────
     uint8_t keyboard_matrix_[kc85_constants::KEYBOARD_ROWS] = {};
+    uint8_t cur_key_code_   = 0;     // Most recently pressed KC85 key code
+    uint32_t key_sticky_count_ = 0;  // Frames remaining for key "hold"
+    KC85KeyboardMode kbd_mode_ = KC85KeyboardMode::MEMORY_INJECT;
 
     // ── Banking state ────────────────────────────────────────────────────
     uint8_t bank_ctrl_     = 0;      // Port $84 value (KC85/4 only)
@@ -252,6 +261,7 @@ private:
     bus_state_t io_tick(bus_state_t pins);
     bool        load_roms();
     void        render_frame();               // Decode IRM into indexed framebuffer
+    void        handle_keyboard();            // Patch keycode into CAOS via IX register
 
     // Pre-computed overlay snapshots.
     // KC85/2: 4 modes (IRM×CAOS), KC85/3: 8 modes (IRM×BASIC×CAOS),
