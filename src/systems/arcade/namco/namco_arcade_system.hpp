@@ -184,9 +184,7 @@ private:
     bus_state_t pins_       = NAMCO_BUS_DEFAULT_STATE;
     bool        system_ready_ = false;
     uint32_t scanline_      = 0;
-    uint64_t total_cycles_  = 0;
     int audio_sample_rate_  = namco_arcade_constants::DEFAULT_SAMPLE_RATE;
-    float speed_multiplier_ = 1.0f;
 
     // ── Internal helpers ─────────────────────────────────────────────────
     bus_state_t io_tick(bus_state_t pins);   // Handle I/O region ($5xxx/$9xxx)

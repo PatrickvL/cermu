@@ -189,9 +189,7 @@ private:
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t pins_       = Z1013_BUS_DEFAULT_STATE;
     bool        system_ready_ = false;
-    uint64_t total_cycles_  = 0;
     int audio_sample_rate_  = z1013_constants::DEFAULT_SAMPLE_RATE;
-    float speed_multiplier_ = 1.0f;
 
     // ── Internal helpers ─────────────────────────────────────────────────
     bus_state_t io_tick(bus_state_t pins);

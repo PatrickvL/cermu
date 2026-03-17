@@ -118,9 +118,7 @@ private:
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t pins_       = LC80_BUS_DEFAULT_STATE;
     bool        system_ready_ = false;
-    uint64_t total_cycles_  = 0;
     int audio_sample_rate_  = lc80_constants::DEFAULT_SAMPLE_RATE;
-    float speed_multiplier_ = 1.0f;
 
     // ── Internal helpers ─────────────────────────────────────────────────
     void configure_bus_memory_map();
