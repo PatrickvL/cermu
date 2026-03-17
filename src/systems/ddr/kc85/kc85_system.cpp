@@ -192,7 +192,7 @@ void KC85System<V>::apply_banking() {
     if constexpr (Traits::has_extended_video) {
         if (irm_enabled_) {
             constexpr size_t kIrmSlot = 1;
-            uint8_t bank = bank_ctrl_ & 0x03;
+            uint8_t bank = (bank_ctrl_ >> 1) & 0x03;  // io84 bits [2:1] select CPU bank
             board_.select_bank_at(bus_, 0, kIrmSlot, bank, 0x80);
         } else {
             // IRM disabled — unmap $80-$BF
@@ -207,13 +207,14 @@ void KC85System<V>::apply_banking() {
 // if any flag changed.
 template<KC85Variant V>
 void KC85System<V>::update_bank_state() {
-    uint8_t pio_b = pio1_->get_output(1);
+    // Banking is controlled by PIO Port A (not Port B)
+    uint8_t pio_a = pio1_->get_output(0);
 
-    bool new_caos = (pio_b & 0x01) != 0;
-    bool new_irm  = (pio_b & 0x04) != 0;
+    bool new_caos = (pio_a & 0x01) != 0;   // PIO-A bit 0: CAOS ROM at E000
+    bool new_irm  = (pio_a & 0x04) != 0;   // PIO-A bit 2: IRM at 8000
     bool new_basic = basic_rom_on_;
     if constexpr (Traits::has_basic_rom)
-        new_basic = (pio_b & 0x40) != 0;
+        new_basic = (pio_a & 0x80) != 0;   // PIO-A bit 7: BASIC ROM at C000
 
     if (new_irm != irm_enabled_ || new_caos != caos_rom_on_ ||
         new_basic != basic_rom_on_) {
@@ -244,6 +245,10 @@ void KC85System<V>::tick() {
     }
 
     ctc_->tick();
+    // CTC channel 2 zero-count toggles the foreground blink flag
+    if (ctc_->check_zero_count(2)) {
+        blink_flag_ = !blink_flag_;
+    }
     total_cycles_++;
 }
 
@@ -267,18 +272,23 @@ template<KC85Variant V> void KC85System<V>::set_speed_multiplier(float m) { spee
 // VIDEO RENDERING — decode IRM into indexed framebuffer
 // ============================================================================
 //
-// KC85/2,3: IRM = 16 KB at $8000-$BFFF, column-major layout
-//   Pixel data: irm[col * 256 + row]  (col = 0..31, row = 0..255) = 8192 bytes
-//   Color data: irm[$2800 + col * 64 + (row / 4)] = 2048 bytes
+// KC85/2,3: IRM = 16 KB at $8000-$BFFF, ZX Spectrum-like interleaved addressing
+//   Left 256×256 area (pixel cols 0..31, 8 KB pixel + 2 KB color):
+//     pixel_offset = x | (((y>>2)&3)<<5) | ((y&3)<<7) | (((y>>4)&0xF)<<9)
+//     color_offset = x | (((y>>2)&0x3F)<<5)
+//   Right 64×256 area (pixel cols 32..39, 2 KB pixel + 0.5 KB color):
+//     pixel_offset = 0x2000 + ((x&7) | (((y>>4)&3)<<3) | (((y>>2)&3)<<5) | ((y&3)<<7) | (((y>>6)&3)<<9))
+//     color_offset = 0x0800 + ((x&7) | (((y>>4)&3)<<3) | (((y>>2)&3)<<5) | (((y>>6)&3)<<7))
+//   Color bytes stored at irm[$2800 + color_offset]
 //   Each pixel byte = 8 horizontal pixels (MSB = leftmost)
-//   Each color byte: bits [3:0] = foreground (16 colors), bits [6:4] = background (8 colors), bit 7 = blink
-//   Display: 256×256 pixels, centered in 320×256 framebuffer (32-pixel border each side)
+//   Each color byte: bits [2:0] = background (8 colors), bits [5:3] = foreground base, bit 6 = fg intensity, bit 7 = blink
+//   Display: 320×256 pixels (256 left + 64 right), full framebuffer width
 //
 // KC85/4: IRM = 64 KB in 4 × 16 KB banks, column-major layout
-//   Bank 0: pixel plane 0, Bank 1: pixel plane 1
-//   Bank 2: color plane 0, Bank 3: color plane 1
+//   Bank 0: pixel plane 0, Bank 1: color plane 0
+//   Bank 2: pixel plane 1, Bank 3: color plane 1
 //   Pixel data: bank_base[col * 256 + row]  (col = 0..39) = 10240 bytes used
-//   Color data: same layout in color bank, per-byte color resolution
+//   Color data: same layout in next bank, per-byte color resolution
 //   Display: 320×256 pixels, full framebuffer width
 
 template<KC85Variant V>
@@ -286,19 +296,24 @@ void KC85System<V>::render_frame() {
     if (!irm_chip_) return;
 
     const uint8_t* irm = irm_chip_->data();
+    // Blink: when PIO-B bit 7 enables blinking AND blink_flag_ is true,
+    // color bytes with bit 7 set force foreground to background
+    const uint8_t pio_b = pio1_->get_output(1);
+    const bool blink_bg = blink_flag_ && (pio_b & 0x80);
 
     if constexpr (Traits::has_extended_video) {
         // KC85/4: 320×256, dual-plane with per-byte color
-        const uint8_t* pixel_base = irm + active_plane_ * 16384;
-        const uint8_t* color_base = irm + (2 + active_plane_) * 16384;
+        // Banks are: pixel0, color0, pixel1, color1 (each 16 KB)
+        const uint8_t* pixel_base = irm + active_plane_ * 2 * 16384;
+        const uint8_t* color_base = pixel_base + 16384;
 
         for (int y = 0; y < kc85_constants::FB_HEIGHT; y++) {
             uint8_t* dst = display_.indices() + y * kc85_constants::FB_WIDTH;
             for (int col = 0; col < kc85_constants::KC4_PIXEL_COLS; col++) {
                 uint8_t pixels = pixel_base[col * 256 + y];
                 uint8_t color  = color_base[col * 256 + y];
-                uint8_t fg = color & 0x0F;
-                uint8_t bg = (color >> 4) & 0x07;
+                uint8_t bg = color & 0x07;              // bits 0-2: background (8 colors)
+                uint8_t fg = (blink_bg && (color & 0x80)) ? bg : ((color >> 3) & 0x0F);
                 int x = col * 8;
                 for (int bit = 7; bit >= 0; --bit) {
                     dst[x++] = (pixels & (1 << bit)) ? fg : bg;
@@ -306,23 +321,45 @@ void KC85System<V>::render_frame() {
             }
         }
     } else {
-        // KC85/2,3: 256×256, centered in 320-pixel framebuffer
-        // Clear border columns to black (palette index 0)
-        display_.clear();
-
+        // KC85/2,3: 320×256, ZX Spectrum-like interleaved addressing
+        // Left 256×256 area (cols 0..31) + right 64×256 area (cols 32..39)
         for (int y = 0; y < kc85_constants::FB_HEIGHT; y++) {
-            uint8_t* dst = display_.indices() + y * kc85_constants::FB_WIDTH
-                         + kc85_constants::KC23_BORDER_X;
-            for (int col = 0; col < kc85_constants::KC23_PIXEL_COLS; col++) {
-                uint8_t pixels = irm[col * 256 + y];
-                // Color cells are 8×4 pixels: one color byte per 4 scanlines
-                uint8_t color  = irm[kc85_constants::KC23_COLOR_OFFSET
-                                     + col * 64 + (y >> 2)];
-                uint8_t fg = color & 0x0F;
-                uint8_t bg = (color >> 4) & 0x07;
-                int x = col * 8;
+            uint8_t* dst = display_.indices() + y * kc85_constants::FB_WIDTH;
+
+            // Left 256×256 area (columns 0..31)
+            for (int x = 0; x < 32; x++) {
+                int pixel_offset = x | (((y >> 2) & 0x3) << 5)
+                                     | ((y & 0x3) << 7)
+                                     | (((y >> 4) & 0xF) << 9);
+                int color_offset = x | (((y >> 2) & 0x3F) << 5);
+                uint8_t pixels = irm[pixel_offset];
+                uint8_t color  = irm[0x2800 + color_offset];
+                uint8_t bg = color & 0x07;
+                uint8_t fg = (blink_bg && (color & 0x80)) ? bg : ((color >> 3) & 0x0F);
+                int px = x * 8;
                 for (int bit = 7; bit >= 0; --bit) {
-                    dst[x++] = (pixels & (1 << bit)) ? fg : bg;
+                    dst[px++] = (pixels & (1 << bit)) ? fg : bg;
+                }
+            }
+
+            // Right 64×256 area (columns 32..39)
+            for (int x = 32; x < 40; x++) {
+                int pixel_offset = 0x2000 + ((x & 0x7)
+                                     | (((y >> 4) & 0x3) << 3)
+                                     | (((y >> 2) & 0x3) << 5)
+                                     | ((y & 0x3) << 7)
+                                     | (((y >> 6) & 0x3) << 9));
+                int color_offset = 0x0800 + ((x & 0x7)
+                                     | (((y >> 4) & 0x3) << 3)
+                                     | (((y >> 2) & 0x3) << 5)
+                                     | (((y >> 6) & 0x3) << 7));
+                uint8_t pixels = irm[pixel_offset];
+                uint8_t color  = irm[0x2800 + color_offset];
+                uint8_t bg = color & 0x07;
+                uint8_t fg = (blink_bg && (color & 0x80)) ? bg : ((color >> 3) & 0x0F);
+                int px = x * 8;
+                for (int bit = 7; bit >= 0; --bit) {
+                    dst[px++] = (pixels & (1 << bit)) ? fg : bg;
                 }
             }
         }
@@ -363,8 +400,8 @@ bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
             } else {
                 pio1_->write_data(port_idx, data);
             }
-            // PIO 1 Port B controls memory banking
-            if (!is_ctrl && port_idx == 1) {
+            // PIO 1 controls memory banking (Port A enables, Port B for KC85/4)
+            if (!is_ctrl) {
                 update_bank_state();
             }
         }
@@ -393,9 +430,9 @@ bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
     // KC85/4: additional banking control ports
     if constexpr (Traits::has_extended_video) {
         if (port == kc85_constants::KC4_CTRL_PORT && !is_read) {
-            uint8_t old_bank = bank_ctrl_ & 0x03;
+            uint8_t old_bank = (bank_ctrl_ >> 1) & 0x03;  // io84 bits [2:1]
             bank_ctrl_ = data;
-            uint8_t new_bank = bank_ctrl_ & 0x03;
+            uint8_t new_bank = (bank_ctrl_ >> 1) & 0x03;
 
             // Remap IRM bank if changed and IRM is enabled
             if (new_bank != old_bank && irm_enabled_) {
