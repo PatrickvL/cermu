@@ -30,59 +30,6 @@
 // ── Variants ─────────────────────────────────────────────────────────────
 enum class KC85Variant { KC85_2, KC85_3, KC85_4 };
 
-template<KC85Variant V> struct KC85VariantTraits;
-
-template<> struct KC85VariantTraits<KC85Variant::KC85_2> {
-    static constexpr const char* name            = "KC 85/2";
-    static constexpr const char* short_name      = "KC85/2";
-    static constexpr const char* description     = "VEB Mühlhausen KC 85/2 (HC 900) — U880 @ 1.77MHz, 16KB RAM, CAOS 2.2 (1984)";
-    static constexpr uint32_t    ram_size        = kc85_constants::RAM_SIZE_16K;
-    static constexpr bool        has_basic_rom   = false;
-    static constexpr bool        has_extended_video = false;
-    static constexpr const char* caos_version    = "2.2";
-    // Slot indices into kKC852Chips
-    static constexpr size_t kCaosRomSlot         = 2;
-    static constexpr size_t kPio1Slot            = 4;
-    static constexpr size_t kPio2Slot            = 5;
-    static constexpr size_t kCtcSlot             = 6;
-    static constexpr size_t kModulesSlot         = 7;
-};
-
-template<> struct KC85VariantTraits<KC85Variant::KC85_3> {
-    static constexpr const char* name            = "KC 85/3";
-    static constexpr const char* short_name      = "KC85/3";
-    static constexpr const char* description     = "VEB Mühlhausen KC 85/3 — U880 @ 1.77MHz, 16KB RAM, BASIC, CAOS 3.1 (1986)";
-    static constexpr uint32_t    ram_size        = kc85_constants::RAM_SIZE_16K;
-    static constexpr bool        has_basic_rom   = true;
-    static constexpr bool        has_extended_video = false;
-    static constexpr const char* caos_version    = "3.1";
-    // Slot indices into kKC853Chips
-    static constexpr size_t kBasicRomSlot        = 2;
-    static constexpr size_t kCaosRomSlot         = 3;
-    static constexpr size_t kPio1Slot            = 5;
-    static constexpr size_t kPio2Slot            = 6;
-    static constexpr size_t kCtcSlot             = 7;
-    static constexpr size_t kModulesSlot         = 8;
-};
-
-template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
-    static constexpr const char* name            = "KC 85/4";
-    static constexpr const char* short_name      = "KC85/4";
-    static constexpr const char* description     = "VEB Mühlhausen KC 85/4 — U880 @ 1.77MHz, 64KB RAM, dual-plane video, CAOS 4.2 (1989)";
-    static constexpr uint32_t    ram_size        = kc85_constants::RAM_SIZE_64K;
-    static constexpr bool        has_basic_rom   = true;
-    static constexpr bool        has_extended_video = true;
-    static constexpr const char* caos_version    = "4.2";
-    // Slot indices into kKC854Chips
-    static constexpr size_t kBasicRomSlot        = 2;
-    static constexpr size_t kCaosCRomSlot        = 3;
-    static constexpr size_t kCaosRomSlot         = 4;
-    static constexpr size_t kPio1Slot            = 6;
-    static constexpr size_t kPio2Slot            = 7;
-    static constexpr size_t kCtcSlot             = 8;
-    static constexpr size_t kModulesSlot         = 9;
-};
-
 // ============================================================================
 // KC 85 chip manifests — declarative memory layout
 // ============================================================================
@@ -155,6 +102,39 @@ inline constexpr auto kKC854Chips = make_chip_manifest(
     Slot<z80_ctc_t>           {0, 0, 0, "U857 CTC"},
     Slot<kc85_module_system_t>{0, 0, 0, "Module System"}
 );
+
+// ── Variant traits ───────────────────────────────────────────────────────
+template<KC85Variant V> struct KC85VariantTraits;
+
+template<> struct KC85VariantTraits<KC85Variant::KC85_2> {
+    static constexpr const char* name            = "KC 85/2";
+    static constexpr const char* short_name      = "KC85/2";
+    static constexpr const char* description     = "VEB Mühlhausen KC 85/2 (HC 900) — U880 @ 1.77MHz, 16KB RAM, CAOS 2.2 (1984)";
+    static constexpr uint32_t    ram_size        = kc85_constants::RAM_SIZE_16K;
+    static constexpr bool        has_basic_rom   = false;
+    static constexpr bool        has_extended_video = false;
+    static constexpr const char* caos_version    = "2.2";
+};
+
+template<> struct KC85VariantTraits<KC85Variant::KC85_3> {
+    static constexpr const char* name            = "KC 85/3";
+    static constexpr const char* short_name      = "KC85/3";
+    static constexpr const char* description     = "VEB Mühlhausen KC 85/3 — U880 @ 1.77MHz, 16KB RAM, BASIC, CAOS 3.1 (1986)";
+    static constexpr uint32_t    ram_size        = kc85_constants::RAM_SIZE_16K;
+    static constexpr bool        has_basic_rom   = true;
+    static constexpr bool        has_extended_video = false;
+    static constexpr const char* caos_version    = "3.1";
+};
+
+template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
+    static constexpr const char* name            = "KC 85/4";
+    static constexpr const char* short_name      = "KC85/4";
+    static constexpr const char* description     = "VEB Mühlhausen KC 85/4 — U880 @ 1.77MHz, 64KB RAM, dual-plane video, CAOS 4.2 (1989)";
+    static constexpr uint32_t    ram_size        = kc85_constants::RAM_SIZE_64K;
+    static constexpr bool        has_basic_rom   = true;
+    static constexpr bool        has_extended_video = true;
+    static constexpr const char* caos_version    = "4.2";
+};
 
 // BusTraits — selects the correct manifest per variant
 template<KC85Variant V> struct KC85BusTraits;

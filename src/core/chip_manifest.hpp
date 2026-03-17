@@ -433,6 +433,43 @@ struct ChipManifest {
         return max_count;
     }
 
+    // ── Type-based slot lookup ─────────────────────────────────────────────
+
+    // Find the slot index of the Nth chip of type T (0-based).
+    // Matching uses the factory function pointer, which is unique per Slot<T>
+    // type (each template instantiation produces a distinct pointer).
+    // Returns N (past-end) when fewer than (nth + 1) chips of type T exist.
+    //
+    // Example:
+    //   constexpr size_t pio1 = manifest.find<z80_pio_t>();     // first PIO
+    //   constexpr size_t pio2 = manifest.find<z80_pio_t>(1);    // second PIO
+    //   static_assert(pio1 < manifest.num_chips(), "PIO not found");
+    //
+    template<typename T>
+    [[nodiscard]] constexpr size_t find(size_t nth = 0) const noexcept {
+        constexpr auto target = resolve_slot_factory<T>();
+        size_t count = 0;
+        for (size_t i = 0; i < N; ++i) {
+            if (chips[i].factory == target) {
+                if (count == nth) return i;
+                ++count;
+            }
+        }
+        return N;
+    }
+
+    // Find the last slot of type T.  Returns N (past-end) if none exist.
+    template<typename T>
+    [[nodiscard]] constexpr size_t find_last() const noexcept {
+        constexpr auto target = resolve_slot_factory<T>();
+        size_t result = N;
+        for (size_t i = 0; i < N; ++i) {
+            if (chips[i].factory == target)
+                result = i;
+        }
+        return result;
+    }
+
     // ── Chainable modifiers ────────────────────────────────────────────────
 
     // Returns a copy with the dynamic pool set to the given number of pages.

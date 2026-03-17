@@ -269,6 +269,67 @@ public:
     }
 
     // =====================================================================
+    // §4.4b″  Type-based chip lookup
+    // =====================================================================
+    //
+    // Returns the Nth chip of type T by matching factory function pointers.
+    // Equivalent to chip_as<T>(manifest.find<T>(nth)) but doesn't require
+    // the caller to carry a manifest reference.
+    //
+    //   pio1_ = board_.find<z80_pio_t>();      // first PIO
+    //   pio2_ = board_.find<z80_pio_t>(1);     // second PIO
+    //
+
+    template<typename T>
+    [[nodiscard]] T* find(size_t nth = 0) noexcept {
+        constexpr auto target = resolve_slot_factory<T>();
+        size_t count = 0;
+        for (size_t i = 0; i < bus_map_.slot_count(); ++i) {
+            if (bus_map_.slot(i).factory == target) {
+                if (count == nth)
+                    return static_cast<T*>(bus_map_.slot(i).chip);
+                ++count;
+            }
+        }
+        return nullptr;
+    }
+
+    template<typename T>
+    [[nodiscard]] const T* find(size_t nth = 0) const noexcept {
+        constexpr auto target = resolve_slot_factory<T>();
+        size_t count = 0;
+        for (size_t i = 0; i < bus_map_.slot_count(); ++i) {
+            if (bus_map_.slot(i).factory == target) {
+                if (count == nth)
+                    return static_cast<const T*>(bus_map_.slot(i).chip);
+                ++count;
+            }
+        }
+        return nullptr;
+    }
+
+    // find_last<T>() — returns the last chip of type T in the manifest.
+    template<typename T>
+    [[nodiscard]] T* find_last() noexcept {
+        constexpr auto target = resolve_slot_factory<T>();
+        for (size_t i = bus_map_.slot_count(); i-- > 0; ) {
+            if (bus_map_.slot(i).factory == target)
+                return static_cast<T*>(bus_map_.slot(i).chip);
+        }
+        return nullptr;
+    }
+
+    template<typename T>
+    [[nodiscard]] const T* find_last() const noexcept {
+        constexpr auto target = resolve_slot_factory<T>();
+        for (size_t i = bus_map_.slot_count(); i-- > 0; ) {
+            if (bus_map_.slot(i).factory == target)
+                return static_cast<const T*>(bus_map_.slot(i).chip);
+        }
+        return nullptr;
+    }
+
+    // =====================================================================
     // §4.4c  Owned chip access (for registration / lifetime)
     // =====================================================================
 
