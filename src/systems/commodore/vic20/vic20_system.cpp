@@ -748,7 +748,7 @@ bus_state_t VIC20System::mem_tick(bus_state_t s) {
         return io_tick(s);
 
     // Everything else: MemoryBus page-pointer dispatch
-    return mem_bus_.tick(0, s);
+    return mem_bus_.tick(s);
 }
 
 // ── I/O dispatch for $9000-$9FFF ─────────────────────────────────────────

@@ -252,18 +252,10 @@ template<KC85Variant V>
 void KC85System<V>::tick() {
     if (!cpu_) return;
 
-    pins_ = cpu_->tick(pins_);
-
-    bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);
-    bool iorq = !BUS_GET_BIT(pins_, Z80_IORQ_BIT);
-
-    if (mreq) {
-        pins_ = bus_.tick(0, pins_);
-    } else if (iorq) {
-        pins_ = io_tick(pins_);
-    }
-
+    // ── 1. Tick peripherals BEFORE CPU ──────────────────────────────────
+    // CTC must tick before cpu so CTC3 timer measures pulse intervals correctly.
     ctc_->tick();
+
     // CTC channel 2 zero-count toggles the foreground blink flag
     if (ctc_->check_zero_count(2)) {
         blink_flag_ = !blink_flag_;
@@ -279,6 +271,28 @@ void KC85System<V>::tick() {
             pio1_->strobe(1, true);
             pio1_->strobe(1, false);
         }
+    }
+
+    // ── 2. Drive INT pin on bus (active-low, level-sensitive) ──────────
+    // Daisy chain priority: CTC > PIO-A > PIO-B.
+    // The CPU samples INT at the start of each M1 cycle.
+    if (ctc_->interrupt_pending() || pio1_->any_interrupt_pending()) {
+        BUS_CLR_BIT(pins_, BUS_IRQ_BIT);   // Assert INT (active-low)
+    } else {
+        BUS_SET_BIT(pins_, BUS_IRQ_BIT);   // Deassert INT
+    }
+
+    // ── 3. CPU tick (one T-state) ─────────────────────────────────────
+    pins_ = cpu_->tick(pins_);
+
+    // ── 4. Bus dispatch ───────────────────────────────────────────────
+    bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);
+    bool iorq = !BUS_GET_BIT(pins_, Z80_IORQ_BIT);
+
+    if (mreq) {
+        pins_ = bus_.tick(pins_);
+    } else if (iorq) {
+        pins_ = io_tick(pins_);
     }
 
     total_cycles_++;
@@ -668,59 +682,37 @@ void KC85System<V>::render_frame() {
 
 template<KC85Variant V>
 bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
-    // Interrupt acknowledge: IORQ + M1
-    // Priority: CTC > PIO (CTC is highest priority in KC85 daisy chain)
+    // Interrupt acknowledge: IORQ + M1 (both active-low)
+    // Daisy chain priority: CTC > PIO-A > PIO-B.
     if (!BUS_GET_BIT(pins, Z80_M1_BIT)) {
-        if (ctc_->interrupt_pending()) {
-            BUS_SET_DATA(pins, ctc_->interrupt_vector());
-        } else if (pio1_->any_interrupt_pending()) {
-            int pi = pio1_->highest_priority_port();
-            BUS_SET_DATA(pins, pio1_->interrupt_vector(pi));
-            pio1_->acknowledge_interrupt(pi);
-        } else {
-            BUS_SET_DATA(pins, 0xFF);
-        }
+        if (ctc_->interrupt_pending()) return ctc_->inta(pins);
+        if (pio1_->any_interrupt_pending()) return pio1_->inta(pins);
+        BUS_SET_DATA(pins, 0xFF);
         return pins;
     }
 
     uint8_t port = static_cast<uint8_t>(BUS_GET_ADDR(pins));
-    bool is_read = BUS_GET_BIT(pins, BUS_RW_BIT);
-    uint8_t data = BUS_GET_DATA(pins);
 
     // PIO 1 at $88-$8B (system + keyboard)
     if ((port & 0xFC) == kc85_constants::PIO_A_DATA) {
-        int port_idx = port & 0x01;
-        bool is_ctrl = (port >> 1) & 0x01;
-        if (is_read) {
-            BUS_SET_DATA(pins, pio1_->read_data(port_idx));
-        } else {
-            if (is_ctrl) {
-                pio1_->write_control(port_idx, data);
-            } else {
-                pio1_->write_data(port_idx, data);
-            }
-            // PIO 1 controls memory banking (Port A enables, Port B for KC85/4)
-            if (!is_ctrl) {
-                update_bank_state();
-            }
+        bool is_write = !BUS_GET_BIT(pins, BUS_RW_BIT);
+        bool is_data_reg = !((port >> 1) & 0x01);
+        pins = pio1_->io_tick(pins);
+        // PIO 1 data writes control memory banking
+        if (is_write && is_data_reg) {
+            update_bank_state();
         }
         return pins;
     }
 
     // CTC at $8C-$8F (4 channels)
     if ((port & 0xFC) == kc85_constants::CTC_CH0) {
-        int channel = port & 0x03;
-        if (is_read) {
-            BUS_SET_DATA(pins, ctc_->read(channel));
-        } else {
-            ctc_->write(channel, data);
-        }
-        return pins;
+        return ctc_->io_tick(pins);
     }
 
     // Module system at $80-$81
     if (port == kc85_constants::MODULE_PORT || port == kc85_constants::MODULE_DATA_PORT) {
-        if (is_read) {
+        if (BUS_GET_BIT(pins, BUS_RW_BIT)) {
             BUS_SET_DATA(pins, 0xFF);
         }
         return pins;
@@ -728,12 +720,12 @@ bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
 
     // KC85/4: additional banking control ports
     if constexpr (Traits::has_extended_video) {
-        if (port == kc85_constants::KC4_CTRL_PORT && !is_read) {
-            uint8_t old_bank = (bank_ctrl_ >> 1) & 0x03;  // io84 bits [2:1]
+        if (port == kc85_constants::KC4_CTRL_PORT && !BUS_GET_BIT(pins, BUS_RW_BIT)) {
+            uint8_t data = BUS_GET_DATA(pins);
+            uint8_t old_bank = (bank_ctrl_ >> 1) & 0x03;
             bank_ctrl_ = data;
             uint8_t new_bank = (bank_ctrl_ >> 1) & 0x03;
 
-            // Remap IRM bank if changed and IRM is enabled
             if (new_bank != old_bank && irm_enabled_) {
                 constexpr size_t kIrmSlot = 1;
                 board_.select_bank_at(bus_, 0, kIrmSlot, new_bank, 0x80);
@@ -741,8 +733,8 @@ bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
             active_plane_ = bank_ctrl_ & 0x01;
             return pins;
         }
-        if (port == kc85_constants::KC4_CTRL2_PORT && !is_read) {
-            bank_ctrl2_ = data;
+        if (port == kc85_constants::KC4_CTRL2_PORT && !BUS_GET_BIT(pins, BUS_RW_BIT)) {
+            bank_ctrl2_ = BUS_GET_DATA(pins);
             return pins;
         }
     }

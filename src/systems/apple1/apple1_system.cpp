@@ -476,7 +476,7 @@ void Apple1System::configure_bus_memory_map() {
 void Apple1System::tick_cpu() {
     if (cpu_) {
         pins_ = cpu_->tick<MOS6502::Phase::PHI2>(pins_);
-        pins_ = bus_.tick(0, pins_);
+        pins_ = bus_.tick(pins_);
         pins_ = cpu_->tick<MOS6502::Phase::PHI1>(pins_);
         cpu_->sample_nmi_pin(pins_);
     }

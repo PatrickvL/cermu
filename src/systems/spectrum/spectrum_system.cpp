@@ -300,7 +300,7 @@ void SpectrumSystem<V>::tick() {
     bool iorq = !BUS_GET_BIT(pins_, Z80_IORQ_BIT);  // Active-low
 
     if (mreq) {
-        pins_ = bus_.tick(0, pins_);
+        pins_ = bus_.tick(pins_);
     } else if (iorq) {
         pins_ = io_tick(pins_);
     }

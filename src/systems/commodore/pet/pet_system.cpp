@@ -514,7 +514,7 @@ void PETSystem::tick() {
                 BUS_SET_DATA(s, io_read(addr));
             }
         } else {
-            s = bus_.tick(0, s);
+            s = bus_.tick(s);
         }
     }
 

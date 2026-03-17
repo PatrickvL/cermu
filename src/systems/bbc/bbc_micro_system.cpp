@@ -347,7 +347,7 @@ void BBCMicroSystem::tick() {
         if (unlikely(addr >= bbc_constants::FRED_START && addr <= bbc_constants::SHEILA_END)) {
             s = sheila_tick(s);     // FRED/JIM/SHEILA I/O ($FC00-$FEFF)
         } else {
-            s = bus_.tick(0, s);    // Memory dispatch via MemoryBus
+            s = bus_.tick(s);    // Memory dispatch via MemoryBus
         }
     }
 

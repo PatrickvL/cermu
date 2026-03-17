@@ -998,7 +998,7 @@ bool Commodore264System<V>::load_roms() {
 // changes are callback-driven from TED register writes — no per-tick polling.
 template<C264SeriesVariant V>
 bus_state_t Commodore264System<V>::mem_tick(bus_state_t s) {
-    s = bus_.tick(0, s);
+    s = bus_.tick(s);
     // Debug cart capture ($FDCF) — VICE test convention, not real hardware.
     // Writes to unmatched $FD addresses are silently dropped by the bus
     // (open-bus base), so we intercept here.
@@ -1114,7 +1114,7 @@ uint8_t Commodore264System<V>::ted_keyboard_scan(void* user_data, uint8_t column
 template<C264SeriesVariant V>
 uint8_t Commodore264System<V>::ted_mem_read(void* user_data, uint16_t address) {
     auto* sys = static_cast<Commodore264System<V>*>(user_data);
-    return sys->bus_.peek_byte(c264_viewer::kTedVideo, address);
+    return sys->bus_.peek_byte(address, c264_viewer::kTedVideo);
 }
 
 // ============================================================================

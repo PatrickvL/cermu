@@ -294,7 +294,7 @@ void Atari2600System::tick_cpu() {
         pins_ = cpu_->tick<MOS6507::Phase::PHI2>(pins_);
 
         // Memory dispatch through MemoryBus (TIA, RIOT, Cart all via MMIO)
-        pins_ = bus_.tick(0, pins_);
+        pins_ = bus_.tick(pins_);
 
         // Bus snooping for mappers that monitor all accesses
         // (e.g. 3F watches TIA writes, FE watches stack at $01FE)

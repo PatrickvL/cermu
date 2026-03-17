@@ -138,7 +138,7 @@ void BombJackSystem::tick() {
         if ((addr & 0xF000) == 0xB000) {
             main_pins_ = main_io_tick(main_pins_);
         } else {
-            main_pins_ = main_bus_.tick(0, main_pins_);
+            main_pins_ = main_bus_.tick(main_pins_);
         }
     }
 
@@ -164,7 +164,7 @@ void BombJackSystem::tick() {
                     sound_nmi_ = false;
                 }
             } else {
-                sound_pins_ = sound_bus_.tick(0, sound_pins_);
+                sound_pins_ = sound_bus_.tick(sound_pins_);
             }
         } else if (!BUS_GET_BIT(sound_pins_, Z80_IORQ_BIT)) {
             sound_pins_ = sound_io_tick(sound_pins_);

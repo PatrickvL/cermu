@@ -241,6 +241,39 @@ public:
         return port_[port_idx & 1].int_vector;
     }
 
+    // === Bus interface ===
+
+    /// Bus-connected register access. Called when chip is address-decoded (CE asserted).
+    /// A0 selects port (A=0, B=1), A1 selects data (0) vs control (1).
+    bus_state_t io_tick(bus_state_t pins) {
+        int port_idx = BUS_GET_ADDR(pins) & 0x01;
+        bool is_ctrl = (BUS_GET_ADDR(pins) >> 1) & 0x01;
+        if (BUS_GET_BIT(pins, BUS_RW_BIT)) {
+            BUS_SET_DATA(pins, read_data(port_idx));
+        } else {
+            uint8_t data = BUS_GET_DATA(pins);
+            if (is_ctrl) {
+                write_control(port_idx, data);
+            } else {
+                write_data(port_idx, data);
+            }
+        }
+        return pins;
+    }
+
+    /// Interrupt acknowledge via bus (IORQ+M1 cycle).
+    /// Places the pending interrupt vector on the data bus and clears the pending flag.
+    bus_state_t inta(bus_state_t pins) {
+        int pi = highest_priority_port();
+        if (pi >= 0) {
+            BUS_SET_DATA(pins, interrupt_vector(pi));
+            acknowledge_interrupt(pi);
+        } else {
+            BUS_SET_DATA(pins, 0xFF);
+        }
+        return pins;
+    }
+
     // === ChipBase GUI virtuals ===
 #ifdef CERMU_HAS_GUI
     ChipLayout* create_chip_layout() const override;

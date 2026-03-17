@@ -463,7 +463,7 @@ bool C64System::initialize() {
     this->vicii->bus.mem_read = [](void* ctx, bus_state_t bus, uint16_t addr) -> bus_state_t {
         auto* sys = static_cast<C64System*>(ctx);
         // Use peek_byte for VIC-II viewer (viewer 1) — returns 0xFF for unmapped
-        uint8_t data = sys->bus_.peek_byte(C64BusSpec::Vic, addr);
+        uint8_t data = sys->bus_.peek_byte(addr, C64BusSpec::Vic);
         BUS_SET_DATA(bus, data);
         return bus;
     };
@@ -893,7 +893,7 @@ void C64System::system_tick() {
         const bool is_write = !BUS_GET_BIT(s, BUS_RW_BIT);
         const size_t viewer = (is_write || BUS_GET_BIT(s, BUS_AEC_BIT))
                                   ? C64BusSpec::Cpu : C64BusSpec::Vic;
-        s = bus_.tick(viewer, s);
+        s = bus_.tick(s, viewer);
     }
 
     // NMI edge detection — sample after bus dispatch (post-dispatch state)
@@ -1957,7 +1957,7 @@ uint8_t C64System::read_memory(uint16_t addr) {
     bus_state_t s = bus_state_;
     BUS_SET_ADDR(s, addr);
     BUS_SET_BIT(s, BUS_RW_BIT);
-    s = bus_.tick(C64BusSpec::Cpu, s);
+    s = bus_.tick(s);
     return BUS_GET_DATA(s);
 }
 
@@ -1966,7 +1966,7 @@ void C64System::write_memory(uint16_t addr, uint8_t value) {
     BUS_SET_ADDR(s, addr);
     BUS_SET_DATA(s, value);
     BUS_CLR_BIT(s, BUS_RW_BIT);
-    (void)bus_.tick(C64BusSpec::Cpu, s);
+    (void)bus_.tick(s);
 }
 
 // ============================================================================
