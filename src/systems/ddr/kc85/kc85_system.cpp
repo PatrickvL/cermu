@@ -102,6 +102,29 @@ bool KC85System<V>::initialize() {
     ctc_     = board_.template chip_as<z80_ctc_t>(Traits::kCtcSlot);
     modules_ = board_.template chip_as<kc85_module_system_t>(Traits::kModulesSlot);
 
+    // ── KC85/2,3: fill RAM and IRM with pseudo-random noise ─────────────
+    // Real hardware powers up with random bit patterns in DRAM.  KC85/4 RAM
+    // is cleared to zero by firmware, so only /2 and /3 get the noise fill.
+    if constexpr (!Traits::has_extended_video) {
+        auto* ram = board_.template chip_as<RAMChip>(0);
+        auto xorshift32 = [](uint32_t x) -> uint32_t {
+            x ^= x << 13; x ^= x >> 17; x ^= x << 5; return x;
+        };
+        uint32_t r = 0x6D98302B;  // same seed as floooh reference
+        if (ram) {
+            uint8_t* p = ram->data();
+            for (uint32_t i = 0; i < Traits::ram_size; ++i) {
+                r = xorshift32(r); p[i] = static_cast<uint8_t>(r);
+            }
+        }
+        if (irm_chip_) {
+            uint8_t* p = irm_chip_->data();
+            for (uint32_t i = 0; i < 16384; ++i) {
+                r = xorshift32(r); p[i] = static_cast<uint8_t>(r);
+            }
+        }
+    }
+
     // ── Set initial banking state ───────────────────────────────────────
     caos_rom_on_  = true;
     irm_enabled_  = true;
