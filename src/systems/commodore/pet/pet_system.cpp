@@ -244,18 +244,18 @@ bool PETSystem::initialize() {
     board_.create_chips(&pins_);
     board_.apply(bus_);
 
-    main_ram_chip_    = board_.template chip_as<RAMChip>(pet_chips::kMainRamSlot);
-    screen_ram_chip_  = board_.template chip_as<RAMChip>(pet_chips::kScreenRamSlot);
-    basic_rom_b_chip_ = board_.template chip_as<ROMChip>(pet_chips::kBasicBSlot);
-    basic_rom_c_chip_ = board_.template chip_as<ROMChip>(pet_chips::kBasicCSlot);
-    basic_rom_d_chip_ = board_.template chip_as<ROMChip>(pet_chips::kBasicDSlot);
-    editor_rom_chip_  = board_.template chip_as<ROMChip>(pet_chips::kEditorRomSlot);
-    kernal_rom_chip_  = board_.template chip_as<ROMChip>(pet_chips::kKernalRomSlot);
+    main_ram_chip_    = board_.template find<RAMChip>();
+    screen_ram_chip_  = board_.template find<RAMChip>(1);
+    basic_rom_b_chip_ = board_.template find<ROMChip>();
+    basic_rom_c_chip_ = board_.template find<ROMChip>(1);
+    basic_rom_d_chip_ = board_.template find<ROMChip>(2);
+    editor_rom_chip_  = board_.template find<ROMChip>(3);
+    kernal_rom_chip_  = board_.template find<ROMChip>(4);
     cpu_              = board_.template cpu<MOS6502>();
-    crtc_             = board_.template chip_as<mc6845_t>(pet_chips::kCrtcSlot);
-    pia1_             = board_.template chip_as<pia6820_t>(pet_chips::kPia1Slot);
-    pia2_             = board_.template chip_as<pia6820_t>(pet_chips::kPia2Slot);
-    via_              = board_.template chip_as<mos6522_t>(pet_chips::kViaSlot);
+    crtc_             = board_.template find<mc6845_t>();
+    pia1_             = board_.template find<pia6820_t>();
+    pia2_             = board_.template find<pia6820_t>(1);
+    via_              = board_.template find<mos6522_t>();
 
     // Screen RAM mirror at $8400-$87FF and configure memory map
     configure_memory_map();

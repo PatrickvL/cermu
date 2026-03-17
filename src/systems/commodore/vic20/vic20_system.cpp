@@ -580,14 +580,15 @@ bool VIC20System::initialize() {
     board_.apply(mem_bus_);
 
     // ── Retrieve typed convenience pointers ──────────────────────────────
-    ram_        = board_.chip_as<RAMChip>(vic20_slot::kRam);
-    charrom_    = board_.chip_as<ROMChip>(vic20_slot::kCharRom);
-    basic_rom_  = board_.chip_as<ROMChip>(vic20_slot::kBasicRom);
-    kernal_rom_ = board_.chip_as<ROMChip>(vic20_slot::kKernalRom);
+    ram_        = board_.find<RAMChip>();
+    charrom_    = board_.find<ROMChip>();
+    basic_rom_  = board_.find<ROMChip>(1);
+    kernal_rom_ = board_.find<ROMChip>(2);
     cpu_        = board_.cpu<MOS6502>();
-    vic_        = board_.first_chip<vic_base_t>({vic20_slot::kVicPal, vic20_slot::kVicNtsc});
-    via1_       = board_.chip_as<mos6522_t>(vic20_slot::kVia1);
-    via2_       = board_.chip_as<mos6522_t>(vic20_slot::kVia2);
+    vic_        = board_.find<mos6561_t>();
+    if (!vic_) vic_ = board_.find<mos6560_t>();
+    via1_       = board_.find<mos6522_t>();
+    via2_       = board_.find<mos6522_t>(1);
     
     // Initialize Color RAM to cyan (color 3) for proper text visibility
     // Color RAM lives in the RAM buffer at $9400 (within the I/O-handled region)
@@ -615,9 +616,9 @@ bool VIC20System::initialize() {
         return false;
     }
     // init() is on the concrete types, not on vic_base_t — call via the slot
-    if (auto* pal = board_.chip_as<mos6561_t>(vic20_slot::kVicPal))
+    if (auto* pal = board_.find<mos6561_t>())
         pal->init();
-    else if (auto* ntsc = board_.chip_as<mos6560_t>(vic20_slot::kVicNtsc))
+    else if (auto* ntsc = board_.find<mos6560_t>())
         ntsc->init();
     printf("VIC20: Created %s VIC chip\n",
            (config_.region_option_index <= 0) ? "MOS6561 (PAL)" : "MOS6560 (NTSC)");
@@ -1125,7 +1126,7 @@ void VIC20System::render_system_menu_items() {
 // After apply(), all 256 pages point to RAM (read+write) with ROM overlays.
 // We override only the expansion blocks that are NOT present + I/O region.
 void VIC20System::setup_expansion_map() {
-    constexpr size_t kRamBase = kVIC20Chips.base_id(vic20_slot::kRam, 8);
+    constexpr size_t kRamBase = kVIC20Chips.base_id(kVIC20Chips.find<RAMChip>(), 8);
 
     // Reset: apply() gives us full 64KB RAM + ROM overlays
     board_.apply(mem_bus_);
@@ -1163,7 +1164,7 @@ void VIC20System::setup_expansion_map() {
 // When absent: $A000-$BFFF is unmapped (no chip selected for both read and write).
 void VIC20System::setup_cartridge_pages(bool present) {
     using CId = typename Bus::ChipId;
-    constexpr size_t kRamBase = kVIC20Chips.base_id(vic20_slot::kRam, 8);
+    constexpr size_t kRamBase = kVIC20Chips.base_id(kVIC20Chips.find<RAMChip>(), 8);
 
     if (present) {
         // Reads from RAM buffer (cartridge data loaded there), writes blocked
