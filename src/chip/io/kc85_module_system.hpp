@@ -86,7 +86,7 @@ enum class KC85ModuleType : uint8_t {
 struct kc85_module_slot_t {
     KC85ModuleType type = KC85ModuleType::NONE;
     uint8_t  control = 0x00;      // Control byte
-    uint8_t  structure_byte = 0x00; // Module identification byte
+    uint8_t  structure_byte = 0xFF; // Module identification byte (0xFF = empty slot)
     uint8_t* data = nullptr;       // Module memory (ROM or RAM), non-owning
     uint32_t size = 0;             // Module memory size
     uint16_t base_address = 0;    // Base address in Z80 address space

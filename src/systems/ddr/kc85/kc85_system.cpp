@@ -740,10 +740,24 @@ bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
         return ctc_->io_tick(pins);
     }
 
-    // Module system at $80-$81
-    if (port == kc85_constants::MODULE_PORT || port == kc85_constants::MODULE_DATA_PORT) {
+    // Module system at $80
+    // Upper 8 bits of the 16-bit port address encode the slot address:
+    //   0x08 = internal slot 0 (right), 0x0C = internal slot 1 (left)
+    if (port == kc85_constants::MODULE_PORT) {
+        uint16_t full_addr = static_cast<uint16_t>(BUS_GET_ADDR(pins));
+        uint8_t slot_addr = static_cast<uint8_t>(full_addr >> 8);
+        int slot_idx = (slot_addr == 0x08) ? 0 : (slot_addr == 0x0C) ? 1 : -1;
+
         if (BUS_GET_BIT(pins, BUS_RW_BIT)) {
-            BUS_SET_DATA(pins, 0xFF);
+            // Read: return module structure byte (ID) for selected slot
+            uint8_t id = (slot_idx >= 0) ? modules_->read_slot_status(slot_idx) : 0xFF;
+            BUS_SET_DATA(pins, id);
+        } else {
+            // Write: set control byte for selected slot, update memory mapping
+            if (slot_idx >= 0) {
+                modules_->write_slot_control(slot_idx, BUS_GET_DATA(pins));
+                // TODO: map/unmap module memory based on active bit
+            }
         }
         return pins;
     }
