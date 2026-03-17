@@ -393,18 +393,18 @@ bool C64System::initialize() {
     board_.apply(bus_);
 
     // Retrieve typed convenience pointers (Board owns, these are non-owning)
-    this->ram             = board_.chip_as<RAMChip>(c64_slots::kRam);
-    this->cartridge_roml  = board_.chip_as<ROMChip>(c64_slots::kRoml);
-    this->cartridge_romh  = board_.chip_as<ROMChip>(c64_slots::kRomh);
-    this->basic           = board_.chip_as<ROMChip>(c64_slots::kBasic);
-    this->kernal          = board_.chip_as<ROMChip>(c64_slots::kKernal);
-    this->charrom         = board_.chip_as<ROMChip>(c64_slots::kCharrom);
-    this->mos6510         = board_.chip_as<MOS6510>(c64_slots::kCpu);
-    this->vicii           = board_.chip_as<vicii_t>(c64_slots::kVicii);
-    this->sid             = board_.chip_as<mos6581_t>(c64_slots::kSid);
-    this->colorram        = board_.chip_as<MOS2114>(c64_slots::kColram);
-    this->cia1            = board_.chip_as<mos6526_t>(c64_slots::kCia1);
-    this->cia2            = board_.chip_as<mos6526_t>(c64_slots::kCia2);
+    this->ram             = board_.find<RAMChip>();
+    this->cartridge_roml  = board_.find<ROMChip>();
+    this->cartridge_romh  = board_.find<ROMChip>(1);
+    this->basic           = board_.find<ROMChip>(2);
+    this->kernal          = board_.find<ROMChip>(3);
+    this->charrom         = board_.find<ROMChip>(4);
+    this->mos6510         = board_.find<MOS6510>();
+    this->vicii           = board_.find<vicii_t>();
+    this->sid             = board_.find<mos6581_t>();
+    this->colorram        = board_.find<MOS2114>();
+    this->cia1            = board_.find<mos6526_t>();
+    this->cia2            = board_.find<mos6526_t>(1);
 
     if (!this->mos6510) { cleanup(); return false; }
 

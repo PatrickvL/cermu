@@ -150,16 +150,6 @@ inline constexpr auto kC264Chips = make_chip_manifest(
     Slot<c264_rom_bank_select_t>{0xFDD0, 0, 0xFFF0, "ROM Bank Select"}    // page $FD sub-table 1
 );
 
-namespace c264_slot {
-    inline constexpr size_t kRam       = 0;
-    inline constexpr size_t kBasicRom  = 1;
-    inline constexpr size_t kKernalRom = 2;
-    inline constexpr size_t kTed       = 4;
-    inline constexpr size_t kPio1      = 5;
-    inline constexpr size_t kPio2      = 6;
-    inline constexpr size_t kRomBank   = 7;
-}
-
 // MaskedSubTable indices (determined by manifest slot order during apply())
 namespace c264_sub {
     inline constexpr size_t kTedPage = 0;    // page $FF — TED registers
