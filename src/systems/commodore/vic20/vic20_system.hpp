@@ -92,17 +92,6 @@ inline constexpr auto kVIC20Chips = make_chip_manifest(
     Slot<mos6522_t> {0, 0, 0, "VIA 2"}
 );
 
-namespace vic20_slot {
-    inline constexpr size_t kRam       = 0;
-    inline constexpr size_t kCharRom   = 1;
-    inline constexpr size_t kBasicRom  = 2;
-    inline constexpr size_t kKernalRom = 3;
-    inline constexpr size_t kVicPal    = 5;
-    inline constexpr size_t kVicNtsc   = 6;
-    inline constexpr size_t kVia1      = 7;
-    inline constexpr size_t kVia2      = 8;
-}
-
 struct VIC20BusTraits {
     static constexpr const auto& kManifest = kVIC20Chips;
     using Spec = ManifestBusSpec<kVIC20Chips, 16, 8>;

@@ -77,22 +77,6 @@ inline constexpr auto kPETChips = make_chip_manifest(
     Slot<mos6522_t> {0, 0, 0, "MOS 6522 VIA"}
 );
 
-namespace pet_chips {
-    inline constexpr size_t kMainRamSlot    = 0;
-    inline constexpr size_t kScreenRamSlot  = 1;
-    inline constexpr size_t kBasicBSlot     = 2;
-    inline constexpr size_t kBasicCSlot     = 3;
-    inline constexpr size_t kBasicDSlot     = 4;
-    inline constexpr size_t kEditorRomSlot  = 5;
-    inline constexpr size_t kKernalRomSlot  = 6;
-    // Non-bus chip slots
-    inline constexpr size_t kCpuSlot        = 7;
-    inline constexpr size_t kCrtcSlot       = 8;
-    inline constexpr size_t kPia1Slot       = 9;
-    inline constexpr size_t kPia2Slot       = 10;
-    inline constexpr size_t kViaSlot        = 11;
-}
-
 struct PETBusTraits {
     static constexpr const auto& kManifest = kPETChips;
     using Spec = ManifestBusSpec<kPETChips, 16, 8>;
