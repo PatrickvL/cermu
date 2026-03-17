@@ -155,7 +155,7 @@ void NamcoArcadeSystem<G>::tick() {
         if ((addr & 0xF000) == Traits::io_base) {
             pins_ = io_tick(pins_);
         } else {
-            pins_ = bus_.tick(0, pins_);
+            pins_ = bus_.tick(pins_);
         }
     }
 

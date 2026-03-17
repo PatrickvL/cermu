@@ -150,7 +150,7 @@ void Z9001System<V>::tick() {
     bool iorq = !BUS_GET_BIT(pins_, Z80_IORQ_BIT);
 
     if (mreq) {
-        pins_ = bus_.tick(0, pins_);
+        pins_ = bus_.tick(pins_);
     } else if (iorq) {
         pins_ = io_tick(pins_);
     }

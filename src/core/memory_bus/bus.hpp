@@ -100,7 +100,7 @@ public:
     //
 
     [[nodiscard]] FORCE_INLINE
-    bus_state_t resolve(size_t viewer_id, bus_state_t bus) const noexcept
+    bus_state_t resolve(bus_state_t bus, size_t viewer_id = 0) const noexcept
         requires(kCsLines)
     {
         const Addr addr = Addr(BUS_GET_ADDR(bus));
@@ -174,7 +174,7 @@ public:
     //
 
     [[nodiscard]] FORCE_INLINE
-    bus_state_t read(size_t viewer_id, bus_state_t bus) noexcept {
+    bus_state_t read(bus_state_t bus, size_t viewer_id = 0) noexcept {
         const Addr   addr    = Addr(BUS_GET_ADDR(bus));
         const ChipId chip_id = viewers_[viewer_id].read_chip(Viewer::page_of(addr));
 
@@ -189,7 +189,7 @@ public:
     // =========================================================================
 
     FORCE_INLINE
-    bus_state_t write(size_t viewer_id, bus_state_t bus) noexcept {
+    bus_state_t write(bus_state_t bus, size_t viewer_id = 0) noexcept {
         const Addr        addr    = Addr(BUS_GET_ADDR(bus));
         const WriteChipId chip_id = viewers_[viewer_id].write_chip(Viewer::page_of(addr));
 
@@ -204,10 +204,10 @@ public:
     // =========================================================================
 
     [[nodiscard]] FORCE_INLINE
-    bus_state_t tick(size_t viewer_id, bus_state_t bus) noexcept {
+    bus_state_t tick(bus_state_t bus, size_t viewer_id = 0) noexcept {
         return BUS_GET_BIT(bus, BUS_RW_BIT)
-            ? read (viewer_id, bus)
-            : write(viewer_id, bus);
+            ? read (bus, viewer_id)
+            : write(bus, viewer_id);
     }
 
     // =========================================================================
@@ -224,7 +224,7 @@ public:
     //
 
     [[nodiscard]] FORCE_INLINE
-    uint8_t peek_byte(size_t viewer_id, Addr addr) const noexcept {
+    uint8_t peek_byte(Addr addr, size_t viewer_id = 0) const noexcept {
         const ChipId chip_id = viewers_[viewer_id].read_chip(Viewer::page_of(addr));
         if (likely(chip_id < PT::kReadSentinelMin)) {
             const auto& ci = chip_info_[size_t(chip_id)];
@@ -1056,7 +1056,7 @@ public:
 
     [[nodiscard]] FORCE_INLINE
     bus_state_t resolve(bus_state_t bus) const noexcept
-        requires(Bus::kCsLines) { return bus_.resolve(ViewerId, bus); }
+        requires(Bus::kCsLines) { return bus_.resolve(bus, ViewerId); }
 
     [[nodiscard]] FORCE_INLINE
     bus_state_t service_read(bus_state_t bus) const noexcept
@@ -1073,13 +1073,13 @@ public:
     // ── Non-CS workflow: full dispatch ─────────────────────────────────────
 
     [[nodiscard]] FORCE_INLINE
-    bus_state_t read (bus_state_t bus) noexcept { return bus_.read (ViewerId, bus); }
+    bus_state_t read (bus_state_t bus) noexcept { return bus_.read (bus, ViewerId); }
 
     FORCE_INLINE
-    bus_state_t write(bus_state_t bus) noexcept { return bus_.write(ViewerId, bus); }
+    bus_state_t write(bus_state_t bus) noexcept { return bus_.write(bus, ViewerId); }
 
     [[nodiscard]] FORCE_INLINE
-    bus_state_t tick (bus_state_t bus) noexcept { return bus_.tick (ViewerId, bus); }
+    bus_state_t tick (bus_state_t bus) noexcept { return bus_.tick (bus, ViewerId); }
 
     [[nodiscard]] Bus& bus() noexcept { return bus_; }
 

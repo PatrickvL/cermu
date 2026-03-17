@@ -193,11 +193,44 @@ public:
         return int_vector_base_;
     }
 
+    /// Acknowledge the highest-priority pending interrupt (clear int_pending).
+    /// Called when the CPU services the interrupt (IORQ+M1 acknowledge cycle).
+    void acknowledge_interrupt() {
+        for (int i = 0; i < 4; ++i) {
+            if (ch_[i].int_pending) {
+                ch_[i].int_pending = false;
+                return;
+            }
+        }
+    }
+
     /// Check if a specific channel reached zero count (and clear the flag).
     bool check_zero_count(int channel) {
         bool zc = ch_[channel & 3].zero_count;
         ch_[channel & 3].zero_count = false;
         return zc;
+    }
+
+    // === Bus interface ===
+
+    /// Bus-connected register access. Called when chip is address-decoded (CE asserted).
+    /// Address bits 0-1 select the channel. BUS_RW_BIT distinguishes read/write.
+    bus_state_t io_tick(bus_state_t pins) {
+        int channel = BUS_GET_ADDR(pins) & 0x03;
+        if (BUS_GET_BIT(pins, BUS_RW_BIT)) {
+            BUS_SET_DATA(pins, read(channel));
+        } else {
+            write(channel, BUS_GET_DATA(pins));
+        }
+        return pins;
+    }
+
+    /// Interrupt acknowledge via bus (IORQ+M1 cycle).
+    /// Places the pending interrupt vector on the data bus and clears the pending flag.
+    bus_state_t inta(bus_state_t pins) {
+        BUS_SET_DATA(pins, interrupt_vector());
+        acknowledge_interrupt();
+        return pins;
     }
 
     // === ChipBase GUI virtuals ===

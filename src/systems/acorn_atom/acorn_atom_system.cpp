@@ -127,7 +127,7 @@ void AcornAtomSystem::tick() {
     pins_ = cpu_->tick<MOS6502::Phase::PHI2>(pins_);
 
     // ---- Memory dispatch via MemoryBus ----
-    pins_ = bus_.tick(0, pins_);
+    pins_ = bus_.tick(pins_);
 
     // ---- CPU PHI1 ----
     pins_ = cpu_->tick<MOS6502::Phase::PHI1>(pins_);
