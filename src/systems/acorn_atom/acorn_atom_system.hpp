@@ -72,24 +72,6 @@ inline constexpr auto kAcornAtomChips = make_chip_manifest(
 // BusSpec auto-derived from the manifest
 using AcornAtomBusSpec = ManifestBusSpec<kAcornAtomChips, 16, 8>;
 
-namespace acorn_atom_chips {
-    inline constexpr size_t kRamSlot      = 0;
-    inline constexpr size_t kVideoRamSlot = 1;
-    inline constexpr size_t kBasicSlot    = 2;
-    inline constexpr size_t kFpRomSlot    = 3;
-    inline constexpr size_t kOsRomSlot    = 4;
-    inline constexpr size_t kPpiSlot      = 5;
-    inline constexpr size_t kViaSlot      = 6;
-    inline constexpr size_t kVdgSlot      = 8;
-
-    // Compile-time chip ids (from manifest prefix-sum)
-    inline constexpr size_t kRamId      = kAcornAtomChips.base_id(kRamSlot, AcornAtomBusSpec::PageBits);
-    inline constexpr size_t kVideoRamId = kAcornAtomChips.base_id(kVideoRamSlot, AcornAtomBusSpec::PageBits);
-    inline constexpr size_t kBasicId    = kAcornAtomChips.base_id(kBasicSlot, AcornAtomBusSpec::PageBits);
-    inline constexpr size_t kFpRomId    = kAcornAtomChips.base_id(kFpRomSlot, AcornAtomBusSpec::PageBits);
-    inline constexpr size_t kOsRomId    = kAcornAtomChips.base_id(kOsRomSlot, AcornAtomBusSpec::PageBits);
-}
-
 class AcornAtomSystem : public System {
 public:
     AcornAtomSystem();

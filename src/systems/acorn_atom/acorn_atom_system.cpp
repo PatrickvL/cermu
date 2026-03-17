@@ -51,17 +51,16 @@ bool AcornAtomSystem::initialize() {
     register_board(&board_);
 
     // ── Pre-bind MMIO chips, then factory-create memory chips ──────────
-    board_.bind_chip(acorn_atom_chips::kPpiSlot, &ppi_);
-    board_.bind_chip(acorn_atom_chips::kViaSlot, &via_);
+    board_.bind_chip(board_.find_index<i8255_t>(), &ppi_);
+    board_.bind_chip(board_.find_index<mos6522_t>(), &via_);
     board_.create_chips(&pins_);
-    basic_rom_ = board_.chip_as<ROMChip>(acorn_atom_chips::kBasicSlot);
-    fp_rom_    = board_.chip_as<ROMChip>(acorn_atom_chips::kFpRomSlot);
-    os_rom_    = board_.chip_as<ROMChip>(acorn_atom_chips::kOsRomSlot);
-    vdg_       = board_.chip_as<mc6847_t>(acorn_atom_chips::kVdgSlot);
+    basic_rom_ = board_.find<ROMChip>();
+    fp_rom_    = board_.find<ROMChip>(1);
+    os_rom_    = board_.find<ROMChip>(2);
+    vdg_       = board_.find<mc6847_t>();
 
     // Direct pointer for MC6847 rendering
-    video_ram_ptr_ = board_.chip_buffer(
-        static_cast<PT::ChipId>(acorn_atom_chips::kVideoRamId));
+    video_ram_ptr_ = board_.find<RAMChip>(1)->data();
 
     // ── Init chips ──────────────────────────────────────────────────────
     cpu_ = board_.cpu<MOS6502>();
@@ -257,7 +256,7 @@ void AcornAtomSystem::configure_bus_memory_map() {
     // Trim RAM to configured size BEFORE apply() — effective_size limits
     // Phase 1 page mapping.  MMIO sub-tables on pages beyond the effective
     // range automatically capture kNoChipSelected as their base chip.
-    board_.set_effective_size(acorn_atom_chips::kRamSlot,
+    board_.set_effective_size(board_.find_index<RAMChip>(),
                               ram_size_kb_ * 1024);
     board_.apply(bus_);
 }

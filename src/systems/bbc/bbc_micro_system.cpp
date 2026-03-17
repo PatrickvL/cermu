@@ -168,16 +168,16 @@ bool BBCMicroSystem::initialize() {
     register_board(&board_);
 
     // ── Pre-bind stack-member chips, then factory-create all chips ──────
-    board_.bind_chip(bbc_chips::kSysViaSlot,  &system_via_);
-    board_.bind_chip(bbc_chips::kUserViaSlot, &user_via_);
-    board_.bind_chip(bbc_chips::kVidprocSlot, &vidproc_);
+    board_.bind_chip(board_.find_index<mos6522_t>(),    &system_via_);
+    board_.bind_chip(board_.find_index<mos6522_t>(1),  &user_via_);
+    board_.bind_chip(board_.find_index<bbc_vidproc_t>(), &vidproc_);
     board_.create_chips(&pins_);
-    ram_chip_        = board_.chip_as<RAMChip>(bbc_chips::kRamSlot);
-    paged_rom_chip_  = board_.chip_as<ROMChip>(bbc_chips::kPagedRomSlot);
-    os_rom_chip_     = board_.chip_as<ROMChip>(bbc_chips::kOsRomSlot);
+    ram_chip_        = board_.find<RAMChip>();
+    paged_rom_chip_  = board_.find<ROMChip>();
+    os_rom_chip_     = board_.find<ROMChip>(1);
     cpu_             = board_.cpu<MOS6502>();
-    crtc_            = board_.chip_as<mc6845_t>(bbc_chips::kCrtcSlot);
-    psg_             = board_.chip_as<sn76489_t>(bbc_chips::kPsgSlot);
+    crtc_            = board_.find<mc6845_t>();
+    psg_             = board_.find<sn76489_t>();
 
     // ── Convenience pointer for rendering functions ─────────────────────
     memory_ = ram_chip_->data();
@@ -393,7 +393,7 @@ void BBCMicroSystem::configure_bus_memory_map() {
 }
 
 void BBCMicroSystem::update_paged_rom() {
-    board_.select_bank_at(bus_, 0, bbc_chips::kPagedRomSlot,
+    board_.select_bank_at(bus_, 0, board_.find_index<ROMChip>(),
                            rom_select_ & 0x0F, 0x80);
 }
 

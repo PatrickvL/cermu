@@ -42,17 +42,6 @@ inline constexpr auto kBBCMicroChips = make_chip_manifest(
     Slot<bbc_vidproc_t>{0, 0, 0, "Video ULA"}
 );
 
-namespace bbc_chips {
-    inline constexpr size_t kRamSlot       = 0;
-    inline constexpr size_t kPagedRomSlot  = 1;
-    inline constexpr size_t kOsRomSlot     = 2;
-    inline constexpr size_t kCrtcSlot      = 4;
-    inline constexpr size_t kPsgSlot       = 5;
-    inline constexpr size_t kSysViaSlot    = 6;
-    inline constexpr size_t kUserViaSlot   = 7;
-    inline constexpr size_t kVidprocSlot   = 8;
-}
-
 using BBCMicroBusSpec = ManifestBusSpec<kBBCMicroChips, 16, 8>;
 
 /**
