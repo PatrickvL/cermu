@@ -134,6 +134,12 @@ bool KC85System<V>::initialize() {
     display_.set_palette(kc85_constants::PALETTE, kc85_constants::COLOR_COUNT);
     register_display(&display_);
 
+    // ── Audio beeper ────────────────────────────────────────────────
+    audio_sample_period_ = kc85_constants::CPU_FREQ_HZ / audio_sample_rate_;
+    audio_sample_counter_ = 0;
+    beeper1_state_ = false;
+    beeper2_state_ = false;
+
     printf("%s: System initialized (RAM: %d KB, IRM: %d KB)\n",
            Traits::name, Traits::ram_size / 1024,
            Traits::has_extended_video ? 64 : 16);
@@ -256,6 +262,14 @@ void KC85System<V>::tick() {
     // CTC must tick before cpu so CTC3 timer measures pulse intervals correctly.
     ctc_->tick();
 
+    // CTC channel 0 and 1 zero-count toggle audio beepers
+    if (ctc_->check_zero_count(0)) {
+        beeper1_state_ = !beeper1_state_;
+    }
+    if (ctc_->check_zero_count(1)) {
+        beeper2_state_ = !beeper2_state_;
+    }
+
     // CTC channel 2 zero-count toggles the foreground blink flag
     if (ctc_->check_zero_count(2)) {
         blink_flag_ = !blink_flag_;
@@ -293,6 +307,17 @@ void KC85System<V>::tick() {
         pins_ = bus_.tick(pins_);
     } else if (iorq) {
         pins_ = io_tick(pins_);
+    }
+
+    // ── 5. Audio sample generation ──────────────────────────────────────
+    if (audio_sample_period_ > 0) {
+        audio_sample_counter_++;
+        if (audio_sample_counter_ >= audio_sample_period_) {
+            audio_sample_counter_ = 0;
+            float sample = (beeper1_state_ ? audio_volume_ : 0.0f)
+                         + (beeper2_state_ ? audio_volume_ : 0.0f);
+            audio_ring_buf_.write(&sample, 1);
+        }
     }
 
     total_cycles_++;
@@ -454,8 +479,13 @@ template<KC85Variant V> bool KC85System<V>::load_file(const char*) { return fals
 template<KC85Variant V> void KC85System<V>::get_display_dimensions(int* w, int* h) const {
     *w = kc85_constants::FB_WIDTH; *h = kc85_constants::FB_HEIGHT;
 }
-template<KC85Variant V> uint32_t KC85System<V>::get_audio_samples(float*, uint32_t) { return 0; }
-template<KC85Variant V> void KC85System<V>::set_audio_sample_rate(int hz) { audio_sample_rate_ = hz; }
+template<KC85Variant V> uint32_t KC85System<V>::get_audio_samples(float* buffer, uint32_t max_samples) {
+    return audio_ring_buf_.read(buffer, max_samples);
+}
+template<KC85Variant V> void KC85System<V>::set_audio_sample_rate(int hz) {
+    audio_sample_rate_ = hz;
+    audio_sample_period_ = kc85_constants::CPU_FREQ_HZ / audio_sample_rate_;
+}
 template<KC85Variant V>
 void KC85System<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     // Map SDL keycodes to KC85 key codes (CAOS encoding).

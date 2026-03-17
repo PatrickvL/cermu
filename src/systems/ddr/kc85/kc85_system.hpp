@@ -21,6 +21,7 @@
 #include "chip/io/kc85_module_system.hpp"
 #include "chip/input/keyboard_encoder.hpp"
 #include "chip/memory/memory_chip.hpp"
+#include "utils/ring_buffer.hpp"
 #include <cstdint>
 #include <vector>
 
@@ -257,6 +258,16 @@ private:
     bus_state_t pins_       = KC85_BUS_DEFAULT_STATE;
     bool        system_ready_ = false;
     int audio_sample_rate_  = kc85_constants::DEFAULT_SAMPLE_RATE;
+
+    // ── Audio (CTC-driven square-wave beepers) ───────────────────────────
+    // CTC channel 0 → beeper 1. CTC channel 1 → beeper 2.
+    // Each zero-count toggles the respective beeper output.
+    bool     beeper1_state_        = false;
+    bool     beeper2_state_        = false;
+    float    audio_volume_         = 0.5f;
+    uint32_t audio_sample_counter_ = 0;
+    uint32_t audio_sample_period_  = 0;   // CPU ticks per audio sample
+    AudioRingBuffer audio_ring_buf_{8192};
 
     // ── Internal helpers ─────────────────────────────────────────────────
     void        configure_bus_memory_map();   // Initial banking setup after apply()
