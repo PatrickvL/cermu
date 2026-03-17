@@ -65,18 +65,6 @@ inline constexpr auto kBombJackSoundChips = make_chip_manifest(
     Slot<ZilogZ80A>{0, 0, 0, "Sound CPU"}
 );
 
-namespace bj_main {
-    inline constexpr size_t kProgramRom  = 0;
-    inline constexpr size_t kWorkRam     = 1;
-    inline constexpr size_t kFgTilemap   = 2;
-    inline constexpr size_t kFgAttr      = 3;
-    inline constexpr size_t kSpriteArea  = 4;
-    inline constexpr size_t kPaletteRam  = 5;
-}
-namespace bj_sound {
-    inline constexpr size_t kSoundRom = 0;
-    inline constexpr size_t kSoundRam = 1;
-}
 
 // ── Bus traits — one per CPU ─────────────────────────────────────────────
 

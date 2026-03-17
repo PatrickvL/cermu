@@ -92,11 +92,7 @@ inline constexpr auto kAtari2600Chips = make_chip_manifest(
 // BusSpec auto-derived from the manifest (13-bit address, 256-byte pages)
 using Atari2600BusSpec = ManifestBusSpec<kAtari2600Chips, 13, 8>;
 
-namespace atari2600_chips {
-    inline constexpr size_t kTiaSlot  = 0;
-    inline constexpr size_t kRiotSlot = 1;
-    inline constexpr size_t kCartSlot = 2;
-}
+
 
 class Atari2600System : public System {
 public:

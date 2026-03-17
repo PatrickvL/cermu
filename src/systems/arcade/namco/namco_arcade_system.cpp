@@ -82,8 +82,8 @@ bool NamcoArcadeSystem<G>::initialize() {
 
     // ── Init CPU + sound ────────────────────────────────────────────────
     cpu_ = board_.template cpu<ZilogZ80A>();
-    vram_chip_ = board_.template chip_as<RAMChip>(1);  // Slot 1: Video RAM
-    cram_chip_ = board_.template chip_as<RAMChip>(2);  // Slot 2: Color RAM
+    vram_chip_ = board_.template find<RAMChip>();      // Video RAM
+    cram_chip_ = board_.template find<RAMChip>(1);     // Color RAM
     pins_ = board_.cpu_chip()->init();
     wsg_.init();
     // WSG clock = CPU / 32 = 96 kHz

@@ -68,9 +68,9 @@ bool BombJackSystem::initialize() {
     // ── Init chips ───────────────────────────────────────────────────────
     main_cpu_  = main_board_.cpu<ZilogZ80A>();
     sound_cpu_ = sound_board_.cpu<ZilogZ80A>();
-    fg_tilemap_chip_  = main_board_.chip_as<RAMChip>(bj_main::kFgTilemap);
-    fg_attr_chip_     = main_board_.chip_as<RAMChip>(bj_main::kFgAttr);
-    palette_ram_chip_ = main_board_.chip_as<RAMChip>(bj_main::kPaletteRam);
+    fg_tilemap_chip_  = main_board_.find<RAMChip>(1);
+    fg_attr_chip_     = main_board_.find<RAMChip>(2);
+    palette_ram_chip_ = main_board_.find<RAMChip>(4);
     main_pins_  = main_board_.cpu_chip()->init();
     sound_pins_ = sound_board_.cpu_chip()->init();
     for (auto& ay : ay_) {
