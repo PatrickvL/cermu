@@ -174,9 +174,7 @@ private:
     bus_state_t main_pins_  = BOMBJACK_BUS_DEFAULT_STATE;
     bus_state_t sound_pins_ = BOMBJACK_BUS_DEFAULT_STATE;
     bool        system_ready_ = false;
-    uint64_t total_cycles_  = 0;
     int audio_sample_rate_  = bombjack_constants::DEFAULT_SAMPLE_RATE;
-    float speed_multiplier_ = 1.0f;
 
     // ── Internal helpers ─────────────────────────────────────────────────
     bus_state_t main_io_tick(bus_state_t pins);   // $B000+ I/O registers
