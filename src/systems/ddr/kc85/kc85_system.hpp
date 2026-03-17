@@ -75,11 +75,12 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
     static constexpr const char* caos_version    = "4.2";
     // Slot indices into kKC854Chips
     static constexpr size_t kBasicRomSlot        = 2;
-    static constexpr size_t kCaosRomSlot         = 3;
-    static constexpr size_t kPio1Slot            = 5;
-    static constexpr size_t kPio2Slot            = 6;
-    static constexpr size_t kCtcSlot             = 7;
-    static constexpr size_t kModulesSlot         = 8;
+    static constexpr size_t kCaosCRomSlot        = 3;
+    static constexpr size_t kCaosRomSlot         = 4;
+    static constexpr size_t kPio1Slot            = 6;
+    static constexpr size_t kPio2Slot            = 7;
+    static constexpr size_t kCtcSlot             = 8;
+    static constexpr size_t kModulesSlot         = 9;
 };
 
 // ============================================================================
@@ -97,11 +98,12 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
 //   Slot 2: BASIC ROM —  8 KB at $C000
 //   Slot 3: CAOS ROM  —  8 KB at $E000
 //
-// KC85/4 (4 slots):
-//   Slot 0: RAM       — 32 KB at $0000         ($0000-$7FFF, always mapped)
-//   Slot 1: IRM       — 64 KB at $8000         (4 banks: pixel0/pixel1/color0/color1)
-//   Slot 2: BASIC ROM —  8 KB at $C000
-//   Slot 3: CAOS ROM  —  8 KB at $E000
+// KC85/4 (5 bus slots):
+//   Slot 0: RAM        — 32 KB at $0000        ($0000-$7FFF, base; $4000+ via port $86)
+//   Slot 1: IRM        — 64 KB at $8000        (4 banks: pixel0/pixel1/color0/color1)
+//   Slot 2: BASIC ROM  —  8 KB at $C000        (overlay group 1)
+//   Slot 3: CAOS-C ROM —  4 KB at $C000        (overlay group 3, port $86 bit 7)
+//   Slot 4: CAOS ROM   —  8 KB at $E000        (overlay group 2)
 //
 // KC85/4 IRM bank layout (64 KB, 256 pages):
 //   Pages   0- 63: Pixel RAM plane 0
@@ -143,8 +145,9 @@ inline constexpr auto kKC853Chips = make_chip_manifest(
 inline constexpr auto kKC854Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 32768, 0, "RAM"},
     Slot<RAMChip>{0x8000, 65536, 0, "IRM", 0, 16384, 0, 16384}, // 4 × 16 KB banks, 1 visible
-    Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM", 0, 0, 1}.with_rom("basic.rom|BASIC.ROM"),   // overlay group 1
-    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM",  0, 0, 2}.with_rom("caos.rom|CAOS.ROM"),   // overlay group 2
+    Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM",  0, 0, 1}.with_rom("basic.rom|BASIC.ROM"),   // overlay group 1
+    Slot<ROMChip>{0xC000,  4096, 0, "CAOS-C ROM", 0, 0, 3}.with_rom("caos_c.rom|CAOS_C.ROM", true),  // overlay group 3, optional
+    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM",   0, 0, 2}.with_rom("caos.rom|CAOS.ROM"),   // overlay group 2
     // Non-bus chips — factory-created, not address-decoded
     Slot<U880>                {0, 0, 0, "U880"},
     Slot<z80_pio_t>           {0, 0, 0, "U855 PIO #1"},
@@ -287,7 +290,7 @@ private:
 
     // Pre-computed overlay snapshots.
     // KC85/2: 4 modes (IRM×CAOS), KC85/3: 8 modes (IRM×BASIC×CAOS),
-    // KC85/4: 4 modes (BASIC×CAOS, IRM stays manual).
+    // KC85/4: 8 modes (BASIC×CAOS-E×CAOS-C, IRM+RAM4 stay manual).
     static constexpr size_t kNumOverlayModes = BT::kManifest.overlay_mode_count();
     std::array<std::array<typename Bus::Snapshot, kNumOverlayModes>, 1> snapshots_;
 };

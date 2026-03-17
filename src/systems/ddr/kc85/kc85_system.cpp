@@ -223,9 +223,10 @@ void KC85System<V>::apply_banking() {
     // KC85/4: bit 0=BASIC, bit 1=CAOS                   (groups 1,2 → 4 modes)
     size_t mode = 0;
     if constexpr (Traits::has_extended_video) {
-        // KC85/4: IRM is base layer (not in overlay groups)
-        if (basic_rom_on_) mode |= 1;
-        if (caos_rom_on_)  mode |= 2;
+        // KC85/4: IRM and RAM4 are manual (not in overlay groups)
+        if (basic_rom_on_)       mode |= 1;  // Group 1: BASIC at $C000
+        if (caos_rom_on_)        mode |= 2;  // Group 2: CAOS-E at $E000
+        if (bank_ctrl2_ & 0x80)  mode |= 4;  // Group 3: CAOS-C 4 KB at $C000
     } else if constexpr (Traits::has_basic_rom) {
         // KC85/3: IRM=group 1, BASIC=group 2, CAOS=group 3
         if (irm_enabled_)  mode |= 1;
@@ -238,8 +239,19 @@ void KC85System<V>::apply_banking() {
     }
     bus_.load_snapshot(0, snapshots_[0][mode]);
 
-    // ── KC85/4: manual IRM handling (not in overlay groups) ─────────────
+    // ── KC85/4: manual RAM4 and IRM handling ────────────────────────────
     if constexpr (Traits::has_extended_video) {
+        // RAM4 at $4000-$7FFF — controlled by port $86 bits 0-1
+        if (!(bank_ctrl2_ & 0x01)) {
+            // RAM4 disabled — unmap $4000-$7FFF (pages $40-$7F)
+            bus_.map_no_chip_selected(0, 0x40, 0x40);
+        } else if (!(bank_ctrl2_ & 0x02)) {
+            // RAM4 enabled, write-protected — block writes to $4000-$7FFF
+            bus_.map_write_no_chip_selected(0, 0x40, 0x40);
+        }
+        // else: RAM4 enabled + writable — snapshot already mapped it correctly
+
+        // IRM bank selection
         if (irm_enabled_) {
             constexpr size_t kIrmSlot = 1;
             uint8_t bank = (bank_ctrl_ >> 1) & 0x03;  // io84 bits [2:1] select CPU bank
@@ -823,9 +835,6 @@ bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
         }
         if (port == kc85_constants::KC4_CTRL2_PORT && !BUS_GET_BIT(pins, BUS_RW_BIT)) {
             bank_ctrl2_ = BUS_GET_DATA(pins);
-            // TODO: port $86 bit 0 = RAM4 enable at $4000, bit 1 = RAM4 write-protect,
-            //       bit 7 = CAOS-C 4 KB ROM at $C000.  Needs manifest changes to add
-            //       the CAOS-C ROM slot and split RAM into two 16 KB regions.
             apply_banking();
             return pins;
         }

@@ -15,6 +15,7 @@ additionally require a BASIC ROM.
 |----------|------|----------|-------------|
 | `caos.rom` | 8,192 bytes | All | CAOS 3.1 operating system ROM at $E000–$FFFF |
 | `basic.rom` | 8,192 bytes | KC85/3, KC85/4 | HC-BASIC interpreter ROM at $C000–$DFFF |
+| `caos_c.rom` | 4,096 bytes | KC85/4 | CAOS 4.2 C-part ROM at $C000–$CFFF (optional) |
 
 The included `caos.rom` is **CAOS 3.1** for the KC85/3. If you need a
 different CAOS version for another variant, replace this file:
@@ -26,12 +27,15 @@ different CAOS version for another variant, replace this file:
 | CAOS 4.2 E | KC85/4 | `caos42e.854` | 8,192 bytes |
 
 > **Note:** KC85/4 CAOS 4.2 also requires a 4 KB C-part (`caos42c.854`)
-> which is not yet supported by the emulator's ROM loading.
+> mapped at $C000–$CFFF via port $86 bit 7. Place it as `caos_c.rom` in
+> this directory. The emulator will run without it but some KC85/4 features
+> that rely on the CAOS-C routines may not work.
 
 ## Alternative Filenames Accepted
 
 - **CAOS ROM:** `caos.rom`, `CAOS.ROM`
 - **BASIC ROM:** `basic.rom`, `BASIC.ROM`
+- **CAOS-C ROM (KC85/4):** `caos_c.rom`, `CAOS_C.ROM`
 
 ## Source
 
