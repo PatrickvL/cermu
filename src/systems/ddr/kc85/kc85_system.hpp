@@ -259,6 +259,12 @@ private:
     bool        system_ready_ = false;
     int audio_sample_rate_  = kc85_constants::DEFAULT_SAMPLE_RATE;
 
+    // ── Video timing counters ────────────────────────────────────────────
+    // h_count_ ticks every CPU cycle; v_count_ increments each scanline.
+    // CTC ch2 external trigger fires on vertical sync (v_count_ wrap).
+    uint32_t h_count_ = 0;
+    uint32_t v_count_ = 0;
+
     // ── Audio (CTC-driven square-wave beepers) ───────────────────────────
     // CTC channel 0 → beeper 1. CTC channel 1 → beeper 2.
     // Each zero-count toggles the respective beeper output.

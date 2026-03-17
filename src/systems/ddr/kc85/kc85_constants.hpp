@@ -35,6 +35,9 @@ inline constexpr uint16_t BASIC_ROM_SIZE       = 0x2000;    // 8 KB BASIC ROM
 inline constexpr int FB_WIDTH                  = 320;
 inline constexpr int FB_HEIGHT                 = 256;
 inline constexpr int COLOR_COUNT               = 16;
+inline constexpr int SCANLINES_PER_FRAME       = 312;       // PAL 312 lines
+inline constexpr int KC23_H_TICKS              = 112;       // CPU ticks per scanline (KC85/2,3)
+inline constexpr int KC4_H_TICKS               = 113;       // CPU ticks per scanline (KC85/4)
 
 // KC85/2,3: 256×256 pixel-addressable, column-major IRM, 8×4 color cells
 // KC85/4:   320×256 pixel-addressable, column-major IRM, per-byte color
