@@ -357,10 +357,93 @@ target_link_libraries(cermu_console ... m680x0_decoder)
 
 ## Key Architectural Differences (Z80 → 68000)
 
-1. **Endianness**: Z80 is little-endian; 68000 is **big-endian** — affects all multi-byte loads/stores
+1. **Endianness**: Z80 is little-endian; 68000 is **big-endian** — affects all multi-byte loads/stores (see Endianness XOR Trick below)
 2. **Word-aligned access**: 68000 requires word-aligned access for `.W`/`.L` (bus error on odd address) — Z80 has no alignment requirements
 3. **Prefetch pipeline**: 68000 has a 2-word prefetch queue — must model `IRC`/`IR`/`IRD` for cycle accuracy
 4. **Supervisor/User mode**: 68000 has dual stack pointers and privilege levels — Z80 has none
 5. **Exception processing**: 68000 has a rich exception model (bus error, address error, illegal instruction, privilege violation, trace, etc.) with a vector table — much more complex than Z80's IM0/1/2
 6. **Bus arbitration**: 68000 has a 3-wire protocol (BR/BG/BGACK) vs Z80's 2-wire (BUSREQ/BUSACK)
 7. **No I/O space**: 68000 is memory-mapped I/O only — Z80's IORQ concept doesn't exist
+
+---
+
+## Appendix: Endianness XOR Trick
+
+> Source: Darek Mihocka, *"NO EXECUTE! Part 8: Software TLB Tricks"*, Emulators.com (Oct 22 2007).
+> Referenced again in Part 25 as: *"how to handle byte-swapping and endianness differences without an explicit byte-swapping instruction on the host."*
+
+### Problem
+
+The 68000 is big-endian; x86/ARM64 hosts are little-endian. Naively, every guest memory access would need an explicit byte-swap (`BSWAP`, `REV`, etc.), adding overhead to every read/write on the hot path.
+
+### The Trick
+
+Store guest memory as **native host-endian 32-bit words**. Then, XOR the lowest address bits with a size-dependent mask to flip byte lanes implicitly:
+
+| Guest access size | XOR mask | Effect |
+|-------------------|----------|--------|
+| Byte (`.B`) | `addr ^ 3` (`0b11`) | Flips byte position within the 32-bit word |
+| Word (`.W`) | `addr ^ 2` (`0b10`) | Flips word position within the 32-bit word |
+| Long (`.L`) | `addr ^ 0` (no-op) | 32-bit value is already in correct host order |
+
+The general formula is: **`host_addr = guest_addr XOR (4 - access_size)`**, or equivalently **`XOR (word_size - access_size)`**.
+
+### Worked Example
+
+Guest (big-endian 68000) stores `0x12345678` at address `0x1000`:
+
+```
+Guest memory (big-endian byte order):
+  0x1000: 0x12  (MSB)
+  0x1001: 0x34
+  0x1002: 0x56
+  0x1003: 0x78  (LSB)
+
+Host memory (stored as native LE uint32 = 0x12345678):
+  host+0: 0x78  (LSB)
+  host+1: 0x56
+  host+2: 0x34
+  host+3: 0x12  (MSB)
+```
+
+**Byte reads** (XOR with 3):
+```
+  Guest 0x1000 → host+(0 XOR 3) = host+3 → 0x12 ✓
+  Guest 0x1001 → host+(1 XOR 3) = host+2 → 0x34 ✓
+  Guest 0x1002 → host+(2 XOR 3) = host+1 → 0x56 ✓
+  Guest 0x1003 → host+(3 XOR 3) = host+0 → 0x78 ✓
+```
+
+**Word reads** (XOR with 2):
+```
+  Guest 0x1000 → host+(0 XOR 2) = host+2 → LE uint16 {0x34,0x12} = 0x1234 ✓
+  Guest 0x1002 → host+(2 XOR 2) = host+0 → LE uint16 {0x78,0x56} = 0x5678 ✓
+```
+
+**Long read** (no XOR):
+```
+  Guest 0x1000 → host+0 → LE uint32 {0x78,0x56,0x34,0x12} = 0x12345678 ✓
+```
+
+### Integration with Software TLB
+
+In Darek's Gemulator/SoftMac 68040 engine, the XOR mask for endianness is **baked into the page table XOR value** alongside the guest-to-host address mapping offset. This means the endianness flip costs zero additional instructions — it's folded into the same XOR that maps guest addresses to host addresses:
+
+```asm
+; From Gemulator's 68040 engine (Part 8):
+mov  edx, pagetbl+eax*8+4   ; load XOR value (address map + endianness)
+xor  edx, ecx               ; map guest addr to host addr (includes byte flip)
+movzx eax, dword ptr [edx-3] ; read 32-bit value at adjusted address
+```
+
+### Implications for cermu
+
+- **Bus read/write helpers** in `m680x0.hpp` should apply the XOR mask before accessing the host memory buffer.
+- The mask can be a compile-time constant selected by `OpSize`:
+  ```cpp
+  static constexpr uint32_t endian_xor[3] = { 3, 2, 0 }; // Byte, Word, Long
+  ```
+- If the system's memory model uses page-pointer dispatch (as in C64's `c64_bus_t`), the XOR can be folded into the page offset at map time — zero per-access cost.
+- For 16-bit bus systems (68000's natural bus width), a simpler variant applies:
+  - Byte access: `addr ^ 1`
+  - Word access: `addr ^ 0` (no-op)
