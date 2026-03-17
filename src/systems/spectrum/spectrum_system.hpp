@@ -108,12 +108,6 @@ inline constexpr auto kSpectrum128KChips = make_chip_manifest(
     Slot<ay_3_8910_t>   {0, 0, 0, "AY-3-8912"}
 );
 
-namespace spectrum_chips {
-    inline constexpr size_t kRamSlot = 0;
-    inline constexpr size_t kRomSlot = 1;
-    inline constexpr size_t kUlaSlot = 3;
-    inline constexpr size_t kAySlot  = 4;
-}
 
 // BusTraits — selects the correct manifest per variant
 template<SpectrumVariant V> struct SpectrumBusTraits;

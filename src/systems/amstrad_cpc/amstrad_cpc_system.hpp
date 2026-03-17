@@ -121,17 +121,6 @@ inline constexpr auto kCPC6128Chips = make_chip_manifest(
     Slot<amstrad_gate_array_t>{0, 0, 0, "Gate Array"}
 );
 
-namespace cpc_chips {
-    inline constexpr size_t kRamSlot      = 0;
-    inline constexpr size_t kLowerRomSlot = 1;
-    inline constexpr size_t kUpperRomSlot = 2;
-    // Non-bus chip slots
-    inline constexpr size_t kCpuSlot      = 3;
-    inline constexpr size_t kCrtcSlot     = 4;
-    inline constexpr size_t kPpiSlot      = 5;
-    inline constexpr size_t kAySlot       = 6;
-    inline constexpr size_t kGaSlot       = 7;
-}
 
 // BusTraits — selects the correct manifest per CPC model
 template<CPCModel M> struct CPCBusTraits;
