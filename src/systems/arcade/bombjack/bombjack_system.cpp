@@ -278,13 +278,12 @@ void BombJackSystem::decode_palette() {
 // Palette index = palette_group * 8 + pixel_3bit (0-127)
 
 void BombJackSystem::render_frame() {
-    if (!fg_tilemap_chip_ || !fg_attr_chip_) return;
+    if (!fg_tilemap_chip_ || !fg_attr_chip_ || char_rom_.empty()) return;
 
     const uint8_t* tilemap = fg_tilemap_chip_->data();
     const uint8_t* attr_map = fg_attr_chip_->data();
     const uint8_t* chars = char_rom_.data();
-    const int char_count = char_rom_.empty() ? 0
-                         : static_cast<int>(char_rom_.size()) / 24;
+    const int char_count = static_cast<int>(char_rom_.size()) / 24;
 
     std::memset(display_.indices(), 0, bombjack_constants::FB_WIDTH * bombjack_constants::FB_HEIGHT);
 
