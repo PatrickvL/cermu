@@ -329,6 +329,22 @@ public:
         return nullptr;
     }
 
+    // find_index<T>(nth) — returns the slot index of the Nth chip of type T.
+    // Use for APIs that need a slot index: bind_chip(), set_effective_size().
+    // Returns slot_count() (past-end) if not found.
+    template<typename T>
+    [[nodiscard]] size_t find_index(size_t nth = 0) const noexcept {
+        constexpr auto target = resolve_slot_factory<T>();
+        size_t count = 0;
+        for (size_t i = 0; i < bus_map_.slot_count(); ++i) {
+            if (bus_map_.slot(i).factory == target) {
+                if (count == nth) return i;
+                ++count;
+            }
+        }
+        return bus_map_.slot_count();
+    }
+
     // =====================================================================
     // §4.4c  Owned chip access (for registration / lifetime)
     // =====================================================================

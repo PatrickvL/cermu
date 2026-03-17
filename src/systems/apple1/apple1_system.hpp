@@ -42,17 +42,7 @@ inline constexpr auto kApple1Chips = make_chip_manifest(
 // BusSpec auto-derived from the manifest
 using Apple1BusSpec = ManifestBusSpec<kApple1Chips, 16, 8>;
 
-namespace apple1_chips {
-    inline constexpr size_t kRamSlot     = 0;
-    inline constexpr size_t kMonitorSlot = 1;
-    inline constexpr size_t kBasicSlot   = 2;
-    inline constexpr size_t kPiaSlot     = 3;
 
-    // Compile-time chip ids (from manifest prefix-sum)
-    inline constexpr size_t kRamId       = kApple1Chips.base_id(kRamSlot, Apple1BusSpec::PageBits);      // 0
-    inline constexpr size_t kMonitorId   = kApple1Chips.base_id(kMonitorSlot, Apple1BusSpec::PageBits);  // 256
-    inline constexpr size_t kBasicId     = kApple1Chips.base_id(kBasicSlot, Apple1BusSpec::PageBits);    // 257
-}
 
 
 /**
