@@ -565,7 +565,7 @@ bool Commodore264System<V>::initialize() {
             // Initialize sound subsystem: TED master clock is 2× CPU clock
             uint32_t ted_clock = is_pal_region ? TED_PAL_CLOCK_HZ : TED_NTSC_CLOCK_HZ;
             ted_->audio_reset(ted_clock, c16_constants::AUDIO_SAMPLE_RATE);
-            board_.bind_chip(c264_slot::kTed, ted_);
+            board_.bind_chip(board_.template find_index<ted7360_t>(), ted_);
         } else {
             printf("%s: Warning - TED 7360 creation failed\n", Traits::name);
         }
@@ -576,13 +576,13 @@ bool Commodore264System<V>::initialize() {
     board_.apply(bus_);
 
     // Convenience pointers for direct buffer access (ROM loading, KERNAL checks, etc.)
-    ram_        = board_.chip_as<RAMChip>(c264_slot::kRam);
-    basic_rom_  = board_.chip_as<ROMChip>(c264_slot::kBasicRom);
-    kernal_rom_ = board_.chip_as<ROMChip>(c264_slot::kKernalRom);
+    ram_        = board_.template find<RAMChip>();
+    basic_rom_  = board_.template find<ROMChip>();
+    kernal_rom_ = board_.template find<ROMChip>(1);
     cpu_        = board_.cpu<CSG7501>();
-    pio1_       = board_.chip_as<mos6529_t>(c264_slot::kPio1);
-    pio2_       = board_.chip_as<mos6529_t>(c264_slot::kPio2);
-    rom_bank_   = board_.chip_as<c264_rom_bank_select_t>(c264_slot::kRomBank);
+    pio1_       = board_.template find<mos6529_t>();
+    pio2_       = board_.template find<mos6529_t>(1);
+    rom_bank_   = board_.template find<c264_rom_bank_select_t>();
 
     // Wire ROM bank select callback — fires on $FDD0-$FDDF writes when
     // low_bank or high_bank actually changes.
@@ -1019,7 +1019,7 @@ bus_state_t Commodore264System<V>::mem_tick(bus_state_t s) {
 // mask 0x3FFF so all accesses wrap to the first 16KB of the 64KB buffer.
 template<C264SeriesVariant V>
 void Commodore264System<V>::setup_ram_mirroring() {
-    constexpr size_t kRamBase = kC264Chips.base_id(c264_slot::kRam, 8);
+    constexpr size_t kRamBase = kC264Chips.base_id(kC264Chips.find<RAMChip>(), 8);
 
     // Update chip_info_ address mask to reflect actual RAM size.
     // 16KB: mask = 0x3FFF → hardware address mirroring.

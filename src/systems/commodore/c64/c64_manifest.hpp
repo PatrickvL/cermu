@@ -67,25 +67,6 @@ inline constexpr auto kC64Chips = make_chip_manifest(
 );
 
 // =============================================================================
-// §2  Manifest Slot Indices
-// =============================================================================
-
-namespace c64_slots {
-    inline constexpr size_t kRam     = 0;
-    inline constexpr size_t kRoml    = 1;
-    inline constexpr size_t kRomh    = 2;
-    inline constexpr size_t kBasic   = 3;
-    inline constexpr size_t kKernal  = 4;
-    inline constexpr size_t kCharrom = 5;
-    inline constexpr size_t kCpu     = 6;
-    inline constexpr size_t kVicii   = 7;
-    inline constexpr size_t kSid     = 8;
-    inline constexpr size_t kColram  = 9;
-    inline constexpr size_t kCia1    = 10;
-    inline constexpr size_t kCia2    = 11;
-}
-
-// =============================================================================
 // §3  Type Aliases
 // =============================================================================
 
@@ -109,12 +90,12 @@ using C64PlaChipId = uint8_t;
 //
 
 namespace c64_chip_ids {
-    inline constexpr C64ChipId kRam     = C64ChipId(kC64Chips.base_id(c64_slots::kRam,     12));  // 0
-    inline constexpr C64ChipId kRoml    = C64ChipId(kC64Chips.base_id(c64_slots::kRoml,    12));  // 1
-    inline constexpr C64ChipId kRomh    = C64ChipId(kC64Chips.base_id(c64_slots::kRomh,    12));  // 2
-    inline constexpr C64ChipId kBasic   = C64ChipId(kC64Chips.base_id(c64_slots::kBasic,   12));  // 3
-    inline constexpr C64ChipId kKernal  = C64ChipId(kC64Chips.base_id(c64_slots::kKernal,  12));  // 4
-    inline constexpr C64ChipId kCharrom = C64ChipId(kC64Chips.base_id(c64_slots::kCharrom, 12));  // 5
+    inline constexpr C64ChipId kRam     = C64ChipId(kC64Chips.base_id(kC64Chips.find<RAMChip>(),    12));  // 0
+    inline constexpr C64ChipId kRoml    = C64ChipId(kC64Chips.base_id(kC64Chips.find<ROMChip>(),    12));  // 1
+    inline constexpr C64ChipId kRomh    = C64ChipId(kC64Chips.base_id(kC64Chips.find<ROMChip>(1),   12));  // 2
+    inline constexpr C64ChipId kBasic   = C64ChipId(kC64Chips.base_id(kC64Chips.find<ROMChip>(2),   12));  // 3
+    inline constexpr C64ChipId kKernal  = C64ChipId(kC64Chips.base_id(kC64Chips.find<ROMChip>(3),   12));  // 4
+    inline constexpr C64ChipId kCharrom = C64ChipId(kC64Chips.base_id(kC64Chips.find<ROMChip>(4),   12));  // 5
 
     // Sentinel values for PLA outputs that don't map to buffer chips
     inline constexpr C64PlaChipId kIo       = 0xFE;  // I/O region ($D000-$DFFF)
