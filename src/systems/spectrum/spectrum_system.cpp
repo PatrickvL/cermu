@@ -208,8 +208,8 @@ bool SpectrumSystem<V>::initialize() {
     register_board(&board_);
 
     // ── Pre-bind stack-member chips, then factory-create all chips ─────
-    board_.bind_chip(spectrum_chips::kUlaSlot, &ula_);
-    board_.bind_chip(spectrum_chips::kAySlot,  &ay_);
+    board_.bind_chip(board_.template find_index<ferranti_ula_t>(), &ula_);
+    board_.bind_chip(board_.template find_index<ay_3_8910_t>(),  &ay_);
     board_.create_chips(&pins_);
     board_.apply(bus_);
 
@@ -359,8 +359,8 @@ void SpectrumSystem<V>::configure_bus_memory_map() {
         //   $8000-$BFFF: always bank 2
         //   $C000-$FFFF: selected by bank_select_ bits 0-2
         //   $0000-$3FFF: ROM bank selected by bank_select_ bit 4
-        board_.select_bank_at(bus_, 0, spectrum_chips::kRamSlot, 5, 0x40);
-        board_.select_bank_at(bus_, 0, spectrum_chips::kRamSlot, 2, 0x80);
+        board_.select_bank_at(bus_, 0, board_.template find_index<RAMChip>(), 5, 0x40);
+        board_.select_bank_at(bus_, 0, board_.template find_index<RAMChip>(), 2, 0x80);
 
         // Switchable bank at $C000 + ROM bank at $0000
         update_banking();
@@ -371,7 +371,7 @@ void SpectrumSystem<V>::configure_bus_memory_map() {
         bool use_bank7 = (bank_select_ & 0x08) != 0;
         size_t screen_bank = use_bank7 ? 7 : 5;
         screen_ram_ptr_ = board_.chip_buffer(
-            ChipId(size_t(board_.slot(spectrum_chips::kRamSlot).base_id) + screen_bank));
+            ChipId(size_t(board_.slot(board_.template find_index<RAMChip>()).base_id) + screen_bank));
     } else {
         // 48K: screen starts at $4000 = page $40 = chip ID 64
         screen_ram_ptr_ = board_.chip_buffer(ChipId(0x40));
@@ -386,17 +386,17 @@ void SpectrumSystem<V>::update_banking() {
 
     // Switchable RAM bank at $C000-$FFFF (bits 0-2 of bank_select_)
     uint8_t ram_bank = bank_select_ & 0x07;
-    board_.select_bank_at(bus_, 0, spectrum_chips::kRamSlot, ram_bank, 0xC0);
+    board_.select_bank_at(bus_, 0, board_.template find_index<RAMChip>(), ram_bank, 0xC0);
 
     // ROM bank at $0000-$3FFF (bit 4 of bank_select_)
     uint8_t rom_bank = (bank_select_ & 0x10) ? 1 : 0;
-    board_.select_bank_at(bus_, 0, spectrum_chips::kRomSlot, rom_bank, 0x00);
+    board_.select_bank_at(bus_, 0, board_.template find_index<ROMChip>(), rom_bank, 0x00);
 
     // Screen bank: bit 3 selects bank 5 or 7
     bool use_bank7 = (bank_select_ & 0x08) != 0;
     size_t screen_bank = use_bank7 ? 7 : 5;
     screen_ram_ptr_ = board_.chip_buffer(
-        ChipId(size_t(board_.slot(spectrum_chips::kRamSlot).base_id) + screen_bank));
+        ChipId(size_t(board_.slot(board_.template find_index<RAMChip>()).base_id) + screen_bank));
 }
 
 // ============================================================================

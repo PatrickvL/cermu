@@ -106,10 +106,10 @@ bool AmstradCPCSystem<M>::initialize() {
     register_board(&board_);
 
     // ── Pre-bind stack-member chips, then factory-create all chips ─────
-    board_.bind_chip(cpc_chips::kCrtcSlot, &crtc_);
-    board_.bind_chip(cpc_chips::kPpiSlot,  &ppi_);
-    board_.bind_chip(cpc_chips::kAySlot,   &ay_);
-    board_.bind_chip(cpc_chips::kGaSlot,   &gate_array_);
+    board_.bind_chip(board_.template find_index<mc6845_t>(), &crtc_);
+    board_.bind_chip(board_.template find_index<i8255_t>(),  &ppi_);
+    board_.bind_chip(board_.template find_index<ay_3_8910_t>(),   &ay_);
+    board_.bind_chip(board_.template find_index<amstrad_gate_array_t>(),   &gate_array_);
     board_.create_chips(&pins_);
 
     // ── Configure page tables for this variant ──────────────────────────
@@ -140,7 +140,7 @@ bool AmstradCPCSystem<M>::initialize() {
 
     load_roms();
     // ── Cache RAM chip pointer for rendering ───────────────────────
-    ram_chip_ = board_.template chip_as<RAMChip>(cpc_chips::kRamSlot);
+    ram_chip_ = board_.template find<RAMChip>();
 
     // ── GPU indexed palette rendering — display_ owns palette + RGBA fallback ───
     display_.init(amstrad_cpc_constants::FB_WIDTH,
@@ -288,7 +288,7 @@ void AmstradCPCSystem<M>::update_banking() {
         uint8_t config = gate_array_.ram_config & 7;
         constexpr size_t kPagesPerBank = 64;  // 16384 / 256
         for (int pg = 0; pg < 4; ++pg) {
-            board_.select_bank_at(bus_, 0, cpc_chips::kRamSlot,
+            board_.select_bank_at(bus_, 0, board_.template find_index<RAMChip>(),
                                    bank_table[config][pg],
                                    pg * kPagesPerBank);
         }
