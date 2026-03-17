@@ -818,6 +818,10 @@ bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
         }
         if (port == kc85_constants::KC4_CTRL2_PORT && !BUS_GET_BIT(pins, BUS_RW_BIT)) {
             bank_ctrl2_ = BUS_GET_DATA(pins);
+            // TODO: port $86 bit 0 = RAM4 enable at $4000, bit 1 = RAM4 write-protect,
+            //       bit 7 = CAOS-C 4 KB ROM at $C000.  Needs manifest changes to add
+            //       the CAOS-C ROM slot and split RAM into two 16 KB regions.
+            apply_banking();
             return pins;
         }
     }
