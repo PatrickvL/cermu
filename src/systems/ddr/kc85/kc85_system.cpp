@@ -309,7 +309,23 @@ void KC85System<V>::tick() {
         pins_ = io_tick(pins_);
     }
 
-    // ── 5. Audio sample generation ──────────────────────────────────────
+    // ── 5. Video timing counters ─────────────────────────────────────────
+    constexpr int h_width = Traits::has_extended_video
+        ? kc85_constants::KC4_H_TICKS : kc85_constants::KC23_H_TICKS;
+    h_count_++;
+    if (h_count_ >= static_cast<uint32_t>(h_width)) {
+        h_count_ = 0;
+        v_count_++;
+        if (v_count_ >= static_cast<uint32_t>(kc85_constants::SCANLINES_PER_FRAME)) {
+            v_count_ = 0;
+            // Vertical sync: trigger CTC channel 2 for blink frequency
+            ctc_->trigger(2, true);
+        } else {
+            ctc_->trigger(2, false);
+        }
+    }
+
+    // ── 6. Audio sample generation ──────────────────────────────────────
     if (audio_sample_period_ > 0) {
         audio_sample_counter_++;
         if (audio_sample_counter_ >= audio_sample_period_) {
