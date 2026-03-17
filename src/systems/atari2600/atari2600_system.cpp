@@ -192,7 +192,7 @@ bool Atari2600System::initialize() {
 
     // GPU indexed palette rendering — 128-color TIA NTSC palette
     display_.init(atari2600_constants::DISPLAY_WIDTH,
-                  atari2600_constants::FB_HEIGHT);
+                  atari2600_constants::DISPLAY_HEIGHT);
     display_.set_palette(tia_->palette_rgba_, 128);
     tia_->set_display(&display_);
     register_display(&display_);

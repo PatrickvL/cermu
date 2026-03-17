@@ -42,9 +42,6 @@ namespace atari2600_constants {
 
     inline constexpr int DISPLAY_WIDTH               = 160;
     inline constexpr int DISPLAY_HEIGHT              = 192;   // Typical visible area (228 total, varies by game)
-    // Most games use scanlines ~40-232 for visible content, giving ~192 lines.
-    // The system provides a 160×262 framebuffer; the GUI clips to visible area.
-    inline constexpr int FB_HEIGHT                   = 262;   // Full frame height (for scanline-accurate rendering)
 
     // ========================================================================
     // Memory Map (6507: 13-bit address, $0000-$1FFF)
