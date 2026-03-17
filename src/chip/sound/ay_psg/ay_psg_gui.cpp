@@ -1,5 +1,5 @@
 /*
- * ay_3_8910_gui.cpp — AY-3-8910 PSG Debug/Layout GUI
+ * ay_psg_gui.cpp — AY/YM PSG family Debug/Layout GUI
  *
  * Hardware-accurate pinouts for all AY variants:
  *   AY-3-8910: 40-pin DIP (GI datasheet)
@@ -8,9 +8,13 @@
  *   YM2149:    40-pin DIP (Yamaha, pin-compatible with 8910)
  *
  * Compiled only when CERMU_HAS_GUI is defined.
+ * Debug field registration compiled when CERMU_HAS_CHIP_DEBUG is defined.
  */
 
-#include "chip/sound/ay_3_8910.hpp"
+// Include all variant headers used by systems (for explicit instantiation)
+#include "chip/sound/ay_psg/ay_3_8910.hpp"
+#include "chip/sound/ay_psg/ay_3_8912.hpp"
+
 #include "core/chip_layout.hpp"
 
 #ifdef CERMU_HAS_GUI
@@ -24,8 +28,9 @@
 // ============================================================================
 
 #ifdef CERMU_HAS_CHIP_DEBUG
-void ay_3_8910_t::register_debug_fields() {
-    using S = const ay_3_8910_t;
+template <const AYTraits& Traits>
+void ay_psg_t<Traits>::register_debug_fields() {
+    using S = const ay_psg_t<Traits>;
     auto& r = debug_registry_;
     r.set_registers(regs_, ay_regs::REG_COUNT, AY_REG_INFO);
     r.set_decl_entries(AY_DECL_ENTRIES.data(), AY_DECL_ENTRIES.size());
@@ -57,6 +62,10 @@ void ay_3_8910_t::register_debug_fields() {
         return s->regs_[ay_regs::ENV_FINE] | (uint16_t(s->regs_[ay_regs::ENV_COARSE]) << 8);
     }, 16);
 }
+
+// Explicit template instantiation — debug fields
+template void ay_psg_t<AY_3_8910_Traits>::register_debug_fields();
+template void ay_psg_t<AY_3_8912_Traits>::register_debug_fields();
 #endif // CERMU_HAS_CHIP_DEBUG
 
 // ============================================================================
@@ -65,15 +74,14 @@ void ay_3_8910_t::register_debug_fields() {
 
 #ifdef CERMU_HAS_GUI
 
-ChipLayout* ay_3_8910_t::create_chip_layout() const {
-    const auto& traits = ay_variant_traits[static_cast<int>(variant_)];
-
-    // AY-3-8910 / YM2149: 40-pin DIP
-    if (variant_ == AYVariant::AY_3_8910 || variant_ == AYVariant::YM2149) {
-        static ChipLayout layout = [&] {
+template <const AYTraits& Traits>
+ChipLayout* ay_psg_t<Traits>::create_chip_layout() const {
+    // 40-pin DIP: AY-3-8910, AY-3-8914, YM2149, YM3439, AY8930
+    if constexpr (Traits.io_port_count == 2) {
+        static ChipLayout layout = [] {
             ChipLayout layout = create_dip40_layout();
-            layout.markings.part_number  = traits.part_number;
-            layout.markings.manufacturer = traits.manufacturer;
+            layout.markings.part_number  = Traits.chip_id;
+            layout.markings.manufacturer = Traits.vendor;
 
             // AY-3-8910 40-pin DIP pinout (GI datasheet)
             //                  LEFT                          RIGHT
@@ -103,12 +111,12 @@ ChipLayout* ay_3_8910_t::create_chip_layout() const {
         return &layout;
     }
 
-    // AY-3-8912: 28-pin DIP (1 I/O port, no port B)
-    if (variant_ == AYVariant::AY_3_8912) {
+    // 28-pin DIP: AY-3-8912 (1 I/O port, no port B)
+    if constexpr (Traits.io_port_count == 1) {
         static ChipLayout layout = [] {
             ChipLayout layout = create_dip28_layout();
-            layout.markings.part_number  = "AY-3-8912";
-            layout.markings.manufacturer = "General Instrument";
+            layout.markings.part_number  = Traits.chip_id;
+            layout.markings.manufacturer = Traits.vendor;
 
             //                  LEFT                          RIGHT
             PIN_LR(layout,  1, VSS,        VCC,          28);
@@ -131,35 +139,45 @@ ChipLayout* ay_3_8910_t::create_chip_layout() const {
         return &layout;
     }
 
-    // AY-3-8913: 24-pin DIP (no I/O ports)
-    static ChipLayout layout = [] {
-        ChipLayout layout = create_dip24_layout();
-        layout.markings.part_number  = "AY-3-8913";
-        layout.markings.manufacturer = "General Instrument";
+    // 24-pin DIP: AY-3-8913 (no I/O ports)
+    if constexpr (Traits.io_port_count == 0) {
+        static ChipLayout layout = [] {
+            ChipLayout layout = create_dip24_layout();
+            layout.markings.part_number  = Traits.chip_id;
+            layout.markings.manufacturer = Traits.vendor;
 
-        //                  LEFT                          RIGHT
-        PIN_LR(layout,  1, VSS,        VCC,          24);
-        PIN_LR(layout,  2, NC,         CHANNEL_C,    23);
-        PIN_LR(layout,  3, CHANNEL_B,  D7,           22);
-        PIN_LR(layout,  4, CHANNEL_A,  D6,           21);
-        PIN_LR(layout,  5, NC,         D5,           20);
-        PIN_LR(layout,  6, NC,         D4,           19);
-        PIN_LR(layout,  7, NC,         D3,           18);
-        PIN_LR(layout,  8, NC,         D2,           17);
-        PIN_LR(layout,  9, A8,         D1,           16);
-        PIN_LR(layout, 10, _CS,        D0,           15);  // /A9
-        PIN_LR(layout, 11, _RES,       BDIR,         14);
-        PIN_LR(layout, 12, CLK,        BC1,          13);
+            //                  LEFT                          RIGHT
+            PIN_LR(layout,  1, VSS,        VCC,          24);
+            PIN_LR(layout,  2, NC,         CHANNEL_C,    23);
+            PIN_LR(layout,  3, CHANNEL_B,  D7,           22);
+            PIN_LR(layout,  4, CHANNEL_A,  D6,           21);
+            PIN_LR(layout,  5, NC,         D5,           20);
+            PIN_LR(layout,  6, NC,         D4,           19);
+            PIN_LR(layout,  7, NC,         D3,           18);
+            PIN_LR(layout,  8, NC,         D2,           17);
+            PIN_LR(layout,  9, A8,         D1,           16);
+            PIN_LR(layout, 10, _CS,        D0,           15);  // /A9
+            PIN_LR(layout, 11, _RES,       BDIR,         14);
+            PIN_LR(layout, 12, CLK,        BC1,          13);
 
-        return layout;
-    }();
-    return &layout;
+            return layout;
+        }();
+        return &layout;
+    }
 }
 
-std::vector<PinSignalState> ay_3_8910_t::get_layout_pin_states(ChipLayout& layout) {
+template <const AYTraits& Traits>
+std::vector<PinSignalState> ay_psg_t<Traits>::get_layout_pin_states(ChipLayout& layout) {
     auto ps = populate_pin_states_from_bus(layout, 0);
     // AY-3-8910 is not on main system bus — signals come from BDIR/BC1/BC2
     return ps;
 }
+
+// Explicit template instantiation — GUI methods
+template ChipLayout* ay_psg_t<AY_3_8910_Traits>::create_chip_layout() const;
+template std::vector<PinSignalState> ay_psg_t<AY_3_8910_Traits>::get_layout_pin_states(ChipLayout&);
+
+template ChipLayout* ay_psg_t<AY_3_8912_Traits>::create_chip_layout() const;
+template std::vector<PinSignalState> ay_psg_t<AY_3_8912_Traits>::get_layout_pin_states(ChipLayout&);
 
 #endif // CERMU_HAS_GUI

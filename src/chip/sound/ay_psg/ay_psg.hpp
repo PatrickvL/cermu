@@ -1,19 +1,13 @@
 #pragma once
 /*
- * ay_3_8910.h — General Instrument AY-3-8910 Programmable Sound Generator
+ * ay_psg.hpp — AY-3-8910 family Programmable Sound Generator (template)
+ *
+ * NTTP-parameterized implementation covering the full AY/YM PSG family.
+ * Each variant is selected at compile time via AYTraits, enabling
+ * zero-overhead feature dispatch with if constexpr.
  *
  * The AY-3-8910 (1978) is a 3-channel square wave + noise + envelope
- * sound generator with two 8-bit I/O ports.  One of the most widely-used
- * sound chips of the 8-bit era.
- *
- * Variants:
- *   AY-3-8910: 3 channels, 2 I/O ports (40-pin DIP)
- *   AY-3-8912: 3 channels, 1 I/O port  (28-pin DIP)
- *   AY-3-8913: 3 channels, no I/O ports (24-pin DIP)
- *   YM2149:    Yamaha-licensed clone with half-step envelope precision
- *
- * Used in: ZX Spectrum 128K, Amstrad CPC (via PPI), MSX, Atari ST (YM2149),
- *          Intellivision, many arcade machines (Bomb Jack, etc.)
+ * sound generator.  One of the most widely-used sound chips of the 8-bit era.
  *
  * Bus interface:
  *   BDIR + BC1 select the bus operation:
@@ -23,36 +17,12 @@
  *     11 = Latch address
  */
 
+#include "chip/sound/ay_psg/ay_psg_traits.hpp"
 #include "chip/sound/sound_chip_base.hpp"
 #include "core/system_lines.hpp"
 #include "utils/ring_buffer.hpp"
 #include <cstdint>
 #include <cstring>
-
-// ============================================================================
-// AY-3-8910 Variant Configuration
-// ============================================================================
-
-enum class AYVariant : uint8_t {
-    AY_3_8910,   // Original GI, 2 I/O ports
-    AY_3_8912,   // 1 I/O port
-    AY_3_8913,   // No I/O ports
-    YM2149,      // Yamaha clone (half-step envelope)
-};
-
-struct AYVariantTraits {
-    const char* part_number;
-    const char* manufacturer;
-    uint8_t     io_port_count;   // 0, 1, or 2
-    bool        half_step_env;   // YM2149 envelope precision
-};
-
-inline constexpr AYVariantTraits ay_variant_traits[] = {
-    { "AY-3-8910", "General Instrument", 2, false },
-    { "AY-3-8912", "General Instrument", 1, false },
-    { "AY-3-8913", "General Instrument", 0, false },
-    { "YM2149",    "Yamaha",             2, true  },
-};
 
 // ============================================================================
 // AY-3-8910 REGISTER TABLE — single source of truth
@@ -103,16 +73,46 @@ namespace ay_regs {
 DECL_EXTRACT(AY, AY_DECL)
 
 // ============================================================================
-// AY-3-8910 Sound Chip
+// AY-3-8914 (Intellivision) register remap table
+// ============================================================================
+//
+// The AY-3-8914 shuffles registers so that the mixer (control) register
+// sits at address 0 instead of 7.  The mapping converts external (host-
+// facing) addresses to internal (standard AY layout) addresses:
+//
+//   External 0 → MIXER (internal 7)
+//   External 1–6 → TONE_A_FINE … TONE_C_COARSE (internal 0–5)
+//   External 7 → NOISE_PERIOD (internal 6)
+//   External 8–15 → unchanged (AMP_A … IO_PORT_B)
+
+inline constexpr uint8_t ay_8914_reg_map[16] = {
+    0x07,  // ext 0 → MIXER
+    0x00,  // ext 1 → TONE_A_FINE
+    0x01,  // ext 2 → TONE_A_COARSE
+    0x02,  // ext 3 → TONE_B_FINE
+    0x03,  // ext 4 → TONE_B_COARSE
+    0x04,  // ext 5 → TONE_C_FINE
+    0x05,  // ext 6 → TONE_C_COARSE
+    0x06,  // ext 7 → NOISE_PERIOD
+    0x08,  // ext 8 → AMP_A
+    0x09,  // ext 9 → AMP_B
+    0x0A,  // ext 10 → AMP_C
+    0x0B,  // ext 11 → ENV_FINE
+    0x0C,  // ext 12 → ENV_COARSE
+    0x0D,  // ext 13 → ENV_SHAPE
+    0x0E,  // ext 14 → IO_PORT_A
+    0x0F,  // ext 15 → IO_PORT_B
+};
+
+// ============================================================================
+// ay_psg_t — AY/YM PSG family template
 // ============================================================================
 
-class ay_3_8910_t : public SoundChipBase {
+template <const AYTraits& Traits>
+class ay_psg_t : public SoundChipBase {
 public:
-    explicit ay_3_8910_t(AYVariant variant = AYVariant::AY_3_8910)
-        : SoundChipBase(ChipInfo(
-              ay_variant_traits[static_cast<int>(variant)].part_number,
-              ay_variant_traits[static_cast<int>(variant)].manufacturer))
-        , variant_(variant)
+    ay_psg_t()
+        : SoundChipBase(ChipInfo(Traits.chip_id, Traits.vendor))
         , audio_buffer_(4096)
     {
         init_regs(ay_regs::REG_COUNT);
@@ -133,8 +133,8 @@ public:
         env_volume_ = 0;
         env_ascending_ = false;
         env_holding_ = false;
-        io_port_a_ = 0xFF;
-        io_port_b_ = 0xFF;
+        if constexpr (Traits.has_io_port_a()) io_port_a_ = 0xFF;
+        if constexpr (Traits.has_io_port_b()) io_port_b_ = 0xFF;
         audio_buffer_.reset();
         audio_cycle_accum_ = 0.0;
         audio_cycles_per_sample_ = 0.0;
@@ -142,38 +142,36 @@ public:
 
     void reset() { init(); }
 
+    // === Register address mapping ===
+
+    /// Map an external register address to the internal (standard) layout.
+    /// Identity for all variants except AY-3-8914 (Intellivision remap).
+    static constexpr uint8_t map_reg(uint8_t addr) {
+        if constexpr (Traits.has_register_remap()) {
+            return ay_8914_reg_map[addr & 0x0F];
+        } else {
+            return addr & 0x0F;
+        }
+    }
+
     // === Register access (address latch + read/write) ===
 
     void latch_address(uint8_t addr) {
-        latch_addr_ = addr & 0x0F;
+        latch_addr_ = map_reg(addr);
     }
 
     void write_register(uint8_t data) {
         regs_[latch_addr_] = data;
-        if (latch_addr_ == ay_regs::ENV_SHAPE) {
-            // Writing envelope shape resets the envelope generator
-            env_step_ = 0;
-            env_counter_ = 0;
-            env_holding_ = false;
-            env_ascending_ = (data & 0x04) != 0;  // ATT bit
-            env_volume_ = env_ascending_ ? 0 : 15;
-        }
+        on_register_write(latch_addr_, data);
     }
 
     /// Direct addressed write (for AudioThread adapter).
     /// Does NOT touch latch_addr_ — safe for audio-thread use while the
     /// emu thread owns latch_addr_ for read_register() / latch_address().
     void write_register(uint8_t reg, uint8_t data) {
-        uint8_t r = reg & 0x0F;
+        uint8_t r = map_reg(reg);
         regs_[r] = data;
-        if (r == ay_regs::ENV_SHAPE) {
-            // Writing envelope shape resets the envelope generator
-            env_step_ = 0;
-            env_counter_ = 0;
-            env_holding_ = false;
-            env_ascending_ = (data & 0x04) != 0;  // ATT bit
-            env_volume_ = env_ascending_ ? 0 : 15;
-        }
+        on_register_write(r, data);
     }
 
     /// Shadow write — updates regs_[] only (no side effects).
@@ -185,17 +183,33 @@ public:
     }
 
     uint8_t read_register() const {
-        if (latch_addr_ == ay_regs::IO_PORT_A) return io_port_a_;
-        if (latch_addr_ == ay_regs::IO_PORT_B) return io_port_b_;
+        if constexpr (Traits.has_io_port_a()) {
+            if (latch_addr_ == ay_regs::IO_PORT_A) return io_port_a_;
+        }
+        if constexpr (Traits.has_io_port_b()) {
+            if (latch_addr_ == ay_regs::IO_PORT_B) return io_port_b_;
+        }
+        // Variants without the requested I/O port return the register
+        // contents (which default to 0x00 after reset).
         return regs_[latch_addr_];
     }
 
     // === I/O port access (directly from system, not through register bus) ===
 
-    void set_io_port_a(uint8_t data) { io_port_a_ = data; }
-    void set_io_port_b(uint8_t data) { io_port_b_ = data; }
-    uint8_t get_io_port_a() const { return io_port_a_; }
-    uint8_t get_io_port_b() const { return io_port_b_; }
+    void set_io_port_a(uint8_t data) {
+        if constexpr (Traits.has_io_port_a()) { io_port_a_ = data; }
+    }
+    void set_io_port_b(uint8_t data) {
+        if constexpr (Traits.has_io_port_b()) { io_port_b_ = data; }
+    }
+    uint8_t get_io_port_a() const {
+        if constexpr (Traits.has_io_port_a()) return io_port_a_;
+        else return 0xFF;
+    }
+    uint8_t get_io_port_b() const {
+        if constexpr (Traits.has_io_port_b()) return io_port_b_;
+        else return 0xFF;
+    }
 
     // === Audio generation ===
 
@@ -262,8 +276,6 @@ public:
         return (mix / 3.0f) * 2.0f - 1.0f;
     }
 
-    AYVariant variant() const { return variant_; }
-
     // === Audio output (ring buffer for systems using chip-level drain) ===
 
     void set_clock_frequency(uint32_t internal_hz) {
@@ -291,8 +303,6 @@ public:
 #endif
 
 private:
-    AYVariant variant_;
-
     uint8_t   latch_addr_ = 0;
 
     // Tone generators (3 channels)
@@ -310,7 +320,7 @@ private:
     bool      env_ascending_ = false;
     bool      env_holding_ = false;
 
-    // I/O ports
+    // I/O ports (always present in memory; gated by if constexpr in public API)
     uint8_t   io_port_a_ = 0xFF;
     uint8_t   io_port_b_ = 0xFF;
 
@@ -345,15 +355,40 @@ private:
         audio_buffer_.write(&sample, 1);
     }
 
+    /// Side effects triggered by writing to a specific internal register.
+    void on_register_write(uint8_t internal_reg, uint8_t data) {
+        if (internal_reg == ay_regs::ENV_SHAPE) {
+            // Writing envelope shape resets the envelope generator
+            env_step_ = 0;
+            env_counter_ = 0;
+            env_holding_ = false;
+            env_ascending_ = (data & 0x04) != 0;  // ATT bit
+            env_volume_ = env_ascending_ ? 0 : Traits.envelope_max();
+            // Clamp to DAC range for half-step variants
+            if constexpr (Traits.has_half_step_envelope()) {
+                env_volume_ >>= 1;
+            }
+        }
+    }
+
     /// Advance the envelope generator one step.
     void advance_envelope() {
         env_step_++;
-        if (env_step_ < 16) {
-            env_volume_ = env_ascending_ ? env_step_ : (15 - env_step_);
+        constexpr uint8_t steps = Traits.envelope_steps;
+
+        if (env_step_ < steps) {
+            if constexpr (Traits.has_half_step_envelope()) {
+                // YM2149/YM3439: 32 steps, output mapped to 0-15 for DAC lookup
+                uint8_t raw = env_ascending_ ? env_step_ : (uint8_t(steps - 1) - env_step_);
+                env_volume_ = raw >> 1;
+            } else {
+                // AY: 16 steps, direct 0-15 mapping
+                env_volume_ = env_ascending_ ? env_step_ : (15 - env_step_);
+            }
             return;
         }
 
-        // End of a 16-step cycle — handle shape
+        // End of a full cycle — handle shape
         uint8_t shape = regs_[ay_regs::ENV_SHAPE] & 0x0F;
         bool cont = shape & 0x08;
         bool alt  = shape & 0x02;
@@ -371,7 +406,11 @@ private:
             // Continue + alternate: reverse direction, restart
             env_ascending_ = !env_ascending_;
             env_step_ = 0;
-            env_volume_ = env_ascending_ ? 0 : 15;
+            if constexpr (Traits.has_half_step_envelope()) {
+                env_volume_ = env_ascending_ ? 0 : 15;
+            } else {
+                env_volume_ = env_ascending_ ? 0 : 15;
+            }
         } else {
             // Continue + restart same direction (sawtooth)
             env_step_ = 0;

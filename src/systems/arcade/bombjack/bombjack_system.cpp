@@ -82,7 +82,7 @@ bool BombJackSystem::initialize() {
 
     // Wire 3× AY to audio thread — cpu_cycles_per_tick=2 (AY = sound CPU / 2)
     for (int i = 0; i < 3; i++) {
-        ay_adapter_[i] = std::make_unique<WriteOnlySynthAdapter<ay_3_8910_t, true>>(
+        ay_adapter_[i] = std::make_unique<WriteOnlySynthAdapter<AY_3_8910, true>>(
             &ay_[i], 2);
         audio_thread_.register_engine(ay_adapter_[i].get());
     }

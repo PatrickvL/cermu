@@ -28,7 +28,7 @@
 #include "core/board.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/video/spectrum_ula/ferranti_ula.hpp"
-#include "chip/sound/ay_3_8910.hpp"
+#include "chip/sound/ay_psg/ay_3_8912.hpp"
 #include "chip/memory/memory_chip.hpp"
 #include "systems/spectrum/spectrum_constants.hpp"
 #include "utils/ring_buffer.hpp"
@@ -96,7 +96,7 @@ inline constexpr auto kSpectrum48KChips = make_chip_manifest(
     // Non-bus chips — factory-created or pre-bound, not address-decoded
     Slot<ZilogZ80A>     {0, 0, 0, "Z80A"},
     Slot<ferranti_ula_t>{0, 0, 0, "Ferranti ULA"},
-    Slot<ay_3_8910_t>   {0, 0, 0, "AY-3-8912"}
+    Slot<AY_3_8912>     {0, 0, 0, "AY-3-8912"}
 );
 
 inline constexpr auto kSpectrum128KChips = make_chip_manifest(
@@ -105,7 +105,7 @@ inline constexpr auto kSpectrum128KChips = make_chip_manifest(
     // Non-bus chips — factory-created or pre-bound, not address-decoded
     Slot<ZilogZ80A>     {0, 0, 0, "Z80A"},
     Slot<ferranti_ula_t>{0, 0, 0, "Ferranti ULA"},
-    Slot<ay_3_8910_t>   {0, 0, 0, "AY-3-8912"}
+    Slot<AY_3_8912>     {0, 0, 0, "AY-3-8912"}
 );
 
 
@@ -179,7 +179,7 @@ private:
 
     ZilogZ80A*      cpu_ = nullptr;   // Z80A CPU @ 3.5 MHz — owned by board_
     ferranti_ula_t  ula_;             // Ferranti ULA (video, keyboard, tape, contention)
-    ay_3_8910_t     ay_;              // AY-3-8912 sound (128K only, but always present for simplicity)
+    AY_3_8912       ay_;              // AY-3-8912 sound (128K only, but always present for simplicity)
 
     // ========================================================================
     // MEMORY — owned by Board

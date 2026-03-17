@@ -75,7 +75,6 @@ static SystemDescriptor cpc6128_descriptor = {
 template<CPCModel M>
 AmstradCPCSystem<M>::AmstradCPCSystem()
     : System()
-    , ay_(AYVariant::AY_3_8912)
     , pins_(CPC_BUS_DEFAULT_STATE)
 {
     hardware_traits_ = create_cpc_hardware_traits<M>();
@@ -108,7 +107,7 @@ bool AmstradCPCSystem<M>::initialize() {
     // ── Pre-bind stack-member chips, then factory-create all chips ─────
     board_.bind_chip(board_.template find_index<mc6845_t>(), &crtc_);
     board_.bind_chip(board_.template find_index<i8255_t>(),  &ppi_);
-    board_.bind_chip(board_.template find_index<ay_3_8910_t>(),   &ay_);
+    board_.bind_chip(board_.template find_index<AY_3_8912>(),   &ay_);
     board_.bind_chip(board_.template find_index<amstrad_gate_array_t>(),   &gate_array_);
     board_.create_chips(&pins_);
 
@@ -134,7 +133,7 @@ bool AmstradCPCSystem<M>::initialize() {
     ay_.set_audio_sample_rate(amstrad_cpc_constants::DEFAULT_SAMPLE_RATE);
 
     // Wire AY to audio thread — cpu_cycles_per_tick=4 (AY = CPU / 4)
-    ay_adapter_ = std::make_unique<WriteOnlySynthAdapter<ay_3_8910_t, true>>(&ay_, 4);
+    ay_adapter_ = std::make_unique<WriteOnlySynthAdapter<AY_3_8912, true>>(&ay_, 4);
     audio_thread_.register_engine(ay_adapter_.get());
     audio_thread_.start();
 

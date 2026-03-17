@@ -16,7 +16,7 @@
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
-#include "chip/sound/ay_3_8910.hpp"
+#include "chip/sound/ay_psg/ay_3_8910.hpp"
 #include "chip/memory/ram_chip.hpp"
 #include "chip/memory/rom_chip.hpp"
 #include "core/audio_thread.hpp"
@@ -115,11 +115,11 @@ private:
     ZilogZ80A*  sound_cpu_ = nullptr;    // Z80A @ 3 MHz (sound) — owned by sound_board_
 
     // ── Sound ────────────────────────────────────────────────────────────
-    ay_3_8910_t ay_[3];                  // 3× AY-3-8910 PSG
+    AY_3_8910 ay_[3];                    // 3× AY-3-8910 PSG
 
     // ── Audio thread — synthesis runs off the emu thread ────────────────
     AudioThread audio_thread_;
-    std::unique_ptr<WriteOnlySynthAdapter<ay_3_8910_t, true>> ay_adapter_[3];
+    std::unique_ptr<WriteOnlySynthAdapter<AY_3_8910, true>> ay_adapter_[3];
     uint8_t   ay_latch_[3]{};            // Cached latched register per AY (emu thread)
     uint64_t  sound_cycles_ = 0;         // Monotonic sound-CPU cycle counter (3 MHz)
 
