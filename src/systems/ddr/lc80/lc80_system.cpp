@@ -62,9 +62,9 @@ bool LC80System::initialize() {
 
     // ── Init chips ──────────────────────────────────────────────────────
     cpu_  = board_.cpu<U880>();
-    pio1_ = board_.chip_as<z80_pio_t>(lc80_chips::kPio1Slot);
-    pio2_ = board_.chip_as<z80_pio_t>(lc80_chips::kPio2Slot);
-    ctc_  = board_.chip_as<z80_ctc_t>(lc80_chips::kCtcSlot);
+    pio1_ = board_.find<z80_pio_t>();
+    pio2_ = board_.find<z80_pio_t>(1);
+    ctc_  = board_.find<z80_ctc_t>();
 
     pins_ = board_.cpu_chip()->init();
     pio1_->init();

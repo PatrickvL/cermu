@@ -44,14 +44,6 @@ inline constexpr auto kLC80Chips = make_chip_manifest(
     Slot<z80_ctc_t> {0, 0, 0, "U857 CTC"}
 );
 
-namespace lc80_chips {
-    inline constexpr size_t kRomSlot  = 0;
-    inline constexpr size_t kRamSlot  = 1;
-    inline constexpr size_t kPio1Slot = 3;
-    inline constexpr size_t kPio2Slot = 4;
-    inline constexpr size_t kCtcSlot  = 5;
-}
-
 using LC80BusSpec = ManifestBusSpec<kLC80Chips, 16, 8>;
 
 class LC80System : public System {

@@ -179,10 +179,10 @@ bool Apple1System::initialize() {
     register_board(&board_);
     
     // ── Pre-bind PIA, then factory-create all chips (memory + CPU) ───
-    board_.bind_chip(apple1_chips::kPiaSlot, &pia_);
+    board_.bind_chip(board_.find_index<pia6820_t>(), &pia_);
     board_.create_chips(&pins_);
-    monitor_rom_ = board_.chip_as<ROMChip>(apple1_chips::kMonitorSlot);
-    basic_rom_   = board_.chip_as<ROMChip>(apple1_chips::kBasicSlot);
+    monitor_rom_ = board_.find<ROMChip>();
+    basic_rom_   = board_.find<ROMChip>(1);
     cpu_         = board_.cpu<MOS6502>();
 
     // Character ROM — not on the bus (used by terminal renderer only).
@@ -447,7 +447,7 @@ void Apple1System::configure_bus_memory_map() {
 
     // effective_size trims RAM in Phase 1 and gives MMIO sub-tables
     // (PIA at $D0) an open-bus base when RAM doesn't reach that page.
-    board_.set_effective_size(apple1_chips::kRamSlot, ram_size_);
+    board_.set_effective_size(board_.find_index<RAMChip>(), ram_size_);
     board_.apply(bus_);
 
     // ── BASIC ROM — unmap if not loaded ─────────────────────────────────────
