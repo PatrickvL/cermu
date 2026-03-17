@@ -91,22 +91,22 @@ bool KC85System<V>::initialize() {
     board_.apply(bus_);
 
     // Retrieve typed pointers for chips accessed after initialize()
-    caos_rom_chip_ = board_.template chip_as<ROMChip>(Traits::kCaosRomSlot);
     if constexpr (Traits::has_basic_rom) {
-        basic_rom_chip_ = board_.template chip_as<ROMChip>(Traits::kBasicRomSlot);
+        basic_rom_chip_ = board_.template find<ROMChip>();
     }
-    irm_chip_ = board_.template chip_as<RAMChip>(1);  // IRM always at slot 1
-    cpu_     = board_.template cpu<U880>();
-    pio1_    = board_.template chip_as<z80_pio_t>(Traits::kPio1Slot);
-    pio2_    = board_.template chip_as<z80_pio_t>(Traits::kPio2Slot);
-    ctc_     = board_.template chip_as<z80_ctc_t>(Traits::kCtcSlot);
-    modules_ = board_.template chip_as<kc85_module_system_t>(Traits::kModulesSlot);
+    caos_rom_chip_ = board_.template find_last<ROMChip>();
+    irm_chip_  = board_.template find<RAMChip>(1);
+    cpu_       = board_.template cpu<U880>();
+    pio1_      = board_.template find<z80_pio_t>();
+    pio2_      = board_.template find<z80_pio_t>(1);
+    ctc_       = board_.template find<z80_ctc_t>();
+    modules_   = board_.template find<kc85_module_system_t>();
 
     // ── KC85/2,3: fill RAM and IRM with pseudo-random noise ─────────────
     // Real hardware powers up with random bit patterns in DRAM.  KC85/4 RAM
     // is cleared to zero by firmware, so only /2 and /3 get the noise fill.
     if constexpr (!Traits::has_extended_video) {
-        auto* ram = board_.template chip_as<RAMChip>(0);
+        auto* ram = board_.template find<RAMChip>();
         auto xorshift32 = [](uint32_t x) -> uint32_t {
             x ^= x << 13; x ^= x >> 17; x ^= x << 5; return x;
         };
@@ -401,7 +401,7 @@ template<KC85Variant V>
 void KC85System<V>::handle_keyboard() {
     if (!cpu_ || !cpu_->iff1()) return;
 
-    RAMChip* ram = board_.template chip_as<RAMChip>(0);  // RAM at slot 0
+    RAMChip* ram = board_.template find<RAMChip>();
     if (!ram) return;
     uint8_t* mem = ram->data();
     const uint32_t ram_size = Traits::ram_size;
@@ -481,7 +481,7 @@ void KC85System<V>::build_reverse_ktab() {
     if (!cpu_ || !cpu_->iff1()) return;
 
     // Read KTAB pointer from CAOS OS variables (IX+$0E, IX+$0F)
-    RAMChip* ram = board_.template chip_as<RAMChip>(0);
+    RAMChip* ram = board_.template find<RAMChip>();
     if (!ram) return;
     uint8_t* mem = ram->data();
     const uint32_t ram_size = Traits::ram_size;
