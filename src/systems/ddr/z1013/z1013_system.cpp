@@ -78,16 +78,16 @@ bool Z1013System<V>::initialize() {
     board_.apply(bus_);
 
     // Retain pointers for post-init access (rendering, ROM loading)
-    video_ram_chip_   = board_.template chip_as<RAMChip>(Traits::kVideoRamSlot);
-    monitor_rom_chip_ = board_.template chip_as<ROMChip>(Traits::kMonitorRomSlot);
+    video_ram_chip_   = board_.template find_last<RAMChip>();
+    monitor_rom_chip_ = board_.template find_last<ROMChip>();
     if constexpr (Traits::has_basic_rom) {
-        basic_rom_lo_chip_ = board_.template chip_as<ROMChip>(Traits::kBasicRomLoSlot);
-        basic_rom_hi_chip_ = board_.template chip_as<ROMChip>(Traits::kBasicRomHiSlot);
+        basic_rom_lo_chip_ = board_.template find<ROMChip>();
+        basic_rom_hi_chip_ = board_.template find<ROMChip>(1);
     }
 
     // ── Init chips ──────────────────────────────────────────────────────
     cpu_ = board_.template cpu<U880>();
-    pio_ = board_.template chip_as<z80_pio_t>(Traits::kPioSlot);
+    pio_ = board_.template find<z80_pio_t>();
     pins_ = board_.cpu_chip()->init();
     pio_->init();
 

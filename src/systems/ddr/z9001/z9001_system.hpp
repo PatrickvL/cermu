@@ -35,12 +35,6 @@ template<> struct Z9001VariantTraits<Z9001Variant::Z9001> {
     static constexpr uint32_t    ram_size        = z9001_constants::RAM_SIZE_Z9001;
     static constexpr bool        has_color_ram   = false;
     static constexpr bool        has_basic_rom   = false;
-    // Slot indices into kZ9001Chips
-    static constexpr size_t kVideoRamSlot        = 1;
-    static constexpr size_t kOsRomSlot           = 2;
-    static constexpr size_t kPio1Slot            = 4;
-    static constexpr size_t kPio2Slot            = 5;
-    static constexpr size_t kCtcSlot             = 6;
 };
 
 template<> struct Z9001VariantTraits<Z9001Variant::KC87> {
@@ -50,15 +44,6 @@ template<> struct Z9001VariantTraits<Z9001Variant::KC87> {
     static constexpr uint32_t    ram_size        = z9001_constants::RAM_SIZE_KC87;
     static constexpr bool        has_color_ram   = true;
     static constexpr bool        has_basic_rom   = true;
-    // Slot indices into kKC87Chips
-    static constexpr size_t kBasicRomLoSlot      = 1;
-    static constexpr size_t kBasicRomHiSlot      = 2;
-    static constexpr size_t kColorRamSlot        = 3;
-    static constexpr size_t kVideoRamSlot        = 4;
-    static constexpr size_t kOsRomSlot           = 5;
-    static constexpr size_t kPio1Slot            = 7;
-    static constexpr size_t kPio2Slot            = 8;
-    static constexpr size_t kCtcSlot             = 9;
 };
 
 // ============================================================================

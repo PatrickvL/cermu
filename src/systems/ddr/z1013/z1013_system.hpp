@@ -32,10 +32,6 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_01> {
     static constexpr const char* description     = "Robotron Z1013.01 — U880 @ 2MHz, 16KB RAM, 32×32 text (1985)";
     static constexpr uint32_t    ram_size        = z1013_constants::RAM_SIZE_16K;
     static constexpr bool        has_basic_rom   = false;
-    // Slot indices into kZ1013_16K_Chips
-    static constexpr size_t kVideoRamSlot   = 1;
-    static constexpr size_t kMonitorRomSlot = 2;
-    static constexpr size_t kPioSlot        = 4;
 };
 
 template<> struct Z1013VariantTraits<Z1013Variant::Z1013_16> {
@@ -44,9 +40,6 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_16> {
     static constexpr const char* description     = "Robotron Z1013.16 — U880 @ 2MHz, 16KB RAM, membrane keyboard (1987)";
     static constexpr uint32_t    ram_size        = z1013_constants::RAM_SIZE_16K;
     static constexpr bool        has_basic_rom   = false;
-    static constexpr size_t kVideoRamSlot   = 1;
-    static constexpr size_t kMonitorRomSlot = 2;
-    static constexpr size_t kPioSlot        = 4;
 };
 
 template<> struct Z1013VariantTraits<Z1013Variant::Z1013_64> {
@@ -55,11 +48,6 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_64> {
     static constexpr const char* description     = "Robotron Z1013.64 — U880 @ 2MHz, 64KB RAM, ROM BASIC (1988)";
     static constexpr uint32_t    ram_size        = z1013_constants::RAM_SIZE_64K;
     static constexpr bool        has_basic_rom   = true;
-    static constexpr size_t kBasicRomLoSlot = 1;
-    static constexpr size_t kBasicRomHiSlot = 2;
-    static constexpr size_t kVideoRamSlot   = 3;
-    static constexpr size_t kMonitorRomSlot = 4;
-    static constexpr size_t kPioSlot        = 6;
 };
 
 // ============================================================================

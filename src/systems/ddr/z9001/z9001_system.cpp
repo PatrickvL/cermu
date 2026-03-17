@@ -70,19 +70,19 @@ bool Z9001System<V>::initialize() {
     board_.apply(bus_);
 
     // Retrieve typed pointers for chips accessed after initialize()
-    video_ram_chip_ = board_.template chip_as<RAMChip>(Traits::kVideoRamSlot);
-    os_rom_chip_    = board_.template chip_as<ROMChip>(Traits::kOsRomSlot);
+    video_ram_chip_ = board_.template find_last<RAMChip>();
+    os_rom_chip_    = board_.template find_last<ROMChip>();
     if constexpr (Traits::has_basic_rom) {
-        basic_rom_lo_chip_ = board_.template chip_as<ROMChip>(Traits::kBasicRomLoSlot);
-        basic_rom_hi_chip_ = board_.template chip_as<ROMChip>(Traits::kBasicRomHiSlot);
+        basic_rom_lo_chip_ = board_.template find<ROMChip>();
+        basic_rom_hi_chip_ = board_.template find<ROMChip>(1);
     }
     if constexpr (Traits::has_color_ram) {
-        color_ram_chip_ = board_.template chip_as<RAMChip>(Traits::kColorRamSlot);
+        color_ram_chip_ = board_.template find<RAMChip>(1);
     }
     cpu_ = board_.template cpu<U880>();
-    pio1_ = board_.template chip_as<z80_pio_t>(Traits::kPio1Slot);
-    pio2_ = board_.template chip_as<z80_pio_t>(Traits::kPio2Slot);
-    ctc_  = board_.template chip_as<z80_ctc_t>(Traits::kCtcSlot);
+    pio1_ = board_.template find<z80_pio_t>();
+    pio2_ = board_.template find<z80_pio_t>(1);
+    ctc_  = board_.template find<z80_ctc_t>();
 
     // ── Trim RAM pages for KC87 (48 KB out of 64 KB allocated) ──────────
     configure_bus_memory_map();
