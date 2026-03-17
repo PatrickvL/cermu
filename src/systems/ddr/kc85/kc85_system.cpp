@@ -689,7 +689,8 @@ void KC85System<V>::render_frame() {
             for (int col = 0; col < kc85_constants::KC4_PIXEL_COLS; col++) {
                 uint8_t pixels = pixel_base[col * 256 + y];
                 uint8_t color  = color_base[col * 256 + y];
-                uint8_t bg = color & 0x07;              // bits 0-2: background (8 colors)
+                uint8_t bg_raw = color & 0x07;              // bits 0-2: background (8 colors)
+                uint8_t bg = bg_raw + kc85_constants::BG_COLOR_OFFSET;
                 uint8_t fg = (blink_bg && (color & 0x80)) ? bg : ((color >> 3) & 0x0F);
                 int x = col * 8;
                 for (int bit = 7; bit >= 0; --bit) {
@@ -711,7 +712,8 @@ void KC85System<V>::render_frame() {
                 int color_offset = x | (((y >> 2) & 0x3F) << 5);
                 uint8_t pixels = irm[pixel_offset];
                 uint8_t color  = irm[0x2800 + color_offset];
-                uint8_t bg = color & 0x07;
+                uint8_t bg_raw = color & 0x07;
+                uint8_t bg = bg_raw + kc85_constants::BG_COLOR_OFFSET;
                 uint8_t fg = (blink_bg && (color & 0x80)) ? bg : ((color >> 3) & 0x0F);
                 int px = x * 8;
                 for (int bit = 7; bit >= 0; --bit) {
@@ -732,7 +734,8 @@ void KC85System<V>::render_frame() {
                                      | (((y >> 6) & 0x3) << 7));
                 uint8_t pixels = irm[pixel_offset];
                 uint8_t color  = irm[0x2800 + color_offset];
-                uint8_t bg = color & 0x07;
+                uint8_t bg_raw = color & 0x07;
+                uint8_t bg = bg_raw + kc85_constants::BG_COLOR_OFFSET;
                 uint8_t fg = (blink_bg && (color & 0x80)) ? bg : ((color >> 3) & 0x0F);
                 int px = x * 8;
                 for (int bit = 7; bit >= 0; --bit) {

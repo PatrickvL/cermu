@@ -34,7 +34,9 @@ inline constexpr uint16_t BASIC_ROM_SIZE       = 0x2000;    // 8 KB BASIC ROM
 // ── Video ───────────────────────────────────────────────────────────────
 inline constexpr int FB_WIDTH                  = 320;
 inline constexpr int FB_HEIGHT                 = 256;
-inline constexpr int COLOR_COUNT               = 16;
+inline constexpr int COLOR_COUNT               = 24;      // 16 fg + 8 bg
+inline constexpr int FG_COLOR_COUNT             = 16;
+inline constexpr int BG_COLOR_OFFSET            = 16;      // bg index = raw_bg + 16
 inline constexpr int SCANLINES_PER_FRAME       = 312;       // PAL 312 lines
 inline constexpr int KC23_H_TICKS              = 112;       // CPU ticks per scanline (KC85/2,3)
 inline constexpr int KC4_H_TICKS               = 113;       // CPU ticks per scanline (KC85/4)
@@ -47,25 +49,38 @@ inline constexpr int KC23_COLOR_OFFSET          = 0x2800; // Color RAM starts at
 inline constexpr int KC23_COLOR_CELL_H          = 4;     // Color cell height (pixels)
 inline constexpr int KC23_BORDER_X              = 32;    // Left border in 320-px framebuffer
 
-// KC85 16-color palette (ABGR format)
-// Color encoding: bit 0=blue, bit 1=red, bit 2=green, bit 3=brightness
-inline constexpr uint32_t PALETTE[16] = {
+// KC85 palette (ABGR format), 16 foreground + 8 background entries.
+// Foreground colors 0-7 are full intensity (0xFF per channel),
+// colors 8-15 are mixed hues.  Background colors use 0xA0 for the dim level.
+// This matches the floooh/kc85.zig reference palette.
+inline constexpr uint32_t PALETTE[24] = {
+    // Foreground 0-7 (base colors, full intensity)
     0xFF000000,  //  0: black
-    0xFFD00000,  //  1: blue
-    0xFF0000D0,  //  2: red
-    0xFFD000D0,  //  3: magenta
-    0xFF00D000,  //  4: green
-    0xFFD0D000,  //  5: cyan
-    0xFF00D0D0,  //  6: yellow
-    0xFFD0D0D0,  //  7: white
-    0xFF000000,  //  8: black (bright)
-    0xFFFF0000,  //  9: bright blue
-    0xFF0000FF,  // 10: bright red
-    0xFFFF00FF,  // 11: bright magenta
-    0xFF00FF00,  // 12: bright green
-    0xFFFFFF00,  // 13: bright cyan
-    0xFF00FFFF,  // 14: bright yellow
-    0xFFFFFFFF,  // 15: bright white
+    0xFFFF0000,  //  1: blue
+    0xFF0000FF,  //  2: red
+    0xFFFF00FF,  //  3: magenta
+    0xFF00FF00,  //  4: green
+    0xFFFFFF00,  //  5: cyan
+    0xFF00FFFF,  //  6: yellow
+    0xFFFFFFFF,  //  7: white
+    // Foreground 8-15 (intensity/hue variants)
+    0xFF000000,  //  8: black #2
+    0xFFFF00A0,  //  9: violet
+    0xFF00A0FF,  // 10: orange
+    0xFFA000FF,  // 11: purple
+    0xFFA0FF00,  // 12: bluish green
+    0xFFFFA000,  // 13: greenish blue
+    0xFF00FFA0,  // 14: yellow-green
+    0xFFFFFFFF,  // 15: white #2
+    // Background 0-7 (dimmed, 0xA0 per channel)
+    0xFF000000,  // 16: black
+    0xFFA00000,  // 17: dark blue
+    0xFF0000A0,  // 18: dark red
+    0xFFA000A0,  // 19: dark magenta
+    0xFF00A000,  // 20: dark green
+    0xFFA0A000,  // 21: dark cyan
+    0xFF00A0A0,  // 22: dark yellow
+    0xFFA0A0A0,  // 23: gray
 };
 
 // ── I/O ports ───────────────────────────────────────────────────────────
