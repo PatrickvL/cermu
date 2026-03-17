@@ -532,7 +532,7 @@ if(BUILD_GUI)
         src/chip/io/i8255_gui.cpp
         src/chip/io/z80_pio_gui.cpp
         src/chip/io/z80_ctc_gui.cpp
-        src/chip/sound/ay_3_8910_gui.cpp
+        src/chip/sound/ay_psg/ay_psg_gui.cpp
         src/chip/sound/sn76489/sn76489_gui.cpp
         src/chip/video/spectrum_ula/ferranti_ula_gui.cpp
         src/chip/video/mc6847/mc6847_gui.cpp
@@ -575,7 +575,7 @@ set(GUI_STUB_SOURCES
     src/chip/io/i8255_gui.cpp
     src/chip/io/z80_pio_gui.cpp
     src/chip/io/z80_ctc_gui.cpp
-    src/chip/sound/ay_3_8910_gui.cpp
+    src/chip/sound/ay_psg/ay_psg_gui.cpp
     src/chip/sound/sn76489/sn76489_gui.cpp
     src/chip/video/spectrum_ula/ferranti_ula_gui.cpp
     src/chip/video/mc6847/mc6847_gui.cpp

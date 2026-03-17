@@ -10,7 +10,9 @@
 #include "core/chip_registry.hpp"
 
 #include "chip/sound/sn76489/sn76489.hpp"
-#include "chip/sound/ay_3_8910.hpp"
+#include "chip/sound/ay_psg/ay_3_8910.hpp"
+#include "chip/sound/ay_psg/ay_3_8912.hpp"
 
 REGISTER_CHIP_TYPE("SN76489", sn76489_t)
-REGISTER_CHIP_TYPE("AY-3-8910", ay_3_8910_t)
+REGISTER_CHIP_TYPE("AY-3-8910", AY_3_8910)
+REGISTER_CHIP_TYPE("AY-3-8912", AY_3_8912)

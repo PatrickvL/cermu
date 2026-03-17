@@ -25,7 +25,7 @@
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/video/mc6845/mc6845.hpp"
 #include "chip/io/i8255.hpp"
-#include "chip/sound/ay_3_8910.hpp"
+#include "chip/sound/ay_psg/ay_3_8912.hpp"
 #include "chip/memory/memory_chip.hpp"
 #include "chip/video/amstrad_gate_array/amstrad_gate_array.hpp"
 #include "core/audio_thread.hpp"
@@ -105,7 +105,7 @@ inline constexpr auto kCPC464Chips = make_chip_manifest(
     Slot<ZilogZ80A>           {0, 0, 0, "Z80A"},
     Slot<mc6845_t>            {0, 0, 0, "MC6845 CRTC"},
     Slot<i8255_t>             {0, 0, 0, "8255 PPI"},
-    Slot<ay_3_8910_t>         {0, 0, 0, "AY-3-8912 PSG"},
+    Slot<AY_3_8912>           {0, 0, 0, "AY-3-8912 PSG"},
     Slot<amstrad_gate_array_t>{0, 0, 0, "Gate Array"}
 );
 
@@ -117,7 +117,7 @@ inline constexpr auto kCPC6128Chips = make_chip_manifest(
     Slot<ZilogZ80A>           {0, 0, 0, "Z80A"},
     Slot<mc6845_t>            {0, 0, 0, "MC6845 CRTC"},
     Slot<i8255_t>             {0, 0, 0, "8255 PPI"},
-    Slot<ay_3_8910_t>         {0, 0, 0, "AY-3-8912 PSG"},
+    Slot<AY_3_8912>           {0, 0, 0, "AY-3-8912 PSG"},
     Slot<amstrad_gate_array_t>{0, 0, 0, "Gate Array"}
 );
 
@@ -185,7 +185,7 @@ private:
     ZilogZ80A*              cpu_ = nullptr;   // Z80A CPU — owned by board_
     mc6845_t                crtc_;        // MC6845 CRTC — pre-bound into board_
     i8255_t                 ppi_;         // Intel 8255 PPI — pre-bound into board_
-    ay_3_8910_t             ay_;          // AY-3-8912 PSG — pre-bound into board_
+    AY_3_8912               ay_;          // AY-3-8912 PSG — pre-bound into board_
     amstrad_gate_array_t    gate_array_;  // Amstrad custom gate array
 
     // ========================================================================
@@ -223,7 +223,7 @@ private:
 
     // ── Audio thread — AY synthesis runs off the emu thread ─────────────
     AudioThread audio_thread_;
-    std::unique_ptr<WriteOnlySynthAdapter<ay_3_8910_t, true>> ay_adapter_;
+    std::unique_ptr<WriteOnlySynthAdapter<AY_3_8912, true>> ay_adapter_;
     uint8_t ay_latch_ = 0;              // Cached latched register (emu thread)
 
     // ========================================================================

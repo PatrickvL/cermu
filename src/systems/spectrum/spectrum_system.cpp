@@ -156,7 +156,6 @@ static SystemDescriptor spectrum128k_descriptor = {
 template<SpectrumVariant V>
 SpectrumSystem<V>::SpectrumSystem()
     : System()
-    , ay_(Traits::has_ay_sound ? AYVariant::AY_3_8912 : AYVariant::AY_3_8910)
     , pins_(SPECTRUM_BUS_DEFAULT_STATE)
 {
     hardware_traits_ = create_spectrum_hardware_traits<V>();
@@ -209,7 +208,7 @@ bool SpectrumSystem<V>::initialize() {
 
     // ── Pre-bind stack-member chips, then factory-create all chips ─────
     board_.bind_chip(board_.template find_index<ferranti_ula_t>(), &ula_);
-    board_.bind_chip(board_.template find_index<ay_3_8910_t>(),  &ay_);
+    board_.bind_chip(board_.template find_index<AY_3_8912>(),  &ay_);
     board_.create_chips(&pins_);
     board_.apply(bus_);
 
