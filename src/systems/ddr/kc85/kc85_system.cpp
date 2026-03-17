@@ -119,6 +119,9 @@ bool KC85System<V>::initialize() {
     modules_->init();
 
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
+    kbd_encoder_.reset();
+    ktab_valid_ = false;
+    std::memset(reverse_ktab_, 0xFF, sizeof(reverse_ktab_));
 
     load_roms();
 
@@ -150,6 +153,8 @@ template<KC85Variant V> void KC85System<V>::reset() {
     basic_rom_on_ = false;
     irm_enabled_ = true;
     active_plane_ = 0;
+    kbd_encoder_.reset();
+    ktab_valid_ = false;
     configure_bus_memory_map();
 }
 
@@ -263,6 +268,19 @@ void KC85System<V>::tick() {
     if (ctc_->check_zero_count(2)) {
         blink_flag_ = !blink_flag_;
     }
+
+    // In SERIAL_PIO mode, tick the keyboard encoder and trigger PIO-B
+    // strobe on each pulse (which fires the PIO-B interrupt).
+    if (kbd_mode_ == KC85KeyboardMode::SERIAL_PIO) {
+        if (kbd_encoder_.tick()) {
+            // Pulse from U807 → PIO Port B strobe (BSTB)
+            // This triggers the PIO-B interrupt service routine at $E199
+            // which reads CTC3 to measure the interval between pulses.
+            pio1_->strobe(1, true);
+            pio1_->strobe(1, false);
+        }
+    }
+
     total_cycles_++;
 }
 
@@ -350,6 +368,72 @@ void KC85System<V>::handle_keyboard() {
             w8(addr_repeat, 0);
         }
     }
+}
+
+// ============================================================================
+// KEYBOARD — Reverse KTAB lookup (for SERIAL_PIO mode)
+// ============================================================================
+//
+// The CAOS ROM contains a KTAB (key table) that maps scancodes to keycodes
+// (ASCII). For SERIAL_PIO mode, we need the reverse mapping: given a
+// keycode (what the host user typed), find the scancode that KTAB maps to
+// that keycode, so the keyboard encoder can serialize it.
+//
+// KTAB address is stored in RAM at IX+$0E (low byte), IX+$0F (high byte).
+// The table has ~128 entries (one per possible scancode).
+
+template<KC85Variant V>
+void KC85System<V>::build_reverse_ktab() {
+    std::memset(reverse_ktab_, 0xFF, sizeof(reverse_ktab_));
+
+    if (!cpu_ || !cpu_->iff1()) return;
+
+    // Read KTAB pointer from CAOS OS variables (IX+$0E, IX+$0F)
+    RAMChip* ram = board_.template chip_as<RAMChip>(0);
+    if (!ram) return;
+    uint8_t* mem = ram->data();
+    const uint32_t ram_size = Traits::ram_size;
+
+    auto r8 = [&](uint16_t addr) -> uint8_t {
+        return (addr < ram_size) ? mem[addr] : 0xFF;
+    };
+
+    const uint16_t ix = cpu_->ix();
+    uint16_t ktab_addr = r8(ix + 0x0E) | (static_cast<uint16_t>(r8(ix + 0x0F)) << 8);
+
+    if (ktab_addr == 0 || ktab_addr == 0xFFFF) return;
+
+    // Read KTAB from ROM/RAM — need to use direct chip reads since KTAB
+    // is typically in CAOS ROM space
+    ROMChip* caos = caos_rom_chip_;
+    if (!caos) return;
+
+    // KTAB is typically at an address in the E000-FFFF ROM range
+    // Read up to 128 scancodes (8×8 matrix = 64, but with caps-lock variants = 128)
+    for (uint16_t scancode = 0; scancode < 128; ++scancode) {
+        uint16_t addr = ktab_addr + scancode;
+        uint8_t keycode = 0xFF;
+
+        // Try to read from the memory bus (handles banking correctly)
+        // For ROM addresses (E000+), read from CAOS ROM directly
+        if (addr >= 0xE000 && caos) {
+            uint16_t rom_offset = addr - 0xE000;
+            if (rom_offset < caos->size_bytes()) {
+                keycode = caos->data()[rom_offset];
+            }
+        } else if (addr < ram_size) {
+            keycode = mem[addr];
+        }
+
+        // Build reverse mapping: first scancode wins for each keycode
+        if (keycode != 0 && keycode != 0xFF && reverse_ktab_[keycode] == 0xFF) {
+            reverse_ktab_[keycode] = static_cast<uint8_t>(scancode);
+        }
+    }
+
+    ktab_valid_ = true;
+    printf("%s: Built reverse KTAB (keycode→scancode) from CAOS at $%04X\n",
+           Traits::name, ktab_addr);
 }
 
 template<KC85Variant V> bool KC85System<V>::load_file(const char*) { return false; }
@@ -442,16 +526,32 @@ void KC85System<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
         cur_key_code_ = kc85_key;
         // Hold key for ~2 frames to give CAOS time to sample it
         key_sticky_count_ = 2 * kc85_constants::TSTATES_PER_FRAME;
+
+        // SERIAL_PIO mode: convert keycode to scancode via reverse KTAB,
+        // then set the keyboard encoder matrix position so the encoder
+        // transmits the scancode as timed serial pulses to PIO-B.
+        if (kbd_mode_ == KC85KeyboardMode::SERIAL_PIO) {
+            if (!ktab_valid_) build_reverse_ktab();
+            uint8_t scancode = reverse_ktab_[kc85_key];
+            if (scancode != 0xFF) {
+                kbd_encoder_.clear_all_keys();
+                kbd_encoder_.set_key_by_scancode(scancode, true);
+            }
+        }
     } else if (!pressed) {
         cur_key_code_ = 0;
         key_sticky_count_ = 0;
+
+        if (kbd_mode_ == KC85KeyboardMode::SERIAL_PIO) {
+            kbd_encoder_.clear_all_keys();
+        }
     }
 }
 template<KC85Variant V> void KC85System<V>::render_system_menu_items() {}
 template<KC85Variant V> void KC85System<V>::render_configuration_ui() {
 #ifdef CERMU_HAS_GUI
     ImGui::Text("Keyboard Emulation:");
-    static const char* kbd_names[] = { "Memory inject (fast)", "Serial PIO (accurate, TODO)" };
+    static const char* kbd_names[] = { "Memory inject (fast)", "Serial PIO (accurate)" };
     int selected = (kbd_mode_ == KC85KeyboardMode::SERIAL_PIO) ? 1 : 0;
     if (ImGui::Combo("##kbd_mode", &selected, kbd_names, 2)) {
         SystemConfiguration new_config = config_;
@@ -569,9 +669,14 @@ void KC85System<V>::render_frame() {
 template<KC85Variant V>
 bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
     // Interrupt acknowledge: IORQ + M1
+    // Priority: CTC > PIO (CTC is highest priority in KC85 daisy chain)
     if (!BUS_GET_BIT(pins, Z80_M1_BIT)) {
         if (ctc_->interrupt_pending()) {
             BUS_SET_DATA(pins, ctc_->interrupt_vector());
+        } else if (pio1_->any_interrupt_pending()) {
+            int pi = pio1_->highest_priority_port();
+            BUS_SET_DATA(pins, pio1_->interrupt_vector(pi));
+            pio1_->acknowledge_interrupt(pi);
         } else {
             BUS_SET_DATA(pins, 0xFF);
         }

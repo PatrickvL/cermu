@@ -93,6 +93,8 @@ public:
             port_[i].int_pending = false;
             port_[i].ready = false;
             port_[i].strobe = false;
+            port_[i].expect_io_select = false;
+            port_[i].expect_int_mask = false;
         }
         update_regs();
     }
@@ -120,11 +122,64 @@ public:
     }
 
     /// Write to port control register.
+    /// Decodes the Z80 PIO control word state machine:
+    ///   - Interrupt vector:    bit 0 = 0
+    ///   - Mode set:            lower nibble = 0x0F, bits 6-7 = mode
+    ///   - Interrupt control:   lower nibble = 0x07
+    ///   - I/O select mask:     follows mode 3 set
+    ///   - Interrupt mask:      follows int control with mask-follows bit
     void write_control(int port_idx, uint8_t data) {
-        // TODO: Decode control word sequences (mode set, interrupt control,
-        //       I/O select mask for mode 3, interrupt mask)
-        (void)port_idx;
-        (void)data;
+        auto& p = port_[port_idx & 1];
+
+        // Pending state: expecting I/O direction mask or interrupt mask
+        if (p.expect_io_select) {
+            p.io_select = data;  // 1 = input, 0 = output
+            p.expect_io_select = false;
+            update_regs();
+            return;
+        }
+        if (p.expect_int_mask) {
+            p.int_mask = data;  // 1 = monitored, 0 = ignored
+            p.expect_int_mask = false;
+            update_regs();
+            return;
+        }
+
+        // Interrupt vector: bit 0 = 0
+        if ((data & 0x01) == 0) {
+            p.int_vector = data & 0xFE;
+            update_regs();
+            return;
+        }
+
+        // Mode control word: lower nibble = 0x0F
+        if ((data & 0x0F) == 0x0F) {
+            p.mode = static_cast<PIOMode>((data >> 6) & 0x03);
+            if (p.mode == PIOMode::BIT_CONTROL) {
+                p.expect_io_select = true;  // Next byte is I/O direction mask
+            }
+            update_regs();
+            return;
+        }
+
+        // Interrupt control word: lower nibble = 0x07
+        if ((data & 0x0F) == 0x07) {
+            p.int_enabled = (data & 0x80) != 0;
+            p.int_control = data;
+            if (data & 0x10) {
+                p.expect_int_mask = true;  // Next byte is interrupt mask
+            }
+            update_regs();
+            return;
+        }
+
+        // Interrupt enable/disable: lower nibble = 0x03
+        if ((data & 0x0F) == 0x03) {
+            p.int_enabled = (data & 0x80) != 0;
+            update_regs();
+            return;
+        }
+
         update_regs();
     }
 
@@ -138,9 +193,41 @@ public:
         return port_[port_idx & 1].output;
     }
 
-    /// Strobe signal (active-low) — triggers data transfer/interrupt.
+    /// Strobe signal — triggers data transfer/interrupt.
+    /// On rising edge of strobe with interrupts enabled, sets int_pending.
     void strobe(int port_idx, bool active) {
-        port_[port_idx & 1].strobe = active;
+        auto& p = port_[port_idx & 1];
+        // Rising edge detection: trigger interrupt on transition to active
+        if (active && !p.strobe && p.int_enabled) {
+            p.int_pending = true;
+        }
+        p.strobe = active;
+    }
+
+    /// Acknowledge interrupt for the given port (called after CPU services it).
+    void acknowledge_interrupt(int port_idx) {
+        port_[port_idx & 1].int_pending = false;
+    }
+
+    /// Check if any port has a pending interrupt.
+    bool any_interrupt_pending() const {
+        return port_[0].int_pending || port_[1].int_pending;
+    }
+
+    /// Get interrupt vector for highest-priority pending port.
+    /// Port A has higher priority than Port B.
+    uint8_t highest_priority_vector() const {
+        if (port_[0].int_pending) return port_[0].int_vector;
+        if (port_[1].int_pending) return port_[1].int_vector;
+        return 0xFF;
+    }
+
+    /// Get the port index that has the highest-priority pending interrupt.
+    /// Returns -1 if none.
+    int highest_priority_port() const {
+        if (port_[0].int_pending) return 0;
+        if (port_[1].int_pending) return 1;
+        return -1;
     }
 
     // === Interrupt daisy chain ===
@@ -173,6 +260,8 @@ private:
         bool     int_pending = false;
         bool     ready = false;
         bool     strobe = false;
+        bool     expect_io_select = false;  // Next control write is I/O direction mask
+        bool     expect_int_mask = false;   // Next control write is interrupt mask
     };
 
     Port port_[2]{};

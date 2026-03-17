@@ -19,6 +19,7 @@
 #include "chip/io/z80_pio.hpp"
 #include "chip/io/z80_ctc.hpp"
 #include "chip/io/kc85_module_system.hpp"
+#include "chip/input/keyboard_encoder.hpp"
 #include "chip/memory/memory_chip.hpp"
 #include <cstdint>
 #include <vector>
@@ -237,6 +238,11 @@ private:
     uint8_t cur_key_code_   = 0;     // Most recently pressed KC85 key code
     uint32_t key_sticky_count_ = 0;  // Frames remaining for key "hold"
     KC85KeyboardMode kbd_mode_ = KC85KeyboardMode::MEMORY_INJECT;
+    KeyboardEncoder kbd_encoder_;    // U807 serial keyboard encoder (SERIAL_PIO mode)
+
+    // Reverse KTAB: keycode → scancode lookup (built from CAOS ROM at runtime)
+    uint8_t reverse_ktab_[256] = {};
+    bool    ktab_valid_ = false;
 
     // ── Banking state ────────────────────────────────────────────────────
     uint8_t bank_ctrl_     = 0;      // Port $84 value (KC85/4 only)
@@ -262,6 +268,7 @@ private:
     bool        load_roms();
     void        render_frame();               // Decode IRM into indexed framebuffer
     void        handle_keyboard();            // Patch keycode into CAOS via IX register
+    void        build_reverse_ktab();         // Build keycode→scancode from CAOS KTAB
 
     // Pre-computed overlay snapshots.
     // KC85/2: 4 modes (IRM×CAOS), KC85/3: 8 modes (IRM×BASIC×CAOS),
