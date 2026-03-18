@@ -62,9 +62,9 @@ void tms9918_t<Traits>::render_sprites(int line) {
             sprites_on_line++;
             if (sprites_on_line > 4) {
                 // 5th sprite flag and number
-                status_ |= regs::STATUS_5S;
-                status_ = (status_ & ~regs::STATUS_5NUM)
-                        | (static_cast<uint8_t>(s) & regs::STATUS_5NUM);
+                status_ |= reg::STATUS_5S;
+                status_ = (status_ & ~reg::STATUS_5NUM)
+                        | (static_cast<uint8_t>(s) & reg::STATUS_5NUM);
                 break;  // Only 4 sprites per line
             }
 
@@ -127,9 +127,9 @@ void tms9918_t<Traits>::render_sprites(int line) {
         }
 
         // If fewer than 5 sprites found and no 5S flag, store last sprite checked
-        if (sprites_on_line <= 4 && !(status_ & regs::STATUS_5S)) {
+        if (sprites_on_line <= 4 && !(status_ & reg::STATUS_5S)) {
             // 5th sprite number field = number of sprites processed (or 31)
-            status_ = (status_ & ~regs::STATUS_5NUM) | (fifth_sprite_num & regs::STATUS_5NUM);
+            status_ = (status_ & ~reg::STATUS_5NUM) | (fifth_sprite_num & reg::STATUS_5NUM);
         }
 
     } else if constexpr (Traits.sprite_model == VDPSpriteModel::SEGA) {

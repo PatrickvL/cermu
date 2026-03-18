@@ -116,14 +116,14 @@ public:
 
         // Vblank IRQ: set F flag at start of vblank
         if (line_ == Traits.visible_lines && dot_ == 0) {
-            status_ |= regs::STATUS_F;
+            status_ |= reg::STATUS_F;
             if (irq_enabled()) {
                 BUS_CLR_BIT(bus, BUS_IRQ_BIT);  // Active-low IRQ
             }
         }
 
         // Clear IRQ when outside vblank (IRQ is level-triggered)
-        if (!(status_ & regs::STATUS_F) || !irq_enabled()) {
+        if (!(status_ & reg::STATUS_F) || !irq_enabled()) {
             BUS_SET_BIT(bus, BUS_IRQ_BIT);
         }
 
@@ -162,7 +162,7 @@ public:
     uint8_t  status_register() const { return status_; }
 
     uint8_t current_screen_mode() const {
-        return decode_screen_mode(regs_[regs::R0], regs_[regs::R1]);
+        return decode_screen_mode(regs_[reg::R0], regs_[reg::R1]);
     }
 
     // ====================================================================
@@ -171,46 +171,46 @@ public:
 
     uint16_t name_table_addr() const {
         return static_cast<uint16_t>(
-            BF_GET(regs_[regs::R2], 3:0) << 10);
+            BF_GET(regs_[reg::R2], 3:0) << 10);
     }
 
     uint16_t color_table_addr() const {
-        return static_cast<uint16_t>(regs_[regs::R3] << 6);
+        return static_cast<uint16_t>(regs_[reg::R3] << 6);
     }
 
     uint16_t pattern_gen_addr() const {
         return static_cast<uint16_t>(
-            BF_GET(regs_[regs::R4], 2:0) << 11);
+            BF_GET(regs_[reg::R4], 2:0) << 11);
     }
 
     uint16_t sprite_attr_addr() const {
         return static_cast<uint16_t>(
-            BF_GET(regs_[regs::R5], 6:0) << 7);
+            BF_GET(regs_[reg::R5], 6:0) << 7);
     }
 
     uint16_t sprite_pattern_addr() const {
         return static_cast<uint16_t>(
-            BF_GET(regs_[regs::R6], 2:0) << 11);
+            BF_GET(regs_[reg::R6], 2:0) << 11);
     }
 
     uint8_t backdrop_color() const {
-        return BF_GET(regs_[regs::R7], 3:0);
+        return BF_GET(regs_[reg::R7], 3:0);
     }
 
     uint8_t text_color() const {
-        return BF_GET(regs_[regs::R7], 7:4);
+        return BF_GET(regs_[reg::R7], 7:4);
     }
 
     bool blank_enabled() const {
-        return BF_GET(regs_[regs::R1], 6:6) != 0;
+        return BF_GET(regs_[reg::R1], 6:6) != 0;
     }
 
     bool sprite_16x16() const {
-        return BF_GET(regs_[regs::R1], 1:1) != 0;
+        return BF_GET(regs_[reg::R1], 1:1) != 0;
     }
 
     bool sprite_magnified() const {
-        return BF_GET(regs_[regs::R1], 0:0) != 0;
+        return BF_GET(regs_[reg::R1], 0:0) != 0;
     }
 
 private:
@@ -265,7 +265,7 @@ private:
     // ====================================================================
 
     bool irq_enabled() const {
-        return BF_GET(regs_[regs::R1], 5:5) != 0;
+        return BF_GET(regs_[reg::R1], 5:5) != 0;
     }
 
     // --- VRAM data port read (port 0) ---
