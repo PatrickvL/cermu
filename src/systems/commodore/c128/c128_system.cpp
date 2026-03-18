@@ -22,8 +22,8 @@ static HardwareTraits create_c128_hardware_traits() {
     // Display — VIC-IIe 40-column (default; VDC 80-col is secondary)
     traits.display.native_width    = c128_constants::VIC_DISPLAY_WIDTH_PAL;
     traits.display.native_height   = c128_constants::VIC_DISPLAY_HEIGHT_PAL;
-    traits.display.visible_width   = 384;
-    traits.display.visible_height  = 272;
+    traits.display.visible_width   = c128_constants::VIC_DISPLAY_WIDTH_PAL;
+    traits.display.visible_height  = c128_constants::VIC_DISPLAY_HEIGHT_PAL;
     traits.display.format          = FramebufferFormat::RGBA8888;
     traits.display.palette_size    = 16;
     traits.display.has_overscan    = true;
