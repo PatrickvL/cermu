@@ -458,6 +458,71 @@ inline uint32_t alu_roxr(uint32_t val, uint8_t count, OpSize sz) {
     return val;
 }
 
+// ========================================================================
+// BCD arithmetic
+// ========================================================================
+
+/// ABCD: BCD add src + dst + X → result
+/// Updates X, C (carry), N (MSB of result), Z (sticky: only cleared, never set)
+/// V = unadjusted bit7 clear AND result bit7 set
+inline uint8_t alu_abcd(uint8_t src, uint8_t dst) {
+    uint8_t x = (get_ccr() & Flags::X) ? 1 : 0;
+    uint8_t init_z = (get_ccr() & Flags::Z) ? 1 : 0;
+
+    uint32_t low = (src & 0x0F) + (dst & 0x0F) + x;
+    uint32_t corf = (low > 9) ? 6 : 0;
+    low += corf;
+    uint32_t high = (src & 0xF0) + (dst & 0xF0) + (low & 0xF0);
+    uint8_t carry = 0;
+    if (high > 0x90) { high += 0x60; carry = 1; }
+    uint8_t result = static_cast<uint8_t>((high & 0xF0) | (low & 0x0F));
+
+    uint8_t unadj = static_cast<uint8_t>(src + dst + x);
+    uint8_t ccr = 0;
+    if (carry)                                        ccr |= Flags::X | Flags::C;
+    if (result & 0x80)                                ccr |= Flags::N;
+    if (result == 0 && init_z)                        ccr |= Flags::Z;
+    if (!(unadj & 0x80) && (result & 0x80))           ccr |= Flags::V;
+    set_ccr(ccr);
+    return result;
+}
+
+/// SBCD: BCD subtract dst - src - X → result
+/// Same flag behavior as ABCD but for subtraction
+inline uint8_t alu_sbcd(uint8_t src, uint8_t dst) {
+    uint8_t x = (get_ccr() & Flags::X) ? 1 : 0;
+    uint8_t init_z = (get_ccr() & Flags::Z) ? 1 : 0;
+
+    int32_t binary = static_cast<int32_t>(dst) - src - x;
+    uint8_t result = static_cast<uint8_t>(binary & 0xFF);
+
+    // Low nibble correction: half-borrow from original operands
+    uint8_t corf = ((dst & 0xF) < ((src & 0xF) + x)) ? 6 : 0;
+
+    // High nibble correction and carry detection
+    uint8_t carry = 0;
+    if (binary < 0) {
+        // Full borrow: apply both corrections
+        result = static_cast<uint8_t>((result - corf - 0x60) & 0xFF);
+        carry = 1;
+    } else if (result < corf) {
+        // Low correction wraps into high nibble
+        result = static_cast<uint8_t>((result - corf) & 0xFF);
+        carry = 1;
+    } else {
+        result = static_cast<uint8_t>((result - corf) & 0xFF);
+    }
+
+    uint8_t unadj = static_cast<uint8_t>((dst - src - x) & 0xFF);
+    uint8_t ccr = 0;
+    if (carry)                                        ccr |= Flags::X | Flags::C;
+    if (result & 0x80)                                ccr |= Flags::N;
+    if (result == 0 && init_z)                        ccr |= Flags::Z;
+    if ((unadj & 0x80) && !(result & 0x80))           ccr |= Flags::V;
+    set_ccr(ccr);
+    return result;
+}
+
 /// MULU: unsigned 16×16 → 32 multiply (updates N, Z; clears V, C)
 inline uint32_t alu_mulu(uint16_t src, uint16_t dst) {
     uint32_t result = static_cast<uint32_t>(src) * static_cast<uint32_t>(dst);
@@ -477,6 +542,46 @@ inline uint32_t alu_muls(int16_t src, int16_t dst) {
     if (uresult & 0x80000000)                ccr |= Flags::N;
     set_ccr(ccr);
     return uresult;
+}
+
+// ========================================================================
+// Division timing helpers
+// ========================================================================
+
+/// Compute the variable loop cost (in clocks) of the DIVU restoring division.
+/// The MC68000 performs 16 iterations of shift-and-subtract:
+///   Steps 0-14: MSB set → 4 clocks, compare+subtract → 6 clocks, no subtract → 8 clocks
+///   Step 15: always 6 clocks (fixed)
+/// Caller must ensure no overflow (dividend >> 16 < divisor).
+inline uint8_t divu_loop_cost(uint32_t dividend, uint16_t divisor) {
+    uint32_t hdivisor = static_cast<uint32_t>(divisor) << 16;
+    uint8_t cost = 0;
+
+    for (int i = 0; i < 16; i++) {
+        uint32_t msb = dividend & 0x80000000;
+        dividend <<= 1;
+
+        if (i == 15) {
+            if (msb || dividend >= hdivisor)
+                dividend -= hdivisor;
+            cost += 6;  // last step always 6
+        } else if (msb) {
+            dividend -= hdivisor;
+            cost += 4;  // MSB set: shift + forced subtract
+        } else if (dividend >= hdivisor) {
+            dividend -= hdivisor;
+            cost += 6;  // compare + subtract
+        } else {
+            cost += 8;  // compare only, no subtract
+        }
+    }
+    return cost;
+}
+
+/// Compute idle clocks for DIVU Dn form (no overflow).
+/// Total clocks = idle + 4 (prefetch).
+inline uint8_t divu_idle_clocks(uint32_t dividend, uint16_t divisor) {
+    return 6 + divu_loop_cost(dividend, divisor);
 }
 
 /// DIVU: unsigned 32÷16 → 16q:16r (updates N, Z, V, C; C always cleared)
