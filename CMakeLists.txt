@@ -464,6 +464,21 @@ set(SYSTEM_SOURCES
     # Arcade systems
     src/systems/arcade/bombjack/bombjack_system.cpp
     src/systems/arcade/namco/namco_arcade_system.cpp
+
+    # Apple II family (Apple II, IIe, IIc)
+    src/systems/apple_ii/apple_ii_system.cpp
+
+    # Commodore 128
+    src/systems/commodore/c128/c128_system.cpp
+
+    # VTech Laser / VZ series (VZ200, VZ300)
+    src/systems/vtech_vz/vtech_vz_system.cpp
+
+    # Oric (Oric-1, Oric Atmos)
+    src/systems/oric/oric_system.cpp
+
+    # BBC Micro B+ / Master 128
+    src/systems/bbc/bbc_master_system.cpp
 )
 
 # Testing sources
