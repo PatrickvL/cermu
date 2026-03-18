@@ -291,12 +291,20 @@ inline uint32_t alu_asr(uint32_t val, uint8_t count, OpSize sz) {
         ccr &= ~Flags::C;
     } else {
         bool sign = (val & msb) != 0;
-        for (uint8_t i = 0; i < count; ++i) {
-            bool carry = (val & 1) != 0;
-            val = (val >> 1) & mask;
-            if (sign) val |= msb;   // Preserve sign bit
-            if (carry) { ccr |= Flags::C | Flags::X; }
-            else       { ccr &= ~(Flags::C | Flags::X); }
+        uint8_t bits = size_bytes(sz) * 8;
+        if (count <= bits) {
+            // Normal shift — iterate count times
+            for (uint8_t i = 0; i < count; ++i) {
+                bool carry = (val & 1) != 0;
+                val = (val >> 1) & mask;
+                if (sign) val |= msb;
+                if (carry) { ccr |= Flags::C | Flags::X; }
+                else       { ccr &= ~(Flags::C | Flags::X); }
+            }
+        } else {
+            // Count > bit width: result = sign fill, C and X cleared
+            val = sign ? mask : 0;
+            ccr &= ~(Flags::C | Flags::X);
         }
     }
 
@@ -345,7 +353,6 @@ inline uint32_t alu_rol(uint32_t val, uint8_t count, OpSize sz) {
     if (count == 0) {
         ccr &= ~Flags::C;
     } else {
-        count %= bits;
         for (uint8_t i = 0; i < count; ++i) {
             bool carry = (val & msb) != 0;
             val = ((val << 1) | (carry ? 1 : 0)) & mask;
@@ -372,7 +379,6 @@ inline uint32_t alu_ror(uint32_t val, uint8_t count, OpSize sz) {
     if (count == 0) {
         ccr &= ~Flags::C;
     } else {
-        count %= bits;
         for (uint8_t i = 0; i < count; ++i) {
             bool carry = (val & 1) != 0;
             val = ((val >> 1) | (carry ? msb : 0)) & mask;
@@ -389,6 +395,68 @@ inline uint32_t alu_ror(uint32_t val, uint8_t count, OpSize sz) {
 // ========================================================================
 // Multiply / Divide
 // ========================================================================
+
+/// ROXL: rotate left through extend (X bit participates in rotation)
+inline uint32_t alu_roxl(uint32_t val, uint8_t count, OpSize sz) {
+    uint32_t mask = size_mask(sz);
+    uint32_t msb  = msb_mask(sz);
+    uint8_t bits = size_bytes(sz) * 8;
+    val &= mask;
+
+    uint8_t ccr = get_ccr();
+    bool x_bit = (ccr & Flags::X) != 0;
+    ccr &= ~Flags::V;  // V always cleared
+
+    if (count == 0) {
+        // C = X (unchanged)
+        if (x_bit) ccr |= Flags::C; else ccr &= ~Flags::C;
+    } else {
+        // Effective rotation width is bits+1 (includes X)
+        count %= (bits + 1);
+        for (uint8_t i = 0; i < count; ++i) {
+            bool carry = (val & msb) != 0;
+            val = ((val << 1) | (x_bit ? 1u : 0u)) & mask;
+            x_bit = carry;
+        }
+        if (x_bit) { ccr |= Flags::C | Flags::X; }
+        else       { ccr &= ~(Flags::C | Flags::X); }
+    }
+
+    if ((val & mask) == 0) ccr |= Flags::Z; else ccr &= ~Flags::Z;
+    if (val & msb)         ccr |= Flags::N; else ccr &= ~Flags::N;
+    set_ccr(ccr);
+    return val;
+}
+
+/// ROXR: rotate right through extend (X bit participates in rotation)
+inline uint32_t alu_roxr(uint32_t val, uint8_t count, OpSize sz) {
+    uint32_t mask = size_mask(sz);
+    uint32_t msb  = msb_mask(sz);
+    uint8_t bits = size_bytes(sz) * 8;
+    val &= mask;
+
+    uint8_t ccr = get_ccr();
+    bool x_bit = (ccr & Flags::X) != 0;
+    ccr &= ~Flags::V;
+
+    if (count == 0) {
+        if (x_bit) ccr |= Flags::C; else ccr &= ~Flags::C;
+    } else {
+        count %= (bits + 1);
+        for (uint8_t i = 0; i < count; ++i) {
+            bool carry = (val & 1) != 0;
+            val = ((val >> 1) | (x_bit ? msb : 0u)) & mask;
+            x_bit = carry;
+        }
+        if (x_bit) { ccr |= Flags::C | Flags::X; }
+        else       { ccr &= ~(Flags::C | Flags::X); }
+    }
+
+    if ((val & mask) == 0) ccr |= Flags::Z; else ccr &= ~Flags::Z;
+    if (val & msb)         ccr |= Flags::N; else ccr &= ~Flags::N;
+    set_ccr(ccr);
+    return val;
+}
 
 /// MULU: unsigned 16×16 → 32 multiply (updates N, Z; clears V, C)
 inline uint32_t alu_mulu(uint16_t src, uint16_t dst) {
