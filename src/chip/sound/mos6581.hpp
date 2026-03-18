@@ -172,9 +172,21 @@ enum waveform_bits_t {
     REG(0x1F, R1F,       "-")
 
 // --- Extract register constants ---
-namespace sid_regs {
+namespace sid {
+namespace reg {
     SID_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 }
+namespace fld {
+#define SID_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
+    inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
+    inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
+SID_DECL(DECL_REG_NOP, SID_X_FLD_NS_, DECL_CMP_NOP)
+#undef SID_X_FLD_NS_
+} // namespace fld
+} // namespace sid
+
+// Backward compatibility alias
+namespace sid_regs = sid::reg;
 
 #ifdef CERMU_HAS_CHIP_DEBUG
 DECL_EXTRACT(SID, SID_DECL)

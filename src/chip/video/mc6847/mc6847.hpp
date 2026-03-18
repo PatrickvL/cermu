@@ -76,8 +76,19 @@ namespace mc6847_const {
     inline constexpr uint8_t MODE_GM2    = 0x80;
 
     // Register constants from DECL
-    MC6847_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-    inline constexpr uint8_t REG_COUNT = 1;
+    namespace reg {
+        MC6847_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
+        inline constexpr uint8_t REG_COUNT = 1;
+    }
+    using namespace reg;
+
+    namespace fld {
+#define MC6847_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
+        inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
+        inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
+    MC6847_DECL(DECL_REG_NOP, MC6847_X_FLD_NS_, DECL_CMP_NOP)
+#undef MC6847_X_FLD_NS_
+    } // namespace fld
 
 } // namespace mc6847_const
 

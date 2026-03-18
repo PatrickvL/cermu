@@ -74,10 +74,22 @@ enum class WSGVariant : uint8_t {
       FLD(V3_WAVEVOL, V3_WAVE, 6:4, "Waveform", Value, 0, 0) \
       FLD(V3_WAVEVOL, V3_VOL,  3:0, "Volume",   Value, 0, 0)
 
-namespace wsg_regs {
+namespace wsg {
+namespace reg {
     WSG_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 0x15;
-} // namespace wsg_regs
+}
+namespace fld {
+#define WSG_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
+    inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
+    inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
+WSG_DECL(DECL_REG_NOP, WSG_X_FLD_NS_, DECL_CMP_NOP)
+#undef WSG_X_FLD_NS_
+} // namespace fld
+} // namespace wsg
+
+// Backward compatibility alias
+namespace wsg_regs = wsg::reg;
 
 DECL_EXTRACT(WSG, WSG_DECL)
 

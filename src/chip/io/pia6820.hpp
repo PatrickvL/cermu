@@ -45,6 +45,15 @@ PIA_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
 DECL_EXTRACT(PIA, PIA_DECL)
 
+// --- Bitfield accessors ---
+namespace pia { namespace fld {
+#define PIA_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
+    inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
+    inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
+PIA_DECL(DECL_REG_NOP, PIA_X_FLD_NS_, DECL_CMP_NOP)
+#undef PIA_X_FLD_NS_
+} } // namespace pia::fld
+
 struct pia6820_t : public IoChipBase {
     pia6820_t() : IoChipBase(ChipInfo{"PIA6820", "Motorola"}) {
         init_regs(PIA_NUM_REGS);

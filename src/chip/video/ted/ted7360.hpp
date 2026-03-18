@@ -99,6 +99,17 @@ class IndexedFrameBuffer;
 // --- Extract address constants ---
 TED_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
+// --- TED chip-local namespace for bitfield accessors ---
+namespace ted {
+namespace fld {
+#define TED_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
+    inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
+    inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
+TED_DECL(DECL_REG_NOP, TED_X_FLD_NS_, DECL_CMP_NOP)
+#undef TED_X_FLD_NS_
+} // namespace fld
+} // namespace ted
+
 DECL_EXTRACT(TED, TED_DECL)
 
 // Video counter / address masks

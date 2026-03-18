@@ -59,10 +59,22 @@
       FLD(SLOT7_CTRL, ACTIVE_7, 0:0, "Active",        Flag, 0, 0) \
       FLD(SLOT7_CTRL, WPROT_7,  1:1, "Write protect", Flag, 0, 0)
 
-namespace kc85_mod_regs {
+namespace kc85_mod {
+namespace reg {
     KC85_MOD_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 8;
-} // namespace kc85_mod_regs
+}
+namespace fld {
+#define KC85_MOD_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
+    inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
+    inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
+KC85_MOD_DECL(DECL_REG_NOP, KC85_MOD_X_FLD_NS_, DECL_CMP_NOP)
+#undef KC85_MOD_X_FLD_NS_
+} // namespace fld
+} // namespace kc85_mod
+
+// Backward compatibility alias
+namespace kc85_mod_regs = kc85_mod::reg;
 
 DECL_EXTRACT(KC85_MOD, KC85_MOD_DECL)
 

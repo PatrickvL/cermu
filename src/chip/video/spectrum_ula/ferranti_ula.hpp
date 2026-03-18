@@ -50,8 +50,20 @@
 namespace spectrum_ula {
 
     // Register constants from DECL
-    SPECTRUM_ULA_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-    inline constexpr uint8_t REG_COUNT = 1;
+    namespace reg {
+        SPECTRUM_ULA_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
+        inline constexpr uint8_t REG_COUNT = 1;
+    }
+    // Backward compat — bare names still accessible as spectrum_ula::PORT_FE etc.
+    using namespace reg;
+
+    namespace fld {
+#define SPECTRUM_ULA_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
+        inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
+        inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
+    SPECTRUM_ULA_DECL(DECL_REG_NOP, SPECTRUM_ULA_X_FLD_NS_, DECL_CMP_NOP)
+#undef SPECTRUM_ULA_X_FLD_NS_
+    } // namespace fld
 
     // Display dimensions
     inline constexpr int SCREEN_WIDTH      = 256;

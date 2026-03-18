@@ -66,6 +66,15 @@ VIC_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
 DECL_EXTRACT(VIC, VIC_DECL)
 
+// --- Bitfield accessors ---
+namespace vic { namespace fld {
+#define VIC_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
+    inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
+    inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
+VIC_DECL(DECL_REG_NOP, VIC_X_FLD_NS_, DECL_CMP_NOP)
+#undef VIC_X_FLD_NS_
+} } // namespace vic::fld
+
 // Control register 1 bit masks
 #define VIC_C1_INTERLACE 0x80
 #define VIC_C1_SCREEN_ORIGIN_X_MASK 0x7F
