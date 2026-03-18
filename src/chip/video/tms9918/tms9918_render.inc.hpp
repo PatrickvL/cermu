@@ -1,223 +1,434 @@
 /*
- * tms9918_render.inc.hpp — Scanline rendering for TMS9918 VDP family
+ * tms9918_render.inc.hpp — Per-dot background rendering for TMS9918 VDP family
  *
  * Included from tms9918.hpp inside the tms9918 namespace.
- * Implements all four base screen modes (Graphics I, Text, Graphics II,
- * Multicolor) with if-constexpr gates for Sega and V9938 extended modes.
+ *
+ * Per-dot-clock pipeline:
+ *   begin_scanline()   — called at dot 0 of each visible line.
+ *                        Caches per-line values, prefetches first tile.
+ *   bg_fetch_step()    — called each dot during active display (dots 0-255).
+ *                        Reads VRAM for the NEXT tile at specific sub-cycles.
+ *   emit_bg_pixel()    — called each dot during active display.
+ *                        Shifts out one pixel from the current tile data.
+ *
+ * The pipeline is 1 tile ahead: while emitting pixels from tile N,
+ * VRAM reads for tile N+1 proceed in the background. The first tile's
+ * data is prefetched during begin_scanline() so it's ready at dot 0.
  */
 
 // ============================================================================
-// SCANLINE DISPATCH
+// BEGIN SCANLINE — per-line setup + first tile prefetch
 // ============================================================================
 
 template <const VDPTraits& Traits>
-void tms9918_t<Traits>::render_scanline(int line) {
-    // Fill with backdrop first
-    std::memset(color_line_, backdrop_color(), 256);
+void tms9918_t<Traits>::begin_scanline() {
+    const uint16_t line = line_;
 
-    const uint8_t mode = current_screen_mode();
+    // Decode current screen mode from registers
+    screen_mode_ = decode_screen_mode(regs_[reg::R0], regs_[reg::R1]);
 
-    switch (mode) {
-    case ScreenMode::GRAPHIC_I:
-        render_mode0_line(line);
-        break;
+    // Cache per-line values that don't change within a scanline
+    bg_.row = static_cast<uint8_t>(line >> 3);
+    bg_.tile_row = static_cast<uint8_t>(line & 0x07);
+    bg_.nt_base = name_table_addr();
+    bg_.pg_base = pattern_gen_addr();
+    bg_.ct_base = color_table_addr();
+    bg_.column = 0;
+    bg_.pixel_in_char = 0;
+
+    // Mode-specific setup
+    switch (screen_mode_) {
     case ScreenMode::TEXT:
-        render_mode1_line(line);
+        bg_.char_width = 6;
         break;
+
     case ScreenMode::GRAPHIC_II:
-        render_mode2_line(line);
+        // Mode 2 address masking (R3/R4 control table mirroring)
+        bg_.ct_base = static_cast<uint16_t>((regs_[reg::R3] & 0x80) << 6);
+        bg_.pg_base = static_cast<uint16_t>((regs_[reg::R4] & 0x04) << 11);
+        bg_.ct_mask = static_cast<uint16_t>((regs_[reg::R3] & 0x7F) << 3 | 0x07);
+        bg_.pg_mask = static_cast<uint16_t>((regs_[reg::R4] & 0x03) << 8 | 0xFF);
+        bg_.region_offset = static_cast<uint16_t>((bg_.row / 8) * 256 * 8);
+        bg_.char_width = 8;
         break;
-    case ScreenMode::MULTICOLOR:
-        render_mode3_line(line);
+
+    default:  // GRAPHIC_I, MULTICOLOR, extended modes
+        bg_.char_width = 8;
         break;
+    }
+
+    // Clear collision tracking for this line
+    std::memset(sprite_collision_, 0, 256);
+
+    // Evaluate sprites for line 0 (subsequent lines evaluated during HBlank)
+    if (line == 0) {
+        evaluate_sprites(0);
+    }
+
+    // Prefetch first tile data so it's ready for dot 0
+    prefetch_tile(0);
+
+    // Load shift register from prefetch latches
+    load_bg_shifter();
+}
+
+// ============================================================================
+// PREFETCH TILE — read VRAM for a specific column (mode-aware)
+// ============================================================================
+
+template <const VDPTraits& Traits>
+void tms9918_t<Traits>::prefetch_tile(uint8_t col) {
+    const uint32_t mask = Traits.vram_mask();
+
+    switch (screen_mode_) {
+    case ScreenMode::GRAPHIC_I: {
+        // Name table → tile index
+        bg_.name_latch = vram_[(bg_.nt_base + bg_.row * 32 + col) & mask];
+        // Pattern generator → 8-pixel bit pattern
+        bg_.pattern_latch = vram_[(bg_.pg_base + bg_.name_latch * 8 + bg_.tile_row) & mask];
+        // Color table → one byte covers 8 consecutive patterns (tile / 8)
+        bg_.color_latch = vram_[(bg_.ct_base + (bg_.name_latch >> 3)) & mask];
+        break;
+    }
+    case ScreenMode::TEXT: {
+        // Name table → character index (40 columns)
+        bg_.name_latch = vram_[(bg_.nt_base + bg_.row * 40 + col) & mask];
+        // Pattern generator → 6-pixel bit pattern (upper 6 bits used)
+        bg_.pattern_latch = vram_[(bg_.pg_base + bg_.name_latch * 8 + bg_.tile_row) & mask];
+        // No color table — text/backdrop from R7
+        bg_.color_latch = regs_[reg::R7];
+        break;
+    }
+    case ScreenMode::GRAPHIC_II: {
+        // Name table → tile index
+        bg_.name_latch = vram_[(bg_.nt_base + bg_.row * 32 + col) & mask];
+        const uint16_t pattern_idx = static_cast<uint16_t>(bg_.name_latch * 8 + bg_.tile_row);
+        // Pattern and color with region offset + mask (3-zone address space)
+        bg_.pattern_latch = vram_[
+            (bg_.pg_base + ((pattern_idx + bg_.region_offset) & (bg_.pg_mask << 3 | 0x07)))
+            & mask];
+        bg_.color_latch = vram_[
+            (bg_.ct_base + ((pattern_idx + bg_.region_offset) & (bg_.ct_mask << 3 | 0x07)))
+            & mask];
+        break;
+    }
+    case ScreenMode::MULTICOLOR: {
+        // Name table → tile index
+        bg_.name_latch = vram_[(bg_.nt_base + bg_.row * 32 + col) & mask];
+        // Pattern byte encodes two 4-pixel color blocks
+        // Row within pattern depends on line position (4-line groups)
+        const uint8_t pattern_row = static_cast<uint8_t>(
+            ((line_ >> 2) & 0x01)
+            ? ((bg_.row & 0x03) * 2 + 1)
+            : ((bg_.row & 0x03) * 2));
+        bg_.pattern_latch = vram_[(bg_.pg_base + bg_.name_latch * 8 + pattern_row) & mask];
+        // Decode left/right colors
+        bg_.mc_left = (bg_.pattern_latch >> 4) & 0x0F;
+        bg_.mc_right = bg_.pattern_latch & 0x0F;
+        break;
+    }
     default:
-        // Extended modes: Sega mode 4 or V9938 bitmap modes
-        // (Placeholder — these will be filled in Phase 4/5)
+        // Extended modes (Sega mode 4, V9938 bitmap modes)
+        if constexpr (Traits.is_sega()) {
+            prefetch_tile_sega(col);
+        }
         break;
     }
-
-    // Sprites overlay the background in all graphic modes (not Text)
-    if (mode != ScreenMode::TEXT) {
-        render_sprites(line);
-    }
-
-    flush_scanline(line);
 }
 
 // ============================================================================
-// MODE 0 — GRAPHICS I (256×192)
+// LOAD BG SHIFTER — transfer latched data into shift register + colors
 // ============================================================================
-// 32×24 tiles from 8×8 pattern table.
-// Name table: 768 bytes (32×24 tile indices).
-// Pattern table: 2048 bytes (256 × 8 rows).
-// Color table: 32 bytes — each byte covers 8 consecutive patterns
-//   (upper nibble = foreground, lower nibble = background).
 
 template <const VDPTraits& Traits>
-void tms9918_t<Traits>::render_mode0_line(int line) {
-    const uint16_t nt_base  = name_table_addr();
-    const uint16_t ct_base  = color_table_addr();
-    const uint16_t pg_base  = pattern_gen_addr();
+void tms9918_t<Traits>::load_bg_shifter() {
+    switch (screen_mode_) {
+    case ScreenMode::GRAPHIC_I:
+    case ScreenMode::GRAPHIC_II:
+        bg_.shift_reg = bg_.pattern_latch;
+        bg_.fg_color = (bg_.color_latch >> 4) & 0x0F;
+        bg_.bg_color = bg_.color_latch & 0x0F;
+        break;
 
-    const int row = line >> 3;          // Tile row (0–23)
-    const int fine_y = line & 0x07;     // Row within tile (0–7)
+    case ScreenMode::TEXT:
+        bg_.shift_reg = bg_.pattern_latch;
+        bg_.fg_color = text_color();
+        bg_.bg_color = backdrop_color();
+        break;
 
-    for (int col = 0; col < 32; ++col) {
-        // Look up tile index from name table
-        const uint8_t tile = vram_[(nt_base + row * 32 + col) & Traits.vram_mask()];
+    case ScreenMode::MULTICOLOR:
+        // No shift register — direct color blocks
+        break;
 
-        // Fetch pattern byte (1 bit per pixel, 8 pixels)
-        const uint8_t pattern = vram_[(pg_base + tile * 8 + fine_y) & Traits.vram_mask()];
-
-        // Fetch color: one byte covers 8 patterns (tile / 8)
-        const uint8_t color = vram_[(ct_base + (tile >> 3)) & Traits.vram_mask()];
-        const uint8_t fg = (color >> 4) & 0x0F;
-        const uint8_t bg = color & 0x0F;
-
-        // Render 8 pixels
-        const int x = col * 8;
-        for (int bit = 0; bit < 8; ++bit) {
-            color_line_[x + bit] = (pattern & (0x80 >> bit)) ? fg : bg;
+    default:
+        if constexpr (Traits.is_sega()) {
+            load_bg_shifter_sega();
         }
+        break;
     }
 }
 
 // ============================================================================
-// MODE 1 — TEXT (240×192)
+// BG FETCH STEP — per-dot VRAM fetch pipeline
 // ============================================================================
-// 40×24 characters from 6×8 pattern table.
-// Name table: 960 bytes (40×24 character indices).
-// Pattern table: 2048 bytes (256 × 8 rows, only 6 bits used per row).
-// No sprites in text mode. Colors from R7 (text/backdrop).
-// 8-pixel left/right borders.
+//
+// During active display (dots 0-255), this runs each dot.
+// Pipelined: while emitting from tile N, we fetch tile N+1.
+//
+// For 8-pixel tiled modes (Graphic I/II, Multicolor):
+//   sub-cycle 0: load SR from latches + begin name fetch for next tile
+//   sub-cycle 2: fetch pattern for next tile
+//   sub-cycle 4: fetch color/pattern for next tile
+//   sub-cycle 6: (prepare for next load)
+//
+// For 6-pixel text mode:
+//   sub-cycle 0: load SR from latches + begin name fetch for next char
+//   sub-cycle 2: fetch pattern for next char
+//   sub-cycle 4: (prepare for next load)
 
 template <const VDPTraits& Traits>
-void tms9918_t<Traits>::render_mode1_line(int line) {
-    const uint16_t nt_base = name_table_addr();
-    const uint16_t pg_base = pattern_gen_addr();
+void tms9918_t<Traits>::bg_fetch_step() {
+    const uint8_t sub = bg_.pixel_in_char;
+    const uint32_t mask = Traits.vram_mask();
 
-    const uint8_t fg = text_color();
-    const uint8_t bg = backdrop_color();
+    // Text mode: 8-pixel left border (dots 0-7), no tile fetch
+    if (screen_mode_ == ScreenMode::TEXT && dot_ < 8) {
+        return;
+    }
+    // Text mode: 8-pixel right border (dots 248-255), no tile fetch
+    if (screen_mode_ == ScreenMode::TEXT && dot_ >= 248) {
+        return;
+    }
 
-    const int row = line >> 3;
-    const int fine_y = line & 0x07;
+    // Next column to pre-fetch (pipeline is 1 tile ahead)
+    const uint8_t next_col = bg_.column + 1;
+    const uint8_t max_cols = (screen_mode_ == ScreenMode::TEXT) ? 40 : 32;
 
-    // 8-pixel left border (backdrop)
-    // color_line_ is already filled with backdrop from render_scanline()
+    switch (sub) {
+    case 0:
+        // Load shift register with previously-fetched data
+        load_bg_shifter();
 
-    for (int col = 0; col < 40; ++col) {
-        const uint8_t ch = vram_[(nt_base + row * 40 + col) & Traits.vram_mask()];
-        const uint8_t pattern = vram_[(pg_base + ch * 8 + fine_y) & Traits.vram_mask()];
-
-        // 6 pixels per character, bit 7 is leftmost
-        const int x = 8 + col * 6;  // 8-pixel left border offset
-        for (int bit = 0; bit < 6; ++bit) {
-            if (x + bit < 256) {
-                color_line_[x + bit] = (pattern & (0x80 >> bit)) ? fg : bg;
+        // Begin fetching next tile (if not past last column)
+        if (next_col < max_cols) {
+            // Name table read for next tile
+            if (screen_mode_ == ScreenMode::TEXT) {
+                bg_.name_latch = vram_[(bg_.nt_base + bg_.row * 40 + next_col) & mask];
+            } else {
+                bg_.name_latch = vram_[(bg_.nt_base + bg_.row * 32 + next_col) & mask];
             }
         }
+        break;
+
+    case 2:
+        // Pattern fetch for next tile
+        if (next_col < max_cols) {
+            switch (screen_mode_) {
+            case ScreenMode::GRAPHIC_I:
+            case ScreenMode::TEXT:
+                bg_.pattern_latch = vram_[(bg_.pg_base + bg_.name_latch * 8 + bg_.tile_row) & mask];
+                break;
+            case ScreenMode::GRAPHIC_II: {
+                const uint16_t pattern_idx = static_cast<uint16_t>(bg_.name_latch * 8 + bg_.tile_row);
+                bg_.pattern_latch = vram_[
+                    (bg_.pg_base + ((pattern_idx + bg_.region_offset) & (bg_.pg_mask << 3 | 0x07)))
+                    & mask];
+                break;
+            }
+            case ScreenMode::MULTICOLOR: {
+                const uint8_t pattern_row = static_cast<uint8_t>(
+                    ((line_ >> 2) & 0x01)
+                    ? ((bg_.row & 0x03) * 2 + 1)
+                    : ((bg_.row & 0x03) * 2));
+                bg_.pattern_latch = vram_[(bg_.pg_base + bg_.name_latch * 8 + pattern_row) & mask];
+                bg_.mc_left = (bg_.pattern_latch >> 4) & 0x0F;
+                bg_.mc_right = bg_.pattern_latch & 0x0F;
+                break;
+            }
+            default:
+                break;
+            }
+        }
+        break;
+
+    case 4:
+        // Color fetch for next tile (modes that use color table)
+        if (next_col < max_cols) {
+            switch (screen_mode_) {
+            case ScreenMode::GRAPHIC_I:
+                bg_.color_latch = vram_[(bg_.ct_base + (bg_.name_latch >> 3)) & mask];
+                break;
+            case ScreenMode::GRAPHIC_II: {
+                const uint16_t pattern_idx = static_cast<uint16_t>(bg_.name_latch * 8 + bg_.tile_row);
+                bg_.color_latch = vram_[
+                    (bg_.ct_base + ((pattern_idx + bg_.region_offset) & (bg_.ct_mask << 3 | 0x07)))
+                    & mask];
+                break;
+            }
+            case ScreenMode::TEXT:
+                // Text mode: no color table, colors from R7 (already set)
+                bg_.color_latch = regs_[reg::R7];
+                break;
+            default:
+                break;
+            }
+        }
+        break;
+
+    default:
+        break;
+    }
+
+    // Advance pixel-within-character counter
+    bg_.pixel_in_char++;
+    if (bg_.pixel_in_char >= bg_.char_width) {
+        bg_.pixel_in_char = 0;
+        bg_.column++;
     }
 }
 
 // ============================================================================
-// MODE 2 — GRAPHICS II (256×192)
+// EMIT BG PIXEL — extract one pixel from shift register or color block
 // ============================================================================
-// 32×24 tiles, but pattern and color tables are divided into 3 regions
-// of 256 patterns each (top/middle/bottom third of screen).
-// Each pattern row has its own foreground/background color.
-//
-// Name table: 768 bytes.
-// Pattern table: up to 6144 bytes (3 × 256 × 8).
-// Color table: up to 6144 bytes (3 × 256 × 8, one byte per pattern row).
-//
-// R3 and R4 mask the table addresses:
-//   Color table:   (R3 & 0x80) ? base | 0x1FFF : base
-//   Pattern table: (R4 & 0x04) ? base | 0x1FFF : base
 
 template <const VDPTraits& Traits>
-void tms9918_t<Traits>::render_mode2_line(int line) {
-    const uint16_t nt_base = name_table_addr();
-    const uint16_t ct_base = static_cast<uint16_t>((regs_[reg::R3] & 0x80) << 6);
-    const uint16_t pg_base = static_cast<uint16_t>((regs_[reg::R4] & 0x04) << 11);
+uint8_t tms9918_t<Traits>::emit_bg_pixel() {
+    const uint8_t bd = backdrop_color();
 
-    const uint16_t ct_mask = static_cast<uint16_t>((regs_[reg::R3] & 0x7F) << 3 | 0x07);
-    const uint16_t pg_mask = static_cast<uint16_t>((regs_[reg::R4] & 0x03) << 8 | 0xFF);
-
-    const int row = line >> 3;
-    const int fine_y = line & 0x07;
-
-    // Third of screen (0, 1, or 2) — each has its own 256-pattern region
-    const int third = row / 8;      // 0=top (rows 0-7), 1=mid (8-15), 2=bot (16-23)
-    const uint16_t region_offset = static_cast<uint16_t>(third * 256 * 8);
-
-    for (int col = 0; col < 32; ++col) {
-        const uint8_t tile = vram_[(nt_base + row * 32 + col) & Traits.vram_mask()];
-
-        const uint16_t pattern_idx = static_cast<uint16_t>(tile * 8 + fine_y);
-
-        // Apply mask: pattern/color lookup within region
-        const uint8_t pattern = vram_[
-            (pg_base + ((pattern_idx + region_offset) & (pg_mask << 3 | 0x07)))
-            & Traits.vram_mask()];
-
-        const uint8_t color = vram_[
-            (ct_base + ((pattern_idx + region_offset) & (ct_mask << 3 | 0x07)))
-            & Traits.vram_mask()];
-
-        const uint8_t fg = (color >> 4) & 0x0F;
-        const uint8_t bg = color & 0x0F;
-
-        const int x = col * 8;
-        for (int bit = 0; bit < 8; ++bit) {
-            const uint8_t c = (pattern & (0x80 >> bit)) ? fg : bg;
-            // Transparent (color 0) shows backdrop
-            color_line_[x + bit] = (c == 0) ? backdrop_color() : c;
+    switch (screen_mode_) {
+    case ScreenMode::GRAPHIC_I:
+    case ScreenMode::GRAPHIC_II: {
+        // 1 bit per pixel from shift register (MSB = leftmost)
+        const uint8_t pixel = (bg_.shift_reg & 0x80) ? bg_.fg_color : bg_.bg_color;
+        bg_.shift_reg <<= 1;
+        // Transparent (color 0) shows backdrop
+        return (pixel == 0) ? bd : pixel;
+    }
+    case ScreenMode::TEXT: {
+        // Left/right border: backdrop
+        if (dot_ < 8 || dot_ >= 248) {
+            return bd;
         }
+        // 6 bits per character (MSB = leftmost), bits 7-2
+        const uint8_t pixel = (bg_.shift_reg & 0x80) ? bg_.fg_color : bg_.bg_color;
+        bg_.shift_reg <<= 1;
+        return pixel;
+    }
+    case ScreenMode::MULTICOLOR: {
+        // 4 pixels left color, 4 pixels right color
+        const uint8_t sub = bg_.pixel_in_char;
+        // pixel_in_char has already been incremented by bg_fetch_step(),
+        // so the value we see here is 1 ahead. Compensate:
+        const uint8_t actual_sub = (sub == 0) ? (bg_.char_width - 1) : (sub - 1);
+        const uint8_t color = (actual_sub < 4) ? bg_.mc_left : bg_.mc_right;
+        return (color == 0) ? bd : color;
+    }
+    default:
+        // Extended modes
+        if constexpr (Traits.is_sega()) {
+            return emit_bg_pixel_sega();
+        }
+        return bd;
     }
 }
 
 // ============================================================================
-// MODE 3 — MULTICOLOR (64×48 blocks at 4×4 pixels each)
+// SEGA MODE 4 — per-dot background rendering
 // ============================================================================
-// Each name table entry points to a pattern; the pattern byte encodes
-// two colors (upper nibble = left 4 pixels, lower nibble = right 4 pixels).
-// The active row within the 8-byte pattern alternates per 4-pixel block row.
+// SMS Mode 4: 256×192 (or 224/240 in extended), 32×28 tile map,
+// 4bpp tiles (8×8, 32 bytes each), 32-entry CRAM, per-line H-scroll,
+// per-column V-scroll, tile priority bit.
 
 template <const VDPTraits& Traits>
-void tms9918_t<Traits>::render_mode3_line(int line) {
-    const uint16_t nt_base = name_table_addr();
-    const uint16_t pg_base = pattern_gen_addr();
+void tms9918_t<Traits>::prefetch_tile_sega([[maybe_unused]] uint8_t col) {
+    if constexpr (Traits.is_sega()) {
+        const uint32_t mask = Traits.vram_mask();
 
-    const int row = line >> 3;
-    const int fine_y = line & 0x07;
+        // Sega mode 4 name table entry is 16 bits:
+        //   bit  0-8:  pattern index (0-511)
+        //   bit  9:    horizontal flip
+        //   bit 10:    vertical flip
+        //   bit 11:    palette select (0=sprite/BG palette, 1=tile palette)
+        //   bit 12:    priority (1=in front of sprites)
+        //   bits 13-15: unused
 
-    // Two color rows per 8-pixel tile: rows 0–3 use offset (row%4)*2,
-    // rows 4–7 use offset (row%4)*2+1
-    const int color_row = (fine_y < 4) ? (fine_y >> 1) * 2 : (fine_y >> 1) * 2 + 1;
-    // Simplified: each 4-line block maps to a pair of rows in the pattern
-    // Actually in multicolor mode, the pattern offset is:
-    //   (row & 3) * 2 + (fine_y >= 4 ? 1 : 0)
-    // but each "row" in the pattern encodes a 4×4 block
-    const int pattern_row = ((line >> 2) & 0x01)
-                          ? ((row & 0x03) * 2 + 1)
-                          : ((row & 0x03) * 2);
+        // Apply horizontal scroll
+        const uint8_t scroll_x = this->scroll_x_;
+        const int scrolled_col = (col - (scroll_x >> 3)) & 0x1F;
 
-    for (int col = 0; col < 32; ++col) {
-        const uint8_t tile = vram_[(nt_base + row * 32 + col) & Traits.vram_mask()];
-        const uint8_t color_byte = vram_[
-            (pg_base + tile * 8 + pattern_row) & Traits.vram_mask()];
+        // Apply vertical scroll per-column
+        const uint8_t scroll_y = this->scroll_y_;
+        int scrolled_row = (static_cast<int>(line_) + scroll_y) % (28 * 8);
+        const int tile_row_s = scrolled_row >> 3;
+        const int fine_y_s = scrolled_row & 7;
 
-        const uint8_t left_color  = (color_byte >> 4) & 0x0F;
-        const uint8_t right_color = color_byte & 0x0F;
+        // Name table base (from R2, different layout in mode 4)
+        const uint16_t nt_base = static_cast<uint16_t>((regs_[reg::R2] & 0x0E) << 10);
+        const uint16_t nt_addr = nt_base + tile_row_s * 64 + scrolled_col * 2;
 
-        const int x = col * 8;
-        // Left 4 pixels
-        for (int i = 0; i < 4; ++i) {
-            color_line_[x + i] = (left_color == 0) ? backdrop_color() : left_color;
-        }
-        // Right 4 pixels
-        for (int i = 4; i < 8; ++i) {
-            color_line_[x + i] = (right_color == 0) ? backdrop_color() : right_color;
-        }
+        const uint8_t lo = vram_[nt_addr & mask];
+        const uint8_t hi = vram_[(nt_addr + 1) & mask];
+        const uint16_t entry = static_cast<uint16_t>(lo | (hi << 8));
+
+        const uint16_t pattern_idx = entry & 0x01FF;
+        const bool h_flip = (entry >> 9) & 1;
+        const bool v_flip = (entry >> 10) & 1;
+        const uint8_t palette_bank = ((entry >> 11) & 1) ? 16 : 0;
+        // const bool priority = (entry >> 12) & 1; // TODO: sprite priority
+
+        // Pattern data: 4 bytes per row, 32 bytes per tile
+        int row_in_tile = v_flip ? (7 - fine_y_s) : fine_y_s;
+        const uint16_t pat_addr = pattern_idx * 32 + row_in_tile * 4;
+
+        // Read 4 bitplanes
+        const uint8_t bp0 = vram_[pat_addr & mask];
+        const uint8_t bp1 = vram_[(pat_addr + 1) & mask];
+        const uint8_t bp2 = vram_[(pat_addr + 2) & mask];
+        const uint8_t bp3 = vram_[(pat_addr + 3) & mask];
+
+        // Store in pattern latches (we'll decode per-pixel in emit)
+        // Pack bitplanes into 4 bytes for per-pixel extraction
+        bg_.pattern_latch = bp0;  // Use pattern_latch for bp0
+        bg_.color_latch = bp1;    // Repurpose color_latch for bp1
+        bg_.mc_left = bp2;        // Repurpose mc_left for bp2
+        bg_.mc_right = bp3;       // Repurpose mc_right for bp3
+        bg_.fg_color = palette_bank;
+        bg_.bg_color = h_flip ? 1 : 0;  // Flag h_flip in bg_color
     }
+}
+
+template <const VDPTraits& Traits>
+void tms9918_t<Traits>::load_bg_shifter_sega() {
+    // Sega mode 4: no traditional shift register — pixel extraction
+    // is done per-pixel from the stored bitplane data.
+    // Nothing to do here; data is already in the latches.
+}
+
+template <const VDPTraits& Traits>
+uint8_t tms9918_t<Traits>::emit_bg_pixel_sega() {
+    if constexpr (Traits.is_sega()) {
+        // Extract one pixel from 4-bitplane data
+        const uint8_t sub = bg_.pixel_in_char;
+        const uint8_t actual_sub = (sub == 0) ? 7 : (sub - 1);
+        const bool h_flip = bg_.bg_color != 0;
+        const int bit = h_flip ? actual_sub : (7 - actual_sub);
+
+        const uint8_t bp0 = bg_.pattern_latch;
+        const uint8_t bp1 = bg_.color_latch;
+        const uint8_t bp2 = bg_.mc_left;
+        const uint8_t bp3 = bg_.mc_right;
+
+        const uint8_t color_idx = static_cast<uint8_t>(
+            ((bp0 >> bit) & 1) |
+            (((bp1 >> bit) & 1) << 1) |
+            (((bp2 >> bit) & 1) << 2) |
+            (((bp3 >> bit) & 1) << 3));
+
+        return color_idx + bg_.fg_color;  // fg_color holds palette bank offset
+    }
+    return backdrop_color();
+
+    // Sega mode 4 fine-scroll (sub-tile X offset) is not yet implemented.
+    // H-scroll fine bits (scroll_x & 7) would offset the starting pixel
+    // within each tile's 8-pixel group.
 }
