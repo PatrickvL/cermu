@@ -15,7 +15,7 @@
 // ChipBase interface implementation
 // ============================================================================
 
-ChipLayout* vicii_t::create_chip_layout() const {
+ChipLayout* vicii_base_t::create_chip_layout() const {
     static ChipLayout layout = [] {
         // Start with DIP-40 base layout
         ChipLayout layout = create_dip40_layout();
@@ -70,17 +70,17 @@ ChipLayout* vicii_t::create_chip_layout() const {
 // COMMON VIC-II GUI RENDERING FUNCTIONS
 // ============================================================================
 
-static const char* get_vicii_type_name(const vicii_t* vicii) {
-    if (vicii && vicii->config && vicii->config->chip_name) {
-        return vicii->config->chip_name;
+static const char* get_vicii_type_name(const vicii_base_t* vicii) {
+    if (vicii && vicii->cached_chip_name) {
+        return vicii->cached_chip_name;
     }
     return "Unknown VIC-II";
 }
 
-static const char* get_video_standard(vicii_t* vicii) {
-    if (vicii->config->cycles_per_line == 65 && vicii->config->total_lines == 262) {
+static const char* get_video_standard(const vicii_base_t* vicii) {
+    if (vicii->cached_cycles_per_line == 65 && vicii->cached_total_lines == 262) {
         return "NTSC 60Hz";
-    } else if (vicii->config->cycles_per_line == 63 && vicii->config->total_lines == 312) {
+    } else if (vicii->cached_cycles_per_line == 63 && vicii->cached_total_lines == 312) {
         return "PAL 50Hz";
     }
     return "Unknown";
@@ -91,7 +91,7 @@ static const char* get_video_standard(vicii_t* vicii) {
 // ============================================================================
 
 // Helper function to get VIC-II pin states for visualization
-static std::vector<PinSignalState> get_vicii_pin_states(vicii_t* vicii, const ChipLayout* layout, bus_state_t bus_state) {
+static std::vector<PinSignalState> get_vicii_pin_states(vicii_base_t* vicii, const ChipLayout* layout, bus_state_t bus_state) {
     if (!vicii || !layout) return {};
 
     // Generic bus-derived pin states (address, data, power, clock, control)
@@ -118,11 +118,11 @@ static std::vector<PinSignalState> get_vicii_pin_states(vicii_t* vicii, const Ch
     return pin_states;
 }
 
-std::vector<PinSignalState> vicii_t::get_layout_pin_states(ChipLayout& layout) {
+std::vector<PinSignalState> vicii_base_t::get_layout_pin_states(ChipLayout& layout) {
     return get_vicii_pin_states(this, &layout, bus_snapshot_);
 }
 
-const char* vicii_t::get_layout_chip_name() const {
+const char* vicii_base_t::get_layout_chip_name() const {
     return get_vicii_type_name(this);
 }
 
@@ -130,15 +130,15 @@ const char* vicii_t::get_layout_chip_name() const {
 // VIC-II GUI SETTINGS
 // ============================================================================
 
-void vicii_t::render_settings_content() {
-    vicii_t* vicii = this;
+void vicii_base_t::render_settings_content() {
+    vicii_base_t* vicii = this;
 
     ImGui::Text("VIC-II Configuration");
     ImGui::Separator();
     
     ImGui::Text("Chip Type: %s", get_vicii_type_name(vicii));
     ImGui::Text("Video Standard: %s", get_video_standard(vicii));
-    ImGui::Text("Timing: %d cycles/line, %d lines/frame", vicii->config->cycles_per_line, vicii->config->total_lines);
+    ImGui::Text("Timing: %d cycles/line, %d lines/frame", vicii->cached_cycles_per_line, vicii->cached_total_lines);
     
     ImGui::Separator();
     

@@ -311,32 +311,96 @@ constexpr uint16_t VICII_BORDER_RIGHT_CSEL1 = 344; // 0x158
 // CHIP CONFIGURATION STRUCTURE
 // ========================================================================================
 
-// Configuration struct for different MOS 656x chip variants
-struct vicii_chip_config_t {
+// VicIITraits — compile-time chip configuration for VIC-II NTTP variants.
+// Follows the fam65xx_t<CPUTraits> pattern: all variant-specific constants
+// are baked into the type, enabling zero-overhead dispatch and constexpr
+// cache computation.
+struct VicIITraits {
     // Timing parameters
-    uint16_t total_lines;
-    uint16_t visible_lines;
-    uint8_t cycles_per_line;
-    uint16_t visible_pixels_per_line;
-    uint16_t first_vblank_line;
-    uint16_t last_vblank_line;
-    uint16_t first_x_coord;
-    uint16_t first_visible_x_coord;
-    uint16_t last_visible_x_coord;
-    
+    uint16_t total_lines;             // Total raster lines per frame (PAL: 312, NTSC: 262/263)
+    uint16_t visible_lines;           // Visible raster lines (PAL: 284, NTSC: 234/235)
+    uint8_t  cycles_per_line;         // CPU cycles per raster line (PAL: 63, NTSC: 64/65)
+    uint16_t visible_pixels_per_line; // Visible pixels per line (PAL: 403, NTSC: 411/418)
+    uint16_t first_vblank_line;       // First vblank line
+    uint16_t last_vblank_line;        // Last vblank line
+    uint16_t first_x_coord;           // X coordinate at cycle 0
+    uint16_t first_visible_x_coord;   // First visible X coordinate
+    uint16_t last_visible_x_coord;    // Last visible X coordinate
+
     // Framebuffer area bounds
     uint16_t framebuffer_start_x;
     uint16_t framebuffer_end_x;
-    
-    // Chip name for debugging
-    const char* chip_name;
+
+    // Identity
+    const char* chip_name;            // Human-readable chip name (e.g. "MOS6569 PAL")
+    const char* chip_id;              // Short chip ID (e.g. "MOS6569")
+    const char* vendor;               // Manufacturer (e.g. "MOS Technology")
+
+    // Variant flags
+    bool is_pal;                      // PAL vs NTSC (affects line-0 raster/IRQ timing)
+
+    // Helpers
+    constexpr bool is_ntsc() const { return !is_pal; }
+};
+
+// ── VIC-II trait instances ─────────────────────────────────────────────────
+
+inline constexpr VicIITraits MOS6569_traits = {
+    .total_lines = 312, .visible_lines = 284, .cycles_per_line = 63,
+    .visible_pixels_per_line = 403,
+    .first_vblank_line = 300, .last_vblank_line = 15,
+    .first_x_coord = 404, .first_visible_x_coord = 480, .last_visible_x_coord = 380,
+    .framebuffer_start_x = 0, .framebuffer_end_x = 504,
+    .chip_name = "MOS6569 PAL", .chip_id = "MOS6569", .vendor = "MOS Technology",
+    .is_pal = true
+};
+
+inline constexpr VicIITraits MOS6567R8_traits = {
+    .total_lines = 263, .visible_lines = 235, .cycles_per_line = 65,
+    .visible_pixels_per_line = 418,
+    .first_vblank_line = 13, .last_vblank_line = 40,
+    .first_x_coord = 412, .first_visible_x_coord = 489, .last_visible_x_coord = 396,
+    .framebuffer_start_x = 0, .framebuffer_end_x = 520,
+    .chip_name = "MOS6567(R8) NTSC", .chip_id = "MOS6567", .vendor = "MOS Technology",
+    .is_pal = false
+};
+
+inline constexpr VicIITraits MOS6567R56A_traits = {
+    .total_lines = 262, .visible_lines = 234, .cycles_per_line = 64,
+    .visible_pixels_per_line = 411,
+    .first_vblank_line = 13, .last_vblank_line = 40,
+    .first_x_coord = 412, .first_visible_x_coord = 488, .last_visible_x_coord = 388,
+    .framebuffer_start_x = 0, .framebuffer_end_x = 520,
+    .chip_name = "MOS6567(R56A) NTSC", .chip_id = "MOS6567", .vendor = "MOS Technology",
+    .is_pal = false
+};
+
+// VIC-IIe variants (C128) — same timing as 6569/6567, additional features
+inline constexpr VicIITraits MOS8566_traits = {
+    .total_lines = 312, .visible_lines = 284, .cycles_per_line = 63,
+    .visible_pixels_per_line = 403,
+    .first_vblank_line = 300, .last_vblank_line = 15,
+    .first_x_coord = 404, .first_visible_x_coord = 480, .last_visible_x_coord = 380,
+    .framebuffer_start_x = 0, .framebuffer_end_x = 504,
+    .chip_name = "MOS8566 PAL VIC-IIe", .chip_id = "MOS8566", .vendor = "MOS Technology",
+    .is_pal = true
+};
+
+inline constexpr VicIITraits MOS8564_traits = {
+    .total_lines = 263, .visible_lines = 235, .cycles_per_line = 65,
+    .visible_pixels_per_line = 418,
+    .first_vblank_line = 13, .last_vblank_line = 40,
+    .first_x_coord = 412, .first_visible_x_coord = 489, .last_visible_x_coord = 396,
+    .framebuffer_start_x = 0, .framebuffer_end_x = 520,
+    .chip_name = "MOS8564 NTSC VIC-IIe", .chip_id = "MOS8564", .vendor = "MOS Technology",
+    .is_pal = false
 };
 
 // ========================================================================================
 // CYCLE TABLE ENTRY TYPE (needed for timing unit)
 // ========================================================================================
-struct vicii_t; // Forward declaration
-using vicii_cycle_func_t = uint8_t (*)(vicii_t*, int);
+struct vicii_base_t; // Forward declaration
+using vicii_cycle_func_t = uint8_t (*)(vicii_base_t*, int);
 
 struct vicii_cycle_entry_t {
     vicii_cycle_func_t func;
@@ -546,25 +610,34 @@ struct vicii_bus_unit_t {
     bus_state_t bus_line_mask;           // Bitmask for bus lines to pull low (BA, AEC, etc.)
 };
 
-// Main VIC-II structure composed of units
-struct vicii_t : public VideoChipBase {
-    vicii_t() {
+// Main VIC-II base structure — holds all runtime state and implementation.
+// The template wrapper vicii_t<Traits> inherits from this and provides
+// trait-driven initialization.  All tick/render code operates on vicii_base_t*
+// pointers — no templated hot paths needed.
+struct vicii_base_t : public VideoChipBase {
+    vicii_base_t() {
         init_regs(vicii_regs::SIZE + 2);  // 64 standard + 2 shadow collision
     }
 
     MOS2114* colorram = nullptr;
 
-    // Chip configuration (set at initialization)
-    const vicii_chip_config_t* config = nullptr;
-
-    // Pre-computed display mapping constants (session-constant, set during init)
-    // Eliminates per-pixel modulo and pointer dereferences in the pixel pipeline.
-    uint16_t cached_pixels_per_line = 0;         // config->cycles_per_line * 8
-    uint16_t cached_visible_pixels = 0;          // config->visible_pixels_per_line
+    // Pre-computed constants populated from VicIITraits at init time.
+    // All hot-path code uses these instead of the (removed) config pointer.
+    uint16_t cached_pixels_per_line = 0;         // cycles_per_line * 8
+    uint16_t cached_visible_pixels = 0;          // visible_pixels_per_line
     uint16_t cached_first_visible_display = 0;   // transformed first_visible_x_coord
     uint16_t cached_wrap_threshold = 0;          // (first_visible_display + visible_pixels) % pixels_per_line
     uint16_t cached_display_offset = 0;          // pixels_per_line + pipeline_delay + centering
-    uint16_t cached_first_x_coord = 0;           // config->first_x_coord (X at cycle 0)
+    uint16_t cached_first_x_coord = 0;           // first_x_coord (X at cycle 0)
+    uint16_t cached_total_lines = 0;             // total_lines (frame height)
+    uint16_t cached_last_vblank_line = 0;        // last_vblank_line
+    uint8_t  cached_cycles_per_line = 0;         // cycles_per_line
+    const char* cached_chip_name = nullptr;      // chip_name for debug/GUI
+
+    // Non-owning pointer to the VicIITraits used at init — needed by reset()
+    // to re-initialize with the same configuration.  Always points to an
+    // inline constexpr VicIITraits instance (compile-time constant).
+    const VicIITraits* traits_ = nullptr;
 
     // Topic-specific units
     vicii_timing_unit_t timing = {};
@@ -583,7 +656,7 @@ struct vicii_t : public VideoChipBase {
     void set_display(IndexedFrameBuffer* d) { display_ = d; }
 
     // Destructor — cleans up dynamically allocated pixel line buffers
-    ~vicii_t() override;
+    ~vicii_base_t() override;
 
     // ChipBase interface
 #ifdef CERMU_HAS_GUI
@@ -595,7 +668,7 @@ struct vicii_t : public VideoChipBase {
 #endif
 
     // Initialization and lifecycle
-    void init(const vicii_chip_config_t* config, void (*bank_change)(void*, uint8_t));
+    void init_base(const VicIITraits& traits, void (*bank_change)(void*, uint8_t));
     void reset();
 
     // Tick functions
@@ -610,7 +683,6 @@ struct vicii_t : public VideoChipBase {
     static void memory_bank_change(void* chip, uint8_t bank);
 
     // Configuration and utility
-    static const vicii_chip_config_t* get_default_config(bool is_pal);
     static const uint32_t* get_default_palette();
     uint16_t get_raster_counter() const;
     uint16_t get_x_coordinate() const;
@@ -619,4 +691,27 @@ private:
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields();
 #endif
+};
+
+// ============================================================================
+// vicii_t<Traits> — NTTP-driven VIC-II template
+// ============================================================================
+//
+// Thin wrapper that inherits all state and implementation from vicii_base_t.
+// The template parameter bakes variant-specific constants into the type,
+// enabling type-safe PAL/NTSC/VIC-IIe distinction and compile-time
+// identity resolution.
+//
+// Usage:
+//   using mos6569_t = vicii_t<MOS6569_traits>;   // PAL
+//   using mos6567_t = vicii_t<MOS6567R8_traits>;  // NTSC
+//
+template<const VicIITraits& Traits>
+struct vicii_t : public vicii_base_t {
+    static constexpr const VicIITraits& traits = Traits;
+
+    // Initialize with Traits-derived config
+    void init(void (*bank_change)(void*, uint8_t)) {
+        init_base(Traits, bank_change);
+    }
 };
