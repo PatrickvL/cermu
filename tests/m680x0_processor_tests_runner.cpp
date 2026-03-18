@@ -37,6 +37,8 @@
 #include <sstream>
 #include <unordered_map>
 
+#include <zlib.h>
+
 // Low-level JSON utilities (shared with fam65xx/Z80 runners)
 #include "json_parser.hpp"
 
@@ -93,10 +95,15 @@ struct m68k_cpu_state_t {
 };
 
 // M68K bus transaction entry (from test data)
+// Format: ["r"/"w", clocks, fc, address, ".w"/".b", value]
+//     or: ["n", clocks]  (idle)
 struct m68k_transaction_t {
     char     type;          // 'n' = idle, 'r' = read, 'w' = write
+    uint8_t  clocks;        // number of clock cycles for this bus cycle
+    uint8_t  fc;            // function code (FC0-FC2)
     uint32_t address;
-    uint16_t value;         // 16-bit for word accesses
+    uint16_t value;         // 16-bit for word accesses, 8-bit for byte
+    bool     is_word;       // true = .w, false = .b
     bool     has_addr;      // false for idle cycles
 };
 
@@ -201,6 +208,7 @@ static bool m68k_parse_state(const char* json, const char* state_name, m68k_cpu_
 }
 
 // Parse transactions array (optional bus-cycle trace)
+// Format: [["r", 4, 6, 3076, ".w", 1657], ["n", 2], ...]
 static bool m68k_parse_transactions(const char* json, m68k_test_t* test) {
     const char* arr = json_find_key(json, "transactions");
     if (!arr || *arr != '[') {
@@ -215,33 +223,80 @@ static bool m68k_parse_transactions(const char* json, m68k_test_t* test) {
     while (*pos && test->transaction_count < 128) {
         pos = json_skip_whitespace(pos);
         if (*pos == ']') break;
-        if (*pos != '{') { pos++; continue; }
+        if (*pos != '[') { pos++; continue; }
+        pos++;  // skip opening '['
 
         m68k_transaction_t& txn = test->transactions[test->transaction_count];
         txn.type = 'n';
+        txn.clocks = 0;
+        txn.fc = 0;
         txn.address = 0;
         txn.value = 0;
+        txn.is_word = true;
         txn.has_addr = false;
 
-        // Find end of this object
-        const char* obj_start = pos;
-        const char* obj_end = json_find_object_end(pos);
-        if (!obj_end) break;
+        // Element 0: type string ("r", "w", "n")
+        pos = json_skip_whitespace(pos);
+        if (*pos == '"') {
+            pos++;
+            txn.type = *pos;
+            while (*pos && *pos != '"') pos++;
+            if (*pos == '"') pos++;
+        }
+        pos = json_skip_whitespace(pos);
+        if (*pos == ',') pos++;
 
-        // Parse type field
-        char type_str[8] = {};
-        json_parse_string(obj_start, "type", type_str, sizeof(type_str));
-        if (type_str[0]) txn.type = type_str[0];
+        // Element 1: clocks
+        pos = json_skip_whitespace(pos);
+        txn.clocks = static_cast<uint8_t>(strtol(pos, const_cast<char**>(&pos), 0));
+        pos = json_skip_whitespace(pos);
 
-        // Parse address and value for r/w transactions
-        if (txn.type == 'r' || txn.type == 'w') {
-            txn.address = json_parse_u32(obj_start, "address");
-            txn.value = static_cast<uint16_t>(json_parse_number(obj_start, "value"));
-            txn.has_addr = true;
+        // For idle cycles ("n"), the array has only 2 elements
+        if (txn.type == 'n') {
+            // Skip to end of array
+            while (*pos && *pos != ']') pos++;
+            if (*pos == ']') pos++;
+            test->transaction_count++;
+            pos = json_skip_whitespace(pos);
+            if (*pos == ',') pos++;
+            continue;
         }
 
+        if (*pos == ',') pos++;
+
+        // Element 2: function code
+        pos = json_skip_whitespace(pos);
+        txn.fc = static_cast<uint8_t>(strtol(pos, const_cast<char**>(&pos), 0));
+        pos = json_skip_whitespace(pos);
+        if (*pos == ',') pos++;
+
+        // Element 3: address
+        pos = json_skip_whitespace(pos);
+        txn.address = static_cast<uint32_t>(strtoul(pos, const_cast<char**>(&pos), 0));
+        txn.has_addr = true;
+        pos = json_skip_whitespace(pos);
+        if (*pos == ',') pos++;
+
+        // Element 4: size string (".w" or ".b")
+        pos = json_skip_whitespace(pos);
+        if (*pos == '"') {
+            pos++;
+            if (pos[0] == '.' && pos[1] == 'b') txn.is_word = false;
+            while (*pos && *pos != '"') pos++;
+            if (*pos == '"') pos++;
+        }
+        pos = json_skip_whitespace(pos);
+        if (*pos == ',') pos++;
+
+        // Element 5: value
+        pos = json_skip_whitespace(pos);
+        txn.value = static_cast<uint16_t>(strtoul(pos, const_cast<char**>(&pos), 0));
+        pos = json_skip_whitespace(pos);
+
+        // Skip to end of array
+        while (*pos && *pos != ']') pos++;
+        if (*pos == ']') pos++;
         test->transaction_count++;
-        pos = obj_end;
         pos = json_skip_whitespace(pos);
         if (*pos == ',') pos++;
     }
@@ -802,19 +857,45 @@ private:
 // File collection
 // ============================================================================
 
+// Decompress a gzip file into a string
+static bool decompress_gz(const std::string& filepath, std::string& output) {
+    gzFile gz = gzopen(filepath.c_str(), "rb");
+    if (!gz) return false;
+
+    output.clear();
+    char buf[65536];
+    int bytes_read;
+    while ((bytes_read = gzread(gz, buf, sizeof(buf))) > 0) {
+        output.append(buf, static_cast<size_t>(bytes_read));
+    }
+    gzclose(gz);
+    return bytes_read == 0;  // 0 = EOF (success), <0 = error
+}
+
 static void collect_tests_from_file(const std::string& filepath, std::vector<TestItem>& tests) {
     tests.clear();
-    std::ifstream file(filepath, std::ios::binary | std::ios::ate);
-    if (!file.is_open()) {
-        std::cout << "ERROR: Could not open file: " << filepath << "\n";
-        return;
+
+    std::string content;
+    bool is_gz = (filepath.size() > 3 && filepath.substr(filepath.size() - 3) == ".gz");
+
+    if (is_gz) {
+        if (!decompress_gz(filepath, content)) {
+            std::cout << "ERROR: Could not decompress file: " << filepath << "\n";
+            return;
+        }
+    } else {
+        std::ifstream file(filepath, std::ios::binary | std::ios::ate);
+        if (!file.is_open()) {
+            std::cout << "ERROR: Could not open file: " << filepath << "\n";
+            return;
+        }
+        auto size = file.tellg();
+        if (size <= 0) return;
+        file.seekg(0, std::ios::beg);
+        content.resize(static_cast<size_t>(size));
+        if (!file.read(&content[0], size)) return;
+        file.close();
     }
-    auto size = file.tellg();
-    if (size <= 0) return;
-    file.seekg(0, std::ios::beg);
-    std::string content(static_cast<size_t>(size), '\0');
-    if (!file.read(&content[0], size)) return;
-    file.close();
 
     tests.reserve(1100);
 
@@ -862,9 +943,13 @@ static std::vector<TestItem> collect_all_tests(const std::vector<std::string>& p
                 std::error_code ec;
                 for (const auto& entry : fs::recursive_directory_iterator(p, ec)) {
                     if (ec) continue;
-                    if (entry.is_regular_file(ec) && !ec && entry.path().extension() == ".json") {
+                    if (entry.is_regular_file(ec) && !ec &&
+                        (entry.path().extension() == ".json" || entry.path().extension() == ".gz")) {
                         if (!opcode_filter.empty()) {
+                            // For .json.gz files, stem() gives "NOP.json", need to strip .json too
                             std::string stem = entry.path().stem().string();
+                            if (stem.size() > 5 && stem.substr(stem.size() - 5) == ".json")
+                                stem = stem.substr(0, stem.size() - 5);
                             std::transform(stem.begin(), stem.end(), stem.begin(),
                                            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
                             if (stem != opcode_filter) continue;
