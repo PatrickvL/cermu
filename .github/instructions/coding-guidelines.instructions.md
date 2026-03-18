@@ -113,6 +113,16 @@ C++17. Use `if constexpr`, structured bindings, `std::string_view`, fold express
 - `std::conditional_t` for compile-time mixin selection.
 - Explicit template specialization for variant traits (e.g. `NintendoVariantTraits<V>`).
 - No CRTP — classical virtual + template instantiation.
+- **Instantiation minimization** — never put non-trivial logic directly in a full-trait NTTP template body. Extract an `_impl` templated only on the scalar fields that actually vary. The outer NTTP wrapper is a one-liner dispatcher.
+
+```cpp
+// WRONG — N trait objects → N instantiations of identical code
+template <const CPUTraits& T> void adc() { if constexpr (T.has_bcd) ... }
+
+// RIGHT — N trait objects → still only 2 instantiations
+template <bool BCD> void adc_impl() { if constexpr (BCD) ... }
+template <const CPUTraits& T> void adc() { adc_impl<T.has_bcd>(); }
+```
 
 ### Memory & Ownership
 
