@@ -26,6 +26,7 @@
 #include "chip/cpu/fam65xx/rockwell65c02.hpp"
 #include "chip/cpu/fam65xx/wdc_w65c02s.hpp"
 #include "chip/cpu/fam65xx/wdc65c816.hpp"
+#include "chip/cpu/fam65xx/csg8502.hpp"
 
 // Include GUI interface first (defines CERMU_HAS_GUI)
 #include "core/chip_layout.hpp"
@@ -259,6 +260,11 @@ template void fam65xx_t<WDC_65C816Traits>::render_settings_content();
 template ChipLayout* fam65xx_t<WDC_65C816Traits>::create_chip_layout() const;
 template std::vector<PinSignalState> fam65xx_t<WDC_65C816Traits>::get_layout_pin_states(ChipLayout&);
 template const char* fam65xx_t<WDC_65C816Traits>::get_layout_chip_name() const;
+
+template void fam65xx_t<CSG8502Traits>::render_settings_content();
+template ChipLayout* fam65xx_t<CSG8502Traits>::create_chip_layout() const;
+template std::vector<PinSignalState> fam65xx_t<CSG8502Traits>::get_layout_pin_states(ChipLayout&);
+template const char* fam65xx_t<CSG8502Traits>::get_layout_chip_name() const;
 
 } // namespace fam65xx
 

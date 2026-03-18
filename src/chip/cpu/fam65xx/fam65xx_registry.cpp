@@ -18,6 +18,7 @@
 #include "chip/cpu/fam65xx/mos6507.hpp"
 #include "chip/cpu/fam65xx/mos7501.hpp"
 #include "chip/cpu/fam65xx/ricoh_2a03.hpp"
+#include "chip/cpu/fam65xx/csg8502.hpp"
 
 // 6502 family — CMOS
 #include "chip/cpu/fam65xx/wdc65c02.hpp"
@@ -37,6 +38,7 @@ REGISTER_CHIP_TYPE("WDC_65C816",     WDC_65C816)
 REGISTER_CHIP_TYPE("ROCKWELL_R65C02", ROCKWELL_R65C02)
 REGISTER_CHIP_TYPE("SYNERTEK_65C02", SYNERTEK_65C02)
 
-// NOTE: MOS6509, CSG8502, RICOH_5A22 are omitted — their GUI virtual
+// NOTE: MOS6509, RICOH_5A22 are omitted — their GUI virtual
 // methods are not yet instantiated in fam65xx_gui.cpp (no system uses
 // them yet).  Register them when their systems are added.
+REGISTER_CHIP_TYPE("CSG8502",         CSG8502)
