@@ -82,6 +82,7 @@ C128System::C128System()
     , pins_(C128_BUS_DEFAULT_STATE)
 {
     hardware_traits_ = create_c128_hardware_traits();
+    cycles_per_frame_ = c128_constants::CYCLES_PER_FRAME_PAL;
 }
 
 C128System::~C128System() = default;
@@ -110,12 +111,21 @@ bool C128System::apply_configuration() {
 bool C128System::initialize() {
     printf("C128: Initializing system\n");
     register_board(&board_);
+
+    // Bus pull-up defaults — same as C64 (BA, CNT, FLAG, data lines)
+    default_state_ = CSG8502::default_bus_state()
+                   | BUS_BIT(BUS_BA_BIT) | BUS_BIT(BUS_CNT_BIT)
+                   | BUS_BIT(BUS_FLAG_BIT) | BUS_DATA_MASK;
+    pins_ = default_state_;
+
     board_.create_chips(&pins_);
+    board_.apply(bus_);
 
     cpu_8502_     = board_.cpu<CSG8502>();
     cpu_z80_      = board_.find<ZilogZ80A>();
     vic_iie_      = board_.find<mos8566_t>();
     sid_          = board_.find<mos6581_t>();
+    colorram_     = board_.find<MOS2114>();
     cia1_         = board_.find<mos6526_t>();
     cia2_         = board_.find<mos6526_t>(1);
     basic_lo_rom_ = board_.find<ROMChip>();
@@ -125,8 +135,6 @@ bool C128System::initialize() {
     char_rom_     = board_.find<ROMChip>(4);
     vdc_vram_     = board_.find<RAMChip>(1);
 
-    pins_ = board_.cpu_chip()->init();
-
     configure_bus_memory_map();
     if (!load_roms()) {
         printf("C128: Warning — ROMs not loaded\n");
@@ -134,8 +142,43 @@ bool C128System::initialize() {
 
     // VIC-IIe — initialize with PAL traits (MOS8566)
     vic_iie_->init(vicii_base_t::memory_bank_change);
+    vic_iie_->colorram = colorram_;
+
+    // VIC-IIe memory read callback — routes through MemoryBus viewer 1
+    vic_iie_->bus.bus = nullptr;
+    vic_iie_->bus.bank_change = nullptr;
+    vic_iie_->bus.mem_read = [](void* ctx, bus_state_t bus, uint16_t addr) -> bus_state_t {
+        auto* sys = static_cast<C128System*>(ctx);
+        uint8_t data = sys->bus_.peek_byte(addr, kViewerVicII);
+        BUS_SET_DATA(bus, data);
+        return bus;
+    };
+    vic_iie_->bus.mem_read_ctx = this;
+
+    // CIA2 Port A → VIC-IIe bank selection
+    cia2_->port_a_change_callback = [](void* ctx, uint8_t value) {
+        auto* sys = static_cast<C128System*>(ctx);
+        vicii_base_t::memory_bank_change(sys->vic_iie_, value & 0x03);
+    };
+    cia2_->port_a_callback_context = this;
+
+    // CIA2 interrupt line → NMI
+    cia2_->configured_interrupt_bit = BUS_NMI_BIT;
+
+    // SID — initialize
+    sid_->init();
+    {
+        float cpu_clock = static_cast<float>(c128_constants::CPU_FREQ_1MHZ_PAL);
+        sid_->set_cpu_clock(cpu_clock);
+        sid_->set_timing(true);  // PAL
+    }
 
     register_bus_chips(board_);
+
+    // Initialize CPU — reset vector will come from Kernal ROM
+    cpu_8502_->init();
+    cpu_8502_->init_io_port();
+    cpu_8502_->reset();
 
     display_.init(c128_constants::VIC_DISPLAY_WIDTH_PAL,
                   c128_constants::VIC_DISPLAY_HEIGHT_PAL);
@@ -168,7 +211,57 @@ void C128System::reset() {
 // ============================================================================
 
 void C128System::tick() {
-    // TODO: implement tick — dual-CPU dispatch + VIC-IIe + SID + CIA + MMU
+    total_cycles_++;
+
+    // Start each cycle with pull-up defaults
+    bus_state_t s = default_state_;
+    BUS_SET_ADDR(s, BUS_GET_ADDR(pins_));
+    BUS_SET_DATA(s, BUS_GET_DATA(pins_));
+
+    // PHASE 1: VIC-IIe PHI1 — g-access read, pixel sequencing
+    s = vic_iie_->tick_phi1(s);
+
+    // PHASE 1.5: CIA PHI2 — apply pending interrupt lines before CPU
+    s = cia2_->tick_phi2(s);
+    s = cia1_->tick_phi2(s);
+
+    // BA→RDY wiring (direct bit test + set/clear)
+    if (BUS_GET_BIT(s, BUS_BA_BIT))
+        BUS_SET_BIT(s, BUS_RDY_BIT);
+    else
+        BUS_CLR_BIT(s, BUS_RDY_BIT);
+
+    // PHASE 2: CPU PHI2 — instruction execution
+    s = cpu_8502_->tick<CSG8502::Phase::PHI2>(s);
+
+    // PHASE 3: Memory service — AEC determines CPU vs VIC-IIe bus ownership
+    {
+        const bool is_write = !BUS_GET_BIT(s, BUS_RW_BIT);
+        const size_t viewer = (is_write || BUS_GET_BIT(s, BUS_AEC_BIT))
+                                  ? kViewerCpu : kViewerVicII;
+        s = bus_.tick(s, viewer);
+    }
+
+    // NMI edge detection
+    cpu_8502_->sample_nmi_pin(s);
+
+    // PHASE 3.1: VIC-IIe PHI2 — c/p/s-access data delivery
+    vic_iie_->tick_phi2(s);
+
+    // PHASE 3.5: CIA PHI1 — timer counting, TOD, interrupt generation
+    s = cia2_->tick_phi1(s);
+    s = cia1_->tick_phi1(s);
+
+    // PHASE 4: CPU PHI1 — prepare next fetch
+    s = cpu_8502_->tick<CSG8502::Phase::PHI1>(s);
+
+    // Restore R/W line to read mode
+    BUS_SET_BIT(s, BUS_RW_BIT);
+
+    // PHASE 5: SID — sound generation
+    s = sid_->tick(s);
+
+    pins_ = s;
 }
 
 void C128System::run_frame() {
@@ -241,7 +334,70 @@ void C128System::inject_keys(const char* /*str*/) {
 // ============================================================================
 
 void C128System::configure_bus_memory_map() {
-    // TODO: setup page tables based on MMU configuration
+    // C128 default boot config (MMU CR = 0x00):
+    //   $0000-$3FFF : RAM bank 0
+    //   $4000-$7FFF : BASIC lo ROM
+    //   $8000-$BFFF : BASIC hi ROM
+    //   $C000-$CFFF : Editor ROM
+    //   $D000-$DFFF : I/O (TODO: register MMIO handlers for VIC, SID, CIA, MMU, VDC)
+    //   $E000-$FFFF : Kernal ROM
+    //
+    // Chip IDs (4 KB pages, bank_size = chip size for ROMs):
+    //   Slot 0 (RAM 128KB, bank_size=65536): 2 banks → IDs 0-1
+    //   Slot 1 (BASIC lo 16KB):  1 bank → ID 2
+    //   Slot 2 (BASIC hi 16KB): 1 bank → ID 3
+    //   Slot 3 (Editor 4KB):    1 bank → ID 4
+    //   Slot 4 (Kernal 8KB):    1 bank → ID 5
+    //   Slot 5 (Char ROM 8KB):  1 bank → ID 6
+    //   Slot 6 (VDC VRAM 16KB): 1 bank → ID 7
+
+    using ChipId    = Bus::ChipId;
+    using WriteId   = Bus::WriteChipId;
+
+    constexpr ChipId  kRamBank0  = ChipId(0);
+    constexpr WriteId kRamBank0W = WriteId(0);
+    constexpr ChipId  kBasicLo   = ChipId(2);
+    constexpr ChipId  kBasicHi   = ChipId(3);
+    constexpr ChipId  kEditor    = ChipId(4);
+    constexpr ChipId  kKernal    = ChipId(5);
+    constexpr ChipId  kCharRom   = ChipId(6);
+
+    // ── CPU viewer (viewer 0) ────────────────────────────────────────
+    // apply() already mapped RAM bank 0 at $0000-$FFFF.
+    // Overlay ROM chips at their proper addresses for reads;
+    // writes always go to underlying RAM.
+
+    // $4000-$7FFF → BASIC lo ROM (read), RAM (write)
+    bus_.set_page(kViewerCpu, 0x4, kBasicLo, kRamBank0W);
+    bus_.set_page(kViewerCpu, 0x5, kBasicLo, kRamBank0W);
+    bus_.set_page(kViewerCpu, 0x6, kBasicLo, kRamBank0W);
+    bus_.set_page(kViewerCpu, 0x7, kBasicLo, kRamBank0W);
+
+    // $8000-$BFFF → BASIC hi ROM (read), RAM (write)
+    bus_.set_page(kViewerCpu, 0x8, kBasicHi, kRamBank0W);
+    bus_.set_page(kViewerCpu, 0x9, kBasicHi, kRamBank0W);
+    bus_.set_page(kViewerCpu, 0xA, kBasicHi, kRamBank0W);
+    bus_.set_page(kViewerCpu, 0xB, kBasicHi, kRamBank0W);
+
+    // $C000-$CFFF → Editor ROM (read), RAM (write)
+    bus_.set_page(kViewerCpu, 0xC, kEditor, kRamBank0W);
+
+    // $D000-$DFFF → RAM for now (I/O dispatch TODO)
+    // (apply() already mapped RAM here)
+
+    // $E000-$FFFF → Kernal ROM (read), RAM (write)
+    bus_.set_page(kViewerCpu, 0xE, kKernal, kRamBank0W);
+    bus_.set_page(kViewerCpu, 0xF, kKernal, kRamBank0W);
+
+    // ── VIC-IIe viewer (viewer 1) ────────────────────────────────────
+    // VIC-IIe sees 64KB of RAM bank 0 by default, with character ROM
+    // ghosted at $1000-$1FFF and $9000-$9FFF (bank 0 and 2)
+    for (size_t page = 0; page < 16; ++page)
+        bus_.set_read_page(kViewerVicII, page, kRamBank0);
+
+    // Character ROM ghost at $1000 and $9000 (VIC bank 0 and bank 2)
+    bus_.set_read_page(kViewerVicII, 0x1, kCharRom);
+    bus_.set_read_page(kViewerVicII, 0x9, kCharRom);
 }
 
 bool C128System::load_roms() {
