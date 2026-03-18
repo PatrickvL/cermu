@@ -130,7 +130,13 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
 
     // ── NBCD (0100 1000 00xx xxxx) ───────────────────────────────
     if ((opcode & 0xFFC0) == 0x4800) {
-        // TODO: BCD negate
+        if (ea_mode == 0) {
+            // NBCD Dn: negate BCD (0 - dst - X)
+            uint8_t result = alu_sbcd(get_d_b(ea_reg), 0);
+            set_d_b(ea_reg, result);
+            return do_idle_then_prefetch(pins, 2);  // 6 clocks (2 idle + 4 prefetch)
+        }
+        // TODO: NBCD <ea> — needs bus cycles
         return do_prefetch(pins);
     }
 

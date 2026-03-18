@@ -285,9 +285,15 @@ inline bus_state_t decode_group8(bus_state_t pins, uint16_t opcode) {
     uint8_t ea_reg  = instr_ea_reg(opcode);
     uint8_t opmode = (opcode >> 6) & 7;
 
-    // SBCD: opmode 4, ea_mode 0 or 1
+    // SBCD: opmode 4, ea_mode 0 (Dn) or 1 (-(An))
     if (opmode == 4 && (ea_mode == 0 || ea_mode == 1)) {
-        // TODO: BCD subtract
+        if (ea_mode == 0) {
+            // SBCD Dn,Dn
+            uint8_t result = alu_sbcd(get_d_b(ea_reg), get_d_b(dn));
+            set_d_b(dn, result);
+            return do_idle_then_prefetch(pins, 2);  // 6 clocks (2 idle + 4 prefetch)
+        }
+        // TODO: SBCD -(An),-(An) — needs bus cycles
         return do_prefetch(pins);
     }
 
@@ -302,10 +308,18 @@ inline bus_state_t decode_group8(bus_state_t pins, uint16_t opcode) {
         if (src == 0) {
             return exception(pins, Vector::ZERO_DIVIDE);
         }
+        uint32_t dividend = get_d(dn);
+        // Overflow: upper word >= divisor
+        if ((dividend >> 16) >= src) {
+            // Set V, clear C; N, Z, X unchanged. Destination unchanged.
+            uint8_t ccr = (get_ccr() & (Flags::X | Flags::N | Flags::Z)) | Flags::V;
+            set_ccr(ccr);
+            return do_idle_then_prefetch(pins, 6);  // overflow: 10 total (6 idle + 4 prefetch)
+        }
         uint16_t quotient, remainder;
-        alu_divu(get_d(dn), src, quotient, remainder);
+        alu_divu(dividend, src, quotient, remainder);
         set_d(dn, (static_cast<uint32_t>(remainder) << 16) | quotient);
-        return do_prefetch(pins);
+        return do_idle_then_prefetch(pins, divu_idle_clocks(dividend, src));
     }
 
     // DIVS: opmode 7
@@ -319,12 +333,31 @@ inline bus_state_t decode_group8(bus_state_t pins, uint16_t opcode) {
         if (src == 0) {
             return exception(pins, Vector::ZERO_DIVIDE);
         }
-        int16_t quotient;
-        int16_t remainder;
-        alu_divs(static_cast<int32_t>(get_d(dn)), src, quotient, remainder);
+        int32_t dividend = static_cast<int32_t>(get_d(dn));
+        int32_t result = dividend / src;
+        bool dst_neg = dividend < 0;
+        bool src_neg = src < 0;
+        if (result > 32767 || result < -32768) {
+            // Overflow — V set, C cleared; N, Z, X unchanged. Destination unchanged.
+            uint8_t ccr = (get_ccr() & (Flags::X | Flags::N | Flags::Z)) | Flags::V;
+            set_ccr(ccr);
+            uint8_t idle = dst_neg ? 14 : 12;  // 18 or 16 total
+            return do_idle_then_prefetch(pins, idle);
+        }
+        int16_t quotient = static_cast<int16_t>(result);
+        int16_t remainder = static_cast<int16_t>(dividend % src);
+        // Set flags
+        uint8_t ccr = get_ccr() & Flags::X;
+        if (static_cast<uint16_t>(quotient) == 0) ccr |= Flags::Z;
+        if (quotient < 0)                         ccr |= Flags::N;
+        set_ccr(ccr);
         set_d(dn, (static_cast<uint32_t>(static_cast<uint16_t>(remainder)) << 16) |
                     static_cast<uint16_t>(quotient));
-        return do_prefetch(pins);
+        // DIVS timing: DIVU loop on abs values + sign-dependent overhead
+        uint32_t abs_dst = static_cast<uint32_t>(dividend < 0 ? -dividend : dividend);
+        uint16_t abs_src = static_cast<uint16_t>(src < 0 ? -src : src);
+        uint8_t base = 20 + (dst_neg ? (src_neg ? 4 : 6) : (src_neg ? 2 : 0));
+        return do_idle_then_prefetch(pins, base + divu_loop_cost(abs_dst, abs_src));
     }
 
     // OR: opmodes 0,1,2 (<ea> OR Dn → Dn) and 4,5,6 (Dn OR <ea> → <ea>)
@@ -504,14 +537,53 @@ inline bus_state_t decode_groupC(bus_state_t pins, uint16_t opcode) {
     uint8_t ea_reg  = instr_ea_reg(opcode);
     uint8_t opmode = (opcode >> 6) & 7;
 
-    // ABCD: opmode 4, ea_mode 0 or 1
+    // ABCD: opmode 4, ea_mode 0 (Dn) or 1 (-(An))
     if (opmode == 4 && (ea_mode == 0 || ea_mode == 1)) {
-        // TODO: BCD add
+        if (ea_mode == 0) {
+            // ABCD Dn,Dn
+            uint8_t result = alu_abcd(get_d_b(ea_reg), get_d_b(dn));
+            set_d_b(dn, result);
+            return do_idle_then_prefetch(pins, 2);  // 6 clocks (2 idle + 4 prefetch)
+        }
+        // TODO: ABCD -(An),-(An) — needs bus cycles
         return do_prefetch(pins);
+    }
+
+    // MULU: opmode 3
+    if (opmode == 3) {
+        uint16_t src;
+        if (ea_mode == 0) {
+            src = get_d_w(ea_reg);
+        } else {
+            src = static_cast<uint16_t>(read_ea(ea_mode, ea_reg, OpSize::Word));
+        }
+        uint32_t result = alu_mulu(src, get_d_w(dn));
+        set_d(dn, result);
+        // MULU timing: 38 + 2*popcount(source_word) total clocks
+        uint8_t idle = 34 + 2 * __builtin_popcount(src);
+        return do_idle_then_prefetch(pins, idle);
+    }
+
+    // MULS: opmode 7
+    if (opmode == 7) {
+        uint16_t src_raw;
+        if (ea_mode == 0) {
+            src_raw = get_d_w(ea_reg);
+        } else {
+            src_raw = static_cast<uint16_t>(read_ea(ea_mode, ea_reg, OpSize::Word));
+        }
+        uint32_t result = alu_muls(static_cast<int16_t>(src_raw),
+                                   static_cast<int16_t>(get_d_w(dn)));
+        set_d(dn, result);
+        // MULS timing: 38 + 2*popcount((src ^ (src<<1)) & 0xFFFF)
+        uint16_t transitions = (src_raw ^ (src_raw << 1)) & 0xFFFF;
+        uint8_t idle = 34 + 2 * __builtin_popcount(transitions);
+        return do_idle_then_prefetch(pins, idle);
     }
 
     // EXG: 1100 rrr1 0100 0rrr (Dx,Dy), 1100 rrr1 0100 1rrr (Ax,Ay),
     //       1100 rrr1 1000 1rrr (Dx,Ay)
+    // Note: checked AFTER MULU/MULS to avoid false matches (mask overlaps opmode 7)
     if ((opcode & 0xF130) == 0xC100) {
         uint8_t exg_mode = (opcode >> 3) & 0x1F;
         switch (exg_mode) {
@@ -538,32 +610,6 @@ inline bus_state_t decode_groupC(bus_state_t pins, uint16_t opcode) {
         // Sync A7 ↔ SSP/USP after exchange
         sync_sp();
         return do_idle_then_prefetch(pins, 2);  // EXG: 6 clocks (2 idle)
-    }
-
-    // MULU: opmode 3
-    if (opmode == 3) {
-        uint16_t src;
-        if (ea_mode == 0) {
-            src = get_d_w(ea_reg);
-        } else {
-            src = static_cast<uint16_t>(read_ea(ea_mode, ea_reg, OpSize::Word));
-        }
-        uint32_t result = alu_mulu(src, get_d_w(dn));
-        set_d(dn, result);
-        return do_prefetch(pins);
-    }
-
-    // MULS: opmode 7
-    if (opmode == 7) {
-        int16_t src;
-        if (ea_mode == 0) {
-            src = static_cast<int16_t>(get_d_w(ea_reg));
-        } else {
-            src = static_cast<int16_t>(read_ea(ea_mode, ea_reg, OpSize::Word));
-        }
-        uint32_t result = alu_muls(src, static_cast<int16_t>(get_d_w(dn)));
-        set_d(dn, result);
-        return do_prefetch(pins);
     }
 
     // AND: opmodes 0,1,2 (<ea> AND Dn → Dn) and 4,5,6 (Dn AND <ea> → <ea>)
