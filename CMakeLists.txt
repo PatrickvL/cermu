@@ -398,6 +398,9 @@ list(APPEND CHIP_SOURCES
     # Video - TIA (Atari 2600)
     src/chip/video/tia/tia.cpp
 
+    # Video - TMS9918 VDP family (TMS9918/A, TMS9928/29, V9938, V9958, Sega)
+    src/chip/video/tms9918/tms9918_registry.cpp
+
     # Video - Registry (header-only chips)
     src/chip/video/video_registry.cpp
 )
