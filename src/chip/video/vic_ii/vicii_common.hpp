@@ -343,58 +343,8 @@ struct VicIITraits {
     constexpr bool is_ntsc() const { return !is_pal; }
 };
 
-// ── VIC-II trait instances ─────────────────────────────────────────────────
-
-inline constexpr VicIITraits MOS6569_traits = {
-    .total_lines = 312, .visible_lines = 284, .cycles_per_line = 63,
-    .visible_pixels_per_line = 403,
-    .first_vblank_line = 300, .last_vblank_line = 15,
-    .first_x_coord = 404, .first_visible_x_coord = 480, .last_visible_x_coord = 380,
-    .framebuffer_start_x = 0, .framebuffer_end_x = 504,
-    .chip_name = "MOS6569 PAL", .chip_id = "MOS6569", .vendor = "MOS Technology",
-    .is_pal = true
-};
-
-inline constexpr VicIITraits MOS6567R8_traits = {
-    .total_lines = 263, .visible_lines = 235, .cycles_per_line = 65,
-    .visible_pixels_per_line = 418,
-    .first_vblank_line = 13, .last_vblank_line = 40,
-    .first_x_coord = 412, .first_visible_x_coord = 489, .last_visible_x_coord = 396,
-    .framebuffer_start_x = 0, .framebuffer_end_x = 520,
-    .chip_name = "MOS6567(R8) NTSC", .chip_id = "MOS6567", .vendor = "MOS Technology",
-    .is_pal = false
-};
-
-inline constexpr VicIITraits MOS6567R56A_traits = {
-    .total_lines = 262, .visible_lines = 234, .cycles_per_line = 64,
-    .visible_pixels_per_line = 411,
-    .first_vblank_line = 13, .last_vblank_line = 40,
-    .first_x_coord = 412, .first_visible_x_coord = 488, .last_visible_x_coord = 388,
-    .framebuffer_start_x = 0, .framebuffer_end_x = 520,
-    .chip_name = "MOS6567(R56A) NTSC", .chip_id = "MOS6567", .vendor = "MOS Technology",
-    .is_pal = false
-};
-
-// VIC-IIe variants (C128) — same timing as 6569/6567, additional features
-inline constexpr VicIITraits MOS8566_traits = {
-    .total_lines = 312, .visible_lines = 284, .cycles_per_line = 63,
-    .visible_pixels_per_line = 403,
-    .first_vblank_line = 300, .last_vblank_line = 15,
-    .first_x_coord = 404, .first_visible_x_coord = 480, .last_visible_x_coord = 380,
-    .framebuffer_start_x = 0, .framebuffer_end_x = 504,
-    .chip_name = "MOS8566 PAL VIC-IIe", .chip_id = "MOS8566", .vendor = "MOS Technology",
-    .is_pal = true
-};
-
-inline constexpr VicIITraits MOS8564_traits = {
-    .total_lines = 263, .visible_lines = 235, .cycles_per_line = 65,
-    .visible_pixels_per_line = 418,
-    .first_vblank_line = 13, .last_vblank_line = 40,
-    .first_x_coord = 412, .first_visible_x_coord = 489, .last_visible_x_coord = 396,
-    .framebuffer_start_x = 0, .framebuffer_end_x = 520,
-    .chip_name = "MOS8564 NTSC VIC-IIe", .chip_id = "MOS8564", .vendor = "MOS Technology",
-    .is_pal = false
-};
+// ── VIC-II trait instances live in their respective variant headers ─────────
+//   mos6569.hpp, mos6567.hpp, mos8566.hpp, mos8564.hpp
 
 // ========================================================================================
 // CYCLE TABLE ENTRY TYPE (needed for timing unit)

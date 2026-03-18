@@ -21,7 +21,8 @@
 #include "systems/commodore/commodore_load_helpers.hpp"
 #include "chip/cpu/fam65xx/mos6510.hpp"
 // CPU (fam65xx) is a native C++ ChipBase — no separate GUI header needed
-#include "chip/video/vic_ii/vicii_common.hpp"
+#include "chip/video/vic_ii/mos6569.hpp"
+#include "chip/video/vic_ii/mos6567.hpp"
 // VIC-II is a native C++ ChipBase — no separate GUI header needed
 // MOS6526 is a native C++ ChipBase — no separate GUI header needed
 // MOS2114 is a native C++ ChipBase — no separate GUI header needed
