@@ -245,7 +245,12 @@ void C128System::configure_bus_memory_map() {
 }
 
 bool C128System::load_roms() {
-    return board_.load_roms("c128");
+    char rom_root[1024];
+    if (!system_config_discover_rom_root("c128", rom_root, sizeof(rom_root))) {
+        printf("C128: ROM root not found — cannot load ROMs\n");
+        return false;
+    }
+    return board_.load_roms(rom_root, "C128");
 }
 
 void C128System::mmu_write(uint16_t /*addr*/, uint8_t /*data*/) {
