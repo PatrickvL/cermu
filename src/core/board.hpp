@@ -217,6 +217,11 @@ public:
             if (auto* as_cpu = dynamic_cast<CpuChipBase*>(chip);
                 !cpu_chip_ && as_cpu)
                 cpu_chip_ = as_cpu;
+
+            // Cache the first video chip on this board.
+            if (auto* as_video = dynamic_cast<VideoChipBase*>(chip);
+                !video_chip_ && as_video)
+                video_chip_ = as_video;
         }
     }
 
