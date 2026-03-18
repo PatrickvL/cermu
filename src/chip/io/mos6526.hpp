@@ -99,6 +99,15 @@ enum mos6526_pin_t {
 
 DECL_EXTRACT(CIA, CIA_DECL)
 
+// --- Bitfield accessors ---
+namespace cia { namespace fld {
+#define CIA_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
+    inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
+    inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
+CIA_DECL(DECL_REG_NOP, CIA_X_FLD_NS_, DECL_CMP_NOP)
+#undef CIA_X_FLD_NS_
+} } // namespace cia::fld
+
 struct mos6526_t : public IoChipBase {
     mos6526_t() : IoChipBase(ChipInfo{"MOS6526", "MOS Technology"}) {
         init_regs(CIA_REGS_SIZE + 4 + 4 + 4 + 1 + 1); // Registers, plus TIMER, CLOCK, ALARM, SDR and DDRB latches

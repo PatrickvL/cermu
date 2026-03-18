@@ -65,10 +65,22 @@
     REG(0x0E, IO_PORT_A,     "I/O port A data")                                  \
     REG(0x0F, IO_PORT_B,     "I/O port B data")
 
-namespace ay_regs {
+namespace ay {
+namespace reg {
     AY_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 16;
-} // namespace ay_regs
+}
+namespace fld {
+#define AY_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
+    inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
+    inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
+AY_DECL(DECL_REG_NOP, AY_X_FLD_NS_, DECL_CMP_NOP)
+#undef AY_X_FLD_NS_
+} // namespace fld
+} // namespace ay
+
+// Backward compatibility alias
+namespace ay_regs = ay::reg;
 
 DECL_EXTRACT(AY, AY_DECL)
 

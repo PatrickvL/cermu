@@ -56,6 +56,15 @@ static constexpr int MC6845_NUM_REGISTERS = 18;
 
 DECL_EXTRACT(MC6845, MC6845_DECL)
 
+// --- Bitfield accessors ---
+namespace mc6845 { namespace fld {
+#define MC6845_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
+    inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
+    inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
+MC6845_DECL(DECL_REG_NOP, MC6845_X_FLD_NS_, DECL_CMP_NOP)
+#undef MC6845_X_FLD_NS_
+} } // namespace mc6845::fld
+
 // ============================================================================
 // MC6845 CHIP STRUCTURE
 // ============================================================================

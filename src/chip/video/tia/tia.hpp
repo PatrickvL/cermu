@@ -126,6 +126,14 @@ TIA_WRITE_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
 DECL_EXTRACT(TIA_W, TIA_WRITE_DECL)
 
+namespace tia_w { namespace fld {
+#define TIA_W_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
+    inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
+    inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
+TIA_WRITE_DECL(DECL_REG_NOP, TIA_W_X_FLD_NS_, DECL_CMP_NOP)
+#undef TIA_W_X_FLD_NS_
+} } // namespace tia_w::fld
+
 // ============================================================================
 // TIA READ REGISTER TABLE ($00-$0D) — single source of truth
 // ============================================================================
@@ -173,6 +181,14 @@ DECL_EXTRACT(TIA_W, TIA_WRITE_DECL)
 TIA_READ_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
 DECL_EXTRACT(TIA_R, TIA_READ_DECL)
+
+namespace tia_r { namespace fld {
+#define TIA_R_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
+    inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
+    inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
+TIA_READ_DECL(DECL_REG_NOP, TIA_R_X_FLD_NS_, DECL_CMP_NOP)
+#undef TIA_R_X_FLD_NS_
+} } // namespace tia_r::fld
 
 // ============================================================================
 // TIA CONSTANTS

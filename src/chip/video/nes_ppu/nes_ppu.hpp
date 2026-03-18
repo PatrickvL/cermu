@@ -68,6 +68,15 @@ namespace nes_system {
 
 DECL_EXTRACT(NES_PPU, NES_PPU_DECL)
 
+// --- Bitfield accessors ---
+namespace nes_ppu { namespace fld {
+#define NES_PPU_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
+    inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
+    inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
+NES_PPU_DECL(DECL_REG_NOP, NES_PPU_X_FLD_NS_, DECL_CMP_NOP)
+#undef NES_PPU_X_FLD_NS_
+} } // namespace nes_ppu::fld
+
 namespace nes_system {
 
 class PPU : public VideoChipBase {

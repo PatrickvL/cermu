@@ -61,6 +61,15 @@ MOS6522_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
 DECL_EXTRACT(MOS6522, MOS6522_DECL)
 
+// --- Bitfield accessors ---
+namespace mos6522 { namespace fld {
+#define MOS6522_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
+    inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
+    inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
+MOS6522_DECL(DECL_REG_NOP, MOS6522_X_FLD_NS_, DECL_CMP_NOP)
+#undef MOS6522_X_FLD_NS_
+} } // namespace mos6522::fld
+
 // Interrupt flags
 #define MOS6522_IFR_IRQ      0x80
 #define MOS6522_IFR_SET_CLR  0x80

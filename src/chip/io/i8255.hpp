@@ -41,10 +41,22 @@
       FLD(CONTROL, PB_DIR,     1:1, "Port B dir (1=in)",     Flag,  0, 0)       \
       FLD(CONTROL, PC_LO_DIR,  0:0, "Port C lo dir (1=in)",  Flag,  0, 0)
 
-namespace i8255_regs {
+namespace i8255 {
+namespace reg {
     I8255_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 4;
-} // namespace i8255_regs
+}
+namespace fld {
+#define I8255_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
+    inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
+    inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
+I8255_DECL(DECL_REG_NOP, I8255_X_FLD_NS_, DECL_CMP_NOP)
+#undef I8255_X_FLD_NS_
+} // namespace fld
+} // namespace i8255
+
+// Backward compatibility alias
+namespace i8255_regs = i8255::reg;
 
 DECL_EXTRACT(I8255, I8255_DECL)
 
