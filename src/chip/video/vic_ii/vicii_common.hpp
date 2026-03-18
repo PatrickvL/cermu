@@ -80,11 +80,21 @@ class IndexedFrameBuffer;
       FLD(C2,   XSCROLL,  2:0, "X scroll",             Value, 0, 0)            \
       FLD(C2,   CSEL,     3:3, "Column select 38/40",  Flag, 0, 0)             \
       FLD(C2,   MCM,      4:4, "Multi-color mode",     Flag, 0, 0)             \
+      FLD(C2,   RES,      5:5, "Reserved (always 0)",  Flag, 0, 0)             \
+      FLD(C2,   UNUSED,   7:6, "Unused (always high)", Value, 0, 0)            \
     /* ---- Sprite Y Expand ($D017) ---- */ \
     REG(23, MXYE,   "Sprite Y expand")                                         \
     /* ---- Memory Pointers ($D018) ---- */ \
     REG(24, MP,     "Memory pointers")                                         \
+      FLD(MP,   UNUSED,   0:0, "Unused (always high)", Flag, 0, 0)             \
+      FLD(MP,   CB11,     1:1, "Char base bit 11",     Flag, 0, 0)             \
+      FLD(MP,   CB12,     2:2, "Char base bit 12",     Flag, 0, 0)             \
+      FLD(MP,   CB13,     3:3, "Char base bit 13",     Flag, 0, 0)             \
       FLD(MP,   CB,       3:1, "Char base",            Address, 11, 0)         \
+      FLD(MP,   VM10,     4:4, "Video matrix bit 10",  Flag, 0, 0)             \
+      FLD(MP,   VM11,     5:5, "Video matrix bit 11",  Flag, 0, 0)             \
+      FLD(MP,   VM12,     6:6, "Video matrix bit 12",  Flag, 0, 0)             \
+      FLD(MP,   VM13,     7:7, "Video matrix bit 13",  Flag, 0, 0)             \
       FLD(MP,   VM,       7:4, "Video matrix",         Address, 10, 0)         \
     /* ---- Interrupt Register ($D019) ---- */ \
     REG(25, IR,     "Interrupt request")                                        \
@@ -92,6 +102,7 @@ class IndexedFrameBuffer;
       FLD(IR,   IMBC,     1:1, "Sprite-data coll IRQ", Flag, 0, 0)             \
       FLD(IR,   IMMC,     2:2, "Sprite-sprite IRQ",    Flag, 0, 0)             \
       FLD(IR,   ILP,      3:3, "Light pen IRQ",        Flag, 0, 0)             \
+      FLD(IR,   UNUSED,   6:4, "Unused (floating)",    Value, 0, 0)            \
       FLD(IR,   IRQ,      7:7, "Any IRQ active",       Flag, 0, 0)             \
     /* ---- Interrupt Enable ($D01A) ---- */ \
     REG(26, IE,     "Interrupt enable")                                         \
@@ -99,6 +110,7 @@ class IndexedFrameBuffer;
       FLD(IE,   EMBC,     1:1, "Spr-data coll enable", Flag, 0, 0)             \
       FLD(IE,   EMMC,     2:2, "Spr-spr coll enable",  Flag, 0, 0)             \
       FLD(IE,   ELP,      3:3, "Light pen IRQ enable",  Flag, 0, 0)            \
+      FLD(IE,   UNUSED,   7:4, "Unused (always high)", Value, 0, 0)            \
     /* ---- Sprite attribute registers ---- */ \
     REG(27, MXDP,   "Sprite data priority")                                    \
     REG(28, MXMC,   "Sprite multicolor")                                       \
@@ -179,58 +191,16 @@ DECL_EXTRACT(VICII, VICII_DECL, DECL_X_ENTRY_CMP_)
 VICII_DECL(DECL_REG_NOP, VICII_X_FLD_CONST_, DECL_CMP_NOP)
 #undef VICII_X_FLD_CONST_
 
-// Control register 1 ($d011) bit masks
-#define VICII_C1_YSCROLL  0x07  // Smooth Scroll to Y Pos
-#define VICII_C1_RSEL     0x08  // Select 24/25 Row Text Display
-#define VICII_C1_DEN      0x10  // Display Enable
-#define VICII_C1_BMM      0x20  // Bitmap Mode
-#define VICII_C1_ECM      0x40  // Extended Color Mode
-#define VICII_C1_RST8     0x80  // Raster bit 8
-
-// Control register 2 ($d016) bit masks
-#define VICII_C2_XSCROLL  0x07  // Smooth Scroll to X Pos
-#define VICII_C2_CSEL     0x08  // Select 38/40 Column Text Display
-#define VICII_C2_MCM      0x10  // Multi-Color Mode
-#define VICII_C2_RES      0x20  // Reserved (always 0)
-#define VICII_C2_UNUSED   0xC0  // Unused bits - always high
-
-// Memory pointers ($d018) bit masks
-#define VICII_MP_UNUSED   0x01  // Unused bits - always high
-#define VICII_MP_CB11     0x02  // Character Dot-Data Base Address
-#define VICII_MP_CB12     0x04
-#define VICII_MP_CB13     0x08
-#define VICII_MP_VM10     0x10  // Video Matrix Base Address
-#define VICII_MP_VM11     0x20
-#define VICII_MP_VM12     0x40
-#define VICII_MP_VM13     0x80
-
-// Interrupt Register ($d019) bit masks
-#define VICII_IR_IRST     0x01  // Raster Compare occurred
-#define VICII_IR_IMBC     0x02  // Sprite-data Collision occurred
-#define VICII_IR_IMMC     0x04  // Sprite to Sprite Collision occurred
-#define VICII_IR_ILP      0x08  // Light-Pen occurred
-#define VICII_IR_UNUSED   0x70  // Unused bits - floating, mostly set high
-#define VICII_IR_IRQ      0x80  // Set on Any Enabled VIC IRQ Condition
-
-// Interrupt Enabled ($d01a) bit masks
-#define VICII_IE_ERST     0x01  // Raster interrupt enabled
-#define VICII_IE_EMBC     0x02  // Sprite-data collision interrupt enabled
-#define VICII_IE_EMMC     0x04  // Sprite-sprite collision interrupt enabled
-#define VICII_IE_ELP      0x08  // Light pen interrupt enabled
-#define VICII_IE_UNUSED   0xF0  // Unused bits - always high
-
-// Graphics modes
-#define VICII_GM_STANDARD_TEXT      0  // ECM/BMM/MCM=0/0/0
-#define VICII_GM_MULTICOLOR_TEXT    1  // ECM/BMM/MCM=0/0/1
-#define VICII_GM_STANDARD_BITMAP    2  // ECM/BMM/MCM=0/1/0
-#define VICII_GM_MULTICOLOR_BITMAP  3  // ECM/BMM/MCM=0/1/1
-#define VICII_GM_ECM_TEXT           4  // ECM/BMM/MCM=1/0/0
-#define VICII_GM_INVALID_TEXT       5  // ECM/BMM/MCM=1/0/1
-#define VICII_GM_INVALID_BITMAP1    6  // ECM/BMM/MCM=1/1/0
-#define VICII_GM_INVALID_BITMAP2    7  // ECM/BMM/MCM=1/1/1
-
-// Mode bitmasks
-#define VICII_MULTICOLOR_MODE_MASK    1  // MCM=1
+// Graphics mode indices (derived from ECM/BMM/MCM bit combination >> 4)
+constexpr uint8_t VICII_GM_STANDARD_TEXT      = 0;  // ECM/BMM/MCM=0/0/0
+constexpr uint8_t VICII_GM_MULTICOLOR_TEXT    = 1;  // ECM/BMM/MCM=0/0/1
+constexpr uint8_t VICII_GM_STANDARD_BITMAP    = 2;  // ECM/BMM/MCM=0/1/0
+constexpr uint8_t VICII_GM_MULTICOLOR_BITMAP  = 3;  // ECM/BMM/MCM=0/1/1
+constexpr uint8_t VICII_GM_ECM_TEXT           = 4;  // ECM/BMM/MCM=1/0/0
+constexpr uint8_t VICII_GM_INVALID_TEXT       = 5;  // ECM/BMM/MCM=1/0/1
+constexpr uint8_t VICII_GM_INVALID_BITMAP1    = 6;  // ECM/BMM/MCM=1/1/0
+constexpr uint8_t VICII_GM_INVALID_BITMAP2    = 7;  // ECM/BMM/MCM=1/1/1
+constexpr uint8_t VICII_MULTICOLOR_MODE_MASK  = 1;  // MCM=1
 
 // VIC-II Colors
 enum vicii_color_e {
@@ -291,7 +261,7 @@ constexpr uint16_t VICII_BORDER_RIGHT_CSEL1 = 344; // 0x158
 #define VIC_ACCESS_REFRESH_C    6  // PHI1: r-access, PHI2: c-access (spec cycle 15 only)
 
 // Interrupt mask
-#define VICII_INTERRUPTS_MASK (VICII_IR_ILP | VICII_IR_IMMC | VICII_IR_IMBC | VICII_IR_IRST)
+constexpr uint8_t VICII_INTERRUPTS_MASK = VICII_IR_ILP_MASK | VICII_IR_IMMC_MASK | VICII_IR_IMBC_MASK | VICII_IR_IRST_MASK;
 
 // Number of sprites
 #define VICII_NUM_SPRITES 8
