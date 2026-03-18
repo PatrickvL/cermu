@@ -569,6 +569,46 @@ private:
     bus_state_t         bus_prev_        = 0;       // Previous bus state (edge detection)
     uint16_t            reset_counter_   = 0;       // Counts clocks with RESET asserted
 
+    // ── Test harness support ────────────────────────────────────
+public:
+    /// Returns true when the CPU is at an instruction boundary.
+    /// Used by test harnesses to detect instruction completion.
+    bool opdone() const {
+        return current_handler_ == &m680x0_t::handle_decode
+            && step_ == 0;
+    }
+
+    /// Set CPU to "ready to decode" state (skip reset sequence).
+    /// Call after init() and loading registers to start executing from IRD.
+    void prepare_for_test() {
+        current_handler_ = &m680x0_t::handle_decode;
+        step_ = 0;
+        halted_ = false;
+        stopped_ = false;
+        reset_counter_ = 0;
+    }
+
+    // === Register accessors (for test harness) ===
+    uint32_t reg_d(uint8_t n) const { return regs_.d[n & 7]; }
+    uint32_t reg_a(uint8_t n) const { return regs_.a[n & 7]; }
+    uint32_t reg_pc() const { return regs_.pc; }
+    uint16_t reg_sr() const { return regs_.sr; }
+    uint32_t reg_usp() const { return regs_.usp; }
+    uint32_t reg_ssp() const { return regs_.ssp; }
+    uint16_t reg_irc() const { return regs_.irc; }
+    uint16_t reg_ir() const { return regs_.ir; }
+    uint16_t reg_ird() const { return regs_.ird; }
+
+    void set_reg_d(uint8_t n, uint32_t v) { regs_.d[n & 7] = v; }
+    void set_reg_a(uint8_t n, uint32_t v) { regs_.a[n & 7] = v; }
+    void set_reg_pc(uint32_t v) { regs_.pc = v; }
+    void set_reg_sr(uint16_t v) { regs_.sr = v; }
+    void set_reg_usp(uint32_t v) { regs_.usp = v; }
+    void set_reg_ssp(uint32_t v) { regs_.ssp = v; }
+    void set_reg_irc(uint16_t v) { regs_.irc = v; }
+    void set_reg_ir(uint16_t v) { regs_.ir = v; }
+    void set_reg_ird(uint16_t v) { regs_.ird = v; }
+
     // ── GUI support ─────────────────────────────────────────────
 #ifdef CERMU_HAS_GUI
 public:
