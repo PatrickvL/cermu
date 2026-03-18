@@ -16,6 +16,7 @@
 #include <imgui.h>
 #include "gui/chip_visualization.hpp"
 #include <cstdio>
+#include <cstring>
 #include <algorithm>
 
 // ============================================================================
@@ -558,7 +559,18 @@ void render_decl_sub_entry(const DeclEntry& entry, uint32_t val,
     }
 }
 
-// Walk the DeclEntry array and render each entry in declaration order
+// Read N bytes from a register backing store in host byte order.
+// The backing store is assumed to hold values in host-endian layout
+// (i.e. written via memcpy from native integer types).
+static inline uint32_t read_reg_bytes(const uint8_t* data, uint16_t offset, uint8_t count) {
+    uint32_t val = 0;
+    std::memcpy(&val, data + offset, count);
+    return val;
+}
+
+// Walk the DeclEntry array and render each entry in declaration order.
+// Supports multi-byte registers: REG rows with bit_width > 8 read
+// ceil(bit_width/8) bytes and display with wider hex format.
 void render_decl_walk(const ChipDebugRegistry& reg, const ChipBase* /*chip*/) {
     const auto* entries    = reg.decl_entries();
     size_t      count      = reg.decl_entry_count();
@@ -568,26 +580,52 @@ void render_decl_walk(const ChipDebugRegistry& reg, const ChipBase* /*chip*/) {
     const auto* palette    = reg.palette();
     uint16_t    pal_size   = reg.palette_size();
 
+    uint8_t     cur_reg_bytes = 1;  // Track current register's byte width for FLD reads
+
     for (size_t i = 0; i < count; ++i) {
         const auto& e = entries[i];
         switch (e.type) {
             case DeclRowType::Reg: {
+                // Determine byte width: annotated registers use bit_width,
+                // unannotated ones default to 1 byte (backward compatible)
+                uint8_t reg_bytes = (e.bit_width > 0) ? ((e.bit_width + 7) / 8) : 1;
+                cur_reg_bytes = reg_bytes;
                 if (!e.desc || e.desc[0] == '-') continue;  // skip unnamed slots
+                uint32_t val = read_reg_bytes(reg_data, e.reg_offset, reg_bytes);
                 char line[128];
-                if (base_addr)
-                    snprintf(line, sizeof(line), "$%04X  %-14s $%02X  %s",
-                             (unsigned)(base_addr + e.reg_offset), e.label,
-                             reg_data[e.reg_offset], e.desc);
-                else
-                    snprintf(line, sizeof(line), "  $%02X  %-14s $%02X  %s",
-                             (unsigned)e.reg_offset, e.label,
-                             reg_data[e.reg_offset], e.desc);
+                if (base_addr) {
+                    if (reg_bytes <= 1)
+                        snprintf(line, sizeof(line), "$%04X  %-14s $%02X  %s",
+                                 (unsigned)(base_addr + e.reg_offset), e.label,
+                                 val, e.desc);
+                    else if (reg_bytes <= 2)
+                        snprintf(line, sizeof(line), "$%04X  %-14s $%04X  %s",
+                                 (unsigned)(base_addr + e.reg_offset), e.label,
+                                 val, e.desc);
+                    else
+                        snprintf(line, sizeof(line), "$%04X  %-14s $%08X  %s",
+                                 (unsigned)(base_addr + e.reg_offset), e.label,
+                                 val, e.desc);
+                } else {
+                    if (reg_bytes <= 1)
+                        snprintf(line, sizeof(line), "  $%02X  %-14s $%02X  %s",
+                                 (unsigned)e.reg_offset, e.label,
+                                 val, e.desc);
+                    else if (reg_bytes <= 2)
+                        snprintf(line, sizeof(line), "  $%02X  %-14s $%04X  %s",
+                                 (unsigned)e.reg_offset, e.label,
+                                 val, e.desc);
+                    else
+                        snprintf(line, sizeof(line), "  $%02X  %-14s $%08X  %s",
+                                 (unsigned)e.reg_offset, e.label,
+                                 val, e.desc);
+                }
                 ImGui::TextUnformatted(line);
                 // Inline DataKind visualization for kind-annotated registers
                 if (e.kind == DataKind::Color && palette && e.bit_width > 0) {
-                    uint32_t val = reg_data[e.reg_offset] & ((1u << e.bit_width) - 1u);
-                    if (val < pal_size) {
-                        uint32_t rgb = palette[val];
+                    uint32_t color_val = val & ((1u << e.bit_width) - 1u);
+                    if (color_val < pal_size) {
+                        uint32_t rgb = palette[color_val];
                         ImGui::SameLine();
                         ImVec4 col(((rgb >> 16) & 0xFF) / 255.0f,
                                    ((rgb >>  8) & 0xFF) / 255.0f,
@@ -602,7 +640,7 @@ void render_decl_walk(const ChipDebugRegistry& reg, const ChipBase* /*chip*/) {
                 break;
             }
             case DeclRowType::Field: {
-                uint32_t reg_val = reg_data[e.reg_offset];
+                uint32_t reg_val = read_reg_bytes(reg_data, e.reg_offset, cur_reg_bytes);
                 uint32_t val = (reg_val >> e.bit_offset) & ((1u << e.bit_width) - 1u);
                 render_decl_sub_entry(e, val, palette, pal_size);
                 break;

@@ -29,88 +29,13 @@ namespace m680x0 {
 
 template <const M680x0Traits& Traits>
 void m680x0_t<Traits>::register_debug_fields() {
-    using M68K = const m680x0_t;
     auto& r = this->debug_registry_;
 
-    // SR snapshot backing store (2 bytes: CCR + system byte)
+    // Point the debug registry at the flat byte array + DECL table.
+    // All register values are data-driven — no per-register callbacks.
     sync_debug_snapshot();
-    r.set_registers(sr_snapshot_, M68K_SR_SNAPSHOT_SIZE, M68K_REG_INFO);
+    r.set_registers(debug_regs_, M68K_DBG_SIZE, M68K_REG_INFO);
     r.set_decl_entries(M68K_DECL_ENTRIES.data(), M68K_DECL_ENTRIES.size());
-
-    // ---- Processor Registers (via callback) ----
-    r.category("Program Counter")
-     .address("PC",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.pc; }, 32);
-
-    r.category("Data Registers")
-     .value("D0",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.d[0]; }, 32)
-     .value("D1",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.d[1]; }, 32)
-     .value("D2",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.d[2]; }, 32)
-     .value("D3",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.d[3]; }, 32)
-     .value("D4",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.d[4]; }, 32)
-     .value("D5",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.d[5]; }, 32)
-     .value("D6",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.d[6]; }, 32)
-     .value("D7",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.d[7]; }, 32);
-
-    r.category("Address Registers")
-     .value("A0",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.a[0]; }, 32)
-     .value("A1",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.a[1]; }, 32)
-     .value("A2",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.a[2]; }, 32)
-     .value("A3",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.a[3]; }, 32)
-     .value("A4",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.a[4]; }, 32)
-     .value("A5",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.a[5]; }, 32)
-     .value("A6",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.a[6]; }, 32)
-     .value("A7",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.a[7]; }, 32);
-
-    r.category("Stack Pointers")
-     .address("USP",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.usp; }, 32)
-     .address("SSP",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.ssp; }, 32);
-
-    r.category("Prefetch Pipeline")
-     .value("IRD",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.ird; }, 16)
-     .value("IR",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.ir; }, 16)
-     .value("IRC",
-         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.irc; }, 16);
-
-    // 68010+ control registers
-    if constexpr (has_vbr()) {
-        r.category("Control Registers")
-         .address("VBR",
-             +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.vbr; }, 32)
-         .value("SFC",
-             +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.sfc; }, 8)
-         .value("DFC",
-             +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.dfc; }, 8);
-    }
-
-    // 68020+ cache control registers
-    if constexpr (has_cache()) {
-        r.category("Cache Control")
-         .value("CACR",
-             +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.cacr; }, 32)
-         .value("CAAR",
-             +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.caar; }, 32);
-    }
 }
 
 template void m680x0_t<MC68000Traits>::register_debug_fields();
