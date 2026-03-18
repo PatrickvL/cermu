@@ -65,13 +65,13 @@ inline uint32_t alu_add(uint32_t src, uint32_t dst, OpSize sz) {
     uint32_t msb  = msb_mask(sz);
     src &= mask;
     dst &= mask;
-    uint32_t result = src + dst;
-    uint32_t carries = src ^ dst ^ result;
+    uint64_t full = (uint64_t)src + dst;
+    uint32_t result = (uint32_t)full;
 
     uint8_t ccr = 0;
     if ((result & mask) == 0)              ccr |= Flags::Z;
     if (result & msb)                      ccr |= Flags::N;
-    if (result & ~mask)                    ccr |= Flags::C | Flags::X;  // unsigned overflow
+    if (full > mask)                       ccr |= Flags::C | Flags::X;  // unsigned overflow
     // Signed overflow: same-sign operands produce different-sign result
     if ((~(src ^ dst) & (src ^ result)) & msb) ccr |= Flags::V;
     set_ccr(ccr);
@@ -119,12 +119,13 @@ inline uint32_t alu_addx(uint32_t src, uint32_t dst, OpSize sz) {
     uint32_t x_in = (get_ccr() & Flags::X) ? 1 : 0;
     src &= mask;
     dst &= mask;
-    uint32_t result = src + dst + x_in;
+    uint64_t full = (uint64_t)src + dst + x_in;
+    uint32_t result = (uint32_t)full;
 
     uint8_t ccr = get_ccr() & Flags::Z;  // Z is cleared only if result non-zero
     if ((result & mask) != 0)              ccr &= ~Flags::Z;
     if (result & msb)                      ccr |= Flags::N;
-    if (result & ~mask)                    ccr |= Flags::C | Flags::X;
+    if (full > mask)                       ccr |= Flags::C | Flags::X;
     if ((~(src ^ dst) & (src ^ result)) & msb) ccr |= Flags::V;
     set_ccr(ccr);
     return result & mask;
@@ -142,7 +143,7 @@ inline uint32_t alu_subx(uint32_t src, uint32_t dst, OpSize sz) {
     uint8_t ccr = get_ccr() & Flags::Z;
     if ((result & mask) != 0)              ccr &= ~Flags::Z;
     if (result & msb)                      ccr |= Flags::N;
-    if (dst < (src + x_in))               ccr |= Flags::C | Flags::X;
+    if ((uint64_t)src + x_in > dst)       ccr |= Flags::C | Flags::X;
     if (((src ^ dst) & (dst ^ result)) & msb) ccr |= Flags::V;
     set_ccr(ccr);
     return result & mask;

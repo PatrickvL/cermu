@@ -375,7 +375,12 @@ inline bus_state_t decode_group8(bus_state_t pins, uint16_t opcode) {
         if (ea_mode == 0) {
             src_val = read_dn(ea_reg, sz);
         } else {
-            src_val = read_ea(ea_mode, ea_reg, sz);
+            ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
+            reg_idx_ = dn;
+            op_sz_ = sz;
+            pending_op_ = OP_OR;
+            bus_op_mode_ = (sz == OpSize::Long) ? BUS_READ_TO_DN_LONG : BUS_READ_TO_DN;
+            return begin_ea_read(pins, ea_mode);
         }
         uint32_t dst_val = read_dn(dn, sz);
         uint32_t result = alu_or(src_val, dst_val, sz);
@@ -384,6 +389,14 @@ inline bus_state_t decode_group8(bus_state_t pins, uint16_t opcode) {
         if (ea_mode <= 1 && sz == OpSize::Long) return do_idle_then_prefetch(pins, 4);
     } else {
         // Dn OR <ea> → <ea>
+        if (ea_mode >= 2) {
+            ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
+            reg_idx_ = dn;
+            op_sz_ = sz;
+            pending_op_ = OP_OR;
+            bus_op_mode_ = (sz == OpSize::Long) ? BUS_RMW_LONG : BUS_RMW;
+            return begin_ea_read(pins, ea_mode);
+        }
         uint32_t src_val = read_dn(dn, sz);
         uint32_t dst_val = read_ea(ea_mode, ea_reg, sz);
         uint32_t result = alu_or(src_val, dst_val, sz);
@@ -435,8 +448,7 @@ inline bus_state_t decode_group9(bus_state_t pins, uint16_t opcode) {
         return do_prefetch(pins);
     }
 
-    // SUB: opmodes 0,1,2 (<ea> - Dn → Dn) and 4,5,6 are SUBX (handled above)
-    // Actually: opmode 0,1,2 = <ea>,Dn → Dn; opmode 4,5,6 = Dn,<ea> → <ea> (if not SUBX)
+    // SUB: opmodes 0,1,2 (<ea> - Dn → Dn) and 4,5,6 = Dn,<ea> → <ea> (if not SUBX)
     OpSize sz = static_cast<OpSize>(opmode & 3);
     if (opmode < 3) {
         // <ea> → Dn
@@ -448,12 +460,30 @@ inline bus_state_t decode_group9(bus_state_t pins, uint16_t opcode) {
             if (sz == OpSize::Word)
                 src_val = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(src_val)));
         } else {
-            src_val = read_ea(ea_mode, ea_reg, sz);
+            ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
+            reg_idx_ = dn;
+            op_sz_ = sz;
+            pending_op_ = OP_SUB;
+            bus_op_mode_ = (sz == OpSize::Long) ? BUS_READ_TO_DN_LONG : BUS_READ_TO_DN;
+            return begin_ea_read(pins, ea_mode);
         }
         uint32_t result = alu_sub(src_val, read_dn(dn, sz), sz);
         write_dn(dn, result, sz);
         // SUB .l Dn,Dn: 8 clocks (4 idle)
         if (ea_mode <= 1 && sz == OpSize::Long) return do_idle_then_prefetch(pins, 4);
+        return do_prefetch(pins);
+    }
+    // opmode 4,5,6: SUB Dn → <ea>
+    if (opmode >= 4 && opmode <= 6) {
+        sz = static_cast<OpSize>(opmode - 4);
+        if (ea_mode >= 2) {
+            ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
+            reg_idx_ = dn;
+            op_sz_ = sz;
+            pending_op_ = OP_SUB;
+            bus_op_mode_ = (sz == OpSize::Long) ? BUS_RMW_LONG : BUS_RMW;
+            return begin_ea_read(pins, ea_mode);
+        }
     }
     return do_prefetch(pins);
 }
@@ -503,9 +533,13 @@ inline bus_state_t decode_groupB(bus_state_t pins, uint16_t opcode) {
             // EOR .l Dn,Dn: 8 clocks (4 idle)
             if (sz == OpSize::Long) return do_idle_then_prefetch(pins, 4);
         } else {
-            uint32_t dst_val = read_ea(ea_mode, ea_reg, sz);
-            uint32_t result = alu_eor(src_val, dst_val, sz);
-            write_ea(ea_mode, ea_reg, result, sz);
+            // EOR Dn, <ea> — read-modify-write
+            ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
+            reg_idx_ = dn;
+            op_sz_ = sz;
+            pending_op_ = OP_EOR;
+            bus_op_mode_ = (sz == OpSize::Long) ? BUS_RMW_LONG : BUS_RMW;
+            return begin_ea_read(pins, ea_mode);
         }
         return do_prefetch(pins);
     }
@@ -521,7 +555,12 @@ inline bus_state_t decode_groupB(bus_state_t pins, uint16_t opcode) {
             if (sz == OpSize::Word)
                 src_val = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(src_val)));
         } else {
-            src_val = read_ea(ea_mode, ea_reg, sz);
+            ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
+            reg_idx_ = dn;
+            op_sz_ = sz;
+            pending_op_ = OP_CMP;
+            bus_op_mode_ = (sz == OpSize::Long) ? BUS_READ_TO_DN_LONG : BUS_READ_ONLY;
+            return begin_ea_read(pins, ea_mode);
         }
         alu_cmp(src_val, read_dn(dn, sz), sz);
         // CMP .l Dn,Dn: 6 clocks (2 idle)
@@ -613,13 +652,26 @@ inline bus_state_t decode_groupC(bus_state_t pins, uint16_t opcode) {
     }
 
     // AND: opmodes 0,1,2 (<ea> AND Dn → Dn) and 4,5,6 (Dn AND <ea> → <ea>)
-    OpSize sz;
-    switch (opmode & 3) {
-        case 0: sz = OpSize::Byte; break;
-        case 1: sz = OpSize::Word; break;
-        case 2: sz = OpSize::Long; break;
-        default: return do_prefetch(pins);
-    }
+    OpSize sea_addr_ = calc_ea(ea_mode, ea_reg, sz);
+            reg_idx_ = dn;
+            op_sz_ = sz;
+            pending_op_ = OP_AND;
+            bus_op_mode_ = (sz == OpSize::Long) ? BUS_READ_TO_DN_LONG : BUS_READ_TO_DN;
+            return begin_ea_read(pins, ea_mode);
+        }
+        uint32_t result = alu_and(src_val, read_dn(dn, sz), sz);
+        write_dn(dn, result, sz);
+        // AND .l Dn,Dn: 8 clocks (4 idle)
+        if (ea_mode <= 1 && sz == OpSize::Long) return do_idle_then_prefetch(pins, 4);
+    } else {
+        if (ea_mode >= 2) {
+            ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
+            reg_idx_ = dn;
+            op_sz_ = sz;
+            pending_op_ = OP_AND;
+            bus_op_mode_ = (sz == OpSize::Long) ? BUS_RMW_LONG : BUS_RMW;
+            return begin_ea_read(pins, ea_mode);
+        }
 
     if (opmode < 3) {
         uint32_t src_val;
@@ -693,15 +745,32 @@ inline bus_state_t decode_groupD(bus_state_t pins, uint16_t opcode) {
             if (sz == OpSize::Word)
                 src_val = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(src_val)));
         } else {
-            src_val = read_ea(ea_mode, ea_reg, sz);
+            // Memory EA: use bus cycle handlers
+            ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
+            reg_idx_ = dn;
+            op_sz_ = sz;
+            pending_op_ = OP_ADD;
+            bus_op_mode_ = (sz == OpSize::Long) ? BUS_READ_TO_DN_LONG : BUS_READ_TO_DN;
+            return begin_ea_read(pins, ea_mode);
         }
         uint32_t result = alu_add(src_val, read_dn(dn, sz), sz);
         write_dn(dn, result, sz);
         // ADD .l Dn,Dn: 8 clocks (4 idle)
         if (ea_mode <= 1 && sz == OpSize::Long) return do_idle_then_prefetch(pins, 4);
+        return do_prefetch(pins);
     }
-    // opmode 4,5,6 are ADDX (handled above) when ea_mode 0/1,
-    // but also Dn + <ea> → <ea> when ea_mode >= 2
+    // opmode 4,5,6: ADD Dn → <ea> (memory destination)
+    if (opmode >= 4 && opmode <= 6) {
+        sz = static_cast<OpSize>(opmode - 4);
+        if (ea_mode >= 2) {
+            ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
+            reg_idx_ = dn;
+            op_sz_ = sz;
+            pending_op_ = OP_ADD;
+            bus_op_mode_ = (sz == OpSize::Long) ? BUS_RMW_LONG : BUS_RMW;
+            return begin_ea_read(pins, ea_mode);
+        }
+    }
     return do_prefetch(pins);
 }
 
