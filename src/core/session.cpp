@@ -16,6 +16,7 @@ System* Session::add_system(std::string name, std::unique_ptr<System> system) {
     }
 
     System* ptr = system.get();
+    ptr->set_session(this);
     systems_.push_back({std::move(name), std::move(system)});
     return ptr;
 }

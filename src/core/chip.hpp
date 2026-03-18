@@ -17,6 +17,7 @@
 // Forward declarations for layout support
 struct ChipLayout;
 struct PinSignalState;
+class BoardBase;
 
 // ============================================================================
 // VIDEO STANDARD — TV broadcast standard affecting system timing
@@ -105,6 +106,10 @@ public:
     ChipDebugRegistry debug_registry_;
 #endif
 
+    // --- Parent board (set by Board during bind/create_chips) ---
+    BoardBase* board() const { return board_; }
+    void set_board(BoardBase* b) { board_ = b; }
+
     // --- Bus chip identity (assigned by Board during bind) ---
     uint16_t bus_chip_id() const { return bus_chip_id_; }
     void set_bus_chip_id(uint16_t id) { bus_chip_id_ = id; }
@@ -179,6 +184,8 @@ protected:
     virtual ChipLayout* create_chip_layout() const { return nullptr; }
     void invalidate_layout() const { layout_initialized_ = false; layout_ = nullptr; }
 #endif
+
+    BoardBase* board_ = nullptr;            // Non-owning back-reference to parent board
 
     // Registration metadata — set by derived constructors or by register_chip()
     uint16_t bus_chip_id_ = 0xFFFF;        // MemoryBus chip id (0xFFFF = unassigned)

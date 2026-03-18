@@ -13,8 +13,9 @@
 #include "core/peripherals/input_peripheral_device.hpp"
 #include "core/device_registry.hpp"
 
-// Forward-declare format descriptor so SystemDescriptor can reference it
+// Forward declarations
 struct format_descriptor_t;
+class Session;
 
 #include "core/indexed_frame_buffer.hpp"
 #include "core/board_base.hpp"
@@ -180,6 +181,8 @@ protected:
         display_ = display;
     }
     
+    Session* session_ = nullptr;  // Non-owning back-reference to parent session
+
     // Emulation state
     uint64_t total_cycles_;
     float speed_multiplier_;
@@ -262,7 +265,11 @@ protected:
     std::vector<BoardBase*> boards_;
 
     /// Register a board.  The first call establishes the main board.
-    void register_board(BoardBase* board) { boards_.push_back(board); }
+    /// Sets the board's back-reference to this system.
+    void register_board(BoardBase* board) {
+        board->set_system(this);
+        boards_.push_back(board);
+    }
 
     /// The main board (boards_[0]) — owns connector ports.
     [[nodiscard]] BoardBase& main_board() { return *boards_[0]; }
@@ -320,6 +327,10 @@ protected:
 public:
     System();
     virtual ~System() = default;
+
+    // --- Parent session (set by Session::add_system) ---
+    Session* session() const { return session_; }
+    void set_session(Session* s) { session_ = s; }
 
     /// Attach every peripheral listed by get_default_peripherals() and
     /// then run auto_assign_controller_keymaps().  Called automatically by
