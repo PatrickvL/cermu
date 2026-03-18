@@ -99,31 +99,73 @@ namespace FunctionCode {
 } // namespace FunctionCode
 
 // ============================================================================
-// M68K DECL — Status Register layout for debug infrastructure
+// M68K DECL — CPU register layout for debug infrastructure
 // ============================================================================
 //
-// The 68000 Status Register is 16 bits, split into two 8-bit "registers"
-// for the DECL system (which works with byte-granularity):
-//   Offset 0: CCR (Condition Code Register) — bits 0-4 of SR
-//   Offset 1: System byte — bits 8-15 of SR (IPM, M, S, T0, T1)
+// All internal registers are mirrored into a flat byte array (debug_regs_)
+// in host-endian byte order.  The DECL table describes each register's byte
+// offset and width, allowing the DECL renderer to display them without any
+// hardcoded per-register callbacks.
 //
-// The sr_snapshot_[2] array is passed to set_registers() and kept in
-// sync before rendering.  The fld:: namespace provides masks/shifts
-// for these per-byte fields.
+// Byte layout (little-endian hosts; values stored via std::memcpy):
+//   Offset  Size  Register
+//   0-31    4×8   D0-D7 (Data registers)
+//   32-63   4×8   A0-A7 (Address registers)
+//   64-67   4     PC    (Program Counter)
+//   68-69   2     SR    (Status Register: CCR at +68, system byte at +69)
+//   70-73   4     USP   (User Stack Pointer)
+//   74-77   4     SSP   (Supervisor Stack Pointer)
+//   78-79   2     IRD   (Instruction Register Decoder)
+//   80-81   2     IR    (Instruction Register)
+//   82-83   2     IRC   (Instruction Register Capture)
+//   84-87   4     VBR   (Vector Base Register, 68010+)
+//   88      1     SFC   (Source Function Code, 68010+)
+//   89      1     DFC   (Dest Function Code, 68010+)
+//   90-93   4     CACR  (Cache Control, 68020+)
+//   94-97   4     CAAR  (Cache Address, 68020+)
+
+static constexpr uint16_t M68K_DBG_SIZE = 98;
 
 #define M68K_DECL(REG, FLD, CMP) \
-    REG(0x00, SR_CCR,     "Condition Code Register")                              \
-      FLD(SR_CCR,  C,       0:0, "Carry",             Flag,  0, 0)               \
-      FLD(SR_CCR,  V,       1:1, "Overflow",          Flag,  0, 0)               \
-      FLD(SR_CCR,  Z,       2:2, "Zero",              Flag,  0, 0)               \
-      FLD(SR_CCR,  N,       3:3, "Negative",          Flag,  0, 0)               \
-      FLD(SR_CCR,  X,       4:4, "Extend",            Flag,  0, 0)               \
-    REG(0x01, SR_SYS,     "System byte")                                          \
-      FLD(SR_SYS,  IPM,     2:0, "Interrupt mask",    Value, 0, 0)               \
-      FLD(SR_SYS,  M,       4:4, "Master/ISP",        Flag,  0, 0)               \
-      FLD(SR_SYS,  S,       5:5, "Supervisor",        Flag,  0, 0)               \
-      FLD(SR_SYS,  T0,      6:6, "Trace 0",           Flag,  0, 0)               \
-      FLD(SR_SYS,  T1,      7:7, "Trace 1",           Flag,  0, 0)
+    REG( 0, D0,      "Data Register 0",       Value, 31:0) \
+    REG( 4, D1,      "Data Register 1",       Value, 31:0) \
+    REG( 8, D2,      "Data Register 2",       Value, 31:0) \
+    REG(12, D3,      "Data Register 3",       Value, 31:0) \
+    REG(16, D4,      "Data Register 4",       Value, 31:0) \
+    REG(20, D5,      "Data Register 5",       Value, 31:0) \
+    REG(24, D6,      "Data Register 6",       Value, 31:0) \
+    REG(28, D7,      "Data Register 7",       Value, 31:0) \
+    REG(32, A0,      "Address Register 0",    Value, 31:0) \
+    REG(36, A1,      "Address Register 1",    Value, 31:0) \
+    REG(40, A2,      "Address Register 2",    Value, 31:0) \
+    REG(44, A3,      "Address Register 3",    Value, 31:0) \
+    REG(48, A4,      "Address Register 4",    Value, 31:0) \
+    REG(52, A5,      "Address Register 5",    Value, 31:0) \
+    REG(56, A6,      "Address Register 6",    Value, 31:0) \
+    REG(60, A7,      "Address Register 7",    Value, 31:0) \
+    REG(64, PC,      "Program Counter",       Address, 31:0) \
+    REG(68, SR_CCR,  "Condition Code Reg")                  \
+      FLD(SR_CCR,  C,       0:0, "Carry",             Flag,  0, 0)  \
+      FLD(SR_CCR,  V,       1:1, "Overflow",          Flag,  0, 0)  \
+      FLD(SR_CCR,  Z,       2:2, "Zero",              Flag,  0, 0)  \
+      FLD(SR_CCR,  N,       3:3, "Negative",          Flag,  0, 0)  \
+      FLD(SR_CCR,  X,       4:4, "Extend",            Flag,  0, 0)  \
+    REG(69, SR_SYS,  "System byte")                         \
+      FLD(SR_SYS,  IPM,     2:0, "Interrupt mask",    Value, 0, 0)  \
+      FLD(SR_SYS,  M,       4:4, "Master/ISP",        Flag,  0, 0)  \
+      FLD(SR_SYS,  S,       5:5, "Supervisor",        Flag,  0, 0)  \
+      FLD(SR_SYS,  T0,      6:6, "Trace 0",           Flag,  0, 0)  \
+      FLD(SR_SYS,  T1,      7:7, "Trace 1",           Flag,  0, 0)  \
+    REG(70, USP,     "User Stack Pointer",    Address, 31:0) \
+    REG(74, SSP,     "Supervisor Stack Ptr",  Address, 31:0) \
+    REG(78, IRD,     "Instr Reg Decoder",     Value, 15:0)  \
+    REG(80, IR,      "Instruction Register",  Value, 15:0)  \
+    REG(82, IRC,     "Instr Reg Capture",     Value, 15:0)  \
+    REG(84, VBR,     "Vector Base Register",  Address, 31:0) \
+    REG(88, SFC,     "Source Function Code",  Value, 7:0)   \
+    REG(89, DFC,     "Dest Function Code",    Value, 7:0)   \
+    REG(90, CACR,    "Cache Control",         Value, 31:0)  \
+    REG(94, CAAR,    "Cache Address",         Value, 31:0)
 
 // --- Extract address constants ---
 M68K_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
@@ -140,8 +182,6 @@ M68K_DECL(DECL_REG_NOP, M68K_X_FLD_NS_, DECL_CMP_NOP)
 } // namespace m68k
 
 DECL_EXTRACT(M68K, M68K_DECL)
-
-static constexpr uint8_t M68K_SR_SNAPSHOT_SIZE = 2;
 
 // ── Execution states ──────────────────────────────────────────────
 
@@ -627,7 +667,7 @@ private:
 
     // ── Internal state ──────────────────────────────────────────
     Registers           regs_{};
-    uint8_t             sr_snapshot_[M68K_SR_SNAPSHOT_SIZE]{}; // SR split for DECL debug
+    uint8_t             debug_regs_[M68K_DBG_SIZE]{}; // Flat byte array for DECL debug
     InstructionHandler  current_handler_ = &m680x0_t::handle_reset;
     ExecState           state_           = ExecState::RESET_SEQUENCE;
     uint8_t             step_            = 0;
@@ -687,10 +727,37 @@ public:
     void register_debug_fields();
 #endif
 
-    /// Update sr_snapshot_ from current SR (call before debug rendering)
+    /// Update debug_regs_ from current register state (call before debug rendering).
+    /// Values stored in host byte order via memcpy for DECL renderer access.
     void sync_debug_snapshot() {
-        sr_snapshot_[0] = static_cast<uint8_t>(regs_.sr & 0xFF);
-        sr_snapshot_[1] = static_cast<uint8_t>((regs_.sr >> 8) & 0xFF);
+        // D0-D7 (32 bytes at offset 0)
+        std::memcpy(&debug_regs_[0], regs_.d, 32);
+        // A0-A7 (32 bytes at offset 32)
+        std::memcpy(&debug_regs_[32], regs_.a, 32);
+        // PC (4 bytes at offset 64)
+        std::memcpy(&debug_regs_[64], &regs_.pc, 4);
+        // SR split into CCR (byte 68) + system byte (byte 69)
+        debug_regs_[68] = static_cast<uint8_t>(regs_.sr & 0xFF);
+        debug_regs_[69] = static_cast<uint8_t>((regs_.sr >> 8) & 0xFF);
+        // USP (4 bytes at offset 70)
+        std::memcpy(&debug_regs_[70], &regs_.usp, 4);
+        // SSP (4 bytes at offset 74)
+        std::memcpy(&debug_regs_[74], &regs_.ssp, 4);
+        // Prefetch pipeline (2 bytes each)
+        std::memcpy(&debug_regs_[78], &regs_.ird, 2);
+        std::memcpy(&debug_regs_[80], &regs_.ir, 2);
+        std::memcpy(&debug_regs_[82], &regs_.irc, 2);
+        // 68010+ control registers
+        if constexpr (has_vbr()) {
+            std::memcpy(&debug_regs_[84], &regs_.vbr, 4);
+            debug_regs_[88] = regs_.sfc;
+            debug_regs_[89] = regs_.dfc;
+        }
+        // 68020+ cache control
+        if constexpr (has_cache()) {
+            std::memcpy(&debug_regs_[90], &regs_.cacr, 4);
+            std::memcpy(&debug_regs_[94], &regs_.caar, 4);
+        }
     }
 
     // ── GUI support ─────────────────────────────────────────────
