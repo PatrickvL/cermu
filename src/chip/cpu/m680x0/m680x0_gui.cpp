@@ -21,6 +21,104 @@
 
 namespace m680x0 {
 
+// ════════════════════════════════════════════════════════════════════
+// Debug field registration
+// ════════════════════════════════════════════════════════════════════
+
+#ifdef CERMU_HAS_CHIP_DEBUG
+
+template <const M680x0Traits& Traits>
+void m680x0_t<Traits>::register_debug_fields() {
+    using M68K = const m680x0_t;
+    auto& r = this->debug_registry_;
+
+    // SR snapshot backing store (2 bytes: CCR + system byte)
+    sync_debug_snapshot();
+    r.set_registers(sr_snapshot_, M68K_SR_SNAPSHOT_SIZE, M68K_REG_INFO);
+    r.set_decl_entries(M68K_DECL_ENTRIES.data(), M68K_DECL_ENTRIES.size());
+
+    // ---- Processor Registers (via callback) ----
+    r.category("Program Counter")
+     .address("PC",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.pc; }, 32);
+
+    r.category("Data Registers")
+     .value("D0",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.d[0]; }, 32)
+     .value("D1",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.d[1]; }, 32)
+     .value("D2",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.d[2]; }, 32)
+     .value("D3",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.d[3]; }, 32)
+     .value("D4",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.d[4]; }, 32)
+     .value("D5",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.d[5]; }, 32)
+     .value("D6",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.d[6]; }, 32)
+     .value("D7",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.d[7]; }, 32);
+
+    r.category("Address Registers")
+     .value("A0",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.a[0]; }, 32)
+     .value("A1",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.a[1]; }, 32)
+     .value("A2",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.a[2]; }, 32)
+     .value("A3",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.a[3]; }, 32)
+     .value("A4",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.a[4]; }, 32)
+     .value("A5",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.a[5]; }, 32)
+     .value("A6",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.a[6]; }, 32)
+     .value("A7",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.a[7]; }, 32);
+
+    r.category("Stack Pointers")
+     .address("USP",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.usp; }, 32)
+     .address("SSP",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.ssp; }, 32);
+
+    r.category("Prefetch Pipeline")
+     .value("IRD",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.ird; }, 16)
+     .value("IR",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.ir; }, 16)
+     .value("IRC",
+         +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.irc; }, 16);
+
+    // 68010+ control registers
+    if constexpr (has_vbr()) {
+        r.category("Control Registers")
+         .address("VBR",
+             +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.vbr; }, 32)
+         .value("SFC",
+             +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.sfc; }, 8)
+         .value("DFC",
+             +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.dfc; }, 8);
+    }
+
+    // 68020+ cache control registers
+    if constexpr (has_cache()) {
+        r.category("Cache Control")
+         .value("CACR",
+             +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.cacr; }, 32)
+         .value("CAAR",
+             +[](const ChipBase* c) -> uint32_t { return static_cast<M68K*>(c)->regs_.caar; }, 32);
+    }
+}
+
+template void m680x0_t<MC68000Traits>::register_debug_fields();
+template void m680x0_t<MC68010Traits>::register_debug_fields();
+template void m680x0_t<MC68020Traits>::register_debug_fields();
+
+#endif // CERMU_HAS_CHIP_DEBUG
+
 #ifdef CERMU_HAS_GUI
 
 // ════════════════════════════════════════════════════════════════════
@@ -221,46 +319,11 @@ const char* m680x0_t<Traits>::get_layout_chip_name() const {
 
 template <const M680x0Traits& Traits>
 void m680x0_t<Traits>::render_debug_content() {
-    // Register display
-    ImGui::Text("PC: %08X  SR: %04X", regs_.pc, regs_.sr);
-    ImGui::Separator();
+    // Sync SR snapshot for DECL walk
+    sync_debug_snapshot();
 
-    // Data registers
-    ImGui::Text("D0: %08X  D1: %08X  D2: %08X  D3: %08X",
-                regs_.d[0], regs_.d[1], regs_.d[2], regs_.d[3]);
-    ImGui::Text("D4: %08X  D5: %08X  D6: %08X  D7: %08X",
-                regs_.d[4], regs_.d[5], regs_.d[6], regs_.d[7]);
-    ImGui::Separator();
-
-    // Address registers
-    ImGui::Text("A0: %08X  A1: %08X  A2: %08X  A3: %08X",
-                regs_.a[0], regs_.a[1], regs_.a[2], regs_.a[3]);
-    ImGui::Text("A4: %08X  A5: %08X  A6: %08X  A7: %08X",
-                regs_.a[4], regs_.a[5], regs_.a[6], regs_.a[7]);
-    ImGui::Separator();
-
-    // Stack pointers
-    ImGui::Text("USP: %08X  SSP: %08X", regs_.usp, regs_.ssp);
-
-    // Status register breakdown
-    uint8_t ccr = static_cast<uint8_t>(regs_.sr & 0x1F);
-    ImGui::Text("SR: T=%d S=%d IPM=%d  CCR: X=%d N=%d Z=%d V=%d C=%d",
-                (regs_.sr >> 15) & 1,
-                (regs_.sr >> 13) & 1,
-                (regs_.sr >> 8) & 7,
-                (ccr >> 4) & 1, (ccr >> 3) & 1, (ccr >> 2) & 1,
-                (ccr >> 1) & 1, ccr & 1);
-
-    // Prefetch pipeline
-    ImGui::Text("IRD: %04X  IR: %04X  IRC: %04X",
-                regs_.ird, regs_.ir, regs_.irc);
-
-    // 68010+ registers
-    if constexpr (has_vbr()) {
-        ImGui::Separator();
-        ImGui::Text("VBR: %08X  SFC: %02X  DFC: %02X",
-                    regs_.vbr, regs_.sfc, regs_.dfc);
-    }
+    // DECL-based register/field walk + builder-API categories
+    debug_registry_.render(this);
 }
 
 // ════════════════════════════════════════════════════════════════════
