@@ -67,11 +67,11 @@
 //
 inline constexpr auto kC128Chips = make_chip_manifest(
     Slot<RAMChip>{0x0000, 131072, 0, "Main RAM", 0, 65536},  // 2 × 64 KB banks
-    Slot<ROMChip>{0x4000,  16384, 0, "BASIC lo"}.with_rom("c128_basic_lo.rom|basic_lo.rom|basiclo.rom"),
-    Slot<ROMChip>{0x8000,  16384, 0, "BASIC hi"}.with_rom("c128_basic_hi.rom|basic_hi.rom|basichi.rom"),
+    Slot<ROMChip>{0x4000,  16384, 0, "BASIC lo"}.with_rom("basic-4000.318018-04.bin|c128_basic_lo.rom|basic_lo.rom|basiclo.rom"),
+    Slot<ROMChip>{0x8000,  16384, 0, "BASIC hi"}.with_rom("basic-8000.318019-04.bin|c128_basic_hi.rom|basic_hi.rom|basichi.rom"),
     Slot<ROMChip>{0xC000,   4096, 0, "Editor ROM"}.with_rom("c128_editor.rom|editor.rom"),
-    Slot<ROMChip>{0xE000,   8192, 0, "Kernal ROM"}.with_rom("c128_kernal.rom|kernal.rom"),
-    Slot<ROMChip>{0xD000,   4096, 0, "Character ROM"}.with_rom("c128_chargen.rom|chargen.rom|characters.rom"),
+    Slot<ROMChip>{0xE000,   8192, 0, "Kernal ROM"}.with_rom("kernal.318020-05.bin|c128_kernal.rom|kernal.rom"),
+    Slot<ROMChip>{0xD000,   4096, 0, "Character ROM"}.with_rom("characters.390059-01.bin|c128_chargen.rom|chargen.rom|characters.rom"),
     // VDC video RAM — separate bus, not CPU-addressed
     Slot<RAMChip>{0x0000,  16384, 0, "VDC VRAM"},
     // Non-bus chips — factory-created, not address-decoded
