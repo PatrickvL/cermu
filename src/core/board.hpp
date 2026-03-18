@@ -95,6 +95,7 @@ public:
     //
 
     uint8_t* bind_chip(size_t slot_index, ChipBase* chip) {
+        if (chip) chip->set_board(this);
         bus_map_.bind_chip(slot_index, chip);
         auto& s = bus_map_.slot(slot_index);
         return s.num_pages > 0 ? chip_buffer(s.base_id) : nullptr;

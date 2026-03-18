@@ -22,6 +22,8 @@
 #include "chip/cpu/cpu_chip_base.hpp"    // CpuChipBase for cpu_chip_
 #include "chip/video/video_chip_base.hpp" // VideoChipBase for video_chip_
 
+class System;  // Forward declaration for parent back-reference
+
 #include <cstring>
 #include <memory>
 #include <span>
@@ -47,6 +49,10 @@ public:
         for (auto* c : components_)
             c->reset();
     }
+
+    // ── Parent system (set by System::register_board) ────────────────────
+    System* system() const { return system_; }
+    void set_system(System* s) { system_ = s; }
 
     // ── Board lifecycle ──────────────────────────────────────────────────
 
@@ -170,6 +176,7 @@ protected:
     }
 
     std::vector<std::unique_ptr<Port>> ports_;
+    System*        system_     = nullptr;  // Non-owning back-reference to parent system
     CpuChipBase*   cpu_chip_   = nullptr;  // First CpuChipBase-derived chip (set by Board::create_chips)
     VideoChipBase* video_chip_ = nullptr;  // First VideoChipBase-derived chip (set by Board::create_chips)
 
