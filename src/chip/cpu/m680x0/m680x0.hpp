@@ -183,6 +183,25 @@ M68K_DECL(DECL_REG_NOP, M68K_X_FLD_NS_, DECL_CMP_NOP)
 
 DECL_EXTRACT(M68K, M68K_DECL)
 
+// ── Pending ALU operation (for memory EA bus cycle handlers) ──────
+
+enum PendingOp : uint8_t {
+    OP_ADD, OP_SUB, OP_AND, OP_OR, OP_EOR,
+    OP_CMP, OP_CMPA_W, OP_CMPA_L,
+    OP_ADDA_W, OP_ADDA_L, OP_SUBA_W, OP_SUBA_L,
+    OP_MOVE, OP_MOVEA,
+    OP_CLR, OP_NEG, OP_NOT, OP_NEGX, OP_TST,
+    OP_BTST_DYN, OP_BCHG_DYN, OP_BCLR_DYN, OP_BSET_DYN,
+};
+
+enum BusOpMode : uint8_t {
+    BUS_READ_TO_DN,           // read src → ALU → write Dn → prefetch
+    BUS_READ_TO_DN_LONG,      // same but with 2-idle post-prefetch (long ops)
+    BUS_RMW,                  // read dst → ALU → prefetch → write dst
+    BUS_RMW_LONG,             // same for long (read 2, prefetch, write 2)
+    BUS_READ_ONLY,            // read src → ALU (no writeback) → prefetch (CMP/TST/BTST)
+};
+
 // ── Execution states ──────────────────────────────────────────────
 
 enum class ExecState : uint8_t {
@@ -448,6 +467,324 @@ private:
         return M68K_GET_DATA_WORD(pins);
     }
 
+    /// Read data byte from bus (after DTACK)
+    /// Both even and odd addresses deliver the byte via the DATA field
+    /// (the test harness and real hardware place the byte on D15-D8
+    /// for even addresses / UDS, and on D7-D0 for odd / LDS; our
+    /// bus convention uses DATA for both).
+    inline uint8_t read_data_byte(bus_state_t pins) const {
+        return BUS_GET_DATA(pins);
+    }
+
+    // ── Generic bus cycle handlers for memory EA ────────────────
+
+    // -- Read byte/word from ea_addr_ into data_latch_ -----------
+    // On completion: transition to cont_handler_ (next tick).
+    bus_state_t handle_read_bw(bus_state_t pins) {
+        switch (step_++) {
+            case 0:  // S0/S1: begin read
+                return (op_sz_ == OpSize::Byte)
+                    ? begin_read_byte(pins, ea_addr_, fc_data())
+                    : begin_read_word(pins, ea_addr_, fc_data());
+            case 1:  // S2/S3: propagation
+                return pins;
+            case 2:  // S4/S5: DTACK + latch
+                if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
+                data_latch_ = (op_sz_ == OpSize::Byte)
+                    ? static_cast<uint32_t>(read_data_byte(pins))
+                    : static_cast<uint32_t>(read_data_word(pins));
+                return pins;
+            case 3:  // S6/S7: end bus cycle
+                pins = end_bus_cycle(pins);
+                transition_to(cont_handler_);
+                return pins;  // Don't chain — cont runs next tick
+        }
+        return pins;
+    }
+
+    // -- Read long (two words) from ea_addr_ into data_latch_ ----
+    // Reads hi word at ea_addr_, lo word at ea_addr_+2.
+    bus_state_t handle_read_l(bus_state_t pins) {
+        switch (step_++) {
+            // First word (high)
+            case 0: return begin_read_word(pins, ea_addr_, fc_data());
+            case 1: return pins;
+            case 2:
+                if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
+                data_latch_ = static_cast<uint32_t>(read_data_word(pins)) << 16;
+                return pins;
+            case 3:
+                pins = end_bus_cycle(pins);
+                return pins;  // Gap between bus cycles
+            // Second word (low)
+            case 4: return begin_read_word(pins, ea_addr_ + 2, fc_data());
+            case 5: return pins;
+            case 6:
+                if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
+                data_latch_ |= read_data_word(pins);
+                return pins;
+            case 7:
+                pins = end_bus_cycle(pins);
+                transition_to(cont_handler_);
+                return pins;  // Don't chain
+        }
+        return pins;
+    }
+
+    // -- Write byte/word from data_latch_ to ea_addr_ ------------
+    bus_state_t handle_write_bw(bus_state_t pins) {
+        switch (step_++) {
+            case 0:
+                return (op_sz_ == OpSize::Byte)
+                    ? begin_write_byte(pins, ea_addr_, static_cast<uint8_t>(data_latch_), fc_data())
+                    : begin_write_word(pins, ea_addr_, static_cast<uint16_t>(data_latch_), fc_data());
+            case 1: return pins;
+            case 2:
+                if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
+                return pins;
+            case 3:
+                pins = end_bus_cycle(pins);
+                transition_to(cont_handler_);
+                return pins;
+        }
+        return pins;
+    }
+
+    // -- Write long from data_latch_ to ea_addr_ (lo first!) -----
+    // 68000 writes long words in reverse order: low word first.
+    bus_state_t handle_write_l(bus_state_t pins) {
+        switch (step_++) {
+            // Low word first (at ea_addr_+2)
+            case 0: return begin_write_word(pins, ea_addr_ + 2,
+                        static_cast<uint16_t>(data_latch_ & 0xFFFF), fc_data());
+            case 1: return pins;
+            case 2:
+                if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
+                return pins;
+            case 3:
+                pins = end_bus_cycle(pins);
+                return pins;
+            // High word (at ea_addr_)
+            case 4: return begin_write_word(pins, ea_addr_,
+                        static_cast<uint16_t>((data_latch_ >> 16) & 0xFFFF), fc_data());
+            case 5: return pins;
+            case 6:
+                if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
+                return pins;
+            case 7:
+                pins = end_bus_cycle(pins);
+                transition_to(cont_handler_);
+                return pins;
+        }
+        return pins;
+    }
+
+    // -- Prefetch that chains to cont_handler_ (not decode) ------
+    // Used mid-instruction (e.g., between read and write in RMW).
+    bus_state_t handle_prefetch_continue(bus_state_t pins) {
+        switch (step_++) {
+            case 0: return begin_read_word(pins, regs_.pc, fc_program());
+            case 1: return pins;
+            case 2:
+                if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
+                regs_.ir  = regs_.irc;
+                regs_.irc = read_data_word(pins);
+                regs_.pc += 2;
+                return pins;
+            case 3:
+                pins = end_bus_cycle(pins);
+                regs_.ird = regs_.ir;
+                transition_to(cont_handler_);
+                return pins;  // Don't chain
+        }
+        return pins;
+    }
+
+    // -- Idle clocks then chain to cont_handler_ -----------------
+    bus_state_t handle_idle_continue(bus_state_t pins) {
+        if (idle_remaining_ > 0) {
+            idle_remaining_--;
+            return pins;
+        }
+        // Done idling — chain to continuation immediately
+        transition_to(cont_handler_);
+        return (this->*cont_handler_)(pins);
+    }
+
+    // -- Post-prefetch idle then decode --------------------------
+    // Burns remaining idle clocks after prefetch, then enters decode.
+    bus_state_t handle_idle_to_decode(bus_state_t pins) {
+        if (idle_remaining_ > 0) {
+            idle_remaining_--;
+            return pins;
+        }
+        transition_to(&m680x0_t::handle_decode);
+        return pins;
+    }
+
+    // -- Apply pending ALU operation -----------------------------
+    inline uint32_t apply_alu(uint32_t src, uint32_t dst, OpSize sz) {
+        switch (pending_op_) {
+            case OP_ADD:  return alu_add(src, dst, sz);
+            case OP_SUB:  return alu_sub(src, dst, sz);
+            case OP_AND:  return alu_and(src, dst, sz);
+            case OP_OR:   return alu_or(src, dst, sz);
+            case OP_EOR:  return alu_eor(src, dst, sz);
+            case OP_CMP:  alu_cmp(src, dst, sz); return 0;
+            case OP_CMPA_W: {
+                int32_t s = static_cast<int32_t>(static_cast<int16_t>(src & 0xFFFF));
+                alu_cmp(static_cast<uint32_t>(s), dst, OpSize::Long);
+                return 0;
+            }
+            case OP_CMPA_L: alu_cmp(src, dst, OpSize::Long); return 0;
+            case OP_ADDA_W: {
+                int32_t s = static_cast<int32_t>(static_cast<int16_t>(src & 0xFFFF));
+                return dst + static_cast<uint32_t>(s);
+            }
+            case OP_ADDA_L: return dst + src;
+            case OP_SUBA_W: {
+                int32_t s = static_cast<int32_t>(static_cast<int16_t>(src & 0xFFFF));
+                return dst - static_cast<uint32_t>(s);
+            }
+            case OP_SUBA_L: return dst - src;
+            case OP_CLR:  { uint8_t ccr = Flags::Z; set_ccr(ccr); return 0; }
+            case OP_NEG:  return alu_sub(src, 0, sz);
+            case OP_NOT:  return alu_not(src, sz);
+            case OP_NEGX: return alu_subx(src, 0, sz);
+            case OP_TST:  alu_tst(src, sz); return src;
+            default: return src;
+        }
+    }
+
+    // -- Post-read: execute ALU and determine next phase ---------
+    bus_state_t handle_post_read(bus_state_t pins) {
+        uint32_t ea_val = data_latch_ & size_mask(op_sz_);
+        uint32_t result;
+
+        switch (bus_op_mode_) {
+            case BUS_READ_TO_DN: {
+                uint32_t dn_val = read_dn(reg_idx_, op_sz_);
+                result = apply_alu(ea_val, dn_val, op_sz_);
+                if (pending_op_ != OP_CMP)
+                    write_dn(reg_idx_, result, op_sz_);
+                return do_prefetch(pins);
+            }
+            case BUS_READ_TO_DN_LONG: {
+                uint32_t dn_val = read_dn(reg_idx_, OpSize::Long);
+                result = apply_alu(data_latch_, dn_val, OpSize::Long);
+                if (pending_op_ != OP_CMP && pending_op_ != OP_CMPA_W && pending_op_ != OP_CMPA_L)
+                    write_dn(reg_idx_, result, OpSize::Long);
+                // Prefetch + 2 idle after
+                cont_handler_ = &m680x0_t::handle_idle_to_decode;
+                idle_remaining_ = 1;  // 2 idle clocks after prefetch
+                transition_to(&m680x0_t::handle_prefetch_continue);
+                return handle_prefetch_continue(pins);
+            }
+            case BUS_RMW: {
+                uint32_t dn_val = read_dn(reg_idx_, op_sz_);
+                result = apply_alu(dn_val, ea_val, op_sz_);
+                data_latch_ = result;
+                cont_handler_ = &m680x0_t::handle_start_write_bw;
+                transition_to(&m680x0_t::handle_prefetch_continue);
+                return handle_prefetch_continue(pins);
+            }
+            case BUS_RMW_LONG: {
+                uint32_t dn_val = read_dn(reg_idx_, OpSize::Long);
+                result = apply_alu(dn_val, data_latch_, OpSize::Long);
+                data_latch_ = result;
+                cont_handler_ = &m680x0_t::handle_start_write_l;
+                transition_to(&m680x0_t::handle_prefetch_continue);
+                return handle_prefetch_continue(pins);
+            }
+            case BUS_READ_ONLY: {
+                uint32_t dn_val = read_dn(reg_idx_, op_sz_);
+                apply_alu(ea_val, dn_val, op_sz_);
+                return do_prefetch(pins);
+            }
+            default:
+                return do_prefetch(pins);
+        }
+    }
+
+    // -- Post-read for ADDA/SUBA/CMPA: ea reads to address reg ---
+    bus_state_t handle_post_read_addr(bus_state_t pins) {
+        uint32_t ea_val = data_latch_;
+        uint32_t an_val = get_a(reg_idx_);
+        uint32_t result = apply_alu(ea_val, an_val, op_sz_);
+
+        bool is_cmp = (pending_op_ == OP_CMPA_W || pending_op_ == OP_CMPA_L);
+        if (!is_cmp)
+            set_a(reg_idx_, result);
+
+        // Address operations always use long result and may need extra idle
+        if (op_sz_ == OpSize::Word && !is_cmp) {
+            // ADDA.w/SUBA.w from memory: 8 clocks (no extra idle)
+            return do_prefetch(pins);
+        }
+        if (op_sz_ == OpSize::Long || is_cmp) {
+            // ADDA.l/SUBA.l/CMPA from memory: 6 idle + prefetch? No —
+            // depends on EA source size. For now: word/byte source = no idle,
+            // long source = 2 idle after prefetch.
+        }
+        return do_prefetch(pins);
+    }
+
+    // -- Start write (byte/word) after prefetch ------------------
+    bus_state_t handle_start_write_bw(bus_state_t pins) {
+        cont_handler_ = &m680x0_t::handle_decode;
+        transition_to(&m680x0_t::handle_write_bw);
+        return handle_write_bw(pins);
+    }
+
+    // -- Start write (long) after prefetch -----------------------
+    bus_state_t handle_start_write_l(bus_state_t pins) {
+        cont_handler_ = &m680x0_t::handle_decode;
+        transition_to(&m680x0_t::handle_write_l);
+        return handle_write_l(pins);
+    }
+
+    // -- Begin memory EA read with optional pre-idle -------------
+    // Sets up read handler chain. For predecrement mode, adds 2 idle.
+    inline bus_state_t begin_ea_read(bus_state_t pins, uint8_t ea_mode) {
+        cont_handler_ = &m680x0_t::handle_post_read;
+        if (ea_mode == 4) {
+            // -(An): 2 idle before read
+            idle_remaining_ = 1;
+            InstructionHandler read_handler = (op_sz_ == OpSize::Long)
+                ? &m680x0_t::handle_read_l
+                : &m680x0_t::handle_read_bw;
+            InstructionHandler saved_cont = cont_handler_;
+            cont_handler_ = read_handler;
+            // Stash the real continuation for after the read
+            // We chain: idle → read → post_read
+            // But cont_handler_ is used by both idle and read...
+            // Solution: idle chains to cont (=read handler), read handler's
+            // cont is set inside the read handler? No — we need to set it here.
+            // Use a two-step approach: idle → begin_ea_read_phase2
+            cont_handler_ = &m680x0_t::handle_begin_read_phase2;
+            transition_to(&m680x0_t::handle_idle_continue);
+            return pins;  // First idle tick consumed
+        }
+        // No idle needed for modes 2, 3
+        if (op_sz_ == OpSize::Long) {
+            transition_to(&m680x0_t::handle_read_l);
+            return handle_read_l(pins);
+        }
+        transition_to(&m680x0_t::handle_read_bw);
+        return handle_read_bw(pins);
+    }
+
+    // Phase 2: after pre-idle, start the actual read
+    bus_state_t handle_begin_read_phase2(bus_state_t pins) {
+        cont_handler_ = &m680x0_t::handle_post_read;
+        if (op_sz_ == OpSize::Long) {
+            transition_to(&m680x0_t::handle_read_l);
+            return handle_read_l(pins);
+        }
+        transition_to(&m680x0_t::handle_read_bw);
+        return handle_read_bw(pins);
+    }
+
     // ── Vector read ─────────────────────────────────────────────
     /// Calculate vector address (with VBR for 68010+)
     inline uint32_t vector_addr(uint8_t vector_num) const {
@@ -703,6 +1040,11 @@ private:
     bus_state_t         bus_prev_        = 0;       // Previous bus state (edge detection)
     uint16_t            reset_counter_   = 0;       // Counts clocks with RESET asserted
     uint8_t             idle_remaining_  = 0;       // Remaining idle clocks before prefetch
+    InstructionHandler  cont_handler_    = nullptr; // Continuation after bus cycle
+    uint8_t             reg_idx_         = 0;       // Register index for current memory op
+    OpSize              op_sz_           = OpSize::Byte;  // Size for current memory op
+    uint8_t             pending_op_      = 0;       // PendingOp enum: which ALU operation
+    uint8_t             bus_op_mode_     = 0;       // BusOpMode enum: read-to-Dn vs RMW etc.
 
     // ── Test harness support ────────────────────────────────────
 public:

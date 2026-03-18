@@ -25,8 +25,13 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             write_dn(ea_reg, result, sz);
             return (sz == OpSize::Long) ? do_idle_then_prefetch(pins, 2) : do_prefetch(pins);
         }
-        // Memory modes: TODO
-        return do_prefetch(pins);
+        // Memory: read-modify-write
+        ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
+        reg_idx_ = 0;  // unused for unary ops
+        op_sz_ = sz;
+        pending_op_ = OP_NEGX;
+        bus_op_mode_ = (sz == OpSize::Long) ? BUS_RMW_LONG : BUS_RMW;
+        return begin_ea_read(pins, ea_mode);
     }
 
     // ── CLR.b/w/l (0100 0010 ssxx xxxx) ─────────────────────────
@@ -38,8 +43,13 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             // CLR Dn: 4 (b/w), 6 (l)
             return (sz == OpSize::Long) ? do_idle_then_prefetch(pins, 2) : do_prefetch(pins);
         }
-        // Memory modes: TODO
-        return do_prefetch(pins);
+        // Memory: 68000 reads then writes 0 (RMW)
+        ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
+        reg_idx_ = 0;
+        op_sz_ = sz;
+        pending_op_ = OP_CLR;
+        bus_op_mode_ = (sz == OpSize::Long) ? BUS_RMW_LONG : BUS_RMW;
+        return begin_ea_read(pins, ea_mode);
     }
 
     // ── NEG.b/w/l (0100 0100 ssxx xxxx) ─────────────────────────
@@ -51,8 +61,12 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             write_dn(ea_reg, result, sz);
             return (sz == OpSize::Long) ? do_idle_then_prefetch(pins, 2) : do_prefetch(pins);
         }
-        // Memory modes: TODO
-        return do_prefetch(pins);
+        ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
+        reg_idx_ = 0;
+        op_sz_ = sz;
+        pending_op_ = OP_NEG;
+        bus_op_mode_ = (sz == OpSize::Long) ? BUS_RMW_LONG : BUS_RMW;
+        return begin_ea_read(pins, ea_mode);
     }
 
     // ── NOT.b/w/l (0100 0110 ssxx xxxx) ─────────────────────────
@@ -64,8 +78,12 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             write_dn(ea_reg, result, sz);
             return (sz == OpSize::Long) ? do_idle_then_prefetch(pins, 2) : do_prefetch(pins);
         }
-        // Memory modes: TODO
-        return do_prefetch(pins);
+        ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
+        reg_idx_ = 0;
+        op_sz_ = sz;
+        pending_op_ = OP_NOT;
+        bus_op_mode_ = (sz == OpSize::Long) ? BUS_RMW_LONG : BUS_RMW;
+        return begin_ea_read(pins, ea_mode);
     }
 
     // ── MOVE from SR (0100 0000 11xx xxxx) ───────────────────────
@@ -111,9 +129,13 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             alu_tst(read_dn(ea_reg, sz), sz);
             return do_prefetch(pins);
         }
-        uint32_t val = read_ea(ea_mode, ea_reg, sz);
-        alu_tst(val, sz);
-        return do_prefetch(pins);
+        // Memory: read-only (just test flags)
+        ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
+        reg_idx_ = 0;
+        op_sz_ = sz;
+        pending_op_ = OP_TST;
+        bus_op_mode_ = BUS_READ_ONLY;
+        return begin_ea_read(pins, ea_mode);
     }
 
     // ── TAS (0100 1010 11xx xxxx) ────────────────────────────────
