@@ -158,12 +158,14 @@ inline constexpr ChipRegTraits vicii_reg_traits = {
 // EXTRACTORS — all derived from the single VICII_DECL table
 // ============================================================================
 
-// VIC-II Register Constants - Modern C++ constexpr
-namespace vicii_regs {
+// VIC-II chip-local namespaces — reg:: for register indices, fld:: for bitfields
+namespace vicii {
+
+// --- Register indices ---
+namespace reg {
     constexpr uint8_t SIZE = 64;
     constexpr uint8_t MASK = 63;
 
-    // Register indices from DECL
     VICII_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
     // Absolute memory-mapped I/O addresses (C64: $D000-based)
@@ -175,21 +177,29 @@ namespace vicii_regs {
     constexpr uint16_t ADDR_D01A = 0xD01A;  // Interrupt enabled
     constexpr uint16_t ADDR_D020 = 0xD020;  // Border color
     constexpr uint16_t ADDR_D021 = 0xD021;  // Background color 0
-}
+} // namespace reg
 
-// VIC-II DECL table includes CMP rows that reference vicii_regs:: register symbols.
-#define DECL_CMP_NS_ vicii_regs
+// --- Bitfield masks (REG_FLD) and shifts (REG_FLD_S) ---
+namespace fld {
+#define VICII_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
+    inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
+    inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
+VICII_DECL(DECL_REG_NOP, VICII_X_FLD_NS_, DECL_CMP_NOP)
+#undef VICII_X_FLD_NS_
+
+    // Composite interrupt mask (IRST | IMBC | IMMC | ILP)
+    inline constexpr uint8_t IR_INTERRUPTS = IR_ILP | IR_IMMC | IR_IMBC | IR_IRST;
+} // namespace fld
+
+} // namespace vicii
+
+// Backward compatibility alias
+namespace vicii_regs = vicii::reg;
+
+// VIC-II DECL table includes CMP rows that reference vicii::reg:: register symbols.
+#define DECL_CMP_NS_ vicii::reg
 DECL_EXTRACT(VICII, VICII_DECL, DECL_X_ENTRY_CMP_)
 #undef DECL_CMP_NS_
-
-// --- Extract FLD constants ---
-// Produces: VICII_C1_YSCROLL_SHIFT, VICII_C1_YSCROLL_WIDTH, VICII_C1_YSCROLL_MASK
-#define VICII_X_FLD_CONST_(reg, fld, hilo, desc, kind, ds, dm) \
-    static constexpr uint8_t  VICII_##reg##_##fld##_SHIFT = BF_LO(hilo); \
-    static constexpr uint8_t  VICII_##reg##_##fld##_WIDTH = BF_WIDTH(hilo); \
-    static constexpr uint32_t VICII_##reg##_##fld##_MASK  = BF_MASK(hilo);
-VICII_DECL(DECL_REG_NOP, VICII_X_FLD_CONST_, DECL_CMP_NOP)
-#undef VICII_X_FLD_CONST_
 
 // Graphics mode indices (derived from ECM/BMM/MCM bit combination >> 4)
 constexpr uint8_t VICII_GM_STANDARD_TEXT      = 0;  // ECM/BMM/MCM=0/0/0
@@ -259,9 +269,6 @@ constexpr uint16_t VICII_BORDER_RIGHT_CSEL1 = 344; // 0x158
 #define VIC_ACCESS_C            4  //      PHI2: c-access - video matrix and Color RAM (in bad lines)
 #define VIC_ACCESS_G            5  // PHI1     : g-access - character generator or bitmap (always with c-access, never alone)
 #define VIC_ACCESS_REFRESH_C    6  // PHI1: r-access, PHI2: c-access (spec cycle 15 only)
-
-// Interrupt mask
-constexpr uint8_t VICII_INTERRUPTS_MASK = VICII_IR_ILP_MASK | VICII_IR_IMMC_MASK | VICII_IR_IMBC_MASK | VICII_IR_IRST_MASK;
 
 // Number of sprites
 #define VICII_NUM_SPRITES 8
