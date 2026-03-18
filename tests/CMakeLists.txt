@@ -627,13 +627,15 @@ else()
     target_compile_options(m680x0_processor_tests_runner PRIVATE -Wall -Wextra)
 endif()
 target_link_libraries(m680x0_processor_tests_runner json_parser)
+find_package(ZLIB REQUIRED)
+target_link_libraries(m680x0_processor_tests_runner ZLIB::ZLIB)
 if(NOT WIN32 AND NOT MSVC)
     target_link_libraries(m680x0_processor_tests_runner m)
 endif()
 
 # M680x0 test CTest integration
 add_test(NAME m680x0_processor_tests
-    COMMAND m680x0_processor_tests_runner ${CMAKE_CURRENT_SOURCE_DIR}/m68000_tests/v1/
+    COMMAND m680x0_processor_tests_runner ${CMAKE_CURRENT_SOURCE_DIR}/processor_tests/680x0/68000/v1/
 )
 set_tests_properties(m680x0_processor_tests PROPERTIES
     TIMEOUT 600
