@@ -137,11 +137,11 @@ void tms9918_t<Traits>::render_mode1_line(int line) {
 template <const VDPTraits& Traits>
 void tms9918_t<Traits>::render_mode2_line(int line) {
     const uint16_t nt_base = name_table_addr();
-    const uint16_t ct_base = static_cast<uint16_t>((regs_[regs::R3] & 0x80) << 6);
-    const uint16_t pg_base = static_cast<uint16_t>((regs_[regs::R4] & 0x04) << 11);
+    const uint16_t ct_base = static_cast<uint16_t>((regs_[reg::R3] & 0x80) << 6);
+    const uint16_t pg_base = static_cast<uint16_t>((regs_[reg::R4] & 0x04) << 11);
 
-    const uint16_t ct_mask = static_cast<uint16_t>((regs_[regs::R3] & 0x7F) << 3 | 0x07);
-    const uint16_t pg_mask = static_cast<uint16_t>((regs_[regs::R4] & 0x03) << 8 | 0xFF);
+    const uint16_t ct_mask = static_cast<uint16_t>((regs_[reg::R3] & 0x7F) << 3 | 0x07);
+    const uint16_t pg_mask = static_cast<uint16_t>((regs_[reg::R4] & 0x03) << 8 | 0xFF);
 
     const int row = line >> 3;
     const int fine_y = line & 0x07;

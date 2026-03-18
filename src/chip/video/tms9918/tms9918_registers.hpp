@@ -71,7 +71,7 @@ namespace tms9918 {
 // REGISTER INDEX CONSTANTS
 // ============================================================================
 
-namespace regs {
+namespace reg {
     // Extract register-index constants from the base DECL
     TMS9918_BASE_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
@@ -86,16 +86,16 @@ namespace regs {
 }
 
 // ============================================================================
-// BITFIELD ACCESSOR CONSTANTS — extracted from FLD declarations
+// BITFIELD ACCESSOR CONSTANTS — fld::REG_FLD (mask), fld::REG_FLD_S (shift)
 // ============================================================================
-//
-// Produces: TMS9918_R0_M3_SHIFT, TMS9918_R0_M3_WIDTH, TMS9918_R0_M3_MASK, etc.
 
-#define TMS9918_X_FLD_CONST_(reg, fld, hilo, desc, kind, ds, dm)               \
-    static constexpr uint8_t  TMS9918_##reg##_##fld##_SHIFT = BF_LO(hilo);    \
-    static constexpr uint8_t  TMS9918_##reg##_##fld##_WIDTH = BF_WIDTH(hilo);  \
-    static constexpr uint32_t TMS9918_##reg##_##fld##_MASK  = BF_MASK(hilo);
-TMS9918_BASE_DECL(DECL_REG_NOP, TMS9918_X_FLD_CONST_, DECL_CMP_NOP)
+namespace fld {
+#define TMS9918_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
+    inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
+    inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
+TMS9918_BASE_DECL(DECL_REG_NOP, TMS9918_X_FLD_NS_, DECL_CMP_NOP)
+#undef TMS9918_X_FLD_NS_
+} // namespace fld
 
 // ============================================================================
 // REGISTER INFO (for debug UI)
