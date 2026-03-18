@@ -17,8 +17,7 @@
 inline bus_state_t decode_group0(bus_state_t pins, uint16_t opcode) {
     // ORI, ANDI, EORI, SUBI, ADDI, CMPI, BTST, BCHG, BCLR, BSET, MOVEP
     // TODO: implement
-    transition_to_prefetch();
-    return pins;
+    return do_prefetch(pins);
 }
 
 // ── Group 5: ADDQ / SUBQ / Scc / DBcc ──────────────────────────
@@ -32,8 +31,7 @@ inline bus_state_t decode_group5(bus_state_t pins, uint16_t opcode) {
     if (size_field == 3) {
         // DBcc or Scc
         // TODO: implement
-        transition_to_prefetch();
-        return pins;
+        return do_prefetch(pins);
     }
 
     OpSize sz = static_cast<OpSize>(size_field);
@@ -51,50 +49,43 @@ inline bus_state_t decode_group5(bus_state_t pins, uint16_t opcode) {
     }
     write_ea(ea_mode, ea_reg, result, sz);
 
-    transition_to_prefetch();
-    return pins;
+    return do_prefetch(pins);
 }
 
 // ── Group 8: OR / DIV / SBCD ────────────────────────────────────
 inline bus_state_t decode_group8(bus_state_t pins, uint16_t opcode) {
     // TODO: implement OR, DIVU, DIVS, SBCD
-    transition_to_prefetch();
-    return pins;
+    return do_prefetch(pins);
 }
 
 // ── Group 9: SUB / SUBA / SUBX ─────────────────────────────────
 inline bus_state_t decode_group9(bus_state_t pins, uint16_t opcode) {
     // TODO: implement SUB, SUBA, SUBX
-    transition_to_prefetch();
-    return pins;
+    return do_prefetch(pins);
 }
 
 // ── Group B: CMP / CMPA / CMPM / EOR ───────────────────────────
 inline bus_state_t decode_groupB(bus_state_t pins, uint16_t opcode) {
     // TODO: implement CMP, CMPA, CMPM, EOR
-    transition_to_prefetch();
-    return pins;
+    return do_prefetch(pins);
 }
 
 // ── Group C: AND / MUL / ABCD / EXG ────────────────────────────
 inline bus_state_t decode_groupC(bus_state_t pins, uint16_t opcode) {
     // TODO: implement AND, MULU, MULS, ABCD, EXG
-    transition_to_prefetch();
-    return pins;
+    return do_prefetch(pins);
 }
 
 // ── Group D: ADD / ADDA / ADDX ─────────────────────────────────
 inline bus_state_t decode_groupD(bus_state_t pins, uint16_t opcode) {
     // TODO: implement ADD, ADDA, ADDX
-    transition_to_prefetch();
-    return pins;
+    return do_prefetch(pins);
 }
 
 // ── Group E: Shift / Rotate ────────────────────────────────────
 inline bus_state_t decode_groupE(bus_state_t pins, uint16_t opcode) {
     // TODO: implement ASL, ASR, LSL, LSR, ROL, ROR, ROXL, ROXR
-    transition_to_prefetch();
-    return pins;
+    return do_prefetch(pins);
 }
 
 #include "chip/cpu/m680x0/operations/inc_lint_prevention_footer.hpp"

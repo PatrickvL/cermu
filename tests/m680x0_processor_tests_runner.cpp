@@ -484,14 +484,17 @@ public:
         // SR (includes CCR + supervisor byte)
         cpu.set_reg_sr(s->sr);
 
-        // Program counter
-        cpu.set_reg_pc(s->pc);
+        // Program counter — the test's 'pc' is the formal PC (instruction address).
+        // The 68000's internal PC is 4 bytes ahead (two prefetched words).
+        cpu.set_reg_pc(s->pc + 4);
 
-        // Prefetch pipeline
+        // Prefetch pipeline:
+        //   prefetch[0] = "fetched earlier" = IR = IRD (current instruction)
+        //   prefetch[1] = "fetched later"   = IRC (next prefetched word)
         if (s->has_prefetch) {
-            cpu.set_reg_irc(s->prefetch[0]);
-            cpu.set_reg_ir(s->prefetch[1]);
-            cpu.set_reg_ird(s->prefetch[1]);  // IRD = IR at instruction boundary
+            cpu.set_reg_ir(s->prefetch[0]);
+            cpu.set_reg_ird(s->prefetch[0]);   // IRD = IR at instruction boundary
+            cpu.set_reg_irc(s->prefetch[1]);
         }
 
         // Set CPU state to "ready to decode" (skip reset sequence)
@@ -499,6 +502,8 @@ public:
 
         // Ensure interrupt lines are inactive (IPL = 0 = no interrupt)
         pins_ = CPU::default_bus_state();
+        // RESET deasserted (active-low, high = inactive)
+        BUS_SET_BIT(pins_, M68K_RESET_BIT);
         // Set IPL lines high (inactive — active-low, inverted: all high = priority 0)
         BUS_SET_BIT(pins_, M68K_IPL0_BIT);
         BUS_SET_BIT(pins_, M68K_IPL1_BIT);
@@ -517,27 +522,35 @@ public:
         bool uds_active = !BUS_GET_BIT(pins, M68K_UDS_BIT); // Active-low
         bool lds_active = !BUS_GET_BIT(pins, M68K_LDS_BIT); // Active-low
 
-        // Record bus cycle
-        m68k_recorded_cycle_t rec;
-        rec.address = BUS_GET_ADDR(pins);
-        rec.data = BUS_GET_DATA(pins);
-        rec.is_read = rw_read;
-        rec.is_active = as_active;
-        actual_bus_cycles_.push_back(rec);
-
-        if (as_active) {
+        if (as_active && (uds_active || lds_active)) {
             uint32_t addr = BUS_GET_ADDR(pins);
 
-            if (rw_read && (uds_active || lds_active)) {
-                // Memory read — put data on bus
-                uint8_t data = mem_read(addr);
-                BUS_SET_DATA(pins, data);
+            if (rw_read) {
+                if (uds_active && lds_active) {
+                    // Word read — put 16-bit word on bus (high in DATA, low in BANK)
+                    uint8_t hi = mem_read(addr);
+                    uint8_t lo = mem_read(addr + 1);
+                    uint16_t word = (static_cast<uint16_t>(hi) << 8) | lo;
+                    M68K_SET_DATA_WORD(pins, word);
+                } else if (uds_active) {
+                    // Byte read from even address (D15-D8)
+                    BUS_SET_DATA(pins, mem_read(addr));
+                } else {
+                    // Byte read from odd address (D7-D0)
+                    BUS_SET_DATA(pins, mem_read(addr));
+                }
                 // Assert DTACK (active-low — clear the bit)
                 BUS_CLR_BIT(pins, M68K_DTACK_BIT);
-            } else if (!rw_read && (uds_active || lds_active)) {
-                // Memory write — capture data from bus
-                uint8_t data = BUS_GET_DATA(pins);
-                mem_write(addr, data);
+            } else {
+                if (uds_active && lds_active) {
+                    // Word write — read 16-bit word from bus
+                    uint16_t word = M68K_GET_DATA_WORD(pins);
+                    mem_write(addr, (word >> 8) & 0xFF);
+                    mem_write(addr + 1, word & 0xFF);
+                } else {
+                    // Byte write
+                    mem_write(addr, BUS_GET_DATA(pins));
+                }
                 // Assert DTACK
                 BUS_CLR_BIT(pins, M68K_DTACK_BIT);
             }
@@ -588,12 +601,13 @@ public:
             s->a[i] = cpu.reg_a(i);
 
         s->sr  = cpu.reg_sr();
-        s->pc  = cpu.reg_pc();
+        s->pc  = cpu.reg_pc() - 4;   // Convert internal PC back to formal PC
         s->usp = cpu.reg_usp();
         s->ssp = cpu.reg_ssp();
 
-        s->prefetch[0] = cpu.reg_irc();
-        s->prefetch[1] = cpu.reg_ir();
+        // prefetch[0] = IR (fetched earlier), prefetch[1] = IRC (fetched later)
+        s->prefetch[0] = cpu.reg_ir();
+        s->prefetch[1] = cpu.reg_irc();
         s->has_prefetch = true;
 
         s->ram_count = 0;
@@ -726,9 +740,8 @@ private:
         harness.load_state(&test->initial);
 
         // Determine opcode (upper byte of first instruction word)
-        // The instruction word is in IRD at decode time.
-        // From RAM at PC, read the 16-bit opcode (big-endian):
-        uint8_t opcode_hi = harness.get_memory(test->initial.pc);
+        // The instruction word is in prefetch[0] (= IR/IRD at instruction boundary)
+        uint8_t opcode_hi = (test->initial.prefetch[0] >> 8) & 0xFF;
 
         // Execute
         if (!harness.step()) {
@@ -791,8 +804,8 @@ private:
 
         // Prefetch pipeline (if test data provides it)
         if (expected.has_prefetch) {
-            CHECK_REG("IRC", actual.prefetch[0], expected.prefetch[0]);
-            CHECK_REG("IR",  actual.prefetch[1], expected.prefetch[1]);
+            CHECK_REG("prefetch[0]/IR",  actual.prefetch[0], expected.prefetch[0]);
+            CHECK_REG("prefetch[1]/IRC", actual.prefetch[1], expected.prefetch[1]);
         }
 
         #undef CHECK_REG

@@ -20,8 +20,7 @@ inline bus_state_t decode_move(bus_state_t pins, uint16_t opcode, OpSize sz) {
     // MOVE sets N, Z, clears V and C
     alu_tst(value, sz);
 
-    transition_to_prefetch();
-    return pins;
+    return do_prefetch(pins);
 }
 
 // ── Group 7: MOVEQ ─────────────────────────────────────────────
@@ -37,8 +36,7 @@ inline bus_state_t decode_moveq(bus_state_t pins, uint16_t opcode) {
     if (value & 0x80000000)          ccr |= Flags::N;
     set_ccr(ccr);
 
-    transition_to_prefetch();
-    return pins;
+    return do_prefetch(pins);
 }
 
 #include "chip/cpu/m680x0/operations/inc_lint_prevention_footer.hpp"
