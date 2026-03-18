@@ -19,7 +19,8 @@
 //
 
 #include "core/component_base.hpp"
-#include "chip/cpu/cpu_chip_base.hpp"  // CpuChipBase for cpu_chip_
+#include "chip/cpu/cpu_chip_base.hpp"    // CpuChipBase for cpu_chip_
+#include "chip/video/video_chip_base.hpp" // VideoChipBase for video_chip_
 
 #include <cstring>
 #include <memory>
@@ -124,7 +125,7 @@ public:
     // ── Main CPU ────────────────────────────────────────────────────────────
     //
     // Cached pointer to the first CpuChipBase-derived chip on this board.
-    // Set by Board::create_chips() via the is_cpu flag in the manifest.
+    // Set by Board::create_chips() via dynamic_cast.
     // nullptr for boards with no CPU (e.g. a peripheral expansion board).
     //
 
@@ -140,6 +141,25 @@ public:
     template<typename T>
     [[nodiscard]] const T* cpu() const noexcept { return static_cast<const T*>(cpu_chip_); }
 
+    // ── Primary video chip ──────────────────────────────────────────────────
+    //
+    // Cached pointer to the first VideoChipBase-derived chip on this board.
+    // Set by Board::create_chips() via dynamic_cast.
+    // nullptr for boards with no video chip (e.g. headless or audio-only).
+    //
+
+    /// Raw accessor — returns the VideoChipBase pointer (or nullptr).
+    [[nodiscard]] FORCE_INLINE VideoChipBase* video_chip() noexcept { return video_chip_; }
+    [[nodiscard]] FORCE_INLINE const VideoChipBase* video_chip() const noexcept { return video_chip_; }
+
+    /// Typed accessor — returns the video chip cast to the requested concrete type.
+    /// The caller must ensure T matches the actual video chip type on this board.
+    template<typename T>
+    [[nodiscard]] T* video() noexcept { return static_cast<T*>(video_chip_); }
+
+    template<typename T>
+    [[nodiscard]] const T* video() const noexcept { return static_cast<const T*>(video_chip_); }
+
 protected:
     void register_component(ComponentBase* c) {
         if (c) components_.push_back(c);
@@ -150,7 +170,8 @@ protected:
     }
 
     std::vector<std::unique_ptr<Port>> ports_;
-    CpuChipBase* cpu_chip_ = nullptr;  // First CpuChipBase-derived chip (set by Board::create_chips)
+    CpuChipBase*   cpu_chip_   = nullptr;  // First CpuChipBase-derived chip (set by Board::create_chips)
+    VideoChipBase* video_chip_ = nullptr;  // First VideoChipBase-derived chip (set by Board::create_chips)
 
 private:
     std::vector<ComponentBase*> components_;  // non-owning; lifetime in Board<Spec>
