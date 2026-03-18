@@ -54,7 +54,12 @@ enum class PinLabel {
     // ================================================================
     _ABORT,       // /ABORT — abort (65C816)
     _AEC,         // /AEC — address enable control (active-low form)
+    _AS,          // /AS — address strobe (M68K)
     _BASIC,       // /BASIC — BASIC ROM select
+    _BERR,        // /BERR — bus error (M68K)
+    _BG,          // /BG — bus grant (M68K)
+    _BGACK,       // /BGACK — bus grant acknowledge (M68K)
+    _BR,          // /BR — bus request (M68K)
     _BUSAK,       // /BUSAK — bus acknowledge (Z80)
     _BUSRQ,       // /BUSRQ — bus request (Z80)
     _CAS,         // /CAS — column address strobe
@@ -66,6 +71,7 @@ enum class PinLabel {
     _CS0,         // /CS0 — chip select 0
     _CS1,         // /CS1 — chip select 1
     _CS2,         // /CS2 — chip select 2
+    _DTACK,       // /DTACK — data transfer acknowledge (M68K)
     _EXROM,       // /EXROM — external ROM
     _GAME,        // /GAME — game line
     _HALT,        // /HALT — halt (Z80)
@@ -73,10 +79,14 @@ enum class PinLabel {
     _INT,         // /INT — interrupt (Z80)
     _IO,          // /I/O — I/O area select
     _IORQ,        // /IORQ — I/O request (Z80)
+    _IPL0,        // /IPL0 — interrupt priority level 0 (M68K)
+    _IPL1,        // /IPL1 — interrupt priority level 1 (M68K)
+    _IPL2,        // /IPL2 — interrupt priority level 2 (M68K)
     _IRQ,         // /IRQ — interrupt request
     _IRQA,        // /IRQA — interrupt request A (PIA 6820/6821)
     _IRQB,        // /IRQB — interrupt request B (PIA 6820/6821)
     _KERNAL,      // /KERNAL — KERNAL ROM select
+    _LDS,         // /LDS — lower data strobe (M68K)
     _LORAM,       // /LORAM — low RAM
     _M1,          // /M1 — machine cycle 1 (Z80)
     _ML,          // /ML — memory lock (65C02/65C816)
@@ -94,8 +104,11 @@ enum class PinLabel {
     _ROML,        // /ROML — ROM low
     _ROMSEL,      // /ROMSEL — ROM select (Ricoh 5A22 cartridge chip select)
     _SO,          // /SO — set overflow
+    _UDS,         // /UDS — upper data strobe (M68K)
     _VA14,        // /VA14 — video address 14 (inverted form)
+    _VMA,         // /VMA — valid memory address (M68K)
     _VP,          // /VP — vector pull (active-low)
+    _VPA,         // /VPA — valid peripheral address (M68K)
     _VPB,         // /VPB — vector pull bar (active-low)
     _WAIT,        // /WAIT — wait (Z80)
     _WE,          // /WE — write enable
@@ -118,6 +131,7 @@ enum class PinLabel {
     // Clock pins
     CLK,          // Generic clock input
     CPUCLK,       // CPU clock output (Ricoh 5A22)
+    E_CLK,        // Enable clock output (M68K 6800 peripheral compat)
     M2,           // Derived clock output (2A03)
     PHI0,         // Φ0 — clock input
     PHI1,         // Φ1 — inverted clock output
@@ -178,6 +192,11 @@ enum class PinLabel {
     IRQ,          // Interrupt Request (active-high form)
     NMI,          // Non-Maskable Interrupt (active-high form)
     RES,          // Reset (active-high form)
+
+    // Function code pins (M68K)
+    FC0,          // Function code 0 (M68K)
+    FC1,          // Function code 1 (M68K)
+    FC2,          // Function code 2 (M68K)
 
     // Special pins
     E,            // Emulation mode (65C816)
