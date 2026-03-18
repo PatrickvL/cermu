@@ -17,16 +17,14 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
 
     // NOP: 0100_1110_0111_0001 = $4E71
     if (opcode == 0x4E71) {
-        transition_to_prefetch();
-        return pins;
+        return do_prefetch(pins);
     }
 
     // RTS: 0100_1110_0111_0101 = $4E75
     if (opcode == 0x4E75) {
         // Pop PC from stack
         // TODO: bus cycles for stack read
-        transition_to_prefetch();
-        return pins;
+        return do_prefetch(pins);
     }
 
     // RTE: 0100_1110_0111_0011 = $4E73
@@ -35,8 +33,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             return exception(pins, Vector::PRIVILEGE_VIOLATION);
         }
         // TODO: restore SR and PC from stack
-        transition_to_prefetch();
-        return pins;
+        return do_prefetch(pins);
     }
 
     // TRAP #vector: 0100_1110_0100_vvvv
@@ -46,8 +43,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
     }
 
     // TODO: remaining group 4 instructions
-    transition_to_prefetch();
-    return pins;
+    return do_prefetch(pins);
 }
 
 // ── Group 6: Bcc / BSR / BRA ────────────────────────────────────
@@ -79,8 +75,7 @@ inline bus_state_t decode_group6(bus_state_t pins, uint16_t opcode) {
     if (cc == Condition::T) {
         // BRA — always branch
         regs_.pc = regs_.pc + displacement - 2;  // -2 because PC already advanced past opcode
-        transition_to_prefetch();
-        return pins;
+        return do_prefetch(pins);
     }
     if (cc == Condition::F) {
         // BSR — branch to subroutine
@@ -88,16 +83,14 @@ inline bus_state_t decode_group6(bus_state_t pins, uint16_t opcode) {
         regs_.a[7] -= 4;
         // TODO: write PC to stack via bus cycles
         regs_.pc = regs_.pc + displacement - 2;
-        transition_to_prefetch();
-        return pins;
+        return do_prefetch(pins);
     }
 
     // Bcc — conditional branch
     if (test_condition(cc)) {
         regs_.pc = regs_.pc + displacement - 2;
     }
-    transition_to_prefetch();
-    return pins;
+    return do_prefetch(pins);
 }
 
 #include "chip/cpu/m680x0/operations/inc_lint_prevention_footer.hpp"

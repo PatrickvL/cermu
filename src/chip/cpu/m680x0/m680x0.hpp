@@ -75,6 +75,20 @@ namespace m680x0 {
 // Convenience: RESET reuse
 #define M68K_RESET_BIT  BUS_RES_BIT
 
+// ── 16-bit data bus convention ─────────────────────────────────
+// The 68000 has a 16-bit data bus, but bus_state_t only has 8 data
+// bits.  For word transfers (both UDS and LDS active), we carry the
+// high byte (D15-D8) in the DATA field and the low byte (D7-D0) in
+// the BANK field.  This is safe because the address has already been
+// latched before data appears on the bus.
+#define M68K_SET_DATA_WORD(state, word) do { \
+    BUS_SET_DATA(state, ((word) >> 8) & 0xFF); \
+    (state) = ((state) & ~BUS_BANK_MASK) | (((bus_state_t)((word) & 0xFF)) << BUS_BANK_SHIFT); \
+} while(0)
+
+#define M68K_GET_DATA_WORD(state) \
+    ((uint16_t)((BUS_GET_DATA(state) << 8) | (((state) >> BUS_BANK_SHIFT) & 0xFF)))
+
 // Function code values (bits FC2:FC1:FC0)
 namespace FunctionCode {
     constexpr uint8_t USER_DATA       = 0b001;
@@ -351,7 +365,7 @@ private:
     inline bus_state_t begin_write_word(bus_state_t pins, uint32_t addr, uint16_t data, uint8_t fc) {
         addr &= address_mask();
         pins = BUS_SET_ADDR(pins, addr);
-        pins = BUS_SET_DATA(pins, (data >> 8) & 0xFF);  // D15-D8 on data bus (high byte)
+        M68K_SET_DATA_WORD(pins, data);  // High byte in DATA, low byte in BANK
         pins = set_fc(pins, fc);
         pins = BUS_CLR_BIT(pins, BUS_RW_BIT);    // R/W = write
         pins = BUS_CLR_BIT(pins, M68K_AS_BIT);   // Assert AS
@@ -389,11 +403,9 @@ private:
 
     /// Read data word from bus (after DTACK)
     inline uint16_t read_data_word(bus_state_t pins) const {
-        // 68000: D15-D8 appear on data bus bits — but bus_state_t has 8-bit data field.
-        // In cermu, the system memory map presents the correct byte on BUS_GET_DATA.
-        // For word reads, the system returns the high byte first, then low byte.
-        // We store the full word in data_latch_ across two sub-cycles.
-        return static_cast<uint16_t>(BUS_GET_DATA(pins));
+        // 68000 word transfer convention: high byte in DATA field,
+        // low byte in BANK field. See M68K_GET_DATA_WORD.
+        return M68K_GET_DATA_WORD(pins);
     }
 
     // ── Vector read ─────────────────────────────────────────────
@@ -415,7 +427,7 @@ private:
                 pins = begin_read_word(pins, 0x00000000, FunctionCode::SUPER_DATA);
                 return pins;
             case 1:
-                if (!BUS_GET_BIT(pins, M68K_DTACK_BIT)) return pins;  // Wait for DTACK
+                if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) return pins;  // Wait for DTACK
                 data_latch_ = static_cast<uint32_t>(read_data_word(pins)) << 16;
                 pins = end_bus_cycle(pins);
                 return pins;
@@ -424,7 +436,7 @@ private:
                 pins = begin_read_word(pins, 0x00000002, FunctionCode::SUPER_DATA);
                 return pins;
             case 3:
-                if (!BUS_GET_BIT(pins, M68K_DTACK_BIT)) return pins;
+                if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) return pins;
                 data_latch_ |= read_data_word(pins);
                 regs_.a[7] = data_latch_;
                 regs_.ssp  = data_latch_;
@@ -435,7 +447,7 @@ private:
                 pins = begin_read_word(pins, 0x00000004, FunctionCode::SUPER_DATA);
                 return pins;
             case 5:
-                if (!BUS_GET_BIT(pins, M68K_DTACK_BIT)) return pins;
+                if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) return pins;
                 data_latch_ = static_cast<uint32_t>(read_data_word(pins)) << 16;
                 pins = end_bus_cycle(pins);
                 return pins;
@@ -444,7 +456,7 @@ private:
                 pins = begin_read_word(pins, 0x00000006, FunctionCode::SUPER_DATA);
                 return pins;
             case 7:
-                if (!BUS_GET_BIT(pins, M68K_DTACK_BIT)) return pins;
+                if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) return pins;
                 data_latch_ |= read_data_word(pins);
                 regs_.pc = data_latch_;
                 pins = end_bus_cycle(pins);
@@ -457,19 +469,24 @@ private:
     }
 
     // ── Handler: Prefetch ───────────────────────────────────────
-    // Fetches the next instruction word from [PC], advances PC
+    // Fetches the next instruction word from [PC], advances PC.
+    // One bus cycle = 4 clocks (S0-S7 in half-clock notation).
     bus_state_t handle_prefetch(bus_state_t pins) {
         switch (step_++) {
-            case 0:
+            case 0:  // S0/S1: Output address, begin read
                 pins = begin_read_word(pins, regs_.pc, fc_program());
                 return pins;
-            case 1:
-                if (!BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
+            case 1:  // S2/S3: Wait for address propagation
+                return pins;
+            case 2:  // S4/S5: Wait for DTACK, latch data
+                if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
+                // Shift prefetch pipeline
                 regs_.ir  = regs_.irc;
                 regs_.irc = read_data_word(pins);
                 regs_.pc += 2;
+                return pins;
+            case 3:  // S6/S7: End bus cycle, transition to decode
                 pins = end_bus_cycle(pins);
-                // Move to decode
                 regs_.ird = regs_.ir;
                 transition_to(&m680x0_t::handle_decode);
                 return pins;
@@ -479,7 +496,10 @@ private:
     }
 
     // ── Handler: Decode ─────────────────────────────────────────
-    // Decodes IRD and dispatches to the appropriate instruction handler
+    // Decodes IRD and dispatches to the appropriate instruction handler.
+    // Decode is "free" (0 clocks) — it chains to the instruction handler
+    // on the same tick, so the instruction handler's first step runs
+    // in the same clock cycle.
     bus_state_t handle_decode(bus_state_t pins) {
         uint16_t opcode = regs_.ird;
         uint8_t group = instr_group(opcode);
@@ -530,7 +550,7 @@ private:
                     static_cast<uint16_t>(regs_.pc & 0xFFFF), FunctionCode::SUPER_DATA);
                 return pins;
             case 2:
-                if (!BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
+                if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
                 pins = end_bus_cycle(pins);
                 return pins;
             // Push PC high word
@@ -540,7 +560,7 @@ private:
                     static_cast<uint16_t>((regs_.pc >> 16) & 0xFFFF), FunctionCode::SUPER_DATA);
                 return pins;
             case 4:
-                if (!BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
+                if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
                 pins = end_bus_cycle(pins);
                 return pins;
             // Push SR
@@ -549,7 +569,7 @@ private:
                 pins = begin_write_word(pins, regs_.a[7], exception_sr_, FunctionCode::SUPER_DATA);
                 return pins;
             case 6:
-                if (!BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
+                if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
                 pins = end_bus_cycle(pins);
                 return pins;
             // Read vector high word
@@ -557,7 +577,7 @@ private:
                 pins = begin_read_word(pins, vector_addr(exception_vector_), FunctionCode::SUPER_DATA);
                 return pins;
             case 8:
-                if (!BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
+                if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
                 data_latch_ = static_cast<uint32_t>(read_data_word(pins)) << 16;
                 pins = end_bus_cycle(pins);
                 return pins;
@@ -566,7 +586,7 @@ private:
                 pins = begin_read_word(pins, vector_addr(exception_vector_) + 2, FunctionCode::SUPER_DATA);
                 return pins;
             case 10:
-                if (!BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
+                if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
                 data_latch_ |= read_data_word(pins);
                 regs_.pc = data_latch_;
                 pins = end_bus_cycle(pins);
@@ -585,8 +605,12 @@ private:
         step_ = 0;
     }
 
-    inline void transition_to_prefetch() {
+    /// Transition to prefetch and immediately run its first step.
+    /// This chains decode + prefetch into the same clock tick,
+    /// matching the real 68000 where decode is free (0 clocks).
+    inline bus_state_t do_prefetch(bus_state_t pins) {
         transition_to(&m680x0_t::handle_prefetch);
+        return handle_prefetch(pins);
     }
 
     // ── Group decode stubs ──────────────────────────────────────
