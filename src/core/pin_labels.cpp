@@ -16,7 +16,12 @@ const char* pin_label_to_string(PinLabel label) {
         // The display layer adds "/" via get_invert_logic().
         case PinLabel::_ABORT: return "ABORT";
         case PinLabel::_AEC: return "AEC";
+        case PinLabel::_AS: return "AS";
         case PinLabel::_BASIC: return "BASIC";
+        case PinLabel::_BERR: return "BERR";
+        case PinLabel::_BG: return "BG";
+        case PinLabel::_BGACK: return "BGACK";
+        case PinLabel::_BR: return "BR";
         case PinLabel::_BUSAK: return "BUSAK";
         case PinLabel::_BUSRQ: return "BUSRQ";
         case PinLabel::_CAS: return "CAS";
@@ -28,6 +33,7 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::_CS0: return "CS0";
         case PinLabel::_CS1: return "CS1";
         case PinLabel::_CS2: return "CS2";
+        case PinLabel::_DTACK: return "DTACK";
         case PinLabel::_EXROM: return "EXROM";
         case PinLabel::_GAME: return "GAME";
         case PinLabel::_HALT: return "HALT";
@@ -35,10 +41,14 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::_INT: return "INT";
         case PinLabel::_IO: return "I/O";
         case PinLabel::_IORQ: return "IORQ";
+        case PinLabel::_IPL0: return "IPL0";
+        case PinLabel::_IPL1: return "IPL1";
+        case PinLabel::_IPL2: return "IPL2";
         case PinLabel::_IRQ: return "IRQ";
         case PinLabel::_IRQA: return "IRQA";
         case PinLabel::_IRQB: return "IRQB";
         case PinLabel::_KERNAL: return "KERNAL";
+        case PinLabel::_LDS: return "LDS";
         case PinLabel::_LORAM: return "LORAM";
         case PinLabel::_M1: return "M1";
         case PinLabel::_ML: return "ML";
@@ -56,8 +66,11 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::_ROML: return "ROML";
         case PinLabel::_ROMSEL: return "ROMSEL";
         case PinLabel::_SO: return "SO";
+        case PinLabel::_UDS: return "UDS";
         case PinLabel::_VA14: return "VA14";
+        case PinLabel::_VMA: return "VMA";
         case PinLabel::_VP: return "VP";
+        case PinLabel::_VPA: return "VPA";
         case PinLabel::_VPB: return "VPB";
         case PinLabel::_WAIT: return "WAIT";
         case PinLabel::_WE: return "WE";
@@ -151,6 +164,9 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::VDA: return "VDA";
         case PinLabel::ML: return "ML";
         case PinLabel::E: return "E";
+        case PinLabel::FC0: return "FC0";
+        case PinLabel::FC1: return "FC1";
+        case PinLabel::FC2: return "FC2";
         case PinLabel::MX: return "MX";
         
         // I/O Port pins
@@ -466,6 +482,7 @@ const char* pin_label_to_string(PinLabel label) {
         // Clock pins
         case PinLabel::CLK: return "CLK";
         case PinLabel::CPUCLK: return "CPUCLK";
+        case PinLabel::E_CLK: return "E";
         case PinLabel::M2: return "M2";
         case PinLabel::SYSCLK: return "SYSCLK";
         
@@ -498,6 +515,9 @@ PinType pin_label_to_pin_type(PinLabel label) {
     switch (label) {
         // Active-low interrupt pins
         case PinLabel::_ABORT:
+        case PinLabel::_IPL0:
+        case PinLabel::_IPL1:
+        case PinLabel::_IPL2:
         case PinLabel::_IRQ:
         case PinLabel::_IRQA:
         case PinLabel::_IRQB:
@@ -507,7 +527,12 @@ PinType pin_label_to_pin_type(PinLabel label) {
 
         // Active-low control pins
         case PinLabel::_AEC:
+        case PinLabel::_AS:
         case PinLabel::_BASIC:
+        case PinLabel::_BERR:
+        case PinLabel::_BG:
+        case PinLabel::_BGACK:
+        case PinLabel::_BR:
         case PinLabel::_CAS:
         case PinLabel::_CASRAM_PLA:
         case PinLabel::_CHAREN:
@@ -516,6 +541,7 @@ PinType pin_label_to_pin_type(PinLabel label) {
         case PinLabel::_CS0:
         case PinLabel::_CS1:
         case PinLabel::_CS2:
+        case PinLabel::_DTACK:
         case PinLabel::_EXROM:
         case PinLabel::_GAME:
         case PinLabel::_HIRAM:
@@ -526,6 +552,8 @@ PinType pin_label_to_pin_type(PinLabel label) {
         case PinLabel::_Q7:
         case PinLabel::_RAS:
         case PinLabel::_RD:
+        case PinLabel::_UDS:
+        case PinLabel::_VMA:
         case PinLabel::_ROMH:
         case PinLabel::_ROML:
         case PinLabel::_WE:
@@ -535,6 +563,7 @@ PinType pin_label_to_pin_type(PinLabel label) {
         case PinLabel::_ML:
         case PinLabel::_SO:
         case PinLabel::_VP:
+        case PinLabel::_VPA:
         case PinLabel::_VPB:
             return PinType::SPECIAL;
 
@@ -555,6 +584,7 @@ PinType pin_label_to_pin_type(PinLabel label) {
         case PinLabel::PHI2:
         case PinLabel::CLK:
         case PinLabel::CPUCLK:
+        case PinLabel::E_CLK:
         case PinLabel::M2:
         case PinLabel::SYSCLK:
         case PinLabel::DOT_CLK:
@@ -597,6 +627,9 @@ PinType pin_label_to_pin_type(PinLabel label) {
         case PinLabel::BE:
         case PinLabel::BA:
         case PinLabel::B_ASEL:
+        case PinLabel::FC0:
+        case PinLabel::FC1:
+        case PinLabel::FC2:
         case PinLabel::CS:
         case PinLabel::CS0:
         case PinLabel::CS1:

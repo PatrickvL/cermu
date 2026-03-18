@@ -344,12 +344,22 @@ target_include_directories(z80_decoder PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/z80
 )
 
+# M680x0 Decoder - standalone library for instruction decoding
+add_library(m680x0_decoder STATIC
+    src/chip/cpu/m680x0/m680x0_decoder.cpp
+)
+target_include_directories(m680x0_decoder PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/m680x0
+)
+
 # Chip library sources
 set(CHIP_SOURCES
     # CPU - fam65xx template instantiation + ChipRegistry registration
     src/chip/cpu/fam65xx/fam65xx_registry.cpp
     # CPU - Z80 template instantiation + ChipRegistry registration
     src/chip/cpu/z80/z80_registry.cpp
+    # CPU - M680x0 template instantiation + ChipRegistry registration
+    src/chip/cpu/m680x0/m680x0_registry.cpp
 )
 # Always include other chip sources
 list(APPEND CHIP_SOURCES
@@ -536,6 +546,7 @@ if(BUILD_GUI)
         src/systems/commodore/c64/c64_pla_chip.cpp
         src/chip/cpu/fam65xx/fam65xx_gui.cpp
         src/chip/cpu/z80/z80_gui.cpp
+        src/chip/cpu/m680x0/m680x0_gui.cpp
         src/chip/io/mos6526_gui.cpp
         src/chip/io/mos6522_gui.cpp
         src/chip/memory/mos2114_gui.cpp
@@ -575,6 +586,7 @@ set(GUI_STUB_SOURCES
     src/gui/chip_debug_registry_gui.cpp
     src/chip/cpu/fam65xx/fam65xx_gui.cpp
     src/chip/cpu/z80/z80_gui.cpp
+    src/chip/cpu/m680x0/m680x0_gui.cpp
     src/chip/io/mos6526_gui.cpp
     src/chip/io/mos6522_gui.cpp
     src/chip/memory/mos2114_gui.cpp
@@ -613,6 +625,7 @@ add_executable(cermu_console
 target_link_libraries(cermu_console
     fam65xx_decoder
     z80_decoder
+    m680x0_decoder
     ${LIBARCHIVE_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
@@ -663,6 +676,7 @@ if(BUILD_GUI)
         imgui
         fam65xx_decoder
         z80_decoder
+        m680x0_decoder
         ${LIBARCHIVE_LIBRARIES}
         ${SDL2_LIBRARIES}
         ${OPENGL_LIBRARIES}
@@ -737,6 +751,7 @@ add_executable(c64_test_runner
 target_link_libraries(c64_test_runner
     fam65xx_decoder
     z80_decoder
+    m680x0_decoder
     ${LIBARCHIVE_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
@@ -760,6 +775,7 @@ add_executable(nes_test_runner
 target_link_libraries(nes_test_runner
     fam65xx_decoder
     z80_decoder
+    m680x0_decoder
     ${LIBARCHIVE_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
@@ -788,6 +804,7 @@ add_executable(c16_test_runner
 target_link_libraries(c16_test_runner
     fam65xx_decoder
     z80_decoder
+    m680x0_decoder
     ${LIBARCHIVE_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
@@ -838,6 +855,7 @@ add_executable(probe_verify
 target_link_libraries(probe_verify
     fam65xx_decoder
     z80_decoder
+    m680x0_decoder
     ${LIBARCHIVE_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
