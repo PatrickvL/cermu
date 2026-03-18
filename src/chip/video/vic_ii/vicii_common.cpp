@@ -64,13 +64,13 @@ const uint32_t* vicii_base_t::get_default_palette() {
 // ========================================================================================
 
 static inline void vicii_border_update_limits(vicii_border_unit_t* border, uint8_t c1_reg, uint8_t c2_reg) {
-    border->border_top = (c1_reg & VICII_C1_RSEL) ?
+    border->border_top = (c1_reg & VICII_C1_RSEL_MASK) ?
         VICII_BORDER_TOP_RSEL1 : VICII_BORDER_TOP_RSEL0;
-    border->border_bottom = (c1_reg & VICII_C1_RSEL) ?
+    border->border_bottom = (c1_reg & VICII_C1_RSEL_MASK) ?
         VICII_BORDER_BOTTOM_RSEL1 : VICII_BORDER_BOTTOM_RSEL0;
-    border->border_left = (c2_reg & VICII_C2_CSEL) ?
+    border->border_left = (c2_reg & VICII_C2_CSEL_MASK) ?
         VICII_BORDER_LEFT_CSEL1 : VICII_BORDER_LEFT_CSEL0;
-    border->border_right = (c2_reg & VICII_C2_CSEL) ?
+    border->border_right = (c2_reg & VICII_C2_CSEL_MASK) ?
         VICII_BORDER_RIGHT_CSEL1 : VICII_BORDER_RIGHT_CSEL0;
 }
 
@@ -79,7 +79,7 @@ static inline void vicii_border_update_limits(vicii_border_unit_t* border, uint8
 // Inputs: raster_counter, DEN bit, border_top, border_bottom.
 static inline void vicii_check_vertical_border(vicii_base_t* vicii) {
     const uint16_t raster = vicii->timing.raster_counter;
-    const bool den_set = (vicii->regs_[vicii_regs::C1] & VICII_C1_DEN) != 0;
+    const bool den_set = (vicii->regs_[vicii_regs::C1] & VICII_C1_DEN_MASK) != 0;
     
     // check_vborder_top: top border + DEN → clear both immediately
     if (raster == vicii->border.border_top && den_set) {
@@ -176,7 +176,7 @@ static inline void vicii_set_interrupt(vicii_base_t* vicii, uint8_t interrupt_ma
     
     // Set IRQ flag if any enabled interrupt is latched
     if (latched_interrupts & enabled_interrupts) {
-        vicii->regs_[vicii_regs::IR] |= VICII_IR_IRQ;
+        vicii->regs_[vicii_regs::IR] |= VICII_IR_IRQ_MASK;
     }
     
     // NOTE: IRQ line will be updated in vicii_tick() based on register state
@@ -271,7 +271,7 @@ static inline void vicii_sprite_emit_pixels(vicii_base_t* vicii, int param_sprit
                 const bool was_zero = (vicii->regs_[vicii_regs::MXM_2] == 0);
                 vicii->regs_[vicii_regs::MXM_2] |= collision_mask;
                 if (was_zero) {
-                    vicii_set_interrupt(vicii, VICII_IR_IMMC);
+                    vicii_set_interrupt(vicii, VICII_IR_IMMC_MASK);
                 }
             }
             
@@ -282,7 +282,7 @@ static inline void vicii_sprite_emit_pixels(vicii_base_t* vicii, int param_sprit
                 const bool was_zero = (vicii->regs_[vicii_regs::MXD_2] == 0);
                 vicii->regs_[vicii_regs::MXD_2] |= sprite_bit;
                 if (was_zero) {
-                    vicii_set_interrupt(vicii, VICII_IR_IMBC);
+                    vicii_set_interrupt(vicii, VICII_IR_IMBC_MASK);
                 }
             }
             
@@ -465,7 +465,7 @@ static void vicii_pixel_sequencer(vicii_base_t* vicii) {
                 if (!vicii->border.vertical_border_flip_flop) {
                     // Detect main border opening transition for XSCROLL initialization.
                     if (vicii->border.main_border_flip_flop) {
-                        seq->xscroll_counter = vicii->regs_[vicii_regs::C2] & VICII_C2_XSCROLL;
+                        seq->xscroll_counter = vicii->regs_[vicii_regs::C2] & VICII_C2_XSCROLL_MASK;
                         seq->pixel_in_char = 0;
                         seq->display_vmli = 0;
                     }
@@ -741,7 +741,7 @@ void vicii_lightpen_set_pin(vicii_base_t* vicii, bool pin_high) {
             vicii->regs_[vicii_regs::LPX] = (uint8_t)(vicii->timing.x_coordinate >> 1);
             vicii->regs_[vicii_regs::LPY] = (uint8_t)vicii->timing.raster_counter;
             // Signal the lightpen interrupt
-            vicii_set_interrupt(vicii, VICII_IR_ILP);
+            vicii_set_interrupt(vicii, VICII_IR_ILP_MASK);
         }
     }
     vicii->lightpen.lp_pin_prev = pin_high;
@@ -808,8 +808,8 @@ static inline bus_state_t vicii_bus_memory_setup(vicii_base_t* vicii, bus_state_
 // ========================================================================================
 
 static inline void vicii_sequencer_update_mode(vicii_sequencer_unit_t* sequencer, uint8_t c1_reg, uint8_t c2_reg) {
-    sequencer->graphics_mode = ((c1_reg & (VICII_C1_ECM | VICII_C1_BMM)) |
-                               (c2_reg & VICII_C2_MCM)) >> 4;
+    sequencer->graphics_mode = ((c1_reg & (VICII_C1_ECM_MASK | VICII_C1_BMM_MASK)) |
+                               (c2_reg & VICII_C2_MCM_MASK)) >> 4;
 }
 
 // Timing functions
@@ -837,12 +837,12 @@ void vicii_update_badline_condition(vicii_base_t* vicii) {
         if (raster == 0x30) {
             if (!vicii->video_logic.was_den_set_during_raster_30) {
                 vicii->video_logic.was_den_set_during_raster_30 =
-                    (vicii->regs_[vicii_regs::C1] & VICII_C1_DEN) != 0;
+                    (vicii->regs_[vicii_regs::C1] & VICII_C1_DEN_MASK) != 0;
             }
         }
         
         vicii->video_logic.is_bad_line = vicii->video_logic.was_den_set_during_raster_30 &&
-                                 ((raster & 0x07) == (vicii->regs_[vicii_regs::C1] & VICII_C1_YSCROLL));
+                                 ((raster & 0x07) == (vicii->regs_[vicii_regs::C1] & VICII_C1_YSCROLL_MASK));
         
         // CRITICAL: The VIC-II latches display_state to true IMMEDIATELY when a bad line
         // condition is detected, at ANY cycle — not just at cycle 58.
@@ -868,7 +868,7 @@ void vicii_update_badline_condition(vicii_base_t* vicii) {
 // Bits 0-7 from $d012, bit 8 from $d011 bit 7
 static inline uint16_t vicii_get_raster_compare(const vicii_base_t* vicii) {
     return (vicii->regs_[vicii_regs::RASTER] & 0xFF) |
-           ((vicii->regs_[vicii_regs::C1] & VICII_C1_RST8) ? 0x100 : 0);
+           ((vicii->regs_[vicii_regs::C1] & VICII_C1_RST8_MASK) ? 0x100 : 0);
 }
 
 static inline void vicii_registers_write_interrupt(uint8_t* regs, uint8_t value) {
@@ -889,9 +889,9 @@ static inline void vicii_registers_write_interrupt(uint8_t* regs, uint8_t value)
     
     // Set IRQ flag if any enabled interrupt remains latched
     if (latched_interrupts & enabled_interrupts) {
-        ir |= VICII_IR_IRQ;
+        ir |= VICII_IR_IRQ_MASK;
     } else {
-        ir &= ~VICII_IR_IRQ;  // Clear IRQ flag - all interrupts acknowledged
+        ir &= ~VICII_IR_IRQ_MASK;  // Clear IRQ flag - all interrupts acknowledged
     }
     
     // Store the resulting bits (no need to set unused bits - they're only for reads)
@@ -1038,16 +1038,16 @@ bus_state_t vicii_base_t::registers_read(void* context, bus_state_t bus_state) {
     // Single test — one branch, predicted not-taken
     if (unlikely((VICII_SPECIAL_REGS >> reg) & 1)) {
         switch (reg) {
-            case vicii_regs::C1:     reg_val = (reg_val & 0x7F) | ((vicii->timing.raster_counter >> 1) & VICII_C1_RST8); break;
+            case vicii_regs::C1:     reg_val = (reg_val & 0x7F) | ((vicii->timing.raster_counter >> 1) & VICII_C1_RST8_MASK); break;
             case vicii_regs::RASTER: reg_val = vicii->timing.raster_counter & 0xFF; break;
             case vicii_regs::MXM:    reg_val = vicii->regs_[vicii_regs::MXM_2];
                                vicii->regs_[vicii_regs::MXM_2] = 0; break;
             case vicii_regs::MXD:    reg_val = vicii->regs_[vicii_regs::MXD_2];
                                vicii->regs_[vicii_regs::MXD_2] = 0; break;
-            case vicii_regs::C2:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~VICII_C2_UNUSED); break;
-            case vicii_regs::MP:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~VICII_MP_UNUSED); break;
-            case vicii_regs::IR:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~VICII_IR_UNUSED); break;
-            case vicii_regs::IE:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~VICII_IE_UNUSED); break;
+            case vicii_regs::C2:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~VICII_C2_UNUSED_MASK); break;
+            case vicii_regs::MP:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~VICII_MP_UNUSED_MASK); break;
+            case vicii_regs::IR:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~VICII_IR_UNUSED_MASK); break;
+            case vicii_regs::IE:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~VICII_IE_UNUSED_MASK); break;
         }
     }
 
@@ -1108,7 +1108,7 @@ static inline void vicii_check_raster_interrupt(vicii_base_t* vicii) {
     if (compare == vicii->timing.raster_counter) {
         // Raster counter matches compare value — set the interrupt latch bit.
         // vicii_set_interrupt only asserts IRQ if the ERST enable bit is also set.
-        vicii_set_interrupt(vicii, VICII_IR_IRST);
+        vicii_set_interrupt(vicii, VICII_IR_IRST_MASK);
     }
 }
 
@@ -2013,7 +2013,7 @@ bus_state_t vicii_base_t::tick_phi1(bus_state_t bus_state) {
     // The pull-up resistor model (system bus default state) already sets
     // IRQ high at the start of each cycle. If we set it here, we would overwrite any IRQ
     // assertion by CIA or other chips. VIC-II should ONLY assert, never explicitly release.
-    if (vicii->regs_[vicii_regs::IR] & VICII_IR_IRQ) {
+    if (vicii->regs_[vicii_regs::IR] & VICII_IR_IRQ_MASK) {
         // IRQ flag is set - assert IRQ line (active-low, clear bit)
         BUS_CLR_BIT(bus_state, BUS_IRQ_BIT);
     }
@@ -2247,11 +2247,11 @@ static inline void vicii_initialize(vicii_base_t* vicii) {
     
     // Set default register values - Enable DEN to match real hardware behavior
     // The VIC-II starts with display enabled, allowing immediate character data display
-    vicii->regs_[vicii_regs::C1] = VICII_C1_RST8 | VICII_C1_DEN | VICII_C1_RSEL |
-                            (VICII_C1_YSCROLL & 3); // DEN=1, YSCROLL=3, RSEL=1, RST8=1
+    vicii->regs_[vicii_regs::C1] = VICII_C1_RST8_MASK | VICII_C1_DEN_MASK | VICII_C1_RSEL_MASK |
+                            (VICII_C1_YSCROLL_MASK & 3); // DEN=1, YSCROLL=3, RSEL=1, RST8=1
     vicii->regs_[vicii_regs::MXE] = 0;  // All sprites disabled
-    vicii->regs_[vicii_regs::C2] = VICII_C2_CSEL; // 8: XSCROLL:0, no MultiColorMode, 40-column display, no RESET
-    vicii->regs_[vicii_regs::MP] = VICII_MP_CB12 | VICII_MP_VM10; // 0x14: "address of Character Dot-Data area to 4096 ($1000)"
+    vicii->regs_[vicii_regs::C2] = VICII_C2_CSEL_MASK; // 8: XSCROLL:0, no MultiColorMode, 40-column display, no RESET
+    vicii->regs_[vicii_regs::MP] = VICII_MP_CB12_MASK | VICII_MP_VM10_MASK; // 0x14: "address of Character Dot-Data area to 4096 ($1000)"
     vicii->regs_[vicii_regs::RASTER] = 0; // Raster compare bits 0-7
     vicii->regs_[vicii_regs::IR] = 0; // No interrupts latched at startup
     // CRITICAL FIX: Disable VIC-II interrupts at startup to prevent boot disruption
