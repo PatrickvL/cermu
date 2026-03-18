@@ -40,6 +40,7 @@
 #include "chip/sound/mos6581.hpp"
 #include "chip/io/mos6526.hpp"
 #include "chip/memory/memory_chip.hpp"
+#include "chip/memory/mos2114.hpp"
 
 #include <cstdint>
 
@@ -66,33 +67,36 @@
 //   CSG 8502, Z80A, VIC-IIe, SID, CIA ×2
 //
 inline constexpr auto kC128Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 131072, 0, "Main RAM", 0, 65536},  // 2 × 64 KB banks
-    Slot<ROMChip>{0x4000,  16384, 0, "BASIC lo"}.with_rom(
+    //                       base    size   mask  label          cond  bank_sz  ovl
+    Slot<RAMChip>{0x0000, 131072, 0, "Main RAM", 0, 65536, 0},  // Slot 0: 2 × 64 KB banks
+    Slot<ROMChip>{0x4000,  16384, 0, "BASIC lo",  0, 16384, 1}.with_rom(
         "basic-4000.318018-04.bin|c128_basic_lo.rom|basic_lo.rom|basiclo.rom"
         "|basic.318023-02.bin@0"),       // first 16 KB of combined 32 KB BASIC image
-    Slot<ROMChip>{0x8000,  16384, 0, "BASIC hi"}.with_rom(
+    Slot<ROMChip>{0x8000,  16384, 0, "BASIC hi",  0, 16384, 1}.with_rom(
         "basic-8000.318019-04.bin|c128_basic_hi.rom|basic_hi.rom|basichi.rom"
         "|basic.318023-02.bin@16384"),   // second 16 KB of combined 32 KB BASIC image
-    Slot<ROMChip>{0xC000,   4096, 0, "Editor ROM"}.with_rom(
+    Slot<ROMChip>{0xC000,   4096, 0, "Editor ROM", 0, 4096, 1}.with_rom(
         "c128_editor.rom|editor.rom"
         "|kernal.318020-05.bin@0"),          // first 4 KB of combined 16 KB kernal image
-    Slot<ROMChip>{0xE000,   8192, 0, "Kernal ROM"}.with_rom(
+    Slot<ROMChip>{0xE000,   8192, 0, "Kernal ROM", 0, 8192, 1}.with_rom(
         "c128_kernal.rom|kernal.rom"
         "|kernal.318020-05.bin@8192"),       // last 8 KB of combined 16 KB kernal image
-    Slot<ROMChip>{0xD000,   8192, 0, "Character ROM"}.with_rom(
+    Slot<ROMChip>{0xD000,   8192, 0, "Character ROM", 0, 8192, 1}.with_rom(
         "characters.390059-01.bin|c128_chargen.rom|chargen.rom|characters.rom"),
     // VDC video RAM — separate bus, not CPU-addressed
-    Slot<RAMChip>{0x0000,  16384, 0, "VDC VRAM"},
+    Slot<RAMChip>{0x0000,  16384, 0, "VDC VRAM",  0, 16384, 1},
     // Non-bus chips — factory-created, not address-decoded
     Slot<CSG8502>   {0, 0, 0, "CSG 8502"},
     Slot<ZilogZ80A> {0, 0, 0, "Zilog Z80A"},
     Slot<mos8566_t> {0, 0, 0, "MOS 8566 VIC-IIe"},
     Slot<mos6581_t> {0, 0, 0, "MOS 6581 SID"},
+    Slot<MOS2114>   {0, 0, 0, "Color RAM"},
     Slot<mos6526_t> {0, 0, 0, "CIA 1"},
     Slot<mos6526_t> {0, 0, 0, "CIA 2"}
 );
 
-using C128BusSpec = ManifestBusSpec<kC128Chips, 16, 8>;
+// 4 KB pages, 2 viewers (CPU + VIC-IIe)
+using C128BusSpec = ManifestBusSpec<kC128Chips, 16, 12, 2>;
 
 // =============================================================================
 // C128 System
@@ -142,6 +146,7 @@ private:
     ZilogZ80A*  cpu_z80_  = nullptr;     // Secondary CPU — Z80 for CP/M
     mos8566_t*  vic_iie_  = nullptr;     // MOS8566 VIC-IIe (40-column display)
     mos6581_t*  sid_      = nullptr;     // SID sound chip
+    MOS2114*    colorram_ = nullptr;     // 1KB Color RAM (4-bit nibbles)
     mos6526_t*  cia1_     = nullptr;     // CIA 1 (keyboard + joystick)
     mos6526_t*  cia2_     = nullptr;     // CIA 2 (IEC serial + user port)
 
@@ -177,9 +182,14 @@ private:
     bool     c64_mode_ = false;          // C64 compatibility mode
 
     // ── System state ─────────────────────────────────────────────────────
+    bus_state_t default_state_ = 0;     // Pull-up defaults (reset each tick)
     bus_state_t pins_      = C128_BUS_DEFAULT_STATE;
     bool        system_ready_ = false;
     int         audio_sample_rate_ = c128_constants::DEFAULT_SAMPLE_RATE;
+
+    // ── Viewer IDs ───────────────────────────────────────────────────────
+    static constexpr size_t kViewerCpu   = 0;
+    static constexpr size_t kViewerVicII = 1;
 
     // ── Internal helpers ─────────────────────────────────────────────────
     void configure_bus_memory_map();
