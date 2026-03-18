@@ -95,6 +95,7 @@ This block must be complete enough for a **cold-start agent to resume with zero 
 ## Version Control (MANDATORY — safety)
 
 Stage only files you modified for the current task — never `git add .` or stage unrelated files.
+Never commit edits that were not requested or caused by the current prompt.
 Parallel edits to different concerns must be **separate commits**, even within the same milestone.
 
 - One logical change = one commit.
