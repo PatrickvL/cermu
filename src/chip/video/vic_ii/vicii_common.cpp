@@ -2150,218 +2150,83 @@ void vicii_t::tick_phi2(bus_state_t bus_state) {
 }
 
 // ========================================================================================
-// CYCLE TABLES
+// CYCLE TABLE — unified builder (Documentation section 3.6.3)
 // ========================================================================================
+//
+// All VIC-II variants share the same cycle structure with only two differences:
+//
+//   1. Cycle 1–2 (line-0 raster/IRQ handling):
+//      PAL (6569): postpones line-0 ops to cycle 2 (one-cycle delay)
+//      NTSC (6567): handles line-0 ops immediately in cycle 1
+//
+//   2. Idle padding between display end and sprite-0 tail:
+//      PAL  63 cycles → 1 idle
+//      R56A 64 cycles → 2 idles
+//      R8   65 cycles → 3 idles
+//
+// The remaining 57 entries are identical across all variants.
+//
+static void build_vicii_cycle_table(vicii_cycle_entry_t* table, bool is_pal, int cycles_per_line) {
+    int i = 0;
 
-// Cycle callback table - PAL timing (6569 : 63 cycles per line) (Documentation section 3.6.3)
-static const vicii_cycle_entry_t vicii_cycle_table_6569[63] = {
-    // 1=VIC-II PHI1, 2=VIC-II PHI2, C=CPU PHI2       12C 12C
-    //                                                BAD NBD
-    {vicii_cycle_sprite_p_access, 3},           // 1  3_x 3_x (PAL: sprite P-access only, line 0 ops postponed to next cycle)
-    {vicii_cycle_sprite_s_1_pal, 3},            // 2  i_x i_x (PAL: executes postponed line 0 raster/IRQ operations)
-    {vicii_cycle_sprite_p_access, 4},           // 3  4_x 4_x
-    {vicii_cycle_sprite_s_access, 4},           // 4  i_x i_x
-    {vicii_cycle_sprite_p_access, 5},           // 5  5_x 5_x
-    {vicii_cycle_sprite_s_access, 5},           // 6  i_x i_x
-    {vicii_cycle_sprite_p_access, 6},           // 7  6_x 6_x
-    {vicii_cycle_sprite_s_access, 6},           // 8  i_x i_x
-    {vicii_cycle_sprite_p_access, 7},           // 9  7_x 7_x
-    {vicii_cycle_sprite_s_access, 7},           // 10 i_x i_x
-    {vicii_cycle_refresh, -1},                  // 11 r_x r_x
-    {vicii_cycle_refresh, -1},                  // 12 r_X r_x
-    {vicii_cycle_refresh, -1},                  // 13 r_X r_x
-    {vicii_cycle_refresh_vc_update, -1},        // 14 r_X r_x (+ VC=VCBASE, VMLI=0, RC=0 on bad line)
-    {vicii_cycle_refresh_first_c_access_sprite_crunch, -1}, // 15 rc_ r_x (refresh PHI1 + first c-access PHI2 + sprite crunch)
-    {vicii_cycle_16_mcbase_char_color, 0},      // 16 gc_ g_x + MCBASE update
-    {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
-    {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
-    {vicii_cycle_char_color_access, 3},         // 19 gc_ g_x
-    {vicii_cycle_char_color_access, 4},         // 20 gc_ g_x
-    {vicii_cycle_char_color_access, 5},         // 21 gc_ g_x
-    {vicii_cycle_char_color_access, 6},         // 22 gc_ g_x
-    {vicii_cycle_char_color_access, 7},         // 23 gc_ g_x
-    {vicii_cycle_char_color_access, 8},         // 24 gc_ g_x
-    {vicii_cycle_char_color_access, 9},         // 25 gc_ g_x
-    {vicii_cycle_char_color_access, 10},        // 26 gc_ g_x
-    {vicii_cycle_char_color_access, 11},        // 27 gc_ g_x
-    {vicii_cycle_char_color_access, 12},        // 28 gc_ g_x
-    {vicii_cycle_char_color_access, 13},        // 29 gc_ g_x
-    {vicii_cycle_char_color_access, 14},        // 30 gc_ g_x
-    {vicii_cycle_char_color_access, 15},        // 31 gc_ g_x
-    {vicii_cycle_char_color_access, 16},        // 32 gc_ g_x
-    {vicii_cycle_char_color_access, 17},        // 33 gc_ g_x
-    {vicii_cycle_char_color_access, 18},        // 34 gc_ g_x
-    {vicii_cycle_char_color_access, 19},        // 35 gc_ g_x
-    {vicii_cycle_char_color_access, 20},        // 36 gc_ g_x
-    {vicii_cycle_char_color_access, 21},        // 37 gc_ g_x
-    {vicii_cycle_char_color_access, 22},        // 38 gc_ g_x
-    {vicii_cycle_char_color_access, 23},        // 39 gc_ g_x
-    {vicii_cycle_char_color_access, 24},        // 40 gc_ g_x
-    {vicii_cycle_char_color_access, 25},        // 41 gc_ g_x
-    {vicii_cycle_char_color_access, 26},        // 42 gc_ g_x
-    {vicii_cycle_char_color_access, 27},        // 43 gc_ g_x
-    {vicii_cycle_char_color_access, 28},        // 44 gc_ g_x
-    {vicii_cycle_char_color_access, 29},        // 45 gc_ g_x
-    {vicii_cycle_char_color_access, 30},        // 46 gc_ g_x
-    {vicii_cycle_char_color_access, 31},        // 47 gc_ g_x
-    {vicii_cycle_char_color_access, 32},        // 48 gc_ g_x
-    {vicii_cycle_char_color_access, 33},        // 49 gc_ g_x
-    {vicii_cycle_char_color_access, 34},        // 50 gc_ g_x
-    {vicii_cycle_char_color_access, 35},        // 51 gc_ g_x
-    {vicii_cycle_char_color_access, 36},        // 52 gc_ g_x
-    {vicii_cycle_char_color_access, 37},        // 53 gc_ g_x
-    {vicii_cycle_char_color_access, 38},        // 54 gc_ g_x
-    {vicii_cycle_char_color_y_match, 39},       // 55 g_x g_x (+ sprite Y match)
-    {vicii_cycle_idle_y_match, -1},             // 56 i_x i_x (+ sprite Y match)
-    {vicii_cycle_idle, -1},                     // 57 i_x i_x
-    {vicii_cycle_sprite_p_rc_mc_load, 0},       // 58 0_x 0_x : Sprite 0 P-access + RC/VCBASE + MC load (Rules 5 & 4)
-    {vicii_cycle_sprite_s_access, 0},           // 59 i_x i_x : Sprite 0 S-access
-    {vicii_cycle_sprite_p_access, 1},           // 60 1_x 1_x : Sprite 1 P-access
-    {vicii_cycle_sprite_s_access, 1},           // 61 i_x i_x : Sprite 1 S-access
-    {vicii_cycle_sprite_p_access, 2},           // 62 2_x 2_x : Sprite 2 P-access
-    {vicii_cycle_sprite_s_border_check, 2}      // 63 i_x i_x : Sprite 2 S-access + border check
-};
+    // ── Cycles 1–2: line-0 raster/IRQ handling (PAL vs NTSC) ──────────────
+    if (is_pal) {
+        table[i++] = {vicii_cycle_sprite_p_access, 3};   // PAL: sprite 3 P-access, line-0 ops postponed
+        table[i++] = {vicii_cycle_sprite_s_1_pal, 3};    // PAL: sprite 3 S-access + postponed line-0 ops
+    } else {
+        table[i++] = {vicii_cycle_sprite_p_0_ntsc, 3};   // NTSC: sprite 3 P-access + immediate line-0 ops
+        table[i++] = {vicii_cycle_sprite_s_access, 3};    // NTSC: sprite 3 S-access (normal)
+    }
 
-// Cycle callback table - NTSC timing (6567R56A : 64 cycles per line)
-static const vicii_cycle_entry_t vicii_cycle_table_6567R56A[64] = {
-    // 1=VIC-II PHI1, 2=VIC-II PHI2, C=CPU PHI2       12C 12C
-    //                                                BAD NBD
-    {vicii_cycle_sprite_p_0_ntsc, 3},           // 1  3_x 3_x (NTSC: executes line 0 raster/IRQ immediately)
-    {vicii_cycle_sprite_s_access, 3},           // 2  i_x i_x
-    {vicii_cycle_sprite_p_access, 4},           // 3  4_x 4_x
-    {vicii_cycle_sprite_s_access, 4},           // 4  i_x i_x
-    {vicii_cycle_sprite_p_access, 5},           // 5  5_x 5_x
-    {vicii_cycle_sprite_s_access, 5},           // 6  i_x i_x
-    {vicii_cycle_sprite_p_access, 6},           // 7  6_x 6_x
-    {vicii_cycle_sprite_s_access, 6},           // 8  i_x i_x
-    {vicii_cycle_sprite_p_access, 7},           // 9  7_x 7_x
-    {vicii_cycle_sprite_s_access, 7},           // 10 i_x i_x
-    {vicii_cycle_refresh, -1},                  // 11 r_x r_x
-    {vicii_cycle_refresh, -1},                  // 12 r_X r_x
-    {vicii_cycle_refresh, -1},                  // 13 r_X r_x
-    {vicii_cycle_refresh_vc_update, -1},        // 14 r_X r_x (+ VC=VCBASE, VMLI=0, RC=0 on bad line)
-    {vicii_cycle_refresh_first_c_access_sprite_crunch, -1}, // 15 rc_ r_x (refresh PHI1 + first c-access PHI2 + sprite crunch)
-    {vicii_cycle_16_mcbase_char_color, 0},      // 16 gc_ g_x + MCBASE update
-    {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
-    {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
-    {vicii_cycle_char_color_access, 3},         // 19 gc_ g_x
-    {vicii_cycle_char_color_access, 4},         // 20 gc_ g_x
-    {vicii_cycle_char_color_access, 5},         // 21 gc_ g_x
-    {vicii_cycle_char_color_access, 6},         // 22 gc_ g_x
-    {vicii_cycle_char_color_access, 7},         // 23 gc_ g_x
-    {vicii_cycle_char_color_access, 8},         // 24 gc_ g_x
-    {vicii_cycle_char_color_access, 9},         // 25 gc_ g_x
-    {vicii_cycle_char_color_access, 10},        // 26 gc_ g_x
-    {vicii_cycle_char_color_access, 11},        // 27 gc_ g_x
-    {vicii_cycle_char_color_access, 12},        // 28 gc_ g_x
-    {vicii_cycle_char_color_access, 13},        // 29 gc_ g_x
-    {vicii_cycle_char_color_access, 14},        // 30 gc_ g_x
-    {vicii_cycle_char_color_access, 15},        // 31 gc_ g_x
-    {vicii_cycle_char_color_access, 16},        // 32 gc_ g_x
-    {vicii_cycle_char_color_access, 17},        // 33 gc_ g_x
-    {vicii_cycle_char_color_access, 18},        // 34 gc_ g_x
-    {vicii_cycle_char_color_access, 19},        // 35 gc_ g_x
-    {vicii_cycle_char_color_access, 20},        // 36 gc_ g_x
-    {vicii_cycle_char_color_access, 21},        // 37 gc_ g_x
-    {vicii_cycle_char_color_access, 22},        // 38 gc_ g_x
-    {vicii_cycle_char_color_access, 23},        // 39 gc_ g_x
-    {vicii_cycle_char_color_access, 24},        // 40 gc_ g_x
-    {vicii_cycle_char_color_access, 25},        // 41 gc_ g_x
-    {vicii_cycle_char_color_access, 26},        // 42 gc_ g_x
-    {vicii_cycle_char_color_access, 27},        // 43 gc_ g_x
-    {vicii_cycle_char_color_access, 28},        // 44 gc_ g_x
-    {vicii_cycle_char_color_access, 29},        // 45 gc_ g_x
-    {vicii_cycle_char_color_access, 30},        // 46 gc_ g_x
-    {vicii_cycle_char_color_access, 31},        // 47 gc_ g_x
-    {vicii_cycle_char_color_access, 32},        // 48 gc_ g_x
-    {vicii_cycle_char_color_access, 33},        // 49 gc_ g_x
-    {vicii_cycle_char_color_access, 34},        // 50 gc_ g_x
-    {vicii_cycle_char_color_access, 35},        // 51 gc_ g_x
-    {vicii_cycle_char_color_access, 36},        // 52 gc_ g_x
-    {vicii_cycle_char_color_access, 37},        // 53 gc_ g_x
-    {vicii_cycle_char_color_access, 38},        // 54 gc_ g_x
-    {vicii_cycle_char_color_y_match, 39},       // 55 g_x g_x (+ sprite Y match)
-    {vicii_cycle_idle_y_match, -1},             // 56 i_x i_x (+ sprite Y match)
-    {vicii_cycle_idle, -1},                     // 57 i_x i_x
-    {vicii_cycle_idle, -1},                     // 58 i_x i_x
-    {vicii_cycle_sprite_p_rc_mc_load, 0},       // 59 0_x 0_x : Sprite 0 P-access + RC/VCBASE + MC load (Rules 5 & 4)
-    {vicii_cycle_sprite_s_access, 0},           // 60 i_x i_x : Sprite 0 S-access
-    {vicii_cycle_sprite_p_access, 1},           // 61 1_x 1_x : Sprite 1 P-access
-    {vicii_cycle_sprite_s_access, 1},           // 62 i_x i_x : Sprite 1 S-access
-    {vicii_cycle_sprite_p_access, 2},           // 63 2_x 2_x : Sprite 2 P-access
-    {vicii_cycle_sprite_s_border_check, 2}      // 64 i_x i_x : Sprite 2 S-access + border check
-};
+    // ── Cycles 3–10: sprite 4–7 P/S accesses ─────────────────────────────
+    for (int s = 4; s <= 7; s++) {
+        table[i++] = {vicii_cycle_sprite_p_access, s};
+        table[i++] = {vicii_cycle_sprite_s_access, s};
+    }
 
-// Cycle callback table - NTSC timing (6567R8 : 65 cycles per line)
-static const vicii_cycle_entry_t vicii_cycle_table_6567R8[65] = {
-    // 1=VIC-II PHI1, 2=VIC-II PHI2, C=CPU PHI2       12C 12C
-    //                                                BAD NBD
-    {vicii_cycle_sprite_p_0_ntsc, 3},           // 1  3_x 3_x (NTSC: executes line 0 raster/IRQ immediately)
-    {vicii_cycle_sprite_s_access, 3},           // 2  i_x i_x
-    {vicii_cycle_sprite_p_access, 4},           // 3  4_x 4_x
-    {vicii_cycle_sprite_s_access, 4},           // 4  i_x i_x
-    {vicii_cycle_sprite_p_access, 5},           // 5  5_x 5_x
-    {vicii_cycle_sprite_s_access, 5},           // 6  i_x i_x
-    {vicii_cycle_sprite_p_access, 6},           // 7  6_x 6_x
-    {vicii_cycle_sprite_s_access, 6},           // 8  i_x i_x
-    {vicii_cycle_sprite_p_access, 7},           // 9  7_x 7_x
-    {vicii_cycle_sprite_s_access, 7},           // 10 i_x i_x
-    {vicii_cycle_refresh, -1},                  // 11 r_x r_x
-    {vicii_cycle_refresh, -1},                  // 12 r_X r_x
-    {vicii_cycle_refresh, -1},                  // 13 r_X r_x
-    {vicii_cycle_refresh_vc_update, -1},        // 14 r_X r_x (+ VC=VCBASE, VMLI=0, RC=0 on bad line)
-    {vicii_cycle_refresh_first_c_access_sprite_crunch, -1}, // 15 rc_ r_x (refresh PHI1 + first c-access PHI2 + sprite crunch)
-    {vicii_cycle_16_mcbase_char_color, 0},      // 16 gc_ g_x + MCBASE update
-    {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
-    {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
-    {vicii_cycle_char_color_access, 3},         // 19 gc_ g_x
-    {vicii_cycle_char_color_access, 4},         // 20 gc_ g_x
-    {vicii_cycle_char_color_access, 5},         // 21 gc_ g_x
-    {vicii_cycle_char_color_access, 6},         // 22 gc_ g_x
-    {vicii_cycle_char_color_access, 7},         // 23 gc_ g_x
-    {vicii_cycle_char_color_access, 8},         // 24 gc_ g_x
-    {vicii_cycle_char_color_access, 9},         // 25 gc_ g_x
-    {vicii_cycle_char_color_access, 10},        // 26 gc_ g_x
-    {vicii_cycle_char_color_access, 11},        // 27 gc_ g_x
-    {vicii_cycle_char_color_access, 12},        // 28 gc_ g_x
-    {vicii_cycle_char_color_access, 13},        // 29 gc_ g_x
-    {vicii_cycle_char_color_access, 14},        // 30 gc_ g_x
-    {vicii_cycle_char_color_access, 15},        // 31 gc_ g_x
-    {vicii_cycle_char_color_access, 16},        // 32 gc_ g_x
-    {vicii_cycle_char_color_access, 17},        // 33 gc_ g_x
-    {vicii_cycle_char_color_access, 18},        // 34 gc_ g_x
-    {vicii_cycle_char_color_access, 19},        // 35 gc_ g_x
-    {vicii_cycle_char_color_access, 20},        // 36 gc_ g_x
-    {vicii_cycle_char_color_access, 21},        // 37 gc_ g_x
-    {vicii_cycle_char_color_access, 22},        // 38 gc_ g_x
-    {vicii_cycle_char_color_access, 23},        // 39 gc_ g_x
-    {vicii_cycle_char_color_access, 24},        // 40 gc_ g_x
-    {vicii_cycle_char_color_access, 25},        // 41 gc_ g_x
-    {vicii_cycle_char_color_access, 26},        // 42 gc_ g_x
-    {vicii_cycle_char_color_access, 27},        // 43 gc_ g_x
-    {vicii_cycle_char_color_access, 28},        // 44 gc_ g_x
-    {vicii_cycle_char_color_access, 29},        // 45 gc_ g_x
-    {vicii_cycle_char_color_access, 30},        // 46 gc_ g_x
-    {vicii_cycle_char_color_access, 31},        // 47 gc_ g_x
-    {vicii_cycle_char_color_access, 32},        // 48 gc_ g_x
-    {vicii_cycle_char_color_access, 33},        // 49 gc_ g_x
-    {vicii_cycle_char_color_access, 34},        // 50 gc_ g_x
-    {vicii_cycle_char_color_access, 35},        // 51 gc_ g_x
-    {vicii_cycle_char_color_access, 36},        // 52 gc_ g_x
-    {vicii_cycle_char_color_access, 37},        // 53 gc_ g_x
-    {vicii_cycle_char_color_access, 38},        // 54 gc_ g_x
-    {vicii_cycle_char_color_y_match, 39},       // 55 g_x g_x (+ sprite Y match)
-    {vicii_cycle_idle_y_match, -1},             // 56 i_x i_x (+ sprite Y match)
-    {vicii_cycle_idle, -1},                     // 57 i_x i_x
-    {vicii_cycle_idle, -1},                     // 58 i_x i_x
-    {vicii_cycle_idle, -1},                     // 59 i_x i_x
-    {vicii_cycle_sprite_p_rc_mc_load, 0},       // 60 0_x 0_x : Sprite 0 P-access + RC/VCBASE + MC load (Rules 5 & 4)
-    {vicii_cycle_sprite_s_access, 0},           // 61 i_x i_x : Sprite 0 S-access
-    {vicii_cycle_sprite_p_access, 1},           // 62 1_x 1_x : Sprite 1 P-access
-    {vicii_cycle_sprite_s_access, 1},           // 63 i_x i_x : Sprite 1 S-access
-    {vicii_cycle_sprite_p_access, 2},           // 64 2_x 2_x : Sprite 2 P-access
-    {vicii_cycle_sprite_s_border_check, 2}      // 65 i_x i_x : Sprite 2 S-access + border check
-};
+    // ── Cycles 11–15: DRAM refresh + first c-access + sprite crunch ──────
+    table[i++] = {vicii_cycle_refresh, -1};
+    table[i++] = {vicii_cycle_refresh, -1};
+    table[i++] = {vicii_cycle_refresh, -1};
+    table[i++] = {vicii_cycle_refresh_vc_update, -1};
+    table[i++] = {vicii_cycle_refresh_first_c_access_sprite_crunch, -1};
+
+    // ── Cycles 16–54: 40-column character/color access ───────────────────
+    table[i++] = {vicii_cycle_16_mcbase_char_color, 0};   // + MCBASE update
+    for (int c = 1; c <= 38; c++)
+        table[i++] = {vicii_cycle_char_color_access, c};
+
+    // ── Cycle 55–56: display end + sprite Y match ────────────────────────
+    table[i++] = {vicii_cycle_char_color_y_match, 39};
+    table[i++] = {vicii_cycle_idle_y_match, -1};
+
+    // ── Idle padding: 1 (PAL/63), 2 (R56A/64), 3 (R8/65) ────────────────
+    const int idle_count = cycles_per_line - 62;
+    for (int j = 0; j < idle_count; j++)
+        table[i++] = {vicii_cycle_idle, -1};
+
+    // ── Sprite 0–2 tail (always last 6 cycles) ──────────────────────────
+    table[i++] = {vicii_cycle_sprite_p_rc_mc_load, 0};    // Sprite 0 P-access + RC/VCBASE + MC load
+    table[i++] = {vicii_cycle_sprite_s_access, 0};
+    table[i++] = {vicii_cycle_sprite_p_access, 1};
+    table[i++] = {vicii_cycle_sprite_s_access, 1};
+    table[i++] = {vicii_cycle_sprite_p_access, 2};
+    table[i++] = {vicii_cycle_sprite_s_border_check, 2};
+}
+
+// Static storage for the three VIC-II cycle tables (populated on first use)
+static vicii_cycle_entry_t vicii_cycle_table_6569[63];
+static vicii_cycle_entry_t vicii_cycle_table_6567R56A[64];
+static vicii_cycle_entry_t vicii_cycle_table_6567R8[65];
+static bool vicii_cycle_tables_built = false;
+
+static void vicii_ensure_cycle_tables() {
+    if (vicii_cycle_tables_built) return;
+    build_vicii_cycle_table(vicii_cycle_table_6569,     true,  63);  // MOS 6569 PAL
+    build_vicii_cycle_table(vicii_cycle_table_6567R56A, false, 64);  // MOS 6567 R56A NTSC
+    build_vicii_cycle_table(vicii_cycle_table_6567R8,   false, 65);  // MOS 6567 R8 NTSC
+    vicii_cycle_tables_built = true;
+}
 
 // ========================================================================================
 // CHIP CONFIGURATION DEFINITIONS
@@ -2523,6 +2388,9 @@ static inline void vicii_initialize(vicii_t* vicii) {
 }
 
 static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_config_t* config) {
+    // Ensure cycle tables are built (lazy one-time init)
+    vicii_ensure_cycle_tables();
+
     // Select cycle table based on timing characteristics
     if (config->cycles_per_line == 63) { // PAL
         vicii->timing.cycle_table = vicii_cycle_table_6569;
