@@ -9,4 +9,9 @@
 
 #include "chip/sound/ay_psg/ay_psg.hpp"
 
+inline constexpr AYTraits AY_3_8914_Traits = {
+    "General Instrument", "AY-3-8914",
+    2, 2, 16, AYRegisterMap::INTELLIVISION, false
+};
+
 using AY_3_8914 = ay_psg_t<AY_3_8914_Traits>;
