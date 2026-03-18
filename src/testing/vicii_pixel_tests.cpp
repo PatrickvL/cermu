@@ -19,8 +19,8 @@
 
 namespace vicii_test {
 
-// Palette — sourced from vicii_t::get_default_palette()
-static const uint32_t* PAL = vicii_t::get_default_palette();
+// Palette — sourced from vicii_base_t::get_default_palette()
+static const uint32_t* PAL = vicii_base_t::get_default_palette();
 
 // =============================================================================
 // COORDINATE MAPPING (PAL MOS6569)

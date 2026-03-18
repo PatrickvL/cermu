@@ -83,7 +83,7 @@ public:
     ROMChip* cartridge_romh = nullptr; // Cartridge ROM High $A000-$BFFF (8KB)
     ROMChip* basic = nullptr;        // Basic ROM $A000-$BFFF (8KB)
     ROMChip* charrom = nullptr;      // Character ROM $D000-$DFFF (4KB) when CHAREN=0
-    vicii_t* vicii = nullptr;           // mos6567_t (NTSC) or mos6569_t (PAL) ($D000-$DFFF, 4KB)
+    vicii_base_t* vicii = nullptr;      // VIC-II base (traits set at init for PAL/NTSC)
     mos6581_t* sid = nullptr;           // MOS6581 SID sound chip ($D400-$D7FF, 1KB)
     MOS2114* colorram = nullptr;        // Color RAM (1KB at $D800-$DBFF)
     mos6526_t* cia1 = nullptr;          // MOS6526 CIA 1 (BUS_MASK_IRQ) ($DC00-$DDFF, 256 bytes)

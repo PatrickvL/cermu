@@ -333,7 +333,7 @@ int main(int argc, char** argv) {
         printf("VICII-DUMP: Normal boot, %dx%d framebuffer\n", fb_width, fb_height);
 
         // Palette lookup
-        const uint32_t* PAL = vicii_t::get_default_palette();
+        const uint32_t* PAL = vicii_base_t::get_default_palette();
         [[maybe_unused]] auto color_name = [&](uint32_t rgba) -> const char* {
             for (int i = 0; i < 16; i++) {
                 if (PAL[i] == rgba) {

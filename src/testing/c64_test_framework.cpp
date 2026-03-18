@@ -456,7 +456,7 @@ static TickLoopResult tick_loop_protected(C64System* c64, uint32_t max_cycles, i
                             r.loop_pc = current_pc;
                             // Get border color
                             if (c64->vicii) {
-                                vicii_t* vicii = static_cast<vicii_t*>(c64->vicii);
+                                vicii_base_t* vicii = static_cast<vicii_base_t*>(c64->vicii);
                                 r.border_color = vicii->regs_[vicii_regs::EC] & 0x0F;
                             }
                             return r;
@@ -986,7 +986,7 @@ uint8_t TestFramework::get_border_color(C64System* c64) {
         return 0;
     }
     
-    vicii_t* vicii = static_cast<vicii_t*>(c64->vicii);
+    vicii_base_t* vicii = static_cast<vicii_base_t*>(c64->vicii);
     // Border color is at register $D020 (vicii_regs::EC = register 32)
     return vicii->regs_[vicii_regs::EC] & 0x0F;  // Only lower 4 bits are color
 }
@@ -1401,7 +1401,7 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
     result.cycles_executed = cycles;
     
     // Get VIC-II framebuffer
-    vicii_t* vicii = static_cast<vicii_t*>(c64->vicii);
+    vicii_base_t* vicii = static_cast<vicii_base_t*>(c64->vicii);
     if (!vicii || !vicii->display_) {
         result.status = TestStatus::ERROR;
         result.message = "VIC-II framebuffer not available";

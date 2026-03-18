@@ -36,7 +36,7 @@
 #include "core/board.hpp"
 #include "chip/cpu/fam65xx/csg8502.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
-#include "chip/video/vic_ii/vicii_common.hpp"
+#include "chip/video/vic_ii/mos8566.hpp"
 #include "chip/sound/mos6581.hpp"
 #include "chip/io/mos6526.hpp"
 #include "chip/memory/memory_chip.hpp"
@@ -77,7 +77,7 @@ inline constexpr auto kC128Chips = make_chip_manifest(
     // Non-bus chips — factory-created, not address-decoded
     Slot<CSG8502>   {0, 0, 0, "CSG 8502"},
     Slot<ZilogZ80A> {0, 0, 0, "Zilog Z80A"},
-    Slot<vicii_t>   {0, 0, 0, "MOS 8564 VIC-IIe"},
+    Slot<mos8566_t> {0, 0, 0, "MOS 8566 VIC-IIe"},
     Slot<mos6581_t> {0, 0, 0, "MOS 6581 SID"},
     Slot<mos6526_t> {0, 0, 0, "CIA 1"},
     Slot<mos6526_t> {0, 0, 0, "CIA 2"}
@@ -131,7 +131,7 @@ private:
     // ── Chips ────────────────────────────────────────────────────────────
     CSG8502*    cpu_8502_ = nullptr;     // Primary CPU — 6502-compatible
     ZilogZ80A*  cpu_z80_  = nullptr;     // Secondary CPU — Z80 for CP/M
-    vicii_t*    vic_      = nullptr;     // VIC-IIe (40-column display)
+    mos8566_t*  vic_iie_  = nullptr;     // MOS8566 VIC-IIe (40-column display)
     mos6581_t*  sid_      = nullptr;     // SID sound chip
     mos6526_t*  cia1_     = nullptr;     // CIA 1 (keyboard + joystick)
     mos6526_t*  cia2_     = nullptr;     // CIA 2 (IEC serial + user port)

@@ -347,7 +347,7 @@ const SystemDescriptor& C64System::get_descriptor() const {
 // CIA2 Port A change callback — updates VIC-II bank select
 static void cia2_port_a_bank_callback(void* context, uint8_t port_a_value) {
     C64System* c64 = static_cast<C64System*>(context);
-    vicii_t::memory_bank_change(c64->vicii, port_a_value & 0x03);
+    vicii_base_t::memory_bank_change(c64->vicii, port_a_value & 0x03);
 }
 
 // CPU I/O port banking callback — updates PLA memory mode
@@ -400,7 +400,7 @@ bool C64System::initialize() {
     this->kernal          = board_.find<ROMChip>(3);
     this->charrom         = board_.find<ROMChip>(4);
     this->mos6510         = board_.find<MOS6510>();
-    this->vicii           = board_.find<vicii_t>();
+    this->vicii           = board_.find<vicii_base_t>();
     this->sid             = board_.find<mos6581_t>();
     this->colorram        = board_.find<MOS2114>();
     this->cia1            = board_.find<mos6526_t>();
@@ -413,7 +413,9 @@ bool C64System::initialize() {
     // =========================================================================
 
     // VIC-II
-    this->vicii->init(vicii_t::get_default_config(get_vicii_standard() == VIC_PAL), vicii_t::memory_bank_change);
+    this->vicii->init_base(
+        get_vicii_standard() == VIC_PAL ? MOS6569_traits : MOS6567R8_traits,
+        vicii_base_t::memory_bank_change);
     this->vicii->colorram = this->colorram;
 
     // SID — clock, timing, revision
@@ -535,7 +537,7 @@ bool C64System::initialize() {
     // GPU indexed palette rendering — 16-color VIC-II palette
     display_.init(c64_constants::DISPLAY_WIDTH_PAL,
                   c64_constants::DISPLAY_HEIGHT_PAL);
-    display_.set_palette(vicii_t::get_default_palette(), 16);
+    display_.set_palette(vicii_base_t::get_default_palette(), 16);
     vicii->set_display(&display_);
     register_display(&display_);
 
@@ -1843,7 +1845,7 @@ bool C64System::pla_maps_generate() {
 
 void C64System::init_io_dispatch() {
     // Register MMIO handlers for each I/O chip
-    int hVicII  = bus_.register_handler({this->vicii,    vicii_t::registers_read,    vicii_t::registers_write});
+    int hVicII  = bus_.register_handler({this->vicii,    vicii_base_t::registers_read, vicii_base_t::registers_write});
     int hSid    = bus_.register_handler({this->sid,      mos6581_t::registers_read,  mos6581_t::registers_write});
     int hColRam = bus_.register_handler({this->colorram, MOS2114::bus_read,          MOS2114::bus_write});
     int hCia1   = bus_.register_handler({this->cia1,     mos6526_t::registers_read,  mos6526_t::registers_write});

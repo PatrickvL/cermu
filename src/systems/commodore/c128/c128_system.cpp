@@ -114,7 +114,7 @@ bool C128System::initialize() {
 
     cpu_8502_     = board_.cpu<CSG8502>();
     cpu_z80_      = board_.find<ZilogZ80A>();
-    vic_          = board_.find<vicii_t>();
+    vic_iie_      = board_.find<mos8566_t>();
     sid_          = board_.find<mos6581_t>();
     cia1_         = board_.find<mos6526_t>();
     cia2_         = board_.find<mos6526_t>(1);
@@ -132,10 +132,15 @@ bool C128System::initialize() {
         printf("C128: Warning — ROMs not loaded\n");
     }
 
+    // VIC-IIe — initialize with PAL traits (MOS8566)
+    vic_iie_->init(vicii_base_t::memory_bank_change);
+
     register_bus_chips(board_);
 
     display_.init(c128_constants::VIC_DISPLAY_WIDTH_PAL,
                   c128_constants::VIC_DISPLAY_HEIGHT_PAL);
+    display_.set_palette(vicii_base_t::get_default_palette(), 16);
+    vic_iie_->set_display(&display_);
     register_display(&display_);
 
     system_ready_ = true;

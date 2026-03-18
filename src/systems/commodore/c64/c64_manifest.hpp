@@ -59,7 +59,7 @@ inline constexpr auto kC64Chips = make_chip_manifest(
 
     // ── Non-bus chips (CPU, I/O — no buffer in flat mem) ─────────────────
     Slot<MOS6510>  {0, 0, 0, "MOS 6510"},       // Slot 6 — CPU
-    Slot<vicii_t>  {0, 0, 0, "VIC-II"},          // Slot 7
+    Slot<vicii_base_t>  {0, 0, 0, "VIC-II"},     // Slot 7
     Slot<mos6581_t>{0, 0, 0, "SID"},             // Slot 8
     Slot<MOS2114>  {0, 0, 0, "Color RAM"},       // Slot 9
     Slot<mos6526_t>{0, 0, 0, "CIA1"},            // Slot 10
