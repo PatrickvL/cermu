@@ -39,6 +39,15 @@ inline uint32_t get_ssp() const { return regs_.ssp; }
 inline void set_usp(uint32_t val) { regs_.usp = val; }
 inline void set_ssp(uint32_t val) { regs_.ssp = val; }
 
+/// Keep A7 ↔ SSP/USP in sync after direct A7 modifications (e.g. EXG)
+inline void sync_sp() {
+    if (regs_.sr & SRBits::S) {
+        regs_.ssp = regs_.a[7];
+    } else {
+        regs_.usp = regs_.a[7];
+    }
+}
+
 /// Swap A7 with USP when entering supervisor mode
 inline void enter_supervisor() {
     if (!(regs_.sr & SRBits::S)) {
@@ -59,6 +68,11 @@ inline void leave_supervisor() {
 
 /// Full SR write with mode switch handling
 inline void set_sr(uint16_t new_sr) {
+    // Mask to valid SR bits for this CPU model
+    if constexpr (!has_bit_fields()) {
+        // MC68000/010: only T1, S, IPM, CCR valid
+        new_sr &= SRBits::SR_MASK;
+    }
     bool was_super = (regs_.sr & SRBits::S) != 0;
     bool now_super = (new_sr  & SRBits::S) != 0;
     if (was_super && !now_super) {

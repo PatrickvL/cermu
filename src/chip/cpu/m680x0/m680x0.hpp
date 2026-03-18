@@ -653,6 +653,27 @@ private:
         return handle_prefetch(pins);
     }
 
+    /// Add N idle clocks before starting the prefetch cycle.
+    /// Used for instructions that take more than 4 clocks (prefetch only).
+    /// The first idle clock is consumed on the current tick.
+    inline bus_state_t do_idle_then_prefetch(bus_state_t pins, uint8_t idle_clocks) {
+        if (idle_clocks == 0) return do_prefetch(pins);
+        idle_remaining_ = idle_clocks - 1;  // -1 because we consume one now
+        transition_to(&m680x0_t::handle_idle);
+        return pins;
+    }
+
+    // ── Handler: Idle ───────────────────────────────────────────
+    // Burns internal idle cycles, then transitions to prefetch.
+    bus_state_t handle_idle(bus_state_t pins) {
+        if (idle_remaining_ > 0) {
+            idle_remaining_--;
+            return pins;
+        }
+        // Done idling → start prefetch
+        return do_prefetch(pins);
+    }
+
     // ── Group decode stubs ──────────────────────────────────────
     // Declared via #include of operations/m680x0_ops.inc.hpp below.
 
@@ -681,6 +702,7 @@ private:
     uint32_t            ea_addr_         = 0;       // Computed effective address
     bus_state_t         bus_prev_        = 0;       // Previous bus state (edge detection)
     uint16_t            reset_counter_   = 0;       // Counts clocks with RESET asserted
+    uint8_t             idle_remaining_  = 0;       // Remaining idle clocks before prefetch
 
     // ── Test harness support ────────────────────────────────────
 public:

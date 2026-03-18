@@ -15,6 +15,15 @@ inline bus_state_t decode_move(bus_state_t pins, uint16_t opcode, OpSize sz) {
     uint8_t dst_mode = (opcode >> 6) & 7;
 
     uint32_t value = read_ea(src_mode, src_reg, sz);
+
+    // MOVEA — destination is An: no flags change, sign-extend .w → .l
+    if (dst_mode == 1) {
+        if (sz == OpSize::Word)
+            value = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(value)));
+        set_a(dst_reg, value);
+        return do_prefetch(pins);
+    }
+
     write_ea(dst_mode, dst_reg, value, sz);
 
     // MOVE sets N, Z, clears V and C
