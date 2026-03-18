@@ -8,4 +8,9 @@
 
 #include "chip/sound/ay_psg/ay_psg.hpp"
 
+inline constexpr AYTraits YM3439_Traits = {
+    "Yamaha", "YM3439",
+    2, 1, 32, AYRegisterMap::STANDARD, false
+};
+
 using YM3439 = ay_psg_t<YM3439_Traits>;

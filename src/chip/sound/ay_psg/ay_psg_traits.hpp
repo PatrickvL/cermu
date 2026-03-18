@@ -50,47 +50,6 @@ struct AYTraits {
     constexpr uint8_t envelope_max() const { return envelope_steps - 1; }
 };
 
-// ============================================================================
-// Concrete trait instances — one per chip in the family
-// ============================================================================
-
-// --- Standard General Instrument parts ---
-
-inline constexpr AYTraits AY_3_8910_Traits = {
-    "General Instrument", "AY-3-8910",
-    2, 2, 16, AYRegisterMap::STANDARD, false
-};
-
-inline constexpr AYTraits AY_3_8912_Traits = {
-    "General Instrument", "AY-3-8912",
-    1, 2, 16, AYRegisterMap::STANDARD, false
-};
-
-inline constexpr AYTraits AY_3_8913_Traits = {
-    "General Instrument", "AY-3-8913",
-    0, 2, 16, AYRegisterMap::STANDARD, false
-};
-
-inline constexpr AYTraits AY_3_8914_Traits = {
-    "General Instrument", "AY-3-8914",
-    2, 2, 16, AYRegisterMap::INTELLIVISION, false
-};
-
-// --- Yamaha clones ---
-
-inline constexpr AYTraits YM2149_Traits = {
-    "Yamaha", "YM2149",
-    2, 1, 32, AYRegisterMap::STANDARD, false
-};
-
-inline constexpr AYTraits YM3439_Traits = {
-    "Yamaha", "YM3439",
-    2, 1, 32, AYRegisterMap::STANDARD, false
-};
-
-// --- Enhanced clone ---
-
-inline constexpr AYTraits AY8930_Traits = {
-    "Microchip", "AY8930",
-    2, 2, 16, AYRegisterMap::STANDARD, true
-};
+// Concrete trait instances live in their respective variant headers:
+//   ay_3_8910.hpp, ay_3_8912.hpp, ay_3_8913.hpp, ay_3_8914.hpp,
+//   ym2149.hpp, ym3439.hpp, ay8930.hpp
