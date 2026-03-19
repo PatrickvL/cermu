@@ -548,6 +548,15 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
         if (display_) display_->flush_line_range(
             scanline, scanline_color_line_, active_palette_, scanline_flush_x_, 256);
         scanline_flush_x_ = 256;  // Prevent re-flush from HBlank palette writes
+
+        // Drive video stream with the completed scanline
+        if (video_stream_) {
+            VideoFlags flags = VideoFlags::HSync | VideoFlags::BeamOn;
+            video_stream_->drive({0, flags});  // HSync marker
+            for (int i = 0; i < 256; i++) {
+                video_stream_->drive({scanline_color_line_[i], VideoFlags::BeamOn});
+            }
+        }
     }
 
     // Advance cycle
@@ -564,11 +573,23 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
         cycle            = 0;
         scanline_event_  = 0;  // Reset event counter for new scanline
         scanline_flush_x_ = 0; // Reset partial-flush cursor for new scanline
+
+        // Drive VBlank line markers to the video stream (non-visible scanlines)
+        if (video_stream_ && (scanline >= 240 || scanline < 0)) {
+            VideoFlags flags = VideoFlags::HSync | VideoFlags::VSync | VideoFlags::Blank;
+            video_stream_->drive({0, flags});
+        }
+
         scanline++;
         if (scanline >= total_scanlines_minus_one_) {
             scanline = -1;
             frame_complete = true;
             frame_count++;
+
+            // FrameEnd marker in the video stream
+            if (video_stream_) {
+                video_stream_->drive({0, VideoFlags::FrameEnd});
+            }
         }
     }
     status_read_last_dot_ = false;  // Consumed; clear for next dot
