@@ -24,6 +24,8 @@
  */
 
 #include "chip/video/video_chip_base.hpp"
+#include "core/signal/composite_video_stream.hpp"
+#include "core/signal/audio_port.hpp"
 #include "utils/ring_buffer.hpp"
 #include <cstdint>
 
@@ -352,6 +354,17 @@ struct tia_t : public VideoChipBase {
     AudioRingBuffer audio_buffer_{4096};
     uint32_t audio_cycle_counter = 0;
     uint32_t audio_cycles_per_sample = 0;     // CPU cycles per audio sample
+
+    AudioPort* audio_port_ = nullptr;
+    void set_audio_port(AudioPort* p) { audio_port_ = p; }
+
+    // ========================================================================
+    // VIDEO STREAM
+    // ========================================================================
+
+    CompositeVideoStream* video_stream_ = nullptr;
+    void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
+    bool prev_vsync_stream_ = false;  // Edge detection for FrameEnd emission
 
     // ========================================================================
     // FRAMEBUFFER

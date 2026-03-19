@@ -531,6 +531,27 @@ void tia_t::tick_color_clock() {
                                  tia_constants::DISPLAY_WIDTH);
         }
 
+        // Drive video stream at end of each scanline
+        if (video_stream_) {
+            bool vsync_active = (regs_[TIA_VSYNC] & 0x02) != 0;
+
+            VideoFlags sync_flags = VideoFlags::HSync;
+            if (vblank || vsync_active)
+                sync_flags = sync_flags | VideoFlags::VSync | VideoFlags::Blank;
+            // FrameEnd on VSYNC rising edge (program declares frame boundary)
+            if (vsync_active && !prev_vsync_stream_)
+                sync_flags = sync_flags | VideoFlags::FrameEnd;
+            prev_vsync_stream_ = vsync_active;
+
+            video_stream_->drive({0, sync_flags});
+
+            if (!vblank && visible_row >= 0) {
+                for (int i = 0; i < tia_constants::DISPLAY_WIDTH; i++) {
+                    video_stream_->drive({color_line_buffer[i], VideoFlags::BeamOn});
+                }
+            }
+        }
+
         // Track visible row for framebuffer mapping.
         if (!vblank) {
             // Row was already set to 0 before first pixel (see above).
@@ -574,6 +595,9 @@ void tia_t::tick_cpu_cycle() {
             sample = std::max(-1.0f, std::min(1.0f, sample));
 
             audio_buffer_.write(&sample, 1);
+            if (audio_port_) {
+                audio_port_->drive_sample(sample);
+            }
         }
     }
 }
