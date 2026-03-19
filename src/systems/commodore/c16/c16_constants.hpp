@@ -19,7 +19,7 @@ namespace c16_constants {
     inline constexpr uint32_t AUDIO_SAMPLE_RATE      = 22050;     // Default output sample rate (Hz)
 
     // Display
-    inline constexpr uint32_t DISPLAY_WIDTH          = 384;    // TED_VISIBLE_WIDTH (320 + borders)
+    inline constexpr uint32_t DISPLAY_WIDTH          = 376;    // (48 - 1) visible cycles × 8 pixels (excl. HSync cycle)
     inline constexpr uint32_t DISPLAY_HEIGHT         = 288;    // TED_VISIBLE_HEIGHT_PAL (normal borders)
 
     // Memory sizes

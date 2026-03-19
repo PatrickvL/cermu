@@ -729,32 +729,6 @@ void ted7360_t::timing_advance() {
 
     // --- End of line ---
 
-    // Drive video stream with the completed scanline's pixel data
-    if (video_stream_) {
-        const uint16_t raster = timing.raster_counter;
-        const uint16_t fvl = timing.first_visible_line;
-        const uint16_t lines = timing.lines_per_frame;
-        const uint16_t vis_h = timing.is_pal ? TED_VISIBLE_HEIGHT_PAL : TED_VISIBLE_HEIGHT_NTSC;
-
-        // Check if raster is in visible range (wrapping case: PAL first_visible=275)
-        uint16_t fb_row = (raster + lines - fvl) % lines;
-        bool in_vblank = (fb_row >= vis_h);
-        bool frame_end = (raster == lines - 1);
-
-        // HSync sample — marks start of this scanline
-        VideoFlags sync_flags = VideoFlags::HSync;
-        if (in_vblank) sync_flags = sync_flags | VideoFlags::VSync | VideoFlags::Blank;
-        if (frame_end) sync_flags = sync_flags | VideoFlags::FrameEnd;
-        video_stream_->drive({0, sync_flags});
-
-        // Visible pixel data
-        if (!in_vblank && color_line_) {
-            for (uint16_t i = 0; i < TED_VISIBLE_WIDTH; i++) {
-                video_stream_->drive({color_line_[i], VideoFlags::BeamOn});
-            }
-        }
-    }
-
     timing.x_cycle = 0;
     timing.x_pixel = 0;
     video_logic.dma_line_occurred = false;
@@ -762,6 +736,7 @@ void ted7360_t::timing_advance() {
     uint16_t new_raster = timing.raster_counter + 1u;
     if (new_raster >= timing.lines_per_frame) {
         new_raster = 0;
+        frame_wrapped_ = true;
 
         // --- End of frame ---
         ++timing.frame_count;
@@ -781,6 +756,20 @@ void ted7360_t::timing_advance() {
     }
 
     timing.raster_counter = new_raster;
+
+    // Update drive_flags_ for the new raster line:
+    //   HSync active on cycle 0 only (cleared at cycle 1 in tick_phi1).
+    //   VSync + Blank during vertical blanking.
+    {
+        const uint16_t fvl = timing.first_visible_line;
+        const uint16_t lines = timing.lines_per_frame;
+        const uint16_t vis_h = timing.is_pal ? TED_VISIBLE_HEIGHT_PAL : TED_VISIBLE_HEIGHT_NTSC;
+        uint16_t fb_row = (new_raster + lines - fvl) % lines;
+        bool in_vblank = (fb_row >= vis_h);
+        drive_flags_ = VideoFlags::HSync;
+        if (in_vblank)
+            drive_flags_ = drive_flags_ | VideoFlags::VSync | VideoFlags::Blank;
+    }
 
     // Raster IRQ is edge-triggered on line transition
     check_raster_interrupt();
@@ -934,6 +923,11 @@ void ted7360_t::reset() {
     flash_counter   = 0;
     cursor_visible  = false;
     reverse_mode    = false;
+
+    // Per-dot-clock stream state
+    frame_wrapped_ = false;
+    // Raster 0 is in vblank for TED — initialize drive_flags_ accordingly
+    drive_flags_ = VideoFlags::HSync | VideoFlags::VSync | VideoFlags::Blank;
 
     // Derive memory addresses from default register values
     update_memory_addresses();
@@ -1110,8 +1104,34 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
 
     // ===== STEP 4: Pixel sequencer (8 pixels) =====
     // Always run — border flip-flop state must stay consistent across all lines.
-    // flush_line() handles the visible-range clip when writing to the framebuffer.
     pixel_sequencer();
+
+    // ===== STEP 4.1: Per-dot-clock stream driving (8 pixels) =====
+    // drive_flags_ is maintained at line transitions (HSync on cycle 0,
+    // VSync during vblank).  Clear HSync after cycle 0 so the falling
+    // edge creates the sync event.
+    if (x == 1) {
+        drive_flags_ = drive_flags_ & ~VideoFlags::HSync;
+    }
+
+    if (video_stream_) {
+        VideoFlags flags = drive_flags_;
+        if (frame_wrapped_) {
+            frame_wrapped_ = false;
+            flags = flags | VideoFlags::FrameEnd;
+        }
+        const bool is_vblank = has_flag(flags, VideoFlags::VSync);
+        const uint16_t x_base = timing.x_pixel;
+        for (int pi = 0; pi < 8; ++pi) {
+            uint8_t color = 0;
+            if (!is_vblank && color_line_) {
+                const uint16_t px = x_base + static_cast<uint16_t>(pi);
+                if (px < TED_VISIBLE_WIDTH)
+                    color = color_line_[px];
+            }
+            video_stream_->drive({color, (pi == 0) ? flags : (flags & ~VideoFlags::FrameEnd)});
+        }
+    }
 
     // ===== STEP 5: Timer countdown =====
     tick_timers();
