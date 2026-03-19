@@ -55,16 +55,14 @@ struct VideoStream {
     void drive(SampleT s) noexcept {
         *ptr++ = s;
 
-        if (unlikely(s.flags != prev_flags)) {
-            const uint32_t pos = static_cast<uint32_t>(ptr - 1 - base);
-            bool is_frame = on_sync_change(ctx, s.flags, pos);
-            if (is_frame) {
-                frame_len = static_cast<uint32_t>(ptr - base);
+        if (unlikely(prev_flags != s.flags)) {
+            prev_flags = s.flags;
+            const uint32_t len = static_cast<uint32_t>(ptr - base);
+            if (on_sync_change(ctx, s.flags, len - 1)) {
+                frame_len = len;
                 ptr = base;
             }
-            prev_flags = s.flags;
         }
-
     }
 };
 
