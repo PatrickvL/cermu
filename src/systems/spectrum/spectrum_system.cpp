@@ -344,10 +344,12 @@ void SpectrumSystem<V>::tick() {
 
 template<SpectrumVariant V>
 void SpectrumSystem<V>::run_frame() {
-    for (uint32_t i = 0; i < spectrum_constants::TSTATES_PER_FRAME; ++i) {
+    if (!video_port_) return;
+    auto& stream = video_port_->stream();
+    while (!stream.frame_ended()) {
         tick();
     }
-    if (video_port_) video_port_->swap_frame();
+    video_port_->swap_frame();
 }
 
 // ============================================================================

@@ -461,14 +461,14 @@ void NintendoSystem<V>::reset() {
 
 template<NintendoVariant V>
 void NintendoSystem<V>::run_frame() {
-    if (!system_ready_ || !ppu_) return;
+    if (!system_ready_ || !ppu_ || !video_port_) return;
 
-    ppu_->frame_complete = false;
-    while (!ppu_->frame_complete) {
+    auto& stream = video_port_->stream();
+    while (!stream.frame_ended()) {
         tick();
     }
 
-    if (video_port_) video_port_->swap_frame();
+    video_port_->swap_frame();
 
     // Signal audio thread with accumulated CPU cycles
     if (apu_synth_engine_) {

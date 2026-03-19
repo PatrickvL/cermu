@@ -1239,5 +1239,13 @@ Systems with software-generated audio (beeper, CTC) use `AudioPort::drive_sample
 1. **Per-dot-clock migration for Commodore chips.** VIC-II, VIC, and TED currently use collected-scanline bursts. The `drive()` hot path is now cheap enough (one store + one byte compare) that per-dot-clock driving is viable. This would preserve mid-line timing information and enable future composite artifact simulation. VIC-II first (highest impact), then VIC, then TED.
 2. **Per-dot-clock migration for NES PPU.** Currently flushes at scanline boundaries (and on palette change). Per-dot-clock would simplify the logic and remove the palette-change flush workaround.
 3. **Per-frame chip elimination.** Amstrad Gate Array, BBC VIDPROC, MC6847, and Ferranti ULA currently render to framebuffer then read back to drive the stream. Convert to per-dot-clock or per-scanline to eliminate the round-trip.
-4. **Stream-driven frame sync expansion.** Extend `frame_ended()` loop pattern from Commodore systems to NES, Atari 2600, and other chip-wired systems.
+4. ~~**Stream-driven frame sync expansion.**~~ **Done.** All chip-wired systems now use `stream.frame_ended()` to terminate the frame loop:
+   - Commodore C64, VIC-20, C16/Plus4 (original pattern)
+   - NES (PPU drives FrameEnd at scanline wrap)
+   - Atari 2600 (TIA drives FrameEnd on VSYNC rising edge, with safety limit)
+   - ZX Spectrum (ULA drives FrameEnd at frame boundary in tick)
+   - BBC Micro (VIDPROC drives FrameEnd via CRTC timing)
+   - Amstrad CPC (Gate Array drives FrameEnd at frame boundary in tick)
+   - Acorn Atom (MC6847 VDG drives FrameEnd on Field Sync)
+   Per-frame render systems (Bomb Jack, Namco, KC85, Z9001, Z1013) retain fixed-count loops — stream-driven sync adds no benefit for atomic renderers. VTech VZ is deferred (tick/video stub).
 5. **GPU reconstruction pipeline.** Replace CPU-side `reconstruct_to_framebuffer()` bridge with compute+fragment shader pipeline per the design (PBO upload, scanline map, palette lookup).

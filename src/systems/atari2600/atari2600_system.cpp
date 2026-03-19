@@ -261,38 +261,36 @@ void Atari2600System::tick() {
     total_cycles_++;
 
     // Frame boundary detection:
-    // When TIA VSYNC transitions from active to inactive, a new frame starts.
-    // We detect this by watching the TIA's vsync flag.
+    // When TIA VSYNC transitions from active to inactive, reset the TIA
+    // scanline counter for the new frame.  Frame sync itself is now
+    // stream-driven (TIA drives FrameEnd on VSYNC rising edge).
     bool vsync_active = (tia_->regs_[TIA_VSYNC] & 0x02) != 0;
     if (in_vsync_ && !vsync_active) {
-        // VSYNC just ended — frame is complete
-        frame_complete_ = true;
         tia_->scanline = 0;  // Reset scanline counter for new frame
     }
     in_vsync_ = vsync_active;
 }
 
 void Atari2600System::run_frame() {
-    if (!system_ready_) return;
+    if (!system_ready_ || !video_port_) return;
 
-    frame_complete_ = false;
-
-    // Run until TIA completes a frame (VSYNC cycle)
-    // Safety limit: don't run more than 2× normal frame cycles
+    // Stream-driven: TIA drives FrameEnd on VSYNC rising edge.
+    // Safety limit protects against games that never trigger VSYNC.
+    auto& stream = video_port_->stream();
     uint32_t safety_limit = cycles_per_frame_ * 2;
     uint32_t cycles_run = 0;
 
-    while (!frame_complete_ && cycles_run < safety_limit) {
+    while (!stream.frame_ended() && cycles_run < safety_limit) {
         tick();
         cycles_run++;
     }
 
-    // If we hit the safety limit, force frame completion
-    if (!frame_complete_) {
+    // If we hit the safety limit, force scanline reset
+    if (!stream.frame_ended()) {
         tia_->scanline = 0;
     }
 
-    if (video_port_) video_port_->swap_frame();
+    video_port_->swap_frame();
 
     // Tick all attached peripheral devices
     tick_peripherals();

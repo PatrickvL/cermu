@@ -216,14 +216,24 @@ void AmstradCPCSystem<M>::tick() {
     }
 
     total_cycles_++;
+
+    // Render at frame boundary — snapshot current VRAM into video stream
+    if (total_cycles_ % amstrad_cpc_constants::TSTATES_PER_FRAME == 0) {
+        render_frame();
+    }
 }
 
 template<CPCModel M>
 void AmstradCPCSystem<M>::run_frame() {
-    for (uint32_t i = 0; i < amstrad_cpc_constants::TSTATES_PER_FRAME; ++i) tick();
+    if (!video_port_) return;
+
+    // Stream-driven: Gate Array drives FrameEnd at frame boundary
+    auto& stream = video_port_->stream();
+    while (!stream.frame_ended()) {
+        tick();
+    }
     audio_thread_.signal_progress(total_cycles_);
-    render_frame();
-    if (video_port_) video_port_->swap_frame();
+    video_port_->swap_frame();
 }
 
 template<CPCModel M> bool AmstradCPCSystem<M>::load_file(const char*) { return false; }
