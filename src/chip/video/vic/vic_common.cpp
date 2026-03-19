@@ -96,6 +96,9 @@ void vic_base_t::reset() {
     // Decode all cached register fields from the reset defaults
     decode_all_registers();
 
+    // Initialize drive_flags_ for raster 0 (in vblank since 0 < 28)
+    drive_flags_ = VideoFlags::HSync | VideoFlags::VSync | VideoFlags::Blank;
+
     // Reset audio state (preserves cycles_per_sample_fp set by audio_reset)
     for (int i = 0; i < VIC_NUM_VOICES; i++) {
         audio.prescaler[i] = vic_voice_divisor[i]; // Must match audio_reset!
@@ -467,17 +470,13 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
     // Increment cycle counter
     current_cycle++;
     if (current_cycle >= cycles_per_line) {
-        // End-of-line: emit collected scanline to video stream
+        // End-of-line: emit collected scanline to video stream.
+        // drive_flags_ holds the maintained sync flags for this raster line
+        // (HSync always set; VSync|Blank when in vblank; FrameEnd on last line).
         if (video_stream_) {
-            const bool in_vblank = (raster_counter < 28);
-            const bool frame_end = (raster_counter == total_lines - 1);
+            video_stream_->drive({0, drive_flags_});
 
-            VideoFlags sync_flags = VideoFlags::HSync;
-            if (in_vblank) sync_flags = sync_flags | VideoFlags::VSync | VideoFlags::Blank;
-            if (frame_end) sync_flags = sync_flags | VideoFlags::FrameEnd;
-            video_stream_->drive({0, sync_flags});
-
-            if (!in_vblank && pixel_line_index > 0) {
+            if (!has_flag(drive_flags_, VideoFlags::VSync) && pixel_line_index > 0) {
                 for (int i = 0; i < pixel_line_index; i++) {
                     video_stream_->drive({color_line_buffer[i], VideoFlags::BeamOn});
                 }
@@ -492,6 +491,13 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
         if (raster_counter >= total_lines) {
             raster_counter = 0;
         }
+
+        // Update drive_flags_ for the new raster line
+        drive_flags_ = VideoFlags::HSync;
+        if (raster_counter < 28)
+            drive_flags_ = drive_flags_ | VideoFlags::VSync | VideoFlags::Blank;
+        if (raster_counter == total_lines - 1)
+            drive_flags_ = drive_flags_ | VideoFlags::FrameEnd;
 
         const uint8_t char_height = cached_char_height;
         // Check if entering/leaving display area

@@ -19,7 +19,8 @@ enum class VideoFlags : uint8_t {
     HSync    = 0x01,   // composite sync on composite systems; H-sync on RGB
     VSync    = 0x02,   // unused on composite (classified from pulse length); explicit on RGB
     Blank    = 0x04,   // blanking active — no visible output
-    Burst    = 0x08,   // composite color burst gate; unused on RGB
+    Burst    = 0x08,   // composite color burst gate; unused on RGB.
+                       // Downstream use (analog chroma phase calibration) not yet implemented.
     BeamOn   = 0x10,   // vector: beam actively drawing
     FrameEnd = 0x20,   // vector: drawing list complete; semantic equivalent of VSync
 };
