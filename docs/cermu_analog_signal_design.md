@@ -164,27 +164,47 @@ The `drive` function receives the sample directly. The chip constructs it at the
 
 template<typename SampleT>
 struct VideoStream {
+    using value_type = SampleT;
+
     SampleT*   ptr;
     SampleT*   base;
     VideoFlags prev_flags = VideoFlags::None;
+    uint32_t   frame_len  = 0;
 
-    void (*on_sync_change)(void* ctx, VideoFlags flags, uint32_t pos) noexcept;
+    bool (*on_sync_change)(void* ctx, VideoFlags flags, uint32_t pos) noexcept;
     void* ctx;
+
+    bool frame_ended() const noexcept { return frame_len != 0; }
 
     __attribute__((always_inline))
     void drive(SampleT s) noexcept {
-        SampleT* pos = ptr;
-        *ptr++       = s;
+        *ptr++ = s;
 
-        if (__builtin_expect(s.flags != prev_flags, 0)) [[unlikely]]
-            on_sync_change(ctx, s.flags, (uint32_t)(pos - base));
-
-        prev_flags = s.flags;
+        if (__builtin_expect(s.flags != prev_flags, 0)) [[unlikely]] {
+            uint32_t pos = static_cast<uint32_t>(ptr - 1 - base);
+            if (on_sync_change(ctx, s.flags, pos)) {
+                frame_len = static_cast<uint32_t>(ptr - base);
+                ptr = base;
+            }
+            prev_flags = s.flags;
+        }
     }
 };
 ```
 
-The flags comparison is a single byte load from the struct argument (already in a register) versus a byte load from `prev_flags`. No mask, no bit manipulation, no `sync_mask` member. The comparison is self-documenting and generates optimal code.
+### Self-Bounding Buffer
+
+The hot path is exactly two operations: one store-and-increment (`*ptr++ = s`) and one byte compare (`s.flags != prev_flags`). This is cheap enough for per-dot-clock driving on every video chip.
+
+The `on_sync_change` callback returns `bool` — `true` when the current sample carries `FrameEnd`. On frame end, the stream snapshots its length into `frame_len` and resets `ptr` to `base`, making the buffer self-bounding regardless of how many frames the caller ticks through. This eliminates the need for a fixed `cycles_per_frame` counter and prevents buffer overflow.
+
+`frame_ended()` reads `frame_len` (already in cache — no extra bool needed). It is sticky until `swap_frame()` clears it. Systems use `while (!stream.frame_ended()) { system_tick(); }` to run until the video chip itself signals frame completion, matching real hardware behavior.
+
+### prev_flags Inside Unlikely Block
+
+`prev_flags = s.flags` is written only inside the unlikely block, not unconditionally. This eliminates one store per sample on the hot path. With per-dot-clock driving at ~504 pixels/line × 312 lines ≈ 157K samples/frame, this saves ~157K stores per frame.
+
+Correctness: the only purpose of `prev_flags` is to detect flag edges for sync event classification. As long as every distinct flag value eventually triggers the cold path (which it does — flags change at most a few times per line), no edge is missed. A sequence `A→A→A→B` correctly fires on the `A→B` transition.
 
 The `[[unlikely]]` annotation tells the branch predictor the fast path is the non-sync case. The cold path function is marked `[[gnu::cold, gnu::noinline]]` at the definition site in `VideoPort`, pushing its code out of the instruction cache footprint of `drive()` entirely.
 
@@ -257,17 +277,32 @@ public:
 
     Stream& stream() noexcept { return stream_; }
 
+    void bind_display(IndexedFrameBuffer* fb, const uint32_t* palette,
+                      int display_width = 0, int back_porch_pixels = 0) noexcept;
+
     FrameData swap_frame() noexcept {
+        uint32_t len = stream_.frame_len
+            ? stream_.frame_len
+            : static_cast<uint32_t>(stream_.ptr - buf_);
+
         FrameData fd {
             .stream      = buf_,
-            .stream_len  = (uint32_t)(stream_.ptr - buf_),
+            .stream_len  = len,
             .sync_events = sync_events_,
             .sync_count  = sync_count_,
             .signal_type = SignalTraits<Sample>::type,
         };
+
+        // Auto-reconstruct into bound framebuffer before resetting
+        if (bound_fb_)
+            reconstruct_to_framebuffer(fd, bound_fb_, bound_palette_,
+                                       bound_line_width_, bound_back_porch_);
+
         stream_.ptr        = buf_;
         stream_.prev_flags = VideoFlags::None;
+        stream_.frame_len  = 0;
         sync_count_        = 0;
+        sync_run_          = 0;
         return fd;
     }
 
@@ -278,19 +313,19 @@ private:
     uint32_t  sync_count_ = 0;
     int       sync_run_   = 0;
 
+    IndexedFrameBuffer* bound_fb_         = nullptr;
+    const uint32_t*     bound_palette_    = nullptr;
+    int                 bound_line_width_ = 0;
+    int                 bound_back_porch_ = 0;
+
     [[gnu::cold, gnu::noinline]]
-    static void cold_path(void* ctx, VideoFlags flags, uint32_t pos) noexcept {
-        static_cast<VideoPort*>(ctx)->handle_sync(flags, pos);
+    static bool cold_path(void* ctx, VideoFlags flags, uint32_t pos) noexcept {
+        auto* self = static_cast<VideoPort*>(ctx);
+        self->handle_sync(flags, pos);
+        return has_flag(flags, VideoFlags::FrameEnd);
     }
 
-    void handle_sync(VideoFlags flags, uint32_t pos) noexcept {
-        bool falling = (stream_.prev_flags & VideoFlags::HSync)
-                    && !(flags             & VideoFlags::HSync);
-        if (falling)
-            sync_events_[sync_count_++] = { pos, classify_sync() };
-    }
-
-    SyncType classify_sync() const noexcept;
+    void handle_sync(VideoFlags flags, uint32_t pos) noexcept;
 };
 
 // Concrete port types — only these names appear in board headers
@@ -301,6 +336,12 @@ using VectorVideoPort    = VideoPort<VectorVideoStream>;
 ```
 
 `FrameData` carries a `SignalType` field so the GPU rendering layer selects the correct shader without any additional runtime query.
+
+### Display Binding
+
+`bind_display()` registers an `IndexedFrameBuffer` and palette for automatic stream→framebuffer reconstruction on `swap_frame()`. Per-dot-clock systems call it once during `initialize()`. Per-frame systems that render to the framebuffer directly should NOT bind a display — `swap_frame()` just resets the stream for them.
+
+This is a transitional bridge: once the GPU reconstruction pipeline is in place, `bind_display()` becomes unnecessary.
 
 ---
 
@@ -540,12 +581,15 @@ struct FrameData {
 };
 
 struct SyncEvent {
-    uint32_t stream_pos;       // sample offset in stream at falling edge
-    uint8_t  type;             // SyncType::HSync, VSync, Equalizing, FrameEnd, BeamOn, BeamOff
+    uint32_t   stream_pos;     // sample offset in stream at falling edge
+    SyncType   type;           // SyncType::HSync, VSync, FrameEnd, BeamOn, BeamOff
+    VideoFlags flags;          // original VideoFlags at this event
 };
 ```
 
-For a C64 PAL frame: ~313 events × 5 bytes = ~1.5 KB per frame.
+The `flags` field on `SyncEvent` carries the `VideoFlags` that were active when the event was emitted. The bridge uses this to distinguish visible HSync events from VBlank HSync events (checking the `Blank` flag) so it can skip blank lines during framebuffer reconstruction.
+
+For a C64 PAL frame: ~313 events × 8 bytes = ~2.5 KB per frame.
 
 ### Sync Pulse Classification (Composite)
 
@@ -554,8 +598,9 @@ Composite sync carries H-sync and V-sync on the same line, classified by pulse l
 | Pulse type | Duration | Cycles (approx) |
 |---|---|---|
 | H-sync | ~4.7 µs | ~37 |
-| Equalizing (interlace) | ~2.3 µs | ~18 |
 | V-sync (broad pulse) | ~27 µs | ~213 |
+
+Equalizing pulses (used for interlace field detection) are not currently classified. When interlace support is implemented, they can be re-added as a separate `SyncType`. For now, only HSync and VSync are distinguished.
 
 RGB systems carry separate `HSync` and `VSync` flag bits — classification by pulse length is not needed.
 
@@ -1100,63 +1145,81 @@ Migration status of all chips and systems to the new video/audio port infrastruc
 
 All video chips with implemented rendering have been migrated. Each chip holds a `CompositeVideoStream*` member, exposes a `set_stream()` setter, and drives the stream with `HSync`, `BeamOn`, `Blank`, `VSync`, and `FrameEnd` flags at the appropriate points in their rendering pipeline.
 
-| Chip | Pattern | Signal Source | Commit |
+There are three driving patterns:
+
+- **Per-dot-clock:** One `drive()` call per pixel clock cycle inside `tick()`. Most hardware-accurate. The hot path cost (one store + one byte compare) makes this viable for all chips.
+- **Per-scanline (collected):** Pixels are buffered into a `color_line[]` during the line, then burst as `HSync` marker + pixel data at end-of-line. Simpler to retrofit onto existing rendering code. Loses mid-line timing information.
+- **Per-frame:** The chip renders an entire frame into an `IndexedFrameBuffer`, then the stream is driven line-by-line from that buffer. A transitional pattern used for chips not yet converted to per-dot-clock. Wastes a round-trip through the framebuffer.
+
+The per-dot-clock pattern is the target for all chips. Per-scanline and per-frame patterns are stepping stones.
+
+| Chip | Pattern | Signal Source | Notes |
 |---|---|---|---|
-| VIC (6560/6561) | per-dot-clock | `tick()` inline | prior session |
-| VIC-II (6567/6569) | per-dot-clock | `tick()` inline | prior session |
-| TED 7360 | per-dot-clock | `tick()` inline | prior session |
-| NES PPU (RP2C02) | per-dot-clock | `tick()` inline | prior session |
-| TIA (Atari 2600) | per-scanline | end-of-scanline flush, VSYNC edge for FrameEnd | `32c9890e` |
-| Amstrad Gate Array | per-frame | after `display_->flush()`, line-by-line from framebuffer | `daef0f6c` |
-| BBC VIDPROC | per-frame | in `vsync()` after flush, line-by-line from framebuffer | `daef0f6c` |
-| MC6847 VDG | per-frame | private `drive_stream_from_indices()` helper, both render paths | `daef0f6c` |
-| Ferranti ULA | per-frame | after `display_->flush()` in `render_frame()` | `daef0f6c` |
-| TMS9918 | per-scanline | `flush_scanline()` for visible, VBlank+FrameEnd in `tick()` | `daef0f6c` |
+| VIC-II (6567/6569) | per-scanline | `vicii_timing_advance()` EOL burst | mid-line palette changes captured in color_line; target: per-dot-clock |
+| VIC (6560/6561) | per-scanline | `tick()` EOL burst | target: per-dot-clock |
+| TED 7360 | per-scanline | `timing_advance()` EOL burst | target: per-dot-clock |
+| NES PPU (RP2C02) | per-scanline | `clock()` at cycle 257/340 | flushes on palette change; target: per-dot-clock |
+| TIA (Atari 2600) | per-scanline | `tick_color_clock()` EOL burst | VSYNC edge for FrameEnd |
+| Amstrad Gate Array | per-frame | after `display_->flush()`, line-by-line from framebuffer | target: per-dot-clock |
+| BBC VIDPROC | per-frame | in `vsync()` after flush, line-by-line from framebuffer | target: per-dot-clock |
+| MC6847 VDG | per-frame | private `drive_stream_from_indices()` helper | target: per-dot-clock |
+| Ferranti ULA | per-frame | after `display_->flush()` in `render_frame()` | target: per-dot-clock |
+| TMS9918 | per-scanline | `flush_scanline()` for visible, VBlank+FrameEnd in `tick()` | |
 
 ### Video — System-Level (CompositeVideoPort)
 
-Systems that don't use a dedicated video chip but render directly create a `CompositeVideoPort` and drive the stream from their framebuffer after `display_.flush()`.
+Systems where a dedicated video chip drives the stream have the port wired to the chip. Systems without a discrete video chip drive the stream from the system level after rendering to an `IndexedFrameBuffer`.
 
-| System | Resolution | Commit |
+Stream-driven frame sync: Commodore systems (C64, VIC-20, C16) use `stream.frame_ended()` to loop until the video chip's FrameEnd flag appears, eliminating fixed `cycles_per_frame` counters and preventing drift between system timing and video timing.
+
+| System | Video Source | Frame Sync |
 |---|---|---|
-| C64 | chip-wired (VIC-II) | prior session |
-| VIC-20 | chip-wired (VIC) | prior session |
-| C16/Plus4 | chip-wired (TED) | prior session |
-| NES/Famicom | chip-wired (PPU) | prior session |
-| Atari 2600 | chip-wired (TIA) | `32c9890e` |
-| Amstrad CPC | chip-wired (Gate Array) | `daef0f6c` |
-| BBC Micro | chip-wired (VIDPROC) | `daef0f6c` |
-| Acorn Atom | chip-wired (MC6847) | `daef0f6c` |
-| VTech VZ | chip-wired (MC6847) | `daef0f6c` |
-| ZX Spectrum | chip-wired (Ferranti ULA) + audio_port_ | `daef0f6c` |
-| CHIP-8 | 128×64, system-level render | `79b24bf1` |
-| KC85 | 320×256, system-level render | `79b24bf1` |
-| Z9001 | 320×192, system-level render | `79b24bf1` |
-| Z1013 | 256×256, system-level render | `79b24bf1` |
-| Bomb Jack (arcade) | 256×224, system-level render | `79b24bf1` |
-| Namco Arcade | 224×288, system-level render | `79b24bf1` |
+| C64 | chip-wired (VIC-II) | stream-driven (`frame_ended()`) |
+| VIC-20 | chip-wired (VIC) | stream-driven (`frame_ended()`) |
+| C16/Plus4 | chip-wired (TED) | stream-driven (`frame_ended()`) |
+| NES/Famicom | chip-wired (PPU) | chip-level `frame_complete` flag |
+| Atari 2600 | chip-wired (TIA) | fixed cycle count |
+| Amstrad CPC | chip-wired (Gate Array) | fixed cycle count |
+| BBC Micro | chip-wired (VIDPROC) | fixed cycle count |
+| Acorn Atom | chip-wired (MC6847) | fixed cycle count |
+| VTech VZ | chip-wired (MC6847) | fixed cycle count |
+| ZX Spectrum | chip-wired (Ferranti ULA) | fixed cycle count |
+
+#### System-Level Render (No Discrete Video Chip)
+
+These systems lack a dedicated video chip in real hardware. Video output is generated by discrete TTL logic, memory-mapped video RAM, or (for virtual machines) directly by the CPU/interpreter. The system code renders to an `IndexedFrameBuffer`, then drives the video stream per-scanline from that buffer. This is the correct architecture — there is no chip to model.
+
+| System | Resolution | Hardware Video Source |
+|---|---|---|
+| CHIP-8 | 128×64 | Virtual machine — software interpreter, no physical hardware |
+| KC85/2, /3 | 320×256 | Memory-mapped IRM + discrete logic (no video chip) |
+| KC85/4 | 320×256 | U82720 ASIC (not currently modeled; system-level render is acceptable) |
+| Z9001 / KC 87 | 320×192 | Character ROM + TTL logic (no video chip) |
+| Z1013 | 256×256 | Character ROM + minimal TTL logic (no video chip) |
+| Bomb Jack | 256×224 | Custom tile/sprite TTL logic (no discrete video chip) |
+| Namco (Pac-Man) | 224×288 | TTL video counters + tile/sprite logic (no discrete video chip) |
 
 ### Audio — Chip-Level (AudioPort)
 
 Dedicated sound chips use `AudioPort::drive()` for per-clock output with BLEP decimation, alongside their legacy audio buffer for backward compatibility.
 
-| Chip | Drive Method | Commit |
-|---|---|---|
-| MOS 6581 SID | `drive()` per chip clock | prior session |
-| NES APU (RP2A03) | `drive()` per chip clock | prior session |
-| AY-3-8910 PSG | `drive()` per chip clock | prior session |
-| SN76489 | `drive()` per chip clock | prior session |
-| Namco WSG | `drive()` per chip clock | prior session |
-| TIA (2-channel audio) | `drive_sample()` pre-decimated | `32c9890e` |
+| Chip | Drive Method |
+|---|---|
+| MOS 6581 SID | `drive()` per chip clock |
+| NES APU (RP2A03) | `drive()` per chip clock |
+| AY-3-8910 PSG | `drive()` per chip clock |
+| SN76489 | `drive()` per chip clock |
+| Namco WSG | `drive()` per chip clock |
+| TIA (2-channel audio) | `drive_sample()` pre-decimated |
 
 ### Audio — System-Level (AudioPort)
 
 Systems with software-generated audio (beeper, CTC) use `AudioPort::drive_sample()` for pre-decimated output alongside their legacy ring buffer.
 
-| System | Audio Source | Commit |
-|---|---|---|
-| ZX Spectrum | beeper + AY mix | `79b24bf1` |
-| KC85 | CTC beeper (2 channels) | `79b24bf1` |
+| System | Audio Source |
+|---|---|
+| ZX Spectrum | beeper + AY mix |
+| KC85 | CTC beeper (2 channels) |
 
 ### Not Migrated (Intentional)
 
@@ -1168,4 +1231,11 @@ Systems with software-generated audio (beeper, CTC) use `AudioPort::drive_sample
 | Apple 1 | Terminal-style display only |
 | Z9001, Z1013 audio | Audio generation is a stub |
 | CHIP-8 audio | Pull-based on-demand generation; not suitable for push-based AudioPort |
-| Inactive video stream writes | Null sink — L1 scratch cell | |
+
+### Next Steps
+
+1. **Per-dot-clock migration for Commodore chips.** VIC-II, VIC, and TED currently use collected-scanline bursts. The `drive()` hot path is now cheap enough (one store + one byte compare) that per-dot-clock driving is viable. This would preserve mid-line timing information and enable future composite artifact simulation. VIC-II first (highest impact), then VIC, then TED.
+2. **Per-dot-clock migration for NES PPU.** Currently flushes at scanline boundaries (and on palette change). Per-dot-clock would simplify the logic and remove the palette-change flush workaround.
+3. **Per-frame chip elimination.** Amstrad Gate Array, BBC VIDPROC, MC6847, and Ferranti ULA currently render to framebuffer then read back to drive the stream. Convert to per-dot-clock or per-scanline to eliminate the round-trip.
+4. **Stream-driven frame sync expansion.** Extend `frame_ended()` loop pattern from Commodore systems to NES, Atari 2600, and other chip-wired systems.
+5. **GPU reconstruction pipeline.** Replace CPU-side `reconstruct_to_framebuffer()` bridge with compute+fragment shader pipeline per the design (PBO upload, scanline map, palette lookup).
