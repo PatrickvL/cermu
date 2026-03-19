@@ -589,6 +589,11 @@ public:
 
     /// Last frame's stream data (pointers valid until next run_frame).
     const FrameData& get_last_frame_data() const { return last_frame_data_; }
+
+    /// Video signal type this system produces.
+    /// Override in systems that use non-Composite video ports (RGB, RGBI, Vector).
+    /// The GUI uses this at init time to allocate the correct shader pipeline.
+    virtual SignalType get_video_signal_type() const { return SignalType::Composite; }
 };
 
 // Include SystemRegistry (moved to separate file)

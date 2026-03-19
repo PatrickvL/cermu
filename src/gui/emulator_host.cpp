@@ -1,5 +1,6 @@
 #include "gui/emulator_host.hpp"
 #include "gui/indexed_shader.hpp"
+#include "gui/vector_shader.hpp"
 #include <imgui.h>
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl2.h>
@@ -474,6 +475,22 @@ void EmulatorHost::cleanup_indexed_resources() {
     use_stream_shader_ = false;
     stream_display_width_ = 0;
     stream_display_height_ = 0;
+
+    // Vector display resources
+    if (vector_shader_) { indexed_shader::glDeleteProgram(vector_shader_); vector_shader_ = 0; }
+    if (vector_vao_ && vector_shader::glDeleteVertexArrays) { vector_shader::glDeleteVertexArrays(1, &vector_vao_); vector_vao_ = 0; }
+    if (vector_vbo_ && vector_shader::glDeleteBuffers) { vector_shader::glDeleteBuffers(1, &vector_vbo_); vector_vbo_ = 0; }
+    delete[] vector_stream_snapshot_; vector_stream_snapshot_ = nullptr;
+    vector_stream_len_ = 0;
+    vector_beam_buf_.clear();
+    vector_beam_count_ = 0;
+    use_vector_shader_ = false;
+
+    // RGB stream reconstruction resources
+    if (rgb_stream_shader_) { indexed_shader::glDeleteProgram(rgb_stream_shader_); rgb_stream_shader_ = 0; }
+    if (rgb_stream_texture_) { glDeleteTextures(1, &rgb_stream_texture_); rgb_stream_texture_ = 0; }
+    delete[] rgb_stream_snapshot_; rgb_stream_snapshot_ = nullptr;
+    use_rgb_stream_shader_ = false;
 }
 
 // ============================================================================
