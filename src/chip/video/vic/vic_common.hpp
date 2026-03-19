@@ -363,7 +363,5 @@ protected:
 
 private:
     void emit_pixel(uint8_t color_index);
-    void drive_pixel(uint8_t color_index);  // stream-based output
-    void flush_pixel_line(int raster_line);
     void update_video_flags();  // update flags_prepack_ on state transitions
 };

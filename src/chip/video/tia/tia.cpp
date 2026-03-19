@@ -386,12 +386,11 @@ uint8_t tia_t::get_missile_pixel(int x, uint8_t pos, uint8_t size_bits, bool ena
 void tia_t::render_pixel() {
     int x = h_counter - tia_constants::HBLANK_CLOCKS;
     if (x < 0 || x >= tia_constants::DISPLAY_WIDTH) return;
-    if (!display_) return;
 
     // Use visible_row (tracks only non-VBLANK lines) so the first
     // visible scanline maps to framebuffer row 0.
     int row = visible_row;
-    if (row < 0 || row >= display_->height()) return;
+    if (row < 0 || row >= tia_constants::DISPLAY_HEIGHT) return;
 
     // Determine which objects are present at this pixel.
     // Each function returns its bitmask constant (PX_*) or 0.
@@ -524,12 +523,6 @@ void tia_t::tick_color_clock() {
 
         // Clear HMOVE blanking at start of new scanline
         hmove_blank_active = false;
-
-        // Flush indexed scanline to framebuffer at end of visible line
-        if (!vblank && visible_row >= 0) {
-            display_->flush_line(visible_row, color_line_buffer, palette_rgba_,
-                                 tia_constants::DISPLAY_WIDTH);
-        }
 
         // Drive video stream at end of each scanline
         if (video_stream_) {

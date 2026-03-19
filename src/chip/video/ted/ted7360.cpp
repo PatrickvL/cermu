@@ -728,7 +728,6 @@ void ted7360_t::timing_advance() {
     }
 
     // --- End of line ---
-    flush_line(timing.raster_counter);
 
     // Drive video stream with the completed scanline's pixel data
     if (video_stream_) {

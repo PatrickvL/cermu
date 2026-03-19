@@ -545,14 +545,11 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
     // palette/mask changes; flush the tail [scanline_flush_x_, 256).
     if (scanline >= 0 && cycle == 257) {
         if (unlikely(!active_palette_)) rebuild_active_palette();
-        if (display_) display_->flush_line_range(
-            scanline, scanline_color_line_, active_palette_, scanline_flush_x_, 256);
         scanline_flush_x_ = 256;  // Prevent re-flush from HBlank palette writes
 
         // Drive video stream with the completed scanline
         if (video_stream_) {
-            VideoFlags flags = VideoFlags::HSync | VideoFlags::BeamOn;
-            video_stream_->drive({0, flags});  // HSync marker
+            video_stream_->drive({0, VideoFlags::HSync});  // HSync marker
             for (int i = 0; i < 256; i++) {
                 video_stream_->drive({scanline_color_line_[i], VideoFlags::BeamOn});
             }

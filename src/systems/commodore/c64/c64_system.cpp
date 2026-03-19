@@ -962,9 +962,13 @@ void C64System::run_frame() {
             system_tick();
         }
 
-        // Swap video stream frame — advances to next frame buffer
+        // Reconstruct video stream into IndexedFrameBuffer for display
         if (video_port_) {
-            video_port_->swap_frame();
+            FrameData fd = video_port_->swap_frame();
+            video_port_->reconstruct_to_framebuffer(
+                fd, &display_,
+                vicii_base_t::get_default_palette(),
+                0, 0);
         }
 
         // Check deferred load once per frame (only active during boot)

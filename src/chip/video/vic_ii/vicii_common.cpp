@@ -1162,16 +1162,9 @@ void vicii_timing_advance(vicii_base_t* vicii) {
         return;
     }
     
-    // --- End of line: flush scanline, advance raster, reset buffers ---
+    // --- End of line: drive video stream, advance raster, reset buffers ---
     
-    // CRITICAL: Flush the completed scanline BEFORE advancing to the next line.
-    // This ensures pixels from the PREVIOUS raster line are written to the framebuffer
-    // at the correct Y position (which is still the OLD raster_counter value).
     const uint16_t completed_raster = vicii->timing.raster_counter;
-    const int fb_row = vicii_raster_to_fb_row(vicii, completed_raster);
-    if (vicii->display_ && fb_row < vicii->display_->height()) {
-        vicii_pixel_flush_line(vicii, vicii->system_palette(), fb_row);
-    }
 
     // Drive video stream with the completed scanline's pixel data.
     // Emitted once per line as a burst: HSync marker + visible pixel samples.
@@ -2013,7 +2006,7 @@ bus_state_t vicii_base_t::tick_phi1(bus_state_t bus_state) {
     // This uses the graphics data that was JUST loaded above AND the border flip-flop state updated above
     {
         const int fb_row = vicii_raster_to_fb_row(vicii, vicii->timing.raster_counter);
-        if (vicii->display_ && fb_row < vicii->display_->height()) {
+        if (fb_row >= 0 && static_cast<uint16_t>(fb_row) < vicii->cached_total_lines) {
             vicii_pixel_sequencer(vicii);
         }
     }
