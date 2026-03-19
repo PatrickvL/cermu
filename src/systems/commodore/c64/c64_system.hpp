@@ -5,6 +5,7 @@
 #include "core/device_registry.hpp"
 #include "core/formats/format_handler.hpp"
 #include "core/formats/sid_format.hpp"
+#include "core/signal/video_port.hpp"
 // Chip headers (previously included via c64.h)
 #include "chip/memory/memory_chip.hpp"
 #include "chip/memory/mos2114.hpp"
@@ -14,6 +15,7 @@
 #include "chip/input/commodore_keyboard.hpp"
 #include "systems/commodore/c64/c64_manifest.hpp"
 #include "systems/commodore/c64/c64_config.hpp"
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -135,6 +137,7 @@ public:
 private:
     bool initialized_ = false;          // True when initialize() has succeeded
     IndexedFrameBuffer display_;         // Display output for GPU indexed rendering
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
     vicii_standard_t created_vicii_standard_ = VIC_PAL;  // Actual VIC-II standard at creation time
     sid_revision_t pending_sid_revision_ = SID_REVISION_6581_R4AR;  // Applied after SID creation
 
