@@ -7,6 +7,7 @@ inline constexpr VicIITraits MOS6569_traits = {
     .visible_pixels_per_line = 403,
     .first_vblank_line = 300, .last_vblank_line = 15,
     .first_x_coord = 404, .first_visible_x_coord = 480, .last_visible_x_coord = 380,
+    .hsync_start = 408, .hsync_end = 444, .burst_start = 448, .burst_end = 488,
     .framebuffer_start_x = 0, .framebuffer_end_x = 504,
     .chip_name = "MOS6569 PAL", .chip_id = "MOS6569", .vendor = "MOS Technology",
     .is_pal = true

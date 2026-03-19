@@ -544,7 +544,14 @@ bool C64System::initialize() {
     // Wire VIC-II to composite video stream port
     video_port_ = std::make_unique<CompositeVideoPort>();
     vicii->set_stream(&video_port_->stream());
-    video_port_->bind_display(&display_, vicii_base_t::get_default_palette());
+
+    // Compute back porch for stream→framebuffer reconstruction.
+    // Back porch = distance in samples from HSync falling edge to first visible pixel.
+    const auto& vt = (get_vicii_standard() == VIC_PAL) ? MOS6569_traits : MOS6567R8_traits;
+    const uint16_t ppl = vt.cycles_per_line * 8;
+    const int back_porch = (int(vt.first_visible_x_coord) - int(vt.hsync_end) + ppl) % ppl;
+    video_port_->bind_display(&display_, vicii_base_t::get_default_palette(),
+                              vt.visible_pixels_per_line, back_porch);
 
     // Wire SID to audio signal port
     audio_port_ = std::make_unique<AudioPort>();
