@@ -1,5 +1,6 @@
 #include "chip/sound/mos6581.hpp"
 #include "chip/sound/sid_waveform_tables.hpp"
+#include "core/signal/audio_port.hpp"
 #include <cstring>
 #include <cstdlib>
 #include <cmath>
@@ -836,7 +837,11 @@ inline bus_state_t mos6581_t::advance_cycle(bus_state_t bus_state) {
         if (mixed > 1.0f) mixed = 1.0f;
         if (mixed < -1.0f) mixed = -1.0f;
 
-        sample_buffer.write(&mixed, 1);
+        if (audio_port_) {
+            audio_port_->drive_sample(mixed);
+        } else {
+            sample_buffer.write(&mixed, 1);
+        }
         samples_generated++;
     }
 

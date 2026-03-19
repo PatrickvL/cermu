@@ -9,7 +9,7 @@
 
 #include <cmath>
 
-// SID MOS 6581 DIP has 28 pins; Pinout:
+struct AudioPort;  // Forward declaration for analog signal output
 enum mos6581_pin_t {
     SID_PIN_CAP1A = 1, SID_PIN_VDD = 28,
     SID_PIN_CAP1B = 2, SID_PIN_AUDIO_OUT = 27,
@@ -411,6 +411,7 @@ struct mos6581_t : public SoundChipBase {
     
     // Sample output
     AudioRingBuffer sample_buffer{SID_SAMPLE_BUFFER_SIZE};
+    AudioPort* audio_port_ = nullptr;  // Optional analog signal output port
     
     // Chip revision and features
     sid_revision_t revision = SID_REVISION_6581_R4AR; // SID chip revision
@@ -500,6 +501,7 @@ struct mos6581_t : public SoundChipBase {
     void set_timing(bool pal_timing);
     void set_sample_rate(float sample_rate);
     void set_cpu_clock(float clock_hz);
+    void set_audio_port(AudioPort* port) { audio_port_ = port; }
 
     // Static methods for C function pointer compatibility (io_page_handlers_t)
     static bus_state_t registers_read(void* context, bus_state_t bus_state);
