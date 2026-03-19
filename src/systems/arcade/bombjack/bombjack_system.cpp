@@ -85,6 +85,9 @@ bool BombJackSystem::initialize() {
         ay_adapter_[i] = std::make_unique<WriteOnlySynthAdapter<AY_3_8910, true>>(
             &ay_[i], 2);
         audio_thread_.register_engine(ay_adapter_[i].get());
+        // Wire each AY to its own audio signal port
+        audio_port_[i] = std::make_unique<AudioPort>();
+        ay_[i].set_audio_port(audio_port_[i].get());
     }
     audio_thread_.start();
 
@@ -200,6 +203,39 @@ void BombJackSystem::get_display_dimensions(int* w, int* h) const {
 uint32_t BombJackSystem::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
 
+    // AudioPort path: read from each AY's port and mix
+    if (audio_port_[0]) {
+        uint32_t avail = std::min({audio_port_[0]->available(),
+                                   audio_port_[1]->available(),
+                                   audio_port_[2]->available()});
+        uint32_t count = std::min(avail, max_samples);
+        if (count == 0) return 0;
+
+        count = static_cast<uint32_t>(audio_port_[0]->read_samples(buffer, static_cast<int>(count)));
+
+        constexpr uint32_t MIX_CHUNK = 256;
+        float tmp[MIX_CHUNK];
+        for (int chip = 1; chip < 3; chip++) {
+            uint32_t remaining = count;
+            uint32_t offset = 0;
+            while (remaining > 0) {
+                uint32_t n = std::min(MIX_CHUNK, remaining);
+                audio_port_[chip]->read_samples(tmp, static_cast<int>(n));
+                for (uint32_t i = 0; i < n; i++)
+                    buffer[offset + i] += tmp[i];
+                offset += n;
+                remaining -= n;
+            }
+        }
+
+        constexpr float inv3 = 1.0f / 3.0f;
+        for (uint32_t i = 0; i < count; i++)
+            buffer[i] *= inv3;
+
+        return count;
+    }
+
+    // Legacy path: read from chip ring buffers
     // Read minimum available from all 3 AYs for synchronization
     uint32_t avail = std::min({ay_[0].audio_available(),
                                ay_[1].audio_available(),

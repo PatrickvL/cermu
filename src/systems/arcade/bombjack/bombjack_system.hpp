@@ -15,6 +15,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/sound/ay_psg/ay_3_8910.hpp"
 #include "chip/memory/ram_chip.hpp"
@@ -120,6 +121,7 @@ private:
     // ── Audio thread — synthesis runs off the emu thread ────────────────
     AudioThread audio_thread_;
     std::unique_ptr<WriteOnlySynthAdapter<AY_3_8910, true>> ay_adapter_[3];
+    std::unique_ptr<AudioPort> audio_port_[3];   // Audio signal output (one per AY)
     uint8_t   ay_latch_[3]{};            // Cached latched register per AY (emu thread)
     uint64_t  sound_cycles_ = 0;         // Monotonic sound-CPU cycle counter (3 MHz)
 

@@ -137,6 +137,10 @@ bool AmstradCPCSystem<M>::initialize() {
     audio_thread_.register_engine(ay_adapter_.get());
     audio_thread_.start();
 
+    // Wire AY to audio signal port
+    audio_port_ = std::make_unique<AudioPort>();
+    ay_.set_audio_port(audio_port_.get());
+
     load_roms();
     // ── Cache RAM chip pointer for rendering ───────────────────────
     ram_chip_ = board_.template find<RAMChip>();
@@ -223,6 +227,9 @@ template<CPCModel M> void AmstradCPCSystem<M>::get_display_dimensions(int* w, in
 }
 template<CPCModel M> uint32_t AmstradCPCSystem<M>::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
+    if (audio_port_) {
+        return static_cast<uint32_t>(audio_port_->read_samples(buffer, static_cast<int>(max_samples)));
+    }
     return ay_.audio_read(buffer, max_samples);
 }
 template<CPCModel M> void AmstradCPCSystem<M>::set_audio_sample_rate(int hz) {

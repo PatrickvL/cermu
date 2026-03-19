@@ -19,6 +19,7 @@
 
 #include "chip/sound/ay_psg/ay_psg_traits.hpp"
 #include "chip/sound/sound_chip_base.hpp"
+#include "core/signal/audio_port.hpp"
 #include "core/system_lines.hpp"
 #include "utils/ring_buffer.hpp"
 #include <cstdint>
@@ -300,6 +301,8 @@ public:
         update_cycles_per_sample();
     }
 
+    void set_audio_port(AudioPort* port) { audio_port_ = port; }
+
     uint32_t audio_read(float* buffer, uint32_t max_samples) {
         return audio_buffer_.read(buffer, max_samples);
     }
@@ -338,6 +341,7 @@ private:
 
     // Audio output — decimated from AY clock to audio sample rate
     AudioRingBuffer audio_buffer_;
+    AudioPort* audio_port_ = nullptr;  // Optional analog signal output
     uint32_t internal_clock_hz_ = 0;
     int      audio_sample_rate_ = 0;
     double   audio_cycles_per_sample_ = 0.0;
@@ -364,7 +368,11 @@ private:
         if (audio_cycle_accum_ < audio_cycles_per_sample_) return;
         audio_cycle_accum_ -= audio_cycles_per_sample_;
         float sample = get_sample();
-        audio_buffer_.write(&sample, 1);
+        if (audio_port_) {
+            audio_port_->drive_sample(sample);
+        } else {
+            audio_buffer_.write(&sample, 1);
+        }
     }
 
     /// Side effects triggered by writing to a specific internal register.
