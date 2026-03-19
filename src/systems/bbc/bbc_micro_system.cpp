@@ -220,6 +220,10 @@ bool BBCMicroSystem::initialize() {
     vidproc_.set_display(&display_);
     register_display(&display_);
 
+    // Video stream output — composite video from VIDPROC
+    video_port_ = std::make_unique<CompositeVideoPort>();
+    vidproc_.set_stream(&video_port_->stream());
+
     // ---- Sound (SN76489) ----
     psg_->init();
     psg_->set_clock_frequency(bbc_constants::SN76489_CLOCK);

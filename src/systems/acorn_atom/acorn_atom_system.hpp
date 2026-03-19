@@ -29,6 +29,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/video/mc6847/mc6847.hpp"
 #include "chip/io/i8255.hpp"
@@ -127,6 +128,7 @@ private:
 
     // ── Display ──────────────────────────────────────────────────────────
     IndexedFrameBuffer display_;
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
 
     // ── Keyboard ─────────────────────────────────────────────────────────
     uint8_t keyboard_matrix_[acorn_atom_constants::KEYBOARD_ROWS] = {};

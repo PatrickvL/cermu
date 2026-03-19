@@ -152,6 +152,10 @@ bool AmstradCPCSystem<M>::initialize() {
                          amstrad_gate_array_t::get_palette_size());
     gate_array_.set_display(&display_);
     register_display(&display_);
+
+    // Video stream output — composite video from Gate Array
+    video_port_ = std::make_unique<CompositeVideoPort>();
+    gate_array_.set_stream(&video_port_->stream());
     // ── Register all manifest chips for Hardware menu ────────────────
     register_bus_chips(board_);
 
