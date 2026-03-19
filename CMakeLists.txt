@@ -491,6 +491,7 @@ set(SYSTEM_SOURCES
     # Arcade systems
     src/systems/arcade/bombjack/bombjack_system.cpp
     src/systems/arcade/namco/namco_arcade_system.cpp
+    src/systems/arcade/atari_vector/atari_vector_system.cpp
 
     # Apple II family (Apple II, IIe, IIc)
     src/systems/apple_ii/apple_ii_system.cpp
