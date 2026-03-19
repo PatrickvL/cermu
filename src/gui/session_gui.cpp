@@ -1012,8 +1012,9 @@ void SessionGUI::render_screen() {
         // update_screen_texture(), creating a data-race window.
         std::lock_guard<std::mutex> lock(fb_mutex_);
 
-        // Stream texture upload — runs alongside the indexed path as
-        // infrastructure; the stream shader is not yet used for rendering.
+        // Stream texture upload — upload color indices + update scanline map.
+        // When stream_display_height_ > 0 after this, the stream shader
+        // takes priority over the indexed path for rendering.
         if (use_stream_shader_ && stream_shader_ && stream_texture_ && stream_snapshot_len_ > 0) {
             glBindTexture(GL_TEXTURE_2D, stream_texture_);
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -1038,7 +1039,7 @@ void SessionGUI::render_screen() {
                 scanline_offsets, stream_shader::MAX_SCANLINES,
                 sync_snapshot_, sync_snapshot_count_,
                 stream_back_porch_, stream_snapshot_len_);
-            stream_display_width_ = fb_width_;
+            // stream_display_width_ already set by emu thread from FrameData
 
             indexed_shader::glUseProgram(stream_shader_);
             indexed_shader::glUniform1iv(stream_loc_scanline_map_,
@@ -1070,11 +1071,15 @@ void SessionGUI::render_screen() {
     }
 
     // Always render the most recently uploaded texture (read index = opposite of write)
-    // Stream shader is not yet used for rendering — indexed path is primary.
+    // Prefer stream shader when stream data is available; fall back to indexed path.
     GLuint display_tex = 0;
     bool use_indexed_shader = false;
     bool use_stream = false;
-    if (use_gpu_indexed_ && index_textures_[0]) {
+    if (use_stream_shader_ && stream_shader_ && stream_display_height_ > 0) {
+        // Stream shader — display from packed stream texture
+        display_tex = stream_texture_;
+        use_stream = true;
+    } else if (use_gpu_indexed_ && index_textures_[0]) {
         display_tex = index_textures_[texture_write_idx_ ^ 1];
         use_indexed_shader = true;
     } else if (screen_textures_[0]) {
@@ -1957,7 +1962,9 @@ void SessionGUI::emu_thread_func() {
                     memcpy(sync_snapshot_, fd.sync_events,
                            sc * sizeof(SyncEvent));
                     sync_snapshot_count_ = sc;
-                    stream_back_porch_ = system_->get_stream_back_porch();
+                    stream_back_porch_ = fd.back_porch;
+                    stream_display_width_ = fd.display_width > 0
+                                         ? fd.display_width : fb_width_;
                     fb_new_frame_.store(true, std::memory_order_release);
                 }
             }

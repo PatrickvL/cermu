@@ -194,11 +194,13 @@ public:
             : static_cast<uint32_t>(stream_.ptr - buf_);
 
         FrameData fd {
-            .stream      = buf_,
-            .stream_len  = len,
-            .sync_events = sync_events_,
-            .sync_count  = sync_count_,
-            .signal_type = SignalTraits<Sample>::type,
+            .stream        = buf_,
+            .stream_len    = len,
+            .sync_events   = sync_events_,
+            .sync_count    = sync_count_,
+            .signal_type   = SignalTraits<Sample>::type,
+            .back_porch    = bound_back_porch_,
+            .display_width = bound_line_width_,
         };
 
         // Store for later access (e.g. GUI thread snapshot)
