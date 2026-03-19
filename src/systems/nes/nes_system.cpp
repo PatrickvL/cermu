@@ -467,9 +467,13 @@ void NintendoSystem<V>::run_frame() {
         tick();
     }
 
-    // Swap video stream frame
+    // Reconstruct video stream into IndexedFrameBuffer for display
     if (video_port_) {
-        video_port_->swap_frame();
+        FrameData fd = video_port_->swap_frame();
+        video_port_->reconstruct_to_framebuffer(
+            fd, &nes_display_,
+            NES_COLOR_TABLE,
+            0, 0);
     }
 
     // Signal audio thread with accumulated CPU cycles

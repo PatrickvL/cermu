@@ -906,7 +906,7 @@ void VIC20System::run_frame() {
             fd, &display_,
             vic_base_t::get_default_palette(),
             vic20_constants::DISPLAY_WIDTH,
-            36);  // back porch ~9 cycles × 4 pixels
+            0);
     }
 
     // Tick all attached peripheral devices (datasette, drive, etc.)

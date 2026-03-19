@@ -451,8 +451,6 @@ private:
         const int x_end = cycle - 1;  // last rendered pixel = cycle-2, range is [flush_x, cycle-1)
         if (x_end <= scanline_flush_x_) return;
         if (!active_palette_) rebuild_active_palette();
-        if (display_) display_->flush_line_range(
-            scanline, scanline_color_line_, active_palette_, scanline_flush_x_, x_end);
         scanline_flush_x_ = x_end;
     }
 

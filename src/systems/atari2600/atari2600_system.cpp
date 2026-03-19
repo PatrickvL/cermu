@@ -291,6 +291,15 @@ void Atari2600System::run_frame() {
         tia_->scanline = 0;
     }
 
+    // Reconstruct video stream into IndexedFrameBuffer for display
+    if (video_port_) {
+        FrameData fd = video_port_->swap_frame();
+        video_port_->reconstruct_to_framebuffer(
+            fd, &display_,
+            tia_->palette_rgba_,
+            0, 0);
+    }
+
     // Tick all attached peripheral devices
     tick_peripherals();
 }
