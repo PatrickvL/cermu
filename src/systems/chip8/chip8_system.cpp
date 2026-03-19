@@ -348,6 +348,9 @@ Chip8System::Chip8System()
         display_.set_palette(pal, 4);
     }
     register_display(&display_);
+
+    // Video stream output
+    video_port_ = std::make_unique<CompositeVideoPort>();
 }
 
 // ============================================================================
@@ -601,6 +604,22 @@ void Chip8System::run_frame() {
     }
 
     display_.flush();
+
+    // Drive video stream with per-line pixel data
+    if (video_port_) {
+        auto& stream = video_port_->stream();
+        const uint8_t* indices2 = display_.indices();
+        const int h = chip8_constants::HIRES_HEIGHT;
+        const int w = chip8_constants::HIRES_WIDTH;
+        for (int y = 0; y < h; y++) {
+            const uint8_t* line = indices2 + y * w;
+            stream.drive({0, VideoFlags::HSync});
+            for (int x = 0; x < w; x++) {
+                stream.drive({line[x], VideoFlags::BeamOn});
+            }
+        }
+        stream.drive({0, VideoFlags::FrameEnd});
+    }
 }
 
 // ============================================================================

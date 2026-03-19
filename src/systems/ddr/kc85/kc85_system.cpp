@@ -158,6 +158,13 @@ bool KC85System<V>::initialize() {
     display_.set_palette(kc85_constants::PALETTE, kc85_constants::COLOR_COUNT);
     register_display(&display_);
 
+    // Video stream output
+    video_port_ = std::make_unique<CompositeVideoPort>();
+
+    // Audio stream output
+    audio_port_ = std::make_unique<AudioPort>();
+    audio_port_->configure(audio_sample_rate_, audio_sample_rate_);
+
     // ── Audio beeper ────────────────────────────────────────────────
     audio_sample_period_ = kc85_constants::CPU_FREQ_HZ / audio_sample_rate_;
     audio_sample_counter_ = 0;
@@ -370,6 +377,7 @@ void KC85System<V>::tick() {
             float sample = (beeper1_state_ ? audio_volume_ : 0.0f)
                          + (beeper2_state_ ? audio_volume_ : 0.0f);
             audio_ring_buf_.write(&sample, 1);
+            if (audio_port_) audio_port_->drive_sample(sample);
         }
     }
 
@@ -533,6 +541,10 @@ template<KC85Variant V> void KC85System<V>::get_display_dimensions(int* w, int* 
     *w = kc85_constants::FB_WIDTH; *h = kc85_constants::FB_HEIGHT;
 }
 template<KC85Variant V> uint32_t KC85System<V>::get_audio_samples(float* buffer, uint32_t max_samples) {
+    if (audio_port_) {
+        uint32_t n = audio_port_->read_samples(buffer, max_samples);
+        if (n > 0) return n;
+    }
     return audio_ring_buf_.read(buffer, max_samples);
 }
 template<KC85Variant V> void KC85System<V>::set_audio_sample_rate(int hz) {
@@ -760,6 +772,20 @@ void KC85System<V>::render_frame() {
     }
 
     display_.flush();
+
+    // Drive video stream with per-line pixel data
+    if (video_port_) {
+        auto& stream = video_port_->stream();
+        const uint8_t* idx = display_.indices();
+        for (int y = 0; y < kc85_constants::FB_HEIGHT; y++) {
+            const uint8_t* line = idx + y * kc85_constants::FB_WIDTH;
+            stream.drive({0, VideoFlags::HSync});
+            for (int x = 0; x < kc85_constants::FB_WIDTH; x++) {
+                stream.drive({line[x], VideoFlags::BeamOn});
+            }
+        }
+        stream.drive({0, VideoFlags::FrameEnd});
+    }
 }
 
 // ============================================================================
