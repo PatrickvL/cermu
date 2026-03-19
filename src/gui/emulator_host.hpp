@@ -16,6 +16,7 @@
 
 #include "utils/ring_buffer.hpp"
 #include "utils/performance_metrics.hpp"
+#include "core/signal/sync_types.hpp"  // FrameData, SyncEvent
 
 // Forward declarations
 struct ImGuiIO;
@@ -153,6 +154,33 @@ protected:
     GLuint    indexed_shader_        = 0;       ///< Shader program for indexed rendering
     GLint     indexed_loc_proj_      = -1;      ///< ProjMtx uniform location
     int       gpu_palette_size_      = 0;       ///< Number of palette entries
+
+    // ========================================================================
+    // GPU stream reconstruction
+    // ========================================================================
+    /// When the system drives per-dot-clock video samples to a VideoPort,
+    /// the raw stream can be uploaded directly to the GPU.  A fragment
+    /// shader performs scanline mapping and palette lookup in a single pass,
+    /// bypassing the CPU-side reconstruct_to_framebuffer() bridge.
+
+    bool      use_stream_shader_     = false;   ///< Active system has stream data
+    GLuint    stream_texture_        = 0;       ///< R8 packed 1D→2D stream texture
+    GLuint    stream_shader_         = 0;       ///< Stream reconstruction shader program
+    GLint     stream_loc_proj_       = -1;      ///< ProjMtx uniform location
+    GLint     stream_loc_scanline_map_ = -1;    ///< ScanlineMap uniform location
+    GLint     stream_loc_tex_width_  = -1;      ///< StreamTexWidth uniform location
+    GLint     stream_loc_display_h_  = -1;      ///< DisplayHeight uniform location
+    GLint     stream_loc_display_w_  = -1;      ///< DisplayWidth uniform location
+
+    /// Stream snapshot — copied from last_frame_data_ by emu thread under fb_mutex_.
+    /// GUI thread reads these to upload stream texture and compute scanline map.
+    uint8_t*  stream_snapshot_       = nullptr;  ///< Color indices extracted from stream
+    SyncEvent* sync_snapshot_        = nullptr;  ///< Sync events snapshot
+    uint32_t  stream_snapshot_len_   = 0;        ///< Number of samples in snapshot
+    uint32_t  sync_snapshot_count_   = 0;        ///< Number of sync events in snapshot
+    int       stream_back_porch_     = 0;        ///< Back porch pixels for scanline map
+    int       stream_display_width_  = 0;        ///< Visible pixels per scanline
+    int       stream_display_height_ = 0;        ///< Visible scanlines (from scanline map)
 
     // ========================================================================
     // Statistics / Frame pacing

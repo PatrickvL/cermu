@@ -156,6 +156,7 @@ bool AmstradCPCSystem<M>::initialize() {
     // Video stream output — composite video from Gate Array
     video_port_ = std::make_unique<CompositeVideoPort>();
     gate_array_.set_stream(&video_port_->stream());
+    video_port_->bind_frame_output(&last_frame_data_);
     // ── Register all manifest chips for Hardware menu ────────────────
     register_bus_chips(board_);
 

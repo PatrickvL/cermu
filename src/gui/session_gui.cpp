@@ -1,5 +1,6 @@
 #include "gui/session_gui.hpp"
 #include "gui/indexed_shader.hpp"
+#include "gui/stream_shader.hpp"
 #include "gui/port_icons.hpp"
 #include "gui/vfs_file_system.hpp"
 #define IMGUI_DEFINE_MATH_OPERATORS
@@ -56,6 +57,49 @@ static void indexed_shader_bind_callback(const ImDrawList*, const ImDrawCmd* cmd
     indexed_shader::glUniformMatrix4fv(d->loc_proj, 1, GL_FALSE, &ortho[0][0]);
 
     // Bind palette texture to slot 1 (index texture goes to slot 0 via ImGui)
+    indexed_shader::glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, d->palette_tex);
+    indexed_shader::glActiveTexture(GL_TEXTURE0);
+}
+
+// ============================================================================
+// GPU Stream Reconstruction — ImGui draw callback
+// ============================================================================
+
+struct StreamShaderCallbackData {
+    GLuint shader;
+    GLint  loc_proj;
+    GLuint palette_tex;
+    GLuint stream_tex;
+    // Uniforms set before draw (scanline map, dimensions) — already uploaded
+    // via glUseProgram + glUniform1iv in the texture upload path.
+};
+
+static void stream_shader_bind_callback(const ImDrawList*, const ImDrawCmd* cmd) {
+    auto* d = static_cast<const StreamShaderCallbackData*>(cmd->UserCallbackData);
+
+    // Switch to stream reconstruction shader
+    indexed_shader::glUseProgram(d->shader);
+
+    // Compute ortho projection (same as ImGui)
+    ImDrawData* draw_data = ImGui::GetDrawData();
+    float L = draw_data->DisplayPos.x;
+    float R = draw_data->DisplayPos.x + draw_data->DisplaySize.x;
+    float T = draw_data->DisplayPos.y;
+    float B = draw_data->DisplayPos.y + draw_data->DisplaySize.y;
+    const float ortho[4][4] = {
+        { 2.0f/(R-L),   0.0f,         0.0f,   0.0f },
+        { 0.0f,         2.0f/(T-B),   0.0f,   0.0f },
+        { 0.0f,         0.0f,        -1.0f,   0.0f },
+        { (R+L)/(L-R),  (T+B)/(B-T),  0.0f,   1.0f },
+    };
+    indexed_shader::glUniformMatrix4fv(d->loc_proj, 1, GL_FALSE, &ortho[0][0]);
+
+    // Bind stream texture to slot 0 (ImGui's texture bind is overridden)
+    indexed_shader::glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, d->stream_tex);
+
+    // Bind palette texture to slot 1
     indexed_shader::glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, d->palette_tex);
     indexed_shader::glActiveTexture(GL_TEXTURE0);
@@ -968,7 +1012,45 @@ void SessionGUI::render_screen() {
         // update_screen_texture(), creating a data-race window.
         std::lock_guard<std::mutex> lock(fb_mutex_);
 
-        if (use_gpu_indexed_ && index_textures_[0]) {
+        if (use_stream_shader_ && stream_shader_ && stream_texture_ && stream_snapshot_len_ > 0) {
+            // Upload color-index stream data to GPU (already extracted in emu thread)
+            glBindTexture(GL_TEXTURE_2D, stream_texture_);
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            int full_rows = static_cast<int>(stream_snapshot_len_) / stream_shader::STREAM_TEX_WIDTH;
+            int remainder = static_cast<int>(stream_snapshot_len_) - full_rows * stream_shader::STREAM_TEX_WIDTH;
+            if (full_rows > 0) {
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                                stream_shader::STREAM_TEX_WIDTH, full_rows,
+                                GL_RED, GL_UNSIGNED_BYTE, stream_snapshot_);
+            }
+            if (remainder > 0) {
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, full_rows,
+                                remainder, 1,
+                                GL_RED, GL_UNSIGNED_BYTE,
+                                stream_snapshot_ + full_rows * stream_shader::STREAM_TEX_WIDTH);
+            }
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+
+            // Compute scanline map and set shader uniforms
+            int scanline_offsets[stream_shader::MAX_SCANLINES];
+            stream_display_height_ = stream_shader::compute_scanline_map(
+                scanline_offsets, stream_shader::MAX_SCANLINES,
+                sync_snapshot_, sync_snapshot_count_,
+                stream_back_porch_, stream_snapshot_len_);
+            stream_display_width_ = fb_width_;
+
+            indexed_shader::glUseProgram(stream_shader_);
+            indexed_shader::glUniform1iv(stream_loc_scanline_map_,
+                                         stream_shader::MAX_SCANLINES, scanline_offsets);
+            indexed_shader::glUniform1i(stream_loc_tex_width_,
+                                        stream_shader::STREAM_TEX_WIDTH);
+            indexed_shader::glUniform1i(stream_loc_display_h_, stream_display_height_);
+            indexed_shader::glUniform1i(stream_loc_display_w_, stream_display_width_);
+            indexed_shader::glUseProgram(0);
+
+            // Re-upload palette for stream shader path
+            update_palette_texture(system_->get_gpu_palette_data(), gpu_palette_size_);
+        } else if (use_gpu_indexed_ && index_textures_[0]) {
             // GPU indexed path — upload 1 byte/pixel R8 index texture
             GLuint upload_tex = index_textures_[texture_write_idx_];
             update_index_texture(upload_tex, fb_width_, fb_height_, index_snapshot_);
@@ -989,7 +1071,12 @@ void SessionGUI::render_screen() {
     // Always render the most recently uploaded texture (read index = opposite of write)
     GLuint display_tex = 0;
     bool use_indexed_shader = false;
-    if (use_gpu_indexed_ && index_textures_[0]) {
+    bool use_stream = false;
+    if (use_stream_shader_ && stream_shader_ && stream_display_height_ > 0) {
+        // Stream shader path — display from packed stream texture
+        display_tex = stream_texture_;
+        use_stream = true;
+    } else if (use_gpu_indexed_ && index_textures_[0]) {
         display_tex = index_textures_[texture_write_idx_ ^ 1];
         use_indexed_shader = true;
     } else if (screen_textures_[0]) {
@@ -1010,9 +1097,15 @@ void SessionGUI::render_screen() {
             is_pal, use_pixel_aspect,
             &display_w, &display_h, &pos_x, &pos_y);
 
-        // GPU indexed: inject custom shader via ImGui draw callback
-        ImDrawList* draw_list = use_indexed_shader ? ImGui::GetWindowDrawList() : nullptr;
-        if (use_indexed_shader) {
+        // GPU shader: inject custom shader via ImGui draw callback
+        ImDrawList* draw_list = (use_indexed_shader || use_stream)
+                                ? ImGui::GetWindowDrawList() : nullptr;
+        if (use_stream) {
+            StreamShaderCallbackData cb = {
+                stream_shader_, stream_loc_proj_, palette_texture_, stream_texture_
+            };
+            draw_list->AddCallback(stream_shader_bind_callback, &cb, sizeof(cb));
+        } else if (use_indexed_shader) {
             IndexedShaderCallbackData cb = { indexed_shader_, indexed_loc_proj_, palette_texture_ };
             draw_list->AddCallback(indexed_shader_bind_callback, &cb, sizeof(cb));
         }
@@ -1022,8 +1115,8 @@ void SessionGUI::render_screen() {
         ImGui::Image((ImTextureID)(intptr_t)display_tex,
                     ImVec2(display_w, display_h));
 
-        // Restore ImGui's default shader after our indexed draw
-        if (use_indexed_shader) {
+        // Restore ImGui's default shader after our custom draw
+        if (use_indexed_shader || use_stream) {
             draw_list->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
         }
 
@@ -1234,6 +1327,33 @@ void SessionGUI::allocate_framebuffer() {
             system_->set_index_buffer(index_framebuffer_);
             use_gpu_indexed_ = true;
             printf("GPU indexed palette rendering enabled (%d colors)\n", gpu_palette_size_);
+        }
+
+        // GPU stream reconstruction — allocate resources for direct stream→GPU
+        // rendering.  The stream shader bypasses the CPU reconstruct_to_framebuffer()
+        // bridge.  It activates when the emu thread produces stream data; until
+        // then, the indexed shader path displays the CPU-reconstructed framebuffer.
+        if (system_->supports_gpu_indexed_rendering()) {
+            // Allocate snapshot buffers for emu→GUI thread transfer
+            stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES]();
+            sync_snapshot_   = new SyncEvent[MAX_SYNC_EVENTS]();
+
+            // Create stream texture and compile shader
+            stream_texture_ = stream_shader::create_stream_texture(MAX_STREAM_SAMPLES);
+            stream_shader::StreamShaderLocations locs{};
+            stream_shader_ = stream_shader::create_program(&locs);
+            if (stream_shader_) {
+                stream_loc_proj_         = locs.proj_mtx;
+                stream_loc_scanline_map_ = locs.scanline_map;
+                stream_loc_tex_width_    = locs.stream_tex_width;
+                stream_loc_display_h_    = locs.display_height;
+                stream_loc_display_w_    = locs.display_width;
+                // Palette texture is shared with indexed path (already created above)
+                if (!palette_texture_)
+                    palette_texture_ = create_palette_texture();
+                use_stream_shader_ = true;
+                printf("GPU stream reconstruction enabled\n");
+            }
         }
     } else {
         printf("Allocated %dx%d framebuffer (texture creation deferred until init)\n", fb_width_, fb_height_);
@@ -1819,6 +1939,29 @@ void SessionGUI::emu_thread_func() {
                 memcpy(fb_snapshot_, framebuffer_,
                        static_cast<size_t>(fb_width_) * fb_height_ * sizeof(uint32_t));
                 fb_new_frame_.store(true, std::memory_order_release);
+            }
+
+            // Stream snapshot — extract color indices from the raw
+            // CompositeVideoSample stream for GPU texture upload.
+            if (use_stream_shader_ && stream_snapshot_ && system_) {
+                const auto& fd = system_->get_last_frame_data();
+                if (fd.stream && fd.stream_len > 0) {
+                    const uint8_t* src = static_cast<const uint8_t*>(fd.stream);
+                    uint32_t n = fd.stream_len;
+                    if (n > MAX_STREAM_SAMPLES) n = MAX_STREAM_SAMPLES;
+                    // Extract color_index bytes (stride 2: [color_index, flags])
+                    for (uint32_t i = 0; i < n; i++)
+                        stream_snapshot_[i] = src[i * 2];
+                    stream_snapshot_len_ = n;
+                    // Copy sync events
+                    uint32_t sc = fd.sync_count;
+                    if (sc > MAX_SYNC_EVENTS) sc = MAX_SYNC_EVENTS;
+                    memcpy(sync_snapshot_, fd.sync_events,
+                           sc * sizeof(SyncEvent));
+                    sync_snapshot_count_ = sc;
+                    stream_back_porch_ = system_->get_stream_back_porch();
+                    fb_new_frame_.store(true, std::memory_order_release);
+                }
             }
         }
 

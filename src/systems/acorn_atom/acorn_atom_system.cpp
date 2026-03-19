@@ -95,6 +95,7 @@ bool AcornAtomSystem::initialize() {
     // Video stream output — composite video from MC6847 VDG
     video_port_ = std::make_unique<CompositeVideoPort>();
     vdg_->set_stream(&video_port_->stream());
+    video_port_->bind_frame_output(&last_frame_data_);
 
     printf("Acorn Atom: System initialized (RAM: %dKB)\n", ram_size_kb_);
     system_ready_ = true;

@@ -223,6 +223,7 @@ bool BBCMicroSystem::initialize() {
     // Video stream output — composite video from VIDPROC
     video_port_ = std::make_unique<CompositeVideoPort>();
     vidproc_.set_stream(&video_port_->stream());
+    video_port_->bind_frame_output(&last_frame_data_);
 
     // ---- Sound (SN76489) ----
     psg_->init();

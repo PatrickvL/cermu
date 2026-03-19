@@ -19,6 +19,7 @@ class Session;
 
 #include "core/indexed_frame_buffer.hpp"
 #include "core/board_base.hpp"
+#include "core/signal/sync_types.hpp"   // FrameData, SyncEvent, SignalType
 
 /**
  * Result of probing a file for system-specific compatibility.
@@ -173,6 +174,11 @@ protected:
     // When non-null, GPU palette accessors and set_framebuffer()
     // delegate through this automatically.
     IndexedFrameBuffer* display_ = nullptr;
+
+    // Last video frame data — populated by VideoPort::swap_frame() when
+    // the system calls bind_frame_output(&last_frame_data_) during init.
+    // Contains pointers to port-internal buffers valid until next swap_frame().
+    FrameData last_frame_data_{};
 
     /// Register an IndexedFrameBuffer as this system's display output.
     /// Call once in initialize() after the display is created and its
@@ -570,6 +576,24 @@ public:
     virtual void set_index_buffer(uint8_t* buffer) {
         if (display_) display_->set_index_buffer(buffer);
     }
+
+    // ====================================================================
+    // Stream data access — for GPU stream reconstruction
+    // ====================================================================
+    // Systems that bind their VideoPort to last_frame_data_ (via
+    // bind_frame_output) make the raw stream available to the host for
+    // direct GPU texture upload, bypassing the CPU-side bridge.
+
+    /// Whether stream data is available from the last frame.
+    bool has_stream_data() const { return last_frame_data_.stream_len > 0; }
+
+    /// Last frame's stream data (pointers valid until next run_frame).
+    const FrameData& get_last_frame_data() const { return last_frame_data_; }
+
+    /// Back porch in pixels — how many stream samples after HSync
+    /// before visible pixels begin.  Systems override if they use
+    /// stream-based rendering with a non-zero back porch.
+    virtual int get_stream_back_porch() const { return 0; }
 };
 
 // Include SystemRegistry (moved to separate file)

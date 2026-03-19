@@ -57,6 +57,7 @@ inline void   (APIENTRY* glDeleteProgram)(GLuint) = nullptr;
 inline void   (APIENTRY* glUseProgram)(GLuint) = nullptr;
 inline GLint  (APIENTRY* glGetUniformLocation)(GLuint, const GLchar*) = nullptr;
 inline void   (APIENTRY* glUniform1i)(GLint, GLint) = nullptr;
+inline void   (APIENTRY* glUniform1iv)(GLint, GLsizei, const GLint*) = nullptr;
 inline void   (APIENTRY* glUniformMatrix4fv)(GLint, GLsizei, GLboolean, const GLfloat*) = nullptr;
 
 // Load all GL function pointers.  Returns true if all critical functions
@@ -86,6 +87,7 @@ inline bool load_gl() {
     ISGL_LOAD(glUseProgram,          "glUseProgram");
     ISGL_LOAD(glGetUniformLocation,  "glGetUniformLocation");
     ISGL_LOAD(glUniform1i,           "glUniform1i");
+    ISGL_LOAD(glUniform1iv,          "glUniform1iv");
     ISGL_LOAD(glUniformMatrix4fv,    "glUniformMatrix4fv");
     #undef ISGL_LOAD
 
