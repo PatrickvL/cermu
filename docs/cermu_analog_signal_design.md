@@ -180,10 +180,11 @@ struct VideoStream {
     void drive(SampleT s) noexcept {
         *ptr++ = s;
 
-        if (__builtin_expect(s.flags != prev_flags, 0)) [[unlikely]] {
-            uint32_t pos = static_cast<uint32_t>(ptr - 1 - base);
-            if (on_sync_change(ctx, s.flags, pos)) {
-                frame_len = static_cast<uint32_t>(ptr - base);
+        if (__builtin_expect(prev_flags != s.flags, 0)) [[unlikely]] {
+            const uint32_t len = static_cast<uint32_t>(ptr - base);
+            bool is_frame = on_sync_change(ctx, s.flags, len - 1);
+            if (is_frame) {
+                frame_len = static_cast<uint32_t>(len);
                 ptr = base;
             }
             prev_flags = s.flags;
@@ -205,6 +206,8 @@ The `on_sync_change` callback returns `bool` — `true` when the current sample 
 `prev_flags = s.flags` is written only inside the unlikely block, not unconditionally. This eliminates one store per sample on the hot path. With per-dot-clock driving at ~504 pixels/line × 312 lines ≈ 157K samples/frame, this saves ~157K stores per frame.
 
 Correctness: the only purpose of `prev_flags` is to detect flag edges for sync event classification. As long as every distinct flag value eventually triggers the cold path (which it does — flags change at most a few times per line), no edge is missed. A sequence `A→A→A→B` correctly fires on the `A→B` transition.
+
+**Critical invariant:** `prev_flags` must be updated **after** the `on_sync_change` callback, not before. The callback reads `prev_flags` from the VideoPort's cold path to detect falling edges (e.g. HSync high→low). If `prev_flags` is updated first, the callback sees `prev == current` and detects zero edges — resulting in no sync events and a black screen.
 
 The `[[unlikely]]` annotation tells the branch predictor the fast path is the non-sync case. The cold path function is marked `[[gnu::cold, gnu::noinline]]` at the definition site in `VideoPort`, pushing its code out of the instruction cache footprint of `drive()` entirely.
 
@@ -280,6 +283,10 @@ public:
     void bind_display(IndexedFrameBuffer* fb, const uint32_t* palette,
                       int display_width = 0, int back_porch_pixels = 0) noexcept;
 
+    // Frame output binding — store FrameData externally (e.g. System::last_frame_data_)
+    // so the GUI thread can snapshot stream data between run_frame() calls.
+    void bind_frame_output(FrameData* out) noexcept { frame_output_ = out; }
+
     FrameData swap_frame() noexcept {
         uint32_t len = stream_.frame_len
             ? stream_.frame_len
@@ -292,6 +299,10 @@ public:
             .sync_count  = sync_count_,
             .signal_type = SignalTraits<Sample>::type,
         };
+
+        // Store for later access (e.g. GUI thread snapshot)
+        last_frame_ = fd;
+        if (frame_output_) *frame_output_ = fd;
 
         // Auto-reconstruct into bound framebuffer before resetting
         if (bound_fb_)
@@ -312,6 +323,10 @@ private:
     SyncEvent sync_events_[MAX_SYNC_EVENTS];
     uint32_t  sync_count_ = 0;
     int       sync_run_   = 0;
+
+    // Last frame data — stored by swap_frame() before reset
+    FrameData  last_frame_{};
+    FrameData* frame_output_ = nullptr;  // external binding
 
     IndexedFrameBuffer* bound_fb_         = nullptr;
     const uint32_t*     bound_palette_    = nullptr;
@@ -604,49 +619,69 @@ Equalizing pulses (used for interlace field detection) are not currently classif
 
 RGB systems carry separate `HSync` and `VSync` flag bits — classification by pulse length is not needed.
 
-### GPU Pass 1 — Build Scanline Map (Compute Shader)
+### CPU Side — Build Scanline Map
 
-The sync event list is pre-computed by the CPU. Pass 1 reads it and builds a scanline offset table — O(scanlines), not O(stream_length):
+The scanline map is built on the CPU by walking the sync event list (~312 iterations for PAL). This is trivially cheap and avoids requiring compute shaders (GL 4.3), keeping the minimum requirement at GL 3.0 / GLSL 130:
 
-```glsl
-layout(local_size_x = 64) in;
+```cpp
+void compute_scanline_map(
+    const SyncEvent* events, uint32_t sync_count,
+    int back_porch_pixels,
+    int max_scanlines,
+    int* scanline_offsets)       // out: int[MAX_SCANLINES]
+{
+    for (int i = 0; i < max_scanlines; i++)
+        scanline_offsets[i] = -1;    // -1 = no data / VBlank
 
-struct SyncEvent { uint stream_pos; uint type; };
-layout(std430, binding = 0) readonly  buffer Events  { SyncEvent events[]; };
-layout(std430, binding = 1) writeonly buffer ScanMap { int scanline_starts[]; };
-
-uniform int back_porch_cycles;
-
-void main() {
-    uint i = gl_GlobalInvocationID.x;
-    if (events[i].type == HSYNC)
-        scanline_starts[i] = int(events[i].stream_pos) + back_porch_cycles;
+    int scanline = 0;
+    for (uint32_t i = 0; i < sync_count && scanline < max_scanlines; i++) {
+        if (events[i].type != SyncType::HSync) continue;
+        if (has_flag(events[i].flags, VideoFlags::VSync)) continue;
+        scanline_offsets[scanline++] = events[i].stream_pos + back_porch_pixels;
+    }
 }
 ```
 
-### GPU Pass 2 — Reconstruct Image (Fragment Shader)
+### GPU — Single-Pass Fragment Shader (GLSL 130)
+
+The stream is stored as an R8 texture (1D stream packed into 2D, `STREAM_TEX_WIDTH=1024` wide). The scanline map is passed as a `uniform int[512]` array. One fragment shader draw call performs reconstruction + palette lookup:
 
 ```glsl
-uniform usampler2D u_raw;
-layout(std430, binding = 1) readonly buffer ScanMap { int scanline_starts[]; };
-uniform int scanline_count;
-uniform int active_width;
+#version 130
+
+in vec2 Frag_UV;
+uniform sampler2D StreamTex;    // unit 0: R8 packed stream
+uniform sampler2D Palette;      // unit 1: 256×1 RGBA
+
+uniform int ScanlineMap[512];   // stream offset per visible scanline
+uniform int StreamTexWidth;     // width of packed stream texture
+uniform int DisplayHeight;      // number of visible scanlines
+uniform int DisplayWidth;       // visible pixels per scanline
+
+out vec4 Out_Color;
 
 void main() {
-    int py = int(v_uv.y * float(scanline_count));
-    int px = int(v_uv.x * float(active_width));
+    int scanline = clamp(int(Frag_UV.y * float(DisplayHeight)), 0, DisplayHeight - 1);
+    int pixel_x  = clamp(int(Frag_UV.x * float(DisplayWidth)),  0, DisplayWidth  - 1);
 
-    int  stream_pos = scanline_starts[py] + px;
-    uint packed     = texelFetch(u_raw,
-        ivec2(stream_pos % RAW_STRIDE, stream_pos / RAW_STRIDE), 0).r;
+    int offset = ScanlineMap[scanline];
+    if (offset < 0) {
+        Out_Color = vec4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
 
-    uint flags = packed >> 8;
-    if ((flags & BLANK_BIT) != 0u) { frag_color = vec4(0.0); return; }
+    int stream_pos = offset + pixel_x;
+    int tex_row = stream_pos / StreamTexWidth;
+    int tex_col = stream_pos - tex_row * StreamTexWidth;
 
-    frag_color = texture(u_palette,
-        vec2(float(packed & 0xFFu) / float(PALETTE_SIZE), 0.5));
+    float idx_f = texelFetch(StreamTex, ivec2(tex_col, tex_row), 0).r;
+    int idx = int(idx_f * 255.0 + 0.5);
+
+    Out_Color = texelFetch(Palette, ivec2(idx, 0), 0);
 }
 ```
+
+This replaces the original two-pass compute+fragment design. The minimum GL requirement drops from 4.3 to 3.0, enabling support on older hardware and macOS (which caps out at GL 4.1 / GL 3.3 Core).
 
 ### Interlace Field Detection
 
@@ -1119,9 +1154,9 @@ struct NESResistorMix {
 | Maintain pre-packed flag word | ✓ (on transition only) | |
 | Detect sync / beam edges, append to event list | ✓ (~313/frame, `[[unlikely]]`) | |
 | Upload stream + event list via PBO | ✓ (DMA, async) | |
-| Build scanline offset table or segment list | | ✓ (compute, O(lines)) |
-| Detect interlace field parity | | ✓ (compute) |
-| Reconstruct 2D image from stream | | ✓ (fragment) |
+| Build scanline offset table | ✓ (walk sync list, ~312 iter) | |
+| Detect interlace field parity | | ✓ (future) |
+| Reconstruct 2D image from stream | | ✓ (fragment, GLSL 130) |
 | Palette lookup / color conversion | | ✓ (fragment) |
 | Composite artifacting / NTSC decode | | ✓ (fragment, all pixels parallel) |
 | Vector line rendering + phosphor | | ✓ (geometry + fragment) |
@@ -1155,8 +1190,8 @@ The per-dot-clock pattern is the target for all chips. Per-scanline and per-fram
 
 | Chip | Pattern | Signal Source | Notes |
 |---|---|---|---|
-| VIC-II (6567/6569) | per-scanline | `vicii_timing_advance()` EOL burst | mid-line palette changes captured in color_line; target: per-dot-clock |
-| VIC (6560/6561) | per-scanline | `tick()` EOL burst | target: per-dot-clock |
+| VIC-II (6567/6569) | per-dot-clock | `vicii_timing_advance()` per dot-clock | One `drive()` per pixel clock cycle, `flags_prepack_` cached per-line via `drive_flags_` |
+| VIC (6560/6561) | per-scanline (collected) | `tick()` EOL burst | Pixels collected into `color_line_[]`, burst at EOL; target: per-dot-clock |
 | TED 7360 | per-scanline | `timing_advance()` EOL burst | target: per-dot-clock |
 | NES PPU (RP2C02) | per-scanline | `clock()` at cycle 257/340 | flushes on palette change; target: per-dot-clock |
 | TIA (Atari 2600) | per-scanline | `tick_color_clock()` EOL burst | VSYNC edge for FrameEnd |
@@ -1236,10 +1271,11 @@ Systems with software-generated audio (beeper, CTC) use `AudioPort::drive_sample
 
 ### Next Steps
 
-1. **Per-dot-clock migration for Commodore chips.** VIC-II, VIC, and TED currently use collected-scanline bursts. The `drive()` hot path is now cheap enough (one store + one byte compare) that per-dot-clock driving is viable. This would preserve mid-line timing information and enable future composite artifact simulation. VIC-II first (highest impact), then VIC, then TED.
-2. **Per-dot-clock migration for NES PPU.** Currently flushes at scanline boundaries (and on palette change). Per-dot-clock would simplify the logic and remove the palette-change flush workaround.
-3. **Per-frame chip elimination.** Amstrad Gate Array, BBC VIDPROC, MC6847, and Ferranti ULA currently render to framebuffer then read back to drive the stream. Convert to per-dot-clock or per-scanline to eliminate the round-trip.
-4. ~~**Stream-driven frame sync expansion.**~~ **Done.** All chip-wired systems now use `stream.frame_ended()` to terminate the frame loop:
+1. ~~**Per-dot-clock migration for VIC-II.**~~ **Done.** VIC-II (6567/6569) now drives one `CompositeVideoSample` per dot clock cycle. Flag state (`drive_flags_`) is pre-computed per raster line instead of per drive call, minimizing hot-path overhead.
+2. **Per-dot-clock migration for remaining Commodore chips.** VIC (6560/6561) and TED 7360 still use collected-scanline bursts. The `drive()` hot path is cheap enough (one store + one byte compare) that per-dot-clock driving is viable. VIC next, then TED.
+3. **Per-dot-clock migration for NES PPU.** Currently flushes at scanline boundaries (and on palette change). Per-dot-clock would simplify the logic and remove the palette-change flush workaround.
+4. **Per-frame chip elimination.** Amstrad Gate Array, BBC VIDPROC, MC6847, and Ferranti ULA currently render to framebuffer then read back to drive the stream. Convert to per-dot-clock or per-scanline to eliminate the round-trip.
+5. ~~**Stream-driven frame sync expansion.**~~ **Done.** All chip-wired systems now use `stream.frame_ended()` to terminate the frame loop:
    - Commodore C64, VIC-20, C16/Plus4 (original pattern)
    - NES (PPU drives FrameEnd at scanline wrap)
    - Atari 2600 (TIA drives FrameEnd on VSYNC rising edge, with safety limit)
@@ -1248,4 +1284,8 @@ Systems with software-generated audio (beeper, CTC) use `AudioPort::drive_sample
    - Amstrad CPC (Gate Array drives FrameEnd at frame boundary in tick)
    - Acorn Atom (MC6847 VDG drives FrameEnd on Field Sync)
    Per-frame render systems (Bomb Jack, Namco, KC85, Z9001, Z1013) retain fixed-count loops — stream-driven sync adds no benefit for atomic renderers. VTech VZ is deferred (tick/video stub).
-5. **GPU reconstruction pipeline.** Replace CPU-side `reconstruct_to_framebuffer()` bridge with compute+fragment shader pipeline per the design (PBO upload, scanline map, palette lookup).
+6. ~~**GPU reconstruction pipeline.**~~ **Infrastructure in place.** Stream shader (GLSL 130 fragment shader) is compiled and GPU resources are allocated at startup. The emu thread snapshots stream data + sync events via `bind_frame_output()`; the GUI thread uploads the stream texture and computes the scanline map each frame. The indexed shader path (CPU-reconstructed `IndexedFrameBuffer`) remains the primary display path. Remaining work:
+   - Activate the stream shader for rendering (currently infrastructure-only)
+   - PBO double-buffering for zero-copy stream upload
+   - Per-system back-porch calibration
+   - Visual verification across all systems before switching from indexed path
