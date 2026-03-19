@@ -39,6 +39,10 @@ void CompositeVideoPort::reconstruct_to_framebuffer(
         if (fd.sync_events[i].type != SyncType::HSync)
             continue;
 
+        // Skip VBlank lines — they carry HSync but have no visible pixel data
+        if (has_flag(fd.sync_events[i].flags, VideoFlags::Blank))
+            continue;
+
         // Start of visible line: sync position + back porch
         uint32_t line_start = fd.sync_events[i].stream_pos + back_porch_pixels;
         if (line_start >= fd.stream_len) continue;
@@ -89,6 +93,10 @@ void RGBVideoPort::reconstruct_to_framebuffer(
         if (fd.sync_events[i].type != SyncType::HSync)
             continue;
 
+        // Skip VBlank lines
+        if (has_flag(fd.sync_events[i].flags, VideoFlags::Blank))
+            continue;
+
         uint32_t line_start = fd.sync_events[i].stream_pos + back_porch_pixels;
         if (line_start >= fd.stream_len) continue;
 
@@ -129,6 +137,10 @@ void RGBIVideoPort::reconstruct_to_framebuffer(
 
     for (uint32_t i = 0; i < fd.sync_count && scanline < fb_height; ++i) {
         if (fd.sync_events[i].type != SyncType::HSync)
+            continue;
+
+        // Skip VBlank lines
+        if (has_flag(fd.sync_events[i].flags, VideoFlags::Blank))
             continue;
 
         uint32_t line_start = fd.sync_events[i].stream_pos + back_porch_pixels;

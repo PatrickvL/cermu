@@ -192,6 +192,7 @@ template<NamcoGame G> void NamcoArcadeSystem<G>::run_frame() {
     // Signal audio thread once per frame with accumulated cycle count
     audio_thread_.signal_progress(total_cycles_);
     render_frame();
+    if (video_port_) video_port_->swap_frame();
 }
 
 template<NamcoGame G> bool NamcoArcadeSystem<G>::load_file(const char*) { return false; }

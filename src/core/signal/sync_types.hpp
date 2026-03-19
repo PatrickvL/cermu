@@ -5,6 +5,7 @@
 // ============================================================================
 
 #include <cstdint>
+#include "core/signal/video_flags.hpp"
 
 enum class SyncType : uint8_t {
     HSync,          // Horizontal sync (raster)
@@ -16,8 +17,9 @@ enum class SyncType : uint8_t {
 };
 
 struct SyncEvent {
-    uint32_t stream_pos;    // sample offset in stream at edge
-    SyncType type;
+    uint32_t   stream_pos;    // sample offset in stream at edge
+    SyncType   type;
+    VideoFlags flags;         // original VideoFlags at this event (for VBlank detection)
 };
 
 // Signal type identifier for GPU shader selection

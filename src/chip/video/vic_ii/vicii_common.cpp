@@ -1123,6 +1123,7 @@ static inline void vicii_check_raster_interrupt(vicii_base_t* vicii) {
 static inline void vicii_perform_line0_raster_irq_operations(vicii_base_t* vicii) {
     // Reset raster counter to 0
     vicii->timing.raster_counter = 0;
+    vicii->frame_wrapped_ = true;
     
     // Reset per-frame state
     vicii->video_logic.was_den_set_during_raster_30 = false;
@@ -1180,8 +1181,11 @@ void vicii_timing_advance(vicii_base_t* vicii) {
                          completed_raster <= vicii->cached_last_vblank_line);
         }
 
-        // FrameEnd: emitted on the last line before frame wraps
-        const bool frame_end = (completed_raster == vicii->cached_total_lines - 1);
+        // FrameEnd: the cycle wrapper that resets raster_counter to 0
+        // runs BEFORE timing_advance, so completed_raster is already 0 by
+        // the time we reach EOL.  Consume the flag set during that reset.
+        const bool frame_end = vicii->frame_wrapped_;
+        vicii->frame_wrapped_ = false;
 
         // HSync sample — marks start of this scanline in the stream
         VideoFlags sync_flags = VideoFlags::HSync;

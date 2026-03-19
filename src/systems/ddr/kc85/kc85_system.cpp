@@ -390,6 +390,7 @@ template<KC85Variant V> void KC85System<V>::run_frame() {
         handle_keyboard();
     }
     render_frame();
+    if (video_port_) video_port_->swap_frame();
 }
 
 // ============================================================================

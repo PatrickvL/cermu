@@ -151,6 +151,7 @@ void AcornAtomSystem::run_frame() {
     const uint32_t cycles = static_cast<uint32_t>(
         acorn_atom_constants::CYCLES_PER_FRAME_PAL * speed_multiplier_);
     for (uint32_t i = 0; i < cycles; ++i) tick();
+    if (video_port_) video_port_->swap_frame();
 }
 
 bool AcornAtomSystem::load_file(const char*) { return false; }

@@ -661,6 +661,7 @@ bool Commodore264System<V>::initialize() {
     // Wire TED to composite video stream port
     video_port_ = std::make_unique<CompositeVideoPort>();
     ted_->set_stream(&video_port_->stream());
+    video_port_->bind_display(&display_, ted7360_t::get_palette());
 
     // Wire TED to audio port (decimates TED master-clock-rate audio to host sample rate)
     audio_port_ = std::make_unique<AudioPort>();
@@ -794,19 +795,15 @@ void Commodore264System<V>::tick() {
 
 template<C264SeriesVariant V>
 void Commodore264System<V>::run_frame() {
-    uint32_t adjusted_cycles = static_cast<uint32_t>(cycles_per_frame_ * speed_multiplier_);
-    for (uint32_t i = 0; i < adjusted_cycles; i++) {
+    if (!video_port_) return;
+
+    // Run until the video chip drives FrameEnd into the stream.
+    auto& stream = video_port_->stream();
+    while (!stream.frame_ended()) {
         tick();
     }
 
-    // Reconstruct video stream into IndexedFrameBuffer for display
-    if (video_port_) {
-        FrameData fd = video_port_->swap_frame();
-        video_port_->reconstruct_to_framebuffer(
-            fd, &display_,
-            ted_->get_palette(),
-            0, 0);
-    }
+    video_port_->swap_frame();
 
     // Check deferred load once per frame (only active during boot)
     check_deferred_load();

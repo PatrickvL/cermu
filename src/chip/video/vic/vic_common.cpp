@@ -202,25 +202,11 @@ void vic_base_t::decode_all_registers() {
     decode_register(VIC_REG_BACKGROUND);
 }
 
-// Emit a single pixel to the video stream.
+// Buffer a single pixel for end-of-line stream emission.
 void vic_base_t::emit_pixel(uint8_t color_index) {
-    if (video_stream_) {
-        video_stream_->drive({ .color_index = static_cast<uint8_t>(color_index & 0x0F),
-                               .flags = flags_prepack_ });
+    if (pixel_line_index < VIC_MAX_LINE_WIDTH) {
+        color_line_buffer[pixel_line_index++] = color_index & 0x0F;
     }
-}
-
-// Update pre-packed video flags from current raster state.
-// Called once per cycle.  HSync drives sync event detection in the
-// VideoPort cold path; all other pixels carry no sync flags.
-void vic_base_t::update_video_flags() {
-    const bool in_hsync = (current_cycle < 9);
-    const bool in_vsync = (raster_counter < 3);
-
-    if (in_hsync || in_vsync)
-        flags_prepack_ = VideoFlags::HSync;
-    else
-        flags_prepack_ = VideoFlags::None;
 }
 
 
@@ -481,6 +467,24 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
     // Increment cycle counter
     current_cycle++;
     if (current_cycle >= cycles_per_line) {
+        // End-of-line: emit collected scanline to video stream
+        if (video_stream_) {
+            const bool in_vblank = (raster_counter < 28);
+            const bool frame_end = (raster_counter == total_lines - 1);
+
+            VideoFlags sync_flags = VideoFlags::HSync;
+            if (in_vblank) sync_flags = sync_flags | VideoFlags::VSync | VideoFlags::Blank;
+            if (frame_end) sync_flags = sync_flags | VideoFlags::FrameEnd;
+            video_stream_->drive({0, sync_flags});
+
+            if (!in_vblank && pixel_line_index > 0) {
+                for (int i = 0; i < pixel_line_index; i++) {
+                    video_stream_->drive({color_line_buffer[i], VideoFlags::BeamOn});
+                }
+            }
+        }
+        pixel_line_index = 0;
+
         current_cycle = 0;
 
         // Move to next raster line
@@ -513,9 +517,6 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
     const uint16_t screen_origin_x = cached_screen_origin_x;
     const uint16_t char_area_end = screen_origin_x + (columns << 1);
     const bool in_char_area = (current_cycle >= screen_origin_x) && (current_cycle < char_area_end);
-
-    // Update pre-packed video flags for stream output (sync/blank state)
-    update_video_flags();
 
     const uint8_t border_color = cached_border_color;
     

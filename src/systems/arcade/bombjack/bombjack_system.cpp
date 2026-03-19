@@ -197,6 +197,7 @@ void BombJackSystem::run_frame() {
     audio_thread_.signal_progress(sound_cycles_);
     decode_palette();
     render_frame();
+    if (video_port_) video_port_->swap_frame();
 }
 
 bool BombJackSystem::load_file(const char*) { return false; }

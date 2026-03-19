@@ -88,13 +88,11 @@ inline void handle_sync_impl(CompositeTag,
         SyncType type;
         if (sync_run > 150)
             type = SyncType::VSync;
-        else if (sync_run < 25)
-            type = SyncType::Equalizing;
         else
             type = SyncType::HSync;
 
         if (count < MAX_SYNC_EVENTS)
-            events[count++] = { pos, type };
+            events[count++] = { pos, type, prev };
         sync_run = 0;
     } else if (now_sync) {
         ++sync_run;
@@ -110,11 +108,11 @@ inline void handle_sync_impl(RGBTag,
 {
     if (has_flag(prev, VideoFlags::HSync) && !has_flag(flags, VideoFlags::HSync)) {
         if (count < MAX_SYNC_EVENTS)
-            events[count++] = { pos, SyncType::HSync };
+            events[count++] = { pos, SyncType::HSync, prev };
     }
     if (has_flag(prev, VideoFlags::VSync) && !has_flag(flags, VideoFlags::VSync)) {
         if (count < MAX_SYNC_EVENTS)
-            events[count++] = { pos, SyncType::VSync };
+            events[count++] = { pos, SyncType::VSync, prev };
     }
 }
 
@@ -137,7 +135,7 @@ inline void handle_sync_impl(VectorTag,
 {
     if (has_flag(flags, VideoFlags::FrameEnd) && !has_flag(prev, VideoFlags::FrameEnd)) {
         if (count < MAX_SYNC_EVENTS)
-            events[count++] = { pos, SyncType::FrameEnd };
+            events[count++] = { pos, SyncType::FrameEnd, flags };
     }
 
     bool beam_changed = has_flag(flags, VideoFlags::BeamOn) !=
@@ -146,7 +144,7 @@ inline void handle_sync_impl(VectorTag,
         SyncType t = has_flag(flags, VideoFlags::BeamOn)
                    ? SyncType::BeamOn : SyncType::BeamOff;
         if (count < MAX_SYNC_EVENTS)
-            events[count++] = { pos, t };
+            events[count++] = { pos, t, flags };
     }
 }
 
@@ -172,24 +170,58 @@ public:
 
     Stream& stream() noexcept { return stream_; }
 
+    // ====================================================================
+    // Display binding — register framebuffer + palette for automatic
+    // stream→framebuffer reconstruction on swap_frame().
+    // Call once during initialize() for per-dot-clock systems.
+    // Per-frame systems that render to the framebuffer directly should
+    // NOT bind a display — swap_frame() just resets the stream for them.
+    // ====================================================================
+
+    void bind_display(IndexedFrameBuffer* fb, const uint32_t* palette,
+                      int display_width = 0, int back_porch_pixels = 0) noexcept {
+        bound_fb_         = fb;
+        bound_palette_    = palette;
+        bound_line_width_ = display_width;
+        bound_back_porch_ = back_porch_pixels;
+    }
+
+    void set_palette(const uint32_t* palette) noexcept {
+        bound_palette_ = palette;
+    }
+
     FrameData swap_frame() noexcept {
+        // Use the snapshot taken at FrameEnd (self-bounding reset);
+        // fall back to current ptr position for non-FrameEnd callers.
+        const uint32_t len = stream_.frame_len
+            ? stream_.frame_len
+            : static_cast<uint32_t>(stream_.ptr - buf_);
+
         FrameData fd {
             .stream      = buf_,
-            .stream_len  = static_cast<uint32_t>(stream_.ptr - buf_),
+            .stream_len  = len,
             .sync_events = sync_events_,
             .sync_count  = sync_count_,
             .signal_type = SignalTraits<Sample>::type,
         };
-        stream_.ptr        = buf_;
-        stream_.prev_flags = VideoFlags::None;
-        sync_count_        = 0;
-        sync_run_          = 0;
+
+        // Auto-reconstruct into bound framebuffer before resetting
+        if (bound_fb_) {
+            reconstruct_to_framebuffer(fd, bound_fb_, bound_palette_,
+                                       bound_line_width_, bound_back_porch_);
+        }
+
+        stream_.ptr            = buf_;
+        stream_.prev_flags     = VideoFlags::None;
+        stream_.frame_len      = 0;
+        sync_count_            = 0;
+        sync_run_              = 0;
         return fd;
     }
 
     // ====================================================================
-    // Bridge: reconstruct stream into IndexedFrameBuffer for existing
-    // display pipeline.  Called once per frame after swap_frame().
+    // Manual bridge: reconstruct stream into IndexedFrameBuffer.
+    // Prefer bind_display() + swap_frame() for automatic reconstruction.
     // Only meaningful for raster (composite/RGB/RGBI) signal types.
     // ====================================================================
 
@@ -206,14 +238,21 @@ private:
     uint32_t  sync_count_ = 0;
     int       sync_run_   = 0;
 
+    // Display binding for automatic reconstruction
+    IndexedFrameBuffer* bound_fb_         = nullptr;
+    const uint32_t*     bound_palette_    = nullptr;
+    int                 bound_line_width_ = 0;
+    int                 bound_back_porch_ = 0;
+
     FORCE_NOINLINE
-    static void cold_path(void* ctx, VideoFlags flags, uint32_t pos) noexcept {
+    static bool cold_path(void* ctx, VideoFlags flags, uint32_t pos) noexcept {
         auto* self = static_cast<VideoPort*>(ctx);
         using Tag = typename detail::SyncTag<Sample>::type;
         detail::handle_sync_impl(Tag{},
                                  self->sync_events_, self->sync_count_,
                                  self->sync_run_,
                                  self->stream_.prev_flags, flags, pos);
+        return has_flag(flags, VideoFlags::FrameEnd);
     }
 };
 

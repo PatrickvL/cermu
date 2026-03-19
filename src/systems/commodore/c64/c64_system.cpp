@@ -544,6 +544,7 @@ bool C64System::initialize() {
     // Wire VIC-II to composite video stream port
     video_port_ = std::make_unique<CompositeVideoPort>();
     vicii->set_stream(&video_port_->stream());
+    video_port_->bind_display(&display_, vicii_base_t::get_default_palette());
 
     // Wire SID to audio signal port
     audio_port_ = std::make_unique<AudioPort>();
@@ -951,32 +952,26 @@ void C64System::tick() {
 }
 
 void C64System::run_frame() {
-    uint32_t adjusted_cycles = static_cast<uint32_t>(cycles_per_frame_ * speed_multiplier_);
+    if (!initialized_ || !video_port_) return;
 
-    if (initialized_) {
-        // Update per-frame state for peripheral devices before cycle loop.
-        // Lightpen: pass display rect so it can convert SDL mouse → VIC-II coords.
-        update_lightpen_display_rect();
+    // Update per-frame state for peripheral devices before cycle loop.
+    // Lightpen: pass display rect so it can convert SDL mouse → VIC-II coords.
+    update_lightpen_display_rect();
 
-        for (uint32_t i = 0; i < adjusted_cycles; i++) {
-            system_tick();
-        }
-
-        // Reconstruct video stream into IndexedFrameBuffer for display
-        if (video_port_) {
-            FrameData fd = video_port_->swap_frame();
-            video_port_->reconstruct_to_framebuffer(
-                fd, &display_,
-                vicii_base_t::get_default_palette(),
-                0, 0);
-        }
-
-        // Check deferred load once per frame (only active during boot)
-        check_deferred_load();
-
-        // Tick all attached peripheral devices (datasette timing, 1541 IEC, etc.)
-        tick_peripherals();
+    // Run until the video chip drives FrameEnd into the stream — the
+    // frame boundary is implicit in the video signal, just like on a CRT.
+    auto& stream = video_port_->stream();
+    while (!stream.frame_ended()) {
+        system_tick();
     }
+
+    video_port_->swap_frame();
+
+    // Check deferred load once per frame (only active during boot)
+    check_deferred_load();
+
+    // Tick all attached peripheral devices (datasette timing, 1541 IEC, etc.)
+    tick_peripherals();
 }
 
 // ============================================================================

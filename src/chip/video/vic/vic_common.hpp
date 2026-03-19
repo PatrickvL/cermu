@@ -284,7 +284,6 @@ struct vic_base_t : public VideoChipBase {
     // Video stream output (non-owning pointer, set by system/board)
     CompositeVideoStream* video_stream_ = nullptr;
     void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
-    VideoFlags flags_prepack_ = VideoFlags::None;
 
     // Audio port output (non-owning pointer, set by system/board)
     // When set, audio_tick() drives the port instead of the internal uint8_t ring buffer.
@@ -363,5 +362,4 @@ protected:
 
 private:
     void emit_pixel(uint8_t color_index);
-    void update_video_flags();  // update flags_prepack_ on state transitions
 };

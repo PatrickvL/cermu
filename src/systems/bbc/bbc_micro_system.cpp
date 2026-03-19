@@ -377,6 +377,7 @@ void BBCMicroSystem::run_frame() {
     }
     // Signal audio thread once per frame with the accumulated cycle count
     audio_thread_.signal_progress(total_cycles_);
+    if (video_port_) video_port_->swap_frame();
     tick_peripherals();
 }
 
