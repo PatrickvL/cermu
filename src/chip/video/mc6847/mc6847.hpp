@@ -24,6 +24,7 @@
 
 #include "chip/video/video_chip_base.hpp"
 #include "core/indexed_frame_buffer.hpp"
+#include "core/signal/composite_video_stream.hpp"
 #include "core/system_lines.hpp"
 #include <cstdint>
 #include <cstring>
@@ -294,6 +295,7 @@ public:
             // Full-graphics modes: clear to black (placeholder)
             std::memset(fb, 0, W * H);
             display_->flush(mc6847_font::PALETTE);
+            drive_stream_from_indices(fb, W, H);
             return;
         }
 
@@ -343,6 +345,7 @@ public:
         }
 
         display_->flush(mc6847_font::PALETTE);
+        drive_stream_from_indices(display_->indices(), W, H);
     }
 
     /// Get the palette for GPU indexed rendering registration.
@@ -353,6 +356,9 @@ public:
     IndexedFrameBuffer* display_ = nullptr;
     void set_display(IndexedFrameBuffer* d) { display_ = d; }
 
+    CompositeVideoStream* video_stream_ = nullptr;
+    void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
+
     // === ChipBase GUI virtuals ===
 #ifdef CERMU_HAS_GUI
     ChipLayout* create_chip_layout() const override;
@@ -360,6 +366,18 @@ public:
 #endif
 
 private:
+    void drive_stream_from_indices(const uint8_t* idx, int w, int h) {
+        if (!video_stream_) return;
+        for (int y = 0; y < h; y++) {
+            const uint8_t* line = idx + y * w;
+            video_stream_->drive({0, VideoFlags::HSync});
+            for (int i = 0; i < w; i++) {
+                video_stream_->drive({line[i], VideoFlags::BeamOn});
+            }
+        }
+        video_stream_->drive({0, VideoFlags::FrameEnd});
+    }
+
     // Mode pins
     bool    mode_ag_ = false;
     uint8_t mode_gm_ = 0;

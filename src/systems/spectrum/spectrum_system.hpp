@@ -26,6 +26,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/signal/video_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/video/spectrum_ula/ferranti_ula.hpp"
 #include "chip/sound/ay_psg/ay_3_8912.hpp"
@@ -217,6 +218,7 @@ private:
     // Display output — IndexedFrameBuffer owns palette + RGBA fallback.
     // ULA chip's pixel unit writes scanlines; display_ handles GPU routing.
     IndexedFrameBuffer display_;
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
 
     // ========================================================================
     // AUDIO

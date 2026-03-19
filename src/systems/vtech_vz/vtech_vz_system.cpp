@@ -143,6 +143,10 @@ bool VTechVZSystem<V>::initialize() {
     vdg_->set_display(&display_);
     register_display(&display_);
 
+    // Video stream output — composite video from MC6847 VDG
+    video_port_ = std::make_unique<CompositeVideoPort>();
+    vdg_->set_stream(&video_port_->stream());
+
     system_ready_ = true;
     printf("%s: System initialized (RAM: %dKB)\n", Traits::name,
            Traits::ram_size / 1024);

@@ -28,6 +28,7 @@
 
 #include "chip/video/video_chip_base.hpp"
 #include "core/indexed_frame_buffer.hpp"
+#include "core/signal/composite_video_stream.hpp"
 #include "core/system_lines.hpp"
 #include <cstdint>
 #include <cstring>
@@ -346,11 +347,26 @@ public:
 
         // Flush: GPU mode → index_buffer, CPU mode → RGBA framebuffer
         display_->flush(system_palette());
+
+        // Drive video stream with per-line pixel data
+        if (video_stream_) {
+            for (int y = 0; y < spectrum_ula::TOTAL_HEIGHT; y++) {
+                const uint8_t* line = fb + y * W;
+                video_stream_->drive({0, VideoFlags::HSync});
+                for (int x = 0; x < W; x++) {
+                    video_stream_->drive({line[x], VideoFlags::BeamOn});
+                }
+            }
+            video_stream_->drive({0, VideoFlags::FrameEnd});
+        }
     }
 
     // Display output — set by system via set_display().
     IndexedFrameBuffer* display_ = nullptr;
     void set_display(IndexedFrameBuffer* d) { display_ = d; }
+
+    CompositeVideoStream* video_stream_ = nullptr;
+    void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
 
     // === ChipBase GUI virtuals ===
 #ifdef CERMU_HAS_GUI

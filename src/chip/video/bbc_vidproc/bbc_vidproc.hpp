@@ -35,6 +35,7 @@
 
 #include "chip/video/video_chip_base.hpp"
 #include "core/indexed_frame_buffer.hpp"
+#include "core/signal/composite_video_stream.hpp"
 #include "systems/bbc/bbc_micro_constants.hpp"
 #include <cstdint>
 #include <cstring>
@@ -146,6 +147,17 @@ public:
     /// Called at VSYNC — flushes the indexed frame buffer.
     void vsync() {
         if (display_) display_->flush(bbc_constants::PALETTE);
+        if (video_stream_ && display_) {
+            const uint8_t* idx = display_->indices();
+            for (uint32_t y = 0; y < bbc_constants::DISPLAY_HEIGHT; y++) {
+                const uint8_t* line = idx + y * bbc_constants::DISPLAY_WIDTH;
+                video_stream_->drive({0, VideoFlags::HSync});
+                for (uint32_t x = 0; x < bbc_constants::DISPLAY_WIDTH; x++) {
+                    video_stream_->drive({line[x], VideoFlags::BeamOn});
+                }
+            }
+            video_stream_->drive({0, VideoFlags::FrameEnd});
+        }
     }
 
     /// Clear the frame buffer (called at start of frame or on mode change)
@@ -156,6 +168,9 @@ public:
     // Display output — set by system via set_display().
     IndexedFrameBuffer* display_ = nullptr;
     void set_display(IndexedFrameBuffer* d) { display_ = d; }
+
+    CompositeVideoStream* video_stream_ = nullptr;
+    void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
 
 private:
     // === Mode 7 Teletext rendering ===

@@ -19,6 +19,7 @@
 
 #include "chip/video/video_chip_base.hpp"
 #include "core/indexed_frame_buffer.hpp"
+#include "core/signal/composite_video_stream.hpp"
 #include "systems/amstrad_cpc/amstrad_cpc_constants.hpp"
 #include <cstdint>
 #include <cstring>
@@ -147,11 +148,27 @@ public:
         }
 
         display_->flush(amstrad_cpc_constants::HARDWARE_PALETTE);
+
+        // Drive video stream with per-line pixel data
+        if (video_stream_) {
+            const uint8_t* idx = display_->indices();
+            for (int y = 0; y < 200; y++) {
+                const uint8_t* line = idx + (y * 2) * FB_W;
+                video_stream_->drive({0, VideoFlags::HSync});
+                for (int i = 0; i < FB_W; i++) {
+                    video_stream_->drive({line[i], VideoFlags::BeamOn});
+                }
+            }
+            video_stream_->drive({0, VideoFlags::FrameEnd});
+        }
     }
 
     // Display output — set by system via set_display().
     IndexedFrameBuffer* display_ = nullptr;
     void set_display(IndexedFrameBuffer* d) { display_ = d; }
+
+    CompositeVideoStream* video_stream_ = nullptr;
+    void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
 
 private:
 };

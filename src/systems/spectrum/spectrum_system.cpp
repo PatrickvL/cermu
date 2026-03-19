@@ -242,6 +242,10 @@ bool SpectrumSystem<V>::initialize() {
     ula_.set_display(&display_);
     register_display(&display_);
 
+    // Video stream output — composite video from Ferranti ULA
+    video_port_ = std::make_unique<CompositeVideoPort>();
+    ula_.set_stream(&video_port_->stream());
+
     printf("%s: System initialized (%dKB RAM)\n", Traits::name, Traits::ram_size_kb);
     system_ready_ = true;
     return true;
