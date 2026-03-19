@@ -22,6 +22,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/video/mc6845/mc6845.hpp"
 #include "chip/io/i8255.hpp"
@@ -224,6 +225,7 @@ private:
     // ── Audio thread — AY synthesis runs off the emu thread ─────────────
     AudioThread audio_thread_;
     std::unique_ptr<WriteOnlySynthAdapter<AY_3_8912, true>> ay_adapter_;
+    std::unique_ptr<AudioPort> audio_port_;  // Audio signal output
     uint8_t ay_latch_ = 0;              // Cached latched register (emu thread)
 
     // ========================================================================
