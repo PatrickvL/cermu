@@ -231,6 +231,10 @@ bool BBCMicroSystem::initialize() {
     audio_thread_.register_engine(psg_adapter_.get());
     audio_thread_.start();
 
+    // Wire SN76489 to audio signal port
+    audio_port_ = std::make_unique<AudioPort>();
+    psg_->set_audio_port(audio_port_.get());
+
     // ---- System VIA ($FE40-$FE5F) ----
     system_via_.reset();
     system_via_.interrupt_bit = BUS_IRQ_BIT;
@@ -712,7 +716,11 @@ void BBCMicroSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 // ============================================================================
 
 uint32_t BBCMicroSystem::get_audio_samples(float* buffer, uint32_t max_samples) {
-    if (!buffer || max_samples == 0 || !psg_) return 0;
+    if (!buffer || max_samples == 0) return 0;
+    if (audio_port_) {
+        return static_cast<uint32_t>(audio_port_->read_samples(buffer, static_cast<int>(max_samples)));
+    }
+    if (!psg_) return 0;
     return psg_->audio_read(buffer, max_samples);
 }
 

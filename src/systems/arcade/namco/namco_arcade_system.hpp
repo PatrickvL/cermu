@@ -11,6 +11,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/sound/namco_wsg.hpp"
 #include "chip/memory/memory_chip.hpp"
@@ -149,6 +150,7 @@ private:
     // Audio thread — WSG synthesis runs off the emulation thread
     AudioThread audio_thread_;
     std::unique_ptr<WriteOnlySynthAdapter<namco_wsg_t, true>> wsg_adapter_;
+    std::unique_ptr<AudioPort> audio_port_;  // Audio signal output
 
     // ── Graphics ROM — NOT bus-mapped (display rendering only) ───────────
     std::vector<uint8_t> char_rom_;

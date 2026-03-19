@@ -3,6 +3,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/signal/audio_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/io/mos6522.hpp"
 #include "chip/video/mc6845/mc6845.hpp"
@@ -112,6 +113,7 @@ private:
     // Audio thread — SN76489 synthesis runs off the emulation thread
     AudioThread audio_thread_;
     std::unique_ptr<WriteOnlySynthAdapter<sn76489_t>> psg_adapter_;
+    std::unique_ptr<AudioPort> audio_port_;  // Audio signal output
 
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using Bus = MemoryBus<BBCMicroBusSpec>;
