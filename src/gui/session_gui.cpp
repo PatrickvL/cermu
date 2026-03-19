@@ -1,6 +1,9 @@
 #include "gui/session_gui.hpp"
 #include "gui/indexed_shader.hpp"
 #include "gui/stream_shader.hpp"
+#include "gui/rgb_stream_shader.hpp"
+#include "gui/rgbi_stream_shader.hpp"
+#include "gui/vector_shader.hpp"
 #include "gui/port_icons.hpp"
 #include "gui/vfs_file_system.hpp"
 #define IMGUI_DEFINE_MATH_OPERATORS
@@ -103,6 +106,94 @@ static void stream_shader_bind_callback(const ImDrawList*, const ImDrawCmd* cmd)
     indexed_shader::glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, d->palette_tex);
     indexed_shader::glActiveTexture(GL_TEXTURE0);
+}
+
+// ============================================================================
+// GPU RGB Stream Reconstruction — ImGui draw callback
+// ============================================================================
+
+struct RGBStreamShaderCallbackData {
+    GLuint shader;
+    GLint  loc_proj;
+    GLuint stream_tex;
+};
+
+static void rgb_stream_shader_bind_callback(const ImDrawList*, const ImDrawCmd* cmd) {
+    auto* d = static_cast<const RGBStreamShaderCallbackData*>(cmd->UserCallbackData);
+
+    indexed_shader::glUseProgram(d->shader);
+
+    ImDrawData* draw_data = ImGui::GetDrawData();
+    float L = draw_data->DisplayPos.x;
+    float R = draw_data->DisplayPos.x + draw_data->DisplaySize.x;
+    float T = draw_data->DisplayPos.y;
+    float B = draw_data->DisplayPos.y + draw_data->DisplaySize.y;
+    const float ortho[4][4] = {
+        { 2.0f/(R-L),   0.0f,         0.0f,   0.0f },
+        { 0.0f,         2.0f/(T-B),   0.0f,   0.0f },
+        { 0.0f,         0.0f,        -1.0f,   0.0f },
+        { (R+L)/(L-R),  (T+B)/(B-T),  0.0f,   1.0f },
+    };
+    indexed_shader::glUniformMatrix4fv(d->loc_proj, 1, GL_FALSE, &ortho[0][0]);
+
+    // Bind RGB stream texture to slot 0 (no palette texture needed)
+    indexed_shader::glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, d->stream_tex);
+}
+
+// ============================================================================
+// GPU Vector Display — ImGui draw callback
+// ============================================================================
+
+struct VectorShaderCallbackData {
+    GLuint shader;
+    GLint  loc_proj;
+    GLint  loc_phosphor;
+    GLuint vao;
+    GLuint vbo;
+    const void* vertices;   // BeamVertex array
+    int    vertex_count;
+};
+
+static void vector_shader_render_callback(const ImDrawList*, const ImDrawCmd* cmd) {
+    auto* d = static_cast<const VectorShaderCallbackData*>(cmd->UserCallbackData);
+    if (d->vertex_count <= 0) return;
+
+    indexed_shader::glUseProgram(d->shader);
+
+    // Same ortho projection ImGui uses
+    ImDrawData* draw_data = ImGui::GetDrawData();
+    float L = draw_data->DisplayPos.x;
+    float R = draw_data->DisplayPos.x + draw_data->DisplaySize.x;
+    float T = draw_data->DisplayPos.y;
+    float B = draw_data->DisplayPos.y + draw_data->DisplaySize.y;
+    const float ortho[4][4] = {
+        { 2.0f/(R-L),   0.0f,         0.0f,   0.0f },
+        { 0.0f,         2.0f/(T-B),   0.0f,   0.0f },
+        { 0.0f,         0.0f,        -1.0f,   0.0f },
+        { (R+L)/(L-R),  (T+B)/(B-T),  0.0f,   1.0f },
+    };
+    indexed_shader::glUniformMatrix4fv(d->loc_proj, 1, GL_FALSE, &ortho[0][0]);
+
+    // Green phosphor (P1 / P31 — typical for vector arcade monitors)
+    vector_shader::glUniform3f(d->loc_phosphor, 0.2f, 1.0f, 0.2f);
+
+    // Additive blending for beam glow
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+
+    // Upload vertices to VBO and draw
+    vector_shader::glBindVertexArray(d->vao);
+    vector_shader::glBindBuffer(GL_ARRAY_BUFFER, d->vbo);
+    vector_shader::glBufferData(GL_ARRAY_BUFFER,
+        static_cast<GLsizeiptr>(d->vertex_count) * static_cast<GLsizeiptr>(sizeof(vector_shader::BeamVertex)),
+        d->vertices, GL_DYNAMIC_DRAW);
+    glDrawArrays(GL_TRIANGLES, 0, d->vertex_count);
+    vector_shader::glBindVertexArray(0);
+    vector_shader::glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    // Restore default blend mode (ImGui's blend state)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
 // ============================================================================
@@ -1051,6 +1142,41 @@ void SessionGUI::render_screen() {
             indexed_shader::glUseProgram(0);
         }
 
+        // RGB stream texture upload — upload RGBA8 data + update scanline map.
+        // RGB systems send 4-byte samples (r, g, b, flags); no palette needed.
+        if (use_rgb_stream_shader_ && rgb_stream_shader_ && rgb_stream_texture_ && stream_snapshot_len_ > 0) {
+            glBindTexture(GL_TEXTURE_2D, rgb_stream_texture_);
+            int full_rows = static_cast<int>(stream_snapshot_len_) / stream_shader::STREAM_TEX_WIDTH;
+            int remainder = static_cast<int>(stream_snapshot_len_) - full_rows * stream_shader::STREAM_TEX_WIDTH;
+            if (full_rows > 0) {
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                                stream_shader::STREAM_TEX_WIDTH, full_rows,
+                                GL_RGBA, GL_UNSIGNED_BYTE, rgb_stream_snapshot_);
+            }
+            if (remainder > 0) {
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, full_rows,
+                                remainder, 1,
+                                GL_RGBA, GL_UNSIGNED_BYTE,
+                                rgb_stream_snapshot_ + full_rows * stream_shader::STREAM_TEX_WIDTH * 4);
+            }
+
+            // Compute scanline map (uses same sync events as composite path)
+            int scanline_offsets[stream_shader::MAX_SCANLINES];
+            stream_display_height_ = stream_shader::compute_scanline_map(
+                scanline_offsets, stream_shader::MAX_SCANLINES,
+                sync_snapshot_, sync_snapshot_count_,
+                stream_back_porch_, stream_snapshot_len_);
+
+            indexed_shader::glUseProgram(rgb_stream_shader_);
+            indexed_shader::glUniform1iv(rgb_stream_loc_scanline_map_,
+                                         stream_shader::MAX_SCANLINES, scanline_offsets);
+            indexed_shader::glUniform1i(rgb_stream_loc_tex_width_,
+                                        stream_shader::STREAM_TEX_WIDTH);
+            indexed_shader::glUniform1i(rgb_stream_loc_display_h_, stream_display_height_);
+            indexed_shader::glUniform1i(rgb_stream_loc_display_w_, stream_display_width_);
+            indexed_shader::glUseProgram(0);
+        }
+
         // Primary display path — indexed framebuffer (CPU-reconstructed)
         if (use_gpu_indexed_ && index_textures_[0]) {
             // GPU indexed path — upload 1 byte/pixel R8 index texture
@@ -1071,11 +1197,20 @@ void SessionGUI::render_screen() {
     }
 
     // Always render the most recently uploaded texture (read index = opposite of write)
-    // Prefer stream shader when stream data is available; fall back to indexed path.
+    // Dispatch by signal type: Vector → RGB stream → Composite stream → indexed → CPU fallback.
     GLuint display_tex = 0;
     bool use_indexed_shader = false;
     bool use_stream = false;
-    if (use_stream_shader_ && stream_shader_ && stream_display_height_ > 0) {
+    bool use_rgb_stream = false;
+    bool use_vector = false;
+
+    if (use_vector_shader_ && vector_shader_) {
+        // Vector display — no texture, rendered via beam quads
+        use_vector = true;
+    } else if (use_rgb_stream_shader_ && rgb_stream_shader_ && stream_display_height_ > 0) {
+        display_tex = rgb_stream_texture_;
+        use_rgb_stream = true;
+    } else if (use_stream_shader_ && stream_shader_ && stream_display_height_ > 0) {
         // Stream shader — display from packed stream texture
         display_tex = stream_texture_;
         use_stream = true;
@@ -1086,24 +1221,79 @@ void SessionGUI::render_screen() {
         display_tex = screen_textures_[texture_write_idx_ ^ 1];
     }
 
-    if (display_tex) {
-        // Get hardware traits to determine PAL/NTSC (default to PAL for most systems)
-        const auto& traits = system_->get_hardware_traits();
-        bool is_pal = true;  // Default to PAL, systems can override via traits
-        bool use_pixel_aspect = true;  // Use pixel aspect correction by default
-        
-        // Calculate display dimensions with full aspect ratio support
-        float display_w, display_h, pos_x, pos_y;
+    // Calculate display dimensions (needed by all paths)
+    bool is_pal = true;
+    bool use_pixel_aspect = true;
+    float display_w = 0, display_h = 0, pos_x = 0, pos_y = 0;
+    if (display_tex || use_vector) {
         calculate_display_dimensions(
             viewport->Size.x, viewport->Size.y,
             (float)fb_width_, (float)fb_height_,
             is_pal, use_pixel_aspect,
             &display_w, &display_h, &pos_x, &pos_y);
+    }
 
-        // GPU shader: inject custom shader via ImGui draw callback
-        ImDrawList* draw_list = (use_indexed_shader || use_stream)
+    if (use_vector) {
+        // ================================================================
+        // Vector display — build beam quads and render via draw callback
+        // ================================================================
+        // Build quads in viewport pixel coordinates so the ortho projection
+        // maps 1:1 to screen pixels.
+        std::vector<vector_shader::BeamVertex> beam_verts;
+        if (vector_stream_len_ > 0) {
+            float x_scale = display_w / static_cast<float>(fb_width_);
+            float y_scale = display_h / static_cast<float>(fb_height_);
+            vector_shader::build_beam_quads(
+                vector_stream_snapshot_, vector_stream_len_,
+                2.0f,  // beam width in pixels
+                display_w, display_h,
+                x_scale, y_scale,
+                viewport->Pos.x + pos_x,
+                viewport->Pos.y + pos_y,
+                beam_verts);
+        }
+
+        // Store vertices in member buffer so the pointer stays valid
+        // until ImGui renders the draw list in end_frame().
+        vector_beam_count_ = static_cast<int>(beam_verts.size());
+        if (vector_beam_count_ > 0) {
+            size_t bytes = beam_verts.size() * sizeof(vector_shader::BeamVertex);
+            vector_beam_buf_.resize(bytes);
+            memcpy(vector_beam_buf_.data(), beam_verts.data(), bytes);
+        }
+
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        VectorShaderCallbackData cb = {
+            vector_shader_, vector_loc_proj_, vector_loc_phosphor_,
+            vector_vao_, vector_vbo_,
+            vector_beam_buf_.data(), vector_beam_count_
+        };
+        draw_list->AddCallback(vector_shader_render_callback, &cb, sizeof(cb));
+        draw_list->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+
+        // Reserve display area so ImGui::GetItemRect* works for peripheral mapping
+        ImGui::SetCursorPos(ImVec2(pos_x, pos_y));
+        ImGui::Dummy(ImVec2(display_w, display_h));
+
+        if (system_) {
+            auto item_min = ImGui::GetItemRectMin();
+            auto item_max = ImGui::GetItemRectMax();
+            system_->set_display_screen_rect(
+                item_min.x, item_min.y,
+                item_max.x - item_min.x, item_max.y - item_min.y);
+        }
+    } else if (display_tex) {
+        // ================================================================
+        // Texture-based display (stream / indexed / CPU)
+        // ================================================================
+        ImDrawList* draw_list = (use_indexed_shader || use_stream || use_rgb_stream)
                                 ? ImGui::GetWindowDrawList() : nullptr;
-        if (use_stream) {
+        if (use_rgb_stream) {
+            RGBStreamShaderCallbackData cb = {
+                rgb_stream_shader_, rgb_stream_loc_proj_, rgb_stream_texture_
+            };
+            draw_list->AddCallback(rgb_stream_shader_bind_callback, &cb, sizeof(cb));
+        } else if (use_stream) {
             StreamShaderCallbackData cb = {
                 stream_shader_, stream_loc_proj_, palette_texture_, stream_texture_
             };
@@ -1119,7 +1309,7 @@ void SessionGUI::render_screen() {
                     ImVec2(display_w, display_h));
 
         // Restore ImGui's default shader after our custom draw
-        if (use_indexed_shader || use_stream) {
+        if (use_indexed_shader || use_stream || use_rgb_stream) {
             draw_list->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
         }
 
@@ -1300,6 +1490,9 @@ void SessionGUI::allocate_framebuffer() {
     // Resize the temporary audio buffer for the emu thread
     // Enough for ~2 frames at 44100 Hz / 50 fps = 1764 samples, rounded up
     emu_audio_tmp_.resize(2048);
+
+    // Cache the system's signal type for emu thread dispatch
+    active_signal_type_ = system_->get_video_signal_type();
     
     // Create double-buffered OpenGL textures.
     // Two textures let us upload to one while the GPU may still be
@@ -1332,31 +1525,96 @@ void SessionGUI::allocate_framebuffer() {
             printf("GPU indexed palette rendering enabled (%d colors)\n", gpu_palette_size_);
         }
 
-        // GPU stream reconstruction — allocate resources for direct stream→GPU
-        // rendering.  The stream shader bypasses the CPU reconstruct_to_framebuffer()
-        // bridge.  It activates when the emu thread produces stream data; until
-        // then, the indexed shader path displays the CPU-reconstructed framebuffer.
-        if (system_->supports_gpu_indexed_rendering()) {
-            // Allocate snapshot buffers for emu→GUI thread transfer
-            stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES]();
-            sync_snapshot_   = new SyncEvent[MAX_SYNC_EVENTS]();
+        // ================================================================
+        // Signal-type-specific GPU pipeline setup
+        // ================================================================
 
-            // Create stream texture and compile shader
-            stream_texture_ = stream_shader::create_stream_texture(MAX_STREAM_SAMPLES);
-            stream_shader::StreamShaderLocations locs{};
-            stream_shader_ = stream_shader::create_program(&locs);
-            if (stream_shader_) {
-                stream_loc_proj_         = locs.proj_mtx;
-                stream_loc_scanline_map_ = locs.scanline_map;
-                stream_loc_tex_width_    = locs.stream_tex_width;
-                stream_loc_display_h_    = locs.display_height;
-                stream_loc_display_w_    = locs.display_width;
-                // Palette texture is shared with indexed path (already created above)
-                if (!palette_texture_)
-                    palette_texture_ = create_palette_texture();
-                use_stream_shader_ = true;
-                printf("GPU stream reconstruction enabled\n");
+        switch (active_signal_type_) {
+            case SignalType::Composite:
+            case SignalType::RGBI: {
+                // Composite / RGBI — R8 stream texture + palette lookup shader.
+                // RGBI uses the same shader as Composite (4-bit indices into
+                // a 16-entry palette, extracted in the emu thread snapshot).
+                if (system_->supports_gpu_indexed_rendering()) {
+                    stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES]();
+                    sync_snapshot_   = new SyncEvent[MAX_SYNC_EVENTS]();
+
+                    stream_texture_ = stream_shader::create_stream_texture(MAX_STREAM_SAMPLES);
+                    stream_shader::StreamShaderLocations locs{};
+                    stream_shader_ = stream_shader::create_program(&locs);
+                    if (stream_shader_) {
+                        stream_loc_proj_         = locs.proj_mtx;
+                        stream_loc_scanline_map_ = locs.scanline_map;
+                        stream_loc_tex_width_    = locs.stream_tex_width;
+                        stream_loc_display_h_    = locs.display_height;
+                        stream_loc_display_w_    = locs.display_width;
+                        if (!palette_texture_)
+                            palette_texture_ = create_palette_texture();
+                        use_stream_shader_ = true;
+                        printf("GPU stream reconstruction enabled (signal: %s)\n",
+                               active_signal_type_ == SignalType::RGBI ? "RGBI" : "Composite");
+                    }
+                }
+                break;
             }
+
+            case SignalType::RGB: {
+                // RGB — RGBA8 stream texture, no palette lookup.
+                // Uses a dedicated shader that reads raw {r,g,b} values.
+                stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES]();  // reused for sync snapshot alloc
+                sync_snapshot_ = new SyncEvent[MAX_SYNC_EVENTS]();
+                rgb_stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES * 4]();
+
+                rgb_stream_texture_ = rgb_stream_shader::create_stream_texture(MAX_STREAM_SAMPLES);
+                rgb_stream_shader::RGBShaderLocations rlocs{};
+                rgb_stream_shader_ = rgb_stream_shader::create_program(&rlocs);
+                if (rgb_stream_shader_) {
+                    rgb_stream_loc_proj_         = rlocs.proj_mtx;
+                    rgb_stream_loc_scanline_map_ = rlocs.scanline_map;
+                    rgb_stream_loc_tex_width_    = rlocs.stream_tex_width;
+                    rgb_stream_loc_display_h_    = rlocs.display_height;
+                    rgb_stream_loc_display_w_    = rlocs.display_width;
+                    use_rgb_stream_shader_ = true;
+                    printf("GPU RGB stream reconstruction enabled\n");
+                }
+                break;
+            }
+
+            case SignalType::Vector: {
+                // Vector — CPU-side line extraction + beam quad vertex shader.
+                // No textures involved; vertices carry all data.
+                vector_shader::load_gl();
+                vector_shader::VectorShaderLocations vlocs{};
+                vector_shader_ = vector_shader::create_program(&vlocs);
+                if (vector_shader_) {
+                    vector_loc_proj_     = vlocs.proj_mtx;
+                    vector_loc_phosphor_ = vlocs.phosphor_color;
+
+                    vector_shader::glGenVertexArrays(1, &vector_vao_);
+                    vector_shader::glGenBuffers(1, &vector_vbo_);
+                    vector_shader::glBindVertexArray(vector_vao_);
+                    vector_shader::glBindBuffer(GL_ARRAY_BUFFER, vector_vbo_);
+                    vector_shader::glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE,
+                        sizeof(vector_shader::BeamVertex), reinterpret_cast<void*>(0));
+                    vector_shader::glEnableVertexAttribArray(0);
+                    vector_shader::glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE,
+                        sizeof(vector_shader::BeamVertex), reinterpret_cast<void*>(8));
+                    vector_shader::glEnableVertexAttribArray(1);
+                    vector_shader::glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE,
+                        sizeof(vector_shader::BeamVertex), reinterpret_cast<void*>(12));
+                    vector_shader::glEnableVertexAttribArray(2);
+                    vector_shader::glBindVertexArray(0);
+                    vector_shader::glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+                    vector_stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES * 8]();
+                    use_vector_shader_ = true;
+                    printf("GPU vector display rendering enabled\n");
+                }
+                break;
+            }
+
+            default:
+                break;
         }
     } else {
         printf("Allocated %dx%d framebuffer (texture creation deferred until init)\n", fb_width_, fb_height_);
@@ -1944,28 +2202,54 @@ void SessionGUI::emu_thread_func() {
                 fb_new_frame_.store(true, std::memory_order_release);
             }
 
-            // Stream snapshot — extract color indices from the raw
-            // CompositeVideoSample stream for GPU texture upload.
-            if (use_stream_shader_ && stream_snapshot_ && system_) {
+            // Stream snapshot — extract samples from the raw video stream
+            // for GPU texture upload.  The extraction method depends on the
+            // signal type because sample sizes and layouts differ.
+            if (system_) {
                 const auto& fd = system_->get_last_frame_data();
                 if (fd.stream && fd.stream_len > 0) {
                     const uint8_t* src = static_cast<const uint8_t*>(fd.stream);
                     uint32_t n = fd.stream_len;
                     if (n > MAX_STREAM_SAMPLES) n = MAX_STREAM_SAMPLES;
-                    // Extract color_index bytes (stride 2: [color_index, flags])
-                    for (uint32_t i = 0; i < n; i++)
-                        stream_snapshot_[i] = src[i * 2];
-                    stream_snapshot_len_ = n;
-                    // Copy sync events
-                    uint32_t sc = fd.sync_count;
-                    if (sc > MAX_SYNC_EVENTS) sc = MAX_SYNC_EVENTS;
-                    memcpy(sync_snapshot_, fd.sync_events,
-                           sc * sizeof(SyncEvent));
-                    sync_snapshot_count_ = sc;
-                    stream_back_porch_ = fd.back_porch;
-                    stream_display_width_ = fd.display_width > 0
-                                         ? fd.display_width : fb_width_;
-                    fb_new_frame_.store(true, std::memory_order_release);
+
+                    if (use_vector_shader_ && vector_stream_snapshot_) {
+                        // Vector: copy raw 8-byte VectorVideoSamples
+                        memcpy(vector_stream_snapshot_, src, n * 8);
+                        vector_stream_len_ = n;
+                        fb_new_frame_.store(true, std::memory_order_release);
+                    } else if (use_rgb_stream_shader_ && rgb_stream_snapshot_) {
+                        // RGB: extract {r,g,b,0} from 4-byte RGBVideoSamples
+                        rgb_stream_shader::extract_rgb_samples(src, n, rgb_stream_snapshot_);
+                        stream_snapshot_len_ = n;
+                        // Copy sync events + geometry
+                        uint32_t sc = fd.sync_count;
+                        if (sc > MAX_SYNC_EVENTS) sc = MAX_SYNC_EVENTS;
+                        memcpy(sync_snapshot_, fd.sync_events, sc * sizeof(SyncEvent));
+                        sync_snapshot_count_ = sc;
+                        stream_back_porch_ = fd.back_porch;
+                        stream_display_width_ = fd.display_width > 0
+                                             ? fd.display_width : fb_width_;
+                        fb_new_frame_.store(true, std::memory_order_release);
+                    } else if (use_stream_shader_ && stream_snapshot_) {
+                        // Composite / RGBI: extract 1-byte index from 2-byte samples
+                        if (active_signal_type_ == SignalType::RGBI) {
+                            rgbi_stream_shader::extract_rgbi_samples(src, n, stream_snapshot_);
+                        } else {
+                            // Composite: color_index is first byte, stride 2
+                            for (uint32_t i = 0; i < n; i++)
+                                stream_snapshot_[i] = src[i * 2];
+                        }
+                        stream_snapshot_len_ = n;
+                        // Copy sync events
+                        uint32_t sc = fd.sync_count;
+                        if (sc > MAX_SYNC_EVENTS) sc = MAX_SYNC_EVENTS;
+                        memcpy(sync_snapshot_, fd.sync_events, sc * sizeof(SyncEvent));
+                        sync_snapshot_count_ = sc;
+                        stream_back_porch_ = fd.back_porch;
+                        stream_display_width_ = fd.display_width > 0
+                                             ? fd.display_width : fb_width_;
+                        fb_new_frame_.store(true, std::memory_order_release);
+                    }
                 }
             }
         }

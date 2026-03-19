@@ -183,6 +183,53 @@ protected:
     int       stream_display_height_ = 0;        ///< Visible scanlines (from scanline map)
 
     // ========================================================================
+    // GPU RGB stream reconstruction
+    // ========================================================================
+    /// For RGB signal types: separate shader + RGBA8 stream texture.
+    /// RGB samples are {r, g, b, flags} — 4 bytes each; the shader reads
+    /// raw RGB values without a palette lookup.
+
+    bool      use_rgb_stream_shader_   = false;
+    GLuint    rgb_stream_texture_      = 0;       ///< RGBA8 packed 1D→2D stream texture
+    GLuint    rgb_stream_shader_       = 0;       ///< RGB stream reconstruction shader
+    GLint     rgb_stream_loc_proj_     = -1;
+    GLint     rgb_stream_loc_scanline_map_ = -1;
+    GLint     rgb_stream_loc_tex_width_    = -1;
+    GLint     rgb_stream_loc_display_h_    = -1;
+    GLint     rgb_stream_loc_display_w_    = -1;
+    uint8_t*  rgb_stream_snapshot_     = nullptr;  ///< RGBA bytes extracted from stream
+
+    // ========================================================================
+    // GPU vector display rendering
+    // ========================================================================
+    /// For systems with SignalType::Vector (DVG, Vectrex, etc.), the raw
+    /// VectorVideoSample stream is extracted into line segments on the CPU
+    /// and rendered as beam quads via a dedicated vertex+fragment shader.
+    /// No texture is involved — vertices carry all data.
+
+    bool      use_vector_shader_        = false;
+    GLuint    vector_shader_            = 0;
+    GLuint    vector_vao_               = 0;
+    GLuint    vector_vbo_               = 0;
+    GLint     vector_loc_proj_          = -1;
+    GLint     vector_loc_phosphor_      = -1;
+
+    /// Video signal type of the active system (cached from System::get_video_signal_type()).
+    SignalType active_signal_type_       = SignalType::Composite;
+
+    /// Vector stream snapshot — raw VectorVideoSample bytes copied from
+    /// last_frame_data_ by emu thread.  8 bytes per sample.
+    uint8_t*  vector_stream_snapshot_   = nullptr;
+    uint32_t  vector_stream_len_        = 0;  ///< Number of samples in snapshot
+
+    /// CPU-expanded beam quad vertices for the current frame.
+    /// Built during render_screen() from vector_stream_snapshot_,
+    /// consumed by the vector draw callback.  Stored as raw bytes
+    /// (BeamVertex = 16 bytes each).
+    std::vector<uint8_t> vector_beam_buf_;
+    int                  vector_beam_count_  = 0;
+
+    // ========================================================================
     // Statistics / Frame pacing
     // ========================================================================
     std::atomic<uint64_t> total_frames_;
