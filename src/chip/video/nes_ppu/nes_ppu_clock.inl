@@ -230,6 +230,11 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                 scanline = -1;
                 frame_complete = true;
                 frame_count++;
+
+                // FrameEnd marker in the video stream
+                if (video_stream_) {
+                    video_stream_->drive({0, VideoFlags::FrameEnd});
+                }
             }
         }
         status_read_last_dot_ = false;

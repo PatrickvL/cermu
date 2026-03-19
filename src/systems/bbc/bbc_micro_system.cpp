@@ -371,13 +371,18 @@ void BBCMicroSystem::tick() {
 }
 
 void BBCMicroSystem::run_frame() {
-    uint32_t adjusted_cycles = static_cast<uint32_t>(cycles_per_frame_ * speed_multiplier_);
-    for (uint32_t i = 0; i < adjusted_cycles; i++) {
-        tick();
+    if (!video_port_) return;
+
+    // Stream-driven: VIDPROC drives FrameEnd via CRTC timing
+    auto& stream = video_port_->stream();
+    const int frames = (speed_multiplier_ > 1.0) ? static_cast<int>(speed_multiplier_) : 1;
+    for (int f = 0; f < frames; f++) {
+        while (!stream.frame_ended()) {
+            tick();
+        }
+        video_port_->swap_frame();
     }
-    // Signal audio thread once per frame with the accumulated cycle count
     audio_thread_.signal_progress(total_cycles_);
-    if (video_port_) video_port_->swap_frame();
     tick_peripherals();
 }
 

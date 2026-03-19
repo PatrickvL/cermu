@@ -148,10 +148,17 @@ void AcornAtomSystem::tick() {
 }
 
 void AcornAtomSystem::run_frame() {
-    const uint32_t cycles = static_cast<uint32_t>(
-        acorn_atom_constants::CYCLES_PER_FRAME_PAL * speed_multiplier_);
-    for (uint32_t i = 0; i < cycles; ++i) tick();
-    if (video_port_) video_port_->swap_frame();
+    if (!video_port_) return;
+
+    // Stream-driven: MC6847 VDG drives FrameEnd on Field Sync
+    auto& stream = video_port_->stream();
+    const int frames = (speed_multiplier_ > 1.0) ? static_cast<int>(speed_multiplier_) : 1;
+    for (int f = 0; f < frames; f++) {
+        while (!stream.frame_ended()) {
+            tick();
+        }
+        video_port_->swap_frame();
+    }
 }
 
 bool AcornAtomSystem::load_file(const char*) { return false; }
