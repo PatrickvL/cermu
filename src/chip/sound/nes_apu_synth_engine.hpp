@@ -20,6 +20,8 @@
 
 #include <cstdint>
 
+struct AudioPort;  // Forward declaration for analog signal output
+
 class NesApuSynthEngine : public AudioSynthEngine {
 public:
     /// @param is_pal     true for PAL (2A07), false for NTSC (2A03)
@@ -88,6 +90,9 @@ public:
         sample_period_ = is_pal ? 33 : 37;
     }
 
+    /// Set optional AudioPort for analog signal output.
+    void set_audio_port(AudioPort* port) { audio_port_ = port; }
+
 private:
     /// Advance the APU from current_cycle_ to target, ticking once per
     /// CPU cycle and generating decimated audio samples.
@@ -99,7 +104,11 @@ private:
             if (++sample_counter_ >= sample_period_) {
                 sample_counter_ = 0;
                 float s = apu_.sample();
-                ring_buf_.write(&s, 1);
+                if (audio_port_) {
+                    audio_port_->drive_sample(s);
+                } else {
+                    ring_buf_.write(&s, 1);
+                }
             }
         }
     }
@@ -110,4 +119,5 @@ private:
     uint64_t          current_cycle_ = 0;
     uint32_t          sample_counter_ = 0;
     uint32_t          sample_period_;       // NTSC=37, PAL=33
+    AudioPort*        audio_port_ = nullptr;  // Optional analog signal output
 };

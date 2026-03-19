@@ -24,6 +24,7 @@
 #include "utils/ring_buffer.hpp"
 #include "core/indexed_frame_buffer.hpp"
 #include "core/signal/video_port.hpp"
+#include "core/signal/audio_port.hpp"
 #include "core/audio_thread.hpp"
 #include "chip/sound/nes_apu_synth_engine.hpp"
 
@@ -126,6 +127,7 @@ private:
     nes_bus::nes_bus_t bus_;                     // Page-pointer bus (replaces MemoryBus)
     IndexedFrameBuffer nes_display_;             // Unified display output (256×240)
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
+    std::unique_ptr<AudioPort> audio_port_;            // Audio signal output
     
     // System state
     bool is_pal_;
