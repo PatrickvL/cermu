@@ -361,6 +361,12 @@ bool NintendoSystem<V>::initialize() {
     video_port_ = std::make_unique<CompositeVideoPort>();
     ppu_->set_stream(&video_port_->stream());
 
+    // Wire APU to audio signal port
+    audio_port_ = std::make_unique<AudioPort>();
+    if (apu_synth_engine_) {
+        apu_synth_engine_->set_audio_port(audio_port_.get());
+    }
+
     register_display(&nes_display_);
 
     initialized_ = true;
@@ -914,6 +920,10 @@ void NintendoSystem<V>::set_speed_multiplier(float multiplier) {
 template<NintendoVariant V>
 uint32_t NintendoSystem<V>::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
+    // AudioPort: unified output path
+    if (audio_port_) {
+        return static_cast<uint32_t>(audio_port_->read_samples(buffer, static_cast<int>(max_samples)));
+    }
     // Multi-threaded: read from synth engine's ring buffer
     if (apu_synth_engine_) {
         return apu_synth_engine_->audio_read(buffer, max_samples);
@@ -1049,7 +1059,11 @@ void NintendoSystem<V>::tick() {
                 if (--audio_sample_counter_ == 0) {
                     audio_sample_counter_ = audio_sample_period_;
                     float sample = cpu_->generate_audio_sample();
-                    audio_ring_buf_.write(&sample, 1);
+                    if (audio_port_) {
+                        audio_port_->drive_sample(sample);
+                    } else {
+                        audio_ring_buf_.write(&sample, 1);
+                    }
                 }
             }
         }
@@ -1263,7 +1277,11 @@ void NintendoSystem<V>::tick() {
         if (--audio_sample_counter_ == 0) {
             audio_sample_counter_ = audio_sample_period_;
             float sample = cpu_->generate_audio_sample();
-            audio_ring_buf_.write(&sample, 1);
+            if (audio_port_) {
+                audio_port_->drive_sample(sample);
+            } else {
+                audio_ring_buf_.write(&sample, 1);
+            }
         }
     }
 
