@@ -95,6 +95,10 @@ bool NamcoArcadeSystem<G>::initialize() {
     audio_thread_.register_engine(wsg_adapter_.get());
     audio_thread_.start();
 
+    // Wire WSG to audio signal port
+    audio_port_ = std::make_unique<AudioPort>();
+    wsg_.set_audio_port(audio_port_.get());
+
     // Graphics ROMs — not bus-mapped
     char_rom_.resize(Traits::char_rom_size, 0xFF);
     sprite_rom_.resize(namco_arcade_constants::SPRITE_ROM_SIZE, 0xFF);
@@ -193,6 +197,9 @@ template<NamcoGame G> void NamcoArcadeSystem<G>::get_display_dimensions(int* w, 
 }
 template<NamcoGame G> uint32_t NamcoArcadeSystem<G>::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
+    if (audio_port_) {
+        return static_cast<uint32_t>(audio_port_->read_samples(buffer, static_cast<int>(max_samples)));
+    }
     return wsg_.audio_read(buffer, max_samples);
 }
 template<NamcoGame G> void NamcoArcadeSystem<G>::set_audio_sample_rate(int hz) {

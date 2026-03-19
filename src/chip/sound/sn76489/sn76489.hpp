@@ -43,6 +43,7 @@
  */
 
 #include "chip/sound/sound_chip_base.hpp"
+#include "core/signal/audio_port.hpp"
 #include "utils/ring_buffer.hpp"
 #include "core/cermu.hpp"
 #include <cstdint>
@@ -223,6 +224,8 @@ public:
         internal_clock_hz_ = internal_hz;
     }
 
+    void set_audio_port(AudioPort* port) { audio_port_ = port; }
+
     /// Read audio samples into buffer. Returns number of samples written.
     uint32_t audio_read(float* buffer, uint32_t max_samples) {
         return audio_buffer_.read(buffer, max_samples);
@@ -270,6 +273,7 @@ private:
 
     // Audio output
     AudioRingBuffer audio_buffer_;
+    AudioPort* audio_port_ = nullptr;  // Optional analog signal output
     uint32_t internal_clock_hz_ = 0;
     double   audio_cycles_per_sample_ = 0.0;
     double   audio_cycle_accum_ = 0.0;
@@ -298,7 +302,11 @@ private:
         // Scale: 4 channels each contributing 0..1.0 → normalize to -1..+1
         sample = (sample / 4.0f) * 2.0f - 1.0f;
 
-        audio_buffer_.write(&sample, 1);
+        if (audio_port_) {
+            audio_port_->drive_sample(sample);
+        } else {
+            audio_buffer_.write(&sample, 1);
+        }
     }
 
 #ifdef CERMU_HAS_CHIP_DEBUG

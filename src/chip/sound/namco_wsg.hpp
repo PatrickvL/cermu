@@ -26,6 +26,7 @@
  */
 
 #include "chip/sound/sound_chip_base.hpp"
+#include "core/signal/audio_port.hpp"
 #include "utils/ring_buffer.hpp"
 #include <cstdint>
 #include <cstdio>
@@ -209,6 +210,8 @@ public:
         update_cycles_per_sample();
     }
 
+    void set_audio_port(AudioPort* port) { audio_port_ = port; }
+
     /// Read audio samples into buffer.  Returns number of samples written.
     uint32_t audio_read(float* buffer, uint32_t max_samples) {
         return audio_buffer_.read(buffer, max_samples);
@@ -255,6 +258,7 @@ private:
 
     // Audio output — decimated from WSG clock to audio sample rate
     AudioRingBuffer audio_buffer_;
+    AudioPort* audio_port_ = nullptr;  // Optional analog signal output
     uint32_t internal_clock_hz_ = 0;
     int      audio_sample_rate_ = 0;
     double   audio_cycles_per_sample_ = 0.0;
@@ -274,7 +278,11 @@ private:
         audio_cycle_accum_ -= audio_cycles_per_sample_;
 
         float sample = get_sample();
-        audio_buffer_.write(&sample, 1);
+        if (audio_port_) {
+            audio_port_->drive_sample(sample);
+        } else {
+            audio_buffer_.write(&sample, 1);
+        }
     }
 
 #ifdef CERMU_HAS_CHIP_DEBUG
