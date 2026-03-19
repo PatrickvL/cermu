@@ -307,6 +307,8 @@ set(CORE_SOURCES
     src/core/session.cpp
     src/core/board_base.cpp
     src/core/audio_thread.cpp
+    # Signal — analog video/audio stream infrastructure
+    src/core/signal/video_port_bridge.cpp
     # Ports — cross-system port registrations
     src/ports/nes_ports.cpp
     # Devices — input peripherals
