@@ -1,5 +1,6 @@
 #include "chip/video/vic/vic_common.hpp"
 #include "core/indexed_frame_buffer.hpp"
+#include "core/signal/audio_port.hpp"
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
@@ -310,7 +311,7 @@ void vic_base_t::audio_reset(uint32_t chip_clock_hz, uint32_t sample_rate_hz) {
     audio.cycles_per_sample_fp =
         (uint32_t)(((uint64_t)chip_clock_hz << 16) / sample_rate_hz);
 
-    // --- Compute first-order IIR filter coefficients ---
+    // --- Compute first-order IIR filter coefficients (host-rate, legacy path) ---
     // Models the VIC-20 output stage (see schematic in VICE vic20sound.c):
     //   Lowpass:  R=1kΩ, C=100nF → RC = 1e-4 s → f_c ≈ 1592 Hz
     //   Highpass: R=1kΩ, C=1µF   → RC = 1e-3 s → f_c ≈  159 Hz
@@ -325,6 +326,14 @@ void vic_base_t::audio_reset(uint32_t chip_clock_hz, uint32_t sample_rate_hz) {
     // We want that to map to about ±70 in the uint8 output (128 ± 70 = 58–198),
     // leaving headroom for multi-voice peaks (which compress naturally via the table).
     audio.output_gain = 70.0f / (float)(vic_mix_table[1][15] / 2);
+
+    // --- Compute chip-rate IIR coefficients (for AudioPort path) ---
+    // Same RC model but sampled at chip clock rate for per-cycle filtering
+    float dt_chip = 1.0f / (float)chip_clock_hz;
+    audio.lp_alpha_chip = dt_chip / (dt_chip + 1.0e-4f);
+    audio.hp_alpha_chip = dt_chip / (dt_chip + 1.0e-3f);
+    audio.lp_buf_chip = 0.0f;
+    audio.hp_buf_chip = 0.0f;
 
     // Zero all runtime state
     for (int i = 0; i < VIC_NUM_VOICES; i++) {
@@ -426,43 +435,63 @@ void vic_base_t::audio_tick() {
     // Count active voices (0-4), look up the combined non-linear amplitude
     // that models the VIC's DAC compression + volume ladder in one step.
     uint8_t voices_active = audio.output[0] + audio.output[1] + audio.output[2] + audio.output[3];
-    audio.sample_accum += vic_mix_table[voices_active][cached_volume];
-    audio.sample_tick_count++;
+    uint32_t dac_value = vic_mix_table[voices_active][cached_volume];
 
-    // --- Downsample: emit one output sample when enough cycles have elapsed ---
-    audio.sample_frac += (1u << 16); // one cycle in 16.16 fixed point
-    if (audio.sample_frac >= audio.cycles_per_sample_fp) {
-        audio.sample_frac -= audio.cycles_per_sample_fp;
+    if (audio_port_) {
+        // ---- AudioPort path: per-cycle IIR → drive AudioPort ----
+        // Apply analog output stage filter at chip clock rate (more accurate
+        // than the legacy per-host-sample path).
+        float raw = static_cast<float>(dac_value);
 
-        // Average the accumulated DAC values over this sample window
-        float raw = 0.0f;
-        if (audio.sample_tick_count > 0) {
-            raw = (float)audio.sample_accum / (float)audio.sample_tick_count;
+        // Lowpass: models 1kΩ + 100nF (fc ≈ 1592 Hz)
+        audio.lp_buf_chip += audio.lp_alpha_chip * (raw - audio.lp_buf_chip);
+
+        // Highpass: models 1µF coupling cap (fc ≈ 159 Hz), removes DC
+        float ac = audio.lp_buf_chip - audio.hp_buf_chip;
+        audio.hp_buf_chip += audio.hp_alpha_chip * (audio.lp_buf_chip - audio.hp_buf_chip);
+
+        // Normalize to roughly [-1, +1] using the same gain factor as the
+        // legacy path (output_gain maps to ±70 in uint8 space; /128 → float).
+        audio_port_->drive(ac * audio.output_gain * (1.0f / 128.0f));
+    } else {
+        // ---- Legacy path: accumulate → downsample → IIR → uint8 ring ----
+        audio.sample_accum += dac_value;
+        audio.sample_tick_count++;
+
+        audio.sample_frac += (1u << 16); // one cycle in 16.16 fixed point
+        if (audio.sample_frac >= audio.cycles_per_sample_fp) {
+            audio.sample_frac -= audio.cycles_per_sample_fp;
+
+            // Average the accumulated DAC values over this sample window
+            float raw = 0.0f;
+            if (audio.sample_tick_count > 0) {
+                raw = (float)audio.sample_accum / (float)audio.sample_tick_count;
+            }
+
+            // Lowpass filter: smooths the square-wave steps (models 1kΩ + 100nF)
+            audio.lowpass_buf += audio.lowpass_alpha * (raw - audio.lowpass_buf);
+
+            // Highpass filter: removes DC offset (models 1µF coupling capacitor)
+            // The AC component is the difference between lowpass output and the
+            // slowly-tracking highpass buffer.
+            float ac = audio.lowpass_buf - audio.highpass_buf;
+            audio.highpass_buf += audio.highpass_alpha * (audio.lowpass_buf - audio.highpass_buf);
+
+            // Scale to unsigned 8-bit centered at VIC_AUDIO_SILENCE
+            int32_t out = VIC_AUDIO_SILENCE + (int32_t)(ac * audio.output_gain);
+            if (out < 0) out = 0;
+            if (out > 255) out = 255;
+
+            // Write to ring buffer (drop sample if full)
+            uint32_t next_write = (audio.write_pos + 1) & VIC_AUDIO_BUFFER_MASK;
+            if (next_write != audio.read_pos) {
+                audio.buffer[audio.write_pos] = (uint8_t)out;
+                audio.write_pos = next_write;
+            }
+
+            audio.sample_accum = 0;
+            audio.sample_tick_count = 0;
         }
-
-        // Lowpass filter: smooths the square-wave steps (models 1kΩ + 100nF)
-        audio.lowpass_buf += audio.lowpass_alpha * (raw - audio.lowpass_buf);
-
-        // Highpass filter: removes DC offset (models 1µF coupling capacitor)
-        // The AC component is the difference between lowpass output and the
-        // slowly-tracking highpass buffer.
-        float ac = audio.lowpass_buf - audio.highpass_buf;
-        audio.highpass_buf += audio.highpass_alpha * (audio.lowpass_buf - audio.highpass_buf);
-
-        // Scale to unsigned 8-bit centered at VIC_AUDIO_SILENCE
-        int32_t out = VIC_AUDIO_SILENCE + (int32_t)(ac * audio.output_gain);
-        if (out < 0) out = 0;
-        if (out > 255) out = 255;
-
-        // Write to ring buffer (drop sample if full)
-        uint32_t next_write = (audio.write_pos + 1) & VIC_AUDIO_BUFFER_MASK;
-        if (next_write != audio.read_pos) {
-            audio.buffer[audio.write_pos] = (uint8_t)out;
-            audio.write_pos = next_write;
-        }
-
-        audio.sample_accum = 0;
-        audio.sample_tick_count = 0;
     }
 }
 

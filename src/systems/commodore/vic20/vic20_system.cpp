@@ -690,6 +690,11 @@ bool VIC20System::initialize() {
     video_port_ = std::make_unique<CompositeVideoPort>();
     vic_->set_stream(&video_port_->stream());
 
+    // Wire VIC chip to audio port (decimates chip-rate audio to host sample rate)
+    audio_port_ = std::make_unique<AudioPort>();
+    audio_port_->configure(vic_->clock_frequency, vic20_constants::AUDIO_SAMPLE_RATE);
+    vic_->set_audio_port(audio_port_.get());
+
     register_display(&display_);
     
     initialized_ = true;
@@ -1229,9 +1234,17 @@ void VIC20System::render_configuration_ui() {
 // ============================================================================
 
 uint32_t VIC20System::get_audio_samples(float* buffer, uint32_t max_samples) {
-    if (!vic_ || max_samples == 0 || !buffer) return 0;
+    if (!buffer || max_samples == 0) return 0;
 
-    // Read unsigned-8-bit samples from VIC ring buffer and convert to float
+    // AudioPort path: VIC drives audio_port_ per cycle via IIR-filtered float stream.
+    // AudioPort decimates to host rate and writes to its lock-free ring.
+    if (audio_port_) {
+        return static_cast<uint32_t>(audio_port_->read_samples(buffer, static_cast<int>(max_samples)));
+    }
+
+    // Legacy path: read uint8_t from VIC internal ring, convert to float
+    if (!vic_) return 0;
+
     uint32_t avail = vic_->audio_available();
     uint32_t to_read = avail < max_samples ? avail : max_samples;
     if (to_read == 0) return 0;
@@ -1251,6 +1264,21 @@ uint32_t VIC20System::get_audio_samples(float* buffer, uint32_t max_samples) {
         written += n;
     }
     return written;
+}
+
+void VIC20System::set_audio_sample_rate(int sample_rate_hz) {
+    if (sample_rate_hz <= 0) return;
+    uint32_t rate = static_cast<uint32_t>(sample_rate_hz);
+
+    // Reconfigure AudioPort decimation for the negotiated host sample rate
+    if (audio_port_ && vic_) {
+        audio_port_->configure(vic_->clock_frequency, rate);
+    }
+
+    // Also update legacy path (VIC internal ring buffer downsample ratio)
+    if (vic_) {
+        vic_->audio_reset(vic_->clock_frequency, rate);
+    }
 }
 
 // ============================================================================

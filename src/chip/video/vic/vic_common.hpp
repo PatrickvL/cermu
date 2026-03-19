@@ -7,6 +7,7 @@
 #include "core/system_lines.hpp"
 
 class IndexedFrameBuffer;
+struct AudioPort;
 
 // ============================================================================
 // VIC 6560/6561 REGISTER TABLE — single source of truth
@@ -243,9 +244,15 @@ struct vic_audio_state_t {
     //   Highpass: 1µF coupling capacitor + 1kΩ  → fc ≈  159 Hz
     float lowpass_buf;               // Lowpass filter accumulator
     float highpass_buf;              // Highpass filter accumulator
-    float lowpass_alpha;             // Lowpass coefficient  = dt / (dt + RC)
-    float highpass_alpha;            // Highpass coefficient = dt / (dt + RC)
+    float lowpass_alpha;             // Lowpass coefficient  = dt / (dt + RC)  (host-rate, legacy path)
+    float highpass_alpha;            // Highpass coefficient = dt / (dt + RC)  (host-rate, legacy path)
     float output_gain;               // Maps filter output to uint8 range
+
+    // Per-cycle IIR coefficients (chip-rate, for AudioPort path)
+    float lp_alpha_chip;             // Lowpass at chip clock rate
+    float hp_alpha_chip;             // Highpass at chip clock rate
+    float lp_buf_chip;               // Lowpass state (chip-rate path)
+    float hp_buf_chip;               // Highpass state (chip-rate path)
 
     // Output ring buffer (mono, unsigned 8-bit, centre = 128) ----------
     uint8_t  buffer[VIC_AUDIO_BUFFER_SIZE];
@@ -278,6 +285,11 @@ struct vic_base_t : public VideoChipBase {
     CompositeVideoStream* video_stream_ = nullptr;
     void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
     VideoFlags flags_prepack_ = VideoFlags::None;
+
+    // Audio port output (non-owning pointer, set by system/board)
+    // When set, audio_tick() drives the port instead of the internal uint8_t ring buffer.
+    AudioPort* audio_port_ = nullptr;
+    void set_audio_port(AudioPort* p) { audio_port_ = p; }
 
     // Legacy display output (non-owning pointer set by system)
     // TODO: remove once all systems use VideoPort bridge

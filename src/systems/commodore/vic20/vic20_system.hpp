@@ -3,6 +3,7 @@
 #include "systems/commodore/commodore_system.hpp"
 #include "core/board.hpp"
 #include "core/signal/video_port.hpp"
+#include "core/signal/audio_port.hpp"
 #include "chip/memory/ram_chip.hpp"
 #include "chip/memory/rom_chip.hpp"
 #include "chip/io/mos6522.hpp"
@@ -131,11 +132,13 @@ public:
 
     // Audio output — drains VIC chip audio ring buffer
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
+    void set_audio_sample_rate(int sample_rate_hz) override;
 
 private:
     vic20_bus_t bus_;
     IndexedFrameBuffer display_;  // Display output for GPU indexed rendering
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
+    std::unique_ptr<AudioPort> audio_port_;            // Audio signal output
     
     // ── Memory bus (declarative manifest + page-pointer dispatch) ────────
     using Bus = MemoryBus<VIC20BusTraits::Spec>;
