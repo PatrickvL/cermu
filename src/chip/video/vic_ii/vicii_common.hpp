@@ -565,6 +565,16 @@ struct vicii_base_t : public VideoChipBase {
     // Cached VBlank start for stream flag computation
     uint16_t cached_first_vblank_line = 0;
 
+    // Raster-level component of drive_flags_ (VSync|Blank during vblank, None otherwise).
+    // Updated at raster transitions.  Combined with per-cycle set/clear masks from the
+    // cycle table to produce drive_flags_.
+    VideoFlags raster_flags_ = VideoFlags::None;
+
+    // Maintained analog signal flags for stream driving.  Horizontal flags
+    // (HSync, Burst) are set/cleared by the cycle callback functions that
+    // straddle the transition boundaries.  raster_flags_ provides VSync/Blank.
+    VideoFlags drive_flags_ = VideoFlags::None;
+
     // Set by the cycle wrapper that performs line-0 operations (frame wrap).
     // Consumed at the next end-of-line to emit FrameEnd into the video stream.
     bool frame_wrapped_ = false;

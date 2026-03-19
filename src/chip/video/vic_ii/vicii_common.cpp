@@ -100,6 +100,28 @@ static inline void vicii_check_vertical_border(vicii_base_t* vicii) {
 // PIXEL SEQUENCER AND GRAPHICS - HARDWARE-ACCURATE ARCHITECTURE
 // ========================================================================================
 
+// Update raster_flags_ and drive_flags_ after a raster counter change.
+// VSync maps to vblank; Blank is set for the entire vblank region.
+static inline void vicii_update_vblank_flags(vicii_base_t* vicii) {
+    const uint16_t raster = vicii->timing.raster_counter;
+    bool in_vblank;
+    if (vicii->cached_first_vblank_line > vicii->cached_last_vblank_line) {
+        in_vblank = (raster >= vicii->cached_first_vblank_line ||
+                     raster <= vicii->cached_last_vblank_line);
+    } else {
+        in_vblank = (raster >= vicii->cached_first_vblank_line &&
+                     raster <= vicii->cached_last_vblank_line);
+    }
+    vicii->raster_flags_ = in_vblank
+        ? (VideoFlags::VSync | VideoFlags::Blank)
+        : VideoFlags::None;
+
+    // Replace the raster component of drive_flags_ while keeping horizontal bits
+    constexpr VideoFlags raster_mask = VideoFlags::VSync | VideoFlags::Blank;
+    vicii->drive_flags_ = vicii->raster_flags_
+        | (vicii->drive_flags_ & ~raster_mask);
+}
+
 // CRITICAL INSIGHT: Real VIC-II hardware separation of concerns:
 // 1. G-access cycles load graphics data into 8-bit shift register
 // 2. Pixel sequencer reads from shift register and outputs exactly 8 pixels per cycle
@@ -703,70 +725,36 @@ static void vicii_pixel_sequencer(vicii_base_t* vicii) {
     // ---------------------------------------------------------------
     // PER-DOT-CLOCK STREAM DRIVING
     // ---------------------------------------------------------------
-    // After graphics and sprite processing are complete for this 8-pixel
-    // span, drive the resolved pixels into the video stream with proper
-    // analog signal flags.  Each pixel = one stream sample.  Total per
-    // line: 504 (PAL) or 520/512 (NTSC).
+    // drive_flags_ was set for this cycle in vicii_set_x_cycle (once per cycle).
+    // The 8-pixel loop reads it directly — zero per-pixel flag computation.
+    // FrameEnd is a one-shot overlay consumed here.
     if (vicii->video_stream_) {
-        const uint16_t raster = vicii->timing.raster_counter;
         const uint16_t ppl = vicii->cached_pixels_per_line;
+        const VideoFlags flags = vicii->drive_flags_;
+        const bool is_vblank = has_flag(flags, VideoFlags::VSync);
 
-        // VBlank — uniform across all 8 pixels (raster-level property)
-        bool in_vblank;
-        if (vicii->cached_first_vblank_line > vicii->cached_last_vblank_line) {
-            in_vblank = (raster >= vicii->cached_first_vblank_line ||
-                         raster <= vicii->cached_last_vblank_line);
-        } else {
-            in_vblank = (raster >= vicii->cached_first_vblank_line &&
-                         raster <= vicii->cached_last_vblank_line);
-        }
-
-        // FrameEnd: consume flag set by line-0 cycle wrapper
+        // FrameEnd: consume sticky flag set by line-0 cycle wrapper
         const bool frame_end = vicii->frame_wrapped_;
         if (frame_end) vicii->frame_wrapped_ = false;
-
-        const uint16_t hs_start  = vicii->cached_hsync_start;
-        const uint16_t hs_end    = vicii->cached_hsync_end;
-        const uint16_t bs_start  = vicii->cached_burst_start;
-        const uint16_t bs_end    = vicii->cached_burst_end;
-        const uint16_t vis_last  = vicii->cached_last_visible_x;
-        const uint16_t vis_first = vicii->cached_first_visible_x;
 
         for (int pixel = 0; pixel < 8; pixel++) {
             uint16_t px = x_coord + static_cast<uint16_t>(pixel);
             if (px >= ppl) px -= ppl;
 
-            VideoFlags flags = VideoFlags::None;
-
-            // HSync pulse (non-wrapping range)
-            if (px >= hs_start && px < hs_end)
-                flags = flags | VideoFlags::HSync;
-
-            // HBlank: outside visible area (visible range wraps: first > last)
-            const bool in_hblank = (px > vis_last && px < vis_first);
-            if (in_hblank || in_vblank)
-                flags = flags | VideoFlags::Blank;
-
-            if (in_vblank)
-                flags = flags | VideoFlags::VSync;
-
-            // Color burst gate (non-wrapping range)
-            if (px >= bs_start && px < bs_end)
-                flags = flags | VideoFlags::Burst;
-
-            // FrameEnd on first pixel only
-            if (frame_end && pixel == 0)
-                flags = flags | VideoFlags::FrameEnd;
-
-            // Resolved pixel color from line buffer (0 if blanked)
+            // Resolved pixel color (0 if vblank or outside visible area)
             uint8_t color = 0;
-            if (!in_hblank && !in_vblank) {
+            if (!is_vblank) {
                 const int16_t buf_pos = vicii_fetch_x_to_buffer_pos(vicii, px);
                 if (buf_pos >= 0)
                     color = vicii->pixel.color_line[buf_pos];
             }
 
-            vicii->video_stream_->drive({color, flags});
+            // FrameEnd on first pixel only
+            VideoFlags pf = flags;
+            if (frame_end && pixel == 0)
+                pf = pf | VideoFlags::FrameEnd;
+
+            vicii->video_stream_->drive({color, pf});
         }
     }
 }
@@ -1172,6 +1160,9 @@ static inline void vicii_perform_line0_raster_irq_operations(vicii_base_t* vicii
     // Reset raster counter to 0
     vicii->timing.raster_counter = 0;
     vicii->frame_wrapped_ = true;
+
+    // Update maintained drive_flags_ for raster 0's vblank state
+    vicii_update_vblank_flags(vicii);
     
     // Reset per-frame state
     vicii->video_logic.was_den_set_during_raster_30 = false;
@@ -1244,6 +1235,9 @@ void vicii_timing_advance(vicii_base_t* vicii) {
     vicii->timing.raster_counter = (new_raster < vicii->cached_total_lines)
         ? new_raster
         : vicii->cached_total_lines - 1;  // Clamp; cycle wrappers reset to 0
+
+    // Update maintained drive_flags_ for the new raster's vblank state
+    vicii_update_vblank_flags(vicii);
     
     // Check raster interrupt on every line transition.
     // Line 0 raster interrupt is handled separately in
@@ -1415,6 +1409,13 @@ static uint8_t vicii_cycle_idle(vicii_base_t* vicii, int unused_param) {
     return VIC_ACCESS_IDLE;
 }
 
+// PAL Cycle 0: Sprite 3 P-access + HSync begins
+// HSync starts during cycle 0's 8-pixel span for all VIC-II variants.
+static uint8_t vicii_cycle_sprite_p_0_pal(vicii_base_t* vicii, int param) {
+    vicii->drive_flags_ = vicii->drive_flags_ | VideoFlags::HSync;
+    return vicii_cycle_sprite_p_access(vicii, param);
+}
+
 // PAL Cycle 1 wrapper: Execute line 0 operations here (delayed from cycle 0)
 //
 // Documentation (vic-ii.txt lines 1006-1015):
@@ -1462,6 +1463,9 @@ static uint8_t vicii_cycle_sprite_s_1_pal(vicii_base_t* vicii, int param) {
 // IMPLEMENTATION: This function executes line 0 operations in cycle 0, providing
 // immediate frame wrap without the one-cycle delay present in PAL chips.
 static uint8_t vicii_cycle_sprite_p_0_ntsc(vicii_base_t* vicii, int param) {
+    // HSync starts during cycle 0's 8-pixel span for all VIC-II variants.
+    vicii->drive_flags_ = vicii->drive_flags_ | VideoFlags::HSync;
+
     // Check if we're transitioning into line 0
     const bool transitioning_to_line0 = (vicii->timing.raster_counter == vicii->cached_total_lines - 1);
     
@@ -1473,6 +1477,20 @@ static uint8_t vicii_cycle_sprite_p_0_ntsc(vicii_base_t* vicii, int param) {
     
     // Call underlying cycle function (sprite 3 P-access for NTSC)
     return vicii_cycle_sprite_p_access(vicii, param);
+}
+
+// Cycle 5: HSync ends + color burst gate opens
+// HSync pulse ends and burst gate opens during cycle 5 for all variants.
+static uint8_t vicii_cycle_sprite_s_5_hsync_burst(vicii_base_t* vicii, int param) {
+    vicii->drive_flags_ = (vicii->drive_flags_ & ~VideoFlags::HSync) | VideoFlags::Burst;
+    return vicii_cycle_sprite_s_access(vicii, param);
+}
+
+// Cycle 10: Color burst gate closes
+// Burst gate closes during cycle 10 for all variants.
+static uint8_t vicii_cycle_refresh_burst_off(vicii_base_t* vicii, int param) {
+    vicii->drive_flags_ = vicii->drive_flags_ & ~VideoFlags::Burst;
+    return vicii_cycle_refresh(vicii, param);
 }
 
 // Helper: Sprite Y-coordinate matching (shared by cycles 55 and 56)
@@ -2209,23 +2227,34 @@ void vicii_base_t::tick_phi2(bus_state_t bus_state) {
 static void build_vicii_cycle_table(vicii_cycle_entry_t* table, bool is_pal, int cycles_per_line) {
     int i = 0;
 
-    // ── Cycles 1–2: line-0 raster/IRQ handling (PAL vs NTSC) ──────────────
+    // ── Cycles 0–1: line-0 raster/IRQ handling (PAL vs NTSC) ────────────
+    // Cycle 0 also starts the HSync pulse (all variants).
     if (is_pal) {
-        table[i++] = {vicii_cycle_sprite_p_access, 3};   // PAL: sprite 3 P-access, line-0 ops postponed
+        table[i++] = {vicii_cycle_sprite_p_0_pal, 3};    // PAL: sprite 3 P-access + HSync on, line-0 ops postponed
         table[i++] = {vicii_cycle_sprite_s_1_pal, 3};    // PAL: sprite 3 S-access + postponed line-0 ops
     } else {
-        table[i++] = {vicii_cycle_sprite_p_0_ntsc, 3};   // NTSC: sprite 3 P-access + immediate line-0 ops
+        table[i++] = {vicii_cycle_sprite_p_0_ntsc, 3};   // NTSC: sprite 3 P-access + HSync on + immediate line-0 ops
         table[i++] = {vicii_cycle_sprite_s_access, 3};    // NTSC: sprite 3 S-access (normal)
     }
 
-    // ── Cycles 3–10: sprite 4–7 P/S accesses ─────────────────────────────
-    for (int s = 4; s <= 7; s++) {
+    // ── Cycles 2–4: sprite 4 P/S, sprite 5 P ─────────────────────────────
+    table[i++] = {vicii_cycle_sprite_p_access, 4};
+    table[i++] = {vicii_cycle_sprite_s_access, 4};
+    table[i++] = {vicii_cycle_sprite_p_access, 5};
+
+    // ── Cycle 5: sprite 5 S-access + HSync off + Burst on ────────────────
+    table[i++] = {vicii_cycle_sprite_s_5_hsync_burst, 5};
+
+    // ── Cycles 6–9: sprite 6–7 P/S accesses ──────────────────────────────
+    for (int s = 6; s <= 7; s++) {
         table[i++] = {vicii_cycle_sprite_p_access, s};
         table[i++] = {vicii_cycle_sprite_s_access, s};
     }
 
-    // ── Cycles 11–15: DRAM refresh + first c-access + sprite crunch ──────
-    table[i++] = {vicii_cycle_refresh, -1};
+    // ── Cycle 10: first DRAM refresh + Burst off ─────────────────────────
+    table[i++] = {vicii_cycle_refresh_burst_off, -1};
+
+    // ── Cycles 11–14: remaining refreshes + VC update + sprite crunch ────
     table[i++] = {vicii_cycle_refresh, -1};
     table[i++] = {vicii_cycle_refresh, -1};
     table[i++] = {vicii_cycle_refresh_vc_update, -1};
@@ -2445,6 +2474,10 @@ static inline void vicii_initialize_timing(vicii_base_t* vicii, const VicIITrait
     vicii->cached_burst_end = traits.burst_end;
     vicii->cached_last_visible_x = traits.last_visible_x_coord;
     vicii->cached_first_visible_x = traits.first_visible_x_coord;
+
+    // Initialize raster_flags_ and drive_flags_ for the starting position.
+    // HSync/Burst will be set by the cycle 0 callback on first tick.
+    vicii_update_vblank_flags(vicii);
 }
 
 // ========================================================================================

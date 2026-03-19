@@ -285,6 +285,10 @@ struct vic_base_t : public VideoChipBase {
     CompositeVideoStream* video_stream_ = nullptr;
     void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
 
+    // Maintained analog signal flags — adjusted at raster transitions,
+    // used directly in drive() calls rather than recomputed per line.
+    VideoFlags drive_flags_ = VideoFlags::None;
+
     // Audio port output (non-owning pointer, set by system/board)
     // When set, audio_tick() drives the port instead of the internal uint8_t ring buffer.
     AudioPort* audio_port_ = nullptr;
