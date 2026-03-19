@@ -17,6 +17,7 @@
 #include "chip/cpu/z80/z80.hpp"   // Z80_MREQ_BIT / Z80_IORQ_BIT
 #include "chip/io/z80_pio.hpp"
 #include "chip/memory/memory_chip.hpp"
+#include "chip/video/char_display/char_display.hpp"
 #include <cstdint>
 #include <vector>
 
@@ -171,6 +172,7 @@ private:
     // ── Display ──────────────────────────────────────────────────────────
     IndexedFrameBuffer display_;
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
+    CharDisplayGenerator video_gen_;                  // TTL character display generator
 
     // ── Keyboard ─────────────────────────────────────────────────────────
     uint8_t keyboard_matrix_[z1013_constants::KEYBOARD_ROWS] = {};

@@ -160,6 +160,16 @@ bool KC85System<V>::initialize() {
 
     // Video stream output
     video_port_ = std::make_unique<CompositeVideoPort>();
+    video_port_->bind_display(&display_, kc85_constants::PALETTE,
+                              kc85_constants::FB_WIDTH, 1);
+
+    // Video generator — models KC85 TTL / U82720 video circuitry
+    video_gen_.set_stream(&video_port_->stream());
+    if constexpr (Traits::has_extended_video) {
+        video_gen_.set_mode(KC85VideoMode::Extended);
+    } else {
+        video_gen_.set_mode(KC85VideoMode::Standard);
+    }
 
     // Audio stream output
     audio_port_ = std::make_unique<AudioPort>();
@@ -673,120 +683,20 @@ template<KC85Variant V> void KC85System<V>::render_configuration_ui() {
 template<KC85Variant V> void KC85System<V>::set_speed_multiplier(float m) { speed_multiplier_ = m; }
 
 // ============================================================================
-// VIDEO RENDERING — decode IRM into indexed framebuffer
+// VIDEO RENDERING — delegate to KC85VideoGenerator
 // ============================================================================
-//
-// KC85/2,3: IRM = 16 KB at $8000-$BFFF, ZX Spectrum-like interleaved addressing
-//   Left 256×256 area (pixel cols 0..31, 8 KB pixel + 2 KB color):
-//     pixel_offset = x | (((y>>2)&3)<<5) | ((y&3)<<7) | (((y>>4)&0xF)<<9)
-//     color_offset = x | (((y>>2)&0x3F)<<5)
-//   Right 64×256 area (pixel cols 32..39, 2 KB pixel + 0.5 KB color):
-//     pixel_offset = 0x2000 + ((x&7) | (((y>>4)&3)<<3) | (((y>>2)&3)<<5) | ((y&3)<<7) | (((y>>6)&3)<<9))
-//     color_offset = 0x0800 + ((x&7) | (((y>>4)&3)<<3) | (((y>>2)&3)<<5) | (((y>>6)&3)<<7))
-//   Color bytes stored at irm[$2800 + color_offset]
-//   Each pixel byte = 8 horizontal pixels (MSB = leftmost)
-//   Each color byte: bits [2:0] = background (8 colors), bits [5:3] = foreground base, bit 6 = fg intensity, bit 7 = blink
-//   Display: 320×256 pixels (256 left + 64 right), full framebuffer width
-//
-// KC85/4: IRM = 64 KB in 4 × 16 KB banks, column-major layout
-//   Bank 0: pixel plane 0, Bank 1: color plane 0
-//   Bank 2: pixel plane 1, Bank 3: color plane 1
-//   Pixel data: bank_base[col * 256 + row]  (col = 0..39) = 10240 bytes used
-//   Color data: same layout in next bank, per-byte color resolution
-//   Display: 320×256 pixels, full framebuffer width
 
 template<KC85Variant V>
 void KC85System<V>::render_frame() {
     if (!irm_chip_) return;
 
-    const uint8_t* irm = irm_chip_->data();
-    // Blink: when PIO-B bit 7 enables blinking AND blink_flag_ is true,
-    // color bytes with bit 7 set force foreground to background
     const uint8_t pio_b = pio1_->get_output(1);
-    const bool blink_bg = blink_flag_ && (pio_b & 0x80);
-
+    video_gen_.set_irm(irm_chip_->data());
+    video_gen_.set_blink_bg(blink_flag_ && (pio_b & 0x80));
     if constexpr (Traits::has_extended_video) {
-        // KC85/4: 320×256, dual-plane with per-byte color
-        // Banks are: pixel0, color0, pixel1, color1 (each 16 KB)
-        const uint8_t* pixel_base = irm + active_plane_ * 2 * 16384;
-        const uint8_t* color_base = pixel_base + 16384;
-
-        for (int y = 0; y < kc85_constants::FB_HEIGHT; y++) {
-            uint8_t* dst = display_.indices() + y * kc85_constants::FB_WIDTH;
-            for (int col = 0; col < kc85_constants::KC4_PIXEL_COLS; col++) {
-                uint8_t pixels = pixel_base[col * 256 + y];
-                uint8_t color  = color_base[col * 256 + y];
-                uint8_t bg_raw = color & 0x07;              // bits 0-2: background (8 colors)
-                uint8_t bg = bg_raw + kc85_constants::BG_COLOR_OFFSET;
-                uint8_t fg = (blink_bg && (color & 0x80)) ? bg : ((color >> 3) & 0x0F);
-                int x = col * 8;
-                for (int bit = 7; bit >= 0; --bit) {
-                    dst[x++] = (pixels & (1 << bit)) ? fg : bg;
-                }
-            }
-        }
-    } else {
-        // KC85/2,3: 320×256, ZX Spectrum-like interleaved addressing
-        // Left 256×256 area (cols 0..31) + right 64×256 area (cols 32..39)
-        for (int y = 0; y < kc85_constants::FB_HEIGHT; y++) {
-            uint8_t* dst = display_.indices() + y * kc85_constants::FB_WIDTH;
-
-            // Left 256×256 area (columns 0..31)
-            for (int x = 0; x < 32; x++) {
-                int pixel_offset = x | (((y >> 2) & 0x3) << 5)
-                                     | ((y & 0x3) << 7)
-                                     | (((y >> 4) & 0xF) << 9);
-                int color_offset = x | (((y >> 2) & 0x3F) << 5);
-                uint8_t pixels = irm[pixel_offset];
-                uint8_t color  = irm[0x2800 + color_offset];
-                uint8_t bg_raw = color & 0x07;
-                uint8_t bg = bg_raw + kc85_constants::BG_COLOR_OFFSET;
-                uint8_t fg = (blink_bg && (color & 0x80)) ? bg : ((color >> 3) & 0x0F);
-                int px = x * 8;
-                for (int bit = 7; bit >= 0; --bit) {
-                    dst[px++] = (pixels & (1 << bit)) ? fg : bg;
-                }
-            }
-
-            // Right 64×256 area (columns 32..39)
-            for (int x = 32; x < 40; x++) {
-                int pixel_offset = 0x2000 + ((x & 0x7)
-                                     | (((y >> 4) & 0x3) << 3)
-                                     | (((y >> 2) & 0x3) << 5)
-                                     | ((y & 0x3) << 7)
-                                     | (((y >> 6) & 0x3) << 9));
-                int color_offset = 0x0800 + ((x & 0x7)
-                                     | (((y >> 4) & 0x3) << 3)
-                                     | (((y >> 2) & 0x3) << 5)
-                                     | (((y >> 6) & 0x3) << 7));
-                uint8_t pixels = irm[pixel_offset];
-                uint8_t color  = irm[0x2800 + color_offset];
-                uint8_t bg_raw = color & 0x07;
-                uint8_t bg = bg_raw + kc85_constants::BG_COLOR_OFFSET;
-                uint8_t fg = (blink_bg && (color & 0x80)) ? bg : ((color >> 3) & 0x0F);
-                int px = x * 8;
-                for (int bit = 7; bit >= 0; --bit) {
-                    dst[px++] = (pixels & (1 << bit)) ? fg : bg;
-                }
-            }
-        }
+        video_gen_.set_active_plane(active_plane_);
     }
-
-    display_.flush();
-
-    // Drive video stream with per-line pixel data
-    if (video_port_) {
-        auto& stream = video_port_->stream();
-        const uint8_t* idx = display_.indices();
-        for (int y = 0; y < kc85_constants::FB_HEIGHT; y++) {
-            const uint8_t* line = idx + y * kc85_constants::FB_WIDTH;
-            stream.drive({0, VideoFlags::HSync});
-            for (int x = 0; x < kc85_constants::FB_WIDTH; x++) {
-                stream.drive({line[x], VideoFlags::BeamOn});
-            }
-        }
-        stream.drive({0, VideoFlags::FrameEnd});
-    }
+    video_gen_.render_frame();
 }
 
 // ============================================================================

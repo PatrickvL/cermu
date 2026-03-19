@@ -7,7 +7,6 @@
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
-#include "utils/tile_decoder.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -116,6 +115,15 @@ bool NamcoArcadeSystem<G>::initialize() {
 
     // Video stream output
     video_port_ = std::make_unique<CompositeVideoPort>();
+
+    // Video generator — models TTL tile rendering (224×288 already-rotated output)
+    video_gen_.set_stream(&video_port_->stream());
+    video_gen_.set_char_rom(char_rom_.data(), static_cast<int>(char_rom_.size()));
+    video_gen_.set_colortable_prom(colortable_prom_.data());
+
+    // Auto-reconstruct stream → framebuffer (palette is dynamically decoded)
+    video_port_->bind_display(&display_, display_.palette_data(),
+                              namco_arcade_constants::FB_WIDTH, 1);
 
     // ── Register chips for Hardware menu ────────────────────────────────
     register_bus_chips(board_);
@@ -233,93 +241,16 @@ void NamcoArcadeSystem<G>::decode_palette() {
 }
 
 // ============================================================================
-// VIDEO RENDERING — decode tilemap into indexed framebuffer
+// VIDEO RENDERING — delegate to NamcoVideo
 // ============================================================================
-//
-// The Namco Pac-Man board has a 36×28 tile display (288×224 pixels)
-// rotated 90° CW.  The framebuffer is 224 wide × 288 tall.
-//
-// VRAM layout (1024 bytes, 32×32 grid):
-//   Rows 0-1  (0x000-0x03F): bottom score strips → screen rows 34-35
-//   Rows 2-29 (0x040-0x3BF): main playfield (rotated)
-//   Rows 30-31(0x3C0-0x3FF): top score strips → screen rows 0-1
-//
-// Char ROM tile format (2bpp, 8×8 pixels, 16 bytes per tile):
-//   Each byte contains 4 pixels × 2 planes packed:
-//     bits [3:0] = plane 0 for 4 pixels, bits [7:4] = plane 1
-//   Bytes 0-7: right half (x=4-7) rows 0-7
-//   Bytes 8-15: left half (x=0-3) rows 0-7
-//
-// Color lookup: colortable_prom[(color_attr & 0x3F) * 4 + pixel_2bit] → palette index
 
 template<NamcoGame G>
 void NamcoArcadeSystem<G>::render_frame() {
     if (!vram_chip_ || !cram_chip_) return;
 
-    const uint8_t* vram = vram_chip_->data();
-    const uint8_t* cram = cram_chip_->data();
-    const uint8_t* chars = char_rom_.data();
-    const uint8_t* ctable = colortable_prom_.data();
-    const int char_count = static_cast<int>(char_rom_.size()) / 16;
-
-    std::memset(display_.indices(), 0,
-                namco_arcade_constants::FB_WIDTH * namco_arcade_constants::FB_HEIGHT);
-
-    // Render all 1024 VRAM entries
-    for (int offs = 0; offs < 1024; offs++) {
-        int mx = offs & 0x1F;       // VRAM column (0-31)
-        int my = offs >> 5;          // VRAM row (0-31)
-
-        // Map VRAM position → screen tile position after 90° rotation
-        int sx, sy;
-        if (my < 2) {
-            // Bottom score strip
-            sx = mx - 2;
-            sy = 34 + my;
-        } else if (my >= 30) {
-            // Top score strip
-            sx = mx - 2;
-            sy = my - 30;
-        } else {
-            // Main playfield (rotated)
-            sx = 29 - my;
-            sy = mx + 2;
-        }
-
-        // Bounds check (some entries fall outside visible 28×36)
-        if (sx < 0 || sx >= 28 || sy < 0 || sy >= 36) continue;
-
-        uint8_t tile_idx = vram[offs];
-        uint8_t color_attr = cram[offs] & 0x3F;
-
-        // Skip if tile index exceeds available char ROM
-        if (tile_idx >= char_count) tile_idx = 0;
-
-        const uint8_t* tile = chars + tile_idx * 16;
-
-        // Decode 8×8 tile via shared Namco interleaved 2bpp decoder
-        int fb_x = sx * 8;
-        int fb_y = sy * 8;
-        uint8_t* dst = display_.indices() + fb_y * namco_arcade_constants::FB_WIDTH + fb_x;
-        tile_decoder::decode_namco_tile(tile, dst, namco_arcade_constants::FB_WIDTH,
-                                        ctable, color_attr);
-    }
-
-    display_.flush();
-
-    // Drive video stream with per-line pixel data
-    if (video_port_) {
-        auto& stream = video_port_->stream();
-        const uint8_t* idx = display_.indices();
-        for (int y = 0; y < namco_arcade_constants::FB_HEIGHT; y++) {
-            const uint8_t* line = idx + y * namco_arcade_constants::FB_WIDTH;
-            stream.drive({0, VideoFlags::HSync});
-            for (int x = 0; x < namco_arcade_constants::FB_WIDTH; x++) {
-                stream.drive({line[x], VideoFlags::BeamOn});
-            }
-        }
-        stream.drive({0, VideoFlags::FrameEnd});
-    }
+    video_gen_.set_vram(vram_chip_->data());
+    video_gen_.set_cram(cram_chip_->data());
+    video_gen_.render_frame();
 }
 
 // ============================================================================

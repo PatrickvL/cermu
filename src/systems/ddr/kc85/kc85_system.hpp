@@ -23,6 +23,7 @@
 #include "chip/io/kc85_module_system.hpp"
 #include "chip/input/keyboard_encoder.hpp"
 #include "chip/memory/memory_chip.hpp"
+#include "chip/video/kc85_video/kc85_video.hpp"
 #include "utils/ring_buffer.hpp"
 #include <cstdint>
 #include <vector>
@@ -219,6 +220,7 @@ private:
     // ── Display ──────────────────────────────────────────────────────────
     IndexedFrameBuffer display_;
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
+    KC85VideoGenerator video_gen_;                    // Video generation circuitry
 
     // ── Keyboard ─────────────────────────────────────────────────────────
     uint8_t keyboard_matrix_[kc85_constants::KEYBOARD_ROWS] = {};

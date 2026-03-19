@@ -39,8 +39,10 @@ void CompositeVideoPort::reconstruct_to_framebuffer(
         if (fd.sync_events[i].type != SyncType::HSync)
             continue;
 
-        // Skip VBlank lines — they carry HSync but have no visible pixel data
-        if (has_flag(fd.sync_events[i].flags, VideoFlags::Blank))
+        // Skip VBlank lines — VSync flag distinguishes vertical blanking from
+        // horizontal blanking.  Per-dot-clock streams have Blank set on all HSync
+        // samples (HSync is within HBlank), so Blank alone cannot identify VBlank.
+        if (has_flag(fd.sync_events[i].flags, VideoFlags::VSync))
             continue;
 
         // Start of visible line: sync position + back porch
