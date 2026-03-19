@@ -545,6 +545,10 @@ bool C64System::initialize() {
     video_port_ = std::make_unique<CompositeVideoPort>();
     vicii->set_stream(&video_port_->stream());
 
+    // Wire SID to audio signal port
+    audio_port_ = std::make_unique<AudioPort>();
+    sid->set_audio_port(audio_port_.get());
+
     register_display(&display_);
 
     printf("C64: System initialized successfully\n");
@@ -1713,7 +1717,11 @@ void C64System::on_port_device_changed(int port_index) {
 }
 
 uint32_t C64System::get_audio_samples(float* buffer, uint32_t max_samples) {
-    if (!initialized_ || !this->sid || !buffer || max_samples == 0) return 0;
+    if (!initialized_ || !buffer || max_samples == 0) return 0;
+    if (audio_port_) {
+        return static_cast<uint32_t>(audio_port_->read_samples(buffer, static_cast<int>(max_samples)));
+    }
+    if (!this->sid) return 0;
     this->sid->generate_samples(buffer, max_samples);
     return max_samples;
 }

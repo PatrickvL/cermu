@@ -101,6 +101,14 @@ struct AudioPort {
         prev_ = value;
     }
 
+    /// Push a pre-decimated sample directly to the ring buffer.
+    /// For chips with sophisticated internal downsampling (e.g. SID CIC-3)
+    /// that already produce samples at the host sample rate.
+    FORCE_INLINE
+    void drive_sample(float value) noexcept {
+        ring_.push_unchecked(value * scale_);
+    }
+
     /// Read samples into host buffer.  Returns number of samples written.
     int read_samples(float* dst, int max_samples) noexcept {
         return ring_.pop(dst, max_samples);
