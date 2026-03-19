@@ -22,6 +22,7 @@
 #include <array>
 
 #include "chip/video/video_chip_base.hpp"
+#include "core/signal/composite_video_stream.hpp"
 #include "core/system_lines.hpp"
 #include "core/indexed_frame_buffer.hpp"
 #include "systems/nes/bus/nes_bus.hpp"
@@ -286,6 +287,9 @@ public:
     // set_display().  Replaces the former VideoPixelUnit + screen vector.
     IndexedFrameBuffer* display_ = nullptr;
 
+    // Video stream output (non-owning pointer, set by system/board)
+    CompositeVideoStream* video_stream_ = nullptr;
+
     // Active palette variant — pointer into palette_cache_[].  Set to nullptr
     // to mark as stale; the render path checks this once per dot with an
     // unlikely branch and reselects the variant on demand.  Coalesces rapid
@@ -375,6 +379,9 @@ public:
 
     // Set the display output (system-owned IndexedFrameBuffer).
     void set_display(IndexedFrameBuffer* d) { display_ = d; }
+
+    // Set the video stream output (system-owned CompositeVideoStream).
+    void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
 
     // NMI output level — true when /NMI is asserted (active LOW).
     // Reads from the caller-provided ppu_bus; the system passes the

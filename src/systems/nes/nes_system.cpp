@@ -356,6 +356,11 @@ bool NintendoSystem<V>::initialize() {
     nes_display_.init(256, 240);
     nes_display_.set_palette(NES_COLOR_TABLE, 64);
     ppu_->set_display(&nes_display_);
+
+    // Wire PPU to composite video stream port
+    video_port_ = std::make_unique<CompositeVideoPort>();
+    ppu_->set_stream(&video_port_->stream());
+
     register_display(&nes_display_);
 
     initialized_ = true;
@@ -454,6 +459,11 @@ void NintendoSystem<V>::run_frame() {
     ppu_->frame_complete = false;
     while (!ppu_->frame_complete) {
         tick();
+    }
+
+    // Swap video stream frame
+    if (video_port_) {
+        video_port_->swap_frame();
     }
 
     // Signal audio thread with accumulated CPU cycles

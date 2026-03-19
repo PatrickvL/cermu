@@ -23,6 +23,7 @@
 #include <string>
 #include "utils/ring_buffer.hpp"
 #include "core/indexed_frame_buffer.hpp"
+#include "core/signal/video_port.hpp"
 #include "core/audio_thread.hpp"
 #include "chip/sound/nes_apu_synth_engine.hpp"
 
@@ -124,6 +125,7 @@ private:
     std::shared_ptr<Cartridge> cartridge_;
     nes_bus::nes_bus_t bus_;                     // Page-pointer bus (replaces MemoryBus)
     IndexedFrameBuffer nes_display_;             // Unified display output (256×240)
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
     
     // System state
     bool is_pal_;
