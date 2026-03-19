@@ -685,6 +685,11 @@ bool VIC20System::initialize() {
                   vic20_constants::DISPLAY_HEIGHT);
     display_.set_palette(vic_base_t::get_default_palette(), 16);
     vic_->set_display(&display_);
+
+    // Wire VIC chip to video stream port
+    video_port_ = std::make_unique<CompositeVideoPort>();
+    vic_->set_stream(&video_port_->stream());
+
     register_display(&display_);
     
     initialized_ = true;
@@ -887,6 +892,16 @@ void VIC20System::run_frame() {
     uint32_t adjusted_cycles = static_cast<uint32_t>(cycles_per_frame_ * speed_multiplier_);
     for (uint32_t i = 0; i < adjusted_cycles; i++) {
         tick();
+    }
+
+    // Reconstruct video stream into IndexedFrameBuffer for display
+    if (video_port_) {
+        FrameData fd = video_port_->swap_frame();
+        video_port_->reconstruct_to_framebuffer(
+            fd, &display_,
+            vic_base_t::get_default_palette(),
+            vic20_constants::DISPLAY_WIDTH,
+            36);  // back porch ~9 cycles × 4 pixels
     }
 
     // Tick all attached peripheral devices (datasette, drive, etc.)

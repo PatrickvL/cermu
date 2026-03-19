@@ -202,10 +202,46 @@ void vic_base_t::decode_all_registers() {
 }
 
 // Emit a single pixel to the line buffer (stores palette index)
+// When a video stream is attached, also drives the stream output.
 void vic_base_t::emit_pixel(uint8_t color_index) {
+    uint8_t c = color_index & 0x0F;
     if (pixel_line_index < VIC_MAX_LINE_WIDTH) {
-        color_line_buffer[pixel_line_index++] = color_index & 0x0F;
+        color_line_buffer[pixel_line_index++] = c;
     }
+    if (video_stream_) {
+        video_stream_->drive({ .color_index = c, .flags = flags_prepack_ });
+    }
+}
+
+// Drive a single pixel to the video stream (new signal path)
+void vic_base_t::drive_pixel(uint8_t color_index) {
+    if (video_stream_) {
+        video_stream_->drive({ .color_index = static_cast<uint8_t>(color_index & 0x0F),
+                               .flags = flags_prepack_ });
+    }
+}
+
+// Update pre-packed video flags from current raster state.
+// Called only on state transitions — not every tick.
+void vic_base_t::update_video_flags() {
+    // The VIC 6560/6561 composite sync is active during the horizontal
+    // blanking interval.  Sync begins at the end of the visible line and
+    // lasts for a fixed number of cycles.  VSync is a prolonged sync
+    // pulse during the vertical blanking interval.
+    //
+    // For the bridge path, we derive sync/blank from raster coordinates:
+    //   HSync:  active during first ~9 cycles of each line (approximate)
+    //   Blank:  active outside the visible window
+    //   VSync:  active during lines 0-2 (broad sync pulses)
+    const bool in_hsync = (current_cycle < 9);
+    const bool in_vsync = (raster_counter < 3);
+    const bool in_blank = !in_display_area || (current_cycle < 9);
+
+    flags_prepack_ = VideoFlags::None;
+    if (in_hsync || in_vsync)
+        flags_prepack_ = flags_prepack_ | VideoFlags::HSync;
+    if (in_blank)
+        flags_prepack_ = flags_prepack_ | VideoFlags::Blank;
 }
 
 // Flush accumulated pixel line to framebuffer
@@ -457,8 +493,10 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
     if (current_cycle >= cycles_per_line) {
         current_cycle = 0;
         
-        // Flush the previous line to framebuffer
-        flush_pixel_line(raster_counter);
+        // Flush the previous line to framebuffer (legacy path)
+        if (!video_stream_) {
+            flush_pixel_line(raster_counter);
+        }
         
         // Move to next raster line
         raster_counter++;
@@ -490,6 +528,11 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
     const uint16_t screen_origin_x = cached_screen_origin_x;
     const uint16_t char_area_end = screen_origin_x + (columns << 1);
     const bool in_char_area = (current_cycle >= screen_origin_x) && (current_cycle < char_area_end);
+
+    // Update pre-packed video flags for stream output (sync/blank state)
+    if (video_stream_) {
+        update_video_flags();
+    }
 
     const uint8_t border_color = cached_border_color;
     
