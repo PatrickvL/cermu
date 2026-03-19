@@ -17,6 +17,8 @@
 
 #include "core/system.hpp"
 #include "core/board.hpp"
+#include "core/signal/video_port.hpp"
+#include "core/signal/audio_port.hpp"
 #include "chip/cpu/fam65xx/mos6507.hpp"
 #include "chip/video/tia/tia.hpp"
 #include "chip/io/pia6532.hpp"
@@ -148,6 +150,9 @@ private:
     pia6532_t*         riot_      = nullptr;  // PIA 6532 RIOT — RAM, I/O, Timer
     Atari2600CartChip* cart_chip_ = nullptr;  // Cart MMIO adapter (wraps mapper)
     IndexedFrameBuffer display_;               // Display output for GPU indexed rendering
+
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
+    std::unique_ptr<AudioPort> audio_port_;            // Audio port output
 
     // ========================================================================
     // CARTRIDGE ROM

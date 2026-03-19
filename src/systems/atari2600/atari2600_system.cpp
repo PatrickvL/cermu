@@ -197,6 +197,16 @@ bool Atari2600System::initialize() {
     tia_->set_display(&display_);
     register_display(&display_);
 
+    // Video stream output — composite video from TIA
+    video_port_ = std::make_unique<CompositeVideoPort>();
+    tia_->set_stream(&video_port_->stream());
+
+    // Audio port — TIA does its own decimation, uses drive_sample()
+    audio_port_ = std::make_unique<AudioPort>();
+    audio_port_->configure(atari2600_constants::DEFAULT_SAMPLE_RATE,
+                           atari2600_constants::DEFAULT_SAMPLE_RATE);
+    tia_->set_audio_port(audio_port_.get());
+
     printf("Atari2600: System initialized\n");
     return true;
 }
@@ -418,6 +428,7 @@ void Atari2600System::get_display_dimensions(int* width, int* height) const {
 
 uint32_t Atari2600System::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
+    if (audio_port_) return audio_port_->read_samples(buffer, max_samples);
     return tia_->audio_read(buffer, max_samples);
 }
 
