@@ -652,7 +652,21 @@ inline bus_state_t decode_groupC(bus_state_t pins, uint16_t opcode) {
     }
 
     // AND: opmodes 0,1,2 (<ea> AND Dn → Dn) and 4,5,6 (Dn AND <ea> → <ea>)
-    OpSize sea_addr_ = calc_ea(ea_mode, ea_reg, sz);
+    OpSize sz;
+    switch (opmode & 3) {
+        case 0: sz = OpSize::Byte; break;
+        case 1: sz = OpSize::Word; break;
+        case 2: sz = OpSize::Long; break;
+        default: return do_prefetch(pins);
+    }
+
+    if (opmode < 3) {
+        // <ea> AND Dn → Dn
+        uint32_t src_val;
+        if (ea_mode == 0) {
+            src_val = read_dn(ea_reg, sz);
+        } else {
+            ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
             reg_idx_ = dn;
             op_sz_ = sz;
             pending_op_ = OP_AND;
@@ -662,8 +676,9 @@ inline bus_state_t decode_groupC(bus_state_t pins, uint16_t opcode) {
         uint32_t result = alu_and(src_val, read_dn(dn, sz), sz);
         write_dn(dn, result, sz);
         // AND .l Dn,Dn: 8 clocks (4 idle)
-        if (ea_mode <= 1 && sz == OpSize::Long) return do_idle_then_prefetch(pins, 4);
+        if (sz == OpSize::Long) return do_idle_then_prefetch(pins, 4);
     } else {
+        // Dn AND <ea> → <ea>
         if (ea_mode >= 2) {
             ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
             reg_idx_ = dn;
@@ -672,23 +687,6 @@ inline bus_state_t decode_groupC(bus_state_t pins, uint16_t opcode) {
             bus_op_mode_ = (sz == OpSize::Long) ? BUS_RMW_LONG : BUS_RMW;
             return begin_ea_read(pins, ea_mode);
         }
-
-    if (opmode < 3) {
-        uint32_t src_val;
-        if (ea_mode == 0) {
-            src_val = read_dn(ea_reg, sz);
-        } else {
-            src_val = read_ea(ea_mode, ea_reg, sz);
-        }
-        uint32_t result = alu_and(src_val, read_dn(dn, sz), sz);
-        write_dn(dn, result, sz);
-        // AND .l Dn,Dn: 8 clocks (4 idle)
-        if (ea_mode <= 1 && sz == OpSize::Long) return do_idle_then_prefetch(pins, 4);
-    } else {
-        uint32_t src_val = read_dn(dn, sz);
-        uint32_t dst_val = read_ea(ea_mode, ea_reg, sz);
-        uint32_t result = alu_and(src_val, dst_val, sz);
-        write_ea(ea_mode, ea_reg, result, sz);
     }
     return do_prefetch(pins);
 }
