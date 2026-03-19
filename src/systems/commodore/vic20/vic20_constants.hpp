@@ -18,8 +18,8 @@ namespace vic20_constants {
     // Audio
     inline constexpr uint32_t AUDIO_SAMPLE_RATE      = 22050;     // Default output sample rate (Hz)
 
-    // Display (full VIC output including borders)
-    inline constexpr uint32_t DISPLAY_WIDTH          = 252;        // 63 cycles × 4 pixels
+    // Display (per-dot-clock visible area, excluding HSync cycle)
+    inline constexpr uint32_t DISPLAY_WIDTH          = 248;        // (63 - 1) cycles × 4 pixels
     inline constexpr uint32_t DISPLAY_HEIGHT         = 284;        // Visible raster lines (PAL)
 
     // BASIC start addresses (vary by expansion config)

@@ -278,16 +278,18 @@ struct vic_base_t : public VideoChipBase {
     // Video state
     uint8_t current_line[40] = {};
     uint8_t color_ram[1024] = {};
-    uint8_t color_line_buffer[VIC_MAX_LINE_WIDTH] = {};  // Per-pixel palette index buffer
-    int pixel_line_index = 0;
 
     // Video stream output (non-owning pointer, set by system/board)
     CompositeVideoStream* video_stream_ = nullptr;
     void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
 
-    // Maintained analog signal flags — adjusted at raster transitions,
-    // used directly in drive() calls rather than recomputed per line.
+    // Maintained analog signal flags — adjusted at cycle boundaries,
+    // used directly in drive() calls (HSync on cycle 0, VSync during vblank).
     VideoFlags drive_flags_ = VideoFlags::None;
+
+    // Frame-end one-shot — set when raster wraps to 0, consumed on first
+    // drive() of the new frame.
+    bool frame_wrapped_ = false;
 
     // Audio port output (non-owning pointer, set by system/board)
     // When set, audio_tick() drives the port instead of the internal uint8_t ring buffer.
@@ -363,7 +365,4 @@ protected:
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields();
 #endif
-
-private:
-    void emit_pixel(uint8_t color_index);
 };
