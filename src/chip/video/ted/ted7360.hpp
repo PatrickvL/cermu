@@ -34,10 +34,12 @@
 #include <cstdint>
 
 #include "chip/video/video_chip_base.hpp"
+#include "core/signal/composite_video_stream.hpp"
 #include "core/system_lines.hpp"
 #include "utils/ring_buffer.hpp"
 
 class IndexedFrameBuffer;
+struct AudioPort;
 
 // ============================================================================
 // TED REGISTER TABLE — single source of truth
@@ -434,11 +436,17 @@ struct ted_sound_unit_t {
     uint32_t sample_frac;               // Fractional accumulator for sample timing (16.16)
 
     // --- Analog output stage (first-order IIR filters) ---
-    float    lowpass_buf;               // Lowpass filter state
-    float    highpass_buf;              // Highpass filter state
-    float    lowpass_alpha;             // Lowpass coefficient
-    float    highpass_alpha;            // Highpass coefficient
+    float    lowpass_buf;               // Lowpass filter state (host-rate, legacy path)
+    float    highpass_buf;              // Highpass filter state (host-rate, legacy path)
+    float    lowpass_alpha;             // Lowpass coefficient (host-rate)
+    float    highpass_alpha;            // Highpass coefficient (host-rate)
     float    output_gain;               // Maps filtered output to float range
+
+    // Per-TED-clock IIR coefficients (chip-rate, for AudioPort path)
+    float    lp_alpha_chip;             // Lowpass at TED master clock rate
+    float    hp_alpha_chip;             // Highpass at TED master clock rate
+    float    lp_buf_chip;              // Lowpass state (chip-rate path)
+    float    hp_buf_chip;              // Highpass state (chip-rate path)
 
     // --- Output ring buffer (mono float, -1.0..+1.0) ---
     AudioRingBuffer audio_buffer{TED_AUDIO_BUFFER_SIZE};
@@ -567,6 +575,14 @@ struct ted7360_t : public VideoChipBase {
     // Display output (non-owning pointer set by system)
     IndexedFrameBuffer*    display_ = nullptr;
     uint8_t*               color_line_ = nullptr;  // Per-pixel palette index buffer (owned)
+
+    // Video stream output (non-owning pointer, set by system/board)
+    CompositeVideoStream* video_stream_ = nullptr;
+    void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
+
+    // Audio port output (non-owning pointer, set by system/board)
+    AudioPort* audio_port_ = nullptr;
+    void set_audio_port(AudioPort* p) { audio_port_ = p; }
 
     // IRQ state (mirrors register file but kept separate for quick access)
     uint8_t irq_status = 0;             // Latched IRQ source bits (see TED_IRQ_*)

@@ -32,6 +32,7 @@
 
 #include "chip/video/ted/ted7360.hpp"
 #include "core/indexed_frame_buffer.hpp"
+#include "core/signal/audio_port.hpp"
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -308,6 +309,13 @@ void ted7360_t::audio_reset(uint32_t ted_clock_hz, uint32_t sample_rate_hz) {
     // Map to roughly ±0.8 float range for comfortable headroom.
     sound.output_gain = 0.8f / static_cast<float>(ted_volume_table[3 * 16 + 8]);
 
+    // Chip-rate IIR coefficients (for AudioPort path)
+    float dt_chip = 1.0f / static_cast<float>(ted_clock_hz);
+    sound.lp_alpha_chip = dt_chip / (dt_chip + 1.0e-4f);
+    sound.hp_alpha_chip = dt_chip / (dt_chip + 1.0e-3f);
+    sound.lp_buf_chip = 0.0f;
+    sound.hp_buf_chip = 0.0f;
+
     // Zero runtime state (preserving decoded register values)
     sound.ch1_counter    = 0;
     sound.ch2_counter    = 0;
@@ -327,7 +335,7 @@ void ted7360_t::audio_reset(uint32_t ted_clock_hz, uint32_t sample_rate_hz) {
 
 void ted7360_t::audio_tick() {
     // Skip if audio not initialized (cycles_per_sample_fp == 0)
-    if (sound.cycles_per_sample_fp == 0) return;
+    if (sound.cycles_per_sample_fp == 0 && !audio_port_) return;
 
     // Process 2 TED clock ticks per CPU cycle (TED master clock = 2 × CPU)
     for (int half = 0; half < 2; ++half) {
@@ -356,17 +364,14 @@ void ted7360_t::audio_tick() {
         }
 
         // --- Mix voices using volume table ---
-        // Determine each voice's digital output level
         bool v0_high, v1_high;
 
         if (sound.da_mode) {
-            // DA mode: both voices held high, volume register acts as DAC
             v0_high = true;
             v1_high = true;
         } else {
             v0_high = sound.ch1_enabled && sound.ch1_output;
             if (sound.noise_enabled) {
-                // Noise mode: channel 2 output from LFSR bit 0 (inverted per VICE)
                 v1_high = sound.ch2_enabled && !(sound.noise_shift_reg & 1);
             } else {
                 v1_high = sound.ch2_enabled && sound.ch2_output;
@@ -376,42 +381,47 @@ void ted7360_t::audio_tick() {
         uint8_t table_index = static_cast<uint8_t>(
             (v1_high ? 2u : 0u) | (v0_high ? 1u : 0u));
         uint8_t vol = sound.volume;
-        if (vol > 8) vol = 8;   // Hardware clamp: volumes 9-15 = same as 8
+        if (vol > 8) vol = 8;
 
-        sound.sample_accum += static_cast<uint32_t>(
+        uint32_t dac_value = static_cast<uint32_t>(
             ted_volume_table[table_index * 16 + vol]);
-        sound.sample_tick_count++;
 
-        // --- Downsample: emit one output sample when enough TED clocks elapsed ---
-        sound.sample_frac += (1u << 16);
-        if (sound.sample_frac >= sound.cycles_per_sample_fp) {
-            sound.sample_frac -= sound.cycles_per_sample_fp;
+        if (audio_port_) {
+            // ---- AudioPort path: per-TED-clock IIR → drive AudioPort ----
+            float raw = static_cast<float>(dac_value);
+            sound.lp_buf_chip += sound.lp_alpha_chip * (raw - sound.lp_buf_chip);
+            float ac = sound.lp_buf_chip - sound.hp_buf_chip;
+            sound.hp_buf_chip += sound.hp_alpha_chip * (sound.lp_buf_chip - sound.hp_buf_chip);
+            audio_port_->drive(ac * sound.output_gain);
+        } else {
+            // ---- Legacy path: accumulate → downsample → IIR → float ring ----
+            sound.sample_accum += dac_value;
+            sound.sample_tick_count++;
 
-            // Average accumulated table values over this sample window
-            float raw = 0.0f;
-            if (sound.sample_tick_count > 0) {
-                raw = static_cast<float>(sound.sample_accum)
-                    / static_cast<float>(sound.sample_tick_count);
+            sound.sample_frac += (1u << 16);
+            if (sound.sample_frac >= sound.cycles_per_sample_fp) {
+                sound.sample_frac -= sound.cycles_per_sample_fp;
+
+                float raw = 0.0f;
+                if (sound.sample_tick_count > 0) {
+                    raw = static_cast<float>(sound.sample_accum)
+                        / static_cast<float>(sound.sample_tick_count);
+                }
+
+                sound.lowpass_buf += sound.lowpass_alpha * (raw - sound.lowpass_buf);
+                float ac = sound.lowpass_buf - sound.highpass_buf;
+                sound.highpass_buf += sound.highpass_alpha
+                                    * (sound.lowpass_buf - sound.highpass_buf);
+
+                float out = ac * sound.output_gain;
+                if (out > 1.0f) out = 1.0f;
+                if (out < -1.0f) out = -1.0f;
+
+                sound.audio_buffer.write(&out, 1);
+
+                sound.sample_accum = 0;
+                sound.sample_tick_count = 0;
             }
-
-            // Lowpass: smooths square-wave harmonics
-            sound.lowpass_buf += sound.lowpass_alpha * (raw - sound.lowpass_buf);
-
-            // Highpass: removes DC offset (coupling capacitor model)
-            float ac = sound.lowpass_buf - sound.highpass_buf;
-            sound.highpass_buf += sound.highpass_alpha
-                                * (sound.lowpass_buf - sound.highpass_buf);
-
-            // Scale to float range and clamp
-            float out = ac * sound.output_gain;
-            if (out > 1.0f) out = 1.0f;
-            if (out < -1.0f) out = -1.0f;
-
-            // Write to ring buffer (drop sample if full)
-            sound.audio_buffer.write(&out, 1);
-
-            sound.sample_accum = 0;
-            sound.sample_tick_count = 0;
         }
     }
 }
@@ -719,6 +729,32 @@ void ted7360_t::timing_advance() {
 
     // --- End of line ---
     flush_line(timing.raster_counter);
+
+    // Drive video stream with the completed scanline's pixel data
+    if (video_stream_) {
+        const uint16_t raster = timing.raster_counter;
+        const uint16_t fvl = timing.first_visible_line;
+        const uint16_t lines = timing.lines_per_frame;
+        const uint16_t vis_h = timing.is_pal ? TED_VISIBLE_HEIGHT_PAL : TED_VISIBLE_HEIGHT_NTSC;
+
+        // Check if raster is in visible range (wrapping case: PAL first_visible=275)
+        uint16_t fb_row = (raster + lines - fvl) % lines;
+        bool in_vblank = (fb_row >= vis_h);
+        bool frame_end = (raster == lines - 1);
+
+        // HSync sample — marks start of this scanline
+        VideoFlags sync_flags = VideoFlags::HSync;
+        if (in_vblank) sync_flags = sync_flags | VideoFlags::VSync | VideoFlags::Blank;
+        if (frame_end) sync_flags = sync_flags | VideoFlags::FrameEnd;
+        video_stream_->drive({0, sync_flags});
+
+        // Visible pixel data
+        if (!in_vblank && color_line_) {
+            for (uint16_t i = 0; i < TED_VISIBLE_WIDTH; i++) {
+                video_stream_->drive({color_line_[i], VideoFlags::BeamOn});
+            }
+        }
+    }
 
     timing.x_cycle = 0;
     timing.x_pixel = 0;

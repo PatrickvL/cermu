@@ -657,6 +657,17 @@ bool Commodore264System<V>::initialize() {
                   c16_constants::DISPLAY_HEIGHT);
     display_.set_palette(ted7360_t::get_palette(), 128);
     ted_->set_display(&display_);
+
+    // Wire TED to composite video stream port
+    video_port_ = std::make_unique<CompositeVideoPort>();
+    ted_->set_stream(&video_port_->stream());
+
+    // Wire TED to audio port (decimates TED master-clock-rate audio to host sample rate)
+    audio_port_ = std::make_unique<AudioPort>();
+    uint32_t ted_clock = ted_->timing.is_pal ? TED_PAL_CLOCK_HZ : TED_NTSC_CLOCK_HZ;
+    audio_port_->configure(ted_clock, c16_constants::AUDIO_SAMPLE_RATE);
+    ted_->set_audio_port(audio_port_.get());
+
     register_display(&display_);
 
     initialized_ = true;
@@ -788,6 +799,11 @@ void Commodore264System<V>::run_frame() {
         tick();
     }
 
+    // Swap video stream frame
+    if (video_port_) {
+        video_port_->swap_frame();
+    }
+
     // Check deferred load once per frame (only active during boot)
     check_deferred_load();
 
@@ -879,12 +895,18 @@ void Commodore264System<V>::get_display_dimensions(int* width, int* height) cons
 
 template<C264SeriesVariant V>
 uint32_t Commodore264System<V>::get_audio_samples(float* buffer, uint32_t max_samples) {
-    if (!ted_ || !buffer || max_samples == 0) return 0;
+    if (!buffer || max_samples == 0) return 0;
 
+    // AudioPort path: TED drives audio_port_ per TED clock via IIR-filtered float
+    if (audio_port_) {
+        return static_cast<uint32_t>(audio_port_->read_samples(buffer, static_cast<int>(max_samples)));
+    }
+
+    // Legacy path: read float samples from TED's internal ring buffer
+    if (!ted_) return 0;
     uint32_t avail = ted_->audio_available();
     uint32_t to_read = (avail < max_samples) ? avail : max_samples;
     if (to_read == 0) return 0;
-
     return ted_->audio_read(buffer, to_read);
 }
 
@@ -892,9 +914,15 @@ template<C264SeriesVariant V>
 void Commodore264System<V>::set_audio_sample_rate(int sample_rate_hz) {
     if (!ted_ || sample_rate_hz <= 0) return;
 
-    // Re-initialize TED audio with the new sample rate
     bool is_pal = (config_.region_option_index <= 0);
     uint32_t ted_clock = is_pal ? TED_PAL_CLOCK_HZ : TED_NTSC_CLOCK_HZ;
+
+    // Reconfigure AudioPort decimation for the negotiated host sample rate
+    if (audio_port_) {
+        audio_port_->configure(ted_clock, static_cast<uint32_t>(sample_rate_hz));
+    }
+
+    // Also update legacy path (TED internal ring buffer downsample ratio)
     ted_->audio_reset(ted_clock, static_cast<uint32_t>(sample_rate_hz));
 }
 
