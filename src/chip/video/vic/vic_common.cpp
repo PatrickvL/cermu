@@ -91,7 +91,7 @@ void vic_base_t::reset() {
     matrix_video_byte = 0;
     matrix_color_byte = 0;
     matrix_char_data = 0;
-    pixel_line_index = 0;
+    frame_wrapped_ = false;
 
     // Decode all cached register fields from the reset defaults
     decode_all_registers();
@@ -206,11 +206,6 @@ void vic_base_t::decode_all_registers() {
 }
 
 // Buffer a single pixel for end-of-line stream emission.
-void vic_base_t::emit_pixel(uint8_t color_index) {
-    if (pixel_line_index < VIC_MAX_LINE_WIDTH) {
-        color_line_buffer[pixel_line_index++] = color_index & 0x0F;
-    }
-}
 
 
 
@@ -470,34 +465,21 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
     // Increment cycle counter
     current_cycle++;
     if (current_cycle >= cycles_per_line) {
-        // End-of-line: emit collected scanline to video stream.
-        // drive_flags_ holds the maintained sync flags for this raster line
-        // (HSync always set; VSync|Blank when in vblank; FrameEnd on last line).
-        if (video_stream_) {
-            video_stream_->drive({0, drive_flags_});
-
-            if (!has_flag(drive_flags_, VideoFlags::VSync) && pixel_line_index > 0) {
-                for (int i = 0; i < pixel_line_index; i++) {
-                    video_stream_->drive({color_line_buffer[i], VideoFlags::BeamOn});
-                }
-            }
-        }
-        pixel_line_index = 0;
-
         current_cycle = 0;
 
         // Move to next raster line
         raster_counter++;
         if (raster_counter >= total_lines) {
             raster_counter = 0;
+            frame_wrapped_ = true;
         }
 
-        // Update drive_flags_ for the new raster line
+        // Update drive_flags_ for the new raster line:
+        //   HSync active only during cycle 0 (cleared in cycle 1)
+        //   VSync + Blank during vertical blanking (raster < 28)
         drive_flags_ = VideoFlags::HSync;
         if (raster_counter < 28)
             drive_flags_ = drive_flags_ | VideoFlags::VSync | VideoFlags::Blank;
-        if (raster_counter == total_lines - 1)
-            drive_flags_ = drive_flags_ | VideoFlags::FrameEnd;
 
         const uint8_t char_height = cached_char_height;
         // Check if entering/leaving display area
@@ -518,6 +500,10 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
             matrix_index = char_row * columns;
         }
     }
+    else if (current_cycle == 1) {
+        // Clear HSync after cycle 0 — the falling edge creates the sync event.
+        drive_flags_ = drive_flags_ & ~VideoFlags::HSync;
+    }
 
     // Derive character area status from current cycle position
     const uint16_t screen_origin_x = cached_screen_origin_x;
@@ -526,7 +512,14 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
 
     const uint8_t border_color = cached_border_color;
     
-    // Emit 4 pixels per cycle
+    // ---------------------------------------------------------------
+    // PER-DOT-CLOCK STREAM DRIVING — 4 pixels per chip cycle
+    // ---------------------------------------------------------------
+    // Resolve 4 pixel colors into a local array, then drive the stream.
+    // drive_flags_ is maintained at cycle boundaries (HSync on cycle 0,
+    // VSync during vblank).  FrameEnd is a one-shot overlay.
+
+    uint8_t px[4];
 
     if (in_display_area && in_char_area) {
         // Use cached base addresses (decoded on register write)
@@ -570,46 +563,59 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
         // Emit high nyble (4 pixels)
         if (matrix_color_byte & VIC_COLOR_MULTICOLOR) {  // Multicolor mode
             const uint8_t auxiliary_color = cached_auxiliary_color;
-            // Emit 2 pixels for bits 7-6
-            uint8_t color = 0;
+            // 2 pixels for bits 7-6
+            uint8_t c0 = 0;
             switch ((matrix_char_data >> 6) & 3) {
-                case 0b00: color = background_color; break;
-                case 0b01: color = border_color; break;
-                case 0b10: color = foreground_color; break;
-                case 0b11: color = auxiliary_color; break;
+                case 0b00: c0 = background_color; break;
+                case 0b01: c0 = border_color; break;
+                case 0b10: c0 = foreground_color; break;
+                case 0b11: c0 = auxiliary_color; break;
             }
-            emit_pixel(color);
-            emit_pixel(color);
+            px[0] = c0;
+            px[1] = c0;
 
-            // Emit 2 pixels for bits 5-4
+            // 2 pixels for bits 5-4
+            uint8_t c1 = 0;
             switch ((matrix_char_data >> 4) & 3) {
-                case 0b00: color = background_color; break;
-                case 0b01: color = border_color; break;
-                case 0b10: color = foreground_color; break;
-                case 0b11: color = auxiliary_color; break;
+                case 0b00: c1 = background_color; break;
+                case 0b01: c1 = border_color; break;
+                case 0b10: c1 = foreground_color; break;
+                case 0b11: c1 = auxiliary_color; break;
             }
-            emit_pixel(color);
-            emit_pixel(color);
+            px[2] = c1;
+            px[3] = c1;
         }
         else {  // Hires mode
-            // Reverse mode: bit 3 of $900F controls screen inversion
-            // When reverse=1 (normal): set pixels use foreground, clear pixels use background
-            // When reverse=0 (inverted): set pixels use background, clear pixels use foreground
             const bool reversed = cached_reversed;
             const uint8_t fg = reversed ? background_color : foreground_color;
             const uint8_t bg = reversed ? foreground_color : background_color;
-            emit_pixel((matrix_char_data & 0x80) ? fg : bg);
-            emit_pixel((matrix_char_data & 0x40) ? fg : bg);
-            emit_pixel((matrix_char_data & 0x20) ? fg : bg);
-            emit_pixel((matrix_char_data & 0x10) ? fg : bg);
+            px[0] = (matrix_char_data & 0x80) ? fg : bg;
+            px[1] = (matrix_char_data & 0x40) ? fg : bg;
+            px[2] = (matrix_char_data & 0x20) ? fg : bg;
+            px[3] = (matrix_char_data & 0x10) ? fg : bg;
         }
     }
     else {
-        // Emit 4 border pixels
-        emit_pixel(border_color);
-        emit_pixel(border_color);
-        emit_pixel(border_color);
-        emit_pixel(border_color);
+        // Border pixels
+        px[0] = border_color;
+        px[1] = border_color;
+        px[2] = border_color;
+        px[3] = border_color;
+    }
+
+    // Drive 4 pixels to the video stream
+    if (video_stream_) {
+        VideoFlags flags = drive_flags_;
+        // FrameEnd is a one-shot: consume on first pixel of the frame
+        if (frame_wrapped_) {
+            frame_wrapped_ = false;
+            flags = flags | VideoFlags::FrameEnd;
+        }
+        const bool is_vblank = has_flag(flags, VideoFlags::VSync);
+        for (int i = 0; i < 4; i++) {
+            const uint8_t color = is_vblank ? uint8_t(0) : px[i];
+            video_stream_->drive({color, (i == 0) ? flags : (flags & ~VideoFlags::FrameEnd)});
+        }
     }
 
 #ifdef CERMU_HAS_GUI
