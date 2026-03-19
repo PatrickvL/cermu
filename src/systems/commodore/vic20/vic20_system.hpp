@@ -2,6 +2,7 @@
 
 #include "systems/commodore/commodore_system.hpp"
 #include "core/board.hpp"
+#include "core/signal/video_port.hpp"
 #include "chip/memory/ram_chip.hpp"
 #include "chip/memory/rom_chip.hpp"
 #include "chip/io/mos6522.hpp"
@@ -13,6 +14,7 @@
 #include "chip/cpu/fam65xx/mos6502.hpp"
 
 #include <cstdint>
+#include <memory>
 #include <string>
 
 /**
@@ -133,6 +135,7 @@ public:
 private:
     vic20_bus_t bus_;
     IndexedFrameBuffer display_;  // Display output for GPU indexed rendering
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
     
     // ── Memory bus (declarative manifest + page-pointer dispatch) ────────
     using Bus = MemoryBus<VIC20BusTraits::Spec>;

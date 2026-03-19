@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "chip/video/video_chip_base.hpp"
+#include "core/signal/composite_video_stream.hpp"
 #include "core/system_lines.hpp"
 
 class IndexedFrameBuffer;
@@ -273,7 +274,13 @@ struct vic_base_t : public VideoChipBase {
     uint8_t color_line_buffer[VIC_MAX_LINE_WIDTH] = {};  // Per-pixel palette index buffer
     int pixel_line_index = 0;
 
-    // Display output (non-owning pointer set by system)
+    // Video stream output (non-owning pointer, set by system/board)
+    CompositeVideoStream* video_stream_ = nullptr;
+    void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
+    VideoFlags flags_prepack_ = VideoFlags::None;
+
+    // Legacy display output (non-owning pointer set by system)
+    // TODO: remove once all systems use VideoPort bridge
     IndexedFrameBuffer* display_ = nullptr;
     void set_display(IndexedFrameBuffer* d) { display_ = d; }
 
@@ -344,5 +351,7 @@ protected:
 
 private:
     void emit_pixel(uint8_t color_index);
+    void drive_pixel(uint8_t color_index);  // stream-based output
     void flush_pixel_line(int raster_line);
+    void update_video_flags();  // update flags_prepack_ on state transitions
 };
