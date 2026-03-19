@@ -290,6 +290,10 @@ public:
     // Video stream output (non-owning pointer, set by system/board)
     CompositeVideoStream* video_stream_ = nullptr;
 
+    // Per-dot-clock stream driving state
+    VideoFlags drive_flags_ = VideoFlags::HSync | VideoFlags::VSync | VideoFlags::Blank;
+    bool       frame_wrapped_ = false;
+
     // Active palette variant — pointer into palette_cache_[].  Set to nullptr
     // to mark as stale; the render path checks this once per dot with an
     // unlikely branch and reselects the variant on demand.  Coalesces rapid
@@ -339,6 +343,10 @@ public:
         std::fill(std::begin(open_bus_refresh_), std::end(open_bus_refresh_), 0);
         io_latch_ = 0;
         bus_snapshot_ = PPU_BUS_DEFAULT_STATE;   // PPU bus (active-low signals HIGH)
+
+        // Per-dot-clock stream state — scanline -1 is pre-render (non-visible)
+        frame_wrapped_ = false;
+        drive_flags_ = VideoFlags::HSync | VideoFlags::VSync | VideoFlags::Blank;
 
         // Clear memory
         if (ciram_) std::memset(ciram_, 0, CIRAM_SIZE);

@@ -219,6 +219,18 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
             pending_vbl_set_ = true;
             vbl_was_suppressed_ = false;
         }
+
+        // Per-dot stream driving (VBlank — all samples are blank)
+        if (cycle == 1) drive_flags_ = drive_flags_ & ~VideoFlags::HSync;
+        if (video_stream_) {
+            VideoFlags flags = drive_flags_;
+            if (frame_wrapped_) {
+                frame_wrapped_ = false;
+                flags = flags | VideoFlags::FrameEnd;
+            }
+            video_stream_->drive({0, flags});
+        }
+
         // Inline cycle advance — no odd-frame skip, no rendering to flush.
         cycle++;
         if (cycle >= DOTS_PER_SCANLINE) {
@@ -230,12 +242,13 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                 scanline = -1;
                 frame_complete = true;
                 frame_count++;
-
-                // FrameEnd marker in the video stream
-                if (video_stream_) {
-                    video_stream_->drive({0, VideoFlags::FrameEnd});
-                }
+                frame_wrapped_ = true;
             }
+
+            // Update drive_flags_ for the new scanline
+            drive_flags_ = VideoFlags::HSync;
+            if (scanline < 0 || scanline >= 240)
+                drive_flags_ = drive_flags_ | VideoFlags::VSync | VideoFlags::Blank;
         }
         status_read_last_dot_ = false;
         return ppu_bus;
@@ -545,20 +558,24 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
         scanline_color_line_[x] = palette[pal_mirror_[color_idx]] & 0x3F;
     }
 
-    // Flush remaining pixels of the visible scanline to screen buffer.
-    // Pixels [0, scanline_flush_x_) were already flushed by mid-scanline
-    // palette/mask changes; flush the tail [scanline_flush_x_, 256).
+    // Prevent mid-HBlank emphasis re-flush after last visible pixel
     if (scanline >= 0 && cycle == 257) {
         if (unlikely(!active_palette_)) rebuild_active_palette();
-        scanline_flush_x_ = 256;  // Prevent re-flush from HBlank palette writes
+        scanline_flush_x_ = 256;
+    }
 
-        // Drive video stream with the completed scanline
-        if (video_stream_) {
-            video_stream_->drive({0, VideoFlags::HSync});  // HSync marker
-            for (int i = 0; i < 256; i++) {
-                video_stream_->drive({scanline_color_line_[i], VideoFlags::BeamOn});
-            }
+    // ===== Per-dot stream driving (1 sample per PPU dot) =====
+    if (cycle == 1) drive_flags_ = drive_flags_ & ~VideoFlags::HSync;
+    if (video_stream_) {
+        VideoFlags flags = drive_flags_;
+        if (frame_wrapped_) {
+            frame_wrapped_ = false;
+            flags = flags | VideoFlags::FrameEnd;
         }
+        uint8_t color = 0;
+        if (scanline >= 0 && cycle >= 1 && cycle < 257)
+            color = scanline_color_line_[cycle - 1];
+        video_stream_->drive({color, flags});
     }
 
     // Advance cycle
@@ -576,23 +593,18 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
         scanline_event_  = 0;  // Reset event counter for new scanline
         scanline_flush_x_ = 0; // Reset partial-flush cursor for new scanline
 
-        // Drive VBlank line markers to the video stream (non-visible scanlines)
-        if (video_stream_ && (scanline >= 240 || scanline < 0)) {
-            VideoFlags flags = VideoFlags::HSync | VideoFlags::VSync | VideoFlags::Blank;
-            video_stream_->drive({0, flags});
-        }
-
         scanline++;
         if (scanline >= total_scanlines_minus_one_) {
             scanline = -1;
             frame_complete = true;
             frame_count++;
-
-            // FrameEnd marker in the video stream
-            if (video_stream_) {
-                video_stream_->drive({0, VideoFlags::FrameEnd});
-            }
+            frame_wrapped_ = true;
         }
+
+        // Update drive_flags_ for the new scanline
+        drive_flags_ = VideoFlags::HSync;
+        if (scanline < 0 || scanline >= 240)
+            drive_flags_ = drive_flags_ | VideoFlags::VSync | VideoFlags::Blank;
     }
     status_read_last_dot_ = false;  // Consumed; clear for next dot
 
