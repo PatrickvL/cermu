@@ -1012,8 +1012,9 @@ void SessionGUI::render_screen() {
         // update_screen_texture(), creating a data-race window.
         std::lock_guard<std::mutex> lock(fb_mutex_);
 
+        // Stream texture upload — runs alongside the indexed path as
+        // infrastructure; the stream shader is not yet used for rendering.
         if (use_stream_shader_ && stream_shader_ && stream_texture_ && stream_snapshot_len_ > 0) {
-            // Upload color-index stream data to GPU (already extracted in emu thread)
             glBindTexture(GL_TEXTURE_2D, stream_texture_);
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
             int full_rows = static_cast<int>(stream_snapshot_len_) / stream_shader::STREAM_TEX_WIDTH;
@@ -1047,10 +1048,10 @@ void SessionGUI::render_screen() {
             indexed_shader::glUniform1i(stream_loc_display_h_, stream_display_height_);
             indexed_shader::glUniform1i(stream_loc_display_w_, stream_display_width_);
             indexed_shader::glUseProgram(0);
+        }
 
-            // Re-upload palette for stream shader path
-            update_palette_texture(system_->get_gpu_palette_data(), gpu_palette_size_);
-        } else if (use_gpu_indexed_ && index_textures_[0]) {
+        // Primary display path — indexed framebuffer (CPU-reconstructed)
+        if (use_gpu_indexed_ && index_textures_[0]) {
             // GPU indexed path — upload 1 byte/pixel R8 index texture
             GLuint upload_tex = index_textures_[texture_write_idx_];
             update_index_texture(upload_tex, fb_width_, fb_height_, index_snapshot_);
@@ -1069,14 +1070,11 @@ void SessionGUI::render_screen() {
     }
 
     // Always render the most recently uploaded texture (read index = opposite of write)
+    // Stream shader is not yet used for rendering — indexed path is primary.
     GLuint display_tex = 0;
     bool use_indexed_shader = false;
     bool use_stream = false;
-    if (use_stream_shader_ && stream_shader_ && stream_display_height_ > 0) {
-        // Stream shader path — display from packed stream texture
-        display_tex = stream_texture_;
-        use_stream = true;
-    } else if (use_gpu_indexed_ && index_textures_[0]) {
+    if (use_gpu_indexed_ && index_textures_[0]) {
         display_tex = index_textures_[texture_write_idx_ ^ 1];
         use_indexed_shader = true;
     } else if (screen_textures_[0]) {
