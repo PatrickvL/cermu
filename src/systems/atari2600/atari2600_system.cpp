@@ -201,6 +201,7 @@ bool Atari2600System::initialize() {
     video_port_ = std::make_unique<CompositeVideoPort>();
     tia_->set_stream(&video_port_->stream());
     video_port_->bind_display(&display_, tia_->palette_rgba_);
+    video_port_->bind_frame_output(&last_frame_data_);
 
     // Audio port — TIA does its own decimation, uses drive_sample()
     audio_port_ = std::make_unique<AudioPort>();

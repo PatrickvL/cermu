@@ -24,20 +24,6 @@
 // Forward declaration for bridge — chips never see this
 class IndexedFrameBuffer;
 
-// Maximum stream buffer: enough for one full frame of the largest system.
-// C64 PAL: 504×312 ≈ 157K samples.  Allow generous headroom.
-inline constexpr uint32_t MAX_STREAM_SAMPLES = 512 * 320;  // ~163K
-inline constexpr uint32_t MAX_SYNC_EVENTS    = 400;
-
-// FrameData — handed off to the display layer once per frame
-struct FrameData {
-    void*      stream;
-    uint32_t   stream_len;
-    SyncEvent* sync_events;
-    uint32_t   sync_count;
-    SignalType signal_type;
-};
-
 // SignalTraits — maps a sample type to its SignalType enum value
 template<typename SampleT> struct SignalTraits;
 
@@ -190,6 +176,16 @@ public:
         bound_palette_ = palette;
     }
 
+    // ====================================================================
+    // Frame output binding — automatically store the last FrameData in
+    // an external location (e.g. System::last_frame_data_) so the GUI
+    // thread can snapshot stream data between run_frame() calls.
+    // ====================================================================
+
+    void bind_frame_output(FrameData* out) noexcept { frame_output_ = out; }
+
+    const FrameData& last_frame_data() const noexcept { return last_frame_; }
+
     FrameData swap_frame() noexcept {
         // Use the snapshot taken at FrameEnd (self-bounding reset);
         // fall back to current ptr position for non-FrameEnd callers.
@@ -204,6 +200,10 @@ public:
             .sync_count  = sync_count_,
             .signal_type = SignalTraits<Sample>::type,
         };
+
+        // Store for later access (e.g. GUI thread snapshot)
+        last_frame_ = fd;
+        if (frame_output_) *frame_output_ = fd;
 
         // Auto-reconstruct into bound framebuffer before resetting
         if (bound_fb_) {
@@ -237,6 +237,10 @@ private:
     SyncEvent sync_events_[MAX_SYNC_EVENTS];
     uint32_t  sync_count_ = 0;
     int       sync_run_   = 0;
+
+    // Last frame data — stored by swap_frame() before reset
+    FrameData  last_frame_{};
+    FrameData* frame_output_ = nullptr;  // external binding (e.g. System::last_frame_data_)
 
     // Display binding for automatic reconstruction
     IndexedFrameBuffer* bound_fb_         = nullptr;

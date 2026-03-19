@@ -463,6 +463,17 @@ void EmulatorHost::cleanup_indexed_resources() {
     delete[] index_snapshot_; index_snapshot_ = nullptr;
     use_gpu_indexed_ = false;
     gpu_palette_size_ = 0;
+
+    // Stream reconstruction resources
+    if (stream_shader_) { indexed_shader::glDeleteProgram(stream_shader_); stream_shader_ = 0; }
+    if (stream_texture_) { glDeleteTextures(1, &stream_texture_); stream_texture_ = 0; }
+    delete[] stream_snapshot_; stream_snapshot_ = nullptr;
+    delete[] sync_snapshot_; sync_snapshot_ = nullptr;
+    stream_snapshot_len_ = 0;
+    sync_snapshot_count_ = 0;
+    use_stream_shader_ = false;
+    stream_display_width_ = 0;
+    stream_display_height_ = 0;
 }
 
 // ============================================================================

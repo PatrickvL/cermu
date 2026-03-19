@@ -351,6 +351,7 @@ Chip8System::Chip8System()
 
     // Video stream output
     video_port_ = std::make_unique<CompositeVideoPort>();
+    video_port_->bind_frame_output(&last_frame_data_);
 }
 
 // ============================================================================

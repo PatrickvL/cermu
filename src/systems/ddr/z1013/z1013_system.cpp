@@ -112,6 +112,7 @@ bool Z1013System<V>::initialize() {
     video_port_ = std::make_unique<CompositeVideoPort>();
     video_port_->bind_display(&display_, z1013_constants::PALETTE,
                               z1013_constants::FB_WIDTH, 1);
+    video_port_->bind_frame_output(&last_frame_data_);
 
     // Video generator — models TTL character display circuitry
     video_gen_.set_stream(&video_port_->stream());

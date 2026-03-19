@@ -361,6 +361,7 @@ bool NintendoSystem<V>::initialize() {
     video_port_ = std::make_unique<CompositeVideoPort>();
     ppu_->set_stream(&video_port_->stream());
     video_port_->bind_display(&nes_display_, NES_COLOR_TABLE);
+    video_port_->bind_frame_output(&last_frame_data_);
 
     // Wire APU to audio signal port
     audio_port_ = std::make_unique<AudioPort>();

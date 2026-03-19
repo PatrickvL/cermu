@@ -31,3 +31,17 @@ enum class SignalType : uint8_t {
     Vector,
     CompositeArtifact,
 };
+
+// FrameData — handed off to the display layer once per frame
+struct FrameData {
+    void*      stream;
+    uint32_t   stream_len;
+    SyncEvent* sync_events;
+    uint32_t   sync_count;
+    SignalType signal_type;
+};
+
+// Maximum stream buffer: enough for one full frame of the largest system.
+// C64 PAL: 504×312 ≈ 157K samples.  Allow generous headroom.
+inline constexpr uint32_t MAX_STREAM_SAMPLES = 512 * 320;  // ~163K
+inline constexpr uint32_t MAX_SYNC_EVENTS    = 400;

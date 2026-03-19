@@ -107,6 +107,7 @@ bool BombJackSystem::initialize() {
     // Auto-reconstruct stream → framebuffer (palette is dynamically decoded)
     video_port_->bind_display(&display_, display_.palette_data(),
                               bombjack_constants::FB_WIDTH, 1);
+    video_port_->bind_frame_output(&last_frame_data_);
 
     // ── Register chips for Hardware menu ─────────────────────────────────
 
