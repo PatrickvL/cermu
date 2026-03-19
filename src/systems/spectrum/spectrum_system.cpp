@@ -246,6 +246,11 @@ bool SpectrumSystem<V>::initialize() {
     video_port_ = std::make_unique<CompositeVideoPort>();
     ula_.set_stream(&video_port_->stream());
 
+    // Audio port — system mixes beeper + AY, uses drive_sample()
+    audio_port_ = std::make_unique<AudioPort>();
+    audio_port_->configure(spectrum_constants::DEFAULT_SAMPLE_RATE,
+                           spectrum_constants::DEFAULT_SAMPLE_RATE);
+
     printf("%s: System initialized (%dKB RAM)\n", Traits::name, Traits::ram_size_kb);
     system_ready_ = true;
     return true;
@@ -324,6 +329,7 @@ void SpectrumSystem<V>::tick() {
             sample += ay_.get_sample() * 0.5f;
         }
         audio_ring_buf_.write(&sample, 1);
+        if (audio_port_) audio_port_->drive_sample(sample);
     }
 
     // Frame counter
@@ -729,6 +735,7 @@ void SpectrumSystem<V>::get_display_dimensions(int* width, int* height) const {
 template<SpectrumVariant V>
 uint32_t SpectrumSystem<V>::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
+    if (audio_port_) return audio_port_->read_samples(buffer, max_samples);
     return static_cast<uint32_t>(
         audio_ring_buf_.read(buffer, static_cast<size_t>(max_samples)));
 }

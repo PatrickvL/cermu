@@ -2,6 +2,7 @@
 
 #include "systems/chip8/chip8_constants.hpp"
 #include "core/system.hpp"
+#include "core/signal/video_port.hpp"
 #include <cstdint>
 #include <cstring>
 #include <vector>
@@ -93,6 +94,7 @@ private:
 
     // GPU indexed rendering
     IndexedFrameBuffer display_;
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
 
     // ── Input ───────────────────────────────────────────────────────────
     uint8_t keys_[16];               // 16-key keypad state

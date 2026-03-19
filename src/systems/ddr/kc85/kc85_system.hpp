@@ -13,6 +13,8 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/signal/video_port.hpp"
+#include "core/signal/audio_port.hpp"
 
 #include "chip/cpu/z80/u880.hpp"
 #include "chip/cpu/z80/z80.hpp"   // Z80_MREQ_BIT / Z80_IORQ_BIT
@@ -216,6 +218,7 @@ private:
 
     // ── Display ──────────────────────────────────────────────────────────
     IndexedFrameBuffer display_;
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
 
     // ── Keyboard ─────────────────────────────────────────────────────────
     uint8_t keyboard_matrix_[kc85_constants::KEYBOARD_ROWS] = {};
@@ -257,6 +260,7 @@ private:
     uint32_t audio_sample_counter_ = 0;
     uint32_t audio_sample_period_  = 0;   // CPU ticks per audio sample
     AudioRingBuffer audio_ring_buf_{8192};
+    std::unique_ptr<AudioPort> audio_port_;  // Audio signal output
 
     // ── Internal helpers ─────────────────────────────────────────────────
     void        configure_bus_memory_map();   // Initial banking setup after apply()

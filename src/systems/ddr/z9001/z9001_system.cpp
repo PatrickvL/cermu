@@ -111,6 +111,9 @@ bool Z9001System<V>::initialize() {
     display_.set_palette(z9001_constants::PALETTE, 9);
     register_display(&display_);
 
+    // Video stream output
+    video_port_ = std::make_unique<CompositeVideoPort>();
+
     printf("%s: System initialized (RAM: %d KB)\n", Traits::name, Traits::ram_size / 1024);
     system_ready_ = true;
     return true;
@@ -386,6 +389,20 @@ void Z9001System<V>::render_frame() {
     }
 
     display_.flush();
+
+    // Drive video stream with per-line pixel data
+    if (video_port_) {
+        auto& stream = video_port_->stream();
+        const uint8_t* idx = display_.indices();
+        for (int y = 0; y < z9001_constants::FB_HEIGHT; y++) {
+            const uint8_t* line = idx + y * z9001_constants::FB_WIDTH;
+            stream.drive({0, VideoFlags::HSync});
+            for (int x = 0; x < z9001_constants::FB_WIDTH; x++) {
+                stream.drive({line[x], VideoFlags::BeamOn});
+            }
+        }
+        stream.drive({0, VideoFlags::FrameEnd});
+    }
 }
 
 // ============================================================================

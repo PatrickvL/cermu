@@ -27,6 +27,7 @@
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
 #include "core/signal/video_port.hpp"
+#include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/video/spectrum_ula/ferranti_ula.hpp"
 #include "chip/sound/ay_psg/ay_3_8912.hpp"
@@ -228,6 +229,7 @@ private:
     uint32_t audio_sample_counter_ = 0;
     uint32_t audio_sample_period_ = 0;
     AudioRingBuffer audio_ring_buf_{8192};
+    std::unique_ptr<AudioPort> audio_port_;  // Audio signal output
 
     // ========================================================================
     // HELPERS

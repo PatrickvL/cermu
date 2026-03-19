@@ -114,6 +114,9 @@ bool NamcoArcadeSystem<G>::initialize() {
     decode_palette();
     register_display(&display_);
 
+    // Video stream output
+    video_port_ = std::make_unique<CompositeVideoPort>();
+
     // ── Register chips for Hardware menu ────────────────────────────────
     register_bus_chips(board_);
 
@@ -302,6 +305,20 @@ void NamcoArcadeSystem<G>::render_frame() {
     }
 
     display_.flush();
+
+    // Drive video stream with per-line pixel data
+    if (video_port_) {
+        auto& stream = video_port_->stream();
+        const uint8_t* idx = display_.indices();
+        for (int y = 0; y < namco_arcade_constants::FB_HEIGHT; y++) {
+            const uint8_t* line = idx + y * namco_arcade_constants::FB_WIDTH;
+            stream.drive({0, VideoFlags::HSync});
+            for (int x = 0; x < namco_arcade_constants::FB_WIDTH; x++) {
+                stream.drive({line[x], VideoFlags::BeamOn});
+            }
+        }
+        stream.drive({0, VideoFlags::FrameEnd});
+    }
 }
 
 // ============================================================================

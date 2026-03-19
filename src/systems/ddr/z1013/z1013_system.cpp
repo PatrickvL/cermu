@@ -109,6 +109,9 @@ bool Z1013System<V>::initialize() {
     display_.set_palette(z1013_constants::PALETTE, 2);
     register_display(&display_);
 
+    // Video stream output
+    video_port_ = std::make_unique<CompositeVideoPort>();
+
     system_ready_ = true;
     return true;
 }
@@ -310,6 +313,20 @@ void Z1013System<V>::render_frame() {
                                     vram, char_rom_.data(),
                                     COLS, ROWS, 8, 8, 1, 0);
     display_.flush();
+
+    // Drive video stream with per-line pixel data
+    if (video_port_) {
+        auto& stream = video_port_->stream();
+        const uint8_t* idx = display_.indices();
+        for (int y = 0; y < z1013_constants::FB_HEIGHT; y++) {
+            const uint8_t* line = idx + y * z1013_constants::FB_WIDTH;
+            stream.drive({0, VideoFlags::HSync});
+            for (int x = 0; x < z1013_constants::FB_WIDTH; x++) {
+                stream.drive({line[x], VideoFlags::BeamOn});
+            }
+        }
+        stream.drive({0, VideoFlags::FrameEnd});
+    }
 }
 
 // ============================================================================
