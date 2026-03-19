@@ -35,6 +35,12 @@ struct VicIITraits {
     uint16_t first_visible_x_coord;   // First visible X coordinate
     uint16_t last_visible_x_coord;    // Last visible X coordinate
 
+    // Horizontal analog signal timing (X coordinates)
+    uint16_t hsync_start;             // X where HSync pulse begins
+    uint16_t hsync_end;               // X where HSync pulse ends
+    uint16_t burst_start;             // X where color burst gate opens
+    uint16_t burst_end;               // X where color burst gate closes
+
     // Framebuffer area bounds
     uint16_t framebuffer_start_x;
     uint16_t framebuffer_end_x;

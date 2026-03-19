@@ -529,6 +529,14 @@ struct vicii_base_t : public VideoChipBase {
     uint8_t  cached_cycles_per_line = 0;         // cycles_per_line
     const char* cached_chip_name = nullptr;      // chip_name for debug/GUI
 
+    // Horizontal analog signal timing (cached from traits)
+    uint16_t cached_hsync_start = 0;             // X where HSync begins
+    uint16_t cached_hsync_end = 0;               // X where HSync ends
+    uint16_t cached_burst_start = 0;             // X where burst gate opens
+    uint16_t cached_burst_end = 0;               // X where burst gate closes
+    uint16_t cached_last_visible_x = 0;          // last_visible_x_coord
+    uint16_t cached_first_visible_x = 0;         // first_visible_x_coord
+
     // Non-owning pointer to the VicIITraits used at init — needed by reset()
     // to re-initialize with the same configuration.  Always points to an
     // inline constexpr VicIITraits instance (compile-time constant).

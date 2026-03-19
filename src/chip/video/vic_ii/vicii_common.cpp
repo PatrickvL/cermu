@@ -699,32 +699,80 @@ static void vicii_pixel_sequencer(vicii_base_t* vicii) {
     // Sprites are processed every cycle and can overlay any area
     // They have priority over both graphics and border pixels
     vicii_sprite_sequencer(vicii);
-}
 
-// Map raster counter to framebuffer row.
-// The framebuffer stores only visible lines (284 for PAL, 234/235 for NTSC).
-// Row 0 = first visible raster line (last_vblank_line + 1).
-// VBlank rasters map to values >= visible_lines and are filtered out by callers.
-static inline int vicii_raster_to_fb_row(const vicii_base_t* vicii, uint16_t raster) {
-    const uint16_t first_visible = vicii->cached_last_vblank_line + 1;
-    if (raster >= first_visible) {
-        return (int)(raster - first_visible);
-    } else {
-        return (int)(raster + vicii->cached_total_lines - first_visible);
+    // ---------------------------------------------------------------
+    // PER-DOT-CLOCK STREAM DRIVING
+    // ---------------------------------------------------------------
+    // After graphics and sprite processing are complete for this 8-pixel
+    // span, drive the resolved pixels into the video stream with proper
+    // analog signal flags.  Each pixel = one stream sample.  Total per
+    // line: 504 (PAL) or 520/512 (NTSC).
+    if (vicii->video_stream_) {
+        const uint16_t raster = vicii->timing.raster_counter;
+        const uint16_t ppl = vicii->cached_pixels_per_line;
+
+        // VBlank — uniform across all 8 pixels (raster-level property)
+        bool in_vblank;
+        if (vicii->cached_first_vblank_line > vicii->cached_last_vblank_line) {
+            in_vblank = (raster >= vicii->cached_first_vblank_line ||
+                         raster <= vicii->cached_last_vblank_line);
+        } else {
+            in_vblank = (raster >= vicii->cached_first_vblank_line &&
+                         raster <= vicii->cached_last_vblank_line);
+        }
+
+        // FrameEnd: consume flag set by line-0 cycle wrapper
+        const bool frame_end = vicii->frame_wrapped_;
+        if (frame_end) vicii->frame_wrapped_ = false;
+
+        const uint16_t hs_start  = vicii->cached_hsync_start;
+        const uint16_t hs_end    = vicii->cached_hsync_end;
+        const uint16_t bs_start  = vicii->cached_burst_start;
+        const uint16_t bs_end    = vicii->cached_burst_end;
+        const uint16_t vis_last  = vicii->cached_last_visible_x;
+        const uint16_t vis_first = vicii->cached_first_visible_x;
+
+        for (int pixel = 0; pixel < 8; pixel++) {
+            uint16_t px = x_coord + static_cast<uint16_t>(pixel);
+            if (px >= ppl) px -= ppl;
+
+            VideoFlags flags = VideoFlags::None;
+
+            // HSync pulse (non-wrapping range)
+            if (px >= hs_start && px < hs_end)
+                flags = flags | VideoFlags::HSync;
+
+            // HBlank: outside visible area (visible range wraps: first > last)
+            const bool in_hblank = (px > vis_last && px < vis_first);
+            if (in_hblank || in_vblank)
+                flags = flags | VideoFlags::Blank;
+
+            if (in_vblank)
+                flags = flags | VideoFlags::VSync;
+
+            // Color burst gate (non-wrapping range)
+            if (px >= bs_start && px < bs_end)
+                flags = flags | VideoFlags::Burst;
+
+            // FrameEnd on first pixel only
+            if (frame_end && pixel == 0)
+                flags = flags | VideoFlags::FrameEnd;
+
+            // Resolved pixel color from line buffer (0 if blanked)
+            uint8_t color = 0;
+            if (!in_hblank && !in_vblank) {
+                const int16_t buf_pos = vicii_fetch_x_to_buffer_pos(vicii, px);
+                if (buf_pos >= 0)
+                    color = vicii->pixel.color_line[buf_pos];
+            }
+
+            vicii->video_stream_->drive({color, flags});
+        }
     }
 }
 
-void vicii_pixel_flush_line(vicii_base_t* vicii, const uint32_t* palette, int y) {
-    if (!palette || !vicii->display_) return;
-    
-    // color_line is pre-filled with border_color_index at line start
-    // (vicii_line_buffer_reset), then overwritten by per-cycle rendering
-    // for content/sprite pixels.  Flush the full visible width.
-    vicii->display_->flush_line(y, vicii->pixel.color_line, palette,
-                                vicii->cached_visible_pixels);
-}
-
-// vicii_pixel_set_framebuffer removed — system manages display via set_display() + IndexedFrameBuffer.
+// vicii_pixel_flush_line / vicii_raster_to_fb_row removed — per-dot-clock stream
+// driving in vicii_pixel_sequencer replaces the collected-scanline flush path.
 
 // ========================================================================================
 // LIGHTPEN
@@ -1163,45 +1211,10 @@ void vicii_timing_advance(vicii_base_t* vicii) {
         return;
     }
     
-    // --- End of line: drive video stream, advance raster, reset buffers ---
+    // --- End of line: advance raster, reset buffers ---
+    // (Stream driving has moved to per-dot-clock emission in vicii_pixel_sequencer)
     
     const uint16_t completed_raster = vicii->timing.raster_counter;
-
-    // Drive video stream with the completed scanline's pixel data.
-    // Emitted once per line as a burst: HSync marker + visible pixel samples.
-    // The reconstruct_to_framebuffer bridge walks HSync events to delimit lines.
-    if (vicii->video_stream_) {
-        // Determine VBlank state — PAL wraps (first=300, last=15)
-        bool in_vblank;
-        if (vicii->cached_first_vblank_line > vicii->cached_last_vblank_line) {
-            in_vblank = (completed_raster >= vicii->cached_first_vblank_line ||
-                         completed_raster <= vicii->cached_last_vblank_line);
-        } else {
-            in_vblank = (completed_raster >= vicii->cached_first_vblank_line &&
-                         completed_raster <= vicii->cached_last_vblank_line);
-        }
-
-        // FrameEnd: the cycle wrapper that resets raster_counter to 0
-        // runs BEFORE timing_advance, so completed_raster is already 0 by
-        // the time we reach EOL.  Consume the flag set during that reset.
-        const bool frame_end = vicii->frame_wrapped_;
-        vicii->frame_wrapped_ = false;
-
-        // HSync sample — marks start of this scanline in the stream
-        VideoFlags sync_flags = VideoFlags::HSync;
-        if (in_vblank) sync_flags = sync_flags | VideoFlags::VSync | VideoFlags::Blank;
-        if (frame_end) sync_flags = sync_flags | VideoFlags::FrameEnd;
-        vicii->video_stream_->drive({0, sync_flags});
-
-        // Visible pixel data (skip during VBlank — no meaningful pixel output)
-        if (!in_vblank && vicii->pixel.color_line) {
-            const uint16_t vis = vicii->cached_visible_pixels;
-            for (uint16_t i = 0; i < vis; i++) {
-                vicii->video_stream_->drive({vicii->pixel.color_line[i], VideoFlags::BeamOn});
-            }
-        }
-    }
-    
     vicii_set_x_cycle(vicii, 0);
     
     // Reset bad line latch at the start of each new raster line.
@@ -2006,14 +2019,10 @@ bus_state_t vicii_base_t::tick_phi1(bus_state_t bus_state) {
     }
     
     // STEP 5: Perform unified pixel sequencing (8 pixels per cycle)
-    // Border flip-flops are now updated per-pixel WITHIN the pixel sequencer
-    // This uses the graphics data that was JUST loaded above AND the border flip-flop state updated above
-    {
-        const int fb_row = vicii_raster_to_fb_row(vicii, vicii->timing.raster_counter);
-        if (fb_row >= 0 && static_cast<uint16_t>(fb_row) < vicii->cached_total_lines) {
-            vicii_pixel_sequencer(vicii);
-        }
-    }
+    // Border flip-flops are now updated per-pixel WITHIN the pixel sequencer.
+    // This uses the graphics data that was JUST loaded above AND the border
+    // flip-flop state updated above.  Also drives the video stream per-dot-clock.
+    vicii_pixel_sequencer(vicii);
     
     // STEP 5.5: Light pen pin sampling
     // Read LP pin state via callback (control port 1 pin 6 → VIC-II pin 9).
@@ -2428,6 +2437,14 @@ static inline void vicii_initialize_timing(vicii_base_t* vicii, const VicIITrait
     vicii->cached_display_offset = ppl + VICII_PIPELINE_DELAY_PIXELS + VICII_X_CENTERING_PIXELS;
     vicii->cached_first_visible_display = (traits.first_visible_x_coord + vicii->cached_display_offset) % ppl;
     vicii->cached_wrap_threshold = (vicii->cached_first_visible_display + vicii->cached_visible_pixels) % ppl;
+
+    // Horizontal analog signal timing
+    vicii->cached_hsync_start = traits.hsync_start;
+    vicii->cached_hsync_end = traits.hsync_end;
+    vicii->cached_burst_start = traits.burst_start;
+    vicii->cached_burst_end = traits.burst_end;
+    vicii->cached_last_visible_x = traits.last_visible_x_coord;
+    vicii->cached_first_visible_x = traits.first_visible_x_coord;
 }
 
 // ========================================================================================
