@@ -65,9 +65,6 @@ public:
     // Update SID sample rate to match actual audio device rate
     void set_audio_sample_rate(int sample_rate_hz) override;
 
-    // Stream reconstruction back porch
-    int get_stream_back_porch() const override { return stream_back_porch_; }
-
     // Apply KERNAL RAMTAS patch to skip the memory test during boot.
     // Returns true if the patch was applied.
     bool patch_skip_memtest();
@@ -144,7 +141,6 @@ private:
     IndexedFrameBuffer display_;         // Display output for GPU indexed rendering
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
     std::unique_ptr<AudioPort> audio_port_;            // Audio signal output
-    int stream_back_porch_ = 0;                        // Back porch pixels for stream reconstruction
     vicii_standard_t created_vicii_standard_ = VIC_PAL;  // Actual VIC-II standard at creation time
     sid_revision_t pending_sid_revision_ = SID_REVISION_6581_R4AR;  // Applied after SID creation
 

@@ -589,11 +589,6 @@ public:
 
     /// Last frame's stream data (pointers valid until next run_frame).
     const FrameData& get_last_frame_data() const { return last_frame_data_; }
-
-    /// Back porch in pixels — how many stream samples after HSync
-    /// before visible pixels begin.  Systems override if they use
-    /// stream-based rendering with a non-zero back porch.
-    virtual int get_stream_back_porch() const { return 0; }
 };
 
 // Include SystemRegistry (moved to separate file)

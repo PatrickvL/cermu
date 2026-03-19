@@ -39,6 +39,8 @@ struct FrameData {
     SyncEvent* sync_events;
     uint32_t   sync_count;
     SignalType signal_type;
+    int        back_porch;     // samples after HSync before visible pixels
+    int        display_width;  // visible pixels per scanline (0 = use fb width)
 };
 
 // Maximum stream buffer: enough for one full frame of the largest system.
