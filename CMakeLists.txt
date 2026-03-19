@@ -413,6 +413,18 @@ list(APPEND CHIP_SOURCES
     # Video - TMS9918 VDP family (TMS9918/A, TMS9928/29, V9938, V9958, Sega)
     src/chip/video/tms9918/tms9918_registry.cpp
 
+    # Video - KC85 video generator (TTL / U82720)
+    src/chip/video/kc85_video/kc85_video.cpp
+
+    # Video - Character display generator (Z9001, Z1013)
+    src/chip/video/char_display/char_display.cpp
+
+    # Video - Bomb Jack foreground tile renderer
+    src/chip/video/bombjack_video/bombjack_video.cpp
+
+    # Video - Namco arcade tile renderer (Pac-Man, Pengo)
+    src/chip/video/namco_video/namco_video.cpp
+
     # Video - Registry (header-only chips)
     src/chip/video/video_registry.cpp
 )

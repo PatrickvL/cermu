@@ -6,7 +6,6 @@
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
-#include "utils/charset_renderer.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -113,6 +112,15 @@ bool Z9001System<V>::initialize() {
 
     // Video stream output
     video_port_ = std::make_unique<CompositeVideoPort>();
+    video_port_->bind_display(&display_, z9001_constants::PALETTE,
+                              z9001_constants::FB_WIDTH, 1);
+
+    // Video generator — models TTL character display circuitry
+    video_gen_.set_stream(&video_port_->stream());
+    video_gen_.set_geometry(z9001_constants::TEXT_COLS, z9001_constants::TEXT_ROWS,
+                            8, 8,
+                            z9001_constants::FB_WIDTH, z9001_constants::FB_HEIGHT);
+    video_gen_.set_default_colors(8, 0);  // white on black
 
     printf("%s: System initialized (RAM: %d KB)\n", Traits::name, Traits::ram_size / 1024);
     system_ready_ = true;
@@ -352,58 +360,29 @@ bus_state_t Z9001System<V>::io_tick(bus_state_t pins) {
 // The screen buffer is at $EC00 (video_ram_, 1 KB).
 // The color RAM (KC 87 only) is at $E800 (color_ram_, 1 KB).
 // The character ROM provides 8×8 bitmaps for 256 characters (2 KB).
-//
-// Color byte format (KC 87): bits 2-0 = foreground, bits 5-3 = background.
+// ============================================================================
+// VIDEO RENDERING — delegate to CharDisplayGenerator
 // ============================================================================
 
 template<Z9001Variant V>
 void Z9001System<V>::render_frame() {
-    static constexpr int COLS = z9001_constants::TEXT_COLS;
-    static constexpr int ROWS = z9001_constants::TEXT_ROWS;
-
     const uint8_t* vram = video_ram_chip_ ? video_ram_chip_->data() : nullptr;
     if (!vram) return;
 
-    display_.clear();
+    video_gen_.set_vram(vram);
+    video_gen_.set_char_rom(char_rom_.data());
 
     if constexpr (Traits::has_color_ram) {
         const uint8_t* cram = color_ram_chip_ ? color_ram_chip_->data() : nullptr;
         if (cram) {
             // KC87: per-character fg (bits 2:0) and bg (bits 5:3) from color RAM
-            charset_renderer::render_screen_attr(
-                display_.indices(), z9001_constants::FB_WIDTH,
-                vram, char_rom_.data(), cram,
-                0x07, 0,    // fg: bits 2:0, no shift
-                0x38, 3,    // bg: bits 5:3, shift 3
-                COLS, ROWS, 8, 8);
+            video_gen_.set_color_attr({cram, 0x07, 0, 0x38, 3});
         } else {
-            // Color RAM not available — monochrome fallback
-            charset_renderer::render_screen(display_.indices(), z9001_constants::FB_WIDTH,
-                                            vram, char_rom_.data(),
-                                            COLS, ROWS, 8, 8, 8, 0);
+            video_gen_.set_color_attr({});
         }
-    } else {
-        // Z9001: monochrome (white on black)
-        charset_renderer::render_screen(display_.indices(), z9001_constants::FB_WIDTH,
-                                        vram, char_rom_.data(),
-                                        COLS, ROWS, 8, 8, 8, 0);
     }
 
-    display_.flush();
-
-    // Drive video stream with per-line pixel data
-    if (video_port_) {
-        auto& stream = video_port_->stream();
-        const uint8_t* idx = display_.indices();
-        for (int y = 0; y < z9001_constants::FB_HEIGHT; y++) {
-            const uint8_t* line = idx + y * z9001_constants::FB_WIDTH;
-            stream.drive({0, VideoFlags::HSync});
-            for (int x = 0; x < z9001_constants::FB_WIDTH; x++) {
-                stream.drive({line[x], VideoFlags::BeamOn});
-            }
-        }
-        stream.drive({0, VideoFlags::FrameEnd});
-    }
+    video_gen_.render_frame();
 }
 
 // ============================================================================

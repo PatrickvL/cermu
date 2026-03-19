@@ -21,6 +21,7 @@
 #include "chip/sound/ay_psg/ay_3_8910.hpp"
 #include "chip/memory/ram_chip.hpp"
 #include "chip/memory/rom_chip.hpp"
+#include "chip/video/bombjack_video/bombjack_video.hpp"
 #include "core/audio_thread.hpp"
 #include "utils/write_only_synth_adapter.hpp"
 #include <cstdint>
@@ -153,6 +154,7 @@ private:
     // ── Display ──────────────────────────────────────────────────────────
     IndexedFrameBuffer display_;
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
+    BombJackVideo video_gen_;                         // TTL foreground tile renderer
     uint8_t bg_image_select_ = 0;       // Active background (0–4)
 
     // ── Inputs ───────────────────────────────────────────────────────────

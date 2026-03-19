@@ -4,7 +4,6 @@
 
 #include "systems/arcade/bombjack/bombjack_system.hpp"
 #include "utils/resistor_dac.hpp"
-#include "utils/tile_decoder.hpp"
 #include "core/system_registry.hpp"
 #include <cstring>
 #include <cstdio>
@@ -100,6 +99,14 @@ bool BombJackSystem::initialize() {
 
     // Video stream output
     video_port_ = std::make_unique<CompositeVideoPort>();
+
+    // Video generator — models TTL foreground tile rendering hardware
+    video_gen_.set_stream(&video_port_->stream());
+    video_gen_.set_char_rom(char_rom_.data(), static_cast<int>(char_rom_.size()));
+
+    // Auto-reconstruct stream → framebuffer (palette is dynamically decoded)
+    video_port_->bind_display(&display_, display_.palette_data(),
+                              bombjack_constants::FB_WIDTH, 1);
 
     // ── Register chips for Hardware menu ─────────────────────────────────
 
@@ -300,73 +307,15 @@ void BombJackSystem::decode_palette() {
 }
 
 // ============================================================================
-// VIDEO RENDERING — decode FG tilemap into indexed framebuffer
+// VIDEO RENDERING — delegate to BombJackVideo
 // ============================================================================
-//
-// Bomb Jack display: 256×224, visible area 32×28 foreground tiles (8×8).
-//
-// FG tilemap at $9000 (1024 bytes, 32×32 grid, only 32×28 visible):
-//   Tile index byte → character ROM lookup
-//
-// FG attributes at $9400 (1024 bytes):
-//   bits [3:0] = palette group (selects 8 colors from 128-entry palette)
-//   bit 6 = flip X, bit 7 = flip Y
-//
-// Char ROM tile format — 3bpp, 8×8 pixels, 24 bytes per tile:
-//   Plane 0: bytes 0-7, Plane 1: bytes 8-15, Plane 2: bytes 16-23
-//
-// Palette index = palette_group * 8 + pixel_3bit (0-127)
 
 void BombJackSystem::render_frame() {
     if (!fg_tilemap_chip_ || !fg_attr_chip_ || char_rom_.empty()) return;
 
-    const uint8_t* tilemap = fg_tilemap_chip_->data();
-    const uint8_t* attr_map = fg_attr_chip_->data();
-    const uint8_t* chars = char_rom_.data();
-    const int char_count = static_cast<int>(char_rom_.size()) / 24;
-
-    std::memset(display_.indices(), 0, bombjack_constants::FB_WIDTH * bombjack_constants::FB_HEIGHT);
-
-    // Render 32×28 visible foreground tiles
-    // 3bpp planar: 24 bytes/tile (3 planes × 8 rows), plane_stride=8
-    for (int ty = 0; ty < 28; ty++) {
-        for (int tx = 0; tx < 32; tx++) {
-            int offs = ty * 32 + tx;
-            uint8_t tile_idx = tilemap[offs];
-            uint8_t attr = attr_map[offs];
-            uint8_t pal_group = attr & 0x0F;
-            bool flip_x = (attr & 0x40) != 0;
-            bool flip_y = (attr & 0x80) != 0;
-
-            if (tile_idx >= char_count && char_count > 0) tile_idx = 0;
-
-            const uint8_t* tile = chars + tile_idx * 24;
-            uint8_t* dst = display_.indices()
-                         + ty * 8 * bombjack_constants::FB_WIDTH + tx * 8;
-
-            tile_decoder::decode_planar_tile(
-                tile, 1, 8, 3, 8, 8,
-                dst, bombjack_constants::FB_WIDTH,
-                static_cast<uint8_t>(pal_group * 8),
-                flip_x, flip_y, 0x7F);
-        }
-    }
-
-    display_.flush();
-
-    // Drive video stream with per-line pixel data
-    if (video_port_) {
-        auto& stream = video_port_->stream();
-        const uint8_t* idx = display_.indices();
-        for (int y = 0; y < bombjack_constants::FB_HEIGHT; y++) {
-            const uint8_t* line = idx + y * bombjack_constants::FB_WIDTH;
-            stream.drive({0, VideoFlags::HSync});
-            for (int x = 0; x < bombjack_constants::FB_WIDTH; x++) {
-                stream.drive({line[x], VideoFlags::BeamOn});
-            }
-        }
-        stream.drive({0, VideoFlags::FrameEnd});
-    }
+    video_gen_.set_tilemap(fg_tilemap_chip_->data());
+    video_gen_.set_attr_map(fg_attr_chip_->data());
+    video_gen_.render_frame();
 }
 
 // ============================================================================

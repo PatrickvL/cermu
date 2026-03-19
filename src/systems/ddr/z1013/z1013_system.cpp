@@ -5,7 +5,6 @@
 #include "systems/ddr/z1013/z1013_system.hpp"
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
-#include "utils/charset_renderer.hpp"
 #include "core/config/path_discovery.hpp"
 #include <cstring>
 #include <cstdio>
@@ -111,6 +110,15 @@ bool Z1013System<V>::initialize() {
 
     // Video stream output
     video_port_ = std::make_unique<CompositeVideoPort>();
+    video_port_->bind_display(&display_, z1013_constants::PALETTE,
+                              z1013_constants::FB_WIDTH, 1);
+
+    // Video generator — models TTL character display circuitry
+    video_gen_.set_stream(&video_port_->stream());
+    video_gen_.set_geometry(z1013_constants::TEXT_COLS, z1013_constants::TEXT_ROWS,
+                            8, 8,
+                            z1013_constants::FB_WIDTH, z1013_constants::FB_HEIGHT);
+    video_gen_.set_default_colors(1, 0);  // green on black
 
     system_ready_ = true;
     return true;
@@ -297,37 +305,18 @@ bus_state_t Z1013System<V>::io_tick(bus_state_t pins) {
 // The Z1013 has a 32×32 character display. Each screen position maps to one
 // byte in video RAM ($EC00–$EFFF). The character ROM provides 8×8 bitmaps
 // for 256 characters (2 KB ROM). Each character is rendered as 8×8 pixels.
-//
-// If the character ROM has not been loaded, all characters render as blank.
+// ============================================================================
+// VIDEO RENDERING — delegate to CharDisplayGenerator
 // ============================================================================
 
 template<Z1013Variant V>
 void Z1013System<V>::render_frame() {
-    static constexpr int COLS = z1013_constants::TEXT_COLS;
-    static constexpr int ROWS = z1013_constants::TEXT_ROWS;
-
     const uint8_t* vram = video_ram_chip_ ? video_ram_chip_->data() : nullptr;
     if (!vram) return;
 
-    display_.clear();
-    charset_renderer::render_screen(display_.indices(), z1013_constants::FB_WIDTH,
-                                    vram, char_rom_.data(),
-                                    COLS, ROWS, 8, 8, 1, 0);
-    display_.flush();
-
-    // Drive video stream with per-line pixel data
-    if (video_port_) {
-        auto& stream = video_port_->stream();
-        const uint8_t* idx = display_.indices();
-        for (int y = 0; y < z1013_constants::FB_HEIGHT; y++) {
-            const uint8_t* line = idx + y * z1013_constants::FB_WIDTH;
-            stream.drive({0, VideoFlags::HSync});
-            for (int x = 0; x < z1013_constants::FB_WIDTH; x++) {
-                stream.drive({line[x], VideoFlags::BeamOn});
-            }
-        }
-        stream.drive({0, VideoFlags::FrameEnd});
-    }
+    video_gen_.set_vram(vram);
+    video_gen_.set_char_rom(char_rom_.data());
+    video_gen_.render_frame();
 }
 
 // ============================================================================

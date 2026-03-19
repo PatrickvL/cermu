@@ -16,6 +16,7 @@
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/sound/namco_wsg.hpp"
 #include "chip/memory/memory_chip.hpp"
+#include "chip/video/namco_video/namco_video.hpp"
 #include "core/audio_thread.hpp"
 #include "utils/write_only_synth_adapter.hpp"
 #include <cstdint>
@@ -171,6 +172,7 @@ private:
     // ── Display ──────────────────────────────────────────────────────────
     IndexedFrameBuffer display_;
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
+    NamcoVideo video_gen_;                            // TTL tile renderer with 90° rotation
 
     // ── Memory chips (cached for hot-path rendering) ────────────
     RAMChip* vram_chip_ = nullptr;  // Video RAM (tile indices)
