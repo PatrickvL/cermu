@@ -360,6 +360,7 @@ bool NintendoSystem<V>::initialize() {
     // Wire PPU to composite video stream port
     video_port_ = std::make_unique<CompositeVideoPort>();
     ppu_->set_stream(&video_port_->stream());
+    video_port_->bind_display(&nes_display_, NES_COLOR_TABLE);
 
     // Wire APU to audio signal port
     audio_port_ = std::make_unique<AudioPort>();
@@ -467,14 +468,7 @@ void NintendoSystem<V>::run_frame() {
         tick();
     }
 
-    // Reconstruct video stream into IndexedFrameBuffer for display
-    if (video_port_) {
-        FrameData fd = video_port_->swap_frame();
-        video_port_->reconstruct_to_framebuffer(
-            fd, &nes_display_,
-            NES_COLOR_TABLE,
-            0, 0);
-    }
+    if (video_port_) video_port_->swap_frame();
 
     // Signal audio thread with accumulated CPU cycles
     if (apu_synth_engine_) {

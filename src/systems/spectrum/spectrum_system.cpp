@@ -347,6 +347,7 @@ void SpectrumSystem<V>::run_frame() {
     for (uint32_t i = 0; i < spectrum_constants::TSTATES_PER_FRAME; ++i) {
         tick();
     }
+    if (video_port_) video_port_->swap_frame();
 }
 
 // ============================================================================

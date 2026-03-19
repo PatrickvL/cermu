@@ -178,6 +178,7 @@ void VTechVZSystem<V>::run_frame() {
     if (!system_ready_) return;
     for (uint32_t i = 0; i < static_cast<uint32_t>(vtech_vz_constants::TSTATES_PER_FRAME_PAL); ++i)
         tick();
+    if (video_port_) video_port_->swap_frame();
 }
 
 // ============================================================================

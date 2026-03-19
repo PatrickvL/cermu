@@ -200,6 +200,7 @@ bool Atari2600System::initialize() {
     // Video stream output — composite video from TIA
     video_port_ = std::make_unique<CompositeVideoPort>();
     tia_->set_stream(&video_port_->stream());
+    video_port_->bind_display(&display_, tia_->palette_rgba_);
 
     // Audio port — TIA does its own decimation, uses drive_sample()
     audio_port_ = std::make_unique<AudioPort>();
@@ -291,14 +292,7 @@ void Atari2600System::run_frame() {
         tia_->scanline = 0;
     }
 
-    // Reconstruct video stream into IndexedFrameBuffer for display
-    if (video_port_) {
-        FrameData fd = video_port_->swap_frame();
-        video_port_->reconstruct_to_framebuffer(
-            fd, &display_,
-            tia_->palette_rgba_,
-            0, 0);
-    }
+    if (video_port_) video_port_->swap_frame();
 
     // Tick all attached peripheral devices
     tick_peripherals();

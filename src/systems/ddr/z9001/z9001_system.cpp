@@ -170,6 +170,7 @@ template<Z9001Variant V> void Z9001System<V>::run_frame() {
     const uint32_t cycles = static_cast<uint32_t>(
         z9001_constants::TSTATES_PER_FRAME * speed_multiplier_);
     for (uint32_t i = 0; i < cycles; ++i) tick();
+    if (video_port_) video_port_->swap_frame();
 }
 
 template<Z9001Variant V> bool Z9001System<V>::load_file(const char*) { return false; }

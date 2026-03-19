@@ -689,6 +689,8 @@ bool VIC20System::initialize() {
     // Wire VIC chip to video stream port
     video_port_ = std::make_unique<CompositeVideoPort>();
     vic_->set_stream(&video_port_->stream());
+    video_port_->bind_display(&display_, vic_base_t::get_default_palette(),
+                              vic20_constants::DISPLAY_WIDTH);
 
     // Wire VIC chip to audio port (decimates chip-rate audio to host sample rate)
     audio_port_ = std::make_unique<AudioPort>();
@@ -891,23 +893,18 @@ void VIC20System::tick() {
 }
 
 void VIC20System::run_frame() {
+    if (!video_port_) return;
+
     // Check if a deferred file load is waiting for BASIC to reach READY
     check_deferred_load();
 
-    uint32_t adjusted_cycles = static_cast<uint32_t>(cycles_per_frame_ * speed_multiplier_);
-    for (uint32_t i = 0; i < adjusted_cycles; i++) {
+    // Run until the video chip drives FrameEnd into the stream.
+    auto& stream = video_port_->stream();
+    while (!stream.frame_ended()) {
         tick();
     }
 
-    // Reconstruct video stream into IndexedFrameBuffer for display
-    if (video_port_) {
-        FrameData fd = video_port_->swap_frame();
-        video_port_->reconstruct_to_framebuffer(
-            fd, &display_,
-            vic_base_t::get_default_palette(),
-            vic20_constants::DISPLAY_WIDTH,
-            0);
-    }
+    video_port_->swap_frame();
 
     // Tick all attached peripheral devices (datasette, drive, etc.)
     tick_peripherals();

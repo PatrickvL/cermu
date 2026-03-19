@@ -619,6 +619,7 @@ void Chip8System::run_frame() {
             }
         }
         stream.drive({0, VideoFlags::FrameEnd});
+        video_port_->swap_frame();
     }
 }
 

@@ -154,6 +154,7 @@ template<Z1013Variant V> void Z1013System<V>::run_frame() {
     const uint32_t cycles = static_cast<uint32_t>(
         z1013_constants::TSTATES_PER_FRAME * speed_multiplier_);
     for (uint32_t i = 0; i < cycles; ++i) tick();
+    if (video_port_) video_port_->swap_frame();
 }
 
 template<Z1013Variant V> bool Z1013System<V>::load_file(const char*) { return false; }

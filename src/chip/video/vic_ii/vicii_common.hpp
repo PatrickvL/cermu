@@ -557,6 +557,10 @@ struct vicii_base_t : public VideoChipBase {
     // Cached VBlank start for stream flag computation
     uint16_t cached_first_vblank_line = 0;
 
+    // Set by the cycle wrapper that performs line-0 operations (frame wrap).
+    // Consumed at the next end-of-line to emit FrameEnd into the video stream.
+    bool frame_wrapped_ = false;
+
     // Destructor — cleans up dynamically allocated pixel line buffers
     ~vicii_base_t() override;
 

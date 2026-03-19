@@ -32,18 +32,39 @@ struct VideoStream {
     SampleT*   base;
     VideoFlags prev_flags = VideoFlags::None;
 
-    void (*on_sync_change)(void* ctx, VideoFlags flags, uint32_t pos) noexcept;
+    // Length of the most recently completed frame (samples).
+    // Set when on_sync_change signals a frame boundary (returns true);
+    // consumed and cleared by swap_frame().
+    uint32_t   frame_len = 0;
+
+    // Cold-path callback for sync edge processing.  Returns true when the
+    // current sample marks a frame boundary (FrameEnd flag) — the stream
+    // then snapshots frame_len and resets ptr to base, making the buffer
+    // self-bounding regardless of how many frames the caller ticks through.
+    bool (*on_sync_change)(void* ctx, VideoFlags flags, uint32_t pos) noexcept;
     void* ctx;
+
+    // Frame-end detection: true once a FrameEnd flag has been driven.
+    // Sticky until swap_frame() clears frame_len.  Zero overhead — reads
+    // a field already in cache (no extra bool needed).
+    FORCE_INLINE bool frame_ended() const noexcept {
+        return frame_len != 0;
+    }
 
     FORCE_INLINE
     void drive(SampleT s) noexcept {
-        SampleT* pos = ptr;
         *ptr++ = s;
 
-        if (unlikely(s.flags != prev_flags))
-            on_sync_change(ctx, s.flags, static_cast<uint32_t>(pos - base));
+        if (unlikely(s.flags != prev_flags)) {
+            const uint32_t pos = static_cast<uint32_t>(ptr - 1 - base);
+            bool is_frame = on_sync_change(ctx, s.flags, pos);
+            if (is_frame) {
+                frame_len = static_cast<uint32_t>(ptr - base);
+                ptr = base;
+            }
+            prev_flags = s.flags;
+        }
 
-        prev_flags = s.flags;
     }
 };
 
