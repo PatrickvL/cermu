@@ -1172,6 +1172,38 @@ void vicii_timing_advance(vicii_base_t* vicii) {
     if (vicii->display_ && fb_row < vicii->display_->height()) {
         vicii_pixel_flush_line(vicii, vicii->system_palette(), fb_row);
     }
+
+    // Drive video stream with the completed scanline's pixel data.
+    // Emitted once per line as a burst: HSync marker + visible pixel samples.
+    // The reconstruct_to_framebuffer bridge walks HSync events to delimit lines.
+    if (vicii->video_stream_) {
+        // Determine VBlank state — PAL wraps (first=300, last=15)
+        bool in_vblank;
+        if (vicii->cached_first_vblank_line > vicii->cached_last_vblank_line) {
+            in_vblank = (completed_raster >= vicii->cached_first_vblank_line ||
+                         completed_raster <= vicii->cached_last_vblank_line);
+        } else {
+            in_vblank = (completed_raster >= vicii->cached_first_vblank_line &&
+                         completed_raster <= vicii->cached_last_vblank_line);
+        }
+
+        // FrameEnd: emitted on the last line before frame wraps
+        const bool frame_end = (completed_raster == vicii->cached_total_lines - 1);
+
+        // HSync sample — marks start of this scanline in the stream
+        VideoFlags sync_flags = VideoFlags::HSync;
+        if (in_vblank) sync_flags = sync_flags | VideoFlags::VSync | VideoFlags::Blank;
+        if (frame_end) sync_flags = sync_flags | VideoFlags::FrameEnd;
+        vicii->video_stream_->drive({0, sync_flags});
+
+        // Visible pixel data (skip during VBlank — no meaningful pixel output)
+        if (!in_vblank && vicii->pixel.color_line) {
+            const uint16_t vis = vicii->cached_visible_pixels;
+            for (uint16_t i = 0; i < vis; i++) {
+                vicii->video_stream_->drive({vicii->pixel.color_line[i], VideoFlags::BeamOn});
+            }
+        }
+    }
     
     vicii_set_x_cycle(vicii, 0);
     
@@ -2350,6 +2382,7 @@ static inline void vicii_initialize_timing(vicii_base_t* vicii, const VicIITrait
     // Populate all cached values from traits
     vicii->cached_total_lines = traits.total_lines;
     vicii->cached_last_vblank_line = traits.last_vblank_line;
+    vicii->cached_first_vblank_line = traits.first_vblank_line;
     vicii->cached_cycles_per_line = traits.cycles_per_line;
     vicii->cached_chip_name = traits.chip_name;
 

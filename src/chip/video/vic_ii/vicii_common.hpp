@@ -2,6 +2,7 @@
 
 #include "core/chip.hpp"
 #include "chip/video/video_chip_base.hpp"
+#include "core/signal/composite_video_stream.hpp"
 #include <cstdint>
 #include "core/system_lines.hpp" // For bus_state_t
 #include "chip/memory/mos2114.hpp"  // For MOS2114
@@ -548,6 +549,13 @@ struct vicii_base_t : public VideoChipBase {
     // Display output (non-owning pointer set by system)
     IndexedFrameBuffer* display_ = nullptr;
     void set_display(IndexedFrameBuffer* d) { display_ = d; }
+
+    // Video stream output (non-owning pointer, set by system/board)
+    CompositeVideoStream* video_stream_ = nullptr;
+    void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
+
+    // Cached VBlank start for stream flag computation
+    uint16_t cached_first_vblank_line = 0;
 
     // Destructor — cleans up dynamically allocated pixel line buffers
     ~vicii_base_t() override;

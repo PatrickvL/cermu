@@ -540,6 +540,11 @@ bool C64System::initialize() {
                   c64_constants::DISPLAY_HEIGHT_PAL);
     display_.set_palette(vicii_base_t::get_default_palette(), 16);
     vicii->set_display(&display_);
+
+    // Wire VIC-II to composite video stream port
+    video_port_ = std::make_unique<CompositeVideoPort>();
+    vicii->set_stream(&video_port_->stream());
+
     register_display(&display_);
 
     printf("C64: System initialized successfully\n");
@@ -951,6 +956,11 @@ void C64System::run_frame() {
 
         for (uint32_t i = 0; i < adjusted_cycles; i++) {
             system_tick();
+        }
+
+        // Swap video stream frame — advances to next frame buffer
+        if (video_port_) {
+            video_port_->swap_frame();
         }
 
         // Check deferred load once per frame (only active during boot)
