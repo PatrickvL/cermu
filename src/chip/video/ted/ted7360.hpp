@@ -580,6 +580,14 @@ struct ted7360_t : public VideoChipBase {
     CompositeVideoStream* video_stream_ = nullptr;
     void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
 
+    // Maintained analog signal flags — adjusted at cycle boundaries.
+    // HSync on cycle 0, VSync during vblank, cleared on cycle 1.
+    VideoFlags drive_flags_ = VideoFlags::None;
+
+    // Frame-end one-shot — set when raster wraps to 0, consumed on first
+    // drive() of the new frame.
+    bool frame_wrapped_ = false;
+
     // Audio port output (non-owning pointer, set by system/board)
     AudioPort* audio_port_ = nullptr;
     void set_audio_port(AudioPort* p) { audio_port_ = p; }
