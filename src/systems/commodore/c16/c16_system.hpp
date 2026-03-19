@@ -3,11 +3,14 @@
 #include "systems/commodore/commodore_system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/signal/video_port.hpp"
+#include "core/signal/audio_port.hpp"
 #include "chip/memory/ram_chip.hpp"
 #include "chip/memory/rom_chip.hpp"
 #include "chip/video/ted/ted7360.hpp"
 #include "chip/cpu/fam65xx/mos7501.hpp"
 #include "chip/io/mos6529.hpp"
+#include <memory>
 
 // C264 series (C16/C116/Plus4) default bus state — derived from CPU.
 // CSG7501 provides: RW, RDY, IRQ, AEC.  (No NMI — NO_NMI_LINE flag.)
@@ -259,6 +262,8 @@ private:
     CSG7501* cpu_ = nullptr;          // MOS 7501/8501 CPU — owned by board_
     ted7360_t* ted_;
     IndexedFrameBuffer display_;       // Display output for GPU indexed rendering
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
+    std::unique_ptr<AudioPort> audio_port_;            // Audio signal output
     bus_state_t bus_state_;
 
     // ── Memory bus (declarative manifest + page-pointer dispatch) ────────
