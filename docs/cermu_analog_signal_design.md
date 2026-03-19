@@ -21,6 +21,7 @@
 17. [AudioPort Implementation](#audioport-implementation)
 18. [Host Performance Optimization](#host-performance-optimization)
 19. [System Assembly](#system-assembly)
+20. [Implementation Status](#implementation-status)
 
 ---
 
@@ -1088,4 +1089,83 @@ struct NESResistorMix {
 | Mode switch — stream redirection | ✓ (pointer update, rare) | |
 | Inactive CPU ticking | Skipped — accurate | |
 | Inactive video chip ticking | ✓ Always — accuracy requirement | |
+
+---
+
+## Implementation Status
+
+Migration status of all chips and systems to the new video/audio port infrastructure.
+
+### Video — Chip-Level (CompositeVideoStream)
+
+All video chips with implemented rendering have been migrated. Each chip holds a `CompositeVideoStream*` member, exposes a `set_stream()` setter, and drives the stream with `HSync`, `BeamOn`, `Blank`, `VSync`, and `FrameEnd` flags at the appropriate points in their rendering pipeline.
+
+| Chip | Pattern | Signal Source | Commit |
+|---|---|---|---|
+| VIC (6560/6561) | per-dot-clock | `tick()` inline | prior session |
+| VIC-II (6567/6569) | per-dot-clock | `tick()` inline | prior session |
+| TED 7360 | per-dot-clock | `tick()` inline | prior session |
+| NES PPU (RP2C02) | per-dot-clock | `tick()` inline | prior session |
+| TIA (Atari 2600) | per-scanline | end-of-scanline flush, VSYNC edge for FrameEnd | `32c9890e` |
+| Amstrad Gate Array | per-frame | after `display_->flush()`, line-by-line from framebuffer | `daef0f6c` |
+| BBC VIDPROC | per-frame | in `vsync()` after flush, line-by-line from framebuffer | `daef0f6c` |
+| MC6847 VDG | per-frame | private `drive_stream_from_indices()` helper, both render paths | `daef0f6c` |
+| Ferranti ULA | per-frame | after `display_->flush()` in `render_frame()` | `daef0f6c` |
+| TMS9918 | per-scanline | `flush_scanline()` for visible, VBlank+FrameEnd in `tick()` | `daef0f6c` |
+
+### Video — System-Level (CompositeVideoPort)
+
+Systems that don't use a dedicated video chip but render directly create a `CompositeVideoPort` and drive the stream from their framebuffer after `display_.flush()`.
+
+| System | Resolution | Commit |
+|---|---|---|
+| C64 | chip-wired (VIC-II) | prior session |
+| VIC-20 | chip-wired (VIC) | prior session |
+| C16/Plus4 | chip-wired (TED) | prior session |
+| NES/Famicom | chip-wired (PPU) | prior session |
+| Atari 2600 | chip-wired (TIA) | `32c9890e` |
+| Amstrad CPC | chip-wired (Gate Array) | `daef0f6c` |
+| BBC Micro | chip-wired (VIDPROC) | `daef0f6c` |
+| Acorn Atom | chip-wired (MC6847) | `daef0f6c` |
+| VTech VZ | chip-wired (MC6847) | `daef0f6c` |
+| ZX Spectrum | chip-wired (Ferranti ULA) + audio_port_ | `daef0f6c` |
+| CHIP-8 | 128×64, system-level render | `79b24bf1` |
+| KC85 | 320×256, system-level render | `79b24bf1` |
+| Z9001 | 320×192, system-level render | `79b24bf1` |
+| Z1013 | 256×256, system-level render | `79b24bf1` |
+| Bomb Jack (arcade) | 256×224, system-level render | `79b24bf1` |
+| Namco Arcade | 224×288, system-level render | `79b24bf1` |
+
+### Audio — Chip-Level (AudioPort)
+
+Dedicated sound chips use `AudioPort::drive()` for per-clock output with BLEP decimation, alongside their legacy audio buffer for backward compatibility.
+
+| Chip | Drive Method | Commit |
+|---|---|---|
+| MOS 6581 SID | `drive()` per chip clock | prior session |
+| NES APU (RP2A03) | `drive()` per chip clock | prior session |
+| AY-3-8910 PSG | `drive()` per chip clock | prior session |
+| SN76489 | `drive()` per chip clock | prior session |
+| Namco WSG | `drive()` per chip clock | prior session |
+| TIA (2-channel audio) | `drive_sample()` pre-decimated | `32c9890e` |
+
+### Audio — System-Level (AudioPort)
+
+Systems with software-generated audio (beeper, CTC) use `AudioPort::drive_sample()` for pre-decimated output alongside their legacy ring buffer.
+
+| System | Audio Source | Commit |
+|---|---|---|
+| ZX Spectrum | beeper + AY mix | `79b24bf1` |
+| KC85 | CTC beeper (2 channels) | `79b24bf1` |
+
+### Not Migrated (Intentional)
+
+| System/Chip | Reason |
+|---|---|
+| Apple II | Display and audio are TODO stubs |
+| Oric | Display and audio are TODO stubs |
+| LC80 | LED segment display (no raster), audio stub |
+| Apple 1 | Terminal-style display only |
+| Z9001, Z1013 audio | Audio generation is a stub |
+| CHIP-8 audio | Pull-based on-demand generation; not suitable for push-based AudioPort |
 | Inactive video stream writes | Null sink — L1 scratch cell | |
