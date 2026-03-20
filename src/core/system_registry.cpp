@@ -1,6 +1,7 @@
 #include "core/system_registry.hpp"
 #include "core/system.hpp"
 #include "core/formats/format_handler.hpp"
+#include "core/rom_set.hpp"
 #include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <algorithm>
@@ -133,6 +134,36 @@ std::unique_ptr<System> SystemRegistry::create_system_for_file(const char* filep
 
     if (g_verbose)
         printf("SystemRegistry: %zu systems registered\n", systems_.size());
+
+    // For archive files, try ROM set probing first — many arcade ROM
+    // archives contain multiple chip dumps that can't be identified
+    // individually but are unambiguous as a set.
+    std::string ext_str = filepath ? vfs_extension(filepath) : "";
+    if (!ext_str.empty() && vfs_is_archive_extension(ext_str.c_str())) {
+        auto probe = rom_set_probe(filepath);
+        if (probe.confidence >= 0.5f) {
+            printf("SystemRegistry: ROM set identified: %s (confidence: %.2f)\n",
+                   probe.system_name.c_str(), probe.confidence);
+            for (const auto& [descriptor, factory] : systems_) {
+                if (probe.system_name == descriptor.short_name) {
+                    auto system = factory();
+                    // Store match info so caller can call load_rom_set()
+                    // after initialize().  For now, do init+load here
+                    // since the caller doesn't know about ROM sets.
+                    if (!system->initialize()) {
+                        printf("SystemRegistry: Failed to initialize %s for ROM set\n",
+                               descriptor.short_name);
+                        return nullptr;
+                    }
+                    system->attach_default_peripherals();
+                    if (system->load_rom_set(probe.rom_match)) {
+                        return system;
+                    }
+                    break;
+                }
+            }
+        }
+    }
 
     // Read file content via format layer — handles both VFS archive paths
     // and Commodore container paths (e.g. "archive.zip!/disk.d64!/GAME")

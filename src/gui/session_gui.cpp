@@ -14,6 +14,7 @@
 #include "core/archive_scanner.hpp"
 #include "core/formats/format_handler.hpp"
 #include "core/formats/format_registry.hpp"
+#include "core/rom_set.hpp"
 #include "core/vfs/vfs.hpp"
 #include "devices/storage/drive_1541.hpp"
 #include <cstdio>
@@ -1801,7 +1802,32 @@ void SessionGUI::handle_dropped_file(const std::string& filepath) {
     // first loadable file inside it — same logic as switch_system().
     std::string resolved = filepath;
     std::string ext = vfs_extension(filepath.c_str());
-    if (vfs_is_archive_extension(ext.c_str())) {
+    bool is_archive = vfs_is_archive_extension(ext.c_str());
+
+    if (is_archive) {
+        // Archives may contain multi-file ROM sets (arcade ROM zips) or a
+        // single loadable file (e.g. a .prg inside a .zip).  Try ROM set
+        // identification first — it's higher-fidelity for multi-chip dumps
+        // and avoids false positives from single-file probes.
+        auto probe = rom_set_probe(filepath.c_str());
+        if (probe.confidence >= 0.5f) {
+            printf("ROM set identified: %s (confidence: %.2f)\n",
+                   probe.system_name.c_str(), probe.confidence);
+            switch_system(probe.system_name.c_str());
+            if (system_) {
+                stop_emu_thread();
+                if (system_->load_rom_set(probe.rom_match)) {
+                    printf("ROM set loaded successfully\n");
+                    emulation_running_.store(true);
+                    emulation_paused_.store(false);
+                }
+                start_emu_thread();
+                update_window_title();
+            }
+            return;
+        }
+
+        // ROM set probe didn't match — fall back to single-file resolution.
         auto scan = scan_archive(filepath.c_str());
         if (!scan.loadable_files.empty()) {
             resolved = scan.loadable_files[0].full_path;
@@ -1826,6 +1852,29 @@ void SessionGUI::handle_dropped_file(const std::string& filepath) {
     free(data);
 
     if (match.confidence < 0.5f) {
+        // Single-file identification failed — try ROM set probing on the
+        // containing folder or archive.  The dropped file might be one ROM
+        // chip within a multi-file ROM set.
+        std::string parent = is_archive ? filepath : vfs_parent_path(resolved.c_str());
+        if (!parent.empty()) {
+            auto probe = rom_set_probe(parent.c_str());
+            if (probe.confidence >= 0.5f) {
+                printf("ROM set identified via parent: %s (confidence: %.2f)\n",
+                       probe.system_name.c_str(), probe.confidence);
+                switch_system(probe.system_name.c_str());
+                if (system_) {
+                    stop_emu_thread();
+                    if (system_->load_rom_set(probe.rom_match)) {
+                        printf("ROM set loaded successfully\n");
+                        emulation_running_.store(true);
+                        emulation_paused_.store(false);
+                    }
+                    start_emu_thread();
+                    update_window_title();
+                }
+                return;
+            }
+        }
         printf("WARNING: Could not identify system for dropped file: %s\n",
                resolved.c_str());
         return;

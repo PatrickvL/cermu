@@ -214,22 +214,25 @@ int main(int argc, char** argv) {
                    system->get_descriptor().name,
                    system->get_descriptor().short_name);
             printf("Description: %s\n", system->get_descriptor().description);
-            
-            // Initialize the system
-            if (!system->initialize()) {
-                printf("ERROR: Failed to initialize %s system\n", 
-                       system->get_descriptor().name);
-                return 1;
-            }
 
-            // Attach default peripheral devices declared by the system
-            system->attach_default_peripherals();
+            // ROM set path: system is already initialized + loaded
+            if (!system->is_system_ready()) {
+                // Initialize the system
+                if (!system->initialize()) {
+                    printf("ERROR: Failed to initialize %s system\n", 
+                           system->get_descriptor().name);
+                    return 1;
+                }
+
+                // Attach default peripheral devices declared by the system
+                system->attach_default_peripherals();
             
-            // Load the file
-            if (!system->load_file(file_path)) {
-                printf("ERROR: Failed to load file: %s\n", file_path);
-                system->shutdown();
-                return 1;
+                // Load the file
+                if (!system->load_file(file_path)) {
+                    printf("ERROR: Failed to load file: %s\n", file_path);
+                    system->shutdown();
+                    return 1;
+                }
             }
             printf("Successfully loaded file into %s\n", system->get_descriptor().name);
         }
