@@ -140,8 +140,10 @@ bool System::initialize() {
 
 void System::shutdown() {
     // Detach all devices from ports before clearing (clean teardown)
-    for (const auto& port : get_ports()) {
-        port->detach_device();
+    if (!boards_.empty()) {
+        for (const auto& port : get_ports()) {
+            port->detach_device();
+        }
     }
     owned_devices_.clear();
     if (!boards_.empty())
