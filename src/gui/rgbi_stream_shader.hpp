@@ -29,8 +29,16 @@ namespace rgbi_stream_shader {
 inline void extract_rgbi_samples(const void* stream_samples, uint32_t stream_len,
                                  uint8_t* index_buf) {
     const uint8_t* src = static_cast<const uint8_t*>(stream_samples);
-    for (uint32_t i = 0; i < stream_len; i++) {
-        index_buf[i] = src[i * 2] & 0x0F;   // rgbi is first byte, mask to 4 bits
+    const uint32_t n4 = stream_len & ~3u;
+    uint32_t i = 0;
+    for (; i < n4; i += 4) {
+        index_buf[i + 0] = src[(i + 0) * 2] & 0x0F;
+        index_buf[i + 1] = src[(i + 1) * 2] & 0x0F;
+        index_buf[i + 2] = src[(i + 2) * 2] & 0x0F;
+        index_buf[i + 3] = src[(i + 3) * 2] & 0x0F;
+    }
+    for (; i < stream_len; i++) {
+        index_buf[i] = src[i * 2] & 0x0F;
     }
 }
 

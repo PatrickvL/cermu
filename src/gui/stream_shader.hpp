@@ -142,10 +142,6 @@ inline int compute_scanline_map(
     int back_porch_pixels,
     uint32_t stream_len)
 {
-    // Initialize all entries to -1 (no data)
-    for (int i = 0; i < max_scanlines; i++)
-        offsets[i] = -1;
-
     int scanline = 0;
     for (uint32_t i = 0; i < sync_count && scanline < max_scanlines; i++) {
         if (sync_events[i].type != SyncType::HSync)
@@ -158,9 +154,16 @@ inline int compute_scanline_map(
         uint32_t line_start = sync_events[i].stream_pos + back_porch_pixels;
         if (line_start < stream_len) {
             offsets[scanline] = static_cast<int>(line_start);
+        } else {
+            offsets[scanline] = -1;
         }
         scanline++;
     }
+
+    // Blank remaining entries (only those beyond the last visible scanline)
+    for (int i = scanline; i < max_scanlines; i++)
+        offsets[i] = -1;
+
     return scanline;
 }
 

@@ -356,12 +356,14 @@ inline void build_beam_quads(
             // Line segment from (prev_x, prev_y) to (sx, sy)
             float dx = sx - prev_x;
             float dy = sy - prev_y;
-            float len = std::sqrt(dx * dx + dy * dy);
+            float len_sq = dx * dx + dy * dy;
 
-            if (len > 0.001f) {
-                // Perpendicular direction for beam width expansion
-                float nx = -dy / len * beam_width;
-                float ny =  dx / len * beam_width;
+            if (len_sq > 0.000001f) {
+                // Perpendicular direction for beam width expansion.
+                // One division by len instead of sqrt + two divides.
+                float inv_len = 1.0f / std::sqrt(len_sq);
+                float nx = -dy * inv_len * beam_width;
+                float ny =  dx * inv_len * beam_width;
 
                 // Average intensity for the segment
                 float avg_i = (prev_intensity + si) * 0.5f;
