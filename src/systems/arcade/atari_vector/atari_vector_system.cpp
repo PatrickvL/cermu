@@ -575,6 +575,22 @@ bool AtariVectorSystem<V>::load_file(const char* filepath) {
 
     printf("%s: Loading file: %s\n", Traits::NAME, filepath);
 
+    // Archive files (zip, 7z, …) may contain a multi-file ROM set.
+    // Try ROM set matching before falling back to single-blob loading.
+    std::string ext = vfs_extension(filepath);
+    if (!ext.empty() && vfs_is_archive_extension(ext.c_str())) {
+        auto descriptors = get_rom_set_descriptors();
+        if (!descriptors.empty()) {
+            auto match = rom_set_scan_and_match(
+                filepath, descriptors.data(), static_cast<int>(descriptors.size()));
+            if (match.matched) {
+                printf("%s: Archive contains ROM set '%s'\n",
+                       Traits::NAME, match.rom_set ? match.rom_set->name : "?");
+                return load_rom_set(match);
+            }
+        }
+    }
+
     // Read the ROM file
     size_t file_size = 0;
     uint8_t* file_data = vfs_read_file(filepath, &file_size);
