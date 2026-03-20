@@ -193,18 +193,4 @@ inline GLuint create_stream_texture(int max_stream_len) {
     return tex;
 }
 
-// Extract {r, g, b} from RGBVideoSample stream into an RGBA upload buffer.
-// RGBVideoSample layout: [r, g, b, flags] — 4 bytes, aligned to 4.
-// Output: [r, g, b, 0] per texel — ready for GL_RGBA upload.
-inline void extract_rgb_samples(const void* stream_samples, uint32_t stream_len,
-                                uint8_t* rgba_buf) {
-    const uint8_t* src = static_cast<const uint8_t*>(stream_samples);
-    for (uint32_t i = 0; i < stream_len; i++) {
-        rgba_buf[i * 4 + 0] = src[i * 4 + 0];  // r
-        rgba_buf[i * 4 + 1] = src[i * 4 + 1];  // g
-        rgba_buf[i * 4 + 2] = src[i * 4 + 2];  // b
-        rgba_buf[i * 4 + 3] = 0;                // unused
-    }
-}
-
 } // namespace rgb_stream_shader

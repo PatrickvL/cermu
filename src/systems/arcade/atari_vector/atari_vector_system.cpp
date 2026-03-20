@@ -382,7 +382,7 @@ void AtariVectorSystem<V>::run_frame() {
         tick();
     }
 
-    // Swap frame — produces FrameData with SignalType::Vector for the GPU
+    // Swap frame — produces FrameData with VideoSignalType::Vector for the GPU
     video_port_->swap_frame();
 
     // Tick peripherals

@@ -41,7 +41,7 @@ namespace stream_shader {
 inline constexpr int MAX_SCANLINES = 512;
 
 // Width of the packed stream texture.  The 1D stream (up to ~160K samples
-// for PAL VIC-II) is stored row-major in a 2D R8 texture this many
+// for PAL VIC-II) is stored row-major in a 2D RG8 texture this many
 // texels wide.  1024 keeps total rows reasonable (~157 for a 160K stream)
 // and is universally supported by GL 3.0 drivers.
 inline constexpr int STREAM_TEX_WIDTH = 1024;
@@ -73,7 +73,7 @@ void main() {
 //   2. Look up ScanlineMap[scanline] → stream offset of first visible pixel
 //   3. u → pixel-within-line: stream_pos = offset + pixel_x
 //   4. Unpack 2D coordinates in stream texture: row = pos / width, col = pos % width
-//   5. texelFetch → R8 color index
+//   5. texelFetch → RG8 texel, read .r as color index
 //   6. texelFetch palette → RGBA color
 static constexpr const char* fragment_src = R"glsl(
 #version 130
@@ -113,7 +113,7 @@ void main() {
     int tex_row = stream_pos / StreamTexWidth;
     int tex_col = stream_pos - tex_row * StreamTexWidth;  // mod without %
 
-    // Read color index from stream texture (R8 normalized → int)
+    // Read color index from stream texture (RG8: .r is normalized index)
     float idx_f = texelFetch(StreamTex, ivec2(tex_col, tex_row), 0).r;
     int idx = int(idx_f * 255.0 + 0.5);
 
@@ -235,7 +235,7 @@ inline GLuint create_program(StreamShaderLocations* locs) {
 // Stream texture management
 // ============================================================================
 
-// Create a 2D R8 texture for the packed 1D stream.
+// Create a 2D RG8 texture for the packed 1D stream.
 // Height is computed from max_stream_len / STREAM_TEX_WIDTH, rounded up.
 inline GLuint create_stream_texture(int max_stream_len) {
     int tex_height = (max_stream_len + STREAM_TEX_WIDTH - 1) / STREAM_TEX_WIDTH;
