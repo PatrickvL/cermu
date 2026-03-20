@@ -33,7 +33,7 @@
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/video/dvg/dvg.hpp"
-#include "chip/sound/pokey/pokey.hpp"
+#include "chip/sound/pokey/c012294.hpp"
 #include "chip/memory/ram_chip.hpp"
 #include "chip/memory/rom_chip.hpp"
 #include <cstdint>
@@ -231,7 +231,7 @@ private:
     // ── Chips ────────────────────────────────────────────────────────────
     MOS6502*    cpu_   = nullptr;    // MOS 6502 @ 1.512 MHz — owned by board_
     dvg_t       dvg_;                // Digital Vector Generator
-    pokey_t     pokey_;              // POKEY sound chip (used by Asteroids Deluxe)
+    pokey::C012294 pokey_;              // POKEY sound chip (used by Asteroids Deluxe)
 
     // Memory chips (non-owning; owned by board_)
     RAMChip*    vec_ram_  = nullptr; // Vector RAM ($4000-$47FF)

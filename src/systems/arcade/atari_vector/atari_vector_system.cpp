@@ -430,7 +430,7 @@ void AtariVectorSystem<V>::tick() {
 
     // POKEY tick (Asteroids Deluxe — runs at CPU clock)
     if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
-        pokey_.tick();
+        pokey_.tick(0);  // Arcade POKEY: no bus-driven memory access
     }
 
     // NMI timer — periodic pulse model (matches MAME set_periodic_int).
