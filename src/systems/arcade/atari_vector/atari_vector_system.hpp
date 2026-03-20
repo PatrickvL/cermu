@@ -209,14 +209,12 @@ private:
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t pins_ = MOS6502::default_bus_state();
     bool system_ready_    = false;
-    uint32_t nmi_counter_ = 0;      // Cycles until next NMI
-    bool nmi_pending_     = false;   // NMI flip-flop (cleared by NMI_ACK write)
+    uint32_t nmi_counter_ = 0;      // Cycles until next NMI pulse
 
-    // ── Inputs (active-low) ──────────────────────────────────────────────
-    uint8_t in0_       = 0xFF;      // Coin/system inputs
-    uint8_t in1_       = 0xFF;      // Player 1 inputs
-    uint8_t in2_       = 0xFF;      // Player 2 inputs (Asteroids only)
-    uint8_t dsw1_      = 0x00;      // DIP switch bank 1
+    // ── Inputs (active-HIGH: pressed=1, not-pressed=0) ─────────────────
+    uint8_t in0_       = 0x00;      // System inputs (coins/tilt/self-test)
+    uint8_t in1_       = 0x00;      // Player inputs (buttons/coins/start)
+    uint8_t dsw1_      = 0x84;      // DIP switch bank 1 (English, 3 lives, 1C_1C)
     uint8_t dsw2_      = 0x00;      // DIP switch bank 2
     uint8_t thrust_    = 0x00;      // Thrust lever ADC (Lunar Lander only, 0-255)
 

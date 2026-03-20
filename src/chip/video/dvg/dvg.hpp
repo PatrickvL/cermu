@@ -7,18 +7,20 @@
  * shared memory and produces X/Y beam deflection + intensity signals for
  * an XY (vector) monitor.
  *
- * Display list opcodes (4-bit command in bits [15:12] of second word):
+ * Display list opcodes (4-bit command in bits [15:12] of first word):
  *
- *   0x0–0x9  VCTR   — Draw vector: 10-bit ΔY, 3-bit intensity (0=off),
- *                      10-bit ΔX, 4-bit scale factor.  Two words.
- *   0xA      LABS   — Load absolute beam position (10-bit X + 10-bit Y)
- *                      + global scale.  Two words.
- *   0xB      HALT   — Stop the state machine until next VGGO trigger.
- *   0xC      JSRL   — Jump to subroutine (12-bit target address).
- *   0xD      RTSL   — Return from subroutine (pop stack).
- *   0xE      JMPL   — Jump unconditional (12-bit target address).
- *   0xF      SVEC   — Short vector: 2-bit ΔY, 2-bit ΔX, 3-bit intensity,
- *                      implicit scale.  One word.
+ *   0x0–0x9  VCTR   — Draw vector.  Two words.
+ *                      w0: SSSS -mYY YYYY YYYY  (scale, Y sign, 10-bit ΔY)
+ *                      w1: BBBB -mXX XXXX XXXX  (4-bit brightness, X sign, 10-bit ΔX)
+ *   0xA      LABS   — Load absolute beam position.  Two words.
+ *                      w0: 1010 00yy yyyy yyyy  (Y position)
+ *                      w1: SSSS 00xx xxxx xxxx  (global scale, X position)
+ *   0xB      HALT   — Stop the state machine until next VGGO trigger.  One word.
+ *   0xC      JSRL   — Jump to subroutine (12-bit target address).  One word.
+ *   0xD      RTSL   — Return from subroutine (pop stack).  One word.
+ *   0xE      JMPL   — Jump unconditional (12-bit target address).  One word.
+ *   0xF      SVEC   — Short vector.  One word.
+ *                      1111 smYY BBBB SmXX  (Ss=scale, 4-bit brightness, 2-bit ΔY/ΔX)
  *
  * Memory:
  *   The DVG accesses vector RAM/ROM through a 12-bit address (4 KB window).
@@ -75,7 +77,7 @@ namespace dvg_constants {
     // Coordinate range: DVG uses 10-bit X/Y (0-1023)
     inline constexpr int COORD_RANGE           = 1024;
 
-    // DVG opcode types (from bits [15:12] of second word)
+    // DVG opcode types (from bits [15:12] of first word)
     inline constexpr uint8_t OP_VCTR_MIN       = 0x0;
     inline constexpr uint8_t OP_VCTR_MAX       = 0x9;
     inline constexpr uint8_t OP_LABS            = 0xA;
@@ -154,62 +156,6 @@ struct dvg_t : public VideoChipBase {
     bool is_halted() const { return halt_; }
 
     // ========================================================================
-    // Test pattern — emit random vectors for visual verification
-    // ========================================================================
-
-    /// Generate a frame of random vectors for testing the signal pipeline.
-    /// Emits ~40 random line segments within the 1024×1024 coordinate space,
-    /// followed by a FrameEnd.  Call once per frame instead of tick() when
-    /// no ROM is loaded.
-    void generate_test_pattern() {
-        if (!stream_) return;
-
-        // Deterministic seed from frame counter for varied but repeatable frames
-        uint32_t seed = test_frame_counter_++;
-
-        auto rng = [&seed]() -> uint32_t {
-            seed = seed * 1103515245u + 12345u;
-            return (seed >> 16) & 0x7FFF;
-        };
-
-        int num_vectors = 30 + static_cast<int>(rng() % 20);
-
-        // Move beam to a random starting position
-        int16_t cx = static_cast<int16_t>(rng() % 1024);
-        int16_t cy = static_cast<int16_t>(rng() % 1024);
-        stream_->drive(VectorVideoSample{
-            cx, cy, 0, 0, VideoFlags::None, 0
-        });
-
-        for (int i = 0; i < num_vectors; ++i) {
-            int16_t x0 = static_cast<int16_t>(100 + rng() % 824);
-            int16_t y0 = static_cast<int16_t>(100 + rng() % 824);
-            int16_t x1 = static_cast<int16_t>(100 + rng() % 824);
-            int16_t y1 = static_cast<int16_t>(100 + rng() % 824);
-            uint8_t bright = static_cast<uint8_t>(72 + rng() % 184);
-
-            // Move to start (break line chain)
-            stream_->drive(VectorVideoSample{
-                x0, y0, 0, 0, VideoFlags::None, 0
-            });
-            // Draw: start + end with BeamOn
-            stream_->drive(VectorVideoSample{
-                x0, y0, bright, 0, VideoFlags::BeamOn, 0
-            });
-            stream_->drive(VectorVideoSample{
-                x1, y1, bright, 0, VideoFlags::BeamOn, 0
-            });
-        }
-
-        // Terminate frame
-        stream_->drive(VectorVideoSample{
-            0, 0, 0, 0, VideoFlags::FrameEnd, 0
-        });
-    }
-
-    uint32_t test_frame_counter_ = 0;
-
-    // ========================================================================
     // Execution — call once per CPU cycle (1.512 MHz)
     // ========================================================================
 
@@ -260,182 +206,154 @@ private:
     // ========================================================================
 
     /// Read a 16-bit word from vector memory at the given word address.
+    ///
+    /// DVG address space (Asteroids/Lunar Lander hardware):
+    ///   Word 0x000-0x3FF → vector RAM  (CPU $4000-$47FF)
+    ///   Word 0x400-0x7FF → unmapped gap
+    ///   Word 0x800-0xBFF → vector ROM  (CPU $5000-$57FF)
+    ///   Word 0xC00-0xFFF → unmapped gap
+    ///
+    /// The system provides a contiguous 4 KB buffer: RAM (2 KB) followed
+    /// by ROM (2 KB).  This function remaps the DVG word address into that
+    /// buffer, returning 0 for addresses that fall in the unmapped gaps.
     uint16_t read_word(uint16_t word_addr) const {
-        uint16_t byte_addr = (word_addr * 2) & (vec_size_ - 1);
+        uint16_t w = word_addr & 0xFFF;
+        uint16_t byte_addr;
+
+        if (w < 0x400) {
+            // Word 0x000-0x3FF → vector RAM (buf offset 0x000-0x7FF)
+            byte_addr = w * 2;
+        } else if (w >= 0x800 && w < 0xC00) {
+            // Word 0x800-0xBFF → vector ROM (buf offset 0x800-0xFFF)
+            byte_addr = 0x800 + (w - 0x800) * 2;
+        } else {
+            return 0;  // unmapped gap
+        }
+
         if (!vec_mem_ || byte_addr + 1 >= vec_size_) return 0;
         return vec_mem_[byte_addr] | (vec_mem_[byte_addr + 1] << 8);
     }
 
     /// Execute one DVG opcode at the current PC.
+    /// All opcodes are decoded from w0[15:12] (top nibble of first word).
+    /// Two-word opcodes: VEC (0-9), LABS (0xA).
+    /// Single-word opcodes: HALT (0xB), JSR (0xC), RTS (0xD), JMP (0xE), SVEC (0xF).
     void execute_opcode() {
         uint16_t w0 = read_word(pc_);
+        uint8_t opcode = (w0 >> 12) & 0xF;
 
-        // For single-word opcodes (SVEC, HALT, RTSL), only w0 is used.
-        // For two-word opcodes, w1 contains the opcode type in [15:12].
-        // But for the DVG, the first word is fetched at PC, second at PC+1.
+        if (opcode <= dvg_constants::OP_VCTR_MAX) {
+            // VCTR — Draw vector (two words)
+            // w0: SSSS -mYY YYYY YYYY  (scale in [15:12], Y sign in [10], ΔY in [9:0])
+            // w1: BBBB -mXX XXXX XXXX  (brightness in [15:12], X sign in [10], ΔX in [9:0])
+            uint16_t w1 = read_word(pc_ + 1);
 
-        // DVG opcode encoding:
-        // Single-word instructions test the top 4 bits of w0 directly for
-        // the 0xF (SVEC) case.  All other opcodes use the second word.
-        //
-        // However, the DVG's actual encoding is:
-        //   Word 0 (at PC):   operand data
-        //   Word 1 (at PC+1): [15:12]=opcode, [11:0]=operand data
-        //
-        // Exception: SVEC uses only Word 0 with [15:12]=0xF
+            int local_scale = opcode;  // 0-9
+            int total_scale = ((int)global_scale_ + local_scale) & 0xf;
 
-        uint8_t op_check = (w0 >> 12) & 0xF;
+            int dy_mag = w0 & 0x03FF;
+            int dy_sgn = (w0 >> 10) & 1;
+            int dx_mag = w1 & 0x03FF;
+            int dx_sgn = (w1 >> 10) & 1;
+            int intensity = (w1 >> 12) & 0x0F;  // 4-bit brightness
 
-        if (op_check == dvg_constants::OP_SVEC) {
-            // SVEC — Short vector (single word)
-            // Bits: [15:12]=0xF, [11:9]=intensity, [8]=dy_sign, [7:4]=scale',
-            //       [3]=dx_sign, [2:1]=dy_mag, [0]= reserved (often 0)
-            //
-            // Actually the DVG SVEC encoding is:
-            //   [15:12] = 0xF
-            //   [11]    = Y sign (1=negative)
-            //   [10:8]  = intensity (0=move)
-            //   [7:4]   = ΔY magnitude (2-bit, shifted)
-            //   [3]     = X sign (1=negative)
-            //   [2:0]   = ΔX magnitude (2-bit, shifted)
-            //
-            // Scale is always 2 (multiplied by 2^(2+scale_from_context)?).
-            // The real DVG applies the implicit scale of the current VCTR
-            // scale factor / binary rate multiplier.  For simplicity, use
-            // the standard SVEC formula: delta = magnitude << (scale + 2)
-
-            int intensity = (w0 >> 4) & 0x07;
-
-            int dy_mag = (w0 >> 8) & 0x03;
-            int dy_sgn = (w0 >> 10) & 0x01;
-            int dx_mag =  w0        & 0x03;
-            int dx_sgn = (w0 >> 2)  & 0x01;
-
-            // SVEC uses a fixed scale shift of 2 (equivalent to scale=2 in VCTR)
-            int shift = 2 + 2;  // base 2 + SVEC implicit 2
-
-            int32_t dx = dx_mag << shift;
-            int32_t dy = dy_mag << shift;
+            // BRM scaling: pixel delta = magnitude >> (9 - total_scale)
+            // Scales 10-15: hardware counter overflows → zero-length vector
+            int32_t dx = 0, dy = 0;
+            if (total_scale <= 9) {
+                int shift = 9 - total_scale;
+                dx = dx_mag >> shift;
+                dy = dy_mag >> shift;
+            }
             if (dx_sgn) dx = -dx;
             if (dy_sgn) dy = -dy;
 
             emit_vector(dx, dy, intensity);
 
-            // SVEC cost: small fixed cost
-            clocks_remaining_ = 2 + ((std::abs(dx) + std::abs(dy)) >> 3);
+            int vec_len = std::max(std::abs(dx), std::abs(dy));
+            clocks_remaining_ = std::max(4, vec_len >> 1);
+            pc_ += 2;
+
+        } else if (opcode == dvg_constants::OP_LABS) {
+            // LABS — Load absolute beam position (two words)
+            // w0: 1010 00yy yyyy yyyy  (Y position in [9:0])
+            // w1: SSSS 00xx xxxx xxxx  (global scale in [15:12], X position in [9:0])
+            uint16_t w1 = read_word(pc_ + 1);
+
+            beam_y_ = w0 & 0x03FF;
+            beam_x_ = w1 & 0x03FF;
+            global_scale_ = (w1 >> 12) & 0x0F;
+
+            emit_position();
+            clocks_remaining_ = 4;
+            pc_ += 2;
+
+        } else if (opcode == dvg_constants::OP_HALT) {
+            // HALT — Stop DVG (single word)
+            emit_frame_end();
+            running_ = false;
+            halt_    = true;
             pc_ += 1;
-            return;
-        }
 
-        // Two-word opcodes: fetch second word
-        uint16_t w1 = read_word(pc_ + 1);
-        uint8_t opcode = (w1 >> 12) & 0xF;
-
-        switch (opcode) {
-            case dvg_constants::OP_LABS: {
-                // LABS — Load absolute beam position
-                // w0: [9:0]=X position, [11:10]=global scale
-                // w1: [15:12]=0xA, [9:0]=Y position
-                beam_x_ = w0 & 0x03FF;
-                beam_y_ = w1 & 0x03FF;
-                global_scale_ = (w0 >> 10) & 0x03;
-                emit_position();
-                clocks_remaining_ = 4;
-                pc_ += 2;
-                break;
+        } else if (opcode == dvg_constants::OP_JSRL) {
+            // JSRL — Jump to subroutine (single word)
+            // w0: 1100 aaaa aaaa aaaa  (12-bit target word address)
+            if (sp_ < dvg_constants::STACK_DEPTH) {
+                stack_[sp_++] = pc_ + 1;
             }
+            pc_ = w0 & 0x0FFF;
+            // Zero cost — falls through immediately
 
-            case dvg_constants::OP_HALT: {
-                // HALT — Stop the DVG; emit FrameEnd signal
-                emit_frame_end();
+        } else if (opcode == dvg_constants::OP_RTSL) {
+            // RTSL — Return from subroutine (single word)
+            if (sp_ > 0) {
+                pc_ = stack_[--sp_];
+            } else {
+                // Stack underflow — halt
                 running_ = false;
                 halt_    = true;
-                pc_ += 2;
-                break;
             }
+            // Zero cost — falls through immediately
 
-            case dvg_constants::OP_JSRL: {
-                // JSRL — Jump to subroutine
-                // w1: [11:0]=target word address
-                if (sp_ < dvg_constants::STACK_DEPTH) {
-                    stack_[sp_++] = pc_ + 2;
-                }
-                pc_ = w1 & 0x0FFF;
-                // Zero cost — falls through immediately
-                break;
+        } else if (opcode == dvg_constants::OP_JMPL) {
+            // JMPL — Unconditional jump (single word)
+            // w0: 1110 aaaa aaaa aaaa  (12-bit target word address)
+            pc_ = w0 & 0x0FFF;
+            // Zero cost — falls through immediately
+
+        } else {
+            // SVEC — Short vector (single word)
+            // w0: 1111 smYY BBBB SmXX
+            //   s=bit11 (scale high), m=bit10 (Y sign), YY=bits[9:8] (Y mag)
+            //   BBBB=bits[7:4] (brightness, 4 bits)
+            //   S=bit3 (scale low), m=bit2 (X sign), XX=bits[1:0] (X mag)
+            int s_bit = (w0 >> 11) & 1;
+            int S_bit = (w0 >> 3) & 1;
+            int Ss = (S_bit << 1) | s_bit;  // 0-3 (S is MSB, s is LSB)
+            int svec_local_scale = Ss + 2;  // SVEC base scale offset
+            int total_scale = ((int)global_scale_ + svec_local_scale) & 0xf;
+
+            int dy_mag = (w0 >> 8) & 0x03;
+            int dy_sgn = (w0 >> 10) & 1;
+            int dx_mag =  w0        & 0x03;
+            int dx_sgn = (w0 >> 2)  & 1;
+            int intensity = (w0 >> 4) & 0x0F;  // 4-bit brightness
+
+            // Place 2-bit magnitude at top of 10-bit range, then apply VEC-style scaling
+            // Scales 10-15: hardware counter overflows → zero-length vector
+            int32_t dx = 0, dy = 0;
+            if (total_scale <= 9) {
+                int shift = 9 - total_scale;
+                dx = (dx_mag << 8) >> shift;
+                dy = (dy_mag << 8) >> shift;
             }
+            if (dx_sgn) dx = -dx;
+            if (dy_sgn) dy = -dy;
 
-            case dvg_constants::OP_RTSL: {
-                // RTSL — Return from subroutine
-                if (sp_ > 0) {
-                    pc_ = stack_[--sp_];
-                } else {
-                    // Stack underflow — halt
-                    running_ = false;
-                    halt_    = true;
-                }
-                // Zero cost — falls through immediately
-                break;
-            }
+            emit_vector(dx, dy, intensity);
 
-            case dvg_constants::OP_JMPL: {
-                // JMPL — Unconditional jump
-                // w1: [11:0]=target word address
-                pc_ = w1 & 0x0FFF;
-                // Zero cost — falls through immediately
-                break;
-            }
-
-            default: {
-                // VCTR — Draw vector (opcodes 0x0 through 0x9 = scale factor)
-                // The opcode field IS the scale factor (0-9).
-                //
-                // w0: [12]=Y sign, [9:0]=ΔY magnitude
-                // w1: [15:12]=scale, [12]=X sign, [9:0]=ΔX magnitude
-                //
-                // Actual delta = magnitude << scale (binary rate multiplier)
-
-                int scale = opcode;  // 0-9
-
-                int dy_mag = w0 & 0x03FF;
-                int dy_sgn = (w0 >> 10) & 0x01;
-                int dx_mag = w1 & 0x03FF;
-                int dx_sgn = (w1 >> 10) & 0x01;
-
-                int intensity = (w0 >> 12) & 0x07;
-
-                // Apply scale: shift magnitude by (9 - scale).
-                // Scale 9 = no shift (fastest), scale 0 = shift by 9 (longest vector).
-                // Wait — the DVG uses the scale as the number of shifts:
-                //   Effective delta = magnitude * 2^(scale_factor - 9)
-                //   But if scale < 9, that's a right-shift (shorter vector).
-                //
-                // Actually: the BRM (binary rate multiplier) timing means
-                // the vector length in clocks depends on magnitude >> (9 - scale).
-                // For rendering, the pixel delta = magnitude >> (9 - scale).
-
-                int shift = 9 - scale;
-                int32_t dx, dy;
-                if (shift >= 0) {
-                    dx = dx_mag >> shift;
-                    dy = dy_mag >> shift;
-                } else {
-                    dx = dx_mag << (-shift);
-                    dy = dy_mag << (-shift);
-                }
-                if (dx_sgn) dx = -dx;
-                if (dy_sgn) dy = -dy;
-
-                emit_vector(dx, dy, intensity);
-
-                // Vector draw time proportional to magnitude at current scale.
-                // The BRM clocks = 2^(13 - scale) for maximum-length vectors,
-                // but short vectors take less time.  Approximate:
-                int vec_len = std::max(std::abs(dx), std::abs(dy));
-                clocks_remaining_ = std::max(4, vec_len >> 1);
-                pc_ += 2;
-                break;
-            }
+            clocks_remaining_ = 2 + ((std::abs(dx) + std::abs(dy)) >> 3);
+            pc_ += 1;
         }
     }
 
@@ -443,13 +361,22 @@ private:
     // Vector signal emission — emit beam position samples to the stream
     // ========================================================================
 
-    /// Global scale factor (set by LABS instruction, bits [11:10] of w0).
+    /// Global scale factor (set by LABS instruction, w1[15:12]).
     uint8_t global_scale_ = 0;
 
+    /// Convert beam Y to screen Y — vector monitors have Y increasing upward,
+    /// but screen coordinates have Y increasing downward.
+    static int16_t screen_y(int32_t y) {
+        return static_cast<int16_t>(dvg_constants::COORD_RANGE - 1 - y);
+    }
+
     /// Emit a vector signal: beam moves from current position by (dx, dy).
-    /// Intensity 0 = beam off (move only), 1-7 = draw with brightness.
+    /// Intensity 0 = beam off (move only), 1-15 = draw with brightness.
     /// For draws, emits start and end samples with BeamOn flag so the GPU
     /// shader can extract line segments from consecutive BeamOn samples.
+    ///
+    /// Y is flipped for display: vector monitors have Y increasing upward,
+    /// but screen coordinates have Y increasing downward.
     void emit_vector(int32_t dx, int32_t dy, int intensity) {
         int32_t x0 = beam_x_;
         int32_t y0 = beam_y_;
@@ -462,20 +389,20 @@ private:
 
         if (intensity > 0) {
             // Draw: emit start + end with BeamOn.
-            // Map intensity (1-7) to brightness byte (36-252).
-            uint8_t bright = static_cast<uint8_t>(std::min(intensity * 36, 255));
+            // Map intensity (1-15) to brightness byte (17-255).
+            uint8_t bright = static_cast<uint8_t>(std::min(intensity * 17, 255));
             stream_->drive(VectorVideoSample{
-                static_cast<int16_t>(x0), static_cast<int16_t>(y0),
+                static_cast<int16_t>(x0), screen_y(y0),
                 bright, 0, VideoFlags::BeamOn, 0
             });
             stream_->drive(VectorVideoSample{
-                static_cast<int16_t>(beam_x_), static_cast<int16_t>(beam_y_),
+                static_cast<int16_t>(beam_x_), screen_y(beam_y_),
                 bright, 0, VideoFlags::BeamOn, 0
             });
         } else {
             // Move: emit position without BeamOn to break the line chain
             stream_->drive(VectorVideoSample{
-                static_cast<int16_t>(beam_x_), static_cast<int16_t>(beam_y_),
+                static_cast<int16_t>(beam_x_), screen_y(beam_y_),
                 0, 0, VideoFlags::None, 0
             });
         }
@@ -485,7 +412,7 @@ private:
     void emit_position() {
         if (!stream_) return;
         stream_->drive(VectorVideoSample{
-            static_cast<int16_t>(beam_x_), static_cast<int16_t>(beam_y_),
+            static_cast<int16_t>(beam_x_), screen_y(beam_y_),
             0, 0, VideoFlags::None, 0
         });
     }
@@ -494,7 +421,7 @@ private:
     void emit_frame_end() {
         if (!stream_) return;
         stream_->drive(VectorVideoSample{
-            static_cast<int16_t>(beam_x_), static_cast<int16_t>(beam_y_),
+            static_cast<int16_t>(beam_x_), screen_y(beam_y_),
             0, 0, VideoFlags::FrameEnd, 0
         });
     }

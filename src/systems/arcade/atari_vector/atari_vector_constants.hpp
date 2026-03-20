@@ -90,31 +90,30 @@ namespace atari_vector_constants {
     // I/O Read Map (active A13=1, active read)
     // ========================================================================
     //
-    // Both games decode reads in the $2000-$2FFF range.  Specific addresses:
+    // Both games decode reads in the $2000-$2FFF range.  Input reads
+    // use MULTIPLEXED access via 74LS244 buffers: reading address
+    // $200X returns bit X of the port value, placed at D7.  The
+    // BIT instruction can then test specific inputs via BMI/BPL.
     //
     // Asteroids:
-    //   $2000 — IN0: coins, self-test, slam, diagnostic step
-    //   $2001 — IN1: P1 controls (left, right, fire, thrust, hyperspace)
-    //   $2002 — IN2: P2 controls (unused in 1-player Asteroids)
-    //   $2003 — — (unused)
-    //   $2800 — DSW1: DIP switches (lives, language, bonus)
-    //   $2801 — DSW2: DIP switches (coinage)
+    //   $2000-$2007 — IN0 (multiplexed): DVG halt, 3KHz clock,
+    //                 hyperspace, fire, diag step, tilt, self-test
+    //   $2400-$2407 — IN1 (multiplexed): coins, start, thrust,
+    //                 rotate left/right
+    //   $2800-$2803 — DSW1 (multiplexed): DIP switches
     //
     // Lunar Lander:
-    //   $2000 — IN0: coins, self-test, slam
-    //   $2001 — IN1: abort, game select, start buttons
-    //   $2400 — Thrust lever (4-bit ADC value)
-    //   $2800 — DSW1: DIP switches (fuel, coinage)
-    //   $2801 — DSW2: DIP switches (language, bonus)
-    //   $2C00 — DVG status (bit 7 = HALT flag)
+    //   $2000       — IN0 (direct, full byte): DVG halt, self-test,
+    //                 tilt, 3KHz clock, diagnostic step
+    //   $2400-$2407 — IN1 (multiplexed): start, coins, select,
+    //                 abort, rotate left/right
+    //   $2800-$2803 — DSW1 (multiplexed): DIP switches
+    //   $2C00       — Thrust lever ADC (direct, 8-bit value)
 
-    inline constexpr uint16_t IN0_ADDR             = 0x2000;
-    inline constexpr uint16_t IN1_ADDR             = 0x2001;
-    inline constexpr uint16_t IN2_ADDR             = 0x2002;  // Asteroids only
-    inline constexpr uint16_t THRUST_ADC_ADDR      = 0x2400;  // Lunar Lander only
-    inline constexpr uint16_t DSW1_ADDR            = 0x2800;
-    inline constexpr uint16_t DSW2_ADDR            = 0x2801;
-    inline constexpr uint16_t DVG_STATUS_ADDR      = 0x2C00;  // Bit 7 = HALT
+    inline constexpr uint16_t IN0_BASE             = 0x2000;
+    inline constexpr uint16_t IN1_BASE             = 0x2400;
+    inline constexpr uint16_t DSW1_BASE            = 0x2800;
+    inline constexpr uint16_t THRUST_ADC_ADDR      = 0x2C00;  // Lunar Lander only
 
     // ========================================================================
     // I/O Write Map (active A13=1, active write)
@@ -159,37 +158,50 @@ namespace atari_vector_constants {
     inline constexpr uint16_t LL_PROGROM_SIZE      = 0x2000;  // 8 KB
 
     // ========================================================================
-    // Asteroids IN0 bit definitions (active low)
+    // Asteroids IN0 bit definitions (active-HIGH unless noted)
     // ========================================================================
+    //
+    // Matches MAME asteroid.cpp INPUT_PORTS.  All inputs are active-HIGH
+    // (pressed = 1) except DVG HALT which is active-LOW (running = 1).
+    // Multiplexed: reading $200X returns bit X at D7.
 
-    inline constexpr uint8_t AST_IN0_CLOCK         = 0x01;  // 3 KHz clock (bit 0)
-    inline constexpr uint8_t AST_IN0_SELF_TEST     = 0x04;  // Self-test switch
-    inline constexpr uint8_t AST_IN0_DIAG_STEP     = 0x08;  // Diagnostic step
-    inline constexpr uint8_t AST_IN0_SLAM          = 0x10;  // Slam switch
-    inline constexpr uint8_t AST_IN0_HALT          = 0x20;  // DVG HALT status
-    inline constexpr uint8_t AST_IN0_COIN_R        = 0x40;  // Right coin
-    inline constexpr uint8_t AST_IN0_COIN_C        = 0x80;  // Center coin
-
-    // ========================================================================
-    // Asteroids IN1 bit definitions (active low)
-    // ========================================================================
-
-    inline constexpr uint8_t AST_IN1_FIRE          = 0x04;  // Fire button (active low)
-    inline constexpr uint8_t AST_IN1_THRUST        = 0x08;  // Thrust (active low)
-    inline constexpr uint8_t AST_IN1_ROT_RIGHT     = 0x10;  // Rotate right (active low)
-    inline constexpr uint8_t AST_IN1_ROT_LEFT      = 0x20;  // Rotate left (active low)
-    inline constexpr uint8_t AST_IN1_HYPERSPACE    = 0x40;  // Hyperspace (active low)
-    inline constexpr uint8_t AST_IN1_2P_START      = 0x80;  // 2-player start
+    inline constexpr uint8_t AST_IN0_UNUSED0       = 0x01;  // bit 0: unused
+    inline constexpr uint8_t AST_IN0_CLOCK         = 0x02;  // bit 1: 3 KHz clock
+    inline constexpr uint8_t AST_IN0_HALT          = 0x04;  // bit 2: DVG HALT (active-LOW: halted=0, running=1)
+    inline constexpr uint8_t AST_IN0_HYPERSPACE    = 0x08;  // bit 3: Hyperspace
+    inline constexpr uint8_t AST_IN0_FIRE          = 0x10;  // bit 4: Fire
+    inline constexpr uint8_t AST_IN0_DIAG_STEP     = 0x20;  // bit 5: Diagnostic step
+    inline constexpr uint8_t AST_IN0_TILT          = 0x40;  // bit 6: Tilt
+    inline constexpr uint8_t AST_IN0_SELF_TEST     = 0x80;  // bit 7: Self-test (PORT_SERVICE)
 
     // ========================================================================
-    // Lunar Lander IN0 bit definitions
+    // Asteroids IN1 bit definitions (active-HIGH, pressed = 1)
     // ========================================================================
+    //
+    // Matches MAME asteroid.cpp INPUT_PORTS.
+    // Multiplexed: reading $240X returns bit X at D7.
 
-    inline constexpr uint8_t LL_IN0_COIN           = 0x01;  // Coin deposit
-    inline constexpr uint8_t LL_IN0_SELF_TEST      = 0x04;  // Self-test
-    inline constexpr uint8_t LL_IN0_SLAM           = 0x10;  // Slam switch
-    inline constexpr uint8_t LL_IN0_HALT           = 0x20;  // DVG HALT status
-    inline constexpr uint8_t LL_IN0_START          = 0x40;  // Start button
-    inline constexpr uint8_t LL_IN0_SELECT         = 0x80;  // Select button
+    inline constexpr uint8_t AST_IN1_COIN1         = 0x01;  // bit 0: Coin Left
+    inline constexpr uint8_t AST_IN1_COIN2         = 0x02;  // bit 1: Coin Center
+    inline constexpr uint8_t AST_IN1_COIN3         = 0x04;  // bit 2: Coin Right
+    inline constexpr uint8_t AST_IN1_1P_START      = 0x08;  // bit 3: 1-player start
+    inline constexpr uint8_t AST_IN1_2P_START      = 0x10;  // bit 4: 2-player start
+    inline constexpr uint8_t AST_IN1_THRUST        = 0x20;  // bit 5: Thrust
+    inline constexpr uint8_t AST_IN1_ROT_RIGHT     = 0x40;  // bit 6: Rotate right
+    inline constexpr uint8_t AST_IN1_ROT_LEFT      = 0x80;  // bit 7: Rotate left
+
+    // ========================================================================
+    // Lunar Lander IN0 bit definitions (active-HIGH unless noted)
+    // ========================================================================
+    //
+    // Matches MAME asteroid.cpp llander INPUT_PORTS.
+    // Lunar Lander IN0 is a direct (non-multiplexed) full-byte read at $2000.
+
+    inline constexpr uint8_t LL_IN0_HALT           = 0x01;  // bit 0: DVG HALT (active-HIGH: done_r)
+    inline constexpr uint8_t LL_IN0_SELF_TEST      = 0x02;  // bit 1: Self-test (active-LOW)
+    inline constexpr uint8_t LL_IN0_TILT           = 0x04;  // bit 2: Tilt (active-LOW)
+    // bits 3-5: unknown (active-LOW)
+    inline constexpr uint8_t LL_IN0_CLOCK          = 0x40;  // bit 6: 3 KHz clock
+    inline constexpr uint8_t LL_IN0_DIAG_STEP      = 0x80;  // bit 7: Diagnostic step (active-LOW)
 
 }  // namespace atari_vector_constants
