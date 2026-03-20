@@ -2,7 +2,6 @@
 #include "gui/indexed_shader.hpp"
 #include "gui/stream_shader.hpp"
 #include "gui/rgb_stream_shader.hpp"
-#include "gui/rgbi_stream_shader.hpp"
 #include "gui/vector_shader.hpp"
 #include "gui/port_icons.hpp"
 #include "gui/vfs_file_system.hpp"
@@ -1119,24 +1118,10 @@ void SessionGUI::render_screen() {
         {
             std::lock_guard<std::mutex> lock(fb_mutex_);
 
-            // Stream texture upload — upload color indices.
+            // Stream texture upload — raw 2-byte samples as RG8.
             if (use_stream_shader_ && stream_shader_ && stream_texture_ && stream_snapshot_len_ > 0) {
-                glBindTexture(GL_TEXTURE_2D, stream_texture_);
-                glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-                int full_rows = static_cast<int>(stream_snapshot_len_) / stream_shader::STREAM_TEX_WIDTH;
-                int remainder = static_cast<int>(stream_snapshot_len_) - full_rows * stream_shader::STREAM_TEX_WIDTH;
-                if (full_rows > 0) {
-                    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-                                    stream_shader::STREAM_TEX_WIDTH, full_rows,
-                                    GL_RED, GL_UNSIGNED_BYTE, stream_snapshot_);
-                }
-                if (remainder > 0) {
-                    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, full_rows,
-                                    remainder, 1,
-                                    GL_RED, GL_UNSIGNED_BYTE,
-                                    stream_snapshot_ + full_rows * stream_shader::STREAM_TEX_WIDTH);
-                }
-                glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+                stream_shader::upload_stream_texture(
+                    stream_texture_, stream_snapshot_, stream_snapshot_len_);
 
                 // Snapshot metadata for post-lock uniform setup
                 local_stream_len = stream_snapshot_len_;
@@ -1566,11 +1551,12 @@ void SessionGUI::allocate_framebuffer() {
         switch (active_signal_type_) {
             case SignalType::Composite:
             case SignalType::RGBI: {
-                // Composite / RGBI — R8 stream texture + palette lookup shader.
-                // RGBI uses the same shader as Composite (4-bit indices into
-                // a 16-entry palette, extracted in the emu thread snapshot).
+                // Composite / RGBI — RG8 stream texture + palette lookup shader.
+                // Raw 2-byte samples are uploaded directly (no CPU extraction);
+                // the shader reads only the R channel (color index) and ignores
+                // the G channel (flags byte).
                 if (system_->supports_gpu_indexed_rendering()) {
-                    stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES]();
+                    stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES * 2]();
                     sync_snapshot_   = new SyncEvent[MAX_SYNC_EVENTS]();
 
                     stream_texture_ = stream_shader::create_stream_texture(MAX_STREAM_SAMPLES);
@@ -2316,23 +2302,10 @@ void SessionGUI::emu_thread_func() {
                         have_stream_snapshot = true;
                         fb_new_frame_.store(true, std::memory_order_release);
                     } else if (use_stream_shader_ && stream_snapshot_) {
-                        // Composite / RGBI: extract 1-byte index from 2-byte samples
-                        if (active_signal_type_ == SignalType::RGBI) {
-                            rgbi_stream_shader::extract_rgbi_samples(src, n, stream_snapshot_);
-                        } else {
-                            // Composite: color_index is first byte of each 2-byte sample.
-                            // Unroll by 4 to reduce loop overhead and enable wider loads.
-                            uint32_t i = 0;
-                            const uint32_t n4 = n & ~3u;
-                            for (; i < n4; i += 4) {
-                                stream_snapshot_[i + 0] = src[(i + 0) * 2];
-                                stream_snapshot_[i + 1] = src[(i + 1) * 2];
-                                stream_snapshot_[i + 2] = src[(i + 2) * 2];
-                                stream_snapshot_[i + 3] = src[(i + 3) * 2];
-                            }
-                            for (; i < n; i++)
-                                stream_snapshot_[i] = src[i * 2];
-                        }
+                        // Composite / RGBI: copy raw 2-byte samples directly.
+                        // The RG8 texture stores both bytes per texel; the
+                        // shader reads only .r (color index), ignoring .g (flags).
+                        memcpy(stream_snapshot_, src, n * 2);
                         stream_snapshot_len_ = n;
                         // Copy sync events
                         uint32_t sc = fd.sync_count;
