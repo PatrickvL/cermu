@@ -510,6 +510,27 @@ set(SYSTEM_SOURCES
 
     # BBC Micro B+ / Master 128
     src/systems/bbc/bbc_master_system.cpp
+
+    # MSX family (MSX1 / MSX2 / MSX2+)
+    src/systems/msx/msx_system.cpp
+
+    # Sega SG-1000 / SC-3000
+    src/systems/sega/sg1000/sega_sg1000_system.cpp
+
+    # Sega Master System
+    src/systems/sega/sms/sega_sms_system.cpp
+
+    # ColecoVision
+    src/systems/colecovision/colecovision_system.cpp
+
+    # Memotech MTX500 / MTX512
+    src/systems/memotech_mtx/memotech_mtx_system.cpp
+
+    # Tatung Einstein TC-01
+    src/systems/tatung_einstein/tatung_einstein_system.cpp
+
+    # Spectravideo SVI-318 / SVI-328
+    src/systems/spectravideo/spectravideo_system.cpp
 )
 
 # Testing sources
