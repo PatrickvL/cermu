@@ -368,6 +368,7 @@ set(CHIP_SOURCES
 list(APPEND CHIP_SOURCES
     # Input chips
     src/chip/input/commodore_keyboard.cpp
+    src/chip/input/input_registry.cpp
 
     # Input pipeline (host input abstractions)
     src/core/input/keyboard_mapper.cpp
@@ -386,6 +387,7 @@ list(APPEND CHIP_SOURCES
     # Memory
     src/chip/memory/mos2114.cpp
     src/chip/memory/memory_chip_base.cpp
+    src/chip/memory/memory_registry.cpp
 
     # Sound
     src/chip/sound/mos6581.cpp

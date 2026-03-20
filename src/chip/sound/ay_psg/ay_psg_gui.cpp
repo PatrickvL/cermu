@@ -14,6 +14,11 @@
 // Include all variant headers used by systems (for explicit instantiation)
 #include "chip/sound/ay_psg/ay_3_8910.hpp"
 #include "chip/sound/ay_psg/ay_3_8912.hpp"
+#include "chip/sound/ay_psg/ay_3_8913.hpp"
+#include "chip/sound/ay_psg/ay_3_8914.hpp"
+#include "chip/sound/ay_psg/ym2149.hpp"
+#include "chip/sound/ay_psg/ym3439.hpp"
+#include "chip/sound/ay_psg/ay8930.hpp"
 
 #include "core/chip_layout.hpp"
 
@@ -66,6 +71,11 @@ void ay_psg_t<Traits>::register_debug_fields() {
 // Explicit template instantiation — debug fields
 template void ay_psg_t<AY_3_8910_Traits>::register_debug_fields();
 template void ay_psg_t<AY_3_8912_Traits>::register_debug_fields();
+template void ay_psg_t<AY_3_8913_Traits>::register_debug_fields();
+template void ay_psg_t<AY_3_8914_Traits>::register_debug_fields();
+template void ay_psg_t<YM2149_Traits>::register_debug_fields();
+template void ay_psg_t<YM3439_Traits>::register_debug_fields();
+template void ay_psg_t<AY8930_Traits>::register_debug_fields();
 #endif // CERMU_HAS_CHIP_DEBUG
 
 // ============================================================================
@@ -179,5 +189,20 @@ template std::vector<PinSignalState> ay_psg_t<AY_3_8910_Traits>::get_layout_pin_
 
 template ChipLayout* ay_psg_t<AY_3_8912_Traits>::create_chip_layout() const;
 template std::vector<PinSignalState> ay_psg_t<AY_3_8912_Traits>::get_layout_pin_states(ChipLayout&);
+
+template ChipLayout* ay_psg_t<AY_3_8913_Traits>::create_chip_layout() const;
+template std::vector<PinSignalState> ay_psg_t<AY_3_8913_Traits>::get_layout_pin_states(ChipLayout&);
+
+template ChipLayout* ay_psg_t<AY_3_8914_Traits>::create_chip_layout() const;
+template std::vector<PinSignalState> ay_psg_t<AY_3_8914_Traits>::get_layout_pin_states(ChipLayout&);
+
+template ChipLayout* ay_psg_t<YM2149_Traits>::create_chip_layout() const;
+template std::vector<PinSignalState> ay_psg_t<YM2149_Traits>::get_layout_pin_states(ChipLayout&);
+
+template ChipLayout* ay_psg_t<YM3439_Traits>::create_chip_layout() const;
+template std::vector<PinSignalState> ay_psg_t<YM3439_Traits>::get_layout_pin_states(ChipLayout&);
+
+template ChipLayout* ay_psg_t<AY8930_Traits>::create_chip_layout() const;
+template std::vector<PinSignalState> ay_psg_t<AY8930_Traits>::get_layout_pin_states(ChipLayout&);
 
 #endif // CERMU_HAS_GUI

@@ -1,5 +1,9 @@
 #include "chip/video/vic/mos6561.hpp"
+#include "core/chip_manifest.hpp"
+#include "core/chip_registry.hpp"
 #include <cstring>
+
+REGISTER_CHIP_TYPE("MOS6561", mos6561_t)
 
 // MOS6561 chip configuration — PAL variant
 // The MOS 6561 is the PAL version of the VIC-I chip used in PAL VIC-20s.

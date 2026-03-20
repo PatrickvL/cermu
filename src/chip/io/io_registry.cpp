@@ -13,8 +13,10 @@
 #include "chip/io/z80_pio.hpp"
 #include "chip/io/z80_ctc.hpp"
 #include "chip/io/kc85_module_system.hpp"
+#include "chip/io/mos6529.hpp"
 
 REGISTER_CHIP_TYPE("8255",          i8255_t)
 REGISTER_CHIP_TYPE("Z80 PIO",      z80_pio_t)
 REGISTER_CHIP_TYPE("Z80 CTC",      z80_ctc_t)
 REGISTER_CHIP_TYPE("KC85 Module System", kc85_module_system_t)
+REGISTER_CHIP_TYPE("MOS6529",      mos6529_t)

@@ -16,6 +16,10 @@
 // nes_ppu.h is transitively included via nes_system.h but be explicit
 #include "chip/video/nes_ppu/nes_ppu.hpp"
 #include "chip/video/nes_ppu/nes_palette.hpp"
+#include "core/chip_manifest.hpp"
+#include "core/chip_registry.hpp"
+
+REGISTER_CHIP_TYPE("PPU", nes_system::PPU)
 
 // ============================================================================
 // Optional PPU sub-component profiling — enabled with -DNES_PROFILING
