@@ -218,6 +218,12 @@ protected:
     /// Video signal type of the active system (cached from System::get_video_signal_type()).
     VideoSignalType active_signal_type_       = VideoSignalType::Composite;
 
+    /// NTSC artifact shader — PhaseIncrement uniform location and value.
+    /// PhaseIncrement = 2π × color_carrier / dot_clock (radians per pixel).
+    /// Default π gives the classic 2-pixel color cycle (Apple II–style artifacts).
+    GLint     artifact_loc_phase_increment_   = -1;
+    float     artifact_phase_increment_       = 3.14159265f;
+
     /// Vector stream snapshot — raw VectorVideoSample bytes copied from
     /// last_frame_data_ by emu thread.  8 bytes per sample.
     uint8_t*  vector_stream_snapshot_   = nullptr;

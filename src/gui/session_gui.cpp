@@ -1,7 +1,10 @@
 #include "gui/session_gui.hpp"
 #include "gui/indexed_shader.hpp"
 #include "gui/stream_shader.hpp"
+#include "gui/svideo_stream_shader.hpp"
+#include "gui/artifact_stream_shader.hpp"
 #include "gui/rgb_stream_shader.hpp"
+#include "gui/ypbpr_stream_shader.hpp"
 #include "gui/vector_shader.hpp"
 #include "gui/port_icons.hpp"
 #include "gui/vfs_file_system.hpp"
@@ -1195,6 +1198,12 @@ void SessionGUI::render_screen() {
                                         stream_shader::STREAM_TEX_WIDTH);
             indexed_shader::glUniform1i(stream_loc_display_h_, stream_display_height_);
             indexed_shader::glUniform1i(stream_loc_display_w_, local_display_w);
+
+            // Artifact shader: upload PhaseIncrement (no-op when loc is -1)
+            if (artifact_loc_phase_increment_ >= 0)
+                indexed_shader::glUniform1f(artifact_loc_phase_increment_,
+                                            artifact_phase_increment_);
+
             indexed_shader::glUseProgram(0);
         }
 
@@ -1553,23 +1562,30 @@ void SessionGUI::allocate_framebuffer() {
             case VideoSignalType::RGBI:
             case VideoSignalType::SVideo:
             case VideoSignalType::CompositeArtifact: {
-                // Composite / RGBI / SVideo / CompositeArtifact —
-                // RG8 stream texture + palette lookup shader.
+                // Palette-indexed RG8 stream texture + palette lookup shader.
                 // Raw 2-byte samples are uploaded directly (no CPU extraction);
                 // the shader reads only the R channel (color index) and ignores
                 // the G channel (flags byte).
                 //
-                // SVideo and CompositeArtifact share the same palette-indexed
-                // sample format as Composite; dedicated analog modeling
-                // (luma/chroma separation, NTSC artifact coloring) can be
-                // added as shader variants later.
+                // Each signal type uses a dedicated fragment shader:
+                //   Composite/RGBI — direct palette lookup (stream_shader)
+                //   SVideo         — palette lookup + chroma bandwidth limiting
+                //   CompositeArtifact — NTSC encode/decode artifact coloring
                 if (system_->supports_gpu_indexed_rendering()) {
                     stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES * 2]();
                     sync_snapshot_   = new SyncEvent[MAX_SYNC_EVENTS]();
 
                     stream_texture_ = stream_shader::create_stream_texture(MAX_STREAM_SAMPLES);
                     stream_shader::StreamShaderLocations locs{};
-                    stream_shader_ = stream_shader::create_program(&locs);
+
+                    // Select the shader variant for this signal type
+                    if (active_signal_type_ == VideoSignalType::SVideo)
+                        stream_shader_ = svideo_stream_shader::create_program(&locs);
+                    else if (active_signal_type_ == VideoSignalType::CompositeArtifact)
+                        stream_shader_ = artifact_stream_shader::create_program(&locs, &artifact_loc_phase_increment_);
+                    else
+                        stream_shader_ = stream_shader::create_program(&locs);
+
                     if (stream_shader_) {
                         stream_loc_proj_         = locs.proj_mtx;
                         stream_loc_scanline_map_ = locs.scanline_map;
@@ -1593,20 +1609,24 @@ void SessionGUI::allocate_framebuffer() {
             case VideoSignalType::RGB:
             case VideoSignalType::YPbPr:
             case VideoSignalType::Digital: {
-                // RGB / YPbPr / Digital — RGBA8 stream texture, no palette lookup.
-                // Uses a dedicated shader that reads raw {r,g,b} values.
+                // RGBA8 stream texture, no palette lookup.
                 //
-                // YPbPr (component video) and Digital (DVI/HDMI) carry
-                // uncompressed color data identical to RGB at the emulation
-                // level.  Dedicated color-space transform shaders can be
-                // added later if analog modeling is desired.
+                // Each signal type uses a dedicated fragment shader:
+                //   RGB/Digital — direct RGB pass-through (rgb_stream_shader)
+                //   YPbPr       — Y'PbPr component bandwidth limiting
                 stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES]();  // reused for sync snapshot alloc
                 sync_snapshot_ = new SyncEvent[MAX_SYNC_EVENTS]();
                 rgb_stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES * 4]();
 
                 rgb_stream_texture_ = rgb_stream_shader::create_stream_texture(MAX_STREAM_SAMPLES);
                 rgb_stream_shader::RGBShaderLocations rlocs{};
-                rgb_stream_shader_ = rgb_stream_shader::create_program(&rlocs);
+
+                // Select the shader variant for this signal type
+                if (active_signal_type_ == VideoSignalType::YPbPr)
+                    rgb_stream_shader_ = ypbpr_stream_shader::create_program(&rlocs);
+                else
+                    rgb_stream_shader_ = rgb_stream_shader::create_program(&rlocs);
+
                 if (rgb_stream_shader_) {
                     rgb_stream_loc_proj_         = rlocs.proj_mtx;
                     rgb_stream_loc_scanline_map_ = rlocs.scanline_map;
@@ -1614,7 +1634,7 @@ void SessionGUI::allocate_framebuffer() {
                     rgb_stream_loc_display_h_    = rlocs.display_height;
                     rgb_stream_loc_display_w_    = rlocs.display_width;
                     use_rgb_stream_shader_ = true;
-                    // Suppress the CPU-side bridge: RGB stream shader
+                    // Suppress the CPU-side bridge: stream shader
                     // handles display directly.
                     system_->set_video_bridge_suppressed(true);
                     printf("GPU stream reconstruction enabled (signal: %s)\n",

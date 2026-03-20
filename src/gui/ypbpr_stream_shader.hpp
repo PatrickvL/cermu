@@ -1,0 +1,153 @@
+#pragma once
+
+// ============================================================================
+// GPU Y'PbPr Component Video Stream Shader
+// ============================================================================
+//
+// Y'PbPr (component video) carries luminance and two color-difference
+// signals on separate cables.  Luma (Y') travels at full bandwidth;
+// Pb and Pr have reduced bandwidth (typically ~half of Y').  The visual
+// result is sharper than S-Video, with full-resolution brightness and
+// only slightly softened color transitions.
+//
+// This shader models the bandwidth asymmetry: the center pixel provides
+// luma at full resolution, while Pb and Pr are averaged over a 3-pixel
+// horizontal window.
+//
+// Data format:   Same as RGB — RGBA8 stream ({r, g, b, flags})
+// Texture units: 0 = StreamTex (RGBA8, no palette)
+// Uniforms:      Same set as rgb_stream_shader
+//
+// Requires: OpenGL 3.0 / GLSL 130
+// ============================================================================
+
+#include "gui/indexed_shader.hpp"
+#include "gui/rgb_stream_shader.hpp"    // RGBShaderLocations, vertex_src, constants
+#include "gui/stream_shader.hpp"        // STREAM_TEX_WIDTH constant
+#include <cstdio>
+
+namespace ypbpr_stream_shader {
+
+// Fragment shader — Y'PbPr component video with chroma bandwidth limiting.
+//
+// For each output pixel:
+//   1. Read center pixel's RGB → extract full-resolution luma (Y')
+//   2. Sample a 3-pixel horizontal window of RGB values
+//   3. Convert each to Y'PbPr, average Pb and Pr across the window
+//   4. Recombine Y' (center) + filtered Pb,Pr → output RGB
+static constexpr const char* fragment_src = R"glsl(
+#version 130
+
+in vec2 Frag_UV;
+in vec4 Frag_Color;
+
+uniform sampler2D StreamTex;    // unit 0: RGBA8 packed stream
+
+uniform int ScanlineMap[512];
+uniform int StreamTexWidth;
+uniform int DisplayHeight;
+uniform int DisplayWidth;
+
+out vec4 Out_Color;
+
+// Fetch RGB at a given stream position
+vec3 fetch_rgb(int stream_pos) {
+    int r = stream_pos / StreamTexWidth;
+    int c = stream_pos - r * StreamTexWidth;
+    return texelFetch(StreamTex, ivec2(c, r), 0).rgb;
+}
+
+void main() {
+    int scanline = clamp(int(Frag_UV.y * float(DisplayHeight)), 0, DisplayHeight - 1);
+    int pixel_x  = clamp(int(Frag_UV.x * float(DisplayWidth)),  0, DisplayWidth  - 1);
+
+    int offset = ScanlineMap[scanline];
+    if (offset < 0) {
+        Out_Color = vec4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
+
+    // Center pixel — full-resolution luma (BT.601)
+    vec3 center = fetch_rgb(offset + pixel_x);
+    float Y = 0.299 * center.r + 0.587 * center.g + 0.114 * center.b;
+
+    // Pb / Pr: average over 3-pixel horizontal window
+    // Models component video's reduced chroma bandwidth (~half of Y')
+    float Pb_sum = 0.0;
+    float Pr_sum = 0.0;
+    for (int dx = -1; dx <= 1; dx++) {
+        int px = clamp(pixel_x + dx, 0, DisplayWidth - 1);
+        vec3 c = fetch_rgb(offset + px);
+        float cy = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
+        Pb_sum += 0.564 * (c.b - cy);
+        Pr_sum += 0.713 * (c.r - cy);
+    }
+    float Pb = Pb_sum / 3.0;
+    float Pr = Pr_sum / 3.0;
+
+    // Y'PbPr → RGB (BT.601)
+    vec3 rgb = vec3(
+        Y + 1.402 * Pr,
+        Y - 0.344 * Pb - 0.714 * Pr,
+        Y + 1.772 * Pb
+    );
+
+    Out_Color = Frag_Color * vec4(clamp(rgb, 0.0, 1.0), 1.0);
+}
+)glsl";
+
+// ============================================================================
+// Shader program creation
+// ============================================================================
+
+// Create the Y'PbPr stream shader program.
+// Uses the same vertex shader and uniform layout as rgb_stream_shader.
+// Returns the program ID (0 on failure).
+inline GLuint create_program(rgb_stream_shader::RGBShaderLocations* locs) {
+    using namespace indexed_shader;
+
+    GLuint vs = compile_shader(GL_VERTEX_SHADER, rgb_stream_shader::vertex_src);
+    if (!vs) return 0;
+    GLuint fs = compile_shader(GL_FRAGMENT_SHADER, fragment_src);
+    if (!fs) { glDeleteShader(vs); return 0; }
+
+    GLuint prog = glCreateProgram();
+    glAttachShader(prog, vs);
+    glAttachShader(prog, fs);
+
+    glBindAttribLocation(prog, 0, "Position");
+    glBindAttribLocation(prog, 1, "UV");
+    glBindAttribLocation(prog, 2, "Color");
+
+    glLinkProgram(prog);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+
+    GLint status = 0;
+    glGetProgramiv(prog, GL_LINK_STATUS, &status);
+    if (status != GL_TRUE) {
+        char log[512];
+        glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
+        fprintf(stderr, "ypbpr_stream_shader: link error: %s\n", log);
+        glDeleteProgram(prog);
+        return 0;
+    }
+
+    // Set texture unit binding — StreamTex on unit 0 (no palette)
+    glUseProgram(prog);
+    glUniform1i(glGetUniformLocation(prog, "StreamTex"), 0);
+    glUseProgram(0);
+
+    if (locs) {
+        locs->proj_mtx         = glGetUniformLocation(prog, "ProjMtx");
+        locs->scanline_map     = glGetUniformLocation(prog, "ScanlineMap");
+        locs->stream_tex_width = glGetUniformLocation(prog, "StreamTexWidth");
+        locs->display_height   = glGetUniformLocation(prog, "DisplayHeight");
+        locs->display_width    = glGetUniformLocation(prog, "DisplayWidth");
+    }
+
+    printf("ypbpr_stream_shader: program %u compiled and linked successfully\n", prog);
+    return prog;
+}
+
+} // namespace ypbpr_stream_shader
