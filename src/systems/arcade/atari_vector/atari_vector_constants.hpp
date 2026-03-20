@@ -84,8 +84,10 @@ namespace atari_vector_constants {
     inline constexpr uint16_t VECRAM_SIZE          = 0x0800;    // 2 KB
 
     // Vector ROM (read-only, shared DVG + CPU)
+    // Asteroids: 1 × 2 KB chip; Lunar Lander: 2 × 2 KB chips
     inline constexpr uint16_t VECROM_BASE          = 0x5000;
-    inline constexpr uint16_t VECROM_SIZE          = 0x0800;    // 2 KB
+    inline constexpr uint16_t AST_VECROM_SIZE      = 0x0800;    // 2 KB (Asteroids)
+    inline constexpr uint16_t LL_VECROM_SIZE       = 0x1000;    // 4 KB (Lunar Lander)
 
     // ========================================================================
     // I/O Read Map (active A13=1, active read)

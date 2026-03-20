@@ -33,6 +33,7 @@
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/video/dvg/dvg.hpp"
+#include "chip/sound/pokey/pokey.hpp"
 #include "chip/memory/ram_chip.hpp"
 #include "chip/memory/rom_chip.hpp"
 #include <cstdint>
@@ -61,7 +62,7 @@ struct AtariVectorTraits<AtariVectorVariant::ASTEROIDS> {
     static constexpr uint16_t PROGROM_OFFSET  = atv::AST_PROGROM_OFFSET; // ROM starts at offset $800
 
     static constexpr uint16_t VECROM_BASE        = atv::VECROM_BASE;        // $5000
-    static constexpr uint16_t VECROM_SIZE        = atv::VECROM_SIZE;        // 2 KB
+    static constexpr uint16_t VECROM_SIZE        = atv::AST_VECROM_SIZE;    // 2 KB
     static constexpr uint16_t VECROM_WORD_OFFSET = 0x800;                   // DVG word addr where ROM starts
 
     static constexpr const char* PALETTE_ID   = "green";   // Green phosphor CRT
@@ -80,7 +81,7 @@ struct AtariVectorTraits<AtariVectorVariant::LUNAR_LANDER> {
     static constexpr uint16_t PROGROM_OFFSET  = 0;                       // No offset
 
     static constexpr uint16_t VECROM_BASE        = atv::VECROM_BASE;        // $5000
-    static constexpr uint16_t VECROM_SIZE        = atv::VECROM_SIZE;        // 2 KB
+    static constexpr uint16_t VECROM_SIZE        = atv::LL_VECROM_SIZE;     // 4 KB (2 × 2 KB chips)
     static constexpr uint16_t VECROM_WORD_OFFSET = 0x800;                   // DVG word addr where ROM starts
 
     static constexpr const char* PALETTE_ID   = "white";   // White/blue phosphor CRT
@@ -127,7 +128,7 @@ struct AtariVectorTraits<AtariVectorVariant::ASTEROIDS_DELUXE> {
 inline constexpr auto kAsteroidsChips = make_chip_manifest(
     Slot<RAMChip>{atv::RAM_BASE,     atv::RAM_SIZE,     0, "Work RAM"},
     Slot<RAMChip>{atv::VECRAM_BASE,  atv::VECRAM_SIZE,  0, "Vector RAM"},
-    Slot<ROMChip>{atv::VECROM_BASE,  atv::VECROM_SIZE,  0, "Vector ROM"},
+    Slot<ROMChip>{atv::VECROM_BASE,  atv::AST_VECROM_SIZE, 0, "Vector ROM"},
     Slot<ROMChip>{atv::AST_PROGROM_BASE, atv::AST_PROGROM_SIZE, 0, "Program ROM"},
     Slot<MOS6502>{0, 0, 0, "MOS 6502"}
 );
@@ -135,7 +136,7 @@ inline constexpr auto kAsteroidsChips = make_chip_manifest(
 inline constexpr auto kLunarLanderChips = make_chip_manifest(
     Slot<RAMChip>{atv::RAM_BASE,     atv::RAM_SIZE,     0, "Work RAM"},
     Slot<RAMChip>{atv::VECRAM_BASE,  atv::VECRAM_SIZE,  0, "Vector RAM"},
-    Slot<ROMChip>{atv::VECROM_BASE,  atv::VECROM_SIZE,  0, "Vector ROM"},
+    Slot<ROMChip>{atv::VECROM_BASE,  atv::LL_VECROM_SIZE, 0, "Vector ROM"},
     Slot<ROMChip>{atv::LL_PROGROM_BASE, atv::LL_PROGROM_SIZE, 0, "Program ROM"},
     Slot<MOS6502>{0, 0, 0, "MOS 6502"}
 );
@@ -230,6 +231,7 @@ private:
     // ── Chips ────────────────────────────────────────────────────────────
     MOS6502*    cpu_   = nullptr;    // MOS 6502 @ 1.512 MHz — owned by board_
     dvg_t       dvg_;                // Digital Vector Generator
+    pokey_t     pokey_;              // POKEY sound chip (used by Asteroids Deluxe)
 
     // Memory chips (non-owning; owned by board_)
     RAMChip*    vec_ram_  = nullptr; // Vector RAM ($4000-$47FF)
