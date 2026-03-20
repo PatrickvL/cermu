@@ -36,3 +36,18 @@ enum class AudioSignalType : uint8_t {
     Stereo,             ///< Two channels (left/right)
     Quadraphonic,       ///< Four channels
 };
+
+/// Human-readable name for a VideoSignalType (for diagnostics/printf).
+inline const char* signal_type_name(VideoSignalType t) {
+    switch (t) {
+        case VideoSignalType::Composite:         return "Composite";
+        case VideoSignalType::SVideo:            return "S-Video";
+        case VideoSignalType::RGB:               return "RGB";
+        case VideoSignalType::RGBI:              return "RGBI";
+        case VideoSignalType::YPbPr:             return "YPbPr";
+        case VideoSignalType::Digital:           return "Digital";
+        case VideoSignalType::Vector:            return "Vector";
+        case VideoSignalType::CompositeArtifact: return "Composite (artifact)";
+    }
+    return "Unknown";
+}

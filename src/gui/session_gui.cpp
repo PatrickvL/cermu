@@ -1550,11 +1550,19 @@ void SessionGUI::allocate_framebuffer() {
 
         switch (active_signal_type_) {
             case VideoSignalType::Composite:
-            case VideoSignalType::RGBI: {
-                // Composite / RGBI — RG8 stream texture + palette lookup shader.
+            case VideoSignalType::RGBI:
+            case VideoSignalType::SVideo:
+            case VideoSignalType::CompositeArtifact: {
+                // Composite / RGBI / SVideo / CompositeArtifact —
+                // RG8 stream texture + palette lookup shader.
                 // Raw 2-byte samples are uploaded directly (no CPU extraction);
                 // the shader reads only the R channel (color index) and ignores
                 // the G channel (flags byte).
+                //
+                // SVideo and CompositeArtifact share the same palette-indexed
+                // sample format as Composite; dedicated analog modeling
+                // (luma/chroma separation, NTSC artifact coloring) can be
+                // added as shader variants later.
                 if (system_->supports_gpu_indexed_rendering()) {
                     stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES * 2]();
                     sync_snapshot_   = new SyncEvent[MAX_SYNC_EVENTS]();
@@ -1576,15 +1584,22 @@ void SessionGUI::allocate_framebuffer() {
                         // from reconstruct_to_framebuffer() redundant.
                         system_->set_video_bridge_suppressed(true);
                         printf("GPU stream reconstruction enabled (signal: %s)\n",
-                               active_signal_type_ == VideoSignalType::RGBI ? "RGBI" : "Composite");
+                               signal_type_name(active_signal_type_));
                     }
                 }
                 break;
             }
 
-            case VideoSignalType::RGB: {
-                // RGB — RGBA8 stream texture, no palette lookup.
+            case VideoSignalType::RGB:
+            case VideoSignalType::YPbPr:
+            case VideoSignalType::Digital: {
+                // RGB / YPbPr / Digital — RGBA8 stream texture, no palette lookup.
                 // Uses a dedicated shader that reads raw {r,g,b} values.
+                //
+                // YPbPr (component video) and Digital (DVI/HDMI) carry
+                // uncompressed color data identical to RGB at the emulation
+                // level.  Dedicated color-space transform shaders can be
+                // added later if analog modeling is desired.
                 stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES]();  // reused for sync snapshot alloc
                 sync_snapshot_ = new SyncEvent[MAX_SYNC_EVENTS]();
                 rgb_stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES * 4]();
@@ -1602,7 +1617,8 @@ void SessionGUI::allocate_framebuffer() {
                     // Suppress the CPU-side bridge: RGB stream shader
                     // handles display directly.
                     system_->set_video_bridge_suppressed(true);
-                    printf("GPU RGB stream reconstruction enabled\n");
+                    printf("GPU stream reconstruction enabled (signal: %s)\n",
+                           signal_type_name(active_signal_type_));
                 }
                 break;
             }
