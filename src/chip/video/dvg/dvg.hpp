@@ -120,12 +120,30 @@ struct dvg_t : public VideoChipBase {
     // Memory access — system provides vector RAM/ROM pointer
     // ========================================================================
 
-    /// Set the pointer to the 4 KB vector memory window.
-    /// The system is responsible for mapping vector RAM and ROM into this
-    /// contiguous block.  The DVG reads 16-bit words from this buffer.
-    void set_vector_memory(const uint8_t* mem, uint16_t size) {
-        vec_mem_  = mem;
-        vec_size_ = size;
+    /// Configure the DVG's vector memory pointers.
+    ///
+    /// The DVG accesses a 12-bit (4096-word) address space.  The board
+    /// determines how RAM and ROM chips are mapped into that space:
+    ///
+    ///   Asteroids/LL:  RAM at word 0x000-0x3FF, gap 0x400-0x7FF,
+    ///                  ROM at word 0x800-0xBFF  (rom_word_offset=0x800)
+    ///
+    ///   Asteroids DX:  RAM at word 0x000-0x3FF,
+    ///                  ROM at word 0x400-0xBFF  (rom_word_offset=0x400)
+    ///
+    /// @param ram            Pointer to vector RAM (CPU-writable)
+    /// @param ram_byte_size  Size of vector RAM in bytes (e.g. 2048)
+    /// @param rom            Pointer to vector ROM (read-only)
+    /// @param rom_byte_size  Size of vector ROM in bytes (e.g. 2048 or 4096)
+    /// @param rom_word_offset  DVG word address where ROM begins (0x800 for AST/LL, 0x400 for AD)
+    void set_vector_memory(const uint8_t* ram, uint16_t ram_byte_size,
+                           const uint8_t* rom, uint16_t rom_byte_size,
+                           uint16_t rom_word_offset = 0x800) {
+        vec_ram_       = ram;
+        vec_ram_size_  = ram_byte_size;
+        vec_rom_       = rom;
+        vec_rom_size_  = rom_byte_size;
+        rom_word_offset_ = rom_word_offset;
     }
 
     /// Set the output video stream for vector signals.
@@ -197,8 +215,11 @@ struct dvg_t : public VideoChipBase {
     uint16_t stack_[dvg_constants::STACK_DEPTH] = {};  // Subroutine return stack
 
 private:
-    const uint8_t*   vec_mem_  = nullptr;  // Pointer to 4 KB vector memory
-    uint16_t         vec_size_ = 0;        // Size of vector memory in bytes
+    const uint8_t*   vec_ram_  = nullptr;    // Pointer to vector RAM
+    uint16_t         vec_ram_size_ = 0;      // Size of vector RAM in bytes
+    const uint8_t*   vec_rom_  = nullptr;    // Pointer to vector ROM
+    uint16_t         vec_rom_size_ = 0;      // Size of vector ROM in bytes
+    uint16_t         rom_word_offset_ = 0x800; // DVG word address where ROM begins
     VectorVideoStream* stream_ = nullptr;  // Output video stream
 
     // ========================================================================
@@ -207,31 +228,33 @@ private:
 
     /// Read a 16-bit word from vector memory at the given word address.
     ///
-    /// DVG address space (Asteroids/Lunar Lander hardware):
-    ///   Word 0x000-0x3FF → vector RAM  (CPU $4000-$47FF)
-    ///   Word 0x400-0x7FF → unmapped gap
-    ///   Word 0x800-0xBFF → vector ROM  (CPU $5000-$57FF)
-    ///   Word 0xC00-0xFFF → unmapped gap
+    /// DVG address space is 12-bit (4096 words).  The board determines
+    /// where RAM and ROM sit in that space — the DVG chip itself just
+    /// indexes linearly.  We use separate RAM/ROM pointers with a
+    /// configurable ROM word offset to handle different board layouts:
     ///
-    /// The system provides a contiguous 4 KB buffer: RAM (2 KB) followed
-    /// by ROM (2 KB).  This function remaps the DVG word address into that
-    /// buffer, returning 0 for addresses that fall in the unmapped gaps.
+    ///   Asteroids/LL:  RAM 0x000-0x3FF, ROM 0x800-0xBFF (gap at 0x400-0x7FF)
+    ///   Asteroids DX:  RAM 0x000-0x3FF, ROM 0x400-0xBFF (no gap)
     uint16_t read_word(uint16_t word_addr) const {
         uint16_t w = word_addr & 0xFFF;
-        uint16_t byte_addr;
 
-        if (w < 0x400) {
-            // Word 0x000-0x3FF → vector RAM (buf offset 0x000-0x7FF)
-            byte_addr = w * 2;
-        } else if (w >= 0x800 && w < 0xC00) {
-            // Word 0x800-0xBFF → vector ROM (buf offset 0x800-0xFFF)
-            byte_addr = 0x800 + (w - 0x800) * 2;
-        } else {
-            return 0;  // unmapped gap
+        // Vector RAM region
+        uint16_t ram_words = vec_ram_size_ / 2;
+        if (w < ram_words) {
+            uint16_t byte_addr = w * 2;
+            if (!vec_ram_ || byte_addr + 1 >= vec_ram_size_) return 0;
+            return vec_ram_[byte_addr] | (vec_ram_[byte_addr + 1] << 8);
         }
 
-        if (!vec_mem_ || byte_addr + 1 >= vec_size_) return 0;
-        return vec_mem_[byte_addr] | (vec_mem_[byte_addr + 1] << 8);
+        // Vector ROM region (starts at rom_word_offset_)
+        if (w >= rom_word_offset_) {
+            uint16_t rom_word = w - rom_word_offset_;
+            uint16_t byte_addr = rom_word * 2;
+            if (!vec_rom_ || byte_addr + 1 >= vec_rom_size_) return 0;
+            return vec_rom_[byte_addr] | (vec_rom_[byte_addr + 1] << 8);
+        }
+
+        return 0;  // unmapped gap
     }
 
     /// Execute one DVG opcode at the current PC.

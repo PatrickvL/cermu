@@ -60,6 +60,10 @@ struct AtariVectorTraits<AtariVectorVariant::ASTEROIDS> {
     static constexpr uint16_t PROGROM_ACTUAL  = atv::AST_PROGROM_ACTUAL; // 6 KB actual
     static constexpr uint16_t PROGROM_OFFSET  = atv::AST_PROGROM_OFFSET; // ROM starts at offset $800
 
+    static constexpr uint16_t VECROM_BASE        = atv::VECROM_BASE;        // $5000
+    static constexpr uint16_t VECROM_SIZE        = atv::VECROM_SIZE;        // 2 KB
+    static constexpr uint16_t VECROM_WORD_OFFSET = 0x800;                   // DVG word addr where ROM starts
+
     static constexpr const char* PALETTE_ID   = "green";   // Green phosphor CRT
 };
 
@@ -75,7 +79,30 @@ struct AtariVectorTraits<AtariVectorVariant::LUNAR_LANDER> {
     static constexpr uint16_t PROGROM_ACTUAL  = atv::LL_PROGROM_SIZE;    // Full 8 KB
     static constexpr uint16_t PROGROM_OFFSET  = 0;                       // No offset
 
+    static constexpr uint16_t VECROM_BASE        = atv::VECROM_BASE;        // $5000
+    static constexpr uint16_t VECROM_SIZE        = atv::VECROM_SIZE;        // 2 KB
+    static constexpr uint16_t VECROM_WORD_OFFSET = 0x800;                   // DVG word addr where ROM starts
+
     static constexpr const char* PALETTE_ID   = "white";   // White/blue phosphor CRT
+};
+
+template<>
+struct AtariVectorTraits<AtariVectorVariant::ASTEROIDS_DELUXE> {
+    static constexpr const char* NAME         = "Asteroids Deluxe";
+    static constexpr const char* SHORT_NAME   = "AsteroidsDeluxe";
+    static constexpr const char* DESCRIPTION  = "Atari Asteroids Deluxe (1980) — 6502 CPU, DVG, POKEY";
+    static constexpr const char* DATA_FOLDER  = "asteroids_deluxe";
+
+    static constexpr uint16_t PROGROM_BASE    = atv::AD_PROGROM_BASE;    // $6000
+    static constexpr uint16_t PROGROM_SIZE    = atv::AD_PROGROM_SIZE;    // 8 KB
+    static constexpr uint16_t PROGROM_ACTUAL  = atv::AD_PROGROM_SIZE;    // Full 8 KB
+    static constexpr uint16_t PROGROM_OFFSET  = 0;                       // No offset
+
+    static constexpr uint16_t VECROM_BASE        = atv::AD_VECROM_BASE;     // $4800
+    static constexpr uint16_t VECROM_SIZE        = atv::AD_VECROM_SIZE;     // 4 KB (2 × 2 KB chips)
+    static constexpr uint16_t VECROM_WORD_OFFSET = 0x400;                   // ROM starts right after RAM (no gap)
+
+    static constexpr const char* PALETTE_ID   = "blue";    // Blue/white phosphor CRT
 };
 
 
@@ -113,6 +140,15 @@ inline constexpr auto kLunarLanderChips = make_chip_manifest(
     Slot<MOS6502>{0, 0, 0, "MOS 6502"}
 );
 
+// Asteroids Deluxe: vector ROM at $4800 (4 KB), program ROM at $6000 (8 KB)
+inline constexpr auto kAsteroidsDeluxeChips = make_chip_manifest(
+    Slot<RAMChip>{atv::RAM_BASE,       atv::RAM_SIZE,       0, "Work RAM"},
+    Slot<RAMChip>{atv::VECRAM_BASE,    atv::VECRAM_SIZE,    0, "Vector RAM"},
+    Slot<ROMChip>{atv::AD_VECROM_BASE, atv::AD_VECROM_SIZE, 0, "Vector ROM"},
+    Slot<ROMChip>{atv::AD_PROGROM_BASE, atv::AD_PROGROM_SIZE, 0, "Program ROM"},
+    Slot<MOS6502>{0, 0, 0, "MOS 6502"}
+);
+
 // ============================================================================
 // Manifest selector — pick the right manifest at compile time
 // ============================================================================
@@ -121,6 +157,8 @@ template<AtariVectorVariant V>
 constexpr const auto& select_manifest() {
     if constexpr (V == AtariVectorVariant::ASTEROIDS)
         return kAsteroidsChips;
+    else if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE)
+        return kAsteroidsDeluxeChips;
     else
         return kLunarLanderChips;
 }
@@ -129,14 +167,17 @@ constexpr const auto& select_manifest() {
 // BusSpec for each variant
 // ============================================================================
 
-using AsteroidsBusSpec     = ManifestBusSpec<kAsteroidsChips, 16, 8>;
-using LunarLanderBusSpec   = ManifestBusSpec<kLunarLanderChips, 16, 8>;
+using AsteroidsBusSpec       = ManifestBusSpec<kAsteroidsChips, 16, 8>;
+using AsteroidsDeluxeBusSpec = ManifestBusSpec<kAsteroidsDeluxeChips, 16, 8>;
+using LunarLanderBusSpec     = ManifestBusSpec<kLunarLanderChips, 16, 8>;
 
 template<AtariVectorVariant V>
 using VectorBusSpec = std::conditional_t<
     V == AtariVectorVariant::ASTEROIDS,
     AsteroidsBusSpec,
-    LunarLanderBusSpec
+    std::conditional_t<V == AtariVectorVariant::ASTEROIDS_DELUXE,
+                       AsteroidsDeluxeBusSpec,
+                       LunarLanderBusSpec>
 >;
 
 
@@ -221,6 +262,10 @@ private:
     // ── Sound output latches ─────────────────────────────────────────────
     uint8_t snd_latch_ = 0x00;      // Sound triggers / output bits
 
+    // ── EAROM (Asteroids Deluxe only — ER2055 64×4-bit) ─────────────────
+    uint8_t earom_[64] = {};         // EAROM data (stubbed as simple RAM)
+    uint8_t earom_ctrl_ = 0x00;      // EAROM control register
+
     // ── Internal helpers ─────────────────────────────────────────────────
     void tick_cpu();
     bus_state_t io_read(uint16_t addr, bus_state_t pins);
@@ -231,5 +276,6 @@ private:
 // Concrete type aliases for system registration
 // ============================================================================
 
-using AsteroidsSystem     = AtariVectorSystem<AtariVectorVariant::ASTEROIDS>;
-using LunarLanderSystem   = AtariVectorSystem<AtariVectorVariant::LUNAR_LANDER>;
+using AsteroidsSystem       = AtariVectorSystem<AtariVectorVariant::ASTEROIDS>;
+using AsteroidsDeluxeSystem = AtariVectorSystem<AtariVectorVariant::ASTEROIDS_DELUXE>;
+using LunarLanderSystem     = AtariVectorSystem<AtariVectorVariant::LUNAR_LANDER>;
