@@ -145,10 +145,10 @@ uniform vec3 PhosphorColor;    // phosphor tint (default: warm green P31)
 out vec4 Out_Color;
 
 void main() {
-    // Gaussian falloff: exp(-4 * d^2) gives ~60% at edge (d=±0.5),
-    // visible glow extending past the nominal beam width.
+    // Gaussian falloff: exp(-2.5 * d^2) gives a wider, brighter beam
+    // profile matching the look of real vector monitors.
     float d = v_dist;            // [-1, 1] normalized dist from center
-    float falloff = exp(-4.0 * d * d);
+    float falloff = exp(-2.5 * d * d);
     float bright = v_intensity * falloff;
 
     Out_Color = vec4(PhosphorColor * bright, bright);

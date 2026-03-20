@@ -185,6 +185,10 @@ static void vector_shader_render_callback(const ImDrawList*, const ImDrawCmd* cm
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 
+    // Disable scissor test — ImGui's clip rect can crop vector quads
+    // that legitimately extend to the edges of the display area.
+    glDisable(GL_SCISSOR_TEST);
+
     // Upload vertices to VBO and draw
     vector_shader::glBindVertexArray(d->vao);
     vector_shader::glBindBuffer(GL_ARRAY_BUFFER, d->vbo);
@@ -195,8 +199,9 @@ static void vector_shader_render_callback(const ImDrawList*, const ImDrawCmd* cm
     vector_shader::glBindVertexArray(0);
     vector_shader::glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    // Restore default blend mode (ImGui's blend state)
+    // Restore default blend mode and re-enable scissor (ImGui's state)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_SCISSOR_TEST);
 }
 
 // ============================================================================
@@ -1276,9 +1281,13 @@ void SessionGUI::render_screen() {
         if (vector_stream_len_ > 0) {
             float x_scale = display_w / static_cast<float>(fb_width_);
             float y_scale = display_h / static_cast<float>(fb_height_);
+            // Scale beam width with display size so lines stay visually
+            // consistent across window resizes.  Base: 3px at 1024px.
+            float beam_w = 3.0f * (std::min(display_w, display_h) / 1024.0f);
+            beam_w = std::max(1.5f, std::min(beam_w, 6.0f));  // clamp range
             vector_shader::build_beam_quads(
                 vector_stream_snapshot_, vector_stream_len_,
-                2.0f,  // beam width in pixels
+                beam_w,
                 display_w, display_h,
                 x_scale, y_scale,
                 viewport->Pos.x + pos_x,
