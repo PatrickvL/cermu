@@ -28,6 +28,7 @@
 
 enum class AtariVectorVariant : uint8_t {
     ASTEROIDS,
+    ASTEROIDS_DELUXE,
     LUNAR_LANDER,
 };
 
@@ -150,6 +151,29 @@ namespace atari_vector_constants {
     inline constexpr uint16_t AST_PROGROM_OFFSET   = 0x0800;  // ROM data starts at byte $800 within the 8 KB
 
     // ========================================================================
+    // Asteroids Deluxe-specific constants
+    // ========================================================================
+
+    // AD program ROM: $6000-$7FFF (8 KB — 4 × 2 KB chips)
+    inline constexpr uint16_t AD_PROGROM_BASE      = 0x6000;
+    inline constexpr uint16_t AD_PROGROM_SIZE      = 0x2000;  // 8 KB
+
+    // AD vector ROM: $4800-$57FF (4 KB — 2 × 2 KB chips)
+    // In the DVG address space: word 0x400-0xBFF (no gap after RAM)
+    inline constexpr uint16_t AD_VECROM_BASE       = 0x4800;
+    inline constexpr uint16_t AD_VECROM_SIZE       = 0x1000;  // 4 KB
+
+    // EAROM: ER2055 at $2C00-$2C0F (64×4-bit nonvolatile memory)
+    inline constexpr uint16_t AD_EAROM_BASE        = 0x2C00;
+    inline constexpr uint16_t AD_EAROM_SIZE        = 0x40;    // 64 bytes address space
+
+    // POKEY sound chip at $2600-$260F
+    inline constexpr uint16_t AD_POKEY_BASE        = 0x2600;
+
+    // EAROM control register
+    inline constexpr uint16_t AD_EAROM_CTRL_ADDR   = 0x3800;
+
+    // ========================================================================
     // Lunar Lander-specific program ROM
     // ========================================================================
 
@@ -189,6 +213,24 @@ namespace atari_vector_constants {
     inline constexpr uint8_t AST_IN1_THRUST        = 0x20;  // bit 5: Thrust
     inline constexpr uint8_t AST_IN1_ROT_RIGHT     = 0x40;  // bit 6: Rotate right
     inline constexpr uint8_t AST_IN1_ROT_LEFT      = 0x80;  // bit 7: Rotate left
+
+    // ========================================================================
+    // Asteroids Deluxe IN0/IN1 bit definitions
+    // ========================================================================
+    //
+    // Matches MAME asteroid.cpp astdelux INPUT_PORTS.
+    // IN0 is the same as Asteroids except bit 3 = shields (was hyperspace).
+    // IN1 rearranges controls:
+    //   bits 0-4: same as Asteroids (coins, starts)
+    //   bit 5: rotate left  (joystick 2-way left)
+    //   bit 6: rotate right (joystick 2-way right)
+    //   bit 7: fire (button 1)
+
+    inline constexpr uint8_t AD_IN0_SHIELDS        = 0x08;  // bit 3: Shields (replaces hyperspace)
+    inline constexpr uint8_t AD_IN0_THRUST         = 0x10;  // bit 4: Thrust
+    inline constexpr uint8_t AD_IN1_ROT_LEFT       = 0x20;  // bit 5: Rotate left
+    inline constexpr uint8_t AD_IN1_ROT_RIGHT      = 0x40;  // bit 6: Rotate right
+    inline constexpr uint8_t AD_IN1_FIRE           = 0x80;  // bit 7: Fire
 
     // ========================================================================
     // Lunar Lander IN0 bit definitions (active-HIGH unless noted)

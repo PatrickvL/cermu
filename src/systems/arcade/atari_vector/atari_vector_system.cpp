@@ -117,6 +117,47 @@ static const RomSetDescriptor ll_v2_romset = {
     ll_v2_entries, 7
 };
 
+// ── Asteroids Deluxe Rev 1 ───────────────────────────────────────────────
+//
+// Program ROMs: 4 × 2 KB at $6000-$7FFF
+// Vector ROMs:  2 × 2 KB
+//   036800 at DVG offset $0800 → CPU $4800 (load_address $4800)
+//   036799 at DVG offset $1000 → CPU $5000 (load_address $5000)
+
+static const RomEntryDescriptor ad_v1_entries[] = {
+    // Vector ROMs
+    { {"036800.01"},                0x4800, 2048, true  },   // DVG offset $0800
+    { {"036799.01"},                0x5000, 2048, true  },   // DVG offset $1000
+    // Program ROMs
+    { {"036430.01"},                0x6000, 2048, true  },   // socket c1
+    { {"036431.01"},                0x6800, 2048, true  },   // socket de1
+    { {"036432.01"},                0x7000, 2048, true  },   // socket f1
+    { {"036433.02"},                0x7800, 2048, true  },   // socket j1 (reset vector)
+};
+
+static const RomSetDescriptor ad_v1_romset = {
+    "Asteroids Deluxe Rev 1", "AsteroidsDeluxe",
+    ad_v1_entries, 6
+};
+
+// ── Asteroids Deluxe Rev 2 ───────────────────────────────────────────────
+
+static const RomEntryDescriptor ad_v2_entries[] = {
+    // Vector ROMs (036800 updated, 036799 same as v1)
+    { {"036800.02"},                0x4800, 2048, true  },
+    { {"036799.01"},                0x5000, 2048, true  },
+    // Program ROMs
+    { {"036430.02"},                0x6000, 2048, true  },
+    { {"036431.02"},                0x6800, 2048, true  },
+    { {"036432.02"},                0x7000, 2048, true  },
+    { {"036433.03"},                0x7800, 2048, true  },
+};
+
+static const RomSetDescriptor ad_v2_romset = {
+    "Asteroids Deluxe Rev 2", "AsteroidsDeluxe",
+    ad_v2_entries, 6
+};
+
 // ============================================================================
 // HARDWARE TRAITS
 // ============================================================================
@@ -153,6 +194,23 @@ static HardwareTraits create_vector_hardware_traits() {
 
     return ht;
 }
+
+// ============================================================================
+// CONSTRUCTOR / DESTRUCTOR
+// ============================================================================
+
+template<AtariVectorVariant V>
+AtariVectorSystem<V>::AtariVectorSystem()
+    : System()
+    , pins_(MOS6502::default_bus_state())
+    , nmi_counter_(atv::NMI_PERIOD_CYCLES)
+{
+    hardware_traits_ = create_vector_hardware_traits<V>();
+    current_palette_ = hardware_traits_.display.default_palette;
+}
+
+template<AtariVectorVariant V>
+AtariVectorSystem<V>::~AtariVectorSystem() = default;
 
 // ============================================================================
 // SYSTEM DESCRIPTORS
@@ -204,30 +262,35 @@ static SystemDescriptor lunar_lander_descriptor = {
     }
 };
 
-// ============================================================================
-// CONSTRUCTOR / DESTRUCTOR
-// ============================================================================
-
-template<AtariVectorVariant V>
-AtariVectorSystem<V>::AtariVectorSystem()
-    : System()
-    , pins_(MOS6502::default_bus_state())
-    , nmi_counter_(atv::NMI_PERIOD_CYCLES)
-{
-    hardware_traits_ = create_vector_hardware_traits<V>();
-    current_palette_ = hardware_traits_.display.default_palette;
-}
-
-template<AtariVectorVariant V>
-AtariVectorSystem<V>::~AtariVectorSystem() = default;
-
-// ============================================================================
-// SYSTEM IDENTIFICATION
-// ============================================================================
-
+static SystemDescriptor asteroids_deluxe_descriptor = {
+    "Asteroids Deluxe",
+    "AsteroidsDeluxe",
+    "Atari Asteroids Deluxe (1980) — 6502 CPU, DVG, POKEY sound",
+    "asteroids_deluxe",
+    {"AsteroidsDeluxe", "Asteroids Deluxe", "ASTEROIDSDELUXE"},
+    nullptr,
+    create_vector_hardware_traits<AtariVectorVariant::ASTEROIDS_DELUXE>(),
+    [](const format_descriptor_t*, const char* filepath,
+       const uint8_t*, size_t size) -> SystemProbeResult {
+        SystemProbeResult result = { 0.0f, {} };
+        const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
+        if (!ext) return result;
+        if (strcmp(ext, ".bin") == 0 || strcmp(ext, ".BIN") == 0) {
+            // AD: 8 KB program + 4 KB vector = 12 KB
+            if (size == 12288)
+                result.confidence = 0.3f;
+        }
+        return result;
+    }
+};
 template<>
 const SystemDescriptor& AsteroidsSystem::get_descriptor() const {
     return asteroids_descriptor;
+}
+
+template<>
+const SystemDescriptor& AsteroidsDeluxeSystem::get_descriptor() const {
+    return asteroids_deluxe_descriptor;
 }
 
 template<>
@@ -291,8 +354,12 @@ bool AtariVectorSystem<V>::initialize() {
     // Wire DVG to the video stream
     dvg_.set_stream(&video_port_->stream());
 
-    // Wire DVG vector memory — will be set properly after ROM load
-    // (vector RAM + vector ROM concatenated into a contiguous 4 KB window)
+    // Wire DVG vector memory — pointers are stable after board_.create_chips()
+    if (vec_ram_ && vec_rom_) {
+        dvg_.set_vector_memory(vec_ram_->data(), atv::VECRAM_SIZE,
+                              vec_rom_->data(), Traits::VECROM_SIZE,
+                              Traits::VECROM_WORD_OFFSET);
+    }
 
     // Audio port (basic — discrete sound, not chip-driven)
     audio_port_ = std::make_unique<AudioPort>();
@@ -428,20 +495,44 @@ template<AtariVectorVariant V>
 bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
     uint8_t data = 0x00;
 
-    if constexpr (V == AtariVectorVariant::ASTEROIDS) {
-        // ── Asteroids I/O reads ──────────────────────────────────────────
+    if constexpr (V == AtariVectorVariant::ASTEROIDS ||
+                  V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+        // ── Asteroids / Asteroids Deluxe I/O reads ──────────────────────
         //
-        // Asteroids uses MULTIPLEXED input reads via 74LS244 buffers.
+        // Both use MULTIPLEXED input reads via 74LS244 buffers.
         // Reading address $200X returns bit X of the IN0 port placed at D7.
-        // This allows the 6502 to test individual input bits with the BIT
-        // instruction (BMI/BPL test D7, BVC/BVS test D6).
         //
-        // Address decode (matches MAME asteroid_map):
+        // Address decode:
         //   $2000-$2007   IN0   (multiplexed, 8 bits)
         //   $2400-$2407   IN1   (multiplexed, 8 bits)
+        //   $2600-$260F   POKEY (Asteroids Deluxe only)
         //   $2800-$2803   DSW1  (multiplexed, 4 bits)
+        //   $2C00-$2C3F   EAROM (Asteroids Deluxe only)
 
-        // Determine which port range we're reading
+        // AD-specific peripherals: POKEY and EAROM
+        if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+            // POKEY at $2600-$260F
+            if (addr >= atv::AD_POKEY_BASE && addr < atv::AD_POKEY_BASE + 0x10) {
+                uint8_t pokey_reg = addr & 0x0F;
+                // POKEY stub: return sensible defaults
+                switch (pokey_reg) {
+                    case 0x0A: data = static_cast<uint8_t>(total_cycles_); break; // RANDOM
+                    case 0x0E: data = 0xFF; break;  // IRQST (no pending IRQs, active-low)
+                    case 0x0F: data = 0xFF; break;  // SKSTAT (no errors)
+                    default:   data = 0x00; break;  // POT/KBCODE/etc
+                }
+                BUS_SET_DATA(pins, data);
+                return pins;
+            }
+            // EAROM at $2C00-$2C3F
+            if (addr >= atv::AD_EAROM_BASE && addr < atv::AD_EAROM_BASE + atv::AD_EAROM_SIZE) {
+                data = earom_[addr & 0x3F];
+                BUS_SET_DATA(pins, data);
+                return pins;
+            }
+        }
+
+        // Multiplexed input port reads (shared Asteroids / AD)
         uint16_t port_base = addr & 0x2C00;  // A13, A11, A10 select port
         uint8_t offset = addr & 0x07;        // A0-A2 select which bit
 
@@ -541,18 +632,25 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
     // I/O writes are decode-by-address — the upper address bits select the register.
     // The data byte on the bus is sometimes ignored (trigger-only writes).
 
+    // AD-specific write-capable peripherals in the $2000-$2FFF range
+    if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+        // POKEY write at $2600-$260F
+        if (addr >= atv::AD_POKEY_BASE && addr < atv::AD_POKEY_BASE + 0x10) {
+            // POKEY stub — ignore writes (no sound emulation yet)
+            return pins;
+        }
+        // EAROM write at $2C00-$2C3F
+        if (addr >= atv::AD_EAROM_BASE && addr < atv::AD_EAROM_BASE + atv::AD_EAROM_SIZE) {
+            earom_[addr & 0x3F] = data;
+            return pins;
+        }
+    }
+
     uint16_t reg = addr & 0x3E00;
 
     switch (reg) {
         case atv::VGGO_ADDR: {
             // $3000 — VGGO: Start DVG vector state machine
-            // DVG addresses $0000-$07FF = vector RAM, $0800-$0FFF = vector ROM.
-            // Board allocates flat_mem_ contiguously in slot order, so
-            // vector RAM (slot 1) is immediately followed by vector ROM (slot 2).
-            if (vec_ram_) {
-                dvg_.set_vector_memory(vec_ram_->data(),
-                                       atv::VECRAM_SIZE + atv::VECROM_SIZE);
-            }
             dvg_.trigger_go();
             break;
         }
@@ -573,8 +671,10 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
 
         case 0x3800:
         case 0x3A00:
-            // $3800-$3BFF — Additional sound / output latches
-            // Game-specific; store for potential audio modeling
+            // $3800 — EAROM control (AD) / sound latches (other games)
+            if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+                earom_ctrl_ = data;
+            }
             break;
 
         case atv::COIN_CTR_ADDR:
@@ -680,9 +780,11 @@ bool AtariVectorSystem<V>::load_file(const char* filepath) {
     if (!name) name = strrchr(filepath, '\\');
     program_title_ = name ? (name + 1) : filepath;
 
-    // Wire DVG to vector memory (vector RAM + vector ROM as contiguous view)
-    if (vec_ram_) {
-        dvg_.set_vector_memory(vec_ram_->data(), atv::VECRAM_SIZE + atv::VECROM_SIZE);
+    // Wire DVG to vector memory
+    if (vec_ram_ && vec_rom_) {
+        dvg_.set_vector_memory(vec_ram_->data(), atv::VECRAM_SIZE,
+                              vec_rom_->data(), Traits::VECROM_SIZE,
+                              Traits::VECROM_WORD_OFFSET);
     }
 
     system_ready_ = true;
@@ -706,6 +808,8 @@ template<AtariVectorVariant V>
 std::vector<const RomSetDescriptor*> AtariVectorSystem<V>::get_rom_set_descriptors() const {
     if constexpr (V == AtariVectorVariant::ASTEROIDS) {
         return { &ast_v1_romset, &ast_v2_romset };
+    } else if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+        return { &ad_v1_romset, &ad_v2_romset };
     } else {
         return { &ll_v1_romset, &ll_v2_romset };
     }
@@ -730,12 +834,12 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
                                                   size_t size,
                                                   int /*entry_index*/) -> bool {
         // Route data to the correct chip based on load address
-        if (load_address >= atv::VECROM_BASE &&
-            load_address < atv::VECROM_BASE + atv::VECROM_SIZE) {
-            // Vector ROM ($5000-$57FF)
+        if (load_address >= Traits::VECROM_BASE &&
+            load_address < Traits::VECROM_BASE + Traits::VECROM_SIZE) {
+            // Vector ROM
             if (!vec_rom_) return false;
-            uint32_t offset = load_address - atv::VECROM_BASE;
-            size_t to_copy = std::min(size, static_cast<size_t>(atv::VECROM_SIZE - offset));
+            uint32_t offset = load_address - Traits::VECROM_BASE;
+            size_t to_copy = std::min(size, static_cast<size_t>(Traits::VECROM_SIZE - offset));
             std::memcpy(vec_rom_->data() + offset, data, to_copy);
             printf("  Vector ROM: %zu bytes at $%04X\n", to_copy, load_address);
             return true;
@@ -768,8 +872,10 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
         program_title_ = match.rom_set->name;
 
     // Wire DVG to vector memory
-    if (vec_ram_) {
-        dvg_.set_vector_memory(vec_ram_->data(), atv::VECRAM_SIZE + atv::VECROM_SIZE);
+    if (vec_ram_ && vec_rom_) {
+        dvg_.set_vector_memory(vec_ram_->data(), atv::VECRAM_SIZE,
+                              vec_rom_->data(), Traits::VECROM_SIZE,
+                              Traits::VECROM_WORD_OFFSET);
     }
 
     system_ready_ = true;
@@ -863,6 +969,50 @@ void AtariVectorSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) 
             default:
                 break;
         }
+    } else if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+        // Asteroids Deluxe controls:
+        //   Arrow left/right = rotate (IN1 bits 5/6)
+        //   Up = thrust (IN0 bit 4)
+        //   Space = fire (IN1 bit 7)
+        //   H = shields (IN0 bit 3)
+        //   1/2 = 1P/2P start
+        //   5 = coin
+        switch (key) {
+            case SDLK_LEFT:
+                if (pressed) in1_ |=  atv::AD_IN1_ROT_LEFT;
+                else         in1_ &= ~atv::AD_IN1_ROT_LEFT;
+                break;
+            case SDLK_RIGHT:
+                if (pressed) in1_ |=  atv::AD_IN1_ROT_RIGHT;
+                else         in1_ &= ~atv::AD_IN1_ROT_RIGHT;
+                break;
+            case SDLK_UP:
+                if (pressed) in0_ |=  atv::AD_IN0_THRUST;
+                else         in0_ &= ~atv::AD_IN0_THRUST;
+                break;
+            case SDLK_SPACE:
+                if (pressed) in1_ |=  atv::AD_IN1_FIRE;
+                else         in1_ &= ~atv::AD_IN1_FIRE;
+                break;
+            case SDLK_h:
+                if (pressed) in0_ |=  atv::AD_IN0_SHIELDS;
+                else         in0_ &= ~atv::AD_IN0_SHIELDS;
+                break;
+            case SDLK_1:
+                if (pressed) in1_ |=  atv::AST_IN1_1P_START;
+                else         in1_ &= ~atv::AST_IN1_1P_START;
+                break;
+            case SDLK_2:
+                if (pressed) in1_ |=  atv::AST_IN1_2P_START;
+                else         in1_ &= ~atv::AST_IN1_2P_START;
+                break;
+            case SDLK_5:
+                if (pressed) in1_ |=  atv::AST_IN1_COIN1;
+                else         in1_ &= ~atv::AST_IN1_COIN1;
+                break;
+            default:
+                break;
+        }
     } else {
         // Lunar Lander controls (active-HIGH: pressed = set bit):
         //   Up/Down = thrust (adjusts ADC value)
@@ -934,6 +1084,12 @@ void AtariVectorSystem<V>::set_speed_multiplier(float multiplier) {
 // ============================================================================
 
 template class AtariVectorSystem<AtariVectorVariant::ASTEROIDS>;
+template class AtariVectorSystem<AtariVectorVariant::ASTEROIDS_DELUXE>;
+template class AtariVectorSystem<AtariVectorVariant::LUNAR_LANDER>;
+
+// ============================================================================
+// SYSTEM REGISTRATION
+// ==================================================ASTEROIDS_DELUXE>;
 template class AtariVectorSystem<AtariVectorVariant::LUNAR_LANDER>;
 
 // ============================================================================
@@ -941,4 +1097,5 @@ template class AtariVectorSystem<AtariVectorVariant::LUNAR_LANDER>;
 // ============================================================================
 
 REGISTER_SYSTEM(asteroids_descriptor, [] { return std::make_unique<AsteroidsSystem>(); });
+REGISTER_SYSTEM(asteroids_deluxe_descriptor, [] { return std::make_unique<AsteroidsDeluxeSystem>(); });
 REGISTER_SYSTEM(lunar_lander_descriptor, [] { return std::make_unique<LunarLanderSystem>(); });
