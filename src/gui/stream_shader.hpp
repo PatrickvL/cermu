@@ -11,7 +11,8 @@
 // performs palette lookup in a single draw call.
 //
 // Textures:
-//   unit 0: Stream texture (R8, packed 1D→2D, STREAM_TEX_WIDTH wide)
+//   unit 0: Stream texture (RG8, packed 1D→2D, STREAM_TEX_WIDTH wide)
+//           R = color index byte, G = flags byte (ignored by shader)
 //   unit 1: Palette texture (RGBA, 256×1)
 //
 // Uniforms:
@@ -80,7 +81,7 @@ static constexpr const char* fragment_src = R"glsl(
 in vec2 Frag_UV;
 in vec4 Frag_Color;
 
-uniform sampler2D StreamTex;    // unit 0: R8 packed stream
+uniform sampler2D StreamTex;    // unit 0: RG8 packed stream (R = index, G = flags)
 uniform sampler2D Palette;      // unit 1: 256×1 RGBA
 
 uniform int ScanlineMap[512];   // stream offset per visible scanline
@@ -247,56 +248,42 @@ inline GLuint create_stream_texture(int max_stream_len) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, STREAM_TEX_WIDTH, tex_height, 0,
-                 GL_RED, GL_UNSIGNED_BYTE, nullptr);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    // RG8: each texel stores one raw 2-byte video sample.
+    // R channel = color/palette index, G channel = flags (ignored by shader).
+    // This lets the CPU upload raw samples via memcpy — no extraction needed.
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, STREAM_TEX_WIDTH, tex_height, 0,
+                 GL_RG, GL_UNSIGNED_BYTE, nullptr);
 
-    printf("stream_shader: created %dx%d R8 stream texture %u (max %d samples)\n",
+    printf("stream_shader: created %dx%d RG8 stream texture %u (max %d samples)\n",
            STREAM_TEX_WIDTH, tex_height, tex, max_stream_len);
     return tex;
 }
 
-// Upload stream data to the stream texture.
-// The 1D stream is packed row-major: first STREAM_TEX_WIDTH bytes go to row 0, etc.
-// Only the color_index bytes are uploaded; flags are not needed on the GPU
-// (sync classification already happened on the CPU to produce the scanline map).
-//
-// extract_buf must be at least stream_len bytes — caller provides it to avoid
-// per-frame allocation.  The function extracts color_index from each
-// CompositeVideoSample (2-byte stride: [color_index, flags]).
-inline void upload_stream_texture(GLuint tex, const void* stream_samples,
-                                  uint32_t stream_len, uint8_t* extract_buf) {
-    if (!tex || !stream_samples || stream_len == 0 || !extract_buf) return;
-
-    // Extract color_index bytes from interleaved [color_index, flags] pairs
-    const uint8_t* src = static_cast<const uint8_t*>(stream_samples);
-    for (uint32_t i = 0; i < stream_len; i++) {
-        extract_buf[i] = src[i * 2];   // CompositeVideoSample.color_index is first byte
-    }
+// Upload raw 2-byte video samples to the RG8 stream texture.
+// The 1D stream is packed row-major: first STREAM_TEX_WIDTH samples (× 2 bytes)
+// go to row 0, etc.  The GPU reads only the R channel (color index);
+// the G channel (flags byte) is ignored by the fragment shader.
+inline void upload_stream_texture(GLuint tex, const uint8_t* raw_samples,
+                                  uint32_t stream_len) {
+    if (!tex || !raw_samples || stream_len == 0) return;
 
     int full_rows = static_cast<int>(stream_len) / STREAM_TEX_WIDTH;
     int remainder = static_cast<int>(stream_len) - full_rows * STREAM_TEX_WIDTH;
 
     glBindTexture(GL_TEXTURE_2D, tex);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
-    // Upload complete rows
     if (full_rows > 0) {
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
                         STREAM_TEX_WIDTH, full_rows,
-                        GL_RED, GL_UNSIGNED_BYTE, extract_buf);
+                        GL_RG, GL_UNSIGNED_BYTE, raw_samples);
     }
 
-    // Upload partial last row
     if (remainder > 0) {
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, full_rows,
                         remainder, 1,
-                        GL_RED, GL_UNSIGNED_BYTE,
-                        extract_buf + full_rows * STREAM_TEX_WIDTH);
+                        GL_RG, GL_UNSIGNED_BYTE,
+                        raw_samples + full_rows * STREAM_TEX_WIDTH * 2);
     }
-
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 }
 
 } // namespace stream_shader
