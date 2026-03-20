@@ -53,9 +53,9 @@ static const RomEntryDescriptor ast_v1_entries[] = {
     // Vector ROM — DVG display list ROM at $5000
     { {"035127.01"},                0x5000, 2048, true  },
     // Program ROMs — three 2 KB chips covering $6800-$7FFF
-    { {"035143.01"},                0x6800, 2048, true  },   // socket e2/f2
-    { {"035144.01"},                0x7000, 2048, true  },   // socket d2
-    { {"035145.01"},                0x7800, 2048, true  },   // socket c2 (reset vector)
+    { {"035145.01"},                0x6800, 2048, true  },   // socket ef2
+    { {"035144.01"},                0x7000, 2048, true  },   // socket h2
+    { {"035143.01"},                0x7800, 2048, true  },   // socket j2 (reset vector)
 };
 
 static const RomSetDescriptor ast_v1_romset = {
@@ -67,9 +67,9 @@ static const RomSetDescriptor ast_v1_romset = {
 
 static const RomEntryDescriptor ast_v2_entries[] = {
     { {"035127.02"},                0x5000, 2048, true  },
-    { {"035143.02"},                0x6800, 2048, true  },
+    { {"035145.02"},                0x6800, 2048, true  },
     { {"035144.02"},                0x7000, 2048, true  },
-    { {"035145.02"},                0x7800, 2048, true  },
+    { {"035143.02"},                0x7800, 2048, true  },
 };
 
 static const RomSetDescriptor ast_v2_romset = {
@@ -83,10 +83,10 @@ static const RomEntryDescriptor ll_v1_entries[] = {
     // Vector ROM 0 at $5000
     { {"034598.01", "LLVROM0"},     0x5000, 2048, true  },
     // Program ROMs — four 2 KB chips covering $6000-$7FFF
-    { {"034569.01", "LLPROM0"},     0x6000, 2048, true  },
-    { {"034570.01", "LLPROM1"},     0x6800, 2048, true  },
-    { {"034571.01", "LLPROM2"},     0x7000, 2048, true  },
-    { {"034572.01"},                0x7800, 2048, true  },
+    { {"034572.01"},                0x6000, 2048, true  },   // socket c1
+    { {"034571.01", "LLPROM2"},     0x6800, 2048, true  },   // socket de1
+    { {"034570.01", "LLPROM1"},     0x7000, 2048, true  },   // socket f1
+    { {"034569.01", "LLPROM0"},     0x7800, 2048, true  },   // socket j1 (reset vector)
     // Vector ROM 1 at $5800 (optional — system chip manifest may not map this yet)
     { {"034599.01", "LLVROM1"},     0x5800, 2048, false },
     // Language PROM (optional)
@@ -104,10 +104,10 @@ static const RomEntryDescriptor ll_v2_entries[] = {
     // Vector ROMs unchanged from v1
     { {"034598.01", "LLVROM0"},     0x5000, 2048, true  },
     // Program ROMs — rev 2 chips
-    { {"034569.02"},                0x6000, 2048, true  },
-    { {"034570.02"},                0x6800, 2048, true  },
-    { {"034571.02"},                0x7000, 2048, true  },
-    { {"034572.02"},                0x7800, 2048, true  },
+    { {"034572.02"},                0x6000, 2048, true  },
+    { {"034571.02"},                0x6800, 2048, true  },
+    { {"034570.02"},                0x7000, 2048, true  },
+    { {"034569.02"},                0x7800, 2048, true  },
     { {"034599.01", "LLVROM1"},     0x5800, 2048, false },
     { {"034597.01", "034597-01"},   0x0000, 2048, false },
 };
@@ -327,11 +327,9 @@ void AtariVectorSystem<V>::reset() {
 
     dvg_.reset();
     nmi_counter_ = atv::NMI_PERIOD_CYCLES;
-    nmi_pending_ = false;
 
-    in0_ = 0xFF;
-    in1_ = 0xFF;
-    in2_ = 0xFF;
+    in0_ = 0x00;
+    in1_ = 0x00;
     thrust_ = 0x00;
     snd_latch_ = 0x00;
 }
@@ -348,19 +346,16 @@ void AtariVectorSystem<V>::tick() {
     // DVG tick — runs at the same frequency as the CPU
     dvg_.tick();
 
-    // NMI timer
+    // NMI timer — periodic pulse model (matches MAME set_periodic_int).
+    // The NMI is edge-triggered on the 6502.  We assert NMI for one cycle
+    // every NMI_PERIOD_CYCLES, then de-assert.  The 6502 detects the
+    // falling edge and vectors to the NMI handler.
     if (nmi_counter_ > 0) {
         --nmi_counter_;
+        BUS_SET_BIT(pins_, BUS_NMI_BIT);   // NMI inactive (high)
     } else {
         nmi_counter_ = atv::NMI_PERIOD_CYCLES;
-        nmi_pending_ = true;
-    }
-
-    // Drive NMI pin
-    if (nmi_pending_) {
-        BUS_CLR_BIT(pins_, BUS_NMI_BIT);  // NMI is active-low
-    } else {
-        BUS_SET_BIT(pins_, BUS_NMI_BIT);
+        BUS_CLR_BIT(pins_, BUS_NMI_BIT);   // NMI active (low) — 1-cycle pulse
     }
 
     total_cycles_++;
@@ -371,8 +366,7 @@ void AtariVectorSystem<V>::run_frame() {
     if (!video_port_) return;
 
     if (!system_ready_) {
-        // No ROM loaded — emit random test vectors so the display isn't blank
-        dvg_.generate_test_pattern();
+        // No ROM loaded — nothing to draw
         video_port_->swap_frame();
         return;
     }
@@ -399,7 +393,12 @@ void AtariVectorSystem<V>::tick_cpu() {
 
     pins_ = cpu_->tick<MOS6502::Phase::PHI2>(pins_);
 
-    uint16_t addr = BUS_GET_ADDR(pins_);
+    // Asteroids/Lunar Lander only decode 15 address lines (A0-A14).
+    // A15 is not connected to the address decoder, so $8000-$FFFF
+    // mirrors $0000-$7FFF.  The CPU still drives A15 on the bus (e.g.
+    // $FFFC for reset vector), but the board ignores it — mask locally
+    // for dispatch without modifying the bus state the CPU sees.
+    uint16_t addr = BUS_GET_ADDR(pins_) & 0x7FFF;
     bool is_write = !BUS_GET_BIT(pins_, BUS_RW_BIT);
 
     // I/O region: $2000-$3FFF — manual dispatch (not on MemoryBus)
@@ -410,8 +409,11 @@ void AtariVectorSystem<V>::tick_cpu() {
             pins_ = io_read(addr, pins_);
         }
     } else {
-        // All other addresses: RAM, vector RAM/ROM, program ROM via MemoryBus
-        pins_ = bus_.tick(pins_);
+        // All other addresses: RAM, vector RAM/ROM, program ROM via MemoryBus.
+        // Present the masked address to the bus for page-table lookup.
+        bus_state_t bus = pins_;
+        BUS_SET_ADDR(bus, addr);
+        pins_ = bus_.tick(bus);
     }
 
     pins_ = cpu_->tick<MOS6502::Phase::PHI1>(pins_);
@@ -427,69 +429,102 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
     uint8_t data = 0x00;
 
     if constexpr (V == AtariVectorVariant::ASTEROIDS) {
-        // Asteroids I/O reads
-        switch (addr & 0x2C01) {
-            case 0x2000:  // IN0: coins, self-test, DVG halt
-                data = in0_;
-                // Inject DVG HALT status into bit 5
-                if (dvg_.is_halted())
-                    data |= atv::AST_IN0_HALT;
-                else
-                    data &= ~atv::AST_IN0_HALT;
-                // 3 KHz clock on bit 0 — toggle based on cycle count
-                if ((total_cycles_ / (atv::CPU_FREQ_HZ / 6000)) & 1)
-                    data |= atv::AST_IN0_CLOCK;
-                else
-                    data &= ~atv::AST_IN0_CLOCK;
-                break;
-            case 0x2001:  // IN1: player 1 controls
-                data = in1_;
-                break;
-            case 0x2400:  // (Asteroids doesn't use $2400)
-                data = 0xFF;
-                break;
-            case 0x2800:  // DSW1
-                // DIP switches are active-low; each D0-D7 maps to one switch
-                data = dsw1_;
-                break;
-            case 0x2801:  // DSW2
-                data = dsw2_;
-                break;
-            case 0x2C00:  // DVG halt status (bit 7)
-                data = dvg_.is_halted() ? 0x80 : 0x00;
-                break;
-            default:
-                data = 0xFF;
-                break;
+        // ── Asteroids I/O reads ──────────────────────────────────────────
+        //
+        // Asteroids uses MULTIPLEXED input reads via 74LS244 buffers.
+        // Reading address $200X returns bit X of the IN0 port placed at D7.
+        // This allows the 6502 to test individual input bits with the BIT
+        // instruction (BMI/BPL test D7, BVC/BVS test D6).
+        //
+        // Address decode (matches MAME asteroid_map):
+        //   $2000-$2007   IN0   (multiplexed, 8 bits)
+        //   $2400-$2407   IN1   (multiplexed, 8 bits)
+        //   $2800-$2803   DSW1  (multiplexed, 4 bits)
+
+        // Determine which port range we're reading
+        uint16_t port_base = addr & 0x2C00;  // A13, A11, A10 select port
+        uint8_t offset = addr & 0x07;        // A0-A2 select which bit
+
+        uint8_t port_val = 0x00;
+
+        if (port_base == 0x2000) {
+            // IN0: build live value from button state + hw signals
+            port_val = in0_;
+
+            // bit 1: 3 KHz clock — toggle every 256 CPU cycles (matches MAME clock_r)
+            if (total_cycles_ & 0x100)
+                port_val |= atv::AST_IN0_CLOCK;
+            else
+                port_val &= ~atv::AST_IN0_CLOCK;
+
+            // bit 2: DVG HALT (IP_ACTIVE_LOW: halted=0, running=1)
+            if (!dvg_.is_halted())
+                port_val |= atv::AST_IN0_HALT;
+            else
+                port_val &= ~atv::AST_IN0_HALT;
+
+        } else if (port_base == 0x2400) {
+            // IN1: player controls, coins, start
+            port_val = in1_;
+
+        } else if (port_base == 0x2800) {
+            // DSW1: DIP switches
+            port_val = dsw1_;
+            offset &= 0x03;  // only 4 switches via this multiplexer
+
+        } else {
+            // Unmapped read
+            data = 0xFF;
+            BUS_SET_DATA(pins, data);
+            return pins;
         }
+
+        // Multiplexed read: extract bit[offset], return at D7
+        data = (port_val & (1 << offset)) ? 0x80 : 0x7F;
+
     } else {
-        // Lunar Lander I/O reads
-        switch (addr & 0x2C01) {
-            case 0x2000:  // IN0: coins, self-test, DVG halt, start/select
-                data = in0_;
-                if (dvg_.is_halted())
-                    data |= atv::LL_IN0_HALT;
-                else
-                    data &= ~atv::LL_IN0_HALT;
-                break;
-            case 0x2001:  // IN1: game select, abort
-                data = in1_;
-                break;
-            case 0x2400:  // Thrust lever ADC (4-bit value)
-                data = thrust_;
-                break;
-            case 0x2800:  // DSW1
-                data = dsw1_;
-                break;
-            case 0x2801:  // DSW2
-                data = dsw2_;
-                break;
-            case 0x2C00:  // DVG halt status (bit 7)
-                data = dvg_.is_halted() ? 0x80 : 0x00;
-                break;
-            default:
-                data = 0xFF;
-                break;
+        // ── Lunar Lander I/O reads ───────────────────────────────────────
+        //
+        // Lunar Lander has a different I/O layout (MAME llander_map):
+        //   $2000        IN0   (direct full-byte read, NOT multiplexed)
+        //   $2400-$2407  IN1   (multiplexed, 8 bits)
+        //   $2800-$2803  DSW1  (multiplexed, 4 bits)
+        //   $2C00        THRUST (direct ADC value)
+
+        uint16_t port_base = addr & 0x2C00;
+
+        if (port_base == 0x2000 && (addr & 0x03FF) == 0x0000) {
+            // IN0: direct read (non-multiplexed), full byte
+            data = in0_;
+
+            // bit 0: DVG HALT (IP_ACTIVE_HIGH in LL: done_r → bit set when halted)
+            if (dvg_.is_halted())
+                data |= atv::LL_IN0_HALT;
+            else
+                data &= ~atv::LL_IN0_HALT;
+
+            // bit 6: 3 KHz clock
+            if (total_cycles_ & 0x100)
+                data |= atv::LL_IN0_CLOCK;
+            else
+                data &= ~atv::LL_IN0_CLOCK;
+
+        } else if (port_base == 0x2400) {
+            // IN1: multiplexed
+            uint8_t offset = addr & 0x07;
+            data = (in1_ & (1 << offset)) ? 0x80 : 0x7F;
+
+        } else if (port_base == 0x2800) {
+            // DSW1: multiplexed (4 bits)
+            uint8_t offset = addr & 0x03;
+            data = (dsw1_ & (1 << offset)) ? 0x80 : 0x7F;
+
+        } else if (port_base == 0x2C00) {
+            // Thrust lever ADC
+            data = thrust_;
+
+        } else {
+            data = 0xFF;
         }
     }
 
@@ -547,9 +582,8 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
             break;
 
         case atv::NMI_ACK_ADDR:
-            // $3E00 — NMI acknowledge: clears the NMI flip-flop
-            nmi_pending_ = false;
-            BUS_SET_BIT(pins, BUS_NMI_BIT);  // De-assert NMI (active-low: set = inactive)
+            // $3E00 — Noise reset (asteroid_noise_reset_w in MAME).
+            // Resets the LFSR noise generator.  No-op for now.
             break;
 
         default:
@@ -740,6 +774,7 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
 
     system_ready_ = true;
     reset();
+
     printf("%s: ROM set loaded, system ready\n", Traits::NAME);
     return true;
 }
@@ -780,55 +815,61 @@ void AtariVectorSystem<V>::set_audio_sample_rate(int sample_rate_hz) {
 template<AtariVectorVariant V>
 void AtariVectorSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     if constexpr (V == AtariVectorVariant::ASTEROIDS) {
-        // Asteroids controls:
+        // Asteroids controls (active-HIGH: pressed = set bit):
         //   Arrow keys = rotate left/right, thrust
         //   Space = fire
         //   H = hyperspace
-        //   1/2 = 1P/2P start (active on coin IN0)
+        //   1/2 = 1P/2P start
         //   5 = coin
+        //
+        // In the MAME mapping, player controls are on IN1 ($2400-$2407),
+        // fire/hyperspace are on IN0 ($2000-$2007).
         switch (key) {
             case SDLK_LEFT:
-                if (pressed) in1_ &= ~atv::AST_IN1_ROT_LEFT;
-                else         in1_ |=  atv::AST_IN1_ROT_LEFT;
+                if (pressed) in1_ |=  atv::AST_IN1_ROT_LEFT;
+                else         in1_ &= ~atv::AST_IN1_ROT_LEFT;
                 break;
             case SDLK_RIGHT:
-                if (pressed) in1_ &= ~atv::AST_IN1_ROT_RIGHT;
-                else         in1_ |=  atv::AST_IN1_ROT_RIGHT;
+                if (pressed) in1_ |=  atv::AST_IN1_ROT_RIGHT;
+                else         in1_ &= ~atv::AST_IN1_ROT_RIGHT;
                 break;
             case SDLK_UP:
-                if (pressed) in1_ &= ~atv::AST_IN1_THRUST;
-                else         in1_ |=  atv::AST_IN1_THRUST;
+                if (pressed) in1_ |=  atv::AST_IN1_THRUST;
+                else         in1_ &= ~atv::AST_IN1_THRUST;
                 break;
             case SDLK_SPACE:
-                if (pressed) in1_ &= ~atv::AST_IN1_FIRE;
-                else         in1_ |=  atv::AST_IN1_FIRE;
+                // Fire is on IN0 bit 4 in the MAME mapping
+                if (pressed) in0_ |=  atv::AST_IN0_FIRE;
+                else         in0_ &= ~atv::AST_IN0_FIRE;
                 break;
             case SDLK_h:
-                if (pressed) in1_ &= ~atv::AST_IN1_HYPERSPACE;
-                else         in1_ |=  atv::AST_IN1_HYPERSPACE;
+                // Hyperspace is on IN0 bit 3 in the MAME mapping
+                if (pressed) in0_ |=  atv::AST_IN0_HYPERSPACE;
+                else         in0_ &= ~atv::AST_IN0_HYPERSPACE;
                 break;
             case SDLK_1:
-                // 1P start — directly on IN1 bit 7 is 2P start;
-                // Asteroids doesn't have a dedicated 1P start bit — it uses
-                // hyperspace or a separate mechanism.  Map to 2P start for now.
-                if (pressed) in1_ &= ~atv::AST_IN1_2P_START;
-                else         in1_ |=  atv::AST_IN1_2P_START;
+                if (pressed) in1_ |=  atv::AST_IN1_1P_START;
+                else         in1_ &= ~atv::AST_IN1_1P_START;
+                break;
+            case SDLK_2:
+                if (pressed) in1_ |=  atv::AST_IN1_2P_START;
+                else         in1_ &= ~atv::AST_IN1_2P_START;
                 break;
             case SDLK_5:
-                // Coin insert
-                if (pressed) in0_ &= ~atv::AST_IN0_COIN_C;
-                else         in0_ |=  atv::AST_IN0_COIN_C;
+                // Coin insert (IN1 bit 0)
+                if (pressed) in1_ |=  atv::AST_IN1_COIN1;
+                else         in1_ &= ~atv::AST_IN1_COIN1;
                 break;
             default:
                 break;
         }
     } else {
-        // Lunar Lander controls:
+        // Lunar Lander controls (active-HIGH: pressed = set bit):
         //   Up/Down = thrust (adjusts ADC value)
         //   Left/Right = rotate
-        //   Space = abort
-        //   1 = start
-        //   5 = coin
+        //   Space = abort (IN1 bit 5)
+        //   1 = start (IN1 bit 0)
+        //   5 = coin (IN1 bit 1)
         switch (key) {
             case SDLK_UP:
                 if (pressed) {
@@ -841,17 +882,19 @@ void AtariVectorSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) 
                 }
                 break;
             case SDLK_SPACE:
-                // Abort button
-                if (pressed) in1_ &= ~0x01;
-                else         in1_ |=  0x01;
+                // Abort button (IN1 bit 5)
+                if (pressed) in1_ |=  0x20;
+                else         in1_ &= ~0x20;
                 break;
             case SDLK_1:
-                if (pressed) in0_ &= ~atv::LL_IN0_START;
-                else         in0_ |=  atv::LL_IN0_START;
+                // Start (IN1 bit 0)
+                if (pressed) in1_ |=  0x01;
+                else         in1_ &= ~0x01;
                 break;
             case SDLK_5:
-                if (pressed) in0_ &= ~atv::LL_IN0_COIN;
-                else         in0_ |=  atv::LL_IN0_COIN;
+                // Coin (IN1 bit 1, IP_ACTIVE_LOW → we store active-high)
+                if (pressed) in1_ |=  0x02;
+                else         in1_ &= ~0x02;
                 break;
             default:
                 break;
