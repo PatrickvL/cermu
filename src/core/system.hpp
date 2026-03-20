@@ -617,6 +617,16 @@ public:
     /// Override in systems that use non-Composite video ports (RGB, RGBI, Vector).
     /// The GUI uses this at init time to allocate the correct shader pipeline.
     virtual SignalType get_video_signal_type() const { return SignalType::Composite; }
+
+    /// Suppress the CPU-side bridge (reconstruct_to_framebuffer) in the
+    /// system's VideoPort.  Called by the host when the GPU stream shader
+    /// is confirmed active — the bridge becomes redundant and its per-frame
+    /// reconstruction + index buffer writes are wasted work.
+    /// Forwards to IndexedFrameBuffer which makes flush_line / flush_frame
+    /// no-ops, preventing all downstream memcpy / palette work.
+    void set_video_bridge_suppressed(bool suppress) {
+        if (display_) display_->set_bridge_suppressed(suppress);
+    }
 };
 
 // Include SystemRegistry (moved to separate file)

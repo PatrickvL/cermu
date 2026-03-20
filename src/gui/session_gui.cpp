@@ -1178,17 +1178,28 @@ void SessionGUI::render_screen() {
             indexed_shader::glUseProgram(0);
         }
 
-        // Primary display path — indexed framebuffer (CPU-reconstructed)
-        if (use_gpu_indexed_ && index_textures_[0]) {
-            // GPU indexed path — upload 1 byte/pixel R8 index texture
-            GLuint upload_tex = index_textures_[texture_write_idx_];
-            update_index_texture(upload_tex, fb_width_, fb_height_, index_snapshot_);
-            // Re-upload palette (cheap: max 256×4 bytes; supports palette changes)
+        // Primary display path — indexed framebuffer (CPU-reconstructed).
+        // Skip when stream data was uploaded: the stream shader takes
+        // priority, and the indexed texture + palette upload are wasted work.
+        bool stream_uploaded = (stream_snapshot_len_ > 0 &&
+                                (use_stream_shader_ || use_rgb_stream_shader_))
+                            || (vector_stream_len_ > 0 && use_vector_shader_);
+        if (!stream_uploaded) {
+            if (use_gpu_indexed_ && index_textures_[0]) {
+                // GPU indexed path — upload 1 byte/pixel R8 index texture
+                GLuint upload_tex = index_textures_[texture_write_idx_];
+                update_index_texture(upload_tex, fb_width_, fb_height_, index_snapshot_);
+                // Re-upload palette (cheap: max 256×4 bytes; supports palette changes)
+                update_palette_texture(system_->get_gpu_palette_data(), gpu_palette_size_);
+            } else if (fb_snapshot_ && screen_textures_[0]) {
+                // CPU path — upload 4 bytes/pixel RGBA texture
+                GLuint upload_tex = screen_textures_[texture_write_idx_];
+                update_screen_texture(upload_tex, fb_width_, fb_height_, fb_snapshot_);
+            }
+        } else if (use_stream_shader_ && palette_texture_) {
+            // Stream shader still needs the palette texture for color lookup.
+            // Only upload if palette might have changed (e.g. TIA runtime palette).
             update_palette_texture(system_->get_gpu_palette_data(), gpu_palette_size_);
-        } else if (fb_snapshot_ && screen_textures_[0]) {
-            // CPU path — upload 4 bytes/pixel RGBA texture
-            GLuint upload_tex = screen_textures_[texture_write_idx_];
-            update_screen_texture(upload_tex, fb_width_, fb_height_, fb_snapshot_);
         }
 
         // Swap write index for next frame
@@ -1552,6 +1563,10 @@ void SessionGUI::allocate_framebuffer() {
                         if (!palette_texture_)
                             palette_texture_ = create_palette_texture();
                         use_stream_shader_ = true;
+                        // Suppress the CPU-side bridge: the stream shader
+                        // handles display directly, making flush_line writes
+                        // from reconstruct_to_framebuffer() redundant.
+                        system_->set_video_bridge_suppressed(true);
                         printf("GPU stream reconstruction enabled (signal: %s)\n",
                                active_signal_type_ == SignalType::RGBI ? "RGBI" : "Composite");
                     }
@@ -1576,6 +1591,9 @@ void SessionGUI::allocate_framebuffer() {
                     rgb_stream_loc_display_h_    = rlocs.display_height;
                     rgb_stream_loc_display_w_    = rlocs.display_width;
                     use_rgb_stream_shader_ = true;
+                    // Suppress the CPU-side bridge: RGB stream shader
+                    // handles display directly.
+                    system_->set_video_bridge_suppressed(true);
                     printf("GPU RGB stream reconstruction enabled\n");
                 }
                 break;
@@ -2240,20 +2258,12 @@ void SessionGUI::emu_thread_func() {
         // ----- Snapshot framebuffer (separate fb_mutex_) -----
         if (frames_ran > 0) {
             std::lock_guard<std::mutex> lock(fb_mutex_);
-            if (use_gpu_indexed_ && index_framebuffer_ && index_snapshot_) {
-                // GPU indexed mode — copy 1 byte/pixel index buffer
-                memcpy(index_snapshot_, index_framebuffer_,
-                       static_cast<size_t>(fb_width_) * fb_height_);
-                fb_new_frame_.store(true, std::memory_order_release);
-            } else if (framebuffer_ && fb_snapshot_) {
-                memcpy(fb_snapshot_, framebuffer_,
-                       static_cast<size_t>(fb_width_) * fb_height_ * sizeof(uint32_t));
-                fb_new_frame_.store(true, std::memory_order_release);
-            }
 
             // Stream snapshot — extract samples from the raw video stream
-            // for GPU texture upload.  The extraction method depends on the
-            // signal type because sample sizes and layouts differ.
+            // for GPU texture upload.  When stream data is successfully
+            // extracted, the indexed/RGBA framebuffer snapshot is redundant
+            // (the stream shader handles display directly).
+            bool have_stream_snapshot = false;
             if (system_) {
                 const auto& fd = system_->get_last_frame_data();
                 if (fd.stream && fd.stream_len > 0) {
@@ -2265,10 +2275,13 @@ void SessionGUI::emu_thread_func() {
                         // Vector: copy raw 8-byte VectorVideoSamples
                         memcpy(vector_stream_snapshot_, src, n * 8);
                         vector_stream_len_ = n;
+                        have_stream_snapshot = true;
                         fb_new_frame_.store(true, std::memory_order_release);
                     } else if (use_rgb_stream_shader_ && rgb_stream_snapshot_) {
-                        // RGB: extract {r,g,b,0} from 4-byte RGBVideoSamples
-                        rgb_stream_shader::extract_rgb_samples(src, n, rgb_stream_snapshot_);
+                        // RGB: upload raw 4-byte RGBVideoSamples directly.
+                        // The shader reads only .rgb and forces alpha to 1.0,
+                        // so the flags byte in position [3] is harmless.
+                        memcpy(rgb_stream_snapshot_, src, n * 4);
                         stream_snapshot_len_ = n;
                         // Copy sync events + geometry
                         uint32_t sc = fd.sync_count;
@@ -2278,6 +2291,7 @@ void SessionGUI::emu_thread_func() {
                         stream_back_porch_ = fd.back_porch;
                         stream_display_width_ = fd.display_width > 0
                                              ? fd.display_width : fb_width_;
+                        have_stream_snapshot = true;
                         fb_new_frame_.store(true, std::memory_order_release);
                     } else if (use_stream_shader_ && stream_snapshot_) {
                         // Composite / RGBI: extract 1-byte index from 2-byte samples
@@ -2297,8 +2311,24 @@ void SessionGUI::emu_thread_func() {
                         stream_back_porch_ = fd.back_porch;
                         stream_display_width_ = fd.display_width > 0
                                              ? fd.display_width : fb_width_;
+                        have_stream_snapshot = true;
                         fb_new_frame_.store(true, std::memory_order_release);
                     }
+                }
+            }
+
+            // Indexed / RGBA framebuffer snapshot — only needed when stream
+            // data is NOT available (the stream shader takes priority over
+            // the indexed / CPU-resolved display path when both are ready).
+            if (!have_stream_snapshot) {
+                if (use_gpu_indexed_ && index_framebuffer_ && index_snapshot_) {
+                    memcpy(index_snapshot_, index_framebuffer_,
+                           static_cast<size_t>(fb_width_) * fb_height_);
+                    fb_new_frame_.store(true, std::memory_order_release);
+                } else if (framebuffer_ && fb_snapshot_) {
+                    memcpy(fb_snapshot_, framebuffer_,
+                           static_cast<size_t>(fb_width_) * fb_height_ * sizeof(uint32_t));
+                    fb_new_frame_.store(true, std::memory_order_release);
                 }
             }
         }

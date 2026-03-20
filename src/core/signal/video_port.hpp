@@ -186,6 +186,15 @@ public:
 
     const FrameData& last_frame_data() const noexcept { return last_frame_; }
 
+    // ====================================================================
+    // Bridge suppression — skip CPU-side reconstruction when the GPU
+    // stream shader is handling display directly.  The display binding
+    // stays intact so the bridge can be re-enabled if needed.
+    // ====================================================================
+
+    void set_bridge_suppressed(bool suppress) noexcept { bridge_suppressed_ = suppress; }
+    bool bridge_suppressed() const noexcept { return bridge_suppressed_; }
+
     FrameData swap_frame() noexcept {
         // Use the snapshot taken at FrameEnd (self-bounding reset);
         // fall back to current ptr position for non-FrameEnd callers.
@@ -207,8 +216,9 @@ public:
         last_frame_ = fd;
         if (frame_output_) *frame_output_ = fd;
 
-        // Auto-reconstruct into bound framebuffer before resetting
-        if (bound_fb_) {
+        // Auto-reconstruct into bound framebuffer before resetting.
+        // Suppressed when the GPU stream shader handles display directly.
+        if (bound_fb_ && !bridge_suppressed_) {
             reconstruct_to_framebuffer(fd, bound_fb_, bound_palette_,
                                        bound_line_width_, bound_back_porch_);
         }
@@ -249,6 +259,7 @@ private:
     const uint32_t*     bound_palette_    = nullptr;
     int                 bound_line_width_ = 0;
     int                 bound_back_porch_ = 0;
+    bool                bridge_suppressed_ = false;
 
     FORCE_NOINLINE
     static bool cold_path(void* ctx, VideoFlags flags, uint32_t pos) noexcept {
