@@ -23,6 +23,7 @@
  */
 
 #include "systems/arcade/atari_vector/atari_vector_system.hpp"
+#include "core/rom_set.hpp"
 #include "core/system_registry.hpp"
 #include "core/vfs/vfs.hpp"
 #include <cstring>
@@ -34,6 +35,87 @@
 #endif
 
 namespace atv = atari_vector_constants;
+
+// ============================================================================
+// ROM SET DESCRIPTORS
+// ============================================================================
+//
+// Each Atari vector game shipped with multiple ROM chips.  These descriptors
+// map the individual ROM files (identified by part-number substrings) to their
+// memory addresses so the generic rom_set loader can place them correctly.
+//
+// Asteroids:  3 × 2 KB program ROMs ($6800-$7FFF) + 1 × 2 KB vector ROM ($5000)
+// Lunar Lander: 4 × 2 KB program ROMs ($6000-$7FFF) + 1–2 × 2 KB vector ROMs ($5000+)
+
+// ── Asteroids Rev 1 ──────────────────────────────────────────────────────────
+
+static const RomEntryDescriptor ast_v1_entries[] = {
+    // Vector ROM — DVG display list ROM at $5000
+    { {"035127.01"},                0x5000, 2048, true  },
+    // Program ROMs — three 2 KB chips covering $6800-$7FFF
+    { {"035143.01"},                0x6800, 2048, true  },   // socket e2/f2
+    { {"035144.01"},                0x7000, 2048, true  },   // socket d2
+    { {"035145.01"},                0x7800, 2048, true  },   // socket c2 (reset vector)
+};
+
+static const RomSetDescriptor ast_v1_romset = {
+    "Asteroids Rev 1", "Asteroids",
+    ast_v1_entries, 4
+};
+
+// ── Asteroids Rev 2 ──────────────────────────────────────────────────────────
+
+static const RomEntryDescriptor ast_v2_entries[] = {
+    { {"035127.02"},                0x5000, 2048, true  },
+    { {"035143.02"},                0x6800, 2048, true  },
+    { {"035144.02"},                0x7000, 2048, true  },
+    { {"035145.02"},                0x7800, 2048, true  },
+};
+
+static const RomSetDescriptor ast_v2_romset = {
+    "Asteroids Rev 2", "Asteroids",
+    ast_v2_entries, 4
+};
+
+// ── Lunar Lander Rev 1 ──────────────────────────────────────────────────────
+
+static const RomEntryDescriptor ll_v1_entries[] = {
+    // Vector ROM 0 at $5000
+    { {"034598.01", "LLVROM0"},     0x5000, 2048, true  },
+    // Program ROMs — four 2 KB chips covering $6000-$7FFF
+    { {"034569.01", "LLPROM0"},     0x6000, 2048, true  },
+    { {"034570.01", "LLPROM1"},     0x6800, 2048, true  },
+    { {"034571.01", "LLPROM2"},     0x7000, 2048, true  },
+    { {"034572.01"},                0x7800, 2048, true  },
+    // Vector ROM 1 at $5800 (optional — system chip manifest may not map this yet)
+    { {"034599.01", "LLVROM1"},     0x5800, 2048, false },
+    // Language PROM (optional)
+    { {"034597.01", "034597-01"},   0x0000, 2048, false },
+};
+
+static const RomSetDescriptor ll_v1_romset = {
+    "Lunar Lander Rev 1", "LunarLander",
+    ll_v1_entries, 7
+};
+
+// ── Lunar Lander Rev 2 ──────────────────────────────────────────────────────
+
+static const RomEntryDescriptor ll_v2_entries[] = {
+    // Vector ROMs unchanged from v1
+    { {"034598.01", "LLVROM0"},     0x5000, 2048, true  },
+    // Program ROMs — rev 2 chips
+    { {"034569.02"},                0x6000, 2048, true  },
+    { {"034570.02"},                0x6800, 2048, true  },
+    { {"034571.02"},                0x7000, 2048, true  },
+    { {"034572.02"},                0x7800, 2048, true  },
+    { {"034599.01", "LLVROM1"},     0x5800, 2048, false },
+    { {"034597.01", "034597-01"},   0x0000, 2048, false },
+};
+
+static const RomSetDescriptor ll_v2_romset = {
+    "Lunar Lander Rev 2", "LunarLander",
+    ll_v2_entries, 7
+};
 
 // ============================================================================
 // HARDWARE TRAITS
@@ -563,6 +645,86 @@ bool AtariVectorSystem<V>::load_file(const char* filepath) {
     }
 
     printf("%s: ROM loaded, system ready\n", Traits::NAME);
+    return true;
+}
+
+// ============================================================================
+// ROM SET LOADING
+// ============================================================================
+
+template<AtariVectorVariant V>
+std::vector<const RomSetDescriptor*> AtariVectorSystem<V>::get_rom_set_descriptors() const {
+    if constexpr (V == AtariVectorVariant::ASTEROIDS) {
+        return { &ast_v1_romset, &ast_v2_romset };
+    } else {
+        return { &ll_v1_romset, &ll_v2_romset };
+    }
+}
+
+template<AtariVectorVariant V>
+bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
+    using Traits = AtariVectorTraits<V>;
+
+    if (!match.matched) return false;
+
+    if (!cpu_) {
+        if (!initialize()) return false;
+    }
+
+    printf("%s: Loading ROM set '%s' (%zu entries)\n",
+           Traits::NAME, match.rom_set ? match.rom_set->name : "?",
+           match.entries.size());
+
+    bool ok = rom_set_load_matched(match, [this](uint32_t load_address,
+                                                  const uint8_t* data,
+                                                  size_t size,
+                                                  int /*entry_index*/) -> bool {
+        // Route data to the correct chip based on load address
+        if (load_address >= atv::VECROM_BASE &&
+            load_address < atv::VECROM_BASE + atv::VECROM_SIZE) {
+            // Vector ROM ($5000-$57FF)
+            if (!vec_rom_) return false;
+            uint32_t offset = load_address - atv::VECROM_BASE;
+            size_t to_copy = std::min(size, static_cast<size_t>(atv::VECROM_SIZE - offset));
+            std::memcpy(vec_rom_->data() + offset, data, to_copy);
+            printf("  Vector ROM: %zu bytes at $%04X\n", to_copy, load_address);
+            return true;
+        }
+
+        if (load_address >= AtariVectorTraits<V>::PROGROM_BASE &&
+            load_address < AtariVectorTraits<V>::PROGROM_BASE + AtariVectorTraits<V>::PROGROM_SIZE) {
+            // Program ROM ($6000/$6800-$7FFF)
+            if (!prog_rom_) return false;
+            uint32_t offset = load_address - AtariVectorTraits<V>::PROGROM_BASE;
+            size_t to_copy = std::min(size, static_cast<size_t>(AtariVectorTraits<V>::PROGROM_SIZE - offset));
+            std::memcpy(prog_rom_->data() + offset, data, to_copy);
+            printf("  Program ROM: %zu bytes at $%04X (offset $%04X)\n",
+                   to_copy, load_address, offset);
+            return true;
+        }
+
+        printf("  WARNING: Unhandled ROM address $%04X (%zu bytes) — skipped\n",
+               load_address, size);
+        return true;  // Not a fatal error
+    });
+
+    if (!ok) {
+        printf("%s: Failed to load ROM set\n", Traits::NAME);
+        return false;
+    }
+
+    // Set program title from ROM set name
+    if (match.rom_set && match.rom_set->name)
+        program_title_ = match.rom_set->name;
+
+    // Wire DVG to vector memory
+    if (vec_ram_) {
+        dvg_.set_vector_memory(vec_ram_->data(), atv::VECRAM_SIZE + atv::VECROM_SIZE);
+    }
+
+    system_ready_ = true;
+    reset();
+    printf("%s: ROM set loaded, system ready\n", Traits::NAME);
     return true;
 }
 

@@ -179,6 +179,10 @@ public:
     SignalType get_video_signal_type() const override { return SignalType::Vector; }
     void set_speed_multiplier(float multiplier) override;
 
+    // ROM set loading
+    std::vector<const RomSetDescriptor*> get_rom_set_descriptors() const override;
+    bool load_rom_set(const RomSetMatch& match) override;
+
     bool is_system_ready() const override { return system_ready_; }
 
 private:
