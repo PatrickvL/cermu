@@ -347,6 +347,12 @@ bool AtariVectorSystem<V>::initialize() {
     // Register DVG as a non-bus chip for the Hardware menu
     register_chip(&dvg_, "DVG", "DVG", "Video");
 
+    // Initialize POKEY (Asteroids Deluxe)
+    if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+        pokey_.init();
+        register_chip(&pokey_, "POKEY", "POKEY", "Sound");
+    }
+
     // Video port — VectorVideoPort for signal-based rendering
     video_port_ = std::make_unique<VectorVideoPort>();
     video_port_->bind_frame_output(&last_frame_data_);
@@ -361,9 +367,14 @@ bool AtariVectorSystem<V>::initialize() {
                               Traits::VECROM_WORD_OFFSET);
     }
 
-    // Audio port (basic — discrete sound, not chip-driven)
+    // Audio port
     audio_port_ = std::make_unique<AudioPort>();
-    audio_port_->configure(atv::DEFAULT_SAMPLE_RATE, atv::DEFAULT_SAMPLE_RATE);
+    audio_port_->configure(atv::CPU_FREQ_HZ, atv::DEFAULT_SAMPLE_RATE);
+
+    // Wire POKEY audio output
+    if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+        pokey_.set_audio_port(audio_port_.get());
+    }
 
     // Default DIP switches (factory defaults)
     dsw1_ = 0x00;
@@ -395,6 +406,10 @@ void AtariVectorSystem<V>::reset() {
     dvg_.reset();
     nmi_counter_ = atv::NMI_PERIOD_CYCLES;
 
+    if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+        pokey_.reset();
+    }
+
     in0_ = 0x00;
     in1_ = 0x00;
     thrust_ = 0x00;
@@ -412,6 +427,11 @@ void AtariVectorSystem<V>::tick() {
 
     // DVG tick — runs at the same frequency as the CPU
     dvg_.tick();
+
+    // POKEY tick (Asteroids Deluxe — runs at CPU clock)
+    if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+        pokey_.tick();
+    }
 
     // NMI timer — periodic pulse model (matches MAME set_periodic_int).
     // The NMI is edge-triggered on the 6502.  We assert NMI for one cycle
@@ -513,14 +533,7 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
         if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
             // POKEY at $2600-$260F
             if (addr >= atv::AD_POKEY_BASE && addr < atv::AD_POKEY_BASE + 0x10) {
-                uint8_t pokey_reg = addr & 0x0F;
-                // POKEY stub: return sensible defaults
-                switch (pokey_reg) {
-                    case 0x0A: data = static_cast<uint8_t>(total_cycles_); break; // RANDOM
-                    case 0x0E: data = 0xFF; break;  // IRQST (no pending IRQs, active-low)
-                    case 0x0F: data = 0xFF; break;  // SKSTAT (no errors)
-                    default:   data = 0x00; break;  // POT/KBCODE/etc
-                }
+                data = pokey_.read(addr & 0x0F);
                 BUS_SET_DATA(pins, data);
                 return pins;
             }
@@ -636,7 +649,7 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
     if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
         // POKEY write at $2600-$260F
         if (addr >= atv::AD_POKEY_BASE && addr < atv::AD_POKEY_BASE + 0x10) {
-            // POKEY stub — ignore writes (no sound emulation yet)
+            pokey_.write(addr & 0x0F, data);
             return pins;
         }
         // EAROM write at $2C00-$2C3F
@@ -747,7 +760,7 @@ bool AtariVectorSystem<V>::load_file(const char* filepath) {
     //   b) Program ROM + vector ROM concatenated
     //   c) A combined ROM image with everything
 
-    if (file_size >= Traits::PROGROM_ACTUAL + atv::VECROM_SIZE) {
+    if (file_size >= Traits::PROGROM_ACTUAL + Traits::VECROM_SIZE) {
         // File contains both program ROM and vector ROM
         // Layout: program ROM first, then vector ROM at the end.
         if (prog_rom_) {
@@ -756,7 +769,7 @@ bool AtariVectorSystem<V>::load_file(const char* filepath) {
         }
         if (vec_rom_) {
             std::memcpy(vec_rom_->data(), file_data + Traits::PROGROM_ACTUAL,
-                        atv::VECROM_SIZE);
+                        Traits::VECROM_SIZE);
         }
     } else if (file_size >= Traits::PROGROM_ACTUAL) {
         // Just the program ROM — vector ROM must be loaded separately
@@ -901,11 +914,21 @@ void AtariVectorSystem<V>::get_display_dimensions(int* width, int* height) const
 
 template<AtariVectorVariant V>
 uint32_t AtariVectorSystem<V>::get_audio_samples(float* buffer, uint32_t max_samples) {
-    // Discrete sound — for now, output silence.
-    // Future: model discrete sound circuits as CPU-driven DAC samples.
-    if (buffer && max_samples > 0) {
-        std::memset(buffer, 0, max_samples * sizeof(float));
+    if (!buffer || max_samples == 0) return 0;
+
+    if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+        // Read from POKEY audio ring buffer
+        if (audio_port_) {
+            int got = audio_port_->ring_.pop(buffer, static_cast<int>(max_samples));
+            // Pad remainder with silence if ring didn't have enough
+            if (got < static_cast<int>(max_samples))
+                std::memset(buffer + got, 0, (max_samples - got) * sizeof(float));
+            return max_samples;
+        }
     }
+
+    // Discrete sound (Asteroids, Lunar Lander) — silence for now
+    std::memset(buffer, 0, max_samples * sizeof(float));
     return max_samples;
 }
 
@@ -1069,7 +1092,6 @@ void AtariVectorSystem<V>::render_configuration_ui() {
     // Future: DIP switch configuration, phosphor color selection
 #endif
 }
-
 // ============================================================================
 // SPEED CONTROL
 // ============================================================================
@@ -1085,11 +1107,6 @@ void AtariVectorSystem<V>::set_speed_multiplier(float multiplier) {
 
 template class AtariVectorSystem<AtariVectorVariant::ASTEROIDS>;
 template class AtariVectorSystem<AtariVectorVariant::ASTEROIDS_DELUXE>;
-template class AtariVectorSystem<AtariVectorVariant::LUNAR_LANDER>;
-
-// ============================================================================
-// SYSTEM REGISTRATION
-// ==================================================ASTEROIDS_DELUXE>;
 template class AtariVectorSystem<AtariVectorVariant::LUNAR_LANDER>;
 
 // ============================================================================
