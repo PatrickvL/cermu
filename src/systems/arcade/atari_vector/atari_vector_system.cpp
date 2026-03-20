@@ -376,8 +376,10 @@ bool AtariVectorSystem<V>::initialize() {
         pokey_.set_audio_port(audio_port_.get());
     }
 
-    // Default DIP switches (factory defaults)
-    dsw1_ = 0x00;
+    // Default DIP switches (MAME factory defaults)
+    // Asteroids: English, 3 lives, 1 coin/1 credit = 0x84
+    // Lunar Lander: 0 bonus fuel, free play off, English = game-specific
+    dsw1_ = 0x84;
     dsw2_ = 0x00;
 
     printf("%s: System initialized\n", Traits::NAME);
@@ -410,6 +412,7 @@ void AtariVectorSystem<V>::reset() {
         pokey_.reset();
     }
 
+    // Internal button state uses active-HIGH convention (1=pressed, 0=not pressed).
     in0_ = 0x00;
     in1_ = 0x00;
     thrust_ = 0x00;
@@ -437,6 +440,7 @@ void AtariVectorSystem<V>::tick() {
     // The NMI is edge-triggered on the 6502.  We assert NMI for one cycle
     // every NMI_PERIOD_CYCLES, then de-assert.  The 6502 detects the
     // falling edge and vectors to the NMI handler.
+    // NMI is gated by the output latch bit 4 ($3C04 on Asteroids).
     if (nmi_counter_ > 0) {
         --nmi_counter_;
         BUS_SET_BIT(pins_, BUS_NMI_BIT);   // NMI inactive (high)
@@ -662,16 +666,16 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
     uint16_t reg = addr & 0x3E00;
 
     switch (reg) {
-        case atv::VGGO_ADDR: {
+        case atv::VGGO_ADDR:
             // $3000 — VGGO: Start DVG vector state machine
             dvg_.trigger_go();
             break;
-        }
 
-        case atv::VGRST_ADDR:
+        case atv::VGRST_ADDR: {
             // $3200 — VGRST: Reset DVG
             dvg_.trigger_reset();
             break;
+        }
 
         case atv::WDCLR_ADDR:
             // $3400 — WD CLR: Watchdog clear (no-op in emulation)
@@ -691,7 +695,13 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
             break;
 
         case atv::COIN_CTR_ADDR:
-            // $3C00 — Coin counter (no-op in emulation)
+            // $3C00-$3C05 — Output latch (address-decoded, D0 = bit value)
+            //   bit 0 ($3C00): coin counter 1
+            //   bit 1 ($3C01): coin counter 2
+            //   bit 2 ($3C02): LED 1 (player 1 start)
+            //   bit 3 ($3C03): LED 0 (player 2 start)
+            //   bit 4 ($3C04): NMI enable (TODO: gate NMI generation)
+            //   bit 5 ($3C05): cocktail invert
             break;
 
         case atv::NMI_ACK_ADDR:
@@ -1068,6 +1078,16 @@ void AtariVectorSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) 
                 // Coin (IN1 bit 1, IP_ACTIVE_LOW → we store active-high)
                 if (pressed) in1_ |=  0x02;
                 else         in1_ &= ~0x02;
+                break;
+            case SDLK_LEFT:
+                // Rotate left (IN1 bit 7, IP_ACTIVE_LOW → we store active-high)
+                if (pressed) in1_ |=  0x80;
+                else         in1_ &= ~0x80;
+                break;
+            case SDLK_RIGHT:
+                // Rotate right (IN1 bit 6, IP_ACTIVE_LOW → we store active-high)
+                if (pressed) in1_ |=  0x40;
+                else         in1_ &= ~0x40;
                 break;
             default:
                 break;
