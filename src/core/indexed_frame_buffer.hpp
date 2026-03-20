@@ -131,6 +131,15 @@ public:
     }
 
     // ====================================================================
+    // Bridge suppression — skip all flush output when the GPU stream
+    // shader handles display directly.  The CPU-side bridge still runs
+    // (sync walk + color extraction) but no memcpy / palette work occurs.
+    // ====================================================================
+
+    void set_bridge_suppressed(bool suppress) { bridge_suppressed_ = suppress; }
+    bool bridge_suppressed() const { return bridge_suppressed_; }
+
+    // ====================================================================
     // Clear
     // ====================================================================
 
@@ -162,7 +171,7 @@ public:
     /// Used by chips that own their own frame_indices_ buffer.
     void flush_frame(const uint8_t* frame_indices, const uint32_t* palette) {
         const int total = width_ * height_;
-        if (total <= 0 || !frame_indices) return;
+        if (total <= 0 || !frame_indices || bridge_suppressed_) return;
 
         if (ext_indices_) {
             // GPU path — copy raw indices; palette applied by shader
@@ -193,7 +202,7 @@ public:
     void flush_line_range(int row, const uint8_t* color_line,
                           const uint32_t* palette,
                           int x_start, int x_end) {
-        if (!color_line) return;
+        if (!color_line || bridge_suppressed_) return;
         if (row < 0 || row >= height_) return;
 
         x_start = std::max(x_start, 0);
@@ -255,6 +264,7 @@ private:
     int       ext_width_    = 0;
     int       ext_height_   = 0;
     uint8_t*  ext_indices_  = nullptr;   // External GPU index buffer (GUI-owned)
+    bool      bridge_suppressed_ = false; // Skip flush output (GPU stream shader active)
     PaletteTable palette_;
 
     uint32_t* active_framebuffer() {
