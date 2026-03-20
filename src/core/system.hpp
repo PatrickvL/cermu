@@ -15,6 +15,8 @@
 
 // Forward declarations
 struct format_descriptor_t;
+struct RomSetDescriptor;
+struct RomSetMatch;
 class Session;
 
 #include "core/indexed_frame_buffer.hpp"
@@ -462,6 +464,27 @@ public:
     /// Returns true if the file was accepted by a storage device.
     /// Default: returns false (system has no storage devices).
     virtual bool attach_media(const char* filepath) { return false; }
+
+    // ====================================================================
+    // ROM set loading — multi-file ROM support for arcade-style systems
+    // ====================================================================
+
+    /// Return ROM set descriptors for this system.
+    /// Systems that use multi-file ROM sets (arcade boards, etc.) override
+    /// this to return their set definitions.  Used by the ROM set probing
+    /// and loading pipeline in rom_set.hpp.
+    /// Default: returns empty (system uses single-file load_file()).
+    virtual std::vector<const RomSetDescriptor*> get_rom_set_descriptors() const {
+        return {};
+    }
+
+    /// Load a matched ROM set into system memory.
+    /// Called after rom_set_scan_and_match() returns a successful match.
+    /// The default implementation does nothing; systems that support ROM
+    /// sets override this to write data into their ROM chips.
+    /// @param match  The ROM set match result (all file paths resolved)
+    /// @return true if loading succeeded
+    virtual bool load_rom_set(const RomSetMatch& match) { return false; }
 
     /// Title of the currently loaded program (set by load_file()).
     /// Empty string if nothing is loaded.
