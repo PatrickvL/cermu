@@ -24,20 +24,20 @@
 // Forward declaration for bridge — chips never see this
 class IndexedFrameBuffer;
 
-// SignalTraits — maps a sample type to its SignalType enum value
+// SignalTraits — maps a sample type to its VideoSignalType enum value
 template<typename SampleT> struct SignalTraits;
 
 template<> struct SignalTraits<CompositeVideoSample> {
-    static constexpr SignalType type = SignalType::Composite;
+    static constexpr VideoSignalType type = VideoSignalType::Composite;
 };
 template<> struct SignalTraits<RGBVideoSample> {
-    static constexpr SignalType type = SignalType::RGB;
+    static constexpr VideoSignalType type = VideoSignalType::RGB;
 };
 template<> struct SignalTraits<RGBIVideoSample> {
-    static constexpr SignalType type = SignalType::RGBI;
+    static constexpr VideoSignalType type = VideoSignalType::RGBI;
 };
 template<> struct SignalTraits<VectorVideoSample> {
-    static constexpr SignalType type = SignalType::Vector;
+    static constexpr VideoSignalType type = VideoSignalType::Vector;
 };
 
 // ============================================================================

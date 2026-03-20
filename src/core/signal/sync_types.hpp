@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include "core/signal/video_flags.hpp"
+#include "core/signal_types.hpp"  // VideoSignalType
 
 enum class SyncType : uint8_t {
     HSync,          // Horizontal sync (raster)
@@ -22,25 +23,15 @@ struct SyncEvent {
     VideoFlags flags;         // original VideoFlags at this event (for VBlank detection)
 };
 
-// Signal type identifier for GPU shader selection
-enum class SignalType : uint8_t {
-    Composite,
-    SVideo,
-    RGB,
-    RGBI,
-    Vector,
-    CompositeArtifact,
-};
-
 // FrameData — handed off to the display layer once per frame
 struct FrameData {
-    void*      stream;
-    uint32_t   stream_len;
-    SyncEvent* sync_events;
-    uint32_t   sync_count;
-    SignalType signal_type;
-    int        back_porch;     // samples after HSync before visible pixels
-    int        display_width;  // visible pixels per scanline (0 = use fb width)
+    void*           stream;
+    uint32_t        stream_len;
+    SyncEvent*      sync_events;
+    uint32_t        sync_count;
+    VideoSignalType signal_type;
+    int             back_porch;     // samples after HSync before visible pixels
+    int             display_width;  // visible pixels per scanline (0 = use fb width)
 };
 
 // Maximum stream buffer: enough for one full frame of the largest system.

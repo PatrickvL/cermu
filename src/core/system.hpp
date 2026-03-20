@@ -21,7 +21,7 @@ class Session;
 
 #include "core/indexed_frame_buffer.hpp"
 #include "core/board_base.hpp"
-#include "core/signal/sync_types.hpp"   // FrameData, SyncEvent, SignalType
+#include "core/signal/sync_types.hpp"   // FrameData, SyncEvent, VideoSignalType
 
 /**
  * Result of probing a file for system-specific compatibility.
@@ -616,7 +616,7 @@ public:
     /// Video signal type this system produces.
     /// Override in systems that use non-Composite video ports (RGB, RGBI, Vector).
     /// The GUI uses this at init time to allocate the correct shader pipeline.
-    virtual SignalType get_video_signal_type() const { return SignalType::Composite; }
+    virtual VideoSignalType get_video_signal_type() const { return VideoSignalType::Composite; }
 
     /// Suppress the CPU-side bridge (reconstruct_to_framebuffer) in the
     /// system's VideoPort.  Called by the host when the GPU stream shader

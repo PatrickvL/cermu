@@ -203,7 +203,7 @@ protected:
     // ========================================================================
     // GPU vector display rendering
     // ========================================================================
-    /// For systems with SignalType::Vector (DVG, Vectrex, etc.), the raw
+    /// For systems with VideoSignalType::Vector (DVG, Vectrex, etc.), the raw
     /// VectorVideoSample stream is extracted into line segments on the CPU
     /// and rendered as beam quads via a dedicated vertex+fragment shader.
     /// No texture is involved — vertices carry all data.
@@ -216,7 +216,7 @@ protected:
     GLint     vector_loc_phosphor_      = -1;
 
     /// Video signal type of the active system (cached from System::get_video_signal_type()).
-    SignalType active_signal_type_       = SignalType::Composite;
+    VideoSignalType active_signal_type_       = VideoSignalType::Composite;
 
     /// Vector stream snapshot — raw VectorVideoSample bytes copied from
     /// last_frame_data_ by emu thread.  8 bytes per sample.

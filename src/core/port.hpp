@@ -21,6 +21,7 @@
  */
 
 #include "core/component_base.hpp"
+#include "core/signal_types.hpp"
 #include <cstdint>
 #include <cstddef>
 #include <functional>
@@ -85,26 +86,8 @@ enum class PortType {
 /// Human-readable name for a PortType.
 const char* port_type_name(PortType type);
 
-// ============================================================================
-// OUTPUT SIGNAL TYPES
-// ============================================================================
-
-/// Video signal encoding standard.
-enum class VideoSignalType {
-    Composite,      ///< CVBS composite
-    SVideo,         ///< Separate luma + chroma
-    RGB,            ///< Analog RGB
-    RGBI,           ///< Digital RGBI (TTL)
-    YPbPr,          ///< Analog component (Y/Pb/Pr)
-    Digital,        ///< Generic digital (HDMI, DVI, etc.)
-};
-
-/// Audio signal encoding.
-enum class AudioSignalType {
-    Mono,           ///< Single channel
-    Stereo,         ///< Two channels (left/right)
-    Quadraphonic,   ///< Four channels
-};
+// VideoSignalType and AudioSignalType are defined in signal_types.hpp
+// (shared with the video stream pipeline, GPU shader dispatch, etc.).
 
 // ============================================================================
 // OUTPUT DESCRIPTORS

@@ -1549,8 +1549,8 @@ void SessionGUI::allocate_framebuffer() {
         // ================================================================
 
         switch (active_signal_type_) {
-            case SignalType::Composite:
-            case SignalType::RGBI: {
+            case VideoSignalType::Composite:
+            case VideoSignalType::RGBI: {
                 // Composite / RGBI — RG8 stream texture + palette lookup shader.
                 // Raw 2-byte samples are uploaded directly (no CPU extraction);
                 // the shader reads only the R channel (color index) and ignores
@@ -1576,13 +1576,13 @@ void SessionGUI::allocate_framebuffer() {
                         // from reconstruct_to_framebuffer() redundant.
                         system_->set_video_bridge_suppressed(true);
                         printf("GPU stream reconstruction enabled (signal: %s)\n",
-                               active_signal_type_ == SignalType::RGBI ? "RGBI" : "Composite");
+                               active_signal_type_ == VideoSignalType::RGBI ? "RGBI" : "Composite");
                     }
                 }
                 break;
             }
 
-            case SignalType::RGB: {
+            case VideoSignalType::RGB: {
                 // RGB — RGBA8 stream texture, no palette lookup.
                 // Uses a dedicated shader that reads raw {r,g,b} values.
                 stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES]();  // reused for sync snapshot alloc
@@ -1607,7 +1607,7 @@ void SessionGUI::allocate_framebuffer() {
                 break;
             }
 
-            case SignalType::Vector: {
+            case VideoSignalType::Vector: {
                 // Vector — CPU-side line extraction + beam quad vertex shader.
                 // No textures involved; vertices carry all data.
                 vector_shader::load_gl();

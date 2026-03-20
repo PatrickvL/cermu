@@ -176,7 +176,7 @@ public:
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
     void render_system_menu_items() override;
     void render_configuration_ui() override;
-    SignalType get_video_signal_type() const override { return SignalType::Vector; }
+    VideoSignalType get_video_signal_type() const override { return VideoSignalType::Vector; }
     void set_speed_multiplier(float multiplier) override;
 
     // ROM set loading

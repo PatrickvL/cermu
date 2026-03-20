@@ -850,13 +850,13 @@ No mutex, no condition variable.
 Signal type is known from `FrameData.signal_type`. Separate GLSL programs per variant — no runtime branching inside shaders:
 
 ```cpp
-GLuint select_shader(SignalType t) noexcept {
+GLuint select_shader(VideoSignalType t) noexcept {
     switch (t) {
-        case SignalType::Composite:         return shader_composite_;
-        case SignalType::RGB:               return shader_rgb_;
-        case SignalType::RGBI:              return shader_rgbi_;
-        case SignalType::CompositeArtifact: return shader_composite_artifact_;
-        case SignalType::Vector:            return shader_vector_;
+        case VideoSignalType::Composite:         return shader_composite_;
+        case VideoSignalType::RGB:               return shader_rgb_;
+        case VideoSignalType::RGBI:              return shader_rgbi_;
+        case VideoSignalType::CompositeArtifact: return shader_composite_artifact_;
+        case VideoSignalType::Vector:            return shader_vector_;
     }
 }
 ```

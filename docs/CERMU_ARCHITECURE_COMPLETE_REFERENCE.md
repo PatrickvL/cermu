@@ -100,18 +100,22 @@ enum class PortType {
 ## Output Signal Descriptors
 
 Signal descriptors describe what a port carries. They live on `Port` instances.
+Both `VideoSignalType` and `AudioSignalType` are defined in `signal_types.hpp`
+and shared across the port framework, video stream pipeline, and GPU shader dispatch.
 
 ```cpp
-enum class VideoSignalType {
-    Composite,
-    SVideo,
-    RGB,
-    RGBI,
-    YPbPr,
-    Digital,
+enum class VideoSignalType : uint8_t {
+    Composite,          // Composite / CVBS (palette-indexed luma+chroma)
+    SVideo,             // S-Video (separate luma + chroma)
+    RGB,                // Analog RGB (3 independent color channels)
+    RGBI,               // Digital RGBI (4-bit TTL: R, G, B, Intensity)
+    YPbPr,              // Analog component (Y/Pb/Pr)
+    Digital,            // Generic digital (HDMI, DVI, etc.)
+    Vector,             // Vector display (x/y beam deflection + intensity)
+    CompositeArtifact,  // Composite with NTSC artifact coloring
 };
 
-enum class AudioSignalType {
+enum class AudioSignalType : uint8_t {
     Mono,
     Stereo,
     Quadraphonic,
