@@ -20,6 +20,7 @@
 
 // Forward declarations
 struct ImGuiIO;
+namespace vector_shader { struct BeamVertex; }
 
 // ============================================================================
 // Display Configuration Enums
@@ -224,9 +225,8 @@ protected:
 
     /// CPU-expanded beam quad vertices for the current frame.
     /// Built during render_screen() from vector_stream_snapshot_,
-    /// consumed by the vector draw callback.  Stored as raw bytes
-    /// (BeamVertex = 16 bytes each).
-    std::vector<uint8_t> vector_beam_buf_;
+    /// consumed by the vector draw callback.
+    std::vector<vector_shader::BeamVertex> vector_beam_buf_;
     int                  vector_beam_count_  = 0;
 
     // ========================================================================
