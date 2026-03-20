@@ -192,6 +192,19 @@ std::string vfs_extension(const char* path);
  */
 std::string vfs_join_path(const std::string& base, const std::string& entry);
 
+/**
+ * Extract the parent directory/container from a VFS path.
+ *
+ * Handles both plain paths and archive paths:
+ *   "/data/roms/game.bin"          → "/data/roms"
+ *   "/data/roms.zip!/game.bin"     → "/data/roms.zip"
+ *   "/data/roms.zip!/sub/game.bin" → "/data/roms.zip!/sub"
+ *   "/data/roms.zip"               → "/data"
+ *
+ * Returns an empty string if no parent can be determined.
+ */
+std::string vfs_parent_path(const char* path);
+
 // ============================================================================
 // Archive Cache
 // ============================================================================

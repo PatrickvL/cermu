@@ -528,6 +528,38 @@ std::string vfs_join_path(const std::string& base, const std::string& entry) {
     return result;
 }
 
+std::string vfs_parent_path(const char* path) {
+    if (!path || !path[0]) return {};
+
+    std::string p(path);
+
+    // If archive path, check for content after the last "!/"
+    size_t delim = p.rfind(VFS_ARCHIVE_DELIMITER);
+    if (delim != std::string::npos) {
+        std::string inside = p.substr(delim + VFS_ARCHIVE_DELIMITER_LEN);
+        // Strip trailing slash
+        while (!inside.empty() && inside.back() == '/') inside.pop_back();
+
+        size_t sep = inside.find_last_of('/');
+        if (sep != std::string::npos) {
+            // archive.zip!/sub/file → archive.zip!/sub
+            return p.substr(0, delim + VFS_ARCHIVE_DELIMITER_LEN) +
+                   inside.substr(0, sep);
+        }
+        // archive.zip!/file → archive.zip (the archive root)
+        return p.substr(0, delim);
+    }
+
+    // Plain filesystem path — strip trailing slash, then find last separator
+    while (p.size() > 1 && (p.back() == '/' || p.back() == '\\'))
+        p.pop_back();
+
+    size_t sep = p.find_last_of("/\\");
+    if (sep == std::string::npos) return {};
+    if (sep == 0) return "/";
+    return p.substr(0, sep);
+}
+
 // ============================================================================
 // Public API — Archive Cache
 // ============================================================================
