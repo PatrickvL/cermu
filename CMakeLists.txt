@@ -582,6 +582,7 @@ if(BUILD_GUI)
         src/chip/sound/ay_psg/ay_psg_gui.cpp
         src/chip/sound/pokey/pokey_gui.cpp
         src/chip/sound/sn76489/sn76489_gui.cpp
+        src/chip/sound/ym_fm/ym_fm_gui.cpp
         src/chip/video/spectrum_ula/ferranti_ula_gui.cpp
         src/chip/video/mc6847/mc6847_gui.cpp
         src/systems/nes/cartridge/nes_cartridge_gui.cpp
@@ -627,6 +628,7 @@ set(GUI_STUB_SOURCES
     src/chip/sound/ay_psg/ay_psg_gui.cpp
     src/chip/sound/pokey/pokey_gui.cpp
     src/chip/sound/sn76489/sn76489_gui.cpp
+    src/chip/sound/ym_fm/ym_fm_gui.cpp
     src/chip/video/spectrum_ula/ferranti_ula_gui.cpp
     src/chip/video/mc6847/mc6847_gui.cpp
     src/systems/nes/cartridge/nes_cartridge_gui.cpp
