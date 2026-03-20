@@ -392,6 +392,17 @@ enum class PinLabel {
     // Power variant (TIA analog section)
     VTIA,         // TIA-specific analog supply voltage
 
+    // POKEY-specific pins (must remain sequential within sub-groups)
+    POT0, POT1, POT2, POT3,      // Paddle/pot analog inputs 0-3
+    POT4, POT5, POT6, POT7,      // Paddle/pot analog inputs 4-7
+    SIO_IN,       // Serial I/O data input
+    SIO_OUT,      // Serial I/O data output
+    SIO_CLK_IN,   // Serial I/O clock input
+    SIO_CLK_OUT,  // Serial I/O clock output
+    BCLK_IN,      // Bidirectional clock input
+    KR1,          // Keyboard return 1
+    KR2,          // Keyboard return 2
+
     // Unknown/custom pin — must be last
     UNKNOWN
 };
