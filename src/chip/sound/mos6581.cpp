@@ -1,10 +1,14 @@
 #include "chip/sound/mos6581.hpp"
 #include "chip/sound/sid_waveform_tables.hpp"
+#include "core/chip_manifest.hpp"
+#include "core/chip_registry.hpp"
 #include "core/signal/audio_port.hpp"
 #include <cstring>
 #include <cstdlib>
 #include <cmath>
 #include <cstdio>  // For snprintf
+
+REGISTER_CHIP_TYPE("MOS6581", mos6581_t)
 
 // Fast tanh approximation: x / (1 + |x|).
 // Monotonic, odd-symmetric, same [-1,+1] range — good enough for SID

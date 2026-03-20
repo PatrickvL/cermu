@@ -20,9 +20,13 @@
  */
 
 #include "chip/video/tia/tia.hpp"
+#include "core/chip_manifest.hpp"
+#include "core/chip_registry.hpp"
 #include "core/indexed_frame_buffer.hpp"
 #include <cstring>
 #include <algorithm>
+
+REGISTER_CHIP_TYPE("TIA", tia_t)
 
 // ============================================================================
 // NTSC PALETTE (128 colors — index is upper 7 bits of color register)

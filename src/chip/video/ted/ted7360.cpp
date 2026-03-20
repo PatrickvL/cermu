@@ -31,11 +31,15 @@
  */
 
 #include "chip/video/ted/ted7360.hpp"
+#include "core/chip_manifest.hpp"
+#include "core/chip_registry.hpp"
 #include "core/indexed_frame_buffer.hpp"
 #include "core/signal/audio_port.hpp"
 #include <algorithm>
 #include <array>
 #include <cstring>
+
+REGISTER_CHIP_TYPE("TED7360", ted7360_t)
 
 // ============================================================================
 // TED 7360 COLOR PALETTE — compile-time computed (16 hues × 8 luminances = 128 entries)

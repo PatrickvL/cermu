@@ -1,5 +1,9 @@
 #include "chip/video/vic/mos6560.hpp"
+#include "core/chip_manifest.hpp"
+#include "core/chip_registry.hpp"
 #include <cstring>
+
+REGISTER_CHIP_TYPE("MOS6560", mos6560_t)
 
 // VIC-6560 chip configuration — NTSC variant
 // The MOS 6560 is the NTSC version of the VIC-I chip used in NTSC VIC-20s.
