@@ -120,10 +120,10 @@ private:
     BoardBase board_;
 
     // Core components
-    RICOH_2A03* cpu_;
+    RICOH_2A03 cpu_;
     bus_state_t pins_;               // Persistent CPU bus state across ticks
-    std::shared_ptr<PPU> ppu_;
-    std::shared_ptr<Cartridge> cartridge_;
+    PPU ppu_;
+    std::unique_ptr<Cartridge> cartridge_;
     nes_bus::nes_bus_t bus_;                     // Page-pointer bus (replaces MemoryBus)
     IndexedFrameBuffer nes_display_;             // Unified display output (256×240)
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
