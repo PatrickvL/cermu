@@ -167,17 +167,12 @@ bool BBCMicroSystem::initialize() {
     printf("BBC Micro: Initializing system\n");
     register_board(&board_);
 
-    // ── Pre-bind stack-member chips, then factory-create all chips ──────
-    board_.bind_chip(board_.find_index<mos6522_t>(),    &system_via_);
-    board_.bind_chip(board_.find_index<mos6522_t>(1),  &user_via_);
-    board_.bind_chip(board_.find_index<bbc_vidproc_t>(), &vidproc_);
+    // ── Pre-bind all value-typed chips, then factory-create remaining ───
+    board_.bind_chipset();
     board_.create_chips(&pins_);
     ram_chip_        = board_.find<RAMChip>();
     paged_rom_chip_  = board_.find<ROMChip>();
     os_rom_chip_     = board_.find<ROMChip>(1);
-    cpu_             = board_.cpu<MOS6502>();
-    crtc_            = board_.find<mc6845_t>();
-    psg_             = board_.find<sn76489_t>();
 
     // ── Convenience pointer for rendering functions ─────────────────────
     memory_ = ram_chip_->data();
@@ -193,73 +188,73 @@ bool BBCMicroSystem::initialize() {
     }
 
     // ---- CPU (MOS 6502 @ 2 MHz) ----
-    board_.cpu_chip()->init();
-    board_.cpu_chip()->reset();
+    board_.cpu().init();
+    board_.cpu().reset();
 
     // ---- CRTC (MC6845) ----
-    crtc_->init();
+    board_.vdp().init();
 
     // Program CRTC with Mode 7 register values (the MOS does this too, but
     // we prime them so the display works even before the ROM runs)
     for (int i = 0; i < 14; i++) {
-        crtc_->regs_[i] = bbc_constants::MODE7_CRTC_REGS[i];
+        board_.vdp().regs_[i] = bbc_constants::MODE7_CRTC_REGS[i];
     }
 
     // Wire CRTC callbacks
-    crtc_->on_display_char = [this](uint16_t ma, uint8_t ra, bool cursor) {
+    board_.vdp().on_display_char = [this](uint16_t ma, uint8_t ra, bool cursor) {
         this->crtc_display_char(ma, ra, cursor);
     };
-    crtc_->on_vsync = [this]() { this->crtc_vsync(); };
-    crtc_->on_hsync = [this]() { this->crtc_hsync(); };
+    board_.vdp().on_vsync = [this]() { this->crtc_vsync(); };
+    board_.vdp().on_hsync = [this]() { this->crtc_hsync(); };
 
     // GPU indexed palette rendering — display_ owns palette + RGBA fallback.
-    vidproc_.set_memory(memory_);
+    board_.chips().vidproc.set_memory(memory_);
     display_.init(bbc_constants::DISPLAY_WIDTH, bbc_constants::DISPLAY_HEIGHT);
     display_.set_palette(bbc_vidproc_t::get_palette(),
                          bbc_vidproc_t::get_palette_size());
-    vidproc_.set_display(&display_);
+    board_.chips().vidproc.set_display(&display_);
     register_display(&display_);
 
     // Video stream output — composite video from VIDPROC
     video_port_ = std::make_unique<CompositeVideoPort>();
-    vidproc_.set_stream(&video_port_->stream());
+    board_.chips().vidproc.set_stream(&video_port_->stream());
     video_port_->bind_frame_output(&last_frame_data_);
 
     // ---- Sound (SN76489) ----
-    psg_->init();
-    psg_->set_clock_frequency(bbc_constants::SN76489_CLOCK);
-    psg_->set_audio_sample_rate(bbc_constants::DEFAULT_SAMPLE_RATE);
+    board_.psg().init();
+    board_.psg().set_clock_frequency(bbc_constants::SN76489_CLOCK);
+    board_.psg().set_audio_sample_rate(bbc_constants::DEFAULT_SAMPLE_RATE);
 
     // Wire SN76489 to audio thread — PSG is clocked at CRTC rate (1 MHz),
     // CPU runs at 2 MHz → 2 CPU cycles per PSG tick.
-    psg_adapter_ = std::make_unique<WriteOnlySynthAdapter<sn76489_t>>(psg_, 2);
+    psg_adapter_ = std::make_unique<WriteOnlySynthAdapter<sn76489_t>>(&board_.psg(), 2);
     audio_thread_.register_engine(psg_adapter_.get());
     audio_thread_.start();
 
     // Wire SN76489 to audio signal port
     audio_port_ = std::make_unique<AudioPort>();
-    psg_->set_audio_port(audio_port_.get());
+    board_.psg().set_audio_port(audio_port_.get());
 
     // ---- System VIA ($FE40-$FE5F) ----
-    system_via_.reset();
-    system_via_.interrupt_bit = BUS_IRQ_BIT;
+    board_.chips().system_via.reset();
+    board_.chips().system_via.interrupt_bit = BUS_IRQ_BIT;
     // Port A: keyboard column data + slow data bus
     // Port B: addressable latch control + VSYNC + light pen
-    system_via_.port_a_read_callback = sys_via_port_a_read;
-    system_via_.port_a_read_context = this;
-    system_via_.port_b_read_callback = sys_via_port_b_read;
-    system_via_.port_b_read_context = this;
+    board_.chips().system_via.port_a_read_callback = sys_via_port_a_read;
+    board_.chips().system_via.port_a_read_context = this;
+    board_.chips().system_via.port_b_read_callback = sys_via_port_b_read;
+    board_.chips().system_via.port_b_read_context = this;
 
     // ---- User VIA ($FE60-$FE7F) ----
-    user_via_.reset();
-    user_via_.interrupt_bit = BUS_IRQ_BIT;
+    board_.chips().user_via.reset();
+    board_.chips().user_via.interrupt_bit = BUS_IRQ_BIT;
 
     // ---- Video ULA defaults ----
     // Default palette: identity mapping (logical N → physical N)
     for (int i = 0; i < 16; i++) {
         // write_palette format: high nibble = logical, low nibble = encoded physical
         // Physical = ((data >> 1) & 7) ^ 7, so to get physical i: data = ((i ^ 7) << 1)
-        vidproc_.write_palette((i << 4) | (((i & 0x07) ^ 0x07) << 1));
+        board_.chips().vidproc.write_palette((i << 4) | (((i & 0x07) ^ 0x07) << 1));
     }
 
     // ---- Keyboard ----
@@ -285,15 +280,15 @@ void BBCMicroSystem::reset() {
 
     // Reset all manifest chips (CRTC, PSG, VIAs; RAM/ROM are no-op)
     board_.reset_chips();
-    if (board_.cpu_chip())  { board_.cpu_chip()->reset(); }
+    if (system_ready_)  { board_.cpu().reset(); }
 
     // Re-establish VIA callbacks (reset clears them)
-    system_via_.interrupt_bit = BUS_IRQ_BIT;
-    system_via_.port_a_read_callback = sys_via_port_a_read;
-    system_via_.port_a_read_context = this;
-    system_via_.port_b_read_callback = sys_via_port_b_read;
-    system_via_.port_b_read_context = this;
-    user_via_.interrupt_bit = BUS_IRQ_BIT;
+    board_.chips().system_via.interrupt_bit = BUS_IRQ_BIT;
+    board_.chips().system_via.port_a_read_callback = sys_via_port_a_read;
+    board_.chips().system_via.port_a_read_context = this;
+    board_.chips().system_via.port_b_read_callback = sys_via_port_b_read;
+    board_.chips().system_via.port_b_read_context = this;
+    board_.chips().user_via.interrupt_bit = BUS_IRQ_BIT;
 
     // Reset audio thread adapter (both threads quiescent during reset)
     audio_thread_.stop();
@@ -322,8 +317,8 @@ void BBCMicroSystem::tick() {
     crtc_divider_++;
     if (crtc_divider_ >= 2) {
         crtc_divider_ = 0;
-        if (crtc_) {
-            crtc_->tick();
+        if (true) {
+            board_.vdp().tick();
         }
         // SN76489 synthesis is now driven by the audio thread — no direct
         // tick here.  signal_progress() is called once per CPU tick below.
@@ -333,7 +328,7 @@ void BBCMicroSystem::tick() {
     {
         bus_state_t via_bus = BBC_BUS_DEFAULT_STATE;
         BUS_SET_BIT(via_bus, BUS_RW_BIT);
-        via_bus = system_via_.tick(via_bus);
+        via_bus = board_.chips().system_via.tick(via_bus);
         if (!BUS_GET_BIT(via_bus, BUS_IRQ_BIT)) {
             BUS_CLR_BIT(s, BUS_IRQ_BIT);
         }
@@ -341,14 +336,14 @@ void BBCMicroSystem::tick() {
     {
         bus_state_t via_bus = BBC_BUS_DEFAULT_STATE;
         BUS_SET_BIT(via_bus, BUS_RW_BIT);
-        via_bus = user_via_.tick(via_bus);
+        via_bus = board_.chips().user_via.tick(via_bus);
         if (!BUS_GET_BIT(via_bus, BUS_IRQ_BIT)) {
             BUS_CLR_BIT(s, BUS_IRQ_BIT);
         }
     }
 
     // ---- CPU PHI2 ----
-    s = cpu_->tick<MOS6502::Phase::PHI2>(s);
+    s = board_.cpu().tick<MOS6502::Phase::PHI2>(s);
 
     // ---- Memory / I/O service ----
     {
@@ -361,10 +356,10 @@ void BBCMicroSystem::tick() {
     }
 
     // ---- NMI edge detection ----
-    cpu_->sample_nmi_pin(s);
+    board_.cpu().sample_nmi_pin(s);
 
     // ---- CPU PHI1 ----
-    s = cpu_->tick<MOS6502::Phase::PHI1>(s);
+    s = board_.cpu().tick<MOS6502::Phase::PHI1>(s);
 
     BUS_SET_BIT(s, BUS_RW_BIT);
     pins_ = s;
@@ -432,20 +427,20 @@ bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
         uint8_t data = 0xFF;
 
         if (addr >= bbc_constants::CRTC_BASE && addr <= bbc_constants::CRTC_END) {
-            data = crtc_->read(addr);
+            data = board_.vdp().read(addr);
         }
         else if (addr >= bbc_constants::SYSTEM_VIA_BASE && addr <= bbc_constants::SYSTEM_VIA_END) {
             bus_state_t via_s = BBC_BUS_DEFAULT_STATE;
             BUS_SET_ADDR(via_s, addr - bbc_constants::SYSTEM_VIA_BASE);
             BUS_SET_BIT(via_s, BUS_RW_BIT);
-            via_s = system_via_.registers_read(via_s);
+            via_s = board_.chips().system_via.registers_read(via_s);
             data = BUS_GET_DATA(via_s);
         }
         else if (addr >= bbc_constants::USER_VIA_BASE && addr <= bbc_constants::USER_VIA_END) {
             bus_state_t via_s = BBC_BUS_DEFAULT_STATE;
             BUS_SET_ADDR(via_s, addr - bbc_constants::USER_VIA_BASE);
             BUS_SET_BIT(via_s, BUS_RW_BIT);
-            via_s = user_via_.registers_read(via_s);
+            via_s = board_.chips().user_via.registers_read(via_s);
             data = BUS_GET_DATA(via_s);
         }
 
@@ -455,13 +450,13 @@ bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
         uint8_t data = BUS_GET_DATA(s);
 
         if (addr >= bbc_constants::CRTC_BASE && addr <= bbc_constants::CRTC_END) {
-            crtc_->write(addr, data);
+            board_.vdp().write(addr, data);
         }
         else if (addr == bbc_constants::VIDEO_ULA_CONTROL) {
-            vidproc_.write_control(data);
+            board_.chips().vidproc.write_control(data);
         }
         else if (addr == bbc_constants::VIDEO_ULA_PALETTE) {
-            vidproc_.write_palette(data);
+            board_.chips().vidproc.write_palette(data);
         }
         else if (addr == bbc_constants::ROM_SELECT_REG) {
             rom_select_ = data & 0x0F;
@@ -472,7 +467,7 @@ bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
             BUS_SET_ADDR(via_s, addr - bbc_constants::SYSTEM_VIA_BASE);
             BUS_SET_DATA(via_s, data);
             BUS_CLR_BIT(via_s, BUS_RW_BIT);
-            system_via_.registers_write(via_s);
+            board_.chips().system_via.registers_write(via_s);
 
             // Check if writing to Port B triggers sound chip or addressable latch
             uint8_t via_reg = (addr - bbc_constants::SYSTEM_VIA_BASE) & 0x0F;
@@ -493,7 +488,7 @@ bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
                     if (psg_adapter_) {
                         // Data comes from System VIA Port A output register.
                         // Enqueue timestamped write for the audio thread.
-                        uint8_t psg_data = system_via_.regs_[MOS6522_PORTA];
+                        uint8_t psg_data = board_.chips().system_via.regs_[MOS6522_PORTA];
                         psg_adapter_->cmd_queue().push_write(total_cycles_, 0, psg_data);
                     }
                 }
@@ -504,7 +499,7 @@ bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
             BUS_SET_ADDR(via_s, addr - bbc_constants::USER_VIA_BASE);
             BUS_SET_DATA(via_s, data);
             BUS_CLR_BIT(via_s, BUS_RW_BIT);
-            user_via_.registers_write(via_s);
+            board_.chips().user_via.registers_write(via_s);
         }
     }
 
@@ -526,19 +521,19 @@ bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
 // ============================================================================
 
 void BBCMicroSystem::crtc_display_char(uint16_t ma, uint8_t ra, bool cursor) {
-    if (!crtc_) return;
-    vidproc_.display_char(ma, ra, cursor, crtc_->regs_[MC6845_R9_MAX_SCANLINE]);
+    if (false) return;
+    board_.chips().vidproc.display_char(ma, ra, cursor, board_.vdp().regs_[MC6845_R9_MAX_SCANLINE]);
 }
 
 void BBCMicroSystem::crtc_vsync() {
     // Flush indexed frame through VIDPROC pixel unit at VSYNC
-    vidproc_.vsync();
+    board_.chips().vidproc.vsync();
 
     // On real hardware, VSYNC connects to System VIA CA1 input.
     // The VIA detects the edge and sets the CA1 interrupt flag.
     // Since the current VIA implementation doesn't have CA1 pin handling,
     // we directly set the CA1 interrupt flag in IFR.
-    system_via_.ifr |= MOS6522_IFR_CA1;
+    board_.chips().system_via.ifr |= MOS6522_IFR_CA1;
 }
 
 void BBCMicroSystem::crtc_hsync() {
@@ -559,7 +554,7 @@ uint8_t BBCMicroSystem::sys_via_port_a_read(void* ctx, uint8_t /*output*/) {
     // When auto-scan is enabled (addressable latch bit 3), the keyboard
     // returns the state of the currently selected column.
     uint8_t keyboard_data = 0xFF;
-    uint8_t col = sys->system_via_.port_b.output() & 0x07;
+    uint8_t col = sys->board_.chips().system_via.port_b.output() & 0x07;
     if (col < bbc_constants::KEYBOARD_COLS) {
         keyboard_data = sys->scan_keyboard(col);
     }
@@ -576,7 +571,7 @@ uint8_t BBCMicroSystem::sys_via_port_b_read(void* ctx, uint8_t /*output*/) {
     // PB5-PB6: unused
     // PB7: VSYNC (active-high)
     uint8_t pb = 0;
-    if (sys->crtc_ && sys->crtc_->v_sync_active) {
+    if (sys->board_.vdp().v_sync_active) {
         pb |= 0x80;  // PB7 = VSYNC
     }
     return pb;
@@ -727,13 +722,13 @@ uint32_t BBCMicroSystem::get_audio_samples(float* buffer, uint32_t max_samples) 
     if (audio_port_) {
         return static_cast<uint32_t>(audio_port_->read_samples(buffer, static_cast<int>(max_samples)));
     }
-    if (!psg_) return 0;
-    return psg_->audio_read(buffer, max_samples);
+    if (false) return 0;
+    return board_.psg().audio_read(buffer, max_samples);
 }
 
 void BBCMicroSystem::set_audio_sample_rate(int sample_rate_hz) {
-    if (psg_) {
-        psg_->set_audio_sample_rate(sample_rate_hz);
+    if (true) {
+        board_.psg().set_audio_sample_rate(sample_rate_hz);
     }
 }
 
@@ -749,7 +744,7 @@ void BBCMicroSystem::render_system_menu_items() {
     ImGui::Separator();
     ImGui::Text("ROM Bank: %d", rom_select_);
     ImGui::Text("Video Mode: %d",
-        vidproc_.get_display_mode(crtc_ ? crtc_->regs_[MC6845_R9_MAX_SCANLINE] : 0));
+        board_.chips().vidproc.get_display_mode(board_.vdp().regs_[MC6845_R9_MAX_SCANLINE]));
 #endif
 }
 
