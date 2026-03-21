@@ -44,7 +44,8 @@
 namespace atv = atari_vector_constants;
 
 // ============================================================================
-// Variant traits — compile-time differences between Asteroids and LL
+// Variant traits — compile-time differences between game variants.
+// Drives ChipManifest, BusSpec, Board, SystemDescriptor, and ROM loading.
 // ============================================================================
 
 template<AtariVectorVariant V>
@@ -67,6 +68,10 @@ struct AtariVectorTraits<AtariVectorVariant::ASTEROIDS> {
     static constexpr uint16_t VECROM_WORD_OFFSET = 0x800;                   // DVG word addr where ROM starts
 
     static constexpr const char* PALETTE_ID   = "green";   // Green phosphor CRT
+
+    // System descriptor metadata
+    static constexpr const char* ALIASES[] = { "Asteroids", "ASTEROIDS" };
+    static constexpr size_t PROBE_ROM_SIZES[] = { 6144, 8192 };  // 6 KB prog, 6+2 KB prog+vec
 };
 
 template<>
@@ -86,6 +91,10 @@ struct AtariVectorTraits<AtariVectorVariant::LUNAR_LANDER> {
     static constexpr uint16_t VECROM_WORD_OFFSET = 0x400;                   // ROM starts right after RAM (no gap)
 
     static constexpr const char* PALETTE_ID   = "white";   // White/blue phosphor CRT
+
+    // System descriptor metadata
+    static constexpr const char* ALIASES[] = { "LunarLander", "Lunar Lander", "LUNARLANDER" };
+    static constexpr size_t PROBE_ROM_SIZES[] = { 8192, 10240 };  // 8 KB prog, 8+2 KB prog+vec
 };
 
 template<>
@@ -105,6 +114,10 @@ struct AtariVectorTraits<AtariVectorVariant::ASTEROIDS_DELUXE> {
     static constexpr uint16_t VECROM_WORD_OFFSET = 0x400;                   // ROM starts right after RAM (no gap)
 
     static constexpr const char* PALETTE_ID   = "blue";    // Blue/white phosphor CRT
+
+    // System descriptor metadata
+    static constexpr const char* ALIASES[] = { "AsteroidsDeluxe", "Asteroids Deluxe", "ASTEROIDSDELUXE" };
+    static constexpr size_t PROBE_ROM_SIZES[] = { 12288 };  // 8 KB prog + 4 KB vec
 };
 
 
@@ -264,7 +277,7 @@ private:
     uint8_t thrust_    = 0x00;      // Thrust lever ADC (Lunar Lander only, 0-255)
 
     // ── NMI gating (Asteroids Deluxe) ─────────────────────────────────────
-    bool nmi_enabled_ = false;       // Output latch NMI enable (AD: bit 2 at $3C04)
+    bool nmi_enabled_ = false;       // Output latch NMI enable (AD: Q4, $3C04 D0)
 
     // ── Sound output latches ─────────────────────────────────────────────
     uint8_t snd_latch_ = 0x00;      // Sound triggers / output bits
