@@ -12,6 +12,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "core/signal/video_port.hpp"
 
 #include "chip/cpu/z80/u880.hpp"
@@ -111,6 +112,27 @@ template<> struct Z9001BusTraits<Z9001Variant::KC87> {
     using Spec = ManifestBusSpec<kKC87Chips, 16, 8>;
 };
 
+// ── ChipSet ──────────────────────────────────────────────────────────────
+struct Z9001ChipSet : StandardChips<U880> {
+    z80_pio_t pio1;     // U855 PIO #1 (keyboard + system control)
+    z80_pio_t pio2;     // U855 PIO #2 (keyboard + cassette)
+    z80_ctc_t ctc;      // U857 CTC (timing + sound)
+
+    template<typename BoardT>
+    void bind_extras(BoardT& board) {
+        board.bind_chip(board.template find_index<z80_pio_t>(0), &pio1);
+        board.bind_chip(board.template find_index<z80_pio_t>(1), &pio2);
+        board.bind_chip(board.template find_index<z80_ctc_t>(), &ctc);
+    }
+
+    template<typename BoardT>
+    void register_extras(BoardT& board) {
+        board.register_component(&pio1);
+        board.register_component(&pio2);
+        board.register_component(&ctc);
+    }
+};
+
 // ── System ───────────────────────────────────────────────────────────────
 template<Z9001Variant V>
 class Z9001System : public System {
@@ -134,11 +156,7 @@ public:
 
 
 private:
-    // ── Chips ────────────────────────────────────────────────────────────
-    U880*       cpu_  = nullptr;     // U880 @ 2.4576 MHz — owned by board_
-    z80_pio_t*  pio1_ = nullptr;     // U855 PIO #1 (keyboard + system control) — owned by board_
-    z80_pio_t*  pio2_ = nullptr;     // U855 PIO #2 (keyboard + cassette) — owned by board_
-    z80_ctc_t*  ctc_  = nullptr;     // U857 CTC (timing + sound) — owned by board_
+    // ── Chips (value-typed via Board ChipSet) ────────────────────────────
 
     // ── Memory — owned by Board, accessed via chip_as<>() ────────────
     ROMChip* basic_rom_lo_chip_  = nullptr;  // KC 87 only
@@ -154,7 +172,7 @@ private:
     using BT  = Z9001BusTraits<V>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec>;
+    using MainBoard = Board<typename BT::Spec, Z9001ChipSet>;
     Bus bus_;
     MainBoard board_{BT::kManifest};
 
