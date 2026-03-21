@@ -36,6 +36,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/cpu/fam65xx/wdc65c02.hpp"
 #include "chip/memory/memory_chip.hpp"
@@ -163,6 +164,13 @@ template<> struct AppleIIBusTraits<AppleIIVariant::APPLE_IIC> {
     using Spec = ManifestBusSpec<kAppleIIcChips, 16, 8>;
 };
 
+// ── ChipSet ──────────────────────────────────────────────────────────────
+template<AppleIIVariant V>
+using AppleIICPU = std::conditional_t<AppleIIVariantTraits<V>::is_cmos, WDC_65C02, MOS6502>;
+
+template<AppleIIVariant V>
+using AppleIIChips = StandardChips<AppleIICPU<V>>;
+
 // ============================================================================
 // Apple II System
 // ============================================================================
@@ -198,10 +206,7 @@ public:
 
 
 private:
-    // ── Chips ────────────────────────────────────────────────────────────
-    // CPU type depends on variant (MOS6502 for II, WDC65C02 for IIe/IIc)
-    // Both are accessed via ChipBase* through the board.
-    ChipBase*  cpu_chip_ = nullptr;
+    // ── Chips (value-typed via Board ChipSet) ────────────────────────────
 
     // ── Memory chips — post-init pointers ────────────────────────────────
     ROMChip* rom_       = nullptr;
@@ -209,7 +214,7 @@ private:
 
     // ── Board + bus ──────────────────────────────────────────────────────
     using Bus       = MemoryBus<typename BTraits::Spec>;
-    using MainBoard = Board<typename BTraits::Spec>;
+    using MainBoard = Board<typename BTraits::Spec, AppleIIChips<V>>;
     Bus       bus_;
     MainBoard board_{BTraits::kManifest};
 

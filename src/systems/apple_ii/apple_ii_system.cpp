@@ -131,13 +131,13 @@ template<AppleIIVariant V>
 bool AppleIISystem<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
     register_board(&board_);
+    board_.bind_chipset();
     board_.create_chips(&pins_);
 
-    cpu_chip_ = board_.cpu_chip();
     rom_      = board_.template find<ROMChip>();
     ram_ptr_  = board_.template find<RAMChip>()->data();
 
-    pins_ = board_.cpu_chip()->init();
+    pins_ = board_.cpu().init();
 
     configure_bus_memory_map();
     if (!load_roms()) {
@@ -160,8 +160,8 @@ void AppleIISystem<V>::shutdown() { system_ready_ = false; }
 
 template<AppleIIVariant V>
 void AppleIISystem<V>::reset() {
-    if (!cpu_chip_) return;
-    pins_ = board_.cpu_chip()->reset(pins_);
+    if (!system_ready_) return;
+    pins_ = board_.cpu().reset(pins_);
     board_.reset_chips();
     sw_text_ = true; sw_mixed_ = false; sw_page2_ = false; sw_hires_ = false;
     kbd_data_ = 0; kbd_strobe_ = false;
