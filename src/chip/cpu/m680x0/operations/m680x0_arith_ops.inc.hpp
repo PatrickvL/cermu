@@ -535,6 +535,15 @@ inline bus_state_t decode_group9(bus_state_t pins, uint16_t opcode) {
         // SUBX -(An),-(An): .b/.w = 18 clocks, .l = 30 clocks
         // Use calc_ea + direct read to avoid predec idle penalties
         ea_addr_ = calc_ea(4, ea_reg, sz);
+        if (unlikely((ea_addr_ & 1) && sz != OpSize::Byte)) {
+            if (sz == OpSize::Long) {
+                set_a(ea_reg, get_a(ea_reg) + 2);
+                ea_addr_ += 2;
+            }
+            clocks_remaining_ += 2;  // predecrement idle
+            process_address_error_sync(ea_addr_, true, fc_data());
+            return pins;
+        }
         uint32_t src = 0;
         if (mem_read_) {
             uint32_t addr = ea_addr_ & address_mask();
@@ -552,6 +561,15 @@ inline bus_state_t decode_group9(bus_state_t pins, uint16_t opcode) {
             }
         }
         ea_addr_ = calc_ea(4, dn, sz);
+        if (unlikely((ea_addr_ & 1) && sz != OpSize::Byte)) {
+            if (sz == OpSize::Long) {
+                set_a(dn, get_a(dn) + 2);
+                ea_addr_ += 2;
+            }
+            clocks_remaining_ += 2;  // predecrement idle
+            process_address_error_sync(ea_addr_, true, fc_data());
+            return pins;
+        }
         uint32_t dst = 0;
         if (mem_read_) {
             uint32_t addr = ea_addr_ & address_mask();
@@ -901,6 +919,17 @@ inline bus_state_t decode_groupD(bus_state_t pins, uint16_t opcode) {
         }
         // ADDX -(An),-(An): .b/.w = 18 clocks, .l = 30 clocks
         ea_addr_ = calc_ea(4, ea_reg, sz);
+        if (unlikely((ea_addr_ & 1) && sz != OpSize::Byte)) {
+            // Long predecrement is two -2 steps; address error on first
+            // step means only -2 happened (not -4)
+            if (sz == OpSize::Long) {
+                set_a(ea_reg, get_a(ea_reg) + 2);
+                ea_addr_ += 2;
+            }
+            clocks_remaining_ += 2;  // predecrement idle
+            process_address_error_sync(ea_addr_, true, fc_data());
+            return pins;
+        }
         uint32_t src = 0;
         if (mem_read_) {
             uint32_t addr = ea_addr_ & address_mask();
@@ -918,6 +947,15 @@ inline bus_state_t decode_groupD(bus_state_t pins, uint16_t opcode) {
             }
         }
         ea_addr_ = calc_ea(4, dn, sz);
+        if (unlikely((ea_addr_ & 1) && sz != OpSize::Byte)) {
+            if (sz == OpSize::Long) {
+                set_a(dn, get_a(dn) + 2);
+                ea_addr_ += 2;
+            }
+            clocks_remaining_ += 2;  // predecrement idle
+            process_address_error_sync(ea_addr_, true, fc_data());
+            return pins;
+        }
         uint32_t dst = 0;
         if (mem_read_) {
             uint32_t addr = ea_addr_ & address_mask();
