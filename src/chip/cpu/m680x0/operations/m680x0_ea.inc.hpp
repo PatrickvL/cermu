@@ -74,12 +74,14 @@ inline uint32_t calc_ea(uint8_t mode, uint8_t reg, OpSize sz) {
                     return addr;
                 }
                 case 2: {  // (d16,PC)
-                    uint32_t base = regs_.pc;
+                    // PC value for d16(PC) = address of the extension word
+                    uint32_t base = regs_.pc - 2;
                     int16_t disp = static_cast<int16_t>(consume_extension_word());
                     return base + disp;
                 }
                 case 3: {  // (d8,PC,Xn)
-                    uint32_t base = regs_.pc;
+                    // PC value for d8(PC,Xn) = address of the extension word
+                    uint32_t base = regs_.pc - 2;
                     uint16_t ext = consume_extension_word();
                     uint8_t  xn_reg  = (ext >> 12) & 7;
                     bool     xn_is_a = (ext & 0x8000) != 0;
@@ -130,6 +132,9 @@ inline uint32_t read_ea(uint8_t mode, uint8_t reg, OpSize sz) {
     }
     // Memory modes — calculate address, read via callback
     ea_addr_ = calc_ea(mode, reg, sz);
+    // -(An) requires 2 idle clocks before the bus read
+    if (mode == static_cast<uint8_t>(EAMode::AddrRegPreDec))
+        clocks_remaining_ += 2;
     if (mem_read_) {
         uint32_t addr = ea_addr_ & address_mask();
         if (sz == OpSize::Long) {
