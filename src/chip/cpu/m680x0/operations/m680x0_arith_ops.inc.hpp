@@ -325,6 +325,7 @@ inline bus_state_t decode_group5(bus_state_t pins, uint16_t opcode) {
         uint32_t an = get_a(ea_reg);
         if (is_sub) an -= quick_data; else an += quick_data;
         set_a(ea_reg, an);
+        if (ea_reg == 7) sync_sp();
         return do_idle_then_prefetch(pins, 4);
     }
 
@@ -590,6 +591,7 @@ inline bus_state_t decode_group9(bus_state_t pins, uint16_t opcode) {
             src_val = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(src_val)));
         }
         set_a(dn, get_a(dn) - src_val);
+        if (dn == 7) sync_sp();
         // SUBA does not affect flags — always 8 clocks minimum (4 idle for 32-bit address op)
         return do_idle_then_prefetch(pins, 4);
     }
@@ -950,6 +952,7 @@ inline bus_state_t decode_groupD(bus_state_t pins, uint16_t opcode) {
             src_val = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(src_val)));
         }
         set_a(dn, get_a(dn) + src_val);
+        if (dn == 7) sync_sp();
         // ADDA does not affect flags — always 8 clocks minimum (4 idle for 32-bit address op)
         return do_idle_then_prefetch(pins, 4);
     }
