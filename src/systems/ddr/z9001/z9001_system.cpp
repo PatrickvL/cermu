@@ -182,10 +182,6 @@ template<Z9001Variant V> void Z9001System<V>::run_frame() {
     if (video_port_) video_port_->swap_frame();
 }
 
-template<Z9001Variant V> bool Z9001System<V>::load_file(const char*) { return false; }
-template<Z9001Variant V> uint32_t Z9001System<V>::get_audio_samples(float*, uint32_t) { return 0; }
-template<Z9001Variant V> void Z9001System<V>::set_audio_sample_rate(int hz) { audio_sample_rate_ = hz; }
-
 // ============================================================================
 // KEYBOARD HANDLING
 // ============================================================================

@@ -237,7 +237,6 @@ void AmstradCPCSystem<M>::run_frame() {
     video_port_->swap_frame();
 }
 
-template<CPCModel M> bool AmstradCPCSystem<M>::load_file(const char*) { return false; }
 template<CPCModel M> uint32_t AmstradCPCSystem<M>::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
     if (audio_port_) {

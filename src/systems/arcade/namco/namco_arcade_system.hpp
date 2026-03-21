@@ -130,12 +130,9 @@ public:
     void tick() override;
     void run_frame() override;
 
-    bool load_file(const char* filepath) override;
-
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
     void set_audio_sample_rate(int sample_rate_hz) override;
 
-    bool is_system_ready() const override { return system_ready_; }
 
 private:
     // ── Chips ────────────────────────────────────────────────────────────
@@ -181,7 +178,6 @@ private:
 
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t pins_       = NAMCO_BUS_DEFAULT_STATE;
-    bool        system_ready_ = false;
     uint32_t scanline_      = 0;
     int audio_sample_rate_  = namco_arcade_constants::DEFAULT_SAMPLE_RATE;
 

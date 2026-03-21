@@ -204,7 +204,6 @@ template<NamcoGame G> void NamcoArcadeSystem<G>::run_frame() {
     if (video_port_) video_port_->swap_frame();
 }
 
-template<NamcoGame G> bool NamcoArcadeSystem<G>::load_file(const char*) { return false; }
 template<NamcoGame G> uint32_t NamcoArcadeSystem<G>::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
     if (audio_port_) {

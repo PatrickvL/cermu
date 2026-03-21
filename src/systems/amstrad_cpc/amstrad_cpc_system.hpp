@@ -164,12 +164,9 @@ public:
     void tick() override;
     void run_frame() override;
 
-    bool load_file(const char* filepath) override;
-
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
     void set_audio_sample_rate(int sample_rate_hz) override;
 
-    bool is_system_ready() const override { return system_ready_; }
 
 private:
     // ========================================================================
@@ -199,7 +196,6 @@ private:
     // ========================================================================
 
     bus_state_t pins_;
-    bool        system_ready_ = false;
 
     // ========================================================================
     // DISPLAY — IndexedFrameBuffer owns palette + RGBA fallback.

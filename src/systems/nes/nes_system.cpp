@@ -219,7 +219,6 @@ NintendoSystem<V>::NintendoSystem()
     , cpu_(nullptr)
     , pins_(0)
     , is_pal_(false)
-    , system_ready_(false)
     , cycles_per_frame_(nes_constants::CYCLES_PER_FRAME_NTSC)
     , initialized_(false)
     , audio_sample_rate_(nes_constants::AUDIO_SAMPLE_RATE)
@@ -227,6 +226,7 @@ NintendoSystem<V>::NintendoSystem()
     , audio_sample_period_(37)   // NTSC default
     , residual_time_(0.0)
 {
+    system_ready_ = false;
     hardware_traits_ = create_nes_hardware_traits();
     current_palette_ = hardware_traits_.display.default_palette;
 }

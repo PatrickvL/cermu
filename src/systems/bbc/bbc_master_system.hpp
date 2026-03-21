@@ -183,7 +183,6 @@ public:
 
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
 
-    bool is_system_ready() const override { return system_ready_; }
 
 private:
     // ── Chips ────────────────────────────────────────────────────────────
@@ -229,7 +228,6 @@ private:
     bus_state_t pins_;
     uint32_t    cycles_per_frame_;
     uint32_t    crtc_divider_ = 0;
-    bool        system_ready_ = false;
 
     // ── Internal helpers ─────────────────────────────────────────────────
     void tick_cpu();
