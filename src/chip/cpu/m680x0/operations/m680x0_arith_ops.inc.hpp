@@ -139,11 +139,11 @@ inline bus_state_t decode_group0(bus_state_t pins, uint16_t opcode) {
                 case 2: set_d(ea_reg, val & ~(1u << bit_num)); break;
                 case 3: set_d(ea_reg, val | (1u << bit_num)); break;
             }
-            // Static bit Dn timing: BTST 10, BCHG/BSET 12, BCLR 14
+            // Static bit Dn timing — depends on bit position like dynamic
             uint8_t idle;
-            if (op_type == 0)      idle = 2;   // BTST: 10 clk
-            else if (op_type == 2) idle = 6;   // BCLR: 14 clk
-            else                   idle = 4;   // BCHG/BSET: 12 clk
+            if (op_type == 0)      idle = 2;                                   // BTST: 10 clk
+            else if (op_type == 2) idle = (bit_num >= 16) ? 6 : 4;            // BCLR: 14|12 clk
+            else                   idle = (bit_num >= 16) ? 4 : 2;            // BCHG/BSET: 12|10 clk
             return do_idle_then_prefetch(pins, idle);
         }
         // Memory modes: bit number modulo 8, operate on byte
@@ -322,11 +322,13 @@ inline bus_state_t decode_group5(bus_state_t pins, uint16_t opcode) {
 
     if (ea_mode == 1) {
         // ADDQ/SUBQ to An — full 32-bit, no flags affected
+        // .l = 6 clocks (2 idle), .w/.b = 8 clocks (4 idle)
         uint32_t an = get_a(ea_reg);
         if (is_sub) an -= quick_data; else an += quick_data;
         set_a(ea_reg, an);
         if (ea_reg == 7) sync_sp();
-        return do_idle_then_prefetch(pins, 2);  // 6 clocks total (real hw)
+        uint8_t idle = (sz == OpSize::Long) ? 2 : 4;
+        return do_idle_then_prefetch(pins, idle);
     }
 
     uint32_t src = quick_data;
@@ -611,8 +613,10 @@ inline bus_state_t decode_group9(bus_state_t pins, uint16_t opcode) {
         }
         set_a(dn, get_a(dn) - src_val);
         if (dn == 7) sync_sp();
-        // SUBA: register/imm source or word EA = 4 idle; long EA = 2 idle
-        uint8_t idle = (ea_mode >= 2 && src_sz == OpSize::Long) ? 2 : 4;
+        // SUBA: memory long source = 2 idle; register/word/imm = 4 idle
+        bool mem_long = (ea_mode >= 2 && src_sz == OpSize::Long &&
+                         !(ea_mode == 7 && ea_reg == 4));
+        uint8_t idle = mem_long ? 2 : 4;
         return do_idle_then_prefetch(pins, idle);
     }
 
@@ -995,8 +999,10 @@ inline bus_state_t decode_groupD(bus_state_t pins, uint16_t opcode) {
         }
         set_a(dn, get_a(dn) + src_val);
         if (dn == 7) sync_sp();
-        // ADDA: register/imm source or word EA = 4 idle; long EA = 2 idle
-        uint8_t idle = (ea_mode >= 2 && src_sz == OpSize::Long) ? 2 : 4;
+        // ADDA: memory long source = 2 idle; register/word/imm = 4 idle
+        bool mem_long = (ea_mode >= 2 && src_sz == OpSize::Long &&
+                         !(ea_mode == 7 && ea_reg == 4));
+        uint8_t idle = mem_long ? 2 : 4;
         return do_idle_then_prefetch(pins, idle);
     }
 

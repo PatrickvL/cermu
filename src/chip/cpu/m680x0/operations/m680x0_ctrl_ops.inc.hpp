@@ -562,7 +562,10 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             set_a(ea_reg, (static_cast<uint32_t>(hi) << 16) | lo);
             clocks_remaining_ += 8;  // 2 × 4-clock reads
         }
-        set_a(7, get_a(7) + 4);
+        // UNLK A7: popped value IS SP — don't add 4
+        if (ea_reg != 7) {
+            set_a(7, get_a(7) + 4);
+        }
         sync_sp();
         return do_prefetch(pins);
     }
