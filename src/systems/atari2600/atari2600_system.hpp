@@ -17,6 +17,7 @@
 
 #include "core/system.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/fam65xx/mos6507.hpp"
@@ -94,6 +95,23 @@ inline constexpr auto kAtari2600Chips = make_chip_manifest(
 // BusSpec auto-derived from the manifest (13-bit address, 256-byte pages)
 using Atari2600BusSpec = ManifestBusSpec<kAtari2600Chips, 13, 8>;
 
+// ── ChipSet ──────────────────────────────────────────────────────────────
+struct Atari2600ChipSet : StandardChips<MOS6507, tia_t> {
+    pia6532_t         riot;   // PIA 6532 RIOT — RAM, I/O, Timer
+    Atari2600CartChip cart;   // Cart MMIO adapter (wraps mapper)
+
+    template<typename BoardT>
+    void bind_extras(BoardT& board) {
+        board.bind_chip(board.template find_index<pia6532_t>(), &riot);
+        board.bind_chip(board.template find_index<Atari2600CartChip>(), &cart);
+    }
+
+    template<typename BoardT>
+    void register_extras(BoardT& board) {
+        board.register_component(&riot);
+        board.register_component(&cart);
+    }
+};
 
 
 class Atari2600System : public System {
@@ -135,13 +153,9 @@ public:
 
 private:
     // ========================================================================
-    // CHIPS — owned by board_, borrowed here for direct access
+    // CHIPS (value-typed via Board ChipSet)
     // ========================================================================
 
-    MOS6507*           cpu_       = nullptr;  // MOS 6507 CPU — owned by board_
-    tia_t*             tia_       = nullptr;  // TIA — Television Interface Adapter
-    pia6532_t*         riot_      = nullptr;  // PIA 6532 RIOT — RAM, I/O, Timer
-    Atari2600CartChip* cart_chip_ = nullptr;  // Cart MMIO adapter (wraps mapper)
     IndexedFrameBuffer display_;               // Display output for GPU indexed rendering
 
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
@@ -161,7 +175,7 @@ private:
     // ========================================================================
 
     using Bus = MemoryBus<Atari2600BusSpec>;
-    using MainBoard = Board<Atari2600BusSpec>;
+    using MainBoard = Board<Atari2600BusSpec, Atari2600ChipSet>;
 
     Bus bus_;
     MainBoard board_{kAtari2600Chips};
