@@ -111,7 +111,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
         uint32_t val = read_ea(ea_mode, ea_reg, OpSize::Word);
         if (address_error_) return pins;
         set_ccr(static_cast<uint8_t>(val));
-        return do_prefetch(pins);
+        return do_idle_then_prefetch(pins, 8);  // 12 + EA clocks total
     }
 
     // ── MOVE to SR (0100 0110 11xx xxxx) ─────────────────────────
@@ -126,7 +126,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
         uint32_t val = read_ea(ea_mode, ea_reg, OpSize::Word);
         if (address_error_) return pins;
         set_sr(static_cast<uint16_t>(val));
-        return do_prefetch(pins);
+        return do_idle_then_prefetch(pins, 8);  // 12 + EA clocks total
     }
 
     // ── TST.b/w/l (0100 1010 ssxx xxxx) ─────────────────────────
@@ -199,6 +199,10 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
         sync_sp();
         if (mem_write_) {
             uint32_t sp = get_a(7) & address_mask();
+            if (unlikely(sp & 1)) {
+                process_address_error_sync(sp, false, fc_data());
+                return pins;
+            }
             mem_write_(mem_ctx_, sp,     static_cast<uint16_t>((ea >> 16) & 0xFFFF));
             mem_write_(mem_ctx_, sp + 2, static_cast<uint16_t>(ea & 0xFFFF));
             clocks_remaining_ += 8;  // 2 × 4-clock writes
@@ -244,6 +248,12 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
                 addr = calc_ea(ea_mode, ea_reg, sz);
             }
 
+            // Address error: MOVEM always accesses words
+            if (unlikely((addr & 1) && mem_read_)) {
+                process_address_error_sync(addr, true, fc_data());
+                return pins;
+            }
+
             if (mem_read_) {
                 // Transfer registers in order: D0-D7, then A0-A7
                 for (int i = 0; i < 16; i++) {
@@ -279,6 +289,11 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
                 // -(An): register mask is REVERSED: A7→A0 at bit 0→7, D7→D0 at bit 8→15
                 // Addresses decrement from An
                 uint32_t addr = get_a(ea_reg);
+                // Address error: odd base address
+                if (unlikely((addr & 1) && mem_write_)) {
+                    process_address_error_sync(addr, false, fc_data());
+                    return pins;
+                }
                 if (mem_write_) {
                     for (int i = 0; i < 16; i++) {
                         if (!(mask & (1 << i))) continue;
@@ -306,6 +321,11 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             } else {
                 // Other modes: normal mask order (D0→D7 at bits 0→7, A0→A7 at bits 8→15)
                 uint32_t addr = calc_ea(ea_mode, ea_reg, sz);
+                // Address error: odd base address
+                if (unlikely((addr & 1) && mem_write_)) {
+                    process_address_error_sync(addr, false, fc_data());
+                    return pins;
+                }
                 if (mem_write_) {
                     for (int i = 0; i < 16; i++) {
                         if (!(mask & (1 << i))) continue;
@@ -387,7 +407,8 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
     if (opcode == 0x4E70) {
         if (!(regs_.sr & SRBits::S))
             return exception(pins, Vector::PRIVILEGE_VIOLATION);
-        // Assert RESET line — simplified: just do prefetch
+        // Assert RESET line for 124 clocks, then prefetch (8 clocks) = 132 total
+        clocks_remaining_ += 128;  // 132 - 4 (prefetch bus cycle)
         return do_prefetch(pins);
     }
 
@@ -409,6 +430,10 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
         // Pop SR and PC from supervisor stack
         if (mem_read_) {
             uint32_t sp = get_a(7) & address_mask();
+            if (unlikely(sp & 1)) {
+                process_address_error_sync(sp, true, fc_data());
+                return pins;
+            }
             uint16_t new_sr = mem_read_(mem_ctx_, sp);
             uint16_t pc_hi  = mem_read_(mem_ctx_, sp + 2);
             uint16_t pc_lo  = mem_read_(mem_ctx_, sp + 4);
@@ -427,6 +452,10 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
         // Pop PC from stack
         if (mem_read_) {
             uint32_t sp = get_a(7) & address_mask();
+            if (unlikely(sp & 1)) {
+                process_address_error_sync(sp, true, fc_data());
+                return pins;
+            }
             uint16_t pc_hi = mem_read_(mem_ctx_, sp);
             uint16_t pc_lo = mem_read_(mem_ctx_, sp + 2);
             set_a(7, get_a(7) + 4);
@@ -451,6 +480,10 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
         // Pop CCR then PC from stack
         if (mem_read_) {
             uint32_t sp = get_a(7) & address_mask();
+            if (unlikely(sp & 1)) {
+                process_address_error_sync(sp, true, fc_data());
+                return pins;
+            }
             uint16_t new_ccr = mem_read_(mem_ctx_, sp);
             uint16_t pc_hi   = mem_read_(mem_ctx_, sp + 2);
             uint16_t pc_lo   = mem_read_(mem_ctx_, sp + 4);
@@ -487,6 +520,10 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
         sync_sp();
         if (mem_write_) {
             uint32_t sp = get_a(7) & address_mask();
+            if (unlikely(sp & 1)) {
+                process_address_error_sync(sp, false, fc_data());
+                return pins;
+            }
             uint32_t an_val = get_a(ea_reg);
             mem_write_(mem_ctx_, sp,     static_cast<uint16_t>((an_val >> 16) & 0xFFFF));
             mem_write_(mem_ctx_, sp + 2, static_cast<uint16_t>(an_val & 0xFFFF));
@@ -505,6 +542,10 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
         sync_sp();
         if (mem_read_) {
             uint32_t sp = get_a(7) & address_mask();
+            if (unlikely(sp & 1)) {
+                process_address_error_sync(sp, true, fc_data());
+                return pins;
+            }
             uint16_t hi = mem_read_(mem_ctx_, sp);
             uint16_t lo = mem_read_(mem_ctx_, sp + 2);
             set_a(ea_reg, (static_cast<uint32_t>(hi) << 16) | lo);
@@ -578,6 +619,10 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
         sync_sp();
         if (mem_write_) {
             uint32_t sp = get_a(7) & address_mask();
+            if (unlikely(sp & 1)) {
+                process_address_error_sync(sp, false, fc_data());
+                return pins;
+            }
             mem_write_(mem_ctx_, sp,     static_cast<uint16_t>((return_pc >> 16) & 0xFFFF));
             mem_write_(mem_ctx_, sp + 2, static_cast<uint16_t>(return_pc & 0xFFFF));
             clocks_remaining_ += 8;  // 2 × 4-clock writes
@@ -686,6 +731,10 @@ inline bus_state_t decode_group6(bus_state_t pins, uint16_t opcode) {
         sync_sp();
         if (mem_write_) {
             uint32_t sp = get_a(7) & address_mask();
+            if (unlikely(sp & 1)) {
+                process_address_error_sync(sp, false, fc_data());
+                return pins;
+            }
             mem_write_(mem_ctx_, sp,     static_cast<uint16_t>((return_pc >> 16) & 0xFFFF));
             mem_write_(mem_ctx_, sp + 2, static_cast<uint16_t>(return_pc & 0xFFFF));
             clocks_remaining_ += 10;  // 2 × 4-clock writes + 2 idle
