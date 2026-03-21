@@ -36,6 +36,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/sound/ay_psg/ay_3_8912.hpp"
 #include "chip/io/mos6522.hpp"
@@ -125,6 +126,22 @@ template<> struct OricBusTraits<OricVariant::ORIC_ATMOS> {
 };
 
 // ============================================================================
+// Oric ChipSet — value-typed chips owned by Board
+// ============================================================================
+
+struct OricChips : StandardChips<MOS6502, NoChip, AY_3_8912> {
+    mos6522_t via;
+
+    template<typename B> void bind_extras(B& board) {
+        board.bind_chip(board.template find_index<mos6522_t>(), &via);
+    }
+
+    void register_extras(BoardBase& board) {
+        board.register_component(&via);
+    }
+};
+
+// ============================================================================
 // Oric System
 // ============================================================================
 
@@ -158,19 +175,14 @@ public:
 
 
 private:
-    // ── Chips ────────────────────────────────────────────────────────────
-    MOS6502*      cpu_  = nullptr;   // MOS 6502 — owned by board_
-    AY_3_8912*    ay_   = nullptr;   // AY-3-8912 PSG — owned by board_
-    mos6522_t     via_;              // MOS 6522 VIA (pre-bound)
+    // ── Board + bus ──────────────────────────────────────────────────────
+    using Bus       = MemoryBus<typename BTraits::Spec>;
+    using MainBoard = Board<typename BTraits::Spec, OricChips>;
+    Bus       bus_;
+    MainBoard board_{BTraits::kManifest};
 
     // ── Memory chips — post-init pointers ────────────────────────────────
     uint8_t* ram_ptr_ = nullptr;     // Direct pointer for video rendering
-
-    // ── Board + bus ──────────────────────────────────────────────────────
-    using Bus       = MemoryBus<typename BTraits::Spec>;
-    using MainBoard = Board<typename BTraits::Spec>;
-    Bus       bus_;
-    MainBoard board_{BTraits::kManifest};
 
     // ── Display ──────────────────────────────────────────────────────────
     IndexedFrameBuffer display_;
