@@ -19,8 +19,67 @@ inline bus_state_t decode_group0(bus_state_t pins, uint16_t opcode) {
     uint8_t ea_reg  = instr_ea_reg(opcode);
 
     // BTST/BCHG/BCLR/BSET with dynamic bit# (Dn) — 0000 rrr1 xxmm mrrr
+    // Also MOVEP: 0000 rrr1 xx00 1rrr (ea_mode == 1)
     if (opcode & 0x0100) {
         uint8_t dn = (opcode >> 9) & 7;
+
+        // MOVEP: ea_mode == 1 (address register)
+        if (ea_mode == 1) {
+            uint8_t opmode = (opcode >> 6) & 3;
+            int16_t disp = static_cast<int16_t>(consume_extension_word());
+            uint32_t base = get_a(ea_reg) + disp;
+            if (mem_read_ && mem_write_) {
+                if (opmode <= 1) {
+                    // MOVEP memory→Dn: read bytes from alternating addresses
+                    auto read_byte = [&](uint32_t addr) -> uint8_t {
+                        uint32_t a = addr & address_mask();
+                        uint16_t word = mem_read_(mem_ctx_, a & ~1u);
+                        clocks_remaining_ += 4;
+                        return (a & 1) ? static_cast<uint8_t>(word) : static_cast<uint8_t>(word >> 8);
+                    };
+                    if (opmode == 0) {
+                        // MOVEP.w (d16,An),Dn — 16 clocks
+                        uint8_t hi = read_byte(base);
+                        uint8_t lo = read_byte(base + 2);
+                        set_d_w(dn, static_cast<uint16_t>((hi << 8) | lo));
+                    } else {
+                        // MOVEP.l (d16,An),Dn — 24 clocks
+                        uint8_t b0 = read_byte(base);
+                        uint8_t b1 = read_byte(base + 2);
+                        uint8_t b2 = read_byte(base + 4);
+                        uint8_t b3 = read_byte(base + 6);
+                        set_d(dn, (static_cast<uint32_t>(b0) << 24) | (static_cast<uint32_t>(b1) << 16) |
+                                  (static_cast<uint32_t>(b2) << 8) | b3);
+                    }
+                } else {
+                    // MOVEP Dn→memory: write bytes to alternating addresses
+                    auto write_byte = [&](uint32_t addr, uint8_t val) {
+                        uint32_t a = addr & address_mask();
+                        uint32_t even = a & ~1u;
+                        uint16_t existing = mem_read_(mem_ctx_, even);
+                        uint16_t word = (a & 1) ? ((existing & 0xFF00) | val)
+                                                : ((val << 8) | (existing & 0x00FF));
+                        mem_write_(mem_ctx_, even, word);
+                        clocks_remaining_ += 4;
+                    };
+                    if (opmode == 2) {
+                        // MOVEP.w Dn,(d16,An) — 16 clocks
+                        uint16_t val = get_d_w(dn);
+                        write_byte(base, static_cast<uint8_t>(val >> 8));
+                        write_byte(base + 2, static_cast<uint8_t>(val));
+                    } else {
+                        // MOVEP.l Dn,(d16,An) — 24 clocks
+                        uint32_t val = get_d(dn);
+                        write_byte(base, static_cast<uint8_t>(val >> 24));
+                        write_byte(base + 2, static_cast<uint8_t>(val >> 16));
+                        write_byte(base + 4, static_cast<uint8_t>(val >> 8));
+                        write_byte(base + 6, static_cast<uint8_t>(val));
+                    }
+                }
+            }
+            return do_prefetch(pins);
+        }
+
         uint8_t op_type = (opcode >> 6) & 3;  // 0=BTST, 1=BCHG, 2=BCLR, 3=BSET
         uint8_t bit_num;
 
@@ -222,18 +281,23 @@ inline bus_state_t decode_group5(bus_state_t pins, uint16_t opcode) {
                 dn--;
                 set_d_w(ea_reg, static_cast<uint16_t>(dn));
                 if (dn != -1) {
+                    // Branch taken: 10 clocks (n np np)
                     int16_t disp = static_cast<int16_t>(regs_.irc);
                     regs_.pc = branch_base + disp;
+                    clocks_remaining_ += 2;  // 2 idle clocks
                     return do_branch_prefetch(pins);
                 } else {
-                    // Counter expired, skip extension word
-                    regs_.pc += 2;
+                    // Counter expired: 14 clocks (nn np np)
+                    // Consume displacement word (refill IRC) + idle + prefetch
+                    consume_extension_word();
+                    return do_idle_then_prefetch(pins, 6);
                 }
             } else {
-                // Condition true → skip extension word, no decrement
-                regs_.pc += 2;
+                // Condition true: 12 clocks (nn np np)
+                // Consume displacement word (refill IRC) + idle + prefetch
+                consume_extension_word();
+                return do_idle_then_prefetch(pins, 4);
             }
-            return do_prefetch(pins);
         }
         // Scc: 0101 cccc 11xx xxxx
         auto cc = static_cast<Condition>((opcode >> 8) & 0x0F);
@@ -244,7 +308,9 @@ inline bus_state_t decode_group5(bus_state_t pins, uint16_t opcode) {
             // Scc Dn: true → 6 clocks (2 idle), false → 4 clocks
             return cond ? do_idle_then_prefetch(pins, 2) : do_prefetch(pins);
         } else {
-            write_ea(ea_mode, ea_reg, val, OpSize::Byte);
+            // Memory: read-modify-write (dummy read + write)
+            read_ea(ea_mode, ea_reg, OpSize::Byte);  // dummy read, sets ea_addr_
+            write_back_ea(val, OpSize::Byte);
         }
         return do_prefetch(pins);
     }
@@ -301,7 +367,27 @@ inline bus_state_t decode_group8(bus_state_t pins, uint16_t opcode) {
             set_d_b(dn, result);
             return do_idle_then_prefetch(pins, 2);  // 6 clocks (2 idle + 4 prefetch)
         }
-        // TODO: SBCD -(An),-(An) — needs bus cycles
+        // SBCD -(An),-(An) — 18 clocks
+        // Use calc_ea + direct read to avoid predec idle penalties
+        ea_addr_ = calc_ea(4, ea_reg, OpSize::Byte);
+        uint8_t src = 0;
+        if (mem_read_) {
+            uint32_t a = ea_addr_ & address_mask();
+            uint16_t w = mem_read_(mem_ctx_, a & ~1u);
+            src = (a & 1) ? static_cast<uint8_t>(w) : static_cast<uint8_t>(w >> 8);
+            clocks_remaining_ += 4;
+        }
+        ea_addr_ = calc_ea(4, dn, OpSize::Byte);
+        uint8_t dst = 0;
+        if (mem_read_) {
+            uint32_t a = ea_addr_ & address_mask();
+            uint16_t w = mem_read_(mem_ctx_, a & ~1u);
+            dst = (a & 1) ? static_cast<uint8_t>(w) : static_cast<uint8_t>(w >> 8);
+            clocks_remaining_ += 4;
+        }
+        uint8_t result = alu_sbcd(src, dst);
+        write_back_ea(result, OpSize::Byte);
+        clocks_remaining_ += 2;  // BCD computation idle
         return do_prefetch(pins);
     }
 
@@ -433,8 +519,48 @@ inline bus_state_t decode_group9(bus_state_t pins, uint16_t opcode) {
             write_dn(dn, result, sz);
             // SUBX Dn .l: 8 clocks (4 idle)
             if (sz == OpSize::Long) return do_idle_then_prefetch(pins, 4);
+            return do_prefetch(pins);
         }
-        // ea_mode 1: -(An) — TODO: bus cycles
+        // SUBX -(An),-(An): .b/.w = 18 clocks, .l = 30 clocks
+        // Use calc_ea + direct read to avoid predec idle penalties
+        ea_addr_ = calc_ea(4, ea_reg, sz);
+        uint32_t src = 0;
+        if (mem_read_) {
+            uint32_t addr = ea_addr_ & address_mask();
+            if (sz == OpSize::Long) {
+                src = (static_cast<uint32_t>(mem_read_(mem_ctx_, addr)) << 16) |
+                       mem_read_(mem_ctx_, (addr + 2) & address_mask());
+                clocks_remaining_ += 8;
+            } else if (sz == OpSize::Byte) {
+                uint16_t w = mem_read_(mem_ctx_, addr & ~1u);
+                src = (addr & 1) ? (w & 0xFF) : (w >> 8);
+                clocks_remaining_ += 4;
+            } else {
+                src = mem_read_(mem_ctx_, addr);
+                clocks_remaining_ += 4;
+            }
+        }
+        ea_addr_ = calc_ea(4, dn, sz);
+        uint32_t dst = 0;
+        if (mem_read_) {
+            uint32_t addr = ea_addr_ & address_mask();
+            if (sz == OpSize::Long) {
+                dst = (static_cast<uint32_t>(mem_read_(mem_ctx_, addr)) << 16) |
+                       mem_read_(mem_ctx_, (addr + 2) & address_mask());
+                clocks_remaining_ += 8;
+            } else if (sz == OpSize::Byte) {
+                uint16_t w = mem_read_(mem_ctx_, addr & ~1u);
+                dst = (addr & 1) ? (w & 0xFF) : (w >> 8);
+                clocks_remaining_ += 4;
+            } else {
+                dst = mem_read_(mem_ctx_, addr);
+                clocks_remaining_ += 4;
+            }
+        }
+        uint32_t result = alu_subx(src, dst, sz);
+        write_back_ea(result, sz);
+        // SUBX -(An) .l: 30 clocks, .b/.w: 18 clocks (2 idle)
+        clocks_remaining_ += 2;  // BCD/extend computation idle
         return do_prefetch(pins);
     }
 
@@ -535,7 +661,10 @@ inline bus_state_t decode_groupB(bus_state_t pins, uint16_t opcode) {
         OpSize sz = static_cast<OpSize>(opmode - 4);
         if (ea_mode == 1) {
             // CMPM: (Ay)+,(Ax)+
-            // TODO: bus cycles for memory reads
+            // Read source from (Ay)+, then destination from (Ax)+
+            uint32_t src = read_ea(3, ea_reg, sz);   // (ea_reg)+ as source
+            uint32_t dst = read_ea(3, dn, sz);       // (dn)+ as destination
+            alu_cmp(src, dst, sz);
             return do_prefetch(pins);
         }
         // EOR: Dn → <ea>
@@ -601,7 +730,26 @@ inline bus_state_t decode_groupC(bus_state_t pins, uint16_t opcode) {
             set_d_b(dn, result);
             return do_idle_then_prefetch(pins, 2);  // 6 clocks (2 idle + 4 prefetch)
         }
-        // TODO: ABCD -(An),-(An) — needs bus cycles
+        // ABCD -(An),-(An) — 18 clocks
+        ea_addr_ = calc_ea(4, ea_reg, OpSize::Byte);
+        uint8_t src = 0;
+        if (mem_read_) {
+            uint32_t a = ea_addr_ & address_mask();
+            uint16_t w = mem_read_(mem_ctx_, a & ~1u);
+            src = (a & 1) ? static_cast<uint8_t>(w) : static_cast<uint8_t>(w >> 8);
+            clocks_remaining_ += 4;
+        }
+        ea_addr_ = calc_ea(4, dn, OpSize::Byte);
+        uint8_t dst = 0;
+        if (mem_read_) {
+            uint32_t a = ea_addr_ & address_mask();
+            uint16_t w = mem_read_(mem_ctx_, a & ~1u);
+            dst = (a & 1) ? static_cast<uint8_t>(w) : static_cast<uint8_t>(w >> 8);
+            clocks_remaining_ += 4;
+        }
+        uint8_t result = alu_abcd(src, dst);
+        write_back_ea(result, OpSize::Byte);
+        clocks_remaining_ += 2;  // BCD computation idle
         return do_prefetch(pins);
     }
 
@@ -727,8 +875,46 @@ inline bus_state_t decode_groupD(bus_state_t pins, uint16_t opcode) {
             write_dn(dn, result, sz);
             // ADDX Dn .l: 8 clocks (4 idle)
             if (sz == OpSize::Long) return do_idle_then_prefetch(pins, 4);
+            return do_prefetch(pins);
         }
-        // ea_mode 1: -(An) — TODO: bus cycles
+        // ADDX -(An),-(An): .b/.w = 18 clocks, .l = 30 clocks
+        ea_addr_ = calc_ea(4, ea_reg, sz);
+        uint32_t src = 0;
+        if (mem_read_) {
+            uint32_t addr = ea_addr_ & address_mask();
+            if (sz == OpSize::Long) {
+                src = (static_cast<uint32_t>(mem_read_(mem_ctx_, addr)) << 16) |
+                       mem_read_(mem_ctx_, (addr + 2) & address_mask());
+                clocks_remaining_ += 8;
+            } else if (sz == OpSize::Byte) {
+                uint16_t w = mem_read_(mem_ctx_, addr & ~1u);
+                src = (addr & 1) ? (w & 0xFF) : (w >> 8);
+                clocks_remaining_ += 4;
+            } else {
+                src = mem_read_(mem_ctx_, addr);
+                clocks_remaining_ += 4;
+            }
+        }
+        ea_addr_ = calc_ea(4, dn, sz);
+        uint32_t dst = 0;
+        if (mem_read_) {
+            uint32_t addr = ea_addr_ & address_mask();
+            if (sz == OpSize::Long) {
+                dst = (static_cast<uint32_t>(mem_read_(mem_ctx_, addr)) << 16) |
+                       mem_read_(mem_ctx_, (addr + 2) & address_mask());
+                clocks_remaining_ += 8;
+            } else if (sz == OpSize::Byte) {
+                uint16_t w = mem_read_(mem_ctx_, addr & ~1u);
+                dst = (addr & 1) ? (w & 0xFF) : (w >> 8);
+                clocks_remaining_ += 4;
+            } else {
+                dst = mem_read_(mem_ctx_, addr);
+                clocks_remaining_ += 4;
+            }
+        }
+        uint32_t result = alu_addx(src, dst, sz);
+        write_back_ea(result, sz);
+        clocks_remaining_ += 2;  // extend computation idle
         return do_prefetch(pins);
     }
 
@@ -825,7 +1011,7 @@ inline bus_state_t decode_groupE(bus_state_t pins, uint16_t opcode) {
                 default: result = val;
             }
         }
-        write_ea(ea_mode, ea_reg, result, OpSize::Word);
+        write_back_ea(result, OpSize::Word);
         return do_prefetch(pins);
     }
 
