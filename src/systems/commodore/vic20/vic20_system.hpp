@@ -2,6 +2,7 @@
 
 #include "systems/commodore/commodore_system.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/memory/ram_chip.hpp"
@@ -100,6 +101,21 @@ struct VIC20BusTraits {
     using Spec = ManifestBusSpec<kVIC20Chips, 16, 8>;
 };
 
+// Value-typed chips: CPU + 2× VIA.  VIC stays factory-created (PAL/NTSC conditional).
+struct VIC20ChipSet : StandardChips<MOS6502> {
+    mos6522_t via1;
+    mos6522_t via2;
+
+    template<typename B> void bind_extras(B& board) {
+        board.bind_chip(board.template find_index<mos6522_t>(0), &via1);
+        board.bind_chip(board.template find_index<mos6522_t>(1), &via2);
+    }
+    template<typename B> void register_extras(B& board) {
+        board.register_component(&via1);
+        board.register_component(&via2);
+    }
+};
+
 class VIC20System : public CommodoreSystem {
 public:
     VIC20System();
@@ -139,19 +155,16 @@ private:
     
     // ── Memory bus (declarative manifest + page-pointer dispatch) ────────
     using Bus = MemoryBus<VIC20BusTraits::Spec>;
-    using MainBoard = Board<VIC20BusTraits::Spec>;
+    using MainBoard = Board<VIC20BusTraits::Spec, VIC20ChipSet>;
     Bus mem_bus_;
     MainBoard board_{kVIC20Chips};
 
-    // Convenience chip pointers (all owned by board_, accessed via chip_as/first_chip)
+    // Convenience chip pointers (memory chips owned by board_)
     RAMChip* ram_         = nullptr;  // 64 KB flat mem
     ROMChip* charrom_     = nullptr;  // Character ROM $8000-$8FFF (4 KB)
     ROMChip* basic_rom_   = nullptr;  // BASIC ROM $C000-$DFFF (8 KB)
     ROMChip* kernal_rom_  = nullptr;  // KERNAL ROM $E000-$FFFF (8 KB)
-    MOS6502* cpu_         = nullptr;  // MOS 6502 CPU
-    vic_base_t* vic_      = nullptr;  // VIC chip: MOS 6561 (PAL) or MOS 6560 (NTSC)
-    mos6522_t* via1_      = nullptr;  // MOS 6522 VIA 1 - keyboard, joystick
-    mos6522_t* via2_      = nullptr;  // MOS 6522 VIA 2 - user port, serial
+    vic_base_t* vic_      = nullptr;  // VIC chip: MOS 6561 (PAL) or MOS 6560 (NTSC) — factory-created
     
     // System state
     uint8_t expansion_flags_;        // Expansion RAM configuration
@@ -162,7 +175,7 @@ private:
     bool is_basic_ready() const override;
     commodore_load_context_t build_load_context() override;
     void inject_keys(const char* str) override;
-    bool is_system_initialized() const override { return initialized_ && cpu_ != nullptr; }
+    bool is_system_initialized() const override { return initialized_; }
     int get_iec_port_index() const override { return 1; }       // IEC Serial Bus
     int get_cassette_port_index() const override { return 2; }  // Cassette Port
 

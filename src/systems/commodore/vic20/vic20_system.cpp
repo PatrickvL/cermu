@@ -468,10 +468,6 @@ static SystemDescriptor vic20_descriptor = {
 // ============================================================================
 VIC20System::VIC20System()
     : CommodoreSystem()
-    , cpu_(nullptr)
-    , vic_(nullptr)
-    , via1_(nullptr)
-    , via2_(nullptr)
     , expansion_flags_(VIC20_EXP_NONE)
 {
     cycles_per_frame_ = vic20_constants::CYCLES_PER_FRAME_PAL;
@@ -575,7 +571,8 @@ bool VIC20System::initialize() {
         }
     };
 
-    // ── Create ALL chips from manifest (memory + CPU + VIC + VIAs) ──────
+    // ── Bind value-typed ChipSet (CPU + VIAs), then create remaining chips ──
+    board_.bind_chipset();
     board_.create_chips(&bus_.state, vic20_condition, &config_);
     board_.apply(mem_bus_);
 
@@ -584,11 +581,8 @@ bool VIC20System::initialize() {
     charrom_    = board_.find<ROMChip>();
     basic_rom_  = board_.find<ROMChip>(1);
     kernal_rom_ = board_.find<ROMChip>(2);
-    cpu_        = board_.cpu<MOS6502>();
     vic_        = board_.find<mos6561_t>();
     if (!vic_) vic_ = board_.find<mos6560_t>();
-    via1_       = board_.find<mos6522_t>();
-    via2_       = board_.find<mos6522_t>(1);
     
     // Initialize Color RAM to cyan (color 3) for proper text visibility
     // Color RAM lives in the RAM buffer at $9400 (within the I/O-handled region)
@@ -603,12 +597,12 @@ bool VIC20System::initialize() {
     // ── Post-creation wiring: init/reset/callbacks ──────────────────────
     
     // CPU
-    if (!cpu_) {
+    if (!board_.cpu_chip()) {
         printf("VIC20: Failed to create MOS6502 CPU\n");
         return false;
     }
-    board_.cpu_chip()->init();
-    board_.cpu_chip()->reset();
+    board_.cpu().init();
+    board_.cpu().reset();
     
     // VIC — region-dependent variant was selected by condition callback
     if (!vic_) {
@@ -630,22 +624,14 @@ bool VIC20System::initialize() {
         VIC20System::vic_color_read,    // Color RAM read callback
         this);                           // User data for color RAM
     
-    // VIA chips (MOS6522)
+    // VIA chips (MOS6522) — value-typed in ChipSet
     // VIC-20 hardware: VIA1 ($9110) → NMI line, VIA2 ($9120) → IRQ line
     // VIA2 Timer 1 is the system heartbeat (jiffy clock, keyboard scan, cursor blink)
-    if (via1_) {
-        via1_->reset();
-        via1_->interrupt_bit = BUS_NMI_BIT;
-    } else {
-        printf("VIC20: Failed to create VIA1\n");
-    }
-    
-    if (via2_) {
-        via2_->reset();
-        via2_->interrupt_bit = BUS_IRQ_BIT;
-    } else {
-        printf("VIC20: Warning: VIA2 not created (optional)\n");
-    }
+    board_.chips().via1.reset();
+    board_.chips().via1.interrupt_bit = BUS_NMI_BIT;
+
+    board_.chips().via2.reset();
+    board_.chips().via2.interrupt_bit = BUS_IRQ_BIT;
     
     // Create keyboard matrix and connect to VIA2
     // VIC-20 keyboard: VIA2 Port B selects columns, VIA2 Port A reads rows
@@ -658,15 +644,11 @@ bool VIC20System::initialize() {
         // Create the layered keyboard mapper for character-based input
         keyboard_mapper_.reset(create_vic20_keyboard_mapper(keyboard_));
         
-        if (via2_) {
-            // Register port read callbacks for keyboard matrix scanning
-            // Port A reads rows, Port B reads columns (reverse scanning)
-            via2_->set_port_a_read_callback(vic20_via2_port_a_read, this);
-            via2_->set_port_b_read_callback(vic20_via2_port_b_read, this);
-            printf("VIC20: Keyboard connected to VIA2 via callbacks\n");
-        } else {
-            printf("VIC20: Warning: Could not connect keyboard to VIA2\n");
-        }
+        // Register port read callbacks for keyboard matrix scanning
+        // Port A reads rows, Port B reads columns (reverse scanning)
+        board_.chips().via2.set_port_a_read_callback(vic20_via2_port_a_read, this);
+        board_.chips().via2.set_port_b_read_callback(vic20_via2_port_b_read, this);
+        printf("VIC20: Keyboard connected to VIA2 via callbacks\n");
     } else {
         printf("VIC20: Warning: Could not create keyboard\n");
     }
@@ -735,9 +717,7 @@ void VIC20System::reset() {
     }
     
     // Reset CPU last (so it picks up clean bus state)
-    if (board_.cpu_chip()) {
-        board_.cpu_chip()->reset();
-    }
+    board_.cpu().reset();
     
     // Reset bus state
     bus_.state = bus_.default_state;
@@ -794,22 +774,22 @@ bus_state_t VIC20System::io_tick(bus_state_t s) {
             bus_state_t chip_state = 0;
             BUS_SET_ADDR(chip_state, offset & 0x0F);
             if (is_read) {
-                chip_state = via1_->registers_read(chip_state);
+                chip_state = board_.chips().via1.registers_read(chip_state);
                 BUS_SET_DATA(s, BUS_GET_DATA(chip_state));
             } else {
                 BUS_SET_DATA(chip_state, BUS_GET_DATA(s));
-                via1_->registers_write(chip_state);
+                board_.chips().via1.registers_write(chip_state);
             }
         } else {
             // VIA2 registers ($9x20-$9x2F)
             bus_state_t chip_state = 0;
             BUS_SET_ADDR(chip_state, offset & 0x0F);
             if (is_read) {
-                chip_state = via2_->registers_read(chip_state);
+                chip_state = board_.chips().via2.registers_read(chip_state);
                 BUS_SET_DATA(s, BUS_GET_DATA(chip_state));
             } else {
                 BUS_SET_DATA(chip_state, BUS_GET_DATA(s));
-                via2_->registers_write(chip_state);
+                board_.chips().via2.registers_write(chip_state);
             }
         }
         break;
@@ -857,15 +837,15 @@ void VIC20System::tick() {
     // PHASE 2: VIA CHIPS TICKING (BEFORE CPU PHI2)
     // VIA chips handle I/O and timing, must tick before CPU to set interrupt lines
     // =========================================================================
-    s = via1_->tick(s);
-    s = via2_->tick(s);
+    s = board_.chips().via1.tick(s);
+    s = board_.chips().via2.tick(s);
     
     // =========================================================================
     // PHASE 3: CPU TICKING (PHI2 phase - sets up memory access)
     // CPU executes instruction and puts address/control on bus
     // =========================================================================
-    auto* cpu = cpu_;
-    s = cpu->tick<MOS6502::Phase::PHI2>(s);
+    auto& cpu = board_.cpu();
+    s = cpu.tick<MOS6502::Phase::PHI2>(s);
     
     // =========================================================================
     // PHASE 4: MEMORY SERVICE PHASE
@@ -876,13 +856,13 @@ void VIC20System::tick() {
     s = mem_tick(s);
 
     // NMI edge detection — sample after bus dispatch (post-dispatch state)
-    cpu->sample_nmi_pin(s);
+    cpu.sample_nmi_pin(s);
     
     // =========================================================================
     // PHASE 5: CPU TICKING (PHI1 phase - completes cycle)
     // CPU prepares next instruction fetch
     // =========================================================================
-    s = cpu->tick<MOS6502::Phase::PHI1>(s);
+    s = cpu.tick<MOS6502::Phase::PHI1>(s);
     
     // Restore R/W line to read mode after CPU PHI1 has consumed write info.
     // Maintains invariant: BUS_MASK_RW is always set outside the CPU write window.
@@ -926,7 +906,7 @@ static void vic20_mem_write_byte_cb(void* ctx, uint16_t addr, uint8_t val) {
 }
 
 bool VIC20System::is_basic_ready() const {
-    if (!ram_ || !cpu_) return false;
+    if (!ram_) return false;
 
     const uint8_t* ram = ram_->data();
 
@@ -1288,11 +1268,11 @@ void VIC20System::set_audio_sample_rate(int sample_rate_hz) {
 
 uint8_t VIC20System::vic20_via2_port_a_read(void* context, uint8_t port_a_output) {
     VIC20System* sys = static_cast<VIC20System*>(context);
-    if (!sys || !sys->keyboard_ || !sys->via2_) return 0xFF;
+    if (!sys || !sys->keyboard_) return 0xFF;
 
     // Port A reads rows based on which columns are selected via Port B
     // Get Port B output (column select) - only bits with DDR=1 are driven
-    uint8_t port_b_output = sys->via2_->port_b.output();
+    uint8_t port_b_output = sys->board_.chips().via2.port_b.output();
     uint8_t column_select = ~port_b_output;  // Active-LOW: 0 = selected
 
     uint8_t row_state = 0xFF;  // Default: all rows open (no keys pressed)
@@ -1307,11 +1287,11 @@ uint8_t VIC20System::vic20_via2_port_a_read(void* context, uint8_t port_a_output
 
 uint8_t VIC20System::vic20_via2_port_b_read(void* context, uint8_t port_b_output) {
     VIC20System* sys = static_cast<VIC20System*>(context);
-    if (!sys || !sys->keyboard_ || !sys->via2_) return 0xFF;
+    if (!sys || !sys->keyboard_) return 0xFF;
 
     // Port B reads columns based on which rows are selected via Port A
     // (Reverse scanning direction)
-    uint8_t port_a_output = sys->via2_->port_a.output();
+    uint8_t port_a_output = sys->board_.chips().via2.port_a.output();
     uint8_t row_select = ~port_a_output;  // Active-LOW: 0 = selected
 
     uint8_t col_state = 0xFF;  // Default: all columns open (no keys pressed)
