@@ -201,7 +201,104 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
 
     // ── MOVEM (0100 1x00 1xxx xxxx / 0100 1x10 0xxx xxxx) ──────
     if ((opcode & 0xFB80) == 0x4880 && ea_mode >= 2) {
-        // TODO: MOVEM.w/l register list to/from memory
+        uint16_t mask = consume_extension_word();
+        bool to_reg = (opcode & 0x0400) != 0;  // 1 = memory→register
+        OpSize sz = (opcode & 0x0040) ? OpSize::Long : OpSize::Word;
+        uint32_t step = (sz == OpSize::Long) ? 4 : 2;
+
+        if (to_reg) {
+            // Memory → registers (postincrement allowed, predecrement not)
+            uint32_t addr;
+            if (ea_mode == 3) {
+                // (An)+ — start from An, update An after
+                addr = get_a(ea_reg);
+            } else {
+                addr = calc_ea(ea_mode, ea_reg, sz);
+            }
+
+            if (mem_read_) {
+                // Transfer registers in order: D0-D7, then A0-A7
+                for (int i = 0; i < 16; i++) {
+                    if (!(mask & (1 << i))) continue;
+                    uint32_t a = addr & address_mask();
+                    if (sz == OpSize::Word) {
+                        int16_t val = static_cast<int16_t>(mem_read_(mem_ctx_, a));
+                        if (i < 8) set_d(i, static_cast<uint32_t>(static_cast<int32_t>(val)));
+                        else       set_a(i - 8, static_cast<uint32_t>(static_cast<int32_t>(val)));
+                    } else {
+                        uint16_t hi = mem_read_(mem_ctx_, a);
+                        uint16_t lo = mem_read_(mem_ctx_, (a + 2) & address_mask());
+                        uint32_t val = (static_cast<uint32_t>(hi) << 16) | lo;
+                        if (i < 8) set_d(i, val);
+                        else       set_a(i - 8, val);
+                    }
+                    clocks_remaining_ += (sz == OpSize::Long) ? 8 : 4;
+                    addr += step;
+                }
+                // (An)+ updates the address register AFTER all transfers
+                // (even if An is in the register list, the updated value is from memory)
+                if (ea_mode == 3) {
+                    set_a(ea_reg, addr);
+                    if (ea_reg == 7) sync_sp();
+                }
+                // 68000 MOVEM mem→reg does one extra read (discarded) at the end
+                mem_read_(mem_ctx_, addr & address_mask());
+                clocks_remaining_ += 4;
+            }
+        } else {
+            // Registers → memory (predecrement allowed, postincrement not)
+            if (ea_mode == 4) {
+                // -(An): register mask is REVERSED: A7→A0 at bit 0→7, D7→D0 at bit 8→15
+                // Addresses decrement from An
+                uint32_t addr = get_a(ea_reg);
+                if (mem_write_) {
+                    for (int i = 0; i < 16; i++) {
+                        if (!(mask & (1 << i))) continue;
+                        addr -= step;
+                        uint32_t a = addr & address_mask();
+                        // Reversed order: bit 0 = A7, bit 7 = A0, bit 8 = D7, bit 15 = D0
+                        uint32_t val;
+                        if (i < 8)
+                            val = get_a(7 - i);
+                        else
+                            val = get_d(15 - i);
+                        if (sz == OpSize::Word) {
+                            mem_write_(mem_ctx_, a, static_cast<uint16_t>(val & 0xFFFF));
+                        } else {
+                            mem_write_(mem_ctx_, a,
+                                static_cast<uint16_t>((val >> 16) & 0xFFFF));
+                            mem_write_(mem_ctx_, (a + 2) & address_mask(),
+                                static_cast<uint16_t>(val & 0xFFFF));
+                        }
+                        clocks_remaining_ += (sz == OpSize::Long) ? 8 : 4;
+                    }
+                    set_a(ea_reg, addr);
+                    if (ea_reg == 7) sync_sp();
+                }
+            } else {
+                // Other modes: normal mask order (D0→D7 at bits 0→7, A0→A7 at bits 8→15)
+                uint32_t addr = calc_ea(ea_mode, ea_reg, sz);
+                if (mem_write_) {
+                    for (int i = 0; i < 16; i++) {
+                        if (!(mask & (1 << i))) continue;
+                        uint32_t a = addr & address_mask();
+                        uint32_t val;
+                        if (i < 8) val = get_d(i);
+                        else       val = get_a(i - 8);
+                        if (sz == OpSize::Word) {
+                            mem_write_(mem_ctx_, a, static_cast<uint16_t>(val & 0xFFFF));
+                        } else {
+                            mem_write_(mem_ctx_, a,
+                                static_cast<uint16_t>((val >> 16) & 0xFFFF));
+                            mem_write_(mem_ctx_, (a + 2) & address_mask(),
+                                static_cast<uint16_t>(val & 0xFFFF));
+                        }
+                        clocks_remaining_ += (sz == OpSize::Long) ? 8 : 4;
+                        addr += step;
+                    }
+                }
+            }
+        }
         return do_prefetch(pins);
     }
 
