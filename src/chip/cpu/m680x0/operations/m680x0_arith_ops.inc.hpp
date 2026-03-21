@@ -200,15 +200,17 @@ inline bus_state_t decode_group5(bus_state_t pins, uint16_t opcode) {
         if (ea_mode == 1) {
             // DBcc: 0101 cccc 1100 1rrr
             auto cc = static_cast<Condition>((opcode >> 8) & 0x0F);
+            // displacement is relative to formal_opcode + 2 (= internal PC - 2)
+            uint32_t branch_base = regs_.pc - 2;
             if (!test_condition(cc)) {
                 // Condition false → decrement and branch
                 int16_t dn = static_cast<int16_t>(get_d_w(ea_reg));
                 dn--;
                 set_d_w(ea_reg, static_cast<uint16_t>(dn));
                 if (dn != -1) {
-                    // Branch: PC + displacement from extension word
                     int16_t disp = static_cast<int16_t>(regs_.irc);
-                    regs_.pc += disp - 2;  // -2 because PC already past opcode
+                    regs_.pc = branch_base + disp;
+                    return do_branch_prefetch(pins);
                 } else {
                     // Counter expired, skip extension word
                     regs_.pc += 2;

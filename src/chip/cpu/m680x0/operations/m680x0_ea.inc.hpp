@@ -56,6 +56,7 @@ inline uint32_t calc_ea(uint8_t mode, uint8_t reg, OpSize sz) {
                 xn_val = xn_long ? static_cast<int32_t>(get_d(xn_reg))
                                  : static_cast<int32_t>(static_cast<int16_t>(get_d_w(xn_reg)));
             }
+            clocks_remaining_ += 2;  // 2 idle clocks for index calculation
             return get_a(reg) + disp8 + xn_val;
         }
         case EAMode::Special:
@@ -88,6 +89,7 @@ inline uint32_t calc_ea(uint8_t mode, uint8_t reg, OpSize sz) {
                         xn_val = xn_long ? static_cast<int32_t>(get_d(xn_reg))
                                          : static_cast<int32_t>(static_cast<int16_t>(get_d_w(xn_reg)));
                     }
+                    clocks_remaining_ += 2;  // 2 idle clocks for index calculation
                     return base + disp8 + xn_val;
                 }
                 case 4: {  // #imm
