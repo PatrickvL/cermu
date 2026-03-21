@@ -593,10 +593,15 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
                     target = static_cast<uint32_t>(static_cast<int32_t>(addr));
                     clocks_remaining_ += 2;  // 2 idle
                 } else if (ea_reg == 1) {
-                    // abs.L: high word from IRC (free), low word needs bus read
-                    target = static_cast<uint32_t>(regs_.irc) << 16;
+                    // abs.L: high word from IRC (free), low word via bus read
+                    uint16_t hi = regs_.irc;
+                    if (mem_read_) {
+                        regs_.irc = mem_read_(mem_ctx_, regs_.pc & address_mask());
+                        clocks_remaining_ += 4;
+                    }
                     regs_.pc += 2;
-                    target |= consume_extension_word();
+                    target = (static_cast<uint32_t>(hi) << 16) | regs_.irc;
+                    regs_.pc += 2;
                 } else if (ea_reg == 2) {
                     // (d16,PC): read disp from IRC, no refill
                     uint32_t base = regs_.pc - 2;
@@ -612,6 +617,12 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             default:
                 target = calc_ea(ea_mode, ea_reg, OpSize::Long);
                 break;
+        }
+        // Check for odd target before pushing — 68000 detects this first
+        if (unlikely(target & 1)) {
+            regs_.pc = target;  // Frame saves PC = target - 4
+            process_address_error_sync(target, true, fc_program());
+            return pins;
         }
         // Push return address (formal PC of next instruction = internal PC - 2)
         uint32_t return_pc = regs_.pc - 2;
@@ -656,9 +667,14 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
                     target = static_cast<uint32_t>(static_cast<int32_t>(addr));
                     clocks_remaining_ += 2;  // 2 idle
                 } else if (ea_reg == 1) {
-                    target = static_cast<uint32_t>(regs_.irc) << 16;
+                    uint16_t hi = regs_.irc;
+                    if (mem_read_) {
+                        regs_.irc = mem_read_(mem_ctx_, regs_.pc & address_mask());
+                        clocks_remaining_ += 4;
+                    }
                     regs_.pc += 2;
-                    target |= consume_extension_word();
+                    target = (static_cast<uint32_t>(hi) << 16) | regs_.irc;
+                    regs_.pc += 2;
                 } else if (ea_reg == 2) {
                     uint32_t base = regs_.pc - 2;
                     int16_t disp = static_cast<int16_t>(regs_.irc);
