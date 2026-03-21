@@ -247,13 +247,35 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
         if (!(regs_.sr & SRBits::S)) {
             return exception(pins, Vector::PRIVILEGE_VIOLATION);
         }
-        // TODO: restore SR and PC from stack via bus cycles
+        // Pop SR and PC from supervisor stack
+        if (mem_read_) {
+            uint32_t sp = get_a(7) & address_mask();
+            uint16_t new_sr = mem_read_(mem_ctx_, sp);
+            uint16_t pc_hi  = mem_read_(mem_ctx_, sp + 2);
+            uint16_t pc_lo  = mem_read_(mem_ctx_, sp + 4);
+            set_a(7, get_a(7) + 6);
+            sync_sp();
+            set_sr(new_sr);
+            regs_.pc = (static_cast<uint32_t>(pc_hi) << 16) | pc_lo;
+            clocks_remaining_ += 12;  // 3 × 4-clock reads from stack
+            return do_branch_prefetch(pins);
+        }
         return do_prefetch(pins);
     }
 
-    // ── RTS: $4E75 ───────────────────────────────────────────────
+    // ── RTS: $4E75 ───────────────────────────────────────────
     if (opcode == 0x4E75) {
-        // TODO: Pop PC from stack via bus cycles
+        // Pop PC from stack
+        if (mem_read_) {
+            uint32_t sp = get_a(7) & address_mask();
+            uint16_t pc_hi = mem_read_(mem_ctx_, sp);
+            uint16_t pc_lo = mem_read_(mem_ctx_, sp + 2);
+            set_a(7, get_a(7) + 4);
+            sync_sp();
+            regs_.pc = (static_cast<uint32_t>(pc_hi) << 16) | pc_lo;
+            clocks_remaining_ += 8;  // 2 × 4-clock reads from stack
+            return do_branch_prefetch(pins);
+        }
         return do_prefetch(pins);
     }
 
@@ -267,7 +289,19 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
 
     // ── RTR: $4E77 ───────────────────────────────────────────────
     if (opcode == 0x4E77) {
-        // TODO: Pop CCR and PC from stack via bus cycles
+        // Pop CCR then PC from stack
+        if (mem_read_) {
+            uint32_t sp = get_a(7) & address_mask();
+            uint16_t new_ccr = mem_read_(mem_ctx_, sp);
+            uint16_t pc_hi   = mem_read_(mem_ctx_, sp + 2);
+            uint16_t pc_lo   = mem_read_(mem_ctx_, sp + 4);
+            set_a(7, get_a(7) + 6);
+            sync_sp();
+            set_ccr(static_cast<uint8_t>(new_ccr));  // Only CCR (low byte of SR)
+            regs_.pc = (static_cast<uint32_t>(pc_hi) << 16) | pc_lo;
+            clocks_remaining_ += 12;  // 3 × 4-clock reads from stack
+            return do_branch_prefetch(pins);
+        }
         return do_prefetch(pins);
     }
 
@@ -288,13 +322,37 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
 
     // ── LINK: 0100 1110 0101 0rrr ────────────────────────────────
     if ((opcode & 0xFFF8) == 0x4E50) {
-        // TODO: LINK with bus cycles for stack push + extension word
+        // Push An, An = SP, SP += displacement (signed)
+        int16_t disp = static_cast<int16_t>(consume_extension_word());
+        set_a(7, get_a(7) - 4);
+        sync_sp();
+        if (mem_write_) {
+            uint32_t sp = get_a(7) & address_mask();
+            uint32_t an_val = get_a(ea_reg);
+            mem_write_(mem_ctx_, sp,     static_cast<uint16_t>((an_val >> 16) & 0xFFFF));
+            mem_write_(mem_ctx_, sp + 2, static_cast<uint16_t>(an_val & 0xFFFF));
+            clocks_remaining_ += 8;  // 2 × 4-clock writes
+        }
+        set_a(ea_reg, get_a(7));
+        set_a(7, get_a(7) + disp);
+        sync_sp();
         return do_prefetch(pins);
     }
 
     // ── UNLK: 0100 1110 0101 1rrr ────────────────────────────────
     if ((opcode & 0xFFF8) == 0x4E58) {
-        // TODO: UNLK with bus cycles for stack pop
+        // SP = An, pop An from stack
+        set_a(7, get_a(ea_reg));
+        sync_sp();
+        if (mem_read_) {
+            uint32_t sp = get_a(7) & address_mask();
+            uint16_t hi = mem_read_(mem_ctx_, sp);
+            uint16_t lo = mem_read_(mem_ctx_, sp + 2);
+            set_a(ea_reg, (static_cast<uint32_t>(hi) << 16) | lo);
+            clocks_remaining_ += 8;  // 2 × 4-clock reads
+        }
+        set_a(7, get_a(7) + 4);
+        sync_sp();
         return do_prefetch(pins);
     }
 
@@ -306,14 +364,26 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
 
     // ── JSR: 0100 1110 10xx xxxx ─────────────────────────────────
     if ((opcode & 0xFFC0) == 0x4E80) {
-        // TODO: JSR with bus cycles
-        return do_prefetch(pins);
+        uint32_t target = calc_ea(ea_mode, ea_reg, OpSize::Long);
+        // Push return address (formal PC of next instruction = internal PC - 2)
+        uint32_t return_pc = regs_.pc - 2;
+        set_a(7, get_a(7) - 4);
+        sync_sp();
+        if (mem_write_) {
+            uint32_t sp = get_a(7) & address_mask();
+            mem_write_(mem_ctx_, sp,     static_cast<uint16_t>((return_pc >> 16) & 0xFFFF));
+            mem_write_(mem_ctx_, sp + 2, static_cast<uint16_t>(return_pc & 0xFFFF));
+            clocks_remaining_ += 8;  // 2 × 4-clock writes
+        }
+        regs_.pc = target;
+        return do_branch_prefetch(pins);
     }
 
     // ── JMP: 0100 1110 11xx xxxx ─────────────────────────────────
     if ((opcode & 0xFFC0) == 0x4EC0) {
-        // TODO: JMP with bus cycles
-        return do_prefetch(pins);
+        uint32_t target = calc_ea(ea_mode, ea_reg, OpSize::Long);
+        regs_.pc = target;
+        return do_branch_prefetch(pins);
     }
 
     // Fallthrough: illegal / unimplemented
@@ -325,10 +395,14 @@ inline bus_state_t decode_group6(bus_state_t pins, uint16_t opcode) {
     auto cc = static_cast<Condition>((opcode >> 8) & 0x0F);
     int8_t disp8 = static_cast<int8_t>(opcode & 0xFF);
 
+    // Displacement is always relative to the address of the displacement
+    // itself (formal_opcode + 2). Save branch base BEFORE consuming ext word.
+    uint32_t branch_base = regs_.pc - 2;  // = formal_opcode + 2
+
     int32_t displacement;
     if (disp8 == 0) {
         // Word displacement from extension word
-        // Note: branches can't use consume_extension_word() because the
+        // Note: branches don't use consume_extension_word() because the
         // IRC refill would read from the sequential address, not the branch target.
         displacement = static_cast<int16_t>(regs_.irc);
         regs_.pc += 2;
@@ -354,21 +428,29 @@ inline bus_state_t decode_group6(bus_state_t pins, uint16_t opcode) {
     // BRA (cc = T, but opcode convention: cc=0 is BRA, cc=1 is BSR)
     if (cc == Condition::T) {
         // BRA — always branch
-        regs_.pc = regs_.pc + displacement - 2;  // -2 because PC already advanced past opcode
-        return do_prefetch(pins);
+        regs_.pc = branch_base + displacement;
+        return do_branch_prefetch(pins);
     }
     if (cc == Condition::F) {
         // BSR — branch to subroutine
-        // Push return address
-        regs_.a[7] -= 4;
-        // TODO: write PC to stack via bus cycles
-        regs_.pc = regs_.pc + displacement - 2;
-        return do_prefetch(pins);
+        // Return address = formal address of next instruction = internal PC - 2
+        uint32_t return_pc = regs_.pc - 2;
+        set_a(7, get_a(7) - 4);
+        sync_sp();
+        if (mem_write_) {
+            uint32_t sp = get_a(7) & address_mask();
+            mem_write_(mem_ctx_, sp,     static_cast<uint16_t>((return_pc >> 16) & 0xFFFF));
+            mem_write_(mem_ctx_, sp + 2, static_cast<uint16_t>(return_pc & 0xFFFF));
+            clocks_remaining_ += 8;  // 2 × 4-clock writes
+        }
+        regs_.pc = branch_base + displacement;
+        return do_branch_prefetch(pins);
     }
 
     // Bcc — conditional branch
     if (test_condition(cc)) {
-        regs_.pc = regs_.pc + displacement - 2;
+        regs_.pc = branch_base + displacement;
+        return do_branch_prefetch(pins);
     }
     return do_prefetch(pins);
 }

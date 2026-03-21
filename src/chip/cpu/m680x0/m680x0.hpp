@@ -514,7 +514,7 @@ private:
             } else {
                 data_latch_ = static_cast<uint32_t>(mem_read_(mem_ctx_, addr));
             }
-            clocks_remaining_ = 3;  // 4-clock bus cycle
+            clocks_remaining_ += 3;  // 4-clock bus cycle
             transition_to(cont_handler_);
             return pins;
         }
@@ -548,7 +548,7 @@ private:
             uint16_t hi = mem_read_(mem_ctx_, addr);
             uint16_t lo = mem_read_(mem_ctx_, addr + 2);
             data_latch_ = (static_cast<uint32_t>(hi) << 16) | lo;
-            clocks_remaining_ = 7;  // 2 × 4-clock bus cycles
+            clocks_remaining_ += 7;  // 2 × 4-clock bus cycles
             transition_to(cont_handler_);
             return pins;
         }
@@ -596,7 +596,7 @@ private:
             } else {
                 mem_write_(mem_ctx_, addr, static_cast<uint16_t>(data_latch_));
             }
-            clocks_remaining_ = 3;  // 4-clock bus cycle
+            clocks_remaining_ += 3;  // 4-clock bus cycle
             transition_to(cont_handler_);
             return pins;
         }
@@ -627,7 +627,7 @@ private:
             // final memory state. Use natural order for callbacks.
             mem_write_(mem_ctx_, addr,     static_cast<uint16_t>((data_latch_ >> 16) & 0xFFFF));
             mem_write_(mem_ctx_, addr + 2, static_cast<uint16_t>(data_latch_ & 0xFFFF));
-            clocks_remaining_ = 7;  // 2 × 4-clock bus cycles
+            clocks_remaining_ += 7;  // 2 × 4-clock bus cycles
             transition_to(cont_handler_);
             return pins;
         }
@@ -1150,6 +1150,24 @@ private:
     inline bus_state_t do_prefetch(bus_state_t pins) {
         transition_to(&m680x0_t::handle_prefetch);
         return handle_prefetch(pins);
+    }
+
+    /// After a branch/jump, the prefetch pipeline is stale.
+    /// Fill it from the new PC location with two bus reads.
+    inline bus_state_t do_branch_prefetch(bus_state_t pins) {
+        if (mem_read_) {
+            uint16_t word1 = mem_read_(mem_ctx_, regs_.pc & address_mask());
+            regs_.pc += 2;
+            uint16_t word2 = mem_read_(mem_ctx_, regs_.pc & address_mask());
+            regs_.ir  = word1;
+            regs_.irc = word2;
+            regs_.pc += 2;
+            regs_.ird = regs_.ir;
+            clocks_remaining_ += 7;  // 2 × 4-clock bus reads minus current tick
+            transition_to(&m680x0_t::handle_decode);
+            return pins;
+        }
+        return do_prefetch(pins);
     }
 
     /// Add N idle clocks before starting the prefetch cycle.
