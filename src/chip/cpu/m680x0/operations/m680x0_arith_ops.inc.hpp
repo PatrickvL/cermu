@@ -580,9 +580,8 @@ inline bus_state_t decode_group9(bus_state_t pins, uint16_t opcode) {
             src_val = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(src_val)));
         }
         set_a(dn, get_a(dn) - src_val);
-        // SUBA does not affect flags — always 8 clocks for register source
-        if (ea_mode <= 1) return do_idle_then_prefetch(pins, 4);
-        return do_prefetch(pins);
+        // SUBA does not affect flags — always 8 clocks minimum (4 idle for 32-bit address op)
+        return do_idle_then_prefetch(pins, 4);
     }
 
     // SUB: opmodes 0,1,2 (<ea> - Dn → Dn) and 4,5,6 = Dn,<ea> → <ea> (if not SUBX)
@@ -650,9 +649,8 @@ inline bus_state_t decode_groupB(bus_state_t pins, uint16_t opcode) {
             src_val = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(src_val)));
         }
         alu_cmp(src_val, get_a(dn), OpSize::Long);
-        // CMPA: always 6 clocks for register source
-        if (ea_mode <= 1) return do_idle_then_prefetch(pins, 2);
-        return do_prefetch(pins);
+        // CMPA: 6 clocks minimum (2 idle for 32-bit comparison)
+        return do_idle_then_prefetch(pins, 2);
     }
 
     // EOR: opmode 4,5,6 — Dn EOR <ea> → <ea>
@@ -933,9 +931,8 @@ inline bus_state_t decode_groupD(bus_state_t pins, uint16_t opcode) {
             src_val = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(src_val)));
         }
         set_a(dn, get_a(dn) + src_val);
-        // ADDA does not affect flags — always 8 clocks for register source
-        if (ea_mode <= 1) return do_idle_then_prefetch(pins, 4);
-        return do_prefetch(pins);
+        // ADDA does not affect flags — always 8 clocks minimum (4 idle for 32-bit address op)
+        return do_idle_then_prefetch(pins, 4);
     }
 
     // ADD: opmodes 0,1,2 (<ea> + Dn → Dn)
