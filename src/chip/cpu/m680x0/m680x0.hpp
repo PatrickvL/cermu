@@ -1078,7 +1078,9 @@ private:
         mem_write_(mem_ctx_, (base + 6)  & address_mask(), regs_.ird);                                  // IR
         mem_write_(mem_ctx_, (base + 4)  & address_mask(), static_cast<uint16_t>(fault_addr & 0xFFFF)); // Fault addr low
         // SSW: upper bits from IRD, lower 5 bits = R/W(4) | IN(3) | FC(2:0)
-        uint16_t ssw = (regs_.ird & 0xFFE0) | (is_read ? 0x10 : 0x00) | fc;
+        // IN = 1 for instruction/program fetch (FC bit 1 set), 0 for data
+        uint8_t in_flag = (fc & 0x02) ? 0x08 : 0x00;
+        uint16_t ssw = (regs_.ird & 0xFFE0) | (is_read ? 0x10 : 0x00) | in_flag | fc;
         mem_write_(mem_ctx_, base        & address_mask(), ssw);                                         // SSW
         mem_write_(mem_ctx_, (base + 2)  & address_mask(), static_cast<uint16_t>((fault_addr >> 16) & 0xFFFF)); // Fault addr high
         // Read vector
@@ -1239,6 +1241,11 @@ private:
     /// Fill it from the new PC location with two bus reads.
     inline bus_state_t do_branch_prefetch(bus_state_t pins) {
         if (mem_read_) {
+            // Address error: odd PC triggers group 0 exception
+            if (unlikely(regs_.pc & 1)) {
+                process_address_error_sync(regs_.pc, true, fc_program());
+                return pins;
+            }
             uint16_t word1 = mem_read_(mem_ctx_, regs_.pc & address_mask());
             regs_.pc += 2;
             uint16_t word2 = mem_read_(mem_ctx_, regs_.pc & address_mask());
