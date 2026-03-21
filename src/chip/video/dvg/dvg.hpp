@@ -464,8 +464,22 @@ private:
         // DVG hardware uses 10-bit counters — wrap to 0-1023 range.
         // The emit above uses the unwrapped endpoint so lines extending
         // past the edge are correctly clipped by the renderer.
-        beam_x_ &= 0x3FF;
-        beam_y_ &= 0x3FF;
+        int32_t wrapped_x = beam_x_ & 0x3FF;
+        int32_t wrapped_y = beam_y_ & 0x3FF;
+
+        // If wrapping occurred after a visible vector, break the BeamOn
+        // chain so the renderer doesn't draw a spurious connector line
+        // from the unwrapped endpoint back to the wrapped start of the
+        // next vector.
+        if ((wrapped_x != beam_x_ || wrapped_y != beam_y_) && intensity > 0) {
+            stream_->drive(VectorVideoSample{
+                static_cast<int16_t>(wrapped_x), screen_y(wrapped_y),
+                0, 0, VideoFlags::None, 0
+            });
+        }
+
+        beam_x_ = wrapped_x;
+        beam_y_ = wrapped_y;
     }
 
     /// Emit a beam position sample (no draw) — used by LABS.
