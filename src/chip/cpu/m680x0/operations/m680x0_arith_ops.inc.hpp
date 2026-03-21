@@ -321,12 +321,12 @@ inline bus_state_t decode_group5(bus_state_t pins, uint16_t opcode) {
     OpSize sz = static_cast<OpSize>(size_field);
 
     if (ea_mode == 1) {
-        // ADDQ/SUBQ to An — full 32-bit, no flags affected, always 8 clocks
+        // ADDQ/SUBQ to An — full 32-bit, no flags affected
         uint32_t an = get_a(ea_reg);
         if (is_sub) an -= quick_data; else an += quick_data;
         set_a(ea_reg, an);
         if (ea_reg == 7) sync_sp();
-        return do_idle_then_prefetch(pins, 4);
+        return do_idle_then_prefetch(pins, 2);  // 6 clocks total (real hw)
     }
 
     uint32_t src = quick_data;
@@ -592,8 +592,9 @@ inline bus_state_t decode_group9(bus_state_t pins, uint16_t opcode) {
         }
         set_a(dn, get_a(dn) - src_val);
         if (dn == 7) sync_sp();
-        // SUBA does not affect flags — always 8 clocks minimum (4 idle for 32-bit address op)
-        return do_idle_then_prefetch(pins, 4);
+        // SUBA: register/imm source or word EA = 4 idle; long EA = 2 idle
+        uint8_t idle = (ea_mode >= 2 && src_sz == OpSize::Long) ? 2 : 4;
+        return do_idle_then_prefetch(pins, idle);
     }
 
     // SUB: opmodes 0,1,2 (<ea> - Dn → Dn) and 4,5,6 = Dn,<ea> → <ea> (if not SUBX)
@@ -953,8 +954,9 @@ inline bus_state_t decode_groupD(bus_state_t pins, uint16_t opcode) {
         }
         set_a(dn, get_a(dn) + src_val);
         if (dn == 7) sync_sp();
-        // ADDA does not affect flags — always 8 clocks minimum (4 idle for 32-bit address op)
-        return do_idle_then_prefetch(pins, 4);
+        // ADDA: register/imm source or word EA = 4 idle; long EA = 2 idle
+        uint8_t idle = (ea_mode >= 2 && src_sz == OpSize::Long) ? 2 : 4;
+        return do_idle_then_prefetch(pins, idle);
     }
 
     // ADD: opmodes 0,1,2 (<ea> + Dn → Dn)
