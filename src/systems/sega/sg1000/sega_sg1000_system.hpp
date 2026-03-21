@@ -13,6 +13,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -105,6 +106,12 @@ template<> struct SG1000BusTraits<SG1000Variant::SC3000> {
 };
 
 // ============================================================================
+// SG-1000 ChipSet — value-typed chips owned by Board
+// ============================================================================
+
+struct SG1000Chips : StandardChips<ZilogZ80A, TMS9918A, sn76489_t> {};
+
+// ============================================================================
 // Sega SG-1000 / SC-3000 System
 // ============================================================================
 
@@ -136,15 +143,10 @@ public:
 
 
 private:
-    // ── Chips ────────────────────────────────────────────────────────────
-    ZilogZ80A*   cpu_ = nullptr;
-    TMS9918A     vdp_;
-    sn76489_t    psg_{SN76489Variant::SN76489};
-
     // ── Board + bus ──────────────────────────────────────────────────────
     using Bus       = MemoryBus<typename BT::Spec>;
     using PT        = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec>;
+    using MainBoard = Board<typename BT::Spec, SG1000Chips>;
     Bus       bus_;
     MainBoard board_{BT::kManifest};
 
