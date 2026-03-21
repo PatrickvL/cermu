@@ -74,6 +74,7 @@ bool Z1013System<V>::initialize() {
 
     // ── Create memory chips from manifest and wire bus ────────────────────
     board_.create_chips(&pins_);
+    board_.bind_chipset();
     board_.apply(bus_);
 
     // Retain pointers for post-init access (rendering, ROM loading)
@@ -85,10 +86,8 @@ bool Z1013System<V>::initialize() {
     }
 
     // ── Init chips ──────────────────────────────────────────────────────
-    cpu_ = board_.template cpu<U880>();
-    pio_ = board_.template find<z80_pio_t>();
-    pins_ = board_.cpu_chip()->init();
-    pio_->init();
+    pins_ = board_.cpu().init();
+    board_.chips().pio.init();
 
     // Character ROM — not bus-mapped, used for display rendering only
     char_rom_.resize(z1013_constants::CHAR_ROM_SIZE, 0xFF);
@@ -125,21 +124,21 @@ bool Z1013System<V>::initialize() {
     return true;
 }
 
-template<Z1013Variant V> void Z1013System<V>::shutdown() { cpu_ = nullptr; system_ready_ = false; }
+template<Z1013Variant V> void Z1013System<V>::shutdown() { system_ready_ = false; }
 template<Z1013Variant V> void Z1013System<V>::reset() {
-    if (!cpu_) return;
+    if (!system_ready_) return;
     board_.reset_chips();
-    pins_ = board_.cpu_chip()->reset(pins_);
+    pins_ = board_.cpu().reset(pins_);
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
     keyboard_column_select_ = 0xFF;
 }
 
 template<Z1013Variant V>
 void Z1013System<V>::tick() {
-    if (!cpu_) return;
+    if (!system_ready_) return;
 
     // CPU tick (one T-state)
-    pins_ = cpu_->tick(pins_);
+    pins_ = board_.cpu().tick(pins_);
 
     // Bus dispatch — check Z80-specific MREQ/IORQ signals
     bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);
@@ -267,16 +266,16 @@ bus_state_t Z1013System<V>::io_tick(bus_state_t pins) {
                         cols &= keyboard_matrix_[r];
                     }
                 }
-                pio_->set_input(0, cols);
+                board_.chips().pio.set_input(0, cols);
             }
-            uint8_t data = pio_->read_data(port_sel);
+            uint8_t data = board_.chips().pio.read_data(port_sel);
             BUS_SET_DATA(pins, data);
         } else {
             uint8_t data = BUS_GET_DATA(pins);
             if (is_ctrl) {
-                pio_->write_control(port_sel, data);
+                board_.chips().pio.write_control(port_sel, data);
             } else {
-                pio_->write_data(port_sel, data);
+                board_.chips().pio.write_data(port_sel, data);
             }
         }
     } else if (port == z1013_constants::KEYBOARD_SEL_PORT) {

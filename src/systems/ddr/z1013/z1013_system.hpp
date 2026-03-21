@@ -11,6 +11,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "core/signal/video_port.hpp"
 
 #include "chip/cpu/z80/u880.hpp"
@@ -114,6 +115,21 @@ template<> struct Z1013BusTraits<Z1013Variant::Z1013_64> {
     using Spec = ManifestBusSpec<kZ1013_64K_Chips, 16, 8>;
 };
 
+// ── ChipSet ──────────────────────────────────────────────────────────────
+struct Z1013ChipSet : StandardChips<U880> {
+    z80_pio_t pio;      // U855 PIO (keyboard + cassette)
+
+    template<typename BoardT>
+    void bind_extras(BoardT& board) {
+        board.bind_chip(board.template find_index<z80_pio_t>(), &pio);
+    }
+
+    template<typename BoardT>
+    void register_extras(BoardT& board) {
+        board.register_component(&pio);
+    }
+};
+
 // ── System ───────────────────────────────────────────────────────────────
 template<Z1013Variant V>
 class Z1013System : public System {
@@ -137,9 +153,7 @@ public:
 
 
 private:
-    // ── Chips ────────────────────────────────────────────────────────────
-    U880*       cpu_  = nullptr;     // U880 (Z80A clone) — owned by board_
-    z80_pio_t*  pio_  = nullptr;     // U855 PIO (keyboard + cassette) — owned by board_
+    // ── Chips (value-typed via Board ChipSet) ────────────────────────────
 
     // ── Memory — chip pointers for post-init access (owned by Board) ─
     ROMChip* basic_rom_lo_chip_    = nullptr;  // Z1013.64 only
@@ -154,7 +168,7 @@ private:
     using BT  = Z1013BusTraits<V>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec>;
+    using MainBoard = Board<typename BT::Spec, Z1013ChipSet>;
     Bus bus_;
     MainBoard board_{BT::kManifest};
 
