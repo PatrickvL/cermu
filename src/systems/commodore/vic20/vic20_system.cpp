@@ -1094,10 +1094,6 @@ bool VIC20System::pre_apply_pending_load() {
 // Display
 // ============================================================================
 
-void VIC20System::get_display_dimensions(int* width, int* height) const {
-    *width = vic20_constants::DISPLAY_WIDTH;
-    *height = vic20_constants::DISPLAY_HEIGHT;
-}
 
 // ============================================================================
 // Input

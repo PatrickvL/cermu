@@ -372,11 +372,6 @@ bool MSXSystem<V>::load_file(const char* filepath) {
 // DISPLAY
 // ============================================================================
 
-template<MSXVariant V>
-void MSXSystem<V>::get_display_dimensions(int* width, int* height) const {
-    *width  = Traits::display_w;
-    *height = Traits::display_h;
-}
 
 // ============================================================================
 // AUDIO

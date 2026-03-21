@@ -282,10 +282,6 @@ bool ColecoVisionSystem::load_file(const char* filepath) {
 // DISPLAY
 // ============================================================================
 
-void ColecoVisionSystem::get_display_dimensions(int* width, int* height) const {
-    *width  = coleco_constants::DISPLAY_WIDTH;
-    *height = coleco_constants::DISPLAY_HEIGHT;
-}
 
 // ============================================================================
 // AUDIO

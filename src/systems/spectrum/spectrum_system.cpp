@@ -726,11 +726,6 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
 // DISPLAY
 // ============================================================================
 
-template<SpectrumVariant V>
-void SpectrumSystem<V>::get_display_dimensions(int* width, int* height) const {
-    *width = spectrum_constants::TOTAL_WIDTH;
-    *height = spectrum_constants::TOTAL_HEIGHT;
-}
 
 // ============================================================================
 // AUDIO

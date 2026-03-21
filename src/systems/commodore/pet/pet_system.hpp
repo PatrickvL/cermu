@@ -102,9 +102,6 @@ public:
     void tick() override;
     void run_frame() override;
 
-    // Display
-    void get_display_dimensions(int* width, int* height) const override;
-
     // Input
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
 

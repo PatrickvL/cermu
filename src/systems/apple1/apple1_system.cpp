@@ -325,10 +325,6 @@ bool Apple1System::load_file(const char* filepath) {
 // Display
 // ============================================================================
 
-void Apple1System::get_display_dimensions(int* width, int* height) const {
-    *width = apple1_constants::DISPLAY_WIDTH;
-    *height = apple1_constants::DISPLAY_HEIGHT;
-}
 
 // ============================================================================
 // Input

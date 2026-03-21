@@ -92,8 +92,6 @@ public:
 
     bool load_file(const char* filepath) override;
 
-    void get_display_dimensions(int* width, int* height) const override;
-
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
     void set_audio_sample_rate(int sample_rate_hz) override;
 

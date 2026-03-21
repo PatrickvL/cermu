@@ -356,11 +356,6 @@ bool SpectravideoSystem<V>::load_file(const char* filepath) {
 // DISPLAY
 // ============================================================================
 
-template<SVIVariant V>
-void SpectravideoSystem<V>::get_display_dimensions(int* width, int* height) const {
-    *width  = svi_constants::DISPLAY_WIDTH;
-    *height = svi_constants::DISPLAY_HEIGHT;
-}
 
 // ============================================================================
 // AUDIO

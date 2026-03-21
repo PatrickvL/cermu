@@ -302,11 +302,6 @@ bool SegaSG1000System<V>::load_file(const char* filepath) {
 // DISPLAY
 // ============================================================================
 
-template<SG1000Variant V>
-void SegaSG1000System<V>::get_display_dimensions(int* width, int* height) const {
-    *width  = sg1000_constants::DISPLAY_WIDTH;
-    *height = sg1000_constants::DISPLAY_HEIGHT;
-}
 
 // ============================================================================
 // AUDIO

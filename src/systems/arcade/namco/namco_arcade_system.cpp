@@ -205,9 +205,6 @@ template<NamcoGame G> void NamcoArcadeSystem<G>::run_frame() {
 }
 
 template<NamcoGame G> bool NamcoArcadeSystem<G>::load_file(const char*) { return false; }
-template<NamcoGame G> void NamcoArcadeSystem<G>::get_display_dimensions(int* w, int* h) const {
-    *w = namco_arcade_constants::FB_WIDTH; *h = namco_arcade_constants::FB_HEIGHT;
-}
 template<NamcoGame G> uint32_t NamcoArcadeSystem<G>::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
     if (audio_port_) {

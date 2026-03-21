@@ -340,11 +340,6 @@ bool MemotechMTXSystem<V>::load_file(const char* filepath) {
 // DISPLAY
 // ============================================================================
 
-template<MTXVariant V>
-void MemotechMTXSystem<V>::get_display_dimensions(int* width, int* height) const {
-    *width  = mtx_constants::DISPLAY_WIDTH;
-    *height = mtx_constants::DISPLAY_HEIGHT;
-}
 
 // ============================================================================
 // AUDIO

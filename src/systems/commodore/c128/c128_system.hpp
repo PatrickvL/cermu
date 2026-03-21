@@ -119,8 +119,6 @@ public:
     void tick() override;
     void run_frame() override;
 
-    void get_display_dimensions(int* width, int* height) const override;
-
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
 
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;

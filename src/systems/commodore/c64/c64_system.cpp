@@ -1224,11 +1224,6 @@ void C64System::ensure_compatible_for_sid(const sid_header_t* sid) {
 }
 
 // ============================================================================
-void C64System::get_display_dimensions(int* width, int* height) const {
-    // VIC-II visible area (284 visible lines for PAL per documentation Section 3.4)
-    *width = c64_constants::DISPLAY_WIDTH_PAL;
-    *height = c64_constants::DISPLAY_HEIGHT_PAL;
-}
 
 void C64System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     // Legacy path â€” still used when handle_keyboard_event_ex is not called

@@ -885,11 +885,6 @@ void Commodore264System<V>::inject_keys(const char* str) {
 // Display
 // ============================================================================
 
-template<C264SeriesVariant V>
-void Commodore264System<V>::get_display_dimensions(int* width, int* height) const {
-    *width = c16_constants::DISPLAY_WIDTH;
-    *height = c16_constants::DISPLAY_HEIGHT;
-}
 
 // ============================================================================
 // Audio

@@ -209,9 +209,6 @@ void BombJackSystem::run_frame() {
 }
 
 bool BombJackSystem::load_file(const char*) { return false; }
-void BombJackSystem::get_display_dimensions(int* w, int* h) const {
-    *w = bombjack_constants::FB_WIDTH; *h = bombjack_constants::FB_HEIGHT;
-}
 uint32_t BombJackSystem::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
 

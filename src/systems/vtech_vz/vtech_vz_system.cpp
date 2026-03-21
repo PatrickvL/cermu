@@ -196,11 +196,6 @@ bool VTechVZSystem<V>::load_file(const char* /*filepath*/) {
 // DISPLAY
 // ============================================================================
 
-template<VZVariant V>
-void VTechVZSystem<V>::get_display_dimensions(int* width, int* height) const {
-    if (width)  *width  = vtech_vz_constants::FB_WIDTH;
-    if (height) *height = vtech_vz_constants::FB_HEIGHT;
-}
 
 // ============================================================================
 // AUDIO

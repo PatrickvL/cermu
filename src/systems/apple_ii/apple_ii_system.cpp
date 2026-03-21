@@ -197,11 +197,6 @@ bool AppleIISystem<V>::load_file(const char* /*filepath*/) {
 // DISPLAY
 // ============================================================================
 
-template<AppleIIVariant V>
-void AppleIISystem<V>::get_display_dimensions(int* width, int* height) const {
-    if (width) *width = apple_ii_constants::DISPLAY_WIDTH;
-    if (height) *height = apple_ii_constants::DISPLAY_HEIGHT;
-}
 
 // ============================================================================
 // AUDIO

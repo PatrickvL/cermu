@@ -295,10 +295,6 @@ bool SegaSMSSystem::load_file(const char* filepath) {
 // DISPLAY
 // ============================================================================
 
-void SegaSMSSystem::get_display_dimensions(int* width, int* height) const {
-    *width  = sms_constants::DISPLAY_WIDTH;
-    *height = sms_constants::DISPLAY_HEIGHT;
-}
 
 // ============================================================================
 // AUDIO

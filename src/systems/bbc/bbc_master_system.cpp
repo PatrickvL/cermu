@@ -233,11 +233,6 @@ bool BBCMasterSystem<V>::load_file(const char* /*filepath*/) {
 // DISPLAY
 // ============================================================================
 
-template<BBCMasterVariant V>
-void BBCMasterSystem<V>::get_display_dimensions(int* width, int* height) const {
-    if (width)  *width  = bbc_constants::DISPLAY_WIDTH;
-    if (height) *height = bbc_constants::DISPLAY_HEIGHT;
-}
 
 // ============================================================================
 // AUDIO

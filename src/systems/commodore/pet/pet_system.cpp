@@ -629,10 +629,6 @@ void PETSystem::via_cb2_output(void* user_data, bool state) {
 // Display
 // ============================================================================
 
-void PETSystem::get_display_dimensions(int* width, int* height) const {
-    *width  = pet_constants::DISPLAY_WIDTH;
-    *height = pet_constants::DISPLAY_HEIGHT;
-}
 
 // ============================================================================
 // Audio
