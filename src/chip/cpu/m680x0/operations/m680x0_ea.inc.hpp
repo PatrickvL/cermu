@@ -176,6 +176,17 @@ inline void write_ea(uint8_t mode, uint8_t reg, uint32_t value, OpSize sz) {
         uint32_t addr = ea_addr_ & address_mask();
         // Address error: word/long write to odd address
         if (unlikely((addr & 1) && sz != OpSize::Byte)) {
+            // PostInc: undo the increment — real 68000 doesn't post-increment on error
+            if (mode == static_cast<uint8_t>(EAMode::AddrRegPostInc)) {
+                set_a(reg, ea_addr_);
+                if (reg == 7) sync_sp();
+            }
+            // PreDec Long: 68000 only decremented by 2 (first word step)
+            if (mode == static_cast<uint8_t>(EAMode::AddrRegPreDec) && sz == OpSize::Long) {
+                set_a(reg, get_a(reg) + 2);
+                ea_addr_ += 2;
+                if (reg == 7) sync_sp();
+            }
             process_address_error_sync(ea_addr_, false /*write*/, fc_data());
             return;
         }

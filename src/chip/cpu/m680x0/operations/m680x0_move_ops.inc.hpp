@@ -26,11 +26,11 @@ inline bus_state_t decode_move(bus_state_t pins, uint16_t opcode, OpSize sz) {
         return do_prefetch(pins);
     }
 
+    // MOVE sets N, Z, clears V and C — flags update before write on 68000
+    alu_tst(value, sz);
+
     write_ea(dst_mode, dst_reg, value, sz);
     if (address_error_) return pins;
-
-    // MOVE sets N, Z, clears V and C
-    alu_tst(value, sz);
 
     return do_prefetch(pins);
 }
