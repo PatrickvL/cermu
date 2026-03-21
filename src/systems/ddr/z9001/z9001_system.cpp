@@ -66,9 +66,10 @@ bool Z9001System<V>::initialize() {
 
     // ── Create chips via factory, wire the bus ────────────────────────
     board_.create_chips(&pins_);
+    board_.bind_chipset();
     board_.apply(bus_);
 
-    // Retrieve typed pointers for chips accessed after initialize()
+    // Retrieve typed pointers for memory chips accessed after initialize()
     video_ram_chip_ = board_.template find_last<RAMChip>();
     os_rom_chip_    = board_.template find_last<ROMChip>();
     if constexpr (Traits::has_basic_rom) {
@@ -78,19 +79,15 @@ bool Z9001System<V>::initialize() {
     if constexpr (Traits::has_color_ram) {
         color_ram_chip_ = board_.template find<RAMChip>(1);
     }
-    cpu_ = board_.template cpu<U880>();
-    pio1_ = board_.template find<z80_pio_t>();
-    pio2_ = board_.template find<z80_pio_t>(1);
-    ctc_  = board_.template find<z80_ctc_t>();
 
     // ── Trim RAM pages for KC87 (48 KB out of 64 KB allocated) ──────────
     configure_bus_memory_map();
 
     // ── Init chips ──────────────────────────────────────────────────────────
-    pins_ = board_.cpu_chip()->init();
-    pio1_->init();
-    pio2_->init();
-    ctc_->init();
+    pins_ = board_.cpu().init();
+    board_.chips().pio1.init();
+    board_.chips().pio2.init();
+    board_.chips().ctc.init();
 
     // Character ROM — not bus-mapped, used for display rendering only
     char_rom_.resize(z9001_constants::CHAR_ROM_SIZE, 0xFF);
@@ -128,11 +125,11 @@ bool Z9001System<V>::initialize() {
     return true;
 }
 
-template<Z9001Variant V> void Z9001System<V>::shutdown() { cpu_ = nullptr; system_ready_ = false; }
+template<Z9001Variant V> void Z9001System<V>::shutdown() { system_ready_ = false; }
 template<Z9001Variant V> void Z9001System<V>::reset() {
-    if (!cpu_) return;
+    if (!system_ready_) return;
     board_.reset_chips();
-    pins_ = board_.cpu_chip()->reset(pins_);
+    pins_ = board_.cpu().reset(pins_);
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 }
 
@@ -152,10 +149,10 @@ void Z9001System<V>::configure_bus_memory_map() {
 
 template<Z9001Variant V>
 void Z9001System<V>::tick() {
-    if (!cpu_) return;
+    if (!system_ready_) return;
 
     // CPU tick (one T-state)
-    pins_ = cpu_->tick(pins_);
+    pins_ = board_.cpu().tick(pins_);
 
     // Bus dispatch
     bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);
@@ -307,18 +304,18 @@ bus_state_t Z9001System<V>::io_tick(bus_state_t pins) {
         if (is_rd) {
             // Port A output holds the keyboard row select; Port B returns column data
             if (port_sel == 0) {
-                uint8_t row  = pio1_->get_output(0) & 0x07;
+                uint8_t row  = board_.chips().pio1.get_output(0) & 0x07;
                 uint8_t cols = keyboard_matrix_[row];
-                pio1_->set_input(1, cols);
+                board_.chips().pio1.set_input(1, cols);
             }
-            uint8_t data = pio1_->read_data(port_sel);
+            uint8_t data = board_.chips().pio1.read_data(port_sel);
             BUS_SET_DATA(pins, data);
         } else {
             uint8_t data = BUS_GET_DATA(pins);
             if (is_ctrl) {
-                pio1_->write_control(port_sel, data);
+                board_.chips().pio1.write_control(port_sel, data);
             } else {
-                pio1_->write_data(port_sel, data);
+                board_.chips().pio1.write_data(port_sel, data);
             }
         }
     }
@@ -328,14 +325,14 @@ bus_state_t Z9001System<V>::io_tick(bus_state_t pins) {
         int     port_sel = pio_idx & 0x01;
         bool    is_ctrl  = (pio_idx & 0x02) != 0;
         if (is_rd) {
-            uint8_t data = pio2_->read_data(port_sel);
+            uint8_t data = board_.chips().pio2.read_data(port_sel);
             BUS_SET_DATA(pins, data);
         } else {
             uint8_t data = BUS_GET_DATA(pins);
             if (is_ctrl) {
-                pio2_->write_control(port_sel, data);
+                board_.chips().pio2.write_control(port_sel, data);
             } else {
-                pio2_->write_data(port_sel, data);
+                board_.chips().pio2.write_data(port_sel, data);
             }
         }
     }
