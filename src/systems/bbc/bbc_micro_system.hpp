@@ -3,6 +3,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "core/signal/audio_port.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
@@ -45,6 +46,28 @@ inline constexpr auto kBBCMicroChips = make_chip_manifest(
 );
 
 using BBCMicroBusSpec = ManifestBusSpec<kBBCMicroChips, 16, 8>;
+
+// ============================================================================
+// BBC Micro ChipSet — value-typed chips owned by Board
+// ============================================================================
+
+struct BBCMicroChips : StandardChips<MOS6502, mc6845_t, sn76489_t> {
+    mos6522_t      system_via;
+    mos6522_t      user_via;
+    bbc_vidproc_t  vidproc;
+
+    template<typename B> void bind_extras(B& board) {
+        board.bind_chip(board.template find_index<mos6522_t>(),     &system_via);
+        board.bind_chip(board.template find_index<mos6522_t>(1),   &user_via);
+        board.bind_chip(board.template find_index<bbc_vidproc_t>(), &vidproc);
+    }
+
+    void register_extras(BoardBase& board) {
+        board.register_component(&system_via);
+        board.register_component(&user_via);
+        board.register_component(&vidproc);
+    }
+};
 
 /**
  * BBC Micro Model B System Implementation
@@ -98,13 +121,6 @@ public:
     void render_configuration_ui() override;
 
 private:
-    // Chip instances
-    MOS6502*    cpu_ = nullptr;         // MOS6502 CPU — owned by board_
-    mc6845_t*   crtc_ = nullptr;        // MC6845 CRTC — owned by board_
-    sn76489_t*  psg_ = nullptr;         // SN76489 PSG — owned by board_
-    mos6522_t   system_via_;            // System VIA ($FE40-$FE5F) — pre-bound
-    mos6522_t   user_via_;              // User VIA ($FE60-$FE7F) — pre-bound
-
     // Audio thread — SN76489 synthesis runs off the emulation thread
     AudioThread audio_thread_;
     std::unique_ptr<WriteOnlySynthAdapter<sn76489_t>> psg_adapter_;
@@ -113,7 +129,7 @@ private:
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using Bus = MemoryBus<BBCMicroBusSpec>;
     using PT  = PackingTraits<BBCMicroBusSpec>;
-    using MainBoard = Board<BBCMicroBusSpec>;
+    using MainBoard = Board<BBCMicroBusSpec, BBCMicroChips>;
     Bus bus_;
     MainBoard board_{kBBCMicroChips};
 
@@ -127,9 +143,6 @@ private:
 
     // Paged ROM state
     uint8_t     rom_select_ = 0;         // Currently selected paged ROM bank (0-15)
-
-    // Video ULA chip (VIDPROC) — owns rendering + palette
-    bbc_vidproc_t   vidproc_;           // Video ULA — pre-bound into board_
 
     // Display — IndexedFrameBuffer owns palette + RGBA fallback.
     // VIDPROC chip writes scanlines; display_ handles GPU routing.
