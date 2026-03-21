@@ -98,12 +98,9 @@ public:
     void tick() override;
     void run_frame() override;
 
-    bool load_file(const char* filepath) override;
-
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
     void set_audio_sample_rate(int sample_rate_hz) override;
 
-    bool is_system_ready() const override { return system_ready_; }
 
 private:
     // ── CPUs ─────────────────────────────────────────────────────────────
@@ -160,7 +157,6 @@ private:
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t main_pins_  = BOMBJACK_BUS_DEFAULT_STATE;
     bus_state_t sound_pins_ = BOMBJACK_BUS_DEFAULT_STATE;
-    bool        system_ready_ = false;
     int audio_sample_rate_  = bombjack_constants::DEFAULT_SAMPLE_RATE;
 
     // ── Internal helpers ─────────────────────────────────────────────────

@@ -132,7 +132,6 @@ public:
     void render_configuration_ui() override;
 
     // System ready state
-    bool is_system_ready() const override { return system_ready_; }
 
 private:
     // ========================================================================
@@ -172,7 +171,6 @@ private:
     // ========================================================================
 
     bus_state_t pins_;                   // CPU bus state (persisted across ticks)
-    bool system_ready_ = false;          // True when cartridge is loaded
     uint32_t cycles_per_frame_;          // CPU cycles per video frame
 
     // Console switch state (directly mapped to RIOT Port B)

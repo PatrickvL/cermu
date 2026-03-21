@@ -119,11 +119,6 @@ void LC80System::run_frame() {
     for (uint32_t i = 0; i < lc80_constants::CYCLES_PER_UPDATE; ++i) tick();
 }
 
-bool LC80System::load_file(const char*) { return false; }
-void LC80System::set_framebuffer(uint32_t*, int, int) {}
-uint32_t LC80System::get_audio_samples(float*, uint32_t) { return 0; }
-void LC80System::set_audio_sample_rate(int hz) { audio_sample_rate_ = hz; }
-
 // ============================================================================
 // BUS CONFIGURATION
 // ============================================================================

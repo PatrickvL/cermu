@@ -166,10 +166,6 @@ template<Z1013Variant V> void Z1013System<V>::run_frame() {
     if (video_port_) video_port_->swap_frame();
 }
 
-template<Z1013Variant V> bool Z1013System<V>::load_file(const char*) { return false; }
-template<Z1013Variant V> uint32_t Z1013System<V>::get_audio_samples(float*, uint32_t) { return 0; }
-template<Z1013Variant V> void Z1013System<V>::set_audio_sample_rate(int hz) { audio_sample_rate_ = hz; }
-
 // ============================================================================
 // KEYBOARD HANDLING
 // ============================================================================

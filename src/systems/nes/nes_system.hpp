@@ -131,7 +131,6 @@ private:
     
     // System state
     bool is_pal_;
-    bool system_ready_;
     uint32_t cycles_per_frame_;
     bool initialized_;
 
@@ -216,7 +215,6 @@ public:
     bool save_state(const std::string& filename) const;
     bool load_state(const std::string& filename);
     bool is_cartridge_loaded() const { return cartridge_ != nullptr; }
-    bool is_system_ready() const override { return system_ready_; }
 
     // Debug / test harness memory access (no side-effects)
     uint8_t peek_memory(uint16_t addr) const;

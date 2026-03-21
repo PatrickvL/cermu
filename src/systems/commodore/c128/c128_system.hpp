@@ -124,7 +124,6 @@ public:
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
     void set_audio_sample_rate(int sample_rate_hz) override;
 
-    bool is_system_ready() const override { return system_ready_; }
 
 protected:
     // ── CommodoreSystem hooks ────────────────────────────────────
@@ -177,7 +176,6 @@ private:
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t default_state_ = 0;     // Pull-up defaults (reset each tick)
     bus_state_t pins_      = C128_BUS_DEFAULT_STATE;
-    bool        system_ready_ = false;
     int         audio_sample_rate_ = c128_constants::DEFAULT_SAMPLE_RATE;
 
     // ── Viewer IDs ───────────────────────────────────────────────────────

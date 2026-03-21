@@ -208,7 +208,6 @@ void BombJackSystem::run_frame() {
     if (video_port_) video_port_->swap_frame();
 }
 
-bool BombJackSystem::load_file(const char*) { return false; }
 uint32_t BombJackSystem::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
 

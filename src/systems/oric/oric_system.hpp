@@ -156,7 +156,6 @@ public:
 
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
 
-    bool is_system_ready() const override { return system_ready_; }
 
 private:
     // ── Chips ────────────────────────────────────────────────────────────
@@ -186,7 +185,6 @@ private:
 
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t pins_      = ORIC_BUS_DEFAULT_STATE;
-    bool        system_ready_ = false;
     int         audio_sample_rate_ = oric_constants::DEFAULT_SAMPLE_RATE;
 
     // ── Internal helpers ─────────────────────────────────────────────────

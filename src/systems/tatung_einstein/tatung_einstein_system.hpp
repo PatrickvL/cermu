@@ -80,7 +80,6 @@ public:
 
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
 
-    bool is_system_ready() const override { return system_ready_; }
 
 private:
     // ── Chips ────────────────────────────────────────────────────────────
@@ -116,7 +115,6 @@ private:
 
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t pins_         = EINSTEIN_BUS_DEFAULT_STATE;
-    bool        system_ready_ = false;
     uint32_t    frame_tstate_counter_ = 0;
 
     // ── Internal helpers ─────────────────────────────────────────────────

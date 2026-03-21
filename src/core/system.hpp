@@ -196,6 +196,7 @@ protected:
     float speed_multiplier_;
     uint32_t cached_target_fps_ = 60;  // Cached to avoid per-frame virtual dispatch + vector lookup
     bool quit_requested_;
+    bool system_ready_ = true;  // False until ROMs loaded / media inserted
 
     // Loaded program title — set by load_file() implementations.
     // For SID/NSF: song name + author.  For PRG/NES: bare filename.
@@ -358,8 +359,8 @@ public:
     void request_quit() { quit_requested_ = true; }
 
     /// Whether the system is ready to execute (e.g. has ROM loaded).
-    /// Systems that require media (cartridge, disk) return false until loaded.
-    virtual bool is_system_ready() const { return true; }
+    /// Default: returns system_ready_ (true unless set false during init).
+    virtual bool is_system_ready() const { return system_ready_; }
 
     /// Update the screen rect where the emulated display is rendered (SDL window coords).
     void set_display_screen_rect(float x, float y, float w, float h) {
@@ -456,7 +457,9 @@ public:
     virtual void reset() = 0;
     virtual void tick() = 0;
     virtual void run_frame() = 0;
-    virtual bool load_file(const char* filepath) = 0;
+    /// Load a program file (PRG, ROM, SID, NES, etc.).
+    /// Default: returns false (system does not support file loading).
+    virtual bool load_file(const char* filepath) { (void)filepath; return false; }
 
     /// Try to attach a container/streamable media file to the appropriate
     /// storage device (e.g. D64 → 1541 drive, TAP → datasette).  If the
