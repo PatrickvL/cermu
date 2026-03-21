@@ -13,6 +13,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 
@@ -157,6 +158,27 @@ template<> struct KC85BusTraits<KC85Variant::KC85_4> {
     using Spec = ManifestBusSpec<kKC854Chips, 16, 8>;
 };
 
+// ── ChipSet ──────────────────────────────────────────────────────────────
+struct KC85ChipSet : StandardChips<U880> {
+    z80_pio_t pio1;     // U855 PIO (system + keyboard)
+    z80_pio_t pio2;     // U855 PIO (module system)
+    z80_ctc_t ctc;      // U857 CTC (timing + sound + tape)
+
+    template<typename BoardT>
+    void bind_extras(BoardT& board) {
+        board.bind_chip(board.template find_index<z80_pio_t>(0), &pio1);
+        board.bind_chip(board.template find_index<z80_pio_t>(1), &pio2);
+        board.bind_chip(board.template find_index<z80_ctc_t>(), &ctc);
+    }
+
+    template<typename BoardT>
+    void register_extras(BoardT& board) {
+        board.register_component(&pio1);
+        board.register_component(&pio2);
+        board.register_component(&ctc);
+    }
+};
+
 // ── Keyboard emulation modes ─────────────────────────────────────────────────
 enum class KC85KeyboardMode {
     MEMORY_INJECT,   // Patch keycodes directly into CAOS OS variables (fast, default)
@@ -190,11 +212,7 @@ public:
 
 
 private:
-    // ── Chips ────────────────────────────────────────────────────────────
-    U880*                cpu_     = nullptr;  // U880 @ 1.7734 MHz — owned by board_
-    z80_pio_t*           pio1_    = nullptr;  // U855 PIO (system + keyboard) — owned by board_
-    z80_pio_t*           pio2_    = nullptr;  // U855 PIO (module system) — owned by board_
-    z80_ctc_t*           ctc_     = nullptr;  // U857 CTC (timing + sound + tape) — owned by board_
+    // ── Chips (value-typed via Board ChipSet) ────────────────────────────
     kc85_module_system_t* modules_ = nullptr; // Expansion module slot controller — owned by board_
 
     // ── Memory — owned by Board, accessed via chip_as<>() ────────────
@@ -206,7 +224,7 @@ private:
     using BT  = KC85BusTraits<V>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec>;
+    using MainBoard = Board<typename BT::Spec, KC85ChipSet>;
     Bus bus_;
     MainBoard board_{BT::kManifest};
 

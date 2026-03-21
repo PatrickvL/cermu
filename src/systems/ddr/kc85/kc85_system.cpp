@@ -88,18 +88,15 @@ bool KC85System<V>::initialize() {
 
     // ── Create chips via factory, wire the bus ────────────────────────
     board_.create_chips(&pins_);
+    board_.bind_chipset();
     board_.apply(bus_);
 
-    // Retrieve typed pointers for chips accessed after initialize()
+    // Retrieve typed pointers for memory chips accessed after initialize()
     if constexpr (Traits::has_basic_rom) {
         basic_rom_chip_ = board_.template find<ROMChip>();
     }
     caos_rom_chip_ = board_.template find_last<ROMChip>();
     irm_chip_  = board_.template find<RAMChip>(1);
-    cpu_       = board_.template cpu<U880>();
-    pio1_      = board_.template find<z80_pio_t>();
-    pio2_      = board_.template find<z80_pio_t>(1);
-    ctc_       = board_.template find<z80_ctc_t>();
     modules_   = board_.template find<kc85_module_system_t>();
 
     // ── KC85/2,3: fill RAM and IRM with pseudo-random noise ─────────────
@@ -135,11 +132,11 @@ bool KC85System<V>::initialize() {
     configure_bus_memory_map();
 
     // ── Init chips ──────────────────────────────────────────────────────
-    pins_ = board_.cpu_chip()->init();
-    cpu_->set_pc(0xF000);   // CAOS cold-start entry (real HW forces this via address latch)
-    pio1_->init();
-    pio2_->init();
-    ctc_->init();
+    pins_ = board_.cpu().init();
+    board_.cpu().set_pc(0xF000);   // CAOS cold-start entry (real HW forces this via address latch)
+    board_.chips().pio1.init();
+    board_.chips().pio2.init();
+    board_.chips().ctc.init();
     modules_->init();
 
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
@@ -189,12 +186,12 @@ bool KC85System<V>::initialize() {
     return true;
 }
 
-template<KC85Variant V> void KC85System<V>::shutdown() { cpu_ = nullptr; system_ready_ = false; }
+template<KC85Variant V> void KC85System<V>::shutdown() { system_ready_ = false; }
 template<KC85Variant V> void KC85System<V>::reset() {
-    if (!cpu_) return;
+    if (!system_ready_) return;
     board_.reset_chips();
-    pins_ = board_.cpu_chip()->reset(pins_);
-    cpu_->set_pc(0xF000);   // CAOS cold-start entry
+    pins_ = board_.cpu().reset(pins_);
+    board_.cpu().set_pc(0xF000);   // CAOS cold-start entry
     modules_->init();
     bank_ctrl_ = 0;
     bank_ctrl2_ = 0;
@@ -288,7 +285,7 @@ void KC85System<V>::apply_banking() {
 template<KC85Variant V>
 void KC85System<V>::update_bank_state() {
     // Banking is controlled by PIO Port A (not Port B)
-    uint8_t pio_a = pio1_->get_output(0);
+    uint8_t pio_a = board_.chips().pio1.get_output(0);
 
     bool new_caos = (pio_a & 0x01) != 0;   // PIO-A bit 0: CAOS ROM at E000
     bool new_irm  = (pio_a & 0x04) != 0;   // PIO-A bit 2: IRM at 8000
@@ -311,22 +308,22 @@ void KC85System<V>::update_bank_state() {
 
 template<KC85Variant V>
 void KC85System<V>::tick() {
-    if (!cpu_) return;
+    if (!system_ready_) return;
 
     // ── 1. Tick peripherals BEFORE CPU ──────────────────────────────────
     // CTC must tick before cpu so CTC3 timer measures pulse intervals correctly.
-    ctc_->tick();
+    board_.chips().ctc.tick();
 
     // CTC channel 0 and 1 zero-count toggle audio beepers
-    if (ctc_->check_zero_count(0)) {
+    if (board_.chips().ctc.check_zero_count(0)) {
         beeper1_state_ = !beeper1_state_;
     }
-    if (ctc_->check_zero_count(1)) {
+    if (board_.chips().ctc.check_zero_count(1)) {
         beeper2_state_ = !beeper2_state_;
     }
 
     // CTC channel 2 zero-count toggles the foreground blink flag
-    if (ctc_->check_zero_count(2)) {
+    if (board_.chips().ctc.check_zero_count(2)) {
         blink_flag_ = !blink_flag_;
     }
 
@@ -337,22 +334,22 @@ void KC85System<V>::tick() {
             // Pulse from U807 → PIO Port B strobe (BSTB)
             // This triggers the PIO-B interrupt service routine at $E199
             // which reads CTC3 to measure the interval between pulses.
-            pio1_->strobe(1, true);
-            pio1_->strobe(1, false);
+            board_.chips().pio1.strobe(1, true);
+            board_.chips().pio1.strobe(1, false);
         }
     }
 
     // ── 2. Drive INT pin on bus (active-low, level-sensitive) ──────────
     // Daisy chain priority: CTC > PIO-A > PIO-B.
     // The CPU samples INT at the start of each M1 cycle.
-    if (ctc_->interrupt_pending() || pio1_->any_interrupt_pending()) {
+    if (board_.chips().ctc.interrupt_pending() || board_.chips().pio1.any_interrupt_pending()) {
         BUS_CLR_BIT(pins_, BUS_IRQ_BIT);   // Assert INT (active-low)
     } else {
         BUS_SET_BIT(pins_, BUS_IRQ_BIT);   // Deassert INT
     }
 
     // ── 3. CPU tick (one T-state) ─────────────────────────────────────
-    pins_ = cpu_->tick(pins_);
+    pins_ = board_.cpu().tick(pins_);
 
     // ── 4. Bus dispatch ───────────────────────────────────────────────
     bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);
@@ -374,9 +371,9 @@ void KC85System<V>::tick() {
         if (v_count_ >= static_cast<uint32_t>(kc85_constants::SCANLINES_PER_FRAME)) {
             v_count_ = 0;
             // Vertical sync: trigger CTC channel 2 for blink frequency
-            ctc_->trigger(2, true);
+            board_.chips().ctc.trigger(2, true);
         } else {
-            ctc_->trigger(2, false);
+            board_.chips().ctc.trigger(2, false);
         }
     }
 
@@ -419,7 +416,7 @@ template<KC85Variant V> void KC85System<V>::run_frame() {
 
 template<KC85Variant V>
 void KC85System<V>::handle_keyboard() {
-    if (!cpu_ || !cpu_->iff1()) return;
+    if (!system_ready_ || !board_.cpu().iff1()) return;
 
     RAMChip* ram = board_.template find<RAMChip>();
     if (!ram) return;
@@ -433,7 +430,7 @@ void KC85System<V>::handle_keyboard() {
         if (addr < ram_size) mem[addr] = val;
     };
 
-    const uint16_t ix = cpu_->ix();
+    const uint16_t ix = board_.cpu().ix();
     const uint16_t addr_status  = ix + 0x08;
     const uint16_t addr_repeat  = ix + 0x0A;
     const uint16_t addr_keycode = ix + 0x0D;
@@ -498,7 +495,7 @@ template<KC85Variant V>
 void KC85System<V>::build_reverse_ktab() {
     std::memset(reverse_ktab_, 0xFF, sizeof(reverse_ktab_));
 
-    if (!cpu_ || !cpu_->iff1()) return;
+    if (!system_ready_ || !board_.cpu().iff1()) return;
 
     // Read KTAB pointer from CAOS OS variables (IX+$0E, IX+$0F)
     RAMChip* ram = board_.template find<RAMChip>();
@@ -510,7 +507,7 @@ void KC85System<V>::build_reverse_ktab() {
         return (addr < ram_size) ? mem[addr] : 0xFF;
     };
 
-    const uint16_t ix = cpu_->ix();
+    const uint16_t ix = board_.cpu().ix();
     uint16_t ktab_addr = r8(ix + 0x0E) | (static_cast<uint16_t>(r8(ix + 0x0F)) << 8);
 
     if (ktab_addr == 0 || ktab_addr == 0xFFFF) return;
@@ -685,7 +682,7 @@ template<KC85Variant V>
 void KC85System<V>::render_frame() {
     if (!irm_chip_) return;
 
-    const uint8_t pio_b = pio1_->get_output(1);
+    const uint8_t pio_b = board_.chips().pio1.get_output(1);
     video_gen_.set_irm(irm_chip_->data());
     video_gen_.set_blink_bg(blink_flag_ && (pio_b & 0x80));
     if constexpr (Traits::has_extended_video) {
@@ -703,8 +700,8 @@ bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
     // Interrupt acknowledge: IORQ + M1 (both active-low)
     // Daisy chain priority: CTC > PIO-A > PIO-B.
     if (!BUS_GET_BIT(pins, Z80_M1_BIT)) {
-        if (ctc_->interrupt_pending()) return ctc_->inta(pins);
-        if (pio1_->any_interrupt_pending()) return pio1_->inta(pins);
+        if (board_.chips().ctc.interrupt_pending()) return board_.chips().ctc.inta(pins);
+        if (board_.chips().pio1.any_interrupt_pending()) return board_.chips().pio1.inta(pins);
         BUS_SET_DATA(pins, 0xFF);
         return pins;
     }
@@ -715,7 +712,7 @@ bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
     if ((port & 0xFC) == kc85_constants::PIO_A_DATA) {
         bool is_write = !BUS_GET_BIT(pins, BUS_RW_BIT);
         bool is_data_reg = !((port >> 1) & 0x01);
-        pins = pio1_->io_tick(pins);
+        pins = board_.chips().pio1.io_tick(pins);
         // PIO 1 data writes control memory banking
         if (is_write && is_data_reg) {
             update_bank_state();
@@ -725,7 +722,7 @@ bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
 
     // CTC at $8C-$8F (4 channels)
     if ((port & 0xFC) == kc85_constants::CTC_CH0) {
-        return ctc_->io_tick(pins);
+        return board_.chips().ctc.io_tick(pins);
     }
 
     // Module system at $80
