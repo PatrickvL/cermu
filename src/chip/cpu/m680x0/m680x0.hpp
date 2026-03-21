@@ -1025,22 +1025,27 @@ private:
             case InstrGroup::GROUP_7:     return decode_moveq(pins, opcode);
             case InstrGroup::GROUP_8:     return decode_group8(pins, opcode);
             case InstrGroup::GROUP_9:     return decode_group9(pins, opcode);
-            case InstrGroup::GROUP_A:     return exception(pins, Vector::LINE_A);
+            case InstrGroup::GROUP_A:     return exception(pins, Vector::LINE_A, regs_.pc - 4);
             case InstrGroup::GROUP_B:     return decode_groupB(pins, opcode);
             case InstrGroup::GROUP_C:     return decode_groupC(pins, opcode);
             case InstrGroup::GROUP_D:     return decode_groupD(pins, opcode);
             case InstrGroup::GROUP_E:     return decode_groupE(pins, opcode);
-            case InstrGroup::GROUP_F:     return exception(pins, Vector::LINE_F);
+            case InstrGroup::GROUP_F:     return exception(pins, Vector::LINE_F, regs_.pc - 4);
         }
         return pins;
     }
 
     // ── Exception processing ────────────────────────────────────
-    bus_state_t exception(bus_state_t pins, uint8_t vector_num) {
-        // Simplified exception processing — push context, read vector
+    bus_state_t exception(bus_state_t pins, uint8_t vector_num, uint32_t pc_to_save) {
         exception_vector_ = vector_num;
+        exception_pc_ = pc_to_save;
         transition_to(&m680x0_t::handle_exception);
         return (this->*current_handler_)(pins);
+    }
+
+    // Convenience: push current "next instruction" PC (regs_.pc - 2)
+    bus_state_t exception(bus_state_t pins, uint8_t vector_num) {
+        return exception(pins, vector_num, regs_.pc - 2);
     }
 
     bus_state_t handle_exception(bus_state_t pins) {
@@ -1053,10 +1058,10 @@ private:
             // Push PC (low word first, then high word — stack grows down)
             regs_.a[7] -= 2;
             mem_write_(mem_ctx_, regs_.a[7] & address_mask(),
-                       static_cast<uint16_t>(regs_.pc & 0xFFFF));
+                       static_cast<uint16_t>(exception_pc_ & 0xFFFF));
             regs_.a[7] -= 2;
             mem_write_(mem_ctx_, regs_.a[7] & address_mask(),
-                       static_cast<uint16_t>((regs_.pc >> 16) & 0xFFFF));
+                       static_cast<uint16_t>((exception_pc_ >> 16) & 0xFFFF));
             // Push SR
             regs_.a[7] -= 2;
             mem_write_(mem_ctx_, regs_.a[7] & address_mask(), exception_sr_);
@@ -1065,9 +1070,19 @@ private:
             uint16_t vec_hi = mem_read_(mem_ctx_, vaddr);
             uint16_t vec_lo = mem_read_(mem_ctx_, vaddr + 2);
             regs_.pc = (static_cast<uint32_t>(vec_hi) << 16) | vec_lo;
-            // 3 writes + 2 reads + 1 idle = 6 bus cycles = ~24 clocks
-            clocks_remaining_ = 23;
-            transition_to(&m680x0_t::handle_prefetch);
+            // Two-word prefetch from handler address (same as do_branch_prefetch)
+            uint16_t word1 = mem_read_(mem_ctx_, regs_.pc & address_mask());
+            regs_.pc += 2;
+            uint16_t word2 = mem_read_(mem_ctx_, regs_.pc & address_mask());
+            regs_.ir  = word1;
+            regs_.irc = word2;
+            regs_.pc += 2;
+            regs_.ird = regs_.ir;
+            // 3 writes + 2 reads (vector) + 2 reads (prefetch) + 2 idle = 34 clocks
+            // Current tick consumed: clocks_remaining_ = 33
+            clocks_remaining_ += 33;
+            sync_sp();
+            transition_to(&m680x0_t::handle_decode);
             return pins;
         }
         // Fallback: multi-tick bus signal path
@@ -1083,7 +1098,7 @@ private:
             case 1:
                 regs_.a[7] -= 2;
                 pins = begin_write_word(pins, regs_.a[7],
-                    static_cast<uint16_t>(regs_.pc & 0xFFFF), FunctionCode::SUPER_DATA);
+                    static_cast<uint16_t>(exception_pc_ & 0xFFFF), FunctionCode::SUPER_DATA);
                 return pins;
             case 2:
                 if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
@@ -1093,7 +1108,7 @@ private:
             case 3:
                 regs_.a[7] -= 2;
                 pins = begin_write_word(pins, regs_.a[7],
-                    static_cast<uint16_t>((regs_.pc >> 16) & 0xFFFF), FunctionCode::SUPER_DATA);
+                    static_cast<uint16_t>((exception_pc_ >> 16) & 0xFFFF), FunctionCode::SUPER_DATA);
                 return pins;
             case 4:
                 if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
@@ -1237,6 +1252,7 @@ private:
     uint32_t            addr_latch_      = 0;       // Address latch for multi-cycle ops
     uint32_t            data_latch_      = 0;       // Data latch for multi-cycle ops
     uint16_t            exception_sr_    = 0;       // SR saved during exception processing
+    uint32_t            exception_pc_    = 0;       // PC to push during exception processing
     uint8_t             exception_vector_ = 0;      // Vector number for current exception
     uint32_t            ea_addr_         = 0;       // Computed effective address
     bus_state_t         bus_prev_        = 0;       // Previous bus state (edge detection)
