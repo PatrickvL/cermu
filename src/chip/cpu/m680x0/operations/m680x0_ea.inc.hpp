@@ -137,6 +137,11 @@ inline uint32_t read_ea(uint8_t mode, uint8_t reg, OpSize sz) {
         clocks_remaining_ += 2;
     if (mem_read_) {
         uint32_t addr = ea_addr_ & address_mask();
+        // Address error: word/long access to odd address
+        if (unlikely((addr & 1) && sz != OpSize::Byte)) {
+            process_address_error_sync(ea_addr_, true /*read*/, fc_data());
+            return 0;
+        }
         if (sz == OpSize::Long) {
             uint16_t hi = mem_read_(mem_ctx_, addr & ~1u);
             uint16_t lo = mem_read_(mem_ctx_, (addr + 2) & ~1u);
@@ -168,6 +173,11 @@ inline void write_ea(uint8_t mode, uint8_t reg, uint32_t value, OpSize sz) {
     ea_addr_ = calc_ea(mode, reg, sz);
     if (mem_write_) {
         uint32_t addr = ea_addr_ & address_mask();
+        // Address error: word/long write to odd address
+        if (unlikely((addr & 1) && sz != OpSize::Byte)) {
+            process_address_error_sync(ea_addr_, false /*write*/, fc_data());
+            return;
+        }
         if (sz == OpSize::Long) {
             mem_write_(mem_ctx_, addr,     static_cast<uint16_t>((value >> 16) & 0xFFFF));
             mem_write_(mem_ctx_, addr + 2, static_cast<uint16_t>(value & 0xFFFF));
