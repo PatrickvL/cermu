@@ -4,6 +4,7 @@
 #include "core/system_lines.hpp"
 #include "core/text_terminal.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "systems/apple1/apple1_constants.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/io/pia6820.hpp"
@@ -41,6 +42,22 @@ inline constexpr auto kApple1Chips = make_chip_manifest(
 
 // BusSpec auto-derived from the manifest
 using Apple1BusSpec = ManifestBusSpec<kApple1Chips, 16, 8>;
+
+// ============================================================================
+// Apple 1 ChipSet — value-typed chips owned by Board
+// ============================================================================
+
+struct Apple1Chips : StandardChips<MOS6502> {
+    pia6820_t pia;
+
+    template<typename B> void bind_extras(B& board) {
+        board.bind_chip(board.template find_index<pia6820_t>(), &pia);
+    }
+
+    void register_extras(BoardBase& board) {
+        board.register_component(&pia);
+    }
+};
 
 
 
@@ -91,8 +108,6 @@ public:
 
 private:
     // Chip instances
-    MOS6502* cpu_ = nullptr;         // MOS6502 CPU — owned by board_
-    pia6820_t pia_;                  // PIA 6820 — pre-bound member
     TextTerminal* terminal_;         // Text terminal (40x24)
     
     // Memory chips — owned by board_, borrowed here for post-init access
@@ -103,7 +118,7 @@ private:
     // MemoryBus — declarative setup via chip manifest + Board::apply()
     using Bus = MemoryBus<Apple1BusSpec>;
     using PT  = PackingTraits<Apple1BusSpec>;
-    using MainBoard = Board<Apple1BusSpec>;
+    using MainBoard = Board<Apple1BusSpec, Apple1Chips>;
     Bus bus_;
     MainBoard board_{kApple1Chips};
 
