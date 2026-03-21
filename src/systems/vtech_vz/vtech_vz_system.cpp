@@ -119,13 +119,12 @@ bool VTechVZSystem<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
     register_board(&board_);
     board_.create_chips(&pins_);
+    board_.bind_chipset();
 
-    cpu_ = board_.template cpu<ZilogZ80A>();
-    vdg_ = board_.template find<mc6847_t>();
     video_ram_ptr_ = board_.template find<RAMChip>()->data();  // First RAMChip = Video RAM
 
-    pins_ = board_.cpu_chip()->init();
-    vdg_->init();
+    pins_ = board_.cpu().init();
+    board_.vdp().init();
 
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 
@@ -140,12 +139,12 @@ bool VTechVZSystem<V>::initialize() {
                   vtech_vz_constants::FB_HEIGHT);
     display_.set_palette(mc6847_t::get_palette(),
                          mc6847_t::get_palette_size());
-    vdg_->set_display(&display_);
+    board_.vdp().set_display(&display_);
     register_display(&display_);
 
     // Video stream output — composite video from MC6847 VDG
     video_port_ = std::make_unique<CompositeVideoPort>();
-    vdg_->set_stream(&video_port_->stream());
+    board_.vdp().set_stream(&video_port_->stream());
     video_port_->bind_frame_output(&last_frame_data_);
 
     system_ready_ = true;
@@ -159,8 +158,8 @@ void VTechVZSystem<V>::shutdown() { system_ready_ = false; }
 
 template<VZVariant V>
 void VTechVZSystem<V>::reset() {
-    if (!cpu_) return;
-    pins_ = board_.cpu_chip()->reset(pins_);
+    if (!system_ready_) return;
+    pins_ = board_.cpu().reset(pins_);
     board_.reset_chips();
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 }
