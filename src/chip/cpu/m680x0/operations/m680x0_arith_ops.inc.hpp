@@ -55,8 +55,7 @@ inline bus_state_t decode_group0(bus_state_t pins, uint16_t opcode) {
     if (upper == 4) {
         uint8_t op_type = (opcode >> 6) & 3;
         // Bit number from extension word (IRC)
-        uint8_t bit_num_raw = static_cast<uint8_t>(regs_.irc & 0xFF);
-        regs_.pc += 2;
+        uint8_t bit_num_raw = static_cast<uint8_t>(consume_extension_word() & 0xFF);
 
         if (ea_mode == 0) {
             uint8_t bit_num = bit_num_raw & 31;
@@ -85,16 +84,14 @@ inline bus_state_t decode_group0(bus_state_t pins, uint16_t opcode) {
         switch (upper) {
             case 0: {  // ORI
                 if ((opcode & 0x3F) == 0x3C) {  // ORI to CCR
-                    uint8_t imm = static_cast<uint8_t>(regs_.irc);
-                    regs_.pc += 2;
+                    uint8_t imm = static_cast<uint8_t>(consume_extension_word());
                     set_ccr(get_ccr() | imm);
                     return do_prefetch(pins);
                 }
                 if ((opcode & 0x3F) == 0x7C) {  // ORI to SR
                     if (!(regs_.sr & SRBits::S))
                         return exception(pins, Vector::PRIVILEGE_VIOLATION);
-                    uint16_t imm = regs_.irc;
-                    regs_.pc += 2;
+                    uint16_t imm = consume_extension_word();
                     set_sr(regs_.sr | imm);
                     return do_prefetch(pins);
                 }
@@ -102,16 +99,14 @@ inline bus_state_t decode_group0(bus_state_t pins, uint16_t opcode) {
             }
             case 1: {  // ANDI
                 if ((opcode & 0x3F) == 0x3C) {  // ANDI to CCR
-                    uint8_t imm = static_cast<uint8_t>(regs_.irc);
-                    regs_.pc += 2;
+                    uint8_t imm = static_cast<uint8_t>(consume_extension_word());
                     set_ccr(get_ccr() & imm);
                     return do_prefetch(pins);
                 }
                 if ((opcode & 0x3F) == 0x7C) {  // ANDI to SR
                     if (!(regs_.sr & SRBits::S))
                         return exception(pins, Vector::PRIVILEGE_VIOLATION);
-                    uint16_t imm = regs_.irc;
-                    regs_.pc += 2;
+                    uint16_t imm = consume_extension_word();
                     set_sr(regs_.sr & imm);
                     return do_prefetch(pins);
                 }
@@ -119,16 +114,14 @@ inline bus_state_t decode_group0(bus_state_t pins, uint16_t opcode) {
             }
             case 5: {  // EORI
                 if ((opcode & 0x3F) == 0x3C) {  // EORI to CCR
-                    uint8_t imm = static_cast<uint8_t>(regs_.irc);
-                    regs_.pc += 2;
+                    uint8_t imm = static_cast<uint8_t>(consume_extension_word());
                     set_ccr(get_ccr() ^ imm);
                     return do_prefetch(pins);
                 }
                 if ((opcode & 0x3F) == 0x7C) {  // EORI to SR
                     if (!(regs_.sr & SRBits::S))
                         return exception(pins, Vector::PRIVILEGE_VIOLATION);
-                    uint16_t imm = regs_.irc;
-                    regs_.pc += 2;
+                    uint16_t imm = consume_extension_word();
                     set_sr(regs_.sr ^ imm);
                     return do_prefetch(pins);
                 }
@@ -144,15 +137,10 @@ inline bus_state_t decode_group0(bus_state_t pins, uint16_t opcode) {
     // Read immediate value from prefetch
     uint32_t imm;
     if (sz == OpSize::Long) {
-        imm = static_cast<uint32_t>(regs_.irc) << 16;
-        regs_.pc += 2;
-        // NOTE: second word should come from bus — simplified: read from IRC again
-        // This won't work correctly for most cases. TODO: proper bus cycle.
-        imm |= regs_.irc;
-        regs_.pc += 2;
+        imm = static_cast<uint32_t>(consume_extension_word()) << 16;
+        imm |= consume_extension_word();
     } else {
-        imm = regs_.irc & size_mask(sz);
-        regs_.pc += 2;
+        imm = consume_extension_word() & size_mask(sz);
     }
 
     // Read destination
@@ -190,7 +178,9 @@ inline bus_state_t decode_group0(bus_state_t pins, uint16_t opcode) {
     if (ea_mode == 0) {
         write_dn(ea_reg, result, sz);
     } else {
-        write_ea(ea_mode, ea_reg, result, sz);
+        // ea_addr_ already set by read_ea — use write_back_ea to avoid
+        // recalculating (which would double PostInc/PreDec side effects)
+        write_back_ea(result, sz);
     }
     return do_prefetch(pins);
 }
@@ -273,7 +263,9 @@ inline bus_state_t decode_group5(bus_state_t pins, uint16_t opcode) {
         // ADDQ/SUBQ Dn: .l → 8 clocks (4 idle)
         if (sz == OpSize::Long) return do_idle_then_prefetch(pins, 4);
     } else {
-        write_ea(ea_mode, ea_reg, result, sz);
+        // ea_addr_ already set by read_ea — use write_back_ea to avoid
+        // recalculating (which would double PostInc/PreDec side effects)
+        write_back_ea(result, sz);
     }
     return do_prefetch(pins);
 }

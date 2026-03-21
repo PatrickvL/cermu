@@ -237,8 +237,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
         if (!(regs_.sr & SRBits::S))
             return exception(pins, Vector::PRIVILEGE_VIOLATION);
         // Load new SR from extension word
-        set_sr(regs_.irc);
-        regs_.pc += 2;
+        set_sr(consume_extension_word());
         stopped_ = true;
         return do_prefetch(pins);
     }
@@ -329,6 +328,8 @@ inline bus_state_t decode_group6(bus_state_t pins, uint16_t opcode) {
     int32_t displacement;
     if (disp8 == 0) {
         // Word displacement from extension word
+        // Note: branches can't use consume_extension_word() because the
+        // IRC refill would read from the sequential address, not the branch target.
         displacement = static_cast<int16_t>(regs_.irc);
         regs_.pc += 2;
     } else if constexpr (has_long_branch()) {
@@ -337,7 +338,11 @@ inline bus_state_t decode_group6(bus_state_t pins, uint16_t opcode) {
             displacement = static_cast<int32_t>(
                 (static_cast<uint32_t>(regs_.irc) << 16)); // high word
             regs_.pc += 2;
-            displacement |= regs_.irc;  // low word
+            if (mem_read_) {
+                displacement |= mem_read_(mem_ctx_, regs_.pc & address_mask());
+            } else {
+                displacement |= regs_.irc;
+            }
             regs_.pc += 2;
         } else {
             displacement = disp8;

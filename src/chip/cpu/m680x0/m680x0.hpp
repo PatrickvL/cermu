@@ -508,10 +508,12 @@ private:
     bus_state_t handle_read_bw(bus_state_t pins) {
         if (mem_read_) {
             uint32_t addr = ea_addr_ & address_mask();
-            uint16_t word = mem_read_(mem_ctx_, addr);
-            data_latch_ = (op_sz_ == OpSize::Byte)
-                ? static_cast<uint32_t>((addr & 1) ? (word & 0xFF) : (word >> 8))
-                : static_cast<uint32_t>(word);
+            if (op_sz_ == OpSize::Byte) {
+                uint16_t word = mem_read_(mem_ctx_, addr & ~1u);
+                data_latch_ = static_cast<uint32_t>((addr & 1) ? (word & 0xFF) : (word >> 8));
+            } else {
+                data_latch_ = static_cast<uint32_t>(mem_read_(mem_ctx_, addr));
+            }
             clocks_remaining_ = 3;  // 4-clock bus cycle
             transition_to(cont_handler_);
             return pins;
@@ -582,14 +584,15 @@ private:
         if (mem_write_) {
             uint32_t addr = ea_addr_ & address_mask();
             if (op_sz_ == OpSize::Byte) {
-                // Byte write: put byte in correct position of word
+                // Read-modify-write: only change the target byte
+                uint32_t even_addr = addr & ~1u;
+                uint16_t existing = mem_read_(mem_ctx_, even_addr);
                 uint16_t word;
-                if (addr & 1) {
-                    word = static_cast<uint16_t>(data_latch_ & 0xFF);       // odd → low byte
-                } else {
-                    word = static_cast<uint16_t>((data_latch_ & 0xFF) << 8); // even → high byte
-                }
-                mem_write_(mem_ctx_, addr, word);
+                if (addr & 1)
+                    word = (existing & 0xFF00) | (data_latch_ & 0xFF);
+                else
+                    word = ((data_latch_ & 0xFF) << 8) | (existing & 0x00FF);
+                mem_write_(mem_ctx_, even_addr, word);
             } else {
                 mem_write_(mem_ctx_, addr, static_cast<uint16_t>(data_latch_));
             }
@@ -664,7 +667,7 @@ private:
             regs_.irc = word;
             regs_.pc += 2;
             regs_.ird = regs_.ir;
-            clocks_remaining_ = 3;  // 4-clock bus cycle
+            clocks_remaining_ += 3;  // 4-clock bus cycle
             transition_to(cont_handler_);
             return pins;
         }
@@ -959,7 +962,7 @@ private:
             regs_.irc = word;
             regs_.pc += 2;
             regs_.ird = regs_.ir;
-            clocks_remaining_ = 3;  // 4-clock bus cycle minus current tick
+            clocks_remaining_ += 3;  // 4-clock bus cycle minus current tick
             transition_to(&m680x0_t::handle_decode);
             return pins;
         }
@@ -1124,6 +1127,23 @@ private:
         step_ = 0;
     }
 
+    /// Consume an extension word from IRC and refill IRC from [PC].
+    /// On the real 68000, each extension word read is a 4-clock bus cycle
+    /// that shifts the prefetch pipeline. Without this refill, the final
+    /// do_prefetch would put the stale extension value into IRD, corrupting
+    /// the next instruction decode.
+    inline uint16_t consume_extension_word() {
+        uint16_t word = regs_.irc;
+        // Refill IRC from [PC] — PC already points past the extension word
+        // (it was advanced by the previous prefetch that loaded IRC).
+        if (mem_read_) {
+            regs_.irc = mem_read_(mem_ctx_, regs_.pc & address_mask());
+            clocks_remaining_ += 4;
+        }
+        regs_.pc += 2;  // Advance PC AFTER refill (next read will be from PC+2)
+        return word;
+    }
+
     /// Transition to prefetch and immediately run its first step.
     /// This chains decode + prefetch into the same clock tick,
     /// matching the real 68000 where decode is free (0 clocks).
@@ -1136,6 +1156,14 @@ private:
     /// Used for instructions that take more than 4 clocks (prefetch only).
     /// The first idle clock is consumed on the current tick.
     inline bus_state_t do_idle_then_prefetch(bus_state_t pins, uint8_t idle_clocks) {
+        if (mem_read_) {
+            // Synchronous: prefetch now, then idle + prefetch bus cycle = total delay
+            transition_to(&m680x0_t::handle_prefetch);
+            handle_prefetch(pins);  // Does the fetch, sets clocks_remaining_ = 3
+            // Add idle clocks to the prefetch delay
+            clocks_remaining_ += idle_clocks;
+            return pins;
+        }
         if (idle_clocks == 0) return do_prefetch(pins);
         idle_remaining_ = idle_clocks - 1;  // -1 because we consume one now
         transition_to(&m680x0_t::handle_idle);
@@ -1200,7 +1228,8 @@ public:
     /// Used by test harnesses to detect instruction completion.
     bool opdone() const {
         return current_handler_ == &m680x0_t::handle_decode
-            && step_ == 0;
+            && step_ == 0
+            && clocks_remaining_ == 0;
     }
 
     /// Set CPU to "ready to decode" state (skip reset sequence).
