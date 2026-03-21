@@ -13,6 +13,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -48,6 +49,15 @@ inline constexpr auto kSMSChips = make_chip_manifest(
 using SMSBusSpec  = ManifestBusSpec<kSMSChips, 16, 8>;
 
 // ============================================================================
+// SMS ChipSet — value-typed chips owned by Board
+// ============================================================================
+
+struct SMSChips : StandardChips<ZilogZ80A, SEGA_315_5124, sn76489_t> {
+    SMSChips() : StandardChips<ZilogZ80A, SEGA_315_5124, sn76489_t>{
+        ZilogZ80A{}, SEGA_315_5124{}, sn76489_t{SN76489Variant::SEGA_PSG}} {}
+};
+
+// ============================================================================
 // Sega Master System
 // ============================================================================
 
@@ -76,15 +86,10 @@ public:
 
 
 private:
-    // ── Chips ────────────────────────────────────────────────────────────
-    ZilogZ80A*       cpu_ = nullptr;
-    SEGA_315_5124    vdp_;
-    sn76489_t        psg_{SN76489Variant::SEGA_PSG};
-
     // ── Board + bus ──────────────────────────────────────────────────────
     using Bus       = MemoryBus<SMSBusSpec>;
     using PT        = PackingTraits<SMSBusSpec>;
-    using MainBoard = Board<SMSBusSpec>;
+    using MainBoard = Board<SMSBusSpec, SMSChips>;
     Bus       bus_;
     MainBoard board_{kSMSChips};
 
