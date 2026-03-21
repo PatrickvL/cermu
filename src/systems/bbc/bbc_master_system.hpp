@@ -44,6 +44,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "chip/cpu/fam65xx/wdc65c02.hpp"
 #include "chip/io/mos6522.hpp"
 #include "chip/video/mc6845/mc6845.hpp"
@@ -152,6 +153,28 @@ template<> struct BBCMasterBusTraits<BBCMasterVariant::MASTER_128> {
 };
 
 // ============================================================================
+// BBC Master ChipSet — value-typed chips owned by Board
+// ============================================================================
+
+struct BBCMasterChipSet : StandardChips<WDC_65C02, mc6845_t, sn76489_t> {
+    mos6522_t      system_via;
+    mos6522_t      user_via;
+    bbc_vidproc_t  vidproc;
+
+    template<typename B> void bind_extras(B& board) {
+        board.bind_chip(board.template find_index<mos6522_t>(),     &system_via);
+        board.bind_chip(board.template find_index<mos6522_t>(1),   &user_via);
+        board.bind_chip(board.template find_index<bbc_vidproc_t>(), &vidproc);
+    }
+
+    void register_extras(BoardBase& board) {
+        board.register_component(&system_via);
+        board.register_component(&user_via);
+        board.register_component(&vidproc);
+    }
+};
+
+// ============================================================================
 // BBC B+ / Master System
 // ============================================================================
 
@@ -185,20 +208,13 @@ public:
 
 
 private:
-    // ── Chips ────────────────────────────────────────────────────────────
-    WDC_65C02*  cpu_  = nullptr;     // WDC 65C02 — owned by board_
-    mc6845_t*   crtc_ = nullptr;     // MC6845 CRTC — owned by board_
-    sn76489_t*  psg_  = nullptr;     // SN76489 PSG — owned by board_
-    mos6522_t   system_via_;         // System VIA — pre-bound
-    mos6522_t   user_via_;           // User VIA — pre-bound
-
     // Audio thread — SN76489 synthesis runs off the emulation thread
     AudioThread audio_thread_;
     std::unique_ptr<WriteOnlySynthAdapter<sn76489_t>> psg_adapter_;
 
     // ── Board + bus ──────────────────────────────────────────────────────
     using Bus       = MemoryBus<typename BTraits::Spec>;
-    using MainBoard = Board<typename BTraits::Spec>;
+    using MainBoard = Board<typename BTraits::Spec, BBCMasterChipSet>;
     Bus       bus_;
     MainBoard board_{BTraits::kManifest};
 
@@ -207,9 +223,6 @@ private:
     ROMChip* paged_rom_chip_  = nullptr;
     ROMChip* os_rom_chip_     = nullptr;
     uint8_t* memory_          = nullptr;    // Direct pointer for rendering
-
-    // Video ULA chip (VIDPROC) — pre-bound
-    bbc_vidproc_t vidproc_;
 
     // ── Display ──────────────────────────────────────────────────────────
     IndexedFrameBuffer display_;

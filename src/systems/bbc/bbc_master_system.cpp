@@ -146,25 +146,13 @@ bool BBCMasterSystem<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
     register_board(&board_);
 
-    // Pre-bind stack-member VIAs
-    board_.bind_chip(board_.template find_index<mos6522_t>(),  &system_via_);
-    board_.bind_chip(board_.template find_index<mos6522_t>(1), &user_via_);
-    board_.bind_chip(board_.template find_index<bbc_vidproc_t>(), &vidproc_);
-    board_.create_chips(&pins_);
+    // Pre-bind all value-typed chips\n    board_.bind_chipset();\n    board_.create_chips(&pins_);\n\n    ram_chip_       = board_.template find<RAMChip>();\n    paged_rom_chip_ = board_.template find<ROMChip>();\n    os_rom_chip_    = board_.template find<ROMChip>(1);\n    memory_         = ram_chip_->data();
 
-    cpu_  = board_.template cpu<WDC_65C02>();
-    crtc_ = board_.template find<mc6845_t>();
-    psg_  = board_.template find<sn76489_t>();
-    ram_chip_       = board_.template find<RAMChip>();
-    paged_rom_chip_ = board_.template find<ROMChip>();
-    os_rom_chip_    = board_.template find<ROMChip>(1);
-    memory_         = ram_chip_->data();
-
-    pins_ = board_.cpu_chip()->init();
-    system_via_.reset();
-    user_via_.reset();
-    system_via_.interrupt_bit = BUS_IRQ_BIT;
-    user_via_.interrupt_bit   = BUS_IRQ_BIT;
+    pins_ = board_.cpu().init();
+    board_.chips().system_via.reset();
+    board_.chips().user_via.reset();
+    board_.chips().system_via.interrupt_bit = BUS_IRQ_BIT;
+    board_.chips().user_via.interrupt_bit   = BUS_IRQ_BIT;
 
     configure_bus_memory_map();
     if (!load_roms()) {
@@ -188,13 +176,13 @@ void BBCMasterSystem<V>::shutdown() { system_ready_ = false; }
 
 template<BBCMasterVariant V>
 void BBCMasterSystem<V>::reset() {
-    if (!cpu_) return;
-    pins_ = board_.cpu_chip()->reset(pins_);
+    if (!system_ready_) return;
+    pins_ = board_.cpu().reset(pins_);
     board_.reset_chips();
-    system_via_.reset();
-    user_via_.reset();
-    system_via_.interrupt_bit = BUS_IRQ_BIT;
-    user_via_.interrupt_bit   = BUS_IRQ_BIT;
+    board_.chips().system_via.reset();
+    board_.chips().user_via.reset();
+    board_.chips().system_via.interrupt_bit = BUS_IRQ_BIT;
+    board_.chips().user_via.interrupt_bit   = BUS_IRQ_BIT;
     rom_select_ = 0;
     acccon_ = 0;
     shadow_active_ = false;
