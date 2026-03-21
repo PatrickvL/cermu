@@ -15,6 +15,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -54,6 +55,25 @@ inline constexpr auto kEinsteinChips = make_chip_manifest(
 using EinsteinBusSpec = ManifestBusSpec<kEinsteinChips, 16, 8>;
 
 // ============================================================================
+// Einstein ChipSet — value-typed chips owned by Board
+// ============================================================================
+
+struct EinsteinChips : StandardChips<ZilogZ80A, TMS9929A, AY_3_8910> {
+    z80_ctc_t ctc;
+    z80_pio_t pio;
+
+    template<typename B> void bind_extras(B& board) {
+        board.bind_chip(board.template find_index<z80_ctc_t>(), &ctc);
+        board.bind_chip(board.template find_index<z80_pio_t>(), &pio);
+    }
+
+    void register_extras(BoardBase& board) {
+        board.register_component(&ctc);
+        board.register_component(&pio);
+    }
+};
+
+// ============================================================================
 // Tatung Einstein System
 // ============================================================================
 
@@ -82,17 +102,10 @@ public:
 
 
 private:
-    // ── Chips ────────────────────────────────────────────────────────────
-    ZilogZ80A*   cpu_ = nullptr;
-    TMS9929A     vdp_;
-    AY_3_8910    psg_;
-    z80_ctc_t    ctc_;
-    z80_pio_t    pio_;
-
     // ── Board + bus ──────────────────────────────────────────────────────
     using Bus       = MemoryBus<EinsteinBusSpec>;
     using PT        = PackingTraits<EinsteinBusSpec>;
-    using MainBoard = Board<EinsteinBusSpec>;
+    using MainBoard = Board<EinsteinBusSpec, EinsteinChips>;
     Bus       bus_;
     MainBoard board_{kEinsteinChips};
 
