@@ -26,6 +26,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -125,6 +126,12 @@ template<> struct SpectrumBusTraits<SpectrumVariant::ZX128K> {
 };
 
 // ============================================================================
+// Spectrum ChipSet — value-typed chips owned by Board
+// ============================================================================
+
+struct SpectrumChips : StandardChips<ZilogZ80A, ferranti_ula_t, AY_3_8912> {};
+
+// ============================================================================
 // ZX Spectrum System
 // ============================================================================
 
@@ -168,14 +175,6 @@ public:
 
 private:
     // ========================================================================
-    // CHIPS
-    // ========================================================================
-
-    ZilogZ80A*      cpu_ = nullptr;   // Z80A CPU @ 3.5 MHz — owned by board_
-    ferranti_ula_t  ula_;             // Ferranti ULA (video, keyboard, tape, contention)
-    AY_3_8912       ay_;              // AY-3-8912 sound (128K only, but always present for simplicity)
-
-    // ========================================================================
     // MEMORY — owned by Board
     // ========================================================================
 
@@ -186,7 +185,7 @@ private:
     using BT  = SpectrumBusTraits<V>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec>;
+    using MainBoard = Board<typename BT::Spec, SpectrumChips>;
     Bus bus_;
     MainBoard board_{BT::kManifest};
 

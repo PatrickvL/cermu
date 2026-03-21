@@ -190,7 +190,7 @@ bool SpectrumSystem<V>::apply_configuration() {
     // Apply display palette selection
     auto pal_it = config_.custom_settings.find("display_palette");
     if (pal_it != config_.custom_settings.end()) {
-        if (auto* np = ula_.select_palette(pal_it->second.c_str())) {
+        if (auto* np = board_.vdp().select_palette(pal_it->second.c_str())) {
             display_.set_palette(np->data, np->count);
         }
     }
@@ -207,8 +207,7 @@ bool SpectrumSystem<V>::initialize() {
     register_board(&board_);
 
     // ── Pre-bind stack-member chips, then factory-create all chips ─────
-    board_.bind_chip(board_.template find_index<ferranti_ula_t>(), &ula_);
-    board_.bind_chip(board_.template find_index<AY_3_8912>(),  &ay_);
+    board_.bind_chipset();
     board_.create_chips(&pins_);
     board_.apply(bus_);
 
@@ -216,11 +215,10 @@ bool SpectrumSystem<V>::initialize() {
     configure_bus_memory_map();
 
     // ── Init chips ──────────────────────────────────────────────────────
-    cpu_ = board_.template cpu<ZilogZ80A>();
-    pins_ = board_.cpu_chip()->init();
-    ula_.init();
+    pins_ = board_.cpu().init();
+    board_.vdp().init();
     if constexpr (Traits::has_ay_sound) {
-        ay_.init();
+        board_.psg().init();
     }
 
     // Audio setup
@@ -238,13 +236,13 @@ bool SpectrumSystem<V>::initialize() {
     // GPU indexed palette rendering — display_ owns palette + RGBA fallback.
     display_.init(spectrum_constants::TOTAL_WIDTH,
                   spectrum_constants::TOTAL_HEIGHT);
-    display_.set_palette(ula_.get_palette(), ula_.get_palette_size());
-    ula_.set_display(&display_);
+    display_.set_palette(board_.vdp().get_palette(), board_.vdp().get_palette_size());
+    board_.vdp().set_display(&display_);
     register_display(&display_);
 
     // Video stream output — composite video from Ferranti ULA
     video_port_ = std::make_unique<CompositeVideoPort>();
-    ula_.set_stream(&video_port_->stream());
+    board_.vdp().set_stream(&video_port_->stream());
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Audio port — system mixes beeper + AY, uses drive_sample()
@@ -259,15 +257,13 @@ bool SpectrumSystem<V>::initialize() {
 
 template<SpectrumVariant V>
 void SpectrumSystem<V>::shutdown() {
-    cpu_ = nullptr;
     system_ready_ = false;
 }
 
 template<SpectrumVariant V>
 void SpectrumSystem<V>::reset() {
-    if (!cpu_) return;
     board_.reset_chips();
-    pins_ = board_.cpu_chip()->reset(pins_);
+    pins_ = board_.cpu().reset(pins_);
     bank_select_ = 0;
     bank_locked_ = false;
     frame_tstate_counter_ = 0;
@@ -281,13 +277,12 @@ void SpectrumSystem<V>::reset() {
 
 template<SpectrumVariant V>
 void SpectrumSystem<V>::tick() {
-    if (!cpu_) return;
 
     // ULA tick (same clock as CPU — one T-state)
-    ula_.tick();
+    board_.vdp().tick();
 
     // Frame interrupt: ULA asserts INT at start of frame, held for 32 T-states
-    if (ula_.check_frame_interrupt()) {
+    if (board_.vdp().check_frame_interrupt()) {
         BUS_CLR_BIT(pins_, BUS_IRQ_BIT);  // Assert INT (active-low)
         int_counter_ = 32;
     }
@@ -301,7 +296,7 @@ void SpectrumSystem<V>::tick() {
     // TODO: Implement contention pattern
 
     // CPU tick — one T-state
-    pins_ = cpu_->tick(pins_);
+    pins_ = board_.cpu().tick(pins_);
 
     // Bus dispatch
     // Check for I/O request vs memory request
@@ -317,7 +312,7 @@ void SpectrumSystem<V>::tick() {
     // AY tick (128K: clocked at CPU/2)
     if constexpr (Traits::has_ay_sound) {
         if (frame_tstate_counter_ & 1) {
-            ay_.tick();
+            board_.psg().tick();
         }
     }
 
@@ -325,9 +320,9 @@ void SpectrumSystem<V>::tick() {
     audio_sample_counter_++;
     if (audio_sample_counter_ >= audio_sample_period_) {
         audio_sample_counter_ = 0;
-        float sample = ula_.get_ear_output() ? 0.5f : 0.0f;
+        float sample = board_.vdp().get_ear_output() ? 0.5f : 0.0f;
         if constexpr (Traits::has_ay_sound) {
-            sample += ay_.get_sample() * 0.5f;
+            sample += board_.psg().get_sample() * 0.5f;
         }
         audio_ring_buf_.write(&sample, 1);
         if (audio_port_) audio_port_->drive_sample(sample);
@@ -337,7 +332,7 @@ void SpectrumSystem<V>::tick() {
     frame_tstate_counter_++;
     if (frame_tstate_counter_ >= spectrum_constants::TSTATES_PER_FRAME) {
         frame_tstate_counter_ = 0;
-        ula_.render_frame(screen_ram_ptr_);
+        board_.vdp().render_frame(screen_ram_ptr_);
     }
 
     total_cycles_++;
@@ -424,10 +419,10 @@ bus_state_t SpectrumSystem<V>::io_tick(bus_state_t pins) {
     if (!(addr & 0x01)) {
         // ULA port ($FE) — selected when A0=0
         if (is_read) {
-            uint8_t data = ula_.read_port_fe(static_cast<uint8_t>(addr >> 8));
+            uint8_t data = board_.vdp().read_port_fe(static_cast<uint8_t>(addr >> 8));
             BUS_SET_DATA(pins, data);
         } else {
-            ula_.write_port_fe(BUS_GET_DATA(pins));
+            board_.vdp().write_port_fe(BUS_GET_DATA(pins));
         }
     }
 
@@ -444,15 +439,15 @@ bus_state_t SpectrumSystem<V>::io_tick(bus_state_t pins) {
         // AY register select $FFFD (A1=0, A14=1, A15=1)
         if ((addr & 0xC002) == 0xC000) {
             if (is_read) {
-                BUS_SET_DATA(pins, ay_.read_register());
+                BUS_SET_DATA(pins, board_.psg().read_register());
             } else {
-                ay_.latch_address(BUS_GET_DATA(pins));
+                board_.psg().latch_address(BUS_GET_DATA(pins));
             }
         }
 
         // AY data write $BFFD (A1=0, A14=1, A15=0)
         if (!is_read && (addr & 0xC002) == 0x8000) {
-            ay_.write_register(BUS_GET_DATA(pins));
+            board_.psg().write_register(BUS_GET_DATA(pins));
         }
     }
 
@@ -465,7 +460,7 @@ bus_state_t SpectrumSystem<V>::io_tick(bus_state_t pins) {
 
 template<SpectrumVariant V>
 bool SpectrumSystem<V>::load_file(const char* filepath) {
-    if (!filepath || !cpu_) return false;
+    if (!filepath || !system_ready_) return false;
 
     format_load_result_t result;
     if (!format_load_file(filepath, &result)) {
@@ -489,35 +484,35 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
         }
 
         // Restore Z80 registers
-        cpu_->set_i(hdr.i_reg);
-        cpu_->set_r(hdr.r_reg);
-        cpu_->set_af(hdr.af);
-        cpu_->set_bc(hdr.bc);
-        cpu_->set_de(hdr.de);
-        cpu_->set_hl_direct(hdr.hl);
-        cpu_->set_ix(hdr.ix);
-        cpu_->set_iy(hdr.iy);
-        cpu_->set_af_prime(hdr.af_prime);
-        cpu_->set_bc_prime(hdr.bc_prime);
-        cpu_->set_de_prime(hdr.de_prime);
-        cpu_->set_hl_prime(hdr.hl_prime);
-        cpu_->set_sp(hdr.sp);
-        cpu_->set_im(hdr.int_mode);
-        cpu_->set_iff1((hdr.iff2 & 0x04) != 0);
-        cpu_->set_iff2((hdr.iff2 & 0x04) != 0);
+        board_.cpu().set_i(hdr.i_reg);
+        board_.cpu().set_r(hdr.r_reg);
+        board_.cpu().set_af(hdr.af);
+        board_.cpu().set_bc(hdr.bc);
+        board_.cpu().set_de(hdr.de);
+        board_.cpu().set_hl_direct(hdr.hl);
+        board_.cpu().set_ix(hdr.ix);
+        board_.cpu().set_iy(hdr.iy);
+        board_.cpu().set_af_prime(hdr.af_prime);
+        board_.cpu().set_bc_prime(hdr.bc_prime);
+        board_.cpu().set_de_prime(hdr.de_prime);
+        board_.cpu().set_hl_prime(hdr.hl_prime);
+        board_.cpu().set_sp(hdr.sp);
+        board_.cpu().set_im(hdr.int_mode);
+        board_.cpu().set_iff1((hdr.iff2 & 0x04) != 0);
+        board_.cpu().set_iff2((hdr.iff2 & 0x04) != 0);
 
         // SNA 48K: PC is on the stack — pop it
         uint16_t sp = hdr.sp;
         uint16_t pc_lo = ram[sp];
         uint16_t pc_hi = ram[(uint16_t)(sp + 1)];
-        cpu_->set_pc(pc_lo | (pc_hi << 8));
-        cpu_->set_sp(sp + 2);
+        board_.cpu().set_pc(pc_lo | (pc_hi << 8));
+        board_.cpu().set_sp(sp + 2);
 
         // Restore border color
-        ula_.set_border_color(hdr.border & 0x07);
+        board_.vdp().set_border_color(hdr.border & 0x07);
 
         printf("%s: SNA loaded — PC=$%04X SP=$%04X\n", Traits::name,
-               cpu_->pc(), cpu_->sp());
+               board_.cpu().pc(), board_.cpu().sp());
         result.release();
         return true;
     }
@@ -554,29 +549,29 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
         }
 
         // Restore Z80 registers
-        cpu_->set_af(hdr.af);
-        cpu_->set_bc(hdr.bc);
-        cpu_->set_de(hdr.de);
-        cpu_->set_hl_direct(hdr.hl);
-        cpu_->set_ix(hdr.ix);
-        cpu_->set_iy(hdr.iy);
-        cpu_->set_sp(hdr.sp);
-        cpu_->set_pc(hdr.pc);
-        cpu_->set_i(hdr.i_reg);
-        cpu_->set_r(hdr.r_reg);
-        cpu_->set_im(hdr.im_mode);
-        cpu_->set_iff1(hdr.iff1 != 0);
-        cpu_->set_iff2(hdr.iff2 != 0);
-        cpu_->set_af_prime(hdr.af_prime);
-        cpu_->set_bc_prime(hdr.bc_prime);
-        cpu_->set_de_prime(hdr.de_prime);
-        cpu_->set_hl_prime(hdr.hl_prime);
+        board_.cpu().set_af(hdr.af);
+        board_.cpu().set_bc(hdr.bc);
+        board_.cpu().set_de(hdr.de);
+        board_.cpu().set_hl_direct(hdr.hl);
+        board_.cpu().set_ix(hdr.ix);
+        board_.cpu().set_iy(hdr.iy);
+        board_.cpu().set_sp(hdr.sp);
+        board_.cpu().set_pc(hdr.pc);
+        board_.cpu().set_i(hdr.i_reg);
+        board_.cpu().set_r(hdr.r_reg);
+        board_.cpu().set_im(hdr.im_mode);
+        board_.cpu().set_iff1(hdr.iff1 != 0);
+        board_.cpu().set_iff2(hdr.iff2 != 0);
+        board_.cpu().set_af_prime(hdr.af_prime);
+        board_.cpu().set_bc_prime(hdr.bc_prime);
+        board_.cpu().set_de_prime(hdr.de_prime);
+        board_.cpu().set_hl_prime(hdr.hl_prime);
 
         // Restore border color
-        ula_.set_border_color(hdr.border & 0x07);
+        board_.vdp().set_border_color(hdr.border & 0x07);
 
         printf("%s: Z80 v%d loaded — PC=$%04X SP=$%04X\n", Traits::name,
-               hdr.version, cpu_->pc(), cpu_->sp());
+               hdr.version, board_.cpu().pc(), board_.cpu().sp());
         result.release();
         return true;
     }
@@ -677,11 +672,11 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
         // Jump target: prefer CODE blocks (machine code entry point),
         // otherwise enter the ROM's main execution loop for BASIC.
         if (has_code) {
-            cpu_->set_pc(code_addr);
+            board_.cpu().set_pc(code_addr);
             printf("%s: Jumping to CODE at $%04X\n", Traits::name, code_addr);
         } else if (has_basic) {
             // Enter the ROM main execution loop — it will honour NEWPPC/NSPPC
-            cpu_->set_pc(0x12A2);  // MAIN-EXEC in the 48K ROM
+            board_.cpu().set_pc(0x12A2);  // MAIN-EXEC in the 48K ROM
             printf("%s: Entering BASIC via ROM MAIN-EXEC ($12A2)\n", Traits::name);
         }
 
@@ -705,7 +700,7 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
 
             bool is_code = entry && entry->type == 'C';
             if (is_code) {
-                cpu_->set_pc(addr);
+                board_.cpu().set_pc(addr);
                 printf("%s: %s Code loaded %zu bytes at $%04X — jumping\n",
                        Traits::name, result.format->name, len, addr);
             } else {
@@ -808,7 +803,7 @@ void SpectrumSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
             else
                 row_state |= (1 << m.bit);   // Release: set bit
             keyboard_rows_[m.row] = row_state;
-            ula_.set_keyboard_row(m.row, row_state);
+            board_.vdp().set_keyboard_row(m.row, row_state);
         }
     }
 }
@@ -820,7 +815,7 @@ void SpectrumSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 template<SpectrumVariant V>
 void SpectrumSystem<V>::render_configuration_ui() {
 #ifdef CERMU_HAS_GUI
-    if (palette_selector::render(ula_, config_.custom_settings)) {
+    if (palette_selector::render(board_.vdp(), config_.custom_settings)) {
         set_configuration(config_);
         apply_configuration();
     }
