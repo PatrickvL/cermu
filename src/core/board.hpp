@@ -384,10 +384,12 @@ public:
         // Register value-typed chips from the ChipSet (if present)
         if constexpr (!std::is_same_v<ChipSet, NoChipSet>) {
             register_component(&chips_.cpu);
-            if constexpr (has_vdp_v<ChipSet>)
-                register_component(&chips_.vdp);
-            if constexpr (has_psg_v<ChipSet>)
-                register_component(&chips_.psg);
+            if constexpr (has_video_v<ChipSet>)
+                register_component(&chips_.video);
+            if constexpr (has_sound_v<ChipSet>)
+                register_component(&chips_.sound);
+            if constexpr (has_io_v<ChipSet>)
+                register_component(&chips_.io);
             if constexpr (HasRegisterExtras<ChipSet>)
                 chips_.register_extras(*this);
         }
@@ -425,23 +427,32 @@ public:
     [[nodiscard]] std::enable_if_t<!std::is_same_v<CS, NoChipSet>, const typename CS::cpu_type&>
     cpu() const noexcept { return chips_.cpu; }
 
-    /// VDP accessor — only available when ChipSet has a real VDP.
+    /// Video chip accessor — only available when ChipSet has a real video chip.
     template<typename CS = ChipSet>
-    [[nodiscard]] std::enable_if_t<has_vdp_v<CS>, typename CS::vdp_type&>
-    vdp() noexcept { return chips_.vdp; }
+    [[nodiscard]] std::enable_if_t<has_video_v<CS>, typename CS::video_type&>
+    video() noexcept { return chips_.video; }
 
     template<typename CS = ChipSet>
-    [[nodiscard]] std::enable_if_t<has_vdp_v<CS>, const typename CS::vdp_type&>
-    vdp() const noexcept { return chips_.vdp; }
+    [[nodiscard]] std::enable_if_t<has_video_v<CS>, const typename CS::video_type&>
+    video() const noexcept { return chips_.video; }
 
-    /// PSG accessor — only available when ChipSet has a real PSG.
+    /// Sound chip accessor — only available when ChipSet has a real sound chip.
     template<typename CS = ChipSet>
-    [[nodiscard]] std::enable_if_t<has_psg_v<CS>, typename CS::psg_type&>
-    psg() noexcept { return chips_.psg; }
+    [[nodiscard]] std::enable_if_t<has_sound_v<CS>, typename CS::sound_type&>
+    sound() noexcept { return chips_.sound; }
 
     template<typename CS = ChipSet>
-    [[nodiscard]] std::enable_if_t<has_psg_v<CS>, const typename CS::psg_type&>
-    psg() const noexcept { return chips_.psg; }
+    [[nodiscard]] std::enable_if_t<has_sound_v<CS>, const typename CS::sound_type&>
+    sound() const noexcept { return chips_.sound; }
+
+    /// I/O chip accessor — only available when ChipSet has a real I/O chip.
+    template<typename CS = ChipSet>
+    [[nodiscard]] std::enable_if_t<has_io_v<CS>, typename CS::io_type&>
+    io() noexcept { return chips_.io; }
+
+    template<typename CS = ChipSet>
+    [[nodiscard]] std::enable_if_t<has_io_v<CS>, const typename CS::io_type&>
+    io() const noexcept { return chips_.io; }
 
     // =====================================================================
     // §4.4c‴  Automatic chipset binding
@@ -468,12 +479,15 @@ public:
         bind_chip(find_index<typename CS::cpu_type>(), &chips_.cpu);
         cpu_chip_ = &chips_.cpu;
 
-        if constexpr (has_vdp_v<CS>) {
-            bind_chip(find_index<typename CS::vdp_type>(), &chips_.vdp);
-            video_chip_ = &chips_.vdp;
+        if constexpr (has_video_v<CS>) {
+            bind_chip(find_index<typename CS::video_type>(), &chips_.video);
+            video_chip_ = &chips_.video;
         }
-        if constexpr (has_psg_v<CS>) {
-            bind_chip(find_index<typename CS::psg_type>(), &chips_.psg);
+        if constexpr (has_sound_v<CS>) {
+            bind_chip(find_index<typename CS::sound_type>(), &chips_.sound);
+        }
+        if constexpr (has_io_v<CS>) {
+            bind_chip(find_index<typename CS::io_type>(), &chips_.io);
         }
 
         // Per-system extras

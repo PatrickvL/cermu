@@ -324,9 +324,9 @@ bool AtariVectorSystem<V>::initialize() {
 
     register_board(&board_);
 
-    // Factory-create all chips from the manifest
+    // Bind value-typed CPU from ChipSet, then factory-create remaining chips
+    board_.bind_chipset();
     board_.create_chips(&pins_);
-    cpu_      = board_.template cpu<MOS6502>();
     vec_ram_  = board_.template find<RAMChip>(1);   // 2nd RAMChip = vector RAM
     vec_rom_  = board_.template find<ROMChip>(0);   // 1st ROMChip = vector ROM
     prog_rom_ = board_.template find<ROMChip>(1);   // 2nd ROMChip = program ROM
@@ -335,8 +335,8 @@ bool AtariVectorSystem<V>::initialize() {
     board_.apply(bus_);
 
     // Initialize CPU
-    board_.cpu_chip()->init();
-    board_.cpu_chip()->reset();
+    board_.cpu().init();
+    board_.cpu().reset();
 
     // Initialize DVG
     dvg_.init();
@@ -397,10 +397,7 @@ void AtariVectorSystem<V>::reset() {
     printf("%s: Reset\n", AtariVectorTraits<V>::NAME);
 
     board_.reset_chips();
-
-    if (board_.cpu_chip()) {
-        board_.cpu_chip()->reset();
-    }
+    board_.cpu().reset();
 
     pins_ = MOS6502::default_bus_state();
     total_cycles_ = 0;
@@ -480,9 +477,9 @@ void AtariVectorSystem<V>::run_frame() {
 
 template<AtariVectorVariant V>
 void AtariVectorSystem<V>::tick_cpu() {
-    if (!cpu_) return;
+    auto& cpu = board_.cpu();
 
-    pins_ = cpu_->tick<MOS6502::Phase::PHI2>(pins_);
+    pins_ = cpu.template tick<MOS6502::Phase::PHI2>(pins_);
 
     // Asteroids/Lunar Lander only decode 15 address lines (A0-A14).
     // A15 is not connected to the address decoder, so $8000-$FFFF
@@ -507,8 +504,8 @@ void AtariVectorSystem<V>::tick_cpu() {
         pins_ = bus_.tick(bus);
     }
 
-    pins_ = cpu_->tick<MOS6502::Phase::PHI1>(pins_);
-    cpu_->sample_nmi_pin(pins_);
+    pins_ = cpu.template tick<MOS6502::Phase::PHI1>(pins_);
+    cpu.sample_nmi_pin(pins_);
 }
 
 // ============================================================================
@@ -726,7 +723,7 @@ bool AtariVectorSystem<V>::load_file(const char* filepath) {
 
     bool cold_boot = system_ready_;
 
-    if (!cpu_) {
+    if (!system_ready_) {
         if (!initialize()) return false;
     }
 
@@ -813,10 +810,10 @@ bool AtariVectorSystem<V>::load_file(const char* filepath) {
     system_ready_ = true;
     reset();
 
-    if (cold_boot && cpu_) {
-        cpu_->set(REG_A, 0);
-        cpu_->set(REG_X, 0);
-        cpu_->set(REG_Y, 0);
+    if (cold_boot) {
+        board_.cpu().set(REG_A, 0);
+        board_.cpu().set(REG_X, 0);
+        board_.cpu().set(REG_Y, 0);
     }
 
     printf("%s: ROM loaded, system ready\n", Traits::NAME);
@@ -844,7 +841,7 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
 
     if (!match.matched) return false;
 
-    if (!cpu_) {
+    if (!system_ready_) {
         if (!initialize()) return false;
     }
 
