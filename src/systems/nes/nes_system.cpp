@@ -693,12 +693,6 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
     }
 }
 
-template<NintendoVariant V>
-void NintendoSystem<V>::get_display_dimensions(int* width, int* height) const {
-    *width = 256;   // Full PPU output
-    *height = 240;
-}
-
 
 
 template<NintendoVariant V>

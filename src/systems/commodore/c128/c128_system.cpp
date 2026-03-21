@@ -276,11 +276,6 @@ void C128System::run_frame() {
 // DISPLAY
 // ============================================================================
 
-void C128System::get_display_dimensions(int* width, int* height) const {
-    // Default to VIC-IIe 40-column display
-    if (width) *width = c128_constants::VIC_DISPLAY_WIDTH_PAL;
-    if (height) *height = c128_constants::VIC_DISPLAY_HEIGHT_PAL;
-}
 
 // ============================================================================
 // AUDIO

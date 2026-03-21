@@ -167,9 +167,6 @@ template<Z1013Variant V> void Z1013System<V>::run_frame() {
 }
 
 template<Z1013Variant V> bool Z1013System<V>::load_file(const char*) { return false; }
-template<Z1013Variant V> void Z1013System<V>::get_display_dimensions(int* w, int* h) const {
-    *w = z1013_constants::FB_WIDTH; *h = z1013_constants::FB_HEIGHT;
-}
 template<Z1013Variant V> uint32_t Z1013System<V>::get_audio_samples(float*, uint32_t) { return 0; }
 template<Z1013Variant V> void Z1013System<V>::set_audio_sample_rate(int hz) { audio_sample_rate_ = hz; }
 template<Z1013Variant V> void Z1013System<V>::render_system_menu_items() {}

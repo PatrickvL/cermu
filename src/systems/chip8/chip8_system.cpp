@@ -671,10 +671,6 @@ bool Chip8System::load_file(const char* filepath) {
 // Display
 // ============================================================================
 
-void Chip8System::get_display_dimensions(int* width, int* height) const {
-    *width = chip8_constants::HIRES_WIDTH;
-    *height = chip8_constants::HIRES_HEIGHT;
-}
 
 void Chip8System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     int chip8_key = map_sdl_key_to_chip8(key);

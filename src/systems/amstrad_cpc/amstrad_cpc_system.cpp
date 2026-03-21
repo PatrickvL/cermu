@@ -238,9 +238,6 @@ void AmstradCPCSystem<M>::run_frame() {
 }
 
 template<CPCModel M> bool AmstradCPCSystem<M>::load_file(const char*) { return false; }
-template<CPCModel M> void AmstradCPCSystem<M>::get_display_dimensions(int* w, int* h) const {
-    *w = amstrad_cpc_constants::FB_WIDTH; *h = amstrad_cpc_constants::FB_HEIGHT;
-}
 template<CPCModel M> uint32_t AmstradCPCSystem<M>::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
     if (audio_port_) {

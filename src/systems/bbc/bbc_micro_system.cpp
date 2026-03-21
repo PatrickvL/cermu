@@ -709,10 +709,6 @@ bool BBCMicroSystem::load_file(const char* filepath) {
 // Display
 // ============================================================================
 
-void BBCMicroSystem::get_display_dimensions(int* width, int* height) const {
-    *width = bbc_constants::DISPLAY_WIDTH;
-    *height = bbc_constants::DISPLAY_HEIGHT;
-}
 
 // ============================================================================
 // Input

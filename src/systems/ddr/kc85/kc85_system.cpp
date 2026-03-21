@@ -549,9 +549,6 @@ void KC85System<V>::build_reverse_ktab() {
 }
 
 template<KC85Variant V> bool KC85System<V>::load_file(const char*) { return false; }
-template<KC85Variant V> void KC85System<V>::get_display_dimensions(int* w, int* h) const {
-    *w = kc85_constants::FB_WIDTH; *h = kc85_constants::FB_HEIGHT;
-}
 template<KC85Variant V> uint32_t KC85System<V>::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (audio_port_) {
         uint32_t n = audio_port_->read_samples(buffer, max_samples);

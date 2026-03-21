@@ -164,9 +164,6 @@ void AcornAtomSystem::run_frame() {
 
 bool AcornAtomSystem::load_file(const char*) { return false; }
 
-void AcornAtomSystem::get_display_dimensions(int* w, int* h) const {
-    *w = acorn_atom_constants::FB_WIDTH; *h = acorn_atom_constants::FB_HEIGHT;
-}
 
 uint32_t AcornAtomSystem::get_audio_samples(float*, uint32_t) { return 0; }
 void AcornAtomSystem::set_audio_sample_rate(int hz) { audio_sample_rate_ = hz; }

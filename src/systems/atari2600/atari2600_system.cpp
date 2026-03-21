@@ -419,10 +419,6 @@ bool Atari2600System::load_file(const char* filepath) {
 // DISPLAY
 // ============================================================================
 
-void Atari2600System::get_display_dimensions(int* width, int* height) const {
-    *width  = atari2600_constants::DISPLAY_WIDTH;
-    *height = atari2600_constants::DISPLAY_HEIGHT;
-}
 
 // ============================================================================
 // AUDIO

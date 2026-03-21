@@ -65,7 +65,6 @@ public:
 
     bool load_file(const char* filepath) override;
 
-    void get_display_dimensions(int* width, int* height) const override;
     void set_framebuffer(uint32_t* buffer, int width, int height) override;
 
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;

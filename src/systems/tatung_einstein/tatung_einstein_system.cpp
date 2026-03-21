@@ -328,10 +328,6 @@ bool TatungEinsteinSystem::load_file(const char* filepath) {
 // DISPLAY
 // ============================================================================
 
-void TatungEinsteinSystem::get_display_dimensions(int* width, int* height) const {
-    *width  = einstein_constants::DISPLAY_WIDTH;
-    *height = einstein_constants::DISPLAY_HEIGHT;
-}
 
 // ============================================================================
 // AUDIO

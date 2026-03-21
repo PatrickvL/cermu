@@ -183,9 +183,6 @@ template<Z9001Variant V> void Z9001System<V>::run_frame() {
 }
 
 template<Z9001Variant V> bool Z9001System<V>::load_file(const char*) { return false; }
-template<Z9001Variant V> void Z9001System<V>::get_display_dimensions(int* w, int* h) const {
-    *w = z9001_constants::FB_WIDTH; *h = z9001_constants::FB_HEIGHT;
-}
 template<Z9001Variant V> uint32_t Z9001System<V>::get_audio_samples(float*, uint32_t) { return 0; }
 template<Z9001Variant V> void Z9001System<V>::set_audio_sample_rate(int hz) { audio_sample_rate_ = hz; }
 template<Z9001Variant V> void Z9001System<V>::render_system_menu_items() {}

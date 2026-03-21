@@ -203,11 +203,6 @@ bool OricSystem<V>::load_file(const char* /*filepath*/) {
 // DISPLAY
 // ============================================================================
 
-template<OricVariant V>
-void OricSystem<V>::get_display_dimensions(int* width, int* height) const {
-    if (width)  *width  = oric_constants::FB_WIDTH;
-    if (height) *height = oric_constants::FB_HEIGHT;
-}
 
 // ============================================================================
 // AUDIO

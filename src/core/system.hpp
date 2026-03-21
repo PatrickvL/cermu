@@ -498,10 +498,27 @@ public:
     /// Returns empty string when not applicable.
     virtual std::string get_subtitle_info() const { return {}; }
 
-    virtual void get_display_dimensions(int* width, int* height) const = 0;
-    virtual void handle_keyboard_event(SDL_Keycode key, bool pressed) = 0;
-    virtual void render_system_menu_items() = 0;
-    virtual void render_configuration_ui() = 0;
+    /// Return the system's display dimensions.
+    /// Default: returns hardware_traits_.display.native_width/native_height.
+    virtual void get_display_dimensions(int* width, int* height) const {
+        *width  = hardware_traits_.display.native_width;
+        *height = hardware_traits_.display.native_height;
+    }
+
+    /// Handle a keyboard key press/release.
+    /// Default: no-op — systems without keyboard input need not override.
+    virtual void handle_keyboard_event(SDL_Keycode key, bool pressed) {
+        (void)key; (void)pressed;
+    }
+
+    /// Render system-specific items in the System menu.
+    /// Default: empty — no extra menu items.
+    virtual void render_system_menu_items() {}
+
+    /// Render system-specific configuration UI (region, memory, etc.).
+    /// Default: empty — no configuration UI.
+    virtual void render_configuration_ui() {}
+
     uint32_t get_target_fps() const { return cached_target_fps_; }
 
     /// Precise frame time in seconds, derived from hardware timing.
@@ -514,7 +531,11 @@ public:
         return 1.0 / (cached_target_fps_ > 0 ? cached_target_fps_ : 60);
     }
 
-    virtual void set_speed_multiplier(float multiplier) = 0;
+    /// Set the emulation speed multiplier.
+    /// Default: stores the value in speed_multiplier_.
+    virtual void set_speed_multiplier(float multiplier) {
+        speed_multiplier_ = multiplier;
+    }
 
     // Extended keyboard event handler with full SDL event information.
     // Receives keycode, scancode, modifier state, and repeat flag.
