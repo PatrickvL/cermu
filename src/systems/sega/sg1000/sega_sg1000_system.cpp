@@ -116,36 +116,36 @@ bool SegaSG1000System<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
     register_board(&board_);
 
-    board_.bind_chip(board_.template find_index<TMS9918A>(), &board_.vdp());
+    board_.bind_chip(board_.template find_index<TMS9918A>(), &board_.video());
     board_.create_chips(&pins_);
     board_.apply(bus_);
 
     configure_bus_memory_map();
 
     pins_ = board_.cpu().init();
-    board_.psg().init();
+    board_.sound().init();
 
-    board_.psg().set_clock_frequency(sg1000_constants::CPU_FREQ_HZ / 16);
-    board_.psg().set_audio_sample_rate(audio_sample_rate_);
+    board_.sound().set_clock_frequency(sg1000_constants::CPU_FREQ_HZ / 16);
+    board_.sound().set_audio_sample_rate(audio_sample_rate_);
 
     register_bus_chips(board_);
 
     // Display
     display_.init(sg1000_constants::DISPLAY_WIDTH,
                   sg1000_constants::DISPLAY_HEIGHT);
-    display_.set_palette(board_.vdp().system_palette(), board_.vdp().palette_size());
-    board_.vdp().set_display(&display_);
+    display_.set_palette(board_.video().system_palette(), board_.video().palette_size());
+    board_.video().set_display(&display_);
     register_display(&display_);
 
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.vdp().set_stream(&video_port_->stream());
+    board_.video().set_stream(&video_port_->stream());
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Audio
     audio_port_ = std::make_unique<AudioPort>();
     audio_port_->configure(sg1000_constants::DEFAULT_SAMPLE_RATE,
                            sg1000_constants::DEFAULT_SAMPLE_RATE);
-    board_.psg().set_audio_port(audio_port_.get());
+    board_.sound().set_audio_port(audio_port_.get());
 
     system_ready_ = true;
     printf("%s: System initialized (RAM: %dB)\n", Traits::name, Traits::ram_size);
@@ -174,7 +174,7 @@ void SegaSG1000System<V>::tick() {
 
     // VDP tick
     bus_state_t vdp_bus = 0;
-    vdp_bus = board_.vdp().tick(vdp_bus);
+    vdp_bus = board_.video().tick(vdp_bus);
 
     // VDP interrupt → Z80 INT
     if (BUS_GET_BIT(vdp_bus, BUS_IRQ_BIT) == 0)
@@ -197,7 +197,7 @@ void SegaSG1000System<V>::tick() {
 
     // PSG tick (CPU/16)
     if ((frame_tstate_counter_ & 0x0F) == 0) {
-        board_.psg().tick();
+        board_.sound().tick();
     }
 
     frame_tstate_counter_++;
@@ -234,7 +234,7 @@ bus_state_t SegaSG1000System<V>::io_tick(bus_state_t pins) {
 
     // SN76489 write ($7E-$7F area, active on even)
     if (!is_read && (port & 0xFE) == sg1000_constants::PSG_PORT) {
-        board_.psg().write(BUS_GET_DATA(pins));
+        board_.sound().write(BUS_GET_DATA(pins));
         return pins;
     }
 
@@ -244,10 +244,10 @@ bus_state_t SegaSG1000System<V>::io_tick(bus_state_t pins) {
         BUS_SET_ADDR(vdp_bus, 0);  // port 0 = data
         BUS_SET_DATA(vdp_bus, BUS_GET_DATA(pins));
         if (is_read) {
-            vdp_bus = TMS9918A::port_read(&board_.vdp(), vdp_bus);
+            vdp_bus = TMS9918A::port_read(&board_.video(), vdp_bus);
             BUS_SET_DATA(pins, BUS_GET_DATA(vdp_bus));
         } else {
-            TMS9918A::port_write(&board_.vdp(), vdp_bus);
+            TMS9918A::port_write(&board_.video(), vdp_bus);
         }
         return pins;
     }
@@ -258,10 +258,10 @@ bus_state_t SegaSG1000System<V>::io_tick(bus_state_t pins) {
         BUS_SET_ADDR(vdp_bus, 1);  // port 1 = control/status
         BUS_SET_DATA(vdp_bus, BUS_GET_DATA(pins));
         if (is_read) {
-            vdp_bus = TMS9918A::port_read(&board_.vdp(), vdp_bus);
+            vdp_bus = TMS9918A::port_read(&board_.video(), vdp_bus);
             BUS_SET_DATA(pins, BUS_GET_DATA(vdp_bus));
         } else {
-            TMS9918A::port_write(&board_.vdp(), vdp_bus);
+            TMS9918A::port_write(&board_.video(), vdp_bus);
         }
         return pins;
     }
@@ -306,13 +306,13 @@ template<SG1000Variant V>
 uint32_t SegaSG1000System<V>::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
     if (audio_port_) return audio_port_->read_samples(buffer, max_samples);
-    return board_.psg().audio_read(buffer, max_samples);
+    return board_.sound().audio_read(buffer, max_samples);
 }
 
 template<SG1000Variant V>
 void SegaSG1000System<V>::set_audio_sample_rate(int sample_rate_hz) {
     audio_sample_rate_ = static_cast<uint32_t>(sample_rate_hz);
-    board_.psg().set_audio_sample_rate(sample_rate_hz);
+    board_.sound().set_audio_sample_rate(sample_rate_hz);
 }
 
 // ============================================================================

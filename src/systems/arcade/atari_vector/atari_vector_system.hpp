@@ -29,6 +29,7 @@
 #include "systems/arcade/atari_vector/atari_vector_constants.hpp"
 #include "core/system.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
@@ -191,7 +192,8 @@ class AtariVectorSystem : public System {
     using Traits = AtariVectorTraits<V>;
     using Spec   = VectorBusSpec<V>;
     using Bus    = MemoryBus<Spec>;
-    using MainBoard = Board<Spec>;
+    using ChipSet = StandardChips<MOS6502>;
+    using MainBoard = Board<Spec, ChipSet>;
 
 public:
     AtariVectorSystem();
@@ -229,7 +231,7 @@ public:
 
 private:
     // ── Chips ────────────────────────────────────────────────────────────
-    MOS6502*    cpu_   = nullptr;    // MOS 6502 @ 1.512 MHz — owned by board_
+
     dvg_t       dvg_;                // Digital Vector Generator
     pokey::C012294 pokey_;              // POKEY sound chip (used by Asteroids Deluxe)
 

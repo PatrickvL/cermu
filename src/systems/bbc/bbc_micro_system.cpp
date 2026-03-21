@@ -192,20 +192,20 @@ bool BBCMicroSystem::initialize() {
     board_.cpu().reset();
 
     // ---- CRTC (MC6845) ----
-    board_.vdp().init();
+    board_.video().init();
 
     // Program CRTC with Mode 7 register values (the MOS does this too, but
     // we prime them so the display works even before the ROM runs)
     for (int i = 0; i < 14; i++) {
-        board_.vdp().regs_[i] = bbc_constants::MODE7_CRTC_REGS[i];
+        board_.video().regs_[i] = bbc_constants::MODE7_CRTC_REGS[i];
     }
 
     // Wire CRTC callbacks
-    board_.vdp().on_display_char = [this](uint16_t ma, uint8_t ra, bool cursor) {
+    board_.video().on_display_char = [this](uint16_t ma, uint8_t ra, bool cursor) {
         this->crtc_display_char(ma, ra, cursor);
     };
-    board_.vdp().on_vsync = [this]() { this->crtc_vsync(); };
-    board_.vdp().on_hsync = [this]() { this->crtc_hsync(); };
+    board_.video().on_vsync = [this]() { this->crtc_vsync(); };
+    board_.video().on_hsync = [this]() { this->crtc_hsync(); };
 
     // GPU indexed palette rendering — display_ owns palette + RGBA fallback.
     board_.chips().vidproc.set_memory(memory_);
@@ -221,19 +221,19 @@ bool BBCMicroSystem::initialize() {
     video_port_->bind_frame_output(&last_frame_data_);
 
     // ---- Sound (SN76489) ----
-    board_.psg().init();
-    board_.psg().set_clock_frequency(bbc_constants::SN76489_CLOCK);
-    board_.psg().set_audio_sample_rate(bbc_constants::DEFAULT_SAMPLE_RATE);
+    board_.sound().init();
+    board_.sound().set_clock_frequency(bbc_constants::SN76489_CLOCK);
+    board_.sound().set_audio_sample_rate(bbc_constants::DEFAULT_SAMPLE_RATE);
 
     // Wire SN76489 to audio thread — PSG is clocked at CRTC rate (1 MHz),
     // CPU runs at 2 MHz → 2 CPU cycles per PSG tick.
-    psg_adapter_ = std::make_unique<WriteOnlySynthAdapter<sn76489_t>>(&board_.psg(), 2);
+    psg_adapter_ = std::make_unique<WriteOnlySynthAdapter<sn76489_t>>(&board_.sound(), 2);
     audio_thread_.register_engine(psg_adapter_.get());
     audio_thread_.start();
 
     // Wire SN76489 to audio signal port
     audio_port_ = std::make_unique<AudioPort>();
-    board_.psg().set_audio_port(audio_port_.get());
+    board_.sound().set_audio_port(audio_port_.get());
 
     // ---- System VIA ($FE40-$FE5F) ----
     board_.chips().system_via.reset();
@@ -318,7 +318,7 @@ void BBCMicroSystem::tick() {
     if (crtc_divider_ >= 2) {
         crtc_divider_ = 0;
         if (true) {
-            board_.vdp().tick();
+            board_.video().tick();
         }
         // SN76489 synthesis is now driven by the audio thread — no direct
         // tick here.  signal_progress() is called once per CPU tick below.
@@ -427,7 +427,7 @@ bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
         uint8_t data = 0xFF;
 
         if (addr >= bbc_constants::CRTC_BASE && addr <= bbc_constants::CRTC_END) {
-            data = board_.vdp().read(addr);
+            data = board_.video().read(addr);
         }
         else if (addr >= bbc_constants::SYSTEM_VIA_BASE && addr <= bbc_constants::SYSTEM_VIA_END) {
             bus_state_t via_s = BBC_BUS_DEFAULT_STATE;
@@ -450,7 +450,7 @@ bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
         uint8_t data = BUS_GET_DATA(s);
 
         if (addr >= bbc_constants::CRTC_BASE && addr <= bbc_constants::CRTC_END) {
-            board_.vdp().write(addr, data);
+            board_.video().write(addr, data);
         }
         else if (addr == bbc_constants::VIDEO_ULA_CONTROL) {
             board_.chips().vidproc.write_control(data);
@@ -522,7 +522,7 @@ bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
 
 void BBCMicroSystem::crtc_display_char(uint16_t ma, uint8_t ra, bool cursor) {
     if (false) return;
-    board_.chips().vidproc.display_char(ma, ra, cursor, board_.vdp().regs_[MC6845_R9_MAX_SCANLINE]);
+    board_.chips().vidproc.display_char(ma, ra, cursor, board_.video().regs_[MC6845_R9_MAX_SCANLINE]);
 }
 
 void BBCMicroSystem::crtc_vsync() {
@@ -571,7 +571,7 @@ uint8_t BBCMicroSystem::sys_via_port_b_read(void* ctx, uint8_t /*output*/) {
     // PB5-PB6: unused
     // PB7: VSYNC (active-high)
     uint8_t pb = 0;
-    if (sys->board_.vdp().v_sync_active) {
+    if (sys->board_.video().v_sync_active) {
         pb |= 0x80;  // PB7 = VSYNC
     }
     return pb;
@@ -723,12 +723,12 @@ uint32_t BBCMicroSystem::get_audio_samples(float* buffer, uint32_t max_samples) 
         return static_cast<uint32_t>(audio_port_->read_samples(buffer, static_cast<int>(max_samples)));
     }
     if (false) return 0;
-    return board_.psg().audio_read(buffer, max_samples);
+    return board_.sound().audio_read(buffer, max_samples);
 }
 
 void BBCMicroSystem::set_audio_sample_rate(int sample_rate_hz) {
     if (true) {
-        board_.psg().set_audio_sample_rate(sample_rate_hz);
+        board_.sound().set_audio_sample_rate(sample_rate_hz);
     }
 }
 
@@ -744,7 +744,7 @@ void BBCMicroSystem::render_system_menu_items() {
     ImGui::Separator();
     ImGui::Text("ROM Bank: %d", rom_select_);
     ImGui::Text("Video Mode: %d",
-        board_.chips().vidproc.get_display_mode(board_.vdp().regs_[MC6845_R9_MAX_SCANLINE]));
+        board_.chips().vidproc.get_display_mode(board_.video().regs_[MC6845_R9_MAX_SCANLINE]));
 #endif
 }
 

@@ -124,7 +124,7 @@ bool VTechVZSystem<V>::initialize() {
     video_ram_ptr_ = board_.template find<RAMChip>()->data();  // First RAMChip = Video RAM
 
     pins_ = board_.cpu().init();
-    board_.vdp().init();
+    board_.video().init();
 
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 
@@ -139,12 +139,12 @@ bool VTechVZSystem<V>::initialize() {
                   vtech_vz_constants::FB_HEIGHT);
     display_.set_palette(mc6847_t::get_palette(),
                          mc6847_t::get_palette_size());
-    board_.vdp().set_display(&display_);
+    board_.video().set_display(&display_);
     register_display(&display_);
 
     // Video stream output — composite video from MC6847 VDG
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.vdp().set_stream(&video_port_->stream());
+    board_.video().set_stream(&video_port_->stream());
     video_port_->bind_frame_output(&last_frame_data_);
 
     system_ready_ = true;

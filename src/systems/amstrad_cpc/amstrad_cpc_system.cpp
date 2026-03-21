@@ -113,9 +113,9 @@ bool AmstradCPCSystem<M>::initialize() {
 
     // ── Init chips ──────────────────────────────────────────────────────
     pins_ = board_.cpu().init();
-    board_.vdp().init();
+    board_.video().init();
     // Gate array drives interrupts from CRTC HSYNC (every 52 HSYNCs)
-    board_.vdp().on_hsync = [this]() {
+    board_.video().on_hsync = [this]() {
         board_.chips().gate_array.interrupt_counter++;
         if (board_.chips().gate_array.interrupt_counter >= 52) {
             board_.chips().gate_array.interrupt_counter = 0;
@@ -123,19 +123,19 @@ bool AmstradCPCSystem<M>::initialize() {
         }
     };
     board_.chips().ppi.init();
-    board_.psg().init();
+    board_.sound().init();
     // AY clock = CPU / 4 = 1 MHz
-    board_.psg().set_clock_frequency(amstrad_cpc_constants::CPU_FREQ_HZ / 4);
-    board_.psg().set_audio_sample_rate(amstrad_cpc_constants::DEFAULT_SAMPLE_RATE);
+    board_.sound().set_clock_frequency(amstrad_cpc_constants::CPU_FREQ_HZ / 4);
+    board_.sound().set_audio_sample_rate(amstrad_cpc_constants::DEFAULT_SAMPLE_RATE);
 
     // Wire AY to audio thread — cpu_cycles_per_tick=4 (AY = CPU / 4)
-    ay_adapter_ = std::make_unique<WriteOnlySynthAdapter<AY_3_8912, true>>(&board_.psg(), 4);
+    ay_adapter_ = std::make_unique<WriteOnlySynthAdapter<AY_3_8912, true>>(&board_.sound(), 4);
     audio_thread_.register_engine(ay_adapter_.get());
     audio_thread_.start();
 
     // Wire AY to audio signal port
     audio_port_ = std::make_unique<AudioPort>();
-    board_.psg().set_audio_port(audio_port_.get());
+    board_.sound().set_audio_port(audio_port_.get());
 
     load_roms();
     // ── Cache RAM chip pointer for rendering ───────────────────────
@@ -208,7 +208,7 @@ void AmstradCPCSystem<M>::tick() {
     // CRTC ticks at 1 MHz (CPU clock / 4).
     // AY synthesis is driven by the audio thread — no direct tick here.
     if ((total_cycles_ & 3) == 0) {
-        board_.vdp().tick();
+        board_.video().tick();
     }
 
     total_cycles_++;
@@ -237,11 +237,11 @@ template<CPCModel M> uint32_t AmstradCPCSystem<M>::get_audio_samples(float* buff
     if (audio_port_) {
         return static_cast<uint32_t>(audio_port_->read_samples(buffer, static_cast<int>(max_samples)));
     }
-    return board_.psg().audio_read(buffer, max_samples);
+    return board_.sound().audio_read(buffer, max_samples);
 }
 template<CPCModel M> void AmstradCPCSystem<M>::set_audio_sample_rate(int hz) {
     audio_sample_rate_ = hz;
-    board_.psg().set_audio_sample_rate(hz);
+    board_.sound().set_audio_sample_rate(hz);
 }
 
 // ============================================================================
@@ -253,8 +253,8 @@ void AmstradCPCSystem<M>::render_frame() {
     if (!ram_chip_) return;
 
     // CRTC display start address (R12:R13)
-    uint16_t crtc_start = (board_.vdp().regs_[MC6845_R12_START_ADDR_HI] << 8)
-                        | board_.vdp().regs_[MC6845_R13_START_ADDR_LO];
+    uint16_t crtc_start = (board_.video().regs_[MC6845_R12_START_ADDR_HI] << 8)
+                        | board_.video().regs_[MC6845_R13_START_ADDR_LO];
 
     board_.chips().gate_array.render_frame(ram_chip_->data(), crtc_start);
 }
@@ -374,11 +374,11 @@ bus_state_t AmstradCPCSystem<M>::io_tick(bus_state_t pins) {
         uint8_t crtc_func = (addr >> 8) & 0x03;
         if (is_read) {
             if (crtc_func >= 2) {
-                BUS_SET_DATA(pins, board_.vdp().read(crtc_func & 1));
+                BUS_SET_DATA(pins, board_.video().read(crtc_func & 1));
             }
         } else {
             if (crtc_func < 2) {
-                board_.vdp().write(crtc_func & 1, data);
+                board_.video().write(crtc_func & 1, data);
             }
         }
     }
@@ -397,14 +397,14 @@ bus_state_t AmstradCPCSystem<M>::io_tick(bus_state_t pins) {
             bool bc1  = (port_c >> 6) & 1;
             if (bdir && bc1) {
                 ay_latch_ = board_.chips().ppi.get_port_a_output() & 0x0F;
-                board_.psg().latch_address(board_.chips().ppi.get_port_a_output());
+                board_.sound().latch_address(board_.chips().ppi.get_port_a_output());
             } else if (bdir && !bc1) {
                 // Shadow write for immediate readback, enqueue for audio thread
                 uint8_t val = board_.chips().ppi.get_port_a_output();
-                board_.psg().write_register_shadow(val);
+                board_.sound().write_register_shadow(val);
                 ay_adapter_->cmd_queue().push_write(total_cycles_, ay_latch_, val);
             } else if (!bdir && bc1) {
-                board_.chips().ppi.set_port_a_input(board_.psg().read_register());
+                board_.chips().ppi.set_port_a_input(board_.sound().read_register());
             }
         }
     }

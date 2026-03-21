@@ -190,7 +190,7 @@ bool SpectrumSystem<V>::apply_configuration() {
     // Apply display palette selection
     auto pal_it = config_.custom_settings.find("display_palette");
     if (pal_it != config_.custom_settings.end()) {
-        if (auto* np = board_.vdp().select_palette(pal_it->second.c_str())) {
+        if (auto* np = board_.video().select_palette(pal_it->second.c_str())) {
             display_.set_palette(np->data, np->count);
         }
     }
@@ -216,9 +216,9 @@ bool SpectrumSystem<V>::initialize() {
 
     // ── Init chips ──────────────────────────────────────────────────────
     pins_ = board_.cpu().init();
-    board_.vdp().init();
+    board_.video().init();
     if constexpr (Traits::has_ay_sound) {
-        board_.psg().init();
+        board_.sound().init();
     }
 
     // Audio setup
@@ -236,13 +236,13 @@ bool SpectrumSystem<V>::initialize() {
     // GPU indexed palette rendering — display_ owns palette + RGBA fallback.
     display_.init(spectrum_constants::TOTAL_WIDTH,
                   spectrum_constants::TOTAL_HEIGHT);
-    display_.set_palette(board_.vdp().get_palette(), board_.vdp().get_palette_size());
-    board_.vdp().set_display(&display_);
+    display_.set_palette(board_.video().get_palette(), board_.video().get_palette_size());
+    board_.video().set_display(&display_);
     register_display(&display_);
 
     // Video stream output — composite video from Ferranti ULA
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.vdp().set_stream(&video_port_->stream());
+    board_.video().set_stream(&video_port_->stream());
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Audio port — system mixes beeper + AY, uses drive_sample()
@@ -279,10 +279,10 @@ template<SpectrumVariant V>
 void SpectrumSystem<V>::tick() {
 
     // ULA tick (same clock as CPU — one T-state)
-    board_.vdp().tick();
+    board_.video().tick();
 
     // Frame interrupt: ULA asserts INT at start of frame, held for 32 T-states
-    if (board_.vdp().check_frame_interrupt()) {
+    if (board_.video().check_frame_interrupt()) {
         BUS_CLR_BIT(pins_, BUS_IRQ_BIT);  // Assert INT (active-low)
         int_counter_ = 32;
     }
@@ -312,7 +312,7 @@ void SpectrumSystem<V>::tick() {
     // AY tick (128K: clocked at CPU/2)
     if constexpr (Traits::has_ay_sound) {
         if (frame_tstate_counter_ & 1) {
-            board_.psg().tick();
+            board_.sound().tick();
         }
     }
 
@@ -320,9 +320,9 @@ void SpectrumSystem<V>::tick() {
     audio_sample_counter_++;
     if (audio_sample_counter_ >= audio_sample_period_) {
         audio_sample_counter_ = 0;
-        float sample = board_.vdp().get_ear_output() ? 0.5f : 0.0f;
+        float sample = board_.video().get_ear_output() ? 0.5f : 0.0f;
         if constexpr (Traits::has_ay_sound) {
-            sample += board_.psg().get_sample() * 0.5f;
+            sample += board_.sound().get_sample() * 0.5f;
         }
         audio_ring_buf_.write(&sample, 1);
         if (audio_port_) audio_port_->drive_sample(sample);
@@ -332,7 +332,7 @@ void SpectrumSystem<V>::tick() {
     frame_tstate_counter_++;
     if (frame_tstate_counter_ >= spectrum_constants::TSTATES_PER_FRAME) {
         frame_tstate_counter_ = 0;
-        board_.vdp().render_frame(screen_ram_ptr_);
+        board_.video().render_frame(screen_ram_ptr_);
     }
 
     total_cycles_++;
@@ -419,10 +419,10 @@ bus_state_t SpectrumSystem<V>::io_tick(bus_state_t pins) {
     if (!(addr & 0x01)) {
         // ULA port ($FE) — selected when A0=0
         if (is_read) {
-            uint8_t data = board_.vdp().read_port_fe(static_cast<uint8_t>(addr >> 8));
+            uint8_t data = board_.video().read_port_fe(static_cast<uint8_t>(addr >> 8));
             BUS_SET_DATA(pins, data);
         } else {
-            board_.vdp().write_port_fe(BUS_GET_DATA(pins));
+            board_.video().write_port_fe(BUS_GET_DATA(pins));
         }
     }
 
@@ -439,15 +439,15 @@ bus_state_t SpectrumSystem<V>::io_tick(bus_state_t pins) {
         // AY register select $FFFD (A1=0, A14=1, A15=1)
         if ((addr & 0xC002) == 0xC000) {
             if (is_read) {
-                BUS_SET_DATA(pins, board_.psg().read_register());
+                BUS_SET_DATA(pins, board_.sound().read_register());
             } else {
-                board_.psg().latch_address(BUS_GET_DATA(pins));
+                board_.sound().latch_address(BUS_GET_DATA(pins));
             }
         }
 
         // AY data write $BFFD (A1=0, A14=1, A15=0)
         if (!is_read && (addr & 0xC002) == 0x8000) {
-            board_.psg().write_register(BUS_GET_DATA(pins));
+            board_.sound().write_register(BUS_GET_DATA(pins));
         }
     }
 
@@ -509,7 +509,7 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
         board_.cpu().set_sp(sp + 2);
 
         // Restore border color
-        board_.vdp().set_border_color(hdr.border & 0x07);
+        board_.video().set_border_color(hdr.border & 0x07);
 
         printf("%s: SNA loaded — PC=$%04X SP=$%04X\n", Traits::name,
                board_.cpu().pc(), board_.cpu().sp());
@@ -568,7 +568,7 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
         board_.cpu().set_hl_prime(hdr.hl_prime);
 
         // Restore border color
-        board_.vdp().set_border_color(hdr.border & 0x07);
+        board_.video().set_border_color(hdr.border & 0x07);
 
         printf("%s: Z80 v%d loaded — PC=$%04X SP=$%04X\n", Traits::name,
                hdr.version, board_.cpu().pc(), board_.cpu().sp());
@@ -803,7 +803,7 @@ void SpectrumSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
             else
                 row_state |= (1 << m.bit);   // Release: set bit
             keyboard_rows_[m.row] = row_state;
-            board_.vdp().set_keyboard_row(m.row, row_state);
+            board_.video().set_keyboard_row(m.row, row_state);
         }
     }
 }
@@ -815,7 +815,7 @@ void SpectrumSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 template<SpectrumVariant V>
 void SpectrumSystem<V>::render_configuration_ui() {
 #ifdef CERMU_HAS_GUI
-    if (palette_selector::render(board_.vdp(), config_.custom_settings)) {
+    if (palette_selector::render(board_.video(), config_.custom_settings)) {
         set_configuration(config_);
         apply_configuration();
     }

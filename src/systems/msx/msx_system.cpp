@@ -150,13 +150,13 @@ bool MSXSystem<V>::initialize() {
 
     // Init chips
     pins_ = board_.cpu_chip()->init();
-    board_.psg().init();
+    board_.sound().init();
     board_.chips().ppi.init();
 
     // AY clock: PSG runs at CPU_FREQ / 16 internally, but we tick it
     // at CPU rate and let the chip handle internal division
-    board_.psg().set_clock_frequency(msx_constants::CPU_FREQ_HZ / 16);
-    board_.psg().set_audio_sample_rate(audio_sample_rate_);
+    board_.sound().set_clock_frequency(msx_constants::CPU_FREQ_HZ / 16);
+    board_.sound().set_audio_sample_rate(audio_sample_rate_);
 
     // Audio setup
     audio_sample_period_ = msx_constants::CPU_FREQ_HZ / audio_sample_rate_;
@@ -184,13 +184,13 @@ bool MSXSystem<V>::initialize() {
 
     // Display setup
     display_.init(Traits::display_w, Traits::display_h);
-    display_.set_palette(board_.vdp().system_palette(), board_.vdp().palette_size());
-    board_.vdp().set_display(&display_);
+    display_.set_palette(board_.video().system_palette(), board_.video().palette_size());
+    board_.video().set_display(&display_);
     register_display(&display_);
 
     // Video stream output
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.vdp().set_stream(&video_port_->stream());
+    board_.video().set_stream(&video_port_->stream());
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Audio port
@@ -217,8 +217,8 @@ void MSXSystem<V>::reset() {
     frame_tstate_counter_ = 0;
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
     board_.chips().ppi.init();
-    board_.vdp().reset();
-    board_.psg().init();
+    board_.video().reset();
+    board_.sound().init();
 }
 
 // ============================================================================
@@ -230,7 +230,7 @@ void MSXSystem<V>::tick() {
     // VDP tick — dot clock is ~3× CPU clock, but for simplicity
     // we tick the VDP once per CPU T-state (approximate)
     bus_state_t vdp_bus = 0;
-    vdp_bus = board_.vdp().tick(vdp_bus);
+    vdp_bus = board_.video().tick(vdp_bus);
 
     // Check VDP interrupt
     if (BUS_GET_BIT(vdp_bus, BUS_IRQ_BIT) == 0) {
@@ -255,14 +255,14 @@ void MSXSystem<V>::tick() {
     // PSG tick — AY runs at CPU/16, but we tick at CPU rate
     // and let generate_sample handle downsampling
     if ((frame_tstate_counter_ & 0x0F) == 0) {
-        board_.psg().tick();
+        board_.sound().tick();
     }
 
     // Audio sample generation
     audio_sample_counter_++;
     if (audio_sample_counter_ >= audio_sample_period_) {
         audio_sample_counter_ = 0;
-        float sample = board_.psg().get_sample();
+        float sample = board_.sound().get_sample();
         audio_ring_buf_.write(&sample, 1);
         if (audio_port_) audio_port_->drive_sample(sample);
     }
@@ -309,25 +309,25 @@ bus_state_t MSXSystem<V>::io_tick(bus_state_t pins) {
         BUS_SET_ADDR(vdp_bus, port - msx_constants::VDP_DATA_PORT);
         BUS_SET_DATA(vdp_bus, BUS_GET_DATA(pins));
         if (is_read) {
-            vdp_bus = VDP::port_read(&board_.vdp(), vdp_bus);
+            vdp_bus = VDP::port_read(&board_.video(), vdp_bus);
             BUS_SET_DATA(pins, BUS_GET_DATA(vdp_bus));
         } else {
-            VDP::port_write(&board_.vdp(), vdp_bus);
+            VDP::port_write(&board_.video(), vdp_bus);
         }
         return pins;
     }
 
     // PSG ports $A0-$A2
     if (port == msx_constants::PSG_ADDR_PORT && !is_read) {
-        board_.psg().latch_address(BUS_GET_DATA(pins));
+        board_.sound().latch_address(BUS_GET_DATA(pins));
         return pins;
     }
     if (port == msx_constants::PSG_DATA_WRITE_PORT && !is_read) {
-        board_.psg().write_register(BUS_GET_DATA(pins));
+        board_.sound().write_register(BUS_GET_DATA(pins));
         return pins;
     }
     if (port == msx_constants::PSG_DATA_READ_PORT && is_read) {
-        BUS_SET_DATA(pins, board_.psg().read_register());
+        BUS_SET_DATA(pins, board_.sound().read_register());
         return pins;
     }
 
@@ -382,7 +382,7 @@ template<MSXVariant V>
 void MSXSystem<V>::set_audio_sample_rate(int sample_rate_hz) {
     audio_sample_rate_ = static_cast<uint32_t>(sample_rate_hz);
     audio_sample_period_ = msx_constants::CPU_FREQ_HZ / audio_sample_rate_;
-    board_.psg().set_audio_sample_rate(sample_rate_hz);
+    board_.sound().set_audio_sample_rate(sample_rate_hz);
 }
 
 // ============================================================================
