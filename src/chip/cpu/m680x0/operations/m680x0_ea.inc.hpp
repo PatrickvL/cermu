@@ -31,12 +31,14 @@ inline uint32_t calc_ea(uint8_t mode, uint8_t reg, OpSize sz) {
             // Stack pointer (A7) always stays word-aligned
             if (reg == 7 && sz == OpSize::Byte) inc = 2;
             set_a(reg, addr + inc);
+            if (reg == 7) sync_sp();
             return addr;
         }
         case EAMode::AddrRegPreDec: {
             uint32_t dec = size_bytes(sz);
             if (reg == 7 && sz == OpSize::Byte) dec = 2;
             set_a(reg, get_a(reg) - dec);
+            if (reg == 7) sync_sp();
             return get_a(reg);
         }
         case EAMode::AddrRegDisp: {
@@ -51,7 +53,8 @@ inline uint32_t calc_ea(uint8_t mode, uint8_t reg, OpSize sz) {
             int8_t   disp8   = static_cast<int8_t>(ext & 0xFF);
             int32_t  xn_val;
             if (xn_is_a) {
-                xn_val = static_cast<int32_t>(get_a(xn_reg));
+                xn_val = xn_long ? static_cast<int32_t>(get_a(xn_reg))
+                                 : static_cast<int32_t>(static_cast<int16_t>(get_a(xn_reg) & 0xFFFF));
             } else {
                 xn_val = xn_long ? static_cast<int32_t>(get_d(xn_reg))
                                  : static_cast<int32_t>(static_cast<int16_t>(get_d_w(xn_reg)));
@@ -84,7 +87,8 @@ inline uint32_t calc_ea(uint8_t mode, uint8_t reg, OpSize sz) {
                     int8_t   disp8   = static_cast<int8_t>(ext & 0xFF);
                     int32_t  xn_val;
                     if (xn_is_a) {
-                        xn_val = static_cast<int32_t>(get_a(xn_reg));
+                        xn_val = xn_long ? static_cast<int32_t>(get_a(xn_reg))
+                                         : static_cast<int32_t>(static_cast<int16_t>(get_a(xn_reg) & 0xFFFF));
                     } else {
                         xn_val = xn_long ? static_cast<int32_t>(get_d(xn_reg))
                                          : static_cast<int32_t>(static_cast<int16_t>(get_d_w(xn_reg)));
