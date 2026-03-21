@@ -85,7 +85,7 @@ bool Z9001System<V>::initialize() {
 
     // ── Init chips ──────────────────────────────────────────────────────────
     pins_ = board_.cpu().init();
-    board_.chips().pio1.init();
+    board_.io().init();
     board_.chips().pio2.init();
     board_.chips().ctc.init();
 
@@ -304,18 +304,18 @@ bus_state_t Z9001System<V>::io_tick(bus_state_t pins) {
         if (is_rd) {
             // Port A output holds the keyboard row select; Port B returns column data
             if (port_sel == 0) {
-                uint8_t row  = board_.chips().pio1.get_output(0) & 0x07;
+                uint8_t row  = board_.io().get_output(0) & 0x07;
                 uint8_t cols = keyboard_matrix_[row];
-                board_.chips().pio1.set_input(1, cols);
+                board_.io().set_input(1, cols);
             }
-            uint8_t data = board_.chips().pio1.read_data(port_sel);
+            uint8_t data = board_.io().read_data(port_sel);
             BUS_SET_DATA(pins, data);
         } else {
             uint8_t data = BUS_GET_DATA(pins);
             if (is_ctrl) {
-                board_.chips().pio1.write_control(port_sel, data);
+                board_.io().write_control(port_sel, data);
             } else {
-                board_.chips().pio1.write_data(port_sel, data);
+                board_.io().write_data(port_sel, data);
             }
         }
     }

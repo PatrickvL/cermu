@@ -151,7 +151,7 @@ bool MSXSystem<V>::initialize() {
     // Init chips
     pins_ = board_.cpu_chip()->init();
     board_.sound().init();
-    board_.chips().ppi.init();
+    board_.io().init();
 
     // AY clock: PSG runs at CPU_FREQ / 16 internally, but we tick it
     // at CPU rate and let the chip handle internal division
@@ -165,10 +165,10 @@ bool MSXSystem<V>::initialize() {
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 
     // PPI Port B read callback — returns keyboard column data
-    board_.chips().ppi.set_port_b_read_callback(
+    board_.io().set_port_b_read_callback(
         [](void* ctx, uint8_t /*port_a*/) -> uint8_t {
             auto* sys = static_cast<MSXSystem*>(ctx);
-            uint8_t row = sys->board_.chips().ppi.get_port_c_output() & 0x0F;
+            uint8_t row = sys->board_.io().get_port_c_output() & 0x0F;
             if (row < msx_constants::KEYBOARD_ROWS)
                 return sys->keyboard_matrix_[row];
             return 0xFF;
@@ -216,7 +216,7 @@ void MSXSystem<V>::reset() {
     slot_select_ = 0;
     frame_tstate_counter_ = 0;
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
-    board_.chips().ppi.init();
+    board_.io().init();
     board_.video().reset();
     board_.sound().init();
 }
@@ -334,12 +334,12 @@ bus_state_t MSXSystem<V>::io_tick(bus_state_t pins) {
     // PPI ports $A8-$AB
     if (port >= msx_constants::PPI_PORT_A && port <= msx_constants::PPI_CONTROL) {
         if (is_read) {
-            BUS_SET_DATA(pins, board_.chips().ppi.read(port - msx_constants::PPI_PORT_A));
+            BUS_SET_DATA(pins, board_.io().read(port - msx_constants::PPI_PORT_A));
         } else {
-            board_.chips().ppi.write(port - msx_constants::PPI_PORT_A, BUS_GET_DATA(pins));
+            board_.io().write(port - msx_constants::PPI_PORT_A, BUS_GET_DATA(pins));
             // Slot selection changed — update memory map
             if (port == msx_constants::PPI_PORT_A) {
-                slot_select_ = board_.chips().ppi.get_port_a_output();
+                slot_select_ = board_.io().get_port_a_output();
                 // TODO: remap memory pages based on slot_select_
             }
         }

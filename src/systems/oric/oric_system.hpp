@@ -129,17 +129,7 @@ template<> struct OricBusTraits<OricVariant::ORIC_ATMOS> {
 // Oric ChipSet — value-typed chips owned by Board
 // ============================================================================
 
-struct OricChips : StandardChips<MOS6502, NoChip, AY_3_8912> {
-    mos6522_t via;
-
-    template<typename B> void bind_extras(B& board) {
-        board.bind_chip(board.template find_index<mos6522_t>(), &via);
-    }
-
-    void register_extras(BoardBase& board) {
-        board.register_component(&via);
-    }
-};
+struct OricChips : StandardChips<MOS6502, NoChip, AY_3_8912, mos6522_t> {};
 
 // ============================================================================
 // Oric System

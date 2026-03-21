@@ -63,8 +63,8 @@ bool AcornAtomSystem::initialize() {
     // ── Init chips ──────────────────────────────────────────────────────
     pins_ = board_.cpu().init();
     board_.video().init();
-    board_.chips().ppi.init();
-    board_.chips().ppi.set_port_b_read_callback(ppi_keyboard_scan, this);
+    board_.io().init();
+    board_.io().set_port_b_read_callback(ppi_keyboard_scan, this);
     board_.chips().via.reset();
     board_.chips().via.interrupt_bit = BUS_IRQ_BIT;
 
@@ -106,7 +106,7 @@ void AcornAtomSystem::reset() {
     pins_ = board_.cpu().reset(pins_);
     // Reset all manifest chips (VDG, PPI, VIA; RAM/ROM are no-op)
     board_.reset_chips();
-    board_.chips().ppi.set_port_b_read_callback(ppi_keyboard_scan, this);
+    board_.io().set_port_b_read_callback(ppi_keyboard_scan, this);
     board_.chips().via.interrupt_bit = BUS_IRQ_BIT;
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 }

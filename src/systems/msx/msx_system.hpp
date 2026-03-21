@@ -94,18 +94,7 @@ template<> struct MSXVariantTraits<MSXVariant::MSX2P> {
 // ============================================================================
 
 template<MSXVariant V>
-struct MSXChips : StandardChips<ZilogZ80A, typename MSXVariantTraits<V>::VDP, AY_3_8910> {
-    i8255_t ppi;   // i8255 PPI (keyboard + slot control)
-
-    template<typename B>
-    void bind_extras(B& board) {
-        board.bind_chip(board.template find_index<i8255_t>(), &ppi);
-    }
-
-    void register_extras(BoardBase& board) {
-        board.register_component(&ppi);
-    }
-};
+struct MSXChips : StandardChips<ZilogZ80A, typename MSXVariantTraits<V>::VDP, AY_3_8910, i8255_t> {};
 
 // ============================================================================
 // MSX default bus state

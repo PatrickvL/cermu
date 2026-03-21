@@ -144,19 +144,16 @@ template<> struct CPCBusTraits<CPCModel::CPC6128> {
 };
 
 // ── ChipSet ──────────────────────────────────────────────────────────────
-struct CPCChipSet : StandardChips<ZilogZ80A, mc6845_t, AY_3_8912> {
-    i8255_t              ppi;          // Intel 8255 PPI
+struct CPCChipSet : StandardChips<ZilogZ80A, mc6845_t, AY_3_8912, i8255_t> {
     amstrad_gate_array_t gate_array;   // Amstrad custom gate array
 
     template<typename BoardT>
     void bind_extras(BoardT& board) {
-        board.bind_chip(board.template find_index<i8255_t>(), &ppi);
         board.bind_chip(board.template find_index<amstrad_gate_array_t>(), &gate_array);
     }
 
     template<typename BoardT>
     void register_extras(BoardT& board) {
-        board.register_component(&ppi);
         board.register_component(&gate_array);
     }
 };

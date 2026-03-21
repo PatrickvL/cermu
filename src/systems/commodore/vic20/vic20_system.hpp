@@ -102,16 +102,13 @@ struct VIC20BusTraits {
 };
 
 // Value-typed chips: CPU + 2× VIA.  VIC stays factory-created (PAL/NTSC conditional).
-struct VIC20ChipSet : StandardChips<MOS6502> {
-    mos6522_t via1;
+struct VIC20ChipSet : StandardChips<MOS6502, NoChip, NoChip, mos6522_t> {
     mos6522_t via2;
 
     template<typename B> void bind_extras(B& board) {
-        board.bind_chip(board.template find_index<mos6522_t>(0), &via1);
         board.bind_chip(board.template find_index<mos6522_t>(1), &via2);
     }
     template<typename B> void register_extras(B& board) {
-        board.register_component(&via1);
         board.register_component(&via2);
     }
 };

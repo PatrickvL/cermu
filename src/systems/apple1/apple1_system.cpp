@@ -127,10 +127,10 @@ Apple1System::Apple1System()
     current_palette_ = hardware_traits_.display.default_palette;
     
     // Initialize PIA with callbacks
-    board_.chips().pia.init();
-    board_.chips().pia.user_data = this;
-    board_.chips().pia.on_port_a_read = pia_keyboard_read;  // Port A: keyboard input
-    board_.chips().pia.on_port_b_write = pia_display_write; // Port B: display output
+    board_.io().init();
+    board_.io().user_data = this;
+    board_.io().on_port_a_read = pia_keyboard_read;  // Port A: keyboard input
+    board_.io().on_port_b_write = pia_display_write; // Port B: display output
     // DDR left at 0x00 — Woz Monitor configures PIA during boot.
 }
 
@@ -211,10 +211,10 @@ bool Apple1System::initialize() {
     board_.cpu().reset();
     
     // Reset PIA with callbacks
-    board_.chips().pia.init();
-    board_.chips().pia.user_data = this;
-    board_.chips().pia.on_port_a_read = pia_keyboard_read;
-    board_.chips().pia.on_port_b_write = pia_display_write;
+    board_.io().init();
+    board_.io().user_data = this;
+    board_.io().on_port_a_read = pia_keyboard_read;
+    board_.io().on_port_b_write = pia_display_write;
     // DDR left at 0x00 after init — the Woz Monitor sets DDRB = $7F
     // via STY $D012 during its boot sequence (control bit 2 = 0 → DDR mode).
     
@@ -245,9 +245,9 @@ void Apple1System::reset() {
     
     // Reset all manifest chips (PIA; RAM/ROM are no-op)
     board_.reset_chips();
-    board_.chips().pia.user_data = this;
-    board_.chips().pia.on_port_a_read = pia_keyboard_read;
-    board_.chips().pia.on_port_b_write = pia_display_write;
+    board_.io().user_data = this;
+    board_.io().on_port_a_read = pia_keyboard_read;
+    board_.io().on_port_b_write = pia_display_write;
     
     // Clear terminal
     if (terminal_) {
@@ -475,7 +475,7 @@ uint8_t Apple1System::pia_keyboard_read(void* user_data) {
     // Return current keyboard state
     // Note: The Apple 1 keyboard hardware clears bit 7 (strobe) when Port A is read
     // This is NOT PIA behavior - it's the external keyboard circuit's behavior
-    uint8_t data = sys->board_.chips().pia.port_a_data;
+    uint8_t data = sys->board_.io().port_a_data;
     
     // Simulate Apple 1 keyboard circuit: clear strobe on read
     sys->clear_keyboard_strobe();
@@ -533,25 +533,25 @@ void Apple1System::display_char(uint8_t ch) {
 // Apple 1 keyboard helpers (system-specific PIA Port A usage)
 void Apple1System::set_keyboard_data(uint8_t key_code) {
     // Apple 1 convention: Set bit 7 (strobe) and key code in bits 0-6
-    board_.chips().pia.set_port_a_input(0x80 | (key_code & 0x7F));
+    board_.io().set_port_a_input(0x80 | (key_code & 0x7F));
     
     // Simulate MM5740 keyboard encoder strobe pulse:
     // Ensure CA1 is low first so the rising edge is always detected,
     // even if a previous key press left CA1 high.
-    board_.chips().pia.set_ca1(false);
-    board_.chips().pia.set_ca1(true);
+    board_.io().set_ca1(false);
+    board_.io().set_ca1(true);
 }
 
 bool Apple1System::keyboard_ready() const {
     // Check if bit 7 is set (keyboard data available)
-    return (board_.chips().pia.port_a_data & 0x80) != 0;
+    return (board_.io().port_a_data & 0x80) != 0;
 }
 
 void Apple1System::clear_keyboard_strobe() {
     // Apple 1 keyboard hardware behavior: The keyboard circuit clears bit 7 (strobe)
     // when the CPU reads Port A. This is NOT PIA behavior - it's the external
     // keyboard hardware responding to the PIA's read signal.
-    board_.chips().pia.port_a_data &= 0x7F;
+    board_.io().port_a_data &= 0x7F;
 }
 
 // ============================================================================

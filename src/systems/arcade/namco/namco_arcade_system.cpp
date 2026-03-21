@@ -83,19 +83,19 @@ bool NamcoArcadeSystem<G>::initialize() {
     vram_chip_ = board_.template find<RAMChip>();      // Video RAM
     cram_chip_ = board_.template find<RAMChip>(1);     // Color RAM
     pins_ = board_.cpu().init();
-    board_.chips().wsg.init();
+    board_.sound().init();
     // WSG clock = CPU / 32 = 96 kHz
-    board_.chips().wsg.set_clock_frequency(namco_arcade_constants::CPU_FREQ_HZ / 32);
-    board_.chips().wsg.set_audio_sample_rate(namco_arcade_constants::DEFAULT_SAMPLE_RATE);
+    board_.sound().set_clock_frequency(namco_arcade_constants::CPU_FREQ_HZ / 32);
+    board_.sound().set_audio_sample_rate(namco_arcade_constants::DEFAULT_SAMPLE_RATE);
 
     // Wire WSG to audio thread — WSG clocked at CPU/32
-    wsg_adapter_ = std::make_unique<WriteOnlySynthAdapter<namco_wsg_t, true>>(&board_.chips().wsg, 32);
+    wsg_adapter_ = std::make_unique<WriteOnlySynthAdapter<namco_wsg_t, true>>(&board_.sound(), 32);
     audio_thread_.register_engine(wsg_adapter_.get());
     audio_thread_.start();
 
     // Wire WSG to audio signal port
     audio_port_ = std::make_unique<AudioPort>();
-    board_.chips().wsg.set_audio_port(audio_port_.get());
+    board_.sound().set_audio_port(audio_port_.get());
 
     // Graphics ROMs — not bus-mapped
     char_rom_.resize(Traits::char_rom_size, 0xFF);
@@ -207,11 +207,11 @@ template<NamcoGame G> uint32_t NamcoArcadeSystem<G>::get_audio_samples(float* bu
     if (audio_port_) {
         return static_cast<uint32_t>(audio_port_->read_samples(buffer, static_cast<int>(max_samples)));
     }
-    return board_.chips().wsg.audio_read(buffer, max_samples);
+    return board_.sound().audio_read(buffer, max_samples);
 }
 template<NamcoGame G> void NamcoArcadeSystem<G>::set_audio_sample_rate(int hz) {
     audio_sample_rate_ = hz;
-    board_.chips().wsg.set_audio_sample_rate(hz);
+    board_.sound().set_audio_sample_rate(hz);
 }
 
 // ============================================================================

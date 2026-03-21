@@ -75,19 +75,16 @@ inline constexpr auto kAcornAtomChips = make_chip_manifest(
 using AcornAtomBusSpec = ManifestBusSpec<kAcornAtomChips, 16, 8>;
 
 // ── ChipSet ──────────────────────────────────────────────────────────────
-struct AtomChipSet : StandardChips<MOS6502, mc6847_t> {
-    i8255_t   ppi;    // Intel 8255 PPI (keyboard + cassette ctrl)
+struct AtomChipSet : StandardChips<MOS6502, mc6847_t, NoChip, i8255_t> {
     mos6522_t via;    // MOS 6522 VIA (timers, cassette, printer)
 
     template<typename BoardT>
     void bind_extras(BoardT& board) {
-        board.bind_chip(board.template find_index<i8255_t>(), &ppi);
         board.bind_chip(board.template find_index<mos6522_t>(), &via);
     }
 
     template<typename BoardT>
     void register_extras(BoardT& board) {
-        board.register_component(&ppi);
         board.register_component(&via);
     }
 };

@@ -116,19 +116,7 @@ template<> struct Z1013BusTraits<Z1013Variant::Z1013_64> {
 };
 
 // ── ChipSet ──────────────────────────────────────────────────────────────
-struct Z1013ChipSet : StandardChips<U880> {
-    z80_pio_t pio;      // U855 PIO (keyboard + cassette)
-
-    template<typename BoardT>
-    void bind_extras(BoardT& board) {
-        board.bind_chip(board.template find_index<z80_pio_t>(), &pio);
-    }
-
-    template<typename BoardT>
-    void register_extras(BoardT& board) {
-        board.register_component(&pio);
-    }
-};
+struct Z1013ChipSet : StandardChips<U880, NoChip, NoChip, z80_pio_t> {};
 
 // ── System ───────────────────────────────────────────────────────────────
 template<Z1013Variant V>

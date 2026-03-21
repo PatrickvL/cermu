@@ -87,7 +87,7 @@ bool Z1013System<V>::initialize() {
 
     // ── Init chips ──────────────────────────────────────────────────────
     pins_ = board_.cpu().init();
-    board_.chips().pio.init();
+    board_.io().init();
 
     // Character ROM — not bus-mapped, used for display rendering only
     char_rom_.resize(z1013_constants::CHAR_ROM_SIZE, 0xFF);
@@ -266,16 +266,16 @@ bus_state_t Z1013System<V>::io_tick(bus_state_t pins) {
                         cols &= keyboard_matrix_[r];
                     }
                 }
-                board_.chips().pio.set_input(0, cols);
+                board_.io().set_input(0, cols);
             }
-            uint8_t data = board_.chips().pio.read_data(port_sel);
+            uint8_t data = board_.io().read_data(port_sel);
             BUS_SET_DATA(pins, data);
         } else {
             uint8_t data = BUS_GET_DATA(pins);
             if (is_ctrl) {
-                board_.chips().pio.write_control(port_sel, data);
+                board_.io().write_control(port_sel, data);
             } else {
-                board_.chips().pio.write_data(port_sel, data);
+                board_.io().write_data(port_sel, data);
             }
         }
     } else if (port == z1013_constants::KEYBOARD_SEL_PORT) {

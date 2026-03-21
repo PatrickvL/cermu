@@ -627,8 +627,8 @@ bool VIC20System::initialize() {
     // VIA chips (MOS6522) — value-typed in ChipSet
     // VIC-20 hardware: VIA1 ($9110) → NMI line, VIA2 ($9120) → IRQ line
     // VIA2 Timer 1 is the system heartbeat (jiffy clock, keyboard scan, cursor blink)
-    board_.chips().via1.reset();
-    board_.chips().via1.interrupt_bit = BUS_NMI_BIT;
+    board_.io().reset();
+    board_.io().interrupt_bit = BUS_NMI_BIT;
 
     board_.chips().via2.reset();
     board_.chips().via2.interrupt_bit = BUS_IRQ_BIT;
@@ -774,11 +774,11 @@ bus_state_t VIC20System::io_tick(bus_state_t s) {
             bus_state_t chip_state = 0;
             BUS_SET_ADDR(chip_state, offset & 0x0F);
             if (is_read) {
-                chip_state = board_.chips().via1.registers_read(chip_state);
+                chip_state = board_.io().registers_read(chip_state);
                 BUS_SET_DATA(s, BUS_GET_DATA(chip_state));
             } else {
                 BUS_SET_DATA(chip_state, BUS_GET_DATA(s));
-                board_.chips().via1.registers_write(chip_state);
+                board_.io().registers_write(chip_state);
             }
         } else {
             // VIA2 registers ($9x20-$9x2F)
@@ -837,7 +837,7 @@ void VIC20System::tick() {
     // PHASE 2: VIA CHIPS TICKING (BEFORE CPU PHI2)
     // VIA chips handle I/O and timing, must tick before CPU to set interrupt lines
     // =========================================================================
-    s = board_.chips().via1.tick(s);
+    s = board_.io().tick(s);
     s = board_.chips().via2.tick(s);
     
     // =========================================================================

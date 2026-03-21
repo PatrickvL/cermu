@@ -149,9 +149,9 @@ bool BBCMasterSystem<V>::initialize() {
     // Pre-bind all value-typed chips\n    board_.bind_chipset();\n    board_.create_chips(&pins_);\n\n    ram_chip_       = board_.template find<RAMChip>();\n    paged_rom_chip_ = board_.template find<ROMChip>();\n    os_rom_chip_    = board_.template find<ROMChip>(1);\n    memory_         = ram_chip_->data();
 
     pins_ = board_.cpu().init();
-    board_.chips().system_via.reset();
+    board_.io().reset();
     board_.chips().user_via.reset();
-    board_.chips().system_via.interrupt_bit = BUS_IRQ_BIT;
+    board_.io().interrupt_bit = BUS_IRQ_BIT;
     board_.chips().user_via.interrupt_bit   = BUS_IRQ_BIT;
 
     configure_bus_memory_map();
@@ -179,9 +179,9 @@ void BBCMasterSystem<V>::reset() {
     if (!system_ready_) return;
     pins_ = board_.cpu().reset(pins_);
     board_.reset_chips();
-    board_.chips().system_via.reset();
+    board_.io().reset();
     board_.chips().user_via.reset();
-    board_.chips().system_via.interrupt_bit = BUS_IRQ_BIT;
+    board_.io().interrupt_bit = BUS_IRQ_BIT;
     board_.chips().user_via.interrupt_bit   = BUS_IRQ_BIT;
     rom_select_ = 0;
     acccon_ = 0;
