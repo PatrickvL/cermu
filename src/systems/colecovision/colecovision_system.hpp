@@ -12,6 +12,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -49,6 +50,12 @@ inline constexpr auto kColecoChips = make_chip_manifest(
 using ColecoBusSpec = ManifestBusSpec<kColecoChips, 16, 8>;
 
 // ============================================================================
+// ColecoVision ChipSet — value-typed chips embedded in Board
+// ============================================================================
+
+struct ColecoChips : StandardChips<ZilogZ80A, TMS9918A, sn76489_t> {};
+
+// ============================================================================
 // ColecoVision System
 // ============================================================================
 
@@ -77,15 +84,10 @@ public:
 
 
 private:
-    // ── Chips ────────────────────────────────────────────────────────────
-    ZilogZ80A*   cpu_ = nullptr;
-    TMS9918A     vdp_;
-    sn76489_t    psg_{SN76489Variant::SN76489};
-
-    // ── Board + bus ──────────────────────────────────────────────────────
+    // ── Board + bus (chips live inside board_) ────────────────────────────
     using Bus       = MemoryBus<ColecoBusSpec>;
     using PT        = PackingTraits<ColecoBusSpec>;
-    using MainBoard = Board<ColecoBusSpec>;
+    using MainBoard = Board<ColecoBusSpec, ColecoChips>;
     Bus       bus_;
     MainBoard board_{kColecoChips};
 
