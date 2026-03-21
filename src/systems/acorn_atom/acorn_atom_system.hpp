@@ -29,6 +29,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/video/mc6847/mc6847.hpp"
@@ -73,6 +74,24 @@ inline constexpr auto kAcornAtomChips = make_chip_manifest(
 // BusSpec auto-derived from the manifest
 using AcornAtomBusSpec = ManifestBusSpec<kAcornAtomChips, 16, 8>;
 
+// ── ChipSet ──────────────────────────────────────────────────────────────
+struct AtomChipSet : StandardChips<MOS6502, mc6847_t> {
+    i8255_t   ppi;    // Intel 8255 PPI (keyboard + cassette ctrl)
+    mos6522_t via;    // MOS 6522 VIA (timers, cassette, printer)
+
+    template<typename BoardT>
+    void bind_extras(BoardT& board) {
+        board.bind_chip(board.template find_index<i8255_t>(), &ppi);
+        board.bind_chip(board.template find_index<mos6522_t>(), &via);
+    }
+
+    template<typename BoardT>
+    void register_extras(BoardT& board) {
+        board.register_component(&ppi);
+        board.register_component(&via);
+    }
+};
+
 class AcornAtomSystem : public System {
 public:
     AcornAtomSystem();
@@ -94,11 +113,7 @@ public:
 
 
 private:
-    // ── Chips ────────────────────────────────────────────────────────────
-    MOS6502*    cpu_  = nullptr;     // MOS 6502 — owned by board_
-    mc6847_t*   vdg_  = nullptr;     // MC6847 Video Display Generator — owned by board_
-    i8255_t     ppi_;                // Intel 8255 PPI (keyboard + cassette ctrl)
-    mos6522_t   via_;                // MOS 6522 VIA (timers, cassette, printer)
+    // ── Chips (value-typed via Board ChipSet) ────────────────────────────
 
     // ── Memory chips — post-init pointers via chip_as<>() ───────────────
     ROMChip* basic_rom_ = nullptr;  // 4 KB at $C000
@@ -111,7 +126,7 @@ private:
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using Bus = MemoryBus<AcornAtomBusSpec>;
     using PT  = PackingTraits<AcornAtomBusSpec>;
-    using MainBoard = Board<AcornAtomBusSpec>;
+    using MainBoard = Board<AcornAtomBusSpec, AtomChipSet>;
     Bus bus_;
     MainBoard board_{kAcornAtomChips};
 
