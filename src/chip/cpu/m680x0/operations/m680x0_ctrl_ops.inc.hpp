@@ -178,7 +178,15 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
     // ── PEA (0100 1000 01xx xxxx) ────────────────────────────────
     // NOTE: SWAP is 0x4840-0x4847, PEA uses EA modes 2-7 (bits 5-3 ≥ 2)
     if ((opcode & 0xFFC0) == 0x4840 && ea_mode >= 2) {
-        // TODO: Push effective address onto stack
+        uint32_t ea = calc_ea(ea_mode, ea_reg, OpSize::Long);
+        set_a(7, get_a(7) - 4);
+        sync_sp();
+        if (mem_write_) {
+            uint32_t sp = get_a(7) & address_mask();
+            mem_write_(mem_ctx_, sp,     static_cast<uint16_t>((ea >> 16) & 0xFFFF));
+            mem_write_(mem_ctx_, sp + 2, static_cast<uint16_t>(ea & 0xFFFF));
+            clocks_remaining_ += 8;  // 2 × 4-clock writes
+        }
         return do_prefetch(pins);
     }
 
@@ -538,7 +546,7 @@ inline bus_state_t decode_group6(bus_state_t pins, uint16_t opcode) {
             uint32_t sp = get_a(7) & address_mask();
             mem_write_(mem_ctx_, sp,     static_cast<uint16_t>((return_pc >> 16) & 0xFFFF));
             mem_write_(mem_ctx_, sp + 2, static_cast<uint16_t>(return_pc & 0xFFFF));
-            clocks_remaining_ += 8;  // 2 × 4-clock writes
+            clocks_remaining_ += 10;  // 2 × 4-clock writes + 2 idle
         }
         regs_.pc = branch_base + displacement;
         return do_branch_prefetch(pins);
