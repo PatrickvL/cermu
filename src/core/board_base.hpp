@@ -166,11 +166,14 @@ public:
     template<typename T>
     [[nodiscard]] const T* video() const noexcept { return static_cast<const T*>(video_chip_); }
 
-protected:
+    /// Register a component in the board's component index (non-owning).
+    /// Public so that ChipSet::register_extras() can add extra value-typed
+    /// chips from outside the class hierarchy.
     void register_component(ComponentBase* c) {
         if (c) components_.push_back(c);
     }
 
+protected:
     void clear_components() {
         components_.clear();
     }
