@@ -289,11 +289,11 @@ inline void destroy_resources(VectorDisplayResources* res) {
 // into a screen-space quad (2 triangles = 6 vertices).
 //
 // VectorVideoSample layout (8 bytes):
-//   int16_t x, y;        — beam position in hardware coordinates
-//   uint8_t intensity;   — brightness [0, 255]
+//   int16_t x, y;          — beam position in hardware coordinates
+//   uint8_t intensity;     — Z-axis drive level [0, 255]
+//   uint8_t color_index;   — AVG STAT[2:0] color select; 0 = white/mono
+//   VideoFlags flags;      — BeamOn when drawing
 //   uint8_t _pad;
-//   VideoFlags flags;    — BeamOn when drawing
-//   uint8_t _pad2;
 //
 // Line segments are formed between consecutive samples where both have
 // BeamOn set.  A BeamOff or FrameEnd sample breaks the current segment.
@@ -332,9 +332,9 @@ inline void build_beam_quads(
     struct Sample {
         int16_t x, y;
         uint8_t intensity;
-        uint8_t _pad;
+        uint8_t color_index;
         uint8_t flags;
-        uint8_t _pad2;
+        uint8_t _pad;
     };
     static_assert(sizeof(Sample) == 8);
 

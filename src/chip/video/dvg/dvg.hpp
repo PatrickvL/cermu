@@ -49,7 +49,6 @@
 #include <cstdint>
 #include <cstring>
 #include <algorithm>
-#include <cstdlib>
 
 // ============================================================================
 // DVG CONSTANTS
@@ -158,12 +157,6 @@ struct dvg_t : public VideoChipBase {
 
     /// Trigger VGGO: start processing display list from address 0.
     void trigger_go() {
-        // TEMP TRACE
-        if (go_count_ < 5) {
-            fprintf(stderr, "[DVG VGGO] frame %d start (was %s)\n",
-                    go_count_, halt_ ? "halted" : "RUNNING");
-        }
-        go_count_++;
         pc_        = 0;
         sp_        = 0;
         running_   = true;
@@ -217,8 +210,6 @@ struct dvg_t : public VideoChipBase {
     bool     running_   = false;    // True while processing display list
     bool     halt_      = true;     // True when halted (waiting for VGGO)
     int32_t  clocks_remaining_ = 0; // Clocks left for current vector draw
-    int      trace_count_ = 0;      // TEMP — remove after debugging
-    int      go_count_ = 0;         // TEMP — VGGO trigger counter
 
     uint16_t stack_[dvg_constants::STACK_DEPTH] = {};  // Subroutine return stack
 
@@ -299,13 +290,6 @@ private:
             if (dx_sgn) dx = -dx;
             if (dy_sgn) dy = -dy;
 
-            // TEMP TRACE — first 2 frames only
-            if (go_count_ <= 2 && intensity > 0) {
-                fprintf(stderr, "[DVG VCTR] pc=$%03X gs=%d ls=%d ts=%d dx=%+d dy=%+d beam->(%d,%d) b=%d\n",
-                        pc_, global_scale_, local_scale, total_scale,
-                        dx, dy, beam_x_+dx, beam_y_+dy, intensity);
-            }
-
             emit_vector(dx, dy, intensity);
 
             int vec_len = std::max(std::abs(dx), std::abs(dy));
@@ -322,23 +306,12 @@ private:
             beam_x_ = w1 & 0x03FF;
             global_scale_ = (w1 >> 12) & 0x0F;
 
-            // TEMP TRACE — remove after debugging
-            if (go_count_ <= 2) {
-                fprintf(stderr, "[DVG LABS] pc=$%03X x=%d y=%d scale=%d (w0=$%04X w1=$%04X)\n",
-                        pc_, beam_x_, beam_y_, global_scale_, w0, w1);
-                trace_count_++;
-            }
-
             emit_position();
             clocks_remaining_ = 4;
             pc_ += 2;
 
         } else if (opcode == dvg_constants::OP_HALT) {
             // HALT — Stop DVG (single word)
-            // TEMP TRACE
-            if (go_count_ <= 5) {
-                fprintf(stderr, "[DVG HALT] frame %d done, beam=(%d,%d)\n", go_count_-1, beam_x_, beam_y_);
-            }
             emit_frame_end();
             running_ = false;
             halt_    = true;
@@ -447,17 +420,17 @@ private:
             uint8_t bright = static_cast<uint8_t>(std::min(intensity * 17, 255));
             stream_->drive(VectorVideoSample{
                 static_cast<int16_t>(x0), screen_y(y0),
-                bright, 0, VideoFlags::BeamOn, 0
+                bright, 0, VideoFlags::BeamOn, {}
             });
             stream_->drive(VectorVideoSample{
                 static_cast<int16_t>(beam_x_), screen_y(beam_y_),
-                bright, 0, VideoFlags::BeamOn, 0
+                bright, 0, VideoFlags::BeamOn, {}
             });
         } else {
             // Move: emit position without BeamOn to break the line chain
             stream_->drive(VectorVideoSample{
                 static_cast<int16_t>(beam_x_), screen_y(beam_y_),
-                0, 0, VideoFlags::None, 0
+                0, 0, VideoFlags::None, {}
             });
         }
 
@@ -474,7 +447,7 @@ private:
         if ((wrapped_x != beam_x_ || wrapped_y != beam_y_) && intensity > 0) {
             stream_->drive(VectorVideoSample{
                 static_cast<int16_t>(wrapped_x), screen_y(wrapped_y),
-                0, 0, VideoFlags::None, 0
+                0, 0, VideoFlags::None, {}
             });
         }
 
@@ -487,7 +460,7 @@ private:
         if (!stream_) return;
         stream_->drive(VectorVideoSample{
             static_cast<int16_t>(beam_x_), screen_y(beam_y_),
-            0, 0, VideoFlags::None, 0
+            0, 0, VideoFlags::None, {}
         });
     }
 
@@ -496,7 +469,7 @@ private:
         if (!stream_) return;
         stream_->drive(VectorVideoSample{
             static_cast<int16_t>(beam_x_), screen_y(beam_y_),
-            0, 0, VideoFlags::FrameEnd, 0
+            0, 0, VideoFlags::FrameEnd, {}
         });
     }
 };

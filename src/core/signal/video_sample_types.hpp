@@ -36,13 +36,15 @@ struct alignas(2) RGBIVideoSample {
 };
 static_assert(sizeof(RGBIVideoSample) == 2);
 
-// Vector — Vectrex, Atari Asteroids/Tempest/Star Wars
-// Beam position and intensity; no scanlines
+// Vector — Vectrex, Atari DVG/AVG (Asteroids, Tempest, Star Wars)
+// Beam endpoint; renderer draws segment from previous sample position.
+// BLANK flag suppresses draw but still moves beam (repositioning move).
+// Monochrome systems (DVG, Battlezone, Gravitar) emit color_index == 0.
 struct alignas(8) VectorVideoSample {
-    int16_t    x, y;
-    uint8_t    intensity;
+    int16_t    x, y;          // beam position, chip-native coordinate space
+    uint8_t    intensity;     // Z-axis drive level; governs bloom, spot size
+    uint8_t    color_index;   // AVG STAT[2:0] color select; 0 = white/mono
+    VideoFlags flags;         // BLANK etc.
     uint8_t    _pad;
-    VideoFlags flags;
-    uint8_t    _pad2;
 };
 static_assert(sizeof(VectorVideoSample) == 8);

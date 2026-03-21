@@ -212,89 +212,44 @@ template<AtariVectorVariant V>
 AtariVectorSystem<V>::~AtariVectorSystem() = default;
 
 // ============================================================================
-// SYSTEM DESCRIPTORS
+// SYSTEM DESCRIPTORS — compile-time traits → runtime descriptor
 // ============================================================================
 
-static SystemDescriptor asteroids_descriptor = {
-    "Asteroids",
-    "Asteroids",
-    "Atari Asteroids (1979) — 6502 CPU, DVG vector display",
-    "asteroids",
-    {"Asteroids", "ASTEROIDS"},
-    nullptr,
-    create_vector_hardware_traits<AtariVectorVariant::ASTEROIDS>(),
-    [](const format_descriptor_t*, const char* filepath,
-       const uint8_t*, size_t size) -> SystemProbeResult {
-        SystemProbeResult result = { 0.0f, {} };
-        const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
-        if (!ext) return result;
-        // Match common Asteroids ROM extensions
-        if (strcmp(ext, ".bin") == 0 || strcmp(ext, ".BIN") == 0) {
-            // Asteroids ROMs are typically 6 KB (program) + 2 KB (vector) = 8 KB
-            // or raw 6 KB program ROM
-            if (size == 6144 || size == 8192)
-                result.confidence = 0.3f;
+template<AtariVectorVariant V>
+static SystemDescriptor create_system_descriptor() {
+    using T = AtariVectorTraits<V>;
+    return {
+        T::NAME, T::SHORT_NAME, T::DESCRIPTION, T::DATA_FOLDER,
+        std::vector<const char*>(std::begin(T::ALIASES), std::end(T::ALIASES)),
+        nullptr,
+        create_vector_hardware_traits<V>(),
+        [](const format_descriptor_t*, const char* filepath,
+           const uint8_t*, size_t size) -> SystemProbeResult {
+            SystemProbeResult result = { 0.0f, {} };
+            const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
+            if (!ext) return result;
+            if (strcmp(ext, ".bin") == 0 || strcmp(ext, ".BIN") == 0) {
+                for (auto expected : T::PROBE_ROM_SIZES) {
+                    if (size == expected) {
+                        result.confidence = 0.3f;
+                        break;
+                    }
+                }
+            }
+            return result;
         }
-        return result;
-    }
-};
-
-static SystemDescriptor lunar_lander_descriptor = {
-    "Lunar Lander",
-    "LunarLander",
-    "Atari Lunar Lander (1979) — 6502 CPU, DVG vector display",
-    "lunar_lander",
-    {"LunarLander", "Lunar Lander", "LUNARLANDER"},
-    nullptr,
-    create_vector_hardware_traits<AtariVectorVariant::LUNAR_LANDER>(),
-    [](const format_descriptor_t*, const char* filepath,
-       const uint8_t*, size_t size) -> SystemProbeResult {
-        SystemProbeResult result = { 0.0f, {} };
-        const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
-        if (!ext) return result;
-        if (strcmp(ext, ".bin") == 0 || strcmp(ext, ".BIN") == 0) {
-            // Lunar Lander: 8 KB program + 2 KB vector = 10 KB, or 8 KB program alone
-            if (size == 8192 || size == 10240)
-                result.confidence = 0.3f;
-        }
-        return result;
-    }
-};
-
-static SystemDescriptor asteroids_deluxe_descriptor = {
-    "Asteroids Deluxe",
-    "AsteroidsDeluxe",
-    "Atari Asteroids Deluxe (1980) — 6502 CPU, DVG, POKEY sound",
-    "asteroids_deluxe",
-    {"AsteroidsDeluxe", "Asteroids Deluxe", "ASTEROIDSDELUXE"},
-    nullptr,
-    create_vector_hardware_traits<AtariVectorVariant::ASTEROIDS_DELUXE>(),
-    [](const format_descriptor_t*, const char* filepath,
-       const uint8_t*, size_t size) -> SystemProbeResult {
-        SystemProbeResult result = { 0.0f, {} };
-        const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
-        if (!ext) return result;
-        if (strcmp(ext, ".bin") == 0 || strcmp(ext, ".BIN") == 0) {
-            // AD: 8 KB program + 4 KB vector = 12 KB
-            if (size == 12288)
-                result.confidence = 0.3f;
-        }
-        return result;
-    }
-};
-template<>
-const SystemDescriptor& AsteroidsSystem::get_descriptor() const {
-    return asteroids_descriptor;
+    };
 }
 
-template<>
-const SystemDescriptor& AsteroidsDeluxeSystem::get_descriptor() const {
-    return asteroids_deluxe_descriptor;
+template<AtariVectorVariant V>
+static SystemDescriptor& descriptor_instance() {
+    static SystemDescriptor desc = create_system_descriptor<V>();
+    return desc;
 }
 
-template<>
-const SystemDescriptor& LunarLanderSystem::get_descriptor() const {
-    return lunar_lander_descriptor;
+template<AtariVectorVariant V>
+const SystemDescriptor& AtariVectorSystem<V>::get_descriptor() const {
+    return descriptor_instance<V>();
 }
 
 // ============================================================================
@@ -438,9 +393,11 @@ void AtariVectorSystem<V>::tick() {
     // every NMI_PERIOD_CYCLES, then de-assert.  The 6502 detects the
     // falling edge and vectors to the NMI handler.
     //
-    // Asteroids Deluxe gates NMI via output latch bit 2 ($3C04).
-    // Asteroids and Lunar Lander fire NMI unconditionally (the ROM
-    // tolerates NMI during its reset handler).
+    // Asteroids / Lunar Lander: NMI fires unconditionally every period.
+    // Asteroids Deluxe: NMI is gated by the 74LS259 output latch Q4
+    //   ($3C04, D0).  When NMI is disabled, IRQ is asserted instead
+    //   (level-sensitive, held until NMI is re-enabled).  This matches
+    //   MAME's irq_or_nmi() approach.
     if (nmi_counter_ > 0) {
         --nmi_counter_;
         BUS_SET_BIT(pins_, BUS_NMI_BIT);   // NMI inactive (high)
@@ -448,38 +405,29 @@ void AtariVectorSystem<V>::tick() {
         nmi_counter_ = atv::NMI_PERIOD_CYCLES;
         if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
             if (nmi_enabled_)
-                BUS_CLR_BIT(pins_, BUS_NMI_BIT);   // NMI active (low)
-            else
-                BUS_SET_BIT(pins_, BUS_NMI_BIT);   // NMI suppressed
+                BUS_CLR_BIT(pins_, BUS_NMI_BIT);   // NMI pulse (gated)
         } else {
-            BUS_CLR_BIT(pins_, BUS_NMI_BIT);   // NMI active (low) — 1-cycle pulse
+            BUS_CLR_BIT(pins_, BUS_NMI_BIT);       // NMI pulse (unconditional)
         }
+    }
+
+    // AD: IRQ line mirrors "NMI disabled" state (level-sensitive).
+    // While the game hasn't enabled NMI ($3C04 D0=1), IRQ stays asserted.
+    // The CPU ignores it while I=1 (BRK/SEI), so this is inert during
+    // the reset sequence.  Once the game enables interrupts, pending IRQ
+    // fires immediately.
+    if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+        if (nmi_enabled_)
+            BUS_SET_BIT(pins_, BUS_IRQ_BIT);   // IRQ inactive
+        else
+            BUS_CLR_BIT(pins_, BUS_IRQ_BIT);   // IRQ active (HOLD_LINE)
     }
 
     total_cycles_++;
-
-    // TEMP TRACE — AD CPU progress
-    if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
-        if (total_cycles_ == 1 || (total_cycles_ <= 2000000 && (total_cycles_ % 100000) == 0)) {
-            uint16_t pc = board_.cpu().get(REG_PC);
-            fprintf(stderr, "[AD CPU] cycle=%llu PC=$%04X nmi_en=%d\n",
-                    (unsigned long long)total_cycles_, pc, (int)nmi_enabled_);
-        }
-    }
 }
 
 template<AtariVectorVariant V>
 void AtariVectorSystem<V>::run_frame() {
-    // TEMP TRACE — AD run_frame entry (before ANY check)
-    if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
-        static int frame_count = 0;
-        if (frame_count < 3) {
-            fprintf(stderr, "[AD FRAME] frame=%d system_ready=%d cpu=%p video_port=%p\n",
-                    frame_count, (int)system_ready_, (void*)&board_.cpu(), (void*)video_port_.get());
-        }
-        frame_count++;
-    }
-
     if (!video_port_) return;
 
     if (!system_ready_) {
@@ -733,16 +681,9 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
             //   bit 4 ($3C04): NMI enable
             //   bit 5 ($3C05): cocktail invert
             uint8_t latch_bit = addr & 0x07;
-            // TEMP TRACE — AD NMI enable
             if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
-                if (latch_bit == 4) {
-                    bool new_val = (data & 1) != 0;
-                    if (new_val != nmi_enabled_)
-                        fprintf(stderr, "[AD NMI] STA $%04X, D0=%d → nmi_enabled %d→%d (cycle %llu)\n",
-                                addr, data & 1, (int)nmi_enabled_, (int)new_val,
-                                (unsigned long long)total_cycles_);
-                    nmi_enabled_ = new_val;
-                }
+                if (latch_bit == 4)
+                    nmi_enabled_ = (data & 1) != 0;
             }
             break;
         }
@@ -1176,6 +1117,6 @@ template class AtariVectorSystem<AtariVectorVariant::LUNAR_LANDER>;
 // SYSTEM REGISTRATION
 // ============================================================================
 
-REGISTER_SYSTEM(asteroids_descriptor, [] { return std::make_unique<AsteroidsSystem>(); });
-REGISTER_SYSTEM(asteroids_deluxe_descriptor, [] { return std::make_unique<AsteroidsDeluxeSystem>(); });
-REGISTER_SYSTEM(lunar_lander_descriptor, [] { return std::make_unique<LunarLanderSystem>(); });
+REGISTER_SYSTEM(descriptor_instance<AtariVectorVariant::ASTEROIDS>(), [] { return std::make_unique<AsteroidsSystem>(); });
+REGISTER_SYSTEM(descriptor_instance<AtariVectorVariant::ASTEROIDS_DELUXE>(), [] { return std::make_unique<AsteroidsDeluxeSystem>(); });
+REGISTER_SYSTEM(descriptor_instance<AtariVectorVariant::LUNAR_LANDER>(), [] { return std::make_unique<LunarLanderSystem>(); });
