@@ -44,7 +44,19 @@ inline bus_state_t decode_group0(bus_state_t pins, uint16_t opcode) {
             return do_idle_then_prefetch(pins, idle);
         }
         // Memory modes: bit number modulo 8, operate on byte
-        // TODO: bus cycles for memory access
+        bit_num = get_d(dn) & 7;
+        uint32_t val = read_ea(ea_mode, ea_reg, OpSize::Byte);
+        alu_btst(val, bit_num);
+        if (op_type != 0) {
+            uint32_t result;
+            switch (op_type) {
+                case 1: result = val ^ (1u << bit_num); break;  // BCHG
+                case 2: result = val & ~(1u << bit_num); break; // BCLR
+                case 3: result = val | (1u << bit_num); break;  // BSET
+                default: result = val; break;
+            }
+            write_back_ea(result, OpSize::Byte);
+        }
         return do_prefetch(pins);
     }
 
@@ -67,70 +79,68 @@ inline bus_state_t decode_group0(bus_state_t pins, uint16_t opcode) {
                 case 2: set_d(ea_reg, val & ~(1u << bit_num)); break;
                 case 3: set_d(ea_reg, val | (1u << bit_num)); break;
             }
+            // Static bit Dn timing: BTST 10, BCHG/BSET 12, BCLR 14
+            uint8_t idle;
+            if (op_type == 0)      idle = 2;   // BTST: 10 clk
+            else if (op_type == 2) idle = 6;   // BCLR: 14 clk
+            else                   idle = 4;   // BCHG/BSET: 12 clk
+            return do_idle_then_prefetch(pins, idle);
+        }
+        // Memory modes: bit number modulo 8, operate on byte
+        {
+            uint8_t bit_num = bit_num_raw & 7;
+            uint32_t val = read_ea(ea_mode, ea_reg, OpSize::Byte);
+            alu_btst(val, bit_num);
+            if (op_type != 0) {
+                uint32_t result;
+                switch (op_type) {
+                    case 1: result = val ^ (1u << bit_num); break;
+                    case 2: result = val & ~(1u << bit_num); break;
+                    case 3: result = val | (1u << bit_num); break;
+                    default: result = val; break;
+                }
+                write_back_ea(result, OpSize::Byte);
+            }
             return do_prefetch(pins);
         }
-        // Memory modes: TODO
-        return do_prefetch(pins);
     }
 
     // MOVEP: 0000 rrr1 0x00 1rrr — already handled above (bit 8 set)
     // Remaining: ORI, ANDI, SUBI, ADDI, EORI, CMPI
     // Encoding: 0000 xxx0 ssxx xxxx  where xxx = operation:
     //   000=ORI, 001=ANDI, 010=SUBI, 011=ADDI, 100=(static bit), 101=EORI, 110=CMPI
-    OpSize sz;
-    uint8_t size_field = (opcode >> 6) & 3;
-    if (size_field == 3) {
-        // Special: ORI/ANDI/EORI to CCR/SR
-        switch (upper) {
-            case 0: {  // ORI
-                if ((opcode & 0x3F) == 0x3C) {  // ORI to CCR
-                    uint8_t imm = static_cast<uint8_t>(consume_extension_word());
-                    set_ccr(get_ccr() | imm);
-                    return do_prefetch(pins);
-                }
-                if ((opcode & 0x3F) == 0x7C) {  // ORI to SR
-                    if (!(regs_.sr & SRBits::S))
-                        return exception(pins, Vector::PRIVILEGE_VIOLATION);
-                    uint16_t imm = consume_extension_word();
-                    set_sr(regs_.sr | imm);
-                    return do_prefetch(pins);
-                }
-                break;
+
+    // Special: ORI/ANDI/EORI to CCR (ea=0x3C) or SR (ea=0x7C)
+    // These are matched before normal size/EA processing
+    if ((upper == 0 || upper == 1 || upper == 5) &&
+        ((opcode & 0xFF) == 0x3C || (opcode & 0xFF) == 0x7C)) {
+        bool to_sr = (opcode & 0xFF) == 0x7C;
+        if (to_sr && !(regs_.sr & SRBits::S))
+            return exception(pins, Vector::PRIVILEGE_VIOLATION);
+        uint16_t imm = consume_extension_word();
+        if (to_sr) {
+            switch (upper) {
+                case 0: set_sr(regs_.sr | imm); break;
+                case 1: set_sr(regs_.sr & imm); break;
+                case 5: set_sr(regs_.sr ^ imm); break;
             }
-            case 1: {  // ANDI
-                if ((opcode & 0x3F) == 0x3C) {  // ANDI to CCR
-                    uint8_t imm = static_cast<uint8_t>(consume_extension_word());
-                    set_ccr(get_ccr() & imm);
-                    return do_prefetch(pins);
-                }
-                if ((opcode & 0x3F) == 0x7C) {  // ANDI to SR
-                    if (!(regs_.sr & SRBits::S))
-                        return exception(pins, Vector::PRIVILEGE_VIOLATION);
-                    uint16_t imm = consume_extension_word();
-                    set_sr(regs_.sr & imm);
-                    return do_prefetch(pins);
-                }
-                break;
+        } else {
+            uint8_t imm8 = static_cast<uint8_t>(imm);
+            switch (upper) {
+                case 0: set_ccr(get_ccr() | imm8); break;
+                case 1: set_ccr(get_ccr() & imm8); break;
+                case 5: set_ccr(get_ccr() ^ imm8); break;
             }
-            case 5: {  // EORI
-                if ((opcode & 0x3F) == 0x3C) {  // EORI to CCR
-                    uint8_t imm = static_cast<uint8_t>(consume_extension_word());
-                    set_ccr(get_ccr() ^ imm);
-                    return do_prefetch(pins);
-                }
-                if ((opcode & 0x3F) == 0x7C) {  // EORI to SR
-                    if (!(regs_.sr & SRBits::S))
-                        return exception(pins, Vector::PRIVILEGE_VIOLATION);
-                    uint16_t imm = consume_extension_word();
-                    set_sr(regs_.sr ^ imm);
-                    return do_prefetch(pins);
-                }
-                break;
-            }
-            default: break;
         }
+        // ORI/ANDI/EORI to CCR/SR: 20 clocks total
+        // consume_extension_word (4) + dummy re-read + internal (12) + prefetch (4) = 20
+        clocks_remaining_ += 12;
         return do_prefetch(pins);
     }
+
+    OpSize sz;
+    uint8_t size_field = (opcode >> 6) & 3;
+    if (size_field == 3) return do_prefetch(pins);  // Invalid size encoding
 
     sz = static_cast<OpSize>(size_field);
 
@@ -170,6 +180,8 @@ inline bus_state_t decode_group0(bus_state_t pins, uint16_t opcode) {
             break;
         case 6:  // CMPI
             alu_cmp(imm, dst, sz);
+            // CMPI.l #imm,Dn: 14 clocks (2 idle)
+            if (ea_mode == 0 && sz == OpSize::Long) return do_idle_then_prefetch(pins, 2);
             return do_prefetch(pins);
         default:
             return do_prefetch(pins);
@@ -177,6 +189,8 @@ inline bus_state_t decode_group0(bus_state_t pins, uint16_t opcode) {
 
     if (ea_mode == 0) {
         write_dn(ea_reg, result, sz);
+        // ORI/ANDI/EORI/SUBI/ADDI .l #imm,Dn: 16 clocks (4 idle)
+        if (sz == OpSize::Long) return do_idle_then_prefetch(pins, 4);
     } else {
         // ea_addr_ already set by read_ea — use write_back_ea to avoid
         // recalculating (which would double PostInc/PreDec side effects)
