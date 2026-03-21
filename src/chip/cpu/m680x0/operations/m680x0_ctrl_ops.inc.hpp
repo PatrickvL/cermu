@@ -93,7 +93,11 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             set_d_w(ea_reg, regs_.sr);
             return do_idle_then_prefetch(pins, 2);
         }
-        // Memory modes: TODO
+        // Memory: compute EA, dummy read, then write SR word
+        uint16_t sr_val = regs_.sr;
+        // Read (dummy) then write — same as Scc memory pattern
+        (void)read_ea(ea_mode, ea_reg, OpSize::Word);
+        write_back_ea(sr_val, OpSize::Word);
         return do_prefetch(pins);
     }
 
@@ -146,7 +150,11 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             set_d_b(ea_reg, val | 0x80);
             return do_prefetch(pins);
         }
-        // Memory modes: TODO (indivisible read-modify-write cycle)
+        // Memory: indivisible read-modify-write cycle
+        uint32_t val = read_ea(ea_mode, ea_reg, OpSize::Byte);
+        alu_tst(static_cast<uint8_t>(val), OpSize::Byte);
+        write_back_ea(val | 0x80, OpSize::Byte);
+        clocks_remaining_ += 2;  // TAS RMC bus cycle adds 2 idle clocks
         return do_prefetch(pins);
     }
 
@@ -158,7 +166,10 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             set_d_b(ea_reg, result);
             return do_idle_then_prefetch(pins, 2);  // 6 clocks (2 idle + 4 prefetch)
         }
-        // TODO: NBCD <ea> — needs bus cycles
+        // Memory: read-modify-write
+        uint32_t val = read_ea(ea_mode, ea_reg, OpSize::Byte);
+        uint8_t result = alu_sbcd(static_cast<uint8_t>(val), 0);
+        write_back_ea(result, OpSize::Byte);
         return do_prefetch(pins);
     }
 
@@ -329,8 +340,36 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
 
     // ── CHK (0100 rrr1 10xx xxxx) ────────────────────────────────
     if ((opcode & 0xF1C0) == 0x4180) {
-        // TODO: CHK instruction
-        return do_prefetch(pins);
+        uint8_t dn = (opcode >> 9) & 7;
+        uint16_t src_val;
+        if (ea_mode == 0) {
+            src_val = get_d_w(ea_reg);
+        } else {
+            src_val = static_cast<uint16_t>(read_ea(ea_mode, ea_reg, OpSize::Word));
+        }
+        int16_t dn_val = static_cast<int16_t>(get_d_w(dn));
+        int16_t bound  = static_cast<int16_t>(src_val);
+        // CHK: trap if Dn > bound or Dn < 0
+        // 68000 checks Dn > bound first (shorter path, +4 idle), then Dn < 0 (+6 idle).
+        // All paths: preserve X, clear Z/V/C.
+        //   Trap:    N = sign bit of Dn (bit 15)
+        //   No-trap: preserve N from prior state
+        uint8_t x_flag = get_ccr() & Flags::X;
+        uint8_t dn_sign = (get_d_w(dn) & 0x8000) ? Flags::N : 0;
+        if (dn_val > bound) {
+            set_ccr(x_flag | dn_sign);
+            clocks_remaining_ += 4;
+            return exception(pins, Vector::CHK_INSTR);
+        }
+        if (dn_val < 0) {
+            set_ccr(x_flag | Flags::N);
+            clocks_remaining_ += 6;
+            return exception(pins, Vector::CHK_INSTR);
+        }
+        // No trap — preserve X and N, clear Z/V/C
+        uint8_t n_flag = get_ccr() & Flags::N;
+        set_ccr(x_flag | n_flag);
+        return do_idle_then_prefetch(pins, 6);
     }
 
     // ── NOP: 0100_1110_0111_0001 = $4E71 ─────────────────────────

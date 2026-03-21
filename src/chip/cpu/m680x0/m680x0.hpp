@@ -741,7 +741,7 @@ private:
                 return dst - static_cast<uint32_t>(s);
             }
             case OP_SUBA_L: return dst - src;
-            case OP_CLR:  { uint8_t ccr = Flags::Z; set_ccr(ccr); return 0; }
+            case OP_CLR:  { uint8_t ccr = (get_ccr() & Flags::X) | Flags::Z; set_ccr(ccr); return 0; }
             case OP_NEG:  return alu_sub(src, 0, sz);
             case OP_NOT:  return alu_not(src, sz);
             case OP_NEGX: return alu_subx(src, 0, sz);
