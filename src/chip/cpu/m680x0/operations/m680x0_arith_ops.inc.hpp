@@ -490,8 +490,9 @@ inline bus_state_t decode_group8(bus_state_t pins, uint16_t opcode) {
         uint32_t dst_val = read_dn(dn, sz);
         uint32_t result = alu_or(src_val, dst_val, sz);
         write_dn(dn, result, sz);
-        // OR .l Dn,Dn: 8 clocks (4 idle)
-        if (ea_mode <= 1 && sz == OpSize::Long) return do_idle_then_prefetch(pins, 4);
+        // OR .l <ea>,Dn: Dn/imm sources need 4 idle
+        if (sz == OpSize::Long && (ea_mode <= 1 || (ea_mode == 7 && ea_reg == 4)))
+            return do_idle_then_prefetch(pins, 4);
     } else {
         // Dn OR <ea> → <ea>
         if (ea_mode >= 2) {
@@ -622,8 +623,9 @@ inline bus_state_t decode_group9(bus_state_t pins, uint16_t opcode) {
         }
         uint32_t result = alu_sub(src_val, read_dn(dn, sz), sz);
         write_dn(dn, result, sz);
-        // SUB .l Dn,Dn: 8 clocks (4 idle)
-        if (ea_mode <= 1 && sz == OpSize::Long) return do_idle_then_prefetch(pins, 4);
+        // SUB .l <ea>,Dn: Dn/An/imm sources need 4 idle
+        if (sz == OpSize::Long && (ea_mode <= 1 || (ea_mode == 7 && ea_reg == 4)))
+            return do_idle_then_prefetch(pins, 4);
         return do_prefetch(pins);
     }
     // opmode 4,5,6: SUB Dn → <ea>
@@ -725,8 +727,9 @@ inline bus_state_t decode_groupB(bus_state_t pins, uint16_t opcode) {
             return begin_ea_read(pins, ea_mode);
         }
         alu_cmp(src_val, read_dn(dn, sz), sz);
-        // CMP .l Dn,Dn: 6 clocks (2 idle)
-        if (ea_mode <= 1 && sz == OpSize::Long) return do_idle_then_prefetch(pins, 2);
+        // CMP .l <ea>,Dn: Dn/An/imm sources need 2 idle
+        if (sz == OpSize::Long && (ea_mode <= 1 || (ea_mode == 7 && ea_reg == 4)))
+            return do_idle_then_prefetch(pins, 2);
     }
     return do_prefetch(pins);
 }
@@ -984,8 +987,9 @@ inline bus_state_t decode_groupD(bus_state_t pins, uint16_t opcode) {
         }
         uint32_t result = alu_add(src_val, read_dn(dn, sz), sz);
         write_dn(dn, result, sz);
-        // ADD .l Dn,Dn: 8 clocks (4 idle)
-        if (ea_mode <= 1 && sz == OpSize::Long) return do_idle_then_prefetch(pins, 4);
+        // ADD .l <ea>,Dn: Dn/An/imm sources need 4 idle
+        if (sz == OpSize::Long && (ea_mode <= 1 || (ea_mode == 7 && ea_reg == 4)))
+            return do_idle_then_prefetch(pins, 4);
         return do_prefetch(pins);
     }
     // opmode 4,5,6: ADD Dn → <ea> (memory destination)
