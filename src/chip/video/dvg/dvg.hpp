@@ -158,6 +158,12 @@ struct dvg_t : public VideoChipBase {
 
     /// Trigger VGGO: start processing display list from address 0.
     void trigger_go() {
+        // TEMP TRACE
+        if (go_count_ < 5) {
+            fprintf(stderr, "[DVG VGGO] frame %d start (was %s)\n",
+                    go_count_, halt_ ? "halted" : "RUNNING");
+        }
+        go_count_++;
         pc_        = 0;
         sp_        = 0;
         running_   = true;
@@ -211,6 +217,8 @@ struct dvg_t : public VideoChipBase {
     bool     running_   = false;    // True while processing display list
     bool     halt_      = true;     // True when halted (waiting for VGGO)
     int32_t  clocks_remaining_ = 0; // Clocks left for current vector draw
+    int      trace_count_ = 0;      // TEMP — remove after debugging
+    int      go_count_ = 0;         // TEMP — VGGO trigger counter
 
     uint16_t stack_[dvg_constants::STACK_DEPTH] = {};  // Subroutine return stack
 
@@ -291,6 +299,13 @@ private:
             if (dx_sgn) dx = -dx;
             if (dy_sgn) dy = -dy;
 
+            // TEMP TRACE — first 2 frames only
+            if (go_count_ <= 2 && intensity > 0) {
+                fprintf(stderr, "[DVG VCTR] pc=$%03X gs=%d ls=%d ts=%d dx=%+d dy=%+d beam->(%d,%d) b=%d\n",
+                        pc_, global_scale_, local_scale, total_scale,
+                        dx, dy, beam_x_+dx, beam_y_+dy, intensity);
+            }
+
             emit_vector(dx, dy, intensity);
 
             int vec_len = std::max(std::abs(dx), std::abs(dy));
@@ -307,12 +322,23 @@ private:
             beam_x_ = w1 & 0x03FF;
             global_scale_ = (w1 >> 12) & 0x0F;
 
+            // TEMP TRACE — remove after debugging
+            if (go_count_ <= 2) {
+                fprintf(stderr, "[DVG LABS] pc=$%03X x=%d y=%d scale=%d (w0=$%04X w1=$%04X)\n",
+                        pc_, beam_x_, beam_y_, global_scale_, w0, w1);
+                trace_count_++;
+            }
+
             emit_position();
             clocks_remaining_ = 4;
             pc_ += 2;
 
         } else if (opcode == dvg_constants::OP_HALT) {
             // HALT — Stop DVG (single word)
+            // TEMP TRACE
+            if (go_count_ <= 5) {
+                fprintf(stderr, "[DVG HALT] frame %d done, beam=(%d,%d)\n", go_count_-1, beam_x_, beam_y_);
+            }
             emit_frame_end();
             running_ = false;
             halt_    = true;
@@ -404,11 +430,16 @@ private:
         int32_t x0 = beam_x_;
         int32_t y0 = beam_y_;
 
-        // Update beam position
+        // Update beam position (unwrapped for line endpoint rendering)
         beam_x_ += dx;
         beam_y_ += dy;
 
-        if (!stream_) return;
+        if (!stream_) {
+            // Still wrap for next instruction even without output
+            beam_x_ &= 0x3FF;
+            beam_y_ &= 0x3FF;
+            return;
+        }
 
         if (intensity > 0) {
             // Draw: emit start + end with BeamOn.
@@ -429,6 +460,12 @@ private:
                 0, 0, VideoFlags::None, 0
             });
         }
+
+        // DVG hardware uses 10-bit counters — wrap to 0-1023 range.
+        // The emit above uses the unwrapped endpoint so lines extending
+        // past the edge are correctly clipped by the renderer.
+        beam_x_ &= 0x3FF;
+        beam_y_ &= 0x3FF;
     }
 
     /// Emit a beam position sample (no draw) — used by LABS.

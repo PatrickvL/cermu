@@ -81,9 +81,9 @@ struct AtariVectorTraits<AtariVectorVariant::LUNAR_LANDER> {
     static constexpr uint16_t PROGROM_ACTUAL  = atv::LL_PROGROM_SIZE;    // Full 8 KB
     static constexpr uint16_t PROGROM_OFFSET  = 0;                       // No offset
 
-    static constexpr uint16_t VECROM_BASE        = atv::VECROM_BASE;        // $5000
+    static constexpr uint16_t VECROM_BASE        = atv::LL_VECROM_BASE;     // $4800
     static constexpr uint16_t VECROM_SIZE        = atv::LL_VECROM_SIZE;     // 4 KB (2 × 2 KB chips)
-    static constexpr uint16_t VECROM_WORD_OFFSET = 0x800;                   // DVG word addr where ROM starts
+    static constexpr uint16_t VECROM_WORD_OFFSET = 0x400;                   // ROM starts right after RAM (no gap)
 
     static constexpr const char* PALETTE_ID   = "white";   // White/blue phosphor CRT
 };
@@ -137,7 +137,7 @@ inline constexpr auto kAsteroidsChips = make_chip_manifest(
 inline constexpr auto kLunarLanderChips = make_chip_manifest(
     Slot<RAMChip>{atv::RAM_BASE,     atv::RAM_SIZE,     0, "Work RAM"},
     Slot<RAMChip>{atv::VECRAM_BASE,  atv::VECRAM_SIZE,  0, "Vector RAM"},
-    Slot<ROMChip>{atv::VECROM_BASE,  atv::LL_VECROM_SIZE, 0, "Vector ROM"},
+    Slot<ROMChip>{atv::LL_VECROM_BASE, atv::LL_VECROM_SIZE, 0, "Vector ROM"},
     Slot<ROMChip>{atv::LL_PROGROM_BASE, atv::LL_PROGROM_SIZE, 0, "Program ROM"},
     Slot<MOS6502>{0, 0, 0, "MOS 6502"}
 );
@@ -262,6 +262,9 @@ private:
     uint8_t dsw1_      = 0x84;      // DIP switch bank 1 (English, 3 lives, 1C_1C)
     uint8_t dsw2_      = 0x00;      // DIP switch bank 2
     uint8_t thrust_    = 0x00;      // Thrust lever ADC (Lunar Lander only, 0-255)
+
+    // ── NMI gating (Asteroids Deluxe) ─────────────────────────────────────
+    bool nmi_enabled_ = false;       // Output latch NMI enable (AD: bit 2 at $3C04)
 
     // ── Sound output latches ─────────────────────────────────────────────
     uint8_t snd_latch_ = 0x00;      // Sound triggers / output bits
