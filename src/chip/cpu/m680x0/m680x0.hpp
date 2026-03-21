@@ -817,8 +817,10 @@ private:
         uint32_t result = apply_alu(ea_val, an_val, op_sz_);
 
         bool is_cmp = (pending_op_ == OP_CMPA_W || pending_op_ == OP_CMPA_L);
-        if (!is_cmp)
+        if (!is_cmp) {
             set_a(reg_idx_, result);
+            if (reg_idx_ == 7) sync_sp();
+        }
 
         // Address operations always use long result and may need extra idle
         if (op_sz_ == OpSize::Word && !is_cmp) {
@@ -850,6 +852,13 @@ private:
     // -- Begin memory EA read with optional pre-idle -------------
     // Sets up read handler chain. For predecrement mode, adds 2 idle.
     inline bus_state_t begin_ea_read(bus_state_t pins, uint8_t ea_mode) {
+        // Address error: word/long access to odd address
+        if (unlikely((ea_addr_ & 1) && op_sz_ != OpSize::Byte)) {
+            // -(An): 2 idle clocks before the bus cycle that would have faulted
+            if (ea_mode == 4) clocks_remaining_ += 2;
+            process_address_error_sync(ea_addr_, true /*read*/, fc_data());
+            return pins;
+        }
         cont_handler_ = &m680x0_t::handle_post_read;
         if (ea_mode == 4) {
             // -(An): 2 idle before read

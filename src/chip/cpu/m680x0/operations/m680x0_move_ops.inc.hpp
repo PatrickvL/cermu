@@ -22,6 +22,7 @@ inline bus_state_t decode_move(bus_state_t pins, uint16_t opcode, OpSize sz) {
         if (sz == OpSize::Word)
             value = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(value)));
         set_a(dst_reg, value);
+        if (dst_reg == 7) sync_sp();
         return do_prefetch(pins);
     }
 

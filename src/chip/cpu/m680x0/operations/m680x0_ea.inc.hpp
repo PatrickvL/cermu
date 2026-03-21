@@ -167,6 +167,7 @@ inline void write_ea(uint8_t mode, uint8_t reg, uint32_t value, OpSize sz) {
     }
     if (mode == static_cast<uint8_t>(EAMode::AddrRegDirect)) {
         set_a(reg, value);
+        if (reg == 7) sync_sp();
         return;
     }
     // Memory write via callback
