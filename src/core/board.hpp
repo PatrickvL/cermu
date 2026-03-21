@@ -14,6 +14,7 @@
 
 #include "core/board_base.hpp"
 #include "core/bus_map.hpp"
+#include "core/standard_chips.hpp"
 #include "core/storage/rom_loader.hpp"
 #include <cstdio>
 
@@ -32,10 +33,20 @@
 // Thread safety: none.  External synchronisation required if add/remove_chip
 // or apply() is called concurrently with bus accesses.
 //
+// Optional second parameter ChipSet (default: NoChipSet) embeds value-typed
+// chip members directly in the board, eliminating heap allocation and pointer
+// indirection for non-bus chips.  See standard_chips.hpp.
+//
 
-template<BusSpecConcept Spec>
+template<BusSpecConcept Spec, typename ChipSet = NoChipSet>
 class Board : public BoardBase {
 public:
+    // Re-expose base-class typed chip accessors (Board<Spec>::cpu<T>() etc.)
+    // so that the ChipSet-aware overloads added below form a proper overload
+    // set rather than hiding the inherited versions.
+    using BoardBase::cpu;
+    using BoardBase::video;
+
     using Map         = BusMap<Spec>;
     using Bus         = MemoryBus<Spec>;
     using ChipId      = typename Bus::ChipId;
@@ -370,10 +381,105 @@ public:
 
     void register_board_components() {
         clear_components();
+        // Register value-typed chips from the ChipSet (if present)
+        if constexpr (!std::is_same_v<ChipSet, NoChipSet>) {
+            register_component(&chips_.cpu);
+            if constexpr (has_vdp_v<ChipSet>)
+                register_component(&chips_.vdp);
+            if constexpr (has_psg_v<ChipSet>)
+                register_component(&chips_.psg);
+            if constexpr (HasRegisterExtras<ChipSet>)
+                chips_.register_extras(*this);
+        }
         for (auto& chip : owned_chips_)
             register_component(chip.get());
         for (auto& port : ports_)
             register_component(port.get());
+    }
+
+    // =====================================================================
+    // §4.4c″  Value-typed chip access (ChipSet)
+    // =====================================================================
+    //
+    // When Board is instantiated with a ChipSet (not NoChipSet), these
+    // accessors provide direct, zero-indirection access to the embedded
+    // chip objects.  The compiler knows the exact concrete type and can
+    // fully inline chip member functions.
+    //
+
+    /// Full ChipSet access — for per-system extras (e.g. chips().ppi).
+    template<typename CS = ChipSet>
+    [[nodiscard]] std::enable_if_t<!std::is_same_v<CS, NoChipSet>, CS&>
+    chips() noexcept { return chips_; }
+
+    template<typename CS = ChipSet>
+    [[nodiscard]] std::enable_if_t<!std::is_same_v<CS, NoChipSet>, const CS&>
+    chips() const noexcept { return chips_; }
+
+    /// CPU accessor — returns reference to the value-typed CPU.
+    template<typename CS = ChipSet>
+    [[nodiscard]] std::enable_if_t<!std::is_same_v<CS, NoChipSet>, typename CS::cpu_type&>
+    cpu() noexcept { return chips_.cpu; }
+
+    template<typename CS = ChipSet>
+    [[nodiscard]] std::enable_if_t<!std::is_same_v<CS, NoChipSet>, const typename CS::cpu_type&>
+    cpu() const noexcept { return chips_.cpu; }
+
+    /// VDP accessor — only available when ChipSet has a real VDP.
+    template<typename CS = ChipSet>
+    [[nodiscard]] std::enable_if_t<has_vdp_v<CS>, typename CS::vdp_type&>
+    vdp() noexcept { return chips_.vdp; }
+
+    template<typename CS = ChipSet>
+    [[nodiscard]] std::enable_if_t<has_vdp_v<CS>, const typename CS::vdp_type&>
+    vdp() const noexcept { return chips_.vdp; }
+
+    /// PSG accessor — only available when ChipSet has a real PSG.
+    template<typename CS = ChipSet>
+    [[nodiscard]] std::enable_if_t<has_psg_v<CS>, typename CS::psg_type&>
+    psg() noexcept { return chips_.psg; }
+
+    template<typename CS = ChipSet>
+    [[nodiscard]] std::enable_if_t<has_psg_v<CS>, const typename CS::psg_type&>
+    psg() const noexcept { return chips_.psg; }
+
+    // =====================================================================
+    // §4.4c‴  Automatic chipset binding
+    // =====================================================================
+    //
+    // Binds all value-typed ChipSet members to their corresponding manifest
+    // slots, then sets up the BoardBase cpu_chip_ / video_chip_ caches.
+    // Call before create_chips() — pre-bound slots are skipped by the
+    // factory, so value-typed chips avoid heap allocation entirely.
+    //
+    // After bind_chipset(), call create_chips() for remaining slots (RAM,
+    // ROM, conditional chips), then apply() to wire page tables.
+    //
+    // Usage:
+    //   board_.bind_chipset();
+    //   board_.create_chips(&pins_);
+    //   board_.apply(bus_);
+    //
+
+    template<typename CS = ChipSet>
+    std::enable_if_t<!std::is_same_v<CS, NoChipSet>>
+    bind_chipset() {
+        // Standard roles
+        bind_chip(find_index<typename CS::cpu_type>(), &chips_.cpu);
+        cpu_chip_ = &chips_.cpu;
+
+        if constexpr (has_vdp_v<CS>) {
+            bind_chip(find_index<typename CS::vdp_type>(), &chips_.vdp);
+            video_chip_ = &chips_.vdp;
+        }
+        if constexpr (has_psg_v<CS>) {
+            bind_chip(find_index<typename CS::psg_type>(), &chips_.psg);
+        }
+
+        // Per-system extras
+        if constexpr (HasBindExtras<CS, Board>) {
+            chips_.bind_extras(*this);
+        }
     }
 
     // =====================================================================
@@ -679,6 +785,9 @@ private:
 
     // Chips created by create_chips() — owned here for lifetime management.
     std::vector<std::unique_ptr<ChipBase>> owned_chips_;
+
+    // Value-typed chip members (NoChipSet = empty, 1 byte).
+    ChipSet chips_;
 
     size_t               dynamic_base_ = 0;
     std::vector<FreeRun> free_list_;
