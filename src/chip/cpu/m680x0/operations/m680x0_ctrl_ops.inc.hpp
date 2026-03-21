@@ -250,6 +250,11 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
 
             // Address error: MOVEM always accesses words
             if (unlikely((addr & 1) && mem_read_)) {
+                // (An)+: 68000 increments An by one word step before error
+                if (ea_mode == 3) {
+                    set_a(ea_reg, addr + 2);
+                    if (ea_reg == 7) sync_sp();
+                }
                 process_address_error_sync(addr, true, fc_data());
                 return pins;
             }
@@ -262,13 +267,19 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
                     if (sz == OpSize::Word) {
                         int16_t val = static_cast<int16_t>(mem_read_(mem_ctx_, a));
                         if (i < 8) set_d(i, static_cast<uint32_t>(static_cast<int32_t>(val)));
-                        else       set_a(i - 8, static_cast<uint32_t>(static_cast<int32_t>(val)));
+                        else {
+                            set_a(i - 8, static_cast<uint32_t>(static_cast<int32_t>(val)));
+                            if (i == 15) sync_sp();
+                        }
                     } else {
                         uint16_t hi = mem_read_(mem_ctx_, a);
                         uint16_t lo = mem_read_(mem_ctx_, (a + 2) & address_mask());
                         uint32_t val = (static_cast<uint32_t>(hi) << 16) | lo;
                         if (i < 8) set_d(i, val);
-                        else       set_a(i - 8, val);
+                        else {
+                            set_a(i - 8, val);
+                            if (i == 15) sync_sp();
+                        }
                     }
                     clocks_remaining_ += (sz == OpSize::Long) ? 8 : 4;
                     addr += step;
@@ -289,9 +300,9 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
                 // -(An): register mask is REVERSED: A7→A0 at bit 0→7, D7→D0 at bit 8→15
                 // Addresses decrement from An
                 uint32_t addr = get_a(ea_reg);
-                // Address error: odd base address
+                // Address error: fault address is first predecremented word address
                 if (unlikely((addr & 1) && mem_write_)) {
-                    process_address_error_sync(addr, false, fc_data());
+                    process_address_error_sync(addr - 2, false, fc_data());
                     return pins;
                 }
                 if (mem_write_) {
