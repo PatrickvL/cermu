@@ -88,9 +88,6 @@ public:
     // GUI integration
     void render_system_menu_items() override;
     void render_configuration_ui() override;
-    
-    // Emulation control
-    void set_speed_multiplier(float multiplier) override;
 
 private:
     // Chip instances

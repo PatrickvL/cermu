@@ -228,18 +228,6 @@ void OricSystem<V>::handle_keyboard_event(SDL_Keycode /*key*/, bool /*pressed*/)
     // TODO: Oric keyboard matrix mapping (accent via VIA)
 }
 
-// ============================================================================
-// GUI (stubs)
-// ============================================================================
-
-template<OricVariant V>
-void OricSystem<V>::render_system_menu_items() {}
-
-template<OricVariant V>
-void OricSystem<V>::render_configuration_ui() {}
-
-template<OricVariant V>
-void OricSystem<V>::set_speed_multiplier(float /*multiplier*/) {}
 
 // ============================================================================
 // INTERNAL HELPERS (stubs)

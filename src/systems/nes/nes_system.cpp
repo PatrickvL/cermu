@@ -905,10 +905,6 @@ void NintendoSystem<V>::render_configuration_ui() {
 #endif
 }
 
-template<NintendoVariant V>
-void NintendoSystem<V>::set_speed_multiplier(float multiplier) {
-    speed_multiplier_ = multiplier;
-}
 
 template<NintendoVariant V>
 uint32_t NintendoSystem<V>::get_audio_samples(float* buffer, uint32_t max_samples) {

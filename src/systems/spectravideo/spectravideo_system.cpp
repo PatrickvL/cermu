@@ -441,21 +441,6 @@ void SpectravideoSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed)
 }
 
 // ============================================================================
-// GUI
-// ============================================================================
-
-template<SVIVariant V>
-void SpectravideoSystem<V>::render_system_menu_items() {}
-
-template<SVIVariant V>
-void SpectravideoSystem<V>::render_configuration_ui() {}
-
-template<SVIVariant V>
-void SpectravideoSystem<V>::set_speed_multiplier(float multiplier) {
-    speed_multiplier_ = multiplier;
-}
-
-// ============================================================================
 // ROM LOADING
 // ============================================================================
 

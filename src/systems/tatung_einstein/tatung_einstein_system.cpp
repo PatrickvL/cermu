@@ -389,17 +389,6 @@ void TatungEinsteinSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) 
 }
 
 // ============================================================================
-// GUI
-// ============================================================================
-
-void TatungEinsteinSystem::render_system_menu_items() {}
-void TatungEinsteinSystem::render_configuration_ui() {}
-
-void TatungEinsteinSystem::set_speed_multiplier(float multiplier) {
-    speed_multiplier_ = multiplier;
-}
-
-// ============================================================================
 // ROM LOADING
 // ============================================================================
 

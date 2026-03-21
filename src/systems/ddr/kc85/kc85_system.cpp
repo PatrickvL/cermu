@@ -665,7 +665,6 @@ void KC85System<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
         }
     }
 }
-template<KC85Variant V> void KC85System<V>::render_system_menu_items() {}
 template<KC85Variant V> void KC85System<V>::render_configuration_ui() {
 #ifdef CERMU_HAS_GUI
     ImGui::Text("Keyboard Emulation:");
@@ -678,7 +677,6 @@ template<KC85Variant V> void KC85System<V>::render_configuration_ui() {
     }
 #endif
 }
-template<KC85Variant V> void KC85System<V>::set_speed_multiplier(float m) { speed_multiplier_ = m; }
 
 // ============================================================================
 // VIDEO RENDERING — delegate to KC85VideoGenerator

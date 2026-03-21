@@ -249,10 +249,6 @@ template<CPCModel M> void AmstradCPCSystem<M>::set_audio_sample_rate(int hz) {
     audio_sample_rate_ = hz;
     ay_.set_audio_sample_rate(hz);
 }
-template<CPCModel M> void AmstradCPCSystem<M>::handle_keyboard_event(SDL_Keycode, bool) {}
-template<CPCModel M> void AmstradCPCSystem<M>::render_system_menu_items() {}
-template<CPCModel M> void AmstradCPCSystem<M>::render_configuration_ui() {}
-template<CPCModel M> void AmstradCPCSystem<M>::set_speed_multiplier(float m) { speed_multiplier_ = m; }
 
 // ============================================================================
 // VIDEO RENDERING — delegate to Gate Array chip

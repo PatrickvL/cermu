@@ -97,9 +97,6 @@ public:
     void render_system_menu_items() override;
     void render_configuration_ui() override;
 
-    // Speed control
-    void set_speed_multiplier(float multiplier) override;
-
 private:
     // Chip instances
     MOS6502*    cpu_ = nullptr;         // MOS6502 CPU — owned by board_

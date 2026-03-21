@@ -258,18 +258,6 @@ void BBCMasterSystem<V>::handle_keyboard_event(SDL_Keycode /*key*/, bool /*press
     // TODO: BBC keyboard matrix mapping (same layout as Model B)
 }
 
-// ============================================================================
-// GUI (stubs)
-// ============================================================================
-
-template<BBCMasterVariant V>
-void BBCMasterSystem<V>::render_system_menu_items() {}
-
-template<BBCMasterVariant V>
-void BBCMasterSystem<V>::render_configuration_ui() {}
-
-template<BBCMasterVariant V>
-void BBCMasterSystem<V>::set_speed_multiplier(float /*multiplier*/) {}
 
 // ============================================================================
 // INTERNAL HELPERS (stubs)

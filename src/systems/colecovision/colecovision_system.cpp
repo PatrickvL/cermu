@@ -324,17 +324,6 @@ void ColecoVisionSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 }
 
 // ============================================================================
-// GUI
-// ============================================================================
-
-void ColecoVisionSystem::render_system_menu_items() {}
-void ColecoVisionSystem::render_configuration_ui() {}
-
-void ColecoVisionSystem::set_speed_multiplier(float multiplier) {
-    speed_multiplier_ = multiplier;
-}
-
-// ============================================================================
 // ROM LOADING
 // ============================================================================
 

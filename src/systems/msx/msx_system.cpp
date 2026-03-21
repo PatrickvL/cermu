@@ -457,21 +457,6 @@ void MSXSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 }
 
 // ============================================================================
-// GUI
-// ============================================================================
-
-template<MSXVariant V>
-void MSXSystem<V>::render_system_menu_items() {}
-
-template<MSXVariant V>
-void MSXSystem<V>::render_configuration_ui() {}
-
-template<MSXVariant V>
-void MSXSystem<V>::set_speed_multiplier(float multiplier) {
-    speed_multiplier_ = multiplier;
-}
-
-// ============================================================================
 // ROM LOADING
 // ============================================================================
 

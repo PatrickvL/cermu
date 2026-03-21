@@ -221,18 +221,6 @@ void VTechVZSystem<V>::handle_keyboard_event(SDL_Keycode /*key*/, bool /*pressed
     // TODO: VZ keyboard matrix mapping
 }
 
-// ============================================================================
-// GUI (stubs)
-// ============================================================================
-
-template<VZVariant V>
-void VTechVZSystem<V>::render_system_menu_items() {}
-
-template<VZVariant V>
-void VTechVZSystem<V>::render_configuration_ui() {}
-
-template<VZVariant V>
-void VTechVZSystem<V>::set_speed_multiplier(float /*multiplier*/) {}
 
 // ============================================================================
 // INTERNAL HELPERS (stubs)

@@ -24,10 +24,6 @@ bool CommodoreSystem::set_configuration(const SystemConfiguration& config) {
     return true;
 }
 
-void CommodoreSystem::set_speed_multiplier(float multiplier) {
-    speed_multiplier_ = multiplier;
-}
-
 void CommodoreSystem::handle_text_input(const char* text) {
     if (keyboard_mapper_) {
         keyboard_mapper_->process_text_input(text);

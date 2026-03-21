@@ -168,9 +168,6 @@ bool AcornAtomSystem::load_file(const char*) { return false; }
 uint32_t AcornAtomSystem::get_audio_samples(float*, uint32_t) { return 0; }
 void AcornAtomSystem::set_audio_sample_rate(int hz) { audio_sample_rate_ = hz; }
 
-void AcornAtomSystem::render_system_menu_items() {}
-void AcornAtomSystem::render_configuration_ui() {}
-void AcornAtomSystem::set_speed_multiplier(float m) { speed_multiplier_ = m; }
 
 // ============================================================================
 // KEYBOARD HANDLING
