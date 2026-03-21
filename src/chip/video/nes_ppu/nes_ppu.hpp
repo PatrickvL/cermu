@@ -317,6 +317,16 @@ public:
 #endif
     }
 
+    // Reinitialize for a different region (PAL/NTSC) without full reconstruction.
+    // Called by the system when the user changes the video standard.
+    void reconfigure(bool pal) {
+        is_pal = pal;
+        total_scanlines_minus_one_ = pal ? 311 : 261;
+        info_ = ChipInfo{pal ? "RP2C07" : "RP2C02", "Ricoh"};
+        build_palette_cache(is_pal, palette_cache_);
+        reset();
+    }
+
     // Switch the base 64-color table and rebuild the emphasis cache.
     // Called by the system when the user selects a different palette.
     void set_base_palette(const uint32_t base[64]) {
