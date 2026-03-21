@@ -22,6 +22,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -86,6 +87,24 @@ template<> struct MSXVariantTraits<MSXVariant::MSX2P> {
         return {"MSX2+", "MSX2Plus"};
     }
     using VDP = V9958;
+};
+
+// ============================================================================
+// MSX ChipSet — value-typed chips embedded in Board
+// ============================================================================
+
+template<MSXVariant V>
+struct MSXChips : StandardChips<ZilogZ80A, typename MSXVariantTraits<V>::VDP, AY_3_8910> {
+    i8255_t ppi;   // i8255 PPI (keyboard + slot control)
+
+    template<typename B>
+    void bind_extras(B& board) {
+        board.bind_chip(board.template find_index<i8255_t>(), &ppi);
+    }
+
+    void register_extras(BoardBase& board) {
+        board.register_component(&ppi);
+    }
 };
 
 // ============================================================================
@@ -167,6 +186,7 @@ class MSXSystem : public System {
     using Traits = MSXVariantTraits<V>;
     using BT     = MSXBusTraits<V>;
     using VDP    = typename Traits::VDP;
+    using Chips  = MSXChips<V>;
 
 public:
     MSXSystem();
@@ -200,16 +220,10 @@ public:
 
 
 private:
-    // ── Chips ────────────────────────────────────────────────────────────
-    ZilogZ80A*   cpu_ = nullptr;   // Z80A CPU — owned by board_
-    VDP          vdp_;             // Video Display Processor
-    AY_3_8910    psg_;             // AY-3-8910 PSG
-    i8255_t      ppi_;             // i8255 PPI (keyboard + slot control)
-
-    // ── Board + bus ──────────────────────────────────────────────────────
+    // ── Board + bus (chips live inside board_) ────────────────────────────
     using Bus       = MemoryBus<typename BT::Spec>;
     using PT        = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec>;
+    using MainBoard = Board<typename BT::Spec, Chips>;
     Bus       bus_;
     MainBoard board_{BT::kManifest};
 
