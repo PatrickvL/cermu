@@ -135,9 +135,9 @@ bool C128System::initialize() {
     }
 
     // VIC-IIe — initialize with PAL traits (MOS8566)
-    auto& vic_iie = board_.chips().vic_iie;
-    auto& sid     = board_.chips().sid;
-    auto& cia1    = board_.chips().cia1;
+    auto& vic_iie = board_.video();
+    auto& sid     = board_.sound();
+    auto& cia1    = board_.io();
     auto& cia2    = board_.chips().cia2;
 
     vic_iie.init(vicii_base_t::memory_bank_change);
@@ -157,7 +157,7 @@ bool C128System::initialize() {
     // CIA2 Port A → VIC-IIe bank selection
     cia2.port_a_change_callback = [](void* ctx, uint8_t value) {
         auto* sys = static_cast<C128System*>(ctx);
-        vicii_base_t::memory_bank_change(&sys->board_.chips().vic_iie, value & 0x03);
+        vicii_base_t::memory_bank_change(&sys->board_.video(), value & 0x03);
     };
     cia2.port_a_callback_context = this;
 
@@ -212,9 +212,9 @@ void C128System::tick() {
     total_cycles_++;
 
     auto& cpu     = board_.cpu();
-    auto& vic_iie = board_.chips().vic_iie;
-    auto& sid     = board_.chips().sid;
-    auto& cia1    = board_.chips().cia1;
+    auto& vic_iie = board_.video();
+    auto& sid     = board_.sound();
+    auto& cia1    = board_.io();
     auto& cia2    = board_.chips().cia2;
 
     // Start each cycle with pull-up defaults

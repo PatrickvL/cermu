@@ -104,7 +104,7 @@ bool TatungEinsteinSystem::initialize() {
     pins_ = board_.cpu().init();
     board_.sound().init();
     board_.chips().ctc.init();
-    board_.chips().pio.init();
+    board_.io().init();
 
     board_.sound().set_clock_frequency(einstein_constants::CPU_FREQ_HZ / 16);
     board_.sound().set_audio_sample_rate(audio_sample_rate_);
@@ -293,7 +293,7 @@ bus_state_t TatungEinsteinSystem::io_tick(bus_state_t pins) {
     // PIO ($10-$13)
     if (port >= einstein_constants::PIO_BASE_PORT &&
         port <= (einstein_constants::PIO_BASE_PORT + 3)) {
-        pins = board_.chips().pio.io_tick(pins);
+        pins = board_.io().io_tick(pins);
         return pins;
     }
 

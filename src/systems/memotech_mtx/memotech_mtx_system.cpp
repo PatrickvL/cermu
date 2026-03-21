@@ -122,7 +122,7 @@ bool MemotechMTXSystem<V>::initialize() {
     
     pins_ = board_.cpu_chip()->init();
     board_.sound().init();
-    board_.chips().ctc.init();
+    board_.io().init();
 
     board_.sound().set_clock_frequency(mtx_constants::CPU_FREQ_HZ / 16);
     board_.sound().set_audio_sample_rate(audio_sample_rate_);
@@ -189,8 +189,8 @@ void MemotechMTXSystem<V>::tick() {
         BUS_SET_BIT(pins_, BUS_IRQ_BIT);
 
     // CTC tick (system clock rate)
-    board_.chips().ctc.tick();
-    if (board_.chips().ctc.interrupt_pending()) {
+    board_.io().tick();
+    if (board_.io().interrupt_pending()) {
         BUS_CLR_BIT(pins_, BUS_IRQ_BIT);
     }
 
@@ -316,9 +316,9 @@ bus_state_t MemotechMTXSystem<V>::io_tick(bus_state_t pins) {
     if (port >= mtx_constants::CTC_BASE_PORT && port <= (mtx_constants::CTC_BASE_PORT + 3)) {
         int channel = port - mtx_constants::CTC_BASE_PORT;
         if (is_read)
-            BUS_SET_DATA(pins, board_.chips().ctc.read(channel));
+            BUS_SET_DATA(pins, board_.io().read(channel));
         else
-            board_.chips().ctc.write(channel, BUS_GET_DATA(pins));
+            board_.io().write(channel, BUS_GET_DATA(pins));
         return pins;
     }
 

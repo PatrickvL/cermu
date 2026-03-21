@@ -58,18 +58,15 @@ using EinsteinBusSpec = ManifestBusSpec<kEinsteinChips, 16, 8>;
 // Einstein ChipSet — value-typed chips owned by Board
 // ============================================================================
 
-struct EinsteinChips : StandardChips<ZilogZ80A, TMS9929A, AY_3_8910> {
+struct EinsteinChips : StandardChips<ZilogZ80A, TMS9929A, AY_3_8910, z80_pio_t> {
     z80_ctc_t ctc;
-    z80_pio_t pio;
 
     template<typename B> void bind_extras(B& board) {
         board.bind_chip(board.template find_index<z80_ctc_t>(), &ctc);
-        board.bind_chip(board.template find_index<z80_pio_t>(), &pio);
     }
 
     void register_extras(BoardBase& board) {
         board.register_component(&ctc);
-        board.register_component(&pio);
     }
 };
 

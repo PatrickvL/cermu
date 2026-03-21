@@ -176,7 +176,7 @@ bool Atari2600System::initialize() {
     board_.cpu().reset();
     board_.video().init();
     board_.video().set_audio_sample_rate(atari2600_constants::DEFAULT_SAMPLE_RATE);
-    board_.chips().riot.init();
+    board_.io().init();
 
     // Console switches default: color mode, both difficulty A, not pressed
     console_switches_ = 0xFF;  // All bits high = not pressed (active-low)
@@ -248,7 +248,7 @@ void Atari2600System::tick() {
     }
 
     // RIOT timer tick (once per CPU cycle)
-    board_.chips().riot.tick();
+    board_.io().tick();
 
     // Read joystick inputs from connector ports
     update_joystick_state();
@@ -507,8 +507,8 @@ void Atari2600System::update_joystick_state() {
     }
 
     // Write joystick state to RIOT Port A and console switches to Port B
-    board_.chips().riot.port_a_input = joystick_state_;
-    board_.chips().riot.port_b_input = console_switches_;
+    board_.io().port_a_input = joystick_state_;
+    board_.io().port_b_input = console_switches_;
 }
 
 // ============================================================================

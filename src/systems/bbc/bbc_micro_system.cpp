@@ -236,14 +236,14 @@ bool BBCMicroSystem::initialize() {
     board_.sound().set_audio_port(audio_port_.get());
 
     // ---- System VIA ($FE40-$FE5F) ----
-    board_.chips().system_via.reset();
-    board_.chips().system_via.interrupt_bit = BUS_IRQ_BIT;
+    board_.io().reset();
+    board_.io().interrupt_bit = BUS_IRQ_BIT;
     // Port A: keyboard column data + slow data bus
     // Port B: addressable latch control + VSYNC + light pen
-    board_.chips().system_via.port_a_read_callback = sys_via_port_a_read;
-    board_.chips().system_via.port_a_read_context = this;
-    board_.chips().system_via.port_b_read_callback = sys_via_port_b_read;
-    board_.chips().system_via.port_b_read_context = this;
+    board_.io().port_a_read_callback = sys_via_port_a_read;
+    board_.io().port_a_read_context = this;
+    board_.io().port_b_read_callback = sys_via_port_b_read;
+    board_.io().port_b_read_context = this;
 
     // ---- User VIA ($FE60-$FE7F) ----
     board_.chips().user_via.reset();
@@ -283,11 +283,11 @@ void BBCMicroSystem::reset() {
     if (system_ready_)  { board_.cpu().reset(); }
 
     // Re-establish VIA callbacks (reset clears them)
-    board_.chips().system_via.interrupt_bit = BUS_IRQ_BIT;
-    board_.chips().system_via.port_a_read_callback = sys_via_port_a_read;
-    board_.chips().system_via.port_a_read_context = this;
-    board_.chips().system_via.port_b_read_callback = sys_via_port_b_read;
-    board_.chips().system_via.port_b_read_context = this;
+    board_.io().interrupt_bit = BUS_IRQ_BIT;
+    board_.io().port_a_read_callback = sys_via_port_a_read;
+    board_.io().port_a_read_context = this;
+    board_.io().port_b_read_callback = sys_via_port_b_read;
+    board_.io().port_b_read_context = this;
     board_.chips().user_via.interrupt_bit = BUS_IRQ_BIT;
 
     // Reset audio thread adapter (both threads quiescent during reset)
@@ -328,7 +328,7 @@ void BBCMicroSystem::tick() {
     {
         bus_state_t via_bus = BBC_BUS_DEFAULT_STATE;
         BUS_SET_BIT(via_bus, BUS_RW_BIT);
-        via_bus = board_.chips().system_via.tick(via_bus);
+        via_bus = board_.io().tick(via_bus);
         if (!BUS_GET_BIT(via_bus, BUS_IRQ_BIT)) {
             BUS_CLR_BIT(s, BUS_IRQ_BIT);
         }
@@ -433,7 +433,7 @@ bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
             bus_state_t via_s = BBC_BUS_DEFAULT_STATE;
             BUS_SET_ADDR(via_s, addr - bbc_constants::SYSTEM_VIA_BASE);
             BUS_SET_BIT(via_s, BUS_RW_BIT);
-            via_s = board_.chips().system_via.registers_read(via_s);
+            via_s = board_.io().registers_read(via_s);
             data = BUS_GET_DATA(via_s);
         }
         else if (addr >= bbc_constants::USER_VIA_BASE && addr <= bbc_constants::USER_VIA_END) {
@@ -467,7 +467,7 @@ bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
             BUS_SET_ADDR(via_s, addr - bbc_constants::SYSTEM_VIA_BASE);
             BUS_SET_DATA(via_s, data);
             BUS_CLR_BIT(via_s, BUS_RW_BIT);
-            board_.chips().system_via.registers_write(via_s);
+            board_.io().registers_write(via_s);
 
             // Check if writing to Port B triggers sound chip or addressable latch
             uint8_t via_reg = (addr - bbc_constants::SYSTEM_VIA_BASE) & 0x0F;
@@ -488,7 +488,7 @@ bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
                     if (psg_adapter_) {
                         // Data comes from System VIA Port A output register.
                         // Enqueue timestamped write for the audio thread.
-                        uint8_t psg_data = board_.chips().system_via.regs_[MOS6522_PORTA];
+                        uint8_t psg_data = board_.io().regs_[MOS6522_PORTA];
                         psg_adapter_->cmd_queue().push_write(total_cycles_, 0, psg_data);
                     }
                 }
@@ -533,7 +533,7 @@ void BBCMicroSystem::crtc_vsync() {
     // The VIA detects the edge and sets the CA1 interrupt flag.
     // Since the current VIA implementation doesn't have CA1 pin handling,
     // we directly set the CA1 interrupt flag in IFR.
-    board_.chips().system_via.ifr |= MOS6522_IFR_CA1;
+    board_.io().ifr |= MOS6522_IFR_CA1;
 }
 
 void BBCMicroSystem::crtc_hsync() {
@@ -554,7 +554,7 @@ uint8_t BBCMicroSystem::sys_via_port_a_read(void* ctx, uint8_t /*output*/) {
     // When auto-scan is enabled (addressable latch bit 3), the keyboard
     // returns the state of the currently selected column.
     uint8_t keyboard_data = 0xFF;
-    uint8_t col = sys->board_.chips().system_via.port_b.output() & 0x07;
+    uint8_t col = sys->board_.io().port_b.output() & 0x07;
     if (col < bbc_constants::KEYBOARD_COLS) {
         keyboard_data = sys->scan_keyboard(col);
     }

@@ -96,19 +96,16 @@ inline constexpr auto kAtari2600Chips = make_chip_manifest(
 using Atari2600BusSpec = ManifestBusSpec<kAtari2600Chips, 13, 8>;
 
 // ── ChipSet ──────────────────────────────────────────────────────────────
-struct Atari2600ChipSet : StandardChips<MOS6507, tia_t> {
-    pia6532_t         riot;   // PIA 6532 RIOT — RAM, I/O, Timer
+struct Atari2600ChipSet : StandardChips<MOS6507, tia_t, NoChip, pia6532_t> {
     Atari2600CartChip cart;   // Cart MMIO adapter (wraps mapper)
 
     template<typename BoardT>
     void bind_extras(BoardT& board) {
-        board.bind_chip(board.template find_index<pia6532_t>(), &riot);
         board.bind_chip(board.template find_index<Atari2600CartChip>(), &cart);
     }
 
     template<typename BoardT>
     void register_extras(BoardT& board) {
-        board.register_component(&riot);
         board.register_component(&cart);
     }
 };

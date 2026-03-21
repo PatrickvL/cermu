@@ -113,14 +113,7 @@ template<> struct NamcoBusTraits<NamcoGame::Pengo> {
 };
 
 // ── ChipSet ──────────────────────────────────────────────────────────────
-struct NamcoChipSet : StandardChips<ZilogZ80A> {
-    namco_wsg_t wsg;    // Namco WSG3 wavetable sound (not bus-mapped)
-
-    template<typename BoardT>
-    void register_extras(BoardT& board) {
-        board.register_component(&wsg);
-    }
-};
+struct NamcoChipSet : StandardChips<ZilogZ80A, NoChip, namco_wsg_t> {};
 
 // ── System ───────────────────────────────────────────────────────────────
 template<NamcoGame G>

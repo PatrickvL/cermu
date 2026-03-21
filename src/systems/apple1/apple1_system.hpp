@@ -47,17 +47,7 @@ using Apple1BusSpec = ManifestBusSpec<kApple1Chips, 16, 8>;
 // Apple 1 ChipSet — value-typed chips owned by Board
 // ============================================================================
 
-struct Apple1Chips : StandardChips<MOS6502> {
-    pia6820_t pia;
-
-    template<typename B> void bind_extras(B& board) {
-        board.bind_chip(board.template find_index<pia6820_t>(), &pia);
-    }
-
-    void register_extras(BoardBase& board) {
-        board.register_component(&pia);
-    }
-};
+struct Apple1Chips : StandardChips<MOS6502, NoChip, NoChip, pia6820_t> {};
 
 
 

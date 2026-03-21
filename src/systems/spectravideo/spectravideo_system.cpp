@@ -140,7 +140,7 @@ bool SpectravideoSystem<V>::initialize() {
     // Init chips
     pins_ = board_.cpu_chip()->init();
     board_.sound().init();
-    board_.chips().ppi.init();
+    board_.io().init();
 
     // PSG clock & audio
     board_.sound().set_clock_frequency(svi_constants::CPU_FREQ_HZ / 16);
@@ -151,10 +151,10 @@ bool SpectravideoSystem<V>::initialize() {
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 
     // PPI Port B read callback — returns keyboard column data
-    board_.chips().ppi.set_port_b_read_callback(
+    board_.io().set_port_b_read_callback(
         [](void* ctx, uint8_t /*port_a*/) -> uint8_t {
             auto* sys = static_cast<SpectravideoSystem*>(ctx);
-            uint8_t row = sys->board_.chips().ppi.get_port_a_output() & 0x0F;
+            uint8_t row = sys->board_.io().get_port_a_output() & 0x0F;
             if (row < svi_constants::KEYBOARD_ROWS)
                 return sys->keyboard_matrix_[row];
             return 0xFF;
@@ -201,7 +201,7 @@ void SpectravideoSystem<V>::reset() {
     pins_ = board_.cpu_chip()->reset(pins_);
     frame_tstate_counter_ = 0;
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
-    board_.chips().ppi.init();
+    board_.io().init();
     board_.video().reset();
     board_.sound().init();
 }
@@ -323,9 +323,9 @@ bus_state_t SpectravideoSystem<V>::io_tick(bus_state_t pins) {
     // PPI ports $96-$99
     if (port >= svi_constants::PPI_PORT_A && port <= svi_constants::PPI_CONTROL) {
         if (is_read) {
-            BUS_SET_DATA(pins, board_.chips().ppi.read(port - svi_constants::PPI_PORT_A));
+            BUS_SET_DATA(pins, board_.io().read(port - svi_constants::PPI_PORT_A));
         } else {
-            board_.chips().ppi.write(port - svi_constants::PPI_PORT_A, BUS_GET_DATA(pins));
+            board_.io().write(port - svi_constants::PPI_PORT_A, BUS_GET_DATA(pins));
         }
         return pins;
     }

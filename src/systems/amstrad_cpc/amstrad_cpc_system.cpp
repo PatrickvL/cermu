@@ -122,7 +122,7 @@ bool AmstradCPCSystem<M>::initialize() {
             board_.chips().gate_array.interrupt_pending = true;
         }
     };
-    board_.chips().ppi.init();
+    board_.io().init();
     board_.sound().init();
     // AY clock = CPU / 4 = 1 MHz
     board_.sound().set_clock_frequency(amstrad_cpc_constants::CPU_FREQ_HZ / 4);
@@ -387,24 +387,24 @@ bus_state_t AmstradCPCSystem<M>::io_tick(bus_state_t pins) {
     if (!(addr & 0x0800)) {
         uint8_t ppi_reg = addr & 0x03;
         if (is_read) {
-            BUS_SET_DATA(pins, board_.chips().ppi.read(ppi_reg));
+            BUS_SET_DATA(pins, board_.io().read(ppi_reg));
         } else {
-            board_.chips().ppi.write(ppi_reg, data);
+            board_.io().write(ppi_reg, data);
             // AY-3-8912 is controlled via PPI Port C bits 7:6 (BDIR/BC1)
             // and Port A carries the data bus
-            uint8_t port_c = board_.chips().ppi.get_port_c_output();
+            uint8_t port_c = board_.io().get_port_c_output();
             bool bdir = (port_c >> 7) & 1;
             bool bc1  = (port_c >> 6) & 1;
             if (bdir && bc1) {
-                ay_latch_ = board_.chips().ppi.get_port_a_output() & 0x0F;
-                board_.sound().latch_address(board_.chips().ppi.get_port_a_output());
+                ay_latch_ = board_.io().get_port_a_output() & 0x0F;
+                board_.sound().latch_address(board_.io().get_port_a_output());
             } else if (bdir && !bc1) {
                 // Shadow write for immediate readback, enqueue for audio thread
-                uint8_t val = board_.chips().ppi.get_port_a_output();
+                uint8_t val = board_.io().get_port_a_output();
                 board_.sound().write_register_shadow(val);
                 ay_adapter_->cmd_queue().push_write(total_cycles_, ay_latch_, val);
             } else if (!bdir && bc1) {
-                board_.chips().ppi.set_port_a_input(board_.sound().read_register());
+                board_.io().set_port_a_input(board_.sound().read_register());
             }
         }
     }

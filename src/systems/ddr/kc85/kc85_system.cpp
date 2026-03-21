@@ -134,7 +134,7 @@ bool KC85System<V>::initialize() {
     // ── Init chips ──────────────────────────────────────────────────────
     pins_ = board_.cpu().init();
     board_.cpu().set_pc(0xF000);   // CAOS cold-start entry (real HW forces this via address latch)
-    board_.chips().pio1.init();
+    board_.io().init();
     board_.chips().pio2.init();
     board_.chips().ctc.init();
     modules_->init();
@@ -285,7 +285,7 @@ void KC85System<V>::apply_banking() {
 template<KC85Variant V>
 void KC85System<V>::update_bank_state() {
     // Banking is controlled by PIO Port A (not Port B)
-    uint8_t pio_a = board_.chips().pio1.get_output(0);
+    uint8_t pio_a = board_.io().get_output(0);
 
     bool new_caos = (pio_a & 0x01) != 0;   // PIO-A bit 0: CAOS ROM at E000
     bool new_irm  = (pio_a & 0x04) != 0;   // PIO-A bit 2: IRM at 8000
@@ -334,15 +334,15 @@ void KC85System<V>::tick() {
             // Pulse from U807 → PIO Port B strobe (BSTB)
             // This triggers the PIO-B interrupt service routine at $E199
             // which reads CTC3 to measure the interval between pulses.
-            board_.chips().pio1.strobe(1, true);
-            board_.chips().pio1.strobe(1, false);
+            board_.io().strobe(1, true);
+            board_.io().strobe(1, false);
         }
     }
 
     // ── 2. Drive INT pin on bus (active-low, level-sensitive) ──────────
     // Daisy chain priority: CTC > PIO-A > PIO-B.
     // The CPU samples INT at the start of each M1 cycle.
-    if (board_.chips().ctc.interrupt_pending() || board_.chips().pio1.any_interrupt_pending()) {
+    if (board_.chips().ctc.interrupt_pending() || board_.io().any_interrupt_pending()) {
         BUS_CLR_BIT(pins_, BUS_IRQ_BIT);   // Assert INT (active-low)
     } else {
         BUS_SET_BIT(pins_, BUS_IRQ_BIT);   // Deassert INT
@@ -682,7 +682,7 @@ template<KC85Variant V>
 void KC85System<V>::render_frame() {
     if (!irm_chip_) return;
 
-    const uint8_t pio_b = board_.chips().pio1.get_output(1);
+    const uint8_t pio_b = board_.io().get_output(1);
     video_gen_.set_irm(irm_chip_->data());
     video_gen_.set_blink_bg(blink_flag_ && (pio_b & 0x80));
     if constexpr (Traits::has_extended_video) {
@@ -701,7 +701,7 @@ bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
     // Daisy chain priority: CTC > PIO-A > PIO-B.
     if (!BUS_GET_BIT(pins, Z80_M1_BIT)) {
         if (board_.chips().ctc.interrupt_pending()) return board_.chips().ctc.inta(pins);
-        if (board_.chips().pio1.any_interrupt_pending()) return board_.chips().pio1.inta(pins);
+        if (board_.io().any_interrupt_pending()) return board_.io().inta(pins);
         BUS_SET_DATA(pins, 0xFF);
         return pins;
     }
@@ -712,7 +712,7 @@ bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
     if ((port & 0xFC) == kc85_constants::PIO_A_DATA) {
         bool is_write = !BUS_GET_BIT(pins, BUS_RW_BIT);
         bool is_data_reg = !((port >> 1) & 0x01);
-        pins = board_.chips().pio1.io_tick(pins);
+        pins = board_.io().io_tick(pins);
         // PIO 1 data writes control memory banking
         if (is_write && is_data_reg) {
             update_bank_state();

@@ -63,7 +63,7 @@ bool LC80System::initialize() {
 
     // ── Init chips ──────────────────────────────────────────────────────
     pins_ = board_.cpu().init();
-    board_.chips().pio1.init();
+    board_.io().init();
     board_.chips().pio2.init();
     board_.chips().ctc.init();
 
@@ -154,12 +154,12 @@ bus_state_t LC80System::io_tick(bus_state_t pins) {
         int port_idx = port & 0x01;
         bool is_ctrl = (port >> 1) & 0x01;
         if (is_read) {
-            BUS_SET_DATA(pins, board_.chips().pio1.read_data(port_idx));
+            BUS_SET_DATA(pins, board_.io().read_data(port_idx));
         } else {
             if (is_ctrl) {
-                board_.chips().pio1.write_control(port_idx, data);
+                board_.io().write_control(port_idx, data);
             } else {
-                board_.chips().pio1.write_data(port_idx, data);
+                board_.io().write_data(port_idx, data);
             }
         }
         return pins;

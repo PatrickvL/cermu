@@ -100,18 +100,7 @@ template<> struct MTXBusTraits<MTXVariant::MTX512> {
 // MTX ChipSet — value-typed chips embedded in Board
 // ============================================================================
 
-struct MTXChips : StandardChips<ZilogZ80A, TMS9918A, AY_3_8910> {
-    z80_ctc_t ctc;   // Z80 CTC for timing
-
-    template<typename B>
-    void bind_extras(B& board) {
-        board.bind_chip(board.template find_index<z80_ctc_t>(), &ctc);
-    }
-
-    void register_extras(BoardBase& board) {
-        board.register_component(&ctc);
-    }
-};
+struct MTXChips : StandardChips<ZilogZ80A, TMS9918A, AY_3_8910, z80_ctc_t> {};
 
 // ============================================================================
 // Memotech MTX System

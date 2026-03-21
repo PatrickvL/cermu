@@ -48,21 +48,18 @@ inline constexpr auto kLC80Chips = make_chip_manifest(
 using LC80BusSpec = ManifestBusSpec<kLC80Chips, 16, 8>;
 
 // ── ChipSet ──────────────────────────────────────────────────────────────
-struct LC80ChipSet : StandardChips<U880> {
-    z80_pio_t pio1;     // U855 PIO #1 (LED display + keyboard)
+struct LC80ChipSet : StandardChips<U880, NoChip, NoChip, z80_pio_t> {
     z80_pio_t pio2;     // U855 PIO #2 (keyboard scan + cassette)
     z80_ctc_t ctc;      // U857 CTC (speaker on channel 2)
 
     template<typename BoardT>
     void bind_extras(BoardT& board) {
-        board.bind_chip(board.template find_index<z80_pio_t>(0), &pio1);
         board.bind_chip(board.template find_index<z80_pio_t>(1), &pio2);
         board.bind_chip(board.template find_index<z80_ctc_t>(), &ctc);
     }
 
     template<typename BoardT>
     void register_extras(BoardT& board) {
-        board.register_component(&pio1);
         board.register_component(&pio2);
         board.register_component(&ctc);
     }

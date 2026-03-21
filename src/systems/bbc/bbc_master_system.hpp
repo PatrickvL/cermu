@@ -156,19 +156,16 @@ template<> struct BBCMasterBusTraits<BBCMasterVariant::MASTER_128> {
 // BBC Master ChipSet — value-typed chips owned by Board
 // ============================================================================
 
-struct BBCMasterChipSet : StandardChips<WDC_65C02, mc6845_t, sn76489_t> {
-    mos6522_t      system_via;
+struct BBCMasterChipSet : StandardChips<WDC_65C02, mc6845_t, sn76489_t, mos6522_t> {
     mos6522_t      user_via;
     bbc_vidproc_t  vidproc;
 
     template<typename B> void bind_extras(B& board) {
-        board.bind_chip(board.template find_index<mos6522_t>(),     &system_via);
         board.bind_chip(board.template find_index<mos6522_t>(1),   &user_via);
         board.bind_chip(board.template find_index<bbc_vidproc_t>(), &vidproc);
     }
 
     void register_extras(BoardBase& board) {
-        board.register_component(&system_via);
         board.register_component(&user_via);
         board.register_component(&vidproc);
     }

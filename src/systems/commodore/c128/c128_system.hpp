@@ -101,28 +101,19 @@ using C128BusSpec = ManifestBusSpec<kC128Chips, 16, 12, 2>;
 
 // Value-typed chips: CPU + Z80 + VIC-IIe + SID + Color RAM + 2× CIA.
 // Memory chips (RAM/ROM) stay factory-created.
-struct C128ChipSet : StandardChips<CSG8502> {
+struct C128ChipSet : StandardChips<CSG8502, mos8566_t, mos6581_t, mos6526_t> {
     ZilogZ80A  z80;
-    mos8566_t  vic_iie;
-    mos6581_t  sid;
     MOS2114    colorram;
-    mos6526_t  cia1;
     mos6526_t  cia2;
 
     template<typename Board> void bind_extras(Board& board) {
         board.bind_chip(board.template find_index<ZilogZ80A>(),  &z80);
-        board.bind_chip(board.template find_index<mos8566_t>(),  &vic_iie);
-        board.bind_chip(board.template find_index<mos6581_t>(),  &sid);
         board.bind_chip(board.template find_index<MOS2114>(),    &colorram);
-        board.bind_chip(board.template find_index<mos6526_t>(0), &cia1);
         board.bind_chip(board.template find_index<mos6526_t>(1), &cia2);
     }
     template<typename Board> void register_extras(Board& board) {
         board.register_component(&z80);
-        board.register_component(&vic_iie);
-        board.register_component(&sid);
         board.register_component(&colorram);
-        board.register_component(&cia1);
         board.register_component(&cia2);
     }
 };
