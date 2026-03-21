@@ -216,10 +216,6 @@ template<NamcoGame G> void NamcoArcadeSystem<G>::set_audio_sample_rate(int hz) {
     audio_sample_rate_ = hz;
     wsg_.set_audio_sample_rate(hz);
 }
-template<NamcoGame G> void NamcoArcadeSystem<G>::handle_keyboard_event(SDL_Keycode, bool) {}
-template<NamcoGame G> void NamcoArcadeSystem<G>::render_system_menu_items() {}
-template<NamcoGame G> void NamcoArcadeSystem<G>::render_configuration_ui() {}
-template<NamcoGame G> void NamcoArcadeSystem<G>::set_speed_multiplier(float m) { speed_multiplier_ = m; }
 
 // ============================================================================
 // PALETTE DECODE — build RGBA palette from palette PROM

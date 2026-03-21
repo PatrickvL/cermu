@@ -347,21 +347,6 @@ void SegaSG1000System<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 }
 
 // ============================================================================
-// GUI
-// ============================================================================
-
-template<SG1000Variant V>
-void SegaSG1000System<V>::render_system_menu_items() {}
-
-template<SG1000Variant V>
-void SegaSG1000System<V>::render_configuration_ui() {}
-
-template<SG1000Variant V>
-void SegaSG1000System<V>::set_speed_multiplier(float multiplier) {
-    speed_multiplier_ = multiplier;
-}
-
-// ============================================================================
 // EXPLICIT TEMPLATE INSTANTIATIONS
 // ============================================================================
 

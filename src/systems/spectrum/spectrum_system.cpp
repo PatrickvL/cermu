@@ -818,9 +818,6 @@ void SpectrumSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 // ============================================================================
 
 template<SpectrumVariant V>
-void SpectrumSystem<V>::render_system_menu_items() {}
-
-template<SpectrumVariant V>
 void SpectrumSystem<V>::render_configuration_ui() {
 #ifdef CERMU_HAS_GUI
     if (palette_selector::render(ula_, config_.custom_settings)) {
@@ -828,11 +825,6 @@ void SpectrumSystem<V>::render_configuration_ui() {
         apply_configuration();
     }
 #endif
-}
-
-template<SpectrumVariant V>
-void SpectrumSystem<V>::set_speed_multiplier(float multiplier) {
-    speed_multiplier_ = multiplier;
 }
 
 // ============================================================================

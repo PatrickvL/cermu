@@ -124,11 +124,6 @@ public:
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
     void set_audio_sample_rate(int sample_rate_hz) override;
 
-    void render_system_menu_items() override;
-    void render_configuration_ui() override;
-
-    void set_speed_multiplier(float multiplier) override;
-
     bool is_system_ready() const override { return system_ready_; }
 
 protected:

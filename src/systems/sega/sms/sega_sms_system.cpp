@@ -337,17 +337,6 @@ void SegaSMSSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 }
 
 // ============================================================================
-// GUI
-// ============================================================================
-
-void SegaSMSSystem::render_system_menu_items() {}
-void SegaSMSSystem::render_configuration_ui() {}
-
-void SegaSMSSystem::set_speed_multiplier(float multiplier) {
-    speed_multiplier_ = multiplier;
-}
-
-// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 

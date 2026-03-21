@@ -195,9 +195,6 @@ public:
 
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
     void handle_text_input(const char* text) override;
-    void render_system_menu_items() override;
-    void render_configuration_ui() override;
-    void set_speed_multiplier(float multiplier) override;
 
     bool is_system_ready() const override { return system_ready_; }
 

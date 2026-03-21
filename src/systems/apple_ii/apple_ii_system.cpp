@@ -231,19 +231,6 @@ void AppleIISystem<V>::handle_text_input(const char* text) {
 }
 
 // ============================================================================
-// GUI (stubs)
-// ============================================================================
-
-template<AppleIIVariant V>
-void AppleIISystem<V>::render_system_menu_items() {}
-
-template<AppleIIVariant V>
-void AppleIISystem<V>::render_configuration_ui() {}
-
-template<AppleIIVariant V>
-void AppleIISystem<V>::set_speed_multiplier(float /*multiplier*/) {}
-
-// ============================================================================
 // INTERNAL HELPERS (stubs)
 // ============================================================================
 

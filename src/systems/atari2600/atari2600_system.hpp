@@ -131,9 +131,6 @@ public:
     void render_system_menu_items() override;
     void render_configuration_ui() override;
 
-    // Emulation control
-    void set_speed_multiplier(float multiplier) override;
-
     // System ready state
     bool is_system_ready() const override { return system_ready_; }
 

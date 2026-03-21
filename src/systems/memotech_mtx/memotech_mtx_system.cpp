@@ -403,21 +403,6 @@ void MemotechMTXSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) 
 }
 
 // ============================================================================
-// GUI
-// ============================================================================
-
-template<MTXVariant V>
-void MemotechMTXSystem<V>::render_system_menu_items() {}
-
-template<MTXVariant V>
-void MemotechMTXSystem<V>::render_configuration_ui() {}
-
-template<MTXVariant V>
-void MemotechMTXSystem<V>::set_speed_multiplier(float multiplier) {
-    speed_multiplier_ = multiplier;
-}
-
-// ============================================================================
 // ROM LOADING
 // ============================================================================
 

@@ -149,7 +149,6 @@ public:
     // ---- Identical across all Commodore systems ----
 
     bool set_configuration(const SystemConfiguration& config) override;
-    void set_speed_multiplier(float multiplier) override;
     void handle_text_input(const char* text) override;
     void release_all_keys() override;
 

@@ -282,10 +282,6 @@ void BombJackSystem::set_audio_sample_rate(int hz) {
     audio_sample_rate_ = hz;
     for (auto& ay : ay_) ay.set_audio_sample_rate(hz);
 }
-void BombJackSystem::handle_keyboard_event(SDL_Keycode, bool) {}
-void BombJackSystem::render_system_menu_items() {}
-void BombJackSystem::render_configuration_ui() {}
-void BombJackSystem::set_speed_multiplier(float m) { speed_multiplier_ = m; }
 
 // ============================================================================
 // PALETTE DECODE — rebuild RGBA palette from palette RAM each frame

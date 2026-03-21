@@ -203,9 +203,6 @@ public:
     // Window title metadata
     const char* get_mode_label() const override;
     std::string get_subtitle_info() const override;
-    
-    // System interface - Emulation control
-    void set_speed_multiplier(float multiplier) override;
 
     // Audio output — drains NES APU sample buffer
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;

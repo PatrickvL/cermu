@@ -299,14 +299,6 @@ void C128System::handle_keyboard_event(SDL_Keycode /*key*/, bool /*pressed*/) {
 }
 
 // ============================================================================
-// GUI (stubs)
-// ============================================================================
-
-void C128System::render_system_menu_items() {}
-void C128System::render_configuration_ui() {}
-void C128System::set_speed_multiplier(float /*multiplier*/) {}
-
-// ============================================================================
 // COMMODORE SYSTEM HOOKS
 // ============================================================================
 

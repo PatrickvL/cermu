@@ -198,13 +198,6 @@ public:
     // Input
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
 
-    // GUI
-    void render_system_menu_items() override;
-    void render_configuration_ui() override;
-
-    // Emulation control
-    void set_speed_multiplier(float multiplier) override;
-
     bool is_system_ready() const override { return system_ready_; }
 
 private:
