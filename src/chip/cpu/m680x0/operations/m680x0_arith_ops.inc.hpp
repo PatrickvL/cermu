@@ -117,6 +117,9 @@ inline bus_state_t decode_group0(bus_state_t pins, uint16_t opcode) {
             }
             write_back_ea(result, OpSize::Byte);
         }
+        // BTST #imm: 2 extra idle clocks for immediate source
+        if (op_type == 0 && ea_mode == 7 && ea_reg == 4)
+            clocks_remaining_ += 2;
         return do_prefetch(pins);
     }
 
