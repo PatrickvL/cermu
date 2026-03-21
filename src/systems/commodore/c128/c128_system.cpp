@@ -118,16 +118,10 @@ bool C128System::initialize() {
                    | BUS_BIT(BUS_FLAG_BIT) | BUS_DATA_MASK;
     pins_ = default_state_;
 
+    board_.bind_chipset();
     board_.create_chips(&pins_);
     board_.apply(bus_);
 
-    cpu_8502_     = board_.cpu<CSG8502>();
-    cpu_z80_      = board_.find<ZilogZ80A>();
-    vic_iie_      = board_.find<mos8566_t>();
-    sid_          = board_.find<mos6581_t>();
-    colorram_     = board_.find<MOS2114>();
-    cia1_         = board_.find<mos6526_t>();
-    cia2_         = board_.find<mos6526_t>(1);
     basic_lo_rom_ = board_.find<ROMChip>();
     basic_hi_rom_ = board_.find<ROMChip>(1);
     editor_rom_   = board_.find<ROMChip>(2);
@@ -141,49 +135,54 @@ bool C128System::initialize() {
     }
 
     // VIC-IIe — initialize with PAL traits (MOS8566)
-    vic_iie_->init(vicii_base_t::memory_bank_change);
-    vic_iie_->colorram = colorram_;
+    auto& vic_iie = board_.chips().vic_iie;
+    auto& sid     = board_.chips().sid;
+    auto& cia1    = board_.chips().cia1;
+    auto& cia2    = board_.chips().cia2;
+
+    vic_iie.init(vicii_base_t::memory_bank_change);
+    vic_iie.colorram = &board_.chips().colorram;
 
     // VIC-IIe memory read callback — routes through MemoryBus viewer 1
-    vic_iie_->bus.bus = nullptr;
-    vic_iie_->bus.bank_change = nullptr;
-    vic_iie_->bus.mem_read = [](void* ctx, bus_state_t bus, uint16_t addr) -> bus_state_t {
+    vic_iie.bus.bus = nullptr;
+    vic_iie.bus.bank_change = nullptr;
+    vic_iie.bus.mem_read = [](void* ctx, bus_state_t bus, uint16_t addr) -> bus_state_t {
         auto* sys = static_cast<C128System*>(ctx);
         uint8_t data = sys->bus_.peek_byte(addr, kViewerVicII);
         BUS_SET_DATA(bus, data);
         return bus;
     };
-    vic_iie_->bus.mem_read_ctx = this;
+    vic_iie.bus.mem_read_ctx = this;
 
     // CIA2 Port A → VIC-IIe bank selection
-    cia2_->port_a_change_callback = [](void* ctx, uint8_t value) {
+    cia2.port_a_change_callback = [](void* ctx, uint8_t value) {
         auto* sys = static_cast<C128System*>(ctx);
-        vicii_base_t::memory_bank_change(sys->vic_iie_, value & 0x03);
+        vicii_base_t::memory_bank_change(&sys->board_.chips().vic_iie, value & 0x03);
     };
-    cia2_->port_a_callback_context = this;
+    cia2.port_a_callback_context = this;
 
     // CIA2 interrupt line → NMI
-    cia2_->configured_interrupt_bit = BUS_NMI_BIT;
+    cia2.configured_interrupt_bit = BUS_NMI_BIT;
 
     // SID — initialize
-    sid_->init();
+    sid.init();
     {
         float cpu_clock = static_cast<float>(c128_constants::CPU_FREQ_1MHZ_PAL);
-        sid_->set_cpu_clock(cpu_clock);
-        sid_->set_timing(true);  // PAL
+        sid.set_cpu_clock(cpu_clock);
+        sid.set_timing(true);  // PAL
     }
 
     register_bus_chips(board_);
 
     // Initialize CPU — reset vector will come from Kernal ROM
-    cpu_8502_->init();
-    cpu_8502_->init_io_port();
-    cpu_8502_->reset();
+    board_.cpu().init();
+    board_.cpu().init_io_port();
+    board_.cpu().reset();
 
     display_.init(c128_constants::VIC_DISPLAY_WIDTH_PAL,
                   c128_constants::VIC_DISPLAY_HEIGHT_PAL);
     display_.set_palette(vicii_base_t::get_default_palette(), 16);
-    vic_iie_->set_display(&display_);
+    vic_iie.set_display(&display_);
     register_display(&display_);
 
     system_ready_ = true;
@@ -194,8 +193,7 @@ bool C128System::initialize() {
 void C128System::shutdown() { system_ready_ = false; }
 
 void C128System::reset() {
-    if (!cpu_8502_) return;
-    pins_ = board_.cpu_chip()->reset(pins_);
+    pins_ = board_.cpu().reset(pins_);
     board_.reset_chips();
     cpu_mode_ = CPUMode::MODE_8502;
     c64_mode_ = false;
@@ -213,17 +211,23 @@ void C128System::reset() {
 void C128System::tick() {
     total_cycles_++;
 
+    auto& cpu     = board_.cpu();
+    auto& vic_iie = board_.chips().vic_iie;
+    auto& sid     = board_.chips().sid;
+    auto& cia1    = board_.chips().cia1;
+    auto& cia2    = board_.chips().cia2;
+
     // Start each cycle with pull-up defaults
     bus_state_t s = default_state_;
     BUS_SET_ADDR(s, BUS_GET_ADDR(pins_));
     BUS_SET_DATA(s, BUS_GET_DATA(pins_));
 
     // PHASE 1: VIC-IIe PHI1 — g-access read, pixel sequencing
-    s = vic_iie_->tick_phi1(s);
+    s = vic_iie.tick_phi1(s);
 
     // PHASE 1.5: CIA PHI2 — apply pending interrupt lines before CPU
-    s = cia2_->tick_phi2(s);
-    s = cia1_->tick_phi2(s);
+    s = cia2.tick_phi2(s);
+    s = cia1.tick_phi2(s);
 
     // BA→RDY wiring (direct bit test + set/clear)
     if (BUS_GET_BIT(s, BUS_BA_BIT))
@@ -232,7 +236,7 @@ void C128System::tick() {
         BUS_CLR_BIT(s, BUS_RDY_BIT);
 
     // PHASE 2: CPU PHI2 — instruction execution
-    s = cpu_8502_->tick<CSG8502::Phase::PHI2>(s);
+    s = cpu.tick<CSG8502::Phase::PHI2>(s);
 
     // PHASE 3: Memory service — AEC determines CPU vs VIC-IIe bus ownership
     {
@@ -243,23 +247,23 @@ void C128System::tick() {
     }
 
     // NMI edge detection
-    cpu_8502_->sample_nmi_pin(s);
+    cpu.sample_nmi_pin(s);
 
     // PHASE 3.1: VIC-IIe PHI2 — c/p/s-access data delivery
-    vic_iie_->tick_phi2(s);
+    vic_iie.tick_phi2(s);
 
     // PHASE 3.5: CIA PHI1 — timer counting, TOD, interrupt generation
-    s = cia2_->tick_phi1(s);
-    s = cia1_->tick_phi1(s);
+    s = cia2.tick_phi1(s);
+    s = cia1.tick_phi1(s);
 
     // PHASE 4: CPU PHI1 — prepare next fetch
-    s = cpu_8502_->tick<CSG8502::Phase::PHI1>(s);
+    s = cpu.tick<CSG8502::Phase::PHI1>(s);
 
     // Restore R/W line to read mode
     BUS_SET_BIT(s, BUS_RW_BIT);
 
     // PHASE 5: SID — sound generation
-    s = sid_->tick(s);
+    s = sid.tick(s);
 
     pins_ = s;
 }
