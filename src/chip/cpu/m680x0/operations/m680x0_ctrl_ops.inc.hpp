@@ -187,6 +187,10 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             mem_write_(mem_ctx_, sp + 2, static_cast<uint16_t>(ea & 0xFFFF));
             clocks_remaining_ += 8;  // 2 × 4-clock writes
         }
+        // Index modes (d8,An,Xn) and (d8,PC,Xn) need 2 extra idle clocks
+        if (ea_mode == 6 || (ea_mode == 7 && ea_reg == 3)) {
+            return do_idle_then_prefetch(pins, 2);
+        }
         return do_prefetch(pins);
     }
 
@@ -315,6 +319,11 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
         uint8_t an = (opcode >> 9) & 7;
         uint32_t addr = calc_ea(ea_mode, ea_reg, OpSize::Long);
         set_a(an, addr);
+        if (an == 7) sync_sp();
+        // Index modes (d8,An,Xn) and (d8,PC,Xn) need 2 extra idle clocks
+        if (ea_mode == 6 || (ea_mode == 7 && ea_reg == 3)) {
+            return do_idle_then_prefetch(pins, 2);
+        }
         return do_prefetch(pins);
     }
 
@@ -469,7 +478,55 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
 
     // ── JSR: 0100 1110 10xx xxxx ─────────────────────────────────
     if ((opcode & 0xFFC0) == 0x4E80) {
-        uint32_t target = calc_ea(ea_mode, ea_reg, OpSize::Long);
+        // For JSR, modes with simple displacement (d16,An / abs.W / d16,PC)
+        // must not refill IRC from sequential address since we're branching.
+        // Read displacement from IRC directly, then branch_prefetch refills.
+        uint32_t target;
+        switch (static_cast<EAMode>(ea_mode)) {
+            case EAMode::AddrRegIndirect:
+                target = get_a(ea_reg);
+                break;
+            case EAMode::AddrRegDisp: {
+                // (d16,An): read disp from IRC, no refill
+                int16_t disp = static_cast<int16_t>(regs_.irc);
+                regs_.pc += 2;
+                target = get_a(ea_reg) + disp;
+                clocks_remaining_ += 2;  // 2 idle
+                break;
+            }
+            case EAMode::AddrRegIndex: {
+                // (d8,An,Xn): uses consume_extension_word (refill ok — timing matches)
+                target = calc_ea(ea_mode, ea_reg, OpSize::Long);
+                break;
+            }
+            case EAMode::Special:
+                if (ea_reg == 0) {
+                    // abs.W: read from IRC, no refill
+                    int16_t addr = static_cast<int16_t>(regs_.irc);
+                    regs_.pc += 2;
+                    target = static_cast<uint32_t>(static_cast<int32_t>(addr));
+                    clocks_remaining_ += 2;  // 2 idle
+                } else if (ea_reg == 1) {
+                    // abs.L: high word from IRC (free), low word needs bus read
+                    target = static_cast<uint32_t>(regs_.irc) << 16;
+                    regs_.pc += 2;
+                    target |= consume_extension_word();
+                } else if (ea_reg == 2) {
+                    // (d16,PC): read disp from IRC, no refill
+                    uint32_t base = regs_.pc - 2;
+                    int16_t disp = static_cast<int16_t>(regs_.irc);
+                    regs_.pc += 2;
+                    target = base + disp;
+                    clocks_remaining_ += 2;  // 2 idle
+                } else {
+                    // (d8,PC,Xn): consume_extension_word is fine
+                    target = calc_ea(ea_mode, ea_reg, OpSize::Long);
+                }
+                break;
+            default:
+                target = calc_ea(ea_mode, ea_reg, OpSize::Long);
+                break;
+        }
         // Push return address (formal PC of next instruction = internal PC - 2)
         uint32_t return_pc = regs_.pc - 2;
         set_a(7, get_a(7) - 4);
@@ -486,7 +543,46 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
 
     // ── JMP: 0100 1110 11xx xxxx ─────────────────────────────────
     if ((opcode & 0xFFC0) == 0x4EC0) {
-        uint32_t target = calc_ea(ea_mode, ea_reg, OpSize::Long);
+        // Same mode-aware EA computation as JSR above
+        uint32_t target;
+        switch (static_cast<EAMode>(ea_mode)) {
+            case EAMode::AddrRegIndirect:
+                target = get_a(ea_reg);
+                break;
+            case EAMode::AddrRegDisp: {
+                int16_t disp = static_cast<int16_t>(regs_.irc);
+                regs_.pc += 2;
+                target = get_a(ea_reg) + disp;
+                clocks_remaining_ += 2;  // 2 idle
+                break;
+            }
+            case EAMode::AddrRegIndex:
+                target = calc_ea(ea_mode, ea_reg, OpSize::Long);
+                break;
+            case EAMode::Special:
+                if (ea_reg == 0) {
+                    int16_t addr = static_cast<int16_t>(regs_.irc);
+                    regs_.pc += 2;
+                    target = static_cast<uint32_t>(static_cast<int32_t>(addr));
+                    clocks_remaining_ += 2;  // 2 idle
+                } else if (ea_reg == 1) {
+                    target = static_cast<uint32_t>(regs_.irc) << 16;
+                    regs_.pc += 2;
+                    target |= consume_extension_word();
+                } else if (ea_reg == 2) {
+                    uint32_t base = regs_.pc - 2;
+                    int16_t disp = static_cast<int16_t>(regs_.irc);
+                    regs_.pc += 2;
+                    target = base + disp;
+                    clocks_remaining_ += 2;  // 2 idle
+                } else {
+                    target = calc_ea(ea_mode, ea_reg, OpSize::Long);
+                }
+                break;
+            default:
+                target = calc_ea(ea_mode, ea_reg, OpSize::Long);
+                break;
+        }
         regs_.pc = target;
         return do_branch_prefetch(pins);
     }
@@ -532,8 +628,9 @@ inline bus_state_t decode_group6(bus_state_t pins, uint16_t opcode) {
 
     // BRA (cc = T, but opcode convention: cc=0 is BRA, cc=1 is BSR)
     if (cc == Condition::T) {
-        // BRA — always branch
+        // BRA — always branch: 10 clocks (n np np)
         regs_.pc = branch_base + displacement;
+        clocks_remaining_ += 2;  // 2 idle clocks before branch prefetch
         return do_branch_prefetch(pins);
     }
     if (cc == Condition::F) {
@@ -554,10 +651,23 @@ inline bus_state_t decode_group6(bus_state_t pins, uint16_t opcode) {
 
     // Bcc — conditional branch
     if (test_condition(cc)) {
+        // Bcc taken: 10 clocks (n np np) — same for byte and word displacement
         regs_.pc = branch_base + displacement;
+        clocks_remaining_ += 2;  // 2 idle clocks before branch prefetch
         return do_branch_prefetch(pins);
     }
-    return do_prefetch(pins);
+    // Bcc not taken
+    if (disp8 == 0) {
+        // Word displacement not taken: 12 clocks (nn np np)
+        // Refill IRC from [PC] since we consumed the displacement word
+        if (mem_read_) {
+            regs_.irc = mem_read_(mem_ctx_, regs_.pc & address_mask());
+            clocks_remaining_ += 4;  // bus read to refill IRC
+        }
+        return do_idle_then_prefetch(pins, 4);  // 4 idle + 4 prefetch
+    }
+    // Byte displacement not taken: 8 clocks (nn np)
+    return do_idle_then_prefetch(pins, 4);
 }
 
 #include "chip/cpu/m680x0/operations/inc_lint_prevention_footer.hpp"
