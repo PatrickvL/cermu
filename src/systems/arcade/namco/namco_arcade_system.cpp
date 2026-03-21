@@ -35,7 +35,6 @@ static SystemDescriptor pengo_descriptor = {
 template<NamcoGame G>
 NamcoArcadeSystem<G>::NamcoArcadeSystem()
     : System()
-    , wsg_(WSGVariant::WSG3)
     , pins_(NAMCO_BUS_DEFAULT_STATE)
 {
     HardwareTraits traits = {};
@@ -76,27 +75,27 @@ bool NamcoArcadeSystem<G>::initialize() {
     register_board(&board_);
 
     // ── Create memory chips from manifest and wire bus ────────────────
+    board_.bind_chipset();
     board_.create_chips(&pins_);
     board_.apply(bus_);
 
-    // ── Init CPU + sound ────────────────────────────────────────────────
-    cpu_ = board_.template cpu<ZilogZ80A>();
+    // ── Init CPU + sound ────────────────────────────────────────────
     vram_chip_ = board_.template find<RAMChip>();      // Video RAM
     cram_chip_ = board_.template find<RAMChip>(1);     // Color RAM
-    pins_ = board_.cpu_chip()->init();
-    wsg_.init();
+    pins_ = board_.cpu().init();
+    board_.chips().wsg.init();
     // WSG clock = CPU / 32 = 96 kHz
-    wsg_.set_clock_frequency(namco_arcade_constants::CPU_FREQ_HZ / 32);
-    wsg_.set_audio_sample_rate(namco_arcade_constants::DEFAULT_SAMPLE_RATE);
+    board_.chips().wsg.set_clock_frequency(namco_arcade_constants::CPU_FREQ_HZ / 32);
+    board_.chips().wsg.set_audio_sample_rate(namco_arcade_constants::DEFAULT_SAMPLE_RATE);
 
     // Wire WSG to audio thread — WSG clocked at CPU/32
-    wsg_adapter_ = std::make_unique<WriteOnlySynthAdapter<namco_wsg_t, true>>(&wsg_, 32);
+    wsg_adapter_ = std::make_unique<WriteOnlySynthAdapter<namco_wsg_t, true>>(&board_.chips().wsg, 32);
     audio_thread_.register_engine(wsg_adapter_.get());
     audio_thread_.start();
 
     // Wire WSG to audio signal port
     audio_port_ = std::make_unique<AudioPort>();
-    wsg_.set_audio_port(audio_port_.get());
+    board_.chips().wsg.set_audio_port(audio_port_.get());
 
     // Graphics ROMs — not bus-mapped
     char_rom_.resize(Traits::char_rom_size, 0xFF);
@@ -137,12 +136,11 @@ bool NamcoArcadeSystem<G>::initialize() {
 
 template<NamcoGame G> void NamcoArcadeSystem<G>::shutdown() {
     audio_thread_.stop();
-    cpu_ = nullptr;
     system_ready_ = false;
 }
 template<NamcoGame G> void NamcoArcadeSystem<G>::reset() {
-    if (!cpu_) return;
-    pins_ = board_.cpu_chip()->reset(pins_);
+    if (!system_ready_) return;
+    pins_ = board_.cpu().reset(pins_);
     audio_thread_.stop();
     if (wsg_adapter_) wsg_adapter_->reset();
     audio_thread_.start();
@@ -157,10 +155,10 @@ template<NamcoGame G> void NamcoArcadeSystem<G>::reset() {
 
 template<NamcoGame G>
 void NamcoArcadeSystem<G>::tick() {
-    if (!cpu_) return;
+    if (!system_ready_) return;
 
     // CPU tick
-    pins_ = cpu_->tick(pins_);
+    pins_ = board_.cpu().tick(pins_);
 
     // Bus dispatch — Namco hardware uses memory-mapped I/O only
     bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);
@@ -209,11 +207,11 @@ template<NamcoGame G> uint32_t NamcoArcadeSystem<G>::get_audio_samples(float* bu
     if (audio_port_) {
         return static_cast<uint32_t>(audio_port_->read_samples(buffer, static_cast<int>(max_samples)));
     }
-    return wsg_.audio_read(buffer, max_samples);
+    return board_.chips().wsg.audio_read(buffer, max_samples);
 }
 template<NamcoGame G> void NamcoArcadeSystem<G>::set_audio_sample_rate(int hz) {
     audio_sample_rate_ = hz;
-    wsg_.set_audio_sample_rate(hz);
+    board_.chips().wsg.set_audio_sample_rate(hz);
 }
 
 // ============================================================================
