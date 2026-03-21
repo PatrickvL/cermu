@@ -72,8 +72,11 @@ inline uint32_t calc_ea(uint8_t mode, uint8_t reg, OpSize sz) {
                 case 1: {  // Abs.L
                     uint32_t addr = static_cast<uint32_t>(regs_.irc) << 16;
                     regs_.pc += 2;
-                    // Need another prefetch for low word — simplified here
-                    addr |= regs_.irc;
+                    if (mem_read_) {
+                        addr |= mem_read_(mem_ctx_, regs_.pc & address_mask());
+                    } else {
+                        addr |= regs_.irc;  // Fallback: stale IRC
+                    }
                     regs_.pc += 2;
                     return addr;
                 }
@@ -111,8 +114,9 @@ inline uint32_t calc_ea(uint8_t mode, uint8_t reg, OpSize sz) {
     return 0;
 }
 
-// read_ea / write_ea — simplified synchronous versions
-// In the full implementation these will use bus cycle handlers
+// read_ea / write_ea — synchronous via mem_read_ / mem_write_ callbacks.
+// For memory modes: calculates EA, reads/writes via callback.
+// For register/immediate modes: operates directly.
 
 inline uint32_t read_ea(uint8_t mode, uint8_t reg, OpSize sz) {
     if (mode == static_cast<uint8_t>(EAMode::DataRegDirect)) {
@@ -122,11 +126,16 @@ inline uint32_t read_ea(uint8_t mode, uint8_t reg, OpSize sz) {
         return get_a(reg);
     }
     if (mode == static_cast<uint8_t>(EAMode::Special) && reg == 4) {
-        // Immediate
+        // Immediate: read from prefetch pipeline + memory callback
         if (sz == OpSize::Long) {
             uint32_t val = static_cast<uint32_t>(regs_.irc) << 16;
             regs_.pc += 2;
-            val |= regs_.irc;
+            if (mem_read_) {
+                // Fetch second word via callback (IRC was consumed, need next word)
+                val |= mem_read_(mem_ctx_, regs_.pc & address_mask());
+            } else {
+                val |= regs_.irc;  // Fallback: stale IRC (wrong for most cases)
+            }
             regs_.pc += 2;
             return val;
         } else {
@@ -135,9 +144,22 @@ inline uint32_t read_ea(uint8_t mode, uint8_t reg, OpSize sz) {
             return val & size_mask(sz);
         }
     }
-    // Memory modes — calculate address, then the bus cycle reads the value
+    // Memory modes — calculate address, read via callback
     ea_addr_ = calc_ea(mode, reg, sz);
-    // Actual memory read happens through bus cycles — return 0 as placeholder
+    if (mem_read_) {
+        uint32_t addr = ea_addr_ & address_mask();
+        if (sz == OpSize::Long) {
+            uint16_t hi = mem_read_(mem_ctx_, addr);
+            uint16_t lo = mem_read_(mem_ctx_, addr + 2);
+            return (static_cast<uint32_t>(hi) << 16) | lo;
+        } else if (sz == OpSize::Byte) {
+            uint16_t word = mem_read_(mem_ctx_, addr);
+            return (addr & 1) ? (word & 0xFF) : (word >> 8);
+        } else {
+            return mem_read_(mem_ctx_, addr);
+        }
+    }
+    // Fallback: return data_latch_ (set by bus cycle handlers)
     return data_latch_ & size_mask(sz);
 }
 
@@ -150,8 +172,24 @@ inline void write_ea(uint8_t mode, uint8_t reg, uint32_t value, OpSize sz) {
         set_a(reg, value);
         return;
     }
-    // Memory write — the actual bus cycle is handled by the caller
+    // Memory write via callback
     ea_addr_ = calc_ea(mode, reg, sz);
+    if (mem_write_) {
+        uint32_t addr = ea_addr_ & address_mask();
+        if (sz == OpSize::Long) {
+            mem_write_(mem_ctx_, addr,     static_cast<uint16_t>((value >> 16) & 0xFFFF));
+            mem_write_(mem_ctx_, addr + 2, static_cast<uint16_t>(value & 0xFFFF));
+        } else if (sz == OpSize::Byte) {
+            uint16_t word;
+            if (addr & 1)
+                word = static_cast<uint16_t>(value & 0xFF);         // odd → low byte
+            else
+                word = static_cast<uint16_t>((value & 0xFF) << 8);  // even → high byte
+            mem_write_(mem_ctx_, addr, word);
+        } else {
+            mem_write_(mem_ctx_, addr, static_cast<uint16_t>(value));
+        }
+    }
     data_latch_ = value;
 }
 
