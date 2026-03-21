@@ -368,6 +368,9 @@ inline bus_state_t decode_group8(bus_state_t pins, uint16_t opcode) {
         uint32_t src_val;
         if (ea_mode == 0) {
             src_val = read_dn(ea_reg, sz);
+        } else if (ea_mode == 7 && ea_reg == 4) {
+            // Immediate: inline path
+            src_val = read_ea(ea_mode, ea_reg, sz);
         } else {
             ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
             reg_idx_ = dn;
@@ -453,6 +456,9 @@ inline bus_state_t decode_group9(bus_state_t pins, uint16_t opcode) {
             src_val = get_a(ea_reg);
             if (sz == OpSize::Word)
                 src_val = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(src_val)));
+        } else if (ea_mode == 7 && ea_reg == 4) {
+            // Immediate: inline path
+            src_val = read_ea(ea_mode, ea_reg, sz);
         } else {
             ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
             reg_idx_ = dn;
@@ -548,6 +554,9 @@ inline bus_state_t decode_groupB(bus_state_t pins, uint16_t opcode) {
             src_val = get_a(ea_reg);
             if (sz == OpSize::Word)
                 src_val = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(src_val)));
+        } else if (ea_mode == 7 && ea_reg == 4) {
+            // Immediate: inline path
+            src_val = read_ea(ea_mode, ea_reg, sz);
         } else {
             ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
             reg_idx_ = dn;
@@ -659,6 +668,9 @@ inline bus_state_t decode_groupC(bus_state_t pins, uint16_t opcode) {
         uint32_t src_val;
         if (ea_mode == 0) {
             src_val = read_dn(ea_reg, sz);
+        } else if (ea_mode == 7 && ea_reg == 4) {
+            // Immediate: inline path
+            src_val = read_ea(ea_mode, ea_reg, sz);
         } else {
             ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
             reg_idx_ = dn;
@@ -736,6 +748,9 @@ inline bus_state_t decode_groupD(bus_state_t pins, uint16_t opcode) {
             src_val = get_a(ea_reg);
             if (sz == OpSize::Word)
                 src_val = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(src_val)));
+        } else if (ea_mode == 7 && ea_reg == 4) {
+            // Immediate: inline path
+            src_val = read_ea(ea_mode, ea_reg, sz);
         } else {
             // Memory EA: use bus cycle handlers
             ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
