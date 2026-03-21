@@ -11,6 +11,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "core/signal/audio_port.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -111,6 +112,16 @@ template<> struct NamcoBusTraits<NamcoGame::Pengo> {
     using Spec = ManifestBusSpec<kPengoChips, 16, 8>;
 };
 
+// ── ChipSet ──────────────────────────────────────────────────────────────
+struct NamcoChipSet : StandardChips<ZilogZ80A> {
+    namco_wsg_t wsg;    // Namco WSG3 wavetable sound (not bus-mapped)
+
+    template<typename BoardT>
+    void register_extras(BoardT& board) {
+        board.register_component(&wsg);
+    }
+};
+
 // ── System ───────────────────────────────────────────────────────────────
 template<NamcoGame G>
 class NamcoArcadeSystem : public System {
@@ -135,9 +146,7 @@ public:
 
 
 private:
-    // ── Chips ────────────────────────────────────────────────────────────
-    ZilogZ80A*       cpu_ = nullptr;     // Z80A @ 3.072 MHz — owned by board_
-    namco_wsg_t      wsg_;               // Namco WSG3 wavetable sound
+    // ── Chips (value-typed via Board ChipSet) ────────────────────────────
 
     // Audio thread — WSG synthesis runs off the emulation thread
     AudioThread audio_thread_;
@@ -155,7 +164,7 @@ private:
     using BT  = NamcoBusTraits<G>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec>;
+    using MainBoard = Board<typename BT::Spec, NamcoChipSet>;
     Bus bus_;
     MainBoard board_{BT::kManifest};
 
