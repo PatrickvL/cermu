@@ -12,6 +12,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -96,6 +97,23 @@ template<> struct MTXBusTraits<MTXVariant::MTX512> {
 };
 
 // ============================================================================
+// MTX ChipSet — value-typed chips embedded in Board
+// ============================================================================
+
+struct MTXChips : StandardChips<ZilogZ80A, TMS9918A, AY_3_8910> {
+    z80_ctc_t ctc;   // Z80 CTC for timing
+
+    template<typename B>
+    void bind_extras(B& board) {
+        board.bind_chip(board.template find_index<z80_ctc_t>(), &ctc);
+    }
+
+    void register_extras(BoardBase& board) {
+        board.register_component(&ctc);
+    }
+};
+
+// ============================================================================
 // Memotech MTX System
 // ============================================================================
 
@@ -103,6 +121,7 @@ template<MTXVariant V>
 class MemotechMTXSystem : public System {
     using Traits = MTXVariantTraits<V>;
     using BT     = MTXBusTraits<V>;
+    using Chips  = MTXChips;
 
 public:
     MemotechMTXSystem();
@@ -128,16 +147,10 @@ public:
 
 
 private:
-    // ── Chips ────────────────────────────────────────────────────────────
-    ZilogZ80A*   cpu_ = nullptr;
-    TMS9918A     vdp_;
-    AY_3_8910    psg_;
-    z80_ctc_t    ctc_;
-
-    // ── Board + bus ──────────────────────────────────────────────────────
+    // ── Board + bus (chips live inside board_) ────────────────────────────
     using Bus       = MemoryBus<typename BT::Spec>;
     using PT        = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec>;
+    using MainBoard = Board<typename BT::Spec, Chips>;
     Bus       bus_;
     MainBoard board_{BT::kManifest};
 
