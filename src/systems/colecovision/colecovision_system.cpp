@@ -98,7 +98,7 @@ bool ColecoVisionSystem::initialize() {
 
     configure_bus_memory_map();
 
-    pins_ = board_.cpu_chip()->init();
+    pins_ = board_.cpu().init();
     board_.sound().init();
 
     board_.sound().set_clock_frequency(coleco_constants::CPU_FREQ_HZ / 16);
@@ -138,7 +138,7 @@ void ColecoVisionSystem::shutdown() {
 
 void ColecoVisionSystem::reset() {
     board_.reset_chips();
-    pins_ = board_.cpu_chip()->reset(pins_);
+    pins_ = board_.cpu().reset(pins_);
     frame_tstate_counter_ = 0;
     ctrl_mode_ = 0;
     ctrl1_joystick_ = 0x7F;

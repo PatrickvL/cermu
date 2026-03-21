@@ -240,7 +240,8 @@ bool PETSystem::initialize() {
     printf("PET: Initializing system\n");
     register_board(&board_);
 
-    // ── Create memory chips from manifest and wire bus ─────────────────
+    // ── Bind value-typed chips from ChipSet, then create remaining ─────
+    board_.bind_chipset();
     board_.create_chips(&pins_);
     board_.apply(bus_);
 
@@ -251,11 +252,11 @@ bool PETSystem::initialize() {
     basic_rom_d_chip_ = board_.template find<ROMChip>(2);
     editor_rom_chip_  = board_.template find<ROMChip>(3);
     kernal_rom_chip_  = board_.template find<ROMChip>(4);
-    cpu_              = board_.template cpu<MOS6502>();
-    crtc_             = board_.template find<mc6845_t>();
-    pia1_             = board_.template find<pia6820_t>();
-    pia2_             = board_.template find<pia6820_t>(1);
-    via_              = board_.template find<mos6522_t>();
+    cpu_              = &board_.cpu();
+    crtc_             = &board_.video();
+    pia1_             = &board_.io();
+    pia2_             = &board_.chips().pia2;
+    via_              = &board_.sound();
 
     // Screen RAM mirror at $8400-$87FF and configure memory map
     configure_memory_map();
@@ -267,8 +268,8 @@ bool PETSystem::initialize() {
     }
 
     // ---- CPU (MOS 6502) ----
-    board_.cpu_chip()->init();
-    board_.cpu_chip()->reset();
+    board_.cpu().init();
+    board_.cpu().reset();
 
     // ---- CRTC (MC6845) ----
     crtc_->init();
@@ -376,7 +377,7 @@ void PETSystem::reset() {
     audio_cycle_counter_ = 0;
 
     // Reset CPU last
-    if (board_.cpu_chip()) { board_.cpu_chip()->reset(); }
+    board_.cpu().reset();
 
     pins_ = PET_BUS_DEFAULT_STATE;
     total_cycles_ = 0;

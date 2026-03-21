@@ -388,8 +388,9 @@ bool C64System::initialize() {
     system_lines_  = SYS_MASK_EXROM | SYS_MASK_GAME;
 
     // =========================================================================
-    // Factory-create all manifest chips (Board owns lifetimes)
+    // Bind value-typed chips from ChipSet, then factory-create remaining
     // =========================================================================
+    board_.bind_chipset();
     board_.create_chips(&bus_state_);
     board_.apply(bus_);
 
@@ -400,12 +401,12 @@ bool C64System::initialize() {
     this->basic           = board_.find<ROMChip>(2);
     this->kernal          = board_.find<ROMChip>(3);
     this->charrom         = board_.find<ROMChip>(4);
-    this->mos6510         = board_.find<MOS6510>();
-    this->vicii           = board_.find<vicii_base_t>();
-    this->sid             = board_.find<mos6581_t>();
-    this->colorram        = board_.find<MOS2114>();
-    this->cia1            = board_.find<mos6526_t>();
-    this->cia2            = board_.find<mos6526_t>(1);
+    this->mos6510         = &board_.cpu();
+    this->vicii           = board_.find<vicii_base_t>();    // factory-created (PAL/NTSC)
+    this->sid             = &board_.sound();
+    this->colorram        = &board_.chips().colorram;
+    this->cia1            = &board_.io();
+    this->cia2            = &board_.chips().cia2;
 
     if (!this->mos6510) { cleanup(); return false; }
 

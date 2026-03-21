@@ -41,12 +41,6 @@
 template<BusSpecConcept Spec, typename ChipSet = NoChipSet>
 class Board : public BoardBase {
 public:
-    // Re-expose base-class typed chip accessors (Board<Spec>::cpu<T>() etc.)
-    // so that the ChipSet-aware overloads added below form a proper overload
-    // set rather than hiding the inherited versions.
-    using BoardBase::cpu;
-    using BoardBase::video;
-
     using Map         = BusMap<Spec>;
     using Bus         = MemoryBus<Spec>;
     using ChipId      = typename Bus::ChipId;
@@ -224,16 +218,6 @@ public:
 
             bind_chip(i, chip);
             owned_chips_.emplace_back(chip);
-
-            // Cache the first CPU chip on this board.
-            if (auto* as_cpu = dynamic_cast<CpuChipBase*>(chip);
-                !cpu_chip_ && as_cpu)
-                cpu_chip_ = as_cpu;
-
-            // Cache the first video chip on this board.
-            if (auto* as_video = dynamic_cast<VideoChipBase*>(chip);
-                !video_chip_ && as_video)
-                video_chip_ = as_video;
         }
     }
 
@@ -459,7 +443,7 @@ public:
     // =====================================================================
     //
     // Binds all value-typed ChipSet members to their corresponding manifest
-    // slots, then sets up the BoardBase cpu_chip_ / video_chip_ caches.
+    // slots, then calls bind_extras() for per-system extra chip members.
     // Call before create_chips() — pre-bound slots are skipped by the
     // factory, so value-typed chips avoid heap allocation entirely.
     //
@@ -477,11 +461,9 @@ public:
     bind_chipset() {
         // Standard roles
         bind_chip(find_index<typename CS::cpu_type>(), &chips_.cpu);
-        cpu_chip_ = &chips_.cpu;
 
         if constexpr (has_video_v<CS>) {
             bind_chip(find_index<typename CS::video_type>(), &chips_.video);
-            video_chip_ = &chips_.video;
         }
         if constexpr (has_sound_v<CS>) {
             bind_chip(find_index<typename CS::sound_type>(), &chips_.sound);

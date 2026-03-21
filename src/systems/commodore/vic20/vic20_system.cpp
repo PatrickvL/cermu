@@ -597,10 +597,6 @@ bool VIC20System::initialize() {
     // ── Post-creation wiring: init/reset/callbacks ──────────────────────
     
     // CPU
-    if (!board_.cpu_chip()) {
-        printf("VIC20: Failed to create MOS6502 CPU\n");
-        return false;
-    }
     board_.cpu().init();
     board_.cpu().reset();
     

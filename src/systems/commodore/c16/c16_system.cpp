@@ -571,7 +571,8 @@ bool Commodore264System<V>::initialize() {
         }
     }
 
-    // ── Create memory chips from manifest and wire bus ───────────────────
+    // Bind value-typed chips from ChipSet, then factory-create remaining
+    board_.bind_chipset();
     board_.create_chips(&bus_state_);
     board_.apply(bus_);
 
@@ -579,10 +580,10 @@ bool Commodore264System<V>::initialize() {
     ram_        = board_.template find<RAMChip>();
     basic_rom_  = board_.template find<ROMChip>();
     kernal_rom_ = board_.template find<ROMChip>(1);
-    cpu_        = board_.cpu<CSG7501>();
-    pio1_       = board_.template find<mos6529_t>();
-    pio2_       = board_.template find<mos6529_t>(1);
-    rom_bank_   = board_.template find<c264_rom_bank_select_t>();
+    cpu_        = &board_.cpu();
+    pio1_       = &board_.io();
+    pio2_       = &board_.chips().pio2;
+    rom_bank_   = &board_.chips().rom_bank;
 
     // Wire ROM bank select callback — fires on $FDD0-$FDDF writes when
     // low_bank or high_bank actually changes.
@@ -611,12 +612,12 @@ bool Commodore264System<V>::initialize() {
     }
     
     // Initialize CPU and I/O port
-    board_.cpu_chip()->init();
+    board_.cpu().init();
     cpu_->init_io_port(0x00, 0x00, 0xFF);  // C16: DDR=0 (all inputs), data=0, pins=0xFF (all high)
 
     // Reset the CPU to start the hardware-accurate RESET sequence.
     // The deferred hijack fetches $FFFC/$FFFD through the bus on first tick.
-    board_.cpu_chip()->reset();
+    board_.cpu().reset();
     
     // Note: C16 doesn't use the io_port_mixin bank_change path.
     // Banking is handled by TED register writes.

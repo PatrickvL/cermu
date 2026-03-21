@@ -57,21 +57,23 @@ bool BombJackSystem::initialize() {
     printf("Bomb Jack: Initializing arcade system\n");
     register_board(&main_board_);
 
-    // ── Create memory chips from manifest and wire buses ─────────────────
+    // ── Bind value-typed chips from ChipSet, then create remaining ─────
+    main_board_.bind_chipset();
     main_board_.create_chips(&main_pins_);
     main_board_.apply(main_bus_);
 
+    sound_board_.bind_chipset();
     sound_board_.create_chips(&sound_pins_);
     sound_board_.apply(sound_bus_);
 
     // ── Init chips ───────────────────────────────────────────────────────
-    main_cpu_  = main_board_.cpu<ZilogZ80A>();
-    sound_cpu_ = sound_board_.cpu<ZilogZ80A>();
+    main_cpu_  = &main_board_.cpu();
+    sound_cpu_ = &sound_board_.cpu();
     fg_tilemap_chip_  = main_board_.find<RAMChip>(1);
     fg_attr_chip_     = main_board_.find<RAMChip>(2);
     palette_ram_chip_ = main_board_.find<RAMChip>(4);
-    main_pins_  = main_board_.cpu_chip()->init();
-    sound_pins_ = sound_board_.cpu_chip()->init();
+    main_pins_  = main_board_.cpu().init();
+    sound_pins_ = sound_board_.cpu().init();
     for (auto& ay : ay_) {
         ay.init();
         // AY clock = sound CPU / 2 = 1.5 MHz
@@ -126,9 +128,8 @@ void BombJackSystem::shutdown() {
 }
 
 void BombJackSystem::reset() {
-    if (!main_board_.cpu_chip() || !sound_board_.cpu_chip()) return;
-    main_pins_  = main_board_.cpu_chip()->reset(main_pins_);
-    sound_pins_ = sound_board_.cpu_chip()->reset(sound_pins_);
+    main_pins_  = main_board_.cpu().reset(main_pins_);
+    sound_pins_ = sound_board_.cpu().reset(sound_pins_);
     audio_thread_.stop();
     for (int i = 0; i < 3; i++) {
         ay_[i].reset();
@@ -141,7 +142,6 @@ void BombJackSystem::reset() {
 }
 
 void BombJackSystem::tick() {
-    if (!main_board_.cpu_chip() || !sound_board_.cpu_chip()) return;
 
     // Main CPU tick
     main_pins_ = main_cpu_->tick(main_pins_);
