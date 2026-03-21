@@ -13,6 +13,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -97,6 +98,23 @@ template<> struct SVIBusTraits<SVIVariant::SVI328> {
 };
 
 // ============================================================================
+// SVI ChipSet — value-typed chips embedded in Board
+// ============================================================================
+
+struct SVIChips : StandardChips<ZilogZ80A, TMS9918A, AY_3_8910> {
+    i8255_t ppi;   // i8255 PPI (keyboard + ROM banking)
+
+    template<typename B>
+    void bind_extras(B& board) {
+        board.bind_chip(board.template find_index<i8255_t>(), &ppi);
+    }
+
+    void register_extras(BoardBase& board) {
+        board.register_component(&ppi);
+    }
+};
+
+// ============================================================================
 // Spectravideo System
 // ============================================================================
 
@@ -104,6 +122,7 @@ template<SVIVariant V>
 class SpectravideoSystem : public System {
     using Traits = SVIVariantTraits<V>;
     using BT     = SVIBusTraits<V>;
+    using Chips  = SVIChips;
 
 public:
     SpectravideoSystem();
@@ -129,16 +148,10 @@ public:
 
 
 private:
-    // ── Chips ────────────────────────────────────────────────────────────
-    ZilogZ80A*   cpu_ = nullptr;
-    TMS9918A     vdp_;
-    AY_3_8910    psg_;
-    i8255_t      ppi_;
-
-    // ── Board + bus ──────────────────────────────────────────────────────
+    // ── Board + bus (chips live inside board_) ────────────────────────────
     using Bus       = MemoryBus<typename BT::Spec>;
     using PT        = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec>;
+    using MainBoard = Board<typename BT::Spec, Chips>;
     Bus       bus_;
     MainBoard board_{BT::kManifest};
 
