@@ -22,6 +22,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "core/signal/audio_port.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -142,6 +143,24 @@ template<> struct CPCBusTraits<CPCModel::CPC6128> {
     using Spec = ManifestBusSpec<kCPC6128Chips, 16, 8>;
 };
 
+// ── ChipSet ──────────────────────────────────────────────────────────────
+struct CPCChipSet : StandardChips<ZilogZ80A, mc6845_t, AY_3_8912> {
+    i8255_t              ppi;          // Intel 8255 PPI
+    amstrad_gate_array_t gate_array;   // Amstrad custom gate array
+
+    template<typename BoardT>
+    void bind_extras(BoardT& board) {
+        board.bind_chip(board.template find_index<i8255_t>(), &ppi);
+        board.bind_chip(board.template find_index<amstrad_gate_array_t>(), &gate_array);
+    }
+
+    template<typename BoardT>
+    void register_extras(BoardT& board) {
+        board.register_component(&ppi);
+        board.register_component(&gate_array);
+    }
+};
+
 // ============================================================================
 // Amstrad CPC System
 // ============================================================================
@@ -170,14 +189,8 @@ public:
 
 private:
     // ========================================================================
-    // CHIPS
+    // CHIPS (value-typed via Board ChipSet)
     // ========================================================================
-
-    ZilogZ80A*              cpu_ = nullptr;   // Z80A CPU — owned by board_
-    mc6845_t                crtc_;        // MC6845 CRTC — pre-bound into board_
-    i8255_t                 ppi_;         // Intel 8255 PPI — pre-bound into board_
-    AY_3_8912               ay_;          // AY-3-8912 PSG — pre-bound into board_
-    amstrad_gate_array_t    gate_array_;  // Amstrad custom gate array
 
     // ========================================================================
     // MEMORY — owned by registered_chips_, managed via Board
@@ -187,7 +200,7 @@ private:
     using BT  = CPCBusTraits<M>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec>;
+    using MainBoard = Board<typename BT::Spec, CPCChipSet>;
     Bus bus_;
     MainBoard board_{BT::kManifest};
 
