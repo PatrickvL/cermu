@@ -34,6 +34,7 @@
 #include "systems/commodore/c128/c128_constants.hpp"
 #include "systems/commodore/commodore_system.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "chip/cpu/fam65xx/csg8502.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/video/vic_ii/mos8566.hpp"
@@ -98,6 +99,34 @@ inline constexpr auto kC128Chips = make_chip_manifest(
 // 4 KB pages, 2 viewers (CPU + VIC-IIe)
 using C128BusSpec = ManifestBusSpec<kC128Chips, 16, 12, 2>;
 
+// Value-typed chips: CPU + Z80 + VIC-IIe + SID + Color RAM + 2× CIA.
+// Memory chips (RAM/ROM) stay factory-created.
+struct C128ChipSet : StandardChips<CSG8502> {
+    ZilogZ80A  z80;
+    mos8566_t  vic_iie;
+    mos6581_t  sid;
+    MOS2114    colorram;
+    mos6526_t  cia1;
+    mos6526_t  cia2;
+
+    template<typename Board> void bind_extras(Board& board) {
+        board.bind_chip(board.template find_index<ZilogZ80A>(),  &z80);
+        board.bind_chip(board.template find_index<mos8566_t>(),  &vic_iie);
+        board.bind_chip(board.template find_index<mos6581_t>(),  &sid);
+        board.bind_chip(board.template find_index<MOS2114>(),    &colorram);
+        board.bind_chip(board.template find_index<mos6526_t>(0), &cia1);
+        board.bind_chip(board.template find_index<mos6526_t>(1), &cia2);
+    }
+    template<typename Board> void register_extras(Board& board) {
+        board.register_component(&z80);
+        board.register_component(&vic_iie);
+        board.register_component(&sid);
+        board.register_component(&colorram);
+        board.register_component(&cia1);
+        board.register_component(&cia2);
+    }
+};
+
 // =============================================================================
 // C128 System
 // =============================================================================
@@ -133,15 +162,6 @@ protected:
     bool is_system_initialized() const override { return system_ready_; }
 
 private:
-    // ── Chips ────────────────────────────────────────────────────────────
-    CSG8502*    cpu_8502_ = nullptr;     // Primary CPU — 6502-compatible
-    ZilogZ80A*  cpu_z80_  = nullptr;     // Secondary CPU — Z80 for CP/M
-    mos8566_t*  vic_iie_  = nullptr;     // MOS8566 VIC-IIe (40-column display)
-    mos6581_t*  sid_      = nullptr;     // SID sound chip
-    MOS2114*    colorram_ = nullptr;     // 1KB Color RAM (4-bit nibbles)
-    mos6526_t*  cia1_     = nullptr;     // CIA 1 (keyboard + joystick)
-    mos6526_t*  cia2_     = nullptr;     // CIA 2 (IEC serial + user port)
-
     // ── Memory chips — post-init pointers ────────────────────────────────
     ROMChip* basic_lo_rom_ = nullptr;
     ROMChip* basic_hi_rom_ = nullptr;
@@ -152,7 +172,7 @@ private:
 
     // ── Board + bus ──────────────────────────────────────────────────────
     using Bus       = MemoryBus<C128BusSpec>;
-    using MainBoard = Board<C128BusSpec>;
+    using MainBoard = Board<C128BusSpec, C128ChipSet>;
     Bus       bus_;
     MainBoard board_{kC128Chips};
 
