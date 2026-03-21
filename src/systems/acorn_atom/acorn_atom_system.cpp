@@ -50,26 +50,23 @@ bool AcornAtomSystem::initialize() {
     printf("Acorn Atom: Initializing system\n");
     register_board(&board_);
 
-    // ── Pre-bind MMIO chips, then factory-create memory chips ──────────
-    board_.bind_chip(board_.find_index<i8255_t>(), &ppi_);
-    board_.bind_chip(board_.find_index<mos6522_t>(), &via_);
+    // ── Create chips from manifest and bind chipset ───────────────────
+    board_.bind_chipset();
     board_.create_chips(&pins_);
     basic_rom_ = board_.find<ROMChip>();
     fp_rom_    = board_.find<ROMChip>(1);
     os_rom_    = board_.find<ROMChip>(2);
-    vdg_       = board_.find<mc6847_t>();
 
     // Direct pointer for MC6847 rendering
     video_ram_ptr_ = board_.find<RAMChip>(1)->data();
 
     // ── Init chips ──────────────────────────────────────────────────────
-    cpu_ = board_.cpu<MOS6502>();
-    pins_ = board_.cpu_chip()->init();
-    vdg_->init();
-    ppi_.init();
-    ppi_.set_port_b_read_callback(ppi_keyboard_scan, this);
-    via_.reset();
-    via_.interrupt_bit = BUS_IRQ_BIT;
+    pins_ = board_.cpu().init();
+    board_.vdp().init();
+    board_.chips().ppi.init();
+    board_.chips().ppi.set_port_b_read_callback(ppi_keyboard_scan, this);
+    board_.chips().via.reset();
+    board_.chips().via.interrupt_bit = BUS_IRQ_BIT;
 
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_)); // all keys released (active-low)
 
@@ -89,12 +86,12 @@ bool AcornAtomSystem::initialize() {
                   acorn_atom_constants::FB_HEIGHT);
     display_.set_palette(mc6847_t::get_palette(),
                          mc6847_t::get_palette_size());
-    vdg_->set_display(&display_);
+    board_.vdp().set_display(&display_);
     register_display(&display_);
 
     // Video stream output — composite video from MC6847 VDG
     video_port_ = std::make_unique<CompositeVideoPort>();
-    vdg_->set_stream(&video_port_->stream());
+    board_.vdp().set_stream(&video_port_->stream());
     video_port_->bind_frame_output(&last_frame_data_);
 
     printf("Acorn Atom: System initialized (RAM: %dKB)\n", ram_size_kb_);
@@ -105,43 +102,43 @@ bool AcornAtomSystem::initialize() {
 void AcornAtomSystem::shutdown() { system_ready_ = false; }
 
 void AcornAtomSystem::reset() {
-    if (!cpu_) return;
-    pins_ = board_.cpu_chip()->reset(pins_);
+    if (!system_ready_) return;
+    pins_ = board_.cpu().reset(pins_);
     // Reset all manifest chips (VDG, PPI, VIA; RAM/ROM are no-op)
     board_.reset_chips();
-    ppi_.set_port_b_read_callback(ppi_keyboard_scan, this);
-    via_.interrupt_bit = BUS_IRQ_BIT;
+    board_.chips().ppi.set_port_b_read_callback(ppi_keyboard_scan, this);
+    board_.chips().via.interrupt_bit = BUS_IRQ_BIT;
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 }
 
 void AcornAtomSystem::tick() {
-    if (!cpu_) return;
+    if (!system_ready_) return;
 
     // ---- VIA timer tick — may assert IRQ ----
     {
         bus_state_t vbus = ATOM_BUS_DEFAULT_STATE;
         BUS_SET_BIT(vbus, BUS_RW_BIT);
-        vbus = via_.tick(vbus);
+        vbus = board_.chips().via.tick(vbus);
         if (!BUS_GET_BIT(vbus, BUS_IRQ_BIT)) {
             BUS_CLR_BIT(pins_, BUS_IRQ_BIT);
         }
     }
 
     // ---- CPU PHI2 — address/R#W valid on bus ----
-    pins_ = cpu_->tick<MOS6502::Phase::PHI2>(pins_);
+    pins_ = board_.cpu().tick<MOS6502::Phase::PHI2>(pins_);
 
     // ---- Memory dispatch via MemoryBus ----
     pins_ = bus_.tick(pins_);
 
     // ---- CPU PHI1 ----
-    pins_ = cpu_->tick<MOS6502::Phase::PHI1>(pins_);
+    pins_ = board_.cpu().tick<MOS6502::Phase::PHI1>(pins_);
 
     // Re-assert deasserted control lines for next cycle
     BUS_SET_BIT(pins_, BUS_RW_BIT);
 
     // ---- VDG timing: one pixel clock per CPU cycle ----
-    vdg_->tick();
-    if (vdg_->check_fs()) {
+    board_.vdp().tick();
+    if (board_.vdp().check_fs()) {
         render_frame();
     }
 
@@ -295,7 +292,7 @@ uint8_t AcornAtomSystem::ppi_keyboard_scan(void* context, uint8_t port_a_output)
 void AcornAtomSystem::render_frame() {
     // Delegate rendering to the MC6847 chip — it owns the font ROM,
     // palette, and frame index buffer.
-    vdg_->render_frame(video_ram_ptr_);
+    board_.vdp().render_frame(video_ram_ptr_);
 }
 
 // ============================================================================
