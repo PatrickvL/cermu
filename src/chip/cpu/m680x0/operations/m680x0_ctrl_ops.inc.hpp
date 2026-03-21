@@ -97,6 +97,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
         uint16_t sr_val = regs_.sr;
         // Read (dummy) then write — same as Scc memory pattern
         (void)read_ea(ea_mode, ea_reg, OpSize::Word);
+        if (address_error_) return pins;
         write_back_ea(sr_val, OpSize::Word);
         return do_prefetch(pins);
     }
@@ -108,6 +109,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             return do_idle_then_prefetch(pins, 8);  // 12 clocks total
         }
         uint32_t val = read_ea(ea_mode, ea_reg, OpSize::Word);
+        if (address_error_) return pins;
         set_ccr(static_cast<uint8_t>(val));
         return do_prefetch(pins);
     }
@@ -122,6 +124,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             return do_idle_then_prefetch(pins, 8);  // 12 clocks total
         }
         uint32_t val = read_ea(ea_mode, ea_reg, OpSize::Word);
+        if (address_error_) return pins;
         set_sr(static_cast<uint16_t>(val));
         return do_prefetch(pins);
     }
@@ -152,6 +155,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
         }
         // Memory: indivisible read-modify-write cycle
         uint32_t val = read_ea(ea_mode, ea_reg, OpSize::Byte);
+        if (address_error_) return pins;
         alu_tst(static_cast<uint8_t>(val), OpSize::Byte);
         write_back_ea(val | 0x80, OpSize::Byte);
         clocks_remaining_ += 2;  // TAS RMC bus cycle adds 2 idle clocks
@@ -168,6 +172,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
         }
         // Memory: read-modify-write
         uint32_t val = read_ea(ea_mode, ea_reg, OpSize::Byte);
+        if (address_error_) return pins;
         uint8_t result = alu_sbcd(static_cast<uint8_t>(val), 0);
         write_back_ea(result, OpSize::Byte);
         return do_prefetch(pins);
@@ -346,6 +351,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             src_val = get_d_w(ea_reg);
         } else {
             src_val = static_cast<uint16_t>(read_ea(ea_mode, ea_reg, OpSize::Word));
+            if (address_error_) return pins;
         }
         int16_t dn_val = static_cast<int16_t>(get_d_w(dn));
         int16_t bound  = static_cast<int16_t>(src_val);

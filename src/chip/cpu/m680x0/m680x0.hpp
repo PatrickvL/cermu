@@ -1010,6 +1010,7 @@ private:
     // on the same tick, so the instruction handler's first step runs
     // in the same clock cycle.
     bus_state_t handle_decode(bus_state_t pins) {
+        address_error_ = false;
         uint16_t opcode = regs_.ird;
         uint8_t group = instr_group(opcode);
 
@@ -1046,6 +1047,50 @@ private:
     // Convenience: push current "next instruction" PC (regs_.pc - 2)
     bus_state_t exception(bus_state_t pins, uint8_t vector_num) {
         return exception(pins, vector_num, regs_.pc - 2);
+    }
+
+    // ── Address error exception (group 0) — 14-byte frame ───────
+    // Called from read_ea/write_ea when a word/long access hits an odd address.
+    // Synchronous only (mem_read_/mem_write_ path). Sets address_error_ flag.
+    inline void process_address_error_sync(uint32_t fault_addr, bool is_read, uint8_t fc) {
+        exception_sr_ = regs_.sr;
+        enter_supervisor();
+        regs_.sr &= ~SRBits::T1;
+        regs_.sr &= ~SRBits::T0;
+        // Decrement SP by 14 for the full group 0 frame
+        regs_.a[7] -= 14;
+        uint32_t base = regs_.a[7];
+        // Address error PC points to the faulting instruction's opcode
+        uint32_t pc = regs_.pc - 4;
+        // Push in 68000 microcode order (non-sequential writes)
+        mem_write_(mem_ctx_, (base + 12) & address_mask(), static_cast<uint16_t>(pc & 0xFFFF));         // PC low
+        mem_write_(mem_ctx_, (base + 8)  & address_mask(), exception_sr_);                              // SR
+        mem_write_(mem_ctx_, (base + 10) & address_mask(), static_cast<uint16_t>((pc >> 16) & 0xFFFF)); // PC high
+        mem_write_(mem_ctx_, (base + 6)  & address_mask(), regs_.ird);                                  // IR
+        mem_write_(mem_ctx_, (base + 4)  & address_mask(), static_cast<uint16_t>(fault_addr & 0xFFFF)); // Fault addr low
+        // SSW: upper bits from IRD, lower 5 bits = R/W(4) | IN(3) | FC(2:0)
+        uint16_t ssw = (regs_.ird & 0xFFE0) | (is_read ? 0x10 : 0x00) | fc;
+        mem_write_(mem_ctx_, base        & address_mask(), ssw);                                         // SSW
+        mem_write_(mem_ctx_, (base + 2)  & address_mask(), static_cast<uint16_t>((fault_addr >> 16) & 0xFFFF)); // Fault addr high
+        // Read vector
+        uint32_t vaddr = vector_addr(Vector::ADDRESS_ERROR);
+        uint16_t vec_hi = mem_read_(mem_ctx_, vaddr);
+        uint16_t vec_lo = mem_read_(mem_ctx_, vaddr + 2);
+        regs_.pc = (static_cast<uint32_t>(vec_hi) << 16) | vec_lo;
+        // Two-word prefetch from handler
+        uint16_t word1 = mem_read_(mem_ctx_, regs_.pc & address_mask());
+        regs_.pc += 2;
+        uint16_t word2 = mem_read_(mem_ctx_, regs_.pc & address_mask());
+        regs_.ir  = word1;
+        regs_.irc = word2;
+        regs_.pc += 2;
+        regs_.ird = regs_.ir;
+        // 4 idle + 7 writes(28) + 2 vector reads(8) + 2 prefetch reads(4+4) + 2 idle = 50
+        // Minus 1 for the current tick = 49
+        clocks_remaining_ += 49;
+        sync_sp();
+        transition_to(&m680x0_t::handle_decode);
+        address_error_ = true;
     }
 
     bus_state_t handle_exception(bus_state_t pins) {
@@ -1263,6 +1308,7 @@ private:
     OpSize              op_sz_           = OpSize::Byte;  // Size for current memory op
     uint8_t             pending_op_      = 0;       // PendingOp enum: which ALU operation
     uint8_t             bus_op_mode_     = 0;       // BusOpMode enum: read-to-Dn vs RMW etc.
+    bool                address_error_   = false;   // Set by read_ea/write_ea on odd word/long access
 
     // ── Memory callback state ───────────────────────────────────
     m68k_read_fn        mem_read_        = nullptr; // Synchronous word read callback

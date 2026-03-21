@@ -105,6 +105,7 @@ inline bus_state_t decode_group0(bus_state_t pins, uint16_t opcode) {
         // Memory modes: bit number modulo 8, operate on byte
         bit_num = get_d(dn) & 7;
         uint32_t val = read_ea(ea_mode, ea_reg, OpSize::Byte);
+        if (address_error_) return pins;
         alu_btst(val, bit_num);
         if (op_type != 0) {
             uint32_t result;
@@ -149,6 +150,7 @@ inline bus_state_t decode_group0(bus_state_t pins, uint16_t opcode) {
         {
             uint8_t bit_num = bit_num_raw & 7;
             uint32_t val = read_ea(ea_mode, ea_reg, OpSize::Byte);
+            if (address_error_) return pins;
             alu_btst(val, bit_num);
             if (op_type != 0) {
                 uint32_t result;
@@ -218,6 +220,7 @@ inline bus_state_t decode_group0(bus_state_t pins, uint16_t opcode) {
         dst = read_dn(ea_reg, sz);
     } else {
         dst = read_ea(ea_mode, ea_reg, sz);
+        if (address_error_) return pins;
     }
 
     uint32_t result;
@@ -331,6 +334,7 @@ inline bus_state_t decode_group5(bus_state_t pins, uint16_t opcode) {
         dst = read_dn(ea_reg, sz);
     } else {
         dst = read_ea(ea_mode, ea_reg, sz);
+        if (address_error_) return pins;
     }
 
     uint32_t result;
@@ -398,6 +402,7 @@ inline bus_state_t decode_group8(bus_state_t pins, uint16_t opcode) {
             src = get_d_w(ea_reg);
         } else {
             src = static_cast<uint16_t>(read_ea(ea_mode, ea_reg, OpSize::Word));
+            if (address_error_) return pins;
         }
         if (src == 0) {
             return exception(pins, Vector::ZERO_DIVIDE);
@@ -423,6 +428,7 @@ inline bus_state_t decode_group8(bus_state_t pins, uint16_t opcode) {
             src = static_cast<int16_t>(get_d_w(ea_reg));
         } else {
             src = static_cast<int16_t>(read_ea(ea_mode, ea_reg, OpSize::Word));
+            if (address_error_) return pins;
         }
         if (src == 0) {
             return exception(pins, Vector::ZERO_DIVIDE);
@@ -471,6 +477,7 @@ inline bus_state_t decode_group8(bus_state_t pins, uint16_t opcode) {
         } else if (ea_mode == 7 && ea_reg == 4) {
             // Immediate: inline path
             src_val = read_ea(ea_mode, ea_reg, sz);
+            if (address_error_) return pins;
         } else {
             ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
             reg_idx_ = dn;
@@ -496,8 +503,10 @@ inline bus_state_t decode_group8(bus_state_t pins, uint16_t opcode) {
         }
         uint32_t src_val = read_dn(dn, sz);
         uint32_t dst_val = read_ea(ea_mode, ea_reg, sz);
+        if (address_error_) return pins;
         uint32_t result = alu_or(src_val, dst_val, sz);
         write_ea(ea_mode, ea_reg, result, sz);
+        if (address_error_) return pins;
     }
     return do_prefetch(pins);
 }
@@ -574,6 +583,7 @@ inline bus_state_t decode_group9(bus_state_t pins, uint16_t opcode) {
             src_val = get_a(ea_reg);
         } else {
             src_val = read_ea(ea_mode, ea_reg, src_sz);
+            if (address_error_) return pins;
         }
         // Word source is sign-extended to 32 bits
         if (src_sz == OpSize::Word) {
@@ -598,6 +608,7 @@ inline bus_state_t decode_group9(bus_state_t pins, uint16_t opcode) {
         } else if (ea_mode == 7 && ea_reg == 4) {
             // Immediate: inline path
             src_val = read_ea(ea_mode, ea_reg, sz);
+            if (address_error_) return pins;
         } else {
             ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
             reg_idx_ = dn;
@@ -644,6 +655,7 @@ inline bus_state_t decode_groupB(bus_state_t pins, uint16_t opcode) {
             src_val = get_a(ea_reg);
         } else {
             src_val = read_ea(ea_mode, ea_reg, src_sz);
+            if (address_error_) return pins;
         }
         if (src_sz == OpSize::Word) {
             src_val = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(src_val)));
@@ -661,7 +673,9 @@ inline bus_state_t decode_groupB(bus_state_t pins, uint16_t opcode) {
             // CMPM: (Ay)+,(Ax)+
             // Read source from (Ay)+, then destination from (Ax)+
             uint32_t src = read_ea(3, ea_reg, sz);   // (ea_reg)+ as source
+            if (address_error_) return pins;
             uint32_t dst = read_ea(3, dn, sz);       // (dn)+ as destination
+            if (address_error_) return pins;
             alu_cmp(src, dst, sz);
             return do_prefetch(pins);
         }
@@ -698,6 +712,7 @@ inline bus_state_t decode_groupB(bus_state_t pins, uint16_t opcode) {
         } else if (ea_mode == 7 && ea_reg == 4) {
             // Immediate: inline path
             src_val = read_ea(ea_mode, ea_reg, sz);
+            if (address_error_) return pins;
         } else {
             ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
             reg_idx_ = dn;
@@ -758,6 +773,7 @@ inline bus_state_t decode_groupC(bus_state_t pins, uint16_t opcode) {
             src = get_d_w(ea_reg);
         } else {
             src = static_cast<uint16_t>(read_ea(ea_mode, ea_reg, OpSize::Word));
+            if (address_error_) return pins;
         }
         uint32_t result = alu_mulu(src, get_d_w(dn));
         set_d(dn, result);
@@ -773,6 +789,7 @@ inline bus_state_t decode_groupC(bus_state_t pins, uint16_t opcode) {
             src_raw = get_d_w(ea_reg);
         } else {
             src_raw = static_cast<uint16_t>(read_ea(ea_mode, ea_reg, OpSize::Word));
+            if (address_error_) return pins;
         }
         uint32_t result = alu_muls(static_cast<int16_t>(src_raw),
                                    static_cast<int16_t>(get_d_w(dn)));
@@ -831,6 +848,7 @@ inline bus_state_t decode_groupC(bus_state_t pins, uint16_t opcode) {
         } else if (ea_mode == 7 && ea_reg == 4) {
             // Immediate: inline path
             src_val = read_ea(ea_mode, ea_reg, sz);
+            if (address_error_) return pins;
         } else {
             ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
             reg_idx_ = dn;
@@ -926,6 +944,7 @@ inline bus_state_t decode_groupD(bus_state_t pins, uint16_t opcode) {
             src_val = get_a(ea_reg);
         } else {
             src_val = read_ea(ea_mode, ea_reg, src_sz);
+            if (address_error_) return pins;
         }
         if (src_sz == OpSize::Word) {
             src_val = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(src_val)));
@@ -948,6 +967,7 @@ inline bus_state_t decode_groupD(bus_state_t pins, uint16_t opcode) {
         } else if (ea_mode == 7 && ea_reg == 4) {
             // Immediate: inline path
             src_val = read_ea(ea_mode, ea_reg, sz);
+            if (address_error_) return pins;
         } else {
             // Memory EA: use bus cycle handlers
             ea_addr_ = calc_ea(ea_mode, ea_reg, sz);
@@ -990,6 +1010,7 @@ inline bus_state_t decode_groupE(bus_state_t pins, uint16_t opcode) {
         uint8_t op_type = (opcode >> 9) & 3;  // 0=ASd, 1=LSd, 2=ROXd, 3=ROd
         bool dir_left = (opcode & 0x0100) != 0;
         uint32_t val = read_ea(ea_mode, ea_reg, OpSize::Word);
+        if (address_error_) return pins;
         uint32_t result;
         if (dir_left) {
             switch (op_type) {

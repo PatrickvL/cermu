@@ -15,6 +15,7 @@ inline bus_state_t decode_move(bus_state_t pins, uint16_t opcode, OpSize sz) {
     uint8_t dst_mode = (opcode >> 6) & 7;
 
     uint32_t value = read_ea(src_mode, src_reg, sz);
+    if (address_error_) return pins;
 
     // MOVEA — destination is An: no flags change, sign-extend .w → .l
     if (dst_mode == 1) {
@@ -25,6 +26,7 @@ inline bus_state_t decode_move(bus_state_t pins, uint16_t opcode, OpSize sz) {
     }
 
     write_ea(dst_mode, dst_reg, value, sz);
+    if (address_error_) return pins;
 
     // MOVE sets N, Z, clears V and C
     alu_tst(value, sz);
