@@ -200,6 +200,10 @@ enum PendingOp : uint8_t {
     OP_BTST_DYN, OP_BCHG_DYN, OP_BCLR_DYN, OP_BSET_DYN,
 };
 
+static inline bool is_unary_op(uint8_t op) {
+    return op >= OP_CLR && op <= OP_TST;
+}
+
 enum BusOpMode : uint8_t {
     BUS_READ_TO_DN,           // read src → ALU → write Dn → prefetch
     BUS_READ_TO_DN_LONG,      // same but with 2-idle post-prefetch (long ops)
@@ -771,16 +775,26 @@ private:
                 return handle_prefetch_continue(pins);
             }
             case BUS_RMW: {
-                uint32_t dn_val = read_dn(reg_idx_, op_sz_);
-                result = apply_alu(dn_val, ea_val, op_sz_);
+                uint32_t src, dst;
+                if (is_unary_op(pending_op_)) {
+                    src = ea_val; dst = 0;
+                } else {
+                    src = read_dn(reg_idx_, op_sz_); dst = ea_val;
+                }
+                result = apply_alu(src, dst, op_sz_);
                 data_latch_ = result;
                 cont_handler_ = &m680x0_t::handle_start_write_bw;
                 transition_to(&m680x0_t::handle_prefetch_continue);
                 return handle_prefetch_continue(pins);
             }
             case BUS_RMW_LONG: {
-                uint32_t dn_val = read_dn(reg_idx_, OpSize::Long);
-                result = apply_alu(dn_val, data_latch_, OpSize::Long);
+                uint32_t src, dst;
+                if (is_unary_op(pending_op_)) {
+                    src = data_latch_; dst = 0;
+                } else {
+                    src = read_dn(reg_idx_, OpSize::Long); dst = data_latch_;
+                }
+                result = apply_alu(src, dst, OpSize::Long);
                 data_latch_ = result;
                 cont_handler_ = &m680x0_t::handle_start_write_l;
                 transition_to(&m680x0_t::handle_prefetch_continue);
@@ -1255,6 +1269,7 @@ public:
     void prepare_for_test() {
         current_handler_ = &m680x0_t::handle_decode;
         step_ = 0;
+        clocks_remaining_ = 0;
         halted_ = false;
         stopped_ = false;
         reset_counter_ = 0;
