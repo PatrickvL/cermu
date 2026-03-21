@@ -75,12 +75,18 @@ namespace m680x0 {
 // Convenience: RESET reuse
 #define M68K_RESET_BIT  BUS_RES_BIT
 
+// ── Memory callback types ──────────────────────────────────────
+// VIC-II-style callbacks: the CPU invokes these within its tick()
+// to perform memory accesses synchronously.  The system injects
+// concrete implementations at init time.  This decouples the CPU
+// from any particular memory map.
+using m68k_read_fn  = uint16_t (*)(void* ctx, uint32_t addr);
+using m68k_write_fn = void     (*)(void* ctx, uint32_t addr, uint16_t data);
+
 // ── 16-bit data bus convention ─────────────────────────────────
-// The 68000 has a 16-bit data bus, but bus_state_t only has 8 data
-// bits.  For word transfers (both UDS and LDS active), we carry the
-// high byte (D15-D8) in the DATA field and the low byte (D7-D0) in
-// the BANK field.  This is safe because the address has already been
-// latched before data appears on the bus.
+// With callbacks the CPU reads/writes 16-bit words directly.
+// Legacy macros kept for bus-signal-level code (test harness,
+// system integration where pin-level bus matters).
 #define M68K_SET_DATA_WORD(state, word) do { \
     BUS_SET_DATA(state, ((word) >> 8) & 0xFF); \
     (state) = ((state) & ~BUS_BANK_MASK) | (((bus_state_t)((word) & 0xFF)) << BUS_BANK_SHIFT); \
@@ -258,6 +264,14 @@ public:
 #endif
     }
 
+    // ── Memory callback registration ─────────────────────────────
+    // Call once after construction to inject system memory callbacks.
+    void set_memory_callbacks(m68k_read_fn read_fn, m68k_write_fn write_fn, void* ctx) {
+        mem_read_  = read_fn;
+        mem_write_ = write_fn;
+        mem_ctx_   = ctx;
+    }
+
     // ── Lifecycle ────────────────────────────────────────────────
 
     bus_state_t init() override {
@@ -288,7 +302,13 @@ public:
     }
 
     // ── Tick ─────────────────────────────────────────────────────
-    // One call = one clock cycle
+    // One call = one clock cycle.
+    //
+    // Hybrid model: the handler state machine stays (reset, exception,
+    // decode dispatch all work as before), but memory-accessing handlers
+    // now complete synchronously via mem_read_ / mem_write_ callbacks
+    // and set clocks_remaining_ for proper timing.  While the counter
+    // is positive, tick() just decrements and returns.
 
     inline bus_state_t tick(bus_state_t pins) {
         // Edge detection for RESET (active-low)
@@ -304,9 +324,7 @@ public:
 
         // Bus request handling
         if (BUS_GET_BIT(pins, M68K_BR_BIT) && state_ != ExecState::BUS_GRANTED) {
-            // Grant bus — tri-state all outputs
-            pins = BUS_SET_BIT(pins, M68K_BG_BIT);  // Assert BG (active-low = clear? depends on convention)
-            // For simplicity, enter BUS_GRANTED when BGACK is also asserted
+            pins = BUS_SET_BIT(pins, M68K_BG_BIT);
             if (BUS_GET_BIT(pins, M68K_BGACK_BIT)) {
                 state_ = ExecState::BUS_GRANTED;
             }
@@ -328,7 +346,14 @@ public:
         if (BUS_GET_BIT(pins, M68K_IPL2_BIT)) ipl |= 4;
         ipl_pending_ = 7 - ipl;  // IPL lines are active-low, inverted → priority level
 
-        // Main state dispatch
+        // Count down remaining clocks from previous instruction/bus cycle
+        if (clocks_remaining_ > 0) {
+            clocks_remaining_--;
+            bus_prev_ = pins;
+            return pins;
+        }
+
+        // Dispatch via handler state machine (unchanged architecture)
         pins = (this->*current_handler_)(pins);
 
         bus_prev_ = pins;
@@ -481,6 +506,17 @@ private:
     // -- Read byte/word from ea_addr_ into data_latch_ -----------
     // On completion: transition to cont_handler_ (next tick).
     bus_state_t handle_read_bw(bus_state_t pins) {
+        if (mem_read_) {
+            uint32_t addr = ea_addr_ & address_mask();
+            uint16_t word = mem_read_(mem_ctx_, addr);
+            data_latch_ = (op_sz_ == OpSize::Byte)
+                ? static_cast<uint32_t>((addr & 1) ? (word & 0xFF) : (word >> 8))
+                : static_cast<uint32_t>(word);
+            clocks_remaining_ = 3;  // 4-clock bus cycle
+            transition_to(cont_handler_);
+            return pins;
+        }
+        // Fallback: multi-tick bus signal path
         switch (step_++) {
             case 0:  // S0/S1: begin read
                 return (op_sz_ == OpSize::Byte)
@@ -505,6 +541,16 @@ private:
     // -- Read long (two words) from ea_addr_ into data_latch_ ----
     // Reads hi word at ea_addr_, lo word at ea_addr_+2.
     bus_state_t handle_read_l(bus_state_t pins) {
+        if (mem_read_) {
+            uint32_t addr = ea_addr_ & address_mask();
+            uint16_t hi = mem_read_(mem_ctx_, addr);
+            uint16_t lo = mem_read_(mem_ctx_, addr + 2);
+            data_latch_ = (static_cast<uint32_t>(hi) << 16) | lo;
+            clocks_remaining_ = 7;  // 2 × 4-clock bus cycles
+            transition_to(cont_handler_);
+            return pins;
+        }
+        // Fallback: multi-tick bus signal path
         switch (step_++) {
             // First word (high)
             case 0: return begin_read_word(pins, ea_addr_, fc_data());
@@ -533,6 +579,25 @@ private:
 
     // -- Write byte/word from data_latch_ to ea_addr_ ------------
     bus_state_t handle_write_bw(bus_state_t pins) {
+        if (mem_write_) {
+            uint32_t addr = ea_addr_ & address_mask();
+            if (op_sz_ == OpSize::Byte) {
+                // Byte write: put byte in correct position of word
+                uint16_t word;
+                if (addr & 1) {
+                    word = static_cast<uint16_t>(data_latch_ & 0xFF);       // odd → low byte
+                } else {
+                    word = static_cast<uint16_t>((data_latch_ & 0xFF) << 8); // even → high byte
+                }
+                mem_write_(mem_ctx_, addr, word);
+            } else {
+                mem_write_(mem_ctx_, addr, static_cast<uint16_t>(data_latch_));
+            }
+            clocks_remaining_ = 3;  // 4-clock bus cycle
+            transition_to(cont_handler_);
+            return pins;
+        }
+        // Fallback: multi-tick bus signal path
         switch (step_++) {
             case 0:
                 return (op_sz_ == OpSize::Byte)
@@ -553,6 +618,17 @@ private:
     // -- Write long from data_latch_ to ea_addr_ (lo first!) -----
     // 68000 writes long words in reverse order: low word first.
     bus_state_t handle_write_l(bus_state_t pins) {
+        if (mem_write_) {
+            uint32_t addr = ea_addr_ & address_mask();
+            // 68000 writes long words low word first, but address order doesn't affect
+            // final memory state. Use natural order for callbacks.
+            mem_write_(mem_ctx_, addr,     static_cast<uint16_t>((data_latch_ >> 16) & 0xFFFF));
+            mem_write_(mem_ctx_, addr + 2, static_cast<uint16_t>(data_latch_ & 0xFFFF));
+            clocks_remaining_ = 7;  // 2 × 4-clock bus cycles
+            transition_to(cont_handler_);
+            return pins;
+        }
+        // Fallback: multi-tick bus signal path
         switch (step_++) {
             // Low word first (at ea_addr_+2)
             case 0: return begin_write_word(pins, ea_addr_ + 2,
@@ -582,6 +658,17 @@ private:
     // -- Prefetch that chains to cont_handler_ (not decode) ------
     // Used mid-instruction (e.g., between read and write in RMW).
     bus_state_t handle_prefetch_continue(bus_state_t pins) {
+        if (mem_read_) {
+            uint16_t word = mem_read_(mem_ctx_, regs_.pc & address_mask());
+            regs_.ir  = regs_.irc;
+            regs_.irc = word;
+            regs_.pc += 2;
+            regs_.ird = regs_.ir;
+            clocks_remaining_ = 3;  // 4-clock bus cycle
+            transition_to(cont_handler_);
+            return pins;
+        }
+        // Fallback: multi-tick bus signal path
         switch (step_++) {
             case 0: return begin_read_word(pins, regs_.pc, fc_program());
             case 1: return pins;
@@ -798,6 +885,22 @@ private:
     // ── Handler: Reset sequence ─────────────────────────────────
     // Reads SSP from vector 0, PC from vector 1, then starts prefetch
     bus_state_t handle_reset(bus_state_t pins) {
+        if (mem_read_) {
+            // Synchronous: read 4 words (SSP hi/lo, PC hi/lo)
+            uint16_t ssp_hi = mem_read_(mem_ctx_, 0x00000000);
+            uint16_t ssp_lo = mem_read_(mem_ctx_, 0x00000002);
+            regs_.a[7] = (static_cast<uint32_t>(ssp_hi) << 16) | ssp_lo;
+            regs_.ssp  = regs_.a[7];
+            uint16_t pc_hi = mem_read_(mem_ctx_, 0x00000004);
+            uint16_t pc_lo = mem_read_(mem_ctx_, 0x00000006);
+            regs_.pc = (static_cast<uint32_t>(pc_hi) << 16) | pc_lo;
+            state_ = ExecState::PREFETCH;
+            transition_to(&m680x0_t::handle_prefetch);
+            // 4 word reads × 4 clocks each = 16 clocks, minus current tick
+            clocks_remaining_ = 15;
+            return pins;
+        }
+        // Fallback: multi-tick bus signal path
         switch (step_++) {
             // Read SSP high word (vector 0, offset 0)
             case 0:
@@ -849,6 +952,18 @@ private:
     // Fetches the next instruction word from [PC], advances PC.
     // One bus cycle = 4 clocks (S0-S7 in half-clock notation).
     bus_state_t handle_prefetch(bus_state_t pins) {
+        if (mem_read_) {
+            // Synchronous: fetch word, shift pipeline, set timing
+            uint16_t word = mem_read_(mem_ctx_, regs_.pc & address_mask());
+            regs_.ir  = regs_.irc;
+            regs_.irc = word;
+            regs_.pc += 2;
+            regs_.ird = regs_.ir;
+            clocks_remaining_ = 3;  // 4-clock bus cycle minus current tick
+            transition_to(&m680x0_t::handle_decode);
+            return pins;
+        }
+        // Fallback: multi-tick bus signal path
         switch (step_++) {
             case 0:  // S0/S1: Output address, begin read
                 pins = begin_read_word(pins, regs_.pc, fc_program());
@@ -912,6 +1027,33 @@ private:
     }
 
     bus_state_t handle_exception(bus_state_t pins) {
+        if (mem_read_ && mem_write_) {
+            // Synchronous: enter supervisor, push context, read vector
+            exception_sr_ = regs_.sr;
+            enter_supervisor();
+            regs_.sr &= ~SRBits::T1;
+            regs_.sr &= ~SRBits::T0;
+            // Push PC (low word first, then high word — stack grows down)
+            regs_.a[7] -= 2;
+            mem_write_(mem_ctx_, regs_.a[7] & address_mask(),
+                       static_cast<uint16_t>(regs_.pc & 0xFFFF));
+            regs_.a[7] -= 2;
+            mem_write_(mem_ctx_, regs_.a[7] & address_mask(),
+                       static_cast<uint16_t>((regs_.pc >> 16) & 0xFFFF));
+            // Push SR
+            regs_.a[7] -= 2;
+            mem_write_(mem_ctx_, regs_.a[7] & address_mask(), exception_sr_);
+            // Read vector
+            uint32_t vaddr = vector_addr(exception_vector_);
+            uint16_t vec_hi = mem_read_(mem_ctx_, vaddr);
+            uint16_t vec_lo = mem_read_(mem_ctx_, vaddr + 2);
+            regs_.pc = (static_cast<uint32_t>(vec_hi) << 16) | vec_lo;
+            // 3 writes + 2 reads + 1 idle = 6 bus cycles = ~24 clocks
+            clocks_remaining_ = 23;
+            transition_to(&m680x0_t::handle_prefetch);
+            return pins;
+        }
+        // Fallback: multi-tick bus signal path
         switch (step_++) {
             // Enter supervisor mode
             case 0:
@@ -1045,6 +1187,12 @@ private:
     OpSize              op_sz_           = OpSize::Byte;  // Size for current memory op
     uint8_t             pending_op_      = 0;       // PendingOp enum: which ALU operation
     uint8_t             bus_op_mode_     = 0;       // BusOpMode enum: read-to-Dn vs RMW etc.
+
+    // ── Memory callback state ───────────────────────────────────
+    m68k_read_fn        mem_read_        = nullptr; // Synchronous word read callback
+    m68k_write_fn       mem_write_       = nullptr; // Synchronous word write callback
+    void*               mem_ctx_         = nullptr; // Opaque context for callbacks
+    uint16_t            clocks_remaining_ = 0;      // Countdown for multi-clock operations
 
     // ── Test harness support ────────────────────────────────────
 public:

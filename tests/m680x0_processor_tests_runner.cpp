@@ -419,12 +419,29 @@ private:
         else extended_memory_[addr] = data;
     }
 
+    // ── Callback trampolines for CPU memory access ──────────────
+    static uint16_t cb_read_word(void* ctx, uint32_t addr) {
+        auto* self = static_cast<M68KTestHarness*>(ctx);
+        addr &= CPU::address_mask();
+        uint8_t hi = self->mem_read(addr);
+        uint8_t lo = self->mem_read(addr + 1);
+        return (static_cast<uint16_t>(hi) << 8) | lo;
+    }
+
+    static void cb_write_word(void* ctx, uint32_t addr, uint16_t data) {
+        auto* self = static_cast<M68KTestHarness*>(ctx);
+        addr &= CPU::address_mask();
+        self->mem_write(addr, (data >> 8) & 0xFF);
+        self->mem_write(addr + 1, data & 0xFF);
+    }
+
 public:
     M68KTestHarness()
         : memory_(test_memory), cycle_count_(0), pins_(CPU::default_bus_state()) {
         std::fill(memory_, memory_ + 65536, static_cast<uint8_t>(0));
         extended_memory_.clear();
         cpu.init();
+        cpu.set_memory_callbacks(&cb_read_word, &cb_write_word, this);
         actual_bus_cycles_.reserve(64);
     }
 
@@ -461,6 +478,7 @@ public:
     void load_state(const m68k_cpu_state_t* s) {
         // Full re-init to clear internal state machines
         pins_ = cpu.init();
+        cpu.set_memory_callbacks(&cb_read_word, &cb_write_word, this);
 
         // Data registers
         for (int i = 0; i < 8; i++)

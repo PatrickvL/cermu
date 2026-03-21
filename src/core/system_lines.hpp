@@ -21,6 +21,10 @@ typedef uint64_t bus_state_t;
 #define BUS_DATA_MASK       0x00000000000000FFULL
 #define BUS_ADDR_MASK       0x0000000000FFFF00ULL
 #define BUS_BANK_MASK       0x00000000FF000000ULL
+/* Combined 24-bit address: ADDR (bits 15-0) + BANK (bits 23-16).
+   Used by CPUs with >16-bit address buses (M68000: 24-bit).
+   8-bit systems continue using BUS_GET_ADDR / BUS_SET_ADDR unchanged. */
+#define BUS_ADDR24_MASK     (BUS_ADDR_MASK | BUS_BANK_MASK)       /* 0x00000000FFFFFF00ULL */
 
 /* Core pin bit indices */
 #define BUS_RES_BIT     32  // Reset (active low)
@@ -64,6 +68,7 @@ typedef uint64_t bus_state_t;
 #define BUS_GET_DATA(state)     ((uint8_t) (((state) & BUS_DATA_MASK) >> BUS_DATA_SHIFT))
 #define BUS_GET_ADDR(state)     ((uint16_t)(((state) & BUS_ADDR_MASK) >> BUS_ADDR_SHIFT))
 #define BUS_GET_BANK(state)     ((uint8_t) (((state) & BUS_BANK_MASK) >> BUS_BANK_SHIFT))
+#define BUS_GET_ADDR24(state)   ((uint32_t)(((state) & BUS_ADDR24_MASK) >> BUS_ADDR_SHIFT))
 
 /* XOR-AND-XOR field write — 3 ops, no NOT, matches bitmix() convention.
    The field mask isolates the target bits so excess bits in the value
@@ -71,6 +76,7 @@ typedef uint64_t bus_state_t;
 #define BUS_SET_DATA(state, data)   ((state) = (state) ^ (((state) ^ ((bus_state_t)(data) << BUS_DATA_SHIFT)) & BUS_DATA_MASK))
 #define BUS_SET_ADDR(state, addr)   ((state) = (state) ^ (((state) ^ ((bus_state_t)(addr) << BUS_ADDR_SHIFT)) & BUS_ADDR_MASK))
 #define BUS_SET_BANK(state, bank)   ((state) = (state) ^ (((state) ^ ((bus_state_t)(bank) << BUS_BANK_SHIFT)) & BUS_BANK_MASK))
+#define BUS_SET_ADDR24(state, addr) ((state) = (state) ^ (((state) ^ ((bus_state_t)(addr) << BUS_ADDR_SHIFT)) & BUS_ADDR24_MASK))
 
 /* Bitwise multiplexer within a bus_state_t field.
    Merges NEW_VAL into STATE's field (at FIELD_MASK / SHIFT) using DATA_MASK:
