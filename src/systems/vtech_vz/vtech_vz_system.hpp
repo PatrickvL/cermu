@@ -21,6 +21,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/video/mc6847/mc6847.hpp"
@@ -109,6 +110,9 @@ template<> struct VZBusTraits<VZVariant::VZ300> {
     using Spec = ManifestBusSpec<kVZ300Chips, 16, 8>;
 };
 
+// ── ChipSet ──────────────────────────────────────────────────────────────
+using VZChips = StandardChips<ZilogZ80A, mc6847_t>;
+
 // ============================================================================
 // VTech VZ System
 // ============================================================================
@@ -143,16 +147,14 @@ public:
 
 
 private:
-    // ── Chips ────────────────────────────────────────────────────────────
-    ZilogZ80A*  cpu_ = nullptr;      // Z80A CPU — owned by board_
-    mc6847_t*   vdg_ = nullptr;      // MC6847 Video Display Generator — owned by board_
+    // ── Chips (value-typed via Board ChipSet) ────────────────────────────
 
     // ── Memory chips — post-init pointers ────────────────────────────────
     uint8_t* video_ram_ptr_ = nullptr;
 
     // ── Board + bus ──────────────────────────────────────────────────────
     using Bus       = MemoryBus<typename BTraits::Spec>;
-    using MainBoard = Board<typename BTraits::Spec>;
+    using MainBoard = Board<typename BTraits::Spec, VZChips>;
     Bus       bus_;
     MainBoard board_{BTraits::kManifest};
 
