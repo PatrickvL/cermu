@@ -170,6 +170,22 @@ namespace c264_viewer {
     inline constexpr size_t kTedVideo = 1;  // TED video fetches (controlled by video_romsel)
 }
 
+// Value-typed chips: CPU + PIO1 + PIO2 + ROM bank select.
+// TED stays factory-created (requires descriptor at construction, non-copyable).
+struct C264ChipSet : StandardChips<CSG7501, NoChip, NoChip, mos6529_t> {
+    mos6529_t               pio2;
+    c264_rom_bank_select_t  rom_bank;
+
+    template<typename Board> void bind_extras(Board& board) {
+        board.bind_chip(board.template find_index<mos6529_t>(1),             &pio2);
+        board.bind_chip(board.template find_index<c264_rom_bank_select_t>(), &rom_bank);
+    }
+    template<typename Board> void register_extras(Board& board) {
+        board.register_component(&pio2);
+        board.register_component(&rom_bank);
+    }
+};
+
 // ============================================================================
 // Commodore264System — Commodore 264 Series Emulator (C16, C116, Plus/4)
 // ============================================================================
@@ -265,7 +281,7 @@ private:
 
     // ── Memory bus (declarative manifest + page-pointer dispatch) ────────
     using Bus = MemoryBus<C264BusTraits::Spec>;
-    using MainBoard = Board<C264BusTraits::Spec>;
+    using MainBoard = Board<C264BusTraits::Spec, C264ChipSet>;
     Bus bus_;
     MainBoard board_{kC264Chips};
 

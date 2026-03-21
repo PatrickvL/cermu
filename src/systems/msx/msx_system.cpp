@@ -149,7 +149,7 @@ bool MSXSystem<V>::initialize() {
     configure_bus_memory_map();
 
     // Init chips
-    pins_ = board_.cpu_chip()->init();
+    pins_ = board_.cpu().init();
     board_.sound().init();
     board_.io().init();
 
@@ -212,7 +212,7 @@ void MSXSystem<V>::shutdown() {
 template<MSXVariant V>
 void MSXSystem<V>::reset() {
     board_.reset_chips();
-    pins_ = board_.cpu_chip()->reset(pins_);
+    pins_ = board_.cpu().reset(pins_);
     slot_select_ = 0;
     frame_tstate_counter_ = 0;
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));

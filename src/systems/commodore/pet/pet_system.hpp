@@ -82,6 +82,18 @@ struct PETBusTraits {
     using Spec = ManifestBusSpec<kPETChips, 16, 8>;
 };
 
+// Value-typed chips: CPU + CRTC + VIA + PIA1 + PIA2.
+struct PETChipSet : StandardChips<MOS6502, mc6845_t, mos6522_t, pia6820_t> {
+    pia6820_t pia2;
+
+    template<typename Board> void bind_extras(Board& board) {
+        board.bind_chip(board.template find_index<pia6820_t>(1), &pia2);
+    }
+    template<typename Board> void register_extras(Board& board) {
+        board.register_component(&pia2);
+    }
+};
+
 class PETSystem : public CommodoreSystem {
 public:
     PETSystem();
@@ -116,7 +128,7 @@ public:
 private:
     // ── Bus ──────────────────────────────────────────────────────────────
     using Bus    = MemoryBus<PETBusTraits::Spec>;
-    using MainBoard = Board<PETBusTraits::Spec>;
+    using MainBoard = Board<PETBusTraits::Spec, PETChipSet>;
     Bus    bus_;
     MainBoard board_{kPETChips};
     bus_state_t pins_ = PET_BUS_DEFAULT_STATE;

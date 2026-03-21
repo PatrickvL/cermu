@@ -81,6 +81,10 @@ struct BombJackSoundBusTraits {
     using Spec = ManifestBusSpec<kBombJackSoundChips, 16, 8>;
 };
 
+// Value-typed chips: one Z80A per board, no video/sound/IO in slots.
+using BombJackMainChipSet  = StandardChips<ZilogZ80A>;
+using BombJackSoundChipSet = StandardChips<ZilogZ80A>;
+
 class BombJackSystem : public System {
 public:
     BombJackSystem();
@@ -127,13 +131,13 @@ private:
 
     // ── Main bus ─────────────────────────────────────────────────────────
     using MainBus = MemoryBus<BombJackMainBusTraits::Spec>;
-    using MainBoard = Board<BombJackMainBusTraits::Spec>;
+    using MainBoard = Board<BombJackMainBusTraits::Spec, BombJackMainChipSet>;
     MainBus main_bus_;
     MainBoard main_board_{kBombJackMainChips};
 
     // ── Sound bus ────────────────────────────────────────────────────────
     using SoundBus = MemoryBus<BombJackSoundBusTraits::Spec>;
-    using SoundBoard = Board<BombJackSoundBusTraits::Spec>;
+    using SoundBoard = Board<BombJackSoundBusTraits::Spec, BombJackSoundChipSet>;
     SoundBus sound_bus_;
     SoundBoard sound_board_{kBombJackSoundChips};
 

@@ -19,8 +19,6 @@
 //
 
 #include "core/component_base.hpp"
-#include "chip/cpu/cpu_chip_base.hpp"    // CpuChipBase for cpu_chip_
-#include "chip/video/video_chip_base.hpp" // VideoChipBase for video_chip_
 
 class System;  // Forward declaration for parent back-reference
 
@@ -128,44 +126,6 @@ public:
     /// Remove all ports from this board.
     void clear_ports();
 
-    // ── Main CPU ────────────────────────────────────────────────────────────
-    //
-    // Cached pointer to the first CpuChipBase-derived chip on this board.
-    // Set by Board::create_chips() via dynamic_cast.
-    // nullptr for boards with no CPU (e.g. a peripheral expansion board).
-    //
-
-    /// Raw accessor — returns the CpuChipBase pointer (or nullptr).
-    [[nodiscard]] FORCE_INLINE CpuChipBase* cpu_chip() noexcept { return cpu_chip_; }
-    [[nodiscard]] FORCE_INLINE const CpuChipBase* cpu_chip() const noexcept { return cpu_chip_; }
-
-    /// Typed accessor — returns the CPU cast to the requested concrete type.
-    /// The caller must ensure T matches the actual CPU type on this board.
-    template<typename T>
-    [[nodiscard]] T* cpu() noexcept { return static_cast<T*>(cpu_chip_); }
-
-    template<typename T>
-    [[nodiscard]] const T* cpu() const noexcept { return static_cast<const T*>(cpu_chip_); }
-
-    // ── Primary video chip ──────────────────────────────────────────────────
-    //
-    // Cached pointer to the first VideoChipBase-derived chip on this board.
-    // Set by Board::create_chips() via dynamic_cast.
-    // nullptr for boards with no video chip (e.g. headless or audio-only).
-    //
-
-    /// Raw accessor — returns the VideoChipBase pointer (or nullptr).
-    [[nodiscard]] FORCE_INLINE VideoChipBase* video_chip() noexcept { return video_chip_; }
-    [[nodiscard]] FORCE_INLINE const VideoChipBase* video_chip() const noexcept { return video_chip_; }
-
-    /// Typed accessor — returns the video chip cast to the requested concrete type.
-    /// The caller must ensure T matches the actual video chip type on this board.
-    template<typename T>
-    [[nodiscard]] T* video() noexcept { return static_cast<T*>(video_chip_); }
-
-    template<typename T>
-    [[nodiscard]] const T* video() const noexcept { return static_cast<const T*>(video_chip_); }
-
     /// Register a component in the board's component index (non-owning).
     /// Public so that ChipSet::register_extras() can add extra value-typed
     /// chips from outside the class hierarchy.
@@ -180,8 +140,6 @@ protected:
 
     std::vector<std::unique_ptr<Port>> ports_;
     System*        system_     = nullptr;  // Non-owning back-reference to parent system
-    CpuChipBase*   cpu_chip_   = nullptr;  // First CpuChipBase-derived chip (set by Board::create_chips)
-    VideoChipBase* video_chip_ = nullptr;  // First VideoChipBase-derived chip (set by Board::create_chips)
 
 private:
     std::vector<ComponentBase*> components_;  // non-owning; lifetime in Board<Spec>

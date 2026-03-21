@@ -120,7 +120,7 @@ bool MemotechMTXSystem<V>::initialize() {
     configure_bus_memory_map();
 
     
-    pins_ = board_.cpu_chip()->init();
+    pins_ = board_.cpu().init();
     board_.sound().init();
     board_.io().init();
 
@@ -166,7 +166,7 @@ template<MTXVariant V>
 void MemotechMTXSystem<V>::reset() {
     
     board_.reset_chips();
-    pins_ = board_.cpu_chip()->reset(pins_);
+    pins_ = board_.cpu().reset(pins_);
     frame_tstate_counter_ = 0;
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 }
