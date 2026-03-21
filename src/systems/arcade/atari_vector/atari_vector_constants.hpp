@@ -84,8 +84,10 @@ namespace atari_vector_constants {
     inline constexpr uint16_t VECRAM_SIZE          = 0x0800;    // 2 KB
 
     // Vector ROM (read-only, shared DVG + CPU)
-    // Asteroids: 1 × 2 KB chip; Lunar Lander: 2 × 2 KB chips
+    // Asteroids: 1 × 2 KB chip at $5000
+    // Lunar Lander: 2 × 2 KB chips at $4800-$57FF (same layout as AD)
     inline constexpr uint16_t VECROM_BASE          = 0x5000;
+    inline constexpr uint16_t LL_VECROM_BASE       = 0x4800;    // LL ROM starts at $4800
     inline constexpr uint16_t AST_VECROM_SIZE      = 0x0800;    // 2 KB (Asteroids)
     inline constexpr uint16_t LL_VECROM_SIZE       = 0x1000;    // 4 KB (Lunar Lander)
 
@@ -247,5 +249,12 @@ namespace atari_vector_constants {
     // bits 3-5: unknown (active-LOW)
     inline constexpr uint8_t LL_IN0_CLOCK          = 0x40;  // bit 6: 3 KHz clock
     inline constexpr uint8_t LL_IN0_DIAG_STEP      = 0x80;  // bit 7: Diagnostic step (active-LOW)
+
+    // Polarity masks for IP_ACTIVE_LOW bits.
+    // Internal state uses active-HIGH convention (1=pressed). These masks are
+    // XORed in io_read to produce the hardware-expected active-LOW signals
+    // (idle=1, active=0) for the bits that the real hardware active-pulls.
+    inline constexpr uint8_t LL_IN0_ACTIVE_LOW_MASK = 0xBE;  // bits 1,2,3,4,5,7
+    inline constexpr uint8_t LL_IN1_ACTIVE_LOW_MASK = 0xCE;  // bits 1,2,3,6,7
 
 }  // namespace atari_vector_constants

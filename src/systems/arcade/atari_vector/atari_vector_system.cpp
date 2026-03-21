@@ -80,15 +80,14 @@ static const RomSetDescriptor ast_v2_romset = {
 // ── Lunar Lander Rev 1 ──────────────────────────────────────────────────────
 
 static const RomEntryDescriptor ll_v1_entries[] = {
-    // Vector ROM 0 at $5000
+    // Vector ROMs — 034599 at $4800, 034598 at $5000
+    { {"034599.01", "LLVROM1"},     0x4800, 2048, true  },
     { {"034598.01", "LLVROM0"},     0x5000, 2048, true  },
     // Program ROMs — four 2 KB chips covering $6000-$7FFF
     { {"034572.01"},                0x6000, 2048, true  },   // socket c1
     { {"034571.01", "LLPROM2"},     0x6800, 2048, true  },   // socket de1
     { {"034570.01", "LLPROM1"},     0x7000, 2048, true  },   // socket f1
     { {"034569.01", "LLPROM0"},     0x7800, 2048, true  },   // socket j1 (reset vector)
-    // Vector ROM 1 at $5800 (optional — system chip manifest may not map this yet)
-    { {"034599.01", "LLVROM1"},     0x5800, 2048, false },
     // Language PROM (optional)
     { {"034597.01", "034597-01"},   0x0000, 2048, false },
 };
@@ -101,14 +100,14 @@ static const RomSetDescriptor ll_v1_romset = {
 // ── Lunar Lander Rev 2 ──────────────────────────────────────────────────────
 
 static const RomEntryDescriptor ll_v2_entries[] = {
-    // Vector ROMs unchanged from v1
+    // Vector ROMs — same layout as v1: 034599 at $4800, 034598 at $5000
+    { {"034599.01", "LLVROM1"},     0x4800, 2048, true  },
     { {"034598.01", "LLVROM0"},     0x5000, 2048, true  },
     // Program ROMs — rev 2 chips
     { {"034572.02"},                0x6000, 2048, true  },
     { {"034571.02"},                0x6800, 2048, true  },
     { {"034570.02"},                0x7000, 2048, true  },
     { {"034569.02"},                0x7800, 2048, true  },
-    { {"034599.01", "LLVROM1"},     0x5800, 2048, false },
     { {"034597.01", "034597-01"},   0x0000, 2048, false },
 };
 
@@ -414,6 +413,7 @@ void AtariVectorSystem<V>::reset() {
     in1_ = 0x00;
     thrust_ = 0x00;
     snd_latch_ = 0x00;
+    nmi_enabled_ = false;  // NMI gated off until ROM enables it
 }
 
 // ============================================================================
@@ -437,20 +437,49 @@ void AtariVectorSystem<V>::tick() {
     // The NMI is edge-triggered on the 6502.  We assert NMI for one cycle
     // every NMI_PERIOD_CYCLES, then de-assert.  The 6502 detects the
     // falling edge and vectors to the NMI handler.
-    // NMI is gated by the output latch bit 4 ($3C04 on Asteroids).
+    //
+    // Asteroids Deluxe gates NMI via output latch bit 2 ($3C04).
+    // Asteroids and Lunar Lander fire NMI unconditionally (the ROM
+    // tolerates NMI during its reset handler).
     if (nmi_counter_ > 0) {
         --nmi_counter_;
         BUS_SET_BIT(pins_, BUS_NMI_BIT);   // NMI inactive (high)
     } else {
         nmi_counter_ = atv::NMI_PERIOD_CYCLES;
-        BUS_CLR_BIT(pins_, BUS_NMI_BIT);   // NMI active (low) — 1-cycle pulse
+        if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+            if (nmi_enabled_)
+                BUS_CLR_BIT(pins_, BUS_NMI_BIT);   // NMI active (low)
+            else
+                BUS_SET_BIT(pins_, BUS_NMI_BIT);   // NMI suppressed
+        } else {
+            BUS_CLR_BIT(pins_, BUS_NMI_BIT);   // NMI active (low) — 1-cycle pulse
+        }
     }
 
     total_cycles_++;
+
+    // TEMP TRACE — AD CPU progress
+    if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+        if (total_cycles_ == 1 || (total_cycles_ <= 2000000 && (total_cycles_ % 100000) == 0)) {
+            uint16_t pc = board_.cpu().get(REG_PC);
+            fprintf(stderr, "[AD CPU] cycle=%llu PC=$%04X nmi_en=%d\n",
+                    (unsigned long long)total_cycles_, pc, (int)nmi_enabled_);
+        }
+    }
 }
 
 template<AtariVectorVariant V>
 void AtariVectorSystem<V>::run_frame() {
+    // TEMP TRACE — AD run_frame entry (before ANY check)
+    if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+        static int frame_count = 0;
+        if (frame_count < 3) {
+            fprintf(stderr, "[AD FRAME] frame=%d system_ready=%d cpu=%p video_port=%p\n",
+                    frame_count, (int)system_ready_, (void*)&board_.cpu(), (void*)video_port_.get());
+        }
+        frame_count++;
+    }
+
     if (!video_port_) return;
 
     if (!system_ready_) {
@@ -599,8 +628,11 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
         uint16_t port_base = addr & 0x2C00;
 
         if (port_base == 0x2000 && (addr & 0x03FF) == 0x0000) {
-            // IN0: direct read (non-multiplexed), full byte
-            data = in0_;
+            // IN0: direct read (non-multiplexed), full byte.
+            // XOR converts internal active-HIGH state → hardware active-LOW
+            // for IP_ACTIVE_LOW bits (self-test, tilt, diag step, etc.).
+            // HALT (bit 0) and CLOCK (bit 6) are active-HIGH → unaffected.
+            data = in0_ ^ atv::LL_IN0_ACTIVE_LOW_MASK;
 
             // bit 0: DVG HALT (IP_ACTIVE_HIGH in LL: done_r → bit set when halted)
             if (dvg_.is_halted())
@@ -615,9 +647,10 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
                 data &= ~atv::LL_IN0_CLOCK;
 
         } else if (port_base == 0x2400) {
-            // IN1: multiplexed
+            // IN1: multiplexed. XOR for active-LOW polarity before bit extract.
             uint8_t offset = addr & 0x07;
-            data = (in1_ & (1 << offset)) ? 0x80 : 0x7F;
+            uint8_t port_val = in1_ ^ atv::LL_IN1_ACTIVE_LOW_MASK;
+            data = (port_val & (1 << offset)) ? 0x80 : 0x7F;
 
         } else if (port_base == 0x2800) {
             // DSW1: multiplexed (4 bits)
@@ -691,15 +724,28 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
             }
             break;
 
-        case atv::COIN_CTR_ADDR:
-            // $3C00-$3C05 — Output latch (address-decoded, D0 = bit value)
+        case atv::COIN_CTR_ADDR: {
+            // $3C00-$3C07 — Output latch (74LS259, A0-A2 = bit select, D0 = value)
             //   bit 0 ($3C00): coin counter 1
             //   bit 1 ($3C01): coin counter 2
-            //   bit 2 ($3C02): LED 1 (player 1 start)
-            //   bit 3 ($3C03): LED 0 (player 2 start)
-            //   bit 4 ($3C04): NMI enable (TODO: gate NMI generation)
+            //   bit 2 ($3C02): player 1 start LED
+            //   bit 3 ($3C03): player 2 start LED
+            //   bit 4 ($3C04): NMI enable
             //   bit 5 ($3C05): cocktail invert
+            uint8_t latch_bit = addr & 0x07;
+            // TEMP TRACE — AD NMI enable
+            if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+                if (latch_bit == 4) {
+                    bool new_val = (data & 1) != 0;
+                    if (new_val != nmi_enabled_)
+                        fprintf(stderr, "[AD NMI] STA $%04X, D0=%d → nmi_enabled %d→%d (cycle %llu)\n",
+                                addr, data & 1, (int)nmi_enabled_, (int)new_val,
+                                (unsigned long long)total_cycles_);
+                    nmi_enabled_ = new_val;
+                }
+            }
             break;
+        }
 
         case atv::NMI_ACK_ADDR:
             // $3E00 — Noise reset (asteroid_noise_reset_w in MAME).
