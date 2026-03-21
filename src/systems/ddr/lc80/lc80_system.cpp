@@ -55,21 +55,17 @@ bool LC80System::initialize() {
 
     // ── Create memory chips from manifest and wire bus ────────────────────
     board_.create_chips(&pins_);
+    board_.bind_chipset();
     board_.apply(bus_);
 
-    // ── Configure page tables (mirroring) ───────────────────────────────
+    // ── Configure page tables (mirroring) ───────────────────────────
     configure_bus_memory_map();
 
     // ── Init chips ──────────────────────────────────────────────────────
-    cpu_  = board_.cpu<U880>();
-    pio1_ = board_.find<z80_pio_t>();
-    pio2_ = board_.find<z80_pio_t>(1);
-    ctc_  = board_.find<z80_ctc_t>();
-
-    pins_ = board_.cpu_chip()->init();
-    pio1_->init();
-    pio2_->init();
-    ctc_->init();
+    pins_ = board_.cpu().init();
+    board_.chips().pio1.init();
+    board_.chips().pio2.init();
+    board_.chips().ctc.init();
 
     load_roms();
 
@@ -83,9 +79,9 @@ bool LC80System::initialize() {
 void LC80System::shutdown() { system_ready_ = false; }
 
 void LC80System::reset() {
-    if (!cpu_) return;
+    if (!system_ready_) return;
     board_.reset_chips();
-    pins_ = board_.cpu_chip()->reset(pins_);
+    pins_ = board_.cpu().reset(pins_);
     std::memset(led_segments_, 0, sizeof(led_segments_));
 }
 
@@ -94,10 +90,10 @@ void LC80System::reset() {
 // ============================================================================
 
 void LC80System::tick() {
-    if (!cpu_) return;
+    if (!system_ready_) return;
 
     // CPU tick
-    pins_ = cpu_->tick(pins_);
+    pins_ = board_.cpu().tick(pins_);
 
     // Bus dispatch
     bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);  // Active-low
@@ -110,7 +106,7 @@ void LC80System::tick() {
     }
 
     // CTC tick (speaker on channel 2)
-    ctc_->tick();
+    board_.chips().ctc.tick();
 
     total_cycles_++;
 }
@@ -140,8 +136,8 @@ void LC80System::configure_bus_memory_map() {
 bus_state_t LC80System::io_tick(bus_state_t pins) {
     // Interrupt acknowledge: IORQ + M1
     if (!BUS_GET_BIT(pins, Z80_M1_BIT)) {
-        if (ctc_->interrupt_pending()) {
-            BUS_SET_DATA(pins, ctc_->interrupt_vector());
+        if (board_.chips().ctc.interrupt_pending()) {
+            BUS_SET_DATA(pins, board_.chips().ctc.interrupt_vector());
         } else {
             BUS_SET_DATA(pins, 0xFF);
         }
@@ -158,12 +154,12 @@ bus_state_t LC80System::io_tick(bus_state_t pins) {
         int port_idx = port & 0x01;
         bool is_ctrl = (port >> 1) & 0x01;
         if (is_read) {
-            BUS_SET_DATA(pins, pio1_->read_data(port_idx));
+            BUS_SET_DATA(pins, board_.chips().pio1.read_data(port_idx));
         } else {
             if (is_ctrl) {
-                pio1_->write_control(port_idx, data);
+                board_.chips().pio1.write_control(port_idx, data);
             } else {
-                pio1_->write_data(port_idx, data);
+                board_.chips().pio1.write_data(port_idx, data);
             }
         }
         return pins;
@@ -174,12 +170,12 @@ bus_state_t LC80System::io_tick(bus_state_t pins) {
         int port_idx = port & 0x01;
         bool is_ctrl = (port >> 1) & 0x01;
         if (is_read) {
-            BUS_SET_DATA(pins, pio2_->read_data(port_idx));
+            BUS_SET_DATA(pins, board_.chips().pio2.read_data(port_idx));
         } else {
             if (is_ctrl) {
-                pio2_->write_control(port_idx, data);
+                board_.chips().pio2.write_control(port_idx, data);
             } else {
-                pio2_->write_data(port_idx, data);
+                board_.chips().pio2.write_data(port_idx, data);
             }
         }
         return pins;
@@ -189,9 +185,9 @@ bus_state_t LC80System::io_tick(bus_state_t pins) {
     if ((port & 0xFC) == lc80_constants::CTC_CH0) {
         int channel = port & 0x03;
         if (is_read) {
-            BUS_SET_DATA(pins, ctc_->read(channel));
+            BUS_SET_DATA(pins, board_.chips().ctc.read(channel));
         } else {
-            ctc_->write(channel, data);
+            board_.chips().ctc.write(channel, data);
         }
         return pins;
     }

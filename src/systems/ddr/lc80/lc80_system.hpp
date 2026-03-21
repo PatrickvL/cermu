@@ -11,6 +11,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/standard_chips.hpp"
 #include "chip/cpu/z80/u880.hpp"
 #include "chip/io/z80_pio.hpp"
 #include "chip/io/z80_ctc.hpp"
@@ -46,6 +47,27 @@ inline constexpr auto kLC80Chips = make_chip_manifest(
 
 using LC80BusSpec = ManifestBusSpec<kLC80Chips, 16, 8>;
 
+// ── ChipSet ──────────────────────────────────────────────────────────────
+struct LC80ChipSet : StandardChips<U880> {
+    z80_pio_t pio1;     // U855 PIO #1 (LED display + keyboard)
+    z80_pio_t pio2;     // U855 PIO #2 (keyboard scan + cassette)
+    z80_ctc_t ctc;      // U857 CTC (speaker on channel 2)
+
+    template<typename BoardT>
+    void bind_extras(BoardT& board) {
+        board.bind_chip(board.template find_index<z80_pio_t>(0), &pio1);
+        board.bind_chip(board.template find_index<z80_pio_t>(1), &pio2);
+        board.bind_chip(board.template find_index<z80_ctc_t>(), &ctc);
+    }
+
+    template<typename BoardT>
+    void register_extras(BoardT& board) {
+        board.register_component(&pio1);
+        board.register_component(&pio2);
+        board.register_component(&ctc);
+    }
+};
+
 class LC80System : public System {
 public:
     LC80System();
@@ -65,16 +87,12 @@ public:
 
 
 private:
-    // ── Chips ────────────────────────────────────────────────────────────
-    U880*       cpu_  = nullptr;     // U880 (Z80A clone) — owned by board_
-    z80_pio_t*  pio1_ = nullptr;     // U855 PIO #1 (LED display + keyboard)
-    z80_pio_t*  pio2_ = nullptr;     // U855 PIO #2 (keyboard scan + cassette)
-    z80_ctc_t*  ctc_  = nullptr;     // U857 CTC (speaker on channel 2)
+    // ── Chips (value-typed via Board ChipSet) ────────────────────────────
 
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using Bus = MemoryBus<LC80BusSpec>;
     using PT  = PackingTraits<LC80BusSpec>;
-    using MainBoard = Board<LC80BusSpec>;
+    using MainBoard = Board<LC80BusSpec, LC80ChipSet>;
     Bus bus_;
     MainBoard board_{kLC80Chips};
 
