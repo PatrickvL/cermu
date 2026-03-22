@@ -20,7 +20,8 @@
 
 // Forward declarations
 struct ImGuiIO;
-namespace vector_shader { struct BeamVertex; }
+
+#include "gui/vector_shader.hpp"  // BeamVertex, PhosphorPersistence
 
 // ============================================================================
 // Display Configuration Enums
@@ -214,6 +215,7 @@ protected:
     GLuint    vector_vbo_               = 0;
     GLint     vector_loc_proj_          = -1;
     GLint     vector_loc_phosphor_      = -1;
+    vector_shader::PhosphorPersistence vector_persist_{};
 
     /// Video signal type of the active system (cached from System::get_video_signal_type()).
     VideoSignalType active_signal_type_       = VideoSignalType::Composite;

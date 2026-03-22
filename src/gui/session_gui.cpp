@@ -145,66 +145,6 @@ static void rgb_stream_shader_bind_callback(const ImDrawList*, const ImDrawCmd* 
 }
 
 // ============================================================================
-// GPU Vector Display — ImGui draw callback
-// ============================================================================
-
-struct VectorShaderCallbackData {
-    GLuint shader;
-    GLint  loc_proj;
-    GLint  loc_phosphor;
-    GLuint vao;
-    GLuint vbo;
-    const void* vertices;   // BeamVertex array
-    int    vertex_count;
-};
-
-static void vector_shader_render_callback(const ImDrawList*, const ImDrawCmd* cmd) {
-    auto* d = static_cast<const VectorShaderCallbackData*>(cmd->UserCallbackData);
-    if (d->vertex_count <= 0) return;
-
-    indexed_shader::glUseProgram(d->shader);
-
-    // Same ortho projection ImGui uses
-    ImDrawData* draw_data = ImGui::GetDrawData();
-    float L = draw_data->DisplayPos.x;
-    float R = draw_data->DisplayPos.x + draw_data->DisplaySize.x;
-    float T = draw_data->DisplayPos.y;
-    float B = draw_data->DisplayPos.y + draw_data->DisplaySize.y;
-    const float ortho[4][4] = {
-        { 2.0f/(R-L),   0.0f,         0.0f,   0.0f },
-        { 0.0f,         2.0f/(T-B),   0.0f,   0.0f },
-        { 0.0f,         0.0f,        -1.0f,   0.0f },
-        { (R+L)/(L-R),  (T+B)/(B-T),  0.0f,   1.0f },
-    };
-    indexed_shader::glUniformMatrix4fv(d->loc_proj, 1, GL_FALSE, &ortho[0][0]);
-
-    // Green phosphor (P1 / P31 — typical for vector arcade monitors)
-    vector_shader::glUniform3f(d->loc_phosphor, 0.2f, 1.0f, 0.2f);
-
-    // Additive blending for beam glow
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-
-    // Disable scissor test — ImGui's clip rect can crop vector quads
-    // that legitimately extend to the edges of the display area.
-    glDisable(GL_SCISSOR_TEST);
-
-    // Upload vertices to VBO and draw
-    vector_shader::glBindVertexArray(d->vao);
-    vector_shader::glBindBuffer(GL_ARRAY_BUFFER, d->vbo);
-    vector_shader::glBufferData(GL_ARRAY_BUFFER,
-        static_cast<GLsizeiptr>(d->vertex_count) * static_cast<GLsizeiptr>(sizeof(vector_shader::BeamVertex)),
-        d->vertices, GL_DYNAMIC_DRAW);
-    glDrawArrays(GL_TRIANGLES, 0, d->vertex_count);
-    vector_shader::glBindVertexArray(0);
-    vector_shader::glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    // Restore default blend mode and re-enable scissor (ImGui's state)
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_SCISSOR_TEST);
-}
-
-// ============================================================================
 // Helpers
 // ============================================================================
 
@@ -1262,43 +1202,53 @@ void SessionGUI::render_screen() {
 
     if (use_vector) {
         // ================================================================
-        // Vector display — build beam quads and render via draw callback
+        // Vector display — FBO-based phosphor persistence rendering
         // ================================================================
-        // Build quads directly into the member buffer — avoids per-frame
-        // temporary vector allocation.  build_beam_quads clears and fills.
+        // Ensure persistence FBO matches display dimensions.
+        int fbo_w = static_cast<int>(display_w);
+        int fbo_h = static_cast<int>(display_h);
+        if (fbo_w > 0 && fbo_h > 0 && vector_persist_.fbo) {
+            vector_shader::resize_persistence(&vector_persist_, fbo_w, fbo_h);
+        }
+
+        // Build beam quads in FBO-local coordinates: [0, fbo_w) × [0, fbo_h).
+        // No viewport offset — the FBO has its own coordinate space.
+        // Query per-system vector display configuration (phosphor tint + palette).
+        System::VectorDisplayConfig vdc;
+        if (system_) vdc = system_->get_vector_display_config();
+
         if (vector_stream_len_ > 0) {
             float x_scale = display_w / static_cast<float>(fb_width_);
             float y_scale = display_h / static_cast<float>(fb_height_);
-            // Scale beam width with display size so lines stay visually
-            // consistent across window resizes.  Base: 3px at 1024px.
             float beam_w = 3.0f * (std::min(display_w, display_h) / 1024.0f);
-            beam_w = std::max(1.5f, std::min(beam_w, 6.0f));  // clamp range
+            beam_w = std::max(1.5f, std::min(beam_w, 6.0f));
             vector_shader::build_beam_quads(
                 vector_stream_snapshot_, vector_stream_len_,
                 beam_w,
                 display_w, display_h,
                 x_scale, y_scale,
-                viewport->Pos.x + pos_x,
-                viewport->Pos.y + pos_y,
+                0.0f, 0.0f,
+                vdc.color_palette,
                 vector_beam_buf_);
         } else {
             vector_beam_buf_.clear();
         }
-
         vector_beam_count_ = static_cast<int>(vector_beam_buf_.size());
 
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        VectorShaderCallbackData cb = {
+        // Render persistence pass: decay previous frame + add new vectors
+        float frame_dt = io.DeltaTime;  // seconds
+        vector_shader::render_persistence_frame(
+            &vector_persist_,
             vector_shader_, vector_loc_proj_, vector_loc_phosphor_,
             vector_vao_, vector_vbo_,
-            vector_beam_buf_.data(), vector_beam_count_
-        };
-        draw_list->AddCallback(vector_shader_render_callback, &cb, sizeof(cb));
-        draw_list->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+            vector_beam_buf_.data(), vector_beam_count_,
+            frame_dt,
+            vdc.phosphor_r, vdc.phosphor_g, vdc.phosphor_b);
 
-        // Reserve display area so ImGui::GetItemRect* works for peripheral mapping
+        // Display the persistence FBO texture via ImGui
         ImGui::SetCursorPos(ImVec2(pos_x, pos_y));
-        ImGui::Dummy(ImVec2(display_w, display_h));
+        ImGui::Image((ImTextureID)(intptr_t)vector_persist_.texture,
+                     ImVec2(display_w, display_h));
 
         if (system_) {
             auto item_min = ImGui::GetItemRectMin();
@@ -1662,11 +1612,21 @@ void SessionGUI::allocate_framebuffer() {
                     vector_shader::glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE,
                         sizeof(vector_shader::BeamVertex), reinterpret_cast<void*>(12));
                     vector_shader::glEnableVertexAttribArray(2);
+                    vector_shader::glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE,
+                        sizeof(vector_shader::BeamVertex), reinterpret_cast<void*>(16));
+                    vector_shader::glEnableVertexAttribArray(3);
                     vector_shader::glBindVertexArray(0);
                     vector_shader::glBindBuffer(GL_ARRAY_BUFFER, 0);
 
                     vector_stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES * 8]();
                     use_vector_shader_ = true;
+
+                    // Create phosphor persistence FBO (initial size matches framebuffer;
+                    // will be resized to match display dimensions on first render)
+                    vector_shader::create_persistence(&vector_persist_,
+                        fb_width_ > 0 ? fb_width_ : 1024,
+                        fb_height_ > 0 ? fb_height_ : 1024);
+
                     printf("GPU vector display rendering enabled\n");
                 }
                 break;
