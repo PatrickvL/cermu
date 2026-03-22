@@ -548,8 +548,8 @@ bool Commodore264System<V>::initialize() {
     register_board(&board_);
     
     // Initialize TED 7360 (video, sound, timers, keyboard scanning)
-    // TED requires a descriptor — create it before board_.create_chips() and pre-bind.
-    {   
+    // TED is a value member of board_.chips() — configure via two-phase init.
+    {
         bool is_pal_region = (config_.region_option_index <= 0);
         ted7360_desc_t ted_desc = {};
         ted_desc.is_pal = is_pal_region;
@@ -559,16 +559,12 @@ bool Commodore264System<V>::initialize() {
         ted_desc.mem_read_user_data = this;
         ted_desc.banking_change = ted_banking_changed;
         ted_desc.banking_change_user_data = this;
-        ted_ = new ted7360_t(ted_desc);
-        if (ted_) {
-            printf("%s: Created TED 7360 (%s)\n", Traits::name, is_pal_region ? "PAL" : "NTSC");
-            // Initialize sound subsystem: TED master clock is 2× CPU clock
-            uint32_t ted_clock = is_pal_region ? TED_PAL_CLOCK_HZ : TED_NTSC_CLOCK_HZ;
-            ted_->audio_reset(ted_clock, c16_constants::AUDIO_SAMPLE_RATE);
-            board_.bind_chip(board_.template find_index<ted7360_t>(), ted_);
-        } else {
-            printf("%s: Warning - TED 7360 creation failed\n", Traits::name);
-        }
+        board_.video().init(ted_desc);
+        ted_ = &board_.video();
+        printf("%s: Created TED 7360 (%s)\n", Traits::name, is_pal_region ? "PAL" : "NTSC");
+        // Initialize sound subsystem: TED master clock is 2× CPU clock
+        uint32_t ted_clock = is_pal_region ? TED_PAL_CLOCK_HZ : TED_NTSC_CLOCK_HZ;
+        ted_->audio_reset(ted_clock, c16_constants::AUDIO_SAMPLE_RATE);
     }
 
     // Bind value-typed chips from ChipSet, then factory-create remaining
@@ -643,10 +639,6 @@ bool Commodore264System<V>::initialize() {
     // Register chips for the Hardware menu and debug windows
     register_bus_chips(board_);
 
-    // TED is pre-bound (not factory-created), so auto_register_video_palette_
-    // won't find it in owned_chips().  Set the palette explicitly.
-    palette_.set(ted7360_t::get_palette(), 128);
-
     // Set up page pointers for current RAM size and ROM banking state
     setup_ram_mirroring();
 
@@ -675,12 +667,6 @@ bool Commodore264System<V>::initialize() {
 template<C264SeriesVariant V>
 void Commodore264System<V>::shutdown() {
     printf("%s: Shutting down system\n", Traits::name);
-    
-    // Destroy TED 7360
-    if (ted_) {
-        delete ted_;
-        ted_ = nullptr;
-    }
     
     // Destroy keyboard
     if (keyboard_) {

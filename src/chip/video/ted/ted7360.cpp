@@ -787,7 +787,7 @@ void ted7360_t::timing_advance() {
 // On the TED's 57-cycle line (0..56), cycle 55 is the last display data cycle.
 static constexpr uint8_t TED_RC_UPDATE_CYCLE = 55u;
 
-ted7360_t::ted7360_t(const ted7360_desc_t& desc) {
+void ted7360_t::init(const ted7360_desc_t& desc) {
     init_regs(TED_NUM_REGS);
     timing.is_pal          = desc.is_pal;
     info_                  = ChipInfo{"TED7360", "Commodore"};

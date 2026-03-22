@@ -463,8 +463,14 @@ struct ted7360_t : public VideoChipBase {
     // Public API — Lifecycle
     // ========================================================================
 
-    /** Construct and initialize a TED 7360 instance. */
-    explicit ted7360_t(const ted7360_desc_t& desc);
+    /** Default constructor — leaves TED uninitialized.  Call init() before use. */
+    ted7360_t() = default;
+
+    /** Construct and initialize a TED 7360 instance (one-step convenience). */
+    explicit ted7360_t(const ted7360_desc_t& desc) : ted7360_t() { init(desc); }
+
+    /** Two-phase initialization — configure after default construction. */
+    void init(const ted7360_desc_t& desc);
 
     /** Destructor — frees internal color index line buffer. */
     ~ted7360_t();
