@@ -643,6 +643,10 @@ bool Commodore264System<V>::initialize() {
     // Register chips for the Hardware menu and debug windows
     register_bus_chips(board_);
 
+    // TED is pre-bound (not factory-created), so auto_register_video_palette_
+    // won't find it in owned_chips().  Set the palette explicitly.
+    palette_.set(ted7360_t::get_palette(), 128);
+
     // Set up page pointers for current RAM size and ROM banking state
     setup_ram_mirroring();
 
