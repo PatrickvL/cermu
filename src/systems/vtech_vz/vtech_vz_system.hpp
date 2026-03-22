@@ -21,7 +21,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chipset.hpp"
+#include "core/core_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/video/mc6847/mc6847.hpp"
@@ -110,8 +110,8 @@ template<> struct VZBusTraits<VZVariant::VZ300> {
     using Spec = ManifestBusSpec<kVZ300Chips, 16, 8>;
 };
 
-// ── Chipset ──────────────────────────────────────────────────────────────
-using VZChips = CoreChipset<ZilogZ80A, mc6847_t>;
+// ── Chips ──────────────────────────────────────────────────────────────
+using VZChips = CoreChips<ZilogZ80A, mc6847_t>;
 
 // ============================================================================
 // VTech VZ System
@@ -147,7 +147,7 @@ public:
 
 
 private:
-    // ── Chips (value-typed via Board Chipset) ────────────────────────────
+    // ── Chips (value-typed via Board Chips) ────────────────────────────
 
     // ── Memory chips — post-init pointers ────────────────────────────────
     uint8_t* video_ram_ptr_ = nullptr;

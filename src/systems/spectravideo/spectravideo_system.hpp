@@ -13,7 +13,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chipset.hpp"
+#include "core/core_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -98,10 +98,10 @@ template<> struct SVIBusTraits<SVIVariant::SVI328> {
 };
 
 // ============================================================================
-// SVI Chipset — value-typed chips embedded in Board
+// SVI Chips — value-typed chips embedded in Board
 // ============================================================================
 
-struct SVIChips : CoreChipset<ZilogZ80A, TMS9918A, AY_3_8910, i8255_t> {};
+struct SVIChips : CoreChips<ZilogZ80A, TMS9918A, AY_3_8910, i8255_t> {};
 
 // ============================================================================
 // Spectravideo System

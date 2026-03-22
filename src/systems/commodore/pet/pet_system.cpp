@@ -240,7 +240,7 @@ bool PETSystem::initialize() {
     printf("PET: Initializing system\n");
     register_board(&board_);
 
-    // ── Bind value-typed chips from Chipset, then create remaining ─────
+    // ── Bind value-typed chips from Chips, then create remaining ─────
     board_.bind_chipset();
     board_.create_chips(&pins_);
     board_.apply(bus_);

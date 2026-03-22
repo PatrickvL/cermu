@@ -11,7 +11,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chipset.hpp"
+#include "core/core_chips.hpp"
 #include "core/signal/video_port.hpp"
 
 #include "chip/cpu/z80/u880.hpp"
@@ -115,8 +115,8 @@ template<> struct Z1013BusTraits<Z1013Variant::Z1013_64> {
     using Spec = ManifestBusSpec<kZ1013_64K_Chips, 16, 8>;
 };
 
-// ── Chipset ──────────────────────────────────────────────────────────────
-struct Z1013Chipset : CoreChipset<U880, NoChip, NoChip, z80_pio_t> {};
+// ── Chips ──────────────────────────────────────────────────────────────
+struct Z1013Chipset : CoreChips<U880, NoChip, NoChip, z80_pio_t> {};
 
 // ── System ───────────────────────────────────────────────────────────────
 template<Z1013Variant V>
@@ -141,7 +141,7 @@ public:
 
 
 private:
-    // ── Chips (value-typed via Board Chipset) ────────────────────────────
+    // ── Chips (value-typed via Board Chips) ────────────────────────────
 
     // ── Memory — chip pointers for post-init access (owned by Board) ─
     ROMChip* basic_rom_lo_chip_    = nullptr;  // Z1013.64 only

@@ -13,7 +13,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chipset.hpp"
+#include "core/core_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 
@@ -158,8 +158,8 @@ template<> struct KC85BusTraits<KC85Variant::KC85_4> {
     using Spec = ManifestBusSpec<kKC854Chips, 16, 8>;
 };
 
-// ── Chipset ──────────────────────────────────────────────────────────────
-struct KC85Chipset : CoreChipset<U880, NoChip, NoChip, z80_pio_t> {
+// ── Chips ──────────────────────────────────────────────────────────────
+struct KC85Chipset : CoreChips<U880, NoChip, NoChip, z80_pio_t> {
     z80_pio_t pio2;     // U855 PIO (module system)
     z80_ctc_t ctc;      // U857 CTC (timing + sound + tape)
 
@@ -209,7 +209,7 @@ public:
 
 
 private:
-    // ── Chips (value-typed via Board Chipset) ────────────────────────────
+    // ── Chips (value-typed via Board Chips) ────────────────────────────
     kc85_module_system_t* modules_ = nullptr; // Expansion module slot controller — owned by board_
 
     // ── Memory — owned by Board, accessed via chip_as<>() ────────────

@@ -17,7 +17,7 @@
 
 #include "core/system.hpp"
 #include "core/board.hpp"
-#include "core/core_chipset.hpp"
+#include "core/core_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/fam65xx/mos6507.hpp"
@@ -95,8 +95,8 @@ inline constexpr auto kAtari2600Chips = make_chip_manifest(
 // BusSpec auto-derived from the manifest (13-bit address, 256-byte pages)
 using Atari2600BusSpec = ManifestBusSpec<kAtari2600Chips, 13, 8>;
 
-// ── Chipset ──────────────────────────────────────────────────────────────
-struct Atari2600Chipset : CoreChipset<MOS6507, tia_t, NoChip, pia6532_t> {
+// ── Chips ──────────────────────────────────────────────────────────────
+struct Atari2600Chipset : CoreChips<MOS6507, tia_t, NoChip, pia6532_t> {
     Atari2600CartChip cart;   // Cart MMIO adapter (wraps mapper)
 
     template<typename BoardT>
@@ -150,7 +150,7 @@ public:
 
 private:
     // ========================================================================
-    // CHIPS (value-typed via Board Chipset)
+    // CHIPS (value-typed via Board Chips)
     // ========================================================================
 
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output

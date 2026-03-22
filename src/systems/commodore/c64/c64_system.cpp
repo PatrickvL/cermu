@@ -388,7 +388,7 @@ bool C64System::initialize() {
     system_lines_  = SYS_MASK_EXROM | SYS_MASK_GAME;
 
     // =========================================================================
-    // Bind value-typed chips from Chipset, then factory-create remaining
+    // Bind value-typed chips from Chips, then factory-create remaining
     // =========================================================================
     board_.bind_chipset();
     board_.create_chips(&bus_state_);

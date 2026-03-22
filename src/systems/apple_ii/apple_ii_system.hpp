@@ -36,7 +36,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chipset.hpp"
+#include "core/core_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/cpu/fam65xx/wdc65c02.hpp"
@@ -165,12 +165,12 @@ template<> struct AppleIIBusTraits<AppleIIVariant::APPLE_IIC> {
     using Spec = ManifestBusSpec<kAppleIIcChips, 16, 8>;
 };
 
-// ── Chipset ──────────────────────────────────────────────────────────────
+// ── Chips ──────────────────────────────────────────────────────────────
 template<AppleIIVariant V>
 using AppleIICPU = std::conditional_t<AppleIIVariantTraits<V>::is_cmos, WDC_65C02, MOS6502>;
 
 template<AppleIIVariant V>
-using AppleIIChips = CoreChipset<AppleIICPU<V>>;
+using AppleIIChips = CoreChips<AppleIICPU<V>>;
 
 // ============================================================================
 // Apple II System
@@ -207,7 +207,7 @@ public:
 
 
 private:
-    // ── Chips (value-typed via Board Chipset) ────────────────────────────
+    // ── Chips (value-typed via Board Chips) ────────────────────────────
 
     // ── Memory chips — post-init pointers ────────────────────────────────
     ROMChip* rom_       = nullptr;

@@ -84,7 +84,7 @@ struct PETBusTraits {
 };
 
 // Value-typed chips: CPU + CRTC + VIA + PIA1 + PIA2.
-struct PETChipset : CoreChipset<MOS6502, mc6845_t, mos6522_t, pia6820_t> {
+struct PETChipset : CoreChips<MOS6502, mc6845_t, mos6522_t, pia6820_t> {
     pia6820_t pia2;
 
     template<typename Board> void bind_extras(Board& board) {

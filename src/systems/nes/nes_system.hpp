@@ -26,7 +26,7 @@
 #include "core/signal/audio_port.hpp"
 #include "core/audio_thread.hpp"
 #include "core/board.hpp"
-#include "core/core_chipset.hpp"
+#include "core/core_chips.hpp"
 #include "core/chip_manifest.hpp"
 #include "chip/sound/nes_apu_synth_engine.hpp"
 
@@ -83,8 +83,8 @@ inline constexpr auto kNESChips = make_chip_manifest(
 
 using NESBusSpec = ManifestBusSpec<kNESChips, 16, 8>;
 
-// ── NES Chipset — PPU in the Video slot for auto-palette discovery ──────
-struct NESChipset : CoreChipset<RICOH_2A03, PPU> {};
+// ── NES Chips — PPU in the Video slot for auto-palette discovery ──────
+struct NESChipset : CoreChips<RICOH_2A03, PPU> {};
 
 // ============================================================================
 // Nintendo system variant (compile-time template parameter)

@@ -127,7 +127,7 @@ public:
     void clear_ports();
 
     /// Register a component in the board's component index (non-owning).
-    /// Public so that Chipset::register_extras() can add extra value-typed
+    /// Public so that Chips::register_extras() can add extra value-typed
     /// chips from outside the class hierarchy.
     void register_component(ComponentBase* c) {
         if (c) components_.push_back(c);
