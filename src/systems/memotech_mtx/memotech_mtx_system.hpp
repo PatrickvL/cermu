@@ -100,7 +100,7 @@ template<> struct MTXBusTraits<MTXVariant::MTX512> {
 // MTX ChipSet — value-typed chips embedded in Board
 // ============================================================================
 
-struct MTXChips : StandardChips<ZilogZ80A, TMS9918A, AY_3_8910, z80_ctc_t> {};
+struct MTXChips : CommonBoardChips<ZilogZ80A, TMS9918A, AY_3_8910, z80_ctc_t> {};
 
 // ============================================================================
 // Memotech MTX System

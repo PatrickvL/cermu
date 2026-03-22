@@ -111,7 +111,7 @@ template<> struct VZBusTraits<VZVariant::VZ300> {
 };
 
 // ── ChipSet ──────────────────────────────────────────────────────────────
-using VZChips = StandardChips<ZilogZ80A, mc6847_t>;
+using VZChips = CommonBoardChips<ZilogZ80A, mc6847_t>;
 
 // ============================================================================
 // VTech VZ System

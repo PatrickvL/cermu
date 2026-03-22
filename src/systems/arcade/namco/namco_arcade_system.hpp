@@ -113,7 +113,7 @@ template<> struct NamcoBusTraits<NamcoGame::Pengo> {
 };
 
 // ── ChipSet ──────────────────────────────────────────────────────────────
-struct NamcoChipSet : StandardChips<ZilogZ80A, NoChip, namco_wsg_t> {};
+struct NamcoChipSet : CommonBoardChips<ZilogZ80A, NoChip, namco_wsg_t> {};
 
 // ── System ───────────────────────────────────────────────────────────────
 template<NamcoGame G>

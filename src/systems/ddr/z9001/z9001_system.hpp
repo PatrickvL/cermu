@@ -113,7 +113,7 @@ template<> struct Z9001BusTraits<Z9001Variant::KC87> {
 };
 
 // ── ChipSet ──────────────────────────────────────────────────────────────
-struct Z9001ChipSet : StandardChips<U880, NoChip, NoChip, z80_pio_t> {
+struct Z9001ChipSet : CommonBoardChips<U880, NoChip, NoChip, z80_pio_t> {
     z80_pio_t pio2;     // U855 PIO #2 (keyboard + cassette)
     z80_ctc_t ctc;      // U857 CTC (timing + sound)
 

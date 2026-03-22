@@ -102,7 +102,7 @@ using C128BusSpec = ManifestBusSpec<kC128Chips, 16, 12, 2>;
 
 // Value-typed chips: CPU + Z80 + VIC-IIe + SID + Color RAM + 2× CIA.
 // Memory chips (RAM/ROM) stay factory-created.
-struct C128ChipSet : StandardChips<CSG8502, mos8566_t, mos6581_t, mos6526_t> {
+struct C128ChipSet : CommonBoardChips<CSG8502, mos8566_t, mos6581_t, mos6526_t> {
     ZilogZ80A  z80;
     MOS2114    colorram;
     mos6526_t  cia2;

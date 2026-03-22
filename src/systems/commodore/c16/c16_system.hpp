@@ -172,7 +172,7 @@ namespace c264_viewer {
 
 // Value-typed chips: CPU + PIO1 + PIO2 + ROM bank select.
 // TED stays factory-created (requires descriptor at construction, non-copyable).
-struct C264ChipSet : StandardChips<CSG7501, NoChip, NoChip, mos6529_t> {
+struct C264ChipSet : CommonBoardChips<CSG7501, NoChip, NoChip, mos6529_t> {
     mos6529_t               pio2;
     c264_rom_bank_select_t  rom_bank;
 

@@ -130,7 +130,7 @@ template<> struct OricBusTraits<OricVariant::ORIC_ATMOS> {
 // Oric ChipSet — value-typed chips owned by Board
 // ============================================================================
 
-struct OricChips : StandardChips<MOS6502, NoChip, AY_3_8912, mos6522_t> {};
+struct OricChips : CommonBoardChips<MOS6502, NoChip, AY_3_8912, mos6522_t> {};
 
 // ============================================================================
 // Oric System

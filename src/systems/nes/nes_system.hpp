@@ -84,7 +84,7 @@ inline constexpr auto kNESChips = make_chip_manifest(
 using NESBusSpec = ManifestBusSpec<kNESChips, 16, 8>;
 
 // ── NES ChipSet — PPU in the Video slot for auto-palette discovery ──────
-struct NESChipSet : StandardChips<RICOH_2A03, PPU> {};
+struct NESChipSet : CommonBoardChips<RICOH_2A03, PPU> {};
 
 // ============================================================================
 // Nintendo system variant (compile-time template parameter)

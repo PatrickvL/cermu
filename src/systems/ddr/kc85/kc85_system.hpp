@@ -159,7 +159,7 @@ template<> struct KC85BusTraits<KC85Variant::KC85_4> {
 };
 
 // ── ChipSet ──────────────────────────────────────────────────────────────
-struct KC85ChipSet : StandardChips<U880, NoChip, NoChip, z80_pio_t> {
+struct KC85ChipSet : CommonBoardChips<U880, NoChip, NoChip, z80_pio_t> {
     z80_pio_t pio2;     // U855 PIO (module system)
     z80_ctc_t ctc;      // U857 CTC (timing + sound + tape)
 

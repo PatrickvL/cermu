@@ -53,7 +53,7 @@ using ColecoBusSpec = ManifestBusSpec<kColecoChips, 16, 8>;
 // ColecoVision ChipSet — value-typed chips embedded in Board
 // ============================================================================
 
-struct ColecoChips : StandardChips<ZilogZ80A, TMS9918A, sn76489_t> {};
+struct ColecoChips : CommonBoardChips<ZilogZ80A, TMS9918A, sn76489_t> {};
 
 // ============================================================================
 // ColecoVision System

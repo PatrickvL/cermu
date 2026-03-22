@@ -116,7 +116,7 @@ template<> struct Z1013BusTraits<Z1013Variant::Z1013_64> {
 };
 
 // ── ChipSet ──────────────────────────────────────────────────────────────
-struct Z1013ChipSet : StandardChips<U880, NoChip, NoChip, z80_pio_t> {};
+struct Z1013ChipSet : CommonBoardChips<U880, NoChip, NoChip, z80_pio_t> {};
 
 // ── System ───────────────────────────────────────────────────────────────
 template<Z1013Variant V>

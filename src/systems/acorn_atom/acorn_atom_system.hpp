@@ -75,7 +75,7 @@ inline constexpr auto kAcornAtomChips = make_chip_manifest(
 using AcornAtomBusSpec = ManifestBusSpec<kAcornAtomChips, 16, 8>;
 
 // ── ChipSet ──────────────────────────────────────────────────────────────
-struct AtomChipSet : StandardChips<MOS6502, mc6847_t, NoChip, i8255_t> {
+struct AtomChipSet : CommonBoardChips<MOS6502, mc6847_t, NoChip, i8255_t> {
     mos6522_t via;    // MOS 6522 VIA (timers, cassette, printer)
 
     template<typename BoardT>

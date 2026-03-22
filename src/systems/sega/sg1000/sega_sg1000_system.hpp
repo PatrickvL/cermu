@@ -109,7 +109,7 @@ template<> struct SG1000BusTraits<SG1000Variant::SC3000> {
 // SG-1000 ChipSet — value-typed chips owned by Board
 // ============================================================================
 
-struct SG1000Chips : StandardChips<ZilogZ80A, TMS9918A, sn76489_t> {};
+struct SG1000Chips : CommonBoardChips<ZilogZ80A, TMS9918A, sn76489_t> {};
 
 // ============================================================================
 // Sega SG-1000 / SC-3000 System

@@ -129,7 +129,7 @@ template<> struct SpectrumBusTraits<SpectrumVariant::ZX128K> {
 // Spectrum ChipSet — value-typed chips owned by Board
 // ============================================================================
 
-struct SpectrumChips : StandardChips<ZilogZ80A, ferranti_ula_t, AY_3_8912> {};
+struct SpectrumChips : CommonBoardChips<ZilogZ80A, ferranti_ula_t, AY_3_8912> {};
 
 // ============================================================================
 // ZX Spectrum System
