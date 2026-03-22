@@ -21,7 +21,7 @@
 // Requires: OpenGL 3.0 / GLSL 130
 // ============================================================================
 
-#include "gui/gl_api.hpp"            // GL function pointers, compile_shader()
+#include "gui/gl_api.hpp"            // GL function pointers, gl_api::compile_shader()
 #include "gui/stream_shader.hpp"    // StreamShaderLocations, vertex_src, constants
 #include <cstdio>
 
@@ -117,47 +117,46 @@ void main() {
 // Uses the same vertex shader and uniform layout as stream_shader.
 // Returns the program ID (0 on failure).
 inline GLuint create_program(stream_shader::StreamShaderLocations* locs) {
-    using namespace gl_api;
 
-    GLuint vs = compile_shader(GL_VERTEX_SHADER, stream_shader::vertex_src);
+    GLuint vs = gl_api::compile_shader(GL_VERTEX_SHADER, stream_shader::vertex_src);
     if (!vs) return 0;
-    GLuint fs = compile_shader(GL_FRAGMENT_SHADER, fragment_src);
-    if (!fs) { glDeleteShader(vs); return 0; }
+    GLuint fs = gl_api::compile_shader(GL_FRAGMENT_SHADER, fragment_src);
+    if (!fs) { gl_api::glDeleteShader(vs); return 0; }
 
-    GLuint prog = glCreateProgram();
-    glAttachShader(prog, vs);
-    glAttachShader(prog, fs);
+    GLuint prog = gl_api::glCreateProgram();
+    gl_api::glAttachShader(prog, vs);
+    gl_api::glAttachShader(prog, fs);
 
-    glBindAttribLocation(prog, 0, "Position");
-    glBindAttribLocation(prog, 1, "UV");
-    glBindAttribLocation(prog, 2, "Color");
+    gl_api::glBindAttribLocation(prog, 0, "Position");
+    gl_api::glBindAttribLocation(prog, 1, "UV");
+    gl_api::glBindAttribLocation(prog, 2, "Color");
 
-    glLinkProgram(prog);
-    glDeleteShader(vs);
-    glDeleteShader(fs);
+    gl_api::glLinkProgram(prog);
+    gl_api::glDeleteShader(vs);
+    gl_api::glDeleteShader(fs);
 
     GLint status = 0;
-    glGetProgramiv(prog, GL_LINK_STATUS, &status);
+    gl_api::glGetProgramiv(prog, GL_LINK_STATUS, &status);
     if (status != GL_TRUE) {
         char log[512];
-        glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
+        gl_api::glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
         fprintf(stderr, "svideo_stream_shader: link error: %s\n", log);
-        glDeleteProgram(prog);
+        gl_api::glDeleteProgram(prog);
         return 0;
     }
 
     // Set texture unit bindings — same as composite stream shader
-    glUseProgram(prog);
-    glUniform1i(glGetUniformLocation(prog, "StreamTex"), 0);
-    glUniform1i(glGetUniformLocation(prog, "Palette"), 1);
-    glUseProgram(0);
+    gl_api::glUseProgram(prog);
+    gl_api::glUniform1i(gl_api::glGetUniformLocation(prog, "StreamTex"), 0);
+    gl_api::glUniform1i(gl_api::glGetUniformLocation(prog, "Palette"), 1);
+    gl_api::glUseProgram(0);
 
     if (locs) {
-        locs->proj_mtx        = glGetUniformLocation(prog, "ProjMtx");
-        locs->scanline_map    = glGetUniformLocation(prog, "ScanlineMap");
-        locs->stream_tex_width = glGetUniformLocation(prog, "StreamTexWidth");
-        locs->display_height  = glGetUniformLocation(prog, "DisplayHeight");
-        locs->display_width   = glGetUniformLocation(prog, "DisplayWidth");
+        locs->proj_mtx        = gl_api::glGetUniformLocation(prog, "ProjMtx");
+        locs->scanline_map    = gl_api::glGetUniformLocation(prog, "ScanlineMap");
+        locs->stream_tex_width = gl_api::glGetUniformLocation(prog, "StreamTexWidth");
+        locs->display_height  = gl_api::glGetUniformLocation(prog, "DisplayHeight");
+        locs->display_width   = gl_api::glGetUniformLocation(prog, "DisplayWidth");
     }
 
     printf("svideo_stream_shader: program %u compiled and linked successfully\n", prog);

@@ -20,34 +20,6 @@
 
 namespace indexed_shader {
 
-// Backward-compatible aliases — existing code uses indexed_shader::glFoo()
-// and "using namespace indexed_shader;" to reach GL functions.  These
-// aliases forward to the consolidated gl_api namespace.
-using gl_api::glActiveTexture;
-using gl_api::glCreateShader;
-using gl_api::glShaderSource;
-using gl_api::glCompileShader;
-using gl_api::glGetShaderiv;
-using gl_api::glGetShaderInfoLog;
-using gl_api::glDeleteShader;
-using gl_api::glCreateProgram;
-using gl_api::glAttachShader;
-using gl_api::glBindAttribLocation;
-using gl_api::glLinkProgram;
-using gl_api::glGetProgramiv;
-using gl_api::glGetProgramInfoLog;
-using gl_api::glDeleteProgram;
-using gl_api::glUseProgram;
-using gl_api::glGetUniformLocation;
-using gl_api::glUniform1i;
-using gl_api::glUniform1iv;
-using gl_api::glUniform1f;
-using gl_api::glUniformMatrix4fv;
-using gl_api::compile_shader;
-
-// Backward-compatible load_gl() — delegates to gl_api::load_gl().
-inline bool load_gl() { return gl_api::load_gl(); }
-
 // ============================================================================
 // GLSL sources
 // ============================================================================
@@ -95,42 +67,43 @@ void main() {
 // Returns the program ID (0 on failure).
 // On success, writes uniform locations to the output parameters.
 inline GLuint create_program(GLint* out_loc_proj, GLint* out_loc_palette) {
-    GLuint vs = compile_shader(GL_VERTEX_SHADER, vertex_src);
-    if (!vs) return 0;
-    GLuint fs = compile_shader(GL_FRAGMENT_SHADER, fragment_src);
-    if (!fs) { glDeleteShader(vs); return 0; }
 
-    GLuint prog = glCreateProgram();
-    glAttachShader(prog, vs);
-    glAttachShader(prog, fs);
+    GLuint vs = gl_api::compile_shader(GL_VERTEX_SHADER, vertex_src);
+    if (!vs) return 0;
+    GLuint fs = gl_api::compile_shader(GL_FRAGMENT_SHADER, fragment_src);
+    if (!fs) { gl_api::glDeleteShader(vs); return 0; }
+
+    GLuint prog = gl_api::glCreateProgram();
+    gl_api::glAttachShader(prog, vs);
+    gl_api::glAttachShader(prog, fs);
 
     // Bind attribute locations to match ImGui's vertex layout.
-    glBindAttribLocation(prog, 0, "Position");
-    glBindAttribLocation(prog, 1, "UV");
-    glBindAttribLocation(prog, 2, "Color");
+    gl_api::glBindAttribLocation(prog, 0, "Position");
+    gl_api::glBindAttribLocation(prog, 1, "UV");
+    gl_api::glBindAttribLocation(prog, 2, "Color");
 
-    glLinkProgram(prog);
-    glDeleteShader(vs);
-    glDeleteShader(fs);
+    gl_api::glLinkProgram(prog);
+    gl_api::glDeleteShader(vs);
+    gl_api::glDeleteShader(fs);
 
     GLint status = 0;
-    glGetProgramiv(prog, GL_LINK_STATUS, &status);
+    gl_api::glGetProgramiv(prog, GL_LINK_STATUS, &status);
     if (status != GL_TRUE) {
         char log[512];
-        glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
+        gl_api::glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
         fprintf(stderr, "indexed_shader: link error: %s\n", log);
-        glDeleteProgram(prog);
+        gl_api::glDeleteProgram(prog);
         return 0;
     }
 
     // Set texture unit bindings (Texture=0 set by ImGui, Palette=1 set by us).
-    glUseProgram(prog);
-    glUniform1i(glGetUniformLocation(prog, "Texture"), 0);
-    glUniform1i(glGetUniformLocation(prog, "Palette"), 1);
-    glUseProgram(0);
+    gl_api::glUseProgram(prog);
+    gl_api::glUniform1i(gl_api::glGetUniformLocation(prog, "Texture"), 0);
+    gl_api::glUniform1i(gl_api::glGetUniformLocation(prog, "Palette"), 1);
+    gl_api::glUseProgram(0);
 
-    if (out_loc_proj)    *out_loc_proj    = glGetUniformLocation(prog, "ProjMtx");
-    if (out_loc_palette) *out_loc_palette = glGetUniformLocation(prog, "Palette");
+    if (out_loc_proj)    *out_loc_proj    = gl_api::glGetUniformLocation(prog, "ProjMtx");
+    if (out_loc_palette) *out_loc_palette = gl_api::glGetUniformLocation(prog, "Palette");
 
     printf("indexed_shader: program %u compiled and linked successfully\n", prog);
     return prog;

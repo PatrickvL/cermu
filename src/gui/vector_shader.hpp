@@ -47,7 +47,7 @@
 // Requires: OpenGL 3.0 / GLSL 130
 // ============================================================================
 
-#include "gui/gl_api.hpp"            // GL function pointers, compile_shader()
+#include "gui/gl_api.hpp"            // GL function pointers, gl_api::compile_shader()
 #include "core/signal/sync_types.hpp"
 #include <cstdio>
 #include <cstdint>
@@ -56,29 +56,6 @@
 #include <vector>
 
 namespace vector_shader {
-
-// Backward-compatible aliases — existing code uses vector_shader::glFoo()
-// and "using namespace indexed_shader;" inside this namespace.  These
-// forward to gl_api so call sites don't need changing.
-using gl_api::glGenBuffers;
-using gl_api::glBindBuffer;
-using gl_api::glBufferData;
-using gl_api::glGenVertexArrays;
-using gl_api::glDeleteVertexArrays;
-using gl_api::glBindVertexArray;
-using gl_api::glVertexAttribPointer;
-using gl_api::glEnableVertexAttribArray;
-using gl_api::glDeleteBuffers;
-using gl_api::glUniform1f;
-using gl_api::glUniform3f;
-using gl_api::glGenFramebuffers;
-using gl_api::glDeleteFramebuffers;
-using gl_api::glBindFramebuffer;
-using gl_api::glFramebufferTexture2D;
-using gl_api::glCheckFramebufferStatus;
-
-// Backward-compatible load_gl() — all pointers are now loaded by gl_api::load_gl().
-inline bool load_gl() { return true; }
 
 // ============================================================================
 // GLSL sources
@@ -155,48 +132,47 @@ struct VectorShaderLocations {
 // ============================================================================
 
 inline GLuint create_program(VectorShaderLocations* locs) {
-    using namespace gl_api;
 
-    GLuint vs = compile_shader(GL_VERTEX_SHADER, vertex_src);
+    GLuint vs = gl_api::compile_shader(GL_VERTEX_SHADER, vertex_src);
     if (!vs) return 0;
-    GLuint fs = compile_shader(GL_FRAGMENT_SHADER, fragment_src);
-    if (!fs) { glDeleteShader(vs); return 0; }
+    GLuint fs = gl_api::compile_shader(GL_FRAGMENT_SHADER, fragment_src);
+    if (!fs) { gl_api::glDeleteShader(vs); return 0; }
 
-    GLuint prog = glCreateProgram();
-    glAttachShader(prog, vs);
-    glAttachShader(prog, fs);
+    GLuint prog = gl_api::glCreateProgram();
+    gl_api::glAttachShader(prog, vs);
+    gl_api::glAttachShader(prog, fs);
 
     // Custom attribute layout for vector vertices
-    glBindAttribLocation(prog, 0, "Position");
-    glBindAttribLocation(prog, 1, "Intensity");
-    glBindAttribLocation(prog, 2, "DistFromCenter");
-    glBindAttribLocation(prog, 3, "Color");
+    gl_api::glBindAttribLocation(prog, 0, "Position");
+    gl_api::glBindAttribLocation(prog, 1, "Intensity");
+    gl_api::glBindAttribLocation(prog, 2, "DistFromCenter");
+    gl_api::glBindAttribLocation(prog, 3, "Color");
 
-    glLinkProgram(prog);
-    glDeleteShader(vs);
-    glDeleteShader(fs);
+    gl_api::glLinkProgram(prog);
+    gl_api::glDeleteShader(vs);
+    gl_api::glDeleteShader(fs);
 
     GLint status = 0;
-    glGetProgramiv(prog, GL_LINK_STATUS, &status);
+    gl_api::glGetProgramiv(prog, GL_LINK_STATUS, &status);
     if (status != GL_TRUE) {
         char log[512];
-        glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
+        gl_api::glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
         fprintf(stderr, "vector_shader: link error: %s\n", log);
-        glDeleteProgram(prog);
+        gl_api::glDeleteProgram(prog);
         return 0;
     }
 
     // Default PhosphorColor to white (pass-through) — per-vertex color
     // carries the actual beam color.  Callers rendering monochrome DVG
     // games can override this to P31 green (0.2, 1.0, 0.4).
-    glUseProgram(prog);
-    glUniform3f(glGetUniformLocation(prog, "PhosphorColor"),
+    gl_api::glUseProgram(prog);
+    gl_api::glUniform3f(gl_api::glGetUniformLocation(prog, "PhosphorColor"),
                 1.0f, 1.0f, 1.0f);
-    glUseProgram(0);
+    gl_api::glUseProgram(0);
 
     if (locs) {
-        locs->proj_mtx       = glGetUniformLocation(prog, "ProjMtx");
-        locs->phosphor_color = glGetUniformLocation(prog, "PhosphorColor");
+        locs->proj_mtx       = gl_api::glGetUniformLocation(prog, "ProjMtx");
+        locs->phosphor_color = gl_api::glGetUniformLocation(prog, "PhosphorColor");
     }
 
     printf("vector_shader: program %u compiled and linked successfully\n", prog);
@@ -230,48 +206,48 @@ struct VectorDisplayResources {
 };
 
 inline bool create_resources(VectorDisplayResources* res) {
-    if (!glGenVertexArrays || !glGenBuffers) return false;
+    if (!gl_api::glGenVertexArrays || !gl_api::glGenBuffers) return false;
 
     res->shader = create_program(&res->locs);
     if (!res->shader) return false;
 
-    glGenVertexArrays(1, &res->vao);
-    glGenBuffers(1, &res->vbo);
+    gl_api::glGenVertexArrays(1, &res->vao);
+    gl_api::glGenBuffers(1, &res->vbo);
 
-    glBindVertexArray(res->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, res->vbo);
+    gl_api::glBindVertexArray(res->vao);
+    gl_api::glBindBuffer(GL_ARRAY_BUFFER, res->vbo);
 
     // Set up vertex attribute layout: {x, y, intensity, dist_from_center, r, g, b}
     // Position (location 0): 2 floats at offset 0
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(BeamVertex),
+    gl_api::glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(BeamVertex),
                           reinterpret_cast<void*>(0));
-    glEnableVertexAttribArray(0);
+    gl_api::glEnableVertexAttribArray(0);
 
     // Intensity (location 1): 1 float at offset 8
-    glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, sizeof(BeamVertex),
+    gl_api::glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, sizeof(BeamVertex),
                           reinterpret_cast<void*>(8));
-    glEnableVertexAttribArray(1);
+    gl_api::glEnableVertexAttribArray(1);
 
     // DistFromCenter (location 2): 1 float at offset 12
-    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(BeamVertex),
+    gl_api::glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(BeamVertex),
                           reinterpret_cast<void*>(12));
-    glEnableVertexAttribArray(2);
+    gl_api::glEnableVertexAttribArray(2);
 
     // Color (location 3): 3 floats at offset 16
-    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(BeamVertex),
+    gl_api::glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(BeamVertex),
                           reinterpret_cast<void*>(16));
-    glEnableVertexAttribArray(3);
+    gl_api::glEnableVertexAttribArray(3);
 
-    glBindVertexArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    gl_api::glBindVertexArray(0);
+    gl_api::glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     printf("vector_shader: created VAO %u, VBO %u\n", res->vao, res->vbo);
     return true;
 }
 
 inline void destroy_resources(VectorDisplayResources* res) {
-    if (res->vao) { glDeleteVertexArrays(1, &res->vao); res->vao = 0; }
-    if (res->vbo) { glDeleteBuffers(1, &res->vbo); res->vbo = 0; }
+    if (res->vao) { gl_api::glDeleteVertexArrays(1, &res->vao); res->vao = 0; }
+    if (res->vbo) { gl_api::glDeleteBuffers(1, &res->vbo); res->vbo = 0; }
     if (res->shader) { gl_api::glDeleteProgram(res->shader); res->shader = 0; }
 }
 
@@ -425,14 +401,14 @@ inline void upload_and_draw(VectorDisplayResources* res,
                             const BeamVertex* verts, int count) {
     if (!res || !res->vao || !res->vbo || count <= 0) return;
 
-    glBindVertexArray(res->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, res->vbo);
-    glBufferData(GL_ARRAY_BUFFER,
+    gl_api::glBindVertexArray(res->vao);
+    gl_api::glBindBuffer(GL_ARRAY_BUFFER, res->vbo);
+    gl_api::glBufferData(GL_ARRAY_BUFFER,
                  static_cast<GLsizeiptr>(count) * sizeof(BeamVertex),
                  verts, GL_DYNAMIC_DRAW);
     glDrawArrays(GL_TRIANGLES, 0, count);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    gl_api::glBindVertexArray(0);
+    gl_api::glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     res->vertex_count = count;
 }
@@ -549,7 +525,6 @@ struct PhosphorPersistence {
 
 inline bool create_persistence(PhosphorPersistence* p, int w, int h,
                                const PhosphorProfile& profile = PHOSPHOR_P31) {
-    using namespace gl_api;
     p->width   = w;
     p->height  = h;
     p->profile = profile;
@@ -565,50 +540,50 @@ inline bool create_persistence(PhosphorPersistence* p, int w, int h,
     glBindTexture(GL_TEXTURE_2D, 0);
 
     // Create FBO
-    glGenFramebuffers(1, &p->fbo);
-    glBindFramebuffer(GL_FRAMEBUFFER, p->fbo);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, p->texture, 0);
-    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    gl_api::glGenFramebuffers(1, &p->fbo);
+    gl_api::glBindFramebuffer(GL_FRAMEBUFFER, p->fbo);
+    gl_api::glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, p->texture, 0);
+    GLenum status = gl_api::glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    gl_api::glBindFramebuffer(GL_FRAMEBUFFER, 0);
     if (status != GL_FRAMEBUFFER_COMPLETE) {
         fprintf(stderr, "vector_shader: persistence FBO incomplete (0x%x)\n", status);
         return false;
     }
 
     // Compile decay shader
-    GLuint vs = compile_shader(GL_VERTEX_SHADER, decay_vertex_src);
+    GLuint vs = gl_api::compile_shader(GL_VERTEX_SHADER, decay_vertex_src);
     if (!vs) return false;
-    GLuint fs = compile_shader(GL_FRAGMENT_SHADER, decay_fragment_src);
-    if (!fs) { glDeleteShader(vs); return false; }
+    GLuint fs = gl_api::compile_shader(GL_FRAGMENT_SHADER, decay_fragment_src);
+    if (!fs) { gl_api::glDeleteShader(vs); return false; }
 
-    p->decay_shader = glCreateProgram();
-    glAttachShader(p->decay_shader, vs);
-    glAttachShader(p->decay_shader, fs);
-    glLinkProgram(p->decay_shader);
-    glDeleteShader(vs);
-    glDeleteShader(fs);
+    p->decay_shader = gl_api::glCreateProgram();
+    gl_api::glAttachShader(p->decay_shader, vs);
+    gl_api::glAttachShader(p->decay_shader, fs);
+    gl_api::glLinkProgram(p->decay_shader);
+    gl_api::glDeleteShader(vs);
+    gl_api::glDeleteShader(fs);
 
     GLint link_ok = 0;
-    glGetProgramiv(p->decay_shader, GL_LINK_STATUS, &link_ok);
+    gl_api::glGetProgramiv(p->decay_shader, GL_LINK_STATUS, &link_ok);
     if (link_ok != GL_TRUE) {
         char log[512];
-        glGetProgramInfoLog(p->decay_shader, sizeof(log), nullptr, log);
+        gl_api::glGetProgramInfoLog(p->decay_shader, sizeof(log), nullptr, log);
         fprintf(stderr, "vector_shader: decay shader link error: %s\n", log);
-        glDeleteProgram(p->decay_shader);
+        gl_api::glDeleteProgram(p->decay_shader);
         p->decay_shader = 0;
         return false;
     }
 
-    p->decay_loc_prev  = glGetUniformLocation(p->decay_shader, "PrevFrame");
-    p->decay_loc_decay = glGetUniformLocation(p->decay_shader, "Decay");
+    p->decay_loc_prev  = gl_api::glGetUniformLocation(p->decay_shader, "PrevFrame");
+    p->decay_loc_decay = gl_api::glGetUniformLocation(p->decay_shader, "Decay");
 
     // Set sampler to texture unit 0
-    glUseProgram(p->decay_shader);
-    glUniform1i(p->decay_loc_prev, 0);
-    glUseProgram(0);
+    gl_api::glUseProgram(p->decay_shader);
+    gl_api::glUniform1i(p->decay_loc_prev, 0);
+    gl_api::glUseProgram(0);
 
     // Empty VAO for fullscreen triangle (gl_VertexID-based)
-    glGenVertexArrays(1, &p->dummy_vao);
+    gl_api::glGenVertexArrays(1, &p->dummy_vao);
 
     printf("vector_shader: persistence FBO %u (%dx%d), decay shader %u\n",
            p->fbo, w, h, p->decay_shader);
@@ -616,10 +591,10 @@ inline bool create_persistence(PhosphorPersistence* p, int w, int h,
 }
 
 inline void destroy_persistence(PhosphorPersistence* p) {
-    if (p->fbo)          { glDeleteFramebuffers(1, &p->fbo); p->fbo = 0; }
+    if (p->fbo)          { gl_api::glDeleteFramebuffers(1, &p->fbo); p->fbo = 0; }
     if (p->texture)      { glDeleteTextures(1, &p->texture); p->texture = 0; }
     if (p->decay_shader) { gl_api::glDeleteProgram(p->decay_shader); p->decay_shader = 0; }
-    if (p->dummy_vao)    { glDeleteVertexArrays(1, &p->dummy_vao); p->dummy_vao = 0; }
+    if (p->dummy_vao)    { gl_api::glDeleteVertexArrays(1, &p->dummy_vao); p->dummy_vao = 0; }
     p->width = p->height = 0;
 }
 
@@ -666,7 +641,7 @@ inline void render_persistence_frame(
     glGetIntegerv(0x8CA6 /* GL_DRAW_FRAMEBUFFER_BINDING */, &prev_fbo);
 
     // Bind persistence FBO
-    glBindFramebuffer(GL_FRAMEBUFFER, p->fbo);
+    gl_api::glBindFramebuffer(GL_FRAMEBUFFER, p->fbo);
     glViewport(0, 0, p->width, p->height);
 
     // --- Pass 1: Decay previous frame per channel ---
@@ -677,7 +652,7 @@ inline void render_persistence_frame(
     DecayFactors decay = compute_decay(p->profile, frame_dt_seconds);
 
     gl_api::glUseProgram(p->decay_shader);
-    glUniform3f(p->decay_loc_decay, decay.r, decay.g, decay.b);
+    gl_api::glUniform3f(p->decay_loc_decay, decay.r, decay.g, decay.b);
 
     // Bind persistence texture as input (reading our own previous content)
     // This is safe because the fullscreen triangle writes every pixel exactly
@@ -690,9 +665,9 @@ inline void render_persistence_frame(
     gl_api::glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, p->texture);
 
-    glBindVertexArray(p->dummy_vao);
+    gl_api::glBindVertexArray(p->dummy_vao);
     glDrawArrays(GL_TRIANGLES, 0, 3);
-    glBindVertexArray(0);
+    gl_api::glBindVertexArray(0);
 
     // --- Pass 2: Render new beam quads additively ---
     if (vertex_count > 0 && verts) {
@@ -711,20 +686,20 @@ inline void render_persistence_frame(
             {-1.0f,   -1.0f,    0.0f,  1.0f },
         };
         gl_api::glUniformMatrix4fv(beam_loc_proj, 1, GL_FALSE, &ortho[0][0]);
-        glUniform3f(beam_loc_phosphor, phosphor_r, phosphor_g, phosphor_b);
+        gl_api::glUniform3f(beam_loc_phosphor, phosphor_r, phosphor_g, phosphor_b);
 
-        glBindVertexArray(beam_vao);
-        glBindBuffer(GL_ARRAY_BUFFER, beam_vbo);
-        glBufferData(GL_ARRAY_BUFFER,
+        gl_api::glBindVertexArray(beam_vao);
+        gl_api::glBindBuffer(GL_ARRAY_BUFFER, beam_vbo);
+        gl_api::glBufferData(GL_ARRAY_BUFFER,
                      static_cast<GLsizeiptr>(vertex_count) * static_cast<GLsizeiptr>(sizeof(BeamVertex)),
                      verts, GL_DYNAMIC_DRAW);
         glDrawArrays(GL_TRIANGLES, 0, vertex_count);
-        glBindVertexArray(0);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        gl_api::glBindVertexArray(0);
+        gl_api::glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
 
     // Restore previous state
-    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(prev_fbo));
+    gl_api::glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(prev_fbo));
     glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
     glEnable(GL_SCISSOR_TEST);
     glDisable(GL_BLEND);
