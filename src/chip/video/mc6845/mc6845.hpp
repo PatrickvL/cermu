@@ -179,7 +179,8 @@ struct mc6845_t : public VideoChipBase {
     //
     // When char_render_rom_ is non-null, the built-in character renderer
     // fires instead of (and in addition to) on_display_char.  At VSYNC
-    // the frame is flushed through the IndexedFrameBuffer.
+    // the frame is flushed through the IndexedFrameBuffer (if set),
+    // or left in char_render_indices_ for the system to stream.
     //
     // This is the pattern for PET, BBC Micro (text modes), and any future
     // MC6845-based system with a fixed character ROM and monochrome or
@@ -192,6 +193,7 @@ struct mc6845_t : public VideoChipBase {
     int             char_render_cols_    = 40;
     int             char_render_char_h_  = 8;
     int             char_render_fb_w_    = 320;
+    int             char_render_fb_h_    = 200;
     uint8_t         char_render_fg_      = 1;
     uint8_t         char_render_bg_      = 0;
     const uint32_t* char_render_palette_ = nullptr;
@@ -200,6 +202,7 @@ struct mc6845_t : public VideoChipBase {
     uint8_t         char_render_invert_bit_  = 0x80;
 
     /// Configure indexed character rendering.  Call once after init().
+    /// Pass nullptr for display to render into indices without IFB flush.
     /// Pass nullptr for rom to disable.
     void configure_char_render(IndexedFrameBuffer* display, uint8_t* indices,
                                const uint8_t* rom, const uint8_t* vram,
@@ -215,6 +218,7 @@ struct mc6845_t : public VideoChipBase {
         char_render_cols_    = cols;
         char_render_char_h_  = char_h;
         char_render_fb_w_    = fb_w;
+        char_render_fb_h_    = display ? display->height() : (char_h * 25);
         char_render_fg_      = fg;
         char_render_bg_      = bg;
         char_render_palette_ = palette;

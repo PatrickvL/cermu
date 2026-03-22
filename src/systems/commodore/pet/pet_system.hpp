@@ -3,6 +3,7 @@
 #include "systems/commodore/commodore_system.hpp"
 #include "systems/commodore/pet/pet_constants.hpp"
 #include "core/board.hpp"
+#include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/io/pia6820.hpp"
 #include "chip/io/mos6522.hpp"
@@ -152,8 +153,9 @@ private:
     mos6522_t*  via_  = nullptr;    // VIA — user port, timers, CB2 speaker
     mc6845_t*   crtc_ = nullptr;    // MC6845 CRTC — display timing
 
-    // Display — own framebuffer + GPU indexed rendering via CRTC
-    IndexedFrameBuffer display_;
+    // Display — pixel buffer rendered by CRTC, streamed via video port
+    uint8_t pixel_buffer_[pet_constants::DISPLAY_WIDTH * pet_constants::DISPLAY_HEIGHT] = {};
+    std::unique_ptr<CompositeVideoPort> video_port_;
 
     // Audio state — CB2 square wave speaker
     bool     speaker_state_ = false;    // Current CB2 output level

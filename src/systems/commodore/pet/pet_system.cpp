@@ -289,10 +289,10 @@ bool PETSystem::initialize() {
     crtc_->regs_[MC6845_R13_START_ADDR_LO] = 0x00;
 
     // GPU indexed palette rendering via CRTC's built-in character renderer
-    display_.init(pet_constants::DISPLAY_WIDTH, pet_constants::DISPLAY_HEIGHT);
-    display_.set_palette(pet_constants::PALETTE, 2);
+    palette_.set(pet_constants::PALETTE, 2);
+    std::memset(pixel_buffer_, 0, sizeof(pixel_buffer_));
     crtc_->configure_char_render(
-        &display_, display_.indices(),
+        nullptr, pixel_buffer_,
         char_rom_, screen_ram_chip_->data(),
         pet_constants::SCREEN_COLS,
         pet_constants::PET_CHAR_HEIGHT,
@@ -302,7 +302,13 @@ bool PETSystem::initialize() {
         0x03FF,  // vram_mask — 1K screen RAM
         0x80     // invert_bit — bit 7 selects inverted charset
     );
-    register_display(&display_);
+
+    // Video stream output
+    video_port_ = std::make_unique<CompositeVideoPort>();
+    video_port_->bind_display(nullptr, palette_.data(),
+                              pet_constants::DISPLAY_WIDTH, 1);
+    video_port_->set_palette(palette_.data(), 2);
+    video_port_->bind_frame_output(&last_frame_data_);
 
     // VSYNC/HSYNC callbacks (display rendering handled by CRTC internally)
     crtc_->on_vsync = [this]() { this->crtc_vsync(); };
@@ -367,8 +373,8 @@ void PETSystem::reset() {
         memset(screen_ram_chip_->data(), 0, 1024);
     }
 
-    // Clear framebuffer
-    display_.clear();
+    // Clear pixel buffer
+    std::memset(pixel_buffer_, 0, sizeof(pixel_buffer_));
 
     // Reset audio state
     speaker_state_ = false;
@@ -546,11 +552,12 @@ void PETSystem::run_frame() {
     // Check deferred loading
     check_deferred_load();
 
-    uint32_t adjusted_cycles = static_cast<uint32_t>(cycles_per_frame_ * speed_multiplier_);
-    for (uint32_t i = 0; i < adjusted_cycles; i++) {
+    if (!video_port_) return;
+    auto& stream = video_port_->stream();
+    while (!stream.frame_ended()) {
         tick();
     }
-
+    video_port_->swap_frame();
     tick_peripherals();
 }
 
@@ -565,7 +572,18 @@ void PETSystem::crtc_display_char(uint16_t /* ma */, uint8_t /* ra */, bool /* c
 }
 
 void PETSystem::crtc_vsync() {
-    // VSYNC — frame rendering + flush handled by MC6845 internally.
+    // Flush pixel buffer to video stream
+    if (video_port_) {
+        auto& stream = video_port_->stream();
+        for (int y = 0; y < pet_constants::DISPLAY_HEIGHT; y++) {
+            const uint8_t* line = pixel_buffer_ + y * pet_constants::DISPLAY_WIDTH;
+            stream.drive({0, VideoFlags::HSync});
+            for (int x = 0; x < pet_constants::DISPLAY_WIDTH; x++) {
+                stream.drive({line[x], VideoFlags::BeamOn});
+            }
+        }
+        stream.drive({0, VideoFlags::FrameEnd});
+    }
 }
 
 void PETSystem::crtc_hsync() {
