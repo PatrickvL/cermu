@@ -355,6 +355,14 @@ target_include_directories(m680x0_decoder PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/m680x0
 )
 
+# MC6809 Decoder - standalone library for instruction decoding
+add_library(mc6809_decoder STATIC
+    src/chip/cpu/mc6809/mc6809_decoder.cpp
+)
+target_include_directories(mc6809_decoder PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/mc6809
+)
+
 # Chip library sources
 set(CHIP_SOURCES
     # CPU - fam65xx template instantiation + ChipRegistry registration
@@ -673,6 +681,7 @@ target_link_libraries(cermu_console
     fam65xx_decoder
     z80_decoder
     m680x0_decoder
+    mc6809_decoder
     ${LIBARCHIVE_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
@@ -724,6 +733,7 @@ if(BUILD_GUI)
         fam65xx_decoder
         z80_decoder
         m680x0_decoder
+        mc6809_decoder
         ${LIBARCHIVE_LIBRARIES}
         ${SDL2_LIBRARIES}
         ${OPENGL_LIBRARIES}
@@ -799,6 +809,7 @@ target_link_libraries(c64_test_runner
     fam65xx_decoder
     z80_decoder
     m680x0_decoder
+    mc6809_decoder
     ${LIBARCHIVE_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
@@ -823,6 +834,7 @@ target_link_libraries(nes_test_runner
     fam65xx_decoder
     z80_decoder
     m680x0_decoder
+    mc6809_decoder
     ${LIBARCHIVE_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
@@ -852,6 +864,7 @@ target_link_libraries(c16_test_runner
     fam65xx_decoder
     z80_decoder
     m680x0_decoder
+    mc6809_decoder
     ${LIBARCHIVE_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
@@ -903,6 +916,7 @@ target_link_libraries(probe_verify
     fam65xx_decoder
     z80_decoder
     m680x0_decoder
+    mc6809_decoder
     ${LIBARCHIVE_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
