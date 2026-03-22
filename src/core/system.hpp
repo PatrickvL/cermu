@@ -20,6 +20,7 @@ struct RomSetMatch;
 class Session;
 
 #include "core/indexed_frame_buffer.hpp"
+#include "core/palette_table.hpp"
 #include "core/board_base.hpp"
 #include "core/signal/sync_types.hpp"   // FrameData, SyncEvent, VideoSignalType
 
@@ -177,6 +178,11 @@ protected:
     // delegate through this automatically.
     IndexedFrameBuffer* display_ = nullptr;
 
+    // Direct palette — for stream-only systems that don't use IndexedFrameBuffer.
+    // Set via register_palette().  The palette accessors check this first,
+    // then fall back to display_->palette for IFB-based systems.
+    PaletteTable palette_;
+
     // Last video frame data — populated by VideoPort::swap_frame() when
     // the system calls bind_frame_output(&last_frame_data_) during init.
     // Contains pointers to port-internal buffers valid until next swap_frame().
@@ -187,6 +193,12 @@ protected:
     /// palette has been set.  Enables GPU indexed rendering automatically.
     void register_display(IndexedFrameBuffer* display) {
         display_ = display;
+    }
+
+    /// Register a palette directly (without IndexedFrameBuffer).
+    /// For stream-only systems that no longer use IndexedFrameBuffer.
+    void register_palette(const uint32_t* palette, int count) {
+        palette_.set(palette, count);
     }
     
     Session* session_ = nullptr;  // Non-owning back-reference to parent session
@@ -589,9 +601,9 @@ public:
     // eliminates per-pixel CPU work and reduces the texture upload from
     // 4 bytes/pixel (RGBA) to 1 byte/pixel (R8).
     //
-    // Systems opt in by calling register_display() during initialize(),
-    // providing an IndexedFrameBuffer with a palette set.  The base
-    // class implements all accessors automatically.
+    // Two opt-in paths:
+    //   1. register_palette(data, count) — stream-only systems (no IFB).
+    //   2. register_display(&ifb) — legacy IFB-based systems.
     //
     // The host calls set_index_buffer() after set_framebuffer() when the
     // system advertises support.  Scanline-based systems override
@@ -599,17 +611,20 @@ public:
 
     /// Whether this system supports GPU indexed palette rendering.
     bool supports_gpu_indexed_rendering() const {
+        if (!palette_.empty()) return true;
         return display_ && display_->palette_size() > 0;
     }
 
     /// Number of palette entries (e.g. 16 for C64, 128 for TED/TIA).
     int get_gpu_palette_size() const {
+        if (!palette_.empty()) return palette_.size();
         return display_ ? display_->palette_size() : 0;
     }
 
     /// Pointer to the RGBA palette array (must have get_gpu_palette_size() entries).
     /// The host uploads this to a 256×1 GPU texture once per frame.
     const uint32_t* get_gpu_palette_data() const {
+        if (!palette_.empty()) return palette_.data();
         return display_ ? display_->palette_data() : nullptr;
     }
 
@@ -641,6 +656,14 @@ public:
     /// Override in systems that use non-Composite video ports (RGB, RGBI, Vector).
     /// The GUI uses this at init time to allocate the correct shader pipeline.
     virtual VideoSignalType get_video_signal_type() const { return VideoSignalType::Composite; }
+
+    /// Configuration for vector display phosphor tint and color palette.
+    /// Used by the GUI to select phosphor color and palette for the shader.
+    struct VectorDisplayConfig {
+        float phosphor_r = 0.2f, phosphor_g = 1.0f, phosphor_b = 0.2f;  // P31 green
+        const float* color_palette = nullptr;   // 8×3 RGB floats, or nullptr for mono
+    };
+    virtual VectorDisplayConfig get_vector_display_config() const { return {}; }
 
     /// Suppress the CPU-side bridge (reconstruct_to_framebuffer) in the
     /// system's VideoPort.  Called by the host when the GPU stream shader
