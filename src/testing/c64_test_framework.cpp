@@ -1400,11 +1400,11 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
     
     result.cycles_executed = cycles;
     
-    // Get VIC-II framebuffer
+    // Verify VIC-II chip is available
     vicii_base_t* vicii = static_cast<vicii_base_t*>(c64->vicii);
-    if (!vicii || !vicii->display_) {
+    if (!vicii) {
         result.status = TestStatus::ERROR;
-        result.message = "VIC-II framebuffer not available";
+        result.message = "VIC-II chip not available";
         return result;
     }
     
@@ -1453,13 +1453,15 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
         
         // Check if we need to resave screenshot with exact reference dimensions
         // This handles cases where reference has different crop than our default
-        if (ref_info.width != vicii->display_->width() ||
-            ref_info.height != vicii->display_->height()) {
+        int fb_w = is_pal_system_ ? 403 : 418;
+        int fb_h = is_pal_system_ ? 284 : 235;
+        if (ref_info.width != fb_w ||
+            ref_info.height != fb_h) {
             
             if (verbose_) {
                 printf("  Reference dimensions (%dx%d) differ from framebuffer (%dx%d)\n",
                        ref_info.width, ref_info.height,
-                       vicii->display_->width(), vicii->display_->height());
+                       fb_w, fb_h);
             }
             
             // Use VICE-aligned crop offsets to extract the correct display window.
@@ -1470,9 +1472,6 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
             int crop_w = ref_info.width;
             int crop_h = ref_info.height;
             int crop_x, crop_y;
-            
-            int fb_w = vicii->display_->width();
-            int fb_h = vicii->display_->height();
             
             // VICE PAL: first_displayed_line=16, display is 384x272
             if (ref_info.width == 384 && ref_info.height == 272) {
@@ -1786,6 +1785,7 @@ C64System* TestFramework::create_system_for_test(const TestDescriptor& test) {
     uint32_t* framebuffer = new uint32_t[fb_width * fb_height];
     if (framebuffer) {
         c64->set_framebuffer(framebuffer, fb_width, fb_height);
+        last_allocated_framebuffer_ = framebuffer;
         if (verbose_) {
             printf("Allocated %dx%d framebuffer for VIC-II\n", fb_width, fb_height);
         }
@@ -1876,9 +1876,7 @@ std::vector<TestResult> TestFramework::run_tests_with_auto_config(const std::vec
             }
             
             // Get framebuffer pointer (already allocated by create_system_for_test)
-            if (current_c64->vicii && current_c64->vicii->display_) {
-                current_framebuffer = current_c64->vicii->display_->framebuffer();
-            }
+            current_framebuffer = last_allocated_framebuffer_;
         }
         
         // Run the test on current system (SEH-protected on Windows)

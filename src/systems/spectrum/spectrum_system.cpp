@@ -191,7 +191,7 @@ bool SpectrumSystem<V>::apply_configuration() {
     auto pal_it = config_.custom_settings.find("display_palette");
     if (pal_it != config_.custom_settings.end()) {
         if (auto* np = board_.video().select_palette(pal_it->second.c_str())) {
-            display_.set_palette(np->data, np->count);
+            register_palette(np->data, np->count);
         }
     }
     return true;
@@ -233,12 +233,8 @@ bool SpectrumSystem<V>::initialize() {
 
     register_bus_chips(board_);
 
-    // GPU indexed palette rendering — display_ owns palette + RGBA fallback.
-    display_.init(spectrum_constants::TOTAL_WIDTH,
-                  spectrum_constants::TOTAL_HEIGHT);
-    display_.set_palette(board_.video().get_palette(), board_.video().get_palette_size());
-    board_.video().set_display(&display_);
-    register_display(&display_);
+    // Register palette for GPU stream shader
+    register_palette(board_.video().get_palette(), board_.video().get_palette_size());
 
     // Video stream output — composite video from Ferranti ULA
     video_port_ = std::make_unique<CompositeVideoPort>();

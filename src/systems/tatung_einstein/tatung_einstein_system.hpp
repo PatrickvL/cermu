@@ -109,8 +109,7 @@ private:
     // ── ROM banking ──────────────────────────────────────────────────────
     bool rom_enabled_ = true;  // ROM overlays RAM at boot, disabled by port $23
 
-    // ── Display ──────────────────────────────────────────────────────────
-    IndexedFrameBuffer display_;
+    // ── Video ────────────────────────────────────────────────────────────
     std::unique_ptr<CompositeVideoPort> video_port_;
 
     // ── Audio ────────────────────────────────────────────────────────────

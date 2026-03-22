@@ -65,7 +65,7 @@ static constexpr uint8_t SYS_MASK_GAME  = 0x02;
  *
  * FRAMEBUFFER MANAGEMENT:
  * =======================
- * - VIC-II renders to IndexedFrameBuffer via set_display()
+ * - VIC-II drives the composite video stream via VideoPort
  */
 
 /** Check if load address is a typical C64 address */
@@ -536,11 +536,8 @@ bool C64System::initialize() {
     register_bus_chips(board_);
     register_chip(std::make_unique<PlaChip>(this));
 
-    // GPU indexed palette rendering — 16-color VIC-II palette
-    display_.init(c64_constants::DISPLAY_WIDTH_PAL,
-                  c64_constants::DISPLAY_HEIGHT_PAL);
-    display_.set_palette(vicii_base_t::get_default_palette(), 16);
-    vicii->set_display(&display_);
+    // Register palette for GPU stream shader
+    register_palette(vicii_base_t::get_default_palette(), 16);
 
     // Wire VIC-II to composite video stream port
     video_port_ = std::make_unique<CompositeVideoPort>();
@@ -551,15 +548,11 @@ bool C64System::initialize() {
     const auto& vt = (get_vicii_standard() == VIC_PAL) ? MOS6569_traits : MOS6567R8_traits;
     const uint16_t ppl = vt.cycles_per_line * 8;
     const int back_porch = (int(vt.first_visible_x_coord) - int(vt.hsync_end) + ppl) % ppl;
-    video_port_->bind_display(&display_, vicii_base_t::get_default_palette(),
-                              vt.visible_pixels_per_line, back_porch);
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Wire SID to audio signal port
     audio_port_ = std::make_unique<AudioPort>();
     sid->set_audio_port(audio_port_.get());
-
-    register_display(&display_);
 
     printf("C64: System initialized successfully\n");
     return true;
@@ -1438,7 +1431,7 @@ bool C64System::apply_configuration() {
     auto pal_it = config_.custom_settings.find("display_palette");
     if (pal_it != config_.custom_settings.end() && initialized_ && this->vicii) {
         if (auto* np = this->vicii->select_palette(pal_it->second.c_str())) {
-            display_.set_palette(np->data, np->count);
+            register_palette(np->data, np->count);
         }
     }
 

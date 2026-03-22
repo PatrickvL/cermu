@@ -127,8 +127,7 @@ private:
     Bus bus_;
     MainBoard board_{kAcornAtomChips};
 
-    // ── Display ──────────────────────────────────────────────────────────
-    IndexedFrameBuffer display_;
+    // ── Video ────────────────────────────────────────────────────────────
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
 
     // ── Keyboard ─────────────────────────────────────────────────────────

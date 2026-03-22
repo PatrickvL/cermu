@@ -182,7 +182,6 @@ bool C128System::initialize() {
     display_.init(c128_constants::VIC_DISPLAY_WIDTH_PAL,
                   c128_constants::VIC_DISPLAY_HEIGHT_PAL);
     display_.set_palette(vicii_base_t::get_default_palette(), 16);
-    vic_iie.set_display(&display_);
     register_display(&display_);
 
     system_ready_ = true;

@@ -187,17 +187,12 @@ bool Atari2600System::initialize() {
     // Register all manifest-created chips for the Hardware menu
     register_bus_chips(board_);
 
-    // GPU indexed palette rendering — 128-color TIA NTSC palette
-    display_.init(atari2600_constants::DISPLAY_WIDTH,
-                  atari2600_constants::DISPLAY_HEIGHT);
-    display_.set_palette(board_.video().palette_rgba_, 128);
-    board_.video().set_display(&display_);
-    register_display(&display_);
+    // Register palette for GPU stream shader
+    register_palette(board_.video().palette_rgba_, 128);
 
     // Video stream output — composite video from TIA
     video_port_ = std::make_unique<CompositeVideoPort>();
     board_.video().set_stream(&video_port_->stream());
-    video_port_->bind_display(&display_, board_.video().palette_rgba_);
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Audio port — TIA does its own decimation, uses drive_sample()

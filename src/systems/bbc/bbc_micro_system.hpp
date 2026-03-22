@@ -141,9 +141,6 @@ private:
     // Paged ROM state
     uint8_t     rom_select_ = 0;         // Currently selected paged ROM bank (0-15)
 
-    // Display — IndexedFrameBuffer owns palette + RGBA fallback.
-    // VIDPROC chip writes scanlines; display_ handles GPU routing.
-    IndexedFrameBuffer display_;
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
 
     // Keyboard matrix (10 columns × 8 rows)

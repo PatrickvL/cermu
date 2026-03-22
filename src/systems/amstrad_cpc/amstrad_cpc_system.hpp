@@ -208,11 +208,9 @@ private:
     bus_state_t pins_;
 
     // ========================================================================
-    // DISPLAY — IndexedFrameBuffer owns palette + RGBA fallback.
-    // Gate Array chip writes scanlines; display_ handles GPU routing.
+    // VIDEO
     // ========================================================================
 
-    IndexedFrameBuffer display_;
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
 
     // ========================================================================
