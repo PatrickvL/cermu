@@ -21,7 +21,7 @@
 // Requires: OpenGL 3.0 / GLSL 130
 // ============================================================================
 
-#include "gui/indexed_shader.hpp"
+#include "gui/gl_api.hpp"            // GL function pointers, compile_shader()
 #include "gui/stream_shader.hpp"    // StreamShaderLocations, vertex_src, constants
 #include <cstdio>
 
@@ -117,7 +117,7 @@ void main() {
 // Uses the same vertex shader and uniform layout as stream_shader.
 // Returns the program ID (0 on failure).
 inline GLuint create_program(stream_shader::StreamShaderLocations* locs) {
-    using namespace indexed_shader;
+    using namespace gl_api;
 
     GLuint vs = compile_shader(GL_VERTEX_SHADER, stream_shader::vertex_src);
     if (!vs) return 0;

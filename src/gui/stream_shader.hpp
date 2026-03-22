@@ -29,12 +29,14 @@
 // Requires: OpenGL 3.0 / GLSL 130
 // ============================================================================
 
-#include "gui/indexed_shader.hpp"   // GL function pointers, compile_shader()
+#include "gui/gl_api.hpp"            // GL function pointers, compile_shader()
 #include "core/signal/sync_types.hpp"
 #include <cstdio>
 #include <cstdint>
 
 namespace stream_shader {
+
+using namespace gl_api;
 
 // Maximum visible scanlines any system can produce.
 // PAL VIC-II: 284, NTSC: 234, PAL TED: 288.  512 gives ample headroom.
@@ -183,7 +185,7 @@ struct StreamShaderLocations {
 // Create the stream reconstruction shader program.
 // Returns the program ID (0 on failure).
 inline GLuint create_program(StreamShaderLocations* locs) {
-    using namespace indexed_shader;
+    using namespace gl_api;
 
     GLuint vs = compile_shader(GL_VERTEX_SHADER, vertex_src);
     if (!vs) return 0;
