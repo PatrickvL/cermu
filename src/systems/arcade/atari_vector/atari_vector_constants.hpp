@@ -2,34 +2,46 @@
 /*
  * atari_vector_constants.hpp — Shared constants for Atari vector arcade systems
  *
- * Defines hardware constants shared between Asteroids (1979) and
- * Lunar Lander (1979).  Both use the same general board architecture:
- *   - MOS 6502 CPU @ 1.512 MHz
- *   - DVG (Digital Vector Generator) for XY vector display
- *   - Discrete sound circuits (no sound chip)
+ * Defines hardware constants for all Atari 6502-based vector arcade games:
+ *
+ * DVG-based (Digital Vector Generator):
+ *   Lunar Lander (1979), Asteroids (1979), Asteroids Deluxe (1980)
+ *
+ * AVG-based (Analog Vector Generator):
+ *   Battlezone (1980), Red Baron (1980), Tempest (1980),
+ *   Gravitar (1982), Space Duel (1982),
+ *   Black Widow (1982), Major Havoc (1983)
+ *
+ * All share the same general architecture:
+ *   - MOS 6502 CPU @ 1.512 MHz (12.096 MHz / 8)
+ *   - DVG or AVG vector display processor
+ *   - POKEY sound chip (later games; early games use discrete)
  *   - DIP switches, coin inputs, player controls
- *
- * Memory maps differ between games:
- *   Asteroids:     2 KB RAM ($0000-$03FF), vector RAM ($4000-$47FF),
- *                  vector ROM ($5000-$57FF), program ROM ($6800-$7FFF).
- *   Lunar Lander:  1 KB RAM ($0000-$03FF), vector RAM ($4000-$47FF),
- *                  vector ROM ($5000-$57FF), program ROM ($6000-$7FFF).
- *
- * Both share the same I/O decode region ($2000-$3FFF):
- *   Reads:   coin/start switches, player inputs, DIP switches
- *   Writes:  VGGO, VGRST, sound triggers, coin counters, LEDs
+ *   - I/O decode at $2000-$3FFF (reads=inputs, writes=outputs)
+ *   - Vector RAM at $2000+ (AVG) or $4000+ (DVG)
+ *   - Program ROM at $4000+ (AVG) or $6000+ (DVG)
  */
 
 #include <cstdint>
 
 // ============================================================================
-// Game variant enum — selects between Asteroids and Lunar Lander
+// Game variant enum
 // ============================================================================
 
 enum class AtariVectorVariant : uint8_t {
+    // DVG-based
     ASTEROIDS,
     ASTEROIDS_DELUXE,
     LUNAR_LANDER,
+    BATTLEZONE,
+    RED_BARON,
+
+    // AVG-based
+    TEMPEST,
+    GRAVITAR,
+    SPACE_DUEL,
+    BLACK_WIDOW,
+    MAJOR_HAVOC,
 };
 
 namespace atari_vector_constants {
@@ -256,5 +268,199 @@ namespace atari_vector_constants {
     // (idle=1, active=0) for the bits that the real hardware active-pulls.
     inline constexpr uint8_t LL_IN0_ACTIVE_LOW_MASK = 0xBE;  // bits 1,2,3,4,5,7
     inline constexpr uint8_t LL_IN1_ACTIVE_LOW_MASK = 0xCE;  // bits 1,2,3,6,7
+
+    // ========================================================================
+    // Battlezone-specific constants
+    // ========================================================================
+    //
+    // Battlezone (1980): 6502 + AVG (AVG_BZONE variant), discrete audio.
+    // Memory map (from MAME bzone.cpp):
+    //   Work RAM:    $0000-$03FF (1 KB)
+    //   I/O:         $0800-$1FFF (various decode — IN0, DSW, VGGO, VGRST)
+    //   Vector RAM:  $2000-$2FFF (4 KB — shared CPU + AVG)
+    //   Vector ROM:  $3000-$3FFF (4 KB — 2 × 2 KB)
+    //   Program ROM: $5000-$7FFF (12 KB — 6 × 2 KB chips)
+
+    inline constexpr uint16_t BZ_RAM_BASE          = 0x0000;
+    inline constexpr uint16_t BZ_RAM_SIZE          = 0x0400;    // 1 KB (MAME: $0000-$03FF)
+
+    inline constexpr uint16_t BZ_VECRAM_BASE       = 0x2000;
+    inline constexpr uint16_t BZ_VECRAM_SIZE       = 0x1000;    // 4 KB (AVG: $2000-$2FFF)
+    inline constexpr uint16_t BZ_VECROM_BASE       = 0x3000;
+    inline constexpr uint16_t BZ_VECROM_SIZE       = 0x1000;    // 4 KB
+
+    inline constexpr uint16_t BZ_PROGROM_BASE      = 0x4000;
+    inline constexpr uint16_t BZ_PROGROM_SIZE      = 0x4000;    // 16 KB (manifest-aligned, actual ROM at $5000-$7FFF)
+    inline constexpr uint16_t BZ_PROGROM_ACTUAL    = 0x3000;    // 12 KB actual ROM
+    inline constexpr uint16_t BZ_PROGROM_OFFSET    = 0x1000;    // ROM data at offset $1000 within 16 KB slot
+
+    // I/O decode — Battlezone uses $0800-$1FFF (MAME bzone.cpp)
+    inline constexpr uint16_t BZ_IO_BASE            = 0x0800;
+
+    inline constexpr uint16_t BZ_IN0_ADDR          = 0x0800;    // read: IN0 (direct byte)
+    inline constexpr uint16_t BZ_DSW0_ADDR         = 0x0A00;    // read: DSW0
+    inline constexpr uint16_t BZ_DSW1_ADDR         = 0x0C00;    // read: DSW1
+
+    inline constexpr uint16_t BZ_COIN_CTR_ADDR     = 0x1000;    // write: coin counters
+    inline constexpr uint16_t BZ_SND_ADDR          = 0x1200;    // write: sound latch
+    inline constexpr uint16_t BZ_VGGO_ADDR         = 0x1600;    // write: trigger AVG
+    inline constexpr uint16_t BZ_VGRST_ADDR        = 0x1800;    // write: reset AVG
+    inline constexpr uint16_t BZ_WDCLR_ADDR        = 0x1A00;    // write: watchdog clear
+
+    // DVG word offset: RAM at word 0x000, ROM at word 0x800 (4 KB gap, then 4 KB ROM)
+    inline constexpr uint16_t BZ_VECROM_WORD_OFFSET = 0x800;
+
+    // Battlezone IN0 bit definitions
+    inline constexpr uint8_t BZ_IN0_HALT           = 0x01;  // bit 0: DVG HALT
+    inline constexpr uint8_t BZ_IN0_CLOCK          = 0x02;  // bit 1: 3 KHz clock
+    inline constexpr uint8_t BZ_IN0_COIN3          = 0x04;  // bit 2: Coin 3
+    inline constexpr uint8_t BZ_IN0_COIN2          = 0x08;  // bit 3: Coin 2
+    inline constexpr uint8_t BZ_IN0_COIN1          = 0x10;  // bit 4: Coin 1
+    inline constexpr uint8_t BZ_IN0_SELF_TEST      = 0x20;  // bit 5: Self-test (active-LOW)
+    inline constexpr uint8_t BZ_IN0_TILT           = 0x40;  // bit 6: Tilt
+    inline constexpr uint8_t BZ_IN0_1P_START       = 0x80;  // bit 7: Start
+
+    // Joystick ports at separate addresses
+    inline constexpr uint16_t BZ_JSR_ADDR          = 0x0800;    // joystick register (overlaps IN0)
+    // bit fields for joystick: forward/reverse left/right
+
+    // ========================================================================
+    // Red Baron-specific constants
+    // ========================================================================
+    //
+    // Red Baron (1980): 6502 + AVG + POKEY, yoke controller.
+    // Very similar memory map to Battlezone but uses POKEY for sound.
+    // I/O addresses match BZ except POKEY at $1810-$181F.
+
+    inline constexpr uint16_t RB_RAM_BASE          = 0x0000;
+    inline constexpr uint16_t RB_RAM_SIZE          = 0x0400;    // 1 KB (MAME: $0000-$03FF)
+
+    inline constexpr uint16_t RB_VECRAM_BASE       = 0x2000;
+    inline constexpr uint16_t RB_VECRAM_SIZE       = 0x1000;    // 4 KB (AVG: $2000-$2FFF)
+    inline constexpr uint16_t RB_VECROM_BASE       = 0x3000;
+    inline constexpr uint16_t RB_VECROM_SIZE       = 0x1000;    // 4 KB
+
+    inline constexpr uint16_t RB_PROGROM_BASE      = 0x4000;
+    inline constexpr uint16_t RB_PROGROM_SIZE      = 0x4000;    // 16 KB (manifest-aligned, actual ROM at $5000-$7FFF)
+    inline constexpr uint16_t RB_PROGROM_ACTUAL    = 0x3000;    // 12 KB actual ROM
+    inline constexpr uint16_t RB_PROGROM_OFFSET    = 0x1000;    // ROM data at offset $1000 within 16 KB slot
+
+    // Red Baron I/O same base as Battlezone
+    inline constexpr uint16_t RB_POKEY_BASE        = 0x1810;    // POKEY at $1810-$181F
+
+    inline constexpr uint16_t RB_VECROM_WORD_OFFSET = 0x800;
+
+    // ========================================================================
+    // AVG-based game memory map constants
+    // ========================================================================
+    //
+    // The AVG games (Tempest, Gravitar, Space Duel, Black Widow, Major Havoc)
+    // share a different board architecture from the DVG games:
+    //
+    //   Work RAM:    $0000-$03FF (1 KB)
+    //   Vector RAM:  $2000-$2FFF (4 KB) — shared CPU + AVG
+    //   Vector ROM:  $3000-$3FFF (4 KB) — DVG/AVG address space
+    //   Program ROM: $4000-$7FFF (16 KB)
+    //   POKEY:       $60xx
+    //   I/O:         $0800-$0FFF or $6000–$6FFF (game-dependent)
+    //   EAROM:       $0C00-$0CFF (some games)
+    //
+    // All AVG games use a 16-bit address space with A15=0 giving $0000-$7FFF.
+
+    // Tempest (1980): 6502 + AVG + POKEY (x2), color vector, spinner input
+    // Memory: $0000–$03FF RAM, $0800 I/O, $2000–$2FFF VRAM, $3000–$3FFF VROM,
+    //         $4000–$5FFF math ROM?, $6000–$7FFF program ROM
+    // Tempest uses a 32 KB address space: A15 unused → $0000-$7FFF mirrors.
+    inline constexpr uint16_t TEMP_RAM_BASE        = 0x0000;
+    inline constexpr uint16_t TEMP_RAM_SIZE        = 0x0400;    // 1 KB
+    inline constexpr uint16_t TEMP_VECRAM_BASE     = 0x2000;
+    inline constexpr uint16_t TEMP_VECRAM_SIZE     = 0x1000;    // 4 KB
+    inline constexpr uint16_t TEMP_VECROM_BASE     = 0x3000;
+    inline constexpr uint16_t TEMP_VECROM_SIZE     = 0x1000;    // 4 KB
+    inline constexpr uint16_t TEMP_PROGROM_BASE    = 0x4000;
+    inline constexpr uint16_t TEMP_PROGROM_SIZE    = 0x4000;    // 16 KB ($4000-$7FFF)
+    inline constexpr uint16_t TEMP_POKEY1_BASE     = 0x60C0;    // POKEY 1
+    inline constexpr uint16_t TEMP_POKEY2_BASE     = 0x60D0;    // POKEY 2 (secondary)
+    inline constexpr uint16_t TEMP_EAROM_BASE      = 0x0C00;
+    inline constexpr uint16_t TEMP_EAROM_SIZE      = 0x0040;    // 64 bytes
+    inline constexpr uint16_t TEMP_VGGO_ADDR       = 0x6040;
+    inline constexpr uint16_t TEMP_VGRST_ADDR      = 0x6080;
+    inline constexpr uint16_t TEMP_WDCLR_ADDR      = 0x60E0;
+    inline constexpr uint16_t TEMP_IN0_ADDR        = 0x0C00;
+    inline constexpr uint16_t TEMP_IN1_ADDR        = 0x0D00;
+    inline constexpr uint16_t TEMP_DSW1_ADDR       = 0x0E00;
+    inline constexpr uint16_t TEMP_DSW2_ADDR       = 0x0E00;
+
+    // AVG word offset for Tempest-family games
+    // Vector RAM at word 0x000-0x7FF (4 KB), Vector ROM at word 0x800-0xFFF (4 KB)
+    inline constexpr uint16_t TEMP_VECROM_WORD_OFFSET = 0x800;
+
+    // Gravitar (1982): Uses "bwidow" board (MAME bwidow.cpp).
+    // I/O at $0800-$1FFF, program ROM at $4000-$7FFF.
+    // MAME maps: POKEY1 $8800→$0800, VGGO $8840→$0840, VGRST $8880→$0880,
+    //            WD $88C0→$08C0, POKEY2 $8A00→$0A00, IN0 $0C00, IN1 $0D00, DSW $0E00.
+    inline constexpr uint16_t GRAV_RAM_BASE        = 0x0000;
+    inline constexpr uint16_t GRAV_RAM_SIZE        = 0x0800;    // 2 KB (MAME: $0000-$07FF)
+    inline constexpr uint16_t GRAV_VECRAM_BASE     = 0x2000;
+    inline constexpr uint16_t GRAV_VECRAM_SIZE     = 0x1000;
+    inline constexpr uint16_t GRAV_VECROM_BASE     = 0x3000;
+    inline constexpr uint16_t GRAV_VECROM_SIZE     = 0x1000;
+    inline constexpr uint16_t GRAV_PROGROM_BASE    = 0x4000;
+    inline constexpr uint16_t GRAV_PROGROM_SIZE    = 0x4000;
+    inline constexpr uint16_t GRAV_POKEY1_BASE     = 0x0800;    // POKEY 1 (MAME: $8800→$0800)
+    inline constexpr uint16_t GRAV_POKEY2_BASE     = 0x0A00;    // POKEY 2 (MAME: $8A00→$0A00)
+    inline constexpr uint16_t GRAV_VGGO_ADDR       = 0x0840;    // write: trigger AVG (MAME: $8840)
+    inline constexpr uint16_t GRAV_VGRST_ADDR      = 0x0880;    // write: reset AVG (MAME: $8880)
+    inline constexpr uint16_t GRAV_WDCLR_ADDR      = 0x08C0;    // write: watchdog clear
+
+    // Space Duel (1982): AVG + POKEY, color, two-player simultaneous
+    // MAME spacduel_map: VGGO $0C80, VGRST $0D80, WD $0E80,
+    //   POKEY1 $0800, POKEY2 $0900, IN0 $0C00, IN1 $0D00, DSW $0E00.
+    inline constexpr uint16_t SD_RAM_BASE          = 0x0000;
+    inline constexpr uint16_t SD_RAM_SIZE          = 0x0800;    // 2 KB (MAME: $0000-$07FF)
+    inline constexpr uint16_t SD_VECRAM_BASE       = 0x2000;
+    inline constexpr uint16_t SD_VECRAM_SIZE       = 0x1000;
+    inline constexpr uint16_t SD_VECROM_BASE       = 0x3000;
+    inline constexpr uint16_t SD_VECROM_SIZE       = 0x1000;
+    inline constexpr uint16_t SD_PROGROM_BASE      = 0x4000;
+    inline constexpr uint16_t SD_PROGROM_SIZE      = 0x4000;
+    inline constexpr uint16_t SD_POKEY1_BASE       = 0x0800;    // POKEY 1
+    inline constexpr uint16_t SD_POKEY2_BASE       = 0x0900;    // POKEY 2
+    inline constexpr uint16_t SD_VGGO_ADDR         = 0x0C80;    // write: trigger AVG
+    inline constexpr uint16_t SD_VGRST_ADDR        = 0x0D80;    // write: reset AVG
+    inline constexpr uint16_t SD_WDCLR_ADDR        = 0x0E80;    // write: watchdog clear
+
+    // Black Widow (1982): AVG + POKEY, color, dual joystick
+    // Same board as Gravitar (bwidow board). I/O at $0800-$1FFF.
+    // MAME: POKEY1 $8800→$0800, VGGO $8840→$0840, POKEY2 $8A00→$0A00.
+    inline constexpr uint16_t BW_RAM_BASE          = 0x0000;
+    inline constexpr uint16_t BW_RAM_SIZE          = 0x0800;
+    inline constexpr uint16_t BW_VECRAM_BASE       = 0x2000;
+    inline constexpr uint16_t BW_VECRAM_SIZE       = 0x1000;
+    inline constexpr uint16_t BW_VECROM_BASE       = 0x3000;
+    inline constexpr uint16_t BW_VECROM_SIZE       = 0x1000;
+    inline constexpr uint16_t BW_PROGROM_BASE      = 0x4000;
+    inline constexpr uint16_t BW_PROGROM_SIZE      = 0x4000;
+    inline constexpr uint16_t BW_POKEY1_BASE       = 0x0800;
+    inline constexpr uint16_t BW_POKEY2_BASE       = 0x0A00;    // POKEY 2 (MAME: $8A00→$0A00)
+    inline constexpr uint16_t BW_VGGO_ADDR         = 0x0840;    // write: trigger AVG (same as Gravitar)
+    inline constexpr uint16_t BW_VGRST_ADDR        = 0x0880;    // write: reset AVG
+    inline constexpr uint16_t BW_WDCLR_ADDR        = 0x08C0;    // write: watchdog clear
+
+    // Major Havoc (1983): AVG + POKEY + TMS5220, color, spinner
+    // More complex memory map — has bank switching for extra program ROM
+    // MAME mhavoc.cpp: VGGO $1400, VGRST $1600, IN0 $1200, POKEY1 $1200(?)
+    inline constexpr uint16_t MH_RAM_BASE          = 0x0000;
+    inline constexpr uint16_t MH_RAM_SIZE          = 0x0800;
+    inline constexpr uint16_t MH_VECRAM_BASE       = 0x2000;
+    inline constexpr uint16_t MH_VECRAM_SIZE       = 0x1000;
+    inline constexpr uint16_t MH_VECROM_BASE       = 0x3000;
+    inline constexpr uint16_t MH_VECROM_SIZE       = 0x1000;
+    inline constexpr uint16_t MH_PROGROM_BASE      = 0x4000;
+    inline constexpr uint16_t MH_PROGROM_SIZE      = 0x4000;
+    inline constexpr uint16_t MH_POKEY1_BASE       = 0x1200;
+    inline constexpr uint16_t MH_VGGO_ADDR         = 0x1400;    // write: trigger AVG
+    inline constexpr uint16_t MH_VGRST_ADDR        = 0x1600;    // write: reset AVG
+    inline constexpr uint16_t MH_WDCLR_ADDR        = 0x1800;    // write: watchdog clear
 
 }  // namespace atari_vector_constants

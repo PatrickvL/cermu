@@ -157,6 +157,202 @@ static const RomSetDescriptor ad_v2_romset = {
     ad_v2_entries, 6
 };
 
+// ── Battlezone Rev 1 ─────────────────────────────────────────────────────
+//
+// Battlezone: 6 × 2 KB program ROMs ($5000-$7FFF), 2 × 2 KB vector ROMs ($3000-$3FFF)
+
+static const RomEntryDescriptor bz_v1_entries[] = {
+    // Vector ROMs
+    { {"036422.01"},                0x3000, 2048, true  },   // vector ROM 1
+    { {"036421.01"},                0x3800, 2048, true  },   // vector ROM 2
+    // Program ROMs ($5000-$7FFF)
+    { {"036414.01"},                0x5000, 2048, true  },
+    { {"036413.01"},                0x5800, 2048, true  },
+    { {"036412.01"},                0x6000, 2048, true  },
+    { {"036411.01"},                0x6800, 2048, true  },
+    { {"036410.01"},                0x7000, 2048, true  },
+    { {"036409.01"},                0x7800, 2048, true  },
+};
+
+static const RomSetDescriptor bz_v1_romset = {
+    "Battlezone Rev 1", "Battlezone",
+    bz_v1_entries, 8
+};
+
+// ── Battlezone Rev 2 ─────────────────────────────────────────────────────
+
+static const RomEntryDescriptor bz_v2_entries[] = {
+    { {"036422.01"},                0x3000, 2048, true  },
+    { {"036421.01"},                0x3800, 2048, true  },
+    { {"036414.02"},                0x5000, 2048, true  },
+    { {"036413.02"},                0x5800, 2048, true  },
+    { {"036412.02"},                0x6000, 2048, true  },
+    { {"036411.02"},                0x6800, 2048, true  },
+    { {"036410.02"},                0x7000, 2048, true  },
+    { {"036409.02"},                0x7800, 2048, true  },
+};
+
+static const RomSetDescriptor bz_v2_romset = {
+    "Battlezone Rev 2", "Battlezone",
+    bz_v2_entries, 8
+};
+
+// ── Red Baron ────────────────────────────────────────────────────────────
+//
+// Red Baron: 6 × 2 KB program ROMs ($5000-$7FFF), 2 × 2 KB vector ROMs ($3000-$3FFF)
+
+static const RomEntryDescriptor rb_entries[] = {
+    // Vector ROMs
+    { {"037006.01"},                0x3000, 2048, true  },   // vector ROM 1
+    { {"037007.01"},                0x3800, 2048, true  },   // vector ROM 2
+    // Program ROMs ($5000-$7FFF)
+    { {"037001.01"},                0x5000, 2048, true  },
+    { {"037000.01"},                0x5800, 2048, true  },
+    { {"036999.01"},                0x6000, 2048, true  },
+    { {"036998.01"},                0x6800, 2048, true  },
+    { {"036997.01"},                0x7000, 2048, true  },
+    { {"036996.01"},                0x7800, 2048, true  },
+};
+
+static const RomSetDescriptor rb_romset = {
+    "Red Baron", "RedBaron",
+    rb_entries, 8
+};
+
+// ── Tempest Rev 3 ────────────────────────────────────────────────────────
+//
+// Tempest: 10 × 2 KB program ROMs + 2 × 2 KB vector ROMs.
+// MAME confirms part numbers for V3 (tempest3): most chips shared with
+// V1/V2, with V3-specific replacements: -217 (J1), -222 (R1), -316 (H1).
+//
+// The real hardware maps program ROM at $9000-$DFFF (20 KB) using A15
+// for bank select.  Our 15-bit address scheme maps only $4000-$7FFF
+// (16 KB), so the first 2 program ROMs ($9000-$9FFF → 15-bit $1000-$1FFF)
+// overflow the program ROM chip and are skipped by the loader with a
+// warning.  Full 16-bit address decode is needed for correct execution.
+//
+// ROM order matches MAME: lowest CPU address first.
+
+static const RomEntryDescriptor tempest_v3_entries[] = {
+    // Vector ROMs (AVG display list ROM at $3000-$3FFF)
+    { {"136002.111", "136002-111"},  0x3000, 2048, true  },
+    { {"136002.112", "136002-112"},  0x3800, 2048, true  },
+    // Program ROMs — sequential from $4000 (first 8 of 10 fit in 16 KB)
+    { {"136002.113", "136002-113"},  0x4000, 2048, true  },   // D1  ($9000)
+    { {"136002.114", "136002-114"},  0x4800, 2048, true  },   // E1  ($9800)
+    { {"136002.115", "136002-115"},  0x5000, 2048, true  },   // F1  ($A000)
+    { {"136002.316", "136002-316"},  0x5800, 2048, true  },   // H1  ($A800) — V3 only
+    { {"136002.217", "136002-217"},  0x6000, 2048, true  },   // J1  ($B000) — V2/V3
+    { {"136002.118", "136002-118"},  0x6800, 2048, true  },   // K1  ($B800)
+    { {"136002.119", "136002-119"},  0x7000, 2048, true  },   // L/M1 ($C000)
+    { {"136002.120", "136002-120"},  0x7800, 2048, true  },   // M/N1 ($C800)
+    // Last 2 program ROMs — addresses overflow $4000-$7FFF; loader skips
+    { {"136002.121", "136002-121"},  0x8000, 2048, false },   // P1  ($D000)
+    { {"136002.222", "136002-222"},  0x8800, 2048, false },   // R1  ($D800) — V2/V3
+};
+
+static const RomSetDescriptor tempest_v3_romset = {
+    "Tempest Rev 3", "Tempest",
+    tempest_v3_entries, 12
+};
+
+// ── Gravitar Rev 2 ───────────────────────────────────────────────────────
+//
+// Gravitar: program ROMs are 4 KB chips (4096 bytes), not 2 KB.
+// The actual ROM files in distribution zips (e.g. 136010.201) are 4096 bytes.
+// TODO: Restructure entries with 4 KB sizes and 4 KB address stride once
+//       the full MAME-to-address mapping is verified.
+// Patterns include both dot-separated (actual files) and dash-separated
+// (MAME naming convention) forms for flexible matching.
+
+static const RomEntryDescriptor gravitar_v2_entries[] = {
+    // Vector ROMs at $3000 (MAME: 136010-101, 136010-102 — 2 KB each)
+    { {"136010.101", "136010-101"},  0x3000, 2048, true  },
+    { {"136010.102", "136010-102"},  0x3800, 2048, true  },
+    // Program ROMs ($4000-$7FFF)
+    // MAME uses a mix of 2 KB and 4 KB chips. Actual zip files are 4096 bytes.
+    // expected_size=0 allows matching regardless of file size.
+    { {"136010.210", "136010-210"},  0x4000, 0, true  },
+    { {"136010.207", "136010-207"},  0x4800, 0, true  },
+    { {"136010.208", "136010-208"},  0x5000, 0, true  },
+    { {"136010.209", "136010-209"},  0x5800, 0, true  },
+    { {"136010.201", "136010-201"},  0x6000, 0, true  },
+};
+
+static const RomSetDescriptor gravitar_v2_romset = {
+    "Gravitar Rev 2", "Gravitar",
+    gravitar_v2_entries, 7
+};
+
+// ── Space Duel ───────────────────────────────────────────────────────────
+//
+// Space Duel: program ROMs are 4 KB chips. Actual files match 136006.NNN format.
+// TODO: Restructure with 4 KB sizes/stride once MAME mapping is verified.
+
+static const RomEntryDescriptor spaceduel_entries[] = {
+    // Vector ROMs (2 KB each)
+    { {"136006.107", "136006-107"},  0x3000, 2048, true  },
+    { {"136006.108", "136006-108"},  0x3800, 2048, true  },
+    // Program ROMs ($4000-$7FFF) — expected_size=0 for flexible matching
+    { {"136006.201", "136006-201"},  0x4000, 0, true  },
+    { {"136006.102", "136006-102"},  0x4800, 0, true  },
+    { {"136006.103", "136006-103"},  0x5000, 0, true  },
+    { {"136006.104", "136006-104"},  0x5800, 0, true  },
+    { {"136006.105", "136006-105"},  0x6000, 0, true  },
+    { {"136006.106", "136006-106"},  0x6800, 0, true  },
+};
+
+static const RomSetDescriptor spaceduel_romset = {
+    "Space Duel", "SpaceDuel",
+    spaceduel_entries, 8
+};
+
+// ── Black Widow ──────────────────────────────────────────────────────────
+//
+// Black Widow: program ROMs are 4 KB chips. Actual files match 136017.NNN format.
+// TODO: Restructure with 4 KB sizes/stride once MAME mapping is verified.
+
+static const RomEntryDescriptor blackwidow_entries[] = {
+    // Vector ROMs (2 KB each)
+    { {"136017.107", "136017-107"},  0x3000, 2048, true  },
+    { {"136017.108", "136017-108"},  0x3800, 2048, true  },
+    // Program ROMs ($4000-$7FFF) — expected_size=0 for flexible matching
+    { {"136017.101", "136017-101"},  0x4000, 0, true  },
+    { {"136017.102", "136017-102"},  0x4800, 0, true  },
+    { {"136017.103", "136017-103"},  0x5000, 0, true  },
+    { {"136017.104", "136017-104"},  0x5800, 0, true  },
+    { {"136017.105", "136017-105"},  0x6000, 0, true  },
+    { {"136017.106", "136017-106"},  0x6800, 0, true  },
+};
+
+static const RomSetDescriptor blackwidow_romset = {
+    "Black Widow", "BlackWidow",
+    blackwidow_entries, 8
+};
+
+// ── Major Havoc Rev 3 ────────────────────────────────────────────────────
+//
+// Major Havoc: uses 16 KB ROM chips (actual files are 16384 bytes).
+// The memory architecture is more complex than other AVG games, with bank
+// switching for extra program ROM and a separate gamma CPU.
+// TODO: Restructure with 16 KB sizes and proper bank-switched layout.
+
+static const RomEntryDescriptor majorhavoc_v3_entries[] = {
+    // Vector ROMs
+    { {"136025.110", "136025-110"},  0x3000, 0, true  },
+    { {"136025.111", "136025-111"},  0x3800, 0, true  },
+    // Program ROMs ($4000-$7FFF) — expected_size=0 for flexible matching
+    { {"136025.215", "136025-215"},  0x4000, 0, true  },
+    { {"136025.216", "136025-216"},  0x4800, 0, true  },
+    { {"136025.217", "136025-217"},  0x5000, 0, true  },
+    { {"136025.218", "136025-218"},  0x5800, 0, true  },
+};
+
+static const RomSetDescriptor majorhavoc_v3_romset = {
+    "Major Havoc Rev 3", "MajorHavoc",
+    majorhavoc_v3_entries, 6
+};
+
 // ============================================================================
 // HARDWARE TRAITS
 // ============================================================================
@@ -292,17 +488,17 @@ bool AtariVectorSystem<V>::initialize() {
     board_.cpu().init();
     board_.cpu().reset();
 
-    // Initialize DVG
-    dvg_.init();
+    // Initialize vector generator (DVG or AVG via ChipSet)
+    vg().init();
 
     // Register all manifest-created chips for the Hardware menu
     register_bus_chips(board_);
 
-    // Register DVG as a non-bus chip for the Hardware menu
-    register_chip(&dvg_, "DVG", "DVG", "Video");
+    // Register vector generator for the Hardware menu
+    register_chip(&vg(), Traits::VIDEO_CHIP_NAME, Traits::VIDEO_CHIP_NAME, "Video");
 
-    // Initialize POKEY (Asteroids Deluxe)
-    if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+    // Initialize POKEY (for games that have it)
+    if constexpr (Traits::HAS_POKEY) {
         pokey_.init();
         register_chip(&pokey_, "POKEY", "POKEY", "Sound");
     }
@@ -311,12 +507,12 @@ bool AtariVectorSystem<V>::initialize() {
     video_port_ = std::make_unique<VectorVideoPort>();
     video_port_->bind_frame_output(&last_frame_data_);
 
-    // Wire DVG to the video stream
-    dvg_.set_stream(&video_port_->stream());
+    // Wire vector generator to the video stream
+    vg().set_stream(&video_port_->stream());
 
-    // Wire DVG vector memory — pointers are stable after board_.create_chips()
+    // Wire vector generator memory — pointers are stable after board_.create_chips()
     if (vec_ram_ && vec_rom_) {
-        dvg_.set_vector_memory(vec_ram_->data(), atv::VECRAM_SIZE,
+        vg().set_vector_memory(vec_ram_->data(), Traits::VECRAM_SIZE,
                               vec_rom_->data(), Traits::VECROM_SIZE,
                               Traits::VECROM_WORD_OFFSET);
     }
@@ -326,7 +522,7 @@ bool AtariVectorSystem<V>::initialize() {
     audio_port_->configure(atv::CPU_FREQ_HZ, atv::DEFAULT_SAMPLE_RATE);
 
     // Wire POKEY audio output
-    if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+    if constexpr (Traits::HAS_POKEY) {
         pokey_.set_audio_port(audio_port_.get());
     }
 
@@ -356,10 +552,10 @@ void AtariVectorSystem<V>::reset() {
     pins_ = MOS6502::default_bus_state();
     total_cycles_ = 0;
 
-    dvg_.reset();
+    vg().reset();
     nmi_counter_ = atv::NMI_PERIOD_CYCLES;
 
-    if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+    if constexpr (Traits::HAS_POKEY) {
         pokey_.reset();
     }
 
@@ -380,11 +576,11 @@ void AtariVectorSystem<V>::tick() {
     // CPU tick
     tick_cpu();
 
-    // DVG tick — runs at the same frequency as the CPU
-    dvg_.tick();
+    // Vector generator tick — runs at the same frequency as the CPU
+    vg().tick();
 
-    // POKEY tick (Asteroids Deluxe — runs at CPU clock)
-    if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+    // POKEY tick (runs at CPU clock for games with POKEY)
+    if constexpr (Traits::HAS_POKEY) {
         pokey_.tick(0);  // Arcade POKEY: no bus-driven memory access
     }
 
@@ -393,11 +589,10 @@ void AtariVectorSystem<V>::tick() {
     // every NMI_PERIOD_CYCLES, then de-assert.  The 6502 detects the
     // falling edge and vectors to the NMI handler.
     //
-    // Asteroids / Lunar Lander: NMI fires unconditionally every period.
+    // Most games: NMI fires unconditionally every period.
     // Asteroids Deluxe: NMI is gated by the 74LS259 output latch Q4
     //   ($3C04, D0).  When NMI is disabled, IRQ is asserted instead
-    //   (level-sensitive, held until NMI is re-enabled).  This matches
-    //   MAME's irq_or_nmi() approach.
+    //   (level-sensitive, held until NMI is re-enabled).
     if (nmi_counter_ > 0) {
         --nmi_counter_;
         BUS_SET_BIT(pins_, BUS_NMI_BIT);   // NMI inactive (high)
@@ -412,10 +607,6 @@ void AtariVectorSystem<V>::tick() {
     }
 
     // AD: IRQ line mirrors "NMI disabled" state (level-sensitive).
-    // While the game hasn't enabled NMI ($3C04 D0=1), IRQ stays asserted.
-    // The CPU ignores it while I=1 (BRK/SEI), so this is inert during
-    // the reset sequence.  Once the game enables interrupts, pending IRQ
-    // fires immediately.
     if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
         if (nmi_enabled_)
             BUS_SET_BIT(pins_, BUS_IRQ_BIT);   // IRQ inactive
@@ -458,16 +649,36 @@ void AtariVectorSystem<V>::tick_cpu() {
 
     pins_ = cpu.template tick<MOS6502::Phase::PHI2>(pins_);
 
-    // Asteroids/Lunar Lander only decode 15 address lines (A0-A14).
-    // A15 is not connected to the address decoder, so $8000-$FFFF
-    // mirrors $0000-$7FFF.  The CPU still drives A15 on the bus (e.g.
-    // $FFFC for reset vector), but the board ignores it — mask locally
-    // for dispatch without modifying the bus state the CPU sees.
+    // All Atari vector games decode only 15 address lines (A0-A14).
+    // A15 is not connected, so $8000-$FFFF mirrors $0000-$7FFF.
     uint16_t addr = BUS_GET_ADDR(pins_) & 0x7FFF;
     bool is_write = !BUS_GET_BIT(pins_, BUS_RW_BIT);
 
-    // I/O region: $2000-$3FFF — manual dispatch (not on MemoryBus)
-    if (addr >= 0x2000 && addr < 0x4000) {
+    // I/O region varies by game family:
+    //   Asteroids/LL/AD:  $2000-$3FFF
+    //   Battlezone/RB:    $0800-$1FFF (MAME bzone.cpp)
+    //   Gravitar/BW:      $0800-$1FFF (MAME bwidow.cpp — $8800 masked to $0800)
+    //   Space Duel:       $0800-$1FFF (MAME spacduel_map)
+    //   Major Havoc:      $0800-$1FFF (MAME mhavoc.cpp)
+    //   Tempest:          $0800-$1FFF (inputs) + $6000-$60FF (POKEY, VGGO, etc.)
+    bool is_io = false;
+
+    if constexpr (V == AtariVectorVariant::ASTEROIDS ||
+                  V == AtariVectorVariant::ASTEROIDS_DELUXE ||
+                  V == AtariVectorVariant::LUNAR_LANDER) {
+        // Original DVG games: I/O at $2000-$3FFF
+        is_io = (addr >= 0x2000 && addr < 0x4000);
+    } else if constexpr (V == AtariVectorVariant::TEMPEST) {
+        // Tempest: I/O at $0800-$1FFF (input ports) and $6000-$60FF (POKEY, VGGO, VGRST)
+        // Must NOT intercept RAM at $0000-$07FF or VECRAM/VECROM/PROGROM
+        is_io = (addr >= 0x0800 && addr < 0x2000) ||
+                (addr >= 0x6000 && addr < 0x6100);
+    } else {
+        // BZ, RB, Gravitar, SD, BW, MH: I/O at $0800-$1FFF
+        is_io = (addr >= 0x0800 && addr < 0x2000);
+    }
+
+    if (is_io) {
         if (is_write) {
             pins_ = io_write(addr, BUS_GET_DATA(pins_), pins_);
         } else {
@@ -475,7 +686,6 @@ void AtariVectorSystem<V>::tick_cpu() {
         }
     } else {
         // All other addresses: RAM, vector RAM/ROM, program ROM via MemoryBus.
-        // Present the masked address to the bus for page-table lookup.
         bus_state_t bus = pins_;
         BUS_SET_ADDR(bus, addr);
         pins_ = bus_.tick(bus);
@@ -493,7 +703,49 @@ template<AtariVectorVariant V>
 bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
     uint8_t data = 0x00;
 
-    if constexpr (V == AtariVectorVariant::ASTEROIDS ||
+    if constexpr (V == AtariVectorVariant::BATTLEZONE ||
+                  V == AtariVectorVariant::RED_BARON) {
+        // ── Battlezone / Red Baron I/O reads ────────────────────────────
+        //
+        // I/O at $0800-$1FFF (MAME bzone.cpp / redbaron_map):
+        //   $0800         IN0  (direct, full byte — HALT, clock, coins, start)
+        //   $0A00         DSW0 (DIP switches)
+        //   $0C00         DSW1 (DIP switches)
+        //   $1810-$181F   POKEY (Red Baron only)
+
+        if constexpr (V == AtariVectorVariant::RED_BARON) {
+            if (addr >= atv::RB_POKEY_BASE && addr < atv::RB_POKEY_BASE + 0x10) {
+                data = pokey_.read(addr & 0x0F);
+                BUS_SET_DATA(pins, data);
+                return pins;
+            }
+        }
+
+        if (addr >= atv::BZ_IN0_ADDR && addr < atv::BZ_IN0_ADDR + 0x0200) {
+            // IN0 — full byte with live HW signals
+            data = in0_;
+            // bit 0: VG HALT
+            if (vg().is_halted())
+                data |= atv::BZ_IN0_HALT;
+            else
+                data &= ~atv::BZ_IN0_HALT;
+            // bit 1: 3 KHz clock
+            if (total_cycles_ & 0x100)
+                data |= atv::BZ_IN0_CLOCK;
+            else
+                data &= ~atv::BZ_IN0_CLOCK;
+
+        } else if (addr >= atv::BZ_DSW0_ADDR && addr < atv::BZ_DSW0_ADDR + 0x0200) {
+            data = dsw1_;
+
+        } else if (addr >= atv::BZ_DSW1_ADDR && addr < atv::BZ_DSW1_ADDR + 0x0200) {
+            data = dsw2_;
+
+        } else {
+            data = 0xFF;
+        }
+
+    } else if constexpr (V == AtariVectorVariant::ASTEROIDS ||
                   V == AtariVectorVariant::ASTEROIDS_DELUXE) {
         // ── Asteroids / Asteroids Deluxe I/O reads ──────────────────────
         //
@@ -539,8 +791,8 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
             else
                 port_val &= ~atv::AST_IN0_CLOCK;
 
-            // bit 2: DVG HALT (IP_ACTIVE_LOW: halted=0, running=1)
-            if (!dvg_.is_halted())
+            // bit 2: DVG done_r (IP_ACTIVE_HIGH: 1 = halted/done)
+            if (vg().is_halted())
                 port_val |= atv::AST_IN0_HALT;
             else
                 port_val &= ~atv::AST_IN0_HALT;
@@ -564,7 +816,7 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
         // Multiplexed read: extract bit[offset], return at D7
         data = (port_val & (1 << offset)) ? 0x80 : 0x7F;
 
-    } else {
+    } else if constexpr (V == AtariVectorVariant::LUNAR_LANDER) {
         // ── Lunar Lander I/O reads ───────────────────────────────────────
         //
         // Lunar Lander has a different I/O layout (MAME llander_map):
@@ -583,7 +835,7 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
             data = in0_ ^ atv::LL_IN0_ACTIVE_LOW_MASK;
 
             // bit 0: DVG HALT (IP_ACTIVE_HIGH in LL: done_r → bit set when halted)
-            if (dvg_.is_halted())
+            if (vg().is_halted())
                 data |= atv::LL_IN0_HALT;
             else
                 data &= ~atv::LL_IN0_HALT;
@@ -612,6 +864,105 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
         } else {
             data = 0xFF;
         }
+
+    } else {
+        // ── AVG-based game I/O reads ─────────────────────────────────────
+        //
+        // Tempest/Gravitar/Space Duel/Black Widow/Major Havoc share the
+        // Atari "AVG board" layout.  I/O addresses vary per game but the
+        // general scheme is:
+        //   IN0:    full-byte read (VG halt, 3KHz clock, coins)
+        //   IN1:    player controls
+        //   DSW1/2: DIP switch banks
+        //   POKEY:  sound/input multiplexer
+        //   EAROM:  high-score storage (some games)
+        //
+        // The addresses differ per game but the data format is similar.
+        // We use Traits constants where available, with fallback to
+        // Tempest-style layout for shared code.
+
+        // POKEY reads (all AVG games have at least one POKEY)
+        if constexpr (V == AtariVectorVariant::TEMPEST) {
+            if (addr >= atv::TEMP_POKEY1_BASE && addr < atv::TEMP_POKEY1_BASE + 0x10) {
+                data = pokey_.read(addr & 0x0F);
+                BUS_SET_DATA(pins, data);
+                return pins;
+            }
+            if (addr >= atv::TEMP_EAROM_BASE && addr < atv::TEMP_EAROM_BASE + atv::TEMP_EAROM_SIZE) {
+                data = earom_[addr & 0x3F];
+                BUS_SET_DATA(pins, data);
+                return pins;
+            }
+        } else if constexpr (V == AtariVectorVariant::GRAVITAR ||
+                             V == AtariVectorVariant::BLACK_WIDOW) {
+            if (addr >= atv::GRAV_POKEY1_BASE && addr < atv::GRAV_POKEY1_BASE + 0x10) {
+                data = pokey_.read(addr & 0x0F);
+                BUS_SET_DATA(pins, data);
+                return pins;
+            }
+        } else if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
+            if (addr >= atv::SD_POKEY1_BASE && addr < atv::SD_POKEY1_BASE + 0x10) {
+                data = pokey_.read(addr & 0x0F);
+                BUS_SET_DATA(pins, data);
+                return pins;
+            }
+        } else if constexpr (V == AtariVectorVariant::MAJOR_HAVOC) {
+            if (addr >= atv::MH_POKEY1_BASE && addr < atv::MH_POKEY1_BASE + 0x10) {
+                data = pokey_.read(addr & 0x0F);
+                BUS_SET_DATA(pins, data);
+                return pins;
+            }
+        }
+
+        // Input port reads — per-game addresses and VG halt bit positions.
+        // All AVG games use active-LOW IN0 bits (0 = active, 1 = idle).
+        // Default 0xFF = all idle/inactive.
+        if constexpr (V == AtariVectorVariant::TEMPEST) {
+            // Tempest IN0 at $0C00: bit 6 = VG done_r (IP_ACTIVE_HIGH)
+            if (addr >= 0x0C00 && addr < 0x0D00) {
+                data = 0xFF;
+                if (!vg().is_halted()) data &= ~0x40;
+            } else if (addr >= 0x0D00 && addr < 0x0E00) {
+                data = in1_;
+            } else if (addr >= 0x0E00 && addr < 0x0F00) {
+                data = dsw1_;
+            } else {
+                data = 0xFF;
+            }
+        } else if constexpr (V == AtariVectorVariant::GRAVITAR ||
+                             V == AtariVectorVariant::BLACK_WIDOW) {
+            // Gravitar/BW IN0 at $0C00: bit 5 = VG done_r (IP_ACTIVE_HIGH)
+            if (addr >= 0x0C00 && addr < 0x0D00) {
+                data = 0xFF;
+                if (!vg().is_halted()) data &= ~0x20;
+            } else if (addr >= 0x0D00 && addr < 0x0E00) {
+                data = in1_;
+            } else if (addr >= 0x0E00 && addr < 0x0F00) {
+                data = dsw1_;
+            } else {
+                data = 0xFF;
+            }
+        } else if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
+            // Space Duel IN0 at $0C00: bit 5 = VG done_r (IP_ACTIVE_HIGH)
+            if (addr >= 0x0C00 && addr < 0x0D00) {
+                data = 0xFF;
+                if (!vg().is_halted()) data &= ~0x20;
+            } else if (addr >= 0x0D00 && addr < 0x0E00) {
+                data = in1_;
+            } else if (addr >= 0x0E00 && addr < 0x0F00) {
+                data = dsw1_;
+            } else {
+                data = 0xFF;
+            }
+        } else if constexpr (V == AtariVectorVariant::MAJOR_HAVOC) {
+            // MH alpha reads IN0 at $0800; bit 1 = VG done_r (IP_ACTIVE_HIGH)
+            if (addr >= 0x0800 && addr < 0x0900) {
+                data = 0xFF;
+                if (!vg().is_halted()) data &= ~0x02;
+            } else {
+                data = 0xFF;
+            }
+        }
     }
 
     BUS_SET_DATA(pins, data);
@@ -627,74 +978,158 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
     // I/O writes are decode-by-address — the upper address bits select the register.
     // The data byte on the bus is sometimes ignored (trigger-only writes).
 
-    // AD-specific write-capable peripherals in the $2000-$2FFF range
-    if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
-        // POKEY write at $2600-$260F
-        if (addr >= atv::AD_POKEY_BASE && addr < atv::AD_POKEY_BASE + 0x10) {
-            pokey_.write(addr & 0x0F, data);
-            return pins;
-        }
-        // EAROM write at $2C00-$2C3F
-        if (addr >= atv::AD_EAROM_BASE && addr < atv::AD_EAROM_BASE + atv::AD_EAROM_SIZE) {
-            earom_[addr & 0x3F] = data;
-            return pins;
-        }
-    }
+    if constexpr (V == AtariVectorVariant::BATTLEZONE ||
+                  V == AtariVectorVariant::RED_BARON) {
+        // ── BZ/RB I/O writes at $0800-$1FFF ────────────────────────────
+        //
+        // MAME bzone.cpp:
+        //   $1000: coin counters   $1200: sound latch
+        //   $1600: VGGO            $1800: VGRST
+        //   $1A00: WD clear
 
-    uint16_t reg = addr & 0x3E00;
-
-    switch (reg) {
-        case atv::VGGO_ADDR:
-            // $3000 — VGGO: Start DVG vector state machine
-            dvg_.trigger_go();
-            break;
-
-        case atv::VGRST_ADDR: {
-            // $3200 — VGRST: Reset DVG
-            dvg_.trigger_reset();
-            break;
+        if constexpr (V == AtariVectorVariant::RED_BARON) {
+            if (addr >= atv::RB_POKEY_BASE && addr < atv::RB_POKEY_BASE + 0x10) {
+                pokey_.write(addr & 0x0F, data);
+                return pins;
+            }
         }
 
-        case atv::WDCLR_ADDR:
-            // $3400 — WD CLR: Watchdog clear (no-op in emulation)
-            break;
-
-        case atv::SND_BASE_ADDR:
-            // $3600 — Sound triggers (game-specific discrete circuits)
+        if (addr >= atv::BZ_COIN_CTR_ADDR && addr < atv::BZ_COIN_CTR_ADDR + 0x0200) {
+            // Coin counters / output latch
+        } else if (addr >= atv::BZ_SND_ADDR && addr < atv::BZ_SND_ADDR + 0x0200) {
             snd_latch_ = data;
-            break;
-
-        case 0x3800:
-        case 0x3A00:
-            // $3800 — EAROM control (AD) / sound latches (other games)
-            if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
-                earom_ctrl_ = data;
-            }
-            break;
-
-        case atv::COIN_CTR_ADDR: {
-            // $3C00-$3C07 — Output latch (74LS259, A0-A2 = bit select, D0 = value)
-            //   bit 0 ($3C00): coin counter 1
-            //   bit 1 ($3C01): coin counter 2
-            //   bit 2 ($3C02): player 1 start LED
-            //   bit 3 ($3C03): player 2 start LED
-            //   bit 4 ($3C04): NMI enable
-            //   bit 5 ($3C05): cocktail invert
-            uint8_t latch_bit = addr & 0x07;
-            if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
-                if (latch_bit == 4)
-                    nmi_enabled_ = (data & 1) != 0;
-            }
-            break;
+        } else if (addr >= atv::BZ_VGGO_ADDR && addr < atv::BZ_VGGO_ADDR + 0x0200) {
+            vg().trigger_go();
+        } else if (addr >= atv::BZ_VGRST_ADDR && addr < atv::BZ_VGRST_ADDR + 0x0200) {
+            vg().trigger_reset();
+        } else if (addr >= atv::BZ_WDCLR_ADDR && addr < atv::BZ_WDCLR_ADDR + 0x0200) {
+            // Watchdog clear — no-op
         }
 
-        case atv::NMI_ACK_ADDR:
-            // $3E00 — Noise reset (asteroid_noise_reset_w in MAME).
-            // Resets the LFSR noise generator.  No-op for now.
-            break;
+    } else if constexpr (V == AtariVectorVariant::ASTEROIDS ||
+                         V == AtariVectorVariant::ASTEROIDS_DELUXE ||
+                         V == AtariVectorVariant::LUNAR_LANDER) {
+        // ── Asteroids / AD / Lunar Lander I/O writes at $3000-$3FFF ────
 
-        default:
-            break;
+        // AD-specific write-capable peripherals in the $2000-$2FFF range
+        if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+            // POKEY write at $2600-$260F
+            if (addr >= atv::AD_POKEY_BASE && addr < atv::AD_POKEY_BASE + 0x10) {
+                pokey_.write(addr & 0x0F, data);
+                return pins;
+            }
+            // EAROM write at $2C00-$2C3F
+            if (addr >= atv::AD_EAROM_BASE && addr < atv::AD_EAROM_BASE + atv::AD_EAROM_SIZE) {
+                earom_[addr & 0x3F] = data;
+                return pins;
+            }
+        }
+
+        uint16_t reg = addr & 0x3E00;
+
+        switch (reg) {
+            case atv::VGGO_ADDR:
+                vg().trigger_go();
+                break;
+
+            case atv::VGRST_ADDR:
+                vg().trigger_reset();
+                break;
+
+            case atv::WDCLR_ADDR:
+                // Watchdog clear — no-op in emulation
+                break;
+
+            case atv::SND_BASE_ADDR:
+                snd_latch_ = data;
+                break;
+
+            case 0x3800:
+            case 0x3A00:
+                if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+                    earom_ctrl_ = data;
+                }
+                break;
+
+            case atv::COIN_CTR_ADDR: {
+                uint8_t latch_bit = addr & 0x07;
+                if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+                    if (latch_bit == 4)
+                        nmi_enabled_ = (data & 1) != 0;
+                }
+                break;
+            }
+
+            case atv::NMI_ACK_ADDR:
+                break;
+
+            default:
+                break;
+        }
+
+    } else {
+        // ── AVG-based game I/O writes ────────────────────────────────────
+        //
+        // Each AVG game has its own I/O address decode.
+        // VGGO/VGRST/POKEY/WD addresses vary per game.
+
+        if constexpr (V == AtariVectorVariant::TEMPEST) {
+            // Tempest (MAME tempest.cpp)
+            // POKEY1 $60C0, POKEY2 $60D0, VGGO $6040, VGRST $6080, WD $60E0
+            if (addr >= atv::TEMP_POKEY1_BASE && addr < atv::TEMP_POKEY1_BASE + 0x10) {
+                pokey_.write(addr & 0x0F, data);
+                return pins;
+            }
+            if (addr >= atv::TEMP_EAROM_BASE && addr < atv::TEMP_EAROM_BASE + atv::TEMP_EAROM_SIZE) {
+                earom_[addr & 0x3F] = data;
+                return pins;
+            }
+            if (addr == atv::TEMP_VGGO_ADDR)  { vg().trigger_go(); return pins; }
+            if (addr == atv::TEMP_VGRST_ADDR) { vg().trigger_reset(); return pins; }
+            if (addr == atv::TEMP_WDCLR_ADDR) { return pins; }
+
+        } else if constexpr (V == AtariVectorVariant::GRAVITAR ||
+                             V == AtariVectorVariant::BLACK_WIDOW) {
+            // Gravitar / Black Widow board (MAME bwidow.cpp bwidow_map)
+            // POKEY1 $0800, POKEY2 $0A00, VGGO $0840, VGRST $0880, WD $08C0
+            if (addr >= atv::GRAV_POKEY1_BASE && addr < atv::GRAV_POKEY1_BASE + 0x10) {
+                pokey_.write(addr & 0x0F, data);
+                return pins;
+            }
+            if (addr >= atv::GRAV_POKEY2_BASE && addr < atv::GRAV_POKEY2_BASE + 0x10) {
+                // TODO: second POKEY
+                return pins;
+            }
+            if (addr == atv::GRAV_VGGO_ADDR)  { vg().trigger_go(); return pins; }
+            if (addr == atv::GRAV_VGRST_ADDR) { vg().trigger_reset(); return pins; }
+            if (addr == atv::GRAV_WDCLR_ADDR) { return pins; }
+
+        } else if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
+            // Space Duel (MAME bwidow.cpp spacduel_map)
+            // POKEY1 $0800, POKEY2 $0900, VGGO $0C80, VGRST $0D80, WD $0E80
+            if (addr >= atv::SD_POKEY1_BASE && addr < atv::SD_POKEY1_BASE + 0x10) {
+                pokey_.write(addr & 0x0F, data);
+                return pins;
+            }
+            if (addr >= atv::SD_POKEY2_BASE && addr < atv::SD_POKEY2_BASE + 0x10) {
+                // TODO: second POKEY
+                return pins;
+            }
+            if (addr == atv::SD_VGGO_ADDR)  { vg().trigger_go(); return pins; }
+            if (addr == atv::SD_VGRST_ADDR) { vg().trigger_reset(); return pins; }
+            if (addr == atv::SD_WDCLR_ADDR) { return pins; }
+
+        } else if constexpr (V == AtariVectorVariant::MAJOR_HAVOC) {
+            // Major Havoc (MAME mhavoc.cpp)
+            // POKEY1 $1200, VGGO $1400, VGRST $1600, WD $1800
+            if (addr >= atv::MH_POKEY1_BASE && addr < atv::MH_POKEY1_BASE + 0x10) {
+                pokey_.write(addr & 0x0F, data);
+                return pins;
+            }
+            if (addr == atv::MH_VGGO_ADDR)  { vg().trigger_go(); return pins; }
+            if (addr == atv::MH_VGRST_ADDR) { vg().trigger_reset(); return pins; }
+            if (addr == atv::MH_WDCLR_ADDR) { return pins; }
+        }
     }
 
     return pins;
@@ -787,9 +1222,9 @@ bool AtariVectorSystem<V>::load_file(const char* filepath) {
     if (!name) name = strrchr(filepath, '\\');
     program_title_ = name ? (name + 1) : filepath;
 
-    // Wire DVG to vector memory
+    // Wire vector generator to vector memory
     if (vec_ram_ && vec_rom_) {
-        dvg_.set_vector_memory(vec_ram_->data(), atv::VECRAM_SIZE,
+        vg().set_vector_memory(vec_ram_->data(), Traits::VECRAM_SIZE,
                               vec_rom_->data(), Traits::VECROM_SIZE,
                               Traits::VECROM_WORD_OFFSET);
     }
@@ -817,8 +1252,24 @@ std::vector<const RomSetDescriptor*> AtariVectorSystem<V>::get_rom_set_descripto
         return { &ast_v1_romset, &ast_v2_romset };
     } else if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
         return { &ad_v1_romset, &ad_v2_romset };
-    } else {
+    } else if constexpr (V == AtariVectorVariant::LUNAR_LANDER) {
         return { &ll_v1_romset, &ll_v2_romset };
+    } else if constexpr (V == AtariVectorVariant::BATTLEZONE) {
+        return { &bz_v1_romset, &bz_v2_romset };
+    } else if constexpr (V == AtariVectorVariant::RED_BARON) {
+        return { &rb_romset };
+    } else if constexpr (V == AtariVectorVariant::TEMPEST) {
+        return { &tempest_v3_romset };
+    } else if constexpr (V == AtariVectorVariant::GRAVITAR) {
+        return { &gravitar_v2_romset };
+    } else if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
+        return { &spaceduel_romset };
+    } else if constexpr (V == AtariVectorVariant::BLACK_WIDOW) {
+        return { &blackwidow_romset };
+    } else if constexpr (V == AtariVectorVariant::MAJOR_HAVOC) {
+        return { &majorhavoc_v3_romset };
+    } else {
+        return {};
     }
 }
 
@@ -878,9 +1329,9 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
     if (match.rom_set && match.rom_set->name)
         program_title_ = match.rom_set->name;
 
-    // Wire DVG to vector memory
+    // Wire vector generator to vector memory
     if (vec_ram_ && vec_rom_) {
-        dvg_.set_vector_memory(vec_ram_->data(), atv::VECRAM_SIZE,
+        vg().set_vector_memory(vec_ram_->data(), Traits::VECRAM_SIZE,
                               vec_rom_->data(), Traits::VECROM_SIZE,
                               Traits::VECROM_WORD_OFFSET);
     }
@@ -910,7 +1361,7 @@ template<AtariVectorVariant V>
 uint32_t AtariVectorSystem<V>::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
 
-    if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+    if constexpr (Traits::HAS_POKEY) {
         // Read from POKEY audio ring buffer
         if (audio_port_) {
             int got = audio_port_->ring_.pop(buffer, static_cast<int>(max_samples));
@@ -1030,7 +1481,7 @@ void AtariVectorSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) 
             default:
                 break;
         }
-    } else {
+    } else if constexpr (V == AtariVectorVariant::LUNAR_LANDER) {
         // Lunar Lander controls (active-HIGH: pressed = set bit):
         //   Up/Down = thrust (adjusts ADC value)
         //   Left/Right = rotate
@@ -1076,6 +1527,124 @@ void AtariVectorSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) 
             default:
                 break;
         }
+
+    } else if constexpr (V == AtariVectorVariant::BATTLEZONE) {
+        // Battlezone — twin-stick tank controls
+        //   W/S = left stick forward/reverse
+        //   I/K = right stick forward/reverse
+        //   Space = fire
+        //   1 = start
+        //   5 = coin
+        switch (key) {
+            case SDLK_w:
+                if (pressed) in1_ |=  0x01;  // left forward
+                else         in1_ &= ~0x01;
+                break;
+            case SDLK_s:
+                if (pressed) in1_ |=  0x02;  // left reverse
+                else         in1_ &= ~0x02;
+                break;
+            case SDLK_i:
+                if (pressed) in1_ |=  0x04;  // right forward
+                else         in1_ &= ~0x04;
+                break;
+            case SDLK_k:
+                if (pressed) in1_ |=  0x08;  // right reverse
+                else         in1_ &= ~0x08;
+                break;
+            case SDLK_SPACE:
+                if (pressed) in1_ |=  0x10;  // fire
+                else         in1_ &= ~0x10;
+                break;
+            case SDLK_1:
+                if (pressed) in0_ |=  atv::BZ_IN0_1P_START;
+                else         in0_ &= ~atv::BZ_IN0_1P_START;
+                break;
+            case SDLK_5:
+                if (pressed) in0_ |=  atv::BZ_IN0_COIN1;
+                else         in0_ &= ~atv::BZ_IN0_COIN1;
+                break;
+            default:
+                break;
+        }
+
+    } else if constexpr (V == AtariVectorVariant::RED_BARON) {
+        // Red Baron — yoke controls
+        //   Arrow keys = up/down/left/right
+        //   Space = fire
+        //   1 = start
+        //   5 = coin
+        switch (key) {
+            case SDLK_UP:
+                if (pressed) in1_ |=  0x01;
+                else         in1_ &= ~0x01;
+                break;
+            case SDLK_DOWN:
+                if (pressed) in1_ |=  0x02;
+                else         in1_ &= ~0x02;
+                break;
+            case SDLK_LEFT:
+                if (pressed) in1_ |=  0x04;
+                else         in1_ &= ~0x04;
+                break;
+            case SDLK_RIGHT:
+                if (pressed) in1_ |=  0x08;
+                else         in1_ &= ~0x08;
+                break;
+            case SDLK_SPACE:
+                if (pressed) in1_ |=  0x10;  // fire
+                else         in1_ &= ~0x10;
+                break;
+            case SDLK_1:
+                if (pressed) in0_ |=  atv::BZ_IN0_1P_START;
+                else         in0_ &= ~atv::BZ_IN0_1P_START;
+                break;
+            case SDLK_5:
+                if (pressed) in0_ |=  atv::BZ_IN0_COIN1;
+                else         in0_ &= ~atv::BZ_IN0_COIN1;
+                break;
+            default:
+                break;
+        }
+
+    } else {
+        // ── AVG-based games — generic controls ──────────────────────────
+        //   Arrow keys = directional
+        //   Space = fire / primary action
+        //   1 = start
+        //   5 = coin
+        switch (key) {
+            case SDLK_LEFT:
+                if (pressed) in1_ |=  0x01;
+                else         in1_ &= ~0x01;
+                break;
+            case SDLK_RIGHT:
+                if (pressed) in1_ |=  0x02;
+                else         in1_ &= ~0x02;
+                break;
+            case SDLK_UP:
+                if (pressed) in1_ |=  0x04;
+                else         in1_ &= ~0x04;
+                break;
+            case SDLK_DOWN:
+                if (pressed) in1_ |=  0x08;
+                else         in1_ &= ~0x08;
+                break;
+            case SDLK_SPACE:
+                if (pressed) in1_ |=  0x10;
+                else         in1_ &= ~0x10;
+                break;
+            case SDLK_1:
+                if (pressed) in0_ |=  0x80;  // start
+                else         in0_ &= ~0x80;
+                break;
+            case SDLK_5:
+                if (pressed) in0_ |=  0x10;  // coin
+                else         in0_ &= ~0x10;
+                break;
+            default:
+                break;
+        }
     }
 }
 
@@ -1109,14 +1678,34 @@ void AtariVectorSystem<V>::set_speed_multiplier(float multiplier) {
 // EXPLICIT TEMPLATE INSTANTIATION
 // ============================================================================
 
+// DVG-based
 template class AtariVectorSystem<AtariVectorVariant::ASTEROIDS>;
 template class AtariVectorSystem<AtariVectorVariant::ASTEROIDS_DELUXE>;
 template class AtariVectorSystem<AtariVectorVariant::LUNAR_LANDER>;
+template class AtariVectorSystem<AtariVectorVariant::BATTLEZONE>;
+template class AtariVectorSystem<AtariVectorVariant::RED_BARON>;
+
+// AVG-based
+template class AtariVectorSystem<AtariVectorVariant::TEMPEST>;
+template class AtariVectorSystem<AtariVectorVariant::GRAVITAR>;
+template class AtariVectorSystem<AtariVectorVariant::SPACE_DUEL>;
+template class AtariVectorSystem<AtariVectorVariant::BLACK_WIDOW>;
+template class AtariVectorSystem<AtariVectorVariant::MAJOR_HAVOC>;
 
 // ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 
+// DVG-based
 REGISTER_SYSTEM(descriptor_instance<AtariVectorVariant::ASTEROIDS>(), [] { return std::make_unique<AsteroidsSystem>(); });
 REGISTER_SYSTEM(descriptor_instance<AtariVectorVariant::ASTEROIDS_DELUXE>(), [] { return std::make_unique<AsteroidsDeluxeSystem>(); });
 REGISTER_SYSTEM(descriptor_instance<AtariVectorVariant::LUNAR_LANDER>(), [] { return std::make_unique<LunarLanderSystem>(); });
+REGISTER_SYSTEM(descriptor_instance<AtariVectorVariant::BATTLEZONE>(), [] { return std::make_unique<BattlezoneSystem>(); });
+REGISTER_SYSTEM(descriptor_instance<AtariVectorVariant::RED_BARON>(), [] { return std::make_unique<RedBaronSystem>(); });
+
+// AVG-based
+REGISTER_SYSTEM(descriptor_instance<AtariVectorVariant::TEMPEST>(), [] { return std::make_unique<TempestSystem>(); });
+REGISTER_SYSTEM(descriptor_instance<AtariVectorVariant::GRAVITAR>(), [] { return std::make_unique<GravitarSystem>(); });
+REGISTER_SYSTEM(descriptor_instance<AtariVectorVariant::SPACE_DUEL>(), [] { return std::make_unique<SpaceDuelSystem>(); });
+REGISTER_SYSTEM(descriptor_instance<AtariVectorVariant::BLACK_WIDOW>(), [] { return std::make_unique<BlackWidowSystem>(); });
+REGISTER_SYSTEM(descriptor_instance<AtariVectorVariant::MAJOR_HAVOC>(), [] { return std::make_unique<MajorHavocSystem>(); });
