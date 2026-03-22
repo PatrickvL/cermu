@@ -111,6 +111,8 @@ void tia_t::init() {
                          | ((c >> 16) & 0x000000FFu)
                          | ((c << 16) & 0x00FF0000u);
     }
+    system_palette_ = palette_rgba_;
+    palette_size_   = 128;
 }
 
 void tia_t::reset() {

@@ -27,6 +27,8 @@ class amstrad_gate_array_t : public VideoChipBase {
 public:
     amstrad_gate_array_t() : VideoChipBase(ChipInfo{"Amstrad Gate Array", "Amstrad"}) {
         category_ = "Video";
+        system_palette_ = get_palette();
+        palette_size_   = static_cast<uint16_t>(get_palette_size());
     }
 
     // ChipBase override — called by Board::reset_chips()

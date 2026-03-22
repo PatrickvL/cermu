@@ -130,9 +130,6 @@ bool SegaSG1000System<V>::initialize() {
 
     register_bus_chips(board_);
 
-    // Register palette for GPU stream shader
-    register_palette(board_.video().system_palette(), board_.video().palette_size());
-
     video_port_ = std::make_unique<CompositeVideoPort>();
     board_.video().set_stream(&video_port_->stream());
     video_port_->bind_frame_output(&last_frame_data_);

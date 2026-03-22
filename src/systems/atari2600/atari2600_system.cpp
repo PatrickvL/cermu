@@ -187,9 +187,6 @@ bool Atari2600System::initialize() {
     // Register all manifest-created chips for the Hardware menu
     register_bus_chips(board_);
 
-    // Register palette for GPU stream shader
-    register_palette(board_.video().palette_rgba_, 128);
-
     // Video stream output — composite video from TIA
     video_port_ = std::make_unique<CompositeVideoPort>();
     board_.video().set_stream(&video_port_->stream());

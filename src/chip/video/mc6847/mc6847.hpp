@@ -193,6 +193,8 @@ public:
         : VideoChipBase(ChipInfo("MC6847", "Motorola"))
     {
         init_regs(mc6847_const::REG_COUNT);
+        system_palette_ = get_palette();
+        palette_size_   = static_cast<uint16_t>(get_palette_size());
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif

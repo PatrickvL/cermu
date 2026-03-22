@@ -265,9 +265,23 @@ protected:
             sc.show_detached = 0;
             registered_chips_.push_back(std::move(sc));
         }
+        // Auto-register palette from the board's primary video chip
+        auto_register_video_palette_(board, 0);
     }
 
-    // =========================================================================
+private:
+    // SFINAE overload: board has a video() accessor with a non-null palette
+    template<typename B>
+    auto auto_register_video_palette_(B& board, int)
+        -> decltype(board.video().system_palette(), void()) {
+        if (auto* p = board.video().system_palette())
+            palette_.set(p, board.video().palette_size());
+    }
+    // Fallback: board has no video() or no palette — do nothing
+    template<typename B>
+    void auto_register_video_palette_(B&, long) {}
+
+protected:
     // BOARD & PORT OWNERSHIP
     // =========================================================================
     //

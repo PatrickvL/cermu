@@ -811,6 +811,9 @@ ted7360_t::ted7360_t(const ted7360_desc_t& desc) {
 
     color_line_ = new uint8_t[TED_VISIBLE_WIDTH]();
 
+    system_palette_ = get_palette();
+    palette_size_   = 128;
+
     reset();
 #ifdef CERMU_HAS_CHIP_DEBUG
     register_debug_fields();
