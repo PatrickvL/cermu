@@ -1140,22 +1140,10 @@ void SessionGUI::render_screen() {
                 did_stream_upload = true;
             }
 
-            // RGB stream texture upload — upload RGBA8 data.
+            // RGB stream texture upload — RGBA8 data.
             if (use_rgb_stream_shader_ && rgb_stream_shader_ && rgb_stream_texture_ && stream_snapshot_len_ > 0) {
-                glBindTexture(GL_TEXTURE_2D, rgb_stream_texture_);
-                int full_rows = static_cast<int>(stream_snapshot_len_) / stream_shader::STREAM_TEX_WIDTH;
-                int remainder = static_cast<int>(stream_snapshot_len_) - full_rows * stream_shader::STREAM_TEX_WIDTH;
-                if (full_rows > 0) {
-                    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-                                    stream_shader::STREAM_TEX_WIDTH, full_rows,
-                                    GL_RGBA, GL_UNSIGNED_BYTE, rgb_stream_snapshot_);
-                }
-                if (remainder > 0) {
-                    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, full_rows,
-                                    remainder, 1,
-                                    GL_RGBA, GL_UNSIGNED_BYTE,
-                                    rgb_stream_snapshot_ + full_rows * stream_shader::STREAM_TEX_WIDTH * 4);
-                }
+                rgb_stream_shader::upload_stream_texture(
+                    rgb_stream_texture_, rgb_stream_snapshot_, stream_snapshot_len_);
 
                 local_stream_len = stream_snapshot_len_;
                 local_sync_count = std::min(sync_snapshot_count_, MAX_SYNC_EVENTS);
@@ -1623,7 +1611,6 @@ void SessionGUI::allocate_framebuffer() {
                 // Each signal type uses a dedicated fragment shader:
                 //   RGB/Digital — direct RGB pass-through (rgb_stream_shader)
                 //   YPbPr       — Y'PbPr component bandwidth limiting
-                stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES]();  // reused for sync snapshot alloc
                 sync_snapshot_ = new SyncEvent[MAX_SYNC_EVENTS]();
                 rgb_stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES * 4]();
 

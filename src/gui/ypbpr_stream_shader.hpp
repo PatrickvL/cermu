@@ -50,11 +50,9 @@ uniform int DisplayWidth;
 
 out vec4 Out_Color;
 
-// Fetch RGB at a given stream position
-vec3 fetch_rgb(int stream_pos) {
-    int r = stream_pos / StreamTexWidth;
-    int c = stream_pos - r * StreamTexWidth;
-    return texelFetch(StreamTex, ivec2(c, r), 0).rgb;
+// Fetch RGB at a 2D texture position (no division needed)
+vec3 rgb_at(int col, int row) {
+    return texelFetch(StreamTex, ivec2(col, row), 0).rgb;
 }
 
 void main() {
@@ -67,17 +65,27 @@ void main() {
         return;
     }
 
+    // Compute center pixel's 2D texture position (single division)
+    int center_pos = offset + pixel_x;
+    int center_row = center_pos / StreamTexWidth;
+    int center_col = center_pos - center_row * StreamTexWidth;
+
     // Center pixel — full-resolution luma (BT.601)
-    vec3 center = fetch_rgb(offset + pixel_x);
+    vec3 center = rgb_at(center_col, center_row);
     float Y = 0.299 * center.r + 0.587 * center.g + 0.114 * center.b;
 
-    // Pb / Pr: average over 3-pixel horizontal window
-    // Models component video's reduced chroma bandwidth (~half of Y')
+    // Pb / Pr: average over 3-pixel horizontal window.
+    // Models component video's reduced chroma bandwidth (~half of Y').
+    // Derive 2D coords from center position — no division.
     float Pb_sum = 0.0;
     float Pr_sum = 0.0;
     for (int dx = -1; dx <= 1; dx++) {
-        int px = clamp(pixel_x + dx, 0, DisplayWidth - 1);
-        vec3 c = fetch_rgb(offset + px);
+        int delta = clamp(pixel_x + dx, 0, DisplayWidth - 1) - pixel_x;
+        int col = center_col + delta;
+        int row = center_row;
+        if (col < 0) { col += StreamTexWidth; row--; }
+        else if (col >= StreamTexWidth) { col -= StreamTexWidth; row++; }
+        vec3 c = rgb_at(col, row);
         float cy = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
         Pb_sum += 0.564 * (c.b - cy);
         Pr_sum += 0.713 * (c.r - cy);
