@@ -403,6 +403,7 @@ inline bus_state_t decode_group8(bus_state_t pins, uint16_t opcode) {
 
     // DIVU: opmode 3
     if (opmode == 3) {
+        uint32_t opcode_addr = regs_.pc - 4;
         uint16_t src;
         if (ea_mode == 0) {
             src = get_d_w(ea_reg);
@@ -411,7 +412,10 @@ inline bus_state_t decode_group8(bus_state_t pins, uint16_t opcode) {
             if (address_error_) return pins;
         }
         if (src == 0) {
-            return exception(pins, Vector::ZERO_DIVIDE);
+            // Real 68000 clears arithmetic flags before the divide-by-zero exception
+            set_ccr(get_ccr() & Flags::X);
+            clocks_remaining_ += 4;  // divide setup idle before exception
+            return exception(pins, Vector::ZERO_DIVIDE, opcode_addr);
         }
         uint32_t dividend = get_d(dn);
         // Overflow: upper word >= divisor
@@ -429,6 +433,7 @@ inline bus_state_t decode_group8(bus_state_t pins, uint16_t opcode) {
 
     // DIVS: opmode 7
     if (opmode == 7) {
+        uint32_t opcode_addr = regs_.pc - 4;
         int16_t src;
         if (ea_mode == 0) {
             src = static_cast<int16_t>(get_d_w(ea_reg));
@@ -437,7 +442,9 @@ inline bus_state_t decode_group8(bus_state_t pins, uint16_t opcode) {
             if (address_error_) return pins;
         }
         if (src == 0) {
-            return exception(pins, Vector::ZERO_DIVIDE);
+            set_ccr(get_ccr() & Flags::X);
+            clocks_remaining_ += 4;
+            return exception(pins, Vector::ZERO_DIVIDE, opcode_addr);
         }
         int32_t dividend = static_cast<int32_t>(get_d(dn));
         int32_t result = dividend / src;
