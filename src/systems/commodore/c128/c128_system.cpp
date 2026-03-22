@@ -179,10 +179,10 @@ bool C128System::initialize() {
     board_.cpu().init_io_port();
     board_.cpu().reset();
 
-    display_.init(c128_constants::VIC_DISPLAY_WIDTH_PAL,
-                  c128_constants::VIC_DISPLAY_HEIGHT_PAL);
-    display_.set_palette(vicii_base_t::get_default_palette(), 16);
-    register_display(&display_);
+    // Video stream output — VIC-IIe drives composite video
+    video_port_ = std::make_unique<CompositeVideoPort>();
+    vic_iie.set_stream(&video_port_->stream());
+    video_port_->bind_frame_output(&last_frame_data_);
 
     system_ready_ = true;
     printf("C128: System initialized\n");
@@ -268,11 +268,13 @@ void C128System::tick() {
 }
 
 void C128System::run_frame() {
-    if (!system_ready_) return;
-    for (uint32_t i = 0; i < cycles_per_frame_; ++i) {
+    if (!system_ready_ || !video_port_) return;
+    auto& stream = video_port_->stream();
+    while (!stream.frame_ended()) {
         tick();
-        check_deferred_load();
     }
+    video_port_->swap_frame();
+    check_deferred_load();
 }
 
 // ============================================================================

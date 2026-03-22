@@ -146,7 +146,14 @@ bool BBCMasterSystem<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
     register_board(&board_);
 
-    // Pre-bind all value-typed chips\n    board_.bind_chipset();\n    board_.create_chips(&pins_);\n\n    ram_chip_       = board_.template find<RAMChip>();\n    paged_rom_chip_ = board_.template find<ROMChip>();\n    os_rom_chip_    = board_.template find<ROMChip>(1);\n    memory_         = ram_chip_->data();
+    // Pre-bind all value-typed chips
+    board_.bind_chipset();
+    board_.create_chips(&pins_);
+
+    ram_chip_       = board_.template find<RAMChip>();
+    paged_rom_chip_ = board_.template find<ROMChip>();
+    os_rom_chip_    = board_.template find<ROMChip>(1);
+    memory_         = ram_chip_->data();
 
     pins_ = board_.cpu().init();
     board_.io().reset();
@@ -159,11 +166,37 @@ bool BBCMasterSystem<V>::initialize() {
         printf("%s: Warning — ROMs not loaded\n", Traits::name);
     }
 
-    register_bus_chips(board_);
+    // ── CRTC (MC6845) ───────────────────────────────────────────────────
+    board_.video().init();
 
-    display_.init(bbc_constants::DISPLAY_WIDTH,
-                  bbc_constants::DISPLAY_HEIGHT);
-    register_display(&display_);
+    // Program CRTC with Mode 7 register values (the MOS does this too, but
+    // we prime them so the display works even before the ROM runs)
+    for (int i = 0; i < 14; i++) {
+        board_.video().regs_[i] = bbc_constants::MODE7_CRTC_REGS[i];
+    }
+
+    // Wire CRTC callbacks
+    board_.video().on_display_char = [this](uint16_t ma, uint8_t ra, bool cursor) {
+        this->crtc_display_char(ma, ra, cursor);
+    };
+    board_.video().on_vsync = [this]() { this->crtc_vsync(); };
+    board_.video().on_hsync = [this]() { this->crtc_hsync(); };
+
+    // Set memory for video rendering
+    board_.chips().vidproc.set_memory(memory_);
+
+    // ── Video stream output ─────────────────────────────────────────────
+    video_port_ = std::make_unique<CompositeVideoPort>();
+    board_.chips().vidproc.set_stream(&video_port_->stream());
+    video_port_->bind_frame_output(&last_frame_data_);
+
+    // ── Video ULA defaults ──────────────────────────────────────────────
+    // Default palette: identity mapping (logical N → physical N)
+    for (int i = 0; i < 16; i++) {
+        board_.chips().vidproc.write_palette((i << 4) | (((i & 0x07) ^ 0x07) << 1));
+    }
+
+    register_bus_chips(board_);
 
     system_ready_ = true;
     printf("%s: System initialized (%dKB RAM)\n", Traits::name,
@@ -202,9 +235,17 @@ void BBCMasterSystem<V>::tick() {
 
 template<BBCMasterVariant V>
 void BBCMasterSystem<V>::run_frame() {
-    if (!system_ready_) return;
-    for (uint32_t i = 0; i < cycles_per_frame_; ++i)
-        tick();
+    if (!system_ready_ || !video_port_) return;
+
+    // Stream-driven: VIDPROC drives FrameEnd via CRTC timing
+    auto& stream = video_port_->stream();
+    const int frames = (speed_multiplier_ > 1.0) ? static_cast<int>(speed_multiplier_) : 1;
+    for (int f = 0; f < frames; f++) {
+        while (!stream.frame_ended()) {
+            tick();
+        }
+        video_port_->swap_frame();
+    }
 }
 
 // ============================================================================
@@ -293,18 +334,20 @@ uint8_t BBCMasterSystem<V>::scan_keyboard(uint8_t /*column*/) const {
 }
 
 template<BBCMasterVariant V>
-void BBCMasterSystem<V>::crtc_display_char(uint16_t /*ma*/, uint8_t /*ra*/, bool /*cursor*/) {
-    // TODO: forward CRTC character output to VIDPROC
+void BBCMasterSystem<V>::crtc_display_char(uint16_t ma, uint8_t ra, bool cursor) {
+    board_.chips().vidproc.display_char(ma, ra, cursor,
+                                        board_.video().regs_[MC6845_R9_MAX_SCANLINE]);
 }
 
 template<BBCMasterVariant V>
 void BBCMasterSystem<V>::crtc_vsync() {
-    // TODO: vertical sync handling
+    board_.chips().vidproc.vsync();
+    board_.io().ifr |= MOS6522_IFR_CA1;
 }
 
 template<BBCMasterVariant V>
 void BBCMasterSystem<V>::crtc_hsync() {
-    // TODO: horizontal sync handling
+    // HSYNC — no action needed for basic rendering
 }
 
 template<BBCMasterVariant V>

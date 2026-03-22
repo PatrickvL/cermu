@@ -45,6 +45,7 @@
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
 #include "core/standard_chips.hpp"
+#include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/wdc65c02.hpp"
 #include "chip/io/mos6522.hpp"
 #include "chip/video/mc6845/mc6845.hpp"
@@ -222,7 +223,7 @@ private:
     uint8_t* memory_          = nullptr;    // Direct pointer for rendering
 
     // ── Display ──────────────────────────────────────────────────────────
-    IndexedFrameBuffer display_;
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
 
     // ── Paged ROM / Shadow RAM state ─────────────────────────────────────
     uint8_t rom_select_     = 0;

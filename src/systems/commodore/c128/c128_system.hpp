@@ -35,6 +35,7 @@
 #include "systems/commodore/commodore_system.hpp"
 #include "core/board.hpp"
 #include "core/standard_chips.hpp"
+#include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/csg8502.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/video/vic_ii/mos8566.hpp"
@@ -168,8 +169,8 @@ private:
     MainBoard board_{kC128Chips};
 
     // ── Display ──────────────────────────────────────────────────────────
-    IndexedFrameBuffer display_;          // VIC-IIe output (40-col)
-    // TODO: second display for VDC 80-column output
+    std::unique_ptr<CompositeVideoPort> video_port_;  // VIC-IIe output (40-col)
+    // TODO: second video port for VDC 80-column output
 
     // ── 8722 MMU state ───────────────────────────────────────────────────
     uint8_t mmu_cr_        = 0;          // Configuration register
