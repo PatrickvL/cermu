@@ -287,10 +287,10 @@ bool cc_vs() const { return (regs_.cc & Flags::V) != 0; }
 bool cc_pl() const { return !(regs_.cc & Flags::N); }
 /// BMI: N=1
 bool cc_mi() const { return (regs_.cc & Flags::N) != 0; }
-/// BGE: N^V=0
-bool cc_ge() const { return !((regs_.cc ^ (regs_.cc >> 1)) & Flags::V); }
+/// BGE: N^V=0  (N=bit3, V=bit1; shift by 2 to align)
+bool cc_ge() const { return !(((regs_.cc >> 2) ^ regs_.cc) & Flags::V); }
 /// BLT: N^V=1
-bool cc_lt() const { return ((regs_.cc ^ (regs_.cc >> 1)) & Flags::V) != 0; }
+bool cc_lt() const { return (((regs_.cc >> 2) ^ regs_.cc) & Flags::V) != 0; }
 /// BGT: Z=0 AND N^V=0
 bool cc_gt() const { return !(regs_.cc & Flags::Z) && cc_ge(); }
 /// BLE: Z=1 OR N^V=1
