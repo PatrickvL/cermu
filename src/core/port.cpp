@@ -223,7 +223,7 @@ bool Port::attach_device(PeripheralDevice* device) {
     if (!device) return false;
 
     // Type compatibility check
-    if (device->get_port_type() != definition_.type) {
+    if (!device->is_compatible_with(definition_.type)) {
         printf("Port: Cannot attach '%s' — incompatible port type "
                "(device needs %s, port is %s)\n",
                device->get_name(),
@@ -266,7 +266,7 @@ void Port::detach_device(PeripheralDevice* device) {
             if (g_verbose)
                 printf("Port: '%s' detached from %s (port %d)\n",
                        d->get_name(), definition_.name, port_index_);
-            d->on_detach();
+            d->on_detach(this);
         }
         attached_devices_.clear();
     } else {
@@ -277,7 +277,7 @@ void Port::detach_device(PeripheralDevice* device) {
         if (g_verbose)
             printf("Port: '%s' detached from %s (port %d)\n",
                    device->get_name(), definition_.name, port_index_);
-        device->on_detach();
+        device->on_detach(this);
         attached_devices_.erase(it);
     }
 

@@ -161,6 +161,23 @@ public:
     /// Whether this display has built-in speaker(s).
     virtual bool has_builtin_speakers() const { return false; }
 
+    // --- Multi-port compatibility ---------------------------------------
+
+    /// Displays can attach to both video and audio ports.
+    /// Maps accepted video signal types to video PortTypes, and — if the
+    /// display has built-in speakers — also accepts audio PortTypes.
+    bool is_compatible_with(PortType type) const override {
+        // Check video port types against accepted signal types
+        if (accepts_signal(video_signal_for_port(type)))
+            return true;
+        // Check audio port types for displays with built-in speakers
+        if (has_builtin_speakers()) {
+            if (type == PortType::AUDIO_MONO || type == PortType::AUDIO_STEREO)
+                return true;
+        }
+        return false;
+    }
+
     // --- PeripheralDevice defaults for output-only device ----------------
 
     /// Displays have no state to reset.
@@ -171,4 +188,20 @@ public:
 
     /// Displays do not accept host input.
     InputPeripheralDevice* as_input_device() override { return nullptr; }
+
+    // --- Helpers --------------------------------------------------------
+
+    /// Map a video PortType to its corresponding VideoSignalType.
+    /// Returns a sentinel (CompositeArtifact + 1) for non-video port types.
+    static constexpr VideoSignalType video_signal_for_port(PortType type) {
+        switch (type) {
+            case PortType::VIDEO_COMPOSITE: return VideoSignalType::Composite;
+            case PortType::VIDEO_SVIDEO:    return VideoSignalType::SVideo;
+            case PortType::VIDEO_RGB:       return VideoSignalType::RGB;
+            case PortType::VIDEO_RGBI:      return VideoSignalType::RGBI;
+            case PortType::VIDEO_COMPONENT: return VideoSignalType::YPbPr;
+            case PortType::VIDEO_HDMI:      return VideoSignalType::Digital;
+            default: return static_cast<VideoSignalType>(255);
+        }
+    }
 };
