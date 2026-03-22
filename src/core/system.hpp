@@ -23,6 +23,7 @@ class Session;
 #include "core/palette_table.hpp"
 #include "core/board_base.hpp"
 #include "core/signal/sync_types.hpp"   // FrameData, SyncEvent, VideoSignalType
+#include "chip/video/video_chip_base.hpp"  // VideoChipBase (for owned_chips palette scan)
 
 /**
  * Result of probing a file for system-specific compatibility.
@@ -277,9 +278,20 @@ private:
         if (auto* p = board.video().system_palette())
             palette_.set(p, board.video().palette_size());
     }
-    // Fallback: board has no video() or no palette — do nothing
+    // Fallback: board has no typed video() — scan owned_chips() for a
+    // VideoChipBase with a palette (covers C64, VIC-20, C16 where the
+    // video chip is factory-created but not in the Board's Video type).
     template<typename B>
-    void auto_register_video_palette_(B&, long) {}
+    void auto_register_video_palette_(B& board, long) {
+        for (const auto& chip : board.owned_chips()) {
+            if (auto* vc = dynamic_cast<VideoChipBase*>(chip.get())) {
+                if (auto* p = vc->system_palette()) {
+                    palette_.set(p, vc->palette_size());
+                    return;
+                }
+            }
+        }
+    }
 
 protected:
     // BOARD & PORT OWNERSHIP

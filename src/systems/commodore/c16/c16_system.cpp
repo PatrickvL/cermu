@@ -653,9 +653,6 @@ bool Commodore264System<V>::initialize() {
     apply_cpu_banking();
     apply_ted_video_banking();
 
-    // Register palette for GPU stream shader
-    register_palette(ted7360_t::get_palette(), 128);
-
     // Wire TED to composite video stream port
     video_port_ = std::make_unique<CompositeVideoPort>();
     ted_->set_stream(&video_port_->stream());

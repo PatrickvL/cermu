@@ -536,9 +536,6 @@ bool C64System::initialize() {
     register_bus_chips(board_);
     register_chip(std::make_unique<PlaChip>(this));
 
-    // Register palette for GPU stream shader
-    register_palette(vicii_base_t::get_default_palette(), 16);
-
     // Wire VIC-II to composite video stream port
     video_port_ = std::make_unique<CompositeVideoPort>();
     vicii->set_stream(&video_port_->stream());
