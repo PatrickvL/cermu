@@ -180,8 +180,9 @@ protected:
     IndexedFrameBuffer* display_ = nullptr;
 
     // Direct palette — for stream-only systems that don't use IndexedFrameBuffer.
-    // Set via register_palette().  The palette accessors check this first,
-    // then fall back to display_->palette for IFB-based systems.
+    // Set by auto_register_video_palette_() / apply_display_palette_().
+    // The palette accessors check this first, then fall back to
+    // display_->palette for IFB-based systems.
     PaletteTable palette_;
 
     // Last video frame data — populated by VideoPort::swap_frame() when
@@ -196,11 +197,6 @@ protected:
         display_ = display;
     }
 
-    /// Register a palette directly (without IndexedFrameBuffer).
-    /// For stream-only systems that no longer use IndexedFrameBuffer.
-    void register_palette(const uint32_t* palette, int count) {
-        palette_.set(palette, count);
-    }
     
     Session* session_ = nullptr;  // Non-owning back-reference to parent session
 
@@ -648,8 +644,8 @@ public:
     // 4 bytes/pixel (RGBA) to 1 byte/pixel (R8).
     //
     // Two opt-in paths:
-    //   1. register_palette(data, count) — stream-only systems (no IFB).
-    //   2. register_display(&ifb) — legacy IFB-based systems.
+    //   1. Stream-only: auto_register_video_palette_() discovers the palette.
+    //   2. IFB-based: register_display(&ifb) — legacy systems.
     //
     // The host calls set_index_buffer() after set_framebuffer() when the
     // system advertises support.  Scanline-based systems override
