@@ -22,7 +22,7 @@
  *   - System descriptor metadata (name, aliases, ROM sizes)
  *   - POKEY presence and base address
  *
- * The system template uses StandardChips<MOS6502, VideoChip> where
+ * The system template uses CommonBoardChips<MOS6502, VideoChip> where
  * VideoChip is either dvg_t or avg_t, selected by traits.
  */
 
@@ -94,6 +94,7 @@ struct AtariVectorTraits<AtariVectorVariant::ASTEROIDS> {
 
     static constexpr bool HAS_POKEY     = false;
     static constexpr bool HAS_EAROM     = false;
+    static constexpr bool USES_15BIT_ADDR = true;
     static constexpr const char* PALETTE_ID = "green";
     static constexpr const char* VIDEO_CHIP_NAME = "DVG";
 
@@ -123,6 +124,7 @@ struct AtariVectorTraits<AtariVectorVariant::ASTEROIDS_DELUXE> {
 
     static constexpr bool HAS_POKEY     = true;
     static constexpr bool HAS_EAROM     = true;
+    static constexpr bool USES_15BIT_ADDR = true;
     static constexpr const char* PALETTE_ID = "blue";
     static constexpr const char* VIDEO_CHIP_NAME = "DVG";
 
@@ -152,6 +154,7 @@ struct AtariVectorTraits<AtariVectorVariant::LUNAR_LANDER> {
 
     static constexpr bool HAS_POKEY     = false;
     static constexpr bool HAS_EAROM     = false;
+    static constexpr bool USES_15BIT_ADDR = true;
     static constexpr const char* PALETTE_ID = "white";
     static constexpr const char* VIDEO_CHIP_NAME = "DVG";
 
@@ -181,6 +184,7 @@ struct AtariVectorTraits<AtariVectorVariant::BATTLEZONE> {
 
     static constexpr bool HAS_POKEY     = false;
     static constexpr bool HAS_EAROM     = false;
+    static constexpr bool USES_15BIT_ADDR = true;
     static constexpr const char* PALETTE_ID = "green";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
 
@@ -210,6 +214,7 @@ struct AtariVectorTraits<AtariVectorVariant::RED_BARON> {
 
     static constexpr bool HAS_POKEY     = true;
     static constexpr bool HAS_EAROM     = false;
+    static constexpr bool USES_15BIT_ADDR = true;
     static constexpr const char* PALETTE_ID = "green";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
 
@@ -229,10 +234,10 @@ struct AtariVectorTraits<AtariVectorVariant::TEMPEST> {
 
     static constexpr uint16_t RAM_BASE        = atv::TEMP_RAM_BASE;
     static constexpr uint16_t RAM_SIZE        = atv::TEMP_RAM_SIZE;
-    static constexpr uint16_t PROGROM_BASE    = atv::TEMP_PROGROM_BASE;
-    static constexpr uint16_t PROGROM_SIZE    = atv::TEMP_PROGROM_SIZE;
-    static constexpr uint16_t PROGROM_ACTUAL  = atv::TEMP_PROGROM_SIZE;
-    static constexpr uint16_t PROGROM_OFFSET  = 0;
+    static constexpr uint16_t PROGROM_BASE    = atv::TEMP_PROGROM_BASE;  // $8000
+    static constexpr uint16_t PROGROM_SIZE    = atv::TEMP_PROGROM_SIZE;  // 32KB
+    static constexpr uint16_t PROGROM_ACTUAL  = 0x5000;                  // 20KB actual ($9000-$DFFF)
+    static constexpr uint16_t PROGROM_OFFSET  = 0x1000;                  // ROM starts at chip offset $1000
     static constexpr uint16_t VECRAM_BASE     = atv::TEMP_VECRAM_BASE;
     static constexpr uint16_t VECRAM_SIZE     = atv::TEMP_VECRAM_SIZE;
     static constexpr uint16_t VECROM_BASE        = atv::TEMP_VECROM_BASE;
@@ -241,6 +246,7 @@ struct AtariVectorTraits<AtariVectorVariant::TEMPEST> {
 
     static constexpr bool HAS_POKEY     = true;
     static constexpr bool HAS_EAROM     = true;
+    static constexpr bool USES_15BIT_ADDR = false;
     static constexpr const char* PALETTE_ID = "color";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
 
@@ -258,18 +264,19 @@ struct AtariVectorTraits<AtariVectorVariant::GRAVITAR> {
 
     static constexpr uint16_t RAM_BASE        = atv::GRAV_RAM_BASE;
     static constexpr uint16_t RAM_SIZE        = atv::GRAV_RAM_SIZE;
-    static constexpr uint16_t PROGROM_BASE    = atv::GRAV_PROGROM_BASE;
-    static constexpr uint16_t PROGROM_SIZE    = atv::GRAV_PROGROM_SIZE;
+    static constexpr uint16_t PROGROM_BASE    = atv::GRAV_PROGROM_BASE;  // $9000
+    static constexpr uint16_t PROGROM_SIZE    = atv::GRAV_PROGROM_SIZE;  // 28KB
     static constexpr uint16_t PROGROM_ACTUAL  = atv::GRAV_PROGROM_SIZE;
     static constexpr uint16_t PROGROM_OFFSET  = 0;
     static constexpr uint16_t VECRAM_BASE     = atv::GRAV_VECRAM_BASE;
-    static constexpr uint16_t VECRAM_SIZE     = atv::GRAV_VECRAM_SIZE;
-    static constexpr uint16_t VECROM_BASE        = atv::GRAV_VECROM_BASE;
-    static constexpr uint16_t VECROM_SIZE        = atv::GRAV_VECROM_SIZE;
-    static constexpr uint16_t VECROM_WORD_OFFSET = atv::TEMP_VECROM_WORD_OFFSET;
+    static constexpr uint16_t VECRAM_SIZE     = atv::GRAV_VECRAM_SIZE;  // 2KB
+    static constexpr uint16_t VECROM_BASE        = atv::GRAV_VECROM_BASE;  // $2800
+    static constexpr uint16_t VECROM_SIZE        = atv::GRAV_VECROM_SIZE;  // 14KB
+    static constexpr uint16_t VECROM_WORD_OFFSET = 0x400;  // RAM=2KB=1024 words, ROM at word 0x400
 
     static constexpr bool HAS_POKEY     = true;
     static constexpr bool HAS_EAROM     = false;
+    static constexpr bool USES_15BIT_ADDR = false;
     static constexpr const char* PALETTE_ID = "green";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
 
@@ -286,19 +293,20 @@ struct AtariVectorTraits<AtariVectorVariant::SPACE_DUEL> {
     static constexpr const char* DATA_FOLDER  = "space_duel";
 
     static constexpr uint16_t RAM_BASE        = atv::SD_RAM_BASE;
-    static constexpr uint16_t RAM_SIZE        = atv::SD_RAM_SIZE;
+    static constexpr uint16_t RAM_SIZE        = atv::SD_RAM_SIZE;  // 1KB
     static constexpr uint16_t PROGROM_BASE    = atv::SD_PROGROM_BASE;
     static constexpr uint16_t PROGROM_SIZE    = atv::SD_PROGROM_SIZE;
     static constexpr uint16_t PROGROM_ACTUAL  = atv::SD_PROGROM_SIZE;
     static constexpr uint16_t PROGROM_OFFSET  = 0;
     static constexpr uint16_t VECRAM_BASE     = atv::SD_VECRAM_BASE;
-    static constexpr uint16_t VECRAM_SIZE     = atv::SD_VECRAM_SIZE;
-    static constexpr uint16_t VECROM_BASE        = atv::SD_VECROM_BASE;
-    static constexpr uint16_t VECROM_SIZE        = atv::SD_VECROM_SIZE;
-    static constexpr uint16_t VECROM_WORD_OFFSET = atv::TEMP_VECROM_WORD_OFFSET;
+    static constexpr uint16_t VECRAM_SIZE     = atv::SD_VECRAM_SIZE;  // 2KB
+    static constexpr uint16_t VECROM_BASE        = atv::SD_VECROM_BASE;  // $2800
+    static constexpr uint16_t VECROM_SIZE        = atv::SD_VECROM_SIZE;  // 6KB
+    static constexpr uint16_t VECROM_WORD_OFFSET = 0x400;  // RAM=2KB=1024 words, ROM at word 0x400
 
     static constexpr bool HAS_POKEY     = true;
     static constexpr bool HAS_EAROM     = false;
+    static constexpr bool USES_15BIT_ADDR = false;
     static constexpr const char* PALETTE_ID = "color";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
 
@@ -316,18 +324,19 @@ struct AtariVectorTraits<AtariVectorVariant::BLACK_WIDOW> {
 
     static constexpr uint16_t RAM_BASE        = atv::BW_RAM_BASE;
     static constexpr uint16_t RAM_SIZE        = atv::BW_RAM_SIZE;
-    static constexpr uint16_t PROGROM_BASE    = atv::BW_PROGROM_BASE;
-    static constexpr uint16_t PROGROM_SIZE    = atv::BW_PROGROM_SIZE;
+    static constexpr uint16_t PROGROM_BASE    = atv::BW_PROGROM_BASE;  // $9000
+    static constexpr uint16_t PROGROM_SIZE    = atv::BW_PROGROM_SIZE;  // 28KB
     static constexpr uint16_t PROGROM_ACTUAL  = atv::BW_PROGROM_SIZE;
     static constexpr uint16_t PROGROM_OFFSET  = 0;
     static constexpr uint16_t VECRAM_BASE     = atv::BW_VECRAM_BASE;
-    static constexpr uint16_t VECRAM_SIZE     = atv::BW_VECRAM_SIZE;
-    static constexpr uint16_t VECROM_BASE        = atv::BW_VECROM_BASE;
-    static constexpr uint16_t VECROM_SIZE        = atv::BW_VECROM_SIZE;
-    static constexpr uint16_t VECROM_WORD_OFFSET = atv::TEMP_VECROM_WORD_OFFSET;
+    static constexpr uint16_t VECRAM_SIZE     = atv::BW_VECRAM_SIZE;  // 2KB
+    static constexpr uint16_t VECROM_BASE        = atv::BW_VECROM_BASE;  // $2800
+    static constexpr uint16_t VECROM_SIZE        = atv::BW_VECROM_SIZE;  // 14KB
+    static constexpr uint16_t VECROM_WORD_OFFSET = 0x400;  // RAM=2KB=1024 words, ROM at word 0x400
 
     static constexpr bool HAS_POKEY     = true;
     static constexpr bool HAS_EAROM     = false;
+    static constexpr bool USES_15BIT_ADDR = false;
     static constexpr const char* PALETTE_ID = "color";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
 
@@ -357,6 +366,7 @@ struct AtariVectorTraits<AtariVectorVariant::MAJOR_HAVOC> {
 
     static constexpr bool HAS_POKEY     = true;
     static constexpr bool HAS_EAROM     = false;
+    static constexpr bool USES_15BIT_ADDR = true;  // TODO: MH needs 16-bit + bank switching, deferred
     static constexpr const char* PALETTE_ID = "color";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
 
@@ -440,7 +450,8 @@ inline constexpr auto kSpaceDuelChips = make_chip_manifest(
     Slot<RAMChip>{atv::SD_RAM_BASE,      atv::SD_RAM_SIZE,      0, "Work RAM"},
     Slot<RAMChip>{atv::SD_VECRAM_BASE,   atv::SD_VECRAM_SIZE,   0, "Vector RAM"},
     Slot<ROMChip>{atv::SD_VECROM_BASE,   atv::SD_VECROM_SIZE,   0, "Vector ROM"},
-    Slot<ROMChip>{atv::SD_PROGROM_BASE,  atv::SD_PROGROM_SIZE,  0, "Program ROM"},
+    Slot<ROMChip>{atv::SD_PROGROM_BASE,  atv::SD_PROGROM_SIZE,  0, "Program ROM Low"},
+    Slot<ROMChip>{atv::SD_PROGROM_HI_BASE, atv::SD_PROGROM_HI_SIZE, 0, "Program ROM High"},
     Slot<MOS6502>{0, 0, 0, "MOS 6502"},
     Slot<avg_t>{0, 0, 0, "AVG"}
 );
@@ -524,7 +535,7 @@ class AtariVectorSystem : public System {
     using VideoChip = typename Traits::VideoChip;
     using Spec      = VectorBusSpec<V>;
     using Bus       = MemoryBus<Spec>;
-    using ChipSet   = StandardChips<MOS6502, VideoChip>;
+    using ChipSet   = CommonBoardChips<MOS6502, VideoChip>;
     using MainBoard = Board<Spec, ChipSet>;
 
 public:
@@ -580,9 +591,10 @@ private:
     pokey::C012294 pokey_;           // POKEY sound chip (games with HAS_POKEY)
 
     // Memory chips (non-owning; owned by board_)
-    RAMChip*    vec_ram_  = nullptr;
-    ROMChip*    vec_rom_  = nullptr;
-    ROMChip*    prog_rom_ = nullptr;
+    RAMChip*    vec_ram_     = nullptr;
+    ROMChip*    vec_rom_     = nullptr;
+    ROMChip*    prog_rom_    = nullptr;
+    ROMChip*    prog_rom_hi_ = nullptr;  // 16-bit games: upper ROM ($8000-$FFFF)
 
     // ── Memory bus ───────────────────────────────────────────────────────
     Bus bus_;

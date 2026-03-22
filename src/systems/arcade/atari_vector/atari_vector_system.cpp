@@ -234,26 +234,24 @@ static const RomSetDescriptor rb_romset = {
 // ROM order matches MAME: lowest CPU address first.
 
 static const RomEntryDescriptor tempest_v3_entries[] = {
-    // Vector ROMs (AVG display list ROM at $3000-$3FFF)
-    { {"136002.111", "136002-111"},  0x3000, 2048, true  },
-    { {"136002.112", "136002-112"},  0x3800, 2048, true  },
-    // Program ROMs — sequential from $4000 (first 8 of 10 fit in 16 KB)
-    { {"136002.113", "136002-113"},  0x4000, 2048, true  },   // D1  ($9000)
-    { {"136002.114", "136002-114"},  0x4800, 2048, true  },   // E1  ($9800)
-    { {"136002.115", "136002-115"},  0x5000, 2048, true  },   // F1  ($A000)
-    { {"136002.316", "136002-316"},  0x5800, 2048, true  },   // H1  ($A800) — V3 only
-    { {"136002.217", "136002-217"},  0x6000, 2048, true  },   // J1  ($B000) — V2/V3
-    { {"136002.118", "136002-118"},  0x6800, 2048, true  },   // K1  ($B800)
-    { {"136002.119", "136002-119"},  0x7000, 2048, true  },   // L/M1 ($C000)
-    { {"136002.120", "136002-120"},  0x7800, 2048, true  },   // M/N1 ($C800)
-    // Last 2 program ROMs — addresses overflow $4000-$7FFF; loader skips
-    { {"136002.121", "136002-121"},  0x8000, 2048, false },   // P1  ($D000)
-    { {"136002.222", "136002-222"},  0x8800, 2048, false },   // R1  ($D800) — V2/V3
+    // Vector ROM (AVG display list ROM at $3000)
+    { {"136002.111", "136002-111"},  0x3000, 0, true  },
+    // Program ROMs — MAME loads at $9000-$CFFF for V3 (only 8 chips, not 10).
+    // V3 uses different part numbers from V1/V2.
+    // The zip contains: .133,.134,.235,.316,.217,.138,.136,.237
+    { {"136002.133", "136002-133"},  0x9000, 0, true  },   // D1
+    { {"136002.134", "136002-134"},  0x9800, 0, true  },   // E1
+    { {"136002.235", "136002-235"},  0xA000, 0, true  },   // F1 (V3)
+    { {"136002.316", "136002-316"},  0xA800, 0, true  },   // H1 (V3)
+    { {"136002.217", "136002-217"},  0xB000, 0, true  },   // J1 (V2/V3)
+    { {"136002.138", "136002-138"},  0xB800, 0, true  },   // K1
+    { {"136002.136", "136002-136"},  0xC000, 0, true  },   // L/M1
+    { {"136002.237", "136002-237"},  0xC800, 0, true  },   // M/N1 (V3)
 };
 
 static const RomSetDescriptor tempest_v3_romset = {
     "Tempest Rev 3", "Tempest",
-    tempest_v3_entries, 12
+    tempest_v3_entries, 9
 };
 
 // ── Gravitar Rev 2 ───────────────────────────────────────────────────────
@@ -269,19 +267,41 @@ static const RomEntryDescriptor gravitar_v2_entries[] = {
     // Vector ROMs at $3000 (MAME: 136010-101, 136010-102 — 2 KB each)
     { {"136010.101", "136010-101"},  0x3000, 2048, true  },
     { {"136010.102", "136010-102"},  0x3800, 2048, true  },
-    // Program ROMs ($4000-$7FFF)
-    // MAME uses a mix of 2 KB and 4 KB chips. Actual zip files are 4096 bytes.
+    // Program ROMs — MAME loads at $5000-$9FFF (5 × 4 KB, full 16-bit).
     // expected_size=0 allows matching regardless of file size.
-    { {"136010.210", "136010-210"},  0x4000, 0, true  },
-    { {"136010.207", "136010-207"},  0x4800, 0, true  },
-    { {"136010.208", "136010-208"},  0x5000, 0, true  },
-    { {"136010.209", "136010-209"},  0x5800, 0, true  },
-    { {"136010.201", "136010-201"},  0x6000, 0, true  },
+    { {"136010.210", "136010-210"},  0x5000, 0, true  },
+    { {"136010.207", "136010-207"},  0x6000, 0, true  },
+    { {"136010.208", "136010-208"},  0x7000, 0, true  },
+    { {"136010.209", "136010-209"},  0x8000, 0, true  },
+    { {"136010.201", "136010-201"},  0x9000, 0, true  },
 };
 
 static const RomSetDescriptor gravitar_v2_romset = {
     "Gravitar Rev 2", "Gravitar",
     gravitar_v2_entries, 7
+};
+
+// ── Gravitar Rev 3 ───────────────────────────────────────────────────────
+//
+// Rev 3 uses different part numbers: 136010.301-309 + shared 136010.210.
+// Vector ROM: 136010.302-306 (5 × 4 KB), program ROM: 136010.301,309,307-308,210.
+// Based on the actual zip contents and MAME naming conventions.
+
+static const RomEntryDescriptor gravitar_v3_entries[] = {
+    // Vector ROMs (in the avgdvg region — mapped to $3000+)
+    { {"136010.302", "136010-302"},  0x3000, 0, false },
+    // Program ROMs — same MAME layout: $5000-$9FFF.
+    // V3 replaces .209→.309 and .201→.301; others (.210,.207,.208) are shared with V2.
+    { {"136010.210", "136010-210"},  0x5000, 0, true  },
+    { {"136010.207", "136010-207"},  0x6000, 0, true  },
+    { {"136010.208", "136010-208"},  0x7000, 0, true  },
+    { {"136010.309", "136010-309"},  0x8000, 0, true  },
+    { {"136010.301", "136010-301"},  0x9000, 0, true  },
+};
+
+static const RomSetDescriptor gravitar_v3_romset = {
+    "Gravitar Rev 3", "Gravitar",
+    gravitar_v3_entries, 6
 };
 
 // ── Space Duel ───────────────────────────────────────────────────────────
@@ -290,16 +310,17 @@ static const RomSetDescriptor gravitar_v2_romset = {
 // TODO: Restructure with 4 KB sizes/stride once MAME mapping is verified.
 
 static const RomEntryDescriptor spaceduel_entries[] = {
-    // Vector ROMs (2 KB each)
-    { {"136006.107", "136006-107"},  0x3000, 2048, true  },
-    { {"136006.108", "136006-108"},  0x3800, 2048, true  },
-    // Program ROMs ($4000-$7FFF) — expected_size=0 for flexible matching
+    // Vector ROMs — .108 optional (not always present in dumps)
+    { {"136006.107", "136006-107"},  0x3000, 0, true  },
+    { {"136006.108", "136006-108"},  0x3800, 0, false },
+    // Program ROMs — MAME loads at $4000-$9FFF (6 × 4 KB, full 16-bit).
+    // expected_size=0 for flexible matching.
     { {"136006.201", "136006-201"},  0x4000, 0, true  },
-    { {"136006.102", "136006-102"},  0x4800, 0, true  },
-    { {"136006.103", "136006-103"},  0x5000, 0, true  },
-    { {"136006.104", "136006-104"},  0x5800, 0, true  },
-    { {"136006.105", "136006-105"},  0x6000, 0, true  },
-    { {"136006.106", "136006-106"},  0x6800, 0, true  },
+    { {"136006.102", "136006-102"},  0x5000, 0, true  },
+    { {"136006.103", "136006-103"},  0x6000, 0, true  },
+    { {"136006.104", "136006-104"},  0x7000, 0, true  },
+    { {"136006.105", "136006-105"},  0x8000, 0, true  },
+    { {"136006.106", "136006-106"},  0x9000, 0, true  },
 };
 
 static const RomSetDescriptor spaceduel_romset = {
@@ -313,16 +334,17 @@ static const RomSetDescriptor spaceduel_romset = {
 // TODO: Restructure with 4 KB sizes/stride once MAME mapping is verified.
 
 static const RomEntryDescriptor blackwidow_entries[] = {
-    // Vector ROMs (2 KB each)
-    { {"136017.107", "136017-107"},  0x3000, 2048, true  },
-    { {"136017.108", "136017-108"},  0x3800, 2048, true  },
-    // Program ROMs ($4000-$7FFF) — expected_size=0 for flexible matching
+    // Vector ROMs — expected_size=0 for flexible matching (files may be 2 KB or 4 KB)
+    { {"136017.107", "136017-107"},  0x3000, 0, true  },
+    { {"136017.108", "136017-108"},  0x3800, 0, false },
+    // Program ROMs — MAME loads at $4000-$9FFF (bwidow board, full 16-bit).
+    // expected_size=0 for flexible matching.
     { {"136017.101", "136017-101"},  0x4000, 0, true  },
-    { {"136017.102", "136017-102"},  0x4800, 0, true  },
-    { {"136017.103", "136017-103"},  0x5000, 0, true  },
-    { {"136017.104", "136017-104"},  0x5800, 0, true  },
-    { {"136017.105", "136017-105"},  0x6000, 0, true  },
-    { {"136017.106", "136017-106"},  0x6800, 0, true  },
+    { {"136017.102", "136017-102"},  0x5000, 0, true  },
+    { {"136017.103", "136017-103"},  0x6000, 0, true  },
+    { {"136017.104", "136017-104"},  0x7000, 0, true  },
+    { {"136017.105", "136017-105"},  0x8000, 0, true  },
+    { {"136017.106", "136017-106"},  0x9000, 0, true  },
 };
 
 static const RomSetDescriptor blackwidow_romset = {
@@ -480,6 +502,11 @@ bool AtariVectorSystem<V>::initialize() {
     vec_ram_  = board_.template find<RAMChip>(1);   // 2nd RAMChip = vector RAM
     vec_rom_  = board_.template find<ROMChip>(0);   // 1st ROMChip = vector ROM
     prog_rom_ = board_.template find<ROMChip>(1);   // 2nd ROMChip = program ROM
+
+    // 16-bit address games have a 3rd ROMChip for upper address space ($8000-$FFFF)
+    if constexpr (!Traits::USES_15BIT_ADDR) {
+        prog_rom_hi_ = board_.template find<ROMChip>(2);
+    }
 
     // Wire MemoryBus page tables
     board_.apply(bus_);
@@ -649,9 +676,15 @@ void AtariVectorSystem<V>::tick_cpu() {
 
     pins_ = cpu.template tick<MOS6502::Phase::PHI2>(pins_);
 
-    // All Atari vector games decode only 15 address lines (A0-A14).
-    // A15 is not connected, so $8000-$FFFF mirrors $0000-$7FFF.
-    uint16_t addr = BUS_GET_ADDR(pins_) & 0x7FFF;
+    uint16_t raw_addr = BUS_GET_ADDR(pins_);
+    uint16_t addr;
+    if constexpr (Traits::USES_15BIT_ADDR) {
+        // DVG games + BZ/RB: A15 not connected, $8000-$FFFF mirrors $0000-$7FFF.
+        addr = raw_addr & 0x7FFF;
+    } else {
+        // Tempest, Gravitar, BW, SD: full 16-bit address space.
+        addr = raw_addr;
+    }
     bool is_write = !BUS_GET_BIT(pins_, BUS_RW_BIT);
 
     // I/O region varies by game family:
@@ -669,12 +702,20 @@ void AtariVectorSystem<V>::tick_cpu() {
         // Original DVG games: I/O at $2000-$3FFF
         is_io = (addr >= 0x2000 && addr < 0x4000);
     } else if constexpr (V == AtariVectorVariant::TEMPEST) {
-        // Tempest: I/O at $0800-$1FFF (input ports) and $6000-$60FF (POKEY, VGGO, VGRST)
-        // Must NOT intercept RAM at $0000-$07FF or VECRAM/VECROM/PROGROM
+        // Tempest: I/O at $0800-$1FFF (input ports, color RAM)
+        //          $4000-$5FFF (coin, VGGO, WD, VGRST)
+        //          $6000-$60FF (EAROM, mathbox, POKEY, LED)
         is_io = (addr >= 0x0800 && addr < 0x2000) ||
-                (addr >= 0x6000 && addr < 0x6100);
+                (addr >= 0x4000 && addr < 0x6100);
+    } else if constexpr (V == AtariVectorVariant::GRAVITAR ||
+                         V == AtariVectorVariant::BLACK_WIDOW) {
+        // Gravitar/BW (bwidow board): full 16-bit addressing.
+        //   $6000-$6FFF: POKEY1/2
+        //   $7000-$7FFF: EAROM, IN0 ($7800)
+        //   $8000-$8FFF: IN3, IN4, VGGO, VGRST, IRQ ack, EAROM ctrl, WD
+        is_io = (addr >= 0x6000 && addr < 0x9000);
     } else {
-        // BZ, RB, Gravitar, SD, BW, MH: I/O at $0800-$1FFF
+        // BZ, RB, SD, MH: I/O at $0800-$1FFF
         is_io = (addr >= 0x0800 && addr < 0x2000);
     }
 
@@ -723,8 +764,10 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
 
         if (addr >= atv::BZ_IN0_ADDR && addr < atv::BZ_IN0_ADDR + 0x0200) {
             // IN0 — full byte with live HW signals
-            data = in0_;
-            // bit 0: VG HALT
+            // XOR converts internal active-HIGH → hardware active-LOW for
+            // coin, self-test, diagnostic step bits.
+            data = in0_ ^ atv::BZ_IN0_ACTIVE_LOW_MASK;
+            // bit 6: VG HALT
             if (vg().is_halted())
                 data |= atv::BZ_IN0_HALT;
             else
@@ -791,11 +834,11 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
             else
                 port_val &= ~atv::AST_IN0_CLOCK;
 
-            // bit 2: DVG done_r (IP_ACTIVE_HIGH: 1 = halted/done)
+            // bit 2: DVG done_r (IP_ACTIVE_LOW: halted=0, running=1)
             if (vg().is_halted())
-                port_val |= atv::AST_IN0_HALT;
-            else
                 port_val &= ~atv::AST_IN0_HALT;
+            else
+                port_val |= atv::AST_IN0_HALT;
 
         } else if (port_base == 0x2400) {
             // IN1: player controls, coins, start
@@ -888,8 +931,14 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
                 BUS_SET_DATA(pins, data);
                 return pins;
             }
-            if (addr >= atv::TEMP_EAROM_BASE && addr < atv::TEMP_EAROM_BASE + atv::TEMP_EAROM_SIZE) {
-                data = earom_[addr & 0x3F];
+            if (addr == atv::TEMP_EAROM_READ_ADDR) {
+                data = earom_[0];  // TODO: proper ER2055 address latch
+                BUS_SET_DATA(pins, data);
+                return pins;
+            }
+            if (addr == atv::TEMP_EAROM_CTRL_ADDR) {
+                // Mathbox status register (read side of $6040)
+                data = 0x00;  // TODO: mathbox status
                 BUS_SET_DATA(pins, data);
                 return pins;
             }
@@ -983,10 +1032,9 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
         // ── BZ/RB I/O writes at $0800-$1FFF ────────────────────────────
         //
         // MAME bzone.cpp:
-        //   $1000: coin counters   $1200: sound latch
-        //   $1600: VGGO            $1800: VGRST
-        //   $1A00: WD clear
-
+        //   $1000: coin counters   $1200: VGGO
+        //   $1400: WD clear        $1600: VGRST
+        //   $1840: sound latch
         if constexpr (V == AtariVectorVariant::RED_BARON) {
             if (addr >= atv::RB_POKEY_BASE && addr < atv::RB_POKEY_BASE + 0x10) {
                 pokey_.write(addr & 0x0F, data);
@@ -999,6 +1047,7 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
         } else if (addr >= atv::BZ_SND_ADDR && addr < atv::BZ_SND_ADDR + 0x0200) {
             snd_latch_ = data;
         } else if (addr >= atv::BZ_VGGO_ADDR && addr < atv::BZ_VGGO_ADDR + 0x0200) {
+            printf("BZ: VGGO triggered at $%04X\n", addr);
             vg().trigger_go();
         } else if (addr >= atv::BZ_VGRST_ADDR && addr < atv::BZ_VGRST_ADDR + 0x0200) {
             vg().trigger_reset();
@@ -1029,6 +1078,7 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
 
         switch (reg) {
             case atv::VGGO_ADDR:
+                printf("AST: VGGO triggered (reg=$%04X, addr=$%04X)\n", reg, addr);
                 vg().trigger_go();
                 break;
 
@@ -1075,7 +1125,7 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
 
         if constexpr (V == AtariVectorVariant::TEMPEST) {
             // Tempest (MAME tempest.cpp)
-            // POKEY1 $60C0, POKEY2 $60D0, VGGO $6040, VGRST $6080, WD $60E0
+            // POKEY1 $60C0, POKEY2 $60D0, VGGO $4800, VGRST $5800, WD $5000
             if (addr >= atv::TEMP_POKEY1_BASE && addr < atv::TEMP_POKEY1_BASE + 0x10) {
                 pokey_.write(addr & 0x0F, data);
                 return pins;
@@ -1084,7 +1134,7 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
                 earom_[addr & 0x3F] = data;
                 return pins;
             }
-            if (addr == atv::TEMP_VGGO_ADDR)  { vg().trigger_go(); return pins; }
+            if (addr == atv::TEMP_VGGO_ADDR)  { printf("TEMP: VGGO triggered\n"); vg().trigger_go(); return pins; }
             if (addr == atv::TEMP_VGRST_ADDR) { vg().trigger_reset(); return pins; }
             if (addr == atv::TEMP_WDCLR_ADDR) { return pins; }
 
@@ -1232,6 +1282,15 @@ bool AtariVectorSystem<V>::load_file(const char* filepath) {
     system_ready_ = true;
     reset();
 
+    // Show reset vector for diagnostic — confirms ROM data is present and mapped
+    if (prog_rom_) {
+        uint16_t rst_offset = Traits::PROGROM_SIZE - 4;  // $FFFC relative
+        uint16_t rst_lo = prog_rom_->data()[rst_offset];
+        uint16_t rst_hi = prog_rom_->data()[rst_offset + 1];
+        printf("%s: Reset vector = $%04X (chip offset $%04X)\n",
+               Traits::NAME, rst_lo | (rst_hi << 8), rst_offset);
+    }
+
     if (cold_boot) {
         board_.cpu().set(REG_A, 0);
         board_.cpu().set(REG_X, 0);
@@ -1261,7 +1320,7 @@ std::vector<const RomSetDescriptor*> AtariVectorSystem<V>::get_rom_set_descripto
     } else if constexpr (V == AtariVectorVariant::TEMPEST) {
         return { &tempest_v3_romset };
     } else if constexpr (V == AtariVectorVariant::GRAVITAR) {
-        return { &gravitar_v2_romset };
+        return { &gravitar_v2_romset, &gravitar_v3_romset };
     } else if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
         return { &spaceduel_romset };
     } else if constexpr (V == AtariVectorVariant::BLACK_WIDOW) {
@@ -1303,16 +1362,28 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
             return true;
         }
 
-        if (load_address >= AtariVectorTraits<V>::PROGROM_BASE &&
-            load_address < AtariVectorTraits<V>::PROGROM_BASE + AtariVectorTraits<V>::PROGROM_SIZE) {
-            // Program ROM ($6000/$6800-$7FFF)
+        // Program ROM — lower chip ($4000-$7FFF for most games)
+        if (load_address >= Traits::PROGROM_BASE &&
+            load_address < Traits::PROGROM_BASE + Traits::PROGROM_SIZE) {
             if (!prog_rom_) return false;
-            uint32_t offset = load_address - AtariVectorTraits<V>::PROGROM_BASE;
-            size_t to_copy = std::min(size, static_cast<size_t>(AtariVectorTraits<V>::PROGROM_SIZE - offset));
+            uint32_t offset = load_address - Traits::PROGROM_BASE;
+            size_t to_copy = std::min(size, static_cast<size_t>(Traits::PROGROM_SIZE - offset));
             std::memcpy(prog_rom_->data() + offset, data, to_copy);
             printf("  Program ROM: %zu bytes at $%04X (offset $%04X)\n",
                    to_copy, load_address, offset);
             return true;
+        }
+
+        // 16-bit games: upper ROM chip ($8000-$FFFF)
+        if constexpr (!Traits::USES_15BIT_ADDR) {
+            if (prog_rom_hi_ && load_address >= 0x8000) {
+                uint32_t offset = load_address - 0x8000;
+                size_t to_copy = std::min(size, static_cast<size_t>(0x8000u - offset));
+                std::memcpy(prog_rom_hi_->data() + offset, data, to_copy);
+                printf("  Program ROM (high): %zu bytes at $%04X (offset $%04X)\n",
+                       to_copy, load_address, offset);
+                return true;
+            }
         }
 
         printf("  WARNING: Unhandled ROM address $%04X (%zu bytes) — skipped\n",
@@ -1323,6 +1394,43 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
     if (!ok) {
         printf("%s: Failed to load ROM set\n", Traits::NAME);
         return false;
+    }
+
+    // 16-bit games: create reset vector mirrors
+    if constexpr (!Traits::USES_15BIT_ADDR) {
+        if constexpr (V == AtariVectorVariant::TEMPEST) {
+            // Tempest: prog_rom_ IS the $8000-$FFFF chip (32KB).
+            // Mirror upper ROM region for reset vector coverage.
+            // V3 ROM goes to $CFFF, so mirror $C000-$CFFF repeating through $D000-$FFFF.
+            // V1/V2 ROM goes to $DFFF, so mirror $C000-$DFFF at $E000-$FFFF.
+            if (prog_rom_) {
+                // Fill $D000-$DFFF with copy of $C000-$CFFF
+                std::memcpy(prog_rom_->data() + 0x5000,
+                            prog_rom_->data() + 0x4000, 0x1000);
+                // Fill $E000-$FFFF with copy of $C000-$DFFF (now includes the mirror)
+                std::memcpy(prog_rom_->data() + 0x6000,
+                            prog_rom_->data() + 0x4000, 0x2000);
+                printf("  Reset vector mirror: ROM mirrored to $E000-$FFFF\n");
+            }
+        } else if (prog_rom_hi_) {
+            if constexpr (V == AtariVectorVariant::GRAVITAR ||
+                          V == AtariVectorVariant::BLACK_WIDOW) {
+                // Mirror last 4 KB ROM ($9000) at $F000 (chip offset $1000 → $7000)
+                std::memcpy(prog_rom_hi_->data() + 0x7000,
+                            prog_rom_hi_->data() + 0x1000, 0x1000);
+                printf("  Reset vector mirror: $9000 → $F000\n");
+            } else if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
+                // Mirror $4000-$9FFF at $A000-$FFFF.
+                // $A000 in high chip = offset $2000.
+                if (prog_rom_) {
+                    std::memcpy(prog_rom_hi_->data() + 0x2000,
+                                prog_rom_->data(), 0x4000);   // $A000-$DFFF ← $4000-$7FFF
+                }
+                std::memcpy(prog_rom_hi_->data() + 0x6000,
+                            prog_rom_hi_->data(), 0x2000);    // $E000-$FFFF ← $8000-$9FFF
+                printf("  Reset vector mirror: $4000-$9FFF → $A000-$FFFF\n");
+            }
+        }
     }
 
     // Set program title from ROM set name
@@ -1338,6 +1446,15 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
 
     system_ready_ = true;
     reset();
+
+    // Show reset vector for diagnostic — confirms ROM data is present and mapped
+    if (prog_rom_) {
+        uint16_t rst_offset = Traits::PROGROM_SIZE - 4;  // $FFFC relative
+        uint16_t rst_lo = prog_rom_->data()[rst_offset];
+        uint16_t rst_hi = prog_rom_->data()[rst_offset + 1];
+        printf("%s: Reset vector = $%04X (chip offset $%04X)\n",
+               Traits::NAME, rst_lo | (rst_hi << 8), rst_offset);
+    }
 
     printf("%s: ROM set loaded, system ready\n", Traits::NAME);
     return true;
@@ -1557,8 +1674,9 @@ void AtariVectorSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) 
                 else         in1_ &= ~0x10;
                 break;
             case SDLK_1:
-                if (pressed) in0_ |=  atv::BZ_IN0_1P_START;
-                else         in0_ &= ~atv::BZ_IN0_1P_START;
+                // Start is IN3 bit 5 in MAME (joystick register, not IN0)
+                if (pressed) in1_ |=  0x20;
+                else         in1_ &= ~0x20;
                 break;
             case SDLK_5:
                 if (pressed) in0_ |=  atv::BZ_IN0_COIN1;
@@ -1596,8 +1714,9 @@ void AtariVectorSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) 
                 else         in1_ &= ~0x10;
                 break;
             case SDLK_1:
-                if (pressed) in0_ |=  atv::BZ_IN0_1P_START;
-                else         in0_ &= ~atv::BZ_IN0_1P_START;
+                // Start is IN3 bit 5 in MAME (joystick register, not IN0)
+                if (pressed) in1_ |=  0x20;
+                else         in1_ &= ~0x20;
                 break;
             case SDLK_5:
                 if (pressed) in0_ |=  atv::BZ_IN0_COIN1;

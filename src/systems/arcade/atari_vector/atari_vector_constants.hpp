@@ -269,6 +269,10 @@ namespace atari_vector_constants {
     inline constexpr uint8_t LL_IN0_ACTIVE_LOW_MASK = 0xBE;  // bits 1,2,3,4,5,7
     inline constexpr uint8_t LL_IN1_ACTIVE_LOW_MASK = 0xCE;  // bits 1,2,3,6,7
 
+    // Battlezone / Red Baron IN0 active-LOW mask.
+    // bits 0(coin1), 1(coin2), 2-3(unused), 4(self-test), 5(diag step) are IP_ACTIVE_LOW.
+    inline constexpr uint8_t BZ_IN0_ACTIVE_LOW_MASK = 0x3F;
+
     // ========================================================================
     // Battlezone-specific constants
     // ========================================================================
@@ -302,23 +306,25 @@ namespace atari_vector_constants {
     inline constexpr uint16_t BZ_DSW1_ADDR         = 0x0C00;    // read: DSW1
 
     inline constexpr uint16_t BZ_COIN_CTR_ADDR     = 0x1000;    // write: coin counters
-    inline constexpr uint16_t BZ_SND_ADDR          = 0x1200;    // write: sound latch
-    inline constexpr uint16_t BZ_VGGO_ADDR         = 0x1600;    // write: trigger AVG
-    inline constexpr uint16_t BZ_VGRST_ADDR        = 0x1800;    // write: reset AVG
-    inline constexpr uint16_t BZ_WDCLR_ADDR        = 0x1A00;    // write: watchdog clear
+    inline constexpr uint16_t BZ_VGGO_ADDR         = 0x1200;    // write: trigger AVG (MAME bzone.cpp: avg_device::go_w)
+    inline constexpr uint16_t BZ_WDCLR_ADDR        = 0x1400;    // write: watchdog clear (MAME bzone.cpp)
+    inline constexpr uint16_t BZ_VGRST_ADDR        = 0x1600;    // write: reset AVG (MAME bzone.cpp: avg_device::reset_w)
+    inline constexpr uint16_t BZ_SND_ADDR          = 0x1840;    // write: sound latch (MAME bzone_sounds_w)
 
     // DVG word offset: RAM at word 0x000, ROM at word 0x800 (4 KB gap, then 4 KB ROM)
     inline constexpr uint16_t BZ_VECROM_WORD_OFFSET = 0x800;
 
-    // Battlezone IN0 bit definitions
-    inline constexpr uint8_t BZ_IN0_HALT           = 0x01;  // bit 0: DVG HALT
-    inline constexpr uint8_t BZ_IN0_CLOCK          = 0x02;  // bit 1: 3 KHz clock
-    inline constexpr uint8_t BZ_IN0_COIN3          = 0x04;  // bit 2: Coin 3
-    inline constexpr uint8_t BZ_IN0_COIN2          = 0x08;  // bit 3: Coin 2
-    inline constexpr uint8_t BZ_IN0_COIN1          = 0x10;  // bit 4: Coin 1
-    inline constexpr uint8_t BZ_IN0_SELF_TEST      = 0x20;  // bit 5: Self-test (active-LOW)
-    inline constexpr uint8_t BZ_IN0_TILT           = 0x40;  // bit 6: Tilt
-    inline constexpr uint8_t BZ_IN0_1P_START       = 0x80;  // bit 7: Start
+    // Battlezone IN0 bit definitions (MAME bzone.cpp BZONEIN0)
+    // Bits 0-4: Coin1(active-LOW), Coin2(active-LOW), unused, unused, Self-test(active-LOW)
+    // Bit 5: Diagnostic step (active-LOW)
+    // Bit 6: VG HALT (IP_ACTIVE_HIGH = done_r)
+    // Bit 7: 3 KHz clock (IP_ACTIVE_HIGH)
+    inline constexpr uint8_t BZ_IN0_COIN1          = 0x01;  // bit 0: Coin 1 (active-LOW)
+    inline constexpr uint8_t BZ_IN0_COIN2          = 0x02;  // bit 1: Coin 2 (active-LOW)
+    inline constexpr uint8_t BZ_IN0_SELF_TEST      = 0x10;  // bit 4: Self-test (active-LOW)
+    inline constexpr uint8_t BZ_IN0_DIAG_STEP      = 0x20;  // bit 5: Diagnostic step (active-LOW)
+    inline constexpr uint8_t BZ_IN0_HALT           = 0x40;  // bit 6: VG HALT (IP_ACTIVE_HIGH)
+    inline constexpr uint8_t BZ_IN0_CLOCK          = 0x80;  // bit 7: 3 KHz clock
 
     // Joystick ports at separate addresses
     inline constexpr uint16_t BZ_JSR_ADDR          = 0x0800;    // joystick register (overlaps IN0)
@@ -377,15 +383,17 @@ namespace atari_vector_constants {
     inline constexpr uint16_t TEMP_VECRAM_SIZE     = 0x1000;    // 4 KB
     inline constexpr uint16_t TEMP_VECROM_BASE     = 0x3000;
     inline constexpr uint16_t TEMP_VECROM_SIZE     = 0x1000;    // 4 KB
-    inline constexpr uint16_t TEMP_PROGROM_BASE    = 0x4000;
-    inline constexpr uint16_t TEMP_PROGROM_SIZE    = 0x4000;    // 16 KB ($4000-$7FFF)
+    inline constexpr uint16_t TEMP_PROGROM_BASE    = 0x8000;
+    inline constexpr uint16_t TEMP_PROGROM_SIZE    = 0x8000;    // 32 KB ($8000-$FFFF, ROM at $9000-$DFFF + mirror)
     inline constexpr uint16_t TEMP_POKEY1_BASE     = 0x60C0;    // POKEY 1
     inline constexpr uint16_t TEMP_POKEY2_BASE     = 0x60D0;    // POKEY 2 (secondary)
-    inline constexpr uint16_t TEMP_EAROM_BASE      = 0x0C00;
+    inline constexpr uint16_t TEMP_EAROM_BASE      = 0x6000;    // MAME: $6000-$603F (write)
     inline constexpr uint16_t TEMP_EAROM_SIZE      = 0x0040;    // 64 bytes
-    inline constexpr uint16_t TEMP_VGGO_ADDR       = 0x6040;
-    inline constexpr uint16_t TEMP_VGRST_ADDR      = 0x6080;
-    inline constexpr uint16_t TEMP_WDCLR_ADDR      = 0x60E0;
+    inline constexpr uint16_t TEMP_EAROM_READ_ADDR = 0x6050;    // MAME: earom_read
+    inline constexpr uint16_t TEMP_EAROM_CTRL_ADDR = 0x6040;    // MAME: earom_control_w / mathbox_status_r
+    inline constexpr uint16_t TEMP_VGGO_ADDR       = 0x4800;    // MAME tempest.cpp: avg_device::go_w
+    inline constexpr uint16_t TEMP_VGRST_ADDR      = 0x5800;    // MAME tempest.cpp: avg_device::reset_w
+    inline constexpr uint16_t TEMP_WDCLR_ADDR      = 0x5000;    // MAME tempest.cpp: wdclr_w
     inline constexpr uint16_t TEMP_IN0_ADDR        = 0x0C00;
     inline constexpr uint16_t TEMP_IN1_ADDR        = 0x0D00;
     inline constexpr uint16_t TEMP_DSW1_ADDR       = 0x0E00;
@@ -402,50 +410,68 @@ namespace atari_vector_constants {
     inline constexpr uint16_t GRAV_RAM_BASE        = 0x0000;
     inline constexpr uint16_t GRAV_RAM_SIZE        = 0x0800;    // 2 KB (MAME: $0000-$07FF)
     inline constexpr uint16_t GRAV_VECRAM_BASE     = 0x2000;
-    inline constexpr uint16_t GRAV_VECRAM_SIZE     = 0x1000;
-    inline constexpr uint16_t GRAV_VECROM_BASE     = 0x3000;
-    inline constexpr uint16_t GRAV_VECROM_SIZE     = 0x1000;
-    inline constexpr uint16_t GRAV_PROGROM_BASE    = 0x4000;
-    inline constexpr uint16_t GRAV_PROGROM_SIZE    = 0x4000;
-    inline constexpr uint16_t GRAV_POKEY1_BASE     = 0x0800;    // POKEY 1 (MAME: $8800→$0800)
-    inline constexpr uint16_t GRAV_POKEY2_BASE     = 0x0A00;    // POKEY 2 (MAME: $8A00→$0A00)
-    inline constexpr uint16_t GRAV_VGGO_ADDR       = 0x0840;    // write: trigger AVG (MAME: $8840)
-    inline constexpr uint16_t GRAV_VGRST_ADDR      = 0x0880;    // write: reset AVG (MAME: $8880)
-    inline constexpr uint16_t GRAV_WDCLR_ADDR      = 0x08C0;    // write: watchdog clear
+    inline constexpr uint16_t GRAV_VECRAM_SIZE     = 0x0800;    // 2 KB (MAME bwidow.cpp: $2000-$27FF)
+    inline constexpr uint16_t GRAV_VECROM_BASE     = 0x2800;    // MAME: $2800-$5FFF
+    inline constexpr uint16_t GRAV_VECROM_SIZE     = 0x3800;    // 14 KB (MAME bwidow.cpp)
+    inline constexpr uint16_t GRAV_POKEY1_BASE     = 0x6000;    // POKEY 1 (MAME bwidow.cpp: $6000)
+    inline constexpr uint16_t GRAV_POKEY2_BASE     = 0x6800;    // POKEY 2 (MAME bwidow.cpp: $6800)
+    inline constexpr uint16_t GRAV_IN0_ADDR        = 0x7800;    // IN0 (MAME: $7800)
+    inline constexpr uint16_t GRAV_IN3_ADDR        = 0x8000;    // IN3 (MAME: $8000)
+    inline constexpr uint16_t GRAV_IN4_ADDR        = 0x8800;    // IN4 (MAME: $8800)
+    inline constexpr uint16_t GRAV_VGGO_ADDR       = 0x8840;    // write: trigger AVG
+    inline constexpr uint16_t GRAV_VGRST_ADDR      = 0x8880;    // write: reset AVG
+    inline constexpr uint16_t GRAV_IRQACK_ADDR     = 0x88C0;    // write: IRQ acknowledge
+    inline constexpr uint16_t GRAV_WDCLR_ADDR      = 0x8980;    // write: watchdog clear (MAME: $8980)
+
+    // Gravitar program ROM: MAME loads at $9000-$FFFF ($E000 reload for vectors).
+    // No program ROM in $4000-$5FFF range (that's vector ROM on bwidow board).
+    inline constexpr uint16_t GRAV_PROGROM_BASE    = 0x9000;    // MAME bwidow.cpp
+    inline constexpr uint16_t GRAV_PROGROM_SIZE    = 0x7000;    // 28 KB ($9000-$FFFF)
 
     // Space Duel (1982): AVG + POKEY, color, two-player simultaneous
-    // MAME spacduel_map: VGGO $0C80, VGRST $0D80, WD $0E80,
-    //   POKEY1 $0800, POKEY2 $0900, IN0 $0C00, IN1 $0D00, DSW $0E00.
+    // MAME spacduel_map: different board from bwidow!
+    //   RAM $0000-$03FF (1KB), IN0 $0800, IN3 $0900,
+    //   POKEY1 $1000, POKEY2 $1400, VGGO $0C80, VGRST $0D80,
+    //   Vec RAM $2000-$27FF, Vec ROM $2800-$3FFF, Prog ROM $4000-$FFFF.
     inline constexpr uint16_t SD_RAM_BASE          = 0x0000;
-    inline constexpr uint16_t SD_RAM_SIZE          = 0x0800;    // 2 KB (MAME: $0000-$07FF)
+    inline constexpr uint16_t SD_RAM_SIZE          = 0x0400;    // 1 KB (MAME: $0000-$03FF)
     inline constexpr uint16_t SD_VECRAM_BASE       = 0x2000;
-    inline constexpr uint16_t SD_VECRAM_SIZE       = 0x1000;
-    inline constexpr uint16_t SD_VECROM_BASE       = 0x3000;
-    inline constexpr uint16_t SD_VECROM_SIZE       = 0x1000;
+    inline constexpr uint16_t SD_VECRAM_SIZE       = 0x0800;    // 2 KB (MAME: $2000-$27FF)
+    inline constexpr uint16_t SD_VECROM_BASE       = 0x2800;    // MAME: $2800-$3FFF
+    inline constexpr uint16_t SD_VECROM_SIZE       = 0x1800;    // 6 KB
     inline constexpr uint16_t SD_PROGROM_BASE      = 0x4000;
     inline constexpr uint16_t SD_PROGROM_SIZE      = 0x4000;
-    inline constexpr uint16_t SD_POKEY1_BASE       = 0x0800;    // POKEY 1
-    inline constexpr uint16_t SD_POKEY2_BASE       = 0x0900;    // POKEY 2
+
+    // Space Duel high ROM: $8000-$FFFF (ROM at $8000 + mirrors for reset vector)
+    inline constexpr uint16_t SD_PROGROM_HI_BASE   = 0x8000;
+    inline constexpr uint16_t SD_PROGROM_HI_SIZE   = 0x8000;    // 32 KB ($8000-$FFFF)
+    inline constexpr uint16_t SD_IN0_ADDR          = 0x0800;    // IN0 (MAME: $0800)
+    inline constexpr uint16_t SD_POKEY1_BASE       = 0x1000;    // POKEY 1 (MAME: $1000)
+    inline constexpr uint16_t SD_POKEY2_BASE       = 0x1400;    // POKEY 2 (MAME: $1400)
     inline constexpr uint16_t SD_VGGO_ADDR         = 0x0C80;    // write: trigger AVG
     inline constexpr uint16_t SD_VGRST_ADDR        = 0x0D80;    // write: reset AVG
-    inline constexpr uint16_t SD_WDCLR_ADDR        = 0x0E80;    // write: watchdog clear
+    inline constexpr uint16_t SD_WDCLR_ADDR        = 0x0D00;    // write: watchdog clear (MAME: $0D00)
 
     // Black Widow (1982): AVG + POKEY, color, dual joystick
-    // Same board as Gravitar (bwidow board). I/O at $0800-$1FFF.
-    // MAME: POKEY1 $8800→$0800, VGGO $8840→$0840, POKEY2 $8A00→$0A00.
+    // Same board as Gravitar (bwidow_map). Memory map identical to Gravitar.
     inline constexpr uint16_t BW_RAM_BASE          = 0x0000;
     inline constexpr uint16_t BW_RAM_SIZE          = 0x0800;
     inline constexpr uint16_t BW_VECRAM_BASE       = 0x2000;
-    inline constexpr uint16_t BW_VECRAM_SIZE       = 0x1000;
-    inline constexpr uint16_t BW_VECROM_BASE       = 0x3000;
-    inline constexpr uint16_t BW_VECROM_SIZE       = 0x1000;
-    inline constexpr uint16_t BW_PROGROM_BASE      = 0x4000;
-    inline constexpr uint16_t BW_PROGROM_SIZE      = 0x4000;
-    inline constexpr uint16_t BW_POKEY1_BASE       = 0x0800;
-    inline constexpr uint16_t BW_POKEY2_BASE       = 0x0A00;    // POKEY 2 (MAME: $8A00→$0A00)
-    inline constexpr uint16_t BW_VGGO_ADDR         = 0x0840;    // write: trigger AVG (same as Gravitar)
-    inline constexpr uint16_t BW_VGRST_ADDR        = 0x0880;    // write: reset AVG
-    inline constexpr uint16_t BW_WDCLR_ADDR        = 0x08C0;    // write: watchdog clear
+    inline constexpr uint16_t BW_VECRAM_SIZE       = 0x0800;    // 2 KB (MAME bwidow.cpp: $2000-$27FF)
+    inline constexpr uint16_t BW_VECROM_BASE       = 0x2800;    // MAME: $2800-$5FFF
+    inline constexpr uint16_t BW_VECROM_SIZE       = 0x3800;    // 14 KB (MAME bwidow.cpp)
+    // BW uses same POKEY, I/O addresses as Gravitar (shared bwidow_map)
+    inline constexpr uint16_t BW_POKEY1_BASE       = 0x6000;    // POKEY 1 (MAME: $6000)
+    inline constexpr uint16_t BW_POKEY2_BASE       = 0x6800;    // POKEY 2 (MAME: $6800)
+    inline constexpr uint16_t BW_IN0_ADDR          = 0x7800;    // IN0 (MAME: $7800)
+    inline constexpr uint16_t BW_VGGO_ADDR         = 0x8840;    // write: trigger AVG
+    inline constexpr uint16_t BW_VGRST_ADDR        = 0x8880;    // write: reset AVG
+    inline constexpr uint16_t BW_IRQACK_ADDR       = 0x88C0;    // write: IRQ acknowledge
+    inline constexpr uint16_t BW_WDCLR_ADDR        = 0x8980;    // write: watchdog clear (MAME: $8980)
+
+    // Black Widow program ROM: same layout as Gravitar (bwidow board).
+    inline constexpr uint16_t BW_PROGROM_BASE      = 0x9000;    // MAME bwidow.cpp
+    inline constexpr uint16_t BW_PROGROM_SIZE      = 0x7000;    // 28 KB ($9000-$FFFF)
 
     // Major Havoc (1983): AVG + POKEY + TMS5220, color, spinner
     // More complex memory map — has bank switching for extra program ROM
