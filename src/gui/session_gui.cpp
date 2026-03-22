@@ -1593,31 +1593,31 @@ void SessionGUI::allocate_framebuffer() {
             case VideoSignalType::Vector: {
                 // Vector — CPU-side line extraction + beam quad vertex shader.
                 // No textures involved; vertices carry all data.
-                vector_shader::load_gl();
+                
                 vector_shader::VectorShaderLocations vlocs{};
                 vector_shader_ = vector_shader::create_program(&vlocs);
                 if (vector_shader_) {
                     vector_loc_proj_     = vlocs.proj_mtx;
                     vector_loc_phosphor_ = vlocs.phosphor_color;
 
-                    vector_shader::glGenVertexArrays(1, &vector_vao_);
-                    vector_shader::glGenBuffers(1, &vector_vbo_);
-                    vector_shader::glBindVertexArray(vector_vao_);
-                    vector_shader::glBindBuffer(GL_ARRAY_BUFFER, vector_vbo_);
-                    vector_shader::glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE,
+                    gl_api::glGenVertexArrays(1, &vector_vao_);
+                    gl_api::glGenBuffers(1, &vector_vbo_);
+                    gl_api::glBindVertexArray(vector_vao_);
+                    gl_api::glBindBuffer(GL_ARRAY_BUFFER, vector_vbo_);
+                    gl_api::glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE,
                         sizeof(vector_shader::BeamVertex), reinterpret_cast<void*>(0));
-                    vector_shader::glEnableVertexAttribArray(0);
-                    vector_shader::glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE,
+                    gl_api::glEnableVertexAttribArray(0);
+                    gl_api::glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE,
                         sizeof(vector_shader::BeamVertex), reinterpret_cast<void*>(8));
-                    vector_shader::glEnableVertexAttribArray(1);
-                    vector_shader::glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE,
+                    gl_api::glEnableVertexAttribArray(1);
+                    gl_api::glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE,
                         sizeof(vector_shader::BeamVertex), reinterpret_cast<void*>(12));
-                    vector_shader::glEnableVertexAttribArray(2);
-                    vector_shader::glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE,
+                    gl_api::glEnableVertexAttribArray(2);
+                    gl_api::glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE,
                         sizeof(vector_shader::BeamVertex), reinterpret_cast<void*>(16));
-                    vector_shader::glEnableVertexAttribArray(3);
-                    vector_shader::glBindVertexArray(0);
-                    vector_shader::glBindBuffer(GL_ARRAY_BUFFER, 0);
+                    gl_api::glEnableVertexAttribArray(3);
+                    gl_api::glBindVertexArray(0);
+                    gl_api::glBindBuffer(GL_ARRAY_BUFFER, 0);
 
                     vector_stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES * 8]();
                     use_vector_shader_ = true;

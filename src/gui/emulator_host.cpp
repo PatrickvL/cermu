@@ -479,8 +479,8 @@ void EmulatorHost::cleanup_indexed_resources() {
 
     // Vector display resources
     if (vector_shader_) { gl_api::glDeleteProgram(vector_shader_); vector_shader_ = 0; }
-    if (vector_vao_ && vector_shader::glDeleteVertexArrays) { vector_shader::glDeleteVertexArrays(1, &vector_vao_); vector_vao_ = 0; }
-    if (vector_vbo_ && vector_shader::glDeleteBuffers) { vector_shader::glDeleteBuffers(1, &vector_vbo_); vector_vbo_ = 0; }
+    if (vector_vao_ && gl_api::glDeleteVertexArrays) { gl_api::glDeleteVertexArrays(1, &vector_vao_); vector_vao_ = 0; }
+    if (vector_vbo_ && gl_api::glDeleteBuffers) { gl_api::glDeleteBuffers(1, &vector_vbo_); vector_vbo_ = 0; }
     vector_shader::destroy_persistence(&vector_persist_);
     delete[] vector_stream_snapshot_; vector_stream_snapshot_ = nullptr;
     vector_stream_len_ = 0;
