@@ -1425,12 +1425,8 @@ bool C64System::apply_configuration() {
     }
 
     // Apply display palette selection
-    auto pal_it = config_.custom_settings.find("display_palette");
-    if (pal_it != config_.custom_settings.end() && initialized_ && this->vicii) {
-        if (auto* np = this->vicii->select_palette(pal_it->second.c_str())) {
-            register_palette(np->data, np->count);
-        }
-    }
+    if (initialized_)
+        apply_display_palette_();
 
     return true;
 }

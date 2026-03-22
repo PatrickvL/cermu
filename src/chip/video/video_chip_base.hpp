@@ -43,16 +43,23 @@ public:
     int                 named_palette_count() const { return named_palette_count_; }
 
     // Select palette by id string.  Returns the matched entry, or nullptr.
+    // Updates system_palette_ and calls on_palette_selected() for chip-specific
+    // post-processing (e.g. NES PPU emphasis cache rebuild).
     const NamedPalette* select_palette(const char* id) {
         for (int i = 0; i < named_palette_count_; ++i) {
             if (std::strcmp(named_palettes_[i].id, id) == 0) {
                 system_palette_ = named_palettes_[i].data;
                 palette_size_   = static_cast<uint16_t>(named_palettes_[i].count);
+                on_palette_selected(named_palettes_[i]);
                 return &named_palettes_[i];
             }
         }
         return nullptr;
     }
+
+    /// Override for chip-specific post-processing after palette selection.
+    /// Called automatically by select_palette().
+    virtual void on_palette_selected(const NamedPalette& /*np*/) {}
 
 protected:
     const uint32_t* system_palette_ = nullptr;
