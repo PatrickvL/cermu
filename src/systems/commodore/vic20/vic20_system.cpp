@@ -661,6 +661,8 @@ bool VIC20System::initialize() {
     // Wire VIC chip to video stream port
     video_port_ = std::make_unique<CompositeVideoPort>();
     vic_->set_stream(&video_port_->stream());
+    video_port_->bind_display(nullptr, nullptr,
+                              vic20_constants::DISPLAY_WIDTH, 8);
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Wire VIC chip to audio port (decimates chip-rate audio to host sample rate)

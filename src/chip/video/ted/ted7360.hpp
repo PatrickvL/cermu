@@ -208,7 +208,7 @@ DECL_EXTRACT(TED, TED_DECL)
 #define TED_VISIBLE_HEIGHT_NTSC     242     // NTSC framebuffer height (normal border, derived from VICE timing)
 
 // First TED raster line mapped to framebuffer row 0
-#define TED_FIRST_VISIBLE_LINE_PAL  275     // PAL: TED raster 275 → fb row 0 (wraps: last frame lines first)
+#define TED_FIRST_VISIBLE_LINE_PAL  272     // PAL: TED raster 272 → fb row 0 (wraps: last frame lines first)
 #define TED_FIRST_VISIBLE_LINE_NTSC 19      // NTSC: TED raster 19 → fb row 0
 
 // ============================================================================

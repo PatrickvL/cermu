@@ -1158,7 +1158,6 @@ static inline void vicii_check_raster_interrupt(vicii_base_t* vicii) {
 static inline void vicii_perform_line0_raster_irq_operations(vicii_base_t* vicii) {
     // Reset raster counter to 0
     vicii->timing.raster_counter = 0;
-    vicii->frame_wrapped_ = true;
 
     // Update maintained drive_flags_ for raster 0's vblank state
     vicii_update_vblank_flags(vicii);
@@ -1237,6 +1236,12 @@ void vicii_timing_advance(vicii_base_t* vicii) {
 
     // Update maintained drive_flags_ for the new raster's vblank state
     vicii_update_vblank_flags(vicii);
+
+    // Emit FrameEnd when raster reaches the centering start line.
+    // Decoupled from line-0 operations so the stream frame can start
+    // at an optimal raster for vertically centered display.
+    if (vicii->timing.raster_counter == vicii->stream_frame_start_raster_)
+        vicii->frame_wrapped_ = true;
     
     // Check raster interrupt on every line transition.
     // Line 0 raster interrupt is handled separately in
@@ -2473,6 +2478,28 @@ static inline void vicii_initialize_timing(vicii_base_t* vicii, const VicIITrait
     vicii->cached_burst_end = traits.burst_end;
     vicii->cached_last_visible_x = traits.last_visible_x_coord;
     vicii->cached_first_visible_x = traits.first_visible_x_coord;
+
+    // Compute stream frame start raster for vertical centering.
+    // Goal: equal top and bottom borders around the 200-line text area.
+    // Text area: rasters 51-250 (RSEL=1).  VBlank: first_vblank..last_vblank.
+    // First visible after VBlank: last_vblank + 1.
+    // Top border without centering = (border_top - (last_vblank+1)) lines.
+    // Total border = visible_lines - 200.  Target top = total_border / 2.
+    // Extra lines needed before first visible = target_top - current_top.
+    // Those come from pre-VBlank rasters → frame_start = first_vblank - extra.
+    {
+        const uint16_t first_vis_raster = traits.last_vblank_line + 1;
+        const uint16_t top_border_now = VICII_BORDER_TOP_RSEL1 - first_vis_raster;
+        const uint16_t total_border = traits.visible_lines - 200;
+        const uint16_t target_top = total_border / 2;
+        if (target_top > top_border_now) {
+            uint16_t extra = target_top - top_border_now;
+            vicii->stream_frame_start_raster_ =
+                (traits.first_vblank_line + traits.total_lines - extra) % traits.total_lines;
+        } else {
+            vicii->stream_frame_start_raster_ = 0;
+        }
+    }
 
     // Initialize raster_flags_ and drive_flags_ for the starting position.
     // HSync/Burst will be set by the cycle 0 callback on first tick.

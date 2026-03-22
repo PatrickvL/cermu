@@ -735,7 +735,6 @@ void ted7360_t::timing_advance() {
     uint16_t new_raster = timing.raster_counter + 1u;
     if (new_raster >= timing.lines_per_frame) {
         new_raster = 0;
-        frame_wrapped_ = true;
 
         // --- End of frame ---
         ++timing.frame_count;
@@ -752,6 +751,13 @@ void ted7360_t::timing_advance() {
         // Reset border: start of frame is fully in border state
         border.vert_ff = true;
         border.main_ff = true;
+    }
+
+    // FrameEnd at first_visible_line so the stream frame starts at the top
+    // of the visible display, not at raster 0.  This ensures the stream
+    // shader sees all top-border lines before the text area.
+    if (new_raster == timing.first_visible_line) {
+        frame_wrapped_ = true;
     }
 
     timing.raster_counter = new_raster;

@@ -652,6 +652,8 @@ bool Commodore264System<V>::initialize() {
     // Wire TED to composite video stream port
     video_port_ = std::make_unique<CompositeVideoPort>();
     ted_->set_stream(&video_port_->stream());
+    video_port_->bind_display(nullptr, nullptr,
+                              c16_constants::DISPLAY_WIDTH, 0);
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Wire TED to audio port (decimates TED master-clock-rate audio to host sample rate)
