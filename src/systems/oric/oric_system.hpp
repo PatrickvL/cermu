@@ -37,6 +37,7 @@
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
 #include "core/standard_chips.hpp"
+#include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/sound/ay_psg/ay_3_8912.hpp"
 #include "chip/io/mos6522.hpp"
@@ -175,7 +176,8 @@ private:
     uint8_t* ram_ptr_ = nullptr;     // Direct pointer for video rendering
 
     // ── Display ──────────────────────────────────────────────────────────
-    IndexedFrameBuffer display_;
+    uint8_t pixel_buffer_[oric_constants::FB_WIDTH * oric_constants::FB_HEIGHT] = {};
+    std::unique_ptr<CompositeVideoPort> video_port_;
 
     // ── Keyboard ─────────────────────────────────────────────────────────
     uint8_t keyboard_matrix_[oric_constants::KEYBOARD_ROWS] = {};

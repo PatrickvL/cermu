@@ -90,7 +90,7 @@ private:
     uint8_t active_plane_mask_;      // bitmask: bit0=plane0, bit1=plane1
 
     // GPU indexed rendering
-    IndexedFrameBuffer display_;
+    uint8_t pixel_buffer_[chip8_constants::HIRES_WIDTH * chip8_constants::HIRES_HEIGHT];
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
 
     // ── Input ───────────────────────────────────────────────────────────

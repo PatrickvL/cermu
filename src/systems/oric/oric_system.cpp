@@ -148,8 +148,14 @@ bool OricSystem<V>::initialize() {
 
     register_bus_chips(board_);
 
-    display_.init(oric_constants::FB_WIDTH, oric_constants::FB_HEIGHT);
-    register_display(&display_);
+    palette_.set(oric_constants::PALETTE, oric_constants::COLOR_COUNT);
+
+    // Video stream output
+    video_port_ = std::make_unique<CompositeVideoPort>();
+    video_port_->bind_display(nullptr, palette_.data(),
+                              oric_constants::FB_WIDTH, 1);
+    video_port_->set_palette(palette_.data(), oric_constants::COLOR_COUNT);
+    video_port_->bind_frame_output(&last_frame_data_);
 
     system_ready_ = true;
     printf("%s: System initialized\n", Traits::name);

@@ -37,6 +37,7 @@
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
 #include "core/standard_chips.hpp"
+#include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/cpu/fam65xx/wdc65c02.hpp"
 #include "chip/memory/memory_chip.hpp"
@@ -219,7 +220,8 @@ private:
     MainBoard board_{BTraits::kManifest};
 
     // ── Display ──────────────────────────────────────────────────────────
-    IndexedFrameBuffer display_;
+    uint8_t pixel_buffer_[apple_ii_constants::DISPLAY_WIDTH * apple_ii_constants::DISPLAY_HEIGHT] = {};
+    std::unique_ptr<CompositeVideoPort> video_port_;
 
     // ── Soft switch state ────────────────────────────────────────────────
     bool    sw_text_     = true;     // Text/Graphics mode
