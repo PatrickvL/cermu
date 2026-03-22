@@ -311,7 +311,7 @@ bool NintendoSystem<V>::initialize() {
     // Register main board (owns connector ports)
     register_board(&board_);
 
-    // Bind value-typed Chipset (CPU + PPU) to manifest slots
+    // Bind value-typed Chips (CPU + PPU) to manifest slots
     board_.bind_chipset();
 
     // Initialize CPU with integrated APU

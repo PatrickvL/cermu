@@ -11,7 +11,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chipset.hpp"
+#include "core/core_chips.hpp"
 #include "chip/cpu/z80/u880.hpp"
 #include "chip/io/z80_pio.hpp"
 #include "chip/io/z80_ctc.hpp"
@@ -47,8 +47,8 @@ inline constexpr auto kLC80Chips = make_chip_manifest(
 
 using LC80BusSpec = ManifestBusSpec<kLC80Chips, 16, 8>;
 
-// ── Chipset ──────────────────────────────────────────────────────────────
-struct LC80Chipset : CoreChipset<U880, NoChip, NoChip, z80_pio_t> {
+// ── Chips ──────────────────────────────────────────────────────────────
+struct LC80Chipset : CoreChips<U880, NoChip, NoChip, z80_pio_t> {
     z80_pio_t pio2;     // U855 PIO #2 (keyboard scan + cassette)
     z80_ctc_t ctc;      // U857 CTC (speaker on channel 2)
 
@@ -84,7 +84,7 @@ public:
 
 
 private:
-    // ── Chips (value-typed via Board Chipset) ────────────────────────────
+    // ── Chips (value-typed via Board Chips) ────────────────────────────
 
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using Bus = MemoryBus<LC80BusSpec>;

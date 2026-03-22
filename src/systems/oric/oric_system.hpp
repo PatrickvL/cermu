@@ -36,7 +36,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chipset.hpp"
+#include "core/core_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/sound/ay_psg/ay_3_8912.hpp"
@@ -127,10 +127,10 @@ template<> struct OricBusTraits<OricVariant::ORIC_ATMOS> {
 };
 
 // ============================================================================
-// Oric Chipset — value-typed chips owned by Board
+// Oric Chips — value-typed chips owned by Board
 // ============================================================================
 
-struct OricChips : CoreChipset<MOS6502, NoChip, AY_3_8912, mos6522_t> {};
+struct OricChips : CoreChips<MOS6502, NoChip, AY_3_8912, mos6522_t> {};
 
 // ============================================================================
 // Oric System

@@ -172,7 +172,7 @@ namespace c264_viewer {
 
 // Value-typed chips: CPU + TED (video) + PIO1 + PIO2 + ROM bank select.
 // TED is default-constructed and configured via init(desc) in initialize().
-struct C264Chipset : CoreChipset<CSG7501, ted7360_t, NoChip, mos6529_t> {
+struct C264Chipset : CoreChips<CSG7501, ted7360_t, NoChip, mos6529_t> {
     mos6529_t               pio2;
     c264_rom_bank_select_t  rom_bank;
 

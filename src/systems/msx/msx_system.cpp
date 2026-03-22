@@ -140,7 +140,7 @@ bool MSXSystem<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
     register_board(&board_);
 
-    // Bind value-typed Chipset members, then factory-create remaining (RAM/ROM)
+    // Bind value-typed Chips members, then factory-create remaining (RAM/ROM)
     board_.bind_chipset();
     board_.create_chips(&pins_);
     board_.apply(bus_);

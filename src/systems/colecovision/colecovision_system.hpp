@@ -12,7 +12,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chipset.hpp"
+#include "core/core_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -50,10 +50,10 @@ inline constexpr auto kColecoChips = make_chip_manifest(
 using ColecoBusSpec = ManifestBusSpec<kColecoChips, 16, 8>;
 
 // ============================================================================
-// ColecoVision Chipset — value-typed chips embedded in Board
+// ColecoVision Chips — value-typed chips embedded in Board
 // ============================================================================
 
-struct ColecoChips : CoreChipset<ZilogZ80A, TMS9918A, sn76489_t> {};
+struct ColecoChips : CoreChips<ZilogZ80A, TMS9918A, sn76489_t> {};
 
 // ============================================================================
 // ColecoVision System

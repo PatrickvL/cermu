@@ -82,8 +82,8 @@ struct BombJackSoundBusTraits {
 };
 
 // Value-typed chips: one Z80A per board, no video/sound/IO in slots.
-using BombJackMainChipset  = CoreChipset<ZilogZ80A>;
-using BombJackSoundChipset = CoreChipset<ZilogZ80A>;
+using BombJackMainChipset  = CoreChips<ZilogZ80A>;
+using BombJackSoundChipset = CoreChips<ZilogZ80A>;
 
 class BombJackSystem : public System {
 public:

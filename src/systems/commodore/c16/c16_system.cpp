@@ -567,7 +567,7 @@ bool Commodore264System<V>::initialize() {
         ted_->audio_reset(ted_clock, c16_constants::AUDIO_SAMPLE_RATE);
     }
 
-    // Bind value-typed chips from Chipset, then factory-create remaining
+    // Bind value-typed chips from Chips, then factory-create remaining
     board_.bind_chipset();
     board_.create_chips(&bus_state_);
     board_.apply(bus_);

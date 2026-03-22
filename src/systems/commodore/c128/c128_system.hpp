@@ -34,7 +34,7 @@
 #include "systems/commodore/c128/c128_constants.hpp"
 #include "systems/commodore/commodore_system.hpp"
 #include "core/board.hpp"
-#include "core/core_chipset.hpp"
+#include "core/core_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/csg8502.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -102,7 +102,7 @@ using C128BusSpec = ManifestBusSpec<kC128Chips, 16, 12, 2>;
 
 // Value-typed chips: CPU + Z80 + VIC-IIe + SID + Color RAM + 2× CIA.
 // Memory chips (RAM/ROM) stay factory-created.
-struct C128Chipset : CoreChipset<CSG8502, mos8566_t, mos6581_t, mos6526_t> {
+struct C128Chipset : CoreChips<CSG8502, mos8566_t, mos6581_t, mos6526_t> {
     ZilogZ80A  z80;
     MOS2114    colorram;
     mos6526_t  cia2;

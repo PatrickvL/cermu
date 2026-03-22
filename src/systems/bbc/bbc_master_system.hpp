@@ -44,7 +44,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chipset.hpp"
+#include "core/core_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/wdc65c02.hpp"
 #include "chip/io/mos6522.hpp"
@@ -154,10 +154,10 @@ template<> struct BBCMasterBusTraits<BBCMasterVariant::MASTER_128> {
 };
 
 // ============================================================================
-// BBC Master Chipset — value-typed chips owned by Board
+// BBC Master Chips — value-typed chips owned by Board
 // ============================================================================
 
-struct BBCMasterChipset : CoreChipset<WDC_65C02, mc6845_t, sn76489_t, mos6522_t> {
+struct BBCMasterChipset : CoreChips<WDC_65C02, mc6845_t, sn76489_t, mos6522_t> {
     mos6522_t      user_via;
     bbc_vidproc_t  vidproc;
 

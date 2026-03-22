@@ -571,7 +571,7 @@ bool VIC20System::initialize() {
         }
     };
 
-    // ── Bind value-typed Chipset (CPU + VIAs), then create remaining chips ──
+    // ── Bind value-typed Chips (CPU + VIAs), then create remaining chips ──
     board_.bind_chipset();
     board_.create_chips(&bus_.state, vic20_condition, &config_);
     board_.apply(mem_bus_);
@@ -620,7 +620,7 @@ bool VIC20System::initialize() {
         VIC20System::vic_color_read,    // Color RAM read callback
         this);                           // User data for color RAM
     
-    // VIA chips (MOS6522) — value-typed in Chipset
+    // VIA chips (MOS6522) — value-typed in Chips
     // VIC-20 hardware: VIA1 ($9110) → NMI line, VIA2 ($9120) → IRQ line
     // VIA2 Timer 1 is the system heartbeat (jiffy clock, keyboard scan, cursor blink)
     board_.io().reset();

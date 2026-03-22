@@ -11,7 +11,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chipset.hpp"
+#include "core/core_chips.hpp"
 #include "core/signal/audio_port.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -112,8 +112,8 @@ template<> struct NamcoBusTraits<NamcoGame::Pengo> {
     using Spec = ManifestBusSpec<kPengoChips, 16, 8>;
 };
 
-// ── Chipset ──────────────────────────────────────────────────────────────
-struct NamcoChipset : CoreChipset<ZilogZ80A, NoChip, namco_wsg_t> {};
+// ── Chips ──────────────────────────────────────────────────────────────
+struct NamcoChipset : CoreChips<ZilogZ80A, NoChip, namco_wsg_t> {};
 
 // ── System ───────────────────────────────────────────────────────────────
 template<NamcoGame G>
@@ -139,7 +139,7 @@ public:
 
 
 private:
-    // ── Chips (value-typed via Board Chipset) ────────────────────────────
+    // ── Chips (value-typed via Board Chips) ────────────────────────────
 
     // Audio thread — WSG synthesis runs off the emulation thread
     AudioThread audio_thread_;
