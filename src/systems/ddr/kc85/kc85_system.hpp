@@ -226,7 +226,6 @@ private:
     MainBoard board_{BT::kManifest};
 
     // ── Display ──────────────────────────────────────────────────────────
-    IndexedFrameBuffer display_;
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
     KC85VideoGenerator video_gen_;                    // Video generation circuitry
 
