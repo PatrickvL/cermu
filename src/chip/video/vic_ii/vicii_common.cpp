@@ -1,5 +1,4 @@
 #include "chip/video/vic_ii/vicii_common.hpp"
-#include "core/indexed_frame_buffer.hpp"
 #include "chip/memory/mos2114.hpp"
 #include "core/system_lines.hpp"
 #include "core/cermu.hpp"
