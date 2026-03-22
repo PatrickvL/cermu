@@ -14,6 +14,7 @@
 
 #include "core/board_base.hpp"
 #include "core/bus_map.hpp"
+#include "core/port.hpp"
 #include "core/standard_chips.hpp"
 #include "core/storage/rom_loader.hpp"
 #include <cstdio>

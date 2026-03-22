@@ -25,6 +25,9 @@
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "core/audio_thread.hpp"
+#include "core/board.hpp"
+#include "core/standard_chips.hpp"
+#include "core/chip_manifest.hpp"
 #include "chip/sound/nes_apu_synth_engine.hpp"
 
 // ============================================================================
@@ -67,14 +70,21 @@ namespace nes_constants {
 #define NES_BUS_DEFAULT_STATE \
     (RICOH_2A03::default_bus_state())
 
-// Forward declarations — none needed; all NES types included above.
-
-// PPU class now in chip/video/nes_ppu/nes_ppu.h (included above)
-// Cartridge class now in cartridge/nes_cartridge.h (included above)
-// Bus struct now in bus/nes_bus.h (included above)
-// MemoryBus class removed in Phase 2 — replaced by nes_bus_t + inline dispatch
-
 namespace nes_system {
+
+// =============================================================================
+// NES chip manifest — non-bus chip declarations for Board typed access.
+// Actual memory dispatch uses nes_bus_t (page-pointer bus), not MemoryBus.
+// =============================================================================
+inline constexpr auto kNESChips = make_chip_manifest(
+    Slot<RICOH_2A03>{0, 0, 0, "Ricoh 2A03"},
+    Slot<PPU>       {0, 0, 0, "Ricoh 2C02 PPU"}
+);
+
+using NESBusSpec = ManifestBusSpec<kNESChips, 16, 8>;
+
+// ── NES ChipSet — PPU in the Video slot for auto-palette discovery ──────
+struct NESChipSet : StandardChips<RICOH_2A03, PPU> {};
 
 // ============================================================================
 // Nintendo system variant (compile-time template parameter)
@@ -115,13 +125,13 @@ class NintendoSystem : public System {
     using Traits = NintendoVariantTraits<V>;
 
 private:
-    // Main board (owns connector ports)
-    BoardBase board_;
+    // Main board — typed Board with NESChipSet for auto-palette discovery.
+    // Memory dispatch is handled separately by nes_bus_t (page-pointer bus).
+    using MainBoard = Board<NESBusSpec, NESChipSet>;
+    MainBoard board_{kNESChips};
 
-    // Core components
-    RICOH_2A03 cpu_;
+    // Core components — CPU and PPU accessed via board_.cpu() / board_.video()
     bus_state_t pins_;               // Persistent CPU bus state across ticks
-    PPU ppu_;
     std::unique_ptr<Cartridge> cartridge_;
     nes_bus::nes_bus_t bus_;                     // Page-pointer bus (replaces MemoryBus)
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output

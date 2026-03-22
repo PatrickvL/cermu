@@ -50,19 +50,21 @@ using BBCMicroBusSpec = ManifestBusSpec<kBBCMicroChips, 16, 8>;
 // ============================================================================
 // BBC Micro ChipSet — value-typed chips owned by Board
 // ============================================================================
+// Video slot = VIDPROC (pixel generator + palette owner).
+// MC6845 CRTC is a timing/address generator — kept as extra member.
 
-struct BBCMicroChips : StandardChips<MOS6502, mc6845_t, sn76489_t, mos6522_t> {
+struct BBCMicroChips : StandardChips<MOS6502, bbc_vidproc_t, sn76489_t, mos6522_t> {
     mos6522_t      user_via;
-    bbc_vidproc_t  vidproc;
+    mc6845_t       crtc;
 
     template<typename B> void bind_extras(B& board) {
         board.bind_chip(board.template find_index<mos6522_t>(1),   &user_via);
-        board.bind_chip(board.template find_index<bbc_vidproc_t>(), &vidproc);
+        board.bind_chip(board.template find_index<mc6845_t>(), &crtc);
     }
 
     void register_extras(BoardBase& board) {
         board.register_component(&user_via);
-        board.register_component(&vidproc);
+        board.register_component(&crtc);
     }
 };
 

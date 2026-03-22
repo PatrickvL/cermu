@@ -113,13 +113,13 @@ bool AmstradCPCSystem<M>::initialize() {
 
     // ── Init chips ──────────────────────────────────────────────────────
     pins_ = board_.cpu().init();
-    board_.video().init();
+    board_.chips().crtc.init();
     // Gate array drives interrupts from CRTC HSYNC (every 52 HSYNCs)
-    board_.video().on_hsync = [this]() {
-        board_.chips().gate_array.interrupt_counter++;
-        if (board_.chips().gate_array.interrupt_counter >= 52) {
-            board_.chips().gate_array.interrupt_counter = 0;
-            board_.chips().gate_array.interrupt_pending = true;
+    board_.chips().crtc.on_hsync = [this]() {
+        board_.video().interrupt_counter++;
+        if (board_.video().interrupt_counter >= 52) {
+            board_.video().interrupt_counter = 0;
+            board_.video().interrupt_pending = true;
         }
     };
     board_.io().init();
@@ -141,13 +141,9 @@ bool AmstradCPCSystem<M>::initialize() {
     // ── Cache RAM chip pointer for rendering ───────────────────────
     ram_chip_ = board_.template find<RAMChip>();
 
-    // Register palette for GPU stream shader
-    register_palette(amstrad_gate_array_t::get_palette(),
-                     amstrad_gate_array_t::get_palette_size());
-
     // Video stream output — composite video from Gate Array
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.chips().gate_array.set_stream(&video_port_->stream());
+    board_.video().set_stream(&video_port_->stream());
     video_port_->bind_frame_output(&last_frame_data_);
     // ── Register all manifest chips for Hardware menu ────────────────
     register_bus_chips(board_);
@@ -197,14 +193,14 @@ void AmstradCPCSystem<M>::tick() {
     }
 
     // Gate array interrupt: IRQ is level-sensitive, keep asserted while pending
-    if (board_.chips().gate_array.interrupt_pending) {
+    if (board_.video().interrupt_pending) {
         BUS_CLR_BIT(pins_, BUS_IRQ_BIT);
     }
 
     // CRTC ticks at 1 MHz (CPU clock / 4).
     // AY synthesis is driven by the audio thread — no direct tick here.
     if ((total_cycles_ & 3) == 0) {
-        board_.video().tick();
+        board_.chips().crtc.tick();
     }
 
     total_cycles_++;
@@ -249,10 +245,10 @@ void AmstradCPCSystem<M>::render_frame() {
     if (!ram_chip_) return;
 
     // CRTC display start address (R12:R13)
-    uint16_t crtc_start = (board_.video().regs_[MC6845_R12_START_ADDR_HI] << 8)
-                        | board_.video().regs_[MC6845_R13_START_ADDR_LO];
+    uint16_t crtc_start = (board_.chips().crtc.regs_[MC6845_R12_START_ADDR_HI] << 8)
+                        | board_.chips().crtc.regs_[MC6845_R13_START_ADDR_LO];
 
-    board_.chips().gate_array.render_frame(ram_chip_->data(), crtc_start);
+    board_.video().render_frame(ram_chip_->data(), crtc_start);
 }
 
 // ============================================================================
@@ -279,7 +275,7 @@ void AmstradCPCSystem<M>::configure_bus_memory_map() {
 }
 
 // ── RAM banking (CPC 6128 only) + rebuild overlay snapshots ──────────────
-// Called when board_.chips().gate_array.ram_config changes (Gate Array opcode 11xxxxxx).
+// Called when board_.video().ram_config changes (Gate Array opcode 11xxxxxx).
 // Remaps RAM bank assignments, rebuilds overlay snapshots for the new base
 // state, then re-applies the current ROM overlay.
 template<CPCModel M>
@@ -290,7 +286,7 @@ void AmstradCPCSystem<M>::update_banking() {
             {0, 1, 2, 3}, {0, 1, 2, 7}, {4, 5, 6, 7}, {0, 3, 2, 7},
             {0, 4, 2, 3}, {0, 5, 2, 3}, {0, 6, 2, 3}, {0, 7, 2, 3}
         };
-        uint8_t config = board_.chips().gate_array.ram_config & 7;
+        uint8_t config = board_.video().ram_config & 7;
         constexpr size_t kPagesPerBank = 64;  // 16384 / 256
         for (int pg = 0; pg < 4; ++pg) {
             board_.select_bank_at(bus_, 0, board_.template find_index<RAMChip>(),
@@ -309,8 +305,8 @@ void AmstradCPCSystem<M>::update_banking() {
 // Mode bits: 0 = lower ROM (group 1), 1 = upper ROM (group 2).
 template<CPCModel M>
 void AmstradCPCSystem<M>::apply_rom_overlay() {
-    size_t mode = (board_.chips().gate_array.lower_rom_enabled ? 1 : 0)
-               |  (board_.chips().gate_array.upper_rom_enabled ? 2 : 0);
+    size_t mode = (board_.video().lower_rom_enabled ? 1 : 0)
+               |  (board_.video().upper_rom_enabled ? 2 : 0);
     bus_.load_snapshot(0, snapshots_[0][mode]);
 }
 
@@ -322,7 +318,7 @@ template<CPCModel M>
 bus_state_t AmstradCPCSystem<M>::io_tick(bus_state_t pins) {
     // Interrupt acknowledge: IORQ + M1 asserted simultaneously
     if (!BUS_GET_BIT(pins, Z80_M1_BIT)) {
-        board_.chips().gate_array.interrupt_pending = false;
+        board_.video().interrupt_pending = false;
         BUS_SET_BIT(pins, BUS_IRQ_BIT);  // Deassert INT
         BUS_SET_DATA(pins, 0xFF);
         return pins;
@@ -338,26 +334,26 @@ bus_state_t AmstradCPCSystem<M>::io_tick(bus_state_t pins) {
     if (!is_read && !(addr & 0x8000)) {
         switch (data >> 6) {
             case 0:  // Pen select
-                board_.chips().gate_array.pen_select = data & 0x1F;
+                board_.video().pen_select = data & 0x1F;
                 break;
             case 1:  // Set color for current pen
-                if (board_.chips().gate_array.pen_select < amstrad_cpc_constants::GA_PEN_COUNT)
-                    board_.chips().gate_array.ink[board_.chips().gate_array.pen_select] = data & 0x1F;
+                if (board_.video().pen_select < amstrad_cpc_constants::GA_PEN_COUNT)
+                    board_.video().ink[board_.video().pen_select] = data & 0x1F;
                 break;
             case 2:  // Screen mode + ROM control + interrupt reset
-                board_.chips().gate_array.screen_mode = data & 0x03;
-                board_.chips().gate_array.lower_rom_enabled = !(data & 0x04);
-                board_.chips().gate_array.upper_rom_enabled = !(data & 0x08);
+                board_.video().screen_mode = data & 0x03;
+                board_.video().lower_rom_enabled = !(data & 0x04);
+                board_.video().upper_rom_enabled = !(data & 0x08);
                 if (data & 0x10) {
-                    board_.chips().gate_array.interrupt_counter = 0;
-                    board_.chips().gate_array.interrupt_pending = false;
+                    board_.video().interrupt_counter = 0;
+                    board_.video().interrupt_pending = false;
                     BUS_SET_BIT(pins, BUS_IRQ_BIT);
                 }
                 apply_rom_overlay();  // ROM visibility changed
                 break;
             case 3:  // RAM banking (CPC6128 only)
                 if constexpr (Traits::ram_size_kb == 128) {
-                    board_.chips().gate_array.ram_config = data & 0x3F;
+                    board_.video().ram_config = data & 0x3F;
                     update_banking();  // RAM bank configuration changed → rebuild + apply
                 }
                 break;
@@ -370,11 +366,11 @@ bus_state_t AmstradCPCSystem<M>::io_tick(bus_state_t pins) {
         uint8_t crtc_func = (addr >> 8) & 0x03;
         if (is_read) {
             if (crtc_func >= 2) {
-                BUS_SET_DATA(pins, board_.video().read(crtc_func & 1));
+                BUS_SET_DATA(pins, board_.chips().crtc.read(crtc_func & 1));
             }
         } else {
             if (crtc_func < 2) {
-                board_.video().write(crtc_func & 1, data);
+                board_.chips().crtc.write(crtc_func & 1, data);
             }
         }
     }
