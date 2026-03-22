@@ -783,9 +783,9 @@ inline bus_state_t decode_group6(bus_state_t pins, uint16_t opcode) {
     // Bcc not taken
     if (disp8 == 0) {
         // Word displacement not taken: 12 clocks (nn np np)
-        // Refill IRC from [PC] since we consumed the displacement word
+        // Refill IRC from the displacement word position (PC was advanced past it)
         if (mem_read_) {
-            regs_.irc = mem_read_(mem_ctx_, regs_.pc & address_mask());
+            regs_.irc = mem_read_(mem_ctx_, (regs_.pc - 2) & address_mask());
             clocks_remaining_ += 4;  // bus read to refill IRC
         }
         return do_idle_then_prefetch(pins, 4);  // 4 idle + 4 prefetch
