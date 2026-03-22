@@ -48,7 +48,7 @@ using Apple1BusSpec = ManifestBusSpec<kApple1Chips, 16, 8>;
 // Apple 1 ChipSet — value-typed chips owned by Board
 // ============================================================================
 
-struct Apple1Chips : StandardChips<MOS6502, NoChip, NoChip, pia6820_t> {};
+struct Apple1Chips : CommonBoardChips<MOS6502, NoChip, NoChip, pia6820_t> {};
 
 
 

@@ -94,7 +94,7 @@ template<> struct MSXVariantTraits<MSXVariant::MSX2P> {
 // ============================================================================
 
 template<MSXVariant V>
-struct MSXChips : StandardChips<ZilogZ80A, typename MSXVariantTraits<V>::VDP, AY_3_8910, i8255_t> {};
+struct MSXChips : CommonBoardChips<ZilogZ80A, typename MSXVariantTraits<V>::VDP, AY_3_8910, i8255_t> {};
 
 // ============================================================================
 // MSX default bus state

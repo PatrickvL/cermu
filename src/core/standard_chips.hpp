@@ -3,7 +3,7 @@
 // standard_chips.hpp — Value-typed chip composition for Board<Spec, ChipSet>
 // =============================================================================
 //
-// StandardChips<CPU, VIDEO, SOUND, IO> provides the four chip roles that
+// CommonBoardChips<CPU, VIDEO, SOUND, IO> provides the four chip roles that
 // nearly every emulated system has: a CPU, a video chip, a sound chip,
 // and a primary I/O controller.  Systems add per-board extras by
 // inheriting and adding fields.
@@ -12,13 +12,13 @@
 // NoChipSet is the default Board template parameter — opts out of typed chips.
 //
 // ChipSet contract:
-//   - Must inherit StandardChips<CPU, VIDEO, SOUND, IO>  (or at least
+//   - Must inherit CommonBoardChips<CPU, VIDEO, SOUND, IO>  (or at least
 //     provide the type aliases: cpu_type, video_type, sound_type, io_type).
 //   - May define bind_extras(Board& board) for extra chip members.
 //
 // Example:
 //
-//   struct MSX1Chips : StandardChips<ZilogZ80A, TMS9918A, AY_3_8910, i8255_t> {
+//   struct MSX1Chips : CommonBoardChips<ZilogZ80A, TMS9918A, AY_3_8910, i8255_t> {
 //       // no extras needed — all four standard roles filled
 //   };
 //
@@ -48,10 +48,10 @@ concept HasRegisterExtras = requires(CS& cs, BoardBase& b) {
     cs.register_extras(b);
 };
 
-// ── StandardChips — generic base for the common CPU + VIDEO + SOUND + IO roles
+// ── CommonBoardChips — generic base for the common CPU + VIDEO + SOUND + IO roles
 
 template<typename CPU_T, typename VIDEO_T = NoChip, typename SOUND_T = NoChip, typename IO_T = NoChip>
-struct StandardChips {
+struct CommonBoardChips {
     using cpu_type   = CPU_T;
     using video_type = VIDEO_T;
     using sound_type = SOUND_T;

@@ -170,7 +170,7 @@ template<AppleIIVariant V>
 using AppleIICPU = std::conditional_t<AppleIIVariantTraits<V>::is_cmos, WDC_65C02, MOS6502>;
 
 template<AppleIIVariant V>
-using AppleIIChips = StandardChips<AppleIICPU<V>>;
+using AppleIIChips = CommonBoardChips<AppleIICPU<V>>;
 
 // ============================================================================
 // Apple II System

@@ -48,7 +48,7 @@ inline constexpr auto kLC80Chips = make_chip_manifest(
 using LC80BusSpec = ManifestBusSpec<kLC80Chips, 16, 8>;
 
 // ── ChipSet ──────────────────────────────────────────────────────────────
-struct LC80ChipSet : StandardChips<U880, NoChip, NoChip, z80_pio_t> {
+struct LC80ChipSet : CommonBoardChips<U880, NoChip, NoChip, z80_pio_t> {
     z80_pio_t pio2;     // U855 PIO #2 (keyboard scan + cassette)
     z80_ctc_t ctc;      // U857 CTC (speaker on channel 2)
 

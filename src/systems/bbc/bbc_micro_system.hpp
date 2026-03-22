@@ -53,7 +53,7 @@ using BBCMicroBusSpec = ManifestBusSpec<kBBCMicroChips, 16, 8>;
 // Video slot = VIDPROC (pixel generator + palette owner).
 // MC6845 CRTC is a timing/address generator — kept as extra member.
 
-struct BBCMicroChips : StandardChips<MOS6502, bbc_vidproc_t, sn76489_t, mos6522_t> {
+struct BBCMicroChips : CommonBoardChips<MOS6502, bbc_vidproc_t, sn76489_t, mos6522_t> {
     mos6522_t      user_via;
     mc6845_t       crtc;
 

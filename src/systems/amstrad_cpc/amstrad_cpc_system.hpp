@@ -146,7 +146,7 @@ template<> struct CPCBusTraits<CPCModel::CPC6128> {
 // ── ChipSet ──────────────────────────────────────────────────────────────
 // Video slot = Gate Array (pixel generator + palette owner).
 // MC6845 CRTC is a timing/address generator — kept as extra member.
-struct CPCChipSet : StandardChips<ZilogZ80A, amstrad_gate_array_t, AY_3_8912, i8255_t> {
+struct CPCChipSet : CommonBoardChips<ZilogZ80A, amstrad_gate_array_t, AY_3_8912, i8255_t> {
     mc6845_t crtc;   // MC6845 CRTC — display timing/address generator
 
     template<typename BoardT>

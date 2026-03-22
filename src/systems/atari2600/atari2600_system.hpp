@@ -96,7 +96,7 @@ inline constexpr auto kAtari2600Chips = make_chip_manifest(
 using Atari2600BusSpec = ManifestBusSpec<kAtari2600Chips, 13, 8>;
 
 // ── ChipSet ──────────────────────────────────────────────────────────────
-struct Atari2600ChipSet : StandardChips<MOS6507, tia_t, NoChip, pia6532_t> {
+struct Atari2600ChipSet : CommonBoardChips<MOS6507, tia_t, NoChip, pia6532_t> {
     Atari2600CartChip cart;   // Cart MMIO adapter (wraps mapper)
 
     template<typename BoardT>

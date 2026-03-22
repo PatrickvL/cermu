@@ -101,7 +101,7 @@ template<> struct SVIBusTraits<SVIVariant::SVI328> {
 // SVI ChipSet — value-typed chips embedded in Board
 // ============================================================================
 
-struct SVIChips : StandardChips<ZilogZ80A, TMS9918A, AY_3_8910, i8255_t> {};
+struct SVIChips : CommonBoardChips<ZilogZ80A, TMS9918A, AY_3_8910, i8255_t> {};
 
 // ============================================================================
 // Spectravideo System

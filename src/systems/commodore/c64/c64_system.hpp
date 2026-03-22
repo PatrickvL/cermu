@@ -26,7 +26,7 @@ class LightpenDevice;
 
 // Value-typed chips: CPU + SID + CIA1 + Color RAM + CIA2.
 // VIC-II stays factory-created (polymorphic vicii_base_t, PAL/NTSC variant).
-struct C64ChipSet : StandardChips<MOS6510, NoChip, mos6581_t, mos6526_t> {
+struct C64ChipSet : CommonBoardChips<MOS6510, NoChip, mos6581_t, mos6526_t> {
     MOS2114    colorram;
     mos6526_t  cia2;
 

@@ -157,7 +157,7 @@ template<> struct BBCMasterBusTraits<BBCMasterVariant::MASTER_128> {
 // BBC Master ChipSet — value-typed chips owned by Board
 // ============================================================================
 
-struct BBCMasterChipSet : StandardChips<WDC_65C02, mc6845_t, sn76489_t, mos6522_t> {
+struct BBCMasterChipSet : CommonBoardChips<WDC_65C02, mc6845_t, sn76489_t, mos6522_t> {
     mos6522_t      user_via;
     bbc_vidproc_t  vidproc;
 
