@@ -29,7 +29,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/standard_chips.hpp"
+#include "core/core_chipset.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/video/mc6847/mc6847.hpp"
@@ -74,8 +74,8 @@ inline constexpr auto kAcornAtomChips = make_chip_manifest(
 // BusSpec auto-derived from the manifest
 using AcornAtomBusSpec = ManifestBusSpec<kAcornAtomChips, 16, 8>;
 
-// ── ChipSet ──────────────────────────────────────────────────────────────
-struct AtomChipSet : CommonBoardChips<MOS6502, mc6847_t, NoChip, i8255_t> {
+// ── Chipset ──────────────────────────────────────────────────────────────
+struct AtomChipset : CoreChipset<MOS6502, mc6847_t, NoChip, i8255_t> {
     mos6522_t via;    // MOS 6522 VIA (timers, cassette, printer)
 
     template<typename BoardT>
@@ -110,7 +110,7 @@ public:
 
 
 private:
-    // ── Chips (value-typed via Board ChipSet) ────────────────────────────
+    // ── Chips (value-typed via Board Chipset) ────────────────────────────
 
     // ── Memory chips — post-init pointers via chip_as<>() ───────────────
     ROMChip* basic_rom_ = nullptr;  // 4 KB at $C000
@@ -123,7 +123,7 @@ private:
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using Bus = MemoryBus<AcornAtomBusSpec>;
     using PT  = PackingTraits<AcornAtomBusSpec>;
-    using MainBoard = Board<AcornAtomBusSpec, AtomChipSet>;
+    using MainBoard = Board<AcornAtomBusSpec, AtomChipset>;
     Bus bus_;
     MainBoard board_{kAcornAtomChips};
 

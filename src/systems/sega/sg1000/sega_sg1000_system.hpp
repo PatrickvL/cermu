@@ -13,7 +13,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/standard_chips.hpp"
+#include "core/core_chipset.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -106,10 +106,10 @@ template<> struct SG1000BusTraits<SG1000Variant::SC3000> {
 };
 
 // ============================================================================
-// SG-1000 ChipSet — value-typed chips owned by Board
+// SG-1000 Chipset — value-typed chips owned by Board
 // ============================================================================
 
-struct SG1000Chips : CommonBoardChips<ZilogZ80A, TMS9918A, sn76489_t> {};
+struct SG1000Chips : CoreChipset<ZilogZ80A, TMS9918A, sn76489_t> {};
 
 // ============================================================================
 // Sega SG-1000 / SC-3000 System

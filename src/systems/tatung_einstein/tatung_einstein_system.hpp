@@ -15,7 +15,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/standard_chips.hpp"
+#include "core/core_chipset.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -55,10 +55,10 @@ inline constexpr auto kEinsteinChips = make_chip_manifest(
 using EinsteinBusSpec = ManifestBusSpec<kEinsteinChips, 16, 8>;
 
 // ============================================================================
-// Einstein ChipSet — value-typed chips owned by Board
+// Einstein Chipset — value-typed chips owned by Board
 // ============================================================================
 
-struct EinsteinChips : CommonBoardChips<ZilogZ80A, TMS9929A, AY_3_8910, z80_pio_t> {
+struct EinsteinChips : CoreChipset<ZilogZ80A, TMS9929A, AY_3_8910, z80_pio_t> {
     z80_ctc_t ctc;
 
     template<typename B> void bind_extras(B& board) {

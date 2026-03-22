@@ -3,7 +3,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/standard_chips.hpp"
+#include "core/core_chipset.hpp"
 #include "core/signal/audio_port.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
@@ -48,12 +48,12 @@ inline constexpr auto kBBCMicroChips = make_chip_manifest(
 using BBCMicroBusSpec = ManifestBusSpec<kBBCMicroChips, 16, 8>;
 
 // ============================================================================
-// BBC Micro ChipSet — value-typed chips owned by Board
+// BBC Micro Chipset — value-typed chips owned by Board
 // ============================================================================
 // Video slot = VIDPROC (pixel generator + palette owner).
 // MC6845 CRTC is a timing/address generator — kept as extra member.
 
-struct BBCMicroChips : CommonBoardChips<MOS6502, bbc_vidproc_t, sn76489_t, mos6522_t> {
+struct BBCMicroChips : CoreChipset<MOS6502, bbc_vidproc_t, sn76489_t, mos6522_t> {
     mos6522_t      user_via;
     mc6845_t       crtc;
 

@@ -26,7 +26,7 @@
 #include "core/signal/audio_port.hpp"
 #include "core/audio_thread.hpp"
 #include "core/board.hpp"
-#include "core/standard_chips.hpp"
+#include "core/core_chipset.hpp"
 #include "core/chip_manifest.hpp"
 #include "chip/sound/nes_apu_synth_engine.hpp"
 
@@ -83,8 +83,8 @@ inline constexpr auto kNESChips = make_chip_manifest(
 
 using NESBusSpec = ManifestBusSpec<kNESChips, 16, 8>;
 
-// ── NES ChipSet — PPU in the Video slot for auto-palette discovery ──────
-struct NESChipSet : CommonBoardChips<RICOH_2A03, PPU> {};
+// ── NES Chipset — PPU in the Video slot for auto-palette discovery ──────
+struct NESChipset : CoreChipset<RICOH_2A03, PPU> {};
 
 // ============================================================================
 // Nintendo system variant (compile-time template parameter)
@@ -125,9 +125,9 @@ class NintendoSystem : public System {
     using Traits = NintendoVariantTraits<V>;
 
 private:
-    // Main board — typed Board with NESChipSet for auto-palette discovery.
+    // Main board — typed Board with NESChipset for auto-palette discovery.
     // Memory dispatch is handled separately by nes_bus_t (page-pointer bus).
-    using MainBoard = Board<NESBusSpec, NESChipSet>;
+    using MainBoard = Board<NESBusSpec, NESChipset>;
     MainBoard board_{kNESChips};
 
     // Core components — CPU and PPU accessed via board_.cpu() / board_.video()

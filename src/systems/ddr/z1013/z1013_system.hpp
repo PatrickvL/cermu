@@ -11,7 +11,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/standard_chips.hpp"
+#include "core/core_chipset.hpp"
 #include "core/signal/video_port.hpp"
 
 #include "chip/cpu/z80/u880.hpp"
@@ -115,8 +115,8 @@ template<> struct Z1013BusTraits<Z1013Variant::Z1013_64> {
     using Spec = ManifestBusSpec<kZ1013_64K_Chips, 16, 8>;
 };
 
-// ── ChipSet ──────────────────────────────────────────────────────────────
-struct Z1013ChipSet : CommonBoardChips<U880, NoChip, NoChip, z80_pio_t> {};
+// ── Chipset ──────────────────────────────────────────────────────────────
+struct Z1013Chipset : CoreChipset<U880, NoChip, NoChip, z80_pio_t> {};
 
 // ── System ───────────────────────────────────────────────────────────────
 template<Z1013Variant V>
@@ -141,7 +141,7 @@ public:
 
 
 private:
-    // ── Chips (value-typed via Board ChipSet) ────────────────────────────
+    // ── Chips (value-typed via Board Chipset) ────────────────────────────
 
     // ── Memory — chip pointers for post-init access (owned by Board) ─
     ROMChip* basic_rom_lo_chip_    = nullptr;  // Z1013.64 only
@@ -156,7 +156,7 @@ private:
     using BT  = Z1013BusTraits<V>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec, Z1013ChipSet>;
+    using MainBoard = Board<typename BT::Spec, Z1013Chipset>;
     Bus bus_;
     MainBoard board_{BT::kManifest};
 

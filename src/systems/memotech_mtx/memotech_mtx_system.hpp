@@ -12,7 +12,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/standard_chips.hpp"
+#include "core/core_chipset.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -97,10 +97,10 @@ template<> struct MTXBusTraits<MTXVariant::MTX512> {
 };
 
 // ============================================================================
-// MTX ChipSet — value-typed chips embedded in Board
+// MTX Chipset — value-typed chips embedded in Board
 // ============================================================================
 
-struct MTXChips : CommonBoardChips<ZilogZ80A, TMS9918A, AY_3_8910, z80_ctc_t> {};
+struct MTXChips : CoreChipset<ZilogZ80A, TMS9918A, AY_3_8910, z80_ctc_t> {};
 
 // ============================================================================
 // Memotech MTX System

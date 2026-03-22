@@ -13,7 +13,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/standard_chips.hpp"
+#include "core/core_chipset.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -49,11 +49,11 @@ inline constexpr auto kSMSChips = make_chip_manifest(
 using SMSBusSpec  = ManifestBusSpec<kSMSChips, 16, 8>;
 
 // ============================================================================
-// SMS ChipSet — value-typed chips owned by Board
+// SMS Chipset — value-typed chips owned by Board
 // ============================================================================
 
-struct SMSChips : CommonBoardChips<ZilogZ80A, SEGA_315_5124, sn76489_t> {
-    SMSChips() : CommonBoardChips<ZilogZ80A, SEGA_315_5124, sn76489_t>{
+struct SMSChips : CoreChipset<ZilogZ80A, SEGA_315_5124, sn76489_t> {
+    SMSChips() : CoreChipset<ZilogZ80A, SEGA_315_5124, sn76489_t>{
         ZilogZ80A{}, SEGA_315_5124{}, sn76489_t{SN76489Variant::SEGA_PSG}} {}
 };
 

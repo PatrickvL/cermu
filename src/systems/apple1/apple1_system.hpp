@@ -4,7 +4,7 @@
 #include "core/system_lines.hpp"
 #include "core/text_terminal.hpp"
 #include "core/board.hpp"
-#include "core/standard_chips.hpp"
+#include "core/core_chipset.hpp"
 #include "core/signal/video_port.hpp"
 #include "systems/apple1/apple1_constants.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
@@ -45,10 +45,10 @@ inline constexpr auto kApple1Chips = make_chip_manifest(
 using Apple1BusSpec = ManifestBusSpec<kApple1Chips, 16, 8>;
 
 // ============================================================================
-// Apple 1 ChipSet — value-typed chips owned by Board
+// Apple 1 Chipset — value-typed chips owned by Board
 // ============================================================================
 
-struct Apple1Chips : CommonBoardChips<MOS6502, NoChip, NoChip, pia6820_t> {};
+struct Apple1Chips : CoreChipset<MOS6502, NoChip, NoChip, pia6820_t> {};
 
 
 

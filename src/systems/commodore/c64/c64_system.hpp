@@ -26,7 +26,7 @@ class LightpenDevice;
 
 // Value-typed chips: CPU + SID + CIA1 + Color RAM + CIA2.
 // VIC-II stays factory-created (polymorphic vicii_base_t, PAL/NTSC variant).
-struct C64ChipSet : CommonBoardChips<MOS6510, NoChip, mos6581_t, mos6526_t> {
+struct C64Chipset : CoreChipset<MOS6510, NoChip, mos6581_t, mos6526_t> {
     MOS2114    colorram;
     mos6526_t  cia2;
 
@@ -136,7 +136,7 @@ public:
     // MANIFEST-DRIVEN BUS
     // =========================================================================
     C64Bus   bus_;                       // MemoryBus<C64BusSpec> — page-table dispatch
-    Board<C64BusSpec, C64ChipSet> board_{kC64Chips}; // Board — owns flat mem, chip binding
+    Board<C64BusSpec, C64Chipset> board_{kC64Chips}; // Board — owns flat mem, chip binding
 
     // PLA banking — 32 modes × 2 viewers (CPU + VIC-II)
     std::array<C64Snapshot, kC64NumPlaModes> cpu_snapshots_;    // Viewer 0

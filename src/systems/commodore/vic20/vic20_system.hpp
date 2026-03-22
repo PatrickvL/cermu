@@ -2,7 +2,7 @@
 
 #include "systems/commodore/commodore_system.hpp"
 #include "core/board.hpp"
-#include "core/standard_chips.hpp"
+#include "core/core_chipset.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/memory/ram_chip.hpp"
@@ -102,7 +102,7 @@ struct VIC20BusTraits {
 };
 
 // Value-typed chips: CPU + 2× VIA.  VIC stays factory-created (PAL/NTSC conditional).
-struct VIC20ChipSet : CommonBoardChips<MOS6502, NoChip, NoChip, mos6522_t> {
+struct VIC20Chipset : CoreChipset<MOS6502, NoChip, NoChip, mos6522_t> {
     mos6522_t via2;
 
     template<typename B> void bind_extras(B& board) {
@@ -151,7 +151,7 @@ private:
     
     // ── Memory bus (declarative manifest + page-pointer dispatch) ────────
     using Bus = MemoryBus<VIC20BusTraits::Spec>;
-    using MainBoard = Board<VIC20BusTraits::Spec, VIC20ChipSet>;
+    using MainBoard = Board<VIC20BusTraits::Spec, VIC20Chipset>;
     Bus mem_bus_;
     MainBoard board_{kVIC20Chips};
 
