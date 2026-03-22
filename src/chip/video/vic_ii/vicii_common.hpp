@@ -572,9 +572,14 @@ struct vicii_base_t : public VideoChipBase {
     // straddle the transition boundaries.  raster_flags_ provides VSync/Blank.
     VideoFlags drive_flags_ = VideoFlags::None;
 
-    // Set by the cycle wrapper that performs line-0 operations (frame wrap).
-    // Consumed at the next end-of-line to emit FrameEnd into the video stream.
+    // Set when raster reaches stream_frame_start_raster_ to emit FrameEnd
+    // into the video stream.  Decoupled from line-0 operations so the stream
+    // frame can start at a centering-optimal raster line.
     bool frame_wrapped_ = false;
+
+    // Raster line at which FrameEnd is emitted into the video stream.
+    // Computed at init to vertically center the display area.
+    uint16_t stream_frame_start_raster_ = 0;
 
     // Destructor — cleans up dynamically allocated pixel line buffers
     ~vicii_base_t() override;

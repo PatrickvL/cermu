@@ -95,6 +95,28 @@ void vic_base_t::reset() {
     // Decode all cached register fields from the reset defaults
     decode_all_registers();
 
+    // Compute stream frame start raster for vertical centering.
+    // VBlank = rasters 0-27 (28 lines).  First visible = raster 28.
+    // Text starts at cached_screen_origin_y (default 38 for PAL).
+    // Text height = cached_num_rows * cached_char_height (default 23*8=184).
+    // Total visible = total_lines - 28 = 284 (PAL).
+    // Target top border = (total_visible - text_height) / 2.
+    {
+        const uint16_t vblank_lines = 28;
+        const uint16_t first_vis = vblank_lines;  // raster 28
+        const uint16_t total_visible = total_lines - vblank_lines;
+        const uint16_t text_height = cached_num_rows * cached_char_height;
+        const uint16_t total_border = total_visible - text_height;
+        const uint16_t target_top = total_border / 2;
+        const uint16_t top_now = cached_screen_origin_y - first_vis;
+        if (target_top > top_now) {
+            uint16_t extra = target_top - top_now;
+            stream_frame_start_raster_ = total_lines - extra;
+        } else {
+            stream_frame_start_raster_ = 0;
+        }
+    }
+
     // Initialize drive_flags_ for raster 0 (in vblank since 0 < 28)
     drive_flags_ = VideoFlags::HSync | VideoFlags::VSync | VideoFlags::Blank;
 
@@ -468,8 +490,11 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
         raster_counter++;
         if (raster_counter >= total_lines) {
             raster_counter = 0;
-            frame_wrapped_ = true;
         }
+
+        // Emit FrameEnd at the centering start raster
+        if (raster_counter == stream_frame_start_raster_)
+            frame_wrapped_ = true;
 
         // Update drive_flags_ for the new raster line:
         //   HSync active only during cycle 0 (cleared in cycle 1)

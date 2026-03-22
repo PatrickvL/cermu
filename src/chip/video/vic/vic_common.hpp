@@ -291,6 +291,7 @@ struct vic_base_t : public VideoChipBase {
     // Frame-end one-shot — set when raster wraps to 0, consumed on first
     // drive() of the new frame.
     bool frame_wrapped_ = false;
+    uint16_t stream_frame_start_raster_ = 0;  // Raster for FrameEnd (vertical centering)
 
     // Audio port output (non-owning pointer, set by system/board)
     // When set, audio_tick() drives the port instead of the internal uint8_t ring buffer.

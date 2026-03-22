@@ -545,6 +545,8 @@ bool C64System::initialize() {
     const auto& vt = (get_vicii_standard() == VIC_PAL) ? MOS6569_traits : MOS6567R8_traits;
     const uint16_t ppl = vt.cycles_per_line * 8;
     const int back_porch = (int(vt.first_visible_x_coord) - int(vt.hsync_end) + ppl) % ppl;
+    video_port_->bind_display(nullptr, nullptr,
+                              c64_constants::DISPLAY_WIDTH_PAL, back_porch);
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Wire SID to audio signal port
