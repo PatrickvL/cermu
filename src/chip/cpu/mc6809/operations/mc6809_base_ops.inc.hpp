@@ -1593,29 +1593,42 @@ bus_state_t op_leau(bus_state_t pins) {
 
 bus_state_t op_pshs(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_.pc);
+    case 0: return bus_setup_read(pins, regs_.pc);  // Fetch postbyte
     case 1:
         postbyte_ = bus_read_data(pins);
         regs_.pc++;
-        data_lo_ = 0;  // Bit counter
-        [[fallthrough]];
+        data_lo_ = 0;  // Push phase: walk bits 7→0
+        return bus_internal(pins);
     default: {
-        // Push registers in reverse order: PC, U, Y, X, DP, B, A, CC
-        while (data_lo_ < 8) {
-            uint8_t bit = 7 - data_lo_;
-            data_lo_++;
-            if (postbyte_ & (1 << bit)) {
-                switch (bit) {
-                case 7: regs_.s--; return bus_setup_write(pins, regs_.s, regs_.pc & 0xFF);
-                case 6: regs_.s--; if (data_lo_ == 1) { return bus_setup_write(pins, regs_.s, regs_.pc >> 8); }
-                        return bus_setup_write(pins, regs_.s, regs_.u & 0xFF);
-                case 5: regs_.s--; return bus_setup_write(pins, regs_.s, regs_.y & 0xFF);
-                case 4: regs_.s--; return bus_setup_write(pins, regs_.s, regs_.x & 0xFF);
-                case 3: regs_.s--; return bus_setup_write(pins, regs_.s, regs_.dp);
-                case 2: regs_.s--; return bus_setup_write(pins, regs_.s, regs_.b);
-                case 1: regs_.s--; return bus_setup_write(pins, regs_.s, regs_.a);
-                case 0: regs_.s--; return bus_setup_write(pins, regs_.s, regs_.cc);
-                }
+        // Push registers in order: PC(7), U(6), Y(5), X(4), DP(3), B(2), A(1), CC(0)
+        // 16-bit regs require two bus writes (hi byte first, then lo byte)
+        while (data_lo_ < 12) {  // Max 12 push phases (8 bits, 16-bit regs = 2 each)
+            uint8_t phase = data_lo_++;
+            switch (phase) {
+            case 0:  if (postbyte_ & 0x80) return bus_setup_write(pins, --regs_.s, regs_.pc & 0xFF);
+                     break;
+            case 1:  if (postbyte_ & 0x80) return bus_setup_write(pins, --regs_.s, regs_.pc >> 8);
+                     break;
+            case 2:  if (postbyte_ & 0x40) return bus_setup_write(pins, --regs_.s, regs_.u & 0xFF);
+                     break;
+            case 3:  if (postbyte_ & 0x40) return bus_setup_write(pins, --regs_.s, regs_.u >> 8);
+                     break;
+            case 4:  if (postbyte_ & 0x20) return bus_setup_write(pins, --regs_.s, regs_.y & 0xFF);
+                     break;
+            case 5:  if (postbyte_ & 0x20) return bus_setup_write(pins, --regs_.s, regs_.y >> 8);
+                     break;
+            case 6:  if (postbyte_ & 0x10) return bus_setup_write(pins, --regs_.s, regs_.x & 0xFF);
+                     break;
+            case 7:  if (postbyte_ & 0x10) return bus_setup_write(pins, --regs_.s, regs_.x >> 8);
+                     break;
+            case 8:  if (postbyte_ & 0x08) return bus_setup_write(pins, --regs_.s, regs_.dp);
+                     break;
+            case 9:  if (postbyte_ & 0x04) return bus_setup_write(pins, --regs_.s, regs_.b);
+                     break;
+            case 10: if (postbyte_ & 0x02) return bus_setup_write(pins, --regs_.s, regs_.a);
+                     break;
+            case 11: if (postbyte_ & 0x01) return bus_setup_write(pins, --regs_.s, regs_.cc);
+                     break;
             }
         }
         transition_to_fetch();
@@ -1626,21 +1639,89 @@ bus_state_t op_pshs(bus_state_t pins) {
 
 bus_state_t op_puls(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_.pc);
+    case 0: return bus_setup_read(pins, regs_.pc);  // Fetch postbyte
     case 1:
         postbyte_ = bus_read_data(pins);
         regs_.pc++;
-        data_lo_ = 0;
-        [[fallthrough]];
+        data_lo_ = 0;  // Pull phase
+        return bus_internal(pins);
     default: {
-        // Pull registers in order: CC, A, B, DP, X, Y, U, PC
-        while (data_lo_ < 8) {
-            uint8_t bit = data_lo_;
-            data_lo_++;
-            if (postbyte_ & (1 << bit)) {
-                return bus_setup_read(pins, regs_.s++);
+        // Process result from previous read, then start next read
+        // Pull order: CC(0), A(1), B(2), DP(3), X(4), Y(5), U(6), PC(7)
+        // 16-bit registers: read hi byte first, then lo byte
+        //
+        // We use a two-phase approach: even phases start a read,
+        // odd phases consume the result and start the next read or finish.
+        // But since step_ advances each call, we need to handle both
+        // initiating reads and consuming their results.
+        //
+        // Simpler: use data_lo_ as a phase counter that tracks which
+        // register byte to pull next. Each case either reads a result
+        // from the previous cycle or starts a new read.
+        //
+        // On entry to default (step_>=2), we need to start pulls.
+        // data_lo_ tracks current pull phase.
+
+        // First call at step_==2: start the first read
+        // Subsequent calls: consume previous read and start next
+
+        // Phase state machine:
+        // 0: start CC read (if needed)
+        // 1: consume CC, start A read (if needed)
+        // 2: consume A, start B read, etc.
+        // ...
+        // We handle this by having the previous step's result consumed
+        // at the beginning of the current step.
+
+        // Actually, let's use a different approach: track byte index
+        // through a flattened list of bytes to pull.
+        // On each tick: if we set up a read last tick, consume it.
+        // Then set up the next read or finish.
+
+        // Use offset_ to remember if we have pending data
+        // Use ea_ to track what we're reading
+
+        // Simplest correct approach: walk through bits, one read per tick.
+        // Each case returns after setting up a read; next entry consumes it.
+
+        while (data_lo_ < 12) {
+            uint8_t phase = data_lo_++;
+            switch (phase) {
+            case 0:  if (postbyte_ & 0x01) return bus_setup_read(pins, regs_.s++);
+                     break;
+            case 1:  if (postbyte_ & 0x01) { regs_.cc = bus_read_data(pins); }
+                     if (postbyte_ & 0x02) return bus_setup_read(pins, regs_.s++);
+                     break;
+            case 2:  if (postbyte_ & 0x02) { regs_.a = bus_read_data(pins); }
+                     if (postbyte_ & 0x04) return bus_setup_read(pins, regs_.s++);
+                     break;
+            case 3:  if (postbyte_ & 0x04) { regs_.b = bus_read_data(pins); }
+                     if (postbyte_ & 0x08) return bus_setup_read(pins, regs_.s++);
+                     break;
+            case 4:  if (postbyte_ & 0x08) { regs_.dp = bus_read_data(pins); }
+                     if (postbyte_ & 0x10) return bus_setup_read(pins, regs_.s++);
+                     break;
+            case 5:  if (postbyte_ & 0x10) { regs_.x = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_.s++); }
+                     break;
+            case 6:  if (postbyte_ & 0x10) { regs_.x |= bus_read_data(pins); }
+                     if (postbyte_ & 0x20) return bus_setup_read(pins, regs_.s++);
+                     break;
+            case 7:  if (postbyte_ & 0x20) { regs_.y = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_.s++); }
+                     break;
+            case 8:  if (postbyte_ & 0x20) { regs_.y |= bus_read_data(pins); }
+                     if (postbyte_ & 0x40) return bus_setup_read(pins, regs_.s++);
+                     break;
+            case 9:  if (postbyte_ & 0x40) { regs_.u = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_.s++); }
+                     break;
+            case 10: if (postbyte_ & 0x40) { regs_.u |= bus_read_data(pins); }
+                     if (postbyte_ & 0x80) return bus_setup_read(pins, regs_.s++);
+                     break;
+            case 11: if (postbyte_ & 0x80) { regs_.pc = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_.s++); }
+                     break;
             }
         }
+        // Final byte of PC if we were pulling it
+        if (postbyte_ & 0x80) { regs_.pc |= bus_read_data(pins); }
         transition_to_fetch();
         return pins;
     }
@@ -1649,35 +1730,101 @@ bus_state_t op_puls(bus_state_t pins) {
 
 bus_state_t op_pshu(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_.pc);
+    case 0: return bus_setup_read(pins, regs_.pc);  // Fetch postbyte
     case 1:
         postbyte_ = bus_read_data(pins);
         regs_.pc++;
-        // Simplified: push all flagged registers at once
-        if (postbyte_ & StackBit::PC)  { regs_.u--; }
-        if (postbyte_ & StackBit::PC)  { regs_.u--; }
-        if (postbyte_ & StackBit::U_S) { regs_.u--; regs_.u--; } // S for PSHU
-        if (postbyte_ & StackBit::Y)   { regs_.u--; regs_.u--; }
-        if (postbyte_ & StackBit::X)   { regs_.u--; regs_.u--; }
-        if (postbyte_ & StackBit::DP)  { regs_.u--; }
-        if (postbyte_ & StackBit::B)   { regs_.u--; }
-        if (postbyte_ & StackBit::A)   { regs_.u--; }
-        if (postbyte_ & StackBit::CC)  { regs_.u--; }
+        data_lo_ = 0;
+        return bus_internal(pins);
+    default: {
+        // Push order: PC(7), S(6), Y(5), X(4), DP(3), B(2), A(1), CC(0)
+        // Uses U stack instead of S; bit 6 = S (not U)
+        while (data_lo_ < 12) {
+            uint8_t phase = data_lo_++;
+            switch (phase) {
+            case 0:  if (postbyte_ & 0x80) return bus_setup_write(pins, --regs_.u, regs_.pc & 0xFF);
+                     break;
+            case 1:  if (postbyte_ & 0x80) return bus_setup_write(pins, --regs_.u, regs_.pc >> 8);
+                     break;
+            case 2:  if (postbyte_ & 0x40) return bus_setup_write(pins, --regs_.u, regs_.s & 0xFF);
+                     break;
+            case 3:  if (postbyte_ & 0x40) return bus_setup_write(pins, --regs_.u, regs_.s >> 8);
+                     break;
+            case 4:  if (postbyte_ & 0x20) return bus_setup_write(pins, --regs_.u, regs_.y & 0xFF);
+                     break;
+            case 5:  if (postbyte_ & 0x20) return bus_setup_write(pins, --regs_.u, regs_.y >> 8);
+                     break;
+            case 6:  if (postbyte_ & 0x10) return bus_setup_write(pins, --regs_.u, regs_.x & 0xFF);
+                     break;
+            case 7:  if (postbyte_ & 0x10) return bus_setup_write(pins, --regs_.u, regs_.x >> 8);
+                     break;
+            case 8:  if (postbyte_ & 0x08) return bus_setup_write(pins, --regs_.u, regs_.dp);
+                     break;
+            case 9:  if (postbyte_ & 0x04) return bus_setup_write(pins, --regs_.u, regs_.b);
+                     break;
+            case 10: if (postbyte_ & 0x02) return bus_setup_write(pins, --regs_.u, regs_.a);
+                     break;
+            case 11: if (postbyte_ & 0x01) return bus_setup_write(pins, --regs_.u, regs_.cc);
+                     break;
+            }
+        }
         transition_to_fetch();
         return pins;
-    default: transition_to_fetch(); return pins;
+    }
     }
 }
 
 bus_state_t op_pulu(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_.pc);
+    case 0: return bus_setup_read(pins, regs_.pc);  // Fetch postbyte
     case 1:
         postbyte_ = bus_read_data(pins);
         regs_.pc++;
+        data_lo_ = 0;
+        return bus_internal(pins);
+    default: {
+        // Pull order: CC(0), A(1), B(2), DP(3), X(4), Y(5), S(6), PC(7)
+        // Uses U stack; bit 6 = S (not U)
+        while (data_lo_ < 12) {
+            uint8_t phase = data_lo_++;
+            switch (phase) {
+            case 0:  if (postbyte_ & 0x01) return bus_setup_read(pins, regs_.u++);
+                     break;
+            case 1:  if (postbyte_ & 0x01) { regs_.cc = bus_read_data(pins); }
+                     if (postbyte_ & 0x02) return bus_setup_read(pins, regs_.u++);
+                     break;
+            case 2:  if (postbyte_ & 0x02) { regs_.a = bus_read_data(pins); }
+                     if (postbyte_ & 0x04) return bus_setup_read(pins, regs_.u++);
+                     break;
+            case 3:  if (postbyte_ & 0x04) { regs_.b = bus_read_data(pins); }
+                     if (postbyte_ & 0x08) return bus_setup_read(pins, regs_.u++);
+                     break;
+            case 4:  if (postbyte_ & 0x08) { regs_.dp = bus_read_data(pins); }
+                     if (postbyte_ & 0x10) return bus_setup_read(pins, regs_.u++);
+                     break;
+            case 5:  if (postbyte_ & 0x10) { regs_.x = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_.u++); }
+                     break;
+            case 6:  if (postbyte_ & 0x10) { regs_.x |= bus_read_data(pins); }
+                     if (postbyte_ & 0x20) return bus_setup_read(pins, regs_.u++);
+                     break;
+            case 7:  if (postbyte_ & 0x20) { regs_.y = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_.u++); }
+                     break;
+            case 8:  if (postbyte_ & 0x20) { regs_.y |= bus_read_data(pins); }
+                     if (postbyte_ & 0x40) return bus_setup_read(pins, regs_.u++);
+                     break;
+            case 9:  if (postbyte_ & 0x40) { regs_.s = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_.u++); }
+                     break;
+            case 10: if (postbyte_ & 0x40) { regs_.s |= bus_read_data(pins); }
+                     if (postbyte_ & 0x80) return bus_setup_read(pins, regs_.u++);
+                     break;
+            case 11: if (postbyte_ & 0x80) { regs_.pc = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_.u++); }
+                     break;
+            }
+        }
+        if (postbyte_ & 0x80) { regs_.pc |= bus_read_data(pins); }
         transition_to_fetch();
         return pins;
-    default: transition_to_fetch(); return pins;
+    }
     }
 }
 

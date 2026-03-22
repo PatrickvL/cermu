@@ -363,6 +363,9 @@ public:
 
     // Load CPU registers from test initial state
     void load_state(const mc6809_cpu_state_t* s) {
+        // Skip hardware reset — go directly to instruction fetch state
+        cpu.begin_instruction();
+
         cpu.set_a(s->a);
         cpu.set_b(s->b);
         cpu.set_x(s->x);

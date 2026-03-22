@@ -332,6 +332,16 @@ public:
             && !cwai_wait_;
     }
 
+    /// Skip hardware reset and go directly to instruction fetch state.
+    /// For test harnesses only — does NOT execute the reset bus sequence.
+    void begin_instruction() {
+        current_handler_ = &mc6809_t::fetch_opcode;
+        step_ = 0;
+        sync_wait_ = false;
+        cwai_wait_ = false;
+        halted_ = false;
+    }
+
     bool halted() const { return halted_; }
     bool sync_waiting() const { return sync_wait_; }
     bool cwai_waiting() const { return cwai_wait_; }
@@ -342,7 +352,9 @@ private:
     // ========================================================================
     struct Registers {
         // Accumulators (D = A:B, big-endian: A is high byte)
-        union { struct { uint8_t a, b; }; uint16_t d; };
+        // On little-endian hosts the low-addressed byte is the LSB of
+        // the uint16_t, so B (low byte of D) must come first.
+        union { struct { uint8_t b, a; }; uint16_t d; };
 
         // Index registers
         uint16_t x, y;
@@ -358,8 +370,8 @@ private:
         uint8_t dp;   // Direct page register
         uint8_t cc;   // Condition code register
 
-        // HD6309-specific registers
-        union { struct { uint8_t e, f; }; uint16_t w; };  // W = E:F
+        // HD6309-specific registers (W = E:F, same LE layout)
+        union { struct { uint8_t f, e; }; uint16_t w; };  // W = E:F
         uint16_t v;   // V register
         uint8_t  md;  // Mode register (HD6309)
     };
