@@ -440,8 +440,8 @@ inline constexpr auto kTempestChips = make_chip_manifest(
 inline constexpr auto kGravitarChips = make_chip_manifest(
     Slot<RAMChip>{atv::GRAV_RAM_BASE,      atv::GRAV_RAM_SIZE,      0, "Work RAM"},
     Slot<RAMChip>{atv::GRAV_VECRAM_BASE,   atv::GRAV_VECRAM_SIZE,   0, "Vector RAM"},
-    Slot<ROMChip>{atv::GRAV_VECROM_BASE,   atv::GRAV_VECROM_SIZE,   0, "Vector ROM"},
-    Slot<ROMChip>{atv::GRAV_PROGROM_BASE,  atv::GRAV_PROGROM_SIZE,  0, "Program ROM"},
+    Slot<ROMChip>{atv::GRAV_VECROM_BASE,   0x4000,   0, "Vector ROM", 0, 0, 0, atv::GRAV_VECROM_SIZE},
+    Slot<ROMChip>{atv::GRAV_PROGROM_BASE,  0x8000,   0, "Program ROM", 0, 0, 0, atv::GRAV_PROGROM_SIZE},
     Slot<MOS6502>{0, 0, 0, "MOS 6502"},
     Slot<avg_t>{0, 0, 0, "AVG"}
 );
@@ -449,7 +449,7 @@ inline constexpr auto kGravitarChips = make_chip_manifest(
 inline constexpr auto kSpaceDuelChips = make_chip_manifest(
     Slot<RAMChip>{atv::SD_RAM_BASE,      atv::SD_RAM_SIZE,      0, "Work RAM"},
     Slot<RAMChip>{atv::SD_VECRAM_BASE,   atv::SD_VECRAM_SIZE,   0, "Vector RAM"},
-    Slot<ROMChip>{atv::SD_VECROM_BASE,   atv::SD_VECROM_SIZE,   0, "Vector ROM"},
+    Slot<ROMChip>{atv::SD_VECROM_BASE,   0x2000,   0, "Vector ROM", 0, 0, 0, atv::SD_VECROM_SIZE},
     Slot<ROMChip>{atv::SD_PROGROM_BASE,  atv::SD_PROGROM_SIZE,  0, "Program ROM Low"},
     Slot<ROMChip>{atv::SD_PROGROM_HI_BASE, atv::SD_PROGROM_HI_SIZE, 0, "Program ROM High"},
     Slot<MOS6502>{0, 0, 0, "MOS 6502"},
@@ -459,8 +459,8 @@ inline constexpr auto kSpaceDuelChips = make_chip_manifest(
 inline constexpr auto kBlackWidowChips = make_chip_manifest(
     Slot<RAMChip>{atv::BW_RAM_BASE,      atv::BW_RAM_SIZE,      0, "Work RAM"},
     Slot<RAMChip>{atv::BW_VECRAM_BASE,   atv::BW_VECRAM_SIZE,   0, "Vector RAM"},
-    Slot<ROMChip>{atv::BW_VECROM_BASE,   atv::BW_VECROM_SIZE,   0, "Vector ROM"},
-    Slot<ROMChip>{atv::BW_PROGROM_BASE,  atv::BW_PROGROM_SIZE,  0, "Program ROM"},
+    Slot<ROMChip>{atv::BW_VECROM_BASE,   0x4000,   0, "Vector ROM", 0, 0, 0, atv::BW_VECROM_SIZE},
+    Slot<ROMChip>{atv::BW_PROGROM_BASE,  0x8000,   0, "Program ROM", 0, 0, 0, atv::BW_PROGROM_SIZE},
     Slot<MOS6502>{0, 0, 0, "MOS 6502"},
     Slot<avg_t>{0, 0, 0, "AVG"}
 );

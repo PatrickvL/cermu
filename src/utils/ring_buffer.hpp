@@ -22,6 +22,25 @@ public:
     explicit RingBuffer(size_t capacity)
         : buf_(capacity), cap_(capacity) {}
 
+    // Move constructor — std::atomic is not movable, so we transfer the
+    // buffer and capacity, then reset the indices (safe for SPSC: move
+    // should only happen before the producer/consumer are active).
+    RingBuffer(RingBuffer&& other) noexcept
+        : buf_(std::move(other.buf_)), cap_(other.cap_) {
+        other.cap_ = 0;
+    }
+
+    RingBuffer& operator=(RingBuffer&& other) noexcept {
+        if (this != &other) {
+            buf_ = std::move(other.buf_);
+            cap_ = other.cap_;
+            read_.store(0, std::memory_order_relaxed);
+            write_.store(0, std::memory_order_relaxed);
+            other.cap_ = 0;
+        }
+        return *this;
+    }
+
     /// Maximum number of elements the buffer can hold.
     size_t capacity() const { return cap_; }
 
