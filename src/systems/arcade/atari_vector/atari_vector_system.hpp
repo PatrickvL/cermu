@@ -22,14 +22,14 @@
  *   - System descriptor metadata (name, aliases, ROM sizes)
  *   - POKEY presence and base address
  *
- * The system template uses CommonBoardChips<MOS6502, VideoChip> where
+ * The system template uses CoreChipset<MOS6502, VideoChip> where
  * VideoChip is either dvg_t or avg_t, selected by traits.
  */
 
 #include "systems/arcade/atari_vector/atari_vector_constants.hpp"
 #include "core/system.hpp"
 #include "core/board.hpp"
-#include "core/standard_chips.hpp"
+#include "core/core_chipset.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
@@ -535,7 +535,7 @@ class AtariVectorSystem : public System {
     using VideoChip = typename Traits::VideoChip;
     using Spec      = VectorBusSpec<V>;
     using Bus       = MemoryBus<Spec>;
-    using ChipSet   = CommonBoardChips<MOS6502, VideoChip>;
+    using ChipSet   = CoreChipset<MOS6502, VideoChip>;
     using MainBoard = Board<Spec, ChipSet>;
 
 public:

@@ -22,7 +22,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/standard_chips.hpp"
+#include "core/core_chipset.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -90,11 +90,11 @@ template<> struct MSXVariantTraits<MSXVariant::MSX2P> {
 };
 
 // ============================================================================
-// MSX ChipSet — value-typed chips embedded in Board
+// MSX Chipset — value-typed chips embedded in Board
 // ============================================================================
 
 template<MSXVariant V>
-struct MSXChips : CommonBoardChips<ZilogZ80A, typename MSXVariantTraits<V>::VDP, AY_3_8910, i8255_t> {};
+struct MSXChips : CoreChipset<ZilogZ80A, typename MSXVariantTraits<V>::VDP, AY_3_8910, i8255_t> {};
 
 // ============================================================================
 // MSX default bus state

@@ -12,7 +12,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/standard_chips.hpp"
+#include "core/core_chipset.hpp"
 #include "core/signal/video_port.hpp"
 
 #include "chip/cpu/z80/u880.hpp"
@@ -112,8 +112,8 @@ template<> struct Z9001BusTraits<Z9001Variant::KC87> {
     using Spec = ManifestBusSpec<kKC87Chips, 16, 8>;
 };
 
-// ── ChipSet ──────────────────────────────────────────────────────────────
-struct Z9001ChipSet : CommonBoardChips<U880, NoChip, NoChip, z80_pio_t> {
+// ── Chipset ──────────────────────────────────────────────────────────────
+struct Z9001Chipset : CoreChipset<U880, NoChip, NoChip, z80_pio_t> {
     z80_pio_t pio2;     // U855 PIO #2 (keyboard + cassette)
     z80_ctc_t ctc;      // U857 CTC (timing + sound)
 
@@ -153,7 +153,7 @@ public:
 
 
 private:
-    // ── Chips (value-typed via Board ChipSet) ────────────────────────────
+    // ── Chips (value-typed via Board Chipset) ────────────────────────────
 
     // ── Memory — owned by Board, accessed via chip_as<>() ────────────
     ROMChip* basic_rom_lo_chip_  = nullptr;  // KC 87 only
@@ -169,7 +169,7 @@ private:
     using BT  = Z9001BusTraits<V>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec, Z9001ChipSet>;
+    using MainBoard = Board<typename BT::Spec, Z9001Chipset>;
     Bus bus_;
     MainBoard board_{BT::kManifest};
 

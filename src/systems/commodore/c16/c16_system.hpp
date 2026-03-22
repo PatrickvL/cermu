@@ -172,7 +172,7 @@ namespace c264_viewer {
 
 // Value-typed chips: CPU + TED (video) + PIO1 + PIO2 + ROM bank select.
 // TED is default-constructed and configured via init(desc) in initialize().
-struct C264ChipSet : CommonBoardChips<CSG7501, ted7360_t, NoChip, mos6529_t> {
+struct C264Chipset : CoreChipset<CSG7501, ted7360_t, NoChip, mos6529_t> {
     mos6529_t               pio2;
     c264_rom_bank_select_t  rom_bank;
 
@@ -280,7 +280,7 @@ private:
 
     // ── Memory bus (declarative manifest + page-pointer dispatch) ────────
     using Bus = MemoryBus<C264BusTraits::Spec>;
-    using MainBoard = Board<C264BusTraits::Spec, C264ChipSet>;
+    using MainBoard = Board<C264BusTraits::Spec, C264Chipset>;
     Bus bus_;
     MainBoard board_{kC264Chips};
 

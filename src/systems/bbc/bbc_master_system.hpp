@@ -44,7 +44,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/standard_chips.hpp"
+#include "core/core_chipset.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/wdc65c02.hpp"
 #include "chip/io/mos6522.hpp"
@@ -154,10 +154,10 @@ template<> struct BBCMasterBusTraits<BBCMasterVariant::MASTER_128> {
 };
 
 // ============================================================================
-// BBC Master ChipSet — value-typed chips owned by Board
+// BBC Master Chipset — value-typed chips owned by Board
 // ============================================================================
 
-struct BBCMasterChipSet : CommonBoardChips<WDC_65C02, mc6845_t, sn76489_t, mos6522_t> {
+struct BBCMasterChipset : CoreChipset<WDC_65C02, mc6845_t, sn76489_t, mos6522_t> {
     mos6522_t      user_via;
     bbc_vidproc_t  vidproc;
 
@@ -212,7 +212,7 @@ private:
 
     // ── Board + bus ──────────────────────────────────────────────────────
     using Bus       = MemoryBus<typename BTraits::Spec>;
-    using MainBoard = Board<typename BTraits::Spec, BBCMasterChipSet>;
+    using MainBoard = Board<typename BTraits::Spec, BBCMasterChipset>;
     Bus       bus_;
     MainBoard board_{BTraits::kManifest};
 

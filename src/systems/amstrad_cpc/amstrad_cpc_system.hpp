@@ -22,7 +22,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/standard_chips.hpp"
+#include "core/core_chipset.hpp"
 #include "core/signal/audio_port.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -143,10 +143,10 @@ template<> struct CPCBusTraits<CPCModel::CPC6128> {
     using Spec = ManifestBusSpec<kCPC6128Chips, 16, 8>;
 };
 
-// ── ChipSet ──────────────────────────────────────────────────────────────
+// ── Chipset ──────────────────────────────────────────────────────────────
 // Video slot = Gate Array (pixel generator + palette owner).
 // MC6845 CRTC is a timing/address generator — kept as extra member.
-struct CPCChipSet : CommonBoardChips<ZilogZ80A, amstrad_gate_array_t, AY_3_8912, i8255_t> {
+struct CPCChipset : CoreChipset<ZilogZ80A, amstrad_gate_array_t, AY_3_8912, i8255_t> {
     mc6845_t crtc;   // MC6845 CRTC — display timing/address generator
 
     template<typename BoardT>
@@ -188,7 +188,7 @@ public:
 
 private:
     // ========================================================================
-    // CHIPS (value-typed via Board ChipSet)
+    // CHIPS (value-typed via Board Chipset)
     // ========================================================================
 
     // ========================================================================
@@ -199,7 +199,7 @@ private:
     using BT  = CPCBusTraits<M>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec, CPCChipSet>;
+    using MainBoard = Board<typename BT::Spec, CPCChipset>;
     Bus bus_;
     MainBoard board_{BT::kManifest};
 

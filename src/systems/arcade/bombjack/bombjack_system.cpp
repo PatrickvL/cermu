@@ -57,7 +57,7 @@ bool BombJackSystem::initialize() {
     printf("Bomb Jack: Initializing arcade system\n");
     register_board(&main_board_);
 
-    // ── Bind value-typed chips from ChipSet, then create remaining ─────
+    // ── Bind value-typed chips from Chipset, then create remaining ─────
     main_board_.bind_chipset();
     main_board_.create_chips(&main_pins_);
     main_board_.apply(main_bus_);

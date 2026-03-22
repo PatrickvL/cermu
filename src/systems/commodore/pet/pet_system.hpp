@@ -84,7 +84,7 @@ struct PETBusTraits {
 };
 
 // Value-typed chips: CPU + CRTC + VIA + PIA1 + PIA2.
-struct PETChipSet : CommonBoardChips<MOS6502, mc6845_t, mos6522_t, pia6820_t> {
+struct PETChipset : CoreChipset<MOS6502, mc6845_t, mos6522_t, pia6820_t> {
     pia6820_t pia2;
 
     template<typename Board> void bind_extras(Board& board) {
@@ -129,7 +129,7 @@ public:
 private:
     // ── Bus ──────────────────────────────────────────────────────────────
     using Bus    = MemoryBus<PETBusTraits::Spec>;
-    using MainBoard = Board<PETBusTraits::Spec, PETChipSet>;
+    using MainBoard = Board<PETBusTraits::Spec, PETChipset>;
     Bus    bus_;
     MainBoard board_{kPETChips};
     bus_state_t pins_ = PET_BUS_DEFAULT_STATE;

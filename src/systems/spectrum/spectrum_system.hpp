@@ -26,7 +26,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/standard_chips.hpp"
+#include "core/core_chipset.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -126,10 +126,10 @@ template<> struct SpectrumBusTraits<SpectrumVariant::ZX128K> {
 };
 
 // ============================================================================
-// Spectrum ChipSet — value-typed chips owned by Board
+// Spectrum Chipset — value-typed chips owned by Board
 // ============================================================================
 
-struct SpectrumChips : CommonBoardChips<ZilogZ80A, ferranti_ula_t, AY_3_8912> {};
+struct SpectrumChips : CoreChipset<ZilogZ80A, ferranti_ula_t, AY_3_8912> {};
 
 // ============================================================================
 // ZX Spectrum System
