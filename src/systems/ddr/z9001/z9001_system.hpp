@@ -174,7 +174,6 @@ private:
     MainBoard board_{BT::kManifest};
 
     // ── Display ──────────────────────────────────────────────────────────
-    IndexedFrameBuffer display_;
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
     CharDisplayGenerator video_gen_;                  // TTL character display generator
 

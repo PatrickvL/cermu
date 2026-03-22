@@ -95,9 +95,8 @@ bool BombJackSystem::initialize() {
     load_roms();
 
     // ── GPU indexed palette rendering ───────────────────────────────
-    display_.init(bombjack_constants::FB_WIDTH, bombjack_constants::FB_HEIGHT);
+    palette_ = PaletteTable(bombjack_constants::PALETTE_ENTRIES);
     decode_palette();
-    register_display(&display_);
 
     // Video stream output
     video_port_ = std::make_unique<CompositeVideoPort>();
@@ -107,8 +106,9 @@ bool BombJackSystem::initialize() {
     video_gen_.set_char_rom(char_rom_.data(), static_cast<int>(char_rom_.size()));
 
     // Auto-reconstruct stream → framebuffer (palette is dynamically decoded)
-    video_port_->bind_display(&display_, display_.palette_data(),
+    video_port_->bind_display(nullptr, palette_.data(),
                               bombjack_constants::FB_WIDTH, 1);
+    video_port_->set_palette(palette_.data(), bombjack_constants::PALETTE_ENTRIES);
     video_port_->bind_frame_output(&last_frame_data_);
 
     // ── Register chips for Hardware menu ─────────────────────────────────
@@ -295,8 +295,8 @@ void BombJackSystem::set_audio_sample_rate(int hz) {
 void BombJackSystem::decode_palette() {
     if (!palette_ram_chip_) return;
     const uint8_t* pal = palette_ram_chip_->data();
-    display_.palette().decode_from(pal, bombjack_constants::PALETTE_ENTRIES,
-                                   resistor_dac::decode_3_3_2);
+    palette_.decode_from(pal, bombjack_constants::PALETTE_ENTRIES,
+                         resistor_dac::decode_3_3_2);
 }
 
 // ============================================================================

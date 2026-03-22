@@ -102,15 +102,14 @@ bool Z9001System<V>::initialize() {
 
     register_bus_chips(board_);
 
-    // Display surface — owns index buffer, framebuffer, palette, pixel unit
-    display_.init(z9001_constants::FB_WIDTH, z9001_constants::FB_HEIGHT);
-    display_.set_palette(z9001_constants::PALETTE, 9);
-    register_display(&display_);
+    // Palette for GPU indexed rendering
+    palette_.set(z9001_constants::PALETTE, 9);
 
     // Video stream output
     video_port_ = std::make_unique<CompositeVideoPort>();
-    video_port_->bind_display(&display_, z9001_constants::PALETTE,
+    video_port_->bind_display(nullptr, palette_.data(),
                               z9001_constants::FB_WIDTH, 1);
+    video_port_->set_palette(palette_.data(), 9);
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Video generator — models TTL character display circuitry

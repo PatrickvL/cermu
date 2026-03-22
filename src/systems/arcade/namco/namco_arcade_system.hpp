@@ -162,7 +162,6 @@ private:
     MainBoard board_{BT::kManifest};
 
     // ── Display ──────────────────────────────────────────────────────────
-    IndexedFrameBuffer display_;
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
     NamcoVideo video_gen_;                            // TTL tile renderer with 90° rotation
 

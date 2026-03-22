@@ -105,12 +105,10 @@ bool NamcoArcadeSystem<G>::initialize() {
     waveform_rom_.resize(namco_arcade_constants::WAVEFORM_ROM_SIZE, 0x00);
 
     load_roms();
-    decode_palette();
 
     // ── GPU indexed palette rendering ───────────────────────────────
-    display_.init(namco_arcade_constants::FB_WIDTH, namco_arcade_constants::FB_HEIGHT);
+    palette_ = PaletteTable(namco_arcade_constants::PALETTE_ENTRIES);
     decode_palette();
-    register_display(&display_);
 
     // Video stream output
     video_port_ = std::make_unique<CompositeVideoPort>();
@@ -121,8 +119,9 @@ bool NamcoArcadeSystem<G>::initialize() {
     video_gen_.set_colortable_prom(colortable_prom_.data());
 
     // Auto-reconstruct stream → framebuffer (palette is dynamically decoded)
-    video_port_->bind_display(&display_, display_.palette_data(),
+    video_port_->bind_display(nullptr, palette_.data(),
                               namco_arcade_constants::FB_WIDTH, 1);
+    video_port_->set_palette(palette_.data(), namco_arcade_constants::PALETTE_ENTRIES);
     video_port_->bind_frame_output(&last_frame_data_);
 
     // ── Register chips for Hardware menu ────────────────────────────────
@@ -228,7 +227,7 @@ void NamcoArcadeSystem<G>::decode_palette() {
     const uint8_t* prom = palette_prom_.data();
     int count = std::min(static_cast<int>(palette_prom_.size()),
                          namco_arcade_constants::PALETTE_ENTRIES);
-    display_.palette().decode_from(prom, count, resistor_dac::decode_3_3_2);
+    palette_.decode_from(prom, count, resistor_dac::decode_3_3_2);
 }
 
 // ============================================================================

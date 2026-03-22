@@ -102,15 +102,14 @@ bool Z1013System<V>::initialize() {
     // ── Register chips for Hardware menu ────────────────────────────────
     register_bus_chips(board_);
 
-    // Display surface — owns index buffer, framebuffer, palette, pixel unit
-    display_.init(z1013_constants::FB_WIDTH, z1013_constants::FB_HEIGHT);
-    display_.set_palette(z1013_constants::PALETTE, 2);
-    register_display(&display_);
+    // Palette for GPU indexed rendering
+    palette_.set(z1013_constants::PALETTE, 2);
 
     // Video stream output
     video_port_ = std::make_unique<CompositeVideoPort>();
-    video_port_->bind_display(&display_, z1013_constants::PALETTE,
+    video_port_->bind_display(nullptr, palette_.data(),
                               z1013_constants::FB_WIDTH, 1);
+    video_port_->set_palette(palette_.data(), 2);
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Video generator — models TTL character display circuitry
