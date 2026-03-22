@@ -227,9 +227,14 @@ bool Apple1System::initialize() {
     register_chip(std::move(char_chip));
 
     // GPU indexed palette rendering
-    display_.init(apple1_constants::DISPLAY_WIDTH, apple1_constants::DISPLAY_HEIGHT);
-    display_.set_palette(apple1_constants::PALETTE, 2);
-    register_display(&display_);
+    palette_.set(apple1_constants::PALETTE, 2);
+
+    // Video stream output
+    video_port_ = std::make_unique<CompositeVideoPort>();
+    video_port_->bind_display(nullptr, palette_.data(),
+                              apple1_constants::DISPLAY_WIDTH, 1);
+    video_port_->set_palette(palette_.data(), 2);
+    video_port_->bind_frame_output(&last_frame_data_);
     
     printf("Apple1: System initialized (RAM: %dKB)\n", ram_size_ / 1024);
     return true;
@@ -285,13 +290,24 @@ void Apple1System::run_frame() {
     // Tick all attached peripheral devices
     tick_peripherals();
 
-    // Render terminal to indexed frame buffer
+    // Render terminal to pixel buffer and flush to video stream
     if (terminal_) {
-        terminal_->render_indexed(display_.indices(),
+        terminal_->render_indexed(pixel_buffer_,
                                   apple1_constants::DISPLAY_WIDTH,
                                   apple1_constants::DISPLAY_HEIGHT,
                                   1, 0);  // fg=1 (green), bg=0 (black)
-        display_.flush();
+    }
+    if (video_port_) {
+        auto& stream = video_port_->stream();
+        for (int y = 0; y < apple1_constants::DISPLAY_HEIGHT; y++) {
+            const uint8_t* line = pixel_buffer_ + y * apple1_constants::DISPLAY_WIDTH;
+            stream.drive({0, VideoFlags::HSync});
+            for (int x = 0; x < apple1_constants::DISPLAY_WIDTH; x++) {
+                stream.drive({line[x], VideoFlags::BeamOn});
+            }
+        }
+        stream.drive({0, VideoFlags::FrameEnd});
+        video_port_->swap_frame();
     }
 }
 

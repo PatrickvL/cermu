@@ -146,9 +146,14 @@ bool AppleIISystem<V>::initialize() {
 
     register_bus_chips(board_);
 
-    display_.init(apple_ii_constants::DISPLAY_WIDTH,
-                  apple_ii_constants::DISPLAY_HEIGHT);
-    register_display(&display_);
+    palette_.set(apple_ii_constants::PALETTE, 16);
+
+    // Video stream output
+    video_port_ = std::make_unique<CompositeVideoPort>();
+    video_port_->bind_display(nullptr, palette_.data(),
+                              apple_ii_constants::DISPLAY_WIDTH, 1);
+    video_port_->set_palette(palette_.data(), 16);
+    video_port_->bind_frame_output(&last_frame_data_);
 
     system_ready_ = true;
     printf("%s: System initialized\n", Traits::name);
@@ -241,7 +246,7 @@ void AppleIISystem<V>::configure_bus_memory_map() {
 
 template<AppleIIVariant V>
 void AppleIISystem<V>::render_frame() {
-    // TODO: render current video mode to display_
+    // TODO: render current video mode to pixel_buffer_
 }
 
 template<AppleIIVariant V>

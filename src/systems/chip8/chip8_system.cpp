@@ -340,17 +340,18 @@ Chip8System::Chip8System()
     register_chip8_chips();
 
     // GPU indexed palette rendering
-    display_.init(chip8_constants::HIRES_WIDTH, chip8_constants::HIRES_HEIGHT);
+    memset(pixel_buffer_, 0, sizeof(pixel_buffer_));
     {
         uint32_t pal[4] = {};
         for (int i = 0; i < 4 && i < static_cast<int>(current_palette_.size()); i++)
             pal[i] = current_palette_[i].to_rgba32();
-        display_.set_palette(pal, 4);
+        palette_.set(pal, 4);
     }
-    register_display(&display_);
 
     // Video stream output
     video_port_ = std::make_unique<CompositeVideoPort>();
+    video_port_->bind_display(nullptr, palette_.data(), chip8_constants::HIRES_WIDTH, 1);
+    video_port_->set_palette(palette_.data(), 4);
     video_port_->bind_frame_output(&last_frame_data_);
 }
 
@@ -406,7 +407,7 @@ bool Chip8System::set_configuration(const SystemConfiguration& config) {
         }
         // Sync GPU palette
         for (int i = 0; i < 4 && i < static_cast<int>(current_palette_.size()); i++)
-            display_.palette().set_entry(i, current_palette_[i].to_rgba32());
+            palette_.set_entry(i, current_palette_[i].to_rgba32());
     }
     
     // Apply mode selection
@@ -573,7 +574,7 @@ void Chip8System::run_frame() {
     // Convert planes_ to palette indices and flush
     static constexpr int w = chip8_constants::HIRES_WIDTH;
     static constexpr int h = chip8_constants::HIRES_HEIGHT;
-    uint8_t* indices = display_.indices();
+    uint8_t* indices = pixel_buffer_;
 
     if (hires_) {
         for (int y = 0; y < h; y++) {
@@ -604,16 +605,11 @@ void Chip8System::run_frame() {
         }
     }
 
-    display_.flush();
-
     // Drive video stream with per-line pixel data
     if (video_port_) {
         auto& stream = video_port_->stream();
-        const uint8_t* indices2 = display_.indices();
-        const int h = chip8_constants::HIRES_HEIGHT;
-        const int w = chip8_constants::HIRES_WIDTH;
         for (int y = 0; y < h; y++) {
-            const uint8_t* line = indices2 + y * w;
+            const uint8_t* line = pixel_buffer_ + y * w;
             stream.drive({0, VideoFlags::HSync});
             for (int x = 0; x < w; x++) {
                 stream.drive({line[x], VideoFlags::BeamOn});

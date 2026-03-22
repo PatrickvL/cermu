@@ -5,6 +5,7 @@
 #include "core/text_terminal.hpp"
 #include "core/board.hpp"
 #include "core/standard_chips.hpp"
+#include "core/signal/video_port.hpp"
 #include "systems/apple1/apple1_constants.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/io/pia6820.hpp"
@@ -112,8 +113,9 @@ private:
     Bus bus_;
     MainBoard board_{kApple1Chips};
 
-    // Display — own framebuffer + GPU indexed rendering
-    IndexedFrameBuffer display_;
+    // Display — pixel buffer + video stream
+    uint8_t pixel_buffer_[apple1_constants::DISPLAY_WIDTH * apple1_constants::DISPLAY_HEIGHT] = {};
+    std::unique_ptr<CompositeVideoPort> video_port_;
 
     // System state
     uint32_t cycles_per_frame_;
