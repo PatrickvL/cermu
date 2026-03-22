@@ -73,6 +73,7 @@ enum class PinLabel {
     _CS2,         // /CS2 — chip select 2
     _DTACK,       // /DTACK — data transfer acknowledge (M68K)
     _EXROM,       // /EXROM — external ROM
+    _FIRQ,        // /FIRQ — fast interrupt request (MC6809)
     _GAME,        // /GAME — game line
     _HALT,        // /HALT — halt (Z80)
     _HIRAM,       // /HIRAM — high RAM
@@ -136,6 +137,7 @@ enum class PinLabel {
     PHI0,         // Φ0 — clock input
     PHI1,         // Φ1 — inverted clock output
     PHI2,         // Φ2 — primary clock output
+    Q_CLK,        // Q clock output (MC6809)
     SYSCLK,       // System master clock input (Ricoh 5A22, 21.477 MHz)
 
     // Address bus pins (A0-A23, must remain sequential)
@@ -152,6 +154,7 @@ enum class PinLabel {
     ALE,          // Address Latch Enable
     ARDY,         // Port A Ready output (Z80 PIO)
     ASTB,         // Port A Strobe input (Z80 PIO)
+    AVMA,         // Advanced Valid Memory Address (MC6809)
     BA,           // Bus Available
     B_ASEL,       // B/A̅ select — port select (Z80 PIO)
     BC1,          // Bus Control 1 (AY-3-8910)
@@ -159,7 +162,9 @@ enum class PinLabel {
     BDIR,         // Bus Direction (AY-3-8910)
     BE,           // Bus Enable (65C02/65C816)
     BRDY,         // Port B Ready output (Z80 PIO)
+    BS,           // Bus Status (MC6809)
     BSTB,         // Port B Strobe input (Z80 PIO)
+    BUSY,         // Busy (MC6809, 16-bit operations)
     CAS,          // Column Address Strobe (active-high form)
     CS,           // Chip Select (active-high form)
     CS0,          // Chip Select 0 (active-high form)
@@ -171,6 +176,7 @@ enum class PinLabel {
     DE,           // Display Enable (MC6845 CRTC)
     DUMP,         // Paddle dump/discharge (TIA)
     ENABLE,       // Enable clock input (6800 bus family)
+    EXTAL,        // External crystal input (MC6809)
     LPSTB,        // Light Pen STroBe (MC6845 CRTC)
     MUX,          // Address multiplexer
     OE,           // Output Enable (active-high form)
@@ -190,6 +196,7 @@ enum class PinLabel {
     IEI,          // Interrupt Enable In (Z80 daisy chain)
     IEO,          // Interrupt Enable Out (Z80 daisy chain)
     IRQ,          // Interrupt Request (active-high form)
+    LIC,          // Last Instruction Cycle (MC6809)
     NMI,          // Non-Maskable Interrupt (active-high form)
     RES,          // Reset (active-high form)
 
@@ -388,6 +395,7 @@ enum class PinLabel {
     OSC_OUT,      // Oscillator output
     XTAL1,        // Crystal 1
     XTAL2,        // Crystal 2
+    XTAL,         // Crystal (MC6809)
 
     // Power variant (TIA analog section)
     VTIA,         // TIA-specific analog supply voltage

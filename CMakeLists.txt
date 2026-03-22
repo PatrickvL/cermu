@@ -363,6 +363,8 @@ set(CHIP_SOURCES
     src/chip/cpu/z80/z80_registry.cpp
     # CPU - M680x0 template instantiation + ChipRegistry registration
     src/chip/cpu/m680x0/m680x0_registry.cpp
+    # CPU - MC6809 template instantiation + ChipRegistry registration
+    src/chip/cpu/mc6809/mc6809_registry.cpp
 )
 # Always include other chip sources
 list(APPEND CHIP_SOURCES
@@ -586,6 +588,7 @@ if(BUILD_GUI)
         src/chip/cpu/fam65xx/fam65xx_gui.cpp
         src/chip/cpu/z80/z80_gui.cpp
         src/chip/cpu/m680x0/m680x0_gui.cpp
+        src/chip/cpu/mc6809/mc6809_gui.cpp
         src/chip/io/mos6526_gui.cpp
         src/chip/io/mos6522_gui.cpp
         src/chip/memory/mos2114_gui.cpp
@@ -628,6 +631,7 @@ set(GUI_STUB_SOURCES
     src/chip/cpu/fam65xx/fam65xx_gui.cpp
     src/chip/cpu/z80/z80_gui.cpp
     src/chip/cpu/m680x0/m680x0_gui.cpp
+    src/chip/cpu/mc6809/mc6809_gui.cpp
     src/chip/io/mos6526_gui.cpp
     src/chip/io/mos6522_gui.cpp
     src/chip/memory/mos2114_gui.cpp
