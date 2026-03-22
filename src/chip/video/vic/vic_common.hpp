@@ -263,6 +263,8 @@ struct vic_audio_state_t {
 struct vic_base_t : public VideoChipBase {
     vic_base_t() {
         init_regs(16);  // VIC has 16 registers
+        system_palette_ = get_default_palette();
+        palette_size_   = 16;
     }
 
     void* bus = nullptr;

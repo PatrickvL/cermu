@@ -81,10 +81,6 @@ bool AcornAtomSystem::initialize() {
     // ── Register all manifest-created chips for Hardware menu ────────
     register_bus_chips(board_);
 
-    // Register palette for GPU stream shader
-    register_palette(mc6847_t::get_palette(),
-                     mc6847_t::get_palette_size());
-
     // Video stream output — composite video from MC6847 VDG
     video_port_ = std::make_unique<CompositeVideoPort>();
     board_.video().set_stream(&video_port_->stream());

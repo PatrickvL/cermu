@@ -233,9 +233,6 @@ bool SpectrumSystem<V>::initialize() {
 
     register_bus_chips(board_);
 
-    // Register palette for GPU stream shader
-    register_palette(board_.video().get_palette(), board_.video().get_palette_size());
-
     // Video stream output — composite video from Ferranti ULA
     video_port_ = std::make_unique<CompositeVideoPort>();
     board_.video().set_stream(&video_port_->stream());

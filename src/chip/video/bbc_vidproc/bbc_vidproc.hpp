@@ -45,6 +45,8 @@ public:
         : VideoChipBase(ChipInfo{"Video ULA", "Acorn"})
     {
         category_ = "Video";
+        system_palette_ = get_palette();
+        palette_size_   = static_cast<uint16_t>(get_palette_size());
     }
 
     void reset() override {

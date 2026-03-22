@@ -511,6 +511,8 @@ struct vicii_bus_unit_t {
 struct vicii_base_t : public VideoChipBase {
     vicii_base_t() {
         init_regs(vicii_regs::SIZE + 2);  // 64 standard + 2 shadow collision
+        system_palette_ = get_default_palette();
+        palette_size_   = 16;
     }
 
     MOS2114* colorram = nullptr;
