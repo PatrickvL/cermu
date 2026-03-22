@@ -591,6 +591,65 @@ add_custom_target(run_z80_tests
 message(STATUS "  Z80 Processor Tests Runner: Built")
 
 # =============================================================================
+# MC6809 SingleStepTests Processor Tests Runner
+# =============================================================================
+# Runs JSON-based MC6809 single-step tests.
+# Test data format matches the SingleStepTests convention.
+# =============================================================================
+
+set(MC6809_DIR ${CPU_DIR}/mc6809)
+
+set(MC6809_GUI_STUBS
+    ${MC6809_DIR}/mc6809_gui.cpp
+)
+
+add_executable(mc6809_processor_tests_runner
+    mc6809_processor_tests_runner.cpp
+    ${MC6809_DIR}/mc6809_decoder.cpp
+    ${MC6809_GUI_STUBS}
+    ${CORE_DIR}/chip.cpp
+    ${CORE_DIR}/chip_layout.cpp
+    ${CORE_DIR}/pin_labels.cpp
+    ${CORE_DIR}/ioport.cpp
+)
+target_include_directories(mc6809_processor_tests_runner PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/mc6809
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_compile_definitions(mc6809_processor_tests_runner PRIVATE CERMU_IMPL PROCESSOR_TESTS)
+set_property(TARGET mc6809_processor_tests_runner PROPERTY CXX_STANDARD 20)
+set_property(TARGET mc6809_processor_tests_runner PROPERTY CXX_STANDARD_REQUIRED ON)
+if(MSVC)
+    target_compile_options(mc6809_processor_tests_runner PRIVATE /W4)
+else()
+    target_compile_options(mc6809_processor_tests_runner PRIVATE -Wall -Wextra)
+endif()
+target_link_libraries(mc6809_processor_tests_runner json_parser)
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(mc6809_processor_tests_runner m)
+endif()
+
+# MC6809 test CTest integration
+add_test(NAME mc6809_processor_tests
+    COMMAND mc6809_processor_tests_runner ${CMAKE_CURRENT_SOURCE_DIR}/mc6809_tests/v1/
+)
+set_tests_properties(mc6809_processor_tests PROPERTIES
+    TIMEOUT 600
+    PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
+)
+
+# Custom target for running MC6809 tests
+add_custom_target(run_mc6809_tests
+    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -R mc6809 --verbose
+    DEPENDS mc6809_processor_tests_runner
+    COMMENT "Running MC6809 SingleStepTests validation"
+)
+
+message(STATUS "  MC6809 Processor Tests Runner: Built")
+
+# =============================================================================
 # M680x0 SingleStepTests Processor Tests Runner
 # =============================================================================
 # Runs the JSON-based M680x0 single-step tests from:
