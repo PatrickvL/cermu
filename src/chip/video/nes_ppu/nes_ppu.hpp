@@ -283,10 +283,6 @@ public:
     uint8_t scanline_color_line_[256] = {};
     int     scanline_flush_x_ = 0;          // Next x to flush (0–256)
 
-    // Display output — system-owned IndexedFrameBuffer, registered via
-    // set_display().  Replaces the former VideoPixelUnit + screen vector.
-    IndexedFrameBuffer* display_ = nullptr;
-
     // Video stream output (non-owning pointer, set by system/board)
     CompositeVideoStream* video_stream_ = nullptr;
 
@@ -394,9 +390,6 @@ public:
         bus_ptr_ = bus;
         if (bus) ciram_ = bus->ciram;
     }
-
-    // Set the display output (system-owned IndexedFrameBuffer).
-    void set_display(IndexedFrameBuffer* d) { display_ = d; }
 
     // Set the video stream output (system-owned CompositeVideoStream).
     void set_stream(CompositeVideoStream* s) { video_stream_ = s; }

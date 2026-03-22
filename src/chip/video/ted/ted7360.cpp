@@ -704,19 +704,15 @@ void ted7360_t::pixel_sequencer() {
 }
 
 // ============================================================================
-// SCANLINE FLUSH — resolve color index line buffer to RGBA framebuffer row
+// SCANLINE FLUSH — drive color index line buffer to video stream
 // ============================================================================
 
 void ted7360_t::flush_line(uint16_t raster_line) {
-    if (!display_ || !color_line_) return;
+    if (!color_line_) return;
 
-    // Map TED raster counter to framebuffer row via visible-area offset.
-    // Rasters wrap: PAL first_visible=275, so raster 275→row 0, 0→row 37, etc.
-    const int fb_row = (raster_line + timing.lines_per_frame
-                        - timing.first_visible_line) % timing.lines_per_frame;
-
-    display_->flush_line(fb_row, color_line_, TED_PALETTE.data(),
-                         static_cast<int>(TED_VISIBLE_WIDTH));
+    // Video stream output is driven per-dot in the pixel pipeline,
+    // so this function is now a no-op for scanline-level flushing.
+    (void)raster_line;
 }
 
 // ============================================================================
@@ -841,7 +837,6 @@ void ted7360_t::reset() {
     const ted_banking_change_fn bc      = banking_change;
     void* const                bc_data  = banking_change_user_data;
     uint8_t* const             cline    = color_line_;
-    IndexedFrameBuffer* const  saved_display = display_;
 
     // Preserve audio configuration (set by audio_reset(), survives chip reset)
     const uint32_t             snd_cps  = sound.cycles_per_sample_fp;
@@ -862,7 +857,7 @@ void ted7360_t::reset() {
     memset(&sound, 0, offsetof(ted_sound_unit_t, audio_buffer));
     sound.audio_buffer.reset();
     bus         = {};
-    // color_line_ and display_ are not zeroed — they are direct members, not inside any unit.
+    // color_line_ is not zeroed — it is a direct member, not inside any unit.
 
     // Restore construction-time configuration
     timing.is_pal              = is_pal;
@@ -876,7 +871,6 @@ void ted7360_t::reset() {
     banking_change             = bc;
     banking_change_user_data   = bc_data;
     color_line_                = cline;
-    display_                   = saved_display;
 
     // Restore audio configuration and initial shift register
     sound.cycles_per_sample_fp = snd_cps;
@@ -1533,12 +1527,6 @@ bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
 [[nodiscard]] bool ted7360_t::irq_pending() const {
     return (irq_status & irq_mask) != 0;
 }
-
-// ============================================================================
-// FRAMEBUFFER
-// ============================================================================
-
-// set_framebuffer removed — system manages display via set_display() + IndexedFrameBuffer.
 
 // ============================================================================
 // Debug field registration (populates ChipDebugRegistry for the default

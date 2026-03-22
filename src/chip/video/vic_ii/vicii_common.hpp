@@ -7,7 +7,6 @@
 #include "core/system_lines.hpp" // For bus_state_t
 #include "chip/memory/mos2114.hpp"  // For MOS2114
 
-class IndexedFrameBuffer;
 // ============================================================================
 // VIC-II UNIFIED DECLARATION TABLE — single source of truth
 // ============================================================================
@@ -553,10 +552,6 @@ struct vicii_base_t : public VideoChipBase {
     vicii_pixel_unit_t pixel = {};
     vicii_lightpen_unit_t lightpen = {};
     vicii_bus_unit_t bus = {};
-
-    // Display output (non-owning pointer set by system)
-    IndexedFrameBuffer* display_ = nullptr;
-    void set_display(IndexedFrameBuffer* d) { display_ = d; }
 
     // Video stream output (non-owning pointer, set by system/board)
     CompositeVideoStream* video_stream_ = nullptr;

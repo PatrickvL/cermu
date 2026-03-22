@@ -14,7 +14,7 @@
  *   - Background tiles fetched via pipelined 8-cycle (or 6-cycle text)
  *     repeating pattern with shift-register pixel emission
  *   - Sprite evaluation at line start, composited per-pixel inline
- *   - Flush to IndexedFrameBuffer at end of each visible scanline
+ *   - Flush to video stream at end of each visible scanline
  */
 
 #include "chip/video/tms9918/tms9918_traits.hpp"
@@ -22,7 +22,6 @@
 #include "chip/video/tms9918/tms9918_palette.hpp"
 #include "chip/video/tms9918/tms9918_mixins.hpp"
 #include "chip/video/video_chip_base.hpp"
-#include "core/indexed_frame_buffer.hpp"
 #include "core/signal/composite_video_stream.hpp"
 #include "core/system_lines.hpp"
 #include <cstring>
@@ -55,11 +54,8 @@ public:
     }
 
     // ====================================================================
-    // Display output
+    // Video stream output
     // ====================================================================
-
-    void set_display(IndexedFrameBuffer* d) { display_ = d; }
-    IndexedFrameBuffer* display() const { return display_; }
 
     CompositeVideoStream* video_stream_ = nullptr;
     void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
@@ -384,12 +380,6 @@ private:
     uint8_t color_line_[256] = {};   // Palette index per pixel (current scanline)
 
     // ====================================================================
-    // Display output
-    // ====================================================================
-
-    IndexedFrameBuffer* display_ = nullptr;
-
-    // ====================================================================
     // INTERNAL: Register / VRAM I/O
     // ====================================================================
 
@@ -470,23 +460,8 @@ private:
     // INTERNAL: Scanline lifecycle
     // ====================================================================
 
-    // Flush completed scanline to the framebuffer
+    // Flush completed scanline to the video stream
     void flush_scanline(int row) {
-        if (display_) {
-            // Select palette source
-            const uint32_t* palette = system_palette();
-            if constexpr (Traits.has_programmable_palette()) {
-                palette = this->palette_cache_;
-            }
-            if constexpr (Traits.is_sega()) {
-                palette = this->cram_cache_;
-            }
-
-            if (palette) {
-                display_->flush_line(row, color_line_, palette, 256);
-            }
-        }
-
         // Drive video stream with the completed scanline
         if (video_stream_) {
             video_stream_->drive({0, VideoFlags::HSync | VideoFlags::BeamOn});

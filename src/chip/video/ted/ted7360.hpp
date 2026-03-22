@@ -38,7 +38,6 @@
 #include "core/system_lines.hpp"
 #include "utils/ring_buffer.hpp"
 
-class IndexedFrameBuffer;
 struct AudioPort;
 
 // ============================================================================
@@ -530,13 +529,6 @@ struct ted7360_t : public VideoChipBase {
     [[nodiscard]] bool irq_pending() const;
 
     // ========================================================================
-    // Public API — Framebuffer
-    // ========================================================================
-
-    /** Set the display output target (called by system during init). */
-    void set_display(IndexedFrameBuffer* d) { display_ = d; }
-
-    // ========================================================================
     // Public API — Color palette (compile-time computed, rodata)
     // ========================================================================
 
@@ -572,9 +564,8 @@ struct ted7360_t : public VideoChipBase {
     ted_sound_unit_t       sound;
     ted_bus_unit_t         bus;
 
-    // Display output (non-owning pointer set by system)
-    IndexedFrameBuffer*    display_ = nullptr;
-    uint8_t*               color_line_ = nullptr;  // Per-pixel palette index buffer (owned)
+    // Scanline color index buffer (owned)
+    uint8_t*               color_line_ = nullptr;
 
     // Video stream output (non-owning pointer, set by system/board)
     CompositeVideoStream* video_stream_ = nullptr;

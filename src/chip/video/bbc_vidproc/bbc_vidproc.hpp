@@ -34,7 +34,6 @@
  */
 
 #include "chip/video/video_chip_base.hpp"
-#include "core/indexed_frame_buffer.hpp"
 #include "core/signal/composite_video_stream.hpp"
 #include "systems/bbc/bbc_micro_constants.hpp"
 #include <cstdint>
@@ -52,7 +51,7 @@ public:
         control_ = 0;
         std::memset(palette_, 0, sizeof(palette_));
         memory_ = nullptr;
-        if (display_) display_->clear();
+        std::memset(frame_indices_, 0, sizeof(frame_indices_));
     }
 
     // === Palette ===
@@ -133,7 +132,7 @@ public:
     /// @param cursor    True if cursor is active at this position
     /// @param crtc_r9   MC6845 R9 — needed for Mode 7 detection
     void display_char(uint16_t ma, uint8_t ra, bool cursor, uint8_t crtc_r9) {
-        if (!memory_ || !display_) return;
+        if (!memory_) return;
 
         int mode = get_display_mode(crtc_r9);
 
@@ -144,11 +143,10 @@ public:
         }
     }
 
-    /// Called at VSYNC — flushes the indexed frame buffer.
+    /// Called at VSYNC — drives the video stream.
     void vsync() {
-        if (display_) display_->flush(bbc_constants::PALETTE);
-        if (video_stream_ && display_) {
-            const uint8_t* idx = display_->indices();
+        if (video_stream_) {
+            const uint8_t* idx = frame_indices_;
             for (uint32_t y = 0; y < bbc_constants::DISPLAY_HEIGHT; y++) {
                 const uint8_t* line = idx + y * bbc_constants::DISPLAY_WIDTH;
                 video_stream_->drive({0, VideoFlags::HSync});
@@ -162,12 +160,8 @@ public:
 
     /// Clear the frame buffer (called at start of frame or on mode change)
     void clear() {
-        if (display_) display_->clear();
+        std::memset(frame_indices_, 0, sizeof(frame_indices_));
     }
-
-    // Display output — set by system via set_display().
-    IndexedFrameBuffer* display_ = nullptr;
-    void set_display(IndexedFrameBuffer* d) { display_ = d; }
 
     CompositeVideoStream* video_stream_ = nullptr;
     void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
@@ -222,7 +216,7 @@ private:
 
         uint8_t fg_idx = 7;  // White
         uint8_t bg_idx = 0;  // Black
-        uint8_t* row_ptr = display_->indices() + pixel_y * bbc_constants::DISPLAY_WIDTH;
+        uint8_t* row_ptr = frame_indices_ + pixel_y * bbc_constants::DISPLAY_WIDTH;
 
         // Render 8 source pixels, doubled to 16 output pixels
         for (int bit = 7; bit >= 0; bit--) {
@@ -263,7 +257,7 @@ private:
 
         if (pixel_y >= bbc_constants::DISPLAY_HEIGHT) return;
 
-        uint8_t* row_ptr = display_->indices() + pixel_y * bbc_constants::DISPLAY_WIDTH;
+        uint8_t* row_ptr = frame_indices_ + pixel_y * bbc_constants::DISPLAY_WIDTH;
 
         // Unpack screen byte into pixels based on bits-per-pixel
         for (int p = 0; p < ppb; p++) {
@@ -312,4 +306,7 @@ private:
 
     // === Memory access ===
     const uint8_t* memory_ = nullptr;  // Pointer to system RAM (set by system)
+
+    // Internal pixel buffer — replaces the former IndexedFrameBuffer dependency.
+    uint8_t frame_indices_[bbc_constants::DISPLAY_WIDTH * bbc_constants::DISPLAY_HEIGHT] = {};
 };

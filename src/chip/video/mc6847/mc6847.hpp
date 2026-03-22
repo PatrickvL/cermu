@@ -23,7 +23,7 @@
  */
 
 #include "chip/video/video_chip_base.hpp"
-#include "core/indexed_frame_buffer.hpp"
+#include "chip/video/video_chip_base.hpp"
 #include "core/signal/composite_video_stream.hpp"
 #include "core/system_lines.hpp"
 #include <cstdint>
@@ -262,8 +262,7 @@ public:
     //
     // The MC6847 owns the palette, internal font ROM, and rendering logic.
     // Systems call render_frame(vram) once per field sync; the chip fills
-    // frame_indices with palette indices, then flushes through the
-    // IndexedFrameBuffer (GPU path → index_buffer, CPU path → RGBA framebuffer).
+    // frame_indices with palette indices, then drives the video stream.
     //
     // This renders the 256×192 active display area only (no border).
     //
@@ -287,14 +286,13 @@ public:
         static constexpr int COLS  = mc6847_const::TEXT_COLS;        // 32
         static constexpr int ROWS  = mc6847_const::TEXT_ROWS;        // 16
 
-        if (!vram || !display_) return;
+        if (!vram) return;
 
-        uint8_t* fb = display_->indices();
+        uint8_t* fb = frame_indices_;
 
         if (mode_ag_) {
             // Full-graphics modes: clear to black (placeholder)
             std::memset(fb, 0, W * H);
-            display_->flush(mc6847_font::PALETTE);
             drive_stream_from_indices(fb, W, H);
             return;
         }
@@ -344,17 +342,12 @@ public:
             }
         }
 
-        display_->flush(mc6847_font::PALETTE);
-        drive_stream_from_indices(display_->indices(), W, H);
+        drive_stream_from_indices(frame_indices_, W, H);
     }
 
     /// Get the palette for GPU indexed rendering registration.
     static const uint32_t* get_palette()     { return mc6847_font::PALETTE; }
     static int             get_palette_size() { return mc6847_font::PALETTE_SIZE; }
-
-    // Display output — set by system via set_display().
-    IndexedFrameBuffer* display_ = nullptr;
-    void set_display(IndexedFrameBuffer* d) { display_ = d; }
 
     CompositeVideoStream* video_stream_ = nullptr;
     void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
@@ -366,6 +359,9 @@ public:
 #endif
 
 private:
+    // Internal pixel buffer — replaces the former IndexedFrameBuffer dependency.
+    uint8_t frame_indices_[mc6847_const::DISPLAY_WIDTH * mc6847_const::DISPLAY_HEIGHT] = {};
+
     void drive_stream_from_indices(const uint8_t* idx, int w, int h) {
         if (!video_stream_) return;
         for (int y = 0; y < h; y++) {

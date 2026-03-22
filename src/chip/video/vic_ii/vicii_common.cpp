@@ -2507,10 +2507,9 @@ vicii_base_t::~vicii_base_t() {
 void vicii_base_t::reset() {
     // Preserve externally-owned pointers and configuration that survive reset.
     // vicii_initialize() memsets every unit to zero, so anything the system
-    // wired up (callbacks, display, color RAM) must be saved/restored.
+    // wired up (callbacks, color RAM) must be saved/restored.
     const VicIITraits* saved_traits = traits_;
     const vicii_bus_unit_t saved_bus = bus;       // entire bus unit (mem_read, bank_change, etc.)
-    IndexedFrameBuffer* saved_display = display_;
     MOS2114* saved_colorram = colorram;
 
     // Re-initialize all state (zeroes + defaults)
@@ -2527,11 +2526,10 @@ void vicii_base_t::reset() {
     bus.ba_prediction_shift_reg = 0;
     bus.ba_low_count = 0;
     bus.bus_line_mask = 0;
-    display_ = saved_display;
     colorram = saved_colorram;
 }
 
-// set_framebuffer removed — system manages display via set_display() + IndexedFrameBuffer.
+// set_framebuffer removed — system manages display via VideoPort stream.
 
 // ============================================================================
 // Debug field registration (populates ChipDebugRegistry for the default
