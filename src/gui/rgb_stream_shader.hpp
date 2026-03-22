@@ -193,4 +193,28 @@ inline GLuint create_stream_texture(int max_stream_len) {
     return tex;
 }
 
+// Upload raw 4-byte RGB samples to the RGBA8 stream texture.
+// Same 1D→2D packing as the composite stream texture, but RGBA8 format.
+inline void upload_stream_texture(GLuint tex, const uint8_t* raw_samples,
+                                  uint32_t stream_len) {
+    if (!tex || !raw_samples || stream_len == 0) return;
+
+    int full_rows = static_cast<int>(stream_len) / stream_shader::STREAM_TEX_WIDTH;
+    int remainder = static_cast<int>(stream_len) - full_rows * stream_shader::STREAM_TEX_WIDTH;
+
+    glBindTexture(GL_TEXTURE_2D, tex);
+
+    if (full_rows > 0) {
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                        stream_shader::STREAM_TEX_WIDTH, full_rows,
+                        GL_RGBA, GL_UNSIGNED_BYTE, raw_samples);
+    }
+    if (remainder > 0) {
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, full_rows,
+                        remainder, 1,
+                        GL_RGBA, GL_UNSIGNED_BYTE,
+                        raw_samples + full_rows * stream_shader::STREAM_TEX_WIDTH * 4);
+    }
+}
+
 } // namespace rgb_stream_shader

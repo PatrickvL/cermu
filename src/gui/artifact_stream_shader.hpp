@@ -53,11 +53,9 @@ uniform float PhaseIncrement;   // radians per pixel (2π × carrier/dotclock)
 
 out vec4 Out_Color;
 
-// Fetch palette color at a given stream position
-vec3 fetch_color(int stream_pos) {
-    int r = stream_pos / StreamTexWidth;
-    int c = stream_pos - r * StreamTexWidth;
-    float idx_f = texelFetch(StreamTex, ivec2(c, r), 0).r;
+// Fetch palette color at a 2D texture position (no division needed)
+vec3 palette_at(int col, int row) {
+    float idx_f = texelFetch(StreamTex, ivec2(col, row), 0).r;
     int idx = int(idx_f * 255.0 + 0.5);
     return texelFetch(Palette, ivec2(idx, 0), 0).rgb;
 }
@@ -72,6 +70,11 @@ void main() {
         return;
     }
 
+    // Compute center pixel's 2D texture position (single division)
+    int center_pos = offset + pixel_x;
+    int center_row = center_pos / StreamTexWidth;
+    int center_col = center_pos - center_row * StreamTexWidth;
+
     // Encode/decode window — 9-tap filter (radius 4)
     const int R = 4;
 
@@ -83,7 +86,14 @@ void main() {
 
     for (int dx = -R; dx <= R; dx++) {
         int px = clamp(pixel_x + dx, 0, DisplayWidth - 1);
-        vec3 c = fetch_color(offset + px);
+
+        // Derive 2D coords from center position — no division
+        int delta = px - pixel_x;
+        int col = center_col + delta;
+        int row = center_row;
+        if (col < 0) { col += StreamTexWidth; row--; }
+        else if (col >= StreamTexWidth) { col -= StreamTexWidth; row++; }
+        vec3 c = palette_at(col, row);
 
         // RGB → YIQ
         float y = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
