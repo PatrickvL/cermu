@@ -29,8 +29,6 @@
 #include "utils/ring_buffer.hpp"
 #include <cstdint>
 
-class IndexedFrameBuffer;
-
 // ============================================================================
 // TIA WRITE REGISTER TABLE ($00-$2C) — single source of truth
 // ============================================================================
@@ -367,11 +365,9 @@ struct tia_t : public VideoChipBase {
     bool prev_vsync_stream_ = false;  // Edge detection for FrameEnd emission
 
     // ========================================================================
-    // FRAMEBUFFER
+    // SCANLINE BUFFER
     // ========================================================================
 
-    IndexedFrameBuffer* display_ = nullptr;
-    void set_display(IndexedFrameBuffer* d) { display_ = d; }
     uint8_t color_line_buffer[tia_constants::DISPLAY_WIDTH] = {};
 
     // Pre-swizzled palette in ABGR format (GL_RGBA little-endian convention).

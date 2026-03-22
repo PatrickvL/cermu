@@ -6,7 +6,6 @@
 #include "core/signal/composite_video_stream.hpp"
 #include "core/system_lines.hpp"
 
-class IndexedFrameBuffer;
 struct AudioPort;
 
 // ============================================================================
@@ -295,11 +294,6 @@ struct vic_base_t : public VideoChipBase {
     // When set, audio_tick() drives the port instead of the internal uint8_t ring buffer.
     AudioPort* audio_port_ = nullptr;
     void set_audio_port(AudioPort* p) { audio_port_ = p; }
-
-    // Legacy display output (non-owning pointer set by system)
-    // TODO: remove once all systems use VideoPort bridge
-    IndexedFrameBuffer* display_ = nullptr;
-    void set_display(IndexedFrameBuffer* d) { display_ = d; }
 
     // Configuration
     bool is_pal = false;

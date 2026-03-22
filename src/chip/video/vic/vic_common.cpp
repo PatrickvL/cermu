@@ -124,8 +124,6 @@ void vic_base_t::reset() {
     color_user_data = NULL;
 }
 
-// set_framebuffer removed — system manages display via set_display() + IndexedFrameBuffer.
-
 // Register read function
 bus_state_t vic_base_t::registers_read(bus_state_t bus_state) {
     uint8_t r = BUS_GET_ADDR(bus_state) & 0x0F;

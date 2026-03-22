@@ -27,7 +27,6 @@
  */
 
 #include "chip/video/video_chip_base.hpp"
-#include "core/indexed_frame_buffer.hpp"
 #include "core/signal/composite_video_stream.hpp"
 #include "core/system_lines.hpp"
 #include <cstdint>
@@ -282,9 +281,9 @@ public:
     // into a pixel stream.  Moving it here keeps the system tick loop clean.
 
     void render_frame(const uint8_t* screen_ram) {
-        if (!screen_ram || !display_) return;
+        if (!screen_ram) return;
 
-        uint8_t* fb = display_->indices();
+        uint8_t* fb = frame_indices_;
         const uint8_t border_idx = border_color_;
         const bool flash = flash_state_;
 
@@ -345,9 +344,6 @@ public:
             std::memset(line + BL + SW, border_idx, W - BL - SW);
         }
 
-        // Flush: GPU mode → index_buffer, CPU mode → RGBA framebuffer
-        display_->flush(system_palette());
-
         // Drive video stream with per-line pixel data
         if (video_stream_) {
             for (int y = 0; y < spectrum_ula::TOTAL_HEIGHT; y++) {
@@ -361,10 +357,6 @@ public:
         }
     }
 
-    // Display output — set by system via set_display().
-    IndexedFrameBuffer* display_ = nullptr;
-    void set_display(IndexedFrameBuffer* d) { display_ = d; }
-
     CompositeVideoStream* video_stream_ = nullptr;
     void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
 
@@ -375,6 +367,9 @@ public:
 #endif
 
 private:
+    // Internal pixel buffer — replaces the former IndexedFrameBuffer dependency.
+    uint8_t frame_indices_[spectrum_ula::TOTAL_WIDTH * spectrum_ula::TOTAL_HEIGHT] = {};
+
     uint8_t   border_color_ = 7;
     bool      flash_state_ = false;
     uint8_t   flash_counter_ = 0;

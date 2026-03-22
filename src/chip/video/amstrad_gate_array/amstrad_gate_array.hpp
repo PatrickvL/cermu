@@ -18,7 +18,6 @@
  */
 
 #include "chip/video/video_chip_base.hpp"
-#include "core/indexed_frame_buffer.hpp"
 #include "core/signal/composite_video_stream.hpp"
 #include "systems/amstrad_cpc/amstrad_cpc_constants.hpp"
 #include <cstdint>
@@ -62,21 +61,21 @@ public:
     //
     // Renders the CPC display (640×400 at mode 2 resolution, each native
     // line drawn twice) into the internal frame_indices_ buffer, then
-    // flushes through the pixel unit.
+    // drives the video stream.
     //
     // The system calls this once per frame, passing:
     //   - ram: pointer to full 64K/128K RAM
     //   - crtc_start: CRTC display start address (R12:R13)
 
     void render_frame(const uint8_t* ram, uint16_t crtc_start) {
-        if (!ram || !display_) return;
+        if (!ram) return;
 
         // Gate Array maps CRTC address bits [13:12] → 16 KB bank
         uint32_t screen_base = (crtc_start & 0x3000) << 2;
 
         constexpr int FB_W = amstrad_cpc_constants::FB_WIDTH;
 
-        uint8_t* fb = display_->indices();
+        uint8_t* fb = frame_indices_;
         std::memset(fb, 0, FB_W * amstrad_cpc_constants::FB_HEIGHT);
 
         for (int y = 0; y < 200; y++) {
@@ -147,11 +146,9 @@ public:
             }
         }
 
-        display_->flush(amstrad_cpc_constants::HARDWARE_PALETTE);
-
         // Drive video stream with per-line pixel data
         if (video_stream_) {
-            const uint8_t* idx = display_->indices();
+            const uint8_t* idx = frame_indices_;
             for (int y = 0; y < 200; y++) {
                 const uint8_t* line = idx + (y * 2) * FB_W;
                 video_stream_->drive({0, VideoFlags::HSync});
@@ -163,12 +160,11 @@ public:
         }
     }
 
-    // Display output — set by system via set_display().
-    IndexedFrameBuffer* display_ = nullptr;
-    void set_display(IndexedFrameBuffer* d) { display_ = d; }
-
     CompositeVideoStream* video_stream_ = nullptr;
     void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
 
 private:
+    // Internal pixel buffer — replaces the former IndexedFrameBuffer dependency.
+    // 640×400 = 256,000 bytes.
+    uint8_t frame_indices_[amstrad_cpc_constants::FB_WIDTH * amstrad_cpc_constants::FB_HEIGHT] = {};
 };
