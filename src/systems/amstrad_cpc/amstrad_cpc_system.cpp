@@ -141,13 +141,9 @@ bool AmstradCPCSystem<M>::initialize() {
     // ── Cache RAM chip pointer for rendering ───────────────────────
     ram_chip_ = board_.template find<RAMChip>();
 
-    // ── GPU indexed palette rendering — display_ owns palette + RGBA fallback ───
-    display_.init(amstrad_cpc_constants::FB_WIDTH,
-                  amstrad_cpc_constants::FB_HEIGHT);
-    display_.set_palette(amstrad_gate_array_t::get_palette(),
-                         amstrad_gate_array_t::get_palette_size());
-    board_.chips().gate_array.set_display(&display_);
-    register_display(&display_);
+    // Register palette for GPU stream shader
+    register_palette(amstrad_gate_array_t::get_palette(),
+                     amstrad_gate_array_t::get_palette_size());
 
     // Video stream output — composite video from Gate Array
     video_port_ = std::make_unique<CompositeVideoPort>();

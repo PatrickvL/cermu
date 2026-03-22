@@ -97,8 +97,7 @@ private:
     uint8_t mapper_ctrl_  = 0;
     uint8_t mapper_bank_[3] = {0, 1, 2};  // Default bank mapping
 
-    // ── Display ──────────────────────────────────────────────────────────
-    IndexedFrameBuffer display_;
+    // ── Video ────────────────────────────────────────────────────────────
     std::unique_ptr<CompositeVideoPort> video_port_;
 
     // ── Audio ────────────────────────────────────────────────────────────

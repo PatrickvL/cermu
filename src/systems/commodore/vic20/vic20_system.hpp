@@ -146,7 +146,6 @@ public:
 
 private:
     vic20_bus_t bus_;
-    IndexedFrameBuffer display_;  // Display output for GPU indexed rendering
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
     std::unique_ptr<AudioPort> audio_port_;            // Audio signal output
     

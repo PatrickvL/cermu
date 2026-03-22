@@ -658,17 +658,12 @@ bool VIC20System::initialize() {
     // Set up page pointers for current expansion and ROM banking
     setup_expansion_map();
 
-    // GPU indexed palette rendering — 16-color VIC palette
-    display_.init(vic20_constants::DISPLAY_WIDTH,
-                  vic20_constants::DISPLAY_HEIGHT);
-    display_.set_palette(vic_base_t::get_default_palette(), 16);
-    vic_->set_display(&display_);
+    // Register palette for GPU stream shader
+    register_palette(vic_base_t::get_default_palette(), 16);
 
     // Wire VIC chip to video stream port
     video_port_ = std::make_unique<CompositeVideoPort>();
     vic_->set_stream(&video_port_->stream());
-    video_port_->bind_display(&display_, vic_base_t::get_default_palette(),
-                              vic20_constants::DISPLAY_WIDTH);
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Wire VIC chip to audio port (decimates chip-rate audio to host sample rate)
@@ -676,8 +671,6 @@ bool VIC20System::initialize() {
     audio_port_->configure(vic_->clock_frequency, vic20_constants::AUDIO_SAMPLE_RATE);
     vic_->set_audio_port(audio_port_.get());
 
-    register_display(&display_);
-    
     initialized_ = true;
     return true;
 }

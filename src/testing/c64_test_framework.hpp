@@ -238,6 +238,7 @@ private:
     HardwareConfig current_hardware_;
     bool is_pal_system_;
     bool is_ntsc_system_;
+    uint32_t* last_allocated_framebuffer_ = nullptr;  // Tracked for cleanup
     
     // Helper methods
     bool discover_tests_in_directory(const std::string& category_path, const std::string& category);

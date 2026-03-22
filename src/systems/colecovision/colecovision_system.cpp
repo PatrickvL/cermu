@@ -110,12 +110,8 @@ bool ColecoVisionSystem::initialize() {
 
     register_bus_chips(board_);
 
-    // Display
-    display_.init(coleco_constants::DISPLAY_WIDTH,
-                  coleco_constants::DISPLAY_HEIGHT);
-    display_.set_palette(board_.video().system_palette(), board_.video().palette_size());
-    board_.video().set_display(&display_);
-    register_display(&display_);
+    // Register palette for GPU stream shader
+    register_palette(board_.video().system_palette(), board_.video().palette_size());
 
     video_port_ = std::make_unique<CompositeVideoPort>();
     board_.video().set_stream(&video_port_->stream());

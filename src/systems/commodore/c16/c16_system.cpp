@@ -653,16 +653,12 @@ bool Commodore264System<V>::initialize() {
     apply_cpu_banking();
     apply_ted_video_banking();
 
-    // GPU indexed palette rendering — 128-color TED palette
-    display_.init(c16_constants::DISPLAY_WIDTH,
-                  c16_constants::DISPLAY_HEIGHT);
-    display_.set_palette(ted7360_t::get_palette(), 128);
-    ted_->set_display(&display_);
+    // Register palette for GPU stream shader
+    register_palette(ted7360_t::get_palette(), 128);
 
     // Wire TED to composite video stream port
     video_port_ = std::make_unique<CompositeVideoPort>();
     ted_->set_stream(&video_port_->stream());
-    video_port_->bind_display(&display_, ted7360_t::get_palette());
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Wire TED to audio port (decimates TED master-clock-rate audio to host sample rate)
@@ -670,8 +666,6 @@ bool Commodore264System<V>::initialize() {
     uint32_t ted_clock = ted_->timing.is_pal ? TED_PAL_CLOCK_HZ : TED_NTSC_CLOCK_HZ;
     audio_port_->configure(ted_clock, c16_constants::AUDIO_SAMPLE_RATE);
     ted_->set_audio_port(audio_port_.get());
-
-    register_display(&display_);
 
     initialized_ = true;
     return true;

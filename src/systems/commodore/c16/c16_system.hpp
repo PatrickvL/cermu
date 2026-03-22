@@ -274,7 +274,6 @@ private:
     // Chip instances
     CSG7501* cpu_ = nullptr;          // MOS 7501/8501 CPU — owned by board_
     ted7360_t* ted_;
-    IndexedFrameBuffer display_;       // Display output for GPU indexed rendering
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
     std::unique_ptr<AudioPort> audio_port_;            // Audio signal output
     bus_state_t bus_state_;

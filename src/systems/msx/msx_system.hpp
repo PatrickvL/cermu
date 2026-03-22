@@ -219,8 +219,6 @@ private:
     // ── Slot selection (PPI Port A) ──────────────────────────────────────
     uint8_t slot_select_ = 0;     // PPI Port A: 2 bits per page (pp3|pp2|pp1|pp0)
 
-    // ── Display ──────────────────────────────────────────────────────────
-    IndexedFrameBuffer display_;
     std::unique_ptr<CompositeVideoPort> video_port_;
 
     // ── Audio ────────────────────────────────────────────────────────────

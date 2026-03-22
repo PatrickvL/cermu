@@ -182,11 +182,8 @@ bool MSXSystem<V>::initialize() {
     // Register chips for Hardware menu
     register_bus_chips(board_);
 
-    // Display setup
-    display_.init(Traits::display_w, Traits::display_h);
-    display_.set_palette(board_.video().system_palette(), board_.video().palette_size());
-    board_.video().set_display(&display_);
-    register_display(&display_);
+    // Register palette for GPU stream shader
+    register_palette(board_.video().system_palette(), board_.video().palette_size());
 
     // Video stream output
     video_port_ = std::make_unique<CompositeVideoPort>();

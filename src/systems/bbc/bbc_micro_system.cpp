@@ -207,13 +207,12 @@ bool BBCMicroSystem::initialize() {
     board_.video().on_vsync = [this]() { this->crtc_vsync(); };
     board_.video().on_hsync = [this]() { this->crtc_hsync(); };
 
-    // GPU indexed palette rendering — display_ owns palette + RGBA fallback.
+    // Set memory for video rendering
     board_.chips().vidproc.set_memory(memory_);
-    display_.init(bbc_constants::DISPLAY_WIDTH, bbc_constants::DISPLAY_HEIGHT);
-    display_.set_palette(bbc_vidproc_t::get_palette(),
-                         bbc_vidproc_t::get_palette_size());
-    board_.chips().vidproc.set_display(&display_);
-    register_display(&display_);
+
+    // Register palette for GPU stream shader
+    register_palette(bbc_vidproc_t::get_palette(),
+                     bbc_vidproc_t::get_palette_size());
 
     // Video stream output — composite video from VIDPROC
     video_port_ = std::make_unique<CompositeVideoPort>();

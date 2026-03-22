@@ -428,8 +428,9 @@ int main(int argc, char** argv) {
             
             // ===== FRAMEBUFFER SCAN =====
             // Scan entire framebuffer to find non-black rows
-            int fb_w = c64->vicii->display_ ? c64->vicii->display_->width() : 0;
-            int fb_h = c64->vicii->display_ ? c64->vicii->display_->height() : 0;
+            const auto& dt = c64->get_hardware_traits().display;
+            int fb_w = dt.visible_width;
+            int fb_h = dt.visible_height;
             printf("\nFramebuffer size: %dx%d\n", fb_w, fb_h);
             printf("Scanning for non-black rows (showing first non-bg pixel per row):\n");
             int shown_rows = 0;

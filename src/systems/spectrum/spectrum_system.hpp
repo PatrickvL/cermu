@@ -206,9 +206,6 @@ private:
     // DISPLAY
     // ========================================================================
 
-    // Display output — IndexedFrameBuffer owns palette + RGBA fallback.
-    // ULA chip's pixel unit writes scanlines; display_ handles GPU routing.
-    IndexedFrameBuffer display_;
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
 
     // ========================================================================

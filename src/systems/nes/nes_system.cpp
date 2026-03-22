@@ -298,7 +298,7 @@ bool NintendoSystem<V>::apply_configuration() {
     if (pal_it != config_.custom_settings.end()) {
         if (auto* np = ppu_.select_palette(pal_it->second.c_str())) {
             ppu_.set_base_palette(np->data);
-            nes_display_.set_palette(np->data, np->count);
+            register_palette(np->data, np->count);
         }
     }
 
@@ -344,15 +344,12 @@ bool NintendoSystem<V>::initialize() {
     // Register chips for the Hardware menu and debug windows
     register_nes_chips();
 
-    // Initialize display output — 256×240 indexed framebuffer
-    nes_display_.init(256, 240);
-    nes_display_.set_palette(NES_COLOR_TABLE, 64);
-    ppu_.set_display(&nes_display_);
+    // Register palette for GPU stream shader
+    register_palette(NES_COLOR_TABLE, 64);
 
     // Wire PPU to composite video stream port
     video_port_ = std::make_unique<CompositeVideoPort>();
     ppu_.set_stream(&video_port_->stream());
-    video_port_->bind_display(&nes_display_, NES_COLOR_TABLE);
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Wire APU to audio signal port
@@ -360,8 +357,6 @@ bool NintendoSystem<V>::initialize() {
     if (apu_synth_engine_) {
         apu_synth_engine_->set_audio_port(audio_port_.get());
     }
-
-    register_display(&nes_display_);
 
     initialized_ = true;
     

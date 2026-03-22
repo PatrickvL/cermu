@@ -135,12 +135,9 @@ bool VTechVZSystem<V>::initialize() {
 
     register_bus_chips(board_);
 
-    display_.init(vtech_vz_constants::FB_WIDTH,
-                  vtech_vz_constants::FB_HEIGHT);
-    display_.set_palette(mc6847_t::get_palette(),
-                         mc6847_t::get_palette_size());
-    board_.video().set_display(&display_);
-    register_display(&display_);
+    // Register palette for GPU stream shader
+    register_palette(mc6847_t::get_palette(),
+                     mc6847_t::get_palette_size());
 
     // Video stream output — composite video from MC6847 VDG
     video_port_ = std::make_unique<CompositeVideoPort>();
