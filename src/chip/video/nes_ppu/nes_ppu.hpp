@@ -24,7 +24,6 @@
 #include "chip/video/video_chip_base.hpp"
 #include "core/signal/composite_video_stream.hpp"
 #include "core/system_lines.hpp"
-#include "core/indexed_frame_buffer.hpp"
 #include "systems/nes/bus/nes_bus.hpp"
 #include "systems/nes/bus/nes_bus_signals.hpp"
 #include "chip/video/nes_ppu/nes_palette.hpp"

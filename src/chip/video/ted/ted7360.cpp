@@ -33,7 +33,6 @@
 #include "chip/video/ted/ted7360.hpp"
 #include "core/chip_manifest.hpp"
 #include "core/chip_registry.hpp"
-#include "core/indexed_frame_buffer.hpp"
 #include "core/signal/audio_port.hpp"
 #include <algorithm>
 #include <array>

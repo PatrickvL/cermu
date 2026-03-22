@@ -1,5 +1,4 @@
 #include "chip/video/vic/vic_common.hpp"
-#include "core/indexed_frame_buffer.hpp"
 #include "core/signal/audio_port.hpp"
 #include <algorithm>
 #include <cstdlib>
