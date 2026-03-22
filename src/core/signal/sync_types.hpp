@@ -23,7 +23,11 @@ struct SyncEvent {
     VideoFlags flags;         // original VideoFlags at this event (for VBlank detection)
 };
 
-// FrameData — handed off to the display layer once per frame
+// FrameData — handed off to the display layer once per frame.
+// Carries all metadata that a display device (monitor) needs to
+// reconstruct and present the image.  The palette and dimensional
+// fields originate from the video chip and flow through the video
+// port, mirroring how a real video signal is self-describing.
 struct FrameData {
     void*           stream;
     uint32_t        stream_len;
@@ -32,6 +36,8 @@ struct FrameData {
     VideoSignalType signal_type;
     int             back_porch;     // samples after HSync before visible pixels
     int             display_width;  // visible pixels per scanline (0 = use fb width)
+    const uint32_t* palette;        // RGBA palette (from video chip, nullptr for RGB/vector)
+    uint16_t        palette_size;   // number of palette entries
 };
 
 // Maximum stream buffer: enough for one full frame of the largest system.

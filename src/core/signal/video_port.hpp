@@ -172,8 +172,9 @@ public:
         bound_back_porch_ = back_porch_pixels;
     }
 
-    void set_palette(const uint32_t* palette) noexcept {
+    void set_palette(const uint32_t* palette, uint16_t size = 0) noexcept {
         bound_palette_ = palette;
+        if (size) bound_palette_size_ = size;
     }
 
     // ====================================================================
@@ -210,6 +211,8 @@ public:
             .signal_type   = SignalTraits<Sample>::type,
             .back_porch    = bound_back_porch_,
             .display_width = bound_line_width_,
+            .palette       = bound_palette_,
+            .palette_size  = bound_palette_size_,
         };
 
         // Store for later access (e.g. GUI thread snapshot)
@@ -255,11 +258,12 @@ private:
     FrameData* frame_output_ = nullptr;  // external binding (e.g. System::last_frame_data_)
 
     // Display binding for automatic reconstruction
-    IndexedFrameBuffer* bound_fb_         = nullptr;
-    const uint32_t*     bound_palette_    = nullptr;
-    int                 bound_line_width_ = 0;
-    int                 bound_back_porch_ = 0;
-    bool                bridge_suppressed_ = false;
+    IndexedFrameBuffer* bound_fb_           = nullptr;
+    const uint32_t*     bound_palette_      = nullptr;
+    uint16_t            bound_palette_size_  = 0;
+    int                 bound_line_width_    = 0;
+    int                 bound_back_porch_    = 0;
+    bool                bridge_suppressed_   = false;
 
     FORCE_NOINLINE
     static bool cold_path(void* ctx, VideoFlags flags, uint32_t pos) noexcept {

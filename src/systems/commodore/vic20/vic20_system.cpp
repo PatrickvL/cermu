@@ -658,9 +658,6 @@ bool VIC20System::initialize() {
     // Set up page pointers for current expansion and ROM banking
     setup_expansion_map();
 
-    // Register palette for GPU stream shader
-    register_palette(vic_base_t::get_default_palette(), 16);
-
     // Wire VIC chip to video stream port
     video_port_ = std::make_unique<CompositeVideoPort>();
     vic_->set_stream(&video_port_->stream());
