@@ -22,6 +22,7 @@
 
 #include "core/component_base.hpp"
 #include "core/signal_types.hpp"
+#include <algorithm>
 #include <cstdint>
 #include <cstddef>
 #include <functional>
@@ -270,6 +271,11 @@ private:
  *
  * Concrete devices (joystick, 1541 drive, datasette, lightpen, …) derive from
  * this and implement the required virtual methods.
+ *
+ * A device may attach to multiple ports simultaneously (e.g. a display monitor
+ * connected to both a video output port and an audio output port).  The
+ * `is_compatible_with()` method determines which port types a device accepts.
+ * Single-port devices match only their primary `get_port_type()`.
  */
 class PeripheralDevice {
 public:
@@ -283,16 +289,32 @@ public:
     /// Short identifier (e.g. "joystick", "1541").
     virtual const char* get_id() const = 0;
 
-    /// Which connector type this device requires.
+    /// Primary connector type this device requires.
     virtual PortType get_port_type() const = 0;
+
+    /// Check if this device is compatible with a given port type.
+    /// Default: exact match against get_port_type().
+    /// Override for multi-port devices that accept additional port types
+    /// (e.g. a display monitor accepting VIDEO_COMPOSITE + AUDIO_MONO).
+    virtual bool is_compatible_with(PortType type) const {
+        return type == get_port_type();
+    }
 
     // --- Lifecycle ------------------------------------------------------
 
-    /// Called once after being attached to a port.
-    virtual void on_attach(Port* port) { port_ = port; }
+    /// Called after being attached to a port.
+    /// Multi-port devices receive this once per port attachment.
+    virtual void on_attach(Port* port) {
+        if (!port_) port_ = port;
+        ports_.push_back(port);
+    }
 
-    /// Called just before being detached.
-    virtual void on_detach() { port_ = nullptr; }
+    /// Called before being detached from a specific port.
+    virtual void on_detach(Port* port) {
+        auto it = std::find(ports_.begin(), ports_.end(), port);
+        if (it != ports_.end()) ports_.erase(it);
+        port_ = ports_.empty() ? nullptr : ports_[0];
+    }
 
     /// Power-on / hardware reset.
     virtual void reset() = 0;
@@ -323,6 +345,18 @@ public:
     virtual InputPeripheralDevice* as_input_device() { return nullptr; }
     virtual const InputPeripheralDevice* as_input_device() const { return nullptr; }
 
+    // --- Multi-port queries --------------------------------------------
+
+    /// All ports this device is currently attached to.
+    const std::vector<Port*>& get_attached_ports() const { return ports_; }
+
+    /// Find an attached port of a specific type, or nullptr.
+    Port* find_attached_port(PortType type) const {
+        for (auto* p : ports_)
+            if (p->get_type() == type) return p;
+        return nullptr;
+    }
+
     // --- Activity indicator ------------------------------------------------
 
     /// Returns true when the device is performing data transfer or I/O
@@ -338,7 +372,8 @@ public:
 #endif
 
 protected:
-    Port* port_ = nullptr;   ///< Port this device is attached to (set by on_attach)
+    Port* port_ = nullptr;   ///< Primary port (first attached — backward compat)
+    std::vector<Port*> ports_;  ///< All ports this device is attached to
 };
 
 // ============================================================================
