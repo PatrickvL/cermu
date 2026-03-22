@@ -160,7 +160,7 @@ inline uint32_t read_ea(uint8_t mode, uint8_t reg, OpSize sz) {
     return data_latch_ & size_mask(sz);
 }
 
-inline void write_ea(uint8_t mode, uint8_t reg, uint32_t value, OpSize sz) {
+inline void write_ea(uint8_t mode, uint8_t reg, uint32_t value, OpSize sz, bool src_is_memory = false) {
     if (mode == static_cast<uint8_t>(EAMode::DataRegDirect)) {
         write_dn(reg, value, sz);
         return;
@@ -181,11 +181,22 @@ inline void write_ea(uint8_t mode, uint8_t reg, uint32_t value, OpSize sz) {
                 set_a(reg, ea_addr_);
                 if (reg == 7) sync_sp();
             }
-            // PreDec Long: 68000 only decremented by 2 (first word step)
-            if (mode == static_cast<uint8_t>(EAMode::AddrRegPreDec) && sz == OpSize::Long) {
-                set_a(reg, get_a(reg) + 2);
-                ea_addr_ += 2;
-                if (reg == 7) sync_sp();
+            // PreDec: 2 idle for predecrement + 2 idle for write setup
+            if (mode == static_cast<uint8_t>(EAMode::AddrRegPreDec)) {
+                clocks_remaining_ += 4;
+                // Long: 68000 only decremented by 2 (first word step)
+                if (sz == OpSize::Long) {
+                    set_a(reg, get_a(reg) + 2);
+                    ea_addr_ += 2;
+                    if (reg == 7) sync_sp();
+                }
+            }
+            // Abs.L destination from memory source: real 68000 hasn't consumed
+            // the last extension word at error time — back out 2 from PC and 4
+            // from cycle count. Register/immediate sources don't need this.
+            if (mode == static_cast<uint8_t>(EAMode::Special) && reg == 1 && src_is_memory) {
+                regs_.pc -= 2;
+                clocks_remaining_ -= 4;
             }
             process_address_error_sync(ea_addr_, false /*write*/, fc_data());
             return;
