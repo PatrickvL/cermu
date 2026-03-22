@@ -1,4 +1,5 @@
 #include "gui/emulator_host.hpp"
+#include "gui/gl_api.hpp"
 #include "gui/indexed_shader.hpp"
 #include "gui/vector_shader.hpp"
 #include <imgui.h>
@@ -148,7 +149,7 @@ bool EmulatorHost::init(const char* window_title, int width, int height) {
     SDL_GL_SetSwapInterval(1); // VSync — paces the GUI render loop (~60Hz)
 
     // Load GL 2.0+ function pointers (needed for shader-based indexed rendering)
-    indexed_shader::load_gl();
+    gl_api::load_gl();
     
     // Show the window
     SDL_ShowWindow(window_);
@@ -457,7 +458,7 @@ bool EmulatorHost::compile_indexed_shader() {
 }
 
 void EmulatorHost::cleanup_indexed_resources() {
-    if (indexed_shader_) { indexed_shader::glDeleteProgram(indexed_shader_); indexed_shader_ = 0; }
+    if (indexed_shader_) { gl_api::glDeleteProgram(indexed_shader_); indexed_shader_ = 0; }
     if (palette_texture_) { glDeleteTextures(1, &palette_texture_); palette_texture_ = 0; }
     if (index_textures_[0]) { glDeleteTextures(2, index_textures_); index_textures_[0] = index_textures_[1] = 0; }
     delete[] index_framebuffer_; index_framebuffer_ = nullptr;
@@ -466,7 +467,7 @@ void EmulatorHost::cleanup_indexed_resources() {
     gpu_palette_size_ = 0;
 
     // Stream reconstruction resources
-    if (stream_shader_) { indexed_shader::glDeleteProgram(stream_shader_); stream_shader_ = 0; }
+    if (stream_shader_) { gl_api::glDeleteProgram(stream_shader_); stream_shader_ = 0; }
     if (stream_texture_) { glDeleteTextures(1, &stream_texture_); stream_texture_ = 0; }
     delete[] stream_snapshot_; stream_snapshot_ = nullptr;
     delete[] sync_snapshot_; sync_snapshot_ = nullptr;
@@ -477,7 +478,7 @@ void EmulatorHost::cleanup_indexed_resources() {
     stream_display_height_ = 0;
 
     // Vector display resources
-    if (vector_shader_) { indexed_shader::glDeleteProgram(vector_shader_); vector_shader_ = 0; }
+    if (vector_shader_) { gl_api::glDeleteProgram(vector_shader_); vector_shader_ = 0; }
     if (vector_vao_ && vector_shader::glDeleteVertexArrays) { vector_shader::glDeleteVertexArrays(1, &vector_vao_); vector_vao_ = 0; }
     if (vector_vbo_ && vector_shader::glDeleteBuffers) { vector_shader::glDeleteBuffers(1, &vector_vbo_); vector_vbo_ = 0; }
     vector_shader::destroy_persistence(&vector_persist_);
@@ -488,7 +489,7 @@ void EmulatorHost::cleanup_indexed_resources() {
     use_vector_shader_ = false;
 
     // RGB stream reconstruction resources
-    if (rgb_stream_shader_) { indexed_shader::glDeleteProgram(rgb_stream_shader_); rgb_stream_shader_ = 0; }
+    if (rgb_stream_shader_) { gl_api::glDeleteProgram(rgb_stream_shader_); rgb_stream_shader_ = 0; }
     if (rgb_stream_texture_) { glDeleteTextures(1, &rgb_stream_texture_); rgb_stream_texture_ = 0; }
     delete[] rgb_stream_snapshot_; rgb_stream_snapshot_ = nullptr;
     use_rgb_stream_shader_ = false;

@@ -47,7 +47,7 @@
 // Requires: OpenGL 3.0 / GLSL 130
 // ============================================================================
 
-#include "gui/indexed_shader.hpp"     // GL function pointers, compile_shader()
+#include "gui/gl_api.hpp"            // GL function pointers, compile_shader()
 #include "core/signal/sync_types.hpp"
 #include <cstdio>
 #include <cstdint>
@@ -57,80 +57,28 @@
 
 namespace vector_shader {
 
-// ============================================================================
-// Additional GL function pointers needed for VBO/VAO rendering
-// ============================================================================
+// Backward-compatible aliases — existing code uses vector_shader::glFoo()
+// and "using namespace indexed_shader;" inside this namespace.  These
+// forward to gl_api so call sites don't need changing.
+using gl_api::glGenBuffers;
+using gl_api::glBindBuffer;
+using gl_api::glBufferData;
+using gl_api::glGenVertexArrays;
+using gl_api::glDeleteVertexArrays;
+using gl_api::glBindVertexArray;
+using gl_api::glVertexAttribPointer;
+using gl_api::glEnableVertexAttribArray;
+using gl_api::glDeleteBuffers;
+using gl_api::glUniform1f;
+using gl_api::glUniform3f;
+using gl_api::glGenFramebuffers;
+using gl_api::glDeleteFramebuffers;
+using gl_api::glBindFramebuffer;
+using gl_api::glFramebufferTexture2D;
+using gl_api::glCheckFramebufferStatus;
 
-inline void  (APIENTRY* glGenBuffers)(GLsizei, GLuint*)        = nullptr;
-inline void  (APIENTRY* glBindBuffer)(GLenum, GLuint)          = nullptr;
-inline void  (APIENTRY* glBufferData)(GLenum, GLsizeiptr, const void*, GLenum) = nullptr;
-inline void  (APIENTRY* glGenVertexArrays)(GLsizei, GLuint*)   = nullptr;
-inline void  (APIENTRY* glDeleteVertexArrays)(GLsizei, const GLuint*) = nullptr;
-inline void  (APIENTRY* glBindVertexArray)(GLuint)              = nullptr;
-inline void  (APIENTRY* glVertexAttribPointer)(GLuint, GLint, GLenum, GLboolean, GLsizei, const void*) = nullptr;
-inline void  (APIENTRY* glEnableVertexAttribArray)(GLuint)      = nullptr;
-inline void  (APIENTRY* glDeleteBuffers)(GLsizei, const GLuint*) = nullptr;
-inline void  (APIENTRY* glUniform1f)(GLint, GLfloat)            = nullptr;
-inline void  (APIENTRY* glUniform3f)(GLint, GLfloat, GLfloat, GLfloat) = nullptr;
-
-// FBO function pointers for phosphor persistence
-inline void  (APIENTRY* glGenFramebuffers)(GLsizei, GLuint*)     = nullptr;
-inline void  (APIENTRY* glDeleteFramebuffers)(GLsizei, const GLuint*) = nullptr;
-inline void  (APIENTRY* glBindFramebuffer)(GLenum, GLuint)       = nullptr;
-inline void  (APIENTRY* glFramebufferTexture2D)(GLenum, GLenum, GLenum, GLuint, GLint) = nullptr;
-inline GLenum(APIENTRY* glCheckFramebufferStatus)(GLenum)        = nullptr;
-
-// Load vector-specific GL functions.  Call after indexed_shader::load_gl().
-inline bool load_gl() {
-    #define VGL_LOAD(fn, name) fn = (decltype(fn))SDL_GL_GetProcAddress(name)
-    VGL_LOAD(glGenBuffers,              "glGenBuffers");
-    VGL_LOAD(glBindBuffer,              "glBindBuffer");
-    VGL_LOAD(glBufferData,              "glBufferData");
-    VGL_LOAD(glGenVertexArrays,         "glGenVertexArrays");
-    VGL_LOAD(glDeleteVertexArrays,      "glDeleteVertexArrays");
-    VGL_LOAD(glBindVertexArray,         "glBindVertexArray");
-    VGL_LOAD(glVertexAttribPointer,     "glVertexAttribPointer");
-    VGL_LOAD(glEnableVertexAttribArray, "glEnableVertexAttribArray");
-    VGL_LOAD(glDeleteBuffers,           "glDeleteBuffers");
-    VGL_LOAD(glUniform1f,              "glUniform1f");
-    VGL_LOAD(glUniform3f,              "glUniform3f");
-    VGL_LOAD(glGenFramebuffers,         "glGenFramebuffers");
-    VGL_LOAD(glDeleteFramebuffers,      "glDeleteFramebuffers");
-    VGL_LOAD(glBindFramebuffer,         "glBindFramebuffer");
-    VGL_LOAD(glFramebufferTexture2D,    "glFramebufferTexture2D");
-    VGL_LOAD(glCheckFramebufferStatus,  "glCheckFramebufferStatus");
-    #undef VGL_LOAD
-
-    bool ok = glGenBuffers && glBindBuffer && glBufferData
-           && glGenVertexArrays && glBindVertexArray
-           && glVertexAttribPointer && glEnableVertexAttribArray
-           && glUniform1f && glUniform3f
-           && glGenFramebuffers && glBindFramebuffer
-           && glFramebufferTexture2D && glCheckFramebufferStatus;
-    if (!ok)
-        fprintf(stderr, "vector_shader: failed to load one or more GL functions\n");
-    return ok;
-}
-
-// GL constants not always available in legacy headers
-#ifndef GL_ARRAY_BUFFER
-#define GL_ARRAY_BUFFER 0x8892
-#endif
-#ifndef GL_DYNAMIC_DRAW
-#define GL_DYNAMIC_DRAW 0x88E8
-#endif
-#ifndef GL_FRAMEBUFFER
-#define GL_FRAMEBUFFER 0x8D40
-#endif
-#ifndef GL_COLOR_ATTACHMENT0
-#define GL_COLOR_ATTACHMENT0 0x8CE0
-#endif
-#ifndef GL_FRAMEBUFFER_COMPLETE
-#define GL_FRAMEBUFFER_COMPLETE 0x8CD5
-#endif
-#ifndef GL_CLAMP_TO_EDGE
-#define GL_CLAMP_TO_EDGE 0x812F
-#endif
+// Backward-compatible load_gl() — all pointers are now loaded by gl_api::load_gl().
+inline bool load_gl() { return true; }
 
 // ============================================================================
 // GLSL sources
@@ -207,7 +155,7 @@ struct VectorShaderLocations {
 // ============================================================================
 
 inline GLuint create_program(VectorShaderLocations* locs) {
-    using namespace indexed_shader;
+    using namespace gl_api;
 
     GLuint vs = compile_shader(GL_VERTEX_SHADER, vertex_src);
     if (!vs) return 0;
@@ -324,7 +272,7 @@ inline bool create_resources(VectorDisplayResources* res) {
 inline void destroy_resources(VectorDisplayResources* res) {
     if (res->vao) { glDeleteVertexArrays(1, &res->vao); res->vao = 0; }
     if (res->vbo) { glDeleteBuffers(1, &res->vbo); res->vbo = 0; }
-    if (res->shader) { indexed_shader::glDeleteProgram(res->shader); res->shader = 0; }
+    if (res->shader) { gl_api::glDeleteProgram(res->shader); res->shader = 0; }
 }
 
 // ============================================================================
@@ -601,7 +549,7 @@ struct PhosphorPersistence {
 
 inline bool create_persistence(PhosphorPersistence* p, int w, int h,
                                const PhosphorProfile& profile = PHOSPHOR_P31) {
-    using namespace indexed_shader;
+    using namespace gl_api;
     p->width   = w;
     p->height  = h;
     p->profile = profile;
@@ -670,7 +618,7 @@ inline bool create_persistence(PhosphorPersistence* p, int w, int h,
 inline void destroy_persistence(PhosphorPersistence* p) {
     if (p->fbo)          { glDeleteFramebuffers(1, &p->fbo); p->fbo = 0; }
     if (p->texture)      { glDeleteTextures(1, &p->texture); p->texture = 0; }
-    if (p->decay_shader) { indexed_shader::glDeleteProgram(p->decay_shader); p->decay_shader = 0; }
+    if (p->decay_shader) { gl_api::glDeleteProgram(p->decay_shader); p->decay_shader = 0; }
     if (p->dummy_vao)    { glDeleteVertexArrays(1, &p->dummy_vao); p->dummy_vao = 0; }
     p->width = p->height = 0;
 }
@@ -728,7 +676,7 @@ inline void render_persistence_frame(
 
     DecayFactors decay = compute_decay(p->profile, frame_dt_seconds);
 
-    indexed_shader::glUseProgram(p->decay_shader);
+    gl_api::glUseProgram(p->decay_shader);
     glUniform3f(p->decay_loc_decay, decay.r, decay.g, decay.b);
 
     // Bind persistence texture as input (reading our own previous content)
@@ -739,7 +687,7 @@ inline void render_persistence_frame(
     // but all major desktop GL drivers handle single-pass full-overwrites
     // correctly.  If artifacts appear on exotic hardware, ping-pong to a
     // second FBO.
-    indexed_shader::glActiveTexture(GL_TEXTURE0);
+    gl_api::glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, p->texture);
 
     glBindVertexArray(p->dummy_vao);
@@ -751,7 +699,7 @@ inline void render_persistence_frame(
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE);  // additive
 
-        indexed_shader::glUseProgram(beam_shader);
+        gl_api::glUseProgram(beam_shader);
 
         // Ortho projection mapping [0, width) × [0, height) to NDC
         const float w = static_cast<float>(p->width);
@@ -762,7 +710,7 @@ inline void render_persistence_frame(
             { 0.0f,    0.0f,   -1.0f,  0.0f },
             {-1.0f,   -1.0f,    0.0f,  1.0f },
         };
-        indexed_shader::glUniformMatrix4fv(beam_loc_proj, 1, GL_FALSE, &ortho[0][0]);
+        gl_api::glUniformMatrix4fv(beam_loc_proj, 1, GL_FALSE, &ortho[0][0]);
         glUniform3f(beam_loc_phosphor, phosphor_r, phosphor_g, phosphor_b);
 
         glBindVertexArray(beam_vao);
@@ -780,7 +728,7 @@ inline void render_persistence_frame(
     glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
     glEnable(GL_SCISSOR_TEST);
     glDisable(GL_BLEND);
-    indexed_shader::glUseProgram(0);
+    gl_api::glUseProgram(0);
 }
 
 } // namespace vector_shader

@@ -1,4 +1,5 @@
 #include "gui/session_gui.hpp"
+#include "gui/gl_api.hpp"
 #include "gui/indexed_shader.hpp"
 #include "gui/stream_shader.hpp"
 #include "gui/svideo_stream_shader.hpp"
@@ -46,7 +47,7 @@ static void indexed_shader_bind_callback(const ImDrawList*, const ImDrawCmd* cmd
     auto* d = static_cast<const IndexedShaderCallbackData*>(cmd->UserCallbackData);
 
     // Switch to indexed palette shader
-    indexed_shader::glUseProgram(d->shader);
+    gl_api::glUseProgram(d->shader);
 
     // Compute the same ortho projection ImGui uses
     ImDrawData* draw_data = ImGui::GetDrawData();
@@ -60,12 +61,12 @@ static void indexed_shader_bind_callback(const ImDrawList*, const ImDrawCmd* cmd
         { 0.0f,         0.0f,        -1.0f,   0.0f },
         { (R+L)/(L-R),  (T+B)/(B-T),  0.0f,   1.0f },
     };
-    indexed_shader::glUniformMatrix4fv(d->loc_proj, 1, GL_FALSE, &ortho[0][0]);
+    gl_api::glUniformMatrix4fv(d->loc_proj, 1, GL_FALSE, &ortho[0][0]);
 
     // Bind palette texture to slot 1 (index texture goes to slot 0 via ImGui)
-    indexed_shader::glActiveTexture(GL_TEXTURE1);
+    gl_api::glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, d->palette_tex);
-    indexed_shader::glActiveTexture(GL_TEXTURE0);
+    gl_api::glActiveTexture(GL_TEXTURE0);
 }
 
 // ============================================================================
@@ -85,7 +86,7 @@ static void stream_shader_bind_callback(const ImDrawList*, const ImDrawCmd* cmd)
     auto* d = static_cast<const StreamShaderCallbackData*>(cmd->UserCallbackData);
 
     // Switch to stream reconstruction shader
-    indexed_shader::glUseProgram(d->shader);
+    gl_api::glUseProgram(d->shader);
 
     // Compute ortho projection (same as ImGui)
     ImDrawData* draw_data = ImGui::GetDrawData();
@@ -99,16 +100,16 @@ static void stream_shader_bind_callback(const ImDrawList*, const ImDrawCmd* cmd)
         { 0.0f,         0.0f,        -1.0f,   0.0f },
         { (R+L)/(L-R),  (T+B)/(B-T),  0.0f,   1.0f },
     };
-    indexed_shader::glUniformMatrix4fv(d->loc_proj, 1, GL_FALSE, &ortho[0][0]);
+    gl_api::glUniformMatrix4fv(d->loc_proj, 1, GL_FALSE, &ortho[0][0]);
 
     // Bind stream texture to slot 0 (ImGui's texture bind is overridden)
-    indexed_shader::glActiveTexture(GL_TEXTURE0);
+    gl_api::glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, d->stream_tex);
 
     // Bind palette texture to slot 1
-    indexed_shader::glActiveTexture(GL_TEXTURE1);
+    gl_api::glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, d->palette_tex);
-    indexed_shader::glActiveTexture(GL_TEXTURE0);
+    gl_api::glActiveTexture(GL_TEXTURE0);
 }
 
 // ============================================================================
@@ -124,7 +125,7 @@ struct RGBStreamShaderCallbackData {
 static void rgb_stream_shader_bind_callback(const ImDrawList*, const ImDrawCmd* cmd) {
     auto* d = static_cast<const RGBStreamShaderCallbackData*>(cmd->UserCallbackData);
 
-    indexed_shader::glUseProgram(d->shader);
+    gl_api::glUseProgram(d->shader);
 
     ImDrawData* draw_data = ImGui::GetDrawData();
     float L = draw_data->DisplayPos.x;
@@ -137,10 +138,10 @@ static void rgb_stream_shader_bind_callback(const ImDrawList*, const ImDrawCmd* 
         { 0.0f,         0.0f,        -1.0f,   0.0f },
         { (R+L)/(L-R),  (T+B)/(B-T),  0.0f,   1.0f },
     };
-    indexed_shader::glUniformMatrix4fv(d->loc_proj, 1, GL_FALSE, &ortho[0][0]);
+    gl_api::glUniformMatrix4fv(d->loc_proj, 1, GL_FALSE, &ortho[0][0]);
 
     // Bind RGB stream texture to slot 0 (no palette texture needed)
-    indexed_shader::glActiveTexture(GL_TEXTURE0);
+    gl_api::glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, d->stream_tex);
 }
 
@@ -1124,20 +1125,20 @@ void SessionGUI::render_screen() {
                 local_sync, local_sync_count,
                 local_back_porch, local_stream_len);
 
-            indexed_shader::glUseProgram(stream_shader_);
-            indexed_shader::glUniform1iv(stream_loc_scanline_map_,
+            gl_api::glUseProgram(stream_shader_);
+            gl_api::glUniform1iv(stream_loc_scanline_map_,
                                          stream_shader::MAX_SCANLINES, scanline_offsets);
-            indexed_shader::glUniform1i(stream_loc_tex_width_,
+            gl_api::glUniform1i(stream_loc_tex_width_,
                                         stream_shader::STREAM_TEX_WIDTH);
-            indexed_shader::glUniform1i(stream_loc_display_h_, stream_display_height_);
-            indexed_shader::glUniform1i(stream_loc_display_w_, local_display_w);
+            gl_api::glUniform1i(stream_loc_display_h_, stream_display_height_);
+            gl_api::glUniform1i(stream_loc_display_w_, local_display_w);
 
             // Artifact shader: upload PhaseIncrement (no-op when loc is -1)
             if (artifact_loc_phase_increment_ >= 0)
-                indexed_shader::glUniform1f(artifact_loc_phase_increment_,
+                gl_api::glUniform1f(artifact_loc_phase_increment_,
                                             artifact_phase_increment_);
 
-            indexed_shader::glUseProgram(0);
+            gl_api::glUseProgram(0);
         }
 
         if (did_rgb_upload) {
@@ -1147,14 +1148,14 @@ void SessionGUI::render_screen() {
                 local_sync, local_sync_count,
                 local_back_porch, local_stream_len);
 
-            indexed_shader::glUseProgram(rgb_stream_shader_);
-            indexed_shader::glUniform1iv(rgb_stream_loc_scanline_map_,
+            gl_api::glUseProgram(rgb_stream_shader_);
+            gl_api::glUniform1iv(rgb_stream_loc_scanline_map_,
                                          stream_shader::MAX_SCANLINES, scanline_offsets);
-            indexed_shader::glUniform1i(rgb_stream_loc_tex_width_,
+            gl_api::glUniform1i(rgb_stream_loc_tex_width_,
                                         stream_shader::STREAM_TEX_WIDTH);
-            indexed_shader::glUniform1i(rgb_stream_loc_display_h_, stream_display_height_);
-            indexed_shader::glUniform1i(rgb_stream_loc_display_w_, local_display_w);
-            indexed_shader::glUseProgram(0);
+            gl_api::glUniform1i(rgb_stream_loc_display_h_, stream_display_height_);
+            gl_api::glUniform1i(rgb_stream_loc_display_w_, local_display_w);
+            gl_api::glUseProgram(0);
         }
 
         // Swap write index for next frame

@@ -28,7 +28,7 @@
 // Requires: OpenGL 3.0 / GLSL 130
 // ============================================================================
 
-#include "gui/indexed_shader.hpp"   // GL function pointers, compile_shader()
+#include "gui/gl_api.hpp"            // GL function pointers, compile_shader()
 #include "gui/stream_shader.hpp"    // MAX_SCANLINES, STREAM_TEX_WIDTH, compute_scanline_map()
 #include <cstdio>
 #include <cstdint>
@@ -121,7 +121,7 @@ struct RGBShaderLocations {
 // Create the RGB stream reconstruction shader program.
 // Returns the program ID (0 on failure).
 inline GLuint create_program(RGBShaderLocations* locs) {
-    using namespace indexed_shader;
+    using namespace gl_api;
 
     GLuint vs = compile_shader(GL_VERTEX_SHADER, vertex_src);
     if (!vs) return 0;

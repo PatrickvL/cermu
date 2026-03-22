@@ -16,89 +16,37 @@
 // Requires: OpenGL 3.0 / GLSL 130
 // ============================================================================
 
-#include <SDL.h>
-#include <SDL_opengl.h>
-#include <cstdio>
-
-// GL 3.0 constants not present in Windows gl.h (only exports GL 1.1)
-#ifndef GL_R8
-#define GL_R8 0x8229
-#endif
+#include "gui/gl_api.hpp"
 
 namespace indexed_shader {
 
-// ============================================================================
-// GL 2.0+ function pointers — loaded at runtime via SDL_GL_GetProcAddress
-// ============================================================================
-// Windows opengl32.dll only exports GL 1.1; all higher functions must be
-// resolved at runtime.  Call load_gl() once after creating the GL context.
+// Backward-compatible aliases — existing code uses indexed_shader::glFoo()
+// and "using namespace indexed_shader;" to reach GL functions.  These
+// aliases forward to the consolidated gl_api namespace.
+using gl_api::glActiveTexture;
+using gl_api::glCreateShader;
+using gl_api::glShaderSource;
+using gl_api::glCompileShader;
+using gl_api::glGetShaderiv;
+using gl_api::glGetShaderInfoLog;
+using gl_api::glDeleteShader;
+using gl_api::glCreateProgram;
+using gl_api::glAttachShader;
+using gl_api::glBindAttribLocation;
+using gl_api::glLinkProgram;
+using gl_api::glGetProgramiv;
+using gl_api::glGetProgramInfoLog;
+using gl_api::glDeleteProgram;
+using gl_api::glUseProgram;
+using gl_api::glGetUniformLocation;
+using gl_api::glUniform1i;
+using gl_api::glUniform1iv;
+using gl_api::glUniform1f;
+using gl_api::glUniformMatrix4fv;
+using gl_api::compile_shader;
 
-// GL 1.3
-inline void (APIENTRY* glActiveTexture)(GLenum) = nullptr;
-
-// GL 2.0 — shader compilation
-inline GLuint (APIENTRY* glCreateShader)(GLenum) = nullptr;
-inline void   (APIENTRY* glShaderSource)(GLuint, GLsizei, const GLchar* const*, const GLint*) = nullptr;
-inline void   (APIENTRY* glCompileShader)(GLuint) = nullptr;
-inline void   (APIENTRY* glGetShaderiv)(GLuint, GLenum, GLint*) = nullptr;
-inline void   (APIENTRY* glGetShaderInfoLog)(GLuint, GLsizei, GLsizei*, GLchar*) = nullptr;
-inline void   (APIENTRY* glDeleteShader)(GLuint) = nullptr;
-
-// GL 2.0 — program linking
-inline GLuint (APIENTRY* glCreateProgram)() = nullptr;
-inline void   (APIENTRY* glAttachShader)(GLuint, GLuint) = nullptr;
-inline void   (APIENTRY* glBindAttribLocation)(GLuint, GLuint, const GLchar*) = nullptr;
-inline void   (APIENTRY* glLinkProgram)(GLuint) = nullptr;
-inline void   (APIENTRY* glGetProgramiv)(GLuint, GLenum, GLint*) = nullptr;
-inline void   (APIENTRY* glGetProgramInfoLog)(GLuint, GLsizei, GLsizei*, GLchar*) = nullptr;
-inline void   (APIENTRY* glDeleteProgram)(GLuint) = nullptr;
-
-// GL 2.0 — program usage / uniforms
-inline void   (APIENTRY* glUseProgram)(GLuint) = nullptr;
-inline GLint  (APIENTRY* glGetUniformLocation)(GLuint, const GLchar*) = nullptr;
-inline void   (APIENTRY* glUniform1i)(GLint, GLint) = nullptr;
-inline void   (APIENTRY* glUniform1iv)(GLint, GLsizei, const GLint*) = nullptr;
-inline void   (APIENTRY* glUniform1f)(GLint, GLfloat) = nullptr;
-inline void   (APIENTRY* glUniformMatrix4fv)(GLint, GLsizei, GLboolean, const GLfloat*) = nullptr;
-
-// Load all GL function pointers.  Returns true if all critical functions
-// were resolved.  Must be called after SDL_GL_CreateContext().
-inline bool load_gl() {
-    #define ISGL_LOAD(name) name = (decltype(name))SDL_GL_GetProcAddress("gl" #name + 2)
-    // +2 skips the "gl" prefix already in the stringified name — giving us
-    // the canonical GL function name.  E.g. "glCreateShader" + 2 won't work;
-    // we need the real GL name.  Fix: use the actual GL entry point string.
-    #undef ISGL_LOAD
-
-    #define ISGL_LOAD(fn, gl_name) fn = (decltype(fn))SDL_GL_GetProcAddress(gl_name)
-    ISGL_LOAD(glActiveTexture,       "glActiveTexture");
-    ISGL_LOAD(glCreateShader,        "glCreateShader");
-    ISGL_LOAD(glShaderSource,        "glShaderSource");
-    ISGL_LOAD(glCompileShader,       "glCompileShader");
-    ISGL_LOAD(glGetShaderiv,         "glGetShaderiv");
-    ISGL_LOAD(glGetShaderInfoLog,    "glGetShaderInfoLog");
-    ISGL_LOAD(glDeleteShader,        "glDeleteShader");
-    ISGL_LOAD(glCreateProgram,       "glCreateProgram");
-    ISGL_LOAD(glAttachShader,        "glAttachShader");
-    ISGL_LOAD(glBindAttribLocation,  "glBindAttribLocation");
-    ISGL_LOAD(glLinkProgram,         "glLinkProgram");
-    ISGL_LOAD(glGetProgramiv,        "glGetProgramiv");
-    ISGL_LOAD(glGetProgramInfoLog,   "glGetProgramInfoLog");
-    ISGL_LOAD(glDeleteProgram,       "glDeleteProgram");
-    ISGL_LOAD(glUseProgram,          "glUseProgram");
-    ISGL_LOAD(glGetUniformLocation,  "glGetUniformLocation");
-    ISGL_LOAD(glUniform1i,           "glUniform1i");
-    ISGL_LOAD(glUniform1iv,          "glUniform1iv");
-    ISGL_LOAD(glUniform1f,           "glUniform1f");
-    ISGL_LOAD(glUniformMatrix4fv,    "glUniformMatrix4fv");
-    #undef ISGL_LOAD
-
-    bool ok = glCreateShader && glCreateProgram && glUseProgram
-           && glActiveTexture && glUniformMatrix4fv && glDeleteProgram;
-    if (!ok)
-        fprintf(stderr, "indexed_shader: failed to load one or more GL functions\n");
-    return ok;
-}
+// Backward-compatible load_gl() — delegates to gl_api::load_gl().
+inline bool load_gl() { return gl_api::load_gl(); }
 
 // ============================================================================
 // GLSL sources
@@ -142,27 +90,6 @@ void main() {
     Out_Color = Frag_Color * color;
 }
 )glsl";
-
-// ============================================================================
-// Shader compilation helpers
-// ============================================================================
-
-// Compile a shader stage and return its ID (0 on failure).
-inline GLuint compile_shader(GLenum type, const char* source) {
-    GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, nullptr);
-    glCompileShader(shader);
-    GLint status = 0;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
-    if (status != GL_TRUE) {
-        char log[512];
-        glGetShaderInfoLog(shader, sizeof(log), nullptr, log);
-        fprintf(stderr, "indexed_shader: compile error: %s\n", log);
-        glDeleteShader(shader);
-        return 0;
-    }
-    return shader;
-}
 
 // Create the indexed palette shader program.
 // Returns the program ID (0 on failure).
