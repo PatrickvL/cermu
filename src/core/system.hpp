@@ -275,8 +275,10 @@ private:
     template<typename B>
     auto auto_register_video_palette_(B& board, int)
         -> decltype(board.video().system_palette(), void()) {
-        if (auto* p = board.video().system_palette())
+        if (auto* p = board.video().system_palette()) {
             palette_.set(p, board.video().palette_size());
+            primary_video_chip_ = &board.video();
+        }
     }
     // Fallback: board has no typed video() — scan owned_chips() for a
     // VideoChipBase with a palette (covers C64, VIC-20, C16 where the
@@ -287,13 +289,31 @@ private:
             if (auto* vc = dynamic_cast<VideoChipBase*>(chip.get())) {
                 if (auto* p = vc->system_palette()) {
                     palette_.set(p, vc->palette_size());
+                    primary_video_chip_ = vc;
                     return;
                 }
             }
         }
     }
 
+    VideoChipBase* primary_video_chip_ = nullptr;
+
 protected:
+    /// Apply display palette selection from config_.custom_settings.
+    /// Looks up "display_palette", calls select_palette() on the primary
+    /// video chip, and re-syncs the system palette binding.
+    /// Returns true if palette was changed.
+    bool apply_display_palette_() {
+        if (!primary_video_chip_) return false;
+        auto it = config_.custom_settings.find("display_palette");
+        if (it == config_.custom_settings.end()) return false;
+        if (auto* np = primary_video_chip_->select_palette(it->second.c_str())) {
+            palette_.set(np->data, np->count);
+            return true;
+        }
+        return false;
+    }
+
     // BOARD & PORT OWNERSHIP
     // =========================================================================
     //

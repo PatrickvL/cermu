@@ -188,12 +188,7 @@ bool SpectrumSystem<V>::set_configuration(const SystemConfiguration& config) {
 template<SpectrumVariant V>
 bool SpectrumSystem<V>::apply_configuration() {
     // Apply display palette selection
-    auto pal_it = config_.custom_settings.find("display_palette");
-    if (pal_it != config_.custom_settings.end()) {
-        if (auto* np = board_.video().select_palette(pal_it->second.c_str())) {
-            register_palette(np->data, np->count);
-        }
-    }
+    apply_display_palette_();
     return true;
 }
 

@@ -330,6 +330,11 @@ public:
         active_palette_ = nullptr;  // Force reselection on next dot
     }
 
+    // Rebuild emphasis palette cache after palette selection.
+    void on_palette_selected(const NamedPalette& np) override {
+        set_base_palette(np.data);
+    }
+
     void reset() {
         std::memset(regs_, 0, num_regs_);
         internal = {};
