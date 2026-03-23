@@ -188,6 +188,7 @@ add_executable(sid_test_runner
     ${SOUND_DIR}/sid_waveform_tables.cpp
     ${CORE_DIR}/chip.cpp
     ${CORE_DIR}/chip_layout.cpp
+    ${CORE_DIR}/chip_registry.cpp
     ${CORE_DIR}/pin_labels.cpp
     ${CORE_DIR}/ioport.cpp
 )
@@ -238,6 +239,7 @@ add_executable(apu_test_runner
     ${SRC_DIR}/chip/sound/nes_apu_gui.cpp
     ${CORE_DIR}/chip.cpp
     ${CORE_DIR}/chip_layout.cpp
+    ${CORE_DIR}/chip_registry.cpp
     ${CORE_DIR}/pin_labels.cpp
     ${CORE_DIR}/ioport.cpp
 )
@@ -287,6 +289,7 @@ add_executable(a2600_test_runner
     ${CORE_DIR}/chip.cpp
     ${CORE_DIR}/chip_layout.cpp
     ${CORE_DIR}/chip_debug_registry.cpp
+    ${CORE_DIR}/chip_registry.cpp
     ${CORE_DIR}/pin_labels.cpp
     ${CORE_DIR}/ioport.cpp
     ${SRC_DIR}/gui/chip_debug_registry_gui.cpp

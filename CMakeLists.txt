@@ -36,6 +36,21 @@ FetchContent_MakeAvailable(tomlplusplus)
 # Find libarchive (archive reading — ZIP, 7z, RAR, tar, etc.)
 # Strategy: CMake find_package first (works with vcpkg and system installs),
 # then PkgConfig (Linux), then fall back to stubs.
+#
+# When building with vcpkg static linkage, libarchive's vcpkg wrapper
+# injects transitive dependencies (lz4, zstd, …) via set_property on
+# LibArchive::LibArchive.  With CMake 4.x this becomes a hard error if
+# those targets don't exist yet.  Work around by pre-loading them.
+# The QUIET flag ensures this is harmless on systems without vcpkg.
+if(DEFINED VCPKG_TARGET_TRIPLET)
+    find_package(lz4 CONFIG QUIET)
+    find_package(zstd CONFIG QUIET)
+    find_package(ZLIB QUIET)
+    find_package(BZip2 QUIET)
+    find_package(LibLZMA QUIET)
+    find_package(OpenSSL QUIET)
+endif()
+
 set(LIBARCHIVE_FOUND FALSE)
 find_package(LibArchive QUIET)
 if(LibArchive_FOUND)
@@ -144,6 +159,8 @@ if(MSVC)
     )
     # Define to silence C++17 deprecation warnings
     add_compile_definitions(_SILENCE_CXX17_C_HEADER_DEPRECATION_WARNING)
+    # Define M_PI etc. from <cmath> on MSVC
+    add_compile_definitions(_USE_MATH_DEFINES)
 else()
     # GCC/Clang specific settings
     add_compile_options(
