@@ -90,11 +90,11 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
     if ((opcode & 0xFFC0) == 0x40C0) {
         if (ea_mode == 0) {
             // Dn ← SR — 6 clocks (2 idle + 4 prefetch)
-            set_d_w(ea_reg, regs_[REG_SR]);
+            set_d_w(ea_reg, regs_[SR]);
             return do_idle_then_prefetch(pins, 2);
         }
         // Memory: compute EA, dummy read, then write SR word
-        uint16_t sr_val = regs_[REG_SR];
+        uint16_t sr_val = regs_[SR];
         // Read (dummy) then write — same as Scc memory pattern
         (void)read_ea(ea_mode, ea_reg, OpSize::Word);
         if (address_error_) return pins;
@@ -116,7 +116,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
 
     // ── MOVE to SR (0100 0110 11xx xxxx) ─────────────────────────
     if ((opcode & 0xFFC0) == 0x46C0) {
-        if (!(regs_[REG_SR] & SRBits::S)) {
+        if (!(regs_[SR] & SRBits::S)) {
             return exception(pins, Vector::PRIVILEGE_VIOLATION);
         }
         if (ea_mode == 0) {
@@ -416,7 +416,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
 
     // ── RESET: $4E70 ─────────────────────────────────────────────
     if (opcode == 0x4E70) {
-        if (!(regs_[REG_SR] & SRBits::S))
+        if (!(regs_[SR] & SRBits::S))
             return exception(pins, Vector::PRIVILEGE_VIOLATION);
         // Assert RESET line for 124 clocks, then prefetch (8 clocks) = 132 total
         clocks_remaining_ += 128;  // 132 - 4 (prefetch bus cycle)
@@ -425,7 +425,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
 
     // ── STOP: $4E72 ──────────────────────────────────────────────
     if (opcode == 0x4E72) {
-        if (!(regs_[REG_SR] & SRBits::S))
+        if (!(regs_[SR] & SRBits::S))
             return exception(pins, Vector::PRIVILEGE_VIOLATION);
         // Load new SR from extension word
         set_sr(consume_extension_word());
@@ -435,7 +435,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
 
     // ── RTE: $4E73 ───────────────────────────────────────────────
     if (opcode == 0x4E73) {
-        if (!(regs_[REG_SR] & SRBits::S)) {
+        if (!(regs_[SR] & SRBits::S)) {
             return exception(pins, Vector::PRIVILEGE_VIOLATION);
         }
         // Pop SR and PC from supervisor stack
@@ -451,7 +451,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             set_a(7, get_a(7) + 6);
             sync_sp();
             set_sr(new_sr);
-            regs_[REG_PC] = (static_cast<uint32_t>(pc_hi) << 16) | pc_lo;
+            regs_[PC] = (static_cast<uint32_t>(pc_hi) << 16) | pc_lo;
             clocks_remaining_ += 12;  // 3 × 4-clock reads from stack
             return do_branch_prefetch(pins);
         }
@@ -471,7 +471,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             uint16_t pc_lo = mem_read_(mem_ctx_, sp + 2);
             set_a(7, get_a(7) + 4);
             sync_sp();
-            regs_[REG_PC] = (static_cast<uint32_t>(pc_hi) << 16) | pc_lo;
+            regs_[PC] = (static_cast<uint32_t>(pc_hi) << 16) | pc_lo;
             clocks_remaining_ += 8;  // 2 × 4-clock reads from stack
             return do_branch_prefetch(pins);
         }
@@ -501,7 +501,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             set_a(7, get_a(7) + 6);
             sync_sp();
             set_ccr(static_cast<uint8_t>(new_ccr));  // Only CCR (low byte of SR)
-            regs_[REG_PC] = (static_cast<uint32_t>(pc_hi) << 16) | pc_lo;
+            regs_[PC] = (static_cast<uint32_t>(pc_hi) << 16) | pc_lo;
             clocks_remaining_ += 12;  // 3 × 4-clock reads from stack
             return do_branch_prefetch(pins);
         }
@@ -510,15 +510,15 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
 
     // ── MOVE USP: 0100 1110 0110 xrrr ────────────────────────────
     if ((opcode & 0xFFF0) == 0x4E60) {
-        if (!(regs_[REG_SR] & SRBits::S))
+        if (!(regs_[SR] & SRBits::S))
             return exception(pins, Vector::PRIVILEGE_VIOLATION);
         if (opcode & 0x0008) {
             // MOVE USP, An
-            set_a(ea_reg, regs_[REG_USP]);
+            set_a(ea_reg, regs_[USP]);
             sync_sp();  // If An == A7, keep SSP in sync
         } else {
             // MOVE An, USP
-            regs_[REG_USP] = get_a(ea_reg);
+            regs_[USP] = get_a(ea_reg);
         }
         return do_prefetch(pins);
     }
@@ -588,8 +588,8 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
                 break;
             case EAMode::AddrRegDisp: {
                 // (d16,An): read disp from IRC, no refill
-                int16_t disp = static_cast<int16_t>(regs_[REG_IRC]);
-                regs_[REG_PC] += 2;
+                int16_t disp = static_cast<int16_t>(regs_[IRC]);
+                regs_[PC] += 2;
                 target = get_a(ea_reg) + disp;
                 clocks_remaining_ += 2;  // 2 idle
                 break;
@@ -602,25 +602,25 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             case EAMode::Special:
                 if (ea_reg == 0) {
                     // abs.W: read from IRC, no refill
-                    int16_t addr = static_cast<int16_t>(regs_[REG_IRC]);
-                    regs_[REG_PC] += 2;
+                    int16_t addr = static_cast<int16_t>(regs_[IRC]);
+                    regs_[PC] += 2;
                     target = static_cast<uint32_t>(static_cast<int32_t>(addr));
                     clocks_remaining_ += 2;  // 2 idle
                 } else if (ea_reg == 1) {
                     // abs.L: high word from IRC (free), low word via bus read
-                    uint16_t hi = regs_[REG_IRC];
+                    uint16_t hi = regs_[IRC];
                     if (mem_read_) {
-                        regs_[REG_IRC] = mem_read_(mem_ctx_, regs_[REG_PC] & address_mask());
+                        regs_[IRC] = mem_read_(mem_ctx_, regs_[PC] & address_mask());
                         clocks_remaining_ += 4;
                     }
-                    regs_[REG_PC] += 2;
-                    target = (static_cast<uint32_t>(hi) << 16) | regs_[REG_IRC];
-                    regs_[REG_PC] += 2;
+                    regs_[PC] += 2;
+                    target = (static_cast<uint32_t>(hi) << 16) | regs_[IRC];
+                    regs_[PC] += 2;
                 } else if (ea_reg == 2) {
                     // (d16,PC): read disp from IRC, no refill
-                    uint32_t base = regs_[REG_PC] - 2;
-                    int16_t disp = static_cast<int16_t>(regs_[REG_IRC]);
-                    regs_[REG_PC] += 2;
+                    uint32_t base = regs_[PC] - 2;
+                    int16_t disp = static_cast<int16_t>(regs_[IRC]);
+                    regs_[PC] += 2;
                     target = base + disp;
                     clocks_remaining_ += 2;  // 2 idle
                 } else {
@@ -634,12 +634,12 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
         }
         // Check for odd target before pushing — 68000 detects this first
         if (unlikely(target & 1)) {
-            regs_[REG_PC] = target;  // Frame saves PC = target - 4
+            regs_[PC] = target;  // Frame saves PC = target - 4
             process_address_error_sync(target, true, fc_program());
             return pins;
         }
         // Push return address (formal PC of next instruction = internal PC - 2)
-        uint32_t return_pc = regs_[REG_PC] - 2;
+        uint32_t return_pc = regs_[PC] - 2;
         set_a(7, get_a(7) - 4);
         sync_sp();
         if (mem_write_) {
@@ -652,7 +652,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
             mem_write_(mem_ctx_, sp + 2, static_cast<uint16_t>(return_pc & 0xFFFF));
             clocks_remaining_ += 8;  // 2 × 4-clock writes
         }
-        regs_[REG_PC] = target;
+        regs_[PC] = target;
         return do_branch_prefetch(pins);
     }
 
@@ -665,8 +665,8 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
                 target = get_a(ea_reg);
                 break;
             case EAMode::AddrRegDisp: {
-                int16_t disp = static_cast<int16_t>(regs_[REG_IRC]);
-                regs_[REG_PC] += 2;
+                int16_t disp = static_cast<int16_t>(regs_[IRC]);
+                regs_[PC] += 2;
                 target = get_a(ea_reg) + disp;
                 clocks_remaining_ += 2;  // 2 idle
                 break;
@@ -676,23 +676,23 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
                 break;
             case EAMode::Special:
                 if (ea_reg == 0) {
-                    int16_t addr = static_cast<int16_t>(regs_[REG_IRC]);
-                    regs_[REG_PC] += 2;
+                    int16_t addr = static_cast<int16_t>(regs_[IRC]);
+                    regs_[PC] += 2;
                     target = static_cast<uint32_t>(static_cast<int32_t>(addr));
                     clocks_remaining_ += 2;  // 2 idle
                 } else if (ea_reg == 1) {
-                    uint16_t hi = regs_[REG_IRC];
+                    uint16_t hi = regs_[IRC];
                     if (mem_read_) {
-                        regs_[REG_IRC] = mem_read_(mem_ctx_, regs_[REG_PC] & address_mask());
+                        regs_[IRC] = mem_read_(mem_ctx_, regs_[PC] & address_mask());
                         clocks_remaining_ += 4;
                     }
-                    regs_[REG_PC] += 2;
-                    target = (static_cast<uint32_t>(hi) << 16) | regs_[REG_IRC];
-                    regs_[REG_PC] += 2;
+                    regs_[PC] += 2;
+                    target = (static_cast<uint32_t>(hi) << 16) | regs_[IRC];
+                    regs_[PC] += 2;
                 } else if (ea_reg == 2) {
-                    uint32_t base = regs_[REG_PC] - 2;
-                    int16_t disp = static_cast<int16_t>(regs_[REG_IRC]);
-                    regs_[REG_PC] += 2;
+                    uint32_t base = regs_[PC] - 2;
+                    int16_t disp = static_cast<int16_t>(regs_[IRC]);
+                    regs_[PC] += 2;
                     target = base + disp;
                     clocks_remaining_ += 2;  // 2 idle
                 } else {
@@ -703,7 +703,7 @@ inline bus_state_t decode_group4(bus_state_t pins, uint16_t opcode) {
                 target = calc_ea(ea_mode, ea_reg, OpSize::Long);
                 break;
         }
-        regs_[REG_PC] = target;
+        regs_[PC] = target;
         return do_branch_prefetch(pins);
     }
 
@@ -718,27 +718,27 @@ inline bus_state_t decode_group6(bus_state_t pins, uint16_t opcode) {
 
     // Displacement is always relative to the address of the displacement
     // itself (formal_opcode + 2). Save branch base BEFORE consuming ext word.
-    uint32_t branch_base = regs_[REG_PC] - 2;  // = formal_opcode + 2
+    uint32_t branch_base = regs_[PC] - 2;  // = formal_opcode + 2
 
     int32_t displacement;
     if (disp8 == 0) {
         // Word displacement from extension word
         // Note: branches don't use consume_extension_word() because the
         // IRC refill would read from the sequential address, not the branch target.
-        displacement = static_cast<int16_t>(regs_[REG_IRC]);
-        regs_[REG_PC] += 2;
+        displacement = static_cast<int16_t>(regs_[IRC]);
+        regs_[PC] += 2;
     } else if constexpr (has_long_branch()) {
         if (disp8 == -1) {
             // Long displacement (68020+) from two extension words
             displacement = static_cast<int32_t>(
-                (static_cast<uint32_t>(regs_[REG_IRC]) << 16)); // high word
-            regs_[REG_PC] += 2;
+                (static_cast<uint32_t>(regs_[IRC]) << 16)); // high word
+            regs_[PC] += 2;
             if (mem_read_) {
-                displacement |= mem_read_(mem_ctx_, regs_[REG_PC] & address_mask());
+                displacement |= mem_read_(mem_ctx_, regs_[PC] & address_mask());
             } else {
-                displacement |= regs_[REG_IRC];
+                displacement |= regs_[IRC];
             }
-            regs_[REG_PC] += 2;
+            regs_[PC] += 2;
         } else {
             displacement = disp8;
         }
@@ -749,14 +749,14 @@ inline bus_state_t decode_group6(bus_state_t pins, uint16_t opcode) {
     // BRA (cc = T, but opcode convention: cc=0 is BRA, cc=1 is BSR)
     if (cc == Condition::T) {
         // BRA — always branch: 10 clocks (n np np)
-        regs_[REG_PC] = branch_base + displacement;
+        regs_[PC] = branch_base + displacement;
         clocks_remaining_ += 2;  // 2 idle clocks before branch prefetch
         return do_branch_prefetch(pins);
     }
     if (cc == Condition::F) {
         // BSR — branch to subroutine
         // Return address = formal address of next instruction = internal PC - 2
-        uint32_t return_pc = regs_[REG_PC] - 2;
+        uint32_t return_pc = regs_[PC] - 2;
         set_a(7, get_a(7) - 4);
         sync_sp();
         if (mem_write_) {
@@ -769,14 +769,14 @@ inline bus_state_t decode_group6(bus_state_t pins, uint16_t opcode) {
             mem_write_(mem_ctx_, sp + 2, static_cast<uint16_t>(return_pc & 0xFFFF));
             clocks_remaining_ += 10;  // 2 × 4-clock writes + 2 idle
         }
-        regs_[REG_PC] = branch_base + displacement;
+        regs_[PC] = branch_base + displacement;
         return do_branch_prefetch(pins);
     }
 
     // Bcc — conditional branch
     if (test_condition(cc)) {
         // Bcc taken: 10 clocks (n np np) — same for byte and word displacement
-        regs_[REG_PC] = branch_base + displacement;
+        regs_[PC] = branch_base + displacement;
         clocks_remaining_ += 2;  // 2 idle clocks before branch prefetch
         return do_branch_prefetch(pins);
     }
@@ -785,7 +785,7 @@ inline bus_state_t decode_group6(bus_state_t pins, uint16_t opcode) {
         // Word displacement not taken: 12 clocks (nn np np)
         // Refill IRC from the displacement word position (PC was advanced past it)
         if (mem_read_) {
-            regs_[REG_IRC] = mem_read_(mem_ctx_, (regs_[REG_PC] - 2) & address_mask());
+            regs_[IRC] = mem_read_(mem_ctx_, (regs_[PC] - 2) & address_mask());
             clocks_remaining_ += 4;  // bus read to refill IRC
         }
         return do_idle_then_prefetch(pins, 4);  // 4 idle + 4 prefetch

@@ -179,14 +179,14 @@ inline bus_state_t decode_group0(bus_state_t pins, uint16_t opcode) {
     if ((upper == 0 || upper == 1 || upper == 5) &&
         ((opcode & 0xFF) == 0x3C || (opcode & 0xFF) == 0x7C)) {
         bool to_sr = (opcode & 0xFF) == 0x7C;
-        if (to_sr && !(regs_[REG_SR] & SRBits::S))
+        if (to_sr && !(regs_[SR] & SRBits::S))
             return exception(pins, Vector::PRIVILEGE_VIOLATION);
         uint16_t imm = consume_extension_word();
         if (to_sr) {
             switch (upper) {
-                case 0: set_sr(regs_[REG_SR] | imm); break;
-                case 1: set_sr(regs_[REG_SR] & imm); break;
-                case 5: set_sr(regs_[REG_SR] ^ imm); break;
+                case 0: set_sr(regs_[SR] | imm); break;
+                case 1: set_sr(regs_[SR] & imm); break;
+                case 5: set_sr(regs_[SR] ^ imm); break;
             }
         } else {
             uint8_t imm8 = static_cast<uint8_t>(imm);
@@ -280,7 +280,7 @@ inline bus_state_t decode_group5(bus_state_t pins, uint16_t opcode) {
             // DBcc: 0101 cccc 1100 1rrr
             auto cc = static_cast<Condition>((opcode >> 8) & 0x0F);
             // displacement is relative to formal_opcode + 2 (= internal PC - 2)
-            uint32_t branch_base = regs_[REG_PC] - 2;
+            uint32_t branch_base = regs_[PC] - 2;
             if (!test_condition(cc)) {
                 // Condition false → decrement and branch
                 int16_t dn = static_cast<int16_t>(get_d_w(ea_reg));
@@ -288,8 +288,8 @@ inline bus_state_t decode_group5(bus_state_t pins, uint16_t opcode) {
                 set_d_w(ea_reg, static_cast<uint16_t>(dn));
                 if (dn != -1) {
                     // Branch taken: 10 clocks (n np np)
-                    int16_t disp = static_cast<int16_t>(regs_[REG_IRC]);
-                    regs_[REG_PC] = branch_base + disp;
+                    int16_t disp = static_cast<int16_t>(regs_[IRC]);
+                    regs_[PC] = branch_base + disp;
                     clocks_remaining_ += 2;  // 2 idle clocks
                     return do_branch_prefetch(pins);
                 } else {
@@ -403,7 +403,7 @@ inline bus_state_t decode_group8(bus_state_t pins, uint16_t opcode) {
 
     // DIVU: opmode 3
     if (opmode == 3) {
-        uint32_t opcode_addr = regs_[REG_PC] - 4;
+        uint32_t opcode_addr = regs_[PC] - 4;
         uint16_t src;
         if (ea_mode == 0) {
             src = get_d_w(ea_reg);
@@ -433,7 +433,7 @@ inline bus_state_t decode_group8(bus_state_t pins, uint16_t opcode) {
 
     // DIVS: opmode 7
     if (opmode == 7) {
-        uint32_t opcode_addr = regs_[REG_PC] - 4;
+        uint32_t opcode_addr = regs_[PC] - 4;
         int16_t src;
         if (ea_mode == 0) {
             src = static_cast<int16_t>(get_d_w(ea_reg));

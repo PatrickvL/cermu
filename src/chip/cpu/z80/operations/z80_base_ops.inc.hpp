@@ -19,11 +19,11 @@
 // ========================================================================
 bus_state_t op_ld_r_n(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
         set_reg8((opcode_ >> 3) & 7, BUS_GET_DATA(pins));
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         transition_to_fetch();
         return pins;
@@ -39,7 +39,7 @@ bus_state_t op_ld_r_hl(bus_state_t pins) {
     if (!has_ix_iy_prefix()) {
         // Standard LD r,(HL) — 3 extra T-states
         switch (step_++) {
-        case 0: return bus_setup_mem_read(pins, regs_[REG_HL]);
+        case 0: return bus_setup_mem_read(pins, regs_[HL]);
         case 1: if (!wait_check(pins)) return pins; return pins;
         case 2:
             set_reg8_direct((opcode_ >> 3) & 7, BUS_GET_DATA(pins));
@@ -50,18 +50,18 @@ bus_state_t op_ld_r_hl(bus_state_t pins) {
     } else {
         // LD r,(IX+d) / LD r,(IY+d) — 15 extra T-states
         switch (step_++) {
-        case 0: return bus_setup_mem_read(pins, regs_[REG_PC]); // Read displacement
+        case 0: return bus_setup_mem_read(pins, regs_[PC]); // Read displacement
         case 1: if (!wait_check(pins)) return pins; return pins;
         case 2:
             displacement_ = static_cast<int8_t>(BUS_GET_DATA(pins));
-            regs_[REG_PC]++;
+            regs_[PC]++;
             bus_finish_mem(pins);
             return pins;
         case 3: case 4: case 5: case 6: case 7: // 5 idle T-states
             return pins;
         case 8: {
             uint16_t addr = get_hl_addr();
-            regs_[REG_WZ] = addr;
+            regs_[WZ] = addr;
             return bus_setup_mem_read(pins, addr); // Read from (IX+d)
         }
         case 9: if (!wait_check(pins)) return pins; return pins;
@@ -82,7 +82,7 @@ bus_state_t op_ld_r_hl(bus_state_t pins) {
 bus_state_t op_ld_hl_r(bus_state_t pins) {
     if (!has_ix_iy_prefix()) {
         switch (step_++) {
-        case 0: return bus_setup_mem_write(pins, regs_[REG_HL], get_reg8_direct(opcode_ & 7));
+        case 0: return bus_setup_mem_write(pins, regs_[HL], get_reg8_direct(opcode_ & 7));
         case 1: if (!wait_check(pins)) return pins; return pins;
         case 2:
             bus_finish_mem(pins);
@@ -91,18 +91,18 @@ bus_state_t op_ld_hl_r(bus_state_t pins) {
         }
     } else {
         switch (step_++) {
-        case 0: return bus_setup_mem_read(pins, regs_[REG_PC]); // Read displacement
+        case 0: return bus_setup_mem_read(pins, regs_[PC]); // Read displacement
         case 1: if (!wait_check(pins)) return pins; return pins;
         case 2:
             displacement_ = static_cast<int8_t>(BUS_GET_DATA(pins));
-            regs_[REG_PC]++;
+            regs_[PC]++;
             bus_finish_mem(pins);
             return pins;
         case 3: case 4: case 5: case 6: case 7:
             return pins;
         case 8: {
             uint16_t addr = get_hl_addr();
-            regs_[REG_WZ] = addr;
+            regs_[WZ] = addr;
             return bus_setup_mem_write(pins, addr, get_reg8_direct(opcode_ & 7));
         }
         case 9: if (!wait_check(pins)) return pins; return pins;
@@ -121,14 +121,14 @@ bus_state_t op_ld_hl_r(bus_state_t pins) {
 bus_state_t op_ld_hl_n(bus_state_t pins) {
     if (!has_ix_iy_prefix()) {
         switch (step_++) {
-        case 0: return bus_setup_mem_read(pins, regs_[REG_PC]); // Read immediate n
+        case 0: return bus_setup_mem_read(pins, regs_[PC]); // Read immediate n
         case 1: if (!wait_check(pins)) return pins; return pins;
         case 2:
             data_latch_ = BUS_GET_DATA(pins);
-            regs_[REG_PC]++;
+            regs_[PC]++;
             bus_finish_mem(pins);
             return pins;
-        case 3: return bus_setup_mem_write(pins, regs_[REG_HL], data_latch_);
+        case 3: return bus_setup_mem_write(pins, regs_[HL], data_latch_);
         case 4: if (!wait_check(pins)) return pins; return pins;
         case 5:
             bus_finish_mem(pins);
@@ -138,25 +138,25 @@ bus_state_t op_ld_hl_n(bus_state_t pins) {
     } else {
         // LD (IX+d),n — 19T (M1:4 + read_d:3 + read_n:3 + idle:2 + write:3)
         switch (step_++) {
-        case 0: return bus_setup_mem_read(pins, regs_[REG_PC]); // Read displacement
+        case 0: return bus_setup_mem_read(pins, regs_[PC]); // Read displacement
         case 1: if (!wait_check(pins)) return pins; return pins;
         case 2:
             displacement_ = static_cast<int8_t>(BUS_GET_DATA(pins));
-            regs_[REG_PC]++;
+            regs_[PC]++;
             bus_finish_mem(pins);
             return pins;
-        case 3: return bus_setup_mem_read(pins, regs_[REG_PC]); // Read n
+        case 3: return bus_setup_mem_read(pins, regs_[PC]); // Read n
         case 4: if (!wait_check(pins)) return pins; return pins;
         case 5:
             data_latch_ = BUS_GET_DATA(pins);
-            regs_[REG_PC]++;
+            regs_[PC]++;
             bus_finish_mem(pins);
             return pins;
         case 6: case 7: // 2 idle T-states
             return pins;
         case 8: {
             uint16_t addr = get_hl_addr();
-            regs_[REG_WZ] = addr;
+            regs_[WZ] = addr;
             return bus_setup_mem_write(pins, addr, data_latch_);
         }
         case 9: if (!wait_check(pins)) return pins; return pins;
@@ -175,16 +175,16 @@ bus_state_t op_ld_hl_n(bus_state_t pins) {
 bus_state_t op_ld_a_indirect(bus_state_t pins) {
     switch (step_++) {
     case 0: {
-        uint16_t addr = (opcode_ & 0x10) ? regs_[REG_DE] : regs_[REG_BC];
+        uint16_t addr = (opcode_ & 0x10) ? regs_[DE] : regs_[BC];
         return bus_setup_mem_read(pins, addr);
     }
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
-        regs_[REG_A] = BUS_GET_DATA(pins);
+        regs_[A] = BUS_GET_DATA(pins);
         bus_finish_mem(pins);
         // WZ = addr + 1
-        uint16_t addr = (opcode_ & 0x10) ? regs_[REG_DE] : regs_[REG_BC];
-        regs_[REG_WZ] = addr + 1;
+        uint16_t addr = (opcode_ & 0x10) ? regs_[DE] : regs_[BC];
+        regs_[WZ] = addr + 1;
         transition_to_fetch();
         return pins;
     }
@@ -197,15 +197,15 @@ bus_state_t op_ld_a_indirect(bus_state_t pins) {
 bus_state_t op_ld_indirect_a(bus_state_t pins) {
     switch (step_++) {
     case 0: {
-        uint16_t addr = (opcode_ & 0x10) ? regs_[REG_DE] : regs_[REG_BC];
-        return bus_setup_mem_write(pins, addr, regs_[REG_A]);
+        uint16_t addr = (opcode_ & 0x10) ? regs_[DE] : regs_[BC];
+        return bus_setup_mem_write(pins, addr, regs_[A]);
     }
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2: {
         bus_finish_mem(pins);
         // WZ: low byte = (addr + 1) & 0xFF, high byte = A
-        uint16_t addr = (opcode_ & 0x10) ? regs_[REG_DE] : regs_[REG_BC];
-        regs_[REG_WZ] = (static_cast<uint16_t>(regs_[REG_A]) << 8) | ((addr + 1) & 0xFF);
+        uint16_t addr = (opcode_ & 0x10) ? regs_[DE] : regs_[BC];
+        regs_[WZ] = (static_cast<uint16_t>(regs_[A]) << 8) | ((addr + 1) & 0xFF);
         transition_to_fetch();
         return pins;
     }
@@ -218,25 +218,25 @@ bus_state_t op_ld_indirect_a(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_ld_a_nn(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_mem_read(pins, regs_[REG_PC]); // Read addr low
+    case 0: return bus_setup_mem_read(pins, regs_[PC]); // Read addr low
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
         addr_latch_ = BUS_GET_DATA(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         return pins;
-    case 3: return bus_setup_mem_read(pins, regs_[REG_PC]); // Read addr high
+    case 3: return bus_setup_mem_read(pins, regs_[PC]); // Read addr high
     case 4: if (!wait_check(pins)) return pins; return pins;
     case 5:
         addr_latch_ |= static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8;
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         return pins;
     case 6: return bus_setup_mem_read(pins, addr_latch_); // Read data
     case 7: if (!wait_check(pins)) return pins; return pins;
     case 8:
-        regs_[REG_A] = BUS_GET_DATA(pins);
-        regs_[REG_WZ] = addr_latch_ + 1;
+        regs_[A] = BUS_GET_DATA(pins);
+        regs_[WZ] = addr_latch_ + 1;
         bus_finish_mem(pins);
         transition_to_fetch();
         return pins;
@@ -249,26 +249,26 @@ bus_state_t op_ld_a_nn(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_ld_nn_a(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
         addr_latch_ = BUS_GET_DATA(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         return pins;
-    case 3: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 3: return bus_setup_mem_read(pins, regs_[PC]);
     case 4: if (!wait_check(pins)) return pins; return pins;
     case 5:
         addr_latch_ |= static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8;
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         return pins;
-    case 6: return bus_setup_mem_write(pins, addr_latch_, regs_[REG_A]);
+    case 6: return bus_setup_mem_write(pins, addr_latch_, regs_[A]);
     case 7: if (!wait_check(pins)) return pins; return pins;
     case 8:
         bus_finish_mem(pins);
         // WZ: low byte = (nn + 1) & 0xFF, high byte = A
-        regs_[REG_WZ] = (static_cast<uint16_t>(regs_[REG_A]) << 8) | ((addr_latch_ + 1) & 0xFF);
+        regs_[WZ] = (static_cast<uint16_t>(regs_[A]) << 8) | ((addr_latch_ + 1) & 0xFF);
         transition_to_fetch();
         return pins;
     }
@@ -280,18 +280,18 @@ bus_state_t op_ld_nn_a(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_ld_rr_nn(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
         data_latch_ = BUS_GET_DATA(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         return pins;
-    case 3: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 3: return bus_setup_mem_read(pins, regs_[PC]);
     case 4: if (!wait_check(pins)) return pins; return pins;
     case 5: {
         uint16_t val = data_latch_ | (static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         set_reg16((opcode_ >> 4) & 3, val);
         transition_to_fetch();
@@ -306,18 +306,18 @@ bus_state_t op_ld_rr_nn(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_ld_nn_hl(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
         addr_latch_ = BUS_GET_DATA(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         return pins;
-    case 3: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 3: return bus_setup_mem_read(pins, regs_[PC]);
     case 4: if (!wait_check(pins)) return pins; return pins;
     case 5:
         addr_latch_ |= static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8;
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         return pins;
     case 6: return bus_setup_mem_write(pins, addr_latch_, static_cast<uint8_t>(get_hl() & 0xFF));
@@ -328,7 +328,7 @@ bus_state_t op_ld_nn_hl(bus_state_t pins) {
     case 9: return bus_setup_mem_write(pins, addr_latch_ + 1, static_cast<uint8_t>(get_hl() >> 8));
     case 10: if (!wait_check(pins)) return pins; return pins;
     case 11:
-        regs_[REG_WZ] = addr_latch_ + 1;
+        regs_[WZ] = addr_latch_ + 1;
         bus_finish_mem(pins);
         transition_to_fetch();
         return pins;
@@ -341,18 +341,18 @@ bus_state_t op_ld_nn_hl(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_ld_hl_nn(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
         addr_latch_ = BUS_GET_DATA(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         return pins;
-    case 3: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 3: return bus_setup_mem_read(pins, regs_[PC]);
     case 4: if (!wait_check(pins)) return pins; return pins;
     case 5:
         addr_latch_ |= static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8;
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         return pins;
     case 6: return bus_setup_mem_read(pins, addr_latch_);
@@ -365,7 +365,7 @@ bus_state_t op_ld_hl_nn(bus_state_t pins) {
     case 10: if (!wait_check(pins)) return pins; return pins;
     case 11: {
         uint16_t val = data_latch_ | (static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8);
-        regs_[REG_WZ] = addr_latch_ + 1;
+        regs_[WZ] = addr_latch_ + 1;
         bus_finish_mem(pins);
         set_hl(val);
         transition_to_fetch();
@@ -382,7 +382,7 @@ bus_state_t op_ld_sp_hl(bus_state_t pins) {
     switch (step_++) {
     case 0: return pins; // 1st internal T-state
     case 1: // 2nd internal T-state
-        regs_[REG_SP] = get_hl();
+        regs_[SP] = get_hl();
         transition_to_fetch();
         return pins;
     }
@@ -394,11 +394,11 @@ bus_state_t op_ld_sp_hl(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_alu_n(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
         alu_op((opcode_ >> 3) & 7, BUS_GET_DATA(pins));
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         transition_to_fetch();
         return pins;
@@ -413,7 +413,7 @@ bus_state_t op_alu_n(bus_state_t pins) {
 bus_state_t op_alu_hl(bus_state_t pins) {
     if (!has_ix_iy_prefix()) {
         switch (step_++) {
-        case 0: return bus_setup_mem_read(pins, regs_[REG_HL]);
+        case 0: return bus_setup_mem_read(pins, regs_[HL]);
         case 1: if (!wait_check(pins)) return pins; return pins;
         case 2:
             alu_op((opcode_ >> 3) & 7, BUS_GET_DATA(pins));
@@ -423,18 +423,18 @@ bus_state_t op_alu_hl(bus_state_t pins) {
         }
     } else {
         switch (step_++) {
-        case 0: return bus_setup_mem_read(pins, regs_[REG_PC]);
+        case 0: return bus_setup_mem_read(pins, regs_[PC]);
         case 1: if (!wait_check(pins)) return pins; return pins;
         case 2:
             displacement_ = static_cast<int8_t>(BUS_GET_DATA(pins));
-            regs_[REG_PC]++;
+            regs_[PC]++;
             bus_finish_mem(pins);
             return pins;
         case 3: case 4: case 5: case 6: case 7:
             return pins;
         case 8: {
             uint16_t addr = get_hl_addr();
-            regs_[REG_WZ] = addr;
+            regs_[WZ] = addr;
             return bus_setup_mem_read(pins, addr);
         }
         case 9: if (!wait_check(pins)) return pins; return pins;
@@ -454,14 +454,14 @@ bus_state_t op_alu_hl(bus_state_t pins) {
 bus_state_t op_inc_hl(bus_state_t pins) {
     if (!has_ix_iy_prefix()) {
         switch (step_++) {
-        case 0: return bus_setup_mem_read(pins, regs_[REG_HL]);
+        case 0: return bus_setup_mem_read(pins, regs_[HL]);
         case 1: if (!wait_check(pins)) return pins; return pins;
         case 2:
             data_latch_ = alu_inc(BUS_GET_DATA(pins));
             bus_finish_mem(pins);
             return pins;
         case 3: return pins; // 1 internal T-state
-        case 4: return bus_setup_mem_write(pins, regs_[REG_HL], data_latch_);
+        case 4: return bus_setup_mem_write(pins, regs_[HL], data_latch_);
         case 5: if (!wait_check(pins)) return pins; return pins;
         case 6:
             bus_finish_mem(pins);
@@ -470,18 +470,18 @@ bus_state_t op_inc_hl(bus_state_t pins) {
         }
     } else {
         switch (step_++) {
-        case 0: return bus_setup_mem_read(pins, regs_[REG_PC]);
+        case 0: return bus_setup_mem_read(pins, regs_[PC]);
         case 1: if (!wait_check(pins)) return pins; return pins;
         case 2:
             displacement_ = static_cast<int8_t>(BUS_GET_DATA(pins));
-            regs_[REG_PC]++;
+            regs_[PC]++;
             bus_finish_mem(pins);
             return pins;
         case 3: case 4: case 5: case 6: case 7:
             return pins;
         case 8: {
             uint16_t addr = get_hl_addr();
-            regs_[REG_WZ] = addr;
+            regs_[WZ] = addr;
             addr_latch_ = addr;
             return bus_setup_mem_read(pins, addr);
         }
@@ -505,14 +505,14 @@ bus_state_t op_inc_hl(bus_state_t pins) {
 bus_state_t op_dec_hl(bus_state_t pins) {
     if (!has_ix_iy_prefix()) {
         switch (step_++) {
-        case 0: return bus_setup_mem_read(pins, regs_[REG_HL]);
+        case 0: return bus_setup_mem_read(pins, regs_[HL]);
         case 1: if (!wait_check(pins)) return pins; return pins;
         case 2:
             data_latch_ = alu_dec(BUS_GET_DATA(pins));
             bus_finish_mem(pins);
             return pins;
         case 3: return pins;
-        case 4: return bus_setup_mem_write(pins, regs_[REG_HL], data_latch_);
+        case 4: return bus_setup_mem_write(pins, regs_[HL], data_latch_);
         case 5: if (!wait_check(pins)) return pins; return pins;
         case 6:
             bus_finish_mem(pins);
@@ -521,18 +521,18 @@ bus_state_t op_dec_hl(bus_state_t pins) {
         }
     } else {
         switch (step_++) {
-        case 0: return bus_setup_mem_read(pins, regs_[REG_PC]);
+        case 0: return bus_setup_mem_read(pins, regs_[PC]);
         case 1: if (!wait_check(pins)) return pins; return pins;
         case 2:
             displacement_ = static_cast<int8_t>(BUS_GET_DATA(pins));
-            regs_[REG_PC]++;
+            regs_[PC]++;
             bus_finish_mem(pins);
             return pins;
         case 3: case 4: case 5: case 6: case 7:
             return pins;
         case 8: {
             uint16_t addr = get_hl_addr();
-            regs_[REG_WZ] = addr;
+            regs_[WZ] = addr;
             addr_latch_ = addr;
             return bus_setup_mem_read(pins, addr);
         }
@@ -592,7 +592,7 @@ bus_state_t op_add_hl_rr(bus_state_t pins) {
     case 6: {
         uint8_t p = (opcode_ >> 4) & 3;
         uint16_t hl = get_hl();
-        regs_[REG_WZ] = hl + 1; // WZ = HL_before + 1
+        regs_[WZ] = hl + 1; // WZ = HL_before + 1
         alu_add16(hl, get_reg16(p));
         set_hl(hl);
         transition_to_fetch();
@@ -611,14 +611,14 @@ bus_state_t op_push(bus_state_t pins) {
     switch (step_++) {
     case 0: return pins; // 1 internal T-state
     case 1:
-        regs_[REG_SP]--;
-        return bus_setup_mem_write(pins, regs_[REG_SP], static_cast<uint8_t>(val >> 8));
+        regs_[SP]--;
+        return bus_setup_mem_write(pins, regs_[SP], static_cast<uint8_t>(val >> 8));
     case 2: if (!wait_check(pins)) return pins; return pins;
     case 3:
         bus_finish_mem(pins);
-        regs_[REG_SP]--;
+        regs_[SP]--;
         return pins;
-    case 4: return bus_setup_mem_write(pins, regs_[REG_SP], static_cast<uint8_t>(val & 0xFF));
+    case 4: return bus_setup_mem_write(pins, regs_[SP], static_cast<uint8_t>(val & 0xFF));
     case 5: if (!wait_check(pins)) return pins; return pins;
     case 6:
         bus_finish_mem(pins);
@@ -633,18 +633,18 @@ bus_state_t op_push(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_pop(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_mem_read(pins, regs_[REG_SP]);
+    case 0: return bus_setup_mem_read(pins, regs_[SP]);
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
         data_latch_ = BUS_GET_DATA(pins);
-        regs_[REG_SP]++;
+        regs_[SP]++;
         bus_finish_mem(pins);
         return pins;
-    case 3: return bus_setup_mem_read(pins, regs_[REG_SP]);
+    case 3: return bus_setup_mem_read(pins, regs_[SP]);
     case 4: if (!wait_check(pins)) return pins; return pins;
     case 5: {
         uint16_t val = data_latch_ | (static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8);
-        regs_[REG_SP]++;
+        regs_[SP]++;
         bus_finish_mem(pins);
         uint8_t p = (opcode_ >> 4) & 3;
         set_reg16_af(p, val);
@@ -660,25 +660,25 @@ bus_state_t op_pop(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_ex_sp_hl(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_mem_read(pins, regs_[REG_SP]);       // Read low from (SP)
+    case 0: return bus_setup_mem_read(pins, regs_[SP]);       // Read low from (SP)
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
         data_latch_ = BUS_GET_DATA(pins);
         bus_finish_mem(pins);
         return pins;
-    case 3: return bus_setup_mem_read(pins, regs_[REG_SP] + 1);   // Read high from (SP+1)
+    case 3: return bus_setup_mem_read(pins, regs_[SP] + 1);   // Read high from (SP+1)
     case 4: if (!wait_check(pins)) return pins; return pins;
     case 5:
         addr_latch_ = data_latch_ | (static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8);
         bus_finish_mem(pins);
         return pins;
     case 6: return pins; // 1 internal T-state
-    case 7: return bus_setup_mem_write(pins, regs_[REG_SP] + 1, static_cast<uint8_t>(get_hl() >> 8));
+    case 7: return bus_setup_mem_write(pins, regs_[SP] + 1, static_cast<uint8_t>(get_hl() >> 8));
     case 8: if (!wait_check(pins)) return pins; return pins;
     case 9:
         bus_finish_mem(pins);
         return pins;
-    case 10: return bus_setup_mem_write(pins, regs_[REG_SP], static_cast<uint8_t>(get_hl() & 0xFF));
+    case 10: return bus_setup_mem_write(pins, regs_[SP], static_cast<uint8_t>(get_hl() & 0xFF));
     case 11: if (!wait_check(pins)) return pins; return pins;
     case 12:
         bus_finish_mem(pins);
@@ -686,7 +686,7 @@ bus_state_t op_ex_sp_hl(bus_state_t pins) {
     case 13: return pins; // 1st internal T-state
     case 14: // 2nd internal T-state
         set_hl(addr_latch_);
-        regs_[REG_WZ] = addr_latch_;
+        regs_[WZ] = addr_latch_;
         transition_to_fetch();
         return pins;
     }
@@ -698,19 +698,19 @@ bus_state_t op_ex_sp_hl(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_jp_nn(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
         addr_latch_ = BUS_GET_DATA(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         return pins;
-    case 3: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 3: return bus_setup_mem_read(pins, regs_[PC]);
     case 4: if (!wait_check(pins)) return pins; return pins;
     case 5:
         addr_latch_ |= static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8;
-        regs_[REG_PC] = addr_latch_;
-        regs_[REG_WZ] = addr_latch_;
+        regs_[PC] = addr_latch_;
+        regs_[WZ] = addr_latch_;
         bus_finish_mem(pins);
         transition_to_fetch();
         return pins;
@@ -723,22 +723,22 @@ bus_state_t op_jp_nn(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_jp_cc_nn(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
         addr_latch_ = BUS_GET_DATA(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         return pins;
-    case 3: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 3: return bus_setup_mem_read(pins, regs_[PC]);
     case 4: if (!wait_check(pins)) return pins; return pins;
     case 5:
         addr_latch_ |= static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8;
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
-        regs_[REG_WZ] = addr_latch_;
+        regs_[WZ] = addr_latch_;
         if (test_cc((opcode_ >> 3) & 7)) {
-            regs_[REG_PC] = addr_latch_;
+            regs_[PC] = addr_latch_;
         }
         transition_to_fetch();
         return pins;
@@ -751,18 +751,18 @@ bus_state_t op_jp_cc_nn(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_jr_e(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
         displacement_ = static_cast<int8_t>(BUS_GET_DATA(pins));
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         return pins;
     case 3: case 4: case 5: case 6: // 4 internal T-states
         return pins;
     case 7: // 5th internal T-state
-        regs_[REG_PC] = static_cast<uint16_t>(regs_[REG_PC] + displacement_);
-        regs_[REG_WZ] = regs_[REG_PC];
+        regs_[PC] = static_cast<uint16_t>(regs_[PC] + displacement_);
+        regs_[WZ] = regs_[PC];
         transition_to_fetch();
         return pins;
     }
@@ -774,11 +774,11 @@ bus_state_t op_jr_e(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_jr_cc_e(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
         displacement_ = static_cast<int8_t>(BUS_GET_DATA(pins));
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         // Condition is encoded in bits 4-3 of opcode (cc2: 0=NZ, 1=Z, 2=NC, 3=C)
         if (!test_cc2(((opcode_ >> 3) & 3) + (opcode_ & 0x08 ? 0 : 0))) {
@@ -789,8 +789,8 @@ bus_state_t op_jr_cc_e(bus_state_t pins) {
     case 3: case 4: case 5: case 6: // 4 internal T-states (branch taken)
         return pins;
     case 7: // 5th internal T-state
-        regs_[REG_PC] = static_cast<uint16_t>(regs_[REG_PC] + displacement_);
-        regs_[REG_WZ] = regs_[REG_PC];
+        regs_[PC] = static_cast<uint16_t>(regs_[PC] + displacement_);
+        regs_[WZ] = regs_[PC];
         transition_to_fetch();
         return pins;
     }
@@ -804,22 +804,22 @@ bus_state_t op_jr_cc_e(bus_state_t pins) {
 bus_state_t op_djnz(bus_state_t pins) {
     switch (step_++) {
     case 0: return pins; // 1 extra internal T-state (M1 was already 4T, this makes it 5T effective)
-    case 1: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 1: return bus_setup_mem_read(pins, regs_[PC]);
     case 2: if (!wait_check(pins)) return pins; return pins;
     case 3:
         displacement_ = static_cast<int8_t>(BUS_GET_DATA(pins));
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
-        regs_[REG_B]--;
-        if (regs_[REG_B] == 0) {
+        regs_[B]--;
+        if (regs_[B] == 0) {
             transition_to_fetch(); // Not taken: 8T
         }
         return pins;
     case 4: case 5: case 6: case 7: // 4 internal T-states (branch taken)
         return pins;
     case 8: // 5th internal T-state
-        regs_[REG_PC] = static_cast<uint16_t>(regs_[REG_PC] + displacement_);
-        regs_[REG_WZ] = regs_[REG_PC];
+        regs_[PC] = static_cast<uint16_t>(regs_[PC] + displacement_);
+        regs_[WZ] = regs_[PC];
         transition_to_fetch();
         return pins;
     }
@@ -831,35 +831,35 @@ bus_state_t op_djnz(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_call_nn(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
         addr_latch_ = BUS_GET_DATA(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         return pins;
-    case 3: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 3: return bus_setup_mem_read(pins, regs_[PC]);
     case 4: if (!wait_check(pins)) return pins; return pins;
     case 5:
         addr_latch_ |= static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8;
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         return pins;
     case 6: return pins; // 1 internal T-state
     case 7:
-        regs_[REG_SP]--;
-        return bus_setup_mem_write(pins, regs_[REG_SP], static_cast<uint8_t>(regs_[REG_PC] >> 8));
+        regs_[SP]--;
+        return bus_setup_mem_write(pins, regs_[SP], static_cast<uint8_t>(regs_[PC] >> 8));
     case 8: if (!wait_check(pins)) return pins; return pins;
     case 9:
         bus_finish_mem(pins);
-        regs_[REG_SP]--;
+        regs_[SP]--;
         return pins;
-    case 10: return bus_setup_mem_write(pins, regs_[REG_SP], static_cast<uint8_t>(regs_[REG_PC] & 0xFF));
+    case 10: return bus_setup_mem_write(pins, regs_[SP], static_cast<uint8_t>(regs_[PC] & 0xFF));
     case 11: if (!wait_check(pins)) return pins; return pins;
     case 12:
         bus_finish_mem(pins);
-        regs_[REG_PC] = addr_latch_;
-        regs_[REG_WZ] = addr_latch_;
+        regs_[PC] = addr_latch_;
+        regs_[WZ] = addr_latch_;
         transition_to_fetch();
         return pins;
     }
@@ -871,38 +871,38 @@ bus_state_t op_call_nn(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_call_cc_nn(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
         addr_latch_ = BUS_GET_DATA(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         return pins;
-    case 3: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 3: return bus_setup_mem_read(pins, regs_[PC]);
     case 4: if (!wait_check(pins)) return pins; return pins;
     case 5:
         addr_latch_ |= static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8;
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
-        regs_[REG_WZ] = addr_latch_;
+        regs_[WZ] = addr_latch_;
         if (!test_cc((opcode_ >> 3) & 7)) {
             transition_to_fetch(); // Not taken: 10T
         }
         return pins;
     case 6: return pins; // 1 internal (taken path)
     case 7:
-        regs_[REG_SP]--;
-        return bus_setup_mem_write(pins, regs_[REG_SP], static_cast<uint8_t>(regs_[REG_PC] >> 8));
+        regs_[SP]--;
+        return bus_setup_mem_write(pins, regs_[SP], static_cast<uint8_t>(regs_[PC] >> 8));
     case 8: if (!wait_check(pins)) return pins; return pins;
     case 9:
         bus_finish_mem(pins);
-        regs_[REG_SP]--;
+        regs_[SP]--;
         return pins;
-    case 10: return bus_setup_mem_write(pins, regs_[REG_SP], static_cast<uint8_t>(regs_[REG_PC] & 0xFF));
+    case 10: return bus_setup_mem_write(pins, regs_[SP], static_cast<uint8_t>(regs_[PC] & 0xFF));
     case 11: if (!wait_check(pins)) return pins; return pins;
     case 12:
         bus_finish_mem(pins);
-        regs_[REG_PC] = addr_latch_;
+        regs_[PC] = addr_latch_;
         transition_to_fetch();
         return pins;
     }
@@ -914,21 +914,21 @@ bus_state_t op_call_cc_nn(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_ret(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_mem_read(pins, regs_[REG_SP]);
+    case 0: return bus_setup_mem_read(pins, regs_[SP]);
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
         addr_latch_ = BUS_GET_DATA(pins);
-        regs_[REG_SP]++;
+        regs_[SP]++;
         bus_finish_mem(pins);
         return pins;
-    case 3: return bus_setup_mem_read(pins, regs_[REG_SP]);
+    case 3: return bus_setup_mem_read(pins, regs_[SP]);
     case 4: if (!wait_check(pins)) return pins; return pins;
     case 5:
         addr_latch_ |= static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8;
-        regs_[REG_SP]++;
+        regs_[SP]++;
         bus_finish_mem(pins);
-        regs_[REG_PC] = addr_latch_;
-        regs_[REG_WZ] = addr_latch_;
+        regs_[PC] = addr_latch_;
+        regs_[WZ] = addr_latch_;
         transition_to_fetch();
         return pins;
     }
@@ -945,21 +945,21 @@ bus_state_t op_ret_cc(bus_state_t pins) {
             transition_to_fetch(); // Not taken: 5T
         }
         return pins;
-    case 1: return bus_setup_mem_read(pins, regs_[REG_SP]);
+    case 1: return bus_setup_mem_read(pins, regs_[SP]);
     case 2: if (!wait_check(pins)) return pins; return pins;
     case 3:
         addr_latch_ = BUS_GET_DATA(pins);
-        regs_[REG_SP]++;
+        regs_[SP]++;
         bus_finish_mem(pins);
         return pins;
-    case 4: return bus_setup_mem_read(pins, regs_[REG_SP]);
+    case 4: return bus_setup_mem_read(pins, regs_[SP]);
     case 5: if (!wait_check(pins)) return pins; return pins;
     case 6:
         addr_latch_ |= static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8;
-        regs_[REG_SP]++;
+        regs_[SP]++;
         bus_finish_mem(pins);
-        regs_[REG_PC] = addr_latch_;
-        regs_[REG_WZ] = addr_latch_;
+        regs_[PC] = addr_latch_;
+        regs_[WZ] = addr_latch_;
         transition_to_fetch();
         return pins;
     }
@@ -973,19 +973,19 @@ bus_state_t op_rst(bus_state_t pins) {
     switch (step_++) {
     case 0: return pins; // 1 extra internal T-state
     case 1:
-        regs_[REG_SP]--;
-        return bus_setup_mem_write(pins, regs_[REG_SP], static_cast<uint8_t>(regs_[REG_PC] >> 8));
+        regs_[SP]--;
+        return bus_setup_mem_write(pins, regs_[SP], static_cast<uint8_t>(regs_[PC] >> 8));
     case 2: if (!wait_check(pins)) return pins; return pins;
     case 3:
         bus_finish_mem(pins);
-        regs_[REG_SP]--;
+        regs_[SP]--;
         return pins;
-    case 4: return bus_setup_mem_write(pins, regs_[REG_SP], static_cast<uint8_t>(regs_[REG_PC] & 0xFF));
+    case 4: return bus_setup_mem_write(pins, regs_[SP], static_cast<uint8_t>(regs_[PC] & 0xFF));
     case 5: if (!wait_check(pins)) return pins; return pins;
     case 6:
         bus_finish_mem(pins);
-        regs_[REG_PC] = opcode_ & 0x38; // RST target = y * 8
-        regs_[REG_WZ] = regs_[REG_PC];
+        regs_[PC] = opcode_ & 0x38; // RST target = y * 8
+        regs_[WZ] = regs_[PC];
         transition_to_fetch();
         return pins;
     }
@@ -997,24 +997,24 @@ bus_state_t op_rst(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_in_a_n(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
         data_latch_ = BUS_GET_DATA(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         return pins;
     case 3: {
-        uint16_t port = (static_cast<uint16_t>(regs_[REG_A]) << 8) | data_latch_;
+        uint16_t port = (static_cast<uint16_t>(regs_[A]) << 8) | data_latch_;
         addr_latch_ = port; // Save port address for WZ calculation
         return bus_setup_io_read(pins, port);
     }
     case 4: if (!wait_check(pins)) return pins; return pins;
     case 5: return pins; // IO automatic TW
     case 6:
-        regs_[REG_A] = BUS_GET_DATA(pins);
+        regs_[A] = BUS_GET_DATA(pins);
         bus_finish_io(pins);
-        regs_[REG_WZ] = addr_latch_ + 1; // WZ = port address + 1
+        regs_[WZ] = addr_latch_ + 1; // WZ = port address + 1
         transition_to_fetch();
         return pins;
     }
@@ -1026,23 +1026,23 @@ bus_state_t op_in_a_n(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_out_n_a(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_mem_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
         data_latch_ = BUS_GET_DATA(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         bus_finish_mem(pins);
         return pins;
     case 3: {
-        uint16_t port = (static_cast<uint16_t>(regs_[REG_A]) << 8) | data_latch_;
-        return bus_setup_io_write(pins, port, regs_[REG_A]);
+        uint16_t port = (static_cast<uint16_t>(regs_[A]) << 8) | data_latch_;
+        return bus_setup_io_write(pins, port, regs_[A]);
     }
     case 4: if (!wait_check(pins)) return pins; return pins;
     case 5: return pins; // IO automatic TW
     case 6:
         bus_finish_io(pins);
         // WZ: low byte = (n + 1) & 0xFF, high byte = A
-        regs_[REG_WZ] = (static_cast<uint16_t>(regs_[REG_A]) << 8) | ((data_latch_ + 1) & 0xFF);
+        regs_[WZ] = (static_cast<uint16_t>(regs_[A]) << 8) | ((data_latch_ + 1) & 0xFF);
         transition_to_fetch();
         return pins;
     }

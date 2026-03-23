@@ -23,7 +23,32 @@
 
 using namespace z80;
 
+// ============================================================================
+// Debug registration (DECL-driven)
+// ============================================================================
+
+#ifdef CERMU_HAS_CHIP_DEBUG
+
+template <const Z80Traits& Traits>
+void z80_t<Traits>::register_debug_fields() {
+    auto& r = this->debug_registry_;
+    r.set_registers(regs_.debug_ptr(), regs_.debug_size(), Z80_REG_INFO);
+    r.set_decl_entries(Z80_DECL_ENTRIES.data(), Z80_DECL_ENTRIES.size());
+}
+
+template void z80_t<ZilogZ80Traits>::register_debug_fields();
+template void z80_t<ZilogZ80ATraits>::register_debug_fields();
+template void z80_t<ZilogZ80BTraits>::register_debug_fields();
+template void z80_t<U880Traits>::register_debug_fields();
+
+#endif // CERMU_HAS_CHIP_DEBUG
+
 #ifdef CERMU_HAS_GUI
+
+template <const Z80Traits& Traits>
+void z80_t<Traits>::render_debug_content() {
+    debug_registry_.render(this);
+}
 
 // ============================================================================
 // ChipBase virtual method implementations (template definitions)
@@ -144,18 +169,22 @@ const char* z80_t<Traits>::get_layout_chip_name() const {
 template ChipLayout*               z80_t<ZilogZ80Traits>::create_chip_layout() const;
 template std::vector<PinSignalState> z80_t<ZilogZ80Traits>::get_layout_pin_states(ChipLayout&);
 template const char*                z80_t<ZilogZ80Traits>::get_layout_chip_name() const;
+template void                       z80_t<ZilogZ80Traits>::render_debug_content();
 
 template ChipLayout*               z80_t<ZilogZ80ATraits>::create_chip_layout() const;
 template std::vector<PinSignalState> z80_t<ZilogZ80ATraits>::get_layout_pin_states(ChipLayout&);
 template const char*                z80_t<ZilogZ80ATraits>::get_layout_chip_name() const;
+template void                       z80_t<ZilogZ80ATraits>::render_debug_content();
 
 template ChipLayout*               z80_t<ZilogZ80BTraits>::create_chip_layout() const;
 template std::vector<PinSignalState> z80_t<ZilogZ80BTraits>::get_layout_pin_states(ChipLayout&);
 template const char*                z80_t<ZilogZ80BTraits>::get_layout_chip_name() const;
+template void                       z80_t<ZilogZ80BTraits>::render_debug_content();
 
 template ChipLayout*               z80_t<U880Traits>::create_chip_layout() const;
 template std::vector<PinSignalState> z80_t<U880Traits>::get_layout_pin_states(ChipLayout&);
 template const char*                z80_t<U880Traits>::get_layout_chip_name() const;
+template void                       z80_t<U880Traits>::render_debug_content();
 
 } // namespace z80
 
