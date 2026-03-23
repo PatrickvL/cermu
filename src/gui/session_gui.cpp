@@ -1469,7 +1469,22 @@ void SessionGUI::allocate_framebuffer() {
 
     // Cache the system's signal type for emu thread dispatch
     active_signal_type_ = system_->get_video_signal_type();
-    
+
+    // Look up the active display device from the system's owned peripherals.
+    // If found, cache its characteristics for the rendering pipeline.
+    display_device_ = nullptr;
+    for (const auto& dev : system_->get_owned_devices()) {
+        auto* dd = dynamic_cast<DisplayDevice*>(dev.get());
+        if (dd) {
+            display_device_ = dd;
+            display_characteristics_ = dd->get_display_characteristics();
+            break;
+        }
+    }
+    if (!display_device_) {
+        display_characteristics_ = DisplayCharacteristics{};  // defaults
+    }
+
     // Create double-buffered OpenGL textures.
     // Two textures let us upload to one while the GPU may still be
     // reading from the other for the previous frame's draw call,
