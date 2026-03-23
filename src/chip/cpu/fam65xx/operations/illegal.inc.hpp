@@ -429,8 +429,8 @@ bus_state_t op_xaa(bus_state_t pins) {
       ++regs_[PC];
       // (A | magic) & X & operand — same empirical magic as LAX immediate
       constexpr uint8_t magic = has_apu() ? 0xFF : 0xEE;
-      regs_[A] = (regs_[A] | magic & regs_[X] &
-                           operand);
+      regs_[A] = (regs_[A] | magic) & regs_[X] &
+                           operand;
       this->update_nz_flags<WidthMode::ACC>(regs_[A]);
       this->transition_to_fetch();
       return pins;
