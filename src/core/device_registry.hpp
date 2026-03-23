@@ -97,12 +97,19 @@ private:
  *       return std::make_unique<JoystickDevice>();
  *   })
  */
+#define REGISTER_DEVICE_CONCAT_IMPL(a, b) a##b
+#define REGISTER_DEVICE_CONCAT(a, b) REGISTER_DEVICE_CONCAT_IMPL(a, b)
+
 #define REGISTER_DEVICE(descriptor, factory) \
+    REGISTER_DEVICE_IMPL(descriptor, factory, __COUNTER__)
+
+#define REGISTER_DEVICE_IMPL(descriptor, factory, counter) \
     namespace { \
-        struct DeviceRegistrar_##__LINE__ { \
-            DeviceRegistrar_##__LINE__() { \
+        struct REGISTER_DEVICE_CONCAT(DeviceRegistrar_, counter) { \
+            REGISTER_DEVICE_CONCAT(DeviceRegistrar_, counter)() { \
                 DeviceRegistry::instance().register_device(descriptor, factory); \
             } \
         }; \
-        static DeviceRegistrar_##__LINE__ s_device_registrar_##__LINE__; \
+        static REGISTER_DEVICE_CONCAT(DeviceRegistrar_, counter) \
+               REGISTER_DEVICE_CONCAT(s_device_registrar_, counter); \
     }
