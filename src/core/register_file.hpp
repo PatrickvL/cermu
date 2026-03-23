@@ -271,6 +271,42 @@ struct RegisterFile {
         std::memcpy(&data[b.offset], &tmp, sizeof(T));
     }
 
+    // ── Named accessors — public API for external code ──────────
+    //    get(PC)  → uint16_t       set(PC, 0x1000)
+    //    get(A)   → uint8_t        set(A, 0x42)
+    //    inc(PC)  → uint16_t (returns new value)
+    //    dec(SP)  → uint16_t (returns new value)
+
+    template <typename T>
+    inline T get(RegIdx<T> idx) const {
+        T v; std::memcpy(&v, &data[idx.offset], sizeof(T)); return v;
+    }
+
+    template <typename T>
+    inline void set(RegIdx<T> idx, T value) {
+        std::memcpy(&data[idx.offset], &value, sizeof(T));
+    }
+
+    template <typename T>
+    inline T inc(RegIdx<T> idx) {
+        T v; std::memcpy(&v, &data[idx.offset], sizeof(T));
+        ++v;
+        std::memcpy(&data[idx.offset], &v, sizeof(T));
+        return v;
+    }
+
+    template <typename T>
+    inline T dec(RegIdx<T> idx) {
+        T v; std::memcpy(&v, &data[idx.offset], sizeof(T));
+        --v;
+        std::memcpy(&data[idx.offset], &v, sizeof(T));
+        return v;
+    }
+
+    // ── Bulk clear ───────────────────────────────────────────────
+
+    inline void clear() { std::memset(data, 0, Size); }
+
     // ── Debug — zero copy ────────────────────────────────────────
 
     const uint8_t*             debug_ptr()  const { return data; }

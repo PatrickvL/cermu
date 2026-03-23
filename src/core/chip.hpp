@@ -2,6 +2,7 @@
 
 #include "core/cermu.hpp"  // Compiler compatibility macros
 #include "core/chip_debug_registry.hpp"  // Always included: DECL_EXTRACT
+#include "core/register_file.hpp"        // RegisterFile<>
                                   // macros are used at file scope in chip headers
                                   // and need RegEntry/FieldEntry types even in
                                   // non-debug builds.  All data is constexpr —
@@ -153,7 +154,7 @@ public:
     //
     // 128 bytes covers all current chips (max: VIC-II at 66 + TIA at 59).
     static constexpr uint16_t MAX_CHIP_REGS = 128;
-    uint8_t  regs_[MAX_CHIP_REGS] = {};     // Primary register file
+    RegisterFile<MAX_CHIP_REGS> regs_;      // Primary register file
     uint16_t num_regs_ = 0;                 // Active write-register count
     uint8_t* read_regs_ = nullptr;          // Separate read register view (nullptr → reads from regs_)
     uint16_t num_read_regs_ = 0;            // Read register count (0 if shared with regs_)
@@ -174,7 +175,7 @@ protected:
     void init_split_regs(uint16_t write_count, uint16_t read_count) {
         num_regs_      = write_count;
         num_read_regs_ = read_count;
-        read_regs_     = &regs_[write_count];
+        read_regs_     = regs_.data + write_count;
     }
 
 #ifdef CERMU_HAS_GUI

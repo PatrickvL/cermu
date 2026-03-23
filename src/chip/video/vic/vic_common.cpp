@@ -57,7 +57,7 @@ static const uint32_t vic_voice_divisor[VIC_NUM_VOICES] = {
 // System reset function
 void vic_base_t::reset() {
     // Reset registers to default values matching C# initialization
-    memset(regs_, 0, num_regs_);
+    regs_.clear();
     raster_counter = 0;
     current_cycle = 0;
 
@@ -655,7 +655,7 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
 void vic_base_t::register_debug_fields() {
     using V = const vic_base_t;
     auto& r = debug_registry_;
-    r.set_registers(regs_, VIC_NUM_REGS, VIC_REG_INFO, 0x9000);
+    r.set_registers(regs_.data, VIC_NUM_REGS, VIC_REG_INFO, 0x9000);
     r.set_decl_entries(VIC_DECL_ENTRIES.data(), VIC_DECL_ENTRIES.size());
     uint32_t* palette = get_default_palette();
 

@@ -48,7 +48,7 @@ struct pia6532_t : public IoChipBase {
     pia6532_t() : IoChipBase(ChipInfo{"PIA6532", "MOS Technology"}) {
         init_regs(RIOT_NUM_REGS);
 #ifdef CERMU_HAS_CHIP_DEBUG
-        debug_registry_.set_registers(regs_, RIOT_NUM_REGS, RIOT_REG_INFO);
+        debug_registry_.set_registers(regs_.data, RIOT_NUM_REGS, RIOT_REG_INFO);
         register_debug_fields();
 #endif
     }
@@ -93,10 +93,10 @@ struct pia6532_t : public IoChipBase {
 
     // I/O port named accessors (backed by ChipBase::regs_)
 
-    uint8_t& port_a_data = regs_[RIOT_REG_PORTA_DATA];   // Output latch
-    uint8_t& port_a_ddr  = regs_[RIOT_REG_PORTA_DDR];    // Data direction (0=input, 1=output)
-    uint8_t& port_b_data = regs_[RIOT_REG_PORTB_DATA];   // Output latch
-    uint8_t& port_b_ddr  = regs_[RIOT_REG_PORTB_DDR];    // Data direction
+    uint8_t& port_a_data = regs_.data[RIOT_REG_PORTA_DATA];   // Output latch
+    uint8_t& port_a_ddr  = regs_.data[RIOT_REG_PORTA_DDR];    // Data direction (0=input, 1=output)
+    uint8_t& port_b_data = regs_.data[RIOT_REG_PORTB_DATA];   // Output latch
+    uint8_t& port_b_ddr  = regs_.data[RIOT_REG_PORTB_DDR];    // Data direction
 
     // External port inputs (set by system)
     uint8_t port_a_input = 0xFF;      // Input pins (active-low for joystick lines)

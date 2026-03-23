@@ -58,7 +58,7 @@ struct pia6820_t : public IoChipBase {
     pia6820_t() : IoChipBase(ChipInfo{"PIA6820", "Motorola"}) {
         init_regs(PIA_NUM_REGS);
 #ifdef CERMU_HAS_CHIP_DEBUG
-        debug_registry_.set_registers(regs_, PIA_NUM_REGS, PIA_REG_INFO);
+        debug_registry_.set_registers(regs_.data, PIA_NUM_REGS, PIA_REG_INFO);
         register_debug_fields();
 #endif
     }
@@ -83,14 +83,14 @@ struct pia6820_t : public IoChipBase {
     // Register named accessors (backed by ChipBase::regs_)
 
     // Port A registers
-    uint8_t& port_a_data      = regs_[PIA_REG_PORTA_DATA];   // Data register (output latch)
-    uint8_t& port_a_direction  = regs_[PIA_REG_PORTA_DDR];    // Data direction register (0=input, 1=output)
-    uint8_t& port_a_control   = regs_[PIA_REG_PORTA_CTRL];   // Control register
+    uint8_t& port_a_data      = regs_.data[PIA_REG_PORTA_DATA];   // Data register (output latch)
+    uint8_t& port_a_direction  = regs_.data[PIA_REG_PORTA_DDR];    // Data direction register (0=input, 1=output)
+    uint8_t& port_a_control   = regs_.data[PIA_REG_PORTA_CTRL];   // Control register
 
     // Port B registers
-    uint8_t& port_b_data      = regs_[PIA_REG_PORTB_DATA];   // Data register (output latch)
-    uint8_t& port_b_direction  = regs_[PIA_REG_PORTB_DDR];    // Data direction register
-    uint8_t& port_b_control   = regs_[PIA_REG_PORTB_CTRL];   // Control register
+    uint8_t& port_b_data      = regs_.data[PIA_REG_PORTB_DATA];   // Data register (output latch)
+    uint8_t& port_b_direction  = regs_.data[PIA_REG_PORTB_DDR];    // Data direction register
+    uint8_t& port_b_control   = regs_.data[PIA_REG_PORTB_CTRL];   // Control register
     
     // Interrupt flags (read in bits 7-6 of control registers)
     bool irq_a1;                // CA1 interrupt flag (bit 7 of CRA)

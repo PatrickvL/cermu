@@ -25,7 +25,7 @@
 void z80_pio_t::register_debug_fields() {
     using S = const z80_pio_t;
     auto& r = debug_registry_;
-    r.set_registers(regs_, z80_pio_regs::REG_COUNT, Z80_PIO_REG_INFO);
+    r.set_registers(regs_.data, z80_pio_regs::REG_COUNT, Z80_PIO_REG_INFO);
     r.set_decl_entries(Z80_PIO_DECL_ENTRIES.data(), Z80_PIO_DECL_ENTRIES.size());
 
     // Register values (output latch, I/O select, int vector) are in the DECL walk.

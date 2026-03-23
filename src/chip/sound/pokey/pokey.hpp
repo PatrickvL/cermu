@@ -257,7 +257,7 @@ public:
     }
 
     void reset() {
-        std::memset(regs_, 0, pokey_regs::TOTAL_REGS);
+        regs_.clear();
 
         // Read register defaults
         regs_[pokey_regs::R_IRQST]  = 0xFF;   // No pending IRQs (active-low)

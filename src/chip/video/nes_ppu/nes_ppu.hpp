@@ -335,7 +335,7 @@ public:
     }
 
     void reset() {
-        std::memset(regs_, 0, num_regs_);
+        regs_.clear();
         internal = {};
         scanline = -1;
         cycle = 0;

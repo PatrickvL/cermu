@@ -115,7 +115,7 @@ void tia_t::init() {
 }
 
 void tia_t::reset() {
-    memset(regs_, 0, num_regs_);
+    regs_.clear();
     memset(read_regs_, 0, num_read_regs_);
 
     h_counter = 0;
@@ -793,7 +793,7 @@ uint8_t tia_t::read(uint16_t addr) {
 void tia_t::register_debug_fields() {
     using T = const tia_t;
     auto& r = debug_registry_;
-    r.set_registers(regs_, TIA_W_NUM_REGS, TIA_W_REG_INFO, 0x00);
+    r.set_registers(regs_.data, TIA_W_NUM_REGS, TIA_W_REG_INFO, 0x00);
     r.set_decl_entries(TIA_W_DECL_ENTRIES.data(), TIA_W_DECL_ENTRIES.size());
 
     // Write register values, control bitfields, audio, etc. are all in

@@ -853,7 +853,7 @@ void ted7360_t::reset() {
     const float                snd_gain = sound.output_gain;
 
     // Zero all mutable state using aggregate initialization (well-defined in C++).
-    memset(regs_, 0, num_regs_);
+    regs_.clear();
     timing      = {};
     video_logic = {};
     video_data  = {};
@@ -1558,7 +1558,7 @@ bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
 void ted7360_t::register_debug_fields() {
     using TD = const ted7360_t;
     auto& r = debug_registry_;
-    r.set_registers(regs_, TED_NUM_REGS, TED_REG_INFO, 0xFF00);
+    r.set_registers(regs_.data, TED_NUM_REGS, TED_REG_INFO, 0xFF00);
     r.set_decl_entries(TED_DECL_ENTRIES.data(), TED_DECL_ENTRIES.size());
     const uint32_t* palette = get_palette();
 

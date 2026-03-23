@@ -955,7 +955,7 @@ bus_state_t vicii_base_t::registers_write(void* context, bus_state_t bus_state) 
 
     if (reg == reg::IR) { // $d019 Interrupt Register
         // Treat the latching Interrupt Register differently from the other registers
-        vicii_registers_write_interrupt(vicii->regs_, value);
+        vicii_registers_write_interrupt(vicii->regs_.data, value);
         return bus_state; // No further processing needed for IR
     }
     
@@ -2307,7 +2307,7 @@ static void vicii_ensure_cycle_tables() {
 
 static inline void vicii_initialize(vicii_base_t* vicii) {
     // Zero all units
-    memset(vicii->regs_, 0, vicii->num_regs_);
+    vicii->regs_.clear();
     memset(&vicii->timing, 0, sizeof(vicii_timing_unit_t));
     memset(&vicii->video_logic, 0, sizeof(vicii_video_logic_unit_t));
     memset(&vicii->video_data, 0, sizeof(vicii_video_data_unit_t));
@@ -2373,7 +2373,7 @@ static inline void vicii_initialize(vicii_base_t* vicii) {
     
     // Initialize border pixel from register value (EC was set to LIGHT_BLUE at line 1815)
     vicii->border.border_pixel.priority = VICII_PRIORITY_BORDER;
-    vicii->border.border_pixel.color = static_cast<vicii_color_t>(vicii->regs_[reg::EC]);
+    vicii->border.border_pixel.color = static_cast<vicii_color_t>(uint8_t(vicii->regs_[reg::EC]));
     // Initialize border flip-flops (Documentation section 3.9)
     vicii->border.main_border_flip_flop = true;      // Start with border on
     vicii->border.vertical_border_flip_flop = true;  // Start with vertical border on
@@ -2567,7 +2567,7 @@ void vicii_base_t::reset() {
 void vicii_base_t::register_debug_fields() {
     using VI = const vicii_base_t;
     auto& r = debug_registry_;
-    r.set_registers(regs_, 66, VICII_REG_INFO, 0xD000);
+    r.set_registers(regs_.data, 66, VICII_REG_INFO, 0xD000);
     r.set_decl_entries(VICII_DECL_ENTRIES.data(), VICII_DECL_ENTRIES.size());
     r.set_palette(get_default_palette(), 16);
 

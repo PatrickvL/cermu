@@ -37,7 +37,7 @@ template <const AYTraits& Traits>
 void ay_psg_t<Traits>::register_debug_fields() {
     using S = const ay_psg_t<Traits>;
     auto& r = debug_registry_;
-    r.set_registers(regs_, ay_regs::REG_COUNT, AY_REG_INFO);
+    r.set_registers(regs_.data, ay_regs::REG_COUNT, AY_REG_INFO);
     r.set_decl_entries(AY_DECL_ENTRIES.data(), AY_DECL_ENTRIES.size());
 
     // Mixer enables, amplitude/env-mode bits, and envelope shape are in the DECL walk.
