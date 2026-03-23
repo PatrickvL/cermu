@@ -15,6 +15,7 @@
 #include "../src/core/formats/format_handler.hpp"
 #include "../src/core/formats/format_registry.hpp"
 #include "../src/core/vfs/vfs.hpp"
+#include "../src/core/cermu.hpp"
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -23,8 +24,12 @@
 #include <map>
 #include <algorithm>
 #include <functional>
-#include <dirent.h>
-#include <sys/stat.h>
+#ifdef CERMU_USE_STD_FILESYSTEM
+    #include <filesystem>
+#else
+    #include <dirent.h>
+    #include <sys/stat.h>
+#endif
 
 // ============================================================================
 // Helpers
@@ -56,12 +61,27 @@ static bool is_loadable_extension(const std::string& ext) {
 static void collect_files(const std::string& dir, std::vector<std::string>& out,
                           int depth = 0) {
     if (depth > 10) return;
-    DIR* d = opendir(dir.c_str());
-    if (!d) return;
-    struct dirent* ent;
-    while ((ent = readdir(d)) != nullptr) {
-        if (ent->d_name[0] == '.') continue;
-        std::string full = dir + "/" + ent->d_name;
+#ifdef CERMU_USE_STD_FILESYSTEM
+    std::error_code ec;
+    for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+        if (ec) break;
+        auto name = entry.path().filename().string();
+        if (name.empty() || name[0] == '.') continue;
+        if (entry.is_directory(ec)) {
+            collect_files(entry.path().string(), out, depth + 1);
+        } else if (entry.is_regular_file(ec)) {
+            std::string ext = get_extension(entry.path().string());
+            if (is_loadable_extension(ext))
+                out.push_back(entry.path().string());
+        }
+    }
+#else
+    DIR* dp = opendir(dir.c_str());
+    if (!dp) return;
+    while (struct dirent* ep = readdir(dp)) {
+        std::string name = ep->d_name;
+        if (name.empty() || name[0] == '.') continue;
+        std::string full = dir + "/" + name;
         struct stat st;
         if (stat(full.c_str(), &st) != 0) continue;
         if (S_ISDIR(st.st_mode)) {
@@ -72,7 +92,8 @@ static void collect_files(const std::string& dir, std::vector<std::string>& out,
                 out.push_back(full);
         }
     }
-    closedir(d);
+    closedir(dp);
+#endif
 }
 
 // ============================================================================
@@ -132,12 +153,6 @@ int main(int argc, char** argv) {
     }
 
     // Discover system folders
-    DIR* top = opendir(data_dir.c_str());
-    if (!top) {
-        printf("ERROR: Cannot open data directory: %s\n", data_dir.c_str());
-        return 1;
-    }
-
     struct TestFolder {
         std::string path;
         std::string name;
@@ -145,17 +160,42 @@ int main(int argc, char** argv) {
     };
     std::vector<TestFolder> test_folders;
 
-    struct dirent* ent;
-    while ((ent = readdir(top)) != nullptr) {
-        if (ent->d_name[0] == '.') continue;
-        std::string full = data_dir + "/" + ent->d_name;
-        struct stat st;
-        if (stat(full.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) continue;
-        auto* mapping = find_mapping(folder_mappings, ent->d_name);
-        if (mapping)
-            test_folders.push_back({ full, ent->d_name, mapping });
+    {
+#ifdef CERMU_USE_STD_FILESYSTEM
+        std::error_code ec;
+        for (const auto& entry : std::filesystem::directory_iterator(data_dir, ec)) {
+            if (ec) break;
+            auto name = entry.path().filename().string();
+            if (name.empty() || name[0] == '.') continue;
+            if (!entry.is_directory(ec)) continue;
+            auto* mapping = find_mapping(folder_mappings, name);
+            if (mapping)
+                test_folders.push_back({ entry.path().string(), name, mapping });
+        }
+        if (ec) {
+            printf("ERROR: Cannot open data directory: %s\n", data_dir.c_str());
+            return 1;
+        }
+#else
+        DIR* dp = opendir(data_dir.c_str());
+        if (!dp) {
+            printf("ERROR: Cannot open data directory: %s\n", data_dir.c_str());
+            return 1;
+        }
+        while (struct dirent* ep = readdir(dp)) {
+            std::string name = ep->d_name;
+            if (name.empty() || name[0] == '.') continue;
+            std::string full = data_dir + "/" + name;
+            struct stat st;
+            if (stat(full.c_str(), &st) != 0) continue;
+            if (!S_ISDIR(st.st_mode)) continue;
+            auto* mapping = find_mapping(folder_mappings, name);
+            if (mapping)
+                test_folders.push_back({ full, name, mapping });
+        }
+        closedir(dp);
+#endif
     }
-    closedir(top);
 
     std::sort(test_folders.begin(), test_folders.end(),
               [](const auto& a, const auto& b) { return a.name < b.name; });
