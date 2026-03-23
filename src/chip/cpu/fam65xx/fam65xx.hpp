@@ -54,6 +54,7 @@
 #include "chip/cpu/fam65xx/fam65xx_mixins.hpp"
 #include "chip/cpu/fam65xx/fam65xx_processor_traits.hpp"
 #include "chip/cpu/fam65xx/fam65xx_types.hpp"
+#include "core/register_file.hpp"
 
 // ============================================================================
 // C++ NAMESPACE - MAIN CPU TEMPLATE IMPLEMENTATION

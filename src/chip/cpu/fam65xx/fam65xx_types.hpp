@@ -365,7 +365,7 @@ enum class Operation : uint8_t {
 enum reg8_t : uint8_t {
 // Core registers (0-13) - used by both 8-bit and 16-bit CPUs
 // 16-bit aligned register pairs (endian-aware) for memory addresses
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#ifdef CERMU_LITTLE_ENDIAN
   REG_SPL = 0, // Stack pointer (low byte)
   REG_SPH = 1, // Stack pointer (high byte)
   REG_ABL = 2, // Address Bus (low byte)
@@ -402,7 +402,7 @@ enum reg8_t : uint8_t {
   REG_DL = 15, // Data Latch (internal)
 
 // Extended registers (16-21) - only used by 65C816
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#ifdef CERMU_LITTLE_ENDIAN
   REG_DPL = 16, // Direct Page low byte (65C816 only)
   REG_DPH = 17, // Direct Page high byte (65C816 only)
 #else
