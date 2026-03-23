@@ -13,6 +13,8 @@
 
 #include "chip/video/vic/vic_common.hpp"
 #include "core/chip_layout.hpp"
+
+using namespace vic::reg;
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #include "gui/chip_visualization.hpp"
@@ -99,7 +101,7 @@ static std::vector<PinSignalState> get_vic_pin_states(vic_base_t* vic, const Chi
 
     // Sound output (pin 26) — active if any voice is enabled
     bool any_voice_on = false;
-    for (int v = VIC_REG_BASS_FREQ; v <= VIC_REG_NOISE_FREQ; v++) {
+    for (int v = BASS_FREQ; v <= NOISE_FREQ; v++) {
         if (vic->regs_[v] & VIC_VOICE_ENABLE) {
             any_voice_on = true;
             break;

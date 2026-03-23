@@ -38,67 +38,12 @@
 
 namespace a2600_test {
 
+using namespace tia_w::reg;
+using namespace tia_r::reg;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
-
-// TIA write register addresses (mirroring TIA constants for test scripts)
-inline constexpr uint8_t TIA_W_VSYNC  = 0x00;
-inline constexpr uint8_t TIA_W_VBLANK = 0x01;
-inline constexpr uint8_t TIA_W_WSYNC  = 0x02;
-inline constexpr uint8_t TIA_W_NUSIZ0 = 0x04;
-inline constexpr uint8_t TIA_W_NUSIZ1 = 0x05;
-inline constexpr uint8_t TIA_W_COLUP0 = 0x06;
-inline constexpr uint8_t TIA_W_COLUP1 = 0x07;
-inline constexpr uint8_t TIA_W_COLUPF = 0x08;
-inline constexpr uint8_t TIA_W_COLUBK = 0x09;
-inline constexpr uint8_t TIA_W_CTRLPF = 0x0A;
-inline constexpr uint8_t TIA_W_REFP0  = 0x0B;
-inline constexpr uint8_t TIA_W_REFP1  = 0x0C;
-inline constexpr uint8_t TIA_W_PF0    = 0x0D;
-inline constexpr uint8_t TIA_W_PF1    = 0x0E;
-inline constexpr uint8_t TIA_W_PF2    = 0x0F;
-inline constexpr uint8_t TIA_W_RESP0  = 0x10;
-inline constexpr uint8_t TIA_W_RESP1  = 0x11;
-inline constexpr uint8_t TIA_W_RESM0  = 0x12;
-inline constexpr uint8_t TIA_W_RESM1  = 0x13;
-inline constexpr uint8_t TIA_W_RESBL  = 0x14;
-inline constexpr uint8_t TIA_W_AUDC0  = 0x15;
-inline constexpr uint8_t TIA_W_AUDC1  = 0x16;
-inline constexpr uint8_t TIA_W_AUDF0  = 0x17;
-inline constexpr uint8_t TIA_W_AUDF1  = 0x18;
-inline constexpr uint8_t TIA_W_AUDV0  = 0x19;
-inline constexpr uint8_t TIA_W_AUDV1  = 0x1A;
-inline constexpr uint8_t TIA_W_GRP0   = 0x1B;
-inline constexpr uint8_t TIA_W_GRP1   = 0x1C;
-inline constexpr uint8_t TIA_W_ENAM0  = 0x1D;
-inline constexpr uint8_t TIA_W_ENAM1  = 0x1E;
-inline constexpr uint8_t TIA_W_ENABL  = 0x1F;
-inline constexpr uint8_t TIA_W_HMP0   = 0x20;
-inline constexpr uint8_t TIA_W_HMP1   = 0x21;
-inline constexpr uint8_t TIA_W_HMM0   = 0x22;
-inline constexpr uint8_t TIA_W_HMM1   = 0x23;
-inline constexpr uint8_t TIA_W_HMBL   = 0x24;
-inline constexpr uint8_t TIA_W_VDELP0 = 0x25;
-inline constexpr uint8_t TIA_W_VDELP1 = 0x26;
-inline constexpr uint8_t TIA_W_VDELBL = 0x27;
-inline constexpr uint8_t TIA_W_RESMP0 = 0x28;
-inline constexpr uint8_t TIA_W_RESMP1 = 0x29;
-inline constexpr uint8_t TIA_W_HMOVE  = 0x2A;
-inline constexpr uint8_t TIA_W_HMCLR  = 0x2B;
-inline constexpr uint8_t TIA_W_CXCLR  = 0x2C;
-
-// TIA read register addresses
-inline constexpr uint8_t TIA_R_CXM0P  = 0x00;
-inline constexpr uint8_t TIA_R_CXM1P  = 0x01;
-inline constexpr uint8_t TIA_R_CXP0FB = 0x02;
-inline constexpr uint8_t TIA_R_CXP1FB = 0x03;
-inline constexpr uint8_t TIA_R_CXM0FB = 0x04;
-inline constexpr uint8_t TIA_R_CXM1FB = 0x05;
-inline constexpr uint8_t TIA_R_CXBLPF = 0x06;
-inline constexpr uint8_t TIA_R_CXPPMM = 0x07;
-inline constexpr uint8_t TIA_R_INPT4  = 0x0C;
-inline constexpr uint8_t TIA_R_INPT5  = 0x0D;
 
 // RIOT register addresses (within I/O space, $0280+)
 inline constexpr uint16_t RIOT_SWCHA    = 0x0280;

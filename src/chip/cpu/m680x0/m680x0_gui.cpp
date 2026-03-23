@@ -29,12 +29,10 @@ namespace m680x0 {
 
 template <const M680x0Traits& Traits>
 void m680x0_t<Traits>::register_debug_fields() {
-    auto& r = this->debug_registry_;
-
     // Point the debug registry at the RegisterFile backing store + DECL table.
     // All register values are data-driven — no per-register callbacks.
-    r.set_registers(regs_.debug_ptr(), regs_.debug_size(), M68K_REG_INFO);
-    r.set_decl_entries(M68K_DECL_ENTRIES.data(), M68K_DECL_ENTRIES.size());
+    this->debug_registry_.set_registers(regs_.debug_ptr(), regs_.debug_size(), M68K_REG_INFO);
+    this->debug_registry_.set_decl_entries(M68K_DECL_ENTRIES.data(), M68K_DECL_ENTRIES.size());
 }
 
 template void m680x0_t<MC68000Traits>::register_debug_fields();

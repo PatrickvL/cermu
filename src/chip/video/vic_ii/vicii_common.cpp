@@ -2567,7 +2567,7 @@ void vicii_base_t::reset() {
 void vicii_base_t::register_debug_fields() {
     using VI = const vicii_base_t;
     auto& r = debug_registry_;
-    r.set_registers(regs_.data, 66, VICII_REG_INFO, 0xD000);
+    wire_debug_registers(VICII_REG_INFO, 0xD000);
     r.set_decl_entries(VICII_DECL_ENTRIES.data(), VICII_DECL_ENTRIES.size());
     r.set_palette(get_default_palette(), 16);
 

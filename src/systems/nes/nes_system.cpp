@@ -958,7 +958,7 @@ void NintendoSystem<V>::tick() {
                 } else {
                     // DMA write to OAM — destination starts at current
                     // OAMADDR and wraps.  OAMADDR itself is NOT modified.
-                    board_.video().oam_write((board_.video().regs_[PPU::OAMADDR] + dma_addr_) & 0xFF, dma_data_);
+                    board_.video().oam_write((board_.video().regs_[OAMADDR] + dma_addr_) & 0xFF, dma_data_);
                     dma_addr_++;
                     if (dma_addr_ == 0x00) {
                         dma_transfer_ = false;

@@ -43,7 +43,7 @@
 //
 // DEBUG — ChipDebugRegistry:
 //
-//   r.set_registers(regs_.debug_ptr(), regs_.debug_size(), REG_INFO);
+//   debug_registry_.set_registers(regs_.debug_ptr(), regs_.debug_size(), REG_INFO);
 //
 // ============================================================================
 

@@ -38,6 +38,8 @@
 #include <array>
 #include <cstring>
 
+using namespace ted::reg;
+
 REGISTER_CHIP_TYPE("TED7360", ted7360_t)
 
 // ============================================================================
@@ -118,8 +120,8 @@ static inline uint8_t ted_color_index(uint8_t color_reg) noexcept {
 // ============================================================================
 
 uint8_t ted7360_t::get_graphics_mode() const {
-    const uint8_t cr1 = regs_[TED_REG_CONTROL1];
-    const uint8_t cr2 = regs_[TED_REG_CONTROL2];
+    const uint8_t cr1 = regs_[CONTROL1];
+    const uint8_t cr2 = regs_[CONTROL2];
     return ((cr1 & TED_CR1_ECM) ? 4u : 0u)
          | ((cr1 & TED_CR1_BMM) ? 2u : 0u)
          | ((cr2 & TED_CR2_MCM) ? 1u : 0u);
@@ -127,8 +129,8 @@ uint8_t ted7360_t::get_graphics_mode() const {
 
 uint16_t ted7360_t::get_raster_compare() const {
     return static_cast<uint16_t>(
-        ((regs_[TED_REG_IRQ_MASK] & 0x01u) << 8)
-      |  regs_[TED_REG_RASTER_CMP]);
+        ((regs_[IRQ_MASK] & 0x01u) << 8)
+      |  regs_[RASTER_CMP]);
 }
 
 // ============================================================================
@@ -140,8 +142,8 @@ uint16_t ted7360_t::get_raster_compare() const {
 // $FF14 (BITMAP_ADDR): bits 3-7 = screen/bitmap base A10..A14; bit 3 = bitmap toggle
 
 void ted7360_t::update_memory_addresses() {
-    const uint8_t char_hi  = regs_[TED_REG_CHAR_HI];
-    const uint8_t bmp_addr = regs_[TED_REG_BITMAP_ADDR];
+    const uint8_t char_hi  = regs_[CHAR_HI];
+    const uint8_t bmp_addr = regs_[BITMAP_ADDR];
 
     memory.screen_base  = static_cast<uint16_t>((bmp_addr & 0xF8u) << 8);
     memory.char_base    = static_cast<uint16_t>((char_hi  & 0xFCu) << 8);
@@ -153,8 +155,8 @@ void ted7360_t::update_memory_addresses() {
 // ============================================================================
 
 void ted7360_t::update_border_limits() {
-    const uint8_t cr1 = regs_[TED_REG_CONTROL1];
-    const uint8_t cr2 = regs_[TED_REG_CONTROL2];
+    const uint8_t cr1 = regs_[CONTROL1];
+    const uint8_t cr2 = regs_[CONTROL2];
     // Vertical: RSEL — 25-row (1) or 24-row (0) display window
     border.top    = (cr1 & TED_CR1_RSEL) ?    4u :    8u;
     border.bottom = (cr1 & TED_CR1_RSEL) ? 0xCBu : 0xC7u;
@@ -184,7 +186,7 @@ void ted7360_t::update_border_limits() {
 
 void ted7360_t::update_dma_condition() {
     const uint16_t raster = timing.raster_counter;
-    const uint8_t  cr1    = regs_[TED_REG_CONTROL1];
+    const uint8_t  cr1    = regs_[CONTROL1];
 
     if (cr1 & TED_CR1_DEN) {
         video_logic.den_latched = true;
@@ -465,7 +467,7 @@ void ted7360_t::pixel_sequencer() {
 
     const uint16_t x_base  = timing.x_pixel;
     const uint16_t raster  = timing.raster_counter;
-    const uint8_t  cr1     = regs_[TED_REG_CONTROL1];
+    const uint8_t  cr1     = regs_[CONTROL1];
     const bool     den_set = (cr1 & TED_CR1_DEN) != 0;
 
     // Hoist border limits to locals — avoids repeated struct member loads.
@@ -476,8 +478,8 @@ void ted7360_t::pixel_sequencer() {
 
     // Border and background colors are hoisted before any writes through cline
     // (which aliases regs_[]) to prevent aliasing-induced reloads.
-    const uint8_t border_color = ted_color_index(regs_[TED_REG_BORDER]);
-    const uint8_t bg0_color    = ted_color_index(regs_[TED_REG_COLOR_BG0]);
+    const uint8_t border_color = ted_color_index(regs_[BORDER]);
+    const uint8_t bg0_color    = ted_color_index(regs_[COLOR_BG0]);
 
     ted_sequencer_unit_t* const seq = &sequencer;
 
@@ -502,7 +504,7 @@ void ted7360_t::pixel_sequencer() {
             if (!border.vert_ff) {
                 if (border.main_ff) {
                     // Latch XSCROLL and reset column counters at display open
-                    seq->xscroll           = regs_[TED_REG_CONTROL2]
+                    seq->xscroll           = regs_[CONTROL2]
                                              & TED_CR2_XSCROLL_MASK;
                     seq->pixel_in_char     = 0;
                     seq->display_vmli      = 0;
@@ -530,9 +532,9 @@ void ted7360_t::pixel_sequencer() {
 
     // Background colors 1-3 only needed in active path — avoid loading them
     // when idle (which is the case for most non-display lines).
-    const uint8_t bg1_color = ted_color_index(regs_[TED_REG_COLOR_BG1]);
-    const uint8_t bg2_color = ted_color_index(regs_[TED_REG_COLOR_BG2]);
-    const uint8_t bg3_color = ted_color_index(regs_[TED_REG_COLOR_BG3]);
+    const uint8_t bg1_color = ted_color_index(regs_[COLOR_BG1]);
+    const uint8_t bg2_color = ted_color_index(regs_[COLOR_BG2]);
+    const uint8_t bg3_color = ted_color_index(regs_[COLOR_BG3]);
 
     for (int pi = 0; pi < 8; ++pi) {
         const uint16_t px = x_base + static_cast<uint16_t>(pi);
@@ -901,12 +903,12 @@ void ted7360_t::reset() {
     sound.noise_shift_reg      = 0xFF;
 
     // Default register values after reset
-    regs_[TED_REG_CONTROL1]   = 0x00;   // Display disabled
-    regs_[TED_REG_CONTROL2]   = timing.is_pal ? 0x00 : TED_CR2_PAL_NTSC;
-    regs_[TED_REG_IRQ_STATUS] = 0x00;
-    regs_[TED_REG_IRQ_MASK]   = 0x00;
-    regs_[TED_REG_BORDER]     = 0x00;   // Black border
-    regs_[TED_REG_COLOR_BG0]  = 0x00;   // Black background
+    regs_[CONTROL1]   = 0x00;   // Display disabled
+    regs_[CONTROL2]   = timing.is_pal ? 0x00 : TED_CR2_PAL_NTSC;
+    regs_[IRQ_STATUS] = 0x00;
+    regs_[IRQ_MASK]   = 0x00;
+    regs_[BORDER]     = 0x00;   // Black border
+    regs_[COLOR_BG0]  = 0x00;   // Black background
 
     // Timers: reset latches and counters to $FFFF
     timer1.counter = TED_TIMER_WRAP_VALUE;
@@ -1237,64 +1239,64 @@ void ted7360_t::tick_phi2(bus_state_t bus_state) {
 // ============================================================================
 
 bus_state_t ted7360_t::registers_read(bus_state_t bus_state) {
-    uint8_t reg = BUS_GET_ADDR(bus_state) & TED_REG_ADDR_MASK;
+    uint8_t reg = BUS_GET_ADDR(bus_state) & ADDR_MASK;
 
     // Banking latches $FF3E/$FF3F: open bus — leave data field untouched
-    if (reg >= TED_REG_MIRROR_START) {
-        if (reg == TED_REG_ROM_LATCH || reg == TED_REG_RAM_LATCH) {
+    if (reg >= MIRROR_START) {
+        if (reg == ROM_LATCH || reg == RAM_LATCH) {
             return bus_state;
         }
-        reg &= TED_REG_UNMIRROR_MASK;
+        reg &= UNMIRROR_MASK;
     }
 
     uint8_t data;
     switch (reg) {
         // Timers: reads return current counter value, not the latch
-        case TED_REG_TIMER1_LO: data = static_cast<uint8_t>(timer1.counter);        break;
-        case TED_REG_TIMER1_HI: data = static_cast<uint8_t>(timer1.counter >> 8);   break;
-        case TED_REG_TIMER2_LO: data = static_cast<uint8_t>(timer2.counter);        break;
-        case TED_REG_TIMER2_HI: data = static_cast<uint8_t>(timer2.counter >> 8);   break;
-        case TED_REG_TIMER3_LO: data = static_cast<uint8_t>(timer3.counter);        break;
-        case TED_REG_TIMER3_HI: data = static_cast<uint8_t>(timer3.counter >> 8);   break;
+        case TIMER1_LO: data = static_cast<uint8_t>(timer1.counter);        break;
+        case TIMER1_HI: data = static_cast<uint8_t>(timer1.counter >> 8);   break;
+        case TIMER2_LO: data = static_cast<uint8_t>(timer2.counter);        break;
+        case TIMER2_HI: data = static_cast<uint8_t>(timer2.counter >> 8);   break;
+        case TIMER3_LO: data = static_cast<uint8_t>(timer3.counter);        break;
+        case TIMER3_HI: data = static_cast<uint8_t>(timer3.counter >> 8);   break;
 
-        case TED_REG_KEYBOARD:
+        case KEYBOARD:
             data = keyboard_scan
                 ? keyboard_scan(keyboard_user_data, keyboard_latch)
                 : 0xFF;  // No keyboard connected: all keys open
             break;
 
-        case TED_REG_IRQ_STATUS:
+        case IRQ_STATUS:
             // Bit 7 = any enabled IRQ source is active
             data = irq_status | ((irq_status & irq_mask) ? TED_IRQ_ANY : 0u);
             break;
 
-        case TED_REG_IRQ_MASK:
+        case IRQ_MASK:
             // Bits [6:1] = IRQ enable flags; bit 0 = raster compare bit 8.
             // Bits 5, 7 are unused and read as 1 (per VICE: | 0xA0).
             data = (regs_[reg] & 0x5Fu) | 0xA0u;
             break;
 
-        case TED_REG_CHARPOS_HI:
+        case CHARPOS_HI:
             // $FF1A read: character counter (VC) bit 8 in bit 0; bits [7:2] = 1
             data = static_cast<uint8_t>(((video_logic.vc >> 8) & 0x01u) | 0xFCu);
             break;
 
-        case TED_REG_CHARPOS_LO:
+        case CHARPOS_LO:
             // $FF1B read: character counter (VC) low byte
             data = static_cast<uint8_t>(video_logic.vc & 0xFFu);
             break;
 
-        case TED_REG_RASTER_HI:
+        case RASTER_HI:
             // $FF1C read: raster counter bit 8 in bit 0; bits [7:1] = 1
             data = static_cast<uint8_t>(((timing.raster_counter >> 8) & 0x01u) | 0xFEu);
             break;
 
-        case TED_REG_RASTER_LO:
+        case RASTER_LO:
             // $FF1D read: raster counter low byte
             data = static_cast<uint8_t>(timing.raster_counter & 0xFFu);
             break;
 
-        case TED_REG_HPOS: {
+        case HPOS: {
             // $FF1E read: horizontal position from cycle within line.
             // VICE formula: ((cycle - 16) * 4) / 2 & 0xFE, with negative wrap.
             int hpos = (static_cast<int>(timing.x_cycle) - 16) * 2;
@@ -1303,7 +1305,7 @@ bus_state_t ted7360_t::registers_read(bus_state_t bus_state) {
             break;
         }
 
-        case TED_REG_FLASH_RC:
+        case FLASH_RC:
             // $FF1F read: bit 7 = 1, bits [6:3] = flash counter [3:0], bits [2:0] = RC
             data = static_cast<uint8_t>(0x80u | ((flash_counter & 0x0Fu) << 3) | (video_logic.rc & 0x07u));
             break;
@@ -1322,18 +1324,18 @@ bus_state_t ted7360_t::registers_read(bus_state_t bus_state) {
 // ============================================================================
 
 bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
-    uint8_t reg       = BUS_GET_ADDR(bus_state) & TED_REG_ADDR_MASK;
+    uint8_t reg       = BUS_GET_ADDR(bus_state) & ADDR_MASK;
     const uint8_t data = BUS_GET_DATA(bus_state);
 
     // ROM/RAM banking latches — not mirrored, handled directly
-    if (reg == TED_REG_ROM_LATCH) {
+    if (reg == ROM_LATCH) {
         if (!rom_enabled) {
             rom_enabled = true;
             if (banking_change) banking_change(banking_change_user_data, TED_BANK_ROM_LATCH);
         }
         return bus_state;
     }
-    if (reg == TED_REG_RAM_LATCH) {
+    if (reg == RAM_LATCH) {
         if (rom_enabled) {
             rom_enabled = false;
             if (banking_change) banking_change(banking_change_user_data, TED_BANK_ROM_LATCH);
@@ -1341,44 +1343,44 @@ bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
         return bus_state;
     }
 
-    if (reg >= TED_REG_MIRROR_START) {
-        reg &= TED_REG_UNMIRROR_MASK;
+    if (reg >= MIRROR_START) {
+        reg &= UNMIRROR_MASK;
     }
 
     switch (reg) {
         // Timer writes: low byte goes to latch only;
         //               high byte write also loads the counter immediately.
-        case TED_REG_TIMER1_LO:
+        case TIMER1_LO:
             timer1.latch = (timer1.latch & 0xFF00u) | data;
             regs_[reg] = data;
             break;
-        case TED_REG_TIMER1_HI:
+        case TIMER1_HI:
             timer1.latch   = (timer1.latch & 0x00FFu) | (static_cast<uint16_t>(data) << 8);
             timer1.counter = timer1.latch;
             regs_[reg] = data;
             break;
 
-        case TED_REG_TIMER2_LO:
+        case TIMER2_LO:
             timer2.latch = (timer2.latch & 0xFF00u) | data;
             regs_[reg] = data;
             break;
-        case TED_REG_TIMER2_HI:
+        case TIMER2_HI:
             timer2.latch   = (timer2.latch & 0x00FFu) | (static_cast<uint16_t>(data) << 8);
             timer2.counter = timer2.latch;
             regs_[reg] = data;
             break;
 
-        case TED_REG_TIMER3_LO:
+        case TIMER3_LO:
             timer3.latch = (timer3.latch & 0xFF00u) | data;
             regs_[reg] = data;
             break;
-        case TED_REG_TIMER3_HI:
+        case TIMER3_HI:
             timer3.latch   = (timer3.latch & 0x00FFu) | (static_cast<uint16_t>(data) << 8);
             timer3.counter = timer3.latch;
             regs_[reg] = data;
             break;
 
-        case TED_REG_CONTROL1:
+        case CONTROL1:
             regs_[reg] = data;
             update_border_limits();
             timing.raster_compare   = get_raster_compare();
@@ -1386,64 +1388,64 @@ bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
             sequencer.graphics_mode = get_graphics_mode();
             break;
 
-        case TED_REG_CONTROL2:
+        case CONTROL2:
             regs_[reg] = data;
             update_border_limits();
             reverse_mode            = (data & TED_CR2_RVS) != 0;
             sequencer.graphics_mode = get_graphics_mode();
             break;
 
-        case TED_REG_KEYBOARD:
+        case KEYBOARD:
             keyboard_latch      = data;
             regs_[reg] = data;
             break;
 
-        case TED_REG_IRQ_STATUS:
+        case IRQ_STATUS:
             // Writing 1 to a bit clears that IRQ source
             irq_status &= ~(data & TED_IRQ_CLEARABLE);
             break;
 
-        case TED_REG_IRQ_MASK:
+        case IRQ_MASK:
             regs_[reg] = data;
             irq_mask = data & TED_IRQ_CLEARABLE;
             // Bit 0 is raster compare bit 8 — update compare value.
             timing.raster_compare = get_raster_compare();
             break;
 
-        case TED_REG_RASTER_CMP:
+        case RASTER_CMP:
             regs_[reg]   = data;
             timing.raster_compare = get_raster_compare();
             break;
 
-        case TED_REG_CURSOR_HI:
-        case TED_REG_CURSOR_LO:
+        case CURSOR_HI:
+        case CURSOR_LO:
             regs_[reg] = data;
             break;
 
         // ---- Sound registers ----
 
-        case TED_REG_SOUND1_LO:
+        case SOUND1_LO:
             // $FF0E: Channel 1 frequency low byte [7:0]
             regs_[reg] = data;
             sound.freq1 = static_cast<uint16_t>(
-                data | ((regs_[TED_REG_MEM_CTRL] & 0x03u) << 8));
+                data | ((regs_[MEM_CTRL] & 0x03u) << 8));
             break;
 
-        case TED_REG_SOUND2_LO:
+        case SOUND2_LO:
             // $FF0F: Channel 2 frequency low byte [7:0]
             regs_[reg] = data;
             sound.freq2 = static_cast<uint16_t>(
-                data | ((regs_[TED_REG_SOUND2_HI] & 0x03u) << 8));
+                data | ((regs_[SOUND2_HI] & 0x03u) << 8));
             break;
 
-        case TED_REG_SOUND2_HI:
+        case SOUND2_HI:
             // $FF10: Channel 2 frequency high bits [9:8] in data bits [1:0]
             regs_[reg] = data;
             sound.freq2 = static_cast<uint16_t>(
-                regs_[TED_REG_SOUND2_LO] | ((data & 0x03u) << 8));
+                regs_[SOUND2_LO] | ((data & 0x03u) << 8));
             break;
 
-        case TED_REG_SOUND_CTRL: {
+        case SOUND_CTRL: {
             // $FF11: Sound control register
             //   bits [3:0] = volume (0-8; 9-15 clamp to 8 in audio_tick)
             //   bit 4 = channel 1 enable
@@ -1469,37 +1471,37 @@ bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
             break;
         }
 
-        case TED_REG_CHARPOS_HI:
+        case CHARPOS_HI:
             // $FF1A write: data bit 0 → VC bit 8, preserve VC low byte
             regs_[reg] = data;
             video_logic.vc = static_cast<uint16_t>(((data & 0x01u) << 8) | (video_logic.vc & 0xFFu));
             break;
 
-        case TED_REG_CHARPOS_LO:
+        case CHARPOS_LO:
             // $FF1B write: data → VC low byte, preserve VC bit 8
             regs_[reg] = data;
             video_logic.vc = static_cast<uint16_t>((video_logic.vc & 0x100u) | data);
             break;
 
-        case TED_REG_RASTER_HI:
+        case RASTER_HI:
             // $FF1C write: data bit 0 → raster counter bit 8 (force raster position)
             regs_[reg] = data;
             timing.raster_counter = static_cast<uint16_t>(
                 ((data & 0x01u) << 8) | (timing.raster_counter & 0xFFu));
             break;
 
-        case TED_REG_RASTER_LO:
+        case RASTER_LO:
             // $FF1D write: data → raster counter low byte (force raster position)
             regs_[reg] = data;
             timing.raster_counter = static_cast<uint16_t>(
                 (timing.raster_counter & 0x100u) | data);
             break;
 
-        case TED_REG_HPOS:
+        case HPOS:
             // $FF1E write: horizontal counter is not writable on real hardware
             break;
 
-        case TED_REG_FLASH_RC: {
+        case FLASH_RC: {
             // $FF1F write: bits [6:3] → flash counter [3:0]; bits [2:0] → RC
             // When flash counter transitions away from 0x0F, visibility bit toggles.
             regs_[reg] = data;
@@ -1514,13 +1516,13 @@ bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
             break;
         }
 
-        case TED_REG_MEM_CTRL: {
+        case MEM_CTRL: {
             // $FF12: bits [1:0] = channel 1 frequency high bits [9:8]
             //        bits [7:2] = memory control (character/bitmap base, ROM bank)
             uint8_t old_romsel = regs_[reg] & 0x04;
             regs_[reg] = data;
             sound.freq1 = static_cast<uint16_t>(
-                regs_[TED_REG_SOUND1_LO] | ((data & 0x03u) << 8));
+                regs_[SOUND1_LO] | ((data & 0x03u) << 8));
             update_memory_addresses();
             if ((data & 0x04) != old_romsel) {
                 if (banking_change) banking_change(banking_change_user_data, TED_BANK_VIDEO_ROMSEL);
@@ -1528,8 +1530,8 @@ bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
             break;
         }
 
-        case TED_REG_CHAR_HI:
-        case TED_REG_BITMAP_ADDR:
+        case CHAR_HI:
+        case BITMAP_ADDR:
             regs_[reg] = data;
             update_memory_addresses();
             break;
@@ -1558,7 +1560,7 @@ bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
 void ted7360_t::register_debug_fields() {
     using TD = const ted7360_t;
     auto& r = debug_registry_;
-    r.set_registers(regs_.data, TED_NUM_REGS, TED_REG_INFO, 0xFF00);
+    wire_debug_registers(TED_REG_INFO, 0xFF00);
     r.set_decl_entries(TED_DECL_ENTRIES.data(), TED_DECL_ENTRIES.size());
     const uint32_t* palette = get_palette();
 
@@ -1647,10 +1649,10 @@ void ted7360_t::register_debug_fields() {
 
     // ---- Colors (palette swatches — DataKind::Color deferred) ----
     r.category("Colors", false)
-     .color("BG0 ($FF15)", TED_REG_COLOR_BG0, palette, 128)
-     .color("BG1 ($FF16)", TED_REG_COLOR_BG1, palette, 128)
-     .color("BG2 ($FF17)", TED_REG_COLOR_BG2, palette, 128)
-     .color("BG3 ($FF18)", TED_REG_COLOR_BG3, palette, 128)
-     .color("Border ($FF19)", TED_REG_BORDER, palette, 128);
+     .color("BG0 ($FF15)", COLOR_BG0, palette, 128)
+     .color("BG1 ($FF16)", COLOR_BG1, palette, 128)
+     .color("BG2 ($FF17)", COLOR_BG2, palette, 128)
+     .color("BG3 ($FF18)", COLOR_BG3, palette, 128)
+     .color("Border ($FF19)", BORDER, palette, 128);
 }
 #endif // CERMU_HAS_CHIP_DEBUG

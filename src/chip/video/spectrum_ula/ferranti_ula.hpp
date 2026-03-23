@@ -395,7 +395,7 @@ private:
     void register_debug_fields() {
         using S = const ferranti_ula_t;
         auto& r = debug_registry_;
-        r.set_registers(regs_.data, spectrum_ula::REG_COUNT, SPECTRUM_ULA_REG_INFO);
+        wire_debug_registers(SPECTRUM_ULA_REG_INFO);
         r.set_decl_entries(SPECTRUM_ULA_DECL_ENTRIES.data(), SPECTRUM_ULA_DECL_ENTRIES.size());
         r.set_palette(system_palette(), 16);
 

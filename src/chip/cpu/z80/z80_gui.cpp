@@ -31,9 +31,8 @@ using namespace z80;
 
 template <const Z80Traits& Traits>
 void z80_t<Traits>::register_debug_fields() {
-    auto& r = this->debug_registry_;
-    r.set_registers(regs_.debug_ptr(), regs_.debug_size(), Z80_REG_INFO);
-    r.set_decl_entries(Z80_DECL_ENTRIES.data(), Z80_DECL_ENTRIES.size());
+    this->debug_registry_.set_registers(regs_.debug_ptr(), regs_.debug_size(), Z80_REG_INFO);
+    this->debug_registry_.set_decl_entries(Z80_DECL_ENTRIES.data(), Z80_DECL_ENTRIES.size());
 }
 
 template void z80_t<ZilogZ80Traits>::register_debug_fields();

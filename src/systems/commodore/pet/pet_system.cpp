@@ -36,6 +36,8 @@
 #include "chip/video/mc6845/mc6845.hpp"
 #include "core/chip.hpp"
 
+using namespace mc6845::reg;
+
 // Include ROM loader
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
@@ -276,17 +278,17 @@ bool PETSystem::initialize() {
 
     // Program CRTC with PET-standard 40×25 register values (BASIC 4.0 editor ROM does this,
     // but we prime them for display before KERNAL has run)
-    crtc_->regs_[MC6845_R0_HTOTAL]       = 63;   // 64 characters per line (R0+1)
-    crtc_->regs_[MC6845_R1_HDISPLAYED]   = 40;   // 40 visible characters
-    crtc_->regs_[MC6845_R2_HSYNC_POS]    = 50;   // H-sync at char 50
-    crtc_->regs_[MC6845_R3_SYNC_WIDTHS]  = 0x04; // H-sync width = 4, V-sync width = 0 (16 default)
-    crtc_->regs_[MC6845_R4_VTOTAL]       = 32;   // 33 char rows per frame (R4+1)
-    crtc_->regs_[MC6845_R5_VADJUST]      = 5;    // Vertical fine adjust
-    crtc_->regs_[MC6845_R6_VDISPLAYED]   = 25;   // 25 visible rows
-    crtc_->regs_[MC6845_R7_VSYNC_POS]    = 28;   // V-sync at row 28
-    crtc_->regs_[MC6845_R9_MAX_SCANLINE] = 7;    // 8 scan lines per character (R9+1)
-    crtc_->regs_[MC6845_R12_START_ADDR_HI] = 0x10; // Display start = $1000 (screen RAM offset)
-    crtc_->regs_[MC6845_R13_START_ADDR_LO] = 0x00;
+    crtc_->regs_[R0_HTOTAL]       = 63;   // 64 characters per line (R0+1)
+    crtc_->regs_[R1_HDISPLAYED]   = 40;   // 40 visible characters
+    crtc_->regs_[R2_HSYNC_POS]    = 50;   // H-sync at char 50
+    crtc_->regs_[R3_SYNC_WIDTHS]  = 0x04; // H-sync width = 4, V-sync width = 0 (16 default)
+    crtc_->regs_[R4_VTOTAL]       = 32;   // 33 char rows per frame (R4+1)
+    crtc_->regs_[R5_VADJUST]      = 5;    // Vertical fine adjust
+    crtc_->regs_[R6_VDISPLAYED]   = 25;   // 25 visible rows
+    crtc_->regs_[R7_VSYNC_POS]    = 28;   // V-sync at row 28
+    crtc_->regs_[R9_MAX_SCANLINE] = 7;    // 8 scan lines per character (R9+1)
+    crtc_->regs_[R12_START_ADDR_HI] = 0x10; // Display start = $1000 (screen RAM offset)
+    crtc_->regs_[R13_START_ADDR_LO] = 0x00;
 
     // GPU indexed palette rendering via CRTC's built-in character renderer
     palette_.set(pet_constants::PALETTE, 2);

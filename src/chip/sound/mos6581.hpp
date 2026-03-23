@@ -186,7 +186,6 @@ SID_DECL(DECL_REG_NOP, SID_X_FLD_NS_, DECL_CMP_NOP)
 } // namespace sid
 
 // Backward compatibility alias
-namespace sid_regs = sid::reg;
 
 #ifdef CERMU_HAS_CHIP_DEBUG
 DECL_EXTRACT(SID, SID_DECL)

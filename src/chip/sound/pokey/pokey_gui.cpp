@@ -32,7 +32,7 @@ template <const pokey::POKEYTraits& Traits>
 void pokey::pokey_t<Traits>::register_debug_fields() {
     using S = const pokey::pokey_t<Traits>;
     auto& r = debug_registry_;
-    r.set_registers(regs_.data, pokey_regs::TOTAL_REGS, POKEY_REG_INFO);
+    wire_debug_registers(POKEY_REG_INFO);
     r.set_decl_entries(POKEY_DECL_ENTRIES.data(), POKEY_DECL_ENTRIES.size());
 
     // Computed multi-register values and internal state

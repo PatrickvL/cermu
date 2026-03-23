@@ -12,6 +12,8 @@
 #include <cstring>
 #include <cstdio>
 
+using namespace mc6845::reg;
+
 // ============================================================================
 // HARDWARE TRAITS
 // ============================================================================
@@ -245,8 +247,8 @@ void AmstradCPCSystem<M>::render_frame() {
     if (!ram_chip_) return;
 
     // CRTC display start address (R12:R13)
-    uint16_t crtc_start = (board_.chips().crtc.regs_[MC6845_R12_START_ADDR_HI] << 8)
-                        | board_.chips().crtc.regs_[MC6845_R13_START_ADDR_LO];
+    uint16_t crtc_start = (board_.chips().crtc.regs_[R12_START_ADDR_HI] << 8)
+                        | board_.chips().crtc.regs_[R13_START_ADDR_LO];
 
     board_.video().render_frame(ram_chip_->data(), crtc_start);
 }

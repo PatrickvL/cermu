@@ -11,6 +11,9 @@
 #include "chip/video/tia/tia.hpp"
 #include "core/chip_layout.hpp"
 
+using namespace tia_w::reg;
+using namespace tia_r::reg;
+
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #include "gui/chip_visualization.hpp"
@@ -121,14 +124,14 @@ static std::vector<PinSignalState> get_tia_pin_states(
     ps[15].high_impedance  = false;
     ps[15].signal_valid    = true;
     ps[15].is_pwm          = true;
-    ps[15].pwm_duty_cycle  = (tia->regs_[TIA_AUDV0] & 0x0F) / 15.0f;
+    ps[15].pwm_duty_cycle  = (tia->regs_[AUDV0] & 0x0F) / 15.0f;
 
     ps[16].signal_level    = tia->audio[1].output;
     ps[16].drive_direction = true;
     ps[16].high_impedance  = false;
     ps[16].signal_valid    = true;
     ps[16].is_pwm          = true;
-    ps[16].pwm_duty_cycle  = (tia->regs_[TIA_AUDV1] & 0x0F) / 15.0f;
+    ps[16].pwm_duty_cycle  = (tia->regs_[AUDV1] & 0x0F) / 15.0f;
 
     // --- Video outputs ---
     // COLU (pin 18, idx 17) — color/luminance
@@ -136,7 +139,7 @@ static std::vector<PinSignalState> get_tia_pin_states(
     ps[17].drive_direction = true;
     ps[17].high_impedance  = false;
     ps[17].signal_valid    = true;
-    ps[17].signal_value    = tia->regs_[TIA_COLUBK];
+    ps[17].signal_value    = tia->regs_[COLUBK];
 
     // LUMA (pin 19, idx 18)
     ps[18].signal_level    = true;
@@ -145,7 +148,7 @@ static std::vector<PinSignalState> get_tia_pin_states(
     ps[18].signal_valid    = true;
 
     // COMP_BLK (pin 20, idx 19) — blanking during VBLANK/HBLANK
-    bool blanking = (tia->regs_[TIA_VBLANK] & 0x02) || (tia->h_counter < 68);
+    bool blanking = (tia->regs_[VBLANK] & 0x02) || (tia->h_counter < 68);
     ps[19].signal_level    = blanking;
     ps[19].drive_direction = true;
     ps[19].high_impedance  = false;
@@ -153,7 +156,7 @@ static std::vector<PinSignalState> get_tia_pin_states(
 
     // CSYNC (pin 21, idx 20) — composite sync
     bool hsync = (tia->h_counter >= 4 && tia->h_counter < 8);
-    ps[20].signal_level    = (tia->regs_[TIA_VSYNC] & 0x02) || hsync;
+    ps[20].signal_level    = (tia->regs_[VSYNC] & 0x02) || hsync;
     ps[20].drive_direction = true;
     ps[20].high_impedance  = false;
     ps[20].signal_valid    = true;
@@ -161,21 +164,21 @@ static std::vector<PinSignalState> get_tia_pin_states(
     // --- Input ports (active-high readback) ---
     // INPT0 (pin 36, idx 35) through INPT5 (pin 31, idx 30)
     // Pin numbering: pin 36=INPT0 .. pin 31=INPT5 → indices 35..30
-    ps[35].signal_level = (tia->read_regs_[TIA_INPT0] & 0x80) != 0; ps[35].drive_direction = false;
+    ps[35].signal_level = (tia->read_regs_[INPT0] & 0x80) != 0; ps[35].drive_direction = false;
     ps[35].high_impedance = false;    ps[35].signal_valid = true;
-    ps[34].signal_level = (tia->read_regs_[TIA_INPT1] & 0x80) != 0; ps[34].drive_direction = false;
+    ps[34].signal_level = (tia->read_regs_[INPT1] & 0x80) != 0; ps[34].drive_direction = false;
     ps[34].high_impedance = false;    ps[34].signal_valid = true;
-    ps[33].signal_level = (tia->read_regs_[TIA_INPT2] & 0x80) != 0; ps[33].drive_direction = false;
+    ps[33].signal_level = (tia->read_regs_[INPT2] & 0x80) != 0; ps[33].drive_direction = false;
     ps[33].high_impedance = false;    ps[33].signal_valid = true;
-    ps[32].signal_level = (tia->read_regs_[TIA_INPT3] & 0x80) != 0; ps[32].drive_direction = false;
+    ps[32].signal_level = (tia->read_regs_[INPT3] & 0x80) != 0; ps[32].drive_direction = false;
     ps[32].high_impedance = false;    ps[32].signal_valid = true;
-    ps[31].signal_level = (tia->read_regs_[TIA_INPT4] & 0x80) != 0; ps[31].drive_direction = false;
+    ps[31].signal_level = (tia->read_regs_[INPT4] & 0x80) != 0; ps[31].drive_direction = false;
     ps[31].high_impedance = false;    ps[31].signal_valid = true;
-    ps[30].signal_level = (tia->read_regs_[TIA_INPT5] & 0x80) != 0; ps[30].drive_direction = false;
+    ps[30].signal_level = (tia->read_regs_[INPT5] & 0x80) != 0; ps[30].drive_direction = false;
     ps[30].high_impedance = false;    ps[30].signal_valid = true;
 
     // --- DUMP (pin 37, idx 36) — paddle discharge control ---
-    ps[36].signal_level    = (tia->regs_[TIA_VBLANK] & 0x02) != 0; // DUMP is gated by VBLANK bit 7
+    ps[36].signal_level    = (tia->regs_[VBLANK] & 0x02) != 0; // DUMP is gated by VBLANK bit 7
     ps[36].drive_direction = true;
     ps[36].high_impedance  = false;
     ps[36].signal_valid    = true;

@@ -37,7 +37,7 @@ template <const AYTraits& Traits>
 void ay_psg_t<Traits>::register_debug_fields() {
     using S = const ay_psg_t<Traits>;
     auto& r = debug_registry_;
-    r.set_registers(regs_.data, ay_regs::REG_COUNT, AY_REG_INFO);
+    wire_debug_registers(AY_REG_INFO);
     r.set_decl_entries(AY_DECL_ENTRIES.data(), AY_DECL_ENTRIES.size());
 
     // Mixer enables, amplitude/env-mode bits, and envelope shape are in the DECL walk.
@@ -46,25 +46,25 @@ void ay_psg_t<Traits>::register_debug_fields() {
     r.category("Channel A");
     r.value("Tone Period", +[](const ChipBase* c) -> uint32_t {
         auto* s = static_cast<S*>(c);
-        return s->regs_[ay_regs::TONE_A_FINE] | (uint16_t(s->regs_[ay_regs::TONE_A_COARSE] & 0x0F) << 8);
+        return s->regs_[ay::reg::TONE_A_FINE] | (uint16_t(s->regs_[ay::reg::TONE_A_COARSE] & 0x0F) << 8);
     }, 12);
 
     r.category("Channel B");
     r.value("Tone Period", +[](const ChipBase* c) -> uint32_t {
         auto* s = static_cast<S*>(c);
-        return s->regs_[ay_regs::TONE_B_FINE] | (uint16_t(s->regs_[ay_regs::TONE_B_COARSE] & 0x0F) << 8);
+        return s->regs_[ay::reg::TONE_B_FINE] | (uint16_t(s->regs_[ay::reg::TONE_B_COARSE] & 0x0F) << 8);
     }, 12);
 
     r.category("Channel C");
     r.value("Tone Period", +[](const ChipBase* c) -> uint32_t {
         auto* s = static_cast<S*>(c);
-        return s->regs_[ay_regs::TONE_C_FINE] | (uint16_t(s->regs_[ay_regs::TONE_C_COARSE] & 0x0F) << 8);
+        return s->regs_[ay::reg::TONE_C_FINE] | (uint16_t(s->regs_[ay::reg::TONE_C_COARSE] & 0x0F) << 8);
     }, 12);
 
     r.category("Envelope");
     r.value("Env Period", +[](const ChipBase* c) -> uint32_t {
         auto* s = static_cast<S*>(c);
-        return s->regs_[ay_regs::ENV_FINE] | (uint16_t(s->regs_[ay_regs::ENV_COARSE]) << 8);
+        return s->regs_[ay::reg::ENV_FINE] | (uint16_t(s->regs_[ay::reg::ENV_COARSE]) << 8);
     }, 16);
 }
 

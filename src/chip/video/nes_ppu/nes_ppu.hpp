@@ -77,15 +77,20 @@ NES_PPU_DECL(DECL_REG_NOP, NES_PPU_X_FLD_NS_, DECL_CMP_NOP)
 #undef NES_PPU_X_FLD_NS_
 } } // namespace nes_ppu::fld
 
+// --- Extract register address constants ---
+namespace nes_ppu {
+namespace reg {
+    NES_PPU_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
+    constexpr uint8_t REG_COUNT = 8;
+} // namespace reg
+} // namespace nes_ppu
+
 namespace nes_system {
+
+using namespace nes_ppu::reg;
 
 class PPU : public VideoChipBase {
 public:
-    // PPU register indices (memory-mapped at $2000-$2007)
-    #define NES_PPU_X_CONST_(a, s, l) static constexpr uint8_t s = a;
-    NES_PPU_DECL(NES_PPU_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-    #undef NES_PPU_X_CONST_
-    static constexpr uint8_t REG_COUNT = 8;
 
     // PPU register file stored in ChipBase::regs_[]
 
