@@ -1505,6 +1505,21 @@ static const PortDefinition c64_expansion_def = {
     false, false
 };
 
+// A/V output — DIN-8 connector carries composite video + audio
+static const PortDefinition c64_video_out_def = {
+    PortType::VIDEO_COMPOSITE,
+    "Video Out",
+    nullptr, 0,
+    false, false
+};
+
+static const PortDefinition c64_audio_out_def = {
+    PortType::AUDIO_MONO,
+    "Audio Out",
+    nullptr, 0,
+    false, false
+};
+
 // ============================================================================
 // JOYSTICK-AWARE CIA1 PORT CALLBACKS
 // ============================================================================
@@ -1629,7 +1644,13 @@ void C64System::setup_ports() {
     // PORT_EXPANSION = 5 — Expansion Port (cartridge slot)
     add_port(c64_expansion_def, 0);
 
-    // PORT_KEYBOARD = 6 — Internal Keyboard (always attached)
+    // PORT_VIDEO = 6 — Video Output (composite, DIN-8 A/V connector)
+    add_port(c64_video_out_def, 0);
+
+    // PORT_AUDIO = 7 — Audio Output (mono, DIN-8 A/V connector)
+    add_port(c64_audio_out_def, 0);
+
+    // PORT_KEYBOARD = 8 — Internal Keyboard (always attached)
     static const PortDefinition c64_keyboard_def = {
         PortType::CUSTOM, "Keyboard", nullptr, 0, true, false  // is_internal, not bus
     };
@@ -1676,6 +1697,7 @@ C64System::get_default_peripherals() const {
         { PORT_CONTROL2,   "joystick"   },  // Control Port 2 — standard game port
         { PORT_IEC_SERIAL, "1541"       },  // IEC Serial Bus — 1541 disk drive
         { PORT_CASSETTE,   "datasette"  },  // Cassette Port  — datasette (1530)
+        { PORT_VIDEO,      "crt_tv"     },  // Video Out      — Color TV
     };
 }
 

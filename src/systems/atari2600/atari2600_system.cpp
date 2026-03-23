@@ -531,6 +531,22 @@ void Atari2600System::setup_ports() {
     add_port(atari_joy_1_def, 1);  // Player 1
     add_port(atari_joy_2_def, 2);  // Player 2
 
+    // Video/Audio output (RF modulator on real hardware)
+    static const PortDefinition atari_video_out_def = {
+        PortType::VIDEO_COMPOSITE,
+        "Video Out",
+        nullptr, 0,
+        false, false
+    };
+    static const PortDefinition atari_audio_out_def = {
+        PortType::AUDIO_MONO,
+        "Audio Out",
+        nullptr, 0,
+        false, false
+    };
+    add_port(atari_video_out_def, 0);
+    add_port(atari_audio_out_def, 0);
+
     printf("Atari2600: Created %zu ports\n", get_ports().size());
 }
 
@@ -539,6 +555,7 @@ Atari2600System::get_default_peripherals() const {
     return {
         { 0, "joystick" },   // Left Controller
         { 1, "joystick" },   // Right Controller
+        { 2, "crt_tv"   },   // Video Out — Color TV
     };
 }
 

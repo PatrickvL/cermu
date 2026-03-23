@@ -447,6 +447,21 @@ static const PortDefinition c16_expansion_def = {
     false, false
 };
 
+// A/V output — DIN-8 connector carries composite video + audio
+static const PortDefinition c16_video_out_def = {
+    PortType::VIDEO_COMPOSITE,
+    "Video Out",
+    nullptr, 0,
+    false, false
+};
+
+static const PortDefinition c16_audio_out_def = {
+    PortType::AUDIO_MONO,
+    "Audio Out",
+    nullptr, 0,
+    false, false
+};
+
 // ============================================================================
 // Constructor / Destructor
 // ============================================================================
@@ -1183,6 +1198,10 @@ void Commodore264System<V>::setup_ports() {
     // Port 5 — Expansion Port (cartridge slot)
     add_port(c16_expansion_def, 0);
 
+    // Video/Audio output ports
+    add_port(c16_video_out_def, 0);
+    add_port(c16_audio_out_def, 0);
+
     // Internal Keyboard (always attached)
     static const PortDefinition c16_keyboard_def = {
         PortType::CUSTOM, "Keyboard", nullptr, 0, true, false
@@ -1202,11 +1221,14 @@ void Commodore264System<V>::setup_ports() {
 template<C264SeriesVariant V>
 std::vector<System::DefaultPeripheral>
 Commodore264System<V>::get_default_peripherals() const {
+    // Video port index depends on variant (Plus/4 has user port at index 4)
+    int video_idx = Traits::has_user_port ? 6 : 5;
     return {
         { 0, "joystick"  },  // Joystick Port 1
         { 1, "joystick"  },  // Joystick Port 2
         { 2, "1541"      },  // IEC Serial Bus — 1541 disk drive
         { 3, "datasette" },  // Cassette Port  — datasette (1530)
+        { video_idx, "crt_tv" },  // Video Out — Color TV
     };
 }
 

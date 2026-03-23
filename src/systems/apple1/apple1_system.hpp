@@ -132,6 +132,9 @@ private:
     // Connector port setup (registers Apple 1 connector ports with base class)
     void setup_ports();
 
+    // Default peripherals
+    std::vector<DefaultPeripheral> get_default_peripherals() const override;
+
     // ROM loading
     bool load_roms();
 

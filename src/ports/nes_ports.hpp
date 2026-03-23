@@ -76,4 +76,22 @@ inline const PortDefinition FC_EXPANSION = {
     false, false
 };
 
+// ============================================================================
+// Video / Audio Output Ports
+// ============================================================================
+
+inline const PortDefinition NES_VIDEO_OUT = {
+    PortType::VIDEO_COMPOSITE,
+    "Video Out",
+    nullptr, 0,
+    false, false
+};
+
+inline const PortDefinition NES_AUDIO_OUT = {
+    PortType::AUDIO_MONO,
+    "Audio Out",
+    nullptr, 0,
+    false, false
+};
+
 } // namespace NesPorts
