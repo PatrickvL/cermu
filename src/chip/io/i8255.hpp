@@ -56,7 +56,6 @@ I8255_DECL(DECL_REG_NOP, I8255_X_FLD_NS_, DECL_CMP_NOP)
 } // namespace i8255
 
 // Backward compatibility alias
-namespace i8255_regs = i8255::reg;
 
 DECL_EXTRACT(I8255, I8255_DECL)
 
@@ -65,7 +64,7 @@ public:
     i8255_t()
         : IoChipBase(ChipInfo("8255", "Intel"))
     {
-        init_regs(i8255_regs::REG_COUNT);
+        init_regs(i8255::reg::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
@@ -200,10 +199,10 @@ private:
     // Register file mirror (for debug inspection — backed by ChipBase::regs_)
 
     void update_regs() {
-        regs_[i8255_regs::PORT_A]  = port_a_out_;
-        regs_[i8255_regs::PORT_B]  = port_b_out_;
-        regs_[i8255_regs::PORT_C]  = port_c_out_;
-        regs_[i8255_regs::CONTROL] = control_;
+        regs_[i8255::reg::PORT_A]  = port_a_out_;
+        regs_[i8255::reg::PORT_B]  = port_b_out_;
+        regs_[i8255::reg::PORT_C]  = port_c_out_;
+        regs_[i8255::reg::CONTROL] = control_;
     }
 
 #ifdef CERMU_HAS_CHIP_DEBUG

@@ -46,10 +46,10 @@
     REG(0x07, CH3_TC,   "Channel 3 time constant")  \
     REG(0x08, INT_VEC,  "Interrupt base vector")
 
-namespace z80_ctc_regs {
+namespace z80_ctc::reg {
     Z80_CTC_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 9;
-} // namespace z80_ctc_regs
+} // namespace z80_ctc::reg
 
 DECL_EXTRACT(Z80_CTC, Z80_CTC_DECL)
 
@@ -78,7 +78,7 @@ public:
         : IoChipBase(ChipInfo(is_u857 ? "U857" : "Z80 CTC",
                              is_u857 ? "VEB MME Erfurt" : "Zilog"))
     {
-        init_regs(z80_ctc_regs::REG_COUNT);
+        init_regs(z80_ctc::reg::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
@@ -263,10 +263,10 @@ private:
 
     void update_regs() {
         for (int i = 0; i < 4; ++i) {
-            regs_[z80_ctc_regs::CH0_CTRL + i] = ch_[i].control;
-            regs_[z80_ctc_regs::CH0_TC + i]   = static_cast<uint8_t>(ch_[i].time_constant & 0xFF);
+            regs_[z80_ctc::reg::CH0_CTRL + i] = ch_[i].control;
+            regs_[z80_ctc::reg::CH0_TC + i]   = static_cast<uint8_t>(ch_[i].time_constant & 0xFF);
         }
-        regs_[z80_ctc_regs::INT_VEC] = int_vector_base_;
+        regs_[z80_ctc::reg::INT_VEC] = int_vector_base_;
     }
 
 #ifdef CERMU_HAS_CHIP_DEBUG

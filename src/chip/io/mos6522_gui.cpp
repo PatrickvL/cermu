@@ -84,8 +84,8 @@ static std::vector<PinSignalState> get_via_pin_states(mos6522_t* via, const Chip
         int pin_idx = i + 1; // PA0 is pin 2, index 1
         if (pin_idx < total_pins) {
             pin_states[pin_idx].signal_level = (via->port_a_pins_ & (1 << i)) != 0;
-            pin_states[pin_idx].drive_direction = (via->regs_[MOS6522_DDRA] & (1 << i)) != 0;
-            pin_states[pin_idx].high_impedance = !(via->regs_[MOS6522_DDRA] & (1 << i));
+            pin_states[pin_idx].drive_direction = (via->regs_[DDRA] & (1 << i)) != 0;
+            pin_states[pin_idx].high_impedance = !(via->regs_[DDRA] & (1 << i));
         }
     }
 
@@ -94,8 +94,8 @@ static std::vector<PinSignalState> get_via_pin_states(mos6522_t* via, const Chip
         int pin_idx = i + 9; // PB0 is pin 10, index 9
         if (pin_idx < total_pins) {
             pin_states[pin_idx].signal_level = (via->port_b_pins_ & (1 << i)) != 0;
-            pin_states[pin_idx].drive_direction = (via->regs_[MOS6522_DDRB] & (1 << i)) != 0;
-            pin_states[pin_idx].high_impedance = !(via->regs_[MOS6522_DDRB] & (1 << i));
+            pin_states[pin_idx].drive_direction = (via->regs_[DDRB] & (1 << i)) != 0;
+            pin_states[pin_idx].high_impedance = !(via->regs_[DDRB] & (1 << i));
         }
     }
 
@@ -147,7 +147,7 @@ void mos6522_t::render_settings_content() {
         // Port A pin-by-pin
         ImGui::Text("Port A (pin by pin):");
         for (int i = 0; i < 8; i++) {
-            bool is_output = (via->regs_[MOS6522_DDRA] & (1 << i)) != 0;
+            bool is_output = (via->regs_[DDRA] & (1 << i)) != 0;
             bool pin_level = (via->port_a_pins_ & (1 << i)) != 0;
             ImGui::Text("  PA%d: %s  Dir: %s", i, pin_level ? "HIGH" : "LOW",
                         is_output ? "OUT" : "IN");
@@ -158,7 +158,7 @@ void mos6522_t::render_settings_content() {
         // Port B pin-by-pin
         ImGui::Text("Port B (pin by pin):");
         for (int i = 0; i < 8; i++) {
-            bool is_output = (via->regs_[MOS6522_DDRB] & (1 << i)) != 0;
+            bool is_output = (via->regs_[DDRB] & (1 << i)) != 0;
             bool pin_level = (via->port_b_pins_ & (1 << i)) != 0;
             ImGui::Text("  PB%d: %s  Dir: %s", i, pin_level ? "HIGH" : "LOW",
                         is_output ? "OUT" : "IN");

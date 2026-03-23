@@ -27,21 +27,24 @@
 // REG(offset, symbol, description)
 // FLD(reg_sym, field_sym, hi:lo, description, kind, display_shift, display_scale)
 #define PIA_DECL(REG, FLD, CMP) \
-    REG(0, PIA_REG_PORTA_DATA, "Port A output latch")                           \
-    REG(1, PIA_REG_PORTA_DDR,  "Port A direction")                              \
-    REG(2, PIA_REG_PORTA_CTRL, "Port A control")                                \
-      FLD(PIA_REG_PORTA_CTRL, CA2_MODE,  5:3, "CA2 control",  Value, 0, 0)     \
-      FLD(PIA_REG_PORTA_CTRL, DDR_SEL_A, 2:2, "DDR select",   Flag,  0, 0)     \
-      FLD(PIA_REG_PORTA_CTRL, CA1_CTRL,  1:0, "CA1 control",  Value, 0, 0)     \
-    REG(3, PIA_REG_PORTB_DATA, "Port B output latch")                           \
-    REG(4, PIA_REG_PORTB_DDR,  "Port B direction")                              \
-    REG(5, PIA_REG_PORTB_CTRL, "Port B control")                                \
-      FLD(PIA_REG_PORTB_CTRL, CB2_MODE,  5:3, "CB2 control",  Value, 0, 0)     \
-      FLD(PIA_REG_PORTB_CTRL, DDR_SEL_B, 2:2, "DDR select",   Flag,  0, 0)     \
-      FLD(PIA_REG_PORTB_CTRL, CB1_CTRL,  1:0, "CB1 control",  Value, 0, 0)
+    REG(0, PORTA_DATA, "Port A output latch")                           \
+    REG(1, PORTA_DDR,  "Port A direction")                              \
+    REG(2, PORTA_CTRL, "Port A control")                                \
+      FLD(PORTA_CTRL, CA2_MODE,  5:3, "CA2 control",  Value, 0, 0)     \
+      FLD(PORTA_CTRL, DDR_SEL_A, 2:2, "DDR select",   Flag,  0, 0)     \
+      FLD(PORTA_CTRL, CA1_CTRL,  1:0, "CA1 control",  Value, 0, 0)     \
+    REG(3, PORTB_DATA, "Port B output latch")                           \
+    REG(4, PORTB_DDR,  "Port B direction")                              \
+    REG(5, PORTB_CTRL, "Port B control")                                \
+      FLD(PORTB_CTRL, CB2_MODE,  5:3, "CB2 control",  Value, 0, 0)     \
+      FLD(PORTB_CTRL, DDR_SEL_B, 2:2, "DDR select",   Flag,  0, 0)     \
+      FLD(PORTB_CTRL, CB1_CTRL,  1:0, "CB1 control",  Value, 0, 0)
 
 // --- Extract address constants ---
+namespace pia { namespace reg {
 PIA_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
+} } // namespace pia::reg
+using namespace pia::reg;
 
 DECL_EXTRACT(PIA, PIA_DECL)
 
@@ -58,7 +61,7 @@ struct pia6820_t : public IoChipBase {
     pia6820_t() : IoChipBase(ChipInfo{"PIA6820", "Motorola"}) {
         init_regs(PIA_NUM_REGS);
 #ifdef CERMU_HAS_CHIP_DEBUG
-        debug_registry_.set_registers(regs_.data, PIA_NUM_REGS, PIA_REG_INFO);
+        wire_debug_registers(PIA_REG_INFO);
         register_debug_fields();
 #endif
     }
@@ -83,14 +86,14 @@ struct pia6820_t : public IoChipBase {
     // Register named accessors (backed by ChipBase::regs_)
 
     // Port A registers
-    uint8_t& port_a_data      = regs_.data[PIA_REG_PORTA_DATA];   // Data register (output latch)
-    uint8_t& port_a_direction  = regs_.data[PIA_REG_PORTA_DDR];    // Data direction register (0=input, 1=output)
-    uint8_t& port_a_control   = regs_.data[PIA_REG_PORTA_CTRL];   // Control register
+    uint8_t& port_a_data      = regs_.data[PORTA_DATA];   // Data register (output latch)
+    uint8_t& port_a_direction  = regs_.data[PORTA_DDR];    // Data direction register (0=input, 1=output)
+    uint8_t& port_a_control   = regs_.data[PORTA_CTRL];   // Control register
 
     // Port B registers
-    uint8_t& port_b_data      = regs_.data[PIA_REG_PORTB_DATA];   // Data register (output latch)
-    uint8_t& port_b_direction  = regs_.data[PIA_REG_PORTB_DDR];    // Data direction register
-    uint8_t& port_b_control   = regs_.data[PIA_REG_PORTB_CTRL];   // Control register
+    uint8_t& port_b_data      = regs_.data[PORTB_DATA];   // Data register (output latch)
+    uint8_t& port_b_direction  = regs_.data[PORTB_DDR];    // Data direction register
+    uint8_t& port_b_control   = regs_.data[PORTB_CTRL];   // Control register
     
     // Interrupt flags (read in bits 7-6 of control registers)
     bool irq_a1;                // CA1 interrupt flag (bit 7 of CRA)
@@ -153,8 +156,8 @@ private:
         debug_registry_
             .category("Port A")
             .port("Port A",
-                  RegSource{PIA_REG_PORTA_DATA},
-                  RegSource{PIA_REG_PORTA_DDR})
+                  RegSource{PORTA_DATA},
+                  RegSource{PORTA_DDR})
             .flag("CA1", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->ca1_state; })
             .flag("CA2", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->ca2_state; })
             .flag("IRQ A1", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->irq_a1; })
@@ -162,8 +165,8 @@ private:
 
             .category("Port B")
             .port("Port B",
-                  RegSource{PIA_REG_PORTB_DATA},
-                  RegSource{PIA_REG_PORTB_DDR})
+                  RegSource{PORTB_DATA},
+                  RegSource{PORTB_DDR})
             .flag("CB1", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->cb1_state; })
             .flag("CB2", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->cb2_state; })
             .flag("IRQ B1", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->irq_b1; })

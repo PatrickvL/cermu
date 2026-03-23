@@ -483,7 +483,7 @@ bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
                     if (psg_adapter_) {
                         // Data comes from System VIA Port A output register.
                         // Enqueue timestamped write for the audio thread.
-                        uint8_t psg_data = board_.io().regs_[MOS6522_PORTA];
+                        uint8_t psg_data = board_.io().regs_[PORTA];
                         psg_adapter_->cmd_queue().push_write(total_cycles_, 0, psg_data);
                     }
                 }
