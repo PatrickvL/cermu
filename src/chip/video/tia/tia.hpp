@@ -365,6 +365,23 @@ struct tia_t : public VideoChipBase {
     bool prev_vsync_stream_ = false;  // Edge detection for FrameEnd emission
 
     // ========================================================================
+    // TEST FRAMEBUFFER (optional, for harness pixel verification)
+    // ========================================================================
+
+    uint32_t* test_framebuffer_  = nullptr;  ///< Optional RGBA output for tests
+    int       test_fb_width_     = 0;
+    int       test_fb_height_    = 0;
+
+    /// Set an RGBA framebuffer for test pixel readback.
+    /// The TIA will blit each visible scanline into this buffer using the
+    /// NTSC palette.  Pass nullptr to disable.
+    void set_framebuffer(uint32_t* fb, int w, int h) {
+        test_framebuffer_ = fb;
+        test_fb_width_    = w;
+        test_fb_height_   = h;
+    }
+
+    // ========================================================================
     // SCANLINE BUFFER
     // ========================================================================
 

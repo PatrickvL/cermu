@@ -547,6 +547,16 @@ void tia_t::tick_color_clock() {
 
         // Track visible row for framebuffer mapping.
         if (!vblank) {
+            // Blit the scanline to the test framebuffer (if attached).
+            if (test_framebuffer_ && visible_row >= 0 && visible_row < test_fb_height_) {
+                uint32_t* row_ptr = test_framebuffer_ + visible_row * test_fb_width_;
+                int cols = (test_fb_width_ < tia_constants::DISPLAY_WIDTH)
+                           ? test_fb_width_ : tia_constants::DISPLAY_WIDTH;
+                for (int i = 0; i < cols; i++) {
+                    row_ptr[i] = palette_rgba_[color_line_buffer[i] & 0x7F];
+                }
+            }
+
             // Row was already set to 0 before first pixel (see above).
             // At end of each visible scanline, advance to next row.
             visible_row++;
