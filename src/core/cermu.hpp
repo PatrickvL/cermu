@@ -56,6 +56,31 @@
 #endif
 
 /* ========================================================================== */
+/* BYTE ORDER                                                                 */
+/* ========================================================================== */
+
+/* Detect host endianness at compile time.  All targets cermu runs on are
+   little-endian (x86, x86-64, ARM64, ARM in LE mode), but the check is
+   here so register_file.hpp and any future byte-order-sensitive code can
+   use CERMU_LITTLE_ENDIAN without platform-specific #if chains. */
+#if defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__)
+    /* GCC / Clang */
+    #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+        #define CERMU_LITTLE_ENDIAN 1
+    #endif
+#elif defined(_WIN32)
+    /* MSVC — Windows is always little-endian on supported architectures */
+    #define CERMU_LITTLE_ENDIAN 1
+#elif defined(__APPLE__)
+    /* macOS/iOS on x86-64 and ARM64 are little-endian */
+    #define CERMU_LITTLE_ENDIAN 1
+#endif
+
+#ifndef CERMU_LITTLE_ENDIAN
+    #error "Unable to detect byte order — add detection for this platform to cermu.hpp"
+#endif
+
+/* ========================================================================== */
 /* PREPROCESSOR CAPABILITIES                                                  */
 /* ========================================================================== */
 
