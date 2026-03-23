@@ -1,4 +1,6 @@
 #include "chip/io/mos6526.hpp" // cia
+using namespace MOS6526;
+using namespace MOS6526::reg;
 using namespace MOS6526::cia_detail;
 #include "core/chip_manifest.hpp"
 #include "core/chip_registry.hpp"
@@ -8,7 +10,7 @@ using namespace MOS6526::cia_detail;
 #include <cstdio>
 
 // =========================================================================
-// CIA_REG_SDR delay pipeline constants (per VICE ciacore.c)
+// SDR delay pipeline constants (per VICE ciacore.c)
 // Each group is a countdown: bits shift LEFT each tick, action fires at ...0
 // =========================================================================
 #define CIA_SDR_TOGGLE_CNT2     0x0001u  // Countdown to toggling CNT
@@ -21,7 +23,7 @@ using namespace MOS6526::cia_detail;
 #define CIA_SDR_NOGGLE_CNT0     0x0040u
 #define CIA_SDR_NOGGLE_CNT_1    0x0080u
 
-#define CIA_SDR_SET_SDR_IRQ3    0x0100u  // Countdown to setting CIA_REG_SDR IRQ
+#define CIA_SDR_SET_SDR_IRQ3    0x0100u  // Countdown to setting SDR IRQ
 #define CIA_SDR_SET_SDR_IRQ2    0x0200u
 #define CIA_SDR_SET_SDR_IRQ1    0x0400u
 #define CIA_SDR_SET_SDR_IRQ0    0x0800u  // Action: set ICR_SP
@@ -31,10 +33,10 @@ using namespace MOS6526::cia_detail;
 #define CIA_SDR_CNT2            0x4000u
 #define CIA_SDR_CNT3            0x8000u
 
-#define CIA_SDR_SET3        0x00010000u  // Countdown to loading CIA_REG_SDR into shifter
+#define CIA_SDR_SET3        0x00010000u  // Countdown to loading SDR into shifter
 #define CIA_SDR_SET2        0x00020000u
 #define CIA_SDR_SET1        0x00040000u
-#define CIA_SDR_SET0        0x00080000u  // Action: load CIA_REG_SDR
+#define CIA_SDR_SET0        0x00080000u  // Action: load SDR
 
 #define CIA_SDR_LEFTMOST    0x00100000u
 
@@ -68,7 +70,7 @@ void mos6526_t::reset() {
     // registers are set to zero and the timer latches to all
     // ones. All other registers are reset to zero."
     regs_.clear();
-    regs_[CIA_REG_TOD_HR] = 1; // According to powerup
+    regs_[TOD_HR] = 1; // According to powerup
     // Ports all high
     // "The lines PA0 and PA1 of the second CIA are the inverse of the
     // virtual VIC-II address lines VA14 and VA15, respectively."
@@ -76,16 +78,16 @@ void mos6526_t::reset() {
     port_a_value = 0xFF;
     port_b_value = 0xFF;
     // Timer latches all ones
-    regs_[TIMER_OFFSET + CIA_REG_TA_LO] = 0xFF;
-    regs_[TIMER_OFFSET + CIA_REG_TA_HI] = 0xFF;
-    regs_[TIMER_OFFSET + CIA_REG_TB_LO] = 0xFF;
-    regs_[TIMER_OFFSET + CIA_REG_TB_HI] = 0xFF;
+    regs_[TIMER_OFFSET + TA_LO] = 0xFF;
+    regs_[TIMER_OFFSET + TA_HI] = 0xFF;
+    regs_[TIMER_OFFSET + TB_LO] = 0xFF;
+    regs_[TIMER_OFFSET + TB_HI] = 0xFF;
     // Timer counters are also set to all ones after reset
     // (loaded from latches since control registers are 0 = stopped)
-    regs_[CIA_REG_TA_LO] = 0xFF;
-    regs_[CIA_REG_TA_HI] = 0xFF;
-    regs_[CIA_REG_TB_LO] = 0xFF;
-    regs_[CIA_REG_TB_HI] = 0xFF;
+    regs_[TA_LO] = 0xFF;
+    regs_[TA_HI] = 0xFF;
+    regs_[TB_LO] = 0xFF;
+    regs_[TB_HI] = 0xFF;
     timer_counter_[A] = 0xFFFF;
     timer_counter_[B] = 0xFFFF;
     // Also reset implementation-related variables
@@ -115,7 +117,7 @@ void mos6526_t::reset() {
     pb67_toggle = 0;
     
     // Initialize serial output state
-    // Already reset above in the grouped CIA_REG_SDR state initialization
+    // Already reset above in the grouped SDR state initialization
     
     // Initialize bus snapshot for edge detection (CNT/FLAG have pull-ups → start HIGH)
     bus_snapshot_ = BUS_BIT(BUS_CNT_BIT) | BUS_BIT(BUS_FLAG_BIT);
@@ -130,17 +132,17 @@ void mos6526_t::reset() {
 bool mos6526_t::has_settings_content() const { return true; }
 #endif
 
-// INTERRUPT CONTROL REGISTER (CIA_REG_ICR) handling
+// INTERRUPT CONTROL REGISTER (ICR) handling
 
 uint8_t mos6526_t::read_and_clear_interrupt_control_register() {
     // "The interrupt DATA register is cleared" (the /IRQ line
     // does NOT return high following a read of the DATA register!)
-    uint8_t v = regs_[CIA_REG_ICR];
+    uint8_t v = regs_[ICR];
     
-    // "interrupt can be prevented by reading the CIA_REG_ICR at the time of the underflow."
-    regs_[CIA_REG_ICR] = 0;
+    // "interrupt can be prevented by reading the ICR at the time of the underflow."
+    regs_[ICR] = 0;
     
-    // Timer B Bug: Remember CIA_REG_ICR reads to block Timer B interrupts this cycle
+    // Timer B Bug: Remember ICR reads to block Timer B interrupts this cycle
     // Per chips_mos6526.hpp lines 476-477: Set flag that will be checked in interrupt handling
     icr_read_this_cycle = true;
     
@@ -155,7 +157,7 @@ void mos6526_t::check_interrupt_mask() {
     // "In order for an interrupt flag to set IR
     // and generate an Interrupt Request, the
     // corresponding MASK bit must be set."
-    uint8_t masked_interrupts = regs_[CIA_REG_ICR] & interrupt_mask;
+    uint8_t masked_interrupts = regs_[ICR] & interrupt_mask;
     
     if (masked_interrupts > 0) {
         // "Any interrupt which is enabled by the MASK register will
@@ -164,11 +166,11 @@ void mos6526_t::check_interrupt_mask() {
         //
         // With the new pull-up resistor model, we simply set ICR_IRQ.
         // The next tick() will see this and assert the interrupt line.
-        // No need for delayed_irq flag - the interrupt persists until CIA_REG_ICR is read.
-        regs_[CIA_REG_ICR] |= ICR_IRQ;
+        // No need for delayed_irq flag - the interrupt persists until ICR is read.
+        regs_[ICR] |= ICR_IRQ;
     }
     // Per CIA datasheet: "Clearing the bit in the IMR may not clear the interrupt."
-    // ICR_IRQ is ONLY cleared by reading the CIA_REG_ICR register (read_and_clear_interrupt_control_register).
+    // ICR_IRQ is ONLY cleared by reading the ICR register (read_and_clear_interrupt_control_register).
     // Once the interrupt flip-flop has been set, changing the IMR has no effect on ICR_IRQ.
 }
 
@@ -192,7 +194,7 @@ void mos6526_t::write_interrupt_control_register(uint32_t v) {
         // 1 = set bits 0..4 are setting the according mask bit."
         interrupt_mask_delayed |= bits;
 
-    // "When a condition in the CIA_REG_ICR is true, setting the corresponding bit in the IMR must also set the interrupt."
+    // "When a condition in the ICR is true, setting the corresponding bit in the IMR must also set the interrupt."
     // "Clearing the bit in the IMR may not clear the interrupt."
     // IMPORTANT: We still need to call check_interrupt_mask() because it handles
     // both setting ICR_IRQ when masked interrupts exist AND clearing it when they don't.
@@ -211,7 +213,7 @@ void mos6526_t::write_interrupt_control_register(uint32_t v) {
 void mos6526_t::write_data_direction_port(uint32_t p, uint8_t v) { // p:A or B
     // Delegate to generic io_port which handles:
     //   - output→input transitions: pull up pins (passive pull-ups)
-    //   - input→output transitions: drive CIA_REG_PRA/CIA_REG_PRB value onto pins
+    //   - input→output transitions: drive PRA/PRB value onto pins
     // Note: Pull-up bits can be lowered by connected devices (keyboard, joystick, mouse)
     // when that happens AFTER the CIA cycle update!
     auto& port = (p == A) ? port_a : port_b;
@@ -220,15 +222,15 @@ void mos6526_t::write_data_direction_port(uint32_t p, uint8_t v) { // p:A or B
 
 void mos6526_t::update_output_port(uint32_t p, uint8_t v) { // p:A or B
     // Drive port pin values through output mask
-    // For port A: mask = CIA_REG_DDRA (standard)
-    // For port B: mask = IDDRB (CIA_REG_DDRB with PBON forced outputs) — see update_internal_data_direction_port_b()
+    // For port A: mask = DDRA (standard)
+    // For port B: mask = IDDRB (DDRB with PBON forced outputs) — see update_internal_data_direction_port_b()
     auto& port = (p == A) ? port_a : port_b;
     uint8_t mask = (p == A) ? *port_a.ddr : regs_[IDDRB_OFFSET];
     port.force_pins(v, mask);
     
     // Call port A change callback if port A and callback is registered
     // Note: Always call for Port A writes (even if value unchanged) because VIC-II
-    // banking needs to be notified on every CIA_REG_PRA write for correct operation
+    // banking needs to be notified on every PRA write for correct operation
     if (p == A && port_a_change_callback) {
         port_a_change_callback(port_a_callback_context, port_a_value);
     }
@@ -236,16 +238,16 @@ void mos6526_t::update_output_port(uint32_t p, uint8_t v) { // p:A or B
 
 void mos6526_t::update_output_port_b(uint8_t v) {
     // Compute physical pin output with timer overrides (if PBON enabled)
-    // Note: Port B register (regs_[CIA_REG_PRB]) is already set by the write handler
+    // Note: Port B register (regs_[PRB]) is already set by the write handler
     
     // Handle PBON bits - these override the pin output, NOT the register value
     // "PBON   1 = TIMER A output appears on PB6.
     //         0 = PB6 normal operation."
-    if ((regs_[CIA_REG_CRA] & CRA_PBON) > 0) { // PB6 output mode:Timer
-        if ((regs_[CIA_REG_CRA] & CRA_OUTMODE) == 0) {
+    if ((regs_[CRA] & CRA_PBON) > 0) { // PB6 output mode:Timer
+        if ((regs_[CRA] & CRA_OUTMODE) == 0) {
             // Pulse mode: Output HIGH for one cycle on underflow (ICR_TA set)
             // Will be cleared in next cycle by the pulse clear logic in tick()
-            uint8_t timer_a_output = ((regs_[CIA_REG_ICR] & ICR_TA) << 6);
+            uint8_t timer_a_output = ((regs_[ICR] & ICR_TA) << 6);
             v = (v & ~PB6_MASK) | timer_a_output;
         } else {
             // Toggle mode: Output the flip-flop state
@@ -254,12 +256,12 @@ void mos6526_t::update_output_port_b(uint8_t v) {
         }
     } // else PB6 output mode:Port (use port register bit)
 
-    // "CIA_REG_CRB[..]1 controls the output of TIMER B on PB7"
-    if ((regs_[CIA_REG_CRB] & CRB_PBON) > 0) { // PB7 output mode:Timer
-        if ((regs_[CIA_REG_CRB] & CRB_OUTMODE) == 0) {
+    // "CRB[..]1 controls the output of TIMER B on PB7"
+    if ((regs_[CRB] & CRB_PBON) > 0) { // PB7 output mode:Timer
+        if ((regs_[CRB] & CRB_OUTMODE) == 0) {
             // Pulse mode: Output HIGH for one cycle on underflow (ICR_TB set)
             // Will be cleared in next cycle by the pulse clear logic in tick()
-            uint8_t timer_b_output = ((regs_[CIA_REG_ICR] & ICR_TB) << 6);
+            uint8_t timer_b_output = ((regs_[ICR] & ICR_TB) << 6);
             v = (v & ~PB7_MASK) | timer_b_output;
         } else {
             // Toggle mode: Output the flip-flop state
@@ -277,8 +279,8 @@ uint8_t mos6526_t::read_port_data(uint32_t p) { // p:A or B
     // Start with current port value (pull-ups HIGH, or driven by output pins)
     uint8_t port_value = (p == A) ? port_a_value : port_b_value;
     // For Port B, use IDDRB which includes PBON-forced outputs
-    // For Port A, use regular CIA_REG_DDRA
-    uint8_t output_mask = (p == A) ? regs_[CIA_REG_DDRA] : regs_[IDDRB_OFFSET];
+    // For Port A, use regular DDRA
+    uint8_t output_mask = (p == A) ? regs_[DDRA] : regs_[IDDRB_OFFSET];
     
     // For input pins, call the read callback to get external device state
     // External devices (keyboard, joystick) can pull lines LOW
@@ -291,16 +293,16 @@ uint8_t mos6526_t::read_port_data(uint32_t p) { // p:A or B
     }
     
     // For Port B with PBON-forced output: timer output overrides register value.
-    // PBON makes PB6/PB7 show the timer output (pulse or toggle), not regs_[CIA_REG_PRB].
-    // Compute directly from current CIA_REG_ICR/toggle state to avoid stale port_b_value.
+    // PBON makes PB6/PB7 show the timer output (pulse or toggle), not regs_[PRB].
+    // Compute directly from current ICR/toggle state to avoid stale port_b_value.
     if (p == B) {
         uint8_t pbon_mask = 0;
         uint8_t pbon_value = 0;
-        if (regs_[CIA_REG_CRA] & CRA_PBON) {
+        if (regs_[CRA] & CRA_PBON) {
             pbon_mask |= PB6_MASK;
-            if ((regs_[CIA_REG_CRA] & CRA_OUTMODE) == 0) {
+            if ((regs_[CRA] & CRA_OUTMODE) == 0) {
                 // Pulse mode: PB6 HIGH for exactly one phi2 cycle on timer A underflow.
-                // Use timer_underflowed (one-cycle flag cleared each tick), not CIA_REG_ICR
+                // Use timer_underflowed (one-cycle flag cleared each tick), not ICR
                 // (which persists until read).
                 if (timer_underflowed & (1 << A))
                     pbon_value |= PB6_MASK;
@@ -309,9 +311,9 @@ uint8_t mos6526_t::read_port_data(uint32_t p) { // p:A or B
                 pbon_value |= (pb67_toggle & PB6_MASK);
             }
         }
-        if (regs_[CIA_REG_CRB] & CRB_PBON) {
+        if (regs_[CRB] & CRB_PBON) {
             pbon_mask |= PB7_MASK;
-            if ((regs_[CIA_REG_CRB] & CRB_OUTMODE) == 0) {
+            if ((regs_[CRB] & CRB_OUTMODE) == 0) {
                 // Pulse mode: PB7 HIGH for exactly one phi2 cycle on timer B underflow
                 if (timer_underflowed & (1 << B))
                     pbon_value |= PB7_MASK;
@@ -322,27 +324,27 @@ uint8_t mos6526_t::read_port_data(uint32_t p) { // p:A or B
         }
         uint8_t normal_mask = output_mask & ~pbon_mask;  // Regular output bits
         return (port_value & ~output_mask)         // Input bits (from pin/callback)
-             | (regs_[CIA_REG_PRB] & normal_mask)       // Normal output bits (from register)
+             | (regs_[PRB] & normal_mask)       // Normal output bits (from register)
              | (pbon_value & pbon_mask);            // PBON bits (timer output, live)
     }
     
     // Return combination: input bits from port_value, output bits from register
-    return (port_value & ~output_mask) | (regs_[CIA_REG_PRA + p] & output_mask);
+    return (port_value & ~output_mask) | (regs_[PRA + p] & output_mask);
 }
 
 void mos6526_t::update_internal_data_direction_port_b(uint8_t port_b_output_mask) {
     // "PB On/Off
     //  A control bit allows the timer output to appear on
     // a PORT B output line (PB6 for TIMER A and PB7
-    // for TIMER B). This function overrides the CIA_REG_DDRB
+    // for TIMER B). This function overrides the DDRB
     // control bit and forces the appropriate PB line to an
     // output."
-    if ((regs_[CIA_REG_CRA] & CRA_PBON) > 0)
+    if ((regs_[CRA] & CRA_PBON) > 0)
         port_b_output_mask = port_b_output_mask | PB6_MASK;
 
-    // "CIA_REG_CRB[..]1 controls the output of TIMER B on PB7"
-    if ((regs_[CIA_REG_CRB] & CRB_PBON) > 0)
-        // Override PB7 when CIA_REG_CRB has PBON flag set
+    // "CRB[..]1 controls the output of TIMER B on PB7"
+    if ((regs_[CRB] & CRB_PBON) > 0)
+        // Override PB7 when CRB has PBON flag set
         port_b_output_mask = port_b_output_mask | PB7_MASK;
 
     regs_[IDDRB_OFFSET] = port_b_output_mask;
@@ -351,10 +353,10 @@ void mos6526_t::update_internal_data_direction_port_b(uint8_t port_b_output_mask
 // TIMER A/B handling
 
 void mos6526_t::reload_timer(uint32_t t) { // t:A or B
-    uint32_t i = t * 2; // Turn A or B into CIA_REG_TA_LO / CIA_REG_TB_LO offsets
-    regs_[CIA_REG_TA_LO + i] = regs_[TIMER_OFFSET + CIA_REG_TA_LO + i];
-    regs_[CIA_REG_TA_HI + i] = regs_[TIMER_OFFSET + CIA_REG_TA_HI + i];
-    timer_counter_[t] = (regs_[CIA_REG_TA_HI + i] << 8) | regs_[CIA_REG_TA_LO + i];
+    uint32_t i = t * 2; // Turn A or B into TA_LO / TB_LO offsets
+    regs_[TA_LO + i] = regs_[TIMER_OFFSET + TA_LO + i];
+    regs_[TA_HI + i] = regs_[TIMER_OFFSET + TA_HI + i];
+    timer_counter_[t] = (regs_[TA_HI + i] << 8) | regs_[TA_LO + i];
 }
 
 void mos6526_t::check_reload_timer(uint32_t t) { // t:A or B
@@ -365,7 +367,7 @@ void mos6526_t::check_reload_timer(uint32_t t) { // t:A or B
     // byte will load the timer latch, but not reload the
     // counter."
     // Check only the specific timer's START bit (generic bit works for both timers)
-    if ((regs_[CIA_REG_CRA + t] & CR_START) == 0)
+    if ((regs_[CRA + t] & CR_START) == 0)
         reload_timer(t);
 }
 
@@ -408,9 +410,9 @@ void mos6526_t::decrease_timer(uint32_t t) { // t:A or B
         // Timer underflowed - reload from latch
         timer_underflowed |= 1 << t;
         
-        // Set CIA_REG_ICR flag, but for Timer B check the "Timer B Bug" first
+        // Set ICR flag, but for Timer B check the "Timer B Bug" first
         if (t == A || !icr_read_this_cycle) {
-            regs_[CIA_REG_ICR] |= (uint8_t)(ICR_TA + t);
+            regs_[ICR] |= (uint8_t)(ICR_TA + t);
         }
         reload_timer(t);
         
@@ -430,7 +432,7 @@ void mos6526_t::decrease_timer(uint32_t t) { // t:A or B
         
         // Serial output: Timer A underflow schedules CNT toggle via delay pipeline
         // Per VICE: ~1.5 cycle delay until CNT is toggled after Timer A underflow.
-        if (t == A && (regs_[CIA_REG_CRA] & CRA_SPMODE)) {
+        if (t == A && (regs_[CRA] & CRA_SPMODE)) {
             if (sr_bits != 0 || sdr_valid) {
                 uint32_t event = CIA_SDR_TOGGLE_CNT1;
                 // If timer pulses come too fast, we can't detect the CNT transition.
@@ -443,18 +445,18 @@ void mos6526_t::decrease_timer(uint32_t t) { // t:A or B
         }
         
         // RUNMODE: 0 = continuous (keep running), 1 = one-shot (stop after underflow)
-        if ((regs_[CIA_REG_CRA + t] & CR_RUNMODE) != 0) {
-            regs_[CIA_REG_CRA + t] &= ~CR_START;
+        if ((regs_[CRA + t] & CR_RUNMODE) != 0) {
+            regs_[CRA + t] &= ~CR_START;
         }
     }
 }
 
-// CONTROL REGISTER (CIA_REG_CRA/CIA_REG_CRB) handling
+// CONTROL REGISTER (CRA/CRB) handling
 
 void mos6526_t::write_control_register(uint32_t c, uint8_t v) { // c:A or B
-    uint8_t old_crx = regs_[CIA_REG_CRA + c]; // c=B:CIA_REG_CRB
+    uint8_t old_crx = regs_[CRA + c]; // c=B:CRB
     
-    // CIA_REG_CRA write logging disabled for performance
+    // CRA write logging disabled for performance
 
     if (c == A) {
         // TODO : Should toggling 50/60Hz reset the cycle counter?
@@ -481,7 +483,7 @@ void mos6526_t::write_control_register(uint32_t c, uint8_t v) { // c:A or B
             delay_line.Inject(cnt_switch_a_pipe);
         }
     } else { // c == B
-        // "CIA_REG_CRB
+        // "CRB
         //   7   TODIN   1 = writing to TOD registers sets ALARM.
         //               0 = writing to TOD registers sets TOD clock."
         write_tod_delta = ((v & CRB_ALARM) > 0) ? ALARM_OFFSET : 0;
@@ -536,10 +538,10 @@ void mos6526_t::write_control_register(uint32_t c, uint8_t v) { // c:A or B
         v &= ~CR_LOAD; // Clear the LOAD strobe bit
     }
     
-    // NOTE: Do NOT clear CIA_REG_ICR bits when manually stopping a timer.
-    // Per CIA6526.txt: "Only reading the CIA_REG_ICR will clear it."
-    // The CIA_REG_ICR bits represent interrupt conditions that occurred and must persist
-    // until software explicitly reads the CIA_REG_ICR register to acknowledge them.
+    // NOTE: Do NOT clear ICR bits when manually stopping a timer.
+    // Per CIA6526.txt: "Only reading the ICR will clear it."
+    // The ICR bits represent interrupt conditions that occurred and must persist
+    // until software explicitly reads the ICR register to acknowledge them.
     // Manually stopping a timer (clearing START bit) does not clear pending interrupts.
 
     // Set toggle flip-flop HIGH on rising edge of START bit
@@ -553,7 +555,7 @@ void mos6526_t::write_control_register(uint32_t c, uint8_t v) { // c:A or B
         // Per chips_mos6526.hpp reference: writing START=1 just starts counting
         // from the current counter value. The counter is only loaded from latch on:
         //   1. Timer underflow (automatic)
-        //   2. Force LOAD bit (bit 4 of CIA_REG_CRA/CIA_REG_CRB)
+        //   2. Force LOAD bit (bit 4 of CRA/CRB)
         //   3. Writing HI byte while timer is stopped
         
         // "the frequency counter is being reset to 0 when the clock was stopped and is
@@ -561,19 +563,19 @@ void mos6526_t::write_control_register(uint32_t c, uint8_t v) { // c:A or B
         tod_cycles = 0;
     }
 
-    regs_[CIA_REG_CRA + c] = v;
+    regs_[CRA + c] = v;
 
     int old_pbon = old_crx & CR_PBON; // Generic bit works for both timers
     int new_pbon = v & CR_PBON;
     // Detect PBON bit change from high to low:
     if (old_pbon > new_pbon) {
         // Re-initialize this port B bit to 1. This solves $"{VICE_testprogs}CIA/pb6pb7/main.prg",
-        // which expects 0x3F to restore to 0xFF once the CIA_REG_CRA/CIA_REG_CRB PBON bits are cleared.
+        // which expects 0x3F to restore to 0xFF once the CRA/CRB PBON bits are cleared.
         port_b_value |= ((c == A) ? PB6_MASK : PB7_MASK);
     }
 
     if (old_pbon != new_pbon)
-        update_internal_data_direction_port_b(regs_[CIA_REG_DDRB]);
+        update_internal_data_direction_port_b(regs_[DDRB]);
 }
 
 // TIME OF DAY (TOD) handling
@@ -587,15 +589,15 @@ void mos6526_t::write_control_register(uint32_t c, uint8_t v) { // c:A or B
 // a read of 10ths of seconds to disable the latching."
 uint8_t mos6526_t::latch_read_tod_hr() {
     read_tod_delta = CLOCK_OFFSET;
-    regs_[CLOCK_OFFSET + CIA_REG_TOD_10THS] = regs_[CIA_REG_TOD_10THS];
-    regs_[CLOCK_OFFSET + CIA_REG_TOD_SEC] = regs_[CIA_REG_TOD_SEC];
-    regs_[CLOCK_OFFSET + CIA_REG_TOD_MIN] = regs_[CIA_REG_TOD_MIN];
-    return regs_[CLOCK_OFFSET + CIA_REG_TOD_HR] = regs_[CIA_REG_TOD_HR];
+    regs_[CLOCK_OFFSET + TOD_10THS] = regs_[TOD_10THS];
+    regs_[CLOCK_OFFSET + TOD_SEC] = regs_[TOD_SEC];
+    regs_[CLOCK_OFFSET + TOD_MIN] = regs_[TOD_MIN];
+    return regs_[CLOCK_OFFSET + TOD_HR] = regs_[TOD_HR];
 }
 
 uint8_t mos6526_t::unlatch_read_tod_10ths() {
     read_tod_delta = 0;
-    return regs_[CLOCK_OFFSET + CIA_REG_TOD_10THS];
+    return regs_[CLOCK_OFFSET + TOD_10THS];
 }
 
 uint8_t mos6526_t::write_tod_hr(uint8_t v) {
@@ -614,22 +616,22 @@ void mos6526_t::check_alarm_interrupt() {
     // Per chips_mos6526.hpp lines 503-512: Only trigger interrupt on RISING EDGE
     // This prevents retriggering the alarm interrupt every cycle when alarm condition stays true
     bool alarm_active = (
-        regs_[CIA_REG_TOD_10THS] == regs_[ALARM_OFFSET + CIA_REG_TOD_10THS] &&
-        regs_[CIA_REG_TOD_SEC] == regs_[ALARM_OFFSET + CIA_REG_TOD_SEC] &&
-        regs_[CIA_REG_TOD_MIN] == regs_[ALARM_OFFSET + CIA_REG_TOD_MIN] &&
-        regs_[CIA_REG_TOD_HR] == regs_[ALARM_OFFSET + CIA_REG_TOD_HR]
+        regs_[TOD_10THS] == regs_[ALARM_OFFSET + TOD_10THS] &&
+        regs_[TOD_SEC] == regs_[ALARM_OFFSET + TOD_SEC] &&
+        regs_[TOD_MIN] == regs_[ALARM_OFFSET + TOD_MIN] &&
+        regs_[TOD_HR] == regs_[ALARM_OFFSET + TOD_HR]
     );
 
     // Only set interrupt flag on rising edge (alarm goes from false to true)
     if (alarm_active && !prev_alarm_state) {
-        regs_[CIA_REG_ICR] |= ICR_ALRM;
+        regs_[ICR] |= ICR_ALRM;
     }
 
     // Store current alarm state for next cycle's edge detection
     prev_alarm_state = alarm_active;
 }
 
-uint8_t mos6526_t::bcd_inc(uint32_t r) { // r:CIA_REG_TOD_SEC,CIA_REG_TOD_MIN or CIA_REG_TOD_HR
+uint8_t mos6526_t::bcd_inc(uint32_t r) { // r:TOD_SEC,TOD_MIN or TOD_HR
     uint8_t v = ++regs_[r]; // Increment the TOD register
     if ((v & 0x0F) > 9) { // Did low BCD nibble overflow? TODO : Verify; Should this be == 0x0A?
         v += 6; // Carry over to a high nibble increase TODO : Verify; Should this also do & 0xF0?
@@ -640,42 +642,42 @@ uint8_t mos6526_t::bcd_inc(uint32_t r) { // r:CIA_REG_TOD_SEC,CIA_REG_TOD_MIN or
 
 void mos6526_t::increase_tod_and_check_alarm() {
     // Count CPU cycles to simulate the power-line frequency input (50/60 Hz)
-    if (tod_cycles++ < cycles_tod[(regs_[CIA_REG_CRA] & CRA_TODIN) >> 7])
+    if (tod_cycles++ < cycles_tod[(regs_[CRA] & CRA_TODIN) >> 7])
         return;
 
     tod_cycles = 0;
 
     // The TOD pin receives 50Hz or 60Hz from the power supply.
-    // CIA_REG_TOD_10THS must increment at 10Hz, so we divide:
+    // TOD_10THS must increment at 10Hz, so we divide:
     //   50Hz / 5 = 10Hz, or 60Hz / 6 = 10Hz
     // CRA_TODIN selects the expected power frequency (0=60Hz, 1=50Hz)
-    int divider = (regs_[CIA_REG_CRA] & CRA_TODIN) ? 5 : 6;
+    int divider = (regs_[CRA] & CRA_TODIN) ? 5 : 6;
     if (++tod_tick_counter < divider)
         return;
 
     tod_tick_counter = 0;
 
-    // Increment CIA_REG_TOD_10THS first, THEN check alarm (per VICE behavior)
-    if (++regs_[CIA_REG_TOD_10THS] <= 9) {
+    // Increment TOD_10THS first, THEN check alarm (per VICE behavior)
+    if (++regs_[TOD_10THS] <= 9) {
         check_alarm_interrupt();
         return;
     }
 
-    regs_[CIA_REG_TOD_10THS] = 0;
+    regs_[TOD_10THS] = 0;
     // Note : Invalid BCD-encoded register values are treated as if they ARE valid;
     // Only when they overflow, does a reset happen which makes them valid BCD again.
-    if (bcd_inc(CIA_REG_TOD_SEC) <= 0x59) { // Note the BCD encoding!
+    if (bcd_inc(TOD_SEC) <= 0x59) { // Note the BCD encoding!
         check_alarm_interrupt();
         return;
     }
 
-    regs_[CIA_REG_TOD_SEC] = 0;
-    if (bcd_inc(CIA_REG_TOD_MIN) <= 0x59) { // Note the BCD encoding!
+    regs_[TOD_SEC] = 0;
+    if (bcd_inc(TOD_MIN) <= 0x59) { // Note the BCD encoding!
         check_alarm_interrupt();
         return;
     }
 
-    regs_[CIA_REG_TOD_MIN] = 0;
+    regs_[TOD_MIN] = 0;
     // Hour increments are somewhat special (besides their BCD encoding);
     // 0x11 (11 AM) must not become 0x12 (12 AM) but 0x92 (12 PM)
     // 0x12 (12 AM) must not become 0x91 ( 1 PM) but 0x01 ( 1 AM)
@@ -685,7 +687,7 @@ void mos6526_t::increase_tod_and_check_alarm() {
     // * when below 12, there's no change
     // * when equal to 12, swap the AM/PM state
     // * when exceeding 12, reset to 1
-    uint8_t hr_new = bcd_inc(CIA_REG_TOD_HR);
+    uint8_t hr_new = bcd_inc(TOD_HR);
     int hr_HR = hr_new & TOD_HR_MASK;
     if (hr_HR < 0x12) { // Note the BCD encoding!
         check_alarm_interrupt();
@@ -698,16 +700,16 @@ void mos6526_t::increase_tod_and_check_alarm() {
     else
         hr_HR = 1;
 
-    regs_[CIA_REG_TOD_HR] = (uint8_t)(hr_PM | hr_HR);
+    regs_[TOD_HR] = (uint8_t)(hr_PM | hr_HR);
     check_alarm_interrupt();
 }
 
-// SERIAL DATA REGISTER (CIA_REG_SDR) handling
+// SERIAL DATA REGISTER (SDR) handling
 
 void mos6526_t::write_serial_data_register(uint8_t v) {
-    regs_[CIA_REG_SDR] = v;
+    regs_[SDR] = v;
     // In output mode: load data into shift pipeline
-    if (regs_[CIA_REG_CRA] & CRA_SPMODE) {
+    if (regs_[CRA] & CRA_SPMODE) {
         if (sr_bits == 0) {
             // Shifter idle: schedule load with ~2 cycle delay
             sdr_delay |= CIA_SDR_SET1;
@@ -719,19 +721,19 @@ void mos6526_t::write_serial_data_register(uint8_t v) {
 }
 
 /**
- * Process the CIA_REG_SDR delay pipeline — called once per tick.
+ * Process the SDR delay pipeline — called once per tick.
  * This implements VICE's sdr_alarm logic as a per-cycle pipeline shift.
  * Actions fire when their countdown bit reaches the ...0 position.
  */
 void mos6526_t::process_sdr_pipeline() {
-    // SET0: Load CIA_REG_SDR value into the 16-bit shifter
+    // SET0: Load SDR value into the 16-bit shifter
     if (sdr_delay & CIA_SDR_SET0) {
         if (sr_bits == 0) {
             sr_bits = 16;
-            shifter = (uint16_t)regs_[CIA_REG_SDR] << 1;
+            shifter = (uint16_t)regs_[SDR] << 1;
         } else if (sr_bits == 1) {
             // Mid-completion: append new byte
-            shifter |= regs_[CIA_REG_SDR];
+            shifter |= regs_[SDR];
             sr_bits = 17;
         } else {
             // Shifter busy: mark as buffered
@@ -753,7 +755,7 @@ void mos6526_t::process_sdr_pipeline() {
                 
                 // If another byte is buffered, start continuous transmission
                 if (sdr_valid) {
-                    shifter |= regs_[CIA_REG_SDR];
+                    shifter |= regs_[SDR];
                     sdr_valid = false;
                     sr_bits = 17;
                 }
@@ -765,9 +767,9 @@ void mos6526_t::process_sdr_pipeline() {
         }
     }
 
-    // SET_SDR_IRQ0: Set the CIA_REG_SDR interrupt flag (2 cycles after byte complete)
+    // SET_SDR_IRQ0: Set the SDR interrupt flag (2 cycles after byte complete)
     if (sdr_delay & CIA_SDR_SET_SDR_IRQ0) {
-        regs_[CIA_REG_ICR] |= ICR_SP;
+        regs_[ICR] |= ICR_SP;
     }
 
     // Advance the pipeline: shift left, clear overflow bits
@@ -791,67 +793,67 @@ bus_state_t mos6526_t::registers_read(void* context, bus_state_t bus_state) {
     
     switch (r) {
         // Read ports
-        case CIA_REG_PRA:
+        case PRA:
             BUS_SET_DATA(bus_state, cia->read_port_data(A));
             break;
-        case CIA_REG_PRB:
+        case PRB:
             BUS_SET_DATA(bus_state, cia->read_port_data(B));
             break;
-        case CIA_REG_DDRA:
-            BUS_SET_DATA(bus_state, cia->regs_[CIA_REG_DDRA]);
+        case DDRA:
+            BUS_SET_DATA(bus_state, cia->regs_[DDRA]);
             break;
-        case CIA_REG_DDRB:
+        case DDRB:
             // Note : Assume this always excludes the optional PBON output mask? (If not, use IDDRB!)
-            BUS_SET_DATA(bus_state, cia->regs_[CIA_REG_DDRB]);
+            BUS_SET_DATA(bus_state, cia->regs_[DDRB]);
             break;
         // Read timers - return current counter value from native 16-bit counter
-        case CIA_REG_TA_LO:
+        case TA_LO:
             BUS_SET_DATA(bus_state, (uint8_t)(cia->timer_counter_[A] & 0xFF));
             break;
-        case CIA_REG_TA_HI:
+        case TA_HI:
             BUS_SET_DATA(bus_state, (uint8_t)(cia->timer_counter_[A] >> 8));
             break;
-        case CIA_REG_TB_LO:
+        case TB_LO:
             BUS_SET_DATA(bus_state, (uint8_t)(cia->timer_counter_[B] & 0xFF));
             break;
-        case CIA_REG_TB_HI:
+        case TB_HI:
             BUS_SET_DATA(bus_state, (uint8_t)(cia->timer_counter_[B] >> 8));
             break;
         // Read TOD registers
-        case CIA_REG_TOD_10THS: {
-            uint8_t tod_value = (cia->read_tod_delta > 0) ? cia->unlatch_read_tod_10ths() : cia->regs_[CIA_REG_TOD_10THS];
+        case TOD_10THS: {
+            uint8_t tod_value = (cia->read_tod_delta > 0) ? cia->unlatch_read_tod_10ths() : cia->regs_[TOD_10THS];
             BUS_SET_DATA(bus_state, tod_value);
             break;
         }
-        case CIA_REG_TOD_SEC:
-            BUS_SET_DATA(bus_state, cia->regs_[cia->read_tod_delta + CIA_REG_TOD_SEC]);
+        case TOD_SEC:
+            BUS_SET_DATA(bus_state, cia->regs_[cia->read_tod_delta + TOD_SEC]);
             break;
-        case CIA_REG_TOD_MIN:
-            BUS_SET_DATA(bus_state, cia->regs_[cia->read_tod_delta + CIA_REG_TOD_MIN]);
+        case TOD_MIN:
+            BUS_SET_DATA(bus_state, cia->regs_[cia->read_tod_delta + TOD_MIN]);
             break;
-        case CIA_REG_TOD_HR: {
-            uint8_t tod_hr_value = (cia->read_tod_delta > 0) ? cia->regs_[CLOCK_OFFSET + CIA_REG_TOD_HR] : cia->latch_read_tod_hr();
+        case TOD_HR: {
+            uint8_t tod_hr_value = (cia->read_tod_delta > 0) ? cia->regs_[CLOCK_OFFSET + TOD_HR] : cia->latch_read_tod_hr();
             BUS_SET_DATA(bus_state, tod_hr_value);
             break;
         }
         // Read control registers
-        case CIA_REG_SDR:
-            BUS_SET_DATA(bus_state, cia->regs_[CIA_REG_SDR]);
+        case SDR:
+            BUS_SET_DATA(bus_state, cia->regs_[SDR]);
             break;
-        case CIA_REG_ICR: {
+        case ICR: {
             uint8_t icr_value = cia->read_and_clear_interrupt_control_register();
             BUS_SET_DATA(bus_state, icr_value);
             break;
         }
-        case CIA_REG_CRA: {
-            uint8_t cra_value = cia->regs_[CIA_REG_CRA];
+        case CRA: {
+            uint8_t cra_value = cia->regs_[CRA];
             // Mask out LOAD bit - it always reads as 0 (strobe bit)
             cra_value &= ~CR_LOAD;
             BUS_SET_DATA(bus_state, cra_value);
             break;
         }
-        case CIA_REG_CRB: {
-            uint8_t crb_value = cia->regs_[CIA_REG_CRB];
+        case CRB: {
+            uint8_t crb_value = cia->regs_[CRB];
             // Mask out LOAD bit - it always reads as 0 (strobe bit)
             crb_value &= ~CR_LOAD;
             BUS_SET_DATA(bus_state, crb_value);
@@ -877,54 +879,54 @@ bus_state_t mos6526_t::registers_write(void* context, bus_state_t bus_state) {
     
     switch (r) {
         // Write ports
-        case CIA_REG_PRA:
-            cia->regs_[CIA_REG_PRA] = value;
+        case PRA:
+            cia->regs_[PRA] = value;
             cia->update_output_port(A, value);
             // Hardware: CIA2 Data Port A bits 0-1 control VIC-II memory bank selection
             // Note: VIC-II will monitor CIA2 writes at $DD00 directly in its tick function
             // This eliminates the need for callbacks and global state
             break;
-        case CIA_REG_PRB:
-            cia->regs_[CIA_REG_PRB] = value;
+        case PRB:
+            cia->regs_[PRB] = value;
             cia->update_output_port_b(value);
             break;
-        case CIA_REG_DDRA:
+        case DDRA:
             cia->write_data_direction_port(A, value);
-            // CRITICAL: ALWAYS trigger callback when CIA_REG_DDRA changes
+            // CRITICAL: ALWAYS trigger callback when DDRA changes
             // write_data_direction_port() already updated port_a_value correctly
             // Don't call update_output_port() as it would overwrite the value!
             if (cia->port_a_change_callback) {
                 cia->port_a_change_callback(cia->port_a_callback_context, cia->port_a_value);
             }
             break;
-        case CIA_REG_DDRB:
+        case DDRB:
             cia->write_data_direction_port(B, value);
             cia->update_internal_data_direction_port_b(value);
-            cia->update_output_port_b(cia->regs_[CIA_REG_PRB]);
+            cia->update_output_port_b(cia->regs_[PRB]);
             break;
         // Write timer latches
-        case CIA_REG_TA_LO:
-            cia->regs_[TIMER_OFFSET + CIA_REG_TA_LO] = value;
+        case TA_LO:
+            cia->regs_[TIMER_OFFSET + TA_LO] = value;
             // Per CIA6526 datasheet: Writing to timer registers updates LATCH only
             // Counter is only updated on: underflow, LOAD bit, or HI byte write while stopped
             break;
-        case CIA_REG_TA_HI:
-            cia->regs_[TIMER_OFFSET + CIA_REG_TA_HI] = value;
+        case TA_HI:
+            cia->regs_[TIMER_OFFSET + TA_HI] = value;
             // Writing to HI byte while stopped triggers reload (latch → counter)
             cia->check_reload_timer(A);
             break;
-        case CIA_REG_TB_LO:
-            cia->regs_[TIMER_OFFSET + CIA_REG_TB_LO] = value;
+        case TB_LO:
+            cia->regs_[TIMER_OFFSET + TB_LO] = value;
             // Per CIA6526 datasheet: Writing to timer registers updates LATCH only
             break;
-        case CIA_REG_TB_HI:
-            cia->regs_[TIMER_OFFSET + CIA_REG_TB_HI] = value;
+        case TB_HI:
+            cia->regs_[TIMER_OFFSET + TB_HI] = value;
             // Writing to HI byte while stopped triggers reload (latch → counter)
             cia->check_reload_timer(B);
             break;
         // Write TOD registers / ALARM latches
-        case CIA_REG_TOD_10THS:
-            cia->regs_[cia->write_tod_delta + CIA_REG_TOD_10THS] = value;
+        case TOD_10THS:
+            cia->regs_[cia->write_tod_delta + TOD_10THS] = value;
             // Only start TOD clock when writing to TOD registers (not alarm)
             if (cia->write_tod_delta == 0) {
                 cia->tod_tick_counter = 0;
@@ -932,30 +934,30 @@ bus_state_t mos6526_t::registers_write(void* context, bus_state_t bus_state) {
             }
             cia->check_alarm_interrupt();
             break;
-        case CIA_REG_TOD_SEC:
-            cia->regs_[cia->write_tod_delta + CIA_REG_TOD_SEC] = value;
+        case TOD_SEC:
+            cia->regs_[cia->write_tod_delta + TOD_SEC] = value;
             break;
-        case CIA_REG_TOD_MIN:
-            cia->regs_[cia->write_tod_delta + CIA_REG_TOD_MIN] = value;
+        case TOD_MIN:
+            cia->regs_[cia->write_tod_delta + TOD_MIN] = value;
             break;
-        case CIA_REG_TOD_HR:
-            cia->regs_[cia->write_tod_delta + CIA_REG_TOD_HR] = cia->write_tod_hr(value);
+        case TOD_HR:
+            cia->regs_[cia->write_tod_delta + TOD_HR] = cia->write_tod_hr(value);
             // Only stop TOD clock when writing to TOD registers (not alarm)
             if (cia->write_tod_delta == 0) {
                 cia->is_running_tod = false;
             }
             break;
         // Write control registers
-        case CIA_REG_SDR:
+        case SDR:
             cia->write_serial_data_register(value);
             break;
-        case CIA_REG_ICR:
+        case ICR:
             cia->write_interrupt_control_register(value);
             break;
-        case CIA_REG_CRA:
+        case CRA:
             cia->write_control_register(A, value);
             break;
-        case CIA_REG_CRB:
+        case CRB:
             cia->write_control_register(B, value);
             break;
     }
@@ -975,7 +977,7 @@ bus_state_t mos6526_t::registers_write(void* context, bus_state_t bus_state) {
  *
  * Per chips_mos6526.hpp reference: within one CIA cycle, the order is:
  *   1. Timer processing (decrement counters, detect underflows)
- *   2. Interrupt generation (set CIA_REG_ICR flags, update IRQ line)
+ *   2. Interrupt generation (set ICR flags, update IRQ line)
  *   3. Pipeline tick (shift delay lines, re-inject signals)
  *   4. Register reads/writes (CPU sees post-decrement values)
  *
@@ -995,12 +997,12 @@ bus_state_t mos6526_t::tick_phi2(bus_state_t bus_state) {
 
     // When PB6 and PB7 should pulse, clear them (the chance for a read was in previous cycle)
     uint8_t port_b_pulse_clear_mask = 0xFF;
-    if ((regs_[CIA_REG_CRA] & CRA_PBON) > 0)
-        if ((regs_[CIA_REG_CRA] & CRA_OUTMODE) == 0)
+    if ((regs_[CRA] & CRA_PBON) > 0)
+        if ((regs_[CRA] & CRA_OUTMODE) == 0)
             port_b_pulse_clear_mask &= ~PB6_MASK;
 
-    if ((regs_[CIA_REG_CRB] & CRB_PBON) > 0)
-        if ((regs_[CIA_REG_CRB] & CRB_OUTMODE) == 0)
+    if ((regs_[CRB] & CRB_PBON) > 0)
+        if ((regs_[CRB] & CRB_OUTMODE) == 0)
             port_b_pulse_clear_mask &= ~PB7_MASK;
 
     if (port_b_pulse_clear_mask != 0xFF)
@@ -1065,12 +1067,12 @@ bus_state_t mos6526_t::tick_phi2(bus_state_t bus_state) {
         increase_tod_and_check_alarm();
 
     // Serial I/O:
-    // - Output mode (SPMODE=1): Handled by CIA_REG_SDR delay pipeline (process_sdr_pipeline).
+    // - Output mode (SPMODE=1): Handled by SDR delay pipeline (process_sdr_pipeline).
     //   Timer A underflows schedule delayed CNT toggles; pipeline processes them each tick.
     // - Input mode (SPMODE=0): External CNT drives the shift register clock.
     //   Per CIA datasheet: "data on the SP pin is shifted into the shift register
     //   on the rising edge of the signal applied to the CNT pin."
-    if ((regs_[CIA_REG_CRA] & CRA_SPMODE) == 0) {
+    if ((regs_[CRA] & CRA_SPMODE) == 0) {
         // Input mode: handle CNT edges for serial input
         // Falling edge starts a new byte (per VICE ciacore_set_cnt)
         if (cnt_is_negative_edge && sr_bits == 0) {
@@ -1085,20 +1087,20 @@ bus_state_t mos6526_t::tick_phi2(bus_state_t bus_state) {
             shifter = (shifter << 1) | (sp_bit ? 1 : 0);
             
             if (sr_bits == 0) {
-                // Byte complete: dump into CIA_REG_SDR and generate interrupt
-                regs_[CIA_REG_SDR] = shifter & 0xFF;
-                regs_[CIA_REG_ICR] |= ICR_SP;
+                // Byte complete: dump into SDR and generate interrupt
+                regs_[SDR] = shifter & 0xFF;
+                regs_[ICR] |= ICR_SP;
             }
         }
     }
     
-    // Process CIA_REG_SDR output delay pipeline (runs every tick)
-    if (regs_[CIA_REG_CRA] & CRA_SPMODE) {
+    // Process SDR output delay pipeline (runs every tick)
+    if (regs_[CRA] & CRA_SPMODE) {
         process_sdr_pipeline();
     }
     
     // Drive CIA serial output pins onto bus for external visibility (user port)
-    if (regs_[CIA_REG_CRA] & CRA_SPMODE) {
+    if (regs_[CRA] & CRA_SPMODE) {
         // SPMODE=output: CIA drives CNT and SP pins
         if (!cnt_output_state) {
             BUS_CLR_BIT(bus_state, BUS_CNT_BIT);  // Pull CNT LOW
@@ -1112,7 +1114,7 @@ bus_state_t mos6526_t::tick_phi2(bus_state_t bus_state) {
 
     // FLAG negative edge detection
     if (flag_is_negative_edge) {
-        regs_[CIA_REG_ICR] |= ICR_FLG;
+        regs_[ICR] |= ICR_FLG;
     }
 
     // =========================================================================
@@ -1121,7 +1123,7 @@ bus_state_t mos6526_t::tick_phi2(bus_state_t bus_state) {
     check_interrupt_mask();
     
     // Update pending_bus_lines for NEXT cycle's assertion
-    if (regs_[CIA_REG_ICR] & ICR_IRQ) {
+    if (regs_[ICR] & ICR_IRQ) {
         pending_bus_lines = BUS_BIT(configured_interrupt_bit);
     } else {
         pending_bus_lines = 0;
@@ -1136,14 +1138,14 @@ bus_state_t mos6526_t::tick_phi2(bus_state_t bus_state) {
     // ALL counting mode logic lives HERE in the pipeline injection.
     
     // Timer A counter pipeline
-    // Timer A INMODE: bit 5 of CIA_REG_CRA (0=PHI2, 1=CNT)
+    // Timer A INMODE: bit 5 of CRA (0=PHI2, 1=CNT)
     bool ta_active = false;
-    if ((regs_[CIA_REG_CRA] & CRA_INMODE) == 0) {
+    if ((regs_[CRA] & CRA_INMODE) == 0) {
         ta_active = true;  // PHI2 mode: always active
     } else {
         ta_active = cnt_is_positive_edge;  // CNT mode: active on positive edge
     }
-    if (ta_active && (regs_[CIA_REG_CRA] & CRA_START)) {
+    if (ta_active && (regs_[CRA] & CRA_START)) {
         delay_line.Inject(ta_count_pipe);
     } else {
         // Clear injection point only (LSB), matching reference CLR(pip, COUNT, 2)
@@ -1152,9 +1154,9 @@ bus_state_t mos6526_t::tick_phi2(bus_state_t bus_state) {
     }
     
     // Timer B counter pipeline
-    // Timer B INMODE: bits 5-6 of CIA_REG_CRB (00=PHI2, 01=CNT, 10=Timer A, 11=Timer A+CNT)
+    // Timer B INMODE: bits 5-6 of CRB (00=PHI2, 01=CNT, 10=Timer A, 11=Timer A+CNT)
     bool tb_active = false;
-    uint8_t crb_inmode = regs_[CIA_REG_CRB] & CRB_INMODE;
+    uint8_t crb_inmode = regs_[CRB] & CRB_INMODE;
     switch (crb_inmode) {
         case 0x00:  // PHI2
             tb_active = true;
@@ -1169,7 +1171,7 @@ bus_state_t mos6526_t::tick_phi2(bus_state_t bus_state) {
             tb_active = ((timer_underflowed & (1 << A)) != 0) && cnt_pin;
             break;
     }
-    if (tb_active && (regs_[CIA_REG_CRB] & CRB_START)) {
+    if (tb_active && (regs_[CRB] & CRB_START)) {
         delay_line.Inject(tb_count_pipe);
     } else {
         // Clear injection point only (LSB), matching reference CLR(pip, COUNT, 2)
@@ -1177,10 +1179,10 @@ bus_state_t mos6526_t::tick_phi2(bus_state_t bus_state) {
     }
     
     // Inject one-shot mode state each cycle (only while timer is running)
-    if ((regs_[CIA_REG_CRA] & (CR_START | CR_RUNMODE)) == (CR_START | CR_RUNMODE)) {
+    if ((regs_[CRA] & (CR_START | CR_RUNMODE)) == (CR_START | CR_RUNMODE)) {
         delay_line.Feed(oneshot_a_pipe);
     }
-    if ((regs_[CIA_REG_CRB] & (CR_START | CR_RUNMODE)) == (CR_START | CR_RUNMODE)) {
+    if ((regs_[CRB] & (CR_START | CR_RUNMODE)) == (CR_START | CR_RUNMODE)) {
         delay_line.Feed(oneshot_b_pipe);
     }
     

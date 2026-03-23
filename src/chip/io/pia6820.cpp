@@ -4,10 +4,10 @@
 #include <cstring>
 
 // PIA 6820 Register offsets
-#define PIA_REG_A_DATA      0x00
-#define PIA_REG_A_CONTROL   0x01
-#define PIA_REG_B_DATA      0x02
-#define PIA_REG_B_CONTROL   0x03
+#define A_DATA      0x00
+#define A_CONTROL   0x01
+#define B_DATA      0x02
+#define B_CONTROL   0x03
 
 // Control register bits
 #define PIA_CTRL_IRQ1       0x80  // IRQ1 flag (read-only)
@@ -77,7 +77,7 @@ void pia6820_t::reset() {
 uint8_t pia6820_t::read(uint16_t addr) {
     uint8_t reg = addr & 0x03;
     switch (reg) {
-        case PIA_REG_A_DATA: {
+        case A_DATA: {
             // If DDR select bit is clear, return DDR
             if (DDR_SELECTED(port_a_control)) {
                 return port_a_direction;
@@ -99,7 +99,7 @@ uint8_t pia6820_t::read(uint16_t addr) {
             return data;
         }
 
-        case PIA_REG_A_CONTROL: {
+        case A_CONTROL: {
             // Bits 7-6: IRQ flags (read-only), Bits 5-0: Control bits
             uint8_t value = port_a_control & 0x3F;
             if (irq_a1) value |= PIA_CTRL_IRQ1;
@@ -107,7 +107,7 @@ uint8_t pia6820_t::read(uint16_t addr) {
             return value;
         }
 
-        case PIA_REG_B_DATA: {
+        case B_DATA: {
             // If DDR select bit is clear, return DDR
             if (DDR_SELECTED(port_b_control)) {
                 return port_b_direction;
@@ -127,7 +127,7 @@ uint8_t pia6820_t::read(uint16_t addr) {
             );
         }
 
-        case PIA_REG_B_CONTROL: {
+        case B_CONTROL: {
             // Bits 7-6: IRQ flags (read-only), Bits 5-0: Control bits
             uint8_t value = port_b_control & 0x3F;
             if (irq_b1) value |= PIA_CTRL_IRQ1;
@@ -143,7 +143,7 @@ void pia6820_t::write(uint16_t addr, uint8_t data) {
     uint8_t reg = addr & 0x03;
 
     switch (reg) {
-        case PIA_REG_A_DATA:
+        case A_DATA:
             // If DDR select bit is clear, write DDR
             if (DDR_SELECTED(port_a_control)) {
                 port_a_direction = data;
@@ -168,13 +168,13 @@ void pia6820_t::write(uint16_t addr, uint8_t data) {
             }
             break;
 
-        case PIA_REG_A_CONTROL:
+        case A_CONTROL:
             port_a_control = data & 0x3F;  // Only bits 0-5 are writable
             update_ca2_output_state();
             update_irq();
             break;
 
-        case PIA_REG_B_DATA:
+        case B_DATA:
             // If DDR select bit is clear, write DDR
             if (DDR_SELECTED(port_b_control)) {
                 port_b_direction = data;
@@ -198,7 +198,7 @@ void pia6820_t::write(uint16_t addr, uint8_t data) {
             }
             break;
 
-        case PIA_REG_B_CONTROL:
+        case B_CONTROL:
             port_b_control = data & 0x3F;  // Only bits 0-5 are writable
             update_cb2_output_state();
             update_irq();

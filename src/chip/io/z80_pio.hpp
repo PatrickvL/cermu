@@ -47,10 +47,10 @@
     REG(0x08, PORT_A_IMASK, "Port A interrupt mask")   \
     REG(0x09, PORT_B_IMASK, "Port B interrupt mask")
 
-namespace z80_pio_regs {
+namespace z80_pio::reg {
     Z80_PIO_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 10;
-} // namespace z80_pio_regs
+} // namespace z80_pio::reg
 
 DECL_EXTRACT(Z80_PIO, Z80_PIO_DECL)
 
@@ -75,7 +75,7 @@ public:
         : IoChipBase(ChipInfo(is_u855 ? "U855" : "Z80 PIO",
                              is_u855 ? "VEB MME Erfurt" : "Zilog"))
     {
-        init_regs(z80_pio_regs::REG_COUNT);
+        init_regs(z80_pio::reg::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
@@ -303,11 +303,11 @@ private:
 
     void update_regs() {
         for (int i = 0; i < 2; ++i) {
-            regs_[z80_pio_regs::PORT_A_DATA  + i] = port_[i].output;
-            regs_[z80_pio_regs::PORT_A_CTRL  + i] = port_[i].int_control;
-            regs_[z80_pio_regs::PORT_A_IOSEL + i] = port_[i].io_select;
-            regs_[z80_pio_regs::PORT_A_IVEC  + i] = port_[i].int_vector;
-            regs_[z80_pio_regs::PORT_A_IMASK + i] = port_[i].int_mask;
+            regs_[z80_pio::reg::PORT_A_DATA  + i] = port_[i].output;
+            regs_[z80_pio::reg::PORT_A_CTRL  + i] = port_[i].int_control;
+            regs_[z80_pio::reg::PORT_A_IOSEL + i] = port_[i].io_select;
+            regs_[z80_pio::reg::PORT_A_IVEC  + i] = port_[i].int_vector;
+            regs_[z80_pio::reg::PORT_A_IMASK + i] = port_[i].int_mask;
         }
     }
 

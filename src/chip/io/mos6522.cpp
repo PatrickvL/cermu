@@ -52,7 +52,7 @@ bus_state_t mos6522_t::registers_read(bus_state_t bus_state) {
     uint8_t reg = BUS_GET_ADDR(bus_state) & 0x0F; // 16 registers
 
     switch (reg) {
-        case MOS6522_PORTB: {
+        case PORTB: {
             // 6522 Port B read: output pins (DDR=1) return ORB, input pins (DDR=0) return pin state
             if (port_b_read_callback) {
                 uint8_t port_b_output = port_b.output();
@@ -61,7 +61,7 @@ bus_state_t mos6522_t::registers_read(bus_state_t bus_state) {
             BUS_SET_DATA(bus_state, port_b.read());
             break;
         }
-        case MOS6522_PORTA: {
+        case PORTA: {
             // 6522 Port A read: output pins (DDR=1) return ORA, input pins (DDR=0) return pin state
             if (port_a_read_callback) {
                 uint8_t port_a_output = port_a.output();
@@ -70,13 +70,13 @@ bus_state_t mos6522_t::registers_read(bus_state_t bus_state) {
             BUS_SET_DATA(bus_state, port_a.read());
             break;
         }
-        case MOS6522_DDRB:
+        case DDRB:
             BUS_SET_DATA(bus_state, *port_b.ddr);
             break;
-        case MOS6522_DDRA:
+        case DDRA:
             BUS_SET_DATA(bus_state, *port_a.ddr);
             break;
-        case MOS6522_T1CL:
+        case T1CL:
             BUS_SET_DATA(bus_state, (uint8_t)(timer1_counter & 0xFF));
             // Reading T1CL clears Timer 1 interrupt flag (per 6522 datasheet)
             ifr &= ~MOS6522_IFR_T1;
@@ -84,16 +84,16 @@ bus_state_t mos6522_t::registers_read(bus_state_t bus_state) {
                 ifr &= ~MOS6522_IFR_IRQ;
             }
             break;
-        case MOS6522_T1CH:
+        case T1CH:
             BUS_SET_DATA(bus_state, (uint8_t)(timer1_counter >> 8));
             break;
-        case MOS6522_T1LL:
+        case T1LL:
             BUS_SET_DATA(bus_state, (uint8_t)(timer1_latch & 0xFF));
             break;
-        case MOS6522_T1LH:
+        case T1LH:
             BUS_SET_DATA(bus_state, (uint8_t)(timer1_latch >> 8));
             break;
-        case MOS6522_T2CL:
+        case T2CL:
             BUS_SET_DATA(bus_state, (uint8_t)(timer2_counter & 0xFF));
             // Reading T2CL clears Timer 2 interrupt flag (per 6522 datasheet)
             ifr &= ~MOS6522_IFR_T2;
@@ -101,29 +101,29 @@ bus_state_t mos6522_t::registers_read(bus_state_t bus_state) {
                 ifr &= ~MOS6522_IFR_IRQ;
             }
             break;
-        case MOS6522_T2CH:
+        case T2CH:
             BUS_SET_DATA(bus_state, (uint8_t)(timer2_counter >> 8));
             break;
-        case MOS6522_SR:
+        case SR:
             BUS_SET_DATA(bus_state, shift_register);
             break;
-        case MOS6522_ACR:
+        case ACR:
             BUS_SET_DATA(bus_state, acr);
             break;
-        case MOS6522_PCR:
+        case PCR:
             BUS_SET_DATA(bus_state, pcr);
             break;
-        case MOS6522_IFR:
+        case IFR:
             // Reading IFR returns current flags - does NOT clear them
             // (Flags are cleared by reading T1CL/T2CL or writing to IFR)
             BUS_SET_DATA(bus_state, ifr);
             break;
-        case MOS6522_IER:
+        case IER:
             // Reading IER returns enable bits with bit 7 always set (per 6522 datasheet)
             BUS_SET_DATA(bus_state, ier | 0x80);
             break;
-        case MOS6522_PORTA_NH: {
-            // Port A read without handshake - same logic as MOS6522_PORTA
+        case PORTA_NH: {
+            // Port A read without handshake - same logic as PORTA
             if (port_a_read_callback) {
                 uint8_t port_a_output = port_a.output();
                 port_a.set_input(port_a_read_callback(port_a_read_context, port_a_output));
@@ -145,23 +145,23 @@ bus_state_t mos6522_t::registers_write(bus_state_t bus_state) {
     uint8_t value = BUS_GET_DATA(bus_state);
 
     switch (reg) {
-        case MOS6522_PORTB:
+        case PORTB:
             (void)port_b.write_data(value);
             break;
-        case MOS6522_PORTA:
+        case PORTA:
             (void)port_a.write_data(value);
             break;
-        case MOS6522_DDRB:
+        case DDRB:
             (void)port_b.write_ddr(value);
             break;
-        case MOS6522_DDRA:
+        case DDRA:
             (void)port_a.write_ddr(value);
             break;
-        case MOS6522_T1LL:
+        case T1LL:
             // Write to T1 Low Latch only (does not affect counter or start timer)
             timer1_latch = (timer1_latch & 0xFF00) | value;
             break;
-        case MOS6522_T1CH:
+        case T1CH:
             // Write to T1 Counter High (register 0x05):
             // 1. Load latch high byte
             // 2. Transfer latch to counter
@@ -176,17 +176,17 @@ bus_state_t mos6522_t::registers_write(bus_state_t bus_state) {
                 ifr &= ~MOS6522_IFR_IRQ;
             }
             break;
-        case MOS6522_T1LH:
+        case T1LH:
             // Write to T1 Latch High only (does not start timer)
             timer1_latch = (timer1_latch & 0x00FF) | (value << 8);
             // NOTE: Unlike T1CH, writing T1LH does NOT load counter or start timer
             // It only updates the latch for the next reload
             break;
-        case MOS6522_T2CL: // 0x08 - T2 Low Latch (write) / Counter Low (read)
+        case T2CL: // 0x08 - T2 Low Latch (write) / Counter Low (read)
             // Write to T2 Low Latch only
             timer2_latch = (timer2_latch & 0xFF00) | value;
             break;
-        case MOS6522_T2CH: // 0x09 - T2 Counter High (write starts timer)
+        case T2CH: // 0x09 - T2 Counter High (write starts timer)
             // Write to T2 Counter High:
             // 1. Load latch high byte (low byte was already loaded)
             // 2. Transfer latch to counter
@@ -201,16 +201,16 @@ bus_state_t mos6522_t::registers_write(bus_state_t bus_state) {
                 ifr &= ~MOS6522_IFR_IRQ;
             }
             break;
-        case MOS6522_SR:
+        case SR:
             shift_register = value;
             break;
-        case MOS6522_ACR:
+        case ACR:
             acr = value;
             break;
-        case MOS6522_PCR:
+        case PCR:
             pcr = value;
             break;
-        case MOS6522_IFR:
+        case IFR:
             // Writing to IFR: bit 7 is set/clear control for lower 7 bits
             // Writing with bit 7=0: clear the specified bits in lower 7
             // (Bit 7 of IFR cannot be directly set/cleared - it's computed)
@@ -222,7 +222,7 @@ bus_state_t mos6522_t::registers_write(bus_state_t bus_state) {
                 ifr &= ~MOS6522_IFR_IRQ;
             }
             break;
-        case MOS6522_IER:
+        case IER:
             // IER bit 7 is set/clear control:
             // Bit 7=1: SET the specified lower 7 bits (enable interrupts)
             // Bit 7=0: CLEAR the specified lower 7 bits (disable interrupts)
@@ -232,7 +232,7 @@ bus_state_t mos6522_t::registers_write(bus_state_t bus_state) {
                 ier &= ~(value & 0x7F);  // Clear specified bits
             }
             break;
-        case MOS6522_PORTA_NH:
+        case PORTA_NH:
             (void)port_a.write_data(value);
             break;
         default:

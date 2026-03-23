@@ -73,9 +73,6 @@ KC85_MOD_DECL(DECL_REG_NOP, KC85_MOD_X_FLD_NS_, DECL_CMP_NOP)
 } // namespace fld
 } // namespace kc85_mod
 
-// Backward compatibility alias
-namespace kc85_mod_regs = kc85_mod::reg;
-
 DECL_EXTRACT(KC85_MOD, KC85_MOD_DECL)
 
 // ============================================================================
@@ -118,7 +115,7 @@ public:
     kc85_module_system_t()
         : IoChipBase(ChipInfo("Module System", "VEB Mikroelektronik"))
     {
-        init_regs(kc85_mod_regs::REG_COUNT);
+        init_regs(kc85_mod::reg::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
@@ -191,7 +188,7 @@ private:
 
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
-        debug_registry_.set_registers(regs_.data, kc85_mod_regs::REG_COUNT, KC85_MOD_REG_INFO);
+        wire_debug_registers(KC85_MOD_REG_INFO);
         debug_registry_.set_decl_entries(KC85_MOD_DECL_ENTRIES.data(), KC85_MOD_DECL_ENTRIES.size());
         // All slot control values and Active/WProt flags are in the DECL walk.
     }
