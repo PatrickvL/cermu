@@ -12,29 +12,29 @@
 
 /// Set N and Z flags based on 8-bit result
 inline void set_nz8(uint8_t val) {
-    regs_[REG_CC] &= ~(Flags::N | Flags::Z);
-    if (val == 0)    regs_[REG_CC] |= Flags::Z;
-    if (val & 0x80)  regs_[REG_CC] |= Flags::N;
+    regs_[CC] &= ~(Flags::N | Flags::Z);
+    if (val == 0)    regs_[CC] |= Flags::Z;
+    if (val & 0x80)  regs_[CC] |= Flags::N;
 }
 
 /// Set N and Z flags based on 16-bit result
 inline void set_nz16(uint16_t val) {
-    regs_[REG_CC] &= ~(Flags::N | Flags::Z);
-    if (val == 0)      regs_[REG_CC] |= Flags::Z;
-    if (val & 0x8000)  regs_[REG_CC] |= Flags::N;
+    regs_[CC] &= ~(Flags::N | Flags::Z);
+    if (val == 0)      regs_[CC] |= Flags::Z;
+    if (val & 0x8000)  regs_[CC] |= Flags::N;
 }
 
 /// Set or clear a single CC flag
 inline void set_flag(uint8_t flag, bool cond) {
     if (cond)
-        regs_[REG_CC] |= flag;
+        regs_[CC] |= flag;
     else
-        regs_[REG_CC] &= ~flag;
+        regs_[CC] &= ~flag;
 }
 
 /// Test a single CC flag
 inline bool test_flag(uint8_t flag) const {
-    return (regs_[REG_CC] & flag) != 0;
+    return (regs_[CC] & flag) != 0;
 }
 
 // ========================================================================
@@ -43,30 +43,30 @@ inline bool test_flag(uint8_t flag) const {
 
 /// ADD: result = a + b (+ carry if adc)
 inline uint8_t alu_add8(uint8_t a, uint8_t b, bool carry_in) {
-    uint8_t c = carry_in ? (regs_[REG_CC] & Flags::C) : 0;
+    uint8_t c = carry_in ? (regs_[CC] & Flags::C) : 0;
     uint16_t result16 = static_cast<uint16_t>(a) + b + c;
     uint8_t result = static_cast<uint8_t>(result16);
 
-    regs_[REG_CC] &= ~(Flags::H | Flags::N | Flags::Z | Flags::V | Flags::C);
-    if (result == 0)                                regs_[REG_CC] |= Flags::Z;
-    if (result & 0x80)                              regs_[REG_CC] |= Flags::N;
-    if (result16 & 0x100)                           regs_[REG_CC] |= Flags::C;
-    if ((a ^ b ^ result ^ (result16 >> 1)) & 0x80) regs_[REG_CC] |= Flags::V;
-    if ((a ^ b ^ result) & 0x10)                    regs_[REG_CC] |= Flags::H;
+    regs_[CC] &= ~(Flags::H | Flags::N | Flags::Z | Flags::V | Flags::C);
+    if (result == 0)                                regs_[CC] |= Flags::Z;
+    if (result & 0x80)                              regs_[CC] |= Flags::N;
+    if (result16 & 0x100)                           regs_[CC] |= Flags::C;
+    if ((a ^ b ^ result ^ (result16 >> 1)) & 0x80) regs_[CC] |= Flags::V;
+    if ((a ^ b ^ result) & 0x10)                    regs_[CC] |= Flags::H;
     return result;
 }
 
 /// SUB: result = a - b (- borrow if sbc)
 inline uint8_t alu_sub8(uint8_t a, uint8_t b, bool borrow_in) {
-    uint8_t c = borrow_in ? (regs_[REG_CC] & Flags::C) : 0;
+    uint8_t c = borrow_in ? (regs_[CC] & Flags::C) : 0;
     uint16_t result16 = static_cast<uint16_t>(a) - b - c;
     uint8_t result = static_cast<uint8_t>(result16);
 
-    regs_[REG_CC] &= ~(Flags::N | Flags::Z | Flags::V | Flags::C);
-    if (result == 0)                                regs_[REG_CC] |= Flags::Z;
-    if (result & 0x80)                              regs_[REG_CC] |= Flags::N;
-    if (result16 & 0x100)                           regs_[REG_CC] |= Flags::C;
-    if ((a ^ b) & (a ^ result) & 0x80)              regs_[REG_CC] |= Flags::V;
+    regs_[CC] &= ~(Flags::N | Flags::Z | Flags::V | Flags::C);
+    if (result == 0)                                regs_[CC] |= Flags::Z;
+    if (result & 0x80)                              regs_[CC] |= Flags::N;
+    if (result16 & 0x100)                           regs_[CC] |= Flags::C;
+    if ((a ^ b) & (a ^ result) & 0x80)              regs_[CC] |= Flags::V;
     return result;
 }
 
@@ -148,8 +148,8 @@ inline void alu_tst8(uint8_t val) {
 
 /// CLR: set to zero, update flags
 inline uint8_t alu_clr8() {
-    regs_[REG_CC] &= ~(Flags::N | Flags::V | Flags::C);
-    regs_[REG_CC] |= Flags::Z;
+    regs_[CC] &= ~(Flags::N | Flags::V | Flags::C);
+    regs_[CC] |= Flags::Z;
     return 0;
 }
 
@@ -200,7 +200,7 @@ inline uint8_t alu_ror8(uint8_t val) {
 
 /// DAA: decimal adjust accumulator A
 inline void alu_daa() {
-    uint8_t a = regs_[REG_A];
+    uint8_t a = regs_[A];
     uint8_t correction = 0;
     bool c = test_flag(Flags::C);
 
@@ -212,8 +212,8 @@ inline void alu_daa() {
         c = true;
     }
 
-    regs_[REG_A] = a + correction;
-    set_nz8(regs_[REG_A]);
+    regs_[A] = a + correction;
+    set_nz8(regs_[A]);
     set_flag(Flags::C, c);
     // V is undefined per Motorola docs
 }
@@ -227,11 +227,11 @@ inline uint16_t alu_add16(uint16_t a, uint16_t b) {
     uint32_t result32 = static_cast<uint32_t>(a) + b;
     uint16_t result = static_cast<uint16_t>(result32);
 
-    regs_[REG_CC] &= ~(Flags::N | Flags::Z | Flags::V | Flags::C);
-    if (result == 0)                                    regs_[REG_CC] |= Flags::Z;
-    if (result & 0x8000)                                regs_[REG_CC] |= Flags::N;
-    if (result32 & 0x10000)                             regs_[REG_CC] |= Flags::C;
-    if ((a ^ b ^ result ^ (result32 >> 1)) & 0x8000)   regs_[REG_CC] |= Flags::V;
+    regs_[CC] &= ~(Flags::N | Flags::Z | Flags::V | Flags::C);
+    if (result == 0)                                    regs_[CC] |= Flags::Z;
+    if (result & 0x8000)                                regs_[CC] |= Flags::N;
+    if (result32 & 0x10000)                             regs_[CC] |= Flags::C;
+    if ((a ^ b ^ result ^ (result32 >> 1)) & 0x8000)   regs_[CC] |= Flags::V;
     return result;
 }
 
@@ -240,11 +240,11 @@ inline uint16_t alu_sub16(uint16_t a, uint16_t b) {
     uint32_t result32 = static_cast<uint32_t>(a) - b;
     uint16_t result = static_cast<uint16_t>(result32);
 
-    regs_[REG_CC] &= ~(Flags::N | Flags::Z | Flags::V | Flags::C);
-    if (result == 0)                               regs_[REG_CC] |= Flags::Z;
-    if (result & 0x8000)                           regs_[REG_CC] |= Flags::N;
-    if (result32 & 0x10000)                        regs_[REG_CC] |= Flags::C;
-    if ((a ^ b) & (a ^ result) & 0x8000)           regs_[REG_CC] |= Flags::V;
+    regs_[CC] &= ~(Flags::N | Flags::Z | Flags::V | Flags::C);
+    if (result == 0)                               regs_[CC] |= Flags::Z;
+    if (result & 0x8000)                           regs_[CC] |= Flags::N;
+    if (result32 & 0x10000)                        regs_[CC] |= Flags::C;
+    if ((a ^ b) & (a ^ result) & 0x8000)           regs_[CC] |= Flags::V;
     return result;
 }
 
@@ -268,33 +268,33 @@ bool cc_always()  const { return true; }
 bool cc_never()   const { return false; }
 
 /// BHI: C=0 AND Z=0
-bool cc_hi() const { return !(regs_[REG_CC] & (Flags::C | Flags::Z)); }
+bool cc_hi() const { return !(regs_[CC] & (Flags::C | Flags::Z)); }
 /// BLS: C=1 OR Z=1
-bool cc_ls() const { return (regs_[REG_CC] & (Flags::C | Flags::Z)) != 0; }
+bool cc_ls() const { return (regs_[CC] & (Flags::C | Flags::Z)) != 0; }
 /// BCC/BHS: C=0
-bool cc_cc() const { return !(regs_[REG_CC] & Flags::C); }
+bool cc_cc() const { return !(regs_[CC] & Flags::C); }
 /// BCS/BLO: C=1
-bool cc_cs() const { return (regs_[REG_CC] & Flags::C) != 0; }
+bool cc_cs() const { return (regs_[CC] & Flags::C) != 0; }
 /// BNE: Z=0
-bool cc_ne() const { return !(regs_[REG_CC] & Flags::Z); }
+bool cc_ne() const { return !(regs_[CC] & Flags::Z); }
 /// BEQ: Z=1
-bool cc_eq() const { return (regs_[REG_CC] & Flags::Z) != 0; }
+bool cc_eq() const { return (regs_[CC] & Flags::Z) != 0; }
 /// BVC: V=0
-bool cc_vc() const { return !(regs_[REG_CC] & Flags::V); }
+bool cc_vc() const { return !(regs_[CC] & Flags::V); }
 /// BVS: V=1
-bool cc_vs() const { return (regs_[REG_CC] & Flags::V) != 0; }
+bool cc_vs() const { return (regs_[CC] & Flags::V) != 0; }
 /// BPL: N=0
-bool cc_pl() const { return !(regs_[REG_CC] & Flags::N); }
+bool cc_pl() const { return !(regs_[CC] & Flags::N); }
 /// BMI: N=1
-bool cc_mi() const { return (regs_[REG_CC] & Flags::N) != 0; }
+bool cc_mi() const { return (regs_[CC] & Flags::N) != 0; }
 /// BGE: N^V=0  (N=bit3, V=bit1; shift by 2 to align)
-bool cc_ge() const { return !(((regs_[REG_CC] >> 2) ^ regs_[REG_CC]) & Flags::V); }
+bool cc_ge() const { return !(((regs_[CC] >> 2) ^ regs_[CC]) & Flags::V); }
 /// BLT: N^V=1
-bool cc_lt() const { return (((regs_[REG_CC] >> 2) ^ regs_[REG_CC]) & Flags::V) != 0; }
+bool cc_lt() const { return (((regs_[CC] >> 2) ^ regs_[CC]) & Flags::V) != 0; }
 /// BGT: Z=0 AND N^V=0
-bool cc_gt() const { return !(regs_[REG_CC] & Flags::Z) && cc_ge(); }
+bool cc_gt() const { return !(regs_[CC] & Flags::Z) && cc_ge(); }
 /// BLE: Z=1 OR N^V=1
-bool cc_le() const { return (regs_[REG_CC] & Flags::Z) || cc_lt(); }
+bool cc_le() const { return (regs_[CC] & Flags::Z) || cc_lt(); }
 
 /// Evaluate condition code by opcode nibble (lower 4 bits of branch opcode)
 bool eval_cc(uint8_t cond) const {
@@ -324,8 +324,8 @@ bool eval_cc(uint8_t cond) const {
 // ========================================================================
 
 inline void alu_mul() {
-    uint16_t result = static_cast<uint16_t>(regs_[REG_A]) * regs_[REG_B];
-    regs_[REG_D] = result;
+    uint16_t result = static_cast<uint16_t>(regs_[A]) * regs_[B];
+    regs_[D] = result;
     set_flag(Flags::Z, result == 0);
     set_flag(Flags::C, (result & 0x80) != 0);  // Bit 7 of result → C
 }
@@ -335,7 +335,7 @@ inline void alu_mul() {
 // ========================================================================
 
 inline void alu_sex() {
-    regs_[REG_A] = (regs_[REG_B] & 0x80) ? 0xFF : 0x00;
-    set_nz16(regs_[REG_D]);  // HD6309 sets flags based on 16-bit D
+    regs_[A] = (regs_[B] & 0x80) ? 0xFF : 0x00;
+    set_nz16(regs_[D]);  // HD6309 sets flags based on 16-bit D
     set_flag(Flags::V, false);  // not officially documented, but cleared
 }

@@ -22,10 +22,10 @@
 bus_state_t addr_direct_read(bus_state_t pins) {
     switch (step_++) {
     case 0:
-        return bus_setup_read(pins, regs_[REG_PC]);  // Fetch offset byte
+        return bus_setup_read(pins, regs_[PC]);  // Fetch offset byte
     case 1:
-        ea_ = (static_cast<uint16_t>(regs_[REG_DP]) << 8) | bus_read_data(pins);
-        regs_[REG_PC]++;
+        ea_ = (static_cast<uint16_t>(regs_[DP]) << 8) | bus_read_data(pins);
+        regs_[PC]++;
         return bus_setup_read(pins, ea_);  // Read from EA
     case 2:
         data_lo_ = bus_read_data(pins);
@@ -39,10 +39,10 @@ bus_state_t addr_direct_read(bus_state_t pins) {
 bus_state_t addr_direct_ea(bus_state_t pins) {
     switch (step_++) {
     case 0:
-        return bus_setup_read(pins, regs_[REG_PC]);
+        return bus_setup_read(pins, regs_[PC]);
     case 1:
-        ea_ = (static_cast<uint16_t>(regs_[REG_DP]) << 8) | bus_read_data(pins);
-        regs_[REG_PC]++;
+        ea_ = (static_cast<uint16_t>(regs_[DP]) << 8) | bus_read_data(pins);
+        regs_[PC]++;
         return pins;
     default:
         return pins;
@@ -54,14 +54,14 @@ bus_state_t addr_direct_ea(bus_state_t pins) {
 bus_state_t addr_extended_ea(bus_state_t pins) {
     switch (step_++) {
     case 0:
-        return bus_setup_read(pins, regs_[REG_PC]);
+        return bus_setup_read(pins, regs_[PC]);
     case 1:
         ea_ = static_cast<uint16_t>(bus_read_data(pins)) << 8;
-        regs_[REG_PC]++;
-        return bus_setup_read(pins, regs_[REG_PC]);
+        regs_[PC]++;
+        return bus_setup_read(pins, regs_[PC]);
     case 2:
         ea_ |= bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         return pins;
     default:
         return pins;
@@ -73,10 +73,10 @@ bus_state_t addr_extended_ea(bus_state_t pins) {
 bus_state_t addr_indexed_ea(bus_state_t pins) {
     switch (step_++) {
     case 0:
-        return bus_setup_read(pins, regs_[REG_PC]);  // Fetch post-byte
+        return bus_setup_read(pins, regs_[PC]);  // Fetch post-byte
     case 1: {
         postbyte_ = bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
 
         if (!(postbyte_ & 0x80)) {
             // 5-bit signed offset: bits 4-0, sign-extended
@@ -126,14 +126,14 @@ bus_state_t addr_indexed_ea(bus_state_t pins) {
             }
             return pins;
         case 0x05: // B,R
-            ea_ = static_cast<uint16_t>(reg_val + static_cast<int8_t>(regs_[REG_B]));
+            ea_ = static_cast<uint16_t>(reg_val + static_cast<int8_t>(regs_[B]));
             if (indirect) {
                 step_ = 10;
                 return bus_setup_read(pins, ea_);
             }
             return pins;
         case 0x06: // A,R
-            ea_ = static_cast<uint16_t>(reg_val + static_cast<int8_t>(regs_[REG_A]));
+            ea_ = static_cast<uint16_t>(reg_val + static_cast<int8_t>(regs_[A]));
             if (indirect) {
                 step_ = 10;
                 return bus_setup_read(pins, ea_);
@@ -141,12 +141,12 @@ bus_state_t addr_indexed_ea(bus_state_t pins) {
             return pins;
         case 0x08: // n8,R — 8-bit signed offset
             step_ = 20;  // Need to fetch offset byte
-            return bus_setup_read(pins, regs_[REG_PC]);
+            return bus_setup_read(pins, regs_[PC]);
         case 0x09: // n16,R — 16-bit offset
             step_ = 30;  // Need to fetch 2 offset bytes
-            return bus_setup_read(pins, regs_[REG_PC]);
+            return bus_setup_read(pins, regs_[PC]);
         case 0x0B: // D,R
-            ea_ = static_cast<uint16_t>(reg_val + static_cast<int16_t>(regs_[REG_D]));
+            ea_ = static_cast<uint16_t>(reg_val + static_cast<int16_t>(regs_[D]));
             if (indirect) {
                 step_ = 10;
                 return bus_setup_read(pins, ea_);
@@ -154,14 +154,14 @@ bus_state_t addr_indexed_ea(bus_state_t pins) {
             return pins;
         case 0x0C: // n8,PCR — 8-bit PC relative
             step_ = 40;
-            return bus_setup_read(pins, regs_[REG_PC]);
+            return bus_setup_read(pins, regs_[PC]);
         case 0x0D: // n16,PCR — 16-bit PC relative
             step_ = 50;
-            return bus_setup_read(pins, regs_[REG_PC]);
+            return bus_setup_read(pins, regs_[PC]);
         case 0x0F: // Extended indirect: [n16]
             if (indirect) {
                 step_ = 50;  // Reuse n16,PCR path then indirect
-                return bus_setup_read(pins, regs_[REG_PC]);
+                return bus_setup_read(pins, regs_[PC]);
             }
             ea_ = reg_val;
             return pins;
@@ -185,7 +185,7 @@ bus_state_t addr_indexed_ea(bus_state_t pins) {
     // States 20-21: 8-bit offset fetch
     case 20: {
         int8_t off8 = static_cast<int8_t>(bus_read_data(pins));
-        regs_[REG_PC]++;
+        regs_[PC]++;
         uint8_t reg_idx = (postbyte_ >> 5) & 0x03;
         ea_ = static_cast<uint16_t>(get_index_reg(reg_idx) + off8);
         if (postbyte_ & 0x10) {
@@ -198,11 +198,11 @@ bus_state_t addr_indexed_ea(bus_state_t pins) {
     // States 30-32: 16-bit offset fetch
     case 30:
         data_hi_ = bus_read_data(pins);
-        regs_[REG_PC]++;
-        return bus_setup_read(pins, regs_[REG_PC]);
+        regs_[PC]++;
+        return bus_setup_read(pins, regs_[PC]);
     case 31: {
         int16_t off16 = static_cast<int16_t>((static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins));
-        regs_[REG_PC]++;
+        regs_[PC]++;
         uint8_t reg_idx = (postbyte_ >> 5) & 0x03;
         ea_ = static_cast<uint16_t>(get_index_reg(reg_idx) + off16);
         if (postbyte_ & 0x10) {
@@ -215,8 +215,8 @@ bus_state_t addr_indexed_ea(bus_state_t pins) {
     // States 40-41: 8-bit PC-relative
     case 40: {
         int8_t off8 = static_cast<int8_t>(bus_read_data(pins));
-        regs_[REG_PC]++;
-        ea_ = static_cast<uint16_t>(regs_[REG_PC] + off8);
+        regs_[PC]++;
+        ea_ = static_cast<uint16_t>(regs_[PC] + off8);
         if (postbyte_ & 0x10) {
             step_ = 10;
             return bus_setup_read(pins, ea_);
@@ -227,11 +227,11 @@ bus_state_t addr_indexed_ea(bus_state_t pins) {
     // States 50-52: 16-bit PC-relative or extended indirect
     case 50:
         data_hi_ = bus_read_data(pins);
-        regs_[REG_PC]++;
-        return bus_setup_read(pins, regs_[REG_PC]);
+        regs_[PC]++;
+        return bus_setup_read(pins, regs_[PC]);
     case 51: {
         int16_t off16 = static_cast<int16_t>((static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins));
-        regs_[REG_PC]++;
+        regs_[PC]++;
         // Check if this is extended indirect ($9F post-byte)
         if ((postbyte_ & 0x1F) == 0x1F) {
             ea_ = static_cast<uint16_t>((static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins));
@@ -239,7 +239,7 @@ bus_state_t addr_indexed_ea(bus_state_t pins) {
             step_ = 10;
             return bus_setup_read(pins, ea_);
         }
-        ea_ = static_cast<uint16_t>(regs_[REG_PC] + off16);
+        ea_ = static_cast<uint16_t>(regs_[PC] + off16);
         if (postbyte_ & 0x10) {
             step_ = 10;
             return bus_setup_read(pins, ea_);
@@ -265,10 +265,10 @@ bus_state_t addr_indexed_ea(bus_state_t pins) {
 #define MC6809_DEFINE_RMW_DIRECT(name, alu_op) \
     bus_state_t op_##name##_direct(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: \
-            ea_ = (static_cast<uint16_t>(regs_[REG_DP]) << 8) | bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            ea_ = (static_cast<uint16_t>(regs_[DP]) << 8) | bus_read_data(pins); \
+            regs_[PC]++; \
             return bus_setup_read(pins, ea_); \
         case 2: \
             data_lo_ = alu_op(bus_read_data(pins)); \
@@ -298,14 +298,14 @@ bus_state_t addr_indexed_ea(bus_state_t pins) {
 #define MC6809_DEFINE_RMW_EXTENDED(name, alu_op) \
     bus_state_t op_##name##_extended(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: \
             ea_ = static_cast<uint16_t>(bus_read_data(pins)) << 8; \
-            regs_[REG_PC]++; \
-            return bus_setup_read(pins, regs_[REG_PC]); \
+            regs_[PC]++; \
+            return bus_setup_read(pins, regs_[PC]); \
         case 2: \
             ea_ |= bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            regs_[PC]++; \
             return bus_setup_read(pins, ea_); \
         case 3: \
             data_lo_ = alu_op(bus_read_data(pins)); \
@@ -363,7 +363,7 @@ bus_state_t op_rmw_indexed(bus_state_t pins, Fn alu_fn) {
     switch (step_++) {
     case 0:
         indexed_phase_ = 0;
-        return bus_setup_read(pins, regs_[REG_PC]);
+        return bus_setup_read(pins, regs_[PC]);
     default: {
         // Check if EA is resolved by trying the indexed state machine.
         // This is a simplified approach — the addr_indexed_ea function
@@ -405,10 +405,10 @@ uint8_t indexed_phase_ = 0;
 
 bus_state_t op_tst_direct(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
-        ea_ = (static_cast<uint16_t>(regs_[REG_DP]) << 8) | bus_read_data(pins);
-        regs_[REG_PC]++;
+        ea_ = (static_cast<uint16_t>(regs_[DP]) << 8) | bus_read_data(pins);
+        regs_[PC]++;
         return bus_setup_read(pins, ea_);
     case 2:
         alu_tst8(bus_read_data(pins));
@@ -421,10 +421,10 @@ bus_state_t op_tst_direct(bus_state_t pins) {
 bus_state_t op_tst_indexed(bus_state_t pins) {
     // Simplified — resolve EA then read and test
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1: {
         postbyte_ = bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         // Simple 5-bit offset case
         if (!(postbyte_ & 0x80)) {
             int8_t off5 = postbyte_ & 0x1F;
@@ -446,14 +446,14 @@ bus_state_t op_tst_indexed(bus_state_t pins) {
 
 bus_state_t op_tst_extended(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
         ea_ = static_cast<uint16_t>(bus_read_data(pins)) << 8;
-        regs_[REG_PC]++;
-        return bus_setup_read(pins, regs_[REG_PC]);
+        regs_[PC]++;
+        return bus_setup_read(pins, regs_[PC]);
     case 2:
         ea_ |= bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         return bus_setup_read(pins, ea_);
     case 3:
         alu_tst8(bus_read_data(pins));
@@ -469,10 +469,10 @@ bus_state_t op_tst_extended(bus_state_t pins) {
 
 bus_state_t op_clr_direct(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
-        ea_ = (static_cast<uint16_t>(regs_[REG_DP]) << 8) | bus_read_data(pins);
-        regs_[REG_PC]++;
+        ea_ = (static_cast<uint16_t>(regs_[DP]) << 8) | bus_read_data(pins);
+        regs_[PC]++;
         return bus_setup_read(pins, ea_);  // Dummy read
     case 2:
         alu_clr8();
@@ -486,10 +486,10 @@ bus_state_t op_clr_direct(bus_state_t pins) {
 
 bus_state_t op_clr_indexed(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1: {
         postbyte_ = bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         if (!(postbyte_ & 0x80)) {
             int8_t off5 = postbyte_ & 0x1F;
             if (off5 & 0x10) off5 |= 0xE0;
@@ -511,14 +511,14 @@ bus_state_t op_clr_indexed(bus_state_t pins) {
 
 bus_state_t op_clr_extended(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
         ea_ = static_cast<uint16_t>(bus_read_data(pins)) << 8;
-        regs_[REG_PC]++;
-        return bus_setup_read(pins, regs_[REG_PC]);
+        regs_[PC]++;
+        return bus_setup_read(pins, regs_[PC]);
     case 2:
         ea_ |= bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         return bus_setup_read(pins, ea_);
     case 3:
         alu_clr8();
@@ -536,9 +536,9 @@ bus_state_t op_clr_extended(bus_state_t pins) {
 
 bus_state_t op_jmp_direct(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
-        regs_[REG_PC] = (static_cast<uint16_t>(regs_[REG_DP]) << 8) | bus_read_data(pins);
+        regs_[PC] = (static_cast<uint16_t>(regs_[DP]) << 8) | bus_read_data(pins);
         transition_to_fetch();
         return pins;
     default: transition_to_fetch(); return pins;
@@ -547,20 +547,20 @@ bus_state_t op_jmp_direct(bus_state_t pins) {
 
 bus_state_t op_jmp_indexed(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1: {
         postbyte_ = bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         if (!(postbyte_ & 0x80)) {
             int8_t off5 = postbyte_ & 0x1F;
             if (off5 & 0x10) off5 |= 0xE0;
             ea_ = static_cast<uint16_t>(get_index_reg((postbyte_ >> 5) & 0x03) + off5);
-            regs_[REG_PC] = ea_;
+            regs_[PC] = ea_;
             transition_to_fetch();
             return pins;
         }
         ea_ = resolve_indexed_simple(postbyte_, pins);
-        regs_[REG_PC] = ea_;
+        regs_[PC] = ea_;
         transition_to_fetch();
         return pins;
     }
@@ -570,14 +570,14 @@ bus_state_t op_jmp_indexed(bus_state_t pins) {
 
 bus_state_t op_jmp_extended(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
         ea_ = static_cast<uint16_t>(bus_read_data(pins)) << 8;
-        regs_[REG_PC]++;
-        return bus_setup_read(pins, regs_[REG_PC]);
+        regs_[PC]++;
+        return bus_setup_read(pins, regs_[PC]);
     case 2:
         ea_ |= bus_read_data(pins);
-        regs_[REG_PC] = ea_;
+        regs_[PC] = ea_;
         transition_to_fetch();
         return pins;
     default: transition_to_fetch(); return pins;
@@ -599,9 +599,9 @@ uint16_t resolve_indexed_simple(uint8_t pb, bus_state_t /*pins*/) {
     case 0x02: set_index_reg(reg_idx, reg_val - 1); return get_index_reg(reg_idx);
     case 0x03: set_index_reg(reg_idx, reg_val - 2); return get_index_reg(reg_idx);
     case 0x04: return reg_val;
-    case 0x05: return static_cast<uint16_t>(reg_val + static_cast<int8_t>(regs_[REG_B]));
-    case 0x06: return static_cast<uint16_t>(reg_val + static_cast<int8_t>(regs_[REG_A]));
-    case 0x0B: return static_cast<uint16_t>(reg_val + static_cast<int16_t>(regs_[REG_D]));
+    case 0x05: return static_cast<uint16_t>(reg_val + static_cast<int8_t>(regs_[B]));
+    case 0x06: return static_cast<uint16_t>(reg_val + static_cast<int8_t>(regs_[A]));
+    case 0x0B: return static_cast<uint16_t>(reg_val + static_cast<int16_t>(regs_[D]));
     default: return reg_val;
     }
 }
@@ -615,10 +615,10 @@ uint16_t resolve_indexed_simple(uint8_t pb, bus_state_t /*pins*/) {
 #define MC6809_OP_IMM8(name, reg, op) \
     bus_state_t op_##name##_imm(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: \
             reg = op(reg, bus_read_data(pins)); \
-            regs_[REG_PC]++; \
+            regs_[PC]++; \
             transition_to_fetch(); \
             return pins; \
         default: transition_to_fetch(); return pins; \
@@ -629,10 +629,10 @@ uint16_t resolve_indexed_simple(uint8_t pb, bus_state_t /*pins*/) {
 #define MC6809_OP_CMP_IMM8(name, reg, op) \
     bus_state_t op_##name##_imm(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: \
             op(reg, bus_read_data(pins)); \
-            regs_[REG_PC]++; \
+            regs_[PC]++; \
             transition_to_fetch(); \
             return pins; \
         default: transition_to_fetch(); return pins; \
@@ -643,10 +643,10 @@ uint16_t resolve_indexed_simple(uint8_t pb, bus_state_t /*pins*/) {
 #define MC6809_OP_DIRECT8(name, reg, op) \
     bus_state_t op_##name##_direct(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: \
-            ea_ = (static_cast<uint16_t>(regs_[REG_DP]) << 8) | bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            ea_ = (static_cast<uint16_t>(regs_[DP]) << 8) | bus_read_data(pins); \
+            regs_[PC]++; \
             return bus_setup_read(pins, ea_); \
         case 2: \
             reg = op(reg, bus_read_data(pins)); \
@@ -659,10 +659,10 @@ uint16_t resolve_indexed_simple(uint8_t pb, bus_state_t /*pins*/) {
 #define MC6809_OP_CMP_DIRECT8(name, reg, op) \
     bus_state_t op_##name##_direct(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: \
-            ea_ = (static_cast<uint16_t>(regs_[REG_DP]) << 8) | bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            ea_ = (static_cast<uint16_t>(regs_[DP]) << 8) | bus_read_data(pins); \
+            regs_[PC]++; \
             return bus_setup_read(pins, ea_); \
         case 2: \
             op(reg, bus_read_data(pins)); \
@@ -676,10 +676,10 @@ uint16_t resolve_indexed_simple(uint8_t pb, bus_state_t /*pins*/) {
 #define MC6809_OP_INDEXED8(name, reg, op) \
     bus_state_t op_##name##_indexed(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: { \
             postbyte_ = bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            regs_[PC]++; \
             if (!(postbyte_ & 0x80)) { \
                 int8_t off5 = postbyte_ & 0x1F; \
                 if (off5 & 0x10) off5 |= 0xE0; \
@@ -700,10 +700,10 @@ uint16_t resolve_indexed_simple(uint8_t pb, bus_state_t /*pins*/) {
 #define MC6809_OP_CMP_INDEXED8(name, reg, op) \
     bus_state_t op_##name##_indexed(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: { \
             postbyte_ = bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            regs_[PC]++; \
             if (!(postbyte_ & 0x80)) { \
                 int8_t off5 = postbyte_ & 0x1F; \
                 if (off5 & 0x10) off5 |= 0xE0; \
@@ -725,14 +725,14 @@ uint16_t resolve_indexed_simple(uint8_t pb, bus_state_t /*pins*/) {
 #define MC6809_OP_EXTENDED8(name, reg, op) \
     bus_state_t op_##name##_extended(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: \
             ea_ = static_cast<uint16_t>(bus_read_data(pins)) << 8; \
-            regs_[REG_PC]++; \
-            return bus_setup_read(pins, regs_[REG_PC]); \
+            regs_[PC]++; \
+            return bus_setup_read(pins, regs_[PC]); \
         case 2: \
             ea_ |= bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            regs_[PC]++; \
             return bus_setup_read(pins, ea_); \
         case 3: \
             reg = op(reg, bus_read_data(pins)); \
@@ -745,14 +745,14 @@ uint16_t resolve_indexed_simple(uint8_t pb, bus_state_t /*pins*/) {
 #define MC6809_OP_CMP_EXTENDED8(name, reg, op) \
     bus_state_t op_##name##_extended(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: \
             ea_ = static_cast<uint16_t>(bus_read_data(pins)) << 8; \
-            regs_[REG_PC]++; \
-            return bus_setup_read(pins, regs_[REG_PC]); \
+            regs_[PC]++; \
+            return bus_setup_read(pins, regs_[PC]); \
         case 2: \
             ea_ |= bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            regs_[PC]++; \
             return bus_setup_read(pins, ea_); \
         case 3: \
             op(reg, bus_read_data(pins)); \
@@ -769,86 +769,86 @@ inline uint8_t wrap_add8(uint8_t a, uint8_t b) { return alu_add8(a, b, false); }
 inline uint8_t wrap_adc8(uint8_t a, uint8_t b) { return alu_add8(a, b, true); }
 
 // Generate all A-register operations
-MC6809_OP_IMM8(suba, regs_[REG_A], wrap_sub8)
-MC6809_OP_IMM8(sbca, regs_[REG_A], wrap_sbc8)
-MC6809_OP_IMM8(anda, regs_[REG_A], alu_and8)
-MC6809_OP_IMM8(eora, regs_[REG_A], alu_eor8)
-MC6809_OP_IMM8(adca, regs_[REG_A], wrap_adc8)
-MC6809_OP_IMM8(ora,  regs_[REG_A], alu_or8)
-MC6809_OP_IMM8(adda, regs_[REG_A], wrap_add8)
-MC6809_OP_CMP_IMM8(cmpa, regs_[REG_A], alu_cmp8)
-MC6809_OP_CMP_IMM8(bita, regs_[REG_A], alu_bit8)
+MC6809_OP_IMM8(suba, regs_[A], wrap_sub8)
+MC6809_OP_IMM8(sbca, regs_[A], wrap_sbc8)
+MC6809_OP_IMM8(anda, regs_[A], alu_and8)
+MC6809_OP_IMM8(eora, regs_[A], alu_eor8)
+MC6809_OP_IMM8(adca, regs_[A], wrap_adc8)
+MC6809_OP_IMM8(ora,  regs_[A], alu_or8)
+MC6809_OP_IMM8(adda, regs_[A], wrap_add8)
+MC6809_OP_CMP_IMM8(cmpa, regs_[A], alu_cmp8)
+MC6809_OP_CMP_IMM8(bita, regs_[A], alu_bit8)
 
-MC6809_OP_DIRECT8(suba, regs_[REG_A], wrap_sub8)
-MC6809_OP_DIRECT8(sbca, regs_[REG_A], wrap_sbc8)
-MC6809_OP_DIRECT8(anda, regs_[REG_A], alu_and8)
-MC6809_OP_DIRECT8(eora, regs_[REG_A], alu_eor8)
-MC6809_OP_DIRECT8(adca, regs_[REG_A], wrap_adc8)
-MC6809_OP_DIRECT8(ora,  regs_[REG_A], alu_or8)
-MC6809_OP_DIRECT8(adda, regs_[REG_A], wrap_add8)
-MC6809_OP_CMP_DIRECT8(cmpa, regs_[REG_A], alu_cmp8)
-MC6809_OP_CMP_DIRECT8(bita, regs_[REG_A], alu_bit8)
+MC6809_OP_DIRECT8(suba, regs_[A], wrap_sub8)
+MC6809_OP_DIRECT8(sbca, regs_[A], wrap_sbc8)
+MC6809_OP_DIRECT8(anda, regs_[A], alu_and8)
+MC6809_OP_DIRECT8(eora, regs_[A], alu_eor8)
+MC6809_OP_DIRECT8(adca, regs_[A], wrap_adc8)
+MC6809_OP_DIRECT8(ora,  regs_[A], alu_or8)
+MC6809_OP_DIRECT8(adda, regs_[A], wrap_add8)
+MC6809_OP_CMP_DIRECT8(cmpa, regs_[A], alu_cmp8)
+MC6809_OP_CMP_DIRECT8(bita, regs_[A], alu_bit8)
 
-MC6809_OP_INDEXED8(suba, regs_[REG_A], wrap_sub8)
-MC6809_OP_INDEXED8(sbca, regs_[REG_A], wrap_sbc8)
-MC6809_OP_INDEXED8(anda, regs_[REG_A], alu_and8)
-MC6809_OP_INDEXED8(eora, regs_[REG_A], alu_eor8)
-MC6809_OP_INDEXED8(adca, regs_[REG_A], wrap_adc8)
-MC6809_OP_INDEXED8(ora,  regs_[REG_A], alu_or8)
-MC6809_OP_INDEXED8(adda, regs_[REG_A], wrap_add8)
-MC6809_OP_CMP_INDEXED8(cmpa, regs_[REG_A], alu_cmp8)
-MC6809_OP_CMP_INDEXED8(bita, regs_[REG_A], alu_bit8)
+MC6809_OP_INDEXED8(suba, regs_[A], wrap_sub8)
+MC6809_OP_INDEXED8(sbca, regs_[A], wrap_sbc8)
+MC6809_OP_INDEXED8(anda, regs_[A], alu_and8)
+MC6809_OP_INDEXED8(eora, regs_[A], alu_eor8)
+MC6809_OP_INDEXED8(adca, regs_[A], wrap_adc8)
+MC6809_OP_INDEXED8(ora,  regs_[A], alu_or8)
+MC6809_OP_INDEXED8(adda, regs_[A], wrap_add8)
+MC6809_OP_CMP_INDEXED8(cmpa, regs_[A], alu_cmp8)
+MC6809_OP_CMP_INDEXED8(bita, regs_[A], alu_bit8)
 
-MC6809_OP_EXTENDED8(suba, regs_[REG_A], wrap_sub8)
-MC6809_OP_EXTENDED8(sbca, regs_[REG_A], wrap_sbc8)
-MC6809_OP_EXTENDED8(anda, regs_[REG_A], alu_and8)
-MC6809_OP_EXTENDED8(eora, regs_[REG_A], alu_eor8)
-MC6809_OP_EXTENDED8(adca, regs_[REG_A], wrap_adc8)
-MC6809_OP_EXTENDED8(ora,  regs_[REG_A], alu_or8)
-MC6809_OP_EXTENDED8(adda, regs_[REG_A], wrap_add8)
-MC6809_OP_CMP_EXTENDED8(cmpa, regs_[REG_A], alu_cmp8)
-MC6809_OP_CMP_EXTENDED8(bita, regs_[REG_A], alu_bit8)
+MC6809_OP_EXTENDED8(suba, regs_[A], wrap_sub8)
+MC6809_OP_EXTENDED8(sbca, regs_[A], wrap_sbc8)
+MC6809_OP_EXTENDED8(anda, regs_[A], alu_and8)
+MC6809_OP_EXTENDED8(eora, regs_[A], alu_eor8)
+MC6809_OP_EXTENDED8(adca, regs_[A], wrap_adc8)
+MC6809_OP_EXTENDED8(ora,  regs_[A], alu_or8)
+MC6809_OP_EXTENDED8(adda, regs_[A], wrap_add8)
+MC6809_OP_CMP_EXTENDED8(cmpa, regs_[A], alu_cmp8)
+MC6809_OP_CMP_EXTENDED8(bita, regs_[A], alu_bit8)
 
 // Generate all B-register operations
-MC6809_OP_IMM8(subb, regs_[REG_B], wrap_sub8)
-MC6809_OP_IMM8(sbcb, regs_[REG_B], wrap_sbc8)
-MC6809_OP_IMM8(andb, regs_[REG_B], alu_and8)
-MC6809_OP_IMM8(eorb, regs_[REG_B], alu_eor8)
-MC6809_OP_IMM8(adcb, regs_[REG_B], wrap_adc8)
-MC6809_OP_IMM8(orb,  regs_[REG_B], alu_or8)
-MC6809_OP_IMM8(addb, regs_[REG_B], wrap_add8)
-MC6809_OP_CMP_IMM8(cmpb, regs_[REG_B], alu_cmp8)
-MC6809_OP_CMP_IMM8(bitb, regs_[REG_B], alu_bit8)
+MC6809_OP_IMM8(subb, regs_[B], wrap_sub8)
+MC6809_OP_IMM8(sbcb, regs_[B], wrap_sbc8)
+MC6809_OP_IMM8(andb, regs_[B], alu_and8)
+MC6809_OP_IMM8(eorb, regs_[B], alu_eor8)
+MC6809_OP_IMM8(adcb, regs_[B], wrap_adc8)
+MC6809_OP_IMM8(orb,  regs_[B], alu_or8)
+MC6809_OP_IMM8(addb, regs_[B], wrap_add8)
+MC6809_OP_CMP_IMM8(cmpb, regs_[B], alu_cmp8)
+MC6809_OP_CMP_IMM8(bitb, regs_[B], alu_bit8)
 
-MC6809_OP_DIRECT8(subb, regs_[REG_B], wrap_sub8)
-MC6809_OP_DIRECT8(sbcb, regs_[REG_B], wrap_sbc8)
-MC6809_OP_DIRECT8(andb, regs_[REG_B], alu_and8)
-MC6809_OP_DIRECT8(eorb, regs_[REG_B], alu_eor8)
-MC6809_OP_DIRECT8(adcb, regs_[REG_B], wrap_adc8)
-MC6809_OP_DIRECT8(orb,  regs_[REG_B], alu_or8)
-MC6809_OP_DIRECT8(addb, regs_[REG_B], wrap_add8)
-MC6809_OP_CMP_DIRECT8(cmpb, regs_[REG_B], alu_cmp8)
-MC6809_OP_CMP_DIRECT8(bitb, regs_[REG_B], alu_bit8)
+MC6809_OP_DIRECT8(subb, regs_[B], wrap_sub8)
+MC6809_OP_DIRECT8(sbcb, regs_[B], wrap_sbc8)
+MC6809_OP_DIRECT8(andb, regs_[B], alu_and8)
+MC6809_OP_DIRECT8(eorb, regs_[B], alu_eor8)
+MC6809_OP_DIRECT8(adcb, regs_[B], wrap_adc8)
+MC6809_OP_DIRECT8(orb,  regs_[B], alu_or8)
+MC6809_OP_DIRECT8(addb, regs_[B], wrap_add8)
+MC6809_OP_CMP_DIRECT8(cmpb, regs_[B], alu_cmp8)
+MC6809_OP_CMP_DIRECT8(bitb, regs_[B], alu_bit8)
 
-MC6809_OP_INDEXED8(subb, regs_[REG_B], wrap_sub8)
-MC6809_OP_INDEXED8(sbcb, regs_[REG_B], wrap_sbc8)
-MC6809_OP_INDEXED8(andb, regs_[REG_B], alu_and8)
-MC6809_OP_INDEXED8(eorb, regs_[REG_B], alu_eor8)
-MC6809_OP_INDEXED8(adcb, regs_[REG_B], wrap_adc8)
-MC6809_OP_INDEXED8(orb,  regs_[REG_B], alu_or8)
-MC6809_OP_INDEXED8(addb, regs_[REG_B], wrap_add8)
-MC6809_OP_CMP_INDEXED8(cmpb, regs_[REG_B], alu_cmp8)
-MC6809_OP_CMP_INDEXED8(bitb, regs_[REG_B], alu_bit8)
+MC6809_OP_INDEXED8(subb, regs_[B], wrap_sub8)
+MC6809_OP_INDEXED8(sbcb, regs_[B], wrap_sbc8)
+MC6809_OP_INDEXED8(andb, regs_[B], alu_and8)
+MC6809_OP_INDEXED8(eorb, regs_[B], alu_eor8)
+MC6809_OP_INDEXED8(adcb, regs_[B], wrap_adc8)
+MC6809_OP_INDEXED8(orb,  regs_[B], alu_or8)
+MC6809_OP_INDEXED8(addb, regs_[B], wrap_add8)
+MC6809_OP_CMP_INDEXED8(cmpb, regs_[B], alu_cmp8)
+MC6809_OP_CMP_INDEXED8(bitb, regs_[B], alu_bit8)
 
-MC6809_OP_EXTENDED8(subb, regs_[REG_B], wrap_sub8)
-MC6809_OP_EXTENDED8(sbcb, regs_[REG_B], wrap_sbc8)
-MC6809_OP_EXTENDED8(andb, regs_[REG_B], alu_and8)
-MC6809_OP_EXTENDED8(eorb, regs_[REG_B], alu_eor8)
-MC6809_OP_EXTENDED8(adcb, regs_[REG_B], wrap_adc8)
-MC6809_OP_EXTENDED8(orb,  regs_[REG_B], alu_or8)
-MC6809_OP_EXTENDED8(addb, regs_[REG_B], wrap_add8)
-MC6809_OP_CMP_EXTENDED8(cmpb, regs_[REG_B], alu_cmp8)
-MC6809_OP_CMP_EXTENDED8(bitb, regs_[REG_B], alu_bit8)
+MC6809_OP_EXTENDED8(subb, regs_[B], wrap_sub8)
+MC6809_OP_EXTENDED8(sbcb, regs_[B], wrap_sbc8)
+MC6809_OP_EXTENDED8(andb, regs_[B], alu_and8)
+MC6809_OP_EXTENDED8(eorb, regs_[B], alu_eor8)
+MC6809_OP_EXTENDED8(adcb, regs_[B], wrap_adc8)
+MC6809_OP_EXTENDED8(orb,  regs_[B], alu_or8)
+MC6809_OP_EXTENDED8(addb, regs_[B], wrap_add8)
+MC6809_OP_CMP_EXTENDED8(cmpb, regs_[B], alu_cmp8)
+MC6809_OP_CMP_EXTENDED8(bitb, regs_[B], alu_bit8)
 
 // Cleanup macros
 #undef MC6809_OP_IMM8
@@ -866,11 +866,11 @@ MC6809_OP_CMP_EXTENDED8(bitb, regs_[REG_B], alu_bit8)
 
 bus_state_t op_lda_imm(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
-        regs_[REG_A] = bus_read_data(pins);
-        regs_[REG_PC]++;
-        set_nz8(regs_[REG_A]);
+        regs_[A] = bus_read_data(pins);
+        regs_[PC]++;
+        set_nz8(regs_[A]);
         set_flag(Flags::V, false);
         transition_to_fetch();
         return pins;
@@ -880,11 +880,11 @@ bus_state_t op_lda_imm(bus_state_t pins) {
 
 bus_state_t op_ldb_imm(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
-        regs_[REG_B] = bus_read_data(pins);
-        regs_[REG_PC]++;
-        set_nz8(regs_[REG_B]);
+        regs_[B] = bus_read_data(pins);
+        regs_[PC]++;
+        set_nz8(regs_[B]);
         set_flag(Flags::V, false);
         transition_to_fetch();
         return pins;
@@ -896,10 +896,10 @@ bus_state_t op_ldb_imm(bus_state_t pins) {
 #define MC6809_OP_LD_DIRECT8(name, reg) \
     bus_state_t op_##name##_direct(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: \
-            ea_ = (static_cast<uint16_t>(regs_[REG_DP]) << 8) | bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            ea_ = (static_cast<uint16_t>(regs_[DP]) << 8) | bus_read_data(pins); \
+            regs_[PC]++; \
             return bus_setup_read(pins, ea_); \
         case 2: \
             reg = bus_read_data(pins); \
@@ -914,10 +914,10 @@ bus_state_t op_ldb_imm(bus_state_t pins) {
 #define MC6809_OP_LD_INDEXED8(name, reg) \
     bus_state_t op_##name##_indexed(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: { \
             postbyte_ = bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            regs_[PC]++; \
             if (!(postbyte_ & 0x80)) { \
                 int8_t off5 = postbyte_ & 0x1F; \
                 if (off5 & 0x10) off5 |= 0xE0; \
@@ -940,14 +940,14 @@ bus_state_t op_ldb_imm(bus_state_t pins) {
 #define MC6809_OP_LD_EXTENDED8(name, reg) \
     bus_state_t op_##name##_extended(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: \
             ea_ = static_cast<uint16_t>(bus_read_data(pins)) << 8; \
-            regs_[REG_PC]++; \
-            return bus_setup_read(pins, regs_[REG_PC]); \
+            regs_[PC]++; \
+            return bus_setup_read(pins, regs_[PC]); \
         case 2: \
             ea_ |= bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            regs_[PC]++; \
             return bus_setup_read(pins, ea_); \
         case 3: \
             reg = bus_read_data(pins); \
@@ -962,10 +962,10 @@ bus_state_t op_ldb_imm(bus_state_t pins) {
 #define MC6809_OP_ST_DIRECT8(name, reg) \
     bus_state_t op_##name##_direct(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: \
-            ea_ = (static_cast<uint16_t>(regs_[REG_DP]) << 8) | bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            ea_ = (static_cast<uint16_t>(regs_[DP]) << 8) | bus_read_data(pins); \
+            regs_[PC]++; \
             set_nz8(reg); \
             set_flag(Flags::V, false); \
             return bus_setup_write(pins, ea_, reg); \
@@ -979,10 +979,10 @@ bus_state_t op_ldb_imm(bus_state_t pins) {
 #define MC6809_OP_ST_INDEXED8(name, reg) \
     bus_state_t op_##name##_indexed(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: { \
             postbyte_ = bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            regs_[PC]++; \
             if (!(postbyte_ & 0x80)) { \
                 int8_t off5 = postbyte_ & 0x1F; \
                 if (off5 & 0x10) off5 |= 0xE0; \
@@ -1004,14 +1004,14 @@ bus_state_t op_ldb_imm(bus_state_t pins) {
 #define MC6809_OP_ST_EXTENDED8(name, reg) \
     bus_state_t op_##name##_extended(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: \
             ea_ = static_cast<uint16_t>(bus_read_data(pins)) << 8; \
-            regs_[REG_PC]++; \
-            return bus_setup_read(pins, regs_[REG_PC]); \
+            regs_[PC]++; \
+            return bus_setup_read(pins, regs_[PC]); \
         case 2: \
             ea_ |= bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            regs_[PC]++; \
             set_nz8(reg); \
             set_flag(Flags::V, false); \
             return bus_setup_write(pins, ea_, reg); \
@@ -1022,19 +1022,19 @@ bus_state_t op_ldb_imm(bus_state_t pins) {
         } \
     }
 
-MC6809_OP_LD_DIRECT8(lda, regs_[REG_A])
-MC6809_OP_LD_DIRECT8(ldb, regs_[REG_B])
-MC6809_OP_LD_INDEXED8(lda, regs_[REG_A])
-MC6809_OP_LD_INDEXED8(ldb, regs_[REG_B])
-MC6809_OP_LD_EXTENDED8(lda, regs_[REG_A])
-MC6809_OP_LD_EXTENDED8(ldb, regs_[REG_B])
+MC6809_OP_LD_DIRECT8(lda, regs_[A])
+MC6809_OP_LD_DIRECT8(ldb, regs_[B])
+MC6809_OP_LD_INDEXED8(lda, regs_[A])
+MC6809_OP_LD_INDEXED8(ldb, regs_[B])
+MC6809_OP_LD_EXTENDED8(lda, regs_[A])
+MC6809_OP_LD_EXTENDED8(ldb, regs_[B])
 
-MC6809_OP_ST_DIRECT8(sta, regs_[REG_A])
-MC6809_OP_ST_DIRECT8(stb, regs_[REG_B])
-MC6809_OP_ST_INDEXED8(sta, regs_[REG_A])
-MC6809_OP_ST_INDEXED8(stb, regs_[REG_B])
-MC6809_OP_ST_EXTENDED8(sta, regs_[REG_A])
-MC6809_OP_ST_EXTENDED8(stb, regs_[REG_B])
+MC6809_OP_ST_DIRECT8(sta, regs_[A])
+MC6809_OP_ST_DIRECT8(stb, regs_[B])
+MC6809_OP_ST_INDEXED8(sta, regs_[A])
+MC6809_OP_ST_INDEXED8(stb, regs_[B])
+MC6809_OP_ST_EXTENDED8(sta, regs_[A])
+MC6809_OP_ST_EXTENDED8(stb, regs_[B])
 
 #undef MC6809_OP_LD_DIRECT8
 #undef MC6809_OP_LD_INDEXED8
@@ -1051,15 +1051,15 @@ MC6809_OP_ST_EXTENDED8(stb, regs_[REG_B])
 
 bus_state_t op_subd_imm(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
         data_hi_ = bus_read_data(pins);
-        regs_[REG_PC]++;
-        return bus_setup_read(pins, regs_[REG_PC]);
+        regs_[PC]++;
+        return bus_setup_read(pins, regs_[PC]);
     case 2: {
         uint16_t val = (static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins);
-        regs_[REG_PC]++;
-        regs_[REG_D] = alu_sub16(regs_[REG_D], val);
+        regs_[PC]++;
+        regs_[D] = alu_sub16(regs_[D], val);
         transition_to_fetch();
         return pins;
     }
@@ -1069,15 +1069,15 @@ bus_state_t op_subd_imm(bus_state_t pins) {
 
 bus_state_t op_addd_imm(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
         data_hi_ = bus_read_data(pins);
-        regs_[REG_PC]++;
-        return bus_setup_read(pins, regs_[REG_PC]);
+        regs_[PC]++;
+        return bus_setup_read(pins, regs_[PC]);
     case 2: {
         uint16_t val = (static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins);
-        regs_[REG_PC]++;
-        regs_[REG_D] = alu_add16(regs_[REG_D], val);
+        regs_[PC]++;
+        regs_[D] = alu_add16(regs_[D], val);
         transition_to_fetch();
         return pins;
     }
@@ -1087,15 +1087,15 @@ bus_state_t op_addd_imm(bus_state_t pins) {
 
 bus_state_t op_cmpx_imm(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
         data_hi_ = bus_read_data(pins);
-        regs_[REG_PC]++;
-        return bus_setup_read(pins, regs_[REG_PC]);
+        regs_[PC]++;
+        return bus_setup_read(pins, regs_[PC]);
     case 2: {
         uint16_t val = (static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins);
-        regs_[REG_PC]++;
-        alu_cmp16(regs_[REG_X], val);
+        regs_[PC]++;
+        alu_cmp16(regs_[X], val);
         transition_to_fetch();
         return pins;
     }
@@ -1105,15 +1105,15 @@ bus_state_t op_cmpx_imm(bus_state_t pins) {
 
 bus_state_t op_ldd_imm(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
-        regs_[REG_A] = bus_read_data(pins);
-        regs_[REG_PC]++;
-        return bus_setup_read(pins, regs_[REG_PC]);
+        regs_[A] = bus_read_data(pins);
+        regs_[PC]++;
+        return bus_setup_read(pins, regs_[PC]);
     case 2:
-        regs_[REG_B] = bus_read_data(pins);
-        regs_[REG_PC]++;
-        alu_ld16_flags(regs_[REG_D]);
+        regs_[B] = bus_read_data(pins);
+        regs_[PC]++;
+        alu_ld16_flags(regs_[D]);
         transition_to_fetch();
         return pins;
     default: transition_to_fetch(); return pins;
@@ -1122,15 +1122,15 @@ bus_state_t op_ldd_imm(bus_state_t pins) {
 
 bus_state_t op_ldx_imm(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
         data_hi_ = bus_read_data(pins);
-        regs_[REG_PC]++;
-        return bus_setup_read(pins, regs_[REG_PC]);
+        regs_[PC]++;
+        return bus_setup_read(pins, regs_[PC]);
     case 2:
-        regs_[REG_X] = (static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins);
-        regs_[REG_PC]++;
-        alu_ld16_flags(regs_[REG_X]);
+        regs_[X] = (static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins);
+        regs_[PC]++;
+        alu_ld16_flags(regs_[X]);
         transition_to_fetch();
         return pins;
     default: transition_to_fetch(); return pins;
@@ -1139,15 +1139,15 @@ bus_state_t op_ldx_imm(bus_state_t pins) {
 
 bus_state_t op_ldu_imm(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
         data_hi_ = bus_read_data(pins);
-        regs_[REG_PC]++;
-        return bus_setup_read(pins, regs_[REG_PC]);
+        regs_[PC]++;
+        return bus_setup_read(pins, regs_[PC]);
     case 2:
-        regs_[REG_U] = (static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins);
-        regs_[REG_PC]++;
-        alu_ld16_flags(regs_[REG_U]);
+        regs_[U] = (static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins);
+        regs_[PC]++;
+        alu_ld16_flags(regs_[U]);
         transition_to_fetch();
         return pins;
     default: transition_to_fetch(); return pins;
@@ -1158,10 +1158,10 @@ bus_state_t op_ldu_imm(bus_state_t pins) {
 #define MC6809_OP_DIRECT16(name, body) \
     bus_state_t op_##name##_direct(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: \
-            ea_ = (static_cast<uint16_t>(regs_[REG_DP]) << 8) | bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            ea_ = (static_cast<uint16_t>(regs_[DP]) << 8) | bus_read_data(pins); \
+            regs_[PC]++; \
             return bus_setup_read(pins, ea_); \
         case 2: \
             data_hi_ = bus_read_data(pins); \
@@ -1176,12 +1176,12 @@ bus_state_t op_ldu_imm(bus_state_t pins) {
         } \
     }
 
-MC6809_OP_DIRECT16(subd, regs_[REG_D] = alu_sub16(regs_[REG_D], val))
-MC6809_OP_DIRECT16(addd, regs_[REG_D] = alu_add16(regs_[REG_D], val))
-MC6809_OP_DIRECT16(cmpx, alu_cmp16(regs_[REG_X], val))
-MC6809_OP_DIRECT16(ldd,  regs_[REG_D] = val; alu_ld16_flags(regs_[REG_D]))
-MC6809_OP_DIRECT16(ldx,  regs_[REG_X] = val; alu_ld16_flags(regs_[REG_X]))
-MC6809_OP_DIRECT16(ldu,  regs_[REG_U] = val; alu_ld16_flags(regs_[REG_U]))
+MC6809_OP_DIRECT16(subd, regs_[D] = alu_sub16(regs_[D], val))
+MC6809_OP_DIRECT16(addd, regs_[D] = alu_add16(regs_[D], val))
+MC6809_OP_DIRECT16(cmpx, alu_cmp16(regs_[X], val))
+MC6809_OP_DIRECT16(ldd,  regs_[D] = val; alu_ld16_flags(regs_[D]))
+MC6809_OP_DIRECT16(ldx,  regs_[X] = val; alu_ld16_flags(regs_[X]))
+MC6809_OP_DIRECT16(ldu,  regs_[U] = val; alu_ld16_flags(regs_[U]))
 
 #undef MC6809_OP_DIRECT16
 
@@ -1189,10 +1189,10 @@ MC6809_OP_DIRECT16(ldu,  regs_[REG_U] = val; alu_ld16_flags(regs_[REG_U]))
 #define MC6809_OP_ST_DIRECT16(name, reg) \
     bus_state_t op_##name##_direct(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: \
-            ea_ = (static_cast<uint16_t>(regs_[REG_DP]) << 8) | bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            ea_ = (static_cast<uint16_t>(regs_[DP]) << 8) | bus_read_data(pins); \
+            regs_[PC]++; \
             alu_ld16_flags(reg); \
             return bus_setup_write(pins, ea_, reg >> 8); \
         case 2: \
@@ -1204,9 +1204,9 @@ MC6809_OP_DIRECT16(ldu,  regs_[REG_U] = val; alu_ld16_flags(regs_[REG_U]))
         } \
     }
 
-MC6809_OP_ST_DIRECT16(std, regs_[REG_D])
-MC6809_OP_ST_DIRECT16(stx, regs_[REG_X])
-MC6809_OP_ST_DIRECT16(stu, regs_[REG_U])
+MC6809_OP_ST_DIRECT16(std, regs_[D])
+MC6809_OP_ST_DIRECT16(stx, regs_[X])
+MC6809_OP_ST_DIRECT16(stu, regs_[U])
 
 #undef MC6809_OP_ST_DIRECT16
 
@@ -1214,10 +1214,10 @@ MC6809_OP_ST_DIRECT16(stu, regs_[REG_U])
 #define MC6809_OP_INDEXED16(name, body) \
     bus_state_t op_##name##_indexed(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: { \
             postbyte_ = bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            regs_[PC]++; \
             if (!(postbyte_ & 0x80)) { \
                 int8_t off5 = postbyte_ & 0x1F; \
                 if (off5 & 0x10) off5 |= 0xE0; \
@@ -1240,12 +1240,12 @@ MC6809_OP_ST_DIRECT16(stu, regs_[REG_U])
         } \
     }
 
-MC6809_OP_INDEXED16(subd, regs_[REG_D] = alu_sub16(regs_[REG_D], val))
-MC6809_OP_INDEXED16(addd, regs_[REG_D] = alu_add16(regs_[REG_D], val))
-MC6809_OP_INDEXED16(cmpx, alu_cmp16(regs_[REG_X], val))
-MC6809_OP_INDEXED16(ldd,  regs_[REG_D] = val; alu_ld16_flags(regs_[REG_D]))
-MC6809_OP_INDEXED16(ldx,  regs_[REG_X] = val; alu_ld16_flags(regs_[REG_X]))
-MC6809_OP_INDEXED16(ldu,  regs_[REG_U] = val; alu_ld16_flags(regs_[REG_U]))
+MC6809_OP_INDEXED16(subd, regs_[D] = alu_sub16(regs_[D], val))
+MC6809_OP_INDEXED16(addd, regs_[D] = alu_add16(regs_[D], val))
+MC6809_OP_INDEXED16(cmpx, alu_cmp16(regs_[X], val))
+MC6809_OP_INDEXED16(ldd,  regs_[D] = val; alu_ld16_flags(regs_[D]))
+MC6809_OP_INDEXED16(ldx,  regs_[X] = val; alu_ld16_flags(regs_[X]))
+MC6809_OP_INDEXED16(ldu,  regs_[U] = val; alu_ld16_flags(regs_[U]))
 
 #undef MC6809_OP_INDEXED16
 
@@ -1253,10 +1253,10 @@ MC6809_OP_INDEXED16(ldu,  regs_[REG_U] = val; alu_ld16_flags(regs_[REG_U]))
 #define MC6809_OP_ST_INDEXED16(name, reg) \
     bus_state_t op_##name##_indexed(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: { \
             postbyte_ = bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            regs_[PC]++; \
             if (!(postbyte_ & 0x80)) { \
                 int8_t off5 = postbyte_ & 0x1F; \
                 if (off5 & 0x10) off5 |= 0xE0; \
@@ -1276,9 +1276,9 @@ MC6809_OP_INDEXED16(ldu,  regs_[REG_U] = val; alu_ld16_flags(regs_[REG_U]))
         } \
     }
 
-MC6809_OP_ST_INDEXED16(std, regs_[REG_D])
-MC6809_OP_ST_INDEXED16(stx, regs_[REG_X])
-MC6809_OP_ST_INDEXED16(stu, regs_[REG_U])
+MC6809_OP_ST_INDEXED16(std, regs_[D])
+MC6809_OP_ST_INDEXED16(stx, regs_[X])
+MC6809_OP_ST_INDEXED16(stu, regs_[U])
 
 #undef MC6809_OP_ST_INDEXED16
 
@@ -1286,14 +1286,14 @@ MC6809_OP_ST_INDEXED16(stu, regs_[REG_U])
 #define MC6809_OP_EXTENDED16(name, body) \
     bus_state_t op_##name##_extended(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: \
             ea_ = static_cast<uint16_t>(bus_read_data(pins)) << 8; \
-            regs_[REG_PC]++; \
-            return bus_setup_read(pins, regs_[REG_PC]); \
+            regs_[PC]++; \
+            return bus_setup_read(pins, regs_[PC]); \
         case 2: \
             ea_ |= bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            regs_[PC]++; \
             return bus_setup_read(pins, ea_); \
         case 3: \
             data_hi_ = bus_read_data(pins); \
@@ -1308,12 +1308,12 @@ MC6809_OP_ST_INDEXED16(stu, regs_[REG_U])
         } \
     }
 
-MC6809_OP_EXTENDED16(subd, regs_[REG_D] = alu_sub16(regs_[REG_D], val))
-MC6809_OP_EXTENDED16(addd, regs_[REG_D] = alu_add16(regs_[REG_D], val))
-MC6809_OP_EXTENDED16(cmpx, alu_cmp16(regs_[REG_X], val))
-MC6809_OP_EXTENDED16(ldd,  regs_[REG_D] = val; alu_ld16_flags(regs_[REG_D]))
-MC6809_OP_EXTENDED16(ldx,  regs_[REG_X] = val; alu_ld16_flags(regs_[REG_X]))
-MC6809_OP_EXTENDED16(ldu,  regs_[REG_U] = val; alu_ld16_flags(regs_[REG_U]))
+MC6809_OP_EXTENDED16(subd, regs_[D] = alu_sub16(regs_[D], val))
+MC6809_OP_EXTENDED16(addd, regs_[D] = alu_add16(regs_[D], val))
+MC6809_OP_EXTENDED16(cmpx, alu_cmp16(regs_[X], val))
+MC6809_OP_EXTENDED16(ldd,  regs_[D] = val; alu_ld16_flags(regs_[D]))
+MC6809_OP_EXTENDED16(ldx,  regs_[X] = val; alu_ld16_flags(regs_[X]))
+MC6809_OP_EXTENDED16(ldu,  regs_[U] = val; alu_ld16_flags(regs_[U]))
 
 #undef MC6809_OP_EXTENDED16
 
@@ -1321,14 +1321,14 @@ MC6809_OP_EXTENDED16(ldu,  regs_[REG_U] = val; alu_ld16_flags(regs_[REG_U]))
 #define MC6809_OP_ST_EXTENDED16(name, reg) \
     bus_state_t op_##name##_extended(bus_state_t pins) { \
         switch (step_++) { \
-        case 0: return bus_setup_read(pins, regs_[REG_PC]); \
+        case 0: return bus_setup_read(pins, regs_[PC]); \
         case 1: \
             ea_ = static_cast<uint16_t>(bus_read_data(pins)) << 8; \
-            regs_[REG_PC]++; \
-            return bus_setup_read(pins, regs_[REG_PC]); \
+            regs_[PC]++; \
+            return bus_setup_read(pins, regs_[PC]); \
         case 2: \
             ea_ |= bus_read_data(pins); \
-            regs_[REG_PC]++; \
+            regs_[PC]++; \
             alu_ld16_flags(reg); \
             return bus_setup_write(pins, ea_, reg >> 8); \
         case 3: \
@@ -1340,9 +1340,9 @@ MC6809_OP_EXTENDED16(ldu,  regs_[REG_U] = val; alu_ld16_flags(regs_[REG_U]))
         } \
     }
 
-MC6809_OP_ST_EXTENDED16(std, regs_[REG_D])
-MC6809_OP_ST_EXTENDED16(stx, regs_[REG_X])
-MC6809_OP_ST_EXTENDED16(stu, regs_[REG_U])
+MC6809_OP_ST_EXTENDED16(std, regs_[D])
+MC6809_OP_ST_EXTENDED16(stx, regs_[X])
+MC6809_OP_ST_EXTENDED16(stu, regs_[U])
 
 #undef MC6809_OP_ST_EXTENDED16
 
@@ -1353,12 +1353,12 @@ MC6809_OP_ST_EXTENDED16(stu, regs_[REG_U])
 /// Short branch (BRA, BRN, BHI, BLS, BCC, BCS, BNE, BEQ, etc.)
 bus_state_t op_bra_short(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1: {
         int8_t offset = static_cast<int8_t>(bus_read_data(pins));
-        regs_[REG_PC]++;
+        regs_[PC]++;
         if (eval_cc(opcode_))
-            regs_[REG_PC] = static_cast<uint16_t>(regs_[REG_PC] + offset);
+            regs_[PC] = static_cast<uint16_t>(regs_[PC] + offset);
         transition_to_fetch();
         return pins;
     }
@@ -1369,15 +1369,15 @@ bus_state_t op_bra_short(bus_state_t pins) {
 /// LBRA — Long branch (always taken)
 bus_state_t op_lbra(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
         data_hi_ = bus_read_data(pins);
-        regs_[REG_PC]++;
-        return bus_setup_read(pins, regs_[REG_PC]);
+        regs_[PC]++;
+        return bus_setup_read(pins, regs_[PC]);
     case 2: {
         int16_t offset = static_cast<int16_t>((static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins));
-        regs_[REG_PC]++;
-        regs_[REG_PC] = static_cast<uint16_t>(regs_[REG_PC] + offset);
+        regs_[PC]++;
+        regs_[PC] = static_cast<uint16_t>(regs_[PC] + offset);
         transition_to_fetch();
         return pins;
     }
@@ -1388,17 +1388,17 @@ bus_state_t op_lbra(bus_state_t pins) {
 /// BSR — Branch to subroutine (short)
 bus_state_t op_bsr(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1: {
         int8_t offset = static_cast<int8_t>(bus_read_data(pins));
-        regs_[REG_PC]++;
-        ea_ = static_cast<uint16_t>(regs_[REG_PC] + offset);
-        return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] & 0xFF);
+        regs_[PC]++;
+        ea_ = static_cast<uint16_t>(regs_[PC] + offset);
+        return bus_setup_write(pins, --regs_[S], regs_[PC] & 0xFF);
     }
     case 2:
-        return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] >> 8);
+        return bus_setup_write(pins, --regs_[S], regs_[PC] >> 8);
     case 3:
-        regs_[REG_PC] = ea_;
+        regs_[PC] = ea_;
         transition_to_fetch();
         return pins;
     default: transition_to_fetch(); return pins;
@@ -1408,21 +1408,21 @@ bus_state_t op_bsr(bus_state_t pins) {
 /// LBSR — Long branch to subroutine
 bus_state_t op_lbsr(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
         data_hi_ = bus_read_data(pins);
-        regs_[REG_PC]++;
-        return bus_setup_read(pins, regs_[REG_PC]);
+        regs_[PC]++;
+        return bus_setup_read(pins, regs_[PC]);
     case 2: {
         int16_t offset = static_cast<int16_t>((static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins));
-        regs_[REG_PC]++;
-        ea_ = static_cast<uint16_t>(regs_[REG_PC] + offset);
-        return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] & 0xFF);
+        regs_[PC]++;
+        ea_ = static_cast<uint16_t>(regs_[PC] + offset);
+        return bus_setup_write(pins, --regs_[S], regs_[PC] & 0xFF);
     }
     case 3:
-        return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] >> 8);
+        return bus_setup_write(pins, --regs_[S], regs_[PC] >> 8);
     case 4:
-        regs_[REG_PC] = ea_;
+        regs_[PC] = ea_;
         transition_to_fetch();
         return pins;
     default: transition_to_fetch(); return pins;
@@ -1435,15 +1435,15 @@ bus_state_t op_lbsr(bus_state_t pins) {
 
 bus_state_t op_jsr_direct(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
-        ea_ = (static_cast<uint16_t>(regs_[REG_DP]) << 8) | bus_read_data(pins);
-        regs_[REG_PC]++;
-        return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] & 0xFF);
+        ea_ = (static_cast<uint16_t>(regs_[DP]) << 8) | bus_read_data(pins);
+        regs_[PC]++;
+        return bus_setup_write(pins, --regs_[S], regs_[PC] & 0xFF);
     case 2:
-        return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] >> 8);
+        return bus_setup_write(pins, --regs_[S], regs_[PC] >> 8);
     case 3:
-        regs_[REG_PC] = ea_;
+        regs_[PC] = ea_;
         transition_to_fetch();
         return pins;
     default: transition_to_fetch(); return pins;
@@ -1452,10 +1452,10 @@ bus_state_t op_jsr_direct(bus_state_t pins) {
 
 bus_state_t op_jsr_indexed(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1: {
         postbyte_ = bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         if (!(postbyte_ & 0x80)) {
             int8_t off5 = postbyte_ & 0x1F;
             if (off5 & 0x10) off5 |= 0xE0;
@@ -1463,12 +1463,12 @@ bus_state_t op_jsr_indexed(bus_state_t pins) {
         } else {
             ea_ = resolve_indexed_simple(postbyte_, pins);
         }
-        return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] & 0xFF);
+        return bus_setup_write(pins, --regs_[S], regs_[PC] & 0xFF);
     }
     case 2:
-        return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] >> 8);
+        return bus_setup_write(pins, --regs_[S], regs_[PC] >> 8);
     case 3:
-        regs_[REG_PC] = ea_;
+        regs_[PC] = ea_;
         transition_to_fetch();
         return pins;
     default: transition_to_fetch(); return pins;
@@ -1477,19 +1477,19 @@ bus_state_t op_jsr_indexed(bus_state_t pins) {
 
 bus_state_t op_jsr_extended(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
         ea_ = static_cast<uint16_t>(bus_read_data(pins)) << 8;
-        regs_[REG_PC]++;
-        return bus_setup_read(pins, regs_[REG_PC]);
+        regs_[PC]++;
+        return bus_setup_read(pins, regs_[PC]);
     case 2:
         ea_ |= bus_read_data(pins);
-        regs_[REG_PC]++;
-        return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] & 0xFF);
+        regs_[PC]++;
+        return bus_setup_write(pins, --regs_[S], regs_[PC] & 0xFF);
     case 3:
-        return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] >> 8);
+        return bus_setup_write(pins, --regs_[S], regs_[PC] >> 8);
     case 4:
-        regs_[REG_PC] = ea_;
+        regs_[PC] = ea_;
         transition_to_fetch();
         return pins;
     default: transition_to_fetch(); return pins;
@@ -1502,10 +1502,10 @@ bus_state_t op_jsr_extended(bus_state_t pins) {
 
 bus_state_t op_leax(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1: {
         postbyte_ = bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         if (!(postbyte_ & 0x80)) {
             int8_t off5 = postbyte_ & 0x1F;
             if (off5 & 0x10) off5 |= 0xE0;
@@ -1513,8 +1513,8 @@ bus_state_t op_leax(bus_state_t pins) {
         } else {
             ea_ = resolve_indexed_simple(postbyte_, pins);
         }
-        regs_[REG_X] = ea_;
-        set_flag(Flags::Z, regs_[REG_X] == 0);
+        regs_[X] = ea_;
+        set_flag(Flags::Z, regs_[X] == 0);
         transition_to_fetch();
         return pins;
     }
@@ -1524,10 +1524,10 @@ bus_state_t op_leax(bus_state_t pins) {
 
 bus_state_t op_leay(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1: {
         postbyte_ = bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         if (!(postbyte_ & 0x80)) {
             int8_t off5 = postbyte_ & 0x1F;
             if (off5 & 0x10) off5 |= 0xE0;
@@ -1535,8 +1535,8 @@ bus_state_t op_leay(bus_state_t pins) {
         } else {
             ea_ = resolve_indexed_simple(postbyte_, pins);
         }
-        regs_[REG_Y] = ea_;
-        set_flag(Flags::Z, regs_[REG_Y] == 0);
+        regs_[Y] = ea_;
+        set_flag(Flags::Z, regs_[Y] == 0);
         transition_to_fetch();
         return pins;
     }
@@ -1546,10 +1546,10 @@ bus_state_t op_leay(bus_state_t pins) {
 
 bus_state_t op_leas(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1: {
         postbyte_ = bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         if (!(postbyte_ & 0x80)) {
             int8_t off5 = postbyte_ & 0x1F;
             if (off5 & 0x10) off5 |= 0xE0;
@@ -1557,7 +1557,7 @@ bus_state_t op_leas(bus_state_t pins) {
         } else {
             ea_ = resolve_indexed_simple(postbyte_, pins);
         }
-        regs_[REG_S] = ea_;
+        regs_[S] = ea_;
         nmi_armed_ = true;  // Loading S arms NMI
         transition_to_fetch();
         return pins;
@@ -1568,10 +1568,10 @@ bus_state_t op_leas(bus_state_t pins) {
 
 bus_state_t op_leau(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1: {
         postbyte_ = bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         if (!(postbyte_ & 0x80)) {
             int8_t off5 = postbyte_ & 0x1F;
             if (off5 & 0x10) off5 |= 0xE0;
@@ -1579,7 +1579,7 @@ bus_state_t op_leau(bus_state_t pins) {
         } else {
             ea_ = resolve_indexed_simple(postbyte_, pins);
         }
-        regs_[REG_U] = ea_;
+        regs_[U] = ea_;
         transition_to_fetch();
         return pins;
     }
@@ -1593,10 +1593,10 @@ bus_state_t op_leau(bus_state_t pins) {
 
 bus_state_t op_pshs(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);  // Fetch postbyte
+    case 0: return bus_setup_read(pins, regs_[PC]);  // Fetch postbyte
     case 1:
         postbyte_ = bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         data_lo_ = 0;  // Push phase: walk bits 7→0
         return bus_internal(pins);
     default: {
@@ -1605,29 +1605,29 @@ bus_state_t op_pshs(bus_state_t pins) {
         while (data_lo_ < 12) {  // Max 12 push phases (8 bits, 16-bit regs = 2 each)
             uint8_t phase = data_lo_++;
             switch (phase) {
-            case 0:  if (postbyte_ & 0x80) return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] & 0xFF);
+            case 0:  if (postbyte_ & 0x80) return bus_setup_write(pins, --regs_[S], regs_[PC] & 0xFF);
                      break;
-            case 1:  if (postbyte_ & 0x80) return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] >> 8);
+            case 1:  if (postbyte_ & 0x80) return bus_setup_write(pins, --regs_[S], regs_[PC] >> 8);
                      break;
-            case 2:  if (postbyte_ & 0x40) return bus_setup_write(pins, --regs_[REG_S], regs_[REG_U] & 0xFF);
+            case 2:  if (postbyte_ & 0x40) return bus_setup_write(pins, --regs_[S], regs_[U] & 0xFF);
                      break;
-            case 3:  if (postbyte_ & 0x40) return bus_setup_write(pins, --regs_[REG_S], regs_[REG_U] >> 8);
+            case 3:  if (postbyte_ & 0x40) return bus_setup_write(pins, --regs_[S], regs_[U] >> 8);
                      break;
-            case 4:  if (postbyte_ & 0x20) return bus_setup_write(pins, --regs_[REG_S], regs_[REG_Y] & 0xFF);
+            case 4:  if (postbyte_ & 0x20) return bus_setup_write(pins, --regs_[S], regs_[Y] & 0xFF);
                      break;
-            case 5:  if (postbyte_ & 0x20) return bus_setup_write(pins, --regs_[REG_S], regs_[REG_Y] >> 8);
+            case 5:  if (postbyte_ & 0x20) return bus_setup_write(pins, --regs_[S], regs_[Y] >> 8);
                      break;
-            case 6:  if (postbyte_ & 0x10) return bus_setup_write(pins, --regs_[REG_S], regs_[REG_X] & 0xFF);
+            case 6:  if (postbyte_ & 0x10) return bus_setup_write(pins, --regs_[S], regs_[X] & 0xFF);
                      break;
-            case 7:  if (postbyte_ & 0x10) return bus_setup_write(pins, --regs_[REG_S], regs_[REG_X] >> 8);
+            case 7:  if (postbyte_ & 0x10) return bus_setup_write(pins, --regs_[S], regs_[X] >> 8);
                      break;
-            case 8:  if (postbyte_ & 0x08) return bus_setup_write(pins, --regs_[REG_S], regs_[REG_DP]);
+            case 8:  if (postbyte_ & 0x08) return bus_setup_write(pins, --regs_[S], regs_[DP]);
                      break;
-            case 9:  if (postbyte_ & 0x04) return bus_setup_write(pins, --regs_[REG_S], regs_[REG_B]);
+            case 9:  if (postbyte_ & 0x04) return bus_setup_write(pins, --regs_[S], regs_[B]);
                      break;
-            case 10: if (postbyte_ & 0x02) return bus_setup_write(pins, --regs_[REG_S], regs_[REG_A]);
+            case 10: if (postbyte_ & 0x02) return bus_setup_write(pins, --regs_[S], regs_[A]);
                      break;
-            case 11: if (postbyte_ & 0x01) return bus_setup_write(pins, --regs_[REG_S], regs_[REG_CC]);
+            case 11: if (postbyte_ & 0x01) return bus_setup_write(pins, --regs_[S], regs_[CC]);
                      break;
             }
         }
@@ -1639,10 +1639,10 @@ bus_state_t op_pshs(bus_state_t pins) {
 
 bus_state_t op_puls(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);  // Fetch postbyte
+    case 0: return bus_setup_read(pins, regs_[PC]);  // Fetch postbyte
     case 1:
         postbyte_ = bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         data_lo_ = 0;  // Pull phase
         return bus_internal(pins);
     default: {
@@ -1687,41 +1687,41 @@ bus_state_t op_puls(bus_state_t pins) {
         while (data_lo_ < 12) {
             uint8_t phase = data_lo_++;
             switch (phase) {
-            case 0:  if (postbyte_ & 0x01) return bus_setup_read(pins, regs_[REG_S]++);
+            case 0:  if (postbyte_ & 0x01) return bus_setup_read(pins, regs_[S]++);
                      break;
-            case 1:  if (postbyte_ & 0x01) { regs_[REG_CC] = bus_read_data(pins); }
-                     if (postbyte_ & 0x02) return bus_setup_read(pins, regs_[REG_S]++);
+            case 1:  if (postbyte_ & 0x01) { regs_[CC] = bus_read_data(pins); }
+                     if (postbyte_ & 0x02) return bus_setup_read(pins, regs_[S]++);
                      break;
-            case 2:  if (postbyte_ & 0x02) { regs_[REG_A] = bus_read_data(pins); }
-                     if (postbyte_ & 0x04) return bus_setup_read(pins, regs_[REG_S]++);
+            case 2:  if (postbyte_ & 0x02) { regs_[A] = bus_read_data(pins); }
+                     if (postbyte_ & 0x04) return bus_setup_read(pins, regs_[S]++);
                      break;
-            case 3:  if (postbyte_ & 0x04) { regs_[REG_B] = bus_read_data(pins); }
-                     if (postbyte_ & 0x08) return bus_setup_read(pins, regs_[REG_S]++);
+            case 3:  if (postbyte_ & 0x04) { regs_[B] = bus_read_data(pins); }
+                     if (postbyte_ & 0x08) return bus_setup_read(pins, regs_[S]++);
                      break;
-            case 4:  if (postbyte_ & 0x08) { regs_[REG_DP] = bus_read_data(pins); }
-                     if (postbyte_ & 0x10) return bus_setup_read(pins, regs_[REG_S]++);
+            case 4:  if (postbyte_ & 0x08) { regs_[DP] = bus_read_data(pins); }
+                     if (postbyte_ & 0x10) return bus_setup_read(pins, regs_[S]++);
                      break;
-            case 5:  if (postbyte_ & 0x10) { regs_[REG_X] = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_[REG_S]++); }
+            case 5:  if (postbyte_ & 0x10) { regs_[X] = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_[S]++); }
                      break;
-            case 6:  if (postbyte_ & 0x10) { regs_[REG_X] |= bus_read_data(pins); }
-                     if (postbyte_ & 0x20) return bus_setup_read(pins, regs_[REG_S]++);
+            case 6:  if (postbyte_ & 0x10) { regs_[X] |= bus_read_data(pins); }
+                     if (postbyte_ & 0x20) return bus_setup_read(pins, regs_[S]++);
                      break;
-            case 7:  if (postbyte_ & 0x20) { regs_[REG_Y] = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_[REG_S]++); }
+            case 7:  if (postbyte_ & 0x20) { regs_[Y] = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_[S]++); }
                      break;
-            case 8:  if (postbyte_ & 0x20) { regs_[REG_Y] |= bus_read_data(pins); }
-                     if (postbyte_ & 0x40) return bus_setup_read(pins, regs_[REG_S]++);
+            case 8:  if (postbyte_ & 0x20) { regs_[Y] |= bus_read_data(pins); }
+                     if (postbyte_ & 0x40) return bus_setup_read(pins, regs_[S]++);
                      break;
-            case 9:  if (postbyte_ & 0x40) { regs_[REG_U] = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_[REG_S]++); }
+            case 9:  if (postbyte_ & 0x40) { regs_[U] = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_[S]++); }
                      break;
-            case 10: if (postbyte_ & 0x40) { regs_[REG_U] |= bus_read_data(pins); }
-                     if (postbyte_ & 0x80) return bus_setup_read(pins, regs_[REG_S]++);
+            case 10: if (postbyte_ & 0x40) { regs_[U] |= bus_read_data(pins); }
+                     if (postbyte_ & 0x80) return bus_setup_read(pins, regs_[S]++);
                      break;
-            case 11: if (postbyte_ & 0x80) { regs_[REG_PC] = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_[REG_S]++); }
+            case 11: if (postbyte_ & 0x80) { regs_[PC] = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_[S]++); }
                      break;
             }
         }
         // Final byte of PC if we were pulling it
-        if (postbyte_ & 0x80) { regs_[REG_PC] |= bus_read_data(pins); }
+        if (postbyte_ & 0x80) { regs_[PC] |= bus_read_data(pins); }
         transition_to_fetch();
         return pins;
     }
@@ -1730,10 +1730,10 @@ bus_state_t op_puls(bus_state_t pins) {
 
 bus_state_t op_pshu(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);  // Fetch postbyte
+    case 0: return bus_setup_read(pins, regs_[PC]);  // Fetch postbyte
     case 1:
         postbyte_ = bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         data_lo_ = 0;
         return bus_internal(pins);
     default: {
@@ -1742,29 +1742,29 @@ bus_state_t op_pshu(bus_state_t pins) {
         while (data_lo_ < 12) {
             uint8_t phase = data_lo_++;
             switch (phase) {
-            case 0:  if (postbyte_ & 0x80) return bus_setup_write(pins, --regs_[REG_U], regs_[REG_PC] & 0xFF);
+            case 0:  if (postbyte_ & 0x80) return bus_setup_write(pins, --regs_[U], regs_[PC] & 0xFF);
                      break;
-            case 1:  if (postbyte_ & 0x80) return bus_setup_write(pins, --regs_[REG_U], regs_[REG_PC] >> 8);
+            case 1:  if (postbyte_ & 0x80) return bus_setup_write(pins, --regs_[U], regs_[PC] >> 8);
                      break;
-            case 2:  if (postbyte_ & 0x40) return bus_setup_write(pins, --regs_[REG_U], regs_[REG_S] & 0xFF);
+            case 2:  if (postbyte_ & 0x40) return bus_setup_write(pins, --regs_[U], regs_[S] & 0xFF);
                      break;
-            case 3:  if (postbyte_ & 0x40) return bus_setup_write(pins, --regs_[REG_U], regs_[REG_S] >> 8);
+            case 3:  if (postbyte_ & 0x40) return bus_setup_write(pins, --regs_[U], regs_[S] >> 8);
                      break;
-            case 4:  if (postbyte_ & 0x20) return bus_setup_write(pins, --regs_[REG_U], regs_[REG_Y] & 0xFF);
+            case 4:  if (postbyte_ & 0x20) return bus_setup_write(pins, --regs_[U], regs_[Y] & 0xFF);
                      break;
-            case 5:  if (postbyte_ & 0x20) return bus_setup_write(pins, --regs_[REG_U], regs_[REG_Y] >> 8);
+            case 5:  if (postbyte_ & 0x20) return bus_setup_write(pins, --regs_[U], regs_[Y] >> 8);
                      break;
-            case 6:  if (postbyte_ & 0x10) return bus_setup_write(pins, --regs_[REG_U], regs_[REG_X] & 0xFF);
+            case 6:  if (postbyte_ & 0x10) return bus_setup_write(pins, --regs_[U], regs_[X] & 0xFF);
                      break;
-            case 7:  if (postbyte_ & 0x10) return bus_setup_write(pins, --regs_[REG_U], regs_[REG_X] >> 8);
+            case 7:  if (postbyte_ & 0x10) return bus_setup_write(pins, --regs_[U], regs_[X] >> 8);
                      break;
-            case 8:  if (postbyte_ & 0x08) return bus_setup_write(pins, --regs_[REG_U], regs_[REG_DP]);
+            case 8:  if (postbyte_ & 0x08) return bus_setup_write(pins, --regs_[U], regs_[DP]);
                      break;
-            case 9:  if (postbyte_ & 0x04) return bus_setup_write(pins, --regs_[REG_U], regs_[REG_B]);
+            case 9:  if (postbyte_ & 0x04) return bus_setup_write(pins, --regs_[U], regs_[B]);
                      break;
-            case 10: if (postbyte_ & 0x02) return bus_setup_write(pins, --regs_[REG_U], regs_[REG_A]);
+            case 10: if (postbyte_ & 0x02) return bus_setup_write(pins, --regs_[U], regs_[A]);
                      break;
-            case 11: if (postbyte_ & 0x01) return bus_setup_write(pins, --regs_[REG_U], regs_[REG_CC]);
+            case 11: if (postbyte_ & 0x01) return bus_setup_write(pins, --regs_[U], regs_[CC]);
                      break;
             }
         }
@@ -1776,10 +1776,10 @@ bus_state_t op_pshu(bus_state_t pins) {
 
 bus_state_t op_pulu(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);  // Fetch postbyte
+    case 0: return bus_setup_read(pins, regs_[PC]);  // Fetch postbyte
     case 1:
         postbyte_ = bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         data_lo_ = 0;
         return bus_internal(pins);
     default: {
@@ -1788,40 +1788,40 @@ bus_state_t op_pulu(bus_state_t pins) {
         while (data_lo_ < 12) {
             uint8_t phase = data_lo_++;
             switch (phase) {
-            case 0:  if (postbyte_ & 0x01) return bus_setup_read(pins, regs_[REG_U]++);
+            case 0:  if (postbyte_ & 0x01) return bus_setup_read(pins, regs_[U]++);
                      break;
-            case 1:  if (postbyte_ & 0x01) { regs_[REG_CC] = bus_read_data(pins); }
-                     if (postbyte_ & 0x02) return bus_setup_read(pins, regs_[REG_U]++);
+            case 1:  if (postbyte_ & 0x01) { regs_[CC] = bus_read_data(pins); }
+                     if (postbyte_ & 0x02) return bus_setup_read(pins, regs_[U]++);
                      break;
-            case 2:  if (postbyte_ & 0x02) { regs_[REG_A] = bus_read_data(pins); }
-                     if (postbyte_ & 0x04) return bus_setup_read(pins, regs_[REG_U]++);
+            case 2:  if (postbyte_ & 0x02) { regs_[A] = bus_read_data(pins); }
+                     if (postbyte_ & 0x04) return bus_setup_read(pins, regs_[U]++);
                      break;
-            case 3:  if (postbyte_ & 0x04) { regs_[REG_B] = bus_read_data(pins); }
-                     if (postbyte_ & 0x08) return bus_setup_read(pins, regs_[REG_U]++);
+            case 3:  if (postbyte_ & 0x04) { regs_[B] = bus_read_data(pins); }
+                     if (postbyte_ & 0x08) return bus_setup_read(pins, regs_[U]++);
                      break;
-            case 4:  if (postbyte_ & 0x08) { regs_[REG_DP] = bus_read_data(pins); }
-                     if (postbyte_ & 0x10) return bus_setup_read(pins, regs_[REG_U]++);
+            case 4:  if (postbyte_ & 0x08) { regs_[DP] = bus_read_data(pins); }
+                     if (postbyte_ & 0x10) return bus_setup_read(pins, regs_[U]++);
                      break;
-            case 5:  if (postbyte_ & 0x10) { regs_[REG_X] = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_[REG_U]++); }
+            case 5:  if (postbyte_ & 0x10) { regs_[X] = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_[U]++); }
                      break;
-            case 6:  if (postbyte_ & 0x10) { regs_[REG_X] |= bus_read_data(pins); }
-                     if (postbyte_ & 0x20) return bus_setup_read(pins, regs_[REG_U]++);
+            case 6:  if (postbyte_ & 0x10) { regs_[X] |= bus_read_data(pins); }
+                     if (postbyte_ & 0x20) return bus_setup_read(pins, regs_[U]++);
                      break;
-            case 7:  if (postbyte_ & 0x20) { regs_[REG_Y] = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_[REG_U]++); }
+            case 7:  if (postbyte_ & 0x20) { regs_[Y] = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_[U]++); }
                      break;
-            case 8:  if (postbyte_ & 0x20) { regs_[REG_Y] |= bus_read_data(pins); }
-                     if (postbyte_ & 0x40) return bus_setup_read(pins, regs_[REG_U]++);
+            case 8:  if (postbyte_ & 0x20) { regs_[Y] |= bus_read_data(pins); }
+                     if (postbyte_ & 0x40) return bus_setup_read(pins, regs_[U]++);
                      break;
-            case 9:  if (postbyte_ & 0x40) { regs_[REG_S] = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_[REG_U]++); }
+            case 9:  if (postbyte_ & 0x40) { regs_[S] = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_[U]++); }
                      break;
-            case 10: if (postbyte_ & 0x40) { regs_[REG_S] |= bus_read_data(pins); }
-                     if (postbyte_ & 0x80) return bus_setup_read(pins, regs_[REG_U]++);
+            case 10: if (postbyte_ & 0x40) { regs_[S] |= bus_read_data(pins); }
+                     if (postbyte_ & 0x80) return bus_setup_read(pins, regs_[U]++);
                      break;
-            case 11: if (postbyte_ & 0x80) { regs_[REG_PC] = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_[REG_U]++); }
+            case 11: if (postbyte_ & 0x80) { regs_[PC] = static_cast<uint16_t>(bus_read_data(pins)) << 8; return bus_setup_read(pins, regs_[U]++); }
                      break;
             }
         }
-        if (postbyte_ & 0x80) { regs_[REG_PC] |= bus_read_data(pins); }
+        if (postbyte_ & 0x80) { regs_[PC] |= bus_read_data(pins); }
         transition_to_fetch();
         return pins;
     }
@@ -1835,12 +1835,12 @@ bus_state_t op_pulu(bus_state_t pins) {
 /// RTS — Return from subroutine
 bus_state_t op_rts(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_S]++);
+    case 0: return bus_setup_read(pins, regs_[S]++);
     case 1:
-        regs_[REG_PC] = static_cast<uint16_t>(bus_read_data(pins)) << 8;
-        return bus_setup_read(pins, regs_[REG_S]++);
+        regs_[PC] = static_cast<uint16_t>(bus_read_data(pins)) << 8;
+        return bus_setup_read(pins, regs_[S]++);
     case 2:
-        regs_[REG_PC] |= bus_read_data(pins);
+        regs_[PC] |= bus_read_data(pins);
         transition_to_fetch();
         return pins;
     default: transition_to_fetch(); return pins;
@@ -1849,7 +1849,7 @@ bus_state_t op_rts(bus_state_t pins) {
 
 /// ABX — Add B to X (unsigned)
 bus_state_t op_abx(bus_state_t pins) {
-    regs_[REG_X] = static_cast<uint16_t>(regs_[REG_X] + regs_[REG_B]);
+    regs_[X] = static_cast<uint16_t>(regs_[X] + regs_[B]);
     transition_to_fetch();
     return pins;
 }
@@ -1857,56 +1857,56 @@ bus_state_t op_abx(bus_state_t pins) {
 /// RTI — Return from interrupt
 bus_state_t op_rti(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_S]++);
+    case 0: return bus_setup_read(pins, regs_[S]++);
     case 1:
-        regs_[REG_CC] = bus_read_data(pins);
-        if (!(regs_[REG_CC] & Flags::E)) {
+        regs_[CC] = bus_read_data(pins);
+        if (!(regs_[CC] & Flags::E)) {
             // Fast interrupt: only CC and PC were saved
-            return bus_setup_read(pins, regs_[REG_S]++);
+            return bus_setup_read(pins, regs_[S]++);
         }
         // Entire state: CC, A, B, DP, X, Y, U, PC
-        return bus_setup_read(pins, regs_[REG_S]++);
+        return bus_setup_read(pins, regs_[S]++);
     case 2:
-        if (!(regs_[REG_CC] & Flags::E)) {
-            regs_[REG_PC] = static_cast<uint16_t>(bus_read_data(pins)) << 8;
-            return bus_setup_read(pins, regs_[REG_S]++);
+        if (!(regs_[CC] & Flags::E)) {
+            regs_[PC] = static_cast<uint16_t>(bus_read_data(pins)) << 8;
+            return bus_setup_read(pins, regs_[S]++);
         }
-        regs_[REG_A] = bus_read_data(pins);
-        return bus_setup_read(pins, regs_[REG_S]++);
+        regs_[A] = bus_read_data(pins);
+        return bus_setup_read(pins, regs_[S]++);
     case 3:
-        if (!(regs_[REG_CC] & Flags::E)) {
-            regs_[REG_PC] |= bus_read_data(pins);
+        if (!(regs_[CC] & Flags::E)) {
+            regs_[PC] |= bus_read_data(pins);
             transition_to_fetch();
             return pins;
         }
-        regs_[REG_B] = bus_read_data(pins);
-        return bus_setup_read(pins, regs_[REG_S]++);
+        regs_[B] = bus_read_data(pins);
+        return bus_setup_read(pins, regs_[S]++);
     case 4:
-        regs_[REG_DP] = bus_read_data(pins);
-        return bus_setup_read(pins, regs_[REG_S]++);
+        regs_[DP] = bus_read_data(pins);
+        return bus_setup_read(pins, regs_[S]++);
     case 5:
         data_hi_ = bus_read_data(pins);
-        return bus_setup_read(pins, regs_[REG_S]++);
+        return bus_setup_read(pins, regs_[S]++);
     case 6:
-        regs_[REG_X] = (static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins);
-        return bus_setup_read(pins, regs_[REG_S]++);
+        regs_[X] = (static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins);
+        return bus_setup_read(pins, regs_[S]++);
     case 7:
         data_hi_ = bus_read_data(pins);
-        return bus_setup_read(pins, regs_[REG_S]++);
+        return bus_setup_read(pins, regs_[S]++);
     case 8:
-        regs_[REG_Y] = (static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins);
-        return bus_setup_read(pins, regs_[REG_S]++);
+        regs_[Y] = (static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins);
+        return bus_setup_read(pins, regs_[S]++);
     case 9:
         data_hi_ = bus_read_data(pins);
-        return bus_setup_read(pins, regs_[REG_S]++);
+        return bus_setup_read(pins, regs_[S]++);
     case 10:
-        regs_[REG_U] = (static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins);
-        return bus_setup_read(pins, regs_[REG_S]++);
+        regs_[U] = (static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins);
+        return bus_setup_read(pins, regs_[S]++);
     case 11:
-        regs_[REG_PC] = static_cast<uint16_t>(bus_read_data(pins)) << 8;
-        return bus_setup_read(pins, regs_[REG_S]++);
+        regs_[PC] = static_cast<uint16_t>(bus_read_data(pins)) << 8;
+        return bus_setup_read(pins, regs_[S]++);
     case 12:
-        regs_[REG_PC] |= bus_read_data(pins);
+        regs_[PC] |= bus_read_data(pins);
         transition_to_fetch();
         return pins;
     default: transition_to_fetch(); return pins;
@@ -1924,28 +1924,28 @@ bus_state_t op_mul(bus_state_t pins) {
 bus_state_t op_swi(bus_state_t pins) {
     switch (step_++) {
     case 0:
-        regs_[REG_CC] |= Flags::E;
+        regs_[CC] |= Flags::E;
         return bus_internal(pins);
-    case 1:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] & 0xFF);
-    case 2:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] >> 8);
-    case 3:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_U] & 0xFF);
-    case 4:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_U] >> 8);
-    case 5:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_Y] & 0xFF);
-    case 6:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_Y] >> 8);
-    case 7:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_X] & 0xFF);
-    case 8:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_X] >> 8);
-    case 9:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_DP]);
-    case 10: return bus_setup_write(pins, --regs_[REG_S], regs_[REG_B]);
-    case 11: return bus_setup_write(pins, --regs_[REG_S], regs_[REG_A]);
-    case 12: return bus_setup_write(pins, --regs_[REG_S], regs_[REG_CC]);
+    case 1:  return bus_setup_write(pins, --regs_[S], regs_[PC] & 0xFF);
+    case 2:  return bus_setup_write(pins, --regs_[S], regs_[PC] >> 8);
+    case 3:  return bus_setup_write(pins, --regs_[S], regs_[U] & 0xFF);
+    case 4:  return bus_setup_write(pins, --regs_[S], regs_[U] >> 8);
+    case 5:  return bus_setup_write(pins, --regs_[S], regs_[Y] & 0xFF);
+    case 6:  return bus_setup_write(pins, --regs_[S], regs_[Y] >> 8);
+    case 7:  return bus_setup_write(pins, --regs_[S], regs_[X] & 0xFF);
+    case 8:  return bus_setup_write(pins, --regs_[S], regs_[X] >> 8);
+    case 9:  return bus_setup_write(pins, --regs_[S], regs_[DP]);
+    case 10: return bus_setup_write(pins, --regs_[S], regs_[B]);
+    case 11: return bus_setup_write(pins, --regs_[S], regs_[A]);
+    case 12: return bus_setup_write(pins, --regs_[S], regs_[CC]);
     case 13:
-        regs_[REG_CC] |= Flags::I | Flags::F;
+        regs_[CC] |= Flags::I | Flags::F;
         return bus_setup_read(pins, Vector::SWI);
     case 14:
-        regs_[REG_PC] = static_cast<uint16_t>(bus_read_data(pins)) << 8;
+        regs_[PC] = static_cast<uint16_t>(bus_read_data(pins)) << 8;
         return bus_setup_read(pins, Vector::SWI + 1);
     case 15:
-        regs_[REG_PC] |= bus_read_data(pins);
+        regs_[PC] |= bus_read_data(pins);
         transition_to_fetch();
         return pins;
     default: transition_to_fetch(); return pins;
@@ -1968,28 +1968,28 @@ bus_state_t op_sync(bus_state_t pins) {
 /// CWAI — Clear flags and wait for interrupt
 bus_state_t op_cwai(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1: {
         uint8_t mask = bus_read_data(pins);
-        regs_[REG_PC]++;
-        regs_[REG_CC] &= mask;
+        regs_[PC]++;
+        regs_[CC] &= mask;
         // Push entire state
-        regs_[REG_CC] |= Flags::E;
+        regs_[CC] |= Flags::E;
         cwai_wait_ = true;
         return bus_internal(pins);
     }
-    case 2:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] & 0xFF);
-    case 3:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] >> 8);
-    case 4:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_U] & 0xFF);
-    case 5:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_U] >> 8);
-    case 6:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_Y] & 0xFF);
-    case 7:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_Y] >> 8);
-    case 8:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_X] & 0xFF);
-    case 9:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_X] >> 8);
-    case 10: return bus_setup_write(pins, --regs_[REG_S], regs_[REG_DP]);
-    case 11: return bus_setup_write(pins, --regs_[REG_S], regs_[REG_B]);
-    case 12: return bus_setup_write(pins, --regs_[REG_S], regs_[REG_A]);
-    case 13: return bus_setup_write(pins, --regs_[REG_S], regs_[REG_CC]);
+    case 2:  return bus_setup_write(pins, --regs_[S], regs_[PC] & 0xFF);
+    case 3:  return bus_setup_write(pins, --regs_[S], regs_[PC] >> 8);
+    case 4:  return bus_setup_write(pins, --regs_[S], regs_[U] & 0xFF);
+    case 5:  return bus_setup_write(pins, --regs_[S], regs_[U] >> 8);
+    case 6:  return bus_setup_write(pins, --regs_[S], regs_[Y] & 0xFF);
+    case 7:  return bus_setup_write(pins, --regs_[S], regs_[Y] >> 8);
+    case 8:  return bus_setup_write(pins, --regs_[S], regs_[X] & 0xFF);
+    case 9:  return bus_setup_write(pins, --regs_[S], regs_[X] >> 8);
+    case 10: return bus_setup_write(pins, --regs_[S], regs_[DP]);
+    case 11: return bus_setup_write(pins, --regs_[S], regs_[B]);
+    case 12: return bus_setup_write(pins, --regs_[S], regs_[A]);
+    case 13: return bus_setup_write(pins, --regs_[S], regs_[CC]);
     default:
         // Stay in CWAI until interrupt arrives
         if (!BUS_GET_BIT(pins, BUS_IRQ_BIT) ||
@@ -2012,10 +2012,10 @@ bus_state_t op_daa(bus_state_t pins) {
 /// ORCC — OR Condition Codes with immediate
 bus_state_t op_orcc(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
-        regs_[REG_CC] |= bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[CC] |= bus_read_data(pins);
+        regs_[PC]++;
         transition_to_fetch();
         return pins;
     default: transition_to_fetch(); return pins;
@@ -2025,10 +2025,10 @@ bus_state_t op_orcc(bus_state_t pins) {
 /// ANDCC — AND Condition Codes with immediate
 bus_state_t op_andcc(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1:
-        regs_[REG_CC] &= bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[CC] &= bus_read_data(pins);
+        regs_[PC]++;
         transition_to_fetch();
         return pins;
     default: transition_to_fetch(); return pins;
@@ -2045,10 +2045,10 @@ bus_state_t op_sex(bus_state_t pins) {
 /// EXG — Exchange registers
 bus_state_t op_exg(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1: {
         uint8_t pb = bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         uint8_t src = (pb >> 4) & 0x0F;
         uint8_t dst = pb & 0x0F;
         uint16_t tmp = get_tfr_reg(src);
@@ -2064,10 +2064,10 @@ bus_state_t op_exg(bus_state_t pins) {
 /// TFR — Transfer register
 bus_state_t op_tfr(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_read(pins, regs_[REG_PC]);
+    case 0: return bus_setup_read(pins, regs_[PC]);
     case 1: {
         uint8_t pb = bus_read_data(pins);
-        regs_[REG_PC]++;
+        regs_[PC]++;
         uint8_t src = (pb >> 4) & 0x0F;
         uint8_t dst = pb & 0x0F;
         set_tfr_reg(dst, get_tfr_reg(src));

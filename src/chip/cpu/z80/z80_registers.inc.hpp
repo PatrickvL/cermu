@@ -16,72 +16,72 @@
 
 uint8_t get_reg8(uint8_t idx) const {
     switch (idx) {
-    case 0: return regs_[REG_B];
-    case 1: return regs_[REG_C];
-    case 2: return regs_[REG_D];
-    case 3: return regs_[REG_E];
+    case 0: return regs_[B];
+    case 1: return regs_[C];
+    case 2: return regs_[D];
+    case 3: return regs_[E];
     case 4:
         if constexpr (has_undocumented_ops()) {
-            if (ix_iy_prefix_ == 0xDD) return static_cast<uint8_t>(regs_[REG_IX] >> 8);
-            if (ix_iy_prefix_ == 0xFD) return static_cast<uint8_t>(regs_[REG_IY] >> 8);
+            if (ix_iy_prefix_ == 0xDD) return static_cast<uint8_t>(regs_[IX] >> 8);
+            if (ix_iy_prefix_ == 0xFD) return static_cast<uint8_t>(regs_[IY] >> 8);
         }
-        return regs_[REG_H];
+        return regs_[H];
     case 5:
         if constexpr (has_undocumented_ops()) {
-            if (ix_iy_prefix_ == 0xDD) return static_cast<uint8_t>(regs_[REG_IX] & 0xFF);
-            if (ix_iy_prefix_ == 0xFD) return static_cast<uint8_t>(regs_[REG_IY] & 0xFF);
+            if (ix_iy_prefix_ == 0xDD) return static_cast<uint8_t>(regs_[IX] & 0xFF);
+            if (ix_iy_prefix_ == 0xFD) return static_cast<uint8_t>(regs_[IY] & 0xFF);
         }
-        return regs_[REG_L];
-    case 7: return regs_[REG_A];
+        return regs_[L];
+    case 7: return regs_[A];
     default: return 0; // index 6 = (HL), handled by caller
     }
 }
 
 void set_reg8(uint8_t idx, uint8_t val) {
     switch (idx) {
-    case 0: regs_[REG_B] = val; return;
-    case 1: regs_[REG_C] = val; return;
-    case 2: regs_[REG_D] = val; return;
-    case 3: regs_[REG_E] = val; return;
+    case 0: regs_[B] = val; return;
+    case 1: regs_[C] = val; return;
+    case 2: regs_[D] = val; return;
+    case 3: regs_[E] = val; return;
     case 4:
         if constexpr (has_undocumented_ops()) {
-            if (ix_iy_prefix_ == 0xDD) { regs_[REG_IX] = (regs_[REG_IX] & 0x00FF) | (static_cast<uint16_t>(val) << 8); return; }
-            if (ix_iy_prefix_ == 0xFD) { regs_[REG_IY] = (regs_[REG_IY] & 0x00FF) | (static_cast<uint16_t>(val) << 8); return; }
+            if (ix_iy_prefix_ == 0xDD) { regs_[IX] = (regs_[IX] & 0x00FF) | (static_cast<uint16_t>(val) << 8); return; }
+            if (ix_iy_prefix_ == 0xFD) { regs_[IY] = (regs_[IY] & 0x00FF) | (static_cast<uint16_t>(val) << 8); return; }
         }
-        regs_[REG_H] = val; return;
+        regs_[H] = val; return;
     case 5:
         if constexpr (has_undocumented_ops()) {
-            if (ix_iy_prefix_ == 0xDD) { regs_[REG_IX] = (regs_[REG_IX] & 0xFF00) | val; return; }
-            if (ix_iy_prefix_ == 0xFD) { regs_[REG_IY] = (regs_[REG_IY] & 0xFF00) | val; return; }
+            if (ix_iy_prefix_ == 0xDD) { regs_[IX] = (regs_[IX] & 0xFF00) | val; return; }
+            if (ix_iy_prefix_ == 0xFD) { regs_[IY] = (regs_[IY] & 0xFF00) | val; return; }
         }
-        regs_[REG_L] = val; return;
-    case 7: regs_[REG_A] = val; return;
+        regs_[L] = val; return;
+    case 7: regs_[A] = val; return;
     }
 }
 
 // Direct register access (no IX/IY substitution) — for CB prefix ops
 uint8_t get_reg8_direct(uint8_t idx) const {
     switch (idx) {
-    case 0: return regs_[REG_B];
-    case 1: return regs_[REG_C];
-    case 2: return regs_[REG_D];
-    case 3: return regs_[REG_E];
-    case 4: return regs_[REG_H];
-    case 5: return regs_[REG_L];
-    case 7: return regs_[REG_A];
+    case 0: return regs_[B];
+    case 1: return regs_[C];
+    case 2: return regs_[D];
+    case 3: return regs_[E];
+    case 4: return regs_[H];
+    case 5: return regs_[L];
+    case 7: return regs_[A];
     default: return 0;
     }
 }
 
 void set_reg8_direct(uint8_t idx, uint8_t val) {
     switch (idx) {
-    case 0: regs_[REG_B] = val; return;
-    case 1: regs_[REG_C] = val; return;
-    case 2: regs_[REG_D] = val; return;
-    case 3: regs_[REG_E] = val; return;
-    case 4: regs_[REG_H] = val; return;
-    case 5: regs_[REG_L] = val; return;
-    case 7: regs_[REG_A] = val; return;
+    case 0: regs_[B] = val; return;
+    case 1: regs_[C] = val; return;
+    case 2: regs_[D] = val; return;
+    case 3: regs_[E] = val; return;
+    case 4: regs_[H] = val; return;
+    case 5: regs_[L] = val; return;
+    case 7: regs_[A] = val; return;
     }
 }
 
@@ -90,22 +90,22 @@ void set_reg8_direct(uint8_t idx, uint8_t val) {
 // ========================================================================
 
 uint16_t get_hl() const {
-    if (ix_iy_prefix_ == 0xDD) return regs_[REG_IX];
-    if (ix_iy_prefix_ == 0xFD) return regs_[REG_IY];
-    return regs_[REG_HL];
+    if (ix_iy_prefix_ == 0xDD) return regs_[IX];
+    if (ix_iy_prefix_ == 0xFD) return regs_[IY];
+    return regs_[HL];
 }
 
 void set_hl(uint16_t val) {
-    if (ix_iy_prefix_ == 0xDD) { regs_[REG_IX] = val; return; }
-    if (ix_iy_prefix_ == 0xFD) { regs_[REG_IY] = val; return; }
-    regs_[REG_HL] = val;
+    if (ix_iy_prefix_ == 0xDD) { regs_[IX] = val; return; }
+    if (ix_iy_prefix_ == 0xFD) { regs_[IY] = val; return; }
+    regs_[HL] = val;
 }
 
 // Effective address for (HL)/(IX+d)/(IY+d)
 uint16_t get_hl_addr() const {
-    if (ix_iy_prefix_ == 0xDD) return static_cast<uint16_t>(regs_[REG_IX] + displacement_);
-    if (ix_iy_prefix_ == 0xFD) return static_cast<uint16_t>(regs_[REG_IY] + displacement_);
-    return regs_[REG_HL];
+    if (ix_iy_prefix_ == 0xDD) return static_cast<uint16_t>(regs_[IX] + displacement_);
+    if (ix_iy_prefix_ == 0xFD) return static_cast<uint16_t>(regs_[IY] + displacement_);
+    return regs_[HL];
 }
 
 // Is an IX/IY prefix active?
@@ -117,40 +117,40 @@ bool has_ix_iy_prefix() const { return ix_iy_prefix_ != 0; }
 
 uint16_t get_reg16(uint8_t idx) const {
     switch (idx) {
-    case 0: return regs_[REG_BC];
-    case 1: return regs_[REG_DE];
+    case 0: return regs_[BC];
+    case 1: return regs_[DE];
     case 2: return get_hl();
-    case 3: return regs_[REG_SP];
+    case 3: return regs_[SP];
     default: return 0;
     }
 }
 
 void set_reg16(uint8_t idx, uint16_t val) {
     switch (idx) {
-    case 0: regs_[REG_BC] = val; return;
-    case 1: regs_[REG_DE] = val; return;
+    case 0: regs_[BC] = val; return;
+    case 1: regs_[DE] = val; return;
     case 2: set_hl(val); return;
-    case 3: regs_[REG_SP] = val; return;
+    case 3: regs_[SP] = val; return;
     }
 }
 
 // PUSH/POP variant: BC=0 DE=1 HL=2 AF=3
 uint16_t get_reg16_af(uint8_t idx) const {
     switch (idx) {
-    case 0: return regs_[REG_BC];
-    case 1: return regs_[REG_DE];
+    case 0: return regs_[BC];
+    case 1: return regs_[DE];
     case 2: return get_hl();
-    case 3: return regs_[REG_AF];
+    case 3: return regs_[AF];
     default: return 0;
     }
 }
 
 void set_reg16_af(uint8_t idx, uint16_t val) {
     switch (idx) {
-    case 0: regs_[REG_BC] = val; return;
-    case 1: regs_[REG_DE] = val; return;
+    case 0: regs_[BC] = val; return;
+    case 1: regs_[DE] = val; return;
     case 2: set_hl(val); return;
-    case 3: regs_[REG_AF] = val; return;
+    case 3: regs_[AF] = val; return;
     }
 }
 
@@ -161,14 +161,14 @@ void set_reg16_af(uint8_t idx, uint16_t val) {
 
 bool test_cc(uint8_t cc) const {
     switch (cc) {
-    case 0: return !(regs_[REG_F] & Flags::Z);   // NZ
-    case 1: return  (regs_[REG_F] & Flags::Z);   // Z
-    case 2: return !(regs_[REG_F] & Flags::C);   // NC
-    case 3: return  (regs_[REG_F] & Flags::C);   // C
-    case 4: return !(regs_[REG_F] & Flags::PV);  // PO (Parity Odd / no overflow)
-    case 5: return  (regs_[REG_F] & Flags::PV);  // PE (Parity Even / overflow)
-    case 6: return !(regs_[REG_F] & Flags::S);   // P  (Sign positive)
-    case 7: return  (regs_[REG_F] & Flags::S);   // M  (Sign minus)
+    case 0: return !(regs_[F] & Flags::Z);   // NZ
+    case 1: return  (regs_[F] & Flags::Z);   // Z
+    case 2: return !(regs_[F] & Flags::C);   // NC
+    case 3: return  (regs_[F] & Flags::C);   // C
+    case 4: return !(regs_[F] & Flags::PV);  // PO (Parity Odd / no overflow)
+    case 5: return  (regs_[F] & Flags::PV);  // PE (Parity Even / overflow)
+    case 6: return !(regs_[F] & Flags::S);   // P  (Sign positive)
+    case 7: return  (regs_[F] & Flags::S);   // M  (Sign minus)
     default: return false;
     }
 }
