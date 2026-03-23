@@ -29,12 +29,19 @@ static inline uint32_t read_long(const uint8_t* p) {
 
 // ── Output helper ───────────────────────────────────────────────
 
+// GCC/Clang format-string checking attribute (no-op on MSVC)
+#if defined(__GNUC__) || defined(__clang__)
+  #define M68K_PRINTF_FMT(fmtIdx, argIdx) __attribute__((format(printf, fmtIdx, argIdx)))
+#else
+  #define M68K_PRINTF_FMT(fmtIdx, argIdx)
+#endif
+
 struct Emitter {
     char* buf;
     int   size;
     int   pos;
 
-    void emit(const char* fmt, ...) __attribute__((format(printf, 2, 3))) {
+    void emit(const char* fmt, ...) M68K_PRINTF_FMT(2, 3) {
         if (pos >= size) return;
         va_list args;
         va_start(args, fmt);

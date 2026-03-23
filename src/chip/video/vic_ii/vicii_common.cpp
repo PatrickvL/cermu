@@ -879,7 +879,7 @@ void vicii_update_badline_condition(vicii_base_t* vicii) {
         }
         
         vicii->video_logic.is_bad_line = vicii->video_logic.was_den_set_during_raster_30 &&
-                                 ((raster & 0x07) == (vicii->regs_[reg::C1] & fld::C1_YSCROLL));
+                                 (static_cast<uint32_t>(raster & 0x07) == (vicii->regs_[reg::C1] & fld::C1_YSCROLL));
         
         // CRITICAL: The VIC-II latches display_state to true IMMEDIATELY when a bad line
         // condition is detected, at ANY cycle — not just at cycle 58.
@@ -1081,10 +1081,10 @@ bus_state_t vicii_base_t::registers_read(void* context, bus_state_t bus_state) {
                                vicii->regs_[reg::MXM_2] = 0; break;
             case reg::MXD:    reg_val = vicii->regs_[reg::MXD_2];
                                vicii->regs_[reg::MXD_2] = 0; break;
-            case reg::C2:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~fld::C2_UNUSED); break;
-            case reg::MP:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~fld::MP_UNUSED); break;
-            case reg::IR:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~fld::IR_UNUSED); break;
-            case reg::IE:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~fld::IE_UNUSED); break;
+            case reg::C2:     reg_val = bitmix(reg_val, bus_data, static_cast<uint8_t>(~fld::C2_UNUSED & 0xFF)); break;
+            case reg::MP:     reg_val = bitmix(reg_val, bus_data, static_cast<uint8_t>(~fld::MP_UNUSED & 0xFF)); break;
+            case reg::IR:     reg_val = bitmix(reg_val, bus_data, static_cast<uint8_t>(~fld::IR_UNUSED & 0xFF)); break;
+            case reg::IE:     reg_val = bitmix(reg_val, bus_data, static_cast<uint8_t>(~fld::IE_UNUSED & 0xFF)); break;
         }
     }
 

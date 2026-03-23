@@ -93,6 +93,9 @@
 #include "core/system_lines.hpp"
 #include <cstdint>
 #include <cstring>
+#ifndef _USE_MATH_DEFINES
+  #define _USE_MATH_DEFINES   // M_PI on MSVC
+#endif
 #include <cmath>
 
 // ============================================================================
