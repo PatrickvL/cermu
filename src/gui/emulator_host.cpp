@@ -328,6 +328,11 @@ void EmulatorHost::begin_frame() {
 void EmulatorHost::end_frame() {
     ImGui::Render();
     ImGuiIO& io = ImGui::GetIO();
+    // Guard against zero display size during monitor transitions / minimization
+    if (io.DisplaySize.x <= 0.0f || io.DisplaySize.y <= 0.0f) {
+        SDL_GL_SwapWindow(window_);
+        return;
+    }
     glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
