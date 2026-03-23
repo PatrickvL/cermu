@@ -16,6 +16,7 @@
 
 #include "utils/ring_buffer.hpp"
 #include "utils/performance_metrics.hpp"
+#include "utils/biquad_filter.hpp"
 #include "core/signal/sync_types.hpp"  // FrameData, SyncEvent
 
 // Forward declarations
@@ -310,6 +311,10 @@ protected:
 
     /// Temporary buffer used by the emu thread to call get_audio_samples().
     std::vector<float> emu_audio_tmp_;
+
+    /// Speaker simulation filter chain (applied when display has built-in speakers).
+    SpeakerSimulation speaker_sim_;
+    bool use_speaker_sim_            = true;  ///< Enable speaker simulation
 
 public:
     EmulatorHost();

@@ -1543,8 +1543,14 @@ void SessionGUI::render_display_settings() {
     if (mask & DisplaySignals::YPBPR)     ImGui::BulletText("Component (YPbPr)");
     if (mask & DisplaySignals::DIGITAL)   ImGui::BulletText("Digital");
     if (mask & DisplaySignals::VECTOR)    ImGui::BulletText("Vector");
-    if (display_device_->has_builtin_speakers())
+    if (display_device_->has_builtin_speakers()) {
         ImGui::BulletText("Built-in speaker");
+        ImGui::Separator();
+        ImGui::Checkbox("Speaker Simulation", &use_speaker_sim_);
+        if (use_speaker_sim_) {
+            ImGui::TextDisabled("  LP 5 kHz / HP 150 Hz / resonance 1 kHz");
+        }
+    }
 
     ImGui::End();
 }
@@ -2633,6 +2639,9 @@ void SessionGUI::open_audio_device() {
     audio_sample_rate_ = have.freq;
     printf("Audio: opened device — requested %d Hz, got %d Hz (buffer %d samples)\n",
            want.freq, have.freq, have.samples);
+
+    // Initialize speaker simulation filter chain at the negotiated sample rate
+    speaker_sim_.init(static_cast<float>(have.freq));
 
     // If SDL negotiated a different sample rate (common on Linux with
     // PipeWire/PulseAudio), update the system's audio generator to match.
