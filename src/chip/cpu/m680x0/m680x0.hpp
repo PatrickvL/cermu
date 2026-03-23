@@ -1327,26 +1327,15 @@ public:
         reset_counter_ = 0;
     }
 
-    // === Register accessors (for test harness) ===
+    // === Generic register access (for debugger/test harness) ===
+    template <typename T> T get(RegIdx<T> idx) const { return regs_.get(idx); }
+    template <typename T, typename U> void set(RegIdx<T> idx, U val) { regs_.set(idx, val); }
+
+    // Runtime-indexed Dn/An access (loop-friendly)
     uint32_t reg_d(uint8_t n) const { return regs_[n & 7]; }
     uint32_t reg_a(uint8_t n) const { return regs_[8 + (n & 7)]; }
-    uint32_t reg_pc() const { return regs_[PC]; }
-    uint16_t reg_sr() const { return regs_[SR]; }
-    uint32_t reg_usp() const { return regs_[USP]; }
-    uint32_t reg_ssp() const { return regs_[SSP]; }
-    uint16_t reg_irc() const { return regs_[IRC]; }
-    uint16_t reg_ir() const { return regs_[IR]; }
-    uint16_t reg_ird() const { return regs_[IRD]; }
-
     void set_reg_d(uint8_t n, uint32_t v) { regs_[n & 7] = v; }
     void set_reg_a(uint8_t n, uint32_t v) { regs_[8 + (n & 7)] = v; }
-    void set_reg_pc(uint32_t v) { regs_[PC] = v; }
-    void set_reg_sr(uint16_t v) { regs_[SR] = v; }
-    void set_reg_usp(uint32_t v) { regs_[USP] = v; }
-    void set_reg_ssp(uint32_t v) { regs_[SSP] = v; }
-    void set_reg_irc(uint16_t v) { regs_[IRC] = v; }
-    void set_reg_ir(uint16_t v) { regs_[IR] = v; }
-    void set_reg_ird(uint16_t v) { regs_[IRD] = v; }
 
     // ── Debug registration ─────────────────────────────────────
 #ifdef CERMU_HAS_CHIP_DEBUG

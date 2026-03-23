@@ -768,13 +768,13 @@ bool C64System::serial_trap_attention() {
     }
 
     // Clear carry and interrupt disable flags (as the real KERNAL would)
-    uint8_t p = cpu->regs_[P];
+    uint8_t p = cpu->get(P);
     p &= ~0x01;  // Clear carry
     p &= ~0x04;  // Clear interrupt disable
-    cpu->regs_[P] = p;
+    cpu->set(P, p);
 
     // Resume at the KERNAL's RTS
-    cpu->regs_[PC] = TRAP_RESUME_ADDRESS;
+    cpu->set(PC, TRAP_RESUME_ADDRESS);
     cpu->transition_to_fetch();
     return true;
 }
@@ -797,12 +797,12 @@ bool C64System::serial_trap_send() {
     drive->trap_send(iecdata);
 
     // Clear carry and interrupt disable
-    uint8_t p = cpu->regs_[P];
+    uint8_t p = cpu->get(P);
     p &= ~0x01;
     p &= ~0x04;
-    cpu->regs_[P] = p;
+    cpu->set(P, p);
 
-    cpu->regs_[PC] = TRAP_RESUME_ADDRESS;
+    cpu->set(PC, TRAP_RESUME_ADDRESS);
     cpu->transition_to_fetch();
     return true;
 }
@@ -826,7 +826,7 @@ bool C64System::serial_trap_receive() {
 
     // Store received byte in TMP_IN and A register
     ram->data()[ZP_TMP_IN] = data;
-    cpu->regs_[A] = data;
+    cpu->set(A, data);
 
     // Set/update I/O status (ST)
     if (status) {
@@ -834,15 +834,15 @@ bool C64System::serial_trap_receive() {
     }
 
     // Set CPU flags to match the received byte
-    uint8_t p = cpu->regs_[P];
+    uint8_t p = cpu->get(P);
     p &= ~0x01;  // Clear carry
     p &= ~0x04;  // Clear interrupt disable
     // Set N (sign) and Z (zero) flags based on data
     if (data & 0x80) p |= 0x80; else p &= ~0x80;
     if (data == 0)   p |= 0x02; else p &= ~0x02;
-    cpu->regs_[P] = p;
+    cpu->set(P, p);
 
-    cpu->regs_[PC] = TRAP_RESUME_ADDRESS;
+    cpu->set(PC, TRAP_RESUME_ADDRESS);
     cpu->transition_to_fetch();
     return true;
 }
@@ -856,15 +856,15 @@ bool C64System::serial_trap_ready() {
     auto* cpu = mos6510;
 
     // Fake the serial-ready check: pretend the bus signals are fine
-    cpu->regs_[A] = 1;
+    cpu->set(A, 1);
 
-    uint8_t p = cpu->regs_[P];
+    uint8_t p = cpu->get(P);
     p &= ~0x80;  // Clear sign
     p &= ~0x02;  // Clear zero
     p &= ~0x04;  // Clear interrupt disable
-    cpu->regs_[P] = p;
+    cpu->set(P, p);
 
-    cpu->regs_[PC] = TRAP_RESUME_ADDRESS;
+    cpu->set(PC, TRAP_RESUME_ADDRESS);
     cpu->transition_to_fetch();
     return true;
 }
@@ -926,7 +926,7 @@ void C64System::system_tick() {
     // KERNAL serial trap check — intercept IEC bus routines at instruction boundaries
     if (serial_traps_enabled_) {
         if (cpu->opdone()) {
-            uint16_t pc = cpu->regs_[PC];
+            uint16_t pc = cpu->get(PC);
             // All serial trap addresses are in the $ED00-$EEFF range
             if (pc >= 0xED00 && pc < 0xEF00) {
                 check_serial_traps(pc);

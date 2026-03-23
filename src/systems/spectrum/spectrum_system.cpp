@@ -36,6 +36,8 @@
 #include <cstring>
 #include <cstdio>
 
+using namespace z80::reg;  // PC, AF, BC, etc.
+
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #include "gui/palette_selector.hpp"
@@ -472,19 +474,19 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
         }
 
         // Restore Z80 registers
-        board_.cpu().set_i(hdr.i_reg);
-        board_.cpu().set_r(hdr.r_reg);
-        board_.cpu().set_af(hdr.af);
-        board_.cpu().set_bc(hdr.bc);
-        board_.cpu().set_de(hdr.de);
-        board_.cpu().set_hl_direct(hdr.hl);
-        board_.cpu().set_ix(hdr.ix);
-        board_.cpu().set_iy(hdr.iy);
-        board_.cpu().set_af_prime(hdr.af_prime);
-        board_.cpu().set_bc_prime(hdr.bc_prime);
-        board_.cpu().set_de_prime(hdr.de_prime);
-        board_.cpu().set_hl_prime(hdr.hl_prime);
-        board_.cpu().set_sp(hdr.sp);
+        board_.cpu().set(I, hdr.i_reg);
+        board_.cpu().set(R, hdr.r_reg);
+        board_.cpu().set(AF, hdr.af);
+        board_.cpu().set(BC, hdr.bc);
+        board_.cpu().set(DE, hdr.de);
+        board_.cpu().set(HL, hdr.hl);
+        board_.cpu().set(IX, hdr.ix);
+        board_.cpu().set(IY, hdr.iy);
+        board_.cpu().set(AF_, hdr.af_prime);
+        board_.cpu().set(BC_, hdr.bc_prime);
+        board_.cpu().set(DE_, hdr.de_prime);
+        board_.cpu().set(HL_, hdr.hl_prime);
+        board_.cpu().set(SP, hdr.sp);
         board_.cpu().set_im(hdr.int_mode);
         board_.cpu().set_iff1((hdr.iff2 & 0x04) != 0);
         board_.cpu().set_iff2((hdr.iff2 & 0x04) != 0);
@@ -493,14 +495,14 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
         uint16_t sp = hdr.sp;
         uint16_t pc_lo = ram[sp];
         uint16_t pc_hi = ram[(uint16_t)(sp + 1)];
-        board_.cpu().set_pc(pc_lo | (pc_hi << 8));
-        board_.cpu().set_sp(sp + 2);
+        board_.cpu().set(PC, pc_lo | (pc_hi << 8));
+        board_.cpu().set(SP, sp + 2);
 
         // Restore border color
         board_.video().set_border_color(hdr.border & 0x07);
 
         printf("%s: SNA loaded — PC=$%04X SP=$%04X\n", Traits::name,
-               board_.cpu().pc(), board_.cpu().sp());
+               board_.cpu().get(PC), board_.cpu().get(SP));
         result.release();
         return true;
     }
@@ -537,29 +539,29 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
         }
 
         // Restore Z80 registers
-        board_.cpu().set_af(hdr.af);
-        board_.cpu().set_bc(hdr.bc);
-        board_.cpu().set_de(hdr.de);
-        board_.cpu().set_hl_direct(hdr.hl);
-        board_.cpu().set_ix(hdr.ix);
-        board_.cpu().set_iy(hdr.iy);
-        board_.cpu().set_sp(hdr.sp);
-        board_.cpu().set_pc(hdr.pc);
-        board_.cpu().set_i(hdr.i_reg);
-        board_.cpu().set_r(hdr.r_reg);
+        board_.cpu().set(AF, hdr.af);
+        board_.cpu().set(BC, hdr.bc);
+        board_.cpu().set(DE, hdr.de);
+        board_.cpu().set(HL, hdr.hl);
+        board_.cpu().set(IX, hdr.ix);
+        board_.cpu().set(IY, hdr.iy);
+        board_.cpu().set(SP, hdr.sp);
+        board_.cpu().set(PC, hdr.pc);
+        board_.cpu().set(I, hdr.i_reg);
+        board_.cpu().set(R, hdr.r_reg);
         board_.cpu().set_im(hdr.im_mode);
         board_.cpu().set_iff1(hdr.iff1 != 0);
         board_.cpu().set_iff2(hdr.iff2 != 0);
-        board_.cpu().set_af_prime(hdr.af_prime);
-        board_.cpu().set_bc_prime(hdr.bc_prime);
-        board_.cpu().set_de_prime(hdr.de_prime);
-        board_.cpu().set_hl_prime(hdr.hl_prime);
+        board_.cpu().set(AF_, hdr.af_prime);
+        board_.cpu().set(BC_, hdr.bc_prime);
+        board_.cpu().set(DE_, hdr.de_prime);
+        board_.cpu().set(HL_, hdr.hl_prime);
 
         // Restore border color
         board_.video().set_border_color(hdr.border & 0x07);
 
         printf("%s: Z80 v%d loaded — PC=$%04X SP=$%04X\n", Traits::name,
-               hdr.version, board_.cpu().pc(), board_.cpu().sp());
+               hdr.version, board_.cpu().get(PC), board_.cpu().get(SP));
         result.release();
         return true;
     }
@@ -660,11 +662,11 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
         // Jump target: prefer CODE blocks (machine code entry point),
         // otherwise enter the ROM's main execution loop for BASIC.
         if (has_code) {
-            board_.cpu().set_pc(code_addr);
+            board_.cpu().set(PC, code_addr);
             printf("%s: Jumping to CODE at $%04X\n", Traits::name, code_addr);
         } else if (has_basic) {
             // Enter the ROM main execution loop — it will honour NEWPPC/NSPPC
-            board_.cpu().set_pc(0x12A2);  // MAIN-EXEC in the 48K ROM
+            board_.cpu().set(PC, 0x12A2);  // MAIN-EXEC in the 48K ROM
             printf("%s: Entering BASIC via ROM MAIN-EXEC ($12A2)\n", Traits::name);
         }
 
@@ -688,7 +690,7 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
 
             bool is_code = entry && entry->type == 'C';
             if (is_code) {
-                board_.cpu().set_pc(addr);
+                board_.cpu().set(PC, addr);
                 printf("%s: %s Code loaded %zu bytes at $%04X — jumping\n",
                        Traits::name, result.format->name, len, addr);
             } else {

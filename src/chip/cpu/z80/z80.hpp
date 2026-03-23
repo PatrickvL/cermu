@@ -284,54 +284,23 @@ public:
         return pins;
     }
 
-    // === Register access (for debugger/test harness) ===
-    uint16_t pc() const { return regs_[PC]; }
-    uint16_t sp() const { return regs_[SP]; }
-    uint16_t af() const { return regs_[AF]; }
-    uint16_t bc() const { return regs_[BC]; }
-    uint16_t de() const { return regs_[DE]; }
-    uint16_t hl() const { return regs_[HL]; }
-    uint16_t ix() const { return regs_[IX]; }
-    uint16_t iy() const { return regs_[IY]; }
-    uint8_t  i()  const { return regs_[I]; }
-    uint8_t  r()  const { return regs_[R]; }
+    // === Generic register access (for debugger/test harness) ===
+    template <typename T> T get(RegIdx<T> idx) const { return regs_.get(idx); }
+    template <typename T, typename U> void set(RegIdx<T> idx, U val) { regs_.set(idx, val); }
+
+    // === Non-register execution state ===
     uint8_t  im() const { return im_; }
     bool iff1()   const { return iff1_; }
     bool iff2()   const { return iff2_; }
     bool halted() const { return halted_; }
-    uint16_t wz() const { return regs_[WZ]; }
+    bool q() const               { return q_; }
 
-    void set_pc(uint16_t v) { regs_[PC] = v; }
-    void set_sp(uint16_t v) { regs_[SP] = v; }
-    void set_af(uint16_t v) { regs_[AF] = v; }
-    void set_bc(uint16_t v) { regs_[BC] = v; }
-    void set_de(uint16_t v) { regs_[DE] = v; }
-    void set_hl_direct(uint16_t v) { regs_[HL] = v; }
-    void set_ix(uint16_t v) { regs_[IX] = v; }
-    void set_iy(uint16_t v) { regs_[IY] = v; }
-    void set_i(uint8_t v)   { regs_[I] = v; }
-    void set_r(uint8_t v)   { regs_[R] = v; }
     void set_im(uint8_t v)  { im_ = v; }
     void set_iff1(bool v)   { iff1_ = v; }
     void set_iff2(bool v)   { iff2_ = v; }
-    void set_wz(uint16_t v) { regs_[WZ] = v; }
-
-    // === Shadow register access ===
-    uint16_t af_prime() const { return regs_[AF_]; }
-    uint16_t bc_prime() const { return regs_[BC_]; }
-    uint16_t de_prime() const { return regs_[DE_]; }
-    uint16_t hl_prime() const { return regs_[HL_]; }
-
-    void set_af_prime(uint16_t v) { regs_[AF_] = v; }
-    void set_bc_prime(uint16_t v) { regs_[BC_] = v; }
-    void set_de_prime(uint16_t v) { regs_[DE_] = v; }
-    void set_hl_prime(uint16_t v) { regs_[HL_] = v; }
-
-    // === Execution state access (for test harness) ===
     void set_halted(bool v)      { halted_ = v; }
     void set_ei_pending(bool v)  { ei_pending_ = v; }
     void set_q(bool v)           { q_ = v; }
-    bool q() const               { return q_; }
 
     /// Returns true when the CPU is at an instruction boundary.
     /// Used by test harnesses to detect instruction completion.

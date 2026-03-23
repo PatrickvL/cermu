@@ -382,11 +382,11 @@ bool Atari2600System::load_file(const char* filepath) {
     // Cold boot: zero CPU registers and clear framebuffer/audio so nothing
     // from the previous program bleeds through.
     if (cold_boot) {
-        board_.cpu().regs_[A] =   0;
-        board_.cpu().regs_[X] =   0;
-        board_.cpu().regs_[Y] =   0;
-        board_.cpu().regs_[SPL] = 0xFD;  // Power-on stack pointer
-        board_.cpu().regs_[P] =   0x24;  // I flag set, unused bit 5 set
+        board_.cpu().set(A, 0);
+        board_.cpu().set(X, 0);
+        board_.cpu().set(Y, 0);
+        board_.cpu().set(SPL, 0xFD);  // Power-on stack pointer
+        board_.cpu().set(P, 0x24);  // I flag set, unused bit 5 set
 
         if (rgba_framebuffer_) {
             memset(rgba_framebuffer_,

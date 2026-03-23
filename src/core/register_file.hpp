@@ -282,9 +282,10 @@ struct RegisterFile {
         T v; std::memcpy(&v, &data[idx.offset], sizeof(T)); return v;
     }
 
-    template <typename T>
-    inline void set(RegIdx<T> idx, T value) {
-        std::memcpy(&data[idx.offset], &value, sizeof(T));
+    template <typename T, typename U>
+    inline void set(RegIdx<T> idx, U value) {
+        T v = static_cast<T>(value);
+        std::memcpy(&data[idx.offset], &v, sizeof(T));
     }
 
     template <typename T>

@@ -266,65 +266,9 @@ public:
         return pins;
     }
 
-    // === Register access (for debugger/test harness) ===
-    uint8_t  a()  const { return regs_[A]; }
-    uint8_t  b()  const { return regs_[B]; }
-    uint16_t d()  const { return regs_[D]; }
-    uint16_t x()  const { return regs_[X]; }
-    uint16_t y()  const { return regs_[Y]; }
-    uint16_t u()  const { return regs_[U]; }
-    uint16_t s()  const { return regs_[S]; }
-    uint16_t pc() const { return regs_[PC]; }
-    uint8_t  dp() const { return regs_[DP]; }
-    uint8_t  cc() const { return regs_[CC]; }
-
-    void set_a(uint8_t v)   { regs_[A] = v; }
-    void set_b(uint8_t v)   { regs_[B] = v; }
-    void set_d(uint16_t v)  { regs_[D] = v; }
-    void set_x(uint16_t v)  { regs_[X] = v; }
-    void set_y(uint16_t v)  { regs_[Y] = v; }
-    void set_u(uint16_t v)  { regs_[U] = v; }
-    void set_s(uint16_t v)  { regs_[S] = v; }
-    void set_pc(uint16_t v) { regs_[PC] = v; }
-    void set_dp(uint8_t v)  { regs_[DP] = v; }
-    void set_cc(uint8_t v)  { regs_[CC] = v; }
-
-    // HD6309-specific register access
-    uint8_t  e_reg() const {
-        if constexpr (has_w_register()) return regs_[E];
-        return 0;
-    }
-    uint8_t  f_reg() const {
-        if constexpr (has_w_register()) return regs_[F];
-        return 0;
-    }
-    uint16_t w()  const {
-        if constexpr (has_w_register()) return regs_[W];
-        return 0;
-    }
-    uint16_t v()  const {
-        if constexpr (has_w_register()) return regs_[V];
-        return 0;
-    }
-    uint8_t  md() const {
-        if constexpr (has_native_mode()) return regs_[MD];
-        return 0;
-    }
-    void set_e_reg(uint8_t val) {
-        if constexpr (has_w_register()) regs_[E] = val;
-    }
-    void set_f_reg(uint8_t val) {
-        if constexpr (has_w_register()) regs_[F] = val;
-    }
-    void set_w(uint16_t val) {
-        if constexpr (has_w_register()) regs_[W] = val;
-    }
-    void set_v(uint16_t val) {
-        if constexpr (has_w_register()) regs_[V] = val;
-    }
-    void set_md(uint8_t val) {
-        if constexpr (has_native_mode()) regs_[MD] = val;
-    }
+    // === Generic register access (for debugger/test harness) ===
+    template <typename T> T get(RegIdx<T> idx) const { return regs_.get(idx); }
+    template <typename T, typename U> void set(RegIdx<T> idx, U val) { regs_.set(idx, val); }
 
     /// Returns true when the CPU is at an instruction boundary.
     bool opdone() const {
@@ -344,6 +288,7 @@ public:
         halted_ = false;
     }
 
+    // === Non-register execution state ===
     bool halted() const { return halted_; }
     bool sync_waiting() const { return sync_wait_; }
     bool cwai_waiting() const { return cwai_wait_; }
