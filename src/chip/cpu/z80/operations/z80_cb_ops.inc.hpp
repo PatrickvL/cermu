@@ -27,7 +27,7 @@
 // With DD/FD: on (IX+d)/(IY+d) — displacement already read before CB
 bus_state_t op_cb_shift_hl(bus_state_t pins) {
     uint16_t addr = get_hl_addr();
-    if (has_ix_iy_prefix()) regs_.wz = addr;
+    if (has_ix_iy_prefix()) regs_[REG_WZ] = addr;
     switch (step_++) {
     case 0: return bus_setup_mem_read(pins, addr);
     case 1: if (!wait_check(pins)) return pins; return pins;
@@ -54,7 +54,7 @@ bus_state_t op_cb_shift_hl(bus_state_t pins) {
 // CB BIT test on (HL) — 12T total (M1:4 + M1:4 + read:4)
 bus_state_t op_cb_bit_hl(bus_state_t pins) {
     uint16_t addr = get_hl_addr();
-    if (has_ix_iy_prefix()) regs_.wz = addr;
+    if (has_ix_iy_prefix()) regs_[REG_WZ] = addr;
     switch (step_++) {
     case 0: return bus_setup_mem_read(pins, addr);
     case 1: if (!wait_check(pins)) return pins; return pins;
@@ -72,7 +72,7 @@ bus_state_t op_cb_bit_hl(bus_state_t pins) {
 // CB SET/RES on (HL) — 15T total (M1:4 + M1:4 + read:4 + write:3)
 bus_state_t op_cb_setres_hl(bus_state_t pins) {
     uint16_t addr = get_hl_addr();
-    if (has_ix_iy_prefix()) regs_.wz = addr;
+    if (has_ix_iy_prefix()) regs_[REG_WZ] = addr;
     uint8_t bit = (cb_opcode_ >> 3) & 7;
     switch (step_++) {
     case 0: return bus_setup_mem_read(pins, addr);
@@ -109,18 +109,18 @@ bus_state_t op_cb_setres_hl(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_ddfd_cb(bus_state_t pins) {
     switch (step_++) {
-    case 0: return bus_setup_mem_read(pins, regs_.pc); // Read displacement
+    case 0: return bus_setup_mem_read(pins, regs_[REG_PC]); // Read displacement
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
         displacement_ = static_cast<int8_t>(BUS_GET_DATA(pins));
-        regs_.pc++;
+        regs_[REG_PC]++;
         bus_finish_mem(pins);
         return pins;
-    case 3: return bus_setup_mem_read(pins, regs_.pc); // Read CB opcode
+    case 3: return bus_setup_mem_read(pins, regs_[REG_PC]); // Read CB opcode
     case 4: if (!wait_check(pins)) return pins; return pins;
     case 5:
         cb_opcode_ = BUS_GET_DATA(pins);
-        regs_.pc++;
+        regs_[REG_PC]++;
         bus_finish_mem(pins);
         return pins;
     case 6: return pins; // 1st idle T-state

@@ -54,30 +54,30 @@ static constexpr std::array<uint8_t, 256> sz53p_table = [] {
 // ========================================================================
 
 void alu_add(uint8_t val) {
-    uint16_t result = regs_.a + val;
-    uint8_t lookup = ((regs_.a & 0x88) >> 3) | ((val & 0x88) >> 2) | ((result & 0x88) >> 1);
-    regs_.a = static_cast<uint8_t>(result);
-    regs_.f = sz53_table[regs_.a]
+    uint16_t result = regs_[REG_A] + val;
+    uint8_t lookup = ((regs_[REG_A] & 0x88) >> 3) | ((val & 0x88) >> 2) | ((result & 0x88) >> 1);
+    regs_[REG_A] = static_cast<uint8_t>(result);
+    regs_[REG_F] = sz53_table[regs_[REG_A]]
             | (result & 0x100 ? Flags::C : 0)
             | half_carry_add_table[lookup & 0x07]
             | overflow_add_table[lookup >> 4];
 }
 
 void alu_adc(uint8_t val) {
-    uint16_t result = regs_.a + val + (regs_.f & Flags::C);
-    uint8_t lookup = ((regs_.a & 0x88) >> 3) | ((val & 0x88) >> 2) | ((result & 0x88) >> 1);
-    regs_.a = static_cast<uint8_t>(result);
-    regs_.f = sz53_table[regs_.a]
+    uint16_t result = regs_[REG_A] + val + (regs_[REG_F] & Flags::C);
+    uint8_t lookup = ((regs_[REG_A] & 0x88) >> 3) | ((val & 0x88) >> 2) | ((result & 0x88) >> 1);
+    regs_[REG_A] = static_cast<uint8_t>(result);
+    regs_[REG_F] = sz53_table[regs_[REG_A]]
             | (result & 0x100 ? Flags::C : 0)
             | half_carry_add_table[lookup & 0x07]
             | overflow_add_table[lookup >> 4];
 }
 
 void alu_sub(uint8_t val) {
-    uint16_t result = regs_.a - val;
-    uint8_t lookup = ((regs_.a & 0x88) >> 3) | ((val & 0x88) >> 2) | ((result & 0x88) >> 1);
-    regs_.a = static_cast<uint8_t>(result);
-    regs_.f = sz53_table[regs_.a]
+    uint16_t result = regs_[REG_A] - val;
+    uint8_t lookup = ((regs_[REG_A] & 0x88) >> 3) | ((val & 0x88) >> 2) | ((result & 0x88) >> 1);
+    regs_[REG_A] = static_cast<uint8_t>(result);
+    regs_[REG_F] = sz53_table[regs_[REG_A]]
             | Flags::N
             | (result & 0x100 ? Flags::C : 0)
             | half_carry_sub_table[lookup & 0x07]
@@ -85,10 +85,10 @@ void alu_sub(uint8_t val) {
 }
 
 void alu_sbc(uint8_t val) {
-    uint16_t result = regs_.a - val - (regs_.f & Flags::C);
-    uint8_t lookup = ((regs_.a & 0x88) >> 3) | ((val & 0x88) >> 2) | ((result & 0x88) >> 1);
-    regs_.a = static_cast<uint8_t>(result);
-    regs_.f = sz53_table[regs_.a]
+    uint16_t result = regs_[REG_A] - val - (regs_[REG_F] & Flags::C);
+    uint8_t lookup = ((regs_[REG_A] & 0x88) >> 3) | ((val & 0x88) >> 2) | ((result & 0x88) >> 1);
+    regs_[REG_A] = static_cast<uint8_t>(result);
+    regs_[REG_F] = sz53_table[regs_[REG_A]]
             | Flags::N
             | (result & 0x100 ? Flags::C : 0)
             | half_carry_sub_table[lookup & 0x07]
@@ -96,25 +96,25 @@ void alu_sbc(uint8_t val) {
 }
 
 void alu_and(uint8_t val) {
-    regs_.a &= val;
-    regs_.f = sz53p_table[regs_.a] | Flags::H;
+    regs_[REG_A] &= val;
+    regs_[REG_F] = sz53p_table[regs_[REG_A]] | Flags::H;
 }
 
 void alu_xor(uint8_t val) {
-    regs_.a ^= val;
-    regs_.f = sz53p_table[regs_.a];
+    regs_[REG_A] ^= val;
+    regs_[REG_F] = sz53p_table[regs_[REG_A]];
 }
 
 void alu_or(uint8_t val) {
-    regs_.a |= val;
-    regs_.f = sz53p_table[regs_.a];
+    regs_[REG_A] |= val;
+    regs_[REG_F] = sz53p_table[regs_[REG_A]];
 }
 
 void alu_cp(uint8_t val) {
-    uint16_t result = regs_.a - val;
-    uint8_t lookup = ((regs_.a & 0x88) >> 3) | ((val & 0x88) >> 2) | ((result & 0x88) >> 1);
+    uint16_t result = regs_[REG_A] - val;
+    uint8_t lookup = ((regs_[REG_A] & 0x88) >> 3) | ((val & 0x88) >> 2) | ((result & 0x88) >> 1);
     // CP: SZ from result, but undocumented flags (3,5) from the OPERAND
-    regs_.f = (sz53_table[static_cast<uint8_t>(result)] & (Flags::S | Flags::Z))
+    regs_[REG_F] = (sz53_table[static_cast<uint8_t>(result)] & (Flags::S | Flags::Z))
             | (val & (Flags::Y | Flags::X))
             | Flags::N
             | (result & 0x100 ? Flags::C : 0)
@@ -142,7 +142,7 @@ void alu_op(uint8_t op, uint8_t val) {
 
 uint8_t alu_inc(uint8_t val) {
     uint8_t result = val + 1;
-    regs_.f = (regs_.f & Flags::C)
+    regs_[REG_F] = (regs_[REG_F] & Flags::C)
             | sz53_table[result]
             | (result == 0x80 ? Flags::PV : 0)
             | ((val ^ result) & Flags::H);
@@ -151,7 +151,7 @@ uint8_t alu_inc(uint8_t val) {
 
 uint8_t alu_dec(uint8_t val) {
     uint8_t result = val - 1;
-    regs_.f = (regs_.f & Flags::C)
+    regs_[REG_F] = (regs_[REG_F] & Flags::C)
             | sz53_table[result]
             | Flags::N
             | (result == 0x7F ? Flags::PV : 0)
@@ -168,7 +168,7 @@ void alu_add16(uint16_t& dest, uint16_t val) {
     uint32_t result = dest + val;
     uint8_t lookup = ((dest & 0x0800) >> 11) | ((val & 0x0800) >> 10) | ((result & 0x0800) >> 9);
     dest = static_cast<uint16_t>(result);
-    regs_.f = (regs_.f & (Flags::S | Flags::Z | Flags::PV))
+    regs_[REG_F] = (regs_[REG_F] & (Flags::S | Flags::Z | Flags::PV))
             | (static_cast<uint8_t>(result >> 8) & (Flags::Y | Flags::X))
             | (result & 0x10000 ? Flags::C : 0)
             | half_carry_add_table[lookup];
@@ -176,11 +176,11 @@ void alu_add16(uint16_t& dest, uint16_t val) {
 
 // ADC HL,rr (15 cycles, full flag update)
 void alu_adc16(uint16_t val) {
-    uint32_t result = regs_.hl + val + (regs_.f & Flags::C);
-    uint8_t lookup = ((regs_.hl & 0x8800) >> 11) | ((val & 0x8800) >> 10) | ((result & 0x8800) >> 9);
-    regs_.hl = static_cast<uint16_t>(result);
-    regs_.f = ((result >> 8) & (Flags::S | Flags::Y | Flags::X))
-            | (regs_.hl == 0 ? Flags::Z : 0)
+    uint32_t result = regs_[REG_HL] + val + (regs_[REG_F] & Flags::C);
+    uint8_t lookup = ((regs_[REG_HL] & 0x8800) >> 11) | ((val & 0x8800) >> 10) | ((result & 0x8800) >> 9);
+    regs_[REG_HL] = static_cast<uint16_t>(result);
+    regs_[REG_F] = ((result >> 8) & (Flags::S | Flags::Y | Flags::X))
+            | (regs_[REG_HL] == 0 ? Flags::Z : 0)
             | (result & 0x10000 ? Flags::C : 0)
             | overflow_add_table[lookup >> 4]
             | half_carry_add_table[lookup & 0x07];
@@ -188,12 +188,12 @@ void alu_adc16(uint16_t val) {
 
 // SBC HL,rr (15 cycles, full flag update)
 void alu_sbc16(uint16_t val) {
-    uint32_t result = regs_.hl - val - (regs_.f & Flags::C);
-    uint8_t lookup = ((regs_.hl & 0x8800) >> 11) | ((val & 0x8800) >> 10) | ((result & 0x8800) >> 9);
-    regs_.hl = static_cast<uint16_t>(result);
-    regs_.f = ((result >> 8) & (Flags::S | Flags::Y | Flags::X))
+    uint32_t result = regs_[REG_HL] - val - (regs_[REG_F] & Flags::C);
+    uint8_t lookup = ((regs_[REG_HL] & 0x8800) >> 11) | ((val & 0x8800) >> 10) | ((result & 0x8800) >> 9);
+    regs_[REG_HL] = static_cast<uint16_t>(result);
+    regs_[REG_F] = ((result >> 8) & (Flags::S | Flags::Y | Flags::X))
             | Flags::N
-            | (regs_.hl == 0 ? Flags::Z : 0)
+            | (regs_[REG_HL] == 0 ? Flags::Z : 0)
             | (result & 0x10000 ? Flags::C : 0)
             | overflow_sub_table[lookup >> 4]
             | half_carry_sub_table[lookup & 0x07];
@@ -224,34 +224,34 @@ static constexpr uint8_t overflow_sub_table[8] = {
 // ========================================================================
 
 void alu_rlca() {
-    uint8_t c = regs_.a >> 7;
-    regs_.a = (regs_.a << 1) | c;
-    regs_.f = (regs_.f & (Flags::S | Flags::Z | Flags::PV))
-            | (regs_.a & (Flags::Y | Flags::X))
+    uint8_t c = regs_[REG_A] >> 7;
+    regs_[REG_A] = (regs_[REG_A] << 1) | c;
+    regs_[REG_F] = (regs_[REG_F] & (Flags::S | Flags::Z | Flags::PV))
+            | (regs_[REG_A] & (Flags::Y | Flags::X))
             | c;
 }
 
 void alu_rrca() {
-    uint8_t c = regs_.a & 0x01;
-    regs_.a = (regs_.a >> 1) | (c << 7);
-    regs_.f = (regs_.f & (Flags::S | Flags::Z | Flags::PV))
-            | (regs_.a & (Flags::Y | Flags::X))
+    uint8_t c = regs_[REG_A] & 0x01;
+    regs_[REG_A] = (regs_[REG_A] >> 1) | (c << 7);
+    regs_[REG_F] = (regs_[REG_F] & (Flags::S | Flags::Z | Flags::PV))
+            | (regs_[REG_A] & (Flags::Y | Flags::X))
             | c;
 }
 
 void alu_rla() {
-    uint8_t c = regs_.a >> 7;
-    regs_.a = (regs_.a << 1) | (regs_.f & Flags::C);
-    regs_.f = (regs_.f & (Flags::S | Flags::Z | Flags::PV))
-            | (regs_.a & (Flags::Y | Flags::X))
+    uint8_t c = regs_[REG_A] >> 7;
+    regs_[REG_A] = (regs_[REG_A] << 1) | (regs_[REG_F] & Flags::C);
+    regs_[REG_F] = (regs_[REG_F] & (Flags::S | Flags::Z | Flags::PV))
+            | (regs_[REG_A] & (Flags::Y | Flags::X))
             | c;
 }
 
 void alu_rra() {
-    uint8_t c = regs_.a & 0x01;
-    regs_.a = (regs_.a >> 1) | ((regs_.f & Flags::C) << 7);
-    regs_.f = (regs_.f & (Flags::S | Flags::Z | Flags::PV))
-            | (regs_.a & (Flags::Y | Flags::X))
+    uint8_t c = regs_[REG_A] & 0x01;
+    regs_[REG_A] = (regs_[REG_A] >> 1) | ((regs_[REG_F] & Flags::C) << 7);
+    regs_[REG_F] = (regs_[REG_F] & (Flags::S | Flags::Z | Flags::PV))
+            | (regs_[REG_A] & (Flags::Y | Flags::X))
             | c;
 }
 
@@ -262,42 +262,42 @@ void alu_rra() {
 uint8_t alu_rlc(uint8_t val) {
     uint8_t c = val >> 7;
     val = (val << 1) | c;
-    regs_.f = sz53p_table[val] | c;
+    regs_[REG_F] = sz53p_table[val] | c;
     return val;
 }
 
 uint8_t alu_rrc(uint8_t val) {
     uint8_t c = val & 0x01;
     val = (val >> 1) | (c << 7);
-    regs_.f = sz53p_table[val] | c;
+    regs_[REG_F] = sz53p_table[val] | c;
     return val;
 }
 
 uint8_t alu_rl(uint8_t val) {
     uint8_t c = val >> 7;
-    val = (val << 1) | (regs_.f & Flags::C);
-    regs_.f = sz53p_table[val] | c;
+    val = (val << 1) | (regs_[REG_F] & Flags::C);
+    regs_[REG_F] = sz53p_table[val] | c;
     return val;
 }
 
 uint8_t alu_rr(uint8_t val) {
     uint8_t c = val & 0x01;
-    val = (val >> 1) | ((regs_.f & Flags::C) << 7);
-    regs_.f = sz53p_table[val] | c;
+    val = (val >> 1) | ((regs_[REG_F] & Flags::C) << 7);
+    regs_[REG_F] = sz53p_table[val] | c;
     return val;
 }
 
 uint8_t alu_sla(uint8_t val) {
     uint8_t c = val >> 7;
     val <<= 1;
-    regs_.f = sz53p_table[val] | c;
+    regs_[REG_F] = sz53p_table[val] | c;
     return val;
 }
 
 uint8_t alu_sra(uint8_t val) {
     uint8_t c = val & 0x01;
     val = (val >> 1) | (val & 0x80); // Preserve sign bit
-    regs_.f = sz53p_table[val] | c;
+    regs_[REG_F] = sz53p_table[val] | c;
     return val;
 }
 
@@ -305,21 +305,21 @@ uint8_t alu_sll(uint8_t val) {
     // Undocumented: SLL shifts left and sets bit 0
     uint8_t c = val >> 7;
     val = (val << 1) | 0x01;
-    regs_.f = sz53p_table[val] | c;
+    regs_[REG_F] = sz53p_table[val] | c;
     return val;
 }
 
 uint8_t alu_srl(uint8_t val) {
     uint8_t c = val & 0x01;
     val >>= 1;
-    regs_.f = sz53p_table[val] | c;
+    regs_[REG_F] = sz53p_table[val] | c;
     return val;
 }
 
 // BIT test — sets Z, H, clears N. Undocumented flags from the value.
 void alu_bit(uint8_t bit, uint8_t val) {
     uint8_t result = val & (1 << bit);
-    regs_.f = (regs_.f & Flags::C)
+    regs_[REG_F] = (regs_[REG_F] & Flags::C)
             | Flags::H
             | (result ? 0 : (Flags::Z | Flags::PV))
             | (result & Flags::S)
@@ -329,11 +329,11 @@ void alu_bit(uint8_t bit, uint8_t val) {
 // BIT test for (HL)/(IX+d)/(IY+d) — undocumented flags from high byte of WZ (MEMPTR)
 void alu_bit_hl(uint8_t bit, uint8_t val) {
     uint8_t result = val & (1 << bit);
-    regs_.f = (regs_.f & Flags::C)
+    regs_[REG_F] = (regs_[REG_F] & Flags::C)
             | Flags::H
             | (result ? 0 : (Flags::Z | Flags::PV))
             | (result & Flags::S)
-            | (regs_.w & (Flags::Y | Flags::X));
+            | (regs_[REG_W] & (Flags::Y | Flags::X));
 }
 
 // ========================================================================
@@ -341,53 +341,53 @@ void alu_bit_hl(uint8_t bit, uint8_t val) {
 // ========================================================================
 
 void alu_daa() {
-    uint8_t a = regs_.a;
+    uint8_t a = regs_[REG_A];
     uint8_t correction = 0;
     uint8_t c = 0;
 
-    if ((regs_.f & Flags::H) || (a & 0x0F) > 0x09) correction |= 0x06;
-    if ((regs_.f & Flags::C) || a > 0x99) { correction |= 0x60; c = Flags::C; }
+    if ((regs_[REG_F] & Flags::H) || (a & 0x0F) > 0x09) correction |= 0x06;
+    if ((regs_[REG_F] & Flags::C) || a > 0x99) { correction |= 0x60; c = Flags::C; }
 
-    if (regs_.f & Flags::N) {
-        regs_.a -= correction;
+    if (regs_[REG_F] & Flags::N) {
+        regs_[REG_A] -= correction;
     } else {
-        regs_.a += correction;
+        regs_[REG_A] += correction;
     }
 
-    regs_.f = sz53p_table[regs_.a]
-            | (regs_.f & Flags::N)
-            | ((regs_.a ^ a) & Flags::H)
+    regs_[REG_F] = sz53p_table[regs_[REG_A]]
+            | (regs_[REG_F] & Flags::N)
+            | ((regs_[REG_A] ^ a) & Flags::H)
             | c;
 }
 
 void alu_cpl() {
-    regs_.a = ~regs_.a;
-    regs_.f = (regs_.f & (Flags::S | Flags::Z | Flags::PV | Flags::C))
-            | (regs_.a & (Flags::Y | Flags::X))
+    regs_[REG_A] = ~regs_[REG_A];
+    regs_[REG_F] = (regs_[REG_F] & (Flags::S | Flags::Z | Flags::PV | Flags::C))
+            | (regs_[REG_A] & (Flags::Y | Flags::X))
             | Flags::H | Flags::N;
 }
 
 void alu_neg() {
-    uint8_t val = regs_.a;
-    regs_.a = 0;
+    uint8_t val = regs_[REG_A];
+    regs_[REG_A] = 0;
     alu_sub(val);
 }
 
 void alu_ccf() {
     // Y/X flags: if previous instruction modified flags (q_saved_), use A only;
     // otherwise use (A | F) to include old flag bits in Y/X.
-    uint8_t yx = q_saved_ ? (regs_.a & (Flags::Y | Flags::X))
-                          : ((regs_.a | regs_.f) & (Flags::Y | Flags::X));
-    regs_.f = (regs_.f & (Flags::S | Flags::Z | Flags::PV))
-            | ((regs_.f & Flags::C) ? Flags::H : 0)
+    uint8_t yx = q_saved_ ? (regs_[REG_A] & (Flags::Y | Flags::X))
+                          : ((regs_[REG_A] | regs_[REG_F]) & (Flags::Y | Flags::X));
+    regs_[REG_F] = (regs_[REG_F] & (Flags::S | Flags::Z | Flags::PV))
+            | ((regs_[REG_F] & Flags::C) ? Flags::H : 0)
             | yx
-            | ((regs_.f & Flags::C) ^ Flags::C);
+            | ((regs_[REG_F] & Flags::C) ^ Flags::C);
 }
 
 void alu_scf() {
-    uint8_t yx = q_saved_ ? (regs_.a & (Flags::Y | Flags::X))
-                          : ((regs_.a | regs_.f) & (Flags::Y | Flags::X));
-    regs_.f = (regs_.f & (Flags::S | Flags::Z | Flags::PV))
+    uint8_t yx = q_saved_ ? (regs_[REG_A] & (Flags::Y | Flags::X))
+                          : ((regs_[REG_A] | regs_[REG_F]) & (Flags::Y | Flags::X));
+    regs_[REG_F] = (regs_[REG_F] & (Flags::S | Flags::Z | Flags::PV))
             | yx
             | Flags::C;
 }
@@ -397,17 +397,17 @@ void alu_scf() {
 // A = (A high nibble, old (HL) high nibble → A low nibble)
 void alu_rld(uint8_t& mem) {
     uint8_t old_mem = mem;
-    mem = static_cast<uint8_t>((old_mem << 4) | (regs_.a & 0x0F));
-    regs_.a = (regs_.a & 0xF0) | (old_mem >> 4);
-    regs_.f = (regs_.f & Flags::C) | sz53p_table[regs_.a];
+    mem = static_cast<uint8_t>((old_mem << 4) | (regs_[REG_A] & 0x0F));
+    regs_[REG_A] = (regs_[REG_A] & 0xF0) | (old_mem >> 4);
+    regs_[REG_F] = (regs_[REG_F] & Flags::C) | sz53p_table[regs_[REG_A]];
 }
 
 // RRD: Rotate right digit
 void alu_rrd(uint8_t& mem) {
     uint8_t old_mem = mem;
-    mem = static_cast<uint8_t>((regs_.a << 4) | (old_mem >> 4));
-    regs_.a = (regs_.a & 0xF0) | (old_mem & 0x0F);
-    regs_.f = (regs_.f & Flags::C) | sz53p_table[regs_.a];
+    mem = static_cast<uint8_t>((regs_[REG_A] << 4) | (old_mem >> 4));
+    regs_[REG_A] = (regs_[REG_A] & 0xF0) | (old_mem & 0x0F);
+    regs_[REG_F] = (regs_[REG_F] & Flags::C) | sz53p_table[regs_[REG_A]];
 }
 
 // Dispatch CB shift/rotate by 3-bit operation field
