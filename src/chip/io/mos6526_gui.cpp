@@ -1,4 +1,5 @@
 #include "chip/io/mos6526.hpp"
+using namespace MOS6526::cia_detail;
 #include "core/chip_layout.hpp"
 #include "core/pin_macros.hpp"
 // Native Dear ImGui C++ - conditional compilation for GUI availability

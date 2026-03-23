@@ -218,9 +218,9 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
     if constexpr (trace_instructions) {
       static int instruction_count = 0;
       if (instruction_count < 100) {
-        uint16_t pc = this->get(REG_PC);
-        uint16_t ab = this->get(REG_AB); // Get address bus from register
-        uint8_t ir = this->get(REG_IR);  // Get instruction register
+        uint16_t pc = regs_[PC];
+        uint16_t ab = regs_[AB]; // Get address bus from register
+        uint8_t ir = regs_[IR];  // Get instruction register
 
         // NOTE: This trace uses placeholder operand values (0x00, 0x00)
         // For accurate operand display, tracing should be done at the system level
@@ -235,9 +235,9 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
                ab, ir, disasm_buffer);
 
         // Get instruction info if opcode is valid
-        printf("A=$%02X X=$%02X Y=$%02X S=$%02X P=$%02X\n", this->get(REG_A),
-               this->get(REG_X), this->get(REG_Y), this->get(REG_SPL),
-               this->get(REG_P));
+        printf("A=$%02X X=$%02X Y=$%02X S=$%02X P=$%02X\n", regs_[A],
+               regs_[X], regs_[Y], regs_[SPL],
+               regs_[P]);
 
         instruction_count++;
         if (instruction_count == 100) {
@@ -283,16 +283,16 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
       if constexpr (has_wide_registers()) {
         trace("REGS %s: PBR=%02X:PC=%04X A16=%05X X16=%04X Y16=%04X P=%02X "
               "ZBR=%02X:S=%02X DBR=%02X(:AB=%04X DL=%02X)",
-              context, this->get(REG_PBR), this->get(REG_PC),
-              this->get(REG_A_16), this->get(REG_X_16), this->get(REG_Y_16),
-              this->get(REG_P), this->get(REG_ZBR), this->get(REG_S),
-              this->get(REG_DBR), this->get(REG_AB), this->get(REG_DL));
+              context, regs_[PBR], regs_[PC],
+              regs_[A16], regs_[X16], regs_[Y16],
+              regs_[P], regs_[ZBR], regs_[S],
+              regs_[DBR], regs_[AB], regs_[DL]);
       } else {
         trace("REGS %s: PC=%04X A=%02X X=%02X Y=%02X P=%02X S=%02X (AB=%04X "
               "DL=%02X IR=%02X)",
-              context, this->get(REG_PC), this->get(REG_A), this->get(REG_X),
-              this->get(REG_Y), this->get(REG_P), this->get(REG_S),
-              this->get(REG_AB), this->get(REG_DL), this->get(REG_IR));
+              context, regs_[PC], regs_[A], regs_[X],
+              regs_[Y], regs_[P], regs_[S],
+              regs_[AB], regs_[DL], regs_[IR]);
       }
     }
   }
@@ -306,14 +306,14 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
   void trace_addressing_mode(const char *am_name) const {
     if constexpr (ENABLE_TRACING) {
       trace("AM %s: IR=0x%02X cycle=%d AB=%04X PC=%04X", am_name,
-            this->get(REG_IR), this->half_cycle, this->get(REG_AB),
-            this->get(REG_PC));
+            regs_[IR], this->half_cycle, regs_[AB],
+            regs_[PC]);
     }
   }
 
   void trace_operation(const char *function_name) const {
     if constexpr (ENABLE_TRACING) {
-      trace("OP: %s (IR=0x%02X cycle=%d)", function_name, this->get(REG_IR),
+      trace("OP: %s (IR=0x%02X cycle=%d)", function_name, regs_[IR],
             this->half_cycle);
     }
   }
@@ -326,20 +326,17 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
 
   /**
    * Template tooling function that returns true when 16-bit mode is required
-   * for the specified register. Handles all processor types and modes.
+   * for the specified width mode. Handles all processor types and modes.
    *
-   * @tparam reg_type The register type (REG_A, REG_X, REG_Y, or memory
-   * placeholder)
-   * @return true if 16-bit mode should be used for this register
+   * @tparam WM WidthMode::ACC (accumulator), WidthMode::IDX (index), or
+   * WidthMode::MEM (always 8-bit)
+   * @return true if 16-bit mode should be used
    */
-  template <reg8_t reg_type> inline bool is_register_16bit() const {
+  template <WidthMode WM> inline bool is_register_16bit() const {
     if constexpr (has_wide_registers()) {
-      // 65C816: Check register-specific width flags
-      if constexpr (reg_type == REG_A) {
-        // Accumulator: M=0 means 16-bit (only in native mode)
+      if constexpr (WM == WidthMode::ACC) {
         return this->is_accumulator_16bit();
-      } else if constexpr (reg_type == REG_X || reg_type == REG_Y) {
-        // Index registers: X=0 means 16-bit (only in native mode)
+      } else if constexpr (WM == WidthMode::IDX) {
         return this->is_index_16bit();
       }
     }
@@ -356,7 +353,7 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
 
     // PC always uses PBR, even in emulation mode
     if constexpr (addr_arg == Addr::PC)
-      return this->get(REG_PBR);
+      return regs_[PBR];
 
     // Stack always uses bank 0 (both emulation and native mode)
     // In emulation mode: SP is 8-bit constrained to page 1 (0x0100-0x01FF)
@@ -369,7 +366,7 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
     // Use the provided bank register (DBR or ZBR)
     // Note: In emulation mode, DBR cannot be changed via instructions,
     // but its current value is still used for address calculation
-    return this->get(static_cast<reg8_t>(bank_arg));
+    return regs_.at<uint8_t>(static_cast<uint8_t>(bank_arg));
   }
 
   // ========================================================================
@@ -417,9 +414,8 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
       addr = this->get_sp();
     } else {
       // Get address from the specified address register
-      constexpr reg16_t addr_reg = static_cast<reg16_t>(addr_arg);
-      // Non-SP addresses: Use register directly
-      addr = this->get(addr_reg);
+      // Get address from the specified address register (Addr value = byte offset)
+      addr = regs_[r16{static_cast<uint16_t>(addr_arg)}];
     }
 
     // For 8/16-bit CPUs: use address field
@@ -473,12 +469,12 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
   }
 
   /**
-   * Set up bus for write cycle with register enum - NO MEMORY ACCESS
-   * Overload that accepts reg8_t enum, retrieves value, and forwards to original
+   * Set up bus for write cycle with register index - NO MEMORY ACCESS
+   * Overload that accepts r8 index, retrieves value, and forwards to original
    */
   template <Addr addr_reg, Bank bank_arg = Bank::DBR>
-  inline bus_state_t bus_setup_write(bus_state_t pins, reg8_t data_reg) {
-    return bus_setup_write<addr_reg, bank_arg>(pins, this->get(data_reg));
+  inline bus_state_t bus_setup_write(bus_state_t pins, r8 data_reg) {
+    return bus_setup_write<addr_reg, bank_arg>(pins, uint8_t(regs_[data_reg]));
   }
 
   /**
@@ -498,7 +494,7 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
    * For memory modes: reads from AB (effective address calculated)
    *
    * For 65C816: Zero-page/Direct-page modes always use Bank 0 (ZBR)
-   * regardless of what's stored in REG_ABH, to prevent corruption of
+   * regardless of what's stored in ABH, to prevent corruption of
    * banking information by operand high bytes in 16-bit operations.
    *
    * This is a runtime check and cannot be avoided because immediate and
@@ -543,8 +539,8 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
    * Load register from bus data (PHI1 phase)
    * Single-line helper for clean read handling
    */
-  inline void bus_load_reg(reg8_t data_reg, bus_state_t pins) {
-    this->set(data_reg, bus_get_data(pins));
+  inline void bus_load_reg(r8 data_reg, bus_state_t pins) {
+    regs_[data_reg] = bus_get_data(pins);
   }
 
   /**
@@ -556,16 +552,16 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
     
     // Immediate mode: increment PC
     if (am == to_index(AM::IMM)) {
-      this->inc(REG_PC);
+      ++regs_[PC];
     } else if constexpr (has_wide_registers()) {
       // Memory modes for 65C816: increment address for next byte
       // Direct Page modes (ZER, ZPX, ZPY): Always increment only ABL
       // These read from Direct Page which is always in bank 0
       // ZPI is NOT included - it's indirect so target can be anywhere
       if (am <= to_index(AM::ZPY)) {
-        this->inc(REG_ABL);
+        ++regs_[ABL];
       } else {
-        this->inc(REG_AB);
+        ++regs_[AB];
       }
     }
     return this->bus_get_data(pins);
@@ -575,10 +571,10 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
    * Load register from bus and increment PC if immediate mode (PHI1 phase)
    * Unified helper for immediate mode operand handling
    */
-  inline void bus_load_operand(reg8_t data_reg, bus_state_t pins) {
+  inline void bus_load_operand(r8 data_reg, bus_state_t pins) {
     const uint8_t operand = this->bus_get_operand(pins);
     // Load data from bus into register
-    this->set(data_reg, operand);
+    regs_[data_reg] = operand;
   }
 
   // ========================================================================
@@ -738,8 +734,8 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
         return pins;
       case 1:
         // PHI1: Load low byte from bus
-        this->bus_load_reg(REG_DL, pins);
-        this->inc(REG_ABL); // Increment address for high byte
+        this->bus_load_reg(DL, pins);
+        ++regs_[ABL]; // Increment address for high byte
         this->half_cycle++;
         return pins;
 
@@ -749,7 +745,7 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
         return pins;
       case 3:
         // PHI1: Load high byte and perform dummy cycle setup
-        this->bus_load_reg(REG_SBR, pins); // Note : Uses REG_SBR as temporary storage (allowed gievn its limited scope)
+        this->bus_load_reg(SBR, pins); // Note : Uses SBR as temporary storage (allowed gievn its limited scope)
         this->half_cycle++;
         return pins;
 
@@ -757,7 +753,7 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
         // PHI2: Dummy cycle
         if (this->has_rmw_dummy_write()) {
           // NMOS: Dummy write of high byte
-          pins = this->bus_setup_write<Addr::AB, BankArg>(pins, REG_SBR);
+          pins = this->bus_setup_write<Addr::AB, BankArg>(pins, SBR);
         } else {
           // CMOS: Dummy read instead of write
           pins = this->bus_setup_dummy<Addr::AB, BankArg>(pins);
@@ -765,31 +761,31 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
         return pins;
       case 5: {
         // PHI1: Perform 16-bit operation
-        uint16_t value16 = static_cast<uint16_t>(this->get(REG_DL)) |
-                           (static_cast<uint16_t>(this->get(REG_SBR)) << 8);
+        uint16_t value16 = static_cast<uint16_t>(regs_[DL]) |
+                           (static_cast<uint16_t>(regs_[SBR]) << 8);
         data_t value = static_cast<data_t>(value16);
         operation_func(value);
         value16 = static_cast<uint16_t>(value);
-        this->set(REG_DL, static_cast<uint8_t>(value16 & 0xFF)); // Low byte
-        this->set(REG_SBR, // Note : Uses REG_SBR as temporary storage (allowed gievn its limited scope)
-                  static_cast<uint8_t>((value16 >> 8) & 0xFF)); // High byte
+        regs_[DL] = static_cast<uint8_t>(value16 & 0xFF); // Low byte
+        regs_[SBR] = // Note : Uses SBR as temporary storage (allowed gievn its limited scope
+                  static_cast<uint8_t>((value16 >> 8) & 0xFF); // High byte
         this->half_cycle++;
         return pins;
       }
 
       case 6:
         // Cycle 6 PHI2: Write high byte back to memory (address + 1)
-        pins = this->bus_setup_write<Addr::AB, BankArg>(pins, REG_SBR);
+        pins = this->bus_setup_write<Addr::AB, BankArg>(pins, SBR);
         return pins;
       case 7:
         // Cycle 7 PHI1: Decrement address
-        this->dec(REG_ABL); // Decrement address back to low byte
+        --regs_[ABL]; // Decrement address back to low byte
         this->half_cycle++;
         return pins;
 
       case 8:
         // Cycle 8 PHI2: Write low byte back to memory (address)
-        pins = this->bus_setup_write<Addr::AB, BankArg>(pins, REG_DL);
+        pins = this->bus_setup_write<Addr::AB, BankArg>(pins, DL);
         return pins;
       case 9:
         // Cycle 9 PHI1: Complete operation
@@ -805,7 +801,7 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
         return pins;
       case 1:
         // PHI1: Load original value from bus
-        this->bus_load_reg(REG_DL, pins);
+        this->bus_load_reg(DL, pins);
         this->half_cycle++;
         return pins;
 
@@ -813,7 +809,7 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
         // PHI2: Dummy cycle
         if (this->has_rmw_dummy_write()) {
           // NMOS: Dummy write of original value
-          pins = this->bus_setup_write<Addr::AB, BankArg>(pins, REG_DL);
+          pins = this->bus_setup_write<Addr::AB, BankArg>(pins, DL);
         } else {
           // CMOS: Dummy read instead of write
           pins = this->bus_setup_dummy<Addr::AB, BankArg>(pins);
@@ -821,16 +817,16 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
         return pins;
       case 3: {
         // PHI1: Perform modification
-        data_t value = static_cast<data_t>(this->get(REG_DL));
+        data_t value = static_cast<data_t>(regs_[DL]);
         operation_func(value);
-        this->set(REG_DL, static_cast<uint8_t>(value & 0xFF));
+        regs_[DL] = static_cast<uint8_t>(value & 0xFF);
         this->half_cycle++;
         return pins;
       }
 
       case 4:
         // PHI2: Write modified value back to memory
-        pins = this->bus_setup_write<Addr::AB, BankArg>(pins, REG_DL);
+        pins = this->bus_setup_write<Addr::AB, BankArg>(pins, DL);
         return pins;
       case 5:
         // Cycle 5 PHI1: Complete operation
@@ -1269,11 +1265,11 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
       this->branch_irq_suppression_ = false;
 
       // Copy PC to AB and increment PC
-      this->set(REG_AB, this->get(REG_PC));
-      this->inc(REG_PC);
+      regs_[AB] = regs_[PC];
+      ++regs_[PC];
       // Sample opcode from bus and decode
       uint8_t opcode = this->bus_get_data(pins);
-      this->set(REG_IR, opcode);
+      regs_[IR] = opcode;
       // Clear SYNC signal after opcode fetch completes (hardware-accurate timing)
       pins &= ~FAM65XX_SYNC;
       // Transition resets half_cycle to 0 for new instructions except
@@ -1566,11 +1562,11 @@ public:
    */
   inline void set_emulation_mode(bool mode) {
     if constexpr (has_wide_registers()) {
-      // Use REG_P_16 to handle FLAG_E (bit 8) directly
+      // Use P16 to handle FLAG_E (bit 8) directly
       if (mode) {
-        this->set(REG_P_16, this->get(REG_P_16) | FLAG_E);
+        regs_[P16] = regs_[P16] | FLAG_E;
       } else {
-        this->set(REG_P_16, this->get(REG_P_16) & ~FLAG_E);
+        regs_[P16] = regs_[P16] & ~FLAG_E;
       }
     }
     // Non-65C816 processors: no-op (always in emulation mode)
@@ -1582,7 +1578,7 @@ public:
    */
   inline bool in_emulation_mode() const {
     if constexpr (has_wide_registers()) {
-      return (this->get(REG_P_16) & FLAG_E) != 0;
+      return (regs_[P16] & FLAG_E) != 0;
     } else {
       // Non-65C816 processors are always in "emulation mode" (6502
       // compatibility)
@@ -1597,7 +1593,7 @@ public:
   inline bool is_accumulator_16bit() const {
     if constexpr (has_wide_registers()) {
       // 16-bit when BOTH emulation=0 AND M=0
-      return !(this->get(REG_P_16) & (FLAG_E | FLAG_M));
+      return !(regs_[P16] & (FLAG_E | FLAG_M));
     } else {
       // Non-65C816 processors: always 8-bit
       return false;
@@ -1612,7 +1608,7 @@ public:
     if constexpr (has_wide_registers()) {
       // Memory operations are 16-bit when BOTH emulation=0 AND M=0 (same as
       // accumulator)
-      return !(this->get(REG_P_16) & (FLAG_E | FLAG_M));
+      return !(regs_[P16] & (FLAG_E | FLAG_M));
     } else {
       // Non-65C816 processors: always 8-bit
       return false;
@@ -1626,7 +1622,7 @@ public:
   inline bool is_index_16bit() const {
     if constexpr (has_wide_registers()) {
       // 16-bit when BOTH emulation=0 AND X=0
-      return !(this->get(REG_P_16) & (FLAG_E | FLAG_X));
+      return !(regs_[P16] & (FLAG_E | FLAG_X));
     } else {
       // Non-65C816 processors: always 8-bit
       return false;
@@ -1695,8 +1691,8 @@ public:
    * @param reset_vector  The 16-bit address to load into PC and AB.
    */
   void load_reset_vector(uint16_t reset_vector) {
-    this->set(REG_PC, reset_vector);
-    this->set(REG_AB, reset_vector);
+    regs_[PC] = reset_vector;
+    regs_[AB] = reset_vector;
   }
 
   bus_state_t bootstrap(bus_state_t pins) {
@@ -1918,7 +1914,7 @@ public:
       //   - For RTI (6-cycle): I is restored from the stack in cycle 4.
       //     The save at cycle 5 PHI1 captures the RESTORED value,
       //     so RTI takes effect immediately — no spurious delay.
-      this->irq_i_flag_sample_ = (this->get(REG_P) & FLAG_I);
+      this->irq_i_flag_sample_ = (regs_[P] & FLAG_I);
 
       // Handle I/O port and APU memory accesses BEFORE calling handler
       // These functions intercept memory operations for internal CPU features
@@ -2052,32 +2048,32 @@ private:
 
     // ---- CPU Registers ----
     r.category("CPU Registers");
-    r.value("A", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_A); }, 8);
-    r.value("X", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_X); }, 8);
-    r.value("Y", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_Y); }, 8);
-    r.address("SP", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_SP); }, 16);
-    r.address("PC", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_PC); }, 16);
-    r.flag_string("P", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_P); },
+    r.value("A", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->regs_[A]; }, 8);
+    r.value("X", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->regs_[X]; }, 8);
+    r.value("Y", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->regs_[Y]; }, 8);
+    r.address("SP", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->regs_[SP]; }, 16);
+    r.address("PC", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->regs_[PC]; }, 16);
+    r.flag_string("P", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->regs_[P]; },
         "NVuBDIZC", "nvubdizc", 8);
 
     if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-      r.address("Direct Page", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_D); }, 16);
-      r.value("Data Bank", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_DBR); }, 8);
-      r.value("Program Bank", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_PBR); }, 8);
+      r.address("Direct Page", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->regs_[D]; }, 16);
+      r.value("Data Bank", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->regs_[DBR]; }, 8);
+      r.value("Program Bank", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->regs_[PBR]; }, 8);
     }
 
     // ---- Internal State ----
     r.category("Internal State");
-    r.value("IR", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_IR); }, 8);
-    r.value("Data Latch", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_DL); }, 8);
-    r.address("Address Bus", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_AB); },
+    r.value("IR", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->regs_[IR]; }, 8);
+    r.value("Data Latch", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->regs_[DL]; }, 8);
+    r.address("Address Bus", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->regs_[AB]; },
         Traits.address_bits);
     r.value("Half Cycle", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->half_cycle; }, 8);
     r.flag("Op Done", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->opdone(); });
 
     // ---- Interrupt State ----
     r.category("Interrupt State", false);
-    r.flag("IRQ Disabled", +[](const ChipBase* c) -> uint32_t { return (static_cast<CPU*>(c)->get(REG_P) & FLAG_I) ? 1u : 0u; });
+    r.flag("IRQ Disabled", +[](const ChipBase* c) -> uint32_t { return (uint8_t(static_cast<CPU*>(c)->regs_[P]) & FLAG_I) ? 1u : 0u; });
 
     if constexpr (Traits.has(CPUCoreFlags::CMOS_BASE)) {
       r.flag("Wait for IRQ", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->wait_for_interrupt; });

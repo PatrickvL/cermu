@@ -25,8 +25,8 @@ bus_state_t op_rep(bus_state_t pins) {
       return pins;
     case 1:
       // Cycle 1 PHI1: Load data and increment PC
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(DL, pins);
+      ++regs_[PC];
       this->half_cycle++;
       return pins;
 
@@ -36,12 +36,12 @@ bus_state_t op_rep(bus_state_t pins) {
       return pins;
     case 3: {
       // Cycle 2 PHI1: Reset specified status bits (clear bits that are 1 in operand)
-      uint8_t mask = this->get(REG_DL);
+      uint8_t mask = regs_[DL];
       if (this->in_emulation_mode()) {
         // In emulation mode, cannot clear M or X flags (bits 5 and 4)
         mask &= ~(FLAG_M | FLAG_X);
       }
-      this->set(REG_P, this->get(REG_P) & ~mask);
+      regs_[P] = regs_[P] & ~mask;
       this->transition_to_fetch();
       return pins;
     }
@@ -63,8 +63,8 @@ bus_state_t op_sep(bus_state_t pins) {
       return pins;
     case 1:
       // Cycle 1 PHI1: Load data and increment PC
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(DL, pins);
+      ++regs_[PC];
       this->half_cycle++;
       return pins;
 
@@ -74,21 +74,21 @@ bus_state_t op_sep(bus_state_t pins) {
       return pins;
     case 3: {
       // Cycle 2 PHI1: Set specified status bits (set bits that are 1 in operand)
-      uint8_t mask = this->get(REG_DL);
+      uint8_t mask = regs_[DL];
       if (this->in_emulation_mode()) {
         // In emulation mode, cannot set M or X flags (bits 5 and 4)
         mask &= ~(FLAG_M | FLAG_X);
       }
       
-      uint8_t old_p = this->get(REG_P);
-      this->set(REG_P, old_p | mask);
+      uint8_t old_p = regs_[P];
+      regs_[P] = old_p | mask;
       
       // X flag (bit 4): Controls index register width
       // When switching from 16-bit to 8-bit index mode, clear high bytes
       if ((mask & FLAG_X) && !(old_p & FLAG_X)) {
         // Switching index registers from 16-bit to 8-bit: clear XH and YH
-        this->set(REG_XH, 0x00);
-        this->set(REG_YH, 0x00);
+        regs_[XH] = 0x00;
+        regs_[YH] = 0x00;
       }
       
       // NOTE: M flag (bit 5) controls accumulator width, but does NOT clear AH
@@ -113,7 +113,7 @@ bus_state_t op_xce(bus_state_t pins) {
     case 0: {
       // Internal cycle - exchange carry and emulation flags
       // CRITICAL: Work with both 8-bit P and emulation flag separately
-      uint16_t p_reg_16 = this->get(REG_P_16);
+      uint16_t p_reg_16 = regs_[P16];
       bool old_carry = (p_reg_16 & FLAG_C) != 0;
       bool old_emulation = (p_reg_16 & FLAG_E) != 0;
 
@@ -131,15 +131,15 @@ bus_state_t op_xce(bus_state_t pins) {
         p_reg_16 &= ~FLAG_E; // Clear emulation if old carry was clear
       }
 
-      this->set(REG_P_16, p_reg_16);
+      regs_[P16] = p_reg_16;
       // Handle mode transition side effects only when switching TO emulation
       // mode
       if (old_carry && !old_emulation) {
         // Switching from native to emulation mode - truncate index registers
-        this->set(REG_XH, 0);
-        this->set(REG_YH, 0);
-        this->set(REG_SPH, 0x01);
-        this->set(REG_D_16, 0);
+        regs_[XH] = 0;
+        regs_[YH] = 0;
+        regs_[SPH] = 0x01;
+        regs_[D16] = 0;
       }
 
       this->half_cycle++;
@@ -170,8 +170,8 @@ bus_state_t op_pea(bus_state_t pins) {
       return pins;
     case 1:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_ABL, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(ABL, pins);
+      ++regs_[PC];
       this->half_cycle++;
       return pins;
 
@@ -181,14 +181,14 @@ bus_state_t op_pea(bus_state_t pins) {
       return pins;
     case 3:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_ABH, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(ABH, pins);
+      ++regs_[PC];
       this->half_cycle++;
       return pins;
 
     case 4:
       // PHI2: Push high byte first
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_ABH);
+      pins = this->bus_setup_write<Addr::SP>(pins, ABH);
       return pins;
     case 5:
       this->dec_stack();
@@ -197,7 +197,7 @@ bus_state_t op_pea(bus_state_t pins) {
 
     case 6:
       // PHI2: Push low byte
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_ABL);
+      pins = this->bus_setup_write<Addr::SP>(pins, ABL);
       return pins;
     case 7:
       this->dec_stack();
@@ -218,7 +218,7 @@ bus_state_t op_phb(bus_state_t pins) {
     switch (this->half_cycle) {
     case 0:
       // PHI2: Push DBR to stack
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_DBR);
+      pins = this->bus_setup_write<Addr::SP>(pins, DBR);
       return pins;
     case 1:
       this->dec_stack();
@@ -239,7 +239,7 @@ bus_state_t op_phd(bus_state_t pins) {
     switch (this->half_cycle) {
     case 0:
       // PHI2: Push D register (Direct Page) high byte first
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_DPH);
+      pins = this->bus_setup_write<Addr::SP>(pins, DPH);
       return pins;
     case 1:
       this->dec_stack();
@@ -248,7 +248,7 @@ bus_state_t op_phd(bus_state_t pins) {
 
     case 2:
       // PHI2: Push D register (Direct Page) low byte
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_DPL);
+      pins = this->bus_setup_write<Addr::SP>(pins, DPL);
       return pins;
     case 3:
       this->dec_stack();
@@ -277,7 +277,7 @@ bus_state_t op_phk(bus_state_t pins) {
 
     case 2:
       // Push PBR to stack
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_PBR);
+      pins = this->bus_setup_write<Addr::SP>(pins, PBR);
       return pins;
     case 3:
       this->dec_stack();
@@ -320,7 +320,7 @@ bus_state_t op_plb(bus_state_t pins) {
       return pins;
     case 5: {
       uint8_t operand = this->bus_get_data(pins);
-      this->set(REG_DBR, operand);
+      regs_[DBR] = operand;
       this->update_nz_flags(operand);
       this->transition_to_fetch();
     }
@@ -353,7 +353,7 @@ bus_state_t op_pld(bus_state_t pins) {
       return pins;
     case 3:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DPL, pins);
+      this->bus_load_reg(DPL, pins);
       this->inc_stack();
       this->half_cycle++;
       return pins;
@@ -364,9 +364,9 @@ bus_state_t op_pld(bus_state_t pins) {
       return pins;
     case 5:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DPH, pins);
+      this->bus_load_reg(DPH, pins);
       this->update_nz_flags(
-          this->get(REG_DPL)); // Only check low byte for flags
+          regs_[DPL]); // Only check low byte for flags
       this->transition_to_fetch();
       return pins;
     }
@@ -392,8 +392,8 @@ bus_state_t op_jsl(bus_state_t pins) {
       return pins;
     case 1:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_ABL, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(ABL, pins);
+      ++regs_[PC];
       this->half_cycle++;
       return pins;
 
@@ -403,8 +403,8 @@ bus_state_t op_jsl(bus_state_t pins) {
       return pins;
     case 3:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_ABH, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(ABH, pins);
+      ++regs_[PC];
       this->half_cycle++;
       return pins;
 
@@ -414,7 +414,7 @@ bus_state_t op_jsl(bus_state_t pins) {
       return pins;
     case 5:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
+      this->bus_load_reg(DL, pins);
       // JSL pushes PC-1 (address of last byte of instruction)
       this->half_cycle++;
       return pins;
@@ -422,7 +422,7 @@ bus_state_t op_jsl(bus_state_t pins) {
     case 6:
       // Push program bank register
       // Store PBR in TMP for pushing
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_PBR);
+      pins = this->bus_setup_write<Addr::SP>(pins, PBR);
       return pins;
     case 7:
       // Push PC high byte
@@ -433,7 +433,7 @@ bus_state_t op_jsl(bus_state_t pins) {
     case 8:
       // Push PC low byte
 
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_PCH);
+      pins = this->bus_setup_write<Addr::SP>(pins, PCH);
       return pins;
 
     case 9:
@@ -442,14 +442,13 @@ bus_state_t op_jsl(bus_state_t pins) {
       return pins;
 
     case 10:
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_PCL);
+      pins = this->bus_setup_write<Addr::SP>(pins, PCL);
       return pins;
     case 11:
       // Final write completes, set new PC and bank
       this->dec_stack();
-      this->set(REG_PC,
-                this->get(REG_AB)); // addr_high:addr_low from cases 0-1
-      this->set(REG_PBR, this->get(REG_DL)); // bank from case 2
+      regs_[PC] = regs_[AB]; // addr_high:addr_low from cases 0-1
+      regs_[PBR] = regs_[DL]; // bank from case 2
       this->transition_to_fetch();
       return pins;
     }
@@ -481,7 +480,7 @@ bus_state_t op_rtl(bus_state_t pins) {
       return pins;
     case 3:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_PCL, pins);
+      this->bus_load_reg(PCL, pins);
       this->inc_stack();
       this->half_cycle++;
       return pins;
@@ -491,7 +490,7 @@ bus_state_t op_rtl(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::SP>(pins);
       return pins;
     case 5:
-      this->bus_load_reg(REG_PCH, pins);
+      this->bus_load_reg(PCH, pins);
       this->inc_stack();
       this->half_cycle++;
       return pins;
@@ -502,8 +501,8 @@ bus_state_t op_rtl(bus_state_t pins) {
       return pins;
     case 7:
       // PHI1: Load PBR, increment PC, and complete
-      this->bus_load_reg(REG_PBR, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(PBR, pins);
+      ++regs_[PC];
       this->transition_to_fetch();
       return pins;
     }
@@ -533,8 +532,8 @@ bus_state_t op_per(bus_state_t pins) {
       return pins;
     case 1:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_ABL, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(ABL, pins);
+      ++regs_[PC];
       this->half_cycle++;
       return pins;
 
@@ -544,17 +543,17 @@ bus_state_t op_per(bus_state_t pins) {
       return pins;
     case 3: {
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_ABH, pins);
-      this->inc(REG_PC);
-      uint16_t effective_addr = this->get(REG_PC) + static_cast<int16_t>(this->get(REG_AB));
-      this->set(REG_AB, effective_addr);
+      this->bus_load_reg(ABH, pins);
+      ++regs_[PC];
+      uint16_t effective_addr = regs_[PC] + static_cast<int16_t>(regs_[AB]);
+      regs_[AB] = effective_addr;
       this->half_cycle++;
       return pins;
     }
 
     case 4:
       // Push high byte of effective address
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_ABH);
+      pins = this->bus_setup_write<Addr::SP>(pins, ABH);
       return pins;
     case 5:
       this->dec_stack();
@@ -563,7 +562,7 @@ bus_state_t op_per(bus_state_t pins) {
 
     case 6:
       // Push low byte of effective address
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_ABL);
+      pins = this->bus_setup_write<Addr::SP>(pins, ABL);
       return pins;
     case 7:
       this->dec_stack();
@@ -590,9 +589,9 @@ bus_state_t op_pei(bus_state_t pins) {
     case 1: {
       /* PHI1: Load data and perform operations */
       uint8_t zp_addr = this->bus_get_data(pins);
-      this->inc(REG_PC);
-      uint16_t dp_addr = this->get(REG_D_16) + zp_addr;
-      this->set(REG_AB, dp_addr);
+      ++regs_[PC];
+      uint16_t dp_addr = regs_[D16] + zp_addr;
+      regs_[AB] = dp_addr;
       this->half_cycle++;
       return pins;
     }
@@ -603,8 +602,8 @@ bus_state_t op_pei(bus_state_t pins) {
       return pins;
     case 3:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);  // Save low byte to DL (temp storage)
-      this->inc(REG_AB);  // Increment full 16-bit address (crosses pages)
+      this->bus_load_reg(DL, pins);  // Save low byte to DL (temp storage)
+      ++regs_[AB];  // Increment full 16-bit address (crosses pages)
       this->half_cycle++;
       return pins;
 
@@ -613,13 +612,13 @@ bus_state_t op_pei(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
       return pins;
     case 5:
-      this->bus_load_reg(REG_SBR, pins);  // Save high byte to SBR (temp storage)
+      this->bus_load_reg(SBR, pins);  // Save high byte to SBR (temp storage)
       this->half_cycle++;
       return pins;
 
     case 6:
       // Push high byte of effective address
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_SBR);
+      pins = this->bus_setup_write<Addr::SP>(pins, SBR);
       return pins;
     case 7:
       this->dec_stack();
@@ -628,7 +627,7 @@ bus_state_t op_pei(bus_state_t pins) {
 
     case 8:
       // Push low byte of effective address
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_DL);
+      pins = this->bus_setup_write<Addr::SP>(pins, DL);
       return pins;
     case 9:
       this->dec_stack();
@@ -652,9 +651,9 @@ bus_state_t op_xba(bus_state_t pins) {
     case 0:
       // Internal cycle - exchange high and low bytes of accumulator
       {
-        uint16_t acc = this->get(REG_C); // Get 16-bit accumulator
+        uint16_t acc = regs_[C]; // Get 16-bit accumulator
         uint16_t swapped = ((acc & 0x00FF) << 8) | ((acc & 0xFF00) >> 8);
-        this->set(REG_C, swapped);
+        regs_[C] = swapped;
         // Update N,Z flags based on new low byte
         this->update_nz_flags(swapped & 0xFF);
       }
@@ -683,8 +682,8 @@ bus_state_t op_mvn(bus_state_t pins) {
       return pins;
     case 1:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DBR, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(DBR, pins);
+      ++regs_[PC];
       this->half_cycle++;
       return pins;
 
@@ -694,9 +693,9 @@ bus_state_t op_mvn(bus_state_t pins) {
       return pins;
     case 3:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_SBR, pins);
-      this->inc(REG_PC);
-      this->set(REG_AB, this->get(REG_X));
+      this->bus_load_reg(SBR, pins);
+      ++regs_[PC];
+      regs_[AB] = regs_[X];
       this->half_cycle++;
       return pins;
 
@@ -706,24 +705,24 @@ bus_state_t op_mvn(bus_state_t pins) {
       return pins;
     case 5:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->set(REG_AB, this->get(REG_Y));
+      this->bus_load_reg(DL, pins);
+      regs_[AB] = regs_[Y];
       this->half_cycle++;
       return pins;
 
     case 6:
       // PHI2: Write to destination address (bank:Y)
-      pins = this->bus_setup_write<Addr::AB, Bank::DBR>(pins, REG_DL);
+      pins = this->bus_setup_write<Addr::AB, Bank::DBR>(pins, DL);
       return pins;
     case 7:
       // Increment X and Y
-      this->inc(REG_X);
-      this->inc(REG_Y);
+      ++regs_[X];
+      ++regs_[Y];
       // Decrement C (transfer count)
-      this->dec(REG_C);
+      --regs_[C];
       // Check if more bytes to transfer
-      if (this->get(REG_C) != 0xFFFF) {
-        this->set(REG_AB, this->get(REG_X));
+      if (regs_[C] != 0xFFFF) {
+        regs_[AB] = regs_[X];
         // Continue transfer - go back to cycle 4
         this->half_cycle = 4;
       } else {
@@ -747,8 +746,8 @@ bus_state_t op_mvp(bus_state_t pins) {
       return pins;
     case 1:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(DL, pins);
+      ++regs_[PC];
       this->half_cycle++;
       return pins;
 
@@ -758,10 +757,10 @@ bus_state_t op_mvp(bus_state_t pins) {
       return pins;
     case 3:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_SBR, pins);
-      this->inc(REG_PC);
-      this->set(REG_DBR, this->get(REG_DL)); // destination bank from case 1
-      this->set(REG_AB, this->get(REG_X));
+      this->bus_load_reg(SBR, pins);
+      ++regs_[PC];
+      regs_[DBR] = regs_[DL]; // destination bank from case 1
+      regs_[AB] = regs_[X];
       this->half_cycle++;
       return pins;
 
@@ -771,24 +770,24 @@ bus_state_t op_mvp(bus_state_t pins) {
       return pins;
     case 5:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->set(REG_AB, this->get(REG_Y));
+      this->bus_load_reg(DL, pins);
+      regs_[AB] = regs_[Y];
       this->half_cycle++;
       return pins;
 
     case 6:
       // PHI2: Write to destination address (bank:Y)
-      pins = this->bus_setup_write<Addr::AB, Bank::DBR>(pins, REG_DL);
+      pins = this->bus_setup_write<Addr::AB, Bank::DBR>(pins, DL);
       return pins;
     case 7:
       // Decrement X and Y (move in opposite direction from MVN)
-      this->dec(REG_X);
-      this->dec(REG_Y);
+      --regs_[X];
+      --regs_[Y];
       // Decrement C (transfer count)
-      this->dec(REG_C);
+      --regs_[C];
       // Check if more bytes to transfer
-      if (this->get(REG_C) != 0xFFFF) {
-        this->set(REG_AB, this->get(REG_X));
+      if (regs_[C] != 0xFFFF) {
+        regs_[AB] = regs_[X];
         // Continue transfer - go back to cycle 4
         this->half_cycle = 4;
       } else {
@@ -832,7 +831,7 @@ bus_state_t op_wdm(bus_state_t pins) {
       pins = this->bus_setup_dummy<Addr::PC>(pins);
       return pins;
     case 1:
-      this->inc(REG_PC);
+      ++regs_[PC];
       // WDM is essentially a 2-byte NOP - do nothing else
       this->transition_to_fetch();
       return pins;

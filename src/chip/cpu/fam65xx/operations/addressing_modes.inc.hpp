@@ -29,9 +29,9 @@ bus_state_t am_zp(bus_state_t pins) {
 
   case 1:
     /* PHI1: Load zero page address and set up address registers */
-    this->bus_load_reg(REG_ABL, pins);
-    this->inc(REG_PC);
-    this->set(REG_ABH, 0x00); // High byte is always 0 for zero page
+    this->bus_load_reg(ABL, pins);
+    ++regs_[PC];
+    regs_[ABH] = 0x00; // High byte is always 0 for zero page
     this->transition_to_operation();
     return pins;
   }
@@ -48,9 +48,9 @@ bus_state_t am_zpx(bus_state_t pins) {
     return pins;
   case 1:
     /* PHI1: Load base address and set up zero page */
-    this->bus_load_reg(REG_ABL, pins);
-    this->inc(REG_PC);
-    this->set(REG_ABH, 0x00); // High byte is always 0 for zero page
+    this->bus_load_reg(ABL, pins);
+    ++regs_[PC];
+    regs_[ABH] = 0x00; // High byte is always 0 for zero page
     this->half_cycle++;
     return pins;
 
@@ -60,7 +60,7 @@ bus_state_t am_zpx(bus_state_t pins) {
     return pins;
   case 3:
     /* PHI1: Add index to ABL address (wraps in zero page) */
-    this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_X));
+    regs_[ABL] = regs_[ABL] + regs_[X];
     this->transition_to_operation();
     return pins;
   }
@@ -77,9 +77,9 @@ bus_state_t am_zpy(bus_state_t pins) {
     return pins;
   case 1:
     /* PHI1: Load base address and set up zero page */
-    this->bus_load_reg(REG_ABL, pins);
-    this->inc(REG_PC);
-    this->set(REG_ABH, 0x00); // High byte is always 0 for zero page
+    this->bus_load_reg(ABL, pins);
+    ++regs_[PC];
+    regs_[ABH] = 0x00; // High byte is always 0 for zero page
     this->half_cycle++;
     return pins;
 
@@ -89,7 +89,7 @@ bus_state_t am_zpy(bus_state_t pins) {
     return pins;
   case 3:
     /* PHI1: Add index to ABL address (wraps in zero page) */
-    this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_Y));
+    regs_[ABL] = regs_[ABL] + regs_[Y];
     this->transition_to_operation();
     return pins;
   }
@@ -101,7 +101,7 @@ bus_state_t am_abs(bus_state_t pins) {
   trace_addressing_mode(__func__);
   // Check for 65C816 PEA (0xF4) in emulation mode - redirect to ZPX addressing
   if constexpr (has_wide_registers()) {
-    if (this->in_emulation_mode() && this->get(REG_IR) == 0xF4) {
+    if (this->in_emulation_mode() && regs_[IR] == 0xF4) {
       // PEA in emulation mode should behave as NOP zp,X
       pins = this->transition_to_opcode(pins, opcode_info_t{OP::NOP, AM::ZPX, OF::NONE});
       return this->call_current_handler(pins);
@@ -115,8 +115,8 @@ bus_state_t am_abs(bus_state_t pins) {
     return pins;
   case 1:
     /* PHI1: Load low byte */
-    this->bus_load_reg(REG_ABL, pins);
-    this->inc(REG_PC);
+    this->bus_load_reg(ABL, pins);
+    ++regs_[PC];
     this->half_cycle++;
     return pins;
 
@@ -126,8 +126,8 @@ bus_state_t am_abs(bus_state_t pins) {
     return pins;
   case 3:
     /* PHI1: Load high byte and transition */
-    this->bus_load_reg(REG_ABH, pins);
-    this->inc(REG_PC);
+    this->bus_load_reg(ABH, pins);
+    ++regs_[PC];
     this->transition_to_operation();
     return pins;
   }
@@ -144,8 +144,8 @@ bus_state_t am_abx(bus_state_t pins) {
     return pins;
   case 1:
     /* PHI1: Load data and perform operations */
-    this->bus_load_reg(REG_ABL, pins);
-    this->inc(REG_PC);
+    this->bus_load_reg(ABL, pins);
+    ++regs_[PC];
     this->half_cycle++;
     return pins;
 
@@ -154,12 +154,12 @@ bus_state_t am_abx(bus_state_t pins) {
     return pins;
   case 3: {
     /* PHI1: Load data and perform operations */
-    this->bus_load_reg(REG_ABH, pins);  // Load high byte into ABH
-    this->inc(REG_PC);
-    this->set(REG_DL, this->get(REG_ABH));
-    uint16_t base = this->get(REG_AB);
-    uint16_t effective = base + this->get(REG_X);
-    this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_X));
+    this->bus_load_reg(ABH, pins);  // Load high byte into ABH
+    ++regs_[PC];
+    regs_[DL] = regs_[ABH];
+    uint16_t base = regs_[AB];
+    uint16_t effective = base + regs_[X];
+    regs_[ABL] = regs_[ABL] + regs_[X];
     bool needs_penalty =
         this->page_crossed(base, effective) ||      // Page crossing
         (this->opcode_entry.is_rmw()) ||            // RMW operations
@@ -168,7 +168,7 @@ bus_state_t am_abx(bus_state_t pins) {
     if (needs_penalty) {
       this->half_cycle++;
     } else {
-      this->set(REG_AB, effective);
+      regs_[AB] = effective;
       this->transition_to_operation();
     }
     return pins;
@@ -182,12 +182,12 @@ bus_state_t am_abx(bus_state_t pins) {
     /* PHI1: Correct final address */
     // DL contains original high byte from case 3
     // Restore original high byte first
-    this->set(REG_ABH, this->get(REG_DL));
+    regs_[ABH] = regs_[DL];
     // ABL has X added, subtract X to restore original base low byte
-    this->set(REG_ABL, this->get(REG_ABL) - this->get(REG_X));
+    regs_[ABL] = regs_[ABL] - regs_[X];
     // Now AB has original base address, add X to full 16-bit AB for correct
     // effective address with carry
-    this->set(REG_AB, this->get(REG_AB) + this->get(REG_X));
+    regs_[AB] = regs_[AB] + regs_[X];
     this->transition_to_operation();
     return pins;
   }
@@ -204,8 +204,8 @@ bus_state_t am_aby(bus_state_t pins) {
     return pins;
   case 1:
     /* PHI1: Load data and perform operations */
-    this->bus_load_reg(REG_ABL, pins);
-    this->inc(REG_PC);
+    this->bus_load_reg(ABL, pins);
+    ++regs_[PC];
     this->half_cycle++;
     return pins;
 
@@ -214,12 +214,12 @@ bus_state_t am_aby(bus_state_t pins) {
     return pins;
   case 3: {
     /* PHI1: Load data and perform operations */
-    this->bus_load_reg(REG_ABH, pins);  // Load high byte into ABH
-    this->inc(REG_PC);
-    this->set(REG_DL, this->get(REG_ABH));
-    uint16_t base = this->get(REG_AB);
-    uint16_t effective = base + this->get(REG_Y);
-    this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_Y));
+    this->bus_load_reg(ABH, pins);  // Load high byte into ABH
+    ++regs_[PC];
+    regs_[DL] = regs_[ABH];
+    uint16_t base = regs_[AB];
+    uint16_t effective = base + regs_[Y];
+    regs_[ABL] = regs_[ABL] + regs_[Y];
     bool needs_penalty =
         this->page_crossed(base, effective) ||      // Page crossing
         (this->opcode_entry.is_rmw()) ||            // RMW operations
@@ -228,7 +228,7 @@ bus_state_t am_aby(bus_state_t pins) {
     if (needs_penalty) {
       this->half_cycle++;
     } else {
-      this->set(REG_AB, effective);
+      regs_[AB] = effective;
       this->transition_to_operation();
     }
     return pins;
@@ -242,12 +242,12 @@ bus_state_t am_aby(bus_state_t pins) {
     /* PHI1: Correct final address */
     // DL contains original high byte from case 3
     // Restore original high byte first
-    this->set(REG_ABH, this->get(REG_DL));
+    regs_[ABH] = regs_[DL];
     // ABL has Y added, subtract Y to restore original base low byte
-    this->set(REG_ABL, this->get(REG_ABL) - this->get(REG_Y));
+    regs_[ABL] = regs_[ABL] - regs_[Y];
     // Now AB has original base address, add Y to full 16-bit AB for correct
     // effective address with carry
-    this->set(REG_AB, this->get(REG_AB) + this->get(REG_Y));
+    regs_[AB] = regs_[AB] + regs_[Y];
     this->transition_to_operation();
     return pins;
   }
@@ -264,8 +264,8 @@ bus_state_t am_ind(bus_state_t pins) {
     return pins;
   case 1:
     /* PHI1: Load data and perform operations */
-    this->bus_load_reg(REG_ABL, pins);
-    this->inc(REG_PC);
+    this->bus_load_reg(ABL, pins);
+    ++regs_[PC];
     this->half_cycle++;
     return pins;
 
@@ -275,8 +275,8 @@ bus_state_t am_ind(bus_state_t pins) {
     return pins;
   case 3:
     /* PHI1: Load high byte of pointer and assemble pointer address */
-    this->bus_load_reg(REG_ABH, pins);
-    this->inc(REG_PC);
+    this->bus_load_reg(ABH, pins);
+    ++regs_[PC];
     this->half_cycle++;
     return pins;
 
@@ -286,13 +286,13 @@ bus_state_t am_ind(bus_state_t pins) {
     return pins;
   case 5:
     /* PHI1: Load low byte and save to TMP, then increment pointer address */
-    this->bus_load_reg(REG_DL, pins);  // Save low byte to DL (temporary storage)
+    this->bus_load_reg(DL, pins);  // Save low byte to DL (temporary storage)
     /* NMOS 6502 bug: JMP ($xxFF) reads high byte from $xx00 instead of $xy00
      * CMOS 65C02 fix: Properly increment full 16-bit address */
     if constexpr (has_cmos()) {
-      this->inc(REG_AB);  // 65C02: Proper 16-bit increment (fixes page-crossing bug)
+      ++regs_[AB];  // 65C02: Proper 16-bit increment (fixes page-crossing bug)
     } else {
-      this->inc(REG_ABL);  // 6502: 8-bit increment only (wraps within page)
+      ++regs_[ABL];  // 6502: 8-bit increment only (wraps within page)
     }
     this->half_cycle++;
     return pins;
@@ -303,8 +303,8 @@ bus_state_t am_ind(bus_state_t pins) {
     return pins;
   case 7:
     /* PHI1: Assemble final address from TMP (low) and bus data (high) */
-    this->bus_load_reg(REG_ABH, pins);  // High byte to ABH
-    this->set(REG_ABL, this->get(REG_DL)); // Low byte from DL to ABL
+    this->bus_load_reg(ABH, pins);  // High byte to ABH
+    regs_[ABL] = regs_[DL]; // Low byte from DL to ABL
     // Only JMP uses am_ind — chain into op_jmp (skips ABS fetch).
     this->transition_to_operation();
     this->half_cycle = 4;
@@ -324,13 +324,13 @@ bus_state_t am_inx(bus_state_t pins) {
   case 1: {
     /* PHI1: Load data and calculate pointer address */
     uint8_t dp_offset = this->bus_get_data(pins);
-    this->inc(REG_PC);
+    ++regs_[PC];
     // 65C816: Use Direct Page register; 6502: Direct Page is always 0x0000
     if constexpr (has_wide_registers()) {
-      uint16_t dp_addr = this->get(REG_D) + dp_offset;
-      this->set(REG_AB, dp_addr);
+      uint16_t dp_addr = regs_[D] + dp_offset;
+      regs_[AB] = dp_addr;
     } else {
-      this->set(REG_AB, dp_offset); // High byte is always 0 for zero page on 6502
+      regs_[AB] = dp_offset; // High byte is always 0 for zero page on 6502
     }
     this->half_cycle++;
     return pins;
@@ -342,14 +342,14 @@ bus_state_t am_inx(bus_state_t pins) {
     return pins;
   case 3: {
     /* PHI1: Add X to pointer address (wraps within bank 0) */
-    this->bus_load_reg(REG_DL, pins);
+    this->bus_load_reg(DL, pins);
     if constexpr (has_wide_registers()) {
-      uint16_t ptr_addr = this->get(REG_AB);
+      uint16_t ptr_addr = regs_[AB];
       uint16_t x_val = this->get_x_register();
       ptr_addr = (ptr_addr + x_val) & 0xFFFF; // Wrap within bank 0
-      this->set(REG_AB, ptr_addr);
+      regs_[AB] = ptr_addr;
     } else {
-      this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_X));
+      regs_[ABL] = regs_[ABL] + regs_[X];
     }
     this->half_cycle++;
     return pins;
@@ -361,8 +361,8 @@ bus_state_t am_inx(bus_state_t pins) {
     return pins;
   case 5:
     /* PHI1: Load low byte and save to TMP */
-    this->bus_load_reg(REG_DL, pins);  // Save low byte to DL (temporary storage)
-    this->inc(REG_ABL); // Increment within bank 0
+    this->bus_load_reg(DL, pins);  // Save low byte to DL (temporary storage)
+    ++regs_[ABL]; // Increment within bank 0
     this->half_cycle++;
     return pins;
 
@@ -372,8 +372,8 @@ bus_state_t am_inx(bus_state_t pins) {
     return pins;
   case 7:
     /* PHI1: Assemble final address from TMP (low) and bus data (high) */
-    this->bus_load_reg(REG_ABH, pins);  // High byte to ABH
-    this->set(REG_ABL, this->get(REG_DL)); // Low byte from DL to ABL
+    this->bus_load_reg(ABH, pins);  // High byte to ABH
+    regs_[ABL] = regs_[DL]; // Low byte from DL to ABL
     // Note: DBR (Data Bank Register) is applied by the memory system for final access
     this->transition_to_operation();
     return pins;
@@ -392,13 +392,13 @@ bus_state_t am_iny(bus_state_t pins) {
   case 1: {
     /* PHI1: Load data and calculate pointer address */
     uint8_t dp_offset = this->bus_get_data(pins);
-    this->inc(REG_PC);
+    ++regs_[PC];
     // 65C816: Use Direct Page register; 6502: Direct Page is always 0x0000
     if constexpr (has_wide_registers()) {
-      uint16_t dp_addr = this->get(REG_D) + dp_offset;
-      this->set(REG_AB, dp_addr);
+      uint16_t dp_addr = regs_[D] + dp_offset;
+      regs_[AB] = dp_addr;
     } else {
-      this->set(REG_AB, dp_offset); // High byte is always 0 for zero page on 6502
+      regs_[AB] = dp_offset; // High byte is always 0 for zero page on 6502
     }
     this->half_cycle++;
     return pins;
@@ -410,8 +410,8 @@ bus_state_t am_iny(bus_state_t pins) {
     return pins;
   case 3:
     /* PHI1: Load low byte and save to TMP */
-    this->bus_load_reg(REG_DL, pins);  // Save low byte to DL (temporary storage)
-    this->inc(REG_ABL); // Increment pointer (wraps within bank 0)
+    this->bus_load_reg(DL, pins);  // Save low byte to DL (temporary storage)
+    ++regs_[ABL]; // Increment pointer (wraps within bank 0)
     this->half_cycle++;
     return pins;
 
@@ -421,17 +421,17 @@ bus_state_t am_iny(bus_state_t pins) {
     return pins;
   case 5: {
     /* PHI1: Load high byte and assemble base address */
-    this->bus_load_reg(REG_ABH, pins);  // High byte to ABH
-    this->set(REG_ABL, this->get(REG_DL)); // Low byte from DL to ABL
-    uint16_t base_addr = this->get(REG_AB);
+    this->bus_load_reg(ABH, pins);  // High byte to ABH
+    regs_[ABL] = regs_[DL]; // Low byte from DL to ABL
+    uint16_t base_addr = regs_[AB];
     uint16_t y_val = this->get_y_register();
     uint16_t final_addr = base_addr + y_val;
     /* Store intermediate high byte in DL for illegal opcodes AFTER setting up
      * AB */
-    this->set(REG_DL, this->get(REG_ABH));
+    regs_[DL] = regs_[ABH];
     /* Add index to low byte only (creates intermediate "wrong" address for
      * page cross) */
-    this->set(REG_ABL, this->get(REG_ABL) + (y_val & 0xFF));
+    regs_[ABL] = regs_[ABL] + (y_val & 0xFF);
     /* Check if penalty cycle is needed */
     bool needs_penalty =
         this->page_crossed(base_addr, final_addr) ||  // Page crossing
@@ -445,7 +445,7 @@ bus_state_t am_iny(bus_state_t pins) {
     } else {
       /* No page cross, not RMW, and not illegal store - can skip penalty, set
        * correct address */
-      this->set(REG_AB, final_addr);
+      regs_[AB] = final_addr;
       // Note: DBR (Data Bank Register) is applied by the memory system for final access
       this->transition_to_operation();
     }
@@ -461,10 +461,10 @@ bus_state_t am_iny(bus_state_t pins) {
     /* DL contains intermediate high byte from case 5 */
     /* Current AB has intermediate address: orig_high:(base_low + Y) */
     /* We need: (orig_high:(base_low)) + Y */
-    this->set(REG_ABH, this->get(REG_DL)); /* Restore original high byte */
+    regs_[ABH] = regs_[DL]; /* Restore original high byte */
     uint16_t y_val = this->get_y_register();
-    this->set(REG_ABL, this->get(REG_ABL) - (y_val & 0xFF)); /* Recover original base low */
-    this->set(REG_AB, this->get(REG_AB) + y_val); /* Calculate correct final with carry */
+    regs_[ABL] = regs_[ABL] - (y_val & 0xFF); /* Recover original base low */
+    regs_[AB] = regs_[AB] + y_val; /* Calculate correct final with carry */
     // Note: DBR (Data Bank Register) is applied by the memory system for final access
     this->transition_to_operation();
     return pins;
@@ -480,7 +480,7 @@ bus_state_t am_zpi(bus_state_t pins) {
   trace_addressing_mode(__func__);
   // Check for 65C816 PEI (0xD4) in emulation mode - redirect to ZPX addressing
   if constexpr (has_wide_registers()) {
-    if (this->in_emulation_mode() && this->get(REG_IR) == 0xD4) {
+    if (this->in_emulation_mode() && regs_[IR] == 0xD4) {
       // PEI in emulation mode should behave as NOP zp,X
       pins = this->transition_to_opcode(pins, opcode_info_t{OP::NOP, AM::ZPX, OF::NONE});
       return this->call_current_handler(pins);
@@ -496,9 +496,9 @@ bus_state_t am_zpi(bus_state_t pins) {
     return pins;
   case 1:
     /* PHI1: Load zero page address into ABL */
-    this->bus_load_reg(REG_ABL, pins);
-    this->set(REG_ABH, 0x00); // High byte is always 0 for zero page
-    this->inc(REG_PC);
+    this->bus_load_reg(ABL, pins);
+    regs_[ABH] = 0x00; // High byte is always 0 for zero page
+    ++regs_[PC];
     this->half_cycle++;
     return pins;
 
@@ -508,8 +508,8 @@ bus_state_t am_zpi(bus_state_t pins) {
     return pins;
   case 3:
     /* PHI1: Load low byte and save to DL (temporary storage) */
-    this->bus_load_reg(REG_DL, pins);  // Save low byte to DL
-    this->inc(REG_ABL);  // Increment ZP pointer
+    this->bus_load_reg(DL, pins);  // Save low byte to DL
+    ++regs_[ABL];  // Increment ZP pointer
     this->half_cycle++;
     return pins;
 
@@ -519,8 +519,8 @@ bus_state_t am_zpi(bus_state_t pins) {
     return pins;
   case 5:
     /* PHI1: Assemble final address from saved low byte and high byte */
-    this->bus_load_reg(REG_ABH, pins);  // High byte to ABH
-    this->set(REG_ABL, this->get(REG_DL)); // Low byte from DL to ABL
+    this->bus_load_reg(ABH, pins);  // High byte to ABH
+    regs_[ABL] = regs_[DL]; // Low byte from DL to ABL
     this->transition_to_operation();
     return pins;
   }
@@ -539,8 +539,8 @@ bus_state_t am_abi(bus_state_t pins) {
       return pins;
     case 1:
       /* PHI1: Load low byte and increment PC */
-      this->bus_load_reg(REG_ABL, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(ABL, pins);
+      ++regs_[PC];
       this->half_cycle++;
       return pins;
 
@@ -550,7 +550,7 @@ bus_state_t am_abi(bus_state_t pins) {
       return pins;
     case 3:
       /* PHI1: Load high byte (don't increment PC yet) */
-      this->bus_load_reg(REG_ABH, pins);
+      this->bus_load_reg(ABH, pins);
       this->half_cycle++;
       return pins;
 
@@ -560,8 +560,8 @@ bus_state_t am_abi(bus_state_t pins) {
       return pins;
     case 5:
       /* PHI1: Increment PC and add X to base address to form pointer address */
-      this->inc(REG_PC);
-      this->set(REG_AB, this->get(REG_AB) + this->get(REG_X));
+      ++regs_[PC];
+      regs_[AB] = regs_[AB] + regs_[X];
       this->half_cycle++;
       return pins;
 
@@ -571,8 +571,8 @@ bus_state_t am_abi(bus_state_t pins) {
       return pins;
     case 7:
       /* PHI1: Load low byte and save to SBR (temporary storage), increment pointer */
-      this->bus_load_reg(REG_SBR, pins);  // Save low byte to SBR
-      this->inc(REG_AB);
+      this->bus_load_reg(SBR, pins);  // Save low byte to SBR
+      ++regs_[AB];
       this->half_cycle++;
       return pins;
 
@@ -582,8 +582,8 @@ bus_state_t am_abi(bus_state_t pins) {
       return pins;
     case 9:
       /* PHI1: Assemble final target address and transition */
-      this->bus_load_reg(REG_ABH, pins);  // High byte to ABH
-      this->set(REG_ABL, this->get(REG_SBR)); // Low byte from SBR to ABL
+      this->bus_load_reg(ABH, pins);  // High byte to ABH
+      regs_[ABL] = regs_[SBR]; // Low byte from SBR to ABL
       // JMP/JML use am_abi — chain into op_jmp/op_jml (skips ABS fetch).
       this->transition_to_operation();
       this->half_cycle = 4;
@@ -605,11 +605,11 @@ bus_state_t am_dp(bus_state_t pins) {
     case 1: {
       /* PHI1: Load data and perform operations */
       uint8_t dp_offset = this->bus_get_data(pins);
-      this->inc(REG_PC);
-      uint16_t dp_addr = this->get(REG_D) + dp_offset;
-      this->set(REG_ABL, dp_addr & 0xFF);
-      this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
-      if ((this->get(REG_D) & 0xFF) != 0x00) {
+      ++regs_[PC];
+      uint16_t dp_addr = regs_[D] + dp_offset;
+      regs_[ABL] = dp_addr & 0xFF;
+      regs_[ABH] = (dp_addr >> 8) & 0xFF;
+      if ((regs_[D] & 0xFF) != 0x00) {
         this->half_cycle++;
       } else {
         this->transition_to_operation();
@@ -647,11 +647,11 @@ bus_state_t am_dpx(bus_state_t pins) {
     case 1: {
       /* PHI1: Load Direct Page offset from bus */
       uint8_t dp_offset = this->bus_get_data(pins);
-      this->inc(REG_PC);
-      uint16_t dp_addr = this->get(REG_D) + dp_offset;
-      this->set(REG_ABL, dp_addr & 0xFF);
-      this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
-      if (this->get(REG_DPL) != 0x00) {
+      ++regs_[PC];
+      uint16_t dp_addr = regs_[D] + dp_offset;
+      regs_[ABL] = dp_addr & 0xFF;
+      regs_[ABH] = (dp_addr >> 8) & 0xFF;
+      if (regs_[DPL] != 0x00) {
         this->half_cycle++;
       } else {
         this->half_cycle = 4; // Skip penalty cycle
@@ -676,11 +676,11 @@ bus_state_t am_dpx(bus_state_t pins) {
       return pins;
     case 5: {
       // PHI1: Add X register to Direct Page address (wraps within bank $00)
-      uint16_t base_addr = this->get(REG_AB);
+      uint16_t base_addr = regs_[AB];
       uint16_t x_val = this->get_x_register();
       uint16_t final_addr = (base_addr + x_val) & 0xFFFF;
 
-      this->set(REG_AB, final_addr);
+      regs_[AB] = final_addr;
       this->transition_to_operation();
       return pins;
     }
@@ -706,11 +706,11 @@ bus_state_t am_dpy(bus_state_t pins) {
     case 1: {
       /* PHI1: Load Direct Page offset from bus */
       uint8_t dp_offset = this->bus_get_data(pins);
-      this->inc(REG_PC);
-      uint16_t dp_addr = this->get(REG_D) + dp_offset;
-      this->set(REG_ABL, dp_addr & 0xFF);
-      this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
-      if ((this->get(REG_D) & 0xFF) != 0x00) {
+      ++regs_[PC];
+      uint16_t dp_addr = regs_[D] + dp_offset;
+      regs_[ABL] = dp_addr & 0xFF;
+      regs_[ABH] = (dp_addr >> 8) & 0xFF;
+      if ((regs_[D] & 0xFF) != 0x00) {
         this->half_cycle++;
       } else {
         this->half_cycle = 4; // Skip penalty cycle
@@ -737,12 +737,12 @@ bus_state_t am_dpy(bus_state_t pins) {
       // PHI1: Add Y register to Direct Page offset, then add to D
       // CRITICAL: For Direct Page indexed, (offset + Y) wraps to 8-bit, THEN added to D!
       // This matches 6502 zero-page indexed behavior
-      uint8_t dp_offset = this->get(REG_DL); // Operand stored in case 1
-      uint8_t y_val = this->get(REG_YL);
+      uint8_t dp_offset = regs_[DL]; // Operand stored in case 1
+      uint8_t y_val = regs_[YL];
       uint8_t wrapped_offset = dp_offset + y_val; // 8-bit addition (wraps naturally)
-      uint16_t final_addr = this->get(REG_D) + wrapped_offset; // Add to 16-bit D
+      uint16_t final_addr = regs_[D] + wrapped_offset; // Add to 16-bit D
 
-      this->set(REG_AB, final_addr);
+      regs_[AB] = final_addr;
       this->transition_to_operation();
       return pins;
     }
@@ -768,11 +768,11 @@ bus_state_t am_dpi(bus_state_t pins) {
     case 1: {
       /* PHI1: Calculate Direct Page address */
       uint8_t dp_offset = this->bus_get_data(pins);
-      this->inc(REG_PC);
-      uint16_t dp_addr = this->get(REG_D) + dp_offset;
-      this->set(REG_ABL, dp_addr & 0xFF);
-      this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
-      if ((this->get(REG_D) & 0xFF) != 0x00) {
+      ++regs_[PC];
+      uint16_t dp_addr = regs_[D] + dp_offset;
+      regs_[ABL] = dp_addr & 0xFF;
+      regs_[ABH] = (dp_addr >> 8) & 0xFF;
+      if ((regs_[D] & 0xFF) != 0x00) {
         this->half_cycle++;
       } else {
         this->half_cycle = 4; // Skip penalty cycle
@@ -796,8 +796,8 @@ bus_state_t am_dpi(bus_state_t pins) {
       return pins;
     case 5:
       /* PHI1: Load low byte and save to DL (temporary storage) */
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_ABL);  // Increment within Direct Page
+      this->bus_load_reg(DL, pins);
+      ++regs_[ABL];  // Increment within Direct Page
       this->half_cycle++;
       return pins;
 
@@ -807,8 +807,8 @@ bus_state_t am_dpi(bus_state_t pins) {
       return pins;
     case 7:
       /* PHI1: Assemble final address from saved low byte and high byte */
-      this->bus_load_reg(REG_ABH, pins);
-      this->set(REG_ABL, this->get(REG_DL));
+      this->bus_load_reg(ABH, pins);
+      regs_[ABL] = regs_[DL];
       this->transition_to_operation();
       return pins;
     }
@@ -829,11 +829,11 @@ bus_state_t am_dpil(bus_state_t pins) {
       return pins;
     case 1: {
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_PC);
-      uint16_t dp_addr = this->get(REG_D) + this->get(REG_DL);
-      this->set(REG_ABL, dp_addr & 0xFF);
-      this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
+      this->bus_load_reg(DL, pins);
+      ++regs_[PC];
+      uint16_t dp_addr = regs_[D] + regs_[DL];
+      regs_[ABL] = dp_addr & 0xFF;
+      regs_[ABH] = (dp_addr >> 8) & 0xFF;
       this->half_cycle++;
       return pins;
     }
@@ -844,8 +844,8 @@ bus_state_t am_dpil(bus_state_t pins) {
       return pins;
     case 3:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_AB);
+      this->bus_load_reg(DL, pins);
+      ++regs_[AB];
       this->half_cycle++;
       return pins;
 
@@ -855,8 +855,8 @@ bus_state_t am_dpil(bus_state_t pins) {
       return pins;
     case 5:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_AB);
+      this->bus_load_reg(DL, pins);
+      ++regs_[AB];
       this->half_cycle++;
       return pins;
 
@@ -865,14 +865,14 @@ bus_state_t am_dpil(bus_state_t pins) {
       return pins;
     case 7: {
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      uint8_t low_byte = this->get(REG_DL);
-      uint8_t mid_byte = this->get(REG_ABL);
-      uint8_t bank_byte = this->get(REG_ABH);
-      this->set(REG_ABL, low_byte);
-      this->set(REG_ABH, mid_byte);
-      this->set(REG_DL, bank_byte); // Bank byte for memory system
-      if ((this->get(REG_D) & 0xFF) != 0x00) {
+      this->bus_load_reg(DL, pins);
+      uint8_t low_byte = regs_[DL];
+      uint8_t mid_byte = regs_[ABL];
+      uint8_t bank_byte = regs_[ABH];
+      regs_[ABL] = low_byte;
+      regs_[ABH] = mid_byte;
+      regs_[DL] = bank_byte; // Bank byte for memory system
+      if ((regs_[D] & 0xFF) != 0x00) {
         this->half_cycle++;
       } else {
         this->transition_to_operation();
@@ -906,10 +906,10 @@ bus_state_t am_dpily(bus_state_t pins) {
       return pins;
     case 1: {
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_PC);
-      uint16_t dp_addr = this->get(REG_D) + this->get(REG_DL);
-      this->set(REG_AB, dp_addr);
+      this->bus_load_reg(DL, pins);
+      ++regs_[PC];
+      uint16_t dp_addr = regs_[D] + regs_[DL];
+      regs_[AB] = dp_addr;
       this->half_cycle++;
       return pins;
     }
@@ -920,8 +920,8 @@ bus_state_t am_dpily(bus_state_t pins) {
       return pins;
     case 3: {
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_AB);
+      this->bus_load_reg(DL, pins);
+      ++regs_[AB];
       this->half_cycle++;
       return pins;
     }
@@ -932,8 +932,8 @@ bus_state_t am_dpily(bus_state_t pins) {
       return pins;
     case 5: {
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_AB);
+      this->bus_load_reg(DL, pins);
+      ++regs_[AB];
       this->half_cycle++;
       return pins;
     }
@@ -943,16 +943,16 @@ bus_state_t am_dpily(bus_state_t pins) {
       return pins;
     case 7: {
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      uint8_t low_byte = this->get(REG_DL);
-      uint8_t mid_byte = this->get(REG_ABL);
-      uint8_t bank_byte = this->get(REG_ABH);
+      this->bus_load_reg(DL, pins);
+      uint8_t low_byte = regs_[DL];
+      uint8_t mid_byte = regs_[ABL];
+      uint8_t bank_byte = regs_[ABH];
       uint16_t base_addr = (mid_byte << 8) | low_byte;
       uint16_t y_val = this->get_y_register();
       uint16_t final_addr = base_addr + y_val;
-      this->set(REG_AB, final_addr);
-      this->set(REG_DL, bank_byte); // Bank byte for memory system
-      if ((this->get(REG_D) & 0xFF) != 0x00) {
+      regs_[AB] = final_addr;
+      regs_[DL] = bank_byte; // Bank byte for memory system
+      if ((regs_[D] & 0xFF) != 0x00) {
         this->half_cycle++;
       } else {
         this->transition_to_operation();
@@ -981,7 +981,7 @@ bus_state_t am_abl(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     // Check for 65C816 JSL (0x22) in emulation mode - redirect to NOP IMM
     // addressing
-    if (this->in_emulation_mode() && this->get(REG_IR) == 0x22) {
+    if (this->in_emulation_mode() && regs_[IR] == 0x22) {
       // PEI in emulation mode should behave as NOP zp,X
       pins = this->transition_to_opcode(pins, opcode_info_t{OP::NOP, AM::IMM, OF::NONE});
       return this->call_current_handler(pins);
@@ -994,8 +994,8 @@ bus_state_t am_abl(bus_state_t pins) {
       return pins;
     case 1:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(DL, pins);
+      ++regs_[PC];
       this->half_cycle++;
       return pins;
 
@@ -1005,8 +1005,8 @@ bus_state_t am_abl(bus_state_t pins) {
       return pins;
     case 3:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(DL, pins);
+      ++regs_[PC];
       this->half_cycle++;
       return pins;
 
@@ -1015,8 +1015,8 @@ bus_state_t am_abl(bus_state_t pins) {
       return pins;
     case 5:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_ABL, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(ABL, pins);
+      ++regs_[PC];
       this->transition_to_operation();
     }
     return pins;
@@ -1037,8 +1037,8 @@ bus_state_t am_ablx(bus_state_t pins) {
       return pins;
     case 1:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(DL, pins);
+      ++regs_[PC];
       this->half_cycle++;
       return pins;
 
@@ -1048,8 +1048,8 @@ bus_state_t am_ablx(bus_state_t pins) {
       return pins;
     case 3:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(DL, pins);
+      ++regs_[PC];
       this->half_cycle++;
       return pins;
 
@@ -1058,12 +1058,12 @@ bus_state_t am_ablx(bus_state_t pins) {
       return pins;
     case 5: {
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_ABL, pins);
-      this->inc(REG_PC);
-      uint16_t base_addr = this->get(REG_AB);
+      this->bus_load_reg(ABL, pins);
+      ++regs_[PC];
+      uint16_t base_addr = regs_[AB];
       uint16_t x_val = this->get_x_register();
       uint16_t final_addr = base_addr + x_val;
-      this->set(REG_AB, final_addr);
+      regs_[AB] = final_addr;
       this->transition_to_operation();
       return pins;
     }
@@ -1086,8 +1086,8 @@ bus_state_t am_sr(bus_state_t pins) {
       return pins;
     case 1:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(DL, pins);
+      ++regs_[PC];
       this->half_cycle++;
       return pins;
 
@@ -1097,9 +1097,9 @@ bus_state_t am_sr(bus_state_t pins) {
       return pins;
     case 3: {
       // Calculate stack address: $00:(S + offset)
-      uint16_t stack_addr = this->get(REG_SP) + this->get(REG_DL);
-      this->set(REG_ABL, stack_addr & 0xFF);
-      this->set(REG_ABH, (stack_addr >> 8) & 0xFF);
+      uint16_t stack_addr = regs_[SP] + regs_[DL];
+      regs_[ABL] = stack_addr & 0xFF;
+      regs_[ABH] = (stack_addr >> 8) & 0xFF;
       this->transition_to_operation();
       return pins;
     }
@@ -1122,8 +1122,8 @@ bus_state_t am_sri(bus_state_t pins) {
       return pins;
     case 1:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_ABL, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(ABL, pins);
+      ++regs_[PC];
       this->half_cycle++;
       return pins;
 
@@ -1132,9 +1132,9 @@ bus_state_t am_sri(bus_state_t pins) {
       return pins;
     case 3: {
       // Calculate stack pointer address: $00:(S + offset)
-      uint16_t stack_addr = this->get(REG_SP) + this->get(REG_DL);
-      this->set(REG_ABL, stack_addr & 0xFF);
-      this->set(REG_ABH, (stack_addr >> 8) & 0xFF);
+      uint16_t stack_addr = regs_[SP] + regs_[DL];
+      regs_[ABL] = stack_addr & 0xFF;
+      regs_[ABH] = (stack_addr >> 8) & 0xFF;
       return pins;
     }
 
@@ -1144,8 +1144,8 @@ bus_state_t am_sri(bus_state_t pins) {
       return pins;
     case 5:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_AB);
+      this->bus_load_reg(DL, pins);
+      ++regs_[AB];
       this->half_cycle++;
       return pins;
 
@@ -1154,12 +1154,12 @@ bus_state_t am_sri(bus_state_t pins) {
       return pins;
     case 7: {
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->set(REG_ABL, this->get(REG_DL)); // Low byte from cycle 2
-      uint16_t base_addr = this->get(REG_AB);
+      this->bus_load_reg(DL, pins);
+      regs_[ABL] = regs_[DL]; // Low byte from cycle 2
+      uint16_t base_addr = regs_[AB];
       uint16_t y_val = this->get_y_register();
       uint16_t final_addr = base_addr + y_val;
-      this->set(REG_AB, final_addr);
+      regs_[AB] = final_addr;
       this->transition_to_operation();
       return pins;
     }
@@ -1183,9 +1183,9 @@ bus_state_t am_zpr(bus_state_t pins) {
       return pins;
     case 1:
       /* PHI1: Load zero page address into ABL */
-      this->bus_load_reg(REG_ABL, pins);
-      this->inc(REG_PC);
-      this->set(REG_ABH, 0x00); // High byte is always 0 for zero page
+      this->bus_load_reg(ABL, pins);
+      ++regs_[PC];
+      regs_[ABH] = 0x00; // High byte is always 0 for zero page
       this->half_cycle++;
       return pins;
 
@@ -1194,8 +1194,8 @@ bus_state_t am_zpr(bus_state_t pins) {
       return pins;
     case 3:
       /* PHI1: Load relative branch offset into DL */
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(DL, pins);
+      ++regs_[PC];
       this->transition_to_operation();
     }
   }

@@ -33,8 +33,8 @@ bus_state_t op_jmp(bus_state_t pins) {
       return pins;
     case 1:
       /* PHI1: Load low byte */
-      this->bus_load_reg(REG_ABL, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(ABL, pins);
+      ++regs_[PC];
       this->half_cycle++;
       return pins;
 
@@ -44,12 +44,12 @@ bus_state_t op_jmp(bus_state_t pins) {
       return pins;
     case 3:
       /* PHI1: Load high byte into AB, then jump */
-      this->bus_load_reg(REG_ABH, pins);
+      this->bus_load_reg(ABH, pins);
       break;
     }
   }
 
-  this->set(REG_PC, this->get(REG_AB));
+  regs_[PC] = regs_[AB];
   this->transition_to_fetch();
   return pins;
 }
@@ -62,7 +62,7 @@ bus_state_t op_jml(bus_state_t pins) {
   trace_operation(__func__);
   // Zero-cycle operation: chained from addressing mode's PHI1 phase.
   // Addressing mode already set AB to target address.
-  this->set(REG_PC, this->get(REG_AB));
+  regs_[PC] = regs_[AB];
   this->transition_to_fetch();
   return pins;
 }
@@ -77,8 +77,8 @@ bus_state_t op_jsr(bus_state_t pins) {
     return pins;
   case 1:
     /* PHI1: Load data and perform operations */
-    this->bus_load_reg(REG_ABL, pins);
-    this->inc(REG_PC);
+    this->bus_load_reg(ABL, pins);
+    ++regs_[PC];
     this->half_cycle++;
     return pins;
 
@@ -93,7 +93,7 @@ bus_state_t op_jsr(bus_state_t pins) {
 
   case 4:
     /* PHI2: Push PCH (high byte of return address) to stack */
-    pins = this->bus_setup_write<Addr::SP>(pins, REG_PCH);
+    pins = this->bus_setup_write<Addr::SP>(pins, PCH);
     return pins;
   case 5:
     /* PHI1: Decrement SP */
@@ -103,7 +103,7 @@ bus_state_t op_jsr(bus_state_t pins) {
 
   case 6:
     /* PHI2: Push PCL (low byte of return address) to stack */
-    pins = this->bus_setup_write<Addr::SP>(pins, REG_PCL);
+    pins = this->bus_setup_write<Addr::SP>(pins, PCL);
     return pins;
   case 7:
     /* PHI1: Decrement SP */
@@ -117,8 +117,8 @@ bus_state_t op_jsr(bus_state_t pins) {
     return pins;
   case 9:
     /* PHI1: Load high byte, set PC to target address, and transition */
-    this->bus_load_reg(REG_ABH, pins);  // Load high byte into ABH
-    this->set(REG_PC, this->get(REG_AB));
+    this->bus_load_reg(ABH, pins);  // Load high byte into ABH
+    regs_[PC] = regs_[AB];
     this->transition_to_fetch();
   }
   return pins;
@@ -153,7 +153,7 @@ bus_state_t op_rts(bus_state_t pins) {
     return pins;
   case 5:
     /* PHI1 T3: Load PCL and increment SP */
-    this->bus_load_reg(REG_PCL, pins);
+    this->bus_load_reg(PCL, pins);
     this->inc_stack();
     this->half_cycle++;
     return pins;
@@ -164,7 +164,7 @@ bus_state_t op_rts(bus_state_t pins) {
     return pins;
   case 7:
     /* PHI1 T4: Load PCH */
-    this->bus_load_reg(REG_PCH, pins);
+    this->bus_load_reg(PCH, pins);
     this->half_cycle++;
     return pins;
 
@@ -174,7 +174,7 @@ bus_state_t op_rts(bus_state_t pins) {
     return pins;
   case 9:
     /* PHI1 T5: Increment PC (fix JSR's PC-1 push) and transition */
-    this->inc(REG_PC);
+    ++regs_[PC];
     this->transition_to_fetch();
     return pins;
   }
@@ -273,7 +273,7 @@ bus_state_t op_brk(bus_state_t pins) {
          * must re-execute after RTI
          */
         if (this->brk_is_software_) {
-          this->inc(REG_PC); // BRK only: skip signature byte
+          ++regs_[PC]; // BRK only: skip signature byte
           if (this->active_interrupt == FAM65XX_INT_NONE) {
             this->active_interrupt = FAM65XX_INT_BRK;
           }
@@ -287,7 +287,7 @@ bus_state_t op_brk(bus_state_t pins) {
         if (this->active_interrupt == FAM65XX_INT_RESET)
           pins = this->bus_setup_dummy<Addr::SP>(pins);
         else
-          pins = this->bus_setup_write<Addr::SP>(pins, REG_PBR);
+          pins = this->bus_setup_write<Addr::SP>(pins, PBR);
         return pins;
       case 3:
         this->dec_stack();
@@ -299,7 +299,7 @@ bus_state_t op_brk(bus_state_t pins) {
         if (this->active_interrupt == FAM65XX_INT_RESET)
           pins = this->bus_setup_dummy<Addr::SP>(pins);
         else
-          pins = this->bus_setup_write<Addr::SP>(pins, REG_PCH);
+          pins = this->bus_setup_write<Addr::SP>(pins, PCH);
         return pins;
       case 5:
         this->dec_stack();
@@ -311,7 +311,7 @@ bus_state_t op_brk(bus_state_t pins) {
         if (this->active_interrupt == FAM65XX_INT_RESET)
           pins = this->bus_setup_dummy<Addr::SP>(pins);
         else
-          pins = this->bus_setup_write<Addr::SP>(pins, REG_PCL);
+          pins = this->bus_setup_write<Addr::SP>(pins, PCL);
         return pins;
       case 7:
         this->dec_stack();
@@ -323,13 +323,13 @@ bus_state_t op_brk(bus_state_t pins) {
         if (this->active_interrupt == FAM65XX_INT_RESET)
           pins = this->bus_setup_dummy<Addr::SP>(pins);
         else
-          pins = this->bus_setup_write<Addr::SP>(pins, REG_P);
+          pins = this->bus_setup_write<Addr::SP>(pins, P);
         return pins;
       case 9:
         this->dec_stack();
         this->set_flag(FLAG_I);   // Disable interrupts
         this->clear_flag(FLAG_D); // Clear decimal mode
-        this->set(REG_AB, this->get_vector_addr());
+        regs_[AB] = this->get_vector_addr();
         this->half_cycle++;
         return pins;
 
@@ -338,8 +338,8 @@ bus_state_t op_brk(bus_state_t pins) {
         pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
         return pins;
       case 11:
-        this->bus_load_reg(REG_PCL, pins);
-        this->inc(REG_AB);
+        this->bus_load_reg(PCL, pins);
+        ++regs_[AB];
         this->half_cycle++;
         return pins;
     
@@ -348,8 +348,8 @@ bus_state_t op_brk(bus_state_t pins) {
         pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
         return pins;
       case 13:
-        this->bus_load_reg(REG_PCH, pins);
-        this->set(REG_PBR, 0); // Clear PBR for interrupt vectors
+        this->bus_load_reg(PCH, pins);
+        regs_[PBR] = 0; // Clear PBR for interrupt vectors
         // DON'T clear active_interrupt here - keep it set so nested interrupts are blocked
         // It will be cleared by RTI when the interrupt handler completes
         this->transition_to_fetch();
@@ -383,7 +383,7 @@ bus_state_t op_brk(bus_state_t pins) {
      * must re-execute after RTI
      */
     if (this->brk_is_software_) {
-      this->inc(REG_PC); // BRK only: skip signature byte
+      ++regs_[PC]; // BRK only: skip signature byte
       // Set active_interrupt to BRK only if NMI hasn't already hijacked
       // the vector.  If NMI overrode active_interrupt between dispatch and
       // here (case 0 PHI2), we keep NMI so the NMI vector is used.
@@ -401,7 +401,7 @@ bus_state_t op_brk(bus_state_t pins) {
     if (this->active_interrupt == FAM65XX_INT_RESET)
       pins = this->bus_setup_dummy<Addr::SP>(pins);
     else
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_PCH);
+      pins = this->bus_setup_write<Addr::SP>(pins, PCH);
     return pins;
   case 3:
     /* PHI1: Decrement SP */
@@ -414,7 +414,7 @@ bus_state_t op_brk(bus_state_t pins) {
     if (this->active_interrupt == FAM65XX_INT_RESET)
       pins = this->bus_setup_dummy<Addr::SP>(pins);
     else
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_PCL);
+      pins = this->bus_setup_write<Addr::SP>(pins, PCL);
     return pins;
   case 5: {
     /* PHI1: Decrement SP and prepare status register for stack push */
@@ -426,12 +426,12 @@ bus_state_t op_brk(bus_state_t pins) {
      * - B flag SET: JMP ($0316) - BRK handler
      * - B flag CLEAR: JMP ($0314) - IRQ handler
      */
-    uint8_t status_flags = this->get(REG_P) | FLAG_U;  // U flag always set
+    uint8_t status_flags = regs_[P] | FLAG_U;  // U flag always set
     if (this->brk_is_software_) {
       status_flags |= FLAG_B;  // Set B flag only for actual BRK instruction
     }
     // For hardware IRQ/NMI: B flag remains clear (not set)
-    this->set(REG_DL, status_flags);
+    regs_[DL] = status_flags;
     this->half_cycle++;
     return pins;
   }
@@ -441,7 +441,7 @@ bus_state_t op_brk(bus_state_t pins) {
     if (this->active_interrupt == FAM65XX_INT_RESET)
       pins = this->bus_setup_dummy<Addr::SP>(pins);
     else
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_DL);
+      pins = this->bus_setup_write<Addr::SP>(pins, DL);
     return pins;
   case 7:
     /* PHI1: Decrement SP, set interrupt flags, get vector address */
@@ -502,7 +502,7 @@ bus_state_t op_brk(bus_state_t pins) {
     // Pin HIGH (inactive) → inverted = 0, Pin LOW (asserted) → inverted = 1
     this->nmi_prev = (pins & FAM65XX_NMI) ? 0 : 1;
     
-    this->set(REG_AB, this->get_vector_addr());
+    regs_[AB] = this->get_vector_addr();
     this->half_cycle++;
     return pins;
 
@@ -512,8 +512,8 @@ bus_state_t op_brk(bus_state_t pins) {
     return pins;
   case 9:
     /* PHI1: Load vector low byte into PCL, then increment vector address in AB */
-    this->bus_load_reg(REG_PCL, pins);
-    this->inc(REG_AB);
+    this->bus_load_reg(PCL, pins);
+    ++regs_[AB];
     this->half_cycle++;
     return pins;
 
@@ -523,10 +523,10 @@ bus_state_t op_brk(bus_state_t pins) {
     return pins;
   case 11:
     /* PHI1: Construct PC from vector bytes and clear PBR if needed */
-    this->bus_load_reg(REG_PCH, pins);
+    this->bus_load_reg(PCH, pins);
     /* 65C816: Clear PBR for interrupt vectors in emulation mode */
     if constexpr (has_wide_registers()) {
-      this->set(REG_PBR, 0);
+      regs_[PBR] = 0;
     }
     
     // CRITICAL FIX: Clear active_interrupt NOW, before starting the handler!
@@ -592,22 +592,22 @@ bus_state_t op_rti(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
       if (this->in_emulation_mode()) {
         // 65C816 emulation mode: set both FLAG_B (bit 4) and FLAG_U (bit 5)
-        this->set(REG_P, new_p | FLAG_B | FLAG_U);
+        regs_[P] = new_p | FLAG_B | FLAG_U;
       } else {
         // Native mode: load value as-is (B becomes X flag, U becomes M flag)
-        uint8_t old_p = this->get(REG_P);
-        this->set(REG_P, new_p);
+        uint8_t old_p = regs_[P];
+        regs_[P] = new_p;
         
         // X flag (bit 4): When switching from 16-bit to 8-bit index mode, clear high bytes
         if ((new_p & FLAG_X) && !(old_p & FLAG_X)) {
           // Switching index registers from 16-bit to 8-bit: clear XH and YH
-          this->set(REG_XH, 0x00);
-          this->set(REG_YH, 0x00);
+          regs_[XH] = 0x00;
+          regs_[YH] = 0x00;
         }
       }
     } else {
       // 6502/6510/65C02: Mask off bit 4 (B is phantom), set bit 5 (U always 1)
-      this->set(REG_P, (new_p & ~FLAG_B) | FLAG_U);
+      regs_[P] = (new_p & ~FLAG_B) | FLAG_U;
     }
     this->inc_stack();
     this->half_cycle++;
@@ -620,7 +620,7 @@ bus_state_t op_rti(bus_state_t pins) {
     return pins;
   case 7:
     /* PHI1: Load PCL and increment SP */
-    this->bus_load_reg(REG_PCL, pins);
+    this->bus_load_reg(PCL, pins);
     this->inc_stack();
     this->half_cycle++;
     return pins;
@@ -631,7 +631,7 @@ bus_state_t op_rti(bus_state_t pins) {
     return pins;
   case 9:
     /* PHI1: Load PCH, clear active_interrupt, and transition */
-    this->bus_load_reg(REG_PCH, pins);
+    this->bus_load_reg(PCH, pins);
     // Clear active_interrupt when RTI completes - this re-enables interrupt detection
     this->active_interrupt = FAM65XX_INT_NONE;
     this->transition_to_fetch();

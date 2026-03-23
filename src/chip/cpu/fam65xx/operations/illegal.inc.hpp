@@ -30,14 +30,14 @@ bus_state_t op_lax(bus_state_t pins) {
       case 1: {
         // PHI1: Load data, increment PC, and perform operation
         uint8_t operand = this->bus_get_data(pins);
-        this->inc(REG_PC);
+        ++regs_[PC];
         // The 2A03 empirically yields 0xFF; standard NMOS 6502 yields 0xEE.
         constexpr uint8_t magic = has_apu() ? 0xFF : 0xEE;
-        uint8_t result = (this->get(REG_A) | magic) & operand;
-        this->set(REG_A, result);
-        this->set(REG_X, result);
+        uint8_t result = (regs_[A] | magic) & operand;
+        regs_[A] = result;
+        regs_[X] = result;
 
-        this->update_nz_flags<REG_A>(result);
+        this->update_nz_flags<WidthMode::ACC>(result);
         this->transition_to_fetch();
         return pins;
       }
@@ -52,9 +52,9 @@ bus_state_t op_lax(bus_state_t pins) {
       case 1: {
         // PHI1: Load data and perform operation
         uint8_t operand = this->bus_get_data(pins);
-        this->set(REG_A, operand);
-        this->set(REG_X, operand);
-        this->update_nz_flags<REG_A>(this->get(REG_A));
+        regs_[A] = operand;
+        regs_[X] = operand;
+        this->update_nz_flags<WidthMode::ACC>(regs_[A]);
         this->transition_to_fetch();
         return pins;
       }
@@ -72,7 +72,7 @@ bus_state_t op_sax(bus_state_t pins) {
     switch (this->half_cycle) {
     case 0: { 
       // PHI2
-      uint8_t result = this->get(REG_A) & this->get(REG_X);
+      uint8_t result = regs_[A] & regs_[X];
       pins = this->bus_setup_write<Addr::AB>(pins, result);
       return pins;
     }
@@ -98,12 +98,12 @@ bus_state_t op_dcp(bus_state_t pins) {
       value--;
 
       // Perform CMP A with decremented value
-      uint16_t result = this->get(REG_A) - static_cast<uint8_t>(value);
+      uint16_t result = regs_[A] - static_cast<uint8_t>(value);
       // Set carry flag (CMP uses subtraction semantics: carry = no borrow)
       this->update_flag(FLAG_C, !(result & 0x100));
 
       // Update N and Z flags based on comparison result
-      this->update_nz_flags<REG_A>(static_cast<uint8_t>(result));
+      this->update_nz_flags<WidthMode::ACC>(static_cast<uint8_t>(result));
     });
   } else {
     return pins;
@@ -140,8 +140,8 @@ bus_state_t op_slo(bus_state_t pins) {
       value <<= 1;
 
       // Perform ORA with accumulator
-      this->set(REG_A, this->get(REG_A) | static_cast<uint8_t>(value));
-      this->update_nz_flags<REG_A>(this->get(REG_A));
+      regs_[A] = regs_[A] | static_cast<uint8_t>(value);
+      this->update_nz_flags<WidthMode::ACC>(regs_[A]);
     });
   } else {
     return pins;
@@ -155,13 +155,13 @@ bus_state_t op_rla(bus_state_t pins) {
     // This is a Read-Modify-Write operation
     return rmw_operation_helper(pins, [this](data_t &value) {
       // Perform ROL on memory value
-      uint8_t carry_in = this->get(REG_P) & FLAG_C;
+      uint8_t carry_in = regs_[P] & FLAG_C;
       this->update_flag(FLAG_C, value & 0x80);
       value = (value << 1) | carry_in;
 
       // Perform AND with accumulator
-      this->set(REG_A, this->get(REG_A) & static_cast<uint8_t>(value));
-      this->update_nz_flags<REG_A>(this->get(REG_A));
+      regs_[A] = regs_[A] & static_cast<uint8_t>(value);
+      this->update_nz_flags<WidthMode::ACC>(regs_[A]);
     });
   } else {
     return pins;
@@ -179,8 +179,8 @@ bus_state_t op_sre(bus_state_t pins) {
       value >>= 1;
 
       // Perform EOR with accumulator
-      this->set(REG_A, this->get(REG_A) ^ static_cast<uint8_t>(value));
-      this->update_nz_flags<REG_A>(this->get(REG_A));
+      regs_[A] = regs_[A] ^ static_cast<uint8_t>(value);
+      this->update_nz_flags<WidthMode::ACC>(regs_[A]);
     });
   } else {
     return pins;
@@ -195,7 +195,7 @@ bus_state_t op_rra(bus_state_t pins) {
     // exactly
     return rmw_operation_helper(pins, [this](data_t &value) {
       // Perform ROR on memory value - exact reference match
-      const uint8_t carry_in = this->get(REG_P) & FLAG_C;
+      const uint8_t carry_in = regs_[P] & FLAG_C;
       const uint8_t carry_out = static_cast<uint8_t>(value) & FLAG_C;
       value = (value >> 1) | (carry_in << 7);
 
@@ -235,8 +235,8 @@ bus_state_t op_jam(bus_state_t pins) {
     return pins;
   case 3:
     /* PHI1: Load data and perform operations */
-    this->bus_load_reg(REG_ABL, pins);
-    this->dec(REG_PC); // Go back to opcode address
+    this->bus_load_reg(ABL, pins);
+    --regs_[PC]; // Go back to opcode address
     this->transition_to_fetch();
   }
   return pins;
@@ -259,15 +259,15 @@ bus_state_t op_anc(bus_state_t pins) {
     case 1: {
       // PHI1: Load data, increment PC, and perform operation
       uint8_t operand = this->bus_get_data(pins);
-      this->inc(REG_PC);
+      ++regs_[PC];
       // Perform AND with accumulator
-      this->set(REG_A, this->get(REG_A) & operand);
+      regs_[A] = regs_[A] & operand;
 
       // Update N and Z flags
-      this->update_nz_flags<REG_A>(this->get(REG_A));
+      this->update_nz_flags<WidthMode::ACC>(regs_[A]);
 
       // Copy N flag to C flag (ANC behavior)
-      this->update_flag(FLAG_C, this->get(REG_P) & FLAG_N);
+      this->update_flag(FLAG_C, regs_[P] & FLAG_N);
       this->transition_to_fetch();
       return pins;
     }
@@ -291,27 +291,27 @@ bus_state_t op_arr(bus_state_t pins) {
     case 1: {
       // PHI1: Load data, increment PC, and perform operation
       uint8_t operand = this->bus_get_data(pins);
-      this->inc(REG_PC);
+      ++regs_[PC];
 
-      bool carry_in = (this->get(REG_P) & FLAG_C) != 0;
+      bool carry_in = (regs_[P] & FLAG_C) != 0;
 
       // Step 1: AND A with operand - save original for BCD checks
-      uint8_t original_a = this->get(REG_A) & operand;
-      this->set(REG_A, original_a);
+      uint8_t original_a = regs_[A] & operand;
+      regs_[A] = original_a;
 
       // Step 2: ROR the result (both modes do this)
-      uint8_t shifted_a = (this->get(REG_A) >> 1) | (carry_in ? 0x80 : 0);
+      uint8_t shifted_a = (regs_[A] >> 1) | (carry_in ? 0x80 : 0);
 
       // Clear all flags initially
-      this->set(REG_P, this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_V | FLAG_C));
+      regs_[P] = regs_[P] & ~(FLAG_N | FLAG_Z | FLAG_V | FLAG_C);
 
       // Set N and Z flags based on shifted result (reference does this first)
-      this->update_nz_flags<REG_A>(shifted_a);
+      this->update_nz_flags<WidthMode::ACC>(shifted_a);
 
       // Check if we're in decimal mode (only for processors with BCD support)
       bool decimal_mode = false;
       if constexpr (has_bcd()) {
-        decimal_mode = (this->get(REG_P) & FLAG_D) != 0;
+        decimal_mode = (regs_[P] & FLAG_D) != 0;
       }
 
       if (decimal_mode) {
@@ -332,16 +332,16 @@ bus_state_t op_arr(bus_state_t pins) {
         }
 
         // Set result in accumulator
-        this->set(REG_A, result);
+        regs_[A] = result;
 
         // V flag: bit 6 changed between original and shifted
         if ((shifted_a ^ original_a) & 0x40) {
-          this->set(REG_P, this->get(REG_P) | FLAG_V);
+          regs_[P] = regs_[P] | FLAG_V;
         }
 
         // C flag: bit 6 of result OR high nibble correction was applied
         if ((original_a & 0xF0) >= 0x50) {
-          this->set(REG_P, this->get(REG_P) | FLAG_C);
+          regs_[P] = regs_[P] | FLAG_C;
         }
 
         // N and Z flags were already set based on shifted_a before BCD correction
@@ -349,18 +349,18 @@ bus_state_t op_arr(bus_state_t pins) {
       } else {
         // Binary mode - special C and V flag behavior
         // (Used by both BCD-capable processors in binary mode and non-BCD processors)
-        this->set(REG_A, shifted_a);
+        regs_[A] = shifted_a;
 
         // ARR has special C and V flag behavior:
         // C = bit 6 of result (not the shifted-out bit!)
         // V = bit 6 XOR bit 5 of result
-        if (this->get(REG_A) & 0x40) {
-          this->set(REG_P, this->get(REG_P) | FLAG_C);
+        if (regs_[A] & 0x40) {
+          regs_[P] = regs_[P] | FLAG_C;
         }
-        if ((this->get(REG_A) & 0x60) == 0x60 || (this->get(REG_A) & 0x60) == 0x00) {
+        if ((regs_[A] & 0x60) == 0x60 || (regs_[A] & 0x60) == 0x00) {
           // V is clear
         } else {
-          this->set(REG_P, this->get(REG_P) | FLAG_V);
+          regs_[P] = regs_[P] | FLAG_V;
         }
       }
 
@@ -386,16 +386,16 @@ bus_state_t op_alr(bus_state_t pins) {
     case 1: {
       // PHI1: Load data, increment PC, and perform operation
       uint8_t operand = bus_get_data(pins);
-      this->inc(REG_PC);
+      ++regs_[PC];
       // Perform AND with accumulator
-      uint8_t a = this->get(REG_A);
+      uint8_t a = regs_[A];
       a &= operand;
       this->update_flag(FLAG_C, a & 0x01);      
       // Perform LSR on accumulator
       a >>= 1;
-      this->set(REG_A, a);
+      regs_[A] = a;
       // Update N and Z flags
-      this->update_nz_flags<REG_A>(a);
+      this->update_nz_flags<WidthMode::ACC>(a);
       this->transition_to_fetch();
       return pins;
     }
@@ -426,12 +426,12 @@ bus_state_t op_xaa(bus_state_t pins) {
     case 1: {
       // PHI1: Load data, increment PC, and perform operation
       uint8_t operand = this->bus_get_data(pins);
-      this->inc(REG_PC);
+      ++regs_[PC];
       // (A | magic) & X & operand — same empirical magic as LAX immediate
       constexpr uint8_t magic = has_apu() ? 0xFF : 0xEE;
-      this->set(REG_A, (this->get(REG_A) | magic) & this->get(REG_X) &
+      regs_[A] = (regs_[A] | magic & regs_[X] &
                            operand);
-      this->update_nz_flags<REG_A>(this->get(REG_A));
+      this->update_nz_flags<WidthMode::ACC>(regs_[A]);
       this->transition_to_fetch();
       return pins;
     }
@@ -454,16 +454,16 @@ bus_state_t op_sbx(bus_state_t pins) {
     case 1: {
       // PHI1: Load data, increment PC, and perform operation
       uint8_t operand = this->bus_get_data(pins);
-      this->inc(REG_PC);
-      uint8_t temp = this->get(REG_A) & this->get(REG_X);
+      ++regs_[PC];
+      uint8_t temp = regs_[A] & regs_[X];
       uint8_t result = temp - operand;
       // Update X with result
-      this->set(REG_X, result);
+      regs_[X] = result;
 
       // Set carry flag using standard subtraction semantics (carry = no borrow)
       this->update_flag(FLAG_C, temp >= operand);
 
-      this->update_nz_flags<REG_X>(result);
+      this->update_nz_flags<WidthMode::IDX>(result);
       this->transition_to_fetch();
       return pins;
     }
@@ -481,11 +481,11 @@ bus_state_t op_sha(bus_state_t pins) {
     case 0: {
       // PHI2: Calculate value: A & X & (intermediate_high + 1)
         uint8_t data_value =
-            this->get(REG_A) & this->get(REG_X) & (this->get(REG_DL) + 1);
+            regs_[A] & regs_[X] & (regs_[DL] + 1);
 
         // Apply address corruption on page cross (DL != ABH means page crossed)
-        if (this->get(REG_DL) != this->get(REG_ABH)) {
-          this->set(REG_ABH, data_value);
+        if (regs_[DL] != regs_[ABH]) {
+          regs_[ABH] = data_value;
         }
 
         // Set data to write
@@ -507,16 +507,16 @@ bus_state_t op_shs(bus_state_t pins) {
     switch (this->half_cycle) {
     case 0: {
       // PHI2: Calculate A & X first (used for both value and S)
-      uint8_t ax = this->get(REG_A) & this->get(REG_X);
+      uint8_t ax = regs_[A] & regs_[X];
       // Calculate value: (A & X) & (intermediate_high + 1)
       // Use DL as intermediate high byte (before page cross correction)
-      uint8_t data_value = ax & ((this->get(REG_DL) + 1) & 0xFF);
+      uint8_t data_value = ax & ((regs_[DL] + 1) & 0xFF);
       // Apply address corruption on page cross (DL != ABH means page crossed)
-      if (this->get(REG_DL) != this->get(REG_ABH)) {
-        this->set(REG_ABH, data_value);
+      if (regs_[DL] != regs_[ABH]) {
+        regs_[ABH] = data_value;
       }
       // Set stack pointer to A & X (unique to SHS)
-      this->set(REG_S, ax);
+      regs_[S] = ax;
       pins = this->bus_setup_write<Addr::AB>(pins, data_value);
       return pins;
     }
@@ -536,11 +536,11 @@ bus_state_t op_shx(bus_state_t pins) {
     case 0: {
       // PHI2: Calculate value: X & (intermediate_high + 1)
       // Use DL as intermediate high byte (before page cross correction)
-      uint8_t data_value = this->get(REG_X) & ((this->get(REG_DL) + 1) & 0xFF);
+      uint8_t data_value = regs_[X] & ((regs_[DL] + 1) & 0xFF);
 
       // Apply address corruption on page cross (DL != ABH means page crossed)
-      if (this->get(REG_DL) != this->get(REG_ABH)) {
-        this->set(REG_ABH, data_value);
+      if (regs_[DL] != regs_[ABH]) {
+        regs_[ABH] = data_value;
       }
 
       // Set data to write
@@ -563,10 +563,10 @@ bus_state_t op_shy(bus_state_t pins) {
     case 0: {
       // PHI2: Calculate value: Y & (intermediate_high + 1)
       // Use DL as intermediate high byte (before page cross correction)
-      uint8_t data_value = this->get(REG_Y) & ((this->get(REG_DL) + 1) & 0xFF);
+      uint8_t data_value = regs_[Y] & ((regs_[DL] + 1) & 0xFF);
       // Apply address corruption on page cross (DL != ABH means page crossed)
-      if (this->get(REG_DL) != this->get(REG_ABH)) {
-        this->set(REG_ABH, data_value);
+      if (regs_[DL] != regs_[ABH]) {
+        regs_[ABH] = data_value;
       }
       // Set data to write
       pins = this->bus_setup_write<Addr::AB>(pins, data_value);
@@ -592,11 +592,11 @@ bus_state_t op_las(bus_state_t pins) {
     case 1: {
       // PHI1: Load data and perform operation
       uint8_t operand = this->bus_get_data(pins);
-      uint8_t result = operand & this->get(REG_S);
-      this->set(REG_A, result);
-      this->set(REG_X, result);
-      this->set(REG_S, result);
-      this->update_nz_flags<REG_A>(result);
+      uint8_t result = operand & regs_[S];
+      regs_[A] = result;
+      regs_[X] = result;
+      regs_[S] = result;
+      this->update_nz_flags<WidthMode::ACC>(result);
       this->transition_to_fetch();
       return pins;
     }

@@ -158,7 +158,7 @@ public:
         
         // Reset CPU and set initial state
         reset_cpu();
-        cpu_->set(REG_PC, load_address_);
+        cpu_->regs_[PC] = load_address_;
         
         // Capture initial state
         initial_state_ = get_current_state();
@@ -178,7 +178,7 @@ public:
                 cycle_count_++;
                 
                 // Check for infinite loops or crashes
-                uint16_t pc = cpu_->get(REG_PC);
+                uint16_t pc = cpu_->regs_[PC];
                 if (pc == 0x0000 || pc >= 0xFF00) {
                     result.status = LorenzTestResult::Status::CRASH;
                     result.message = "CPU crashed or jumped to invalid address: $" +
@@ -232,24 +232,24 @@ public:
     }
 
     void set_initial_state(const LorenzTestState& state) {
-        cpu_->set(REG_PC, state.pc);
-        cpu_->set(REG_A, state.a);
-        cpu_->set(REG_X, state.x);
-        cpu_->set(REG_Y, state.y);
-        cpu_->set(REG_S, state.sp);
-        cpu_->set(REG_P, state.p);
+        cpu_->regs_[PC] = state.pc;
+        cpu_->regs_[AL] = state.a;
+        cpu_->regs_[X] = state.x;
+        cpu_->regs_[Y] = state.y;
+        cpu_->regs_[S] = state.sp;
+        cpu_->regs_[P] = state.p;
         
         initial_state_ = state;
     }
 
     LorenzTestState get_current_state() const {
         LorenzTestState state;
-        state.pc = cpu_->get(REG_PC);
-        state.a = cpu_->get(REG_A);
-        state.x = cpu_->get(REG_X);
-        state.y = cpu_->get(REG_Y);
-        state.sp = cpu_->get(REG_S);
-        state.p = cpu_->get(REG_P);
+        state.pc = cpu_->regs_[PC];
+        state.a = cpu_->regs_[AL];
+        state.x = cpu_->regs_[X];
+        state.y = cpu_->regs_[Y];
+        state.sp = cpu_->regs_[S];
+        state.p = cpu_->regs_[P];
         state.cycles = cycle_count_;
         
         return state;
@@ -285,7 +285,7 @@ private:
     }
 
     bool is_test_complete() const {
-        uint16_t pc = cpu_->get(REG_PC);
+        uint16_t pc = cpu_->regs_[PC];
         
         // Test completion detection methods:
         
@@ -326,14 +326,14 @@ private:
         pins_ = cpu_->tick<MOS6502::Phase::PHI2>(pins_);
         
         if (trace_enabled_) {
-            uint16_t pc = cpu_->get(REG_PC);
+            uint16_t pc = cpu_->regs_[PC];
             std::cout << "Cycle " << cycle_count_ << ": PC=$"
                      << std::hex << std::setw(4) << std::setfill('0') << pc
-                     << " A=$" << std::setw(2) << static_cast<int>(cpu_->get(REG_A))
-                     << " X=$" << std::setw(2) << static_cast<int>(cpu_->get(REG_X))
-                     << " Y=$" << std::setw(2) << static_cast<int>(cpu_->get(REG_Y))
-                     << " SP=$" << std::setw(2) << static_cast<int>(cpu_->get(REG_S))
-                     << " P=$" << std::setw(2) << static_cast<int>(cpu_->get(REG_P))
+                     << " A=$" << std::setw(2) << static_cast<int>(cpu_->regs_[AL])
+                     << " X=$" << std::setw(2) << static_cast<int>(cpu_->regs_[X])
+                     << " Y=$" << std::setw(2) << static_cast<int>(cpu_->regs_[Y])
+                     << " SP=$" << std::setw(2) << static_cast<int>(cpu_->regs_[S])
+                     << " P=$" << std::setw(2) << static_cast<int>(cpu_->regs_[P])
                      << std::endl;
         }
     }

@@ -31,25 +31,25 @@ bus_state_t op_tax(bus_state_t pins) {
 
           if (acc_16bit && index_16bit) {
             // 16-bit A to 16-bit X
-            uint16_t value = this->get(REG_A_16);
+            uint16_t value = regs_[A16];
             this->set_x_register(value);
             this->update_flag(FLAG_Z, value == 0);
             this->update_flag(FLAG_N, (value & 0x8000) != 0);
           } else if (acc_16bit && !index_16bit) {
             // 16-bit A to 8-bit X (transfer low byte)
-            uint8_t value = this->get(REG_AL);
-            this->set(REG_X, value);
+            uint8_t value = regs_[A];
+            regs_[X] = value;
             this->update_nz_flags(value);
           } else if (!acc_16bit && index_16bit) {
             // 8-bit A to 16-bit X (zero-extend)
-            uint16_t value = this->get(REG_AL);
+            uint16_t value = regs_[A];
             this->set_x_register(value);
             this->update_flag(FLAG_Z, value == 0);
             this->update_flag(FLAG_N, false); // High bit is always 0
           } else {
             // 8-bit A to 8-bit X
-            uint8_t value = this->get(REG_A);
-            this->set(REG_X, value);
+            uint8_t value = regs_[A];
+            regs_[X] = value;
             this->update_nz_flags(value);
           }
           this->transition_to_fetch();
@@ -57,8 +57,8 @@ bus_state_t op_tax(bus_state_t pins) {
         }
       }
       // Standard 8-bit operation
-      uint8_t value = this->get(REG_A);
-      this->set(REG_X, value);
+      uint8_t value = regs_[A];
+      regs_[X] = value;
       this->update_nz_flags(value);
       this->transition_to_fetch();
       return pins;
@@ -85,25 +85,25 @@ bus_state_t op_tay(bus_state_t pins) {
 
           if (acc_16bit && index_16bit) {
             // 16-bit A to 16-bit Y
-            uint16_t value = this->get(REG_A_16);
+            uint16_t value = regs_[A16];
             this->set_y_register(value);
             this->update_flag(FLAG_Z, value == 0);
             this->update_flag(FLAG_N, (value & 0x8000) != 0);
           } else if (acc_16bit && !index_16bit) {
             // 16-bit A to 8-bit Y (transfer low byte)
-            uint8_t value = this->get(REG_A);
-            this->set(REG_Y, value);
+            uint8_t value = regs_[A];
+            regs_[Y] = value;
             this->update_nz_flags(value);
           } else if (!acc_16bit && index_16bit) {
             // 8-bit A to 16-bit Y (zero-extend)
-            uint16_t value = this->get(REG_A);
+            uint16_t value = regs_[A];
             this->set_y_register(value);
             this->update_flag(FLAG_Z, value == 0);
             this->update_flag(FLAG_N, false); // High bit is always 0
           } else {
             // 8-bit A to 8-bit Y
-            uint8_t value = this->get(REG_A);
-            this->set(REG_Y, value);
+            uint8_t value = regs_[A];
+            regs_[Y] = value;
             this->update_nz_flags(value);
           }
           this->transition_to_fetch();
@@ -111,8 +111,8 @@ bus_state_t op_tay(bus_state_t pins) {
         }
       }
       // Standard 8-bit operation
-      uint8_t value = this->get(REG_A);
-      this->set(REG_Y, value);
+      uint8_t value = regs_[A];
+      regs_[Y] = value;
       this->update_nz_flags(value);
       this->transition_to_fetch();
       return pins;
@@ -134,7 +134,7 @@ bus_state_t op_tsx(bus_state_t pins) {
       if constexpr (has_wide_registers()) {
         if (this->is_index_16bit()) {
           // Native mode, 16-bit X register - transfer 16-bit stack pointer
-          uint16_t value = this->get(REG_SP);
+          uint16_t value = regs_[SP];
           this->set_x_register(value);
           this->update_flag(FLAG_Z, value == 0);
           this->update_flag(FLAG_N, (value & 0x8000) != 0);
@@ -143,8 +143,8 @@ bus_state_t op_tsx(bus_state_t pins) {
         }
       }
       // Standard 8-bit operation
-      uint8_t value = this->get(REG_S);
-      this->set(REG_X, value);
+      uint8_t value = regs_[S];
+      regs_[X] = value;
       this->update_nz_flags(value);
       this->transition_to_fetch();
       return pins;
@@ -172,24 +172,24 @@ bus_state_t op_txa(bus_state_t pins) {
           if (acc_16bit && index_16bit) {
             // 16-bit X to 16-bit A
             uint16_t value = this->get_x_register();
-            this->set(REG_A_16, value);
+            regs_[A16] = value;
             this->update_flag(FLAG_Z, value == 0);
             this->update_flag(FLAG_N, (value & 0x8000) != 0);
           } else if (acc_16bit && !index_16bit) {
             // 8-bit X to 16-bit A (zero-extend)
-            uint16_t value = this->get(REG_X);
-            this->set(REG_A_16, value);
+            uint16_t value = regs_[X];
+            regs_[A16] = value;
             this->update_flag(FLAG_Z, value == 0);
             this->update_flag(FLAG_N, false); // High bit is always 0
           } else if (!acc_16bit && index_16bit) {
             // 16-bit X to 8-bit A (transfer low byte)
-            uint8_t value = this->get(REG_X);
-            this->set(REG_A, value);
+            uint8_t value = regs_[X];
+            regs_[A] = value;
             this->update_nz_flags(value);
           } else {
             // 8-bit X to 8-bit A
-            uint8_t value = this->get(REG_X);
-            this->set(REG_A, value);
+            uint8_t value = regs_[X];
+            regs_[A] = value;
             this->update_nz_flags(value);
           }
           this->transition_to_fetch();
@@ -197,8 +197,8 @@ bus_state_t op_txa(bus_state_t pins) {
         }
       }
       // Standard 8-bit operation
-      uint8_t value = this->get(REG_X);
-      this->set(REG_A, value);
+      uint8_t value = regs_[X];
+      regs_[A] = value;
       this->update_nz_flags(value);
       this->transition_to_fetch();
       return pins;
@@ -223,19 +223,19 @@ bus_state_t op_txs(bus_state_t pins) {
           if (this->is_index_16bit()) {
             // 16-bit X register - transfer full 16-bit value to stack pointer
             uint16_t value = this->get_x_register();
-            this->set(REG_SP, value);
+            regs_[SP] = value;
           } else {
             // 8-bit X register - transfer low byte to stack pointer
-            uint8_t value = this->get(REG_X);
-            this->set(REG_S, value);
+            uint8_t value = regs_[X];
+            regs_[S] = value;
           }
           this->transition_to_fetch();
           return pins;
         }
       }
       // Standard 8-bit operation
-      uint8_t value = this->get(REG_X);
-      this->set(REG_S, value);
+      uint8_t value = regs_[X];
+      regs_[S] = value;
       this->transition_to_fetch();
       return pins;
   }
@@ -262,24 +262,24 @@ bus_state_t op_tya(bus_state_t pins) {
           if (acc_16bit && index_16bit) {
             // 16-bit Y to 16-bit A
             uint16_t value = this->get_y_register();
-            this->set(REG_A_16, value);
+            regs_[A16] = value;
             this->update_flag(FLAG_Z, value == 0);
             this->update_flag(FLAG_N, (value & 0x8000) != 0);
           } else if (acc_16bit && !index_16bit) {
             // 8-bit Y to 16-bit A (zero-extend)
-            uint16_t value = this->get(REG_Y);
-            this->set(REG_A_16, value);
+            uint16_t value = regs_[Y];
+            regs_[A16] = value;
             this->update_flag(FLAG_Z, value == 0);
             this->update_flag(FLAG_N, false); // High bit is always 0
           } else if (!acc_16bit && index_16bit) {
             // 16-bit Y to 8-bit A (transfer low byte)
-            uint8_t value = this->get(REG_Y);
-            this->set(REG_A, value);
+            uint8_t value = regs_[Y];
+            regs_[A] = value;
             this->update_nz_flags(value);
           } else {
             // 8-bit Y to 8-bit A
-            uint8_t value = this->get(REG_Y);
-            this->set(REG_A, value);
+            uint8_t value = regs_[Y];
+            regs_[A] = value;
             this->update_nz_flags(value);
           }
           this->transition_to_fetch();
@@ -287,8 +287,8 @@ bus_state_t op_tya(bus_state_t pins) {
         }
       }
       // Standard 8-bit operation
-      uint8_t value = this->get(REG_Y);
-      this->set(REG_A, value);
+      uint8_t value = regs_[Y];
+      regs_[A] = value;
       this->update_nz_flags(value);
       this->transition_to_fetch();
       return pins;
@@ -324,8 +324,8 @@ bus_state_t op_inx(bus_state_t pins) {
         }
       }
       // Standard 8-bit INX operation
-      this->inc(REG_X);
-      this->update_nz_flags(this->get(REG_X));
+      ++regs_[X];
+      this->update_nz_flags(regs_[X]);
       this->transition_to_fetch();
       return pins;
   }
@@ -355,8 +355,8 @@ bus_state_t op_iny(bus_state_t pins) {
         }
       }
       // Standard 8-bit INY operation
-      this->inc(REG_Y);
-      this->update_nz_flags(this->get(REG_Y));
+      ++regs_[Y];
+      this->update_nz_flags(regs_[Y]);
       this->transition_to_fetch();
       return pins;
   }
@@ -386,8 +386,8 @@ bus_state_t op_dex(bus_state_t pins) {
         }
       }
       // Standard 8-bit DEX operation
-      this->dec(REG_X);
-      this->update_nz_flags(this->get(REG_X));
+      --regs_[X];
+      this->update_nz_flags(regs_[X]);
       this->transition_to_fetch();
       return pins;
   }
@@ -417,8 +417,8 @@ bus_state_t op_dey(bus_state_t pins) {
         }
       }
       // Standard 8-bit DEY operation
-      this->dec(REG_Y);
-      this->update_nz_flags(this->get(REG_Y));
+      --regs_[Y];
+      this->update_nz_flags(regs_[Y]);
       this->transition_to_fetch();
       return pins;
   }

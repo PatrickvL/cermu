@@ -33,7 +33,7 @@ bus_state_t op_pha(bus_state_t pins) {
 
       case 2:
         /* PHI2: Write high byte of A to stack */
-        pins = this->bus_setup_write<Addr::SP>(pins, REG_AH);
+        pins = this->bus_setup_write<Addr::SP>(pins, AH);
         return pins;
       case 3:
         this->dec_stack();
@@ -42,7 +42,7 @@ bus_state_t op_pha(bus_state_t pins) {
 
       case 4:
         /* PHI2: Write low byte of A to stack */
-        pins = this->bus_setup_write<Addr::SP>(pins, REG_AL);
+        pins = this->bus_setup_write<Addr::SP>(pins, AL);
         return pins;
       case 5:
         this->dec_stack();
@@ -66,7 +66,7 @@ bus_state_t op_pha(bus_state_t pins) {
 
   case 2:
     /* PHI2: Write A to stack */
-    pins = this->bus_setup_write<Addr::SP>(pins, REG_A);
+    pins = this->bus_setup_write<Addr::SP>(pins, A);
     return pins;
   case 3:
     /* PHI1: Decrement SP and transition */
@@ -87,13 +87,13 @@ bus_state_t op_php(bus_state_t pins) {
     return pins;
   case 1:
     /* PHI1: Prepare status byte and increment cycle */
-    this->set(REG_DL, this->get(REG_P) | FLAG_B | FLAG_U);
+    regs_[DL] = regs_[P] | FLAG_B | FLAG_U;
     this->half_cycle++;
     return pins;
 
   case 2:
     /* PHI2: Write P|B|U to stack */
-    pins = this->bus_setup_write<Addr::SP>(pins, REG_DL);
+    pins = this->bus_setup_write<Addr::SP>(pins, DL);
     return pins;
   case 3:
     /* PHI1: Decrement SP and transition */
@@ -138,7 +138,7 @@ bus_state_t op_pla(bus_state_t pins) {
         return pins;
       case 5:
         /* PHI1: Load low byte from bus and increment SP */
-        this->bus_load_reg(REG_AL, pins);
+        this->bus_load_reg(AL, pins);
         this->inc_stack();
         this->half_cycle++;
         return pins;
@@ -149,8 +149,8 @@ bus_state_t op_pla(bus_state_t pins) {
         return pins;
       case 7:
         /* PHI1: Load high byte from bus and update flags */
-        this->bus_load_reg(REG_AH, pins);
-        uint16_t value = this->get(REG_A_16);
+        this->bus_load_reg(AH, pins);
+        uint16_t value = regs_[A16];
         this->update_flag(FLAG_Z, value == 0);
         this->update_flag(FLAG_N, (value & 0x8000) != 0);
         this->transition_to_fetch();
@@ -187,8 +187,8 @@ bus_state_t op_pla(bus_state_t pins) {
     return pins;
   case 5:
     /* PHI1: Load accumulator from bus and set flags */
-    this->bus_load_reg(REG_A, pins);
-    this->update_nz_flags(this->get(REG_A));
+    this->bus_load_reg(A, pins);
+    this->update_nz_flags(regs_[A]);
     this->transition_to_fetch();
     return pins;
   }
@@ -232,22 +232,22 @@ bus_state_t op_plp(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
       if (this->in_emulation_mode()) {
         // 65C816 emulation mode: set both FLAG_B (bit 4) and FLAG_U (bit 5)
-        this->set(REG_P, new_p | FLAG_B | FLAG_U);
+        regs_[P] = new_p | FLAG_B | FLAG_U;
       } else {
         // Native mode: load value as-is (B becomes X flag, U becomes M flag)
-        uint8_t old_p = this->get(REG_P);
-        this->set(REG_P, new_p);
+        uint8_t old_p = regs_[P];
+        regs_[P] = new_p;
         
         // X flag (bit 4): When switching from 16-bit to 8-bit index mode, clear high bytes
         if ((new_p & FLAG_X) && !(old_p & FLAG_X)) {
           // Switching index registers from 16-bit to 8-bit: clear XH and YH
-          this->set(REG_XH, 0x00);
-          this->set(REG_YH, 0x00);
+          regs_[XH] = 0x00;
+          regs_[YH] = 0x00;
         }
       }
     } else {
       // 6502/6510/65C02: Mask off bit 4 (B is phantom), set bit 5 (U always 1)
-      this->set(REG_P, (new_p & ~FLAG_B) | FLAG_U);
+      regs_[P] = (new_p & ~FLAG_B) | FLAG_U;
     }
     this->transition_to_fetch();
     return pins;

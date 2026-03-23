@@ -1296,9 +1296,9 @@ bool AtariVectorSystem<V>::load_file(const char* filepath) {
     }
 
     if (cold_boot) {
-        board_.cpu().set(REG_A, 0);
-        board_.cpu().set(REG_X, 0);
-        board_.cpu().set(REG_Y, 0);
+        board_.cpu().regs_[A] = 0;
+        board_.cpu().regs_[X] = 0;
+        board_.cpu().regs_[Y] = 0;
     }
 
     printf("%s: ROM loaded, system ready\n", Traits::NAME);

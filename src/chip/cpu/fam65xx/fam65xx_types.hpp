@@ -357,119 +357,85 @@ enum class Operation : uint8_t {
 };
 
 // ============================================================================
-// GLOBAL REGISTER CONSTANTS (optimized layout for both narrow and wide CPUs)
+// REGISTER FILE CONSTANTS — typed indices into RegisterFile<24, uint16_t>
 // ============================================================================
+//
+// 16-bit pairs are declared first as r16, then lo_b/hi_b extract the
+// endian-correct byte offsets.  No #ifdef blocks needed here — the
+// lo_b/hi_b helpers (register_file.hpp) handle endianness at compile time.
 
-// 8-bit register constants - optimized layout with no gaps for 8-bit CPUs
-// Type-safe enum typedefs for register access
-enum reg8_t : uint8_t {
-// Core registers (0-13) - used by both 8-bit and 16-bit CPUs
-// 16-bit aligned register pairs (endian-aware) for memory addresses
-#ifdef CERMU_LITTLE_ENDIAN
-  REG_SPL = 0, // Stack pointer (low byte)
-  REG_SPH = 1, // Stack pointer (high byte)
-  REG_ABL = 2, // Address Bus (low byte)
-  REG_ABH = 3, // Address Bus (high byte)
-  REG_PCL = 4, // Program Counter (low byte)
-  REG_PCH = 5, // Program Counter (high byte)
-  REG_AL = 6,  // Accumulator (low byte for 65C816)
-  REG_AH = 7,  // Accumulator high byte (65C816) / unused (8-bit CPUs)
-  REG_XL = 8,  // X index (low byte for 65C816)
-  REG_XH = 9,  // X index high byte (65C816) / unused (8-bit CPUs)
-  REG_YL = 10, // Y index (low byte for 65C816)
-  REG_YH = 11, // Y index high byte (65C816) / unused (8-bit CPUs)
-  REG_PL = 12, // Processor status low byte
-  REG_PH = 13, // Processor status high byte (65C816) / unused (8-bit CPUs)
-#else
-  REG_SPH = 0,  // Stack pointer (high byte)
-  REG_SPL = 1,  // Stack pointer (low byte)
-  REG_ABH = 2,  // Address Bus (high byte)
-  REG_ABL = 3,  // Address Bus (low byte)
-  REG_PCH = 4,  // Program Counter (high byte)
-  REG_PCL = 5,  // Program Counter (low byte)
-  REG_AH = 6,   // Accumulator high byte (65C816) / unused (8-bit CPUs)
-  REG_AL = 7,   // Accumulator (low byte for 65C816)
-  REG_XH = 8,   // X index high byte (65C816) / unused (8-bit CPUs)
-  REG_XL = 9,   // X index (low byte for 65C816)
-  REG_YH = 10,  // Y index high byte (65C816) / unused (8-bit CPUs)
-  REG_YL = 11,  // Y index (low byte for 65C816)
-  REG_PH = 12,  // Processor status high byte (65C816) / unused (8-bit CPUs)
-  REG_PL = 13,  // Processor status low byte
-#endif
+#include "core/register_file.hpp"
 
-  // Common registers (continue from 12) - used by both CPU types
-  REG_IR = 14, // Instruction Register (current opcode)
-  REG_DL = 15, // Data Latch (internal)
+namespace reg {
 
-// Extended registers (16-21) - only used by 65C816
-#ifdef CERMU_LITTLE_ENDIAN
-  REG_DPL = 16, // Direct Page low byte (65C816 only)
-  REG_DPH = 17, // Direct Page high byte (65C816 only)
-#else
-  REG_DPH = 16, // Direct Page high byte (65C816 only)
-  REG_DPL = 17, // Direct Page low byte (65C816 only)
-#endif
-  REG_DBR = 18, // Data Bank register (65C816 only)
-  REG_PBR = 19, // Program Bank register (65C816 only)
-  REG_SBR = 20, // Source Bank register (65C816 only)
-  REG_ZBR = 21, // Zero Bank register (always 0x00, for 65C816 emulation mode
-                // and stack/DP access)
+// --- 16-bit register pairs (byte offsets into the register file) ---
+inline constexpr r16 SP  {0};   // Stack Pointer
+inline constexpr r16 AB  {2};   // Address Bus
+inline constexpr r16 PC  {4};   // Program Counter
+inline constexpr r16 A16 {6};   // Full Accumulator (65C816)
+inline constexpr r16 X16 {8};   // Full X Index (65C816)
+inline constexpr r16 Y16 {10};  // Full Y Index (65C816)
+inline constexpr r16 P16 {12};  // Processor Status + E flag (65C816)
+inline constexpr r16 D16 {16};  // Direct Page (65C816)
 
-  REG_COUNT_16BIT, // Number of 8-bit registers for 65C816
-  REG_COUNT_8BIT =
-      REG_DL + 1, // Core registers 0-14 (high bytes unused for 8-bit CPUs)
+// --- 8-bit sub-registers (endian-aware via lo_b/hi_b) ---
+inline constexpr r8 SPL = lo_b(SP);   inline constexpr r8 SPH = hi_b(SP);
+inline constexpr r8 ABL = lo_b(AB);   inline constexpr r8 ABH = hi_b(AB);
+inline constexpr r8 PCL = lo_b(PC);   inline constexpr r8 PCH = hi_b(PC);
+inline constexpr r8 AL  = lo_b(A16);  inline constexpr r8 AH  = hi_b(A16);
+inline constexpr r8 XL  = lo_b(X16);  inline constexpr r8 XH  = hi_b(X16);
+inline constexpr r8 YL  = lo_b(Y16);  inline constexpr r8 YH  = hi_b(Y16);
+inline constexpr r8 PL  = lo_b(P16);  inline constexpr r8 PH  = hi_b(P16);
+inline constexpr r8 DPL = lo_b(D16);  inline constexpr r8 DPH = hi_b(D16);
 
-  // Compatibility mapping
-  REG_S = REG_SPL, // Map S register to SPL
-  REG_X = REG_XL,  // Map X register to XL
-  REG_Y = REG_YL,  // Map Y register to YL
-  REG_P = REG_PL,  // Map P register to PL
-  // Note: REG_PH is already defined above for processor status high byte
-  // (emulation mode storage)
+// --- Non-paired 8-bit registers ---
+inline constexpr r8 IR  {14};  // Instruction Register (current opcode)
+inline constexpr r8 DL  {15};  // Data Latch (internal)
 
-  // Compatibility mapping (65C816 : A = Low byte of C (16 bit accumulator), B =
-  // High byte of C)
-  REG_A = REG_AL, // Map  A register to AL
-  REG_B = REG_AH, // Map B register to AH
+// --- 65C816-only single-byte registers ---
+inline constexpr r8 DBR {18};  // Data Bank Register
+inline constexpr r8 PBR {19};  // Program Bank Register
+inline constexpr r8 SBR {20};  // Source Bank Register
+inline constexpr r8 ZBR {21};  // Zero Bank Register (hardwired 0x00)
 
-  // Memory operation pseudo-register - forces 8-bit behavior in template
-  // functions
-  REG_MEM = REG_DL // Alias to DL - not A, X, or Y, so always 8-bit
-};
+// --- Register counts ---
+inline constexpr uint8_t COUNT_8BIT  = 16;  // Core registers (0-15)
+inline constexpr uint8_t COUNT_16BIT = 22;  // With 65C816 extended
 
-// 16-bit register constants - these work for both narrow and wide CPUs
-enum reg16_t : uint8_t {
-  REG_SP = REG_SPL / 2, // Stack pointer (16-bit)
-  REG_AB = REG_ABL / 2, // Address Bus (16-bit)
-  REG_PC = REG_PCL / 2, // Program Counter (16-bit)
+// --- Compatibility aliases (8-bit) ---
+inline constexpr r8 S   = SPL;  // S register → SPL
+inline constexpr r8 A   = AL;   // A register → AL (accumulator low)
+inline constexpr r8 B   = AH;   // B register → AH (accumulator high, 65C816)
+inline constexpr r8 X   = XL;   // X register → XL
+inline constexpr r8 Y   = YL;   // Y register → YL
+inline constexpr r8 P   = PL;   // P register → PL
+inline constexpr r8 MEM = DL;   // Memory pseudo-register (forces 8-bit width)
 
-  // 65C816 extended 16-bit registers (only meaningful for wide CPUs)
-  // Now properly aligned with endian-aware register pairs
-  REG_A_16 = REG_AL / 2,  // Full accumulator (16-bit, 65C816 only)
-  REG_X_16 = REG_XL / 2,  // Full X register (16-bit, 65C816 only)
-  REG_Y_16 = REG_YL / 2,  // Full Y register (16-bit, 65C816 only)
-  REG_P_16 = REG_PL / 2,  // Processor status (16-bit, 65C816 only) - includes
-                          // emulation mode in high byte
-  REG_D_16 = REG_DPL / 2, // Direct Page register (16-bit, 65C816 only)
+// --- Compatibility aliases (16-bit) ---
+inline constexpr r16 C = A16;   // Legacy C → full 16-bit accumulator
+inline constexpr r16 D = D16;   // Direct Page → D16
 
-  // Compatibility mapping
-  REG_C = REG_A_16, // Map legacy C register to REG_A_16 for compatibility
-  REG_D = REG_D_16  // Direct Page register (16-bit, 65C816 only)
-};
+// --- Width mode for 65C816 template dispatch ---
+// Replaces reg8_t as NTTP in calc_n_flag<>, calc_nz_flags<>, etc.
+enum class WidthMode : uint8_t { ACC, IDX, MEM };
 
-// Addr enum class for template parameters
+} // namespace reg
+using namespace reg;
+
+// Addr enum class for template parameters — values ARE byte offsets
 enum class Addr : uint8_t {
-  AB = REG_AB, // Address Bus (16-bit)
-  PC = REG_PC, // Program Counter (16-bit)
-  SP = REG_SP  // Stack pointer (16-bit)
+  AB = 2,  // Address Bus  (byte offset of r16 AB)
+  PC = 4,  // Program Counter (byte offset of r16 PC)
+  SP = 0   // Stack pointer (byte offset of r16 SP)
 };
 
-// Bank enum class for template parameters
+// Bank enum class for template parameters — values ARE byte offsets
+// (used for runtime register lookup)
 enum class Bank : uint8_t {
-  DBR = REG_DBR, // Data Bank register (8-bit, 65C816 only)
-  PBR = REG_PBR, // Program Bank register (8-bit, 65C816 only)
-  SBR = REG_SBR, // Source Bank register (8-bit, 65C816 only)
-  ZBR = REG_ZBR  // Zero Bank register (8-bit, hardwired to 0x00)
+  DBR = 18, // Data Bank register
+  PBR = 19, // Program Bank register
+  SBR = 20, // Source Bank register
+  ZBR = 21  // Zero Bank register (hardwired to 0x00)
 };
 
 // ============================================================================

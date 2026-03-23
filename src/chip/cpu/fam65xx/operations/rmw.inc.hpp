@@ -22,7 +22,7 @@ bus_state_t op_asl(bus_state_t pins) {
       const uint16_t val16 = static_cast<uint16_t>(value);
       const uint16_t carry_out = (val16 >> 15) & FLAG_C;
       value = (val16 << 1) & 0xFFFF;
-      this->update_nz_flags<REG_A>(value);
+      this->update_nz_flags<WidthMode::ACC>(value);
       this->update_flag(FLAG_C, carry_out != 0);
     } else {
       // 8-bit operation (memory or 8-bit accumulator)
@@ -34,7 +34,7 @@ bus_state_t op_asl(bus_state_t pins) {
       if (this->opcode_entry.is_rmw()) {
         this->update_nz_flags_8bit(val8);
       } else {
-        this->update_nz_flags<REG_A>(val8);
+        this->update_nz_flags<WidthMode::ACC>(val8);
       }
       this->update_flag(FLAG_C, carry_out != 0);
     }
@@ -56,7 +56,7 @@ bus_state_t op_lsr(bus_state_t pins) {
       value = (value >> 1) & 0xFFFF;
 
       if (is_16bit_acc) {
-        this->update_nz_flags<REG_A>(value);
+        this->update_nz_flags<WidthMode::ACC>(value);
       } else {
         this->update_nz_flags_16bit(static_cast<uint16_t>(value));
       }
@@ -69,7 +69,7 @@ bus_state_t op_lsr(bus_state_t pins) {
       if (is_memory_rmw) {
         this->update_nz_flags_8bit(val8);
       } else {
-        this->update_nz_flags<REG_A>(val8);
+        this->update_nz_flags<WidthMode::ACC>(val8);
       }
     }
   });
@@ -79,7 +79,7 @@ bus_state_t op_lsr(bus_state_t pins) {
 bus_state_t op_rol(bus_state_t pins) {
   trace_operation(__func__);
   return this->rmw_operation_helper(pins, [this](data_t &value) {
-    const uint8_t carry_in = this->get(REG_P) & FLAG_C;
+    const uint8_t carry_in = regs_[P] & FLAG_C;
 
     // rmw_operation_helper already determines memory vs accumulator mode
     // Memory operations are always 8-bit, accumulator operations respect M flag
@@ -89,7 +89,7 @@ bus_state_t op_rol(bus_state_t pins) {
       const uint16_t val16 = static_cast<uint16_t>(value);
       const uint16_t carry_out = (val16 >> 15) & FLAG_C;
       value = ((val16 << 1) | carry_in) & 0xFFFF;
-      this->update_nz_flags<REG_A>(value);
+      this->update_nz_flags<WidthMode::ACC>(value);
       this->update_flag(FLAG_C, carry_out != 0);
     } else {
       // 8-bit operation (memory or 8-bit accumulator)
@@ -101,7 +101,7 @@ bus_state_t op_rol(bus_state_t pins) {
       if (this->opcode_entry.is_rmw()) {
         this->update_nz_flags_8bit(val8);
       } else {
-        this->update_nz_flags<REG_A>(val8);
+        this->update_nz_flags<WidthMode::ACC>(val8);
       }
       this->update_flag(FLAG_C, carry_out != 0);
     }
@@ -112,7 +112,7 @@ bus_state_t op_rol(bus_state_t pins) {
 bus_state_t op_ror(bus_state_t pins) {
   trace_operation(__func__);
   return this->rmw_operation_helper(pins, [this](data_t &value) {
-    const uint8_t carry_in = this->get(REG_P) & FLAG_C;
+    const uint8_t carry_in = regs_[P] & FLAG_C;
 
     // rmw_operation_helper already determines memory vs accumulator mode
     // Memory operations are always 8-bit, accumulator operations respect M flag
@@ -121,7 +121,7 @@ bus_state_t op_ror(bus_state_t pins) {
       // 16-bit accumulator operation
       const uint16_t carry_out = value & FLAG_C;
       value = ((value >> 1) | (static_cast<uint16_t>(carry_in) << 15)) & 0xFFFF;
-      this->update_nz_flags<REG_A>(value);
+      this->update_nz_flags<WidthMode::ACC>(value);
       this->update_flag(FLAG_C, carry_out != 0);
     } else {
       // 8-bit operation (memory or 8-bit accumulator)
@@ -133,7 +133,7 @@ bus_state_t op_ror(bus_state_t pins) {
       if (this->opcode_entry.is_rmw()) {
         this->update_nz_flags_8bit(val8);
       } else {
-        this->update_nz_flags<REG_A>(val8);
+        this->update_nz_flags<WidthMode::ACC>(val8);
       }
       this->update_flag(FLAG_C, carry_out != 0);
     }

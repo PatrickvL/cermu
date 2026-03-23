@@ -365,46 +365,46 @@ public:
     }
     
     // CPU state accessors — direct CPU access with if constexpr for 65816
-    void set_pc(uint16_t pc) { cpu.set(REG_PC, pc); }
+    void set_pc(uint16_t pc) { cpu.regs_[PC] = pc; }
     void set_a(uint16_t a) {
         if constexpr (CPU::has_wide_registers()) {
-            cpu.set(REG_A_16, a);
+            cpu.regs_[A16] = a;
         } else {
-            cpu.set(REG_A, static_cast<uint8_t>(a & 0xFF));
+            cpu.regs_[AL] = static_cast<uint8_t>(a & 0xFF);
         }
     }
     void set_x(uint16_t x) {
         if constexpr (CPU::has_wide_registers()) {
-            cpu.set(REG_X_16, x);
+            cpu.regs_[X16] = x;
         } else {
-            cpu.set(REG_X, static_cast<uint8_t>(x & 0xFF));
+            cpu.regs_[X] = static_cast<uint8_t>(x & 0xFF);
         }
     }
     void set_y(uint16_t y) {
         if constexpr (CPU::has_wide_registers()) {
-            cpu.set(REG_Y_16, y);
+            cpu.regs_[Y16] = y;
         } else {
-            cpu.set(REG_Y, static_cast<uint8_t>(y & 0xFF));
+            cpu.regs_[Y] = static_cast<uint8_t>(y & 0xFF);
         }
     }
     void set_sp(uint16_t sp) {
         if constexpr (CPU::has_wide_registers()) {
             if (cpu.in_emulation_mode()) {
-                cpu.set(REG_SP, 0x0100 | (sp & 0xFF));
+                cpu.regs_[SP] = 0x0100 | (sp & 0xFF);
             } else {
-                cpu.set(REG_SP, sp);
+                cpu.regs_[SP] = sp;
             }
         } else {
-            cpu.set(REG_S, static_cast<uint8_t>(sp & 0xFF));
+            cpu.regs_[S] = static_cast<uint8_t>(sp & 0xFF);
         }
     }
     void set_status(uint8_t p) {
         if constexpr (CPU::has_wide_registers()) {
-            uint16_t p16 = cpu.get(REG_P_16);
+            uint16_t p16 = cpu.regs_[P16];
             p16 = (p16 & 0xFF00) | p;
-            cpu.set(REG_P_16, p16);
+            cpu.regs_[P16] = p16;
         } else {
-            cpu.set(REG_P, p);
+            cpu.regs_[P] = p;
         }
     }
     
@@ -416,17 +416,17 @@ public:
     }
     void set_d(uint16_t value) {
         if constexpr (CPU::has_wide_registers()) {
-            cpu.set(REG_D, value);
+            cpu.regs_[D] = value;
         }
     }
     void set_dbr(uint8_t value) {
         if constexpr (CPU::has_wide_registers()) {
-            cpu.set(REG_DBR, value);
+            cpu.regs_[DBR] = value;
         }
     }
     void set_pbr(uint8_t value) {
         if constexpr (CPU::has_wide_registers()) {
-            cpu.set(REG_PBR, value);
+            cpu.regs_[PBR] = value;
         }
     }
     
@@ -438,30 +438,30 @@ public:
         cpu.nmi_edge_latch = 0;
     }
     
-    uint16_t get_pc() const { return cpu.get(REG_PC); }
+    uint16_t get_pc() const { return cpu.regs_[PC]; }
     uint16_t get_a() const {
         if constexpr (CPU::has_wide_registers()) {
-            return cpu.get(REG_A_16);
+            return cpu.regs_[A16];
         } else {
-            return cpu.get(REG_A);
+            return cpu.regs_[AL];
         }
     }
     uint16_t get_x() const {
         if constexpr (CPU::has_wide_registers()) {
-            return cpu.get(REG_X_16);
+            return cpu.regs_[X16];
         } else {
-            return cpu.get(REG_X);
+            return cpu.regs_[X];
         }
     }
     uint16_t get_y() const {
         if constexpr (CPU::has_wide_registers()) {
-            return cpu.get(REG_Y_16);
+            return cpu.regs_[Y16];
         } else {
-            return cpu.get(REG_Y);
+            return cpu.regs_[Y];
         }
     }
     uint16_t get_sp() const { return cpu.get_sp(); }
-    uint8_t get_status() const { return cpu.get(REG_P); }
+    uint8_t get_status() const { return cpu.regs_[P]; }
     
     // 65816-specific getters
     bool get_emulation_mode() const {
@@ -472,19 +472,19 @@ public:
     }
     uint16_t get_d() const {
         if constexpr (CPU::has_wide_registers()) {
-            return cpu.get(REG_D);
+            return cpu.regs_[D];
         }
         return 0;
     }
     uint8_t get_dbr() const {
         if constexpr (CPU::has_wide_registers()) {
-            return cpu.get(REG_DBR);
+            return cpu.regs_[DBR];
         }
         return 0;
     }
     uint8_t get_pbr() const {
         if constexpr (CPU::has_wide_registers()) {
-            return cpu.get(REG_PBR);
+            return cpu.regs_[PBR];
         }
         return 0;
     }
@@ -1017,7 +1017,7 @@ private:
         }
         
         // Check stack pointer - get_sp() returns accurate 16-bit value
-        // REG_SP automatically handles hardware differences:
+        // SP automatically handles hardware differences:
         // - 65C816 native mode (E=0): full 16-bit SP
         // - 65C816 emulation mode (E=1): 0x01XX (page 1 forced)
         // - 8-bit processors: 0x01XX (page 1 forced)
