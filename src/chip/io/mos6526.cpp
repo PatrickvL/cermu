@@ -1,4 +1,5 @@
 #include "chip/io/mos6526.hpp" // cia
+using namespace MOS6526::cia_detail;
 #include "core/chip_manifest.hpp"
 #include "core/chip_registry.hpp"
 #include "core/system_lines.hpp"

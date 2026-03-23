@@ -34,13 +34,13 @@
  * - 65C02: Enhanced BCD with corrected flag behavior
  */
 inline void perform_adc(uint8_t operand) {
-  const uint8_t old_a = this->get(REG_A);
-  const uint8_t carry_in = this->get(REG_P) & FLAG_C;
+  const uint8_t old_a = regs_[A];
+  const uint8_t carry_in = regs_[P] & FLAG_C;
   const uint16_t full_result = old_a + operand + carry_in;
   const uint8_t result = static_cast<uint8_t>(full_result);
 
   if constexpr (has_bcd()) {
-    if (this->get(REG_P) & FLAG_D) {
+    if (regs_[P] & FLAG_D) {
       // BCD mode calculation
       uint8_t al = (old_a & 0x0F) + (operand & 0x0F) + carry_in;
       if (al > 9)
@@ -100,18 +100,17 @@ inline void perform_adc(uint8_t operand) {
       }
 
       // Apply result and flags
-      this->set(REG_A, (ah << 4) | (al & 0x0F));
-      this->set(REG_P,
-                (this->get(REG_P) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+      regs_[A] = (ah << 4) | (al & 0x0F);
+      regs_[P] = uint8_t((uint8_t(regs_[P]) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
                     n_flag | v_flag | z_flag | c_flag);
       return;
     }
   }
 
   // Binary mode
-  this->set(REG_A, result);
-  this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                       calc_nz_flags<REG_A>(result) |
+  regs_[A] = result;
+  regs_[P] = (regs_[P] & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C) |
+                       calc_nz_flags<WidthMode::ACC>(result) |
                        calc_v_flag_add(old_a, operand, result) |
                        calc_c_flag(full_result));
 }
@@ -121,14 +120,14 @@ inline void perform_adc(uint8_t operand) {
  * Based on ProcessorTests validation and actual 65xx silicon behavior
  */
 inline void perform_sbc(uint8_t operand) {
-  const uint8_t old_a = this->get(REG_A);
+  const uint8_t old_a = regs_[A];
   const uint8_t borrow_in =
-      (this->get(REG_P) & FLAG_C) ^ 1; // Invert carry for borrow
+      (regs_[P] & FLAG_C) ^ 1; // Invert carry for borrow
   const uint16_t full_result = old_a - operand - borrow_in;
   const uint8_t result = static_cast<uint8_t>(full_result);
 
   if constexpr (has_bcd()) {
-    if (this->get(REG_P) & FLAG_D) {
+    if (regs_[P] & FLAG_D) {
       // Hardware-accurate 6502 BCD subtraction
       // Different algorithms for NMOS vs CMOS processors
 
@@ -189,18 +188,17 @@ inline void perform_sbc(uint8_t operand) {
       }
 
       // Apply result and flags
-      this->set(REG_A, bcd_result);
-      this->set(REG_P,
-                (this->get(REG_P) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+      regs_[A] = bcd_result;
+      regs_[P] = uint8_t((uint8_t(regs_[P]) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
                     n_flag | v_flag | z_flag | c_flag);
       return;
     }
   }
 
   // Binary mode
-  this->set(REG_A, result);
-  this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                       calc_nz_flags<REG_A>(result) |
+  regs_[A] = result;
+  regs_[P] = (regs_[P] & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C) |
+                       calc_nz_flags<WidthMode::ACC>(result) |
                        calc_v_flag_sub(old_a, operand, full_result) |
                        (!(full_result & 0x0100) ? FLAG_C : 0));
 }
@@ -209,12 +207,12 @@ inline void perform_sbc(uint8_t operand) {
  * Compare operation (CMP/CPX/CPY)
  * Optimized implementation with branchless flag calculation
  *
- * CRITICAL: Always use explicit 8-bit comparison (REG_MEM forces 8-bit)
+ * CRITICAL: Always use explicit 8-bit comparison (MEM forces 8-bit)
  * even in 65C816 emulation mode where accumulator may be stored as 16-bit
  */
 inline void perform_compare(uint8_t reg_value, uint8_t operand) {
   // Update flags using branchless calculations
-  // Use REG_MEM template parameter to force 8-bit comparison
-  uint8_t new_flags = calc_nzc_flags<REG_MEM>(reg_value, operand);
-  this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_C)) | new_flags);
+  // Use MEM template parameter to force 8-bit comparison
+  uint8_t new_flags = calc_nzc_flags<WidthMode::MEM>(reg_value, operand);
+  regs_[P] = (regs_[P] & ~(FLAG_N | FLAG_Z | FLAG_C)) | new_flags;
 }

@@ -1471,12 +1471,12 @@ uint8_t NintendoSystem<V>::peek_ppu_memory(uint16_t addr) const {
 
 template<NintendoVariant V>
 uint16_t NintendoSystem<V>::get_cpu_pc() const {
-    return static_cast<uint16_t>(board_.cpu().get(REG_PC));
+    return static_cast<uint16_t>(board_.cpu().regs_[PC]);
 }
 
 template<NintendoVariant V>
 void NintendoSystem<V>::set_cpu_pc(uint16_t addr) {
-    board_.cpu().set(REG_PC, addr);
+    board_.cpu().regs_[PC] = addr;
 }
 
 } // namespace nes_system

@@ -113,9 +113,9 @@ bus_state_t bit_branch_helper(bus_state_t pins, uint8_t bit_mask,
     bool bit_is_set = (bus_data & bit_mask) != 0;
     bool branch_taken = (bit_is_set == bit_set);
     if (branch_taken) {
-      int8_t signed_offset = (int8_t)this->get(REG_DL);  // DL contains branch offset
+      int8_t signed_offset = (int8_t)regs_[DL];  // DL contains branch offset
       // Branch taken: calculate target address and jump
-      this->set(REG_PC, this->get(REG_PC) + signed_offset);
+      regs_[PC] = regs_[PC] + signed_offset;
     }
     this->transition_to_fetch();
     return pins;

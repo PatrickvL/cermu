@@ -23,9 +23,9 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
     return pins;
   case 1: {
     /* PHI1: Load operand, increment PC, and check branch condition */
-    this->bus_load_reg(REG_ABL, pins);
-    this->inc(REG_PC);
-    bool branch_taken = ((this->get(REG_P) & flag_mask) != 0) == flag_value;
+    this->bus_load_reg(ABL, pins);
+    ++regs_[PC];
+    bool branch_taken = ((regs_[P] & flag_mask) != 0) == flag_value;
     
     if (!branch_taken) {
       /* Branch not taken: instruction completes after 2 cycles */
@@ -52,8 +52,8 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
     /* Branch taken: calculate correct target address */
     /* Branch offset is relative to PC after incrementing past the offset byte */
     /* PC was already incremented on line 26, so it now points past the 2-byte instruction */
-    uint16_t branch_base = this->get(REG_PC);
-    this->set(REG_AB, branch_base + (int8_t)this->get(REG_ABL));
+    uint16_t branch_base = regs_[PC];
+    regs_[AB] = branch_base + (int8_t)regs_[ABL];
     this->half_cycle++;
     return pins;
   }
@@ -64,14 +64,14 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
     return pins;
   case 3: {
     /* PHI1: Check for page cross */
-    bool page_cross = this->page_crossed(this->get(REG_PC), this->get(REG_AB));
+    bool page_cross = this->page_crossed(regs_[PC], regs_[AB]);
     if (!page_cross) {
       /* No page cross: set final PC and complete after 3 cycles */
       /* 6502 quirk: the fixup cycle of a taken branch without page cross
        * does NOT poll interrupts.  Set suppression flag so the next fetch
        * boundary skips interrupt hijacking, allowing one more instruction
        * to execute before the interrupt is serviced. */
-      this->set(REG_PC, this->get(REG_AB));
+      regs_[PC] = regs_[AB];
       this->branch_irq_suppression_ = true;
       this->transition_to_fetch();
       return pins;
@@ -80,13 +80,13 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
     /* Page cross detected: need penalty cycle with intermediate address */
     /* Hardware behavior: Add signed offset to PC low byte only, ignore carry */
     /* The intermediate address = (PC & 0xFF00) | ((PCL + signed_offset) & 0xFF) */
-    uint8_t pc_low = this->get(REG_PCL);
-    int8_t signed_offset = (int8_t)this->get(REG_ABL);
+    uint8_t pc_low = regs_[PCL];
+    int8_t signed_offset = (int8_t)regs_[ABL];
     uint8_t new_low = (uint8_t)(pc_low + signed_offset); // Let it wrap naturally
 
     /* Store intermediate address in PC for penalty cycle read */
-    this->set(REG_PCL, new_low);
-    /* REG_AB still contains the correct final target from case 1 */
+    regs_[PCL] = new_low;
+    /* AB still contains the correct final target from case 1 */
     this->half_cycle++;
     return pins;
   }
@@ -97,8 +97,8 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
     return pins;
   case 5:
     /* PHI1: Set final correct target PC and complete instruction */
-    /* REG_AB contains the correct target from case 1 */
-    this->set(REG_PC, this->get(REG_AB));
+    /* AB contains the correct target from case 1 */
+    regs_[PC] = regs_[AB];
     this->transition_to_fetch();
     return pins;
   }

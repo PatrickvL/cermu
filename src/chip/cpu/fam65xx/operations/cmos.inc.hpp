@@ -26,9 +26,9 @@ bus_state_t op_bra(bus_state_t pins) {
     case 1: {
       // PHI1: Load data and increment PC
       int8_t offset = static_cast<int8_t>(this->bus_get_data(pins)); // Signed offset
-      this->inc(REG_PC);
+      ++regs_[PC];
       // Apply branch offset
-      this->set(REG_PC, this->get(REG_PC) + offset);
+      regs_[PC] = regs_[PC] + offset;
       this->transition_to_fetch();
       return pins;
     }
@@ -65,28 +65,28 @@ bus_state_t op_trb(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::AB>(pins);
       return pins;
     case 1:
-      this->bus_load_reg(REG_DL, pins);
+      this->bus_load_reg(DL, pins);
       this->half_cycle++;
       return pins;
 
     case 2:
       // Cycle 1: Dummy write original value back + modify
-      pins = this->bus_setup_write<Addr::AB>(pins, REG_DL);
+      pins = this->bus_setup_write<Addr::AB>(pins, DL);
       return pins;
     case 3: {
-      uint8_t accumulator = this->get(REG_A);
+      uint8_t accumulator = regs_[A];
       // Test bits (set Z flag if A & memory == 0)
-      uint8_t test_result = this->get(REG_DL) & accumulator;
+      uint8_t test_result = regs_[DL] & accumulator;
       this->update_flag(FLAG_Z, test_result == 0);
       // Reset bits (memory = memory & ~A)
-      this->set(REG_DL, this->get(REG_DL) & ~accumulator);
+      regs_[DL] = regs_[DL] & ~accumulator;
       this->half_cycle++;
       return pins;
     }
 
     case 4:
       // Cycle 2: Write modified result back
-      pins = this->bus_setup_write<Addr::AB>(pins, REG_DL);
+      pins = this->bus_setup_write<Addr::AB>(pins, DL);
       return pins;
     case 5:
       this->transition_to_fetch();
@@ -107,27 +107,27 @@ bus_state_t op_tsb(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::AB>(pins);
       return pins;
     case 1:
-      this->bus_load_reg(REG_DL, pins);
+      this->bus_load_reg(DL, pins);
       this->half_cycle++;
       return pins;
 
     case 2:
       // Cycle 1: Dummy write original value back + modify
-      pins = this->bus_setup_write<Addr::AB>(pins, REG_DL);
+      pins = this->bus_setup_write<Addr::AB>(pins, DL);
       return pins;
     case 3: {
-      uint8_t accumulator = this->get(REG_A);
+      uint8_t accumulator = regs_[A];
       // Test bits (set Z flag if A & memory == 0)
-      uint8_t test_result = this->get(REG_DL) & accumulator;
+      uint8_t test_result = regs_[DL] & accumulator;
       this->update_flag(FLAG_Z, test_result == 0);
       // Set bits (memory = memory | A)
-      this->set(REG_DL, this->get(REG_DL) | accumulator);
+      regs_[DL] = regs_[DL] | accumulator;
       this->half_cycle++;
       return pins;
     }
 
     case 4: // Cycle 2: Write modified result back
-      pins = this->bus_setup_write<Addr::AB>(pins, REG_DL);
+      pins = this->bus_setup_write<Addr::AB>(pins, DL);
       return pins;
     case 5:
       this->transition_to_fetch();
@@ -163,8 +163,8 @@ bus_state_t op_stp(bus_state_t pins) {
       return pins;
     case 1:
       // PHI1: Load data and increment PC
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_PC);
+      this->bus_load_reg(DL, pins);
+      ++regs_[PC];
 
       // Set stopped state after reading immediate byte
       this->stopped = true;
@@ -193,7 +193,7 @@ bus_state_t op_phx(bus_state_t pins) {
 
     case 2:
       /* PHI2: Write X to stack */
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_X);
+      pins = this->bus_setup_write<Addr::SP>(pins, X);
       return pins;
     case 3:
       /* PHI1: Decrement SP and transition */
@@ -221,7 +221,7 @@ bus_state_t op_phy(bus_state_t pins) {
 
     case 2:
       /* PHI2: Write Y to stack */
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_Y);
+      pins = this->bus_setup_write<Addr::SP>(pins, Y);
       return pins;
     case 3:
       /* PHI1: Decrement SP and transition */
@@ -263,8 +263,8 @@ bus_state_t op_plx(bus_state_t pins) {
       return pins;
     case 5:
       /* PHI1: Load X from bus and set flags */
-      this->bus_load_reg(REG_X, pins);
-      this->update_nz_flags(this->get(REG_X));
+      this->bus_load_reg(X, pins);
+      this->update_nz_flags(regs_[X]);
       this->transition_to_fetch();
       return pins;
     }
@@ -302,8 +302,8 @@ bus_state_t op_ply(bus_state_t pins) {
       return pins;
     case 5:
       /* PHI1: Load Y from bus and set flags */
-      this->bus_load_reg(REG_Y, pins);
-      this->update_nz_flags(this->get(REG_Y));
+      this->bus_load_reg(Y, pins);
+      this->update_nz_flags(regs_[Y]);
       this->transition_to_fetch();
       return pins;
     }

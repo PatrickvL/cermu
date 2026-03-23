@@ -416,7 +416,7 @@ static TickLoopResult tick_loop_protected(C64System* c64, uint32_t max_cycles, i
     
     __try {
         auto* cpu = c64->mos6510;
-        uint16_t last_pc = cpu->get(REG_PC);
+        uint16_t last_pc = cpu->regs_[PC];
         uint32_t pc_stable_count = 0;
         
         for (uint32_t i = 0; i < max_cycles; i++) {
@@ -438,7 +438,7 @@ static TickLoopResult tick_loop_protected(C64System* c64, uint32_t max_cycles, i
             
             // Periodic infinite-loop check every 256 cycles
             if ((i & 0xFF) == 0) {
-                uint16_t current_pc = cpu->get(REG_PC);
+                uint16_t current_pc = cpu->regs_[PC];
                 if (current_pc == last_pc) {
                     pc_stable_count++;
                     if (pc_stable_count >= 2) {
@@ -651,9 +651,9 @@ bool TestFramework::execute_kernal_boot(C64System* c64) {
     cpu->load_reset_vector(reset_vector);
     
     // Enable interrupts for KERNAL (it needs them for initialization)
-    uint8_t status = cpu->get(REG_P);
+    uint8_t status = cpu->regs_[P];
     status &= ~0x04;  // Clear I flag
-    cpu->set(REG_P, status);
+    cpu->regs_[P] = status;
     
     // Execute KERNAL initialization
     // KERNAL boot takes about 2.1 million cycles (includes memory test)
@@ -671,13 +671,13 @@ bool TestFramework::execute_kernal_boot(C64System* c64) {
         
         // Progress indicator
         if (verbose_ && boot_cycles % 500000 == 0) {
-            uint16_t current_pc = cpu->get(REG_PC);
+            uint16_t current_pc = cpu->regs_[PC];
             printf("  Still booting... PC=$%04X (cycle %u)\n", current_pc, boot_cycles);
         }
     }
     
     if (verbose_) {
-        uint16_t final_pc = cpu->get(REG_PC);
+        uint16_t final_pc = cpu->regs_[PC];
         printf("  KERNAL boot complete after %u cycles (PC=$%04X)\n", boot_cycles, final_pc);
     }
     return true;
@@ -712,7 +712,7 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
         c64->tick();
         boot_cycles++;
         
-        uint16_t current_pc = cpu->get(REG_PC);
+        uint16_t current_pc = cpu->regs_[PC];
         
         // Check every 1000 cycles for keyboard input loop
         if (boot_cycles % 1000 == 0) {
@@ -744,7 +744,7 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
         }
     }
     
-    uint16_t final_pc = cpu->get(REG_PC);
+    uint16_t final_pc = cpu->regs_[PC];
     
     if (verbose_) {
         printf("  Boot sequence finished at PC=$%04X after %u cycles\n", final_pc, boot_cycles);
@@ -752,7 +752,7 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
     }
     
     // After boot, set PC to target address (simulating SYS command)
-    cpu->set(REG_PC, sys_addr);
+    cpu->regs_[PC] = sys_addr;
     
     // CRITICAL: Reset CPU pipeline state machine to fetch mode.
     // Without this, the CPU's current_handler and half_cycle are still
@@ -761,7 +761,7 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
     cpu->transition_to_fetch();
     
     // Sync address bus register with new PC (needed for first fetch)
-    cpu->set(REG_AB, sys_addr);
+    cpu->regs_[AB] = sys_addr;
     
     // Set up stack for SYS command context.
     // Real BASIC SYS uses JSR internally: it pushes the return address - 1
@@ -770,13 +770,13 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
     // Use the current stack pointer from BASIC boot (don't clobber it).
     // Push return address pointing to BASIC warm start ($A7AE) so if the
     // test does RTS, it returns to BASIC safely.
-    uint8_t sp = cpu->get(REG_S);
+    uint8_t sp = cpu->regs_[S];
     uint16_t return_addr = 0xA7AE - 1;  // BASIC warm start, adjusted for RTS convention
     c64->ram->data()[0x0100 + sp] = (return_addr >> 8) & 0xFF;  // High byte
     sp--;
     c64->ram->data()[0x0100 + sp] = return_addr & 0xFF;          // Low byte
     sp--;
-    cpu->set(REG_S, sp);
+    cpu->regs_[S] = sp;
     
     return true;
 }
@@ -837,9 +837,9 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
             } else {
                 // After KERNAL boot, set PC to test entry point
                 uint16_t start_addr = (sys_addr != 0) ? sys_addr : load_addr;
-                cpu->set(REG_PC, start_addr);
+                cpu->regs_[PC] = start_addr;
                 cpu->transition_to_fetch();
-                cpu->set(REG_AB, start_addr);
+                cpu->regs_[AB] = start_addr;
                 if (verbose_) {
                     printf("  Set PC to test entry: $%04X\n", start_addr);
                 }
@@ -856,11 +856,11 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
             }
             
             uint16_t start_addr = (sys_addr != 0) ? sys_addr : load_addr;
-            cpu->set(REG_PC, start_addr);
+            cpu->regs_[PC] = start_addr;
             
             // CRITICAL: Reset CPU pipeline and sync AB register for first fetch
             cpu->transition_to_fetch();
-            cpu->set(REG_AB, start_addr);
+            cpu->regs_[AB] = start_addr;
             
             // IMPORTANT: Leave interrupts ENABLED for direct execution
             // Many tests (especially CIA/Lorenz tests) rely on interrupts for timing
@@ -889,7 +889,7 @@ TestProtocol TestFramework::detect_test_protocol(const TestDescriptor& test, C64
     // Check for BASIC two-stage loader pattern
     RAMChip* ram = c64->ram;
     auto* cpu = c64->mos6510;
-    uint16_t pc = cpu->get(REG_PC);
+    uint16_t pc = cpu->regs_[PC];
     
     // BASIC two-stage loaders start at $0801 and have SYS command
     if (pc == 0x0801 && detect_basic_two_stage_loader(ram, pc)) {
@@ -955,7 +955,7 @@ uint16_t TestFramework::calculate_basic_entry_point(RAMChip* ram, uint16_t sys_a
 // Detect if CPU is stuck in infinite loop and check border color
 bool TestFramework::detect_infinite_loop(C64System* c64, uint16_t& loop_pc, uint32_t check_cycles) {
     auto* cpu = c64->mos6510;
-    uint16_t pc = cpu->get(REG_PC);
+    uint16_t pc = cpu->regs_[PC];
     
     // Run for check_cycles and see if PC stays at same address
     uint32_t stable_count = 0;
@@ -963,7 +963,7 @@ bool TestFramework::detect_infinite_loop(C64System* c64, uint16_t& loop_pc, uint
     
     for (uint32_t i = 0; i < check_cycles; i++) {
         c64->tick();
-        uint16_t current_pc = cpu->get(REG_PC);
+        uint16_t current_pc = cpu->regs_[PC];
         
         if (current_pc == last_pc) {
             stable_count++;
@@ -1004,7 +1004,7 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
     uint32_t cycles = 0;
     
     auto* cpu = c64->mos6510;
-    uint16_t start_pc = cpu->get(REG_PC);
+    uint16_t start_pc = cpu->regs_[PC];
     
     if (verbose_) {
         printf("  Protocol: ");
@@ -1192,7 +1192,7 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
         
         // Periodic checks every 256 cycles
         if ((cycles & 0xFF) == 0) {
-            uint16_t current_pc = cpu->get(REG_PC);
+            uint16_t current_pc = cpu->regs_[PC];
             if (current_pc == last_pc) {
                 if (pc_stable_count == 0) stable_pc = current_pc;
                 pc_stable_count++;
@@ -1255,7 +1255,7 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
     
     // Get initial PC for diagnostics
     auto* cpu = c64->mos6510;
-    uint16_t start_pc = cpu->get(REG_PC);
+    uint16_t start_pc = cpu->regs_[PC];
     uint16_t last_pc = start_pc;
     bool pc_changed = false;
     uint32_t pc_change_count = 0;
@@ -1304,7 +1304,7 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
         
         // Check PC every 1000 cycles for diagnostic
         if (cycles % 1000 == 0) {
-            uint16_t current_pc = cpu->get(REG_PC);
+            uint16_t current_pc = cpu->regs_[PC];
             if (current_pc != last_pc) {
                 pc_changed = true;
                 pc_change_count++;

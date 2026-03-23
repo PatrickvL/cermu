@@ -27,7 +27,7 @@ bus_state_t op_adc(bus_state_t pins) {
         return pins;
 
       case 1: // PHI1 - Load and increment
-        this->bus_load_operand(REG_DL, pins);
+        this->bus_load_operand(DL, pins);
         this->half_cycle++;
         return pins;
 
@@ -36,12 +36,12 @@ bus_state_t op_adc(bus_state_t pins) {
         return pins;
 
       case 3: // PHI1 - Load and perform 16-bit ADC
-        this->bus_load_operand(REG_ABH, pins);
-        this->set(REG_ABL, this->get(REG_DL));
-        uint16_t operand = this->get(REG_AB);
-        uint16_t acc = this->get(REG_A_16);
-        uint32_t result = acc + operand + ((this->get(REG_P) & FLAG_C) ? 1 : 0);
-        this->set(REG_A_16, result & 0xFFFF);
+        this->bus_load_operand(ABH, pins);
+        regs_[ABL] = regs_[DL];
+        uint16_t operand = regs_[AB];
+        uint16_t acc = regs_[A16];
+        uint32_t result = acc + operand + ((regs_[P] & FLAG_C) ? 1 : 0);
+        regs_[A16] = result & 0xFFFF;
         this->update_flag(FLAG_C, result > 0xFFFF);
         this->update_flag(FLAG_Z, (result & 0xFFFF) == 0);
         this->update_flag(FLAG_N, (result & 0x8000) != 0);
@@ -63,13 +63,13 @@ bus_state_t op_adc(bus_state_t pins) {
 
   case 1: { // PHI1
     // Load operand and perform ADC
-    this->bus_load_operand(REG_DL, pins);
-    uint8_t operand = this->get(REG_DL);
+    this->bus_load_operand(DL, pins);
+    uint8_t operand = regs_[DL];
     this->perform_adc(operand);
 
     // CMOS processors need extra cycle in decimal mode
     if constexpr (has_bcd_extra_cycle()) {
-      if (this->get(REG_P) & FLAG_D) {
+      if (regs_[P] & FLAG_D) {
         this->half_cycle++;
         return pins;
       }
@@ -157,7 +157,7 @@ bus_state_t op_nop(bus_state_t pins) {
   case 1: // PHI1
     // Increment PC for immediate mode only
     if (this->opcode_entry.am_index == to_index(AM::IMM)) {
-      this->inc(REG_PC);
+      ++regs_[PC];
     }
     this->half_cycle++;
     this->transition_to_fetch();
@@ -184,7 +184,7 @@ bus_state_t op_sbc(bus_state_t pins) {
         return pins;
 
       case 1: // PHI1 - Load and increment
-        this->bus_load_operand(REG_DL, pins);
+        this->bus_load_operand(DL, pins);
         this->half_cycle++;
         return pins;
 
@@ -193,12 +193,12 @@ bus_state_t op_sbc(bus_state_t pins) {
         return pins;
 
       case 3: // PHI1 - Load and perform 16-bit SBC
-        this->bus_load_operand(REG_ABH, pins);
-        this->set(REG_ABL, this->get(REG_DL));
-        uint16_t operand = this->get(REG_AB);
-        uint16_t acc = this->get(REG_A_16);
-        uint32_t result = acc - operand - ((this->get(REG_P) & FLAG_C) ? 0 : 1);
-        this->set(REG_A_16, result & 0xFFFF);
+        this->bus_load_operand(ABH, pins);
+        regs_[ABL] = regs_[DL];
+        uint16_t operand = regs_[AB];
+        uint16_t acc = regs_[A16];
+        uint32_t result = acc - operand - ((regs_[P] & FLAG_C) ? 0 : 1);
+        regs_[A16] = result & 0xFFFF;
         this->update_flag(FLAG_C, result <= 0xFFFF);
         this->update_flag(FLAG_Z, (result & 0xFFFF) == 0);
         this->update_flag(FLAG_N, (result & 0x8000) != 0);
@@ -218,13 +218,13 @@ bus_state_t op_sbc(bus_state_t pins) {
     return pins;
 
   case 1: { // PHI1
-    this->bus_load_operand(REG_DL, pins);
-    uint8_t operand = this->get(REG_DL);
+    this->bus_load_operand(DL, pins);
+    uint8_t operand = regs_[DL];
     this->perform_sbc(operand);
 
     // CMOS processors need extra cycle in decimal mode
     if constexpr (has_bcd_extra_cycle()) {
-      if (this->get(REG_P) & FLAG_D) {
+      if (regs_[P] & FLAG_D) {
         this->half_cycle++;
         return pins;
       }
@@ -263,7 +263,7 @@ bus_state_t op_cmp(bus_state_t pins) {
         return pins;
 
       case 1: // PHI1 - Load and increment
-        this->bus_load_operand(REG_DL, pins);
+        this->bus_load_operand(DL, pins);
         this->half_cycle++;
         return pins;
 
@@ -272,10 +272,10 @@ bus_state_t op_cmp(bus_state_t pins) {
         return pins;
 
       case 3: // PHI1 - Load and perform 16-bit CMP
-        this->bus_load_operand(REG_ABH, pins);
-        this->set(REG_ABL, this->get(REG_DL));
-        uint16_t operand = this->get(REG_AB);
-        uint16_t acc = this->get(REG_A_16);
+        this->bus_load_operand(ABH, pins);
+        regs_[ABL] = regs_[DL];
+        uint16_t operand = regs_[AB];
+        uint16_t acc = regs_[A16];
         uint32_t result = acc - operand;
         this->update_flag(FLAG_C, acc >= operand);
         this->update_flag(FLAG_Z, acc == operand);
@@ -294,9 +294,9 @@ bus_state_t op_cmp(bus_state_t pins) {
     return pins;
 
   case 1: { // PHI1
-    this->bus_load_operand(REG_DL, pins);
-    uint8_t operand = this->get(REG_DL);
-    uint8_t a = this->get(REG_A);
+    this->bus_load_operand(DL, pins);
+    uint8_t operand = regs_[DL];
+    uint8_t a = regs_[A];
     this->perform_compare(a, operand);
     this->transition_to_fetch();
     return pins;
@@ -322,7 +322,7 @@ bus_state_t op_cpx(bus_state_t pins) {
         return pins;
 
       case 1: // PHI1 - Load and increment
-        this->bus_load_operand(REG_DL, pins);
+        this->bus_load_operand(DL, pins);
         this->half_cycle++;
         return pins;
 
@@ -331,9 +331,9 @@ bus_state_t op_cpx(bus_state_t pins) {
         return pins;
 
       case 3: // PHI1 - Load and perform 16-bit CPX
-        this->bus_load_operand(REG_ABH, pins);
-        this->set(REG_ABL, this->get(REG_DL));
-        uint16_t operand = this->get(REG_AB);
+        this->bus_load_operand(ABH, pins);
+        regs_[ABL] = regs_[DL];
+        uint16_t operand = regs_[AB];
         uint16_t x = this->get_x_register();
         uint32_t result = x - operand;
         this->update_flag(FLAG_C, x >= operand);
@@ -353,9 +353,9 @@ bus_state_t op_cpx(bus_state_t pins) {
     return pins;
 
   case 1: { // PHI1
-    this->bus_load_operand(REG_DL, pins);
-    uint8_t operand = this->get(REG_DL);
-    uint8_t x = this->get(REG_X);
+    this->bus_load_operand(DL, pins);
+    uint8_t operand = regs_[DL];
+    uint8_t x = regs_[X];
     this->perform_compare(x, operand);
     this->transition_to_fetch();
     return pins;
@@ -381,7 +381,7 @@ bus_state_t op_cpy(bus_state_t pins) {
         return pins;
 
       case 1: // PHI1 - Load and increment
-        this->bus_load_operand(REG_DL, pins);
+        this->bus_load_operand(DL, pins);
         this->half_cycle++;
         return pins;
 
@@ -390,9 +390,9 @@ bus_state_t op_cpy(bus_state_t pins) {
         return pins;
 
       case 3: // PHI1 - Load and perform 16-bit CPY
-        this->bus_load_operand(REG_ABH, pins);
-        this->set(REG_ABL, this->get(REG_DL));
-        uint16_t operand = this->get(REG_AB);
+        this->bus_load_operand(ABH, pins);
+        regs_[ABL] = regs_[DL];
+        uint16_t operand = regs_[AB];
         uint16_t y = this->get_y_register();
         uint32_t result = y - operand;
         this->update_flag(FLAG_C, y >= operand);
@@ -412,9 +412,9 @@ bus_state_t op_cpy(bus_state_t pins) {
     return pins;
 
   case 1: { // PHI1
-    this->bus_load_operand(REG_DL, pins);
-    uint8_t operand = this->get(REG_DL);
-    uint8_t y = this->get(REG_Y);
+    this->bus_load_operand(DL, pins);
+    uint8_t operand = regs_[DL];
+    uint8_t y = regs_[Y];
     this->perform_compare(y, operand);
     this->transition_to_fetch();
     return pins;
@@ -435,7 +435,7 @@ bus_state_t op_inc(bus_state_t pins) {
     // Increment the value
     value++;
     // Update N and Z flags using consolidated helper
-    this->update_nz_flags<REG_A>(value);
+    this->update_nz_flags<WidthMode::ACC>(value);
   });
 }
 
@@ -451,7 +451,7 @@ bus_state_t op_dec(bus_state_t pins) {
     // Decrement the value
     value--;
     // Update N and Z flags using consolidated helper
-    this->update_nz_flags<REG_A>(value);
+    this->update_nz_flags<WidthMode::ACC>(value);
   });
 }
 

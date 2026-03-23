@@ -1,21 +1,21 @@
 /*
- * fam65xx_registers.inc.hpp - Register Declarations and Accessors
+ * fam65xx_registers.inc.hpp - Register File and Width-Aware Accessors
  *
- * This file contains register declarations and accessor methods for the
- * MOS 65xx family of processors. It handles both 8-bit processors
- * (6502, 6510, 65C02, etc.) and the 16-bit capable 65C816.
+ * Included within the fam65xx_t class definition.  Provides:
+ *  - RegisterFile backing store (regs_)
+ *  - Width-aware named accessors (get_accumulator, get_sp, …)
+ *  - Flag manipulation helpers
+ *  - Unified flag-calculation templates keyed on WidthMode
+ *  - Register initialisation
  *
- * The register layout and data types are selected at compile time based
- * on the CPU traits, eliminating the need for complex mixin inheritance.
- *
- * NOTE: This file is meant to be included within the fam65xx_t class definition
- *       and provides conditional register layouts using constexpr if.
+ * Direct register access uses regs_[X], regs_[PC], ++regs_[PC], etc.
  */
 
 // ============================================================================
-// CONDITIONAL TYPE ALIASES AND REGISTER LAYOUT
+// REGISTER FILE
 // ============================================================================
 
+public:
 // Data type selection based on CPU capabilities
 using data_t =
     std::conditional_t<Traits.has(CPUCoreFlags::C816_16BIT),
@@ -23,143 +23,69 @@ using data_t =
                        uint8_t // All other processors use 8-bit data operations
                        >;
 
-// Register file — unified backing store (replaces legacy union)
-static constexpr uint16_t REG_FILE_SIZE =
-    Traits.has(CPUCoreFlags::C816_16BIT) ? 24 : 16;
+// Unified backing store (24 bytes; 8-bit CPUs use the first 16)
 RegisterFile<24, uint16_t> regs_;
 
-// ============================================================================
-// REGISTER ACCESSOR METHODS
-// ============================================================================
-
-public:
-// === Type-safe 8-bit register accessors ===
-inline uint8_t get(reg8_t reg) const { return regs_.at<uint8_t>(reg); }
-
-inline void set(reg8_t reg, uint8_t value) { regs_.at<uint8_t>(reg) = value; }
-
-inline void inc(reg8_t reg) { ++regs_.at<uint8_t>(reg); }
-
-inline void dec(reg8_t reg) { --regs_.at<uint8_t>(reg); }
-
-// === Stack pointer increment helper ===
-// Encapsulates wide-specific inc(REG_SP) vs 8-bit inc(REG_S)
-inline void inc_stack() {
-  if constexpr (has_wide_registers()) {
-    this->inc(REG_SP);  // 65C816: Use 16-bit for proper carry handling
-  } else {
-    this->inc(REG_S);   // 8-bit CPUs: SP always in page 1
-  }
-}
-
-// === Stack pointer decrement helper ===
-// Encapsulates wide-specific dec(REG_SP) vs 8-bit dec(REG_S)
-inline void dec_stack() {
-  if constexpr (has_wide_registers()) {
-    this->dec(REG_SP);  // 65C816: Use 16-bit for proper borrow handling
-  } else {
-    this->dec(REG_S);   // 8-bit CPUs: SP always in page 1
-  }
-}
-
-// === Type-safe 16-bit register accessors ===
-inline uint16_t get(reg16_t reg_pair) const { return regs_[reg_pair]; }
-
-inline void set(reg16_t reg_pair, uint16_t value) { regs_[reg_pair] = value; }
-
-inline void inc(reg16_t reg_pair) { ++regs_[reg_pair]; }
-
-inline void dec(reg16_t reg_pair) { --regs_[reg_pair]; }
-
 // ========================================================================
-// REGISTER ACCESS METHODS (override mixin methods with constexpr wide
-// detection)
+// WIDTH-AWARE NAMED ACCESSORS
 // ========================================================================
 
-/**
- * Get accumulator value with automatic 8/16-bit handling
- * Uses constexpr wide check for compile-time optimization
- */
 inline data_t get_accumulator() const {
   if constexpr (has_wide_registers()) {
-    if (this->is_accumulator_16bit()) {
-      return this->get(REG_A_16);
-    }
+    if (this->is_accumulator_16bit())
+      return regs_[A16];
   }
-  return this->get(REG_A);
+  return regs_[A];
 }
 
-/**
- * Set accumulator value with automatic 8/16-bit handling
- * Uses constexpr wide check for compile-time optimization
- */
 inline void set_accumulator(data_t value) {
   if constexpr (has_wide_registers()) {
     if (this->is_accumulator_16bit()) {
-      this->set(REG_A_16, value);
+      regs_[A16] = value;
       return;
     }
   }
-  this->set(REG_A, static_cast<uint8_t>(value & 0xFF));
+  regs_[A] = static_cast<uint8_t>(value & 0xFF);
 }
 
-/**
- * Get X register value with automatic 8/16-bit handling
- * Uses constexpr wide check for compile-time optimization
- */
 inline data_t get_x_register() const {
   if constexpr (has_wide_registers()) {
-    if (this->is_index_16bit()) {
-      return this->get(REG_X_16);
-    }
+    if (this->is_index_16bit())
+      return regs_[X16];
   }
-  return this->get(REG_X);
+  return regs_[X];
 }
 
-/**
- * Set X register value with automatic 8/16-bit handling
- * Uses constexpr wide check for compile-time optimization
- */
 inline void set_x_register(data_t value) {
   if constexpr (has_wide_registers()) {
     if (this->is_index_16bit()) {
-      this->set(REG_X_16, value);
+      regs_[X16] = value;
       return;
     }
   }
-  this->set(REG_X, static_cast<uint8_t>(value & 0xFF));
+  regs_[X] = static_cast<uint8_t>(value & 0xFF);
 }
 
-/**
- * Get Y register value with automatic 8/16-bit handling
- * Uses constexpr wide check for compile-time optimization
- */
 inline data_t get_y_register() const {
   if constexpr (has_wide_registers()) {
-    if (this->is_index_16bit()) {
-      return this->get(REG_Y_16);
-    }
+    if (this->is_index_16bit())
+      return regs_[Y16];
   }
-  return this->get(REG_Y);
+  return regs_[Y];
 }
 
-/**
- * Set Y register value with automatic 8/16-bit handling
- * Uses constexpr wide check for compile-time optimization
- */
 inline void set_y_register(data_t value) {
   if constexpr (has_wide_registers()) {
     if (this->is_index_16bit()) {
-      this->set(REG_Y_16, value);
+      regs_[Y16] = value;
       return;
     }
   }
-  this->set(REG_Y, static_cast<uint8_t>(value & 0xFF));
+  regs_[Y] = static_cast<uint8_t>(value & 0xFF);
 }
 
 /**
  * Get stack pointer value with automatic 8/16-bit handling
- * Uses constexpr wide check for compile-time optimization
  *
  * Returns correct 16-bit SP for all processors:
  * - 8-bit processors: high byte is always 0x01 (page 1 forced by hardware)
@@ -168,109 +94,92 @@ inline void set_y_register(data_t value) {
  */
 inline uint16_t get_sp() const {
   if constexpr (has_wide_registers()) {
-    // 65C816: Runtime check for emulation mode
-    if (this->in_emulation_mode()) {
-      // Emulation mode: Force SP to page 1 (0x01xx) for 6502 compatibility
-      return 0x0100 | this->get(REG_SPL);
-    }
+    if (this->in_emulation_mode())
+      return 0x0100 | uint8_t(regs_[SPL]);
   }
-  // Native mode: Use full 16-bit SP (can be anywhere in bank 0)
-  // Non-65C816: Always uses page 1 (like hardware, high byte REG_SPH is fixed to 0x01)
-  return this->get(REG_SP);
+  return regs_[SP];
+}
+
+// === Stack pointer increment/decrement helpers ===
+inline void inc_stack() {
+  if constexpr (has_wide_registers()) {
+    ++regs_[SP];   // 65C816: Use 16-bit for proper carry handling
+  } else {
+    ++regs_[S];    // 8-bit CPUs: SP always in page 1
+  }
+}
+
+inline void dec_stack() {
+  if constexpr (has_wide_registers()) {
+    --regs_[SP];   // 65C816: Use 16-bit for proper borrow handling
+  } else {
+    --regs_[S];    // 8-bit CPUs: SP always in page 1
+  }
 }
 
 private:
 // ========================================================================
-// HELPER FUNCTIONS (needed by operation files)
+// FLAG MANIPULATION
 // ========================================================================
 
-// === Building blocks ===
 inline void set_flag(uint8_t flag_mask) {
-  // Always use 8-bit P register (REG_P = REG_PL) for flag operations
-  // The E flag (65C816) is in REG_PH and should never be modified by flag ops
-  this->set(REG_P, this->get(REG_P) | flag_mask);
+  // Always use 8-bit P register (PL) for flag operations
+  // The E flag (65C816) is in PH and should never be modified by flag ops
+  regs_[P] |= flag_mask;
 }
 inline void clear_flag(uint8_t flag_mask) {
-  // Always use 8-bit P register (REG_P = REG_PL) for flag operations
-  this->set(REG_P, this->get(REG_P) & ~flag_mask);
+  regs_[P] &= ~flag_mask;
 }
-// === Foundation: Single memory write ===
 inline void update_flags(uint8_t clear_mask, uint8_t set_mask) {
-  // Always use 8-bit P register (REG_P = REG_PL) for flag operations
-  this->set(REG_P, (this->get(REG_P) & ~clear_mask) | set_mask);
+  regs_[P] = uint8_t(uint8_t(regs_[P]) & ~clear_mask) | set_mask;
 }
 inline void update_flag(uint8_t flag_mask, bool condition) {
   update_flags(flag_mask, static_cast<uint8_t>(condition) * flag_mask);
 }
 
 // ========================================================================
-// UNIFIED FLAG CALCULATION HELPERS WITH AUTOMATIC WIDTH DETECTION
+// UNIFIED FLAG CALCULATION HELPERS — keyed on WidthMode
 // ========================================================================
 
-/**
- * Unified N flag calculation with automatic width detection
- * Uses template parameter for compile-time register type detection
- */
-template <reg8_t reg_type = REG_A>
+template <WidthMode WM = WidthMode::ACC>
 inline uint8_t calc_n_flag(data_t value) const {
-  if (is_register_16bit<reg_type>()) {
+  if (is_register_16bit<WM>()) {
     return (value & 0x8000) ? FLAG_N : 0;
   } else {
     return (static_cast<uint8_t>(value) & 0x80) ? FLAG_N : 0;
   }
 }
 
-/**
- * Unified Z flag calculation with automatic width detection
- */
-template <reg8_t reg_type = REG_A>
+template <WidthMode WM = WidthMode::ACC>
 inline uint8_t calc_z_flag(data_t value) const {
-  if (is_register_16bit<reg_type>()) {
+  if (is_register_16bit<WM>()) {
     return (value == 0) ? FLAG_Z : 0;
   } else {
     return (static_cast<uint8_t>(value) == 0) ? FLAG_Z : 0;
   }
 }
 
-/**
- * Branchless C flag calculation from 16-bit result
- * Extract carry bit directly from bit 8
- */
+// Branchless C flag calculation from 16-bit result
 inline uint8_t calc_c_flag(uint16_t result) { return (result >> 8) & FLAG_C; }
 
-/**
- * Branchless V flag calculation for addition
- * Hardware-accurate overflow detection using XOR logic
- */
+// Hardware-accurate V flag for ADC
 inline uint8_t calc_v_flag_add(uint8_t a, uint8_t b, uint16_t result) {
   return (((a ^ result) & (b ^ result)) >> 1) & FLAG_V;
 }
 
-/**
- * Branchless V flag calculation for subtraction
- * Hardware-accurate overflow detection for SBC/CMP operations
- */
+// Hardware-accurate V flag for SBC
 inline uint8_t calc_v_flag_sub(uint8_t a, uint8_t b, uint16_t result) {
   return (((a ^ b) & (a ^ result)) >> 1) & FLAG_V;
 }
 
-/**
- * Unified NZ flag calculation with automatic width detection
- * Replaces all calc_nz_flags variants for maximum deduplication
- */
-template <reg8_t reg_type = REG_A>
+template <WidthMode WM = WidthMode::ACC>
 inline uint8_t calc_nz_flags(data_t value) const {
-  return calc_n_flag<reg_type>(value) | calc_z_flag<reg_type>(value);
+  return calc_n_flag<WM>(value) | calc_z_flag<WM>(value);
 }
 
-/**
- * Unified NZC flag calculation for compare operations with width detection
- * Replaces calc_nzc_flags variants
- */
-template <reg8_t reg_type = REG_A>
+template <WidthMode WM = WidthMode::ACC>
 inline uint8_t calc_nzc_flags(data_t minuend, data_t subtrahend) {
-  if (is_register_16bit<reg_type>()) {
-    // 16-bit comparison
+  if (is_register_16bit<WM>()) {
     uint32_t result = minuend - subtrahend;
     return ((result & 0x8000) ? FLAG_N : 0) |
            ((result & 0xFFFF) == 0 ? FLAG_Z : 0) |
@@ -281,104 +190,66 @@ inline uint8_t calc_nzc_flags(data_t minuend, data_t subtrahend) {
     uint8_t min8 = static_cast<uint8_t>(minuend & 0xFF);
     uint8_t sub8 = static_cast<uint8_t>(subtrahend & 0xFF);
     uint8_t result = min8 - sub8;
-    return calc_n_flag<reg_type>(result) | calc_z_flag<reg_type>(result) |
+    return calc_n_flag<WM>(result) | calc_z_flag<WM>(result) |
            (min8 >= sub8 ? FLAG_C : 0);
   }
 }
 
 // ========================================================================
-// UNIFIED UPDATE OPERATIONS WITH AUTOMATIC WIDTH DETECTION
+// UNIFIED UPDATE OPERATIONS
 // ========================================================================
 
 inline void update_c_flag(uint8_t value, uint8_t bit_position) {
   update_flag(FLAG_C, (value >> bit_position) & FLAG_C);
 }
 
-/**
- * Unified NZ flags update with automatic width detection
- * Replaces all update_nz_flags variants for maximum deduplication
- */
-template <reg8_t reg_type = REG_A> inline void update_nz_flags(data_t value) {
-  update_flags(FLAG_N | FLAG_Z, calc_nz_flags<reg_type>(value));
+template <WidthMode WM = WidthMode::ACC> inline void update_nz_flags(data_t value) {
+  update_flags(FLAG_N | FLAG_Z, calc_nz_flags<WM>(value));
 }
 
-/**
- * Unified NZC flags update with automatic width detection
- * Replaces all update_nzc_flags variants for maximum deduplication
- */
-template <reg8_t reg_type = REG_A>
+template <WidthMode WM = WidthMode::ACC>
 inline void update_nzc_flags(data_t value, uint8_t carry_flag) {
   update_flags(FLAG_N | FLAG_Z | FLAG_C,
-               calc_nz_flags<reg_type>(value) | carry_flag);
+               calc_nz_flags<WM>(value) | carry_flag);
 }
 
 // ========================================================================
 // LEGACY COMPATIBILITY (8-bit only versions for explicit 8-bit operations)
 // ========================================================================
 
-/**
- * Legacy 8-bit only N flag calculation (for explicit 8-bit contexts)
- */
 inline uint8_t calc_n_flag_8bit(uint8_t value) const { return value & FLAG_N; }
 
-/**
- * Legacy 8-bit only Z flag calculation (for explicit 8-bit contexts)
- */
 inline uint8_t calc_z_flag_8bit(uint8_t value) const {
   return (value == 0) * FLAG_Z;
 }
 
-/**
- * Legacy 8-bit only NZ flag calculation (for explicit 8-bit contexts)
- */
 inline uint8_t calc_nz_flags_8bit(uint8_t value) const {
   return calc_n_flag_8bit(value) | calc_z_flag_8bit(value);
 }
 
-/**
- * Legacy 8-bit only NZ flags update (for explicit 8-bit contexts)
- */
 inline void update_nz_flags_8bit(uint8_t value) {
   update_flags(FLAG_N | FLAG_Z, calc_nz_flags_8bit(value));
 }
 
-/**
- * Explicit 16-bit NZ flags update (for 16-bit memory operations)
- */
 inline void update_nz_flags_16bit(uint16_t value) {
-  // N flag: bit 15 for 16-bit values
   uint8_t n_flag = (value & 0x8000) ? FLAG_N : 0;
-  // Z flag: zero if entire 16-bit value is 0
   uint8_t z_flag = (value == 0) ? FLAG_Z : 0;
   update_flags(FLAG_N | FLAG_Z, n_flag | z_flag);
 }
 
 // === Register initialization ===
 void init_registers() {
-  // RegisterFile is zero-initialized by default.
-  // Reset it for re-initialization.
   std::memset(regs_.data, 0, sizeof(regs_.data));
 
-  // Stack pointer lives on page 1 ($0100-$01FF) for 8-bit CPUs.
-  // S itself starts at $00 — the reset sequence decrements it by 3 → $FD.
-  // 65C816 is special: SP starts at 0x01FF in emulation mode.
   if constexpr (has_wide_registers()) {
-    set(REG_SP, 0x01FF);
+    regs_[SP] = 0x01FF;
+    regs_[P16] = FLAG_E | FLAG_I | FLAG_M | FLAG_X;
+    regs_[PBR] = 0x00;
+    regs_[DBR] = 0x00;
+    regs_[ZBR] = 0x00;
   } else {
-    set(REG_SP, 0x0100); // S=$00, page byte=$01
-  }
-
-  // Initialize P register based on CPU type
-  if constexpr (has_wide_registers()) {
-    // 65C816 starts in emulation mode with E=1, M=1, X=1 flags
-    // CRITICAL: Must set FLAG_E in the 16-bit P register for proper emulation mode
-    set(REG_P_16, FLAG_E | FLAG_I | FLAG_M | FLAG_X);
-    set(REG_PBR, 0x00); // Program bank register
-    set(REG_DBR, 0x00); // Data bank register
-    set(REG_ZBR, 0x00); // Zero page bank register
-  } else {
-    // Standard 8-bit processors: Only interrupt disable flag
-    set(REG_P, FLAG_I);
+    regs_[SP] = 0x0100;  // S=$00, page byte=$01
+    regs_[P] = FLAG_I;
   }
 }
 

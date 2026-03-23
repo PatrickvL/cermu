@@ -40,8 +40,6 @@ enum mos6526_pin_t {
 #define CIA_REGS_MASK (CIA_REGS_SIZE - 1)  // 15
 
 // Constants
-#define A 0
-#define B 1
 #define PB6_MASK (1 << 6)
 #define PB7_MASK (1 << 7)
 #define MASK5 0x1F
@@ -332,6 +330,12 @@ namespace MOS6526 {
     constexpr uint8_t CRB_OUTMODE = CR_OUTMODE;  // Bit 2: Output mode (alias to generic)
     constexpr uint8_t CRB_PBON = CR_PBON;  // Bit 1: PB7 output enable (alias to generic)
     constexpr uint8_t CRB_START = CR_START;  // Bit 0: Start/stop (alias to generic)
+
+    // Timer index constants (scoped to avoid polluting global namespace)
+    namespace cia_detail {
+        inline constexpr uint32_t A = 0;
+        inline constexpr uint32_t B = 1;
+    } // namespace cia_detail
 }
 
 // Using declarations to maintain compatibility in MOS6526 implementation files

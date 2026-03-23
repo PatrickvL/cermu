@@ -140,7 +140,7 @@ public:
         pins_ = cpu_->bootstrap(pins_);
         
         // Set PC directly to test start address
-        cpu_->set(REG_PC, KLAUS_TEST_START_ADDRESS);
+        cpu_->regs_[PC] = KLAUS_TEST_START_ADDRESS;
 
         std::cout << "Starting Klaus functional test..." << std::endl;
         
@@ -151,7 +151,7 @@ public:
         constexpr uint32_t STUCK_THRESHOLD = 1000;
 
         while (cycles < max_cycles_) {
-            uint16_t current_pc = cpu_->get(REG_PC);
+            uint16_t current_pc = cpu_->regs_[PC];
             
             // Check for success condition - Klaus test success is indicated by infinite loops
             uint8_t instruction = memory_[current_pc];
@@ -196,25 +196,25 @@ public:
             // Optional trace output
             if (trace_enabled_ && trace_file_.is_open() && cycles % 10 == 0) {
                 trace_file_ << "Cycle " << cycles
-                           << ": PC=$" << std::hex << std::setw(4) << std::setfill('0') << cpu_->get(REG_PC)
-                           << " A=$" << std::setw(2) << static_cast<int>(cpu_->get(REG_A))
-                           << " X=$" << std::setw(2) << static_cast<int>(cpu_->get(REG_X))
-                           << " Y=$" << std::setw(2) << static_cast<int>(cpu_->get(REG_Y))
-                           << " P=$" << std::setw(2) << static_cast<int>(cpu_->get(REG_P))
-                           << " S=$" << std::setw(2) << static_cast<int>(cpu_->get(REG_S))
+                           << ": PC=$" << std::hex << std::setw(4) << std::setfill('0') << cpu_->regs_[PC]
+                           << " A=$" << std::setw(2) << static_cast<int>(cpu_->regs_[AL])
+                           << " X=$" << std::setw(2) << static_cast<int>(cpu_->regs_[X])
+                           << " Y=$" << std::setw(2) << static_cast<int>(cpu_->regs_[Y])
+                           << " P=$" << std::setw(2) << static_cast<int>(cpu_->regs_[P])
+                           << " S=$" << std::setw(2) << static_cast<int>(cpu_->regs_[S])
                            << std::endl;
             }
             
             if (cycles % 100000 == 0) {
                 std::cout << "Executed " << cycles << " cycles, PC=$"
                          << std::hex << std::setw(4) << std::setfill('0')
-                         << cpu_->get(REG_PC) << std::endl;
+                         << cpu_->regs_[PC] << std::endl;
             }
         }
         
         status.end_time = std::chrono::steady_clock::now();
         status.cycles_executed = cycles;
-        status.final_pc = cpu_->get(REG_PC);
+        status.final_pc = cpu_->regs_[PC];
         
         if (status.result == TestResult::NOT_SET) {
             if (cycles >= max_cycles_) {
@@ -222,7 +222,7 @@ public:
                 status.error_message = "Test timed out after " + std::to_string(cycles) + " cycles";
             } else {
                 status.result = TestResult::FAILED;
-                status.error_message = "Test failed at PC=$" + std::to_string(cpu_->get(REG_PC));
+                status.error_message = "Test failed at PC=$" + std::to_string(cpu_->regs_[PC]);
             }
         }
         

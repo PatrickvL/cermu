@@ -23,7 +23,7 @@ bus_state_t op_lda(bus_state_t pins) {
   case 1: // PHI1 - Load and increment
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native
     // code
-    this->bus_load_operand(REG_AL, pins);
+    this->bus_load_operand(AL, pins);
     if constexpr (has_wide_registers()) {
       if (this->is_accumulator_16bit()) {
           this->half_cycle++;
@@ -31,7 +31,7 @@ bus_state_t op_lda(bus_state_t pins) {
       }
     }
     // Standard 8-bit LDA operation (emulation mode and non-wide CPUs)
-    this->update_nz_flags(this->get(REG_A));
+    this->update_nz_flags(regs_[A]);
     this->transition_to_fetch();
     return pins;
 
@@ -39,8 +39,8 @@ bus_state_t op_lda(bus_state_t pins) {
     pins = this->bus_setup_read_operand(pins);
     return pins;
   case 3: // PHI1 - Load and update flags
-    this->bus_load_operand(REG_AH, pins);
-    uint16_t value = this->get(REG_A_16);
+    this->bus_load_operand(AH, pins);
+    uint16_t value = regs_[A16];
     this->update_flag(FLAG_Z, value == 0);
     this->update_flag(FLAG_N, (value & 0x8000) != 0);
     this->transition_to_fetch();
@@ -61,7 +61,7 @@ bus_state_t op_ldx(bus_state_t pins) {
     pins = this->bus_setup_read_operand(pins);
     return pins;
   case 1: // PHI1 - Load and increment
-    this->bus_load_operand(REG_XL, pins);
+    this->bus_load_operand(XL, pins);
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested
     // native code
     if constexpr (has_wide_registers()) {
@@ -72,7 +72,7 @@ bus_state_t op_ldx(bus_state_t pins) {
       }
     }
     // Standard 8-bit LDX operation (emulation mode and non-wide CPUs)
-    this->update_nz_flags(this->get(REG_X));
+    this->update_nz_flags(regs_[X]);
     this->transition_to_fetch();
     return pins;
 
@@ -80,8 +80,8 @@ bus_state_t op_ldx(bus_state_t pins) {
     pins = this->bus_setup_read_operand(pins);
     return pins;
   case 3: // PHI1 - Load and update flags
-    this->bus_load_operand(REG_XH, pins);
-    uint16_t value = this->get(REG_X_16);
+    this->bus_load_operand(XH, pins);
+    uint16_t value = regs_[X16];
     this->update_flag(FLAG_Z, value == 0);
     this->update_flag(FLAG_N, (value & 0x8000) != 0);
     this->transition_to_fetch();
@@ -101,7 +101,7 @@ bus_state_t op_ldy(bus_state_t pins) {
     pins = this->bus_setup_read_operand(pins);
     return pins;
   case 1: // PHI1 - Load and increment
-    this->bus_load_operand(REG_YL, pins);
+    this->bus_load_operand(YL, pins);
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested
     // native code
     if constexpr (has_wide_registers()) {
@@ -112,7 +112,7 @@ bus_state_t op_ldy(bus_state_t pins) {
       }
     }
     // Standard 8-bit LDY operation (emulation mode and non-wide CPUs)
-    this->update_nz_flags(this->get(REG_Y));
+    this->update_nz_flags(regs_[Y]);
     this->transition_to_fetch();
     return pins;
 
@@ -120,8 +120,8 @@ bus_state_t op_ldy(bus_state_t pins) {
     pins = this->bus_setup_read_operand(pins);
     return pins;
   case 3: // PHI1 - Load and update flags
-    this->bus_load_operand(REG_YH, pins);
-    uint16_t value = this->get(REG_Y_16);
+    this->bus_load_operand(YH, pins);
+    uint16_t value = regs_[Y16];
     this->update_flag(FLAG_Z, value == 0);
     this->update_flag(FLAG_N, (value & 0x8000) != 0);
     this->transition_to_fetch();
@@ -137,18 +137,18 @@ bus_state_t op_ldy(bus_state_t pins) {
 bus_state_t op_sta(bus_state_t pins) {
   switch (this->half_cycle) {
     case 0:
-      pins = this->bus_setup_write<Addr::AB>(pins, REG_AL);
+      pins = this->bus_setup_write<Addr::AB>(pins, AL);
       return pins;
     case 1:
       if (this->is_accumulator_16bit()) {
-        this->inc(REG_AB);
+        ++regs_[AB];
       } else {
         this->transition_to_fetch();
       }
       return pins;
 
     case 2:
-      pins = this->bus_setup_write<Addr::AB>(pins, REG_AH);
+      pins = this->bus_setup_write<Addr::AB>(pins, AH);
       return pins;
     case 3:
       this->transition_to_fetch();
@@ -161,18 +161,18 @@ bus_state_t op_sta(bus_state_t pins) {
 bus_state_t op_stx(bus_state_t pins) {
   switch (this->half_cycle) {
     case 0:
-      pins = this->bus_setup_write<Addr::AB>(pins, REG_XL);
+      pins = this->bus_setup_write<Addr::AB>(pins, XL);
       return pins;
     case 1:
      if (this->is_index_16bit()) {
-        this->inc(REG_AB);
+        ++regs_[AB];
      } else {
         this->transition_to_fetch();
      }
      return pins;
 
     case 2:
-      pins = this->bus_setup_write<Addr::AB>(pins, REG_XH);
+      pins = this->bus_setup_write<Addr::AB>(pins, XH);
       return pins;
     case 3:
       this->transition_to_fetch();
@@ -189,17 +189,17 @@ bus_state_t op_stx(bus_state_t pins) {
 bus_state_t op_sty(bus_state_t pins) {
     switch (this->half_cycle) {
         case 0:
-            pins = this->bus_setup_write<Addr::AB>(pins, REG_YL);
+            pins = this->bus_setup_write<Addr::AB>(pins, YL);
             return pins;
         case 1:
             if (this->is_index_16bit()) {
-              this->inc(REG_AB);
+              ++regs_[AB];
             } else {
                 this->transition_to_fetch();
             }
             return pins;
         case 2:
-            pins = this->bus_setup_write<Addr::AB>(pins, REG_YH);
+            pins = this->bus_setup_write<Addr::AB>(pins, YH);
             return pins;
         case 3:
             this->transition_to_fetch();
@@ -225,7 +225,7 @@ bus_state_t op_and(bus_state_t pins) {
         pins = this->bus_setup_read_operand(pins);
         return pins;
       case 1: // PHI1 - Load and increment
-        this->bus_load_operand(REG_DL, pins);
+        this->bus_load_operand(DL, pins);
         this->half_cycle++;
         return pins;
 
@@ -233,12 +233,12 @@ bus_state_t op_and(bus_state_t pins) {
         pins = this->bus_setup_read_operand(pins);
         return pins;
       case 3: { // PHI1 - Load and perform 16-bit AND
-        this->bus_load_operand(REG_ABH, pins);
-        this->set(REG_ABL, this->get(REG_DL));
-        uint16_t operand = this->get(REG_AB);
-        uint16_t acc = this->get(REG_A_16);
+        this->bus_load_operand(ABH, pins);
+        regs_[ABL] = regs_[DL];
+        uint16_t operand = regs_[AB];
+        uint16_t acc = regs_[A16];
         uint16_t result = acc & operand;
-        this->set(REG_A_16, result);
+        regs_[A16] = result;
         this->update_flag(FLAG_Z, result == 0);
         this->update_flag(FLAG_N, (result & 0x8000) != 0);
         this->transition_to_fetch();
@@ -256,8 +256,8 @@ bus_state_t op_and(bus_state_t pins) {
     return pins;
   case 1: { // PHI1
     uint8_t operand = this->bus_get_operand(pins);
-    this->set(REG_A, this->get(REG_A) & operand);
-    this->update_nz_flags(this->get(REG_A));
+    regs_[A] = regs_[A] & operand;
+    this->update_nz_flags(regs_[A]);
     this->transition_to_fetch();
     return pins;
   }
@@ -278,7 +278,7 @@ bus_state_t op_ora(bus_state_t pins) {
         pins = this->bus_setup_read_operand(pins);
         return pins;
       case 1: // PHI1 - Load and increment
-        this->bus_load_operand(REG_DL, pins);
+        this->bus_load_operand(DL, pins);
         this->half_cycle++;
         return pins;
 
@@ -286,12 +286,12 @@ bus_state_t op_ora(bus_state_t pins) {
         pins = this->bus_setup_read_operand(pins);
         return pins;
       case 3: { // PHI1 - Load and perform 16-bit ORA
-        this->bus_load_operand(REG_ABH, pins);
-        this->set(REG_ABL, this->get(REG_DL));
-        uint16_t operand = this->get(REG_AB);
-        uint16_t acc = this->get(REG_A_16);
+        this->bus_load_operand(ABH, pins);
+        regs_[ABL] = regs_[DL];
+        uint16_t operand = regs_[AB];
+        uint16_t acc = regs_[A16];
         uint16_t result = acc | operand;
-        this->set(REG_A_16, result);
+        regs_[A16] = result;
         this->update_flag(FLAG_Z, result == 0);
         this->update_flag(FLAG_N, (result & 0x8000) != 0);
         this->transition_to_fetch();
@@ -309,8 +309,8 @@ bus_state_t op_ora(bus_state_t pins) {
     return pins;
   case 1: { // PHI1
     uint8_t operand = this->bus_get_operand(pins);
-    this->set(REG_A, this->get(REG_A) | operand);
-    this->update_nz_flags(this->get(REG_A));
+    regs_[A] = regs_[A] | operand;
+    this->update_nz_flags(regs_[A]);
     this->transition_to_fetch();
     return pins;
   }
@@ -331,7 +331,7 @@ bus_state_t op_eor(bus_state_t pins) {
         pins = this->bus_setup_read_operand(pins);
         return pins;
       case 1: // PHI1 - Load and increment
-        this->bus_load_operand(REG_DL, pins);
+        this->bus_load_operand(DL, pins);
         this->half_cycle++;
         return pins;
 
@@ -339,12 +339,12 @@ bus_state_t op_eor(bus_state_t pins) {
         pins = this->bus_setup_read_operand(pins);
         return pins;
       case 3: // PHI1 - Load and perform 16-bit EOR
-        this->bus_load_operand(REG_ABH, pins);
-        this->set(REG_ABL, this->get(REG_DL));
-        uint16_t operand = this->get(REG_AB);
-        uint16_t acc = this->get(REG_A_16);
+        this->bus_load_operand(ABH, pins);
+        regs_[ABL] = regs_[DL];
+        uint16_t operand = regs_[AB];
+        uint16_t acc = regs_[A16];
         uint16_t result = acc ^ operand;
-        this->set(REG_A_16, result);
+        regs_[A16] = result;
         this->update_flag(FLAG_Z, result == 0);
         this->update_flag(FLAG_N, (result & 0x8000) != 0);
         this->transition_to_fetch();
@@ -361,8 +361,8 @@ bus_state_t op_eor(bus_state_t pins) {
     return pins;
   case 1: { // PHI1
     uint8_t operand = this->bus_get_operand(pins);
-    this->set(REG_A, this->get(REG_A) ^ operand);
-    this->update_nz_flags(this->get(REG_A));
+    regs_[A] = regs_[A] ^ operand;
+    this->update_nz_flags(regs_[A]);
     this->transition_to_fetch();
     return pins;
   }
@@ -386,7 +386,7 @@ bus_state_t op_bit(bus_state_t pins) {
         pins = this->bus_setup_read_operand(pins);
         return pins;
       case 1: // PHI1 - Load and increment
-        this->bus_load_operand(REG_DL, pins);
+        this->bus_load_operand(DL, pins);
         this->half_cycle++;
         return pins;
 
@@ -394,12 +394,12 @@ bus_state_t op_bit(bus_state_t pins) {
         pins = this->bus_setup_read_operand(pins);
         return pins;
       case 3: { // PHI1 - Load and perform 16-bit BIT
-        this->bus_load_operand(REG_ABH, pins);
-        this->set(REG_ABL, this->get(REG_DL));
-        uint16_t operand = this->get(REG_AB);
-        uint16_t acc = this->get(REG_A_16);
+        this->bus_load_operand(ABH, pins);
+        regs_[ABL] = regs_[DL];
+        uint16_t operand = regs_[AB];
+        uint16_t acc = regs_[A16];
         uint16_t result = acc & operand;
-        uint8_t high_byte = this->get(REG_ABH);
+        uint8_t high_byte = regs_[ABH];
         this->update_flag(FLAG_Z, result == 0); // Z = 1 if (A & operand) == 0
         this->update_flag(FLAG_V,
                           (high_byte & 0x40) != 0); // V = bit 6 of HIGH byte
@@ -420,7 +420,7 @@ bus_state_t op_bit(bus_state_t pins) {
     return pins;
   case 1: { // PHI1
     uint8_t operand = this->bus_get_operand(pins);
-    uint8_t result = this->get(REG_A) & operand;
+    uint8_t result = regs_[A] & operand;
     // BIT immediate (65C02) only affects Z flag - N and V are NOT affected
     // BIT memory affects N, V, and Z flags normally
     if (this->opcode_entry.am_index == to_index(AM::IMM)) {

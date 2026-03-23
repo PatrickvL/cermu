@@ -79,8 +79,8 @@ std::vector<PinSignalState> fam65xx_t<Traits>::get_layout_pin_states(ChipLayout&
     bus_state_t bus_state = this->bus_snapshot_;
     if (bus_state == 0) {
       bus_state = FAM65XX_GUI_DEFAULT_STATE;
-      BUS_SET_ADDR(bus_state, this->get(REG_AB));
-      BUS_SET_DATA(bus_state, this->get(REG_DL));
+      BUS_SET_ADDR(bus_state, regs_[AB]);
+      BUS_SET_DATA(bus_state, regs_[DL]);
     }
     return get_cpu_pin_states<Traits>(this, &layout, bus_state);
 }
