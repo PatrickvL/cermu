@@ -60,6 +60,7 @@
 #include "chip/cpu/cpu_chip_base.hpp"
 #include "core/system_lines.hpp"
 #include "core/cermu.hpp"
+#include "core/register_file.hpp"
 
 // Opcode table generation — self-contained with own namespace wrapper
 #include "chip/cpu/z80/z80_opcode_tables.inc.hpp"
@@ -86,6 +87,47 @@ namespace z80 {
 #define Z80_INT_BIT     BUS_IRQ_BIT  // Maskable interrupt (same as IRQ)
 #define Z80_NMI_BIT     BUS_NMI_BIT  // Non-maskable interrupt (same as NMI)
 #define Z80_RESET_BIT   BUS_RES_BIT  // Reset (same as RES)
+
+// ============================================================================
+// Register file constants — typed indices into RegisterFile<28, uint16_t>.
+// ============================================================================
+
+// Main register pairs
+constexpr r16 REG_AF{0};                   // AF (A=hi, F=lo)
+constexpr r8  REG_A  = hi_b(REG_AF);      // Accumulator
+constexpr r8  REG_F  = lo_b(REG_AF);      // Flags
+constexpr r16 REG_BC{2};                   // BC
+constexpr r8  REG_B  = hi_b(REG_BC);
+constexpr r8  REG_C  = lo_b(REG_BC);
+constexpr r16 REG_DE{4};                   // DE
+constexpr r8  REG_D  = hi_b(REG_DE);
+constexpr r8  REG_E  = lo_b(REG_DE);
+constexpr r16 REG_HL{6};                   // HL
+constexpr r8  REG_H  = hi_b(REG_HL);
+constexpr r8  REG_L  = lo_b(REG_HL);
+
+// Index registers
+constexpr r16 REG_IX{8};
+constexpr r16 REG_IY{10};
+
+// Shadow (alternate) register set
+constexpr r16 REG_AF_{12};
+constexpr r16 REG_BC_{14};
+constexpr r16 REG_DE_{16};
+constexpr r16 REG_HL_{18};
+
+// Internal WZ register (MEMPTR)
+constexpr r16 REG_WZ{20};
+constexpr r8  REG_W  = hi_b(REG_WZ);
+constexpr r8  REG_Z  = lo_b(REG_WZ);
+
+// Special registers
+constexpr r8  REG_I{22};                   // Interrupt vector page
+constexpr r8  REG_R{23};                   // DRAM refresh counter
+
+// Stack pointer and program counter
+constexpr r16 REG_SP{24};
+constexpr r16 REG_PC{26};
 
 // ============================================================================
 // MAIN CPU TEMPLATE CLASS
@@ -132,12 +174,12 @@ public:
 
     /// Initialize CPU state. Returns default bus state.
     bus_state_t init() override {
-        std::memset(&regs_, 0, sizeof(regs_));
-        regs_.sp = 0xFFFF;
-        regs_.af = 0xFFFF;  // Documented power-on state
-        regs_.im = 0;
-        regs_.iff1 = false;
-        regs_.iff2 = false;
+        std::memset(regs_.data, 0, sizeof(regs_.data));
+        regs_[REG_SP] = 0xFFFF;
+        regs_[REG_AF] = 0xFFFF;  // Documented power-on state
+        im_ = 0;
+        iff1_ = false;
+        iff2_ = false;
         halted_ = false;
         ei_pending_ = false;
         nmi_pending_ = false;
@@ -151,14 +193,14 @@ public:
 
     /// Reset CPU (active-low RESET held for at least 3 clock cycles).
     bus_state_t reset(bus_state_t pins = 0) override {
-        regs_.pc = 0x0000;
-        regs_.sp = 0xFFFF;
-        regs_.af = 0xFFFF;
-        regs_.i  = 0;
-        regs_.r  = 0;
-        regs_.im = 0;
-        regs_.iff1 = false;
-        regs_.iff2 = false;
+        regs_[REG_PC] = 0x0000;
+        regs_[REG_SP] = 0xFFFF;
+        regs_[REG_AF] = 0xFFFF;
+        regs_[REG_I]  = 0;
+        regs_[REG_R]  = 0;
+        im_ = 0;
+        iff1_ = false;
+        iff2_ = false;
         halted_ = false;
         ei_pending_ = false;
         nmi_pending_ = false;
@@ -195,53 +237,53 @@ public:
     }
 
     // === Register access (for debugger/test harness) ===
-    uint16_t pc() const { return regs_.pc; }
-    uint16_t sp() const { return regs_.sp; }
-    uint16_t af() const { return regs_.af; }
-    uint16_t bc() const { return regs_.bc; }
-    uint16_t de() const { return regs_.de; }
-    uint16_t hl() const { return regs_.hl; }
-    uint16_t ix() const { return regs_.ix; }
-    uint16_t iy() const { return regs_.iy; }
-    uint8_t  i()  const { return regs_.i; }
-    uint8_t  r()  const { return regs_.r; }
-    uint8_t  im() const { return regs_.im; }
-    bool iff1()   const { return regs_.iff1; }
-    bool iff2()   const { return regs_.iff2; }
+    uint16_t pc() const { return regs_[REG_PC]; }
+    uint16_t sp() const { return regs_[REG_SP]; }
+    uint16_t af() const { return regs_[REG_AF]; }
+    uint16_t bc() const { return regs_[REG_BC]; }
+    uint16_t de() const { return regs_[REG_DE]; }
+    uint16_t hl() const { return regs_[REG_HL]; }
+    uint16_t ix() const { return regs_[REG_IX]; }
+    uint16_t iy() const { return regs_[REG_IY]; }
+    uint8_t  i()  const { return regs_[REG_I]; }
+    uint8_t  r()  const { return regs_[REG_R]; }
+    uint8_t  im() const { return im_; }
+    bool iff1()   const { return iff1_; }
+    bool iff2()   const { return iff2_; }
     bool halted() const { return halted_; }
-    uint16_t wz() const { return regs_.wz; }
+    uint16_t wz() const { return regs_[REG_WZ]; }
 
-    void set_pc(uint16_t v) { regs_.pc = v; }
-    void set_sp(uint16_t v) { regs_.sp = v; }
-    void set_af(uint16_t v) { regs_.af = v; }
-    void set_bc(uint16_t v) { regs_.bc = v; }
-    void set_de(uint16_t v) { regs_.de = v; }
-    void set_hl_direct(uint16_t v) { regs_.hl = v; }
-    void set_ix(uint16_t v) { regs_.ix = v; }
-    void set_iy(uint16_t v) { regs_.iy = v; }
-    void set_i(uint8_t v)   { regs_.i = v; }
-    void set_r(uint8_t v)   { regs_.r = v; }
-    void set_im(uint8_t v)  { regs_.im = v; }
-    void set_iff1(bool v)   { regs_.iff1 = v; }
-    void set_iff2(bool v)   { regs_.iff2 = v; }
-    void set_wz(uint16_t v) { regs_.wz = v; }
+    void set_pc(uint16_t v) { regs_[REG_PC] = v; }
+    void set_sp(uint16_t v) { regs_[REG_SP] = v; }
+    void set_af(uint16_t v) { regs_[REG_AF] = v; }
+    void set_bc(uint16_t v) { regs_[REG_BC] = v; }
+    void set_de(uint16_t v) { regs_[REG_DE] = v; }
+    void set_hl_direct(uint16_t v) { regs_[REG_HL] = v; }
+    void set_ix(uint16_t v) { regs_[REG_IX] = v; }
+    void set_iy(uint16_t v) { regs_[REG_IY] = v; }
+    void set_i(uint8_t v)   { regs_[REG_I] = v; }
+    void set_r(uint8_t v)   { regs_[REG_R] = v; }
+    void set_im(uint8_t v)  { im_ = v; }
+    void set_iff1(bool v)   { iff1_ = v; }
+    void set_iff2(bool v)   { iff2_ = v; }
+    void set_wz(uint16_t v) { regs_[REG_WZ] = v; }
 
     // === Shadow register access ===
-    uint16_t af_prime() const { return regs_.af_; }
-    uint16_t bc_prime() const { return regs_.bc_; }
-    uint16_t de_prime() const { return regs_.de_; }
-    uint16_t hl_prime() const { return regs_.hl_; }
+    uint16_t af_prime() const { return regs_[REG_AF_]; }
+    uint16_t bc_prime() const { return regs_[REG_BC_]; }
+    uint16_t de_prime() const { return regs_[REG_DE_]; }
+    uint16_t hl_prime() const { return regs_[REG_HL_]; }
 
-    void set_af_prime(uint16_t v) { regs_.af_ = v; }
-    void set_bc_prime(uint16_t v) { regs_.bc_ = v; }
-    void set_de_prime(uint16_t v) { regs_.de_ = v; }
-    void set_hl_prime(uint16_t v) { regs_.hl_ = v; }
+    void set_af_prime(uint16_t v) { regs_[REG_AF_] = v; }
+    void set_bc_prime(uint16_t v) { regs_[REG_BC_] = v; }
+    void set_de_prime(uint16_t v) { regs_[REG_DE_] = v; }
+    void set_hl_prime(uint16_t v) { regs_[REG_HL_] = v; }
 
     // === Execution state access (for test harness) ===
     void set_halted(bool v)      { halted_ = v; }
     void set_ei_pending(bool v)  { ei_pending_ = v; }
-    void set_q(bool v)           { regs_.q = v; }
-    bool q() const               { return regs_.q; }
+    void set_q(bool v)           { q_ = v; }
+    bool q() const               { return q_; }
 
     /// Returns true when the CPU is at an instruction boundary.
     /// Used by test harnesses to detect instruction completion.
@@ -261,36 +303,13 @@ private:
     // ========================================================================
     // REGISTER FILE
     // ========================================================================
-    struct Registers {
-        // Main register set (little-endian: low byte first in struct)
-        union { struct { uint8_t f, a; }; uint16_t af; };
-        union { struct { uint8_t c, b; }; uint16_t bc; };
-        union { struct { uint8_t e, d; }; uint16_t de; };
-        union { struct { uint8_t l, h; }; uint16_t hl; };
+    RegisterFile<28, uint16_t> regs_;
 
-        // Alternate (shadow) register set
-        uint16_t af_, bc_, de_, hl_;
-
-        // Index registers
-        uint16_t ix, iy;
-
-        // Special registers
-        uint16_t sp;     // Stack pointer
-        uint16_t pc;     // Program counter
-        uint8_t  i;      // Interrupt vector page
-        uint8_t  r;      // DRAM refresh counter (7 bits + bit 7 preserved)
-
-        // Interrupt state
-        uint8_t  im;     // Interrupt mode (0, 1, 2)
-        bool     iff1;   // Interrupt flip-flop 1 (master enable)
-        bool     iff2;   // Interrupt flip-flop 2 (saved during NMI)
-
-        // Internal WZ register (MEMPTR) — observable via undocumented flags
-        union { struct { uint8_t z, w; }; uint16_t wz; };
-
-        // Q register — tracks whether previous instruction modified F (affects SCF/CCF Y/X flags)
-        bool q;
-    };
+    // CPU state (not part of the programmer-visible register model)
+    uint8_t  im_ = 0;      // Interrupt mode (0, 1, 2)
+    bool     iff1_ = false; // Interrupt flip-flop 1 (master enable)
+    bool     iff2_ = false; // Interrupt flip-flop 2 (saved during NMI)
+    bool     q_ = false;    // Q flag (tracks F modification for SCF/CCF)
 
     // ========================================================================
     // REGISTER ACCESS HELPERS (included mid-class)
@@ -372,7 +391,7 @@ private:
     /// Clears prefix state (DD/FD/CB/ED all done).
     inline void transition_to_fetch() {
         // Update Q: if F was modified during this instruction, set Q = true
-        regs_.q = (regs_.f != f_snapshot_);
+        q_ = (regs_[REG_F] != f_snapshot_);
         ix_iy_prefix_ = 0;
         prefix_state_ = PREFIX_NONE;
         current_handler_ = &z80_t::m1_fetch;
@@ -409,9 +428,9 @@ private:
             // Save Q from previous instruction for SCF/CCF, then snapshot F
             // Skip during prefix fetches (DD/FD/CB/ED) — prefixes are transparent to Q
             if (!prefix_fetch_) {
-                q_saved_ = regs_.q;
-                f_snapshot_ = regs_.f;
-                regs_.q = false;
+                q_saved_ = q_;
+                f_snapshot_ = regs_[REG_F];
+                q_ = false;
             }
             prefix_fetch_ = false;
 
@@ -436,27 +455,27 @@ private:
                     halted_ = false;
                     BUS_SET_BIT(pins, Z80_HALT_BIT);
                 }
-                regs_.iff2 = regs_.iff1; // Save IFF1 state
-                regs_.iff1 = false;       // Disable interrupts
+                iff2_ = iff1_; // Save IFF1 state
+                iff1_ = false;       // Disable interrupts
                 transition_to(&z80_t::op_nmi);
                 return pins; // 1 internal T-state consumed
             }
 
             // Check INT (level-sensitive, only when IFF1 is set)
             // Suppressed for one instruction after EI
-            if (!suppress_int && regs_.iff1 && !BUS_GET_BIT(pins, Z80_INT_BIT)) {
+            if (!suppress_int && iff1_ && !BUS_GET_BIT(pins, Z80_INT_BIT)) {
                 if (halted_) {
                     halted_ = false;
                     BUS_SET_BIT(pins, Z80_HALT_BIT);
                 }
-                regs_.iff1 = false;
-                regs_.iff2 = false;
+                iff1_ = false;
+                iff2_ = false;
                 transition_to(&z80_t::op_int);
                 return pins;
             }
 
             // Normal M1 fetch: place PC on address bus
-            BUS_SET_ADDR(pins, regs_.pc);
+            BUS_SET_ADDR(pins, regs_[REG_PC]);
             BUS_CLR_BIT(pins, Z80_M1_BIT);    // Assert M1
             BUS_CLR_BIT(pins, Z80_MREQ_BIT);  // Assert MREQ
             BUS_SET_BIT(pins, BUS_RW_BIT);     // Read mode
@@ -469,18 +488,18 @@ private:
                 return pins;
             }
             opcode_ = BUS_GET_DATA(pins);
-            regs_.pc++;
+            regs_[REG_PC]++;
             // Deassert M1 and MREQ (will be reasserted for refresh)
             BUS_SET_BIT(pins, Z80_M1_BIT);
             BUS_SET_BIT(pins, Z80_MREQ_BIT);
             return pins;
 
         case 2: // T3: refresh cycle
-            BUS_SET_ADDR(pins, (static_cast<uint16_t>(regs_.i) << 8) | (regs_.r & 0x7F));
+            BUS_SET_ADDR(pins, (static_cast<uint16_t>(regs_[REG_I]) << 8) | (regs_[REG_R] & 0x7F));
             BUS_CLR_BIT(pins, Z80_RFSH_BIT);  // Assert RFSH
             BUS_CLR_BIT(pins, Z80_MREQ_BIT);  // Assert MREQ for refresh
             // Increment R counter (lower 7 bits, bit 7 preserved)
-            regs_.r = (regs_.r & 0x80) | ((regs_.r + 1) & 0x7F);
+            regs_[REG_R] = (regs_[REG_R] & 0x80) | ((regs_[REG_R] + 1) & 0x7F);
             return pins;
 
         case 3: // T4: end refresh, decode and execute
@@ -531,7 +550,7 @@ private:
                     transition_to_fetch();
                     return pins;
                 case 1: // EX AF,AF'
-                    std::swap(regs_.af, regs_.af_);
+                    regs_.swap(REG_AF, REG_AF_);
                     transition_to_fetch();
                     return pins;
                 case 2: // DJNZ d
@@ -681,13 +700,13 @@ private:
                         transition_to(&z80_t::op_ret);
                         break;
                     case 1: // EXX
-                        std::swap(regs_.bc, regs_.bc_);
-                        std::swap(regs_.de, regs_.de_);
-                        std::swap(regs_.hl, regs_.hl_);
+                        regs_.swap(REG_BC, REG_BC_);
+                        regs_.swap(REG_DE, REG_DE_);
+                        regs_.swap(REG_HL, REG_HL_);
                         transition_to_fetch();
                         break;
                     case 2: // JP (HL)
-                        regs_.pc = get_hl();
+                        regs_[REG_PC] = get_hl();
                         transition_to_fetch();
                         break;
                     case 3: // LD SP,HL
@@ -725,12 +744,12 @@ private:
                     transition_to(&z80_t::op_ex_sp_hl);
                     break;
                 case 5: // EX DE,HL
-                    std::swap(regs_.de, regs_.hl);
+                    regs_.swap(REG_DE, REG_HL);
                     transition_to_fetch();
                     break;
                 case 6: // DI
-                    regs_.iff1 = false;
-                    regs_.iff2 = false;
+                    iff1_ = false;
+                    iff2_ = false;
                     transition_to_fetch();
                     break;
                 case 7: // EI
@@ -738,8 +757,8 @@ private:
                     // check interrupts until after the NEXT instruction.
                     // ei_pending_ suppresses the interrupt check in the
                     // following M1 fetch cycle.
-                    regs_.iff1 = true;
-                    regs_.iff2 = true;
+                    iff1_ = true;
+                    iff2_ = true;
                     ei_pending_ = true;
                     transition_to_fetch();
                     break;
@@ -885,7 +904,7 @@ private:
 
             case 6: { // IM
                 static constexpr uint8_t im_table[8] = { 0, 0, 1, 2, 0, 0, 1, 2 };
-                regs_.im = im_table[y];
+                im_ = im_table[y];
                 transition_to_fetch();
                 return pins;
             }
@@ -966,20 +985,20 @@ private:
         case 0: case 1: case 2: case 3: case 4: // 5 internal T-states
             return pins;
         case 5:
-            regs_.sp--;
-            return bus_setup_mem_write(pins, regs_.sp, static_cast<uint8_t>(regs_.pc >> 8));
+            regs_[REG_SP]--;
+            return bus_setup_mem_write(pins, regs_[REG_SP], static_cast<uint8_t>(regs_[REG_PC] >> 8));
         case 6: if (!wait_check(pins)) return pins; return pins;
         case 7:
             bus_finish_mem(pins);
-            regs_.sp--;
+            regs_[REG_SP]--;
             return pins;
         case 8:
-            return bus_setup_mem_write(pins, regs_.sp, static_cast<uint8_t>(regs_.pc & 0xFF));
+            return bus_setup_mem_write(pins, regs_[REG_SP], static_cast<uint8_t>(regs_[REG_PC] & 0xFF));
         case 9: if (!wait_check(pins)) return pins; return pins;
         case 10:
             bus_finish_mem(pins);
-            regs_.pc = 0x0066;
-            regs_.wz = 0x0066;
+            regs_[REG_PC] = 0x0066;
+            regs_[REG_WZ] = 0x0066;
             transition_to_fetch();
             return pins;
         }
@@ -1008,27 +1027,27 @@ private:
         case 5: case 6: // 2 more internal
             return pins;
         case 7:
-            regs_.sp--;
-            return bus_setup_mem_write(pins, regs_.sp, static_cast<uint8_t>(regs_.pc >> 8));
+            regs_[REG_SP]--;
+            return bus_setup_mem_write(pins, regs_[REG_SP], static_cast<uint8_t>(regs_[REG_PC] >> 8));
         case 8: if (!wait_check(pins)) return pins; return pins;
         case 9:
             bus_finish_mem(pins);
-            regs_.sp--;
+            regs_[REG_SP]--;
             return pins;
         case 10:
-            return bus_setup_mem_write(pins, regs_.sp, static_cast<uint8_t>(regs_.pc & 0xFF));
+            return bus_setup_mem_write(pins, regs_[REG_SP], static_cast<uint8_t>(regs_[REG_PC] & 0xFF));
         case 11: if (!wait_check(pins)) return pins; return pins;
         case 12:
             bus_finish_mem(pins);
-            switch (regs_.im) {
+            switch (im_) {
             case 0: // IM 0: execute instruction from data bus (simplified as RST 38h)
             case 1: // IM 1: always RST 38h
-                regs_.pc = 0x0038;
-                regs_.wz = regs_.pc;
+                regs_[REG_PC] = 0x0038;
+                regs_[REG_WZ] = regs_[REG_PC];
                 transition_to_fetch();
                 return pins;
             case 2: // IM 2: vectored — need to read 2 bytes from vector table
-                addr_latch_ = (static_cast<uint16_t>(regs_.i) << 8) | (int_data_latch_ & 0xFE);
+                addr_latch_ = (static_cast<uint16_t>(regs_[REG_I]) << 8) | (int_data_latch_ & 0xFE);
                 transition_to(&z80_t::op_int_im2_read);
                 return pins;
             }
@@ -1050,8 +1069,8 @@ private:
         case 3: return bus_setup_mem_read(pins, addr_latch_ + 1);
         case 4: if (!wait_check(pins)) return pins; return pins;
         case 5:
-            regs_.pc = data_latch_ | (static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8);
-            regs_.wz = regs_.pc;
+            regs_[REG_PC] = data_latch_ | (static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8);
+            regs_[REG_WZ] = regs_[REG_PC];
             bus_finish_mem(pins);
             transition_to_fetch();
             return pins;
@@ -1072,8 +1091,6 @@ private:
     // ========================================================================
     // INTERNAL STATE
     // ========================================================================
-
-    Registers regs_{};
 
     // Instruction handler dispatch
     InstructionHandler current_handler_ = &z80_t::m1_fetch;

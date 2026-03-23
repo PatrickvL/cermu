@@ -252,6 +252,17 @@ struct RegisterFile {
         return {old, {&data[byte_off]}};
     }
 
+    // ── Swap two registers ─────────────────────────────────────
+    //    regs.swap(AF, AF_);  — EX AF,AF' etc.
+
+    template <typename T>
+    inline void swap(RegIdx<T> a, RegIdx<T> b) {
+        T tmp;
+        std::memcpy(&tmp, &data[a.offset], sizeof(T));
+        std::memcpy(&data[a.offset], &data[b.offset], sizeof(T));
+        std::memcpy(&data[b.offset], &tmp, sizeof(T));
+    }
+
     // ── Debug — zero copy ────────────────────────────────────────
 
     const uint8_t*             debug_ptr()  const { return data; }
