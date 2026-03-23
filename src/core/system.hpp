@@ -18,6 +18,7 @@ struct format_descriptor_t;
 struct RomSetDescriptor;
 struct RomSetMatch;
 class Session;
+class DisplayDevice;
 
 #include "core/indexed_frame_buffer.hpp"
 #include "core/palette_table.hpp"

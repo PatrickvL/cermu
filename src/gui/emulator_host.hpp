@@ -22,6 +22,7 @@
 struct ImGuiIO;
 
 #include "gui/vector_shader.hpp"  // BeamVertex, PhosphorPersistence
+#include "devices/display/display_device.hpp"  // DisplayDevice, DisplayCharacteristics
 
 // ============================================================================
 // Display Configuration Enums
@@ -219,6 +220,14 @@ protected:
 
     /// Video signal type of the active system (cached from System::get_video_signal_type()).
     VideoSignalType active_signal_type_       = VideoSignalType::Composite;
+
+    /// Active display device (non-owning pointer to system's attached display).
+    /// nullptr when no DisplayDevice is attached to the system.
+    DisplayDevice*  display_device_           = nullptr;
+
+    /// Cached display characteristics from the active display device.
+    /// Default values used when no display device is attached.
+    DisplayCharacteristics display_characteristics_{};
 
     /// NTSC artifact shader — PhaseIncrement uniform location and value.
     /// PhaseIncrement = 2π × color_carrier / dot_clock (radians per pixel).
