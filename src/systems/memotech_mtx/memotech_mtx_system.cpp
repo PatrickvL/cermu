@@ -27,7 +27,6 @@
 
 template<MTXVariant V>
 static HardwareTraits create_mtx_hardware_traits() {
-    using Traits = MTXVariantTraits<V>;
     HardwareTraits traits = {};
 
     traits.display.native_width    = mtx_constants::DISPLAY_WIDTH;

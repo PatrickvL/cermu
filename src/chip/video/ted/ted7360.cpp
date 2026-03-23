@@ -860,9 +860,22 @@ void ted7360_t::reset() {
     sequencer   = {};
     border      = {};
     memory      = {};
-    // Reset sound unit — zero POD fields, reset ring buffer separately
-    // (AudioRingBuffer contains std::atomic, so aggregate assignment is deleted)
-    memset(&sound, 0, offsetof(ted_sound_unit_t, audio_buffer));
+    // Reset sound unit — zero POD fields individually because
+    // ted_sound_unit_t contains AudioRingBuffer (non-trivially copyable)
+    sound.freq1 = 0; sound.freq2 = 0;
+    sound.volume = 0;
+    sound.ch1_enabled = false; sound.ch2_enabled = false;
+    sound.noise_enabled = false; sound.da_mode = false;
+    sound.ch1_counter = 0; sound.ch2_counter = 0;
+    sound.ch1_output = false; sound.ch2_output = false;
+    sound.noise_shift_reg = 0;
+    sound.sample_accum = 0; sound.sample_tick_count = 0;
+    sound.cycles_per_sample_fp = 0; sound.sample_frac = 0;
+    sound.lowpass_buf = 0; sound.highpass_buf = 0;
+    sound.lowpass_alpha = 0; sound.highpass_alpha = 0;
+    sound.output_gain = 0;
+    sound.lp_alpha_chip = 0; sound.hp_alpha_chip = 0;
+    sound.lp_buf_chip = 0; sound.hp_buf_chip = 0;
     sound.audio_buffer.reset();
     bus         = {};
     // color_line_ is not zeroed — it is a direct member, not inside any unit.

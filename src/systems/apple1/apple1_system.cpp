@@ -299,10 +299,10 @@ void Apple1System::run_frame() {
     }
     if (video_port_) {
         auto& stream = video_port_->stream();
-        for (int y = 0; y < apple1_constants::DISPLAY_HEIGHT; y++) {
+        for (uint32_t y = 0; y < apple1_constants::DISPLAY_HEIGHT; y++) {
             const uint8_t* line = pixel_buffer_ + y * apple1_constants::DISPLAY_WIDTH;
             stream.drive({0, VideoFlags::HSync});
-            for (int x = 0; x < apple1_constants::DISPLAY_WIDTH; x++) {
+            for (uint32_t x = 0; x < apple1_constants::DISPLAY_WIDTH; x++) {
                 stream.drive({line[x], VideoFlags::BeamOn});
             }
         }

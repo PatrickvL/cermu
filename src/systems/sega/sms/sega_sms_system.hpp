@@ -38,12 +38,12 @@
 // Slot 1: System RAM   — 8KB at $C000 (mirrored to $E000)
 
 inline constexpr auto kSMSChips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 524288, 0, "Cartridge ROM", 0, 16384},
-    Slot<RAMChip>{0xC000,   8192, 0x1FFF, "System RAM"},
+    Slot<ROMChip>{0x0000, 524288, 0, "Cartridge ROM", 0, 16384, 0, 0, {}},
+    Slot<RAMChip>{0xC000,   8192, 0x1FFF, "System RAM", 0, 0, 0, 0, {}},
     // Non-bus chips
-    Slot<ZilogZ80A>      {0, 0, 0, "Z80A"},
-    Slot<SEGA_315_5124>  {0, 0, 0, "315-5124 VDP"},
-    Slot<sn76489_t>      {0, 0, 0, "SN76489 PSG"}
+    Slot<ZilogZ80A>      {0, 0, 0, "Z80A",          0, 0, 0, 0, {}},
+    Slot<SEGA_315_5124>  {0, 0, 0, "315-5124 VDP",  0, 0, 0, 0, {}},
+    Slot<sn76489_t>      {0, 0, 0, "SN76489 PSG",   0, 0, 0, 0, {}}
 );
 
 using SMSBusSpec  = ManifestBusSpec<kSMSChips, 16, 8>;
@@ -54,7 +54,7 @@ using SMSBusSpec  = ManifestBusSpec<kSMSChips, 16, 8>;
 
 struct SMSChips : CoreChips<ZilogZ80A, SEGA_315_5124, sn76489_t> {
     SMSChips() : CoreChips<ZilogZ80A, SEGA_315_5124, sn76489_t>{
-        ZilogZ80A{}, SEGA_315_5124{}, sn76489_t{SN76489Variant::SEGA_PSG}} {}
+        ZilogZ80A{}, SEGA_315_5124{}, sn76489_t{SN76489Variant::SEGA_PSG}, {}} {}
 };
 
 // ============================================================================
