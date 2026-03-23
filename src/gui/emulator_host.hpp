@@ -86,6 +86,7 @@ protected:
     bool show_memory_viewer_;
     bool show_settings_;
     bool show_about_;
+    bool show_display_settings_ = false;
     
     // Window dimensions
     int window_width_;

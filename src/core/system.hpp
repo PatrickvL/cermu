@@ -443,6 +443,11 @@ public:
         return owned_devices_;
     }
 
+    /// Mutable access to owned peripheral devices (for device replacement).
+    std::vector<std::unique_ptr<PeripheralDevice>>& get_owned_devices_mutable() {
+        return owned_devices_;
+    }
+
     /// Attach a device to a connector port (creates from DeviceRegistry).
     /// On bus ports, multiple devices can be attached simultaneously.
     bool attach_device_to_port(int port_index, const char* device_id);

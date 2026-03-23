@@ -99,6 +99,7 @@ private:
     void update_window_title();
     void allocate_framebuffer();
     void teardown_current_system();
+    void render_display_settings();
 
     /// Cached window title — avoids SDL_SetWindowTitle on every frame.
     std::string last_window_title_;
