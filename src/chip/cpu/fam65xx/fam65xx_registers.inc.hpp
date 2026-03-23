@@ -23,14 +23,10 @@ using data_t =
                        uint8_t // All other processors use 8-bit data operations
                        >;
 
-// Register array with conditional sizing
-union {
-  uint8_t reg8[Traits.has(CPUCoreFlags::C816_16BIT) ? REG_COUNT_16BIT
-                                                    : REG_COUNT_8BIT];
-  uint16_t reg16[(Traits.has(CPUCoreFlags::C816_16BIT) ? REG_COUNT_16BIT
-                                                       : REG_COUNT_8BIT) /
-                 2];
-};
+// Register file — unified backing store (replaces legacy union)
+static constexpr uint16_t REG_FILE_SIZE =
+    Traits.has(CPUCoreFlags::C816_16BIT) ? 24 : 16;
+RegisterFile<24, uint16_t> regs_;
 
 // ============================================================================
 // REGISTER ACCESSOR METHODS
@@ -38,13 +34,13 @@ union {
 
 public:
 // === Type-safe 8-bit register accessors ===
-inline uint8_t get(reg8_t reg) const { return reg8[reg]; }
+inline uint8_t get(reg8_t reg) const { return regs_.at<uint8_t>(reg); }
 
-inline void set(reg8_t reg, uint8_t value) { reg8[reg] = value; }
+inline void set(reg8_t reg, uint8_t value) { regs_.at<uint8_t>(reg) = value; }
 
-inline void inc(reg8_t reg) { reg8[reg]++; }
+inline void inc(reg8_t reg) { ++regs_.at<uint8_t>(reg); }
 
-inline void dec(reg8_t reg) { reg8[reg]--; }
+inline void dec(reg8_t reg) { --regs_.at<uint8_t>(reg); }
 
 // === Stack pointer increment helper ===
 // Encapsulates wide-specific inc(REG_SP) vs 8-bit inc(REG_S)
@@ -67,13 +63,13 @@ inline void dec_stack() {
 }
 
 // === Type-safe 16-bit register accessors ===
-inline uint16_t get(reg16_t reg_pair) const { return reg16[reg_pair]; }
+inline uint16_t get(reg16_t reg_pair) const { return regs_[reg_pair]; }
 
-inline void set(reg16_t reg_pair, uint16_t value) { reg16[reg_pair] = value; }
+inline void set(reg16_t reg_pair, uint16_t value) { regs_[reg_pair] = value; }
 
-inline void inc(reg16_t reg_pair) { reg16[reg_pair]++; }
+inline void inc(reg16_t reg_pair) { ++regs_[reg_pair]; }
 
-inline void dec(reg16_t reg_pair) { reg16[reg_pair]--; }
+inline void dec(reg16_t reg_pair) { --regs_[reg_pair]; }
 
 // ========================================================================
 // REGISTER ACCESS METHODS (override mixin methods with constexpr wide
@@ -359,9 +355,9 @@ inline void update_nz_flags_16bit(uint16_t value) {
 
 // === Register initialization ===
 void init_registers() {
-  // Clear all registers to zero (power-on state is indeterminate, but
-  // zeroing is the conventional emulator choice).
-  std::memset(&reg8, 0, sizeof(reg8));
+  // RegisterFile is zero-initialized by default.
+  // Reset it for re-initialization.
+  std::memset(regs_.data, 0, sizeof(regs_.data));
 
   // Stack pointer lives on page 1 ($0100-$01FF) for 8-bit CPUs.
   // S itself starts at $00 — the reset sequence decrements it by 3 → $FD.
