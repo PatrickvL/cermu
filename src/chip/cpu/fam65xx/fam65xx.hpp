@@ -735,7 +735,7 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
       case 1:
         // PHI1: Load low byte from bus
         this->bus_load_reg(DL, pins);
-        ++regs_[ABL]; // Increment address for high byte
+        ++regs_[AB]; // Increment full 16-bit address for high byte
         this->half_cycle++;
         return pins;
 
@@ -779,7 +779,7 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
         return pins;
       case 7:
         // Cycle 7 PHI1: Decrement address
-        --regs_[ABL]; // Decrement address back to low byte
+        --regs_[AB]; // Decrement full 16-bit address back to low byte
         this->half_cycle++;
         return pins;
 
