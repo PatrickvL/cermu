@@ -159,6 +159,46 @@ static const uint16_t ICON_GENERIC[16] = {
     0b0000000000000000,  //
 };
 
+// CRT monitor — screen with stand
+static const uint16_t ICON_MONITOR[16] = {
+    0b0000000000000000,  //
+    0b0111111111111100,  //  ###########
+    0b0100000000000100,  //  #         #
+    0b0100000000000100,  //  #         #
+    0b0100000000000100,  //  #         #
+    0b0100000000000100,  //  #         #
+    0b0100000000000100,  //  #         #
+    0b0100000000000100,  //  #         #
+    0b0100000000000100,  //  #         #
+    0b0111111111111100,  //  ###########
+    0b0001111111110000,  //    ########
+    0b0000011111000000,  //      #####
+    0b0000001110000000,  //       ###
+    0b0000111111100000,  //     #######
+    0b0000000000000000,  //
+    0b0000000000000000,  //
+};
+
+// Speaker — speaker cone silhouette
+static const uint16_t ICON_SPEAKER[16] = {
+    0b0000000000000000,  //
+    0b0000001100000000,  //       ##
+    0b0000011100000000,  //      ###
+    0b0000111100100000,  //     ####  #
+    0b0011111101000000,  //   ###### #
+    0b0011111110100000,  //   ####### #
+    0b0011111101000000,  //   ###### #
+    0b0011111110100000,  //   ####### #
+    0b0011111101000000,  //   ###### #
+    0b0011111110100000,  //   ####### #
+    0b0011111101000000,  //   ###### #
+    0b0000111100100000,  //     ####  #
+    0b0000011100000000,  //      ###
+    0b0000001100000000,  //       ##
+    0b0000000000000000,  //
+    0b0000000000000000,  //
+};
+
 // ============================================================================
 // TEXTURE STORAGE
 // ============================================================================
@@ -212,6 +252,20 @@ void init() {
     textures_[static_cast<int>(PortType::CONTROLLER_SNES)]   = create_icon_texture(ICON_NES_PAD,   220, 180, 255);  // same shape
     textures_[static_cast<int>(PortType::CONTROLLER_ATARI)]  = create_icon_texture(ICON_JOYSTICK,  255, 200, 150);  // warm
     textures_[static_cast<int>(PortType::CUSTOM)]            = create_icon_texture(ICON_GENERIC,   200, 200, 200);  // gray
+
+    // Video output connectors — monitor icon, colour-coded by signal quality
+    textures_[static_cast<int>(PortType::VIDEO_COMPOSITE)]   = create_icon_texture(ICON_MONITOR,   255, 230, 130);  // yellow (basic)
+    textures_[static_cast<int>(PortType::VIDEO_SVIDEO)]      = create_icon_texture(ICON_MONITOR,   200, 255, 180);  // green (better)
+    textures_[static_cast<int>(PortType::VIDEO_RGB)]         = create_icon_texture(ICON_MONITOR,   180, 220, 255);  // blue (sharp)
+    textures_[static_cast<int>(PortType::VIDEO_RGBI)]        = create_icon_texture(ICON_MONITOR,   180, 200, 255);  // blue-grey
+    textures_[static_cast<int>(PortType::VIDEO_COMPONENT)]   = create_icon_texture(ICON_MONITOR,   180, 255, 220);  // cyan
+    textures_[static_cast<int>(PortType::VIDEO_HDMI)]        = create_icon_texture(ICON_MONITOR,   255, 255, 255);  // white (digital)
+
+    // Audio output connectors — speaker icon
+    textures_[static_cast<int>(PortType::AUDIO_MONO)]        = create_icon_texture(ICON_SPEAKER,   255, 200, 150);  // warm
+    textures_[static_cast<int>(PortType::AUDIO_STEREO)]      = create_icon_texture(ICON_SPEAKER,   255, 220, 180);  // warm light
+    textures_[static_cast<int>(PortType::AUDIO_SPDIF)]       = create_icon_texture(ICON_SPEAKER,   200, 200, 255);  // light blue
+    textures_[static_cast<int>(PortType::AUDIO_HDMI)]        = create_icon_texture(ICON_SPEAKER,   255, 255, 255);  // white
 
     initialised_ = true;
     printf("PortIcons: Initialised %d icon textures\n",
