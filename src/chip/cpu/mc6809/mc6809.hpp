@@ -56,6 +56,7 @@
 #include "chip/cpu/cpu_chip_base.hpp"
 #include "core/system_lines.hpp"
 #include "core/cermu.hpp"
+#include "core/register_file.hpp"
 
 namespace mc6809 {
 
@@ -87,7 +88,7 @@ namespace mc6809 {
 // MC6809 DECL — CPU register layout for debug infrastructure
 // ============================================================================
 //
-// All internal registers are mirrored into a flat byte array (debug_regs_)
+// All internal registers live in a RegisterFile<20, uint16_t> whose byte
 // in host-endian byte order.  The DECL table describes each register's byte
 // offset and width, allowing the DECL renderer to display them without any
 // hardcoded per-register callbacks.
@@ -156,6 +157,27 @@ DECL_EXTRACT(MC6809, MC6809_DECL)
 namespace mc6809 {
 
 // ============================================================================
+// Register file constants — typed indices into RegisterFile<20, uint16_t>.
+// Byte offsets match MC6809_DECL layout: the single source of truth.
+// ============================================================================
+
+constexpr r16 REG_D{0};                   // D Accumulator (A:B)
+constexpr r8  REG_A  = hi_b(REG_D);       // A is high byte of D
+constexpr r8  REG_B  = lo_b(REG_D);       // B is low byte of D
+constexpr r16 REG_X{2};                   // Index Register X
+constexpr r16 REG_Y{4};                   // Index Register Y
+constexpr r16 REG_U{6};                   // User Stack Pointer
+constexpr r16 REG_S{8};                   // System Stack Pointer
+constexpr r16 REG_PC{10};                 // Program Counter
+constexpr r8  REG_DP{12};                 // Direct Page Register
+constexpr r8  REG_CC{13};                 // Condition Code Register
+constexpr r16 REG_W{14};                  // W Accumulator (E:F, HD6309)
+constexpr r8  REG_E  = hi_b(REG_W);       // E is high byte of W
+constexpr r8  REG_F  = lo_b(REG_W);       // F is low byte of W
+constexpr r16 REG_V{16};                  // V Register (HD6309)
+constexpr r8  REG_MD{18};                 // Mode Register (HD6309)
+
+// ============================================================================
 // MAIN CPU TEMPLATE CLASS
 // ============================================================================
 
@@ -196,10 +218,10 @@ public:
 
     /// Initialize CPU state.  Returns default bus state.
     bus_state_t init() override {
-        std::memset(&regs_, 0, sizeof(regs_));
-        regs_.s  = 0xFFFF;
-        regs_.dp = 0x00;
-        regs_.cc = Flags::I | Flags::F;  // IRQ and FIRQ masked at power-on
+        std::memset(regs_.data, 0, sizeof(regs_.data));
+        regs_[REG_S]  = 0xFFFF;
+        regs_[REG_DP] = 0x00;
+        regs_[REG_CC] = Flags::I | Flags::F;  // IRQ and FIRQ masked at power-on
         halted_ = false;
         nmi_armed_ = false;
         nmi_pending_ = false;
@@ -211,15 +233,15 @@ public:
         current_handler_ = &mc6809_t::op_reset;
         bus_prev_ = default_bus_state();
         if constexpr (has_native_mode()) {
-            regs_.md = 0;
+            regs_[REG_MD] = 0;
         }
         return default_bus_state();
     }
 
     /// Reset CPU (active-low RESET).
     bus_state_t reset(bus_state_t pins = 0) override {
-        regs_.dp = 0x00;
-        regs_.cc |= Flags::I | Flags::F;  // Mask interrupts
+        regs_[REG_DP] = 0x00;
+        regs_[REG_CC] |= Flags::I | Flags::F;  // Mask interrupts
         halted_ = false;
         nmi_armed_ = false;
         nmi_pending_ = false;
@@ -230,7 +252,7 @@ public:
         step_ = 0;
         current_handler_ = &mc6809_t::op_reset;
         if constexpr (has_native_mode()) {
-            regs_.md = 0;
+            regs_[REG_MD] = 0;
         }
         return pins;
     }
@@ -265,63 +287,63 @@ public:
     }
 
     // === Register access (for debugger/test harness) ===
-    uint8_t  a()  const { return regs_.a; }
-    uint8_t  b()  const { return regs_.b; }
-    uint16_t d()  const { return regs_.d; }
-    uint16_t x()  const { return regs_.x; }
-    uint16_t y()  const { return regs_.y; }
-    uint16_t u()  const { return regs_.u; }
-    uint16_t s()  const { return regs_.s; }
-    uint16_t pc() const { return regs_.pc; }
-    uint8_t  dp() const { return regs_.dp; }
-    uint8_t  cc() const { return regs_.cc; }
+    uint8_t  a()  const { return regs_[REG_A]; }
+    uint8_t  b()  const { return regs_[REG_B]; }
+    uint16_t d()  const { return regs_[REG_D]; }
+    uint16_t x()  const { return regs_[REG_X]; }
+    uint16_t y()  const { return regs_[REG_Y]; }
+    uint16_t u()  const { return regs_[REG_U]; }
+    uint16_t s()  const { return regs_[REG_S]; }
+    uint16_t pc() const { return regs_[REG_PC]; }
+    uint8_t  dp() const { return regs_[REG_DP]; }
+    uint8_t  cc() const { return regs_[REG_CC]; }
 
-    void set_a(uint8_t v)   { regs_.a = v; }
-    void set_b(uint8_t v)   { regs_.b = v; }
-    void set_d(uint16_t v)  { regs_.d = v; }
-    void set_x(uint16_t v)  { regs_.x = v; }
-    void set_y(uint16_t v)  { regs_.y = v; }
-    void set_u(uint16_t v)  { regs_.u = v; }
-    void set_s(uint16_t v)  { regs_.s = v; }
-    void set_pc(uint16_t v) { regs_.pc = v; }
-    void set_dp(uint8_t v)  { regs_.dp = v; }
-    void set_cc(uint8_t v)  { regs_.cc = v; }
+    void set_a(uint8_t v)   { regs_[REG_A] = v; }
+    void set_b(uint8_t v)   { regs_[REG_B] = v; }
+    void set_d(uint16_t v)  { regs_[REG_D] = v; }
+    void set_x(uint16_t v)  { regs_[REG_X] = v; }
+    void set_y(uint16_t v)  { regs_[REG_Y] = v; }
+    void set_u(uint16_t v)  { regs_[REG_U] = v; }
+    void set_s(uint16_t v)  { regs_[REG_S] = v; }
+    void set_pc(uint16_t v) { regs_[REG_PC] = v; }
+    void set_dp(uint8_t v)  { regs_[REG_DP] = v; }
+    void set_cc(uint8_t v)  { regs_[REG_CC] = v; }
 
     // HD6309-specific register access
     uint8_t  e_reg() const {
-        if constexpr (has_w_register()) return regs_.e;
+        if constexpr (has_w_register()) return regs_[REG_E];
         return 0;
     }
     uint8_t  f_reg() const {
-        if constexpr (has_w_register()) return regs_.f;
+        if constexpr (has_w_register()) return regs_[REG_F];
         return 0;
     }
     uint16_t w()  const {
-        if constexpr (has_w_register()) return regs_.w;
+        if constexpr (has_w_register()) return regs_[REG_W];
         return 0;
     }
     uint16_t v()  const {
-        if constexpr (has_w_register()) return regs_.v;
+        if constexpr (has_w_register()) return regs_[REG_V];
         return 0;
     }
     uint8_t  md() const {
-        if constexpr (has_native_mode()) return regs_.md;
+        if constexpr (has_native_mode()) return regs_[REG_MD];
         return 0;
     }
     void set_e_reg(uint8_t val) {
-        if constexpr (has_w_register()) regs_.e = val;
+        if constexpr (has_w_register()) regs_[REG_E] = val;
     }
     void set_f_reg(uint8_t val) {
-        if constexpr (has_w_register()) regs_.f = val;
+        if constexpr (has_w_register()) regs_[REG_F] = val;
     }
     void set_w(uint16_t val) {
-        if constexpr (has_w_register()) regs_.w = val;
+        if constexpr (has_w_register()) regs_[REG_W] = val;
     }
     void set_v(uint16_t val) {
-        if constexpr (has_w_register()) regs_.v = val;
+        if constexpr (has_w_register()) regs_[REG_V] = val;
     }
     void set_md(uint8_t val) {
-        if constexpr (has_native_mode()) regs_.md = val;
+        if constexpr (has_native_mode()) regs_[REG_MD] = val;
     }
 
     /// Returns true when the CPU is at an instruction boundary.
@@ -350,31 +372,7 @@ private:
     // ========================================================================
     // REGISTER FILE
     // ========================================================================
-    struct Registers {
-        // Accumulators (D = A:B, big-endian: A is high byte)
-        // On little-endian hosts the low-addressed byte is the LSB of
-        // the uint16_t, so B (low byte of D) must come first.
-        union { struct { uint8_t b, a; }; uint16_t d; };
-
-        // Index registers
-        uint16_t x, y;
-
-        // Stack pointers
-        uint16_t u;   // User stack pointer
-        uint16_t s;   // System (hardware) stack pointer
-
-        // Program counter
-        uint16_t pc;
-
-        // Control registers
-        uint8_t dp;   // Direct page register
-        uint8_t cc;   // Condition code register
-
-        // HD6309-specific registers (W = E:F, same LE layout)
-        union { struct { uint8_t f, e; }; uint16_t w; };  // W = E:F
-        uint16_t v;   // V register
-        uint8_t  md;  // Mode register (HD6309)
-    };
+    RegisterFile<20, uint16_t> regs_;
 
     // ========================================================================
     // REGISTER ACCESS HELPERS (included mid-class)
@@ -474,10 +472,10 @@ private:
         }
 
         // IRQ level detection (only when not masked)
-        irq_pending_ = !BUS_GET_BIT(bus_prev_, BUS_IRQ_BIT) && !(regs_.cc & Flags::I);
+        irq_pending_ = !BUS_GET_BIT(bus_prev_, BUS_IRQ_BIT) && !(regs_[REG_CC] & Flags::I);
 
         // FIRQ level detection (only when not masked)
-        firq_pending_ = !BUS_GET_BIT(bus_prev_, MC6809_FIRQ_BIT) && !(regs_.cc & Flags::F);
+        firq_pending_ = !BUS_GET_BIT(bus_prev_, MC6809_FIRQ_BIT) && !(regs_[REG_CC] & Flags::F);
     }
 
     // ========================================================================
@@ -511,25 +509,25 @@ private:
             BUS_SET_BIT(pins, MC6809_LIC_BIT);
 
             // Fetch opcode from PC
-            return bus_setup_read(pins, regs_.pc);
+            return bus_setup_read(pins, regs_[REG_PC]);
         }
 
         case 1: {
             // Opcode byte received
             BUS_CLR_BIT(pins, MC6809_LIC_BIT);
             opcode_ = bus_read_data(pins);
-            regs_.pc++;
+            regs_[REG_PC]++;
 
             // Check for page prefix bytes ($10, $11)
             if (opcode_ == 0x10) {
                 page_ = 1;
                 step_ = 0;  // Re-fetch next byte as the actual opcode
-                return bus_setup_read(pins, regs_.pc);
+                return bus_setup_read(pins, regs_[REG_PC]);
             }
             if (opcode_ == 0x11) {
                 page_ = 2;
                 step_ = 0;
-                return bus_setup_read(pins, regs_.pc);
+                return bus_setup_read(pins, regs_[REG_PC]);
             }
 
             page_ = 0;
@@ -562,19 +560,19 @@ private:
     bus_state_t op_reset(bus_state_t pins) {
         switch (step_++) {
         case 0:
-            regs_.dp = 0x00;
-            regs_.cc |= Flags::I | Flags::F;
-            if constexpr (has_native_mode()) regs_.md = 0;
+            regs_[REG_DP] = 0x00;
+            regs_[REG_CC] |= Flags::I | Flags::F;
+            if constexpr (has_native_mode()) regs_[REG_MD] = 0;
             return bus_internal(pins);
         case 1:
             return bus_internal(pins);
         case 2:
             return bus_setup_read(pins, Vector::RESET);
         case 3:
-            regs_.pc = static_cast<uint16_t>(bus_read_data(pins)) << 8;
+            regs_[REG_PC] = static_cast<uint16_t>(bus_read_data(pins)) << 8;
             return bus_setup_read(pins, Vector::RESET + 1);
         case 4:
-            regs_.pc |= bus_read_data(pins);
+            regs_[REG_PC] |= bus_read_data(pins);
             nmi_armed_ = true;  // NMI armed after first S load
             transition_to_fetch();
             return pins;
@@ -601,7 +599,6 @@ private:
     // INTERNAL STATE
     // ========================================================================
 
-    Registers regs_{};
     InstructionHandler current_handler_ = &mc6809_t::fetch_opcode;
     uint8_t step_ = 0;
 
@@ -625,42 +622,10 @@ private:
 
     bus_state_t bus_prev_ = 0;
 
-    // ========================================================================
-    // DEBUG INFRASTRUCTURE
-    // ========================================================================
-
-    uint8_t debug_regs_[MC6809_DBG_SIZE]{};  // Flat byte array for DECL debug
-
     // ── Debug registration ─────────────────────────────────────
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields();
 #endif
-
-    /// Update debug_regs_ from current register state (call before debug rendering).
-    /// Values stored in host byte order via memcpy for DECL renderer access.
-    void sync_debug_snapshot() {
-        // D = A:B (big-endian semantics: A is high byte, B is low byte)
-        uint16_t d_val = (static_cast<uint16_t>(regs_.a) << 8) | regs_.b;
-        std::memcpy(&debug_regs_[0], &d_val, 2);
-        // X, Y, U, S, PC — 16-bit registers
-        std::memcpy(&debug_regs_[2],  &regs_.x, 2);
-        std::memcpy(&debug_regs_[4],  &regs_.y, 2);
-        std::memcpy(&debug_regs_[6],  &regs_.u, 2);
-        std::memcpy(&debug_regs_[8],  &regs_.s, 2);
-        std::memcpy(&debug_regs_[10], &regs_.pc, 2);
-        // DP, CC — 8-bit registers
-        debug_regs_[12] = regs_.dp;
-        debug_regs_[13] = regs_.cc;
-        // HD6309-only registers
-        if constexpr (has_w_register()) {
-            uint16_t w_val = (static_cast<uint16_t>(regs_.e) << 8) | regs_.f;
-            std::memcpy(&debug_regs_[14], &w_val, 2);
-            std::memcpy(&debug_regs_[16], &regs_.v, 2);
-        }
-        if constexpr (has_native_mode()) {
-            debug_regs_[18] = regs_.md;
-        }
-    }
 
     // ========================================================================
     // GUI SUPPORT
@@ -763,50 +728,50 @@ bus_state_t mc6809_t<Traits>::decode_and_execute(bus_state_t pins) {
     case 0x3F: transition_to(&mc6809_t::op_swi); return pins;
 
     // === 0x40-0x4F: Inherent - register A operations ===
-    case 0x40: regs_.a = alu_neg8(regs_.a); transition_to_fetch(); return pins; // NEGA
+    case 0x40: regs_[REG_A] = alu_neg8(regs_[REG_A]); transition_to_fetch(); return pins; // NEGA
     case 0x41: // Undocumented
         transition_to_fetch(); return pins;
     case 0x42: // Undocumented
         transition_to_fetch(); return pins;
-    case 0x43: regs_.a = alu_com8(regs_.a); transition_to_fetch(); return pins; // COMA
-    case 0x44: regs_.a = alu_lsr8(regs_.a); transition_to_fetch(); return pins; // LSRA
+    case 0x43: regs_[REG_A] = alu_com8(regs_[REG_A]); transition_to_fetch(); return pins; // COMA
+    case 0x44: regs_[REG_A] = alu_lsr8(regs_[REG_A]); transition_to_fetch(); return pins; // LSRA
     case 0x45: // Undocumented
         transition_to_fetch(); return pins;
-    case 0x46: regs_.a = alu_ror8(regs_.a); transition_to_fetch(); return pins; // RORA
-    case 0x47: regs_.a = alu_asr8(regs_.a); transition_to_fetch(); return pins; // ASRA
-    case 0x48: regs_.a = alu_asl8(regs_.a); transition_to_fetch(); return pins; // ASLA
-    case 0x49: regs_.a = alu_rol8(regs_.a); transition_to_fetch(); return pins; // ROLA
-    case 0x4A: regs_.a = alu_dec8(regs_.a); transition_to_fetch(); return pins; // DECA
+    case 0x46: regs_[REG_A] = alu_ror8(regs_[REG_A]); transition_to_fetch(); return pins; // RORA
+    case 0x47: regs_[REG_A] = alu_asr8(regs_[REG_A]); transition_to_fetch(); return pins; // ASRA
+    case 0x48: regs_[REG_A] = alu_asl8(regs_[REG_A]); transition_to_fetch(); return pins; // ASLA
+    case 0x49: regs_[REG_A] = alu_rol8(regs_[REG_A]); transition_to_fetch(); return pins; // ROLA
+    case 0x4A: regs_[REG_A] = alu_dec8(regs_[REG_A]); transition_to_fetch(); return pins; // DECA
     case 0x4B: // Undocumented
         transition_to_fetch(); return pins;
-    case 0x4C: regs_.a = alu_inc8(regs_.a); transition_to_fetch(); return pins; // INCA
-    case 0x4D: alu_tst8(regs_.a); transition_to_fetch(); return pins;           // TSTA
+    case 0x4C: regs_[REG_A] = alu_inc8(regs_[REG_A]); transition_to_fetch(); return pins; // INCA
+    case 0x4D: alu_tst8(regs_[REG_A]); transition_to_fetch(); return pins;           // TSTA
     case 0x4E: // Undocumented
         transition_to_fetch(); return pins;
-    case 0x4F: regs_.a = alu_clr8(); transition_to_fetch(); return pins;        // CLRA
+    case 0x4F: regs_[REG_A] = alu_clr8(); transition_to_fetch(); return pins;        // CLRA
 
     // === 0x50-0x5F: Inherent - register B operations ===
-    case 0x50: regs_.b = alu_neg8(regs_.b); transition_to_fetch(); return pins; // NEGB
+    case 0x50: regs_[REG_B] = alu_neg8(regs_[REG_B]); transition_to_fetch(); return pins; // NEGB
     case 0x51: // Undocumented
         transition_to_fetch(); return pins;
     case 0x52: // Undocumented
         transition_to_fetch(); return pins;
-    case 0x53: regs_.b = alu_com8(regs_.b); transition_to_fetch(); return pins; // COMB
-    case 0x54: regs_.b = alu_lsr8(regs_.b); transition_to_fetch(); return pins; // LSRB
+    case 0x53: regs_[REG_B] = alu_com8(regs_[REG_B]); transition_to_fetch(); return pins; // COMB
+    case 0x54: regs_[REG_B] = alu_lsr8(regs_[REG_B]); transition_to_fetch(); return pins; // LSRB
     case 0x55: // Undocumented
         transition_to_fetch(); return pins;
-    case 0x56: regs_.b = alu_ror8(regs_.b); transition_to_fetch(); return pins; // RORB
-    case 0x57: regs_.b = alu_asr8(regs_.b); transition_to_fetch(); return pins; // ASRB
-    case 0x58: regs_.b = alu_asl8(regs_.b); transition_to_fetch(); return pins; // ASLB
-    case 0x59: regs_.b = alu_rol8(regs_.b); transition_to_fetch(); return pins; // ROLB
-    case 0x5A: regs_.b = alu_dec8(regs_.b); transition_to_fetch(); return pins; // DECB
+    case 0x56: regs_[REG_B] = alu_ror8(regs_[REG_B]); transition_to_fetch(); return pins; // RORB
+    case 0x57: regs_[REG_B] = alu_asr8(regs_[REG_B]); transition_to_fetch(); return pins; // ASRB
+    case 0x58: regs_[REG_B] = alu_asl8(regs_[REG_B]); transition_to_fetch(); return pins; // ASLB
+    case 0x59: regs_[REG_B] = alu_rol8(regs_[REG_B]); transition_to_fetch(); return pins; // ROLB
+    case 0x5A: regs_[REG_B] = alu_dec8(regs_[REG_B]); transition_to_fetch(); return pins; // DECB
     case 0x5B: // Undocumented
         transition_to_fetch(); return pins;
-    case 0x5C: regs_.b = alu_inc8(regs_.b); transition_to_fetch(); return pins; // INCB
-    case 0x5D: alu_tst8(regs_.b); transition_to_fetch(); return pins;           // TSTB
+    case 0x5C: regs_[REG_B] = alu_inc8(regs_[REG_B]); transition_to_fetch(); return pins; // INCB
+    case 0x5D: alu_tst8(regs_[REG_B]); transition_to_fetch(); return pins;           // TSTB
     case 0x5E: // Undocumented
         transition_to_fetch(); return pins;
-    case 0x5F: regs_.b = alu_clr8(); transition_to_fetch(); return pins;        // CLRB
+    case 0x5F: regs_[REG_B] = alu_clr8(); transition_to_fetch(); return pins;        // CLRB
 
     // === 0x60-0x6F: Indexed - unary memory operations ===
     case 0x60: transition_to(&mc6809_t::op_neg_indexed); return pins;
@@ -1025,28 +990,28 @@ template <const MC6809Traits& Traits>
 bus_state_t mc6809_t<Traits>::op_nmi(bus_state_t pins) {
     switch (step_++) {
     case 0:
-        regs_.cc |= Flags::E;  // Set E flag — entire state will be saved
+        regs_[REG_CC] |= Flags::E;  // Set E flag — entire state will be saved
         return bus_internal(pins);
-    case 1:  return bus_setup_write(pins, --regs_.s, regs_.pc & 0xFF);
-    case 2:  return bus_setup_write(pins, --regs_.s, regs_.pc >> 8);
-    case 3:  return bus_setup_write(pins, --regs_.s, regs_.u & 0xFF);
-    case 4:  return bus_setup_write(pins, --regs_.s, regs_.u >> 8);
-    case 5:  return bus_setup_write(pins, --regs_.s, regs_.y & 0xFF);
-    case 6:  return bus_setup_write(pins, --regs_.s, regs_.y >> 8);
-    case 7:  return bus_setup_write(pins, --regs_.s, regs_.x & 0xFF);
-    case 8:  return bus_setup_write(pins, --regs_.s, regs_.x >> 8);
-    case 9:  return bus_setup_write(pins, --regs_.s, regs_.dp);
-    case 10: return bus_setup_write(pins, --regs_.s, regs_.b);
-    case 11: return bus_setup_write(pins, --regs_.s, regs_.a);
-    case 12: return bus_setup_write(pins, --regs_.s, regs_.cc);
+    case 1:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] & 0xFF);
+    case 2:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] >> 8);
+    case 3:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_U] & 0xFF);
+    case 4:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_U] >> 8);
+    case 5:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_Y] & 0xFF);
+    case 6:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_Y] >> 8);
+    case 7:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_X] & 0xFF);
+    case 8:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_X] >> 8);
+    case 9:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_DP]);
+    case 10: return bus_setup_write(pins, --regs_[REG_S], regs_[REG_B]);
+    case 11: return bus_setup_write(pins, --regs_[REG_S], regs_[REG_A]);
+    case 12: return bus_setup_write(pins, --regs_[REG_S], regs_[REG_CC]);
     case 13:
-        regs_.cc |= Flags::I | Flags::F;  // Mask both IRQ and FIRQ
+        regs_[REG_CC] |= Flags::I | Flags::F;  // Mask both IRQ and FIRQ
         return bus_setup_read(pins, Vector::NMI);
     case 14:
-        regs_.pc = static_cast<uint16_t>(bus_read_data(pins)) << 8;
+        regs_[REG_PC] = static_cast<uint16_t>(bus_read_data(pins)) << 8;
         return bus_setup_read(pins, Vector::NMI + 1);
     case 15:
-        regs_.pc |= bus_read_data(pins);
+        regs_[REG_PC] |= bus_read_data(pins);
         transition_to_fetch();
         return pins;
     default:
@@ -1059,28 +1024,28 @@ template <const MC6809Traits& Traits>
 bus_state_t mc6809_t<Traits>::op_irq(bus_state_t pins) {
     switch (step_++) {
     case 0:
-        regs_.cc |= Flags::E;  // Set E flag — entire state will be saved
+        regs_[REG_CC] |= Flags::E;  // Set E flag — entire state will be saved
         return bus_internal(pins);
-    case 1:  return bus_setup_write(pins, --regs_.s, regs_.pc & 0xFF);
-    case 2:  return bus_setup_write(pins, --regs_.s, regs_.pc >> 8);
-    case 3:  return bus_setup_write(pins, --regs_.s, regs_.u & 0xFF);
-    case 4:  return bus_setup_write(pins, --regs_.s, regs_.u >> 8);
-    case 5:  return bus_setup_write(pins, --regs_.s, regs_.y & 0xFF);
-    case 6:  return bus_setup_write(pins, --regs_.s, regs_.y >> 8);
-    case 7:  return bus_setup_write(pins, --regs_.s, regs_.x & 0xFF);
-    case 8:  return bus_setup_write(pins, --regs_.s, regs_.x >> 8);
-    case 9:  return bus_setup_write(pins, --regs_.s, regs_.dp);
-    case 10: return bus_setup_write(pins, --regs_.s, regs_.b);
-    case 11: return bus_setup_write(pins, --regs_.s, regs_.a);
-    case 12: return bus_setup_write(pins, --regs_.s, regs_.cc);
+    case 1:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] & 0xFF);
+    case 2:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] >> 8);
+    case 3:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_U] & 0xFF);
+    case 4:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_U] >> 8);
+    case 5:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_Y] & 0xFF);
+    case 6:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_Y] >> 8);
+    case 7:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_X] & 0xFF);
+    case 8:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_X] >> 8);
+    case 9:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_DP]);
+    case 10: return bus_setup_write(pins, --regs_[REG_S], regs_[REG_B]);
+    case 11: return bus_setup_write(pins, --regs_[REG_S], regs_[REG_A]);
+    case 12: return bus_setup_write(pins, --regs_[REG_S], regs_[REG_CC]);
     case 13:
-        regs_.cc |= Flags::I;  // Mask IRQ
+        regs_[REG_CC] |= Flags::I;  // Mask IRQ
         return bus_setup_read(pins, Vector::IRQ);
     case 14:
-        regs_.pc = static_cast<uint16_t>(bus_read_data(pins)) << 8;
+        regs_[REG_PC] = static_cast<uint16_t>(bus_read_data(pins)) << 8;
         return bus_setup_read(pins, Vector::IRQ + 1);
     case 15:
-        regs_.pc |= bus_read_data(pins);
+        regs_[REG_PC] |= bus_read_data(pins);
         transition_to_fetch();
         return pins;
     default:
@@ -1093,19 +1058,19 @@ template <const MC6809Traits& Traits>
 bus_state_t mc6809_t<Traits>::op_firq(bus_state_t pins) {
     switch (step_++) {
     case 0:
-        regs_.cc &= ~Flags::E;  // Clear E flag — only CC and PC will be saved
+        regs_[REG_CC] &= ~Flags::E;  // Clear E flag — only CC and PC will be saved
         return bus_internal(pins);
-    case 1:  return bus_setup_write(pins, --regs_.s, regs_.pc & 0xFF);
-    case 2:  return bus_setup_write(pins, --regs_.s, regs_.pc >> 8);
-    case 3:  return bus_setup_write(pins, --regs_.s, regs_.cc);
+    case 1:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] & 0xFF);
+    case 2:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_PC] >> 8);
+    case 3:  return bus_setup_write(pins, --regs_[REG_S], regs_[REG_CC]);
     case 4:
-        regs_.cc |= Flags::I | Flags::F;  // Mask both IRQ and FIRQ
+        regs_[REG_CC] |= Flags::I | Flags::F;  // Mask both IRQ and FIRQ
         return bus_setup_read(pins, Vector::FIRQ);
     case 5:
-        regs_.pc = static_cast<uint16_t>(bus_read_data(pins)) << 8;
+        regs_[REG_PC] = static_cast<uint16_t>(bus_read_data(pins)) << 8;
         return bus_setup_read(pins, Vector::FIRQ + 1);
     case 6:
-        regs_.pc |= bus_read_data(pins);
+        regs_[REG_PC] |= bus_read_data(pins);
         transition_to_fetch();
         return pins;
     default:
