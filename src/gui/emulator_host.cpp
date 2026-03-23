@@ -775,6 +775,9 @@ void EmulatorHost::free_framebuffer() {
     // Clean up GPU indexed palette resources
     cleanup_indexed_resources();
 
+    // Clean up CRT post-processing resources
+    crt_shader::destroy(&crt_post_);
+
     // Clear display device reference (system owns the device)
     display_device_ = nullptr;
     display_characteristics_ = DisplayCharacteristics{};

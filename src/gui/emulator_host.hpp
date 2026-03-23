@@ -22,6 +22,7 @@
 struct ImGuiIO;
 
 #include "gui/vector_shader.hpp"  // BeamVertex, PhosphorPersistence
+#include "gui/crt_shader.hpp"     // CRTPostProcess
 #include "devices/display/display_device.hpp"  // DisplayDevice, DisplayCharacteristics
 
 // ============================================================================
@@ -218,6 +219,11 @@ protected:
     GLint     vector_loc_proj_          = -1;
     GLint     vector_loc_phosphor_      = -1;
     vector_shader::PhosphorPersistence vector_persist_{};
+
+    /// CRT post-processing — barrel distortion, scanlines, shadow mask, gamma.
+    /// Applied to non-stream texture paths (CPU fallback + vector persistence).
+    crt_shader::CRTPostProcess crt_post_{};
+    bool      use_crt_shader_           = true;  ///< Enable CRT post-processing
 
     /// Video signal type of the active system (cached from System::get_video_signal_type()).
     VideoSignalType active_signal_type_       = VideoSignalType::Composite;
