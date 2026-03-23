@@ -1164,8 +1164,8 @@ template<C264SeriesVariant V>
 void Commodore264System<V>::set_cpu_pc(void* user_data, uint16_t addr) {
     auto* sys = static_cast<Commodore264System<V>*>(user_data);
     if (sys->cpu_) {
-        sys->cpu_->regs_[PC] = addr;
-        sys->cpu_->regs_[AB] = addr;
+        sys->cpu_->set(PC, addr);
+        sys->cpu_->set(AB, addr);
         sys->cpu_->transition_to_fetch();
         printf("%s: PC set to $%04X\n", Traits::name, addr);
     }

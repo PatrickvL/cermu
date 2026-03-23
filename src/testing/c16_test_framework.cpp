@@ -395,19 +395,19 @@ TestResult TestFramework::run_test(const TestDescriptor& test) {
         }
 
         // Jump to SYS address
-        cpu->regs_[PC] = sys_addr;
+        cpu->set(PC, sys_addr);
         cpu->transition_to_fetch();
-        cpu->regs_[AB] = sys_addr;
+        cpu->set(AB, sys_addr);
 
         // Set up return address on stack pointing to BASIC warm start ($8712)
         // so RTS returns safely to BASIC
-        uint8_t sp = cpu->regs_[S];
+        uint8_t sp = cpu->get(S);
         uint16_t return_addr = 0x8712 - 1; // RTS adds 1
         ram->data()[0x0100 + sp] = (return_addr >> 8) & 0xFF;
         sp--;
         ram->data()[0x0100 + sp] = return_addr & 0xFF;
         sp--;
-        cpu->regs_[S] = sp;
+        cpu->set(S, sp);
 
         if (verbose_) printf("  Jumping to SYS $%04X\n", sys_addr);
     } else {
@@ -417,9 +417,9 @@ TestResult TestFramework::run_test(const TestDescriptor& test) {
             sys.tick();
 
         uint16_t start = (sys_addr != 0) ? sys_addr : load_addr;
-        cpu->regs_[PC] = start;
+        cpu->set(PC, start);
         cpu->transition_to_fetch();
-        cpu->regs_[AB] = start;
+        cpu->set(AB, start);
 
         if (verbose_) printf("  Direct execution at $%04X\n", start);
     }
@@ -457,7 +457,7 @@ TestResult TestFramework::run_test(const TestDescriptor& test) {
 
         // Periodic infinite-loop check (every 256 cycles)
         if ((cycles & 0xFF) == 0) {
-            uint16_t current_pc = cpu->regs_[PC];
+            uint16_t current_pc = cpu->get(PC);
             if (current_pc == last_pc) {
                 pc_stable_count++;
                 if (pc_stable_count >= 2) {

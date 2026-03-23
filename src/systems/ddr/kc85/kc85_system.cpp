@@ -9,6 +9,8 @@
 #include <cstring>
 #include <cstdio>
 
+using namespace z80::reg;  // PC, IX, etc.
+
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #endif
@@ -133,7 +135,7 @@ bool KC85System<V>::initialize() {
 
     // ── Init chips ──────────────────────────────────────────────────────
     pins_ = board_.cpu().init();
-    board_.cpu().set_pc(0xF000);   // CAOS cold-start entry (real HW forces this via address latch)
+    board_.cpu().set(PC, 0xF000);   // CAOS cold-start entry (real HW forces this via address latch)
     board_.io().init();
     board_.chips().pio2.init();
     board_.chips().ctc.init();
@@ -189,7 +191,7 @@ template<KC85Variant V> void KC85System<V>::reset() {
     if (!system_ready_) return;
     board_.reset_chips();
     pins_ = board_.cpu().reset(pins_);
-    board_.cpu().set_pc(0xF000);   // CAOS cold-start entry
+    board_.cpu().set(PC, 0xF000);   // CAOS cold-start entry
     modules_->init();
     bank_ctrl_ = 0;
     bank_ctrl2_ = 0;
@@ -428,7 +430,7 @@ void KC85System<V>::handle_keyboard() {
         if (addr < ram_size) mem[addr] = val;
     };
 
-    const uint16_t ix = board_.cpu().ix();
+    const uint16_t ix = board_.cpu().get(IX);
     const uint16_t addr_status  = ix + 0x08;
     const uint16_t addr_repeat  = ix + 0x0A;
     const uint16_t addr_keycode = ix + 0x0D;
@@ -505,7 +507,7 @@ void KC85System<V>::build_reverse_ktab() {
         return (addr < ram_size) ? mem[addr] : 0xFF;
     };
 
-    const uint16_t ix = board_.cpu().ix();
+    const uint16_t ix = board_.cpu().get(IX);
     uint16_t ktab_addr = r8(ix + 0x0E) | (static_cast<uint16_t>(r8(ix + 0x0F)) << 8);
 
     if (ktab_addr == 0 || ktab_addr == 0xFFFF) return;

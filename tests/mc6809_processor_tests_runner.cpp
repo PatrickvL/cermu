@@ -366,15 +366,15 @@ public:
         // Skip hardware reset — go directly to instruction fetch state
         cpu.begin_instruction();
 
-        cpu.set_a(s->a);
-        cpu.set_b(s->b);
-        cpu.set_x(s->x);
-        cpu.set_y(s->y);
-        cpu.set_u(s->u);
-        cpu.set_s(s->s);
-        cpu.set_pc(s->pc);
-        cpu.set_dp(s->dp);
-        cpu.set_cc(s->cc);
+        cpu.set(A, s->a);
+        cpu.set(B, s->b);
+        cpu.set(X, s->x);
+        cpu.set(Y, s->y);
+        cpu.set(U, s->u);
+        cpu.set(S, s->s);
+        cpu.set(PC, s->pc);
+        cpu.set(DP, s->dp);
+        cpu.set(CC, s->cc);
 
         // Ensure interrupt lines are inactive (high) for test
         pins_ = CPU::default_bus_state();
@@ -444,15 +444,15 @@ public:
 
     // Get current CPU state for comparison
     void read_state(mc6809_cpu_state_t* s) const {
-        s->a  = cpu.a();
-        s->b  = cpu.b();
-        s->x  = cpu.x();
-        s->y  = cpu.y();
-        s->u  = cpu.u();
-        s->s  = cpu.s();
-        s->pc = cpu.pc();
-        s->dp = cpu.dp();
-        s->cc = cpu.cc();
+        s->a  = cpu.get(A);
+        s->b  = cpu.get(B);
+        s->x  = cpu.get(X);
+        s->y  = cpu.get(Y);
+        s->u  = cpu.get(U);
+        s->s  = cpu.get(S);
+        s->pc = cpu.get(PC);
+        s->dp = cpu.get(DP);
+        s->cc = cpu.get(CC);
         s->ram_count = 0;
     }
 };

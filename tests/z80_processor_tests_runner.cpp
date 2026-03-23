@@ -467,24 +467,24 @@ public:
         // Full re-init to clear internal state machines
         pins_ = cpu.init();
 
-        cpu.set_pc(s->pc);
-        cpu.set_sp(s->sp);
-        cpu.set_af(static_cast<uint16_t>(s->a) << 8 | s->f);
-        cpu.set_bc(static_cast<uint16_t>(s->b) << 8 | s->c);
-        cpu.set_de(static_cast<uint16_t>(s->d) << 8 | s->e);
-        cpu.set_hl_direct(static_cast<uint16_t>(s->h) << 8 | s->l);
-        cpu.set_ix(s->ix);
-        cpu.set_iy(s->iy);
-        cpu.set_i(s->i);
-        cpu.set_r(s->r);
+        cpu.set(PC, s->pc);
+        cpu.set(SP, s->sp);
+        cpu.set(AF, static_cast<uint16_t>(s->a) << 8 | s->f);
+        cpu.set(BC, static_cast<uint16_t>(s->b) << 8 | s->c);
+        cpu.set(DE, static_cast<uint16_t>(s->d) << 8 | s->e);
+        cpu.set(HL, static_cast<uint16_t>(s->h) << 8 | s->l);
+        cpu.set(IX, s->ix);
+        cpu.set(IY, s->iy);
+        cpu.set(I, s->i);
+        cpu.set(R, s->r);
         cpu.set_im(s->im);
         cpu.set_iff1(s->iff1);
         cpu.set_iff2(s->iff2);
-        cpu.set_wz(s->wz);
-        cpu.set_af_prime(s->af_);
-        cpu.set_bc_prime(s->bc_);
-        cpu.set_de_prime(s->de_);
-        cpu.set_hl_prime(s->hl_);
+        cpu.set(WZ, s->wz);
+        cpu.set(AF_, s->af_);
+        cpu.set(BC_, s->bc_);
+        cpu.set(DE_, s->de_);
+        cpu.set(HL_, s->hl_);
         cpu.set_ei_pending(s->ei);
         cpu.set_q(s->q);
 
@@ -588,29 +588,29 @@ public:
 
     // Get current CPU state for comparison
     void read_state(z80_cpu_state_t* s) const {
-        s->pc = cpu.pc();
-        s->sp = cpu.sp();
-        uint16_t af = cpu.af();
+        s->pc = cpu.get(PC);
+        s->sp = cpu.get(SP);
+        uint16_t af = cpu.get(AF);
         s->a = static_cast<uint8_t>(af >> 8);
         s->f = static_cast<uint8_t>(af & 0xFF);
-        uint16_t bc = cpu.bc();
+        uint16_t bc = cpu.get(BC);
         s->b = static_cast<uint8_t>(bc >> 8);
         s->c = static_cast<uint8_t>(bc & 0xFF);
-        uint16_t de = cpu.de();
+        uint16_t de = cpu.get(DE);
         s->d = static_cast<uint8_t>(de >> 8);
         s->e = static_cast<uint8_t>(de & 0xFF);
-        uint16_t hl = cpu.hl();
+        uint16_t hl = cpu.get(HL);
         s->h = static_cast<uint8_t>(hl >> 8);
         s->l = static_cast<uint8_t>(hl & 0xFF);
-        s->i  = cpu.i();
-        s->r  = cpu.r();
-        s->ix = cpu.ix();
-        s->iy = cpu.iy();
-        s->wz = cpu.wz();
-        s->af_ = cpu.af_prime();
-        s->bc_ = cpu.bc_prime();
-        s->de_ = cpu.de_prime();
-        s->hl_ = cpu.hl_prime();
+        s->i  = cpu.get(I);
+        s->r  = cpu.get(R);
+        s->ix = cpu.get(IX);
+        s->iy = cpu.get(IY);
+        s->wz = cpu.get(WZ);
+        s->af_ = cpu.get(AF_);
+        s->bc_ = cpu.get(BC_);
+        s->de_ = cpu.get(DE_);
+        s->hl_ = cpu.get(HL_);
         s->im   = cpu.im();
         s->iff1 = cpu.iff1();
         s->iff2 = cpu.iff2();

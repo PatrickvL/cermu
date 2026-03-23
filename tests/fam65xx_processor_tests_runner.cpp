@@ -365,46 +365,46 @@ public:
     }
     
     // CPU state accessors — direct CPU access with if constexpr for 65816
-    void set_pc(uint16_t pc) { cpu.regs_[PC] = pc; }
+    void set_pc(uint16_t pc) { cpu.set(PC, pc); }
     void set_a(uint16_t a) {
         if constexpr (CPU::has_wide_registers()) {
-            cpu.regs_[A16] = a;
+            cpu.set(A16, a);
         } else {
-            cpu.regs_[AL] = static_cast<uint8_t>(a & 0xFF);
+            cpu.set(AL, static_cast<uint8_t>(a & 0xFF));
         }
     }
     void set_x(uint16_t x) {
         if constexpr (CPU::has_wide_registers()) {
-            cpu.regs_[X16] = x;
+            cpu.set(X16, x);
         } else {
-            cpu.regs_[X] = static_cast<uint8_t>(x & 0xFF);
+            cpu.set(X, static_cast<uint8_t>(x & 0xFF));
         }
     }
     void set_y(uint16_t y) {
         if constexpr (CPU::has_wide_registers()) {
-            cpu.regs_[Y16] = y;
+            cpu.set(Y16, y);
         } else {
-            cpu.regs_[Y] = static_cast<uint8_t>(y & 0xFF);
+            cpu.set(Y, static_cast<uint8_t>(y & 0xFF));
         }
     }
     void set_sp(uint16_t sp) {
         if constexpr (CPU::has_wide_registers()) {
             if (cpu.in_emulation_mode()) {
-                cpu.regs_[SP] = 0x0100 | (sp & 0xFF);
+                cpu.set(SP, 0x0100 | (sp & 0xFF));
             } else {
-                cpu.regs_[SP] = sp;
+                cpu.set(SP, sp);
             }
         } else {
-            cpu.regs_[S] = static_cast<uint8_t>(sp & 0xFF);
+            cpu.set(S, static_cast<uint8_t>(sp & 0xFF));
         }
     }
     void set_status(uint8_t p) {
         if constexpr (CPU::has_wide_registers()) {
-            uint16_t p16 = cpu.regs_[P16];
+            uint16_t p16 = cpu.get(P16);
             p16 = (p16 & 0xFF00) | p;
-            cpu.regs_[P16] = p16;
+            cpu.set(P16, p16);
         } else {
-            cpu.regs_[P] = p;
+            cpu.set(P, p);
         }
     }
     
@@ -416,17 +416,17 @@ public:
     }
     void set_d(uint16_t value) {
         if constexpr (CPU::has_wide_registers()) {
-            cpu.regs_[D] = value;
+            cpu.set(D, value);
         }
     }
     void set_dbr(uint8_t value) {
         if constexpr (CPU::has_wide_registers()) {
-            cpu.regs_[DBR] = value;
+            cpu.set(DBR, value);
         }
     }
     void set_pbr(uint8_t value) {
         if constexpr (CPU::has_wide_registers()) {
-            cpu.regs_[PBR] = value;
+            cpu.set(PBR, value);
         }
     }
     
@@ -438,30 +438,30 @@ public:
         cpu.nmi_edge_latch = 0;
     }
     
-    uint16_t get_pc() const { return cpu.regs_[PC]; }
+    uint16_t get_pc() const { return cpu.get(PC); }
     uint16_t get_a() const {
         if constexpr (CPU::has_wide_registers()) {
-            return cpu.regs_[A16];
+            return cpu.get(A16);
         } else {
-            return cpu.regs_[AL];
+            return cpu.get(AL);
         }
     }
     uint16_t get_x() const {
         if constexpr (CPU::has_wide_registers()) {
-            return cpu.regs_[X16];
+            return cpu.get(X16);
         } else {
-            return cpu.regs_[X];
+            return cpu.get(X);
         }
     }
     uint16_t get_y() const {
         if constexpr (CPU::has_wide_registers()) {
-            return cpu.regs_[Y16];
+            return cpu.get(Y16);
         } else {
-            return cpu.regs_[Y];
+            return cpu.get(Y);
         }
     }
     uint16_t get_sp() const { return cpu.get_sp(); }
-    uint8_t get_status() const { return cpu.regs_[P]; }
+    uint8_t get_status() const { return cpu.get(P); }
     
     // 65816-specific getters
     bool get_emulation_mode() const {
@@ -472,19 +472,19 @@ public:
     }
     uint16_t get_d() const {
         if constexpr (CPU::has_wide_registers()) {
-            return cpu.regs_[D];
+            return cpu.get(D);
         }
         return 0;
     }
     uint8_t get_dbr() const {
         if constexpr (CPU::has_wide_registers()) {
-            return cpu.regs_[DBR];
+            return cpu.get(DBR);
         }
         return 0;
     }
     uint8_t get_pbr() const {
         if constexpr (CPU::has_wide_registers()) {
-            return cpu.regs_[PBR];
+            return cpu.get(PBR);
         }
         return 0;
     }

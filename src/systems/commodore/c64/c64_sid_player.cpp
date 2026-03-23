@@ -364,11 +364,11 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
            needs_timer_irq ? ", self-contained IRQ at $0390" : " (init-only)");
 
     // ---- Step 6: Set CPU to execute the stub ----
-    cpu->regs_[A] = (uint8_t)subtune;
-    cpu->regs_[X] = 0;
-    cpu->regs_[Y] = 0;
-    cpu->regs_[SPL] = 0xFF;    // Reset stack
-    cpu->regs_[PC] = STUB_BASE;
+    cpu->set(A, (uint8_t)subtune);
+    cpu->set(X, 0);
+    cpu->set(Y, 0);
+    cpu->set(SPL, 0xFF);    // Reset stack
+    cpu->set(PC, STUB_BASE);
     cpu->transition_to_fetch();  // Reset pipeline for clean fetch
 
     printf("C64: PC set to $%04X — subtune %u/%u starting\n",
@@ -437,11 +437,11 @@ void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
     build_init_stub(ram, sid, subtune, timer_period, needs_timer_irq);
 
     // ---- Reset CPU to start of stub ----
-    cpu->regs_[A] = (uint8_t)subtune;
-    cpu->regs_[X] = 0;
-    cpu->regs_[Y] = 0;
-    cpu->regs_[SPL] = 0xFF;
-    cpu->regs_[PC] = STUB_BASE;
+    cpu->set(A, (uint8_t)subtune);
+    cpu->set(X, 0);
+    cpu->set(Y, 0);
+    cpu->set(SPL, 0xFF);
+    cpu->set(PC, STUB_BASE);
     cpu->transition_to_fetch();
 
     printf("C64: Switched to subtune %u/%u\n", subtune + 1, sid->num_songs);

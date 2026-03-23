@@ -489,8 +489,8 @@ public:
             cpu.set_reg_a(i, s->a[i]);
 
         // Stack pointers
-        cpu.set_reg_usp(s->usp);
-        cpu.set_reg_ssp(s->ssp);
+        cpu.set(USP, s->usp);
+        cpu.set(SSP, s->ssp);
 
         // A7 depends on supervisor mode: if S bit set, A7 = SSP; else A7 = USP
         if (s->sr & m680x0::SRBits::S) {
@@ -500,19 +500,19 @@ public:
         }
 
         // SR (includes CCR + supervisor byte)
-        cpu.set_reg_sr(s->sr);
+        cpu.set(SR, s->sr);
 
         // Program counter — the test's 'pc' is the formal PC (instruction address).
         // The 68000's internal PC is 4 bytes ahead (two prefetched words).
-        cpu.set_reg_pc(s->pc + 4);
+        cpu.set(PC, s->pc + 4);
 
         // Prefetch pipeline:
         //   prefetch[0] = "fetched earlier" = IR = IRD (current instruction)
         //   prefetch[1] = "fetched later"   = IRC (next prefetched word)
         if (s->has_prefetch) {
-            cpu.set_reg_ir(s->prefetch[0]);
-            cpu.set_reg_ird(s->prefetch[0]);   // IRD = IR at instruction boundary
-            cpu.set_reg_irc(s->prefetch[1]);
+            cpu.set(IR, s->prefetch[0]);
+            cpu.set(IRD, s->prefetch[0]);   // IRD = IR at instruction boundary
+            cpu.set(IRC, s->prefetch[1]);
         }
 
         // Set CPU state to "ready to decode" (skip reset sequence)
@@ -618,14 +618,14 @@ public:
         for (int i = 0; i < 7; i++)
             s->a[i] = cpu.reg_a(i);
 
-        s->sr  = cpu.reg_sr();
-        s->pc  = cpu.reg_pc() - 4;   // Convert internal PC back to formal PC
-        s->usp = cpu.reg_usp();
-        s->ssp = cpu.reg_ssp();
+        s->sr  = cpu.get(SR);
+        s->pc  = cpu.get(PC) - 4;   // Convert internal PC back to formal PC
+        s->usp = cpu.get(USP);
+        s->ssp = cpu.get(SSP);
 
         // prefetch[0] = IR (fetched earlier), prefetch[1] = IRC (fetched later)
-        s->prefetch[0] = cpu.reg_ir();
-        s->prefetch[1] = cpu.reg_irc();
+        s->prefetch[0] = cpu.get(IR);
+        s->prefetch[1] = cpu.get(IRC);
         s->has_prefetch = true;
 
         s->ram_count = 0;

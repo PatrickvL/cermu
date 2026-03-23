@@ -23,8 +23,14 @@ using data_t =
                        uint8_t // All other processors use 8-bit data operations
                        >;
 
+protected:
 // Unified backing store (24 bytes; 8-bit CPUs use the first 16)
 RegisterFile<24, uint16_t> regs_;
+
+public:
+// === Generic register access (for debugger/test harness/system code) ===
+template <typename T> T get(RegIdx<T> idx) const { return regs_.get(idx); }
+template <typename T, typename U> void set(RegIdx<T> idx, U val) { regs_.set(idx, val); }
 
 // ========================================================================
 // WIDTH-AWARE NAMED ACCESSORS
