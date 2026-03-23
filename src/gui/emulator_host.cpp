@@ -822,6 +822,14 @@ void EmulatorHost::sdl_audio_callback(void* userdata, uint8_t* stream, int len) 
     // Track underruns (SDL wanted samples but ring was empty/insufficient)
     if (written < static_cast<uint32_t>(sample_count))
         gui->perf_metrics_.audio_underruns.fetch_add(1, std::memory_order_relaxed);
+
+    // Apply speaker simulation if enabled and display has built-in speakers
+    if (gui->use_speaker_sim_ && gui->display_device_
+        && gui->display_device_->has_builtin_speakers()
+        && gui->speaker_sim_.is_initialized() && written > 0) {
+        gui->speaker_sim_.process(out, written);
+    }
+
     // Fill remainder with silence
     for (uint32_t i = written; i < static_cast<uint32_t>(sample_count); i++) {
         out[i] = 0.0f;
@@ -833,6 +841,7 @@ void EmulatorHost::close_audio_device() {
         SDL_CloseAudioDevice(audio_device_);
         audio_device_ = 0;
         audio_sample_rate_ = 0;
+        speaker_sim_.reset();
         printf("Audio: device closed\n");
     }
 }
