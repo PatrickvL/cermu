@@ -26,7 +26,7 @@ void mc6845_t::init() {
 
 void mc6845_t::reset() {
     address_register = 0;
-    memset(regs_, 0, num_regs_);
+    regs_.clear();
 
     // Horizontal state
     h_char_counter = 0;

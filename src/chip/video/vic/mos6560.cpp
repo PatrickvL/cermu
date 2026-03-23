@@ -24,7 +24,7 @@ void mos6560_t::init() {
     config = &vic_config_ntsc;
 
     // Initialize registers
-    memset(regs_, 0, num_regs_);
+    regs_.clear();
     memset(color_ram, 0, sizeof(color_ram));
 
     // Default timing for NTSC

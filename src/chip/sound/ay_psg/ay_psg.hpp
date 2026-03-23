@@ -135,7 +135,7 @@ public:
     }
 
     void init() {
-        std::memset(regs_, 0, num_regs_);
+        regs_.clear();
         latch_addr_ = 0;
         for (auto& ch : tone_counter_) ch = 0;
         for (auto& ch : tone_output_)  ch = 0;

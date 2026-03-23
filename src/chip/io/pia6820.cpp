@@ -32,7 +32,7 @@
 
 void pia6820_t::init() {
     // Zero all registers (data, DDR, control for both ports)
-    memset(regs_, 0, num_regs_);
+    regs_.clear();
 
     irq_a1 = false;
     irq_a2 = false;
@@ -57,7 +57,7 @@ void pia6820_t::init() {
 
 void pia6820_t::reset() {
     // Reset all registers to power-on state
-    memset(regs_, 0, num_regs_);
+    regs_.clear();
 
     // Clear all interrupt flags
     irq_a1 = false;

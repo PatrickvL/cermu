@@ -67,7 +67,7 @@ void mos6526_t::reset() {
     // because of passive pullups). The timer control
     // registers are set to zero and the timer latches to all
     // ones. All other registers are reset to zero."
-    memset(regs_, 0, num_regs_);
+    regs_.clear();
     regs_[CIA_REG_TOD_HR] = 1; // According to powerup
     // Ports all high
     // "The lines PA0 and PA1 of the second CIA are the inverse of the

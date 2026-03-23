@@ -123,8 +123,8 @@ struct mos6526_t : public IoChipBase {
 
     // Generic IO port views for DDR/data/pins mechanics
     // Register indices: PRA=0, PRB=1, DDRA=2, DDRB=3 (constants defined in MOS6526 namespace below)
-    io_port<0xFF> port_a{regs_[2], regs_[0], port_a_value};  // DDR→DDRA, data→PRA, pins→port_a_value
-    io_port<0xFF> port_b{regs_[3], regs_[1], port_b_value};  // DDR→DDRB, data→PRB, pins→port_b_value
+    io_port<0xFF> port_a{regs_.data[2], regs_.data[0], port_a_value};  // DDR→DDRA, data→PRA, pins→port_a_value
+    io_port<0xFF> port_b{regs_.data[3], regs_.data[1], port_b_value};  // DDR→DDRB, data→PRB, pins→port_b_value
 
     uint32_t read_tod_delta = 0;
     uint32_t write_tod_delta = 0;
@@ -239,7 +239,7 @@ private:
     void register_debug_fields() {
         using CI = const mos6526_t;
 
-        debug_registry_.set_registers(regs_, CIA_REGS_SIZE, CIA_REG_INFO);
+        debug_registry_.set_registers(regs_.data, CIA_REGS_SIZE, CIA_REG_INFO);
         debug_registry_.set_decl_entries(CIA_DECL_ENTRIES.data(), CIA_DECL_ENTRIES.size());
 
         // ICR/CRA/CRB bitfields and TOD/SDR register values are in the DECL walk.

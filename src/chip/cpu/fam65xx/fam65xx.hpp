@@ -235,9 +235,9 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
                ab, ir, disasm_buffer);
 
         // Get instruction info if opcode is valid
-        printf("A=$%02X X=$%02X Y=$%02X S=$%02X P=$%02X\n", regs_[A],
-               regs_[X], regs_[Y], regs_[SPL],
-               regs_[P]);
+        printf("A=$%02X X=$%02X Y=$%02X S=$%02X P=$%02X\n",
+               uint8_t(regs_[A]), uint8_t(regs_[X]), uint8_t(regs_[Y]),
+               uint8_t(regs_[SPL]), uint8_t(regs_[P]));
 
         instruction_count++;
         if (instruction_count == 100) {

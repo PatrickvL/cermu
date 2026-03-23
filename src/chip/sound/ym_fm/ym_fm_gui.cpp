@@ -51,7 +51,7 @@ template <const YMTraits& Traits>
 void ym_fm_t<Traits>::register_debug_fields() {
     using S = const ym_fm_t<Traits>;
     auto& r = debug_registry_;
-    r.set_registers(regs_, ym_fm::reg::OPN_TOTAL_REGS, YM_FM_REG_INFO);
+    r.set_registers(regs_.data, ym_fm::reg::OPN_TOTAL_REGS, YM_FM_REG_INFO);
     r.set_decl_entries(YM_FM_DECL_ENTRIES.data(), YM_FM_DECL_ENTRIES.size());
 
     // --- Status ---

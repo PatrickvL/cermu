@@ -111,7 +111,7 @@ struct mos6522_t : public IoChipBase {
     mos6522_t() : IoChipBase(ChipInfo{"MOS6522", "MOS Technology"}) {
         init_regs(MOS6522_NUM_REGS);
 #ifdef CERMU_HAS_CHIP_DEBUG
-        debug_registry_.set_registers(regs_, MOS6522_NUM_REGS, MOS6522_REG_INFO);
+        debug_registry_.set_registers(regs_.data, MOS6522_NUM_REGS, MOS6522_REG_INFO);
         register_debug_fields();
 #endif
     }
@@ -128,8 +128,8 @@ struct mos6522_t : public IoChipBase {
 
     // I/O Ports — io_port views over DDR/data bytes in regs_[] + separate pin bytes
     // CIA pattern: io_port(ddr_ref, data_ref, pins_ref)
-    io_port<0xFF> port_a{regs_[MOS6522_DDRA], regs_[MOS6522_PORTA], port_a_pins_};
-    io_port<0xFF> port_b{regs_[MOS6522_DDRB], regs_[MOS6522_PORTB], port_b_pins_};
+    io_port<0xFF> port_a{regs_.data[MOS6522_DDRA], regs_.data[MOS6522_PORTA], port_a_pins_};
+    io_port<0xFF> port_b{regs_.data[MOS6522_DDRB], regs_.data[MOS6522_PORTB], port_b_pins_};
 
     // Callbacks for port input reads (used for keyboard matrix scanning)
     // These callbacks allow external devices (keyboard, joystick) to pull port lines LOW
@@ -146,14 +146,14 @@ struct mos6522_t : public IoChipBase {
     uint16_t timer2_counter = 0xFFFF;
 
     // Shift register
-    uint8_t& shift_register = regs_[MOS6522_SR];
+    uint8_t& shift_register = regs_.data[MOS6522_SR];
     uint8_t shift_counter = 0;
 
     // Control registers — reference aliases into regs_[]
-    uint8_t& acr = regs_[MOS6522_ACR];   // Auxiliary Control Register
-    uint8_t& pcr = regs_[MOS6522_PCR];   // Peripheral Control Register
-    uint8_t& ifr = regs_[MOS6522_IFR];   // Interrupt Flag Register
-    uint8_t& ier = regs_[MOS6522_IER];   // Interrupt Enable Register
+    uint8_t& acr = regs_.data[MOS6522_ACR];   // Auxiliary Control Register
+    uint8_t& pcr = regs_.data[MOS6522_PCR];   // Peripheral Control Register
+    uint8_t& ifr = regs_.data[MOS6522_IFR];   // Interrupt Flag Register
+    uint8_t& ier = regs_.data[MOS6522_IER];   // Interrupt Enable Register
 
     // Timer control
     bool timer1_running = false;

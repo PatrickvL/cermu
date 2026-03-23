@@ -282,7 +282,7 @@ private:
     void register_debug_fields() {
         using M = const mc6845_t;
 
-        debug_registry_.set_registers(regs_, MC6845_NUM_REGISTERS, MC6845_REG_INFO);
+        debug_registry_.set_registers(regs_.data, MC6845_NUM_REGISTERS, MC6845_REG_INFO);
         debug_registry_.set_decl_entries(MC6845_DECL_ENTRIES.data(), MC6845_DECL_ENTRIES.size());
 
         // All 18 register values and R3/R10 bitfields are in the DECL walk.

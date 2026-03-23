@@ -118,7 +118,7 @@ public:
         for (auto& ch : channels_) {
             ch = {};
         }
-        std::memset(regs_, 0, num_regs_);
+        regs_.clear();
         std::memset(waveform_rom_, 0, sizeof(waveform_rom_));
         audio_buffer_.reset();
         audio_cycle_accum_ = 0.0;
@@ -289,7 +289,7 @@ private:
     void register_debug_fields() {
         using S = const namco_wsg_t;
         auto& r = debug_registry_;
-        r.set_registers(regs_, wsg_regs::REG_COUNT, WSG_REG_INFO);
+        r.set_registers(regs_.data, wsg_regs::REG_COUNT, WSG_REG_INFO);
         r.set_decl_entries(WSG_DECL_ENTRIES.data(), WSG_DECL_ENTRIES.size());
 
         // Waveform/volume fields are in the DECL walk (WAVEVOL FLDs).

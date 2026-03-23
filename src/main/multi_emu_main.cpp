@@ -488,7 +488,7 @@ int main(int argc, char** argv) {
             // Check CIA2 DD00 for bank config
             printf("\nCIA2 $DD00 port A value: $%02X\n", c64->ram->data()[0xDD00]);
             // Actually read from CIA2 register directly
-            printf("CIA2 PRA register: $%02X\n", c64->cia2->regs_[0] & 0x03);
+            printf("CIA2 PRA register: $%02X\n", uint8_t(c64->cia2->regs_[0]) & 0x03);
             
             // ===== BITMAP MODE DATA =====
             if (bmm) {
@@ -528,8 +528,8 @@ int main(int argc, char** argv) {
             printf("IRQ vector: $%04X, NMI vector: $%04X, HW IRQ ($0314): $%04X\n", 
                    irq_lo, nmi_lo, hw_irq);
             printf("CIA1 ICR mask: $%02X, VIC $D01A: $%02X\n",
-                   c64->vicii->regs_[0x1A],
-                   c64->vicii->regs_[0x1A]);
+                   uint8_t(c64->vicii->regs_[0x1A]),
+                   uint8_t(c64->vicii->regs_[0x1A]));
         }
         
         system->shutdown();
