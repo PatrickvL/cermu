@@ -141,6 +141,14 @@ struct ChipRegTraits {
 // Register constant extractor — use inside a namespace block
 #define DECL_X_CONST_(a, s, l, ...)  constexpr uint8_t s = a;
 
+// Typed RegisterFile constant extractor — use inside a namespace block.
+// Generates constexpr r8/r16/r32 <name>{offset} from DECL entries.
+// 3-arg REG (bitfield parent, no hilo): r8.  5-arg REG: type from bit-width.
+// Requires register_file.hpp (regidx_t<W>) at expansion site.
+#define DECL_X_REGIDX_3(a, s, l)           constexpr r8 s{(uint16_t)(a)};
+#define DECL_X_REGIDX_5(a, s, l, k, hilo)  constexpr regidx_t<BF_WIDTH(hilo)> s{(uint16_t)(a)};
+#define DECL_X_REGIDX_(...)                CERMU_PP_OVERLOAD_(DECL_X_REGIDX_, __VA_ARGS__)
+
 // Register info extractor — produces RegEntry initializers.
 // Optional trailing args (kind, hi:lo) populate the kind and value_bits
 // fields; plain REG rows get the defaults (Value, 0).

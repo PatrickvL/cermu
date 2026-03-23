@@ -68,6 +68,14 @@ using r8  = RegIdx<uint8_t>;
 using r16 = RegIdx<uint16_t>;
 using r32 = RegIdx<uint32_t>;
 
+// Bit-width → RegIdx type mapping (for DECL_X_REGIDX_ macro).
+// 1-8 bits → r8, 9-16 bits → r16, 17-32 bits → r32.
+template <int W>
+using regidx_t = RegIdx<
+    std::conditional_t<(W <= 8),  uint8_t,
+    std::conditional_t<(W <= 16), uint16_t,
+                                  uint32_t>>>;
+
 // ============================================================================
 // Sub-register extractors — named by output size, one argument
 // ============================================================================
