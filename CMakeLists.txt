@@ -329,6 +329,8 @@ set(CORE_SOURCES
     src/devices/storage/drive_1541.cpp
     # Devices — keyboard
     src/devices/keyboard/commodore_keyboard_device.cpp
+    # Devices — display
+    src/devices/display/generic_crt.cpp
 )
 
 # FAM65XX Decoder - standalone library for instruction decoding
