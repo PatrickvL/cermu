@@ -307,11 +307,13 @@
 /* Population count (number of set bits) */
 #if defined(CERMU_COMPILER_GCC) || defined(CERMU_COMPILER_CLANG)
     #define cermu_popcount(x)   __builtin_popcount(x)
+    #define cermu_popcount16(x) __builtin_popcount(x)
     #define cermu_popcountl(x)  __builtin_popcountl(x)
     #define cermu_popcountll(x) __builtin_popcountll(x)
 #elif defined(CERMU_COMPILER_MSVC)
     #include <intrin.h>
     #define cermu_popcount(x)   __popcnt(x)
+    #define cermu_popcount16(x) __popcnt16(x)
     #define cermu_popcountl(x)  __popcnt(x)
     #define cermu_popcountll(x) __popcnt64(x)
 #else
@@ -323,6 +325,7 @@
         x = x + (x >> 16);
         return static_cast<int>(x & 0x3Fu);
     }
+    #define cermu_popcount16(x) cermu_popcount(static_cast<unsigned int>(x))
     [[nodiscard]] FORCE_INLINE int cermu_popcountl(unsigned long x) noexcept {
         return cermu_popcount(static_cast<unsigned int>(x)) +
                (sizeof(long) > sizeof(int) ? cermu_popcount(static_cast<unsigned int>(x >> 32)) : 0);
