@@ -12,14 +12,14 @@
 
 /// Set N and Z flags based on 8-bit result
 inline void set_nz8(uint8_t val) {
-    regs_[CC] &= ~(Flags::N | Flags::Z);
+    regs_[CC] &= static_cast<uint8_t>(~(Flags::N | Flags::Z));
     if (val == 0)    regs_[CC] |= Flags::Z;
     if (val & 0x80)  regs_[CC] |= Flags::N;
 }
 
 /// Set N and Z flags based on 16-bit result
 inline void set_nz16(uint16_t val) {
-    regs_[CC] &= ~(Flags::N | Flags::Z);
+    regs_[CC] &= static_cast<uint8_t>(~(Flags::N | Flags::Z));
     if (val == 0)      regs_[CC] |= Flags::Z;
     if (val & 0x8000)  regs_[CC] |= Flags::N;
 }
@@ -29,7 +29,7 @@ inline void set_flag(uint8_t flag, bool cond) {
     if (cond)
         regs_[CC] |= flag;
     else
-        regs_[CC] &= ~flag;
+        regs_[CC] &= static_cast<uint8_t>(~flag);
 }
 
 /// Test a single CC flag
@@ -47,7 +47,7 @@ inline uint8_t alu_add8(uint8_t a, uint8_t b, bool carry_in) {
     uint16_t result16 = static_cast<uint16_t>(a) + b + c;
     uint8_t result = static_cast<uint8_t>(result16);
 
-    regs_[CC] &= ~(Flags::H | Flags::N | Flags::Z | Flags::V | Flags::C);
+    regs_[CC] &= static_cast<uint8_t>(~(Flags::H | Flags::N | Flags::Z | Flags::V | Flags::C));
     if (result == 0)                                regs_[CC] |= Flags::Z;
     if (result & 0x80)                              regs_[CC] |= Flags::N;
     if (result16 & 0x100)                           regs_[CC] |= Flags::C;
@@ -62,7 +62,7 @@ inline uint8_t alu_sub8(uint8_t a, uint8_t b, bool borrow_in) {
     uint16_t result16 = static_cast<uint16_t>(a) - b - c;
     uint8_t result = static_cast<uint8_t>(result16);
 
-    regs_[CC] &= ~(Flags::N | Flags::Z | Flags::V | Flags::C);
+    regs_[CC] &= static_cast<uint8_t>(~(Flags::N | Flags::Z | Flags::V | Flags::C));
     if (result == 0)                                regs_[CC] |= Flags::Z;
     if (result & 0x80)                              regs_[CC] |= Flags::N;
     if (result16 & 0x100)                           regs_[CC] |= Flags::C;
@@ -148,7 +148,7 @@ inline void alu_tst8(uint8_t val) {
 
 /// CLR: set to zero, update flags
 inline uint8_t alu_clr8() {
-    regs_[CC] &= ~(Flags::N | Flags::V | Flags::C);
+    regs_[CC] &= static_cast<uint8_t>(~(Flags::N | Flags::V | Flags::C));
     regs_[CC] |= Flags::Z;
     return 0;
 }
@@ -227,7 +227,7 @@ inline uint16_t alu_add16(uint16_t a, uint16_t b) {
     uint32_t result32 = static_cast<uint32_t>(a) + b;
     uint16_t result = static_cast<uint16_t>(result32);
 
-    regs_[CC] &= ~(Flags::N | Flags::Z | Flags::V | Flags::C);
+    regs_[CC] &= static_cast<uint8_t>(~(Flags::N | Flags::Z | Flags::V | Flags::C));
     if (result == 0)                                    regs_[CC] |= Flags::Z;
     if (result & 0x8000)                                regs_[CC] |= Flags::N;
     if (result32 & 0x10000)                             regs_[CC] |= Flags::C;
@@ -240,7 +240,7 @@ inline uint16_t alu_sub16(uint16_t a, uint16_t b) {
     uint32_t result32 = static_cast<uint32_t>(a) - b;
     uint16_t result = static_cast<uint16_t>(result32);
 
-    regs_[CC] &= ~(Flags::N | Flags::Z | Flags::V | Flags::C);
+    regs_[CC] &= static_cast<uint8_t>(~(Flags::N | Flags::Z | Flags::V | Flags::C));
     if (result == 0)                               regs_[CC] |= Flags::Z;
     if (result & 0x8000)                           regs_[CC] |= Flags::N;
     if (result32 & 0x10000)                        regs_[CC] |= Flags::C;

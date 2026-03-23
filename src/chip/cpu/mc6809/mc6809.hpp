@@ -1038,7 +1038,7 @@ template <const MC6809Traits& Traits>
 bus_state_t mc6809_t<Traits>::op_firq(bus_state_t pins) {
     switch (step_++) {
     case 0:
-        regs_[CC] &= ~Flags::E;  // Clear E flag — only CC and PC will be saved
+        regs_[CC] &= static_cast<uint8_t>(~Flags::E);  // Clear E flag — only CC and PC will be saved
         return bus_internal(pins);
     case 1:  return bus_setup_write(pins, --regs_[S], regs_[PC] & 0xFF);
     case 2:  return bus_setup_write(pins, --regs_[S], regs_[PC] >> 8);

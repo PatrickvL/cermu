@@ -62,7 +62,7 @@ thread_local uint8_t test_memory[65536];
 // Global flags
 // ============================================================================
 
-static bool g_verbose = false;
+// g_verbose is provided by cermu.hpp (inline bool g_verbose)
 static bool g_quiet = false;
 static bool g_stop_on_failure = true;
 static std::atomic<bool> g_test_failed{false};
