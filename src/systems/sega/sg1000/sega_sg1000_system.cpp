@@ -24,7 +24,6 @@
 
 template<SG1000Variant V>
 static HardwareTraits create_sg1000_hardware_traits() {
-    using Traits = SG1000VariantTraits<V>;
     HardwareTraits traits = {};
 
     traits.display.native_width    = sg1000_constants::DISPLAY_WIDTH;

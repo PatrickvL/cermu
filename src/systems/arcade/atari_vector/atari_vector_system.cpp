@@ -51,11 +51,11 @@ namespace atv = atari_vector_constants;
 
 static const RomEntryDescriptor ast_v1_entries[] = {
     // Vector ROM — DVG display list ROM at $5000
-    { {"035127.01"},                0x5000, 2048, true  },
+    { {"035127.01", "035127-01"},   0x5000, 2048, true  },
     // Program ROMs — three 2 KB chips covering $6800-$7FFF
-    { {"035145.01"},                0x6800, 2048, true  },   // socket ef2
-    { {"035144.01"},                0x7000, 2048, true  },   // socket h2
-    { {"035143.01"},                0x7800, 2048, true  },   // socket j2 (reset vector)
+    { {"035145.01", "035145-01"},   0x6800, 2048, true  },   // socket ef2
+    { {"035144.01", "035144-01"},   0x7000, 2048, true  },   // socket h2
+    { {"035143.01", "035143-01"},   0x7800, 2048, true  },   // socket j2 (reset vector)
 };
 
 static const RomSetDescriptor ast_v1_romset = {
@@ -66,10 +66,10 @@ static const RomSetDescriptor ast_v1_romset = {
 // ── Asteroids Rev 2 ──────────────────────────────────────────────────────────
 
 static const RomEntryDescriptor ast_v2_entries[] = {
-    { {"035127.02"},                0x5000, 2048, true  },
-    { {"035145.02"},                0x6800, 2048, true  },
-    { {"035144.02"},                0x7000, 2048, true  },
-    { {"035143.02"},                0x7800, 2048, true  },
+    { {"035127.02", "035127-02"},   0x5000, 2048, true  },
+    { {"035145.02", "035145-02"},   0x6800, 2048, true  },
+    { {"035144.02", "035144-02"},   0x7000, 2048, true  },
+    { {"035143.02", "035143-02"},   0x7800, 2048, true  },
 };
 
 static const RomSetDescriptor ast_v2_romset = {
@@ -81,15 +81,15 @@ static const RomSetDescriptor ast_v2_romset = {
 
 static const RomEntryDescriptor ll_v1_entries[] = {
     // Vector ROMs — 034599 at $4800, 034598 at $5000
-    { {"034599.01", "LLVROM1"},     0x4800, 2048, true  },
-    { {"034598.01", "LLVROM0"},     0x5000, 2048, true  },
+    { {"034599.01", "034599-01", "LLVROM1"},  0x4800, 2048, true  },
+    { {"034598.01", "034598-01", "LLVROM0"},  0x5000, 2048, true  },
     // Program ROMs — four 2 KB chips covering $6000-$7FFF
-    { {"034572.01"},                0x6000, 2048, true  },   // socket c1
-    { {"034571.01", "LLPROM2"},     0x6800, 2048, true  },   // socket de1
-    { {"034570.01", "LLPROM1"},     0x7000, 2048, true  },   // socket f1
-    { {"034569.01", "LLPROM0"},     0x7800, 2048, true  },   // socket j1 (reset vector)
+    { {"034572.01", "034572-01"},             0x6000, 2048, true  },   // socket c1
+    { {"034571.01", "034571-01", "LLPROM2"},  0x6800, 2048, true  },   // socket de1
+    { {"034570.01", "034570-01", "LLPROM1"},  0x7000, 2048, true  },   // socket f1
+    { {"034569.01", "034569-01", "LLPROM0"},  0x7800, 2048, true  },   // socket j1 (reset vector)
     // Language PROM (optional)
-    { {"034597.01", "034597-01"},   0x0000, 2048, false },
+    { {"034597.01", "034597-01"},             0x0000, 2048, false },
 };
 
 static const RomSetDescriptor ll_v1_romset = {
@@ -101,14 +101,14 @@ static const RomSetDescriptor ll_v1_romset = {
 
 static const RomEntryDescriptor ll_v2_entries[] = {
     // Vector ROMs — same layout as v1: 034599 at $4800, 034598 at $5000
-    { {"034599.01", "LLVROM1"},     0x4800, 2048, true  },
-    { {"034598.01", "LLVROM0"},     0x5000, 2048, true  },
+    { {"034599.01", "034599-01", "LLVROM1"},  0x4800, 2048, true  },
+    { {"034598.01", "034598-01", "LLVROM0"},  0x5000, 2048, true  },
     // Program ROMs — rev 2 chips
-    { {"034572.02"},                0x6000, 2048, true  },
-    { {"034571.02"},                0x6800, 2048, true  },
-    { {"034570.02"},                0x7000, 2048, true  },
-    { {"034569.02"},                0x7800, 2048, true  },
-    { {"034597.01", "034597-01"},   0x0000, 2048, false },
+    { {"034572.02", "034572-02"},             0x6000, 2048, true  },
+    { {"034571.02", "034571-02"},             0x6800, 2048, true  },
+    { {"034570.02", "034570-02"},             0x7000, 2048, true  },
+    { {"034569.02", "034569-02"},             0x7800, 2048, true  },
+    { {"034597.01", "034597-01"},             0x0000, 2048, false },
 };
 
 static const RomSetDescriptor ll_v2_romset = {
@@ -125,13 +125,13 @@ static const RomSetDescriptor ll_v2_romset = {
 
 static const RomEntryDescriptor ad_v1_entries[] = {
     // Vector ROMs
-    { {"036800.01"},                0x4800, 2048, true  },   // DVG offset $0800
-    { {"036799.01"},                0x5000, 2048, true  },   // DVG offset $1000
+    { {"036800.01", "036800-01"},   0x4800, 2048, true  },   // DVG offset $0800
+    { {"036799.01", "036799-01"},   0x5000, 2048, true  },   // DVG offset $1000
     // Program ROMs
-    { {"036430.01"},                0x6000, 2048, true  },   // socket c1
-    { {"036431.01"},                0x6800, 2048, true  },   // socket de1
-    { {"036432.01"},                0x7000, 2048, true  },   // socket f1
-    { {"036433.02"},                0x7800, 2048, true  },   // socket j1 (reset vector)
+    { {"036430.01", "036430-01"},   0x6000, 2048, true  },   // socket c1
+    { {"036431.01", "036431-01"},   0x6800, 2048, true  },   // socket de1
+    { {"036432.01", "036432-01"},   0x7000, 2048, true  },   // socket f1
+    { {"036433.02", "036433-02"},   0x7800, 2048, true  },   // socket j1 (reset vector)
 };
 
 static const RomSetDescriptor ad_v1_romset = {
@@ -143,13 +143,13 @@ static const RomSetDescriptor ad_v1_romset = {
 
 static const RomEntryDescriptor ad_v2_entries[] = {
     // Vector ROMs (036800 updated, 036799 same as v1)
-    { {"036800.02"},                0x4800, 2048, true  },
-    { {"036799.01"},                0x5000, 2048, true  },
+    { {"036800.02", "036800-02"},   0x4800, 2048, true  },
+    { {"036799.01", "036799-01"},   0x5000, 2048, true  },
     // Program ROMs
-    { {"036430.02"},                0x6000, 2048, true  },
-    { {"036431.02"},                0x6800, 2048, true  },
-    { {"036432.02"},                0x7000, 2048, true  },
-    { {"036433.03"},                0x7800, 2048, true  },
+    { {"036430.02", "036430-02"},   0x6000, 2048, true  },
+    { {"036431.02", "036431-02"},   0x6800, 2048, true  },
+    { {"036432.02", "036432-02"},   0x7000, 2048, true  },
+    { {"036433.03", "036433-03"},   0x7800, 2048, true  },
 };
 
 static const RomSetDescriptor ad_v2_romset = {
@@ -163,15 +163,15 @@ static const RomSetDescriptor ad_v2_romset = {
 
 static const RomEntryDescriptor bz_v1_entries[] = {
     // Vector ROMs
-    { {"036422.01"},                0x3000, 2048, true  },   // vector ROM 1
-    { {"036421.01"},                0x3800, 2048, true  },   // vector ROM 2
+    { {"036422.01", "036422-01"},   0x3000, 2048, true  },   // vector ROM 1
+    { {"036421.01", "036421-01"},   0x3800, 2048, true  },   // vector ROM 2
     // Program ROMs ($5000-$7FFF)
-    { {"036414.01"},                0x5000, 2048, true  },
-    { {"036413.01"},                0x5800, 2048, true  },
-    { {"036412.01"},                0x6000, 2048, true  },
-    { {"036411.01"},                0x6800, 2048, true  },
-    { {"036410.01"},                0x7000, 2048, true  },
-    { {"036409.01"},                0x7800, 2048, true  },
+    { {"036414.01", "036414-01"},   0x5000, 2048, true  },
+    { {"036413.01", "036413-01"},   0x5800, 2048, true  },
+    { {"036412.01", "036412-01"},   0x6000, 2048, true  },
+    { {"036411.01", "036411-01"},   0x6800, 2048, true  },
+    { {"036410.01", "036410-01"},   0x7000, 2048, true  },
+    { {"036409.01", "036409-01"},   0x7800, 2048, true  },
 };
 
 static const RomSetDescriptor bz_v1_romset = {
@@ -182,14 +182,14 @@ static const RomSetDescriptor bz_v1_romset = {
 // ── Battlezone Rev 2 ─────────────────────────────────────────────────────
 
 static const RomEntryDescriptor bz_v2_entries[] = {
-    { {"036422.01"},                0x3000, 2048, true  },
-    { {"036421.01"},                0x3800, 2048, true  },
-    { {"036414.02"},                0x5000, 2048, true  },
-    { {"036413.02"},                0x5800, 2048, true  },
-    { {"036412.02"},                0x6000, 2048, true  },
-    { {"036411.02"},                0x6800, 2048, true  },
-    { {"036410.02"},                0x7000, 2048, true  },
-    { {"036409.02"},                0x7800, 2048, true  },
+    { {"036422.01", "036422-01"},   0x3000, 2048, true  },
+    { {"036421.01", "036421-01"},   0x3800, 2048, true  },
+    { {"036414.02", "036414-02"},   0x5000, 2048, true  },
+    { {"036413.02", "036413-02"},   0x5800, 2048, true  },
+    { {"036412.02", "036412-02"},   0x6000, 2048, true  },
+    { {"036411.02", "036411-02"},   0x6800, 2048, true  },
+    { {"036410.02", "036410-02"},   0x7000, 2048, true  },
+    { {"036409.02", "036409-02"},   0x7800, 2048, true  },
 };
 
 static const RomSetDescriptor bz_v2_romset = {
@@ -203,15 +203,15 @@ static const RomSetDescriptor bz_v2_romset = {
 
 static const RomEntryDescriptor rb_entries[] = {
     // Vector ROMs
-    { {"037006.01"},                0x3000, 2048, true  },   // vector ROM 1
-    { {"037007.01"},                0x3800, 2048, true  },   // vector ROM 2
+    { {"037006.01", "037006-01"},   0x3000, 2048, true  },   // vector ROM 1
+    { {"037007.01", "037007-01"},   0x3800, 2048, true  },   // vector ROM 2
     // Program ROMs ($5000-$7FFF)
-    { {"037001.01"},                0x5000, 2048, true  },
-    { {"037000.01"},                0x5800, 2048, true  },
-    { {"036999.01"},                0x6000, 2048, true  },
-    { {"036998.01"},                0x6800, 2048, true  },
-    { {"036997.01"},                0x7000, 2048, true  },
-    { {"036996.01"},                0x7800, 2048, true  },
+    { {"037001.01", "037001-01"},   0x5000, 2048, true  },
+    { {"037000.01", "037000-01"},   0x5800, 2048, true  },
+    { {"036999.01", "036999-01"},   0x6000, 2048, true  },
+    { {"036998.01", "036998-01"},   0x6800, 2048, true  },
+    { {"036997.01", "036997-01"},   0x7000, 2048, true  },
+    { {"036996.01", "036996-01"},   0x7800, 2048, true  },
 };
 
 static const RomSetDescriptor rb_romset = {
@@ -381,7 +381,6 @@ static const RomSetDescriptor majorhavoc_v3_romset = {
 
 template<AtariVectorVariant V>
 static HardwareTraits create_vector_hardware_traits() {
-    using Traits = AtariVectorTraits<V>;
 
     HardwareTraits ht = {};
 
@@ -980,26 +979,29 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
             }
         } else if constexpr (V == AtariVectorVariant::GRAVITAR ||
                              V == AtariVectorVariant::BLACK_WIDOW) {
-            // Gravitar/BW IN0 at $0C00: bit 5 = VG done_r (IP_ACTIVE_HIGH)
-            if (addr >= 0x0C00 && addr < 0x0D00) {
+            // Gravitar/BW (bwidow board, MAME bwidow.cpp bwidow_map)
+            //   $7800: IN0 — bit 5 = VG done_r (IP_ACTIVE_HIGH), coins, self-test
+            //   $8000: IN3 — player controls (joystick, fire, shield, start)
+            //   $8800: IN4 — DIP switches / P2 controls
+            if (addr == atv::GRAV_IN0_ADDR) {
                 data = 0xFF;
-                if (!vg().is_halted()) data &= ~0x20;
-            } else if (addr >= 0x0D00 && addr < 0x0E00) {
+                if (!vg().is_halted()) data &= ~0x20;  // bit 5 = VG done_r
+            } else if (addr == atv::GRAV_IN3_ADDR) {
                 data = in1_;
-            } else if (addr >= 0x0E00 && addr < 0x0F00) {
+            } else if (addr == atv::GRAV_IN4_ADDR) {
                 data = dsw1_;
             } else {
                 data = 0xFF;
             }
         } else if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
-            // Space Duel IN0 at $0C00: bit 5 = VG done_r (IP_ACTIVE_HIGH)
-            if (addr >= 0x0C00 && addr < 0x0D00) {
+            // Space Duel (MAME bwidow.cpp spacduel_map)
+            //   $0800: IN0 — bit 5 = VG done_r (IP_ACTIVE_HIGH), coins
+            //   $0900: IN3 — player controls
+            if (addr == atv::SD_IN0_ADDR) {
                 data = 0xFF;
-                if (!vg().is_halted()) data &= ~0x20;
-            } else if (addr >= 0x0D00 && addr < 0x0E00) {
+                if (!vg().is_halted()) data &= ~0x20;  // bit 5 = VG done_r
+            } else if (addr >= 0x0900 && addr < 0x0A00) {
                 data = in1_;
-            } else if (addr >= 0x0E00 && addr < 0x0F00) {
-                data = dsw1_;
             } else {
                 data = 0xFF;
             }
@@ -1047,7 +1049,6 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
         } else if (addr >= atv::BZ_SND_ADDR && addr < atv::BZ_SND_ADDR + 0x0200) {
             snd_latch_ = data;
         } else if (addr >= atv::BZ_VGGO_ADDR && addr < atv::BZ_VGGO_ADDR + 0x0200) {
-            printf("BZ: VGGO triggered at $%04X\n", addr);
             vg().trigger_go();
         } else if (addr >= atv::BZ_VGRST_ADDR && addr < atv::BZ_VGRST_ADDR + 0x0200) {
             vg().trigger_reset();
@@ -1078,7 +1079,6 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
 
         switch (reg) {
             case atv::VGGO_ADDR:
-                printf("AST: VGGO triggered (reg=$%04X, addr=$%04X)\n", reg, addr);
                 vg().trigger_go();
                 break;
 
@@ -1134,14 +1134,14 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
                 earom_[addr & 0x3F] = data;
                 return pins;
             }
-            if (addr == atv::TEMP_VGGO_ADDR)  { printf("TEMP: VGGO triggered\n"); vg().trigger_go(); return pins; }
+            if (addr == atv::TEMP_VGGO_ADDR)  { vg().trigger_go(); return pins; }
             if (addr == atv::TEMP_VGRST_ADDR) { vg().trigger_reset(); return pins; }
             if (addr == atv::TEMP_WDCLR_ADDR) { return pins; }
 
         } else if constexpr (V == AtariVectorVariant::GRAVITAR ||
                              V == AtariVectorVariant::BLACK_WIDOW) {
             // Gravitar / Black Widow board (MAME bwidow.cpp bwidow_map)
-            // POKEY1 $0800, POKEY2 $0A00, VGGO $0840, VGRST $0880, WD $08C0
+            // POKEY1 $6000, POKEY2 $6800, VGGO $8840, VGRST $8880, WD $8980
             if (addr >= atv::GRAV_POKEY1_BASE && addr < atv::GRAV_POKEY1_BASE + 0x10) {
                 pokey_.write(addr & 0x0F, data);
                 return pins;
@@ -1156,7 +1156,7 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
 
         } else if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
             // Space Duel (MAME bwidow.cpp spacduel_map)
-            // POKEY1 $0800, POKEY2 $0900, VGGO $0C80, VGRST $0D80, WD $0E80
+            // POKEY1 $1000, POKEY2 $1400, VGGO $0C80, VGRST $0D80, WD $0D00
             if (addr >= atv::SD_POKEY1_BASE && addr < atv::SD_POKEY1_BASE + 0x10) {
                 pokey_.write(addr & 0x0F, data);
                 return pins;
@@ -1215,6 +1215,10 @@ bool AtariVectorSystem<V>::load_file(const char* filepath) {
                 return load_rom_set(match);
             }
         }
+        // Archive didn't match any ROM set — cannot load raw ZIP as ROM data
+        printf("%s: Archive '%s' did not match any known ROM set\n",
+               Traits::NAME, filepath);
+        return false;
     }
 
     // Read the ROM file

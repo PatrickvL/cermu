@@ -31,7 +31,6 @@
 
 template<SVIVariant V>
 static HardwareTraits create_svi_hardware_traits() {
-    using Traits = SVIVariantTraits<V>;
     HardwareTraits traits = {};
 
     traits.display.native_width    = svi_constants::DISPLAY_WIDTH;

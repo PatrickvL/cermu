@@ -49,21 +49,21 @@
 
 inline constexpr auto kC64Chips = make_chip_manifest(
     // ── Buffer-backed chips (PLA-switched) ───────────────────────────────
-    //                       base    size   mask  label         cond  bank_sz  ovl
-    Slot<RAMChip>  {0x0000, 65536,    0, "RAM",         0, 65536, 1},  // Slot 0
-    Slot<ROMChip>  {0x8000,  8192,    0, "ROML",        0,  8192, 1},  // Slot 1
-    Slot<ROMChip>  {0xA000,  8192,    0, "ROMH",        0,  8192, 1},  // Slot 2
-    Slot<ROMChip>  {0xA000,  8192,    0, "BASIC ROM",   0,  8192, 1},  // Slot 3
-    Slot<ROMChip>  {0xE000,  8192,    0, "KERNAL",      0,  8192, 1},  // Slot 4
-    Slot<ROMChip>  {0xD000,  4096,    0, "CHARROM",     0,  4096, 1},  // Slot 5
+    //                       base    size   mask  label         cond  bank_sz  ovl  eff_sz
+    Slot<RAMChip>  {0x0000, 65536,    0, "RAM",         0, 65536, 1, 0, {}},  // Slot 0
+    Slot<ROMChip>  {0x8000,  8192,    0, "ROML",        0,  8192, 1, 0, {}},  // Slot 1
+    Slot<ROMChip>  {0xA000,  8192,    0, "ROMH",        0,  8192, 1, 0, {}},  // Slot 2
+    Slot<ROMChip>  {0xA000,  8192,    0, "BASIC ROM",   0,  8192, 1, 0, {}},  // Slot 3
+    Slot<ROMChip>  {0xE000,  8192,    0, "KERNAL",      0,  8192, 1, 0, {}},  // Slot 4
+    Slot<ROMChip>  {0xD000,  4096,    0, "CHARROM",     0,  4096, 1, 0, {}},  // Slot 5
 
     // ── Non-bus chips (CPU, I/O — no buffer in flat mem) ─────────────────
-    Slot<MOS6510>  {0, 0, 0, "MOS 6510"},       // Slot 6 — CPU
-    Slot<vicii_base_t>  {0, 0, 0, "VIC-II"},     // Slot 7
-    Slot<mos6581_t>{0, 0, 0, "SID"},             // Slot 8
-    Slot<MOS2114>  {0, 0, 0, "Color RAM"},       // Slot 9
-    Slot<mos6526_t>{0, 0, 0, "CIA1"},            // Slot 10
-    Slot<mos6526_t>{0, 0, 0, "CIA2"}             // Slot 11
+    Slot<MOS6510>  {0, 0, 0, "MOS 6510",   0, 0, 0, 0, {}},  // Slot 6 — CPU
+    Slot<vicii_base_t>  {0, 0, 0, "VIC-II", 0, 0, 0, 0, {}},  // Slot 7
+    Slot<mos6581_t>{0, 0, 0, "SID",        0, 0, 0, 0, {}},  // Slot 8
+    Slot<MOS2114>  {0, 0, 0, "Color RAM",  0, 0, 0, 0, {}},  // Slot 9
+    Slot<mos6526_t>{0, 0, 0, "CIA1",       0, 0, 0, 0, {}},  // Slot 10
+    Slot<mos6526_t>{0, 0, 0, "CIA2",       0, 0, 0, 0, {}}   // Slot 11
 );
 
 // =============================================================================

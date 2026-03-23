@@ -18,7 +18,6 @@
 
 template<AppleIIVariant V>
 static HardwareTraits create_apple_ii_hardware_traits() {
-    using Traits = AppleIIVariantTraits<V>;
     HardwareTraits traits = {};
 
     traits.display.native_width    = apple_ii_constants::DISPLAY_WIDTH;

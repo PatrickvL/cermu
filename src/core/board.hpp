@@ -205,7 +205,7 @@ public:
             ChipSlot slot{rec.base_addr, rec.byte_size,
                           rec.addr_mask, rec.bank_size, 0 /*effective_size*/,
                           rec.overlay_group,
-                          rec.factory, rec.label, rec.condition};
+                          rec.factory, rec.label, rec.condition, {}};
             ChipBase* chip = rec.factory(slot, system_bus, buf);
 
             // Apply placement metadata from the manifest slot.

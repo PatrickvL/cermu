@@ -141,16 +141,16 @@ public:
 // RAM size varies: 16 KB (C16/C116) with mirroring, 64 KB (Plus/4).
 //
 inline constexpr auto kC264Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536, 0, "RAM",        0, 65536},
-    Slot<ROMChip>{0x8000, 16384, 0, "BASIC ROM",  0, 16384, 1}.with_rom("basic.318006-01.bin|basic.rom|318006-01.bin"),   // overlay group 1
-    Slot<ROMChip>{0xC000, 16384, 0, "KERNAL ROM", 0, 16384, 1}.with_rom("kernal.318004-05.bin|kernal.rom|318004-05.bin"), // overlay group 1
+    Slot<RAMChip>{0x0000, 65536, 0, "RAM",        0, 65536, 0, 0, {}},
+    Slot<ROMChip>{0x8000, 16384, 0, "BASIC ROM",  0, 16384, 1, 0, {}}.with_rom("basic.318006-01.bin|basic.rom|318006-01.bin"),   // overlay group 1
+    Slot<ROMChip>{0xC000, 16384, 0, "KERNAL ROM", 0, 16384, 1, 0, {}}.with_rom("kernal.318004-05.bin|kernal.rom|318004-05.bin"), // overlay group 1
     // Non-bus chip — factory-created, not address-decoded
-    Slot<CSG7501>               {0, 0, 0, "CSG 7501"},
+    Slot<CSG7501>               {0, 0, 0, "CSG 7501",         0, 0, 0, 0, {}},
     // MMIO chips — address-decoded by MemoryBus via MaskedSubTables
-    Slot<ted7360_t>             {0xFF00, 0, 0xFFC0, "TED 7360"},          // page $FF sub-table 0
-    Slot<mos6529_t>             {0xFD10, 0, 0xFFF0, "MOS 6529B PIO1"},    // page $FD sub-table 1
-    Slot<mos6529_t>             {0xFD30, 0, 0xFFF0, "MOS 6529B PIO2"},    // page $FD sub-table 1
-    Slot<c264_rom_bank_select_t>{0xFDD0, 0, 0xFFF0, "ROM Bank Select"}    // page $FD sub-table 1
+    Slot<ted7360_t>             {0xFF00, 0, 0xFFC0, "TED 7360",        0, 0, 0, 0, {}},  // page $FF sub-table 0
+    Slot<mos6529_t>             {0xFD10, 0, 0xFFF0, "MOS 6529B PIO1",  0, 0, 0, 0, {}},  // page $FD sub-table 1
+    Slot<mos6529_t>             {0xFD30, 0, 0xFFF0, "MOS 6529B PIO2",  0, 0, 0, 0, {}},  // page $FD sub-table 1
+    Slot<c264_rom_bank_select_t>{0xFDD0, 0, 0xFFF0, "ROM Bank Select", 0, 0, 0, 0, {}}   // page $FD sub-table 1
 );
 
 // MaskedSubTable indices (determined by manifest slot order during apply())

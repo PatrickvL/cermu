@@ -185,7 +185,7 @@ struct Slot {
     size_t      bank_size  = 0;
     uint8_t     overlay_group = 0;
     size_t      effective_size = 0;  // 0 = use size_bytes.  See ChipSlot::effective_size.
-    RomFileInfo rom;                   // ROM file metadata (filenames==nullptr → no auto-load)
+    RomFileInfo rom{};                 // ROM file metadata (filenames==nullptr → no auto-load)
 
     // Returns a copy with ROM file metadata attached.
     // filenames is a pipe-separated string: "name1|name2|name3"

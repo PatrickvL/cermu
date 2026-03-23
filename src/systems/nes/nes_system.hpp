@@ -77,8 +77,8 @@ namespace nes_system {
 // Actual memory dispatch uses nes_bus_t (page-pointer bus), not MemoryBus.
 // =============================================================================
 inline constexpr auto kNESChips = make_chip_manifest(
-    Slot<RICOH_2A03>{0, 0, 0, "Ricoh 2A03"},
-    Slot<PPU>       {0, 0, 0, "Ricoh 2C02 PPU"}
+    Slot<RICOH_2A03>{0, 0, 0, "Ricoh 2A03",    0, 0, 0, 0, {}},
+    Slot<PPU>       {0, 0, 0, "Ricoh 2C02 PPU", 0, 0, 0, 0, {}}
 );
 
 using NESBusSpec = ManifestBusSpec<kNESChips, 16, 8>;
