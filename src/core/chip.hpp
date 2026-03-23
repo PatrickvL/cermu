@@ -178,6 +178,13 @@ protected:
         read_regs_     = regs_.data + write_count;
     }
 
+#ifdef CERMU_HAS_CHIP_DEBUG
+    /// Wire regs_ into the debug registry.  Uses num_regs_ (set by init_regs/init_split_regs).
+    void wire_debug_registers(const RegEntry* info = nullptr, uint16_t base_address = 0) {
+        debug_registry_.set_registers(regs_.data, num_regs_, info, base_address);
+    }
+#endif
+
 #ifdef CERMU_HAS_GUI
     // Override to create the chip's package layout (pin diagram).
     // Called once by get_chip_layout() and cached.  For variant-aware chips
