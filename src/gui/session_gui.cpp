@@ -60,6 +60,7 @@ static void indexed_shader_bind_callback(const ImDrawList*, const ImDrawCmd* cmd
     float R = draw_data->DisplayPos.x + draw_data->DisplaySize.x;
     float T = draw_data->DisplayPos.y;
     float B = draw_data->DisplayPos.y + draw_data->DisplaySize.y;
+    if (R == L || B == T) return;  // Zero-size guard (monitor transition)
     const float ortho[4][4] = {
         { 2.0f/(R-L),   0.0f,         0.0f,   0.0f },
         { 0.0f,         2.0f/(T-B),   0.0f,   0.0f },
@@ -99,6 +100,7 @@ static void stream_shader_bind_callback(const ImDrawList*, const ImDrawCmd* cmd)
     float R = draw_data->DisplayPos.x + draw_data->DisplaySize.x;
     float T = draw_data->DisplayPos.y;
     float B = draw_data->DisplayPos.y + draw_data->DisplaySize.y;
+    if (R == L || B == T) return;  // Zero-size guard (monitor transition)
     const float ortho[4][4] = {
         { 2.0f/(R-L),   0.0f,         0.0f,   0.0f },
         { 0.0f,         2.0f/(T-B),   0.0f,   0.0f },
@@ -137,6 +139,7 @@ static void rgb_stream_shader_bind_callback(const ImDrawList*, const ImDrawCmd* 
     float R = draw_data->DisplayPos.x + draw_data->DisplaySize.x;
     float T = draw_data->DisplayPos.y;
     float B = draw_data->DisplayPos.y + draw_data->DisplaySize.y;
+    if (R == L || B == T) return;  // Zero-size guard (monitor transition)
     const float ortho[4][4] = {
         { 2.0f/(R-L),   0.0f,         0.0f,   0.0f },
         { 0.0f,         2.0f/(T-B),   0.0f,   0.0f },
