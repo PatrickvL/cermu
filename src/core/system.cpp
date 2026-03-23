@@ -356,6 +356,18 @@ void System::attach_default_peripherals() {
     for (auto& dp : defaults) {
         attach_device_to_port(dp.port_index, dp.device_id);
     }
+
+    // Auto-create default display device (passive — not attached to a port).
+    // This makes DisplayCharacteristics available to the rendering pipeline.
+    const char* display_id = get_default_display_id();
+    if (display_id) {
+        auto display_dev = DeviceRegistry::instance().create_device(display_id);
+        if (display_dev) {
+            printf("System: Auto-attached display '%s'\n", display_dev->get_name());
+            owned_devices_.push_back(std::move(display_dev));
+        }
+    }
+
     // After all devices are attached and auto_bind_host_inputs() has assigned
     // bindings, pick collision-minimised keyboard presets for each controller.
     auto_assign_controller_keymaps();
