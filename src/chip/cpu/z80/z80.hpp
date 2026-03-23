@@ -222,7 +222,7 @@ public:
 
     /// Initialize CPU state. Returns default bus state.
     bus_state_t init() override {
-        std::memset(regs_.data, 0, sizeof(regs_.data));
+        regs_.clear();
         regs_[SP] = 0xFFFF;
         regs_[AF] = 0xFFFF;  // Documented power-on state
         im_ = 0;

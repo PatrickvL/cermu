@@ -274,7 +274,7 @@ public:
     // ── Lifecycle ────────────────────────────────────────────────
 
     bus_state_t init() override {
-        std::memset(regs_.data, 0, sizeof(regs_.data));
+        regs_.clear();
         regs_[SR] = SRBits::S | (7 << SRBits::IPM_SHIFT);  // Supervisor mode, IPM=7
         state_        = ExecState::RESET_SEQUENCE;
         step_         = 0;

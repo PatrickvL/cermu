@@ -245,7 +245,7 @@ inline void update_nz_flags_16bit(uint16_t value) {
 
 // === Register initialization ===
 void init_registers() {
-  std::memset(regs_.data, 0, sizeof(regs_.data));
+  regs_.clear();
 
   if constexpr (has_wide_registers()) {
     regs_[SP] = 0x01FF;

@@ -198,7 +198,7 @@ public:
 
     /// Initialize CPU state.  Returns default bus state.
     bus_state_t init() override {
-        std::memset(regs_.data, 0, sizeof(regs_.data));
+        regs_.clear();
         regs_[S]  = 0xFFFF;
         regs_[DP] = 0x00;
         regs_[CC] = Flags::I | Flags::F;  // IRQ and FIRQ masked at power-on
