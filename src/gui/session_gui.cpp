@@ -7,6 +7,7 @@
 #include "gui/rgb_stream_shader.hpp"
 #include "gui/ypbpr_stream_shader.hpp"
 #include "gui/vector_shader.hpp"
+#include "gui/crt_shader.hpp"
 #include "gui/port_icons.hpp"
 #include "gui/vfs_file_system.hpp"
 #define IMGUI_DEFINE_MATH_OPERATORS
@@ -1257,9 +1258,24 @@ void SessionGUI::render_screen() {
             frame_dt,
             vdc.phosphor_r, vdc.phosphor_g, vdc.phosphor_b);
 
+        // Apply CRT post-processing to the persistence texture
+        GLuint final_tex = vector_persist_.texture;
+        if (use_crt_shader_ && crt_post_.shader) {
+            auto& dc = display_characteristics_;
+            int mask = crt_shader::mask_type_from_technology(
+                static_cast<int>(dc.technology));
+            crt_shader::render(&crt_post_, vector_persist_.texture,
+                               static_cast<float>(fb_width_),
+                               static_cast<float>(fb_height_),
+                               display_w, display_h,
+                               dc.curvature, dc.scanline_gap, dc.dot_pitch_mm,
+                               dc.brightness, dc.contrast, dc.gamma, mask);
+            final_tex = crt_post_.texture;
+        }
+
         // Display the persistence FBO texture via ImGui
         ImGui::SetCursorPos(ImVec2(pos_x, pos_y));
-        ImGui::Image((ImTextureID)(intptr_t)vector_persist_.texture,
+        ImGui::Image((ImTextureID)(intptr_t)final_tex,
                      ImVec2(display_w, display_h));
 
         if (system_) {
@@ -1273,6 +1289,24 @@ void SessionGUI::render_screen() {
         // ================================================================
         // Texture-based display (stream / indexed / CPU)
         // ================================================================
+
+        // Apply CRT post-processing to non-stream textures
+        GLuint crt_output_tex = 0;
+        bool use_crt = use_crt_shader_ && crt_post_.shader
+                       && !use_stream && !use_rgb_stream;
+        if (use_crt) {
+            auto& dc = display_characteristics_;
+            int mask = crt_shader::mask_type_from_technology(
+                static_cast<int>(dc.technology));
+            crt_shader::render(&crt_post_, display_tex,
+                               static_cast<float>(fb_width_),
+                               static_cast<float>(fb_height_),
+                               display_w, display_h,
+                               dc.curvature, dc.scanline_gap, dc.dot_pitch_mm,
+                               dc.brightness, dc.contrast, dc.gamma, mask);
+            crt_output_tex = crt_post_.texture;
+        }
+
         ImDrawList* draw_list = (use_indexed_shader || use_stream || use_rgb_stream)
                                 ? ImGui::GetWindowDrawList() : nullptr;
         if (use_rgb_stream) {
@@ -1292,7 +1326,7 @@ void SessionGUI::render_screen() {
 
         // Set cursor position and render from the last-uploaded texture
         ImGui::SetCursorPos(ImVec2(pos_x, pos_y));
-        ImGui::Image((ImTextureID)(intptr_t)display_tex,
+        ImGui::Image((ImTextureID)(intptr_t)(use_crt ? crt_output_tex : display_tex),
                     ImVec2(display_w, display_h));
 
         // Restore ImGui's default shader after our custom draw
@@ -1468,6 +1502,7 @@ void SessionGUI::render_display_settings() {
     ImGui::Separator();
 
     // --- Adjustable parameters ---
+    ImGui::Checkbox("CRT Post-Processing", &use_crt_shader_);
     ImGui::Text("Adjustments:");
     bool changed = false;
     changed |= ImGui::SliderFloat("Brightness", &dc.brightness, 0.5f, 2.0f, "%.2f");
@@ -1805,6 +1840,19 @@ void SessionGUI::allocate_framebuffer() {
 
             default:
                 break;
+        }
+
+        // Create CRT post-processing FBO (for non-stream texture paths).
+        // Initial size matches the framebuffer; resized to display dimensions on render.
+        if (use_crt_shader_) {
+            int crt_w = fb_width_  > 0 ? fb_width_  : 1024;
+            int crt_h = fb_height_ > 0 ? fb_height_ : 1024;
+            if (crt_shader::create(&crt_post_, crt_w, crt_h)) {
+                printf("CRT post-processing shader compiled and linked\n");
+            } else {
+                use_crt_shader_ = false;
+                printf("CRT post-processing shader failed — disabled\n");
+            }
         }
     } else {
         printf("Allocated %dx%d framebuffer (texture creation deferred until init)\n", fb_width_, fb_height_);

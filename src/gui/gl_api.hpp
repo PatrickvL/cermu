@@ -85,6 +85,7 @@ inline GLint  (APIENTRY* glGetUniformLocation)(GLuint, const GLchar*) = nullptr;
 inline void   (APIENTRY* glUniform1i)(GLint, GLint) = nullptr;
 inline void   (APIENTRY* glUniform1iv)(GLint, GLsizei, const GLint*) = nullptr;
 inline void   (APIENTRY* glUniform1f)(GLint, GLfloat) = nullptr;
+inline void   (APIENTRY* glUniform2f)(GLint, GLfloat, GLfloat) = nullptr;
 inline void   (APIENTRY* glUniform3f)(GLint, GLfloat, GLfloat, GLfloat) = nullptr;
 inline void   (APIENTRY* glUniformMatrix4fv)(GLint, GLsizei, GLboolean, const GLfloat*) = nullptr;
 
@@ -150,6 +151,7 @@ inline bool load_gl() {
     GL_API_LOAD(glUniform1i,           "glUniform1i");
     GL_API_LOAD(glUniform1iv,          "glUniform1iv");
     GL_API_LOAD(glUniform1f,           "glUniform1f");
+    GL_API_LOAD(glUniform2f,           "glUniform2f");
     GL_API_LOAD(glUniform3f,           "glUniform3f");
     GL_API_LOAD(glUniformMatrix4fv,    "glUniformMatrix4fv");
 
@@ -180,7 +182,7 @@ inline bool load_gl() {
            && glGenBuffers && glBindBuffer && glBufferData
            && glGenVertexArrays && glBindVertexArray
            && glVertexAttribPointer && glEnableVertexAttribArray
-           && glUniform1f && glUniform3f
+           && glUniform1f && glUniform2f && glUniform3f
            && glGenFramebuffers && glBindFramebuffer
            && glFramebufferTexture2D && glCheckFramebufferStatus;
     if (!ok)
