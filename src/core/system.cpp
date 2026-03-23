@@ -2,6 +2,7 @@
 #include "core/chip.hpp"
 #include "core/formats/format_handler.hpp"
 #include "core/vfs/vfs.hpp"
+#include "devices/display/display_device.hpp"
 #include <cstring>
 #include <cctype>
 #include <cmath>
@@ -357,14 +358,27 @@ void System::attach_default_peripherals() {
         attach_device_to_port(dp.port_index, dp.device_id);
     }
 
-    // Auto-create default display device (passive — not attached to a port).
-    // This makes DisplayCharacteristics available to the rendering pipeline.
-    const char* display_id = get_default_display_id();
-    if (display_id) {
-        auto display_dev = DeviceRegistry::instance().create_device(display_id);
-        if (display_dev) {
-            printf("System: Auto-attached display '%s'\n", display_dev->get_name());
-            owned_devices_.push_back(std::move(display_dev));
+    // Check if a DisplayDevice was already attached to a port via defaults.
+    // If not, auto-create one as a passive owned device.
+    bool has_port_display = false;
+    for (const auto& port : get_ports()) {
+        auto* dev = port->get_attached_device();
+        if (dev && dynamic_cast<DisplayDevice*>(dev)) {
+            has_port_display = true;
+            break;
+        }
+    }
+
+    if (!has_port_display) {
+        // Auto-create default display device (passive — not attached to a port).
+        // This makes DisplayCharacteristics available to the rendering pipeline.
+        const char* display_id = get_default_display_id();
+        if (display_id) {
+            auto display_dev = DeviceRegistry::instance().create_device(display_id);
+            if (display_dev) {
+                printf("System: Auto-attached display '%s'\n", display_dev->get_name());
+                owned_devices_.push_back(std::move(display_dev));
+            }
         }
     }
 

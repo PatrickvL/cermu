@@ -1666,15 +1666,28 @@ void SessionGUI::allocate_framebuffer() {
     // Cache the system's signal type for emu thread dispatch
     active_signal_type_ = system_->get_video_signal_type();
 
-    // Look up the active display device from the system's owned peripherals.
-    // If found, cache its characteristics for the rendering pipeline.
+    // Look up the active display device from ports and owned peripherals.
+    // Port-attached displays take priority over passive owned devices.
     display_device_ = nullptr;
-    for (const auto& dev : system_->get_owned_devices()) {
-        auto* dd = dynamic_cast<DisplayDevice*>(dev.get());
-        if (dd) {
-            display_device_ = dd;
-            display_characteristics_ = dd->get_display_characteristics();
-            break;
+    for (const auto& port : system_->get_ports()) {
+        auto* dev = port->get_attached_device();
+        if (dev) {
+            auto* dd = dynamic_cast<DisplayDevice*>(dev);
+            if (dd) {
+                display_device_ = dd;
+                display_characteristics_ = dd->get_display_characteristics();
+                break;
+            }
+        }
+    }
+    if (!display_device_) {
+        for (const auto& dev : system_->get_owned_devices()) {
+            auto* dd = dynamic_cast<DisplayDevice*>(dev.get());
+            if (dd) {
+                display_device_ = dd;
+                display_characteristics_ = dd->get_display_characteristics();
+                break;
+            }
         }
     }
     if (!display_device_) {

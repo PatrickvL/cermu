@@ -714,7 +714,23 @@ void Apple1System::setup_ports() {
     // Port 1 — Cassette Interface (ACI card, audio in/out)
     add_port(apple1_cassette_def, 0);
 
+    // Port 2 — Video Output (composite, active-high)
+    static const PortDefinition apple1_video_out_def = {
+        PortType::VIDEO_COMPOSITE,
+        "Video Out",
+        nullptr, 0,
+        false, false
+    };
+    add_port(apple1_video_out_def, 0);
+
     printf("Apple1: Created %zu ports\n", get_ports().size());
+}
+
+std::vector<System::DefaultPeripheral>
+Apple1System::get_default_peripherals() const {
+    return {
+        { 2, "crt_green" },   // Video Out — green phosphor monitor
+    };
 }
 
 // ============================================================================

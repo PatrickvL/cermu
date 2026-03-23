@@ -231,6 +231,8 @@ public:
     static constexpr int PORT_CASSETTE   = 3;
     static constexpr int PORT_USER       = 4;
     static constexpr int PORT_EXPANSION  = 5;
+    static constexpr int PORT_VIDEO      = 6;
+    static constexpr int PORT_AUDIO      = 7;
 
     /// Cached lightpen pointer (used by LP pin callback for zero-overhead access).
     LightpenDevice* get_cached_lightpen() const { return cached_lightpen_; }

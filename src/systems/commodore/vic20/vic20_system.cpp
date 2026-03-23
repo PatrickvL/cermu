@@ -1344,6 +1344,21 @@ static const PortDefinition vic20_expansion_def = {
     false, false
 };
 
+// A/V output — DIN-5 connector
+static const PortDefinition vic20_video_out_def = {
+    PortType::VIDEO_COMPOSITE,
+    "Video Out",
+    nullptr, 0,
+    false, false
+};
+
+static const PortDefinition vic20_audio_out_def = {
+    PortType::AUDIO_MONO,
+    "Audio Out",
+    nullptr, 0,
+    false, false
+};
+
 void VIC20System::setup_ports() {
 
     // Port 0 — Control Port (joystick/paddles/lightpen)
@@ -1361,7 +1376,11 @@ void VIC20System::setup_ports() {
     // Port 4 — Expansion Port (cartridge)
     add_port(vic20_expansion_def, 0);
 
-    // Port 5 — Internal Keyboard (always attached)
+    // Port 5/6 — Video/Audio output
+    add_port(vic20_video_out_def, 0);
+    add_port(vic20_audio_out_def, 0);
+
+    // Port 7 — Internal Keyboard (always attached)
     static const PortDefinition vic20_keyboard_def = {
         PortType::CUSTOM, "Keyboard", nullptr, 0, true, false
     };
@@ -1382,6 +1401,7 @@ VIC20System::get_default_peripherals() const {
         { 0, "joystick"  },  // Control Port — joystick
         { 1, "1541"      },  // IEC Serial Bus — 1541 disk drive
         { 2, "datasette" },  // Cassette Port — datasette (1530)
+        { 5, "crt_tv"    },  // Video Out — Color TV
     };
 }
 

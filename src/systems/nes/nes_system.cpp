@@ -1398,14 +1398,18 @@ void NintendoSystem<V>::setup_ports() {
         add_port(NesPorts::FC_CONTROLLER_1, 1);
         add_port(NesPorts::FC_CONTROLLER_2, 2);
         add_port(NesPorts::FC_EXPANSION, 0);
-        printf("%s: Created %zu ports\n", Traits::name, get_ports().size());
     } else {
         // NES: removable controller ports, bottom expansion
         add_port(NesPorts::NES_CONTROLLER_1, 1);
         add_port(NesPorts::NES_CONTROLLER_2, 2);
         add_port(NesPorts::NES_EXPANSION, 0);
-        printf("%s: Created %zu ports\n", Traits::name, get_ports().size());
     }
+
+    // Video/Audio output ports (shared across all variants)
+    add_port(NesPorts::NES_VIDEO_OUT, 0);
+    add_port(NesPorts::NES_AUDIO_OUT, 0);
+
+    printf("%s: Created %zu ports\n", Traits::name, get_ports().size());
 
 }
 
@@ -1415,6 +1419,7 @@ NintendoSystem<V>::get_default_peripherals() const {
     return {
         { 0, "nes_gamepad" },   // Controller Port 1
         { 1, "nes_gamepad" },   // Controller Port 2
+        { 3, "crt_tv"      },   // Video Out — Color TV
     };
 }
 
