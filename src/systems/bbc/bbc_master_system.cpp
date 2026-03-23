@@ -16,6 +16,8 @@
 #include <cstring>
 #include <cstdio>
 
+using namespace mc6845::reg;
+
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #endif
@@ -336,7 +338,7 @@ uint8_t BBCMasterSystem<V>::scan_keyboard(uint8_t /*column*/) const {
 template<BBCMasterVariant V>
 void BBCMasterSystem<V>::crtc_display_char(uint16_t ma, uint8_t ra, bool cursor) {
     board_.chips().vidproc.display_char(ma, ra, cursor,
-                                        board_.video().regs_[MC6845_R9_MAX_SCANLINE]);
+                                        board_.video().regs_[R9_MAX_SCANLINE]);
 }
 
 template<BBCMasterVariant V>

@@ -140,7 +140,7 @@
 // Extract constants and debug metadata
 // ============================================================================
 
-namespace pokey_regs {
+namespace pokey::reg {
     POKEY_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t WRITE_REG_COUNT = 16;
     constexpr uint8_t READ_REG_COUNT  = 16;
@@ -163,16 +163,16 @@ namespace pokey_regs {
     constexpr uint8_t R_SERIN   = POKEY_READ_BASE + 0x0D;
     constexpr uint8_t R_IRQST   = POKEY_READ_BASE + 0x0E;
     constexpr uint8_t R_SKSTAT  = POKEY_READ_BASE + 0x0F;
-} // namespace pokey_regs
+} // namespace pokey::reg
 
 // Bitfield accessors
-namespace pokey_fld {
+namespace pokey::fld {
 #define POKEY_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
     inline constexpr uint32_t reg##_##fld    = BF_MASK(hilo); \
     inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
 POKEY_DECL(DECL_REG_NOP, POKEY_X_FLD_NS_, DECL_CMP_NOP)
 #undef POKEY_X_FLD_NS_
-} // namespace pokey_fld
+} // namespace pokey::fld
 
 DECL_EXTRACT(POKEY, POKEY_DECL)
 
@@ -241,7 +241,7 @@ public:
         : SoundChipBase(ChipInfo{Traits.chip_id, Traits.vendor, "C"})
         , audio_buffer_(pokey_constants::AUDIO_BUFFER_SIZE)
     {
-        init_regs(pokey_regs::TOTAL_REGS);
+        init_regs(pokey::reg::TOTAL_REGS);
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
@@ -260,13 +260,13 @@ public:
         regs_.clear();
 
         // Read register defaults
-        regs_[pokey_regs::R_IRQST]  = 0xFF;   // No pending IRQs (active-low)
-        regs_[pokey_regs::R_SKSTAT] = 0xFF;   // No errors
+        regs_[pokey::reg::R_IRQST]  = 0xFF;   // No pending IRQs (active-low)
+        regs_[pokey::reg::R_SKSTAT] = 0xFF;   // No errors
         // POT0-POT7: center position
         for (int i = 0; i < 8; i++)
-            regs_[pokey_regs::R_POT0 + i] = 228;
-        regs_[pokey_regs::R_KBCODE] = 0xFF;    // No key pressed
-        regs_[pokey_regs::R_SERIN]  = 0xFF;    // No serial data
+            regs_[pokey::reg::R_POT0 + i] = 228;
+        regs_[pokey::reg::R_KBCODE] = 0xFF;    // No key pressed
+        regs_[pokey::reg::R_SERIN]  = 0xFF;    // No serial data
 
         for (auto& ch : channel_) {
             ch.counter = 0;
@@ -347,33 +347,33 @@ public:
         uint8_t r = reg & 0x0F;
         switch (r) {
             case 0x0A: // RANDOM
-                if (regs_[pokey_regs::AUDCTL] & pokey_fld::AUDCTL_POLY9)
+                if (regs_[pokey::reg::AUDCTL] & pokey::fld::AUDCTL_POLY9)
                     return static_cast<uint8_t>(random_ & pokey_constants::POLY9_MASK);
                 else
                     return static_cast<uint8_t>(random_ >> 8);
 
             case 0x0E: // IRQST
-                return regs_[pokey_regs::R_IRQST];
+                return regs_[pokey::reg::R_IRQST];
 
             case 0x0F: // SKSTAT
-                return regs_[pokey_regs::R_SKSTAT];
+                return regs_[pokey::reg::R_SKSTAT];
 
             case 0x08: // ALLPOT
-                return regs_[pokey_regs::R_ALLPOT];
+                return regs_[pokey::reg::R_ALLPOT];
 
             case 0x09: // KBCODE
                 if constexpr (has_keyboard()) {
                     if (keyboard_read_callback)
                         return keyboard_read_callback(keyboard_read_context);
                 }
-                return regs_[pokey_regs::R_KBCODE];
+                return regs_[pokey::reg::R_KBCODE];
 
             case 0x0D: // SERIN
                 if constexpr (has_serial()) {
                     if (serial_read_callback)
                         return serial_read_callback(serial_read_context);
                 }
-                return regs_[pokey_regs::R_SERIN];
+                return regs_[pokey::reg::R_SERIN];
 
             default:
                 // POT0-POT7 (0x00-0x07)
@@ -382,7 +382,7 @@ public:
                         if (pot_read_callback)
                             return pot_read_callback(pot_read_context, r);
                     }
-                    return regs_[pokey_regs::R_POT0 + r];
+                    return regs_[pokey::reg::R_POT0 + r];
                 }
                 return 0x00;
         }
@@ -397,34 +397,34 @@ public:
         regs_[r] = data;  // Store in write register bank
 
         switch (r) {
-            case pokey_regs::STIMER:
+            case pokey::reg::STIMER:
                 // Reset all channel dividers
                 for (int i = 0; i < 4; i++)
                     channel_[i].reload(regs_[i * 2]);  // AUDFn at even offsets
                 break;
 
-            case pokey_regs::SKREST:
-                regs_[pokey_regs::R_SKSTAT] = 0xFF;  // Reset serial status
+            case pokey::reg::SKREST:
+                regs_[pokey::reg::R_SKSTAT] = 0xFF;  // Reset serial status
                 break;
 
-            case pokey_regs::POTGO:
+            case pokey::reg::POTGO:
                 // Start pot scan
                 if constexpr (has_pot_inputs()) {
-                    regs_[pokey_regs::R_ALLPOT] = 0xFF;  // All pots scanning
+                    regs_[pokey::reg::R_ALLPOT] = 0xFF;  // All pots scanning
                     pot_scan_counter_ = 0;
                 }
                 break;
 
-            case pokey_regs::IRQEN: {
-                uint8_t irqst = regs_[pokey_regs::R_IRQST];
+            case pokey::reg::IRQEN: {
+                uint8_t irqst = regs_[pokey::reg::R_IRQST];
                 // Clear pending IRQs no longer enabled
                 irqst |= ~data;
-                regs_[pokey_regs::R_IRQST] = irqst;
+                regs_[pokey::reg::R_IRQST] = irqst;
                 update_irq_output();
                 break;
             }
 
-            case pokey_regs::SKCTL:
+            case pokey::reg::SKCTL:
                 // Init mode: serial mode bits 1:0 = 0 resets poly counters
                 if ((data & 0x03) == 0) {
                     poly4_pos_ = 0;
@@ -434,7 +434,7 @@ public:
                 }
                 break;
 
-            case pokey_regs::SEROUT:
+            case pokey::reg::SEROUT:
                 if constexpr (has_serial()) {
                     if (serial_write_callback)
                         serial_write_callback(serial_write_context, data);
@@ -474,8 +474,8 @@ public:
         poly5_pos_++;
 
         // Base clock divider
-        uint8_t audctl = regs_[pokey_regs::AUDCTL];
-        uint8_t div = (audctl & pokey_fld::AUDCTL_BASE_15KHZ)
+        uint8_t audctl = regs_[pokey::reg::AUDCTL];
+        uint8_t div = (audctl & pokey::fld::AUDCTL_BASE_15KHZ)
                     ? pokey_constants::DIV_15KHZ
                     : pokey_constants::DIV_64KHZ;
 
@@ -489,18 +489,18 @@ public:
         for (int i = 0; i < 4; i++) {
             bool use_fast = false;
             // Ch1 uses 1.79 MHz if AUDCTL bit 6 set
-            if (i == 0 && (audctl & pokey_fld::AUDCTL_CH1_179MHZ))
+            if (i == 0 && (audctl & pokey::fld::AUDCTL_CH1_179MHZ))
                 use_fast = true;
             // Ch3 uses 1.79 MHz if AUDCTL bit 5 set
-            if (i == 2 && (audctl & pokey_fld::AUDCTL_CH3_179MHZ))
+            if (i == 2 && (audctl & pokey::fld::AUDCTL_CH3_179MHZ))
                 use_fast = true;
 
             bool should_tick = use_fast || base_tick;
 
             // 16-bit linked mode: ch2 clocks from ch1 borrow, ch4 from ch3 borrow
-            if ((i == 1) && (audctl & pokey_fld::AUDCTL_CH12_LINKED))
+            if ((i == 1) && (audctl & pokey::fld::AUDCTL_CH12_LINKED))
                 should_tick = channel_[0].borrow;
-            if ((i == 3) && (audctl & pokey_fld::AUDCTL_CH34_LINKED))
+            if ((i == 3) && (audctl & pokey::fld::AUDCTL_CH34_LINKED))
                 should_tick = channel_[2].borrow;
 
             channel_[i].borrow = false;
@@ -521,17 +521,17 @@ public:
         // High-pass filter: XOR ch1 output with ch3, ch2 with ch4
         bool ch0_out = channel_[0].output;
         bool ch1_out = channel_[1].output;
-        if (audctl & pokey_fld::AUDCTL_HIPASS_CH1)
+        if (audctl & pokey::fld::AUDCTL_HIPASS_CH1)
             ch0_out = ch0_out ^ channel_[2].output;
-        if (audctl & pokey_fld::AUDCTL_HIPASS_CH2)
+        if (audctl & pokey::fld::AUDCTL_HIPASS_CH2)
             ch1_out = ch1_out ^ channel_[3].output;
 
         // Mix output — each channel contributes 0-15 volume units
         float mix = 0.f;
         for (int i = 0; i < 4; i++) {
             uint8_t audc = regs_[i * 2 + 1];  // AUDCn
-            uint8_t vol = audc & pokey_fld::AUDC1_VOLUME;
-            if (audc & pokey_fld::AUDC1_VOL_ONLY) {
+            uint8_t vol = audc & pokey::fld::AUDC1_VOLUME;
+            if (audc & pokey::fld::AUDC1_VOL_ONLY) {
                 // DAC mode: volume directly drives output
                 mix += static_cast<float>(vol);
             } else {
@@ -547,14 +547,14 @@ public:
 
         // Timer IRQs: fire when channel counter borrows (underflows)
         if constexpr (has_timers()) {
-            uint8_t irqen = regs_[pokey_regs::IRQEN];
-            uint8_t irqst = regs_[pokey_regs::R_IRQST];
+            uint8_t irqen = regs_[pokey::reg::IRQEN];
+            uint8_t irqst = regs_[pokey::reg::R_IRQST];
             // Timer 1 (ch1), Timer 2 (ch2), Timer 4 (ch4)
             if (channel_[0].borrow && (irqen & 0x01)) irqst &= ~0x01;
             if (channel_[1].borrow && (irqen & 0x02)) irqst &= ~0x02;
             if (channel_[3].borrow && (irqen & 0x04)) irqst &= ~0x04;
-            if (irqst != regs_[pokey_regs::R_IRQST]) {
-                regs_[pokey_regs::R_IRQST] = irqst;
+            if (irqst != regs_[pokey::reg::R_IRQST]) {
+                regs_[pokey::reg::R_IRQST] = irqst;
                 update_irq_output();
                 // Assert IRQ on bus if any timer fired
                 if ((~irqst & irqen) != 0)
@@ -564,16 +564,16 @@ public:
 
         // Pot scan counter advancement
         if constexpr (has_pot_inputs()) {
-            if (regs_[pokey_regs::R_ALLPOT] != 0x00) {
+            if (regs_[pokey::reg::R_ALLPOT] != 0x00) {
                 pot_scan_counter_++;
                 for (int i = 0; i < 8; i++) {
-                    if (regs_[pokey_regs::R_ALLPOT] & (1 << i)) {
+                    if (regs_[pokey::reg::R_ALLPOT] & (1 << i)) {
                         uint8_t pot_val = 228;  // Default center
                         if (pot_read_callback)
                             pot_val = pot_read_callback(pot_read_context, i);
                         if (pot_scan_counter_ >= pot_val) {
-                            regs_[pokey_regs::R_POT0 + i] = pot_val;
-                            regs_[pokey_regs::R_ALLPOT] &= ~(1 << i);  // Done
+                            regs_[pokey::reg::R_POT0 + i] = pot_val;
+                            regs_[pokey::reg::R_ALLPOT] &= ~(1 << i);  // Done
                         }
                     }
                 }
@@ -592,19 +592,19 @@ public:
     // ========================================================================
 
     float get_sample() const {
-        uint8_t audctl = regs_[pokey_regs::AUDCTL];
+        uint8_t audctl = regs_[pokey::reg::AUDCTL];
         bool ch0_out = channel_[0].output;
         bool ch1_out = channel_[1].output;
-        if (audctl & pokey_fld::AUDCTL_HIPASS_CH1)
+        if (audctl & pokey::fld::AUDCTL_HIPASS_CH1)
             ch0_out = ch0_out ^ channel_[2].output;
-        if (audctl & pokey_fld::AUDCTL_HIPASS_CH2)
+        if (audctl & pokey::fld::AUDCTL_HIPASS_CH2)
             ch1_out = ch1_out ^ channel_[3].output;
 
         float mix = 0.f;
         for (int i = 0; i < 4; i++) {
             uint8_t audc = regs_[i * 2 + 1];
-            uint8_t vol = audc & pokey_fld::AUDC1_VOLUME;
-            if (audc & pokey_fld::AUDC1_VOL_ONLY) {
+            uint8_t vol = audc & pokey::fld::AUDC1_VOLUME;
+            if (audc & pokey::fld::AUDC1_VOL_ONLY) {
                 mix += static_cast<float>(vol);
             } else {
                 bool out = (i == 0) ? ch0_out : (i == 1) ? ch1_out : channel_[i].output;
@@ -705,7 +705,7 @@ private:
     // ========================================================================
 
     void advance_lfsr() {
-        if (regs_[pokey_regs::AUDCTL] & pokey_fld::AUDCTL_POLY9) {
+        if (regs_[pokey::reg::AUDCTL] & pokey::fld::AUDCTL_POLY9) {
             uint32_t feedback = ((random_ >> 0) ^ (random_ >> 4)) & 1;
             random_ = ((random_ >> 1) | (feedback << 8)) & pokey_constants::POLY9_MASK;
         } else {
@@ -721,7 +721,7 @@ private:
     /// Apply polynomial counter to determine if channel output should toggle.
     /// audc is the AUDCn register value for the channel.
     bool apply_poly(uint8_t audc) {
-        uint8_t sel = audc & pokey_fld::AUDC1_POLY_SEL;
+        uint8_t sel = audc & pokey::fld::AUDC1_POLY_SEL;
 
         // Get poly5 gate (used by most modes)
         bool poly5 = poly5_table_[poly5_pos_ % POLY5_SIZE];
@@ -786,8 +786,8 @@ private:
     // ========================================================================
 
     void update_irq_output() {
-        uint8_t irqst = regs_[pokey_regs::R_IRQST];
-        uint8_t irqen = regs_[pokey_regs::IRQEN];
+        uint8_t irqst = regs_[pokey::reg::R_IRQST];
+        uint8_t irqen = regs_[pokey::reg::IRQEN];
         // IRQ active when any enabled interrupt has fired (active-low in IRQST)
         bool irq_active = (~irqst & irqen) != 0;
         if (irq_callback)

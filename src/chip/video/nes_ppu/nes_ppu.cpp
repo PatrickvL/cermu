@@ -298,7 +298,7 @@ void PPU::connect_cartridge(Cartridge* cartridge) {
 void PPU::register_debug_fields() {
     using P = const PPU;
     auto& r = debug_registry_;
-    r.set_registers(regs_.data, REG_COUNT, NES_PPU_REG_INFO, 0x2000);
+    wire_debug_registers(NES_PPU_REG_INFO, 0x2000);
     r.set_decl_entries(NES_PPU_DECL_ENTRIES.data(), NES_PPU_DECL_ENTRIES.size());
 
     // Control/mask/status register values and bitfields are in the DECL walk.

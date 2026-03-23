@@ -81,7 +81,6 @@ AY_DECL(DECL_REG_NOP, AY_X_FLD_NS_, DECL_CMP_NOP)
 } // namespace ay
 
 // Backward compatibility alias
-namespace ay_regs = ay::reg;
 
 DECL_EXTRACT(AY, AY_DECL)
 
@@ -128,7 +127,7 @@ public:
         : SoundChipBase(ChipInfo(Traits.chip_id, Traits.vendor))
         , audio_buffer_(4096)
     {
-        init_regs(ay_regs::REG_COUNT);
+        init_regs(ay::reg::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
@@ -197,10 +196,10 @@ public:
 
     uint8_t read_register() const {
         if constexpr (Traits.has_io_port_a()) {
-            if (latch_addr_ == ay_regs::IO_PORT_A) return io_port_a_;
+            if (latch_addr_ == ay::reg::IO_PORT_A) return io_port_a_;
         }
         if constexpr (Traits.has_io_port_b()) {
-            if (latch_addr_ == ay_regs::IO_PORT_B) return io_port_b_;
+            if (latch_addr_ == ay::reg::IO_PORT_B) return io_port_b_;
         }
         // Variants without the requested I/O port return the register
         // contents (which default to 0x00 after reset).
@@ -241,7 +240,7 @@ public:
 
         // --- Noise generator (17-bit LFSR) ---
         {
-            uint8_t np = regs_[ay_regs::NOISE_PERIOD] & 0x1F;
+            uint8_t np = regs_[ay::reg::NOISE_PERIOD] & 0x1F;
             if (np == 0) np = 1;
             if (++noise_counter_ >= np) {
                 noise_counter_ = 0;
@@ -253,7 +252,7 @@ public:
 
         // --- Envelope generator ---
         if (!env_holding_) {
-            uint16_t ep = (regs_[ay_regs::ENV_COARSE] << 8) | regs_[ay_regs::ENV_FINE];
+            uint16_t ep = (regs_[ay::reg::ENV_COARSE] << 8) | regs_[ay::reg::ENV_FINE];
             if (ep == 0) ep = 1;
             if (++env_counter_ >= ep) {
                 env_counter_ = 0;
@@ -268,7 +267,7 @@ public:
     /// Get mixed mono sample (float, -1.0 to +1.0).
     /// Used for direct polling (e.g. Spectrum beeper+AY mix).
     float get_sample() const {
-        uint8_t mixer = regs_[ay_regs::MIXER];
+        uint8_t mixer = regs_[ay::reg::MIXER];
         float mix = 0.0f;
 
         for (int ch = 0; ch < 3; ch++) {
@@ -278,7 +277,7 @@ public:
             bool noise_out = (mixer & (1 << (ch + 3))) ? true : (bool)(noise_shift_ & 1);
             // Channel contributes volume when BOTH gates are high
             if (tone_out && noise_out) {
-                uint8_t amp_reg = regs_[ay_regs::AMP_A + ch];
+                uint8_t amp_reg = regs_[ay::reg::AMP_A + ch];
                 bool env_mode = amp_reg & 0x10;
                 uint8_t level = env_mode ? env_volume_ : (amp_reg & 0x0F);
                 mix += dac_table_[level & 0x0F];
@@ -377,7 +376,7 @@ private:
 
     /// Side effects triggered by writing to a specific internal register.
     void on_register_write(uint8_t internal_reg, uint8_t data) {
-        if (internal_reg == ay_regs::ENV_SHAPE) {
+        if (internal_reg == ay::reg::ENV_SHAPE) {
             // Writing envelope shape resets the envelope generator
             env_step_ = 0;
             env_counter_ = 0;
@@ -409,7 +408,7 @@ private:
         }
 
         // End of a full cycle — handle shape
-        uint8_t shape = regs_[ay_regs::ENV_SHAPE] & 0x0F;
+        uint8_t shape = regs_[ay::reg::ENV_SHAPE] & 0x0F;
         bool cont = shape & 0x08;
         bool alt  = shape & 0x02;
         bool hold = shape & 0x01;

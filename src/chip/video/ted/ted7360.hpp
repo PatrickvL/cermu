@@ -27,7 +27,7 @@
  * screen matrix and color attribute data.
  *
  * Register map: 32 registers at $FF00-$FF1F (mirrored at $FF20-$FF3F),
- * plus banking latches at $FF3E/$FF3F.  See TED_REG_* defines below for
+ * plus banking latches at $FF3E/$FF3F.  See * defines below for
  * individual register descriptions and address notes.
  */
 
@@ -47,61 +47,61 @@ struct AudioPort;
 
 // DECL(REG, FLD, CMP) — 32 registers, 17 fields (CONTROL1/2, SOUND_CTRL)
 #define TED_DECL(REG, FLD, CMP) \
-    REG(0x00, TED_REG_TIMER1_LO,  "Timer 1 low byte")                           \
-    REG(0x01, TED_REG_TIMER1_HI,  "Timer 1 high byte")                          \
-    REG(0x02, TED_REG_TIMER2_LO,  "Timer 2 low byte")                           \
-    REG(0x03, TED_REG_TIMER2_HI,  "Timer 2 high byte")                          \
-    REG(0x04, TED_REG_TIMER3_LO,  "Timer 3 low byte")                           \
-    REG(0x05, TED_REG_TIMER3_HI,  "Timer 3 high byte")                          \
-    REG(0x06, TED_REG_CONTROL1,   "Y-scroll/DEN/BMM/ECM")                       \
-      FLD(TED_REG_CONTROL1, TEST,    7:7, "Test bit",          Flag,  0, 0)      \
-      FLD(TED_REG_CONTROL1, ECM,     6:6, "Extended color",    Flag,  0, 0)      \
-      FLD(TED_REG_CONTROL1, BMM,     5:5, "Bitmap mode",       Flag,  0, 0)      \
-      FLD(TED_REG_CONTROL1, DEN,     4:4, "Display enable",    Flag,  0, 0)      \
-      FLD(TED_REG_CONTROL1, RSEL,    3:3, "25/24 rows",        Flag,  0, 0)      \
-      FLD(TED_REG_CONTROL1, YSCROLL, 2:0, "Y scroll",          Value, 0, 0)      \
-    REG(0x07, TED_REG_CONTROL2,   "X-scroll/CSEL/MCM")                           \
-      FLD(TED_REG_CONTROL2, RVS,      7:7, "Reverse screen",   Flag,  0, 0)      \
-      FLD(TED_REG_CONTROL2, PAL_NTSC, 6:6, "PAL/NTSC",         Flag,  0, 0)      \
-      FLD(TED_REG_CONTROL2, FREEZE,   5:5, "Freeze display",   Flag,  0, 0)      \
-      FLD(TED_REG_CONTROL2, MCM,      4:4, "Multicolor",       Flag,  0, 0)      \
-      FLD(TED_REG_CONTROL2, CSEL,     3:3, "40/38 columns",    Flag,  0, 0)      \
-      FLD(TED_REG_CONTROL2, XSCROLL,  2:0, "X scroll",         Value, 0, 0)      \
-    REG(0x08, TED_REG_KEYBOARD,   "Keyboard col/row latch")                      \
-    REG(0x09, TED_REG_IRQ_STATUS, "IRQ status/acknowledge")                      \
-    REG(0x0A, TED_REG_IRQ_MASK,   "IRQ enable mask")                             \
-    REG(0x0B, TED_REG_RASTER_CMP, "Raster compare lo")                           \
-    REG(0x0C, TED_REG_CURSOR_HI,  "Cursor position hi")                          \
-    REG(0x0D, TED_REG_CURSOR_LO,  "Cursor position lo")                          \
-    REG(0x0E, TED_REG_SOUND1_LO,  "Sound 1 freq lo")                            \
-    REG(0x0F, TED_REG_SOUND2_LO,  "Sound 2 freq lo")                            \
-    REG(0x10, TED_REG_SOUND2_HI,  "Sound 2 freq hi")                            \
-    REG(0x11, TED_REG_SOUND_CTRL, "DA/noise/enable/volume")                      \
-      FLD(TED_REG_SOUND_CTRL, DA_MODE,  7:7, "D/A mode",       Flag,  0, 0)      \
-      FLD(TED_REG_SOUND_CTRL, NOISE_EN, 6:6, "Noise enable",   Flag,  0, 0)      \
-      FLD(TED_REG_SOUND_CTRL, CH2_EN,   5:5, "Ch 2 enable",    Flag,  0, 0)      \
-      FLD(TED_REG_SOUND_CTRL, CH1_EN,   4:4, "Ch 1 enable",    Flag,  0, 0)      \
-      FLD(TED_REG_SOUND_CTRL, SND_VOL,  3:0, "Volume",         Value, 0, 0)      \
-    REG(0x12, TED_REG_MEM_CTRL,   "Sound1 hi + memory map")                      \
-    REG(0x13, TED_REG_CHAR_HI,    "Char generator base")                         \
-    REG(0x14, TED_REG_BITMAP_ADDR,"Screen/bitmap base")                          \
-    REG(0x15, TED_REG_COLOR_BG0,  "Background color 0",  Color, 6:0)            \
-    REG(0x16, TED_REG_COLOR_BG1,  "Background color 1",  Color, 6:0)            \
-    REG(0x17, TED_REG_COLOR_BG2,  "Background color 2",  Color, 6:0)            \
-    REG(0x18, TED_REG_COLOR_BG3,  "Background color 3",  Color, 6:0)            \
-    REG(0x19, TED_REG_BORDER,     "Border color",         Color, 6:0)            \
-    REG(0x1A, TED_REG_CHARPOS_HI, "Char counter hi")                             \
-    REG(0x1B, TED_REG_CHARPOS_LO, "Char counter lo")                             \
-    REG(0x1C, TED_REG_RASTER_HI,  "Raster counter hi")                           \
-    REG(0x1D, TED_REG_RASTER_LO,  "Raster counter lo")                           \
-    REG(0x1E, TED_REG_HPOS,       "Horizontal position")                         \
-    REG(0x1F, TED_REG_FLASH_RC,   "Flash counter/row ctr")
+    REG(0x00, TIMER1_LO,  "Timer 1 low byte")                           \
+    REG(0x01, TIMER1_HI,  "Timer 1 high byte")                          \
+    REG(0x02, TIMER2_LO,  "Timer 2 low byte")                           \
+    REG(0x03, TIMER2_HI,  "Timer 2 high byte")                          \
+    REG(0x04, TIMER3_LO,  "Timer 3 low byte")                           \
+    REG(0x05, TIMER3_HI,  "Timer 3 high byte")                          \
+    REG(0x06, CONTROL1,   "Y-scroll/DEN/BMM/ECM")                       \
+      FLD(CONTROL1, TEST,    7:7, "Test bit",          Flag,  0, 0)      \
+      FLD(CONTROL1, ECM,     6:6, "Extended color",    Flag,  0, 0)      \
+      FLD(CONTROL1, BMM,     5:5, "Bitmap mode",       Flag,  0, 0)      \
+      FLD(CONTROL1, DEN,     4:4, "Display enable",    Flag,  0, 0)      \
+      FLD(CONTROL1, RSEL,    3:3, "25/24 rows",        Flag,  0, 0)      \
+      FLD(CONTROL1, YSCROLL, 2:0, "Y scroll",          Value, 0, 0)      \
+    REG(0x07, CONTROL2,   "X-scroll/CSEL/MCM")                           \
+      FLD(CONTROL2, RVS,      7:7, "Reverse screen",   Flag,  0, 0)      \
+      FLD(CONTROL2, PAL_NTSC, 6:6, "PAL/NTSC",         Flag,  0, 0)      \
+      FLD(CONTROL2, FREEZE,   5:5, "Freeze display",   Flag,  0, 0)      \
+      FLD(CONTROL2, MCM,      4:4, "Multicolor",       Flag,  0, 0)      \
+      FLD(CONTROL2, CSEL,     3:3, "40/38 columns",    Flag,  0, 0)      \
+      FLD(CONTROL2, XSCROLL,  2:0, "X scroll",         Value, 0, 0)      \
+    REG(0x08, KEYBOARD,   "Keyboard col/row latch")                      \
+    REG(0x09, IRQ_STATUS, "IRQ status/acknowledge")                      \
+    REG(0x0A, IRQ_MASK,   "IRQ enable mask")                             \
+    REG(0x0B, RASTER_CMP, "Raster compare lo")                           \
+    REG(0x0C, CURSOR_HI,  "Cursor position hi")                          \
+    REG(0x0D, CURSOR_LO,  "Cursor position lo")                          \
+    REG(0x0E, SOUND1_LO,  "Sound 1 freq lo")                            \
+    REG(0x0F, SOUND2_LO,  "Sound 2 freq lo")                            \
+    REG(0x10, SOUND2_HI,  "Sound 2 freq hi")                            \
+    REG(0x11, SOUND_CTRL, "DA/noise/enable/volume")                      \
+      FLD(SOUND_CTRL, DA_MODE,  7:7, "D/A mode",       Flag,  0, 0)      \
+      FLD(SOUND_CTRL, NOISE_EN, 6:6, "Noise enable",   Flag,  0, 0)      \
+      FLD(SOUND_CTRL, CH2_EN,   5:5, "Ch 2 enable",    Flag,  0, 0)      \
+      FLD(SOUND_CTRL, CH1_EN,   4:4, "Ch 1 enable",    Flag,  0, 0)      \
+      FLD(SOUND_CTRL, SND_VOL,  3:0, "Volume",         Value, 0, 0)      \
+    REG(0x12, MEM_CTRL,   "Sound1 hi + memory map")                      \
+    REG(0x13, CHAR_HI,    "Char generator base")                         \
+    REG(0x14, BITMAP_ADDR,"Screen/bitmap base")                          \
+    REG(0x15, COLOR_BG0,  "Background color 0",  Color, 6:0)            \
+    REG(0x16, COLOR_BG1,  "Background color 1",  Color, 6:0)            \
+    REG(0x17, COLOR_BG2,  "Background color 2",  Color, 6:0)            \
+    REG(0x18, COLOR_BG3,  "Background color 3",  Color, 6:0)            \
+    REG(0x19, BORDER,     "Border color",         Color, 6:0)            \
+    REG(0x1A, CHARPOS_HI, "Char counter hi")                             \
+    REG(0x1B, CHARPOS_LO, "Char counter lo")                             \
+    REG(0x1C, RASTER_HI,  "Raster counter hi")                           \
+    REG(0x1D, RASTER_LO,  "Raster counter lo")                           \
+    REG(0x1E, HPOS,       "Horizontal position")                         \
+    REG(0x1F, FLASH_RC,   "Flash counter/row ctr")
 
 // --- Extract address constants ---
-TED_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-
-// --- TED chip-local namespace for bitfield accessors ---
 namespace ted {
+namespace reg {
+    TED_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
+} // namespace reg
 namespace fld {
 #define TED_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
     inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
@@ -113,16 +113,18 @@ TED_DECL(DECL_REG_NOP, TED_X_FLD_NS_, DECL_CMP_NOP)
 
 DECL_EXTRACT(TED, TED_DECL)
 
+using namespace ted::reg;
+
 // Video counter / address masks
 #define TED_VC_MASK              0x3FF    // 10-bit video counter (VC/VCBASE) mask: 0..1023 (40×25 = 1000 char positions)
 #define TED_TIMER_WRAP_VALUE     0xFFFF   // 16-bit initial value for timers 2/3 (no auto-reload: wrap to $FFFF on underflow)
 
 // Register mirror/latch constants
-#define TED_REG_ADDR_MASK        0x3F     // 6-bit address mask: TED occupies 64 locations $FF00-$FF3F
-#define TED_REG_MIRROR_START     0x20     // Registers $FF20-$FF3D mirror $FF00-$FF1D (except $FF3E/$FF3F)
-#define TED_REG_ROM_LATCH        0x3E     // $FF3E — write-only banking latch: switch to ROM mode
-#define TED_REG_RAM_LATCH        0x3F     // $FF3F — write-only banking latch: switch to RAM mode
-#define TED_REG_UNMIRROR_MASK    0x1F     // Mask to fold mirrored address ($20-$3D) back into primary range ($00-$1D)
+#define ADDR_MASK        0x3F     // 6-bit address mask: TED occupies 64 locations $FF00-$FF3F
+#define MIRROR_START     0x20     // Registers $FF20-$FF3D mirror $FF00-$FF1D (except $FF3E/$FF3F)
+#define ROM_LATCH        0x3E     // $FF3E — write-only banking latch: switch to ROM mode
+#define RAM_LATCH        0x3F     // $FF3F — write-only banking latch: switch to RAM mode
+#define UNMIRROR_MASK    0x1F     // Mask to fold mirrored address ($20-$3D) back into primary range ($00-$1D)
 
 // Video rendering constants
 #define TED_FLASH_PHASE_BIT      0x10     // Bit 4 of flash_counter: 0=cursor/blink off, 1=on (toggles at ~1 Hz)
@@ -616,8 +618,8 @@ struct ted7360_t : public VideoChipBase {
      */
     [[nodiscard]] uint16_t get_cursor_position() const noexcept {
         return static_cast<uint16_t>(
-             regs_[TED_REG_CURSOR_LO]
-           | ((regs_[TED_REG_CURSOR_HI] & 0x03u) << 8));
+             regs_[CURSOR_LO]
+           | ((regs_[CURSOR_HI] & 0x03u) << 8));
     }
 
     // Reverse mode

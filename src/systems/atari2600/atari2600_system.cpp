@@ -26,6 +26,9 @@
 #include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <cstdio>
+
+using namespace tia_w::reg;
+using namespace tia_r::reg;
 #include <algorithm>
 
 #ifdef CERMU_HAS_GUI
@@ -251,7 +254,7 @@ void Atari2600System::tick() {
     // When TIA VSYNC transitions from active to inactive, reset the TIA
     // scanline counter for the new frame.  Frame sync itself is now
     // stream-driven (TIA drives FrameEnd on VSYNC rising edge).
-    bool vsync_active = (board_.video().regs_[TIA_VSYNC] & 0x02) != 0;
+    bool vsync_active = (board_.video().regs_[VSYNC] & 0x02) != 0;
     if (in_vsync_ && !vsync_active) {
         board_.video().scanline = 0;  // Reset scanline counter for new frame
     }
@@ -485,7 +488,7 @@ void Atari2600System::update_joystick_state() {
         if (!(sig0 & (1u << PortSignals::JOY_LEFT)))  joystick_state_ &= ~0x40;
         if (!(sig0 & (1u << PortSignals::JOY_RIGHT))) joystick_state_ &= ~0x80;
         // Fire button → TIA INPT4 (active-low: 0=pressed, 1=not pressed)
-        board_.video().read_regs_[TIA_INPT4] = (sig0 & (1u << PortSignals::JOY_FIRE)) ? 0x80 : 0x00;
+        board_.video().read_regs_[INPT4] = (sig0 & (1u << PortSignals::JOY_FIRE)) ? 0x80 : 0x00;
     }
 
     // Player 1 (connector port 1)
@@ -495,7 +498,7 @@ void Atari2600System::update_joystick_state() {
         if (!(sig1 & (1u << PortSignals::JOY_DOWN)))  joystick_state_ &= ~0x02;
         if (!(sig1 & (1u << PortSignals::JOY_LEFT)))  joystick_state_ &= ~0x04;
         if (!(sig1 & (1u << PortSignals::JOY_RIGHT))) joystick_state_ &= ~0x08;
-        board_.video().read_regs_[TIA_INPT5] = (sig1 & (1u << PortSignals::JOY_FIRE)) ? 0x80 : 0x00;
+        board_.video().read_regs_[INPT5] = (sig1 & (1u << PortSignals::JOY_FIRE)) ? 0x80 : 0x00;
     }
 
     // Write joystick state to RIOT Port A and console switches to Port B

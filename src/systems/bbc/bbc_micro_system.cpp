@@ -6,6 +6,8 @@
 #include <cstring>
 #include <cstdio>
 
+using namespace mc6845::reg;
+
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #endif
@@ -517,7 +519,7 @@ bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
 
 void BBCMicroSystem::crtc_display_char(uint16_t ma, uint8_t ra, bool cursor) {
     if (false) return;
-    board_.video().display_char(ma, ra, cursor, board_.chips().crtc.regs_[MC6845_R9_MAX_SCANLINE]);
+    board_.video().display_char(ma, ra, cursor, board_.chips().crtc.regs_[R9_MAX_SCANLINE]);
 }
 
 void BBCMicroSystem::crtc_vsync() {
@@ -739,7 +741,7 @@ void BBCMicroSystem::render_system_menu_items() {
     ImGui::Separator();
     ImGui::Text("ROM Bank: %d", rom_select_);
     ImGui::Text("Video Mode: %d",
-        board_.video().get_display_mode(board_.chips().crtc.regs_[MC6845_R9_MAX_SCANLINE]));
+        board_.video().get_display_mode(board_.chips().crtc.regs_[R9_MAX_SCANLINE]));
 #endif
 }
 

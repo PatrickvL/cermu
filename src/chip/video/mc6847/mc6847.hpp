@@ -413,7 +413,7 @@ private:
     void register_debug_fields() {
         using S = const mc6847_t;
         auto& r = debug_registry_;
-        r.set_registers(regs_.data, mc6847_const::REG_COUNT, MC6847_REG_INFO);
+        wire_debug_registers(MC6847_REG_INFO);
         r.set_decl_entries(MC6847_DECL_ENTRIES.data(), MC6847_DECL_ENTRIES.size());
 
         r.category("Video Timing");

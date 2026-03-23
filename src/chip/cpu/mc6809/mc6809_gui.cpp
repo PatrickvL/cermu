@@ -33,12 +33,10 @@ namespace mc6809 {
 
 template <const MC6809Traits& Traits>
 void mc6809_t<Traits>::register_debug_fields() {
-    auto& r = this->debug_registry_;
-
     // Point the debug registry at the RegisterFile backing store + DECL table.
     // Zero-copy — no sync needed.
-    r.set_registers(regs_.debug_ptr(), regs_.debug_size(), MC6809_REG_INFO);
-    r.set_decl_entries(MC6809_DECL_ENTRIES.data(), MC6809_DECL_ENTRIES.size());
+    this->debug_registry_.set_registers(regs_.debug_ptr(), regs_.debug_size(), MC6809_REG_INFO);
+    this->debug_registry_.set_decl_entries(MC6809_DECL_ENTRIES.data(), MC6809_DECL_ENTRIES.size());
 }
 
 template void mc6809_t<MotorolaMC6809Traits>::register_debug_fields();

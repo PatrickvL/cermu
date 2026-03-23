@@ -14,6 +14,8 @@
 #include "chip/video/ted/ted7360.hpp"
 #include "core/os/os.hpp"
 
+using namespace ted::reg;
+
 #ifdef CERMU_USE_STD_FILESYSTEM
     #include <filesystem>
     namespace cermu_fs = std::filesystem;
@@ -473,7 +475,7 @@ TestResult TestFramework::run_test(const TestDescriptor& test) {
                         // Read TED border color ($FF19): lower 4 bits = hue
                         ted7360_t* ted = sys.ted();
                         uint8_t border_hue = ted
-                            ? (ted->regs_[TED_REG_BORDER] & 0x0F)
+                            ? (ted->regs_[BORDER] & 0x0F)
                             : 0;
 
                         if (border_hue == TED_HUE_GREEN) {

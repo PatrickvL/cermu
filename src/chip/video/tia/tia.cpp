@@ -23,6 +23,9 @@
 #include "core/chip_manifest.hpp"
 #include "core/chip_registry.hpp"
 #include <cstring>
+
+using namespace tia_w::reg;
+using namespace tia_r::reg;
 #include <algorithm>
 
 REGISTER_CHIP_TYPE("TIA", tia_t)
@@ -135,12 +138,12 @@ void tia_t::reset() {
     memset(cx, 0, sizeof(cx));
 
     // Input ports default to not-pressed (bit 7 high)
-    read_regs_[TIA_INPT0] = 0x80;
-    read_regs_[TIA_INPT1] = 0x80;
-    read_regs_[TIA_INPT2] = 0x80;
-    read_regs_[TIA_INPT3] = 0x80;
-    read_regs_[TIA_INPT4] = 0x80;
-    read_regs_[TIA_INPT5] = 0x80;
+    read_regs_[INPT0] = 0x80;
+    read_regs_[INPT1] = 0x80;
+    read_regs_[INPT2] = 0x80;
+    read_regs_[INPT3] = 0x80;
+    read_regs_[INPT4] = 0x80;
+    read_regs_[INPT5] = 0x80;
 
     audio[0] = {};
     audio[1] = {};
@@ -170,8 +173,8 @@ uint32_t tia_t::audio_read(float* buffer, uint32_t max_samples) {
 
 void tia_t::tick_audio_channel(int ch_idx) {
     auto& ch = audio[ch_idx];
-    uint8_t control   = regs_[TIA_AUDC0 + ch_idx];
-    uint8_t frequency = regs_[TIA_AUDF0 + ch_idx];
+    uint8_t control   = regs_[AUDC0 + ch_idx];
+    uint8_t frequency = regs_[AUDF0 + ch_idx];
 
     // The TIA audio divider counts down from the frequency value
     if (ch.div_counter == 0) {
@@ -255,7 +258,7 @@ uint8_t tia_t::get_playfield_pixel(int x) const {
 
     // Convert pixel position to playfield bit index (0-19 for left half)
     int pfx;
-    bool reflect = (regs_[TIA_CTRLPF] & 0x01) != 0;
+    bool reflect = (regs_[CTRLPF] & 0x01) != 0;
 
     if (x < 80) {
         // Left half (first 80 pixels = PF bits 0-19)
@@ -274,13 +277,13 @@ uint8_t tia_t::get_playfield_pixel(int x) const {
     uint8_t bit;
     if (pfx < 4) {
         // PF0: bits 4-7 (pfx 0 = D4, pfx 3 = D7)
-        bit = (regs_[TIA_PF0] >> (4 + pfx)) & 1;
+        bit = (regs_[PF0] >> (4 + pfx)) & 1;
     } else if (pfx < 12) {
         // PF1: bits 7-0 (pfx 4 = D7, pfx 11 = D0)
-        bit = (regs_[TIA_PF1] >> (11 - pfx)) & 1;
+        bit = (regs_[PF1] >> (11 - pfx)) & 1;
     } else {
         // PF2: bits 0-7 (pfx 12 = D0, pfx 19 = D7)
-        bit = (regs_[TIA_PF2] >> (pfx - 12)) & 1;
+        bit = (regs_[PF2] >> (pfx - 12)) & 1;
     }
     return bit ? PX_PF : 0;
 }
@@ -396,36 +399,36 @@ void tia_t::render_pixel() {
     // Each function returns its bitmask constant (PX_*) or 0.
     uint8_t pixel_bits = get_playfield_pixel(x);
 
-    bool vdelp0 = (regs_[TIA_VDELP0] & 0x01) != 0;
-    bool vdelp1 = (regs_[TIA_VDELP1] & 0x01) != 0;
-    uint8_t p0_grp = vdelp0 ? grp0_old : regs_[TIA_GRP0];
-    uint8_t p1_grp = vdelp1 ? grp1_old : regs_[TIA_GRP1];
-    uint8_t nusiz0 = regs_[TIA_NUSIZ0];
-    uint8_t nusiz1 = regs_[TIA_NUSIZ1];
-    bool refp0 = (regs_[TIA_REFP0] & 0x08) != 0;
-    bool refp1 = (regs_[TIA_REFP1] & 0x08) != 0;
+    bool vdelp0 = (regs_[VDELP0] & 0x01) != 0;
+    bool vdelp1 = (regs_[VDELP1] & 0x01) != 0;
+    uint8_t p0_grp = vdelp0 ? grp0_old : regs_[GRP0];
+    uint8_t p1_grp = vdelp1 ? grp1_old : regs_[GRP1];
+    uint8_t nusiz0 = regs_[NUSIZ0];
+    uint8_t nusiz1 = regs_[NUSIZ1];
+    bool refp0 = (regs_[REFP0] & 0x08) != 0;
+    bool refp1 = (regs_[REFP1] & 0x08) != 0;
     pixel_bits |= get_player_pixel(x, p0_grp, pos_p0, nusiz0, refp0, PX_P0);
     pixel_bits |= get_player_pixel(x, p1_grp, pos_p1, nusiz1, refp1, PX_P1);
 
     // Missile 0 — locked to player 0 if RESMP0 set
-    bool resmp0 = (regs_[TIA_RESMP0] & 0x02) != 0;
+    bool resmp0 = (regs_[RESMP0] & 0x02) != 0;
     uint8_t m0_pos = resmp0 ? pos_p0 : pos_m0;
     uint8_t m0_size = (nusiz0 >> 4) & 0x03;
-    bool enam0 = (regs_[TIA_ENAM0] & 0x02) != 0;
+    bool enam0 = (regs_[ENAM0] & 0x02) != 0;
     pixel_bits |= get_missile_pixel(x, m0_pos, m0_size, enam0 && !resmp0, nusiz0, PX_M0);
 
     // Missile 1 — locked to player 1 if RESMP1 set
-    bool resmp1 = (regs_[TIA_RESMP1] & 0x02) != 0;
+    bool resmp1 = (regs_[RESMP1] & 0x02) != 0;
     uint8_t m1_pos = resmp1 ? pos_p1 : pos_m1;
     uint8_t m1_size = (nusiz1 >> 4) & 0x03;
-    bool enam1 = (regs_[TIA_ENAM1] & 0x02) != 0;
+    bool enam1 = (regs_[ENAM1] & 0x02) != 0;
     pixel_bits |= get_missile_pixel(x, m1_pos, m1_size, enam1 && !resmp1, nusiz1, PX_M1);
 
     // Ball — uses simple single-position check (no copies)
-    bool vdelbl = (regs_[TIA_VDELBL] & 0x01) != 0;
-    bool enabl = (regs_[TIA_ENABL] & 0x02) != 0;
+    bool vdelbl = (regs_[VDELBL] & 0x01) != 0;
+    bool enabl = (regs_[ENABL] & 0x02) != 0;
     bool bl_enabled = vdelbl ? enabl_old : enabl;
-    uint8_t ctrlpf = regs_[TIA_CTRLPF];
+    uint8_t ctrlpf = regs_[CTRLPF];
     uint8_t bl_size = (ctrlpf >> 4) & 0x03;
     pixel_bits |= get_missile_pixel(x, pos_bl, bl_size, bl_enabled, PX_BL);
 
@@ -444,12 +447,12 @@ void tia_t::render_pixel() {
     uint8_t color;
     bool priority = (ctrlpf & 0x04) != 0;
     bool score_mode = (ctrlpf & 0x02) != 0;
-    uint8_t colup0 = regs_[TIA_COLUP0];
-    uint8_t colup1 = regs_[TIA_COLUP1];
-    uint8_t colupf = regs_[TIA_COLUPF];
-    uint8_t colubk = regs_[TIA_COLUBK];
+    uint8_t colup0 = regs_[COLUP0];
+    uint8_t colup1 = regs_[COLUP1];
+    uint8_t colupf = regs_[COLUPF];
+    uint8_t colubk = regs_[COLUBK];
 
-    if (regs_[TIA_VBLANK] & 0x02) {
+    if (regs_[VBLANK] & 0x02) {
         // During VBLANK, output black
         color = 0;
     } else if (hmove_blank_active && x < 8) {
@@ -499,7 +502,7 @@ void tia_t::render_pixel() {
 // ============================================================================
 
 void tia_t::tick_color_clock() {
-    bool vblank = (regs_[TIA_VBLANK] & 0x02) != 0;
+    bool vblank = (regs_[VBLANK] & 0x02) != 0;
 
     // Detect VBLANK→visible transition before first pixel is rendered.
     // This ensures visible_row=0 is available for the first visible scanline.
@@ -526,7 +529,7 @@ void tia_t::tick_color_clock() {
 
         // Drive video stream at end of each scanline
         if (video_stream_) {
-            bool vsync_active = (regs_[TIA_VSYNC] & 0x02) != 0;
+            bool vsync_active = (regs_[VSYNC] & 0x02) != 0;
 
             VideoFlags sync_flags = VideoFlags::HSync;
             if (vblank || vsync_active)
@@ -589,7 +592,7 @@ void tia_t::tick_cpu_cycle() {
             // Mix both channels
             float sample = 0.0f;
             for (int c = 0; c < 2; ++c) {
-                uint8_t vol = regs_[TIA_AUDV0 + c];
+                uint8_t vol = regs_[AUDV0 + c];
                 if (audio[c].output && vol > 0) {
                     sample += (static_cast<float>(vol) / 15.0f);
                 }
@@ -614,56 +617,56 @@ void tia_t::write(uint16_t addr, uint8_t data) {
     if (addr >= WRITE_REG_COUNT) return;
 
     switch (addr) {
-        case TIA_VBLANK: {
-            bool old_vblank = (regs_[TIA_VBLANK] & 0x02) != 0;
+        case VBLANK: {
+            bool old_vblank = (regs_[VBLANK] & 0x02) != 0;
             bool new_vblank = (data & 0x02) != 0;
             // Detect VBLANK off transition mid-scanline so the rest of the
             // current scanline renders to the framebuffer immediately.
             if (old_vblank && !new_vblank && visible_row < 0) {
                 visible_row = 0;
             }
-            regs_[TIA_VBLANK] = data;
+            regs_[VBLANK] = data;
             // Bit 7: dump paddle capacitors (INPT0-3) — not implemented
             break;
         }
 
-        case TIA_WSYNC:
+        case WSYNC:
             regs_[addr] = data;
             wsync_pending = true;
             break;
 
-        case TIA_RSYNC:
+        case RSYNC:
             regs_[addr] = data;
             // Reset horizontal sync counter — rarely used
             h_counter = 0;
             break;
 
         // Object position resets — set position to current horizontal counter
-        case TIA_RESP0:
+        case RESP0:
             regs_[addr] = data;
             pos_p0 = (h_counter >= tia_constants::HBLANK_CLOCKS)
                     ? static_cast<uint8_t>(h_counter - tia_constants::HBLANK_CLOCKS)
                     : 0;
             break;
-        case TIA_RESP1:
+        case RESP1:
             regs_[addr] = data;
             pos_p1 = (h_counter >= tia_constants::HBLANK_CLOCKS)
                     ? static_cast<uint8_t>(h_counter - tia_constants::HBLANK_CLOCKS)
                     : 0;
             break;
-        case TIA_RESM0:
+        case RESM0:
             regs_[addr] = data;
             pos_m0 = (h_counter >= tia_constants::HBLANK_CLOCKS)
                     ? static_cast<uint8_t>(h_counter - tia_constants::HBLANK_CLOCKS)
                     : 0;
             break;
-        case TIA_RESM1:
+        case RESM1:
             regs_[addr] = data;
             pos_m1 = (h_counter >= tia_constants::HBLANK_CLOCKS)
                     ? static_cast<uint8_t>(h_counter - tia_constants::HBLANK_CLOCKS)
                     : 0;
             break;
-        case TIA_RESBL:
+        case RESBL:
             regs_[addr] = data;
             pos_bl = (h_counter >= tia_constants::HBLANK_CLOCKS)
                     ? static_cast<uint8_t>(h_counter - tia_constants::HBLANK_CLOCKS)
@@ -671,24 +674,24 @@ void tia_t::write(uint16_t addr, uint8_t data) {
             break;
 
         // Audio (frequency and volume need masks — consumers use raw values)
-        case TIA_AUDF0:  regs_[addr] = data & 0x1F; break;
-        case TIA_AUDF1:  regs_[addr] = data & 0x1F; break;
-        case TIA_AUDV0:  regs_[addr] = data & 0x0F; break;
-        case TIA_AUDV1:  regs_[addr] = data & 0x0F; break;
+        case AUDF0:  regs_[addr] = data & 0x1F; break;
+        case AUDF1:  regs_[addr] = data & 0x1F; break;
+        case AUDV0:  regs_[addr] = data & 0x0F; break;
+        case AUDV1:  regs_[addr] = data & 0x0F; break;
 
         // Graphics — latching side effects
-        case TIA_GRP0:
-            grp1_old = regs_[TIA_GRP1];  // Writing GRP0 latches current GRP1 into GRP1-OLD
-            regs_[TIA_GRP0] = data;
+        case GRP0:
+            grp1_old = regs_[GRP1];  // Writing GRP0 latches current GRP1 into GRP1-OLD
+            regs_[GRP0] = data;
             break;
-        case TIA_GRP1:
-            grp0_old = regs_[TIA_GRP0];  // Writing GRP1 latches current GRP0 into GRP0-OLD
-            regs_[TIA_GRP1] = data;
+        case GRP1:
+            grp0_old = regs_[GRP0];  // Writing GRP1 latches current GRP0 into GRP0-OLD
+            regs_[GRP1] = data;
             // Writing GRP1 also updates the old ball enable
-            enabl_old = (regs_[TIA_ENABL] & 0x02) != 0;
+            enabl_old = (regs_[ENABL] & 0x02) != 0;
             break;
 
-        case TIA_HMOVE: {
+        case HMOVE: {
             regs_[addr] = data;
             // Apply horizontal motion to all objects
             // Motion value is subtracted (reversed sign convention)
@@ -700,11 +703,11 @@ void tia_t::write(uint16_t addr, uint8_t data) {
                 while (new_pos >= 160) new_pos -= 160;
                 pos = static_cast<uint8_t>(new_pos);
             };
-            apply_motion(pos_p0, regs_[TIA_HMP0]);
-            apply_motion(pos_p1, regs_[TIA_HMP1]);
-            apply_motion(pos_m0, regs_[TIA_HMM0]);
-            apply_motion(pos_m1, regs_[TIA_HMM1]);
-            apply_motion(pos_bl, regs_[TIA_HMBL]);
+            apply_motion(pos_p0, regs_[HMP0]);
+            apply_motion(pos_p1, regs_[HMP1]);
+            apply_motion(pos_m0, regs_[HMM0]);
+            apply_motion(pos_m1, regs_[HMM1]);
+            apply_motion(pos_bl, regs_[HMBL]);
 
             // HMOVE blanking: if strobed during HBLANK, blank first 8 visible pixels
             if (h_counter < tia_constants::HBLANK_CLOCKS) {
@@ -713,15 +716,15 @@ void tia_t::write(uint16_t addr, uint8_t data) {
             break;
         }
 
-        case TIA_HMCLR:
-            regs_[TIA_HMP0] = 0;
-            regs_[TIA_HMP1] = 0;
-            regs_[TIA_HMM0] = 0;
-            regs_[TIA_HMM1] = 0;
-            regs_[TIA_HMBL] = 0;
+        case HMCLR:
+            regs_[HMP0] = 0;
+            regs_[HMP1] = 0;
+            regs_[HMM0] = 0;
+            regs_[HMM1] = 0;
+            regs_[HMBL] = 0;
             break;
 
-        case TIA_CXCLR:
+        case CXCLR:
             regs_[addr] = data;
             memset(cx, 0, sizeof(cx));
             break;
@@ -748,38 +751,38 @@ uint8_t tia_t::read(uint16_t addr) {
         // PX_* bit layout: M0(0) M1(1) P0(2) P1(3) BL(4) PF(5)
         // For FB registers: PF=bit5, BL=bit4 → (cx & 0x30) << 2 maps to D7,D6
         // For CXM0P: P1=bit3, P0=bit2 → (cx & 0x0C) << 4 maps to D7,D6
-        case TIA_CXM0P:
+        case CXM0P:
             read_regs_[addr] = (cx[CX_M0] & (PX_P1 | PX_P0)) << 4;
             break;
-        case TIA_CXM1P:
+        case CXM1P:
             read_regs_[addr] = ((cx[CX_M1] & PX_P0) << 5) |
                               ((cx[CX_M1] & PX_P1) << 3);
             break;
-        case TIA_CXP0FB:
+        case CXP0FB:
             read_regs_[addr] = (cx[CX_P0] & (PX_PF | PX_BL)) << 2;
             break;
-        case TIA_CXP1FB:
+        case CXP1FB:
             read_regs_[addr] = (cx[CX_P1] & (PX_PF | PX_BL)) << 2;
             break;
-        case TIA_CXM0FB:
+        case CXM0FB:
             read_regs_[addr] = (cx[CX_M0] & (PX_PF | PX_BL)) << 2;
             break;
-        case TIA_CXM1FB:
+        case CXM1FB:
             read_regs_[addr] = (cx[CX_M1] & (PX_PF | PX_BL)) << 2;
             break;
-        case TIA_CXBLPF:
+        case CXBLPF:
             read_regs_[addr] = (cx[CX_BL] & PX_PF) << 2;
             break;
-        case TIA_CXPPMM:
+        case CXPPMM:
             read_regs_[addr] = ((cx[CX_P0] & PX_P1) << 4) |
                               ((cx[CX_M0] & PX_M1) << 5);
             break;
-        case TIA_INPT0:
-        case TIA_INPT1:
-        case TIA_INPT2:
-        case TIA_INPT3:
-        case TIA_INPT4:
-        case TIA_INPT5:
+        case INPT0:
+        case INPT1:
+        case INPT2:
+        case INPT3:
+        case INPT4:
+        case INPT5:
             break;  // read directly from read_regs_ (set by system)
     }
     return read_regs_[addr];
@@ -793,7 +796,7 @@ uint8_t tia_t::read(uint16_t addr) {
 void tia_t::register_debug_fields() {
     using T = const tia_t;
     auto& r = debug_registry_;
-    r.set_registers(regs_.data, TIA_W_NUM_REGS, TIA_W_REG_INFO, 0x00);
+    wire_debug_registers(TIA_W_REG_INFO);
     r.set_decl_entries(TIA_W_DECL_ENTRIES.data(), TIA_W_DECL_ENTRIES.size());
 
     // Write register values, control bitfields, audio, etc. are all in
@@ -830,11 +833,11 @@ void tia_t::register_debug_fields() {
 
     // ---- Read Registers (separate address space via read_regs_[]) ----
     r.category("Input Ports")
-     .flag("INPT4 (Joy0 Fire)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[TIA_INPT4] & 0x80) != 0; })
-     .flag("INPT5 (Joy1 Fire)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[TIA_INPT5] & 0x80) != 0; })
-     .flag("INPT0 (Paddle 0)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[TIA_INPT0] & 0x80) != 0; })
-     .flag("INPT1 (Paddle 1)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[TIA_INPT1] & 0x80) != 0; })
-     .flag("INPT2 (Paddle 2)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[TIA_INPT2] & 0x80) != 0; })
-     .flag("INPT3 (Paddle 3)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[TIA_INPT3] & 0x80) != 0; });
+     .flag("INPT4 (Joy0 Fire)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[INPT4] & 0x80) != 0; })
+     .flag("INPT5 (Joy1 Fire)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[INPT5] & 0x80) != 0; })
+     .flag("INPT0 (Paddle 0)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[INPT0] & 0x80) != 0; })
+     .flag("INPT1 (Paddle 1)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[INPT1] & 0x80) != 0; })
+     .flag("INPT2 (Paddle 2)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[INPT2] & 0x80) != 0; })
+     .flag("INPT3 (Paddle 3)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[INPT3] & 0x80) != 0; });
 }
 #endif // CERMU_HAS_CHIP_DEBUG

@@ -23,6 +23,8 @@
 #include <cctype>
 #include <algorithm>
 
+using namespace ted::reg;
+
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #endif
@@ -1080,7 +1082,7 @@ void Commodore264System<V>::apply_cpu_banking() {
 // No sub-tables to update — viewer 1 is pure page table.
 template<C264SeriesVariant V>
 void Commodore264System<V>::apply_ted_video_banking() {
-    bool romsel = ted_ && (ted_->regs_[TED_REG_MEM_CTRL] & 0x04) != 0;
+    bool romsel = ted_ && (ted_->regs_[MEM_CTRL] & 0x04) != 0;
     bus_.load_snapshot(c264_viewer::kTedVideo,
                        snapshots_[c264_viewer::kTedVideo][romsel ? 1 : 0]);
 }

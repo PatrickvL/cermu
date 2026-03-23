@@ -90,7 +90,6 @@ WSG_DECL(DECL_REG_NOP, WSG_X_FLD_NS_, DECL_CMP_NOP)
 } // namespace wsg
 
 // Backward compatibility alias
-namespace wsg_regs = wsg::reg;
 
 DECL_EXTRACT(WSG, WSG_DECL)
 
@@ -108,7 +107,7 @@ public:
         , num_channels_(variant == WSGVariant::WSG3 ? 3 : 8)
         , audio_buffer_(4096)
     {
-        init_regs(wsg_regs::REG_COUNT);
+        init_regs(wsg::reg::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
@@ -143,7 +142,7 @@ public:
         channels_[channel].freq[byte_idx] = data & 0x0F;
         // Mirror to register array
         uint8_t reg_idx = static_cast<uint8_t>(channel * 5 + byte_idx);
-        if (reg_idx < wsg_regs::REG_COUNT) regs_[reg_idx] = data & 0x0F;
+        if (reg_idx < wsg::reg::REG_COUNT) regs_[reg_idx] = data & 0x0F;
     }
 
     /// Set waveform select and volume for a channel.
@@ -153,7 +152,7 @@ public:
         channels_[channel].volume   = volume & 0x0F;
         // Mirror to register array
         static constexpr uint8_t wavevol_regs[] = {
-            wsg_regs::V1_WAVEVOL, wsg_regs::V2_WAVEVOL, wsg_regs::V3_WAVEVOL
+            wsg::reg::V1_WAVEVOL, wsg::reg::V2_WAVEVOL, wsg::reg::V3_WAVEVOL
         };
         if (channel < 3) regs_[wavevol_regs[channel]] = ((waveform & 0x07) << 4) | (volume & 0x0F);
     }
@@ -289,7 +288,7 @@ private:
     void register_debug_fields() {
         using S = const namco_wsg_t;
         auto& r = debug_registry_;
-        r.set_registers(regs_.data, wsg_regs::REG_COUNT, WSG_REG_INFO);
+        wire_debug_registers(WSG_REG_INFO);
         r.set_decl_entries(WSG_DECL_ENTRIES.data(), WSG_DECL_ENTRIES.size());
 
         // Waveform/volume fields are in the DECL walk (WAVEVOL FLDs).

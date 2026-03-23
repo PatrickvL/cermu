@@ -16,6 +16,8 @@
 #include <cstdio>
 #include <cstring>
 
+using namespace mc6845::reg;
+
 // ============================================================================
 // INITIALIZATION / RESET
 // ============================================================================
@@ -70,10 +72,10 @@ uint8_t mc6845_t::read(uint16_t addr) {
 
     // Data register — only R14-R17 are readable
     switch (address_register) {
-        case MC6845_R14_CURSOR_HI:  return regs_[MC6845_R14_CURSOR_HI];
-        case MC6845_R15_CURSOR_LO:  return regs_[MC6845_R15_CURSOR_LO];
-        case MC6845_R16_LPEN_HI:    return static_cast<uint8_t>(light_pen_address >> 8);
-        case MC6845_R17_LPEN_LO:    return static_cast<uint8_t>(light_pen_address & 0xFF);
+        case R14_CURSOR_HI:  return regs_[R14_CURSOR_HI];
+        case R15_CURSOR_LO:  return regs_[R15_CURSOR_LO];
+        case R16_LPEN_HI:    return static_cast<uint8_t>(light_pen_address >> 8);
+        case R17_LPEN_LO:    return static_cast<uint8_t>(light_pen_address & 0xFF);
         default: return 0;  // Non-readable registers return 0
     }
 }
@@ -86,10 +88,10 @@ void mc6845_t::write(uint16_t addr, uint8_t data) {
     }
 
     // Data register: write to selected register
-    if (address_register >= MC6845_NUM_REGISTERS) return;
+    if (address_register >= NUM_REGISTERS) return;
 
     // R16-R17 are read-only (light pen)
-    if (address_register >= MC6845_R16_LPEN_HI) return;
+    if (address_register >= R16_LPEN_HI) return;
 
     regs_[address_register] = data;
 }
@@ -107,8 +109,8 @@ void mc6845_t::tick() {
     if (h_display_active && v_display_active) {
         // Check cursor position
         bool at_cursor = cursor_visible && (linear_address == cursor_address()) &&
-                         (v_scanline_counter >= (regs_[MC6845_R10_CURSOR_START] & 0x1F)) &&
-                         (v_scanline_counter <= regs_[MC6845_R11_CURSOR_END]);
+                         (v_scanline_counter >= (regs_[R10_CURSOR_START] & 0x1F)) &&
+                         (v_scanline_counter <= regs_[R11_CURSOR_END]);
 
         // ---- Built-in indexed character renderer ----
         if (char_render_rom_ && char_render_vram_ && char_render_indices_) {
@@ -163,18 +165,18 @@ void mc6845_t::tick() {
 
     // --- Horizontal display enable ---
     // Display is active for chars 0 through R1-1
-    if (h_char_counter >= regs_[MC6845_R1_HDISPLAYED]) {
+    if (h_char_counter >= regs_[R1_HDISPLAYED]) {
         h_display_active = false;
     }
 
     // --- Horizontal sync ---
-    if (h_char_counter == regs_[MC6845_R2_HSYNC_POS]) {
+    if (h_char_counter == regs_[R2_HSYNC_POS]) {
         h_sync_active = true;
         h_sync_counter = 0;
     }
     if (h_sync_active) {
         h_sync_counter++;
-        uint8_t hsync_width = regs_[MC6845_R3_SYNC_WIDTHS] & 0x0F;
+        uint8_t hsync_width = regs_[R3_SYNC_WIDTHS] & 0x0F;
         if (hsync_width == 0) hsync_width = 16;  // 0 means 16 characters wide
         if (h_sync_counter >= hsync_width) {
             h_sync_active = false;
@@ -182,7 +184,7 @@ void mc6845_t::tick() {
     }
 
     // --- End of horizontal line (character counter == R0) ---
-    if (h_char_counter > regs_[MC6845_R0_HTOTAL]) {
+    if (h_char_counter > regs_[R0_HTOTAL]) {
         // Reset horizontal counter for new line
         h_char_counter = 0;
         h_display_active = true;
@@ -197,7 +199,7 @@ void mc6845_t::tick() {
         if (in_adjust) {
             // Vertical adjust phase: extra scan lines after last character row
             v_adjust_counter++;
-            if (v_adjust_counter >= regs_[MC6845_R5_VADJUST]) {
+            if (v_adjust_counter >= regs_[R5_VADJUST]) {
                 // End of frame — start new frame
                 in_adjust = false;
                 v_row_counter = 0;
@@ -208,7 +210,7 @@ void mc6845_t::tick() {
                 frame_count++;
 
                 // Update cursor blink state
-                uint8_t blink_mode = (regs_[MC6845_R10_CURSOR_START] >> 5) & 0x03;
+                uint8_t blink_mode = (regs_[R10_CURSOR_START] >> 5) & 0x03;
                 switch (blink_mode) {
                     case 0:  // No blink — always visible
                         cursor_visible = true;
@@ -239,7 +241,7 @@ void mc6845_t::tick() {
             // Normal scan line advance within character row
             v_scanline_counter++;
 
-            if (v_scanline_counter > regs_[MC6845_R9_MAX_SCANLINE]) {
+            if (v_scanline_counter > regs_[R9_MAX_SCANLINE]) {
                 // End of character row — advance to next row
                 v_scanline_counter = 0;
                 v_row_counter++;
@@ -248,18 +250,18 @@ void mc6845_t::tick() {
                 row_start_address = linear_address;
 
                 // --- Vertical display enable ---
-                if (v_row_counter >= regs_[MC6845_R6_VDISPLAYED]) {
+                if (v_row_counter >= regs_[R6_VDISPLAYED]) {
                     v_display_active = false;
                 }
 
                 // --- Vertical sync ---
-                if (v_row_counter == regs_[MC6845_R7_VSYNC_POS]) {
+                if (v_row_counter == regs_[R7_VSYNC_POS]) {
                     v_sync_active = true;
                     v_sync_counter = 0;
                 }
 
                 // --- End of frame (row counter == R4) ---
-                if (v_row_counter > regs_[MC6845_R4_VTOTAL]) {
+                if (v_row_counter > regs_[R4_VTOTAL]) {
                     // Enter vertical adjust phase
                     in_adjust = true;
                     v_adjust_counter = 0;
@@ -274,7 +276,7 @@ void mc6845_t::tick() {
         // VSYNC duration tracking (in scan lines)
         if (v_sync_active) {
             v_sync_counter++;
-            uint8_t vsync_width = (regs_[MC6845_R3_SYNC_WIDTHS] >> 4) & 0x0F;
+            uint8_t vsync_width = (regs_[R3_SYNC_WIDTHS] >> 4) & 0x0F;
             if (vsync_width == 0) vsync_width = 16;
             if (v_sync_counter >= vsync_width) {
                 v_sync_active = false;

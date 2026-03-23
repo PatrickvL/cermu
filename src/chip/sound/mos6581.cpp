@@ -1233,7 +1233,7 @@ void mos6581_t::init() {
 void mos6581_t::register_debug_fields() {
     using S = const mos6581_t;
     auto& r = debug_registry_;
-    r.set_registers(regs_.data, sid_constants::REGS_SIZE, SID_REG_INFO, 0xD400);
+    wire_debug_registers(SID_REG_INFO, 0xD400);
     r.set_decl_entries(SID_DECL_ENTRIES.data(), SID_DECL_ENTRIES.size());
 
     static constexpr const char* wf_names[] = {
