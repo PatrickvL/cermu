@@ -816,7 +816,7 @@ inline bus_state_t decode_groupC(bus_state_t pins, uint16_t opcode) {
         uint32_t result = alu_mulu(src, get_d_w(dn));
         set_d(dn, result);
         // MULU timing: 38 + 2*popcount(source_word) total clocks
-        uint8_t idle = 34 + 2 * __builtin_popcount(src);
+        uint8_t idle = static_cast<uint8_t>(34 + 2 * cermu_popcount16(src));
         return do_idle_then_prefetch(pins, idle);
     }
 
@@ -834,7 +834,7 @@ inline bus_state_t decode_groupC(bus_state_t pins, uint16_t opcode) {
         set_d(dn, result);
         // MULS timing: 38 + 2*popcount((src ^ (src<<1)) & 0xFFFF)
         uint16_t transitions = (src_raw ^ (src_raw << 1)) & 0xFFFF;
-        uint8_t idle = 34 + 2 * __builtin_popcount(transitions);
+        uint8_t idle = static_cast<uint8_t>(34 + 2 * cermu_popcount16(transitions));
         return do_idle_then_prefetch(pins, idle);
     }
 
