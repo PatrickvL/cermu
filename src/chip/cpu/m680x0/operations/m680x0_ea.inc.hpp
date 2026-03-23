@@ -75,13 +75,13 @@ inline uint32_t calc_ea(uint8_t mode, uint8_t reg, OpSize sz) {
                 }
                 case 2: {  // (d16,PC)
                     // PC value for d16(PC) = address of the extension word
-                    uint32_t base = regs_.pc - 2;
+                    uint32_t base = regs_[REG_PC] - 2;
                     int16_t disp = static_cast<int16_t>(consume_extension_word());
                     return base + disp;
                 }
                 case 3: {  // (d8,PC,Xn)
                     // PC value for d8(PC,Xn) = address of the extension word
-                    uint32_t base = regs_.pc - 2;
+                    uint32_t base = regs_[REG_PC] - 2;
                     uint16_t ext = consume_extension_word();
                     uint8_t  xn_reg  = (ext >> 12) & 7;
                     bool     xn_is_a = (ext & 0x8000) != 0;
@@ -195,7 +195,7 @@ inline void write_ea(uint8_t mode, uint8_t reg, uint32_t value, OpSize sz, bool 
             // the last extension word at error time — back out 2 from PC and 4
             // from cycle count. Register/immediate sources don't need this.
             if (mode == static_cast<uint8_t>(EAMode::Special) && reg == 1 && src_is_memory) {
-                regs_.pc -= 2;
+                regs_[REG_PC] -= 2;
                 clocks_remaining_ -= 4;
             }
             process_address_error_sync(ea_addr_, false /*write*/, fc_data());
