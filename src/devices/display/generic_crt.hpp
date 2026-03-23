@@ -51,6 +51,9 @@ public:
     // --- Preset query --------------------------------------------------
     CRTPreset get_preset() const { return preset_; }
 
+    /// Mutable access to display characteristics (for GUI tuning).
+    DisplayCharacteristics& mutable_characteristics() { return characteristics_; }
+
 private:
     CRTPreset              preset_;
     const char*            name_;

@@ -20,11 +20,15 @@
 #include "core/rom_set.hpp"
 #include "core/vfs/vfs.hpp"
 #include "devices/storage/drive_1541.hpp"
+#include "devices/display/display_device.hpp"
+#include "devices/display/generic_crt.hpp"
+#include "core/device_registry.hpp"
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
 #include <chrono>
 #include <ctime>
+#include <algorithm>
 
 #ifdef __has_include
 #if __has_include("ImGuiFileDialog.h")
@@ -564,6 +568,9 @@ void SessionGUI::render_frame() {
     if (show_about_) {
         render_about();
     }
+    if (show_display_settings_) {
+        render_display_settings();
+    }
     
     // Performance metrics window
     render_performance_window();
@@ -895,6 +902,10 @@ void SessionGUI::render_menu_bar() {
     // View menu
     if (ImGui::BeginMenu("View")) {
         render_view_menu_generic();
+        ImGui::Separator();
+        if (ImGui::MenuItem("Display Settings", nullptr, show_display_settings_)) {
+            show_display_settings_ = !show_display_settings_;
+        }
         ImGui::Separator();
         if (ImGui::BeginMenu("Performance Statistics")) {
             if (ImGui::MenuItem("Show Performance Graphs", nullptr, show_performance_)) {
@@ -1357,6 +1368,150 @@ void SessionGUI::render_settings() {
 
 void SessionGUI::render_about() {
     render_about_dialog_generic();
+}
+
+// ============================================================================
+// Display Settings Panel
+// ============================================================================
+
+static const char* display_technology_name(DisplayTechnology t) {
+    switch (t) {
+        case DisplayTechnology::CRT_Shadow:     return "CRT (Shadow Mask)";
+        case DisplayTechnology::CRT_Aperture:   return "CRT (Aperture Grille)";
+        case DisplayTechnology::CRT_SlotMask:   return "CRT (Slot Mask)";
+        case DisplayTechnology::CRT_Monochrome: return "CRT (Monochrome)";
+        case DisplayTechnology::CRT_Vector:     return "CRT (Vector)";
+        case DisplayTechnology::LCD:            return "LCD";
+        case DisplayTechnology::LED:            return "LED";
+        default: return "Unknown";
+    }
+}
+
+static const char* phosphor_type_name(PhosphorType p) {
+    switch (p) {
+        case PhosphorType::P1:     return "P1 (Green, medium)";
+        case PhosphorType::P4:     return "P4 (White, B&W TV)";
+        case PhosphorType::P7:     return "P7 (Blue/Yellow, long)";
+        case PhosphorType::P22:    return "P22 (Tricolor, standard)";
+        case PhosphorType::P31:    return "P31 (Green, oscilloscope)";
+        case PhosphorType::P39:    return "P39 (Green, long)";
+        case PhosphorType::P43:    return "P43 (Green, military)";
+        case PhosphorType::Custom: return "Custom";
+        default: return "Unknown";
+    }
+}
+
+void SessionGUI::render_display_settings() {
+    if (!ImGui::Begin("Display Settings", &show_display_settings_,
+                      ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::End();
+        return;
+    }
+
+    if (!display_device_) {
+        ImGui::TextDisabled("No display device attached.");
+        ImGui::End();
+        return;
+    }
+
+    // --- Display device selector ---
+    ImGui::Text("Monitor: %s", display_device_->get_name());
+
+    // Combo to switch between available display presets
+    static const char* preset_ids[]   = {"crt_tv", "crt_1702", "crt_rgb", "crt_green", "crt_amber"};
+    static const char* preset_names[] = {"Color TV", "Commodore 1702", "RGB Monitor", "Green Monitor", "Amber Monitor"};
+    static constexpr int preset_count = 5;
+
+    int current_preset = -1;
+    for (int i = 0; i < preset_count; i++) {
+        if (std::strcmp(display_device_->get_id(), preset_ids[i]) == 0) {
+            current_preset = i;
+            break;
+        }
+    }
+
+    if (ImGui::Combo("Preset", &current_preset, preset_names, preset_count)) {
+        if (current_preset >= 0 && current_preset < preset_count) {
+            // Replace the display device in the system's owned devices
+            auto new_dev = DeviceRegistry::instance().create_device(preset_ids[current_preset]);
+            if (new_dev && system_) {
+                auto* new_display = dynamic_cast<DisplayDevice*>(new_dev.get());
+                if (new_display) {
+                    // Remove old display device from owned_devices_
+                    auto& devices = system_->get_owned_devices_mutable();
+                    devices.erase(
+                        std::remove_if(devices.begin(), devices.end(),
+                                       [this](const std::unique_ptr<PeripheralDevice>& p) {
+                                           return p.get() == display_device_;
+                                       }),
+                        devices.end());
+                    // Add new one and update cached pointer
+                    display_device_ = new_display;
+                    display_characteristics_ = new_display->get_display_characteristics();
+                    devices.push_back(std::move(new_dev));
+                }
+            }
+        }
+    }
+
+    ImGui::Separator();
+
+    // --- Display characteristics (read-only info) ---
+    auto& dc = display_characteristics_;
+    ImGui::Text("Technology: %s", display_technology_name(dc.technology));
+    ImGui::Text("Phosphor: %s", phosphor_type_name(dc.phosphor));
+    ImGui::Text("Screen: %.0f\" diagonal, %.0f:%.0f",
+                dc.screen_diagonal_inches,
+                dc.aspect_ratio > 1.0f ? dc.aspect_ratio : 1.0f,
+                dc.aspect_ratio > 1.0f ? 1.0f : 1.0f / dc.aspect_ratio);
+
+    ImGui::Separator();
+
+    // --- Adjustable parameters ---
+    ImGui::Text("Adjustments:");
+    bool changed = false;
+    changed |= ImGui::SliderFloat("Brightness", &dc.brightness, 0.5f, 2.0f, "%.2f");
+    changed |= ImGui::SliderFloat("Contrast",   &dc.contrast,   0.5f, 2.0f, "%.2f");
+    changed |= ImGui::SliderFloat("Gamma",       &dc.gamma,      1.0f, 3.0f, "%.2f");
+    changed |= ImGui::SliderFloat("Curvature",   &dc.curvature,  0.0f, 1.0f, "%.2f");
+    changed |= ImGui::SliderFloat("Scanline Gap", &dc.scanline_gap, 0.0f, 1.0f, "%.2f");
+    changed |= ImGui::SliderFloat("Dot Pitch (mm)", &dc.dot_pitch_mm, 0.1f, 1.0f, "%.2f");
+    changed |= ImGui::SliderFloat("Color Temp (K)", &dc.color_temperature_k, 3000.0f, 12000.0f, "%.0f");
+
+    if (changed) {
+        // Push adjustments back to the device if it's a GenericCRT
+        auto* crt = dynamic_cast<GenericCRT*>(display_device_);
+        if (crt) {
+            crt->mutable_characteristics() = dc;
+        }
+    }
+
+    // Reset button
+    if (ImGui::Button("Reset to Preset Defaults")) {
+        auto* crt = dynamic_cast<GenericCRT*>(display_device_);
+        if (crt) {
+            // Re-create with same preset to get original values
+            GenericCRT fresh(crt->get_preset());
+            crt->mutable_characteristics() = fresh.get_display_characteristics();
+            dc = crt->get_display_characteristics();
+        }
+    }
+
+    // --- Signal info ---
+    ImGui::Separator();
+    ImGui::Text("Accepted signals:");
+    VideoSignalMask mask = display_device_->get_accepted_video_signals();
+    if (mask & DisplaySignals::COMPOSITE) ImGui::BulletText("Composite");
+    if (mask & DisplaySignals::SVIDEO)    ImGui::BulletText("S-Video");
+    if (mask & DisplaySignals::RGB)       ImGui::BulletText("RGB");
+    if (mask & DisplaySignals::RGBI)      ImGui::BulletText("RGBI");
+    if (mask & DisplaySignals::YPBPR)     ImGui::BulletText("Component (YPbPr)");
+    if (mask & DisplaySignals::DIGITAL)   ImGui::BulletText("Digital");
+    if (mask & DisplaySignals::VECTOR)    ImGui::BulletText("Vector");
+    if (display_device_->has_builtin_speakers())
+        ImGui::BulletText("Built-in speaker");
+
+    ImGui::End();
 }
 
 // ============================================================================
