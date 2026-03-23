@@ -7,25 +7,25 @@
 // Data Register Access
 // ========================================================================
 
-inline uint32_t get_d(uint8_t idx) const { return regs_.d[idx & 7]; }
-inline uint16_t get_d_w(uint8_t idx) const { return static_cast<uint16_t>(regs_.d[idx & 7]); }
-inline uint8_t  get_d_b(uint8_t idx) const { return static_cast<uint8_t>(regs_.d[idx & 7]); }
+inline uint32_t get_d(uint8_t idx) const { return regs_[idx & 7]; }
+inline uint16_t get_d_w(uint8_t idx) const { return static_cast<uint16_t>(regs_[idx & 7]); }
+inline uint8_t  get_d_b(uint8_t idx) const { return static_cast<uint8_t>(regs_[idx & 7]); }
 
-inline void set_d(uint8_t idx, uint32_t val) { regs_.d[idx & 7] = val; }
+inline void set_d(uint8_t idx, uint32_t val) { regs_[idx & 7] = val; }
 inline void set_d_w(uint8_t idx, uint16_t val) {
-    regs_.d[idx & 7] = (regs_.d[idx & 7] & 0xFFFF0000) | val;
+    regs_[idx & 7] = (regs_[idx & 7] & 0xFFFF0000) | val;
 }
 inline void set_d_b(uint8_t idx, uint8_t val) {
-    regs_.d[idx & 7] = (regs_.d[idx & 7] & 0xFFFFFF00) | val;
+    regs_[idx & 7] = (regs_[idx & 7] & 0xFFFFFF00) | val;
 }
 
 // ========================================================================
 // Address Register Access
 // ========================================================================
 
-inline uint32_t get_a(uint8_t idx) const { return regs_.a[idx & 7]; }
+inline uint32_t get_a(uint8_t idx) const { return regs_[8 + (idx & 7)]; }
 
-inline void set_a(uint8_t idx, uint32_t val) { regs_.a[idx & 7] = val; }
+inline void set_a(uint8_t idx, uint32_t val) { regs_[8 + (idx & 7)] = val; }
 
 // ========================================================================
 // Stack Pointer Management
@@ -33,36 +33,36 @@ inline void set_a(uint8_t idx, uint32_t val) { regs_.a[idx & 7] = val; }
 // A7 is the active stack pointer.  On supervisor/user mode switch,
 // A7 is swapped with USP or SSP as appropriate.
 
-inline uint32_t get_usp() const { return regs_.usp; }
-inline uint32_t get_ssp() const { return regs_.ssp; }
+inline uint32_t get_usp() const { return regs_[REG_USP]; }
+inline uint32_t get_ssp() const { return regs_[REG_SSP]; }
 
-inline void set_usp(uint32_t val) { regs_.usp = val; }
-inline void set_ssp(uint32_t val) { regs_.ssp = val; }
+inline void set_usp(uint32_t val) { regs_[REG_USP] = val; }
+inline void set_ssp(uint32_t val) { regs_[REG_SSP] = val; }
 
 /// Keep A7 ↔ SSP/USP in sync after direct A7 modifications (e.g. EXG)
 inline void sync_sp() {
-    if (regs_.sr & SRBits::S) {
-        regs_.ssp = regs_.a[7];
+    if (regs_[REG_SR] & SRBits::S) {
+        regs_[REG_SSP] = regs_[15];
     } else {
-        regs_.usp = regs_.a[7];
+        regs_[REG_USP] = regs_[15];
     }
 }
 
 /// Swap A7 with USP when entering supervisor mode
 inline void enter_supervisor() {
-    if (!(regs_.sr & SRBits::S)) {
-        regs_.usp = regs_.a[7];                 // Save user SP
-        regs_.a[7] = regs_.ssp;                 // Load supervisor SP
-        regs_.sr |= SRBits::S;
+    if (!(regs_[REG_SR] & SRBits::S)) {
+        regs_[REG_USP] = regs_[15];                 // Save user SP
+        regs_[15] = regs_[REG_SSP];                 // Load supervisor SP
+        regs_[REG_SR] |= SRBits::S;
     }
 }
 
 /// Swap A7 with SSP when returning to user mode
 inline void leave_supervisor() {
-    if (regs_.sr & SRBits::S) {
-        regs_.ssp = regs_.a[7];                 // Save supervisor SP
-        regs_.a[7] = regs_.usp;                 // Load user SP
-        regs_.sr &= ~SRBits::S;
+    if (regs_[REG_SR] & SRBits::S) {
+        regs_[REG_SSP] = regs_[15];                 // Save supervisor SP
+        regs_[15] = regs_[REG_USP];                 // Load user SP
+        regs_[REG_SR] &= ~SRBits::S;
     }
 }
 
@@ -73,27 +73,27 @@ inline void set_sr(uint16_t new_sr) {
         // MC68000/010: only T1, S, IPM, CCR valid
         new_sr &= SRBits::SR_MASK;
     }
-    bool was_super = (regs_.sr & SRBits::S) != 0;
+    bool was_super = (regs_[REG_SR] & SRBits::S) != 0;
     bool now_super = (new_sr  & SRBits::S) != 0;
     if (was_super && !now_super) {
         // Supervisor → User
-        regs_.ssp = regs_.a[7];
-        regs_.a[7] = regs_.usp;
+        regs_[REG_SSP] = regs_[15];
+        regs_[15] = regs_[REG_USP];
     } else if (!was_super && now_super) {
         // User → Supervisor
-        regs_.usp = regs_.a[7];
-        regs_.a[7] = regs_.ssp;
+        regs_[REG_USP] = regs_[15];
+        regs_[15] = regs_[REG_SSP];
     }
-    regs_.sr = new_sr;
+    regs_[REG_SR] = new_sr;
 }
 
 // ========================================================================
 // CCR access
 // ========================================================================
 
-inline uint8_t  get_ccr() const { return static_cast<uint8_t>(regs_.sr & Flags::CCR_MASK); }
+inline uint8_t  get_ccr() const { return static_cast<uint8_t>(regs_[REG_SR] & Flags::CCR_MASK); }
 inline void set_ccr(uint8_t ccr) {
-    regs_.sr = (regs_.sr & ~static_cast<uint16_t>(Flags::CCR_MASK)) | (ccr & Flags::CCR_MASK);
+    regs_[REG_SR] = (regs_[REG_SR] & ~static_cast<uint16_t>(Flags::CCR_MASK)) | (ccr & Flags::CCR_MASK);
 }
 
 // ========================================================================

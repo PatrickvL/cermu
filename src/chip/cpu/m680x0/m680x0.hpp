@@ -38,6 +38,7 @@
 #include "chip/cpu/cpu_chip_base.hpp"
 #include "core/system_lines.hpp"
 #include "core/cermu.hpp"
+#include "core/register_file.hpp"
 
 // Opcode table generation
 #include "chip/cpu/m680x0/m680x0_opcode_tables.inc.hpp"
@@ -189,6 +190,29 @@ M68K_DECL(DECL_REG_NOP, M68K_X_FLD_NS_, DECL_CMP_NOP)
 
 DECL_EXTRACT(M68K, M68K_DECL)
 
+// ── RegisterFile constants (byte offsets matching M68K_DECL layout) ──
+
+// Data registers D0-D7 — uint32_t at indices 0-7 (NativeT stride)
+constexpr r32 REG_D0{0},  REG_D1{4},  REG_D2{8},  REG_D3{12};
+constexpr r32 REG_D4{16}, REG_D5{20}, REG_D6{24}, REG_D7{28};
+
+// Address registers A0-A7 — uint32_t at indices 8-15
+constexpr r32 REG_A0{32}, REG_A1{36}, REG_A2{40}, REG_A3{44};
+constexpr r32 REG_A4{48}, REG_A5{52}, REG_A6{56}, REG_A7{60};
+
+constexpr r32 REG_PC{64};
+constexpr r16 REG_SR{68};           // CCR at lo_b, system byte at hi_b
+constexpr r32 REG_USP{70};
+constexpr r32 REG_SSP{74};
+constexpr r16 REG_IRD{78};
+constexpr r16 REG_IR{80};
+constexpr r16 REG_IRC{82};
+constexpr r32 REG_VBR{84};
+constexpr r8  REG_SFC{88};
+constexpr r8  REG_DFC{89};
+constexpr r32 REG_CACR{90};
+constexpr r32 REG_CAAR{94};
+
 // ── Pending ALU operation (for memory EA bus cycle handlers) ──────
 
 enum PendingOp : uint8_t {
@@ -279,8 +303,8 @@ public:
     // ── Lifecycle ────────────────────────────────────────────────
 
     bus_state_t init() override {
-        std::memset(&regs_, 0, sizeof(regs_));
-        regs_.sr = SRBits::S | (7 << SRBits::IPM_SHIFT);  // Supervisor mode, IPM=7
+        std::memset(regs_.data, 0, sizeof(regs_.data));
+        regs_[REG_SR] = SRBits::S | (7 << SRBits::IPM_SHIFT);  // Supervisor mode, IPM=7
         state_        = ExecState::RESET_SEQUENCE;
         step_         = 0;
         halted_       = false;
@@ -294,9 +318,9 @@ public:
 
     bus_state_t reset(bus_state_t pins = 0) override {
         // On reset: Supervisor mode, IPM=7, fetch SSP from vector 0, PC from vector 1
-        regs_.sr = SRBits::S | (7 << SRBits::IPM_SHIFT);
+        regs_[REG_SR] = SRBits::S | (7 << SRBits::IPM_SHIFT);
         if constexpr (has_vbr()) {
-            regs_.vbr = 0;
+            regs_[REG_VBR] = 0;
         }
         state_        = ExecState::RESET_SEQUENCE;
         step_         = 0;
@@ -364,31 +388,11 @@ public:
         return pins;
     }
 
-    // ── Registers struct ────────────────────────────────────────
-    struct Registers {
-        uint32_t d[8];          // Data registers D0-D7
-        uint32_t a[8];          // Address registers A0-A7 (A7 = active stack pointer)
-        uint32_t usp;           // User Stack Pointer (saved when in supervisor mode)
-        uint32_t ssp;           // Supervisor Stack Pointer (saved when in user mode)
-        uint32_t pc;            // Program Counter
-        uint16_t sr;            // Status Register
-
-        // Prefetch pipeline
-        uint16_t irc;           // Instruction Register Capture (latest fetch)
-        uint16_t ir;            // Instruction Register (next instruction)
-        uint16_t ird;           // Instruction Register Decoder (current instruction)
-
-        // 68010+ control registers
-        uint32_t vbr;           // Vector Base Register
-        uint8_t  sfc;           // Source Function Code
-        uint8_t  dfc;           // Destination Function Code
-
-        // 68020+ control registers
-        uint32_t cacr;          // Cache Control Register
-        uint32_t caar;          // Cache Address Register
-        uint32_t msp;           // Master Stack Pointer
-        uint32_t isp;           // Interrupt Stack Pointer
-    };
+    // ── Register file (byte layout matches M68K_DECL) ─────────────
+    // D0-D7 at 0-31, A0-A7 at 32-63, PC at 64, SR at 68,
+    // USP at 70, SSP at 74, IRD/IR/IRC at 78-83, VBR at 84,
+    // SFC at 88, DFC at 89, CACR at 90, CAAR at 94.
+    // data[] IS the debug backing store — no sync, no mirror.
 
 private:
     // ── Mid-class includes (register access + ALU) ──────────────
@@ -412,12 +416,12 @@ private:
 
     /// Get the appropriate function code for data access
     inline uint8_t fc_data() const {
-        return (regs_.sr & SRBits::S) ? FunctionCode::SUPER_DATA : FunctionCode::USER_DATA;
+        return (regs_[REG_SR] & SRBits::S) ? FunctionCode::SUPER_DATA : FunctionCode::USER_DATA;
     }
 
     /// Get the appropriate function code for program access
     inline uint8_t fc_program() const {
-        return (regs_.sr & SRBits::S) ? FunctionCode::SUPER_PROGRAM : FunctionCode::USER_PROGRAM;
+        return (regs_[REG_SR] & SRBits::S) ? FunctionCode::SUPER_PROGRAM : FunctionCode::USER_PROGRAM;
     }
 
     /// Begin a word read bus cycle — set address, assert AS+UDS+LDS, R/W=read
@@ -666,28 +670,28 @@ private:
     // Used mid-instruction (e.g., between read and write in RMW).
     bus_state_t handle_prefetch_continue(bus_state_t pins) {
         if (mem_read_) {
-            uint16_t word = mem_read_(mem_ctx_, regs_.pc & address_mask());
-            regs_.ir  = regs_.irc;
-            regs_.irc = word;
-            regs_.pc += 2;
-            regs_.ird = regs_.ir;
+            uint16_t word = mem_read_(mem_ctx_, regs_[REG_PC] & address_mask());
+            regs_[REG_IR]  = regs_[REG_IRC];
+            regs_[REG_IRC] = word;
+            regs_[REG_PC] += 2;
+            regs_[REG_IRD] = regs_[REG_IR];
             clocks_remaining_ += 3;  // 4-clock bus cycle
             transition_to(cont_handler_);
             return pins;
         }
         // Fallback: multi-tick bus signal path
         switch (step_++) {
-            case 0: return begin_read_word(pins, regs_.pc, fc_program());
+            case 0: return begin_read_word(pins, regs_[REG_PC], fc_program());
             case 1: return pins;
             case 2:
                 if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
-                regs_.ir  = regs_.irc;
-                regs_.irc = read_data_word(pins);
-                regs_.pc += 2;
+                regs_[REG_IR]  = regs_[REG_IRC];
+                regs_[REG_IRC] = read_data_word(pins);
+                regs_[REG_PC] += 2;
                 return pins;
             case 3:
                 pins = end_bus_cycle(pins);
-                regs_.ird = regs_.ir;
+                regs_[REG_IRD] = regs_[REG_IR];
                 transition_to(cont_handler_);
                 return pins;  // Don't chain
         }
@@ -903,7 +907,7 @@ private:
     inline uint32_t vector_addr(uint8_t vector_num) const {
         uint32_t base = 0;
         if constexpr (has_vbr()) {
-            base = regs_.vbr;
+            base = regs_[REG_VBR];
         }
         return base + (static_cast<uint32_t>(vector_num) << 2);
     }
@@ -915,11 +919,11 @@ private:
             // Synchronous: read 4 words (SSP hi/lo, PC hi/lo)
             uint16_t ssp_hi = mem_read_(mem_ctx_, 0x00000000);
             uint16_t ssp_lo = mem_read_(mem_ctx_, 0x00000002);
-            regs_.a[7] = (static_cast<uint32_t>(ssp_hi) << 16) | ssp_lo;
-            regs_.ssp  = regs_.a[7];
+            regs_[15] = (static_cast<uint32_t>(ssp_hi) << 16) | ssp_lo;
+            regs_[REG_SSP]  = regs_[15];
             uint16_t pc_hi = mem_read_(mem_ctx_, 0x00000004);
             uint16_t pc_lo = mem_read_(mem_ctx_, 0x00000006);
-            regs_.pc = (static_cast<uint32_t>(pc_hi) << 16) | pc_lo;
+            regs_[REG_PC] = (static_cast<uint32_t>(pc_hi) << 16) | pc_lo;
             state_ = ExecState::PREFETCH;
             transition_to(&m680x0_t::handle_prefetch);
             // 4 word reads × 4 clocks each = 16 clocks, minus current tick
@@ -944,8 +948,8 @@ private:
             case 3:
                 if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) return pins;
                 data_latch_ |= read_data_word(pins);
-                regs_.a[7] = data_latch_;
-                regs_.ssp  = data_latch_;
+                regs_[15] = data_latch_;
+                regs_[REG_SSP]  = data_latch_;
                 pins = end_bus_cycle(pins);
                 return pins;
             // Read PC high word (vector 1, offset 4)
@@ -964,7 +968,7 @@ private:
             case 7:
                 if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) return pins;
                 data_latch_ |= read_data_word(pins);
-                regs_.pc = data_latch_;
+                regs_[REG_PC] = data_latch_;
                 pins = end_bus_cycle(pins);
                 // Transition to instruction prefetch
                 transition_to(&m680x0_t::handle_prefetch);
@@ -980,11 +984,11 @@ private:
     bus_state_t handle_prefetch(bus_state_t pins) {
         if (mem_read_) {
             // Synchronous: fetch word, shift pipeline, set timing
-            uint16_t word = mem_read_(mem_ctx_, regs_.pc & address_mask());
-            regs_.ir  = regs_.irc;
-            regs_.irc = word;
-            regs_.pc += 2;
-            regs_.ird = regs_.ir;
+            uint16_t word = mem_read_(mem_ctx_, regs_[REG_PC] & address_mask());
+            regs_[REG_IR]  = regs_[REG_IRC];
+            regs_[REG_IRC] = word;
+            regs_[REG_PC] += 2;
+            regs_[REG_IRD] = regs_[REG_IR];
             clocks_remaining_ += 3;  // 4-clock bus cycle minus current tick
             transition_to(&m680x0_t::handle_decode);
             return pins;
@@ -992,20 +996,20 @@ private:
         // Fallback: multi-tick bus signal path
         switch (step_++) {
             case 0:  // S0/S1: Output address, begin read
-                pins = begin_read_word(pins, regs_.pc, fc_program());
+                pins = begin_read_word(pins, regs_[REG_PC], fc_program());
                 return pins;
             case 1:  // S2/S3: Wait for address propagation
                 return pins;
             case 2:  // S4/S5: Wait for DTACK, latch data
                 if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
                 // Shift prefetch pipeline
-                regs_.ir  = regs_.irc;
-                regs_.irc = read_data_word(pins);
-                regs_.pc += 2;
+                regs_[REG_IR]  = regs_[REG_IRC];
+                regs_[REG_IRC] = read_data_word(pins);
+                regs_[REG_PC] += 2;
                 return pins;
             case 3:  // S6/S7: End bus cycle, transition to decode
                 pins = end_bus_cycle(pins);
-                regs_.ird = regs_.ir;
+                regs_[REG_IRD] = regs_[REG_IR];
                 transition_to(&m680x0_t::handle_decode);
                 return pins;
             default:
@@ -1020,7 +1024,7 @@ private:
     // in the same clock cycle.
     bus_state_t handle_decode(bus_state_t pins) {
         address_error_ = false;
-        uint16_t opcode = regs_.ird;
+        uint16_t opcode = regs_[REG_IRD];
         uint8_t group = instr_group(opcode);
 
         // Dispatch by instruction group (bits 15-12)
@@ -1035,12 +1039,12 @@ private:
             case InstrGroup::GROUP_7:     return decode_moveq(pins, opcode);
             case InstrGroup::GROUP_8:     return decode_group8(pins, opcode);
             case InstrGroup::GROUP_9:     return decode_group9(pins, opcode);
-            case InstrGroup::GROUP_A:     return exception(pins, Vector::LINE_A, regs_.pc - 4);
+            case InstrGroup::GROUP_A:     return exception(pins, Vector::LINE_A, regs_[REG_PC] - 4);
             case InstrGroup::GROUP_B:     return decode_groupB(pins, opcode);
             case InstrGroup::GROUP_C:     return decode_groupC(pins, opcode);
             case InstrGroup::GROUP_D:     return decode_groupD(pins, opcode);
             case InstrGroup::GROUP_E:     return decode_groupE(pins, opcode);
-            case InstrGroup::GROUP_F:     return exception(pins, Vector::LINE_F, regs_.pc - 4);
+            case InstrGroup::GROUP_F:     return exception(pins, Vector::LINE_F, regs_[REG_PC] - 4);
         }
         return pins;
     }
@@ -1053,49 +1057,49 @@ private:
         return (this->*current_handler_)(pins);
     }
 
-    // Convenience: push current "next instruction" PC (regs_.pc - 2)
+    // Convenience: push current "next instruction" PC (regs_[REG_PC] - 2)
     bus_state_t exception(bus_state_t pins, uint8_t vector_num) {
-        return exception(pins, vector_num, regs_.pc - 2);
+        return exception(pins, vector_num, regs_[REG_PC] - 2);
     }
 
     // ── Address error exception (group 0) — 14-byte frame ───────
     // Called from read_ea/write_ea when a word/long access hits an odd address.
     // Synchronous only (mem_read_/mem_write_ path). Sets address_error_ flag.
     inline void process_address_error_sync(uint32_t fault_addr, bool is_read, uint8_t fc) {
-        exception_sr_ = regs_.sr;
+        exception_sr_ = regs_[REG_SR];
         enter_supervisor();
-        regs_.sr &= ~SRBits::T1;
-        regs_.sr &= ~SRBits::T0;
+        regs_[REG_SR] &= static_cast<uint16_t>(~SRBits::T1);
+        regs_[REG_SR] &= static_cast<uint16_t>(~SRBits::T0);
         // Decrement SP by 14 for the full group 0 frame
-        regs_.a[7] -= 14;
-        uint32_t base = regs_.a[7];
+        regs_[15] -= 14;
+        uint32_t base = regs_[15];
         // Address error PC points to the faulting instruction's opcode
-        uint32_t pc = regs_.pc - 4;
+        uint32_t pc = regs_[REG_PC] - 4;
         // Push in 68000 microcode order (non-sequential writes)
         mem_write_(mem_ctx_, (base + 12) & address_mask(), static_cast<uint16_t>(pc & 0xFFFF));         // PC low
         mem_write_(mem_ctx_, (base + 8)  & address_mask(), exception_sr_);                              // SR
         mem_write_(mem_ctx_, (base + 10) & address_mask(), static_cast<uint16_t>((pc >> 16) & 0xFFFF)); // PC high
-        mem_write_(mem_ctx_, (base + 6)  & address_mask(), regs_.ird);                                  // IR
+        mem_write_(mem_ctx_, (base + 6)  & address_mask(), regs_[REG_IRD]);                                  // IR
         mem_write_(mem_ctx_, (base + 4)  & address_mask(), static_cast<uint16_t>(fault_addr & 0xFFFF)); // Fault addr low
         // SSW: upper bits from IRD, lower 5 bits = R/W(4) | IN(3) | FC(2:0)
         // IN = 1 for instruction/program fetch (FC bit 1 set), 0 for data
         uint8_t in_flag = (fc & 0x02) ? 0x08 : 0x00;
-        uint16_t ssw = (regs_.ird & 0xFFE0) | (is_read ? 0x10 : 0x00) | in_flag | fc;
+        uint16_t ssw = (regs_[REG_IRD] & 0xFFE0) | (is_read ? 0x10 : 0x00) | in_flag | fc;
         mem_write_(mem_ctx_, base        & address_mask(), ssw);                                         // SSW
         mem_write_(mem_ctx_, (base + 2)  & address_mask(), static_cast<uint16_t>((fault_addr >> 16) & 0xFFFF)); // Fault addr high
         // Read vector
         uint32_t vaddr = vector_addr(Vector::ADDRESS_ERROR);
         uint16_t vec_hi = mem_read_(mem_ctx_, vaddr);
         uint16_t vec_lo = mem_read_(mem_ctx_, vaddr + 2);
-        regs_.pc = (static_cast<uint32_t>(vec_hi) << 16) | vec_lo;
+        regs_[REG_PC] = (static_cast<uint32_t>(vec_hi) << 16) | vec_lo;
         // Two-word prefetch from handler
-        uint16_t word1 = mem_read_(mem_ctx_, regs_.pc & address_mask());
-        regs_.pc += 2;
-        uint16_t word2 = mem_read_(mem_ctx_, regs_.pc & address_mask());
-        regs_.ir  = word1;
-        regs_.irc = word2;
-        regs_.pc += 2;
-        regs_.ird = regs_.ir;
+        uint16_t word1 = mem_read_(mem_ctx_, regs_[REG_PC] & address_mask());
+        regs_[REG_PC] += 2;
+        uint16_t word2 = mem_read_(mem_ctx_, regs_[REG_PC] & address_mask());
+        regs_[REG_IR]  = word1;
+        regs_[REG_IRC] = word2;
+        regs_[REG_PC] += 2;
+        regs_[REG_IRD] = regs_[REG_IR];
         // 4 idle + 7 writes(28) + 2 vector reads(8) + 2 prefetch reads(4+4) + 2 idle = 50
         // Minus 1 for the current tick = 49
         clocks_remaining_ += 49;
@@ -1107,33 +1111,33 @@ private:
     bus_state_t handle_exception(bus_state_t pins) {
         if (mem_read_ && mem_write_) {
             // Synchronous: enter supervisor, push context, read vector
-            exception_sr_ = regs_.sr;
+            exception_sr_ = regs_[REG_SR];
             enter_supervisor();
-            regs_.sr &= ~SRBits::T1;
-            regs_.sr &= ~SRBits::T0;
+            regs_[REG_SR] &= static_cast<uint16_t>(~SRBits::T1);
+            regs_[REG_SR] &= static_cast<uint16_t>(~SRBits::T0);
             // Push PC (low word first, then high word — stack grows down)
-            regs_.a[7] -= 2;
-            mem_write_(mem_ctx_, regs_.a[7] & address_mask(),
+            regs_[15] -= 2;
+            mem_write_(mem_ctx_, regs_[15] & address_mask(),
                        static_cast<uint16_t>(exception_pc_ & 0xFFFF));
-            regs_.a[7] -= 2;
-            mem_write_(mem_ctx_, regs_.a[7] & address_mask(),
+            regs_[15] -= 2;
+            mem_write_(mem_ctx_, regs_[15] & address_mask(),
                        static_cast<uint16_t>((exception_pc_ >> 16) & 0xFFFF));
             // Push SR
-            regs_.a[7] -= 2;
-            mem_write_(mem_ctx_, regs_.a[7] & address_mask(), exception_sr_);
+            regs_[15] -= 2;
+            mem_write_(mem_ctx_, regs_[15] & address_mask(), exception_sr_);
             // Read vector
             uint32_t vaddr = vector_addr(exception_vector_);
             uint16_t vec_hi = mem_read_(mem_ctx_, vaddr);
             uint16_t vec_lo = mem_read_(mem_ctx_, vaddr + 2);
-            regs_.pc = (static_cast<uint32_t>(vec_hi) << 16) | vec_lo;
+            regs_[REG_PC] = (static_cast<uint32_t>(vec_hi) << 16) | vec_lo;
             // Two-word prefetch from handler address (same as do_branch_prefetch)
-            uint16_t word1 = mem_read_(mem_ctx_, regs_.pc & address_mask());
-            regs_.pc += 2;
-            uint16_t word2 = mem_read_(mem_ctx_, regs_.pc & address_mask());
-            regs_.ir  = word1;
-            regs_.irc = word2;
-            regs_.pc += 2;
-            regs_.ird = regs_.ir;
+            uint16_t word1 = mem_read_(mem_ctx_, regs_[REG_PC] & address_mask());
+            regs_[REG_PC] += 2;
+            uint16_t word2 = mem_read_(mem_ctx_, regs_[REG_PC] & address_mask());
+            regs_[REG_IR]  = word1;
+            regs_[REG_IRC] = word2;
+            regs_[REG_PC] += 2;
+            regs_[REG_IRD] = regs_[REG_IR];
             // 3 writes + 2 reads (vector) + 2 reads (prefetch) + 2 idle = 34 clocks
             // Current tick consumed: clocks_remaining_ = 33
             clocks_remaining_ += 33;
@@ -1145,15 +1149,15 @@ private:
         switch (step_++) {
             // Enter supervisor mode
             case 0:
-                exception_sr_ = regs_.sr;
+                exception_sr_ = regs_[REG_SR];
                 enter_supervisor();
-                regs_.sr &= ~SRBits::T1;  // Clear trace
-                regs_.sr &= ~SRBits::T0;
+                regs_[REG_SR] &= static_cast<uint16_t>(~SRBits::T1);  // Clear trace
+                regs_[REG_SR] &= static_cast<uint16_t>(~SRBits::T0);
                 return pins;
             // Push PC low word
             case 1:
-                regs_.a[7] -= 2;
-                pins = begin_write_word(pins, regs_.a[7],
+                regs_[15] -= 2;
+                pins = begin_write_word(pins, regs_[15],
                     static_cast<uint16_t>(exception_pc_ & 0xFFFF), FunctionCode::SUPER_DATA);
                 return pins;
             case 2:
@@ -1162,8 +1166,8 @@ private:
                 return pins;
             // Push PC high word
             case 3:
-                regs_.a[7] -= 2;
-                pins = begin_write_word(pins, regs_.a[7],
+                regs_[15] -= 2;
+                pins = begin_write_word(pins, regs_[15],
                     static_cast<uint16_t>((exception_pc_ >> 16) & 0xFFFF), FunctionCode::SUPER_DATA);
                 return pins;
             case 4:
@@ -1172,8 +1176,8 @@ private:
                 return pins;
             // Push SR
             case 5:
-                regs_.a[7] -= 2;
-                pins = begin_write_word(pins, regs_.a[7], exception_sr_, FunctionCode::SUPER_DATA);
+                regs_[15] -= 2;
+                pins = begin_write_word(pins, regs_[15], exception_sr_, FunctionCode::SUPER_DATA);
                 return pins;
             case 6:
                 if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
@@ -1195,7 +1199,7 @@ private:
             case 10:
                 if (BUS_GET_BIT(pins, M68K_DTACK_BIT)) { --step_; return pins; }
                 data_latch_ |= read_data_word(pins);
-                regs_.pc = data_latch_;
+                regs_[REG_PC] = data_latch_;
                 pins = end_bus_cycle(pins);
                 // Refill prefetch and decode
                 transition_to(&m680x0_t::handle_prefetch);
@@ -1218,14 +1222,14 @@ private:
     /// do_prefetch would put the stale extension value into IRD, corrupting
     /// the next instruction decode.
     inline uint16_t consume_extension_word() {
-        uint16_t word = regs_.irc;
+        uint16_t word = regs_[REG_IRC];
         // Refill IRC from [PC] — PC already points past the extension word
         // (it was advanced by the previous prefetch that loaded IRC).
         if (mem_read_) {
-            regs_.irc = mem_read_(mem_ctx_, regs_.pc & address_mask());
+            regs_[REG_IRC] = mem_read_(mem_ctx_, regs_[REG_PC] & address_mask());
             clocks_remaining_ += 4;
         }
-        regs_.pc += 2;  // Advance PC AFTER refill (next read will be from PC+2)
+        regs_[REG_PC] += 2;  // Advance PC AFTER refill (next read will be from PC+2)
         return word;
     }
 
@@ -1242,17 +1246,17 @@ private:
     inline bus_state_t do_branch_prefetch(bus_state_t pins) {
         if (mem_read_) {
             // Address error: odd PC triggers group 0 exception
-            if (unlikely(regs_.pc & 1)) {
-                process_address_error_sync(regs_.pc, true, fc_program());
+            if (unlikely(regs_[REG_PC] & 1)) {
+                process_address_error_sync(regs_[REG_PC], true, fc_program());
                 return pins;
             }
-            uint16_t word1 = mem_read_(mem_ctx_, regs_.pc & address_mask());
-            regs_.pc += 2;
-            uint16_t word2 = mem_read_(mem_ctx_, regs_.pc & address_mask());
-            regs_.ir  = word1;
-            regs_.irc = word2;
-            regs_.pc += 2;
-            regs_.ird = regs_.ir;
+            uint16_t word1 = mem_read_(mem_ctx_, regs_[REG_PC] & address_mask());
+            regs_[REG_PC] += 2;
+            uint16_t word2 = mem_read_(mem_ctx_, regs_[REG_PC] & address_mask());
+            regs_[REG_IR]  = word1;
+            regs_[REG_IRC] = word2;
+            regs_[REG_PC] += 2;
+            regs_[REG_IRD] = regs_[REG_IR];
             clocks_remaining_ += 7;  // 2 × 4-clock bus reads minus current tick
             transition_to(&m680x0_t::handle_decode);
             return pins;
@@ -1302,8 +1306,7 @@ private:
     #undef M680X0_TEMPLATE_CONTEXT
 
     // ── Internal state ──────────────────────────────────────────
-    Registers           regs_{};
-    uint8_t             debug_regs_[M68K_DBG_SIZE]{}; // Flat byte array for DECL debug
+    RegisterFile<100, uint32_t> regs_{};
     InstructionHandler  current_handler_ = &m680x0_t::handle_reset;
     ExecState           state_           = ExecState::RESET_SEQUENCE;
     uint8_t             step_            = 0;
@@ -1354,63 +1357,30 @@ public:
     }
 
     // === Register accessors (for test harness) ===
-    uint32_t reg_d(uint8_t n) const { return regs_.d[n & 7]; }
-    uint32_t reg_a(uint8_t n) const { return regs_.a[n & 7]; }
-    uint32_t reg_pc() const { return regs_.pc; }
-    uint16_t reg_sr() const { return regs_.sr; }
-    uint32_t reg_usp() const { return regs_.usp; }
-    uint32_t reg_ssp() const { return regs_.ssp; }
-    uint16_t reg_irc() const { return regs_.irc; }
-    uint16_t reg_ir() const { return regs_.ir; }
-    uint16_t reg_ird() const { return regs_.ird; }
+    uint32_t reg_d(uint8_t n) const { return regs_[n & 7]; }
+    uint32_t reg_a(uint8_t n) const { return regs_[8 + (n & 7)]; }
+    uint32_t reg_pc() const { return regs_[REG_PC]; }
+    uint16_t reg_sr() const { return regs_[REG_SR]; }
+    uint32_t reg_usp() const { return regs_[REG_USP]; }
+    uint32_t reg_ssp() const { return regs_[REG_SSP]; }
+    uint16_t reg_irc() const { return regs_[REG_IRC]; }
+    uint16_t reg_ir() const { return regs_[REG_IR]; }
+    uint16_t reg_ird() const { return regs_[REG_IRD]; }
 
-    void set_reg_d(uint8_t n, uint32_t v) { regs_.d[n & 7] = v; }
-    void set_reg_a(uint8_t n, uint32_t v) { regs_.a[n & 7] = v; }
-    void set_reg_pc(uint32_t v) { regs_.pc = v; }
-    void set_reg_sr(uint16_t v) { regs_.sr = v; }
-    void set_reg_usp(uint32_t v) { regs_.usp = v; }
-    void set_reg_ssp(uint32_t v) { regs_.ssp = v; }
-    void set_reg_irc(uint16_t v) { regs_.irc = v; }
-    void set_reg_ir(uint16_t v) { regs_.ir = v; }
-    void set_reg_ird(uint16_t v) { regs_.ird = v; }
+    void set_reg_d(uint8_t n, uint32_t v) { regs_[n & 7] = v; }
+    void set_reg_a(uint8_t n, uint32_t v) { regs_[8 + (n & 7)] = v; }
+    void set_reg_pc(uint32_t v) { regs_[REG_PC] = v; }
+    void set_reg_sr(uint16_t v) { regs_[REG_SR] = v; }
+    void set_reg_usp(uint32_t v) { regs_[REG_USP] = v; }
+    void set_reg_ssp(uint32_t v) { regs_[REG_SSP] = v; }
+    void set_reg_irc(uint16_t v) { regs_[REG_IRC] = v; }
+    void set_reg_ir(uint16_t v) { regs_[REG_IR] = v; }
+    void set_reg_ird(uint16_t v) { regs_[REG_IRD] = v; }
 
     // ── Debug registration ─────────────────────────────────────
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields();
 #endif
-
-    /// Update debug_regs_ from current register state (call before debug rendering).
-    /// Values stored in host byte order via memcpy for DECL renderer access.
-    void sync_debug_snapshot() {
-        // D0-D7 (32 bytes at offset 0)
-        std::memcpy(&debug_regs_[0], regs_.d, 32);
-        // A0-A7 (32 bytes at offset 32)
-        std::memcpy(&debug_regs_[32], regs_.a, 32);
-        // PC (4 bytes at offset 64)
-        std::memcpy(&debug_regs_[64], &regs_.pc, 4);
-        // SR split into CCR (byte 68) + system byte (byte 69)
-        debug_regs_[68] = static_cast<uint8_t>(regs_.sr & 0xFF);
-        debug_regs_[69] = static_cast<uint8_t>((regs_.sr >> 8) & 0xFF);
-        // USP (4 bytes at offset 70)
-        std::memcpy(&debug_regs_[70], &regs_.usp, 4);
-        // SSP (4 bytes at offset 74)
-        std::memcpy(&debug_regs_[74], &regs_.ssp, 4);
-        // Prefetch pipeline (2 bytes each)
-        std::memcpy(&debug_regs_[78], &regs_.ird, 2);
-        std::memcpy(&debug_regs_[80], &regs_.ir, 2);
-        std::memcpy(&debug_regs_[82], &regs_.irc, 2);
-        // 68010+ control registers
-        if constexpr (has_vbr()) {
-            std::memcpy(&debug_regs_[84], &regs_.vbr, 4);
-            debug_regs_[88] = regs_.sfc;
-            debug_regs_[89] = regs_.dfc;
-        }
-        // 68020+ cache control
-        if constexpr (has_cache()) {
-            std::memcpy(&debug_regs_[90], &regs_.cacr, 4);
-            std::memcpy(&debug_regs_[94], &regs_.caar, 4);
-        }
-    }
 
     // ── GUI support ─────────────────────────────────────────────
 #ifdef CERMU_HAS_GUI

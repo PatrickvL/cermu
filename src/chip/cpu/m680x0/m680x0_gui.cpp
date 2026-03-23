@@ -31,10 +31,9 @@ template <const M680x0Traits& Traits>
 void m680x0_t<Traits>::register_debug_fields() {
     auto& r = this->debug_registry_;
 
-    // Point the debug registry at the flat byte array + DECL table.
+    // Point the debug registry at the RegisterFile backing store + DECL table.
     // All register values are data-driven — no per-register callbacks.
-    sync_debug_snapshot();
-    r.set_registers(debug_regs_, M68K_DBG_SIZE, M68K_REG_INFO);
+    r.set_registers(regs_.debug_ptr(), regs_.debug_size(), M68K_REG_INFO);
     r.set_decl_entries(M68K_DECL_ENTRIES.data(), M68K_DECL_ENTRIES.size());
 }
 
@@ -244,9 +243,6 @@ const char* m680x0_t<Traits>::get_layout_chip_name() const {
 
 template <const M680x0Traits& Traits>
 void m680x0_t<Traits>::render_debug_content() {
-    // Sync SR snapshot for DECL walk
-    sync_debug_snapshot();
-
     // DECL-based register/field walk + builder-API categories
     debug_registry_.render(this);
 }
