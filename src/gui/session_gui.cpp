@@ -13,6 +13,7 @@
 #include "gui/decoder/composite_stream_decoder.hpp"
 #include "gui/decoder/rgb_stream_decoder.hpp"
 #include "gui/decoder/indexed_stream_decoder.hpp"
+#include "gui/decoder/vector_stream_decoder.hpp"
 #include "gui/display_panel.hpp"
 #include "gui/port_icons.hpp"
 #include "gui/vfs_file_system.hpp"
@@ -995,6 +996,11 @@ void SessionGUI::render_screen() {
                 if (use_rgb_stream_shader_) did_rgb_upload = true;
             }
 
+            // Vector: upload raw samples to decoder under lock
+            if (use_vector_shader_ && signal_decoder_ && vector_stream_len_ > 0) {
+                signal_decoder_->upload(vector_stream_snapshot_, vector_stream_len_);
+            }
+
             // Primary display path — indexed framebuffer (CPU-reconstructed).
             // Skip when stream data was uploaded: the stream shader takes
             // priority, and the indexed texture + palette upload are wasted work.
@@ -1034,8 +1040,8 @@ void SessionGUI::render_screen() {
     bool use_rgb_stream = false;
     bool use_vector = false;
 
-    if (use_vector_shader_ && vector_shader_) {
-        // Vector display — no texture, rendered via beam quads
+    if (use_vector_shader_ && signal_decoder_ && signal_decoder_->ready()) {
+        // Vector display — rendered via VectorStreamDecoder
         use_vector = true;
     } else if (use_rgb_stream_shader_ && rgb_stream_shader_ && stream_display_height_ > 0) {
         display_tex = rgb_stream_texture_;
@@ -1064,53 +1070,23 @@ void SessionGUI::render_screen() {
 
     if (use_vector) {
         // ================================================================
-        // Vector display — FBO-based phosphor persistence rendering
+        // Vector display — rendered via VectorStreamDecoder
         // ================================================================
-        // Ensure persistence FBO matches display dimensions.
-        int fbo_w = static_cast<int>(display_w);
-        int fbo_h = static_cast<int>(display_h);
-        if (fbo_w > 0 && fbo_h > 0 && vector_persist_.fbo) {
-            vector_shader::resize_persistence(&vector_persist_, fbo_w, fbo_h);
-        }
-
-        // Build beam quads in FBO-local coordinates: [0, fbo_w) × [0, fbo_h).
-        // No viewport offset — the FBO has its own coordinate space.
-        // Query per-system vector display configuration (phosphor tint + palette).
         System::VectorDisplayConfig vdc;
         if (system_) vdc = system_->get_vector_display_config();
 
-        if (vector_stream_len_ > 0) {
-            float x_scale = display_w / static_cast<float>(fb_width_);
-            float y_scale = display_h / static_cast<float>(fb_height_);
-            float beam_w = 3.0f * (std::min(display_w, display_h) / 1024.0f);
-            beam_w = std::max(1.5f, std::min(beam_w, 6.0f));
-            vector_shader::build_beam_quads(
-                vector_stream_snapshot_, vector_stream_len_,
-                beam_w,
-                display_w, display_h,
-                x_scale, y_scale,
-                0.0f, 0.0f,
-                vdc.color_palette,
-                vector_beam_buf_);
-        } else {
-            vector_beam_buf_.clear();
-        }
-        vector_beam_count_ = static_cast<int>(vector_beam_buf_.size());
+        auto* vdec = static_cast<VectorStreamDecoder*>(signal_decoder_.get());
+        vdec->set_frame_params(io.DeltaTime,
+                               vdc.phosphor_r, vdc.phosphor_g, vdc.phosphor_b,
+                               vdc.color_palette);
 
-        // Render persistence pass: decay previous frame + add new vectors
-        float frame_dt = io.DeltaTime;  // seconds
-        vector_shader::render_persistence_frame(
-            &vector_persist_,
-            vector_shader_, vector_loc_proj_, vector_loc_phosphor_,
-            vector_vao_, vector_vbo_,
-            vector_beam_buf_.data(), vector_beam_count_,
-            frame_dt,
-            vdc.phosphor_r, vdc.phosphor_g, vdc.phosphor_b);
+        GLuint vec_tex = vdec->render_to_texture(
+            static_cast<int>(display_w), static_cast<int>(display_h));
 
         // Apply post-processing (CRT or pass-through) to the persistence texture
-        GLuint final_tex = vector_persist_.texture;
+        GLuint final_tex = vec_tex;
         if (display_panel_ && display_panel_->ready()) {
-            final_tex = display_panel_->render(vector_persist_.texture,
+            final_tex = display_panel_->render(vec_tex,
                                                static_cast<float>(fb_width_),
                                                static_cast<float>(fb_height_),
                                                display_w, display_h,
@@ -1697,44 +1673,11 @@ void SessionGUI::allocate_framebuffer() {
             }
 
             case VideoSignalType::Vector: {
-                // Vector — CPU-side line extraction + beam quad vertex shader.
-                // No textures involved; vertices carry all data.
-                
-                vector_shader::VectorShaderLocations vlocs{};
-                vector_shader_ = vector_shader::create_program(&vlocs);
-                if (vector_shader_) {
-                    vector_loc_proj_     = vlocs.proj_mtx;
-                    vector_loc_phosphor_ = vlocs.phosphor_color;
-
-                    gl_api::glGenVertexArrays(1, &vector_vao_);
-                    gl_api::glGenBuffers(1, &vector_vbo_);
-                    gl_api::glBindVertexArray(vector_vao_);
-                    gl_api::glBindBuffer(GL_ARRAY_BUFFER, vector_vbo_);
-                    gl_api::glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE,
-                        sizeof(vector_shader::BeamVertex), reinterpret_cast<void*>(0));
-                    gl_api::glEnableVertexAttribArray(0);
-                    gl_api::glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE,
-                        sizeof(vector_shader::BeamVertex), reinterpret_cast<void*>(8));
-                    gl_api::glEnableVertexAttribArray(1);
-                    gl_api::glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE,
-                        sizeof(vector_shader::BeamVertex), reinterpret_cast<void*>(12));
-                    gl_api::glEnableVertexAttribArray(2);
-                    gl_api::glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE,
-                        sizeof(vector_shader::BeamVertex), reinterpret_cast<void*>(16));
-                    gl_api::glEnableVertexAttribArray(3);
-                    gl_api::glBindVertexArray(0);
-                    gl_api::glBindBuffer(GL_ARRAY_BUFFER, 0);
-
+                auto decoder = std::make_unique<VectorStreamDecoder>(fb_width_, fb_height_);
+                if (decoder->create()) {
                     vector_stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES * 8]();
                     use_vector_shader_ = true;
-
-                    // Create phosphor persistence FBO (initial size matches framebuffer;
-                    // will be resized to match display dimensions on first render)
-                    vector_shader::create_persistence(&vector_persist_,
-                        fb_width_ > 0 ? fb_width_ : 1024,
-                        fb_height_ > 0 ? fb_height_ : 1024);
-
-                    printf("GPU vector display rendering enabled\n");
+                    signal_decoder_ = std::move(decoder);
                 }
                 break;
             }

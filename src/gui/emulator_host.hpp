@@ -24,7 +24,6 @@ struct ImGuiIO;
 class SignalDecoder;
 class DisplayPanel;
 
-#include "gui/shader/vector_shader.hpp"  // BeamVertex, PhosphorPersistence
 #include "gui/shader/crt_shader.hpp"     // CRTPostProcess
 #include "devices/display/display_device.hpp"  // DisplayDevice, DisplayCharacteristics
 
@@ -208,18 +207,9 @@ protected:
     // ========================================================================
     // GPU vector display rendering
     // ========================================================================
-    /// For systems with VideoSignalType::Vector (DVG, Vectrex, etc.), the raw
-    /// VectorVideoSample stream is extracted into line segments on the CPU
-    /// and rendered as beam quads via a dedicated vertex+fragment shader.
-    /// No texture is involved — vertices carry all data.
-
+    /// When true, a VectorStreamDecoder is active in signal_decoder_.
+    /// The decoder owns all GPU resources (shader, VAO/VBO, persistence FBO).
     bool      use_vector_shader_        = false;
-    GLuint    vector_shader_            = 0;
-    GLuint    vector_vao_               = 0;
-    GLuint    vector_vbo_               = 0;
-    GLint     vector_loc_proj_          = -1;
-    GLint     vector_loc_phosphor_      = -1;
-    vector_shader::PhosphorPersistence vector_persist_{};
 
     /// CRT post-processing — barrel distortion, scanlines, shadow mask, gamma.
     /// Applied as the final display stage for all raster paths.
@@ -251,12 +241,6 @@ protected:
     /// last_frame_data_ by emu thread.  8 bytes per sample.
     uint8_t*  vector_stream_snapshot_   = nullptr;
     uint32_t  vector_stream_len_        = 0;  ///< Number of samples in snapshot
-
-    /// CPU-expanded beam quad vertices for the current frame.
-    /// Built during render_screen() from vector_stream_snapshot_,
-    /// consumed by the vector draw callback.
-    std::vector<vector_shader::BeamVertex> vector_beam_buf_;
-    int                  vector_beam_count_  = 0;
 
     // ========================================================================
     // Statistics / Frame pacing

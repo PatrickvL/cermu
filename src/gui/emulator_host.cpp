@@ -3,7 +3,6 @@
 #include "gui/gl_api.hpp"
 #include "gui/shader/indexed_shader.hpp"
 #include "gui/decoder/signal_decoder.hpp"
-#include "gui/shader/vector_shader.hpp"
 #include <imgui.h>
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl2.h>
@@ -405,15 +404,9 @@ void EmulatorHost::cleanup_indexed_resources() {
     delete[] rgb_stream_snapshot_; rgb_stream_snapshot_ = nullptr;
     use_rgb_stream_shader_ = false;
 
-    // Vector display resources
-    if (vector_shader_) { gl_api::glDeleteProgram(vector_shader_); vector_shader_ = 0; }
-    if (vector_vao_ && gl_api::glDeleteVertexArrays) { gl_api::glDeleteVertexArrays(1, &vector_vao_); vector_vao_ = 0; }
-    if (vector_vbo_ && gl_api::glDeleteBuffers) { gl_api::glDeleteBuffers(1, &vector_vbo_); vector_vbo_ = 0; }
-    vector_shader::destroy_persistence(&vector_persist_);
+    // Vector display resources (GL resources owned by VectorStreamDecoder via signal_decoder_)
     delete[] vector_stream_snapshot_; vector_stream_snapshot_ = nullptr;
     vector_stream_len_ = 0;
-    vector_beam_buf_.clear();
-    vector_beam_count_ = 0;
     use_vector_shader_ = false;
 }
 
