@@ -88,7 +88,7 @@ enum class PortType {
 const char* port_type_name(PortType type);
 
 // VideoSignalType and AudioSignalType are defined in signal_types.hpp
-// (shared with the video stream pipeline, GPU shader dispatch, etc.).
+// (shared with the video output pipeline, GPU shader dispatch, etc.).
 
 // ============================================================================
 // OUTPUT DESCRIPTORS

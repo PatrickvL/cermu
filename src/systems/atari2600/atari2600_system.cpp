@@ -190,9 +190,9 @@ bool Atari2600System::initialize() {
     // Register all manifest-created chips for the Hardware menu
     register_bus_chips(board_);
 
-    // Video stream output — composite video from TIA
+    // Video output — composite video from TIA
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.video().set_stream(&video_port_->stream());
+    board_.video().set_video_out(&video_port_->output());
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Audio port — TIA does its own decimation, uses drive_sample()
@@ -266,17 +266,17 @@ void Atari2600System::run_frame() {
 
     // Stream-driven: TIA drives FrameEnd on VSYNC rising edge.
     // Safety limit protects against games that never trigger VSYNC.
-    auto& stream = video_port_->stream();
+    auto& output = video_port_->output();
     uint32_t safety_limit = cycles_per_frame_ * 2;
     uint32_t cycles_run = 0;
 
-    while (!stream.frame_ended() && cycles_run < safety_limit) {
+    while (!output.frame_ended() && cycles_run < safety_limit) {
         tick();
         cycles_run++;
     }
 
     // If we hit the safety limit, force scanline reset
-    if (!stream.frame_ended()) {
+    if (!output.frame_ended()) {
         board_.video().scanline = 0;
     }
 

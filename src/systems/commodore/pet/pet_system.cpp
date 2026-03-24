@@ -305,7 +305,7 @@ bool PETSystem::initialize() {
         0x80     // invert_bit — bit 7 selects inverted charset
     );
 
-    // Video stream output
+    // Video output
     video_port_ = std::make_unique<CompositeVideoPort>();
     video_port_->bind_display(nullptr, palette_.data(),
                               pet_constants::DISPLAY_WIDTH, 1);
@@ -555,8 +555,8 @@ void PETSystem::run_frame() {
     check_deferred_load();
 
     if (!video_port_) return;
-    auto& stream = video_port_->stream();
-    while (!stream.frame_ended()) {
+    auto& output = video_port_->output();
+    while (!output.frame_ended()) {
         tick();
     }
     video_port_->swap_frame();
@@ -574,17 +574,17 @@ void PETSystem::crtc_display_char(uint16_t /* ma */, uint8_t /* ra */, bool /* c
 }
 
 void PETSystem::crtc_vsync() {
-    // Flush pixel buffer to video stream
+    // Flush pixel buffer to video output
     if (video_port_) {
-        auto& stream = video_port_->stream();
+        auto& output = video_port_->output();
         for (int y = 0; y < pet_constants::DISPLAY_HEIGHT; y++) {
             const uint8_t* line = pixel_buffer_ + y * pet_constants::DISPLAY_WIDTH;
-            stream.drive({0, SyncFlag::HSync});
+            output.drive({0, SyncFlag::HSync});
             for (int x = 0; x < pet_constants::DISPLAY_WIDTH; x++) {
-                stream.drive({line[x], SyncFlag::BeamOn});
+                output.drive({line[x], SyncFlag::BeamOn});
             }
         }
-        stream.drive({0, SyncFlag::FrameEnd});
+        output.drive({0, SyncFlag::FrameEnd});
     }
 }
 

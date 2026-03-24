@@ -145,18 +145,18 @@ public:
         }
     }
 
-    /// Called at VSYNC — drives the video stream.
+    /// Called at VSYNC — drives the video output.
     void vsync() {
-        if (video_stream_) {
+        if (video_out_) {
             const uint8_t* idx = frame_indices_;
             for (uint32_t y = 0; y < bbc_constants::DISPLAY_HEIGHT; y++) {
                 const uint8_t* line = idx + y * bbc_constants::DISPLAY_WIDTH;
-                video_stream_->drive({0, SyncFlag::HSync});
+                video_out_->drive({0, SyncFlag::HSync});
                 for (uint32_t x = 0; x < bbc_constants::DISPLAY_WIDTH; x++) {
-                    video_stream_->drive({line[x], SyncFlag::BeamOn});
+                    video_out_->drive({line[x], SyncFlag::BeamOn});
                 }
             }
-            video_stream_->drive({0, SyncFlag::FrameEnd});
+            video_out_->drive({0, SyncFlag::FrameEnd});
         }
     }
 
@@ -165,8 +165,8 @@ public:
         std::memset(frame_indices_, 0, sizeof(frame_indices_));
     }
 
-    CompositeVideoOut* video_stream_ = nullptr;
-    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
+    CompositeVideoOut* video_out_ = nullptr;
+    void set_video_out(CompositeVideoOut* s) { video_out_ = s; }
 
 private:
     // === Mode 7 Teletext rendering ===

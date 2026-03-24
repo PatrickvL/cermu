@@ -227,7 +227,7 @@ private:
     MainBoard board_{BT::kManifest};
 
     // ── Display ──────────────────────────────────────────────────────────
-    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video output
     KC85VideoGenerator video_gen_;                    // Video generation circuitry
 
     // ── Keyboard ─────────────────────────────────────────────────────────

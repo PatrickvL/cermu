@@ -15,18 +15,18 @@
 // horizontal window.
 //
 // Data format:   Same as RGB — RGBA8 stream ({r, g, b, flags})
-// Texture units: 0 = StreamTex (RGBA8, no palette)
-// Uniforms:      Same set as rgb_stream_shader
+// Texture units: 0 = SignalTex (RGBA8, no palette)
+// Uniforms:      Same set as rgb_signal_shader
 //
 // Requires: OpenGL 3.0 / GLSL 130
 // ============================================================================
 
 #include "gui/gl_api.hpp"            // GL function pointers, gl_api::compile_shader()
-#include "gui/shader/rgb_stream_shader.hpp"    // RGBShaderLocations, vertex_src, constants
-#include "gui/shader/stream_shader.hpp"        // STREAM_TEX_WIDTH constant
+#include "gui/shader/rgb_signal_shader.hpp"    // RGBShaderLocations, vertex_src, constants
+#include "gui/shader/signal_shader.hpp"        // SIGNAL_TEX_WIDTH constant
 #include <cstdio>
 
-namespace ypbpr_stream_shader {
+namespace ypbpr_signal_shader {
 
 // Fragment shader — Y'PbPr component video with chroma bandwidth limiting.
 //
@@ -41,10 +41,10 @@ static constexpr const char* fragment_src = R"glsl(
 in vec2 Frag_UV;
 in vec4 Frag_Color;
 
-uniform sampler2D StreamTex;    // unit 0: RGBA8 packed stream
+uniform sampler2D SignalTex;    // unit 0: RGBA8 packed signal
 
 uniform int ScanlineMap[512];
-uniform int StreamTexWidth;
+uniform int SignalTexWidth;
 uniform int DisplayHeight;
 uniform int DisplayWidth;
 
@@ -52,7 +52,7 @@ out vec4 Out_Color;
 
 // Fetch RGB at a 2D texture position (no division needed)
 vec3 rgb_at(int col, int row) {
-    return texelFetch(StreamTex, ivec2(col, row), 0).rgb;
+    return texelFetch(SignalTex, ivec2(col, row), 0).rgb;
 }
 
 void main() {
@@ -67,8 +67,8 @@ void main() {
 
     // Compute center pixel's 2D texture position (single division)
     int center_pos = offset + pixel_x;
-    int center_row = center_pos / StreamTexWidth;
-    int center_col = center_pos - center_row * StreamTexWidth;
+    int center_row = center_pos / SignalTexWidth;
+    int center_col = center_pos - center_row * SignalTexWidth;
 
     // Center pixel — full-resolution luma (BT.601)
     vec3 center = rgb_at(center_col, center_row);
@@ -83,8 +83,8 @@ void main() {
         int delta = clamp(pixel_x + dx, 0, DisplayWidth - 1) - pixel_x;
         int col = center_col + delta;
         int row = center_row;
-        if (col < 0) { col += StreamTexWidth; row--; }
-        else if (col >= StreamTexWidth) { col -= StreamTexWidth; row++; }
+        if (col < 0) { col += SignalTexWidth; row--; }
+        else if (col >= SignalTexWidth) { col -= SignalTexWidth; row++; }
         vec3 c = rgb_at(col, row);
         float cy = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
         Pb_sum += 0.564 * (c.b - cy);
@@ -108,12 +108,12 @@ void main() {
 // Shader program creation
 // ============================================================================
 
-// Create the Y'PbPr stream shader program.
-// Uses the same vertex shader and uniform layout as rgb_stream_shader.
+// Create the Y'PbPr signal shader program.
+// Uses the same vertex shader and uniform layout as rgb_signal_shader.
 // Returns the program ID (0 on failure).
-inline GLuint create_program(rgb_stream_shader::RGBShaderLocations* locs) {
+inline GLuint create_program(rgb_signal_shader::RGBShaderLocations* locs) {
 
-    GLuint vs = gl_api::compile_shader(GL_VERTEX_SHADER, rgb_stream_shader::vertex_src);
+    GLuint vs = gl_api::compile_shader(GL_VERTEX_SHADER, rgb_signal_shader::vertex_src);
     if (!vs) return 0;
     GLuint fs = gl_api::compile_shader(GL_FRAGMENT_SHADER, fragment_src);
     if (!fs) { gl_api::glDeleteShader(vs); return 0; }
@@ -135,26 +135,26 @@ inline GLuint create_program(rgb_stream_shader::RGBShaderLocations* locs) {
     if (status != GL_TRUE) {
         char log[512];
         gl_api::glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
-        fprintf(stderr, "ypbpr_stream_shader: link error: %s\n", log);
+        fprintf(stderr, "ypbpr_signal_shader: link error: %s\n", log);
         gl_api::glDeleteProgram(prog);
         return 0;
     }
 
-    // Set texture unit binding — StreamTex on unit 0 (no palette)
+    // Set texture unit binding — SignalTex on unit 0 (no palette)
     gl_api::glUseProgram(prog);
-    gl_api::glUniform1i(gl_api::glGetUniformLocation(prog, "StreamTex"), 0);
+    gl_api::glUniform1i(gl_api::glGetUniformLocation(prog, "SignalTex"), 0);
     gl_api::glUseProgram(0);
 
     if (locs) {
         locs->proj_mtx         = gl_api::glGetUniformLocation(prog, "ProjMtx");
         locs->scanline_map     = gl_api::glGetUniformLocation(prog, "ScanlineMap");
-        locs->stream_tex_width = gl_api::glGetUniformLocation(prog, "StreamTexWidth");
+        locs->signal_tex_width = gl_api::glGetUniformLocation(prog, "SignalTexWidth");
         locs->display_height   = gl_api::glGetUniformLocation(prog, "DisplayHeight");
         locs->display_width    = gl_api::glGetUniformLocation(prog, "DisplayWidth");
     }
 
-    printf("ypbpr_stream_shader: program %u compiled and linked successfully\n", prog);
+    printf("ypbpr_signal_shader: program %u compiled and linked successfully\n", prog);
     return prog;
 }
 
-} // namespace ypbpr_stream_shader
+} // namespace ypbpr_signal_shader

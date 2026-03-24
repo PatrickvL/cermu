@@ -1,11 +1,11 @@
 #pragma once
 
 // ============================================================================
-// IndexedStreamDecoder — GPU palette-indexed rendering as a SignalDecoder
+// IndexedSignalDecoder — GPU palette-indexed rendering as a SignalDecoder
 // ============================================================================
 //
 // For systems whose video chip writes 8-bit palette indices to a CPU
-// framebuffer instead of driving per-dot-clock stream samples.  The
+// framebuffer instead of driving per-dot-clock signal samples.  The
 // decoder uploads the index buffer as an R8 texture and performs the
 // palette lookup in a fragment shader.
 //
@@ -19,9 +19,9 @@
 #include <cstring>
 #include <memory>
 
-class IndexedStreamDecoder : public SignalDecoder {
+class IndexedSignalDecoder : public SignalDecoder {
 public:
-    IndexedStreamDecoder(int width, int height)
+    IndexedSignalDecoder(int width, int height)
         : width_(width), height_(height) {}
 
     bool create() override {

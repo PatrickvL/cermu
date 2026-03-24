@@ -162,7 +162,7 @@ private:
     MainBoard board_{BT::kManifest};
 
     // ── Display ──────────────────────────────────────────────────────────
-    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video output
     CharDisplayGenerator video_gen_;                  // TTL character display generator
 
     // ── Keyboard ─────────────────────────────────────────────────────────

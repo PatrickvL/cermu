@@ -23,17 +23,17 @@
 // Apple II 4-color artifact scheme (2 pixels per color cycle).
 //
 // Data format:   Same as Composite — palette-indexed RG8 stream
-// Texture units: 0 = StreamTex (RG8), 1 = Palette (RGBA 256×1)
-// Uniforms:      Base set from stream_shader + PhaseIncrement (float)
+// Texture units: 0 = SignalTex (RG8), 1 = Palette (RGBA 256×1)
+// Uniforms:      Base set from signal_shader + PhaseIncrement (float)
 //
 // Requires: OpenGL 3.0 / GLSL 130
 // ============================================================================
 
 #include "gui/gl_api.hpp"            // GL function pointers, gl_api::compile_shader()
-#include "gui/shader/stream_shader.hpp"    // StreamShaderLocations, vertex_src, constants
+#include "gui/shader/signal_shader.hpp"    // SignalShaderLocations, vertex_src, constants
 #include <cstdio>
 
-namespace artifact_stream_shader {
+namespace artifact_signal_shader {
 
 // Fragment shader — NTSC composite artifact coloring.
 static constexpr const char* fragment_src = R"glsl(
@@ -42,11 +42,11 @@ static constexpr const char* fragment_src = R"glsl(
 in vec2 Frag_UV;
 in vec4 Frag_Color;
 
-uniform sampler2D StreamTex;    // unit 0: RG8 packed stream
+uniform sampler2D SignalTex;    // unit 0: RG8 packed signal
 uniform sampler2D Palette;      // unit 1: 256×1 RGBA
 
 uniform int ScanlineMap[512];
-uniform int StreamTexWidth;
+uniform int SignalTexWidth;
 uniform int DisplayHeight;
 uniform int DisplayWidth;
 uniform float PhaseIncrement;   // radians per pixel (2π × carrier/dotclock)
@@ -55,7 +55,7 @@ out vec4 Out_Color;
 
 // Fetch palette color at a 2D texture position (no division needed)
 vec3 palette_at(int col, int row) {
-    float idx_f = texelFetch(StreamTex, ivec2(col, row), 0).r;
+    float idx_f = texelFetch(SignalTex, ivec2(col, row), 0).r;
     int idx = int(idx_f * 255.0 + 0.5);
     return texelFetch(Palette, ivec2(idx, 0), 0).rgb;
 }
@@ -72,8 +72,8 @@ void main() {
 
     // Compute center pixel's 2D texture position (single division)
     int center_pos = offset + pixel_x;
-    int center_row = center_pos / StreamTexWidth;
-    int center_col = center_pos - center_row * StreamTexWidth;
+    int center_row = center_pos / SignalTexWidth;
+    int center_col = center_pos - center_row * SignalTexWidth;
 
     // Encode/decode window — 9-tap filter (radius 4)
     const int R = 4;
@@ -91,8 +91,8 @@ void main() {
         int delta = px - pixel_x;
         int col = center_col + delta;
         int row = center_row;
-        if (col < 0) { col += StreamTexWidth; row--; }
-        else if (col >= StreamTexWidth) { col -= StreamTexWidth; row++; }
+        if (col < 0) { col += SignalTexWidth; row--; }
+        else if (col >= SignalTexWidth) { col -= SignalTexWidth; row++; }
         vec3 c = palette_at(col, row);
 
         // RGB → YIQ
@@ -135,13 +135,13 @@ void main() {
 // Shader program creation
 // ============================================================================
 
-// Create the NTSC artifact stream shader program.
+// Create the NTSC artifact signal shader program.
 // Returns the program ID (0 on failure).
 // out_phase_loc receives the PhaseIncrement uniform location.
-inline GLuint create_program(stream_shader::StreamShaderLocations* locs,
+inline GLuint create_program(signal_shader::SignalShaderLocations* locs,
                              GLint* out_phase_loc) {
 
-    GLuint vs = gl_api::compile_shader(GL_VERTEX_SHADER, stream_shader::vertex_src);
+    GLuint vs = gl_api::compile_shader(GL_VERTEX_SHADER, signal_shader::vertex_src);
     if (!vs) return 0;
     GLuint fs = gl_api::compile_shader(GL_FRAGMENT_SHADER, fragment_src);
     if (!fs) { gl_api::glDeleteShader(vs); return 0; }
@@ -163,21 +163,21 @@ inline GLuint create_program(stream_shader::StreamShaderLocations* locs,
     if (status != GL_TRUE) {
         char log[512];
         gl_api::glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
-        fprintf(stderr, "artifact_stream_shader: link error: %s\n", log);
+        fprintf(stderr, "artifact_signal_shader: link error: %s\n", log);
         gl_api::glDeleteProgram(prog);
         return 0;
     }
 
-    // Set texture unit bindings — same as composite stream shader
+    // Set texture unit bindings — same as composite signal shader
     gl_api::glUseProgram(prog);
-    gl_api::glUniform1i(gl_api::glGetUniformLocation(prog, "StreamTex"), 0);
+    gl_api::glUniform1i(gl_api::glGetUniformLocation(prog, "SignalTex"), 0);
     gl_api::glUniform1i(gl_api::glGetUniformLocation(prog, "Palette"), 1);
     gl_api::glUseProgram(0);
 
     if (locs) {
         locs->proj_mtx        = gl_api::glGetUniformLocation(prog, "ProjMtx");
         locs->scanline_map    = gl_api::glGetUniformLocation(prog, "ScanlineMap");
-        locs->stream_tex_width = gl_api::glGetUniformLocation(prog, "StreamTexWidth");
+        locs->signal_tex_width = gl_api::glGetUniformLocation(prog, "SignalTexWidth");
         locs->display_height  = gl_api::glGetUniformLocation(prog, "DisplayHeight");
         locs->display_width   = gl_api::glGetUniformLocation(prog, "DisplayWidth");
     }
@@ -185,8 +185,8 @@ inline GLuint create_program(stream_shader::StreamShaderLocations* locs,
     if (out_phase_loc)
         *out_phase_loc = gl_api::glGetUniformLocation(prog, "PhaseIncrement");
 
-    printf("artifact_stream_shader: program %u compiled and linked successfully\n", prog);
+    printf("artifact_signal_shader: program %u compiled and linked successfully\n", prog);
     return prog;
 }
 
-} // namespace artifact_stream_shader
+} // namespace artifact_signal_shader

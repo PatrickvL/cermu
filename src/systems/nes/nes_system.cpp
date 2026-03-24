@@ -344,9 +344,9 @@ bool NintendoSystem<V>::initialize() {
     // Auto-discover palette from typed Board video chip (PPU)
     register_bus_chips(board_);
 
-    // Wire PPU to composite video stream port
+    // Wire PPU to composite video output port
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.video().set_stream(&video_port_->stream());
+    board_.video().set_video_out(&video_port_->output());
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Wire APU to audio signal port
@@ -438,8 +438,8 @@ template<NintendoVariant V>
 void NintendoSystem<V>::run_frame() {
     if (!system_ready_ || !video_port_) return;
 
-    auto& stream = video_port_->stream();
-    while (!stream.frame_ended()) {
+    auto& output = video_port_->output();
+    while (!output.frame_ended()) {
         tick();
     }
 

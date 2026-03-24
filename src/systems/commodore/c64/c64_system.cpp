@@ -65,7 +65,7 @@ static constexpr uint8_t SYS_MASK_GAME  = 0x02;
  *
  * FRAMEBUFFER MANAGEMENT:
  * =======================
- * - VIC-II drives the composite video stream via VideoPort
+ * - VIC-II drives the composite video output via VideoPort
  */
 
 /** Check if load address is a typical C64 address */
@@ -536,11 +536,11 @@ bool C64System::initialize() {
     register_bus_chips(board_);
     register_chip(std::make_unique<PlaChip>(this));
 
-    // Wire VIC-II to composite video stream port
+    // Wire VIC-II to composite video output port
     video_port_ = std::make_unique<CompositeVideoPort>();
-    vicii->set_stream(&video_port_->stream());
+    vicii->set_video_out(&video_port_->output());
 
-    // Compute back porch for stream→framebuffer reconstruction.
+    // Compute back porch for signal→framebuffer reconstruction.
     // Back porch = distance in samples from HSync falling edge to first visible pixel.
     const auto& vt = (get_vicii_standard() == VIC_PAL) ? MOS6569_traits : MOS6567R8_traits;
     const uint16_t ppl = vt.cycles_per_line * 8;
@@ -959,10 +959,10 @@ void C64System::run_frame() {
     // Lightpen: pass display rect so it can convert SDL mouse → VIC-II coords.
     update_lightpen_display_rect();
 
-    // Run until the video chip drives FrameEnd into the stream — the
+    // Run until the video chip drives FrameEnd into the output — the
     // frame boundary is implicit in the video signal, just like on a CRT.
-    auto& stream = video_port_->stream();
-    while (!stream.frame_ended()) {
+    auto& output = video_port_->output();
+    while (!output.frame_ended()) {
         system_tick();
     }
 

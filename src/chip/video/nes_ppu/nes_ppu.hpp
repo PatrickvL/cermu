@@ -287,10 +287,10 @@ public:
     uint8_t scanline_color_line_[256] = {};
     int     scanline_flush_x_ = 0;          // Next x to flush (0–256)
 
-    // Video stream output (non-owning pointer, set by system/board)
-    CompositeVideoOut* video_stream_ = nullptr;
+    // Video output (non-owning pointer, set by system/board)
+    CompositeVideoOut* video_out_ = nullptr;
 
-    // Per-dot-clock stream driving state
+    // Per-dot-clock signal driving state
     SyncFlag drive_flags_ = SyncFlag::HSync | SyncFlag::VSync | SyncFlag::Blank;
     bool       frame_wrapped_ = false;
 
@@ -359,7 +359,7 @@ public:
         io_latch_ = 0;
         bus_snapshot_ = PPU_BUS_DEFAULT_STATE;   // PPU bus (active-low signals HIGH)
 
-        // Per-dot-clock stream state — scanline -1 is pre-render (non-visible)
+        // Per-dot-clock signal state — scanline -1 is pre-render (non-visible)
         frame_wrapped_ = false;
         drive_flags_ = SyncFlag::HSync | SyncFlag::VSync | SyncFlag::Blank;
 
@@ -400,8 +400,8 @@ public:
         if (bus) ciram_ = bus->ciram;
     }
 
-    // Set the video stream output (system-owned CompositeVideoOut).
-    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
+    // Set the video output output (system-owned CompositeVideoOut).
+    void set_video_out(CompositeVideoOut* s) { video_out_ = s; }
 
     // NMI output level — true when /NMI is asserted (active LOW).
     // Reads from the caller-provided ppu_bus; the system passes the

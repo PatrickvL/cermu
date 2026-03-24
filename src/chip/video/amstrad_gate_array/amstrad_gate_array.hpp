@@ -63,7 +63,7 @@ public:
     //
     // Renders the CPC display (640×400 at mode 2 resolution, each native
     // line drawn twice) into the internal frame_indices_ buffer, then
-    // drives the video stream.
+    // drives the video output.
     //
     // The system calls this once per frame, passing:
     //   - ram: pointer to full 64K/128K RAM
@@ -148,22 +148,22 @@ public:
             }
         }
 
-        // Drive video stream with per-line pixel data
-        if (video_stream_) {
+        // Drive video output with per-line pixel data
+        if (video_out_) {
             const uint8_t* idx = frame_indices_;
             for (int y = 0; y < 200; y++) {
                 const uint8_t* line = idx + (y * 2) * FB_W;
-                video_stream_->drive({0, SyncFlag::HSync});
+                video_out_->drive({0, SyncFlag::HSync});
                 for (int i = 0; i < FB_W; i++) {
-                    video_stream_->drive({line[i], SyncFlag::BeamOn});
+                    video_out_->drive({line[i], SyncFlag::BeamOn});
                 }
             }
-            video_stream_->drive({0, SyncFlag::FrameEnd});
+            video_out_->drive({0, SyncFlag::FrameEnd});
         }
     }
 
-    CompositeVideoOut* video_stream_ = nullptr;
-    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
+    CompositeVideoOut* video_out_ = nullptr;
+    void set_video_out(CompositeVideoOut* s) { video_out_ = s; }
 
 private:
     // Internal pixel buffer — replaces the former IndexedFrameBuffer dependency.

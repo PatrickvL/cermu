@@ -131,7 +131,7 @@ public:
     }
 
     // ====================================================================
-    // Bridge suppression — skip all flush output when the GPU stream
+    // Bridge suppression — skip all flush output when the GPU signal
     // shader handles display directly.  The CPU-side bridge still runs
     // (sync walk + color extraction) but no memcpy / palette work occurs.
     // ====================================================================
@@ -264,7 +264,7 @@ private:
     int       ext_width_    = 0;
     int       ext_height_   = 0;
     uint8_t*  ext_indices_  = nullptr;   // External GPU index buffer (GUI-owned)
-    bool      bridge_suppressed_ = false; // Skip flush output (GPU stream shader active)
+    bool      bridge_suppressed_ = false; // Skip flush output (GPU signal shader active)
     PaletteTable palette_;
 
     uint32_t* active_framebuffer() {

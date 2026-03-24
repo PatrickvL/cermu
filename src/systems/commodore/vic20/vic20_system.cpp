@@ -658,9 +658,9 @@ bool VIC20System::initialize() {
     // Set up page pointers for current expansion and ROM banking
     setup_expansion_map();
 
-    // Wire VIC chip to video stream port
+    // Wire VIC chip to video output port
     video_port_ = std::make_unique<CompositeVideoPort>();
-    vic_->set_stream(&video_port_->stream());
+    vic_->set_video_out(&video_port_->output());
     video_port_->bind_display(nullptr, nullptr,
                               vic20_constants::DISPLAY_WIDTH, 8);
     video_port_->bind_frame_output(&last_frame_data_);
@@ -867,9 +867,9 @@ void VIC20System::run_frame() {
     // Check if a deferred file load is waiting for BASIC to reach READY
     check_deferred_load();
 
-    // Run until the video chip drives FrameEnd into the stream.
-    auto& stream = video_port_->stream();
-    while (!stream.frame_ended()) {
+    // Run until the video chip drives FrameEnd into the output.
+    auto& output = video_port_->output();
+    while (!output.frame_ended()) {
         tick();
     }
 

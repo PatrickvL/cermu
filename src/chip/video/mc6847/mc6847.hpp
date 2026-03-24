@@ -264,7 +264,7 @@ public:
     //
     // The MC6847 owns the palette, internal font ROM, and rendering logic.
     // Systems call render_frame(vram) once per field sync; the chip fills
-    // frame_indices with palette indices, then drives the video stream.
+    // frame_indices with palette indices, then drives the video output.
     //
     // This renders the 256×192 active display area only (no border).
     //
@@ -295,7 +295,7 @@ public:
         if (mode_ag_) {
             // Full-graphics modes: clear to black (placeholder)
             std::memset(fb, 0, W * H);
-            drive_stream_from_indices(fb, W, H);
+            drive_video_out_from_indices(fb, W, H);
             return;
         }
 
@@ -344,15 +344,15 @@ public:
             }
         }
 
-        drive_stream_from_indices(frame_indices_, W, H);
+        drive_video_out_from_indices(frame_indices_, W, H);
     }
 
     /// Get the palette for GPU indexed rendering registration.
     static const uint32_t* get_palette()     { return mc6847_font::PALETTE; }
     static int             get_palette_size() { return mc6847_font::PALETTE_SIZE; }
 
-    CompositeVideoOut* video_stream_ = nullptr;
-    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
+    CompositeVideoOut* video_out_ = nullptr;
+    void set_video_out(CompositeVideoOut* s) { video_out_ = s; }
 
     // === ChipBase GUI virtuals ===
 #ifdef CERMU_HAS_GUI
@@ -364,16 +364,16 @@ private:
     // Internal pixel buffer — replaces the former IndexedFrameBuffer dependency.
     uint8_t frame_indices_[mc6847_const::DISPLAY_WIDTH * mc6847_const::DISPLAY_HEIGHT] = {};
 
-    void drive_stream_from_indices(const uint8_t* idx, int w, int h) {
-        if (!video_stream_) return;
+    void drive_video_out_from_indices(const uint8_t* idx, int w, int h) {
+        if (!video_out_) return;
         for (int y = 0; y < h; y++) {
             const uint8_t* line = idx + y * w;
-            video_stream_->drive({0, SyncFlag::HSync});
+            video_out_->drive({0, SyncFlag::HSync});
             for (int i = 0; i < w; i++) {
-                video_stream_->drive({line[i], SyncFlag::BeamOn});
+                video_out_->drive({line[i], SyncFlag::BeamOn});
             }
         }
-        video_stream_->drive({0, SyncFlag::FrameEnd});
+        video_out_->drive({0, SyncFlag::FrameEnd});
     }
 
     // Mode pins

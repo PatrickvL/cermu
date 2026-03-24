@@ -5,7 +5,7 @@
 // ============================================================================
 //
 // Owns a triple-buffered sample array that the video chip writes into
-// via VideoPort's stream.  Mirrors real hardware: the monitor owns its
+// via VideoPort's output.  Mirrors real hardware: the monitor owns its
 // input buffer (video decoding happens on the receiving end), and the
 // signal cable (VideoPort) is just a passive connector.
 //
@@ -16,7 +16,7 @@
 //
 // The triple buffer enables zero-copy snapshot:
 //   1. connect() installs the write buffer and a frame-end swap callback.
-//   2. The video chip calls stream.drive(), writing into the WRITE slot.
+//   2. The video chip calls output.drive(), writing into the WRITE slot.
 //   3. At FrameEnd, on_frame_end() promotes WRITE→READY and picks a
 //      FREE slot as the new WRITE target.
 //   4. The emu thread calls claim() under fb_mutex_ to mark the READY
@@ -66,13 +66,13 @@ public:
     using PortType = VideoPort<VideoOut<SampleT>>;
 
     DisplayPipeline() {
-        buf_[0] = std::make_unique<SampleT[]>(MAX_STREAM_SAMPLES);
-        buf_[1] = std::make_unique<SampleT[]>(MAX_STREAM_SAMPLES);
-        buf_[2] = std::make_unique<SampleT[]>(MAX_STREAM_SAMPLES);
+        buf_[0] = std::make_unique<SampleT[]>(MAX_SIGNAL_SAMPLES);
+        buf_[1] = std::make_unique<SampleT[]>(MAX_SIGNAL_SAMPLES);
+        buf_[2] = std::make_unique<SampleT[]>(MAX_SIGNAL_SAMPLES);
     }
 
     // ====================================================================
-    // Connection — redirect a VideoPort's stream to our triple-buffer
+    // Connection — redirect a VideoPort's output to our triple-buffer
     // and install the swap callback.  Only one port at a time.
     // ====================================================================
 

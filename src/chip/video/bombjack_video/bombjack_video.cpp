@@ -3,7 +3,7 @@
 using namespace bombjack_video_constants;
 
 void BombJackVideo::render_frame() {
-    if (!tilemap_ || !attr_map_ || !char_rom_ || !video_stream_) return;
+    if (!tilemap_ || !attr_map_ || !char_rom_ || !video_out_) return;
 
     std::memset(pixel_buf_, 0, sizeof(pixel_buf_));
 
@@ -31,17 +31,17 @@ void BombJackVideo::render_frame() {
         }
     }
 
-    drive_stream();
+    drive_video_out();
 }
 
-void BombJackVideo::drive_stream() {
-    if (!video_stream_) return;
+void BombJackVideo::drive_video_out() {
+    if (!video_out_) return;
     for (int y = 0; y < HEIGHT; y++) {
         const uint8_t* line = pixel_buf_ + y * WIDTH;
-        video_stream_->drive({0, SyncFlag::HSync});
+        video_out_->drive({0, SyncFlag::HSync});
         for (int x = 0; x < WIDTH; x++) {
-            video_stream_->drive({line[x], SyncFlag::BeamOn});
+            video_out_->drive({line[x], SyncFlag::BeamOn});
         }
     }
-    video_stream_->drive({0, SyncFlag::FrameEnd});
+    video_out_->drive({0, SyncFlag::FrameEnd});
 }

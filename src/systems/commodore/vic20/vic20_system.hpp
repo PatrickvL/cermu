@@ -148,7 +148,7 @@ public:
 
 private:
     vic20_bus_t bus_;
-    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video output
     std::unique_ptr<AudioPort> audio_port_;            // Audio signal output
     
     // ── Memory bus (declarative manifest + page-pointer dispatch) ────────

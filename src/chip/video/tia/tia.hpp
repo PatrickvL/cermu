@@ -365,12 +365,12 @@ struct tia_t : public VideoChipBase {
     void set_audio_port(AudioPort* p) { audio_port_ = p; }
 
     // ========================================================================
-    // VIDEO STREAM
+    // VIDEO OUTPUT
     // ========================================================================
 
-    CompositeVideoOut* video_stream_ = nullptr;
-    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
-    bool prev_vsync_stream_ = false;  // Edge detection for FrameEnd emission
+    CompositeVideoOut* video_out_ = nullptr;
+    void set_video_out(CompositeVideoOut* s) { video_out_ = s; }
+    bool prev_vsync_signal_ = false;  // Edge detection for FrameEnd emission
 
     // ========================================================================
     // TEST FRAMEBUFFER (optional, for harness pixel verification)

@@ -224,7 +224,7 @@ private:
     uint8_t* memory_          = nullptr;    // Direct pointer for rendering
 
     // ── Display ──────────────────────────────────────────────────────────
-    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video output
 
     // ── Paged ROM / Shadow RAM state ─────────────────────────────────────
     uint8_t rom_select_     = 0;

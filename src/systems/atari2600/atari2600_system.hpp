@@ -155,7 +155,7 @@ private:
     // CHIPS (value-typed via Board Chips)
     // ========================================================================
 
-    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video output
     std::unique_ptr<AudioPort> audio_port_;            // Audio port output
 
     // ========================================================================

@@ -1,6 +1,6 @@
 #pragma once
 
-// Composite video stream — included by VIC-II, TED, NES PPU, VIC-20 VIC
+// Composite video output — included by VIC-II, TED, NES PPU, VIC-20 VIC
 // Chip includes this header; never sees VideoPort or anything downstream.
 
 #include "core/signal/video_out.hpp"

@@ -39,7 +39,7 @@ struct CharDisplayColorAttr {
 
 struct CharDisplayGenerator {
     // --- Configuration (set once at init) ---
-    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
+    void set_video_out(CompositeVideoOut* s) { video_out_ = s; }
 
     void set_geometry(int text_cols, int text_rows,
                       int char_width, int char_height,
@@ -67,9 +67,9 @@ struct CharDisplayGenerator {
     void render_frame();
 
 private:
-    void drive_stream();
+    void drive_video_out();
 
-    CompositeVideoOut* video_stream_ = nullptr;
+    CompositeVideoOut* video_out_ = nullptr;
     const uint8_t*        vram_         = nullptr;
     const uint8_t*        char_rom_     = nullptr;
     CharDisplayColorAttr  color_attr_   = {};

@@ -147,7 +147,7 @@ bool AppleIISystem<V>::initialize() {
 
     palette_.set(apple_ii_constants::PALETTE, 16);
 
-    // Video stream output
+    // Video output
     video_port_ = std::make_unique<CompositeVideoPort>();
     video_port_->bind_display(nullptr, palette_.data(),
                               apple_ii_constants::DISPLAY_WIDTH, 1);

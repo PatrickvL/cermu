@@ -22,7 +22,7 @@ using namespace namco_video_constants;
 // TODO: output native 288×224 signal when GPU-side rotation is available.
 
 void NamcoVideo::render_frame() {
-    if (!vram_ || !cram_ || !char_rom_ || !colortable_ || !video_stream_) return;
+    if (!vram_ || !cram_ || !char_rom_ || !colortable_ || !video_out_) return;
 
     std::memset(pixel_buf_, 0, sizeof(pixel_buf_));
 
@@ -63,17 +63,17 @@ void NamcoVideo::render_frame() {
         }
     }
 
-    drive_stream();
+    drive_video_out();
 }
 
-void NamcoVideo::drive_stream() {
-    if (!video_stream_) return;
+void NamcoVideo::drive_video_out() {
+    if (!video_out_) return;
     for (int y = 0; y < HEIGHT; y++) {
         const uint8_t* line = pixel_buf_ + y * WIDTH;
-        video_stream_->drive({0, SyncFlag::HSync});
+        video_out_->drive({0, SyncFlag::HSync});
         for (int x = 0; x < WIDTH; x++) {
-            video_stream_->drive({line[x], SyncFlag::BeamOn});
+            video_out_->drive({line[x], SyncFlag::BeamOn});
         }
     }
-    video_stream_->drive({0, SyncFlag::FrameEnd});
+    video_out_->drive({0, SyncFlag::FrameEnd});
 }

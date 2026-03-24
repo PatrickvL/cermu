@@ -4,9 +4,9 @@
 // SignalDecoder — base class for GPU-based video signal reconstruction
 // ============================================================================
 //
-// Each concrete decoder encapsulates the shader program, stream texture,
+// Each concrete decoder encapsulates the shader program, signal texture,
 // FBO, and rendering logic for one signal family.  The decoder transforms
-// raw stream bytes into a GPU texture containing the reconstructed image.
+// raw signal bytes into a GPU texture containing the reconstructed image.
 //
 // Shared infrastructure (owned by this base class):
 //   - FBO + fullscreen quad (create_fbo / destroy_fbo / resize_fbo)
@@ -17,9 +17,9 @@
 //
 // Lifecycle:
 //   1. Construct with signal-specific parameters
-//   2. create() — compile shader, allocate stream texture + FBO
+//   2. create() — compile shader, allocate signal texture + FBO
 //   3. Per frame:
-//      a. snapshot()         — emu thread copies stream data into decoder
+//      a. snapshot()         — emu thread copies signal data into decoder
 //      b. upload_snapshot()  — GUI thread uploads to GPU + computes uniforms
 //      c. render_to_texture() or bind_for_imgui() depending on display mode
 //   4. destroy() — release GPU resources
@@ -51,7 +51,7 @@ public:
     // Snapshot / upload pipeline
     // ------------------------------------------------------------------
     // snapshot() — called by emu thread under fb_mutex_.
-    // Copies stream/sync/metadata from FrameData into decoder-owned buffers.
+    // Copies signal/sync/metadata from FrameData into decoder-owned buffers.
     virtual void snapshot(const FrameData& fd, int fb_width) = 0;
 
     // upload_snapshot() — called by GUI thread under fb_mutex_.
@@ -122,7 +122,7 @@ public:
     virtual bool ready() const = 0;
 
     /// Primary data texture — the texture the shader samples from TU0.
-    /// For stream decoders this is the stream texture; for indexed, the
+    /// For signal decoders this is the signal texture; for indexed, the
     /// index texture.  Used as the ImGui::Image texture ID on the inline
     /// (non-FBO) display path.
     virtual GLuint data_texture() const = 0;

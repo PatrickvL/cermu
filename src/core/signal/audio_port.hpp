@@ -4,12 +4,12 @@
 // AudioStream — chip-facing write interface for audio signal output
 // ============================================================================
 //
-// The chip calls drive(value) once per chip clock.  The stream accumulates
+// The chip calls drive(value) once per chip clock.  The signal accumulates
 // samples and decimates to the host sample rate using simple box-car
 // downsampling with optional BLEP correction for band-limited transitions.
 //
 // Value range: chip-specific float amplitude (e.g. 0.0 - 1.0, or DAC units).
-// The stream normalizes to host [-1.0, +1.0] range on output.
+// The signal normalizes to host [-1.0, +1.0] range on output.
 // ============================================================================
 
 #include "core/cermu.hpp"

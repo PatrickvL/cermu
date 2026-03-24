@@ -705,13 +705,13 @@ void ted7360_t::pixel_sequencer() {
 }
 
 // ============================================================================
-// SCANLINE FLUSH — drive color index line buffer to video stream
+// SCANLINE FLUSH — drive color index line buffer to video output
 // ============================================================================
 
 void ted7360_t::flush_line(uint16_t raster_line) {
     if (!color_line_) return;
 
-    // Video stream output is driven per-dot in the pixel pipeline,
+    // Video output is driven per-dot in the pixel pipeline,
     // so this function is now a no-op for scanline-level flushing.
     (void)raster_line;
 }
@@ -755,8 +755,8 @@ void ted7360_t::timing_advance() {
         border.main_ff = true;
     }
 
-    // FrameEnd at first_visible_line so the stream frame starts at the top
-    // of the visible display, not at raster 0.  This ensures the stream
+    // FrameEnd at first_visible_line so the signal frame starts at the top
+    // of the visible display, not at raster 0.  This ensures the signal output
     // shader sees all top-border lines before the text area.
     if (new_raster == timing.first_visible_line) {
         frame_wrapped_ = true;
@@ -945,7 +945,7 @@ void ted7360_t::reset() {
     cursor_visible  = false;
     reverse_mode    = false;
 
-    // Per-dot-clock stream state
+    // Per-dot-clock signal state
     frame_wrapped_ = false;
     // Raster 0 is in vblank for TED — initialize drive_flags_ accordingly
     drive_flags_ = SyncFlag::HSync | SyncFlag::VSync | SyncFlag::Blank;
@@ -1127,7 +1127,7 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
     // Always run — border flip-flop state must stay consistent across all lines.
     pixel_sequencer();
 
-    // ===== STEP 4.1: Per-dot-clock stream driving (8 pixels) =====
+    // ===== STEP 4.1: Per-dot-clock signal driving (8 pixels) =====
     // drive_flags_ is maintained at line transitions (HSync on cycle 0,
     // VSync during vblank).  Clear HSync after cycle 0 so the falling
     // edge creates the sync event.
@@ -1135,7 +1135,7 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
         drive_flags_ = drive_flags_ & ~SyncFlag::HSync;
     }
 
-    if (video_stream_) {
+    if (video_out_) {
         SyncFlag flags = drive_flags_;
         if (frame_wrapped_) {
             frame_wrapped_ = false;
@@ -1150,7 +1150,7 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
                 if (px < TED_VISIBLE_WIDTH)
                     color = color_line_[px];
             }
-            video_stream_->drive({color, (pi == 0) ? flags : (flags & ~SyncFlag::FrameEnd)});
+            video_out_->drive({color, (pi == 0) ? flags : (flags & ~SyncFlag::FrameEnd)});
         }
     }
 

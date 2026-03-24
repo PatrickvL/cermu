@@ -3,10 +3,10 @@
 #include "gui/shader/crt_shader.hpp"
 #include "gui/display_pipeline.hpp"
 #include "gui/decoder/signal_decoder.hpp"
-#include "gui/decoder/composite_stream_decoder.hpp"
-#include "gui/decoder/rgb_stream_decoder.hpp"
-#include "gui/decoder/indexed_stream_decoder.hpp"
-#include "gui/decoder/vector_stream_decoder.hpp"
+#include "gui/decoder/composite_signal_decoder.hpp"
+#include "gui/decoder/rgb_signal_decoder.hpp"
+#include "gui/decoder/indexed_signal_decoder.hpp"
+#include "gui/decoder/vector_signal_decoder.hpp"
 #include "gui/display_panel.hpp"
 #include "gui/port_icons.hpp"
 #include "gui/vfs_file_system.hpp"
@@ -966,7 +966,7 @@ void SessionGUI::render_screen() {
             if (display_pipeline_)
                 display_pipeline_->release();
 
-            // Palette upload — stream decoders that need a palette
+            // Palette upload — signal decoders that need a palette
             // (Composite) get it here; indexed decoders already have it.
             if (uploaded && active_signal_type_ != VideoSignalType::Vector) {
                 signal_decoder_->upload_palette(
@@ -975,12 +975,12 @@ void SessionGUI::render_screen() {
         }
     }
 
-    // Dispatch by signal type: Vector → stream → indexed.
+    // Dispatch by signal type: Vector → signal → indexed.
     // The active_signal_type_ determines the display path; the decoder
     // is always signal_decoder_.
     GLuint display_tex = 0;
     bool use_indexed_shader = false;
-    bool use_stream = false;
+    bool use_signal = false;
     bool use_vector = false;
 
     if (signal_decoder_ && signal_decoder_->ready()) {
@@ -997,15 +997,15 @@ void SessionGUI::render_screen() {
             case VideoSignalType::Digital:
                 if (signal_decoder_->display_height() > 0) {
                     display_tex = signal_decoder_->data_texture();
-                    use_stream = true;
+                    use_signal = true;
                 }
                 break;
             default:
                 break;
         }
-        // Fallback to indexed if no stream data yet
-        if (!use_stream && !use_vector) {
-            auto* idx = dynamic_cast<IndexedStreamDecoder*>(signal_decoder_.get());
+        // Fallback to indexed if no signal data yet
+        if (!use_signal && !use_vector) {
+            auto* idx = dynamic_cast<IndexedSignalDecoder*>(signal_decoder_.get());
             if (idx) {
                 display_tex = idx->index_texture();
                 use_indexed_shader = true;
@@ -1027,12 +1027,12 @@ void SessionGUI::render_screen() {
 
     if (use_vector) {
         // ================================================================
-        // Vector display — rendered via VectorStreamDecoder
+        // Vector display — rendered via VectorSignalDecoder
         // ================================================================
         System::VectorDisplayConfig vdc;
         if (system_) vdc = system_->get_vector_display_config();
 
-        auto* vdec = static_cast<VectorStreamDecoder*>(signal_decoder_.get());
+        auto* vdec = static_cast<VectorSignalDecoder*>(signal_decoder_.get());
         vdec->set_frame_params(io.DeltaTime,
                                vdc.phosphor_r, vdc.phosphor_g, vdc.phosphor_b,
                                vdc.color_palette);
@@ -1064,7 +1064,7 @@ void SessionGUI::render_screen() {
         }
     } else if (display_tex) {
         // ================================================================
-        // Texture-based display (stream / indexed)
+        // Texture-based display (signal / indexed)
         // ================================================================
 
         // Determine rendering path:
@@ -1072,7 +1072,7 @@ void SessionGUI::render_screen() {
         //   - Signal decoder without CRT → bind_for_imgui() (inline in ImGui draw list)
         bool use_crt = use_crt_shader_ && crt_post_.shader;
         bool decoder_fbo_path = use_crt && signal_decoder_ &&
-                                (use_stream || use_indexed_shader);
+                                (use_signal || use_indexed_shader);
 
         if (decoder_fbo_path && signal_decoder_->ready()) {
             // Decoder owns the FBO — render into its internal texture
@@ -1091,7 +1091,7 @@ void SessionGUI::render_screen() {
 
         // Non-FBO path: bind custom shader via ImGui draw callback
         bool inline_path = !decoder_fbo_path && !use_crt;
-        if (inline_path && signal_decoder_ && (use_stream || use_indexed_shader)) {
+        if (inline_path && signal_decoder_ && (use_signal || use_indexed_shader)) {
             ImDrawList* draw_list = ImGui::GetWindowDrawList();
             signal_decoder_->bind_for_imgui(draw_list);
         }
@@ -1102,7 +1102,7 @@ void SessionGUI::render_screen() {
                     ImVec2(display_w, display_h));
 
         // Restore ImGui's default shader after our custom draw
-        if (inline_path && (use_stream || use_indexed_shader)) {
+        if (inline_path && (use_signal || use_indexed_shader)) {
             ImGui::GetWindowDrawList()->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
         }
 
@@ -1417,7 +1417,7 @@ void SessionGUI::step_emulation() {
         {
             std::lock_guard<std::mutex> flock(fb_mutex_);
             if (signal_decoder_) {
-                auto* idx = dynamic_cast<IndexedStreamDecoder*>(signal_decoder_.get());
+                auto* idx = dynamic_cast<IndexedSignalDecoder*>(signal_decoder_.get());
                 if (idx && idx->index_framebuffer()) {
                     idx->snapshot_index(idx->index_framebuffer(),
                                         fb_width_, fb_height_);
@@ -1537,14 +1537,14 @@ void SessionGUI::allocate_framebuffer() {
 
     if (window_) {
         // GPU indexed palette rendering — always available (every system has
-        // a palette).  IndexedStreamDecoder owns the R8 index buffers,
-        // shader, and palette texture.  If a stream decoder is created below
+        // a palette).  IndexedSignalDecoder owns the R8 index buffers,
+        // shader, and palette texture.  If a signal decoder is created below
         // (Composite/RGB), it takes over signal_decoder_ and the indexed
         // path becomes inactive.
         {
             gpu_palette_size_ = system_->get_gpu_palette_size();
 
-            auto idx_dec = std::make_unique<IndexedStreamDecoder>(fb_width_, fb_height_);
+            auto idx_dec = std::make_unique<IndexedSignalDecoder>(fb_width_, fb_height_);
             if (idx_dec->create()) {
                 uint8_t* live_buf = idx_dec->allocate_index_buffers();
                 system_->set_index_buffer(live_buf);
@@ -1574,11 +1574,11 @@ void SessionGUI::allocate_framebuffer() {
                 else if (active_signal_type_ == VideoSignalType::CompositeArtifact)
                     variant = CompositeShaderVariant::Artifact;
 
-                auto decoder = std::make_unique<CompositeStreamDecoder>(variant);
+                auto decoder = std::make_unique<CompositeSignalDecoder>(variant);
                 if (decoder->create()) {
                     signal_decoder_ = std::move(decoder);
                     system_->set_video_bridge_suppressed(true);
-                    printf("GPU stream reconstruction enabled (signal: %s)\n",
+                    printf("GPU signal reconstruction enabled (signal: %s)\n",
                            signal_type_name(active_signal_type_));
                 }
                 break;
@@ -1591,18 +1591,18 @@ void SessionGUI::allocate_framebuffer() {
                     ? RGBShaderVariant::YPbPr
                     : RGBShaderVariant::Standard;
 
-                auto decoder = std::make_unique<RGBStreamDecoder>(variant);
+                auto decoder = std::make_unique<RGBSignalDecoder>(variant);
                 if (decoder->create()) {
                     signal_decoder_ = std::move(decoder);
                     system_->set_video_bridge_suppressed(true);
-                    printf("GPU stream reconstruction enabled (signal: %s)\n",
+                    printf("GPU signal reconstruction enabled (signal: %s)\n",
                            signal_type_name(active_signal_type_));
                 }
                 break;
             }
 
             case VideoSignalType::Vector: {
-                auto decoder = std::make_unique<VectorStreamDecoder>(fb_width_, fb_height_);
+                auto decoder = std::make_unique<VectorSignalDecoder>(fb_width_, fb_height_);
                 if (decoder->create()) {
                     signal_decoder_ = std::move(decoder);
                 }
@@ -2329,7 +2329,7 @@ void SessionGUI::emu_thread_func() {
             bool have_stream_snapshot = false;
             if (signal_decoder_ && system_) {
                 const auto& fd = system_->get_last_frame_data();
-                if (fd.stream && fd.stream_len > 0) {
+                if (fd.signal_output && fd.signal_output_len > 0) {
                     if (display_pipeline_)
                         display_pipeline_->claim();
                     signal_decoder_->snapshot(fd, fb_width_);
@@ -2338,9 +2338,9 @@ void SessionGUI::emu_thread_func() {
             }
 
             // Indexed fallback — snapshot the CPU-side index buffer when no
-            // stream data was captured this frame.
+            // signal data was captured this frame.
             if (!have_stream_snapshot && signal_decoder_) {
-                auto* idx = dynamic_cast<IndexedStreamDecoder*>(signal_decoder_.get());
+                auto* idx = dynamic_cast<IndexedSignalDecoder*>(signal_decoder_.get());
                 if (idx && idx->index_framebuffer()) {
                     idx->snapshot_index(idx->index_framebuffer(),
                                         fb_width_, fb_height_);

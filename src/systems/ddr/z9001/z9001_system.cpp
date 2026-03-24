@@ -105,7 +105,7 @@ bool Z9001System<V>::initialize() {
     // Palette for GPU indexed rendering
     palette_.set(z9001_constants::PALETTE, 9);
 
-    // Video stream output
+    // Video output
     video_port_ = std::make_unique<CompositeVideoPort>();
     video_port_->bind_display(nullptr, palette_.data(),
                               z9001_constants::FB_WIDTH, 1);
@@ -113,7 +113,7 @@ bool Z9001System<V>::initialize() {
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Video generator — models TTL character display circuitry
-    video_gen_.set_stream(&video_port_->stream());
+    video_gen_.set_video_out(&video_port_->output());
     video_gen_.set_geometry(z9001_constants::TEXT_COLS, z9001_constants::TEXT_ROWS,
                             8, 8,
                             z9001_constants::FB_WIDTH, z9001_constants::FB_HEIGHT);

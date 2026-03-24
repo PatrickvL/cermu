@@ -11,7 +11,7 @@
 // across Z1013, Z9001, MC6847, TextTerminal, MC6845, and others.
 //
 // All functions write palette indices (not RGBA) into a flat index buffer.
-// The caller owns the buffer and drives it to the video stream or display.
+// The caller owns the buffer and drives it to the video output or display.
 //
 // Glyph format assumption: each font row is a byte with MSB = leftmost pixel.
 // This is the universal convention for 8-pixel-wide character ROMs.

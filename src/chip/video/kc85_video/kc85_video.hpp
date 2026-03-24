@@ -15,7 +15,7 @@
 //               active plane.
 //
 // The generator takes a pointer to the IRM and produces indexed pixel
-// output + a composite video stream.  It does not own the IRM — the
+// output + a composite video output.  It does not own the IRM — the
 // system / memory subsystem manages the RAM chip.
 //
 // Blink support: when enabled (PIO-B bit 7), characters with color byte
@@ -42,7 +42,7 @@ enum class KC85VideoMode : uint8_t {
 
 struct KC85VideoGenerator {
     // --- Configuration (set once at init) ---
-    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
+    void set_video_out(CompositeVideoOut* s) { video_out_ = s; }
     void set_mode(KC85VideoMode m) { mode_ = m; }
 
     // --- Per-frame dynamic state (set by system before render_frame) ---
@@ -51,15 +51,15 @@ struct KC85VideoGenerator {
     void set_active_plane(int p) { active_plane_ = p; }  // KC85/4 only
 
     // --- Render one frame ---
-    // Decodes IRM into display (if set) and drives video stream (if set).
+    // Decodes IRM into display (if set) and drives video output (if set).
     void render_frame();
 
 private:
     void render_standard();
     void render_extended();
-    void drive_stream();
+    void drive_video_out();
 
-    CompositeVideoOut* video_stream_ = nullptr;
+    CompositeVideoOut* video_out_ = nullptr;
     const uint8_t*       irm_          = nullptr;
     KC85VideoMode        mode_         = KC85VideoMode::Standard;
     bool                 blink_bg_     = false;

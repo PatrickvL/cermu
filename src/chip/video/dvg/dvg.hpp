@@ -145,10 +145,10 @@ struct dvg_t : public VideoChipBase {
         rom_word_offset_ = rom_word_offset;
     }
 
-    /// Set the output video stream for vector signals.
-    /// The stream is owned by the system's VectorVideoPort.
-    void set_stream(VectorVideoOut* stream) {
-        stream_ = stream;
+    /// Set the video output for vector signals.
+    /// The output is owned by the system's VectorVideoPort.
+    void set_video_out(VectorVideoOut* out) {
+        video_out_ = out;
     }
 
     // ========================================================================
@@ -219,7 +219,7 @@ private:
     const uint8_t*   vec_rom_  = nullptr;    // Pointer to vector ROM
     uint16_t         vec_rom_size_ = 0;      // Size of vector ROM in bytes
     uint16_t         rom_word_offset_ = 0x800; // DVG word address where ROM begins
-    VectorVideoOut* stream_ = nullptr;  // Output video stream
+    VectorVideoOut* video_out_ = nullptr;  // Video output target
 
     // ========================================================================
     // Internal — opcode fetch and decode
@@ -380,7 +380,7 @@ private:
     }
 
     // ========================================================================
-    // Vector signal emission — emit beam position samples to the stream
+    // Vector signal emission — emit beam position samples to the signal output
     // ========================================================================
 
     /// Global scale factor (set by LABS instruction, w1[15:12]).
@@ -407,7 +407,7 @@ private:
         beam_x_ += dx;
         beam_y_ += dy;
 
-        if (!stream_) {
+        if (!video_out_) {
             // Still wrap for next instruction even without output
             beam_x_ &= 0x3FF;
             beam_y_ &= 0x3FF;
@@ -418,17 +418,17 @@ private:
             // Draw: emit start + end with BeamOn.
             // Map intensity (1-15) to brightness byte (17-255).
             uint8_t bright = static_cast<uint8_t>(std::min(intensity * 17, 255));
-            stream_->drive(VectorVideoSample{
+            video_out_->drive(VectorVideoSample{
                 static_cast<int16_t>(x0), screen_y(y0),
                 bright, 0, SyncFlag::BeamOn, {}
             });
-            stream_->drive(VectorVideoSample{
+            video_out_->drive(VectorVideoSample{
                 static_cast<int16_t>(beam_x_), screen_y(beam_y_),
                 bright, 0, SyncFlag::BeamOn, {}
             });
         } else {
             // Move: emit position without BeamOn to break the line chain
-            stream_->drive(VectorVideoSample{
+            video_out_->drive(VectorVideoSample{
                 static_cast<int16_t>(beam_x_), screen_y(beam_y_),
                 0, 0, SyncFlag::None, {}
             });
@@ -445,7 +445,7 @@ private:
         // from the unwrapped endpoint back to the wrapped start of the
         // next vector.
         if ((wrapped_x != beam_x_ || wrapped_y != beam_y_) && intensity > 0) {
-            stream_->drive(VectorVideoSample{
+            video_out_->drive(VectorVideoSample{
                 static_cast<int16_t>(wrapped_x), screen_y(wrapped_y),
                 0, 0, SyncFlag::None, {}
             });
@@ -457,8 +457,8 @@ private:
 
     /// Emit a beam position sample (no draw) — used by LABS.
     void emit_position() {
-        if (!stream_) return;
-        stream_->drive(VectorVideoSample{
+        if (!video_out_) return;
+        video_out_->drive(VectorVideoSample{
             static_cast<int16_t>(beam_x_), screen_y(beam_y_),
             0, 0, SyncFlag::None, {}
         });
@@ -466,8 +466,8 @@ private:
 
     /// Emit frame-end signal — used by HALT.
     void emit_frame_end() {
-        if (!stream_) return;
-        stream_->drive(VectorVideoSample{
+        if (!video_out_) return;
+        video_out_->drive(VectorVideoSample{
             static_cast<int16_t>(beam_x_), screen_y(beam_y_),
             0, 0, SyncFlag::FrameEnd, {}
         });

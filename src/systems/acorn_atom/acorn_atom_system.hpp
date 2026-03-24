@@ -129,7 +129,7 @@ private:
     MainBoard board_{kAcornAtomChips};
 
     // ── Video ────────────────────────────────────────────────────────────
-    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video output
 
     // ── Keyboard ─────────────────────────────────────────────────────────
     uint8_t keyboard_matrix_[acorn_atom_constants::KEYBOARD_ROWS] = {};

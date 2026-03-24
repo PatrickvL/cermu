@@ -1,10 +1,10 @@
 #pragma once
 
 // ============================================================================
-// VideoPort — board-facing owner of a video output stream
+// VideoPort — board-facing owner of a video output
 // ============================================================================
 //
-// Templated on the stream type.  Owns the stream, the frame buffer, and
+// Templated on the output type.  Owns the output, the frame buffer, and
 // the sync event list.  Included only by boards — never by chips.
 //
 // Current implementation includes a bridge to IndexedFrameBuffer for
@@ -143,25 +143,25 @@ inline void handle_sync_impl(VectorTag,
 template<typename StreamT>
 class VideoPort {
 public:
-    using Stream = StreamT;
+    using Output = StreamT;
     using Sample = typename StreamT::value_type;
 
     VideoPort() {
         active_buf_            = buf_;
-        stream_.ptr            = active_buf_;
-        stream_.base           = active_buf_;
-        stream_.prev_flags     = SyncFlag::None;
-        stream_.ctx            = this;
-        stream_.on_sync_change = &VideoPort::cold_path;
+        output_.ptr            = active_buf_;
+        output_.base           = active_buf_;
+        output_.prev_flags     = SyncFlag::None;
+        output_.ctx            = this;
+        output_.on_sync_change = &VideoPort::cold_path;
     }
 
-    Stream& stream() noexcept { return stream_; }
+    Output& output() noexcept { return output_; }
 
     // ====================================================================
     // External buffer management — allows DisplayPipeline (or similar)
     // to provide the sample buffer and control frame-end buffer swaps.
     //
-    // set_active_buffer(): redirect the stream to an external buffer.
+    // set_active_buffer(): redirect the output to an external buffer.
     // set_frame_end_callback(): install a callback that returns the next
     //   buffer pointer on FrameEnd.  If null, cold_path returns active_buf_
     //   (single-buffer mode, current default behavior).
@@ -169,8 +169,8 @@ public:
 
     void set_active_buffer(Sample* buf) noexcept {
         active_buf_  = buf;
-        stream_.base = buf;
-        stream_.ptr  = buf;
+        output_.base = buf;
+        output_.ptr  = buf;
     }
 
     void set_active_sync_buffer(SyncEvent* events, uint32_t* count) noexcept {
@@ -191,8 +191,8 @@ public:
 
     void reset_to_internal_buffer() noexcept {
         active_buf_        = buf_;
-        stream_.base       = buf_;
-        stream_.ptr        = buf_;
+        output_.base       = buf_;
+        output_.ptr        = buf_;
         active_sync_       = sync_events_;
         active_sync_count_ = &sync_count_;
         on_frame_end_      = nullptr;
@@ -201,10 +201,10 @@ public:
 
     // ====================================================================
     // Display binding — register framebuffer + palette for automatic
-    // stream→framebuffer reconstruction on swap_frame().
+    // signal→framebuffer reconstruction on swap_frame().
     // Call once during initialize() for per-dot-clock systems.
     // Per-frame systems that render to the framebuffer directly should
-    // NOT bind a display — swap_frame() just resets the stream for them.
+    // NOT bind a display — swap_frame() just resets the output for them.
     // ====================================================================
 
     void bind_display(IndexedFrameBuffer* fb, const uint32_t* palette,
@@ -223,7 +223,7 @@ public:
     // ====================================================================
     // Frame output binding — automatically store the last FrameData in
     // an external location (e.g. System::last_frame_data_) so the GUI
-    // thread can snapshot stream data between run_frame() calls.
+    // thread can snapshot signal data between run_frame() calls.
     // ====================================================================
 
     void bind_frame_output(FrameData* out) noexcept { frame_output_ = out; }
@@ -232,7 +232,7 @@ public:
 
     // ====================================================================
     // Bridge suppression — skip CPU-side reconstruction when the GPU
-    // stream shader is handling display directly.  The display binding
+    // signal shader is handling display directly.  The display binding
     // stays intact so the bridge can be re-enabled if needed.
     // ====================================================================
 
@@ -244,11 +244,11 @@ public:
         // fall back to current ptr position for non-FrameEnd callers.
         // completed_base points to the buffer that holds the finished frame;
         // if no FrameEnd was detected, active_buf_ is the current (only) buffer.
-        Sample* frame_buf = stream_.completed_base
-            ? stream_.completed_base : active_buf_;
-        const uint32_t len = stream_.frame_len
-            ? stream_.frame_len
-            : static_cast<uint32_t>(stream_.ptr - active_buf_);
+        Sample* frame_buf = output_.completed_base
+            ? output_.completed_base : active_buf_;
+        const uint32_t len = output_.frame_len
+            ? output_.frame_len
+            : static_cast<uint32_t>(output_.ptr - active_buf_);
 
         // Use completed frame's sync data if available (double-buffer mode);
         // fall back to active sync arrays (single-buffer legacy path).
@@ -258,8 +258,8 @@ public:
             ? completed_sync_count_ : *active_sync_count_;
 
         FrameData fd {
-            .stream        = frame_buf,
-            .stream_len    = len,
+            .signal_output = frame_buf,
+            .signal_output_len    = len,
             .sync_events   = frame_sync,
             .sync_count    = frame_sync_count,
             .signal_type   = SignalTraits<Sample>::type,
@@ -274,17 +274,17 @@ public:
         if (frame_output_) *frame_output_ = fd;
 
         // Auto-reconstruct into bound framebuffer before resetting.
-        // Suppressed when the GPU stream shader handles display directly.
+        // Suppressed when the GPU signal shader handles display directly.
         if (bound_fb_ && !bridge_suppressed_) {
             reconstruct_to_framebuffer(fd, bound_fb_, bound_palette_,
                                        bound_line_width_, bound_back_porch_);
         }
 
-        stream_.base           = active_buf_;
-        stream_.ptr            = active_buf_;
-        stream_.prev_flags     = SyncFlag::None;
-        stream_.frame_len      = 0;
-        stream_.completed_base = nullptr;
+        output_.base           = active_buf_;
+        output_.ptr            = active_buf_;
+        output_.prev_flags     = SyncFlag::None;
+        output_.frame_len      = 0;
+        output_.completed_base = nullptr;
         completed_sync_        = nullptr;
         completed_sync_count_  = 0;
         *active_sync_count_    = 0;
@@ -293,7 +293,7 @@ public:
     }
 
     // ====================================================================
-    // Manual bridge: reconstruct stream into IndexedFrameBuffer.
+    // Manual bridge: reconstruct signal into IndexedFrameBuffer.
     // Prefer bind_display() + swap_frame() for automatic reconstruction.
     // Only meaningful for raster (composite/RGB/RGBI) signal types.
     // ====================================================================
@@ -305,8 +305,8 @@ public:
                                     int back_porch_pixels) const;
 
 private:
-    Stream    stream_;
-    Sample    buf_[MAX_STREAM_SAMPLES];  // Default internal buffer — fallback before DisplayPipeline connect and for headless builds
+    Output    output_;
+    Sample    buf_[MAX_SIGNAL_SAMPLES];  // Default internal buffer — fallback before DisplayPipeline connect and for headless builds
     Sample*   active_buf_ = nullptr;     // Points to current frame's sample buffer
 
     // Sync event storage — internal fallback arrays.
@@ -345,7 +345,7 @@ private:
         detail::handle_sync_impl(Tag{},
                                  self->active_sync_, *self->active_sync_count_,
                                  self->sync_run_,
-                                 self->stream_.prev_flags, flags, pos);
+                                 self->output_.prev_flags, flags, pos);
         if (!has_flag(flags, SyncFlag::FrameEnd))
             return static_cast<Sample*>(nullptr);
         // Snapshot completed frame's sync data before the callback swaps buffers

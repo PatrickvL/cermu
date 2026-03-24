@@ -97,16 +97,16 @@ void KC85VideoGenerator::render_extended() {
 // Stream driving — per-scanline burst from internal pixel buffer
 // ============================================================================
 
-void KC85VideoGenerator::drive_stream() {
-    if (!video_stream_) return;
+void KC85VideoGenerator::drive_video_out() {
+    if (!video_out_) return;
     for (int y = 0; y < HEIGHT; y++) {
         const uint8_t* line = pixel_buf_ + y * WIDTH;
-        video_stream_->drive({0, SyncFlag::HSync});
+        video_out_->drive({0, SyncFlag::HSync});
         for (int x = 0; x < WIDTH; x++) {
-            video_stream_->drive({line[x], SyncFlag::BeamOn});
+            video_out_->drive({line[x], SyncFlag::BeamOn});
         }
     }
-    video_stream_->drive({0, SyncFlag::FrameEnd});
+    video_out_->drive({0, SyncFlag::FrameEnd});
 }
 
 // ============================================================================
@@ -114,12 +114,12 @@ void KC85VideoGenerator::drive_stream() {
 // ============================================================================
 
 void KC85VideoGenerator::render_frame() {
-    if (!irm_ || !video_stream_) return;
+    if (!irm_ || !video_out_) return;
 
     if (mode_ == KC85VideoMode::Extended) {
         render_extended();
     } else {
         render_standard();
     }
-    drive_stream();
+    drive_video_out();
 }
