@@ -141,75 +141,14 @@ protected:
     int fb_height_;
 
     // ========================================================================
-    // GPU indexed palette rendering
-    // ========================================================================
-    /// When the active system supports GPU indexed rendering, palette lookups
-    /// are deferred to a fragment shader.  The emu thread writes 8-bit palette
-    /// indices to index_framebuffer_; the GUI thread uploads them as an R8
-    /// texture and lets the shader sample a 256×1 palette texture.
-
-    bool      use_gpu_indexed_       = false;  ///< Active system uses indexed mode
-    uint8_t*  index_framebuffer_     = nullptr; ///< Index buffer (emu thread writes)
-    uint8_t*  index_snapshot_        = nullptr; ///< Snapshot (GUI thread reads)
-    int       gpu_palette_size_      = 0;       ///< Number of palette entries
-
-    // ========================================================================
-    // Signal decoder — type-erased abstraction for GPU stream rendering.
-    // Owns the shader program, stream texture, and scanline map logic
-    // for the active signal type.  Created in allocate_framebuffer().
+    // Signal decoder — owns all GPU rendering resources for the active
+    // signal type: shader, textures, snapshot buffers, scanline map, FBO.
+    // Created in allocate_framebuffer(), destroyed in free_framebuffer().
     // ========================================================================
     std::unique_ptr<SignalDecoder> signal_decoder_;
 
-    // ========================================================================
-    // GPU stream reconstruction
-    // ========================================================================
-    /// When the system drives per-dot-clock video samples to a VideoPort,
-    /// the raw stream can be uploaded directly to the GPU.  A fragment
-    /// shader performs scanline mapping and palette lookup in a single pass,
-    /// bypassing the CPU-side reconstruct_to_framebuffer() bridge.
-
-    bool      use_stream_shader_     = false;   ///< Active system has stream data
-    GLuint    stream_texture_        = 0;       ///< R8 packed 1D→2D stream texture
-    GLuint    stream_shader_         = 0;       ///< Stream reconstruction shader program
-    GLint     stream_loc_proj_       = -1;      ///< ProjMtx uniform location
-    GLint     stream_loc_scanline_map_ = -1;    ///< ScanlineMap uniform location
-    GLint     stream_loc_tex_width_  = -1;      ///< StreamTexWidth uniform location
-    GLint     stream_loc_display_h_  = -1;      ///< DisplayHeight uniform location
-    GLint     stream_loc_display_w_  = -1;      ///< DisplayWidth uniform location
-
-    /// Stream snapshot — copied from last_frame_data_ by emu thread under fb_mutex_.
-    /// GUI thread reads these to upload stream texture and compute scanline map.
-    uint8_t*  stream_snapshot_       = nullptr;  ///< Color indices extracted from stream
-    SyncEvent* sync_snapshot_        = nullptr;  ///< Sync events snapshot
-    uint32_t  stream_snapshot_len_   = 0;        ///< Number of samples in snapshot
-    uint32_t  sync_snapshot_count_   = 0;        ///< Number of sync events in snapshot
-    int       stream_back_porch_     = 0;        ///< Back porch pixels for scanline map
-    int       stream_display_width_  = 0;        ///< Visible pixels per scanline
-    int       stream_display_height_ = 0;        ///< Visible scanlines (from scanline map)
-
-    // ========================================================================
-    // GPU RGB stream reconstruction
-    // ========================================================================
-    /// For RGB signal types: separate shader + RGBA8 stream texture.
-    /// RGB samples are {r, g, b, flags} — 4 bytes each; the shader reads
-    /// raw RGB values without a palette lookup.
-
-    bool      use_rgb_stream_shader_   = false;
-    GLuint    rgb_stream_texture_      = 0;       ///< RGBA8 packed 1D→2D stream texture
-    GLuint    rgb_stream_shader_       = 0;       ///< RGB stream reconstruction shader
-    GLint     rgb_stream_loc_proj_     = -1;
-    GLint     rgb_stream_loc_scanline_map_ = -1;
-    GLint     rgb_stream_loc_tex_width_    = -1;
-    GLint     rgb_stream_loc_display_h_    = -1;
-    GLint     rgb_stream_loc_display_w_    = -1;
-    uint8_t*  rgb_stream_snapshot_     = nullptr;  ///< RGBA bytes extracted from stream
-
-    // ========================================================================
-    // GPU vector display rendering
-    // ========================================================================
-    /// When true, a VectorStreamDecoder is active in signal_decoder_.
-    /// The decoder owns all GPU resources (shader, VAO/VBO, persistence FBO).
-    bool      use_vector_shader_        = false;
+    /// Number of palette entries (cached for palette upload).
+    int       gpu_palette_size_      = 0;
 
     /// CRT post-processing — barrel distortion, scanlines, shadow mask, gamma.
     /// Applied as the final display stage for all raster paths.
@@ -230,17 +169,6 @@ protected:
     /// Cached display characteristics from the active display device.
     /// Default values used when no display device is attached.
     DisplayCharacteristics display_characteristics_{};
-
-    /// NTSC artifact shader — PhaseIncrement uniform location and value.
-    /// PhaseIncrement = 2π × color_carrier / dot_clock (radians per pixel).
-    /// Default π gives the classic 2-pixel color cycle (Apple II–style artifacts).
-    GLint     artifact_loc_phase_increment_   = -1;
-    float     artifact_phase_increment_       = 3.14159265f;
-
-    /// Vector stream snapshot — raw VectorVideoSample bytes copied from
-    /// last_frame_data_ by emu thread.  8 bytes per sample.
-    uint8_t*  vector_stream_snapshot_   = nullptr;
-    uint32_t  vector_stream_len_        = 0;  ///< Number of samples in snapshot
 
     // ========================================================================
     // Statistics / Frame pacing

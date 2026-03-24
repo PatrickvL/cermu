@@ -1,7 +1,6 @@
 #include "gui/emulator_host.hpp"
 #include "gui/display_panel.hpp"
 #include "gui/gl_api.hpp"
-#include "gui/shader/indexed_shader.hpp"
 #include "gui/decoder/signal_decoder.hpp"
 #include <imgui.h>
 #include <imgui_impl_opengl3.h>
@@ -370,44 +369,14 @@ void EmulatorHost::render_about_dialog_generic() {
 // ============================================================================
 
 void EmulatorHost::cleanup_indexed_resources() {
-    delete[] index_framebuffer_; index_framebuffer_ = nullptr;
-    delete[] index_snapshot_; index_snapshot_ = nullptr;
-    use_gpu_indexed_ = false;
     gpu_palette_size_ = 0;
 
-    // Signal decoder — owns shader, textures, palette, and FBO.
-    // Destroy before cleaning up legacy fields to avoid double-delete.
-    bool had_decoder = signal_decoder_ != nullptr;
+    // Signal decoder owns all GPU resources (shader, textures, palette,
+    // FBO, snapshot buffers).  Destroying it releases everything.
     if (signal_decoder_) {
         signal_decoder_->destroy();
         signal_decoder_.reset();
     }
-
-    // Stream reconstruction resources — skip shader/texture if decoder owned them
-    if (!had_decoder) {
-        if (stream_shader_) { gl_api::glDeleteProgram(stream_shader_); }
-        if (stream_texture_) { glDeleteTextures(1, &stream_texture_); }
-        if (rgb_stream_shader_) { gl_api::glDeleteProgram(rgb_stream_shader_); }
-        if (rgb_stream_texture_) { glDeleteTextures(1, &rgb_stream_texture_); }
-    }
-    stream_shader_ = 0;
-    stream_texture_ = 0;
-    delete[] stream_snapshot_; stream_snapshot_ = nullptr;
-    delete[] sync_snapshot_; sync_snapshot_ = nullptr;
-    stream_snapshot_len_ = 0;
-    sync_snapshot_count_ = 0;
-    use_stream_shader_ = false;
-    stream_display_width_ = 0;
-    stream_display_height_ = 0;
-    rgb_stream_shader_ = 0;
-    rgb_stream_texture_ = 0;
-    delete[] rgb_stream_snapshot_; rgb_stream_snapshot_ = nullptr;
-    use_rgb_stream_shader_ = false;
-
-    // Vector display resources (GL resources owned by VectorStreamDecoder via signal_decoder_)
-    delete[] vector_stream_snapshot_; vector_stream_snapshot_ = nullptr;
-    vector_stream_len_ = 0;
-    use_vector_shader_ = false;
 }
 
 // ============================================================================

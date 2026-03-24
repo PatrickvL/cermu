@@ -657,12 +657,6 @@ public:
     // system advertises support.  Scanline-based systems override
     // set_index_buffer() to also forward to their chip's pixel unit.
 
-    /// Whether this system supports GPU indexed palette rendering.
-    bool supports_gpu_indexed_rendering() const {
-        if (!palette_.empty()) return true;
-        return display_ && display_->palette_size() > 0;
-    }
-
     /// Number of palette entries (e.g. 16 for C64, 128 for TED/TIA).
     int get_gpu_palette_size() const {
         if (!palette_.empty()) return palette_.size();

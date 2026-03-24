@@ -1,12 +1,5 @@
 #include "gui/session_gui.hpp"
 #include "gui/gl_api.hpp"
-#include "gui/shader/indexed_shader.hpp"
-#include "gui/shader/stream_shader.hpp"
-#include "gui/shader/svideo_stream_shader.hpp"
-#include "gui/shader/artifact_stream_shader.hpp"
-#include "gui/shader/rgb_stream_shader.hpp"
-#include "gui/shader/ypbpr_stream_shader.hpp"
-#include "gui/shader/vector_shader.hpp"
 #include "gui/shader/crt_shader.hpp"
 #include "gui/display_pipeline.hpp"
 #include "gui/decoder/signal_decoder.hpp"
@@ -958,102 +951,61 @@ void SessionGUI::render_screen() {
     // Only re-upload the texture when a new frame is available; otherwise
     // the GPU keeps displaying the previously uploaded texture.
     bool have_new_frame = fb_new_frame_.exchange(false, std::memory_order_acquire);
-    if (have_new_frame) {
-        // Local copies of snapshot metadata — read under lock, used after
-        // lock release for scanline map computation and uniform upload.
-        uint32_t local_stream_len   = 0;
-        uint32_t local_sync_count   = 0;
-        int      local_back_porch   = 0;
-        int      local_display_w    = 0;
-        bool     did_stream_upload  = false;
-        bool     did_rgb_upload     = false;
-
-        // Cache sync events locally so uniform setup can proceed after
-        // the lock is released.  Stack array — MAX_SYNC_EVENTS is 400
-        // × 8 bytes = 3.2 KB, well within safe stack limits.
-        SyncEvent local_sync[MAX_SYNC_EVENTS];
-
+    if (have_new_frame && signal_decoder_ && signal_decoder_->ready()) {
         // -----------------------------------------------------------
-        // LOCKED SECTION — only texture data uploads that read from
-        // the snapshot buffers shared with the emu thread.
+        // LOCKED SECTION — GPU texture upload from decoder-owned
+        // snapshot buffers.  upload_snapshot() also computes scanline
+        // maps and uploads shader uniforms (all fast operations).
         // -----------------------------------------------------------
         {
             std::lock_guard<std::mutex> lock(fb_mutex_);
+            bool uploaded = signal_decoder_->upload_snapshot();
 
-            // Stream texture upload — via signal decoder.
-            if (signal_decoder_ && signal_decoder_->ready() && stream_snapshot_len_ > 0) {
-                const uint8_t* src = use_rgb_stream_shader_
-                    ? rgb_stream_snapshot_ : stream_snapshot_;
-                signal_decoder_->upload(src, stream_snapshot_len_);
-
-                // Snapshot metadata for post-lock uniform setup
-                local_stream_len = stream_snapshot_len_;
-                local_sync_count = std::min(sync_snapshot_count_, MAX_SYNC_EVENTS);
-                std::memcpy(local_sync, sync_snapshot_, local_sync_count * sizeof(SyncEvent));
-                local_back_porch = stream_back_porch_;
-                local_display_w  = stream_display_width_;
-                if (use_stream_shader_) did_stream_upload = true;
-                if (use_rgb_stream_shader_) did_rgb_upload = true;
-            }
-
-            // Vector: upload raw samples to decoder under lock
-            if (use_vector_shader_ && signal_decoder_ && vector_stream_len_ > 0) {
-                signal_decoder_->upload(vector_stream_snapshot_, vector_stream_len_);
-            }
-
-            // Primary display path — indexed framebuffer (CPU-reconstructed).
-            // Skip when stream data was uploaded: the stream shader takes
-            // priority, and the indexed texture + palette upload are wasted work.
-            bool stream_uploaded = (stream_snapshot_len_ > 0 &&
-                                    (use_stream_shader_ || use_rgb_stream_shader_))
-                                || (vector_stream_len_ > 0 && use_vector_shader_);
-            if (!stream_uploaded) {
-                if (use_gpu_indexed_ && signal_decoder_ && signal_decoder_->ready()) {
-                    signal_decoder_->upload(index_snapshot_,
-                                            static_cast<uint32_t>(fb_width_) * fb_height_);
-                    signal_decoder_->upload_palette(
-                        system_->get_gpu_palette_data(), gpu_palette_size_);
-                }
-            } else if (use_stream_shader_ && signal_decoder_) {
-                signal_decoder_->upload_palette(system_->get_gpu_palette_data(), gpu_palette_size_);
+            // Palette upload — stream decoders that need a palette
+            // (Composite) get it here; indexed decoders already have it.
+            if (uploaded && active_signal_type_ != VideoSignalType::Vector) {
+                signal_decoder_->upload_palette(
+                    system_->get_gpu_palette_data(), gpu_palette_size_);
             }
         }
-        // -----------------------------------------------------------
-        // UNLOCKED — scanline map computation and uniform uploads.
-        // Uses local copies of sync events; no shared data accessed.
-        // -----------------------------------------------------------
-
-        if (did_stream_upload || did_rgb_upload) {
-            signal_decoder_->update_uniforms(
-                local_sync, local_sync_count,
-                local_back_porch, local_display_w, local_stream_len);
-            stream_display_height_ = signal_decoder_->display_height();
-        }
-
     }
 
-    // Always render the most recently uploaded texture (read index = opposite of write)
-    // Dispatch by signal type: Vector → RGB stream → Composite stream → indexed → CPU fallback.
+    // Dispatch by signal type: Vector → stream → indexed.
+    // The active_signal_type_ determines the display path; the decoder
+    // is always signal_decoder_.
     GLuint display_tex = 0;
     bool use_indexed_shader = false;
     bool use_stream = false;
-    bool use_rgb_stream = false;
     bool use_vector = false;
 
-    if (use_vector_shader_ && signal_decoder_ && signal_decoder_->ready()) {
-        // Vector display — rendered via VectorStreamDecoder
-        use_vector = true;
-    } else if (use_rgb_stream_shader_ && rgb_stream_shader_ && stream_display_height_ > 0) {
-        display_tex = rgb_stream_texture_;
-        use_rgb_stream = true;
-    } else if (use_stream_shader_ && stream_shader_ && stream_display_height_ > 0) {
-        // Stream shader — display from packed stream texture
-        display_tex = stream_texture_;
-        use_stream = true;
-    } else if (use_gpu_indexed_ && signal_decoder_ && signal_decoder_->ready()) {
-        auto* idx = static_cast<IndexedStreamDecoder*>(signal_decoder_.get());
-        display_tex = idx->index_texture();
-        use_indexed_shader = true;
+    if (signal_decoder_ && signal_decoder_->ready()) {
+        switch (active_signal_type_) {
+            case VideoSignalType::Vector:
+                use_vector = true;
+                break;
+            case VideoSignalType::Composite:
+            case VideoSignalType::RGBI:
+            case VideoSignalType::SVideo:
+            case VideoSignalType::CompositeArtifact:
+            case VideoSignalType::RGB:
+            case VideoSignalType::YPbPr:
+            case VideoSignalType::Digital:
+                if (signal_decoder_->display_height() > 0) {
+                    display_tex = signal_decoder_->data_texture();
+                    use_stream = true;
+                }
+                break;
+            default:
+                break;
+        }
+        // Fallback to indexed if no stream data yet
+        if (!use_stream && !use_vector) {
+            auto* idx = dynamic_cast<IndexedStreamDecoder*>(signal_decoder_.get());
+            if (idx) {
+                display_tex = idx->index_texture();
+                use_indexed_shader = true;
+            }
+        }
     }
 
     // Calculate display dimensions (needed by all paths)
@@ -1107,16 +1059,15 @@ void SessionGUI::render_screen() {
         }
     } else if (display_tex) {
         // ================================================================
-        // Texture-based display (stream / indexed / CPU)
+        // Texture-based display (stream / indexed)
         // ================================================================
 
         // Determine rendering path:
         //   - Signal decoder with CRT → render_to_texture() (decoder owns FBO)
         //   - Signal decoder without CRT → bind_for_imgui() (inline in ImGui draw list)
-        //   - CPU fallback without CRT → direct texture display
         bool use_crt = use_crt_shader_ && crt_post_.shader;
         bool decoder_fbo_path = use_crt && signal_decoder_ &&
-                                (use_stream || use_rgb_stream || use_indexed_shader);
+                                (use_stream || use_indexed_shader);
 
         if (decoder_fbo_path && signal_decoder_->ready()) {
             // Decoder owns the FBO — render into its internal texture
@@ -1135,12 +1086,9 @@ void SessionGUI::render_screen() {
 
         // Non-FBO path: bind custom shader via ImGui draw callback
         bool inline_path = !decoder_fbo_path && !use_crt;
-        if (inline_path) {
-            ImDrawList* draw_list = (use_indexed_shader || use_stream || use_rgb_stream)
-                                    ? ImGui::GetWindowDrawList() : nullptr;
-            if (signal_decoder_ && (use_rgb_stream || use_stream || use_indexed_shader)) {
-                signal_decoder_->bind_for_imgui(draw_list);
-            }
+        if (inline_path && signal_decoder_ && (use_stream || use_indexed_shader)) {
+            ImDrawList* draw_list = ImGui::GetWindowDrawList();
+            signal_decoder_->bind_for_imgui(draw_list);
         }
 
         // Set cursor position and render
@@ -1149,7 +1097,7 @@ void SessionGUI::render_screen() {
                     ImVec2(display_w, display_h));
 
         // Restore ImGui's default shader after our custom draw
-        if (inline_path && (use_indexed_shader || use_stream || use_rgb_stream)) {
+        if (inline_path && (use_stream || use_indexed_shader)) {
             ImGui::GetWindowDrawList()->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
         }
 
@@ -1460,12 +1408,16 @@ void SessionGUI::step_emulation() {
     if (system_ && emulation_paused_.load()) {
         std::lock_guard<std::mutex> lock(emu_mutex_);
         system_->tick();
-        // Snapshot the framebuffer so the GUI sees the result
+        // Snapshot the index framebuffer so the GUI sees the result
         {
             std::lock_guard<std::mutex> flock(fb_mutex_);
-            if (use_gpu_indexed_ && index_framebuffer_ && index_snapshot_) {
-                memcpy(index_snapshot_, index_framebuffer_,
-                       static_cast<size_t>(fb_width_) * fb_height_);
+            if (signal_decoder_) {
+                auto* idx = dynamic_cast<IndexedStreamDecoder*>(signal_decoder_.get());
+                if (idx && idx->index_framebuffer()) {
+                    idx->snapshot_index(idx->index_framebuffer(),
+                                        fb_width_, fb_height_);
+                    fb_new_frame_.store(true, std::memory_order_release);
+                }
             }
         }
         printf("Single step executed\n");
@@ -1579,23 +1531,18 @@ void SessionGUI::allocate_framebuffer() {
     }
 
     if (window_) {
-        // GPU indexed palette rendering — if the system supports it, allocate
-        // R8 index buffers, create the IndexedStreamDecoder (owns shader,
-        // R8 texture, palette texture, FBO), and hand the index buffer to
-        // the system so video chips write raw indices.
-        if (system_->supports_gpu_indexed_rendering()) {
-            size_t idx_bytes = static_cast<size_t>(fb_width_) * fb_height_;
-            index_framebuffer_ = new uint8_t[idx_bytes]();
-            index_snapshot_    = new uint8_t[idx_bytes]();
+        // GPU indexed palette rendering — always available (every system has
+        // a palette).  IndexedStreamDecoder owns the R8 index buffers,
+        // shader, and palette texture.  If a stream decoder is created below
+        // (Composite/RGB), it takes over signal_decoder_ and the indexed
+        // path becomes inactive.
+        {
             gpu_palette_size_ = system_->get_gpu_palette_size();
-            system_->set_index_buffer(index_framebuffer_);
-            use_gpu_indexed_ = true;
 
-            // Create IndexedStreamDecoder as the initial signal_decoder_.
-            // If a stream decoder is created below (Composite/RGB), it will
-            // take over signal_decoder_ and the indexed path becomes inactive.
             auto idx_dec = std::make_unique<IndexedStreamDecoder>(fb_width_, fb_height_);
             if (idx_dec->create()) {
+                uint8_t* live_buf = idx_dec->allocate_index_buffers();
+                system_->set_index_buffer(live_buf);
                 idx_dec->upload_palette(
                     system_->get_gpu_palette_data(), gpu_palette_size_);
                 signal_decoder_ = std::move(idx_dec);
@@ -1615,35 +1562,19 @@ void SessionGUI::allocate_framebuffer() {
             case VideoSignalType::RGBI:
             case VideoSignalType::SVideo:
             case VideoSignalType::CompositeArtifact: {
-                if (system_->supports_gpu_indexed_rendering()) {
-                    stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES * 2]();
-                    sync_snapshot_   = new SyncEvent[MAX_SYNC_EVENTS]();
+                // Select shader variant
+                CompositeShaderVariant variant = CompositeShaderVariant::Standard;
+                if (active_signal_type_ == VideoSignalType::SVideo)
+                    variant = CompositeShaderVariant::SVideo;
+                else if (active_signal_type_ == VideoSignalType::CompositeArtifact)
+                    variant = CompositeShaderVariant::Artifact;
 
-                    // Select shader variant
-                    CompositeShaderVariant variant = CompositeShaderVariant::Standard;
-                    if (active_signal_type_ == VideoSignalType::SVideo)
-                        variant = CompositeShaderVariant::SVideo;
-                    else if (active_signal_type_ == VideoSignalType::CompositeArtifact)
-                        variant = CompositeShaderVariant::Artifact;
-
-                    // Decoder creates and owns its own palette texture.
-                    auto decoder = std::make_unique<CompositeStreamDecoder>(variant);
-                    if (decoder->create()) {
-                        // Mirror into legacy fields so existing dispatch code
-                        // continues to work during incremental migration.
-                        stream_shader_  = decoder->program();
-                        stream_texture_ = decoder->stream_texture();
-                        use_stream_shader_ = true;
-                        if (variant == CompositeShaderVariant::Artifact) {
-                            artifact_loc_phase_increment_ =
-                                static_cast<CompositeStreamDecoder*>(decoder.get())
-                                    ->artifact_phase_loc();
-                        }
-                        signal_decoder_ = std::move(decoder);
-                        system_->set_video_bridge_suppressed(true);
-                        printf("GPU stream reconstruction enabled (signal: %s)\n",
-                               signal_type_name(active_signal_type_));
-                    }
+                auto decoder = std::make_unique<CompositeStreamDecoder>(variant);
+                if (decoder->create()) {
+                    signal_decoder_ = std::move(decoder);
+                    system_->set_video_bridge_suppressed(true);
+                    printf("GPU stream reconstruction enabled (signal: %s)\n",
+                           signal_type_name(active_signal_type_));
                 }
                 break;
             }
@@ -1651,19 +1582,12 @@ void SessionGUI::allocate_framebuffer() {
             case VideoSignalType::RGB:
             case VideoSignalType::YPbPr:
             case VideoSignalType::Digital: {
-                sync_snapshot_ = new SyncEvent[MAX_SYNC_EVENTS]();
-                rgb_stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES * 4]();
-
                 RGBShaderVariant variant = (active_signal_type_ == VideoSignalType::YPbPr)
                     ? RGBShaderVariant::YPbPr
                     : RGBShaderVariant::Standard;
 
                 auto decoder = std::make_unique<RGBStreamDecoder>(variant);
                 if (decoder->create()) {
-                    // Mirror into legacy fields for existing dispatch code
-                    rgb_stream_shader_  = decoder->program();
-                    rgb_stream_texture_ = decoder->stream_texture();
-                    use_rgb_stream_shader_ = true;
                     signal_decoder_ = std::move(decoder);
                     system_->set_video_bridge_suppressed(true);
                     printf("GPU stream reconstruction enabled (signal: %s)\n",
@@ -1675,8 +1599,6 @@ void SessionGUI::allocate_framebuffer() {
             case VideoSignalType::Vector: {
                 auto decoder = std::make_unique<VectorStreamDecoder>(fb_width_, fb_height_);
                 if (decoder->create()) {
-                    vector_stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES * 8]();
-                    use_vector_shader_ = true;
                     signal_decoder_ = std::move(decoder);
                 }
                 break;
@@ -2394,69 +2316,32 @@ void SessionGUI::emu_thread_func() {
         if (frames_ran > 0) {
             std::lock_guard<std::mutex> lock(fb_mutex_);
 
-            // Stream snapshot — extract samples from the raw video stream
-            // for GPU texture upload.  When stream data is successfully
-            // extracted, the indexed/RGBA framebuffer snapshot is redundant
-            // (the stream shader handles display directly).
+            // Stream snapshot — delegate to the active signal decoder.
+            // Stream decoders (Composite/RGB/Vector) copy the raw samples
+            // and sync events into their own internal buffers.  When no
+            // stream data is available, the indexed decoder snapshots the
+            // CPU-side index framebuffer instead.
             bool have_stream_snapshot = false;
-            if (system_) {
+            if (signal_decoder_ && system_) {
                 const auto& fd = system_->get_last_frame_data();
                 if (fd.stream && fd.stream_len > 0) {
-                    const uint8_t* src = static_cast<const uint8_t*>(fd.stream);
-                    uint32_t n = fd.stream_len;
-                    if (n > MAX_STREAM_SAMPLES) n = MAX_STREAM_SAMPLES;
-
-                    if (use_vector_shader_ && vector_stream_snapshot_) {
-                        // Vector: copy raw 8-byte VectorVideoSamples
-                        memcpy(vector_stream_snapshot_, src, n * 8);
-                        vector_stream_len_ = n;
-                        have_stream_snapshot = true;
-                        fb_new_frame_.store(true, std::memory_order_release);
-                    } else if (use_rgb_stream_shader_ && rgb_stream_snapshot_) {
-                        // RGB: upload raw 4-byte RGBVideoSamples directly.
-                        // The shader reads only .rgb and forces alpha to 1.0,
-                        // so the flags byte in position [3] is harmless.
-                        memcpy(rgb_stream_snapshot_, src, n * 4);
-                        stream_snapshot_len_ = n;
-                        // Copy sync events + geometry
-                        uint32_t sc = fd.sync_count;
-                        if (sc > MAX_SYNC_EVENTS) sc = MAX_SYNC_EVENTS;
-                        memcpy(sync_snapshot_, fd.sync_events, sc * sizeof(SyncEvent));
-                        sync_snapshot_count_ = sc;
-                        stream_back_porch_ = fd.back_porch;
-                        stream_display_width_ = fd.display_width > 0
-                                             ? fd.display_width : fb_width_;
-                        have_stream_snapshot = true;
-                        fb_new_frame_.store(true, std::memory_order_release);
-                    } else if (use_stream_shader_ && stream_snapshot_) {
-                        // Composite / RGBI: copy raw 2-byte samples directly.
-                        // The RG8 texture stores both bytes per texel; the
-                        // shader reads only .r (color index), ignoring .g (flags).
-                        memcpy(stream_snapshot_, src, n * 2);
-                        stream_snapshot_len_ = n;
-                        // Copy sync events
-                        uint32_t sc = fd.sync_count;
-                        if (sc > MAX_SYNC_EVENTS) sc = MAX_SYNC_EVENTS;
-                        memcpy(sync_snapshot_, fd.sync_events, sc * sizeof(SyncEvent));
-                        sync_snapshot_count_ = sc;
-                        stream_back_porch_ = fd.back_porch;
-                        stream_display_width_ = fd.display_width > 0
-                                             ? fd.display_width : fb_width_;
-                        have_stream_snapshot = true;
-                        fb_new_frame_.store(true, std::memory_order_release);
-                    }
+                    signal_decoder_->snapshot(fd, fb_width_);
+                    have_stream_snapshot = signal_decoder_->has_snapshot();
                 }
             }
 
-            // Indexed / RGBA framebuffer snapshot — only needed when stream
-            // data is NOT available (the stream shader takes priority over
-            // the indexed / CPU-resolved display path when both are ready).
-            if (!have_stream_snapshot) {
-                if (use_gpu_indexed_ && index_framebuffer_ && index_snapshot_) {
-                    memcpy(index_snapshot_, index_framebuffer_,
-                           static_cast<size_t>(fb_width_) * fb_height_);
-                    fb_new_frame_.store(true, std::memory_order_release);
+            // Indexed fallback — snapshot the CPU-side index buffer when no
+            // stream data was captured this frame.
+            if (!have_stream_snapshot && signal_decoder_) {
+                auto* idx = dynamic_cast<IndexedStreamDecoder*>(signal_decoder_.get());
+                if (idx && idx->index_framebuffer()) {
+                    idx->snapshot_index(idx->index_framebuffer(),
+                                        fb_width_, fb_height_);
                 }
+            }
+
+            if (signal_decoder_ && signal_decoder_->has_snapshot()) {
+                fb_new_frame_.store(true, std::memory_order_release);
             }
         }
 

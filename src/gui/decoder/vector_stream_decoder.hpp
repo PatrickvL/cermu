@@ -110,6 +110,26 @@ public:
         sample_count_ = sample_count;
     }
 
+    void snapshot(const FrameData& fd, int /*fb_width*/) override {
+        if (!fd.stream || fd.stream_len == 0) { has_snapshot_ = false; return; }
+        const uint8_t* src = static_cast<const uint8_t*>(fd.stream);
+        uint32_t n = std::min(fd.stream_len, MAX_STREAM_SAMPLES);
+        size_t bytes = static_cast<size_t>(n) * 8;
+        if (sample_buf_.size() < bytes)
+            sample_buf_.resize(bytes);
+        std::memcpy(sample_buf_.data(), src, bytes);
+        sample_count_ = n;
+        has_snapshot_ = true;
+    }
+
+    bool upload_snapshot() override {
+        // Vector has no GPU texture upload — data is consumed by render_to_texture().
+        // Just acknowledge the snapshot.
+        if (!has_snapshot_) return false;
+        has_snapshot_ = false;
+        return true;
+    }
+
     /// No-op for vector (no scanline-based uniforms).
     void update_uniforms(const SyncEvent*, uint32_t,
                          int, int, uint32_t) override {}
@@ -170,6 +190,7 @@ public:
     bool requires_fbo() const override { return true; }
     int display_height() const override { return persist_.height; }
     bool ready() const override { return shader_ != 0 && persist_.fbo != 0; }
+    GLuint data_texture() const override { return persist_.texture; }
 
     GLuint output_texture() const { return persist_.texture; }
 
