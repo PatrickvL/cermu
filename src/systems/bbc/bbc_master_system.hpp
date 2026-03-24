@@ -204,6 +204,7 @@ public:
 
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
 
+    void* get_video_port_ptr() override { return video_port_.get(); }
 
 private:
     // Audio thread — SN76489 synthesis runs off the emulation thread

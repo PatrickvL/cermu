@@ -60,6 +60,8 @@ public:
     // Audio output — beeper or XO-CHIP audio pattern
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
 
+    void* get_video_port_ptr() override { return video_port_.get(); }
+
 private:
     // Main board (no ports, but required by System)
     BoardBase board_;

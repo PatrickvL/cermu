@@ -119,6 +119,8 @@ public:
     void render_system_menu_items() override;
     void render_configuration_ui() override;
 
+    void* get_video_port_ptr() override { return video_port_.get(); }
+
 private:
     // Audio thread — SN76489 synthesis runs off the emulation thread
     AudioThread audio_thread_;
