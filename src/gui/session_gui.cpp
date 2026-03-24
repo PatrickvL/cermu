@@ -1634,8 +1634,20 @@ void SessionGUI::refresh_display_device() {
 
     // Auto-toggle CRT post-processing based on display technology
     auto tech = display_characteristics_.technology;
-    use_crt_shader_ = (tech != DisplayTechnology::LCD
-                    && tech != DisplayTechnology::LED);
+    bool want_crt = (tech != DisplayTechnology::LCD
+                  && tech != DisplayTechnology::LED);
+
+    // Re-create display panel if CRT mode changed
+    if (want_crt != use_crt_shader_) {
+        use_crt_shader_ = want_crt;
+        if (use_crt_shader_ && crt_post_.shader) {
+            display_panel_ = std::make_unique<CRTPanel>(&crt_post_);
+        } else {
+            auto panel = std::make_unique<DirectPanel>();
+            panel->create(fb_width_, fb_height_);
+            display_panel_ = std::move(panel);
+        }
+    }
 }
 
 // ============================================================================
