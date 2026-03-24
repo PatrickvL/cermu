@@ -208,7 +208,7 @@ public:
     // --- Helpers --------------------------------------------------------
 
     /// Map a video PortType to its corresponding VideoSignalType.
-    /// Returns a sentinel (CompositeArtifact + 1) for non-video port types.
+    /// Returns a sentinel for non-video port types.
     static constexpr VideoSignalType video_signal_for_port(PortType type) {
         switch (type) {
             case PortType::VIDEO_COMPOSITE: return VideoSignalType::Composite;

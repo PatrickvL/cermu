@@ -991,7 +991,6 @@ void SessionGUI::render_screen() {
             case VideoSignalType::Composite:
             case VideoSignalType::RGBI:
             case VideoSignalType::SVideo:
-            case VideoSignalType::CompositeArtifact:
             case VideoSignalType::RGB:
             case VideoSignalType::YPbPr:
             case VideoSignalType::Digital:
@@ -1565,14 +1564,11 @@ void SessionGUI::allocate_framebuffer() {
         switch (active_signal_type_) {
             case VideoSignalType::Composite:
             case VideoSignalType::RGBI:
-            case VideoSignalType::SVideo:
-            case VideoSignalType::CompositeArtifact: {
+            case VideoSignalType::SVideo: {
                 // Select shader variant
                 CompositeShaderVariant variant = CompositeShaderVariant::Standard;
                 if (active_signal_type_ == VideoSignalType::SVideo)
                     variant = CompositeShaderVariant::SVideo;
-                else if (active_signal_type_ == VideoSignalType::CompositeArtifact)
-                    variant = CompositeShaderVariant::Artifact;
 
                 auto decoder = std::make_unique<CompositeSignalDecoder>(variant);
                 if (decoder->create()) {
@@ -1655,8 +1651,7 @@ void SessionGUI::allocate_framebuffer() {
     if (void* port_ptr = system_->get_video_port_ptr()) {
         switch (active_signal_type_) {
             case VideoSignalType::Composite:
-            case VideoSignalType::SVideo:
-            case VideoSignalType::CompositeArtifact: {
+            case VideoSignalType::SVideo: {
                 auto* port = static_cast<CompositeVideoPort*>(port_ptr);
                 auto pipeline = std::make_unique<CompositeDisplayPipeline>();
                 pipeline->connect(*port);

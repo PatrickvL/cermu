@@ -4,13 +4,16 @@
 // CompositeSignalDecoder — GPU reconstruction for composite-family signals
 // ============================================================================
 //
-// Handles Composite, RGBI, S-Video, and CompositeArtifact signal types.
+// Handles Composite, RGBI, and S-Video signal types.
 // All share the same signal texture format (RG8: color index + flags) and
 // the same scanline-map-based reconstruction approach.  Only the fragment
 // shader differs:
 //   Standard     — direct palette lookup (signal_shader.hpp)
 //   S-Video      — palette + chroma bandwidth limiting (svideo_signal_shader.hpp)
-//   Artifact     — NTSC encode/decode artifact coloring (artifact_signal_shader.hpp)
+//   Artifact     — NTSC artifact coloring (artifact_signal_shader.hpp)
+//                  Not a distinct signal encoding — artifact coloring is a
+//                  decoder/renderer interpretation of a Composite signal,
+//                  controlled via display pipeline configuration.
 //
 // Owns: signal texture, optional palette texture.
 // Inherits: shader, FBO + quad, render_to_texture, ImGui callback from base.

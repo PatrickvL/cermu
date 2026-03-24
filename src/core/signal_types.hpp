@@ -21,20 +21,19 @@
 /// Video signal encoding standard.
 enum class VideoSignalType : uint8_t {
     Composite,          ///< Composite / CVBS (palette-indexed luma+chroma)
-    SVideo,             ///< S-Video (separate luma + chroma)
+    SVideo,             ///< S-Video (separate Y/C) — reserved, uses CompositeVideoSample
     RGB,                ///< Analog RGB (3 independent color channels)
     RGBI,               ///< Digital RGBI (4-bit TTL: R, G, B, Intensity)
-    YPbPr,              ///< Analog component (Y/Pb/Pr)
+    YPbPr,              ///< Analog component (Y/Pb/Pr) — reserved, uses RGBVideoSample
     Digital,            ///< Generic digital (HDMI, DVI, etc.)
     Vector,             ///< Vector display (x/y beam deflection + intensity)
-    CompositeArtifact,  ///< Composite with NTSC artifact coloring
 };
 
 /// Audio signal encoding.
 enum class AudioSignalType : uint8_t {
     Mono,               ///< Single channel
     Stereo,             ///< Two channels (left/right)
-    Quadraphonic,       ///< Four channels
+    Quadraphonic,       ///< Four channels — reserved
 };
 
 /// Human-readable name for a VideoSignalType (for diagnostics/printf).
@@ -47,7 +46,16 @@ inline const char* signal_type_name(VideoSignalType t) {
         case VideoSignalType::YPbPr:             return "YPbPr";
         case VideoSignalType::Digital:           return "Digital";
         case VideoSignalType::Vector:            return "Vector";
-        case VideoSignalType::CompositeArtifact: return "Composite (artifact)";
+    }
+    return "Unknown";
+}
+
+/// Human-readable name for an AudioSignalType.
+inline const char* signal_type_name(AudioSignalType t) {
+    switch (t) {
+        case AudioSignalType::Mono:          return "Mono";
+        case AudioSignalType::Stereo:        return "Stereo";
+        case AudioSignalType::Quadraphonic:  return "Quadraphonic";
     }
     return "Unknown";
 }
