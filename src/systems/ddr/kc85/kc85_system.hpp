@@ -207,6 +207,7 @@ public:
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
     void render_configuration_ui() override;
 
+    void* get_video_port_ptr() override { return video_port_.get(); }
 
 private:
     // ── Chips (value-typed via Board Chips) ────────────────────────────
