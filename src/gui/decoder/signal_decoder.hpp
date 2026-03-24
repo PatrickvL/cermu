@@ -58,7 +58,9 @@ public:
     // Render decoded data into an internal FBO (template method).
     // Saves GL state, binds FBO, sets ortho projection, calls bind_textures(),
     // draws fullscreen quad, restores state.  Returns output texture ID.
-    GLuint render_to_texture(int width, int height) {
+    // Virtual so subclasses (e.g. VectorStreamDecoder) can replace the
+    // fullscreen-quad approach entirely.
+    virtual GLuint render_to_texture(int width, int height) {
         if (!fbo_ || !fbo_tex_) return 0;
         resize_fbo(width, height);
 
