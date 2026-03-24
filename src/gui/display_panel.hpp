@@ -54,42 +54,43 @@ public:
 
 class CRTPanel : public DisplayPanel {
 public:
-    /// Construct with a non-owning reference to an existing CRTPostProcess.
-    /// The caller is responsible for the CRTPostProcess lifecycle.
-    /// Future: CRTPanel owns its own state and creates it in create().
-    explicit CRTPanel(crt_shader::CRTPostProcess* state) : state_(state) {}
+    CRTPanel() = default;
+    ~CRTPanel() override { destroy(); }
 
-    bool create(int /*initial_w*/, int /*initial_h*/) override {
-        return state_ && state_->shader != 0;
+    // Non-copyable, non-movable (owns GPU resources)
+    CRTPanel(const CRTPanel&) = delete;
+    CRTPanel& operator=(const CRTPanel&) = delete;
+
+    bool create(int initial_w, int initial_h) override {
+        return crt_shader::create(&state_, initial_w, initial_h);
     }
 
     void destroy() override {
-        // Non-owning — caller destroys the CRTPostProcess.
-        state_ = nullptr;
+        crt_shader::destroy(&state_);
     }
 
     GLuint render(GLuint input_tex,
                   float input_w, float input_h,
                   float output_w, float output_h,
                   const DisplayCharacteristics& dc) override {
-        if (!state_ || !state_->shader) return input_tex;
+        if (!state_.shader) return input_tex;
         int mask = crt_shader::mask_type_from_technology(
             static_cast<int>(dc.technology));
         float pr, pg, pb;
         phosphor_tint_rgb(dc.phosphor, pr, pg, pb);
-        crt_shader::render(state_, input_tex,
+        crt_shader::render(&state_, input_tex,
                            input_w, input_h,
                            output_w, output_h,
                            dc.curvature, dc.scanline_gap, dc.dot_pitch_mm,
                            dc.brightness, dc.contrast, dc.gamma, mask,
                            pr, pg, pb);
-        return state_->texture;
+        return state_.texture;
     }
 
-    bool ready() const override { return state_ && state_->shader != 0; }
+    bool ready() const override { return state_.shader != 0; }
 
 private:
-    crt_shader::CRTPostProcess* state_;  // Non-owning
+    crt_shader::CRTPostProcess state_{};
 };
 
 

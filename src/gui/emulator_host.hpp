@@ -24,7 +24,6 @@ struct ImGuiIO;
 class SignalDecoder;
 class DisplayPanel;
 
-#include "gui/shader/crt_shader.hpp"     // CRTPostProcess
 #include "devices/display/display_device.hpp"  // DisplayDevice, DisplayCharacteristics
 
 // ============================================================================
@@ -150,9 +149,6 @@ protected:
     /// Number of palette entries (cached for palette upload).
     int       gpu_palette_size_      = 0;
 
-    /// CRT post-processing — barrel distortion, scanlines, shadow mask, gamma.
-    /// Applied as the final display stage for all raster paths.
-    crt_shader::CRTPostProcess crt_post_{};
     bool      use_crt_shader_           = true;  ///< Enable CRT post-processing
 
     /// Display panel — type-erased post-processing stage (CRT, Direct, etc.).
