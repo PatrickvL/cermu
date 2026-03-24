@@ -142,6 +142,7 @@ public:
     // Artifact shader: set the NTSC phase increment (radians per pixel)
     void set_artifact_phase(float phase) { artifact_phase_ = phase; }
     float artifact_phase() const { return artifact_phase_; }
+    GLint artifact_phase_loc() const { return artifact_loc_phase_; }
 
     // Update the palette texture reference (e.g. after recreation)
     void set_palette_texture(GLuint tex) { palette_texture_ = tex; }

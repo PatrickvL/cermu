@@ -21,6 +21,7 @@
 
 // Forward declarations
 struct ImGuiIO;
+class SignalDecoder;
 
 #include "gui/vector_shader.hpp"  // BeamVertex, PhosphorPersistence
 #include "gui/crt_shader.hpp"     // CRTPostProcess
@@ -160,6 +161,13 @@ protected:
     GLuint    indexed_shader_        = 0;       ///< Shader program for indexed rendering
     GLint     indexed_loc_proj_      = -1;      ///< ProjMtx uniform location
     int       gpu_palette_size_      = 0;       ///< Number of palette entries
+
+    // ========================================================================
+    // Signal decoder — type-erased abstraction for GPU stream rendering.
+    // Owns the shader program, stream texture, and scanline map logic
+    // for the active signal type.  Created in allocate_framebuffer().
+    // ========================================================================
+    std::unique_ptr<SignalDecoder> signal_decoder_;
 
     // ========================================================================
     // GPU stream reconstruction

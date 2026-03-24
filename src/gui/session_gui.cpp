@@ -9,6 +9,9 @@
 #include "gui/vector_shader.hpp"
 #include "gui/crt_shader.hpp"
 #include "gui/display_pipeline.hpp"
+#include "gui/signal_decoder.hpp"
+#include "gui/composite_stream_decoder.hpp"
+#include "gui/rgb_stream_decoder.hpp"
 #include "gui/port_icons.hpp"
 #include "gui/vfs_file_system.hpp"
 #define IMGUI_DEFINE_MATH_OPERATORS
@@ -1089,10 +1092,11 @@ void SessionGUI::render_screen() {
         {
             std::lock_guard<std::mutex> lock(fb_mutex_);
 
-            // Stream texture upload — raw 2-byte samples as RG8.
-            if (use_stream_shader_ && stream_shader_ && stream_texture_ && stream_snapshot_len_ > 0) {
-                stream_shader::upload_stream_texture(
-                    stream_texture_, stream_snapshot_, stream_snapshot_len_);
+            // Stream texture upload — via signal decoder.
+            if (signal_decoder_ && signal_decoder_->ready() && stream_snapshot_len_ > 0) {
+                const uint8_t* src = use_rgb_stream_shader_
+                    ? rgb_stream_snapshot_ : stream_snapshot_;
+                signal_decoder_->upload(src, stream_snapshot_len_);
 
                 // Snapshot metadata for post-lock uniform setup
                 local_stream_len = stream_snapshot_len_;
@@ -1100,20 +1104,8 @@ void SessionGUI::render_screen() {
                 std::memcpy(local_sync, sync_snapshot_, local_sync_count * sizeof(SyncEvent));
                 local_back_porch = stream_back_porch_;
                 local_display_w  = stream_display_width_;
-                did_stream_upload = true;
-            }
-
-            // RGB stream texture upload — RGBA8 data.
-            if (use_rgb_stream_shader_ && rgb_stream_shader_ && rgb_stream_texture_ && stream_snapshot_len_ > 0) {
-                rgb_stream_shader::upload_stream_texture(
-                    rgb_stream_texture_, rgb_stream_snapshot_, stream_snapshot_len_);
-
-                local_stream_len = stream_snapshot_len_;
-                local_sync_count = std::min(sync_snapshot_count_, MAX_SYNC_EVENTS);
-                std::memcpy(local_sync, sync_snapshot_, local_sync_count * sizeof(SyncEvent));
-                local_back_porch = stream_back_porch_;
-                local_display_w  = stream_display_width_;
-                did_rgb_upload = true;
+                if (use_stream_shader_) did_stream_upload = true;
+                if (use_rgb_stream_shader_) did_rgb_upload = true;
             }
 
             // Primary display path — indexed framebuffer (CPU-reconstructed).
@@ -1140,44 +1132,11 @@ void SessionGUI::render_screen() {
         // Uses local copies of sync events; no shared data accessed.
         // -----------------------------------------------------------
 
-        if (did_stream_upload) {
-            int scanline_offsets[stream_shader::MAX_SCANLINES];
-            stream_display_height_ = stream_shader::compute_scanline_map(
-                scanline_offsets, stream_shader::MAX_SCANLINES,
+        if (did_stream_upload || did_rgb_upload) {
+            signal_decoder_->update_uniforms(
                 local_sync, local_sync_count,
-                local_back_porch, local_stream_len);
-
-            gl_api::glUseProgram(stream_shader_);
-            gl_api::glUniform1iv(stream_loc_scanline_map_,
-                                         stream_shader::MAX_SCANLINES, scanline_offsets);
-            gl_api::glUniform1i(stream_loc_tex_width_,
-                                        stream_shader::STREAM_TEX_WIDTH);
-            gl_api::glUniform1i(stream_loc_display_h_, stream_display_height_);
-            gl_api::glUniform1i(stream_loc_display_w_, local_display_w);
-
-            // Artifact shader: upload PhaseIncrement (no-op when loc is -1)
-            if (artifact_loc_phase_increment_ >= 0)
-                gl_api::glUniform1f(artifact_loc_phase_increment_,
-                                            artifact_phase_increment_);
-
-            gl_api::glUseProgram(0);
-        }
-
-        if (did_rgb_upload) {
-            int scanline_offsets[stream_shader::MAX_SCANLINES];
-            stream_display_height_ = stream_shader::compute_scanline_map(
-                scanline_offsets, stream_shader::MAX_SCANLINES,
-                local_sync, local_sync_count,
-                local_back_porch, local_stream_len);
-
-            gl_api::glUseProgram(rgb_stream_shader_);
-            gl_api::glUniform1iv(rgb_stream_loc_scanline_map_,
-                                         stream_shader::MAX_SCANLINES, scanline_offsets);
-            gl_api::glUniform1i(rgb_stream_loc_tex_width_,
-                                        stream_shader::STREAM_TEX_WIDTH);
-            gl_api::glUniform1i(rgb_stream_loc_display_h_, stream_display_height_);
-            gl_api::glUniform1i(rgb_stream_loc_display_w_, local_display_w);
-            gl_api::glUseProgram(0);
+                local_back_porch, local_display_w, local_stream_len);
+            stream_display_height_ = signal_decoder_->display_height();
         }
 
         // Swap write index for next frame
@@ -1357,19 +1316,8 @@ void SessionGUI::render_screen() {
             };
 
             // Select and configure shader
-            if (use_rgb_stream) {
-                gl_api::glUseProgram(rgb_stream_shader_);
-                gl_api::glUniformMatrix4fv(rgb_stream_loc_proj_, 1, GL_FALSE, &ortho[0][0]);
-                gl_api::glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, rgb_stream_texture_);
-            } else if (use_stream) {
-                gl_api::glUseProgram(stream_shader_);
-                gl_api::glUniformMatrix4fv(stream_loc_proj_, 1, GL_FALSE, &ortho[0][0]);
-                gl_api::glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, stream_texture_);
-                gl_api::glActiveTexture(GL_TEXTURE1);
-                glBindTexture(GL_TEXTURE_2D, palette_texture_);
-                gl_api::glActiveTexture(GL_TEXTURE0);
+            if (signal_decoder_ && (use_rgb_stream || use_stream)) {
+                signal_decoder_->bind_for_fbo(sw, sh);
             } else if (use_indexed_shader) {
                 gl_api::glUseProgram(indexed_shader_);
                 gl_api::glUniformMatrix4fv(indexed_loc_proj_, 1, GL_FALSE, &ortho[0][0]);
@@ -1417,16 +1365,8 @@ void SessionGUI::render_screen() {
         if (!needs_signal_fbo) {
             ImDrawList* draw_list = (use_indexed_shader || use_stream || use_rgb_stream)
                                     ? ImGui::GetWindowDrawList() : nullptr;
-            if (use_rgb_stream) {
-                RGBStreamShaderCallbackData cb = {
-                    rgb_stream_shader_, rgb_stream_loc_proj_, rgb_stream_texture_
-                };
-                draw_list->AddCallback(rgb_stream_shader_bind_callback, &cb, sizeof(cb));
-            } else if (use_stream) {
-                StreamShaderCallbackData cb = {
-                    stream_shader_, stream_loc_proj_, palette_texture_, stream_texture_
-                };
-                draw_list->AddCallback(stream_shader_bind_callback, &cb, sizeof(cb));
+            if (signal_decoder_ && (use_rgb_stream || use_stream)) {
+                signal_decoder_->bind_for_imgui(draw_list);
             } else if (use_indexed_shader) {
                 IndexedShaderCallbackData cb = { indexed_shader_, indexed_loc_proj_, palette_texture_ };
                 draw_list->AddCallback(indexed_shader_bind_callback, &cb, sizeof(cb));
@@ -1903,42 +1843,34 @@ void SessionGUI::allocate_framebuffer() {
             case VideoSignalType::RGBI:
             case VideoSignalType::SVideo:
             case VideoSignalType::CompositeArtifact: {
-                // Palette-indexed RG8 stream texture + palette lookup shader.
-                // Raw 2-byte samples are uploaded directly (no CPU extraction);
-                // the shader reads only the R channel (color index) and ignores
-                // the G channel (flags byte).
-                //
-                // Each signal type uses a dedicated fragment shader:
-                //   Composite/RGBI — direct palette lookup (stream_shader)
-                //   SVideo         — palette lookup + chroma bandwidth limiting
-                //   CompositeArtifact — NTSC encode/decode artifact coloring
                 if (system_->supports_gpu_indexed_rendering()) {
                     stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES * 2]();
                     sync_snapshot_   = new SyncEvent[MAX_SYNC_EVENTS]();
 
-                    stream_texture_ = stream_shader::create_stream_texture(MAX_STREAM_SAMPLES);
-                    stream_shader::StreamShaderLocations locs{};
+                    if (!palette_texture_)
+                        palette_texture_ = create_palette_texture();
 
-                    // Select the shader variant for this signal type
+                    // Select shader variant
+                    CompositeShaderVariant variant = CompositeShaderVariant::Standard;
                     if (active_signal_type_ == VideoSignalType::SVideo)
-                        stream_shader_ = svideo_stream_shader::create_program(&locs);
+                        variant = CompositeShaderVariant::SVideo;
                     else if (active_signal_type_ == VideoSignalType::CompositeArtifact)
-                        stream_shader_ = artifact_stream_shader::create_program(&locs, &artifact_loc_phase_increment_);
-                    else
-                        stream_shader_ = stream_shader::create_program(&locs);
+                        variant = CompositeShaderVariant::Artifact;
 
-                    if (stream_shader_) {
-                        stream_loc_proj_         = locs.proj_mtx;
-                        stream_loc_scanline_map_ = locs.scanline_map;
-                        stream_loc_tex_width_    = locs.stream_tex_width;
-                        stream_loc_display_h_    = locs.display_height;
-                        stream_loc_display_w_    = locs.display_width;
-                        if (!palette_texture_)
-                            palette_texture_ = create_palette_texture();
+                    auto decoder = std::make_unique<CompositeStreamDecoder>(
+                        variant, palette_texture_);
+                    if (decoder->create()) {
+                        // Mirror into legacy fields so existing dispatch code
+                        // continues to work during incremental migration.
+                        stream_shader_  = decoder->program();
+                        stream_texture_ = decoder->stream_texture();
                         use_stream_shader_ = true;
-                        // Suppress the CPU-side bridge: the stream shader
-                        // handles display directly, making flush_line writes
-                        // from reconstruct_to_framebuffer() redundant.
+                        if (variant == CompositeShaderVariant::Artifact) {
+                            artifact_loc_phase_increment_ =
+                                static_cast<CompositeStreamDecoder*>(decoder.get())
+                                    ->artifact_phase_loc();
+                        }
+                        signal_decoder_ = std::move(decoder);
                         system_->set_video_bridge_suppressed(true);
                         printf("GPU stream reconstruction enabled (signal: %s)\n",
                                signal_type_name(active_signal_type_));
@@ -1950,32 +1882,20 @@ void SessionGUI::allocate_framebuffer() {
             case VideoSignalType::RGB:
             case VideoSignalType::YPbPr:
             case VideoSignalType::Digital: {
-                // RGBA8 stream texture, no palette lookup.
-                //
-                // Each signal type uses a dedicated fragment shader:
-                //   RGB/Digital — direct RGB pass-through (rgb_stream_shader)
-                //   YPbPr       — Y'PbPr component bandwidth limiting
                 sync_snapshot_ = new SyncEvent[MAX_SYNC_EVENTS]();
                 rgb_stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES * 4]();
 
-                rgb_stream_texture_ = rgb_stream_shader::create_stream_texture(MAX_STREAM_SAMPLES);
-                rgb_stream_shader::RGBShaderLocations rlocs{};
+                RGBShaderVariant variant = (active_signal_type_ == VideoSignalType::YPbPr)
+                    ? RGBShaderVariant::YPbPr
+                    : RGBShaderVariant::Standard;
 
-                // Select the shader variant for this signal type
-                if (active_signal_type_ == VideoSignalType::YPbPr)
-                    rgb_stream_shader_ = ypbpr_stream_shader::create_program(&rlocs);
-                else
-                    rgb_stream_shader_ = rgb_stream_shader::create_program(&rlocs);
-
-                if (rgb_stream_shader_) {
-                    rgb_stream_loc_proj_         = rlocs.proj_mtx;
-                    rgb_stream_loc_scanline_map_ = rlocs.scanline_map;
-                    rgb_stream_loc_tex_width_    = rlocs.stream_tex_width;
-                    rgb_stream_loc_display_h_    = rlocs.display_height;
-                    rgb_stream_loc_display_w_    = rlocs.display_width;
+                auto decoder = std::make_unique<RGBStreamDecoder>(variant);
+                if (decoder->create()) {
+                    // Mirror into legacy fields for existing dispatch code
+                    rgb_stream_shader_  = decoder->program();
+                    rgb_stream_texture_ = decoder->stream_texture();
                     use_rgb_stream_shader_ = true;
-                    // Suppress the CPU-side bridge: stream shader
-                    // handles display directly.
+                    signal_decoder_ = std::move(decoder);
                     system_->set_video_bridge_suppressed(true);
                     printf("GPU stream reconstruction enabled (signal: %s)\n",
                            signal_type_name(active_signal_type_));
