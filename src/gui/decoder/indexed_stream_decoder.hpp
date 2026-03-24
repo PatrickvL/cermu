@@ -14,7 +14,7 @@
 // ============================================================================
 
 #include "gui/decoder/signal_decoder.hpp"
-#include "gui/indexed_shader.hpp"
+#include "gui/shader/indexed_shader.hpp"
 
 class IndexedStreamDecoder : public SignalDecoder {
 public:

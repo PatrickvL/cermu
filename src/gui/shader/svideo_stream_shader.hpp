@@ -22,7 +22,7 @@
 // ============================================================================
 
 #include "gui/gl_api.hpp"            // GL function pointers, gl_api::compile_shader()
-#include "gui/stream_shader.hpp"    // StreamShaderLocations, vertex_src, constants
+#include "gui/shader/stream_shader.hpp"    // StreamShaderLocations, vertex_src, constants
 #include <cstdio>
 
 namespace svideo_stream_shader {

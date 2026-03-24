@@ -16,7 +16,7 @@
 //   DirectPanel — identity pass-through (LCD / Direct Output)
 // ============================================================================
 
-#include "gui/crt_shader.hpp"
+#include "gui/shader/crt_shader.hpp"
 #include "devices/display/display_device.hpp"  // DisplayCharacteristics, DisplayTechnology
 
 #include <cstdint>

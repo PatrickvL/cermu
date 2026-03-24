@@ -17,9 +17,9 @@
 // ============================================================================
 
 #include "gui/decoder/signal_decoder.hpp"
-#include "gui/stream_shader.hpp"
-#include "gui/svideo_stream_shader.hpp"
-#include "gui/artifact_stream_shader.hpp"
+#include "gui/shader/stream_shader.hpp"
+#include "gui/shader/svideo_stream_shader.hpp"
+#include "gui/shader/artifact_stream_shader.hpp"
 
 enum class CompositeShaderVariant {
     Standard,   // Composite / RGBI — direct palette lookup
