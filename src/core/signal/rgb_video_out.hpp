@@ -6,4 +6,4 @@
 #include "core/signal/video_sample_types.hpp"
 
 using RGBVideoOut     = VideoOut<RGBVideoSample>;
-using NullRGBVideoOut = NullVideoOut<RGBVideoSample>;
+using NoRGBVideoOut = NoVideoOut<RGBVideoSample>;

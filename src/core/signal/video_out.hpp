@@ -80,7 +80,7 @@ struct VideoOut {
 };
 
 // ============================================================================
-// NullVideoOut — discards output for inactive chips
+// NoVideoOut — discards output for inactive chips
 // ============================================================================
 //
 // For chips that must keep ticking but whose output should be discarded
@@ -89,7 +89,7 @@ struct VideoOut {
 // ============================================================================
 
 template<typename SampleT>
-struct NullVideoOut {
+struct NoVideoOut {
     using value_type = SampleT;
 
     SampleT    scratch;

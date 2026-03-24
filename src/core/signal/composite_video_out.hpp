@@ -7,4 +7,4 @@
 #include "core/signal/video_sample_types.hpp"
 
 using CompositeVideoOut     = VideoOut<CompositeVideoSample>;
-using NullCompositeVideoOut = NullVideoOut<CompositeVideoSample>;
+using NoCompositeVideoOut = NoVideoOut<CompositeVideoSample>;
