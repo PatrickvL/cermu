@@ -555,11 +555,11 @@ struct vicii_base_t : public VideoChipBase {
     vicii_lightpen_unit_t lightpen = {};
     vicii_bus_unit_t bus = {};
 
-    // Video stream output (non-owning pointer, set by system/board)
-    CompositeVideoOut* video_stream_ = nullptr;
-    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
+    // Video output (non-owning pointer, set by system/board)
+    CompositeVideoOut* video_out_ = nullptr;
+    void set_video_out(CompositeVideoOut* s) { video_out_ = s; }
 
-    // Cached VBlank start for stream flag computation
+    // Cached VBlank start for signal flag computation
     uint16_t cached_first_vblank_line = 0;
 
     // Raster-level component of drive_flags_ (VSync|Blank during vblank, None otherwise).
@@ -567,19 +567,19 @@ struct vicii_base_t : public VideoChipBase {
     // cycle table to produce drive_flags_.
     SyncFlag raster_flags_ = SyncFlag::None;
 
-    // Maintained analog signal flags for stream driving.  Horizontal flags
+    // Maintained analog signal flags for signal driving.  Horizontal flags
     // (HSync, Burst) are set/cleared by the cycle callback functions that
     // straddle the transition boundaries.  raster_flags_ provides VSync/Blank.
     SyncFlag drive_flags_ = SyncFlag::None;
 
-    // Set when raster reaches stream_frame_start_raster_ to emit FrameEnd
-    // into the video stream.  Decoupled from line-0 operations so the stream
+    // Set when raster reaches signal_frame_start_raster_ to emit FrameEnd
+    // into the video output.  Decoupled from line-0 operations so the signal output
     // frame can start at a centering-optimal raster line.
     bool frame_wrapped_ = false;
 
-    // Raster line at which FrameEnd is emitted into the video stream.
+    // Raster line at which FrameEnd is emitted into the video output.
     // Computed at init to vertically center the display area.
-    uint16_t stream_frame_start_raster_ = 0;
+    uint16_t signal_frame_start_raster_ = 0;
 
     // Destructor — cleans up dynamically allocated pixel line buffers
     ~vicii_base_t() override;

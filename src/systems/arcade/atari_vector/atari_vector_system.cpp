@@ -533,8 +533,8 @@ bool AtariVectorSystem<V>::initialize() {
     video_port_ = std::make_unique<VectorVideoPort>();
     video_port_->bind_frame_output(&last_frame_data_);
 
-    // Wire vector generator to the video stream
-    vg().set_stream(&video_port_->stream());
+    // Wire vector generator to the video output
+    vg().set_video_out(&video_port_->output());
 
     // Wire vector generator memory — pointers are stable after board_.create_chips()
     if (vec_ram_ && vec_rom_) {

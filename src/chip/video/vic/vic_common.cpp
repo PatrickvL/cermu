@@ -97,7 +97,7 @@ void vic_base_t::reset() {
     // Decode all cached register fields from the reset defaults
     decode_all_registers();
 
-    // Compute stream frame start raster for vertical centering.
+    // Compute signal frame start raster for vertical centering.
     // VBlank = rasters 0-27 (28 lines).  First visible = raster 28.
     // Text starts at cached_screen_origin_y (default 38 for PAL).
     // Text height = cached_num_rows * cached_char_height (default 23*8=184).
@@ -113,9 +113,9 @@ void vic_base_t::reset() {
         const uint16_t top_now = cached_screen_origin_y - first_vis;
         if (target_top > top_now) {
             uint16_t extra = target_top - top_now;
-            stream_frame_start_raster_ = total_lines - extra;
+            signal_frame_start_raster_ = total_lines - extra;
         } else {
-            stream_frame_start_raster_ = 0;
+            signal_frame_start_raster_ = 0;
         }
     }
 
@@ -226,7 +226,7 @@ void vic_base_t::decode_all_registers() {
     decode_register(BACKGROUND);
 }
 
-// Buffer a single pixel for end-of-line stream emission.
+// Buffer a single pixel for end-of-line signal emission.
 
 
 
@@ -495,7 +495,7 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
         }
 
         // Emit FrameEnd at the centering start raster
-        if (raster_counter == stream_frame_start_raster_)
+        if (raster_counter == signal_frame_start_raster_)
             frame_wrapped_ = true;
 
         // Update drive_flags_ for the new raster line:
@@ -539,7 +539,7 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
     // ---------------------------------------------------------------
     // PER-DOT-CLOCK STREAM DRIVING — 4 pixels per chip cycle
     // ---------------------------------------------------------------
-    // Resolve 4 pixel colors into a local array, then drive the stream.
+    // Resolve 4 pixel colors into a local array, then drive the output.
     // drive_flags_ is maintained at cycle boundaries (HSync on cycle 0,
     // VSync during vblank).  FrameEnd is a one-shot overlay.
 
@@ -627,8 +627,8 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
         px[3] = border_color;
     }
 
-    // Drive 4 pixels to the video stream
-    if (video_stream_) {
+    // Drive 4 pixels to the video output
+    if (video_out_) {
         SyncFlag flags = drive_flags_;
         // FrameEnd is a one-shot: consume on first pixel of the frame
         if (frame_wrapped_) {
@@ -638,7 +638,7 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
         const bool is_vblank = has_flag(flags, SyncFlag::VSync);
         for (int i = 0; i < 4; i++) {
             const uint8_t color = is_vblank ? uint8_t(0) : px[i];
-            video_stream_->drive({color, (i == 0) ? flags : (flags & ~SyncFlag::FrameEnd)});
+            video_out_->drive({color, (i == 0) ? flags : (flags & ~SyncFlag::FrameEnd)});
         }
     }
 

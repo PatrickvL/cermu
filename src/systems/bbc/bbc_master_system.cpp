@@ -187,9 +187,9 @@ bool BBCMasterSystem<V>::initialize() {
     // Set memory for video rendering
     board_.chips().vidproc.set_memory(memory_);
 
-    // ── Video stream output ─────────────────────────────────────────────
+    // ── Video output output ─────────────────────────────────────────────
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.chips().vidproc.set_stream(&video_port_->stream());
+    board_.chips().vidproc.set_video_out(&video_port_->output());
     video_port_->bind_frame_output(&last_frame_data_);
 
     // ── Video ULA defaults ──────────────────────────────────────────────
@@ -240,10 +240,10 @@ void BBCMasterSystem<V>::run_frame() {
     if (!system_ready_ || !video_port_) return;
 
     // Stream-driven: VIDPROC drives FrameEnd via CRTC timing
-    auto& stream = video_port_->stream();
+    auto& output = video_port_->output();
     const int frames = (speed_multiplier_ > 1.0) ? static_cast<int>(speed_multiplier_) : 1;
     for (int f = 0; f < frames; f++) {
-        while (!stream.frame_ended()) {
+        while (!output.frame_ended()) {
             tick();
         }
         video_port_->swap_frame();

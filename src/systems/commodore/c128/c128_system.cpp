@@ -179,9 +179,9 @@ bool C128System::initialize() {
     board_.cpu().init_io_port();
     board_.cpu().reset();
 
-    // Video stream output — VIC-IIe drives composite video
+    // Video output — VIC-IIe drives composite video
     video_port_ = std::make_unique<CompositeVideoPort>();
-    vic_iie.set_stream(&video_port_->stream());
+    vic_iie.set_video_out(&video_port_->output());
     video_port_->bind_frame_output(&last_frame_data_);
 
     system_ready_ = true;
@@ -269,8 +269,8 @@ void C128System::tick() {
 
 void C128System::run_frame() {
     if (!system_ready_ || !video_port_) return;
-    auto& stream = video_port_->stream();
-    while (!stream.frame_ended()) {
+    auto& output = video_port_->output();
+    while (!output.frame_ended()) {
         tick();
     }
     video_port_->swap_frame();

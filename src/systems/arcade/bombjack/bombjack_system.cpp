@@ -98,14 +98,14 @@ bool BombJackSystem::initialize() {
     palette_ = PaletteTable(bombjack_constants::PALETTE_ENTRIES);
     decode_palette();
 
-    // Video stream output
+    // Video output
     video_port_ = std::make_unique<CompositeVideoPort>();
 
     // Video generator — models TTL foreground tile rendering hardware
-    video_gen_.set_stream(&video_port_->stream());
+    video_gen_.set_video_out(&video_port_->output());
     video_gen_.set_char_rom(char_rom_.data(), static_cast<int>(char_rom_.size()));
 
-    // Auto-reconstruct stream → framebuffer (palette is dynamically decoded)
+    // Auto-reconstruct signal → framebuffer (palette is dynamically decoded)
     video_port_->bind_display(nullptr, palette_.data(),
                               bombjack_constants::FB_WIDTH, 1);
     video_port_->set_palette(palette_.data(), bombjack_constants::PALETTE_ENTRIES);

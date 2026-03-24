@@ -129,8 +129,8 @@ struct avg_t : public VideoChipBase {
         rom_word_offset_ = rom_word_offset;
     }
 
-    void set_stream(VectorVideoOut* stream) {
-        stream_ = stream;
+    void set_video_out(VectorVideoOut* out) {
+        video_out_ = out;
     }
 
     // ========================================================================
@@ -194,7 +194,7 @@ private:
     const uint8_t*   vec_rom_  = nullptr;
     uint16_t         vec_rom_size_ = 0;
     uint16_t         rom_word_offset_ = 0x800;
-    VectorVideoOut* stream_ = nullptr;
+    VectorVideoOut* video_out_ = nullptr;
 
     // ========================================================================
     // Internal — opcode fetch and decode
@@ -419,20 +419,20 @@ private:
         beam_x_ += dx;
         beam_y_ += dy;
 
-        if (!stream_) return;
+        if (!video_out_) return;
 
         if (intensity > 0) {
             uint8_t bright = static_cast<uint8_t>(std::min(intensity * 17, 255));
-            stream_->drive(VectorVideoSample{
+            video_out_->drive(VectorVideoSample{
                 static_cast<int16_t>(x0), screen_y(y0),
                 bright, color_index_, SyncFlag::BeamOn, {}
             });
-            stream_->drive(VectorVideoSample{
+            video_out_->drive(VectorVideoSample{
                 static_cast<int16_t>(beam_x_), screen_y(beam_y_),
                 bright, color_index_, SyncFlag::BeamOn, {}
             });
         } else {
-            stream_->drive(VectorVideoSample{
+            video_out_->drive(VectorVideoSample{
                 static_cast<int16_t>(beam_x_), screen_y(beam_y_),
                 0, color_index_, SyncFlag::None, {}
             });
@@ -440,16 +440,16 @@ private:
     }
 
     void emit_position() {
-        if (!stream_) return;
-        stream_->drive(VectorVideoSample{
+        if (!video_out_) return;
+        video_out_->drive(VectorVideoSample{
             static_cast<int16_t>(beam_x_), screen_y(beam_y_),
             0, color_index_, SyncFlag::None, {}
         });
     }
 
     void emit_frame_end() {
-        if (!stream_) return;
-        stream_->drive(VectorVideoSample{
+        if (!video_out_) return;
+        video_out_->drive(VectorVideoSample{
             static_cast<int16_t>(beam_x_), screen_y(beam_y_),
             0, 0, SyncFlag::FrameEnd, {}
         });

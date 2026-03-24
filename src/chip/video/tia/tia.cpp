@@ -527,23 +527,23 @@ void tia_t::tick_color_clock() {
         // Clear HMOVE blanking at start of new scanline
         hmove_blank_active = false;
 
-        // Drive video stream at end of each scanline
-        if (video_stream_) {
+        // Drive video output at end of each scanline
+        if (video_out_) {
             bool vsync_active = (regs_[VSYNC] & 0x02) != 0;
 
             SyncFlag sync_flags = SyncFlag::HSync;
             if (vblank || vsync_active)
                 sync_flags = sync_flags | SyncFlag::VSync | SyncFlag::Blank;
             // FrameEnd on VSYNC rising edge (program declares frame boundary)
-            if (vsync_active && !prev_vsync_stream_)
+            if (vsync_active && !prev_vsync_signal_)
                 sync_flags = sync_flags | SyncFlag::FrameEnd;
-            prev_vsync_stream_ = vsync_active;
+            prev_vsync_signal_ = vsync_active;
 
-            video_stream_->drive({0, sync_flags});
+            video_out_->drive({0, sync_flags});
 
             if (!vblank && visible_row >= 0) {
                 for (int i = 0; i < tia_constants::DISPLAY_WIDTH; i++) {
-                    video_stream_->drive({color_line_buffer[i], SyncFlag::BeamOn});
+                    video_out_->drive({color_line_buffer[i], SyncFlag::BeamOn});
                 }
             }
         }

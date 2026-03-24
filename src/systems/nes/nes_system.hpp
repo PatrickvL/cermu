@@ -134,7 +134,7 @@ private:
     bus_state_t pins_;               // Persistent CPU bus state across ticks
     std::unique_ptr<Cartridge> cartridge_;
     nes_bus::nes_bus_t bus_;                     // Page-pointer bus (replaces MemoryBus)
-    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video output
     std::unique_ptr<AudioPort> audio_port_;            // Audio signal output
     
     // System state

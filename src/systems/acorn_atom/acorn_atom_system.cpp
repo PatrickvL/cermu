@@ -81,9 +81,9 @@ bool AcornAtomSystem::initialize() {
     // ── Register all manifest-created chips for Hardware menu ────────
     register_bus_chips(board_);
 
-    // Video stream output — composite video from MC6847 VDG
+    // Video output — composite video from MC6847 VDG
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.video().set_stream(&video_port_->stream());
+    board_.video().set_video_out(&video_port_->output());
     video_port_->bind_frame_output(&last_frame_data_);
 
     printf("Acorn Atom: System initialized (RAM: %dKB)\n", ram_size_kb_);
@@ -141,10 +141,10 @@ void AcornAtomSystem::run_frame() {
     if (!video_port_) return;
 
     // Stream-driven: MC6847 VDG drives FrameEnd on Field Sync
-    auto& stream = video_port_->stream();
+    auto& output = video_port_->output();
     const int frames = (speed_multiplier_ > 1.0) ? static_cast<int>(speed_multiplier_) : 1;
     for (int f = 0; f < frames; f++) {
-        while (!stream.frame_ended()) {
+        while (!output.frame_ended()) {
             tick();
         }
         video_port_->swap_frame();

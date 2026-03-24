@@ -1,7 +1,7 @@
 #include "chip/video/char_display/char_display.hpp"
 
 void CharDisplayGenerator::render_frame() {
-    if (!vram_ || !char_rom_ || !video_stream_) return;
+    if (!vram_ || !char_rom_ || !video_out_) return;
     if (pixel_buf_.empty()) return;
 
     uint8_t* idx    = pixel_buf_.data();
@@ -34,18 +34,18 @@ void CharDisplayGenerator::render_frame() {
             default_fg_, default_bg_);
     }
 
-    drive_stream();
+    drive_video_out();
 }
 
-void CharDisplayGenerator::drive_stream() {
-    if (!video_stream_) return;
+void CharDisplayGenerator::drive_video_out() {
+    if (!video_out_) return;
     const uint8_t* idx = pixel_buf_.data();
     for (int y = 0; y < fb_height_; y++) {
         const uint8_t* line = idx + y * fb_width_;
-        video_stream_->drive({0, SyncFlag::HSync});
+        video_out_->drive({0, SyncFlag::HSync});
         for (int x = 0; x < fb_width_; x++) {
-            video_stream_->drive({line[x], SyncFlag::BeamOn});
+            video_out_->drive({line[x], SyncFlag::BeamOn});
         }
     }
-    video_stream_->drive({0, SyncFlag::FrameEnd});
+    video_out_->drive({0, SyncFlag::FrameEnd});
 }

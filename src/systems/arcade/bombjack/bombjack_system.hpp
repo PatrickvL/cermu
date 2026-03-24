@@ -147,7 +147,7 @@ private:
     bool    sound_nmi_   = false;       // NMI to sound CPU on latch write
 
     // ── Display ──────────────────────────────────────────────────────────
-    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video output
     BombJackVideo video_gen_;                         // TTL foreground tile renderer
     uint8_t bg_image_select_ = 0;       // Active background (0–4)
 

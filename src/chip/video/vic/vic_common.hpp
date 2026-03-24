@@ -284,9 +284,9 @@ struct vic_base_t : public VideoChipBase {
     uint8_t current_line[40] = {};
     uint8_t color_ram[1024] = {};
 
-    // Video stream output (non-owning pointer, set by system/board)
-    CompositeVideoOut* video_stream_ = nullptr;
-    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
+    // Video output (non-owning pointer, set by system/board)
+    CompositeVideoOut* video_out_ = nullptr;
+    void set_video_out(CompositeVideoOut* s) { video_out_ = s; }
 
     // Maintained analog signal flags — adjusted at cycle boundaries,
     // used directly in drive() calls (HSync on cycle 0, VSync during vblank).
@@ -295,7 +295,7 @@ struct vic_base_t : public VideoChipBase {
     // Frame-end one-shot — set when raster wraps to 0, consumed on first
     // drive() of the new frame.
     bool frame_wrapped_ = false;
-    uint16_t stream_frame_start_raster_ = 0;  // Raster for FrameEnd (vertical centering)
+    uint16_t signal_frame_start_raster_ = 0;  // Raster for FrameEnd (vertical centering)
 
     // Audio port output (non-owning pointer, set by system/board)
     // When set, audio_tick() drives the port instead of the internal uint8_t ring buffer.

@@ -220,15 +220,15 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
             vbl_was_suppressed_ = false;
         }
 
-        // Per-dot stream driving (VBlank — all samples are blank)
+        // Per-dot signal driving (VBlank — all samples are blank)
         if (cycle == 1) drive_flags_ = drive_flags_ & ~SyncFlag::HSync;
-        if (video_stream_) {
+        if (video_out_) {
             SyncFlag flags = drive_flags_;
             if (frame_wrapped_) {
                 frame_wrapped_ = false;
                 flags = flags | SyncFlag::FrameEnd;
             }
-            video_stream_->drive({0, flags});
+            video_out_->drive({0, flags});
         }
 
         // Inline cycle advance — no odd-frame skip, no rendering to flush.
@@ -564,9 +564,9 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
         scanline_flush_x_ = 256;
     }
 
-    // ===== Per-dot stream driving (1 sample per PPU dot) =====
+    // ===== Per-dot signal driving (1 sample per PPU dot) =====
     if (cycle == 1) drive_flags_ = drive_flags_ & ~SyncFlag::HSync;
-    if (video_stream_) {
+    if (video_out_) {
         SyncFlag flags = drive_flags_;
         if (frame_wrapped_) {
             frame_wrapped_ = false;
@@ -575,7 +575,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
         uint8_t color = 0;
         if (scanline >= 0 && cycle >= 1 && cycle < 257)
             color = scanline_color_line_[cycle - 1];
-        video_stream_->drive({color, flags});
+        video_out_->drive({color, flags});
     }
 
     // Advance cycle

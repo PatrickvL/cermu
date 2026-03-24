@@ -135,9 +135,9 @@ bool VTechVZSystem<V>::initialize() {
 
     register_bus_chips(board_);
 
-    // Video stream output — composite video from MC6847 VDG
+    // Video output — composite video from MC6847 VDG
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.video().set_stream(&video_port_->stream());
+    board_.video().set_video_out(&video_port_->output());
     video_port_->bind_frame_output(&last_frame_data_);
 
     system_ready_ = true;

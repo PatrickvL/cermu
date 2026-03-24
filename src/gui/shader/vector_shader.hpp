@@ -8,7 +8,7 @@
 // Vectrex, etc.) from a VectorVideoSample stream.
 //
 // Vector displays have no scanlines.  The beam is steered to arbitrary
-// X/Y coordinates via DACs; intensity controls brightness.  The stream
+// X/Y coordinates via DACs; intensity controls brightness.  The signal
 // carries a sequence of {x, y, intensity, color_index, flags} samples.
 // Consecutive samples with BeamOn produce visible line segments.
 //
@@ -284,8 +284,8 @@ inline constexpr float DEFAULT_COLOR_PALETTE[8 * 3] = {
 // BeamOn set.  A BeamOff or FrameEnd sample breaks the current segment.
 //
 // Parameters:
-//   stream         — raw VectorVideoSample stream
-//   stream_len     — number of samples
+//   signal_output  — raw VectorVideoSample signal output
+//   signal_output_len     — number of samples
 //   beam_width     — half-width of beam in display pixels
 //   display_w/h    — display dimensions in pixels
 //   x/y_scale      — hardware units → display pixels
@@ -295,8 +295,8 @@ inline constexpr float DEFAULT_COLOR_PALETTE[8 * 3] = {
 //                     PhosphorColor uniform provides the tint.
 //   vertices       — output: caller-provided vector, cleared and filled
 inline void build_beam_quads(
-    const void* stream,
-    uint32_t stream_len,
+    const void* signal_output,
+    uint32_t signal_output_len,
     float beam_width,
     float display_w,
     float display_h,
@@ -308,10 +308,10 @@ inline void build_beam_quads(
     std::vector<BeamVertex>& vertices)
 {
     vertices.clear();
-    if (!stream || stream_len < 2) return;
+    if (!signal_output || signal_output_len < 2) return;
 
     // Reserve generous estimate: typical Asteroids frame has ~500 vectors
-    vertices.reserve(stream_len * 3);
+    vertices.reserve(signal_output_len * 3);
 
     struct Sample {
         int16_t x, y;
@@ -322,14 +322,14 @@ inline void build_beam_quads(
     };
     static_assert(sizeof(Sample) == 8);
 
-    const auto* samples = static_cast<const Sample*>(stream);
+    const auto* samples = static_cast<const Sample*>(signal_output);
 
     bool prev_beam_on = false;
     float prev_x = 0, prev_y = 0;
     float prev_intensity = 0;
     float prev_r = 1, prev_g = 1, prev_b = 1;
 
-    for (uint32_t i = 0; i < stream_len; i++) {
+    for (uint32_t i = 0; i < signal_output_len; i++) {
         const auto& s = samples[i];
         bool beam_on = (s.flags & static_cast<uint8_t>(SyncFlag::BeamOn)) != 0;
 

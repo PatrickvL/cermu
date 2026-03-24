@@ -214,7 +214,7 @@ private:
     // VIDEO
     // ========================================================================
 
-    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video output
 
     // ========================================================================
     // AUDIO

@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// VectorStreamDecoder — GPU beam-quad rendering for vector display systems
+// VectorSignalDecoder — GPU beam-quad rendering for vector display systems
 // ============================================================================
 //
 // Encapsulates the full GPU pipeline for vector displays (Atari DVG/AVG,
@@ -12,7 +12,7 @@
 //   - Phosphor persistence FBO with per-channel decay
 //   - CPU-side beam quad expansion from VectorVideoSample stream
 //
-// Unlike raster decoders, there is no stream texture.  Raw VectorVideoSample
+// Unlike raster decoders, there is no signal texture.  Raw VectorVideoSample
 // bytes are stored via upload(), and render_to_texture() builds beam quads
 // on the CPU, then renders them into the persistence FBO with additive
 // blending on top of the decayed previous frame.
@@ -28,13 +28,13 @@
 #include <cstring>
 #include <algorithm>
 
-class VectorStreamDecoder : public SignalDecoder {
+class VectorSignalDecoder : public SignalDecoder {
 public:
     /// Construct with hardware coordinate space dimensions (for beam scaling).
-    VectorStreamDecoder(int hw_width, int hw_height)
+    VectorSignalDecoder(int hw_width, int hw_height)
         : hw_width_(hw_width), hw_height_(hw_height) {}
 
-    ~VectorStreamDecoder() override { destroy(); }
+    ~VectorSignalDecoder() override { destroy(); }
 
     // ---- SignalDecoder interface ----
 
@@ -97,9 +97,9 @@ public:
     }
 
     void snapshot(const FrameData& fd, int /*fb_width*/) override {
-        if (!fd.stream || fd.stream_len == 0) { has_snapshot_ = false; return; }
-        const uint8_t* src = static_cast<const uint8_t*>(fd.stream);
-        uint32_t n = std::min(fd.stream_len, MAX_STREAM_SAMPLES);
+        if (!fd.signal_output || fd.signal_output_len == 0) { has_snapshot_ = false; return; }
+        const uint8_t* src = static_cast<const uint8_t*>(fd.signal_output);
+        uint32_t n = std::min(fd.signal_output_len, MAX_SIGNAL_SAMPLES);
         size_t bytes = static_cast<size_t>(n) * 8;
         if (sample_buf_.size() < bytes)
             sample_buf_.resize(bytes);

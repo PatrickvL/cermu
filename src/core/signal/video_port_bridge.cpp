@@ -3,7 +3,7 @@
 #include "core/indexed_frame_buffer.hpp"
 
 // ============================================================================
-// reconstruct_to_framebuffer — bridge from 1D video stream to 2D scanlines
+// reconstruct_to_framebuffer — bridge from 1D video signal to 2D scanlines
 // ============================================================================
 //
 // Walks the sync event list to find HSync events, then copies the visible
@@ -11,7 +11,7 @@
 // into the IndexedFrameBuffer using flush_line().
 //
 // This is a transitional adapter: it lets migrated chips produce a flat
-// pixel stream while the existing display pipeline (IndexedFrameBuffer →
+// pixel output while the existing display pipeline (IndexedFrameBuffer →
 // GUI texture upload) continues to work unchanged.  Once all chips are
 // migrated and the GPU reconstruction pipeline is in place, this bridge
 // becomes unnecessary.
@@ -26,9 +26,9 @@ void CompositeVideoPort::reconstruct_to_framebuffer(
     int display_width,
     int back_porch_pixels) const
 {
-    if (!fb || !fd.stream || fd.stream_len == 0) return;
+    if (!fb || !fd.signal_output || fd.signal_output_len == 0) return;
 
-    const auto* samples = static_cast<const CompositeVideoSample*>(fd.stream);
+    const auto* samples = static_cast<const CompositeVideoSample*>(fd.signal_output);
     const int fb_width  = fb->width();
     const int fb_height = fb->height();
     const int line_width = (display_width > 0) ? display_width : fb_width;
@@ -46,15 +46,15 @@ void CompositeVideoPort::reconstruct_to_framebuffer(
             continue;
 
         // Start of visible line: sync position + back porch
-        uint32_t line_start = fd.sync_events[i].stream_pos + back_porch_pixels;
-        if (line_start >= fd.stream_len) continue;
+        uint32_t line_start = fd.sync_events[i].signal_pos + back_porch_pixels;
+        if (line_start >= fd.signal_output_len) continue;
 
         // Extract color indices for this scanline
-        int pixels_available = static_cast<int>(fd.stream_len - line_start);
+        int pixels_available = static_cast<int>(fd.signal_output_len - line_start);
         int pixels_to_copy = (pixels_available < line_width) ? pixels_available : line_width;
         pixels_to_copy = (pixels_to_copy < fb_width) ? pixels_to_copy : fb_width;
 
-        // Build a temporary color_line from the stream samples
+        // Build a temporary color_line from the signal samples
         // (IndexedFrameBuffer::flush_line expects uint8_t color indices)
         uint8_t color_line[1024];  // generous for any system
         for (int x = 0; x < pixels_to_copy; ++x) {
@@ -76,9 +76,9 @@ void RGBVideoPort::reconstruct_to_framebuffer(
     int display_width,
     int back_porch_pixels) const
 {
-    if (!fb || !fd.stream || fd.stream_len == 0) return;
+    if (!fb || !fd.signal_output || fd.signal_output_len == 0) return;
 
-    const auto* samples = static_cast<const RGBVideoSample*>(fd.stream);
+    const auto* samples = static_cast<const RGBVideoSample*>(fd.signal_output);
     const int fb_width  = fb->width();
     const int fb_height = fb->height();
     const int line_width = (display_width > 0) ? display_width : fb_width;
@@ -99,10 +99,10 @@ void RGBVideoPort::reconstruct_to_framebuffer(
         if (has_flag(fd.sync_events[i].flags, SyncFlag::Blank))
             continue;
 
-        uint32_t line_start = fd.sync_events[i].stream_pos + back_porch_pixels;
-        if (line_start >= fd.stream_len) continue;
+        uint32_t line_start = fd.sync_events[i].signal_pos + back_porch_pixels;
+        if (line_start >= fd.signal_output_len) continue;
 
-        int pixels_available = static_cast<int>(fd.stream_len - line_start);
+        int pixels_available = static_cast<int>(fd.signal_output_len - line_start);
         int pixels_to_copy = (pixels_available < line_width) ? pixels_available : line_width;
         pixels_to_copy = (pixels_to_copy < fb_width) ? pixels_to_copy : fb_width;
 
@@ -128,9 +128,9 @@ void RGBIVideoPort::reconstruct_to_framebuffer(
     int display_width,
     int back_porch_pixels) const
 {
-    if (!fb || !fd.stream || fd.stream_len == 0) return;
+    if (!fb || !fd.signal_output || fd.signal_output_len == 0) return;
 
-    const auto* samples = static_cast<const RGBIVideoSample*>(fd.stream);
+    const auto* samples = static_cast<const RGBIVideoSample*>(fd.signal_output);
     const int fb_width  = fb->width();
     const int fb_height = fb->height();
     const int line_width = (display_width > 0) ? display_width : fb_width;
@@ -145,10 +145,10 @@ void RGBIVideoPort::reconstruct_to_framebuffer(
         if (has_flag(fd.sync_events[i].flags, SyncFlag::Blank))
             continue;
 
-        uint32_t line_start = fd.sync_events[i].stream_pos + back_porch_pixels;
-        if (line_start >= fd.stream_len) continue;
+        uint32_t line_start = fd.sync_events[i].signal_pos + back_porch_pixels;
+        if (line_start >= fd.signal_output_len) continue;
 
-        int pixels_available = static_cast<int>(fd.stream_len - line_start);
+        int pixels_available = static_cast<int>(fd.signal_output_len - line_start);
         int pixels_to_copy = (pixels_available < line_width) ? pixels_available : line_width;
         pixels_to_copy = (pixels_to_copy < fb_width) ? pixels_to_copy : fb_width;
 

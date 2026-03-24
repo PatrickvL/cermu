@@ -229,7 +229,7 @@ bool Apple1System::initialize() {
     // GPU indexed palette rendering
     palette_.set(apple1_constants::PALETTE, 2);
 
-    // Video stream output
+    // Video output
     video_port_ = std::make_unique<CompositeVideoPort>();
     video_port_->bind_display(nullptr, palette_.data(),
                               apple1_constants::DISPLAY_WIDTH, 1);
@@ -290,7 +290,7 @@ void Apple1System::run_frame() {
     // Tick all attached peripheral devices
     tick_peripherals();
 
-    // Render terminal to pixel buffer and flush to video stream
+    // Render terminal to pixel buffer and flush to video output
     if (terminal_) {
         terminal_->render_indexed(pixel_buffer_,
                                   apple1_constants::DISPLAY_WIDTH,
@@ -298,15 +298,15 @@ void Apple1System::run_frame() {
                                   1, 0);  // fg=1 (green), bg=0 (black)
     }
     if (video_port_) {
-        auto& stream = video_port_->stream();
+        auto& output = video_port_->output();
         for (uint32_t y = 0; y < apple1_constants::DISPLAY_HEIGHT; y++) {
             const uint8_t* line = pixel_buffer_ + y * apple1_constants::DISPLAY_WIDTH;
-            stream.drive({0, SyncFlag::HSync});
+            output.drive({0, SyncFlag::HSync});
             for (uint32_t x = 0; x < apple1_constants::DISPLAY_WIDTH; x++) {
-                stream.drive({line[x], SyncFlag::BeamOn});
+                output.drive({line[x], SyncFlag::BeamOn});
             }
         }
-        stream.drive({0, SyncFlag::FrameEnd});
+        output.drive({0, SyncFlag::FrameEnd});
         video_port_->swap_frame();
     }
 }

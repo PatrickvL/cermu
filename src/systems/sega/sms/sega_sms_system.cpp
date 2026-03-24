@@ -111,7 +111,7 @@ bool SegaSMSSystem::initialize() {
     register_bus_chips(board_);
 
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.video().set_stream(&video_port_->stream());
+    board_.video().set_video_out(&video_port_->output());
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Audio
@@ -192,8 +192,8 @@ void SegaSMSSystem::tick() {
 
 void SegaSMSSystem::run_frame() {
     if (!video_port_) return;
-    auto& stream = video_port_->stream();
-    while (!stream.frame_ended()) {
+    auto& output = video_port_->output();
+    while (!output.frame_ended()) {
         tick();
     }
     video_port_->swap_frame();

@@ -666,9 +666,9 @@ bool Commodore264System<V>::initialize() {
     apply_cpu_banking();
     apply_ted_video_banking();
 
-    // Wire TED to composite video stream port
+    // Wire TED to composite video output port
     video_port_ = std::make_unique<CompositeVideoPort>();
-    ted_->set_stream(&video_port_->stream());
+    ted_->set_video_out(&video_port_->output());
     video_port_->bind_display(nullptr, nullptr,
                               c16_constants::DISPLAY_WIDTH, 0);
     video_port_->bind_frame_output(&last_frame_data_);
@@ -799,9 +799,9 @@ template<C264SeriesVariant V>
 void Commodore264System<V>::run_frame() {
     if (!video_port_) return;
 
-    // Run until the video chip drives FrameEnd into the stream.
-    auto& stream = video_port_->stream();
-    while (!stream.frame_ended()) {
+    // Run until the video chip drives FrameEnd into the output.
+    auto& output = video_port_->output();
+    while (!output.frame_ended()) {
         tick();
     }
 

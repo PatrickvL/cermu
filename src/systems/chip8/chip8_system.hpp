@@ -93,7 +93,7 @@ private:
 
     // GPU indexed rendering
     uint8_t pixel_buffer_[chip8_constants::HIRES_WIDTH * chip8_constants::HIRES_HEIGHT];
-    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video output
 
     // ── Input ───────────────────────────────────────────────────────────
     uint8_t keys_[16];               // 16-key keypad state

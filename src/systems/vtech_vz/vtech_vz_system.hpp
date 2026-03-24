@@ -160,7 +160,7 @@ private:
     MainBoard board_{BTraits::kManifest};
 
     // ── Video ────────────────────────────────────────────────────────────
-    std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output
+    std::unique_ptr<CompositeVideoPort> video_port_;  // Video output
 
     // ── Keyboard ─────────────────────────────────────────────────────────
     uint8_t keyboard_matrix_[vtech_vz_constants::KEYBOARD_ROWS] = {};

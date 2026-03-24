@@ -180,7 +180,7 @@ protected:
     // delegate through this automatically.
     IndexedFrameBuffer* display_ = nullptr;
 
-    // Direct palette — for stream-only systems that don't use IndexedFrameBuffer.
+    // Direct palette — for signal-only systems that don't use IndexedFrameBuffer.
     // Set by auto_register_video_palette_() / apply_display_palette_().
     // The palette accessors check this first, then fall back to
     // display_->palette for IFB-based systems.
@@ -682,16 +682,16 @@ public:
     }
 
     // ====================================================================
-    // Stream data access — for GPU stream reconstruction
+    // Signal data access — for GPU signal reconstruction
     // ====================================================================
     // Systems that bind their VideoPort to last_frame_data_ (via
-    // bind_frame_output) make the raw stream available to the host for
+    // bind_frame_output) make the raw signal available to the host for
     // direct GPU texture upload, bypassing the CPU-side bridge.
 
-    /// Whether stream data is available from the last frame.
-    bool has_stream_data() const { return last_frame_data_.stream_len > 0; }
+    /// Whether signal data is available from the last frame.
+    bool has_signal_data() const { return last_frame_data_.signal_output_len > 0; }
 
-    /// Last frame's stream data (pointers valid until next run_frame).
+    /// Last frame's signal data (pointers valid until next run_frame).
     const FrameData& get_last_frame_data() const { return last_frame_data_; }
 
     /// Video signal type this system produces.
@@ -719,7 +719,7 @@ public:
     virtual VectorDisplayConfig get_vector_display_config() const { return {}; }
 
     /// Suppress the CPU-side bridge (reconstruct_to_framebuffer) in the
-    /// system's VideoPort.  Called by the host when the GPU stream shader
+    /// system's VideoPort.  Called by the host when the GPU signal shader
     /// is confirmed active — the bridge becomes redundant and its per-frame
     /// reconstruction + index buffer writes are wasted work.
     /// Forwards to IndexedFrameBuffer which makes flush_line / flush_frame

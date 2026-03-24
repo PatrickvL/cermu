@@ -278,7 +278,7 @@ public:
     // current 6912-byte screen area ($4000-$5AFF).
     //
     // This is the real ULA's primary function: converting bitmap+attribute RAM
-    // into a pixel stream.  Moving it here keeps the system tick loop clean.
+    // into a pixel output.  Moving it here keeps the system tick loop clean.
 
     void render_frame(const uint8_t* screen_ram) {
         if (!screen_ram) return;
@@ -344,21 +344,21 @@ public:
             std::memset(line + BL + SW, border_idx, W - BL - SW);
         }
 
-        // Drive video stream with per-line pixel data
-        if (video_stream_) {
+        // Drive video output with per-line pixel data
+        if (video_out_) {
             for (int y = 0; y < spectrum_ula::TOTAL_HEIGHT; y++) {
                 const uint8_t* line = fb + y * W;
-                video_stream_->drive({0, SyncFlag::HSync});
+                video_out_->drive({0, SyncFlag::HSync});
                 for (int x = 0; x < W; x++) {
-                    video_stream_->drive({line[x], SyncFlag::BeamOn});
+                    video_out_->drive({line[x], SyncFlag::BeamOn});
                 }
             }
-            video_stream_->drive({0, SyncFlag::FrameEnd});
+            video_out_->drive({0, SyncFlag::FrameEnd});
         }
     }
 
-    CompositeVideoOut* video_stream_ = nullptr;
-    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
+    CompositeVideoOut* video_out_ = nullptr;
+    void set_video_out(CompositeVideoOut* s) { video_out_ = s; }
 
     // === ChipBase GUI virtuals ===
 #ifdef CERMU_HAS_GUI

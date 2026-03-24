@@ -143,9 +143,9 @@ bool AmstradCPCSystem<M>::initialize() {
     // ── Cache RAM chip pointer for rendering ───────────────────────
     ram_chip_ = board_.template find<RAMChip>();
 
-    // Video stream output — composite video from Gate Array
+    // Video output — composite video from Gate Array
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.video().set_stream(&video_port_->stream());
+    board_.video().set_video_out(&video_port_->output());
     video_port_->bind_frame_output(&last_frame_data_);
     // ── Register all manifest chips for Hardware menu ────────────────
     register_bus_chips(board_);
@@ -207,7 +207,7 @@ void AmstradCPCSystem<M>::tick() {
 
     total_cycles_++;
 
-    // Render at frame boundary — snapshot current VRAM into video stream
+    // Render at frame boundary — snapshot current VRAM into video output
     if (total_cycles_ % amstrad_cpc_constants::TSTATES_PER_FRAME == 0) {
         render_frame();
     }
@@ -218,8 +218,8 @@ void AmstradCPCSystem<M>::run_frame() {
     if (!video_port_) return;
 
     // Stream-driven: Gate Array drives FrameEnd at frame boundary
-    auto& stream = video_port_->stream();
-    while (!stream.frame_ended()) {
+    auto& output = video_port_->output();
+    while (!output.frame_ended()) {
         tick();
     }
     audio_thread_.signal_progress(total_cycles_);

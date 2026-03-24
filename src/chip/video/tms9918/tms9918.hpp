@@ -14,7 +14,7 @@
  *   - Background tiles fetched via pipelined 8-cycle (or 6-cycle text)
  *     repeating pattern with shift-register pixel emission
  *   - Sprite evaluation at line start, composited per-pixel inline
- *   - Flush to video stream at end of each visible scanline
+ *   - Flush to video output at end of each visible scanline
  */
 
 #include "chip/video/tms9918/tms9918_traits.hpp"
@@ -54,11 +54,11 @@ public:
     }
 
     // ====================================================================
-    // Video stream output
+    // Video output
     // ====================================================================
 
-    CompositeVideoOut* video_stream_ = nullptr;
-    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
+    CompositeVideoOut* video_out_ = nullptr;
+    void set_video_out(CompositeVideoOut* s) { video_out_ = s; }
 
     // ====================================================================
     // Static I/O dispatch helpers (registered in system I/O handler table)
@@ -166,19 +166,19 @@ public:
         if (dot_ >= VDPTraits::dots_per_line) {
             dot_ = 0;
 
-            // Drive VBlank line markers to the video stream (non-visible scanlines)
-            if (video_stream_ && !visible_line) {
+            // Drive VBlank line markers to the video output (non-visible scanlines)
+            if (video_out_ && !visible_line) {
                 SyncFlag flags = SyncFlag::HSync | SyncFlag::VSync | SyncFlag::Blank;
-                video_stream_->drive({0, flags});
+                video_out_->drive({0, flags});
             }
 
             line_++;
             if (line_ >= Traits.total_lines) {
                 line_ = 0;
                 frame_++;
-                // FrameEnd marker in the video stream
-                if (video_stream_) {
-                    video_stream_->drive({0, SyncFlag::FrameEnd});
+                // FrameEnd marker in the video output
+                if (video_out_) {
+                    video_out_->drive({0, SyncFlag::FrameEnd});
                 }
             }
             // Begin-of-line setup for the new line
@@ -460,13 +460,13 @@ private:
     // INTERNAL: Scanline lifecycle
     // ====================================================================
 
-    // Flush completed scanline to the video stream
+    // Flush completed scanline to the video output
     void flush_scanline(int row) {
-        // Drive video stream with the completed scanline
-        if (video_stream_) {
-            video_stream_->drive({0, SyncFlag::HSync | SyncFlag::BeamOn});
+        // Drive video output with the completed scanline
+        if (video_out_) {
+            video_out_->drive({0, SyncFlag::HSync | SyncFlag::BeamOn});
             for (int i = 0; i < 256; i++) {
-                video_stream_->drive({color_line_[i], SyncFlag::BeamOn});
+                video_out_->drive({color_line_[i], SyncFlag::BeamOn});
             }
         }
     }

@@ -727,7 +727,7 @@ static void vicii_pixel_sequencer(vicii_base_t* vicii) {
     // drive_flags_ was set for this cycle in vicii_set_x_cycle (once per cycle).
     // The 8-pixel loop reads it directly — zero per-pixel flag computation.
     // FrameEnd is a one-shot overlay consumed here.
-    if (vicii->video_stream_) {
+    if (vicii->video_out_) {
         const uint16_t ppl = vicii->cached_pixels_per_line;
         const SyncFlag flags = vicii->drive_flags_;
         const bool is_vblank = has_flag(flags, SyncFlag::VSync);
@@ -753,12 +753,12 @@ static void vicii_pixel_sequencer(vicii_base_t* vicii) {
             if (frame_end && pixel == 0)
                 pf = pf | SyncFlag::FrameEnd;
 
-            vicii->video_stream_->drive({color, pf});
+            vicii->video_out_->drive({color, pf});
         }
     }
 }
 
-// vicii_pixel_flush_line / vicii_raster_to_fb_row removed — per-dot-clock stream
+// vicii_pixel_flush_line / vicii_raster_to_fb_row removed — per-dot-clock signal driving
 // driving in vicii_pixel_sequencer replaces the collected-scanline flush path.
 
 // ========================================================================================
@@ -1238,9 +1238,9 @@ void vicii_timing_advance(vicii_base_t* vicii) {
     vicii_update_vblank_flags(vicii);
 
     // Emit FrameEnd when raster reaches the centering start line.
-    // Decoupled from line-0 operations so the stream frame can start
+    // Decoupled from line-0 operations so the signal frame can start
     // at an optimal raster for vertically centered display.
-    if (vicii->timing.raster_counter == vicii->stream_frame_start_raster_)
+    if (vicii->timing.raster_counter == vicii->signal_frame_start_raster_)
         vicii->frame_wrapped_ = true;
     
     // Check raster interrupt on every line transition.
@@ -2043,7 +2043,7 @@ bus_state_t vicii_base_t::tick_phi1(bus_state_t bus_state) {
     // STEP 5: Perform unified pixel sequencing (8 pixels per cycle)
     // Border flip-flops are now updated per-pixel WITHIN the pixel sequencer.
     // This uses the graphics data that was JUST loaded above AND the border
-    // flip-flop state updated above.  Also drives the video stream per-dot-clock.
+    // flip-flop state updated above.  Also drives the video output per-dot-clock.
     vicii_pixel_sequencer(vicii);
     
     // STEP 5.5: Light pen pin sampling
@@ -2479,7 +2479,7 @@ static inline void vicii_initialize_timing(vicii_base_t* vicii, const VicIITrait
     vicii->cached_last_visible_x = traits.last_visible_x_coord;
     vicii->cached_first_visible_x = traits.first_visible_x_coord;
 
-    // Compute stream frame start raster for vertical centering.
+    // Compute signal frame start raster for vertical centering.
     // Goal: equal top and bottom borders around the 200-line text area.
     // Text area: rasters 51-250 (RSEL=1).  VBlank: first_vblank..last_vblank.
     // First visible after VBlank: last_vblank + 1.
@@ -2494,10 +2494,10 @@ static inline void vicii_initialize_timing(vicii_base_t* vicii, const VicIITrait
         const uint16_t target_top = total_border / 2;
         if (target_top > top_border_now) {
             uint16_t extra = target_top - top_border_now;
-            vicii->stream_frame_start_raster_ =
+            vicii->signal_frame_start_raster_ =
                 (traits.first_vblank_line + traits.total_lines - extra) % traits.total_lines;
         } else {
-            vicii->stream_frame_start_raster_ = 0;
+            vicii->signal_frame_start_raster_ = 0;
         }
     }
 
@@ -2555,7 +2555,7 @@ void vicii_base_t::reset() {
     colorram = saved_colorram;
 }
 
-// set_framebuffer removed — system manages display via VideoPort stream.
+// set_framebuffer removed — system manages display via VideoPort output.
 
 // ============================================================================
 // Debug field registration (populates ChipDebugRegistry for the default

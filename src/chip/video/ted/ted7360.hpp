@@ -575,9 +575,9 @@ struct ted7360_t : public VideoChipBase {
     // Scanline color index buffer (owned)
     uint8_t*               color_line_ = nullptr;
 
-    // Video stream output (non-owning pointer, set by system/board)
-    CompositeVideoOut* video_stream_ = nullptr;
-    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
+    // Video output (non-owning pointer, set by system/board)
+    CompositeVideoOut* video_out_ = nullptr;
+    void set_video_out(CompositeVideoOut* s) { video_out_ = s; }
 
     // Maintained analog signal flags — adjusted at cycle boundaries.
     // HSync on cycle 0, VSync during vblank, cleared on cycle 1.

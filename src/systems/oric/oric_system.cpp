@@ -150,7 +150,7 @@ bool OricSystem<V>::initialize() {
 
     palette_.set(oric_constants::PALETTE, oric_constants::COLOR_COUNT);
 
-    // Video stream output
+    // Video output
     video_port_ = std::make_unique<CompositeVideoPort>();
     video_port_->bind_display(nullptr, palette_.data(),
                               oric_constants::FB_WIDTH, 1);

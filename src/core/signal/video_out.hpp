@@ -12,7 +12,7 @@
 // reconstructors, or GPU upload code.
 //
 // Usage:
-//   stream_->drive({ .color_index = color_latch_, .flags = flags_prepack_ });
+//   video_out_->drive({ .color_index = color_latch_, .flags = flags_prepack_ });
 //
 // The flags comparison is a single byte compare.  The cold path executes
 // ~313 times per 8M-cycle frame and is marked noinline at its definition
@@ -44,13 +44,13 @@ struct VideoOut {
 
     // Cold-path callback for sync edge processing.  Returns a non-null
     // pointer when the current sample marks a frame boundary (FrameEnd
-    // flag) — the stream then snapshots frame_len and resets ptr/base to
+    // flag) — the signal then snapshots frame_len and resets ptr/base to
     // the returned address.  Returning nullptr means "not a frame boundary".
     //
-    // This design makes double-buffer swapping transparent to the stream:
+    // This design makes double-buffer swapping transparent to the signal:
     // the callback simply returns &back_buf[0] instead of &front_buf[0].
     // A disconnected stub callback returns &stub[0] on every frame end,
-    // making the stream silently overwrite a small scratch buffer.
+    // making the signal silently overwrite a small scratch buffer.
     SampleT* (*on_sync_change)(void* ctx, SyncFlag flags, uint32_t pos) noexcept;
     void* ctx;
 
