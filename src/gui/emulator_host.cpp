@@ -2,7 +2,7 @@
 #include "gui/display_panel.hpp"
 #include "gui/gl_api.hpp"
 #include "gui/indexed_shader.hpp"
-#include "gui/signal_decoder.hpp"
+#include "gui/decoder/signal_decoder.hpp"
 #include "gui/vector_shader.hpp"
 #include <imgui.h>
 #include <imgui_impl_opengl3.h>

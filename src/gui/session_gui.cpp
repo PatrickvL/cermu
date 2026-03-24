@@ -9,10 +9,10 @@
 #include "gui/vector_shader.hpp"
 #include "gui/crt_shader.hpp"
 #include "gui/display_pipeline.hpp"
-#include "gui/signal_decoder.hpp"
-#include "gui/composite_stream_decoder.hpp"
-#include "gui/rgb_stream_decoder.hpp"
-#include "gui/indexed_stream_decoder.hpp"
+#include "gui/decoder/signal_decoder.hpp"
+#include "gui/decoder/composite_stream_decoder.hpp"
+#include "gui/decoder/rgb_stream_decoder.hpp"
+#include "gui/decoder/indexed_stream_decoder.hpp"
 #include "gui/display_panel.hpp"
 #include "gui/port_icons.hpp"
 #include "gui/vfs_file_system.hpp"
@@ -43,84 +43,6 @@
 #define HAS_IMGUIFILEDIALOG 1
 #endif
 #endif
-
-// ============================================================================
-// GPU Stream Reconstruction — ImGui draw callback
-// ============================================================================
-
-struct StreamShaderCallbackData {
-    GLuint shader;
-    GLint  loc_proj;
-    GLuint palette_tex;
-    GLuint stream_tex;
-    // Uniforms set before draw (scanline map, dimensions) — already uploaded
-    // via glUseProgram + glUniform1iv in the texture upload path.
-};
-
-static void stream_shader_bind_callback(const ImDrawList*, const ImDrawCmd* cmd) {
-    auto* d = static_cast<const StreamShaderCallbackData*>(cmd->UserCallbackData);
-
-    // Switch to stream reconstruction shader
-    gl_api::glUseProgram(d->shader);
-
-    // Compute ortho projection (same as ImGui)
-    ImDrawData* draw_data = ImGui::GetDrawData();
-    float L = draw_data->DisplayPos.x;
-    float R = draw_data->DisplayPos.x + draw_data->DisplaySize.x;
-    float T = draw_data->DisplayPos.y;
-    float B = draw_data->DisplayPos.y + draw_data->DisplaySize.y;
-    if (R == L || B == T) return;  // Zero-size guard (monitor transition)
-    const float ortho[4][4] = {
-        { 2.0f/(R-L),   0.0f,         0.0f,   0.0f },
-        { 0.0f,         2.0f/(T-B),   0.0f,   0.0f },
-        { 0.0f,         0.0f,        -1.0f,   0.0f },
-        { (R+L)/(L-R),  (T+B)/(B-T),  0.0f,   1.0f },
-    };
-    gl_api::glUniformMatrix4fv(d->loc_proj, 1, GL_FALSE, &ortho[0][0]);
-
-    // Bind stream texture to slot 0 (ImGui's texture bind is overridden)
-    gl_api::glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, d->stream_tex);
-
-    // Bind palette texture to slot 1
-    gl_api::glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, d->palette_tex);
-    gl_api::glActiveTexture(GL_TEXTURE0);
-}
-
-// ============================================================================
-// GPU RGB Stream Reconstruction — ImGui draw callback
-// ============================================================================
-
-struct RGBStreamShaderCallbackData {
-    GLuint shader;
-    GLint  loc_proj;
-    GLuint stream_tex;
-};
-
-static void rgb_stream_shader_bind_callback(const ImDrawList*, const ImDrawCmd* cmd) {
-    auto* d = static_cast<const RGBStreamShaderCallbackData*>(cmd->UserCallbackData);
-
-    gl_api::glUseProgram(d->shader);
-
-    ImDrawData* draw_data = ImGui::GetDrawData();
-    float L = draw_data->DisplayPos.x;
-    float R = draw_data->DisplayPos.x + draw_data->DisplaySize.x;
-    float T = draw_data->DisplayPos.y;
-    float B = draw_data->DisplayPos.y + draw_data->DisplaySize.y;
-    if (R == L || B == T) return;  // Zero-size guard (monitor transition)
-    const float ortho[4][4] = {
-        { 2.0f/(R-L),   0.0f,         0.0f,   0.0f },
-        { 0.0f,         2.0f/(T-B),   0.0f,   0.0f },
-        { 0.0f,         0.0f,        -1.0f,   0.0f },
-        { (R+L)/(L-R),  (T+B)/(B-T),  0.0f,   1.0f },
-    };
-    gl_api::glUniformMatrix4fv(d->loc_proj, 1, GL_FALSE, &ortho[0][0]);
-
-    // Bind RGB stream texture to slot 0 (no palette texture needed)
-    gl_api::glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, d->stream_tex);
-}
 
 // ============================================================================
 // Helpers
