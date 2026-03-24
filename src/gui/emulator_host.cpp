@@ -744,13 +744,6 @@ void EmulatorHost::free_framebuffer() {
     // Clean up CRT post-processing resources
     crt_shader::destroy(&crt_post_);
 
-    // Clean up signal reconstruction FBO
-    if (signal_fbo_)       { gl_api::glDeleteFramebuffers(1, &signal_fbo_); signal_fbo_ = 0; }
-    if (signal_fbo_tex_)   { glDeleteTextures(1, &signal_fbo_tex_); signal_fbo_tex_ = 0; }
-    if (signal_quad_vao_)  { gl_api::glDeleteVertexArrays(1, &signal_quad_vao_); signal_quad_vao_ = 0; }
-    if (signal_quad_vbo_)  { gl_api::glDeleteBuffers(1, &signal_quad_vbo_); signal_quad_vbo_ = 0; }
-    signal_fbo_w_ = signal_fbo_h_ = 0;
-
     // Clear display device reference (system owns the device)
     display_device_ = nullptr;
     display_characteristics_ = DisplayCharacteristics{};

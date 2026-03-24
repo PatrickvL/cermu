@@ -235,15 +235,6 @@ protected:
     /// Created in allocate_framebuffer(), destroyed in free_framebuffer().
     std::unique_ptr<DisplayPanel> display_panel_;
 
-    /// Signal reconstruction FBO — intermediate render target for stream/indexed
-    /// shaders.  The signal output is rendered here before CRT post-processing.
-    GLuint    signal_fbo_               = 0;
-    GLuint    signal_fbo_tex_           = 0;
-    GLuint    signal_quad_vao_          = 0;     ///< Fullscreen quad for FBO rendering
-    GLuint    signal_quad_vbo_          = 0;
-    int       signal_fbo_w_             = 0;
-    int       signal_fbo_h_             = 0;
-
     /// Video signal type of the active system (cached from System::get_video_signal_type()).
     VideoSignalType active_signal_type_       = VideoSignalType::Composite;
 

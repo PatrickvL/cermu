@@ -1858,52 +1858,6 @@ void SessionGUI::allocate_framebuffer() {
             int crt_h = fb_height_ > 0 ? fb_height_ : 1024;
             if (crt_shader::create(&crt_post_, crt_w, crt_h)) {
                 printf("CRT post-processing shader compiled and linked\n");
-
-                // Create signal reconstruction FBO — stream/indexed shaders
-                // render here before CRT post-processing is applied.
-                signal_fbo_w_ = crt_w;
-                signal_fbo_h_ = crt_h;
-                glGenTextures(1, &signal_fbo_tex_);
-                glBindTexture(GL_TEXTURE_2D, signal_fbo_tex_);
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, crt_w, crt_h, 0,
-                             GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-                glBindTexture(GL_TEXTURE_2D, 0);
-
-                gl_api::glGenFramebuffers(1, &signal_fbo_);
-                gl_api::glBindFramebuffer(GL_FRAMEBUFFER, signal_fbo_);
-                gl_api::glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                                               GL_TEXTURE_2D, signal_fbo_tex_, 0);
-                gl_api::glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-                // Fullscreen quad VAO/VBO for FBO rendering (ImGui vertex layout)
-                // Position (x,y), UV (u,v), Color (RGBA bytes packed as uint32)
-                struct QuadVertex { float x, y, u, v; uint32_t col; };
-                QuadVertex quad[6] = {
-                    {0, 0,                           0, 0, 0xFFFFFFFF},
-                    {(float)crt_w, 0,                1, 0, 0xFFFFFFFF},
-                    {(float)crt_w, (float)crt_h,     1, 1, 0xFFFFFFFF},
-                    {0, 0,                           0, 0, 0xFFFFFFFF},
-                    {(float)crt_w, (float)crt_h,     1, 1, 0xFFFFFFFF},
-                    {0, (float)crt_h,                0, 1, 0xFFFFFFFF},
-                };
-                gl_api::glGenVertexArrays(1, &signal_quad_vao_);
-                gl_api::glGenBuffers(1, &signal_quad_vbo_);
-                gl_api::glBindVertexArray(signal_quad_vao_);
-                gl_api::glBindBuffer(GL_ARRAY_BUFFER, signal_quad_vbo_);
-                gl_api::glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_DYNAMIC_DRAW);
-                // Position: attr 0, UV: attr 1, Color: attr 2
-                gl_api::glEnableVertexAttribArray(0);
-                gl_api::glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(QuadVertex), (void*)0);
-                gl_api::glEnableVertexAttribArray(1);
-                gl_api::glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(QuadVertex), (void*)(2*sizeof(float)));
-                gl_api::glEnableVertexAttribArray(2);
-                gl_api::glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(QuadVertex), (void*)(4*sizeof(float)));
-                gl_api::glBindVertexArray(0);
-                gl_api::glBindBuffer(GL_ARRAY_BUFFER, 0);
             } else {
                 use_crt_shader_ = false;
                 printf("CRT post-processing shader failed — disabled\n");
