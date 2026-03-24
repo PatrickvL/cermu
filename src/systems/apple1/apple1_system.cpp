@@ -301,12 +301,12 @@ void Apple1System::run_frame() {
         auto& stream = video_port_->stream();
         for (uint32_t y = 0; y < apple1_constants::DISPLAY_HEIGHT; y++) {
             const uint8_t* line = pixel_buffer_ + y * apple1_constants::DISPLAY_WIDTH;
-            stream.drive({0, VideoFlags::HSync});
+            stream.drive({0, SyncFlag::HSync});
             for (uint32_t x = 0; x < apple1_constants::DISPLAY_WIDTH; x++) {
-                stream.drive({line[x], VideoFlags::BeamOn});
+                stream.drive({line[x], SyncFlag::BeamOn});
             }
         }
-        stream.drive({0, VideoFlags::FrameEnd});
+        stream.drive({0, SyncFlag::FrameEnd});
         video_port_->swap_frame();
     }
 }

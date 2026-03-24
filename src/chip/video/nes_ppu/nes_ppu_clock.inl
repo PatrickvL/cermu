@@ -221,12 +221,12 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
         }
 
         // Per-dot stream driving (VBlank — all samples are blank)
-        if (cycle == 1) drive_flags_ = drive_flags_ & ~VideoFlags::HSync;
+        if (cycle == 1) drive_flags_ = drive_flags_ & ~SyncFlag::HSync;
         if (video_stream_) {
-            VideoFlags flags = drive_flags_;
+            SyncFlag flags = drive_flags_;
             if (frame_wrapped_) {
                 frame_wrapped_ = false;
-                flags = flags | VideoFlags::FrameEnd;
+                flags = flags | SyncFlag::FrameEnd;
             }
             video_stream_->drive({0, flags});
         }
@@ -246,9 +246,9 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
             }
 
             // Update drive_flags_ for the new scanline
-            drive_flags_ = VideoFlags::HSync;
+            drive_flags_ = SyncFlag::HSync;
             if (scanline < 0 || scanline >= 240)
-                drive_flags_ = drive_flags_ | VideoFlags::VSync | VideoFlags::Blank;
+                drive_flags_ = drive_flags_ | SyncFlag::VSync | SyncFlag::Blank;
         }
         status_read_last_dot_ = false;
         return ppu_bus;
@@ -565,12 +565,12 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
     }
 
     // ===== Per-dot stream driving (1 sample per PPU dot) =====
-    if (cycle == 1) drive_flags_ = drive_flags_ & ~VideoFlags::HSync;
+    if (cycle == 1) drive_flags_ = drive_flags_ & ~SyncFlag::HSync;
     if (video_stream_) {
-        VideoFlags flags = drive_flags_;
+        SyncFlag flags = drive_flags_;
         if (frame_wrapped_) {
             frame_wrapped_ = false;
-            flags = flags | VideoFlags::FrameEnd;
+            flags = flags | SyncFlag::FrameEnd;
         }
         uint8_t color = 0;
         if (scanline >= 0 && cycle >= 1 && cycle < 257)
@@ -602,9 +602,9 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
         }
 
         // Update drive_flags_ for the new scanline
-        drive_flags_ = VideoFlags::HSync;
+        drive_flags_ = SyncFlag::HSync;
         if (scanline < 0 || scanline >= 240)
-            drive_flags_ = drive_flags_ | VideoFlags::VSync | VideoFlags::Blank;
+            drive_flags_ = drive_flags_ | SyncFlag::VSync | SyncFlag::Blank;
     }
     status_read_last_dot_ = false;  // Consumed; clear for next dot
 

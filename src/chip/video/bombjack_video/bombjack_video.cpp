@@ -38,10 +38,10 @@ void BombJackVideo::drive_stream() {
     if (!video_stream_) return;
     for (int y = 0; y < HEIGHT; y++) {
         const uint8_t* line = pixel_buf_ + y * WIDTH;
-        video_stream_->drive({0, VideoFlags::HSync});
+        video_stream_->drive({0, SyncFlag::HSync});
         for (int x = 0; x < WIDTH; x++) {
-            video_stream_->drive({line[x], VideoFlags::BeamOn});
+            video_stream_->drive({line[x], SyncFlag::BeamOn});
         }
     }
-    video_stream_->drive({0, VideoFlags::FrameEnd});
+    video_stream_->drive({0, SyncFlag::FrameEnd});
 }

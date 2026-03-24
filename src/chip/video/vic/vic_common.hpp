@@ -290,7 +290,7 @@ struct vic_base_t : public VideoChipBase {
 
     // Maintained analog signal flags — adjusted at cycle boundaries,
     // used directly in drive() calls (HSync on cycle 0, VSync during vblank).
-    VideoFlags drive_flags_ = VideoFlags::None;
+    SyncFlag drive_flags_ = SyncFlag::None;
 
     // Frame-end one-shot — set when raster wraps to 0, consumed on first
     // drive() of the new frame.

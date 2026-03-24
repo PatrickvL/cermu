@@ -277,7 +277,7 @@ inline constexpr float DEFAULT_COLOR_PALETTE[8 * 3] = {
 //   int16_t x, y;          — beam position in hardware coordinates
 //   uint8_t intensity;     — Z-axis drive level [0, 255]
 //   uint8_t color_index;   — AVG STAT[2:0] color select; 0 = white/mono
-//   VideoFlags flags;      — BeamOn when drawing
+//   SyncFlag flags;      — BeamOn when drawing
 //   uint8_t _pad;
 //
 // Line segments are formed between consecutive samples where both have
@@ -331,7 +331,7 @@ inline void build_beam_quads(
 
     for (uint32_t i = 0; i < stream_len; i++) {
         const auto& s = samples[i];
-        bool beam_on = (s.flags & static_cast<uint8_t>(VideoFlags::BeamOn)) != 0;
+        bool beam_on = (s.flags & static_cast<uint8_t>(SyncFlag::BeamOn)) != 0;
 
         float sx = static_cast<float>(s.x) * x_scale + x_offset;
         float sy = static_cast<float>(s.y) * y_scale + y_offset;

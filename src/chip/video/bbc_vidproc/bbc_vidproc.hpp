@@ -151,12 +151,12 @@ public:
             const uint8_t* idx = frame_indices_;
             for (uint32_t y = 0; y < bbc_constants::DISPLAY_HEIGHT; y++) {
                 const uint8_t* line = idx + y * bbc_constants::DISPLAY_WIDTH;
-                video_stream_->drive({0, VideoFlags::HSync});
+                video_stream_->drive({0, SyncFlag::HSync});
                 for (uint32_t x = 0; x < bbc_constants::DISPLAY_WIDTH; x++) {
-                    video_stream_->drive({line[x], VideoFlags::BeamOn});
+                    video_stream_->drive({line[x], SyncFlag::BeamOn});
                 }
             }
-            video_stream_->drive({0, VideoFlags::FrameEnd});
+            video_stream_->drive({0, SyncFlag::FrameEnd});
         }
     }
 

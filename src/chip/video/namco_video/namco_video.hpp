@@ -24,7 +24,7 @@
 // ============================================================================
 
 #include "core/signal/composite_video_out.hpp"
-#include "core/signal/video_flags.hpp"
+#include "core/signal/sync_flag.hpp"
 #include "utils/tile_decoder.hpp"
 
 #include <cstdint>

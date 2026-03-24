@@ -579,12 +579,12 @@ void PETSystem::crtc_vsync() {
         auto& stream = video_port_->stream();
         for (int y = 0; y < pet_constants::DISPLAY_HEIGHT; y++) {
             const uint8_t* line = pixel_buffer_ + y * pet_constants::DISPLAY_WIDTH;
-            stream.drive({0, VideoFlags::HSync});
+            stream.drive({0, SyncFlag::HSync});
             for (int x = 0; x < pet_constants::DISPLAY_WIDTH; x++) {
-                stream.drive({line[x], VideoFlags::BeamOn});
+                stream.drive({line[x], SyncFlag::BeamOn});
             }
         }
-        stream.drive({0, VideoFlags::FrameEnd});
+        stream.drive({0, SyncFlag::FrameEnd});
     }
 }
 

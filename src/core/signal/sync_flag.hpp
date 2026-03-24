@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// VideoFlags — shared concrete flag type for all video signal standards
+// SyncFlag — shared concrete flag type for all video signal standards
 // ============================================================================
 //
 // All flag signals across every video system are subsets of the same small
@@ -10,11 +10,15 @@
 //
 // Raster systems use: HSync, VSync (RGB only), Blank, Burst
 // Vector systems use: BeamOn, FrameEnd
+//
+// Visibility asymmetry: HSync and VSync are *invisible* to composite decoders
+// — they classify sync pulses by duration rather than discrete flags.  An RGB
+// decoder sees both explicitly.  Blank and Burst are always visible.
 // ============================================================================
 
 #include <cstdint>
 
-enum class VideoFlags : uint8_t {
+enum class SyncFlag : uint8_t {
     None     = 0x00,
     HSync    = 0x01,   // composite sync on composite systems; H-sync on RGB
     VSync    = 0x02,   // unused on composite (classified from pulse length); explicit on RGB
@@ -25,18 +29,30 @@ enum class VideoFlags : uint8_t {
     FrameEnd = 0x20,   // vector: drawing list complete; semantic equivalent of VSync
 };
 
-constexpr VideoFlags operator|(VideoFlags a, VideoFlags b) noexcept {
-    return VideoFlags(uint8_t(a) | uint8_t(b));
+constexpr SyncFlag operator|(SyncFlag a, SyncFlag b) noexcept {
+    return SyncFlag(uint8_t(a) | uint8_t(b));
 }
 
-constexpr VideoFlags operator&(VideoFlags a, VideoFlags b) noexcept {
-    return VideoFlags(uint8_t(a) & uint8_t(b));
+constexpr SyncFlag operator&(SyncFlag a, SyncFlag b) noexcept {
+    return SyncFlag(uint8_t(a) & uint8_t(b));
 }
 
-constexpr VideoFlags operator~(VideoFlags a) noexcept {
-    return VideoFlags(~uint8_t(a));
+constexpr SyncFlag operator~(SyncFlag a) noexcept {
+    return SyncFlag(~uint8_t(a));
 }
 
-constexpr bool has_flag(VideoFlags flags, VideoFlags test) noexcept {
+constexpr SyncFlag& operator|=(SyncFlag& a, SyncFlag b) noexcept {
+    return a = a | b;
+}
+
+constexpr SyncFlag& operator&=(SyncFlag& a, SyncFlag b) noexcept {
+    return a = a & b;
+}
+
+constexpr SyncFlag& operator^=(SyncFlag& a, SyncFlag b) noexcept {
+    return a = SyncFlag(uint8_t(a) ^ uint8_t(b));
+}
+
+constexpr bool has_flag(SyncFlag flags, SyncFlag test) noexcept {
     return uint8_t(flags & test) != 0;
 }

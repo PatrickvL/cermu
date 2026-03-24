@@ -773,9 +773,9 @@ void ted7360_t::timing_advance() {
         const uint16_t vis_h = timing.is_pal ? TED_VISIBLE_HEIGHT_PAL : TED_VISIBLE_HEIGHT_NTSC;
         uint16_t fb_row = (new_raster + lines - fvl) % lines;
         bool in_vblank = (fb_row >= vis_h);
-        drive_flags_ = VideoFlags::HSync;
+        drive_flags_ = SyncFlag::HSync;
         if (in_vblank)
-            drive_flags_ = drive_flags_ | VideoFlags::VSync | VideoFlags::Blank;
+            drive_flags_ = drive_flags_ | SyncFlag::VSync | SyncFlag::Blank;
     }
 
     // Raster IRQ is edge-triggered on line transition
@@ -948,7 +948,7 @@ void ted7360_t::reset() {
     // Per-dot-clock stream state
     frame_wrapped_ = false;
     // Raster 0 is in vblank for TED — initialize drive_flags_ accordingly
-    drive_flags_ = VideoFlags::HSync | VideoFlags::VSync | VideoFlags::Blank;
+    drive_flags_ = SyncFlag::HSync | SyncFlag::VSync | SyncFlag::Blank;
 
     // Derive memory addresses from default register values
     update_memory_addresses();
@@ -1132,16 +1132,16 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
     // VSync during vblank).  Clear HSync after cycle 0 so the falling
     // edge creates the sync event.
     if (x == 1) {
-        drive_flags_ = drive_flags_ & ~VideoFlags::HSync;
+        drive_flags_ = drive_flags_ & ~SyncFlag::HSync;
     }
 
     if (video_stream_) {
-        VideoFlags flags = drive_flags_;
+        SyncFlag flags = drive_flags_;
         if (frame_wrapped_) {
             frame_wrapped_ = false;
-            flags = flags | VideoFlags::FrameEnd;
+            flags = flags | SyncFlag::FrameEnd;
         }
-        const bool is_vblank = has_flag(flags, VideoFlags::VSync);
+        const bool is_vblank = has_flag(flags, SyncFlag::VSync);
         const uint16_t x_base = timing.x_pixel;
         for (int pi = 0; pi < 8; ++pi) {
             uint8_t color = 0;
@@ -1150,7 +1150,7 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
                 if (px < TED_VISIBLE_WIDTH)
                     color = color_line_[px];
             }
-            video_stream_->drive({color, (pi == 0) ? flags : (flags & ~VideoFlags::FrameEnd)});
+            video_stream_->drive({color, (pi == 0) ? flags : (flags & ~SyncFlag::FrameEnd)});
         }
     }
 

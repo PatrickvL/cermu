@@ -149,7 +149,7 @@ inline int compute_scanline_map(
             continue;
 
         // Skip VBlank lines (VSync flag set)
-        if (has_flag(sync_events[i].flags, VideoFlags::VSync))
+        if (has_flag(sync_events[i].flags, SyncFlag::VSync))
             continue;
 
         uint32_t line_start = sync_events[i].stream_pos + back_porch_pixels;

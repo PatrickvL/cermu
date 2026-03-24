@@ -425,16 +425,16 @@ private:
             uint8_t bright = static_cast<uint8_t>(std::min(intensity * 17, 255));
             stream_->drive(VectorVideoSample{
                 static_cast<int16_t>(x0), screen_y(y0),
-                bright, color_index_, VideoFlags::BeamOn, {}
+                bright, color_index_, SyncFlag::BeamOn, {}
             });
             stream_->drive(VectorVideoSample{
                 static_cast<int16_t>(beam_x_), screen_y(beam_y_),
-                bright, color_index_, VideoFlags::BeamOn, {}
+                bright, color_index_, SyncFlag::BeamOn, {}
             });
         } else {
             stream_->drive(VectorVideoSample{
                 static_cast<int16_t>(beam_x_), screen_y(beam_y_),
-                0, color_index_, VideoFlags::None, {}
+                0, color_index_, SyncFlag::None, {}
             });
         }
     }
@@ -443,7 +443,7 @@ private:
         if (!stream_) return;
         stream_->drive(VectorVideoSample{
             static_cast<int16_t>(beam_x_), screen_y(beam_y_),
-            0, color_index_, VideoFlags::None, {}
+            0, color_index_, SyncFlag::None, {}
         });
     }
 
@@ -451,7 +451,7 @@ private:
         if (!stream_) return;
         stream_->drive(VectorVideoSample{
             static_cast<int16_t>(beam_x_), screen_y(beam_y_),
-            0, 0, VideoFlags::FrameEnd, {}
+            0, 0, SyncFlag::FrameEnd, {}
         });
     }
 };

@@ -420,17 +420,17 @@ private:
             uint8_t bright = static_cast<uint8_t>(std::min(intensity * 17, 255));
             stream_->drive(VectorVideoSample{
                 static_cast<int16_t>(x0), screen_y(y0),
-                bright, 0, VideoFlags::BeamOn, {}
+                bright, 0, SyncFlag::BeamOn, {}
             });
             stream_->drive(VectorVideoSample{
                 static_cast<int16_t>(beam_x_), screen_y(beam_y_),
-                bright, 0, VideoFlags::BeamOn, {}
+                bright, 0, SyncFlag::BeamOn, {}
             });
         } else {
             // Move: emit position without BeamOn to break the line chain
             stream_->drive(VectorVideoSample{
                 static_cast<int16_t>(beam_x_), screen_y(beam_y_),
-                0, 0, VideoFlags::None, {}
+                0, 0, SyncFlag::None, {}
             });
         }
 
@@ -447,7 +447,7 @@ private:
         if ((wrapped_x != beam_x_ || wrapped_y != beam_y_) && intensity > 0) {
             stream_->drive(VectorVideoSample{
                 static_cast<int16_t>(wrapped_x), screen_y(wrapped_y),
-                0, 0, VideoFlags::None, {}
+                0, 0, SyncFlag::None, {}
             });
         }
 
@@ -460,7 +460,7 @@ private:
         if (!stream_) return;
         stream_->drive(VectorVideoSample{
             static_cast<int16_t>(beam_x_), screen_y(beam_y_),
-            0, 0, VideoFlags::None, {}
+            0, 0, SyncFlag::None, {}
         });
     }
 
@@ -469,7 +469,7 @@ private:
         if (!stream_) return;
         stream_->drive(VectorVideoSample{
             static_cast<int16_t>(beam_x_), screen_y(beam_y_),
-            0, 0, VideoFlags::FrameEnd, {}
+            0, 0, SyncFlag::FrameEnd, {}
         });
     }
 };

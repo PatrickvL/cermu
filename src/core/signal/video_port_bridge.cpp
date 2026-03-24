@@ -42,7 +42,7 @@ void CompositeVideoPort::reconstruct_to_framebuffer(
         // Skip VBlank lines — VSync flag distinguishes vertical blanking from
         // horizontal blanking.  Per-dot-clock streams have Blank set on all HSync
         // samples (HSync is within HBlank), so Blank alone cannot identify VBlank.
-        if (has_flag(fd.sync_events[i].flags, VideoFlags::VSync))
+        if (has_flag(fd.sync_events[i].flags, SyncFlag::VSync))
             continue;
 
         // Start of visible line: sync position + back porch
@@ -59,7 +59,7 @@ void CompositeVideoPort::reconstruct_to_framebuffer(
         uint8_t color_line[1024];  // generous for any system
         for (int x = 0; x < pixels_to_copy; ++x) {
             const auto& s = samples[line_start + x];
-            color_line[x] = has_flag(s.flags, VideoFlags::Blank) ? 0 : s.color_index;
+            color_line[x] = has_flag(s.flags, SyncFlag::Blank) ? 0 : s.color_index;
         }
 
         fb->flush_line(scanline, color_line, palette, pixels_to_copy);
@@ -96,7 +96,7 @@ void RGBVideoPort::reconstruct_to_framebuffer(
             continue;
 
         // Skip VBlank lines
-        if (has_flag(fd.sync_events[i].flags, VideoFlags::Blank))
+        if (has_flag(fd.sync_events[i].flags, SyncFlag::Blank))
             continue;
 
         uint32_t line_start = fd.sync_events[i].stream_pos + back_porch_pixels;
@@ -109,7 +109,7 @@ void RGBVideoPort::reconstruct_to_framebuffer(
         uint32_t* row = rgba + scanline * fb_width;
         for (int x = 0; x < pixels_to_copy; ++x) {
             const auto& s = samples[line_start + x];
-            if (has_flag(s.flags, VideoFlags::Blank)) {
+            if (has_flag(s.flags, SyncFlag::Blank)) {
                 row[x] = 0xFF000000;  // black
             } else {
                 row[x] = 0xFF000000 | (s.b << 16) | (s.g << 8) | s.r;
@@ -142,7 +142,7 @@ void RGBIVideoPort::reconstruct_to_framebuffer(
             continue;
 
         // Skip VBlank lines
-        if (has_flag(fd.sync_events[i].flags, VideoFlags::Blank))
+        if (has_flag(fd.sync_events[i].flags, SyncFlag::Blank))
             continue;
 
         uint32_t line_start = fd.sync_events[i].stream_pos + back_porch_pixels;
@@ -155,7 +155,7 @@ void RGBIVideoPort::reconstruct_to_framebuffer(
         uint8_t color_line[1024];
         for (int x = 0; x < pixels_to_copy; ++x) {
             const auto& s = samples[line_start + x];
-            color_line[x] = has_flag(s.flags, VideoFlags::Blank) ? 0 : (s.rgbi & 0x0F);
+            color_line[x] = has_flag(s.flags, SyncFlag::Blank) ? 0 : (s.rgbi & 0x0F);
         }
 
         fb->flush_line(scanline, color_line, palette, pixels_to_copy);
