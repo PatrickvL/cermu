@@ -144,6 +144,8 @@ public:
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
     void set_audio_sample_rate(int sample_rate_hz) override;
 
+    void* get_video_port_ptr() override { return video_port_.get(); }
+
 private:
     vic20_bus_t bus_;
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video stream output

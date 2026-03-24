@@ -241,6 +241,8 @@ public:
     void render_system_menu_items() override;
     void render_configuration_ui() override;
 
+    void* get_video_port_ptr() override { return video_port_.get(); }
+
     // Hardware traits (compile-time variant-specific)
     static HardwareTraits create_hardware_traits();
 
