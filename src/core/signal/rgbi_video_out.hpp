@@ -6,4 +6,4 @@
 #include "core/signal/video_sample_types.hpp"
 
 using RGBIVideoOut     = VideoOut<RGBIVideoSample>;
-using NullRGBIVideoOut = NullVideoOut<RGBIVideoSample>;
+using NoRGBIVideoOut = NoVideoOut<RGBIVideoSample>;

@@ -6,4 +6,4 @@
 #include "core/signal/video_sample_types.hpp"
 
 using VectorVideoOut     = VideoOut<VectorVideoSample>;
-using NullVectorVideoOut = NullVideoOut<VectorVideoSample>;
+using NoVectorVideoOut = NoVideoOut<VectorVideoSample>;
