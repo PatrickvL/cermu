@@ -12,8 +12,9 @@
 #include "core/signal/sync_flag.hpp"
 #include <cstdint>
 
-// Composite / S-Video — VIC-II, TED, NES PPU, VIC-20 VIC
-// color_index implies luma + chroma via chip DAC network
+// Composite / S-Video — VIC-II, TED, NES PPU, VIC-20 VIC, Atari TIA
+// S-Video uses the same sample type (separate Y/C decoding is a display concern).
+// color_index implies luma + chroma via chip DAC network.
 struct alignas(2) CompositeVideoSample {
     uint8_t    color_index;
     SyncFlag flags;
@@ -45,6 +46,6 @@ struct alignas(8) VectorVideoSample {
     uint8_t    intensity;     // Z-axis drive level; governs bloom, spot size
     uint8_t    color_index;   // AVG STAT[2:0] color select; 0 = white/mono
     SyncFlag flags;         // BLANK etc.
-    uint8_t    _pad;
+    uint8_t    _pad;          // reserved — maintains 8-byte alignment
 };
 static_assert(sizeof(VectorVideoSample) == 8);
