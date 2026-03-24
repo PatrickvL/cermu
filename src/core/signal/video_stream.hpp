@@ -33,15 +33,25 @@ struct VideoStream {
     VideoFlags prev_flags = VideoFlags::None;
 
     // Length of the most recently completed frame (samples).
-    // Set when on_sync_change signals a frame boundary (returns true);
+    // Set when on_sync_change signals a frame boundary;
     // consumed and cleared by swap_frame().
     uint32_t   frame_len = 0;
 
-    // Cold-path callback for sync edge processing.  Returns true when the
-    // current sample marks a frame boundary (FrameEnd flag) — the stream
-    // then snapshots frame_len and resets ptr to base, making the buffer
-    // self-bounding regardless of how many frames the caller ticks through.
-    bool (*on_sync_change)(void* ctx, VideoFlags flags, uint32_t pos) noexcept;
+    // Points to the buffer that holds the completed frame's data.
+    // Set by drive() just before swapping base/ptr to the new buffer.
+    // Consumed by swap_frame() to build FrameData, then cleared.
+    SampleT*   completed_base = nullptr;
+
+    // Cold-path callback for sync edge processing.  Returns a non-null
+    // pointer when the current sample marks a frame boundary (FrameEnd
+    // flag) — the stream then snapshots frame_len and resets ptr/base to
+    // the returned address.  Returning nullptr means "not a frame boundary".
+    //
+    // This design makes double-buffer swapping transparent to the stream:
+    // the callback simply returns &back_buf[0] instead of &front_buf[0].
+    // A disconnected stub callback returns &stub[0] on every frame end,
+    // making the stream silently overwrite a small scratch buffer.
+    SampleT* (*on_sync_change)(void* ctx, VideoFlags flags, uint32_t pos) noexcept;
     void* ctx;
 
     // Frame-end detection: true once a FrameEnd flag has been driven.
@@ -57,10 +67,12 @@ struct VideoStream {
 
         if (unlikely(prev_flags != s.flags)) {
             const uint32_t len = static_cast<uint32_t>(ptr - base);
-            bool is_frame = on_sync_change(ctx, s.flags, len - 1);
-            if (is_frame) {
-                frame_len = static_cast<uint32_t>(len);
-                ptr = base;
+            SampleT* new_base = on_sync_change(ctx, s.flags, len - 1);
+            if (new_base) {
+                frame_len = len;
+                completed_base = base;
+                base = new_base;
+                ptr  = new_base;
             }
             prev_flags = s.flags;
         }

@@ -705,6 +705,12 @@ public:
     /// The GUI uses this at init time to allocate the correct shader pipeline.
     virtual VideoSignalType get_video_signal_type() const { return VideoSignalType::Composite; }
 
+    /// Type-erased access to the system's primary video port.
+    /// Returns nullptr by default.  Override in concrete systems to return
+    /// &video_port_ (or equivalent).  The caller uses get_video_signal_type()
+    /// to cast to the correct VideoPort specialization.
+    virtual void* get_video_port_ptr() { return nullptr; }
+
     /// Default display device ID from the DeviceRegistry (e.g. "crt_tv", "crt_1702").
     /// Override to select an era-appropriate default display for the system.
     /// Return nullptr to skip auto-attaching a display device.

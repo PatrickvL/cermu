@@ -8,6 +8,7 @@
 #include "gui/ypbpr_stream_shader.hpp"
 #include "gui/vector_shader.hpp"
 #include "gui/crt_shader.hpp"
+#include "gui/display_pipeline.hpp"
 #include "gui/port_icons.hpp"
 #include "gui/vfs_file_system.hpp"
 #define IMGUI_DEFINE_MATH_OPERATORS
@@ -2092,6 +2093,57 @@ void SessionGUI::allocate_framebuffer() {
     } else {
         printf("Allocated %dx%d framebuffer (texture creation deferred until init)\n", fb_width_, fb_height_);
     }
+
+    // ================================================================
+    // Display pipeline — connect double-buffered frame sample buffers
+    // to the system's VideoPort.  The pipeline owns the buffers and
+    // swaps them at FrameEnd via the on_frame_end callback.
+    // Falls back to VideoPort's internal buffer if the system doesn't
+    // expose its port (get_video_port_ptr returns nullptr).
+    // ================================================================
+    display_pipeline_.reset();
+    if (void* port_ptr = system_->get_video_port_ptr()) {
+        switch (active_signal_type_) {
+            case VideoSignalType::Composite:
+            case VideoSignalType::SVideo:
+            case VideoSignalType::CompositeArtifact: {
+                auto* port = static_cast<CompositeVideoPort*>(port_ptr);
+                auto pipeline = std::make_unique<CompositeDisplayPipeline>();
+                pipeline->connect(*port);
+                display_pipeline_ = std::move(pipeline);
+                printf("Display pipeline connected (Composite double-buffer)\n");
+                break;
+            }
+            case VideoSignalType::RGB:
+            case VideoSignalType::YPbPr:
+            case VideoSignalType::Digital: {
+                auto* port = static_cast<RGBVideoPort*>(port_ptr);
+                auto pipeline = std::make_unique<RGBDisplayPipeline>();
+                pipeline->connect(*port);
+                display_pipeline_ = std::move(pipeline);
+                printf("Display pipeline connected (RGB double-buffer)\n");
+                break;
+            }
+            case VideoSignalType::RGBI: {
+                auto* port = static_cast<RGBIVideoPort*>(port_ptr);
+                auto pipeline = std::make_unique<RGBIDisplayPipeline>();
+                pipeline->connect(*port);
+                display_pipeline_ = std::move(pipeline);
+                printf("Display pipeline connected (RGBI double-buffer)\n");
+                break;
+            }
+            case VideoSignalType::Vector: {
+                auto* port = static_cast<VectorVideoPort*>(port_ptr);
+                auto pipeline = std::make_unique<VectorDisplayPipeline>();
+                pipeline->connect(*port);
+                display_pipeline_ = std::move(pipeline);
+                printf("Display pipeline connected (Vector double-buffer)\n");
+                break;
+            }
+            default:
+                break;
+        }
+    }
 }
 
 // ============================================================================
@@ -2104,6 +2156,12 @@ void SessionGUI::teardown_current_system() {
 
     // Stop audio before destroying the system (callback references system_)
     close_audio_device();
+
+    // Disconnect display pipeline before destroying the system's VideoPort
+    if (display_pipeline_) {
+        display_pipeline_->disconnect();
+        display_pipeline_.reset();
+    }
 
     if (system_) {
         printf("Tearing down current system: %s\n", system_->get_descriptor().name);

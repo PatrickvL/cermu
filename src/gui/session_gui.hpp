@@ -7,6 +7,7 @@
 #include <string>
 
 class Drive1541Device;  // Forward declaration for drive file dialog
+class DisplayPipelineBase;  // Forward declaration for display pipeline
 
 /**
  * SessionGUI - Owns a Session (which owns systems) and implements EmulatorHost hooks
@@ -109,6 +110,12 @@ private:
     /// Cached display device ID for change detection (avoids ABA
     /// pointer-reuse when the allocator gives the same address).
     std::string cached_display_id_;
+
+    /// Display pipeline — owns the double-buffered frame sample buffers.
+    /// Created during allocate_framebuffer() and connected to the system's
+    /// VideoPort.  Automatically swaps buffers at frame boundaries via
+    /// the on_frame_end callback.
+    std::unique_ptr<DisplayPipelineBase> display_pipeline_;
 
     /// Cached window title — avoids SDL_SetWindowTitle on every frame.
     std::string last_window_title_;
