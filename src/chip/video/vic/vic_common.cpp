@@ -120,7 +120,7 @@ void vic_base_t::reset() {
     }
 
     // Initialize drive_flags_ for raster 0 (in vblank since 0 < 28)
-    drive_flags_ = VideoFlags::HSync | VideoFlags::VSync | VideoFlags::Blank;
+    drive_flags_ = SyncFlag::HSync | SyncFlag::VSync | SyncFlag::Blank;
 
     // Reset audio state (preserves cycles_per_sample_fp set by audio_reset)
     for (int i = 0; i < VIC_NUM_VOICES; i++) {
@@ -501,9 +501,9 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
         // Update drive_flags_ for the new raster line:
         //   HSync active only during cycle 0 (cleared in cycle 1)
         //   VSync + Blank during vertical blanking (raster < 28)
-        drive_flags_ = VideoFlags::HSync;
+        drive_flags_ = SyncFlag::HSync;
         if (raster_counter < 28)
-            drive_flags_ = drive_flags_ | VideoFlags::VSync | VideoFlags::Blank;
+            drive_flags_ = drive_flags_ | SyncFlag::VSync | SyncFlag::Blank;
 
         const uint8_t char_height = cached_char_height;
         // Check if entering/leaving display area
@@ -526,7 +526,7 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
     }
     else if (current_cycle == 1) {
         // Clear HSync after cycle 0 — the falling edge creates the sync event.
-        drive_flags_ = drive_flags_ & ~VideoFlags::HSync;
+        drive_flags_ = drive_flags_ & ~SyncFlag::HSync;
     }
 
     // Derive character area status from current cycle position
@@ -629,16 +629,16 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
 
     // Drive 4 pixels to the video stream
     if (video_stream_) {
-        VideoFlags flags = drive_flags_;
+        SyncFlag flags = drive_flags_;
         // FrameEnd is a one-shot: consume on first pixel of the frame
         if (frame_wrapped_) {
             frame_wrapped_ = false;
-            flags = flags | VideoFlags::FrameEnd;
+            flags = flags | SyncFlag::FrameEnd;
         }
-        const bool is_vblank = has_flag(flags, VideoFlags::VSync);
+        const bool is_vblank = has_flag(flags, SyncFlag::VSync);
         for (int i = 0; i < 4; i++) {
             const uint8_t color = is_vblank ? uint8_t(0) : px[i];
-            video_stream_->drive({color, (i == 0) ? flags : (flags & ~VideoFlags::FrameEnd)});
+            video_stream_->drive({color, (i == 0) ? flags : (flags & ~SyncFlag::FrameEnd)});
         }
     }
 

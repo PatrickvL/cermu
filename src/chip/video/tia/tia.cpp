@@ -531,19 +531,19 @@ void tia_t::tick_color_clock() {
         if (video_stream_) {
             bool vsync_active = (regs_[VSYNC] & 0x02) != 0;
 
-            VideoFlags sync_flags = VideoFlags::HSync;
+            SyncFlag sync_flags = SyncFlag::HSync;
             if (vblank || vsync_active)
-                sync_flags = sync_flags | VideoFlags::VSync | VideoFlags::Blank;
+                sync_flags = sync_flags | SyncFlag::VSync | SyncFlag::Blank;
             // FrameEnd on VSYNC rising edge (program declares frame boundary)
             if (vsync_active && !prev_vsync_stream_)
-                sync_flags = sync_flags | VideoFlags::FrameEnd;
+                sync_flags = sync_flags | SyncFlag::FrameEnd;
             prev_vsync_stream_ = vsync_active;
 
             video_stream_->drive({0, sync_flags});
 
             if (!vblank && visible_row >= 0) {
                 for (int i = 0; i < tia_constants::DISPLAY_WIDTH; i++) {
-                    video_stream_->drive({color_line_buffer[i], VideoFlags::BeamOn});
+                    video_stream_->drive({color_line_buffer[i], SyncFlag::BeamOn});
                 }
             }
         }

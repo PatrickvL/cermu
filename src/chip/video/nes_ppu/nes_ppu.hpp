@@ -291,7 +291,7 @@ public:
     CompositeVideoOut* video_stream_ = nullptr;
 
     // Per-dot-clock stream driving state
-    VideoFlags drive_flags_ = VideoFlags::HSync | VideoFlags::VSync | VideoFlags::Blank;
+    SyncFlag drive_flags_ = SyncFlag::HSync | SyncFlag::VSync | SyncFlag::Blank;
     bool       frame_wrapped_ = false;
 
     // Active palette variant — pointer into palette_cache_[].  Set to nullptr
@@ -361,7 +361,7 @@ public:
 
         // Per-dot-clock stream state — scanline -1 is pre-render (non-visible)
         frame_wrapped_ = false;
-        drive_flags_ = VideoFlags::HSync | VideoFlags::VSync | VideoFlags::Blank;
+        drive_flags_ = SyncFlag::HSync | SyncFlag::VSync | SyncFlag::Blank;
 
         // Clear memory
         if (ciram_) std::memset(ciram_, 0, CIRAM_SIZE);

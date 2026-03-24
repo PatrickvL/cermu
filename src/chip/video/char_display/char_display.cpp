@@ -42,10 +42,10 @@ void CharDisplayGenerator::drive_stream() {
     const uint8_t* idx = pixel_buf_.data();
     for (int y = 0; y < fb_height_; y++) {
         const uint8_t* line = idx + y * fb_width_;
-        video_stream_->drive({0, VideoFlags::HSync});
+        video_stream_->drive({0, SyncFlag::HSync});
         for (int x = 0; x < fb_width_; x++) {
-            video_stream_->drive({line[x], VideoFlags::BeamOn});
+            video_stream_->drive({line[x], SyncFlag::BeamOn});
         }
     }
-    video_stream_->drive({0, VideoFlags::FrameEnd});
+    video_stream_->drive({0, SyncFlag::FrameEnd});
 }

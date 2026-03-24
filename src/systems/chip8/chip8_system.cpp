@@ -610,12 +610,12 @@ void Chip8System::run_frame() {
         auto& stream = video_port_->stream();
         for (int y = 0; y < h; y++) {
             const uint8_t* line = pixel_buffer_ + y * w;
-            stream.drive({0, VideoFlags::HSync});
+            stream.drive({0, SyncFlag::HSync});
             for (int x = 0; x < w; x++) {
-                stream.drive({line[x], VideoFlags::BeamOn});
+                stream.drive({line[x], SyncFlag::BeamOn});
             }
         }
-        stream.drive({0, VideoFlags::FrameEnd});
+        stream.drive({0, SyncFlag::FrameEnd});
         video_port_->swap_frame();
     }
 }

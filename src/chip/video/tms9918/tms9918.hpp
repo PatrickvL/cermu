@@ -168,7 +168,7 @@ public:
 
             // Drive VBlank line markers to the video stream (non-visible scanlines)
             if (video_stream_ && !visible_line) {
-                VideoFlags flags = VideoFlags::HSync | VideoFlags::VSync | VideoFlags::Blank;
+                SyncFlag flags = SyncFlag::HSync | SyncFlag::VSync | SyncFlag::Blank;
                 video_stream_->drive({0, flags});
             }
 
@@ -178,7 +178,7 @@ public:
                 frame_++;
                 // FrameEnd marker in the video stream
                 if (video_stream_) {
-                    video_stream_->drive({0, VideoFlags::FrameEnd});
+                    video_stream_->drive({0, SyncFlag::FrameEnd});
                 }
             }
             // Begin-of-line setup for the new line
@@ -464,9 +464,9 @@ private:
     void flush_scanline(int row) {
         // Drive video stream with the completed scanline
         if (video_stream_) {
-            video_stream_->drive({0, VideoFlags::HSync | VideoFlags::BeamOn});
+            video_stream_->drive({0, SyncFlag::HSync | SyncFlag::BeamOn});
             for (int i = 0; i < 256; i++) {
-                video_stream_->drive({color_line_[i], VideoFlags::BeamOn});
+                video_stream_->drive({color_line_[i], SyncFlag::BeamOn});
             }
         }
     }

@@ -112,11 +112,11 @@ static inline void vicii_update_vblank_flags(vicii_base_t* vicii) {
                      raster <= vicii->cached_last_vblank_line);
     }
     vicii->raster_flags_ = in_vblank
-        ? (VideoFlags::VSync | VideoFlags::Blank)
-        : VideoFlags::None;
+        ? (SyncFlag::VSync | SyncFlag::Blank)
+        : SyncFlag::None;
 
     // Replace the raster component of drive_flags_ while keeping horizontal bits
-    constexpr VideoFlags raster_mask = VideoFlags::VSync | VideoFlags::Blank;
+    constexpr SyncFlag raster_mask = SyncFlag::VSync | SyncFlag::Blank;
     vicii->drive_flags_ = vicii->raster_flags_
         | (vicii->drive_flags_ & ~raster_mask);
 }
@@ -729,8 +729,8 @@ static void vicii_pixel_sequencer(vicii_base_t* vicii) {
     // FrameEnd is a one-shot overlay consumed here.
     if (vicii->video_stream_) {
         const uint16_t ppl = vicii->cached_pixels_per_line;
-        const VideoFlags flags = vicii->drive_flags_;
-        const bool is_vblank = has_flag(flags, VideoFlags::VSync);
+        const SyncFlag flags = vicii->drive_flags_;
+        const bool is_vblank = has_flag(flags, SyncFlag::VSync);
 
         // FrameEnd: consume sticky flag set by line-0 cycle wrapper
         const bool frame_end = vicii->frame_wrapped_;
@@ -749,9 +749,9 @@ static void vicii_pixel_sequencer(vicii_base_t* vicii) {
             }
 
             // FrameEnd on first pixel only
-            VideoFlags pf = flags;
+            SyncFlag pf = flags;
             if (frame_end && pixel == 0)
-                pf = pf | VideoFlags::FrameEnd;
+                pf = pf | SyncFlag::FrameEnd;
 
             vicii->video_stream_->drive({color, pf});
         }
@@ -1416,7 +1416,7 @@ static uint8_t vicii_cycle_idle(vicii_base_t* vicii, int unused_param) {
 // PAL Cycle 0: Sprite 3 P-access + HSync begins
 // HSync starts during cycle 0's 8-pixel span for all VIC-II variants.
 static uint8_t vicii_cycle_sprite_p_0_pal(vicii_base_t* vicii, int param) {
-    vicii->drive_flags_ = vicii->drive_flags_ | VideoFlags::HSync;
+    vicii->drive_flags_ = vicii->drive_flags_ | SyncFlag::HSync;
     return vicii_cycle_sprite_p_access(vicii, param);
 }
 
@@ -1468,7 +1468,7 @@ static uint8_t vicii_cycle_sprite_s_1_pal(vicii_base_t* vicii, int param) {
 // immediate frame wrap without the one-cycle delay present in PAL chips.
 static uint8_t vicii_cycle_sprite_p_0_ntsc(vicii_base_t* vicii, int param) {
     // HSync starts during cycle 0's 8-pixel span for all VIC-II variants.
-    vicii->drive_flags_ = vicii->drive_flags_ | VideoFlags::HSync;
+    vicii->drive_flags_ = vicii->drive_flags_ | SyncFlag::HSync;
 
     // Check if we're transitioning into line 0
     const bool transitioning_to_line0 = (vicii->timing.raster_counter == vicii->cached_total_lines - 1);
@@ -1486,14 +1486,14 @@ static uint8_t vicii_cycle_sprite_p_0_ntsc(vicii_base_t* vicii, int param) {
 // Cycle 5: HSync ends + color burst gate opens
 // HSync pulse ends and burst gate opens during cycle 5 for all variants.
 static uint8_t vicii_cycle_sprite_s_5_hsync_burst(vicii_base_t* vicii, int param) {
-    vicii->drive_flags_ = (vicii->drive_flags_ & ~VideoFlags::HSync) | VideoFlags::Burst;
+    vicii->drive_flags_ = (vicii->drive_flags_ & ~SyncFlag::HSync) | SyncFlag::Burst;
     return vicii_cycle_sprite_s_access(vicii, param);
 }
 
 // Cycle 10: Color burst gate closes
 // Burst gate closes during cycle 10 for all variants.
 static uint8_t vicii_cycle_refresh_burst_off(vicii_base_t* vicii, int param) {
-    vicii->drive_flags_ = vicii->drive_flags_ & ~VideoFlags::Burst;
+    vicii->drive_flags_ = vicii->drive_flags_ & ~SyncFlag::Burst;
     return vicii_cycle_refresh(vicii, param);
 }
 

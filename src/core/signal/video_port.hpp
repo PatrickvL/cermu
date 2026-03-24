@@ -13,7 +13,7 @@
 // ============================================================================
 
 #include "core/signal/sync_types.hpp"
-#include "core/signal/video_flags.hpp"
+#include "core/signal/sync_flag.hpp"
 #include "core/signal/video_out.hpp"
 #include "core/signal/video_sample_types.hpp"
 #include "core/cermu.hpp"
@@ -63,11 +63,11 @@ template<> struct SyncTag<VectorVideoSample>    { using type = VectorTag; };
 inline void handle_sync_impl(CompositeTag,
                               SyncEvent* events, uint32_t& count,
                               int& sync_run,
-                              VideoFlags prev, VideoFlags flags,
+                              SyncFlag prev, SyncFlag flags,
                               uint32_t pos) noexcept
 {
-    bool was_sync = has_flag(prev, VideoFlags::HSync);
-    bool now_sync = has_flag(flags, VideoFlags::HSync);
+    bool was_sync = has_flag(prev, SyncFlag::HSync);
+    bool now_sync = has_flag(flags, SyncFlag::HSync);
 
     if (was_sync && !now_sync) {
         // Falling edge — classify by pulse width
@@ -89,14 +89,14 @@ inline void handle_sync_impl(CompositeTag,
 inline void handle_sync_impl(RGBTag,
                               SyncEvent* events, uint32_t& count,
                               int& /*sync_run*/,
-                              VideoFlags prev, VideoFlags flags,
+                              SyncFlag prev, SyncFlag flags,
                               uint32_t pos) noexcept
 {
-    if (has_flag(prev, VideoFlags::HSync) && !has_flag(flags, VideoFlags::HSync)) {
+    if (has_flag(prev, SyncFlag::HSync) && !has_flag(flags, SyncFlag::HSync)) {
         if (count < MAX_SYNC_EVENTS)
             events[count++] = { pos, SyncType::HSync, prev };
     }
-    if (has_flag(prev, VideoFlags::VSync) && !has_flag(flags, VideoFlags::VSync)) {
+    if (has_flag(prev, SyncFlag::VSync) && !has_flag(flags, SyncFlag::VSync)) {
         if (count < MAX_SYNC_EVENTS)
             events[count++] = { pos, SyncType::VSync, prev };
     }
@@ -106,7 +106,7 @@ inline void handle_sync_impl(RGBTag,
 inline void handle_sync_impl(RGBITag,
                               SyncEvent* events, uint32_t& count,
                               int& sync_run,
-                              VideoFlags prev, VideoFlags flags,
+                              SyncFlag prev, SyncFlag flags,
                               uint32_t pos) noexcept
 {
     handle_sync_impl(RGBTag{}, events, count, sync_run, prev, flags, pos);
@@ -116,18 +116,18 @@ inline void handle_sync_impl(RGBITag,
 inline void handle_sync_impl(VectorTag,
                               SyncEvent* events, uint32_t& count,
                               int& /*sync_run*/,
-                              VideoFlags prev, VideoFlags flags,
+                              SyncFlag prev, SyncFlag flags,
                               uint32_t pos) noexcept
 {
-    if (has_flag(flags, VideoFlags::FrameEnd) && !has_flag(prev, VideoFlags::FrameEnd)) {
+    if (has_flag(flags, SyncFlag::FrameEnd) && !has_flag(prev, SyncFlag::FrameEnd)) {
         if (count < MAX_SYNC_EVENTS)
             events[count++] = { pos, SyncType::FrameEnd, flags };
     }
 
-    bool beam_changed = has_flag(flags, VideoFlags::BeamOn) !=
-                        has_flag(prev, VideoFlags::BeamOn);
+    bool beam_changed = has_flag(flags, SyncFlag::BeamOn) !=
+                        has_flag(prev, SyncFlag::BeamOn);
     if (beam_changed) {
-        SyncType t = has_flag(flags, VideoFlags::BeamOn)
+        SyncType t = has_flag(flags, SyncFlag::BeamOn)
                    ? SyncType::BeamOn : SyncType::BeamOff;
         if (count < MAX_SYNC_EVENTS)
             events[count++] = { pos, t, flags };
@@ -150,7 +150,7 @@ public:
         active_buf_            = buf_;
         stream_.ptr            = active_buf_;
         stream_.base           = active_buf_;
-        stream_.prev_flags     = VideoFlags::None;
+        stream_.prev_flags     = SyncFlag::None;
         stream_.ctx            = this;
         stream_.on_sync_change = &VideoPort::cold_path;
     }
@@ -282,7 +282,7 @@ public:
 
         stream_.base           = active_buf_;
         stream_.ptr            = active_buf_;
-        stream_.prev_flags     = VideoFlags::None;
+        stream_.prev_flags     = SyncFlag::None;
         stream_.frame_len      = 0;
         stream_.completed_base = nullptr;
         completed_sync_        = nullptr;
@@ -339,14 +339,14 @@ private:
     bool                bridge_suppressed_   = false;
 
     FORCE_NOINLINE
-    static Sample* cold_path(void* ctx, VideoFlags flags, uint32_t pos) noexcept {
+    static Sample* cold_path(void* ctx, SyncFlag flags, uint32_t pos) noexcept {
         auto* self = static_cast<VideoPort*>(ctx);
         using Tag = typename detail::SyncTag<Sample>::type;
         detail::handle_sync_impl(Tag{},
                                  self->active_sync_, *self->active_sync_count_,
                                  self->sync_run_,
                                  self->stream_.prev_flags, flags, pos);
-        if (!has_flag(flags, VideoFlags::FrameEnd))
+        if (!has_flag(flags, SyncFlag::FrameEnd))
             return static_cast<Sample*>(nullptr);
         // Snapshot completed frame's sync data before the callback swaps buffers
         self->completed_sync_       = self->active_sync_;

@@ -19,7 +19,7 @@
 // site in VideoPort.
 // ============================================================================
 
-#include "core/signal/video_flags.hpp"
+#include "core/signal/sync_flag.hpp"
 #include "core/cermu.hpp"       // FORCE_INLINE
 
 #include <cstdint>
@@ -30,7 +30,7 @@ struct VideoOut {
 
     SampleT*   ptr;
     SampleT*   base;
-    VideoFlags prev_flags = VideoFlags::None;
+    SyncFlag prev_flags = SyncFlag::None;
 
     // Length of the most recently completed frame (samples).
     // Set when on_sync_change signals a frame boundary;
@@ -51,7 +51,7 @@ struct VideoOut {
     // the callback simply returns &back_buf[0] instead of &front_buf[0].
     // A disconnected stub callback returns &stub[0] on every frame end,
     // making the stream silently overwrite a small scratch buffer.
-    SampleT* (*on_sync_change)(void* ctx, VideoFlags flags, uint32_t pos) noexcept;
+    SampleT* (*on_sync_change)(void* ctx, SyncFlag flags, uint32_t pos) noexcept;
     void* ctx;
 
     // Frame-end detection: true once a FrameEnd flag has been driven.
@@ -93,7 +93,7 @@ struct NullVideoOut {
     using value_type = SampleT;
 
     SampleT    scratch;
-    VideoFlags prev_flags = VideoFlags::None;
+    SyncFlag prev_flags = SyncFlag::None;
 
     FORCE_INLINE
     void drive(SampleT s) noexcept {

@@ -9,14 +9,14 @@
 // Chips include only the header for their specific sample type.
 // ============================================================================
 
-#include "core/signal/video_flags.hpp"
+#include "core/signal/sync_flag.hpp"
 #include <cstdint>
 
 // Composite / S-Video — VIC-II, TED, NES PPU, VIC-20 VIC
 // color_index implies luma + chroma via chip DAC network
 struct alignas(2) CompositeVideoSample {
     uint8_t    color_index;
-    VideoFlags flags;
+    SyncFlag flags;
 };
 static_assert(sizeof(CompositeVideoSample) == 2);
 
@@ -24,7 +24,7 @@ static_assert(sizeof(CompositeVideoSample) == 2);
 // Three independent DAC values; separate H and V sync
 struct alignas(4) RGBVideoSample {
     uint8_t    r, g, b;
-    VideoFlags flags;
+    SyncFlag flags;
 };
 static_assert(sizeof(RGBVideoSample) == 4);
 
@@ -32,7 +32,7 @@ static_assert(sizeof(RGBVideoSample) == 4);
 // 4-bit: R, G, B, I as individual TTL lines
 struct alignas(2) RGBIVideoSample {
     uint8_t    rgbi;    // bits [3:0] = I, B, G, R
-    VideoFlags flags;
+    SyncFlag flags;
 };
 static_assert(sizeof(RGBIVideoSample) == 2);
 
@@ -44,7 +44,7 @@ struct alignas(8) VectorVideoSample {
     int16_t    x, y;          // beam position, chip-native coordinate space
     uint8_t    intensity;     // Z-axis drive level; governs bloom, spot size
     uint8_t    color_index;   // AVG STAT[2:0] color select; 0 = white/mono
-    VideoFlags flags;         // BLANK etc.
+    SyncFlag flags;         // BLANK etc.
     uint8_t    _pad;
 };
 static_assert(sizeof(VectorVideoSample) == 8);

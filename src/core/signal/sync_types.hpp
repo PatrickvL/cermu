@@ -5,7 +5,7 @@
 // ============================================================================
 
 #include <cstdint>
-#include "core/signal/video_flags.hpp"
+#include "core/signal/sync_flag.hpp"
 #include "core/signal_types.hpp"  // VideoSignalType
 
 enum class SyncType : uint8_t {
@@ -20,7 +20,7 @@ enum class SyncType : uint8_t {
 struct SyncEvent {
     uint32_t   stream_pos;    // sample offset in stream at edge
     SyncType   type;
-    VideoFlags flags;         // original VideoFlags at this event (for VBlank detection)
+    SyncFlag flags;         // original SyncFlag at this event (for VBlank detection)
 };
 
 // FrameData — handed off to the display layer once per frame.

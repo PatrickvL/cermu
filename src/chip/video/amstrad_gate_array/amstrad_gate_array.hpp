@@ -153,12 +153,12 @@ public:
             const uint8_t* idx = frame_indices_;
             for (int y = 0; y < 200; y++) {
                 const uint8_t* line = idx + (y * 2) * FB_W;
-                video_stream_->drive({0, VideoFlags::HSync});
+                video_stream_->drive({0, SyncFlag::HSync});
                 for (int i = 0; i < FB_W; i++) {
-                    video_stream_->drive({line[i], VideoFlags::BeamOn});
+                    video_stream_->drive({line[i], SyncFlag::BeamOn});
                 }
             }
-            video_stream_->drive({0, VideoFlags::FrameEnd});
+            video_stream_->drive({0, SyncFlag::FrameEnd});
         }
     }
 

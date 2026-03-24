@@ -368,12 +368,12 @@ private:
         if (!video_stream_) return;
         for (int y = 0; y < h; y++) {
             const uint8_t* line = idx + y * w;
-            video_stream_->drive({0, VideoFlags::HSync});
+            video_stream_->drive({0, SyncFlag::HSync});
             for (int i = 0; i < w; i++) {
-                video_stream_->drive({line[i], VideoFlags::BeamOn});
+                video_stream_->drive({line[i], SyncFlag::BeamOn});
             }
         }
-        video_stream_->drive({0, VideoFlags::FrameEnd});
+        video_stream_->drive({0, SyncFlag::FrameEnd});
     }
 
     // Mode pins
