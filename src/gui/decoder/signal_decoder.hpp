@@ -47,7 +47,28 @@ public:
     virtual bool create() = 0;
     virtual void destroy() = 0;
 
-    // Upload raw stream bytes to GPU texture.
+    // ------------------------------------------------------------------
+    // Snapshot / upload pipeline
+    // ------------------------------------------------------------------
+    // snapshot() — called by emu thread under fb_mutex_.
+    // Copies stream/sync/metadata from FrameData into decoder-owned buffers.
+    virtual void snapshot(const FrameData& fd, int fb_width) = 0;
+
+    // snapshot_index() — called by emu thread under fb_mutex_ for indexed path.
+    // Copies raw 8-bit index buffer into decoder-owned snapshot buffer.
+    // Default: no-op (only IndexedStreamDecoder overrides).
+    virtual void snapshot_index(const uint8_t* /*index_buf*/, int /*w*/, int /*h*/) {}
+
+    // upload_snapshot() — called by GUI thread under fb_mutex_.
+    // Uploads internal snapshot data to GPU textures and computes uniforms.
+    // Returns true if data was uploaded (i.e. snapshot was non-empty).
+    virtual bool upload_snapshot() = 0;
+
+    // Whether this decoder has pending snapshot data.
+    bool has_snapshot() const { return has_snapshot_; }
+
+    // Legacy: upload raw stream bytes to GPU texture (external pointer).
+    // Prefer snapshot() + upload_snapshot() pipeline.
     virtual void upload(const uint8_t* data, uint32_t sample_count) = 0;
 
     // Compute scanline map from sync events and upload shader uniforms.
@@ -115,6 +136,12 @@ public:
     GLuint output_texture() const { return fbo_tex_; }
     virtual bool ready() const = 0;
 
+    /// Primary data texture — the texture the shader samples from TU0.
+    /// For stream decoders this is the stream texture; for indexed, the
+    /// index texture.  Used as the ImGui::Image texture ID on the inline
+    /// (non-FBO) display path.
+    virtual GLuint data_texture() const = 0;
+
     // Upload palette data (RGBA, up to 256 entries).
     // Default implementation works for any decoder with palette_texture_ set.
     virtual void upload_palette(const uint32_t* palette, int count) {
@@ -130,6 +157,9 @@ protected:
     // --- Shader state (set by concrete create()) ---
     GLuint shader_    = 0;
     GLint  loc_proj_  = -1;
+
+    // --- Snapshot pending flag ---
+    bool has_snapshot_ = false;
 
     // --- Optional palette texture ---
     GLuint palette_texture_ = 0;

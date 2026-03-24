@@ -16,6 +16,9 @@
 #include "gui/decoder/signal_decoder.hpp"
 #include "gui/shader/indexed_shader.hpp"
 
+#include <cstring>
+#include <memory>
+
 class IndexedStreamDecoder : public SignalDecoder {
 public:
     IndexedStreamDecoder(int width, int height)
@@ -61,6 +64,39 @@ public:
         glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
     }
 
+    // Indexed decoder: snapshot copies from the live index framebuffer.
+    void snapshot(const FrameData& /*fd*/, int /*fb_width*/) override {
+        // Indexed path doesn't use FrameData streams — use snapshot_index().
+    }
+
+    void snapshot_index(const uint8_t* index_buf, int w, int h) override {
+        if (!index_buf || !index_snapshot_) return;
+        std::memcpy(index_snapshot_.get(), index_buf,
+                    static_cast<size_t>(w) * h);
+        has_snapshot_ = true;
+    }
+
+    bool upload_snapshot() override {
+        if (!has_snapshot_) return false;
+        has_snapshot_ = false;
+        upload(index_snapshot_.get(), 0);
+        return true;
+    }
+
+    /// Allocate the index buffers (live + snapshot).  Returns the live
+    /// buffer pointer to hand to the system via set_index_buffer().
+    uint8_t* allocate_index_buffers() {
+        size_t bytes = static_cast<size_t>(width_) * height_;
+        index_framebuffer_ = std::make_unique<uint8_t[]>(bytes);
+        index_snapshot_    = std::make_unique<uint8_t[]>(bytes);
+        std::memset(index_framebuffer_.get(), 0, bytes);
+        std::memset(index_snapshot_.get(), 0, bytes);
+        return index_framebuffer_.get();
+    }
+
+    /// Non-owning pointer to the live index buffer (emu thread writes here).
+    uint8_t* index_framebuffer() const { return index_framebuffer_.get(); }
+
     // Indexed decoder has no sync events — update_uniforms is a no-op.
     void update_uniforms(const SyncEvent* /*sync*/, uint32_t /*sync_count*/,
                          int /*back_porch*/, int /*display_width*/,
@@ -69,6 +105,7 @@ public:
     bool requires_fbo() const override { return true; }
     int display_height() const override { return height_; }
     bool ready() const override { return shader_ != 0 && index_tex_ != 0; }
+    GLuint data_texture() const override { return index_tex_; }
 
     GLuint index_texture() const { return index_tex_; }
 
@@ -90,4 +127,8 @@ private:
     int width_  = 0;
     int height_ = 0;
     GLuint index_tex_ = 0;
+
+    // Owned index buffers (live + snapshot for double-buffering)
+    std::unique_ptr<uint8_t[]> index_framebuffer_;
+    std::unique_ptr<uint8_t[]> index_snapshot_;
 };
