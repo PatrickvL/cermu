@@ -46,7 +46,6 @@ class DisplayPipelineBase {
 public:
     virtual ~DisplayPipelineBase() = default;
     virtual void disconnect() = 0;
-    virtual bool connected() const noexcept = 0;
 
     /// Claim the completed frame — prevents it from being overwritten
     /// by the next FrameEnd swap.  Call under fb_mutex_ from emu thread.
@@ -99,8 +98,6 @@ public:
         }
     }
 
-    bool connected() const noexcept override { return port_ != nullptr; }
-
     // ====================================================================
     // Claim / release — protect the ready buffer from being overwritten.
     // ====================================================================
@@ -146,6 +143,8 @@ private:
     // Called by VideoPort::cold_path on FrameEnd — promotes the write
     // buffer to ready and picks a free slot as the new write target.
     // Runs on emu thread without fb_mutex_.
+    // NOTE: this is a reentrant call — invoked from inside
+    // VideoPort::cold_path and calls back into port_->set_active_sync_buffer().
     static SampleT* on_frame_end(void* ctx) noexcept {
         auto* self = static_cast<DisplayPipeline*>(ctx);
 
