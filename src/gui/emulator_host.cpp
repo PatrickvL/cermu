@@ -1,4 +1,5 @@
 #include "gui/emulator_host.hpp"
+#include "gui/display_panel.hpp"
 #include "gui/gl_api.hpp"
 #include "gui/indexed_shader.hpp"
 #include "gui/signal_decoder.hpp"
@@ -792,6 +793,9 @@ void EmulatorHost::free_framebuffer() {
 
     // Clean up GPU indexed palette resources
     cleanup_indexed_resources();
+
+    // Destroy panel before CRT resources (CRTPanel holds non-owning ref)
+    display_panel_.reset();
 
     // Clean up CRT post-processing resources
     crt_shader::destroy(&crt_post_);

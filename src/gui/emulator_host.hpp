@@ -22,6 +22,7 @@
 // Forward declarations
 struct ImGuiIO;
 class SignalDecoder;
+class DisplayPanel;
 
 #include "gui/vector_shader.hpp"  // BeamVertex, PhosphorPersistence
 #include "gui/crt_shader.hpp"     // CRTPostProcess
@@ -233,6 +234,10 @@ protected:
     /// Applied as the final display stage for all raster paths.
     crt_shader::CRTPostProcess crt_post_{};
     bool      use_crt_shader_           = true;  ///< Enable CRT post-processing
+
+    /// Display panel — type-erased post-processing stage (CRT, Direct, etc.).
+    /// Created in allocate_framebuffer(), destroyed in free_framebuffer().
+    std::unique_ptr<DisplayPanel> display_panel_;
 
     /// Signal reconstruction FBO — intermediate render target for stream/indexed
     /// shaders.  The signal output is rendered here before CRT post-processing.
