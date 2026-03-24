@@ -5,19 +5,27 @@
 // ============================================================================
 //
 // Each concrete decoder encapsulates the shader program, stream texture,
-// scanline map computation, and rendering logic for one signal family.
-// The decoder does NOT own shared resources like the palette texture or
-// signal FBO — those are passed in by the host.
+// FBO, and rendering logic for one signal family.  The decoder transforms
+// raw stream bytes into a GPU texture containing the reconstructed image.
+//
+// Two rendering paths:
+//   requires_fbo() == true:
+//     render_to_texture() — renders into an internal FBO and returns the
+//     output texture ID.  Used when CRT post-processing or other effects
+//     need a texture as input.
+//
+//   requires_fbo() == false:
+//     bind_for_imgui() — adds an ImGui draw callback that binds the
+//     shader + textures for inline rendering through ImGui's draw list.
+//     The ImGui::Image call uses the stream texture directly.
 //
 // Lifecycle:
 //   1. Construct with signal-specific parameters
-//   2. create() — compile shader, allocate stream texture
+//   2. create() — compile shader, allocate stream texture + FBO
 //   3. Per frame:
 //      a. upload()          — upload raw stream bytes to GPU texture
 //      b. update_uniforms() — compute scanline map, upload shader uniforms
-//      c. bind_for_fbo()    — bind shader+textures for FBO rendering
-//           or
-//         bind_for_imgui()  — add ImGui draw callback for direct rendering
+//      c. render_to_texture() or bind_for_imgui() depending on display mode
 //   4. destroy() — release GPU resources
 // ============================================================================
 
@@ -47,23 +55,30 @@ public:
                                  int back_porch, int display_width,
                                  uint32_t stream_len) = 0;
 
-    // Bind shader + textures for FBO rendering.
-    // The FBO must already be bound by the caller.
-    // width/height: FBO dimensions for ortho projection.
-    virtual void bind_for_fbo(int width, int height) = 0;
+    // Render decoded data into an internal FBO.
+    // Returns the output texture ID containing the reconstructed image.
+    // width/height: desired output dimensions (FBO resized if needed).
+    virtual GLuint render_to_texture(int width, int height) = 0;
 
     // Add an ImGui draw callback that binds the shader + textures.
     // Used for non-FBO direct rendering through ImGui's draw list.
+    // Only meaningful when requires_fbo() returns false.
     virtual void bind_for_imgui(ImDrawList* draw_list) = 0;
 
-    // Restore default shader state after rendering.
-    virtual void unbind() { gl_api::glUseProgram(0); }
+    // True if this decoder requires FBO rendering (render_to_texture path).
+    // False if it can render inline through ImGui's draw list.
+    // Decoders like Vector always require an FBO; stream decoders may
+    // use the inline path when no CRT post-processing is active.
+    virtual bool requires_fbo() const { return false; }
 
     // Number of visible scanlines (computed by update_uniforms).
     virtual int display_height() const = 0;
 
     // The GL shader program (for callers that need it).
     virtual GLuint program() const = 0;
+
+    // The output texture of the internal FBO (valid after render_to_texture).
+    virtual GLuint output_texture() const = 0;
 
     // True when create() succeeded and resources are valid.
     virtual bool ready() const = 0;
