@@ -12,6 +12,7 @@
 #include "gui/signal_decoder.hpp"
 #include "gui/composite_stream_decoder.hpp"
 #include "gui/rgb_stream_decoder.hpp"
+#include "gui/display_panel.hpp"
 #include "gui/port_icons.hpp"
 #include "gui/vfs_file_system.hpp"
 #define IMGUI_DEFINE_MATH_OPERATORS
@@ -1227,22 +1228,14 @@ void SessionGUI::render_screen() {
             frame_dt,
             vdc.phosphor_r, vdc.phosphor_g, vdc.phosphor_b);
 
-        // Apply CRT post-processing to the persistence texture
+        // Apply post-processing (CRT or pass-through) to the persistence texture
         GLuint final_tex = vector_persist_.texture;
-        if (use_crt_shader_ && crt_post_.shader) {
-            auto& dc = display_characteristics_;
-            int mask = crt_shader::mask_type_from_technology(
-                static_cast<int>(dc.technology));
-            float pr, pg, pb;
-            phosphor_tint_rgb(dc.phosphor, pr, pg, pb);
-            crt_shader::render(&crt_post_, vector_persist_.texture,
-                               static_cast<float>(fb_width_),
-                               static_cast<float>(fb_height_),
-                               display_w, display_h,
-                               dc.curvature, dc.scanline_gap, dc.dot_pitch_mm,
-                               dc.brightness, dc.contrast, dc.gamma, mask,
-                               pr, pg, pb);
-            final_tex = crt_post_.texture;
+        if (display_panel_ && display_panel_->ready()) {
+            final_tex = display_panel_->render(vector_persist_.texture,
+                                               static_cast<float>(fb_width_),
+                                               static_cast<float>(fb_height_),
+                                               display_w, display_h,
+                                               display_characteristics_);
         }
 
         // Display the persistence FBO texture via ImGui
@@ -1342,22 +1335,14 @@ void SessionGUI::render_screen() {
             display_tex = signal_fbo_tex_;
         }
 
-        // Apply CRT post-processing
-        GLuint crt_output_tex = 0;
-        if (use_crt) {
-            auto& dc = display_characteristics_;
-            int mask = crt_shader::mask_type_from_technology(
-                static_cast<int>(dc.technology));
-            float pr, pg, pb;
-            phosphor_tint_rgb(dc.phosphor, pr, pg, pb);
-            crt_shader::render(&crt_post_, display_tex,
-                               static_cast<float>(fb_width_),
-                               static_cast<float>(fb_height_),
-                               display_w, display_h,
-                               dc.curvature, dc.scanline_gap, dc.dot_pitch_mm,
-                               dc.brightness, dc.contrast, dc.gamma, mask,
-                               pr, pg, pb);
-            crt_output_tex = crt_post_.texture;
+        // Apply post-processing (CRT or pass-through)
+        GLuint output_tex = display_tex;
+        if (display_panel_ && display_panel_->ready()) {
+            output_tex = display_panel_->render(display_tex,
+                                                static_cast<float>(fb_width_),
+                                                static_cast<float>(fb_height_),
+                                                display_w, display_h,
+                                                display_characteristics_);
         }
 
         // When we pre-rendered to the signal FBO, display_tex is now the
@@ -1375,7 +1360,7 @@ void SessionGUI::render_screen() {
 
         // Set cursor position and render
         ImGui::SetCursorPos(ImVec2(pos_x, pos_y));
-        ImGui::Image((ImTextureID)(intptr_t)(use_crt ? crt_output_tex : display_tex),
+        ImGui::Image((ImTextureID)(intptr_t)output_tex,
                     ImVec2(display_w, display_h));
 
         // Restore ImGui's default shader after our custom draw
@@ -2009,6 +1994,19 @@ void SessionGUI::allocate_framebuffer() {
                 use_crt_shader_ = false;
                 printf("CRT post-processing shader failed — disabled\n");
             }
+        }
+
+        // Create the display panel based on initial display technology.
+        // CRTPanel wraps crt_post_ for CRT displays; DirectPanel is a
+        // pass-through for LCD/LED/Direct Output.  The panel can be
+        // swapped at runtime when the user changes monitor presets.
+        if (use_crt_shader_) {
+            display_panel_ = std::make_unique<CRTPanel>(&crt_post_);
+            printf("Display panel: CRT\n");
+        } else {
+            display_panel_ = std::make_unique<DirectPanel>();
+            display_panel_->create(fb_width_, fb_height_);
+            printf("Display panel: Direct\n");
         }
     } else {
         printf("Allocated %dx%d framebuffer (texture creation deferred until init)\n", fb_width_, fb_height_);
