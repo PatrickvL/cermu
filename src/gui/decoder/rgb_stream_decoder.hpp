@@ -14,9 +14,9 @@
 // ============================================================================
 
 #include "gui/decoder/signal_decoder.hpp"
-#include "gui/rgb_stream_shader.hpp"
-#include "gui/ypbpr_stream_shader.hpp"
-#include "gui/stream_shader.hpp"    // for MAX_SCANLINES, STREAM_TEX_WIDTH, compute_scanline_map
+#include "gui/shader/rgb_stream_shader.hpp"
+#include "gui/shader/ypbpr_stream_shader.hpp"
+#include "gui/shader/stream_shader.hpp"    // for MAX_SCANLINES, STREAM_TEX_WIDTH, compute_scanline_map
 
 enum class RGBShaderVariant {
     Standard,   // RGB / Digital — direct pass-through

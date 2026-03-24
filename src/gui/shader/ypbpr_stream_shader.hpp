@@ -22,8 +22,8 @@
 // ============================================================================
 
 #include "gui/gl_api.hpp"            // GL function pointers, gl_api::compile_shader()
-#include "gui/rgb_stream_shader.hpp"    // RGBShaderLocations, vertex_src, constants
-#include "gui/stream_shader.hpp"        // STREAM_TEX_WIDTH constant
+#include "gui/shader/rgb_stream_shader.hpp"    // RGBShaderLocations, vertex_src, constants
+#include "gui/shader/stream_shader.hpp"        // STREAM_TEX_WIDTH constant
 #include <cstdio>
 
 namespace ypbpr_stream_shader {

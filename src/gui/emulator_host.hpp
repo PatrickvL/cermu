@@ -24,8 +24,8 @@ struct ImGuiIO;
 class SignalDecoder;
 class DisplayPanel;
 
-#include "gui/vector_shader.hpp"  // BeamVertex, PhosphorPersistence
-#include "gui/crt_shader.hpp"     // CRTPostProcess
+#include "gui/shader/vector_shader.hpp"  // BeamVertex, PhosphorPersistence
+#include "gui/shader/crt_shader.hpp"     // CRTPostProcess
 #include "devices/display/display_device.hpp"  // DisplayDevice, DisplayCharacteristics
 
 // ============================================================================

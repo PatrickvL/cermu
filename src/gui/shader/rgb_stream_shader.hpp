@@ -29,7 +29,7 @@
 // ============================================================================
 
 #include "gui/gl_api.hpp"            // GL function pointers, gl_api::compile_shader()
-#include "gui/stream_shader.hpp"    // MAX_SCANLINES, STREAM_TEX_WIDTH, compute_scanline_map()
+#include "gui/shader/stream_shader.hpp"    // MAX_SCANLINES, STREAM_TEX_WIDTH, compute_scanline_map()
 #include <cstdio>
 #include <cstdint>
 
