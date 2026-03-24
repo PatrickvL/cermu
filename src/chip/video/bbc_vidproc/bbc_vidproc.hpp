@@ -34,7 +34,7 @@
  */
 
 #include "chip/video/video_chip_base.hpp"
-#include "core/signal/composite_video_stream.hpp"
+#include "core/signal/composite_video_out.hpp"
 #include "systems/bbc/bbc_micro_constants.hpp"
 #include <cstdint>
 #include <cstring>
@@ -165,8 +165,8 @@ public:
         std::memset(frame_indices_, 0, sizeof(frame_indices_));
     }
 
-    CompositeVideoStream* video_stream_ = nullptr;
-    void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
+    CompositeVideoOut* video_stream_ = nullptr;
+    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
 
 private:
     // === Mode 7 Teletext rendering ===

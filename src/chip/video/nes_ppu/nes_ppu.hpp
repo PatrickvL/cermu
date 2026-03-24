@@ -22,7 +22,7 @@
 #include <array>
 
 #include "chip/video/video_chip_base.hpp"
-#include "core/signal/composite_video_stream.hpp"
+#include "core/signal/composite_video_out.hpp"
 #include "core/system_lines.hpp"
 #include "systems/nes/bus/nes_bus.hpp"
 #include "systems/nes/bus/nes_bus_signals.hpp"
@@ -288,7 +288,7 @@ public:
     int     scanline_flush_x_ = 0;          // Next x to flush (0–256)
 
     // Video stream output (non-owning pointer, set by system/board)
-    CompositeVideoStream* video_stream_ = nullptr;
+    CompositeVideoOut* video_stream_ = nullptr;
 
     // Per-dot-clock stream driving state
     VideoFlags drive_flags_ = VideoFlags::HSync | VideoFlags::VSync | VideoFlags::Blank;
@@ -400,8 +400,8 @@ public:
         if (bus) ciram_ = bus->ciram;
     }
 
-    // Set the video stream output (system-owned CompositeVideoStream).
-    void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
+    // Set the video stream output (system-owned CompositeVideoOut).
+    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
 
     // NMI output level — true when /NMI is asserted (active LOW).
     // Reads from the caller-provided ppu_bus; the system passes the

@@ -22,7 +22,7 @@
 // bit 7 set alternate between fg and bg based on a blink timer.
 // ============================================================================
 
-#include "core/signal/composite_video_stream.hpp"
+#include "core/signal/composite_video_out.hpp"
 #include "core/signal/video_flags.hpp"
 
 #include <cstdint>
@@ -42,7 +42,7 @@ enum class KC85VideoMode : uint8_t {
 
 struct KC85VideoGenerator {
     // --- Configuration (set once at init) ---
-    void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
+    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
     void set_mode(KC85VideoMode m) { mode_ = m; }
 
     // --- Per-frame dynamic state (set by system before render_frame) ---
@@ -59,7 +59,7 @@ private:
     void render_extended();
     void drive_stream();
 
-    CompositeVideoStream* video_stream_ = nullptr;
+    CompositeVideoOut* video_stream_ = nullptr;
     const uint8_t*       irm_          = nullptr;
     KC85VideoMode        mode_         = KC85VideoMode::Standard;
     bool                 blink_bg_     = false;

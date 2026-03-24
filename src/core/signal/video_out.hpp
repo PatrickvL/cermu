@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// VideoStream — chip-facing write interface for video signal output
+// VideoOut — chip-facing write interface for video signal output
 // ============================================================================
 //
 // This is the ONLY type a chip needs to know about.  It holds a write pointer,
@@ -25,7 +25,7 @@
 #include <cstdint>
 
 template<typename SampleT>
-struct VideoStream {
+struct VideoOut {
     using value_type = SampleT;
 
     SampleT*   ptr;
@@ -80,7 +80,7 @@ struct VideoStream {
 };
 
 // ============================================================================
-// NullVideoStream — discards output for inactive chips
+// NullVideoOut — discards output for inactive chips
 // ============================================================================
 //
 // For chips that must keep ticking but whose output should be discarded
@@ -89,7 +89,7 @@ struct VideoStream {
 // ============================================================================
 
 template<typename SampleT>
-struct NullVideoStream {
+struct NullVideoOut {
     using value_type = SampleT;
 
     SampleT    scratch;

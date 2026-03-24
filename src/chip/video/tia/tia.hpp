@@ -24,7 +24,7 @@
  */
 
 #include "chip/video/video_chip_base.hpp"
-#include "core/signal/composite_video_stream.hpp"
+#include "core/signal/composite_video_out.hpp"
 #include "core/signal/audio_port.hpp"
 #include "utils/ring_buffer.hpp"
 #include <cstdint>
@@ -368,8 +368,8 @@ struct tia_t : public VideoChipBase {
     // VIDEO STREAM
     // ========================================================================
 
-    CompositeVideoStream* video_stream_ = nullptr;
-    void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
+    CompositeVideoOut* video_stream_ = nullptr;
+    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
     bool prev_vsync_stream_ = false;  // Edge detection for FrameEnd emission
 
     // ========================================================================

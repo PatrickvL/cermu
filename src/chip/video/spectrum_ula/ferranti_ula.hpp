@@ -27,7 +27,7 @@
  */
 
 #include "chip/video/video_chip_base.hpp"
-#include "core/signal/composite_video_stream.hpp"
+#include "core/signal/composite_video_out.hpp"
 #include "core/system_lines.hpp"
 #include <cstdint>
 #include <cstring>
@@ -357,8 +357,8 @@ public:
         }
     }
 
-    CompositeVideoStream* video_stream_ = nullptr;
-    void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
+    CompositeVideoOut* video_stream_ = nullptr;
+    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
 
     // === ChipBase GUI virtuals ===
 #ifdef CERMU_HAS_GUI

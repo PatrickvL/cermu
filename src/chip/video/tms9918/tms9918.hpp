@@ -22,7 +22,7 @@
 #include "chip/video/tms9918/tms9918_palette.hpp"
 #include "chip/video/tms9918/tms9918_mixins.hpp"
 #include "chip/video/video_chip_base.hpp"
-#include "core/signal/composite_video_stream.hpp"
+#include "core/signal/composite_video_out.hpp"
 #include "core/system_lines.hpp"
 #include <cstring>
 
@@ -57,8 +57,8 @@ public:
     // Video stream output
     // ====================================================================
 
-    CompositeVideoStream* video_stream_ = nullptr;
-    void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
+    CompositeVideoOut* video_stream_ = nullptr;
+    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
 
     // ====================================================================
     // Static I/O dispatch helpers (registered in system I/O handler table)
