@@ -1085,9 +1085,6 @@ void SessionGUI::render_screen() {
                                             static_cast<uint32_t>(fb_width_) * fb_height_);
                     signal_decoder_->upload_palette(
                         system_->get_gpu_palette_data(), gpu_palette_size_);
-                } else if (fb_snapshot_ && screen_textures_[0]) {
-                    GLuint upload_tex = screen_textures_[texture_write_idx_];
-                    update_screen_texture(upload_tex, fb_width_, fb_height_, fb_snapshot_);
                 }
             } else if (use_stream_shader_ && signal_decoder_) {
                 signal_decoder_->upload_palette(system_->get_gpu_palette_data(), gpu_palette_size_);
@@ -1105,10 +1102,6 @@ void SessionGUI::render_screen() {
             stream_display_height_ = signal_decoder_->display_height();
         }
 
-        // Swap write index for next frame
-        texture_write_idx_ ^= 1;
-        // Keep base-class id in sync for filter-change code
-        screen_texture_id_ = screen_textures_[texture_write_idx_];
     }
 
     // Always render the most recently uploaded texture (read index = opposite of write)
@@ -1133,8 +1126,6 @@ void SessionGUI::render_screen() {
         auto* idx = static_cast<IndexedStreamDecoder*>(signal_decoder_.get());
         display_tex = idx->index_texture();
         use_indexed_shader = true;
-    } else if (screen_textures_[0]) {
-        display_tex = screen_textures_[texture_write_idx_ ^ 1];
     }
 
     // Calculate display dimensions (needed by all paths)
@@ -1577,9 +1568,6 @@ void SessionGUI::step_emulation() {
             if (use_gpu_indexed_ && index_framebuffer_ && index_snapshot_) {
                 memcpy(index_snapshot_, index_framebuffer_,
                        static_cast<size_t>(fb_width_) * fb_height_);
-            } else if (framebuffer_ && fb_snapshot_) {
-                memcpy(fb_snapshot_, framebuffer_,
-                       static_cast<size_t>(fb_width_) * fb_height_ * sizeof(uint32_t));
             }
         }
         printf("Single step executed\n");
@@ -1643,10 +1631,6 @@ void SessionGUI::allocate_framebuffer() {
     framebuffer_ = new uint32_t[fb_width_ * fb_height_];
     memset(framebuffer_, 0, fb_bytes);
     
-    // Allocate snapshot buffer (read by GUI thread for texture upload)
-    fb_snapshot_ = new uint32_t[fb_width_ * fb_height_];
-    memset(fb_snapshot_, 0, fb_bytes);
-    
     // Give the live buffer to the system
     system_->set_framebuffer(framebuffer_, fb_width_, fb_height_);
 
@@ -1696,19 +1680,7 @@ void SessionGUI::allocate_framebuffer() {
                         && tech != DisplayTechnology::LED);
     }
 
-    // Create double-buffered OpenGL textures.
-    // Two textures let us upload to one while the GPU may still be
-    // reading from the other for the previous frame's draw call,
-    // avoiding driver-level stalls or hidden copies.
     if (window_) {
-        screen_textures_[0] = create_screen_texture(fb_width_, fb_height_);
-        screen_textures_[1] = create_screen_texture(fb_width_, fb_height_);
-        texture_write_idx_ = 0;
-        // Keep base-class id pointing at the first texture for legacy code
-        screen_texture_id_ = screen_textures_[0];
-        printf("Allocated %dx%d framebuffer with double-buffered textures %u/%u\n",
-               fb_width_, fb_height_, screen_textures_[0], screen_textures_[1]);
-
         // GPU indexed palette rendering — if the system supports it, allocate
         // R8 index buffers, create the IndexedStreamDecoder (owns shader,
         // R8 texture, palette texture, FBO), and hand the index buffer to
@@ -2618,10 +2590,6 @@ void SessionGUI::emu_thread_func() {
                 if (use_gpu_indexed_ && index_framebuffer_ && index_snapshot_) {
                     memcpy(index_snapshot_, index_framebuffer_,
                            static_cast<size_t>(fb_width_) * fb_height_);
-                    fb_new_frame_.store(true, std::memory_order_release);
-                } else if (framebuffer_ && fb_snapshot_) {
-                    memcpy(fb_snapshot_, framebuffer_,
-                           static_cast<size_t>(fb_width_) * fb_height_ * sizeof(uint32_t));
                     fb_new_frame_.store(true, std::memory_order_release);
                 }
             }
