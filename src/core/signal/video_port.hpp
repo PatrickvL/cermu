@@ -173,6 +173,11 @@ public:
         stream_.ptr  = buf;
     }
 
+    void set_active_sync_buffer(SyncEvent* events, uint32_t* count) noexcept {
+        active_sync_        = events;
+        active_sync_count_  = count;
+    }
+
     void set_frame_end_callback(Sample* (*cb)(void*) noexcept, void* ctx) noexcept {
         on_frame_end_    = cb;
         frame_end_ctx_   = ctx;
@@ -185,11 +190,13 @@ public:
     // ====================================================================
 
     void reset_to_internal_buffer() noexcept {
-        active_buf_      = buf_;
-        stream_.base     = buf_;
-        stream_.ptr      = buf_;
-        on_frame_end_    = nullptr;
-        frame_end_ctx_   = nullptr;
+        active_buf_        = buf_;
+        stream_.base       = buf_;
+        stream_.ptr        = buf_;
+        active_sync_       = sync_events_;
+        active_sync_count_ = &sync_count_;
+        on_frame_end_      = nullptr;
+        frame_end_ctx_     = nullptr;
     }
 
     // ====================================================================
@@ -243,11 +250,18 @@ public:
             ? stream_.frame_len
             : static_cast<uint32_t>(stream_.ptr - active_buf_);
 
+        // Use completed frame's sync data if available (double-buffer mode);
+        // fall back to active sync arrays (single-buffer legacy path).
+        SyncEvent* frame_sync = completed_sync_
+            ? completed_sync_ : active_sync_;
+        uint32_t frame_sync_count = completed_sync_
+            ? completed_sync_count_ : *active_sync_count_;
+
         FrameData fd {
             .stream        = frame_buf,
             .stream_len    = len,
-            .sync_events   = sync_events_,
-            .sync_count    = sync_count_,
+            .sync_events   = frame_sync,
+            .sync_count    = frame_sync_count,
             .signal_type   = SignalTraits<Sample>::type,
             .back_porch    = bound_back_porch_,
             .display_width = bound_line_width_,
@@ -271,7 +285,9 @@ public:
         stream_.prev_flags     = VideoFlags::None;
         stream_.frame_len      = 0;
         stream_.completed_base = nullptr;
-        sync_count_            = 0;
+        completed_sync_        = nullptr;
+        completed_sync_count_  = 0;
+        *active_sync_count_    = 0;
         sync_run_              = 0;
         return fd;
     }
@@ -292,9 +308,18 @@ private:
     Stream    stream_;
     Sample    buf_[MAX_STREAM_SAMPLES];  // Default internal buffer — fallback before DisplayPipeline connect and for headless builds
     Sample*   active_buf_ = nullptr;     // Points to current frame's sample buffer
-    SyncEvent sync_events_[MAX_SYNC_EVENTS];
-    uint32_t  sync_count_ = 0;
-    int       sync_run_   = 0;
+
+    // Sync event storage — internal fallback arrays.
+    // In double-buffer mode, active_sync_ is redirected to DisplayPipeline's arrays.
+    SyncEvent sync_events_[MAX_SYNC_EVENTS];  // internal fallback
+    SyncEvent* active_sync_ = sync_events_;   // where cold_path writes
+    uint32_t  sync_count_ = 0;                // internal fallback count
+    uint32_t* active_sync_count_ = &sync_count_; // pointer to active count
+    int       sync_run_   = 0;                // transient sync pulse accumulator
+
+    // Completed frame sync snapshot — set at FrameEnd before buffer swap
+    SyncEvent* completed_sync_ = nullptr;
+    uint32_t   completed_sync_count_ = 0;
 
     // Frame-end buffer swap callback — returns next frame's buffer pointer.
     // Null = single-buffer mode (return active_buf_).
@@ -318,11 +343,14 @@ private:
         auto* self = static_cast<VideoPort*>(ctx);
         using Tag = typename detail::SyncTag<Sample>::type;
         detail::handle_sync_impl(Tag{},
-                                 self->sync_events_, self->sync_count_,
+                                 self->active_sync_, *self->active_sync_count_,
                                  self->sync_run_,
                                  self->stream_.prev_flags, flags, pos);
         if (!has_flag(flags, VideoFlags::FrameEnd))
             return static_cast<Sample*>(nullptr);
+        // Snapshot completed frame's sync data before the callback swaps buffers
+        self->completed_sync_       = self->active_sync_;
+        self->completed_sync_count_ = *self->active_sync_count_;
         return self->on_frame_end_
             ? self->on_frame_end_(self->frame_end_ctx_)
             : self->active_buf_;
