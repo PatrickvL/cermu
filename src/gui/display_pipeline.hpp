@@ -62,7 +62,10 @@ public:
     void connect(PortType& port) {
         port_ = &port;
         write_idx_ = 0;
+        sync_count_[0] = 0;
+        sync_count_[1] = 0;
         port.set_active_buffer(buf_[write_idx_].get());
+        port.set_active_sync_buffer(sync_events_[write_idx_], &sync_count_[write_idx_]);
         port.set_frame_end_callback(&DisplayPipeline::on_frame_end, this);
     }
 
@@ -87,20 +90,36 @@ public:
         return buf_[write_idx_ ^ 1].get();
     }
 
+    const SyncEvent* completed_sync_events() const noexcept {
+        return sync_events_[write_idx_ ^ 1];
+    }
+
+    uint32_t completed_sync_count() const noexcept {
+        return sync_count_[write_idx_ ^ 1];
+    }
+
     SampleT* write_buffer() noexcept {
         return buf_[write_idx_].get();
     }
 
 private:
     std::unique_ptr<SampleT[]> buf_[2];
+    SyncEvent sync_events_[2][MAX_SYNC_EVENTS] = {};
+    uint32_t  sync_count_[2] = {};
     int write_idx_ = 0;
     PortType* port_ = nullptr;     // Non-owning back-reference
 
-    // Called by VideoPort::cold_path on FrameEnd — swaps to the other
-    // buffer and returns its address as the new write target.
+    // Called by VideoPort::cold_path on FrameEnd — swaps sample and sync
+    // buffers, returns the new sample write target.  The completed frame's
+    // data (samples + sync events) stays stable in [write_idx_ ^ 1].
     static SampleT* on_frame_end(void* ctx) noexcept {
         auto* self = static_cast<DisplayPipeline*>(ctx);
         self->write_idx_ ^= 1;
+        // Redirect port's sync writing to the new buffer
+        self->port_->set_active_sync_buffer(
+            self->sync_events_[self->write_idx_],
+            &self->sync_count_[self->write_idx_]);
+        self->sync_count_[self->write_idx_] = 0;
         return self->buf_[self->write_idx_].get();
     }
 };
