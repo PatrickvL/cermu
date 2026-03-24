@@ -59,11 +59,10 @@ public:
         if (texture_) { glDeleteTextures(1, &texture_); texture_ = 0; }
     }
 
-    void upload(const uint8_t* data, uint32_t sample_count) override {
+protected:
+    void upload_to_gpu(const uint8_t* data, uint32_t sample_count) override {
         rgb_stream_shader::upload_stream_texture(texture_, data, sample_count);
     }
-
-protected:
     void bind_textures() override {
         gl_api::glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, texture_);

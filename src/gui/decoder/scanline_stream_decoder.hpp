@@ -7,12 +7,12 @@
 // Factors out the common pattern shared by CompositeStreamDecoder (2 bytes/
 // sample) and RGBStreamDecoder (4 bytes/sample):
 //   - Stream texture + scanline-map uniforms
-//   - snapshot() / upload_snapshot() double-buffering
-//   - update_uniforms() scanline map computation + uniform upload
+//   - Zero-copy snapshot (stores FrameData pointers, no memcpy)
+//   - Scanline map computation + uniform upload
 //   - display_height(), ready(), data_texture() accessors
 //
 // Template parameter BytesPerSample sizes the snapshot stream buffer.
-// Concrete subclasses provide create(), destroy(), upload(),
+// Concrete subclasses provide create(), destroy(), upload_to_gpu(),
 // bind_textures(), fill_callback_textures(), and optionally override
 // update_extra_uniforms() for signal-specific uniforms (e.g. artifact
 // phase).
@@ -21,7 +21,6 @@
 #include "gui/decoder/signal_decoder.hpp"
 #include "gui/shader/stream_shader.hpp"   // MAX_SCANLINES, STREAM_TEX_WIDTH, compute_scanline_map
 
-#include <cstring>
 #include <algorithm>
 
 template <int BytesPerSample>
@@ -29,30 +28,52 @@ class ScanlineStreamDecoder : public SignalDecoder {
 public:
     void snapshot(const FrameData& fd, int fb_width) override {
         if (!fd.stream || fd.stream_len == 0) { has_snapshot_ = false; return; }
-        const uint8_t* src = static_cast<const uint8_t*>(fd.stream);
-        uint32_t n = std::min(fd.stream_len, MAX_STREAM_SAMPLES);
-        std::memcpy(stream_buf_, src, n * BytesPerSample);
-        snapshot_len_ = n;
-        uint32_t sc = std::min(fd.sync_count, MAX_SYNC_EVENTS);
-        std::memcpy(sync_buf_, fd.sync_events, sc * sizeof(SyncEvent));
-        sync_count_     = sc;
-        back_porch_     = fd.back_porch;
-        display_width_  = fd.display_width > 0 ? fd.display_width : fb_width;
+        snapshot_fd_ = fd;
+        if (snapshot_fd_.display_width <= 0)
+            snapshot_fd_.display_width = fb_width;
         has_snapshot_ = true;
     }
 
     bool upload_snapshot() override {
         if (!has_snapshot_) return false;
         has_snapshot_ = false;
-        upload(stream_buf_, snapshot_len_);
-        update_uniforms(sync_buf_, sync_count_, back_porch_,
-                        display_width_, snapshot_len_);
+        const uint8_t* src = static_cast<const uint8_t*>(snapshot_fd_.stream);
+        uint32_t n = std::min(snapshot_fd_.stream_len, MAX_STREAM_SAMPLES);
+        upload_to_gpu(src, n);
+        compute_and_upload_uniforms(snapshot_fd_.sync_events,
+                                    snapshot_fd_.sync_count,
+                                    snapshot_fd_.back_porch,
+                                    snapshot_fd_.display_width, n);
         return true;
     }
 
-    void update_uniforms(const SyncEvent* sync, uint32_t sync_count,
-                         int back_porch, int display_width,
-                         uint32_t stream_len) override {
+    int display_height() const override { return display_height_; }
+    bool ready() const override { return shader_ != 0 && texture_ != 0; }
+    GLuint data_texture() const override { return texture_; }
+
+    GLuint stream_texture() const { return texture_; }
+
+protected:
+    /// Hook for subclass-specific uniforms (called with program already bound).
+    virtual void update_extra_uniforms() {}
+
+    /// Upload raw stream bytes to the GPU texture.
+    /// Concrete subclasses call the appropriate shader namespace function.
+    virtual void upload_to_gpu(const uint8_t* data, uint32_t sample_count) = 0;
+
+    GLuint texture_ = 0;
+
+    GLint loc_scanline_map_ = -1;
+    GLint loc_tex_width_    = -1;
+    GLint loc_display_h_    = -1;
+    GLint loc_display_w_    = -1;
+
+    int display_height_ = 0;
+
+private:
+    void compute_and_upload_uniforms(const SyncEvent* sync, uint32_t sync_count,
+                                     int back_porch, int display_width,
+                                     uint32_t stream_len) {
         int offsets[stream_shader::MAX_SCANLINES];
         display_height_ = stream_shader::compute_scanline_map(
             offsets, stream_shader::MAX_SCANLINES,
@@ -69,31 +90,7 @@ public:
         gl_api::glUseProgram(0);
     }
 
-    int display_height() const override { return display_height_; }
-    bool ready() const override { return shader_ != 0 && texture_ != 0; }
-    GLuint data_texture() const override { return texture_; }
-
-    GLuint stream_texture() const { return texture_; }
-
-protected:
-    /// Hook for subclass-specific uniforms (called with program already bound).
-    virtual void update_extra_uniforms() {}
-
-    GLuint texture_ = 0;
-
-    GLint loc_scanline_map_ = -1;
-    GLint loc_tex_width_    = -1;
-    GLint loc_display_h_    = -1;
-    GLint loc_display_w_    = -1;
-
-    int display_height_ = 0;
-
-private:
-    // Snapshot buffers (owned, written by emu thread, read by GUI thread)
-    uint8_t   stream_buf_[MAX_STREAM_SAMPLES * BytesPerSample]{};
-    SyncEvent sync_buf_[MAX_SYNC_EVENTS]{};
-    uint32_t  snapshot_len_  = 0;
-    uint32_t  sync_count_    = 0;
-    int       back_porch_    = 0;
-    int       display_width_ = 0;
+    // Snapshot — stored FrameData (pointers into DisplayPipeline's
+    // triple-buffered slot, protected by claim/release).
+    FrameData snapshot_fd_{};
 };

@@ -96,20 +96,6 @@ public:
         sample_count_ = 0;
     }
 
-    /// Store raw VectorVideoSample data for rendering.
-    /// No GPU upload — data is consumed at render_to_texture() time.
-    void upload(const uint8_t* data, uint32_t sample_count) override {
-        if (!data || sample_count == 0) {
-            sample_count_ = 0;
-            return;
-        }
-        size_t bytes = static_cast<size_t>(sample_count) * 8;
-        if (sample_buf_.size() < bytes)
-            sample_buf_.resize(bytes);
-        std::memcpy(sample_buf_.data(), data, bytes);
-        sample_count_ = sample_count;
-    }
-
     void snapshot(const FrameData& fd, int /*fb_width*/) override {
         if (!fd.stream || fd.stream_len == 0) { has_snapshot_ = false; return; }
         const uint8_t* src = static_cast<const uint8_t*>(fd.stream);
@@ -129,10 +115,6 @@ public:
         has_snapshot_ = false;
         return true;
     }
-
-    /// No-op for vector (no scanline-based uniforms).
-    void update_uniforms(const SyncEvent*, uint32_t,
-                         int, int, uint32_t) override {}
 
     /// Set per-frame rendering parameters.
     /// Call this before render_to_texture() each frame.
