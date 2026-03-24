@@ -54,11 +54,6 @@ public:
     // Copies stream/sync/metadata from FrameData into decoder-owned buffers.
     virtual void snapshot(const FrameData& fd, int fb_width) = 0;
 
-    // snapshot_index() — called by emu thread under fb_mutex_ for indexed path.
-    // Copies raw 8-bit index buffer into decoder-owned snapshot buffer.
-    // Default: no-op (only IndexedStreamDecoder overrides).
-    virtual void snapshot_index(const uint8_t* /*index_buf*/, int /*w*/, int /*h*/) {}
-
     // upload_snapshot() — called by GUI thread under fb_mutex_.
     // Uploads internal snapshot data to GPU textures and computes uniforms.
     // Returns true if data was uploaded (i.e. snapshot was non-empty).
@@ -70,7 +65,7 @@ public:
     // Render decoded data into an internal FBO (template method).
     // Saves GL state, binds FBO, sets ortho projection, calls bind_textures(),
     // draws fullscreen quad, restores state.  Returns output texture ID.
-    // Virtual so subclasses (e.g. VectorStreamDecoder) can replace the
+    // Virtual so subclasses (e.g. VectorSignalDecoder) can replace the
     // fullscreen-quad approach entirely.
     virtual GLuint render_to_texture(int width, int height) {
         if (!fbo_ || !fbo_tex_) return 0;
@@ -86,15 +81,8 @@ public:
         glClear(GL_COLOR_BUFFER_BIT);
 
         gl_api::glUseProgram(shader_);
-        float L = 0, R = static_cast<float>(width);
-        float T = static_cast<float>(height), B = 0;
-        const float ortho[4][4] = {
-            { 2.0f/(R-L),   0.0f,         0.0f,   0.0f },
-            { 0.0f,         2.0f/(T-B),   0.0f,   0.0f },
-            { 0.0f,         0.0f,        -1.0f,   0.0f },
-            { (R+L)/(L-R),  (T+B)/(B-T),  0.0f,   1.0f },
-        };
-        gl_api::glUniformMatrix4fv(loc_proj_, 1, GL_FALSE, &ortho[0][0]);
+        upload_ortho_projection(loc_proj_, 0, static_cast<float>(width),
+                                static_cast<float>(height), 0);
 
         bind_textures();
 
@@ -111,13 +99,19 @@ public:
     }
 
     // Add an ImGui draw callback that binds the shader + textures.
+    // NOTE: the 3-argument AddCallback copies `cb` by value (sized copy).
     void bind_for_imgui(ImDrawList* draw_list) {
         DecoderCallbackData cb = { shader_, loc_proj_, 0, 0 };
         fill_callback_textures(cb);
         draw_list->AddCallback(imgui_bind_callback, &cb, sizeof(cb));
     }
 
-    // True if this decoder requires FBO rendering (render_to_texture path).
+    // Whether this decoder ONLY works via the FBO path (render_to_texture).
+    // Indexed and vector decoders return true — they always render to FBO.
+    // Scanline decoders (Composite/RGB) return false — they support both
+    // the inline ImGui path and the FBO path (for CRT post-processing).
+    // Note: returning false does NOT mean the decoder lacks an FBO;
+    // Composite/RGB still create one for optional CRT post-processing.
     virtual bool requires_fbo() const { return false; }
 
     // Number of visible scanlines (computed by update_uniforms).
@@ -206,7 +200,6 @@ protected:
                                        GL_TEXTURE_2D, fbo_tex_, 0);
         gl_api::glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-        struct QuadVertex { float x, y, u, v; uint32_t col; };
         QuadVertex quad[6] = {
             {0, 0, 0, 0, 0xFFFFFFFF}, {1, 0, 1, 0, 0xFFFFFFFF},
             {1, 1, 1, 1, 0xFFFFFFFF}, {0, 0, 0, 0, 0xFFFFFFFF},
@@ -249,7 +242,6 @@ protected:
                      GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
         glBindTexture(GL_TEXTURE_2D, 0);
 
-        struct QuadVertex { float x, y, u, v; uint32_t col; };
         QuadVertex quad[6] = {
             {0, 0,         0, 0, 0xFFFFFFFF}, {(float)w, 0,         1, 0, 0xFFFFFFFF},
             {(float)w, (float)h, 1, 1, 0xFFFFFFFF}, {0, 0,         0, 0, 0xFFFFFFFF},
@@ -260,7 +252,22 @@ protected:
         gl_api::glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
 
+    // --- Ortho projection helper (shared by render_to_texture and ImGui callback) ---
+
+    static void upload_ortho_projection(GLint loc, float L, float R, float T, float B) {
+        const float ortho[4][4] = {
+            { 2.0f/(R-L),   0.0f,         0.0f,   0.0f },
+            { 0.0f,         2.0f/(T-B),   0.0f,   0.0f },
+            { 0.0f,         0.0f,        -1.0f,   0.0f },
+            { (R+L)/(L-R),  (T+B)/(B-T),  0.0f,   1.0f },
+        };
+        gl_api::glUniformMatrix4fv(loc, 1, GL_FALSE, &ortho[0][0]);
+    }
+
 private:
+    // Fullscreen quad vertex — used by create_fbo() and resize_fbo().
+    struct QuadVertex { float x, y, u, v; uint32_t col; };
+
     // FBO resources
     GLuint fbo_       = 0;
     GLuint fbo_tex_   = 0;
@@ -279,13 +286,7 @@ private:
         float T = draw_data->DisplayPos.y;
         float B = draw_data->DisplayPos.y + draw_data->DisplaySize.y;
         if (R == L || B == T) return;
-        const float ortho[4][4] = {
-            { 2.0f/(R-L),   0.0f,         0.0f,   0.0f },
-            { 0.0f,         2.0f/(T-B),   0.0f,   0.0f },
-            { 0.0f,         0.0f,        -1.0f,   0.0f },
-            { (R+L)/(L-R),  (T+B)/(B-T),  0.0f,   1.0f },
-        };
-        gl_api::glUniformMatrix4fv(d->loc_proj, 1, GL_FALSE, &ortho[0][0]);
+        upload_ortho_projection(d->loc_proj, L, R, T, B);
 
         if (d->tex0) {
             gl_api::glActiveTexture(GL_TEXTURE0);

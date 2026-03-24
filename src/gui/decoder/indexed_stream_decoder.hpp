@@ -60,7 +60,7 @@ public:
         // Indexed path doesn't use FrameData streams — use snapshot_index().
     }
 
-    void snapshot_index(const uint8_t* index_buf, int w, int h) override {
+    void snapshot_index(const uint8_t* index_buf, int w, int h) {
         if (!index_buf || !index_snapshot_) return;
         std::memcpy(index_snapshot_.get(), index_buf,
                     static_cast<size_t>(w) * h);
