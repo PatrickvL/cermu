@@ -106,6 +106,10 @@ private:
     /// seeing a stale display_device_ pointer mid-swap.
     void refresh_display_device();
 
+    /// Cached display device ID for change detection (avoids ABA
+    /// pointer-reuse when the allocator gives the same address).
+    std::string cached_display_id_;
+
     /// Cached window title — avoids SDL_SetWindowTitle on every frame.
     std::string last_window_title_;
 
