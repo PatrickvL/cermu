@@ -62,6 +62,9 @@ public:
     void handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) override;
     void handle_controller_event(int controller, int button, bool pressed) override;
     
+    // Video port access — enables DisplayPipeline connection from host
+    void* get_video_port_ptr() override { return video_port_.get(); }
+
     // GUI rendering overrides
     void render_system_menu_items() override;
     void render_debug_windows(void* gui_state, std::mutex& emu_mutex) override;
