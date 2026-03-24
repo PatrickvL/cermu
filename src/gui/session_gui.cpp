@@ -1694,8 +1694,10 @@ void SessionGUI::refresh_display_device() {
         }
     }
 
-    if (found == display_device_) return;  // no change
+    const char* found_id = found ? found->get_id() : "";
+    if (found_id == cached_display_id_) return;  // same device type — no change
 
+    cached_display_id_ = found_id;
     display_device_ = found;
     display_characteristics_ = found
         ? found->get_display_characteristics()
@@ -1851,6 +1853,7 @@ void SessionGUI::allocate_framebuffer() {
     display_has_speakers_.store(
         display_device_ ? display_device_->has_builtin_speakers() : false,
         std::memory_order_relaxed);
+    cached_display_id_ = display_device_ ? display_device_->get_id() : "";
 
     // Auto-set CRT post-processing based on initial display technology
     {
