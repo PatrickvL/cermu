@@ -953,13 +953,18 @@ void SessionGUI::render_screen() {
     bool have_new_frame = fb_new_frame_.exchange(false, std::memory_order_acquire);
     if (have_new_frame && signal_decoder_ && signal_decoder_->ready()) {
         // -----------------------------------------------------------
-        // LOCKED SECTION — GPU texture upload from decoder-owned
-        // snapshot buffers.  upload_snapshot() also computes scanline
-        // maps and uploads shader uniforms (all fast operations).
+        // LOCKED SECTION — GPU texture upload.  Scanline decoders read
+        // directly from claimed DisplayPipeline buffers (zero-copy);
+        // release() frees the slot for reuse by the emu thread.
         // -----------------------------------------------------------
         {
             std::lock_guard<std::mutex> lock(fb_mutex_);
             bool uploaded = signal_decoder_->upload_snapshot();
+
+            // Release the claimed DisplayPipeline buffer now that the
+            // GL driver has consumed the data (glTexSubImage2D is sync).
+            if (display_pipeline_)
+                display_pipeline_->release();
 
             // Palette upload — stream decoders that need a palette
             // (Composite) get it here; indexed decoders already have it.
@@ -2317,14 +2322,16 @@ void SessionGUI::emu_thread_func() {
             std::lock_guard<std::mutex> lock(fb_mutex_);
 
             // Stream snapshot — delegate to the active signal decoder.
-            // Stream decoders (Composite/RGB/Vector) copy the raw samples
-            // and sync events into their own internal buffers.  When no
-            // stream data is available, the indexed decoder snapshots the
-            // CPU-side index framebuffer instead.
+            // Scanline decoders (Composite/RGB) store FrameData pointers
+            // (zero-copy) — claim() prevents the DisplayPipeline from
+            // overwriting the completed buffer until release().  Vector
+            // and indexed decoders still memcpy (data consumed later).
             bool have_stream_snapshot = false;
             if (signal_decoder_ && system_) {
                 const auto& fd = system_->get_last_frame_data();
                 if (fd.stream && fd.stream_len > 0) {
+                    if (display_pipeline_)
+                        display_pipeline_->claim();
                     signal_decoder_->snapshot(fd, fb_width_);
                     have_stream_snapshot = signal_decoder_->has_snapshot();
                 }

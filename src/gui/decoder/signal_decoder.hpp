@@ -19,8 +19,8 @@
 //   1. Construct with signal-specific parameters
 //   2. create() — compile shader, allocate stream texture + FBO
 //   3. Per frame:
-//      a. upload()          — upload raw stream bytes to GPU texture
-//      b. update_uniforms() — compute scanline map, upload shader uniforms
+//      a. snapshot()         — emu thread copies stream data into decoder
+//      b. upload_snapshot()  — GUI thread uploads to GPU + computes uniforms
 //      c. render_to_texture() or bind_for_imgui() depending on display mode
 //   4. destroy() — release GPU resources
 // ============================================================================
@@ -66,15 +66,6 @@ public:
 
     // Whether this decoder has pending snapshot data.
     bool has_snapshot() const { return has_snapshot_; }
-
-    // Legacy: upload raw stream bytes to GPU texture (external pointer).
-    // Prefer snapshot() + upload_snapshot() pipeline.
-    virtual void upload(const uint8_t* data, uint32_t sample_count) = 0;
-
-    // Compute scanline map from sync events and upload shader uniforms.
-    virtual void update_uniforms(const SyncEvent* sync, uint32_t sync_count,
-                                 int back_porch, int display_width,
-                                 uint32_t stream_len) = 0;
 
     // Render decoded data into an internal FBO (template method).
     // Saves GL state, binds FBO, sets ortho projection, calls bind_textures(),

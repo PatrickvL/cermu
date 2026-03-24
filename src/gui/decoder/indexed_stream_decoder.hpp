@@ -55,15 +55,6 @@ public:
         destroy_palette_texture();
     }
 
-    void upload(const uint8_t* data, uint32_t /*sample_count*/) override {
-        if (!index_tex_ || !data) return;
-        glBindTexture(GL_TEXTURE_2D, index_tex_);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width_, height_,
-                        GL_RED, GL_UNSIGNED_BYTE, data);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-    }
-
     // Indexed decoder: snapshot copies from the live index framebuffer.
     void snapshot(const FrameData& /*fd*/, int /*fb_width*/) override {
         // Indexed path doesn't use FrameData streams — use snapshot_index().
@@ -79,7 +70,7 @@ public:
     bool upload_snapshot() override {
         if (!has_snapshot_) return false;
         has_snapshot_ = false;
-        upload(index_snapshot_.get(), 0);
+        upload_index_texture(index_snapshot_.get());
         return true;
     }
 
@@ -96,11 +87,6 @@ public:
 
     /// Non-owning pointer to the live index buffer (emu thread writes here).
     uint8_t* index_framebuffer() const { return index_framebuffer_.get(); }
-
-    // Indexed decoder has no sync events — update_uniforms is a no-op.
-    void update_uniforms(const SyncEvent* /*sync*/, uint32_t /*sync_count*/,
-                         int /*back_porch*/, int /*display_width*/,
-                         uint32_t /*stream_len*/) override {}
 
     bool requires_fbo() const override { return true; }
     int display_height() const override { return height_; }
@@ -124,6 +110,15 @@ protected:
     }
 
 private:
+    void upload_index_texture(const uint8_t* data) {
+        if (!index_tex_ || !data) return;
+        glBindTexture(GL_TEXTURE_2D, index_tex_);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width_, height_,
+                        GL_RED, GL_UNSIGNED_BYTE, data);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    }
+
     int width_  = 0;
     int height_ = 0;
     GLuint index_tex_ = 0;

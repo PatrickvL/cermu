@@ -81,10 +81,6 @@ public:
             destroy_palette_texture();
     }
 
-    void upload(const uint8_t* data, uint32_t sample_count) override {
-        stream_shader::upload_stream_texture(texture_, data, sample_count);
-    }
-
     // Artifact shader: set the NTSC phase increment (radians per pixel)
     void set_artifact_phase(float phase) { artifact_phase_ = phase; }
     float artifact_phase() const { return artifact_phase_; }
@@ -94,6 +90,9 @@ public:
     void set_palette_texture(GLuint tex) { palette_texture_ = tex; }
 
 protected:
+    void upload_to_gpu(const uint8_t* data, uint32_t sample_count) override {
+        stream_shader::upload_stream_texture(texture_, data, sample_count);
+    }
     void bind_textures() override {
         gl_api::glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, texture_);
