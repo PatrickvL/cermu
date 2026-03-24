@@ -585,6 +585,8 @@ public:
 
     bool is_system_ready() const override { return system_ready_; }
 
+    void* get_video_port_ptr() override { return video_port_.get(); }
+
 private:
     // ── Chips ────────────────────────────────────────────────────────────
 
