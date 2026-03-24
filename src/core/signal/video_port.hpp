@@ -147,14 +147,50 @@ public:
     using Sample = typename StreamT::value_type;
 
     VideoPort() {
-        stream_.ptr            = buf_;
-        stream_.base           = buf_;
+        active_buf_            = buf_;
+        stream_.ptr            = active_buf_;
+        stream_.base           = active_buf_;
         stream_.prev_flags     = VideoFlags::None;
         stream_.ctx            = this;
         stream_.on_sync_change = &VideoPort::cold_path;
     }
 
     Stream& stream() noexcept { return stream_; }
+
+    // ====================================================================
+    // External buffer management — allows DisplayPipeline (or similar)
+    // to provide the sample buffer and control frame-end buffer swaps.
+    //
+    // set_active_buffer(): redirect the stream to an external buffer.
+    // set_frame_end_callback(): install a callback that returns the next
+    //   buffer pointer on FrameEnd.  If null, cold_path returns active_buf_
+    //   (single-buffer mode, current default behavior).
+    // ====================================================================
+
+    void set_active_buffer(Sample* buf) noexcept {
+        active_buf_  = buf;
+        stream_.base = buf;
+        stream_.ptr  = buf;
+    }
+
+    void set_frame_end_callback(Sample* (*cb)(void*) noexcept, void* ctx) noexcept {
+        on_frame_end_    = cb;
+        frame_end_ctx_   = ctx;
+    }
+
+    // ====================================================================
+    // Reset to internal buffer — reverts any external buffer binding,
+    // restoring the default single-buffer mode using the built-in buf_[].
+    // Only safe when emulation is paused (no concurrent drive() calls).
+    // ====================================================================
+
+    void reset_to_internal_buffer() noexcept {
+        active_buf_      = buf_;
+        stream_.base     = buf_;
+        stream_.ptr      = buf_;
+        on_frame_end_    = nullptr;
+        frame_end_ctx_   = nullptr;
+    }
 
     // ====================================================================
     // Display binding — register framebuffer + palette for automatic
@@ -199,12 +235,16 @@ public:
     FrameData swap_frame() noexcept {
         // Use the snapshot taken at FrameEnd (self-bounding reset);
         // fall back to current ptr position for non-FrameEnd callers.
+        // completed_base points to the buffer that holds the finished frame;
+        // if no FrameEnd was detected, active_buf_ is the current (only) buffer.
+        Sample* frame_buf = stream_.completed_base
+            ? stream_.completed_base : active_buf_;
         const uint32_t len = stream_.frame_len
             ? stream_.frame_len
-            : static_cast<uint32_t>(stream_.ptr - buf_);
+            : static_cast<uint32_t>(stream_.ptr - active_buf_);
 
         FrameData fd {
-            .stream        = buf_,
+            .stream        = frame_buf,
             .stream_len    = len,
             .sync_events   = sync_events_,
             .sync_count    = sync_count_,
@@ -226,9 +266,11 @@ public:
                                        bound_line_width_, bound_back_porch_);
         }
 
-        stream_.ptr            = buf_;
+        stream_.base           = active_buf_;
+        stream_.ptr            = active_buf_;
         stream_.prev_flags     = VideoFlags::None;
         stream_.frame_len      = 0;
+        stream_.completed_base = nullptr;
         sync_count_            = 0;
         sync_run_              = 0;
         return fd;
@@ -248,10 +290,16 @@ public:
 
 private:
     Stream    stream_;
-    Sample    buf_[MAX_STREAM_SAMPLES];
+    Sample    buf_[MAX_STREAM_SAMPLES];  // Default internal buffer — fallback before DisplayPipeline connect and for headless builds
+    Sample*   active_buf_ = nullptr;     // Points to current frame's sample buffer
     SyncEvent sync_events_[MAX_SYNC_EVENTS];
     uint32_t  sync_count_ = 0;
     int       sync_run_   = 0;
+
+    // Frame-end buffer swap callback — returns next frame's buffer pointer.
+    // Null = single-buffer mode (return active_buf_).
+    Sample* (*on_frame_end_)(void* ctx) noexcept = nullptr;
+    void*   frame_end_ctx_ = nullptr;
 
     // Last frame data — stored by swap_frame() before reset
     FrameData  last_frame_{};
@@ -266,14 +314,18 @@ private:
     bool                bridge_suppressed_   = false;
 
     FORCE_NOINLINE
-    static bool cold_path(void* ctx, VideoFlags flags, uint32_t pos) noexcept {
+    static Sample* cold_path(void* ctx, VideoFlags flags, uint32_t pos) noexcept {
         auto* self = static_cast<VideoPort*>(ctx);
         using Tag = typename detail::SyncTag<Sample>::type;
         detail::handle_sync_impl(Tag{},
                                  self->sync_events_, self->sync_count_,
                                  self->sync_run_,
                                  self->stream_.prev_flags, flags, pos);
-        return has_flag(flags, VideoFlags::FrameEnd);
+        if (!has_flag(flags, VideoFlags::FrameEnd))
+            return static_cast<Sample*>(nullptr);
+        return self->on_frame_end_
+            ? self->on_frame_end_(self->frame_end_ctx_)
+            : self->active_buf_;
     }
 };
 
