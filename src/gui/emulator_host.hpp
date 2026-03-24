@@ -135,16 +135,11 @@ protected:
     float speed_multiplier_;
 
     // ========================================================================
-    // Framebuffer & double-buffered display
+    // Framebuffer
     // ========================================================================
     uint32_t* framebuffer_;
     int fb_width_;
     int fb_height_;
-
-    /// Double-buffered GL textures — upload to one while the GPU
-    /// may still be rendering the previous frame from the other.
-    GLuint screen_textures_[2];
-    int    texture_write_idx_;
 
     // ========================================================================
     // GPU indexed palette rendering
@@ -301,7 +296,6 @@ protected:
     std::mutex emu_mutex_;
 
     /// Framebuffer snapshot (written by emu thread, read by GUI for texture upload).
-    uint32_t* fb_snapshot_;
     std::mutex fb_mutex_;
     std::atomic<bool> fb_new_frame_{false};
 
@@ -456,18 +450,6 @@ protected:
      */
     void render_about_dialog_generic();
     
-    /**
-     * Create OpenGL texture for screen display
-     * Returns texture ID, or 0 on failure
-     */
-    GLuint create_screen_texture(int width, int height);
-    
-    /**
-     * Update OpenGL texture with new pixel data
-     */
-    void update_screen_texture(GLuint texture_id, int width, int height, 
-                               const uint32_t* pixels);
-
     /**
      * Clean up indexed rendering resources (shader, textures, buffers).
      */

@@ -48,8 +48,6 @@ EmulatorHost::EmulatorHost()
     , framebuffer_(nullptr)
     , fb_width_(0)
     , fb_height_(0)
-    , screen_textures_{0, 0}
-    , texture_write_idx_(0)
     // Statistics
     , total_frames_(0)
     , actual_fps_(0)
@@ -58,7 +56,6 @@ EmulatorHost::EmulatorHost()
     , frame_pace_counter_(0)
     , frame_time_accumulator_(0.0)
     // Threading
-    , fb_snapshot_(nullptr)
     // Audio
     , audio_device_(0)
     , audio_sample_rate_(0)
@@ -189,12 +186,6 @@ bool EmulatorHost::init(const char* window_title, int width, int height) {
 }
 
 void EmulatorHost::cleanup() {
-    // Cleanup screen texture if allocated
-    if (screen_texture_id_ != 0) {
-        glDeleteTextures(1, &screen_texture_id_);
-        screen_texture_id_ = 0;
-    }
-    
     // Cleanup ImGui
     if (ImGui::GetCurrentContext()) {
         ImGui_ImplOpenGL3_Shutdown();
@@ -373,38 +364,6 @@ void EmulatorHost::render_about_dialog_generic() {
         }
     }
     ImGui::End();
-}
-
-// ============================================================================
-// OpenGL Texture Management
-// ============================================================================
-
-GLuint EmulatorHost::create_screen_texture(int width, int height) {
-    GLuint texture_id = 0;
-    glGenTextures(1, &texture_id);
-    glBindTexture(GL_TEXTURE_2D, texture_id);
-    
-    // Set texture parameters
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    
-    // Allocate texture storage
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-                GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    
-    printf("Created OpenGL texture %u (%dx%d)\n", texture_id, width, height);
-    return texture_id;
-}
-
-void EmulatorHost::update_screen_texture(GLuint texture_id, int width, int height,
-                                               const uint32_t* pixels) {
-    if (texture_id == 0 || !pixels) return;
-    
-    glBindTexture(GL_TEXTURE_2D, texture_id);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height,
-                   GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 }
 
 // ============================================================================
@@ -630,9 +589,11 @@ void EmulatorHost::render_screen_menu_generic() {
     ImGui::Checkbox("Scanlines", &screen_scanlines_);
     
     // Update texture filtering based on user preference
-    if (screen_texture_id_ != 0) {
+    GLuint filter_tex = signal_decoder_ ? signal_decoder_->output_texture()
+                                        : screen_texture_id_;
+    if (filter_tex != 0) {
         GLint filter = screen_filter_ ? GL_LINEAR : GL_NEAREST;
-        glBindTexture(GL_TEXTURE_2D, screen_texture_id_);
+        glBindTexture(GL_TEXTURE_2D, filter_tex);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
     }
@@ -721,18 +682,7 @@ void EmulatorHost::free_framebuffer() {
         delete[] framebuffer_;
         framebuffer_ = nullptr;
     }
-    if (fb_snapshot_) {
-        delete[] fb_snapshot_;
-        fb_snapshot_ = nullptr;
-    }
     
-    // Delete double-buffered textures
-    for (int i = 0; i < 2; i++) {
-        if (screen_textures_[i]) {
-            glDeleteTextures(1, &screen_textures_[i]);
-            screen_textures_[i] = 0;
-        }
-    }
     screen_texture_id_ = 0;
 
     // Clean up GPU indexed palette resources
