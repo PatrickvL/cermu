@@ -88,6 +88,22 @@ GenericCRT::GenericCRT(CRTPreset preset)
                 /*brightness*/ 1.0f, /*contrast*/ 1.2f, /*gamma*/ 2.5f
             };
             break;
+
+        case CRTPreset::DirectOutput:
+            name_              = "Direct Output";
+            id_                = "direct_output";
+            primary_port_type_ = PortType::VIDEO_COMPOSITE;
+            accepted_signals_  = DisplaySignals::COMPOSITE | DisplaySignals::SVIDEO
+                               | DisplaySignals::RGB;
+            has_speakers_      = false;
+            characteristics_   = {
+                DisplayTechnology::LCD, PhosphorType::P22,
+                /*diagonal*/ 24.0f, /*aspect*/ 4.0f / 3.0f, /*curvature*/ 0.0f,
+                /*persistence*/ 0.0f, /*color_temp*/ 6500.0f,
+                /*dot_pitch*/ 0.0f, /*scanline_gap*/ 0.0f,
+                /*brightness*/ 1.0f, /*contrast*/ 1.0f, /*gamma*/ 2.2f
+            };
+            break;
     }
 }
 
@@ -153,4 +169,16 @@ REGISTER_DEVICE(crt_green_descriptor, []() {
 
 REGISTER_DEVICE(crt_amber_descriptor, []() {
     return std::make_unique<GenericCRT>(CRTPreset::MonochromeAmber);
+})
+
+static const DeviceDescriptor direct_output_descriptor = {
+    "direct_output",
+    "Direct Output",
+    "Flat display — clean output with no CRT effects",
+    PortType::VIDEO_COMPOSITE,
+    false
+};
+
+REGISTER_DEVICE(direct_output_descriptor, []() {
+    return std::make_unique<GenericCRT>(CRTPreset::DirectOutput);
 })

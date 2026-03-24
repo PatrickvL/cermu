@@ -52,6 +52,7 @@ uniform float Brightness;     // multiplier, 1.0 = neutral
 uniform float Contrast;       // multiplier, 1.0 = neutral
 uniform float Gamma;          // display gamma, typically 2.2
 uniform int   MaskType;       // 0=shadow mask, 1=aperture grille, 2=slot mask, 3=mono, 4=none
+uniform vec3  PhosphorTint;   // Phosphor color for monochrome displays (e.g. green, amber)
 out vec4 Out_Color;
 
 // Barrel distortion for CRT screen curvature.
@@ -130,6 +131,12 @@ void main() {
         color *= mix(vec3(1.0), mask, mask_strength);
     }
 
+    // Monochrome phosphor — convert to luminance and apply tint
+    if (MaskType == 3) {
+        float luma = dot(color, vec3(0.299, 0.587, 0.114));
+        color = vec3(luma) * PhosphorTint;
+    }
+
     // Brightness and contrast
     color = (color - 0.5) * Contrast + 0.5;
     color *= Brightness;
@@ -164,6 +171,7 @@ struct CRTPostProcess {
     GLint loc_contrast       = -1;
     GLint loc_gamma          = -1;
     GLint loc_mask_type      = -1;
+    GLint loc_phosphor_tint  = -1;
 };
 
 // ============================================================================
@@ -232,6 +240,7 @@ inline bool create(CRTPostProcess* p, int w, int h) {
     p->loc_contrast      = gl_api::glGetUniformLocation(p->shader, "Contrast");
     p->loc_gamma         = gl_api::glGetUniformLocation(p->shader, "Gamma");
     p->loc_mask_type     = gl_api::glGetUniformLocation(p->shader, "MaskType");
+    p->loc_phosphor_tint = gl_api::glGetUniformLocation(p->shader, "PhosphorTint");
 
     // Set texture unit (always 0)
     gl_api::glUseProgram(p->shader);
@@ -298,13 +307,15 @@ inline int mask_type_from_technology(int technology) {
 /// @param contrast     Contrast multiplier
 /// @param gamma        Display gamma
 /// @param mask_type    Mask type (0=shadow, 1=aperture, 2=slot, 3=mono, 4=none)
+/// @param tint_r/g/b   Phosphor tint for monochrome displays (1,1,1 = no tint)
 inline void render(CRTPostProcess* p,
                    GLuint input_tex,
                    float input_w, float input_h,
                    float output_w, float output_h,
                    float curvature, float scanline_gap, float dot_pitch,
                    float brightness, float contrast, float gamma,
-                   int mask_type) {
+                   int mask_type,
+                   float tint_r = 1.0f, float tint_g = 1.0f, float tint_b = 1.0f) {
     if (!p->shader || !p->fbo) return;
 
     // Ensure FBO size matches output
@@ -334,6 +345,7 @@ inline void render(CRTPostProcess* p,
     gl_api::glUniform1f(p->loc_contrast, contrast);
     gl_api::glUniform1f(p->loc_gamma, gamma);
     gl_api::glUniform1i(p->loc_mask_type, mask_type);
+    gl_api::glUniform3f(p->loc_phosphor_tint, tint_r, tint_g, tint_b);
 
     // Bind input texture to unit 0
     gl_api::glActiveTexture(GL_TEXTURE0);

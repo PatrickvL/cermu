@@ -222,9 +222,18 @@ protected:
     vector_shader::PhosphorPersistence vector_persist_{};
 
     /// CRT post-processing — barrel distortion, scanlines, shadow mask, gamma.
-    /// Applied to non-stream texture paths (CPU fallback + vector persistence).
+    /// Applied as the final display stage for all raster paths.
     crt_shader::CRTPostProcess crt_post_{};
     bool      use_crt_shader_           = true;  ///< Enable CRT post-processing
+
+    /// Signal reconstruction FBO — intermediate render target for stream/indexed
+    /// shaders.  The signal output is rendered here before CRT post-processing.
+    GLuint    signal_fbo_               = 0;
+    GLuint    signal_fbo_tex_           = 0;
+    GLuint    signal_quad_vao_          = 0;     ///< Fullscreen quad for FBO rendering
+    GLuint    signal_quad_vbo_          = 0;
+    int       signal_fbo_w_             = 0;
+    int       signal_fbo_h_             = 0;
 
     /// Video signal type of the active system (cached from System::get_video_signal_type()).
     VideoSignalType active_signal_type_       = VideoSignalType::Composite;
@@ -315,6 +324,10 @@ protected:
     /// Speaker simulation filter chain (applied when display has built-in speakers).
     SpeakerSimulation speaker_sim_;
     bool use_speaker_sim_            = true;  ///< Enable speaker simulation
+
+    /// Cached from display_device_->has_builtin_speakers() — safe for the
+    /// audio callback to read without dereferencing display_device_.
+    std::atomic<bool> display_has_speakers_{false};
 
 public:
     EmulatorHost();
@@ -548,6 +561,8 @@ protected:
      * Free framebuffer arrays and associated GL textures.
      */
     void free_framebuffer();
+
+
 
     // ========================================================================
     // Threading (generic)

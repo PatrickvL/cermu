@@ -101,6 +101,11 @@ private:
     void teardown_current_system();
     void render_display_settings();
 
+    /// Re-scan ports and owned devices for the active DisplayDevice.
+    /// Locks the SDL audio device to prevent the audio callback from
+    /// seeing a stale display_device_ pointer mid-swap.
+    void refresh_display_device();
+
     /// Cached window title — avoids SDL_SetWindowTitle on every frame.
     std::string last_window_title_;
 

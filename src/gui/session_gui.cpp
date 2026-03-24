@@ -426,6 +426,12 @@ void SessionGUI::update_frame() {
 
 void SessionGUI::render_frame() {
     begin_frame();
+
+    // Re-scan for the active display device each frame.
+    // Port device swaps (via the port icon popup) destroy the old device
+    // and attach a new one without notifying EmulatorHost, so the cached
+    // display_device_ pointer can go stale.
+    refresh_display_device();
     
     // Only render dialog if it's actually open
     if (system_selection_dialog_.is_open()) {
@@ -1267,12 +1273,15 @@ void SessionGUI::render_screen() {
             auto& dc = display_characteristics_;
             int mask = crt_shader::mask_type_from_technology(
                 static_cast<int>(dc.technology));
+            float pr, pg, pb;
+            phosphor_tint_rgb(dc.phosphor, pr, pg, pb);
             crt_shader::render(&crt_post_, vector_persist_.texture,
                                static_cast<float>(fb_width_),
                                static_cast<float>(fb_height_),
                                display_w, display_h,
                                dc.curvature, dc.scanline_gap, dc.dot_pitch_mm,
-                               dc.brightness, dc.contrast, dc.gamma, mask);
+                               dc.brightness, dc.contrast, dc.gamma, mask,
+                               pr, pg, pb);
             final_tex = crt_post_.texture;
         }
 
@@ -1293,48 +1302,144 @@ void SessionGUI::render_screen() {
         // Texture-based display (stream / indexed / CPU)
         // ================================================================
 
-        // Apply CRT post-processing to non-stream textures
+        // When CRT post-processing is enabled for stream/indexed paths,
+        // pre-render the signal output to an FBO so the CRT shader can
+        // process it (phosphor tint, barrel distortion, scanlines, etc.).
+        bool use_crt = use_crt_shader_ && crt_post_.shader;
+        bool needs_signal_fbo = use_crt && (use_stream || use_rgb_stream || use_indexed_shader);
+
+        if (needs_signal_fbo && signal_fbo_ && signal_fbo_tex_) {
+            // Resize signal FBO if dimensions changed
+            int sw = fb_width_, sh = fb_height_;
+            if (sw != signal_fbo_w_ || sh != signal_fbo_h_) {
+                signal_fbo_w_ = sw;
+                signal_fbo_h_ = sh;
+                glBindTexture(GL_TEXTURE_2D, signal_fbo_tex_);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, sw, sh, 0,
+                             GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+                glBindTexture(GL_TEXTURE_2D, 0);
+                // Update quad vertices
+                struct QuadVertex { float x, y, u, v; uint32_t col; };
+                QuadVertex quad[6] = {
+                    {0, 0,             0, 0, 0xFFFFFFFF},
+                    {(float)sw, 0,     1, 0, 0xFFFFFFFF},
+                    {(float)sw, (float)sh, 1, 1, 0xFFFFFFFF},
+                    {0, 0,             0, 0, 0xFFFFFFFF},
+                    {(float)sw, (float)sh, 1, 1, 0xFFFFFFFF},
+                    {0, (float)sh,     0, 1, 0xFFFFFFFF},
+                };
+                gl_api::glBindBuffer(GL_ARRAY_BUFFER, signal_quad_vbo_);
+                gl_api::glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_DYNAMIC_DRAW);
+                gl_api::glBindBuffer(GL_ARRAY_BUFFER, 0);
+            }
+
+            // Save GL state
+            GLint prev_fbo = 0, prev_viewport[4];
+            glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+            glGetIntegerv(GL_VIEWPORT, prev_viewport);
+
+            // Render stream/indexed shader into signal FBO
+            gl_api::glBindFramebuffer(GL_FRAMEBUFFER, signal_fbo_);
+            glViewport(0, 0, sw, sh);
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+
+            // Set up an ortho projection matching the FBO dimensions.
+            // Use standard GL orientation (T=sh, B=0) so scanline 0 is stored
+            // at texture v=0 — matching the CRT shader's sampling convention.
+            float L = 0, R = (float)sw, T = (float)sh, B = 0;
+            const float ortho[4][4] = {
+                { 2.0f/(R-L),   0.0f,         0.0f,   0.0f },
+                { 0.0f,         2.0f/(T-B),   0.0f,   0.0f },
+                { 0.0f,         0.0f,        -1.0f,   0.0f },
+                { (R+L)/(L-R),  (T+B)/(B-T),  0.0f,   1.0f },
+            };
+
+            // Select and configure shader
+            if (use_rgb_stream) {
+                gl_api::glUseProgram(rgb_stream_shader_);
+                gl_api::glUniformMatrix4fv(rgb_stream_loc_proj_, 1, GL_FALSE, &ortho[0][0]);
+                gl_api::glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, rgb_stream_texture_);
+            } else if (use_stream) {
+                gl_api::glUseProgram(stream_shader_);
+                gl_api::glUniformMatrix4fv(stream_loc_proj_, 1, GL_FALSE, &ortho[0][0]);
+                gl_api::glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, stream_texture_);
+                gl_api::glActiveTexture(GL_TEXTURE1);
+                glBindTexture(GL_TEXTURE_2D, palette_texture_);
+                gl_api::glActiveTexture(GL_TEXTURE0);
+            } else if (use_indexed_shader) {
+                gl_api::glUseProgram(indexed_shader_);
+                gl_api::glUniformMatrix4fv(indexed_loc_proj_, 1, GL_FALSE, &ortho[0][0]);
+                gl_api::glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, display_tex);
+                gl_api::glActiveTexture(GL_TEXTURE1);
+                glBindTexture(GL_TEXTURE_2D, palette_texture_);
+                gl_api::glActiveTexture(GL_TEXTURE0);
+            }
+
+            // Draw fullscreen quad
+            gl_api::glBindVertexArray(signal_quad_vao_);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+            gl_api::glBindVertexArray(0);
+
+            gl_api::glUseProgram(0);
+            gl_api::glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
+            glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
+
+            // Now the signal FBO texture contains the reconstructed display.
+            // Feed it through CRT post-processing.
+            display_tex = signal_fbo_tex_;
+        }
+
+        // Apply CRT post-processing
         GLuint crt_output_tex = 0;
-        bool use_crt = use_crt_shader_ && crt_post_.shader
-                       && !use_stream && !use_rgb_stream;
         if (use_crt) {
             auto& dc = display_characteristics_;
             int mask = crt_shader::mask_type_from_technology(
                 static_cast<int>(dc.technology));
+            float pr, pg, pb;
+            phosphor_tint_rgb(dc.phosphor, pr, pg, pb);
             crt_shader::render(&crt_post_, display_tex,
                                static_cast<float>(fb_width_),
                                static_cast<float>(fb_height_),
                                display_w, display_h,
                                dc.curvature, dc.scanline_gap, dc.dot_pitch_mm,
-                               dc.brightness, dc.contrast, dc.gamma, mask);
+                               dc.brightness, dc.contrast, dc.gamma, mask,
+                               pr, pg, pb);
             crt_output_tex = crt_post_.texture;
         }
 
-        ImDrawList* draw_list = (use_indexed_shader || use_stream || use_rgb_stream)
-                                ? ImGui::GetWindowDrawList() : nullptr;
-        if (use_rgb_stream) {
-            RGBStreamShaderCallbackData cb = {
-                rgb_stream_shader_, rgb_stream_loc_proj_, rgb_stream_texture_
-            };
-            draw_list->AddCallback(rgb_stream_shader_bind_callback, &cb, sizeof(cb));
-        } else if (use_stream) {
-            StreamShaderCallbackData cb = {
-                stream_shader_, stream_loc_proj_, palette_texture_, stream_texture_
-            };
-            draw_list->AddCallback(stream_shader_bind_callback, &cb, sizeof(cb));
-        } else if (use_indexed_shader) {
-            IndexedShaderCallbackData cb = { indexed_shader_, indexed_loc_proj_, palette_texture_ };
-            draw_list->AddCallback(indexed_shader_bind_callback, &cb, sizeof(cb));
+        // When we pre-rendered to the signal FBO, display_tex is now the
+        // final CRT output — no ImGui draw callbacks needed.
+        if (!needs_signal_fbo) {
+            ImDrawList* draw_list = (use_indexed_shader || use_stream || use_rgb_stream)
+                                    ? ImGui::GetWindowDrawList() : nullptr;
+            if (use_rgb_stream) {
+                RGBStreamShaderCallbackData cb = {
+                    rgb_stream_shader_, rgb_stream_loc_proj_, rgb_stream_texture_
+                };
+                draw_list->AddCallback(rgb_stream_shader_bind_callback, &cb, sizeof(cb));
+            } else if (use_stream) {
+                StreamShaderCallbackData cb = {
+                    stream_shader_, stream_loc_proj_, palette_texture_, stream_texture_
+                };
+                draw_list->AddCallback(stream_shader_bind_callback, &cb, sizeof(cb));
+            } else if (use_indexed_shader) {
+                IndexedShaderCallbackData cb = { indexed_shader_, indexed_loc_proj_, palette_texture_ };
+                draw_list->AddCallback(indexed_shader_bind_callback, &cb, sizeof(cb));
+            }
         }
 
-        // Set cursor position and render from the last-uploaded texture
+        // Set cursor position and render
         ImGui::SetCursorPos(ImVec2(pos_x, pos_y));
         ImGui::Image((ImTextureID)(intptr_t)(use_crt ? crt_output_tex : display_tex),
                     ImVec2(display_w, display_h));
 
         // Restore ImGui's default shader after our custom draw
-        if (use_indexed_shader || use_stream || use_rgb_stream) {
-            draw_list->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
+        if (!needs_signal_fbo && (use_indexed_shader || use_stream || use_rgb_stream)) {
+            ImGui::GetWindowDrawList()->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
         }
 
         // Store display rect in SDL window coordinates for peripheral devices
@@ -1455,9 +1560,9 @@ void SessionGUI::render_display_settings() {
     ImGui::Text("Monitor: %s", display_device_->get_name());
 
     // Combo to switch between available display presets
-    static const char* preset_ids[]   = {"crt_tv", "crt_1702", "crt_rgb", "crt_green", "crt_amber"};
-    static const char* preset_names[] = {"Color TV", "Commodore 1702", "RGB Monitor", "Green Monitor", "Amber Monitor"};
-    static constexpr int preset_count = 5;
+    static const char* preset_ids[]   = {"direct_output", "crt_tv", "crt_1702", "crt_rgb", "crt_green", "crt_amber"};
+    static const char* preset_names[] = {"Direct Output", "Color TV", "Commodore 1702", "RGB Monitor", "Green Monitor", "Amber Monitor"};
+    static constexpr int preset_count = 6;
 
     int current_preset = -1;
     for (int i = 0; i < preset_count; i++) {
@@ -1468,13 +1573,24 @@ void SessionGUI::render_display_settings() {
     }
 
     if (ImGui::Combo("Preset", &current_preset, preset_names, preset_count)) {
-        if (current_preset >= 0 && current_preset < preset_count) {
-            // Replace the display device in the system's owned devices
-            auto new_dev = DeviceRegistry::instance().create_device(preset_ids[current_preset]);
-            if (new_dev && system_) {
-                auto* new_display = dynamic_cast<DisplayDevice*>(new_dev.get());
-                if (new_display) {
-                    // Remove old display device from owned_devices_
+        if (current_preset >= 0 && current_preset < preset_count && system_) {
+            // Find the port that has the current display attached (if any)
+            int display_port_idx = -1;
+            const auto& ports = system_->get_ports();
+            for (int i = 0; i < static_cast<int>(ports.size()); i++) {
+                if (ports[i]->get_attached_device() == display_device_) {
+                    display_port_idx = i;
+                    break;
+                }
+            }
+
+            if (display_port_idx >= 0) {
+                // Port-attached display: proper detach-old / create-new / attach cycle
+                system_->attach_device_to_port(display_port_idx, preset_ids[current_preset]);
+            } else {
+                // Passive owned device (not port-attached): swap in owned_devices_
+                auto new_dev = DeviceRegistry::instance().create_device(preset_ids[current_preset]);
+                if (new_dev) {
                     auto& devices = system_->get_owned_devices_mutable();
                     devices.erase(
                         std::remove_if(devices.begin(), devices.end(),
@@ -1482,12 +1598,12 @@ void SessionGUI::render_display_settings() {
                                            return p.get() == display_device_;
                                        }),
                         devices.end());
-                    // Add new one and update cached pointer
-                    display_device_ = new_display;
-                    display_characteristics_ = new_display->get_display_characteristics();
                     devices.push_back(std::move(new_dev));
                 }
             }
+            // Re-scan ports/owned devices to update cached pointers.
+            // refresh_display_device() also auto-toggles CRT post-processing.
+            refresh_display_device();
         }
     }
 
@@ -1556,6 +1672,42 @@ void SessionGUI::render_display_settings() {
     }
 
     ImGui::End();
+}
+
+void SessionGUI::refresh_display_device() {
+    if (!system_) return;
+
+    // Scan ports first (port-attached displays take priority)
+    DisplayDevice* found = nullptr;
+    for (const auto& port : system_->get_ports()) {
+        auto* dev = port->get_attached_device();
+        if (dev) {
+            auto* dd = dynamic_cast<DisplayDevice*>(dev);
+            if (dd) { found = dd; break; }
+        }
+    }
+    // Fall back to passive owned devices
+    if (!found) {
+        for (const auto& dev : system_->get_owned_devices()) {
+            auto* dd = dynamic_cast<DisplayDevice*>(dev.get());
+            if (dd) { found = dd; break; }
+        }
+    }
+
+    if (found == display_device_) return;  // no change
+
+    display_device_ = found;
+    display_characteristics_ = found
+        ? found->get_display_characteristics()
+        : DisplayCharacteristics{};
+    display_has_speakers_.store(
+        found ? found->has_builtin_speakers() : false,
+        std::memory_order_relaxed);
+
+    // Auto-toggle CRT post-processing based on display technology
+    auto tech = display_characteristics_.technology;
+    use_crt_shader_ = (tech != DisplayTechnology::LCD
+                    && tech != DisplayTechnology::LED);
 }
 
 // ============================================================================
@@ -1695,6 +1847,16 @@ void SessionGUI::allocate_framebuffer() {
     }
     if (!display_device_) {
         display_characteristics_ = DisplayCharacteristics{};  // defaults
+    }
+    display_has_speakers_.store(
+        display_device_ ? display_device_->has_builtin_speakers() : false,
+        std::memory_order_relaxed);
+
+    // Auto-set CRT post-processing based on initial display technology
+    {
+        auto tech = display_characteristics_.technology;
+        use_crt_shader_ = (tech != DisplayTechnology::LCD
+                        && tech != DisplayTechnology::LED);
     }
 
     // Create double-buffered OpenGL textures.
@@ -1864,13 +2026,61 @@ void SessionGUI::allocate_framebuffer() {
                 break;
         }
 
-        // Create CRT post-processing FBO (for non-stream texture paths).
+        // Create CRT post-processing FBO (for all raster display paths).
+        // Always create so CRT effects are available when the user switches
+        // to a CRT monitor preset at runtime.
         // Initial size matches the framebuffer; resized to display dimensions on render.
-        if (use_crt_shader_) {
+        {
             int crt_w = fb_width_  > 0 ? fb_width_  : 1024;
             int crt_h = fb_height_ > 0 ? fb_height_ : 1024;
             if (crt_shader::create(&crt_post_, crt_w, crt_h)) {
                 printf("CRT post-processing shader compiled and linked\n");
+
+                // Create signal reconstruction FBO — stream/indexed shaders
+                // render here before CRT post-processing is applied.
+                signal_fbo_w_ = crt_w;
+                signal_fbo_h_ = crt_h;
+                glGenTextures(1, &signal_fbo_tex_);
+                glBindTexture(GL_TEXTURE_2D, signal_fbo_tex_);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, crt_w, crt_h, 0,
+                             GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+                glBindTexture(GL_TEXTURE_2D, 0);
+
+                gl_api::glGenFramebuffers(1, &signal_fbo_);
+                gl_api::glBindFramebuffer(GL_FRAMEBUFFER, signal_fbo_);
+                gl_api::glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                               GL_TEXTURE_2D, signal_fbo_tex_, 0);
+                gl_api::glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+                // Fullscreen quad VAO/VBO for FBO rendering (ImGui vertex layout)
+                // Position (x,y), UV (u,v), Color (RGBA bytes packed as uint32)
+                struct QuadVertex { float x, y, u, v; uint32_t col; };
+                QuadVertex quad[6] = {
+                    {0, 0,                           0, 0, 0xFFFFFFFF},
+                    {(float)crt_w, 0,                1, 0, 0xFFFFFFFF},
+                    {(float)crt_w, (float)crt_h,     1, 1, 0xFFFFFFFF},
+                    {0, 0,                           0, 0, 0xFFFFFFFF},
+                    {(float)crt_w, (float)crt_h,     1, 1, 0xFFFFFFFF},
+                    {0, (float)crt_h,                0, 1, 0xFFFFFFFF},
+                };
+                gl_api::glGenVertexArrays(1, &signal_quad_vao_);
+                gl_api::glGenBuffers(1, &signal_quad_vbo_);
+                gl_api::glBindVertexArray(signal_quad_vao_);
+                gl_api::glBindBuffer(GL_ARRAY_BUFFER, signal_quad_vbo_);
+                gl_api::glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_DYNAMIC_DRAW);
+                // Position: attr 0, UV: attr 1, Color: attr 2
+                gl_api::glEnableVertexAttribArray(0);
+                gl_api::glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(QuadVertex), (void*)0);
+                gl_api::glEnableVertexAttribArray(1);
+                gl_api::glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(QuadVertex), (void*)(2*sizeof(float)));
+                gl_api::glEnableVertexAttribArray(2);
+                gl_api::glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(QuadVertex), (void*)(4*sizeof(float)));
+                gl_api::glBindVertexArray(0);
+                gl_api::glBindBuffer(GL_ARRAY_BUFFER, 0);
             } else {
                 use_crt_shader_ = false;
                 printf("CRT post-processing shader failed — disabled\n");

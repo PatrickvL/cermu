@@ -1697,7 +1697,7 @@ C64System::get_default_peripherals() const {
         { PORT_CONTROL2,   "joystick"   },  // Control Port 2 — standard game port
         { PORT_IEC_SERIAL, "1541"       },  // IEC Serial Bus — 1541 disk drive
         { PORT_CASSETTE,   "datasette"  },  // Cassette Port  — datasette (1530)
-        { PORT_VIDEO,      "crt_tv"     },  // Video Out      — Color TV
+        { PORT_VIDEO,      "direct_output" },  // Video Out  — Direct Output (no CRT effects)
     };
 }
 
