@@ -14,7 +14,7 @@
 
 #include "core/signal/sync_types.hpp"
 #include "core/signal/video_flags.hpp"
-#include "core/signal/video_stream.hpp"
+#include "core/signal/video_out.hpp"
 #include "core/signal/video_sample_types.hpp"
 #include "core/cermu.hpp"
 
@@ -361,7 +361,7 @@ private:
 // Concrete port type aliases — only these names appear in board headers
 // ============================================================================
 
-using CompositeVideoPort = VideoPort<VideoStream<CompositeVideoSample>>;
-using RGBVideoPort       = VideoPort<VideoStream<RGBVideoSample>>;
-using RGBIVideoPort      = VideoPort<VideoStream<RGBIVideoSample>>;
-using VectorVideoPort    = VideoPort<VideoStream<VectorVideoSample>>;
+using CompositeVideoPort = VideoPort<VideoOut<CompositeVideoSample>>;
+using RGBVideoPort       = VideoPort<VideoOut<RGBVideoSample>>;
+using RGBIVideoPort      = VideoPort<VideoOut<RGBIVideoSample>>;
+using VectorVideoPort    = VideoPort<VideoOut<VectorVideoSample>>;

@@ -3,7 +3,7 @@
 #include <cstdint>
 
 #include "chip/video/video_chip_base.hpp"
-#include "core/signal/composite_video_stream.hpp"
+#include "core/signal/composite_video_out.hpp"
 #include "core/system_lines.hpp"
 
 struct AudioPort;
@@ -285,8 +285,8 @@ struct vic_base_t : public VideoChipBase {
     uint8_t color_ram[1024] = {};
 
     // Video stream output (non-owning pointer, set by system/board)
-    CompositeVideoStream* video_stream_ = nullptr;
-    void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
+    CompositeVideoOut* video_stream_ = nullptr;
+    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
 
     // Maintained analog signal flags — adjusted at cycle boundaries,
     // used directly in drive() calls (HSync on cycle 0, VSync during vblank).

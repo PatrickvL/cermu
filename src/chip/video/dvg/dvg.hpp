@@ -33,7 +33,7 @@
  *   HALT stops the state machine; VGGO restarts from address 0.
  *
  * Signal output:
- *   The DVG emits VectorVideoSample signals via a VectorVideoStream.
+ *   The DVG emits VectorVideoSample signals via a VectorVideoOut.
  *   Each sample carries {x, y, intensity, flags} describing the beam
  *   state.  Consecutive samples with BeamOn form visible line segments;
  *   the GPU shader (vector_shader.hpp) expands these into beam quads
@@ -45,7 +45,7 @@
  */
 
 #include "chip/video/video_chip_base.hpp"
-#include "core/signal/vector_video_stream.hpp"
+#include "core/signal/vector_video_out.hpp"
 #include <cstdint>
 #include <cstring>
 #include <algorithm>
@@ -147,7 +147,7 @@ struct dvg_t : public VideoChipBase {
 
     /// Set the output video stream for vector signals.
     /// The stream is owned by the system's VectorVideoPort.
-    void set_stream(VectorVideoStream* stream) {
+    void set_stream(VectorVideoOut* stream) {
         stream_ = stream;
     }
 
@@ -219,7 +219,7 @@ private:
     const uint8_t*   vec_rom_  = nullptr;    // Pointer to vector ROM
     uint16_t         vec_rom_size_ = 0;      // Size of vector ROM in bytes
     uint16_t         rom_word_offset_ = 0x800; // DVG word address where ROM begins
-    VectorVideoStream* stream_ = nullptr;  // Output video stream
+    VectorVideoOut* stream_ = nullptr;  // Output video stream
 
     // ========================================================================
     // Internal — opcode fetch and decode

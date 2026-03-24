@@ -34,7 +34,7 @@
 #include <cstdint>
 
 #include "chip/video/video_chip_base.hpp"
-#include "core/signal/composite_video_stream.hpp"
+#include "core/signal/composite_video_out.hpp"
 #include "core/system_lines.hpp"
 #include "utils/ring_buffer.hpp"
 
@@ -576,8 +576,8 @@ struct ted7360_t : public VideoChipBase {
     uint8_t*               color_line_ = nullptr;
 
     // Video stream output (non-owning pointer, set by system/board)
-    CompositeVideoStream* video_stream_ = nullptr;
-    void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
+    CompositeVideoOut* video_stream_ = nullptr;
+    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
 
     // Maintained analog signal flags — adjusted at cycle boundaries.
     // HSync on cycle 0, VSync during vblank, cleared on cycle 1.

@@ -43,7 +43,7 @@
  */
 
 #include "chip/video/video_chip_base.hpp"
-#include "core/signal/vector_video_stream.hpp"
+#include "core/signal/vector_video_out.hpp"
 #include <cstdint>
 #include <cstring>
 #include <algorithm>
@@ -129,7 +129,7 @@ struct avg_t : public VideoChipBase {
         rom_word_offset_ = rom_word_offset;
     }
 
-    void set_stream(VectorVideoStream* stream) {
+    void set_stream(VectorVideoOut* stream) {
         stream_ = stream;
     }
 
@@ -194,7 +194,7 @@ private:
     const uint8_t*   vec_rom_  = nullptr;
     uint16_t         vec_rom_size_ = 0;
     uint16_t         rom_word_offset_ = 0x800;
-    VectorVideoStream* stream_ = nullptr;
+    VectorVideoOut* stream_ = nullptr;
 
     // ========================================================================
     // Internal — opcode fetch and decode

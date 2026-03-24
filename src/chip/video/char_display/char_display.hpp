@@ -20,7 +20,7 @@
 // it takes non-owning pointers updated by the system before each frame.
 // ============================================================================
 
-#include "core/signal/composite_video_stream.hpp"
+#include "core/signal/composite_video_out.hpp"
 #include "core/signal/video_flags.hpp"
 #include "utils/charset_renderer.hpp"
 
@@ -39,7 +39,7 @@ struct CharDisplayColorAttr {
 
 struct CharDisplayGenerator {
     // --- Configuration (set once at init) ---
-    void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
+    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
 
     void set_geometry(int text_cols, int text_rows,
                       int char_width, int char_height,
@@ -69,7 +69,7 @@ struct CharDisplayGenerator {
 private:
     void drive_stream();
 
-    CompositeVideoStream* video_stream_ = nullptr;
+    CompositeVideoOut* video_stream_ = nullptr;
     const uint8_t*        vram_         = nullptr;
     const uint8_t*        char_rom_     = nullptr;
     CharDisplayColorAttr  color_attr_   = {};

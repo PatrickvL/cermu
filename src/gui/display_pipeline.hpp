@@ -47,7 +47,7 @@ public:
 template<typename SampleT>
 class DisplayPipeline : public DisplayPipelineBase {
 public:
-    using PortType = VideoPort<VideoStream<SampleT>>;
+    using PortType = VideoPort<VideoOut<SampleT>>;
 
     DisplayPipeline() {
         buf_[0] = std::make_unique<SampleT[]>(MAX_STREAM_SAMPLES);

@@ -23,7 +23,7 @@
 //   VRAM rows 30-31: top score strip    → screen rows 0-1
 // ============================================================================
 
-#include "core/signal/composite_video_stream.hpp"
+#include "core/signal/composite_video_out.hpp"
 #include "core/signal/video_flags.hpp"
 #include "utils/tile_decoder.hpp"
 
@@ -47,7 +47,7 @@ namespace namco_video_constants {
 
 struct NamcoVideo {
     // --- Configuration (set once at init) ---
-    void set_stream(CompositeVideoStream* s) { video_stream_ = s; }
+    void set_stream(CompositeVideoOut* s) { video_stream_ = s; }
     void set_char_rom(const uint8_t* rom, int size) {
         char_rom_ = rom;
         char_count_ = size / namco_video_constants::BYTES_PER_TILE;
@@ -64,7 +64,7 @@ struct NamcoVideo {
 private:
     void drive_stream();
 
-    CompositeVideoStream* video_stream_ = nullptr;
+    CompositeVideoOut* video_stream_ = nullptr;
     const uint8_t*        char_rom_     = nullptr;
     const uint8_t*        colortable_   = nullptr;
     const uint8_t*        vram_         = nullptr;
