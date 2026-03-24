@@ -1255,14 +1255,21 @@ void SessionGUI::render_screen() {
         // Texture-based display (stream / indexed / CPU)
         // ================================================================
 
-        // When CRT post-processing is enabled for stream/indexed paths,
-        // pre-render the signal output to an FBO so the CRT shader can
-        // process it (phosphor tint, barrel distortion, scanlines, etc.).
+        // Determine rendering path:
+        //   - Signal decoder with CRT → render_to_texture() (decoder owns FBO)
+        //   - Signal decoder without CRT → bind_for_imgui() (inline in ImGui draw list)
+        //   - Indexed shader with CRT → legacy signal FBO path
+        //   - Indexed/CPU without CRT → direct texture display
         bool use_crt = use_crt_shader_ && crt_post_.shader;
-        bool needs_signal_fbo = use_crt && (use_stream || use_rgb_stream || use_indexed_shader);
+        bool decoder_fbo_path = use_crt && signal_decoder_ &&
+                                (use_stream || use_rgb_stream);
 
-        if (needs_signal_fbo && signal_fbo_ && signal_fbo_tex_) {
-            // Resize signal FBO if dimensions changed
+        if (decoder_fbo_path && signal_decoder_->ready()) {
+            // Decoder owns the FBO — render stream into its internal texture
+            display_tex = signal_decoder_->render_to_texture(fb_width_, fb_height_);
+        } else if (use_crt && use_indexed_shader &&
+                   signal_fbo_ && signal_fbo_tex_) {
+            // Indexed shader: legacy FBO path (until IndexedDecoder is created)
             int sw = fb_width_, sh = fb_height_;
             if (sw != signal_fbo_w_ || sh != signal_fbo_h_) {
                 signal_fbo_w_ = sw;
@@ -1271,7 +1278,6 @@ void SessionGUI::render_screen() {
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, sw, sh, 0,
                              GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
                 glBindTexture(GL_TEXTURE_2D, 0);
-                // Update quad vertices
                 struct QuadVertex { float x, y, u, v; uint32_t col; };
                 QuadVertex quad[6] = {
                     {0, 0,             0, 0, 0xFFFFFFFF},
@@ -1286,20 +1292,15 @@ void SessionGUI::render_screen() {
                 gl_api::glBindBuffer(GL_ARRAY_BUFFER, 0);
             }
 
-            // Save GL state
             GLint prev_fbo = 0, prev_viewport[4];
             glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
             glGetIntegerv(GL_VIEWPORT, prev_viewport);
 
-            // Render stream/indexed shader into signal FBO
             gl_api::glBindFramebuffer(GL_FRAMEBUFFER, signal_fbo_);
             glViewport(0, 0, sw, sh);
             glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT);
 
-            // Set up an ortho projection matching the FBO dimensions.
-            // Use standard GL orientation (T=sh, B=0) so scanline 0 is stored
-            // at texture v=0 — matching the CRT shader's sampling convention.
             float L = 0, R = (float)sw, T = (float)sh, B = 0;
             const float ortho[4][4] = {
                 { 2.0f/(R-L),   0.0f,         0.0f,   0.0f },
@@ -1307,31 +1308,23 @@ void SessionGUI::render_screen() {
                 { 0.0f,         0.0f,        -1.0f,   0.0f },
                 { (R+L)/(L-R),  (T+B)/(B-T),  0.0f,   1.0f },
             };
+            gl_api::glUseProgram(indexed_shader_);
+            gl_api::glUniformMatrix4fv(indexed_loc_proj_, 1, GL_FALSE, &ortho[0][0]);
+            gl_api::glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, display_tex);
+            gl_api::glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, palette_texture_);
+            gl_api::glActiveTexture(GL_TEXTURE0);
 
-            // Select and configure shader
-            if (signal_decoder_ && (use_rgb_stream || use_stream)) {
-                signal_decoder_->bind_for_fbo(sw, sh);
-            } else if (use_indexed_shader) {
-                gl_api::glUseProgram(indexed_shader_);
-                gl_api::glUniformMatrix4fv(indexed_loc_proj_, 1, GL_FALSE, &ortho[0][0]);
-                gl_api::glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, display_tex);
-                gl_api::glActiveTexture(GL_TEXTURE1);
-                glBindTexture(GL_TEXTURE_2D, palette_texture_);
-                gl_api::glActiveTexture(GL_TEXTURE0);
-            }
-
-            // Draw fullscreen quad
             gl_api::glBindVertexArray(signal_quad_vao_);
             glDrawArrays(GL_TRIANGLES, 0, 6);
             gl_api::glBindVertexArray(0);
 
             gl_api::glUseProgram(0);
             gl_api::glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
-            glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
+            glViewport(prev_viewport[0], prev_viewport[1],
+                       prev_viewport[2], prev_viewport[3]);
 
-            // Now the signal FBO texture contains the reconstructed display.
-            // Feed it through CRT post-processing.
             display_tex = signal_fbo_tex_;
         }
 
@@ -1345,9 +1338,9 @@ void SessionGUI::render_screen() {
                                                 display_characteristics_);
         }
 
-        // When we pre-rendered to the signal FBO, display_tex is now the
-        // final CRT output — no ImGui draw callbacks needed.
-        if (!needs_signal_fbo) {
+        // Non-FBO path: bind custom shader via ImGui draw callback
+        bool inline_path = !decoder_fbo_path && !use_crt;
+        if (inline_path) {
             ImDrawList* draw_list = (use_indexed_shader || use_stream || use_rgb_stream)
                                     ? ImGui::GetWindowDrawList() : nullptr;
             if (signal_decoder_ && (use_rgb_stream || use_stream)) {
@@ -1364,7 +1357,7 @@ void SessionGUI::render_screen() {
                     ImVec2(display_w, display_h));
 
         // Restore ImGui's default shader after our custom draw
-        if (!needs_signal_fbo && (use_indexed_shader || use_stream || use_rgb_stream)) {
+        if (inline_path && (use_indexed_shader || use_stream || use_rgb_stream)) {
             ImGui::GetWindowDrawList()->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
         }
 
