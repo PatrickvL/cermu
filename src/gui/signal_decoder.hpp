@@ -82,4 +82,12 @@ public:
 
     // True when create() succeeded and resources are valid.
     virtual bool ready() const = 0;
+
+    // Upload palette data (RGBA, up to 256 entries).
+    // Meaningful for indexed and composite decoders; default no-op for others.
+    virtual void upload_palette(const uint32_t* /*palette*/, int /*count*/) {}
+
+    // Palette texture (256×1 RGBA) owned or referenced by this decoder.
+    // Returns 0 if the decoder doesn't use a palette.
+    virtual GLuint palette_texture() const { return 0; }
 };

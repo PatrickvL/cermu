@@ -157,10 +157,6 @@ protected:
     bool      use_gpu_indexed_       = false;  ///< Active system uses indexed mode
     uint8_t*  index_framebuffer_     = nullptr; ///< Index buffer (emu thread writes)
     uint8_t*  index_snapshot_        = nullptr; ///< Snapshot (GUI thread reads)
-    GLuint    index_textures_[2]     = {};      ///< Double-buffered R8 textures
-    GLuint    palette_texture_       = 0;       ///< 256×1 RGBA palette texture
-    GLuint    indexed_shader_        = 0;       ///< Shader program for indexed rendering
-    GLint     indexed_loc_proj_      = -1;      ///< ProjMtx uniform location
     int       gpu_palette_size_      = 0;       ///< Number of palette entries
 
     // ========================================================================
@@ -480,33 +476,6 @@ protected:
      */
     void update_screen_texture(GLuint texture_id, int width, int height, 
                                const uint32_t* pixels);
-
-    /**
-     * Create an R8 OpenGL texture for GPU indexed rendering.
-     */
-    GLuint create_index_texture(int width, int height);
-
-    /**
-     * Update an R8 texture with new index data.
-     */
-    void update_index_texture(GLuint texture_id, int width, int height,
-                              const uint8_t* indices);
-
-    /**
-     * Create a 256×1 RGBA texture for the palette.
-     */
-    GLuint create_palette_texture();
-
-    /**
-     * Update the palette texture with new RGBA palette data.
-     */
-    void update_palette_texture(const uint32_t* palette, int count);
-
-    /**
-     * Compile the indexed palette shader program.
-     * Returns true on success.
-     */
-    bool compile_indexed_shader();
 
     /**
      * Clean up indexed rendering resources (shader, textures, buffers).

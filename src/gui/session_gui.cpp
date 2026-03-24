@@ -12,6 +12,7 @@
 #include "gui/signal_decoder.hpp"
 #include "gui/composite_stream_decoder.hpp"
 #include "gui/rgb_stream_decoder.hpp"
+#include "gui/indexed_stream_decoder.hpp"
 #include "gui/display_panel.hpp"
 #include "gui/port_icons.hpp"
 #include "gui/vfs_file_system.hpp"
@@ -42,43 +43,6 @@
 #define HAS_IMGUIFILEDIALOG 1
 #endif
 #endif
-
-// ============================================================================
-// GPU Indexed Palette Rendering — ImGui draw callback
-// ============================================================================
-
-struct IndexedShaderCallbackData {
-    GLuint shader;
-    GLint  loc_proj;
-    GLuint palette_tex;
-};
-
-static void indexed_shader_bind_callback(const ImDrawList*, const ImDrawCmd* cmd) {
-    auto* d = static_cast<const IndexedShaderCallbackData*>(cmd->UserCallbackData);
-
-    // Switch to indexed palette shader
-    gl_api::glUseProgram(d->shader);
-
-    // Compute the same ortho projection ImGui uses
-    ImDrawData* draw_data = ImGui::GetDrawData();
-    float L = draw_data->DisplayPos.x;
-    float R = draw_data->DisplayPos.x + draw_data->DisplaySize.x;
-    float T = draw_data->DisplayPos.y;
-    float B = draw_data->DisplayPos.y + draw_data->DisplaySize.y;
-    if (R == L || B == T) return;  // Zero-size guard (monitor transition)
-    const float ortho[4][4] = {
-        { 2.0f/(R-L),   0.0f,         0.0f,   0.0f },
-        { 0.0f,         2.0f/(T-B),   0.0f,   0.0f },
-        { 0.0f,         0.0f,        -1.0f,   0.0f },
-        { (R+L)/(L-R),  (T+B)/(B-T),  0.0f,   1.0f },
-    };
-    gl_api::glUniformMatrix4fv(d->loc_proj, 1, GL_FALSE, &ortho[0][0]);
-
-    // Bind palette texture to slot 1 (index texture goes to slot 0 via ImGui)
-    gl_api::glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, d->palette_tex);
-    gl_api::glActiveTexture(GL_TEXTURE0);
-}
 
 // ============================================================================
 // GPU Stream Reconstruction — ImGui draw callback
@@ -1116,16 +1080,17 @@ void SessionGUI::render_screen() {
                                     (use_stream_shader_ || use_rgb_stream_shader_))
                                 || (vector_stream_len_ > 0 && use_vector_shader_);
             if (!stream_uploaded) {
-                if (use_gpu_indexed_ && index_textures_[0]) {
-                    GLuint upload_tex = index_textures_[texture_write_idx_];
-                    update_index_texture(upload_tex, fb_width_, fb_height_, index_snapshot_);
-                    update_palette_texture(system_->get_gpu_palette_data(), gpu_palette_size_);
+                if (use_gpu_indexed_ && signal_decoder_ && signal_decoder_->ready()) {
+                    signal_decoder_->upload(index_snapshot_,
+                                            static_cast<uint32_t>(fb_width_) * fb_height_);
+                    signal_decoder_->upload_palette(
+                        system_->get_gpu_palette_data(), gpu_palette_size_);
                 } else if (fb_snapshot_ && screen_textures_[0]) {
                     GLuint upload_tex = screen_textures_[texture_write_idx_];
                     update_screen_texture(upload_tex, fb_width_, fb_height_, fb_snapshot_);
                 }
-            } else if (use_stream_shader_ && palette_texture_) {
-                update_palette_texture(system_->get_gpu_palette_data(), gpu_palette_size_);
+            } else if (use_stream_shader_ && signal_decoder_) {
+                signal_decoder_->upload_palette(system_->get_gpu_palette_data(), gpu_palette_size_);
             }
         }
         // -----------------------------------------------------------
@@ -1164,8 +1129,9 @@ void SessionGUI::render_screen() {
         // Stream shader — display from packed stream texture
         display_tex = stream_texture_;
         use_stream = true;
-    } else if (use_gpu_indexed_ && index_textures_[0]) {
-        display_tex = index_textures_[texture_write_idx_ ^ 1];
+    } else if (use_gpu_indexed_ && signal_decoder_ && signal_decoder_->ready()) {
+        auto* idx = static_cast<IndexedStreamDecoder*>(signal_decoder_.get());
+        display_tex = idx->index_texture();
         use_indexed_shader = true;
     } else if (screen_textures_[0]) {
         display_tex = screen_textures_[texture_write_idx_ ^ 1];
@@ -1258,74 +1224,14 @@ void SessionGUI::render_screen() {
         // Determine rendering path:
         //   - Signal decoder with CRT → render_to_texture() (decoder owns FBO)
         //   - Signal decoder without CRT → bind_for_imgui() (inline in ImGui draw list)
-        //   - Indexed shader with CRT → legacy signal FBO path
-        //   - Indexed/CPU without CRT → direct texture display
+        //   - CPU fallback without CRT → direct texture display
         bool use_crt = use_crt_shader_ && crt_post_.shader;
         bool decoder_fbo_path = use_crt && signal_decoder_ &&
-                                (use_stream || use_rgb_stream);
+                                (use_stream || use_rgb_stream || use_indexed_shader);
 
         if (decoder_fbo_path && signal_decoder_->ready()) {
-            // Decoder owns the FBO — render stream into its internal texture
+            // Decoder owns the FBO — render into its internal texture
             display_tex = signal_decoder_->render_to_texture(fb_width_, fb_height_);
-        } else if (use_crt && use_indexed_shader &&
-                   signal_fbo_ && signal_fbo_tex_) {
-            // Indexed shader: legacy FBO path (until IndexedDecoder is created)
-            int sw = fb_width_, sh = fb_height_;
-            if (sw != signal_fbo_w_ || sh != signal_fbo_h_) {
-                signal_fbo_w_ = sw;
-                signal_fbo_h_ = sh;
-                glBindTexture(GL_TEXTURE_2D, signal_fbo_tex_);
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, sw, sh, 0,
-                             GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-                glBindTexture(GL_TEXTURE_2D, 0);
-                struct QuadVertex { float x, y, u, v; uint32_t col; };
-                QuadVertex quad[6] = {
-                    {0, 0,             0, 0, 0xFFFFFFFF},
-                    {(float)sw, 0,     1, 0, 0xFFFFFFFF},
-                    {(float)sw, (float)sh, 1, 1, 0xFFFFFFFF},
-                    {0, 0,             0, 0, 0xFFFFFFFF},
-                    {(float)sw, (float)sh, 1, 1, 0xFFFFFFFF},
-                    {0, (float)sh,     0, 1, 0xFFFFFFFF},
-                };
-                gl_api::glBindBuffer(GL_ARRAY_BUFFER, signal_quad_vbo_);
-                gl_api::glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_DYNAMIC_DRAW);
-                gl_api::glBindBuffer(GL_ARRAY_BUFFER, 0);
-            }
-
-            GLint prev_fbo = 0, prev_viewport[4];
-            glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
-            glGetIntegerv(GL_VIEWPORT, prev_viewport);
-
-            gl_api::glBindFramebuffer(GL_FRAMEBUFFER, signal_fbo_);
-            glViewport(0, 0, sw, sh);
-            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT);
-
-            float L = 0, R = (float)sw, T = (float)sh, B = 0;
-            const float ortho[4][4] = {
-                { 2.0f/(R-L),   0.0f,         0.0f,   0.0f },
-                { 0.0f,         2.0f/(T-B),   0.0f,   0.0f },
-                { 0.0f,         0.0f,        -1.0f,   0.0f },
-                { (R+L)/(L-R),  (T+B)/(B-T),  0.0f,   1.0f },
-            };
-            gl_api::glUseProgram(indexed_shader_);
-            gl_api::glUniformMatrix4fv(indexed_loc_proj_, 1, GL_FALSE, &ortho[0][0]);
-            gl_api::glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, display_tex);
-            gl_api::glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_2D, palette_texture_);
-            gl_api::glActiveTexture(GL_TEXTURE0);
-
-            gl_api::glBindVertexArray(signal_quad_vao_);
-            glDrawArrays(GL_TRIANGLES, 0, 6);
-            gl_api::glBindVertexArray(0);
-
-            gl_api::glUseProgram(0);
-            gl_api::glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
-            glViewport(prev_viewport[0], prev_viewport[1],
-                       prev_viewport[2], prev_viewport[3]);
-
-            display_tex = signal_fbo_tex_;
         }
 
         // Apply post-processing (CRT or pass-through)
@@ -1343,11 +1249,8 @@ void SessionGUI::render_screen() {
         if (inline_path) {
             ImDrawList* draw_list = (use_indexed_shader || use_stream || use_rgb_stream)
                                     ? ImGui::GetWindowDrawList() : nullptr;
-            if (signal_decoder_ && (use_rgb_stream || use_stream)) {
+            if (signal_decoder_ && (use_rgb_stream || use_stream || use_indexed_shader)) {
                 signal_decoder_->bind_for_imgui(draw_list);
-            } else if (use_indexed_shader) {
-                IndexedShaderCallbackData cb = { indexed_shader_, indexed_loc_proj_, palette_texture_ };
-                draw_list->AddCallback(indexed_shader_bind_callback, &cb, sizeof(cb));
             }
         }
 
@@ -1807,21 +1710,30 @@ void SessionGUI::allocate_framebuffer() {
                fb_width_, fb_height_, screen_textures_[0], screen_textures_[1]);
 
         // GPU indexed palette rendering — if the system supports it, allocate
-        // R8 index buffers and textures, compile the palette shader, and hand
-        // the index buffer to the system so video chips write raw indices.
+        // R8 index buffers, create the IndexedStreamDecoder (owns shader,
+        // R8 texture, palette texture, FBO), and hand the index buffer to
+        // the system so video chips write raw indices.
         if (system_->supports_gpu_indexed_rendering()) {
             size_t idx_bytes = static_cast<size_t>(fb_width_) * fb_height_;
             index_framebuffer_ = new uint8_t[idx_bytes]();
             index_snapshot_    = new uint8_t[idx_bytes]();
-            index_textures_[0] = create_index_texture(fb_width_, fb_height_);
-            index_textures_[1] = create_index_texture(fb_width_, fb_height_);
-            palette_texture_   = create_palette_texture();
-            compile_indexed_shader();
             gpu_palette_size_ = system_->get_gpu_palette_size();
-            update_palette_texture(system_->get_gpu_palette_data(), gpu_palette_size_);
             system_->set_index_buffer(index_framebuffer_);
             use_gpu_indexed_ = true;
-            printf("GPU indexed palette rendering enabled (%d colors)\n", gpu_palette_size_);
+
+            // Create IndexedStreamDecoder as the initial signal_decoder_.
+            // If a stream decoder is created below (Composite/RGB), it will
+            // take over signal_decoder_ and the indexed path becomes inactive.
+            auto idx_dec = std::make_unique<IndexedStreamDecoder>(fb_width_, fb_height_);
+            if (idx_dec->create()) {
+                idx_dec->upload_palette(
+                    system_->get_gpu_palette_data(), gpu_palette_size_);
+                signal_decoder_ = std::move(idx_dec);
+                printf("GPU indexed palette rendering enabled (%d colors)\n",
+                       gpu_palette_size_);
+            } else {
+                printf("GPU indexed palette rendering FAILED\n");
+            }
         }
 
         // ================================================================
@@ -1837,9 +1749,6 @@ void SessionGUI::allocate_framebuffer() {
                     stream_snapshot_ = new uint8_t[MAX_STREAM_SAMPLES * 2]();
                     sync_snapshot_   = new SyncEvent[MAX_SYNC_EVENTS]();
 
-                    if (!palette_texture_)
-                        palette_texture_ = create_palette_texture();
-
                     // Select shader variant
                     CompositeShaderVariant variant = CompositeShaderVariant::Standard;
                     if (active_signal_type_ == VideoSignalType::SVideo)
@@ -1847,8 +1756,8 @@ void SessionGUI::allocate_framebuffer() {
                     else if (active_signal_type_ == VideoSignalType::CompositeArtifact)
                         variant = CompositeShaderVariant::Artifact;
 
-                    auto decoder = std::make_unique<CompositeStreamDecoder>(
-                        variant, palette_texture_);
+                    // Decoder creates and owns its own palette texture.
+                    auto decoder = std::make_unique<CompositeStreamDecoder>(variant);
                     if (decoder->create()) {
                         // Mirror into legacy fields so existing dispatch code
                         // continues to work during incremental migration.
