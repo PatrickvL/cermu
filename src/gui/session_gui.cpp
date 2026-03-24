@@ -1,6 +1,5 @@
 #include "gui/session_gui.hpp"
 #include "gui/gl_api.hpp"
-#include "gui/shader/crt_shader.hpp"
 #include "gui/display_pipeline.hpp"
 #include "gui/decoder/signal_decoder.hpp"
 #include "gui/decoder/composite_signal_decoder.hpp"
@@ -1069,7 +1068,7 @@ void SessionGUI::render_screen() {
         // Determine rendering path:
         //   - Signal decoder with CRT → render_to_texture() (decoder owns FBO)
         //   - Signal decoder without CRT → bind_for_imgui() (inline in ImGui draw list)
-        bool use_crt = use_crt_shader_ && crt_post_.shader;
+        bool use_crt = use_crt_shader_;
         bool decoder_fbo_path = use_crt && signal_decoder_ &&
                                 (use_signal || use_indexed_shader);
 
@@ -1377,9 +1376,15 @@ void SessionGUI::refresh_display_device() {
     // Re-create display panel if CRT mode changed
     if (want_crt != use_crt_shader_) {
         use_crt_shader_ = want_crt;
-        if (use_crt_shader_ && crt_post_.shader) {
-            display_panel_ = std::make_unique<CRTPanel>(&crt_post_);
-        } else {
+        if (use_crt_shader_) {
+            auto panel = std::make_unique<CRTPanel>();
+            if (panel->create(fb_width_, fb_height_)) {
+                display_panel_ = std::move(panel);
+            } else {
+                use_crt_shader_ = false;
+            }
+        }
+        if (!use_crt_shader_) {
             auto panel = std::make_unique<DirectPanel>();
             panel->create(fb_width_, fb_height_);
             display_panel_ = std::move(panel);
@@ -1609,29 +1614,24 @@ void SessionGUI::allocate_framebuffer() {
                 break;
         }
 
-        // Create CRT post-processing FBO (for all raster display paths).
-        // Always create so CRT effects are available when the user switches
-        // to a CRT monitor preset at runtime.
-        // Initial size matches the framebuffer; resized to display dimensions on render.
-        {
+        // Create display panel based on initial display technology.
+        // CRTPanel owns its CRT post-processing resources (FBO, shader).
+        // DirectPanel is a pass-through for LCD/LED/Direct Output.
+        // The panel can be swapped at runtime when the user changes
+        // monitor presets.
+        if (use_crt_shader_) {
             int crt_w = fb_width_  > 0 ? fb_width_  : 1024;
             int crt_h = fb_height_ > 0 ? fb_height_ : 1024;
-            if (crt_shader::create(&crt_post_, crt_w, crt_h)) {
-                printf("CRT post-processing shader compiled and linked\n");
+            auto panel = std::make_unique<CRTPanel>();
+            if (panel->create(crt_w, crt_h)) {
+                display_panel_ = std::move(panel);
+                printf("Display panel: CRT (shader compiled)\n");
             } else {
                 use_crt_shader_ = false;
                 printf("CRT post-processing shader failed — disabled\n");
             }
         }
-
-        // Create the display panel based on initial display technology.
-        // CRTPanel wraps crt_post_ for CRT displays; DirectPanel is a
-        // pass-through for LCD/LED/Direct Output.  The panel can be
-        // swapped at runtime when the user changes monitor presets.
-        if (use_crt_shader_) {
-            display_panel_ = std::make_unique<CRTPanel>(&crt_post_);
-            printf("Display panel: CRT\n");
-        } else {
+        if (!use_crt_shader_) {
             display_panel_ = std::make_unique<DirectPanel>();
             display_panel_->create(fb_width_, fb_height_);
             printf("Display panel: Direct\n");
