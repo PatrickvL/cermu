@@ -88,6 +88,22 @@ struct DisplayCharacteristics {
     float gamma                    = 2.2f;   ///< Display gamma
 };
 
+/// Map a PhosphorType to an RGB tint color for monochrome rendering.
+/// Color CRTs (P22) return white (1,1,1) — no tinting.
+inline constexpr void phosphor_tint_rgb(PhosphorType p, float& r, float& g, float& b) {
+    switch (p) {
+        case PhosphorType::P1:  r = 0.2f; g = 1.0f; b = 0.2f; break;  // Green
+        case PhosphorType::P4:  r = 1.0f; g = 1.0f; b = 1.0f; break;  // White (B&W TV)
+        case PhosphorType::P7:  r = 0.4f; g = 0.6f; b = 1.0f; break;  // Blue-white
+        case PhosphorType::P22: r = 1.0f; g = 1.0f; b = 1.0f; break;  // Tricolor — no tint
+        case PhosphorType::P31: r = 0.2f; g = 1.0f; b = 0.2f; break;  // Green (classic terminal)
+        case PhosphorType::P39: r = 0.2f; g = 1.0f; b = 0.3f; break;  // Green, long persist
+        case PhosphorType::P43: r = 0.3f; g = 1.0f; b = 0.3f; break;  // Green, military
+        case PhosphorType::Custom: r = 1.0f; g = 0.7f; b = 0.2f; break;  // Amber
+        default: r = 1.0f; g = 1.0f; b = 1.0f; break;
+    }
+}
+
 // ============================================================================
 // VIDEO SIGNAL TYPE MASK
 // ============================================================================

@@ -708,7 +708,7 @@ public:
     /// Default display device ID from the DeviceRegistry (e.g. "crt_tv", "crt_1702").
     /// Override to select an era-appropriate default display for the system.
     /// Return nullptr to skip auto-attaching a display device.
-    virtual const char* get_default_display_id() const { return "crt_tv"; }
+    virtual const char* get_default_display_id() const { return "direct_output"; }
 
     /// Configuration for vector display phosphor tint and color palette.
     /// Used by the GUI to select phosphor color and palette for the shader.

@@ -27,6 +27,7 @@ enum class CRTPreset : uint8_t {
     RGBMonitor,       ///< Professional RGB monitor (composite + S-Video + RGB)
     MonochromeGreen,  ///< Green phosphor monochrome (P31)
     MonochromeAmber,  ///< Amber phosphor monochrome (P3-like)
+    DirectOutput,     ///< Flat/direct output — no CRT effects
 };
 
 // ============================================================================
