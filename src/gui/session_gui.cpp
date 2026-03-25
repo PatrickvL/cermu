@@ -1175,7 +1175,6 @@ void SessionGUI::render_screen() {
         ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoSavedSettings |
         ImGuiWindowFlags_NoBringToFrontOnFocus |
-        ImGuiWindowFlags_NoBackground |
         ImGuiWindowFlags_NoMouseInputs;
     
     ImGui::Begin("##Screen", nullptr, flags);
@@ -1546,21 +1545,72 @@ void SessionGUI::render_display_settings() {
     // --- Display device selector ---
     ImGui::Text("Monitor: %s", display_device_->get_name());
 
-    // Combo to switch between available display presets
+    // Determine the signal type the system's video port outputs
+    VideoSignalMask port_signal_mask = 0;
+    if (system_) {
+        const auto& ports = system_->get_ports();
+        for (const auto& port : ports) {
+            if (port->get_attached_device() == display_device_) {
+                // Map port type to the signal mask it carries
+                switch (port->get_type()) {
+                    case PortType::VIDEO_COMPOSITE: port_signal_mask = DisplaySignals::COMPOSITE; break;
+                    case PortType::VIDEO_SVIDEO:    port_signal_mask = DisplaySignals::SVIDEO; break;
+                    case PortType::VIDEO_RGB:       port_signal_mask = DisplaySignals::RGB; break;
+                    case PortType::VIDEO_RGBI:      port_signal_mask = DisplaySignals::RGBI; break;
+                    default: break;
+                }
+                break;
+            }
+        }
+    }
+    // If no port found (passive device), use the active signal type
+    if (port_signal_mask == 0) {
+        port_signal_mask = video_signal_bit(active_signal_type_);
+    }
+
+    // Combo to switch between available display presets — filtered by signal compatibility
     static const char* preset_ids[]   = {"direct_output", "crt_tv", "crt_1702", "crt_rgb", "crt_green", "crt_amber"};
     static const char* preset_names[] = {"Direct Output", "Color TV", "Commodore 1702", "RGB Monitor", "Green Monitor", "Amber Monitor"};
     static constexpr int preset_count = 6;
 
+    // Build filtered list of compatible presets
+    int filtered_indices[preset_count];
+    int filtered_count = 0;
+    for (int i = 0; i < preset_count; i++) {
+        GenericCRT probe(static_cast<CRTPreset>(i));
+        if (probe.get_accepted_video_signals() & port_signal_mask) {
+            filtered_indices[filtered_count++] = i;
+        }
+    }
+
     int current_preset = -1;
+    int current_filtered = -1;
     for (int i = 0; i < preset_count; i++) {
         if (std::strcmp(display_device_->get_id(), preset_ids[i]) == 0) {
             current_preset = i;
             break;
         }
     }
+    for (int fi = 0; fi < filtered_count; fi++) {
+        if (filtered_indices[fi] == current_preset) {
+            current_filtered = fi;
+            break;
+        }
+    }
 
-    if (ImGui::Combo("Preset", &current_preset, preset_names, preset_count)) {
-        if (current_preset >= 0 && current_preset < preset_count && system_) {
+    // Build combined label string for combo
+    char combo_labels[512] = {};
+    int offset = 0;
+    for (int fi = 0; fi < filtered_count; fi++) {
+        int len = snprintf(combo_labels + offset, sizeof(combo_labels) - offset,
+                           "%s", preset_names[filtered_indices[fi]]);
+        offset += len + 1;
+    }
+
+    if (ImGui::Combo("Preset", &current_filtered, combo_labels)) {
+        if (current_filtered >= 0 && current_filtered < filtered_count && system_) {
+            int sel = filtered_indices[current_filtered];
+
             // Find the port that has the current display attached (if any)
             int display_port_idx = -1;
             const auto& ports = system_->get_ports();
@@ -1573,10 +1623,10 @@ void SessionGUI::render_display_settings() {
 
             if (display_port_idx >= 0) {
                 // Port-attached display: proper detach-old / create-new / attach cycle
-                system_->attach_device_to_port(display_port_idx, preset_ids[current_preset]);
+                system_->attach_device_to_port(display_port_idx, preset_ids[sel]);
             } else {
                 // Passive owned device (not port-attached): swap in owned_devices_
-                auto new_dev = DeviceRegistry::instance().create_device(preset_ids[current_preset]);
+                auto new_dev = DeviceRegistry::instance().create_device(preset_ids[sel]);
                 if (new_dev) {
                     auto& devices = system_->get_owned_devices_mutable();
                     devices.erase(
@@ -1608,24 +1658,61 @@ void SessionGUI::render_display_settings() {
     ImGui::Separator();
 
     // --- Adjustable parameters ---
+    bool is_crt = (dc.technology != DisplayTechnology::LCD
+                && dc.technology != DisplayTechnology::LED);
+
+    // CRT post-processing toggle — swap display panel when changed
+    bool prev_crt = use_crt_shader_;
     ImGui::Checkbox("CRT Post-Processing", &use_crt_shader_);
+    if (use_crt_shader_ != prev_crt) {
+        if (use_crt_shader_) {
+            auto panel = std::make_unique<CRTPanel>();
+            if (panel->create(fb_width_, fb_height_)) {
+                display_panel_ = std::move(panel);
+            } else {
+                use_crt_shader_ = false;  // fallback
+            }
+        }
+        if (!use_crt_shader_) {
+            auto panel = std::make_unique<DirectPanel>();
+            panel->create(fb_width_, fb_height_);
+            display_panel_ = std::move(panel);
+        }
+    }
+
     ImGui::Text("Adjustments:");
-    bool changed = false;
-    changed |= ImGui::SliderFloat("Zoom##disp", &display_zoom_, 0.25f, 4.0f, "%.2fx");
-    changed |= ImGui::SliderFloat("Pan X##disp", &display_pan_x_, -1.0f, 1.0f, "%.2f");
-    changed |= ImGui::SliderFloat("Pan Y##disp", &display_pan_y_, -1.0f, 1.0f, "%.2f");
+
+    // Reset buttons above sliders
     if (ImGui::Button("Reset Zoom/Pan")) {
         display_zoom_ = 1.0f;
         display_pan_x_ = 0.0f;
         display_pan_y_ = 0.0f;
     }
+    ImGui::SameLine();
+    if (ImGui::Button("Reset to Preset Defaults")) {
+        auto* crt = dynamic_cast<GenericCRT*>(display_device_);
+        if (crt) {
+            GenericCRT fresh(crt->get_preset());
+            crt->mutable_characteristics() = fresh.get_display_characteristics();
+            dc = crt->get_display_characteristics();
+        }
+    }
+
+    bool changed = false;
+    changed |= ImGui::SliderFloat("Zoom##disp", &display_zoom_, 0.25f, 4.0f, "%.2fx");
+    changed |= ImGui::SliderFloat("Pan X##disp", &display_pan_x_, -1.0f, 1.0f, "%.2f");
+    changed |= ImGui::SliderFloat("Pan Y##disp", &display_pan_y_, -1.0f, 1.0f, "%.2f");
     changed |= ImGui::SliderFloat("Brightness", &dc.brightness, 0.5f, 2.0f, "%.2f");
     changed |= ImGui::SliderFloat("Contrast",   &dc.contrast,   0.5f, 2.0f, "%.2f");
     changed |= ImGui::SliderFloat("Gamma",       &dc.gamma,      1.0f, 3.0f, "%.2f");
-    changed |= ImGui::SliderFloat("Curvature",   &dc.curvature,  0.0f, 1.0f, "%.2f");
-    changed |= ImGui::SliderFloat("Scanline Gap", &dc.scanline_gap, 0.0f, 1.0f, "%.2f");
-    changed |= ImGui::SliderFloat("Dot Pitch (mm)", &dc.dot_pitch_mm, 0.1f, 1.0f, "%.2f");
     changed |= ImGui::SliderFloat("Color Temp (K)", &dc.color_temperature_k, 3000.0f, 12000.0f, "%.0f");
+
+    // CRT-only sliders — only shown for CRT display types
+    if (is_crt) {
+        changed |= ImGui::SliderFloat("Curvature",   &dc.curvature,  0.0f, 1.0f, "%.2f");
+        changed |= ImGui::SliderFloat("Scanline Gap", &dc.scanline_gap, 0.0f, 1.0f, "%.2f");
+        changed |= ImGui::SliderFloat("Dot Pitch (mm)", &dc.dot_pitch_mm, 0.1f, 1.0f, "%.2f");
+    }
 
     if (changed) {
         // Push adjustments back to the device if it's a GenericCRT
@@ -1635,20 +1722,6 @@ void SessionGUI::render_display_settings() {
         }
     }
 
-    ImGui::Separator();
-
-    // Reset button
-    if (ImGui::Button("Reset to Preset Defaults")) {
-        auto* crt = dynamic_cast<GenericCRT*>(display_device_);
-        if (crt) {
-            // Re-create with same preset to get original values
-            GenericCRT fresh(crt->get_preset());
-            crt->mutable_characteristics() = fresh.get_display_characteristics();
-            dc = crt->get_display_characteristics();
-        }
-    }
-
-    // --- Signal info ---
     ImGui::Separator();
     ImGui::Text("Accepted signals:");
     VideoSignalMask mask = display_device_->get_accepted_video_signals();

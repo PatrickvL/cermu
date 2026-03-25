@@ -626,14 +626,14 @@ void EmulatorHost::render_screen_menu_generic() {
 
     ImGui::Separator();
     ImGui::Text("Zoom & Pan");
-    ImGui::SliderFloat("Zoom", &display_zoom_, 0.25f, 4.0f, "%.2fx");
-    ImGui::SliderFloat("Pan X", &display_pan_x_, -1.0f, 1.0f, "%.2f");
-    ImGui::SliderFloat("Pan Y", &display_pan_y_, -1.0f, 1.0f, "%.2f");
     if (ImGui::Button("Reset Zoom/Pan")) {
         display_zoom_ = 1.0f;
         display_pan_x_ = 0.0f;
         display_pan_y_ = 0.0f;
     }
+    ImGui::SliderFloat("Zoom", &display_zoom_, 0.25f, 4.0f, "%.2fx");
+    ImGui::SliderFloat("Pan X", &display_pan_x_, -1.0f, 1.0f, "%.2f");
+    ImGui::SliderFloat("Pan Y", &display_pan_y_, -1.0f, 1.0f, "%.2f");
     
     // Host DPI information
     ImGui::Separator();

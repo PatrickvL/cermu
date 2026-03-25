@@ -93,8 +93,7 @@ GenericCRT::GenericCRT(CRTPreset preset)
             name_              = "Direct Output";
             id_                = "direct_output";
             primary_port_type_ = PortType::VIDEO_COMPOSITE;
-            accepted_signals_  = DisplaySignals::COMPOSITE | DisplaySignals::SVIDEO
-                               | DisplaySignals::RGB;
+            accepted_signals_  = DisplaySignals::ALL_RASTER;
             has_speakers_      = false;
             characteristics_   = {
                 DisplayTechnology::LCD, PhosphorType::P22,
