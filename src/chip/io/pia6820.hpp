@@ -58,7 +58,7 @@ PIA_DECL(DECL_REG_NOP, PIA_X_FLD_NS_, DECL_CMP_NOP)
 } } // namespace pia::fld
 
 struct pia6820_t : public IoChipBase {
-    pia6820_t() : IoChipBase(ChipInfo{"PIA6820", "Motorola"}) {
+    pia6820_t() : IoChipBase(ChipInfo{"PIA6820", "Motorola", "Motorola 6820 PIA"}) {
         init_regs(PIA_NUM_REGS);
 #ifdef CERMU_HAS_CHIP_DEBUG
         wire_debug_registers(PIA_REG_INFO);

@@ -42,7 +42,7 @@
 class bbc_vidproc_t : public VideoChipBase {
 public:
     bbc_vidproc_t()
-        : VideoChipBase(ChipInfo{"Video ULA", "Acorn"})
+        : VideoChipBase(ChipInfo{"Video ULA", "Acorn", "Acorn Video ULA"})
     {
         category_ = "Video";
         system_palette_ = get_palette();

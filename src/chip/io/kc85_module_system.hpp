@@ -113,7 +113,7 @@ public:
     static constexpr int MAX_SLOTS = 8;
 
     kc85_module_system_t()
-        : IoChipBase(ChipInfo("Module System", "VEB Mikroelektronik"))
+        : IoChipBase(ChipInfo{"Module System", "VEB Mikroelektronik", {}})
     {
         init_regs(kc85_mod::reg::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG

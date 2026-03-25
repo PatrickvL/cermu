@@ -18,6 +18,7 @@ namespace fam65xx {
 inline constexpr CPUTraits WDC_65C02_EARLYTraits = {
     "WDC",                                        // vendor
     "65C02",                                      // chip_id
+    "65C02",                                      // display_name
     CoreFlags::CMOS_BASE_FLAGS,                   // core_flags
     16,                                           // address_bits
     0x00,                                         // io_port_mask

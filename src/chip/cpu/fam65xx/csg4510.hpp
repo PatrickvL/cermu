@@ -13,8 +13,9 @@
 namespace fam65xx {
 
 inline constexpr CPUTraits CSG_4510Traits = {
-    "Commodore", // vendor
+    "Commodore",  // vendor
     "4510",      // chip_id
+    "CSG 4510",  // display_name
     CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::CE02_EXTENDED |
         CPUCoreFlags::OPTIMIZED_CYCLES |
         CPUCoreFlags::HAS_BANKING,                       // core_flags

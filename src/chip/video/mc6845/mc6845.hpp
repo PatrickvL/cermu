@@ -75,7 +75,7 @@ using namespace mc6845::reg;
 // ============================================================================
 
 struct mc6845_t : public VideoChipBase {
-    mc6845_t() : VideoChipBase(ChipInfo{"MC6845", "Motorola"}) {
+    mc6845_t() : VideoChipBase(ChipInfo{"MC6845", "Motorola", "Motorola 6845"}) {
         init_regs(mc6845::reg::NUM_REGISTERS);
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();

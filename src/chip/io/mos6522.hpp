@@ -111,7 +111,7 @@ MOS6522_DECL(DECL_REG_NOP, MOS6522_X_FLD_NS_, DECL_CMP_NOP)
 // ============================================================================
 
 struct mos6522_t : public IoChipBase {
-    mos6522_t() : IoChipBase(ChipInfo{"MOS6522", "MOS Technology"}) {
+    mos6522_t() : IoChipBase(ChipInfo{"MOS6522", "MOS Technology", "MOS 6522"}) {
         init_regs(MOS6522_NUM_REGS);
 #ifdef CERMU_HAS_CHIP_DEBUG
         wire_debug_registers(MOS6522_REG_INFO);

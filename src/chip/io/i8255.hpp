@@ -62,7 +62,7 @@ DECL_EXTRACT(I8255, I8255_DECL)
 class i8255_t : public IoChipBase {
 public:
     i8255_t()
-        : IoChipBase(ChipInfo("8255", "Intel"))
+        : IoChipBase(ChipInfo{"8255", "Intel", "Intel 8255"})
     {
         init_regs(i8255::reg::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG

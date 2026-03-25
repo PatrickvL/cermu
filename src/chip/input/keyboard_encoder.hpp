@@ -75,7 +75,7 @@ public:
     explicit KeyboardEncoder(const KeyboardEncoderConfig& cfg = {},
                              const char* name = "U807",
                              const char* manufacturer = "VEB Mikroelektronik Erfurt")
-        : InputChipBase(ChipInfo{name, "Serial Keyboard Encoder", manufacturer})
+        : InputChipBase(ChipInfo{name, manufacturer, "Keyboard Encoder"})
         , config_(cfg)
     {
         static_assert(sizeof(matrix_) >= 16, "matrix_ must hold at least 16 rows");

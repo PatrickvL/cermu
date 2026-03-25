@@ -124,7 +124,7 @@ template <const AYTraits& Traits>
 class ay_psg_t : public SoundChipBase {
 public:
     ay_psg_t()
-        : SoundChipBase(ChipInfo(Traits.chip_id, Traits.vendor))
+        : SoundChipBase(ChipInfo{Traits.chip_id, Traits.vendor, {}})
         , audio_buffer_(4096)
     {
         init_regs(ay::reg::REG_COUNT);

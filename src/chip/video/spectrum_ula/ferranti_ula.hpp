@@ -149,7 +149,7 @@ DECL_EXTRACT(SPECTRUM_ULA, SPECTRUM_ULA_DECL)
 class ferranti_ula_t : public VideoChipBase {
 public:
     ferranti_ula_t()
-        : VideoChipBase(ChipInfo("6C001E-7", "Ferranti"))
+        : VideoChipBase(ChipInfo{"6C001E-7", "Ferranti", "Ferranti ULA"})
     {
         init_regs(spectrum_ula::REG_COUNT);
         set_named_palettes(spectrum_ula::NAMED_PALETTES,

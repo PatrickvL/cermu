@@ -17,6 +17,7 @@ namespace fam65xx {
 inline constexpr CPUTraits SYNERTEK_65C02Traits = {
     "Synertek",                                   // vendor
     "65C02",                                      // chip_id
+    "65C02",                                      // display_name
     CoreFlags::CMOS_BASE_FLAGS,                   // core_flags
     16,                                           // address_bits
     0x00,                                         // io_port_mask

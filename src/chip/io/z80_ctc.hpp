@@ -75,8 +75,9 @@ namespace ctc_ctrl {
 class z80_ctc_t : public IoChipBase {
 public:
     explicit z80_ctc_t(bool is_u857 = false)
-        : IoChipBase(ChipInfo(is_u857 ? "U857" : "Z80 CTC",
-                             is_u857 ? "VEB MME Erfurt" : "Zilog"))
+        : IoChipBase(ChipInfo{is_u857 ? "U857" : "Z80 CTC",
+                             is_u857 ? "VEB MME Erfurt" : "Zilog",
+                             {}})
     {
         init_regs(z80_ctc::reg::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG

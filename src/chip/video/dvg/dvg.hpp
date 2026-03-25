@@ -94,7 +94,7 @@ namespace dvg_constants {
 
 struct dvg_t : public VideoChipBase {
 
-    dvg_t() : VideoChipBase(ChipInfo{"DVG", "Atari"}) {}
+    dvg_t() : VideoChipBase(ChipInfo{"DVG", "Atari", "Atari DVG"}) {}
 
     // ========================================================================
     // Initialization

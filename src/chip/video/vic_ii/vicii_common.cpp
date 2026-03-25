@@ -2513,7 +2513,7 @@ static inline void vicii_initialize_timing(vicii_base_t* vicii, const VicIITrait
 void vicii_base_t::init_base(const VicIITraits& traits, void (*bank_change)(void*, uint8_t)) {
     this->traits_ = &traits;
     this->bus.bank_change = bank_change;
-    info_ = ChipInfo{traits.chip_id, traits.vendor};
+    info_ = ChipInfo{traits.chip_id, traits.vendor, traits.chip_name};
     vicii_initialize(this);
     vicii_initialize_timing(this, traits);
     set_named_palettes(c64_named_palettes, c64_named_palette_count);

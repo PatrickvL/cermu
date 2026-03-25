@@ -18,6 +18,7 @@ namespace fam65xx {
 inline constexpr CPUTraits ROCKWELL_R65C02Traits = {
     "Rockwell",                                   // vendor
     "R65C02",                                     // chip_id
+    "Rockwell R65C02",                            // display_name
     CoreFlags::ROCKWELL_BASE,                     // core_flags
     16,                                           // address_bits
     0x00,                                         // io_port_mask

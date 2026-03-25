@@ -85,7 +85,7 @@ using rom_bank_change_fn = void (*)(void* user_data);
 class c264_rom_bank_select_t : public ChipBase {
 public:
     c264_rom_bank_select_t()
-        : ChipBase(ChipInfo{"ROM Bank Select", "ROM Bank"}) {
+        : ChipBase(ChipInfo{"ROM Bank Select", "ROM Bank", {}}) {
         category_ = "Logic";
     }
 

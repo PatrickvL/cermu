@@ -100,9 +100,10 @@ DECL_EXTRACT(WSG, WSG_DECL)
 class namco_wsg_t : public SoundChipBase {
 public:
     explicit namco_wsg_t(WSGVariant variant = WSGVariant::WSG3)
-        : SoundChipBase(ChipInfo(
+        : SoundChipBase(ChipInfo{
               variant == WSGVariant::WSG3 ? "WSG3" : "WSG8",
-              "Namco"))
+              "Namco",
+              variant == WSGVariant::WSG3 ? "Namco WSG3" : "Namco WSG8"})
         , variant_(variant)
         , num_channels_(variant == WSGVariant::WSG3 ? 3 : 8)
         , audio_buffer_(4096)

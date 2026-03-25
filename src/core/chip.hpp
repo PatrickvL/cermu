@@ -72,7 +72,11 @@ public:
     // For owned chips (RAMChip, ChipPlaceholder, PlaChip) these are set in the
     // constructor.  For borrowed chips (CPU, VIA, etc.) the system sets them via
     // the register_chip() overload that accepts placement arguments.
-    const char* display_name() const { return display_name_ ? display_name_ : info_.part_number.data(); }
+    const char* display_name() const {
+        if (display_name_) return display_name_;
+        if (!info_.display_name.empty()) return info_.display_name.data();
+        return info_.part_number.data();
+    }
     const char* short_name()   const { return short_name_   ? short_name_   : info_.part_number.data(); }
     const char* category()     const { return category_     ? category_     : ""; }
     uint16_t    base_address() const { return base_address_; }

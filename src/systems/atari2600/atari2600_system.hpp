@@ -41,7 +41,7 @@
 
 class Atari2600CartChip : public ChipBase {
 public:
-    Atari2600CartChip() : ChipBase(ChipInfo{"Cartridge", "Various"}) {}
+    Atari2600CartChip() : ChipBase(ChipInfo{"Cartridge", "Various", {}}) {}
 
     void set_mapper(A2600Mapper* m) { mapper_ = m; }
 

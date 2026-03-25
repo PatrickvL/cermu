@@ -23,7 +23,7 @@
 
 struct mos6529_t : public IoChipBase {
 
-    mos6529_t() : IoChipBase(ChipInfo{"MOS 6529B", "6529B"}) {}
+    mos6529_t() : IoChipBase(ChipInfo{"6529B", "MOS Technology", "MOS 6529B"}) {}
 
     // ── ChipBase MMIO interface ─────────────────────────────────────────
 

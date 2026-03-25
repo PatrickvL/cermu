@@ -9,12 +9,15 @@
 // ICs, peripherals, connectors, complete systems.
 //
 //   ComponentInfo          ← base: part_number + manufacturer
-//     ├── ChipInfo         ← IC: adds package_variant, date_code, lot_number
-//     ├── DeviceInfo       ← peripheral: adds model identifier
-//     └── SystemInfo       ← complete machine: adds short_name, description
+//   ChipInfo               ← IC: adds display_name, package_variant
+//   DeviceInfo             ← peripheral: adds model identifier
+//   SystemInfo             ← complete machine: adds short_name, description
 //
 // All types use std::string_view (non-owning, constexpr, no null footgun).
 // Empty string_view means "not set".
+//
+// These are pure value types — no virtual dispatch, no heap allocation.
+// Designed for aggregate initialization in constexpr chip traits.
 //
 // Rendering concerns (which fields to show in the GUI) are deliberately
 // NOT part of this hierarchy — see ChipMarkings in package_types.h.
@@ -29,34 +32,16 @@
 struct ComponentInfo {
     std::string_view part_number;    // "MOS6510", "1541-II", "DB-9"
     std::string_view manufacturer;   // "MOS Technology", "Commodore"
-
-    constexpr ComponentInfo() = default;
-    constexpr ComponentInfo(std::string_view pn, std::string_view mfr)
-        : part_number(pn), manufacturer(mfr) {}
-
-    virtual ~ComponentInfo() = default;
 };
 
 // ============================================================================
 // ChipInfo — identity for an integrated circuit on a PCB
 // ============================================================================
 
-struct ChipInfo : ComponentInfo {
-    std::string_view package_variant; // "C", "N", "W" — DIP suffix
-    std::string_view date_code;       // "8401" — year+week of manufacture
-    std::string_view lot_number;      // Batch identifier
-
-    constexpr ChipInfo() = default;
-    constexpr ChipInfo(std::string_view pn, std::string_view mfr)
-        : ComponentInfo(pn, mfr) {}
-    constexpr ChipInfo(std::string_view pn, std::string_view mfr,
-                       std::string_view variant,
-                       std::string_view date = {},
-                       std::string_view lot  = {})
-        : ComponentInfo(pn, mfr)
-        , package_variant(variant)
-        , date_code(date)
-        , lot_number(lot) {}
+struct ChipInfo {
+    std::string_view part_number;     // "MOS6510", "RP2C02", "Z80A"
+    std::string_view manufacturer;    // "MOS Technology", "Ricoh", "Zilog"
+    std::string_view display_name;    // "MOS 6510", "Ricoh 2A03" — human-readable
 };
 
 // ============================================================================
@@ -69,7 +54,7 @@ struct DeviceInfo : ComponentInfo {
     constexpr DeviceInfo() = default;
     constexpr DeviceInfo(std::string_view pn, std::string_view mfr,
                          std::string_view mdl = {})
-        : ComponentInfo(pn, mfr), model(mdl) {}
+        : ComponentInfo{pn, mfr}, model(mdl) {}
 };
 
 // ============================================================================
@@ -84,5 +69,5 @@ struct SystemInfo : ComponentInfo {
     constexpr SystemInfo(std::string_view pn, std::string_view mfr,
                          std::string_view sn = {},
                          std::string_view desc = {})
-        : ComponentInfo(pn, mfr), short_name(sn), description(desc) {}
+        : ComponentInfo{pn, mfr}, short_name(sn), description(desc) {}
 };

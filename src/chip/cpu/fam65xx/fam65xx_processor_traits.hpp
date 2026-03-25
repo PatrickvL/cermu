@@ -127,6 +127,7 @@ struct PeripheralConfig {
 struct CPUTraits {
   const char *vendor;          // Manufacturer name (e.g., "MOS Technology", "Ricoh", "WDC")
   const char *chip_id;         // Chip identifier (e.g., "6502", "6510", "2A03")
+  const char *display_name;    // Short display string for UI (e.g., "MOS 6510", "Ricoh 2A03")
   uint32_t core_flags;         // CPUCoreFlags combination
   uint8_t address_bits;        // Address bus width (13, 16, 20, 21, 24)
   uint8_t io_port_mask;        // Bitmask of available I/O pins
@@ -164,6 +165,8 @@ struct CPUTraits {
   constexpr const char *get_vendor() const { return vendor; }
 
   constexpr const char *get_chip_id() const { return chip_id; }
+
+  constexpr const char *get_display_name() const { return display_name; }
 
   constexpr bool has_cmos_enhancements() const {
     return has(CPUCoreFlags::CMOS_BASE);

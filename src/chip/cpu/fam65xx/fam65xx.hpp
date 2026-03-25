@@ -110,9 +110,10 @@ constexpr uint32_t opcode_table_key(const CPUTraits &t) {
 // generate_opcode_table_for_traits produces the correct table.
 template <uint32_t Key> struct SharedOpcodeTable {
   static constexpr CPUTraits canonical_traits_{
-      "",
-      "",
-      Key,
+      "",               // vendor
+      "",               // chip_id
+      "",               // display_name
+      Key,              // core_flags
       16,
       0,
       BankingType::NONE,
@@ -1986,7 +1987,7 @@ public:
   }
 
   fam65xx_t()
-    : CpuChipBase(ChipInfo{Traits.get_chip_id(), Traits.get_vendor()})
+    : CpuChipBase(ChipInfo{Traits.get_chip_id(), Traits.get_vendor(), Traits.get_display_name()})
   {
     // Initialize CPU state to zero
     opcode_entry = {};

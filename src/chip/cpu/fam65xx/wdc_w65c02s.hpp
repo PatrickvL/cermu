@@ -18,6 +18,7 @@ namespace fam65xx {
 inline constexpr CPUTraits WDC_W65C02STraits = {
     "WDC",                                        // vendor
     "W65C02S",                                    // chip_id
+    "WDC W65C02S",                                // display_name
     CoreFlags::WDC_MODERN,                        // core_flags
     16,                                           // address_bits
     0x00,                                         // io_port_mask

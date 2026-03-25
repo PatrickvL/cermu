@@ -35,6 +35,7 @@ namespace fam65xx {
 inline constexpr CPUTraits RICOH_5A22Traits = {
     "Ricoh",                                                // vendor
     "5A22",                                                 // chip_id
+    "Ricoh 5A22",                                           // display_name
     CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::C816_16BIT,  // core_flags
     24,                                                     // address_bits
     0x00,                                                   // io_port_mask

@@ -48,7 +48,7 @@ using namespace riot::reg;
 DECL_EXTRACT(RIOT, RIOT_DECL)
 
 struct pia6532_t : public IoChipBase {
-    pia6532_t() : IoChipBase(ChipInfo{"PIA6532", "MOS Technology"}) {
+    pia6532_t() : IoChipBase(ChipInfo{"PIA6532", "MOS Technology", "MOS 6532 RIOT"}) {
         init_regs(RIOT_NUM_REGS);
 #ifdef CERMU_HAS_CHIP_DEBUG
         wire_debug_registers(RIOT_REG_INFO);

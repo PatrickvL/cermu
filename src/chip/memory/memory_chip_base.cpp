@@ -366,7 +366,7 @@ ChipBase* RAMChip::create_from_slot(const ChipSlot& slot,
                                      const bus_state_t* system_bus,
                                      uint8_t* buffer) {
     auto* chip = new RAMChip(
-        ChipInfo{"SRAM", ""}, slot.size_bytes, SRAM, system_bus,
+        ChipInfo{"SRAM", "", {}}, slot.size_bytes, SRAM, system_bus,
         slot.label, static_cast<uint16_t>(slot.base_addr));
     if (buffer) chip->bind(buffer);
     return chip;
@@ -376,7 +376,7 @@ ChipBase* ROMChip::create_from_slot(const ChipSlot& slot,
                                      const bus_state_t* system_bus,
                                      uint8_t* buffer) {
     auto* chip = new ROMChip(
-        ChipInfo{"ROM", ""}, slot.size_bytes, ROM, system_bus,
+        ChipInfo{"ROM", "", {}}, slot.size_bytes, ROM, system_bus,
         slot.label, static_cast<uint16_t>(slot.base_addr));
     if (buffer) chip->bind(buffer);
     return chip;

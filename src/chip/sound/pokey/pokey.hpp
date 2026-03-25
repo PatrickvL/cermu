@@ -238,7 +238,7 @@ public:
 
     // === Chip identity ===
     pokey_t()
-        : SoundChipBase(ChipInfo{Traits.chip_id, Traits.vendor, "C"})
+        : SoundChipBase(ChipInfo{Traits.chip_id, Traits.vendor, {}})
         , audio_buffer_(pokey_constants::AUDIO_BUFFER_SIZE)
     {
         init_regs(pokey::reg::TOTAL_REGS);

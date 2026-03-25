@@ -210,7 +210,7 @@ public:
     }
 
     // === Chip identity ===
-    z80_t() : CpuChipBase(ChipInfo(Traits.chip_id, Traits.vendor)) {
+    z80_t() : CpuChipBase(ChipInfo{Traits.chip_id, Traits.vendor, {}}) {
         display_name_ = Traits.chip_id;
         short_name_   = Traits.chip_id;
 #ifdef CERMU_HAS_CHIP_DEBUG

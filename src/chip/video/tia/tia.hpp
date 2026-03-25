@@ -243,7 +243,7 @@ struct tia_audio_channel_t {
 // ============================================================================
 
 struct tia_t : public VideoChipBase {
-    tia_t() : VideoChipBase(ChipInfo{"TIA", "Atari"}) {
+    tia_t() : VideoChipBase(ChipInfo{"TIA", "Atari", "Atari TIA"}) {
         init_split_regs(WRITE_REG_COUNT, READ_REG_COUNT);
     }
 
