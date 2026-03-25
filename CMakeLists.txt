@@ -100,6 +100,21 @@ if(NOT LIBARCHIVE_FOUND)
     add_compile_definitions(CERMU_NO_LIBARCHIVE)
 endif()
 
+# Find SQLite3 (catalog database for ROM library)
+find_package(SQLite3 QUIET)
+if(SQLite3_FOUND)
+    message(STATUS "Found SQLite3: ${SQLite3_VERSION}")
+else()
+    # Try pkg-config as fallback
+    if(PkgConfig_FOUND)
+        pkg_check_modules(SQLITE3 QUIET sqlite3)
+    endif()
+    if(NOT SQLITE3_FOUND)
+        message(STATUS "SQLite3 not found — catalog/library features disabled")
+        add_compile_definitions(CERMU_NO_SQLITE)
+    endif()
+endif()
+
 # CRITICAL: Force all binaries to output to a single consistent location
 # This prevents confusion from multiple binary locations across different build methods
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/bin")
@@ -758,6 +773,12 @@ if(BUILD_GUI)
         ${OPENGL_LIBRARIES}
         ${CMAKE_DL_LIBS}
     )
+
+    if(SQLite3_FOUND)
+        list(APPEND CERMU_LINK_LIBS SQLite::SQLite3)
+    elseif(SQLITE3_FOUND)
+        list(APPEND CERMU_LINK_LIBS ${SQLITE3_LIBRARIES})
+    endif()
     
     if(IMGUIFILEDIALOG_FOUND)
         list(APPEND CERMU_LINK_LIBS ImGuiFileDialog)
