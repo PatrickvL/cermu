@@ -775,9 +775,77 @@ inline void LauncherPanel::render_system_header() {
     ImVec4 accent = launcher_theme::accent_for_maker(desc->maker);
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(accent.x * 0.1f, accent.y * 0.1f, accent.z * 0.1f, 1.0f));
-    ImGui::BeginChild("##ZoneA_Header", ImVec2(0, 48), false);
+    ImGui::BeginChild("##ZoneA_Header", ImVec2(0, 64), false);
 
-    ImGui::SetCursorPos(ImVec2(12, 6));
+    // Procedural mini-CRT thumbnail
+    {
+        ImVec2 crt_pos = ImVec2(ImGui::GetCursorScreenPos().x + 12,
+                                ImGui::GetCursorScreenPos().y + 8);
+        float crt_w = 60.0f, crt_h = 48.0f;
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+
+        // CRT background (dark, tinted by accent)
+        ImVec4 crt_bg = ImVec4(accent.x * 0.04f, accent.y * 0.04f, accent.z * 0.04f, 1.0f);
+        dl->AddRectFilled(crt_pos, ImVec2(crt_pos.x + crt_w, crt_pos.y + crt_h),
+                          ImGui::GetColorU32(crt_bg), 4.0f);
+
+        // Determine phosphor tint from system characteristics
+        // Apple/PET → green, Atari 2600/Robotron → amber, others → blue/cyan
+        ImU32 line_color;
+        if (desc->maker) {
+            std::string_view m(desc->maker);
+            if (m.find("Apple") != std::string_view::npos ||
+                (m.find("Commodore") != std::string_view::npos
+                 && desc->name && std::string_view(desc->name).find("PET") != std::string_view::npos))
+                line_color = ImGui::GetColorU32(ImVec4(0.12f, 0.93f, 0.31f, 0.7f));  // green
+            else if (m.find("Robotron") != std::string_view::npos || m.find("Atari") != std::string_view::npos)
+                line_color = ImGui::GetColorU32(ImVec4(1.0f, 0.67f, 0.2f, 0.7f));    // amber
+            else
+                line_color = ImGui::GetColorU32(ImVec4(0.35f, 0.68f, 0.91f, 0.7f));  // blue/cyan
+        } else {
+            line_color = ImGui::GetColorU32(ImVec4(0.35f, 0.68f, 0.91f, 0.7f));
+        }
+
+        // Procedural "code" lines — deterministic from system name hash
+        uint32_t h = 5381;
+        if (desc->name) {
+            for (const char* p = desc->name; *p; ++p)
+                h = ((h << 5) + h) + static_cast<uint8_t>(*p);
+        }
+        int num_lines = 8;
+        for (int i = 0; i < num_lines; ++i) {
+            uint32_t r = ((h * 2654435761u) >> (i * 3)) & 0xFFFF;
+            float lw = 8.0f + (r % static_cast<uint32_t>(crt_w - 20));
+            float indent = (r >> 8) % 8;
+            float y = crt_pos.y + 4 + i * (crt_h - 10) / num_lines;
+            dl->AddRectFilled(
+                ImVec2(crt_pos.x + 3 + indent, y),
+                ImVec2(crt_pos.x + 3 + indent + lw, y + 2),
+                line_color, 1.0f);
+        }
+
+        // Cursor blink
+        float cursor_y = crt_pos.y + crt_h - 8;
+        dl->AddRectFilled(
+            ImVec2(crt_pos.x + 3, cursor_y),
+            ImVec2(crt_pos.x + 8, cursor_y + 3),
+            line_color);
+
+        // Scanline overlay (subtle dark horizontal lines)
+        for (float y = crt_pos.y; y < crt_pos.y + crt_h; y += 3.0f) {
+            dl->AddLine(
+                ImVec2(crt_pos.x, y),
+                ImVec2(crt_pos.x + crt_w, y),
+                ImGui::GetColorU32(ImVec4(0, 0, 0, 0.16f)));
+        }
+
+        // CRT bezel border
+        dl->AddRect(crt_pos, ImVec2(crt_pos.x + crt_w, crt_pos.y + crt_h),
+                    ImGui::GetColorU32(ImVec4(0.08f, 0.10f, 0.16f, 1.0f)), 4.0f);
+    }
+
+    // System info — positioned right of the CRT thumbnail
+    ImGui::SetCursorPos(ImVec2(84, 8));
 
     // System name
     ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextPrimary);
@@ -847,7 +915,7 @@ inline void LauncherPanel::render_system_header() {
     float launch_width = 80.0f;
     float button_group_width = launch_width + 60.0f;  // launch + star + settings + gaps
     ImGui::SameLine(ImGui::GetWindowWidth() - button_group_width - 12);
-    ImGui::SetCursorPosY(10);
+    ImGui::SetCursorPosY(18);
 
     // Favourite toggle
     {
