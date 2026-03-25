@@ -230,6 +230,44 @@ void SessionGUI::handle_events() {
             }
             continue;
         }
+
+        // Escape key hierarchy (§11.3): dismiss topmost UI element.
+        // 1) Any detached chip panel → close it
+        // 2) Menu bar visible (fullscreen) → hide it
+        // 3) Otherwise → pass through to emulation
+        if ((event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) &&
+            event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+            if (event.type == SDL_KEYDOWN && !event.key.repeat &&
+                !launcher_panel_.is_open() && !system_selection_dialog_.is_open()) {
+
+                // Try to close topmost detached chip panel first
+                bool consumed = false;
+                if (system_) {
+                    auto& chips = system_->get_registered_chips();
+                    for (int i = static_cast<int>(chips.size()) - 1; i >= 0; --i) {
+                        if (chips[i].show_detached) {
+                            chips[i].show_detached = 0;
+                            consumed = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!consumed) {
+                    // Hide the auto-hide menu bar if visible in fullscreen
+                    Uint32 wflags = SDL_GetWindowFlags(get_window());
+                    if ((wflags & SDL_WINDOW_FULLSCREEN_DESKTOP) &&
+                        menu_bar_visible_) {
+                        menu_bar_visible_ = false;
+                        menu_bar_pinned_ = false;
+                        consumed = true;
+                    }
+                }
+
+                if (consumed) continue;
+                // Not consumed — fall through to event queue below
+            }
+        }
         
         // Handle quit events
         if (event.type == SDL_QUIT ||
@@ -602,6 +640,11 @@ void SessionGUI::render_frame() {
     // Performance metrics window
     render_performance_window();
 
+    // Emulation HUD (§11.4) — semi-transparent corner overlay
+    if (show_hud_ && system_ && !launcher_panel_.is_open()) {
+        render_emulation_hud();
+    }
+
     // Let system render its debug windows (try_lock: skip if emu thread is busy)
     if (system_) {
         system_->render_debug_windows(nullptr, emu_mutex_);
@@ -684,6 +727,26 @@ void SessionGUI::render_menu_bar() {
         ImGui::EndMenu();
     }
     
+    // Library menu (§11.2) — placeholder for catalog pipeline (Phase 6)
+    if (ImGui::BeginMenu("Library")) {
+        if (ImGui::MenuItem("Scan roots...")) {
+            // TODO: Phase 6a — ScanRootManager
+        }
+        ImGui::BeginDisabled(true);
+        if (ImGui::MenuItem("Rescan all")) {}
+        if (ImGui::MenuItem("Rescan missing only")) {}
+        if (ImGui::MenuItem("Process orphans...")) {}
+        ImGui::EndDisabled();
+        ImGui::Separator();
+        if (ImGui::MenuItem("Switch to file browser")) {
+            launcher_panel_.open();
+        }
+        ImGui::BeginDisabled(true);
+        if (ImGui::MenuItem("Switch to title browser")) {}
+        ImGui::EndDisabled();
+        ImGui::EndMenu();
+    }
+
     // Hardware menu — grouped by entity type (Chips, Connectors, Peripherals)
     // with chip category prefixes (e.g. "CPU: MOS 6510 CPU").
     //
@@ -922,6 +985,14 @@ void SessionGUI::render_menu_bar() {
                 }
             }
 
+            // Hide all panels shortcut (§11.5)
+            ImGui::Separator();
+            if (ImGui::MenuItem("Hide all panels")) {
+                for (auto& sc : chips) {
+                    sc.show_detached = 0;
+                }
+            }
+
             ImGui::EndMenu();
         }
     }
@@ -934,6 +1005,21 @@ void SessionGUI::render_menu_bar() {
             show_display_settings_ = !show_display_settings_;
         }
         ImGui::Separator();
+
+        // EmulationHUD toggle and corner selection (§11.4)
+        if (ImGui::MenuItem("Emulation HUD", nullptr, show_hud_)) {
+            show_hud_ = !show_hud_;
+        }
+        if (ImGui::BeginMenu("HUD Corner")) {
+            static const char* corners[] = {"Top-left", "Top-right", "Bottom-left", "Bottom-right"};
+            for (int i = 0; i < 4; i++) {
+                if (ImGui::MenuItem(corners[i], nullptr, hud_corner_ == i))
+                    hud_corner_ = i;
+            }
+            ImGui::EndMenu();
+        }
+        ImGui::Separator();
+
         if (ImGui::BeginMenu("Performance Statistics")) {
             if (ImGui::MenuItem("Show Performance Graphs", nullptr, show_performance_)) {
                 show_performance_ = !show_performance_;
@@ -1336,6 +1422,97 @@ static const char* phosphor_type_name(PhosphorType p) {
         case PhosphorType::Custom: return "Custom";
         default: return "Unknown";
     }
+}
+
+// ============================================================================
+// Emulation HUD (§11.4) — persistent semi-transparent corner overlay
+// ============================================================================
+
+void SessionGUI::render_emulation_hud() {
+    const float pad = 10.0f;
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+
+    // Position in chosen corner
+    ImVec2 pos;
+    ImVec2 pivot;
+    switch (hud_corner_) {
+        case 0: // Top-left
+            pos   = ImVec2(vp->WorkPos.x + pad, vp->WorkPos.y + pad);
+            pivot = ImVec2(0.0f, 0.0f);
+            break;
+        default:
+        case 1: // Top-right
+            pos   = ImVec2(vp->WorkPos.x + vp->WorkSize.x - pad, vp->WorkPos.y + pad);
+            pivot = ImVec2(1.0f, 0.0f);
+            break;
+        case 2: // Bottom-left
+            pos   = ImVec2(vp->WorkPos.x + pad, vp->WorkPos.y + vp->WorkSize.y - pad);
+            pivot = ImVec2(0.0f, 1.0f);
+            break;
+        case 3: // Bottom-right
+            pos   = ImVec2(vp->WorkPos.x + vp->WorkSize.x - pad, vp->WorkPos.y + vp->WorkSize.y - pad);
+            pivot = ImVec2(1.0f, 1.0f);
+            break;
+    }
+
+    ImGui::SetNextWindowPos(pos, ImGuiCond_Always, pivot);
+    ImGui::SetNextWindowBgAlpha(0.35f);
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration |
+                             ImGuiWindowFlags_AlwaysAutoResize |
+                             ImGuiWindowFlags_NoSavedSettings |
+                             ImGuiWindowFlags_NoFocusOnAppearing |
+                             ImGuiWindowFlags_NoNav |
+                             ImGuiWindowFlags_NoMove;
+
+    if (ImGui::Begin("##EmulationHUD", nullptr, flags)) {
+        // System name + status
+        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "%s",
+                           system_->get_descriptor().short_name);
+        ImGui::SameLine();
+        if (emulation_paused_) {
+            ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.2f, 1.0f), "PAUSED");
+        } else if (emulation_running_) {
+            // Speed indicator — green if near 100%, yellow if throttled, red if too slow
+            float speed = static_cast<float>(perf_metrics_.speed_percent);
+            ImVec4 speed_col = (speed >= 98.0f)  ? ImVec4(0.3f, 0.9f, 0.3f, 1.0f) :
+                               (speed >= 80.0f)  ? ImVec4(0.9f, 0.8f, 0.2f, 1.0f) :
+                                                   ImVec4(0.9f, 0.3f, 0.3f, 1.0f);
+            ImGui::TextColored(speed_col, "%.0f%%", speed);
+        }
+
+        // FPS and frame time
+        {
+            uint32_t emu_us = emu_frame_time_us_.load(std::memory_order_relaxed);
+            ImGui::Text("FPS %u  %.2fms", actual_fps_, emu_us * 0.001f);
+        }
+
+        // Port status — show external ports with attached device names
+        auto& ports = system_->get_ports();
+        bool has_ext_ports = false;
+        for (auto& p : ports) {
+            if (p->get_definition().is_internal) continue;
+            has_ext_ports = true;
+        }
+        if (has_ext_ports) {
+            ImGui::Separator();
+            for (auto& p : ports) {
+                const auto& def = p->get_definition();
+                if (def.is_internal) continue;
+                auto* dev = p->get_attached_device();
+                if (dev) {
+                    ImGui::TextColored(ImVec4(0.5f, 0.7f, 0.5f, 1.0f), "\xe2\x97\x8f");  // ●
+                    ImGui::SameLine();
+                    ImGui::Text("%s", def.name);
+                } else {
+                    ImGui::TextColored(ImVec4(0.4f, 0.4f, 0.4f, 1.0f), "\xe2\x97\x8b");  // ○
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("%s", def.name);
+                }
+            }
+        }
+    }
+    ImGui::End();
 }
 
 void SessionGUI::render_display_settings() {

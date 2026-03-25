@@ -56,6 +56,12 @@ private:
     static constexpr Uint32 kMenuBarHoverDelay = 450;     ///< ms dwell at top before showing
     static constexpr Uint32 kMenuBarIdleHide   = 3000;    ///< ms idle before auto-hiding (hover trigger only)
     static constexpr float  kMenuBarHoverZone  = 8.0f;    ///< Pixels at top edge for hover trigger
+
+    // ========================================================================
+    // Emulation HUD state (§11.4)
+    // ========================================================================
+    bool show_hud_          = true;   ///< Master HUD toggle
+    int  hud_corner_        = 1;      ///< 0=TL, 1=TR, 2=BL, 3=BR
     
 public:
     /**
@@ -119,6 +125,7 @@ private:
     void allocate_framebuffer();
     void teardown_current_system();
     void render_display_settings();
+    void render_emulation_hud();
 
     /// Re-scan ports and owned devices for the active DisplayDevice.
     /// Locks the SDL audio device to prevent the audio callback from
