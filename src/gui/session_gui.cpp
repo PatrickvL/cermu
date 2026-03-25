@@ -300,7 +300,13 @@ void SessionGUI::update_frame() {
     if (!pending_drop_path_.empty()) {
         std::string path = std::move(pending_drop_path_);
         pending_drop_path_.clear();
-        handle_dropped_file(path);
+
+        // Route drops to launcher when it's open (§10.3)
+        if (launcher_panel_.is_open()) {
+            launcher_panel_.handle_drop(path);
+        } else {
+            handle_dropped_file(path);
+        }
     }
 
     // Refresh window title periodically — systems may update program_title_,
