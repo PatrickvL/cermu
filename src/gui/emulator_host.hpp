@@ -104,6 +104,11 @@ protected:
     bool show_invisible_area_;        // Show non-visible area around display output
     float host_dpi_scale_;            // Host DPI scaling factor
 
+    // Display zoom and pan (monitor viewport adjustment)
+    float display_zoom_  = 1.0f;      // 1.0 = 100%, >1 = zoom in, <1 = zoom out
+    float display_pan_x_ = 0.0f;      // -1..+1 horizontal pan (0 = centered)
+    float display_pan_y_ = 0.0f;      // -1..+1 vertical pan (0 = centered)
+
     // ========================================================================
     // Mouse cursor auto-hide
     // ========================================================================

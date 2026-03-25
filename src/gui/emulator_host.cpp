@@ -38,6 +38,9 @@ EmulatorHost::EmulatorHost()
     , center_display_(true)
     , show_invisible_area_(false)
     , host_dpi_scale_(1.0f)  // Will be detected at runtime
+    , display_zoom_(1.0f)
+    , display_pan_x_(0.0f)
+    , display_pan_y_(0.0f)
     // Emulation state
     , emulation_running_(false)
     , emulation_paused_(false)
@@ -538,26 +541,29 @@ void EmulatorHost::calculate_display_dimensions(
     // Apply user scaling
     display_width *= screen_scale_;
     display_height *= screen_scale_;
+
+    // Apply display zoom (zooms into the rendered image)
+    display_width  *= display_zoom_;
+    display_height *= display_zoom_;
     
-    // Clamp to viewport size if needed
-    if (display_width > effective_viewport_width) {
-        float scale_factor = effective_viewport_width / display_width;
-        display_width = effective_viewport_width;
-        display_height *= scale_factor;
-    }
-    if (display_height > effective_viewport_height) {
-        float scale_factor = effective_viewport_height / display_height;
-        display_height = effective_viewport_height;
-        display_width *= scale_factor;
-    }
-    
-    // Calculate position (center by default)
+    // Calculate position (center by default, then apply pan offset)
     float pos_x = 0.0f;
     float pos_y = 0.0f;
     
     if (center_display_) {
         pos_x = (effective_viewport_width - display_width) * 0.5f;
         pos_y = (effective_viewport_height - display_height) * 0.5f;
+    }
+
+    // Apply pan — offset is proportional to the overflow (zoomed-in area)
+    // display_pan_x/y range is -1..+1; maps to moving the full overflow distance
+    float overflow_x = display_width - effective_viewport_width;
+    float overflow_y = display_height - effective_viewport_height;
+    if (overflow_x > 0.0f) {
+        pos_x += -display_pan_x_ * overflow_x * 0.5f;
+    }
+    if (overflow_y > 0.0f) {
+        pos_y += -display_pan_y_ * overflow_y * 0.5f;
     }
     
     // Apply DPI scaling back to final values
@@ -623,6 +629,19 @@ void EmulatorHost::render_screen_menu_generic() {
     ImGui::Checkbox("Show Overscan/Border", &show_overscan_);
     ImGui::Checkbox("Center Display", &center_display_);
     ImGui::Checkbox("Show Invisible Area", &show_invisible_area_);
+
+    ImGui::Separator();
+    ImGui::Text("Zoom & Pan");
+    ImGui::SliderFloat("Zoom", &display_zoom_, 0.25f, 4.0f, "%.2fx");
+    ImGui::BeginDisabled(display_zoom_ <= 1.0f);
+    ImGui::SliderFloat("Pan X", &display_pan_x_, -1.0f, 1.0f, "%.2f");
+    ImGui::SliderFloat("Pan Y", &display_pan_y_, -1.0f, 1.0f, "%.2f");
+    ImGui::EndDisabled();
+    if (ImGui::Button("Reset Zoom/Pan")) {
+        display_zoom_ = 1.0f;
+        display_pan_x_ = 0.0f;
+        display_pan_y_ = 0.0f;
+    }
     
     // Host DPI information
     ImGui::Separator();
