@@ -503,10 +503,11 @@ inline void FileBrowser::render_path_bar() {
 }
 
 inline void FileBrowser::render_file_list() {
-    // Search input
+    // Search input with placeholder hint
     ImGui::PushStyleColor(ImGuiCol_FrameBg, launcher_theme::kSearchInputBg);
     ImGui::PushItemWidth(200);
-    if (ImGui::InputText("##FileSearch", search_buf_, sizeof(search_buf_))) {
+    if (ImGui::InputTextWithHint("##FileSearch", "Title, year, region, format\xe2\x80\xa6",
+                                  search_buf_, sizeof(search_buf_))) {
         apply_filter_and_sort();
     }
     ImGui::PopItemWidth();
@@ -554,9 +555,14 @@ inline void FileBrowser::render_file_list() {
             }
             ImGui::PopStyleColor();
 
+            // Sort indicator: active column shows direction, others show inactive indicator
+            ImGui::SameLine(0, 2);
             if (is_active) {
-                ImGui::SameLine(0, 2);
                 ImGui::Text(sort_ascending_ ? "\xe2\x96\xb2" : "\xe2\x96\xbc");  // ▲ ▼
+                ImGui::PopStyleColor();
+            } else {
+                ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextDimmed);
+                ImGui::Text("\xe2\x87\x85");  // ⇅
                 ImGui::PopStyleColor();
             }
         };
