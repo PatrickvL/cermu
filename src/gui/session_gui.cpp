@@ -8,6 +8,7 @@
 #include "gui/decoder/vector_signal_decoder.hpp"
 #include "gui/display_panel.hpp"
 #include "gui/port_icons.hpp"
+#include "gui/launcher_theme.hpp"
 #include "gui/vfs_file_system.hpp"
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include <imgui.h>
@@ -470,6 +471,25 @@ void SessionGUI::render_frame() {
     // Launcher panel (new unified UI)
     if (launcher_panel_.is_open()) {
         launcher_panel_.render(system_ != nullptr);
+
+        // First-run setup: show scan root setup when no roots configured (§12.1)
+        if (scan_root_manager_.should_show_setup()) {
+            // Overlay on the right side of the launcher
+            ImGuiViewport* vp = ImGui::GetMainViewport();
+            float left_w = launcher_theme::kLeftPanelWidth * sqrtf(launcher_panel_.get_ui_scale());
+            ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + left_w, vp->Pos.y + 36),
+                                    ImGuiCond_Always);
+            ImGui::SetNextWindowSize(ImVec2(vp->Size.x - left_w, vp->Size.y - 60),
+                                     ImGuiCond_Always);
+            ImGui::Begin("##ScanRootSetupOverlay", nullptr,
+                         ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+            if (scan_root_manager_.render_setup_panel()) {
+                // User clicked "Start scanning" — will be handled when
+                // CatalogPipeline is implemented
+            }
+            ImGui::End();
+        }
 
         if (launcher_panel_.selection_confirmed()) {
             const char* selected = launcher_panel_.get_selected_system();
