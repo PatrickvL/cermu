@@ -302,7 +302,8 @@ static SystemDescriptor chip8_descriptor = {
     {"CHIP8", "CHIP-8", "SCHIP", "XO-CHIP"},
     nullptr,
     create_chip8_hardware_traits(),
-    chip8_probe_file
+    chip8_probe_file,
+    nullptr, 1977, "CHIP-8 VM", SystemType::Other
 };
 
 // ============================================================================

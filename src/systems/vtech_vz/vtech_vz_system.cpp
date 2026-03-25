@@ -58,7 +58,8 @@ static SystemDescriptor vz200_descriptor = {
     "vtech_vz", {"VZ200", "Laser200", "Laser 200"},
     nullptr,
     create_vz_hardware_traits<VZVariant::VZ200>(),
-    nullptr
+    nullptr,
+    "VTech", 1983, "Z80A", SystemType::Home
 };
 
 static SystemDescriptor vz300_descriptor = {
@@ -67,7 +68,8 @@ static SystemDescriptor vz300_descriptor = {
     "vtech_vz", {"VZ300", "Laser310", "Laser 310"},
     nullptr,
     create_vz_hardware_traits<VZVariant::VZ300>(),
-    nullptr
+    nullptr,
+    "VTech", 1985, "Z80A", SystemType::Home
 };
 
 // ============================================================================

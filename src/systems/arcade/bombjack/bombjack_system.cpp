@@ -16,7 +16,8 @@ static SystemDescriptor bombjack_descriptor = {
     "Bomb Jack", "BombJack",
     "Tehkan Bomb Jack — dual Z80A, 3× AY-3-8910, 256×224 sprites+tiles (1984)",
     "bombjack", {"BombJack", "Bomb Jack"},
-    nullptr, {}, nullptr
+    nullptr, {}, nullptr,
+    "Tehkan", 1984, "Z80A (x2)", SystemType::Arcade
 };
 
 // ============================================================================

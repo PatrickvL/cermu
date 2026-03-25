@@ -15,7 +15,8 @@ static SystemDescriptor lc80_descriptor = {
     "LC 80", "LC80",
     "VEB Mikroelektronik LC 80 — U880 @ 900kHz, 1KB RAM, 7-segment LED display (1984)",
     "lc80", {"LC80", "LC-80"},
-    nullptr, {}, nullptr
+    nullptr, {}, nullptr,
+    "Robotron", 1984, "U880 (Z80)", SystemType::Other
 };
 
 // ============================================================================

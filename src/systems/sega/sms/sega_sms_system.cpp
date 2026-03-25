@@ -61,7 +61,8 @@ static SystemDescriptor sms_descriptor = {
     "sega_sms", {"SMS", "MasterSystem", "SegaMasterSystem", "Mark III", "MarkIII"},
     nullptr,
     create_sms_hardware_traits(),
-    nullptr
+    nullptr,
+    "Sega", 1986, "Z80A", SystemType::Console
 };
 
 // ============================================================================

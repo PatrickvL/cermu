@@ -60,7 +60,8 @@ static SystemDescriptor einstein_descriptor = {
     "tatung_einstein", {"Einstein", "TatungEinstein", "TC-01"},
     nullptr,
     create_einstein_hardware_traits(),
-    nullptr
+    nullptr,
+    "Tatung", 1984, "Z80A", SystemType::Home
 };
 
 // ============================================================================

@@ -59,7 +59,8 @@ static SystemDescriptor mtx500_descriptor = {
     "memotech_mtx", {"MTX500", "MTX 500"},
     nullptr,
     create_mtx_hardware_traits<MTXVariant::MTX500>(),
-    nullptr
+    nullptr,
+    "Memotech", 1983, "Z80A", SystemType::Home
 };
 
 static SystemDescriptor mtx512_descriptor = {
@@ -68,7 +69,8 @@ static SystemDescriptor mtx512_descriptor = {
     "memotech_mtx", {"MTX512", "MTX 512"},
     nullptr,
     create_mtx_hardware_traits<MTXVariant::MTX512>(),
-    nullptr
+    nullptr,
+    "Memotech", 1983, "Z80A", SystemType::Home
 };
 
 // ============================================================================

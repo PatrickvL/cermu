@@ -107,7 +107,8 @@ static SystemDescriptor apple1_descriptor = {
     {"Apple1", "Apple-1", "Apple 1"},
     nullptr,  // supported_formats: Apple 1 does not use format handler system
     create_apple1_hardware_traits(),
-    apple1_probe_file
+    apple1_probe_file,
+    "Apple", 1976, "MOS 6502", SystemType::Home
 };
 
 // ============================================================================

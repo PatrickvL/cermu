@@ -319,7 +319,8 @@ static SystemDescriptor c64_descriptor = {
     {"C64", "C-64", "Commodore 64"},
     c64_formats,
     create_c64_hardware_traits(),
-    c64_probe_file
+    c64_probe_file,
+    "Commodore", 1982, "MOS 6510", SystemType::Home
 };
 
 C64System::C64System()

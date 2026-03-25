@@ -208,7 +208,8 @@ const SystemDescriptor& NintendoSystem<V>::static_descriptor() {
         Traits::get_aliases(),
         formats,
         create_nes_hardware_traits(),
-        nes_probe_file
+        nes_probe_file,
+        "Nintendo", 1983, "Ricoh 2A03", SystemType::Console
     };
     return desc;
 }

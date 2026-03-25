@@ -182,7 +182,8 @@ static SystemDescriptor pet_descriptor = {
     {"PET", "PET4032", "PET 4032", "CBM 4032"},
     pet_formats,
     create_pet_hardware_traits(),
-    pet_probe_file
+    pet_probe_file,
+    "Commodore", 1977, "MOS 6502", SystemType::Home
 };
 
 // ============================================================================

@@ -79,6 +79,7 @@ struct AtariVectorTraits<AtariVectorVariant::ASTEROIDS> {
     static constexpr const char* SHORT_NAME   = "Asteroids";
     static constexpr const char* DESCRIPTION  = "Atari Asteroids (1979) — 6502 CPU, DVG vector display";
     static constexpr const char* DATA_FOLDER  = "asteroids";
+    static constexpr int         YEAR         = 1979;
 
     static constexpr uint16_t RAM_BASE        = atv::RAM_BASE;
     static constexpr uint16_t RAM_SIZE        = atv::RAM_SIZE;
@@ -109,6 +110,7 @@ struct AtariVectorTraits<AtariVectorVariant::ASTEROIDS_DELUXE> {
     static constexpr const char* SHORT_NAME   = "AsteroidsDeluxe";
     static constexpr const char* DESCRIPTION  = "Atari Asteroids Deluxe (1980) — 6502 CPU, DVG, POKEY";
     static constexpr const char* DATA_FOLDER  = "asteroids_deluxe";
+    static constexpr int         YEAR         = 1980;
 
     static constexpr uint16_t RAM_BASE        = atv::RAM_BASE;
     static constexpr uint16_t RAM_SIZE        = atv::RAM_SIZE;
@@ -139,6 +141,7 @@ struct AtariVectorTraits<AtariVectorVariant::LUNAR_LANDER> {
     static constexpr const char* SHORT_NAME   = "LunarLander";
     static constexpr const char* DESCRIPTION  = "Atari Lunar Lander (1979) — 6502 CPU, DVG vector display";
     static constexpr const char* DATA_FOLDER  = "lunar_lander";
+    static constexpr int         YEAR         = 1979;
 
     static constexpr uint16_t RAM_BASE        = atv::RAM_BASE;
     static constexpr uint16_t RAM_SIZE        = atv::RAM_SIZE;
@@ -169,6 +172,7 @@ struct AtariVectorTraits<AtariVectorVariant::BATTLEZONE> {
     static constexpr const char* SHORT_NAME   = "Battlezone";
     static constexpr const char* DESCRIPTION  = "Atari Battlezone (1980) — 6502 CPU, AVG vector display";
     static constexpr const char* DATA_FOLDER  = "battlezone";
+    static constexpr int         YEAR         = 1980;
 
     static constexpr uint16_t RAM_BASE        = atv::BZ_RAM_BASE;
     static constexpr uint16_t RAM_SIZE        = atv::BZ_RAM_SIZE;
@@ -199,6 +203,7 @@ struct AtariVectorTraits<AtariVectorVariant::RED_BARON> {
     static constexpr const char* SHORT_NAME   = "RedBaron";
     static constexpr const char* DESCRIPTION  = "Atari Red Baron (1980) — 6502 CPU, AVG, POKEY";
     static constexpr const char* DATA_FOLDER  = "red_baron";
+    static constexpr int         YEAR         = 1980;
 
     static constexpr uint16_t RAM_BASE        = atv::RB_RAM_BASE;
     static constexpr uint16_t RAM_SIZE        = atv::RB_RAM_SIZE;
@@ -231,6 +236,7 @@ struct AtariVectorTraits<AtariVectorVariant::TEMPEST> {
     static constexpr const char* SHORT_NAME   = "Tempest";
     static constexpr const char* DESCRIPTION  = "Atari Tempest (1980) — 6502 CPU, AVG color vector, POKEY";
     static constexpr const char* DATA_FOLDER  = "tempest";
+    static constexpr int         YEAR         = 1980;
 
     static constexpr uint16_t RAM_BASE        = atv::TEMP_RAM_BASE;
     static constexpr uint16_t RAM_SIZE        = atv::TEMP_RAM_SIZE;
@@ -261,6 +267,7 @@ struct AtariVectorTraits<AtariVectorVariant::GRAVITAR> {
     static constexpr const char* SHORT_NAME   = "Gravitar";
     static constexpr const char* DESCRIPTION  = "Atari Gravitar (1982) — 6502 CPU, AVG vector, POKEY";
     static constexpr const char* DATA_FOLDER  = "gravitar";
+    static constexpr int         YEAR         = 1982;
 
     static constexpr uint16_t RAM_BASE        = atv::GRAV_RAM_BASE;
     static constexpr uint16_t RAM_SIZE        = atv::GRAV_RAM_SIZE;
@@ -291,6 +298,7 @@ struct AtariVectorTraits<AtariVectorVariant::SPACE_DUEL> {
     static constexpr const char* SHORT_NAME   = "SpaceDuel";
     static constexpr const char* DESCRIPTION  = "Atari Space Duel (1982) — 6502 CPU, AVG color vector, POKEY";
     static constexpr const char* DATA_FOLDER  = "space_duel";
+    static constexpr int         YEAR         = 1982;
 
     static constexpr uint16_t RAM_BASE        = atv::SD_RAM_BASE;
     static constexpr uint16_t RAM_SIZE        = atv::SD_RAM_SIZE;  // 1KB
@@ -321,6 +329,7 @@ struct AtariVectorTraits<AtariVectorVariant::BLACK_WIDOW> {
     static constexpr const char* SHORT_NAME   = "BlackWidow";
     static constexpr const char* DESCRIPTION  = "Atari Black Widow (1982) — 6502 CPU, AVG color vector, POKEY";
     static constexpr const char* DATA_FOLDER  = "black_widow";
+    static constexpr int         YEAR         = 1982;
 
     static constexpr uint16_t RAM_BASE        = atv::BW_RAM_BASE;
     static constexpr uint16_t RAM_SIZE        = atv::BW_RAM_SIZE;
@@ -351,6 +360,7 @@ struct AtariVectorTraits<AtariVectorVariant::MAJOR_HAVOC> {
     static constexpr const char* SHORT_NAME   = "MajorHavoc";
     static constexpr const char* DESCRIPTION  = "Atari Major Havoc (1983) — 6502 CPU, AVG color vector, POKEY";
     static constexpr const char* DATA_FOLDER  = "major_havoc";
+    static constexpr int         YEAR         = 1983;
 
     static constexpr uint16_t RAM_BASE        = atv::MH_RAM_BASE;
     static constexpr uint16_t RAM_SIZE        = atv::MH_RAM_SIZE;
@@ -613,6 +623,8 @@ private:
     bus_state_t pins_ = MOS6502::default_bus_state();
     bool system_ready_    = false;
     uint32_t nmi_counter_ = 0;
+    int cpu_trace_count_ = 0;     // TEMP DIAG
+    uint16_t last_pc_ = 0xFFFF;   // TEMP DIAG
 
     // ── Inputs ──────────────────────────────────────────────────────────
     uint8_t in0_       = 0x00;
@@ -621,8 +633,9 @@ private:
     uint8_t dsw2_      = 0x00;
     uint8_t thrust_    = 0x00;      // Lunar Lander thrust ADC
 
-    // ── NMI gating ──────────────────────────────────────────────────────
+    // ── NMI gating / IRQ state ──────────────────────────────────────────
     bool nmi_enabled_ = false;
+    bool irq_asserted_ = false;     // Tempest: level-sensitive IRQ from 3KHz/12 timer
 
     // ── Sound output latches ────────────────────────────────────────────
     uint8_t snd_latch_ = 0x00;

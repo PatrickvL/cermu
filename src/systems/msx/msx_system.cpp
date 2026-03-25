@@ -69,7 +69,8 @@ static SystemDescriptor msx1_descriptor = {
     "msx", {"MSX", "MSX1"},
     nullptr,
     create_msx_hardware_traits<MSXVariant::MSX1>(),
-    nullptr
+    nullptr,
+    "Microsoft", 1983, "Z80A", SystemType::Home
 };
 
 static SystemDescriptor msx2_descriptor = {
@@ -78,7 +79,8 @@ static SystemDescriptor msx2_descriptor = {
     "msx", {"MSX2"},
     nullptr,
     create_msx_hardware_traits<MSXVariant::MSX2>(),
-    nullptr
+    nullptr,
+    "Microsoft", 1985, "Z80A", SystemType::Home
 };
 
 static SystemDescriptor msx2p_descriptor = {
@@ -87,7 +89,8 @@ static SystemDescriptor msx2p_descriptor = {
     "msx", {"MSX2+", "MSX2Plus"},
     nullptr,
     create_msx_hardware_traits<MSXVariant::MSX2P>(),
-    nullptr
+    nullptr,
+    "Microsoft", 1988, "Z80A", SystemType::Home
 };
 
 // ============================================================================

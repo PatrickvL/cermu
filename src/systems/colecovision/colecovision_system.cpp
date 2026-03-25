@@ -57,7 +57,8 @@ static SystemDescriptor coleco_descriptor = {
     "colecovision", {"ColecoVision", "Coleco", "CV"},
     nullptr,
     create_coleco_hardware_traits(),
-    nullptr
+    nullptr,
+    "Coleco", 1982, "Z80A", SystemType::Console
 };
 
 // ============================================================================

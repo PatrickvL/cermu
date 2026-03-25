@@ -70,7 +70,8 @@ static SystemDescriptor c128_descriptor = {
     "c128", {"C128", "Commodore128", "CBM128"},
     nullptr,
     create_c128_hardware_traits(),
-    nullptr
+    nullptr,
+    "Commodore", 1985, "CSG 8502 + Z80", SystemType::Home
 };
 
 // ============================================================================
