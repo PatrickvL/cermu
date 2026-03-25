@@ -6,6 +6,7 @@ namespace mc6809 {
 inline constexpr MC6809Traits MotorolaMC6809ETtraits = {
     "Motorola",                   // vendor
     "MC6809E",                    // chip_id
+    "Motorola MC6809E",           // display_name
     CoreFlags::MC6809E_BASE,      // core_flags
     16,                           // address_bits
     10,                           // max_clock_mhz_x10 (1.0 MHz)

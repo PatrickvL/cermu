@@ -379,7 +379,7 @@ public:
     // ========================================================================
 
     ym_fm_t()
-        : SoundChipBase(ChipInfo{Traits.chip_id, Traits.vendor, {}})
+        : SoundChipBase(ChipInfo{Traits.chip_id, Traits.vendor, Traits.display_name})
     {
         init_regs(ym_fm::reg::OPN_TOTAL_REGS);
 #ifdef CERMU_HAS_CHIP_DEBUG

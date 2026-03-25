@@ -12,6 +12,7 @@
 inline constexpr YMTraits YM3526_Traits = {
     .vendor               = "Yamaha",
     .chip_id              = "YM3526",
+    .display_name         = "Yamaha YM3526 (OPL)",
     .fm_channels          = 9,
     .operators_per_channel = 2,
     .fm_algorithms        = 4,

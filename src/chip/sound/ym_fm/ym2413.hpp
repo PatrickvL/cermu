@@ -12,6 +12,7 @@
 inline constexpr YMTraits YM2413_Traits = {
     .vendor               = "Yamaha",
     .chip_id              = "YM2413",
+    .display_name         = "Yamaha YM2413 (OPLL)",
     .fm_channels          = 9,
     .operators_per_channel = 2,
     .fm_algorithms        = 4,

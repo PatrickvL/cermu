@@ -12,6 +12,7 @@
 inline constexpr YMTraits YM2151_Traits = {
     .vendor               = "Yamaha",
     .chip_id              = "YM2151",
+    .display_name         = "Yamaha YM2151 (OPM)",
     .fm_channels          = 8,
     .operators_per_channel = 4,
     .fm_algorithms        = 8,

@@ -17,6 +17,7 @@ namespace tms9918 {
 inline constexpr VDPTraits SEGA_315_5124Traits = {
     "Sega",                          // vendor
     "315-5124",                      // chip_id
+    "Sega 315-5124",                 // display_name
     VDPRegion::NTSC,                 // region
     VDPOutput::COMPOSITE,            // output
     VDPSpriteModel::SEGA,            // sprite_model

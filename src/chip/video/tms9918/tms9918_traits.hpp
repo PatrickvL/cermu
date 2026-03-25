@@ -69,6 +69,7 @@ namespace VDPFeatureFlags {
 struct VDPTraits {
     const char*      vendor;
     const char*      chip_id;
+    const char*      display_name;    // "TI TMS9918A" — human-readable UI label
     VDPRegion        region;
     VDPOutput        output;
     VDPSpriteModel   sprite_model;

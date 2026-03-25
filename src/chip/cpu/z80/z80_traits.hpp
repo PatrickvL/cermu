@@ -88,6 +88,7 @@ struct Z80PeripheralConfig {
 struct Z80Traits {
     const char* vendor;            // "Zilog", "NEC", "Sharp", "Toshiba", "SGS-Thomson"
     const char* chip_id;           // "Z80", "Z80A", "Z180", "R800"
+    const char* display_name;      // "Zilog Z80A", "U880" — human-readable UI label
     uint32_t    core_flags;        // Z80CoreFlags combination
     uint8_t     address_bits;      // Address bus width (16, 20, 24)
     uint8_t     max_clock_mhz_x10; // Max rated clock × 10 (e.g. 40 = 4.0 MHz, 60 = 6.0 MHz)

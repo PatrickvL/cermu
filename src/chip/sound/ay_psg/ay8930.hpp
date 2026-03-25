@@ -15,7 +15,7 @@
 #include "chip/sound/ay_psg/ay_psg.hpp"
 
 inline constexpr AYTraits AY8930_Traits = {
-    "Microchip", "AY8930",
+    "Microchip", "AY8930", "Microchip AY8930",
     2, 2, 16, AYRegisterMap::STANDARD, true
 };
 

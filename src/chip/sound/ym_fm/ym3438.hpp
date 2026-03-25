@@ -12,6 +12,7 @@
 inline constexpr YMTraits YM3438_Traits = {
     .vendor               = "Yamaha",
     .chip_id              = "YM3438",
+    .display_name         = "Yamaha YM3438 (OPN2C)",
     .fm_channels          = 6,
     .operators_per_channel = 4,
     .fm_algorithms        = 8,

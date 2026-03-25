@@ -95,6 +95,7 @@ constexpr uint32_t NMOS_B =
 struct POKEYTraits {
     const char* vendor;               // "Atari"
     const char* chip_id;              // "C012294", "C012294B", etc.
+    const char* display_name;         // "Atari POKEY" — human-readable UI label
     uint32_t    core_flags;           // PokeyFlags combination
     uint8_t     pin_count;            // 40 (all known variants)
 

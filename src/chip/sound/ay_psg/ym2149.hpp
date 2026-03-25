@@ -10,7 +10,7 @@
 #include "chip/sound/ay_psg/ay_psg.hpp"
 
 inline constexpr AYTraits YM2149_Traits = {
-    "Yamaha", "YM2149",
+    "Yamaha", "YM2149", "Yamaha YM2149",
     2, 1, 32, AYRegisterMap::STANDARD, false
 };
 

@@ -13,6 +13,7 @@
 inline constexpr YMTraits YM2203_Traits = {
     .vendor               = "Yamaha",
     .chip_id              = "YM2203",
+    .display_name         = "Yamaha YM2203 (OPN)",
     .fm_channels          = 3,
     .operators_per_channel = 4,
     .fm_algorithms        = 8,

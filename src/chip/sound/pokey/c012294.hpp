@@ -14,6 +14,7 @@ namespace pokey {
 inline constexpr POKEYTraits C012294_Traits = {
     "Atari",                     // vendor
     "C012294",                   // chip_id
+    "Atari POKEY",               // display_name
     CoreFlags::NMOS_FULL,        // core_flags — full home computer config
     40                           // pin_count
 };

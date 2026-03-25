@@ -11,6 +11,7 @@
 inline constexpr YMTraits YM2612_Traits = {
     .vendor               = "Yamaha",
     .chip_id              = "YM2612",
+    .display_name         = "Yamaha YM2612 (OPN2)",
     .fm_channels          = 6,
     .operators_per_channel = 4,
     .fm_algorithms        = 8,

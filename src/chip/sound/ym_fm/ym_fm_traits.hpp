@@ -38,6 +38,7 @@
 struct YMTraits {
     const char* vendor;
     const char* chip_id;
+    const char* display_name;       // "Yamaha YM2612 (OPN2)" — human-readable UI label
 
     // FM core
     uint8_t fm_channels;            // 3, 4, 6, 8, or 9
