@@ -78,6 +78,9 @@ public:
     /// Handle a file dropped onto the launcher (navigate + probe)
     void handle_drop(const std::string& path);
 
+    /// Current UI scale factor
+    float get_ui_scale() const { return ui_scale_; }
+
     /// Reset selection state after processing
     void reset();
 
