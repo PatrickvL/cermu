@@ -29,6 +29,7 @@
 #include "gui/vfs_file_system.hpp"
 #include "core/formats/format_handler.hpp"
 #include "core/config/path_discovery.hpp"
+#include "utils/file_watcher.hpp"
 #include "utils/rom_filename_parser.hpp"
 
 /// A single entry in the file browser listing.
@@ -136,6 +137,10 @@ private:
 
     // Region filter
     std::string region_filter_;  // empty = show all
+
+    // Filesystem watch — auto-rescan when directory contents change on disk
+    file_watcher::FileWatcher dir_watcher_;
+    uint32_t watcher_cooldown_ = 0;  // frames to skip after rescan (debounce)
 };
 
 // =============================================================================
@@ -167,6 +172,13 @@ inline void FileBrowser::navigate_to(const std::string& path) {
     file_selection_changed_ = false;
     scan_directory();
     apply_filter_and_sort();
+
+    // Watch real directories for changes (skip VFS paths)
+    if (path.find("!/") == std::string::npos)
+        dir_watcher_.watch(path);
+    else
+        dir_watcher_.unwatch();
+    watcher_cooldown_ = 0;
 }
 
 inline void FileBrowser::navigate_to_system_data(const char* data_folder,
@@ -453,6 +465,15 @@ inline std::string FileBrowser::get_type_label(const FileBrowserEntry& entry) {
 inline void FileBrowser::render() {
     file_selection_changed_ = false;
     file_activated_ = false;
+
+    // Auto-rescan on filesystem changes (inotify)
+    if (watcher_cooldown_ > 0) {
+        --watcher_cooldown_;
+    } else if (dir_watcher_.poll_changed()) {
+        scan_directory();
+        apply_filter_and_sort();
+        watcher_cooldown_ = 30;  // debounce: skip 30 frames (~0.5s at 60fps)
+    }
 
     render_path_bar();
     render_file_list();
