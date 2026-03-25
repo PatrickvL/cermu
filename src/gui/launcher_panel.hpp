@@ -123,6 +123,12 @@ private:
     float probe_confidence_ = 0.0f;
     SystemConfiguration probe_config_;    // Config from probe
 
+    // UI zoom (proportional rendering)
+    float ui_scale_ = 1.0f;
+    static constexpr float kMinUiScale  = 0.5f;
+    static constexpr float kMaxUiScale  = 3.0f;
+    static constexpr float kUiScaleStep = 0.1f;
+
     // Cached sorted system list
     struct SystemEntry {
         int registry_index;
@@ -413,6 +419,10 @@ inline void LauncherPanel::render(bool allow_cancel) {
                              ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
                              ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNav;
 
+    // Apply proportional zoom — scale all ImGui rendering while the launcher is active
+    float saved_scale = ImGui::GetIO().FontGlobalScale;
+    ImGui::GetIO().FontGlobalScale = saved_scale * ui_scale_;
+
     if (ImGui::Begin("##Launcher", nullptr, flags)) {
         float top_bar_height = 36.0f;
         float status_bar_height = 24.0f;
@@ -449,6 +459,9 @@ inline void LauncherPanel::render(bool allow_cancel) {
 
     ImGui::PopStyleVar(3);
     ImGui::PopStyleColor();
+
+    // Restore global scale
+    ImGui::GetIO().FontGlobalScale = saved_scale;
 }
 
 inline void LauncherPanel::render_top_bar(bool allow_cancel) {
@@ -921,12 +934,47 @@ inline void LauncherPanel::render_status_bar() {
         }
     }
 
+    // Right-aligned zoom indicator (only when not at 100%)
+    if (ui_scale_ < 0.99f || ui_scale_ > 1.01f) {
+        char zoom_label[32];
+        snprintf(zoom_label, sizeof(zoom_label), "%d%%", static_cast<int>(ui_scale_ * 100.0f + 0.5f));
+        float text_w = ImGui::CalcTextSize(zoom_label).x;
+        ImGui::SameLine(ImGui::GetWindowWidth() - text_w - 12);
+        ImGui::Text("%s", zoom_label);
+    }
+
     ImGui::PopStyleColor();
     ImGui::EndChild();
     ImGui::PopStyleColor();
 }
 
 inline void LauncherPanel::handle_keyboard() {
+    // Zoom shortcuts — processed even when a text input is active
+    // Ctrl+= / Ctrl+Plus to zoom in, Ctrl+- to zoom out, Ctrl+0 to reset
+    {
+        bool ctrl = ImGui::GetIO().KeyCtrl;
+#ifdef __APPLE__
+        ctrl = ImGui::GetIO().KeySuper;  // Cmd on macOS
+#endif
+        if (ctrl) {
+            // Zoom in: Ctrl+= (unshifted Plus key) or Ctrl+Keypad+
+            if (ImGui::IsKeyPressed(ImGuiKey_Equal) ||
+                ImGui::IsKeyPressed(ImGuiKey_KeypadAdd)) {
+                ui_scale_ = std::min(ui_scale_ + kUiScaleStep, kMaxUiScale);
+            }
+            // Zoom out: Ctrl+- or Ctrl+Keypad-
+            if (ImGui::IsKeyPressed(ImGuiKey_Minus) ||
+                ImGui::IsKeyPressed(ImGuiKey_KeypadSubtract)) {
+                ui_scale_ = std::max(ui_scale_ - kUiScaleStep, kMinUiScale);
+            }
+            // Reset: Ctrl+0 or Ctrl+Keypad0
+            if (ImGui::IsKeyPressed(ImGuiKey_0) ||
+                ImGui::IsKeyPressed(ImGuiKey_Keypad0)) {
+                ui_scale_ = 1.0f;
+            }
+        }
+    }
+
     // Don't process keyboard when a text input is active
     if (ImGui::IsAnyItemActive()) return;
 

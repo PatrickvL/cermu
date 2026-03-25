@@ -157,6 +157,10 @@ void SessionGUI::handle_events() {
             gui_wants_kbd = true;
 #endif
 
+        // Launcher or system selection dialog
+        if (launcher_panel_.is_open() || system_selection_dialog_.is_open())
+            gui_wants_kbd = true;
+
         // Auxiliary windows (settings, memory viewer, about)
         if (show_settings_ || show_memory_viewer_ || show_about_)
             gui_wants_kbd = true;
@@ -204,6 +208,24 @@ void SessionGUI::handle_events() {
                     SDL_SetWindowFullscreen(get_window(), 0);
                 } else {
                     SDL_SetWindowFullscreen(get_window(), SDL_WINDOW_FULLSCREEN_DESKTOP);
+                }
+            }
+            continue;
+        }
+
+        // Consume F12 — toggle auto-hide menu bar (§11.1).
+        if ((event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) &&
+            event.key.keysym.scancode == SDL_SCANCODE_F12) {
+            if (event.type == SDL_KEYDOWN && !event.key.repeat) {
+                if (menu_bar_visible_ && menu_bar_pinned_) {
+                    // Already pinned and visible — hide and unpin
+                    menu_bar_visible_ = false;
+                    menu_bar_pinned_ = false;
+                } else {
+                    // Show and pin (stays until F12 again)
+                    menu_bar_visible_ = true;
+                    menu_bar_pinned_ = true;
+                    menu_bar_show_time_ = SDL_GetTicks();
                 }
             }
             continue;
@@ -295,6 +317,66 @@ void SessionGUI::update_frame() {
     // Emulation now runs on a separate thread (emu_thread_func).
     // The GUI thread only updates the FPS counter from the atomic frame count.
     update_fps();
+
+    // Keep host cursor visible while the launcher or system selection dialog is open
+    force_cursor_visible_ = launcher_panel_.is_open() || system_selection_dialog_.is_open();
+
+    // ========================================================================
+    // Auto-hide menu bar — hover dwell trigger and idle auto-hide (§11.1)
+    // ========================================================================
+    {
+        Uint32 now = SDL_GetTicks();
+        int mx, my;
+        SDL_GetMouseState(&mx, &my);
+
+        // Don't auto-hide/show while launcher is open (launcher has its own UI)
+        if (!launcher_panel_.is_open() && !system_selection_dialog_.is_open()) {
+            // Hover trigger: cursor at top edge of window
+            if (my <= static_cast<int>(kMenuBarHoverZone) && !menu_bar_visible_) {
+                if (!menu_bar_hover_active_) {
+                    menu_bar_hover_active_ = true;
+                    menu_bar_show_time_ = now;  // Start dwell timer
+                } else if (now - menu_bar_show_time_ >= kMenuBarHoverDelay) {
+                    // Dwell threshold reached — show (not pinned)
+                    menu_bar_visible_ = true;
+                    menu_bar_pinned_ = false;
+                    menu_bar_show_time_ = now;
+                    menu_bar_hover_active_ = false;
+                }
+            } else {
+                menu_bar_hover_active_ = false;
+            }
+
+            // Auto-hide after idle (only for hover-triggered, not pinned)
+            if (menu_bar_visible_ && !menu_bar_pinned_) {
+                // Don't hide while a menu is open
+                bool menu_open = ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
+                if (!menu_open && now - menu_bar_show_time_ >= kMenuBarIdleHide) {
+                    // Check if cursor is still near the bar
+                    float bar_h = ImGui::GetFrameHeight() + 4.0f;  // approx menu bar height
+                    if (my > static_cast<int>(bar_h * 1.5f)) {
+                        menu_bar_visible_ = false;
+                    } else {
+                        // Still near bar — reset timer
+                        menu_bar_show_time_ = now;
+                    }
+                }
+            }
+        } else {
+            // Launcher open — bar follows launcher state
+            menu_bar_visible_ = false;
+        }
+
+        // Animate the bar position
+        float target = menu_bar_visible_ ? 1.0f : 0.0f;
+        if (menu_bar_anim_ < target) {
+            menu_bar_anim_ += kMenuBarAnimSpeed * ImGui::GetIO().DeltaTime;
+            if (menu_bar_anim_ > 1.0f) menu_bar_anim_ = 1.0f;
+        } else if (menu_bar_anim_ > target) {
+            menu_bar_anim_ -= kMenuBarAnimSpeed * ImGui::GetIO().DeltaTime;
+            if (menu_bar_anim_ < 0.0f) menu_bar_anim_ = 0.0f;
+        }
+    }
 
     // Process a pending drag-and-drop file (captured in handle_events).
     if (!pending_drop_path_.empty()) {
@@ -479,10 +561,28 @@ void SessionGUI::render_frame() {
         render_screen();
     }
     
-    // Render menu bar (on top of screen) - only if not in fullscreen mode
-    Uint32 window_flags = SDL_GetWindowFlags(get_window());
-    if (!(window_flags & SDL_WINDOW_FULLSCREEN_DESKTOP)) {
-        render_menu_bar();
+    // Render menu bar — animated slide in/out (§11.1)
+    // In windowed mode the bar is always visible; in fullscreen it auto-hides
+    // and slides via menu_bar_anim_ (0=hidden above viewport, 1=fully visible).
+    if (!launcher_panel_.is_open()) {
+        Uint32 window_flags = SDL_GetWindowFlags(get_window());
+        bool fullscreen = (window_flags & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
+
+        if (!fullscreen) {
+            // Windowed — always show the menu bar normally
+            render_menu_bar();
+        } else if (menu_bar_anim_ > 0.01f) {
+            // Fullscreen with animation > 0 — offset the viewport origin so
+            // BeginMainMenuBar() slides in from above.
+            ImGuiViewport* vp = ImGui::GetMainViewport();
+            float bar_h = ImGui::GetFrameHeight() + ImGui::GetStyle().FramePadding.y * 2.0f;
+            float offset_y = -bar_h * (1.0f - menu_bar_anim_);
+
+            ImVec2 saved_pos = vp->Pos;
+            vp->Pos.y += offset_y;
+            render_menu_bar();
+            vp->Pos = saved_pos;
+        }
     }
     
     // Render optional windows
