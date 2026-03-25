@@ -369,7 +369,7 @@ private:
 
 // Main SID chip structure - Enhanced (C++ class inheriting ChipBase)
 struct mos6581_t : public SoundChipBase {
-    mos6581_t() : SoundChipBase(ChipInfo{"MOS6581", "MOS Technology"}) {
+    mos6581_t() : SoundChipBase(ChipInfo{"MOS6581", "MOS Technology", "MOS 6581"}) {
         init_regs(sid_constants::REGS_SIZE);
     }
 

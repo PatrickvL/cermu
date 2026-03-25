@@ -72,8 +72,9 @@ enum class PIOMode : uint8_t {
 class z80_pio_t : public IoChipBase {
 public:
     explicit z80_pio_t(bool is_u855 = false)
-        : IoChipBase(ChipInfo(is_u855 ? "U855" : "Z80 PIO",
-                             is_u855 ? "VEB MME Erfurt" : "Zilog"))
+        : IoChipBase(ChipInfo{is_u855 ? "U855" : "Z80 PIO",
+                             is_u855 ? "VEB MME Erfurt" : "Zilog",
+                             {}})
     {
         init_regs(z80_pio::reg::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG

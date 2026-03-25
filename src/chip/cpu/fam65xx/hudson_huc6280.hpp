@@ -13,8 +13,9 @@
 namespace fam65xx {
 
 inline constexpr CPUTraits HUDSON_HUC6280Traits = {
-    "Hudson Soft", // vendor
-    "HuC6280",     // chip_id
+    "Hudson Soft",    // vendor
+    "HuC6280",        // chip_id
+    "Hudson HuC6280", // display_name
     CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::HUC6280_EXTENDED |
         CPUCoreFlags::VARIABLE_CLOCK | CPUCoreFlags::HAS_BANKING, // core_flags
     21,                                                 // address_bits

@@ -19,7 +19,7 @@ static const vic_chip_config_t vic_config_ntsc = {
 
 void mos6560_t::init() {
     is_pal = false;
-    info_ = ChipInfo{"MOS6560", "MOS Technology"};
+    info_ = ChipInfo{"MOS6560", "MOS Technology", "MOS 6560"};
     clock_frequency = vic_config_ntsc.clock_frequency;
     config = &vic_config_ntsc;
 

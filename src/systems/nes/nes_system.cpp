@@ -814,14 +814,14 @@ void NintendoSystem<V>::register_nes_chips() {
 
     // RAM — RAMChip with layout rendering
     auto ram = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "Various"}, nes_constants::CPU_RAM_SIZE, RAMChip::SRAM, &pins_,
+        ChipInfo{"SRAM", "Various", {}}, nes_constants::CPU_RAM_SIZE, RAMChip::SRAM, &pins_,
         "RAM", 0x0000);
     ram->bind(bus_.cpu_ram);  // Point at flat mem RAM for live debug view
     register_chip(std::move(ram));
 
     // CIRAM (2KB nametable VRAM on NES motherboard)
     auto ciram = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "Various"}, 2048, RAMChip::SRAM, &pins_,
+        ChipInfo{"SRAM", "Various", {}}, 2048, RAMChip::SRAM, &pins_,
         "CIRAM", 0x2000);
     ciram->bind(bus_.ciram);  // Point at flat mem CIRAM for live debug view
     register_chip(std::move(ciram));

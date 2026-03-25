@@ -23,7 +23,7 @@
 class CD4021 : public InputChipBase {
 public:
     CD4021()
-        : InputChipBase(ChipInfo{"CD4021", "8-Bit Static Shift Register", "Texas Instruments"}) {
+        : InputChipBase(ChipInfo{"CD4021", "Texas Instruments", "CD4021 Shift Register"}) {
         reset();
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();

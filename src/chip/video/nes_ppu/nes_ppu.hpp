@@ -304,7 +304,7 @@ public:
     PPU(bool pal = false) : is_pal(pal),
         total_scanlines_minus_one_(pal ? 311 : 261) {  // PAL: 312-1, NTSC: 262-1
         init_regs(REG_COUNT);
-        info_ = ChipInfo{pal ? "RP2C07" : "RP2C02", "Ricoh"};
+        info_ = ChipInfo{pal ? "RP2C07" : "RP2C02", "Ricoh", pal ? "Ricoh 2C07" : "Ricoh 2C02"};
         // Initialize PPU memory (std::array zero-initialized by {})
         std::memset(internal.sec_oam_.bytes, 0xFF, 32);
         internal.sprite_count = 0;
@@ -322,7 +322,7 @@ public:
     void reconfigure(bool pal) {
         is_pal = pal;
         total_scanlines_minus_one_ = pal ? 311 : 261;
-        info_ = ChipInfo{pal ? "RP2C07" : "RP2C02", "Ricoh"};
+        info_ = ChipInfo{pal ? "RP2C07" : "RP2C02", "Ricoh", pal ? "Ricoh 2C07" : "Ricoh 2C02"};
         build_palette_cache(is_pal, palette_cache_);
         reset();
     }

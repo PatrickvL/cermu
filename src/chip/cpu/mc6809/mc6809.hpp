@@ -186,7 +186,7 @@ public:
     }
 
     // === Chip identity ===
-    mc6809_t() : CpuChipBase(ChipInfo(Traits.chip_id, Traits.vendor)) {
+    mc6809_t() : CpuChipBase(ChipInfo{Traits.chip_id, Traits.vendor, {}}) {
         display_name_ = Traits.chip_id;
         short_name_   = Traits.chip_id;
 #ifdef CERMU_HAS_CHIP_DEBUG

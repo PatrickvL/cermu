@@ -8,7 +8,7 @@
 // MOS2114 — constructor
 // ============================================================================
 MOS2114::MOS2114()
-    : MemoryChipBase(ChipInfo{"MOS2114", "MOS Technology"})
+    : MemoryChipBase(ChipInfo{"MOS2114", "MOS Technology", "MOS 2114"})
 {
     std::memset(memory, 0, sizeof(memory));
 #ifdef CERMU_HAS_CHIP_DEBUG

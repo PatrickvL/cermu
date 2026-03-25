@@ -186,7 +186,7 @@ bool Apple1System::initialize() {
 
     // Character ROM — not on the bus (used by terminal renderer only).
     auto char_chip = std::make_unique<ROMChip>(
-        ChipInfo{"2513", "Signetics"}, 512, ROMChip::ROM, &pins_,
+        ChipInfo{"2513", "Signetics", "Signetics 2513"}, 512, ROMChip::ROM, &pins_,
         "CharROM");
     char_rom_ = char_chip.get();
     
@@ -224,7 +224,7 @@ bool Apple1System::initialize() {
     // Register chips for the Hardware menu
     register_bus_chips(board_);
     register_chip(std::make_unique<ChipPlaceholder>(
-        ChipInfo{"Terminal", "Custom"}, "Text Terminal (40x24)", "Terminal", "Video"));
+        ChipInfo{"Terminal", "Custom", {}}, "Text Terminal (40x24)", "Terminal", "Video"));
     register_chip(std::move(char_chip));
 
     // GPU indexed palette rendering

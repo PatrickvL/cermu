@@ -18,6 +18,7 @@ namespace fam65xx {
 inline constexpr CPUTraits WDC_65C816Traits = {
     "WDC",                                                 // vendor
     "65C816",                                              // chip_id
+    "WDC 65C816",                                          // display_name
     CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::C816_16BIT, // core_flags
     24,                                                    // address_bits
     0x00,                                                  // io_port_mask

@@ -190,7 +190,7 @@ inline constexpr int PALETTE_SIZE = 2;
 class mc6847_t : public VideoChipBase {
 public:
     mc6847_t()
-        : VideoChipBase(ChipInfo("MC6847", "Motorola"))
+        : VideoChipBase(ChipInfo{"MC6847", "Motorola", "Motorola MC6847"})
     {
         init_regs(mc6847_const::REG_COUNT);
         system_palette_ = get_palette();

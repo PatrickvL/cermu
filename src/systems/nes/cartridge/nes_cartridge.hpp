@@ -51,7 +51,7 @@ public:
     /** Protected default constructor — allows direct construction for
      *  programmatic cartridge setup (e.g. NSF player). */
     Cartridge()
-        : ChipBase(ChipInfo{"Cartridge", "iNES ROM Cartridge", "Various"}) {
+        : ChipBase(ChipInfo{"Cartridge", "Various", {}}) {
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif

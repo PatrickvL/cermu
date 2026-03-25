@@ -86,9 +86,6 @@ struct ChipMarkings {
     void from_chip_info(const ChipInfo& info) {
         part_number     = info.part_number;
         manufacturer    = info.manufacturer;
-        package_variant = info.package_variant;
-        date_code       = info.date_code;
-        lot_number      = info.lot_number;
     }
 };
 

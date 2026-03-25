@@ -25,8 +25,9 @@ namespace fam65xx {
 
 // CSG 8502 — C128 CPU (NMOS with I/O port and variable clock)
 inline constexpr CPUTraits CSG8502Traits = {
-    "Commodore", // vendor
+    "Commodore",  // vendor
     "CSG8502",   // chip_id
+    "CSG 8502",  // display_name
     CoreFlags::NMOS_BASE | CPUCoreFlags::HAS_IO_PORT |
         CPUCoreFlags::VARIABLE_CLOCK, // core_flags
     16,                               // address_bits

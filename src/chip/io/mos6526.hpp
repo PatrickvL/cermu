@@ -107,7 +107,7 @@ CIA_DECL(DECL_REG_NOP, CIA_X_FLD_NS_, DECL_CMP_NOP)
 } } // namespace cia::fld
 
 struct mos6526_t : public IoChipBase {
-    mos6526_t() : IoChipBase(ChipInfo{"MOS6526", "MOS Technology"}) {
+    mos6526_t() : IoChipBase(ChipInfo{"MOS6526", "MOS Technology", "MOS 6526"}) {
         init_regs(CIA_REGS_SIZE + 4 + 4 + 4 + 1 + 1); // Registers, plus TIMER, CLOCK, ALARM, SDR and DDRB latches
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();

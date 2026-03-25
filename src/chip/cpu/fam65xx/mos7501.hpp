@@ -30,8 +30,9 @@ namespace fam65xx {
 //
 // No NMI line: GATE IN (from TED) replaces NMI on this chip.
 inline constexpr CPUTraits CSG7501Traits = {
-    "Commodore", // vendor
+    "Commodore",  // vendor
     "7501",      // chip_id
+    "MOS 7501",  // display_name
     CoreFlags::NMOS_BASE | CPUCoreFlags::HAS_IO_PORT |
         CPUCoreFlags::NO_NMI_LINE, // core_flags
     16,                            // address_bits

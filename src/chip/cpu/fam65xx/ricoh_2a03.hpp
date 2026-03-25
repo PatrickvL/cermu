@@ -17,8 +17,9 @@ namespace fam65xx {
 
 // Ricoh 2A03 — NES CPU (NMOS without BCD, built-in APU)
 inline constexpr CPUTraits RICOH_2A03Traits = {
-    "Ricoh", // vendor
-    "2A03",  // chip_id
+    "Ricoh",       // vendor
+    "2A03",        // chip_id
+    "Ricoh 2A03",  // display_name
     CPUCoreFlags::ILLEGAL_OPCODES | CPUCoreFlags::JMP_INDIRECT_BUG |
         CPUCoreFlags::RMW_DUMMY_WRITE, // core_flags (NO HAS_DECIMAL_MODE!)
     16,                                 // address_bits

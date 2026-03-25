@@ -81,9 +81,10 @@ inline constexpr SN76489VariantTraits sn76489_variant_traits[] = {
 class sn76489_t : public SoundChipBase {
 public:
     explicit sn76489_t(SN76489Variant variant = SN76489Variant::SN76489)
-        : SoundChipBase(ChipInfo(
+        : SoundChipBase(ChipInfo{
               sn76489_variant_traits[static_cast<int>(variant)].part_number,
-              sn76489_variant_traits[static_cast<int>(variant)].manufacturer))
+              sn76489_variant_traits[static_cast<int>(variant)].manufacturer,
+              {}})
         , variant_(variant)
         , audio_buffer_(4096)
     {

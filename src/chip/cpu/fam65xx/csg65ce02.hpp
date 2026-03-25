@@ -13,8 +13,9 @@
 namespace fam65xx {
 
 inline constexpr CPUTraits CSG_65CE02Traits = {
-    "Commodore", // vendor
+    "Commodore",   // vendor
     "65CE02",    // chip_id
+    "CSG 65CE02", // display_name
     CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::CE02_EXTENDED |
         CPUCoreFlags::OPTIMIZED_CYCLES,           // core_flags
     16,                                           // address_bits

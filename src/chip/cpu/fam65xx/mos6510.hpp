@@ -18,6 +18,7 @@ namespace fam65xx {
 inline constexpr CPUTraits MOS6510Traits = {
     "MOS Technology",                                 // vendor
     "6510",                                           // chip_id
+    "MOS 6510",                                       // display_name
     CoreFlags::NMOS_BASE | CPUCoreFlags::HAS_IO_PORT, // core_flags
     16,                                               // address_bits
     0x3F,                                             // io_port_mask (Pins 0-5)

@@ -19,7 +19,7 @@ class PlaChip : public ChipBase {
     C64System* c64_;
 public:
     explicit PlaChip(C64System* c64)
-        : ChipBase(ChipInfo{"PLA", "MOS Technology"}), c64_(c64) {
+        : ChipBase(ChipInfo{"PLA", "MOS Technology", "MOS PLA"}), c64_(c64) {
         display_name_ = "PLA / Address Decoder";
         short_name_   = "PLA";
         category_     = "Bus";

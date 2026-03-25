@@ -14,6 +14,7 @@ namespace fam65xx {
 inline constexpr CPUTraits MOS6504Traits = {
     "MOS Technology",                             // vendor
     "6504",                                       // chip_id
+    "MOS 6504",                                   // display_name
     CoreFlags::NMOS_BASE,                         // core_flags
     13,                                           // address_bits
     0x00,                                         // io_port_mask
