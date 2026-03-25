@@ -274,22 +274,41 @@ void EmulatorHost::update_mouse_cursor_visibility() {
     Uint32 wflags = SDL_GetWindowFlags(window_);
     bool is_fullscreen = (wflags & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
 
-    // Tell ImGui not to touch the cursor while we're in fullscreen,
-    // otherwise its SDL2 backend calls SDL_ShowCursor(SDL_TRUE) every
-    // frame and overrides our hide.
     ImGuiIO& io = ImGui::GetIO();
-    if (is_fullscreen)
+
+    // In fullscreen, check whether the mouse is hovering over any ImGui
+    // window (menu bar, performance overlay, detached chip panel, HUD, …).
+    // When it is, keep the cursor visible so the user can interact.
+    // When it isn't (mouse is over the emulated display), hide it.
+    bool over_ui_window = is_fullscreen && io.WantCaptureMouse;
+
+    // Tell ImGui not to touch the cursor while we're hiding it in
+    // fullscreen, otherwise its SDL2 backend calls SDL_ShowCursor(TRUE)
+    // every frame and overrides our hide.  But when the mouse is over a
+    // UI window, let ImGui manage cursor shape normally (resize arrows,
+    // text cursors, etc.).
+    if (is_fullscreen && !over_ui_window)
         io.ConfigFlags |=  ImGuiConfigFlags_NoMouseCursorChange;
     else
         io.ConfigFlags &= ~ImGuiConfigFlags_NoMouseCursorChange;
 
-    // Detect movement — reset idle timer and show cursor (windowed only).
+    // Detect movement — reset idle timer and show cursor.
     if (mx != cursor_last_x_ || my != cursor_last_y_) {
         cursor_last_x_    = mx;
         cursor_last_y_    = my;
         cursor_last_move_ = now;
 
-        if (cursor_hidden_ && !is_fullscreen) {
+        // Re-show cursor on movement (except fullscreen over emulated screen)
+        if (cursor_hidden_ && (!is_fullscreen || over_ui_window)) {
+            SDL_ShowCursor(SDL_ENABLE);
+            cursor_hidden_ = false;
+        }
+        return;
+    }
+
+    // Mouse is over a UI window in fullscreen — always keep cursor visible
+    if (over_ui_window) {
+        if (cursor_hidden_) {
             SDL_ShowCursor(SDL_ENABLE);
             cursor_hidden_ = false;
         }
@@ -302,9 +321,7 @@ void EmulatorHost::update_mouse_cursor_visibility() {
     // Don't hide if the pointer left the window (the WM may still need it).
     if (!(wflags & SDL_WINDOW_MOUSE_FOCUS)) return;
 
-    // In fullscreen: hide the host cursor immediately.  The emulated
-    // display fills the screen so there is nothing useful to click, and
-    // a dangling OS cursor is distracting.
+    // In fullscreen over the emulated display: hide immediately.
     if (is_fullscreen) {
         SDL_ShowCursor(SDL_DISABLE);
         cursor_hidden_ = true;
