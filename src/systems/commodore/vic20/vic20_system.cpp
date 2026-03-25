@@ -461,7 +461,7 @@ static SystemDescriptor vic20_descriptor = {
     vic20_formats,
     create_vic20_hardware_traits(),
     vic20_probe_file,
-    "Commodore", 1980, "MOS 6502", SystemType::Home
+    "Commodore", 1980, fam65xx::MOS6502Traits.display_name, SystemType::Home
 };
 
 // ============================================================================

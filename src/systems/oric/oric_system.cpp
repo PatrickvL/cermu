@@ -69,7 +69,7 @@ static SystemDescriptor oric1_descriptor = {
     nullptr,
     create_oric_hardware_traits<OricVariant::ORIC_1>(),
     nullptr,
-    "Oric", 1983, "MOS 6502", SystemType::Home
+    "Oric", 1983, fam65xx::MOS6502Traits.display_name, SystemType::Home
 };
 
 static SystemDescriptor oric_atmos_descriptor = {
@@ -79,7 +79,7 @@ static SystemDescriptor oric_atmos_descriptor = {
     nullptr,
     create_oric_hardware_traits<OricVariant::ORIC_ATMOS>(),
     nullptr,
-    "Oric", 1984, "MOS 6502", SystemType::Home
+    "Oric", 1984, fam65xx::MOS6502Traits.display_name, SystemType::Home
 };
 
 // ============================================================================

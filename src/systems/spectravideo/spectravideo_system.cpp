@@ -67,7 +67,7 @@ static SystemDescriptor svi318_descriptor = {
     nullptr,
     create_svi_hardware_traits<SVIVariant::SVI318>(),
     nullptr,
-    "Spectravideo", 1983, "Z80A", SystemType::Home
+    "Spectravideo", 1983, z80::ZilogZ80ATraits.display_name, SystemType::Home
 };
 
 static SystemDescriptor svi328_descriptor = {
@@ -77,7 +77,7 @@ static SystemDescriptor svi328_descriptor = {
     nullptr,
     create_svi_hardware_traits<SVIVariant::SVI328>(),
     nullptr,
-    "Spectravideo", 1983, "Z80A", SystemType::Home
+    "Spectravideo", 1983, z80::ZilogZ80ATraits.display_name, SystemType::Home
 };
 
 // ============================================================================

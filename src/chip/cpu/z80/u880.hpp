@@ -19,7 +19,7 @@ namespace z80 {
 inline constexpr Z80Traits U880Traits = {
     "VEB MME Erfurt",                                    // vendor
     "U880",                                              // chip_id
-    "U880",                                              // display_name
+    "U880 (Z80)",                                        // display_name
     CoreFlags::NMOS_Z80,                                 // core_flags (Z80A compatible)
     16,                                                  // address_bits
     40,                                                  // max_clock_mhz_x10 (4.0 MHz)

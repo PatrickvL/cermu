@@ -87,7 +87,7 @@ static SystemDescriptor bbc_bplus_descriptor = {
     nullptr,
     create_bbc_master_hardware_traits<BBCMasterVariant::MODEL_B_PLUS>(),
     nullptr,
-    "Acorn", 1985, "65C02", SystemType::Home
+    "Acorn", 1985, fam65xx::WDC_65C02_EARLYTraits.display_name, SystemType::Home
 };
 
 static SystemDescriptor bbc_master_descriptor = {
@@ -97,7 +97,7 @@ static SystemDescriptor bbc_master_descriptor = {
     nullptr,
     create_bbc_master_hardware_traits<BBCMasterVariant::MASTER_128>(),
     nullptr,
-    "Acorn", 1986, "65C02", SystemType::Home
+    "Acorn", 1986, fam65xx::WDC_65C02_EARLYTraits.display_name, SystemType::Home
 };
 
 // ============================================================================

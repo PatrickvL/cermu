@@ -61,7 +61,7 @@ static SystemDescriptor apple_ii_descriptor = {
     nullptr,
     create_apple_ii_hardware_traits<AppleIIVariant::APPLE_II>(),
     nullptr,
-    "Apple", 1977, "MOS 6502", SystemType::Home
+    "Apple", 1977, fam65xx::MOS6502Traits.display_name, SystemType::Home
 };
 
 static SystemDescriptor apple_iie_descriptor = {
@@ -71,7 +71,7 @@ static SystemDescriptor apple_iie_descriptor = {
     nullptr,
     create_apple_ii_hardware_traits<AppleIIVariant::APPLE_IIE>(),
     nullptr,
-    "Apple", 1983, "65C02", SystemType::Home
+    "Apple", 1983, fam65xx::WDC_65C02_EARLYTraits.display_name, SystemType::Home
 };
 
 static SystemDescriptor apple_iic_descriptor = {
@@ -81,7 +81,7 @@ static SystemDescriptor apple_iic_descriptor = {
     nullptr,
     create_apple_ii_hardware_traits<AppleIIVariant::APPLE_IIC>(),
     nullptr,
-    "Apple", 1984, "65C02", SystemType::Home
+    "Apple", 1984, fam65xx::WDC_65C02_EARLYTraits.display_name, SystemType::Home
 };
 
 // ============================================================================

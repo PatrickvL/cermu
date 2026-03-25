@@ -121,7 +121,7 @@ static SystemDescriptor atari2600_descriptor = {
     nullptr,                            // supported_formats
     create_atari2600_hardware_traits(), // hardware_traits
     atari2600_probe_file,               // probe
-    "Atari", 1977, "MOS 6507", SystemType::Console
+    "Atari", 1977, fam65xx::MOS6507Traits.display_name, SystemType::Console
 };
 
 // ============================================================================

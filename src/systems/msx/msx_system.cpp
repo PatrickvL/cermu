@@ -70,7 +70,7 @@ static SystemDescriptor msx1_descriptor = {
     nullptr,
     create_msx_hardware_traits<MSXVariant::MSX1>(),
     nullptr,
-    "Microsoft", 1983, "Z80A", SystemType::Home
+    "Microsoft", 1983, z80::ZilogZ80ATraits.display_name, SystemType::Home
 };
 
 static SystemDescriptor msx2_descriptor = {
@@ -80,7 +80,7 @@ static SystemDescriptor msx2_descriptor = {
     nullptr,
     create_msx_hardware_traits<MSXVariant::MSX2>(),
     nullptr,
-    "Microsoft", 1985, "Z80A", SystemType::Home
+    "Microsoft", 1985, z80::ZilogZ80ATraits.display_name, SystemType::Home
 };
 
 static SystemDescriptor msx2p_descriptor = {
@@ -90,7 +90,7 @@ static SystemDescriptor msx2p_descriptor = {
     nullptr,
     create_msx_hardware_traits<MSXVariant::MSX2P>(),
     nullptr,
-    "Microsoft", 1988, "Z80A", SystemType::Home
+    "Microsoft", 1988, z80::ZilogZ80ATraits.display_name, SystemType::Home
 };
 
 // ============================================================================

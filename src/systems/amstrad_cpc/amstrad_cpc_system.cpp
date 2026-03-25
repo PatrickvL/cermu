@@ -54,7 +54,7 @@ static SystemDescriptor cpc464_descriptor = {
     "Amstrad CPC 464 — Z80A @ 4MHz, 64KB RAM, integrated tape (1984)",
     "amstrad_cpc", {"CPC464", "CPC", "AmstradCPC"},
     nullptr, create_cpc_hardware_traits<CPCModel::CPC464>(), nullptr,
-    "Amstrad", 1984, "Z80A", SystemType::Home
+    "Amstrad", 1984, z80::ZilogZ80ATraits.display_name, SystemType::Home
 };
 
 static SystemDescriptor cpc664_descriptor = {
@@ -62,7 +62,7 @@ static SystemDescriptor cpc664_descriptor = {
     "Amstrad CPC 664 — Z80A @ 4MHz, 64KB RAM, 3\" floppy (1985)",
     "amstrad_cpc", {"CPC664"},
     nullptr, create_cpc_hardware_traits<CPCModel::CPC664>(), nullptr,
-    "Amstrad", 1985, "Z80A", SystemType::Home
+    "Amstrad", 1985, z80::ZilogZ80ATraits.display_name, SystemType::Home
 };
 
 static SystemDescriptor cpc6128_descriptor = {
@@ -70,7 +70,7 @@ static SystemDescriptor cpc6128_descriptor = {
     "Amstrad CPC 6128 — Z80A @ 4MHz, 128KB RAM, 3\" floppy (1985)",
     "amstrad_cpc", {"CPC6128"},
     nullptr, create_cpc_hardware_traits<CPCModel::CPC6128>(), nullptr,
-    "Amstrad", 1985, "Z80A", SystemType::Home
+    "Amstrad", 1985, z80::ZilogZ80ATraits.display_name, SystemType::Home
 };
 
 // ============================================================================
