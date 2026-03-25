@@ -3,6 +3,7 @@
 #include "gui/emulator_host.hpp"
 #include "gui/system_selection_dialog.hpp"
 #include "gui/launcher_panel.hpp"
+#include "gui/scan_root_manager.hpp"
 #include "core/session.hpp"
 #include <memory>
 #include <string>
@@ -62,6 +63,12 @@ private:
     // ========================================================================
     bool show_hud_          = true;   ///< Master HUD toggle
     int  hud_corner_        = 1;      ///< 0=TL, 1=TR, 2=BL, 3=BR
+
+    // ========================================================================
+    // Scan root manager (§12)
+    // ========================================================================
+    scan_roots::ScanRootManager scan_root_manager_;
+    bool show_scan_roots_dialog_ = false;  ///< Library → Scan roots… dialog
     
 public:
     /**
