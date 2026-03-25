@@ -80,6 +80,9 @@ SessionGUI::SessionGUI(std::unique_ptr<System> system, const char* pending_file)
     if (system_) {
         emulation_running_.store(true);
     }
+    // Load scan root configuration (§12)
+    scan_root_manager_.load(scan_roots::ScanRootManager::default_config_path());
+
     if (system_) {
         // System already initialised + file loaded before entering the GUI,
         // so clear the pending file path — it must not survive into a later
@@ -636,6 +639,17 @@ void SessionGUI::render_frame() {
     if (show_display_settings_) {
         render_display_settings();
     }
+
+    // Scan roots dialog (§12)
+    if (show_scan_roots_dialog_) {
+        ImGui::SetNextWindowSize(ImVec2(500, 400), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Scan Roots##ScanRootsDialog", &show_scan_roots_dialog_)) {
+            if (scan_root_manager_.render_manage_dialog()) {
+                show_scan_roots_dialog_ = false;
+            }
+        }
+        ImGui::End();
+    }
     
     // Performance metrics window
     render_performance_window();
@@ -730,7 +744,8 @@ void SessionGUI::render_menu_bar() {
     // Library menu (§11.2) — placeholder for catalog pipeline (Phase 6)
     if (ImGui::BeginMenu("Library")) {
         if (ImGui::MenuItem("Scan roots...")) {
-            // TODO: Phase 6a — ScanRootManager
+            scan_root_manager_.prepare_setup();
+            show_scan_roots_dialog_ = true;
         }
         ImGui::BeginDisabled(true);
         if (ImGui::MenuItem("Rescan all")) {}
