@@ -20,7 +20,7 @@ EmulatorHost::EmulatorHost()
     , should_quit_(false)
     , glsl_version_("#version 130")
     , screen_texture_id_(0)
-    , screen_scale_(2.0f)
+    , screen_scale_(1.0f)
     , screen_filter_(false)
     , screen_scanlines_(false)
     , show_screen_(true)
@@ -555,16 +555,10 @@ void EmulatorHost::calculate_display_dimensions(
         pos_y = (effective_viewport_height - display_height) * 0.5f;
     }
 
-    // Apply pan — offset is proportional to the overflow (zoomed-in area)
-    // display_pan_x/y range is -1..+1; maps to moving the full overflow distance
-    float overflow_x = display_width - effective_viewport_width;
-    float overflow_y = display_height - effective_viewport_height;
-    if (overflow_x > 0.0f) {
-        pos_x += -display_pan_x_ * overflow_x * 0.5f;
-    }
-    if (overflow_y > 0.0f) {
-        pos_y += -display_pan_y_ * overflow_y * 0.5f;
-    }
+    // Apply pan — moves the display position relative to the viewport.
+    // Range -1..+1 maps to half the viewport width/height in each direction.
+    pos_x += display_pan_x_ * effective_viewport_width * 0.5f;
+    pos_y += display_pan_y_ * effective_viewport_height * 0.5f;
     
     // Apply DPI scaling back to final values
     *out_display_width = display_width * host_dpi_scale_;
@@ -633,10 +627,8 @@ void EmulatorHost::render_screen_menu_generic() {
     ImGui::Separator();
     ImGui::Text("Zoom & Pan");
     ImGui::SliderFloat("Zoom", &display_zoom_, 0.25f, 4.0f, "%.2fx");
-    ImGui::BeginDisabled(display_zoom_ <= 1.0f);
     ImGui::SliderFloat("Pan X", &display_pan_x_, -1.0f, 1.0f, "%.2f");
     ImGui::SliderFloat("Pan Y", &display_pan_y_, -1.0f, 1.0f, "%.2f");
-    ImGui::EndDisabled();
     if (ImGui::Button("Reset Zoom/Pan")) {
         display_zoom_ = 1.0f;
         display_pan_x_ = 0.0f;
