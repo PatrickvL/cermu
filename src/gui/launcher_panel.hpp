@@ -18,6 +18,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
 #include <algorithm>
 #include <cstring>
 
@@ -116,6 +117,9 @@ private:
 
     // Config strip state (Zone A)
     bool config_dirty_ = false;
+
+    // Favourites (in-session; persisted via SharedConfigStore if desired)
+    std::set<std::string> favourites_;
 
     // File path to pass along on launch
     std::string pending_file_path_;
@@ -462,17 +466,24 @@ inline void LauncherPanel::render(bool allow_cancel) {
 
         // Left panel (system list) — width scales gently with zoom (square root)
         float left_w = launcher_theme::kLeftPanelWidth * sqrtf(ui_scale_);
+        bool left_focused = (focus_panel_ == FocusPanel::SystemList);
         ImGui::PushStyleColor(ImGuiCol_ChildBg, launcher_theme::kLeftPanelBg);
+        ImGui::PushStyleColor(ImGuiCol_Border,
+            left_focused ? launcher_theme::kPanelBorderFocus : launcher_theme::kPanelBorder);
         ImGui::BeginChild("##LeftPanel", ImVec2(left_w, content_height), true);
         render_left_panel();
         ImGui::EndChild();
-        ImGui::PopStyleColor();
+        ImGui::PopStyleColor(2);
 
         // Right panel (content)
         ImGui::SameLine(0, 0);
+        bool right_focused = (focus_panel_ == FocusPanel::FileBrowser);
+        ImGui::PushStyleColor(ImGuiCol_Border,
+            right_focused ? launcher_theme::kPanelBorderFocus : launcher_theme::kPanelBorder);
         ImGui::BeginChild("##RightPanel", ImVec2(0, content_height), false);
         render_right_panel();
         ImGui::EndChild();
+        ImGui::PopStyleColor();
 
         // Status bar
         ImGui::SetCursorPos(ImVec2(0, display_size.y - status_bar_height));
@@ -515,13 +526,18 @@ inline void LauncherPanel::render_top_bar(bool allow_cancel) {
     auto tab_button = [&](const char* label, bool active) -> bool {
         if (active) {
             ImGui::PushStyleColor(ImGuiCol_Button, launcher_theme::kSystemRowSelected);
-            ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextPrimary);
+            ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kAccentBlue);
+            ImGui::PushStyleColor(ImGuiCol_Border, launcher_theme::kFilterActiveBorder);
         } else {
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
             ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextMuted);
+            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.067f, 0.110f, 0.157f, 1.0f));
         }
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
         bool clicked = ImGui::SmallButton(label);
-        ImGui::PopStyleColor(2);
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(3);
         return clicked;
     };
 
@@ -715,6 +731,16 @@ inline void LauncherPanel::render_left_panel() {
             }
         }
 
+        // Favourite star (right-aligned)
+        if (desc->short_name && favourites_.count(desc->short_name)) {
+            const char* star = "\xe2\x98\x85";  // ★
+            ImVec2 star_size = ImGui::CalcTextSize(star);
+            draw_list->AddText(
+                ImVec2(row_max.x - star_size.x - 6, row_min.y + 2),
+                ImGui::GetColorU32(ImVec4(0.667f, 0.533f, 0.133f, 1.0f)),
+                star);
+        }
+
         ImGui::PopID();
     }
 }
@@ -817,10 +843,38 @@ inline void LauncherPanel::render_system_header() {
         ImGui::PopStyleColor();
     }
 
-    // Launch button (right-aligned)
+    // Action buttons: favourite star + settings + launch (right-aligned)
     float launch_width = 80.0f;
-    ImGui::SameLine(ImGui::GetWindowWidth() - launch_width - 12);
+    float button_group_width = launch_width + 60.0f;  // launch + star + settings + gaps
+    ImGui::SameLine(ImGui::GetWindowWidth() - button_group_width - 12);
     ImGui::SetCursorPosY(10);
+
+    // Favourite toggle
+    {
+        bool is_fav = desc->short_name && favourites_.count(desc->short_name);
+        ImGui::PushStyleColor(ImGuiCol_Button, launcher_theme::kCfgBgDefault);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, launcher_theme::kCfgBgChanged);
+        ImGui::PushStyleColor(ImGuiCol_Text,
+            is_fav ? ImVec4(0.800f, 0.600f, 0.133f, 1.0f) : launcher_theme::kTextMuted);
+        if (ImGui::Button("\xe2\x98\x85##fav", ImVec2(28, 28))) {  // ★
+            if (desc->short_name) {
+                if (is_fav) favourites_.erase(desc->short_name);
+                else favourites_.insert(desc->short_name);
+            }
+        }
+        ImGui::PopStyleColor(3);
+    }
+    ImGui::SameLine(0, 4);
+
+    // Settings placeholder
+    ImGui::PushStyleColor(ImGuiCol_Button, launcher_theme::kCfgBgDefault);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, launcher_theme::kCfgBgChanged);
+    ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextMuted);
+    ImGui::Button("\xe2\x9a\x99##settings", ImVec2(28, 28));  // ⚙
+    ImGui::PopStyleColor(3);
+    ImGui::SameLine(0, 4);
+
+    // Launch button
     ImGui::PushStyleColor(ImGuiCol_Button, accent);
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(accent.x * 1.2f, accent.y * 1.2f, accent.z * 1.2f, 1.0f));
     if (ImGui::Button("\xe2\x96\xb6 Launch", ImVec2(launch_width, 28))) {  // ▶ Launch
