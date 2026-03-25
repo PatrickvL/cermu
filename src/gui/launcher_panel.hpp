@@ -124,7 +124,8 @@ private:
     SystemConfiguration probe_config_;    // Config from probe
 
     // UI zoom (proportional rendering)
-    float ui_scale_ = 1.0f;
+    static constexpr float kDefaultUiScale = 1.5f;
+    float ui_scale_ = kDefaultUiScale;
     static constexpr float kMinUiScale  = 0.5f;
     static constexpr float kMaxUiScale  = 3.0f;
     static constexpr float kUiScaleStep = 0.1f;
@@ -435,9 +436,10 @@ inline void LauncherPanel::render(bool allow_cancel) {
         // Content area
         ImGui::SetCursorPos(ImVec2(0, top_bar_height));
 
-        // Left panel (system list)
+        // Left panel (system list) — width scales proportionally with zoom
+        float left_w = launcher_theme::kLeftPanelWidth * ui_scale_;
         ImGui::PushStyleColor(ImGuiCol_ChildBg, launcher_theme::kLeftPanelBg);
-        ImGui::BeginChild("##LeftPanel", ImVec2(launcher_theme::kLeftPanelWidth, content_height), true);
+        ImGui::BeginChild("##LeftPanel", ImVec2(left_w, content_height), true);
         render_left_panel();
         ImGui::EndChild();
         ImGui::PopStyleColor();
@@ -934,8 +936,8 @@ inline void LauncherPanel::render_status_bar() {
         }
     }
 
-    // Right-aligned zoom indicator (only when not at 100%)
-    if (ui_scale_ < 0.99f || ui_scale_ > 1.01f) {
+    // Right-aligned zoom indicator (only when not at default)
+    if (ui_scale_ < kDefaultUiScale - 0.01f || ui_scale_ > kDefaultUiScale + 0.01f) {
         char zoom_label[32];
         snprintf(zoom_label, sizeof(zoom_label), "%d%%", static_cast<int>(ui_scale_ * 100.0f + 0.5f));
         float text_w = ImGui::CalcTextSize(zoom_label).x;
@@ -970,7 +972,7 @@ inline void LauncherPanel::handle_keyboard() {
             // Reset: Ctrl+0 or Ctrl+Keypad0
             if (ImGui::IsKeyPressed(ImGuiKey_0) ||
                 ImGui::IsKeyPressed(ImGuiKey_Keypad0)) {
-                ui_scale_ = 1.0f;
+                ui_scale_ = kDefaultUiScale;
             }
         }
     }
