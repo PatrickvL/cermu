@@ -57,7 +57,7 @@ static SystemDescriptor sg1000_descriptor = {
     nullptr,
     create_sg1000_hardware_traits<SG1000Variant::SG1000>(),
     nullptr,
-    "Sega", 1983, "Z80A", SystemType::Console
+    "Sega", 1983, z80::ZilogZ80ATraits.display_name, SystemType::Console
 };
 
 static SystemDescriptor sc3000_descriptor = {
@@ -67,7 +67,7 @@ static SystemDescriptor sc3000_descriptor = {
     nullptr,
     create_sg1000_hardware_traits<SG1000Variant::SC3000>(),
     nullptr,
-    "Sega", 1983, "Z80A", SystemType::Home
+    "Sega", 1983, z80::ZilogZ80ATraits.display_name, SystemType::Home
 };
 
 // ============================================================================

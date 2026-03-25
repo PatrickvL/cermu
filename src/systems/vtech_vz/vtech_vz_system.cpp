@@ -59,7 +59,7 @@ static SystemDescriptor vz200_descriptor = {
     nullptr,
     create_vz_hardware_traits<VZVariant::VZ200>(),
     nullptr,
-    "VTech", 1983, "Z80A", SystemType::Home
+    "VTech", 1983, z80::ZilogZ80ATraits.display_name, SystemType::Home
 };
 
 static SystemDescriptor vz300_descriptor = {
@@ -69,7 +69,7 @@ static SystemDescriptor vz300_descriptor = {
     nullptr,
     create_vz_hardware_traits<VZVariant::VZ300>(),
     nullptr,
-    "VTech", 1985, "Z80A", SystemType::Home
+    "VTech", 1985, z80::ZilogZ80ATraits.display_name, SystemType::Home
 };
 
 // ============================================================================

@@ -183,7 +183,7 @@ static SystemDescriptor pet_descriptor = {
     pet_formats,
     create_pet_hardware_traits(),
     pet_probe_file,
-    "Commodore", 1977, "MOS 6502", SystemType::Home
+    "Commodore", 1977, fam65xx::MOS6502Traits.display_name, SystemType::Home
 };
 
 // ============================================================================

@@ -18,7 +18,7 @@ static SystemDescriptor atom_descriptor = {
     "Acorn Atom — MOS 6502 @ 1MHz, MC6847 VDG, 2KB–12KB RAM (1980)",
     "acorn_atom", {"Atom", "AcornAtom"},
     nullptr, {}, nullptr,
-    "Acorn", 1980, "MOS 6502", SystemType::Home
+    "Acorn", 1980, fam65xx::MOS6502Traits.display_name, SystemType::Home
 };
 
 // ============================================================================

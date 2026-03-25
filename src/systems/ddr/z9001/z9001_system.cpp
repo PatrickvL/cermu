@@ -18,7 +18,7 @@ static SystemDescriptor z9001_descriptor = {
     "Robotron Z9001 — U880 @ 2.4576MHz, 16KB RAM, 40×24 text (1984)",
     "z9001", {"Z9001", "KC85/1"},
     nullptr, {}, nullptr,
-    "Robotron", 1984, "U880 (Z80)", SystemType::Home
+    "Robotron", 1984, z80::U880Traits.display_name, SystemType::Home
 };
 
 static SystemDescriptor kc87_descriptor = {
@@ -26,7 +26,7 @@ static SystemDescriptor kc87_descriptor = {
     "Robotron KC 87 — U880 @ 2.4576MHz, 48KB RAM, color text, BASIC (1987)",
     "z9001", {"KC87", "KC-87"},
     nullptr, {}, nullptr,
-    "Robotron", 1987, "U880 (Z80)", SystemType::Home
+    "Robotron", 1987, z80::U880Traits.display_name, SystemType::Home
 };
 
 // ============================================================================

@@ -61,7 +61,7 @@ static SystemDescriptor einstein_descriptor = {
     nullptr,
     create_einstein_hardware_traits(),
     nullptr,
-    "Tatung", 1984, "Z80A", SystemType::Home
+    "Tatung", 1984, z80::ZilogZ80ATraits.display_name, SystemType::Home
 };
 
 // ============================================================================

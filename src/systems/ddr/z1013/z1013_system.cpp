@@ -18,7 +18,7 @@ static SystemDescriptor z1013_01_descriptor = {
     "Robotron Z1013.01 — U880 @ 2MHz, 16KB RAM, 32×32 text (1985)",
     "z1013", {"Z1013", "Z1013.01"},
     nullptr, {}, nullptr,
-    "Robotron", 1985, "U880 (Z80)", SystemType::Home
+    "Robotron", 1985, z80::U880Traits.display_name, SystemType::Home
 };
 
 static SystemDescriptor z1013_16_descriptor = {
@@ -26,7 +26,7 @@ static SystemDescriptor z1013_16_descriptor = {
     "Robotron Z1013.16 — U880 @ 2MHz, 16KB RAM, membrane keyboard (1987)",
     "z1013", {"Z1013.16"},
     nullptr, {}, nullptr,
-    "Robotron", 1987, "U880 (Z80)", SystemType::Home
+    "Robotron", 1987, z80::U880Traits.display_name, SystemType::Home
 };
 
 static SystemDescriptor z1013_64_descriptor = {
@@ -34,7 +34,7 @@ static SystemDescriptor z1013_64_descriptor = {
     "Robotron Z1013.64 — U880 @ 2MHz, 64KB RAM, ROM BASIC (1988)",
     "z1013", {"Z1013.64"},
     nullptr, {}, nullptr,
-    "Robotron", 1988, "U880 (Z80)", SystemType::Home
+    "Robotron", 1988, z80::U880Traits.display_name, SystemType::Home
 };
 
 // ============================================================================

@@ -62,7 +62,7 @@ static SystemDescriptor sms_descriptor = {
     nullptr,
     create_sms_hardware_traits(),
     nullptr,
-    "Sega", 1986, "Z80A", SystemType::Console
+    "Sega", 1986, z80::ZilogZ80ATraits.display_name, SystemType::Console
 };
 
 // ============================================================================

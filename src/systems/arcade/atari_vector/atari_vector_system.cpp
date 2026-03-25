@@ -571,7 +571,7 @@ static SystemDescriptor create_system_descriptor() {
             }
             return result;
         },
-        "Atari", T::YEAR, "MOS 6502", SystemType::Arcade
+        "Atari", T::YEAR, fam65xx::MOS6502Traits.display_name, SystemType::Arcade
     };
 }
 
