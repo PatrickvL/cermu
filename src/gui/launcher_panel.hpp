@@ -436,8 +436,8 @@ inline void LauncherPanel::render(bool allow_cancel) {
         // Content area
         ImGui::SetCursorPos(ImVec2(0, top_bar_height));
 
-        // Left panel (system list) — width scales proportionally with zoom
-        float left_w = launcher_theme::kLeftPanelWidth * ui_scale_;
+        // Left panel (system list) — width scales gently with zoom (square root)
+        float left_w = launcher_theme::kLeftPanelWidth * sqrtf(ui_scale_);
         ImGui::PushStyleColor(ImGuiCol_ChildBg, launcher_theme::kLeftPanelBg);
         ImGui::BeginChild("##LeftPanel", ImVec2(left_w, content_height), true);
         render_left_panel();
