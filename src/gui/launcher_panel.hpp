@@ -75,6 +75,9 @@ public:
     /// Get the file path to load on launch (from file browser selection)
     const std::string& get_pending_file_path() const { return pending_file_path_; }
 
+    /// Handle a file dropped onto the launcher (navigate + probe)
+    void handle_drop(const std::string& path);
+
     /// Reset selection state after processing
     void reset();
 
@@ -90,6 +93,10 @@ private:
     int selected_region_option_ = -1;
     std::map<std::string, bool> selected_peripherals_;
     std::map<std::string, std::string> selected_custom_settings_;
+
+    // Focus tracking
+    enum class FocusPanel { SystemList, FileBrowser };
+    FocusPanel focus_panel_ = FocusPanel::SystemList;
 
     // Filtering
     char search_filter_[256] = {};
@@ -136,6 +143,7 @@ private:
     void render_file_browser();     // Zone B
     void render_probe_bar();        // Zone C
     void render_status_bar();
+    void handle_keyboard();         // Global keyboard shortcuts
 
     // =========================================================================
     // Helpers
@@ -433,6 +441,9 @@ inline void LauncherPanel::render(bool allow_cancel) {
         // Status bar
         ImGui::SetCursorPos(ImVec2(0, display_size.y - status_bar_height));
         render_status_bar();
+
+        // Keyboard navigation (processed after rendering so focus state is current)
+        handle_keyboard();
     }
     ImGui::End();
 
@@ -562,7 +573,7 @@ inline void LauncherPanel::render_left_panel() {
 
             if (ImGui::IsMouseDoubleClicked(0)) {
                 // Double-click: select and move focus to file browser
-                // (For now, same as single-click)
+                focus_panel_ = FocusPanel::FileBrowser;
             }
         }
 
@@ -894,14 +905,123 @@ inline void LauncherPanel::render_status_bar() {
 
     ImGui::SetCursorPos(ImVec2(12, 4));
     ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextDimmed);
-    if (selected_system_name_)
-        ImGui::Text("Enter: Launch  |  Esc: Cancel  |  /: Search");
-    else
-        ImGui::Text("Select a system  |  /: Search");
-    ImGui::PopStyleColor();
 
+    // Context-sensitive hints (§15.5)
+    if (focus_panel_ == FocusPanel::SystemList) {
+        ImGui::Text("\xe2\x86\x91\xe2\x86\x93 Navigate  \xc2\xb7  \xe2\x86\xb5 Open files  \xc2\xb7  Tab Switch panel  \xc2\xb7  / Search");
+    } else if (focus_panel_ == FocusPanel::FileBrowser) {
+        if (probe_state_ == ProbeState::SingleMatch) {
+            ImGui::Text("\xe2\x86\xb5 Launch  \xc2\xb7  Esc Clear  \xc2\xb7  Tab Switch panel");
+        } else if (probe_state_ == ProbeState::Ambiguous) {
+            ImGui::Text("\xe2\x86\xb5 Choose\xe2\x80\xa6  \xc2\xb7  Esc Clear");
+        } else if (selected_system_name_) {
+            ImGui::Text("\xe2\x86\x91\xe2\x86\x93 Navigate  \xc2\xb7  \xe2\x86\xb5 Launch  \xc2\xb7  / Search  \xc2\xb7  Backspace Up");
+        } else {
+            ImGui::Text("\xe2\x86\x91\xe2\x86\x93 Navigate  \xc2\xb7  \xe2\x86\xb5 Select & probe  \xc2\xb7  / Search  \xc2\xb7  Backspace Up");
+        }
+    }
+
+    ImGui::PopStyleColor();
     ImGui::EndChild();
     ImGui::PopStyleColor();
+}
+
+inline void LauncherPanel::handle_keyboard() {
+    // Don't process keyboard when a text input is active
+    if (ImGui::IsAnyItemActive()) return;
+
+    // Tab: toggle focus between system list and file browser
+    if (ImGui::IsKeyPressed(ImGuiKey_Tab)) {
+        focus_panel_ = (focus_panel_ == FocusPanel::SystemList)
+                     ? FocusPanel::FileBrowser
+                     : FocusPanel::SystemList;
+    }
+
+    // Slash: focus search input of active panel
+    if (ImGui::IsKeyPressed(ImGuiKey_Slash)) {
+        if (focus_panel_ == FocusPanel::SystemList) {
+            ImGui::SetKeyboardFocusHere(-1);  // Will be handled by next frame
+        }
+    }
+
+    // Escape
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        if (focus_panel_ == FocusPanel::FileBrowser) {
+            // Clear probe result, return focus to system list
+            probe_state_ = ProbeState::None;
+            probe_system_name_.clear();
+            file_browser_.clear_selection();
+            focus_panel_ = FocusPanel::SystemList;
+        }
+    }
+
+    if (focus_panel_ == FocusPanel::SystemList) {
+        // Arrow keys: navigate system list
+        if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
+            int next = selected_system_index_ + 1;
+            if (next < static_cast<int>(filtered_systems_.size()))
+                select_system(next);
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
+            int prev = selected_system_index_ - 1;
+            if (prev >= 0)
+                select_system(prev);
+        }
+
+        // Enter: move focus to file browser
+        if (ImGui::IsKeyPressed(ImGuiKey_Enter)) {
+            if (selected_system_name_) {
+                focus_panel_ = FocusPanel::FileBrowser;
+            }
+        }
+    } else if (focus_panel_ == FocusPanel::FileBrowser) {
+        // Enter in file browser
+        if (ImGui::IsKeyPressed(ImGuiKey_Enter)) {
+            if (selected_system_name_ && !file_browser_.selected_file().empty()) {
+                // Launch with selected file
+                pending_file_path_ = file_browser_.selected_file();
+                launch_selected_system();
+            } else if (probe_state_ == ProbeState::SingleMatch) {
+                // Auto-select probed system and launch
+                select_system_by_name(probe_system_name_.c_str());
+                if (selected_system_name_ && !file_browser_.selected_file().empty()) {
+                    pending_file_path_ = file_browser_.selected_file();
+                    launch_selected_system();
+                }
+            }
+        }
+    }
+}
+
+inline void LauncherPanel::handle_drop(const std::string& path) {
+    if (path.empty()) return;
+
+    // Determine if the dropped path is a directory or file
+    namespace fs = std::filesystem;
+    std::error_code ec;
+
+    bool is_dir = fs::is_directory(path, ec);
+    bool is_archive = VfsFileSystem::has_archive_extension(path);
+
+    if (is_dir) {
+        // Navigate file browser to that directory
+        file_browser_.navigate_to(path);
+        focus_panel_ = FocusPanel::FileBrowser;
+    } else if (is_archive) {
+        // Navigate into the archive
+        file_browser_.navigate_to(path + "!/");
+        focus_panel_ = FocusPanel::FileBrowser;
+    } else {
+        // File — get parent dir, navigate there, and trigger probe
+        fs::path p(path);
+        auto parent = p.parent_path();
+        if (!parent.empty()) {
+            file_browser_.navigate_to(parent.string());
+        }
+        // Select and probe the file
+        trigger_probe(path);
+        focus_panel_ = FocusPanel::FileBrowser;
+    }
 }
 
 #endif // CERMU_HAS_GUI
