@@ -349,7 +349,14 @@ void SessionGUI::render_frame() {
             const auto& peripherals = launcher_panel_.get_selected_peripherals();
             const auto& custom_settings = launcher_panel_.get_selected_custom_settings();
             if (selected) {
-                const char* pf = pending_file_path_.empty() ? nullptr : pending_file_path_.c_str();
+                // Use launcher's pending file if set, otherwise session's pending file
+                const auto& launcher_file = launcher_panel_.get_pending_file_path();
+                const char* pf = nullptr;
+                if (!launcher_file.empty())
+                    pf = launcher_file.c_str();
+                else if (!pending_file_path_.empty())
+                    pf = pending_file_path_.c_str();
+
                 switch_system(selected, memory_opt, region_opt, &peripherals, pf, &custom_settings);
                 pending_file_path_.clear();
             }

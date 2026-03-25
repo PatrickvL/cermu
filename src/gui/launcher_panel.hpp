@@ -23,8 +23,10 @@
 
 #include "core/system_registry.hpp"
 #include "core/hardware_traits.hpp"
+#include "core/formats/format_handler.hpp"
 #include "gui/launcher_theme.hpp"
 #include "gui/shared_config_store.hpp"
+#include "gui/file_browser.hpp"
 
 /// Probe state machine for file-first launch (§7.2)
 enum class ProbeState { None, Probing, SingleMatch, Ambiguous, NoMatch };
@@ -70,6 +72,9 @@ public:
     /// Get selected custom settings
     const std::map<std::string, std::string>& get_selected_custom_settings() const { return selected_custom_settings_; }
 
+    /// Get the file path to load on launch (from file browser selection)
+    const std::string& get_pending_file_path() const { return pending_file_path_; }
+
     /// Reset selection state after processing
     void reset();
 
@@ -96,8 +101,20 @@ private:
     // Config strip state (Zone A)
     bool config_dirty_ = false;
 
+    // File path to pass along on launch
+    std::string pending_file_path_;
+
     // Shared config memory
     SharedConfigStore config_store_;
+
+    // File browser (Zone B)
+    FileBrowser file_browser_;
+
+    // Probe state
+    ProbeState probe_state_ = ProbeState::None;
+    std::string probe_system_name_;       // System name from probe
+    float probe_confidence_ = 0.0f;
+    SystemConfiguration probe_config_;    // Config from probe
 
     // Cached sorted system list
     struct SystemEntry {
@@ -116,8 +133,8 @@ private:
     void render_right_panel();
     void render_system_header();    // Zone A
     void render_config_strip();     // Zone A config controls
-    void render_file_browser();     // Zone B (stub)
-    void render_probe_bar();        // Zone C (stub)
+    void render_file_browser();     // Zone B
+    void render_probe_bar();        // Zone C
     void render_status_bar();
 
     // =========================================================================
@@ -126,7 +143,9 @@ private:
     void rebuild_system_list();
     void apply_filters();
     void select_system(int filtered_index);
+    void select_system_by_name(const char* short_name);
     void launch_selected_system();
+    void trigger_probe(const std::string& file_path);
     bool matches_search(const SystemDescriptor& desc) const;
 };
 
@@ -250,6 +269,101 @@ inline void LauncherPanel::select_system(int filtered_index) {
     selected_peripherals_ = cfg.enabled_peripherals;
     selected_custom_settings_ = cfg.custom_settings;
     config_dirty_ = false;
+
+    // Clear probe state when system manually selected
+    probe_state_ = ProbeState::None;
+    probe_system_name_.clear();
+
+    // Configure file browser format filter to this system's formats
+    file_browser_.set_formats(desc->supported_formats);
+
+    // Navigate to this system's data folder (only if browser is at default / hasn't been navigated)
+    if (desc->data_folder) {
+        // Build null-terminated alias array for path discovery
+        std::vector<const char*> names;
+        names.push_back(desc->data_folder);
+        for (const auto* a : desc->aliases)
+            names.push_back(a);
+        names.push_back(nullptr);
+        file_browser_.navigate_to_system_data(desc->data_folder, names.data());
+    }
+}
+
+inline void LauncherPanel::select_system_by_name(const char* short_name) {
+    if (!short_name) return;
+    for (int i = 0; i < static_cast<int>(filtered_systems_.size()); ++i) {
+        if (strcmp(filtered_systems_[i].descriptor->short_name, short_name) == 0) {
+            select_system(i);
+            return;
+        }
+    }
+    // Not found in filtered list — try sorted list
+    for (int i = 0; i < static_cast<int>(sorted_systems_.size()); ++i) {
+        if (strcmp(sorted_systems_[i].descriptor->short_name, short_name) == 0) {
+            // Clear filters to show this system
+            type_filter_all_ = true;
+            maker_filter_index_ = 0;
+            search_filter_[0] = '\0';
+            apply_filters();
+            // Now find in filtered
+            for (int j = 0; j < static_cast<int>(filtered_systems_.size()); ++j) {
+                if (strcmp(filtered_systems_[j].descriptor->short_name, short_name) == 0) {
+                    select_system(j);
+                    return;
+                }
+            }
+            break;
+        }
+    }
+}
+
+inline void LauncherPanel::trigger_probe(const std::string& file_path) {
+    if (file_path.empty()) {
+        probe_state_ = ProbeState::None;
+        return;
+    }
+
+    // Read the file via VFS (handles archives, containers, real filesystem)
+    size_t file_size = 0;
+    uint8_t* data = format_read_entire_file(file_path.c_str(), &file_size);
+    if (!data) {
+        probe_state_ = ProbeState::NoMatch;
+        return;
+    }
+
+    // Call the registry probe
+    auto match = SystemRegistry::instance().identify_system(
+        file_path.c_str(), data, file_size);
+    free(data);
+
+    static constexpr float kSingleMatchThreshold = 0.50f;
+    static constexpr float kNoMatchThreshold = 0.30f;
+
+    if (match.confidence >= kSingleMatchThreshold && !match.system_name.empty()) {
+        probe_state_ = ProbeState::SingleMatch;
+        probe_system_name_ = match.system_name;
+        probe_confidence_ = match.confidence;
+        probe_config_ = match.configuration;
+
+        // Auto-populate Zone A from probe result
+        // Find and select the matched system so config strip appears
+        select_system_by_name(match.system_name.c_str());
+
+        // Apply probe config overrides
+        selected_memory_option_ = match.configuration.memory_option_index;
+        selected_region_option_ = match.configuration.region_option_index;
+        selected_peripherals_ = match.configuration.enabled_peripherals;
+        selected_custom_settings_ = match.configuration.custom_settings;
+    } else if (match.confidence >= kNoMatchThreshold && !match.system_name.empty()) {
+        probe_state_ = ProbeState::Ambiguous;
+        probe_system_name_ = match.system_name;
+        probe_confidence_ = match.confidence;
+        probe_config_ = match.configuration;
+    } else {
+        probe_state_ = ProbeState::NoMatch;
+        probe_system_name_.clear();
+        probe_confidence_ = 0.0f;
+    }
 }
 
 inline void LauncherPanel::launch_selected_system() {
@@ -682,30 +796,96 @@ inline void LauncherPanel::render_config_strip() {
 }
 
 inline void LauncherPanel::render_file_browser() {
-    // Zone B stub — will be replaced with FileBrowser in a later phase
-    ImGui::BeginChild("##ZoneB", ImVec2(0, -launcher_theme::kProbeBarHeight), false);
+    // Zone B — file browser occupies remaining space above probe bar
+    float probe_height = (probe_state_ != ProbeState::None) ? launcher_theme::kProbeBarHeight : 0.0f;
+    ImGui::BeginChild("##ZoneB", ImVec2(0, -probe_height), false);
 
-    float center_x = ImGui::GetWindowWidth() * 0.5f;
-    float center_y = ImGui::GetWindowHeight() * 0.5f;
+    file_browser_.render();
 
-    ImGui::SetCursorPos(ImVec2(center_x - 120, center_y - 20));
-    ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextMuted);
-    ImGui::Text("File browser — coming soon");
-    ImGui::PopStyleColor();
+    // Handle file selection: trigger probe when no system is selected
+    if (file_browser_.file_selection_changed() && !selected_system_name_) {
+        trigger_probe(file_browser_.selected_file());
+    }
 
-    ImGui::SetCursorPos(ImVec2(center_x - 80, center_y + 10));
-    ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextDimmed);
-    ImGui::Text("Select a system and press Launch,");
-    ImGui::SetCursorPosX(center_x - 80);
-    ImGui::Text("or double-click a system to boot.");
-    ImGui::PopStyleColor();
+    // Handle file activation: launch if system is selected or probe matched
+    if (file_browser_.file_activated()) {
+        file_browser_.clear_activation();
+        if (selected_system_name_) {
+            // System selected — launch with this file
+            pending_file_path_ = file_browser_.selected_file();
+            launch_selected_system();
+        } else if (probe_state_ == ProbeState::SingleMatch) {
+            // No system selected but probe matched — auto-select and launch
+            select_system_by_name(probe_system_name_.c_str());
+            if (selected_system_name_) {
+                pending_file_path_ = file_browser_.selected_file();
+                launch_selected_system();
+            }
+        }
+    }
 
     ImGui::EndChild();
 }
 
 inline void LauncherPanel::render_probe_bar() {
-    // Zone C stub — visible only after probe (not implemented yet)
-    // Reserve space but don't render anything
+    if (probe_state_ == ProbeState::None) return;
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, launcher_theme::kProbeBarBg);
+    ImGui::BeginChild("##ProbeBar", ImVec2(0, launcher_theme::kProbeBarHeight), true);
+
+    ImGui::SetCursorPos(ImVec2(12, 12));
+
+    switch (probe_state_) {
+        case ProbeState::SingleMatch: {
+            ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kProbeMatch);
+            ImGui::Text("\xe2\x9c\x93");  // ✓
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextPrimary);
+            ImGui::Text("%s", probe_system_name_.c_str());
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextMuted);
+            ImGui::Text("(%.0f%%)", probe_confidence_ * 100.0f);
+            ImGui::PopStyleColor();
+            break;
+        }
+        case ProbeState::Ambiguous: {
+            ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kProbeAmbiguous);
+            ImGui::Text("\xe2\x9a\xa0");  // ⚠
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextSecondary);
+            ImGui::Text("Multiple systems match \xe2\x80\x94 %s (%.0f%%)",
+                        probe_system_name_.c_str(), probe_confidence_ * 100.0f);
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Choose...")) {
+                // Select the best match for now
+                select_system_by_name(probe_system_name_.c_str());
+                probe_state_ = ProbeState::SingleMatch;
+            }
+            break;
+        }
+        case ProbeState::NoMatch: {
+            ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kProbeNoMatch);
+            ImGui::Text("\xe2\x9c\x97  Format not recognised");  // ✗
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextMuted);
+            if (ImGui::SmallButton("Choose system manually...")) {
+                // Focus left panel — just clear probe
+                probe_state_ = ProbeState::None;
+            }
+            ImGui::PopStyleColor();
+            break;
+        }
+        default:
+            break;
+    }
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
 }
 
 inline void LauncherPanel::render_status_bar() {
