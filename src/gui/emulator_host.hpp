@@ -111,6 +111,7 @@ protected:
     int    cursor_last_y_      = 0;     ///< Last observed mouse Y position
     Uint32 cursor_last_move_   = 0;     ///< SDL_GetTicks() of last mouse movement
     bool   cursor_hidden_      = false; ///< True when the host cursor is hidden
+    bool   force_cursor_visible_ = false; ///< When true, cursor is always shown (e.g. launcher open)
 
     // ========================================================================
     // Windows accessibility shortcut suppression

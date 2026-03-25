@@ -254,6 +254,18 @@ void EmulatorHost::run() {
 // ============================================================================
 
 void EmulatorHost::update_mouse_cursor_visibility() {
+    // When a UI overlay (launcher, dialog) needs the cursor, keep it visible
+    if (force_cursor_visible_) {
+        if (cursor_hidden_) {
+            SDL_ShowCursor(SDL_ENABLE);
+            cursor_hidden_ = false;
+        }
+        // Let ImGui control cursor shape normally
+        ImGuiIO& io = ImGui::GetIO();
+        io.ConfigFlags &= ~ImGuiConfigFlags_NoMouseCursorChange;
+        return;
+    }
+
     int mx, my;
     SDL_GetMouseState(&mx, &my);
 

@@ -42,6 +42,20 @@ private:
 
     // Filepath received via SDL drag-and-drop, processed next frame
     std::string pending_drop_path_;
+
+    // ========================================================================
+    // Auto-hide menu bar state (§11.1)
+    // ========================================================================
+    bool   menu_bar_visible_     = true;   ///< Current visibility (drives animation)
+    bool   menu_bar_pinned_      = false;  ///< Pinned via F12 (stays until F12 again)
+    float  menu_bar_anim_        = 1.0f;   ///< Animation progress 0.0 (hidden) → 1.0 (visible)
+    Uint32 menu_bar_show_time_   = 0;      ///< SDL_GetTicks() when bar became visible
+    bool   menu_bar_hover_active_= false;  ///< Hover dwell is counting
+
+    static constexpr float  kMenuBarAnimSpeed  = 8.0f;   ///< ~125ms at 60 FPS ease
+    static constexpr Uint32 kMenuBarHoverDelay = 450;     ///< ms dwell at top before showing
+    static constexpr Uint32 kMenuBarIdleHide   = 3000;    ///< ms idle before auto-hiding (hover trigger only)
+    static constexpr float  kMenuBarHoverZone  = 8.0f;    ///< Pixels at top edge for hover trigger
     
 public:
     /**
