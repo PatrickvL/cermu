@@ -55,6 +55,7 @@ data/**/*.adf
 data/**/*.bin
 data/**/*.c64
 data/**/*.cmd
+data/**/*.cpr
 data/**/*.crt
 data/**/*.d64
 data/**/*.d71
@@ -71,6 +72,7 @@ data/**/*.p00
 data/**/*.pdf
 data/**/*.png
 data/**/*.prg
+data/**/*.rar
 data/**/*.rom
 data/**/*.ROM
 data/**/*.s
