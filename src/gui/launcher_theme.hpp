@@ -28,6 +28,7 @@ namespace launcher_theme {
     inline constexpr ImVec4 kFileRowSelected    = {0.039f, 0.110f, 0.188f, 1.0f};
     inline constexpr ImVec4 kFileRowHover       = {0.035f, 0.047f, 0.094f, 1.0f};
     inline constexpr ImVec4 kSearchInputBg      = {0.035f, 0.047f, 0.110f, 1.0f};
+    inline constexpr ImVec4 kCardBgDefault      = {0.031f, 0.039f, 0.078f, 1.0f};
 
     // =========================================================================
     // Borders

@@ -28,6 +28,12 @@
 #include "gui/shared_config_store.hpp"
 #include "gui/file_browser.hpp"
 
+#ifndef CERMU_NO_SQLITE
+#include "gui/catalog/catalog_store.hpp"
+#include "gui/catalog/catalog_pipeline.hpp"
+#include "gui/catalog/title_browser.hpp"
+#endif
+
 /// Probe state machine for file-first launch (§7.2)
 enum class ProbeState { None, Probing, SingleMatch, Ambiguous, NoMatch };
 
@@ -132,6 +138,21 @@ private:
     static constexpr float kMinUiScale  = 0.5f;
     static constexpr float kMaxUiScale  = 3.0f;
     static constexpr float kUiScaleStep = 0.1f;
+
+    // View mode — file browser vs. title browser
+    enum class ViewMode { FileBrowser, TitleBrowser };
+    ViewMode view_mode_ = ViewMode::FileBrowser;
+
+#ifndef CERMU_NO_SQLITE
+    // Catalog infrastructure (§13)
+    catalog::CatalogStore   catalog_store_;
+    catalog::CatalogPipeline catalog_pipeline_;
+    catalog::TitleBrowser   title_browser_;
+    bool catalog_opened_ = false;
+
+    void ensure_catalog_open();
+    void render_title_browser();
+#endif
 
     // Cached sorted system list
     struct SystemEntry {
@@ -541,6 +562,40 @@ inline void LauncherPanel::render_top_bar(bool allow_cancel) {
                 static_cast<int>(sorted_systems_.size()));
     ImGui::PopStyleColor();
 
+    // View mode toggle (File / Title)
+    ImGui::SameLine();
+    ImGui::SetCursorPosY(6);
+    {
+        bool is_file = (view_mode_ == ViewMode::FileBrowser);
+        if (is_file) {
+            ImGui::PushStyleColor(ImGuiCol_Button, launcher_theme::kSystemRowSelected);
+            ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextPrimary);
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
+            ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextMuted);
+        }
+        if (ImGui::SmallButton("File")) view_mode_ = ViewMode::FileBrowser;
+        ImGui::PopStyleColor(2);
+
+        ImGui::SameLine();
+        bool is_title = (view_mode_ == ViewMode::TitleBrowser);
+        if (is_title) {
+            ImGui::PushStyleColor(ImGuiCol_Button, launcher_theme::kSystemRowSelected);
+            ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextPrimary);
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
+            ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextMuted);
+        }
+        if (ImGui::SmallButton("Title")) {
+            view_mode_ = ViewMode::TitleBrowser;
+#ifndef CERMU_NO_SQLITE
+            ensure_catalog_open();
+            title_browser_.refresh(catalog_store_);
+#endif
+        }
+        ImGui::PopStyleColor(2);
+    }
+
     // Close button (if running system)
     if (allow_cancel) {
         ImGui::SameLine(ImGui::GetWindowWidth() - 40);
@@ -632,8 +687,15 @@ inline void LauncherPanel::render_right_panel() {
         ImGui::Separator();
     }
 
-    // Zone B: file browser stub
-    render_file_browser();
+    // Zone B: file browser or title browser based on view mode
+    if (view_mode_ == ViewMode::FileBrowser) {
+        render_file_browser();
+    }
+#ifndef CERMU_NO_SQLITE
+    else {
+        render_title_browser();
+    }
+#endif
 
     // Zone C: probe result bar (visible only after probe)
     render_probe_bar();
@@ -1076,5 +1138,52 @@ inline void LauncherPanel::handle_drop(const std::string& path) {
         focus_panel_ = FocusPanel::FileBrowser;
     }
 }
+
+// =============================================================================
+// Catalog integration (§13)
+// =============================================================================
+
+#ifndef CERMU_NO_SQLITE
+
+inline void LauncherPanel::ensure_catalog_open() {
+    if (catalog_opened_) return;
+
+    // Open/create the catalog database alongside the scan roots config
+    namespace fs = std::filesystem;
+    std::string config_dir;
+#ifdef _WIN32
+    const char* appdata = std::getenv("APPDATA");
+    config_dir = appdata ? std::string(appdata) + "\\cermu" : ".";
+#else
+    const char* xdg = std::getenv("XDG_CONFIG_HOME");
+    if (xdg) config_dir = std::string(xdg) + "/cermu";
+    else {
+        const char* home = std::getenv("HOME");
+        config_dir = home ? std::string(home) + "/.config/cermu" : ".";
+    }
+#endif
+    std::error_code ec;
+    fs::create_directories(config_dir, ec);
+
+    std::string db_path = config_dir + "/catalog.db";
+    if (catalog_store_.open(db_path)) {
+        catalog_opened_ = true;
+        printf("Catalog database opened: %s\n", db_path.c_str());
+    } else {
+        printf("Failed to open catalog database: %s\n", db_path.c_str());
+    }
+}
+
+inline void LauncherPanel::render_title_browser() {
+    if (!catalog_opened_) {
+        ImGui::TextDisabled("Catalog not available.");
+        return;
+    }
+
+    // Render the title browser (handles progress, empty state, and card grid)
+    title_browser_.render(catalog_store_, catalog_pipeline_);
+}
+
+#endif // CERMU_NO_SQLITE
 
 #endif // CERMU_HAS_GUI
