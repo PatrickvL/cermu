@@ -88,8 +88,8 @@ SessionGUI::SessionGUI(std::unique_ptr<System> system, const char* pending_file)
         printf("SessionGUI created for system: %s\n",
                system_->get_descriptor().name);
     } else {
-        printf("SessionGUI created without system - selection dialog will be shown\n");
-        system_selection_dialog_.open();  // Open dialog if no system provided
+        printf("SessionGUI created without system - launcher will be shown\n");
+        launcher_panel_.open();  // Open launcher if no system provided
     }
 }
 
@@ -337,6 +337,26 @@ void SessionGUI::render_frame() {
             system_selection_dialog_.reset();
         }
     }
+
+    // Launcher panel (new unified UI)
+    if (launcher_panel_.is_open()) {
+        launcher_panel_.render(system_ != nullptr);
+
+        if (launcher_panel_.selection_confirmed()) {
+            const char* selected = launcher_panel_.get_selected_system();
+            int memory_opt = launcher_panel_.get_selected_memory_option();
+            int region_opt = launcher_panel_.get_selected_region_option();
+            const auto& peripherals = launcher_panel_.get_selected_peripherals();
+            const auto& custom_settings = launcher_panel_.get_selected_custom_settings();
+            if (selected) {
+                const char* pf = pending_file_path_.empty() ? nullptr : pending_file_path_.c_str();
+                switch_system(selected, memory_opt, region_opt, &peripherals, pf, &custom_settings);
+                pending_file_path_.clear();
+            }
+            launcher_panel_.reset();
+            launcher_panel_.close();
+        }
+    }
     
 #ifdef HAS_IMGUIFILEDIALOG
     // Display file dialog wrapped in our own window for the close (X) button.
@@ -486,7 +506,7 @@ void SessionGUI::render_menu_bar() {
     if (ImGui::BeginMenu("File")) {
         // Switch System option
         if (ImGui::MenuItem("Switch System...")) {
-            system_selection_dialog_.open();
+            launcher_panel_.open();
         }
         
         ImGui::Separator();

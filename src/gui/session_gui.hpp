@@ -2,6 +2,7 @@
 
 #include "gui/emulator_host.hpp"
 #include "gui/system_selection_dialog.hpp"
+#include "gui/launcher_panel.hpp"
 #include "core/session.hpp"
 #include <memory>
 #include <string>
@@ -24,8 +25,11 @@ private:
     Session  session_;             // Owns all systems and inter-system connections
     System*  system_ = nullptr;    // Non-owning convenience pointer to focused system
 
-    // System selection dialog
+    // System selection dialog (legacy — retained as fallback)
     SystemSelectionDialog system_selection_dialog_;
+
+    // Launcher panel (new unified launcher UI)
+    LauncherPanel launcher_panel_;
     
     // Last selected file path for file dialog
     std::string last_file_path_;
