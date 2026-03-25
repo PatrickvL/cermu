@@ -40,19 +40,30 @@ entry anywhere.
 
 ### New Code Required
 
-| Component | Location | Purpose |
-|---|---|---|
-| `LauncherPanel` | `src/gui/launcher_panel.hpp/.cpp` | Unified launcher UI |
-| `LauncherTheme` | `src/gui/launcher_theme.hpp` | Named color constants |
-| `SharedConfigStore` | `src/gui/shared_config_store.hpp` | In-session cross-system config memory |
-| `ProbeResultPopup` | `src/gui/probe_result_popup.hpp/.cpp` | Probe result display and override |
-| `FileBrowser` | `src/gui/file_browser.hpp/.cpp` | VFS-based directory navigator |
-| `TitleBrowser` | `src/gui/title_browser.hpp/.cpp` | Cataloged title grid view |
-| `CatalogPipeline` | `src/catalog/catalog_pipeline.hpp/.cpp` | Background discovery, probe, group, persist |
-| `CatalogStore` | `src/catalog/catalog_store.hpp/.cpp` | SQLite-backed catalog persistence |
-| `ScanRootManager` | `src/catalog/scan_root_manager.hpp/.cpp` | Scan root list, persistence, filesystem watching |
-| `AutoHideMenuBar` | `src/gui/auto_hide_menu_bar.hpp/.cpp` | Slide-in menu bar for emulation mode |
-| `EmulationHUD` | `src/gui/emulation_hud.hpp/.cpp` | Persistent corner overlay during emulation |
+| Component | Planned location | Actual location | Status |
+|---|---|---|---|
+| `LauncherPanel` | `src/gui/launcher_panel.hpp/.cpp` | `src/gui/launcher_panel.hpp` (header-only) | ✅ Done |
+| `LauncherTheme` | `src/gui/launcher_theme.hpp` | `src/gui/launcher_theme.hpp` | ✅ Done |
+| `SharedConfigStore` | `src/gui/shared_config_store.hpp` | `src/gui/shared_config_store.hpp` | ✅ Done |
+| `ProbeResultPopup` | `src/gui/probe_result_popup.hpp/.cpp` | Inline in `LauncherPanel` (Zone C probe bar) | ✅ Merged |
+| `FileBrowser` | `src/gui/file_browser.hpp/.cpp` | `src/gui/file_browser.hpp` (header-only) | ✅ Done |
+| `TitleBrowser` | `src/gui/title_browser.hpp/.cpp` | `src/gui/catalog/title_browser.hpp` (header-only) | ✅ Done |
+| `CatalogPipeline` | `src/catalog/catalog_pipeline.hpp/.cpp` | `src/gui/catalog/catalog_pipeline.hpp` (header-only) | ✅ Done |
+| `CatalogStore` | `src/catalog/catalog_store.hpp/.cpp` | `src/gui/catalog/catalog_store.hpp` (header-only) | ✅ Done |
+| `ScanRootManager` | `src/catalog/scan_root_manager.hpp/.cpp` | `src/gui/scan_root_manager.hpp` (header-only) | ✅ Done |
+| `AutoHideMenuBar` | `src/gui/auto_hide_menu_bar.hpp/.cpp` | Integrated into `session_gui.cpp` | ✅ Merged |
+| `EmulationHUD` | `src/gui/emulation_hud.hpp/.cpp` | Integrated into `session_gui.cpp` | ✅ Merged |
+
+**Implementation notes:**
+- All new UI components are header-only (.hpp) rather than .hpp/.cpp split,
+  following the project convention for side-effect-free GUI code.
+- `ProbeResultPopup`, `AutoHideMenuBar`, and `EmulationHUD` were merged into their
+  parent components rather than standalone files — the complexity did not warrant
+  separate translation units.
+- Catalog files live under `src/gui/catalog/` (not `src/catalog/`) to keep all GUI
+  code co-located.
+- `ScanRootManager` lives in `src/gui/` alongside the launcher components that use it.
+- All catalog code is guarded by `#ifndef CERMU_NO_SQLITE` for builds without SQLite3.
 
 ---
 
@@ -1058,64 +1069,99 @@ ImGui::SetNextWindowSize({io.DisplaySize.x, bar_height_});
 
 ## 17. Implementation Phases
 
-### Phase 1 — Foundation
+### Phase 1 — Foundation ✅
+*Commit: `0f9e3159`*
 - Add `SystemType`, `maker`, `year`, `cpu_summary` to `SystemDescriptor`
-- Populate new fields in all existing system registrations
+- Populate new fields in all 62 existing system registrations (~35 files)
 - Create `LauncherTheme` with all color tokens
 - Create `SharedConfigStore` (in-session, no persistence)
 
-### Phase 2 — System List Panel
+### Phase 2 — System List Panel ✅
+*Commit: `e8e72eda`*
 - Create `LauncherPanel` with system list, filtering (type, maker, search)
 - Config strip rendering from `HardwareTraits`
 - `SharedConfigStore` integration
-- Zone A system header
+- Zone A system header with maker accent badges
 
-### Phase 3 — File Browser
+### Phase 3 — File Browser ✅
+*Commit: `c91342f9`*
 - `FileBrowser` component: VFS-based directory listing, path bar with archive
   segment colouring, sortable columns, filename search
 - Format filtering (system-scoped and global)
-- Container navigation via VFS
+- Container navigation via VFS (transparent archive browsing)
 - Path persistence (`last_file_path_`)
-- First-run empty state with scan root trigger
+- Probe flow integrated directly — `ProbeResultPopup` merged into Zone C probe bar
+  rather than a separate popup component
 
-### Phase 3b — File-first Probe Flow
-- `ProbeState` state machine in `LauncherPanel`
-- Single-click probe trigger (no system selected)
-- Zone C probe bar (SingleMatch, Ambiguous, NoMatch)
-- Probe config integration with Zone A
-- `ProbeResultPopup`
-- Keyboard navigation for probe states
-- Status bar hints for probe contexts
+### Phase 4 — Integration ✅
+*Commit: `23bfc7ba`*
+- Keyboard navigation (arrow keys, Tab panel switching, Enter to launch/navigate)
+- Status bar with context-sensitive key hints
+- Drag-and-drop onto launcher (directory, archive, and file handling)
+- Focus panel tracking between system list and file browser
 
-### Phase 4 — Integration
-- Replace `SystemSelectionDialog` and `CermuFileDialog` in `SessionGUI`
-- Wire Launch to `switch_system()`
-- CLI argument handling through probe pipeline
-- Drag-and-drop onto launcher
-- Drag-and-drop onto running instance (flip list + system-switch confirm)
-- Multi-path input: `paths[1..N]` → flip list after per-file probe
+*Adjustment: `SystemSelectionDialog` and `CermuFileDialog` are preserved alongside
+the launcher rather than fully replaced — the old dialogs still function as fallback
+paths. Full removal deferred to avoid regressions.*
 
-### Phase 5 — Emulation UI
-- `AutoHideMenuBar`: F12 + dwell trigger, slide animation, mouse-capture-aware
-- `EmulationHUD`: draggable corner overlay, port icons, performance numbers
-- Performance graph overlay as HUD extension
-- Chip panels: floating windows, Hardware menu, hide-all shortcut
-- Escape key hierarchy
-- Window title reflecting running context
+### Phase 5 — Emulation UI ✅
+*Commits: `a5343ed4`, `845471af`, `e51a3231`, `4e02b154`, `85bacb2d`, `f7aaede4`*
+- Auto-hide menu bar in fullscreen: F12 toggle + cursor dwell trigger + slide
+  animation via viewport position hack. Implemented directly in `session_gui.cpp`
+  rather than a separate `AutoHideMenuBar` component.
+- Emulation HUD: semi-transparent corner overlay with system name, speed %,
+  FPS/frame time, port status icons. Corner selectable via View menu.
+  Implemented as `render_emulation_hud()` in `session_gui.cpp` rather than a
+  separate `EmulationHUD` component.
+- Escape key hierarchy (chip panels → menu bar → nothing)
+- Library menu placeholder with Scan roots…, Rescan all, Process orphans…
+- Cursor visibility: visible over UI windows in fullscreen, hidden over emulated
+  display after idle timeout
+- "Hide all panels" in Hardware menu
 
-### Phase 6a — Catalog Pipeline
-- `ScanRootManager`: persistence, first-run popup, host pre-population,
-  path removal policy (`source_root_removed` state)
-- `CatalogPipeline`: discovery → probe (thread pool) → group → persist
-- `CatalogStore`: SQLite, path + mtime keying, fingerprint storage
-- Staleness check on launcher open
+*Additional display enhancements not in original plan:*
+- Display zoom (0.25x–4.0x) and X/Y pan sliders in both Screen menu and Display
+  Settings dialog
+- Color temperature effect in CRT shader (blackbody tint normalized to 6500K D65)
+- CRT toggle with proper panel swap (CRTPanel ↔ DirectPanel) — toggling off no
+  longer causes black screen
+- Display preset filtering by video signal compatibility (port type → accepted
+  signals check)
+- Conditional CRT-only sliders (curvature, scanline gap, dot pitch hidden for
+  LCD/LED displays)
+- Reset buttons positioned above sliders
+- Screen window background cleared (no stale content on zoom-out)
+- Launcher UI zoom: proportional left panel width scaling via `sqrt(ui_scale_)`,
+  default zoom raised from 1.0x to 1.5x for better readability
 
-### Phase 6b — Title Browser
-- `TitleBrowser`: card grid, left panel filter facets, variant picker
-- Scan progress state in title browser
-- Partial catalog usability during scan
+### Phase 6a — Catalog Pipeline ✅
+*Commits: `14710460`, `d3cbb77d`, `8c924347`*
+- `ScanRootManager` (`src/gui/scan_root_manager.hpp`): TOML persistence
+  (`~/.config/cermu/scan_roots.toml`), host environment discovery (Linux/Windows
+  common paths), setup panel UI, manage dialog, wired into Library menu
+- First-run scan root setup overlay rendered in launcher when no roots configured
+- `CatalogStore` (`src/gui/catalog/catalog_store.hpp`): SQLite-backed persistence
+  with entry states (present, stale, file_missing, root_removed, orphaned),
+  fingerprint storage, title grouping queries
+- `CatalogPipeline` (`src/gui/catalog/catalog_pipeline.hpp`): async discovery →
+  probe → group pipeline with atomic progress counters, cancel support
+- SQLite3 dependency added to CMakeLists.txt with pkg-config fallback and
+  `CERMU_NO_SQLITE` graceful degradation
 
-### Phase 6c — Orphan and Relocation Handling
+### Phase 6b — Title Browser ✅
+*Commit: `8c924347`*
+- `TitleBrowser` (`src/gui/catalog/title_browser.hpp`): card grid view with search,
+  scan progress bar, empty/first-run state, variant picker
+- File/Title view mode toggle in launcher top bar
+- Right panel routes between file browser and title browser based on view mode
+- `kCardBgDefault` color constant added to launcher theme
+
+*Adjustment: The title browser shares the existing left panel (system list) rather
+than replacing it with separate filter facets as originally planned. System selection
+in the left panel acts as a filter for both file browser and title browser views.
+`TitleBrowser::render()` takes `CatalogStore&` and `CatalogPipeline&` directly.*
+
+### Phase 6c — Orphan and Relocation Handling ❌ Not started
 - Content fingerprint computation and storage
 - Background per-file fingerprint search on `file_missing` transition
 - Folder-level relocation detection (common prefix, 80% fingerprint match)
@@ -1124,11 +1170,15 @@ ImGui::SetNextWindowSize({io.DisplaySize.x, bar_height_});
 - Fuzzy name matching with user confirmation
 - Bulk relocation notification (threshold: 15 entries)
 
-### Phase 6d — Filesystem Watch
+*Note: The `CatalogStore` schema already includes fingerprint fields and entry
+state tracking. The orphan state machine and relocation detection logic need to
+be built on top of the existing infrastructure.*
+
+### Phase 6d — Filesystem Watch ❌ Not started
 - `inotify` (Linux) / `ReadDirectoryChangesW` (Windows) integration
 - Automatic incremental scan on directory change events
 
-### Phase 6e — Enrichment (optional)
+### Phase 6e — Enrichment (optional) ❌ Not started
 - TOSEC / No-Intro database matching
 - Cover art fetching and caching
 
