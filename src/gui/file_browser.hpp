@@ -29,6 +29,7 @@
 #include "gui/vfs_file_system.hpp"
 #include "core/formats/format_handler.hpp"
 #include "core/config/path_discovery.hpp"
+#include "utils/rom_filename_parser.hpp"
 
 /// A single entry in the file browser listing.
 struct FileBrowserEntry {
@@ -38,10 +39,17 @@ struct FileBrowserEntry {
     bool        is_directory = false;
     bool        is_archive   = false;  ///< ZIP/7z/RAR — always navigable
     bool        is_container = false;  ///< D64/T64/LNX — navigable when enabled
+
+    // Parsed from filename (TOSEC / No-Intro / GoodTools conventions)
+    std::string parsed_title;   ///< Cleaned title (empty = use name)
+    std::string region;         ///< Region code (e.g. "USA", "Europe")
+    std::string year;           ///< Release year (e.g. "1985")
+    std::vector<std::string> tags;   ///< Bracket tags: [!], [b], etc.
+    std::vector<std::string> flags;  ///< Paren flags: (Unl), (Rev A), etc.
 };
 
 /// Sort column for the file list.
-enum class FileBrowserSort { Name, Size, Type };
+enum class FileBrowserSort { Name, Region, Year, Size, Type };
 
 /**
  * FileBrowser — directory navigator for the launcher's Zone B.
@@ -117,12 +125,17 @@ private:
     // Helpers
     void scan_directory();
     void apply_filter_and_sort();
+    void parse_entry_metadata(FileBrowserEntry& entry);
     bool matches_format_filter(const FileBrowserEntry& entry) const;
     bool matches_search(const FileBrowserEntry& entry) const;
+    bool matches_region_filter(const FileBrowserEntry& entry) const;
     void rebuild_extension_cache();
 
     static std::string format_size(size_t bytes);
     static std::string get_type_label(const FileBrowserEntry& entry);
+
+    // Region filter
+    std::string region_filter_;  // empty = show all
 };
 
 // =============================================================================
@@ -229,6 +242,8 @@ inline void FileBrowser::scan_directory() {
             }
             entries_.push_back(std::move(entry));
         }
+        // Parse metadata for all entries
+        for (auto& e : entries_) parse_entry_metadata(e);
         return;
     }
 
@@ -257,6 +272,9 @@ inline void FileBrowser::scan_directory() {
 
         entries_.push_back(std::move(entry));
     }
+
+    // Parse metadata for all entries
+    for (auto& e : entries_) parse_entry_metadata(e);
 }
 
 inline void FileBrowser::apply_filter_and_sort() {
@@ -267,6 +285,8 @@ inline void FileBrowser::apply_filter_and_sort() {
         if (!entry.is_directory && !matches_format_filter(entry))
             continue;
         if (!matches_search(entry))
+            continue;
+        if (!matches_region_filter(entry))
             continue;
         filtered_entries_.push_back(entry);
     }
@@ -296,9 +316,19 @@ inline void FileBrowser::apply_filter_and_sort() {
                     int cmp = ta.compare(tb);
                     return asc ? (cmp < 0) : (cmp > 0);
                 }
+                case FileBrowserSort::Region: {
+                    int cmp = strcasecmp(a.region.c_str(), b.region.c_str());
+                    return asc ? (cmp < 0) : (cmp > 0);
+                }
+                case FileBrowserSort::Year: {
+                    int cmp = a.year.compare(b.year);
+                    return asc ? (cmp < 0) : (cmp > 0);
+                }
                 case FileBrowserSort::Name:
                 default: {
-                    int cmp = strcasecmp(a.name.c_str(), b.name.c_str());
+                    const auto& na = a.parsed_title.empty() ? a.name : a.parsed_title;
+                    const auto& nb = b.parsed_title.empty() ? b.name : b.parsed_title;
+                    int cmp = strcasecmp(na.c_str(), nb.c_str());
                     return asc ? (cmp < 0) : (cmp > 0);
                 }
             }
@@ -324,11 +354,28 @@ inline bool FileBrowser::matches_format_filter(const FileBrowserEntry& entry) co
 inline bool FileBrowser::matches_search(const FileBrowserEntry& entry) const {
     if (search_buf_[0] == '\0') return true;
 
-    std::string name_lower = entry.name;
     std::string query_lower(search_buf_);
-    std::transform(name_lower.begin(), name_lower.end(), name_lower.begin(), ::tolower);
     std::transform(query_lower.begin(), query_lower.end(), query_lower.begin(), ::tolower);
-    return name_lower.find(query_lower) != std::string::npos;
+
+    // Match against name
+    std::string name_lower = entry.name;
+    std::transform(name_lower.begin(), name_lower.end(), name_lower.begin(), ::tolower);
+    if (name_lower.find(query_lower) != std::string::npos) return true;
+
+    // Match against parsed title
+    if (!entry.parsed_title.empty()) {
+        std::string title_lower = entry.parsed_title;
+        std::transform(title_lower.begin(), title_lower.end(), title_lower.begin(), ::tolower);
+        if (title_lower.find(query_lower) != std::string::npos) return true;
+    }
+
+    // Match against region and year
+    std::string region_lower = entry.region;
+    std::transform(region_lower.begin(), region_lower.end(), region_lower.begin(), ::tolower);
+    if (!region_lower.empty() && region_lower.find(query_lower) != std::string::npos) return true;
+    if (!entry.year.empty() && entry.year.find(query_lower) != std::string::npos) return true;
+
+    return false;
 }
 
 inline void FileBrowser::rebuild_extension_cache() {
@@ -351,6 +398,24 @@ inline void FileBrowser::rebuild_extension_cache() {
     active_extensions_.erase(
         std::unique(active_extensions_.begin(), active_extensions_.end()),
         active_extensions_.end());
+}
+
+inline void FileBrowser::parse_entry_metadata(FileBrowserEntry& entry) {
+    if (entry.is_directory) return;
+    auto info = rom_filename::parse(entry.name);
+    entry.parsed_title = std::move(info.title);
+    entry.region       = std::move(info.region);
+    entry.year         = std::move(info.year);
+    entry.tags         = std::move(info.tags);
+    entry.flags        = std::move(info.flags);
+}
+
+inline bool FileBrowser::matches_region_filter(const FileBrowserEntry& entry) const {
+    if (region_filter_.empty()) return true;
+    if (entry.is_directory) return true;
+    // Match short code
+    auto sr = rom_filename::short_region(entry.region);
+    return sr == rom_filename::short_region(region_filter_);
 }
 
 inline std::string FileBrowser::format_size(size_t bytes) {
@@ -502,6 +567,7 @@ inline void FileBrowser::render_path_bar() {
     ImGui::PopStyleColor();
 }
 
+
 inline void FileBrowser::render_file_list() {
     // Search input with placeholder hint
     ImGui::PushStyleColor(ImGuiCol_FrameBg, launcher_theme::kSearchInputBg);
@@ -515,8 +581,10 @@ inline void FileBrowser::render_file_list() {
 
     ImGui::SameLine();
 
-    // Filter pills — REGION All (placeholder) and FORMAT All/filtered
-    auto filter_pill = [](const char* label, const char* value, bool is_active) {
+    // ── Filter pills ────────────────────────────────────────────────────────
+
+    // Helper lambda for rendering a filter pill (returns true if clicked)
+    auto render_pill = [](const char* label, const char* value, bool is_active) -> bool {
         ImVec4 bg = ImVec4(0.035f, 0.047f, 0.102f, 1.0f);
         ImVec4 border = is_active ? launcher_theme::kFilterActiveBorder
                                  : ImVec4(0.063f, 0.094f, 0.133f, 1.0f);
@@ -526,32 +594,59 @@ inline void FileBrowser::render_file_list() {
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 
-        // Label
         ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextDimmed);
         ImGui::TextUnformatted(label);
         ImGui::PopStyleColor();
         ImGui::SameLine(0, 4);
 
-        // Value
         ImGui::PushStyleColor(ImGuiCol_Text,
             is_active ? launcher_theme::kAccentBlue : launcher_theme::kTextMuted);
         std::string btn_id = std::string(value) + "##pill_" + label;
-        ImGui::SmallButton(btn_id.c_str());
+        bool clicked = ImGui::SmallButton(btn_id.c_str());
         ImGui::PopStyleColor();
 
         ImGui::PopStyleVar(2);
         ImGui::PopStyleColor(3);
+        return clicked;
     };
 
-    // REGION All (placeholder — enabled when metadata columns arrive)
-    filter_pill("REGION", "All", false);
+    // REGION pill — clickable cycle through detected regions
+    {
+        const char* rgn_val = region_filter_.empty() ? "All" : region_filter_.c_str();
+        bool rgn_active = !region_filter_.empty();
+        if (render_pill("REGION", rgn_val, rgn_active)) {
+            // Cycle through detected regions
+            std::vector<std::string> regions;
+            for (const auto& e : entries_) {
+                if (!e.region.empty()) {
+                    auto sr = std::string(rom_filename::short_region(e.region));
+                    if (std::find(regions.begin(), regions.end(), sr) == regions.end())
+                        regions.push_back(sr);
+                }
+            }
+            std::sort(regions.begin(), regions.end());
+
+            if (regions.empty()) {
+                region_filter_.clear();
+            } else if (region_filter_.empty()) {
+                region_filter_ = regions.front();
+            } else {
+                auto it = std::find(regions.begin(), regions.end(), region_filter_);
+                if (it == regions.end() || ++it == regions.end())
+                    region_filter_.clear();  // wrap to "All"
+                else
+                    region_filter_ = *it;
+            }
+            apply_filter_and_sort();
+        }
+    }
     ImGui::SameLine(0, 6);
 
     // FORMAT pill
     {
         const char* fmt_val = active_formats_ ? "Filtered" : "All";
         bool fmt_active = (active_formats_ != nullptr);
-        filter_pill("FORMAT", fmt_val, fmt_active);
+        render_pill("FORMAT", fmt_val, fmt_active);
     }
 
     ImGui::SameLine(ImGui::GetWindowWidth() - 80);
@@ -559,12 +654,19 @@ inline void FileBrowser::render_file_list() {
     ImGui::Text("%d items", static_cast<int>(filtered_entries_.size()));
     ImGui::PopStyleColor();
 
-    // Column headers
+    // ── Column headers ──────────────────────────────────────────────────────
+    // Layout: Name (flexible) | Region (50px) | Year (40px) | Size (70px) | Type (60px)
     ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextMuted);
-    float name_width = ImGui::GetContentRegionAvail().x - 70 - 60 - 16;
+    constexpr float kRegionW = 50, kYearW = 40, kSizeW = 70, kTypeW = 60;
+    float name_width = ImGui::GetContentRegionAvail().x - kRegionW - kYearW - kSizeW - kTypeW - 16;
+    float col_region = name_width + 8;
+    float col_year   = col_region + kRegionW;
+    float col_size   = col_year + kYearW;
+    float col_type   = col_size + kSizeW;
+
     ImGui::SetCursorPosX(8);
     {
-        auto sort_header = [&](const char* label, FileBrowserSort col, float width) {
+        auto sort_header = [&](const char* label, FileBrowserSort col, float /*width*/) {
             bool is_active = (sort_column_ == col);
             if (is_active) ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextSecondary);
 
@@ -581,7 +683,7 @@ inline void FileBrowser::render_file_list() {
             }
             ImGui::PopStyleColor();
 
-            // Sort indicator: active column shows direction, others show inactive indicator
+            // Sort indicator
             ImGui::SameLine(0, 2);
             if (is_active) {
                 ImGui::Text(sort_ascending_ ? "\xe2\x96\xb2" : "\xe2\x96\xbc");  // ▲ ▼
@@ -594,16 +696,20 @@ inline void FileBrowser::render_file_list() {
         };
 
         sort_header("Name", FileBrowserSort::Name, name_width);
-        ImGui::SameLine(name_width + 8);
-        sort_header("Size", FileBrowserSort::Size, 70);
-        ImGui::SameLine(name_width + 78);
-        sort_header("Type", FileBrowserSort::Type, 60);
+        ImGui::SameLine(col_region);
+        sort_header("Rgn", FileBrowserSort::Region, kRegionW);
+        ImGui::SameLine(col_year);
+        sort_header("Year", FileBrowserSort::Year, kYearW);
+        ImGui::SameLine(col_size);
+        sort_header("Size", FileBrowserSort::Size, kSizeW);
+        ImGui::SameLine(col_type);
+        sort_header("Type", FileBrowserSort::Type, kTypeW);
     }
     ImGui::PopStyleColor();
 
     ImGui::Separator();
 
-    // File list (scrollable)
+    // ── File list (scrollable) ──────────────────────────────────────────────
     ImGui::BeginChild("##FileList", ImVec2(0, 0), false);
 
     for (int i = 0; i < static_cast<int>(filtered_entries_.size()); ++i) {
@@ -627,25 +733,20 @@ inline void FileBrowser::render_file_list() {
 
             if (entry.is_directory || entry.is_archive || entry.is_container) {
                 if (ImGui::IsMouseDoubleClicked(0)) {
-                    // Double-click navigable entry: navigate into
                     std::string target = entry.full_path;
                     if (entry.is_archive || entry.is_container) {
                         target += "!/";
                     }
                     navigate_to(target);
                 } else {
-                    // Single-click dir: just select (no navigation)
                     selected_file_ = entry.full_path;
                     file_selection_changed_ = true;
                 }
             } else {
-                // File
                 if (ImGui::IsMouseDoubleClicked(0)) {
-                    // Double-click file: activate (launch)
                     selected_file_ = entry.full_path;
                     file_activated_ = true;
                 } else {
-                    // Single-click file: select
                     if (selected_file_ != entry.full_path) {
                         selected_file_ = entry.full_path;
                         file_selection_changed_ = true;
@@ -656,7 +757,7 @@ inline void FileBrowser::render_file_list() {
 
         ImGui::PopStyleColor(2);
 
-        // Overlay: icon + name
+        // Overlay: icon + columns
         ImVec2 row_min = ImGui::GetItemRectMin();
         ImDrawList* dl = ImGui::GetWindowDrawList();
 
@@ -677,22 +778,40 @@ inline void FileBrowser::render_file_list() {
         dl->AddText(ImVec2(row_min.x + 4, row_min.y + 2),
                      ImGui::GetColorU32(icon_color), icon);
 
-        // File name
+        // Name column (show parsed title for files, raw name for dirs)
+        const char* display_name = (!entry.parsed_title.empty() && !entry.is_directory)
+                                   ? entry.parsed_title.c_str()
+                                   : entry.name.c_str();
         dl->AddText(ImVec2(row_min.x + 24, row_min.y + 2),
                      ImGui::GetColorU32(launcher_theme::kTextPrimary),
-                     entry.name.c_str());
+                     display_name);
+
+        // Region column
+        if (!entry.region.empty()) {
+            auto sr = rom_filename::short_region(entry.region);
+            dl->AddText(ImVec2(row_min.x + col_region, row_min.y + 2),
+                         ImGui::GetColorU32(launcher_theme::kTextMuted),
+                         sr.data(), sr.data() + sr.size());
+        }
+
+        // Year column
+        if (!entry.year.empty()) {
+            dl->AddText(ImVec2(row_min.x + col_year, row_min.y + 2),
+                         ImGui::GetColorU32(launcher_theme::kTextMuted),
+                         entry.year.c_str());
+        }
 
         // Size column
         if (!entry.is_directory) {
             std::string size_str = format_size(entry.size);
-            dl->AddText(ImVec2(row_min.x + name_width + 8, row_min.y + 2),
+            dl->AddText(ImVec2(row_min.x + col_size, row_min.y + 2),
                          ImGui::GetColorU32(launcher_theme::kTextMuted),
                          size_str.c_str());
         }
 
         // Type column
         std::string type_str = get_type_label(entry);
-        dl->AddText(ImVec2(row_min.x + name_width + 78, row_min.y + 2),
+        dl->AddText(ImVec2(row_min.x + col_type, row_min.y + 2),
                      ImGui::GetColorU32(launcher_theme::kTextDimmed),
                      type_str.c_str());
 
