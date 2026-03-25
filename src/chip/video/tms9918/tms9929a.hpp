@@ -13,6 +13,7 @@ namespace tms9918 {
 inline constexpr VDPTraits TMS9929ATraits = {
     "Texas Instruments",             // vendor
     "TMS9929A",                      // chip_id
+    "TI TMS9929A",                   // display_name
     VDPRegion::PAL,                  // region
     VDPOutput::COMPOSITE,            // output
     VDPSpriteModel::ORIGINAL,        // sprite_model

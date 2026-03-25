@@ -14,6 +14,7 @@ namespace pokey {
 inline constexpr POKEYTraits C012294B_Traits = {
     "Atari",                     // vendor
     "C012294B",                  // chip_id
+    "Atari POKEY",               // display_name
     CoreFlags::NMOS_B,           // core_flags — timer bug fix variant
     40                           // pin_count
 };

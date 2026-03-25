@@ -9,7 +9,7 @@
 #include "chip/sound/ay_psg/ay_psg.hpp"
 
 inline constexpr AYTraits AY_3_8910_Traits = {
-    "General Instrument", "AY-3-8910",
+    "General Instrument", "AY-3-8910", "GI AY-3-8910",
     2, 2, 16, AYRegisterMap::STANDARD, false
 };
 

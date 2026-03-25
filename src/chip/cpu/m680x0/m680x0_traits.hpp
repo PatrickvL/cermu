@@ -61,6 +61,7 @@ constexpr uint32_t HAS_BURST     = 1 << 21;    // MC68040: burst bus transfers
 struct M680x0Traits {
     const char* vendor;              // "Motorola", "Freescale", "NXP"
     const char* chip_id;             // "68000", "68008", "68010", "68020", "68030", "68040"
+    const char* display_name;        // "Motorola 68000" — human-readable UI label
     uint32_t    core_flags;          // M680x0CoreFlags combination
     uint8_t     address_bits;        // Address bus width (20, 22, 24, 32)
     uint8_t     data_bus_bits;       // Data bus width (8, 16, 32)

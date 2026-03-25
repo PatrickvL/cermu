@@ -63,15 +63,16 @@ enum class SN76489Variant : uint8_t {
 struct SN76489VariantTraits {
     const char* part_number;
     const char* manufacturer;
-    uint16_t    noise_taps;     // LFSR feedback tap mask (XOR bits)
-    uint16_t    noise_bit;      // Width of LFSR (bit position of MSB)
+    const char* display_name;  // Human-readable UI label
+    uint16_t    noise_taps;    // LFSR feedback tap mask (XOR bits)
+    uint16_t    noise_bit;     // Width of LFSR (bit position of MSB)
 };
 
 inline constexpr SN76489VariantTraits sn76489_variant_traits[] = {
-    { "SN76489",  "Texas Instruments", 0x0003, 15 },  // 16-bit LFSR, taps 0+1
-    { "SN76489A", "Texas Instruments", 0x0009, 15 },  // 16-bit LFSR, taps 0+3
-    { "SN76496",  "Texas Instruments", 0x0009, 15 },  //   (same as A)
-    { "Sega PSG", "Sega",              0x0009, 15 },  // Integrated in VDP
+    { "SN76489",  "Texas Instruments", "TI SN76489",  0x0003, 15 },  // 16-bit LFSR, taps 0+1
+    { "SN76489A", "Texas Instruments", "TI SN76489A", 0x0009, 15 },  // 16-bit LFSR, taps 0+3
+    { "SN76496",  "Texas Instruments", "TI SN76496",  0x0009, 15 },  //   (same as A)
+    { "Sega PSG", "Sega",              "Sega PSG",    0x0009, 15 },  // Integrated in VDP
 };
 
 // ============================================================================
@@ -84,7 +85,7 @@ public:
         : SoundChipBase(ChipInfo{
               sn76489_variant_traits[static_cast<int>(variant)].part_number,
               sn76489_variant_traits[static_cast<int>(variant)].manufacturer,
-              {}})
+              sn76489_variant_traits[static_cast<int>(variant)].display_name})
         , variant_(variant)
         , audio_buffer_(4096)
     {

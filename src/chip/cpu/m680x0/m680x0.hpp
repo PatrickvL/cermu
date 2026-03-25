@@ -255,9 +255,7 @@ public:
 
     // ── Constructor ──────────────────────────────────────────────
     m680x0_t()
-        : CpuChipBase(ChipInfo{Traits.chip_id, Traits.vendor, {}}) {
-        display_name_ = Traits.chip_id;
-        short_name_   = Traits.chip_id;
+        : CpuChipBase(ChipInfo{Traits.chip_id, Traits.vendor, Traits.display_name}) {
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif

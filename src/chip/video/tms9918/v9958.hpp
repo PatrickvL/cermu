@@ -15,6 +15,7 @@ namespace tms9918 {
 inline constexpr VDPTraits V9958Traits = {
     "Yamaha",                        // vendor
     "V9958",                         // chip_id
+    "Yamaha V9958",                  // display_name
     VDPRegion::NTSC,                 // region
     VDPOutput::RGB,                  // output
     VDPSpriteModel::V9938,           // sprite_model

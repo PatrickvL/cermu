@@ -57,6 +57,7 @@ constexpr uint32_t HAS_LIC          = 1 << 18; // Last Instruction Cycle output
 struct MC6809Traits {
     const char* vendor;             // "Motorola", "Hitachi"
     const char* chip_id;            // "MC6809", "MC6809E", "HD6309"
+    const char* display_name;       // "Motorola MC6809", "Hitachi HD6309" — human-readable UI label
     uint32_t    core_flags;         // MC6809CoreFlags combination
     uint8_t     address_bits;       // Address bus width (always 16)
     uint8_t     max_clock_mhz_x10;  // Max rated clock × 10 (e.g. 10 = 1.0 MHz, 20 = 2.0 MHz)

@@ -33,6 +33,7 @@ enum class AYRegisterMap : uint8_t {
 struct AYTraits {
     const char*    vendor;
     const char*    chip_id;
+    const char*    display_name;    // Human-readable UI label
     uint8_t        io_port_count;    // 0, 1, or 2
     uint8_t        clock_divider;    // 1 (YM — no internal divider) or 2 (AY internal ÷2)
     uint8_t        envelope_steps;   // 16 (AY) or 32 (YM half-step)

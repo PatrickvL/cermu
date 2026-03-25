@@ -9,7 +9,7 @@
 #include "chip/sound/ay_psg/ay_psg.hpp"
 
 inline constexpr AYTraits YM3439_Traits = {
-    "Yamaha", "YM3439",
+    "Yamaha", "YM3439", "Yamaha YM3439",
     2, 1, 32, AYRegisterMap::STANDARD, false
 };
 

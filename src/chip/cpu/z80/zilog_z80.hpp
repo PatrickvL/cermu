@@ -17,6 +17,7 @@ namespace z80 {
 inline constexpr Z80Traits ZilogZ80Traits = {
     "Zilog",                                             // vendor
     "Z80",                                               // chip_id
+    "Zilog Z80",                                         // display_name
     CoreFlags::NMOS_Z80,                                 // core_flags
     16,                                                  // address_bits
     25,                                                  // max_clock_mhz_x10 (2.5 MHz)

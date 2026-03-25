@@ -15,6 +15,7 @@ namespace m680x0 {
 inline constexpr M680x0Traits MC68010Traits = {
     .vendor          = "Motorola",
     .chip_id         = "68010",
+    .display_name    = "Motorola 68010",
     .core_flags      = CoreFlags::MC68010_FLAGS,
     .address_bits    = 24,
     .data_bus_bits   = 16,

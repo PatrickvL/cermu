@@ -44,7 +44,7 @@ public:
     // ====================================================================
 
     tms9918_t() {
-        info_ = ChipInfo{Traits.chip_id, Traits.vendor, {}};
+        info_ = ChipInfo{Traits.chip_id, Traits.vendor, Traits.display_name};
         init_regs(Traits.num_registers);
 
         // Register fixed palette for base TMS9918 variants
