@@ -786,6 +786,51 @@ inline void FileBrowser::render_file_list() {
                      ImGui::GetColorU32(launcher_theme::kTextPrimary),
                      display_name);
 
+        // Tag/flag badges — rendered as small colored pills after the title
+        if (!entry.tags.empty() || !entry.flags.empty()) {
+            ImVec2 text_size = ImGui::CalcTextSize(display_name);
+            float badge_x = row_min.x + 24 + text_size.x + 6;
+            float badge_y = row_min.y + 2;
+            float badge_h = text_size.y;
+
+            auto draw_badge = [&](const char* label, ImVec4 color) {
+                ImVec2 lsz = ImGui::CalcTextSize(label);
+                float pw = lsz.x + 6;  // pill width with padding
+                // Pill background
+                dl->AddRectFilled(
+                    ImVec2(badge_x, badge_y),
+                    ImVec2(badge_x + pw, badge_y + badge_h),
+                    ImGui::GetColorU32(launcher_theme::kTagBg), 3.0f);
+                // Text
+                dl->AddText(ImVec2(badge_x + 3, badge_y),
+                             ImGui::GetColorU32(color), label);
+                badge_x += pw + 3;  // advance for next badge
+            };
+
+            // Bracket tags: [!], [b], [h], etc.
+            for (const auto& t : entry.tags) {
+                ImVec4 c = launcher_theme::kTagDefault;
+                if (t == "!")                                 c = launcher_theme::kTagVerified;
+                else if (t == "b" || t == "b1" || t == "b2") c = launcher_theme::kTagBadDump;
+                else if (t == "h" || t.substr(0, 1) == "h")  c = launcher_theme::kTagHack;
+                else if (t == "o" || t == "o1")              c = launcher_theme::kTagOverdump;
+                else if (t == "a" || t == "a1" || t == "a2") c = launcher_theme::kTagAlternate;
+                else if (t == "p" || t == "p1")              c = launcher_theme::kTagPirate;
+                std::string label = "[" + t + "]";
+                draw_badge(label.c_str(), c);
+            }
+
+            // Parenthesized flags: (Unl), (Proto), (Beta), etc.
+            for (const auto& f : entry.flags) {
+                ImVec4 c = launcher_theme::kTagDefault;
+                if (f == "Unl" || f == "Unlicensed")         c = launcher_theme::kTagUnlicensed;
+                else if (f == "Proto" || f == "Prototype")   c = launcher_theme::kTagProto;
+                else if (f == "Beta")                        c = launcher_theme::kTagProto;
+                else if (f == "cr" || f == "Crack")          c = launcher_theme::kTagPirate;
+                draw_badge(f.c_str(), c);
+            }
+        }
+
         // Region column
         if (!entry.region.empty()) {
             auto sr = rom_filename::short_region(entry.region);

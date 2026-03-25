@@ -76,6 +76,20 @@ namespace launcher_theme {
     inline constexpr ImVec4 kBreadcrumbArchive  = {0.400f, 0.300f, 0.600f, 1.0f};
 
     // =========================================================================
+    // Tag badge colours (file browser)
+    // =========================================================================
+    inline constexpr ImVec4 kTagVerified    = {0.180f, 0.769f, 0.460f, 1.0f};  // [!] — green
+    inline constexpr ImVec4 kTagBadDump     = {0.800f, 0.267f, 0.267f, 1.0f};  // [b] — red
+    inline constexpr ImVec4 kTagHack        = {0.850f, 0.500f, 0.150f, 1.0f};  // [h] — orange
+    inline constexpr ImVec4 kTagOverdump    = {0.780f, 0.700f, 0.200f, 1.0f};  // [o] — yellow
+    inline constexpr ImVec4 kTagAlternate   = {0.353f, 0.580f, 0.910f, 1.0f};  // [a] — blue
+    inline constexpr ImVec4 kTagPirate      = {0.580f, 0.350f, 0.750f, 1.0f};  // [p] — purple
+    inline constexpr ImVec4 kTagProto       = {0.180f, 0.650f, 0.627f, 1.0f};  // (Proto)/(Beta) — teal
+    inline constexpr ImVec4 kTagUnlicensed  = {0.780f, 0.600f, 0.133f, 1.0f};  // (Unl) — amber
+    inline constexpr ImVec4 kTagDefault     = {0.300f, 0.380f, 0.480f, 1.0f};  // other — dim
+    inline constexpr ImVec4 kTagBg          = {0.039f, 0.047f, 0.094f, 0.8f};  // pill background
+
+    // =========================================================================
     // Manufacturer accent colours
     // =========================================================================
     // Each entry: substring to match against SystemDescriptor::maker, then color.
