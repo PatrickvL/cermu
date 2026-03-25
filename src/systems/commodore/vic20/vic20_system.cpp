@@ -460,7 +460,8 @@ static SystemDescriptor vic20_descriptor = {
     {"VIC20", "VIC-20", "VIC 20", "VIC_20"},
     vic20_formats,
     create_vic20_hardware_traits(),
-    vic20_probe_file
+    vic20_probe_file,
+    "Commodore", 1980, "MOS 6502", SystemType::Home
 };
 
 // ============================================================================

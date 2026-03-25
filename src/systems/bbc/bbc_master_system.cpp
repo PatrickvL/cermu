@@ -86,7 +86,8 @@ static SystemDescriptor bbc_bplus_descriptor = {
     "bbc", {"BBCB+", "BBC B+", "BBCBPlus"},
     nullptr,
     create_bbc_master_hardware_traits<BBCMasterVariant::MODEL_B_PLUS>(),
-    nullptr
+    nullptr,
+    "Acorn", 1985, "65C02", SystemType::Home
 };
 
 static SystemDescriptor bbc_master_descriptor = {
@@ -95,7 +96,8 @@ static SystemDescriptor bbc_master_descriptor = {
     "bbc", {"BBCMaster", "BBC Master", "Master128"},
     nullptr,
     create_bbc_master_hardware_traits<BBCMasterVariant::MASTER_128>(),
-    nullptr
+    nullptr,
+    "Acorn", 1986, "65C02", SystemType::Home
 };
 
 // ============================================================================

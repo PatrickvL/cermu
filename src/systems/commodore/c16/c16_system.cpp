@@ -508,7 +508,8 @@ const SystemDescriptor& Commodore264System<V>::static_descriptor() {
         Traits::get_aliases(),
         formats,
         create_hardware_traits(),
-        probe_file_static
+        probe_file_static,
+        "Commodore", 1984, "MOS 7501", SystemType::Home
     };
     return desc;
 }

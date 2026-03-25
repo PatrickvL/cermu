@@ -137,7 +137,8 @@ static SystemDescriptor spectrum48k_descriptor = {
     {"Spectrum", "Spectrum48K", "ZXSpectrum", "ZX48K", "Speccy"},
     spectrum_formats,
     create_spectrum_hardware_traits<SpectrumVariant::ZX48K>(),
-    spectrum_probe_file
+    spectrum_probe_file,
+    "Sinclair", 1982, "Z80A", SystemType::Home
 };
 
 static SystemDescriptor spectrum128k_descriptor = {
@@ -148,7 +149,8 @@ static SystemDescriptor spectrum128k_descriptor = {
     {"Spectrum128K", "ZX128K", "Spectrum128"},
     spectrum_formats,
     create_spectrum_hardware_traits<SpectrumVariant::ZX128K>(),
-    spectrum_probe_file
+    spectrum_probe_file,
+    "Sinclair", 1985, "Z80A", SystemType::Home
 };
 
 // ============================================================================

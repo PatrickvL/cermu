@@ -113,7 +113,8 @@ static SystemDescriptor bbc_descriptor = {
     {"BBC", "BBC-B", "BBCB", "BBC Micro", "BBCMicro"},
     nullptr,  // supported_formats — simple probe for now
     create_bbc_hardware_traits(),
-    bbc_probe_file
+    bbc_probe_file,
+    "Acorn", 1981, "MOS 6502", SystemType::Home
 };
 
 REGISTER_SYSTEM(bbc_descriptor, []() {

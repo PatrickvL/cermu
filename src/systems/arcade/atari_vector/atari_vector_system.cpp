@@ -221,158 +221,274 @@ static const RomSetDescriptor rb_romset = {
 
 // ── Tempest Rev 3 ────────────────────────────────────────────────────────
 //
-// Tempest: 10 × 2 KB program ROMs + 2 × 2 KB vector ROMs.
-// MAME confirms part numbers for V3 (tempest3): most chips shared with
-// V1/V2, with V3-specific replacements: -217 (J1), -222 (R1), -316 (H1).
+// Tempest (1980): revision 3 PCBs (-03/-04) use 2532 EPROMs (4 KB).
+// Older PCBs (-01/-02) use 2716 EPROMs (2 KB) — separate descriptor.
 //
-// The real hardware maps program ROM at $9000-$DFFF (20 KB) using A15
-// for bank select.  Our 15-bit address scheme maps only $4000-$7FFF
-// (16 KB), so the first 2 program ROMs ($9000-$9FFF → 15-bit $1000-$1FFF)
-// overflow the program ROM chip and are skipped by the loader with a
-// warning.  Full 16-bit address decode is needed for correct execution.
+// PCB layout from tempest3_readme.txt (2532 config):
+//   VECTOR ROM: .138 at N/P3 (4 KB)
+//   PROGRAM ROMs: .133 D1, .134 F1, .235 J1, .136 L/M1, .237 P1 (5 × 4 KB)
 //
-// ROM order matches MAME: lowest CPU address first.
+// MAME ROM addresses:
+//   Vector ROM:  $3000-$3FFF (4 KB)
+//   Program ROM: $9000-$DFFF (20 KB), $E000-$FFFF mirrors $C000-$DFFF
 
 static const RomEntryDescriptor tempest_v3_entries[] = {
-    // Vector ROM (AVG display list ROM at $3000)
-    { {"136002.111", "136002-111"},  0x3000, 0, true  },
-    // Program ROMs — MAME loads at $9000-$CFFF for V3 (only 8 chips, not 10).
-    // V3 uses different part numbers from V1/V2.
-    // The zip contains: .133,.134,.235,.316,.217,.138,.136,.237
-    { {"136002.133", "136002-133"},  0x9000, 0, true  },   // D1
-    { {"136002.134", "136002-134"},  0x9800, 0, true  },   // E1
-    { {"136002.235", "136002-235"},  0xA000, 0, true  },   // F1 (V3)
-    { {"136002.316", "136002-316"},  0xA800, 0, true  },   // H1 (V3)
-    { {"136002.217", "136002-217"},  0xB000, 0, true  },   // J1 (V2/V3)
-    { {"136002.138", "136002-138"},  0xB800, 0, true  },   // K1
-    { {"136002.136", "136002-136"},  0xC000, 0, true  },   // L/M1
-    { {"136002.237", "136002-237"},  0xC800, 0, true  },   // M/N1 (V3)
+    // Vector ROM (2532 at N/P3 — spans both 2716 sockets N/P3 + R3)
+    { {"136002.138", "136002-138"},  0x3000, 4096, true  },
+    // Program ROMs (5 × 2532 = 20 KB at $9000-$DFFF)
+    { {"136002.133", "136002-133"},  0x9000, 4096, true  },   // D1
+    { {"136002.134", "136002-134"},  0xA000, 4096, true  },   // F1
+    { {"136002.235", "136002-235"},  0xB000, 4096, true  },   // J1 (V3)
+    { {"136002.136", "136002-136"},  0xC000, 4096, true  },   // L/M1
+    { {"136002.237", "136002-237"},  0xD000, 4096, true  },   // P1 (V3)
 };
 
 static const RomSetDescriptor tempest_v3_romset = {
-    "Tempest Rev 3", "Tempest",
-    tempest_v3_entries, 9
+    "Tempest Rev 3 (2532)", "Tempest",
+    tempest_v3_entries, 6
+};
+
+// ── Tempest Rev 1 (2716 EPROMs) ─────────────────────────────────────────
+//
+// Original Tempest release.  12 × 2716 (2 KB each):
+//   .111, .112 = vector ROMs ($3000-$3FFF)
+//   .113-.122  = program ROMs ($9000-$DFFF)
+// No revision-specific replacements — all base part numbers.
+
+static const RomEntryDescriptor tempest_v1_entries[] = {
+    // Vector ROMs (2 × 2716)
+    { {"136002.111", "136002-111"},  0x3000, 2048, true  },   // N/P3
+    { {"136002.112", "136002-112"},  0x3800, 2048, true  },   // R3
+    // Program ROMs (10 × 2716 = 20 KB at $9000-$DFFF)
+    { {"136002.113", "136002-113"},  0x9000, 2048, true  },   // D1
+    { {"136002.114", "136002-114"},  0x9800, 2048, true  },   // E1
+    { {"136002.115", "136002-115"},  0xA000, 2048, true  },   // F1
+    { {"136002.116", "136002-116"},  0xA800, 2048, true  },   // H1 (V1)
+    { {"136002.117", "136002-117"},  0xB000, 2048, true  },   // J1 (V1)
+    { {"136002.118", "136002-118"},  0xB800, 2048, true  },   // K1
+    { {"136002.119", "136002-119"},  0xC000, 2048, true  },   // L/M1
+    { {"136002.120", "136002-120"},  0xC800, 2048, true  },   // M/N1
+    { {"136002.121", "136002-121"},  0xD000, 2048, true  },   // P1
+    { {"136002.122", "136002-122"},  0xD800, 2048, true  },   // R1 (V1)
+};
+
+static const RomSetDescriptor tempest_v1_romset = {
+    "Tempest Rev 1 (2716)", "Tempest",
+    tempest_v1_entries, 12
+};
+
+// ── Tempest Rev 2 (2716 EPROMs) ─────────────────────────────────────────
+//
+// V2 replaces two chips from v1:
+//   .117 → .217 at J1 ($B000)
+//   .122 → .222 at R1 ($D800)
+// All other chips same as v1.
+
+static const RomEntryDescriptor tempest_v2_entries[] = {
+    // Vector ROMs (2 × 2716)
+    { {"136002.111", "136002-111"},  0x3000, 2048, true  },   // N/P3
+    { {"136002.112", "136002-112"},  0x3800, 2048, true  },   // R3
+    // Program ROMs (10 × 2716 = 20 KB at $9000-$DFFF)
+    { {"136002.113", "136002-113"},  0x9000, 2048, true  },   // D1
+    { {"136002.114", "136002-114"},  0x9800, 2048, true  },   // E1
+    { {"136002.115", "136002-115"},  0xA000, 2048, true  },   // F1
+    { {"136002.116", "136002-116"},  0xA800, 2048, true  },   // H1 (shared V1/V2)
+    { {"136002.217", "136002-217"},  0xB000, 2048, true  },   // J1 (V2)
+    { {"136002.118", "136002-118"},  0xB800, 2048, true  },   // K1
+    { {"136002.119", "136002-119"},  0xC000, 2048, true  },   // L/M1
+    { {"136002.120", "136002-120"},  0xC800, 2048, true  },   // M/N1
+    { {"136002.121", "136002-121"},  0xD000, 2048, true  },   // P1
+    { {"136002.222", "136002-222"},  0xD800, 2048, true  },   // R1 (V2)
+};
+
+static const RomSetDescriptor tempest_v2_romset = {
+    "Tempest Rev 2 (2716)", "Tempest",
+    tempest_v2_entries, 12
+};
+
+// ── Tempest Rev 3 (2716 upgrade) ────────────────────────────────────────
+//
+// For -01/-02 PCBs: same v3 code in 2716 EPROMs (2 KB each).
+// V3-specific replacements: .316 (H1), .217 (J1), .222 (R1).
+// All other chips (.113-.121) are shared base v1/v2 ROMs.
+
+static const RomEntryDescriptor tempest_v3_2716_entries[] = {
+    // Vector ROMs (2 × 2716)
+    { {"136002.111", "136002-111"},  0x3000, 2048, true  },   // N/P3
+    { {"136002.112", "136002-112"},  0x3800, 2048, true  },   // R3
+    // Program ROMs (10 × 2716 = 20 KB at $9000-$DFFF)
+    { {"136002.113", "136002-113"},  0x9000, 2048, true  },   // D1
+    { {"136002.114", "136002-114"},  0x9800, 2048, true  },   // E1
+    { {"136002.115", "136002-115"},  0xA000, 2048, true  },   // F1
+    { {"136002.316", "136002-316"},  0xA800, 2048, true  },   // H1 (V3)
+    { {"136002.217", "136002-217"},  0xB000, 2048, true  },   // J1 (V2/V3)
+    { {"136002.118", "136002-118"},  0xB800, 2048, true  },   // K1
+    { {"136002.119", "136002-119"},  0xC000, 2048, true  },   // L/M1
+    { {"136002.120", "136002-120"},  0xC800, 2048, true  },   // M/N1
+    { {"136002.121", "136002-121"},  0xD000, 2048, true  },   // P1
+    { {"136002.222", "136002-222"},  0xD800, 2048, true  },   // R1 (V2/V3)
+};
+
+static const RomSetDescriptor tempest_v3_2716_romset = {
+    "Tempest Rev 3 (2716)", "Tempest",
+    tempest_v3_2716_entries, 12
 };
 
 // ── Gravitar Rev 2 ───────────────────────────────────────────────────────
 //
-// Gravitar: program ROMs are 4 KB chips (4096 bytes), not 2 KB.
-// The actual ROM files in distribution zips (e.g. 136010.201) are 4096 bytes.
-// TODO: Restructure entries with 4 KB sizes and 4 KB address stride once
-//       the full MAME-to-address mapping is verified.
-// Patterns include both dot-separated (actual files) and dash-separated
-// (MAME naming convention) forms for flexible matching.
+// Gravitar (1982): "bwidow" board (MAME bwidow.cpp).
+// PCB layout from README.gravitar:
+//   CODE  ROMs: .201-.206 at sockets D1–M1 (row 1) — 6 × 4 KB
+//   VECTOR ROMs: .207-.210 at sockets M/N7–L7 (row 7) — 3 × 4 KB + 1 × 2 KB
+//
+// MAME ROM addresses (single 64 KB CPU address space):
+//   Vector ROM:  $2800-$5FFF (14 KB)
+//   Program ROM: $9000-$EFFF (24 KB), $F000-$FFFF mirrors $E000
 
 static const RomEntryDescriptor gravitar_v2_entries[] = {
-    // Vector ROMs at $3000 (MAME: 136010-101, 136010-102 — 2 KB each)
-    { {"136010.101", "136010-101"},  0x3000, 2048, true  },
-    { {"136010.102", "136010-102"},  0x3800, 2048, true  },
-    // Program ROMs — MAME loads at $5000-$9FFF (5 × 4 KB, full 16-bit).
-    // expected_size=0 allows matching regardless of file size.
-    { {"136010.210", "136010-210"},  0x5000, 0, true  },
-    { {"136010.207", "136010-207"},  0x6000, 0, true  },
-    { {"136010.208", "136010-208"},  0x7000, 0, true  },
-    { {"136010.209", "136010-209"},  0x8000, 0, true  },
-    { {"136010.201", "136010-201"},  0x9000, 0, true  },
+    // Vector ROMs — AVG display list ROM at $2800-$5FFF
+    { {"136010.210", "136010-210"},  0x2800, 2048, true  },   // L7    (2 KB)
+    { {"136010.207", "136010-207"},  0x3000, 4096, true  },   // M/N7  (4 KB)
+    { {"136010.208", "136010-208"},  0x4000, 4096, true  },   // N/P7  (4 KB)
+    { {"136010.209", "136010-209"},  0x5000, 4096, true  },   // R7    (4 KB)
+    // Program ROMs — CPU code at $9000-$EFFF
+    { {"136010.201", "136010-201"},  0x9000, 4096, true  },   // D1
+    { {"136010.202", "136010-202"},  0xA000, 4096, true  },   // E/F1
+    { {"136010.203", "136010-203"},  0xB000, 4096, true  },   // H1
+    { {"136010.204", "136010-204"},  0xC000, 4096, true  },   // J1
+    { {"136010.205", "136010-205"},  0xD000, 4096, true  },   // K/L1
+    { {"136010.206", "136010-206"},  0xE000, 4096, true  },   // M1 (reset vector via mirror)
 };
 
 static const RomSetDescriptor gravitar_v2_romset = {
     "Gravitar Rev 2", "Gravitar",
-    gravitar_v2_entries, 7
+    gravitar_v2_entries, 10
 };
 
 // ── Gravitar Rev 3 ───────────────────────────────────────────────────────
 //
-// Rev 3 uses different part numbers: 136010.301-309 + shared 136010.210.
-// Vector ROM: 136010.302-306 (5 × 4 KB), program ROM: 136010.301,309,307-308,210.
-// Based on the actual zip contents and MAME naming conventions.
+// Rev 3 replaces .209→.309 (vector) and .201-.206→.301-.306 (program).
+// Shared with v2: .210, .207, .208 (vector ROMs).
 
 static const RomEntryDescriptor gravitar_v3_entries[] = {
-    // Vector ROMs (in the avgdvg region — mapped to $3000+)
-    { {"136010.302", "136010-302"},  0x3000, 0, false },
-    // Program ROMs — same MAME layout: $5000-$9FFF.
-    // V3 replaces .209→.309 and .201→.301; others (.210,.207,.208) are shared with V2.
-    { {"136010.210", "136010-210"},  0x5000, 0, true  },
-    { {"136010.207", "136010-207"},  0x6000, 0, true  },
-    { {"136010.208", "136010-208"},  0x7000, 0, true  },
-    { {"136010.309", "136010-309"},  0x8000, 0, true  },
-    { {"136010.301", "136010-301"},  0x9000, 0, true  },
+    // Vector ROMs — same layout as v2 except .209→.309
+    { {"136010.210", "136010-210"},  0x2800, 0, true  },   // L7    (2 KB, but v3 dumps may be padded to 4 KB)
+    { {"136010.207", "136010-207"},  0x3000, 4096, true  },   // M/N7  (4 KB)
+    { {"136010.208", "136010-208"},  0x4000, 4096, true  },   // N/P7  (4 KB)
+    { {"136010.309", "136010-309"},  0x5000, 4096, true  },   // R7    (4 KB, replaces .209)
+    // Program ROMs — .301-.306 replace .201-.206
+    { {"136010.301", "136010-301"},  0x9000, 4096, true  },   // D1
+    { {"136010.302", "136010-302"},  0xA000, 4096, true  },   // E/F1
+    { {"136010.303", "136010-303"},  0xB000, 4096, true  },   // H1
+    { {"136010.304", "136010-304"},  0xC000, 4096, true  },   // J1
+    { {"136010.305", "136010-305"},  0xD000, 4096, true  },   // K/L1
+    { {"136010.306", "136010-306"},  0xE000, 4096, true  },   // M1 (reset vector via mirror)
 };
 
 static const RomSetDescriptor gravitar_v3_romset = {
     "Gravitar Rev 3", "Gravitar",
-    gravitar_v3_entries, 6
+    gravitar_v3_entries, 10
 };
 
 // ── Space Duel ───────────────────────────────────────────────────────────
 //
-// Space Duel: program ROMs are 4 KB chips. Actual files match 136006.NNN format.
-// TODO: Restructure with 4 KB sizes/stride once MAME mapping is verified.
+// Space Duel (1982): different board from bwidow (spacduel_map in MAME).
+// PCB layout from space_duel_readme.txt:
+//   CODE  ROMs: .102-.105 at sockets N/P1–J1 (row 1) + .201 at R1 — 5 × 4 KB
+//   VECTOR ROMs: .106 at R7 (2 KB) + .107 at N/P7 (4 KB)
+//
+// MAME ROM addresses:
+//   Vector ROM:  $2800-$3FFF (6 KB)
+//   Program ROM: $4000-$8FFF (20 KB)
 
 static const RomEntryDescriptor spaceduel_entries[] = {
-    // Vector ROMs — .108 optional (not always present in dumps)
-    { {"136006.107", "136006-107"},  0x3000, 0, true  },
-    { {"136006.108", "136006-108"},  0x3800, 0, false },
-    // Program ROMs — MAME loads at $4000-$9FFF (6 × 4 KB, full 16-bit).
-    // expected_size=0 for flexible matching.
-    { {"136006.201", "136006-201"},  0x4000, 0, true  },
-    { {"136006.102", "136006-102"},  0x5000, 0, true  },
-    { {"136006.103", "136006-103"},  0x6000, 0, true  },
-    { {"136006.104", "136006-104"},  0x7000, 0, true  },
-    { {"136006.105", "136006-105"},  0x8000, 0, true  },
-    { {"136006.106", "136006-106"},  0x9000, 0, true  },
+    // Vector ROMs — AVG display list ROM at $2800-$3FFF
+    { {"136006.106", "136006-106"},  0x2800, 2048, true  },   // R7    (2 KB)
+    { {"136006.107", "136006-107"},  0x3000, 4096, true  },   // N/P7  (4 KB)
+    // Program ROMs — CPU code at $4000-$8FFF
+    { {"136006.201", "136006-201"},  0x4000, 4096, true  },   // R1
+    { {"136006.102", "136006-102"},  0x5000, 4096, true  },   // N/P1
+    { {"136006.103", "136006-103"},  0x6000, 4096, true  },   // M1
+    { {"136006.104", "136006-104"},  0x7000, 4096, true  },   // K/L1
+    { {"136006.105", "136006-105"},  0x8000, 4096, true  },   // J1
 };
 
 static const RomSetDescriptor spaceduel_romset = {
     "Space Duel", "SpaceDuel",
-    spaceduel_entries, 8
+    spaceduel_entries, 7
 };
 
 // ── Black Widow ──────────────────────────────────────────────────────────
 //
-// Black Widow: program ROMs are 4 KB chips. Actual files match 136017.NNN format.
-// TODO: Restructure with 4 KB sizes/stride once MAME mapping is verified.
+// Black Widow (1982): same "bwidow" board as Gravitar.
+// PCB layout from black_widow_readme.txt:
+//   CODE  ROMs: .101-.106 at sockets D1–M1 (row 1) — 6 × 4 KB
+//   VECTOR ROMs: .107-.110 at sockets L7–R7 (row 7) — 1 × 2 KB + 3 × 4 KB
+//
+// MAME ROM addresses (single 64 KB CPU address space):
+//   Vector ROM:  $2800-$5FFF (14 KB)
+//   Program ROM: $9000-$EFFF (24 KB), $F000-$FFFF mirrors $E000
 
 static const RomEntryDescriptor blackwidow_entries[] = {
-    // Vector ROMs — expected_size=0 for flexible matching (files may be 2 KB or 4 KB)
-    { {"136017.107", "136017-107"},  0x3000, 0, true  },
-    { {"136017.108", "136017-108"},  0x3800, 0, false },
-    // Program ROMs — MAME loads at $4000-$9FFF (bwidow board, full 16-bit).
-    // expected_size=0 for flexible matching.
-    { {"136017.101", "136017-101"},  0x4000, 0, true  },
-    { {"136017.102", "136017-102"},  0x5000, 0, true  },
-    { {"136017.103", "136017-103"},  0x6000, 0, true  },
-    { {"136017.104", "136017-104"},  0x7000, 0, true  },
-    { {"136017.105", "136017-105"},  0x8000, 0, true  },
-    { {"136017.106", "136017-106"},  0x9000, 0, true  },
+    // Vector ROMs — AVG display list ROM at $2800-$5FFF
+    { {"136017.107", "136017-107"},  0x2800, 2048, true  },   // L7    (2 KB)
+    { {"136017.108", "136017-108"},  0x3000, 4096, true  },   // M/N7  (4 KB)
+    { {"136017.109", "136017-109"},  0x4000, 4096, true  },   // N/P7  (4 KB)
+    { {"136017.110", "136017-110"},  0x5000, 4096, true  },   // R7    (4 KB)
+    // Program ROMs — CPU code at $9000-$EFFF
+    { {"136017.101", "136017-101"},  0x9000, 4096, true  },   // D1
+    { {"136017.102", "136017-102"},  0xA000, 4096, true  },   // E/F1
+    { {"136017.103", "136017-103"},  0xB000, 4096, true  },   // H1
+    { {"136017.104", "136017-104"},  0xC000, 4096, true  },   // J1
+    { {"136017.105", "136017-105"},  0xD000, 4096, true  },   // K/L1
+    { {"136017.106", "136017-106"},  0xE000, 4096, true  },   // M1 (reset vector via mirror)
 };
 
 static const RomSetDescriptor blackwidow_romset = {
     "Black Widow", "BlackWidow",
-    blackwidow_entries, 8
+    blackwidow_entries, 10
 };
 
 // ── Major Havoc Rev 3 ────────────────────────────────────────────────────
 //
-// Major Havoc: uses 16 KB ROM chips (actual files are 16384 bytes).
-// The memory architecture is more complex than other AVG games, with bank
-// switching for extra program ROM and a separate gamma CPU.
-// TODO: Restructure with 16 KB sizes and proper bank-switched layout.
+// Major Havoc (1983): SIGNIFICANTLY more complex than other AVG games.
+//
+// *** KNOWN BROKEN — needs dedicated architectural work ***
+//
+// Issues requiring per-system implementation:
+//   1. Memory map constants (MH_VECRAM/VECROM/PROGROM_BASE) are all wrong
+//   2. CPU program ROM bank switching ($1740, 4 × 8 KB pages at $2000-$3FFF)
+//   3. CPU RAM bank switching ($1780)
+//   4. AVG paged vector ROM ("avg" region, 32 KB, 4 × 8 KB pages via STROBE2)
+//   5. Separate "vectorrom" region (8 KB at CPU $5000-$6FFF)
+//   6. Full 16-bit addressing (USES_15BIT_ADDR should be false)
+//   7. Gamma CPU (second 6502 for sound/input via quad POKEY)
+//   8. Fixed program ROM at $8000-$FFFF (32 KB)
+//   9. I/O addresses all wrong (VGGO=$1640, VGRST=$16C0, WD=$1680)
+//
+// Rev 3 zip contents: .106,.107,.108 (AVG ROMs, 16KB each),
+//   .210 (vectorrom, 8KB), .215-.217,.318 (program ROMs, 16KB each)
+//
+// Descriptor below uses APPROXIMATE addresses to allow ROM set matching.
+// The game will NOT run correctly until the above issues are addressed.
 
 static const RomEntryDescriptor majorhavoc_v3_entries[] = {
-    // Vector ROMs
-    { {"136025.110", "136025-110"},  0x3000, 0, true  },
-    { {"136025.111", "136025-111"},  0x3800, 0, true  },
-    // Program ROMs ($4000-$7FFF) — expected_size=0 for flexible matching
-    { {"136025.215", "136025-215"},  0x4000, 0, true  },
-    { {"136025.216", "136025-216"},  0x4800, 0, true  },
-    { {"136025.217", "136025-217"},  0x5000, 0, true  },
-    { {"136025.218", "136025-218"},  0x5800, 0, true  },
+    // AVG-only ROMs — not CPU-addressable, need AVG banking support
+    { {"136025.106", "136025-106"},  0x3000, 0, true  },   // 6H  (16 KB, avg bank)
+    { {"136025.107", "136025-107"},  0x3000, 0, false },   // 6JK (16 KB, avg bank — overlaps, deferred)
+    { {"136025.108", "136025-108"},  0x3000, 0, false },   // 9S  (16 KB, avg bank — overlaps, deferred)
+    // CPU-visible vector ROM (vectorrom region)
+    { {"136025.210", "136025-210"},  0x3000, 0, true  },   // 6KL (8 KB, CPU $5000-$6FFF)
+    // Fixed program ROMs — should be at $8000-$FFFF (32 KB)
+    { {"136025.215", "136025-215"},  0x4000, 0, true  },   // 1Q   (16 KB)
+    { {"136025.216", "136025-216"},  0x4000, 0, false },   // 1M/N (16 KB, bank page)
+    { {"136025.217", "136025-217"},  0x4000, 0, false },   // 1L   (16 KB, bank page)
+    { {"136025.318", "136025-318"},  0x4000, 0, false },   // 1N/P (16 KB, bank page, v3 replaces .218)
 };
 
 static const RomSetDescriptor majorhavoc_v3_romset = {
     "Major Havoc Rev 3", "MajorHavoc",
-    majorhavoc_v3_entries, 6
+    majorhavoc_v3_entries, 8
 };
 
 // ============================================================================
@@ -454,7 +570,8 @@ static SystemDescriptor create_system_descriptor() {
                 }
             }
             return result;
-        }
+        },
+        "Atari", T::YEAR, "MOS 6502", SystemType::Arcade
     };
 }
 
@@ -516,6 +633,14 @@ bool AtariVectorSystem<V>::initialize() {
 
     // Initialize vector generator (DVG or AVG via ChipSet)
     vg().init();
+
+    // Tempest-specific AVG configuration:
+    //  - STAT uses bit 11 to select color vs intensity update
+    //  - Monitor is rotated 90°, so X/Y axes are swapped
+    if constexpr (V == AtariVectorVariant::TEMPEST) {
+        vg().set_tempest_stat(true);
+        vg().set_swap_xy(true);
+    }
 
     // Register all manifest-created chips for the Hardware menu
     register_bus_chips(board_);
@@ -591,6 +716,7 @@ void AtariVectorSystem<V>::reset() {
     thrust_ = 0x00;
     snd_latch_ = 0x00;
     nmi_enabled_ = false;  // NMI gated off until ROM enables it
+    irq_asserted_ = false; // IRQ starts inactive
 }
 
 // ============================================================================
@@ -619,17 +745,34 @@ void AtariVectorSystem<V>::tick() {
     // Asteroids Deluxe: NMI is gated by the 74LS259 output latch Q4
     //   ($3C04, D0).  When NMI is disabled, IRQ is asserted instead
     //   (level-sensitive, held until NMI is re-enabled).
+    // Tempest: Uses IRQ (level-sensitive), not NMI.  The periodic timer
+    //   asserts IRQ every period; the handler clears it by writing $5000
+    //   (wdclr_w — watchdog clear + IRQ acknowledge).  IRQ is masked by
+    //   SEI during boot, preventing $53 overflow before CLI.
     if (nmi_counter_ > 0) {
         --nmi_counter_;
-        BUS_SET_BIT(pins_, BUS_NMI_BIT);   // NMI inactive (high)
+        if constexpr (V != AtariVectorVariant::TEMPEST) {
+            BUS_SET_BIT(pins_, BUS_NMI_BIT);   // NMI inactive (high)
+        }
     } else {
         nmi_counter_ = atv::NMI_PERIOD_CYCLES;
-        if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+        if constexpr (V == AtariVectorVariant::TEMPEST) {
+            // Tempest: assert IRQ (level-sensitive, cleared by $5000 write)
+            irq_asserted_ = true;
+        } else if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
             if (nmi_enabled_)
                 BUS_CLR_BIT(pins_, BUS_NMI_BIT);   // NMI pulse (gated)
         } else {
             BUS_CLR_BIT(pins_, BUS_NMI_BIT);       // NMI pulse (unconditional)
         }
+    }
+
+    // Tempest: IRQ line follows irq_asserted_ state (level-sensitive).
+    if constexpr (V == AtariVectorVariant::TEMPEST) {
+        if (irq_asserted_)
+            BUS_CLR_BIT(pins_, BUS_IRQ_BIT);   // IRQ active (held until ack)
+        else
+            BUS_SET_BIT(pins_, BUS_IRQ_BIT);   // IRQ inactive
     }
 
     // AD: IRQ line mirrors "NMI disabled" state (level-sensitive).
@@ -1136,7 +1279,11 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
             }
             if (addr == atv::TEMP_VGGO_ADDR)  { vg().trigger_go(); return pins; }
             if (addr == atv::TEMP_VGRST_ADDR) { vg().trigger_reset(); return pins; }
-            if (addr == atv::TEMP_WDCLR_ADDR) { return pins; }
+            if (addr == atv::TEMP_WDCLR_ADDR) {
+                // MAME wdclr_w: clears IRQ line + resets watchdog.
+                irq_asserted_ = false;
+                return pins;
+            }
 
         } else if constexpr (V == AtariVectorVariant::GRAVITAR ||
                              V == AtariVectorVariant::BLACK_WIDOW) {
@@ -1296,9 +1443,9 @@ bool AtariVectorSystem<V>::load_file(const char* filepath) {
     }
 
     if (cold_boot) {
-        board_.cpu().regs_[A] = 0;
-        board_.cpu().regs_[X] = 0;
-        board_.cpu().regs_[Y] = 0;
+        board_.cpu().set(A, 0);
+        board_.cpu().set(X, 0);
+        board_.cpu().set(Y, 0);
     }
 
     printf("%s: ROM loaded, system ready\n", Traits::NAME);
@@ -1322,7 +1469,8 @@ std::vector<const RomSetDescriptor*> AtariVectorSystem<V>::get_rom_set_descripto
     } else if constexpr (V == AtariVectorVariant::RED_BARON) {
         return { &rb_romset };
     } else if constexpr (V == AtariVectorVariant::TEMPEST) {
-        return { &tempest_v3_romset };
+        return { &tempest_v3_romset, &tempest_v3_2716_romset,
+                 &tempest_v2_romset, &tempest_v1_romset };
     } else if constexpr (V == AtariVectorVariant::GRAVITAR) {
         return { &gravitar_v2_romset, &gravitar_v3_romset };
     } else if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
@@ -1404,35 +1552,34 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
     if constexpr (!Traits::USES_15BIT_ADDR) {
         if constexpr (V == AtariVectorVariant::TEMPEST) {
             // Tempest: prog_rom_ IS the $8000-$FFFF chip (32KB).
-            // Mirror upper ROM region for reset vector coverage.
-            // V3 ROM goes to $CFFF, so mirror $C000-$CFFF repeating through $D000-$FFFF.
-            // V1/V2 ROM goes to $DFFF, so mirror $C000-$DFFF at $E000-$FFFF.
+            // ROM fills $9000-$DFFF (offsets $1000-$5FFF in chip).
+            // Hardware mirrors $C000-$DFFF at $E000-$FFFF (A13 not decoded).
             if (prog_rom_) {
-                // Fill $D000-$DFFF with copy of $C000-$CFFF
-                std::memcpy(prog_rom_->data() + 0x5000,
-                            prog_rom_->data() + 0x4000, 0x1000);
-                // Fill $E000-$FFFF with copy of $C000-$DFFF (now includes the mirror)
+                // Copy $C000-$DFFF → $E000-$FFFF (chip offset $4000-$5FFF → $6000-$7FFF)
                 std::memcpy(prog_rom_->data() + 0x6000,
                             prog_rom_->data() + 0x4000, 0x2000);
-                printf("  Reset vector mirror: ROM mirrored to $E000-$FFFF\n");
+                printf("  Reset vector mirror: $C000-$DFFF → $E000-$FFFF\n");
             }
-        } else if (prog_rom_hi_) {
-            if constexpr (V == AtariVectorVariant::GRAVITAR ||
-                          V == AtariVectorVariant::BLACK_WIDOW) {
-                // Mirror last 4 KB ROM ($9000) at $F000 (chip offset $1000 → $7000)
-                std::memcpy(prog_rom_hi_->data() + 0x7000,
-                            prog_rom_hi_->data() + 0x1000, 0x1000);
-                printf("  Reset vector mirror: $9000 → $F000\n");
-            } else if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
-                // Mirror $4000-$9FFF at $A000-$FFFF.
-                // $A000 in high chip = offset $2000.
-                if (prog_rom_) {
-                    std::memcpy(prog_rom_hi_->data() + 0x2000,
-                                prog_rom_->data(), 0x4000);   // $A000-$DFFF ← $4000-$7FFF
+        } else if constexpr (V == AtariVectorVariant::GRAVITAR ||
+                             V == AtariVectorVariant::BLACK_WIDOW) {
+            // Gravitar/BW: prog_rom_ is the single Program ROM chip at $9000 (32KB alloc).
+            // Last loaded ROM (.206/.106) at $E000 = chip offset $5000.
+            // Mirror $E000-$EFFF to $F000-$FFFF (offset $5000 → $6000) for reset vector.
+            if (prog_rom_) {
+                std::memcpy(prog_rom_->data() + 0x6000,
+                            prog_rom_->data() + 0x5000, 0x1000);
+                printf("  Reset vector mirror: $E000 → $F000\n");
+            }
+        } else if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
+            // Space Duel: prog_rom_hi_ at $8000 (32KB alloc), .105 loads at $8000 (4KB).
+            // Hardware A15 decode: $FFFC → .105 offset $FFC (reset vector lives in .105).
+            // Mirror .105's 4 KB across the entire 32 KB prog_rom_hi_ for vector access.
+            if (prog_rom_hi_) {
+                for (uint32_t off = 0x1000; off < 0x8000; off += 0x1000) {
+                    std::memcpy(prog_rom_hi_->data() + off,
+                                prog_rom_hi_->data(), 0x1000);
                 }
-                std::memcpy(prog_rom_hi_->data() + 0x6000,
-                            prog_rom_hi_->data(), 0x2000);    // $E000-$FFFF ← $8000-$9FFF
-                printf("  Reset vector mirror: $4000-$9FFF → $A000-$FFFF\n");
+                printf("  Reset vector mirror: .105 mirrored across $8000-$FFFF\n");
             }
         }
     }
@@ -1452,7 +1599,31 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
     reset();
 
     // Show reset vector for diagnostic — confirms ROM data is present and mapped
-    if (prog_rom_) {
+    if constexpr (!Traits::USES_15BIT_ADDR) {
+        // 16-bit systems: reset vector at $FFFC in prog_rom_hi_ (or prog_rom_ for Tempest)
+        ROMChip* rst_chip = nullptr;
+        uint32_t rst_offset = 0;
+        if constexpr (V == AtariVectorVariant::TEMPEST) {
+            rst_chip = prog_rom_;
+            rst_offset = Traits::PROGROM_SIZE - 4;  // prog_rom_ IS the $8000-$FFFF chip
+        } else {
+            rst_chip = prog_rom_hi_;
+            if (rst_chip) {
+                rst_offset = 0x8000 - 4;  // $FFFC - $8000 = $7FFC
+            } else if (prog_rom_) {
+                // Gravitar/BW: single prog_rom_ chip at $9000 (32KB alloc)
+                // $FFFC mirrored into chip at offset $FFFC - PROGROM_BASE
+                rst_chip = prog_rom_;
+                rst_offset = 0xFFFC - Traits::PROGROM_BASE;
+            }
+        }
+        if (rst_chip) {
+            uint16_t rst_lo = rst_chip->data()[rst_offset];
+            uint16_t rst_hi = rst_chip->data()[rst_offset + 1];
+            printf("%s: Reset vector = $%04X (chip offset $%04X)\n",
+                   Traits::NAME, rst_lo | (rst_hi << 8), rst_offset);
+        }
+    } else if (prog_rom_) {
         uint16_t rst_offset = Traits::PROGROM_SIZE - 4;  // $FFFC relative
         uint16_t rst_lo = prog_rom_->data()[rst_offset];
         uint16_t rst_hi = prog_rom_->data()[rst_offset + 1];

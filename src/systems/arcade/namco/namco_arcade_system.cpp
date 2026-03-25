@@ -18,14 +18,16 @@ static SystemDescriptor pacman_descriptor = {
     "Pac-Man", "PacMan",
     "Namco Pac-Man — Z80A @ 3.072MHz, WSG3 sound, 224×288 (1980)",
     "pacman", {"PacMan", "Pac-Man", "Puckman"},
-    nullptr, {}, nullptr
+    nullptr, {}, nullptr,
+    "Namco", 1980, "Z80A", SystemType::Arcade
 };
 
 static SystemDescriptor pengo_descriptor = {
     "Pengo", "Pengo",
     "Sega/Coreland Pengo — Z80A @ 3.072MHz, WSG3 sound, 224×288 (1982)",
     "pengo", {"Pengo"},
-    nullptr, {}, nullptr
+    nullptr, {}, nullptr,
+    "Sega", 1982, "Z80A", SystemType::Arcade
 };
 
 // ============================================================================

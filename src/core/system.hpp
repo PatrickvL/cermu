@@ -40,12 +40,17 @@ struct SystemProbeResult {
 };
 
 /**
+ * Broad system category — used by the launcher for tab-based filtering.
+ */
+enum class SystemType : uint8_t { Home, Console, Arcade, Other };
+
+/**
  * System descriptor - provides metadata about an emulated system
  * Each system implementation provides this to describe itself
  */
 struct SystemDescriptor {
     const char* name;                    // E.g., "Commodore 64"
-    const char* short_name;              // E.g., "C64"
+    const char* short_name;             // E.g., "C64"
     const char* description;             // Brief description
 
     /**
@@ -117,6 +122,12 @@ struct SystemDescriptor {
         const char* filepath,
         const uint8_t* data, size_t size
     )> probe_file;
+
+    // --- Launcher display-only metadata (no effect on emulation) ---
+    const char* maker       = nullptr;  // "Commodore", "Nintendo", … (nullptr = not displayed)
+    int         year        = 0;        // Release year; 0 = unknown
+    const char* cpu_summary = nullptr;  // Short display string, e.g. "MOS 6510"
+    SystemType  type        = SystemType::Other;
 };
 
 // ============================================================================
