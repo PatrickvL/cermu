@@ -515,17 +515,43 @@ inline void FileBrowser::render_file_list() {
 
     ImGui::SameLine();
 
-    // Format filter combo
+    // Filter pills — REGION All (placeholder) and FORMAT All/filtered
+    auto filter_pill = [](const char* label, const char* value, bool is_active) {
+        ImVec4 bg = ImVec4(0.035f, 0.047f, 0.102f, 1.0f);
+        ImVec4 border = is_active ? launcher_theme::kFilterActiveBorder
+                                 : ImVec4(0.063f, 0.094f, 0.133f, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button, bg);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(bg.x * 1.3f, bg.y * 1.3f, bg.z * 1.3f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Border, border);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+
+        // Label
+        ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextDimmed);
+        ImGui::TextUnformatted(label);
+        ImGui::PopStyleColor();
+        ImGui::SameLine(0, 4);
+
+        // Value
+        ImGui::PushStyleColor(ImGuiCol_Text,
+            is_active ? launcher_theme::kAccentBlue : launcher_theme::kTextMuted);
+        std::string btn_id = std::string(value) + "##pill_" + label;
+        ImGui::SmallButton(btn_id.c_str());
+        ImGui::PopStyleColor();
+
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(3);
+    };
+
+    // REGION All (placeholder — enabled when metadata columns arrive)
+    filter_pill("REGION", "All", false);
+    ImGui::SameLine(0, 6);
+
+    // FORMAT pill
     {
-        const char* label = active_formats_ ? "Filtered" : "All files";
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, launcher_theme::kSearchInputBg);
-        ImGui::PushItemWidth(90);
-        // Display-only for now — toggling handled via set_formats()
-        ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextMuted);
-        ImGui::Text("[%s]", label);
-        ImGui::PopStyleColor();
-        ImGui::PopItemWidth();
-        ImGui::PopStyleColor();
+        const char* fmt_val = active_formats_ ? "Filtered" : "All";
+        bool fmt_active = (active_formats_ != nullptr);
+        filter_pill("FORMAT", fmt_val, fmt_active);
     }
 
     ImGui::SameLine(ImGui::GetWindowWidth() - 80);
