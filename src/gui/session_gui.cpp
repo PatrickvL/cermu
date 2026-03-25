@@ -1612,6 +1612,23 @@ void SessionGUI::render_display_settings() {
         }
     }
 
+    // --- Zoom & Pan ---
+    ImGui::Separator();
+    ImGui::Text("Zoom & Pan");
+    changed = false;
+    changed |= ImGui::SliderFloat("Zoom##disp", &display_zoom_, 0.25f, 4.0f, "%.2fx");
+    ImGui::BeginDisabled(display_zoom_ <= 1.0f);
+    changed |= ImGui::SliderFloat("Pan X##disp", &display_pan_x_, -1.0f, 1.0f, "%.2f");
+    changed |= ImGui::SliderFloat("Pan Y##disp", &display_pan_y_, -1.0f, 1.0f, "%.2f");
+    ImGui::EndDisabled();
+    if (ImGui::Button("Reset Zoom/Pan")) {
+        display_zoom_ = 1.0f;
+        display_pan_x_ = 0.0f;
+        display_pan_y_ = 0.0f;
+    }
+
+    ImGui::Separator();
+
     // Reset button
     if (ImGui::Button("Reset to Preset Defaults")) {
         auto* crt = dynamic_cast<GenericCRT*>(display_device_);
