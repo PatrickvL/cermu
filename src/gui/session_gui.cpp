@@ -1611,6 +1611,14 @@ void SessionGUI::render_display_settings() {
     ImGui::Checkbox("CRT Post-Processing", &use_crt_shader_);
     ImGui::Text("Adjustments:");
     bool changed = false;
+    changed |= ImGui::SliderFloat("Zoom##disp", &display_zoom_, 0.25f, 4.0f, "%.2fx");
+    changed |= ImGui::SliderFloat("Pan X##disp", &display_pan_x_, -1.0f, 1.0f, "%.2f");
+    changed |= ImGui::SliderFloat("Pan Y##disp", &display_pan_y_, -1.0f, 1.0f, "%.2f");
+    if (ImGui::Button("Reset Zoom/Pan")) {
+        display_zoom_ = 1.0f;
+        display_pan_x_ = 0.0f;
+        display_pan_y_ = 0.0f;
+    }
     changed |= ImGui::SliderFloat("Brightness", &dc.brightness, 0.5f, 2.0f, "%.2f");
     changed |= ImGui::SliderFloat("Contrast",   &dc.contrast,   0.5f, 2.0f, "%.2f");
     changed |= ImGui::SliderFloat("Gamma",       &dc.gamma,      1.0f, 3.0f, "%.2f");
@@ -1625,21 +1633,6 @@ void SessionGUI::render_display_settings() {
         if (crt) {
             crt->mutable_characteristics() = dc;
         }
-    }
-
-    // --- Zoom & Pan ---
-    ImGui::Separator();
-    ImGui::Text("Zoom & Pan");
-    changed = false;
-    changed |= ImGui::SliderFloat("Zoom##disp", &display_zoom_, 0.25f, 4.0f, "%.2fx");
-    ImGui::BeginDisabled(display_zoom_ <= 1.0f);
-    changed |= ImGui::SliderFloat("Pan X##disp", &display_pan_x_, -1.0f, 1.0f, "%.2f");
-    changed |= ImGui::SliderFloat("Pan Y##disp", &display_pan_y_, -1.0f, 1.0f, "%.2f");
-    ImGui::EndDisabled();
-    if (ImGui::Button("Reset Zoom/Pan")) {
-        display_zoom_ = 1.0f;
-        display_pan_x_ = 0.0f;
-        display_pan_y_ = 0.0f;
     }
 
     ImGui::Separator();

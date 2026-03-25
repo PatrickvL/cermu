@@ -53,6 +53,7 @@ uniform float Contrast;       // multiplier, 1.0 = neutral
 uniform float Gamma;          // display gamma, typically 2.2
 uniform int   MaskType;       // 0=shadow mask, 1=aperture grille, 2=slot mask, 3=mono, 4=none
 uniform vec3  PhosphorTint;   // Phosphor color for monochrome displays (e.g. green, amber)
+uniform vec3  ColorTempTint;  // Color temperature tint (normalized to 6500K reference)
 out vec4 Out_Color;
 
 // Barrel distortion for CRT screen curvature.
@@ -144,7 +145,10 @@ void main() {
     // Gamma correction
     color = pow(clamp(color, 0.0, 1.0), vec3(1.0 / Gamma));
 
-    Out_Color = vec4(color, 1.0);
+    // Color temperature tint (pre-computed on CPU, normalized to 6500K)
+    color *= ColorTempTint;
+
+    Out_Color = vec4(clamp(color, 0.0, 1.0), 1.0);
 }
 )glsl";
 
@@ -172,6 +176,7 @@ struct CRTPostProcess {
     GLint loc_gamma          = -1;
     GLint loc_mask_type      = -1;
     GLint loc_phosphor_tint  = -1;
+    GLint loc_color_temp_tint = -1;
 };
 
 // ============================================================================
@@ -241,6 +246,7 @@ inline bool create(CRTPostProcess* p, int w, int h) {
     p->loc_gamma         = gl_api::glGetUniformLocation(p->shader, "Gamma");
     p->loc_mask_type     = gl_api::glGetUniformLocation(p->shader, "MaskType");
     p->loc_phosphor_tint = gl_api::glGetUniformLocation(p->shader, "PhosphorTint");
+    p->loc_color_temp_tint = gl_api::glGetUniformLocation(p->shader, "ColorTempTint");
 
     // Set texture unit (always 0)
     gl_api::glUseProgram(p->shader);
@@ -286,6 +292,44 @@ inline int mask_type_from_technology(int technology) {
     }
 }
 
+/// Convert color temperature (Kelvin) to RGB multipliers.
+/// Based on Tanner Helland’s approximation of the Planckian locus.
+inline void color_temp_to_rgb(float temp_k, float& r, float& g, float& b) {
+    float t = temp_k / 100.0f;
+    // Red
+    if (t <= 66.0f)
+        r = 1.0f;
+    else
+        r = 1.29293618606f * powf(t - 60.0f, -0.1332047592f);
+    // Green
+    if (t <= 66.0f)
+        g = 0.39008157876f * logf(t) - 0.63184144378f;
+    else
+        g = 1.12989086090f * powf(t - 60.0f, -0.0755148492f);
+    // Blue
+    if (t >= 66.0f)
+        b = 1.0f;
+    else if (t <= 19.0f)
+        b = 0.0f;
+    else
+        b = 0.54320678911f * logf(t - 10.0f) - 1.19625408914f;
+    // Clamp
+    r = r < 0.0f ? 0.0f : (r > 1.0f ? 1.0f : r);
+    g = g < 0.0f ? 0.0f : (g > 1.0f ? 1.0f : g);
+    b = b < 0.0f ? 0.0f : (b > 1.0f ? 1.0f : b);
+}
+
+/// Compute a color temperature tint normalized to a 6500K reference white.
+/// At 6500K the tint is (1,1,1).  Lower temps shift warm, higher shift cool.
+inline void color_temp_tint(float temp_k, float& tr, float& tg, float& tb) {
+    float r, g, b, rr, rg, rb;
+    color_temp_to_rgb(temp_k, r, g, b);
+    color_temp_to_rgb(6500.0f, rr, rg, rb);  // reference D65
+    tr = (rr > 0.001f) ? r / rr : 1.0f;
+    tg = (rg > 0.001f) ? g / rg : 1.0f;
+    tb = (rb > 0.001f) ? b / rb : 1.0f;
+}
+
 // ============================================================================
 // Render pass
 // ============================================================================
@@ -308,6 +352,7 @@ inline int mask_type_from_technology(int technology) {
 /// @param gamma        Display gamma
 /// @param mask_type    Mask type (0=shadow, 1=aperture, 2=slot, 3=mono, 4=none)
 /// @param tint_r/g/b   Phosphor tint for monochrome displays (1,1,1 = no tint)
+/// @param color_temp_k  Color temperature in Kelvin (6500 = neutral)
 inline void render(CRTPostProcess* p,
                    GLuint input_tex,
                    float input_w, float input_h,
@@ -315,7 +360,8 @@ inline void render(CRTPostProcess* p,
                    float curvature, float scanline_gap, float dot_pitch,
                    float brightness, float contrast, float gamma,
                    int mask_type,
-                   float tint_r = 1.0f, float tint_g = 1.0f, float tint_b = 1.0f) {
+                   float tint_r = 1.0f, float tint_g = 1.0f, float tint_b = 1.0f,
+                   float color_temp_k = 6500.0f) {
     if (!p->shader || !p->fbo) return;
 
     // Ensure FBO size matches output
@@ -346,6 +392,11 @@ inline void render(CRTPostProcess* p,
     gl_api::glUniform1f(p->loc_gamma, gamma);
     gl_api::glUniform1i(p->loc_mask_type, mask_type);
     gl_api::glUniform3f(p->loc_phosphor_tint, tint_r, tint_g, tint_b);
+
+    // Compute and set color temperature tint
+    float ct_r, ct_g, ct_b;
+    color_temp_tint(color_temp_k, ct_r, ct_g, ct_b);
+    gl_api::glUniform3f(p->loc_color_temp_tint, ct_r, ct_g, ct_b);
 
     // Bind input texture to unit 0
     gl_api::glActiveTexture(GL_TEXTURE0);

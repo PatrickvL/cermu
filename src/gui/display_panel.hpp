@@ -83,7 +83,8 @@ public:
                            output_w, output_h,
                            dc.curvature, dc.scanline_gap, dc.dot_pitch_mm,
                            dc.brightness, dc.contrast, dc.gamma, mask,
-                           pr, pg, pb);
+                           pr, pg, pb,
+                           dc.color_temperature_k);
         return state_.texture;
     }
 
