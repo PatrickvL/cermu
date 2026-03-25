@@ -1133,33 +1133,89 @@ inline void LauncherPanel::render_status_bar() {
     ImGui::BeginChild("##StatusBar", ImVec2(0, 24.0f), false);
 
     ImGui::SetCursorPos(ImVec2(12, 4));
-    ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextDimmed);
+
+    // Helper: render a key badge + label pair
+    auto kbd_hint = [](const char* key, const char* desc) {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+        ImVec2 key_size = ImGui::CalcTextSize(key);
+        float pad_x = 4.0f, pad_y = 1.0f;
+        float badge_w = key_size.x + pad_x * 2;
+        float badge_h = key_size.y + pad_y * 2;
+
+        // Badge background
+        dl->AddRectFilled(
+            ImVec2(pos.x, pos.y),
+            ImVec2(pos.x + badge_w, pos.y + badge_h),
+            ImGui::GetColorU32(ImVec4(0.039f, 0.051f, 0.110f, 1.0f)),
+            3.0f);
+        // Badge border
+        dl->AddRect(
+            ImVec2(pos.x, pos.y),
+            ImVec2(pos.x + badge_w, pos.y + badge_h),
+            ImGui::GetColorU32(ImVec4(0.094f, 0.125f, 0.188f, 1.0f)),
+            3.0f);
+        // Key text
+        dl->AddText(
+            ImVec2(pos.x + pad_x, pos.y + pad_y),
+            ImGui::GetColorU32(launcher_theme::kTextMuted),
+            key);
+
+        // Advance cursor past badge
+        ImGui::Dummy(ImVec2(badge_w, badge_h));
+        ImGui::SameLine(0, 4);
+
+        // Description text
+        ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextDimmed);
+        ImGui::TextUnformatted(desc);
+        ImGui::PopStyleColor();
+        ImGui::SameLine(0, 10);
+    };
 
     // Context-sensitive hints (§15.5)
     if (focus_panel_ == FocusPanel::SystemList) {
-        ImGui::Text("\xe2\x86\x91\xe2\x86\x93 Navigate  \xc2\xb7  \xe2\x86\xb5 Open files  \xc2\xb7  Tab Switch panel  \xc2\xb7  / Search");
+        kbd_hint("\xe2\x86\x91\xe2\x86\x93", "Navigate");
+        kbd_hint("\xe2\x86\xb5", "Open ROMs");
+        kbd_hint("Tab", "Switch panel");
+        kbd_hint("/", "Search");
     } else if (focus_panel_ == FocusPanel::FileBrowser) {
         if (probe_state_ == ProbeState::SingleMatch) {
-            ImGui::Text("\xe2\x86\xb5 Launch  \xc2\xb7  Esc Clear  \xc2\xb7  Tab Switch panel");
+            kbd_hint("\xe2\x86\xb5", "Launch");
+            kbd_hint("Esc", "Clear");
+            kbd_hint("Tab", "Switch panel");
         } else if (probe_state_ == ProbeState::Ambiguous) {
-            ImGui::Text("\xe2\x86\xb5 Choose\xe2\x80\xa6  \xc2\xb7  Esc Clear");
+            kbd_hint("\xe2\x86\xb5", "Choose\xe2\x80\xa6");
+            kbd_hint("Esc", "Clear");
         } else if (selected_system_name_) {
-            ImGui::Text("\xe2\x86\x91\xe2\x86\x93 Navigate  \xc2\xb7  \xe2\x86\xb5 Launch  \xc2\xb7  / Search  \xc2\xb7  Backspace Up");
+            kbd_hint("\xe2\x86\x91\xe2\x86\x93", "Navigate");
+            kbd_hint("\xe2\x86\xb5", "Launch");
+            kbd_hint("/", "Search");
+            kbd_hint("\xe2\x8c\xab", "Up");
         } else {
-            ImGui::Text("\xe2\x86\x91\xe2\x86\x93 Navigate  \xc2\xb7  \xe2\x86\xb5 Select & probe  \xc2\xb7  / Search  \xc2\xb7  Backspace Up");
+            kbd_hint("\xe2\x86\x91\xe2\x86\x93", "Navigate");
+            kbd_hint("\xe2\x86\xb5", "Select & probe");
+            kbd_hint("/", "Search");
+            kbd_hint("\xe2\x8c\xab", "Up");
         }
     }
 
-    // Right-aligned zoom indicator (only when not at default)
-    if (ui_scale_ < kDefaultUiScale - 0.01f || ui_scale_ > kDefaultUiScale + 0.01f) {
-        char zoom_label[32];
-        snprintf(zoom_label, sizeof(zoom_label), "%d%%", static_cast<int>(ui_scale_ * 100.0f + 0.5f));
-        float text_w = ImGui::CalcTextSize(zoom_label).x;
+    // Right-aligned: mode indicator + zoom
+    {
+        const char* mode_str = (focus_panel_ == FocusPanel::SystemList) ? "SYSTEMS" : "FILES";
+        char right_label[64];
+        if (ui_scale_ < kDefaultUiScale - 0.01f || ui_scale_ > kDefaultUiScale + 0.01f)
+            snprintf(right_label, sizeof(right_label), "%s \xc2\xb7 %d%%", mode_str,
+                     static_cast<int>(ui_scale_ * 100.0f + 0.5f));
+        else
+            snprintf(right_label, sizeof(right_label), "%s \xc2\xb7 CERMU", mode_str);
+
+        float text_w = ImGui::CalcTextSize(right_label).x;
         ImGui::SameLine(ImGui::GetWindowWidth() - text_w - 12);
-        ImGui::Text("%s", zoom_label);
+        ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextDimmed);
+        ImGui::Text("%s", right_label);
+        ImGui::PopStyleColor();
     }
 
-    ImGui::PopStyleColor();
     ImGui::EndChild();
     ImGui::PopStyleColor();
 }
