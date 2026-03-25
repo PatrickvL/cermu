@@ -499,6 +499,15 @@ inline void LauncherPanel::render_top_bar(bool allow_cancel) {
     ImGui::Text("\xe2\x97\x88 CERMU");  // ◈ CERMU
     ImGui::PopStyleColor();
 
+    // Vertical divider after logo
+    ImGui::SameLine(0, 8);
+    ImVec2 div_pos = ImGui::GetCursorScreenPos();
+    ImGui::GetWindowDrawList()->AddRectFilled(
+        ImVec2(div_pos.x, div_pos.y + 2),
+        ImVec2(div_pos.x + 1, div_pos.y + 14),
+        ImGui::GetColorU32(ImVec4(0.078f, 0.110f, 0.157f, 1.0f)));
+    ImGui::Dummy(ImVec2(1, 0));
+
     // Type filter tabs
     ImGui::SameLine(140);
     ImGui::SetCursorPosY(6);
@@ -537,9 +546,13 @@ inline void LauncherPanel::render_top_bar(bool allow_cancel) {
         type_filter_all_ = false; type_filter_ = SystemType::Other; apply_filters();
     }
 
-    // Maker filter combo (right side)
-    ImGui::SameLine(ImGui::GetWindowWidth() - 200);
+    // Maker filter combo with label prefix
+    ImGui::SameLine(ImGui::GetWindowWidth() - 210);
     ImGui::SetCursorPosY(6);
+    ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextDimmed);
+    ImGui::TextUnformatted("Maker");
+    ImGui::PopStyleColor();
+    ImGui::SameLine(0, 4);
     ImGui::PushItemWidth(100);
     ImGui::PushStyleColor(ImGuiCol_FrameBg, launcher_theme::kSearchInputBg);
     if (ImGui::BeginCombo("##Maker", maker_list_[maker_filter_index_].c_str(), ImGuiComboFlags_NoArrowButton)) {
@@ -610,11 +623,12 @@ inline void LauncherPanel::render_top_bar(bool allow_cancel) {
 }
 
 inline void LauncherPanel::render_left_panel() {
-    // Search input
+    // Search input with placeholder hint
     ImGui::PushStyleColor(ImGuiCol_FrameBg, launcher_theme::kSearchInputBg);
     ImGui::PushItemWidth(-1);
-    if (ImGui::InputText("##SystemSearch", search_filter_, sizeof(search_filter_),
-                         ImGuiInputTextFlags_AutoSelectAll)) {
+    if (ImGui::InputTextWithHint("##SystemSearch", "Name, CPU, year, type\xe2\x80\xa6",
+                                 search_filter_, sizeof(search_filter_),
+                                 ImGuiInputTextFlags_AutoSelectAll)) {
         apply_filters();
     }
     ImGui::PopItemWidth();
@@ -652,27 +666,53 @@ inline void LauncherPanel::render_left_panel() {
 
         ImGui::PopStyleColor(2);
 
-        // Overlay text on the selectable
+        // Left accent bar (colored by maker)
         ImVec2 row_min = ImGui::GetItemRectMin();
+        ImVec2 row_max = ImGui::GetItemRectMax();
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+        if (is_selected) {
+            ImVec4 maker_accent = launcher_theme::accent_for_maker(desc->maker);
+            draw_list->AddRectFilled(
+                ImVec2(row_min.x, row_min.y),
+                ImVec2(row_min.x + 3.0f, row_max.y),
+                ImGui::GetColorU32(maker_accent));
+        }
 
         // System name
         ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextPrimary);
         draw_list->AddText(ImVec2(row_min.x + 8, row_min.y + 2), ImGui::GetColorU32(launcher_theme::kTextPrimary), desc->name);
         ImGui::PopStyleColor();
 
-        // Year + maker (second line)
+        // Year + maker badge (second line)
         if (desc->maker || desc->year > 0) {
-            char meta[128] = {};
-            if (desc->year > 0 && desc->maker)
-                snprintf(meta, sizeof(meta), "%d \xc2\xb7 %s", desc->year, desc->maker);
-            else if (desc->year > 0)
-                snprintf(meta, sizeof(meta), "%d", desc->year);
-            else if (desc->maker)
-                snprintf(meta, sizeof(meta), "%s", desc->maker);
+            float meta_x = row_min.x + 8;
+            float meta_y = row_min.y + 18;
 
-            draw_list->AddText(ImVec2(row_min.x + 8, row_min.y + 18),
-                               ImGui::GetColorU32(launcher_theme::kTextMuted), meta);
+            // Year
+            if (desc->year > 0) {
+                char year_str[8];
+                snprintf(year_str, sizeof(year_str), "%d", desc->year);
+                draw_list->AddText(ImVec2(meta_x, meta_y),
+                                   ImGui::GetColorU32(launcher_theme::kTextMuted), year_str);
+                meta_x += ImGui::CalcTextSize(year_str).x + 4;
+            }
+
+            // Maker as pill badge
+            if (desc->maker) {
+                ImVec4 maker_color = launcher_theme::accent_for_maker(desc->maker);
+                ImVec2 text_size = ImGui::CalcTextSize(desc->maker);
+                float pill_h = text_size.y + 2;
+                float pill_w = text_size.x + 8;
+                ImVec4 pill_bg = ImVec4(maker_color.x, maker_color.y, maker_color.z, 0.15f);
+                draw_list->AddRectFilled(
+                    ImVec2(meta_x, meta_y - 1),
+                    ImVec2(meta_x + pill_w, meta_y + pill_h),
+                    ImGui::GetColorU32(pill_bg),
+                    3.0f);
+                draw_list->AddText(ImVec2(meta_x + 4, meta_y),
+                                   ImGui::GetColorU32(maker_color), desc->maker);
+            }
         }
 
         ImGui::PopID();
@@ -718,11 +758,11 @@ inline void LauncherPanel::render_system_header() {
     ImGui::Text("%s", desc->name);
     ImGui::PopStyleColor();
 
-    // Metadata badges
+    // Metadata badges — rendered as pills with background
     ImGui::SameLine();
     ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextMuted);
     if (desc->year > 0)
-        ImGui::Text("(%d)", desc->year);
+        ImGui::Text("%d", desc->year);
     ImGui::PopStyleColor();
 
     if (desc->cpu_summary) {
@@ -734,24 +774,46 @@ inline void LauncherPanel::render_system_header() {
 
     if (desc->maker) {
         ImGui::SameLine();
-        // Maker badge with accent color
+        // Maker as a pill badge with colored background
+        ImVec2 cursor = ImGui::GetCursorScreenPos();
+        ImVec2 text_size = ImGui::CalcTextSize(desc->maker);
+        float pad_x = 6.0f, pad_y = 1.0f;
+        ImVec4 pill_bg = ImVec4(accent.x, accent.y, accent.z, 0.15f);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->AddRectFilled(
+            ImVec2(cursor.x, cursor.y + pad_y),
+            ImVec2(cursor.x + text_size.x + pad_x * 2, cursor.y + text_size.y + pad_y),
+            ImGui::GetColorU32(pill_bg),
+            4.0f);
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad_x);
         ImGui::PushStyleColor(ImGuiCol_Text, accent);
-        ImGui::Text("\xc2\xb7 %s", desc->maker);  // · maker
+        ImGui::TextUnformatted(desc->maker);
         ImGui::PopStyleColor();
+        ImGui::SameLine(0, pad_x);
     }
 
-    // Type badge
+    // Type badge as pill
     {
-        ImGui::SameLine();
         const char* type_str = "Other";
         switch (desc->type) {
-            case SystemType::Home:    type_str = "Home"; break;
-            case SystemType::Console: type_str = "Console"; break;
-            case SystemType::Arcade:  type_str = "Arcade"; break;
-            default: break;
+            case SystemType::Home:    type_str = "home"; break;
+            case SystemType::Console: type_str = "console"; break;
+            case SystemType::Arcade:  type_str = "arcade"; break;
+            default: type_str = "other"; break;
         }
+        ImGui::SameLine();
+        ImVec2 cursor = ImGui::GetCursorScreenPos();
+        ImVec2 text_size = ImGui::CalcTextSize(type_str);
+        float pad_x = 5.0f, pad_y = 1.0f;
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->AddRectFilled(
+            ImVec2(cursor.x, cursor.y + pad_y),
+            ImVec2(cursor.x + text_size.x + pad_x * 2, cursor.y + text_size.y + pad_y),
+            ImGui::GetColorU32(ImVec4(0.055f, 0.094f, 0.157f, 1.0f)),
+            4.0f);
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pad_x);
         ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextDimmed);
-        ImGui::Text("[%s]", type_str);
+        ImGui::TextUnformatted(type_str);
         ImGui::PopStyleColor();
     }
 
@@ -784,20 +846,47 @@ inline void LauncherPanel::render_config_strip() {
                        !traits.custom_options.empty();
     if (!has_options) return;
 
+    // Config strip — two-row height to accommodate wrapping options
+    float strip_height = ImGui::GetFrameHeight() * 2 + 16.0f;
     ImGui::PushStyleColor(ImGuiCol_ChildBg, launcher_theme::kCfgBgDefault);
-    ImGui::BeginChild("##ConfigStrip", ImVec2(0, launcher_theme::kConfigStripHeight), false);
+    ImGui::BeginChild("##ConfigStrip", ImVec2(0, strip_height), false);
     ImGui::SetCursorPos(ImVec2(12, 6));
+
+    // Helper: render a labeled config combo as a pill
+    auto config_pill = [&](const char* label, const char* combo_id, const char* preview,
+                           bool is_default, auto render_items) {
+        // Label
+        ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kCfgTextDefault);
+        ImGui::TextUnformatted(label);
+        ImGui::PopStyleColor();
+        ImGui::SameLine(0, 4);
+
+        // Combo value
+        ImVec4 border_col = is_default ? launcher_theme::kCfgBorderDefault : launcher_theme::kCfgBorderChanged;
+        ImVec4 bg_col = is_default ? launcher_theme::kCfgBgDefault : launcher_theme::kCfgBgChanged;
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, bg_col);
+        ImGui::PushStyleColor(ImGuiCol_Border, border_col);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+        ImGui::PushItemWidth(ImGui::CalcTextSize(preview).x + 24);
+        if (ImGui::BeginCombo(combo_id, preview, ImGuiComboFlags_NoArrowButton)) {
+            render_items();
+            ImGui::EndCombo();
+        }
+        ImGui::PopItemWidth();
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(2);
+        ImGui::SameLine(0, 10);
+    };
 
     // Region combo
     if (!traits.video_standard_configs.empty()) {
-        ImGui::PushItemWidth(90);
         int region_idx = selected_region_option_ >= 0 ? selected_region_option_ : 0;
         const char* region_preview = (region_idx < static_cast<int>(traits.video_standard_configs.size()))
             ? traits.video_standard_configs[region_idx].name : "?";
+        bool region_default = (selected_region_option_ <= 0);
 
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, launcher_theme::kCfgBgDefault);
-        ImGui::PushStyleColor(ImGuiCol_Border, launcher_theme::kCfgBorderDefault);
-        if (ImGui::BeginCombo("##Region", region_preview, ImGuiComboFlags_NoArrowButton)) {
+        config_pill("REGION", "##Region", region_preview, region_default, [&]() {
             for (int i = 0; i < static_cast<int>(traits.video_standard_configs.size()); ++i) {
                 bool is_sel = (i == region_idx);
                 if (ImGui::Selectable(traits.video_standard_configs[i].name, is_sel)) {
@@ -805,23 +894,17 @@ inline void LauncherPanel::render_config_strip() {
                     config_dirty_ = true;
                 }
             }
-            ImGui::EndCombo();
-        }
-        ImGui::PopStyleColor(2);
-        ImGui::PopItemWidth();
-        ImGui::SameLine();
+        });
     }
 
     // Memory combo
     if (!traits.memory_options.empty()) {
-        ImGui::PushItemWidth(90);
         int mem_idx = selected_memory_option_ >= 0 ? selected_memory_option_ : 0;
         const char* mem_preview = (mem_idx < static_cast<int>(traits.memory_options.size()))
             ? traits.memory_options[mem_idx].name : "?";
+        bool mem_default = (selected_memory_option_ <= 0);
 
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, launcher_theme::kCfgBgDefault);
-        ImGui::PushStyleColor(ImGuiCol_Border, launcher_theme::kCfgBorderDefault);
-        if (ImGui::BeginCombo("##Memory", mem_preview, ImGuiComboFlags_NoArrowButton)) {
+        config_pill("RAM EXP.", "##Memory", mem_preview, mem_default, [&]() {
             for (int i = 0; i < static_cast<int>(traits.memory_options.size()); ++i) {
                 bool is_sel = (i == mem_idx);
                 if (ImGui::Selectable(traits.memory_options[i].name, is_sel)) {
@@ -829,14 +912,10 @@ inline void LauncherPanel::render_config_strip() {
                     config_dirty_ = true;
                 }
             }
-            ImGui::EndCombo();
-        }
-        ImGui::PopStyleColor(2);
-        ImGui::PopItemWidth();
-        ImGui::SameLine();
+        });
     }
 
-    // Peripheral toggles
+    // Peripheral toggles as labeled pills
     for (const auto& po : traits.peripheral_options) {
         bool enabled = false;
         auto it = selected_peripherals_.find(po.id);
@@ -845,18 +924,34 @@ inline void LauncherPanel::render_config_strip() {
         else
             enabled = po.enabled_by_default;
 
-        if (ImGui::Checkbox(po.name, &enabled)) {
+        // Label
+        ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kCfgTextDefault);
+        ImGui::TextUnformatted(po.name);
+        ImGui::PopStyleColor();
+        ImGui::SameLine(0, 4);
+
+        // Value as toggle text
+        const char* val_str = enabled ? "On" : "None";
+        ImVec4 border_col = enabled ? launcher_theme::kCfgBorderChanged : launcher_theme::kCfgBorderDefault;
+        ImVec4 bg_col = enabled ? launcher_theme::kCfgBgChanged : launcher_theme::kCfgBgDefault;
+        ImGui::PushStyleColor(ImGuiCol_Button, bg_col);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, launcher_theme::kCfgBgChanged);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+        std::string btn_id = std::string(val_str) + "##periph_" + std::string(po.id);
+        if (ImGui::SmallButton(btn_id.c_str())) {
+            enabled = !enabled;
             selected_peripherals_[po.id] = enabled;
             config_dirty_ = true;
         }
-        ImGui::SameLine();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(2);
+        ImGui::SameLine(0, 10);
     }
 
-    // Custom option combos
+    // Custom option combos with labels
     for (const auto& co : traits.custom_options) {
         if (co.choices.empty()) continue;
 
-        ImGui::PushItemWidth(100);
         std::string current;
         auto it = selected_custom_settings_.find(co.id);
         if (it != selected_custom_settings_.end())
@@ -864,10 +959,11 @@ inline void LauncherPanel::render_config_strip() {
         else if (co.default_index >= 0 && co.default_index < static_cast<int>(co.choices.size()))
             current = co.choices[co.default_index];
 
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, launcher_theme::kCfgBgDefault);
-        ImGui::PushStyleColor(ImGuiCol_Border, launcher_theme::kCfgBorderDefault);
+        bool is_default = (co.default_index >= 0 && co.default_index < static_cast<int>(co.choices.size())
+                           && current == co.choices[co.default_index]);
         std::string combo_id = "##Custom_" + std::string(co.id);
-        if (ImGui::BeginCombo(combo_id.c_str(), current.c_str(), ImGuiComboFlags_NoArrowButton)) {
+
+        config_pill(co.name, combo_id.c_str(), current.c_str(), is_default, [&]() {
             for (int i = 0; i < static_cast<int>(co.choices.size()); ++i) {
                 bool is_sel = (current == co.choices[i]);
                 if (ImGui::Selectable(co.choices[i], is_sel)) {
@@ -875,12 +971,11 @@ inline void LauncherPanel::render_config_strip() {
                     config_dirty_ = true;
                 }
             }
-            ImGui::EndCombo();
-        }
-        ImGui::PopStyleColor(2);
-        ImGui::PopItemWidth();
-        ImGui::SameLine();
+        });
     }
+
+    // Add bottom padding to the wrapping strip
+    ImGui::Dummy(ImVec2(0, 4));
 
     ImGui::EndChild();
     ImGui::PopStyleColor();
