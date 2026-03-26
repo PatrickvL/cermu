@@ -91,7 +91,7 @@ ChipLayout* z80_pio_t::create_chip_layout() const {
         PIN_LR(layout,  8,  PA6,   _M1,   33)
         PIN_LR(layout,  9,  PA5,   _IORQ, 32)
         PIN_LR(layout, 10,  PA4,   _RD,   31)
-        PIN_LR(layout, 11,  VSS,   PB0,   30)
+        PIN_LR(layout, 11,  GND,   PB0,   30)
         PIN_LR(layout, 12,  PA3,   PB1,   29)
         PIN_LR(layout, 13,  PA2,   PB2,   28)
         PIN_LR(layout, 14,  PA1,   PB3,   27)
@@ -100,7 +100,7 @@ ChipLayout* z80_pio_t::create_chip_layout() const {
         PIN_LR(layout, 17,  BSTB,  PB6,   24)
         PIN_LR(layout, 18,  ARDY,  PB7,   23)
         PIN_LR(layout, 19,  BRDY,  D0,    22)
-        PIN_LR(layout, 20,  D1,    VDD,   21)
+        PIN_LR(layout, 20,  D1,    VCC,   21)
 
         return layout;
     }();

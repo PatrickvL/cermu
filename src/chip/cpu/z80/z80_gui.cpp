@@ -72,7 +72,7 @@ ChipLayout* z80_t<Traits>::create_chip_layout() const {
         PIN_LR(layout,  9, D5,       A2,     32);
         PIN_LR(layout, 10, D6,       A1,     31);
         PIN_LR(layout, 11, VCC,      A0,     30);
-        PIN_LR(layout, 12, D2,       VSS,    29); // 29 : Ground (VSS)
+        PIN_LR(layout, 12, D2,       GND,    29); // 29 : Ground (GND)
         PIN_LR(layout, 13, D7,       _RFSH,  28);
         PIN_LR(layout, 14, D0,       _M1,    27);
         PIN_LR(layout, 15, D1,       _RES,   26); // 26 : Active-low RESET (asserted when low)
