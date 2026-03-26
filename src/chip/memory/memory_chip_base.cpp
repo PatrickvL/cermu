@@ -220,7 +220,7 @@ static ChipLayout create_memory_layout(size_t size_bytes,
         pin++;
     }
     // GND at bottom of left side
-    layout.left_pins.push_back(PIN(pin, VSS));
+    layout.left_pins.push_back(CHIP_PIN(pin, VSS));
     pin++;
 
     // Right side: built bottom-up (DIP convention: pin pins_per_side+1 is at bottom-right)
@@ -234,7 +234,7 @@ static ChipLayout create_memory_layout(size_t size_bytes,
 
     // Top of right side: VCC
     uint8_t right_top_pin = total_pins;
-    layout.right_pins.push_back(PIN(right_top_pin, VDD));
+    layout.right_pins.push_back(CHIP_PIN(right_top_pin, VDD));
 
     uint8_t rpin = right_top_pin - 1;
 
@@ -257,22 +257,22 @@ static ChipLayout create_memory_layout(size_t size_bytes,
     if (type == MemoryChipBase::RAM || type == MemoryChipBase::SRAM) {
         // WE, OE, CE from bottom up
         if (rpin > pin) {
-            layout.right_pins.push_back(PIN(rpin, _WE));
+            layout.right_pins.push_back(CHIP_PIN(rpin, _WE));
             rpin--;
         }
     }
     if (rpin > pin) {
-        layout.right_pins.push_back(PIN(rpin, _OE));
+        layout.right_pins.push_back(CHIP_PIN(rpin, _OE));
         rpin--;
     }
     if (rpin > pin) {
-        layout.right_pins.push_back(PIN(rpin, _CS));
+        layout.right_pins.push_back(CHIP_PIN(rpin, _CS));
         rpin--;
     }
 
     // Fill any remaining right-side pins as NC
     while (rpin > pin) {
-        layout.right_pins.push_back(PIN(rpin, NC));
+        layout.right_pins.push_back(CHIP_PIN(rpin, NC));
         rpin--;
     }
 

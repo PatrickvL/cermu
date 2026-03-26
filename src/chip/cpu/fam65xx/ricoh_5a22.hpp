@@ -80,38 +80,38 @@ inline ChipLayout create_ricoh_5a22_layout() {
 
   // ---- Left side: pins 1-25 (top to bottom) — address bus A0-A19 + power ----
   layout.left_pins = {
-      PIN( 1, VCC),   PIN( 2, A0),    PIN( 3, A1),    PIN( 4, A2),    PIN( 5, A3),
-      PIN( 6, VSS),   PIN( 7, A4),    PIN( 8, A5),    PIN( 9, A6),    PIN(10, A7),
-      PIN(11, VCC),   PIN(12, A8),    PIN(13, A9),    PIN(14, A10),   PIN(15, A11),
-      PIN(16, VSS),   PIN(17, A12),   PIN(18, A13),   PIN(19, A14),   PIN(20, A15),
-      PIN(21, VCC),   PIN(22, A16),   PIN(23, A17),   PIN(24, A18),   PIN(25, A19),
+      CHIP_PIN( 1, VCC),   CHIP_PIN( 2, A0),    CHIP_PIN( 3, A1),    CHIP_PIN( 4, A2),    CHIP_PIN( 5, A3),
+      CHIP_PIN( 6, VSS),   CHIP_PIN( 7, A4),    CHIP_PIN( 8, A5),    CHIP_PIN( 9, A6),    CHIP_PIN(10, A7),
+      CHIP_PIN(11, VCC),   CHIP_PIN(12, A8),    CHIP_PIN(13, A9),    CHIP_PIN(14, A10),   CHIP_PIN(15, A11),
+      CHIP_PIN(16, VSS),   CHIP_PIN(17, A12),   CHIP_PIN(18, A13),   CHIP_PIN(19, A14),   CHIP_PIN(20, A15),
+      CHIP_PIN(21, VCC),   CHIP_PIN(22, A16),   CHIP_PIN(23, A17),   CHIP_PIN(24, A18),   CHIP_PIN(25, A19),
   };
 
   // ---- Bottom side: pins 26-50 (left to right) — A20-A23, /RD, /WR, data, B-bus addr ----
   layout.bottom_pins = {
-      PIN(26, VSS),   PIN(27, A20),   PIN(28, A21),   PIN(29, A22),   PIN(30, A23),
-      PIN(31, VCC),   PIN(32, _RD),   PIN(33, _WR),   PIN(34, D0),    PIN(35, D1),
-      PIN(36, VSS),   PIN(37, D2),    PIN(38, D3),    PIN(39, D4),    PIN(40, D5),
-      PIN(41, VCC),   PIN(42, D6),    PIN(43, D7),    PIN(44, PA0),   PIN(45, PA1),
-      PIN(46, VSS),   PIN(47, PA2),   PIN(48, PA3),   PIN(49, PA4),   PIN(50, PA5),
+      CHIP_PIN(26, VSS),   CHIP_PIN(27, A20),   CHIP_PIN(28, A21),   CHIP_PIN(29, A22),   CHIP_PIN(30, A23),
+      CHIP_PIN(31, VCC),   CHIP_PIN(32, _RD),   CHIP_PIN(33, _WR),   CHIP_PIN(34, D0),    CHIP_PIN(35, D1),
+      CHIP_PIN(36, VSS),   CHIP_PIN(37, D2),    CHIP_PIN(38, D3),    CHIP_PIN(39, D4),    CHIP_PIN(40, D5),
+      CHIP_PIN(41, VCC),   CHIP_PIN(42, D6),    CHIP_PIN(43, D7),    CHIP_PIN(44, PA0),   CHIP_PIN(45, PA1),
+      CHIP_PIN(46, VSS),   CHIP_PIN(47, PA2),   CHIP_PIN(48, PA3),   CHIP_PIN(49, PA4),   CHIP_PIN(50, PA5),
   };
 
   // ---- Right side: pins 51-75 (bottom to top) — B-bus cont, chip selects, clk, int, joypad ----
   layout.right_pins = {
-      PIN(51, VCC),   PIN(52, PA6),   PIN(53, PA7),   PIN(54, _PARD), PIN(55, _PAWR),
-      PIN(56, VSS),   PIN(57, _WRAM), PIN(58, _ROMSEL),PIN(59, _IRQ), PIN(60, _NMI),
-      PIN(61, VCC),   PIN(62, _RES),  PIN(63, SYSCLK),PIN(64, CPUCLK),PIN(65, REFRESH),
-      PIN(66, VSS),   PIN(67, HBLANK),PIN(68, VBLANK),PIN(69, JOY1),  PIN(70, JOY2),
-      PIN(71, VCC),   PIN(72, JOYCLK),PIN(73, JOYLAT),PIN(74, JOYRD), PIN(75, VSS),
+      CHIP_PIN(51, VCC),   CHIP_PIN(52, PA6),   CHIP_PIN(53, PA7),   CHIP_PIN(54, _PARD), CHIP_PIN(55, _PAWR),
+      CHIP_PIN(56, VSS),   CHIP_PIN(57, _WRAM), CHIP_PIN(58, _ROMSEL),CHIP_PIN(59, _IRQ), CHIP_PIN(60, _NMI),
+      CHIP_PIN(61, VCC),   CHIP_PIN(62, _RES),  CHIP_PIN(63, SYSCLK),CHIP_PIN(64, CPUCLK),CHIP_PIN(65, REFRESH),
+      CHIP_PIN(66, VSS),   CHIP_PIN(67, HBLANK),CHIP_PIN(68, VBLANK),CHIP_PIN(69, JOY1),  CHIP_PIN(70, JOY2),
+      CHIP_PIN(71, VCC),   CHIP_PIN(72, JOYCLK),CHIP_PIN(73, JOYLAT),CHIP_PIN(74, JOYRD), CHIP_PIN(75, VSS),
   };
 
   // ---- Top side: pins 76-100 (right to left) — power/ground distribution + NC/test ----
   layout.top_pins = {
-      PIN(76, VCC),   PIN(77, NC),    PIN(78, NC),    PIN(79, NC),    PIN(80, VSS),
-      PIN(81, NC),    PIN(82, NC),    PIN(83, NC),    PIN(84, VCC),   PIN(85, NC),
-      PIN(86, VSS),   PIN(87, NC),    PIN(88, NC),    PIN(89, VCC),   PIN(90, NC),
-      PIN(91, NC),    PIN(92, VSS),   PIN(93, NC),    PIN(94, NC),    PIN(95, VCC),
-      PIN(96, NC),    PIN(97, NC),    PIN(98, VSS),   PIN(99, NC),    PIN(100, VCC),
+      CHIP_PIN(76, VCC),   CHIP_PIN(77, NC),    CHIP_PIN(78, NC),    CHIP_PIN(79, NC),    CHIP_PIN(80, VSS),
+      CHIP_PIN(81, NC),    CHIP_PIN(82, NC),    CHIP_PIN(83, NC),    CHIP_PIN(84, VCC),   CHIP_PIN(85, NC),
+      CHIP_PIN(86, VSS),   CHIP_PIN(87, NC),    CHIP_PIN(88, NC),    CHIP_PIN(89, VCC),   CHIP_PIN(90, NC),
+      CHIP_PIN(91, NC),    CHIP_PIN(92, VSS),   CHIP_PIN(93, NC),    CHIP_PIN(94, NC),    CHIP_PIN(95, VCC),
+      CHIP_PIN(96, NC),    CHIP_PIN(97, NC),    CHIP_PIN(98, VSS),   CHIP_PIN(99, NC),    CHIP_PIN(100, VCC),
   };
 
   return layout;

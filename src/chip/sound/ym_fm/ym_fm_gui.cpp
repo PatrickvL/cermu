@@ -274,42 +274,42 @@ ChipLayout* ym_fm_t<Traits>::create_chip_layout() const {
 
             // QFP64 — simplified pinout; exact assignment
             // varies between YM2608 and YM2610.
-            layout.left_pins.push_back(ChipPin PIN( 1, D0));
-            layout.left_pins.push_back(ChipPin PIN( 2, D1));
-            layout.left_pins.push_back(ChipPin PIN( 3, D2));
-            layout.left_pins.push_back(ChipPin PIN( 4, D3));
-            layout.left_pins.push_back(ChipPin PIN( 5, D4));
-            layout.left_pins.push_back(ChipPin PIN( 6, D5));
-            layout.left_pins.push_back(ChipPin PIN( 7, D6));
-            layout.left_pins.push_back(ChipPin PIN( 8, D7));
-            layout.left_pins.push_back(ChipPin PIN( 9, _CS));
-            layout.left_pins.push_back(ChipPin PIN(10, _RD));
-            layout.left_pins.push_back(ChipPin PIN(11, _WR));
-            layout.left_pins.push_back(ChipPin PIN(12, A0));
-            layout.left_pins.push_back(ChipPin PIN(13, A1));
-            layout.left_pins.push_back(ChipPin PIN(14, _RES));
-            layout.left_pins.push_back(ChipPin PIN(15, _IRQ));
-            layout.left_pins.push_back(ChipPin PIN(16, PHI_M));
+            layout.left_pins.push_back(ChipPin CHIP_PIN( 1, D0));
+            layout.left_pins.push_back(ChipPin CHIP_PIN( 2, D1));
+            layout.left_pins.push_back(ChipPin CHIP_PIN( 3, D2));
+            layout.left_pins.push_back(ChipPin CHIP_PIN( 4, D3));
+            layout.left_pins.push_back(ChipPin CHIP_PIN( 5, D4));
+            layout.left_pins.push_back(ChipPin CHIP_PIN( 6, D5));
+            layout.left_pins.push_back(ChipPin CHIP_PIN( 7, D6));
+            layout.left_pins.push_back(ChipPin CHIP_PIN( 8, D7));
+            layout.left_pins.push_back(ChipPin CHIP_PIN( 9, _CS));
+            layout.left_pins.push_back(ChipPin CHIP_PIN(10, _RD));
+            layout.left_pins.push_back(ChipPin CHIP_PIN(11, _WR));
+            layout.left_pins.push_back(ChipPin CHIP_PIN(12, A0));
+            layout.left_pins.push_back(ChipPin CHIP_PIN(13, A1));
+            layout.left_pins.push_back(ChipPin CHIP_PIN(14, _RES));
+            layout.left_pins.push_back(ChipPin CHIP_PIN(15, _IRQ));
+            layout.left_pins.push_back(ChipPin CHIP_PIN(16, PHI_M));
 
             // Bottom side (pins 17-32): I/O ports, SSG output
             for (uint8_t i = 17; i <= 24; i++)
-                layout.bottom_pins.push_back(ChipPin PIN(i, NC));
-            layout.bottom_pins.push_back(ChipPin PIN(25, SSG_OUT));
+                layout.bottom_pins.push_back(ChipPin CHIP_PIN(i, NC));
+            layout.bottom_pins.push_back(ChipPin CHIP_PIN(25, SSG_OUT));
             for (uint8_t i = 26; i <= 32; i++)
-                layout.bottom_pins.push_back(ChipPin PIN(i, NC));
+                layout.bottom_pins.push_back(ChipPin CHIP_PIN(i, NC));
 
             // Right side (pins 33-48): audio outputs, ADPCM memory bus
             for (uint8_t i = 33; i <= 44; i++)
-                layout.right_pins.push_back(ChipPin PIN(i, NC));
-            layout.right_pins.push_back(ChipPin PIN(45, MO));
+                layout.right_pins.push_back(ChipPin CHIP_PIN(i, NC));
+            layout.right_pins.push_back(ChipPin CHIP_PIN(45, MO));
             for (uint8_t i = 46; i <= 48; i++)
-                layout.right_pins.push_back(ChipPin PIN(i, NC));
+                layout.right_pins.push_back(ChipPin CHIP_PIN(i, NC));
 
             // Top side (pins 49-64): power, ADPCM address bus
-            layout.top_pins.push_back(ChipPin PIN(49, VCC));
+            layout.top_pins.push_back(ChipPin CHIP_PIN(49, VCC));
             for (uint8_t i = 50; i <= 63; i++)
-                layout.top_pins.push_back(ChipPin PIN(i, NC));
-            layout.top_pins.push_back(ChipPin PIN(64, VSS));
+                layout.top_pins.push_back(ChipPin CHIP_PIN(i, NC));
+            layout.top_pins.push_back(ChipPin CHIP_PIN(64, VSS));
 
             return layout;
         }();
