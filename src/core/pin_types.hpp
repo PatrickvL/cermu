@@ -79,6 +79,7 @@ enum class PinLabel {
     _G,           // /G — gate/enable (74LS259 addressable latch)
     _HALT,        // /HALT — halt (Z80)
     _HIRAM,       // /HIRAM — high RAM
+    _IC,          // /IC — initial clear (Yamaha FM reset)
     _INT,         // /INT — interrupt (Z80)
     _IO,          // /I/O — I/O area select
     _IORQ,        // /IORQ — I/O request (Z80)
@@ -139,6 +140,8 @@ enum class PinLabel {
     PHI0,         // Φ0 — clock input
     PHI1,         // Φ1 — inverted clock output
     PHI2,         // Φ2 — primary clock output
+    PHI_M,        // ΦM — master clock input (Yamaha FM)
+    PHI_S,        // ΦS — SSG/secondary clock (Yamaha OPN)
     Q_CLK,        // Q clock output (MC6809)
     SYSCLK,       // System master clock input (Ricoh 5A22, 21.477 MHz)
 
@@ -253,24 +256,31 @@ enum class PinLabel {
     RA0, RA1, RA2, RA3, RA4,
 
     // Audio chip pins
+    AUD,          // Audio output (Atari POKEY)
     AUD0,         // Audio output 0 (TIA)
     AUD1,         // Audio output 1 (TIA)
     AUDIO_IN,     // Audio input
     AUDIO_OUT,    // Audio output
     FILTER_IN,    // Filter input
     FILTER_OUT,   // Filter output
+    MO,           // Mixed Output (Yamaha FM)
     NOISE,        // Noise output
     OSC1,         // Oscillator output 1
     OSC2,         // Oscillator output 2
     OSC3,         // Oscillator output 3
+    RO,           // Rhythm Output (Yamaha OPLL)
+    SH1,          // Sample-and-Hold 1 (Yamaha FM)
+    SH2,          // Sample-and-Hold 2 (Yamaha FM)
     SND1,         // Sound output 1 (Ricoh 2A03)
     SND2,         // Sound output 2 (Ricoh 2A03)
     SOUND,        // Sound output (VIC-I/II composite audio)
 
-    // AY-3-8910 audio output pins
+    // AY-3-8910 / Yamaha FM audio output pins
+    CH3_OUT,      // FM Channel 3 direct output (Yamaha OPN)
     CHANNEL_A,    // Analog Channel A output (AY-3-8910)
     CHANNEL_B,    // Analog Channel B output (AY-3-8910)
     CHANNEL_C,    // Analog Channel C output (AY-3-8910)
+    SSG_OUT,      // SSG section output (Yamaha OPN)
 
     // Spectrum/general audio pins
     EAR,          // Tape EAR input
@@ -493,6 +503,128 @@ std::string pin_label_to_display_string(PinLabel label); // With Unicode symbols
 
 // Derive pin type from pin label
 PinType pin_label_to_pin_type(PinLabel label);
+
+// ============================================================================
+// PIN LABEL EQUIVALENCE
+// ============================================================================
+
+// Maps any PinLabel to its canonical functional identity.
+// Labels that ARE canonical return themselves (via the default case).
+// Every non-identity mapping targets a fixed point — verified by static_assert.
+//
+// Equivalence classes:
+//   Polarity pairs:  _FOO  → FOO  (active-low → active-high canonical)
+//   Power synonyms:  GND   → VSS,   VCC   → VDD
+//   Name synonyms:   PHI_M → CLK,   MO    → AUDIO_OUT,  _IC → RES, etc.
+//
+// MAINTENANCE: when adding a case `X → Y`, ensure Y is listed in
+// pin_canonical_validate().  The static_assert will catch chains.
+//
+constexpr PinLabel pin_canonical(PinLabel label) {
+    switch (label) {
+    // ── Polarity pairs (active-low → active-high) ──────────────────
+    case PinLabel::_ABORT:       return PinLabel::ABORT;
+    case PinLabel::_AEC:         return PinLabel::AEC;
+    case PinLabel::_BASIC:       return PinLabel::BASIC;
+    case PinLabel::_CAS:         return PinLabel::CAS;
+    case PinLabel::_CASRAM_PLA:  return PinLabel::CASRAM_PLA;
+    case PinLabel::_CHAREN:      return PinLabel::CHAREN;
+    case PinLabel::_CHAROM:      return PinLabel::CHAROM;
+    case PinLabel::_CS:          return PinLabel::CS;
+    case PinLabel::_CS0:         return PinLabel::CS0;
+    case PinLabel::_CS1:         return PinLabel::CS1;
+    case PinLabel::_CS2:         return PinLabel::CS2;
+    case PinLabel::_EXROM:       return PinLabel::EXROM;
+    case PinLabel::_G:           return PinLabel::G;
+    case PinLabel::_GAME:        return PinLabel::GAME;
+    case PinLabel::_HIRAM:       return PinLabel::HIRAM;
+    case PinLabel::_IO:          return PinLabel::IO;
+    case PinLabel::_IRQ:         return PinLabel::IRQ;
+    case PinLabel::_KERNAL:      return PinLabel::KERNAL;
+    case PinLabel::_LORAM:       return PinLabel::LORAM;
+    case PinLabel::_ML:          return PinLabel::ML;
+    case PinLabel::_NMI:         return PinLabel::NMI;
+    case PinLabel::_OE:          return PinLabel::OE;
+    case PinLabel::_Q7:          return PinLabel::Q7;
+    case PinLabel::_RAS:         return PinLabel::RAS;
+    case PinLabel::_RD:          return PinLabel::RD;
+    case PinLabel::_RES:         return PinLabel::RES;
+    case PinLabel::_ROMH:        return PinLabel::ROMH;
+    case PinLabel::_ROML:        return PinLabel::ROML;
+    case PinLabel::_SO:          return PinLabel::SO;
+    case PinLabel::_VA14:        return PinLabel::VA14;
+    case PinLabel::_VP:          return PinLabel::VP;
+    case PinLabel::_VPB:         return PinLabel::VPB;
+    case PinLabel::_WE:          return PinLabel::WE;
+    // NOTE: _VPA (M68K "valid peripheral address") intentionally NOT mapped
+    //       to VPA (65C816 "valid program address") — different signals.
+    // NOTE: _AS (M68K "address strobe") intentionally NOT mapped to
+    //       AS (MC6847 "alpha/semigraphics") — different signals.
+
+    // ── Power synonyms ─────────────────────────────────────────────
+    case PinLabel::GND:          return PinLabel::VSS;
+    case PinLabel::VCC:          return PinLabel::VDD;
+
+    // ── Name synonyms (chip-specific → generic canonical) ──────────
+    case PinLabel::_IC:          return PinLabel::RES;    // /IC = reset (Yamaha)
+    case PinLabel::AUD:          return PinLabel::AUDIO_OUT;
+    case PinLabel::MO:           return PinLabel::AUDIO_OUT;
+    case PinLabel::PHI_M:        return PinLabel::CLK;    // master clock
+
+    default: return label;
+    }
+}
+
+// True if two pin labels represent the same underlying function,
+// regardless of name variant or active-low/active-high polarity.
+constexpr bool pin_equivalent(PinLabel a, PinLabel b) {
+    return pin_canonical(a) == pin_canonical(b);
+}
+
+// Compile-time anti-chain guard: every canonical target must be a fixed point.
+// If pin_canonical(X) returns Y, then pin_canonical(Y) must return Y.
+constexpr bool pin_canonical_validate() {
+    return
+        pin_canonical(PinLabel::ABORT) == PinLabel::ABORT &&
+        pin_canonical(PinLabel::AEC) == PinLabel::AEC &&
+        pin_canonical(PinLabel::AUDIO_OUT) == PinLabel::AUDIO_OUT &&
+        pin_canonical(PinLabel::BASIC) == PinLabel::BASIC &&
+        pin_canonical(PinLabel::CAS) == PinLabel::CAS &&
+        pin_canonical(PinLabel::CASRAM_PLA) == PinLabel::CASRAM_PLA &&
+        pin_canonical(PinLabel::CHAREN) == PinLabel::CHAREN &&
+        pin_canonical(PinLabel::CHAROM) == PinLabel::CHAROM &&
+        pin_canonical(PinLabel::CLK) == PinLabel::CLK &&
+        pin_canonical(PinLabel::CS) == PinLabel::CS &&
+        pin_canonical(PinLabel::CS0) == PinLabel::CS0 &&
+        pin_canonical(PinLabel::CS1) == PinLabel::CS1 &&
+        pin_canonical(PinLabel::CS2) == PinLabel::CS2 &&
+        pin_canonical(PinLabel::EXROM) == PinLabel::EXROM &&
+        pin_canonical(PinLabel::G) == PinLabel::G &&
+        pin_canonical(PinLabel::GAME) == PinLabel::GAME &&
+        pin_canonical(PinLabel::HIRAM) == PinLabel::HIRAM &&
+        pin_canonical(PinLabel::IO) == PinLabel::IO &&
+        pin_canonical(PinLabel::IRQ) == PinLabel::IRQ &&
+        pin_canonical(PinLabel::KERNAL) == PinLabel::KERNAL &&
+        pin_canonical(PinLabel::LORAM) == PinLabel::LORAM &&
+        pin_canonical(PinLabel::ML) == PinLabel::ML &&
+        pin_canonical(PinLabel::NMI) == PinLabel::NMI &&
+        pin_canonical(PinLabel::OE) == PinLabel::OE &&
+        pin_canonical(PinLabel::Q7) == PinLabel::Q7 &&
+        pin_canonical(PinLabel::RAS) == PinLabel::RAS &&
+        pin_canonical(PinLabel::RD) == PinLabel::RD &&
+        pin_canonical(PinLabel::RES) == PinLabel::RES &&
+        pin_canonical(PinLabel::ROMH) == PinLabel::ROMH &&
+        pin_canonical(PinLabel::ROML) == PinLabel::ROML &&
+        pin_canonical(PinLabel::SO) == PinLabel::SO &&
+        pin_canonical(PinLabel::VA14) == PinLabel::VA14 &&
+        pin_canonical(PinLabel::VDD) == PinLabel::VDD &&
+        pin_canonical(PinLabel::VP) == PinLabel::VP &&
+        pin_canonical(PinLabel::VPB) == PinLabel::VPB &&
+        pin_canonical(PinLabel::VSS) == PinLabel::VSS &&
+        pin_canonical(PinLabel::WE) == PinLabel::WE;
+}
+static_assert(pin_canonical_validate(),
+    "pin_canonical() chain detected: every target must be a fixed point");
 
 // ============================================================================
 // PIN-TO-BUS-BIT MAPPING
