@@ -198,26 +198,6 @@ ChipLayout* ym_fm_t<Traits>::create_chip_layout() const {
         static ChipLayout layout = [] {
             ChipLayout layout = create_dip24_layout();
 
-            // YM2151 / YM2612 / YM3526 / YM3812 24-pin DIP pinout
-            // Pin assignments vary slightly per chip but share the same
-            // structural pattern.  Using the YM2612 pinout as reference:
-            //
-            //           ┌──── YM2612 ────┐
-            //   GND  1  │•              │ 24  VCC
-            //   D0   2  │               │ 23  D1
-            //   D2   3  │               │ 22  D3
-            //   D4   4  │               │ 21  D5
-            //   D6   5  │               │ 20  D7
-            //  /RD   6  │               │ 19  /WR
-            //   A0   7  │               │ 18  A1
-            //  /CS   8  │               │ 17  /IC (reset)
-            //  PHI_M 9  │               │ 16  /IRQ
-            //   SH1 10  │               │ 15  SH2
-            //   MO  11  │               │ 14  NC
-            //   GND 12  │               │ 13  NC
-            //           └───────────────┘
-            //
-            //                  LEFT                          RIGHT
             PIN_LR(layout,  1, VSS,        VCC,          24);
             PIN_LR(layout,  2, D0,         D1,           23);
             PIN_LR(layout,  3, D2,         D3,           22);
@@ -241,32 +221,6 @@ ChipLayout* ym_fm_t<Traits>::create_chip_layout() const {
         static ChipLayout layout = [] {
             ChipLayout layout = create_dip40_layout();
 
-            // YM2203 40-pin DIP pinout (Yamaha datasheet)
-            //
-            //           ┌──── YM2203 ────┐
-            //   GND  1  │•              │ 40  VCC
-            //   D0   2  │               │ 39  /RES
-            //   D1   3  │               │ 38  PHI_M
-            //   D2   4  │               │ 37  PHI_S (SSG clock)
-            //   D3   5  │               │ 36  /IRQ
-            //   D4   6  │               │ 35  NC
-            //   D5   7  │               │ 34  IOB7
-            //   D6   8  │               │ 33  IOB6
-            //   D7   9  │               │ 32  IOB5
-            //  /CS  10  │               │ 31  IOB4
-            //  /RD  11  │               │ 30  IOB3
-            //  /WR  12  │               │ 29  IOB2
-            //   A0  13  │               │ 28  IOB1
-            //   A1  14  │               │ 27  IOB0
-            //   SH1 15  │               │ 26  IOA7
-            //   SH2 16  │               │ 25  IOA6
-            //   MO  17  │               │ 24  IOA5
-            //   CH3 18  │               │ 23  IOA4
-            //   SSG 19  │               │ 22  IOA3
-            //   GND 20  │               │ 21  IOA2/1/0
-            //           └───────────────┘
-            //
-            //                  LEFT                          RIGHT
             PIN_LR(layout,  1, VSS,        VCC,          40);
             PIN_LR(layout,  2, D0,         _RES,         39);
             PIN_LR(layout,  3, D1,         CLK,          38);  // PHI_M
@@ -298,21 +252,6 @@ ChipLayout* ym_fm_t<Traits>::create_chip_layout() const {
         static ChipLayout layout = [] {
             ChipLayout layout = create_dip18_layout();
 
-            // YM2413 18-pin DIP pinout (Yamaha datasheet)
-            //
-            //           ┌──── YM2413 ────┐
-            //   D0   1  │•              │ 18  VCC
-            //   D1   2  │               │ 17  D2
-            //   D3   3  │               │ 16  D4
-            //   D5   4  │               │ 15  D6
-            //   D7   5  │               │ 14  /RES
-            //  /CS   6  │               │ 13  A0
-            //  /WR   7  │               │ 12  PHI_M
-            //   MO   8  │               │ 11  /IC
-            //   GND  9  │               │ 10  RO
-            //           └───────────────┘
-            //
-            //                  LEFT                          RIGHT
             PIN_LR(layout,  1, D0,         VCC,          18);
             PIN_LR(layout,  2, D1,         D2,           17);
             PIN_LR(layout,  3, D3,         D4,           16);
@@ -333,11 +272,8 @@ ChipLayout* ym_fm_t<Traits>::create_chip_layout() const {
         static ChipLayout layout = [] {
             ChipLayout layout = create_qfp64_layout();
 
-            // QFP64 — simplified pinout.  The full 64-pin QFP has pins on
-            // all four sides.  We map the key signals for visualization;
-            // the exact assignment varies between YM2608 and YM2610.
-            //
-            // Left side (pins 1-16):  D0-D7, control
+            // QFP64 — simplified pinout; exact assignment
+            // varies between YM2608 and YM2610.
             layout.left_pins.push_back(ChipPin PIN( 1, D0));
             layout.left_pins.push_back(ChipPin PIN( 2, D1));
             layout.left_pins.push_back(ChipPin PIN( 3, D2));
