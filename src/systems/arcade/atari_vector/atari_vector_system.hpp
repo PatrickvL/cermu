@@ -38,6 +38,7 @@
 #include "chip/sound/pokey/c012294.hpp"
 #include "chip/memory/ram_chip.hpp"
 #include "chip/memory/rom_chip.hpp"
+#include "chip/logic/ls259.hpp"
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -633,9 +634,9 @@ private:
     uint8_t dsw2_      = 0x00;
     uint8_t thrust_    = 0x00;      // Lunar Lander thrust ADC
 
-    // ── NMI gating / IRQ state ──────────────────────────────────────────
-    bool nmi_enabled_ = false;
-    bool irq_asserted_ = false;     // Tempest: level-sensitive IRQ from 3KHz/12 timer
+    // ── 74LS259 addressable latch (coin counters, LEDs, NMI enable) ────
+    LS259 latch_259_;
+    bool irq_asserted_ = false;     // Level-sensitive IRQ (Tempest, Gravitar, BW, SD, AD fallback)
 
     // ── Sound output latches ────────────────────────────────────────────
     uint8_t snd_latch_ = 0x00;
