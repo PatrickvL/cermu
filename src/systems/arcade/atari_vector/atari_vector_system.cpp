@@ -715,7 +715,7 @@ void AtariVectorSystem<V>::reset() {
     in1_ = 0x00;
     thrust_ = 0x00;
     snd_latch_ = 0x00;
-    nmi_enabled_ = false;  // NMI gated off until ROM enables it
+    latch_259_.reset();    // All Q outputs LOW (NMI gated off)
     irq_asserted_ = false; // IRQ starts inactive
 }
 
@@ -728,6 +728,14 @@ void AtariVectorSystem<V>::tick() {
     // CPU tick
     tick_cpu();
 
+    // DEBUG: trace CPU PC periodically for BZ
+    if constexpr (V == AtariVectorVariant::BATTLEZONE) {
+        if (total_cycles_ > 0 && (total_cycles_ % 500000) == 0) {
+            uint16_t addr = BUS_GET_ADDR(pins_) & 0x7FFF;
+            printf("BZ cycle %u: addr=$%04X nmi=%d\n", total_cycles_, addr, latch_259_.q(5));
+        }
+    }
+
     // Vector generator tick — runs at the same frequency as the CPU
     vg().tick();
 
@@ -736,51 +744,72 @@ void AtariVectorSystem<V>::tick() {
         pokey_.tick(0);  // Arcade POKEY: no bus-driven memory access
     }
 
-    // NMI timer — periodic pulse model (matches MAME set_periodic_int).
-    // The NMI is edge-triggered on the 6502.  We assert NMI for one cycle
-    // every NMI_PERIOD_CYCLES, then de-assert.  The 6502 detects the
-    // falling edge and vectors to the NMI handler.
+    // ── Periodic interrupt timer ────────────────────────────────────────────
     //
-    // Most games: NMI fires unconditionally every period.
-    // Asteroids Deluxe: NMI is gated by the 74LS259 output latch Q4
-    //   ($3C04, D0).  When NMI is disabled, IRQ is asserted instead
-    //   (level-sensitive, held until NMI is re-enabled).
-    // Tempest: Uses IRQ (level-sensitive), not NMI.  The periodic timer
-    //   asserts IRQ every period; the handler clears it by writing $5000
-    //   (wdclr_w — watchdog clear + IRQ acknowledge).  IRQ is masked by
-    //   SEI during boot, preventing $53 overflow before CLI.
+    // All Atari vector games derive their periodic interrupt from the same
+    // clock divider chain: MASTER_CLOCK / 4096 / 12 ≈ 246 Hz.
+    //
+    // Interrupt type per game (confirmed via ROM vector analysis + MAME):
+    //   Asteroids / Lunar Lander : Pulsed NMI, unconditional.
+    //   Asteroids Deluxe         : Pulsed NMI, gated by 74LS259 Q4 ($3C04).
+    //   Battlezone / Red Baron   : Pulsed NMI, gated by 74LS259 Q5 ($1005).
+    //   Tempest                  : Level IRQ, cleared by $5000 write.
+    //   Gravitar / Black Widow   : Level IRQ, cleared by $88C0 write.
+    //   Space Duel               : Level IRQ, cleared by $0E00 write.
+    //   Major Havoc              : Deferred (dual CPU architecture).
+    //
+    // Evidence: DVG/BZ/RB/AD ROMs have NMI vector → real handler, IRQ vector
+    // → reset address.  AVG games (Tempest+) have IRQ vectors → real handlers.
+    //
     if (nmi_counter_ > 0) {
         --nmi_counter_;
-        if constexpr (V != AtariVectorVariant::TEMPEST) {
+        // De-assert NMI between pulses (edge-triggered: needs high→low edge).
+        if constexpr (V == AtariVectorVariant::ASTEROIDS ||
+                      V == AtariVectorVariant::ASTEROIDS_DELUXE ||
+                      V == AtariVectorVariant::LUNAR_LANDER ||
+                      V == AtariVectorVariant::BATTLEZONE ||
+                      V == AtariVectorVariant::RED_BARON) {
             BUS_SET_BIT(pins_, BUS_NMI_BIT);   // NMI inactive (high)
         }
     } else {
         nmi_counter_ = atv::NMI_PERIOD_CYCLES;
-        if constexpr (V == AtariVectorVariant::TEMPEST) {
-            // Tempest: assert IRQ (level-sensitive, cleared by $5000 write)
+
+        if constexpr (V == AtariVectorVariant::ASTEROIDS ||
+                      V == AtariVectorVariant::LUNAR_LANDER) {
+            // Unconditional NMI pulse
+            BUS_CLR_BIT(pins_, BUS_NMI_BIT);
+
+        } else if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE ||
+                             V == AtariVectorVariant::BATTLEZONE ||
+                             V == AtariVectorVariant::RED_BARON) {
+            // Gated NMI: only fires when enabled via 74LS259 latch output.
+            // AD: Q4 ($3C04), BZ/RB: Q5 ($1005).
+            if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
+                if (latch_259_.q(4))
+                    BUS_CLR_BIT(pins_, BUS_NMI_BIT);
+            } else {
+                if (latch_259_.q(5))
+                    BUS_CLR_BIT(pins_, BUS_NMI_BIT);
+            }
+
+        } else if constexpr (V == AtariVectorVariant::TEMPEST ||
+                             V == AtariVectorVariant::GRAVITAR ||
+                             V == AtariVectorVariant::BLACK_WIDOW ||
+                             V == AtariVectorVariant::SPACE_DUEL) {
+            // Level-sensitive IRQ: held until game writes to IRQ ack register.
             irq_asserted_ = true;
-        } else if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
-            if (nmi_enabled_)
-                BUS_CLR_BIT(pins_, BUS_NMI_BIT);   // NMI pulse (gated)
-        } else {
-            BUS_CLR_BIT(pins_, BUS_NMI_BIT);       // NMI pulse (unconditional)
         }
     }
 
-    // Tempest: IRQ line follows irq_asserted_ state (level-sensitive).
-    if constexpr (V == AtariVectorVariant::TEMPEST) {
+    // ── IRQ line management (Tempest, Gravitar, BW, SD) ─────────────────
+    if constexpr (V == AtariVectorVariant::TEMPEST ||
+                  V == AtariVectorVariant::GRAVITAR ||
+                  V == AtariVectorVariant::BLACK_WIDOW ||
+                  V == AtariVectorVariant::SPACE_DUEL) {
         if (irq_asserted_)
             BUS_CLR_BIT(pins_, BUS_IRQ_BIT);   // IRQ active (held until ack)
         else
             BUS_SET_BIT(pins_, BUS_IRQ_BIT);   // IRQ inactive
-    }
-
-    // AD: IRQ line mirrors "NMI disabled" state (level-sensitive).
-    if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
-        if (nmi_enabled_)
-            BUS_SET_BIT(pins_, BUS_IRQ_BIT);   // IRQ inactive
-        else
-            BUS_CLR_BIT(pins_, BUS_IRQ_BIT);   // IRQ active (HOLD_LINE)
     }
 
     total_cycles_++;
@@ -1187,13 +1216,20 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
             }
         }
 
-        if (addr >= atv::BZ_COIN_CTR_ADDR && addr < atv::BZ_COIN_CTR_ADDR + 0x0200) {
-            // Coin counters / output latch
+        if (addr >= atv::BZ_COIN_CTR_ADDR && addr < atv::BZ_COIN_CTR_ADDR + 0x08) {
+            // 74LS259 addressable latch (MAME: ls259_device::write_a0)
+            // A0-A2 select output Q0-Q7, D0 is the value.
+            //   Q0 = coin counter 1, Q1 = coin counter 2, Q2 = start LED
+            //   Q5 = NMI enable (game writes $1005 D0=1 to enable periodic NMI)
+            latch_259_.write(addr, data);
+            printf("BZ latch: Q%d = %d (addr=$%04X data=$%02X)\n", addr & 0x07, data & 1, addr, data);
         } else if (addr >= atv::BZ_SND_ADDR && addr < atv::BZ_SND_ADDR + 0x0200) {
             snd_latch_ = data;
         } else if (addr >= atv::BZ_VGGO_ADDR && addr < atv::BZ_VGGO_ADDR + 0x0200) {
+            printf("BZ VGGO triggered at cycle %u\n", total_cycles_);
             vg().trigger_go();
         } else if (addr >= atv::BZ_VGRST_ADDR && addr < atv::BZ_VGRST_ADDR + 0x0200) {
+            printf("BZ VGRST at cycle %u\n", total_cycles_);
             vg().trigger_reset();
         } else if (addr >= atv::BZ_WDCLR_ADDR && addr < atv::BZ_WDCLR_ADDR + 0x0200) {
             // Watchdog clear — no-op
@@ -1245,11 +1281,8 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
                 break;
 
             case atv::COIN_CTR_ADDR: {
-                uint8_t latch_bit = addr & 0x07;
-                if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
-                    if (latch_bit == 4)
-                        nmi_enabled_ = (data & 1) != 0;
-                }
+                // 74LS259 addressable latch: A0-A2 select output, D0 is value.
+                latch_259_.write(addr, data);
                 break;
             }
 
@@ -1299,6 +1332,7 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
             }
             if (addr == atv::GRAV_VGGO_ADDR)  { vg().trigger_go(); return pins; }
             if (addr == atv::GRAV_VGRST_ADDR) { vg().trigger_reset(); return pins; }
+            if (addr == atv::GRAV_IRQACK_ADDR) { irq_asserted_ = false; return pins; }
             if (addr == atv::GRAV_WDCLR_ADDR) { return pins; }
 
         } else if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
@@ -1314,6 +1348,7 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
             }
             if (addr == atv::SD_VGGO_ADDR)  { vg().trigger_go(); return pins; }
             if (addr == atv::SD_VGRST_ADDR) { vg().trigger_reset(); return pins; }
+            if (addr == atv::SD_IRQACK_ADDR) { irq_asserted_ = false; return pins; }
             if (addr == atv::SD_WDCLR_ADDR) { return pins; }
 
         } else if constexpr (V == AtariVectorVariant::MAJOR_HAVOC) {
