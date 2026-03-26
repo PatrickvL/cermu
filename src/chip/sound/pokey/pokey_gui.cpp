@@ -103,7 +103,7 @@ ChipLayout* pokey::pokey_t<Traits>::create_chip_layout() const {
         PIN_LR(layout,  5, D6,         A0,           36);
         PIN_LR(layout,  6, D7,         PHI2,         35);
         PIN_LR(layout,  7, POT7,       RW,           34);
-        PIN_LR(layout,  8, POT6,       _CS,          33);  // /CS1
+        PIN_LR(layout,  8, POT6,       _CS1,         33);
         PIN_LR(layout,  9, POT5,       CS0,          32);
         PIN_LR(layout, 10, POT4,       K5,           31);
         PIN_LR(layout, 11, POT3,       K4,           30);
@@ -114,7 +114,7 @@ ChipLayout* pokey::pokey_t<Traits>::create_chip_layout() const {
         PIN_LR(layout, 16, KR1,        SIO_CLK_IN,   25);
         PIN_LR(layout, 17, VCC,        _IRQ,         24);
         PIN_LR(layout, 18, K0,         K1,           23);
-        PIN_LR(layout, 19, AUDIO_OUT,  K2,           22);
+        PIN_LR(layout, 19, AUD,        K2,           22);
         PIN_LR(layout, 20, D0,         D2,           21);
 
         return layout;
