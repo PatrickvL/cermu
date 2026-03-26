@@ -38,6 +38,7 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::_GAME: return "GAME";
         case PinLabel::_HALT: return "HALT";
         case PinLabel::_HIRAM: return "HIRAM";
+        case PinLabel::_IC: return "IC";
         case PinLabel::_INT: return "INT";
         case PinLabel::_IO: return "I/O";
         case PinLabel::_IORQ: return "IORQ";
@@ -268,19 +269,26 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::RA4: return "RA4";
         
         // Audio chip pins
+        case PinLabel::AUD: return "AUD";
         case PinLabel::AUD0: return "AUD0";
         case PinLabel::AUD1: return "AUD1";
         case PinLabel::AUDIO_OUT: return "AUDIO OUT";
         case PinLabel::AUDIO_IN: return "AUDIO IN";
         case PinLabel::FILTER_OUT: return "FILT OUT";
         case PinLabel::FILTER_IN: return "FILT IN";
+        case PinLabel::MO: return "MO";
         case PinLabel::OSC1: return "OSC1";
         case PinLabel::OSC2: return "OSC2";
         case PinLabel::OSC3: return "OSC3";
         case PinLabel::NOISE: return "NOISE";
+        case PinLabel::RO: return "RO";
+        case PinLabel::SH1: return "SH1";
+        case PinLabel::SH2: return "SH2";
+        case PinLabel::CH3_OUT: return "CH3";
         case PinLabel::CHANNEL_A: return "CH A";
         case PinLabel::CHANNEL_B: return "CH B";
         case PinLabel::CHANNEL_C: return "CH C";
+        case PinLabel::SSG_OUT: return "SSG";
         case PinLabel::EAR: return "EAR";
         case PinLabel::MIC: return "MIC";
         case PinLabel::SPEAKER: return "SPKR";
@@ -482,6 +490,8 @@ const char* pin_label_to_string(PinLabel label) {
         // Clock pins
         case PinLabel::CLK: return "CLK";
         case PinLabel::CPUCLK: return "CPUCLK";
+        case PinLabel::PHI_M: return "PHI_M";
+        case PinLabel::PHI_S: return "PHI_S";
         case PinLabel::E_CLK: return "E";
         case PinLabel::M2: return "M2";
         case PinLabel::SYSCLK: return "SYSCLK";
@@ -500,6 +510,8 @@ std::string pin_label_to_display_string(PinLabel label) {
         case PinLabel::PHI0: return "Φ0";
         case PinLabel::PHI1: return "Φ1";
         case PinLabel::PHI2: return "Φ2";
+        case PinLabel::PHI_M: return "ΦM";
+        case PinLabel::PHI_S: return "ΦS";
         
         // Control signals with proper notation
         case PinLabel::RW: return "R/W";
@@ -515,6 +527,7 @@ PinType pin_label_to_pin_type(PinLabel label) {
     switch (label) {
         // Active-low interrupt pins
         case PinLabel::_ABORT:
+        case PinLabel::_IC:
         case PinLabel::_IPL0:
         case PinLabel::_IPL1:
         case PinLabel::_IPL2:
@@ -589,6 +602,8 @@ PinType pin_label_to_pin_type(PinLabel label) {
         case PinLabel::SYSCLK:
         case PinLabel::DOT_CLK:
         case PinLabel::COLOR_CLK:
+        case PinLabel::PHI_M:
+        case PinLabel::PHI_S:
         case PinLabel::XTAL1:
         case PinLabel::XTAL2:
         case PinLabel::OSC_IN:
@@ -721,11 +736,17 @@ PinType pin_label_to_pin_type(PinLabel label) {
             return PinType::VIDEO;
             
         // Audio output pins
+        case PinLabel::AUD:
         case PinLabel::AUD0: case PinLabel::AUD1:
         case PinLabel::AUDIO_OUT:
         case PinLabel::AUDIO_IN:
+        case PinLabel::CH3_OUT:
+        case PinLabel::MO:
+        case PinLabel::RO:
+        case PinLabel::SH1: case PinLabel::SH2:
         case PinLabel::SND1: case PinLabel::SND2:
         case PinLabel::SOUND:
+        case PinLabel::SSG_OUT:
         case PinLabel::OSC1: case PinLabel::OSC2: case PinLabel::OSC3:
         case PinLabel::NOISE:
             return PinType::AUDIO;
