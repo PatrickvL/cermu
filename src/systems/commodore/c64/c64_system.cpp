@@ -535,7 +535,15 @@ bool C64System::initialize() {
 
     // Register chips for the Hardware menu and debug windows
     register_bus_chips(board_);
-    register_chip(std::make_unique<PlaChip>(this));
+    {
+        auto pla = std::make_unique<PLA906114>();
+        pla->set_display_name("PLA / Address Decoder");
+        pla->set_short_name("PLA");
+#ifdef CERMU_HAS_GUI
+        pla->set_system_context(this, c64_pla_render_debug, c64_pla_render_settings);
+#endif
+        register_chip(std::move(pla));
+    }
 
     // Wire VIC-II to composite video output port
     video_port_ = std::make_unique<CompositeVideoPort>();
@@ -1762,22 +1770,21 @@ bool C64System::patch_skip_memtest() {
 
 // Convert PLA output signals to a manifest chip ID.
 // Returns c64_chip_ids values (0-5 for buffer chips, kIo, kUnmapped).
-static C64PlaChipId pla_906114_01_outputs_to_chip(pla_906114_01_t* pla) {
+static C64PlaChipId pla_outputs_to_chip(const PLA906114& pla) {
     using namespace c64_chip_ids;
-    if (!pla->outputs.n_casram)  return kRam;
-    if (!pla->outputs.n_basic)   return kBasic;
-    if (!pla->outputs.n_kernal)  return kKernal;
-    if (!pla->outputs.n_io)      return kIo;
-    if (!pla->outputs.n_charrom) return kCharrom;
-    if (!pla->outputs.n_roml)    return kRoml;
-    if (!pla->outputs.n_romh)    return kRomh;
+    if (!pla.outputs().n_casram)  return kRam;
+    if (!pla.outputs().n_basic)   return kBasic;
+    if (!pla.outputs().n_kernal)  return kKernal;
+    if (!pla.outputs().n_io)      return kIo;
+    if (!pla.outputs().n_charrom) return kCharrom;
+    if (!pla.outputs().n_roml)    return kRoml;
+    if (!pla.outputs().n_romh)    return kRomh;
     return kUnmapped;
 }
 
 bool C64System::pla_maps_generate() {
     // Create a temporary PLA instance for generating memory maps
-    pla_906114_01_t* pla = pla_906114_01_create();
-    if (!pla) return false;
+    PLA906114 pla;
 
     // The IndexedSubTable sentinel for the I/O page — used in PLA modes
     // where the $D000 page routes to the I/O sub-table.
@@ -1804,10 +1811,10 @@ bool C64System::pla_maps_generate() {
 
     // Generate all 32 modes for both viewers
     for (int mode = 0; mode < 32; mode++) {
-        pla_906114_01_set_banking_mode(pla, (uint8_t)mode);
+        pla.set_banking_mode((uint8_t)mode);
 
         // ── CPU viewer (viewer 0) ────────────────────────────────────────
-        pla->inputs.n_cas = false;
+        pla.inputs().n_cas = false;
         bus_.reset_viewer(C64BusSpec::Cpu);
 
         for (uint32_t bank = 0; bank < 16; bank++) {
@@ -1818,13 +1825,13 @@ bool C64System::pla_maps_generate() {
 
             // Read: R/W high
             BUS_SET_BIT(pla_bus, BUS_RW_BIT);
-            pla_906114_01_tick(pla, pla_bus);
-            C64PlaChipId read_chip = pla_906114_01_outputs_to_chip(pla);
+            pla.tick(pla_bus);
+            C64PlaChipId read_chip = pla_outputs_to_chip(pla);
 
             // Write: R/W low
             BUS_CLR_BIT(pla_bus, BUS_RW_BIT);
-            pla_906114_01_tick(pla, pla_bus);
-            C64PlaChipId write_chip = pla_906114_01_outputs_to_chip(pla);
+            pla.tick(pla_bus);
+            C64PlaChipId write_chip = pla_outputs_to_chip(pla);
 
             // Store raw PLA outputs for debug GUI
             pla_cpu_read_chip_[mode][bank]  = read_chip;
@@ -1837,19 +1844,19 @@ bool C64System::pla_maps_generate() {
         bus_.save_snapshot(C64BusSpec::Cpu, cpu_snapshots_[mode]);
 
         // ── VIC-II viewer (viewer 1) ─────────────────────────────────────
-        pla->inputs.n_cas = false;
+        pla.inputs().n_cas = false;
         bus_.reset_viewer(C64BusSpec::Vic);
 
         for (uint32_t bank = 0; bank < 16; bank++) {
-            pla->inputs.va12   = (bank & 0x01) != 0;
-            pla->inputs.va13   = (bank & 0x02) != 0;
-            pla->inputs.n_va14 = (bank & 0x04) == 0;
+            pla.inputs().va12   = (bank & 0x01) != 0;
+            pla.inputs().va13   = (bank & 0x02) != 0;
+            pla.inputs().n_va14 = (bank & 0x04) == 0;
 
             bus_state_t pla_bus = 0;
             BUS_SET_ADDR(pla_bus, bank << 12);
             BUS_SET_BIT(pla_bus, BUS_RW_BIT);
-            pla_906114_01_tick(pla, pla_bus);
-            C64PlaChipId read_chip = pla_906114_01_outputs_to_chip(pla);
+            pla.tick(pla_bus);
+            C64PlaChipId read_chip = pla_outputs_to_chip(pla);
 
             // Store raw PLA output for debug GUI
             pla_vicii_read_chip_[mode][bank] = read_chip;
@@ -1860,8 +1867,6 @@ bool C64System::pla_maps_generate() {
         }
         bus_.save_snapshot(C64BusSpec::Vic, vicii_snapshots_[mode]);
     }
-
-    pla_906114_01_destroy(pla);
 
     // Set initial mode ($1F = standard, no cartridge)
     uint8_t initial_mode = generate_pla_mode(0x07);

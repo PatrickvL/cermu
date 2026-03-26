@@ -100,10 +100,10 @@ static const char* get_memory_bank_notes(int bank) {
 // ============================================================================
 
 // Helper function to get PLA pin states for visualization.
-// Uses pla_906114_01_tick() to evaluate the PLA, then overlays the
+// Uses PLA906114::tick() to evaluate the PLA, then overlays the
 // PLA-specific input/output pins onto the generic bus-derived pin states.
 static std::vector<PinSignalState> get_pla_pin_states(
-    const ChipLayout& layout, const pla_906114_01_t& pla, bus_state_t bus_state) {
+    const ChipLayout& layout, const PLA906114& pla, bus_state_t bus_state) {
 
     // Generic bus-derived pin states (address, data, power, clock, control)
     auto pin_states = populate_pin_states_from_bus(layout, bus_state);
@@ -117,28 +117,28 @@ static std::vector<PinSignalState> get_pla_pin_states(
         switch (pin.label) {
             // Banking inputs — positive logic in PLA struct
             // (n_xxx = true = feature enabled, despite the n_ prefix)
-            case PinLabel::_CHAREN:     s.signal_level = pla.inputs.n_charen; s.high_impedance = false; break;
-            case PinLabel::_HIRAM:      s.signal_level = pla.inputs.n_hiram;  s.high_impedance = false; break;
-            case PinLabel::_LORAM:      s.signal_level = pla.inputs.n_loram;  s.high_impedance = false; break;
-            case PinLabel::_GAME:       s.signal_level = pla.inputs.n_game;   s.high_impedance = false; break;
-            case PinLabel::_EXROM:      s.signal_level = pla.inputs.n_exrom;  s.high_impedance = false; break;
+            case PinLabel::_CHAREN:     s.signal_level = pla.inputs().n_charen; s.high_impedance = false; break;
+            case PinLabel::_HIRAM:      s.signal_level = pla.inputs().n_hiram;  s.high_impedance = false; break;
+            case PinLabel::_LORAM:      s.signal_level = pla.inputs().n_loram;  s.high_impedance = false; break;
+            case PinLabel::_GAME:       s.signal_level = pla.inputs().n_game;   s.high_impedance = false; break;
+            case PinLabel::_EXROM:      s.signal_level = pla.inputs().n_exrom;  s.high_impedance = false; break;
 
             // Other inputs — standard active-low convention
-            case PinLabel::_VA14:       s.signal_level = !pla.inputs.n_va14;  s.high_impedance = false; break;
-            case PinLabel::_CAS:        s.signal_level = !pla.inputs.n_cas;   s.high_impedance = false; break;
-            case PinLabel::VA12:        s.signal_level = pla.inputs.va12;     s.high_impedance = false; break;
-            case PinLabel::VA13:        s.signal_level = pla.inputs.va13;     s.high_impedance = false; break;
+            case PinLabel::_VA14:       s.signal_level = !pla.inputs().n_va14;  s.high_impedance = false; break;
+            case PinLabel::_CAS:        s.signal_level = !pla.inputs().n_cas;   s.high_impedance = false; break;
+            case PinLabel::VA12:        s.signal_level = pla.inputs().va12;     s.high_impedance = false; break;
+            case PinLabel::VA13:        s.signal_level = pla.inputs().va13;     s.high_impedance = false; break;
             case PinLabel::_CS:         s.signal_level = true;                s.high_impedance = false; break;
 
             // Output pins — active-low: !n_xxx = true when output is asserted
-            case PinLabel::_ROMH:       s.signal_level = !pla.outputs.n_romh;     s.drive_direction = true; s.high_impedance = false; break;
-            case PinLabel::_ROML:       s.signal_level = !pla.outputs.n_roml;     s.drive_direction = true; s.high_impedance = false; break;
-            case PinLabel::_IO:         s.signal_level = !pla.outputs.n_io;       s.drive_direction = true; s.high_impedance = false; break;
-            case PinLabel::GRW:         s.signal_level = !pla.outputs.n_grw;      s.drive_direction = true; s.high_impedance = false; break;
-            case PinLabel::_CHAROM:     s.signal_level = !pla.outputs.n_charrom;  s.drive_direction = true; s.high_impedance = false; break;
-            case PinLabel::_KERNAL:     s.signal_level = !pla.outputs.n_kernal;   s.drive_direction = true; s.high_impedance = false; break;
-            case PinLabel::_BASIC:      s.signal_level = !pla.outputs.n_basic;    s.drive_direction = true; s.high_impedance = false; break;
-            case PinLabel::_CASRAM_PLA: s.signal_level = !pla.outputs.n_casram;   s.drive_direction = true; s.high_impedance = false; break;
+            case PinLabel::_ROMH:       s.signal_level = !pla.outputs().n_romh;     s.drive_direction = true; s.high_impedance = false; break;
+            case PinLabel::_ROML:       s.signal_level = !pla.outputs().n_roml;     s.drive_direction = true; s.high_impedance = false; break;
+            case PinLabel::_IO:         s.signal_level = !pla.outputs().n_io;       s.drive_direction = true; s.high_impedance = false; break;
+            case PinLabel::GRW:         s.signal_level = !pla.outputs().n_grw;      s.drive_direction = true; s.high_impedance = false; break;
+            case PinLabel::_CHAROM:     s.signal_level = !pla.outputs().n_charrom;  s.drive_direction = true; s.high_impedance = false; break;
+            case PinLabel::_KERNAL:     s.signal_level = !pla.outputs().n_kernal;   s.drive_direction = true; s.high_impedance = false; break;
+            case PinLabel::_BASIC:      s.signal_level = !pla.outputs().n_basic;    s.drive_direction = true; s.high_impedance = false; break;
+            case PinLabel::_CASRAM_PLA: s.signal_level = !pla.outputs().n_casram;   s.drive_direction = true; s.high_impedance = false; break;
 
             default: return; // Not a PLA-specific pin — keep generic state
         }
@@ -154,26 +154,26 @@ static std::vector<PinSignalState> get_pla_pin_states(
 // Tick a PLA instance with the current bus state and banking mode.
 // Sets VIC-II lines to idle defaults (VA12/VA13=0, VA14=high, CAS=high)
 // since those signals are not captured in bus_state.
-static void tick_pla_for_rendering(pla_906114_01_t& pla, bus_state_t bus_state, uint8_t banking_mode) {
-    pla = {};
-    pla.inputs.n_va14 = true;   // VA14 not asserted (idle)
-    pla.inputs.va13   = false;
-    pla.inputs.va12   = false;
-    pla.inputs.n_cas  = true;   // CAS not asserted (idle)
-    pla_906114_01_set_banking_mode(&pla, banking_mode);
-    pla_906114_01_tick(&pla, bus_state);
+static void tick_pla_for_rendering(PLA906114& pla, bus_state_t bus_state, uint8_t banking_mode) {
+    pla.reset();
+    pla.inputs().n_va14 = true;   // VA14 not asserted (idle)
+    pla.inputs().va13   = false;
+    pla.inputs().va12   = false;
+    pla.inputs().n_cas  = true;   // CAS not asserted (idle)
+    pla.set_banking_mode(banking_mode);
+    pla.tick(bus_state);
 }
 
 
 #endif // CERMU_HAS_GUI (helper functions)
 
 #ifdef CERMU_HAS_GUI
-void PlaChip::render_debug_content() {
-    C64System* c64 = c64_;
+void c64_pla_render_debug(void* ctx, PLA906114& pla) {
+    C64System* c64 = static_cast<C64System*>(ctx);
     if (!c64) return;
 
     // PLA is combinational logic — no tick function — snapshot bus state at render time
-    bus_snapshot_ = c64->get_bus_state();
+    pla.bus_snapshot_ = c64->get_bus_state();
     // Create two-column layout: chip visualization on left, debugging info on right
     ImVec2 window_size = ImGui::GetWindowSize();
     
@@ -191,14 +191,14 @@ void PlaChip::render_debug_content() {
         
         // Get global renderer and chip layout
         ChipVisualization& renderer = GetGlobalChipRenderer();
-        ChipLayout& layout = *get_chip_layout();
+        ChipLayout& layout = *pla.get_chip_layout();
         
         // Tick PLA with current bus state and banking mode
-        pla_906114_01_t pla;
-        tick_pla_for_rendering(pla, bus_snapshot_, c64->get_pla_banking_mode());
+        PLA906114 pla_tmp;
+        tick_pla_for_rendering(pla_tmp, pla.bus_snapshot_, c64->get_pla_banking_mode());
         
         // Get pin states using generic bus population + PLA overlay
-        std::vector<PinSignalState> pin_states = get_pla_pin_states(layout, pla, bus_snapshot_);
+        std::vector<PinSignalState> pin_states = get_pla_pin_states(layout, pla_tmp, pla.bus_snapshot_);
         
         // Render the chip using global renderer
         renderer.render(layout, chip_center, pin_states, "PLA");
@@ -524,8 +524,8 @@ void PlaChip::render_debug_content() {
 // ============================================================================
 
 #ifdef CERMU_HAS_GUI
-void PlaChip::render_settings_content() {
-    C64System* c64 = c64_;
+void c64_pla_render_settings(void* ctx, PLA906114& pla) {
+    C64System* c64 = static_cast<C64System*>(ctx);
     if (!c64) return;
 
 
@@ -556,109 +556,3 @@ void PlaChip::render_settings_content() {
     ImGui::Text("GAME: %s", (current_mode & 0x10) ? "High" : "Low");
 }
 #endif // CERMU_HAS_GUI
-
-// ============================================================================
-// PLA layout virtuals
-// ============================================================================
-
-#ifdef CERMU_HAS_GUI
-
-ChipLayout* PlaChip::create_chip_layout() const {
-    static ChipLayout layout = [] {
-        // Start with DIP-28 base layout
-        ChipLayout layout = create_dip28_layout();
-
-        // Clear default pins and add hardware-accurate C64 PLA pins
-        layout.left_pins.clear();
-        layout.right_pins.clear();
-
-        // Update package info for C64 PLA
-        layout.markings = {
-            "906114-01",                 // part_number
-            "Commodore",                 // manufacturer
-            {},                     // package_variant
-            {},                     // date_code
-            {},                     // lot_number
-            {},                     // custom_text
-            true,                        // show_part_number
-            true,                        // show_manufacturer
-            false,                       // show_package_variant
-            false                        // show_date_code
-        };
-
-        // Hardware-accurate C64 PLA pinout (28-pin DIP)
-        // I0-I15 = inputs, F0-F7 = outputs, active-low signals marked
-        PIN_LR(layout,  1, NC,        VCC, 28);       // prog / +5V
-        PIN_LR(layout,  2, A13,       A12, 27);       // I7 / I8
-        PIN_LR(layout,  3, A14,       BA, 26);        // I6 / I9
-        PIN_LR(layout,  4, A15,       _AEC, 25);      // I5 / I10
-        PIN_LR(layout,  5, _VA14,     RW, 24);        // I4 / I11 (R/W)
-        PIN_LR(layout,  6, _CHAREN,   _EXROM, 23);    // I3 / I12
-        PIN_LR(layout,  7, _HIRAM,    _GAME, 22);     // I2 / I13
-        PIN_LR(layout,  8, _LORAM,    VA13, 21);      // I1 / I14
-        PIN_LR(layout,  9, _CAS,      VA12, 20);      // I0 / I15
-        PIN_LR(layout, 10, _ROMH,     _CS, 19);       // F7 / chip enable
-        PIN_LR(layout, 11, _ROML,     _CASRAM_PLA, 18); // F6 / F0
-        PIN_LR(layout, 12, _IO,       _BASIC, 17);    // F5 / F1
-        PIN_LR(layout, 13, GRW,       _KERNAL, 16);   // F4 (GR/W) / F2
-        PIN_LR(layout, 14, VSS,       _CHAROM, 15);   // gnd / F3
-
-        return layout;
-    }();
-    return &layout;
-}
-
-std::vector<PinSignalState> PlaChip::get_layout_pin_states(ChipLayout& layout) {
-    if (!c64_) return {};
-
-    // PLA is combinational logic — no tick function — snapshot bus state at render time
-    bus_snapshot_ = c64_->get_bus_state();
-
-    // Tick PLA with current bus state and banking mode
-    pla_906114_01_t pla;
-    tick_pla_for_rendering(pla, bus_snapshot_, c64_->get_pla_banking_mode());
-
-    // Get pin states using generic bus population + PLA overlay
-    return get_pla_pin_states(layout, pla, bus_snapshot_);
-}
-
-#endif // CERMU_HAS_GUI
-
-// ============================================================================
-// ChipDebugRegistry — basic PLA state
-// ============================================================================
-// Note: The full interactive banking tables remain in render_debug_content()
-// because they require ImGui controls (checkboxes, tabs, tables) that the
-// registry cannot represent.
-
-#ifdef CERMU_HAS_CHIP_DEBUG
-void PlaChip::register_debug_fields() {
-    using P = const PlaChip;
-    debug_registry_
-        .category("PLA State")
-        .value("Banking Mode", +[](const ChipBase* c) -> uint32_t {
-            auto* self = static_cast<P*>(c);
-            return self->c64_ ? self->c64_->get_pla_banking_mode() : 0;
-        })
-        .flag("#LORAM", +[](const ChipBase* c) -> uint32_t {
-            auto* self = static_cast<P*>(c);
-            return self->c64_ && (self->c64_->get_pla_banking_mode() & 0x01) == 0;
-        })
-        .flag("#HIRAM", +[](const ChipBase* c) -> uint32_t {
-            auto* self = static_cast<P*>(c);
-            return self->c64_ && (self->c64_->get_pla_banking_mode() & 0x02) == 0;
-        })
-        .flag("#CHAREN", +[](const ChipBase* c) -> uint32_t {
-            auto* self = static_cast<P*>(c);
-            return self->c64_ && (self->c64_->get_pla_banking_mode() & 0x04) == 0;
-        })
-        .flag("#EXROM", +[](const ChipBase* c) -> uint32_t {
-            auto* self = static_cast<P*>(c);
-            return self->c64_ && (self->c64_->get_pla_banking_mode() & 0x08) == 0;
-        })
-        .flag("#GAME", +[](const ChipBase* c) -> uint32_t {
-            auto* self = static_cast<P*>(c);
-            return self->c64_ && (self->c64_->get_pla_banking_mode() & 0x10) == 0;
-        });
-}
-#endif // CERMU_HAS_CHIP_DEBUG

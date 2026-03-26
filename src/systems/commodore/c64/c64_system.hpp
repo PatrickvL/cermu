@@ -116,7 +116,7 @@ public:
     ROMChip* kernal = nullptr;       // Kernal ROM $E000-$FFFF (8KB)
 
     // =========================================================================
-    // PLA debug accessors (for PlaChip GUI)
+    // PLA debug accessors (for PLA906114 system-specific GUI)
     // =========================================================================
     uint8_t get_pla_banking_mode() const { return pla_banking_mode_; }
     bus_state_t get_bus_state() const { return bus_state_; }

@@ -640,6 +640,7 @@ if(BUILD_GUI)
         src/chip/video/nes_ppu/nes_ppu_gui.cpp
         src/chip/input/cd4021_gui.cpp
         src/chip/logic/ls259_gui.cpp
+        src/chip/logic/pla_gui.cpp
         src/chip/video/tia/tia_gui.cpp
         src/chip/video/mc6845/mc6845_gui.cpp
         src/chip/io/pia6532_gui.cpp
@@ -688,6 +689,7 @@ set(GUI_STUB_SOURCES
     src/chip/sound/nes_apu_gui.cpp
     src/chip/input/cd4021_gui.cpp
     src/chip/logic/ls259_gui.cpp
+    src/chip/logic/pla_gui.cpp
     src/chip/video/tia/tia_gui.cpp
     src/chip/video/mc6845/mc6845_gui.cpp
     src/chip/io/pia6532_gui.cpp

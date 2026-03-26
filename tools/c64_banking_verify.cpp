@@ -3,15 +3,28 @@
  *
  * Generates all 32 CPU banking modes for comparison against the
  * PLA dissection document (c64_pla_dissected_a4ss.pdf, Appendix A)
+ *
+ * Standalone tool — evaluates PLA906114 directly, no system/bus needed.
  */
 
 #include <iostream>
 #include <iomanip>
 #include <cstring>
 #include <cstdio>
-#include "c64_bus.h"
-#include "c64_chips.h"
-#include "../../chip/logic/pla.h"
+#include "chip/logic/pla.hpp"
+#include "core/system_lines.hpp"
+
+// Chip type IDs matching c64_manifest.hpp sentinels
+enum ChipId : uint8_t {
+    CHIP_RAM     = 0,
+    CHIP_ROML    = 1,
+    CHIP_ROMH    = 2,
+    CHIP_BASIC   = 3,
+    CHIP_KERNAL  = 4,
+    CHIP_CHARROM = 5,
+    CHIP_IO      = 0xFE,
+    CHIP_UNMAPPED = 0xFF,
+};
 
 // Chip type names for readability
 static const char* chip_name(uint8_t chip) {
@@ -26,6 +39,19 @@ static const char* chip_name(uint8_t chip) {
         case CHIP_UNMAPPED: return "---";
         default: return "???";
     }
+}
+
+// Convert PLA output signals to a chip ID
+static uint8_t pla_outputs_to_chip(const PLA906114& pla) {
+    const auto& out = pla.outputs();
+    if (!out.n_casram)  return CHIP_RAM;
+    if (!out.n_basic)   return CHIP_BASIC;
+    if (!out.n_kernal)  return CHIP_KERNAL;
+    if (!out.n_io)      return CHIP_IO;
+    if (!out.n_charrom) return CHIP_CHARROM;
+    if (!out.n_roml)    return CHIP_ROML;
+    if (!out.n_romh)    return CHIP_ROMH;
+    return CHIP_UNMAPPED;
 }
 
 // Convert mode to control line states
@@ -72,6 +98,23 @@ static void print_mode_header(uint8_t mode) {
     printf("  ───────   ────────  ─────────  ─────\n");
 }
 
+// Evaluate PLA for a given mode, bank, and R/W direction
+static uint8_t eval_pla(PLA906114& pla, uint8_t mode, uint16_t bank, bool is_read) {
+    pla.reset();
+    pla.set_banking_mode(mode);
+    pla.inputs().n_cas = false;  // CAS asserted during normal access
+
+    bus_state_t bus = 0;
+    BUS_SET_ADDR(bus, bank << 12);
+    BUS_SET_BIT(bus, BUS_AEC_BIT);   // CPU has bus
+    BUS_SET_BIT(bus, BUS_BA_BIT);    // Bus available
+    if (is_read)
+        BUS_SET_BIT(bus, BUS_RW_BIT);
+
+    pla.tick(bus);
+    return pla_outputs_to_chip(pla);
+}
+
 // Verify all 32 banking modes
 void verify_c64_banking_modes() {
     printf("\n");
@@ -79,58 +122,43 @@ void verify_c64_banking_modes() {
     printf("║         C64 CPU Banking Mode Verification                         ║\n");
     printf("║  Compare against: c64_pla_dissected_a4ss.pdf, Appendix A         ║\n");
     printf("╚═══════════════════════════════════════════════════════════════════╝\n");
-    
-    // Create bus and PLA for testing
-    c64_bus_t* bus = new c64_bus_t();
-    
-    pla_906114_01_t* pla = pla_906114_01_create();
-    if (!pla) {
-        printf("ERROR: Failed to create PLA\n");
-        delete bus;
-        return;
-    }
-    
-    // Generate all PLA modes
-    bus->generate_all_pla_modes(pla);
-    
+
+    PLA906114 pla;
+
     // Test all 32 modes
     for (uint8_t mode = 0; mode < 32; mode++) {
         bool loram, hiram, charen, game, exrom;
         decode_mode(mode, loram, hiram, charen, game, exrom);
-        
+
         print_mode_header(mode);
-        
+
         // Test all 16 banks ($0000-$FFFF in $1000 increments)
         for (uint16_t bank = 0; bank < 16; bank++) {
             uint16_t addr = bank << 12;
-            
-            // Get read and write chips from pre-generated mode table
-            uint8_t encoded = bus->cpu_encoded_chip_per_bank_per_mode[mode][bank];
-            uint8_t read_chip = decode_read_chip(encoded);
-            uint8_t write_chip = decode_write_chip(encoded);
-            
+
+            uint8_t read_chip  = eval_pla(pla, mode, bank, true);
+            uint8_t write_chip = eval_pla(pla, mode, bank, false);
+
             // Check if CHAREN affects this bank
             bool charen_affects = false;
             if (bank == 13) { // $D000-$DFFF
-                // Test with CHAREN toggled
                 uint8_t alt_mode = mode ^ 0x04; // Toggle CHAREN bit
-                uint8_t alt_encoded = bus->cpu_encoded_chip_per_bank_per_mode[alt_mode][bank];
-                uint8_t alt_read = decode_read_chip(alt_encoded);
+                uint8_t alt_read = eval_pla(pla, alt_mode, bank, true);
                 charen_affects = (read_chip != alt_read);
             }
-            
+
             printf("  $%04X    %-8s  %-8s", addr, chip_name(read_chip), chip_name(write_chip));
             if (charen_affects) {
                 printf("  *");
             }
             printf("\n");
         }
-        
+
         // Add summary for special configurations
         bool is_ultimax = (!game && exrom);
         bool has_16k_cart = (!game && !exrom);
         bool has_8k_cart = (game && !exrom);
-        
+
         if (is_ultimax) {
             printf("\n  NOTE: Ultimax mode - only 4K RAM + ROML + I/O + ROMH visible\n");
             printf("        Unmapped areas return floating bus values\n");
@@ -140,7 +168,7 @@ void verify_c64_banking_modes() {
             printf("\n  NOTE: 8K cartridge mode\n");
         }
     }
-    
+
     printf("\n");
     printf("═══════════════════════════════════════════════════════════════════\n");
     printf("  Legend:\n");
@@ -155,10 +183,6 @@ void verify_c64_banking_modes() {
     printf("    ---     = Unmapped (floating bus, Ultimax only)\n");
     printf("═══════════════════════════════════════════════════════════════════\n");
     printf("\n");
-    
-    // Cleanup
-    pla_906114_01_destroy(pla);
-    delete bus;
 }
 
 // Parse LHGX pattern string and generate matching mode numbers
@@ -203,19 +227,8 @@ void verify_c64_banking_by_table() {
     printf("╔═══════════════════════════════════════════════════════════════════╗\n");
     printf("║         C64 Banking Verification - Grouped by PLA Tables         ║\n");
     printf("╚═══════════════════════════════════════════════════════════════════╝\n");
-    
-    // Create bus and PLA for testing
-    c64_bus_t* bus = new c64_bus_t();
-    
-    pla_906114_01_t* pla = pla_906114_01_create();
-    if (!pla) {
-        printf("ERROR: Failed to create PLA\n");
-        delete bus;
-        return;
-    }
-    
-    // Generate all PLA modes
-    bus->generate_all_pla_modes(pla);
+
+    PLA906114 pla;
     
     // Define table groups matching PLA document Appendix A
     // Using actual LHGX strings from the document
@@ -312,16 +325,14 @@ void verify_c64_banking_by_table() {
             // Print all 16 banks once, showing both CHAREN variants
             for (uint16_t bank = 0; bank < 16; bank++) {
                 uint16_t addr = bank << 12;
-                
+
                 // CHAREN=1 side
-                uint8_t enc1 = bus->cpu_encoded_chip_per_bank_per_mode[mode_charen1][bank];
-                uint8_t r1 = decode_read_chip(enc1);
-                uint8_t w1 = decode_write_chip(enc1);
-                
+                uint8_t r1 = eval_pla(pla, mode_charen1, bank, true);
+                uint8_t w1 = eval_pla(pla, mode_charen1, bank, false);
+
                 // CHAREN=0 side
-                uint8_t enc0 = bus->cpu_encoded_chip_per_bank_per_mode[mode_charen0][bank];
-                uint8_t r0 = decode_read_chip(enc0);
-                uint8_t w0 = decode_write_chip(enc0);
+                uint8_t r0 = eval_pla(pla, mode_charen0, bank, true);
+                uint8_t w0 = eval_pla(pla, mode_charen0, bank, false);
                 
                 printf("  $%04X   %-6s  %-6s     |  %-6s  %-6s\n",
                        addr, chip_name(r1), chip_name(w1), chip_name(r0), chip_name(w0));
@@ -344,9 +355,8 @@ void verify_c64_banking_by_table() {
             
             for (uint16_t bank = 0; bank < 16; bank++) {
                 uint16_t addr = bank << 12;
-                uint8_t enc = bus->cpu_encoded_chip_per_bank_per_mode[mode][bank];
-                uint8_t r = decode_read_chip(enc);
-                uint8_t w = decode_write_chip(enc);
+                uint8_t r = eval_pla(pla, mode, bank, true);
+                uint8_t w = eval_pla(pla, mode, bank, false);
                 printf("  $%04X    %-7s  %-7s\n", addr, chip_name(r), chip_name(w));
             }
             
@@ -360,8 +370,4 @@ void verify_c64_banking_by_table() {
     }
     
     printf("\n");
-    
-    // Cleanup
-    pla_906114_01_destroy(pla);
-    delete bus;
 }
