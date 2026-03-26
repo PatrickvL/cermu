@@ -42,8 +42,8 @@ ChipLayout* ferranti_ula_t::create_chip_layout() const {
         PIN_LR(layout,  8, D1,          A15,         33);
         PIN_LR(layout,  9, D0,          A14,         32);
         PIN_LR(layout, 10, VSS,         A13,         31);
-        PIN_LR(layout, 11, CAS,         A12,         30);
-        PIN_LR(layout, 12, RAS,         A11,         29);
+        PIN_LR(layout, 11, _CAS,        A12,         30);
+        PIN_LR(layout, 12, _RAS,        A11,         29);
         PIN_LR(layout, 13, A0,          A10,         28);
         PIN_LR(layout, 14, A1,          A9,          27);
         PIN_LR(layout, 15, A2,          A8,          26);

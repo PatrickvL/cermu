@@ -34,7 +34,7 @@ ChipLayout* sn76489_t::create_chip_layout() const {
         PIN_LR(layout,  5, _WE,        D2,          12);
         PIN_LR(layout,  6, _CE,        D1,          11);
         PIN_LR(layout,  7, AUDIO_OUT,  D0,          10);
-        PIN_LR(layout,  8, VSS,        NC,           9);
+        PIN_LR(layout,  8, GND,        NC,           9);
 
         return layout;
     }();
