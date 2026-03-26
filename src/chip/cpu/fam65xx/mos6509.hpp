@@ -66,7 +66,7 @@ inline ChipLayout create_mos6509_layout() {
   PIN_LR(layout, 5, NC, A15, 25)
   PIN_LR(layout, 6, _NMI, D7, 26)   // Non-Maskable Interrupt
   PIN_LR(layout, 7, SYNC, D6, 27)   // Instruction fetch indicator
-  PIN_LR(layout, 8, VDD, D5, 28)
+  PIN_LR(layout, 8, VCC, D5, 28)
   PIN_LR(layout, 9, A0, D4, 29)
   PIN_LR(layout, 10, A1, D3, 30)
   PIN_LR(layout, 11, A2, D2, 31)

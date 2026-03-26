@@ -65,7 +65,7 @@ inline ChipLayout create_csg7501_layout() {
   PIN_LR(layout, 2, RDY, A12, 22)    // Ready
   PIN_LR(layout, 3, _IRQ, A13, 23)   // Interrupt Request
   PIN_LR(layout, 4, AEC, A14, 24)    // Address Enable Control (from TED)
-  PIN_LR(layout, 5, VDD, A15, 25)
+  PIN_LR(layout, 5, VCC, A15, 25)
   PIN_LR(layout, 6, A0, P0, 26)      // I/O Port bit 0
   PIN_LR(layout, 7, A1, P1, 27)      // I/O Port bit 1
   PIN_LR(layout, 8, A2, P2, 28)      // I/O Port bit 2
