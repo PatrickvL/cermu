@@ -96,38 +96,6 @@ ChipLayout* pokey::pokey_t<Traits>::create_chip_layout() const {
     static ChipLayout layout = [] {
         ChipLayout layout = create_dip40_layout();
 
-        // POKEY 40-pin DIP pinout (Atari/AMI datasheet CO12294/CO14795)
-        //
-        //           ┌──── C012294 ────┐
-        //   VSS  1  │•               │ 40  A4
-        //   D3   2  │                │ 39  A3
-        //   D4   3  │                │ 38  A2
-        //   D5   4  │                │ 37  A1
-        //   D6   5  │                │ 36  A0
-        //   D7   6  │                │ 35  PHI2
-        //   P7   7  │                │ 34  R/W
-        //   P6   8  │                │ 33  /CS1
-        //   P5   9  │                │ 32  CS0
-        //   P4  10  │                │ 31  K5
-        //   P3  11  │                │ 30  K4
-        //   P2  12  │                │ 29  K3
-        //   P1  13  │                │ 28  SID  (SIO data in)
-        //   P0  14  │                │ 27  SOD  (SIO data out)
-        //   KR2 15  │                │ 26  SIO clock out
-        //   KR1 16  │                │ 25  SIO clock in
-        //  VCC  17  │                │ 24  /IRQ
-        //   K0  18  │                │ 23  K1
-        //  AUD  19  │                │ 22  K2
-        //   D0  20  │                │ 21  D2/D1
-        //           └────────────────┘
-        //
-        // Pin 21 is actually two pins (D1 adjacent to D2) but in this
-        // physical pinout D1 and D2 share pin 21 in some diagrams,
-        // more commonly D1=20 is grouped with D0; real datasheet has
-        // D0=20, D1=21, D2=22 but that conflicts with K2 at 22.
-        // Using the standard Atari C012294 datasheet pinout:
-        //
-        //                  LEFT                          RIGHT
         PIN_LR(layout,  1, VSS,        A4,           40);
         PIN_LR(layout,  2, D3,         A3,           39);
         PIN_LR(layout,  3, D4,         A2,           38);
