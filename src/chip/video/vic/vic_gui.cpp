@@ -28,18 +28,11 @@ using namespace vic::reg;
 // MOS 6560/6561 VIC LAYOUT (40-pin DIP)
 // ============================================================================
 
-inline ChipLayout create_vic_layout(const char* part_number) {
+inline ChipLayout create_vic_layout() {
     ChipLayout layout = create_dip40_layout();
 
     layout.left_pins.clear();
     layout.right_pins.clear();
-
-    layout.markings = {
-        part_number,
-        "MOS Technology",
-        {}, {}, {}, {},
-        true, true, false, false
-    };
 
     // Hardware-accurate MOS 6560/6561 VIC pinout (40-pin DIP)
     PIN_LR(layout,  1, D7,      VDD, 40)       // data hi / +5V
@@ -73,9 +66,8 @@ inline ChipLayout create_vic_layout(const char* part_number) {
 bool vic_base_t::has_settings_content() const { return true; }
 
 ChipLayout* vic_base_t::create_chip_layout() const {
-    static ChipLayout layout_ntsc = create_vic_layout("MOS6560");
-    static ChipLayout layout_pal  = create_vic_layout("MOS6561");
-    return is_pal ? &layout_pal : &layout_ntsc;
+    static ChipLayout layout = create_vic_layout();
+    return &layout;
 }
 
 // ============================================================================

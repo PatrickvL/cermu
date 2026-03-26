@@ -26,11 +26,6 @@ template <const fam65xx::detail::CPUTraits &Traits>
 inline ChipLayout create_cpu_pin_layout() {
   ChipLayout layout = create_dip40_layout();
 
-  layout.markings.part_number    = Traits.get_chip_id();
-  layout.markings.manufacturer   = Traits.get_vendor();
-  layout.markings.show_part_number   = true;
-  layout.markings.show_manufacturer  = true;
-
   return layout;
 }
 

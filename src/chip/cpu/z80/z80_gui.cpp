@@ -60,9 +60,6 @@ ChipLayout* z80_t<Traits>::create_chip_layout() const {
     static ChipLayout layout = [] {
         ChipLayout layout = create_dip40_layout();
 
-        layout.markings.part_number  = Traits.chip_id;
-        layout.markings.manufacturer = Traits.vendor;
-
         // Zilog Z80 40-pin DIP pinout (Z80 CPU User Manual)
         PIN_LR(layout,  1, A11,      A10,    40);
         PIN_LR(layout,  2, A12,      A9,     39);

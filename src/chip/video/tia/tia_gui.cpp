@@ -56,8 +56,6 @@ ChipLayout* tia_t::create_chip_layout() const {
     static ChipLayout layout = [] {
         ChipLayout layout = create_dip40_layout();
 
-        layout.markings.part_number  = "CO10444";
-        layout.markings.manufacturer = "Atari";
         layout.markings.custom_text  = "TIA";
 
         //                  LEFT                         RIGHT

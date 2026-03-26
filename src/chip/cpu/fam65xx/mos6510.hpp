@@ -52,19 +52,6 @@ using MOS6510 = fam65xx::MOS6510;
 inline ChipLayout create_mos6510_layout() {
   ChipLayout layout = create_dip40_layout();
 
-  layout.markings = {
-      "MOS6510",        // part_number
-      "MOS Technology", // manufacturer
-      {},          // package_variant
-      {},          // date_code
-      {},          // lot_number
-      {},          // custom_text
-      true,             // show_part_number
-      true,             // show_manufacturer
-      false,            // show_package_variant
-      false             // show_date_code
-  };
-
   // Pin assignments for MOS 6510 (40-pin DIP)
   PIN_LR(layout, 1, PHI0, VSS, 21)
   PIN_LR(layout, 2, RDY, A12, 22)    // Ready

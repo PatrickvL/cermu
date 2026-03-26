@@ -33,13 +33,6 @@ ChipLayout* mos6522_t::create_chip_layout() const {
         layout.left_pins.clear();
         layout.right_pins.clear();
 
-        layout.markings = {
-            "MOS6522",
-            "MOS Technology",
-            {}, {}, {}, {},
-            true, true, false, false
-        };
-
         // Hardware-accurate MOS6522 VIA pinout (40-pin DIP)
         // Per MOS Technology MOS 6522 Versatile Interface Adapter datasheet (1977)
         PIN_LR(layout,  1, VSS,     CA1, 40)        // gnd / handshake in

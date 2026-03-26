@@ -68,9 +68,6 @@ ChipLayout* m680x0_t<Traits>::create_chip_layout() const {
     static ChipLayout layout = [] {
         ChipLayout layout = create_custom_dip(64);
 
-        layout.markings.part_number  = Traits.chip_id;
-        layout.markings.manufacturer = Traits.vendor;
-
         // MC68000 64-pin DIP pinout
         // Left side: pins 1-32 (top to bottom)
         // Right side: pins 64-33 (top to bottom)

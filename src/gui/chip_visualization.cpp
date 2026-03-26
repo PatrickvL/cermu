@@ -575,17 +575,15 @@ void ChipVisualization::render_chip_markings(const ChipLayout& layout, ImVec2 ch
         }
     };
     
-    if (layout.markings.show_part_number && !layout.markings.part_number.empty()) {
-        draw_marking(layout.markings.part_number.data());
+    // Identity fields from ChipInfo (set by ChipBase::get_chip_layout)
+    if (layout.chip_info) {
+        if (!layout.chip_info->part_number.empty())
+            draw_marking(layout.chip_info->part_number.data());
+        if (!layout.chip_info->manufacturer.empty())
+            draw_marking(layout.chip_info->manufacturer.data());
     }
-    if (layout.markings.show_manufacturer && !layout.markings.manufacturer.empty()) {
-        draw_marking(layout.markings.manufacturer.data());
-    }
-    if (layout.markings.show_package_variant && !layout.markings.package_variant.empty()) {
+    if (!layout.markings.package_variant.empty()) {
         draw_marking(layout.markings.package_variant.data());
-    }
-    if (layout.markings.show_date_code && !layout.markings.date_code.empty()) {
-        draw_marking(layout.markings.date_code.data());
     }
     if (!layout.markings.custom_text.empty()) {
         draw_marking(layout.markings.custom_text.data());

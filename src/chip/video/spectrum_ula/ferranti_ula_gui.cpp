@@ -27,8 +27,6 @@ ChipLayout* ferranti_ula_t::create_chip_layout() const {
     static ChipLayout layout = [] {
         ChipLayout layout = create_dip40_layout();
 
-        layout.markings.part_number  = "6C001E-7";
-        layout.markings.manufacturer = "Ferranti";
         layout.markings.custom_text  = "ZX Spectrum ULA";
 
         // Approximate Ferranti ULA 40-pin DIP pinout

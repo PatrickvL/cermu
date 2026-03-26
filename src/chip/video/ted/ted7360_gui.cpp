@@ -36,13 +36,6 @@ ChipLayout* ted7360_t::create_chip_layout() const {
         layout.left_pins.clear();
         layout.right_pins.clear();
 
-        layout.markings = {
-            "MOS7360 TED",
-            "MOS Technology",
-            {}, {}, {}, {},
-            true, true, false, false
-        };
-
         // Hardware-accurate TED 7360 pinout (48-pin DIP, 24 pins per side)
         PIN_LR(layout,  1, VSS,     VDD, 48)       // gnd / +5V supply
         PIN_LR(layout,  2, D0,      _RAS, 47)      // data bus lo

@@ -24,16 +24,8 @@ ChipLayout* MOS2114::create_chip_layout() const {
 
         // Update package info for MOS2114
         layout.markings = {
-            "MOS2114",                   // part_number
-            "MOS Technology",            // manufacturer
-            "1K x 4-bit SRAM",          // package_variant
-            {},                     // date_code
-            {},                     // lot_number
-            {},                     // custom_text
-            true,                        // show_part_number
-            true,                        // show_manufacturer
-            true,                        // show_package_variant
-            false                        // show_date_code
+            "1K x 4-bit SRAM",           // package_variant
+            {} // custom_text
         };
 
         // Clear default pins and add hardware-accurate MOS2114 pins

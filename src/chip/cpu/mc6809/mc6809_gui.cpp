@@ -60,9 +60,6 @@ ChipLayout* mc6809_t<Traits>::create_chip_layout() const {
     static ChipLayout layout = [] {
         ChipLayout layout = create_dip40_layout();
 
-        layout.markings.part_number  = Traits.chip_id;
-        layout.markings.manufacturer = Traits.vendor;
-
         // Motorola MC6809 40-pin DIP pinout
         // MC6809 and MC6809E differ on pins 34-35 (clock-related)
         PIN_LR(layout,  1, VSS,      VCC,    40);

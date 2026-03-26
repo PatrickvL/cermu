@@ -46,19 +46,6 @@ using RICOH_2A03 = fam65xx::RICOH_2A03;
 inline ChipLayout create_ricoh_2a03_layout() {
   ChipLayout layout = create_dip40_layout();
 
-  layout.markings = {
-      "RP2A03",   // part_number
-      "Ricoh",    // manufacturer
-      {},  // package_variant
-      {},  // date_code
-      {},  // lot_number
-      {},  // custom_text
-      true,       // show_part_number
-      true,       // show_manufacturer
-      false,      // show_package_variant
-      false       // show_date_code
-  };
-
   // Hardware-accurate Ricoh RP2A03G pinout (40-pin DIP)
   // The 2A03 integrates a modified 6502 CPU core (no BCD) with an APU,
   // DMA controller, and controller I/O ports on a single die.

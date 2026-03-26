@@ -24,20 +24,6 @@ ChipLayout* vicii_base_t::create_chip_layout() const {
         layout.left_pins.clear();
         layout.right_pins.clear();
 
-        // Update package info for VIC-II
-        layout.markings = {
-            "MOS6567/6569",              // part_number
-            "MOS Technology",            // manufacturer
-            {},                     // package_variant
-            {},                     // date_code
-            {},                     // lot_number
-            {},                     // custom_text
-            true,                        // show_part_number
-            true,                        // show_manufacturer
-            false,                       // show_package_variant
-            false                        // show_date_code
-        };
-
         // Hardware-accurate MOS6567/6569 VIC-II pinout (40-pin DIP)
         // Right-hand pins (21-40) are numbered bottom-up, not top-down
         PIN_LR(layout,  1, VDD,     VCC, 40)    // +5V supply

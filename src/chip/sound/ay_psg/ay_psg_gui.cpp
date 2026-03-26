@@ -90,8 +90,6 @@ ChipLayout* ay_psg_t<Traits>::create_chip_layout() const {
     if constexpr (Traits.io_port_count == 2) {
         static ChipLayout layout = [] {
             ChipLayout layout = create_dip40_layout();
-            layout.markings.part_number  = Traits.chip_id;
-            layout.markings.manufacturer = Traits.vendor;
 
             // AY-3-8910 40-pin DIP pinout (GI datasheet)
             //                  LEFT                          RIGHT
@@ -125,8 +123,6 @@ ChipLayout* ay_psg_t<Traits>::create_chip_layout() const {
     if constexpr (Traits.io_port_count == 1) {
         static ChipLayout layout = [] {
             ChipLayout layout = create_dip28_layout();
-            layout.markings.part_number  = Traits.chip_id;
-            layout.markings.manufacturer = Traits.vendor;
 
             //                  LEFT                          RIGHT
             PIN_LR(layout,  1, VSS,        VCC,          28);
@@ -153,8 +149,6 @@ ChipLayout* ay_psg_t<Traits>::create_chip_layout() const {
     if constexpr (Traits.io_port_count == 0) {
         static ChipLayout layout = [] {
             ChipLayout layout = create_dip24_layout();
-            layout.markings.part_number  = Traits.chip_id;
-            layout.markings.manufacturer = Traits.vendor;
 
             //                  LEFT                          RIGHT
             PIN_LR(layout,  1, VSS,        VCC,          24);

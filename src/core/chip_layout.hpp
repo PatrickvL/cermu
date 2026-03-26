@@ -12,6 +12,7 @@
 #include "core/pin_types.hpp"
 #include "core/package_types.hpp"
 #include "core/pin_macros.hpp"
+#include "core/component_info.hpp"
 #include <vector>
 #include <string>
 
@@ -27,7 +28,8 @@ struct ChipLayout {
     std::vector<ChipPin> top_pins;   // Top side pins (left to right) 
     std::vector<ChipPin> bottom_pins;// Bottom side pins (left to right)
     std::vector<ChipPin> grid_pins;  // Grid pins for BGA packages
-    ChipMarkings markings;           // Chip text markings
+    ChipMarkings markings;           // Extra chip text markings
+    const ChipInfo* chip_info = nullptr;  // Identity (set by ChipBase::get_chip_layout)
     
     // Calculate total number of pins from all sides and grid
     size_t get_total_pins() const {

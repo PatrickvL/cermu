@@ -29,20 +29,6 @@ ChipLayout* mos6581_t::create_chip_layout() const {
         layout.left_pins.clear();
         layout.right_pins.clear();
 
-        // Update package info for MOS6581 SID
-        layout.markings = {
-            "MOS6581",                   // part_number
-            "MOS Technology",            // manufacturer
-            {},                     // package_variant
-            {},                     // date_code
-            {},                     // lot_number
-            {},                     // custom_text
-            true,                        // show_part_number
-            true,                        // show_manufacturer
-            false,                       // show_package_variant
-            false                        // show_date_code
-        };
-
         // Hardware-accurate MOS6581 SID pinout (28-pin DIP)
         // Right-hand pins (15-28) are numbered bottom-up, not top-down
         PIN_LR(layout,  1, CAP1A,  VDD, 28);      // filter cap 1A / +12V

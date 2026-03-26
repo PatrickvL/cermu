@@ -42,19 +42,6 @@ using WDC_W65C02S = fam65xx::WDC_W65C02S;
 inline ChipLayout create_wdc_w65c02s_layout() {
   ChipLayout layout = create_dip40_layout();
 
-  layout.markings = {
-      "W65C02S",               // part_number
-      "Western Design Center", // manufacturer
-      {},                 // package_variant
-      {},                 // date_code
-      {},                 // lot_number
-      {},                 // custom_text
-      true,                    // show_part_number
-      true,                    // show_manufacturer
-      false,                   // show_package_variant
-      false                    // show_date_code
-  };
-
   // Pin assignments for WDC W65C02S (40-pin DIP)
   PIN_LR(layout, 1, _VP, VSS, 21)    // Vector Pull (low during vector fetch)
   PIN_LR(layout, 2, RDY, A12, 22)    // Ready (bidirectional on 65C02)

@@ -25,8 +25,6 @@ ChipLayout* LS259::create_chip_layout() const {
     static ChipLayout layout = [] {
         ChipLayout layout = create_dip16_layout();
 
-        layout.markings.part_number  = "SN74LS259";
-        layout.markings.manufacturer = "Texas Instruments";
         layout.markings.custom_text  = "Addressable Latch";
 
         //                  LEFT                      RIGHT

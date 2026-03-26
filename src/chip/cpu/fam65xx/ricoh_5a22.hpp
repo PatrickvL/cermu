@@ -78,19 +78,6 @@ using RICOH_5A22 = fam65xx::RICOH_5A22;
 inline ChipLayout create_ricoh_5a22_layout() {
   ChipLayout layout = create_qfp100_layout();
 
-  layout.markings = {
-      "S-CPU (5A22)", // part_number
-      "Ricoh",        // manufacturer
-      {},             // package_variant
-      {},             // date_code
-      {},             // lot_number
-      {},             // custom_text
-      true,           // show_part_number
-      true,           // show_manufacturer
-      false,          // show_package_variant
-      false           // show_date_code
-  };
-
   // ---- Left side: pins 1-25 (top to bottom) — address bus A0-A19 + power ----
   layout.left_pins = {
       PIN( 1, VCC),   PIN( 2, A0),    PIN( 3, A1),    PIN( 4, A2),    PIN( 5, A3),

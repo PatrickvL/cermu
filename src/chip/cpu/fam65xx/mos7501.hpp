@@ -57,19 +57,6 @@ using CSG7501 = fam65xx::CSG7501;
 inline ChipLayout create_csg7501_layout() {
   ChipLayout layout = create_dip40_layout();
 
-  layout.markings = {
-      "CSG7501",    // part_number (also branded 8501)
-      "Commodore",  // manufacturer
-      {},      // package_variant
-      {},      // date_code
-      {},      // lot_number
-      {},      // custom_text
-      true,         // show_part_number
-      true,         // show_manufacturer
-      false,        // show_package_variant
-      false         // show_date_code
-  };
-
   // Pin assignments for CSG 7501/8501 (40-pin DIP)
   // Similar to 6510 but with different I/O port mapping and no NMI line.
   // I/O port mask 0x5F = bits 0,1,2,3,4,6 (no bit 5).

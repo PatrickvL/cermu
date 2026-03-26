@@ -9,7 +9,7 @@
 // ICs, peripherals, connectors, complete systems.
 //
 //   ComponentInfo          ← base: part_number + manufacturer
-//   ChipInfo               ← IC: adds display_name, package_variant
+//   ChipInfo               ← IC: adds display_name
 //   DeviceInfo             ← peripheral: adds model identifier
 //   SystemInfo             ← complete machine: adds short_name, description
 //

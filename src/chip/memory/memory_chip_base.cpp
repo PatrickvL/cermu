@@ -157,9 +157,7 @@ void MemoryChipBase::release() {
 //   64KB DRAM  (4164):  DIP-16  —  8 addr (muxed), 1 data, RAS/CAS/WE, VCC/GND
 //
 static ChipLayout create_memory_layout(size_t size_bytes,
-                                       MemoryChipBase::MemoryType type,
-                                       std::string_view part_number,
-                                       std::string_view manufacturer) {
+                                       MemoryChipBase::MemoryType type) {
     // Determine address pin count
     int addr_bits = 0;
     if (size_bytes > 0) {
@@ -202,16 +200,8 @@ static ChipLayout create_memory_layout(size_t size_bytes,
     }
 
     layout.markings = {
-        part_number,                 // part_number
-        manufacturer,                // manufacturer
         type_str,                    // package_variant
-        {},                          // date_code
-        {},                          // lot_number
-        {},                          // custom_text
-        true,                        // show_part_number
-        !manufacturer.empty(),       // show_manufacturer
-        true,                        // show_package_variant
-        false                        // show_date_code
+        {} // custom_text
     };
 
     // --- Build pin assignments ---
@@ -303,9 +293,8 @@ ChipLayout* MemoryChipBase::get_chip_layout() const {
     // Rebuild layout if parameters changed (typically stable after first call)
     if (!cached_layout || cached_size != size_bytes_ || cached_type != type_) {
         static thread_local ChipLayout layout_storage;
-        layout_storage = create_memory_layout(size_bytes_, type_,
-                                              info_.part_number,
-                                              info_.manufacturer);
+        layout_storage = create_memory_layout(size_bytes_, type_);
+        layout_storage.chip_info = &info_;
         cached_layout = &layout_storage;
         cached_size = size_bytes_;
         cached_type = type_;

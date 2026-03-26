@@ -53,8 +53,6 @@ ChipLayout* pia6532_t::create_chip_layout() const {
     static ChipLayout layout = [] {
         ChipLayout layout = create_dip40_layout();
 
-        layout.markings.part_number  = "MOS 6532";
-        layout.markings.manufacturer = "MOS Technology";
         layout.markings.custom_text  = "RIOT";
 
         //                  LEFT                         RIGHT

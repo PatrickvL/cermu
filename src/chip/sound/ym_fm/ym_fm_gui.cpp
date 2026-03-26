@@ -197,8 +197,6 @@ ChipLayout* ym_fm_t<Traits>::create_chip_layout() const {
     if constexpr (Traits.pin_count == 24) {
         static ChipLayout layout = [] {
             ChipLayout layout = create_dip24_layout();
-            layout.markings.part_number  = Traits.chip_id;
-            layout.markings.manufacturer = Traits.vendor;
 
             // YM2151 / YM2612 / YM3526 / YM3812 24-pin DIP pinout
             // Pin assignments vary slightly per chip but share the same
@@ -242,8 +240,6 @@ ChipLayout* ym_fm_t<Traits>::create_chip_layout() const {
     if constexpr (Traits.pin_count == 40) {
         static ChipLayout layout = [] {
             ChipLayout layout = create_dip40_layout();
-            layout.markings.part_number  = Traits.chip_id;
-            layout.markings.manufacturer = Traits.vendor;
 
             // YM2203 40-pin DIP pinout (Yamaha datasheet)
             //
@@ -301,8 +297,6 @@ ChipLayout* ym_fm_t<Traits>::create_chip_layout() const {
     if constexpr (Traits.pin_count == 18) {
         static ChipLayout layout = [] {
             ChipLayout layout = create_dip18_layout();
-            layout.markings.part_number  = Traits.chip_id;
-            layout.markings.manufacturer = Traits.vendor;
 
             // YM2413 18-pin DIP pinout (Yamaha datasheet)
             //
@@ -338,8 +332,6 @@ ChipLayout* ym_fm_t<Traits>::create_chip_layout() const {
     if constexpr (Traits.pin_count == 64) {
         static ChipLayout layout = [] {
             ChipLayout layout = create_qfp64_layout();
-            layout.markings.part_number  = Traits.chip_id;
-            layout.markings.manufacturer = Traits.vendor;
 
             // QFP64 — simplified pinout.  The full 64-pin QFP has pins on
             // all four sides.  We map the key signals for visualization;

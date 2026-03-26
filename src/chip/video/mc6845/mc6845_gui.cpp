@@ -53,8 +53,6 @@ ChipLayout* mc6845_t::create_chip_layout() const {
     static ChipLayout layout = [] {
         ChipLayout layout = create_dip40_layout();
 
-        layout.markings.part_number  = "MC6845";
-        layout.markings.manufacturer = "Motorola";
         layout.markings.custom_text  = "CRT Controller";
 
         //                  LEFT                         RIGHT
