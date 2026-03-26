@@ -69,7 +69,7 @@ public:
     // --- Registration metadata (how this chip appears in a specific system) ---
     // These fields describe the chip's *placement* in a system: its role name,
     // category for menu grouping, and memory-mapped base address.
-    // For owned chips (RAMChip, ChipPlaceholder, PlaChip) these are set in the
+    // For owned chips (RAMChip, ChipPlaceholder, PLA906114) these are set in the
     // constructor.  For borrowed chips (CPU, VIA, etc.) the system sets them via
     // the register_chip() overload that accepts placement arguments.
     const char* display_name() const {

@@ -1,44 +1,19 @@
 #pragma once
 
-#include <cstdint>
-
-#include "core/chip.hpp"
+#include "chip/logic/pla.hpp"
 
 // Forward declare C64System
 class C64System;
 
 // ============================================================================
-// PlaChip — ChipBase wrapper for the C64 PLA
+// C64 PLA system-specific rendering callbacks
 // ============================================================================
-/// The PLA's GUI needs access to the whole C64System (banking tables, bus
-/// state) rather than just the pla_906114_01_t struct (which is ephemeral and
-/// only used during map generation).  PlaChip holds a C64System* back-pointer
-/// and implements ChipBase so the PLA can be registered directly.
-///
-class PlaChip : public ChipBase {
-    C64System* c64_;
-public:
-    explicit PlaChip(C64System* c64)
-        : ChipBase(ChipInfo{"PLA", "MOS Technology", "MOS PLA"}), c64_(c64) {
-        display_name_ = "PLA / Address Decoder";
-        short_name_   = "PLA";
-        category_     = "Bus";
-#ifdef CERMU_HAS_CHIP_DEBUG
-        register_debug_fields();
-#endif
-    }
+// The PLA chip (PLA906114) is system-independent.  These callbacks provide
+// C64-specific debug/settings GUI (interactive banking tables, mode
+// explorer) and are wired to PLA906114::set_system_context() during
+// C64System::initialize().
 
 #ifdef CERMU_HAS_GUI
-    bool has_settings_content() const override { return true; }
-
-    void render_debug_content() override;  // Complex interactive banking tables — kept as override
-    void render_settings_content() override;
-    ChipLayout* create_chip_layout() const override;
-    std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
+void c64_pla_render_debug(void* ctx, PLA906114& pla);
+void c64_pla_render_settings(void* ctx, PLA906114& pla);
 #endif
-
-private:
-#ifdef CERMU_HAS_CHIP_DEBUG
-    void register_debug_fields();
-#endif
-};

@@ -5,55 +5,14 @@
 #include <cstdio>
 #endif
 
-// Include GUI implementation
-#ifdef CERMU_HAS_GUI
-// PlaChip GUI moved to src/systems/c64/c64_pla_chip.h
-#endif
-
 // ============================================================================
-// PLA LOGIC IMPLEMENTATION
+// PLA906114 METHOD IMPLEMENTATIONS
 // ============================================================================
-#include <cstdlib>
-#include <cstring>
-
 // Commodore PLA MOS 906114-01 implementation
 // Based on detailed analysis from C64 wiki and dissection documents
 
-pla_906114_01_t* pla_906114_01_create(void) {
-    pla_906114_01_t* pla = (pla_906114_01_t*)calloc(1, sizeof(pla_906114_01_t));
-    if (!pla) return NULL;
-    
-    // Set default input states (typical C64 boot state)
-    pla->inputs.n_charen = true;    // Character ROM disabled initially
-    pla->inputs.n_hiram = true;     // High RAM enabled
-    pla->inputs.n_loram = true;     // Low RAM enabled
-    pla->inputs.n_cas = true;       // No CAS initially
-    pla->inputs.n_va14 = true;      // VA14 high
-    pla->inputs.n_aec = false;      // CPU has bus control
-    pla->inputs.ba = true;          // Bus available
-    pla->inputs.r_w = true;         // Read mode
-    pla->inputs.n_exrom = true;     // No external ROM
-    pla->inputs.n_game = true;      // No game cartridge
-    pla->inputs.va13 = false;       // VA13 low
-    pla->inputs.va12 = false;       // VA12 low
-    
-    // Update outputs based on initial inputs
-    pla_906114_01_update_outputs(pla);
-    
-    return pla;
-}
-
-void pla_906114_01_destroy(pla_906114_01_t* pla) {
-    free(pla);
-}
-
-// Check for Ultimax mode (#GAME = 0, #EXROM = 1)
-bool pla_906114_01_is_ultimax_mode(pla_906114_01_t* pla) {
-    return pla->inputs.n_exrom && !pla->inputs.n_game;
-}
-
-void pla_906114_01_set_cpu_address_bank(pla_906114_01_t* pla, uint8_t high_nybble) {
-    if (pla_906114_01_is_ultimax_mode(pla)) {
+void PLA906114::set_cpu_address_bank(uint8_t high_nybble) {
+    if (is_ultimax_mode()) {
         // "The address bus lines A15 to A12 (I5 to I8) are connected to the global address bus.
         // They are driven by the CPU when AEC from the VIC-II and #DMA from the Expansion
         // Port are both high. During VIC-II cycles, when AEC is low, they are pulled up by RP4.
@@ -62,7 +21,7 @@ void pla_906114_01_set_cpu_address_bank(pla_906114_01_t* pla, uint8_t high_nybbl
         // mapping when AEC is high, i.e. during CPU cycles. However,
         // they are also evaluated in the PLA in Ultimax mode when AEC is low"
         // (which means when the VIC-II has bus control).
-        if (pla->inputs.n_aec) {
+        if (inputs_.n_aec) {
             // "The address lines A12 to A15 of the C64 address
             // bus are pulled up by RP4 whenever the VIC-II has
             // the bus, so they are %1111 usually"
@@ -72,70 +31,63 @@ void pla_906114_01_set_cpu_address_bank(pla_906114_01_t* pla, uint8_t high_nybbl
         }
     }
 
-    pla->inputs.a12 = (high_nybble & 0x01) != 0;
-    pla->inputs.a13 = (high_nybble & 0x02) != 0;
-    pla->inputs.a14 = (high_nybble & 0x04) != 0;
-    pla->inputs.a15 = (high_nybble & 0x08) != 0;
-    
-    pla_906114_01_update_outputs(pla);
-}    
+    inputs_.a12 = (high_nybble & 0x01) != 0;
+    inputs_.a13 = (high_nybble & 0x02) != 0;
+    inputs_.a14 = (high_nybble & 0x04) != 0;
+    inputs_.a15 = (high_nybble & 0x08) != 0;
 
-void pla_906114_01_set_vicii_address_bank(pla_906114_01_t* pla, uint8_t high_nybble) {
-    pla->inputs.va12 = (high_nybble & 0x01) != 0;
-    pla->inputs.va13 = (high_nybble & 0x02) != 0;
+    update_outputs();
+}
+
+void PLA906114::set_vicii_address_bank(uint8_t high_nybble) {
+    inputs_.va12 = (high_nybble & 0x01) != 0;
+    inputs_.va13 = (high_nybble & 0x02) != 0;
     // #VA14 reflects the corresponding address bit (bit 2 of high_nybble = bit 14 of address)
     // Note: The signal is active-low (#VA14), so it's inverted from the address bit
-    pla->inputs.n_va14 = (high_nybble & 0x04) == 0;
-    
+    inputs_.n_va14 = (high_nybble & 0x04) == 0;
+
     // Also apply the same bank bits to the a12-a15 for address decoding:
-    pla_906114_01_set_cpu_address_bank(pla, high_nybble);
+    set_cpu_address_bank(high_nybble);
 }
 
-void pla_906114_01_set_cardrigde_mode(pla_906114_01_t* pla, uint8_t high_nybble) {
-    // "#EXROM, #GAME (I12, I13)
-    // The two lines #EXROM and #GAME can be pulled down by cartridges to change the
-    // memory map of the C64, e.g., to map external ROM into the address space. When they
-    // are not pulled down from the cartridge port, resistors in RP4 pull them up."
-}
-
-void pla_906114_01_set_banking_mode(pla_906114_01_t* pla, uint8_t mode) {
+void PLA906114::set_banking_mode(uint8_t mode) {
     // Positive logic: bit set = feature enabled = PLA variable true.
     // The n_ prefix in the PLA struct refers to the signal name, not the
     // variable's polarity — see c64_bus.cpp generate_all_pla_modes() for
     // the detailed explanation.
-    pla->inputs.n_loram  = (mode & 0x01) != 0;
-    pla->inputs.n_hiram  = (mode & 0x02) != 0;
-    pla->inputs.n_charen = (mode & 0x04) != 0;
-    pla->inputs.n_exrom  = (mode & 0x08) != 0;
-    pla->inputs.n_game   = (mode & 0x10) != 0;
+    inputs_.n_loram  = (mode & 0x01) != 0;
+    inputs_.n_hiram  = (mode & 0x02) != 0;
+    inputs_.n_charen = (mode & 0x04) != 0;
+    inputs_.n_exrom  = (mode & 0x08) != 0;
+    inputs_.n_game   = (mode & 0x10) != 0;
 }
 
-void pla_906114_01_tick(pla_906114_01_t* pla, bus_state_t bus_state) {
+void PLA906114::tick(bus_state_t bus_state) {
     // Extract address bus bits A12-A15 from bus state
     uint16_t addr = BUS_GET_ADDR(bus_state);
-    pla->inputs.a12 = (addr & 0x1000) != 0;
-    pla->inputs.a13 = (addr & 0x2000) != 0;
-    pla->inputs.a14 = (addr & 0x4000) != 0;
-    pla->inputs.a15 = (addr & 0x8000) != 0;
+    inputs_.a12 = (addr & 0x1000) != 0;
+    inputs_.a13 = (addr & 0x2000) != 0;
+    inputs_.a14 = (addr & 0x4000) != 0;
+    inputs_.a15 = (addr & 0x8000) != 0;
 
     // Control signals from bus state
-    pla->inputs.r_w   = BUS_GET_BIT(bus_state, BUS_RW_BIT);
-    pla->inputs.n_aec = !BUS_GET_BIT(bus_state, BUS_AEC_BIT); // AEC active-high in bus_state, n_aec in PLA
-    pla->inputs.ba    = BUS_GET_BIT(bus_state, BUS_BA_BIT);
+    inputs_.r_w   = BUS_GET_BIT(bus_state, BUS_RW_BIT);
+    inputs_.n_aec = !BUS_GET_BIT(bus_state, BUS_AEC_BIT); // AEC active-high in bus_state, n_aec in PLA
+    inputs_.ba    = BUS_GET_BIT(bus_state, BUS_BA_BIT);
 
     // In Ultimax mode, RP4 pulls A12-A15 high when VIC-II has the bus
     // (n_aec = true means AEC is low, i.e. VIC-II is driving).
-    if (pla_906114_01_is_ultimax_mode(pla) && pla->inputs.n_aec) {
-        pla->inputs.a12 = true;
-        pla->inputs.a13 = true;
-        pla->inputs.a14 = true;
-        pla->inputs.a15 = true;
+    if (is_ultimax_mode() && inputs_.n_aec) {
+        inputs_.a12 = true;
+        inputs_.a13 = true;
+        inputs_.a14 = true;
+        inputs_.a15 = true;
     }
 
-    pla_906114_01_update_outputs(pla);
+    update_outputs();
 }
 
-void pla_906114_01_update_outputs(pla_906114_01_t* pla) {
+void PLA906114::update_outputs() {
     #ifdef DEBUG_PLA_BANKING
     static int debug_call_count = 0;
     debug_call_count++;
@@ -143,24 +95,24 @@ void pla_906114_01_update_outputs(pla_906114_01_t* pla) {
         printf("PLA update_outputs called %d times\n", debug_call_count);
     }
     #endif
-    
+
     // Input state (using same variable names as C# code for clarity)
-    bool a12 = pla->inputs.a12;
-    bool a13 = pla->inputs.a13;
-    bool a14 = pla->inputs.a14;
-    bool a15 = pla->inputs.a15;
-    bool va12 = pla->inputs.va12;
-    bool va13 = pla->inputs.va13;
-    bool n_va14 = pla->inputs.n_va14;
-    bool n_aec = pla->inputs.n_aec;
-    bool n_cas = pla->inputs.n_cas;
-    bool n_charen = pla->inputs.n_charen;
-    bool n_exrom = pla->inputs.n_exrom;
-    bool n_game = pla->inputs.n_game;
-    bool n_hiram = pla->inputs.n_hiram;
-    bool n_loram = pla->inputs.n_loram;
-    bool rd = pla->inputs.r_w;  // read mode when high
-    bool ba = pla->inputs.ba;
+    bool a12 = inputs_.a12;
+    bool a13 = inputs_.a13;
+    bool a14 = inputs_.a14;
+    bool a15 = inputs_.a15;
+    bool va12 = inputs_.va12;
+    bool va13 = inputs_.va13;
+    bool n_va14 = inputs_.n_va14;
+    bool n_aec = inputs_.n_aec;
+    bool n_cas = inputs_.n_cas;
+    bool n_charen = inputs_.n_charen;
+    bool n_exrom = inputs_.n_exrom;
+    bool n_game = inputs_.n_game;
+    bool n_hiram = inputs_.n_hiram;
+    bool n_loram = inputs_.n_loram;
+    bool rd = inputs_.r_w;  // read mode when high
+    bool ba = inputs_.ba;
 
     // Product Term for #BASIC
     bool p0 = n_loram & n_hiram &
@@ -283,31 +235,34 @@ void pla_906114_01_update_outputs(pla_906114_01_t* pla) {
                !n_aec & !rd;
 
     // Sum Terms - Calculate outputs
-    pla->outputs.n_casram = (p0 || p1 || p2 ||
+    outputs_.n_casram = (p0 || p1 || p2 ||
                      p3 || p4 || p5 || p6 || p7 ||
                      p9 || p10 || p11 || p12 || p13 ||
                      p14 || p15 || p16 || p17 || p18 ||
                      p19 || p20 || p21 || p22 || p23 ||
                      p24 || p25 || p26 || p27 || p28 || p30);
 
-    pla->outputs.n_basic = !p0;
-    pla->outputs.n_kernal = !(p1 || p2);
-    pla->outputs.n_charrom = !(p3 || p4 || p5 || p6 || p7);
-    pla->outputs.n_grw = !p31;
-    pla->outputs.n_io = !(p9 || p10 || p11 || p12 || p13 || p14 ||
+    outputs_.n_basic = !p0;
+    outputs_.n_kernal = !(p1 || p2);
+    outputs_.n_charrom = !(p3 || p4 || p5 || p6 || p7);
+    outputs_.n_grw = !p31;
+    outputs_.n_io = !(p9 || p10 || p11 || p12 || p13 || p14 ||
                   p15 || p16 || p17 || p18);
-    pla->outputs.n_roml = !(p19 || p20);
-    pla->outputs.n_romh = !(p21 || p22 || p23);
+    outputs_.n_roml = !(p19 || p20);
+    outputs_.n_romh = !(p21 || p22 || p23);
+
+    sync_regs();
+
 #ifdef DEBUG_PLA_BANKING
     // Debug output for banking issue
     if (a15 == 0 && a14 == 0 && a13 == 0 && a12 == 0) { // Bank 0
         printf("PLA Bank 0: n_casram=%d n_basic=%d n_kernal=%d n_charrom=%d n_io=%d n_roml=%d n_romh=%d\n",
-               pla->outputs.n_casram, pla->outputs.n_basic, pla->outputs.n_kernal, 
-               pla->outputs.n_charrom, pla->outputs.n_io, pla->outputs.n_roml, pla->outputs.n_romh);
+               outputs_.n_casram, outputs_.n_basic, outputs_.n_kernal,
+               outputs_.n_charrom, outputs_.n_io, outputs_.n_roml, outputs_.n_romh);
         printf("PLA Inputs: n_loram=%d n_hiram=%d n_charen=%d n_exrom=%d n_game=%d n_aec=%d r_w=%d n_cas=%d\n",
-               pla->inputs.n_loram, pla->inputs.n_hiram, pla->inputs.n_charen,
-               pla->inputs.n_exrom, pla->inputs.n_game, pla->inputs.n_aec, pla->inputs.r_w, pla->inputs.n_cas);
-        
+               inputs_.n_loram, inputs_.n_hiram, inputs_.n_charen,
+               inputs_.n_exrom, inputs_.n_game, inputs_.n_aec, inputs_.r_w, inputs_.n_cas);
+
         // Check which product terms are active for n_casram
         bool casram_terms[] = {p0, p1, p2, p3, p4, p5, p6, p7, false, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22, p23, p24, p25, p26, p27, p28, false, false, false};
         printf("Active CASRAM terms: ");

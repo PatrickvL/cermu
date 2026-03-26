@@ -10,5 +10,7 @@
 #include "core/chip_registry.hpp"
 
 #include "chip/logic/ls259.hpp"
+#include "chip/logic/pla.hpp"
 
 REGISTER_CHIP_TYPE("74LS259", LS259)
+REGISTER_CHIP_TYPE("906114-01", PLA906114)
