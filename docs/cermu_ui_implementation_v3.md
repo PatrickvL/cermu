@@ -1174,9 +1174,18 @@ in the left panel acts as a filter for both file browser and title browser views
 state tracking. The orphan state machine and relocation detection logic need to
 be built on top of the existing infrastructure.*
 
-### Phase 6d — Filesystem Watch ❌ Not started
-- `inotify` (Linux) / `ReadDirectoryChangesW` (Windows) integration
-- Automatic incremental scan on directory change events
+### Phase 6d — Filesystem Watch ⚠️ Partial
+*Commits: `db83db5c` (file watcher utility + file browser integration)*
+- `FileWatcher` utility (`src/utils/file_watcher.hpp`): standalone inotify-based
+  directory monitor (Linux), non-blocking poll, no-op stub on other platforms
+- File browser auto-rescan: `FileBrowser` watches the current directory and
+  rescans on change events with a 30-frame debounce
+
+*Still missing:*
+- Watching scan root directories to trigger incremental catalog rescans (the
+  utility exists, but `ScanRootManager` / `CatalogPipeline` are not wired to it)
+- `ReadDirectoryChangesW` (Windows) — currently returns `false` on non-Linux
+- Stat-based fallback polling for platforms without native filesystem events
 
 ### Phase 6e — Enrichment (optional) ❌ Not started
 - TOSEC / No-Intro database matching
@@ -1201,6 +1210,147 @@ be built on top of the existing infrastructure.*
    that ZIP be selectable as a group for ordered multi-disk launch? Deferred,
    but the flip-list infrastructure from multi-path CLI input largely solves
    this already for the common case.
+
+---
+
+## 19. Implementation Audit (2026-03-25)
+
+Full code audit of the implemented state against this plan. Serves as a reference
+for resuming work on remaining phases.
+
+### 19.1 Component status summary
+
+| Component | File(s) | Status | Notes |
+|-----------|---------|--------|-------|
+| LauncherPanel | `launcher_panel.hpp` | ✅ Done | Keyboard nav, drag-drop, probe bar (Zone C), launch action, config recording |
+| LauncherTheme | `launcher_theme.hpp` | ✅ Done | All color tokens + tag badge colors + manufacturer accents |
+| SharedConfigStore | `shared_config_store.hpp` | ✅ Done | Region/peripherals/custom/memory storage, `build_config()`, `record_config()` |
+| FileBrowser | `file_browser.hpp` | ✅ Done | 5-column layout (Name/Region/Year/Size/Type), search on parsed metadata, region filter pill, tag badges, filesystem watch, VFS archive navigation |
+| TitleBrowser | `catalog/title_browser.hpp` | ⚠️ Partial | Card grid + scan progress bar + empty state done; variant picker UI incomplete |
+| CatalogStore | `catalog/catalog_store.hpp` | ✅ Done | SQLite integration, fingerprint storage, entry state tracking, grouping queries, mutex-protected |
+| CatalogPipeline | `catalog/catalog_pipeline.hpp` | ⚠️ Partial | Async discovery→probe→group pipeline with cancel support; single worker thread (not a thread pool) |
+| ScanRootManager | `scan_root_manager.hpp` | ✅ Done | TOML persistence, host environment discovery, setup panel UI |
+| FileWatcher | `utils/file_watcher.hpp` | ✅ Done | inotify (Linux) + no-op stub; integrated into FileBrowser |
+| RomFilenameParser | `utils/rom_filename_parser.hpp` | ✅ Done | TOSEC/No-Intro/GoodTools parsing; title/region/year/tags/flags extraction |
+| Auto-hide menu bar | `session_gui.cpp` | ✅ Done | F12 toggle + cursor dwell + slide animation + idle auto-hide |
+| Emulation HUD | `session_gui.cpp` | ✅ Done | System name, speed %, FPS, port status; corner selectable via View menu |
+| Escape hierarchy | `session_gui.cpp` | ✅ Done | Chip panels → menu bar → nothing |
+
+### 19.2 Detailed findings — what works
+
+**LauncherPanel** (`launcher_panel.hpp`):
+- `handle_keyboard()` implements arrow keys (↑↓), Tab (panel toggle), Enter
+  (focus switch / launch), Backspace (navigate up), `/` (focus search)
+- `render_status_bar()` displays context-sensitive key hints based on `focus_panel_`
+- `handle_drop()` routes directories/archives to navigation, files to probe
+- `trigger_probe()` calls `SystemRegistry::instance().identify_system()`
+- `launch_selected_system()` calls `config_store_.record_config()` then sets
+  `selection_confirmed_ = true`; session_gui calls `switch_system()` on confirm
+- Zone C probe bar renders ✓ (SingleMatch) / ⚠ (Ambiguous) / ✗ (NoMatch)
+
+**FileBrowser** (`file_browser.hpp`):
+- `scan_directory()` handles both VFS paths (via `VfsFileSystem::ScanDirectory()`)
+  and real filesystem (via `std::filesystem::directory_iterator`)
+- `parse_entry_metadata()` calls `rom_filename::parse()` to extract title/region/
+  year/tags/flags from filenames
+- `matches_search()` tests against `parsed_title`, `region`, `year`, and `name`
+- Region filter pill cycles through detected regions on click
+- Tag badges rendered as colored pills after title text using ImDrawList
+- `dir_watcher_.poll_changed()` triggers `scan_directory()` + `apply_filter_and_sort()`
+  with 30-frame debounce
+- Column widths: Region 50px, Year 40px, Size 70px, Type 60px, Name flexible
+
+**CatalogStore** (`catalog/catalog_store.hpp`):
+- `Fingerprint` struct: `file_size` + `head_crc32` + `tail_crc32`
+- `EntryState` enum: Present, Stale, FileMissing, RootRemoved, Orphaned
+- `find_by_fingerprint()` exists (schema ready for relocation detection)
+- `get_title_groups()` with GROUP BY on `title_key`; `get_group_entries()`
+- All public methods use `std::lock_guard<std::mutex>`
+
+**CatalogPipeline** (`catalog/catalog_pipeline.hpp`):
+- Three phases: Discovery (recursive dir walk), Probing (identify_system per file),
+  Grouping (assign group_id by title_key)
+- `std::atomic<bool> cancel_` checked at each phase boundary
+- `PipelinePhase` enum + atomic phase counter for UI polling
+- Single `std::thread worker_` — NOT a thread pool
+
+### 19.3 Remaining work — prioritized
+
+**High value (functional gaps):**
+
+1. **Phase 6c — Orphan & relocation handling** (§14, entirely unbuilt)
+   - Grace period state machine: `file_missing` → `orphaned` after 2 days / 15
+     launches (configurable in TOML)
+   - Background per-file fingerprint search on `file_missing` transition
+   - Folder-level relocation detection (common path prefix, ≥80% fingerprint match)
+   - Fuzzy name matching with user confirmation
+   - Orphan processing UI (Library → Process orphans…): list view with per-entry
+     Remove/Search and bulk Remove all/Search all actions
+   - Bulk relocation notification (threshold: 15 entries)
+   - *Prerequisite:* `CatalogStore` schema already has fingerprint fields and
+     entry states. `find_by_fingerprint()` exists.
+
+2. **Scan root watching** (Phase 6d remainder)
+   - Wire `FileWatcher` instances to each configured scan root in `ScanRootManager`
+   - On change events, trigger `CatalogPipeline` incremental rescan for the
+     affected root
+   - Currently only the file browser's current directory is watched
+
+3. **Pipeline thread pool** (§13.2)
+   - Replace single `std::thread worker_` with a pool of
+     `std::thread::hardware_concurrency() - 1` workers
+   - Probing is CPU-bound and embarrassingly parallel; significant speedup expected
+     on multi-core systems
+
+4. **Library menu wiring**
+   - "Rescan all" / "Rescan missing only" should invoke `CatalogPipeline::start()`
+     with appropriate mode
+   - "Process orphans…" should open the orphan processing panel
+   - Currently these are placeholder menu entries
+
+5. **Title browser variant picker** (§6.3)
+   - `expanded_group_` toggle exists but the detailed variant list UI
+     (system/region/format/revision selector per card) is incomplete
+
+**Medium value (quality-of-life):**
+
+6. **Windows filesystem watch** — Add `ReadDirectoryChangesW` to `FileWatcher`,
+   or implement stat-based fallback polling
+
+7. **ProbeResultPopup detail view** (§7.5) — The plan describes a non-modal popup
+   with ranked results, confidence bars, and per-row Launch buttons for the
+   Ambiguous case. Currently probe results are shown only in the Zone C bar.
+
+8. **Cover art / thumbnails** (Phase 6e) — Title cards are text-only. Even
+   procedural CRT placeholder art (§6.1) would improve the experience.
+
+9. **Font bundling** (open question §18.1) — Sora + JetBrains Mono would improve
+   visual polish significantly over the ImGui default font.
+
+10. **Favourites persistence** (open question §18.2) — `SharedConfigStore` is
+    in-session only. A persistent user prefs file would enable favourites and
+    preferences across sessions.
+
+**Low priority / optional:**
+
+11. **TOSEC / No-Intro database matching** (Phase 6e) — exact identification
+    via hash databases, improving grouping accuracy
+
+12. **First-run empty state verification** — §5.5 specifies a [Browse…] button
+    opening a native OS folder picker. Verify this path works end-to-end.
+
+13. **Multi-file launch / multi-disk** (open question §18.4) — flip-list
+    infrastructure exists from CLI multi-path input; ZIP multi-disk selection
+    UX is deferred
+
+### 19.4 Recent visual polish commits (not in original plan)
+
+| Commit | Description |
+|--------|-------------|
+| `64a6eb03` | Wire `cpu_summary` from chip traits `display_name` (29 system files) |
+| `71b7209d` | Filename metadata columns (Name/Region/Year/Size/Type) + region filter |
+| `609608e9` | Colored tag badges for ROM tags/flags in file browser |
+| `db83db5c` | Auto-rescan file browser on directory changes (inotify) |
 
 ---
 
