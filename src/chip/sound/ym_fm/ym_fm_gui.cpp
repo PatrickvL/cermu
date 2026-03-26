@@ -198,18 +198,18 @@ ChipLayout* ym_fm_t<Traits>::create_chip_layout() const {
         static ChipLayout layout = [] {
             ChipLayout layout = create_dip24_layout();
 
-            PIN_LR(layout,  1, VSS,        VCC,          24);
+            PIN_LR(layout,  1, GND,        VCC,          24);
             PIN_LR(layout,  2, D0,         D1,           23);
             PIN_LR(layout,  3, D2,         D3,           22);
             PIN_LR(layout,  4, D4,         D5,           21);
             PIN_LR(layout,  5, D6,         D7,           20);
             PIN_LR(layout,  6, _RD,        _WR,          19);
             PIN_LR(layout,  7, A0,         A1,           18);
-            PIN_LR(layout,  8, _CS,        _RES,         17);  // /IC = reset
-            PIN_LR(layout,  9, CLK,        _IRQ,         16);  // PHI_M
-            PIN_LR(layout, 10, NC,         NC,           15);  // SH1 / SH2
-            PIN_LR(layout, 11, AUDIO_OUT,  NC,           14);  // MO (mixed output)
-            PIN_LR(layout, 12, VSS,        NC,           13);
+            PIN_LR(layout,  8, _CS,        _IC,          17);
+            PIN_LR(layout,  9, PHI_M,      _IRQ,         16);
+            PIN_LR(layout, 10, SH1,        SH2,          15);
+            PIN_LR(layout, 11, MO,         NC,           14);
+            PIN_LR(layout, 12, GND,        NC,           13);
 
             return layout;
         }();
@@ -221,13 +221,13 @@ ChipLayout* ym_fm_t<Traits>::create_chip_layout() const {
         static ChipLayout layout = [] {
             ChipLayout layout = create_dip40_layout();
 
-            PIN_LR(layout,  1, VSS,        VCC,          40);
+            PIN_LR(layout,  1, GND,        VCC,          40);
             PIN_LR(layout,  2, D0,         _RES,         39);
-            PIN_LR(layout,  3, D1,         CLK,          38);  // PHI_M
-            PIN_LR(layout,  4, D2,         NC,           37);  // PHI_S
+            PIN_LR(layout,  3, D1,         PHI_M,        38);
+            PIN_LR(layout,  4, D2,         PHI_S,        37);
             PIN_LR(layout,  5, D3,         _IRQ,         36);
             PIN_LR(layout,  6, D4,         NC,           35);
-            PIN_LR(layout,  7, D5,         PB7,          34);  // IOB7
+            PIN_LR(layout,  7, D5,         PB7,          34);
             PIN_LR(layout,  8, D6,         PB6,          33);
             PIN_LR(layout,  9, D7,         PB5,          32);
             PIN_LR(layout, 10, _CS,        PB4,          31);
@@ -235,12 +235,12 @@ ChipLayout* ym_fm_t<Traits>::create_chip_layout() const {
             PIN_LR(layout, 12, _WR,        PB2,          29);
             PIN_LR(layout, 13, A0,         PB1,          28);
             PIN_LR(layout, 14, A1,         PB0,          27);
-            PIN_LR(layout, 15, NC,         PA7,          26);  // SH1
-            PIN_LR(layout, 16, NC,         PA6,          25);  // SH2
-            PIN_LR(layout, 17, AUDIO_OUT,  PA5,          24);  // MO
-            PIN_LR(layout, 18, NC,         PA4,          23);  // CH3 out
-            PIN_LR(layout, 19, CHANNEL_A,  PA3,          22);  // SSG out
-            PIN_LR(layout, 20, VSS,        PA2,          21);
+            PIN_LR(layout, 15, SH1,        PA7,          26);
+            PIN_LR(layout, 16, SH2,        PA6,          25);
+            PIN_LR(layout, 17, MO,         PA5,          24);
+            PIN_LR(layout, 18, CH3_OUT,    PA4,          23);
+            PIN_LR(layout, 19, SSG_OUT,    PA3,          22);
+            PIN_LR(layout, 20, GND,        PA2,          21);
 
             return layout;
         }();
@@ -258,9 +258,9 @@ ChipLayout* ym_fm_t<Traits>::create_chip_layout() const {
             PIN_LR(layout,  4, D5,         D6,           15);
             PIN_LR(layout,  5, D7,         _RES,         14);
             PIN_LR(layout,  6, _CS,        A0,           13);
-            PIN_LR(layout,  7, _WR,        CLK,          12);  // PHI_M
-            PIN_LR(layout,  8, AUDIO_OUT,  NC,           11);  // MO / /IC
-            PIN_LR(layout,  9, VSS,        NC,           10);  // RO (rhythm out)
+            PIN_LR(layout,  7, _WR,        PHI_M,        12);
+            PIN_LR(layout,  8, MO,         _IC,          11);
+            PIN_LR(layout,  9, GND,        RO,           10);
 
             return layout;
         }();
@@ -289,19 +289,19 @@ ChipLayout* ym_fm_t<Traits>::create_chip_layout() const {
             layout.left_pins.push_back(ChipPin PIN(13, A1));
             layout.left_pins.push_back(ChipPin PIN(14, _RES));
             layout.left_pins.push_back(ChipPin PIN(15, _IRQ));
-            layout.left_pins.push_back(ChipPin PIN(16, CLK));
+            layout.left_pins.push_back(ChipPin PIN(16, PHI_M));
 
             // Bottom side (pins 17-32): I/O ports, SSG output
             for (uint8_t i = 17; i <= 24; i++)
                 layout.bottom_pins.push_back(ChipPin PIN(i, NC));
-            layout.bottom_pins.push_back(ChipPin PIN(25, CHANNEL_A));  // SSG out
+            layout.bottom_pins.push_back(ChipPin PIN(25, SSG_OUT));
             for (uint8_t i = 26; i <= 32; i++)
                 layout.bottom_pins.push_back(ChipPin PIN(i, NC));
 
             // Right side (pins 33-48): audio outputs, ADPCM memory bus
             for (uint8_t i = 33; i <= 44; i++)
                 layout.right_pins.push_back(ChipPin PIN(i, NC));
-            layout.right_pins.push_back(ChipPin PIN(45, AUDIO_OUT));  // MO
+            layout.right_pins.push_back(ChipPin PIN(45, MO));
             for (uint8_t i = 46; i <= 48; i++)
                 layout.right_pins.push_back(ChipPin PIN(i, NC));
 
