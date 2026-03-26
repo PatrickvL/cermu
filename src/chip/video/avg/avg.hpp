@@ -103,6 +103,12 @@ struct avg_t : public VideoChipBase {
 
     avg_t() : VideoChipBase(ChipInfo{"AVG", "Atari", "Atari AVG"}) {}
 
+    // ── 16.16 fixed-point helpers ────────────────────────────────
+    static constexpr int FP_SHIFT = 16;
+    static constexpr int32_t to_fp(int32_t i) { return i << FP_SHIFT; }
+    static constexpr int32_t to_fp(int32_t i, uint16_t frac) { return (i << FP_SHIFT) | frac; }
+    static constexpr int32_t fp_to_int(int32_t fp) { return fp >> FP_SHIFT; }
+
     // ========================================================================
     // Game-specific configuration
     // ========================================================================
@@ -116,6 +122,16 @@ struct avg_t : public VideoChipBase {
     /// Enable X/Y axis swap for rotated monitor (Tempest).
     void set_swap_xy(bool enable) { swap_xy_ = enable; }
 
+    /// Set the visible display area in logical pixels (matching MAME visarea).
+    /// The beam center is derived as (width/2, height/2).  Coordinates are
+    /// stored internally in 16.16 fixed-point for sub-pixel precision.
+    void set_display_area(uint16_t width, uint16_t height) {
+        display_width_  = width;
+        display_height_ = height;
+        center_x_fp_    = to_fp(width  / 2);
+        center_y_fp_    = to_fp(height / 2);
+    }
+
     // ========================================================================
     // Initialization
     // ========================================================================
@@ -127,8 +143,8 @@ struct avg_t : public VideoChipBase {
     void reset() {
         pc_            = 0;
         sp_            = 0;
-        beam_x_        = avg_constants::CENTER_X;
-        beam_y_        = avg_constants::CENTER_Y;
+        beam_x_fp_     = center_x_fp_;
+        beam_y_fp_     = center_y_fp_;
         running_       = false;
         halt_          = true;
         clocks_remaining_ = 0;
@@ -209,8 +225,8 @@ struct avg_t : public VideoChipBase {
 
     uint16_t pc_            = 0;
     uint8_t  sp_            = 0;
-    int32_t  beam_x_        = avg_constants::CENTER_X;
-    int32_t  beam_y_        = avg_constants::CENTER_Y;
+    int32_t  beam_x_fp_     = to_fp(avg_constants::CENTER_X);  // 16.16 fixed-point
+    int32_t  beam_y_fp_     = to_fp(avg_constants::CENTER_Y);  // 16.16 fixed-point
     bool     running_       = false;
     bool     halt_          = true;
     int32_t  clocks_remaining_ = 0;
@@ -221,6 +237,12 @@ struct avg_t : public VideoChipBase {
     uint8_t  lin_scale_     = 0;    // SCAL linear scale [7:0]
 
     uint16_t stack_[avg_constants::STACK_DEPTH] = {};
+
+    // Display area configuration (set via set_display_area)
+    uint16_t display_width_  = avg_constants::DISPLAY_WIDTH;
+    uint16_t display_height_ = avg_constants::DISPLAY_HEIGHT;
+    int32_t  center_x_fp_    = to_fp(avg_constants::CENTER_X);
+    int32_t  center_y_fp_    = to_fp(avg_constants::CENTER_Y);
 
 private:
     const uint8_t*   vec_ram_  = nullptr;
@@ -260,21 +282,25 @@ private:
 
     /// Apply AVG scaling to a raw 13-bit vector component.
     ///
-    /// Models the AVG's DAC + binary rate multiplier pipeline exactly as
-    /// in hardware (and MAME avgdvg.cpp):
+    /// The AVG's Binary Rate Multiplier integrates ALL bits of the delta
+    /// value over the timer period.  MAME approximates this by truncating
+    /// to the DAC's upper 10 bits (>> 3), but with 16.16 fixed-point
+    /// coordinates those 3 extra bits contribute real sub-pixel precision.
     ///
-    ///   1. The DAC sees the upper 10 bits: (raw >> 3)
-    ///   2. XOR with 0x200 and subtract 0x200 converts the offset-binary
-    ///      DAC input to a signed value in [-512, +511].
-    ///   3. The displacement is:
-    ///        pixels = signed_dac * (255 - lin_scale) >> (5 + bin_scale)
+    /// Full-precision formula:
+    ///   1. Convert 13-bit offset-binary to signed [-4096, +4095]:
+    ///        signed_val = (raw ^ 0x1000) - 0x1000
+    ///   2. Displacement (16.16 FP) = signed_val * (255 - lin) << (8 - bin - extra_shift)
+    ///      (shift is 3 less than MAME's 11 to compensate for the 8× larger input)
     ///
-    /// The hardware normalizes the vector (shifts magnitude up, timer
-    /// down) before the DAC, but the final displacement is invariant to
-    /// normalization, so we compute directly from the raw value.
-    int32_t apply_scale(int32_t raw_13bit) const {
-        int32_t dac = ((raw_13bit >> 3) ^ 0x200) - 0x200;
-        return (dac * (255 - lin_scale_)) >> (5 + bin_scale_);
+    /// Max product: 4095 × 255 = 1,044,225.  After << 8: 267,321,600.  Fits int32_t.
+    ///
+    /// Returns displacement in 16.16 fixed-point.
+    int32_t apply_scale(int32_t raw_13bit, int extra_shift = 0) const {
+        int32_t dac = (raw_13bit ^ 0x1000) - 0x1000;
+        int32_t product = dac * (255 - lin_scale_);
+        int shift = 8 - bin_scale_ - extra_shift;
+        return (shift >= 0) ? (product << shift) : (product >> (-shift));
     }
 
     /// Decode Z (3-bit intensity from VCTR/SVEC) into draw intensity value.
@@ -315,7 +341,7 @@ private:
                 int draw_intensity = decode_z_intensity(z);
                 emit_vector(dx, dy, draw_intensity);
 
-                int vec_len = std::max(std::abs(dx), std::abs(dy));
+                int vec_len = std::max(std::abs(fp_to_int(dx)), std::abs(fp_to_int(dy)));
                 clocks_remaining_ = std::max(4, vec_len >> 1);
                 pc_ += 4;  // two words = 4 bytes
                 break;
@@ -345,13 +371,15 @@ private:
                 int32_t raw_dy = ((w0 >> 12) & 1) << 12 | (((w0 >> 8) & 0xF) << 8);
                 int32_t raw_dx = ((w0 >> 4)  & 1) << 12 | ((w0 & 0xF) << 8);
 
-                int32_t dy = apply_scale(raw_dy);
-                int32_t dx = apply_scale(raw_dx);
+                // SVEC uses an 8-bit timer (max 256 cycles) vs VCTR's
+                // 15-bit timer (max 32768 cycles).  Ratio = 128 = 2^7.
+                int32_t dy = apply_scale(raw_dy, 7);
+                int32_t dx = apply_scale(raw_dx, 7);
 
                 int draw_intensity = decode_z_intensity(z);
                 emit_vector(dx, dy, draw_intensity);
 
-                clocks_remaining_ = 2 + ((std::abs(dx) + std::abs(dy)) >> 3);
+                clocks_remaining_ = 2 + ((std::abs(fp_to_int(dx)) + std::abs(fp_to_int(dy))) >> 3);
                 pc_ += 2;  // one word = 2 bytes
                 break;
             }
@@ -386,8 +414,8 @@ private:
 
             case avg_constants::OP_CNTR:
                 // CNTR — Load center position
-                beam_x_ = avg_constants::CENTER_X;
-                beam_y_ = avg_constants::CENTER_Y;
+                beam_x_fp_ = center_x_fp_;
+                beam_y_fp_ = center_y_fp_;
                 emit_position();
                 clocks_remaining_ = 4;
                 pc_ += 2;  // one word = 2 bytes
@@ -429,39 +457,42 @@ private:
     // ========================================================================
 
     /// Convert beam Y to screen Y (Y increasing upward → screen Y increasing downward)
-    static int16_t screen_y(int32_t y) {
-        return static_cast<int16_t>(avg_constants::DISPLAY_HEIGHT - 1 - y);
+    int16_t screen_y(int32_t y) const {
+        return static_cast<int16_t>(display_height_ - 1 - y);
     }
 
-    void emit_vector(int32_t dx, int32_t dy, int intensity) {
+    void emit_vector(int32_t dx_fp, int32_t dy_fp, int intensity) {
         // Tempest uses a 90°-rotated monitor: swap X/Y axes
         if (swap_xy_) {
-            int32_t tmp = dx;
-            dx = dy;
-            dy = tmp;
+            int32_t tmp = dx_fp;
+            dx_fp = dy_fp;
+            dy_fp = tmp;
         }
 
-        int32_t x0 = beam_x_;
-        int32_t y0 = beam_y_;
+        int32_t x0_fp = beam_x_fp_;
+        int32_t y0_fp = beam_y_fp_;
 
-        beam_x_ += dx;
-        beam_y_ += dy;
+        beam_x_fp_ += dx_fp;
+        beam_y_fp_ += dy_fp;
 
         if (!video_out_) return;
 
         if (intensity > 0) {
             uint8_t bright = static_cast<uint8_t>(std::min(intensity * 17, 255));
             video_out_->drive(VectorVideoSample{
-                static_cast<int16_t>(x0), screen_y(y0),
+                static_cast<int16_t>(fp_to_int(x0_fp)),
+                screen_y(fp_to_int(y0_fp)),
                 bright, color_index_, SyncFlag::BeamOn, {}
             });
             video_out_->drive(VectorVideoSample{
-                static_cast<int16_t>(beam_x_), screen_y(beam_y_),
+                static_cast<int16_t>(fp_to_int(beam_x_fp_)),
+                screen_y(fp_to_int(beam_y_fp_)),
                 bright, color_index_, SyncFlag::BeamOn, {}
             });
         } else {
             video_out_->drive(VectorVideoSample{
-                static_cast<int16_t>(beam_x_), screen_y(beam_y_),
+                static_cast<int16_t>(fp_to_int(beam_x_fp_)),
+                screen_y(fp_to_int(beam_y_fp_)),
                 0, color_index_, SyncFlag::None, {}
             });
         }
@@ -470,7 +501,8 @@ private:
     void emit_position() {
         if (!video_out_) return;
         video_out_->drive(VectorVideoSample{
-            static_cast<int16_t>(beam_x_), screen_y(beam_y_),
+            static_cast<int16_t>(fp_to_int(beam_x_fp_)),
+            screen_y(fp_to_int(beam_y_fp_)),
             0, color_index_, SyncFlag::None, {}
         });
     }
@@ -478,7 +510,8 @@ private:
     void emit_frame_end() {
         if (!video_out_) return;
         video_out_->drive(VectorVideoSample{
-            static_cast<int16_t>(beam_x_), screen_y(beam_y_),
+            static_cast<int16_t>(fp_to_int(beam_x_fp_)),
+            screen_y(fp_to_int(beam_y_fp_)),
             0, 0, SyncFlag::FrameEnd, {}
         });
     }

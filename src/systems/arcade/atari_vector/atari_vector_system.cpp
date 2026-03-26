@@ -29,6 +29,7 @@
 #include <cstring>
 #include <cstdio>
 #include <algorithm>
+#include <type_traits>
 
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
@@ -500,11 +501,22 @@ static HardwareTraits create_vector_hardware_traits() {
 
     HardwareTraits ht = {};
 
-    // Display
-    ht.display.native_width    = atv::DISPLAY_WIDTH;
-    ht.display.native_height   = atv::DISPLAY_HEIGHT;
-    ht.display.visible_width   = atv::DISPLAY_WIDTH;
-    ht.display.visible_height  = atv::DISPLAY_HEIGHT;
+    // Display — per-game visible area matching MAME set_visarea.
+    // DVG games keep the default 1024×1024; AVG games use game-specific sizes.
+    int disp_w = atv::DISPLAY_WIDTH;
+    int disp_h = atv::DISPLAY_HEIGHT;
+    if constexpr (V == AtariVectorVariant::BATTLEZONE)  { disp_w = 580; disp_h = 400; }
+    if constexpr (V == AtariVectorVariant::RED_BARON)   { disp_w = 520; disp_h = 400; }
+    if constexpr (V == AtariVectorVariant::TEMPEST)     { disp_w = 580; disp_h = 570; }
+    if constexpr (V == AtariVectorVariant::GRAVITAR)    { disp_w = 420; disp_h = 400; }
+    if constexpr (V == AtariVectorVariant::SPACE_DUEL)  { disp_w = 540; disp_h = 400; }
+    if constexpr (V == AtariVectorVariant::BLACK_WIDOW) { disp_w = 480; disp_h = 440; }
+    if constexpr (V == AtariVectorVariant::MAJOR_HAVOC) { disp_w = 300; disp_h = 260; }
+
+    ht.display.native_width    = disp_w;
+    ht.display.native_height   = disp_h;
+    ht.display.visible_width   = disp_w;
+    ht.display.visible_height  = disp_h;
     ht.display.format          = FramebufferFormat::RGBA8888;
     ht.display.palette_size    = 0;  // Vector display — no palette
     ht.display.pixel_aspect_ratio = 1.0f;
@@ -640,6 +652,26 @@ bool AtariVectorSystem<V>::initialize() {
     if constexpr (V == AtariVectorVariant::TEMPEST) {
         vg().set_tempest_stat(true);
         vg().set_swap_xy(true);
+    }
+
+    // Per-game display area (matches MAME set_visarea dimensions).
+    // AVG games get exact visible areas; DVG games keep the default 1024×1024.
+    if constexpr (std::is_same_v<VideoChip, avg_t>) {
+        if constexpr (V == AtariVectorVariant::BATTLEZONE) {
+            vg().set_display_area(580, 400);
+        } else if constexpr (V == AtariVectorVariant::RED_BARON) {
+            vg().set_display_area(520, 400);
+        } else if constexpr (V == AtariVectorVariant::TEMPEST) {
+            vg().set_display_area(580, 570);
+        } else if constexpr (V == AtariVectorVariant::GRAVITAR) {
+            vg().set_display_area(420, 400);
+        } else if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
+            vg().set_display_area(540, 400);
+        } else if constexpr (V == AtariVectorVariant::BLACK_WIDOW) {
+            vg().set_display_area(480, 440);
+        } else if constexpr (V == AtariVectorVariant::MAJOR_HAVOC) {
+            vg().set_display_area(300, 260);
+        }
     }
 
     // Register all manifest-created chips for the Hardware menu
@@ -1722,8 +1754,8 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
 
 template<AtariVectorVariant V>
 void AtariVectorSystem<V>::get_display_dimensions(int* width, int* height) const {
-    if (width)  *width  = atv::DISPLAY_WIDTH;
-    if (height) *height = atv::DISPLAY_HEIGHT;
+    if (width)  *width  = hardware_traits_.display.visible_width;
+    if (height) *height = hardware_traits_.display.visible_height;
 }
 
 // ============================================================================
