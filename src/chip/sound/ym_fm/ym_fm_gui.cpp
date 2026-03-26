@@ -13,8 +13,8 @@
  *   YM3812 (OPL2):  24-pin DIP
  *
  * SHORTCOMINGS:
- *   - QFP64 pinout (YM2608, YM2610) is a simplified placeholder; the real
- *     64-pin package has pins on all four sides with complex signal grouping.
+ *   - YM2610 (OPNB) shares the 64-pin DIP layout with YM2608; the actual
+ *     YM2610 pinout differs slightly and needs its own variant.
  *   - Debug fields show per-channel F-Num/Block from live state but do not
  *     expose per-operator envelope level, phase, or output — the most useful
  *     debug data for FM synthesis work.
@@ -227,20 +227,20 @@ ChipLayout* ym_fm_t<Traits>::create_chip_layout() const {
             PIN_LR(layout,  4, D2,         PHI_S,        37);
             PIN_LR(layout,  5, D3,         _IRQ,         36);
             PIN_LR(layout,  6, D4,         NC,           35);
-            PIN_LR(layout,  7, D5,         PB7,          34);
-            PIN_LR(layout,  8, D6,         PB6,          33);
-            PIN_LR(layout,  9, D7,         PB5,          32);
-            PIN_LR(layout, 10, _CS,        PB4,          31);
-            PIN_LR(layout, 11, _RD,        PB3,          30);
-            PIN_LR(layout, 12, _WR,        PB2,          29);
-            PIN_LR(layout, 13, A0,         PB1,          28);
-            PIN_LR(layout, 14, A1,         PB0,          27);
-            PIN_LR(layout, 15, SH1,        PA7,          26);
-            PIN_LR(layout, 16, SH2,        PA6,          25);
-            PIN_LR(layout, 17, MO,         PA5,          24);
-            PIN_LR(layout, 18, CH3_OUT,    PA4,          23);
-            PIN_LR(layout, 19, SSG_OUT,    PA3,          22);
-            PIN_LR(layout, 20, GND,        PA2,          21);
+            PIN_LR(layout,  7, D5,         IOB7,         34);
+            PIN_LR(layout,  8, D6,         IOB6,         33);
+            PIN_LR(layout,  9, D7,         IOB5,         32);
+            PIN_LR(layout, 10, _CS,        IOB4,         31);
+            PIN_LR(layout, 11, _RD,        IOB3,         30);
+            PIN_LR(layout, 12, _WR,        IOB2,         29);
+            PIN_LR(layout, 13, A0,         IOB1,         28);
+            PIN_LR(layout, 14, A1,         IOB0,         27);
+            PIN_LR(layout, 15, SH1,        IOA7,         26);
+            PIN_LR(layout, 16, SH2,        IOA6,         25);
+            PIN_LR(layout, 17, MO,         IOA5,         24);
+            PIN_LR(layout, 18, CH3_OUT,    IOA4,         23);
+            PIN_LR(layout, 19, SSG_OUT,    IOA3,         22);
+            PIN_LR(layout, 20, GND,        IOA2,         21);
 
             return layout;
         }();
@@ -267,49 +267,44 @@ ChipLayout* ym_fm_t<Traits>::create_chip_layout() const {
         return &layout;
     }
 
-    // ---------- 64-pin QFP (YM2608, YM2610) ----------
+    // ---------- 64-pin SDIP (YM2608 OPNA) ----------
     if constexpr (Traits.pin_count == 64) {
         static ChipLayout layout = [] {
-            ChipLayout layout = create_qfp64_layout();
+            ChipLayout layout = create_custom_dip(64, "YM2608");
 
-            // QFP64 — simplified pinout; exact assignment
-            // varies between YM2608 and YM2610.
-            layout.left_pins.push_back(ChipPin CHIP_PIN( 1, D0));
-            layout.left_pins.push_back(ChipPin CHIP_PIN( 2, D1));
-            layout.left_pins.push_back(ChipPin CHIP_PIN( 3, D2));
-            layout.left_pins.push_back(ChipPin CHIP_PIN( 4, D3));
-            layout.left_pins.push_back(ChipPin CHIP_PIN( 5, D4));
-            layout.left_pins.push_back(ChipPin CHIP_PIN( 6, D5));
-            layout.left_pins.push_back(ChipPin CHIP_PIN( 7, D6));
-            layout.left_pins.push_back(ChipPin CHIP_PIN( 8, D7));
-            layout.left_pins.push_back(ChipPin CHIP_PIN( 9, _CS));
-            layout.left_pins.push_back(ChipPin CHIP_PIN(10, _RD));
-            layout.left_pins.push_back(ChipPin CHIP_PIN(11, _WR));
-            layout.left_pins.push_back(ChipPin CHIP_PIN(12, A0));
-            layout.left_pins.push_back(ChipPin CHIP_PIN(13, A1));
-            layout.left_pins.push_back(ChipPin CHIP_PIN(14, _RES));
-            layout.left_pins.push_back(ChipPin CHIP_PIN(15, _IRQ));
-            layout.left_pins.push_back(ChipPin CHIP_PIN(16, PHI_M));
-
-            // Bottom side (pins 17-32): I/O ports, SSG output
-            for (uint8_t i = 17; i <= 24; i++)
-                layout.bottom_pins.push_back(ChipPin CHIP_PIN(i, NC));
-            layout.bottom_pins.push_back(ChipPin CHIP_PIN(25, SSG_OUT));
-            for (uint8_t i = 26; i <= 32; i++)
-                layout.bottom_pins.push_back(ChipPin CHIP_PIN(i, NC));
-
-            // Right side (pins 33-48): audio outputs, ADPCM memory bus
-            for (uint8_t i = 33; i <= 44; i++)
-                layout.right_pins.push_back(ChipPin CHIP_PIN(i, NC));
-            layout.right_pins.push_back(ChipPin CHIP_PIN(45, MO));
-            for (uint8_t i = 46; i <= 48; i++)
-                layout.right_pins.push_back(ChipPin CHIP_PIN(i, NC));
-
-            // Top side (pins 49-64): power, ADPCM address bus
-            layout.top_pins.push_back(ChipPin CHIP_PIN(49, VCC));
-            for (uint8_t i = 50; i <= 63; i++)
-                layout.top_pins.push_back(ChipPin CHIP_PIN(i, NC));
-            layout.top_pins.push_back(ChipPin CHIP_PIN(64, VSS));
+            //           Left side                Right side
+            PIN_LR(layout,  1, GND,        PHI_S,        64)
+            PIN_LR(layout,  2, D0,         PHI_M,        63)
+            PIN_LR(layout,  3, D1,         VCC,          62)
+            PIN_LR(layout,  4, D2,         A1,           61)
+            PIN_LR(layout,  5, D3,         A0,           60)
+            PIN_LR(layout,  6, D4,         _RD,          59)
+            PIN_LR(layout,  7, D5,         _WR,          58)
+            PIN_LR(layout,  8, D6,         _CS,          57)
+            PIN_LR(layout,  9, D7,         _IRQ,         56)
+            PIN_LR(layout, 10, IOA7,       DM7,          55)
+            PIN_LR(layout, 11, IOA6,       DM6,          54)
+            PIN_LR(layout, 12, IOA5,       DM5,          53)
+            PIN_LR(layout, 13, IOA4,       DM4,          52)
+            PIN_LR(layout, 14, IOA3,       DM3,          51)
+            PIN_LR(layout, 15, IOA2,       DM2,          50)
+            PIN_LR(layout, 16, IOA1,       DM1,          49)
+            PIN_LR(layout, 17, IOA0,       DM0,          48)
+            PIN_LR(layout, 18, IOB7,       _RAS,         47)
+            PIN_LR(layout, 19, IOB6,       _CAS,         46)
+            PIN_LR(layout, 20, IOB5,       _WE,          45)
+            PIN_LR(layout, 21, IOB4,       MDEN,         44)
+            PIN_LR(layout, 22, IOB3,       ROMCS,        43)
+            PIN_LR(layout, 23, IOB2,       A8,           42)
+            PIN_LR(layout, 24, IOB1,       DTO,          41)
+            PIN_LR(layout, 25, IOB0,       _TEST,        40)
+            PIN_LR(layout, 26, AGND,       AGND,         39)
+            PIN_LR(layout, 27, ANALOG_OUT, DA,           38)
+            PIN_LR(layout, 28, AVCC,       C_DAC,        37)
+            PIN_LR(layout, 29, SH1,        AD_FM,        36)
+            PIN_LR(layout, 30, SH2,        AVCC,         35)
+            PIN_LR(layout, 31, OPO,        SPOFF,        34)
+            PIN_LR(layout, 32, GND,        _IC,          33)
 
             return layout;
         }();

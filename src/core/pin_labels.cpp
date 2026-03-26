@@ -29,6 +29,26 @@ const char* pin_label_to_string(PinLabel label) {
 }
 
 // ============================================================================
+// pin_label_to_description — X-macro generated
+// ============================================================================
+//
+// Returns the human-readable description (the cmt field) for a PinLabel.
+// Used for tooltip / hover text in chip layout rendering.
+
+const char* pin_label_to_description(PinLabel label) {
+    switch (label) {
+#define PLD_INV_(id, str, cmt)   case PinLabel::id: return cmt;
+#define PLD_CAT_(t)
+#define PLD_PIN_(id, str, cmt)   case PinLabel::id: return cmt;
+    PIN_LABELS(PLD_INV_, PLD_CAT_, PLD_PIN_)
+#undef PLD_INV_
+#undef PLD_CAT_
+#undef PLD_PIN_
+    default: return "";
+    }
+}
+
+// ============================================================================
 // pin_label_to_display_string
 // ============================================================================
 //
