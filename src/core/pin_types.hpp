@@ -517,8 +517,8 @@ PinType pin_label_to_pin_type(PinLabel label);
 //   Power synonyms:  GND   → VSS,   VCC   → VDD
 //   Name synonyms:   PHI_M → CLK,   MO    → AUDIO_OUT,  _IC → RES, etc.
 //
-// MAINTENANCE: when adding a case `X → Y`, ensure Y is listed in
-// pin_canonical_validate().  The static_assert will catch chains.
+// MAINTENANCE: when adding a case `X → Y`, ensure Y is itself canonical
+// (not mapped to something else).  The static_assert below will fire if not.
 //
 constexpr PinLabel pin_canonical(PinLabel label) {
     switch (label) {
@@ -581,50 +581,19 @@ constexpr bool pin_equivalent(PinLabel a, PinLabel b) {
     return pin_canonical(a) == pin_canonical(b);
 }
 
-// Compile-time anti-chain guard: every canonical target must be a fixed point.
-// If pin_canonical(X) returns Y, then pin_canonical(Y) must return Y.
-constexpr bool pin_canonical_validate() {
-    return
-        pin_canonical(PinLabel::ABORT) == PinLabel::ABORT &&
-        pin_canonical(PinLabel::AEC) == PinLabel::AEC &&
-        pin_canonical(PinLabel::AUDIO_OUT) == PinLabel::AUDIO_OUT &&
-        pin_canonical(PinLabel::BASIC) == PinLabel::BASIC &&
-        pin_canonical(PinLabel::CAS) == PinLabel::CAS &&
-        pin_canonical(PinLabel::CASRAM_PLA) == PinLabel::CASRAM_PLA &&
-        pin_canonical(PinLabel::CHAREN) == PinLabel::CHAREN &&
-        pin_canonical(PinLabel::CHAROM) == PinLabel::CHAROM &&
-        pin_canonical(PinLabel::CLK) == PinLabel::CLK &&
-        pin_canonical(PinLabel::CS) == PinLabel::CS &&
-        pin_canonical(PinLabel::CS0) == PinLabel::CS0 &&
-        pin_canonical(PinLabel::CS1) == PinLabel::CS1 &&
-        pin_canonical(PinLabel::CS2) == PinLabel::CS2 &&
-        pin_canonical(PinLabel::EXROM) == PinLabel::EXROM &&
-        pin_canonical(PinLabel::G) == PinLabel::G &&
-        pin_canonical(PinLabel::GAME) == PinLabel::GAME &&
-        pin_canonical(PinLabel::HIRAM) == PinLabel::HIRAM &&
-        pin_canonical(PinLabel::IO) == PinLabel::IO &&
-        pin_canonical(PinLabel::IRQ) == PinLabel::IRQ &&
-        pin_canonical(PinLabel::KERNAL) == PinLabel::KERNAL &&
-        pin_canonical(PinLabel::LORAM) == PinLabel::LORAM &&
-        pin_canonical(PinLabel::ML) == PinLabel::ML &&
-        pin_canonical(PinLabel::NMI) == PinLabel::NMI &&
-        pin_canonical(PinLabel::OE) == PinLabel::OE &&
-        pin_canonical(PinLabel::Q7) == PinLabel::Q7 &&
-        pin_canonical(PinLabel::RAS) == PinLabel::RAS &&
-        pin_canonical(PinLabel::RD) == PinLabel::RD &&
-        pin_canonical(PinLabel::RES) == PinLabel::RES &&
-        pin_canonical(PinLabel::ROMH) == PinLabel::ROMH &&
-        pin_canonical(PinLabel::ROML) == PinLabel::ROML &&
-        pin_canonical(PinLabel::SO) == PinLabel::SO &&
-        pin_canonical(PinLabel::VA14) == PinLabel::VA14 &&
-        pin_canonical(PinLabel::VDD) == PinLabel::VDD &&
-        pin_canonical(PinLabel::VP) == PinLabel::VP &&
-        pin_canonical(PinLabel::VPB) == PinLabel::VPB &&
-        pin_canonical(PinLabel::VSS) == PinLabel::VSS &&
-        pin_canonical(PinLabel::WE) == PinLabel::WE;
+// Compile-time idempotency proof: pin_canonical(pin_canonical(x)) == pin_canonical(x)
+// for every label in the enum.  Catches chains regardless of which labels are
+// involved — no manual target list to maintain.
+constexpr bool pin_canonical_is_idempotent() {
+    for (int i = 0; i <= static_cast<int>(PinLabel::UNKNOWN); ++i) {
+        auto l = static_cast<PinLabel>(i);
+        if (pin_canonical(pin_canonical(l)) != pin_canonical(l))
+            return false;
+    }
+    return true;
 }
-static_assert(pin_canonical_validate(),
-    "pin_canonical() chain detected: every target must be a fixed point");
+static_assert(pin_canonical_is_idempotent(),
+    "pin_canonical() is not idempotent — a chain exists (X→Y where Y→Z)");
 
 // ============================================================================
 // PIN-TO-BUS-BIT MAPPING
