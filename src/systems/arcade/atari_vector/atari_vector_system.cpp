@@ -760,14 +760,6 @@ void AtariVectorSystem<V>::tick() {
     // CPU tick
     tick_cpu();
 
-    // DEBUG: trace CPU PC periodically for BZ
-    if constexpr (V == AtariVectorVariant::BATTLEZONE) {
-        if (total_cycles_ > 0 && (total_cycles_ % 500000) == 0) {
-            uint16_t addr = BUS_GET_ADDR(pins_) & 0x7FFF;
-            printf("BZ cycle %u: addr=$%04X nmi=%d\n", total_cycles_, addr, latch_259_.q(5));
-        }
-    }
-
     // Vector generator tick — runs at the same frequency as the CPU
     vg().tick();
 
@@ -889,14 +881,6 @@ void AtariVectorSystem<V>::tick_cpu() {
         addr = raw_addr;
     }
     bool is_write = !BUS_GET_BIT(pins_, BUS_RW_BIT);
-
-    // Boot trace: log first 50 bus accesses to diagnose startup issues.
-    if (total_cycles_ < 50) {
-        uint8_t data = BUS_GET_DATA(pins_);
-        printf("%s [%3u] $%04X %c $%02X\n",
-               Traits::NAME, total_cycles_, addr,
-               is_write ? 'W' : 'R', data);
-    }
 
     // I/O region varies by game family:
     //   Asteroids/LL/AD:  $2000-$3FFF
@@ -1291,14 +1275,11 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
             //   Q0 = coin counter 1, Q1 = coin counter 2, Q2 = start LED
             //   Q5 = NMI enable (game writes $1005 D0=1 to enable periodic NMI)
             latch_259_.write(addr, data);
-            printf("BZ latch: Q%d = %d (addr=$%04X data=$%02X)\n", addr & 0x07, data & 1, addr, data);
         } else if (addr >= atv::BZ_SND_ADDR && addr < atv::BZ_SND_ADDR + 0x0200) {
             snd_latch_ = data;
         } else if (addr >= atv::BZ_VGGO_ADDR && addr < atv::BZ_VGGO_ADDR + 0x0200) {
-            printf("BZ VGGO triggered at cycle %u\n", total_cycles_);
             vg().trigger_go();
         } else if (addr >= atv::BZ_VGRST_ADDR && addr < atv::BZ_VGRST_ADDR + 0x0200) {
-            printf("BZ VGRST at cycle %u\n", total_cycles_);
             vg().trigger_reset();
         } else if (addr >= atv::BZ_WDCLR_ADDR && addr < atv::BZ_WDCLR_ADDR + 0x0200) {
             // Watchdog clear — no-op
