@@ -44,14 +44,14 @@ ChipLayout* MOS2114::create_chip_layout() const {
         // Pin 18: Vcc (Supply voltage)
         //
         // Right-hand pins (10-18) are numbered bottom-up as per DIP standard
-        PIN_LR(layout,  1, A6,    VDD, 18)   // addr 6 / +5V
+        PIN_LR(layout,  1, A6,    VCC, 18)   // addr 6 / +5V
         PIN_LR(layout,  2, A5,    A7,  17)   // addr 5 / addr 7
         PIN_LR(layout,  3, A4,    A8,  16)   // addr 4 / addr 8
         PIN_LR(layout,  4, A3,    A9,  15)   // addr 3 / addr 9
-        PIN_LR(layout,  5, A0,    D1,  14)   // addr 0 / I/O 1
-        PIN_LR(layout,  6, A1,    D2,  13)   // addr 1 / I/O 2
-        PIN_LR(layout,  7, A2,    D3,  12)   // addr 2 / I/O 3
-        PIN_LR(layout,  8, _CS,   D4,  11)   // chip sel / I/O 4
+        PIN_LR(layout,  5, A0,    DQ0,  14)   // addr 0 / I/O 1
+        PIN_LR(layout,  6, A1,    DQ1,  13)   // addr 1 / I/O 2
+        PIN_LR(layout,  7, A2,    DQ2,  12)   // addr 2 / I/O 3
+        PIN_LR(layout,  8, _CS,   DQ3,  11)   // chip sel / I/O 4
         PIN_LR(layout,  9, VSS,   _WE, 10)   // gnd / write enable
 
         return layout;

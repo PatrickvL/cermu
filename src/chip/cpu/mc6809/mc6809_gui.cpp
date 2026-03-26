@@ -67,7 +67,7 @@ ChipLayout* mc6809_t<Traits>::create_chip_layout() const {
         PIN_LR(layout,  3, _IRQ,     XTAL,   38);  // MC6809E: TSC
         PIN_LR(layout,  4, _FIRQ,    EXTAL,  37);  // MC6809E: BS
         PIN_LR(layout,  5, BS,       _RES,   36);  // MC6809E: BA
-        PIN_LR(layout,  6, BA,       E,      35);   // MC6809E: E (input)
+        PIN_LR(layout,  6, BA,       ENABLE, 35);  // MC6809E: E (input)
         PIN_LR(layout,  7, VCC,      Q_CLK,  34);   // MC6809E: Q (input)
         PIN_LR(layout,  8, A0,       D0,     33);
         PIN_LR(layout,  9, A1,       D1,     32);
