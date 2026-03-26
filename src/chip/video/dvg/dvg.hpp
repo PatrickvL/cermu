@@ -162,6 +162,16 @@ struct dvg_t : public VideoChipBase {
         running_   = true;
         halt_      = false;
         clocks_remaining_ = 0;
+
+        // DEBUG: trace first words of display list on VGGO
+        if (vec_ram_) {
+            printf("DVG GO: first 8 words:");
+            for (int i = 0; i < 16; i += 2) {
+                uint16_t w = vec_ram_[i] | (vec_ram_[i+1] << 8);
+                printf(" %04X", w);
+            }
+            printf("\n");
+        }
     }
 
     /// Trigger VGRST: reset the state machine.

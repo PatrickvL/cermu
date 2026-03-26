@@ -451,6 +451,7 @@ namespace atari_vector_constants {
     inline constexpr uint16_t SD_VGGO_ADDR         = 0x0C80;    // write: trigger AVG
     inline constexpr uint16_t SD_VGRST_ADDR        = 0x0D80;    // write: reset AVG
     inline constexpr uint16_t SD_WDCLR_ADDR        = 0x0D00;    // write: watchdog clear (MAME: $0D00)
+    inline constexpr uint16_t SD_IRQACK_ADDR       = 0x0E00;    // write: IRQ acknowledge (MAME: $0E00)
 
     // Black Widow (1982): AVG + POKEY, color, dual joystick
     // Same board as Gravitar (bwidow_map). Memory map identical to Gravitar.

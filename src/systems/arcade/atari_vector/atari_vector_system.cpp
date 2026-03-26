@@ -858,6 +858,14 @@ void AtariVectorSystem<V>::tick_cpu() {
     }
     bool is_write = !BUS_GET_BIT(pins_, BUS_RW_BIT);
 
+    // Boot trace: log first 50 bus accesses to diagnose startup issues.
+    if (total_cycles_ < 50) {
+        uint8_t data = BUS_GET_DATA(pins_);
+        printf("%s [%3u] $%04X %c $%02X\n",
+               Traits::NAME, total_cycles_, addr,
+               is_write ? 'W' : 'R', data);
+    }
+
     // I/O region varies by game family:
     //   Asteroids/LL/AD:  $2000-$3FFF
     //   Battlezone/RB:    $0800-$1FFF (MAME bzone.cpp)
@@ -1102,6 +1110,13 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
                 BUS_SET_DATA(pins, data);
                 return pins;
             }
+            if (addr >= atv::TEMP_POKEY2_BASE && addr < atv::TEMP_POKEY2_BASE + 0x10) {
+                // POKEY2 — reads player buttons/start via pot mechanism.
+                // TODO: second POKEY instance; return open-bus for now.
+                data = 0xFF;
+                BUS_SET_DATA(pins, data);
+                return pins;
+            }
             if (addr == atv::TEMP_EAROM_READ_ADDR) {
                 data = earom_[0];  // TODO: proper ER2055 address latch
                 BUS_SET_DATA(pins, data);
@@ -1109,7 +1124,8 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
             }
             if (addr == atv::TEMP_EAROM_CTRL_ADDR) {
                 // Mathbox status register (read side of $6040)
-                data = 0x00;  // TODO: mathbox status
+                // bit 7 = 1 when idle/done. We have no mathbox — always done.
+                data = 0x80;
                 BUS_SET_DATA(pins, data);
                 return pins;
             }
@@ -1135,29 +1151,46 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
         }
 
         // Input port reads — per-game addresses and VG halt bit positions.
-        // All AVG games use active-LOW IN0 bits (0 = active, 1 = idle).
+        // AVG games use IP_ACTIVE_LOW for done_r: bit=0 when halted, bit=1 when running.
         // Default 0xFF = all idle/inactive.
         if constexpr (V == AtariVectorVariant::TEMPEST) {
-            // Tempest IN0 at $0C00: bit 6 = VG done_r (IP_ACTIVE_HIGH)
+            // Tempest IN0 at $0C00 (MAME tempest.cpp, INPUT_PORTS_START(tempest)):
+            //   bits 0-5: coins, tilt, self-test, diag step (IP_ACTIVE_LOW)
+            //   bit 6 (0x40): VG done_r (IP_ACTIVE_HIGH: 1=halted, 0=running)
+            //   bit 7 (0x80): 3 KHz clock (IP_ACTIVE_HIGH)
             if (addr >= 0x0C00 && addr < 0x0D00) {
-                data = 0xFF;
-                if (!vg().is_halted()) data &= ~0x40;
+                data = 0xFF;  // all idle (active-low buttons = high)
+                if (!vg().is_halted()) data &= ~0x40;  // running → clear bit 6
+                if (!(total_cycles_ & 0x100)) data &= ~0x80;  // clock low → clear bit 7
             } else if (addr >= 0x0D00 && addr < 0x0E00) {
-                data = in1_;
+                data = dsw1_;  // DSW1 at $0D00 (MAME: portr("DSW1"))
             } else if (addr >= 0x0E00 && addr < 0x0F00) {
-                data = dsw1_;
+                data = dsw2_;  // DSW2 at $0E00 (MAME: portr("DSW2"))
+            } else if (addr == 0x6040) {
+                // Mathbox status register (MAME: mathbox_device::status_r)
+                // bit 7 = 1 when mathbox is idle/done, 0 when busy.
+                // We have no mathbox — always return "done".
+                data = 0x80;
+            } else if (addr == 0x6060) {
+                data = 0x00;  // Mathbox lo result (stub)
+            } else if (addr == 0x6070) {
+                data = 0x00;  // Mathbox hi result (stub)
             } else {
                 data = 0xFF;
             }
         } else if constexpr (V == AtariVectorVariant::GRAVITAR ||
                              V == AtariVectorVariant::BLACK_WIDOW) {
-            // Gravitar/BW (bwidow board, MAME bwidow.cpp bwidow_map)
-            //   $7800: IN0 — bit 5 = VG done_r (IP_ACTIVE_HIGH), coins, self-test
-            //   $8000: IN3 — player controls (joystick, fire, shield, start)
+            // Gravitar/BW (bwidow board, MAME bwidow.cpp INPUT_PORTS_START(bwidow/gravitar))
+            //   $7800: IN0 — same layout as all AVG games:
+            //     bits 0-5: coins, unused, self-test, diag step (IP_ACTIVE_LOW)
+            //     bit 6 (0x40): VG done_r (IP_ACTIVE_HIGH: 1=halted, 0=running)
+            //     bit 7 (0x80): 3 KHz clock (IP_ACTIVE_HIGH)
+            //   $8000: IN3 — player controls
             //   $8800: IN4 — DIP switches / P2 controls
             if (addr == atv::GRAV_IN0_ADDR) {
-                data = 0xFF;
-                if (!vg().is_halted()) data &= ~0x20;  // bit 5 = VG done_r
+                data = 0xFF;  // all idle (active-low buttons = high)
+                if (!vg().is_halted()) data &= ~0x40;  // running → clear bit 6
+                if (!(total_cycles_ & 0x100)) data &= ~0x80;  // clock low → clear bit 7
             } else if (addr == atv::GRAV_IN3_ADDR) {
                 data = in1_;
             } else if (addr == atv::GRAV_IN4_ADDR) {
@@ -1166,22 +1199,26 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
                 data = 0xFF;
             }
         } else if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
-            // Space Duel (MAME bwidow.cpp spacduel_map)
-            //   $0800: IN0 — bit 5 = VG done_r (IP_ACTIVE_HIGH), coins
-            //   $0900: IN3 — player controls
+            // Space Duel (MAME bwidow.cpp INPUT_PORTS_START(spacduel))
+            //   $0800: IN0 — same layout as all AVG games:
+            //     bits 0-5: coins, unused, self-test, diag step (IP_ACTIVE_LOW)
+            //     bit 6 (0x40): VG done_r (IP_ACTIVE_HIGH: 1=halted, 0=running)
+            //     bit 7 (0x80): 3 KHz clock (IP_ACTIVE_HIGH)
+            //   $0900-$0907: IN3 — multiplexed player controls
             if (addr == atv::SD_IN0_ADDR) {
-                data = 0xFF;
-                if (!vg().is_halted()) data &= ~0x20;  // bit 5 = VG done_r
+                data = 0xFF;  // all idle (active-low buttons = high)
+                if (!vg().is_halted()) data &= ~0x40;  // running → clear bit 6
+                if (!(total_cycles_ & 0x100)) data &= ~0x80;  // clock low → clear bit 7
             } else if (addr >= 0x0900 && addr < 0x0A00) {
                 data = in1_;
             } else {
                 data = 0xFF;
             }
         } else if constexpr (V == AtariVectorVariant::MAJOR_HAVOC) {
-            // MH alpha reads IN0 at $0800; bit 1 = VG done_r (IP_ACTIVE_HIGH)
+            // MH alpha reads IN0 at $0800; bit 1 = VG done_r (IP_ACTIVE_LOW)
             if (addr >= 0x0800 && addr < 0x0900) {
                 data = 0xFF;
-                if (!vg().is_halted()) data &= ~0x02;
+                if (vg().is_halted()) data &= ~0x02;  // halted → bit 1 = 0
             } else {
                 data = 0xFF;
             }
@@ -1306,6 +1343,11 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
                 pokey_.write(addr & 0x0F, data);
                 return pins;
             }
+            if (addr >= atv::TEMP_POKEY2_BASE && addr < atv::TEMP_POKEY2_BASE + 0x10) {
+                // POKEY2 — handles player buttons/start via pot reads
+                // TODO: second POKEY instance; for now silently accept writes.
+                return pins;
+            }
             if (addr >= atv::TEMP_EAROM_BASE && addr < atv::TEMP_EAROM_BASE + atv::TEMP_EAROM_SIZE) {
                 earom_[addr & 0x3F] = data;
                 return pins;
@@ -1330,7 +1372,11 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
                 // TODO: second POKEY
                 return pins;
             }
-            if (addr == atv::GRAV_VGGO_ADDR)  { vg().trigger_go(); return pins; }
+            // VGGO: $8840 primary, $8940 alternate (bwidow board partial decode,
+            // bit 8 not decoded — MAME bwidow_map lists both addresses).
+            if (addr == atv::GRAV_VGGO_ADDR || addr == 0x8940) {
+                vg().trigger_go(); return pins;
+            }
             if (addr == atv::GRAV_VGRST_ADDR) { vg().trigger_reset(); return pins; }
             if (addr == atv::GRAV_IRQACK_ADDR) { irq_asserted_ = false; return pins; }
             if (addr == atv::GRAV_WDCLR_ADDR) { return pins; }
