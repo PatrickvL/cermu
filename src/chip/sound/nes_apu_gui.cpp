@@ -30,8 +30,6 @@ bool nes6502_apu::APU::has_settings_content() const { return true; }
 ChipLayout* nes6502_apu::APU::create_chip_layout() const {
     static ChipLayout layout = [] {
         auto layout = create_dip40_layout();
-        layout.markings.manufacturer = "Ricoh";
-        layout.markings.part_number  = "RP2A03";
         layout.markings.custom_text  = "CPU + APU";
 
         // Left column  (pins 1-20, top to bottom)

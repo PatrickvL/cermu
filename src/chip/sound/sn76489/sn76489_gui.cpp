@@ -25,10 +25,6 @@ ChipLayout* sn76489_t::create_chip_layout() const {
     static ChipLayout layout = [this] {
         ChipLayout layout = create_dip16_layout();
 
-        const auto& traits = sn76489_variant_traits[static_cast<int>(variant_)];
-        layout.markings.part_number  = traits.part_number;
-        layout.markings.manufacturer = traits.manufacturer;
-
         // SN76489 16-pin DIP pinout (TI datasheet)
         //                  LEFT                        RIGHT
         PIN_LR(layout,  1, D5,         VCC,         16);

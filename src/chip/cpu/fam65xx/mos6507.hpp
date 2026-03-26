@@ -41,19 +41,6 @@ inline ChipLayout create_mos6507_layout() {
     layout.left_pins.clear();
     layout.right_pins.clear();
 
-    layout.markings = {
-        "MOS6507",          // part_number
-        "MOS Technology",   // manufacturer
-        {},                 // package_variant
-        {},                 // date_code
-        {},                 // lot_number
-        {},                 // custom_text
-        true,               // show_part_number
-        true,               // show_manufacturer
-        false,              // show_package_variant
-        false               // show_date_code
-    };
-
     // Hardware-accurate MOS 6507 pinout (28-pin DIP)
     PIN_LR(layout,  1, _RES,   PHI0,  28);  // Reset / Clock input
     PIN_LR(layout,  2, VSS,    RW,    27);  // GND / Read-Write

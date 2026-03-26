@@ -79,19 +79,6 @@ ChipLayout* z80_pio_t::create_chip_layout() const {
         layout.left_pins.clear();
         layout.right_pins.clear();
 
-        layout.markings = {
-            "Z80 PIO",                   // part_number
-            "Zilog",                     // manufacturer
-            {},                          // package_variant
-            {},                          // date_code
-            {},                          // lot_number
-            {},                          // custom_text
-            true,                        // show_part_number
-            true,                        // show_manufacturer
-            false,                       // show_package_variant
-            false                        // show_date_code
-        };
-
         // Z80 PIO (Z8420) — 40-pin DIP
         //           Left side                Right side
         PIN_LR(layout,  1,  D2,    D3,    40)

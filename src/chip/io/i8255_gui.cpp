@@ -55,19 +55,6 @@ ChipLayout* i8255_t::create_chip_layout() const {
         layout.left_pins.clear();
         layout.right_pins.clear();
 
-        layout.markings = {
-            "8255A",                     // part_number
-            "Intel",                     // manufacturer
-            {},                          // package_variant
-            {},                          // date_code
-            {},                          // lot_number
-            {},                          // custom_text
-            true,                        // show_part_number
-            true,                        // show_manufacturer
-            false,                       // show_package_variant
-            false                        // show_date_code
-        };
-
         //           Left side                Right side
         PIN_LR(layout,  1,  PA3,   PA4,   40)
         PIN_LR(layout,  2,  PA2,   PA5,   39)

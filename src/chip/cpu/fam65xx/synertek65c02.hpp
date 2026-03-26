@@ -44,19 +44,6 @@ inline ChipLayout create_synertek65c02_layout() {
     layout.left_pins.clear();
     layout.right_pins.clear();
 
-    layout.markings = {
-        "SY65C02",          // part_number
-        "Synertek",         // manufacturer
-        {},                 // package_variant
-        {},                 // date_code
-        {},                 // lot_number
-        {},                 // custom_text
-        true,               // show_part_number
-        true,               // show_manufacturer
-        false,              // show_package_variant
-        false               // show_date_code
-    };
-
     // Same pinout as MOS 6502 (40-pin DIP, pin-compatible)
     PIN_LR(layout,  1, VSS,   VSS,  21);
     PIN_LR(layout,  2, RDY,   A12,  22);

@@ -29,8 +29,6 @@ ChipLayout* PLA906114::create_chip_layout() const {
         layout.left_pins.clear();
         layout.right_pins.clear();
 
-        layout.markings.part_number  = "906114-01";
-        layout.markings.manufacturer = "MOS Technology";
         layout.markings.custom_text  = "Programmable Logic Array";
 
         // Hardware-accurate PLA pinout (28-pin DIP)

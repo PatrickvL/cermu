@@ -42,19 +42,6 @@ using ROCKWELL_R65C02 = fam65xx::ROCKWELL_R65C02;
 inline ChipLayout create_rockwell_r65c02_layout() {
   ChipLayout layout = create_dip40_layout();
 
-  layout.markings = {
-      "R65C02",   // part_number
-      "Rockwell", // manufacturer
-      {},    // package_variant
-      {},    // date_code
-      {},    // lot_number
-      {},    // custom_text
-      true,       // show_part_number
-      true,       // show_manufacturer
-      false,      // show_package_variant
-      false       // show_date_code
-  };
-
   // Pin assignments for Rockwell R65C02 (40-pin DIP)
   PIN_LR(layout, 1, VSS, VSS, 21)
   PIN_LR(layout, 2, RDY, A12, 22)    // Ready

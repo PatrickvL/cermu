@@ -95,8 +95,6 @@ ChipLayout* pokey::pokey_t<Traits>::create_chip_layout() const {
     // All POKEY variants are 40-pin DIP
     static ChipLayout layout = [] {
         ChipLayout layout = create_dip40_layout();
-        layout.markings.part_number  = Traits.chip_id;
-        layout.markings.manufacturer = Traits.vendor;
 
         // POKEY 40-pin DIP pinout (Atari/AMI datasheet CO12294/CO14795)
         //

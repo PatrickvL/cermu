@@ -48,19 +48,6 @@ inline ChipLayout create_wdc65c02_early_layout() {
     layout.left_pins.clear();
     layout.right_pins.clear();
 
-    layout.markings = {
-        "W65C02",           // part_number
-        "WDC",              // manufacturer
-        {},                 // package_variant
-        {},                 // date_code
-        {},                 // lot_number
-        {},                 // custom_text
-        true,               // show_part_number
-        true,               // show_manufacturer
-        false,              // show_package_variant
-        false               // show_date_code
-    };
-
     // Same pinout as MOS 6502 (40-pin DIP, pin-compatible)
     // Early WDC 65C02 has no Bus Enable (pin 36 = NC)
     PIN_LR(layout,  1, VSS,   VSS,  21);

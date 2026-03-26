@@ -67,19 +67,6 @@ using CSG8502 = fam65xx::CSG8502;
 inline ChipLayout create_csg8502_layout() {
   ChipLayout layout = create_dip40_layout();
 
-  layout.markings = {
-      "CSG8502",    // part_number
-      "Commodore",  // manufacturer
-      {},           // package_variant
-      {},           // date_code
-      {},           // lot_number
-      {},           // custom_text
-      true,         // show_part_number
-      true,         // show_manufacturer
-      false,        // show_package_variant
-      false         // show_date_code
-  };
-
   // Pin assignments for CSG 8502 (40-pin DIP) — identical to MOS 6510
   // Port bits 0-5 on pins 24-29; port bit 6 is internal (clock speed).
   PIN_LR(layout, 1, PHI0, VSS, 21)

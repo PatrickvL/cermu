@@ -42,19 +42,6 @@ using MOS6502 = fam65xx::MOS6502;
 inline ChipLayout create_mos6502_layout() {
   ChipLayout layout = create_dip40_layout();
 
-  layout.markings = {
-      "MOS6502",        // part_number
-      "MOS Technology", // manufacturer
-      {},          // package_variant
-      {},          // date_code
-      {},          // lot_number
-      {},          // custom_text
-      true,             // show_part_number
-      true,             // show_manufacturer
-      false,            // show_package_variant
-      false             // show_date_code
-  };
-
   // Pin assignments for MOS 6502 (40-pin DIP)
   PIN_LR(layout, 1, VSS, VSS, 21)
   PIN_LR(layout, 2, RDY, A12, 22)   // Ready

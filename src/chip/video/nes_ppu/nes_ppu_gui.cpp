@@ -28,18 +28,11 @@
 // RICOH 2C02 PPU LAYOUT (40-pin DIP)
 // ============================================================================
 
-inline ChipLayout create_ppu_layout(bool pal) {
+inline ChipLayout create_ppu_layout() {
     ChipLayout layout = create_dip40_layout();
 
     layout.left_pins.clear();
     layout.right_pins.clear();
-
-    layout.markings = {
-        pal ? "RP2C07" : "RP2C02",
-        "Ricoh",
-        {}, {}, {}, {},
-        true, true, false, false
-    };
 
     // Hardware-accurate Ricoh 2C02 PPU pinout (40-pin DIP)
     PIN_LR(layout,  1, RW,      VDD, 40)       // R/W / +5V
@@ -73,9 +66,8 @@ inline ChipLayout create_ppu_layout(bool pal) {
 bool nes_system::PPU::has_settings_content() const { return true; }
 
 ChipLayout* nes_system::PPU::create_chip_layout() const {
-    static ChipLayout layout_ntsc = create_ppu_layout(false);
-    static ChipLayout layout_pal  = create_ppu_layout(true);
-    return is_pal ? &layout_pal : &layout_ntsc;
+    static ChipLayout layout = create_ppu_layout();
+    return &layout;
 }
 
 // ============================================================================

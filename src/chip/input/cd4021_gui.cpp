@@ -27,8 +27,6 @@ ChipLayout* CD4021::create_chip_layout() const {
     static ChipLayout layout = [] {
         ChipLayout layout = create_dip16_layout();
 
-        layout.markings.part_number  = "CD4021B";
-        layout.markings.manufacturer = "Texas Instruments";
         layout.markings.custom_text  = "CMOS Shift Register";
 
         //                  LEFT                        RIGHT

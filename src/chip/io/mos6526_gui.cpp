@@ -29,20 +29,6 @@ ChipLayout* mos6526_t::create_chip_layout() const {
         layout.left_pins.clear();
         layout.right_pins.clear();
 
-        // Update package info for MOS6526 CIA
-        layout.markings = {
-            "MOS6526",                   // part_number
-            "MOS Technology",            // manufacturer
-            {},                     // package_variant
-            {},                     // date_code
-            {},                     // lot_number
-            {},                     // custom_text
-            true,                        // show_part_number
-            true,                        // show_manufacturer
-            false,                       // show_package_variant
-            false                        // show_date_code
-        };
-
         // Hardware-accurate MOS6526 CIA pinout (40-pin DIP)
         // Per MOS 6526 Complex Interface Adapter datasheet
         PIN_LR(layout,  1, VSS,  _RES, 40)   // gnd / reset

@@ -25,9 +25,6 @@ ChipLayout* mc6847_t::create_chip_layout() const {
     static ChipLayout layout = [] {
         ChipLayout layout = create_dip40_layout();
 
-        layout.markings.part_number  = "MC6847";
-        layout.markings.manufacturer = "Motorola";
-
         // MC6847 40-pin DIP pinout (Motorola datasheet)
         //                  LEFT                        RIGHT
         PIN_LR(layout,  1, D6,         VCC,         40);

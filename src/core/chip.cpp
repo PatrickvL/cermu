@@ -6,6 +6,7 @@
 ChipLayout* ChipBase::get_chip_layout() const {
     if (!layout_initialized_) {
         layout_ = create_chip_layout();
+        if (layout_) layout_->chip_info = &info_;
         layout_initialized_ = true;
     }
     return layout_;

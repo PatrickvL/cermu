@@ -42,19 +42,6 @@ using WDC_65C816 = fam65xx::WDC_65C816;
 inline ChipLayout create_wdc_65c816_layout() {
   ChipLayout layout = create_dip40_layout();
 
-  layout.markings = {
-      "W65C816S",              // part_number
-      "Western Design Center", // manufacturer
-      {},                 // package_variant
-      {},                 // date_code
-      {},                 // lot_number
-      {},                 // custom_text
-      true,                    // show_part_number
-      true,                    // show_manufacturer
-      false,                   // show_package_variant
-      false                    // show_date_code
-  };
-
   // Pin assignments for WDC 65C816 (40-pin DIP)
   PIN_LR(layout, 1, _VPB, VSS, 21)    // Vector Pull Bar (low during vector fetch)
   PIN_LR(layout, 2, RDY, A12, 22)     // Ready

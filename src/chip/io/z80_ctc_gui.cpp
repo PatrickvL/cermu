@@ -81,19 +81,6 @@ ChipLayout* z80_ctc_t::create_chip_layout() const {
         layout.left_pins.clear();
         layout.right_pins.clear();
 
-        layout.markings = {
-            "Z80 CTC",                   // part_number
-            "Zilog",                     // manufacturer
-            {},                          // package_variant
-            {},                          // date_code
-            {},                          // lot_number
-            {},                          // custom_text
-            true,                        // show_part_number
-            true,                        // show_manufacturer
-            false,                       // show_package_variant
-            false                        // show_date_code
-        };
-
         // Z80 CTC (Z8430) — 28-pin DIP
         //           Left side                      Right side
         PIN_LR(layout,  1,  D4,       D3,       28)
