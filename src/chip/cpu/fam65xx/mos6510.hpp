@@ -58,7 +58,7 @@ inline ChipLayout create_mos6510_layout() {
   PIN_LR(layout, 3, _IRQ, A13, 23)   // Interrupt Request
   PIN_LR(layout, 4, _NMI, P0, 24)    // Non-Maskable Interrupt / I/O Port bit 0
   PIN_LR(layout, 5, AEC, P1, 25)     // Address Enable Control / I/O Port bit 1
-  PIN_LR(layout, 6, VDD, P2, 26)     // I/O Port bit 2
+  PIN_LR(layout, 6, VCC, P2, 26)     // I/O Port bit 2
   PIN_LR(layout, 7, A0, P3, 27)      // I/O Port bit 3
   PIN_LR(layout, 8, A1, P4, 28)      // I/O Port bit 4
   PIN_LR(layout, 9, A2, P5, 29)      // I/O Port bit 5
