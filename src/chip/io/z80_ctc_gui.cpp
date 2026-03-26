@@ -87,7 +87,7 @@ ChipLayout* z80_ctc_t::create_chip_layout() const {
         PIN_LR(layout,  2,  D5,       D2,       27)
         PIN_LR(layout,  3,  D6,       D1,       26)
         PIN_LR(layout,  4,  D7,       D0,       25)
-        PIN_LR(layout,  5,  VSS,      VDD,      24)
+        PIN_LR(layout,  5,  GND,      VCC,      24)
         PIN_LR(layout,  6,  _RD,      CLK_TRG3, 23)
         PIN_LR(layout,  7,  ZC_TO2,   CLK_TRG2, 22)
         PIN_LR(layout,  8,  ZC_TO1,   CLK_TRG1, 21)
