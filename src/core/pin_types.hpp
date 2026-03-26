@@ -71,10 +71,12 @@ enum class PinLabel {
     _CS0,         // /CS0 — chip select 0
     _CS1,         // /CS1 — chip select 1
     _CS2,         // /CS2 — chip select 2
+    _CLR,         // /CLR — master clear (74LS259 addressable latch)
     _DTACK,       // /DTACK — data transfer acknowledge (M68K)
     _EXROM,       // /EXROM — external ROM
     _FIRQ,        // /FIRQ — fast interrupt request (MC6809)
     _GAME,        // /GAME — game line
+    _G,           // /G — gate/enable (74LS259 addressable latch)
     _HALT,        // /HALT — halt (Z80)
     _HIRAM,       // /HIRAM — high RAM
     _INT,         // /INT — interrupt (Z80)
