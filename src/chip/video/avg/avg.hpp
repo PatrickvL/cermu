@@ -182,17 +182,6 @@ struct avg_t : public VideoChipBase {
         running_       = true;
         halt_          = false;
         clocks_remaining_ = 0;
-
-        // DEBUG: trace first words of display list on VGGO
-        if (vec_ram_) {
-            printf("AVG GO: first 8 words:");
-            for (int i = 0; i < 16; i += 2) {
-                uint16_t w = vec_ram_[i] | (vec_ram_[i+1] << 8);
-                printf(" %04X", w);
-            }
-            printf("\n");
-        }
-        trace_count_ = 0;  // Reset trace counter
     }
 
     void trigger_reset() {
@@ -252,7 +241,6 @@ private:
     VectorVideoOut* video_out_ = nullptr;
     bool tempest_stat_ = false;   // Tempest-specific STAT encoding
     bool swap_xy_      = false;   // X/Y axis swap (rotated monitor)
-    int  trace_count_  = 0;       // DEBUG: opcode trace counter
 
     // ========================================================================
     // Internal — opcode fetch and decode
@@ -315,16 +303,6 @@ private:
     void execute_opcode() {
         uint16_t w0 = read_word(pc_);
         uint8_t opcode = (w0 >> 13) & 0x07;
-
-        // DEBUG: trace first 20 opcodes per VGGO
-        if (trace_count_ < 20) {
-            static const char* op_names[] = {"VCTR","HALT","SVEC","STAT","CNTR","JSRL","RTSL","JMPL"};
-            printf("  AVG [%04X] op=%s w0=%04X", pc_, op_names[opcode], w0);
-            if (opcode == avg_constants::OP_VCTR)
-                printf(" w1=%04X", read_word(pc_ + 2));
-            printf("\n");
-            trace_count_++;
-        }
 
         switch (opcode) {
             case avg_constants::OP_VCTR: {
