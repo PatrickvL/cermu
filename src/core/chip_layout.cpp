@@ -1045,9 +1045,9 @@ std::vector<PinSignalState> populate_pin_states_from_bus(
             break;
         }
         case PinType::POWER: {
-            // VDD/VCC = high, VSS/GND = low
-            state.signal_level =
-                (pin.label == PinLabel::VDD || pin.label == PinLabel::VCC);
+            // Positive supply (VDD/VCC) = high, ground (VSS/GND) = low.
+            // Use pin_canonical() so all power synonyms resolve correctly.
+            state.signal_level = (pin_canonical(pin.label) == PinLabel::VDD);
             state.high_impedance = false;
             break;
         }

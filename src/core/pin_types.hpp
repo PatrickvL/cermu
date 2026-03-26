@@ -568,6 +568,7 @@ constexpr PinLabel pin_canonical(PinLabel label) {
     // ── Name synonyms (chip-specific → generic canonical) ──────────
     case PinLabel::_IC:          return PinLabel::RES;    // /IC = reset (Yamaha)
     case PinLabel::AUD:          return PinLabel::AUDIO_OUT;
+    case PinLabel::E_CLK:        return PinLabel::ENABLE;  // 6800-bus E clock
     case PinLabel::MO:           return PinLabel::AUDIO_OUT;
     case PinLabel::PHI_M:        return PinLabel::CLK;    // master clock
 
