@@ -76,7 +76,7 @@ ChipLayout* m680x0_t<Traits>::create_chip_layout() const {
         PIN_LR(layout,  3, D2,      D7,     62);
         PIN_LR(layout,  4, D1,      D8,     61);
         PIN_LR(layout,  5, D0,      D9,     60);
-        PIN_LR(layout,  6, _AS,     D10,    59);
+        PIN_LR(layout,  6, _AS_M68K, D10,   59);
         PIN_LR(layout,  7, _UDS,    D11,    58);
         PIN_LR(layout,  8, _LDS,    D12,    57);
         PIN_LR(layout,  9, RW,      D13,    56);
@@ -91,7 +91,7 @@ ChipLayout* m680x0_t<Traits>::create_chip_layout() const {
         PIN_LR(layout, 18, _RES,    A18,    47);
         PIN_LR(layout, 19, _VMA,    A17,    46);
         PIN_LR(layout, 20, E_CLK,   A16,    45);
-        PIN_LR(layout, 21, _VPA,    A15,    44);
+        PIN_LR(layout, 21, _VPA_M68K, A15,  44);
         PIN_LR(layout, 22, _BERR,   A14,    43);
         PIN_LR(layout, 23, _IPL2,   A13,    42);
         PIN_LR(layout, 24, _IPL1,   A12,    41);

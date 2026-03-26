@@ -117,31 +117,17 @@ bool get_invert_logic_from_label(PinLabel label) {
     return label < PinLabel::ACTIVE_LOW_END;
 }
 
-// Convert pin type to group name string
+// Convert pin type to group name string — X-macro generated
 const char* pin_type_to_group_name(PinType type) {
-    switch(type) {
-        case PinType::POWER:        return "POWER";
-        case PinType::CLOCK:        return "CLOCK";
-        case PinType::ADDRESS:      return "ADDR";
-        case PinType::DATA:         return "DATA";
-        case PinType::CONTROL:      return "CONTROL";
-        case PinType::INTERRUPT:    return "INTERRUPT";
-        case PinType::SPECIAL:      return "SPECIAL";
-        case PinType::IO_PORT:      return "GPIO";
-        case PinType::PORT_A:       return "PORTA";
-        case PinType::PORT_B:       return "PORTB";
-        case PinType::PORT_C:       return "PORTC";
-        case PinType::PORT_D:       return "PORTD";
-        case PinType::ANALOG:       return "ANALOG";
-        case PinType::DIFFERENTIAL: return "DIFF";
-        case PinType::VIDEO:        return "VIDEO";
-        case PinType::AUDIO:        return "AUDIO";
-        case PinType::MEMORY:       return "MEMORY";
-        case PinType::LOGIC:        return "LOGIC";
-        case PinType::SERIAL:       return "SERIAL";
-        case PinType::TIMER:        return "TIMER";
-        case PinType::NO_CONNECT:   return "NC";
-        default:                    return "UNKNOWN";
+    switch (type) {
+#define PTGN_INV_(id, str, cmt)
+#define PTGN_CAT_(t)              case PinType::t: return #t;
+#define PTGN_PIN_(id, str, cmt)
+    PIN_LABELS(PTGN_INV_, PTGN_CAT_, PTGN_PIN_)
+#undef PTGN_INV_
+#undef PTGN_CAT_
+#undef PTGN_PIN_
+    default: return "UNKNOWN";
     }
 }
 
@@ -1026,7 +1012,10 @@ std::vector<PinSignalState> populate_pin_states_from_bus(
         PinSignalState& state = states[pin.pin_number - 1];
 
         switch (pin.get_pin_type()) {
-        case PinType::ADDRESS: {
+        case PinType::ADDRESS:
+        case PinType::MEMORY_ADDRESS:
+        case PinType::RASTER_ADDRESS:
+        case PinType::VIDEO_ADDRESS: {
             uint8_t bit_index = pin.get_bit_index();
             if (bit_index < 16) {
                 state.signal_level = (addr_bus & (1 << bit_index)) != 0;
@@ -1034,7 +1023,8 @@ std::vector<PinSignalState> populate_pin_states_from_bus(
             }
             break;
         }
-        case PinType::DATA: {
+        case PinType::DATA:
+        case PinType::MEMORY: {
             uint8_t bit_index = pin.get_bit_index();
             if (bit_index < 8) {
                 state.signal_level = (data_bus & (1 << bit_index)) != 0;

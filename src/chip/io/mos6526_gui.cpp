@@ -48,7 +48,7 @@ ChipLayout* mos6526_t::create_chip_layout() const {
         PIN_LR(layout, 15, PB5,  D7, 26)     // / data hi
         PIN_LR(layout, 16, PB6,  PHI2, 25)   // / clock
         PIN_LR(layout, 17, PB7,  FLAG, 24)   // port B hi / flag in
-        PIN_LR(layout, 18, PC,   _CS, 23)    // periph ctrl / chip sel
+        PIN_LR(layout, 18, PC_CIA, _CS, 23)  // periph ctrl / chip sel
         PIN_LR(layout, 19, TOD,  RW, 22)     // TOD clock / R/W
         PIN_LR(layout, 20, VDD,  _IRQ, 21)   // +5V / interrupt
 

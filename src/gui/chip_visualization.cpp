@@ -30,21 +30,53 @@ uint32_t get_pin_type_color(PinType type, VisualStyle style) {
         case PinType::CLOCK:
             return high_contrast ? 0xFFFFFF00 : (light_theme ? 0xFFCCFFFF : 0xFF64FFFF); // Yellow
         case PinType::ADDRESS:
+        case PinType::MEMORY_ADDRESS:
+        case PinType::RASTER_ADDRESS:
+        case PinType::VIDEO_ADDRESS:
             return high_contrast ? 0xFFFFCC00 : (light_theme ? 0xFFFFDDBB : 0xFFFF9664); // Light Blue
         case PinType::DATA:
+        case PinType::MEMORY:
             return high_contrast ? 0xFF00FF00 : (light_theme ? 0xFFCCFFCC : 0xFF96FF64); // Light Green
         case PinType::CONTROL:
+        case PinType::BUS_CONTROL:
+        case PinType::PLA:
             return high_contrast ? 0xFFFF8000 : (light_theme ? 0xFFFFCC99 : 0xFF6496FF); // Orange
         case PinType::INTERRUPT:
             return high_contrast ? 0xFFFF00FF : (light_theme ? 0xFFFFCCFF : 0xFFFF64FF); // Magenta
         case PinType::SPECIAL:
+        case PinType::FUNCTION_CODE:
             return high_contrast ? 0xFFCCCCCC : (light_theme ? 0xFFE0E0E0 : 0xFFC8C8C8); // Light Gray
         case PinType::IO_PORT:
+        case PinType::PORT_A:
+        case PinType::PORT_B:
+        case PinType::PORT_C:
+        case PinType::PORT_D:
+        case PinType::NES_IO:
+        case PinType::SNES_IO:
+        case PinType::POKEY_IO:
+        case PinType::KEYBOARD:
             return high_contrast ? 0xFFFFCC80 : (light_theme ? 0xFFFFDDCC : 0xFF64C8FF); // Pink
         case PinType::ANALOG:
+        case PinType::SID_ANALOG:
+        case PinType::TIA_INPUT:
             return high_contrast ? 0xFF00CCFF : (light_theme ? 0xFFCCEEFF : 0xFF00A8FF); // Cyan
         case PinType::DIFFERENTIAL:
             return high_contrast ? 0xFF80FF80 : (light_theme ? 0xFFDDFFDD : 0xFF64FFC8); // Mint
+        case PinType::VIDEO:
+        case PinType::VIDEO_CONTROL:
+        case PinType::VDG:
+            return high_contrast ? 0xFF00A0FF : (light_theme ? 0xFFCCDDFF : 0xFF6480FF); // Blue
+        case PinType::AUDIO:
+            return high_contrast ? 0xFF80FFFF : (light_theme ? 0xFFDDFFFF : 0xFF64FFCC); // Turquoise
+        case PinType::SERIAL:
+        case PinType::PWM:
+            return high_contrast ? 0xFFFF80FF : (light_theme ? 0xFFFFDDFF : 0xFFCC80FF); // Lavender
+        case PinType::TIMER:
+        case PinType::TIMER_CTC:
+        case PinType::HANDSHAKE:
+            return high_contrast ? 0xFF80C0FF : (light_theme ? 0xFFDDEEFF : 0xFF80A0FF); // Pale Blue
+        case PinType::LOGIC:
+            return high_contrast ? 0xFFC0FF80 : (light_theme ? 0xFFEEFFDD : 0xFFA0FF80); // Lime
         case PinType::NO_CONNECT:
             return high_contrast ? 0xFF404040 : (light_theme ? 0xFFC0C0C0 : 0xFF404040); // Dark Gray
         default:

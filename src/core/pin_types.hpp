@@ -1,8 +1,10 @@
 /*
- * pin_types.h - Pin type definitions and enumerations
- * 
+ * pin_types.hpp — Pin type definitions and enumerations
+ *
  * Core pin type definitions used across all IC packages and chip types.
- * Includes pin types, labels, sides, and state structures.
+ * Both PinType and PinLabel enums are generated from the PIN_LABELS()
+ * X-macro, keeping label strings, category membership, and documentation
+ * in a single authoritative source.
  */
 
 #pragma once
@@ -12,442 +14,622 @@
 #include "core/system_lines.hpp"
 
 // ============================================================================
-// PIN TYPES AND ENUMERATIONS
+// PIN_LABELS — master X-macro
+// ============================================================================
+//
+// Visitors:
+//   INV(id, str, comment)  — active-low pin label (before ACTIVE_LOW_END)
+//   CAT(pin_type)          — start of a PinType category (active-high)
+//   PIN(id, str, comment)  — active-high pin label
+//
+// Rules:
+//   • All INV entries come first (no interleaved CAT).
+//   • CAT entries mark PinType boundaries; every PIN after a CAT belongs
+//     to that category until the next CAT.
+//   • Sequential numbered groups (A0-A23, D0-D15, etc.) MUST remain
+//     contiguous — get_bit_index_from_label() depends on arithmetic.
+//   • Every INV(_FOO) must have a corresponding PIN(FOO) somewhere so
+//     that pin_canonical(_FOO) → FOO resolves to a valid label.
+//
+
+#define PIN_LABELS(PLBL_INV, PLBL_CAT, PLBL_PIN) \
+    /* ════════════════════════════════════════════════════════════════ */ \
+    /* Active-low (inverted) pins — sorted alphabetically.            */ \
+    /* String representation omits the underscore prefix; the display */ \
+    /* layer prepends "/" or overbar based on notation style.          */ \
+    /* ════════════════════════════════════════════════════════════════ */ \
+    PLBL_INV(_ABORT,      "ABORT",      "abort (65C816)")                       \
+    PLBL_INV(_AEC,        "AEC",        "address enable control")               \
+    PLBL_INV(_AS_M68K,    "AS",         "address strobe (M68K)")                \
+    PLBL_INV(_BASIC,      "BASIC",      "BASIC ROM select")                     \
+    PLBL_INV(_BERR,       "BERR",       "bus error (M68K)")                     \
+    PLBL_INV(_BG,         "BG",         "bus grant (M68K)")                     \
+    PLBL_INV(_BGACK,      "BGACK",      "bus grant acknowledge (M68K)")         \
+    PLBL_INV(_BR,         "BR",         "bus request (M68K)")                   \
+    PLBL_INV(_BUSAK,      "BUSAK",      "bus acknowledge (Z80)")                \
+    PLBL_INV(_BUSRQ,      "BUSRQ",      "bus request (Z80)")                    \
+    PLBL_INV(_CAS,        "CAS",        "column address strobe")                \
+    PLBL_INV(_CASRAM_PLA, "CASRAM",     "CAS RAM (PLA output F0)")              \
+    PLBL_INV(_CE,         "CE",         "chip enable")                          \
+    PLBL_INV(_CHAREN,     "CHAREN",     "character ROM enable")                 \
+    PLBL_INV(_CHAROM,     "CHAROM",     "character ROM select")                 \
+    PLBL_INV(_CLR,        "CLR",        "master clear (74LS259)")               \
+    PLBL_INV(_CS,         "CS",         "chip select")                          \
+    PLBL_INV(_CS0,        "CS0",        "chip select 0")                        \
+    PLBL_INV(_CS1,        "CS1",        "chip select 1")                        \
+    PLBL_INV(_CS2,        "CS2",        "chip select 2")                        \
+    PLBL_INV(_DTACK,      "DTACK",      "data transfer acknowledge (M68K)")     \
+    PLBL_INV(_EXROM,      "EXROM",      "external ROM")                         \
+    PLBL_INV(_FIRQ,       "FIRQ",       "fast interrupt request (MC6809)")      \
+    PLBL_INV(_G,          "G",          "gate/enable (74LS249)")                 \
+    PLBL_INV(_GAME,       "GAME",       "game line")                            \
+    PLBL_INV(_HALT,       "HALT",       "halt (Z80)")                           \
+    PLBL_INV(_HIRAM,      "HIRAM",      "high RAM")                             \
+    PLBL_INV(_IC,         "IC",         "initial clear (Yamaha FM)")            \
+    PLBL_INV(_INT,        "INT",        "interrupt (Z80)")                      \
+    PLBL_INV(_IO,         "I/O",        "I/O area select")                      \
+    PLBL_INV(_IORQ,       "IORQ",       "I/O request (Z80)")                    \
+    PLBL_INV(_IPL0,       "IPL0",       "interrupt priority level 0 (M68K)")    \
+    PLBL_INV(_IPL1,       "IPL1",       "interrupt priority level 1 (M68K)")    \
+    PLBL_INV(_IPL2,       "IPL2",       "interrupt priority level 2 (M68K)")    \
+    PLBL_INV(_IRQ,        "IRQ",        "interrupt request")                    \
+    PLBL_INV(_IRQA,       "IRQA",       "interrupt request A (PIA)")            \
+    PLBL_INV(_IRQB,       "IRQB",       "interrupt request B (PIA)")            \
+    PLBL_INV(_KERNAL,     "KERNAL",     "KERNAL ROM select")                    \
+    PLBL_INV(_LDS,        "LDS",        "lower data strobe (M68K)")             \
+    PLBL_INV(_LORAM,      "LORAM",      "low RAM")                              \
+    PLBL_INV(_M1,         "M1",         "machine cycle 1 (Z80)")                \
+    PLBL_INV(_ML,         "ML",         "memory lock (65C02/65C816)")           \
+    PLBL_INV(_MREQ,       "MREQ",       "memory request (Z80)")                 \
+    PLBL_INV(_NMI,        "NMI",        "non-maskable interrupt")               \
+    PLBL_INV(_OE,         "OE",         "output enable")                        \
+    PLBL_INV(_PARD,       "PARD",       "peripheral address read (5A22)")       \
+    PLBL_INV(_PAWR,       "PAWR",       "peripheral address write (5A22)")      \
+    PLBL_INV(_Q7,         "Q7",         "complement output (shift register)")   \
+    PLBL_INV(_RAS,        "RAS",        "row address strobe")                   \
+    PLBL_INV(_RD,         "RD",         "read strobe")                          \
+    PLBL_INV(_RES,        "RES",        "reset")                                \
+    PLBL_INV(_RFSH,       "RFSH",       "refresh (Z80)")                        \
+    PLBL_INV(_ROMH,       "ROMH",       "ROM high")                             \
+    PLBL_INV(_ROML,       "ROML",       "ROM low")                              \
+    PLBL_INV(_ROMSEL,     "ROMSEL",     "ROM select (5A22 cartridge)")          \
+    PLBL_INV(_SO,         "SO",         "set overflow")                         \
+    PLBL_INV(_UDS,        "UDS",        "upper data strobe (M68K)")             \
+    PLBL_INV(_VA14,       "VA14",       "video address 14")                     \
+    PLBL_INV(_VMA,        "VMA",        "valid memory address (M68K)")          \
+    PLBL_INV(_VP,         "VP",         "vector pull")                          \
+    PLBL_INV(_VPA_M68K,   "VPA",        "valid peripheral address (M68K)")      \
+    PLBL_INV(_VPB,        "VPB",        "vector pull bar")                      \
+    PLBL_INV(_WAIT,       "WAIT",       "wait (Z80)")                           \
+    PLBL_INV(_WE,         "WE",         "write enable")                         \
+    PLBL_INV(_WR,         "WR",         "write strobe (5A22)")                  \
+    PLBL_INV(_WRAM,       "WRAM",       "work RAM chip select (5A22)")          \
+    \
+    /* ════════════════════════════════════════════════════════════════ */ \
+    /* Active-high pins — grouped by PinType category.                */ \
+    /* ════════════════════════════════════════════════════════════════ */ \
+    \
+    /* ── Power ───────────────────────────────────────────────────── */ \
+    PLBL_CAT(POWER)                                                             \
+    PLBL_PIN(GND,         "GND",        "ground")                               \
+    PLBL_PIN(VCC,         "VCC",        "+5V power")                            \
+    PLBL_PIN(VDD,         "VDD",        "+5V power supply")                     \
+    PLBL_PIN(VSS,         "VSS",        "ground (0V)")                          \
+    PLBL_PIN(VTIA,        "Vtia",       "TIA analog supply voltage")            \
+    \
+    /* ── Clock / oscillator ──────────────────────────────────────── */ \
+    PLBL_CAT(CLOCK)                                                             \
+    PLBL_PIN(CLK,         "CLK",        "generic clock input")                  \
+    PLBL_PIN(COLOR_CLK,   "COLOR CLK",  "color clock")                          \
+    PLBL_PIN(CPUCLK,      "CPUCLK",     "CPU clock output (5A22)")              \
+    PLBL_PIN(DOT_CLK,     "DOT CLK",    "dot clock")                            \
+    PLBL_PIN(E_CLK,       "E",          "enable clock output (M68K 6800)")      \
+    PLBL_PIN(ENABLE,      "E",          "enable clock input (6800 bus)")        \
+    PLBL_PIN(EXTAL,       "EXTAL",      "external crystal input (MC6809)")      \
+    PLBL_PIN(M2,          "M2",         "derived clock output (2A03)")          \
+    PLBL_PIN(OSC_IN,      "OSC IN",     "oscillator input")                     \
+    PLBL_PIN(OSC_OUT,     "OSC OUT",    "oscillator output")                    \
+    PLBL_PIN(PHI0,        "Φ0",         "clock input")                          \
+    PLBL_PIN(PHI1,        "Φ1",         "inverted clock output")                \
+    PLBL_PIN(PHI2,        "Φ2",         "primary clock output")                 \
+    PLBL_PIN(PHI_M,       "ΦM",         "master clock input (Yamaha FM)")       \
+    PLBL_PIN(PHI_S,       "ΦS",         "SSG/secondary clock (Yamaha OPN)")     \
+    PLBL_PIN(Q_CLK,       "Q",          "Q clock output (MC6809)")              \
+    PLBL_PIN(SYSCLK,      "SYSCLK",     "system master clock (5A22)")           \
+    PLBL_PIN(XTAL,        "XTAL",       "crystal (MC6809)")                     \
+    PLBL_PIN(XTAL1,       "XTAL1",      "crystal 1")                            \
+    PLBL_PIN(XTAL2,       "XTAL2",      "crystal 2")                            \
+    \
+    /* ── CPU address bus (A0-A23 must remain sequential) ─────────── */ \
+    PLBL_CAT(ADDRESS)                                                           \
+    PLBL_PIN(A0,  "A0",  "address bit 0")  PLBL_PIN(A1,  "A1",  "address bit 1")    \
+    PLBL_PIN(A2,  "A2",  "address bit 2")  PLBL_PIN(A3,  "A3",  "address bit 3")    \
+    PLBL_PIN(A4,  "A4",  "address bit 4")  PLBL_PIN(A5,  "A5",  "address bit 5")    \
+    PLBL_PIN(A6,  "A6",  "address bit 6")  PLBL_PIN(A7,  "A7",  "address bit 7")    \
+    PLBL_PIN(A8,  "A8",  "address bit 8")  PLBL_PIN(A9,  "A9",  "address bit 9")    \
+    PLBL_PIN(A10, "A10", "address bit 10") PLBL_PIN(A11, "A11", "address bit 11")    \
+    PLBL_PIN(A12, "A12", "address bit 12") PLBL_PIN(A13, "A13", "address bit 13")    \
+    PLBL_PIN(A14, "A14", "address bit 14") PLBL_PIN(A15, "A15", "address bit 15")    \
+    PLBL_PIN(A16, "A16", "address bit 16") PLBL_PIN(A17, "A17", "address bit 17")    \
+    PLBL_PIN(A18, "A18", "address bit 18") PLBL_PIN(A19, "A19", "address bit 19")    \
+    PLBL_PIN(A20, "A20", "address bit 20") PLBL_PIN(A21, "A21", "address bit 21")    \
+    PLBL_PIN(A22, "A22", "address bit 22") PLBL_PIN(A23, "A23", "address bit 23")    \
+    \
+    /* ── CPU data bus (D0-D15 must remain sequential) ────────────── */ \
+    PLBL_CAT(DATA)                                                              \
+    PLBL_PIN(D0,  "D0",  "data bit 0")  PLBL_PIN(D1,  "D1",  "data bit 1")         \
+    PLBL_PIN(D2,  "D2",  "data bit 2")  PLBL_PIN(D3,  "D3",  "data bit 3")         \
+    PLBL_PIN(D4,  "D4",  "data bit 4")  PLBL_PIN(D5,  "D5",  "data bit 5")         \
+    PLBL_PIN(D6,  "D6",  "data bit 6")  PLBL_PIN(D7,  "D7",  "data bit 7")         \
+    PLBL_PIN(D8,  "D8",  "data bit 8")  PLBL_PIN(D9,  "D9",  "data bit 9")         \
+    PLBL_PIN(D10, "D10", "data bit 10") PLBL_PIN(D11, "D11", "data bit 11")         \
+    PLBL_PIN(D12, "D12", "data bit 12") PLBL_PIN(D13, "D13", "data bit 13")         \
+    PLBL_PIN(D14, "D14", "data bit 14") PLBL_PIN(D15, "D15", "data bit 15")         \
+    \
+    /* ── Control signals ─────────────────────────────────────────── */ \
+    PLBL_CAT(CONTROL)                                                           \
+    PLBL_PIN(AEC,         "AEC",        "address enable control (6510)")         \
+    PLBL_PIN(ALE,         "ALE",        "address latch enable")                  \
+    PLBL_PIN(AS_M68K,     "AS",         "address strobe (M68K, active-high)")   \
+    PLBL_PIN(AVMA,        "AVMA",       "advanced valid memory address (6809)") \
+    PLBL_PIN(BA,          "BA",         "bus available")                         \
+    PLBL_PIN(BE,          "BE",         "bus enable (65C02/65C816)")             \
+    PLBL_PIN(BERR,        "BERR",       "bus error (M68K, active-high)")        \
+    PLBL_PIN(BG,          "BG",         "bus grant (M68K, active-high)")        \
+    PLBL_PIN(BGACK,       "BGACK",      "bus grant ack (M68K, active-high)")   \
+    PLBL_PIN(BR,          "BR",         "bus request (M68K, active-high)")      \
+    PLBL_PIN(BS,          "BS",         "bus status (MC6809)")                   \
+    PLBL_PIN(BUSAK,       "BUSAK",      "bus acknowledge (Z80, active-high)")   \
+    PLBL_PIN(BUSRQ,       "BUSRQ",      "bus request (Z80, active-high)")       \
+    PLBL_PIN(BUSY,        "BUSY",       "busy (MC6809, 16-bit operations)")     \
+    PLBL_PIN(CAS,         "CAS",        "column address strobe (active-high)")  \
+    PLBL_PIN(CASRAM,      "CASRAM",     "CAS for RAM")                          \
+    PLBL_PIN(CE,          "CE",         "chip enable (active-high)")            \
+    PLBL_PIN(CLR,         "CLR",        "master clear (active-high)")           \
+    PLBL_PIN(CS,          "CS",         "chip select (active-high)")            \
+    PLBL_PIN(CS0,         "CS0",        "chip select 0 (active-high)")          \
+    PLBL_PIN(CS1,         "CS1",        "chip select 1 (active-high)")          \
+    PLBL_PIN(CS2,         "CS2",        "chip select 2 (active-high)")          \
+    PLBL_PIN(CS3,         "CS3",        "chip select 3 (TIA)")                  \
+    PLBL_PIN(DTACK,       "DTACK",      "data transfer ack (M68K, active-h)")  \
+    PLBL_PIN(HALT,        "HALT",       "halt (Z80, active-high)")              \
+    PLBL_PIN(INT,         "INT",        "interrupt (Z80, active-high)")         \
+    PLBL_PIN(IORQ,        "IORQ",       "I/O request (Z80, active-high)")       \
+    PLBL_PIN(LDS,         "LDS",        "lower data strobe (M68K, active-h)")  \
+    PLBL_PIN(M1,          "M1",         "machine cycle 1 (Z80, active-high)")   \
+    PLBL_PIN(MREQ,        "MREQ",       "memory request (Z80, active-high)")    \
+    PLBL_PIN(MUX,         "MUX",        "address multiplexer")                  \
+    PLBL_PIN(OE,          "OE",         "output enable (active-high)")          \
+    PLBL_PIN(P_S,         "P/S",        "parallel/serial (shift register)")     \
+    PLBL_PIN(PARD,        "PARD",       "peripheral addr read (5A22, act-h)")   \
+    PLBL_PIN(PAWR,        "PAWR",       "peripheral addr write (5A22, act-h)")  \
+    PLBL_PIN(RAS,         "RAS",        "row address strobe (active-high)")     \
+    PLBL_PIN(RD,          "RD",         "read strobe (active-high)")            \
+    PLBL_PIN(RDY,         "RDY",        "ready input/output")                   \
+    PLBL_PIN(RFSH,        "RFSH",       "refresh (Z80, active-high)")           \
+    PLBL_PIN(ROMSEL,      "ROMSEL",     "ROM select (5A22 cart, active-high)")  \
+    PLBL_PIN(RS,          "RS",         "register select")                      \
+    PLBL_PIN(RS0,         "RS0",        "register select 0 (PIA)")              \
+    PLBL_PIN(RS1,         "RS1",        "register select 1 (PIA)")              \
+    PLBL_PIN(RW,          "R/W",        "read/write control")                   \
+    PLBL_PIN(SYNC,        "SYNC",       "synchronization output")               \
+    PLBL_PIN(UDS,         "UDS",        "upper data strobe (M68K, active-h)")   \
+    PLBL_PIN(VMA,         "VMA",        "valid mem address (M68K, active-h)")   \
+    PLBL_PIN(WAIT,        "WAIT",       "wait (Z80, active-high)")              \
+    PLBL_PIN(WE,          "WE",         "write enable (active-high)")           \
+    PLBL_PIN(WR,          "WR",         "write strobe (5A22, active-high)")     \
+    PLBL_PIN(WRAM,        "WRAM",       "work RAM chip sel (5A22, active-h)")   \
+    \
+    /* ── Bus control (Z80 PIO/CTC, AY-3-8910 bus protocol) ──────── */ \
+    PLBL_CAT(BUS_CONTROL)                                                       \
+    PLBL_PIN(ARDY,        "ARDY",       "port A ready output (Z80 PIO)")        \
+    PLBL_PIN(ASTB,        "ASTB",       "port A strobe input (Z80 PIO)")        \
+    PLBL_PIN(B_ASEL,      "B/A\u0305", "port select (Z80 PIO)")                \
+    PLBL_PIN(BC1,         "BC1",        "bus control 1 (AY-3-8910)")            \
+    PLBL_PIN(BC2,         "BC2",        "bus control 2 (AY-3-8910)")            \
+    PLBL_PIN(BDIR,        "BDIR",       "bus direction (AY-3-8910)")            \
+    PLBL_PIN(BRDY,        "BRDY",       "port B ready output (Z80 PIO)")        \
+    PLBL_PIN(BSTB,        "BSTB",       "port B strobe input (Z80 PIO)")        \
+    PLBL_PIN(C_DSEL,      "C/D\u0305", "control/data (Z80 PIO/CTC)")           \
+    \
+    /* ── Interrupt ───────────────────────────────────────────────── */ \
+    PLBL_CAT(INTERRUPT)                                                         \
+    PLBL_PIN(ABORT,       "ABORT",      "abort (65C816, active-high)")          \
+    PLBL_PIN(FIRQ,        "FIRQ",       "fast IRQ (MC6809, active-high)")       \
+    PLBL_PIN(IC,          "IC",         "initial clear (Yamaha, active-high)")  \
+    PLBL_PIN(IEI,         "IEI",        "interrupt enable in (Z80 daisy)")      \
+    PLBL_PIN(IEO,         "IEO",        "interrupt enable out (Z80 daisy)")     \
+    PLBL_PIN(IPL0,        "IPL0",       "interrupt priority 0 (M68K, act-h)")   \
+    PLBL_PIN(IPL1,        "IPL1",       "interrupt priority 1 (M68K, act-h)")   \
+    PLBL_PIN(IPL2,        "IPL2",       "interrupt priority 2 (M68K, act-h)")   \
+    PLBL_PIN(IRQ,         "IRQ",        "interrupt request (active-high)")      \
+    PLBL_PIN(IRQA,        "IRQA",       "interrupt request A (PIA, act-h)")     \
+    PLBL_PIN(IRQB,        "IRQB",       "interrupt request B (PIA, act-h)")     \
+    PLBL_PIN(LIC,         "LIC",        "last instruction cycle (MC6809)")      \
+    PLBL_PIN(NMI,         "NMI",        "non-maskable interrupt (active-high)") \
+    PLBL_PIN(RES,         "RES",        "reset (active-high)")                  \
+    \
+    /* ── Function code (M68K) ────────────────────────────────────── */ \
+    PLBL_CAT(FUNCTION_CODE)                                                     \
+    PLBL_PIN(FC0,         "FC0",        "function code 0 (M68K)")               \
+    PLBL_PIN(FC1,         "FC1",        "function code 1 (M68K)")               \
+    PLBL_PIN(FC2,         "FC2",        "function code 2 (M68K)")               \
+    \
+    /* ── Special / status ────────────────────────────────────────── */ \
+    PLBL_CAT(SPECIAL)                                                           \
+    PLBL_PIN(E,           "E",          "emulation mode (65C816)")              \
+    PLBL_PIN(ML,          "ML",         "memory lock (active-high)")            \
+    PLBL_PIN(MX,          "MX",         "memory/index size status (65C816)")    \
+    PLBL_PIN(SO,          "SO",         "set overflow (active-high)")           \
+    PLBL_PIN(TEST,        "TEST",       "test mode pin")                        \
+    PLBL_PIN(VDA,         "VDA",        "valid data address (65C816)")          \
+    PLBL_PIN(VP,          "VP",         "vector pull (active-high)")            \
+    PLBL_PIN(VPA,         "VPA",        "valid program address (65C816)")       \
+    PLBL_PIN(VPA_M68K,    "VPA",        "valid periph addr (M68K, act-h)")     \
+    PLBL_PIN(VPB,         "VPB",        "vector pull bar (active-high)")        \
+    \
+    /* ── I/O port (6510-specific P0-P7, must remain sequential) ──── */ \
+    PLBL_CAT(IO_PORT)                                                           \
+    PLBL_PIN(P0, "P0", "I/O port 0")  PLBL_PIN(P1, "P1", "I/O port 1")             \
+    PLBL_PIN(P2, "P2", "I/O port 2")  PLBL_PIN(P3, "P3", "I/O port 3")             \
+    PLBL_PIN(P4, "P4", "I/O port 4")  PLBL_PIN(P5, "P5", "I/O port 5")             \
+    PLBL_PIN(P6, "P6", "I/O port 6")  PLBL_PIN(P7, "P7", "I/O port 7")             \
+    \
+    /* ── GPIO Port A (PA0-PA7 must remain sequential) ────────────── */ \
+    PLBL_CAT(PORT_A)                                                            \
+    PLBL_PIN(PA0, "PA0", "port A bit 0")  PLBL_PIN(PA1, "PA1", "port A bit 1")      \
+    PLBL_PIN(PA2, "PA2", "port A bit 2")  PLBL_PIN(PA3, "PA3", "port A bit 3")      \
+    PLBL_PIN(PA4, "PA4", "port A bit 4")  PLBL_PIN(PA5, "PA5", "port A bit 5")      \
+    PLBL_PIN(PA6, "PA6", "port A bit 6")  PLBL_PIN(PA7, "PA7", "port A bit 7")      \
+    \
+    /* ── GPIO Port B (PB0-PB7 must remain sequential) ────────────── */ \
+    PLBL_CAT(PORT_B)                                                            \
+    PLBL_PIN(PB0, "PB0", "port B bit 0")  PLBL_PIN(PB1, "PB1", "port B bit 1")      \
+    PLBL_PIN(PB2, "PB2", "port B bit 2")  PLBL_PIN(PB3, "PB3", "port B bit 3")      \
+    PLBL_PIN(PB4, "PB4", "port B bit 4")  PLBL_PIN(PB5, "PB5", "port B bit 5")      \
+    PLBL_PIN(PB6, "PB6", "port B bit 6")  PLBL_PIN(PB7, "PB7", "port B bit 7")      \
+    \
+    /* ── GPIO Port C (PC0-PC7 must remain sequential) ────────────── */ \
+    PLBL_CAT(PORT_C)                                                            \
+    PLBL_PIN(PC0, "PC0", "port C bit 0")  PLBL_PIN(PC1, "PC1", "port C bit 1")      \
+    PLBL_PIN(PC2, "PC2", "port C bit 2")  PLBL_PIN(PC3, "PC3", "port C bit 3")      \
+    PLBL_PIN(PC4, "PC4", "port C bit 4")  PLBL_PIN(PC5, "PC5", "port C bit 5")      \
+    PLBL_PIN(PC6, "PC6", "port C bit 6")  PLBL_PIN(PC7, "PC7", "port C bit 7")      \
+    \
+    /* ── GPIO Port D (PD0-PD7 must remain sequential) ────────────── */ \
+    PLBL_CAT(PORT_D)                                                            \
+    PLBL_PIN(PD0, "PD0", "port D bit 0")  PLBL_PIN(PD1, "PD1", "port D bit 1")      \
+    PLBL_PIN(PD2, "PD2", "port D bit 2")  PLBL_PIN(PD3, "PD3", "port D bit 3")      \
+    PLBL_PIN(PD4, "PD4", "port D bit 4")  PLBL_PIN(PD5, "PD5", "port D bit 5")      \
+    PLBL_PIN(PD6, "PD6", "port D bit 6")  PLBL_PIN(PD7, "PD7", "port D bit 7")      \
+    \
+    /* ── Serial communication ────────────────────────────────────── */ \
+    PLBL_CAT(SERIAL)                                                            \
+    PLBL_PIN(SPI_CLK,     "SPI CLK",    "SPI clock")                            \
+    PLBL_PIN(SPI_CS,      "SPI CS",     "SPI chip select")                      \
+    PLBL_PIN(SPI_MISO,    "SPI MISO",   "SPI data in")                          \
+    PLBL_PIN(SPI_MOSI,    "SPI MOSI",   "SPI data out")                         \
+    PLBL_PIN(UART_RX,     "UART RX",    "UART receive")                         \
+    PLBL_PIN(UART_TX,     "UART TX",    "UART transmit")                        \
+    \
+    /* ── PWM outputs ─────────────────────────────────────────────── */ \
+    PLBL_CAT(PWM)                                                               \
+    PLBL_PIN(PWM0, "PWM0", "PWM output 0")  PLBL_PIN(PWM1, "PWM1", "PWM output 1")  \
+    PLBL_PIN(PWM2, "PWM2", "PWM output 2")  PLBL_PIN(PWM3, "PWM3", "PWM output 3")  \
+    \
+    /* ── Video output ────────────────────────────────────────────── */ \
+    PLBL_CAT(VIDEO)                                                             \
+    PLBL_PIN(CHROMA,      "CHROMA",     "chrominance output")                   \
+    PLBL_PIN(COLU,        "COLU",       "color/luminance output (TIA)")         \
+    PLBL_PIN(COLOR,       "COLOR",      "color signal output (VIC-II)")         \
+    PLBL_PIN(COMP_BLK,    "BLK",        "composite blank (TIA)")                \
+    PLBL_PIN(CSYNC,       "CSYNC",      "composite sync")                       \
+    PLBL_PIN(HSYNC,       "HSYNC",      "horizontal sync")                      \
+    PLBL_PIN(LUMA,        "LUMA",       "luminance output")                     \
+    PLBL_PIN(VOUT,        "VOUT",       "composite video output")               \
+    PLBL_PIN(VSYNC,       "VSYNC",      "vertical sync")                        \
+    \
+    /* ── Video control ───────────────────────────────────────────── */ \
+    PLBL_CAT(VIDEO_CONTROL)                                                     \
+    PLBL_PIN(CURSOR,      "CURSOR",     "cursor output (MC6845 CRTC)")          \
+    PLBL_PIN(DE,          "DE",         "display enable (MC6845 CRTC)")         \
+    PLBL_PIN(DUMP,        "DUMP",       "paddle dump/discharge (TIA)")          \
+    PLBL_PIN(HBLANK,      "HBLANK",     "horizontal blank output (5A22)")       \
+    PLBL_PIN(LIGHT_PEN,   "LP",         "light pen input")                      \
+    PLBL_PIN(LPSTB,       "LPSTB",      "light pen strobe (MC6845 CRTC)")       \
+    PLBL_PIN(REFRESH,     "REFRESH",    "WRAM refresh output (5A22)")           \
+    PLBL_PIN(VBLANK,      "VBLANK",     "vertical blank output (5A22)")         \
+    \
+    /* ── Raster address (RA0-RA4, MC6845, must remain sequential) ── */ \
+    PLBL_CAT(RASTER_ADDRESS)                                                    \
+    PLBL_PIN(RA0, "RA0", "raster addr 0")  PLBL_PIN(RA1, "RA1", "raster addr 1")    \
+    PLBL_PIN(RA2, "RA2", "raster addr 2")  PLBL_PIN(RA3, "RA3", "raster addr 3")    \
+    PLBL_PIN(RA4, "RA4", "raster addr 4")                                       \
+    \
+    /* ── Video address (PLA / VIC-II address lines) ──────────────── */ \
+    PLBL_CAT(VIDEO_ADDRESS)                                                     \
+    PLBL_PIN(VA12,        "VA12",       "video address 12")                     \
+    PLBL_PIN(VA13,        "VA13",       "video address 13")                     \
+    PLBL_PIN(VA14,        "VA14",       "video address 14 (active-high)")       \
+    \
+    /* ── Audio signals ───────────────────────────────────────────── */ \
+    PLBL_CAT(AUDIO)                                                             \
+    PLBL_PIN(AUD,         "AUD",        "audio output (Atari POKEY)")           \
+    PLBL_PIN(AUD0,        "AUD0",       "audio output 0 (TIA)")                 \
+    PLBL_PIN(AUD1,        "AUD1",       "audio output 1 (TIA)")                 \
+    PLBL_PIN(AUDIO_IN,    "AUDIO IN",   "audio input")                          \
+    PLBL_PIN(AUDIO_OUT,   "AUDIO OUT",  "audio output")                         \
+    PLBL_PIN(CH3_OUT,     "CH3",        "FM channel 3 output (Yamaha OPN)")     \
+    PLBL_PIN(CHANNEL_A,   "CH A",       "analog channel A (AY-3-8910)")         \
+    PLBL_PIN(CHANNEL_B,   "CH B",       "analog channel B (AY-3-8910)")         \
+    PLBL_PIN(CHANNEL_C,   "CH C",       "analog channel C (AY-3-8910)")         \
+    PLBL_PIN(EAR,         "EAR",        "tape EAR input")                       \
+    PLBL_PIN(MIC,         "MIC",        "tape MIC output")                      \
+    PLBL_PIN(MO,          "MO",         "mixed output (Yamaha FM)")             \
+    PLBL_PIN(NOISE,       "NOISE",      "noise output")                         \
+    PLBL_PIN(OSC1,        "OSC1",       "oscillator output 1")                  \
+    PLBL_PIN(OSC2,        "OSC2",       "oscillator output 2")                  \
+    PLBL_PIN(OSC3,        "OSC3",       "oscillator output 3")                  \
+    PLBL_PIN(RO,          "RO",         "rhythm output (Yamaha OPLL)")          \
+    PLBL_PIN(SH1,         "SH1",        "sample-and-hold 1 (Yamaha FM)")        \
+    PLBL_PIN(SH2,         "SH2",        "sample-and-hold 2 (Yamaha FM)")        \
+    PLBL_PIN(SND1,        "SND1",       "sound output 1 (Ricoh 2A03)")          \
+    PLBL_PIN(SND2,        "SND2",       "sound output 2 (Ricoh 2A03)")          \
+    PLBL_PIN(SOUND,       "SOUND",      "sound output (VIC-I/II)")              \
+    PLBL_PIN(SPEAKER,     "SPKR",       "speaker output")                       \
+    PLBL_PIN(SSG_OUT,     "SSG",        "SSG section output (Yamaha OPN)")      \
+    \
+    /* ── Analog ──────────────────────────────────────────────────── */ \
+    PLBL_CAT(ANALOG)                                                            \
+    PLBL_PIN(AIN0, "AIN0", "analog in 0")  PLBL_PIN(AIN1, "AIN1", "analog in 1")    \
+    PLBL_PIN(AIN2, "AIN2", "analog in 2")  PLBL_PIN(AIN3, "AIN3", "analog in 3")    \
+    PLBL_PIN(AIN4, "AIN4", "analog in 4")  PLBL_PIN(AIN5, "AIN5", "analog in 5")    \
+    PLBL_PIN(AIN6, "AIN6", "analog in 6")  PLBL_PIN(AIN7, "AIN7", "analog in 7")    \
+    PLBL_PIN(AOUT0,       "AOUT0",     "analog output 0")                       \
+    PLBL_PIN(AOUT1,       "AOUT1",     "analog output 1")                       \
+    PLBL_PIN(VREF,        "VREF",      "voltage reference")                     \
+    \
+    /* ── SID analog (filter caps, pots, ext audio) ───────────────── */ \
+    PLBL_CAT(SID_ANALOG)                                                        \
+    PLBL_PIN(CAP1A,       "CAP1A",     "filter capacitor 1A")                   \
+    PLBL_PIN(CAP1B,       "CAP1B",     "filter capacitor 1B")                   \
+    PLBL_PIN(CAP2A,       "CAP2A",     "filter capacitor 2A")                   \
+    PLBL_PIN(CAP2B,       "CAP2B",     "filter capacitor 2B")                   \
+    PLBL_PIN(EXT_IN,      "EXT IN",    "external audio input")                  \
+    PLBL_PIN(FILTER_IN,   "FILT IN",   "filter input")                          \
+    PLBL_PIN(FILTER_OUT,  "FILT OUT",  "filter output")                         \
+    PLBL_PIN(POTX,        "POTX",      "paddle X input")                        \
+    PLBL_PIN(POTY,        "POTY",      "paddle Y input")                        \
+    \
+    /* ── Timer / CIA (CNT, SP, TOD, FLAG, SDR, PC) ───────────────── */ \
+    PLBL_CAT(TIMER)                                                             \
+    PLBL_PIN(CNT,         "CNT",       "counter input")                         \
+    PLBL_PIN(FLAG,        "FLAG",      "flag input")                            \
+    PLBL_PIN(PC_CIA,      "PC",        "peripheral control output (CIA)")       \
+    PLBL_PIN(SDR,         "SDR",       "serial data register")                  \
+    PLBL_PIN(SP,          "SP",        "serial port")                           \
+    PLBL_PIN(TOD,         "TOD",       "time of day clock")                     \
+    \
+    /* ── VIA handshake (MOS 6522: CA1/2, CB1/2) ─────────────────── */ \
+    PLBL_CAT(HANDSHAKE)                                                         \
+    PLBL_PIN(CA1,         "CA1",       "port A control line 1")                 \
+    PLBL_PIN(CA2,         "CA2",       "port A control line 2")                 \
+    PLBL_PIN(CB1,         "CB1",       "port B control line 1")                 \
+    PLBL_PIN(CB2,         "CB2",       "port B control line 2")                 \
+    \
+    /* ── Z80 CTC (CLK_TRG / ZC_TO, must remain sequential) ──────── */ \
+    PLBL_CAT(TIMER_CTC)                                                         \
+    PLBL_PIN(CLK_TRG0, "CLK/TRG0", "clock/trigger 0 (Z80 CTC)")               \
+    PLBL_PIN(CLK_TRG1, "CLK/TRG1", "clock/trigger 1 (Z80 CTC)")               \
+    PLBL_PIN(CLK_TRG2, "CLK/TRG2", "clock/trigger 2 (Z80 CTC)")               \
+    PLBL_PIN(CLK_TRG3, "CLK/TRG3", "clock/trigger 3 (Z80 CTC)")               \
+    PLBL_PIN(ZC_TO0,   "ZC/TO0",   "zero count/timer 0 (Z80 CTC)")            \
+    PLBL_PIN(ZC_TO1,   "ZC/TO1",   "zero count/timer 1 (Z80 CTC)")            \
+    PLBL_PIN(ZC_TO2,   "ZC/TO2",   "zero count/timer 2 (Z80 CTC)")            \
+    PLBL_PIN(ZC_TO3,   "ZC/TO3",   "zero count/timer 3 (Z80 CTC)")            \
+    \
+    /* ── Memory data I/O (DQ0-DQ7, must remain sequential) ───────── */ \
+    PLBL_CAT(MEMORY)                                                            \
+    PLBL_PIN(DQ0, "DQ0", "memory data I/O 0")  PLBL_PIN(DQ1, "DQ1", "memory data I/O 1")  \
+    PLBL_PIN(DQ2, "DQ2", "memory data I/O 2")  PLBL_PIN(DQ3, "DQ3", "memory data I/O 3")  \
+    PLBL_PIN(DQ4, "DQ4", "memory data I/O 4")  PLBL_PIN(DQ5, "DQ5", "memory data I/O 5")  \
+    PLBL_PIN(DQ6, "DQ6", "memory data I/O 6")  PLBL_PIN(DQ7, "DQ7", "memory data I/O 7")  \
+    PLBL_PIN(I_O1, "I/O1", "memory I/O 1 (MOS 2114)")                          \
+    PLBL_PIN(I_O2, "I/O2", "memory I/O 2 (MOS 2114)")                          \
+    PLBL_PIN(I_O3, "I/O3", "memory I/O 3 (MOS 2114)")                          \
+    PLBL_PIN(I_O4, "I/O4", "memory I/O 4 (MOS 2114)")                          \
+    \
+    /* ── Memory address (MA0-MA15, must remain sequential) ────────── */ \
+    PLBL_CAT(MEMORY_ADDRESS)                                                    \
+    PLBL_PIN(MA0,  "MA0",  "memory addr 0")  PLBL_PIN(MA1,  "MA1",  "memory addr 1")  \
+    PLBL_PIN(MA2,  "MA2",  "memory addr 2")  PLBL_PIN(MA3,  "MA3",  "memory addr 3")  \
+    PLBL_PIN(MA4,  "MA4",  "memory addr 4")  PLBL_PIN(MA5,  "MA5",  "memory addr 5")  \
+    PLBL_PIN(MA6,  "MA6",  "memory addr 6")  PLBL_PIN(MA7,  "MA7",  "memory addr 7")  \
+    PLBL_PIN(MA8,  "MA8",  "memory addr 8")  PLBL_PIN(MA9,  "MA9",  "memory addr 9")  \
+    PLBL_PIN(MA10, "MA10", "memory addr 10") PLBL_PIN(MA11, "MA11", "memory addr 11")  \
+    PLBL_PIN(MA12, "MA12", "memory addr 12") PLBL_PIN(MA13, "MA13", "memory addr 13")  \
+    PLBL_PIN(MA14, "MA14", "memory addr 14") PLBL_PIN(MA15, "MA15", "memory addr 15")  \
+    \
+    /* ── PLA / ROM-RAM select outputs ────────────────────────────── */ \
+    PLBL_CAT(PLA)                                                               \
+    PLBL_PIN(BASIC,       "BASIC",     "BASIC ROM select (active-high)")        \
+    PLBL_PIN(CASRAM_PLA,  "CASRAM",    "CAS RAM — PLA specific (active-high)")  \
+    PLBL_PIN(CHAREN,      "CHAREN",    "character ROM enable (active-high)")    \
+    PLBL_PIN(CHAROM,      "CHAROM",    "character ROM select (active-high)")    \
+    PLBL_PIN(EXROM,       "EXROM",     "external ROM (active-high)")            \
+    PLBL_PIN(GAME,        "GAME",      "game line (active-high)")               \
+    PLBL_PIN(GRW,         "GRW",       "graphics read/write")                   \
+    PLBL_PIN(HIRAM,       "HIRAM",     "high RAM (active-high)")                \
+    PLBL_PIN(IO,          "I/O",       "I/O select (active-high)")              \
+    PLBL_PIN(KERNAL,      "KERNAL",    "KERNAL ROM select (active-high)")       \
+    PLBL_PIN(LORAM,       "LORAM",     "low RAM (active-high)")                 \
+    PLBL_PIN(ROMH,        "ROMH",      "ROM high (active-high)")                \
+    PLBL_PIN(ROML,        "ROML",      "ROM low (active-high)")                 \
+    \
+    /* ── Keyboard matrix (K0-K7, must remain sequential) ─────────── */ \
+    PLBL_CAT(KEYBOARD)                                                          \
+    PLBL_PIN(K0, "K0", "keyboard 0")  PLBL_PIN(K1, "K1", "keyboard 1")              \
+    PLBL_PIN(K2, "K2", "keyboard 2")  PLBL_PIN(K3, "K3", "keyboard 3")              \
+    PLBL_PIN(K4, "K4", "keyboard 4")  PLBL_PIN(K5, "K5", "keyboard 5")              \
+    PLBL_PIN(K6, "K6", "keyboard 6")  PLBL_PIN(K7, "K7", "keyboard 7")              \
+    \
+    /* ── NES-specific I/O (Ricoh 2A03 / 2C02) ───────────────────── */ \
+    PLBL_CAT(NES_IO)                                                            \
+    PLBL_PIN(AD1,         "AD1",       "multiplexed addr/data 1 (2A03)")        \
+    PLBL_PIN(AD2,         "AD2",       "multiplexed addr/data 2 (2A03)")        \
+    PLBL_PIN(EXT0, "EXT0", "PPU ext 0") PLBL_PIN(EXT1, "EXT1", "PPU ext 1")         \
+    PLBL_PIN(EXT2, "EXT2", "PPU ext 2") PLBL_PIN(EXT3, "EXT3", "PPU ext 3")         \
+    PLBL_PIN(IN0,         "IN0",       "controller data input 0 (2A03)")        \
+    PLBL_PIN(IN1,         "IN1",       "controller data input 1 (2A03)")        \
+    PLBL_PIN(OUT0,        "OUT0",      "controller strobe 0 (2A03)")            \
+    PLBL_PIN(OUT1,        "OUT1",      "controller strobe 1 (2A03)")            \
+    PLBL_PIN(OUT2,        "OUT2",      "controller strobe 2 (2A03)")            \
+    \
+    /* ── SNES-specific I/O (Ricoh 5A22) ──────────────────────────── */ \
+    PLBL_CAT(SNES_IO)                                                           \
+    PLBL_PIN(JOY1,        "JOY1",      "joypad 1 serial data (5A22)")           \
+    PLBL_PIN(JOY2,        "JOY2",      "joypad 2 serial data (5A22)")           \
+    PLBL_PIN(JOYCLK,      "JOYCLK",    "joypad clock output (5A22)")            \
+    PLBL_PIN(JOYLAT,      "JOYLAT",    "joypad latch output (5A22)")            \
+    PLBL_PIN(JOYRD,       "JOYRD",     "joypad auto-read strobe (5A22)")        \
+    \
+    /* ── TIA input (INPT0-5, must remain sequential) ─────────────── */ \
+    PLBL_CAT(TIA_INPUT)                                                         \
+    PLBL_PIN(INPT0, "INPT0", "TIA input 0")  PLBL_PIN(INPT1, "INPT1", "TIA input 1") \
+    PLBL_PIN(INPT2, "INPT2", "TIA input 2")  PLBL_PIN(INPT3, "INPT3", "TIA input 3") \
+    PLBL_PIN(INPT4, "INPT4", "TIA input 4")  PLBL_PIN(INPT5, "INPT5", "TIA input 5") \
+    \
+    /* ── MC6847 VDG mode pins ────────────────────────────────────── */ \
+    PLBL_CAT(VDG)                                                               \
+    PLBL_PIN(AG,          "AG",        "alpha/graphics mode (MC6847)")           \
+    PLBL_PIN(AS,          "A/S",       "alpha/semigraphics (MC6847)")            \
+    PLBL_PIN(CSS,         "CSS",       "color set select (MC6847)")              \
+    PLBL_PIN(FS,          "FS",        "field sync output (MC6847)")             \
+    PLBL_PIN(GM0,         "GM0",       "graphics mode 0 (MC6847)")              \
+    PLBL_PIN(GM1,         "GM1",       "graphics mode 1 (MC6847)")              \
+    PLBL_PIN(GM2,         "GM2",       "graphics mode 2 (MC6847)")              \
+    PLBL_PIN(INV,         "INV",       "invert (MC6847)")                        \
+    PLBL_PIN(INTEXT,      "INT/EXT",   "internal/external chargen (MC6847)")    \
+    \
+    /* ── POKEY I/O (Atari) ───────────────────────────────────────── */ \
+    PLBL_CAT(POKEY_IO)                                                          \
+    PLBL_PIN(BCLK_IN,     "BCLK IN",   "bidirectional clock input")             \
+    PLBL_PIN(KR1,         "KR1",       "keyboard return 1")                     \
+    PLBL_PIN(KR2,         "KR2",       "keyboard return 2")                     \
+    PLBL_PIN(POT0, "POT0", "pot input 0")  PLBL_PIN(POT1, "POT1", "pot input 1")    \
+    PLBL_PIN(POT2, "POT2", "pot input 2")  PLBL_PIN(POT3, "POT3", "pot input 3")    \
+    PLBL_PIN(POT4, "POT4", "pot input 4")  PLBL_PIN(POT5, "POT5", "pot input 5")    \
+    PLBL_PIN(POT6, "POT6", "pot input 6")  PLBL_PIN(POT7, "POT7", "pot input 7")    \
+    PLBL_PIN(SIO_CLK_IN,  "SIO CLK IN",  "serial I/O clock input")             \
+    PLBL_PIN(SIO_CLK_OUT, "SIO CLK OUT", "serial I/O clock output")             \
+    PLBL_PIN(SIO_IN,      "SIO IN",    "serial I/O data input")                 \
+    PLBL_PIN(SIO_OUT,     "SIO OUT",   "serial I/O data output")                \
+    \
+    /* ── Logic chip pins (I, Q, Y, S, G sequential sub-groups) ───── */ \
+    PLBL_CAT(LOGIC)                                                             \
+    PLBL_PIN(DS,          "DS",        "data serial input (shift register)")     \
+    PLBL_PIN(G,           "G",         "gate/enable")                            \
+    PLBL_PIN(I0, "I0", "input 0")  PLBL_PIN(I1, "I1", "input 1")                    \
+    PLBL_PIN(I2, "I2", "input 2")  PLBL_PIN(I3, "I3", "input 3")                    \
+    PLBL_PIN(I4, "I4", "input 4")  PLBL_PIN(I5, "I5", "input 5")                    \
+    PLBL_PIN(I6, "I6", "input 6")  PLBL_PIN(I7, "I7", "input 7")                    \
+    PLBL_PIN(Q0, "Q0", "output 0")  PLBL_PIN(Q1, "Q1", "output 1")                  \
+    PLBL_PIN(Q2, "Q2", "output 2")  PLBL_PIN(Q3, "Q3", "output 3")                  \
+    PLBL_PIN(Q4, "Q4", "output 4")  PLBL_PIN(Q5, "Q5", "output 5")                  \
+    PLBL_PIN(Q6, "Q6", "output 6")  PLBL_PIN(Q7, "Q7", "output 7")                  \
+    PLBL_PIN(S0, "S0", "select 0")  PLBL_PIN(S1, "S1", "select 1")                  \
+    PLBL_PIN(S2, "S2", "select 2")  PLBL_PIN(S3, "S3", "select 3")                  \
+    PLBL_PIN(Y0, "Y0", "output 0")  PLBL_PIN(Y1, "Y1", "output 1")                  \
+    PLBL_PIN(Y2, "Y2", "output 2")  PLBL_PIN(Y3, "Y3", "output 3")                  \
+    PLBL_PIN(Y4, "Y4", "output 4")  PLBL_PIN(Y5, "Y5", "output 5")                  \
+    PLBL_PIN(Y6, "Y6", "output 6")  PLBL_PIN(Y7, "Y7", "output 7")                  \
+    \
+    /* ── Differential pairs ──────────────────────────────────────── */ \
+    PLBL_CAT(DIFFERENTIAL)                                                      \
+    \
+    /* ── No-connect ──────────────────────────────────────────────── */ \
+    PLBL_CAT(NO_CONNECT)                                                        \
+    PLBL_PIN(NC,          "NC",        "no connect")                             \
+    /* end of PIN_LABELS */
+
+// ============================================================================
+// PinType enum — generated from CAT entries
 // ============================================================================
 
-// Pin types for visual categorization and color coding
 enum class PinType {
-    POWER,        // VCC, VSS, VDD, GND, AVDD, DVDD, etc.
-    CLOCK,        // Clock inputs/outputs (φ0, φ1, φ2, CLK, XTAL, etc.)
-    ADDRESS,      // Address bus lines (A0-A23, ADDR, etc.)
-    DATA,         // Data bus lines (D0-D15, DATA, etc.)
-    CONTROL,      // Control signals (RW, SYNC, RDY, AEC, CS, OE, WE, etc.)
-    INTERRUPT,    // Interrupt lines (IRQ, NMI, RES, INT, INTR, etc.)
-    SPECIAL,      // Special purpose (SO, BE, ML, NC, TEST, etc.)
-    IO_PORT,      // I/O port lines (P0-P7, PA0-PA7, GPIO, etc.)
-    PORT_A,       // Port A specific GPIO (PA0-PA7)
-    PORT_B,       // Port B specific GPIO (PB0-PB7)
-    PORT_C,       // Port C specific GPIO (PC0-PC7)
-    PORT_D,       // Port D specific GPIO (PD0-PD7)
-    ANALOG,       // Analog signals (AIN, AOUT, VREF, etc.)
-    DIFFERENTIAL, // Differential pairs (TX+/TX-, RX+/RX-, CLK+/CLK-)
-    VIDEO,        // Video signals (LUMA, CHROMA, SYNC, etc.)
-    AUDIO,        // Audio signals (AUDIO_OUT, OSC, FILTER, etc.)
-    MEMORY,       // Memory interface (DQ, MA, CAS, RAS, etc.)
-    LOGIC,        // Logic signals (Q, Y, S, G, etc.)
-    SERIAL,       // Serial communication (UART, SPI, etc.)
-    TIMER,        // Timer/counter signals (CNT, TOD, FLAG, etc.)
-    NO_CONNECT    // Explicitly no-connect pins
+#define PINTYPE_GEN_INV_(id, str, cmt)
+#define PINTYPE_GEN_CAT_(t)            t,
+#define PINTYPE_GEN_PIN_(id, str, cmt)
+    PIN_LABELS(PINTYPE_GEN_INV_, PINTYPE_GEN_CAT_, PINTYPE_GEN_PIN_)
+#undef PINTYPE_GEN_INV_
+#undef PINTYPE_GEN_CAT_
+#undef PINTYPE_GEN_PIN_
 };
 
-// Pin label enumeration for 65xx CPU family and common pins.
+// ============================================================================
+// PinLabel enum — generated from INV + CAT + PIN entries
+// ============================================================================
 //
-// Active-low (inverted) labels appear first, prefixed with underscore.
-// Detect active-low via: label < PinLabel::ACTIVE_LOW_END
+// Layout:
+//   [INV entries]  — active-low labels
+//   ACTIVE_LOW_END — sentinel
+//   [_X_BEGIN, PIN entries] per CAT — active-high labels with range sentinels
+//   _LABEL_END     — final sentinel
+//   UNKNOWN
 //
-enum class PinLabel {
-    // ================================================================
-    // Active-low (inverted) pins — sorted alphabetically.
-    // These correspond to signals that are default-high / active-low.
-    // The string representation omits the underscore; the display
-    // layer prepends "/" or overbar based on notation style.
-    // ================================================================
-    _ABORT,       // /ABORT — abort (65C816)
-    _AEC,         // /AEC — address enable control (active-low form)
-    _AS,          // /AS — address strobe (M68K)
-    _BASIC,       // /BASIC — BASIC ROM select
-    _BERR,        // /BERR — bus error (M68K)
-    _BG,          // /BG — bus grant (M68K)
-    _BGACK,       // /BGACK — bus grant acknowledge (M68K)
-    _BR,          // /BR — bus request (M68K)
-    _BUSAK,       // /BUSAK — bus acknowledge (Z80)
-    _BUSRQ,       // /BUSRQ — bus request (Z80)
-    _CAS,         // /CAS — column address strobe
-    _CASRAM_PLA,  // /CASRAM — CAS RAM (PLA output F0)
-    _CE,          // /CE — chip enable
-    _CHAREN,      // /CHAREN — character ROM enable
-    _CHAROM,      // /CHAROM — character ROM select
-    _CS,          // /CS — chip select
-    _CS0,         // /CS0 — chip select 0
-    _CS1,         // /CS1 — chip select 1
-    _CS2,         // /CS2 — chip select 2
-    _CLR,         // /CLR — master clear (74LS259 addressable latch)
-    _DTACK,       // /DTACK — data transfer acknowledge (M68K)
-    _EXROM,       // /EXROM — external ROM
-    _FIRQ,        // /FIRQ — fast interrupt request (MC6809)
-    _GAME,        // /GAME — game line
-    _G,           // /G — gate/enable (74LS259 addressable latch)
-    _HALT,        // /HALT — halt (Z80)
-    _HIRAM,       // /HIRAM — high RAM
-    _IC,          // /IC — initial clear (Yamaha FM reset)
-    _INT,         // /INT — interrupt (Z80)
-    _IO,          // /I/O — I/O area select
-    _IORQ,        // /IORQ — I/O request (Z80)
-    _IPL0,        // /IPL0 — interrupt priority level 0 (M68K)
-    _IPL1,        // /IPL1 — interrupt priority level 1 (M68K)
-    _IPL2,        // /IPL2 — interrupt priority level 2 (M68K)
-    _IRQ,         // /IRQ — interrupt request
-    _IRQA,        // /IRQA — interrupt request A (PIA 6820/6821)
-    _IRQB,        // /IRQB — interrupt request B (PIA 6820/6821)
-    _KERNAL,      // /KERNAL — KERNAL ROM select
-    _LDS,         // /LDS — lower data strobe (M68K)
-    _LORAM,       // /LORAM — low RAM
-    _M1,          // /M1 — machine cycle 1 (Z80)
-    _ML,          // /ML — memory lock (65C02/65C816)
-    _MREQ,        // /MREQ — memory request (Z80)
-    _NMI,         // /NMI — non-maskable interrupt
-    _OE,          // /OE — output enable
-    _PARD,        // /PARD — peripheral address read (Ricoh 5A22 B-bus)
-    _PAWR,        // /PAWR — peripheral address write (Ricoh 5A22 B-bus)
-    _Q7,          // /Q7 — complement output (shift register)
-    _RAS,         // /RAS — row address strobe
-    _RD,          // /RD — read strobe
-    _RES,         // /RES — reset
-    _RFSH,        // /RFSH — refresh (Z80)
-    _ROMH,        // /ROMH — ROM high
-    _ROML,        // /ROML — ROM low
-    _ROMSEL,      // /ROMSEL — ROM select (Ricoh 5A22 cartridge chip select)
-    _SO,          // /SO — set overflow
-    _UDS,         // /UDS — upper data strobe (M68K)
-    _VA14,        // /VA14 — video address 14 (inverted form)
-    _VMA,         // /VMA — valid memory address (M68K)
-    _VP,          // /VP — vector pull (active-low)
-    _VPA,         // /VPA — valid peripheral address (M68K)
-    _VPB,         // /VPB — vector pull bar (active-low)
-    _WAIT,        // /WAIT — wait (Z80)
-    _WE,          // /WE — write enable
-    _WR,          // /WR — write strobe (Ricoh 5A22 A-bus)
-    _WRAM,        // /WRAM — work RAM chip select (Ricoh 5A22)
 
-    // Sentinel — all labels below this point are active-high.
+enum class PinLabel {
+    // Pass 1: emit active-low labels only
+#define PINLABEL_INV1_(id, str, cmt)   id,
+#define PINLABEL_CAT1_(t)
+#define PINLABEL_PIN1_(id, str, cmt)
+    PIN_LABELS(PINLABEL_INV1_, PINLABEL_CAT1_, PINLABEL_PIN1_)
+#undef PINLABEL_INV1_
+#undef PINLABEL_CAT1_
+#undef PINLABEL_PIN1_
+
     ACTIVE_LOW_END,
 
-    // ================================================================
-    // Active-high pins — normal polarity, sorted within each group.
-    // ================================================================
+    // Pass 2: emit category sentinels and active-high labels
+#define PINLABEL_INV2_(id, str, cmt)
+#define PINLABEL_CAT2_(t)              _##t##_BEGIN,
+#define PINLABEL_PIN2_(id, str, cmt)   id,
+    PIN_LABELS(PINLABEL_INV2_, PINLABEL_CAT2_, PINLABEL_PIN2_)
+#undef PINLABEL_INV2_
+#undef PINLABEL_CAT2_
+#undef PINLABEL_PIN2_
 
-    // Power pins
-    GND,          // Ground (legacy naming, prefer VSS)
-    VCC,          // +5V power (legacy naming, prefer VDD)
-    VDD,          // +5V power supply
-    VSS,          // Ground (0V)
-
-    // Clock pins
-    CLK,          // Generic clock input
-    CPUCLK,       // CPU clock output (Ricoh 5A22)
-    E_CLK,        // Enable clock output (M68K 6800 peripheral compat)
-    M2,           // Derived clock output (2A03)
-    PHI0,         // Φ0 — clock input
-    PHI1,         // Φ1 — inverted clock output
-    PHI2,         // Φ2 — primary clock output
-    PHI_M,        // ΦM — master clock input (Yamaha FM)
-    PHI_S,        // ΦS — SSG/secondary clock (Yamaha OPN)
-    Q_CLK,        // Q clock output (MC6809)
-    SYSCLK,       // System master clock input (Ricoh 5A22, 21.477 MHz)
-
-    // Address bus pins (A0-A23, must remain sequential)
-    A0, A1, A2, A3, A4, A5, A6, A7,
-    A8, A9, A10, A11, A12, A13, A14, A15,
-    A16, A17, A18, A19, A20, A21, A22, A23,
-
-    // Data bus pins (D0-D15, must remain sequential)
-    D0, D1, D2, D3, D4, D5, D6, D7,
-    D8, D9, D10, D11, D12, D13, D14, D15,
-
-    // Control signals
-    AEC,          // Address Enable Control (6510)
-    ALE,          // Address Latch Enable
-    ARDY,         // Port A Ready output (Z80 PIO)
-    ASTB,         // Port A Strobe input (Z80 PIO)
-    AVMA,         // Advanced Valid Memory Address (MC6809)
-    BA,           // Bus Available
-    B_ASEL,       // B/A̅ select — port select (Z80 PIO)
-    BC1,          // Bus Control 1 (AY-3-8910)
-    BC2,          // Bus Control 2 (AY-3-8910)
-    BDIR,         // Bus Direction (AY-3-8910)
-    BE,           // Bus Enable (65C02/65C816)
-    BRDY,         // Port B Ready output (Z80 PIO)
-    BS,           // Bus Status (MC6809)
-    BSTB,         // Port B Strobe input (Z80 PIO)
-    BUSY,         // Busy (MC6809, 16-bit operations)
-    CAS,          // Column Address Strobe (active-high form)
-    CS,           // Chip Select (active-high form)
-    CS0,          // Chip Select 0 (active-high form)
-    CS1,          // Chip Select 1 (active-high form)
-    CS2,          // Chip Select 2 (active-high form)
-    CS3,          // Chip Select 3 (active-high form, TIA)
-    C_DSEL,       // C/D̅ select — control/data (Z80 PIO/CTC)
-    CURSOR,       // Cursor output (MC6845 CRTC)
-    DE,           // Display Enable (MC6845 CRTC)
-    DUMP,         // Paddle dump/discharge (TIA)
-    ENABLE,       // Enable clock input (6800 bus family)
-    EXTAL,        // External crystal input (MC6809)
-    LPSTB,        // Light Pen STroBe (MC6845 CRTC)
-    MUX,          // Address multiplexer
-    OE,           // Output Enable (active-high form)
-    P_S,          // Parallel/Serial control (shift register latch)
-    RAS,          // Row Address Strobe (active-high form)
-    RD,           // Read strobe (active-high form)
-    RDY,          // Ready input/output
-    RS,           // Register Select
-    RS0,          // Register Select 0 (PIA 6820/6821)
-    RS1,          // Register Select 1 (PIA 6820/6821)
-    RW,           // Read/Write control
-    SYNC,         // Synchronization output
-    WE,           // Write Enable (active-high form)
-
-    // Interrupt pins (active-high forms — active-low in _-prefixed)
-    ABORT,        // Abort (65C816, active-high form)
-    IEI,          // Interrupt Enable In (Z80 daisy chain)
-    IEO,          // Interrupt Enable Out (Z80 daisy chain)
-    IRQ,          // Interrupt Request (active-high form)
-    LIC,          // Last Instruction Cycle (MC6809)
-    NMI,          // Non-Maskable Interrupt (active-high form)
-    RES,          // Reset (active-high form)
-
-    // Function code pins (M68K)
-    FC0,          // Function code 0 (M68K)
-    FC1,          // Function code 1 (M68K)
-    FC2,          // Function code 2 (M68K)
-
-    // Special pins
-    E,            // Emulation mode (65C816)
-    ML,           // Memory Lock (active-high form)
-    MX,           // Memory/Index size status (65C816)
-    SO,           // Set Overflow (active-high form)
-    VDA,          // Valid Data Address (65C816)
-    VP,           // Vector Pull (active-high form)
-    VPA,          // Valid Program Address (65C816)
-    VPB,          // Vector Pull Bar (active-high form)
-
-    // I/O Port pins (6510 specific, must remain sequential)
-    P0, P1, P2, P3, P4, P5, P6, P7,
-
-    // GPIO pins (must remain sequential within each port)
-    PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7,
-    PB0, PB1, PB2, PB3, PB4, PB5, PB6, PB7,
-    PC0, PC1, PC2, PC3, PC4, PC5, PC6, PC7,
-    PD0, PD1, PD2, PD3, PD4, PD5, PD6, PD7,
-
-    // Peripheral pins (microcontroller variants)
-    PWM0, PWM1, PWM2, PWM3,
-    SPI_CLK,      // SPI clock
-    SPI_CS,       // SPI chip select
-    SPI_MISO,     // SPI data in
-    SPI_MOSI,     // SPI data out
-    UART_RX,      // UART receive
-    UART_TX,      // UART transmit
-
-    // Video chip pins
-    CHROMA,       // Chrominance output
-    COLU,         // Color/Luminance output (TIA)
-    COLOR,        // Color signal output (VIC-II)
-    COLOR_CLK,    // Color clock
-    COMP_BLK,     // Composite blank (TIA)
-    CSYNC,        // Composite sync
-    DOT_CLK,      // Dot clock
-    HSYNC,        // Horizontal sync
-    LIGHT_PEN,    // Light pen input
-    LUMA,         // Luminance output
-    VOUT,         // Composite video output
-    VSYNC,        // Vertical sync
-
-    // Raster address pins (MC6845 CRTC, must remain sequential)
-    RA0, RA1, RA2, RA3, RA4,
-
-    // Audio chip pins
-    AUD,          // Audio output (Atari POKEY)
-    AUD0,         // Audio output 0 (TIA)
-    AUD1,         // Audio output 1 (TIA)
-    AUDIO_IN,     // Audio input
-    AUDIO_OUT,    // Audio output
-    FILTER_IN,    // Filter input
-    FILTER_OUT,   // Filter output
-    MO,           // Mixed Output (Yamaha FM)
-    NOISE,        // Noise output
-    OSC1,         // Oscillator output 1
-    OSC2,         // Oscillator output 2
-    OSC3,         // Oscillator output 3
-    RO,           // Rhythm Output (Yamaha OPLL)
-    SH1,          // Sample-and-Hold 1 (Yamaha FM)
-    SH2,          // Sample-and-Hold 2 (Yamaha FM)
-    SND1,         // Sound output 1 (Ricoh 2A03)
-    SND2,         // Sound output 2 (Ricoh 2A03)
-    SOUND,        // Sound output (VIC-I/II composite audio)
-
-    // AY-3-8910 / Yamaha FM audio output pins
-    CH3_OUT,      // FM Channel 3 direct output (Yamaha OPN)
-    CHANNEL_A,    // Analog Channel A output (AY-3-8910)
-    CHANNEL_B,    // Analog Channel B output (AY-3-8910)
-    CHANNEL_C,    // Analog Channel C output (AY-3-8910)
-    SSG_OUT,      // SSG section output (Yamaha OPN)
-
-    // Spectrum/general audio pins
-    EAR,          // Tape EAR input
-    MIC,          // Tape MIC output
-    SPEAKER,      // Speaker output
-
-    // CIA/Timer chip pins
-    CNT,          // Counter input
-    FLAG,         // Flag input
-    PC,           // Peripheral Control output
-    SDR,          // Serial Data Register
-    SP,           // Serial port
-    TOD,          // Time of day clock
-
-    // VIA handshake pins (MOS 6522)
-    CA1,          // Port A control line 1
-    CA2,          // Port A control line 2
-    CB1,          // Port B control line 1
-    CB2,          // Port B control line 2
-
-    // Z80 CTC pins (must remain sequential within sub-groups)
-    CLK_TRG0,     // Clock/Trigger 0 input (Z80 CTC)
-    CLK_TRG1,     // Clock/Trigger 1 input (Z80 CTC)
-    CLK_TRG2,     // Clock/Trigger 2 input (Z80 CTC)
-    CLK_TRG3,     // Clock/Trigger 3 input (Z80 CTC)
-    ZC_TO0,       // Zero Count/Timer Output 0 (Z80 CTC)
-    ZC_TO1,       // Zero Count/Timer Output 1 (Z80 CTC)
-    ZC_TO2,       // Zero Count/Timer Output 2 (Z80 CTC)
-    ZC_TO3,       // Zero Count/Timer Output 3 (Z80 CTC)
-
-    // Memory chip pins (DQ/MA must remain sequential)
-    CASRAM,       // CAS for RAM
-    DQ0, DQ1, DQ2, DQ3, DQ4, DQ5, DQ6, DQ7,
-    MA0, MA1, MA2, MA3, MA4, MA5, MA6, MA7,
-    MA8, MA9, MA10, MA11, MA12, MA13, MA14, MA15,
-
-    // SID-specific pins
-    CAP1A,        // Filter capacitor 1A
-    CAP1B,        // Filter capacitor 1B
-    CAP2A,        // Filter capacitor 2A
-    CAP2B,        // Filter capacitor 2B
-    EXT_IN,       // External audio input
-    POTX,         // Paddle X input
-    POTY,         // Paddle Y input
-
-    // TIA-specific input pins (must remain sequential)
-    INPT0, INPT1, INPT2, INPT3, INPT4, INPT5,
-
-    // PLA specific pins (active-high forms; PLA outputs often
-    // active-low — use _-prefixed labels for those)
-    BASIC,        // BASIC ROM select (active-high form)
-    CASRAM_PLA,   // CAS RAM — PLA specific (active-high form)
-    CHAREN,       // Character ROM enable (active-high form)
-    CHAROM,       // Character ROM select (active-high form)
-    EXROM,        // External ROM (active-high form)
-    GAME,         // Game line (active-high form)
-    GRW,          // Graphics Read/Write
-    HIRAM,        // High RAM (active-high form)
-    IO,           // I/O select (active-high form)
-    KERNAL,       // KERNAL ROM select (active-high form)
-    LORAM,        // Low RAM (active-high form)
-    ROMH,         // ROM High (active-high form)
-    ROML,         // ROM Low (active-high form)
-    VA12,         // Video address 12
-    VA13,         // Video address 13
-    VA14,         // Video address 14 (active-high form)
-
-    // Keyboard matrix pins (TED 7360, must remain sequential)
-    K0, K1, K2, K3, K4, K5, K6, K7,
-
-    // NES-specific pins (Ricoh 2A03 / 2C02)
-    AD1,          // Multiplexed address/data 1 (2A03)
-    AD2,          // Multiplexed address/data 2 (2A03)
-    EXT0, EXT1, EXT2, EXT3, // PPU extension port (2C02)
-    IN0,          // Controller data input 0 (2A03)
-    IN1,          // Controller data input 1 (2A03)
-    OUT0,         // Controller strobe 0 (2A03)
-    OUT1,         // Controller strobe 1 (2A03)
-    OUT2,         // Controller strobe 2 (2A03)
-
-    // SNES-specific pins (Ricoh 5A22)
-    HBLANK,       // Horizontal blank output (5A22)
-    JOY1,         // Joypad 1 serial data input (5A22)
-    JOY2,         // Joypad 2 serial data input (5A22)
-    JOYCLK,       // Joypad clock output (5A22)
-    JOYLAT,       // Joypad latch output (5A22)
-    JOYRD,        // Joypad auto-read strobe (5A22)
-    REFRESH,      // WRAM refresh output (5A22)
-    VBLANK,       // Vertical blank output (5A22)
-
-    // MC6847 VDG pins
-    AG,           // Alpha/Graphics mode select (MC6847)
-    AS,           // Alpha/Semigraphics mode select (MC6847)
-    CSS,          // Color Set Select (MC6847)
-    FS,           // Field Sync output (MC6847)
-    GM0,          // Graphics Mode 0 (MC6847)
-    GM1,          // Graphics Mode 1 (MC6847)
-    GM2,          // Graphics Mode 2 (MC6847)
-    INV,          // Invert (MC6847)
-    INTEXT,       // Internal/External character generator (MC6847)
-
-    // Shift register pins
-    DS,           // Data Serial input (shift register)
-
-    // Logic chip pins (must remain sequential within sub-groups)
-    G,            // Gate/Enable
-    I0, I1, I2, I3, I4, I5, I6, I7,
-    Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7,
-    S0, S1, S2, S3,
-    Y0, Y1, Y2, Y3, Y4, Y5, Y6, Y7,
-
-    // Test and configuration
-    NC,           // No Connect
-    TEST,         // Test mode pin
-
-    // Analog pins (AIN must remain sequential)
-    AIN0, AIN1, AIN2, AIN3, AIN4, AIN5, AIN6, AIN7,
-    AOUT0,        // Analog output 0
-    AOUT1,        // Analog output 1
-    VREF,         // Voltage reference
-
-    // Crystal/oscillator pins
-    OSC_IN,       // Oscillator input
-    OSC_OUT,      // Oscillator output
-    XTAL1,        // Crystal 1
-    XTAL2,        // Crystal 2
-    XTAL,         // Crystal (MC6809)
-
-    // Power variant (TIA analog section)
-    VTIA,         // TIA-specific analog supply voltage
-
-    // POKEY-specific pins (must remain sequential within sub-groups)
-    POT0, POT1, POT2, POT3,      // Paddle/pot analog inputs 0-3
-    POT4, POT5, POT6, POT7,      // Paddle/pot analog inputs 4-7
-    SIO_IN,       // Serial I/O data input
-    SIO_OUT,      // Serial I/O data output
-    SIO_CLK_IN,   // Serial I/O clock input
-    SIO_CLK_OUT,  // Serial I/O clock output
-    BCLK_IN,      // Bidirectional clock input
-    KR1,          // Keyboard return 1
-    KR2,          // Keyboard return 2
-
-    // Unknown/custom pin — must be last
-    UNKNOWN
+    _LABEL_END,
+    UNKNOWN = _LABEL_END
 };
 
-// Pin side enumeration for package layout
+// ============================================================================
+// PIN SIDE
+// ============================================================================
+
 enum class PinSide {
     LEFT,         // Left side pins (top to bottom)
     RIGHT,        // Right side pins (top to bottom) 
     TOP,          // Top side pins (left to right)
-    BOTTOM        // Bottom side pins (left to right)
+    BOTTOM
 };
 
 // ============================================================================
 // PIN STRUCTURES
 // ============================================================================
 
+// Forward declaration
+class ChipBase;
+
 // Die pin definition structure with enum-based labels for performance
 struct ChipPin {
-    uint8_t pin_number;           // Physical pin number (or grid position for BGA)
+    uint8_t pin_number;           // Physical pin number
     PinLabel label;               // Pin label enum for fast comparisons
     const char* alt_function;     // Alternate function name
     bool is_differential_pos;     // True if positive side of differential pair
     bool is_differential_neg;     // True if negative side of differential pair
-    
-    // Derived properties - computed from label
+
+    // Derived properties — computed from label
     PinType get_pin_type() const;
     uint8_t get_bit_index() const;
     bool get_invert_logic() const;
@@ -476,30 +658,28 @@ struct BGAPosition {
 };
 
 // ============================================================================
-// MODERN PIN DEFINITION MACROS (ENUM-BASED)
+// PIN DEFINITION MACROS
 // ============================================================================
 
-// Macro to create a ChipPin with simplified structure (no derivable fields)
-#define PIN(num, lbl_enum) \
+#define CHIP_PIN(num, lbl_enum) \
     {num, PinLabel::lbl_enum, nullptr, false, false}
 
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-// Unified pin creation function (replaces all make_*_pin functions)
-inline ChipPin make_pin(uint8_t num, PinLabel label = PinLabel::NC, const char* alt_function = nullptr) {
+inline ChipPin make_pin(uint8_t num, PinLabel label = PinLabel::NC,
+                        const char* alt_function = nullptr) {
     return ChipPin{num, label, alt_function, false, false};
 }
 
-// Helper functions for pin derivation
+// ============================================================================
+// HELPER FUNCTION DECLARATIONS
+// ============================================================================
+
 uint8_t get_bit_index_from_label(PinLabel label);
 bool get_invert_logic_from_label(PinLabel label);
 const char* pin_type_to_group_name(PinType type);
 
 // Enum-to-string conversion functions
 const char* pin_label_to_string(PinLabel label);
-std::string pin_label_to_display_string(PinLabel label); // With Unicode symbols
+std::string pin_label_to_display_string(PinLabel label);
 
 // Derive pin type from pin label
 PinType pin_label_to_pin_type(PinLabel label);
@@ -507,7 +687,7 @@ PinType pin_label_to_pin_type(PinLabel label);
 // ============================================================================
 // PIN LABEL EQUIVALENCE
 // ============================================================================
-
+//
 // Maps any PinLabel to its canonical functional identity.
 // Labels that ARE canonical return themselves (via the default case).
 // Every non-identity mapping targets a fixed point — verified by static_assert.
@@ -515,7 +695,8 @@ PinType pin_label_to_pin_type(PinLabel label);
 // Equivalence classes:
 //   Polarity pairs:  _FOO  → FOO  (active-low → active-high canonical)
 //   Power synonyms:  GND   → VSS,   VCC   → VDD
-//   Name synonyms:   PHI_M → CLK,   MO    → AUDIO_OUT,  _IC → RES, etc.
+//   Name synonyms:   PHI_M → CLK,   MO    → AUDIO_OUT,  IC → RES, etc.
+//   Memory I/O:      I_O1  → DQ0,   I_O2  → DQ1,  etc.
 //
 // MAINTENANCE: when adding a case `X → Y`, ensure Y is itself canonical
 // (not mapped to something else).  The static_assert below will fire if not.
@@ -525,52 +706,87 @@ constexpr PinLabel pin_canonical(PinLabel label) {
     // ── Polarity pairs (active-low → active-high) ──────────────────
     case PinLabel::_ABORT:       return PinLabel::ABORT;
     case PinLabel::_AEC:         return PinLabel::AEC;
+    case PinLabel::_AS_M68K:     return PinLabel::AS_M68K;
     case PinLabel::_BASIC:       return PinLabel::BASIC;
+    case PinLabel::_BERR:        return PinLabel::BERR;
+    case PinLabel::_BG:          return PinLabel::BG;
+    case PinLabel::_BGACK:       return PinLabel::BGACK;
+    case PinLabel::_BR:          return PinLabel::BR;
+    case PinLabel::_BUSAK:       return PinLabel::BUSAK;
+    case PinLabel::_BUSRQ:       return PinLabel::BUSRQ;
     case PinLabel::_CAS:         return PinLabel::CAS;
     case PinLabel::_CASRAM_PLA:  return PinLabel::CASRAM_PLA;
+    case PinLabel::_CE:          return PinLabel::CE;
     case PinLabel::_CHAREN:      return PinLabel::CHAREN;
     case PinLabel::_CHAROM:      return PinLabel::CHAROM;
+    case PinLabel::_CLR:         return PinLabel::CLR;
     case PinLabel::_CS:          return PinLabel::CS;
     case PinLabel::_CS0:         return PinLabel::CS0;
     case PinLabel::_CS1:         return PinLabel::CS1;
     case PinLabel::_CS2:         return PinLabel::CS2;
+    case PinLabel::_DTACK:       return PinLabel::DTACK;
     case PinLabel::_EXROM:       return PinLabel::EXROM;
+    case PinLabel::_FIRQ:        return PinLabel::FIRQ;
     case PinLabel::_G:           return PinLabel::G;
     case PinLabel::_GAME:        return PinLabel::GAME;
+    case PinLabel::_HALT:        return PinLabel::HALT;
     case PinLabel::_HIRAM:       return PinLabel::HIRAM;
+    case PinLabel::_IC:          return PinLabel::RES;    // /IC = reset (Yamaha)
+    case PinLabel::_INT:         return PinLabel::INT;
     case PinLabel::_IO:          return PinLabel::IO;
+    case PinLabel::_IORQ:        return PinLabel::IORQ;
+    case PinLabel::_IPL0:        return PinLabel::IPL0;
+    case PinLabel::_IPL1:        return PinLabel::IPL1;
+    case PinLabel::_IPL2:        return PinLabel::IPL2;
     case PinLabel::_IRQ:         return PinLabel::IRQ;
+    case PinLabel::_IRQA:        return PinLabel::IRQA;
+    case PinLabel::_IRQB:        return PinLabel::IRQB;
     case PinLabel::_KERNAL:      return PinLabel::KERNAL;
+    case PinLabel::_LDS:         return PinLabel::LDS;
     case PinLabel::_LORAM:       return PinLabel::LORAM;
+    case PinLabel::_M1:          return PinLabel::M1;
     case PinLabel::_ML:          return PinLabel::ML;
+    case PinLabel::_MREQ:        return PinLabel::MREQ;
     case PinLabel::_NMI:         return PinLabel::NMI;
     case PinLabel::_OE:          return PinLabel::OE;
+    case PinLabel::_PARD:        return PinLabel::PARD;
+    case PinLabel::_PAWR:        return PinLabel::PAWR;
     case PinLabel::_Q7:          return PinLabel::Q7;
     case PinLabel::_RAS:         return PinLabel::RAS;
     case PinLabel::_RD:          return PinLabel::RD;
     case PinLabel::_RES:         return PinLabel::RES;
+    case PinLabel::_RFSH:        return PinLabel::RFSH;
     case PinLabel::_ROMH:        return PinLabel::ROMH;
     case PinLabel::_ROML:        return PinLabel::ROML;
+    case PinLabel::_ROMSEL:      return PinLabel::ROMSEL;
     case PinLabel::_SO:          return PinLabel::SO;
+    case PinLabel::_UDS:         return PinLabel::UDS;
     case PinLabel::_VA14:        return PinLabel::VA14;
+    case PinLabel::_VMA:         return PinLabel::VMA;
     case PinLabel::_VP:          return PinLabel::VP;
+    case PinLabel::_VPA_M68K:    return PinLabel::VPA_M68K;
     case PinLabel::_VPB:         return PinLabel::VPB;
+    case PinLabel::_WAIT:        return PinLabel::WAIT;
     case PinLabel::_WE:          return PinLabel::WE;
-    // NOTE: _VPA (M68K "valid peripheral address") intentionally NOT mapped
-    //       to VPA (65C816 "valid program address") — different signals.
-    // NOTE: _AS (M68K "address strobe") intentionally NOT mapped to
-    //       AS (MC6847 "alpha/semigraphics") — different signals.
+    case PinLabel::_WR:          return PinLabel::WR;
+    case PinLabel::_WRAM:        return PinLabel::WRAM;
 
     // ── Power synonyms ─────────────────────────────────────────────
     case PinLabel::GND:          return PinLabel::VSS;
     case PinLabel::VCC:          return PinLabel::VDD;
 
     // ── Name synonyms (chip-specific → generic canonical) ──────────
-    case PinLabel::_IC:          return PinLabel::RES;    // /IC = reset (Yamaha)
     case PinLabel::AUD:          return PinLabel::AUDIO_OUT;
     case PinLabel::E_CLK:        return PinLabel::ENABLE;  // 6800-bus E clock
+    case PinLabel::IC:           return PinLabel::RES;     // IC = reset (Yamaha)
     case PinLabel::MO:           return PinLabel::AUDIO_OUT;
-    case PinLabel::PHI_M:        return PinLabel::CLK;    // master clock
+    case PinLabel::PHI_M:        return PinLabel::CLK;     // master clock
+
+    // ── Memory I/O synonyms (MOS 2114 I/O1..4 → DQ0..3) ──────────
+    case PinLabel::I_O1:         return PinLabel::DQ0;
+    case PinLabel::I_O2:         return PinLabel::DQ1;
+    case PinLabel::I_O3:         return PinLabel::DQ2;
+    case PinLabel::I_O4:         return PinLabel::DQ3;
 
     default: return label;
     }
@@ -583,8 +799,7 @@ constexpr bool pin_equivalent(PinLabel a, PinLabel b) {
 }
 
 // Compile-time idempotency proof: pin_canonical(pin_canonical(x)) == pin_canonical(x)
-// for every label in the enum.  Catches chains regardless of which labels are
-// involved — no manual target list to maintain.
+// for every label in the enum.
 constexpr bool pin_canonical_is_idempotent() {
     for (int i = 0; i <= static_cast<int>(PinLabel::UNKNOWN); ++i) {
         auto l = static_cast<PinLabel>(i);
@@ -600,16 +815,12 @@ static_assert(pin_canonical_is_idempotent(),
 // PIN-TO-BUS-BIT MAPPING
 // ============================================================================
 
-// Describes how a PinLabel maps to a bus_state bit for signal extraction.
 struct PinBusMapping {
-    int bus_bit;     // Bus bit index, or -1 if no direct mapping
-    bool is_input;   // true = input to chip (from bus perspective)
-    bool invert;     // true = signal level is inverted from bus bit (active-low)
+    int bus_bit;
+    bool is_input;
+    bool invert;
 };
 
-// Maps a PinLabel to its bus_state bit and signal characteristics.
-// Returns bus_bit = -1 for pins handled separately (ADDRESS, DATA, POWER,
-// CLOCK, NC) or for labels with no bus mapping.
 constexpr PinBusMapping get_pin_bus_mapping(PinLabel label) {
     switch (label) {
     // Control signals (active-high)
