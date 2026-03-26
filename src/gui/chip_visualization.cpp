@@ -694,6 +694,24 @@ void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, co
         ImVec2 pin_num_pos = {pin_pos.x - 6, pin_pos.y - 6};
         draw_list->AddText(pin_num_pos, config.pin_number_color, pin_num_str);
     }
+
+    // Tooltip on hover — InvisibleButton provides proper widget-level occlusion
+    {
+        char btn_id[16];
+        snprintf(btn_id, sizeof(btn_id), "##pin%u", pin.pin_number);
+        ImGui::SetCursorScreenPos(pin_min);
+        ImGui::InvisibleButton(btn_id, {pin_max.x - pin_min.x, pin_max.y - pin_min.y});
+        if (ImGui::IsItemHovered()) {
+            ImGui::BeginTooltip();
+            std::string formatted_label = format_pin_label(pin);
+            ImGui::Text("Pin %d: %s", pin.pin_number, formatted_label.c_str());
+            ImGui::TextDisabled("%s", pin.get_group_name());
+            const char* desc = pin_label_to_description(pin.label);
+            if (desc[0] != '\0')
+                ImGui::TextWrapped("%s", desc);
+            ImGui::EndTooltip();
+        }
+    }
 }
 
 // Simplified helper functions

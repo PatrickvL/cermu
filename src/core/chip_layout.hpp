@@ -40,11 +40,17 @@ struct ChipLayout {
     std::string get_package_name() const;
 };
 
-// Macro to define left and right pins simultaneously for DIP packages
-// Simplified for new ChipPin structure
-#define PIN_LR(layout, left_num, left_lbl_enum, right_lbl_enum, right_num) \
-    layout.left_pins.push_back(CHIP_PIN(left_num, left_lbl_enum)); \
-    layout.right_pins.push_back(CHIP_PIN(right_num, right_lbl_enum));
+// Single-side pin push macros
+#define PIN_L(layout, num, lbl)  layout.left_pins.push_back(CHIP_PIN(num, lbl));
+#define PIN_R(layout, num, lbl)  layout.right_pins.push_back(CHIP_PIN(num, lbl));
+#define PIN_T(layout, num, lbl)  layout.top_pins.push_back(CHIP_PIN(num, lbl));
+#define PIN_B(layout, num, lbl)  layout.bottom_pins.push_back(CHIP_PIN(num, lbl));
+
+// Paired pin push macros for dual-inline / quad packages
+#define PIN_LR(layout, left_num, left_lbl, right_lbl, right_num) \
+    PIN_L(layout, left_num, left_lbl) PIN_R(layout, right_num, right_lbl)
+#define PIN_TB(layout, top_num, top_lbl, bot_lbl, bot_num) \
+    PIN_T(layout, top_num, top_lbl) PIN_B(layout, bot_num, bot_lbl)
 
 // ============================================================================
 // STANDARD PACKAGE LAYOUT FUNCTIONS
