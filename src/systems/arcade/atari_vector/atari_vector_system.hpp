@@ -39,6 +39,7 @@
 #include "chip/memory/ram_chip.hpp"
 #include "chip/memory/rom_chip.hpp"
 #include "chip/logic/ls259.hpp"
+#include "chip/memory/er2055.hpp"
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -398,7 +399,8 @@ inline constexpr auto kAsteroidsChips = make_chip_manifest(
     Slot<ROMChip>{atv::VECROM_BASE,  atv::AST_VECROM_SIZE, 0, "Vector ROM"},
     Slot<ROMChip>{atv::AST_PROGROM_BASE, atv::AST_PROGROM_SIZE, 0, "Program ROM"},
     Slot<MOS6502>{0, 0, 0, "MOS 6502"},
-    Slot<dvg_t>{0, 0, 0, "DVG"}
+    Slot<dvg_t>{0, 0, 0, "DVG"},
+    Slot<LS259>{0, 0, 0, "74LS259"}
 );
 
 inline constexpr auto kLunarLanderChips = make_chip_manifest(
@@ -407,7 +409,8 @@ inline constexpr auto kLunarLanderChips = make_chip_manifest(
     Slot<ROMChip>{atv::LL_VECROM_BASE, atv::LL_VECROM_SIZE, 0, "Vector ROM"},
     Slot<ROMChip>{atv::LL_PROGROM_BASE, atv::LL_PROGROM_SIZE, 0, "Program ROM"},
     Slot<MOS6502>{0, 0, 0, "MOS 6502"},
-    Slot<dvg_t>{0, 0, 0, "DVG"}
+    Slot<dvg_t>{0, 0, 0, "DVG"},
+    Slot<LS259>{0, 0, 0, "74LS259"}
 );
 
 inline constexpr auto kAsteroidsDeluxeChips = make_chip_manifest(
@@ -416,7 +419,10 @@ inline constexpr auto kAsteroidsDeluxeChips = make_chip_manifest(
     Slot<ROMChip>{atv::AD_VECROM_BASE, atv::AD_VECROM_SIZE, 0, "Vector ROM"},
     Slot<ROMChip>{atv::AD_PROGROM_BASE, atv::AD_PROGROM_SIZE, 0, "Program ROM"},
     Slot<MOS6502>{0, 0, 0, "MOS 6502"},
-    Slot<dvg_t>{0, 0, 0, "DVG"}
+    Slot<dvg_t>{0, 0, 0, "DVG"},
+    Slot<pokey::C012294>{0, 0, 0, "POKEY"},
+    Slot<LS259>{0, 0, 0, "74LS259"},
+    Slot<ER2055>{0, 0, 0, "ER2055 EAROM"}
 );
 
 inline constexpr auto kBattlezoneChips = make_chip_manifest(
@@ -425,7 +431,8 @@ inline constexpr auto kBattlezoneChips = make_chip_manifest(
     Slot<ROMChip>{atv::BZ_VECROM_BASE,  atv::BZ_VECROM_SIZE,  0, "Vector ROM"},
     Slot<ROMChip>{atv::BZ_PROGROM_BASE, atv::BZ_PROGROM_SIZE, 0, "Program ROM"},
     Slot<MOS6502>{0, 0, 0, "MOS 6502"},
-    Slot<avg_t>{0, 0, 0, "AVG"}
+    Slot<avg_t>{0, 0, 0, "AVG"},
+    Slot<LS259>{0, 0, 0, "74LS259"}
 );
 
 inline constexpr auto kRedBaronChips = make_chip_manifest(
@@ -434,7 +441,9 @@ inline constexpr auto kRedBaronChips = make_chip_manifest(
     Slot<ROMChip>{atv::RB_VECROM_BASE,  atv::RB_VECROM_SIZE,  0, "Vector ROM"},
     Slot<ROMChip>{atv::RB_PROGROM_BASE, atv::RB_PROGROM_SIZE, 0, "Program ROM"},
     Slot<MOS6502>{0, 0, 0, "MOS 6502"},
-    Slot<avg_t>{0, 0, 0, "AVG"}
+    Slot<avg_t>{0, 0, 0, "AVG"},
+    Slot<pokey::C012294>{0, 0, 0, "POKEY"},
+    Slot<LS259>{0, 0, 0, "74LS259"}
 );
 
 // ── AVG-based manifests ──────────────────────────────────────────────────────
@@ -445,7 +454,10 @@ inline constexpr auto kTempestChips = make_chip_manifest(
     Slot<ROMChip>{atv::TEMP_VECROM_BASE,   atv::TEMP_VECROM_SIZE,   0, "Vector ROM"},
     Slot<ROMChip>{atv::TEMP_PROGROM_BASE,  atv::TEMP_PROGROM_SIZE,  0, "Program ROM"},
     Slot<MOS6502>{0, 0, 0, "MOS 6502"},
-    Slot<avg_t>{0, 0, 0, "AVG"}
+    Slot<avg_t>{0, 0, 0, "AVG"},
+    Slot<pokey::C012294>{0, 0, 0, "POKEY"},
+    Slot<LS259>{0, 0, 0, "74LS259"},
+    Slot<ER2055>{0, 0, 0, "ER2055 EAROM"}
 );
 
 inline constexpr auto kGravitarChips = make_chip_manifest(
@@ -454,7 +466,9 @@ inline constexpr auto kGravitarChips = make_chip_manifest(
     Slot<ROMChip>{atv::GRAV_VECROM_BASE,   0x4000,   0, "Vector ROM", 0, 0, 0, atv::GRAV_VECROM_SIZE},
     Slot<ROMChip>{atv::GRAV_PROGROM_BASE,  0x8000,   0, "Program ROM", 0, 0, 0, atv::GRAV_PROGROM_SIZE},
     Slot<MOS6502>{0, 0, 0, "MOS 6502"},
-    Slot<avg_t>{0, 0, 0, "AVG"}
+    Slot<avg_t>{0, 0, 0, "AVG"},
+    Slot<pokey::C012294>{0, 0, 0, "POKEY"},
+    Slot<LS259>{0, 0, 0, "74LS259"}
 );
 
 inline constexpr auto kSpaceDuelChips = make_chip_manifest(
@@ -464,7 +478,9 @@ inline constexpr auto kSpaceDuelChips = make_chip_manifest(
     Slot<ROMChip>{atv::SD_PROGROM_BASE,  atv::SD_PROGROM_SIZE,  0, "Program ROM Low"},
     Slot<ROMChip>{atv::SD_PROGROM_HI_BASE, atv::SD_PROGROM_HI_SIZE, 0, "Program ROM High"},
     Slot<MOS6502>{0, 0, 0, "MOS 6502"},
-    Slot<avg_t>{0, 0, 0, "AVG"}
+    Slot<avg_t>{0, 0, 0, "AVG"},
+    Slot<pokey::C012294>{0, 0, 0, "POKEY"},
+    Slot<LS259>{0, 0, 0, "74LS259"}
 );
 
 inline constexpr auto kBlackWidowChips = make_chip_manifest(
@@ -473,7 +489,9 @@ inline constexpr auto kBlackWidowChips = make_chip_manifest(
     Slot<ROMChip>{atv::BW_VECROM_BASE,   0x4000,   0, "Vector ROM", 0, 0, 0, atv::BW_VECROM_SIZE},
     Slot<ROMChip>{atv::BW_PROGROM_BASE,  0x8000,   0, "Program ROM", 0, 0, 0, atv::BW_PROGROM_SIZE},
     Slot<MOS6502>{0, 0, 0, "MOS 6502"},
-    Slot<avg_t>{0, 0, 0, "AVG"}
+    Slot<avg_t>{0, 0, 0, "AVG"},
+    Slot<pokey::C012294>{0, 0, 0, "POKEY"},
+    Slot<LS259>{0, 0, 0, "74LS259"}
 );
 
 inline constexpr auto kMajorHavocChips = make_chip_manifest(
@@ -482,7 +500,9 @@ inline constexpr auto kMajorHavocChips = make_chip_manifest(
     Slot<ROMChip>{atv::MH_VECROM_BASE,   atv::MH_VECROM_SIZE,   0, "Vector ROM"},
     Slot<ROMChip>{atv::MH_PROGROM_BASE,  atv::MH_PROGROM_SIZE,  0, "Program ROM"},
     Slot<MOS6502>{0, 0, 0, "MOS 6502"},
-    Slot<avg_t>{0, 0, 0, "AVG"}
+    Slot<avg_t>{0, 0, 0, "AVG"},
+    Slot<pokey::C012294>{0, 0, 0, "POKEY"},
+    Slot<LS259>{0, 0, 0, "74LS259"}
 );
 
 // ============================================================================
@@ -544,9 +564,10 @@ template<AtariVectorVariant V>
 class AtariVectorSystem : public System {
     using Traits    = AtariVectorTraits<V>;
     using VideoChip = typename Traits::VideoChip;
+    using SoundChip = std::conditional_t<Traits::HAS_POKEY, pokey::C012294, NoChip>;
     using Spec      = VectorBusSpec<V>;
     using Bus       = MemoryBus<Spec>;
-    using ChipSet   = CoreChips<MOS6502, VideoChip>;
+    using ChipSet   = CoreChips<MOS6502, VideoChip, SoundChip>;
     using MainBoard = Board<Spec, ChipSet>;
 
 public:
@@ -601,8 +622,6 @@ public:
 private:
     // ── Chips ────────────────────────────────────────────────────────────
 
-    pokey::C012294 pokey_;           // POKEY sound chip (games with HAS_POKEY)
-
     // Memory chips (non-owning; owned by board_)
     RAMChip*    vec_ram_     = nullptr;
     ROMChip*    vec_rom_     = nullptr;
@@ -624,8 +643,6 @@ private:
     bus_state_t pins_ = MOS6502::default_bus_state();
     bool system_ready_    = false;
     uint32_t nmi_counter_ = 0;
-    int cpu_trace_count_ = 0;     // TEMP DIAG
-    uint16_t last_pc_ = 0xFFFF;   // TEMP DIAG
 
     // ── Inputs ──────────────────────────────────────────────────────────
     uint8_t in0_       = 0x00;
@@ -641,9 +658,11 @@ private:
     // ── Sound output latches ────────────────────────────────────────────
     uint8_t snd_latch_ = 0x00;
 
-    // ── EAROM (some games — ER2055 64×4-bit) ────────────────────────────
-    uint8_t earom_[64] = {};
-    uint8_t earom_ctrl_ = 0x00;
+    // ── EAROM (ER2055 512-bit Electrically Alterable ROM) ────────────────
+    // Used on: Asteroids Deluxe, Tempest, Gravitar, Black Widow, Space Duel,
+    // Red Baron, Centipede, Millipede, Dig Dug, Liberator, and others.
+    // Atari part number: 137161-001
+    ER2055 earom_;
 
     // ── Internal helpers ────────────────────────────────────────────────
     void tick_cpu();

@@ -374,11 +374,19 @@ namespace atari_vector_constants {
     // All AVG games use a 16-bit address space with A15=0 giving $0000-$7FFF.
 
     // Tempest (1980): 6502 + AVG + POKEY (x2), color vector, spinner input
-    // Memory: $0000–$03FF RAM, $0800 I/O, $2000–$2FFF VRAM, $3000–$3FFF VROM,
-    //         $4000–$5FFF math ROM?, $6000–$7FFF program ROM
-    // Tempest uses a 32 KB address space: A15 unused → $0000-$7FFF mirrors.
+    // Memory map (MAME tempest.cpp):
+    //   $0000-$07FF: RAM (2 KB)
+    //   $0800-$080F: POKEY 1 (mirrored at $60C0)
+    //   $0900-$090F: POKEY 2 (mirrored at $60D0)
+    //   $0C00: IN0, $0D00: IN1, $0E00: IN2
+    //   $2000-$2FFF: Vector RAM (4 KB)
+    //   $3000-$3FFF: Vector ROM (4 KB)
+    //   $4000: Coin counter, $4800: VGGO, $5000: WD CLR, $5800: VGRST
+    //   $6000-$603F: EAROM, $6040: EAROM ctrl, $6050: EAROM data
+    //   $60C0-$60CF: POKEY 1, $60D0-$60DF: POKEY 2
+    //   $9000-$DFFF: Program ROM (mirrored to $E000-$FFFF)
     inline constexpr uint16_t TEMP_RAM_BASE        = 0x0000;
-    inline constexpr uint16_t TEMP_RAM_SIZE        = 0x0400;    // 1 KB
+    inline constexpr uint16_t TEMP_RAM_SIZE        = 0x0800;    // 2 KB (MAME: $0000-$07FF)
     inline constexpr uint16_t TEMP_VECRAM_BASE     = 0x2000;
     inline constexpr uint16_t TEMP_VECRAM_SIZE     = 0x1000;    // 4 KB
     inline constexpr uint16_t TEMP_VECROM_BASE     = 0x3000;
