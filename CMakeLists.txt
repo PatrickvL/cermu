@@ -634,6 +634,7 @@ if(BUILD_GUI)
         src/chip/cpu/mc6809/mc6809_gui.cpp
         src/chip/io/mos6526_gui.cpp
         src/chip/io/mos6522_gui.cpp
+        src/chip/io/mos6529_gui.cpp
         src/chip/memory/mos2114_gui.cpp
         src/chip/memory/er2055_gui.cpp
         src/chip/sound/mos6581_gui.cpp
@@ -680,6 +681,7 @@ set(GUI_STUB_SOURCES
     src/chip/cpu/mc6809/mc6809_gui.cpp
     src/chip/io/mos6526_gui.cpp
     src/chip/io/mos6522_gui.cpp
+    src/chip/io/mos6529_gui.cpp
     src/chip/memory/mos2114_gui.cpp
     src/chip/memory/er2055_gui.cpp
     src/chip/sound/mos6581_gui.cpp
