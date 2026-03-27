@@ -17,7 +17,109 @@
 #include <cstdint>
 
 #include "chip/sound/sound_chip_base.hpp"
+#include "core/chip_debug_registry.hpp"
 #include "core/system_lines.hpp"
+
+// ============================================================================
+// NES APU REGISTER TABLE — single source of truth (offsets from $4000)
+// ============================================================================
+//
+// $4000-$4003 — Pulse 1,  $4004-$4007 — Pulse 2,
+// $4008-$400B — Triangle, $400C-$400F — Noise,
+// $4010-$4013 — DMC,      $4015 — Status (R/W), $4017 — Frame Counter (W)
+// ($4014 = OAM DMA, $4016 = Controller — not APU registers)
+
+#define NES_APU_DECL(REG, FLD, CMP)                                            \
+    /* ── Pulse 1 ($4000-$4003) ─────────────────────────────── */             \
+    REG(0x00, SQ1_VOL,    "Pulse 1 duty/vol/env")                             \
+      FLD(SQ1_VOL, DUTY,       7:6, "Duty cycle",         Value, 0, 0)        \
+      FLD(SQ1_VOL, LC_HALT,    5:5, "Length halt / env loop", Flag, 0, 0)     \
+      FLD(SQ1_VOL, CONST_VOL,  4:4, "Constant volume",    Flag, 0, 0)        \
+      FLD(SQ1_VOL, VOL_PERIOD, 3:0, "Volume / env period", Value, 0, 0)      \
+    REG(0x01, SQ1_SWEEP,  "Pulse 1 sweep")                                    \
+      FLD(SQ1_SWEEP, SW_EN,    7:7, "Sweep enable",       Flag, 0, 0)        \
+      FLD(SQ1_SWEEP, SW_PER,   6:4, "Sweep period",       Value, 0, 0)       \
+      FLD(SQ1_SWEEP, SW_NEG,   3:3, "Sweep negate",       Flag, 0, 0)        \
+      FLD(SQ1_SWEEP, SW_SHIFT, 2:0, "Sweep shift",        Value, 0, 0)       \
+    REG(0x02, SQ1_LO,     "Pulse 1 timer low")                                \
+    REG(0x03, SQ1_HI,     "Pulse 1 timer hi / length")                        \
+      FLD(SQ1_HI, LC_LOAD,    7:3, "Length counter load", Value, 0, 0)        \
+      FLD(SQ1_HI, TIMER_HI,   2:0, "Timer high bits",    Value, 0, 0)        \
+    /* ── Pulse 2 ($4004-$4007) ─────────────────────────────── */             \
+    REG(0x04, SQ2_VOL,    "Pulse 2 duty/vol/env")                             \
+      FLD(SQ2_VOL, DUTY,       7:6, "Duty cycle",         Value, 0, 0)        \
+      FLD(SQ2_VOL, LC_HALT,    5:5, "Length halt / env loop", Flag, 0, 0)     \
+      FLD(SQ2_VOL, CONST_VOL,  4:4, "Constant volume",    Flag, 0, 0)        \
+      FLD(SQ2_VOL, VOL_PERIOD, 3:0, "Volume / env period", Value, 0, 0)      \
+    REG(0x05, SQ2_SWEEP,  "Pulse 2 sweep")                                    \
+      FLD(SQ2_SWEEP, SW_EN,    7:7, "Sweep enable",       Flag, 0, 0)        \
+      FLD(SQ2_SWEEP, SW_PER,   6:4, "Sweep period",       Value, 0, 0)       \
+      FLD(SQ2_SWEEP, SW_NEG,   3:3, "Sweep negate",       Flag, 0, 0)        \
+      FLD(SQ2_SWEEP, SW_SHIFT, 2:0, "Sweep shift",        Value, 0, 0)       \
+    REG(0x06, SQ2_LO,     "Pulse 2 timer low")                                \
+    REG(0x07, SQ2_HI,     "Pulse 2 timer hi / length")                        \
+      FLD(SQ2_HI, LC_LOAD,    7:3, "Length counter load", Value, 0, 0)        \
+      FLD(SQ2_HI, TIMER_HI,   2:0, "Timer high bits",    Value, 0, 0)        \
+    /* ── Triangle ($4008-$400B) ────────────────────────────── */              \
+    REG(0x08, TRI_LINEAR, "Triangle linear counter")                           \
+      FLD(TRI_LINEAR, LC_HALT, 7:7, "Length halt / lin reload", Flag, 0, 0)   \
+      FLD(TRI_LINEAR, LIN_LOAD, 6:0, "Linear counter load", Value, 0, 0)     \
+    REG(0x09, TRI_UNUSED, "Triangle unused")                                   \
+    REG(0x0A, TRI_LO,     "Triangle timer low")                                \
+    REG(0x0B, TRI_HI,     "Triangle timer hi / length")                        \
+      FLD(TRI_HI, LC_LOAD,    7:3, "Length counter load", Value, 0, 0)        \
+      FLD(TRI_HI, TIMER_HI,   2:0, "Timer high bits",    Value, 0, 0)        \
+    /* ── Noise ($400C-$400F) ───────────────────────────────── */              \
+    REG(0x0C, NOISE_VOL,  "Noise vol/env")                                     \
+      FLD(NOISE_VOL, LC_HALT,    5:5, "Length halt / env loop", Flag, 0, 0)   \
+      FLD(NOISE_VOL, CONST_VOL,  4:4, "Constant volume",    Flag, 0, 0)      \
+      FLD(NOISE_VOL, VOL_PERIOD, 3:0, "Volume / env period", Value, 0, 0)    \
+    REG(0x0D, NOISE_UNUSED, "Noise unused")                                    \
+    REG(0x0E, NOISE_LO,   "Noise mode / period")                               \
+      FLD(NOISE_LO, MODE,     7:7, "Noise mode (short)",  Flag, 0, 0)        \
+      FLD(NOISE_LO, PERIOD,   3:0, "Noise period index",  Value, 0, 0)       \
+    REG(0x0F, NOISE_HI,   "Noise length load")                                 \
+      FLD(NOISE_HI, LC_LOAD,  7:3, "Length counter load", Value, 0, 0)        \
+    /* ── DMC ($4010-$4013) ─────────────────────────────────── */              \
+    REG(0x10, DMC_FREQ,   "DMC flags / rate")                                  \
+      FLD(DMC_FREQ, IRQ_EN,    7:7, "IRQ enable",         Flag, 0, 0)        \
+      FLD(DMC_FREQ, LOOP,      6:6, "Loop",               Flag, 0, 0)        \
+      FLD(DMC_FREQ, RATE_IDX,  3:0, "Rate index",         Value, 0, 0)       \
+    REG(0x11, DMC_RAW,    "DMC direct load")                                   \
+      FLD(DMC_RAW, LOAD,       6:0, "Direct load value",  Value, 0, 0)       \
+    REG(0x12, DMC_START,  "DMC sample address")                                \
+    REG(0x13, DMC_LEN,    "DMC sample length")                                 \
+    /* ── $4014 = OAM DMA (not APU) ─────────────────────────── */             \
+    REG(0x14, OAM_DMA,    "[not APU] OAM DMA page")                           \
+    /* ── Status ($4015) ────────────────────────────────────── */              \
+    REG(0x15, STATUS,     "Status (R: flags / W: enable)")                     \
+      FLD(STATUS, DMC_EN,      4:4, "DMC enable",         Flag, 0, 0)        \
+      FLD(STATUS, NOISE_EN,    3:3, "Noise enable",       Flag, 0, 0)        \
+      FLD(STATUS, TRI_EN,      2:2, "Triangle enable",    Flag, 0, 0)        \
+      FLD(STATUS, SQ2_EN,      1:1, "Pulse 2 enable",     Flag, 0, 0)        \
+      FLD(STATUS, SQ1_EN,      0:0, "Pulse 1 enable",     Flag, 0, 0)        \
+    /* ── $4016 = Controller (not APU) ──────────────────────── */              \
+    REG(0x16, JOY1,       "[not APU] Controller 1")                            \
+    /* ── Frame Counter ($4017) ─────────────────────────────── */              \
+    REG(0x17, FRAME_CNT,  "Frame counter (W only)")                            \
+      FLD(FRAME_CNT, MODE,     7:7, "Sequencer mode (5-step)", Flag, 0, 0)   \
+      FLD(FRAME_CNT, IRQ_INH,  6:6, "IRQ inhibit",        Flag, 0, 0)
+
+namespace nes_apu {
+namespace reg {
+    NES_APU_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
+    constexpr uint8_t REG_COUNT = 0x18;
+}
+namespace fld {
+#define NES_APU_X_FLD_NS_(reg, fld, hilo, desc, kind, ds, dm) \
+    inline constexpr uint32_t reg##_##fld   = BF_MASK(hilo); \
+    inline constexpr uint8_t  reg##_##fld##_S = BF_LO(hilo);
+NES_APU_DECL(DECL_REG_NOP, NES_APU_X_FLD_NS_, DECL_CMP_NOP)
+#undef NES_APU_X_FLD_NS_
+} // namespace fld
+} // namespace nes_apu
+
+DECL_EXTRACT(NES_APU, NES_APU_DECL)
 
 // ============================================================================
 // INTEGRATED APU IMPLEMENTATION (C++)
@@ -874,11 +976,14 @@ private:
 public:
   APU(bool pal = false) : is_pal(pal) {
     info_ = ChipInfo{pal ? "RP2A07-APU" : "RP2A03-APU", "Ricoh", pal ? "Ricoh 2A07 APU" : "Ricoh 2A03 APU"};
+    init_regs(nes_apu::reg::REG_COUNT);
     noise.is_pal = pal;
     dmc.is_pal = pal;
     frame.is_pal = pal;
     reset_to_power_up_state();
 #ifdef CERMU_HAS_CHIP_DEBUG
+    wire_debug_registers(NES_APU_REG_INFO);
+    debug_registry_.set_decl_entries(NES_APU_DECL_ENTRIES.data(), NES_APU_DECL_ENTRIES.size());
     register_debug_fields();
 #endif
   }
