@@ -624,8 +624,13 @@ bool AtariVectorSystem<V>::initialize() {
 
     register_board(&board_);
 
-    // Bind value-typed CPU from ChipSet, then factory-create remaining chips
+    // Bind value-typed CPU/Video/Sound from ChipSet, then bind system-owned
+    // MMIO chips so create_chips() skips them (avoids heap duplicates).
     board_.bind_chipset();
+    board_.bind_chip(board_.template find_index<LS259>(), &latch_259_);
+    if constexpr (Traits::HAS_EAROM) {
+        board_.bind_chip(board_.template find_index<ER2055>(), &earom_);
+    }
     board_.create_chips(&pins_);
     vec_ram_  = board_.template find<RAMChip>(1);   // 2nd RAMChip = vector RAM
     vec_rom_  = board_.template find<ROMChip>(0);   // 1st ROMChip = vector ROM
@@ -682,8 +687,8 @@ bool AtariVectorSystem<V>::initialize() {
 
     // Initialize POKEY (for games that have it)
     if constexpr (Traits::HAS_POKEY) {
-        pokey_.init();
-        register_chip(&pokey_, "POKEY", "POKEY", "Sound");
+        board_.sound().init();
+        register_chip(&board_.sound(), "POKEY", "POKEY", "Sound");
     }
 
     // Video port — VectorVideoPort for signal-based rendering
@@ -706,7 +711,7 @@ bool AtariVectorSystem<V>::initialize() {
 
     // Wire POKEY audio output
     if constexpr (Traits::HAS_POKEY) {
-        pokey_.set_audio_port(audio_port_.get());
+        board_.sound().set_audio_port(audio_port_.get());
     }
 
     // Default DIP switches (MAME factory defaults)
@@ -739,7 +744,7 @@ void AtariVectorSystem<V>::reset() {
     nmi_counter_ = atv::NMI_PERIOD_CYCLES;
 
     if constexpr (Traits::HAS_POKEY) {
-        pokey_.reset();
+        board_.sound().reset();
     }
 
     // Internal button state uses active-HIGH convention (1=pressed, 0=not pressed).
@@ -765,7 +770,7 @@ void AtariVectorSystem<V>::tick() {
 
     // POKEY tick (runs at CPU clock for games with POKEY)
     if constexpr (Traits::HAS_POKEY) {
-        pokey_.tick(0);  // Arcade POKEY: no bus-driven memory access
+        board_.sound().tick(0);  // Arcade POKEY: no bus-driven memory access
     }
 
     // ── Periodic interrupt timer ────────────────────────────────────────────
@@ -951,7 +956,7 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
 
         if constexpr (V == AtariVectorVariant::RED_BARON) {
             if (addr >= atv::RB_POKEY_BASE && addr < atv::RB_POKEY_BASE + 0x10) {
-                data = pokey_.read(addr & 0x0F);
+                data = board_.sound().read(addr & 0x0F);
                 BUS_SET_DATA(pins, data);
                 return pins;
             }
@@ -962,11 +967,11 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
             // XOR converts internal active-HIGH → hardware active-LOW for
             // coin, self-test, diagnostic step bits.
             data = in0_ ^ atv::BZ_IN0_ACTIVE_LOW_MASK;
-            // bit 6: VG HALT
+            // bit 6: VG HALT (IP_ACTIVE_LOW: halted → bit clear, running → bit set)
             if (vg().is_halted())
-                data |= atv::BZ_IN0_HALT;
-            else
                 data &= ~atv::BZ_IN0_HALT;
+            else
+                data |= atv::BZ_IN0_HALT;
             // bit 1: 3 KHz clock
             if (total_cycles_ & 0x100)
                 data |= atv::BZ_IN0_CLOCK;
@@ -1001,13 +1006,13 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
         if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
             // POKEY at $2600-$260F
             if (addr >= atv::AD_POKEY_BASE && addr < atv::AD_POKEY_BASE + 0x10) {
-                data = pokey_.read(addr & 0x0F);
+                data = board_.sound().read(addr & 0x0F);
                 BUS_SET_DATA(pins, data);
                 return pins;
             }
             // EAROM at $2C00-$2C3F
             if (addr >= atv::AD_EAROM_BASE && addr < atv::AD_EAROM_BASE + atv::AD_EAROM_SIZE) {
-                data = earom_[addr & 0x3F];
+                data = earom_.read_data();
                 BUS_SET_DATA(pins, data);
                 return pins;
             }
@@ -1121,20 +1126,26 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
 
         // POKEY reads (all AVG games have at least one POKEY)
         if constexpr (V == AtariVectorVariant::TEMPEST) {
-            if (addr >= atv::TEMP_POKEY1_BASE && addr < atv::TEMP_POKEY1_BASE + 0x10) {
-                data = pokey_.read(addr & 0x0F);
+            // Tempest POKEY1 at $60C0 and $0800 (mirror), POKEY2 at $60D0 and $0900 (mirror)
+            if ((addr >= atv::TEMP_POKEY1_BASE && addr < atv::TEMP_POKEY1_BASE + 0x10) ||
+                (addr >= 0x0800 && addr < 0x0810)) {
+                data = board_.sound().read(addr & 0x0F);
                 BUS_SET_DATA(pins, data);
                 return pins;
             }
-            if (addr >= atv::TEMP_POKEY2_BASE && addr < atv::TEMP_POKEY2_BASE + 0x10) {
+            if ((addr >= atv::TEMP_POKEY2_BASE && addr < atv::TEMP_POKEY2_BASE + 0x10) ||
+                (addr >= 0x0900 && addr < 0x0910)) {
                 // POKEY2 — reads player buttons/start via pot mechanism.
                 // TODO: second POKEY instance; return open-bus for now.
                 data = 0xFF;
                 BUS_SET_DATA(pins, data);
                 return pins;
             }
-            if (addr == atv::TEMP_EAROM_READ_ADDR) {
-                data = earom_[0];  // TODO: proper ER2055 address latch
+            if (addr == atv::TEMP_EAROM_READ_ADDR ||
+                (addr >= atv::TEMP_EAROM_BASE && addr < atv::TEMP_EAROM_BASE + atv::TEMP_EAROM_SIZE)) {
+                // ER2055 data read: returns the data output latch
+                // (set by the last read command via earom_.tick())
+                data = earom_.read_data();
                 BUS_SET_DATA(pins, data);
                 return pins;
             }
@@ -1148,19 +1159,19 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
         } else if constexpr (V == AtariVectorVariant::GRAVITAR ||
                              V == AtariVectorVariant::BLACK_WIDOW) {
             if (addr >= atv::GRAV_POKEY1_BASE && addr < atv::GRAV_POKEY1_BASE + 0x10) {
-                data = pokey_.read(addr & 0x0F);
+                data = board_.sound().read(addr & 0x0F);
                 BUS_SET_DATA(pins, data);
                 return pins;
             }
         } else if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
             if (addr >= atv::SD_POKEY1_BASE && addr < atv::SD_POKEY1_BASE + 0x10) {
-                data = pokey_.read(addr & 0x0F);
+                data = board_.sound().read(addr & 0x0F);
                 BUS_SET_DATA(pins, data);
                 return pins;
             }
         } else if constexpr (V == AtariVectorVariant::MAJOR_HAVOC) {
             if (addr >= atv::MH_POKEY1_BASE && addr < atv::MH_POKEY1_BASE + 0x10) {
-                data = pokey_.read(addr & 0x0F);
+                data = board_.sound().read(addr & 0x0F);
                 BUS_SET_DATA(pins, data);
                 return pins;
             }
@@ -1175,13 +1186,27 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
             //   bit 6 (0x40): VG done_r (IP_ACTIVE_HIGH: 1=halted, 0=running)
             //   bit 7 (0x80): 3 KHz clock (IP_ACTIVE_HIGH)
             if (addr >= 0x0C00 && addr < 0x0D00) {
+                // Tempest IN0 at $0C00 (MAME tempest.cpp):
+                //   bits 0-5: coins, tilt, self-test, slam (IP_ACTIVE_LOW → idle high)
+                //   bit 6 (0x40): VG done_r (IP_ACTIVE_HIGH: 1=halted, 0=running)
+                //   bit 7 (0x80): VBLANK (IP_ACTIVE_HIGH: 1=vblank, 0=active)
                 data = 0xFF;  // all idle (active-low buttons = high)
-                if (!vg().is_halted()) data &= ~0x40;  // running → clear bit 6
-                if (!(total_cycles_ & 0x100)) data &= ~0x80;  // clock low → clear bit 7
+                if (vg().is_halted()) data &= ~0x40;  // halted → clear bit 6 (IP_ACTIVE_LOW)
+                // VBLANK (IP_ACTIVE_LOW): bit low during VBLANK, high during active display
+                if ((total_cycles_ % atv::CYCLES_PER_FRAME) > (atv::CYCLES_PER_FRAME * 4 / 5))
+                    data &= ~0x80;  // VBLANK → clear bit 7
             } else if (addr >= 0x0D00 && addr < 0x0E00) {
-                data = dsw1_;  // DSW1 at $0D00 (MAME: portr("DSW1"))
+                // IN1 at $0D00 (MAME tempest.cpp: portr("IN1"))
+                // All bits are IP_ACTIVE_LOW: idle = 0xFF, pressed = bit cleared.
+                data = 0xFF;  // TODO: wire host inputs
             } else if (addr >= 0x0E00 && addr < 0x0F00) {
-                data = dsw2_;  // DSW2 at $0E00 (MAME: portr("DSW2"))
+                // IN2 at $0E00 (MAME tempest.cpp: portr("IN2") — DIP switches + VBLANK)
+                // Bits 0-6: DIP switches, default 0x03 (1 coin / 1 play)
+                // Bit 7: VBLANK (IP_ACTIVE_HIGH) — 1 during vertical blank
+                data = 0x03;  // DIP defaults
+                // Simulate VBLANK: high during last ~20% of each frame
+                if ((total_cycles_ % atv::CYCLES_PER_FRAME) > (atv::CYCLES_PER_FRAME * 4 / 5))
+                    data |= 0x80;
             } else if (addr == 0x6040) {
                 // Mathbox status register (MAME: mathbox_device::status_r)
                 // bit 7 = 1 when mathbox is idle/done, 0 when busy.
@@ -1205,7 +1230,7 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
             //   $8800: IN4 — DIP switches / P2 controls
             if (addr == atv::GRAV_IN0_ADDR) {
                 data = 0xFF;  // all idle (active-low buttons = high)
-                if (!vg().is_halted()) data &= ~0x40;  // running → clear bit 6
+                if (vg().is_halted()) data &= ~0x40;  // halted → clear bit 6 (IP_ACTIVE_LOW)
                 if (!(total_cycles_ & 0x100)) data &= ~0x80;  // clock low → clear bit 7
             } else if (addr == atv::GRAV_IN3_ADDR) {
                 data = in1_;
@@ -1223,7 +1248,7 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
             //   $0900-$0907: IN3 — multiplexed player controls
             if (addr == atv::SD_IN0_ADDR) {
                 data = 0xFF;  // all idle (active-low buttons = high)
-                if (!vg().is_halted()) data &= ~0x40;  // running → clear bit 6
+                if (vg().is_halted()) data &= ~0x40;  // halted → clear bit 6 (IP_ACTIVE_LOW)
                 if (!(total_cycles_ & 0x100)) data &= ~0x80;  // clock low → clear bit 7
             } else if (addr >= 0x0900 && addr < 0x0A00) {
                 data = in1_;
@@ -1264,7 +1289,7 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
         //   $1840: sound latch
         if constexpr (V == AtariVectorVariant::RED_BARON) {
             if (addr >= atv::RB_POKEY_BASE && addr < atv::RB_POKEY_BASE + 0x10) {
-                pokey_.write(addr & 0x0F, data);
+                board_.sound().write(addr & 0x0F, data);
                 return pins;
             }
         }
@@ -1294,12 +1319,15 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
         if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
             // POKEY write at $2600-$260F
             if (addr >= atv::AD_POKEY_BASE && addr < atv::AD_POKEY_BASE + 0x10) {
-                pokey_.write(addr & 0x0F, data);
+                board_.sound().write(addr & 0x0F, data);
                 return pins;
             }
-            // EAROM write at $2C00-$2C3F
+            // EAROM write at $2C00-$2C3F — latch address + data (no clock strobe)
             if (addr >= atv::AD_EAROM_BASE && addr < atv::AD_EAROM_BASE + atv::AD_EAROM_SIZE) {
-                earom_[addr & 0x3F] = data;
+                bus_state_t eb = 0;
+                BUS_SET_ADDR(eb, addr & 0x3F);
+                BUS_SET_DATA(eb, data);
+                earom_.tick(eb);
                 return pins;
             }
         }
@@ -1326,7 +1354,16 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
             case 0x3800:
             case 0x3A00:
                 if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
-                    earom_ctrl_ = data;
+                    // EAROM control write: CS1=bit3, CS2=tied high, C1=bit2, C2=bit1, CK=bit0
+                    bus_state_t eb = 0;
+                    BUS_SET_ADDR(eb, earom_.regs_.data[er2055::reg::ADDR_LATCH]);
+                    BUS_SET_DATA(eb, earom_.regs_.data[er2055::reg::DATA_IN]);
+                    if (data & 0x08) BUS_SET_BIT(eb, er2055::CS1_BIT);
+                    BUS_SET_BIT(eb, er2055::CS2_BIT);  // tied high
+                    if (data & 0x04) BUS_SET_BIT(eb, er2055::C1_BIT);
+                    if (data & 0x02) BUS_SET_BIT(eb, er2055::C2_BIT);
+                    if (data & 0x01) BUS_SET_BIT(eb, er2055::CK_BIT);
+                    earom_.tick(eb);
                 }
                 break;
 
@@ -1351,18 +1388,38 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
 
         if constexpr (V == AtariVectorVariant::TEMPEST) {
             // Tempest (MAME tempest.cpp)
-            // POKEY1 $60C0, POKEY2 $60D0, VGGO $4800, VGRST $5800, WD $5000
-            if (addr >= atv::TEMP_POKEY1_BASE && addr < atv::TEMP_POKEY1_BASE + 0x10) {
-                pokey_.write(addr & 0x0F, data);
+            // POKEY1 $0800 / $60C0, POKEY2 $0900 / $60D0, VGGO $4800, VGRST $5800, WD $5000
+            if ((addr >= atv::TEMP_POKEY1_BASE && addr < atv::TEMP_POKEY1_BASE + 0x10) ||
+                (addr >= 0x0800 && addr < 0x0810)) {
+                board_.sound().write(addr & 0x0F, data);
                 return pins;
             }
-            if (addr >= atv::TEMP_POKEY2_BASE && addr < atv::TEMP_POKEY2_BASE + 0x10) {
+            if ((addr >= atv::TEMP_POKEY2_BASE && addr < atv::TEMP_POKEY2_BASE + 0x10) ||
+                (addr >= 0x0900 && addr < 0x0910)) {
                 // POKEY2 — handles player buttons/start via pot reads
                 // TODO: second POKEY instance; for now silently accept writes.
                 return pins;
             }
             if (addr >= atv::TEMP_EAROM_BASE && addr < atv::TEMP_EAROM_BASE + atv::TEMP_EAROM_SIZE) {
-                earom_[addr & 0x3F] = data;
+                // EAROM address+data latch (no clock strobe)
+                bus_state_t eb = 0;
+                BUS_SET_ADDR(eb, addr & 0x3F);
+                BUS_SET_DATA(eb, data);
+                earom_.tick(eb);
+                return pins;
+            }
+            if (addr == atv::TEMP_EAROM_CTRL_ADDR) {
+                // Tempest EAROM control write at $6040 (MAME earom_control_w):
+                // CS1=bit3, CS2=tied high, C1=bit2, C2=bit1, CK=bit0
+                bus_state_t eb = 0;
+                BUS_SET_ADDR(eb, earom_.regs_.data[er2055::reg::ADDR_LATCH]);
+                BUS_SET_DATA(eb, earom_.regs_.data[er2055::reg::DATA_IN]);
+                if (data & 0x08) BUS_SET_BIT(eb, er2055::CS1_BIT);
+                BUS_SET_BIT(eb, er2055::CS2_BIT);  // tied high
+                if (data & 0x04) BUS_SET_BIT(eb, er2055::C1_BIT);
+                if (data & 0x02) BUS_SET_BIT(eb, er2055::C2_BIT);
+                if (data & 0x01) BUS_SET_BIT(eb, er2055::CK_BIT);
+                earom_.tick(eb);
                 return pins;
             }
             if (addr == atv::TEMP_VGGO_ADDR)  { vg().trigger_go(); return pins; }
@@ -1378,7 +1435,7 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
             // Gravitar / Black Widow board (MAME bwidow.cpp bwidow_map)
             // POKEY1 $6000, POKEY2 $6800, VGGO $8840, VGRST $8880, WD $8980
             if (addr >= atv::GRAV_POKEY1_BASE && addr < atv::GRAV_POKEY1_BASE + 0x10) {
-                pokey_.write(addr & 0x0F, data);
+                board_.sound().write(addr & 0x0F, data);
                 return pins;
             }
             if (addr >= atv::GRAV_POKEY2_BASE && addr < atv::GRAV_POKEY2_BASE + 0x10) {
@@ -1398,7 +1455,7 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
             // Space Duel (MAME bwidow.cpp spacduel_map)
             // POKEY1 $1000, POKEY2 $1400, VGGO $0C80, VGRST $0D80, WD $0D00
             if (addr >= atv::SD_POKEY1_BASE && addr < atv::SD_POKEY1_BASE + 0x10) {
-                pokey_.write(addr & 0x0F, data);
+                board_.sound().write(addr & 0x0F, data);
                 return pins;
             }
             if (addr >= atv::SD_POKEY2_BASE && addr < atv::SD_POKEY2_BASE + 0x10) {
@@ -1414,7 +1471,7 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
             // Major Havoc (MAME mhavoc.cpp)
             // POKEY1 $1200, VGGO $1400, VGRST $1600, WD $1800
             if (addr >= atv::MH_POKEY1_BASE && addr < atv::MH_POKEY1_BASE + 0x10) {
-                pokey_.write(addr & 0x0F, data);
+                board_.sound().write(addr & 0x0F, data);
                 return pins;
             }
             if (addr == atv::MH_VGGO_ADDR)  { vg().trigger_go(); return pins; }
