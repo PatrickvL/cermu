@@ -23,6 +23,7 @@
  */
 
 #include "systems/arcade/atari_vector/atari_vector_system.hpp"
+#include "core/dip_switch.hpp"
 #include "core/rom_set.hpp"
 #include "core/system_registry.hpp"
 #include "core/vfs/vfs.hpp"
@@ -493,6 +494,360 @@ static const RomSetDescriptor majorhavoc_v3_romset = {
 };
 
 // ============================================================================
+// DIP SWITCH DEFINITIONS (per-game, from MAME schematics)
+// ============================================================================
+//
+// Each game has 1–2 DIP switch banks on the PCB. The switch positions,
+// bit masks, and named settings mirror MAME's PORT_DIPNAME definitions.
+// Default values match MAME factory defaults (typically English, 3 lives,
+// 1 coin / 1 credit).
+
+// ── Shared language settings ─────────────────────────────────────────────────
+
+static constexpr DipSetting kLang4[] = {
+    { "English",  0x00 },
+    { "German",   0x01 },
+    { "French",   0x02 },
+    { "Spanish",  0x03 },
+};
+
+static constexpr DipSetting kLang4_Upper[] = {
+    { "English",  0x00 },
+    { "German",   0x40 },
+    { "French",   0x80 },
+    { "Spanish",  0xC0 },
+};
+
+// ── Asteroids DSW1 (4-bit, multiplexed at $2800–$2803) ──────────────────────
+
+static constexpr DipSetting kAstLives[] = {
+    { "4",  0x00 },
+    { "3",  0x04 },   // default
+};
+
+static constexpr DipSwitch kAstSwitches[] = {
+    { "Language",  0x03, 0, kLang4,    4 },
+    { "Lives",     0x04, 1, kAstLives, 2 },
+};
+
+static constexpr DipSwitchBankDescriptor kAstDSW1 = {
+    "DSW1 (N10)", kAstSwitches, 2
+};
+
+// ── Asteroids Deluxe DSW1 (4-bit, multiplexed at $2800–$2803) ────────────────
+
+static constexpr DipSetting kAdLives[] = {
+    { "2–4 (bonus dependent)", 0x00 },
+    { "3",                     0x04 },   // default
+    { "4",                     0x08 },
+    { "5",                     0x0C },
+};
+
+static constexpr DipSwitch kAdSwitches[] = {
+    { "Language",  0x03, 0, kLang4,   4 },
+    { "Lives",     0x0C, 1, kAdLives, 4 },
+};
+
+static constexpr DipSwitchBankDescriptor kAdDSW1 = {
+    "DSW1 (N10)", kAdSwitches, 2
+};
+
+// ── Lunar Lander DSW1 (4-bit, multiplexed at $2800–$2803) ───────────────────
+
+static constexpr DipSetting kLlRightCoin[] = {
+    { "*1",  0x00 },
+    { "*4",  0x01 },   // default
+    { "*5",  0x02 },
+    { "*6",  0x03 },
+};
+
+static constexpr DipSetting kLlLang[] = {
+    { "English",  0x00 },   // default
+    { "French",   0x04 },
+    { "Spanish",  0x08 },
+    { "German",   0x0C },
+};
+
+static constexpr DipSwitch kLlSwitches[] = {
+    { "Right Coin",  0x03, 1, kLlRightCoin, 4 },
+    { "Language",    0x0C, 0, kLlLang,      4 },
+};
+
+static constexpr DipSwitchBankDescriptor kLlDSW1 = {
+    "DSW1 (B4)", kLlSwitches, 2
+};
+
+// ── Battlezone DSW0 (full byte at $0A00) ─────────────────────────────────────
+
+static constexpr DipSetting kBzLives[] = {
+    { "2",  0x00 },
+    { "3",  0x01 },   // default
+    { "4",  0x02 },
+    { "5",  0x03 },
+};
+
+static constexpr DipSetting kBzMissile[] = {
+    { "5000",   0x00 },
+    { "15000",  0x04 },   // default
+    { "25000",  0x08 },
+    { "50000",  0x0C },
+};
+
+static constexpr DipSetting kBzBonus[] = {
+    { "25000 and 100000",  0x00 },
+    { "15000 and 100000",  0x10 },   // default
+    { "50000 and 100000",  0x20 },
+    { "None",              0x30 },
+};
+
+static constexpr DipSwitch kBzDsw0Switches[] = {
+    { "Lives",              0x03, 1, kBzLives,     4 },
+    { "Missile appears at", 0x0C, 1, kBzMissile,   4 },
+    { "Bonus Life",         0x30, 1, kBzBonus,     4 },
+    { "Language",           0xC0, 0, kLang4_Upper, 4 },
+};
+
+static constexpr DipSwitchBankDescriptor kBzDSW0 = {
+    "DSW0 (N11)", kBzDsw0Switches, 4
+};
+
+// ── Battlezone DSW1 (full byte at $0C00) ─────────────────────────────────────
+
+static constexpr DipSetting kBzCoinB[] = {
+    { "2 Coins / 1 Credit",  0x00 },
+    { "1 Coin / 1 Credit",   0x01 },   // default
+};
+
+static constexpr DipSetting kBzCoinA[] = {
+    { "4 Coins / 1 Credit",  0x00 },
+    { "3 Coins / 1 Credit",  0x02 },
+    { "2 Coins / 1 Credit",  0x04 },
+    { "1 Coin / 1 Credit",   0x06 },   // default
+};
+
+static constexpr DipSwitch kBzDsw1Switches[] = {
+    { "Coin B",  0x01, 1, kBzCoinB, 2 },
+    { "Coin A",  0x06, 3, kBzCoinA, 4 },
+};
+
+static constexpr DipSwitchBankDescriptor kBzDSW1 = {
+    "DSW1 (P12)", kBzDsw1Switches, 2
+};
+
+// ── Red Baron DSW0 (full byte at $0A00) ──────────────────────────────────────
+
+static constexpr DipSetting kRbBonus[] = {
+    { "2000",  0x00 },
+    { "4000",  0x04 },   // default
+    { "6000",  0x08 },
+    { "None",  0x0C },
+};
+
+static constexpr DipSetting kRbLives[] = {
+    { "2",  0x00 },
+    { "3",  0x10 },   // default
+    { "4",  0x20 },
+    { "5",  0x30 },
+};
+
+static constexpr DipSwitch kRbDsw0Switches[] = {
+    { "Language",    0x03, 0, kLang4,    4 },
+    { "Bonus Life",  0x0C, 1, kRbBonus, 4 },
+    { "Lives",       0x30, 1, kRbLives, 4 },
+};
+
+static constexpr DipSwitchBankDescriptor kRbDSW0 = {
+    "DSW0 (N11)", kRbDsw0Switches, 3
+};
+
+// Red Baron DSW1 — same as Battlezone DSW1 (coinage)
+static constexpr DipSwitchBankDescriptor kRbDSW1 = {
+    "DSW1 (P12)", kBzDsw1Switches, 2
+};
+
+// ── Tempest IN2 (bits 0–6 at $0E00; bit 7 = VBLANK, added dynamically) ─────
+
+static constexpr DipSetting kTmpCoinage[] = {
+    { "Free Play",            0x00 },
+    { "1 Coin / 2 Credits",   0x01 },
+    { "2 Coins / 1 Credit",   0x02 },
+    { "1 Coin / 1 Credit",    0x03 },   // default
+};
+
+static constexpr DipSetting kTmpRightCoin[] = {
+    { "*1",  0x00 },   // default
+    { "*4",  0x04 },
+    { "*5",  0x08 },
+    { "*6",  0x0C },
+};
+
+static constexpr DipSetting kTmpLang[] = {
+    { "English",  0x00 },   // default
+    { "French",   0x10 },
+    { "German",   0x20 },
+    { "Spanish",  0x30 },
+};
+
+static constexpr DipSetting kTmpBonusCoin[] = {
+    { "None",     0x00 },   // default
+    { "Enabled",  0x40 },
+};
+
+static constexpr DipSwitch kTmpSwitches[] = {
+    { "Coinage",          0x03, 3, kTmpCoinage,   4 },
+    { "Right Coin",       0x0C, 0, kTmpRightCoin, 4 },
+    { "Language",         0x30, 0, kTmpLang,       4 },
+    { "Bonus Coin Adder", 0x40, 0, kTmpBonusCoin, 2 },
+};
+
+static constexpr DipSwitchBankDescriptor kTmpIN2 = {
+    "IN2 / DIP (R8)", kTmpSwitches, 4
+};
+
+// ── Gravitar IN4 (full byte at $8800) ────────────────────────────────────────
+
+static constexpr DipSetting kGravLives[] = {
+    { "1",         0x00 },
+    { "3",         0x01 },   // default
+    { "5",         0x02 },
+    { "Infinite",  0x03 },
+};
+
+static constexpr DipSetting kGravDifficulty[] = {
+    { "Easy",     0x00 },
+    { "Medium",   0x04 },   // default
+    { "Hard",     0x08 },
+    { "Hardest",  0x0C },
+};
+
+static constexpr DipSetting kGravBonus[] = {
+    { "10000",  0x00 },   // default
+    { "20000",  0x10 },
+    { "30000",  0x20 },
+    { "None",   0x30 },
+};
+
+static constexpr DipSwitch kGravSwitches[] = {
+    { "Lives",       0x03, 1, kGravLives,      4 },
+    { "Difficulty",  0x0C, 1, kGravDifficulty, 4 },
+    { "Bonus Life",  0x30, 0, kGravBonus,      4 },
+    { "Language",    0xC0, 0, kLang4_Upper,    4 },
+};
+
+static constexpr DipSwitchBankDescriptor kGravIN4 = {
+    "IN4 / DIP (M12)", kGravSwitches, 4
+};
+
+// ── Black Widow IN4 (full byte at $8800) ─────────────────────────────────────
+
+static constexpr DipSetting kBwCoinage[] = {
+    { "1 Coin / 1 Credit",   0x00 },   // default
+    { "2 Coins / 1 Credit",  0x01 },
+    { "Free Play",            0x02 },
+    { "1 Coin / 2 Credits",   0x03 },
+};
+
+static constexpr DipSetting kBwRightCoin[] = {
+    { "*1",  0x00 },   // default
+    { "*4",  0x04 },
+    { "*5",  0x08 },
+    { "*6",  0x0C },
+};
+
+static constexpr DipSetting kBwLeftCoin[] = {
+    { "*1",  0x00 },   // default
+    { "*2",  0x10 },
+};
+
+static constexpr DipSetting kBwBonusCoin[] = {
+    { "None",     0x00 },   // default
+    { "Enabled",  0x20 },
+};
+
+static constexpr DipSwitch kBwSwitches[] = {
+    { "Coinage",          0x03, 0, kBwCoinage,   4 },
+    { "Right Coin",       0x0C, 0, kBwRightCoin, 4 },
+    { "Left Coin",        0x10, 0, kBwLeftCoin,  2 },
+    { "Bonus Coin Adder", 0x20, 0, kBwBonusCoin, 2 },
+    { "Language",         0xC0, 0, kLang4_Upper, 4 },
+};
+
+static constexpr DipSwitchBankDescriptor kBwIN4 = {
+    "IN4 / DIP (M12)", kBwSwitches, 5
+};
+
+// ── Space Duel IN3 (bit-indexed at $0900–$0907) ─────────────────────────────
+// MAME: active-LOW DIP convention — default values have bits SET.
+
+static constexpr DipSetting kSdLives[] = {
+    { "3",  0x01 },   // default (bit set)
+    { "4",  0x00 },
+};
+
+static constexpr DipSetting kSdDifficulty[] = {
+    { "Easy",  0x02 },   // default (bit set)
+    { "Hard",  0x00 },
+};
+
+static constexpr DipSetting kSdLang[] = {
+    { "English",  0x08 },   // default (bit set)
+    { "German",   0x00 },
+};
+
+static constexpr DipSetting kSdBonus[] = {
+    { "8000",   0x10 },   // default (bit set)
+    { "10000",  0x00 },
+};
+
+static constexpr DipSetting kSdCabinet[] = {
+    { "Upright",   0x00 },   // default
+    { "Cocktail",  0x20 },
+};
+
+static constexpr DipSetting kSdCoinage[] = {
+    { "1 Coin / 1 Credit",   0x00 },   // default
+    { "2 Coins / 1 Credit",  0x40 },
+    { "Free Play",            0x80 },
+    { "1 Coin / 2 Credits",   0xC0 },
+};
+
+static constexpr DipSwitch kSdSwitches[] = {
+    { "Lives",       0x01, 0, kSdLives,      2 },
+    { "Difficulty",  0x02, 0, kSdDifficulty, 2 },
+    { "Language",    0x08, 0, kSdLang,       2 },
+    { "Bonus Life",  0x10, 0, kSdBonus,     2 },
+    { "Cabinet",     0x20, 0, kSdCabinet,   2 },
+    { "Coinage",     0xC0, 0, kSdCoinage,   4 },
+};
+
+static constexpr DipSwitchBankDescriptor kSdIN3 = {
+    "IN3 / DIP (D4)", kSdSwitches, 6
+};
+
+// ── Per-game DIP switch bank descriptor lookup ───────────────────────────────
+
+template<AtariVectorVariant V>
+static const DipSwitchBankDescriptor* get_dip_descriptor_0() {
+    if constexpr (V == AtariVectorVariant::ASTEROIDS)          return &kAstDSW1;
+    else if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) return &kAdDSW1;
+    else if constexpr (V == AtariVectorVariant::LUNAR_LANDER)  return &kLlDSW1;
+    else if constexpr (V == AtariVectorVariant::BATTLEZONE)    return &kBzDSW0;
+    else if constexpr (V == AtariVectorVariant::RED_BARON)     return &kRbDSW0;
+    else if constexpr (V == AtariVectorVariant::TEMPEST)       return &kTmpIN2;
+    else if constexpr (V == AtariVectorVariant::GRAVITAR)      return &kGravIN4;
+    else if constexpr (V == AtariVectorVariant::BLACK_WIDOW)   return &kBwIN4;
+    else if constexpr (V == AtariVectorVariant::SPACE_DUEL)    return &kSdIN3;
+    else return nullptr;  // Major Havoc: deferred
+}
+
+template<AtariVectorVariant V>
+static const DipSwitchBankDescriptor* get_dip_descriptor_1() {
+    if constexpr (V == AtariVectorVariant::BATTLEZONE)  return &kBzDSW1;
+    else if constexpr (V == AtariVectorVariant::RED_BARON) return &kRbDSW1;
+    else return nullptr;  // Most games: single DIP bank
+}
+
+// ============================================================================
 // HARDWARE TRAITS
 // ============================================================================
 
@@ -605,6 +960,21 @@ const SystemDescriptor& AtariVectorSystem<V>::get_descriptor() const {
 template<AtariVectorVariant V>
 bool AtariVectorSystem<V>::set_configuration(const SystemConfiguration& config) {
     config_ = config;
+
+    // Apply DIP switch settings from custom_settings
+    for (int b = 0; b < 2; b++) {
+        if (!dip_bank_[b].descriptor) continue;
+        for (int i = 0; i < dip_bank_[b].descriptor->num_switches; i++) {
+            const auto& sw = dip_bank_[b].descriptor->switches[i];
+            std::string key = std::string("dip.") + dip_bank_[b].descriptor->name + "." + sw.name;
+            auto it = config_.custom_settings.find(key);
+            if (it != config_.custom_settings.end()) {
+                int idx = DipSwitchBank::find_setting(sw, it->second.c_str());
+                if (idx >= 0) dip_bank_[b].set_selection(i, idx);
+            }
+        }
+    }
+
     return true;
 }
 
@@ -714,11 +1084,39 @@ bool AtariVectorSystem<V>::initialize() {
         board_.sound().set_audio_port(audio_port_.get());
     }
 
-    // Default DIP switches (MAME factory defaults)
-    // Asteroids: English, 3 lives, 1 coin/1 credit = 0x84
-    // Lunar Lander: 0 bonus fuel, free play off, English = game-specific
-    dsw1_ = 0x84;
-    dsw2_ = 0x00;
+    // Space Duel: DIP switches are wired to POKEY1 pot inputs.
+    // MAME overrides ALLPOT to return the DIP bank value directly.
+    // Individual POT reads also return per-bit values (228 = open, 0 = grounded).
+    if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
+        board_.sound().allpot_read_callback = [](void* ctx) -> uint8_t {
+            return static_cast<AtariVectorSystem*>(ctx)->dip_bank_[0].value;
+        };
+        board_.sound().allpot_read_context = this;
+        board_.sound().pot_read_callback = [](void* ctx, uint8_t pot_index) -> uint8_t {
+            auto* sys = static_cast<AtariVectorSystem*>(ctx);
+            // Pot line grounded (0) when switch active, open (228) when inactive
+            return (sys->dip_bank_[0].value & (1 << pot_index)) ? 228 : 0;
+        };
+        board_.sound().pot_read_context = this;
+    }
+
+    // Initialize DIP switch banks with per-game descriptors (MAME factory defaults)
+    dip_bank_[0].init(get_dip_descriptor_0<V>());
+    dip_bank_[1].init(get_dip_descriptor_1<V>());
+
+    // Apply any saved DIP switch settings from the configuration
+    for (int b = 0; b < 2; b++) {
+        if (!dip_bank_[b].descriptor) continue;
+        for (int i = 0; i < dip_bank_[b].descriptor->num_switches; i++) {
+            const auto& sw = dip_bank_[b].descriptor->switches[i];
+            std::string key = std::string("dip.") + dip_bank_[b].descriptor->name + "." + sw.name;
+            auto it = config_.custom_settings.find(key);
+            if (it != config_.custom_settings.end()) {
+                int idx = DipSwitchBank::find_setting(sw, it->second.c_str());
+                if (idx >= 0) dip_bank_[b].set_selection(i, idx);
+            }
+        }
+    }
 
     printf("%s: System initialized\n", Traits::NAME);
     return true;
@@ -944,25 +1342,24 @@ template<AtariVectorVariant V>
 bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
     uint8_t data = 0x00;
 
-    // ── POKEY1 read — routed through BusMap (MMIO via MaskedSubTable) ──
+    // ── POKEY1 read — direct register access ──────────────────────
     if constexpr (Traits::HAS_POKEY) {
-        if (addr >= Traits::POKEY1_BASE && addr < Traits::POKEY1_BASE + 0x10) {
-            BUS_SET_ADDR(pins, addr);
-            return bus_.tick(pins);
+        if (addr >= Traits::POKEY1_BASE && addr < Traits::POKEY1_BASE + Traits::POKEY1_SIZE) {
+            BUS_SET_DATA(pins, board_.sound().read(static_cast<uint8_t>(addr & 0x0F)));
+            return pins;
         }
         // Tempest mirrors POKEY1 at $0800 and POKEY2 at $0900
         if constexpr (V == AtariVectorVariant::TEMPEST) {
             if (addr >= 0x0800 && addr < 0x0810) {
-                // Mirror → canonical POKEY1 address for BusMap dispatch
-                BUS_SET_ADDR(pins, Traits::POKEY1_BASE | (addr & 0x0F));
-                return bus_.tick(pins);
+                BUS_SET_DATA(pins, board_.sound().read(static_cast<uint8_t>(addr & 0x0F)));
+                return pins;
             }
         }
     }
 
     // ── POKEY2 read ─────────────────────────────────────────────────
     if constexpr (Traits::POKEY2_BASE != 0) {
-        if (addr >= Traits::POKEY2_BASE && addr < Traits::POKEY2_BASE + 0x10) {
+        if (addr >= Traits::POKEY2_BASE && addr < Traits::POKEY2_BASE + Traits::POKEY2_SIZE) {
             // TODO: second POKEY instance; return open-bus for now.
             BUS_SET_DATA(pins, 0xFF);
             return pins;
@@ -1028,10 +1425,10 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
                 data &= ~atv::BZ_IN0_CLOCK;
 
         } else if (addr >= 0x0A00 && addr < 0x0C00) {
-            data = dsw1_;
+            data = dip_bank_[0].value;
 
         } else if (addr >= 0x0C00 && addr < 0x0E00) {
-            data = dsw2_;
+            data = dip_bank_[1].value;
 
         } else {
             data = 0xFF;
@@ -1079,7 +1476,7 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
 
         } else if (port_base == 0x2800) {
             // DSW1: DIP switches
-            port_val = dsw1_;
+            port_val = dip_bank_[0].value;
             offset &= 0x03;  // only 4 switches via this multiplexer
 
         } else {
@@ -1131,7 +1528,7 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
         } else if (port_base == 0x2800) {
             // DSW1: multiplexed (4 bits)
             uint8_t offset = addr & 0x03;
-            data = (dsw1_ & (1 << offset)) ? 0x80 : 0x7F;
+            data = (dip_bank_[0].value & (1 << offset)) ? 0x80 : 0x7F;
 
         } else if (port_base == 0x2C00) {
             // Thrust lever ADC
@@ -1160,9 +1557,9 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
             data = 0xFF;  // TODO: wire host inputs
         } else if (addr >= 0x0E00 && addr < 0x0F00) {
             // IN2 at $0E00 (MAME tempest.cpp: portr("IN2") — DIP switches + VBLANK)
-            // Bits 0-6: DIP switches, default 0x03 (1 coin / 1 play)
+            // Bits 0-6: DIP switches (from DIP bank)
             // Bit 7: VBLANK (IP_ACTIVE_HIGH) — 1 during vertical blank
-            data = 0x03;  // DIP defaults
+            data = dip_bank_[0].value & 0x7F;
             // Simulate VBLANK: high during last ~20% of each frame
             if ((total_cycles_ % atv::CYCLES_PER_FRAME) > (atv::CYCLES_PER_FRAME * 4 / 5))
                 data |= 0x80;
@@ -1191,7 +1588,7 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
         } else if (addr == 0x8000) {
             data = in1_;
         } else if (addr == 0x8800) {
-            data = dsw1_;
+            data = dip_bank_[0].value;
         } else {
             data = 0xFF;
         }
@@ -1210,7 +1607,9 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
             // Bit 7: AVG done_r (IP_ACTIVE_LOW) — 0 when halted, 1 when running
             if (vg().is_halted()) data &= ~0x80;
         } else if (addr >= 0x0900 && addr < 0x0A00) {
-            data = in1_;
+            // IN3: DIP switches (multiplexed — $090X returns bit X at D7)
+            uint8_t offset = addr & 0x07;
+            data = (dip_bank_[0].value & (1 << offset)) ? 0x80 : 0x7F;
         } else {
             data = 0xFF;
         }
@@ -1240,24 +1639,24 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
     // I/O writes are decode-by-address — the upper address bits select the register.
     // The data byte on the bus is sometimes ignored (trigger-only writes).
 
-    // ── POKEY1 write — routed through BusMap (MMIO via MaskedSubTable) ─
+    // ── POKEY1 write — direct register access ──────────────────────
     if constexpr (Traits::HAS_POKEY) {
-        if (addr >= Traits::POKEY1_BASE && addr < Traits::POKEY1_BASE + 0x10) {
-            BUS_SET_ADDR(pins, addr);
-            return bus_.tick(pins);
+        if (addr >= Traits::POKEY1_BASE && addr < Traits::POKEY1_BASE + Traits::POKEY1_SIZE) {
+            board_.sound().write(static_cast<uint8_t>(addr & 0x0F), data);
+            return pins;
         }
         // Tempest mirrors POKEY1 at $0800
         if constexpr (V == AtariVectorVariant::TEMPEST) {
             if (addr >= 0x0800 && addr < 0x0810) {
-                BUS_SET_ADDR(pins, Traits::POKEY1_BASE | (addr & 0x0F));
-                return bus_.tick(pins);
+                board_.sound().write(static_cast<uint8_t>(addr & 0x0F), data);
+                return pins;
             }
         }
     }
 
     // ── POKEY2 write ────────────────────────────────────────────────
     if constexpr (Traits::POKEY2_BASE != 0) {
-        if (addr >= Traits::POKEY2_BASE && addr < Traits::POKEY2_BASE + 0x10) {
+        if (addr >= Traits::POKEY2_BASE && addr < Traits::POKEY2_BASE + Traits::POKEY2_SIZE) {
             // TODO: second POKEY instance
             return pins;
         }
@@ -2026,7 +2425,28 @@ void AtariVectorSystem<V>::render_system_menu_items() {
 template<AtariVectorVariant V>
 void AtariVectorSystem<V>::render_configuration_ui() {
 #ifdef CERMU_HAS_GUI
-    // Future: DIP switch configuration, phosphor color selection
+    using Traits = AtariVectorTraits<V>;
+    ImGui::Text("%s — DIP Switches", Traits::NAME);
+    ImGui::Spacing();
+
+    for (int b = 0; b < 2; b++) {
+        if (!dip_bank_[b].descriptor) continue;
+        ImGui::PushID(b);
+        if (render_dip_switch_bank(dip_bank_[b])) {
+            // Persist changed selections into config_.custom_settings
+            const auto* desc = dip_bank_[b].descriptor;
+            for (int i = 0; i < desc->num_switches; i++) {
+                const auto& sw = desc->switches[i];
+                std::string key = std::string("dip.") + desc->name + "." + sw.name;
+                int sel = dip_bank_[b].selections[i];
+                if (sel >= 0 && sel < sw.num_settings) {
+                    config_.custom_settings[key] = sw.settings[sel].name;
+                }
+            }
+        }
+        ImGui::PopID();
+        ImGui::Spacing();
+    }
 #endif
 }
 // ============================================================================

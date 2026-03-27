@@ -326,6 +326,11 @@ public:
     uint8_t (*pot_read_callback)(void* context, uint8_t pot_index) = nullptr;
     void* pot_read_context = nullptr;
 
+    // ALLPOT override callback: when set, bypasses pot scan register and returns
+    // DIP switch state directly (arcade boards wire switches to pot lines).
+    uint8_t (*allpot_read_callback)(void* context) = nullptr;
+    void* allpot_read_context = nullptr;
+
     // Serial input callback: called when POKEY needs serial data.
     // Returns received byte (or 0xFF for no data).
     uint8_t (*serial_read_callback)(void* context) = nullptr;
@@ -375,6 +380,8 @@ public:
                 return regs_[pokey::reg::R_SKSTAT];
 
             case 0x08: // ALLPOT
+                if (allpot_read_callback)
+                    return allpot_read_callback(allpot_read_context);
                 return regs_[pokey::reg::R_ALLPOT];
 
             case 0x09: // KBCODE
