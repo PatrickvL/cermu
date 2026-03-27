@@ -263,6 +263,7 @@ inline void FileBrowser::scan_directory() {
     namespace fs = std::filesystem;
     std::error_code ec;
 
+    try {
     for (const auto& dir_entry : fs::directory_iterator(current_path_, ec)) {
         FileBrowserEntry entry;
         entry.name = dir_entry.path().filename().string();
@@ -283,6 +284,9 @@ inline void FileBrowser::scan_directory() {
         }
 
         entries_.push_back(std::move(entry));
+    }
+    } catch (const fs::filesystem_error&) {
+        // Iterator increment can throw on I/O errors; eat it gracefully
     }
 
     // Parse metadata for all entries
@@ -319,31 +323,38 @@ inline void FileBrowser::apply_filter_and_sort() {
             bool asc = sort_ascending_;
             switch (sort_column_) {
                 case FileBrowserSort::Size: {
-                    bool lt = a.size < b.size;
-                    return asc ? lt : !lt;
+                    if (a.size != b.size)
+                        return asc ? (a.size < b.size) : (a.size > b.size);
+                    // Fall through to name for stable tie-breaking
+                    break;
                 }
                 case FileBrowserSort::Type: {
                     auto ta = get_type_label(a);
                     auto tb = get_type_label(b);
                     int cmp = ta.compare(tb);
-                    return asc ? (cmp < 0) : (cmp > 0);
+                    if (cmp != 0) return asc ? (cmp < 0) : (cmp > 0);
+                    break;  // tie-break by name
                 }
                 case FileBrowserSort::Region: {
                     int cmp = strcasecmp(a.region.c_str(), b.region.c_str());
-                    return asc ? (cmp < 0) : (cmp > 0);
+                    if (cmp != 0) return asc ? (cmp < 0) : (cmp > 0);
+                    break;  // tie-break by name
                 }
                 case FileBrowserSort::Year: {
                     int cmp = a.year.compare(b.year);
-                    return asc ? (cmp < 0) : (cmp > 0);
+                    if (cmp != 0) return asc ? (cmp < 0) : (cmp > 0);
+                    break;  // tie-break by name
                 }
                 case FileBrowserSort::Name:
-                default: {
-                    const auto& na = a.parsed_title.empty() ? a.name : a.parsed_title;
-                    const auto& nb = b.parsed_title.empty() ? b.name : b.parsed_title;
-                    int cmp = strcasecmp(na.c_str(), nb.c_str());
-                    return asc ? (cmp < 0) : (cmp > 0);
-                }
+                default:
+                    break;  // handled below
             }
+
+            // Name-based tie-breaker (always reached for equal primary keys)
+            const auto& na = a.parsed_title.empty() ? a.name : a.parsed_title;
+            const auto& nb = b.parsed_title.empty() ? b.name : b.parsed_title;
+            int cmp = strcasecmp(na.c_str(), nb.c_str());
+            return asc ? (cmp < 0) : (cmp > 0);
         });
 }
 
