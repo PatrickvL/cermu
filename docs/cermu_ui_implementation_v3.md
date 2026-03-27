@@ -1213,7 +1213,7 @@ be built on top of the existing infrastructure.*
 
 ---
 
-## 19. Implementation Audit (2026-03-25)
+## 19. Implementation Audit (2026-03-25, updated 2026-03-28)
 
 Full code audit of the implemented state against this plan. Serves as a reference
 for resuming work on remaining phases.
@@ -1225,10 +1225,10 @@ for resuming work on remaining phases.
 | LauncherPanel | `launcher_panel.hpp` | ✅ Done | Keyboard nav, drag-drop, probe bar (Zone C), launch action, config recording |
 | LauncherTheme | `launcher_theme.hpp` | ✅ Done | All color tokens + tag badge colors + manufacturer accents |
 | SharedConfigStore | `shared_config_store.hpp` | ✅ Done | Region/peripherals/custom/memory storage, `build_config()`, `record_config()` |
-| FileBrowser | `file_browser.hpp` | ✅ Done | 5-column layout (Name/Region/Year/Size/Type), search on parsed metadata, region filter pill, tag badges, filesystem watch, VFS archive navigation |
-| TitleBrowser | `catalog/title_browser.hpp` | ⚠️ Partial | Card grid + scan progress bar + empty state done; variant picker UI incomplete |
-| CatalogStore | `catalog/catalog_store.hpp` | ✅ Done | SQLite integration, fingerprint storage, entry state tracking, grouping queries, mutex-protected |
-| CatalogPipeline | `catalog/catalog_pipeline.hpp` | ⚠️ Partial | Async discovery→probe→group pipeline with cancel support; single worker thread (not a thread pool) |
+| FileBrowser | `file_browser.hpp` | ✅ Done | 5-column layout (Name/Region/Year/Size/Type), search on parsed metadata, region filter pill, tag badges, filesystem watch, VFS archive navigation, strict-weak-ordering sort fix |
+| TitleBrowser | `catalog/title_browser.hpp` | ⚠️ Partial | Card grid with accent bars + system badge pills + text wrapping; scan progress bar + empty state done; variant picker UI incomplete |
+| CatalogStore | `catalog/catalog_store.hpp` | ✅ Done | SQLite integration, fingerprint storage, entry state tracking, grouping queries, mutex-protected, NULL-safe column reads, `display_title` column with COALESCE fallback |
+| CatalogPipeline | `catalog/catalog_pipeline.hpp` | ✅ Done | Async discovery→probe→group pipeline with cancel support; atomic work-queue thread pool (N-1 workers capped at 7); computes `display_title` from `rom_filename::parse()` |
 | ScanRootManager | `scan_root_manager.hpp` | ✅ Done | TOML persistence, host environment discovery, setup panel UI |
 | FileWatcher | `utils/file_watcher.hpp` | ✅ Done | inotify (Linux) + no-op stub; integrated into FileBrowser |
 | RomFilenameParser | `utils/rom_filename_parser.hpp` | ✅ Done | TOSEC/No-Intro/GoodTools parsing; title/region/year/tags/flags extraction |
@@ -1258,13 +1258,23 @@ for resuming work on remaining phases.
 - Tag badges rendered as colored pills after title text using ImDrawList
 - `dir_watcher_.poll_changed()` triggers `scan_directory()` + `apply_filter_and_sort()`
   with 30-frame debounce
+- Sort comparator enforces strict weak ordering — all columns return early only
+  on unequal primary keys, with a common name-based tie-breaker preventing UB
+- `scan_directory()` wraps `std::filesystem::directory_iterator` in try/catch
+  for filesystem error resilience
 - Column widths: Region 50px, Year 40px, Size 70px, Type 60px, Name flexible
 
 **CatalogStore** (`catalog/catalog_store.hpp`):
 - `Fingerprint` struct: `file_size` + `head_crc32` + `tail_crc32`
 - `EntryState` enum: Present, Stale, FileMissing, RootRemoved, Orphaned
 - `find_by_fingerprint()` exists (schema ready for relocation detection)
-- `get_title_groups()` with GROUP BY on `title_key`; `get_group_entries()`
+- `get_title_groups()` with GROUP BY on `title_key`; uses
+  `COALESCE(NULLIF(display_title,''), title_key)` for human-readable titles;
+  `get_group_entries()` for per-group variant listing
+- `display_title` column stores the parsed human-readable title from
+  `rom_filename::parse()`, separate from the normalized `title_key`
+- `read_entry()` uses a `col_text()` helper to safely handle NULL returns
+  from `sqlite3_column_text()`, preventing `std::string(nullptr)` UB
 - All public methods use `std::lock_guard<std::mutex>`
 
 **CatalogPipeline** (`catalog/catalog_pipeline.hpp`):
@@ -1272,7 +1282,9 @@ for resuming work on remaining phases.
   Grouping (assign group_id by title_key)
 - `std::atomic<bool> cancel_` checked at each phase boundary
 - `PipelinePhase` enum + atomic phase counter for UI polling
-- Single `std::thread worker_` — NOT a thread pool
+- Thread pool with atomic `next_idx` work queue: `min(hardware_concurrency()-1, 7)`
+  extra worker threads + main thread participates; all joined before grouping phase
+- Computes `entry.display_title` from `rom_filename::parse()` during probing
 
 ### 19.3 Remaining work — prioritized
 
@@ -1296,11 +1308,8 @@ for resuming work on remaining phases.
      affected root
    - Currently only the file browser's current directory is watched
 
-3. **Pipeline thread pool** (§13.2)
-   - Replace single `std::thread worker_` with a pool of
-     `std::thread::hardware_concurrency() - 1` workers
-   - Probing is CPU-bound and embarrassingly parallel; significant speedup expected
-     on multi-core systems
+3. ~~**Pipeline thread pool** (§13.2)~~ — ✅ Done (2026-03-28). Atomic
+   work-queue with N-1 workers (capped at 7) + main thread participation.
 
 4. **Library menu wiring**
    - "Rescan all" / "Rescan missing only" should invoke `CatalogPipeline::start()`
@@ -1351,6 +1360,8 @@ for resuming work on remaining phases.
 | `71b7209d` | Filename metadata columns (Name/Region/Year/Size/Type) + region filter |
 | `609608e9` | Colored tag badges for ROM tags/flags in file browser |
 | `db83db5c` | Auto-rescan file browser on directory changes (inotify) |
+| `8bfdd87b` | Fix sort comparator UB causing crash on equal-size entries |
+| `7207ff85` | Catalog: display_title, NULL safety, thread pool, enhanced title cards |
 
 ---
 
