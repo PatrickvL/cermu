@@ -635,6 +635,7 @@ if(BUILD_GUI)
         src/chip/io/mos6526_gui.cpp
         src/chip/io/mos6522_gui.cpp
         src/chip/memory/mos2114_gui.cpp
+        src/chip/memory/er2055_gui.cpp
         src/chip/sound/mos6581_gui.cpp
         src/chip/sound/nes_apu_gui.cpp
         src/chip/video/nes_ppu/nes_ppu_gui.cpp
@@ -680,6 +681,7 @@ set(GUI_STUB_SOURCES
     src/chip/io/mos6526_gui.cpp
     src/chip/io/mos6522_gui.cpp
     src/chip/memory/mos2114_gui.cpp
+    src/chip/memory/er2055_gui.cpp
     src/chip/sound/mos6581_gui.cpp
     src/chip/video/vic_ii/vicii_gui.cpp
     src/chip/video/vic/vic_gui.cpp
