@@ -160,7 +160,7 @@ inline RomSetMatch rom_set_scan_and_match(
     if (!vfs_base_path || !descriptors || num_descriptors <= 0)
         return best;
 
-    // List all files at the VFS path
+    // List all files at the primary VFS path
     auto files = vfs_list_entries(vfs_base_path);
     if (files.empty()) return best;
 
@@ -183,29 +183,35 @@ inline RomSetMatch rom_set_scan_and_match(
         return false;
     };
 
-    // Try each descriptor
-    for (int d = 0; d < num_descriptors; d++) {
-        const RomSetDescriptor* desc = descriptors[d];
-        if (!desc || !desc->entries || desc->entry_count <= 0) continue;
-
-        std::vector<RomEntryMatch> matched_entries;
-        int required_total = 0;
+    // Match a single descriptor against a file list.
+    // Returns {matched_entries, required_found, required_total, optional_found}.
+    struct MatchResult {
+        std::vector<RomEntryMatch> entries;
         int required_found = 0;
+        int required_total = 0;
         int optional_found = 0;
+    };
 
+    // Track which entry indices have been matched (to avoid duplicates during
+    // sibling search).
+    auto match_descriptor = [&](const RomSetDescriptor* desc,
+                                const std::vector<VfsEntry>& file_list,
+                                const std::vector<bool>& already_matched) -> MatchResult {
+        MatchResult r;
         for (int e = 0; e < desc->entry_count; e++) {
             const RomEntryDescriptor& entry = desc->entries[e];
-            if (entry.required) required_total++;
+            if (entry.required) r.required_total++;
+            if (already_matched[e]) {
+                if (entry.required) r.required_found++;
+                else                r.optional_found++;
+                continue;
+            }
 
-            // Search files for a match
             bool found = false;
-            for (const auto& file : files) {
+            for (const auto& file : file_list) {
                 if (file.type == VfsEntryType::Directory) continue;
-
-                // Try each pattern
                 for (int p = 0; p < ROM_ENTRY_MAX_PATTERNS && entry.patterns[p]; p++) {
                     if (icontains(file.name, entry.patterns[p])) {
-                        // Size check (if expected_size is set)
                         if (entry.expected_size > 0 && file.size != 0 &&
                             file.size != entry.expected_size)
                             continue;
@@ -215,15 +221,86 @@ inline RomSetMatch rom_set_scan_and_match(
                         em.vfs_path     = file.full_path;
                         em.load_address = entry.load_address;
                         em.file_size    = static_cast<uint32_t>(file.size);
-                        matched_entries.push_back(std::move(em));
+                        r.entries.push_back(std::move(em));
 
-                        if (entry.required) required_found++;
-                        else optional_found++;
+                        if (entry.required) r.required_found++;
+                        else                r.optional_found++;
                         found = true;
                         break;
                     }
                 }
                 if (found) break;
+            }
+        }
+        return r;
+    };
+
+    // Try each descriptor
+    for (int d = 0; d < num_descriptors; d++) {
+        const RomSetDescriptor* desc = descriptors[d];
+        if (!desc || !desc->entries || desc->entry_count <= 0) continue;
+
+        std::vector<bool> already_matched(desc->entry_count, false);
+        auto primary = match_descriptor(desc, files, already_matched);
+
+        auto matched_entries = std::move(primary.entries);
+        int required_found = primary.required_found;
+        int required_total = primary.required_total;
+        int optional_found = primary.optional_found;
+
+        // ── Sibling search ──────────────────────────────────────────
+        //
+        // When the primary path doesn't contain all required entries,
+        // scan sibling files at the parent directory level.  This lets
+        // supplementary ROMs (mathbox PROMs, color PROMs, etc.) live
+        // in separate archives next to the main ROM set archive.
+        //
+        // Example: tempest_ver1_roms.zip + tempest_mathbox_prom.zip
+        //          in the same directory.
+        if (required_found > 0 && required_found < required_total) {
+            std::string parent = vfs_parent_path(vfs_base_path);
+            if (!parent.empty()) {
+                // Mark entries already found so we don't duplicate them
+                for (const auto& em : matched_entries)
+                    already_matched[em.entry_index] = true;
+
+                auto siblings = vfs_list_entries(parent.c_str());
+
+                // First pass: match loose files sitting directly in the parent folder.
+                // Wrap them in a single-entry vector so match_descriptor() can test them.
+                for (const auto& sibling : siblings) {
+                    if (required_found >= required_total) break;
+                    if (sibling.full_path == vfs_base_path) continue;
+                    if (sibling.type == VfsEntryType::File) {
+                        std::vector<VfsEntry> one = { sibling };
+                        auto extra = match_descriptor(desc, one, already_matched);
+                        for (auto& em : extra.entries) {
+                            already_matched[em.entry_index] = true;
+                            matched_entries.push_back(std::move(em));
+                        }
+                        required_found += extra.required_found;
+                        optional_found += extra.optional_found;
+                    }
+                }
+
+                // Second pass: recurse into sibling archives and directories.
+                for (const auto& sibling : siblings) {
+                    if (required_found >= required_total) break;
+                    if (sibling.full_path == vfs_base_path) continue;
+                    if (sibling.type == VfsEntryType::Directory ||
+                        sibling.type == VfsEntryType::Archive) {
+                        auto sibling_files = vfs_list_entries(sibling.full_path.c_str());
+                        if (sibling_files.empty()) continue;
+
+                        auto extra = match_descriptor(desc, sibling_files, already_matched);
+                        for (auto& em : extra.entries) {
+                            already_matched[em.entry_index] = true;
+                            matched_entries.push_back(std::move(em));
+                        }
+                        required_found += extra.required_found;
+                        optional_found += extra.optional_found;
+                    }
+                }
             }
         }
 
