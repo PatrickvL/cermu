@@ -340,6 +340,22 @@ public:
     void* irq_callback_context = nullptr;
 
     // ========================================================================
+    // Bus MMIO interface — enables BusMap auto-wiring
+    // ========================================================================
+
+    bool has_mmio() const override { return true; }
+
+    bus_state_t on_bus_read(bus_state_t bus) noexcept override {
+        BUS_SET_DATA(bus, read(static_cast<uint8_t>(BUS_GET_ADDR(bus) & 0x0F)));
+        return bus;
+    }
+
+    bus_state_t on_bus_write(bus_state_t bus) noexcept override {
+        write(static_cast<uint8_t>(BUS_GET_ADDR(bus) & 0x0F), BUS_GET_DATA(bus));
+        return bus;
+    }
+
+    // ========================================================================
     // Register interface — read from CPU
     // ========================================================================
 
