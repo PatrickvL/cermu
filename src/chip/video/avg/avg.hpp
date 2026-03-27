@@ -447,21 +447,17 @@ private:
             dy_fp = tmp;
         }
 
-        int32_t x0_fp = beam_x_fp_;
-        int32_t y0_fp = beam_y_fp_;
-
         beam_x_fp_ += dx_fp;
         beam_y_fp_ += dy_fp;
 
         if (!video_out_) return;
 
+        // One sample per instruction: the beam destination.
+        // BeamOn = drawing (intensity > 0); None = dark repositioning.
+        // The shader draws a line from the previous sample's position
+        // to this sample's position whenever BeamOn is set.
         if (intensity > 0) {
             uint8_t bright = static_cast<uint8_t>(std::min(intensity * 17, 255));
-            video_out_->drive(VectorVideoSample{
-                static_cast<int16_t>(fp_to_int(x0_fp)),
-                screen_y(fp_to_int(y0_fp)),
-                bright, color_index_, SyncFlag::BeamOn, {}
-            });
             video_out_->drive(VectorVideoSample{
                 static_cast<int16_t>(fp_to_int(beam_x_fp_)),
                 screen_y(fp_to_int(beam_y_fp_)),

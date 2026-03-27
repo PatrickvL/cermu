@@ -324,14 +324,16 @@ inline void build_beam_quads(
 
     const auto* samples = static_cast<const Sample*>(signal_output);
 
-    bool prev_beam_on = false;
+    // Track whether we have a valid previous position.  The first sample
+    // in the stream establishes prev_x/prev_y but must not draw a line
+    // from the initial (0,0) — that would create a spurious random line.
+    bool have_prev = false;
     float prev_x = 0, prev_y = 0;
-    float prev_intensity = 0;
-    float prev_r = 1, prev_g = 1, prev_b = 1;
 
     for (uint32_t i = 0; i < signal_output_len; i++) {
         const auto& s = samples[i];
         bool beam_on = (s.flags & static_cast<uint8_t>(SyncFlag::BeamOn)) != 0;
+        bool frame_end = (s.flags & static_cast<uint8_t>(SyncFlag::FrameEnd)) != 0;
 
         float sx = static_cast<float>(s.x) * x_scale + x_offset;
         float sy = static_cast<float>(s.y) * y_scale + y_offset;
@@ -346,17 +348,15 @@ inline void build_beam_quads(
             cb = color_palette[ci * 3 + 2];
         }
 
-        if (beam_on && prev_beam_on) {
-            // Line segment from (prev_x, prev_y) to (sx, sy)
+        if (beam_on && have_prev) {
+            // Line segment from (prev_x, prev_y) to (sx, sy).
+            // Each BeamOn sample is the endpoint of a visible vector;
+            // the start point is the previous sample's position.
+            // Intensity and color come from the current sample — not
+            // averaged with the previous, which may be a dark move.
             float dx = sx - prev_x;
             float dy = sy - prev_y;
             float len_sq = dx * dx + dy * dy;
-
-            // Average intensity and color for the segment
-            float avg_i = (prev_intensity + si) * 0.5f;
-            float ar = (prev_r + cr) * 0.5f;
-            float ag = (prev_g + cg) * 0.5f;
-            float ab = (prev_b + cb) * 0.5f;
 
             if (len_sq > 0.000001f) {
                 // Perpendicular direction for beam width expansion.
@@ -365,33 +365,29 @@ inline void build_beam_quads(
                 float ny =  dx * inv_len * beam_width;
 
                 // Expand into a quad: 2 triangles, 6 vertices
-                // Triangle 1: (a-n, a+n, b-n)
-                vertices.push_back({prev_x - nx, prev_y - ny, avg_i, -1.0f, ar, ag, ab});
-                vertices.push_back({prev_x + nx, prev_y + ny, avg_i, +1.0f, ar, ag, ab});
-                vertices.push_back({sx     - nx, sy     - ny, avg_i, -1.0f, ar, ag, ab});
-                // Triangle 2: (a+n, b+n, b-n)
-                vertices.push_back({prev_x + nx, prev_y + ny, avg_i, +1.0f, ar, ag, ab});
-                vertices.push_back({sx     + nx, sy     + ny, avg_i, +1.0f, ar, ag, ab});
-                vertices.push_back({sx     - nx, sy     - ny, avg_i, -1.0f, ar, ag, ab});
+                vertices.push_back({prev_x - nx, prev_y - ny, si, -1.0f, cr, cg, cb});
+                vertices.push_back({prev_x + nx, prev_y + ny, si, +1.0f, cr, cg, cb});
+                vertices.push_back({sx     - nx, sy     - ny, si, -1.0f, cr, cg, cb});
+                vertices.push_back({prev_x + nx, prev_y + ny, si, +1.0f, cr, cg, cb});
+                vertices.push_back({sx     + nx, sy     + ny, si, +1.0f, cr, cg, cb});
+                vertices.push_back({sx     - nx, sy     - ny, si, -1.0f, cr, cg, cb});
             } else {
-                // Degenerate segment (point) — draw a small dot
-                float hw = beam_width;
-                vertices.push_back({sx - hw, sy - hw, avg_i, -1.0f, ar, ag, ab});
-                vertices.push_back({sx + hw, sy - hw, avg_i, +1.0f, ar, ag, ab});
-                vertices.push_back({sx - hw, sy + hw, avg_i, -1.0f, ar, ag, ab});
-                vertices.push_back({sx + hw, sy - hw, avg_i, +1.0f, ar, ag, ab});
-                vertices.push_back({sx + hw, sy + hw, avg_i, +1.0f, ar, ag, ab});
-                vertices.push_back({sx - hw, sy + hw, avg_i, -1.0f, ar, ag, ab});
+                // Zero-length segment: stationary beam → render as a dot.
+                // Expand into a beam_width × beam_width quad with gaussian
+                // falloff along one axis (close enough for small beam spots).
+                float bw = beam_width;
+                vertices.push_back({sx - bw, sy - bw, si, -1.0f, cr, cg, cb});
+                vertices.push_back({sx - bw, sy + bw, si, +1.0f, cr, cg, cb});
+                vertices.push_back({sx + bw, sy - bw, si, -1.0f, cr, cg, cb});
+                vertices.push_back({sx - bw, sy + bw, si, +1.0f, cr, cg, cb});
+                vertices.push_back({sx + bw, sy + bw, si, +1.0f, cr, cg, cb});
+                vertices.push_back({sx + bw, sy - bw, si, -1.0f, cr, cg, cb});
             }
         }
 
-        prev_beam_on   = beam_on;
-        prev_x         = sx;
-        prev_y         = sy;
-        prev_intensity = si;
-        prev_r         = cr;
-        prev_g         = cg;
-        prev_b         = cb;
+        prev_x = sx;
+        prev_y = sy;
+        have_prev = !frame_end;  // FrameEnd invalidates prev position
     }
 }
 

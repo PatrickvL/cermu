@@ -404,57 +404,54 @@ private:
 
     /// Emit a vector signal: beam moves from current position by (dx, dy).
     /// Intensity 0 = beam off (move only), 1-15 = draw with brightness.
-    /// For draws, emits start and end samples with BeamOn flag so the GPU
-    /// shader can extract line segments from consecutive BeamOn samples.
+    /// Emits a single sample at the endpoint: BeamOn if drawing, None if
+    /// repositioning.  The shader draws a line from the previous sample's
+    /// position to this one whenever BeamOn is set.
     ///
     /// Y is flipped for display: vector monitors have Y increasing upward,
     /// but screen coordinates have Y increasing downward.
     void emit_vector(int32_t dx, int32_t dy, int intensity) {
-        int32_t x0 = beam_x_;
-        int32_t y0 = beam_y_;
-
-        // Update beam position (unwrapped for line endpoint rendering)
+        // Update beam position (unwrapped — 10-bit wrap applied below)
         beam_x_ += dx;
         beam_y_ += dy;
 
-        if (!video_out_) {
-            // Still wrap for next instruction even without output
-            beam_x_ &= 0x3FF;
-            beam_y_ &= 0x3FF;
-            return;
-        }
-
-        if (intensity > 0) {
-            // Draw: emit start + end with BeamOn.
-            // Map intensity (1-15) to brightness byte (17-255).
-            uint8_t bright = static_cast<uint8_t>(std::min(intensity * 17, 255));
-            video_out_->drive(VectorVideoSample{
-                static_cast<int16_t>(x0), screen_y(y0),
-                bright, 0, SyncFlag::BeamOn, {}
-            });
-            video_out_->drive(VectorVideoSample{
-                static_cast<int16_t>(beam_x_), screen_y(beam_y_),
-                bright, 0, SyncFlag::BeamOn, {}
-            });
-        } else {
-            // Move: emit position without BeamOn to break the line chain
-            video_out_->drive(VectorVideoSample{
-                static_cast<int16_t>(beam_x_), screen_y(beam_y_),
-                0, 0, SyncFlag::None, {}
-            });
-        }
-
         // DVG hardware uses 10-bit counters — wrap to 0-1023 range.
-        // The emit above uses the unwrapped endpoint so lines extending
-        // past the edge are correctly clipped by the renderer.
         int32_t wrapped_x = beam_x_ & 0x3FF;
         int32_t wrapped_y = beam_y_ & 0x3FF;
 
-        // If wrapping occurred after a visible vector, break the BeamOn
-        // chain so the renderer doesn't draw a spurious connector line
-        // from the unwrapped endpoint back to the wrapped start of the
-        // next vector.
-        if ((wrapped_x != beam_x_ || wrapped_y != beam_y_) && intensity > 0) {
+        if (!video_out_) {
+            beam_x_ = wrapped_x;
+            beam_y_ = wrapped_y;
+            return;
+        }
+
+        // One sample per instruction: the beam destination.
+        // BeamOn = drawing (intensity > 0); None = dark repositioning.
+        // The shader draws a line from the previous sample's position
+        // to this sample's position whenever BeamOn is set.
+        if (intensity > 0) {
+            // Bright vector: emit at the UNWRAPPED endpoint so the line
+            // extends naturally past the screen edge (GPU clips).
+            uint8_t bright = static_cast<uint8_t>(std::min(intensity * 17, 255));
+            video_out_->drive(VectorVideoSample{
+                static_cast<int16_t>(beam_x_), screen_y(beam_y_),
+                bright, 0, SyncFlag::BeamOn, {}
+            });
+
+            // If wrapping occurred, break the BeamOn chain so the renderer
+            // doesn't draw a spurious connector from the unwrapped endpoint
+            // back to the wrapped start of the next vector.
+            if (wrapped_x != beam_x_ || wrapped_y != beam_y_) {
+                video_out_->drive(VectorVideoSample{
+                    static_cast<int16_t>(wrapped_x), screen_y(wrapped_y),
+                    0, 0, SyncFlag::None, {}
+                });
+            }
+        } else {
+            // Dark move: emit at the WRAPPED position so the shader's
+            // prev_x/prev_y matches where the beam actually is.  Emitting
+            // at the unwrapped position would cause the next BeamOn to
+            // draw a spurious line from the out-of-range coordinate.
             video_out_->drive(VectorVideoSample{
                 static_cast<int16_t>(wrapped_x), screen_y(wrapped_y),
                 0, 0, SyncFlag::None, {}
