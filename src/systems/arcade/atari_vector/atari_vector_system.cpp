@@ -1182,7 +1182,7 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
         if (addr == 0x7800) {
             data = 0xFF;  // all idle (active-low buttons = high)
             if (vg().is_halted()) data &= ~0x40;  // halted → clear bit 6 (IP_ACTIVE_LOW)
-            if (!(total_cycles_ & 0x100)) data &= ~0x80;  // clock low → clear bit 7
+            if (total_cycles_ & 0x100) data &= ~0x80;  // clock_r=1 + IP_ACTIVE_LOW → clear bit 7
         } else if (addr == 0x8000) {
             data = in1_;
         } else if (addr == 0x8800) {
@@ -1198,7 +1198,7 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
         if (addr == 0x0800) {
             data = 0xFF;  // all idle (active-low buttons = high)
             if (vg().is_halted()) data &= ~0x40;  // halted → clear bit 6 (IP_ACTIVE_LOW)
-            if (!(total_cycles_ & 0x100)) data &= ~0x80;  // clock low → clear bit 7
+            if (total_cycles_ & 0x100) data &= ~0x80;  // clock_r=1 + IP_ACTIVE_LOW → clear bit 7
         } else if (addr >= 0x0900 && addr < 0x0A00) {
             data = in1_;
         } else {
