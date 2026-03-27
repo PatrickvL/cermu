@@ -1179,10 +1179,15 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
         // ── Gravitar/BW input port reads (bwidow board) ─────────────
         // (POKEY reads handled in unified section above)
         //   $7800: IN0, $8000: IN3, $8800: IN4
+        //
+        // IN0 bit layout (all IP_ACTIVE_LOW — idle = 0xFF):
+        //   0: Coin 2       1: Coin 1       2-3: Unused
+        //   4: Service 1    5: Tilt         6: Test/Service switch
+        //   7: AVG done_r   (0 = halted/done, 1 = running)
         if (addr == 0x7800) {
             data = 0xFF;  // all idle (active-low buttons = high)
-            if (vg().is_halted()) data &= ~0x40;  // halted → clear bit 6 (IP_ACTIVE_LOW)
-            if (total_cycles_ & 0x100) data &= ~0x80;  // clock_r=1 + IP_ACTIVE_LOW → clear bit 7
+            // Bit 7: AVG done_r (IP_ACTIVE_LOW) — 0 when halted, 1 when running
+            if (vg().is_halted()) data &= ~0x80;
         } else if (addr == 0x8000) {
             data = in1_;
         } else if (addr == 0x8800) {
@@ -1195,10 +1200,15 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
         // ── Space Duel input port reads ──────────────────────────────
         // (POKEY reads handled in unified section above)
         //   $0800: IN0, $0900: IN3
+        //
+        // IN0 bit layout (all IP_ACTIVE_LOW — idle = 0xFF):
+        //   0: Coin 2       1: Coin 1       2: Coin 3     3: Unused
+        //   4: Tilt          5: Service 1    6: Test/Service switch
+        //   7: AVG done_r   (0 = halted/done, 1 = running)
         if (addr == 0x0800) {
             data = 0xFF;  // all idle (active-low buttons = high)
-            if (vg().is_halted()) data &= ~0x40;  // halted → clear bit 6 (IP_ACTIVE_LOW)
-            if (total_cycles_ & 0x100) data &= ~0x80;  // clock_r=1 + IP_ACTIVE_LOW → clear bit 7
+            // Bit 7: AVG done_r (IP_ACTIVE_LOW) — 0 when halted, 1 when running
+            if (vg().is_halted()) data &= ~0x80;
         } else if (addr >= 0x0900 && addr < 0x0A00) {
             data = in1_;
         } else {
