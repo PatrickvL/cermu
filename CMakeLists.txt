@@ -656,6 +656,7 @@ if(BUILD_GUI)
         src/chip/sound/ym_fm/ym_fm_gui.cpp
         src/chip/video/spectrum_ula/ferranti_ula_gui.cpp
         src/chip/video/mc6847/mc6847_gui.cpp
+        src/chip/video/tms9918/tms9918_gui.cpp
         src/systems/nes/cartridge/nes_cartridge_gui.cpp
     )
     
@@ -707,6 +708,7 @@ set(GUI_STUB_SOURCES
     src/chip/sound/ym_fm/ym_fm_gui.cpp
     src/chip/video/spectrum_ula/ferranti_ula_gui.cpp
     src/chip/video/mc6847/mc6847_gui.cpp
+    src/chip/video/tms9918/tms9918_gui.cpp
     src/systems/nes/cartridge/nes_cartridge_gui.cpp
 )
 

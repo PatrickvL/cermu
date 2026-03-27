@@ -278,6 +278,12 @@ public:
         return BF_GET(regs_[reg::R1], 0:0) != 0;
     }
 
+    // Layout virtuals — defined in tms9918_gui.cpp (GUI builds only)
+#ifdef CERMU_HAS_GUI
+    ChipLayout* create_chip_layout() const override;
+    std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
+#endif
+
 private:
     // ====================================================================
     // VRAM — compile-time sized from traits
