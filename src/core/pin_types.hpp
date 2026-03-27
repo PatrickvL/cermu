@@ -58,6 +58,8 @@
     PLBL_INV(_CS0,        "CS0",        "chip select 0")                        \
     PLBL_INV(_CS1,        "CS1",        "chip select 1")                        \
     PLBL_INV(_CS2,        "CS2",        "chip select 2")                        \
+    PLBL_INV(_CSR,        "CSR",        "chip select read (TMS9918)")           \
+    PLBL_INV(_CSW,        "CSW",        "chip select write (TMS9918)")          \
     PLBL_INV(_DTACK,      "DTACK",      "data transfer acknowledge (M68K)")     \
     PLBL_INV(_EXROM,      "EXROM",      "external ROM")                         \
     PLBL_INV(_FIRQ,       "FIRQ",       "fast interrupt request (MC6809)")      \
@@ -130,6 +132,7 @@
     PLBL_PIN(ENABLE,      "E",          "enable clock input (6800 bus)")        \
     PLBL_PIN(EXTAL,       "EXTAL",      "external crystal input (MC6809)")      \
     PLBL_PIN(E_CLK,       "E",          "enable clock output (M68K 6800)")      \
+    PLBL_PIN(GROMCLK,     "GROMCLK",    "GROM clock output (TMS9918)")          \
     PLBL_PIN(M2,          "M2",         "derived clock output (2A03)")          \
     PLBL_PIN(OSC_IN,      "OSC IN",     "oscillator input")                     \
     PLBL_PIN(OSC_OUT,     "OSC OUT",    "oscillator output")                    \
@@ -217,6 +220,8 @@
     PLBL_PIN(CS1,         "CS1",        "chip select 1 (active-high)")          \
     PLBL_PIN(CS2,         "CS2",        "chip select 2 (active-high)")          \
     PLBL_PIN(CS3,         "CS3",        "chip select 3 (TIA)")                  \
+    PLBL_PIN(CSR,         "CSR",        "chip select read (TMS9918, act-h)")    \
+    PLBL_PIN(CSW,         "CSW",        "chip select write (TMS9918, act-h)")   \
     PLBL_PIN(DTACK,       "DTACK",      "data transfer ack (M68K, active-h)")   \
     PLBL_PIN(HALT,        "HALT",       "halt (Z80, active-high)")              \
     PLBL_PIN(INT,         "INT",        "interrupt (Z80, active-high)")         \
@@ -225,6 +230,7 @@
     PLBL_PIN(M1,          "M1",         "machine cycle 1 (Z80, active-high)")   \
     PLBL_PIN(MDEN,        "MDEN",       "memory data enable (Yamaha OPNA)")     \
     PLBL_PIN(MREQ,        "MREQ",       "memory request (Z80, active-high)")    \
+    PLBL_PIN(MODE,        "MODE",       "mode select (TMS9918)")                \
     PLBL_PIN(MUX,         "MUX",        "address multiplexer")                  \
     PLBL_PIN(OE,          "OE",         "output enable (active-high)")          \
     PLBL_PIN(PARD,        "PARD",       "peripheral addr read (5A22, act-h)")   \
@@ -390,6 +396,7 @@
     PLBL_PIN(CHROMA,      "CHROMA",     "chrominance output")                   \
     PLBL_PIN(COLOR,       "COLOR",      "color signal output (VIC-II)")         \
     PLBL_PIN(COLU,        "COLU",       "color/luminance output (TIA)")         \
+    PLBL_PIN(COMVID,      "COMVID",     "composite video output (TMS9918)")     \
     PLBL_PIN(COMP_BLK,    "BLK",        "composite blank (TIA)")                \
     PLBL_PIN(CSYNC,       "CSYNC",      "composite sync")                       \
     PLBL_PIN(HSYNC,       "HSYNC",      "horizontal sync")                      \
@@ -401,6 +408,7 @@
     PLBL_CAT(VIDEO_CONTROL)                                                     \
     PLBL_PIN(CURSOR,      "CURSOR",     "cursor output (MC6845 CRTC)")          \
     PLBL_PIN(DE,          "DE",         "display enable (MC6845 CRTC)")         \
+    PLBL_PIN(EXTVDP,      "EXTVDP",     "external VDP input (TMS9918)")         \
     PLBL_PIN(DUMP,        "DUMP",       "paddle dump/discharge (TIA)")          \
     PLBL_PIN(HBLANK,      "HBLANK",     "horizontal blank output (5A22)")       \
     PLBL_PIN(LIGHT_PEN,   "LP",         "light pen input")                      \
@@ -577,10 +585,16 @@
     PLBL_PIN(K6,          "K6",         "keyboard 6")                           \
     PLBL_PIN(K7,          "K7",         "keyboard 7")                           \
     \
-    /* ── NES-specific I/O (Ricoh 2A03 / 2C02) ───────────────────── */ \
+    /* ── Multiplexed addr/data & chip I/O (2A03 / 2C02 / TMS9918) ── */ \
     PLBL_CAT(NES_IO)                                                            \
+    PLBL_PIN(AD0,         "AD0",        "multiplexed addr/data 0 (TMS9918)")    \
     PLBL_PIN(AD1,         "AD1",        "multiplexed addr/data 1 (2A03)")       \
     PLBL_PIN(AD2,         "AD2",        "multiplexed addr/data 2 (2A03)")       \
+    PLBL_PIN(AD3,         "AD3",        "multiplexed addr/data 3 (TMS9918)")    \
+    PLBL_PIN(AD4,         "AD4",        "multiplexed addr/data 4 (TMS9918)")    \
+    PLBL_PIN(AD5,         "AD5",        "multiplexed addr/data 5 (TMS9918)")    \
+    PLBL_PIN(AD6,         "AD6",        "multiplexed addr/data 6 (TMS9918)")    \
+    PLBL_PIN(AD7,         "AD7",        "multiplexed addr/data 7 (TMS9918)")    \
     PLBL_PIN(EXT0,        "EXT0",       "PPU ext 0")                            \
     PLBL_PIN(EXT1,        "EXT1",       "PPU ext 1")                            \
     PLBL_PIN(EXT2,        "EXT2",       "PPU ext 2")                            \
@@ -852,6 +866,8 @@ constexpr PinLabel pin_canonical(PinLabel label) {
     case PinLabel::_CS0:         return PinLabel::CS0;
     case PinLabel::_CS1:         return PinLabel::CS1;
     case PinLabel::_CS2:         return PinLabel::CS2;
+    case PinLabel::_CSR:         return PinLabel::CSR;
+    case PinLabel::_CSW:         return PinLabel::CSW;
     case PinLabel::_DTACK:       return PinLabel::DTACK;
     case PinLabel::_EXROM:       return PinLabel::EXROM;
     case PinLabel::_FIRQ:        return PinLabel::FIRQ;
