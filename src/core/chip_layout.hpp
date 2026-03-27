@@ -60,6 +60,7 @@ struct ChipLayout {
 ChipLayout create_dip40_layout();
 ChipLayout create_dip28_layout();
 ChipLayout create_dip24_layout();
+ChipLayout create_dip22_layout();
 ChipLayout create_dip20_layout();
 ChipLayout create_dip18_layout();
 ChipLayout create_dip16_layout();
