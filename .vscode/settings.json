@@ -1,5 +1,5 @@
 {
-    "cmake.cmakePath": "/usr/bin/cmake",
+    "cmake.cmakePath": "cmake",
     "cmake.sourceDirectory": "${workspaceFolder}",
     "cmake.buildDirectory": "${workspaceFolder}/build",
     "cmake.configureOnOpen": true,
