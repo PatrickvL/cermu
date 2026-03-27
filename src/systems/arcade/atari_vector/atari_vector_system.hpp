@@ -29,6 +29,7 @@
 #include "systems/arcade/atari_vector/atari_vector_constants.hpp"
 #include "core/system.hpp"
 #include "core/board.hpp"
+#include "core/dip_switch.hpp"
 #include "core/core_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
@@ -154,7 +155,9 @@ struct AtariVectorTraits<AtariVectorVariant::ASTEROIDS_DELUXE> {
     static constexpr uint16_t VGRST_ADDR       = 0x3200;
     static constexpr uint16_t WDCLR_ADDR       = 0x3400;
     static constexpr uint16_t POKEY1_BASE      = 0x2600;
+    static constexpr uint16_t POKEY1_SIZE      = 0x10;
     static constexpr uint16_t POKEY2_BASE      = 0;
+    static constexpr uint16_t POKEY2_SIZE      = 0;
     static constexpr uint16_t EAROM_BASE       = 0x2C00;
     static constexpr uint16_t EAROM_SIZE       = 0x40;
     static constexpr uint16_t EAROM_CTRL_ADDR  = 0;        // handled via DVG switch ($3800/$3A00)
@@ -289,7 +292,9 @@ struct AtariVectorTraits<AtariVectorVariant::RED_BARON> {
     static constexpr uint16_t VGRST_ADDR       = 0x1600;
     static constexpr uint16_t WDCLR_ADDR       = 0x1400;
     static constexpr uint16_t POKEY1_BASE      = 0x1810;
+    static constexpr uint16_t POKEY1_SIZE      = 0x10;
     static constexpr uint16_t POKEY2_BASE      = 0;
+    static constexpr uint16_t POKEY2_SIZE      = 0;
     static constexpr uint16_t EAROM_BASE       = 0;
     static constexpr uint16_t EAROM_SIZE       = 0;
     static constexpr uint16_t EAROM_CTRL_ADDR  = 0;
@@ -336,7 +341,9 @@ struct AtariVectorTraits<AtariVectorVariant::TEMPEST> {
     static constexpr uint16_t VGRST_ADDR       = 0x5800;
     static constexpr uint16_t WDCLR_ADDR       = 0x5000;
     static constexpr uint16_t POKEY1_BASE      = 0x60C0;
+    static constexpr uint16_t POKEY1_SIZE      = 0x10;
     static constexpr uint16_t POKEY2_BASE      = 0x60D0;
+    static constexpr uint16_t POKEY2_SIZE      = 0x10;
     static constexpr uint16_t EAROM_BASE       = 0x6000;
     static constexpr uint16_t EAROM_SIZE       = 0x40;
     static constexpr uint16_t EAROM_CTRL_ADDR  = 0x6040;
@@ -381,7 +388,9 @@ struct AtariVectorTraits<AtariVectorVariant::GRAVITAR> {
     static constexpr uint16_t VGRST_ADDR       = 0x8880;
     static constexpr uint16_t WDCLR_ADDR       = 0x8980;
     static constexpr uint16_t POKEY1_BASE      = 0x6000;
+    static constexpr uint16_t POKEY1_SIZE      = 0x20;
     static constexpr uint16_t POKEY2_BASE      = 0x6800;
+    static constexpr uint16_t POKEY2_SIZE      = 0x20;
     static constexpr uint16_t EAROM_BASE       = 0;
     static constexpr uint16_t EAROM_SIZE       = 0;
     static constexpr uint16_t EAROM_CTRL_ADDR  = 0;
@@ -431,7 +440,9 @@ struct AtariVectorTraits<AtariVectorVariant::SPACE_DUEL> {
     static constexpr uint16_t VGRST_ADDR       = 0x0D80;
     static constexpr uint16_t WDCLR_ADDR       = 0x0D00;
     static constexpr uint16_t POKEY1_BASE      = 0x1000;
+    static constexpr uint16_t POKEY1_SIZE      = 0x0400;   // $1000-$13FF mirrored
     static constexpr uint16_t POKEY2_BASE      = 0x1400;
+    static constexpr uint16_t POKEY2_SIZE      = 0x0400;   // $1400-$17FF mirrored
     static constexpr uint16_t EAROM_BASE       = 0;
     static constexpr uint16_t EAROM_SIZE       = 0;
     static constexpr uint16_t EAROM_CTRL_ADDR  = 0;
@@ -476,7 +487,9 @@ struct AtariVectorTraits<AtariVectorVariant::BLACK_WIDOW> {
     static constexpr uint16_t VGRST_ADDR       = 0x8880;
     static constexpr uint16_t WDCLR_ADDR       = 0x8980;
     static constexpr uint16_t POKEY1_BASE      = 0x6000;
+    static constexpr uint16_t POKEY1_SIZE      = 0x20;
     static constexpr uint16_t POKEY2_BASE      = 0x6800;
+    static constexpr uint16_t POKEY2_SIZE      = 0x20;
     static constexpr uint16_t EAROM_BASE       = 0;
     static constexpr uint16_t EAROM_SIZE       = 0;
     static constexpr uint16_t EAROM_CTRL_ADDR  = 0;
@@ -521,7 +534,9 @@ struct AtariVectorTraits<AtariVectorVariant::MAJOR_HAVOC> {
     static constexpr uint16_t VGRST_ADDR       = 0x1600;
     static constexpr uint16_t WDCLR_ADDR       = 0x1800;
     static constexpr uint16_t POKEY1_BASE      = 0x1200;
+    static constexpr uint16_t POKEY1_SIZE      = 0x10;
     static constexpr uint16_t POKEY2_BASE      = 0;
+    static constexpr uint16_t POKEY2_SIZE      = 0;
     static constexpr uint16_t EAROM_BASE       = 0;
     static constexpr uint16_t EAROM_SIZE       = 0;
     static constexpr uint16_t EAROM_CTRL_ADDR  = 0;
@@ -689,9 +704,13 @@ private:
     // ── Inputs ──────────────────────────────────────────────────────────
     uint8_t in0_       = 0x00;
     uint8_t in1_       = 0x00;
-    uint8_t dsw1_      = 0x84;
-    uint8_t dsw2_      = 0x00;
     uint8_t thrust_    = 0x00;      // Lunar Lander thrust ADC
+
+    // ── DIP switches ────────────────────────────────────────────────────
+    // Per-game DIP switch banks (descriptors set in initialize()).
+    // dip_bank_[0] = primary (DSW0/DSW1/IN4/IN2/IN3 depending on game)
+    // dip_bank_[1] = secondary (DSW1 for BZ/RB only)
+    DipSwitchBank dip_bank_[2];
 
     // ── 74LS259 addressable latch (coin counters, LEDs, NMI enable) ────
     LS259 latch_259_;
