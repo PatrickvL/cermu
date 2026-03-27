@@ -42,6 +42,7 @@
 #include "chip/memory/er2055.hpp"
 #include <cstdint>
 #include <memory>
+#include <tuple>
 #include <vector>
 
 namespace atv = atari_vector_constants;
@@ -103,6 +104,18 @@ struct AtariVectorTraits<AtariVectorVariant::ASTEROIDS> {
     static constexpr const char* PALETTE_ID = "green";
     static constexpr const char* VIDEO_CHIP_NAME = "DVG";
 
+    // I/O addresses (0 = not present on this board)
+    static constexpr uint16_t VGGO_ADDR        = 0x3000;
+    static constexpr uint16_t VGRST_ADDR       = 0x3200;
+    static constexpr uint16_t WDCLR_ADDR       = 0x3400;
+    static constexpr uint16_t POKEY1_BASE      = 0;
+    static constexpr uint16_t POKEY2_BASE      = 0;
+    static constexpr uint16_t EAROM_BASE       = 0;
+    static constexpr uint16_t EAROM_SIZE       = 0;
+    static constexpr uint16_t EAROM_CTRL_ADDR  = 0;
+    static constexpr uint16_t EAROM_READ_ADDR  = 0;
+    static constexpr uint16_t IRQACK_ADDR      = 0;
+
     static constexpr const char* ALIASES[] = { "Asteroids", "ASTEROIDS" };
     static constexpr size_t PROBE_ROM_SIZES[] = { 6144, 8192 };
 };
@@ -135,6 +148,18 @@ struct AtariVectorTraits<AtariVectorVariant::ASTEROIDS_DELUXE> {
     static constexpr bool USES_15BIT_ADDR = true;
     static constexpr const char* PALETTE_ID = "blue";
     static constexpr const char* VIDEO_CHIP_NAME = "DVG";
+
+    // I/O addresses (0 = not present on this board)
+    static constexpr uint16_t VGGO_ADDR        = 0x3000;
+    static constexpr uint16_t VGRST_ADDR       = 0x3200;
+    static constexpr uint16_t WDCLR_ADDR       = 0x3400;
+    static constexpr uint16_t POKEY1_BASE      = 0x2600;
+    static constexpr uint16_t POKEY2_BASE      = 0;
+    static constexpr uint16_t EAROM_BASE       = 0x2C00;
+    static constexpr uint16_t EAROM_SIZE       = 0x40;
+    static constexpr uint16_t EAROM_CTRL_ADDR  = 0;        // handled via DVG switch ($3800/$3A00)
+    static constexpr uint16_t EAROM_READ_ADDR  = 0;
+    static constexpr uint16_t IRQACK_ADDR      = 0;
 
     static constexpr const char* ALIASES[] = { "AsteroidsDeluxe", "Asteroids Deluxe", "ASTEROIDSDELUXE" };
     static constexpr size_t PROBE_ROM_SIZES[] = { 12288 };
@@ -169,6 +194,18 @@ struct AtariVectorTraits<AtariVectorVariant::LUNAR_LANDER> {
     static constexpr const char* PALETTE_ID = "white";
     static constexpr const char* VIDEO_CHIP_NAME = "DVG";
 
+    // I/O addresses (0 = not present on this board)
+    static constexpr uint16_t VGGO_ADDR        = 0x3000;
+    static constexpr uint16_t VGRST_ADDR       = 0x3200;
+    static constexpr uint16_t WDCLR_ADDR       = 0x3400;
+    static constexpr uint16_t POKEY1_BASE      = 0;
+    static constexpr uint16_t POKEY2_BASE      = 0;
+    static constexpr uint16_t EAROM_BASE       = 0;
+    static constexpr uint16_t EAROM_SIZE       = 0;
+    static constexpr uint16_t EAROM_CTRL_ADDR  = 0;
+    static constexpr uint16_t EAROM_READ_ADDR  = 0;
+    static constexpr uint16_t IRQACK_ADDR      = 0;
+
     static constexpr const char* ALIASES[] = { "LunarLander", "Lunar Lander", "LUNARLANDER" };
     static constexpr size_t PROBE_ROM_SIZES[] = { 8192, 10240 };
 };
@@ -202,6 +239,18 @@ struct AtariVectorTraits<AtariVectorVariant::BATTLEZONE> {
     static constexpr const char* PALETTE_ID = "green";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
 
+    // I/O addresses (0 = not present on this board)
+    static constexpr uint16_t VGGO_ADDR        = 0x1200;
+    static constexpr uint16_t VGRST_ADDR       = 0x1600;
+    static constexpr uint16_t WDCLR_ADDR       = 0x1400;
+    static constexpr uint16_t POKEY1_BASE      = 0;
+    static constexpr uint16_t POKEY2_BASE      = 0;
+    static constexpr uint16_t EAROM_BASE       = 0;
+    static constexpr uint16_t EAROM_SIZE       = 0;
+    static constexpr uint16_t EAROM_CTRL_ADDR  = 0;
+    static constexpr uint16_t EAROM_READ_ADDR  = 0;
+    static constexpr uint16_t IRQACK_ADDR      = 0;
+
     static constexpr const char* ALIASES[] = { "Battlezone", "BATTLEZONE", "BZone" };
     static constexpr size_t PROBE_ROM_SIZES[] = { 12288, 16384 };
 };
@@ -234,6 +283,18 @@ struct AtariVectorTraits<AtariVectorVariant::RED_BARON> {
     static constexpr bool USES_15BIT_ADDR = true;
     static constexpr const char* PALETTE_ID = "green";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
+
+    // I/O addresses (0 = not present on this board)
+    static constexpr uint16_t VGGO_ADDR        = 0x1200;
+    static constexpr uint16_t VGRST_ADDR       = 0x1600;
+    static constexpr uint16_t WDCLR_ADDR       = 0x1400;
+    static constexpr uint16_t POKEY1_BASE      = 0x1810;
+    static constexpr uint16_t POKEY2_BASE      = 0;
+    static constexpr uint16_t EAROM_BASE       = 0;
+    static constexpr uint16_t EAROM_SIZE       = 0;
+    static constexpr uint16_t EAROM_CTRL_ADDR  = 0;
+    static constexpr uint16_t EAROM_READ_ADDR  = 0;
+    static constexpr uint16_t IRQACK_ADDR      = 0;
 
     static constexpr const char* ALIASES[] = { "RedBaron", "Red Baron", "REDBARON" };
     static constexpr size_t PROBE_ROM_SIZES[] = { 12288, 16384 };
@@ -270,6 +331,18 @@ struct AtariVectorTraits<AtariVectorVariant::TEMPEST> {
     static constexpr const char* PALETTE_ID = "color";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
 
+    // I/O addresses (0 = not present on this board)
+    static constexpr uint16_t VGGO_ADDR        = 0x4800;
+    static constexpr uint16_t VGRST_ADDR       = 0x5800;
+    static constexpr uint16_t WDCLR_ADDR       = 0x5000;
+    static constexpr uint16_t POKEY1_BASE      = 0x60C0;
+    static constexpr uint16_t POKEY2_BASE      = 0x60D0;
+    static constexpr uint16_t EAROM_BASE       = 0x6000;
+    static constexpr uint16_t EAROM_SIZE       = 0x40;
+    static constexpr uint16_t EAROM_CTRL_ADDR  = 0x6040;
+    static constexpr uint16_t EAROM_READ_ADDR  = 0x6050;
+    static constexpr uint16_t IRQACK_ADDR      = 0;
+
     static constexpr const char* ALIASES[] = { "Tempest", "TEMPEST" };
     static constexpr size_t PROBE_ROM_SIZES[] = { 16384, 24576 };
 };
@@ -302,6 +375,18 @@ struct AtariVectorTraits<AtariVectorVariant::GRAVITAR> {
     static constexpr bool USES_15BIT_ADDR = false;
     static constexpr const char* PALETTE_ID = "green";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
+
+    // I/O addresses (0 = not present on this board)
+    static constexpr uint16_t VGGO_ADDR        = 0x8840;
+    static constexpr uint16_t VGRST_ADDR       = 0x8880;
+    static constexpr uint16_t WDCLR_ADDR       = 0x8980;
+    static constexpr uint16_t POKEY1_BASE      = 0x6000;
+    static constexpr uint16_t POKEY2_BASE      = 0x6800;
+    static constexpr uint16_t EAROM_BASE       = 0;
+    static constexpr uint16_t EAROM_SIZE       = 0;
+    static constexpr uint16_t EAROM_CTRL_ADDR  = 0;
+    static constexpr uint16_t EAROM_READ_ADDR  = 0;
+    static constexpr uint16_t IRQACK_ADDR      = 0x88C0;
 
     static constexpr const char* ALIASES[] = { "Gravitar", "GRAVITAR" };
     static constexpr size_t PROBE_ROM_SIZES[] = { 16384, 24576 };
@@ -341,6 +426,18 @@ struct AtariVectorTraits<AtariVectorVariant::SPACE_DUEL> {
     static constexpr const char* PALETTE_ID = "color";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
 
+    // I/O addresses (0 = not present on this board)
+    static constexpr uint16_t VGGO_ADDR        = 0x0C80;
+    static constexpr uint16_t VGRST_ADDR       = 0x0D80;
+    static constexpr uint16_t WDCLR_ADDR       = 0x0D00;
+    static constexpr uint16_t POKEY1_BASE      = 0x1000;
+    static constexpr uint16_t POKEY2_BASE      = 0x1400;
+    static constexpr uint16_t EAROM_BASE       = 0;
+    static constexpr uint16_t EAROM_SIZE       = 0;
+    static constexpr uint16_t EAROM_CTRL_ADDR  = 0;
+    static constexpr uint16_t EAROM_READ_ADDR  = 0;
+    static constexpr uint16_t IRQACK_ADDR      = 0x0E00;
+
     static constexpr const char* ALIASES[] = { "SpaceDuel", "Space Duel", "SPACEDUEL" };
     static constexpr size_t PROBE_ROM_SIZES[] = { 16384, 24576 };
 };
@@ -373,6 +470,18 @@ struct AtariVectorTraits<AtariVectorVariant::BLACK_WIDOW> {
     static constexpr bool USES_15BIT_ADDR = false;
     static constexpr const char* PALETTE_ID = "color";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
+
+    // I/O addresses (0 = not present on this board)
+    static constexpr uint16_t VGGO_ADDR        = 0x8840;
+    static constexpr uint16_t VGRST_ADDR       = 0x8880;
+    static constexpr uint16_t WDCLR_ADDR       = 0x8980;
+    static constexpr uint16_t POKEY1_BASE      = 0x6000;
+    static constexpr uint16_t POKEY2_BASE      = 0x6800;
+    static constexpr uint16_t EAROM_BASE       = 0;
+    static constexpr uint16_t EAROM_SIZE       = 0;
+    static constexpr uint16_t EAROM_CTRL_ADDR  = 0;
+    static constexpr uint16_t EAROM_READ_ADDR  = 0;
+    static constexpr uint16_t IRQACK_ADDR      = 0x88C0;
 
     static constexpr const char* ALIASES[] = { "BlackWidow", "Black Widow", "BLACKWIDOW" };
     static constexpr size_t PROBE_ROM_SIZES[] = { 16384, 24576 };
@@ -407,6 +516,18 @@ struct AtariVectorTraits<AtariVectorVariant::MAJOR_HAVOC> {
     static constexpr const char* PALETTE_ID = "color";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
 
+    // I/O addresses (0 = not present on this board)
+    static constexpr uint16_t VGGO_ADDR        = 0x1400;
+    static constexpr uint16_t VGRST_ADDR       = 0x1600;
+    static constexpr uint16_t WDCLR_ADDR       = 0x1800;
+    static constexpr uint16_t POKEY1_BASE      = 0x1200;
+    static constexpr uint16_t POKEY2_BASE      = 0;
+    static constexpr uint16_t EAROM_BASE       = 0;
+    static constexpr uint16_t EAROM_SIZE       = 0;
+    static constexpr uint16_t EAROM_CTRL_ADDR  = 0;
+    static constexpr uint16_t EAROM_READ_ADDR  = 0;
+    static constexpr uint16_t IRQACK_ADDR      = 0;
+
     static constexpr const char* ALIASES[] = { "MajorHavoc", "Major Havoc", "MAJORHAVOC" };
     static constexpr size_t PROBE_ROM_SIZES[] = { 16384, 32768 };
 };
@@ -427,52 +548,43 @@ constexpr auto make_atv_manifest() {
     constexpr uint16_t prom_slot = T::PROGROM_SLOT_SIZE ? T::PROGROM_SLOT_SIZE : T::PROGROM_SIZE;
     constexpr size_t   prom_eff  = T::PROGROM_SLOT_SIZE ? T::PROGROM_SIZE : 0;
 
-    if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
-        return make_chip_manifest(
-            Slot<RAMChip>{T::RAM_BASE,        T::RAM_SIZE,         0, "Work RAM"},
-            Slot<RAMChip>{T::VECRAM_BASE,     T::VECRAM_SIZE,      0, "Vector RAM"},
-            Slot<ROMChip>{T::VECROM_BASE,     vrom_slot,           0, "Vector ROM",       0, 0, 0, vrom_eff},
-            Slot<ROMChip>{T::PROGROM_BASE,    T::PROGROM_SIZE,     0, "Program ROM Low"},
-            Slot<ROMChip>{T::PROGROM_HI_BASE, T::PROGROM_HI_SIZE,  0, "Program ROM High"},
-            Slot<MOS6502>{0, 0, 0, "MOS 6502"},
-            Slot<VG>{0, 0, 0, T::VIDEO_CHIP_NAME},
-            Slot<pokey::C012294>{0, 0, 0, "POKEY"},
-            Slot<LS259>{0, 0, 0, "74LS259"}
-        );
-    } else if constexpr (T::HAS_POKEY && T::HAS_EAROM) {
-        return make_chip_manifest(
-            Slot<RAMChip>{T::RAM_BASE,     T::RAM_SIZE,     0, "Work RAM"},
-            Slot<RAMChip>{T::VECRAM_BASE,  T::VECRAM_SIZE,  0, "Vector RAM"},
-            Slot<ROMChip>{T::VECROM_BASE,  vrom_slot,       0, "Vector ROM",  0, 0, 0, vrom_eff},
-            Slot<ROMChip>{T::PROGROM_BASE, prom_slot,       0, "Program ROM", 0, 0, 0, prom_eff},
-            Slot<MOS6502>{0, 0, 0, "MOS 6502"},
-            Slot<VG>{0, 0, 0, T::VIDEO_CHIP_NAME},
-            Slot<pokey::C012294>{0, 0, 0, "POKEY"},
-            Slot<LS259>{0, 0, 0, "74LS259"},
-            Slot<ER2055>{0, 0, 0, "ER2055 EAROM"}
-        );
-    } else if constexpr (T::HAS_POKEY) {
-        return make_chip_manifest(
-            Slot<RAMChip>{T::RAM_BASE,     T::RAM_SIZE,     0, "Work RAM"},
-            Slot<RAMChip>{T::VECRAM_BASE,  T::VECRAM_SIZE,  0, "Vector RAM"},
-            Slot<ROMChip>{T::VECROM_BASE,  vrom_slot,       0, "Vector ROM",  0, 0, 0, vrom_eff},
-            Slot<ROMChip>{T::PROGROM_BASE, prom_slot,       0, "Program ROM", 0, 0, 0, prom_eff},
-            Slot<MOS6502>{0, 0, 0, "MOS 6502"},
-            Slot<VG>{0, 0, 0, T::VIDEO_CHIP_NAME},
-            Slot<pokey::C012294>{0, 0, 0, "POKEY"},
-            Slot<LS259>{0, 0, 0, "74LS259"}
-        );
-    } else {
-        return make_chip_manifest(
-            Slot<RAMChip>{T::RAM_BASE,     T::RAM_SIZE,     0, "Work RAM"},
-            Slot<RAMChip>{T::VECRAM_BASE,  T::VECRAM_SIZE,  0, "Vector RAM"},
-            Slot<ROMChip>{T::VECROM_BASE,  vrom_slot,       0, "Vector ROM",  0, 0, 0, vrom_eff},
-            Slot<ROMChip>{T::PROGROM_BASE, prom_slot,       0, "Program ROM", 0, 0, 0, prom_eff},
-            Slot<MOS6502>{0, 0, 0, "MOS 6502"},
-            Slot<VG>{0, 0, 0, T::VIDEO_CHIP_NAME},
-            Slot<LS259>{0, 0, 0, "74LS259"}
-        );
-    }
+    // Core slots present in every variant
+    auto core = std::make_tuple(
+        Slot<RAMChip>{T::RAM_BASE,     T::RAM_SIZE,     0, "Work RAM"},
+        Slot<RAMChip>{T::VECRAM_BASE,  T::VECRAM_SIZE,  0, "Vector RAM"},
+        Slot<ROMChip>{T::VECROM_BASE,  vrom_slot,       0, "Vector ROM",  0, 0, 0, vrom_eff},
+        Slot<ROMChip>{T::PROGROM_BASE, prom_slot,       0,
+                      V == AtariVectorVariant::SPACE_DUEL ? "Program ROM Low" : "Program ROM",
+                      0, 0, 0, prom_eff},
+        Slot<MOS6502>{0, 0, 0, "MOS 6502"},
+        Slot<VG>{0, 0, 0, T::VIDEO_CHIP_NAME},
+        Slot<LS259>{0, 0, 0, "74LS259"}
+    );
+
+    // Variant-specific optional slots (extra ROM, POKEY, EAROM)
+    auto extra = []() {
+        if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
+            return std::make_tuple(
+                Slot<ROMChip>{T::PROGROM_HI_BASE, T::PROGROM_HI_SIZE, 0, "Program ROM High"},
+                Slot<pokey::C012294>{T::POKEY1_BASE, 0, 0x0F, "POKEY 1"}
+            );
+        } else if constexpr (T::HAS_POKEY && T::HAS_EAROM) {
+            return std::make_tuple(
+                Slot<pokey::C012294>{T::POKEY1_BASE, 0, 0x0F, "POKEY 1"},
+                Slot<ER2055>{T::EAROM_BASE, 0, 0x3F, "ER2055 EAROM"}
+            );
+        } else if constexpr (T::HAS_POKEY) {
+            return std::make_tuple(
+                Slot<pokey::C012294>{T::POKEY1_BASE, 0, 0x0F, "POKEY 1"}
+            );
+        } else {
+            return std::tuple<>();
+        }
+    }();
+
+    return std::apply([](auto&&... slots) {
+        return make_chip_manifest(std::forward<decltype(slots)>(slots)...);
+    }, std::tuple_cat(core, extra));
 }
 
 template<AtariVectorVariant V>
