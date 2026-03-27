@@ -319,6 +319,31 @@ ChipLayout create_dip18_layout() {
     return layout;
 }
 
+ChipLayout create_dip22_layout() {
+    ChipLayout layout = {};
+    layout.package = {
+        400.0f,                      // width (mil) - DIP22 wide body (0.400" row spacing)
+        1100.0f,                     // height (mil) - DIP22 body length (11 pins × 100 mil)
+        PackageType::DIP,            // package_type
+        OrientationMarker::NOTCH,    // marker
+        100.0f,                      // pin_pitch (mil) - standard DIP pitch
+        false,                       // has_thermal_pad
+        false,                       // has_center_slug
+        0.0f                         // thermal_pad_size
+    };
+
+    // 11 pins per side
+    for (uint8_t i = 1; i <= 11; i++) {
+        layout.left_pins.push_back(make_pin(i, PinLabel::A0));
+    }
+
+    for (uint8_t i = 22; i >= 12; i--) {
+        layout.right_pins.push_back(make_pin(i, PinLabel::D0));
+    }
+
+    return layout;
+}
+
 ChipLayout create_dip24_layout() {
     ChipLayout layout = {};
     layout.package = {

@@ -121,6 +121,7 @@
     PLBL_PIN(VTIA,        "Vtia",       "TIA analog supply voltage")            \
     \
     /* ── Clock / oscillator ──────────────────────────────────────── */ \
+    PLBL_PIN(CK,          "CK",         "clock (EAROM/general)")                \
     PLBL_CAT(CLOCK)                                                             \
     PLBL_PIN(CLK,         "CLK",        "generic clock input")                  \
     PLBL_PIN(COLOR_CLK,   "COLOR CLK",  "color clock")                          \
@@ -205,6 +206,8 @@
     PLBL_PIN(BUSAK,       "BUSAK",      "bus acknowledge (Z80, active-high)")   \
     PLBL_PIN(BUSRQ,       "BUSRQ",      "bus request (Z80, active-high)")       \
     PLBL_PIN(BUSY,        "BUSY",       "busy (MC6809, 16-bit operations)")     \
+    PLBL_PIN(C1,          "C1",         "control pin 1")                        \
+    PLBL_PIN(C2,          "C2",         "control pin 2")                        \
     PLBL_PIN(CAS,         "CAS",        "column address strobe (active-high)")  \
     PLBL_PIN(CASRAM,      "CASRAM",     "CAS for RAM")                          \
     PLBL_PIN(CE,          "CE",         "chip enable (active-high)")            \
