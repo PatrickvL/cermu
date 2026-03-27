@@ -17,6 +17,7 @@
 #include "gui/catalog/catalog_store.hpp"
 #include "gui/catalog/catalog_pipeline.hpp"
 #include "gui/launcher_theme.hpp"
+#include "core/system_registry.hpp"
 
 #include <imgui.h>
 #include <string>
@@ -249,23 +250,54 @@ private:
         ImGui::BeginChild("##Card", ImVec2(width, height), true,
                           ImGuiWindowFlags_NoScrollbar);
 
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 card_min = ImGui::GetWindowPos();
+
+        // Left accent bar (maker color from system_id)
+        ImVec4 sys_accent = launcher_theme::kAccentTeal;
+        if (!group.system_id.empty()) {
+            // Look up maker from system registry for accent color
+            const auto& systems = SystemRegistry::instance().get_systems();
+            for (const auto& [desc, factory] : systems) {
+                if (desc.short_name && group.system_id == desc.short_name) {
+                    sys_accent = launcher_theme::accent_for_maker(desc.maker);
+                    break;
+                }
+            }
+        }
+        dl->AddRectFilled(card_min, ImVec2(card_min.x + 3, card_min.y + height),
+                          ImGui::GetColorU32(sys_accent));
+
         // Title
-        ImGui::SetCursorPos(ImVec2(8, 6));
+        ImGui::SetCursorPos(ImVec2(10, 6));
         ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextPrimary);
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + width - 16);
         ImGui::TextWrapped("%s", group.title.c_str());
+        ImGui::PopTextWrapPos();
         ImGui::PopStyleColor();
 
-        // System badge
-        ImGui::SetCursorPos(ImVec2(8, height - 22));
-        ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kAccentTeal);
-        ImGui::Text("%s", group.system_id.c_str());
-        ImGui::PopStyleColor();
+        // Bottom row: system badge + variant count
+        ImGui::SetCursorPos(ImVec2(10, height - 22));
+
+        // System badge as colored pill
+        if (!group.system_id.empty()) {
+            ImVec2 pos = ImGui::GetCursorScreenPos();
+            ImVec2 tsz = ImGui::CalcTextSize(group.system_id.c_str());
+            float pw = tsz.x + 8;
+            ImVec4 pill_bg = ImVec4(sys_accent.x, sys_accent.y, sys_accent.z, 0.15f);
+            dl->AddRectFilled(pos, ImVec2(pos.x + pw, pos.y + tsz.y + 2),
+                              ImGui::GetColorU32(pill_bg), 3.0f);
+            dl->AddText(ImVec2(pos.x + 4, pos.y + 1),
+                        ImGui::GetColorU32(sys_accent),
+                        group.system_id.c_str());
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + pw + 4);
+        }
 
         // Variant count badge
         if (group.entry_count > 1) {
             ImGui::SameLine(width - 40);
             ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextDimmed);
-            ImGui::Text("%d", group.entry_count);
+            ImGui::Text("%d\xc3\x97", group.entry_count);  // Nx
             ImGui::PopStyleColor();
         }
 

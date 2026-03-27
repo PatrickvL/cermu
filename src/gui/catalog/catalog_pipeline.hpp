@@ -24,6 +24,7 @@
 #include "core/formats/format_handler.hpp"
 #include "core/system_registry.hpp"
 #include "core/system.hpp"
+#include "utils/rom_filename_parser.hpp"
 
 #include <atomic>
 #include <thread>
@@ -144,20 +145,41 @@ private:
 
         if (cancel_.load()) { finish(); return; }
 
-        // Phase 2: Probing
+        // Phase 2: Probing (parallel)
         phase_.store(PipelinePhase::Probing);
 
-        for (auto& df : discovered) {
-            if (cancel_.load()) break;
+        {
+            // Work queue index for lock-free distribution
+            std::atomic<int> next_idx{0};
+            int total = static_cast<int>(discovered.size());
 
-            // Skip if already probed and mtime unchanged
-            if (!store.needs_probe(df.vfs_path, df.mtime)) {
-                files_probed_.fetch_add(1);
-                continue;
-            }
+            auto probe_worker = [&]() {
+                for (;;) {
+                    int idx = next_idx.fetch_add(1);
+                    if (idx >= total || cancel_.load()) break;
 
-            probe_and_store(df, store);
-            files_probed_.fetch_add(1);
+                    auto& df = discovered[idx];
+                    if (!store.needs_probe(df.vfs_path, df.mtime)) {
+                        files_probed_.fetch_add(1);
+                        continue;
+                    }
+                    probe_and_store(df, store);
+                    files_probed_.fetch_add(1);
+                }
+            };
+
+            // Launch worker threads (N-1 extra, current thread also works)
+            unsigned hw = std::max(2u, std::thread::hardware_concurrency()) - 1;
+            unsigned pool_size = std::min(hw, 7u);  // cap at 7 extra workers
+            std::vector<std::thread> pool;
+            pool.reserve(pool_size);
+            for (unsigned i = 0; i < pool_size; ++i)
+                pool.emplace_back(probe_worker);
+
+            // This thread participates in probing too
+            probe_worker();
+
+            for (auto& t : pool) t.join();
         }
 
         if (cancel_.load()) { finish(); return; }
@@ -301,6 +323,10 @@ private:
 
         // Compute title key (normalized filename for grouping)
         entry.title_key = normalize_title(df.filename);
+
+        // Compute display title (human-readable, from filename parser)
+        auto parsed = rom_filename::parse(df.filename);
+        entry.display_title = parsed.title.empty() ? df.filename : parsed.title;
 
         // Compute fingerprint
         entry.fingerprint = compute_fingerprint(df.vfs_path, df.file_size);

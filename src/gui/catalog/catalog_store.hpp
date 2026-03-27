@@ -70,6 +70,7 @@ struct CatalogEntry {
 
     // Grouping
     std::string title_key;              ///< Normalized key for title grouping
+    std::string display_title;          ///< Human-readable title for display
     int         group_id    = 0;        ///< Group this entry belongs to
 
     // State
@@ -160,24 +161,25 @@ public:
         const char* sql = R"(
             INSERT INTO entries (
                 vfs_path, filename, file_size, mtime, scan_time,
-                system_id, confidence, format, title_key, group_id,
+                system_id, confidence, format, title_key, display_title, group_id,
                 state, fp_size, fp_head_crc32, fp_tail_crc32, source_root
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(vfs_path) DO UPDATE SET
-                filename     = excluded.filename,
-                file_size    = excluded.file_size,
-                mtime        = excluded.mtime,
-                scan_time    = excluded.scan_time,
-                system_id    = excluded.system_id,
-                confidence   = excluded.confidence,
-                format       = excluded.format,
-                title_key    = excluded.title_key,
-                group_id     = excluded.group_id,
-                state        = excluded.state,
-                fp_size      = excluded.fp_size,
+                filename      = excluded.filename,
+                file_size     = excluded.file_size,
+                mtime         = excluded.mtime,
+                scan_time     = excluded.scan_time,
+                system_id     = excluded.system_id,
+                confidence    = excluded.confidence,
+                format        = excluded.format,
+                title_key     = excluded.title_key,
+                display_title = excluded.display_title,
+                group_id      = excluded.group_id,
+                state         = excluded.state,
+                fp_size       = excluded.fp_size,
                 fp_head_crc32 = excluded.fp_head_crc32,
                 fp_tail_crc32 = excluded.fp_tail_crc32,
-                source_root  = excluded.source_root
+                source_root   = excluded.source_root
         )";
 
         sqlite3_stmt* stmt = nullptr;
@@ -193,12 +195,13 @@ public:
         sqlite3_bind_double(stmt, 7, static_cast<double>(e.confidence));
         sqlite3_bind_text(stmt, 8, e.format.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(stmt, 9, e.title_key.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(stmt, 10, e.group_id);
-        sqlite3_bind_int(stmt, 11, static_cast<int>(e.state));
-        sqlite3_bind_int64(stmt, 12, e.fingerprint.file_size);
-        sqlite3_bind_int(stmt, 13, static_cast<int>(e.fingerprint.head_crc32));
-        sqlite3_bind_int(stmt, 14, static_cast<int>(e.fingerprint.tail_crc32));
-        sqlite3_bind_text(stmt, 15, e.source_root.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 10, e.display_title.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 11, e.group_id);
+        sqlite3_bind_int(stmt, 12, static_cast<int>(e.state));
+        sqlite3_bind_int64(stmt, 13, e.fingerprint.file_size);
+        sqlite3_bind_int(stmt, 14, static_cast<int>(e.fingerprint.head_crc32));
+        sqlite3_bind_int(stmt, 15, static_cast<int>(e.fingerprint.tail_crc32));
+        sqlite3_bind_text(stmt, 16, e.source_root.c_str(), -1, SQLITE_TRANSIENT);
 
         rc = sqlite3_step(stmt);
         sqlite3_finalize(stmt);
@@ -343,11 +346,13 @@ public:
         if (!db_) return result;
 
         const char* sql = R"(
-            SELECT group_id, title_key, system_id, COUNT(*) as cnt
+            SELECT group_id,
+                   COALESCE(NULLIF(display_title,''), title_key) AS title,
+                   system_id, COUNT(*) as cnt
             FROM entries
             WHERE state = 0 AND group_id > 0
             GROUP BY group_id
-            ORDER BY title_key COLLATE NOCASE
+            ORDER BY title COLLATE NOCASE
         )";
 
         sqlite3_stmt* stmt = nullptr;
@@ -357,8 +362,10 @@ public:
         while (sqlite3_step(stmt) == SQLITE_ROW) {
             TitleGroup g;
             g.group_id    = sqlite3_column_int(stmt, 0);
-            g.title       = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-            g.system_id   = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+            auto* key     = sqlite3_column_text(stmt, 1);
+            g.title       = key ? reinterpret_cast<const char*>(key) : "";
+            auto* sys     = sqlite3_column_text(stmt, 2);
+            g.system_id   = sys ? reinterpret_cast<const char*>(sys) : "";
             g.entry_count = sqlite3_column_int(stmt, 3);
             result.push_back(std::move(g));
         }
@@ -446,6 +453,7 @@ private:
                 confidence      REAL NOT NULL DEFAULT 0.0,
                 format          TEXT NOT NULL DEFAULT '',
                 title_key       TEXT NOT NULL DEFAULT '',
+                display_title   TEXT NOT NULL DEFAULT '',
                 group_id        INTEGER NOT NULL DEFAULT 0,
                 state           INTEGER NOT NULL DEFAULT 0,
                 fp_size         INTEGER NOT NULL DEFAULT 0,
@@ -465,22 +473,27 @@ private:
 
     CatalogEntry read_entry(sqlite3_stmt* stmt) {
         CatalogEntry e;
+        auto col_text = [&](int col) -> std::string {
+            auto* p = sqlite3_column_text(stmt, col);
+            return p ? reinterpret_cast<const char*>(p) : std::string{};
+        };
         e.id         = sqlite3_column_int64(stmt, 0);
-        e.vfs_path   = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-        e.filename   = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+        e.vfs_path   = col_text(1);
+        e.filename   = col_text(2);
         e.file_size  = sqlite3_column_int64(stmt, 3);
         e.mtime      = sqlite3_column_int64(stmt, 4);
         e.scan_time  = sqlite3_column_int64(stmt, 5);
-        e.system_id  = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
+        e.system_id  = col_text(6);
         e.confidence = static_cast<float>(sqlite3_column_double(stmt, 7));
-        e.format     = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 8));
-        e.title_key  = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 9));
-        e.group_id   = sqlite3_column_int(stmt, 10);
-        e.state      = static_cast<EntryState>(sqlite3_column_int(stmt, 11));
-        e.fingerprint.file_size  = sqlite3_column_int64(stmt, 12);
-        e.fingerprint.head_crc32 = static_cast<uint32_t>(sqlite3_column_int(stmt, 13));
-        e.fingerprint.tail_crc32 = static_cast<uint32_t>(sqlite3_column_int(stmt, 14));
-        e.source_root = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 15));
+        e.format     = col_text(8);
+        e.title_key  = col_text(9);
+        e.display_title = col_text(10);
+        e.group_id   = sqlite3_column_int(stmt, 11);
+        e.state      = static_cast<EntryState>(sqlite3_column_int(stmt, 12));
+        e.fingerprint.file_size  = sqlite3_column_int64(stmt, 13);
+        e.fingerprint.head_crc32 = static_cast<uint32_t>(sqlite3_column_int(stmt, 14));
+        e.fingerprint.tail_crc32 = static_cast<uint32_t>(sqlite3_column_int(stmt, 15));
+        e.source_root = col_text(16);
         return e;
     }
 };
