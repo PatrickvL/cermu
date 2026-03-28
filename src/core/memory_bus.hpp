@@ -16,6 +16,20 @@
 // Include this single header for full MemoryBus access.  Individual component
 // headers can be included directly for compilation firewall purposes.
 //
+// HARDWARE ACCURACY NOTES:
+// ────────────────────────
+// The MemoryBus models real hardware signal propagation:
+// • All bus signals (ADDR, DATA, CS, R/W, clock edges, IRQ, etc.) are
+//   propagated to all chips each clock cycle.
+// • Each chip's tick() inspects the bus and reacts based on its select logic.
+// • No explicit "bus master" abstraction; arbitration emerges from correct
+//   sequencing of chip ticks and signal observation.
+// • Address drivers (CPU, VIC-II, DMA) tick first to set up address lines.
+// • Subsequent chips observe the bus and respond if selected.
+// • This approach is hardware-faithful and composable across multiple systems.
+//
+// For detailed timing architecture, see docs/TIMING_ARCHITECTURE.md
+//
 // =============================================================================
 #pragma once
 
