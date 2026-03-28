@@ -179,9 +179,9 @@ public:
         const ChipId chip_id = viewers_[viewer_id].read_chip(Viewer::page_of(addr));
 
         if (likely(chip_id < PT::kReadSentinelMin))
-            return read_flat_mem(chip_id, bus);
+            return read_flat_mem(chip_id, addr, bus);
 
-        return read_slow(viewer_id, chip_id, bus);
+        return read_slow(viewer_id, chip_id, addr, bus);
     }
 
     // =========================================================================
@@ -194,9 +194,9 @@ public:
         const WriteChipId chip_id = viewers_[viewer_id].write_chip(Viewer::page_of(addr));
 
         if (likely(chip_id < PT::kWriteSentinelMin))
-            return write_flat_mem(chip_id, bus);
+            return write_flat_mem(chip_id, addr, bus);
 
-        return write_slow(viewer_id, chip_id, bus);
+        return write_slow(viewer_id, chip_id, addr, bus);
     }
 
     // =========================================================================
@@ -754,17 +754,14 @@ private:
     // §2  Buffer read/write helpers (shared by hot path and slow path)
     // =========================================================================
 
-    // read_flat_mem / write_flat_mem: used by tick()/read()/write() (non-CS path).
-    // They optionally set CS as a side-effect when kCsLines is enabled.
-
+    template<bool SetCs>
     [[nodiscard]] FORCE_INLINE
-    bus_state_t read_flat_mem(ChipId chip_id, bus_state_t bus) const noexcept {
-        const Addr     addr    = Addr(BUS_GET_ADDR(bus));
+    bus_state_t read_buffer_impl(ChipId chip_id, Addr addr, bus_state_t bus) const noexcept {
         const auto&    ci      = chip_info_[size_t(chip_id)];
         const size_t   offset  = size_t(ci.base) + (size_t(addr) & size_t(ci.mask));
         const DataType mem_val = static_cast<DataType>(flat_mem_[offset]);
 
-        if constexpr (kCsLines) { set_cs(bus, size_t(chip_id)); }
+        if constexpr (SetCs && kCsLines) { set_cs(bus, size_t(chip_id)); }
 
         if constexpr (kPartialBus) {
             const DataType mask = bus_masks_.read(size_t(chip_id));
@@ -778,14 +775,14 @@ private:
         return bus;
     }
 
+    template<bool SetCs>
     FORCE_INLINE
-    bus_state_t write_flat_mem(WriteChipId chip_id, bus_state_t bus) noexcept {
-        const Addr     addr    = Addr(BUS_GET_ADDR(bus));
+    bus_state_t write_buffer_impl(WriteChipId chip_id, Addr addr, bus_state_t bus) noexcept {
         const auto&    ci      = chip_info_[size_t(chip_id)];
         const size_t   offset  = size_t(ci.base) + (size_t(addr) & size_t(ci.mask));
         const DataType bus_val = static_cast<DataType>(BUS_GET_DATA(bus));
 
-        if constexpr (kCsLines) { set_cs(bus, size_t(chip_id)); }
+        if constexpr (SetCs && kCsLines) { set_cs(bus, size_t(chip_id)); }
 
         if constexpr (kPartialBus) {
             const DataType mask = bus_masks_.write(size_t(chip_id));
@@ -799,6 +796,19 @@ private:
 
         flat_mem_[offset] = static_cast<uint8_t>(bus_val);
         return bus;
+    }
+
+    // read_flat_mem / write_flat_mem: used by tick()/read()/write() (non-CS path).
+    // They optionally set CS as a side-effect when kCsLines is enabled.
+
+    [[nodiscard]] FORCE_INLINE
+    bus_state_t read_flat_mem(ChipId chip_id, Addr addr, bus_state_t bus) const noexcept {
+        return read_buffer_impl<true>(chip_id, addr, bus);
+    }
+
+    FORCE_INLINE
+    bus_state_t write_flat_mem(WriteChipId chip_id, Addr addr, bus_state_t bus) noexcept {
+        return write_buffer_impl<true>(chip_id, addr, bus);
     }
 
     // read_buffer_no_cs / write_buffer_no_cs: used by service_read/service_write
@@ -806,42 +816,12 @@ private:
 
     [[nodiscard]] FORCE_INLINE
     bus_state_t read_buffer_no_cs(ChipId chip_id, bus_state_t bus) const noexcept {
-        const Addr     addr    = Addr(BUS_GET_ADDR(bus));
-        const auto&    ci      = chip_info_[size_t(chip_id)];
-        const size_t   offset  = size_t(ci.base) + (size_t(addr) & size_t(ci.mask));
-        const DataType mem_val = static_cast<DataType>(flat_mem_[offset]);
-
-        if constexpr (kPartialBus) {
-            const DataType mask = bus_masks_.read(size_t(chip_id));
-            if (unlikely(mask != DataBusMasks<Spec>::kFullMask)) {
-                BUS_BITMIX_DATA(bus, mem_val, mask);
-                return bus;
-            }
-        }
-
-        BUS_SET_DATA(bus, mem_val);
-        return bus;
+        return read_buffer_impl<false>(chip_id, Addr(BUS_GET_ADDR(bus)), bus);
     }
 
     FORCE_INLINE
     bus_state_t write_buffer_no_cs(WriteChipId chip_id, bus_state_t bus) noexcept {
-        const Addr     addr    = Addr(BUS_GET_ADDR(bus));
-        const auto&    ci      = chip_info_[size_t(chip_id)];
-        const size_t   offset  = size_t(ci.base) + (size_t(addr) & size_t(ci.mask));
-        const DataType bus_val = static_cast<DataType>(BUS_GET_DATA(bus));
-
-        if constexpr (kPartialBus) {
-            const DataType mask = bus_masks_.write(size_t(chip_id));
-            if (unlikely(mask != DataBusMasks<Spec>::kFullMask)) {
-                const DataType old_val = static_cast<DataType>(flat_mem_[offset]);
-                flat_mem_[offset] =
-                    static_cast<uint8_t>(bitmix(bus_val, old_val, mask));
-                return bus;
-            }
-        }
-
-        flat_mem_[offset] = static_cast<uint8_t>(bus_val);
-        return bus;
+        return write_buffer_impl<false>(chip_id, Addr(BUS_GET_ADDR(bus)), bus);
     }
 
     // =========================================================================
@@ -874,6 +854,90 @@ private:
         return bus;
     }
 
+    template<bool IsRead>
+    [[nodiscard]] FORCE_INLINE
+    auto resolve_chip_impl(size_t viewer_id,
+                           std::conditional_t<IsRead, ChipId, WriteChipId> chip_id,
+                           Addr addr) const noexcept
+        -> std::conditional_t<IsRead, ChipId, WriteChipId>
+    {
+        using ResolvedChip = std::conditional_t<IsRead, ChipId, WriteChipId>;
+
+        constexpr size_t kMaxDepth = kMaxIndexedSubs + kMaxMaskedSubs;
+        for (size_t depth = 0; depth < kMaxDepth; ++depth) {
+            if constexpr (kHasIndexedSub) {
+                const auto base = size_t(IsRead ? PT::kIndexedSubBase
+                                                : PT::kIndexedSubBaseWrite);
+                const auto id   = size_t(chip_id);
+                if (id >= base && id < base + kMaxIndexedSubs) {
+                    if constexpr (IsRead)
+                        chip_id = indexed_subs_[viewer_id][id - base].read_chip(addr);
+                    else
+                        chip_id = indexed_subs_[viewer_id][id - base].write_chip(addr);
+                    continue;
+                }
+            }
+            if constexpr (kHasMaskedSub) {
+                const auto base = size_t(IsRead ? PT::kMaskedSubBase
+                                                : PT::kMaskedSubBaseWrite);
+                const auto id   = size_t(chip_id);
+                if (id >= base && id < base + kMaxMaskedSubs) {
+                    if constexpr (IsRead)
+                        chip_id = masked_subs_[viewer_id][id - base].resolve_read(addr);
+                    else
+                        chip_id = masked_subs_[viewer_id][id - base].resolve_write(addr);
+                    continue;
+                }
+            }
+            break;
+        }
+
+        return ResolvedChip(chip_id);
+    }
+
+    template<bool IsRead>
+    [[nodiscard]] FORCE_NOINLINE
+    bus_state_t slow_dispatch_impl(
+        size_t viewer_id,
+        std::conditional_t<IsRead, ChipId, WriteChipId> chip_id,
+        Addr addr,
+        bus_state_t bus) noexcept
+    {
+        if constexpr (IsRead) {
+            if (chip_id == PT::kNoChipSelected) return bus;
+        } else {
+            if (chip_id == PT::kNoChipSelectedWrite) return bus;
+        }
+
+        if constexpr (kHasSubTables) {
+            chip_id = resolve_chip_impl<IsRead>(viewer_id, chip_id, addr);
+
+            if constexpr (IsRead) {
+                if (chip_id < PT::kReadSentinelMin)
+                    return read_flat_mem(chip_id, addr, bus);
+                if (chip_id == PT::kNoChipSelected)
+                    return bus;
+            } else {
+                if (chip_id < PT::kWriteSentinelMin)
+                    return write_flat_mem(chip_id, addr, bus);
+                if (chip_id == PT::kNoChipSelectedWrite)
+                    return bus;
+            }
+        }
+
+        if constexpr (Spec::EnableMmio) {
+            if constexpr (IsRead) {
+                if (chip_id >= PT::kRegChipBase)
+                    return read_mmio(chip_id, bus);
+            } else {
+                if (chip_id >= PT::kRegChipBaseWrite)
+                    return write_mmio(chip_id, bus);
+            }
+        }
+
+        return bus;
+    }
+
     // =========================================================================
     // §4  Sub-table resolution (iterative, bounded by pool size)
     // =========================================================================
@@ -888,53 +952,13 @@ private:
     [[nodiscard]] FORCE_INLINE
     ChipId resolve_read_chip(size_t viewer_id, ChipId chip_id,
                              Addr addr) const noexcept {
-        constexpr size_t kMaxDepth = kMaxIndexedSubs + kMaxMaskedSubs;
-        for (size_t depth = 0; depth < kMaxDepth; ++depth) {
-            if constexpr (kHasIndexedSub) {
-                const auto base = size_t(PT::kIndexedSubBase);
-                const auto id   = size_t(chip_id);
-                if (id >= base && id < base + kMaxIndexedSubs) {
-                    chip_id = indexed_subs_[viewer_id][id - base].read_chip(addr);
-                    continue;
-                }
-            }
-            if constexpr (kHasMaskedSub) {
-                const auto base = size_t(PT::kMaskedSubBase);
-                const auto id   = size_t(chip_id);
-                if (id >= base && id < base + kMaxMaskedSubs) {
-                    chip_id = masked_subs_[viewer_id][id - base].resolve_read(addr);
-                    continue;
-                }
-            }
-            break;
-        }
-        return chip_id;
+        return resolve_chip_impl<true>(viewer_id, chip_id, addr);
     }
 
     [[nodiscard]] FORCE_INLINE
     WriteChipId resolve_write_chip(size_t viewer_id, WriteChipId chip_id,
                                    Addr addr) const noexcept {
-        constexpr size_t kMaxDepth = kMaxIndexedSubs + kMaxMaskedSubs;
-        for (size_t depth = 0; depth < kMaxDepth; ++depth) {
-            if constexpr (kHasIndexedSub) {
-                const auto base = size_t(PT::kIndexedSubBaseWrite);
-                const auto id   = size_t(chip_id);
-                if (id >= base && id < base + kMaxIndexedSubs) {
-                    chip_id = indexed_subs_[viewer_id][id - base].write_chip(addr);
-                    continue;
-                }
-            }
-            if constexpr (kHasMaskedSub) {
-                const auto base = size_t(PT::kMaskedSubBaseWrite);
-                const auto id   = size_t(chip_id);
-                if (id >= base && id < base + kMaxMaskedSubs) {
-                    chip_id = masked_subs_[viewer_id][id - base].resolve_write(addr);
-                    continue;
-                }
-            }
-            break;
-        }
-        return chip_id;
+        return resolve_chip_impl<false>(viewer_id, chip_id, addr);
     }
 
     // =========================================================================
@@ -943,49 +967,14 @@ private:
 
     [[nodiscard]] FORCE_NOINLINE
     bus_state_t read_slow(size_t viewer_id, ChipId chip_id,
-                          bus_state_t bus) noexcept {
-        // Fast exit for open bus (common sentinel)
-        if (chip_id == PT::kNoChipSelected) return bus;
-
-        // Resolve through sub-tables if chip_id is a sub-table sentinel
-        if constexpr (kHasSubTables) {
-            chip_id = resolve_read_chip(viewer_id, chip_id,
-                                        Addr(BUS_GET_ADDR(bus)));
-            if (chip_id < PT::kReadSentinelMin)
-                return read_flat_mem(chip_id, bus);
-            if (chip_id == PT::kNoChipSelected)
-                return bus;
-        }
-
-        // MMIO handler dispatch
-        if constexpr (Spec::EnableMmio) {
-            if (chip_id >= PT::kRegChipBase)
-                return read_mmio(chip_id, bus);
-        }
-
-        return bus;   // fallthrough: bus floats
+                          Addr addr, bus_state_t bus) noexcept {
+        return slow_dispatch_impl<true>(viewer_id, chip_id, addr, bus);
     }
 
     FORCE_NOINLINE
     bus_state_t write_slow(size_t viewer_id, WriteChipId chip_id,
-                           bus_state_t bus) noexcept {
-        if (chip_id == PT::kNoChipSelectedWrite) return bus;
-
-        if constexpr (kHasSubTables) {
-            chip_id = resolve_write_chip(viewer_id, chip_id,
-                                         Addr(BUS_GET_ADDR(bus)));
-            if (chip_id < PT::kWriteSentinelMin)
-                return write_flat_mem(chip_id, bus);
-            if (chip_id == PT::kNoChipSelectedWrite)
-                return bus;
-        }
-
-        if constexpr (Spec::EnableMmio) {
-            if (chip_id >= PT::kRegChipBaseWrite)
-                return write_mmio(chip_id, bus);
-        }
-
-        return bus;   // write silently dropped
+                           Addr addr, bus_state_t bus) noexcept {
+        return slow_dispatch_impl<false>(viewer_id, chip_id, addr, bus);
     }
 
     // =========================================================================
