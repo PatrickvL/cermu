@@ -43,7 +43,7 @@
 // Trailing comma is safe inside aggregate init.
 //
 #define CERMU_CHIP_VISITOR_MANIFEST_ROW(ctx, slot, type, chip, base, size, overlay, label, info_label, rom_files) \
-    ChipSlot{base, size, 0, (size > 0 ? size : 0), 0, overlay, resolve_slot_factory<type>(), label, 0, {}},
+    ChipSlot{base, size, 0, (size > 0 ? size : 0), 0, overlay, resolve_slot_factory<type>(), label, 0, {rom_files}},
 
 // ── Chipset Field Declaration Visitor ────────────────────────────────────────
 //

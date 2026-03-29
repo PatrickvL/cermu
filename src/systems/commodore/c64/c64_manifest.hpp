@@ -59,21 +59,27 @@
 // chip ID assignment.  MMIO chip order (slots 6–11) is flexible.
 //
 
-#define C64_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                            \
-    /* ── Buffer-backed chips (PLA-switched) ─────────────────────────────────────────────────────────────────── */ \
+#define C64_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                           \
+    /* ── Buffer-backed chips (PLA-switched) ────────────────────────────────────────────────────────────────── */ \
     X(ctx,  0, RAMChip,       ram,       0x0000, 65536, 1, "RAM",         "RAM",                  nullptr)         \
     X(ctx,  1, ROMChip,       roml,      0x8000,  8192, 1, "ROML",        "Cartridge ROM Low",    nullptr)         \
     X(ctx,  2, ROMChip,       romh,      0xA000,  8192, 1, "ROMH",        "Cartridge ROM High",   nullptr)         \
-    X(ctx,  3, ROMChip,       basic,     0xA000,  8192, 1, "BASIC ROM",   "BASIC ROM",            nullptr)         \
-    X(ctx,  4, ROMChip,       kernal,    0xE000,  8192, 1, "KERNAL",      "KERNAL ROM",           nullptr)         \
-    X(ctx,  5, ROMChip,       charrom,   0xD000,  4096, 1, "CHARROM",     "Character ROM",        nullptr)         \
+    X(ctx,  3, ROMChip,       basic,     0xA000,  8192, 1, "BASIC ROM",   "BASIC ROM",                             \
+        "C64 - 901226-01 - Commodore (F833D117) Basic.rom|"                                                        \
+        "basic.901226-01.bin|901226-01.bin|basic.rom")                                                             \
+    X(ctx,  4, ROMChip,       kernal,    0xE000,  8192, 1, "KERNAL",      "KERNAL ROM",                            \
+        "C64 - 901227-03 - Commodore (DBE3E7C7) Kernal.rom|"                                                       \
+        "kernal.901227-03.bin|901227-03.bin|kernal.rom")                                                           \
+    X(ctx,  5, ROMChip,       charrom,   0xD000,  4096, 1, "CHARROM",     "Character ROM",                         \
+        "C64 - 901225-01 - Commodore (EC4272EE) Characters.rom|"                                                   \
+        "characters.901225-01.bin|901225-01.bin|chargen.rom|char.rom")                                             \
     /* ── MMIO chips (no flat-memory buffer, I/O addresses for documentation) ─────────────────────────────── */   \
-    X(ctx,  6, MOS6510,       cpu,       0x0000,    0, 0, "MOS 6510",    "MOS 6510",             nullptr)         \
-    X(ctx,  7, vicii_base_t,  vicii,     0xD000,    0, 0, "VIC-II",      "VIC-II",               nullptr)         \
-    X(ctx,  8, mos6581_t,     sid,       0xD400,    0, 0, "SID",         "SID",                  nullptr)         \
-    X(ctx,  9, MOS2114,       colorram,  0xD800,    0, 0, "Color RAM",   "Color RAM",            nullptr)         \
-    X(ctx, 10, mos6526_t,     cia1,      0xDC00,    0, 0, "CIA1",        "CIA1",                 nullptr)         \
-    X(ctx, 11, mos6526_t,     cia2,      0xDD00,    0, 0, "CIA2",        "CIA2",                 nullptr)
+    X(ctx,  6, MOS6510,       cpu,       0x0000,     0, 0, "MOS 6510",    "MOS 6510",             nullptr)         \
+    X(ctx,  7, vicii_base_t,  vicii,     0xD000,     0, 0, "VIC-II",      "VIC-II",               nullptr)         \
+    X(ctx,  8, mos6581_t,     sid,       0xD400,     0, 0, "SID",         "SID",                  nullptr)         \
+    X(ctx,  9, MOS2114,       colorram,  0xD800,     0, 0, "Color RAM",   "Color RAM",            nullptr)         \
+    X(ctx, 10, mos6526_t,     cia1,      0xDC00,     0, 0, "CIA1",        "CIA1",                 nullptr)         \
+    X(ctx, 11, mos6526_t,     cia2,      0xDD00,     0, 0, "CIA2",        "CIA2",                 nullptr)
 
 // Total chip count (for manifest sizing)
 static constexpr size_t kC64ChipCount = 12;
