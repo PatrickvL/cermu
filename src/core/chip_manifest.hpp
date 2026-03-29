@@ -287,6 +287,12 @@ template<size_t N>
 struct ChipManifest {
     std::array<ChipSlot, N> chips{};
     size_t num_dynamic_pages = 0;  // reserved for runtime-added chips
+    bool   sorted_ids        = false; // When true, base_id() and byte_offset()
+                                       // assign IDs in size-ascending order
+                                       // regardless of declaration order.
+                                       // Enables address-sorted chip lists
+                                       // while preserving optimal shift-
+                                       // addressable chip-id layout.
 
     // ── Chip-id assignment ─────────────────────────────────────────────────
     //
@@ -294,6 +300,11 @@ struct ChipManifest {
     // occupies size_bytes / bank_size consecutive ids.  When bank_size == 0
     // the chip falls back to one bank per page (backward compatible with
     // the legacy page-index model).
+    //
+    // When sorted_ids is true, ids are assigned as if buffer chips were
+    // sorted by size ascending (stable, declaration order breaks ties).
+    // This decouples declaration order (readability) from id assignment
+    // (shift-addressable optimization).
     //
     // All queries take page_bits for the fallback page size.
     //
@@ -312,16 +323,47 @@ struct ChipManifest {
     }
 
     // Base chip id of chip at index chip_index (0-based).
+    //
+    // When sorted_ids is false (default): prefix sum of bank_counts in
+    // declaration order (chips[0..chip_index-1]).
+    //
+    // When sorted_ids is true: prefix sum of bank_counts of all buffer
+    // chips whose size is strictly smaller, plus same-size chips with a
+    // lower declaration index (stable size-ascending order).
+    //
     [[nodiscard]] constexpr size_t base_id(size_t chip_index, size_t page_bits) const noexcept {
+        if (!sorted_ids) {
+            size_t id = 0;
+            for (size_t i = 0; i < chip_index; ++i)
+                id += bank_count(i, page_bits);
+            return id;
+        }
+        // chip_index == N → total banks (all chips sort before the sentinel)
+        if (chip_index >= N) {
+            size_t id = 0;
+            for (size_t i = 0; i < N; ++i)
+                id += bank_count(i, page_bits);
+            return id;
+        }
+        if (chips[chip_index].size_bytes == 0) return 0;
+        const size_t my_size = chips[chip_index].size_bytes;
         size_t id = 0;
-        for (size_t i = 0; i < chip_index; ++i)
-            id += bank_count(i, page_bits);
+        for (size_t j = 0; j < N; ++j) {
+            if (j == chip_index) continue;
+            if (chips[j].size_bytes == 0) continue;
+            if (chips[j].size_bytes < my_size ||
+                (chips[j].size_bytes == my_size && j < chip_index))
+                id += bank_count(j, page_bits);
+        }
         return id;
     }
 
     // Total bank ids across all static chips.
     [[nodiscard]] constexpr size_t total_banks(size_t page_bits) const noexcept {
-        return base_id(N, page_bits);
+        size_t id = 0;
+        for (size_t i = 0; i < N; ++i)
+            id += bank_count(i, page_bits);
+        return id;
     }
 
     // First chip id in the dynamic pool (= one past the last static bank id).
@@ -342,16 +384,59 @@ struct ChipManifest {
     }
 
     // Byte offset of chip at index chip_index in the flat memory.
-    [[nodiscard]] constexpr size_t byte_offset(size_t chip_index) const noexcept {
+    //
+    // When sorted_ids is true, the flat memory layout follows size-ascending
+    // order so that byte_offset(i) == base_id(i, page_bits) << page_bits
+    // holds for all addressable buffer chips (shift-addressable invariant).
+    // Sub-page chips (size > 0, bank_count == 0) are placed after all
+    // addressable chips since they have no chip IDs to align with.
+    //
+    // page_bits is required in sorted mode to distinguish addressable from
+    // sub-page chips; ignored in non-sorted mode.
+    //
+    [[nodiscard]] constexpr size_t byte_offset(size_t chip_index, size_t page_bits = 0) const noexcept {
+        if (!sorted_ids) {
+            size_t off = 0;
+            for (size_t i = 0; i < chip_index; ++i)
+                off += chips[i].size_bytes;
+            return off;
+        }
+        if (chip_index >= N) return total_buffer_bytes();
+        if (chips[chip_index].size_bytes == 0) return total_buffer_bytes();
+        const size_t my_bc = bank_count(chip_index, page_bits);
+        const size_t my_size = chips[chip_index].size_bytes;
+        if (my_bc == 0) {
+            // Sub-page chip: placed after all addressable chips.
+            size_t off = 0;
+            for (size_t j = 0; j < N; ++j) {
+                if (chips[j].size_bytes == 0) continue;
+                if (bank_count(j, page_bits) > 0)
+                    off += chips[j].size_bytes;  // addressable: always before
+                else if (j < chip_index)
+                    off += chips[j].size_bytes;  // earlier sub-page chip
+            }
+            return off;
+        }
+        // Addressable chip: sorted by size ascending, ties by declaration order.
+        // Only count other addressable chips (skip sub-page).
         size_t off = 0;
-        for (size_t i = 0; i < chip_index; ++i)
-            off += chips[i].size_bytes;
+        for (size_t j = 0; j < N; ++j) {
+            if (j == chip_index) continue;
+            if (chips[j].size_bytes == 0) continue;
+            if (bank_count(j, page_bits) == 0) continue;
+            if (chips[j].size_bytes < my_size ||
+                (chips[j].size_bytes == my_size && j < chip_index))
+                off += chips[j].size_bytes;
+        }
         return off;
     }
 
     // Total static buffer bytes (sum of all chip size_bytes).
     [[nodiscard]] constexpr size_t total_buffer_bytes() const noexcept {
-        return byte_offset(N);
+        size_t sum = 0;
+        for (size_t i = 0; i < N; ++i)
+            sum += chips[i].size_bytes;
+        return sum;
     }
 
     // Buffer size in bytes (static chips + dynamic pool).
@@ -557,6 +642,17 @@ struct ChipManifest {
         for (size_t i = 0; i < N; ++i)
             if (copy.chips[i].size_bytes > 0)
                 copy.chips[i].bank_size = 0;
+        return copy;
+    }
+
+    // Returns a copy with sorted_ids enabled.  Chip IDs are assigned in
+    // size-ascending order regardless of declaration order.  Use after
+    // with_page_banking() so that ID assignment matches the optimal
+    // shift-addressable layout.
+    //
+    [[nodiscard]] constexpr ChipManifest with_sorted_ids() const noexcept {
+        auto copy = *this;
+        copy.sorted_ids = true;
         return copy;
     }
 };

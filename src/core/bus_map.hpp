@@ -87,7 +87,6 @@ public:
     template<size_t N>
     explicit BusMap(const ChipManifest<N>& manifest) {
         slots_.reserve(N);
-        size_t byte_off = 0;
         for (size_t i = 0; i < N; ++i) {
             const ChipSlot& s = manifest.chips[i];
             slots_.push_back({
@@ -96,7 +95,7 @@ public:
                 s.pages(kPageBits),
                 s.bank_size,
                 s.size_bytes,
-                byte_off,
+                manifest.byte_offset(i, kPageBits),
                 s.base_addr,
                 s.addr_mask,
                 false,                          // read_only: set during bind_chip
@@ -111,7 +110,6 @@ public:
                 s.effective_size,
                 s.rom,
             });
-            byte_off += s.size_bytes;
         }
     }
 
