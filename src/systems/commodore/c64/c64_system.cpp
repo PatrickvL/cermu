@@ -1762,17 +1762,19 @@ bool C64System::pla_maps_generate() {
     const auto no_chip_wr   = C64WriteId(C64PT::kNoChipSelectedWrite);
 
     // Map PLA output chip ID → MemoryBus read chip.
-    // Buffer chip IDs (0-5) map directly; kIo→sub-table, kUnmapped→no-chip.
-    auto pla_to_read_chip = [&](C64PlaChipId chip) -> C64ChipId {
+    // Buffer base_ids are converted to per-bank chip_ids using the start
+    // page lookup table; kIo→sub-table, kUnmapped→no-chip.
+    auto pla_to_read_chip = [&](C64PlaChipId chip, uint32_t bank) -> C64ChipId {
         if (chip == c64_chip_ids::kIo)       return io_sub_read;
         if (chip == c64_chip_ids::kUnmapped) return no_chip_rd;
-        return C64ChipId(chip);  // 0-5 are MemoryBus chip IDs directly
+        return C64ChipId(size_t(chip) + bank - kC64ChipStartPage[size_t(chip)]);
     };
 
     // Map PLA output chip ID → MemoryBus write chip.
     // Only RAM and I/O are writable; ROMs and unmapped ignore writes.
-    auto pla_to_write_chip = [&](C64PlaChipId chip) -> C64WriteId {
-        if (chip == c64_chip_ids::kRam) return C64WriteId(chip);
+    auto pla_to_write_chip = [&](C64PlaChipId chip, uint32_t bank) -> C64WriteId {
+        if (chip == c64_chip_ids::kRam)
+            return C64WriteId(size_t(chip) + bank - kC64ChipStartPage[size_t(chip)]);
         if (chip == c64_chip_ids::kIo)  return io_sub_write;
         return no_chip_wr;
     };
@@ -1806,8 +1808,8 @@ bool C64System::pla_maps_generate() {
             pla_cpu_write_chip_[mode][bank] = write_chip;
 
             bus_.set_page(C64BusSpec::Cpu, bank,
-                          pla_to_read_chip(read_chip),
-                          pla_to_write_chip(write_chip));
+                          pla_to_read_chip(read_chip, bank),
+                          pla_to_write_chip(write_chip, bank));
         }
         bus_.save_snapshot(C64BusSpec::Cpu, cpu_snapshots_[mode]);
 
@@ -1831,7 +1833,7 @@ bool C64System::pla_maps_generate() {
 
             // VIC-II only reads — set read page, write stays no-chip
             bus_.set_read_page(C64BusSpec::Vic, bank,
-                               pla_to_read_chip(read_chip));
+                               pla_to_read_chip(read_chip, bank));
         }
         bus_.save_snapshot(C64BusSpec::Vic, vicii_snapshots_[mode]);
     }
