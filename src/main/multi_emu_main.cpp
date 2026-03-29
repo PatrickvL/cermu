@@ -272,6 +272,12 @@ int main(int argc, char** argv) {
         system->set_framebuffer(fb.get(), fb_width, fb_height);
 
         // Set up write-capture callback
+        if (!c64->sid) {
+            printf("ERROR: --sid-log requires SID chip\n");
+            system->shutdown();
+            return 1;
+        }
+
         sid_log::write_log_t log;
         log.chip_model = (c64->sid->revision == SID_REVISION_8580_R5) ? 1 : 0;
         log.cpu_clock  = system->get_current_timing().cpu_frequency_hz;
@@ -355,6 +361,15 @@ int main(int argc, char** argv) {
         float drain[4096];
         int frame_targets[] = { 5, 500 };
         int frame_count = 0;
+        if (!c64->vicii || !c64->ram) {
+            printf("ERROR: --vicii-dump requires VIC-II and RAM chips\n");
+            system->shutdown();
+            return 1;
+        }
+
+        auto& vicii = *c64->vicii;
+        uint8_t* ram_data = c64->ram->data();
+
         for (int t = 0; t < 2; t++) {
             while (frame_count < frame_targets[t]) {
                 system->run_frame();
@@ -362,16 +377,16 @@ int main(int argc, char** argv) {
                 frame_count++;
             }
             printf("\n=== Frame %d ===\n", frame_count);
-            uint8_t d011 = c64->vicii->regs_[0x11];
-            uint8_t d016 = c64->vicii->regs_[0x16];
-            uint8_t d018 = c64->vicii->regs_[0x18];
-            uint8_t d020 = c64->vicii->regs_[0x20];
-            uint8_t d021 = c64->vicii->regs_[0x21];
+            uint8_t d011 = vicii.regs_[0x11];
+            uint8_t d016 = vicii.regs_[0x16];
+            uint8_t d018 = vicii.regs_[0x18];
+            uint8_t d020 = vicii.regs_[0x20];
+            uint8_t d021 = vicii.regs_[0x21];
             uint8_t yscroll = d011 & 0x07;
             uint8_t xscroll = d016 & 0x07;
-            uint16_t bank_base = c64->vicii->memory.bank_base;
-            uint16_t vm_base = c64->vicii->memory.vm_base;
-            uint16_t cb_base = c64->vicii->memory.cb_base;
+            uint16_t bank_base = vicii.memory.bank_base;
+            uint16_t vm_base = vicii.memory.vm_base;
+            uint16_t cb_base = vicii.memory.cb_base;
             bool bmm = (d011 & 0x20) != 0;
             printf("$D011=$%02X $D016=$%02X $D018=$%02X $D020=$%02X $D021=$%02X YSCROLL=%d BMM=%d\n",
                    d011, d016, d018, d020, d021, yscroll, bmm?1:0);
@@ -379,27 +394,27 @@ int main(int argc, char** argv) {
                    bank_base / 0x4000, bank_base, vm_base, bank_base | vm_base, cb_base, bank_base | cb_base);
             
             // ===== SPRITE STATE =====
-            uint8_t d015 = c64->vicii->regs_[0x15]; // enable
-            uint8_t d010 = c64->vicii->regs_[0x10]; // X bit 8
-            uint8_t d017 = c64->vicii->regs_[0x17]; // Y expand
-            uint8_t d01b = c64->vicii->regs_[0x1B]; // priority
-            uint8_t d01c = c64->vicii->regs_[0x1C]; // multicolor
-            uint8_t d01d = c64->vicii->regs_[0x1D]; // X expand
+            uint8_t d015 = vicii.regs_[0x15]; // enable
+            uint8_t d010 = vicii.regs_[0x10]; // X bit 8
+            uint8_t d017 = vicii.regs_[0x17]; // Y expand
+            uint8_t d01b = vicii.regs_[0x1B]; // priority
+            uint8_t d01c = vicii.regs_[0x1C]; // multicolor
+            uint8_t d01d = vicii.regs_[0x1D]; // X expand
             printf("\nSPRITE STATE:\n");
             printf("$D015=$%02X(enable) $D01C=$%02X(mc) $D01D=$%02X(xexp) $D017=$%02X(yexp) $D01B=$%02X(pri) $D010=$%02X(x8)\n",
                    d015, d01c, d01d, d017, d01b, d010);
             
             for (int s = 0; s < 8; s++) {
-                uint16_t sx = c64->vicii->regs_[0x00 + s*2] | ((d010 & (1<<s)) ? 256 : 0);
-                uint8_t sy = c64->vicii->regs_[0x01 + s*2];
-                uint8_t sc = c64->vicii->regs_[0x27 + s]; // color
+                uint16_t sx = vicii.regs_[0x00 + s*2] | ((d010 & (1<<s)) ? 256 : 0);
+                uint8_t sy = vicii.regs_[0x01 + s*2];
+                uint8_t sc = vicii.regs_[0x27 + s]; // color
                 bool en = (d015 & (1<<s)) != 0;
                 bool xexp = (d01d & (1<<s)) != 0;
                 bool yexp = (d017 & (1<<s)) != 0;
                 
                 // Read sprite pointer from the CORRECT screen area
                 uint16_t sp_ptr_addr = (bank_base | vm_base) + 0x3F8 + s;
-                uint8_t sp_ptr = c64->ram->data()[sp_ptr_addr];
+                uint8_t sp_ptr = ram_data[sp_ptr_addr];
                 uint16_t sp_data_addr = bank_base + (uint16_t)sp_ptr * 64;
                 
                 printf("  Spr%d: %s X=%3d Y=%3d col=%d ptr=$%02X (data@$%04X) %s%s",
@@ -409,9 +424,9 @@ int main(int argc, char** argv) {
                 if (en) {
                     // Show first 3 bytes of sprite data (first row)
                     printf(" data[0..2]=%02X %02X %02X",
-                           c64->ram->data()[sp_data_addr],
-                           c64->ram->data()[sp_data_addr+1],
-                           c64->ram->data()[sp_data_addr+2]);
+                           ram_data[sp_data_addr],
+                           ram_data[sp_data_addr+1],
+                           ram_data[sp_data_addr+2]);
                 }
                 printf("\n");
             }
@@ -419,8 +434,8 @@ int main(int argc, char** argv) {
             // ===== EMULATOR SPRITE INTERNAL STATE =====
             printf("\nSprite internal state (emulator):\n");
             for (int s = 0; s < 8; s++) {
-                auto& spr = c64->vicii->sprites.sprites[s];
-                bool enabled = (c64->vicii->regs_[vicii_regs::MXE] & (1 << s)) != 0;
+                auto& spr = vicii.sprites.sprites[s];
+                bool enabled = (vicii.regs_[vicii_regs::MXE] & (1 << s)) != 0;
                 printf("  Spr%d: enabled=%d dma=%d display=%d dp=$%02X mc=%d shift=$%06X\n",
                        s, enabled, spr.dma_enabled, spr.display_state,
                        spr.data_pointer, spr.mc, spr.shift_reg);
@@ -486,9 +501,9 @@ int main(int argc, char** argv) {
                    !ecm && !bmm ? "Standard Text Mode" : "Invalid");
 
             // Check CIA2 DD00 for bank config
-            printf("\nCIA2 $DD00 port A value: $%02X\n", c64->ram->data()[0xDD00]);
+            printf("\nCIA2 $DD00 port A value: $%02X\n", ram_data[0xDD00]);
             // Actually read from CIA2 register directly
-            printf("CIA2 PRA register: $%02X\n", uint8_t(c64->cia2->regs_[0]) & 0x03);
+            printf("CIA2 PRA register: $%02X\n", c64->cia2 ? (uint8_t(c64->cia2->regs_[0]) & 0x03) : 0xFF);
             
             // ===== BITMAP MODE DATA =====
             if (bmm) {
@@ -496,11 +511,11 @@ int main(int argc, char** argv) {
                 uint16_t bitmap_base = bank_base + (cb_base & 0x2000); // CB13 selects $0000 or $2000
                 printf("Bitmap base: $%04X (CB13=%d)\n", bitmap_base, (cb_base & 0x2000) ? 1 : 0);
                 printf("Bitmap[0..7] at $%04X: ", bitmap_base);
-                for (int i = 0; i < 8; i++) printf("$%02X ", c64->ram->data()[bitmap_base + i]);
+                for (int i = 0; i < 8; i++) printf("$%02X ", ram_data[bitmap_base + i]);
                 printf("\n");
                 // Show bitmap data for cell(5,0) = offset 5*8 = 40
                 printf("Bitmap cell(5,0) at $%04X: ", bitmap_base + 40);
-                for (int i = 0; i < 8; i++) printf("$%02X ", c64->ram->data()[bitmap_base + 40 + i]);
+                for (int i = 0; i < 8; i++) printf("$%02X ", ram_data[bitmap_base + 40 + i]);
                 printf("\n");
             }
         }
@@ -516,20 +531,20 @@ int main(int argc, char** argv) {
         {
             FILE* f = fopen("/tmp/c64_memdump.bin", "wb");
             if (f) {
-                fwrite(c64->ram->data(), 1, 65536, f);
+                fwrite(ram_data, 1, 65536, f);
                 fclose(f);
                 printf("Saved 64K RAM dump to /tmp/c64_memdump.bin\n");
             }
             // Also dump IRQ vector and key zero-page/hardware state
-            uint16_t irq_lo = c64->ram->data()[0xFFFE] | (c64->ram->data()[0xFFFF] << 8);
-            uint16_t nmi_lo = c64->ram->data()[0xFFFA] | (c64->ram->data()[0xFFFB] << 8);
+            uint16_t irq_lo = ram_data[0xFFFE] | (ram_data[0xFFFF] << 8);
+            uint16_t nmi_lo = ram_data[0xFFFA] | (ram_data[0xFFFB] << 8);
             // Hardware IRQ vector (from KERNAL RAM copy at $0314/$0315)
-            uint16_t hw_irq = c64->ram->data()[0x0314] | (c64->ram->data()[0x0315] << 8);
+            uint16_t hw_irq = ram_data[0x0314] | (ram_data[0x0315] << 8);
             printf("IRQ vector: $%04X, NMI vector: $%04X, HW IRQ ($0314): $%04X\n", 
                    irq_lo, nmi_lo, hw_irq);
-            printf("CIA1 ICR mask: $%02X, VIC $D01A: $%02X\n",
-                   uint8_t(c64->vicii->regs_[0x1A]),
-                   uint8_t(c64->vicii->regs_[0x1A]));
+            printf("CIA1 ICR: $%02X, VIC $D01A: $%02X\n",
+                   c64->cia1 ? uint8_t(c64->cia1->regs_[0x0D]) : 0xFF,
+                   uint8_t(vicii.regs_[0x1A]));
         }
         
         system->shutdown();

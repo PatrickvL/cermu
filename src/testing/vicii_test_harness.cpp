@@ -405,7 +405,7 @@ static size_t build_test_program(uint8_t* buffer, size_t buffer_size) {
 // ============================================================================
 
 void inject_test_program(C64System* c64) {
-    if (!c64 || !c64->ram) return;
+    if (!c64) return;
 
     uint8_t program[4096];
     size_t size = build_test_program(program, sizeof(program));
@@ -416,10 +416,11 @@ void inject_test_program(C64System* c64) {
     }
 
     // Copy to C64 RAM
-    memcpy(&c64->ram->data()[TEST_LOAD_ADDR], program, size);
+    uint8_t* ram = c64->ram->data();
+    memcpy(&ram[TEST_LOAD_ADDR], program, size);
 
     // Clear results buffer
-    memset(&c64->ram->data()[RESULTS_BASE], 0, RESULTS_MAX * RESULT_ENTRY_SIZE);
+    memset(&ram[RESULTS_BASE], 0, RESULTS_MAX * RESULT_ENTRY_SIZE);
 
     printf("VICII-TEST: Injected %zu bytes at $%04X\n", size, TEST_LOAD_ADDR);
 }
@@ -436,10 +437,11 @@ void harness_init(vicii_test_state_t* state) {
 bool harness_poll(vicii_test_state_t* state, C64System* c64) {
     if (!state->active || !c64 || !c64->ram) return false;
 
+    uint8_t* ram = c64->ram->data();
     state->frames_run++;
 
     // Check done flag
-    if (c64->ram->data()[ZP_DONE_FLAG] == DONE_SIGNAL) {
+    if (ram[ZP_DONE_FLAG] == DONE_SIGNAL) {
         state->all_done = true;
         state->active = false;
         return false;
@@ -448,7 +450,7 @@ bool harness_poll(vicii_test_state_t* state, C64System* c64) {
     // Safety timeout
     if (state->frames_run >= state->max_frames) {
         printf("VICII-TEST: TIMEOUT after %d frames (done_flag=$%02X)\n",
-               state->frames_run, c64->ram->data()[ZP_DONE_FLAG]);
+               state->frames_run, ram[ZP_DONE_FLAG]);
         state->active = false;
         return false;
     }

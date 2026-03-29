@@ -258,15 +258,19 @@ protected:
                        const char* display_name, const char* short_name,
                        const char* category, uint16_t base_address = 0);
 
-    /// Register all factory-created chips from a Board instance.
-    /// Each chip is registered as a borrowed pointer (Board owns them).
+    /// Register all chips from a Board instance.
+    /// Iterates all manifest slots (both value-typed chipset members and
+    /// factory-created owned chips).  Each chip is registered as a borrowed
+    /// pointer — Board owns the lifetimes.
     /// Uses the self-describing register_chip(ChipBase*) path — chips carry
     /// their own display_name, short_name, category, and base_address.
     template<typename BoardT>
     void register_bus_chips(BoardT& board) {
-        for (const auto& chip : board.owned_chips()) {
+        for (size_t i = 0; i < board.slot_count(); ++i) {
+            auto* chip = board.bound_chip(i);
+            if (!chip) continue;
             SystemChip sc;
-            sc.chip = chip.get();
+            sc.chip = chip;
             sc.display_name  = chip->display_name();
             sc.short_name    = chip->short_name();
             sc.category      = chip->category();
@@ -288,13 +292,13 @@ private:
             primary_video_chip_ = &board.video();
         }
     }
-    // Fallback: board has no typed video() — scan owned_chips() for a
+    // Fallback: board has no typed video() — scan all bound slots for a
     // VideoChipBase with a palette (covers C64, VIC-20, C16 where the
-    // video chip is factory-created but not in the Board's Video type).
+    // video chip is a value-typed chipset member or factory-created).
     template<typename B>
     void auto_register_video_palette_(B& board, long) {
-        for (const auto& chip : board.owned_chips()) {
-            if (auto* vc = dynamic_cast<VideoChipBase*>(chip.get())) {
+        for (size_t i = 0; i < board.slot_count(); ++i) {
+            if (auto* vc = dynamic_cast<VideoChipBase*>(board.bound_chip(i))) {
                 if (auto* p = vc->system_palette()) {
                     palette_.set(p, vc->palette_size());
                     primary_video_chip_ = vc;

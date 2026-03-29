@@ -395,21 +395,10 @@ bool C64System::initialize() {
     board_.create_chips(&bus_state_);
     board_.apply(bus_);
 
-    // Retrieve typed convenience pointers (Board owns, these are non-owning)
-    this->ram             = board_.find<RAMChip>();
-    this->cartridge_roml  = board_.find<ROMChip>();
-    this->cartridge_romh  = board_.find<ROMChip>(1);
-    this->basic           = board_.find<ROMChip>(2);
-    this->kernal          = board_.find<ROMChip>(3);
-    this->charrom         = board_.find<ROMChip>(4);
-    this->mos6510         = &board_.cpu();
-    this->vicii           = board_.find<vicii_base_t>();    // factory-created (PAL/NTSC)
-    this->sid             = &board_.sound();
-    this->colorram        = &board_.chips().colorram;
-    this->cia1            = &board_.io();
-    this->cia2            = &board_.chips().cia2;
+    // Convenience pointers — all point into board_.chips() value fields.
+    C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_ASSIGN_POINTER, board_)
 
-    if (!this->mos6510) { cleanup(); return false; }
+    if (!this->cpu) { cleanup(); return false; }
 
     // =========================================================================
     // Post-creation chip initialization (callbacks, timing, etc.)
@@ -495,7 +484,6 @@ bool C64System::initialize() {
     this->cia2->configured_interrupt_bit = BUS_NMI_BIT;
 
     // Initialize CPU and point it at the reset vector
-    auto* cpu = this->mos6510;
     cpu->init();
     cpu->init_io_port();
     cpu->bank_change_fn = cpu_banking_callback;
@@ -580,18 +568,7 @@ void C64System::shutdown() {
         }
 
         // Null out convenience pointers (Board owns the chip lifetimes)
-        this->ram = nullptr;
-        this->cartridge_roml = nullptr;
-        this->cartridge_romh = nullptr;
-        this->basic = nullptr;
-        this->kernal = nullptr;
-        this->charrom = nullptr;
-        this->mos6510 = nullptr;
-        this->vicii = nullptr;
-        this->sid = nullptr;
-        this->colorram = nullptr;
-        this->cia1 = nullptr;
-        this->cia2 = nullptr;
+        C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_NULL_POINTER, unused)
 
         initialized_ = false;
     }
@@ -622,8 +599,7 @@ void C64System::reset() {
         // decoder state (current_handler, half_cycle, opcode_entry).  init() only
         // reinitialises the IO port — it leaves the CPU mid-instruction, which
         // causes a segfault when emulation resumes with an inconsistent pipeline.
-        if (this->mos6510) {
-            auto* cpu = this->mos6510;
+        if (this->cpu) {
             cpu->reset();
             cpu->bank_change_fn = cpu_banking_callback;
             cpu->bank_change_ctx = this;
@@ -723,7 +699,6 @@ bool C64System::check_serial_traps(uint16_t pc) {
 }
 
 bool C64System::serial_trap_attention() {
-    auto* cpu = mos6510;
     uint8_t iecdata = ram->data()[ZP_BSOUR];
 
     if (iecdata == IEC_UNLISTEN) {
@@ -794,7 +769,6 @@ bool C64System::serial_trap_send() {
     auto* drive = find_iec_drive(serial_trap_.active_device);
     if (!drive) return false;
 
-    auto* cpu = mos6510;
     uint8_t iecdata = ram->data()[ZP_BSOUR];
 
     // If no secondary address was sent, default to SA 0
@@ -821,8 +795,6 @@ bool C64System::serial_trap_receive() {
     if (serial_trap_.active_device < 4) return false;
     auto* drive = find_iec_drive(serial_trap_.active_device);
     if (!drive) return false;
-
-    auto* cpu = mos6510;
 
     // If no secondary address was sent, default to SA 0
     if (serial_trap_.trap_secondary == 0) {
@@ -861,8 +833,6 @@ bool C64System::serial_trap_ready() {
     if (serial_trap_.active_device < 4) return false;
     auto* drive = find_iec_drive(serial_trap_.active_device);
     if (!drive) return false;
-
-    auto* cpu = mos6510;
 
     // Fake the serial-ready check: pretend the bus signals are fine
     cpu->set(A, 1);
@@ -906,7 +876,6 @@ void C64System::system_tick() {
         BUS_CLR_BIT(s, BUS_RDY_BIT);
 
     // PHASE 2: CPU PHI2 — instruction execution (direct C++ call, inlineable)
-    auto* cpu = mos6510;
     s = cpu->tick<MOS6510::Phase::PHI2>(s);
 
     // PHASE 3: Memory service — AEC determines CPU vs VIC-II bus ownership
@@ -2069,11 +2038,11 @@ void C64System::memory_init() {
     }
 
     // Cartridge ROMs: not loaded by default (filled with 0xFF if present)
-    if (this->cartridge_roml && this->cartridge_roml->data()) {
-        memset(this->cartridge_roml->data(), 0xFF, c64_constants::BASIC_ROM_SIZE);
+    if (this->roml && this->roml->data()) {
+        memset(this->roml->data(), 0xFF, c64_constants::BASIC_ROM_SIZE);
     }
-    if (this->cartridge_romh && this->cartridge_romh->data()) {
-        memset(this->cartridge_romh->data(), 0xFF, c64_constants::BASIC_ROM_SIZE);
+    if (this->romh && this->romh->data()) {
+        memset(this->romh->data(), 0xFF, c64_constants::BASIC_ROM_SIZE);
     }
 }
 

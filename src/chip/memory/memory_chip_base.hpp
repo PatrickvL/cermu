@@ -94,10 +94,17 @@ public:
     /// Human-readable label for the memory type enum value.
     static const char* type_label(MemoryType t);
 
+    // --- Buffer binding (called by Board::bind_chip for value-typed chips) ---
+    void on_bind_buffer(uint8_t* buffer, size_t size,
+                        const char* label, uint16_t base) override;
+
 protected:
     // Simple constructors for subclasses that manage their own storage
-    // (e.g. MOS2114 color RAM).
+    // (e.g. MOS2114 color RAM).  Public default needed for value-typed
+    // chip fields in system chipset structs.
+public:
     MemoryChipBase() { category_ = "Memory"; }
+protected:
     explicit MemoryChipBase(ChipInfo info) : ChipBase(std::move(info)) { category_ = "Memory"; }
 
 private:

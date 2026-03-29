@@ -132,6 +132,18 @@ void MemoryChipBase::bind(uint8_t* external) {
     owns_data_ = false;
 }
 
+void MemoryChipBase::on_bind_buffer(uint8_t* buffer, size_t size,
+                                    const char* label, uint16_t base) {
+    // For default-constructed value-type chips: set size and metadata first.
+    // For factory-constructed chips: size is already set, only bind() is needed.
+    if (size_bytes_ == 0) {
+        size_bytes_ = size;
+        if (label) { set_display_name(label); set_short_name(label); }
+        set_base_address(base);
+    }
+    bind(buffer);
+}
+
 void MemoryChipBase::release() {
     if (owns_data_) free(data_);
     data_ = nullptr;

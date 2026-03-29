@@ -7,7 +7,12 @@
 #include <cstring>
 
 bool c64_patch_skip_memtest(C64System* c64) {
-    if (!c64 || !c64->kernal || !c64->kernal->data()) {
+    if (!c64) {
+        printf("C64: WARNING — cannot patch KERNAL (system is null)\n");
+        return false;
+    }
+
+    if (!c64->kernal || !c64->kernal->data()) {
         printf("C64: WARNING — cannot patch KERNAL (ROM not loaded)\n");
         return false;
     }

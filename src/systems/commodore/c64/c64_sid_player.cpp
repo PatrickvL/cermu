@@ -285,16 +285,17 @@ static void build_init_stub(uint8_t* ram,
 
 void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
                         const program_data_t* prog, uint16_t subtune) {
-    if (!sid || !c64 || !c64->ram) return;
+    if (!sid || !c64 || !c64->ram || !c64->cpu) return;
+    if (!c64->ram->data()) return;
 
     const char* type_str = (sid->type == SID_TYPE_RSID) ? "RSID" : "PSID";
-    printf("C64: %s loader — \"%s\" by %s\n", type_str, sid->name, sid->author);
+    printf("C64: %s loader \u2014 \"%s\" by %s\n", type_str, sid->name, sid->author);
     printf("C64: load=$%04X init=$%04X play=$%04X songs=%u default=%u\n",
            sid->load_addr, sid->init_addr, sid->play_addr,
            sid->num_songs, sid->start_song);
 
     uint8_t* ram = c64->ram->data();
-    auto* cpu = c64->mos6510;
+    auto& cpu = *c64->cpu;
 
     // ---- Step 1: Write tune payload to C64 RAM ----
     if (prog && prog->data && prog->data_size > 0) {
@@ -337,9 +338,7 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
     // ---- Step 4: Write SID info page to screen RAM ----
     uint8_t* screen_ram = &ram[c64_constants::SCREEN_RAM_BASE];
     uint8_t* color_ram = c64->colorram ? c64->colorram->memory : nullptr;
-    if (color_ram) {
-        c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
-    }
+    c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
 
     // Switch VIC-II to uppercase/lowercase character set so metadata
     // text renders in mixed case.  $D018=$16 → screen at $0400,
@@ -347,9 +346,10 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
     // Must update both the register byte AND the internal memory mapping that
     // the VIC-II rendering actually uses (regs_[] is just storage).
     if (c64->vicii) {
-        c64->vicii->regs_[0x18] = 0x16;
-        c64->vicii->memory.vm_base = ((uint16_t)0x16 & 0xF0) << 6;   // $0400
-        c64->vicii->memory.cb_base = ((uint16_t)0x16 & 0x0E) << 10;  // $1800
+        vicii_base_t& vicii_chip = *c64->vicii;
+        vicii_chip.regs_[0x18] = 0x16;
+        vicii_chip.memory.vm_base = ((uint16_t)0x16 & 0xF0) << 6;   // $0400
+        vicii_chip.memory.cb_base = ((uint16_t)0x16 & 0x0E) << 10;  // $1800
     }
 
     // ---- Step 5: Inject 6502 player stub ----
@@ -364,12 +364,12 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
            needs_timer_irq ? ", self-contained IRQ at $0390" : " (init-only)");
 
     // ---- Step 6: Set CPU to execute the stub ----
-    cpu->set(A, (uint8_t)subtune);
-    cpu->set(X, 0);
-    cpu->set(Y, 0);
-    cpu->set(SPL, 0xFF);    // Reset stack
-    cpu->set(PC, STUB_BASE);
-    cpu->transition_to_fetch();  // Reset pipeline for clean fetch
+    cpu.set(A, (uint8_t)subtune);
+    cpu.set(X, 0);
+    cpu.set(Y, 0);
+    cpu.set(SPL, 0xFF);    // Reset stack
+    cpu.set(PC, STUB_BASE);
+    cpu.transition_to_fetch();  // Reset pipeline for clean fetch
 
     printf("C64: PC set to $%04X — subtune %u/%u starting\n",
            STUB_BASE, subtune + 1, sid->num_songs);
@@ -382,10 +382,11 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
 void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
                              const uint8_t* payload, size_t payload_size,
                              uint16_t subtune) {
-    if (!sid || !c64 || !c64->ram) return;
+    if (!sid || !c64 || !c64->ram || !c64->cpu) return;
+    if (!c64->ram->data()) return;
 
     uint8_t* ram = c64->ram->data();
-    auto* cpu = c64->mos6510;
+    auto& cpu = *c64->cpu;
 
     // ---- Silence SID: reset all voice state ----
     if (c64->sid) {
@@ -413,9 +414,7 @@ void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
     // ---- Update info page ----
     uint8_t* screen_ram = &ram[c64_constants::SCREEN_RAM_BASE];
     uint8_t* color_ram = c64->colorram ? c64->colorram->memory : nullptr;
-    if (color_ram) {
-        c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
-    }
+    c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
 
     // Switch VIC-II to uppercase/lowercase character set so metadata
     // text renders in mixed case.  $D018=$16 → screen at $0400,
@@ -423,9 +422,10 @@ void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
     // Must update both the register byte AND the internal memory mapping that
     // the VIC-II rendering actually uses (regs_[] is just storage).
     if (c64->vicii) {
-        c64->vicii->regs_[0x18] = 0x16;
-        c64->vicii->memory.vm_base = ((uint16_t)0x16 & 0xF0) << 6;   // $0400
-        c64->vicii->memory.cb_base = ((uint16_t)0x16 & 0x0E) << 10;  // $1800
+        vicii_base_t& vicii_chip = *c64->vicii;
+        vicii_chip.regs_[0x18] = 0x16;
+        vicii_chip.memory.vm_base = ((uint16_t)0x16 & 0xF0) << 6;   // $0400
+        vicii_chip.memory.cb_base = ((uint16_t)0x16 & 0x0E) << 10;  // $1800
     }
 
     // ---- Step 5: Inject 6502 player stub ----
@@ -437,12 +437,12 @@ void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
     build_init_stub(ram, sid, subtune, timer_period, needs_timer_irq);
 
     // ---- Reset CPU to start of stub ----
-    cpu->set(A, (uint8_t)subtune);
-    cpu->set(X, 0);
-    cpu->set(Y, 0);
-    cpu->set(SPL, 0xFF);
-    cpu->set(PC, STUB_BASE);
-    cpu->transition_to_fetch();
+    cpu.set(A, (uint8_t)subtune);
+    cpu.set(X, 0);
+    cpu.set(Y, 0);
+    cpu.set(SPL, 0xFF);
+    cpu.set(PC, STUB_BASE);
+    cpu.transition_to_fetch();
 
     printf("C64: Switched to subtune %u/%u\n", subtune + 1, sid->num_songs);
 }

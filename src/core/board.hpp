@@ -104,7 +104,13 @@ public:
         if (chip) chip->set_board(this);
         bus_map_.bind_chip(slot_index, chip);
         auto& s = bus_map_.slot(slot_index);
-        return s.num_pages > 0 ? chip_buffer(s.base_id) : nullptr;
+        uint8_t* buf = s.num_pages > 0 ? chip_buffer(s.base_id) : nullptr;
+        // Auto-bind buffer for value-typed memory chips (RAMChip, ROMChip)
+        if (chip && buf) {
+            chip->on_bind_buffer(buf, s.byte_size, s.label,
+                                 static_cast<uint16_t>(s.base_addr));
+        }
+        return buf;
     }
 
     // =====================================================================
@@ -348,9 +354,17 @@ public:
     }
 
     // =====================================================================
-    // §4.4c  Owned chip access (for registration / lifetime)
+    // §4.4c  Chip access — bound slots + owned chips
     // =====================================================================
 
+    /// Number of manifest slots (value-typed + factory-created).
+    [[nodiscard]] size_t slot_count() const noexcept { return bus_map_.slot_count(); }
+
+    /// Non-owning pointer to the chip bound at a manifest slot (nullptr if unbound).
+    [[nodiscard]] ChipBase* bound_chip(size_t i) noexcept { return bus_map_.slot(i).chip; }
+    [[nodiscard]] const ChipBase* bound_chip(size_t i) const noexcept { return bus_map_.slot(i).chip; }
+
+    /// Factory-created chips only — owned here for lifetime management.
     [[nodiscard]] std::span<const std::unique_ptr<ChipBase>> owned_chips() const noexcept {
         return owned_chips_;
     }

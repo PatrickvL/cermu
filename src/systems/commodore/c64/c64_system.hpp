@@ -24,19 +24,22 @@
 
 class LightpenDevice;
 
-// Value-typed chips: CPU + SID + CIA1 + Color RAM + CIA2.
-// VIC-II stays factory-created (polymorphic vicii_base_t, PAL/NTSC variant).
-struct C64Chipset : CoreChips<MOS6510, NoChip, mos6581_t, mos6526_t> {
-    MOS2114    colorram;
-    mos6526_t  cia2;
+// All C64 chips as value-typed fields, generated from C64_FOR_EACH_SYSTEM_CHIP.
+// Buffer-backed chips (RAMChip, ROMChip) get their flat-memory buffer via
+// Board::bind_chip() → on_bind_buffer().  MMIO chips (size==0) are bound
+// without a buffer.  All are value members — no heap allocation.
+struct C64Chipset {
+    C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
 
-    template<typename Board> void bind_extras(Board& board) {
-        board.bind_chip(board.template find_index<MOS2114>(),    &colorram);
-        board.bind_chip(board.template find_index<mos6526_t>(1), &cia2);
+    // cpu_type alias required by Board::bind_chipset()
+    using cpu_type = MOS6510;
+
+    template<typename BoardT> void bind_extras(BoardT& board) {
+        // Bind all chips except CPU (which Board::bind_chipset handles)
+        C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_BY_SLOT, board)
     }
-    template<typename Board> void register_extras(Board& board) {
-        board.register_component(&colorram);
-        board.register_component(&cia2);
+    template<typename BoardT> void register_extras(BoardT& board) {
+        C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_REGISTER_COMPONENT, board)
     }
 };
 
@@ -96,24 +99,14 @@ public:
     //
 
     // =========================================================================
-    // CHIP INSTANCES
+    // CHIP INSTANCES — convenience pointers into board_.chips() value fields.
+    // Generated from C64_FOR_EACH_SYSTEM_CHIP; non-manifest chips are manual.
     // =========================================================================
 public:
-    MOS6510* mos6510 = nullptr;         // MOS6510 CPU instance
-    RAMChip* ram = nullptr;          // RAM memory $0000-$FFFF (64KB)
-    ROMChip* cartridge_roml = nullptr; // Cartridge ROM Low $8000-$9FFF (8KB)
-    ROMChip* cartridge_romh = nullptr; // Cartridge ROM High $A000-$BFFF (8KB)
-    ROMChip* basic = nullptr;        // Basic ROM $A000-$BFFF (8KB)
-    ROMChip* charrom = nullptr;      // Character ROM $D000-$DFFF (4KB) when CHAREN=0
-    vicii_base_t* vicii = nullptr;      // VIC-II base (traits set at init for PAL/NTSC)
-    mos6581_t* sid = nullptr;           // MOS6581 SID sound chip ($D400-$D7FF, 1KB)
-    MOS2114* colorram = nullptr;        // Color RAM (1KB at $D800-$DBFF)
-    mos6526_t* cia1 = nullptr;          // MOS6526 CIA 1 (BUS_MASK_IRQ) ($DC00-$DDFF, 256 bytes)
-    mos6526_t* cia2 = nullptr;          // MOS6526 CIA 2 (BUS_MASK_NMI) ($DD00-$DFFF, 256 bytes)
+    C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_POINTER, unused)
     commodore_keyboard_t* keyboard = nullptr; // Keyboard matrix (connected to CIA1)
     void* io1 = nullptr;               // Cartridge I/O 1 ($DE00-$DEFF)
     void* io2 = nullptr;               // Cartridge I/O 2 ($DF00-$DFFF)
-    ROMChip* kernal = nullptr;       // Kernal ROM $E000-$FFFF (8KB)
 
     // =========================================================================
     // PLA debug accessors (for PLA906114 system-specific GUI)

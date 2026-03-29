@@ -415,7 +415,7 @@ static TickLoopResult tick_loop_protected(C64System* c64, uint32_t max_cycles, i
     r.reason = 1; // timeout by default
     
     __try {
-        auto* cpu = c64->mos6510;
+        auto* cpu = c64->cpu;
         uint16_t last_pc = cpu->get(PC);
         uint32_t pc_stable_count = 0;
         
@@ -455,8 +455,8 @@ static TickLoopResult tick_loop_protected(C64System* c64, uint32_t max_cycles, i
                             r.cycles = i + 1;
                             r.loop_pc = current_pc;
                             // Get border color
-                            if (c64->vicii) {
-                                vicii_base_t* vicii = static_cast<vicii_base_t*>(c64->vicii);
+                            if (c64) {
+                                vicii_base_t* vicii = c64->vicii;
                                 r.border_color = vicii->regs_[vicii_regs::EC] & 0x0F;
                             }
                             return r;
@@ -635,7 +635,7 @@ TestEnvironment TestFramework::detect_test_environment(const TestDescriptor& tes
 
 // Execute KERNAL boot sequence
 bool TestFramework::execute_kernal_boot(C64System* c64) {
-    auto* cpu = c64->mos6510;
+    auto* cpu = c64->cpu;
     
     // Read KERNAL reset vector from ROM via the new MemoryBus
     uint8_t reset_low  = c64->read_memory(0xFFFC);
@@ -685,7 +685,7 @@ bool TestFramework::execute_kernal_boot(C64System* c64) {
 
 // Execute BASIC boot sequence (KERNAL + BASIC initialization)
 bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& test, uint16_t sys_addr) {
-    auto* cpu = c64->mos6510;
+    auto* cpu = c64->cpu;
     
     if (verbose_) {
         printf("  Executing BASIC boot sequence...\n");
@@ -802,7 +802,7 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
     c64->ram->data()[0x01] = 0x37;  // Data: LORAM=1, HIRAM=1, CHAREN=1
     c64->on_banking_change(0x07);
     
-    auto* cpu = c64->mos6510;
+    auto* cpu = c64->cpu;
     if (!cpu) {
         return false;
     }
@@ -888,7 +888,7 @@ TestProtocol TestFramework::detect_test_protocol(const TestDescriptor& test, C64
     
     // Check for BASIC two-stage loader pattern
     RAMChip* ram = c64->ram;
-    auto* cpu = c64->mos6510;
+    auto* cpu = c64->cpu;
     uint16_t pc = cpu->get(PC);
     
     // BASIC two-stage loaders start at $0801 and have SYS command
@@ -954,7 +954,7 @@ uint16_t TestFramework::calculate_basic_entry_point(RAMChip* ram, uint16_t sys_a
 }
 // Detect if CPU is stuck in infinite loop and check border color
 bool TestFramework::detect_infinite_loop(C64System* c64, uint16_t& loop_pc, uint32_t check_cycles) {
-    auto* cpu = c64->mos6510;
+    auto* cpu = c64->cpu;
     uint16_t pc = cpu->get(PC);
     
     // Run for check_cycles and see if PC stays at same address
@@ -982,11 +982,11 @@ bool TestFramework::detect_infinite_loop(C64System* c64, uint16_t& loop_pc, uint
 
 // Get current VIC-II border color
 uint8_t TestFramework::get_border_color(C64System* c64) {
-    if (!c64 || !c64->vicii) {
+    if (!c64) {
         return 0;
     }
     
-    vicii_base_t* vicii = static_cast<vicii_base_t*>(c64->vicii);
+    vicii_base_t* vicii = c64->vicii;
     // Border color is at register $D020 (vicii_regs::EC = register 32)
     return vicii->regs_[vicii_regs::EC] & 0x0F;  // Only lower 4 bits are color
 }
@@ -1003,7 +1003,7 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
     uint32_t max_cycles = test.timeout_cycles;
     uint32_t cycles = 0;
     
-    auto* cpu = c64->mos6510;
+    auto* cpu = c64->cpu;
     uint16_t start_pc = cpu->get(PC);
     
     if (verbose_) {
@@ -1254,7 +1254,7 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
     debug_intercept_.value = 0;
     
     // Get initial PC for diagnostics
-    auto* cpu = c64->mos6510;
+    auto* cpu = c64->cpu;
     uint16_t start_pc = cpu->get(PC);
     uint16_t last_pc = start_pc;
     bool pc_changed = false;
@@ -1401,7 +1401,7 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
     result.cycles_executed = cycles;
     
     // Verify VIC-II chip is available
-    vicii_base_t* vicii = static_cast<vicii_base_t*>(c64->vicii);
+    vicii_base_t* vicii = c64->vicii;
     if (!vicii) {
         result.status = TestStatus::ERROR;
         result.message = "VIC-II chip not available";
