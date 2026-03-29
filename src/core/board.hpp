@@ -51,6 +51,20 @@ public:
     static constexpr size_t kPageSize = Bus::kPageSize;
     static constexpr size_t kPageBits = Spec::PageBits;
 
+    // Shift-addressable optimization: when the Spec advertises it, chip-id
+    // to flat_mem offset is `id << kShiftBits` instead of a table lookup.
+    // Falls back to false / 0 for Specs that don't define the field.
+    static constexpr bool   kShiftAddressable = []() {
+        if constexpr (requires { Spec::ShiftAddressable; })
+            return Spec::ShiftAddressable;
+        else return false;
+    }();
+    static constexpr size_t kShiftBits = []() {
+        if constexpr (requires { Spec::ShiftBankBits; })
+            return Spec::ShiftBankBits;
+        else return size_t(0);
+    }();
+
     // =====================================================================
     // §4.1  Construction from a ChipManifest
     // =====================================================================
@@ -66,6 +80,10 @@ public:
         flat_mem_.assign(manifest.buffer_bytes(kPageBits), uint8_t(0xFF));
 
         // Precompute per-chip-id byte offsets for chip_buffer().
+        //
+        // When shift-addressable, offsets are implicit (id << kShiftBits)
+        // and this table is unused.  We still populate it for correctness
+        // if non-shift callers exist, but the hot path skips it.
         const size_t total_ids = manifest.total_ids(kPageBits);
         chip_byte_offsets_.resize(total_ids);
         size_t byte_off = 0;
@@ -519,12 +537,19 @@ public:
     // =====================================================================
 
     // Pointer to the start of the chip's region in the flat mem.
+    // When shift-addressable, computes offset as id << kShiftBits (no table).
     [[nodiscard]] uint8_t* chip_buffer(ChipId base_id) noexcept {
-        return flat_mem_.data() + chip_byte_offsets_[size_t(base_id)];
+        if constexpr (kShiftAddressable)
+            return flat_mem_.data() + (size_t(base_id) << kShiftBits);
+        else
+            return flat_mem_.data() + chip_byte_offsets_[size_t(base_id)];
     }
 
     [[nodiscard]] const uint8_t* chip_buffer(ChipId base_id) const noexcept {
-        return flat_mem_.data() + chip_byte_offsets_[size_t(base_id)];
+        if constexpr (kShiftAddressable)
+            return flat_mem_.data() + (size_t(base_id) << kShiftBits);
+        else
+            return flat_mem_.data() + chip_byte_offsets_[size_t(base_id)];
     }
 
     // Total size of a chip's buffer region in bytes.
