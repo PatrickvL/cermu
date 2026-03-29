@@ -57,6 +57,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <numeric>
 #include <span>
 #include <string_view>
 #include <type_traits>
@@ -377,6 +378,120 @@ struct ChipManifest {
         return size_t(1) << num_overlay_groups();
     }
 
+    // ── Shift-addressable chip-id assignment ───────────────────────────────
+    //
+    // When every buffer chip's size is a power of two and all sizes share a
+    // power-of-two GCD (the "stride"), chip-id → flat_mem offset can be
+    // computed as `id << log2(stride)` instead of a table lookup.
+    //
+    // To minimise MaxChipId (and thereby page-table width), buffer chips are
+    // sorted by size ascending — the largest chip is assigned last and its
+    // banks occupy the highest IDs.  Each chip consumes ceil(size / stride)
+    // consecutive IDs starting at the prefix sum of all preceding chips'
+    // ceil(size / stride).
+    //
+    // Example (C64, stride = 4096):
+    //
+    //   CHARROM  4 KB  →  1 ID  → base_id = 0
+    //   ROML     8 KB  →  2 IDs → base_id = 1
+    //   ROMH     8 KB  →  2 IDs → base_id = 3
+    //   BASIC    8 KB  →  2 IDs → base_id = 5
+    //   KERNAL   8 KB  →  2 IDs → base_id = 7
+    //   RAM     64 KB  → 16 IDs → base_id = 9
+    //
+    // Only the base_id for each chip appears in page tables; the address
+    // mask handles intra-chip bank selection.  MaxChipId = 9 (not 24),
+    // because only the base_id is stored — the 16 RAM banks are implicit
+    // via masking.
+    //
+    // The technique requires:  GCD of all buffer chip sizes is a power of
+    // two.  This is checked by has_shift_addressable_banks().
+
+    // GCD of all buffer chip sizes (0 if no buffer chips exist).
+    [[nodiscard]] constexpr size_t buffer_size_gcd() const noexcept {
+        size_t g = 0;
+        for (size_t i = 0; i < N; ++i)
+            if (chips[i].size_bytes > 0)
+                g = g == 0 ? chips[i].size_bytes : std::gcd(g, chips[i].size_bytes);
+        return g;
+    }
+
+    // True when chip-id → offset can be a shift instead of a table lookup.
+    [[nodiscard]] constexpr bool has_shift_addressable_banks() const noexcept {
+        const size_t g = buffer_size_gcd();
+        return g > 0 && std::has_single_bit(g);
+    }
+
+    // log2(stride) — valid only when has_shift_addressable_banks() is true.
+    [[nodiscard]] constexpr size_t shift_bank_bits() const noexcept {
+        return std::bit_width(buffer_size_gcd()) - 1;
+    }
+
+    // Size-sorted order of buffer chip slot indices (ascending by size,
+    // stable by original position for equal sizes).
+    // First `n` entries are valid; remainder are 0.  Call buffer_chip_count()
+    // to get `n`.
+    [[nodiscard]] constexpr std::array<size_t, N> size_sorted_order() const noexcept {
+        std::array<size_t, N> order{};
+        size_t n = 0;
+        for (size_t i = 0; i < N; ++i)
+            if (chips[i].size_bytes > 0) order[n++] = i;
+        // Insertion sort — stable, constexpr-friendly
+        for (size_t i = 1; i < n; ++i) {
+            size_t key = order[i];
+            size_t j = i;
+            while (j > 0 && chips[order[j - 1]].size_bytes > chips[key].size_bytes) {
+                order[j] = order[j - 1];
+                --j;
+            }
+            order[j] = key;
+        }
+        return order;
+    }
+
+    // Number of buffer-backed chips (size_bytes > 0).
+    [[nodiscard]] constexpr size_t buffer_chip_count() const noexcept {
+        size_t n = 0;
+        for (size_t i = 0; i < N; ++i)
+            if (chips[i].size_bytes > 0) ++n;
+        return n;
+    }
+
+    // Base chip-id for slot `chip_index` under the size-sorted assignment.
+    // Each chip's base_id is the prefix sum of stride-slots consumed by all
+    // preceding chips in the sorted order.  Only buffer chips participate.
+    // Returns 0 for MMIO-only chips (they have no chip id).
+    [[nodiscard]] constexpr size_t sorted_base_id(size_t chip_index) const noexcept {
+        if (chips[chip_index].size_bytes == 0) return 0;
+        const size_t stride = buffer_size_gcd();
+        if (stride == 0) return 0;
+        const auto order = size_sorted_order();
+        const size_t n = buffer_chip_count();
+        size_t id = 0;
+        for (size_t pos = 0; pos < n; ++pos) {
+            if (order[pos] == chip_index) return id;
+            id += chips[order[pos]].size_bytes / stride;
+        }
+        return id;
+    }
+
+    // Byte offset of slot `chip_index` in flat_mem under sorted layout.
+    // Equivalent to sorted_base_id(chip_index) * stride.
+    [[nodiscard]] constexpr size_t sorted_byte_offset(size_t chip_index) const noexcept {
+        return sorted_base_id(chip_index) * buffer_size_gcd();
+    }
+
+    // Total stride-slots across all buffer chips (= max_chip_id + 1 in the
+    // sorted scheme, assuming each chip only uses its base_id in page tables).
+    [[nodiscard]] constexpr size_t sorted_total_stride_slots() const noexcept {
+        const size_t stride = buffer_size_gcd();
+        if (stride == 0) return 0;
+        size_t total = 0;
+        for (size_t i = 0; i < N; ++i)
+            total += chips[i].size_bytes / stride;
+        return total;
+    }
+
     // ── BusSpec derivation helpers ─────────────────────────────────────────
 
     // Count of MMIO-only slots (size_bytes == 0).
@@ -571,6 +686,19 @@ struct ManifestBusSpec {
     // Masked sub-tables — auto-detected from sub-page MMIO slots.
     static constexpr size_t MaxMaskedSubTables = Manifest.masked_sub_count(PgBits);
     static constexpr size_t MaxMaskedRegions   = Manifest.max_masked_regions_per_sub(PgBits);
+
+    // ── Shift-addressable chip-id optimization ─────────────────────────
+    //
+    // When all buffer chip sizes share a power-of-two GCD ("stride"),
+    // Board can compute flat_mem offsets as `id << ShiftBankBits` instead
+    // of indexing a chip_byte_offsets_[] table.  Chip IDs are assigned in
+    // ascending chip-size order so the largest chip (most banks) uses the
+    // highest IDs, minimising the MaxChipId that appears in page tables.
+    //
+    // When not shift-addressable, Board falls back to the offset table.
+    //
+    static constexpr bool   ShiftAddressable = Manifest.has_shift_addressable_banks();
+    static constexpr size_t ShiftBankBits    = ShiftAddressable ? Manifest.shift_bank_bits() : 0;
 };
 
 
