@@ -163,7 +163,8 @@ bus_state_t op_swi2(bus_state_t pins) {
 }
 
 // ========================================================================
-// CMPD — Compare D (16-bit)
+// CMPD/CMPY — Compare 16-bit register (immediate hand-written,
+//             direct/indexed/extended via macros below)
 // ========================================================================
 
 bus_state_t op_cmpd_imm(bus_state_t pins) {
@@ -177,6 +178,24 @@ bus_state_t op_cmpd_imm(bus_state_t pins) {
         uint16_t val = (static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins);
         regs_[PC]++;
         alu_cmp16(regs_[D], val);
+        transition_to_fetch();
+        return pins;
+    }
+    default: transition_to_fetch(); return pins;
+    }
+}
+
+bus_state_t op_cmpy_imm(bus_state_t pins) {
+    switch (step_++) {
+    case 0: return bus_setup_read(pins, regs_[PC]);
+    case 1:
+        data_hi_ = bus_read_data(pins);
+        regs_[PC]++;
+        return bus_setup_read(pins, regs_[PC]);
+    case 2: {
+        uint16_t val = (static_cast<uint16_t>(data_hi_) << 8) | bus_read_data(pins);
+        regs_[PC]++;
+        alu_cmp16(regs_[Y], val);
         transition_to_fetch();
         return pins;
     }
