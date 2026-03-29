@@ -1,9 +1,7 @@
 #pragma once
 
 #include <cstdint>
-
 #include <cstddef>
-#include "core/config/path_discovery.hpp"
 
 enum vicii_standard_t {
     VIC_PAL,   // PAL timing standard
@@ -33,23 +31,12 @@ struct c64_test_binary_config_t {
 };
 
 /**
- * ROM file configuration structure.
- * Holds paths to required ROM files with multiple alternatives per ROM type.
- */
-struct rom_config_t {
-    const char* basic_rom_filenames;    // Pipe-separated filename alternatives
-    const char* kernal_rom_filenames;   // Pipe-separated filename alternatives
-    const char* chargen_rom_filenames;  // Pipe-separated filename alternatives
-};
-
-/**
  * C64 system configuration structure.
  * Centralizes C64-specific settings (video standard, ROM config, test mode).
  */
 struct c64_config_t {
     // System configuration
     vicii_standard_t vicii_standard;
-    rom_config_t* rom_config;    // Optional ROM configuration (NULL = use defaults)
     
     // Test/initialization mode
     c64_test_mode_t test_mode;   // How to initialize RAM at startup
@@ -62,10 +49,4 @@ struct c64_config_t {
     // Methods
     void init_defaults();
 };
-
-/**
- * Get default ROM configuration with common file paths.
- * Returns a static configuration with typical ROM file locations.
- */
-const rom_config_t* system_config_get_default_roms(void);
 

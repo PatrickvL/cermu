@@ -31,7 +31,6 @@
 #include "systems/commodore/c64/c64_pla_chip.hpp"
 #include "core/chip.hpp"
 #include "chip/memory/memory_chip.hpp"
-#include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
 #include "systems/commodore/c64/c64_keyboard_matrix.hpp"
 #include "devices/input/joystick_device.hpp"
@@ -1983,13 +1982,6 @@ void C64System::write_memory(uint16_t addr, uint8_t value) {
 // ============================================================================
 
 void C64System::memory_init() {
-    // Use default ROM configuration
-    const rom_config_t* rom_config = system_config_get_default_roms();
-
-    // Discover ROM root path for C64 system
-    char rom_root_path[1024];
-    bool rom_root_found = system_config_discover_rom_root("c64", rom_root_path, sizeof(rom_root_path));
-
     // -------------------------------------------------------------------------
     // Initialize RAM (normal boot: clear to zero)
     // -------------------------------------------------------------------------
@@ -2008,33 +2000,13 @@ void C64System::memory_init() {
     }
 
     // -------------------------------------------------------------------------
-    // Load ROMs from files
+    // Load ROMs from manifest metadata (filenames in C64_FOR_EACH_SYSTEM_CHIP)
     // -------------------------------------------------------------------------
-    struct { ROMChip* rom; const char* filenames; uint16_t size; const char* name; } roms[] = {
-        { this->basic,   rom_config ? rom_config->basic_rom_filenames   : nullptr, c64_constants::BASIC_ROM_SIZE, "BASIC" },
-        { this->kernal,  rom_config ? rom_config->kernal_rom_filenames  : nullptr, c64_constants::KERNAL_ROM_SIZE, "KERNAL" },
-        { this->charrom, rom_config ? rom_config->chargen_rom_filenames : nullptr, c64_constants::CHAR_ROM_SIZE, "Character" },
-    };
-
-    for (auto& r : roms) {
-        if (!r.rom || !r.rom->data()) {
-            if (r.rom) printf("Warning: %s ROM has no allocated memory\n", r.name);
-            continue;
-        }
-        printf("[ROM-INIT] Processing %s ROM (size=%u memory=%p)\n", r.name, r.size, (void*)r.rom->data());
-
-        bool loaded = false;
-        if (rom_root_found && r.filenames) {
-            loaded = rom_loader_load_from_root(rom_root_path, r.filenames, r.size,
-                                               r.rom->data(), r.size);
-            if (!loaded) printf("Warning: Failed to load %s ROM\n", r.name);
-        } else if (!rom_root_found) {
-            printf("Warning: ROM root not found, skipping %s ROM loading\n", r.name);
-        }
-
-        if (!loaded) {
-            memset(r.rom->data(), 0xFF, r.size);
-        }
+    char rom_root_path[1024];
+    if (system_config_discover_rom_root("c64", rom_root_path, sizeof(rom_root_path))) {
+        board_.load_roms(rom_root_path, "C64");
+    } else {
+        printf("C64: ROM root not found, skipping ROM loading\n");
     }
 
     // Cartridge ROMs: not loaded by default (filled with 0xFF if present)
