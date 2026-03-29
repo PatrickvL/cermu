@@ -35,8 +35,10 @@ struct C64Chipset {
     using cpu_type = MOS6510;
 
     template<typename BoardT> void bind_extras(BoardT& board) {
-        // Bind all chips except CPU (which Board::bind_chipset handles)
-        C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_BY_SLOT, board)
+        // Bind all chips except CPU (which Board::bind_chipset handles).
+        // Sequential counter matches manifest array order.
+        size_t slot_idx_ = 0;
+        C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board)
     }
     template<typename BoardT> void register_extras(BoardT& board) {
         C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_REGISTER_COMPONENT, board)

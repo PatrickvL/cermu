@@ -12,9 +12,15 @@
 
 // ── Commodore 64 ──────────────────────────────────────────────────────────────
 //
-// Direct chip ids map to the manifest-derived flat-memory slots used by the
-// current C64 declaration. Keep enough headroom here for all direct chips,
-// independent of their row order in the manifest.
+// With page banking (bank_size=0, effective=4096), each buffer chip gets
+// ceil(size / 4096) consecutive chip IDs.  Sorted by size ascending:
+//
+//   CHARROM  4 KB  →  1 ID  → base_id = 0     (IDs  0)
+//   ROML     8 KB  →  2 IDs → base_id = 1     (IDs  1-2)
+//   ROMH     8 KB  →  2 IDs → base_id = 3     (IDs  3-4)
+//   BASIC    8 KB  →  2 IDs → base_id = 5     (IDs  5-6)
+//   KERNAL   8 KB  →  2 IDs → base_id = 7     (IDs  7-8)
+//   RAM     64 KB  → 16 IDs → base_id = 9     (IDs  9-24)
 //
 // EnablePartialBus is NOT set: the MOS 2114 colour RAM's 4-bit behaviour is
 // handled outside the bus (via the I/O register-file handler on the CPU side,
@@ -30,12 +36,16 @@ struct C64BusSpec {
     static constexpr size_t AddressBits         = 16;
     static constexpr size_t PageBits            = 12;   // 4 KB pages → 16 pages
     static constexpr size_t NumViewers          = 2;    // CPU=0, VIC-II=1
-    static constexpr size_t MaxChipId           = 15;   // keep generous headroom for manifest-derived direct ids
-    static constexpr size_t MaxWriteChipId      = 15;
+    static constexpr size_t MaxChipId           = 24;   // 25 bank IDs (CHARROM..RAM with page banking)
+    static constexpr size_t MaxWriteChipId      = 24;
     static constexpr bool   EnableMmio          = true;
     static constexpr size_t MaxMmioHandlers     = 8;    // VIC-II, SID, ColorRAM, CIA1, CIA2, I/O1, I/O2, + spare
     static constexpr size_t MaxIndexedSubTables = 1;    // one sub-table: the I/O page
     static constexpr size_t IndexedSubBits      = 4;    // 16 × 256 B entries
+
+    // Shift-addressable: flat_mem offset = chip_id << 12 (no table lookup).
+    static constexpr bool   ShiftAddressable    = true;
+    static constexpr size_t ShiftBankBits       = 12;   // 4 KB stride
 
     enum ViewerId : size_t { Cpu = 0, Vic = 1 };
 };
