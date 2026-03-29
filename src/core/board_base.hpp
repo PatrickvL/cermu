@@ -130,7 +130,12 @@ public:
     /// Public so that Chips::register_extras() can add extra value-typed
     /// chips from outside the class hierarchy.
     void register_component(ComponentBase* c) {
-        if (c) components_.push_back(c);
+        if (!c) return;
+        // Avoid duplicate entries (can happen when visitor macros
+        // register chips that bind_chipset() already registered).
+        for (auto* existing : components_)
+            if (existing == c) return;
+        components_.push_back(c);
     }
 
 protected:

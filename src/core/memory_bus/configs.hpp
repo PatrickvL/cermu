@@ -12,9 +12,9 @@
 
 // ── Commodore 64 ──────────────────────────────────────────────────────────────
 //
-// Chip ids 0–9 map to the ten chips in the flat mem (ROML, ROMH,
-// KERNAL, BASIC, CHARROM, RAM, …), matching the CHIP_* constants in
-// c64_chips.h.
+// Direct chip ids map to the manifest-derived flat-memory slots used by the
+// current C64 declaration. Keep enough headroom here for all direct chips,
+// independent of their row order in the manifest.
 //
 // EnablePartialBus is NOT set: the MOS 2114 colour RAM's 4-bit behaviour is
 // handled outside the bus (via the I/O register-file handler on the CPU side,
@@ -30,8 +30,8 @@ struct C64BusSpec {
     static constexpr size_t AddressBits         = 16;
     static constexpr size_t PageBits            = 12;   // 4 KB pages → 16 pages
     static constexpr size_t NumViewers          = 2;    // CPU=0, VIC-II=1
-    static constexpr size_t MaxChipId           = 9;    // CHIP_RAM = highest chip id
-    static constexpr size_t MaxWriteChipId      = 9;
+    static constexpr size_t MaxChipId           = 15;   // keep generous headroom for manifest-derived direct ids
+    static constexpr size_t MaxWriteChipId      = 15;
     static constexpr bool   EnableMmio          = true;
     static constexpr size_t MaxMmioHandlers     = 8;    // VIC-II, SID, ColorRAM, CIA1, CIA2, I/O1, I/O2, + spare
     static constexpr size_t MaxIndexedSubTables = 1;    // one sub-table: the I/O page

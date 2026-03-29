@@ -141,6 +141,14 @@ public:
     // RAMChip and ROM chips override this to return true.
     virtual bool is_read_only() const { return false; }
 
+    // --- Buffer binding (opt-in via override) ---
+    // Called by Board::bind_chip() when a manifest slot has a flat-memory
+    // buffer.  MemoryChipBase overrides this to adopt the external buffer
+    // and set size/metadata for default-constructed value-type chips.
+    // Non-memory chips ignore this (default no-op).
+    virtual void on_bind_buffer(uint8_t* /*buffer*/, size_t /*size*/,
+                                const char* /*label*/, uint16_t /*base*/) {}
+
     // Bus state snapshot — stores the bus state at the end of each tick.
     // Used by the emulation loop for edge detection (A12, NMI) and
     // open-bus decay, and by GUI code for layout pin rendering.
