@@ -159,14 +159,18 @@ static_assert(!C64BusSpec::ShiftAddressable || C64BusSpec::ShiftBankBits == kC64
 // §3c  Per-bank chip-id lookup table
 // =============================================================================
 //
-// Maps a (base_id, page_bank) pair to the exact per-bank chip_id:
-//   chip_id = base_id + (bank - kC64ChipStartPage[base_id])
+// Maps a (base_id, bank) pair to the exact per-bank chip_id:
+//   chip_id = base_id + (bank & kC64ChipBankMask[base_id])
 //
-// Only base_id entries (0, 1, 3, 5, 7, 9) are valid.  Other indices are
-// never accessed — the PLA only emits base_ids.
+// The mask is (num_banks - 1) for each chip, stored at the base_id index.
+// Non-base-id entries are never accessed.
+//
+// This correctly handles the VIC-II case where a chip appears at a different
+// address than its CPU base_addr (e.g. CHARROM at VIC bank 1 instead of
+// CPU bank $D): the low bits of the bank select the intra-chip page.
 //
 
-inline constexpr auto kC64ChipStartPage = []() {
+inline constexpr auto kC64ChipBankMask = []() {
     constexpr size_t page_bits = 12;
     constexpr size_t total = kC64Chips.total_ids(page_bits);
     std::array<uint8_t, total> table{};
@@ -174,10 +178,10 @@ inline constexpr auto kC64ChipStartPage = []() {
         const auto& chip = kC64Chips.chips[i];
         if (chip.size_bytes == 0) continue;
         const size_t bid = kC64Chips.base_id(i, page_bits);
-        const uint8_t sp = uint8_t(chip.base_addr >> page_bits);
         const size_t nb = chip.size_bytes >> page_bits;
+        const uint8_t mask = uint8_t(nb - 1);
         for (size_t b = 0; b < nb; ++b)
-            table[bid + b] = sp;
+            table[bid + b] = mask;
     }
     return table;
 }();

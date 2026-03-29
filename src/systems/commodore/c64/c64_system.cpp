@@ -1762,19 +1762,19 @@ bool C64System::pla_maps_generate() {
     const auto no_chip_wr   = C64WriteId(C64PT::kNoChipSelectedWrite);
 
     // Map PLA output chip ID → MemoryBus read chip.
-    // Buffer base_ids are converted to per-bank chip_ids using the start
-    // page lookup table; kIo→sub-table, kUnmapped→no-chip.
+    // Buffer base_ids are converted to per-bank chip_ids using the bank
+    // mask table; kIo→sub-table, kUnmapped→no-chip.
     auto pla_to_read_chip = [&](C64PlaChipId chip, uint32_t bank) -> C64ChipId {
         if (chip == c64_chip_ids::kIo)       return io_sub_read;
         if (chip == c64_chip_ids::kUnmapped) return no_chip_rd;
-        return C64ChipId(size_t(chip) + bank - kC64ChipStartPage[size_t(chip)]);
+        return C64ChipId(size_t(chip) + (bank & kC64ChipBankMask[size_t(chip)]));
     };
 
     // Map PLA output chip ID → MemoryBus write chip.
     // Only RAM and I/O are writable; ROMs and unmapped ignore writes.
     auto pla_to_write_chip = [&](C64PlaChipId chip, uint32_t bank) -> C64WriteId {
         if (chip == c64_chip_ids::kRam)
-            return C64WriteId(size_t(chip) + bank - kC64ChipStartPage[size_t(chip)]);
+            return C64WriteId(size_t(chip) + (bank & kC64ChipBankMask[size_t(chip)]));
         if (chip == c64_chip_ids::kIo)  return io_sub_write;
         return no_chip_wr;
     };
