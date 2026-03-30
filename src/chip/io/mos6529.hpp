@@ -1,8 +1,11 @@
 #pragma once
 
 // ============================================================================
-// MOS 6529B — Single 8-Bit Bidirectional I/O Port
+// MOS 6529B — Single Port Interface (SPI), an 8-Bit Bidirectional I/O Port
 // ============================================================================
+//
+// Also known as PIO (Programmable/Peripheral Input/Output) in Commodore
+// documentation and schematics.
 //
 // The MOS 6529B is an extremely simple 8-bit I/O port used in the Commodore
 // 264 series (C16, C116, Plus/4).  It has no data direction register — all
