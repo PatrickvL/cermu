@@ -13,7 +13,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -34,17 +34,27 @@
 // SMS chip manifest
 // =============================================================================
 //
-// Slot 0: Cartridge ROM — up to 512KB at $0000 (banked)
+// Slot 0: Cartridge ROM — up to 512KB at $0000 (banked, 16KB pages)
 // Slot 1: System RAM   — 8KB at $C000 (mirrored to $E000)
+//
+//                               ctx   type            chip       base    size    mask    ovl  label            rom
+#define SMS_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, ZilogZ80A,       z80,         0,           0, 0,      0, "Z80A",          nullptr) \
+    V(ctx, ROMChip,         cart_rom,    0x0000, 524288, 0,      0, "Cartridge ROM", nullptr) \
+    V(ctx, RAMChip,         system_ram,  0xC000,   8192, 0x1FFF, 0, "System RAM",    nullptr) \
+    V(ctx, SEGA_315_5124,   vdp,         0,           0, 0,      0, "315-5124 VDP",  nullptr) \
+    V(ctx, sn76489_t,       psg,         0,           0, 0,      0, "SN76489 PSG",   nullptr)
 
-inline constexpr auto kSMSChips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 524288, 0, "Cartridge ROM", 0, 16384, 0, 0, {}},
-    Slot<RAMChip>{0xC000,   8192, 0x1FFF, "System RAM", 0, 0, 0, 0, {}},
-    // Non-bus chips
-    Slot<ZilogZ80A>      {0, 0, 0, "Z80A",          0, 0, 0, 0, {}},
-    Slot<SEGA_315_5124>  {0, 0, 0, "315-5124 VDP",  0, 0, 0, 0, {}},
-    Slot<sn76489_t>      {0, 0, 0, "SN76489 PSG",   0, 0, 0, 0, {}}
-);
+static constexpr size_t kSMSChipCount = 0 SMS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+constexpr ChipManifest<kSMSChipCount> make_sms_manifest() {
+    ChipManifest<kSMSChipCount> m = {{
+        SMS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+    }};
+    m.chips[0].bank_size = 16384;  // Cartridge ROM banking (16KB pages)
+    return m;
+}
+inline constexpr auto kSMSChips = make_sms_manifest();
 
 using SMSBusSpec  = ManifestBusSpec<kSMSChips, 16, 8>;
 
@@ -52,9 +62,10 @@ using SMSBusSpec  = ManifestBusSpec<kSMSChips, 16, 8>;
 // SMS Chips — value-typed chips owned by Board
 // ============================================================================
 
-struct SMSChips : CoreChips<ZilogZ80A, SEGA_315_5124, sn76489_t> {
-    SMSChips() : CoreChips<ZilogZ80A, SEGA_315_5124, sn76489_t>{
-        ZilogZ80A{}, SEGA_315_5124{}, sn76489_t{SN76489Variant::SEGA_PSG}, {}} {}
+struct SMSChips {
+    SMS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+    // PSG needs explicit Sega variant selection
+    SMSChips() : psg(SN76489Variant::SEGA_PSG) {}
 };
 
 // ============================================================================
