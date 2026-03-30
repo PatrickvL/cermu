@@ -243,23 +243,24 @@ bool PETSystem::initialize() {
     printf("PET: Initializing system\n");
     register_board(&board_);
 
-    // ── Bind value-typed chips from Chips, then create remaining ─────
-    board_.bind_chipset();
+    // ── Bind value-typed chips, then create remaining ──────────────────
+    { size_t slot_idx_ = 0;
+      PET_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
     board_.create_chips(&pins_);
     board_.apply(bus_);
 
-    main_ram_chip_    = board_.template find<RAMChip>();
-    screen_ram_chip_  = board_.template find<RAMChip>(1);
-    basic_rom_b_chip_ = board_.template find<ROMChip>();
-    basic_rom_c_chip_ = board_.template find<ROMChip>(1);
-    basic_rom_d_chip_ = board_.template find<ROMChip>(2);
-    editor_rom_chip_  = board_.template find<ROMChip>(3);
-    kernal_rom_chip_  = board_.template find<ROMChip>(4);
-    cpu_              = &board_.cpu;
-    crtc_             = &board_.video;
-    pia1_             = &board_.io;
+    main_ram_chip_    = &board_.main_ram;
+    screen_ram_chip_  = &board_.screen_ram;
+    basic_rom_b_chip_ = &board_.basic_rom_b;
+    basic_rom_c_chip_ = &board_.basic_rom_c;
+    basic_rom_d_chip_ = &board_.basic_rom_d;
+    editor_rom_chip_  = &board_.editor_rom;
+    kernal_rom_chip_  = &board_.kernal_rom;
+    cpu_              = &board_.m6502;
+    crtc_             = &board_.crtc;
+    pia1_             = &board_.pia1;
     pia2_             = &board_.pia2;
-    via_              = &board_.sound;
+    via_              = &board_.via;
 
     // Screen RAM mirror at $8400-$87FF and configure memory map
     configure_memory_map();
@@ -271,8 +272,8 @@ bool PETSystem::initialize() {
     }
 
     // ---- CPU (MOS 6502) ----
-    board_.cpu.init();
-    board_.cpu.reset();
+    board_.m6502.init();
+    board_.m6502.reset();
 
     // ---- CRTC (MC6845) ----
     crtc_->init();
@@ -386,7 +387,7 @@ void PETSystem::reset() {
     audio_cycle_counter_ = 0;
 
     // Reset CPU last
-    board_.cpu.reset();
+    board_.m6502.reset();
 
     pins_ = PET_BUS_DEFAULT_STATE;
     total_cycles_ = 0;
