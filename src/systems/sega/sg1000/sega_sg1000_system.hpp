@@ -13,9 +13,9 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/video/tms9918/tms9918a.hpp"
 #include "chip/sound/sn76489/sn76489.hpp"
@@ -63,53 +63,40 @@ template<> struct SG1000VariantTraits<SG1000Variant::SC3000> {
 #define SG1000_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
 
 // =============================================================================
-// SG-1000 chip manifests
+// SG-1000 chip declaration — single source of truth
 // =============================================================================
 //
-// SG-1000:
-//   Slot 0: Cartridge ROM — up to 48KB at $0000
-//   Slot 1: RAM           — 1KB at $C000 (mirrored to $FFFF)
+// Row: X(ctx, type, chip, base, mask, overlay, label, info_label, rom_files)
 //
-// SC-3000:
-//   Slot 0: Cartridge ROM — up to 48KB at $0000 (or BASIC ROM)
-//   Slot 1: RAM           — 8KB at $C000
+//   Slot 0: RAM      — 64KB at $0000 (effective size set per variant)
+//   Slot 1: Cart ROM — 32KB at $0000
+//   Slot 2: Z80A     — not bus-mapped
+//   Slot 3: TMS9918A — not bus-mapped (I/O port-accessed)
+//   Slot 4: SN76489  — not bus-mapped (I/O port-accessed)
+//
 
-inline constexpr auto kSG1000Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
-    Slot<ROMChip>{0x0000, 32768, 0, "Cartridge ROM"},
-    // Non-bus chips
-    Slot<ZilogZ80A>  {0, 0, 0, "Z80A"},
-    Slot<TMS9918A>   {0, 0, 0, "TMS9918A"},
-    Slot<sn76489_t>  {0, 0, 0, "SN76489"}
-);
+#define SG1000_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                \
+    X(ctx, RAMChip,     ram,   0x0000, 0xFFFF, 0, "RAM",       "RAM",       nullptr)                      \
+    X(ctx, ROMChip,     cart,  0x0000, 0x7FFF, 0, "Cart ROM",  "Cart ROM",  nullptr)                      \
+    X(ctx, ZilogZ80A,   z80,   0x0000,      0, 0, "Z80A",      "Z80A",      nullptr)                      \
+    X(ctx, TMS9918A,    vdp,   0x0000,      0, 0, "TMS9918A",  "TMS9918A",  nullptr)                      \
+    X(ctx, sn76489_t,   psg,   0x0000,      0, 0, "SN76489",   "SN76489",   nullptr)
 
-inline constexpr auto kSC3000Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
-    Slot<ROMChip>{0x0000, 32768, 0, "Cartridge/BASIC ROM"},
-    // Non-bus chips
-    Slot<ZilogZ80A>  {0, 0, 0, "Z80A"},
-    Slot<TMS9918A>   {0, 0, 0, "TMS9918A"},
-    Slot<sn76489_t>  {0, 0, 0, "SN76489"}
-);
+static constexpr size_t kSG1000ChipCount = 0 SG1000_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 
-// BusTraits
-template<SG1000Variant V> struct SG1000BusTraits;
+inline constexpr ChipManifest<kSG1000ChipCount> kSG1000Chips = ChipManifest<kSG1000ChipCount>{{
+    SG1000_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
 
-template<> struct SG1000BusTraits<SG1000Variant::SG1000> {
-    static constexpr const auto& kManifest = kSG1000Chips;
-    using Spec = ManifestBusSpec<kSG1000Chips, 16, 8>;
-};
-
-template<> struct SG1000BusTraits<SG1000Variant::SC3000> {
-    static constexpr const auto& kManifest = kSC3000Chips;
-    using Spec = ManifestBusSpec<kSC3000Chips, 16, 8>;
-};
+using SG1000BusSpec = ManifestBusSpec<kSG1000Chips, 16, 8>;
 
 // ============================================================================
-// SG-1000 Chips — value-typed chips owned by Board
+// SG-1000 Chips — value-typed chips owned by Board (auto-generated)
 // ============================================================================
 
-struct SG1000Chips : CoreChips<ZilogZ80A, TMS9918A, sn76489_t> {};
+struct SG1000Chips {
+    SG1000_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+};
 
 // ============================================================================
 // Sega SG-1000 / SC-3000 System
@@ -118,7 +105,6 @@ struct SG1000Chips : CoreChips<ZilogZ80A, TMS9918A, sn76489_t> {};
 template<SG1000Variant V>
 class SegaSG1000System : public System {
     using Traits = SG1000VariantTraits<V>;
-    using BT     = SG1000BusTraits<V>;
 
 public:
     SegaSG1000System();
@@ -145,11 +131,11 @@ public:
 
 private:
     // ── Board + bus ──────────────────────────────────────────────────────
-    using Bus       = MemoryBus<typename BT::Spec>;
-    using PT        = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec, SG1000Chips>;
+    using Bus       = MemoryBus<SG1000BusSpec>;
+    using PT        = PackingTraits<SG1000BusSpec>;
+    using MainBoard = Board<SG1000BusSpec, SG1000Chips>;
     Bus       bus_;
-    MainBoard board_{BT::kManifest};
+    MainBoard board_{kSG1000Chips};
 
     // ── Video ────────────────────────────────────────────────────────────
     std::unique_ptr<CompositeVideoPort> video_port_;
