@@ -37,6 +37,14 @@
 
 class MemoryChipBase;  // forward declaration for is_base_of_v
 
+// Helper: strip leading '?' from optional ROM filename strings.
+// Returns {filenames, optional} with the prefix removed.
+inline constexpr RomFileInfo parse_rom_spec(const char* spec) noexcept {
+    if (!spec) return {nullptr, false};
+    if (spec[0] == '?') return {spec + 1, true};
+    return {spec, false};
+}
+
 // ── Manifest Row Visitor ─────────────────────────────────────────────────────
 //
 // Emits a ChipSlot{...} initializer for aggregate initialization of
@@ -51,8 +59,7 @@ class MemoryChipBase;  // forward declaration for is_base_of_v
     ChipSlot{base,                                                                                         \
              std::is_base_of_v<MemoryChipBase, type> ? (size_t)(mask) + 1 : (size_t)0,                     \
              std::is_base_of_v<MemoryChipBase, type> ? (uint32_t)0 : (uint32_t)(mask),                     \
-             std::is_base_of_v<MemoryChipBase, type> ? (size_t)(mask) + 1 : (size_t)0,                     \
-             0, overlay, resolve_slot_factory<type>(), label, 0, {rom_files}},
+             0, 0, overlay, resolve_slot_factory<type>(), label, 0, parse_rom_spec(rom_files)},
 
 // ── Chipset Field Declaration Visitor ────────────────────────────────────────
 //
