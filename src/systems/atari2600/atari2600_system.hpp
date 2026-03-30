@@ -17,7 +17,7 @@
 
 #include "core/system.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/fam65xx/mos6507.hpp"
@@ -84,30 +84,35 @@ private:
 //   - Pages 16-31 get full-page MMIO for the cartridge mapper, mirrored
 //     via bank_size = 4096 (A12=1 always selects cart)
 //
-inline constexpr auto kAtari2600Chips = make_chip_manifest(
-    Slot<tia_t>             {0x0000, 0, 0x0080, nullptr, 0, 4096},
-    Slot<pia6532_t>         {0x0080, 0, 0x0080, nullptr, 0, 4096},
-    Slot<Atari2600CartChip> {0x1000, 0, 0, nullptr, 0, 4096},
-    // Non-bus chip — factory-created, not address-decoded
-    Slot<MOS6507>           {0, 0, 0, "MOS 6507"}
-);
+//                                ctx   type                chip  base    size  mask    ovl  label          rom
+#define ATARI2600_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, tia_t,              tia,  0x0000,  0, 0x0080, 0, "TIA",          nullptr) \
+    V(ctx, pia6532_t,          riot, 0x0080,  0, 0x0080, 0, "PIA 6532",     nullptr) \
+    V(ctx, Atari2600CartChip,  cart, 0x1000,  0, 0,      0, "Cartridge",    nullptr) \
+    V(ctx, MOS6507,            cpu,  0,       0, 0,      0, "MOS 6507",     nullptr)
+
+static constexpr size_t kAtari2600ChipCount = 0 ATARI2600_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+// Helper: set bank_size on all bus-mapped slots (those with non-zero base, size, or mask).
+template<size_t N>
+constexpr ChipManifest<N> with_bank_size_on_mapped(ChipManifest<N> m, size_t bs) {
+    for (size_t i = 0; i < N; ++i)
+        if (m.chips[i].base_addr > 0 || m.chips[i].size_bytes > 0 || m.chips[i].addr_mask > 0)
+            m.chips[i].bank_size = bs;
+    return m;
+}
+
+inline constexpr ChipManifest<kAtari2600ChipCount> kAtari2600Chips =
+    with_bank_size_on_mapped(ChipManifest<kAtari2600ChipCount>{{
+        ATARI2600_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+    }}, 4096);
 
 // BusSpec auto-derived from the manifest (13-bit address, 256-byte pages)
 using Atari2600BusSpec = ManifestBusSpec<kAtari2600Chips, 13, 8>;
 
 // ── Chips ──────────────────────────────────────────────────────────────
-struct Atari2600Chipset : CoreChips<MOS6507, tia_t, NoChip, pia6532_t> {
-    Atari2600CartChip cart;   // Cart MMIO adapter (wraps mapper)
-
-    template<typename BoardT>
-    void bind_extras(BoardT& board) {
-        board.bind_chip(board.template find_index<Atari2600CartChip>(), &cart);
-    }
-
-    template<typename BoardT>
-    void register_extras(BoardT& board) {
-        board.register_component(&cart);
-    }
+struct Atari2600Chipset {
+    ATARI2600_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
 };
 
 
