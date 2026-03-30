@@ -119,16 +119,18 @@ bool C128System::initialize() {
                    | BUS_BIT(BUS_FLAG_BIT) | BUS_DATA_MASK;
     pins_ = default_state_;
 
-    board_.bind_chipset();
+    {   size_t slot_idx_ = 0;
+        C128_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
+    }
     board_.create_chips(&pins_);
     board_.apply(bus_);
 
-    basic_lo_rom_ = board_.find<ROMChip>();
-    basic_hi_rom_ = board_.find<ROMChip>(1);
-    editor_rom_   = board_.find<ROMChip>(2);
-    kernal_rom_   = board_.find<ROMChip>(3);
-    char_rom_     = board_.find<ROMChip>(4);
-    vdc_vram_     = board_.find<RAMChip>(1);
+    basic_lo_rom_ = &board_.basic_lo;
+    basic_hi_rom_ = &board_.basic_hi;
+    editor_rom_   = &board_.editor_rom;
+    kernal_rom_   = &board_.kernal_rom;
+    char_rom_     = &board_.char_rom;
+    vdc_vram_     = &board_.vdc_vram;
 
     configure_bus_memory_map();
     if (!load_roms()) {
@@ -136,9 +138,9 @@ bool C128System::initialize() {
     }
 
     // VIC-IIe — initialize with PAL traits (MOS8566)
-    auto& vic_iie = board_.video;
-    auto& sid     = board_.sound;
-    auto& cia1    = board_.io;
+    auto& vic_iie = board_.vic_iie;
+    auto& sid     = board_.sid;
+    auto& cia1    = board_.cia1;
     auto& cia2    = board_.cia2;
 
     vic_iie.init(vicii_base_t::memory_bank_change);
@@ -158,7 +160,7 @@ bool C128System::initialize() {
     // CIA2 Port A → VIC-IIe bank selection
     cia2.port_a_change_callback = [](void* ctx, uint8_t value) {
         auto* sys = static_cast<C128System*>(ctx);
-        vicii_base_t::memory_bank_change(&sys->board_.video, value & 0x03);
+        vicii_base_t::memory_bank_change(&sys->board_.vic_iie, value & 0x03);
     };
     cia2.port_a_callback_context = this;
 
@@ -176,9 +178,9 @@ bool C128System::initialize() {
     register_bus_chips(board_);
 
     // Initialize CPU — reset vector will come from Kernal ROM
-    board_.cpu.init();
-    board_.cpu.init_io_port();
-    board_.cpu.reset();
+    board_.csg8502.init();
+    board_.csg8502.init_io_port();
+    board_.csg8502.reset();
 
     // Video output — VIC-IIe drives composite video
     video_port_ = std::make_unique<CompositeVideoPort>();
@@ -193,7 +195,7 @@ bool C128System::initialize() {
 void C128System::shutdown() { system_ready_ = false; }
 
 void C128System::reset() {
-    pins_ = board_.cpu.reset(pins_);
+    pins_ = board_.csg8502.reset(pins_);
     board_.reset_chips();
     cpu_mode_ = CPUMode::MODE_8502;
     c64_mode_ = false;
@@ -211,10 +213,10 @@ void C128System::reset() {
 void C128System::tick() {
     total_cycles_++;
 
-    auto& cpu     = board_.cpu;
-    auto& vic_iie = board_.video;
-    auto& sid     = board_.sound;
-    auto& cia1    = board_.io;
+    auto& cpu     = board_.csg8502;
+    auto& vic_iie = board_.vic_iie;
+    auto& sid     = board_.sid;
+    auto& cia1    = board_.cia1;
     auto& cia2    = board_.cia2;
 
     // Start each cycle with pull-up defaults

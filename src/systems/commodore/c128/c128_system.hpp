@@ -34,7 +34,7 @@
 #include "systems/commodore/c128/c128_constants.hpp"
 #include "systems/commodore/commodore_system.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/csg8502.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -68,55 +68,44 @@
 // Non-bus chips:
 //   CSG 8502, Z80A, VIC-IIe, SID, CIA ×2
 //
-inline constexpr auto kC128Chips = make_chip_manifest(
-    //                       base    size   mask  label          cond  bank_sz  ovl
-    Slot<RAMChip>{0x0000, 131072, 0, "Main RAM", 0, 65536, 0},  // Slot 0: 2 × 64 KB banks
-    Slot<ROMChip>{0x4000,  16384, 0, "BASIC lo",  0, 16384, 1}.with_rom(
-        "basic-4000.318018-04.bin|c128_basic_lo.rom|basic_lo.rom|basiclo.rom"
-        "|basic.318023-02.bin@0"),       // first 16 KB of combined 32 KB BASIC image
-    Slot<ROMChip>{0x8000,  16384, 0, "BASIC hi",  0, 16384, 1}.with_rom(
-        "basic-8000.318019-04.bin|c128_basic_hi.rom|basic_hi.rom|basichi.rom"
-        "|basic.318023-02.bin@16384"),   // second 16 KB of combined 32 KB BASIC image
-    Slot<ROMChip>{0xC000,   4096, 0, "Editor ROM", 0, 4096, 1}.with_rom(
-        "c128_editor.rom|editor.rom"
-        "|kernal.318020-05.bin@0"),          // first 4 KB of combined 16 KB kernal image
-    Slot<ROMChip>{0xE000,   8192, 0, "Kernal ROM", 0, 8192, 1}.with_rom(
-        "c128_kernal.rom|kernal.rom"
-        "|kernal.318020-05.bin@8192"),       // last 8 KB of combined 16 KB kernal image
-    Slot<ROMChip>{0xD000,   8192, 0, "Character ROM", 0, 8192, 1}.with_rom(
-        "characters.390059-01.bin|c128_chargen.rom|chargen.rom|characters.rom"),
-    // VDC video RAM — separate bus, not CPU-addressed
-    Slot<RAMChip>{0x0000,  16384, 0, "VDC VRAM",  0, 16384, 1},
-    // Non-bus chips — factory-created, not address-decoded
-    Slot<CSG8502>   {0, 0, 0, "CSG 8502"},
-    Slot<ZilogZ80A> {0, 0, 0, "Zilog Z80A"},
-    Slot<mos8566_t> {0, 0, 0, "MOS 8566 VIC-IIe"},
-    Slot<mos6581_t> {0, 0, 0, "MOS 6581 SID"},
-    Slot<MOS2114>   {0, 0, 0, "Color RAM"},
-    Slot<mos6526_t> {0, 0, 0, "CIA 1"},
-    Slot<mos6526_t> {0, 0, 0, "CIA 2"}
-);
+//                                ctx   type       chip        base    size    mask  ovl  label              rom
+#define C128_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, RAMChip,    main_ram,    0x0000, 131072, 0,      0, "Main RAM",        nullptr) \
+    V(ctx, ROMChip,    basic_lo,    0x4000,  16384, 0,      1, "BASIC lo",        "basic-4000.318018-04.bin|c128_basic_lo.rom|basic_lo.rom|basiclo.rom|basic.318023-02.bin@0") \
+    V(ctx, ROMChip,    basic_hi,    0x8000,  16384, 0,      1, "BASIC hi",        "basic-8000.318019-04.bin|c128_basic_hi.rom|basic_hi.rom|basichi.rom|basic.318023-02.bin@16384") \
+    V(ctx, ROMChip,    editor_rom,  0xC000,   4096, 0,      1, "Editor ROM",      "c128_editor.rom|editor.rom|kernal.318020-05.bin@0") \
+    V(ctx, ROMChip,    kernal_rom,  0xE000,   8192, 0,      1, "Kernal ROM",      "c128_kernal.rom|kernal.rom|kernal.318020-05.bin@8192") \
+    V(ctx, ROMChip,    char_rom,    0xD000,   8192, 0,      1, "Character ROM",   "characters.390059-01.bin|c128_chargen.rom|chargen.rom|characters.rom") \
+    V(ctx, RAMChip,    vdc_vram,    0x0000,  16384, 0,      1, "VDC VRAM",        nullptr) \
+    V(ctx, CSG8502,    csg8502,     0,            0, 0,      0, "CSG 8502",        nullptr) \
+    V(ctx, ZilogZ80A,  z80,         0,            0, 0,      0, "Zilog Z80A",      nullptr) \
+    V(ctx, mos8566_t,  vic_iie,     0,            0, 0,      0, "MOS 8566 VIC-IIe", nullptr) \
+    V(ctx, mos6581_t,  sid,         0,            0, 0,      0, "MOS 6581 SID",    nullptr) \
+    V(ctx, MOS2114,    colorram,    0,            0, 0,      0, "Color RAM",       nullptr) \
+    V(ctx, mos6526_t,  cia1,        0,            0, 0,      0, "CIA 1",           nullptr) \
+    V(ctx, mos6526_t,  cia2,        0,            0, 0,      0, "CIA 2",           nullptr)
+
+static constexpr size_t kC128ChipCount = 0 C128_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+inline constexpr auto make_c128_manifest() {
+    ChipManifest<kC128ChipCount> m = {{
+        C128_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+    }};
+    // Main RAM: 2 × 64 KB banks
+    m.chips[0].bank_size = 65536;
+    // All overlay-group 1 chips: bank_size = size_bytes (single bank each)
+    for (auto& s : m.chips)
+        if (s.overlay_group == 1) s.bank_size = s.size_bytes;
+    return m;
+}
+inline constexpr auto kC128Chips = make_c128_manifest();
 
 // 4 KB pages, 2 viewers (CPU + VIC-IIe)
 using C128BusSpec = ManifestBusSpec<kC128Chips, 16, 12, 2>;
 
-// Value-typed chips: CPU + Z80 + VIC-IIe + SID + Color RAM + 2× CIA.
-// Memory chips (RAM/ROM) stay factory-created.
-struct C128Chipset : CoreChips<CSG8502, mos8566_t, mos6581_t, mos6526_t> {
-    ZilogZ80A  z80;
-    MOS2114    colorram;
-    mos6526_t  cia2;
-
-    template<typename Board> void bind_extras(Board& board) {
-        board.bind_chip(board.template find_index<ZilogZ80A>(),  &z80);
-        board.bind_chip(board.template find_index<MOS2114>(),    &colorram);
-        board.bind_chip(board.template find_index<mos6526_t>(1), &cia2);
-    }
-    template<typename Board> void register_extras(Board& board) {
-        board.register_component(&z80);
-        board.register_component(&colorram);
-        board.register_component(&cia2);
-    }
+// Value-typed chips: all chips are fields via X-macro.
+struct C128Chipset {
+    C128_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
 };
 
 // =============================================================================
