@@ -22,7 +22,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/audio_port.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -100,29 +100,42 @@ template<> struct CPCModelTraits<CPCModel::CPC6128> {
 //
 // All I/O is Z80 port-based (IORQ) — no MMIO slots needed.
 //
-inline constexpr auto kCPC464Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
-    Slot<ROMChip>{0x0000, 16384, 0, "Lower ROM", 0, 0, 1},  // overlay group 1
-    Slot<ROMChip>{0xC000, 16384, 0, "Upper ROM", 0, 0, 2},  // overlay group 2
-    // Non-bus chips — factory-created or pre-bound, not address-decoded
-    Slot<ZilogZ80A>           {0, 0, 0, "Z80A"},
-    Slot<mc6845_t>            {0, 0, 0, "MC6845 CRTC"},
-    Slot<i8255_t>             {0, 0, 0, "8255 PPI"},
-    Slot<AY_3_8912>           {0, 0, 0, "AY-3-8912 PSG"},
-    Slot<amstrad_gate_array_t>{0, 0, 0, "Gate Array"}
-);
+//                                      ctx   type                chip        base    size    mask  ovl  label              rom
+#define CPC464_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, RAMChip,              ram,        0x0000,  65536, 0, 0, "RAM",             nullptr) \
+    V(ctx, ROMChip,              lower_rom,  0x0000,  16384, 0, 1, "Lower ROM",       nullptr) \
+    V(ctx, ROMChip,              upper_rom,  0xC000,  16384, 0, 2, "Upper ROM",       nullptr) \
+    V(ctx, ZilogZ80A,            z80,        0,           0, 0, 0, "Z80A",            nullptr) \
+    V(ctx, mc6845_t,             crtc,       0,           0, 0, 0, "MC6845 CRTC",     nullptr) \
+    V(ctx, i8255_t,              ppi,        0,           0, 0, 0, "8255 PPI",        nullptr) \
+    V(ctx, AY_3_8912,            psg,        0,           0, 0, 0, "AY-3-8912 PSG",   nullptr) \
+    V(ctx, amstrad_gate_array_t, gate_array, 0,           0, 0, 0, "Gate Array",      nullptr)
 
-inline constexpr auto kCPC6128Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 131072, 0, "RAM", 0, 16384},          // 128 KB (8 × 16 KB banks)
-    Slot<ROMChip>{0x0000,  16384, 0, "Lower ROM", 0, 0, 1},    // overlay group 1
-    Slot<ROMChip>{0xC000,  16384, 0, "Upper ROM", 0, 0, 2},    // overlay group 2
-    // Non-bus chips — factory-created or pre-bound, not address-decoded
-    Slot<ZilogZ80A>           {0, 0, 0, "Z80A"},
-    Slot<mc6845_t>            {0, 0, 0, "MC6845 CRTC"},
-    Slot<i8255_t>             {0, 0, 0, "8255 PPI"},
-    Slot<AY_3_8912>           {0, 0, 0, "AY-3-8912 PSG"},
-    Slot<amstrad_gate_array_t>{0, 0, 0, "Gate Array"}
-);
+#define CPC6128_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, RAMChip,              ram,        0x0000, 131072, 0, 0, "RAM",             nullptr) \
+    V(ctx, ROMChip,              lower_rom,  0x0000,  16384, 0, 1, "Lower ROM",       nullptr) \
+    V(ctx, ROMChip,              upper_rom,  0xC000,  16384, 0, 2, "Upper ROM",       nullptr) \
+    V(ctx, ZilogZ80A,            z80,        0,           0, 0, 0, "Z80A",            nullptr) \
+    V(ctx, mc6845_t,             crtc,       0,           0, 0, 0, "MC6845 CRTC",     nullptr) \
+    V(ctx, i8255_t,              ppi,        0,           0, 0, 0, "8255 PPI",        nullptr) \
+    V(ctx, AY_3_8912,            psg,        0,           0, 0, 0, "AY-3-8912 PSG",   nullptr) \
+    V(ctx, amstrad_gate_array_t, gate_array, 0,           0, 0, 0, "Gate Array",      nullptr)
+
+static constexpr size_t kCPC464ChipCount  = 0 CPC464_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+static constexpr size_t kCPC6128ChipCount = 0 CPC6128_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+inline constexpr ChipManifest<kCPC464ChipCount> kCPC464Chips = {{
+    CPC464_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
+
+constexpr ChipManifest<kCPC6128ChipCount> make_cpc6128_manifest() {
+    ChipManifest<kCPC6128ChipCount> m = {{
+        CPC6128_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+    }};
+    m.chips[0].bank_size = 16384;  // RAM (8 × 16 KB banks)
+    return m;
+}
+inline constexpr auto kCPC6128Chips = make_cpc6128_manifest();
 
 
 // BusTraits — selects the correct manifest per CPC model
@@ -144,20 +157,8 @@ template<> struct CPCBusTraits<CPCModel::CPC6128> {
 };
 
 // ── Chips ──────────────────────────────────────────────────────────────
-// Video slot = Gate Array (pixel generator + palette owner).
-// MC6845 CRTC is a timing/address generator — kept as extra member.
-struct CPCChipset : CoreChips<ZilogZ80A, amstrad_gate_array_t, AY_3_8912, i8255_t> {
-    mc6845_t crtc;   // MC6845 CRTC — display timing/address generator
-
-    template<typename BoardT>
-    void bind_extras(BoardT& board) {
-        board.bind_chip(board.template find_index<mc6845_t>(), &crtc);
-    }
-
-    template<typename BoardT>
-    void register_extras(BoardT& board) {
-        board.register_component(&crtc);
-    }
+struct CPCChipset {
+    CPC464_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
 };
 
 // ============================================================================
