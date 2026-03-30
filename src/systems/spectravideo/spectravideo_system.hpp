@@ -72,20 +72,20 @@ template<> struct SVIVariantTraits<SVIVariant::SVI328> {
 //
 
 #define SVI318_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                               \
-    X(ctx, ROMChip,    bios, 0x0000, 0x8000, 0, 0, "BASIC ROM",  "BASIC ROM",  "svi318.rom|SVI318.ROM|svi.rom")          \
-    X(ctx, RAMChip,    ram,  0x8000, 0x4000, 0, 0, "RAM",         "RAM",         nullptr)                                 \
     X(ctx, ZilogZ80A,  z80,  0x0000,      0, 0, 0, "Z80A",        "Z80A",        nullptr)                                 \
     X(ctx, TMS9918A,   vdp,  0x0000,      0, 0, 0, "TMS9918A",    "TMS9918A",    nullptr)                                 \
     X(ctx, AY_3_8910,  psg,  0x0000,      0, 0, 0, "AY-3-8910",   "AY-3-8910",   nullptr)                                \
-    X(ctx, i8255_t,    ppi,  0x0000,      0, 0, 0, "i8255 PPI",   "i8255 PPI",   nullptr)
+    X(ctx, i8255_t,    ppi,  0x0000,      0, 0, 0, "i8255 PPI",   "i8255 PPI",   nullptr)                                 \
+    X(ctx, ROMChip,    bios, 0x0000, 0x8000, 0, 0, "BASIC ROM",  "BASIC ROM",  "svi318.rom|SVI318.ROM|svi.rom")          \
+    X(ctx, RAMChip,    ram,  0x8000, 0x4000, 0, 0, "RAM",         "RAM",         nullptr)
 
 #define SVI328_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                               \
-    X(ctx, ROMChip,    bios, 0x0000,  0x8000, 0, 0, "BASIC ROM",  "BASIC ROM",  "svi328.rom|SVI328.ROM|svi.rom")         \
-    X(ctx, RAMChip,    ram,  0x0000, 0x10000, 0, 0, "RAM",         "RAM",         nullptr)                                \
     X(ctx, ZilogZ80A,  z80,  0x0000,       0, 0, 0, "Z80A",        "Z80A",        nullptr)                                \
     X(ctx, TMS9918A,   vdp,  0x0000,       0, 0, 0, "TMS9918A",    "TMS9918A",    nullptr)                                \
     X(ctx, AY_3_8910,  psg,  0x0000,       0, 0, 0, "AY-3-8910",   "AY-3-8910",   nullptr)                               \
-    X(ctx, i8255_t,    ppi,  0x0000,       0, 0, 0, "i8255 PPI",   "i8255 PPI",   nullptr)
+    X(ctx, i8255_t,    ppi,  0x0000,       0, 0, 0, "i8255 PPI",   "i8255 PPI",   nullptr)                                \
+    X(ctx, ROMChip,    bios, 0x0000,  0x8000, 0, 0, "BASIC ROM",  "BASIC ROM",  "svi328.rom|SVI328.ROM|svi.rom")         \
+    X(ctx, RAMChip,    ram,  0x0000, 0x10000, 0, 0, "RAM",         "RAM",         nullptr)
 
 static constexpr size_t kSVI318ChipCount = 0 SVI318_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 static constexpr size_t kSVI328ChipCount = 0 SVI328_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
