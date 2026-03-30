@@ -12,9 +12,9 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/video/tms9918/tms9918a.hpp"
 #include "chip/sound/sn76489/sn76489.hpp"
@@ -30,30 +30,42 @@
 #define COLECO_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
 
 // =============================================================================
-// ColecoVision chip manifest
+// ColecoVision chip declaration — single source of truth
 // =============================================================================
 //
-// Slot 0: BIOS ROM — 8KB at $0000
-// Slot 1: Cart ROM — 32KB at $8000
-// Slot 2: RAM      — 1KB at $6000 (mirrored)
+// Row: X(ctx, type, chip, base, mask, overlay, label, info_label, rom_files)
+//
+//   Slot 0: BIOS ROM — 8KB at $0000
+//   Slot 1: Cart ROM — 32KB at $8000
+//   Slot 2: RAM      — 1KB at $6000 (mirrored)
+//   Slot 3: Z80A     — not bus-mapped
+//   Slot 4: TMS9918A — not bus-mapped (I/O port-accessed)
+//   Slot 5: SN76489  — not bus-mapped (I/O port-accessed)
+//
 
-inline constexpr auto kColecoChips = make_chip_manifest(
-    Slot<ROMChip>{0x0000,  8192, 0x1FFF, "BIOS ROM"}.with_rom("coleco.rom|colecovision.rom|COLECO.ROM"),
-    Slot<ROMChip>{0x8000, 32768, 0, "Cartridge ROM"},
-    Slot<RAMChip>{0x6000,  1024, 0x03FF, "RAM"},
-    // Non-bus chips
-    Slot<ZilogZ80A>  {0, 0, 0, "Z80A"},
-    Slot<TMS9918A>   {0, 0, 0, "TMS9918A"},
-    Slot<sn76489_t>  {0, 0, 0, "SN76489"}
-);
+#define COLECO_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                \
+    X(ctx, ROMChip,     bios,  0x0000, 0x1FFF, 0, "BIOS ROM",  "BIOS ROM",  "coleco.rom|colecovision.rom|COLECO.ROM") \
+    X(ctx, ROMChip,     cart,  0x8000, 0x7FFF, 0, "Cart ROM",  "Cart ROM",  nullptr)                      \
+    X(ctx, RAMChip,     ram,   0x6000, 0x03FF, 0, "RAM",       "RAM",       nullptr)                      \
+    X(ctx, ZilogZ80A,   z80,   0x0000,      0, 0, "Z80A",      "Z80A",      nullptr)                      \
+    X(ctx, TMS9918A,    vdp,   0x0000,      0, 0, "TMS9918A",  "TMS9918A",  nullptr)                      \
+    X(ctx, sn76489_t,   psg,   0x0000,      0, 0, "SN76489",   "SN76489",   nullptr)
+
+static constexpr size_t kColecoChipCount = 0 COLECO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+inline constexpr ChipManifest<kColecoChipCount> kColecoChips = ChipManifest<kColecoChipCount>{{
+    COLECO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
 
 using ColecoBusSpec = ManifestBusSpec<kColecoChips, 16, 8>;
 
 // ============================================================================
-// ColecoVision Chips — value-typed chips embedded in Board
+// ColecoVision Chips — value-typed chips owned by Board (auto-generated)
 // ============================================================================
 
-struct ColecoChips : CoreChips<ZilogZ80A, TMS9918A, sn76489_t> {};
+struct ColecoChips {
+    COLECO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+};
 
 // ============================================================================
 // ColecoVision System

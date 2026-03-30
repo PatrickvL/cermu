@@ -283,13 +283,13 @@ protected:
     }
 
 private:
-    // SFINAE overload: board has a video() accessor with a non-null palette
+    // SFINAE overload: board has a get_video() accessor with a non-null palette
     template<typename B>
     auto auto_register_video_palette_(B& board, int)
-        -> decltype(board.video().system_palette(), void()) {
-        if (auto* p = board.video().system_palette()) {
-            palette_.set(p, board.video().palette_size());
-            primary_video_chip_ = &board.video();
+        -> decltype(board.get_video().system_palette(), void()) {
+        if (auto* p = board.get_video().system_palette()) {
+            palette_.set(p, board.get_video().palette_size());
+            primary_video_chip_ = &board.get_video();
         }
     }
     // Fallback: board has no typed video() — scan all bound slots for a

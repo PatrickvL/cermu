@@ -93,17 +93,18 @@ bool ColecoVisionSystem::initialize() {
     printf("ColecoVision: Initializing system\n");
     register_board(&board_);
 
-    board_.bind_chipset();
+    { size_t slot_idx_ = 0;
+      COLECO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
     board_.create_chips(&pins_);
     board_.apply(bus_);
 
     configure_bus_memory_map();
 
-    pins_ = board_.cpu.init();
-    board_.sound.init();
+    pins_ = board_.z80.init();
+    board_.psg.init();
 
-    board_.sound.set_clock_frequency(coleco_constants::CPU_FREQ_HZ / 16);
-    board_.sound.set_audio_sample_rate(audio_sample_rate_);
+    board_.psg.set_clock_frequency(coleco_constants::CPU_FREQ_HZ / 16);
+    board_.psg.set_audio_sample_rate(audio_sample_rate_);
 
     if (!load_roms()) {
         printf("ColecoVision: Warning — BIOS ROM not loaded\n");
@@ -112,14 +113,14 @@ bool ColecoVisionSystem::initialize() {
     register_bus_chips(board_);
 
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.video.set_video_out(&video_port_->output());
+    board_.vdp.set_video_out(&video_port_->output());
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Audio
     audio_port_ = std::make_unique<AudioPort>();
     audio_port_->configure(coleco_constants::DEFAULT_SAMPLE_RATE,
                            coleco_constants::DEFAULT_SAMPLE_RATE);
-    board_.sound.set_audio_port(audio_port_.get());
+    board_.psg.set_audio_port(audio_port_.get());
 
     system_ready_ = true;
     printf("ColecoVision: System initialized\n");
@@ -132,7 +133,7 @@ void ColecoVisionSystem::shutdown() {
 
 void ColecoVisionSystem::reset() {
     board_.reset_chips();
-    pins_ = board_.cpu.reset(pins_);
+    pins_ = board_.z80.reset(pins_);
     frame_tstate_counter_ = 0;
     ctrl_mode_ = 0;
     ctrl1_joystick_ = 0x7F;
@@ -146,7 +147,7 @@ void ColecoVisionSystem::reset() {
 void ColecoVisionSystem::tick() {
     // VDP tick
     bus_state_t vdp_bus = 0;
-    vdp_bus = board_.video.tick(vdp_bus);
+    vdp_bus = board_.vdp.tick(vdp_bus);
 
     if (BUS_GET_BIT(vdp_bus, BUS_IRQ_BIT) == 0)
         BUS_CLR_BIT(pins_, BUS_IRQ_BIT);
@@ -154,7 +155,7 @@ void ColecoVisionSystem::tick() {
         BUS_SET_BIT(pins_, BUS_IRQ_BIT);
 
     // CPU tick
-    pins_ = board_.cpu.tick(pins_);
+    pins_ = board_.z80.tick(pins_);
 
     bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);
     bool iorq = !BUS_GET_BIT(pins_, Z80_IORQ_BIT);
@@ -167,7 +168,7 @@ void ColecoVisionSystem::tick() {
 
     // PSG tick (CPU/16)
     if ((frame_tstate_counter_ & 0x0F) == 0) {
-        board_.sound.tick();
+        board_.psg.tick();
     }
 
     frame_tstate_counter_++;
@@ -205,10 +206,10 @@ bus_state_t ColecoVisionSystem::io_tick(bus_state_t pins) {
         BUS_SET_ADDR(vdp_bus, 0);  // port 0 = data
         BUS_SET_DATA(vdp_bus, BUS_GET_DATA(pins));
         if (is_read) {
-            vdp_bus = TMS9918A::port_read(&board_.video, vdp_bus);
+            vdp_bus = TMS9918A::port_read(&board_.vdp, vdp_bus);
             BUS_SET_DATA(pins, BUS_GET_DATA(vdp_bus));
         } else {
-            TMS9918A::port_write(&board_.video, vdp_bus);
+            TMS9918A::port_write(&board_.vdp, vdp_bus);
         }
         return pins;
     }
@@ -219,10 +220,10 @@ bus_state_t ColecoVisionSystem::io_tick(bus_state_t pins) {
         BUS_SET_ADDR(vdp_bus, 1);  // port 1 = control/status
         BUS_SET_DATA(vdp_bus, BUS_GET_DATA(pins));
         if (is_read) {
-            vdp_bus = TMS9918A::port_read(&board_.video, vdp_bus);
+            vdp_bus = TMS9918A::port_read(&board_.vdp, vdp_bus);
             BUS_SET_DATA(pins, BUS_GET_DATA(vdp_bus));
         } else {
-            TMS9918A::port_write(&board_.video, vdp_bus);
+            TMS9918A::port_write(&board_.vdp, vdp_bus);
         }
         return pins;
     }
@@ -248,7 +249,7 @@ bus_state_t ColecoVisionSystem::io_tick(bus_state_t pins) {
 
     // SN76489 write (odd addresses $E1-$FF)
     if (!is_read && (port & 0xE1) == 0xE1) {
-        board_.sound.write(BUS_GET_DATA(pins));
+        board_.psg.write(BUS_GET_DATA(pins));
         return pins;
     }
 
@@ -278,12 +279,12 @@ bool ColecoVisionSystem::load_file(const char* filepath) {
 uint32_t ColecoVisionSystem::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
     if (audio_port_) return audio_port_->read_samples(buffer, max_samples);
-    return board_.sound.audio_read(buffer, max_samples);
+    return board_.psg.audio_read(buffer, max_samples);
 }
 
 void ColecoVisionSystem::set_audio_sample_rate(int sample_rate_hz) {
     audio_sample_rate_ = static_cast<uint32_t>(sample_rate_hz);
-    board_.sound.set_audio_sample_rate(sample_rate_hz);
+    board_.psg.set_audio_sample_rate(sample_rate_hz);
 }
 
 // ============================================================================
