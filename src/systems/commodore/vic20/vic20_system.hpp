@@ -2,7 +2,7 @@
 
 #include "systems/commodore/commodore_system.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/memory/ram_chip.hpp"
@@ -55,6 +55,8 @@
 // VIC-20 chip manifest — declarative system chip list
 // ============================================================================
 //
+// Row: X(ctx, type, chip, base, size, mask, overlay, label, rom_files)
+//
 // Memory map (CPU view):
 //   $0000-$03FF  RAM (always present, base RAM 0)
 //   $0400-$0FFF  Expansion block 0 (3KB) or unmapped
@@ -71,46 +73,71 @@
 // Expansion mapping is controlled by page-pointer reconfiguration.
 // Cartridge ROM is loaded into the RAM buffer and write-protected via page pointers.
 //
-// Non-bus chips (CPU, VIC, VIAs) are declared with size_bytes=0 — they are
-// factory-created by Board::create_chips() but not mapped into the bus.
-// Conditional chips use condition tags evaluated at create_chips() time.
+// Value-typed chips (CPU, VIAs) + the default PAL VIC variant are declared
+// here.  NTSC systems swap the VIC at runtime via Board::override_factory()
+// before create_chips(); see VIC20System::initialize().
+//
+// MMIO chips have their real I/O addresses ($9000/$9010/$9020) and decode
+// masks in the manifest.  io_tick() still hand-dispatches for now (mirrors,
+// Color RAM, expansion I/O), but the metadata is authoritative.
 //
 
-// Condition tags for VIC-20 configuration-dependent chips.
-namespace vic20_cond {
-    inline constexpr uint16_t kPAL  = 1;   // PAL region (MOS 6561)
-    inline constexpr uint16_t kNTSC = 2;   // NTSC region (MOS 6560)
-}
+#define VIC20_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                                          \
+    X(ctx, MOS6502,    cpu,      0x0000,     0,      0, 0, "MOS 6502",           nullptr)                                           \
+    X(ctx, RAMChip,    ram0,     0x0000,  1024,      0, 0, "Base RAM 0",         nullptr)                                           \
+    X(ctx, RAMChip,    blk0,     0x0400,  3072,      0, 0, "Expansion Block 0",  nullptr)                                           \
+    X(ctx, RAMChip,    ram1,     0x1000,  4096,      0, 0, "Base RAM 1",         nullptr)                                           \
+    X(ctx, RAMChip,    blk1,     0x2000,  8192,      0, 0, "Expansion Block 1",  nullptr)                                           \
+    X(ctx, RAMChip,    blk2,     0x4000,  8192,      0, 0, "Expansion Block 2",  nullptr)                                           \
+    X(ctx, RAMChip,    blk3,     0x6000,  8192,      0, 0, "Expansion Block 3",  nullptr)                                           \
+    X(ctx, ROMChip,    charrom,  0x8000,  4096,      0, 0, "CHARROM",            "characters.901460-03.bin|chargen.rom|901460-03.bin") \
+    X(ctx, mos6561_t,  vic,      0x9000,     0, 0x000F, 0, "MOS 6561 (PAL)",     nullptr)                                           \
+    X(ctx, mos6522_t,  via1,     0x9010,     0, 0x000F, 0, "VIA 1",              nullptr)                                           \
+    X(ctx, mos6522_t,  via2,     0x9020,     0, 0x000F, 0, "VIA 2",              nullptr)                                           \
+    X(ctx, RAMChip,    colorram, 0x9400,  1024,      0, 0, "Color RAM",          nullptr)                                           \
+    X(ctx, RAMChip,    cart,     0xA000,  8192,      0, 0, "Cartridge Area",     nullptr)                                           \
+    X(ctx, ROMChip,    basic,    0xC000,  8192,      0, 0, "BASIC ROM",          "basic.901486-01.bin|basic.rom|901486-01.bin")       \
+    X(ctx, ROMChip,    kernal,   0xE000,  8192,      0, 0, "KERNAL ROM",         "kernal.901486-07.bin|kernal.rom|901486-07.bin")
 
-inline constexpr auto kVIC20Chips = make_chip_manifest(
-    // ── Bus-mapped memory chips ──────────────────────────────────────────────────
-    Slot<RAMChip>   {0x0000, 65536, 0, "RAM"},
-    Slot<ROMChip>   {0x8000,  4096, 0, "CHARROM"}.with_rom("characters.901460-03.bin|chargen.rom|901460-03.bin"),
-    Slot<ROMChip>   {0xC000,  8192, 0, "BASIC ROM"}.with_rom("basic.901486-01.bin|basic.rom|901486-01.bin"),
-    Slot<ROMChip>   {0xE000,  8192, 0, "KERNAL ROM"}.with_rom("kernal.901486-07.bin|kernal.rom|901486-07.bin"),
-    // ── Non-bus chips (factory-created, not mapped) ──────────────────────
-    Slot<MOS6502>   {0, 0, 0, "MOS 6502"},
-    Slot<mos6561_t> {0, 0, 0, "MOS 6561 (PAL)",  vic20_cond::kPAL},
-    Slot<mos6560_t> {0, 0, 0, "MOS 6560 (NTSC)", vic20_cond::kNTSC},
-    Slot<mos6522_t> {0, 0, 0, "VIA 1"},
-    Slot<mos6522_t> {0, 0, 0, "VIA 2"}
-);
+// ── Chip count, manifest, BusTraits ──────────────────────────────────────
+
+static constexpr size_t kVIC20ChipCount = 0 VIC20_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+inline constexpr ChipManifest<kVIC20ChipCount> kVIC20Chips = ChipManifest<kVIC20ChipCount>{{
+    VIC20_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
+
+// Slot indices for runtime override (constexpr lookup by factory pointer).
+inline constexpr size_t kVIC20_VicSlot = kVIC20Chips.find<mos6561_t>();
+
+// Cart slot index (constexpr lookup by base address).
+inline constexpr size_t kVIC20_CartSlot = [] {
+    for (size_t i = 0; i < kVIC20ChipCount; ++i)
+        if (kVIC20Chips.chips[i].base_addr == 0xA000) return i;
+    return kVIC20ChipCount;
+}();
 
 struct VIC20BusTraits {
     static constexpr const auto& kManifest = kVIC20Chips;
     using Spec = ManifestBusSpec<kVIC20Chips, 16, 8>;
 };
 
-// Value-typed chips: CPU + 2× VIA.  VIC stays factory-created (PAL/NTSC conditional).
-struct VIC20Chipset : CoreChips<MOS6502, NoChip, NoChip, mos6522_t> {
-    mos6522_t via2;
+// ============================================================================
+// VIC-20 Chips — value-typed chipset owned by Board
+// ============================================================================
+// All 16 chips are value-typed.  The PAL VIC (mos6561_t) is the default.
+// For NTSC, the VIC slot is unbound and factory-replaced with mos6560_t
+// before create_chips() — the value-typed field sits unused (~200 bytes).
+// Both variants are accessed uniformly via vic_base_t* vic_.
+//
+// RAM layout: ram0/blk0/ram1/blk1/blk2/blk3 are declared in address order
+// and thus contiguous in Board's flat memory ($0000-$7FFF, 32 KB).  Code
+// that reads this range (VIC video callbacks, load helpers) may index
+// ram0.data() beyond the chip's own 1 KB — the contiguity guarantee
+// makes this safe.
 
-    template<typename B> void bind_extras(B& board) {
-        board.bind_chip(board.template find_index<mos6522_t>(1), &via2);
-    }
-    template<typename B> void register_extras(B& board) {
-        board.register_component(&via2);
-    }
+struct VIC20Chipset {
+    VIC20_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
 };
 
 class VIC20System : public CommodoreSystem {
@@ -157,17 +184,25 @@ private:
     Bus mem_bus_;
     MainBoard board_{kVIC20Chips};
 
-    // Convenience chip pointers (memory chips owned by board_)
-    RAMChip* ram_         = nullptr;  // 64 KB flat mem
-    ROMChip* charrom_     = nullptr;  // Character ROM $8000-$8FFF (4 KB)
-    ROMChip* basic_rom_   = nullptr;  // BASIC ROM $C000-$DFFF (8 KB)
-    ROMChip* kernal_rom_  = nullptr;  // KERNAL ROM $E000-$FFFF (8 KB)
-    vic_base_t* vic_      = nullptr;  // VIC chip: MOS 6561 (PAL) or MOS 6560 (NTSC) — factory-created
+    // VIC chip — polymorphic pointer, concrete type depends on PAL/NTSC config.
+    // PAL: points to value-typed board_.vic (mos6561_t).
+    // NTSC: points to heap-owned mos6560_t created by Board::create_chips().
+    vic_base_t* vic_ = nullptr;
     
     // System state
     uint8_t expansion_flags_;        // Expansion RAM configuration
     bool cartridge_present_ = false; // Whether a cartridge ROM is loaded
     bool initialized_ = false;
+
+public:
+    // Load callback context — two contiguous regions addressable by the
+    // commodore_load_context_t callbacks (write_byte / mem_read).
+    struct MemLoadCtx {
+        uint8_t* ram_base;   // board_.ram0.data() — contiguous for $0000-$7FFF
+        uint8_t* cart_base;  // board_.cart.data() — for $A000-$BFFF
+    };
+private:
+    MemLoadCtx load_mem_ctx_{};
 
     // ---- CommodoreSystem loading hooks ----
     bool is_basic_ready() const override;

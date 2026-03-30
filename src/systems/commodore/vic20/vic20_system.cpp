@@ -160,10 +160,10 @@ static bool is_vic20_load_address(uint16_t addr) {
            addr == vic20_constants::BASIC_START_3K ||
            addr == vic20_constants::BASIC_START_8K ||
            addr == 0x1000 ||                               // Default screen RAM start / ML
-           addr == vic20_constants::BLK1_START ||
-           addr == vic20_constants::BLK2_START ||
-           addr == vic20_constants::BLK3_START ||
-           addr == vic20_constants::BLK5_START;
+           addr == 0x2000 ||                               // Expansion block 1
+           addr == 0x4000 ||                               // Expansion block 2
+           addr == 0x6000 ||                               // Expansion block 3
+           addr == 0xA000;                                 // Cartridge ROM
 }
 
 // ============================================================================
@@ -196,15 +196,15 @@ static int vic20_memory_index_for_prg(uint16_t load_addr, uint32_t end_addr) {
         if (end_addr > 0x5FFF) mem = 3;
         if (end_addr > 0x7FFF) mem = 5;
     } else {
-        if (load_addr >= vic20_constants::BLK0_START && load_addr < vic20_constants::BLK0_END) mem = 1;
-        if (load_addr >= vic20_constants::BLK1_START && load_addr < vic20_constants::BLK1_END) mem = 3;
-        if ((load_addr >= vic20_constants::BLK2_START && load_addr < vic20_constants::BLK2_END) ||
-            (end_addr > vic20_constants::BLK2_START && end_addr <= vic20_constants::BLK2_END))
+        if (load_addr >= 0x0400 && load_addr < 0x1000) mem = 1;
+        if (load_addr >= 0x2000 && load_addr < 0x4000) mem = 3;
+        if ((load_addr >= 0x4000 && load_addr < 0x6000) ||
+            (end_addr > 0x4000 && end_addr <= 0x6000))
             { if (mem < 2) mem = 2; }
-        if ((load_addr >= vic20_constants::BLK3_START && load_addr < vic20_constants::BLK3_END) ||
-            (end_addr > vic20_constants::BLK3_START && end_addr <= vic20_constants::BLK3_END))
+        if ((load_addr >= 0x6000 && load_addr < 0x8000) ||
+            (end_addr > 0x6000 && end_addr <= 0x8000))
             { if (mem < 4) mem = 4; }
-        if (end_addr > vic20_constants::BLK3_START && load_addr < vic20_constants::BLK3_START)
+        if (end_addr > 0x6000 && load_addr < 0x6000)
             { if (mem < 4) mem = 4; }
     }
 
@@ -337,15 +337,15 @@ static SystemProbeResult vic20_probe_file(
                             if (is_vic20_load_address(addr)) found_vic20 = true;
 
                             // Accumulate memory expansion from each entry
-                            if (addr >= vic20_constants::BLK0_START && addr < vic20_constants::BLK0_END)  { if (mem_index < 1) mem_index = 1; }
-                            if (addr >= vic20_constants::BLK1_START && addr < vic20_constants::BLK1_END)  { if (mem_index < 3) mem_index = 3; }
-                            if ((addr >= vic20_constants::BLK2_START && addr < vic20_constants::BLK2_END) || (ea > vic20_constants::BLK2_START && ea <= vic20_constants::BLK2_END))
+                            if (addr >= 0x0400 && addr < 0x1000)  { if (mem_index < 1) mem_index = 1; }
+                            if (addr >= 0x2000 && addr < 0x4000)  { if (mem_index < 3) mem_index = 3; }
+                            if ((addr >= 0x4000 && addr < 0x6000) || (ea > 0x4000 && ea <= 0x6000))
                                 { if (mem_index < 2) mem_index = 2; }
-                            if ((addr >= vic20_constants::BLK3_START && addr < vic20_constants::BLK3_END) || (ea > vic20_constants::BLK3_START && ea <= vic20_constants::BLK3_END))
+                            if ((addr >= 0x6000 && addr < 0x8000) || (ea > 0x6000 && ea <= 0x8000))
                                 { if (mem_index < 4) mem_index = 4; }
                             if (addr == vic20_constants::BASIC_START_3K) { if (mem_index < 1) mem_index = 1; }
                             if (addr == vic20_constants::BASIC_START_8K) { if (mem_index < 2) mem_index = 2; }
-                            if (ea > vic20_constants::BLK3_START && addr < vic20_constants::BLK3_START) { if (mem_index < 4) mem_index = 4; }
+                            if (ea > 0x6000 && addr < 0x6000) { if (mem_index < 4) mem_index = 4; }
                         }
                     }
                 }
@@ -561,33 +561,30 @@ bool VIC20System::initialize() {
     printf("VIC20: Initializing system\n");
     register_board(&board_);
     
-    // ── Condition callback for PAL/NTSC variant selection ────────────────
-    auto vic20_condition = [](uint16_t cond, const void* ctx) -> bool {
-        auto* cfg = static_cast<const SystemConfiguration*>(ctx);
-        bool is_pal = (cfg->region_option_index <= 0);
-        switch (cond) {
-            case vic20_cond::kPAL:  return is_pal;
-            case vic20_cond::kNTSC: return !is_pal;
-            default:                return false;
-        }
-    };
+    // ── Bind all value-typed chips, then factory-create memory chips ─────
+    { size_t slot_idx_ = 0;
+      VIC20_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
 
-    // ── Bind value-typed Chips (CPU + VIAs), then create remaining chips ──
-    board_.bind_chipset();
-    board_.create_chips(&bus_.state, vic20_condition, &config_);
+    // ── NTSC: swap the PAL VIC for a factory-created MOS 6560 ────────────
+    const bool is_ntsc = (config_.region_option_index > 0);
+    if (is_ntsc) {
+        board_.unbind_slot(kVIC20_VicSlot);
+        board_.override_factory(kVIC20_VicSlot, resolve_slot_factory<mos6560_t>());
+        board_.override_label(kVIC20_VicSlot, "MOS 6560 (NTSC)");
+    }
+
+    board_.create_chips(&bus_.state);
     board_.apply(mem_bus_);
 
-    // ── Retrieve typed convenience pointers ──────────────────────────────
-    ram_        = board_.find<RAMChip>();
-    charrom_    = board_.find<ROMChip>();
-    basic_rom_  = board_.find<ROMChip>(1);
-    kernal_rom_ = board_.find<ROMChip>(2);
-    vic_        = board_.find<mos6561_t>();
-    if (!vic_) vic_ = board_.find<mos6560_t>();
+    // ── Retrieve polymorphic VIC pointer ─────────────────────────────────
+    vic_ = board_.chip_as<vic_base_t>(kVIC20_VicSlot);
     
     // Initialize Color RAM to cyan (color 3) for proper text visibility
-    // Color RAM lives in the RAM buffer at $9400 (within the I/O-handled region)
-    memset(ram_->data() + VIC20_BASE_COLOR_RAM, VIC_COLOR_CYAN, 1024);
+    memset(board_.colorram.data(), VIC_COLOR_CYAN, 1024);
+
+    // Initialize load callback pointers (ram0 through blk3 are contiguous
+    // in Board flat memory, so ram0.data() serves as base for $0000-$7FFF).
+    load_mem_ctx_ = { board_.ram0.data(), board_.cart.data() };
     
     // Load ROMs into ROMChip buffers
     bool roms_loaded = load_roms();
@@ -601,18 +598,19 @@ bool VIC20System::initialize() {
     board_.cpu.init();
     board_.cpu.reset();
     
-    // VIC — region-dependent variant was selected by condition callback
+    // VIC — PAL uses value-typed board_.vic, NTSC uses heap-created mos6560_t.
+    // Both accessed uniformly via vic_ (vic_base_t*).
     if (!vic_) {
         printf("VIC20: Failed to create VIC chip\n");
         return false;
     }
-    // init() is on the concrete types, not on vic_base_t — call via the slot
-    if (auto* pal = board_.find<mos6561_t>())
-        pal->init();
-    else if (auto* ntsc = board_.find<mos6560_t>())
-        ntsc->init();
+    if (is_ntsc) {
+        static_cast<mos6560_t*>(vic_)->init();
+    } else {
+        board_.vic.init();
+    }
     printf("VIC20: Created %s VIC chip\n",
-           (config_.region_option_index <= 0) ? "MOS6561 (PAL)" : "MOS6560 (NTSC)");
+           is_ntsc ? "MOS6560 (NTSC)" : "MOS6561 (PAL)");
     
     // Set up VIC memory callbacks for accessing video and character memory
     vic_->set_memory_callbacks(
@@ -624,8 +622,8 @@ bool VIC20System::initialize() {
     // VIA chips (MOS6522) — value-typed in Chips
     // VIC-20 hardware: VIA1 ($9110) → NMI line, VIA2 ($9120) → IRQ line
     // VIA2 Timer 1 is the system heartbeat (jiffy clock, keyboard scan, cursor blink)
-    board_.io.reset();
-    board_.io.interrupt_bit = BUS_NMI_BIT;
+    board_.via1.reset();
+    board_.via1.interrupt_bit = BUS_NMI_BIT;
 
     board_.via2.reset();
     board_.via2.interrupt_bit = BUS_IRQ_BIT;
@@ -694,11 +692,10 @@ void VIC20System::reset() {
     }
     
     // Clear RAM (zero page, stack, main RAM $0000-$7FFF) but preserve ROMs
-    if (ram_) {
-        memset(ram_->data(), 0, 0x8000);             // $0000-$7FFF: all RAM
-        // Reinitialize Color RAM to default cyan
-        memset(ram_->data() + VIC20_BASE_COLOR_RAM, VIC_COLOR_CYAN, 1024);
-    }
+    // ram0 through blk3 are contiguous in Board flat memory.
+    memset(board_.ram0.data(), 0, 0x8000);            // $0000-$7FFF: all RAM
+    // Reinitialize Color RAM to default cyan
+    memset(board_.colorram.data(), VIC_COLOR_CYAN, 1024);
     
     // Clear the framebuffer to black
     if (rgba_framebuffer_ && rgba_width_ > 0 && rgba_height_ > 0) {
@@ -763,11 +760,11 @@ bus_state_t VIC20System::io_tick(bus_state_t s) {
             bus_state_t chip_state = 0;
             BUS_SET_ADDR(chip_state, offset & 0x0F);
             if (is_read) {
-                chip_state = board_.io.registers_read(chip_state);
+                chip_state = board_.via1.registers_read(chip_state);
                 BUS_SET_DATA(s, BUS_GET_DATA(chip_state));
             } else {
                 BUS_SET_DATA(chip_state, BUS_GET_DATA(s));
-                board_.io.registers_write(chip_state);
+                board_.via1.registers_write(chip_state);
             }
         } else {
             // VIA2 registers ($9x20-$9x2F)
@@ -786,7 +783,7 @@ bus_state_t VIC20System::io_tick(bus_state_t s) {
     case 1: {
         // $9400-$97FF: Color RAM (4-bit wide)
         uint16_t offset = addr & 0x03FF;
-        uint8_t* colorram = ram_->data() + VIC20_BASE_COLOR_RAM;
+        uint8_t* colorram = board_.colorram.data();
         if (is_read) {
             BUS_SET_DATA(s, colorram[offset] | 0xF0);  // Upper nibble is garbage
         } else {
@@ -826,7 +823,7 @@ void VIC20System::tick() {
     // PHASE 2: VIA CHIPS TICKING (BEFORE CPU PHI2)
     // VIA chips handle I/O and timing, must tick before CPU to set interrupt lines
     // =========================================================================
-    s = board_.io.tick(s);
+    s = board_.via1.tick(s);
     s = board_.via2.tick(s);
     
     // =========================================================================
@@ -885,19 +882,20 @@ void VIC20System::run_frame() {
 // ============================================================================
 
 static uint8_t vic20_mem_read_for_load(void* ctx, uint16_t addr) {
-    RAMChip* ram = static_cast<RAMChip*>(ctx);
-    return ram->data()[addr];
+    auto* m = static_cast<VIC20System::MemLoadCtx*>(ctx);
+    if (addr < 0x8000) return m->ram_base[addr];
+    if (addr >= 0xA000 && addr < 0xC000) return m->cart_base[addr - 0xA000];
+    return 0xFF;
 }
 
 static void vic20_mem_write_byte_cb(void* ctx, uint16_t addr, uint8_t val) {
-    RAMChip* ram = static_cast<RAMChip*>(ctx);
-    ram->data()[addr] = val;
+    auto* m = static_cast<VIC20System::MemLoadCtx*>(ctx);
+    if (addr < 0x8000) m->ram_base[addr] = val;
+    else if (addr >= 0xA000 && addr < 0xC000) m->cart_base[addr - 0xA000] = val;
 }
 
 bool VIC20System::is_basic_ready() const {
-    if (!ram_) return false;
-
-    const uint8_t* ram = ram_->data();
+    const uint8_t* ram = board_.ram0.data();
 
     // BASIC warm-start vector at $0302/$0303 = $C474
     if (ram[0x0302] != vic20_constants::BASIC_WARMSTART_LO ||
@@ -921,20 +919,19 @@ commodore_load_context_t VIC20System::build_load_context() {
     ctx.write_byte      = vic20_mem_write_byte_cb;
     ctx.write_block     = nullptr;  // VIC-20 uses banked memory, no memcpy
     ctx.mem_read        = vic20_mem_read_for_load;
-    ctx.mem_ctx         = ram_;
+    ctx.mem_ctx         = &load_mem_ctx_;
     ctx.basic_params    = &COMMODORE_BASIC_VIC20;
     ctx.basic_start_addrs[0] = vic20_constants::BASIC_START_3K;
     ctx.basic_start_addrs[1] = vic20_constants::BASIC_START_UNEXPANDED;
     ctx.basic_start_addrs[2] = vic20_constants::BASIC_START_8K;
-    ctx.default_raw_addr = vic20_constants::BLK5_START;
+    ctx.default_raw_addr = 0xA000;
     ctx.set_pc          = nullptr;  // VIC-20 uses keyboard buffer injection
     ctx.try_sys_from_filename = true;
     return ctx;
 }
 
 void VIC20System::inject_keys(const char* str) {
-    if (!ram_) return;
-    uint8_t* ram = ram_->data();
+    uint8_t* ram = board_.ram0.data();
     int len = static_cast<int>(strlen(str));
     if (len > 10) len = 10;  // VIC-20 keyboard buffer capacity
     for (int i = 0; i < len; i++) {
@@ -964,9 +961,10 @@ bool VIC20System::on_file_parsed(format_load_result_t& result,
     return true;
 }
 
-/// Callback context for CRT CHIP packet loading into VIC-20 RAM buffer.
+/// Callback context for CRT CHIP packet loading into VIC-20 chip buffers.
 struct vic20_crt_load_ctx {
-    RAMChip* ram;
+    uint8_t* ram_base;   // board_.ram0.data() — contiguous for $0000-$7FFF
+    uint8_t* cart_base;  // board_.cart.data() — for $A000-$BFFF
     int chips_loaded;
 };
 
@@ -986,8 +984,20 @@ static bool vic20_crt_chip_loader(const commodore_crt_chip_t* chip,
         return false;
     }
 
-    // Load ROM data into RAM buffer at the specified address
-    memcpy(ctx->ram->data() + chip->load_address, rom_data, chip->rom_size);
+    // Route ROM data to the correct chip buffer:
+    // $A000-$BFFF → cart chip, $0000-$7FFF → contiguous RAM from ram0
+    uint8_t* dest;
+    if (chip->load_address >= 0xA000 && chip->load_address < 0xC000)
+        dest = ctx->cart_base + (chip->load_address - 0xA000);
+    else if (chip->load_address < 0x8000)
+        dest = ctx->ram_base + chip->load_address;
+    else {
+        printf("VIC20: CHIP bank %u at unexpected address $%04X\n",
+               chip->bank_number, chip->load_address);
+        return false;
+    }
+
+    memcpy(dest, rom_data, chip->rom_size);
     printf("VIC20: Loaded %uKB ROM at $%04X\n", chip->rom_size / 1024, chip->load_address);
 
     ctx->chips_loaded++;
@@ -1031,8 +1041,8 @@ bool VIC20System::pre_apply_pending_load() {
     cartridge_present_ = true;
     setup_cartridge_pages(true);
 
-    // Iterate CHIP packets and load ROM data into the RAM buffer
-    vic20_crt_load_ctx load_ctx = { ram_, 0 };
+    // Iterate CHIP packets and load ROM data into chip buffers
+    vic20_crt_load_ctx load_ctx = { board_.ram0.data(), board_.cart.data(), 0 };
     int chip_count = commodore_crt_iterate_chips(
         file_data, file_size, hdr,
         vic20_crt_chip_loader, &load_ctx);
@@ -1109,9 +1119,7 @@ void VIC20System::render_system_menu_items() {
 // After apply(), all 256 pages point to RAM (read+write) with ROM overlays.
 // We override only the expansion blocks that are NOT present + I/O region.
 void VIC20System::setup_expansion_map() {
-    constexpr size_t kRamBase = kVIC20Chips.base_id(kVIC20Chips.find<RAMChip>(), 8);
-
-    // Reset: apply() gives us full 64KB RAM + ROM overlays
+    // Reset: apply() gives us full RAM + ROM overlays for all declared chips
     board_.apply(mem_bus_);
 
     // $9000-$9FFF (pages $90-$9F): I/O — handled manually in mem_tick/io_tick
@@ -1147,11 +1155,11 @@ void VIC20System::setup_expansion_map() {
 // When absent: $A000-$BFFF is unmapped (no chip selected for both read and write).
 void VIC20System::setup_cartridge_pages(bool present) {
     using CId = typename Bus::ChipId;
-    constexpr size_t kRamBase = kVIC20Chips.base_id(kVIC20Chips.find<RAMChip>(), 8);
+    constexpr size_t kCartBase = kVIC20Chips.base_id(kVIC20_CartSlot, 8);
 
     if (present) {
-        // Reads from RAM buffer (cartridge data loaded there), writes blocked
-        mem_bus_.fill_read_pages(0, 0xA0, 0x20, CId(kRamBase + 0xA0));
+        // Reads from cart chip buffer (cartridge data loaded there), writes blocked
+        mem_bus_.fill_read_pages(0, 0xA0, 0x20, CId(kCartBase));
         mem_bus_.map_write_no_chip_selected(0, 0xA0, 0x20);
     } else {
         // Unmapped: floating bus on read, writes ignored
@@ -1415,25 +1423,25 @@ VIC20System::get_default_peripherals() const {
 // VA13=1 ($2000-$3FFF): CPU RAM $0000-$1FFF
 uint8_t VIC20System::vic_mem_read(void* user_data, uint16_t addr) {
     VIC20System* sys = static_cast<VIC20System*>(user_data);
-    if (!sys || !sys->ram_) return 0xFF;
+    if (!sys) return 0xFF;
 
     if (addr < 0x2000) {
         // Character ROM — 4KB at $8000 in ROM chip, mirrored to 8KB via 0x0FFF mask
-        if (sys->charrom_)
-            return sys->charrom_->data()[addr & 0x0FFF];
-        return 0xFF;
+        return sys->board_.charrom.data()[addr & 0x0FFF];
     } else {
         // RAM — VIC sees CPU $0000-$1FFF
-        return sys->ram_->data()[addr & 0x1FFF];
+        // ram0/blk0/ram1 are contiguous in Board flat memory, so
+        // ram0.data() serves as base pointer for the whole $0000-$1FFF range.
+        return sys->board_.ram0.data()[addr & 0x1FFF];
     }
 }
 
 // Color RAM read — 10-bit address (1 KB), 4-bit wide
 uint8_t VIC20System::vic_color_read(void* user_data, uint16_t addr) {
     VIC20System* sys = static_cast<VIC20System*>(user_data);
-    if (!sys || !sys->ram_) return 0x0F;
+    if (!sys) return 0x0F;
 
-    return sys->ram_->data()[VIC20_BASE_COLOR_RAM + (addr & 0x03FF)] & 0x0F;
+    return sys->board_.colorram.data()[addr & 0x03FF] & 0x0F;
 }
 
 // ============================================================================
