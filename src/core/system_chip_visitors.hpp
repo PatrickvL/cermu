@@ -21,9 +21,8 @@
 //                    For MMIO-only chips: register address mask
 //                    (e.g. 0x3F → 64 register addresses).
 //   7.  overlay    — overlay_group (0 for non-overlaid, 1+ for PLA-switched)
-//   8.  label      — display label for manifest
-//   9.  info_label — descriptive label for info tables / PLA debug GUI
-//   10. rom_files  — optional ROM filename patterns (nullptr if N/A)
+//   8.  label      — display label (manifest, PLA debug GUI, chip display name)
+//   9.  rom_files  — optional ROM filename patterns (nullptr if N/A)
 //
 // Buffer vs MMIO distinction is explicit via the size column:
 //   size > 0  → buffer chip (flat-memory allocation)
@@ -53,8 +52,8 @@ inline constexpr RomFileInfo parse_rom_spec(const char* spec) noexcept {
 //   size > 0  → size_bytes = size,  addr_mask = mask (0 means "use size-1")
 //   size == 0 → size_bytes = 0,     addr_mask = mask
 //
-#define CERMU_CHIP_VISITOR_MANIFEST_ROW(ctx, type, chip, base, size, mask, overlay, label, info_label, rom_files) \
-    ChipSlot{base, (size_t)(size), (uint32_t)(mask),                                                             \
+#define CERMU_CHIP_VISITOR_MANIFEST_ROW(ctx, type, chip, base, size, mask, overlay, label, rom_files) \
+    ChipSlot{base, (size_t)(size), (uint32_t)(mask),                                                  \
              0, 0, overlay, resolve_slot_factory<type>(), label, 0, parse_rom_spec(rom_files)},
 
 // ── Chipset Field Declaration Visitor ────────────────────────────────────────
@@ -62,7 +61,7 @@ inline constexpr RomFileInfo parse_rom_spec(const char* spec) noexcept {
 // Declares a value-typed field in the chipset struct.
 // Emitted for every chip — all chips are value members.
 //
-#define CERMU_CHIP_VISITOR_DECLARE_FIELD(ctx, type, chip, base, size, mask, overlay, label, info_label, rom_files) \
+#define CERMU_CHIP_VISITOR_DECLARE_FIELD(ctx, type, chip, base, size, mask, overlay, label, rom_files) \
     type chip;
 
 // ── Sequential Binding Visitor ────────────────────────────────────────────────
@@ -71,14 +70,14 @@ inline constexpr RomFileInfo parse_rom_spec(const char* spec) noexcept {
 // Requires a `size_t slot_idx_ = 0;` variable in scope before expansion.
 // Slot order matches manifest array order (both generated from the same macro).
 //
-#define CERMU_CHIP_VISITOR_BIND_SEQUENTIAL(ctx, type, chip, base, size, mask, overlay, label, info_label, rom_files) \
+#define CERMU_CHIP_VISITOR_BIND_SEQUENTIAL(ctx, type, chip, base, size, mask, overlay, label, rom_files) \
     ctx.bind_chip(slot_idx_++, &ctx.chip);
 
 // ── Component Registration Visitor ───────────────────────────────────────────
 //
 // Emits a ctx.register_component(&ctx.chip) call.
 //
-#define CERMU_CHIP_VISITOR_REGISTER_COMPONENT(ctx, type, chip, base, size, mask, overlay, label, info_label, rom_files) \
+#define CERMU_CHIP_VISITOR_REGISTER_COMPONENT(ctx, type, chip, base, size, mask, overlay, label, rom_files) \
     ctx.register_component(&ctx.chip);
 
 // ── Info Row Visitor (for chip info tables) ──────────────────────────────────
@@ -86,15 +85,15 @@ inline constexpr RomFileInfo parse_rom_spec(const char* spec) noexcept {
 // Emits a row in a chip info lookup table (used for PLA debug GUI and metadata).
 // Uses size directly when non-zero; falls back to mask+1 for MMIO chips.
 //
-#define CERMU_CHIP_VISITOR_INFO_ROW(ctx, type, chip, base, size, mask, overlay, label, info_label, rom_files) \
-    {base, (size) > 0 ? (size_t)(size) : (size_t)(mask) + 1, info_label},
+#define CERMU_CHIP_VISITOR_INFO_ROW(ctx, type, chip, base, size, mask, overlay, label, rom_files) \
+    {base, (size) > 0 ? (size_t)(size) : (size_t)(mask) + 1, label},
 
 // ── Convenience-Pointer Declaration Visitor ──────────────────────────────────
 //
 // Declares a convenience pointer (type* chip = nullptr) in the system class.
 // These are non-owning pointers into the chipset's value-typed fields.
 //
-#define CERMU_CHIP_VISITOR_DECLARE_POINTER(ctx, type, chip, base, size, mask, overlay, label, info_label, rom_files) \
+#define CERMU_CHIP_VISITOR_DECLARE_POINTER(ctx, type, chip, base, size, mask, overlay, label, rom_files) \
     type* chip = nullptr;
 
 // ── Convenience-Pointer Assignment Visitor ───────────────────────────────────
@@ -102,14 +101,14 @@ inline constexpr RomFileInfo parse_rom_spec(const char* spec) noexcept {
 // Assigns each convenience pointer from ctx.chip, where ctx is
 // the Board reference.  Expand inside a member function (uses `this`).
 //
-#define CERMU_CHIP_VISITOR_ASSIGN_POINTER(ctx, type, chip, base, size, mask, overlay, label, info_label, rom_files) \
+#define CERMU_CHIP_VISITOR_ASSIGN_POINTER(ctx, type, chip, base, size, mask, overlay, label, rom_files) \
     this->chip = &ctx.chip;
 
 // ── Convenience-Pointer Null Visitor ─────────────────────────────────────────
 //
 // Nulls out each convenience pointer during shutdown.
 //
-#define CERMU_CHIP_VISITOR_NULL_POINTER(ctx, type, chip, base, size, mask, overlay, label, info_label, rom_files) \
+#define CERMU_CHIP_VISITOR_NULL_POINTER(ctx, type, chip, base, size, mask, overlay, label, rom_files) \
     this->chip = nullptr;
 
 // ── Enum Value Visitor ────────────────────────────────────────────────────────
@@ -118,11 +117,11 @@ inline constexpr RomFileInfo parse_rom_spec(const char* spec) noexcept {
 // per chip with the same name as the chip field.  The resulting enum values
 // are sequential and match the manifest slot indices.
 //
-#define CERMU_CHIP_VISITOR_ENUM_VALUE(ctx, type, chip, base, size, mask, overlay, label, info_label, rom_files) \
+#define CERMU_CHIP_VISITOR_ENUM_VALUE(ctx, type, chip, base, size, mask, overlay, label, rom_files) \
     chip,
 
 // ── Count Visitor ────────────────────────────────────────────────────────────
 //
 // Expands to +1 for each chip.  Use as: `0 FOREACH(COUNT_ONE, unused)`
 //
-#define CERMU_CHIP_VISITOR_COUNT_ONE(ctx, type, chip, base, size, mask, overlay, label, info_label, rom_files) +1
+#define CERMU_CHIP_VISITOR_COUNT_ONE(ctx, type, chip, base, size, mask, overlay, label, rom_files) +1

@@ -26,7 +26,7 @@
 // Every chip is declared once.  Visitors generate manifest, chipset fields,
 // binding, and component registration from this list.
 //
-// Row: X(ctx, type, chip, base, mask, overlay, label, info_label, rom_files)
+// Row: X(ctx, type, chip, base, size, mask, overlay, label, rom_files)
 //
 //   Slot 0: RAM         — 64 KB (full address space, actual size configurable)
 //   Slot 1: Monitor ROM — 256 bytes at $FF00
@@ -40,11 +40,11 @@
 //
 
 #define APPLE1_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                \
-    X(ctx, MOS6502,    cpu,     0x0000,       0,      0, 0, "MOS 6502","MOS 6502",    nullptr)             \
-    X(ctx, RAMChip,    ram,     0x0000, 0x10000,      0, 0, "RAM",     "RAM",          nullptr)            \
-    X(ctx, pia6820_t,  pia,     0xD010,       0, 0xFFFC, 0, "PIA",     "PIA 6820",    nullptr)             \
-    X(ctx, ROMChip,    basic,   0xE000,  0x1000,      0, 0, "BASIC",   "BASIC ROM",   "?apple1basic.rom|basic.rom") \
-    X(ctx, ROMChip,    monitor, 0xFF00,  0x0100,      0, 0, "Monitor", "Monitor ROM",  "apple1.rom|monitor.rom|wozmon.rom")
+    X(ctx, MOS6502,    cpu,     0x0000,       0,      0, 0, "MOS 6502",  nullptr)                          \
+    X(ctx, RAMChip,    ram,     0x0000, 0x10000,      0, 0, "RAM",       nullptr)                          \
+    X(ctx, pia6820_t,  pia,     0xD010,       0, 0xFFFC, 0, "PIA",       nullptr)                          \
+    X(ctx, ROMChip,    basic,   0xE000,  0x1000,      0, 0, "BASIC",     "?apple1basic.rom|basic.rom")     \
+    X(ctx, ROMChip,    monitor, 0xFF00,  0x0100,      0, 0, "Monitor",   "apple1.rom|monitor.rom|wozmon.rom")
 
 static constexpr size_t kApple1ChipCount = 0 APPLE1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 

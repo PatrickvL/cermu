@@ -33,7 +33,7 @@
 // ColecoVision chip declaration — single source of truth
 // =============================================================================
 //
-// Row: X(ctx, type, chip, base, mask, overlay, label, info_label, rom_files)
+// Row: X(ctx, type, chip, base, size, mask, overlay, label, rom_files)
 //
 //   Slot 0: BIOS ROM — 8KB at $0000
 //   Slot 1: Cart ROM — 32KB at $8000
@@ -44,12 +44,12 @@
 //
 
 #define COLECO_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                \
-    X(ctx, ZilogZ80A,   z80,   0x0000,      0, 0, 0, "Z80A",      "Z80A",      nullptr)                   \
-    X(ctx, ROMChip,     bios,  0x0000, 0x2000, 0, 0, "BIOS ROM",  "BIOS ROM",  "coleco.rom|colecovision.rom|COLECO.ROM") \
-    X(ctx, RAMChip,     ram,   0x6000, 0x0400, 0, 0, "RAM",       "RAM",       nullptr)                   \
-    X(ctx, ROMChip,     cart,  0x8000, 0x8000, 0, 0, "Cart ROM",  "Cart ROM",  nullptr)                   \
-    X(ctx, TMS9918A,    vdp,   0x00BE,      0, 0, 0, "TMS9918A",  "TMS9918A",  nullptr)                   \
-    X(ctx, sn76489_t,   psg,   0x00FF,      0, 0, 0, "SN76489",   "SN76489",   nullptr)
+    X(ctx, ZilogZ80A,   z80,   0x0000,      0, 0, 0, "Z80A",      nullptr)                                 \
+    X(ctx, ROMChip,     bios,  0x0000, 0x2000, 0, 0, "BIOS ROM",  "coleco.rom|colecovision.rom|COLECO.ROM") \
+    X(ctx, RAMChip,     ram,   0x6000, 0x0400, 0, 0, "RAM",       nullptr)                                 \
+    X(ctx, ROMChip,     cart,  0x8000, 0x8000, 0, 0, "Cart ROM",  nullptr)                                 \
+    X(ctx, TMS9918A,    vdp,   0x00BE,      0, 0, 0, "TMS9918A",  nullptr)                                 \
+    X(ctx, sn76489_t,   psg,   0x00FF,      0, 0, 0, "SN76489",   nullptr)
 
 static constexpr size_t kColecoChipCount = 0 COLECO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 
