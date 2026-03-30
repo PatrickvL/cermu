@@ -22,7 +22,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -93,8 +93,18 @@ template<> struct MSXVariantTraits<MSXVariant::MSX2P> {
 // MSX Chips — value-typed chips embedded in Board
 // ============================================================================
 
+// Value-typed chips: all chips are fields.
+// VDP type varies per variant (TMS9918A / V9938 / V9958).
 template<MSXVariant V>
-struct MSXChips : CoreChips<ZilogZ80A, typename MSXVariantTraits<V>::VDP, AY_3_8910, i8255_t> {};
+struct MSXChipset {
+    using VDP = typename MSXVariantTraits<V>::VDP;
+    ROMChip    bios_rom;
+    RAMChip    main_ram;
+    ZilogZ80A  z80;
+    VDP        vdp;
+    AY_3_8910  psg;
+    i8255_t    ppi;
+};
 
 // ============================================================================
 // MSX default bus state
@@ -118,35 +128,38 @@ struct MSXChips : CoreChips<ZilogZ80A, typename MSXVariantTraits<V>::VDP, AY_3_8
 //   Slot 0: ROM  — 32 KB at $0000
 //   Slot 1: RAM  — 64 KB at $0000
 
-inline constexpr auto kMSX1Chips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 32768, 0, "BIOS+BASIC ROM"}.with_rom("msx.rom|msx1.rom|MSX.ROM"),
-    Slot<RAMChip>{0x0000, 65536, 0, "Main RAM"},
-    // Non-bus chips — factory-created, not address-decoded
-    Slot<ZilogZ80A>  {0, 0, 0, "Z80A"},
-    Slot<TMS9918A>   {0, 0, 0, "TMS9918A"},
-    Slot<AY_3_8910>  {0, 0, 0, "AY-3-8910"},
-    Slot<i8255_t>    {0, 0, 0, "i8255 PPI"}
-);
+// Parameterized X-macro — VDP type/label, ROM files, and RAM size vary per variant
+//                                             ctx   type       chip      base    size      mask  ovl  label              rom
+#define MSX_FOR_EACH_CHIP_IMPL(V, ctx, vdp_type, vdp_label, rom_files, ram_size) \
+    V(ctx, ROMChip,    bios_rom, 0x0000, 32768,     0, 0, "BIOS+BASIC ROM", rom_files) \
+    V(ctx, RAMChip,    main_ram, 0x0000, ram_size,   0, 0, "Main RAM",       nullptr) \
+    V(ctx, ZilogZ80A,  z80,      0,          0,      0, 0, "Z80A",           nullptr) \
+    V(ctx, vdp_type,   vdp,      0,          0,      0, 0, vdp_label,        nullptr) \
+    V(ctx, AY_3_8910,  psg,      0,          0,      0, 0, "AY-3-8910",      nullptr) \
+    V(ctx, i8255_t,    ppi,      0,          0,      0, 0, "i8255 PPI",      nullptr)
 
-inline constexpr auto kMSX2Chips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 32768, 0, "BIOS+BASIC ROM"}.with_rom("msx2.rom|MSX2.ROM"),
-    Slot<RAMChip>{0x0000, 131072, 0, "Main RAM", 0, 16384},
-    // Non-bus chips
-    Slot<ZilogZ80A>  {0, 0, 0, "Z80A"},
-    Slot<V9938>      {0, 0, 0, "V9938"},
-    Slot<AY_3_8910>  {0, 0, 0, "AY-3-8910"},
-    Slot<i8255_t>    {0, 0, 0, "i8255 PPI"}
-);
+#define MSX1_FOR_EACH_SYSTEM_CHIP(V, ctx)  MSX_FOR_EACH_CHIP_IMPL(V, ctx, TMS9918A, "TMS9918A", "msx.rom|msx1.rom|MSX.ROM",        65536)
+#define MSX2_FOR_EACH_SYSTEM_CHIP(V, ctx)  MSX_FOR_EACH_CHIP_IMPL(V, ctx, V9938,    "V9938",    "msx2.rom|MSX2.ROM",               131072)
+#define MSX2P_FOR_EACH_SYSTEM_CHIP(V, ctx) MSX_FOR_EACH_CHIP_IMPL(V, ctx, V9958,    "V9958",    "msx2p.rom|MSX2P.ROM|msx2+.rom",   65536)
 
-inline constexpr auto kMSX2PChips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 32768, 0, "BIOS+BASIC ROM"}.with_rom("msx2p.rom|MSX2P.ROM|msx2+.rom"),
-    Slot<RAMChip>{0x0000, 65536, 0, "Main RAM"},
-    // Non-bus chips
-    Slot<ZilogZ80A>  {0, 0, 0, "Z80A"},
-    Slot<V9958>      {0, 0, 0, "V9958"},
-    Slot<AY_3_8910>  {0, 0, 0, "AY-3-8910"},
-    Slot<i8255_t>    {0, 0, 0, "i8255 PPI"}
-);
+static constexpr size_t kMSXChipCount = 0 MSX1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+inline constexpr ChipManifest<kMSXChipCount> kMSX1Chips = {{
+    MSX1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
+
+inline constexpr auto make_msx2_manifest() {
+    ChipManifest<kMSXChipCount> m = {{
+        MSX2_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+    }};
+    m.chips[1].bank_size = 16384;  // Main RAM: memory mapper with 16KB banks
+    return m;
+}
+inline constexpr auto kMSX2Chips = make_msx2_manifest();
+
+inline constexpr ChipManifest<kMSXChipCount> kMSX2PChips = {{
+    MSX2P_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
 
 // BusTraits — selects the correct manifest per variant
 template<MSXVariant V> struct MSXBusTraits;
@@ -175,7 +188,7 @@ class MSXSystem : public System {
     using Traits = MSXVariantTraits<V>;
     using BT     = MSXBusTraits<V>;
     using VDP    = typename Traits::VDP;
-    using Chips  = MSXChips<V>;
+    using Chips  = MSXChipset<V>;
 
 public:
     MSXSystem();
