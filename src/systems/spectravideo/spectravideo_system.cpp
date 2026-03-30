@@ -131,7 +131,8 @@ bool SpectravideoSystem<V>::initialize() {
     register_board(&board_);
 
     // Bind value-typed Chips members, then factory-create remaining (RAM/ROM)
-    board_.bind_chipset();
+    { size_t slot_idx_ = 0;
+      SVI318_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
     board_.create_chips(&pins_);
     board_.apply(bus_);
 
@@ -139,23 +140,23 @@ bool SpectravideoSystem<V>::initialize() {
     configure_bus_memory_map();
 
     // Init chips
-    pins_ = board_.cpu.init();
-    board_.sound.init();
-    board_.io.init();
+    pins_ = board_.z80.init();
+    board_.psg.init();
+    board_.ppi.init();
 
     // PSG clock & audio
-    board_.sound.set_clock_frequency(svi_constants::CPU_FREQ_HZ / 16);
-    board_.sound.set_audio_sample_rate(audio_sample_rate_);
+    board_.psg.set_clock_frequency(svi_constants::CPU_FREQ_HZ / 16);
+    board_.psg.set_audio_sample_rate(audio_sample_rate_);
     audio_sample_period_ = svi_constants::CPU_FREQ_HZ / audio_sample_rate_;
 
     // Keyboard init — all keys released (active-low)
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 
     // PPI Port B read callback — returns keyboard column data
-    board_.io.set_port_b_read_callback(
+    board_.ppi.set_port_b_read_callback(
         [](void* ctx, uint8_t /*port_a*/) -> uint8_t {
             auto* sys = static_cast<SpectravideoSystem*>(ctx);
-            uint8_t row = sys->board_.io.get_port_a_output() & 0x0F;
+            uint8_t row = sys->board_.ppi.get_port_a_output() & 0x0F;
             if (row < svi_constants::KEYBOARD_ROWS)
                 return sys->keyboard_matrix_[row];
             return 0xFF;
@@ -171,7 +172,7 @@ bool SpectravideoSystem<V>::initialize() {
 
     // Video output
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.video.set_video_out(&video_port_->output());
+    board_.vdp.set_video_out(&video_port_->output());
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Audio port
@@ -193,12 +194,12 @@ void SpectravideoSystem<V>::shutdown() {
 template<SVIVariant V>
 void SpectravideoSystem<V>::reset() {
     board_.reset_chips();
-    pins_ = board_.cpu.reset(pins_);
+    pins_ = board_.z80.reset(pins_);
     frame_tstate_counter_ = 0;
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
-    board_.io.init();
-    board_.video.reset();
-    board_.sound.init();
+    board_.ppi.init();
+    board_.vdp.reset();
+    board_.psg.init();
 }
 
 // ============================================================================
@@ -209,7 +210,7 @@ template<SVIVariant V>
 void SpectravideoSystem<V>::tick() {
     // VDP tick
     bus_state_t vdp_bus = 0;
-    vdp_bus = board_.video.tick(vdp_bus);
+    vdp_bus = board_.vdp.tick(vdp_bus);
 
     // Forward VDP interrupt to Z80
     if (BUS_GET_BIT(vdp_bus, BUS_IRQ_BIT) == 0) {
@@ -219,7 +220,7 @@ void SpectravideoSystem<V>::tick() {
     }
 
     // CPU tick
-    pins_ = board_.cpu.tick(pins_);
+    pins_ = board_.z80.tick(pins_);
 
     // Bus dispatch
     bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);
@@ -233,14 +234,14 @@ void SpectravideoSystem<V>::tick() {
 
     // PSG tick — AY runs at CPU/16
     if ((frame_tstate_counter_ & 0x0F) == 0) {
-        board_.sound.tick();
+        board_.psg.tick();
     }
 
     // Audio sample generation
     audio_sample_counter_++;
     if (audio_sample_counter_ >= audio_sample_period_) {
         audio_sample_counter_ = 0;
-        float sample = board_.sound.get_sample();
+        float sample = board_.psg.get_sample();
         audio_ring_buf_.write(&sample, 1);
         if (audio_port_) audio_port_->drive_sample(sample);
     }
@@ -285,17 +286,17 @@ bus_state_t SpectravideoSystem<V>::io_tick(bus_state_t pins) {
         BUS_SET_DATA(vdp_bus, BUS_GET_DATA(pins));
         if (port == svi_constants::VDP_DATA_PORT) {
             if (is_read) {
-                vdp_bus = TMS9918A::port_read(&board_.video, vdp_bus);
+                vdp_bus = TMS9918A::port_read(&board_.vdp, vdp_bus);
                 BUS_SET_DATA(pins, BUS_GET_DATA(vdp_bus));
             } else {
-                TMS9918A::port_write(&board_.video, vdp_bus);
+                TMS9918A::port_write(&board_.vdp, vdp_bus);
             }
         } else {
             if (is_read) {
-                vdp_bus = TMS9918A::port_read(&board_.video, vdp_bus);
+                vdp_bus = TMS9918A::port_read(&board_.vdp, vdp_bus);
                 BUS_SET_DATA(pins, BUS_GET_DATA(vdp_bus));
             } else {
-                TMS9918A::port_write(&board_.video, vdp_bus);
+                TMS9918A::port_write(&board_.vdp, vdp_bus);
             }
         }
         return pins;
@@ -303,24 +304,24 @@ bus_state_t SpectravideoSystem<V>::io_tick(bus_state_t pins) {
 
     // PSG ports $88 (addr), $8C (write), $90 (read)
     if (port == svi_constants::PSG_ADDR_PORT && !is_read) {
-        board_.sound.latch_address(BUS_GET_DATA(pins));
+        board_.psg.latch_address(BUS_GET_DATA(pins));
         return pins;
     }
     if (port == svi_constants::PSG_DATA_WRITE_PORT && !is_read) {
-        board_.sound.write_register(BUS_GET_DATA(pins));
+        board_.psg.write_register(BUS_GET_DATA(pins));
         return pins;
     }
     if (port == svi_constants::PSG_DATA_READ_PORT && is_read) {
-        BUS_SET_DATA(pins, board_.sound.read_register());
+        BUS_SET_DATA(pins, board_.psg.read_register());
         return pins;
     }
 
     // PPI ports $96-$99
     if (port >= svi_constants::PPI_PORT_A && port <= svi_constants::PPI_CONTROL) {
         if (is_read) {
-            BUS_SET_DATA(pins, board_.io.read(port - svi_constants::PPI_PORT_A));
+            BUS_SET_DATA(pins, board_.ppi.read(port - svi_constants::PPI_PORT_A));
         } else {
-            board_.io.write(port - svi_constants::PPI_PORT_A, BUS_GET_DATA(pins));
+            board_.ppi.write(port - svi_constants::PPI_PORT_A, BUS_GET_DATA(pins));
         }
         return pins;
     }
@@ -361,7 +362,7 @@ template<SVIVariant V>
 void SpectravideoSystem<V>::set_audio_sample_rate(int sample_rate_hz) {
     audio_sample_rate_ = static_cast<uint32_t>(sample_rate_hz);
     audio_sample_period_ = svi_constants::CPU_FREQ_HZ / audio_sample_rate_;
-    board_.sound.set_audio_sample_rate(sample_rate_hz);
+    board_.psg.set_audio_sample_rate(sample_rate_hz);
 }
 
 // ============================================================================
