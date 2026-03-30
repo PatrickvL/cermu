@@ -139,6 +139,41 @@ public:
     }
 
     // =====================================================================
+    // §4.2a  Slot overrides — mutate SlotRecord copies before create_chips()
+    // =====================================================================
+    //
+    // Board holds mutable copies of the constexpr manifest's slot data.
+    // These methods let systems customise individual slots at runtime
+    // (e.g. swap a PAL chip for its NTSC variant, or assign different ROM
+    // filenames for a system revision) without duplicating the manifest.
+    //
+    // Call between register_board() and create_chips().
+    //
+
+    /// Clear a previously bound chip from a slot so create_chips() will
+    /// factory-create a chip for it (using the slot's current factory).
+    void unbind_slot(size_t slot_index) noexcept {
+        bus_map_.slot(slot_index).chip = nullptr;
+    }
+
+    /// Replace the factory function for a slot.  The new factory will be
+    /// used by create_chips() if the slot is unbound at that point.
+    void override_factory(size_t slot_index, ChipSlot::FactoryFn fn) noexcept {
+        bus_map_.slot(slot_index).factory = fn;
+    }
+
+    /// Replace the display label for a slot.
+    void override_label(size_t slot_index, const char* new_label) noexcept {
+        bus_map_.slot(slot_index).label = new_label;
+    }
+
+    /// Replace the ROM file metadata for a slot.
+    void override_rom(size_t slot_index, const char* filenames,
+                      bool optional = false) noexcept {
+        bus_map_.slot(slot_index).rom = {filenames, optional};
+    }
+
+    // =====================================================================
     // §4.3  Auto-wiring: apply()
     // =====================================================================
     //

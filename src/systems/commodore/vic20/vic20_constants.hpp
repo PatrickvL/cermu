@@ -34,15 +34,4 @@ namespace vic20_constants {
     // KERNAL keyboard buffer
     inline constexpr uint16_t KBD_BUFFER_BASE        = 0x0277;     // 10-byte keyboard buffer
     inline constexpr uint8_t  KBD_BUFFER_COUNT       = 0xC6;       // Keyboard buffer count (ZP)
-
-    // VIC-20 memory block boundaries
-    inline constexpr uint16_t BLK0_START             = 0x0400;     // Block 0: 3 KB expansion RAM
-    inline constexpr uint16_t BLK0_END               = 0x1000;     // End of block 0
-    inline constexpr uint16_t BLK1_START             = 0x2000;     // Block 1: 8 KB expansion
-    inline constexpr uint16_t BLK1_END               = 0x4000;     // End of block 1
-    inline constexpr uint16_t BLK2_START             = 0x4000;     // Block 2: 8 KB expansion
-    inline constexpr uint16_t BLK2_END               = 0x6000;     // End of block 2
-    inline constexpr uint16_t BLK3_START             = 0x6000;     // Block 3: 8 KB expansion
-    inline constexpr uint16_t BLK3_END               = 0x8000;     // End of block 3
-    inline constexpr uint16_t BLK5_START             = 0xA000;     // Block 5: cartridge ROM
 }
