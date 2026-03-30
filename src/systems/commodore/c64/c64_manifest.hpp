@@ -129,37 +129,54 @@ using C64PT       = PackingTraits<C64BusSpec>;
 using C64ChipId   = C64PT::ChipId;      // MemoryBus read-side chip/bank ID
 using C64WriteId  = C64PT::WriteChipId;  // MemoryBus write-side chip/bank ID
 
-// PLA output chip identifier — superset of MemoryBus buffer base_ids
-// (0, 1, 3, 5, 7, 9) plus PLA-specific sentinels (kIo=0xFE, kUnmapped=0xFF).
-using C64PlaChipId = uint8_t;
+// PLA chip identifier — one value per manifest slot (in declaration order),
+// plus PLA-only sentinels Io and Unmapped.  Enum values == manifest slot
+// indices for 0..kC64ChipCount-1, so kC64PlaChipTable[i] is populated
+// directly from kC64Chips.chips[i] with no manual find<>() mapping.
+enum class C64PlaChipId : uint8_t {
+    // Auto-generated from C64_FOR_EACH_SYSTEM_CHIP — order matches manifest
+    C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_ENUM_VALUE, unused)
+    // PLA-only sentinels (no manifest slot)
+    io, unmapped,
+    count
+};
+inline constexpr size_t kC64PlaChipCount = size_t(C64PlaChipId::count);
+static_assert(size_t(C64PlaChipId::io) == kC64ChipCount,
+    "Io must be the first sentinel after the manifest chips");
 
 // =============================================================================
-// §3b  Chip IDs (constexpr, derived from manifest)
+// §3a  PLA Chip Descriptor Table (central single source)
 // =============================================================================
 //
-// Base chip IDs under the page-banking scheme.  Each buffer chip's base_id
-// is the prefix sum of preceding chips' bank counts (size / 4096).
-// With size-ascending order and page banking:
-//   CHARROM=0, ROML=1, ROMH=3, BASIC=5, KERNAL=7, RAM=9
+// Maps C64PlaChipId enum → {base_id, slot*, bank_mask}.
+// Entries 0..kC64ChipCount-1 are visitor-generated from the manifest.
+// I/O and Unmapped sentinels point to standalone ChipSlot objects.
 //
 
-namespace c64_chip_ids {
-    // find<ROMChip>(n) returns the nth ROMChip in declaration order:
-    //   0=ROML, 1=BASIC, 2=ROMH, 3=CHARROM, 4=KERNAL
-    inline constexpr C64ChipId kRoml    = C64ChipId(kC64Chips.base_id(kC64Chips.find<ROMChip>(),    12));  // 1
-    inline constexpr C64ChipId kBasic   = C64ChipId(kC64Chips.base_id(kC64Chips.find<ROMChip>(1),   12));  // 5
-    inline constexpr C64ChipId kRomh    = C64ChipId(kC64Chips.base_id(kC64Chips.find<ROMChip>(2),   12));  // 3
-    inline constexpr C64ChipId kCharrom = C64ChipId(kC64Chips.base_id(kC64Chips.find<ROMChip>(3),   12));  // 0
-    inline constexpr C64ChipId kKernal  = C64ChipId(kC64Chips.base_id(kC64Chips.find<ROMChip>(4),   12));  // 7
-    inline constexpr C64ChipId kRam     = C64ChipId(kC64Chips.base_id(kC64Chips.find<RAMChip>(),    12));  // 9
+struct C64PlaChipDesc {
+    C64ChipId        base_id;    // MemoryBus base chip ID (from manifest)
+    const ChipSlot*  slot;       // → manifest slot (base_addr, size_bytes, label)
+    uint8_t          bank_mask;  // (num_4k_banks - 1) for per-bank chip-id conversion
+};
 
-    // Sentinel values for PLA outputs that don't map to buffer chips
-    inline constexpr C64PlaChipId kIo       = 0xFE;  // I/O region ($D000-$DFFF)
-    inline constexpr C64PlaChipId kUnmapped = 0xFF;  // Unmapped / open bus
+// Sentinel ChipSlot objects for PLA-only entries (no manifest slot)
+inline constexpr ChipSlot kC64PlaIoSlot       = []() { ChipSlot s{}; s.base_addr = 0xD000; s.size_bytes = 4096; s.label = "I/O"; return s; }();
+inline constexpr ChipSlot kC64PlaUnmappedSlot = []() { ChipSlot s{}; s.label = "-"; return s; }();
 
-    // Buffer-backed chip count (for iteration)
-    inline constexpr size_t kBufferChipCount = kC64Chips.buffer_chip_count();
-}
+// ctx = page_bits; chip name indexes kC64Chips via C64PlaChipId enum value
+#define C64_PLA_CHIP_DESC_(pb, type, chip, base, mask, overlay, label, info_label, rom_files)  \
+    { C64ChipId(kC64Chips.base_id(size_t(C64PlaChipId::chip), pb)),                              \
+      &kC64Chips.chips[size_t(C64PlaChipId::chip)],                                              \
+      uint8_t((kC64Chips.chips[size_t(C64PlaChipId::chip)].size_bytes >> pb)                     \
+          ? (kC64Chips.chips[size_t(C64PlaChipId::chip)].size_bytes >> pb) - 1 : 0) },
+
+inline constexpr std::array<C64PlaChipDesc, kC64PlaChipCount> kC64PlaChipTable = {{
+    C64_FOR_EACH_SYSTEM_CHIP(C64_PLA_CHIP_DESC_, 12)
+    // PLA-only sentinels
+    {C64ChipId(0), &kC64PlaIoSlot,       0},
+    {C64ChipId(0), &kC64PlaUnmappedSlot, 0},
+}};
+#undef C64_PLA_CHIP_DESC_
 
 // Verify consistency between C64BusSpec and the manifest
 static_assert(C64BusSpec::MaxChipId == kC64Chips.max_chip_id(12),
@@ -169,94 +186,13 @@ static_assert(C64BusSpec::ShiftAddressable == kC64Chips.has_shift_addressable_ba
 static_assert(!C64BusSpec::ShiftAddressable || C64BusSpec::ShiftBankBits == kC64Chips.shift_bank_bits(12),
     "C64BusSpec::ShiftBankBits must match manifest");
 
-// =============================================================================
-// §3c  Per-bank chip-id lookup table
-// =============================================================================
-//
-// Maps a (base_id, bank) pair to the exact per-bank chip_id:
-//   chip_id = base_id + (bank & kC64ChipBankMask[base_id])
-//
-// The mask is (num_banks - 1) for each chip, stored at the base_id index.
-// Non-base-id entries are never accessed.
-//
-// This correctly handles the VIC-II case where a chip appears at a different
-// address than its CPU base_addr (e.g. CHARROM at VIC bank 1 instead of
-// CPU bank $D): the low bits of the bank select the intra-chip page.
-//
-
-inline constexpr auto kC64ChipBankMask = []() {
-    constexpr size_t page_bits = 12;
-    constexpr size_t total = kC64Chips.total_ids(page_bits);
-    std::array<uint8_t, total> table{};
-    for (size_t i = 0; i < kC64ChipCount; ++i) {
-        const auto& chip = kC64Chips.chips[i];
-        if (chip.size_bytes == 0) continue;
-        const size_t bid = kC64Chips.base_id(i, page_bits);
-        const size_t nb = chip.size_bytes >> page_bits;
-        const uint8_t mask = uint8_t(nb - 1);
-        for (size_t b = 0; b < nb; ++b)
-            table[bid + b] = mask;
-    }
-    return table;
-}();
-
-// =============================================================================
-// §3d  Chip Display Helpers (PLA debug GUI)
-// =============================================================================
-
-// All PLA chip IDs that can appear in PLA tables (for legend/iteration)
-inline constexpr C64PlaChipId kC64AllChipIds[] = {
-    C64PlaChipId(c64_chip_ids::kRam),  C64PlaChipId(c64_chip_ids::kRoml),
-    C64PlaChipId(c64_chip_ids::kRomh), C64PlaChipId(c64_chip_ids::kBasic),
-    C64PlaChipId(c64_chip_ids::kKernal), C64PlaChipId(c64_chip_ids::kCharrom),
-    c64_chip_ids::kIo, c64_chip_ids::kUnmapped
-};
-inline constexpr size_t kC64AllChipIdCount = sizeof(kC64AllChipIds) / sizeof(kC64AllChipIds[0]);
-
-// Short chip name for display
-inline const char* c64_chip_title(C64PlaChipId chip_id) {
-    using namespace c64_chip_ids;
-    switch (chip_id) {
-        case kRam:      return "RAM";
-        case kRoml:     return "ROML";
-        case kRomh:     return "ROMH";
-        case kBasic:    return "BASIC";
-        case kKernal:   return "KERNAL";
-        case kCharrom:  return "CHARROM";
-        case kIo:       return "I/O";
-        case kUnmapped: return "-";
-        default:        return "?";
-    }
-}
-
-// Chip descriptor for PLA debug tables
-struct C64ChipInfo {
-    uint16_t base;
-    size_t   size;
-    const char* label;
-};
-
-// Fetch display info for a PLA chip ID (base_id).  Returns true if valid.
-inline bool c64_chip_info(C64PlaChipId chip_id, C64ChipInfo* out) {
-    using namespace c64_chip_ids;
-    // Info table generated from C64_FOR_EACH_SYSTEM_CHIP (all chips,
-    // indexed by manifest slot position).  Buffer chips are matched by
-    // base_id; MMIO entries are skipped.
-    static constexpr C64ChipInfo kInfo[] = {
-        C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_INFO_ROW, unused)
-    };
-    for (size_t i = 0; i < kC64ChipCount; ++i) {
-        if (kC64Chips.chips[i].size_bytes > 0 &&
-            kC64Chips.base_id(i, 12) == size_t(chip_id)) {
-            *out = kInfo[i];
-            return true;
-        }
-    }
-    if (chip_id == kIo)       { *out = {0xD000, 4096, "I/O"};      return true; }
-    if (chip_id == kUnmapped) { *out = {0,         0, "Unmapped"};  return true; }
-    *out = {0, 0, "?"};
-    return false;
-}
+// Verify PLA descriptor table base_ids match the manifest
+static_assert(size_t(kC64PlaChipTable[size_t(C64PlaChipId::charrom)].base_id) == 0,  "CHARROM base_id");
+static_assert(size_t(kC64PlaChipTable[size_t(C64PlaChipId::roml)].base_id)    == 1,  "ROML base_id");
+static_assert(size_t(kC64PlaChipTable[size_t(C64PlaChipId::basic)].base_id)   == 3,  "BASIC base_id");
+static_assert(size_t(kC64PlaChipTable[size_t(C64PlaChipId::romh)].base_id)    == 5,  "ROMH base_id");
+static_assert(size_t(kC64PlaChipTable[size_t(C64PlaChipId::kernal)].base_id)  == 7,  "KERNAL base_id");
+static_assert(size_t(kC64PlaChipTable[size_t(C64PlaChipId::ram)].base_id)     == 9,  "RAM base_id");
 
 // Number of PLA banking modes (5-bit: LORAM, HIRAM, CHAREN, EXROM, GAME)
 inline constexpr size_t kC64NumPlaModes = 32;

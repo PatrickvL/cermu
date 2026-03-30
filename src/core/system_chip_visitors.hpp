@@ -118,6 +118,15 @@ class MemoryChipBase;  // forward declaration for is_base_of_v
 #define CERMU_CHIP_VISITOR_NULL_POINTER(ctx, type, chip, base, mask, overlay, label, info_label, rom_files) \
     this->chip = nullptr;
 
+// ── Enum Value Visitor ────────────────────────────────────────────────────────
+//
+// Emits `chip,` — use inside an enum class body to auto-declare one value
+// per chip with the same name as the chip field.  The resulting enum values
+// are sequential and match the manifest slot indices.
+//
+#define CERMU_CHIP_VISITOR_ENUM_VALUE(ctx, type, chip, base, mask, overlay, label, info_label, rom_files) \
+    chip,
+
 // ── Count Visitor ────────────────────────────────────────────────────────────
 //
 // Expands to +1 for each chip.  Use as: `0 FOREACH(COUNT_ONE, unused)`

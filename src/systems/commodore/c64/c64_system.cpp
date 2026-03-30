@@ -1736,18 +1736,16 @@ bool C64System::patch_skip_memtest() {
 // PLA Memory Map Generation
 // ============================================================================
 
-// Convert PLA output signals to a manifest chip ID.
-// Returns c64_chip_ids values (0-5 for buffer chips, kIo, kUnmapped).
+// Convert PLA output signals to a C64PlaChipId enum value.
 static C64PlaChipId pla_outputs_to_chip(const PLA906114& pla) {
-    using namespace c64_chip_ids;
-    if (!pla.outputs().n_casram)  return kRam;
-    if (!pla.outputs().n_basic)   return kBasic;
-    if (!pla.outputs().n_kernal)  return kKernal;
-    if (!pla.outputs().n_io)      return kIo;
-    if (!pla.outputs().n_charrom) return kCharrom;
-    if (!pla.outputs().n_roml)    return kRoml;
-    if (!pla.outputs().n_romh)    return kRomh;
-    return kUnmapped;
+    if (!pla.outputs().n_casram)  return C64PlaChipId::ram;
+    if (!pla.outputs().n_basic)   return C64PlaChipId::basic;
+    if (!pla.outputs().n_kernal)  return C64PlaChipId::kernal;
+    if (!pla.outputs().n_io)      return C64PlaChipId::io;
+    if (!pla.outputs().n_charrom) return C64PlaChipId::charrom;
+    if (!pla.outputs().n_roml)    return C64PlaChipId::roml;
+    if (!pla.outputs().n_romh)    return C64PlaChipId::romh;
+    return C64PlaChipId::unmapped;
 }
 
 bool C64System::pla_maps_generate() {
@@ -1761,21 +1759,24 @@ bool C64System::pla_maps_generate() {
     const auto no_chip_rd   = C64ChipId(C64PT::kNoChipSelected);
     const auto no_chip_wr   = C64WriteId(C64PT::kNoChipSelectedWrite);
 
-    // Map PLA output chip ID → MemoryBus read chip.
-    // Buffer base_ids are converted to per-bank chip_ids using the bank
-    // mask table; kIo→sub-table, kUnmapped→no-chip.
+    // Map PLA output chip → MemoryBus read chip.
+    // Buffer base_ids are converted to per-bank chip_ids using the
+    // descriptor's bank_mask; Io→sub-table, Unmapped→no-chip.
     auto pla_to_read_chip = [&](C64PlaChipId chip, uint32_t bank) -> C64ChipId {
-        if (chip == c64_chip_ids::kIo)       return io_sub_read;
-        if (chip == c64_chip_ids::kUnmapped) return no_chip_rd;
-        return C64ChipId(size_t(chip) + (bank & kC64ChipBankMask[size_t(chip)]));
+        if (chip == C64PlaChipId::io)       return io_sub_read;
+        if (chip == C64PlaChipId::unmapped) return no_chip_rd;
+        const auto& d = kC64PlaChipTable[size_t(chip)];
+        return C64ChipId(size_t(d.base_id) + (bank & d.bank_mask));
     };
 
-    // Map PLA output chip ID → MemoryBus write chip.
+    // Map PLA output chip → MemoryBus write chip.
     // Only RAM and I/O are writable; ROMs and unmapped ignore writes.
     auto pla_to_write_chip = [&](C64PlaChipId chip, uint32_t bank) -> C64WriteId {
-        if (chip == c64_chip_ids::kRam)
-            return C64WriteId(size_t(chip) + (bank & kC64ChipBankMask[size_t(chip)]));
-        if (chip == c64_chip_ids::kIo)  return io_sub_write;
+        if (chip == C64PlaChipId::ram) {
+            const auto& d = kC64PlaChipTable[size_t(C64PlaChipId::ram)];
+            return C64WriteId(size_t(d.base_id) + (bank & d.bank_mask));
+        }
+        if (chip == C64PlaChipId::io)  return io_sub_write;
         return no_chip_wr;
     };
 
