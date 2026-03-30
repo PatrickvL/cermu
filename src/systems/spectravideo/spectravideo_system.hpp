@@ -13,7 +13,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -62,28 +62,41 @@ template<> struct SVIVariantTraits<SVIVariant::SVI328> {
 #define SVI_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
 
 // =============================================================================
-// SVI chip manifests
+// SVI chip declarations — variant-specific single source of truth
 // =============================================================================
+//
+// Row: X(ctx, type, chip, base, mask, overlay, label, info_label, rom_files)
+//
+// SVI-318: ROM 32KB at $0000, RAM 16KB at $8000
+// SVI-328: ROM 32KB at $0000, RAM 64KB at $0000
+//
 
-inline constexpr auto kSVI318Chips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 32768, 0, "BASIC ROM"}.with_rom("svi318.rom|SVI318.ROM|svi.rom"),
-    Slot<RAMChip>{0x8000, 16384, 0, "RAM"},
-    // Non-bus chips
-    Slot<ZilogZ80A>  {0, 0, 0, "Z80A"},
-    Slot<TMS9918A>   {0, 0, 0, "TMS9918A"},
-    Slot<AY_3_8910>  {0, 0, 0, "AY-3-8910"},
-    Slot<i8255_t>    {0, 0, 0, "i8255 PPI"}
-);
+#define SVI318_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                               \
+    X(ctx, ROMChip,    bios, 0x0000, 0x7FFF, 0, "BASIC ROM",  "BASIC ROM",  "svi318.rom|SVI318.ROM|svi.rom")             \
+    X(ctx, RAMChip,    ram,  0x8000, 0x3FFF, 0, "RAM",         "RAM",         nullptr)                                    \
+    X(ctx, ZilogZ80A,  z80,  0x0000,      0, 0, "Z80A",        "Z80A",        nullptr)                                    \
+    X(ctx, TMS9918A,   vdp,  0x0000,      0, 0, "TMS9918A",    "TMS9918A",    nullptr)                                    \
+    X(ctx, AY_3_8910,  psg,  0x0000,      0, 0, "AY-3-8910",   "AY-3-8910",   nullptr)                                   \
+    X(ctx, i8255_t,    ppi,  0x0000,      0, 0, "i8255 PPI",   "i8255 PPI",   nullptr)
 
-inline constexpr auto kSVI328Chips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 32768, 0, "BASIC ROM"}.with_rom("svi328.rom|SVI328.ROM|svi.rom"),
-    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
-    // Non-bus chips
-    Slot<ZilogZ80A>  {0, 0, 0, "Z80A"},
-    Slot<TMS9918A>   {0, 0, 0, "TMS9918A"},
-    Slot<AY_3_8910>  {0, 0, 0, "AY-3-8910"},
-    Slot<i8255_t>    {0, 0, 0, "i8255 PPI"}
-);
+#define SVI328_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                               \
+    X(ctx, ROMChip,    bios, 0x0000, 0x7FFF, 0, "BASIC ROM",  "BASIC ROM",  "svi328.rom|SVI328.ROM|svi.rom")             \
+    X(ctx, RAMChip,    ram,  0x0000, 0xFFFF, 0, "RAM",         "RAM",         nullptr)                                    \
+    X(ctx, ZilogZ80A,  z80,  0x0000,      0, 0, "Z80A",        "Z80A",        nullptr)                                    \
+    X(ctx, TMS9918A,   vdp,  0x0000,      0, 0, "TMS9918A",    "TMS9918A",    nullptr)                                    \
+    X(ctx, AY_3_8910,  psg,  0x0000,      0, 0, "AY-3-8910",   "AY-3-8910",   nullptr)                                   \
+    X(ctx, i8255_t,    ppi,  0x0000,      0, 0, "i8255 PPI",   "i8255 PPI",   nullptr)
+
+static constexpr size_t kSVI318ChipCount = 0 SVI318_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+static constexpr size_t kSVI328ChipCount = 0 SVI328_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+inline constexpr ChipManifest<kSVI318ChipCount> kSVI318Chips = ChipManifest<kSVI318ChipCount>{{
+    SVI318_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
+
+inline constexpr ChipManifest<kSVI328ChipCount> kSVI328Chips = ChipManifest<kSVI328ChipCount>{{
+    SVI328_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
 
 template<SVIVariant V> struct SVIBusTraits;
 
@@ -98,10 +111,12 @@ template<> struct SVIBusTraits<SVIVariant::SVI328> {
 };
 
 // ============================================================================
-// SVI Chips — value-typed chips embedded in Board
+// SVI Chips — value-typed chips owned by Board (auto-generated)
 // ============================================================================
 
-struct SVIChips : CoreChips<ZilogZ80A, TMS9918A, AY_3_8910, i8255_t> {};
+struct SVIChips {
+    SVI318_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+};
 
 // ============================================================================
 // Spectravideo System
@@ -111,7 +126,6 @@ template<SVIVariant V>
 class SpectravideoSystem : public System {
     using Traits = SVIVariantTraits<V>;
     using BT     = SVIBusTraits<V>;
-    using Chips  = SVIChips;
 
 public:
     SpectravideoSystem();
@@ -141,7 +155,7 @@ private:
     // ── Board + bus (chips live inside board_) ────────────────────────────
     using Bus       = MemoryBus<typename BT::Spec>;
     using PT        = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec, Chips>;
+    using MainBoard = Board<typename BT::Spec, SVIChips>;
     Bus       bus_;
     MainBoard board_{BT::kManifest};
 

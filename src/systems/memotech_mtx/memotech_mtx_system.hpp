@@ -12,7 +12,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -61,28 +61,41 @@ template<> struct MTXVariantTraits<MTXVariant::MTX512> {
 #define MTX_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
 
 // =============================================================================
-// MTX chip manifests
+// MTX chip declarations — variant-specific single source of truth
 // =============================================================================
+//
+// Row: X(ctx, type, chip, base, mask, overlay, label, info_label, rom_files)
+//
+// MTX500: ROM 16KB at $0000, RAM 32KB at $4000
+// MTX512: ROM 16KB at $0000, RAM 64KB at $0000
+//
 
-inline constexpr auto kMTX500Chips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 16384, 0, "OS+BASIC ROM"}.with_rom("mtx500.rom|mtx.rom|MTX.ROM"),
-    Slot<RAMChip>{0x4000, 32768, 0, "RAM"},
-    // Non-bus chips
-    Slot<ZilogZ80A>  {0, 0, 0, "Z80A"},
-    Slot<TMS9918A>   {0, 0, 0, "TMS9918A"},
-    Slot<AY_3_8910>  {0, 0, 0, "AY-3-8910"},
-    Slot<z80_ctc_t>  {0, 0, 0, "Z80 CTC"}
-);
+#define MTX500_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                               \
+    X(ctx, ROMChip,    rom,  0x0000, 0x3FFF, 0, "OS+BASIC ROM", "OS+BASIC ROM", "mtx500.rom|mtx.rom|MTX.ROM")            \
+    X(ctx, RAMChip,    ram,  0x4000, 0x7FFF, 0, "RAM",          "RAM",          nullptr)                                  \
+    X(ctx, ZilogZ80A,  z80,  0x0000,      0, 0, "Z80A",         "Z80A",         nullptr)                                  \
+    X(ctx, TMS9918A,   vdp,  0x0000,      0, 0, "TMS9918A",     "TMS9918A",     nullptr)                                  \
+    X(ctx, AY_3_8910,  psg,  0x0000,      0, 0, "AY-3-8910",    "AY-3-8910",    nullptr)                                  \
+    X(ctx, z80_ctc_t,  ctc,  0x0000,      0, 0, "Z80 CTC",      "Z80 CTC",      nullptr)
 
-inline constexpr auto kMTX512Chips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 16384, 0, "OS+BASIC ROM"}.with_rom("mtx512.rom|mtx.rom|MTX.ROM"),
-    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
-    // Non-bus chips
-    Slot<ZilogZ80A>  {0, 0, 0, "Z80A"},
-    Slot<TMS9918A>   {0, 0, 0, "TMS9918A"},
-    Slot<AY_3_8910>  {0, 0, 0, "AY-3-8910"},
-    Slot<z80_ctc_t>  {0, 0, 0, "Z80 CTC"}
-);
+#define MTX512_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                               \
+    X(ctx, ROMChip,    rom,  0x0000, 0x3FFF, 0, "OS+BASIC ROM", "OS+BASIC ROM", "mtx512.rom|mtx.rom|MTX.ROM")            \
+    X(ctx, RAMChip,    ram,  0x0000, 0xFFFF, 0, "RAM",          "RAM",          nullptr)                                  \
+    X(ctx, ZilogZ80A,  z80,  0x0000,      0, 0, "Z80A",         "Z80A",         nullptr)                                  \
+    X(ctx, TMS9918A,   vdp,  0x0000,      0, 0, "TMS9918A",     "TMS9918A",     nullptr)                                  \
+    X(ctx, AY_3_8910,  psg,  0x0000,      0, 0, "AY-3-8910",    "AY-3-8910",    nullptr)                                  \
+    X(ctx, z80_ctc_t,  ctc,  0x0000,      0, 0, "Z80 CTC",      "Z80 CTC",      nullptr)
+
+static constexpr size_t kMTX500ChipCount = 0 MTX500_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+static constexpr size_t kMTX512ChipCount = 0 MTX512_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+inline constexpr ChipManifest<kMTX500ChipCount> kMTX500Chips = ChipManifest<kMTX500ChipCount>{{
+    MTX500_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
+
+inline constexpr ChipManifest<kMTX512ChipCount> kMTX512Chips = ChipManifest<kMTX512ChipCount>{{
+    MTX512_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
 
 template<MTXVariant V> struct MTXBusTraits;
 
@@ -97,10 +110,12 @@ template<> struct MTXBusTraits<MTXVariant::MTX512> {
 };
 
 // ============================================================================
-// MTX Chips — value-typed chips embedded in Board
+// MTX Chips — value-typed chips owned by Board (auto-generated)
 // ============================================================================
 
-struct MTXChips : CoreChips<ZilogZ80A, TMS9918A, AY_3_8910, z80_ctc_t> {};
+struct MTXChips {
+    MTX500_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+};
 
 // ============================================================================
 // Memotech MTX System
@@ -110,7 +125,6 @@ template<MTXVariant V>
 class MemotechMTXSystem : public System {
     using Traits = MTXVariantTraits<V>;
     using BT     = MTXBusTraits<V>;
-    using Chips  = MTXChips;
 
 public:
     MemotechMTXSystem();
@@ -140,7 +154,7 @@ private:
     // ── Board + bus (chips live inside board_) ────────────────────────────
     using Bus       = MemoryBus<typename BT::Spec>;
     using PT        = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec, Chips>;
+    using MainBoard = Board<typename BT::Spec, MTXChips>;
     Bus       bus_;
     MainBoard board_{BT::kManifest};
 
