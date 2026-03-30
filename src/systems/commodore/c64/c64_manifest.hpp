@@ -75,30 +75,24 @@
 //   CHARROM=0, ROML=1, ROMH=3, BASIC=5, KERNAL=7, RAM=9
 //
 
-#define C64_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                           \
-    /* ── CPU (first entry — no bus-visible address space) ──────────────────────────────────────────────────── */ \
-    X(ctx, MOS6510,       cpu,       0x0000,      0, 0, "MOS 6510",    "MOS 6510",             nullptr)            \
-    /* ── $0000 ─────────────────────────────────────────────────────────────────────────────────────────────── */ \
-    X(ctx, RAMChip,       ram,       0x0000, 0xFFFF, 1, "RAM",         "RAM",                  nullptr)            \
-    /* ── $8000 ─────────────────────────────────────────────────────────────────────────────────────────────── */ \
-    X(ctx, ROMChip,       roml,      0x8000, 0x1FFF, 1, "ROML",        "Cartridge ROM Low",    nullptr)            \
-    /* ── $A000 ─────────────────────────────────────────────────────────────────────────────────────────────── */ \
-    X(ctx, ROMChip,       basic,     0xA000, 0x1FFF, 1, "BASIC ROM",   "BASIC ROM",                                \
-        "C64 - 901226-01 - Commodore (F833D117) Basic.rom|"                                                        \
-        "basic.901226-01.bin|901226-01.bin|basic.rom")                                                             \
-    X(ctx, ROMChip,       romh,      0xA000, 0x1FFF, 1, "ROMH",        "Cartridge ROM High",   nullptr)            \
-    /* ── $D000 ─────────────────────────────────────────────────────────────────────────────────────────────── */ \
-    X(ctx, ROMChip,       charrom,   0xD000, 0x0FFF, 1, "CHARROM",     "Character ROM",                            \
-        "C64 - 901225-01 - Commodore (EC4272EE) Characters.rom|"                                                   \
-        "characters.901225-01.bin|901225-01.bin|chargen.rom|char.rom")                                             \
-    X(ctx, vicii_base_t,  vicii,     0xD000,   0x3F, 0, "VIC-II",      "VIC-II",               nullptr)            \
-    X(ctx, mos6581_t,     sid,       0xD400,   0x1F, 0, "SID",         "SID",                  nullptr)            \
-    X(ctx, MOS2114,       colorram,  0xD800, 0x03FF, 0, "Color RAM",   "Color RAM",            nullptr)            \
-    X(ctx, mos6526_t,     cia1,      0xDC00,   0x0F, 0, "CIA1",        "CIA1",                 nullptr)            \
-    X(ctx, mos6526_t,     cia2,      0xDD00,   0x0F, 0, "CIA2",        "CIA2",                 nullptr)            \
-    /* ── $E000 ─────────────────────────────────────────────────────────────────────────────────────────────── */ \
-    X(ctx, ROMChip,       kernal,    0xE000, 0x1FFF, 1, "KERNAL",      "KERNAL ROM",                               \
-        "C64 - 901227-03 - Commodore (DBE3E7C7) Kernal.rom|"                                                       \
+#define C64_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                         \
+    X(ctx, MOS6510,      cpu,      0x0000,       0,      0, 0, "MOS 6510",    "MOS 6510",             nullptr)   \
+    X(ctx, RAMChip,      ram,      0x0000, 0x10000,      0, 1, "RAM",         "RAM",                  nullptr)   \
+    X(ctx, ROMChip,      roml,     0x8000,  0x2000,      0, 1, "ROML",        "Cartridge ROM Low",    nullptr)   \
+    X(ctx, ROMChip,      basic,    0xA000,  0x2000,      0, 1, "BASIC ROM",   "BASIC ROM",                       \
+        "C64 - 901226-01 - Commodore (F833D117) Basic.rom|"                                                      \
+        "basic.901226-01.bin|901226-01.bin|basic.rom")                                                           \
+    X(ctx, ROMChip,      romh,     0xA000,  0x2000,      0, 1, "ROMH",        "Cartridge ROM High",   nullptr)   \
+    X(ctx, ROMChip,      charrom,  0xD000,  0x1000,      0, 1, "CHARROM",     "Character ROM",                   \
+        "C64 - 901225-01 - Commodore (EC4272EE) Characters.rom|"                                                 \
+        "characters.901225-01.bin|901225-01.bin|chargen.rom|char.rom")                                           \
+    X(ctx, vicii_base_t, vicii,    0xD000,       0,   0x3F, 0, "VIC-II",      "VIC-II",               nullptr)   \
+    X(ctx, mos6581_t,    sid,      0xD400,       0,   0x1F, 0, "SID",         "SID",                  nullptr)   \
+    X(ctx, MOS2114,      colorram, 0xD800,  0x0400,      0, 0, "Color RAM",   "Color RAM",            nullptr)   \
+    X(ctx, mos6526_t,    cia1,     0xDC00,       0,   0x0F, 0, "CIA1",        "CIA1",                 nullptr)   \
+    X(ctx, mos6526_t,    cia2,     0xDD00,       0,   0x0F, 0, "CIA2",        "CIA2",                 nullptr)   \
+    X(ctx, ROMChip,      kernal,   0xE000,  0x2000,      0, 1, "KERNAL",      "KERNAL ROM",                      \
+        "C64 - 901227-03 - Commodore (DBE3E7C7) Kernal.rom|"                                                     \
         "kernal.901227-03.bin|901227-03.bin|kernal.rom")
 
 // Total chip count (auto-derived from macro)
@@ -164,7 +158,7 @@ inline constexpr ChipSlot kC64PlaIoSlot       = []() { ChipSlot s{}; s.base_addr
 inline constexpr ChipSlot kC64PlaUnmappedSlot = []() { ChipSlot s{}; s.label = "-"; return s; }();
 
 // ctx = page_bits; chip name indexes kC64Chips via C64PlaChipId enum value
-#define C64_PLA_CHIP_DESC_(pb, type, chip, base, mask, overlay, label, info_label, rom_files)  \
+#define C64_PLA_CHIP_DESC_(pb, type, chip, base, size, mask, overlay, label, info_label, rom_files)  \
     { C64ChipId(kC64Chips.base_id(size_t(C64PlaChipId::chip), pb)),                              \
       &kC64Chips.chips[size_t(C64PlaChipId::chip)],                                              \
       uint8_t((kC64Chips.chips[size_t(C64PlaChipId::chip)].size_bytes >> pb)                     \
