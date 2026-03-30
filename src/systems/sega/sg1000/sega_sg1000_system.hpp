@@ -76,11 +76,11 @@ template<> struct SG1000VariantTraits<SG1000Variant::SC3000> {
 //
 
 #define SG1000_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                \
-    X(ctx, RAMChip,     ram,   0x0000, 0x10000, 0, 0, "RAM",       "RAM",       nullptr)                  \
-    X(ctx, ROMChip,     cart,  0x0000,  0x8000, 0, 0, "Cart ROM",  "Cart ROM",  nullptr)                  \
     X(ctx, ZilogZ80A,   z80,   0x0000,       0, 0, 0, "Z80A",      "Z80A",      nullptr)                  \
     X(ctx, TMS9918A,    vdp,   0x0000,       0, 0, 0, "TMS9918A",  "TMS9918A",  nullptr)                  \
-    X(ctx, sn76489_t,   psg,   0x0000,       0, 0, 0, "SN76489",   "SN76489",   nullptr)
+    X(ctx, sn76489_t,   psg,   0x0000,       0, 0, 0, "SN76489",   "SN76489",   nullptr)                  \
+    X(ctx, ROMChip,     cart,  0x0000,  0x8000, 0, 0, "Cart ROM",  "Cart ROM",  nullptr)                  \
+    X(ctx, RAMChip,     ram,   0x0000, 0x10000, 0, 0, "RAM",       "RAM",       nullptr)
 
 static constexpr size_t kSG1000ChipCount = 0 SG1000_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 

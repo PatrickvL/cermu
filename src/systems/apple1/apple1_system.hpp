@@ -40,11 +40,11 @@
 //
 
 #define APPLE1_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                \
+    X(ctx, MOS6502,    cpu,     0x0000,       0,      0, 0, "MOS 6502","MOS 6502",    nullptr)             \
     X(ctx, RAMChip,    ram,     0x0000, 0x10000,      0, 0, "RAM",     "RAM",          nullptr)            \
-    X(ctx, ROMChip,    monitor, 0xFF00,  0x0100,      0, 0, "Monitor", "Monitor ROM",  "apple1.rom|monitor.rom|wozmon.rom") \
-    X(ctx, ROMChip,    basic,   0xE000,  0x1000,      0, 0, "BASIC",   "BASIC ROM",   "?apple1basic.rom|basic.rom") \
     X(ctx, pia6820_t,  pia,     0xD010,       0, 0xFFFC, 0, "PIA",     "PIA 6820",    nullptr)             \
-    X(ctx, MOS6502,    cpu,     0x0000,       0,      0, 0, "MOS 6502","MOS 6502",    nullptr)
+    X(ctx, ROMChip,    basic,   0xE000,  0x1000,      0, 0, "BASIC",   "BASIC ROM",   "?apple1basic.rom|basic.rom") \
+    X(ctx, ROMChip,    monitor, 0xFF00,  0x0100,      0, 0, "Monitor", "Monitor ROM",  "apple1.rom|monitor.rom|wozmon.rom")
 
 static constexpr size_t kApple1ChipCount = 0 APPLE1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 
