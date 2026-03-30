@@ -65,6 +65,7 @@
 //
 //                                ctx   type       chip           base    size    mask    ovl  label              rom
 #define PET_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, MOS6502,   m6502,        0,            0, 0,      0, "MOS 6502",        nullptr) \
     V(ctx, RAMChip,   main_ram,     0x0000,  32768, 0,      0, "Main RAM",        nullptr) \
     V(ctx, RAMChip,   screen_ram,   0x8000,   2048, 0x03FF, 0, "Screen RAM",      nullptr) \
     V(ctx, ROMChip,   basic_rom_b,  0xB000,   4096, 0,      0, "BASIC ROM $B000", nullptr) \
@@ -72,7 +73,6 @@
     V(ctx, ROMChip,   basic_rom_d,  0xD000,   4096, 0,      0, "BASIC ROM $D000", nullptr) \
     V(ctx, ROMChip,   editor_rom,   0xE000,   2048, 0,      0, "Editor ROM",      "edit-4-40-n-50Hz.901498-01.bin|edit-4-40-n-60Hz.901499-01.bin|editor.rom|901498-01.bin|901499-01.bin") \
     V(ctx, ROMChip,   kernal_rom,   0xF000,   4096, 0,      0, "Kernal ROM",      "kernal-4.901465-22.bin|kernal4.rom|kernal.rom|901465-22.bin") \
-    V(ctx, MOS6502,   m6502,        0,            0, 0,      0, "MOS 6502",        nullptr) \
     V(ctx, mc6845_t,  crtc,         0,            0, 0,      0, "MC6845 CRTC",     nullptr) \
     V(ctx, pia6820_t, pia1,         0,            0, 0,      0, "PIA 1 (Keyboard)", nullptr) \
     V(ctx, pia6820_t, pia2,         0,            0, 0,      0, "PIA 2 (IEEE-488)", nullptr) \

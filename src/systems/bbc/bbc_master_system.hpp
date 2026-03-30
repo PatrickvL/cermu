@@ -115,10 +115,10 @@ template<> struct BBCMasterVariantTraits<BBCMasterVariant::MASTER_128> {
 //
 //                                       ctx   type           chip       base    size    mask  ovl  label            rom
 #define BBC_BPLUS_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, WDC_65C02,       w65c02,    0,           0, 0,     0, "WDC 65C02",   nullptr) \
     V(ctx, RAMChip,         ram,       0x0000,  65536, 0,     0, "RAM",         nullptr) \
     V(ctx, ROMChip,         paged_rom, 0x8000, 262144, 0,     0, "Paged ROM",   nullptr) \
     V(ctx, ROMChip,         os_rom,    0xC000,  16384, 0,     0, "MOS ROM",     "bplus_os.rom|OS20.ROM|os20.rom") \
-    V(ctx, WDC_65C02,       w65c02,    0,           0, 0,     0, "WDC 65C02",   nullptr) \
     V(ctx, mc6845_t,        crtc,      0,           0, 0,     0, "MC6845 CRTC", nullptr) \
     V(ctx, sn76489_t,       psg,       0,           0, 0,     0, "SN76489 PSG", nullptr) \
     V(ctx, mos6522_t,       sys_via,   0,           0, 0,     0, "System VIA",  nullptr) \
@@ -126,10 +126,10 @@ template<> struct BBCMasterVariantTraits<BBCMasterVariant::MASTER_128> {
     V(ctx, bbc_vidproc_t,   vidproc,   0,           0, 0,     0, "Video ULA",   nullptr)
 
 #define BBC_MASTER_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, WDC_65C02,       w65c02,    0,           0, 0,     0, "WDC 65C02",   nullptr) \
     V(ctx, RAMChip,         ram,       0x0000, 131072, 0,     0, "RAM",         nullptr) \
     V(ctx, ROMChip,         paged_rom, 0x8000, 262144, 0,     0, "Paged ROM",   nullptr) \
     V(ctx, ROMChip,         os_rom,    0xC000,  65536, 0,     0, "MOS ROM",     "master_mos320.rom|MOS320.ROM|mos3.20.rom") \
-    V(ctx, WDC_65C02,       w65c02,    0,           0, 0,     0, "WDC 65C02",   nullptr) \
     V(ctx, mc6845_t,        crtc,      0,           0, 0,     0, "MC6845 CRTC", nullptr) \
     V(ctx, sn76489_t,       psg,       0,           0, 0,     0, "SN76489 PSG", nullptr) \
     V(ctx, mos6522_t,       sys_via,   0,           0, 0,     0, "System VIA",  nullptr) \
@@ -143,7 +143,7 @@ constexpr ChipManifest<kBBCBPlusChipCount> make_bbc_bplus_manifest() {
     ChipManifest<kBBCBPlusChipCount> m = {{
         BBC_BPLUS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
     }};
-    m.chips[1].bank_size = 16384;  // Paged ROM (16 × 16KB sideways banks)
+    m.chips[2].bank_size = 16384;  // Paged ROM (16 × 16KB sideways banks)
     return m;
 }
 
@@ -151,9 +151,9 @@ constexpr ChipManifest<kBBCMasterChipCount> make_bbc_master_manifest() {
     ChipManifest<kBBCMasterChipCount> m = {{
         BBC_MASTER_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
     }};
-    m.chips[0].bank_size = 32768;  // RAM (4 × 32KB banks)
-    m.chips[1].bank_size = 16384;  // Paged ROM (16 × 16KB sideways banks)
-    m.chips[2].bank_size = 16384;  // OS ROM (4 × 16KB MOS banks)
+    m.chips[1].bank_size = 32768;  // RAM (4 × 32KB banks)
+    m.chips[2].bank_size = 16384;  // Paged ROM (16 × 16KB sideways banks)
+    m.chips[3].bank_size = 16384;  // OS ROM (4 × 16KB MOS banks)
     return m;
 }
 

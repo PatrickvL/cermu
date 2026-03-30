@@ -76,22 +76,22 @@ template<> struct Z9001VariantTraits<Z9001Variant::KC87> {
 //
 //                                  ctx   type       chip           base    size    mask  ovl  label            rom
 #define Z9001_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, U880,      z80,       0,            0, 0, 0, "U880",          nullptr) \
     V(ctx, RAMChip,   ram,       0x0000,  16384, 0, 0, "RAM",           nullptr) \
     V(ctx, RAMChip,   video_ram, 0xEC00,   1024, 0, 0, "Video RAM",     nullptr) \
     V(ctx, ROMChip,   os_rom,    0xF000,   4096, 0, 0, "OS ROM",        "z9001_os.rom|os.rom|OS.ROM") \
-    V(ctx, U880,      z80,       0,            0, 0, 0, "U880",          nullptr) \
     V(ctx, z80_pio_t, pio1,      0,            0, 0, 0, "U855 PIO #1",   nullptr) \
     V(ctx, z80_pio_t, pio2,      0,            0, 0, 0, "U855 PIO #2",   nullptr) \
     V(ctx, z80_ctc_t, ctc,       0,            0, 0, 0, "U857 CTC",      nullptr)
 
 #define KC87_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, U880,      z80,           0,            0, 0, 0, "U880",          nullptr) \
     V(ctx, RAMChip,   ram,           0x0000,  65536, 0, 0, "RAM",           nullptr) \
     V(ctx, ROMChip,   basic_rom_lo,  0xC000,   8192, 0, 0, "BASIC ROM lo",  nullptr) \
     V(ctx, ROMChip,   basic_rom_hi,  0xE000,   2048, 0, 0, "BASIC ROM hi",  nullptr) \
     V(ctx, RAMChip,   color_ram,     0xE800,   1024, 0, 0, "Color RAM",     nullptr) \
     V(ctx, RAMChip,   video_ram,     0xEC00,   1024, 0, 0, "Video RAM",     nullptr) \
     V(ctx, ROMChip,   os_rom,        0xF000,   4096, 0, 0, "OS ROM",        "z9001_os.rom|os.rom|OS.ROM") \
-    V(ctx, U880,      z80,           0,            0, 0, 0, "U880",          nullptr) \
     V(ctx, z80_pio_t, pio1,          0,            0, 0, 0, "U855 PIO #1",   nullptr) \
     V(ctx, z80_pio_t, pio2,          0,            0, 0, 0, "U855 PIO #2",   nullptr) \
     V(ctx, z80_ctc_t, ctc,           0,            0, 0, 0, "U857 CTC",      nullptr)
@@ -107,7 +107,7 @@ constexpr ChipManifest<kKC87ChipCount> make_kc87_manifest() {
     ChipManifest<kKC87ChipCount> m = {{
         KC87_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
     }};
-    m.chips[0].effective_size = 0xC000;  // 48 KB visible of 64 KB allocation
+    m.chips[1].effective_size = 0xC000;  // 48 KB visible of 64 KB allocation
     return m;
 }
 inline constexpr auto kKC87Chips = make_kc87_manifest();

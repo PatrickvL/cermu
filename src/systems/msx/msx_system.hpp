@@ -98,9 +98,9 @@ template<> struct MSXVariantTraits<MSXVariant::MSX2P> {
 template<MSXVariant V>
 struct MSXChipset {
     using VDP = typename MSXVariantTraits<V>::VDP;
+    ZilogZ80A  z80;
     ROMChip    bios_rom;
     RAMChip    main_ram;
-    ZilogZ80A  z80;
     VDP        vdp;
     AY_3_8910  psg;
     i8255_t    ppi;
@@ -131,9 +131,9 @@ struct MSXChipset {
 // Parameterized X-macro — VDP type/label, ROM files, and RAM size vary per variant
 //                                             ctx   type       chip      base    size      mask  ovl  label              rom
 #define MSX_FOR_EACH_CHIP_IMPL(V, ctx, vdp_type, vdp_label, rom_files, ram_size) \
+    V(ctx, ZilogZ80A,  z80,      0,          0,      0, 0, "Z80A",           nullptr) \
     V(ctx, ROMChip,    bios_rom, 0x0000, 32768,     0, 0, "BIOS+BASIC ROM", rom_files) \
     V(ctx, RAMChip,    main_ram, 0x0000, ram_size,   0, 0, "Main RAM",       nullptr) \
-    V(ctx, ZilogZ80A,  z80,      0,          0,      0, 0, "Z80A",           nullptr) \
     V(ctx, vdp_type,   vdp,      0,          0,      0, 0, vdp_label,        nullptr) \
     V(ctx, AY_3_8910,  psg,      0,          0,      0, 0, "AY-3-8910",      nullptr) \
     V(ctx, i8255_t,    ppi,      0,          0,      0, 0, "i8255 PPI",      nullptr)
@@ -152,7 +152,7 @@ inline constexpr auto make_msx2_manifest() {
     ChipManifest<kMSXChipCount> m = {{
         MSX2_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
     }};
-    m.chips[1].bank_size = 16384;  // Main RAM: memory mapper with 16KB banks
+    m.chips[2].bank_size = 16384;  // Main RAM: memory mapper with 16KB banks
     return m;
 }
 inline constexpr auto kMSX2Chips = make_msx2_manifest();
