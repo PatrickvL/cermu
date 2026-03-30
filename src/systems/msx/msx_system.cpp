@@ -152,14 +152,14 @@ bool MSXSystem<V>::initialize() {
     configure_bus_memory_map();
 
     // Init chips
-    pins_ = board_.cpu().init();
-    board_.sound().init();
-    board_.io().init();
+    pins_ = board_.cpu.init();
+    board_.sound.init();
+    board_.io.init();
 
     // AY clock: PSG runs at CPU_FREQ / 16 internally, but we tick it
     // at CPU rate and let the chip handle internal division
-    board_.sound().set_clock_frequency(msx_constants::CPU_FREQ_HZ / 16);
-    board_.sound().set_audio_sample_rate(audio_sample_rate_);
+    board_.sound.set_clock_frequency(msx_constants::CPU_FREQ_HZ / 16);
+    board_.sound.set_audio_sample_rate(audio_sample_rate_);
 
     // Audio setup
     audio_sample_period_ = msx_constants::CPU_FREQ_HZ / audio_sample_rate_;
@@ -168,10 +168,10 @@ bool MSXSystem<V>::initialize() {
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 
     // PPI Port B read callback — returns keyboard column data
-    board_.io().set_port_b_read_callback(
+    board_.io.set_port_b_read_callback(
         [](void* ctx, uint8_t /*port_a*/) -> uint8_t {
             auto* sys = static_cast<MSXSystem*>(ctx);
-            uint8_t row = sys->board_.io().get_port_c_output() & 0x0F;
+            uint8_t row = sys->board_.io.get_port_c_output() & 0x0F;
             if (row < msx_constants::KEYBOARD_ROWS)
                 return sys->keyboard_matrix_[row];
             return 0xFF;
@@ -187,7 +187,7 @@ bool MSXSystem<V>::initialize() {
 
     // Video output
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.video().set_video_out(&video_port_->output());
+    board_.video.set_video_out(&video_port_->output());
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Audio port
@@ -209,13 +209,13 @@ void MSXSystem<V>::shutdown() {
 template<MSXVariant V>
 void MSXSystem<V>::reset() {
     board_.reset_chips();
-    pins_ = board_.cpu().reset(pins_);
+    pins_ = board_.cpu.reset(pins_);
     slot_select_ = 0;
     frame_tstate_counter_ = 0;
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
-    board_.io().init();
-    board_.video().reset();
-    board_.sound().init();
+    board_.io.init();
+    board_.video.reset();
+    board_.sound.init();
 }
 
 // ============================================================================
@@ -227,7 +227,7 @@ void MSXSystem<V>::tick() {
     // VDP tick — dot clock is ~3× CPU clock, but for simplicity
     // we tick the VDP once per CPU T-state (approximate)
     bus_state_t vdp_bus = 0;
-    vdp_bus = board_.video().tick(vdp_bus);
+    vdp_bus = board_.video.tick(vdp_bus);
 
     // Check VDP interrupt
     if (BUS_GET_BIT(vdp_bus, BUS_IRQ_BIT) == 0) {
@@ -237,7 +237,7 @@ void MSXSystem<V>::tick() {
     }
 
     // CPU tick
-    pins_ = board_.cpu().tick(pins_);
+    pins_ = board_.cpu.tick(pins_);
 
     // Bus dispatch
     bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);
@@ -252,14 +252,14 @@ void MSXSystem<V>::tick() {
     // PSG tick — AY runs at CPU/16, but we tick at CPU rate
     // and let generate_sample handle downsampling
     if ((frame_tstate_counter_ & 0x0F) == 0) {
-        board_.sound().tick();
+        board_.sound.tick();
     }
 
     // Audio sample generation
     audio_sample_counter_++;
     if (audio_sample_counter_ >= audio_sample_period_) {
         audio_sample_counter_ = 0;
-        float sample = board_.sound().get_sample();
+        float sample = board_.sound.get_sample();
         audio_ring_buf_.write(&sample, 1);
         if (audio_port_) audio_port_->drive_sample(sample);
     }
@@ -306,37 +306,37 @@ bus_state_t MSXSystem<V>::io_tick(bus_state_t pins) {
         BUS_SET_ADDR(vdp_bus, port - msx_constants::VDP_DATA_PORT);
         BUS_SET_DATA(vdp_bus, BUS_GET_DATA(pins));
         if (is_read) {
-            vdp_bus = VDP::port_read(&board_.video(), vdp_bus);
+            vdp_bus = VDP::port_read(&board_.video, vdp_bus);
             BUS_SET_DATA(pins, BUS_GET_DATA(vdp_bus));
         } else {
-            VDP::port_write(&board_.video(), vdp_bus);
+            VDP::port_write(&board_.video, vdp_bus);
         }
         return pins;
     }
 
     // PSG ports $A0-$A2
     if (port == msx_constants::PSG_ADDR_PORT && !is_read) {
-        board_.sound().latch_address(BUS_GET_DATA(pins));
+        board_.sound.latch_address(BUS_GET_DATA(pins));
         return pins;
     }
     if (port == msx_constants::PSG_DATA_WRITE_PORT && !is_read) {
-        board_.sound().write_register(BUS_GET_DATA(pins));
+        board_.sound.write_register(BUS_GET_DATA(pins));
         return pins;
     }
     if (port == msx_constants::PSG_DATA_READ_PORT && is_read) {
-        BUS_SET_DATA(pins, board_.sound().read_register());
+        BUS_SET_DATA(pins, board_.sound.read_register());
         return pins;
     }
 
     // PPI ports $A8-$AB
     if (port >= msx_constants::PPI_PORT_A && port <= msx_constants::PPI_CONTROL) {
         if (is_read) {
-            BUS_SET_DATA(pins, board_.io().read(port - msx_constants::PPI_PORT_A));
+            BUS_SET_DATA(pins, board_.io.read(port - msx_constants::PPI_PORT_A));
         } else {
-            board_.io().write(port - msx_constants::PPI_PORT_A, BUS_GET_DATA(pins));
+            board_.io.write(port - msx_constants::PPI_PORT_A, BUS_GET_DATA(pins));
             // Slot selection changed — update memory map
             if (port == msx_constants::PPI_PORT_A) {
-                slot_select_ = board_.io().get_port_a_output();
+                slot_select_ = board_.io.get_port_a_output();
                 // TODO: remap memory pages based on slot_select_
             }
         }
@@ -379,7 +379,7 @@ template<MSXVariant V>
 void MSXSystem<V>::set_audio_sample_rate(int sample_rate_hz) {
     audio_sample_rate_ = static_cast<uint32_t>(sample_rate_hz);
     audio_sample_period_ = msx_constants::CPU_FREQ_HZ / audio_sample_rate_;
-    board_.sound().set_audio_sample_rate(sample_rate_hz);
+    board_.sound.set_audio_sample_rate(sample_rate_hz);
 }
 
 // ============================================================================

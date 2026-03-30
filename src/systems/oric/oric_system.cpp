@@ -137,9 +137,9 @@ bool OricSystem<V>::initialize() {
 
     ram_ptr_ = board_.template find<RAMChip>()->data();
 
-    pins_ = board_.cpu().init();
-    board_.io().reset();
-    board_.io().interrupt_bit = BUS_IRQ_BIT;
+    pins_ = board_.cpu.init();
+    board_.io.reset();
+    board_.io.interrupt_bit = BUS_IRQ_BIT;
 
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 
@@ -170,10 +170,10 @@ void OricSystem<V>::shutdown() { system_ready_ = false; }
 template<OricVariant V>
 void OricSystem<V>::reset() {
     if (!system_ready_) return;
-    pins_ = board_.cpu().reset(pins_);
+    pins_ = board_.cpu.reset(pins_);
     board_.reset_chips();
-    board_.io().reset();
-    board_.io().interrupt_bit = BUS_IRQ_BIT;
+    board_.io.reset();
+    board_.io.interrupt_bit = BUS_IRQ_BIT;
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
     hires_mode_ = false;
 }

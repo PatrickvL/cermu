@@ -248,10 +248,10 @@ public:
 
     // --- Test / debug accessors ---
     CSG7501*     cpu()       { return cpu_; }
-    ted7360_t*   ted()       { return &board_.video(); }
+    ted7360_t*   ted()       { return &board_.video; }
     RAMChip*  ram()       { return ram_; }
     const CSG7501*    cpu() const { return cpu_; }
-    const ted7360_t*  ted() const { return &board_.video(); }
+    const ted7360_t*  ted() const { return &board_.video; }
     const RAMChip* ram() const { return ram_; }
 
     // Debug cart ($FDCF) — VICE convention for Plus4 test programs.
@@ -275,7 +275,7 @@ public:
 private:
     // Chip instances
     CSG7501* cpu_ = nullptr;          // MOS 7501/8501 CPU — owned by board_
-    ted7360_t* ted_ = nullptr;        // Convenience pointer: &board_.video()
+    ted7360_t* ted_ = nullptr;        // Convenience pointer: &board_.video
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video output
     std::unique_ptr<AudioPort> audio_port_;            // Audio signal output
     bus_state_t bus_state_;

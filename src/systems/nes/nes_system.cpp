@@ -316,26 +316,26 @@ bool NintendoSystem<V>::initialize() {
     board_.bind_chipset();
 
     // Initialize CPU with integrated APU
-    board_.cpu().init();
+    board_.cpu.init();
     
     // Set APU region
-    board_.cpu().set_apu_region(is_pal_);
+    board_.cpu.set_apu_region(is_pal_);
 
     // Wire audio thread for off-emu-thread synthesis
     apu_synth_engine_ = std::make_unique<NesApuSynthEngine>(
         is_pal_, nes_constants::AUDIO_SAMPLE_RATE);
     audio_thread_.register_engine(apu_synth_engine_.get());
     audio_thread_.start();
-    board_.cpu().set_audio_cmd_queue(&apu_synth_engine_->cmd_queue());
+    board_.cpu.set_audio_cmd_queue(&apu_synth_engine_->cmd_queue());
 
     // Reconfigure PPU for current region
-    board_.video().reconfigure(is_pal_);
+    board_.video.reconfigure(is_pal_);
     
     // Initialize page-pointer bus
     bus_.init();
 
     // Connect bus to PPU for page-pointer VRAM access
-    board_.video().connect_bus(&bus_);
+    board_.video.connect_bus(&bus_);
 
     setup_ports();
 
@@ -347,7 +347,7 @@ bool NintendoSystem<V>::initialize() {
 
     // Wire PPU to composite video output port
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.video().set_video_out(&video_port_->output());
+    board_.video.set_video_out(&video_port_->output());
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Wire APU to audio signal port
@@ -398,9 +398,9 @@ void NintendoSystem<V>::reset() {
     printf("%s: Resetting system\n", Traits::name);
     
     pins_ = NES_BUS_DEFAULT_STATE;
-    board_.cpu().reset(pins_);
+    board_.cpu.reset(pins_);
     
-    board_.video().reset();
+    board_.video.reset();
 
     // Reset DMA + clock state
     dma_page_ = 0;
@@ -448,7 +448,7 @@ void NintendoSystem<V>::run_frame() {
 
     // Signal audio thread with accumulated CPU cycles
     if (apu_synth_engine_) {
-        audio_thread_.signal_progress(board_.cpu().apu_cycle_count());
+        audio_thread_.signal_progress(board_.cpu.apu_cycle_count());
     }
 
     // Tick all attached peripheral devices
@@ -552,7 +552,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         // reference the flat mem copy.
 
         // ---- Allocate flat mem ----
-        board_.video().connect_cartridge(cartridge_.get());
+        board_.video.connect_cartridge(cartridge_.get());
         bus_.init_flat_mem(
             cartridge_->prg_memory.data(), cartridge_->prg_memory.size(),
             nullptr, 0,            // no CHR-ROM data
@@ -571,7 +571,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         cartridge_->install_mapper(std::move(nsf_mapper));
 
         // Re-connect PPU to bus (ciram pointer may have changed)
-        board_.video().connect_bus(&bus_);
+        board_.video.connect_bus(&bus_);
         cartridge_->update_bank_map(&bus_, bus_.ciram);
 
         // ---- Write vectors and 6502 stubs ----
@@ -581,7 +581,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
                header.num_songs, header.start_song);
 
         NsfPlayer::setup_cpu(
-            &board_.cpu(), bus_.cpu_ram,
+            &board_.cpu, bus_.cpu_ram,
             bus_.prg_rom_ptr, bus_.prg_rom_size,
             bankswitched, header.bankswitch, header.load_addr,
             &header, subtune, is_pal_);
@@ -589,7 +589,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         // Re-update bank map after vectors are written to ROM
         cartridge_->update_bank_map(&bus_, bus_.ciram);
 
-        NsfPlayer::write_info_page(&board_.video(), &header, subtune);
+        NsfPlayer::write_info_page(&board_.video, &header, subtune);
 
         // Save state for subtune switching
         active_nsf_header_ = header;
@@ -627,7 +627,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         free(file_data);
 
         // Connect cartridge to PPU and set up page-pointer bank maps
-        board_.video().connect_cartridge(cartridge_.get());
+        board_.video.connect_cartridge(cartridge_.get());
 
         // Allocate flat mem with cartridge ROM/RAM data
         bus_.init_flat_mem(
@@ -648,7 +648,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         }
 
         // Re-connect PPU to bus (ciram pointer may have changed)
-        board_.video().connect_bus(&bus_);
+        board_.video.connect_bus(&bus_);
 
         cartridge_->update_bank_map(&bus_, bus_.ciram);
         
@@ -756,7 +756,7 @@ bool NintendoSystem<V>::handle_nsf_player_key(SDL_Keycode key) {
     if (static_cast<uint16_t>(new_subtune) == active_nsf_subtune_) return true;
 
     active_nsf_subtune_ = static_cast<uint16_t>(new_subtune);
-    NsfPlayer::switch_subtune(&board_.cpu(), &board_.video(), bus_.cpu_ram,
+    NsfPlayer::switch_subtune(&board_.cpu, &board_.video, bus_.cpu_ram,
                             bus_.prg_rom_ptr, bus_.prg_rom_size,
                             cartridge_->get_mapper(),
                             &active_nsf_header_,
@@ -801,15 +801,15 @@ std::string NintendoSystem<V>::get_subtitle_info() const {
 template<NintendoVariant V>
 void NintendoSystem<V>::register_nes_chips() {
     // CPU (Ricoh 2A03) — native ChipBase, registered directly
-    register_chip(static_cast<ChipBase*>(&board_.cpu()),
+    register_chip(static_cast<ChipBase*>(&board_.cpu),
         "Ricoh 2A03 (6502 + APU)", "2A03", "CPU", 0x0000);
 
     // PPU (Ricoh 2C02) — native ChipBase, registered directly
-    register_chip(static_cast<ChipBase*>(&board_.video()),
+    register_chip(static_cast<ChipBase*>(&board_.video),
         "Ricoh 2C02 PPU", "PPU", "Video", 0x2000);
 
     // APU (built into 2A03) — native ChipBase, registered directly
-    register_chip(board_.cpu().get_apu(),
+    register_chip(board_.cpu.get_apu(),
         "APU (built-in 2A03)", "APU", "Audio", 0x4000);
 
     // RAM — RAMChip with layout rendering
@@ -870,7 +870,7 @@ void NintendoSystem<V>::render_configuration_ui() {
     // Palette selection
     {
         ImGui::Separator();
-        if (palette_selector::render(board_.video(), config_.custom_settings)) {
+        if (palette_selector::render(board_.video, config_.custom_settings)) {
             set_configuration(config_);
             apply_configuration();
         }
@@ -903,7 +903,7 @@ void NintendoSystem<V>::eject_cartridge() {
     }
     cartridge_.reset();
     bus_.init();  // Clear page pointers and RAM
-    board_.video().connect_cartridge(nullptr);
+    board_.video.connect_cartridge(nullptr);
     system_ready_ = false;
 }
 
@@ -916,7 +916,7 @@ void NintendoSystem<V>::tick() {
     // ppu_ is guaranteed valid during frame execution (run_frame gates it)
     // ====================================================================
     NES_PROF_START(ppu);
-    board_.video().bus_snapshot_ = board_.video().clock(board_.video().bus_snapshot_);
+    board_.video.bus_snapshot_ = board_.video.clock(board_.video.bus_snapshot_);
 
     // Cartridge services the PPU bus — reads the address the PPU placed
     // on the bus, performs block dispatch (CHR/nametable read) and A12
@@ -928,9 +928,9 @@ void NintendoSystem<V>::tick() {
     // the cartridge dispatch to avoid 6,820 wasted read cycles per
     // frame.  CPU-initiated $2007 reads/writes during VBlank are
     // handled separately in the CPU bus dispatch section.
-    if (cartridge_ && board_.video().scanline < 240) {
-        board_.video().bus_snapshot_ = cartridge_->ppu_memory_tick(
-            board_.video().bus_snapshot_, &bus_, board_.video().ppu_dot_count_);
+    if (cartridge_ && board_.video.scanline < 240) {
+        board_.video.bus_snapshot_ = cartridge_->ppu_memory_tick(
+            board_.video.bus_snapshot_, &bus_, board_.video.ppu_dot_count_);
     }
     NES_PROF_END(ppu_clock_cycles, ppu);
 
@@ -959,7 +959,7 @@ void NintendoSystem<V>::tick() {
                 } else {
                     // DMA write to OAM — destination starts at current
                     // OAMADDR and wraps.  OAMADDR itself is NOT modified.
-                    board_.video().oam_write((board_.video().regs_[OAMADDR] + dma_addr_) & 0xFF, dma_data_);
+                    board_.video.oam_write((board_.video.regs_[OAMADDR] + dma_addr_) & 0xFF, dma_data_);
                     dma_addr_++;
                     if (dma_addr_ == 0x00) {
                         dma_transfer_ = false;
@@ -980,14 +980,14 @@ void NintendoSystem<V>::tick() {
             // ============================================================
 
             // Clock APU — advances frame counter, timers, DMC
-            pins_ = board_.cpu().clock_apu(pins_);
+            pins_ = board_.cpu.clock_apu(pins_);
 
             // Transfer PPU /NMI onto CPU bus
-            pins_ = PPU_CPU_BITMIX(pins_, board_.video().bus_snapshot_);
+            pins_ = PPU_CPU_BITMIX(pins_, board_.video.bus_snapshot_);
 
             // Sample NMI edge — the edge-detect flip-flop continues
             // during DMA (confirmed by hardware tests)
-            board_.cpu().sample_nmi_pin(pins_);
+            board_.cpu.sample_nmi_pin(pins_);
 
             // Update IRQ wire on pins_ so the state is current when
             // the CPU resumes.  Do NOT call process_interrupt_detection
@@ -995,7 +995,7 @@ void NintendoSystem<V>::tick() {
             {
                 bool irq_asserted = false;
                 if (cartridge_ && cartridge_->irq_state()) irq_asserted = true;
-                if (board_.cpu().apu_irq()) irq_asserted = true;
+                if (board_.cpu.apu_irq()) irq_asserted = true;
                 if (irq_asserted) {
                     BUS_CLR_BIT(pins_, BUS_IRQ_BIT);
                 } else {
@@ -1005,10 +1005,10 @@ void NintendoSystem<V>::tick() {
 
             // Service DMC sample fetch during OAM DMA (real HW allows
             // the DMC to steal cycles from an in-progress OAM DMA)
-            if (unlikely(board_.cpu().apu_needs_dma())) {
-                uint16_t dmc_addr = board_.cpu().apu_dma_address();
+            if (unlikely(board_.cpu.apu_needs_dma())) {
+                uint16_t dmc_addr = board_.cpu.apu_dma_address();
                 uint8_t sample = bus_.cpu_read(dmc_addr);
-                board_.cpu().apu_load_dma_sample(sample);
+                board_.cpu.apu_load_dma_sample(sample);
             }
 
             // Audio sample generation (keep sample rate steady during DMA)
@@ -1016,7 +1016,7 @@ void NintendoSystem<V>::tick() {
             if (!apu_synth_engine_) {
                 if (--audio_sample_counter_ == 0) {
                     audio_sample_counter_ = audio_sample_period_;
-                    float sample = board_.cpu().generate_audio_sample();
+                    float sample = board_.cpu.generate_audio_sample();
                     if (audio_port_) {
                         audio_port_->drive_sample(sample);
                     } else {
@@ -1052,7 +1052,7 @@ void NintendoSystem<V>::tick() {
     // (nmi_edge_latch) handles persistence.  Once latched, the NMI fires
     // was giving iteration 05 of blargg 06-suppression an extra NMI LOW
     // cycle, making NMI fire when it shouldn't.
-    pins_ = PPU_CPU_BITMIX(pins_, board_.video().bus_snapshot_);
+    pins_ = PPU_CPU_BITMIX(pins_, board_.video.bus_snapshot_);
 
     // IRQ wire update BEFORE PHI2 — ensures the CPU's interrupt shift
     // register samples the current IRQ state.  On real 2A03 hardware the
@@ -1064,7 +1064,7 @@ void NintendoSystem<V>::tick() {
     {
         bool irq_asserted = false;
         if (cartridge_ && cartridge_->irq_state()) irq_asserted = true;
-        if (board_.cpu().apu_irq()) irq_asserted = true;
+        if (board_.cpu.apu_irq()) irq_asserted = true;
         if (irq_asserted) {
             BUS_CLR_BIT(pins_, BUS_IRQ_BIT);
         } else {
@@ -1074,7 +1074,7 @@ void NintendoSystem<V>::tick() {
 
     // PHI2: CPU drives address bus and R/W signal
     NES_PROF_START(phi2);
-    pins_ = board_.cpu().tick<RICOH_2A03::Phase::PHI2>(pins_);
+    pins_ = board_.cpu.tick<RICOH_2A03::Phase::PHI2>(pins_);
     NES_PROF_END(cpu_phi2_cycles, phi2);
 
     const uint16_t addr = BUS_GET_ADDR(pins_);
@@ -1094,17 +1094,17 @@ void NintendoSystem<V>::tick() {
                 BUS_SET_DATA(pins_, bus_.cpu_block_read(block, addr));
             } else if (block == nes_bus::BLOCK_PPU_REGS) {
                 // PPU registers ($2000-$3FFF, mirrored every 8 bytes)
-                auto [cpu_result, ppu_result] = board_.video().service_cpu_bus(
-                    pins_, board_.video().bus_snapshot_);
+                auto [cpu_result, ppu_result] = board_.video.service_cpu_bus(
+                    pins_, board_.video.bus_snapshot_);
                 pins_ = cpu_result;
-                board_.video().bus_snapshot_ = ppu_result;
+                board_.video.bus_snapshot_ = ppu_result;
                 // service_cpu_bus may have placed a new address on the PPU
                 // bus ($2006 second write, $2007 read/write post-increment).
                 // Run ppu_memory_tick to let the cartridge observe it —
                 // handles A12 edge detection and mapper hooks.
                 if (cartridge_) {
-                    board_.video().bus_snapshot_ = cartridge_->ppu_memory_tick(
-                        board_.video().bus_snapshot_, &bus_, board_.video().ppu_dot_count_);
+                    board_.video.bus_snapshot_ = cartridge_->ppu_memory_tick(
+                        board_.video.bus_snapshot_, &bus_, board_.video.ppu_dot_count_);
                 }
             } else if (block == nes_bus::BLOCK_APU_IO) {
                 // APU/IO registers ($4000-$4FFF)
@@ -1148,15 +1148,15 @@ void NintendoSystem<V>::tick() {
                 bus_.cpu_block_write(block, addr, data);
             } else if (block == nes_bus::BLOCK_PPU_REGS) {
                 // PPU registers ($2000-$3FFF, mirrored every 8 bytes)
-                auto [cpu_result, ppu_result] = board_.video().service_cpu_bus(
-                    pins_, board_.video().bus_snapshot_);
+                auto [cpu_result, ppu_result] = board_.video.service_cpu_bus(
+                    pins_, board_.video.bus_snapshot_);
                 pins_ = cpu_result;
-                board_.video().bus_snapshot_ = ppu_result;
+                board_.video.bus_snapshot_ = ppu_result;
                 // service_cpu_bus may have placed a new address on the PPU
                 // bus ($2006/$2007).  Let the cartridge observe it.
                 if (cartridge_) {
-                    board_.video().bus_snapshot_ = cartridge_->ppu_memory_tick(
-                        board_.video().bus_snapshot_, &bus_, board_.video().ppu_dot_count_);
+                    board_.video.bus_snapshot_ = cartridge_->ppu_memory_tick(
+                        board_.video.bus_snapshot_, &bus_, board_.video.ppu_dot_count_);
                 }
             } else if (block == nes_bus::BLOCK_APU_IO) {
                 // APU/IO registers ($4000-$4FFF)
@@ -1195,14 +1195,14 @@ void NintendoSystem<V>::tick() {
 
     // Re-transfer PPU /NMI after bus dispatch — service_cpu_bus() may have
     // changed NMI state ($2002 read clears VBL, $2000 write toggles enable).
-    pins_ = PPU_CPU_BITMIX(pins_, board_.video().bus_snapshot_);
+    pins_ = PPU_CPU_BITMIX(pins_, board_.video.bus_snapshot_);
 
     // Sample NMI pin AFTER bus dispatch so the CPU sees the post-operation
     // pin state.  End of PHI2 and start of PHI1 are the same clock edge;
     // sampling here is equivalent to sampling at the end of PHI2.
     // The 1-cycle-before-acting delay is inherent: edge latched at end of
     // cycle N → process_interrupt_detection at PHI2 of N+1 sees it.
-    board_.cpu().sample_nmi_pin(pins_);
+    board_.cpu.sample_nmi_pin(pins_);
 
     // IRQ — level-sensitive (active low)
     // Mapper IRQ (e.g. MMC3 scanline counter) stays asserted until the game
@@ -1213,7 +1213,7 @@ void NintendoSystem<V>::tick() {
     if (cartridge_ && cartridge_->irq_state()) {
         irq_asserted = true;
     }
-    if (board_.cpu().apu_irq()) {
+    if (board_.cpu.apu_irq()) {
         irq_asserted = true;
     }
     if (irq_asserted) {
@@ -1225,7 +1225,7 @@ void NintendoSystem<V>::tick() {
 
     // PHI1: CPU internal operations (including APU clock)
     NES_PROF_START(phi1);
-    pins_ = board_.cpu().tick<RICOH_2A03::Phase::PHI1>(pins_);
+    pins_ = board_.cpu.tick<RICOH_2A03::Phase::PHI1>(pins_);
 
     // ====================================================================
     // Audio sample generation
@@ -1234,7 +1234,7 @@ void NintendoSystem<V>::tick() {
     if (!apu_synth_engine_) {
         if (--audio_sample_counter_ == 0) {
             audio_sample_counter_ = audio_sample_period_;
-            float sample = board_.cpu().generate_audio_sample();
+            float sample = board_.cpu.generate_audio_sample();
             if (audio_port_) {
                 audio_port_->drive_sample(sample);
             } else {
@@ -1248,10 +1248,10 @@ void NintendoSystem<V>::tick() {
     // On real hardware this steals 1-4 CPU cycles; for now we do an
     // instantaneous read to get the DMC functionally working.
     // ====================================================================
-    if (unlikely(board_.cpu().apu_needs_dma())) {
-        uint16_t dmc_addr = board_.cpu().apu_dma_address();
+    if (unlikely(board_.cpu.apu_needs_dma())) {
+        uint16_t dmc_addr = board_.cpu.apu_dma_address();
         uint8_t sample = bus_.cpu_read(dmc_addr);
-        board_.cpu().apu_load_dma_sample(sample);
+        board_.cpu.apu_load_dma_sample(sample);
     }
 
     NES_PROF_END(cpu_phi1_cycles, phi1);
@@ -1293,14 +1293,14 @@ bool NintendoSystem<V>::save_state(const std::string& filename) const {
     f.write(reinterpret_cast<const char*>(&pins_), sizeof(pins_));
 
     // PPU state
-    f.write(reinterpret_cast<const char*>(&board_.video().regs_), board_.video().num_regs_);
+    f.write(reinterpret_cast<const char*>(&board_.video.regs_), board_.video.num_regs_);
     f.write(reinterpret_cast<const char*>(bus_.ciram), nes_bus::CIRAM_SIZE);
-    f.write(reinterpret_cast<const char*>(board_.video().oam.bytes), sizeof(board_.video().oam.bytes));
-    f.write(reinterpret_cast<const char*>(board_.video().palette.data()), board_.video().palette.size());
-    f.write(reinterpret_cast<const char*>(&board_.video().internal), sizeof(board_.video().internal));
-    int16_t sl = board_.video().scanline; f.write(reinterpret_cast<const char*>(&sl), sizeof(sl));
-    uint16_t cy = board_.video().cycle;   f.write(reinterpret_cast<const char*>(&cy), sizeof(cy));
-    uint64_t fc = board_.video().frame_count; f.write(reinterpret_cast<const char*>(&fc), sizeof(fc));
+    f.write(reinterpret_cast<const char*>(board_.video.oam.bytes), sizeof(board_.video.oam.bytes));
+    f.write(reinterpret_cast<const char*>(board_.video.palette.data()), board_.video.palette.size());
+    f.write(reinterpret_cast<const char*>(&board_.video.internal), sizeof(board_.video.internal));
+    int16_t sl = board_.video.scanline; f.write(reinterpret_cast<const char*>(&sl), sizeof(sl));
+    uint16_t cy = board_.video.cycle;   f.write(reinterpret_cast<const char*>(&cy), sizeof(cy));
+    uint64_t fc = board_.video.frame_count; f.write(reinterpret_cast<const char*>(&fc), sizeof(fc));
 
     // Bus state -- CPU RAM
     f.write(reinterpret_cast<const char*>(bus_.cpu_ram), nes_bus::WRAM_SIZE);
@@ -1343,14 +1343,14 @@ bool NintendoSystem<V>::load_state(const std::string& filename) {
     f.read(reinterpret_cast<char*>(&pins_), sizeof(pins_));
 
     // PPU state
-    f.read(reinterpret_cast<char*>(&board_.video().regs_), board_.video().num_regs_);
+    f.read(reinterpret_cast<char*>(&board_.video.regs_), board_.video.num_regs_);
     f.read(reinterpret_cast<char*>(bus_.ciram), nes_bus::CIRAM_SIZE);
-    f.read(reinterpret_cast<char*>(board_.video().oam.bytes), sizeof(board_.video().oam.bytes));
-    f.read(reinterpret_cast<char*>(board_.video().palette.data()), board_.video().palette.size());
-    f.read(reinterpret_cast<char*>(&board_.video().internal), sizeof(board_.video().internal));
-    int16_t sl; f.read(reinterpret_cast<char*>(&sl), sizeof(sl)); board_.video().scanline = sl;
-    uint16_t cy; f.read(reinterpret_cast<char*>(&cy), sizeof(cy)); board_.video().cycle = cy;
-    uint64_t fc; f.read(reinterpret_cast<char*>(&fc), sizeof(fc)); board_.video().frame_count = fc;
+    f.read(reinterpret_cast<char*>(board_.video.oam.bytes), sizeof(board_.video.oam.bytes));
+    f.read(reinterpret_cast<char*>(board_.video.palette.data()), board_.video.palette.size());
+    f.read(reinterpret_cast<char*>(&board_.video.internal), sizeof(board_.video.internal));
+    int16_t sl; f.read(reinterpret_cast<char*>(&sl), sizeof(sl)); board_.video.scanline = sl;
+    uint16_t cy; f.read(reinterpret_cast<char*>(&cy), sizeof(cy)); board_.video.cycle = cy;
+    uint64_t fc; f.read(reinterpret_cast<char*>(&fc), sizeof(fc)); board_.video.frame_count = fc;
 
     // Bus state
     f.read(reinterpret_cast<char*>(bus_.cpu_ram), nes_bus::WRAM_SIZE);
@@ -1438,7 +1438,7 @@ uint8_t NintendoSystem<V>::peek_memory(uint16_t addr) const {
 
     // PPU registers ($2000-$3FFF): side-effect-free peek
     if (block == nes_bus::BLOCK_PPU_REGS) {
-        return board_.video().cpu_peek(addr);
+        return board_.video.cpu_peek(addr);
     }
 
     return 0;
@@ -1459,7 +1459,7 @@ uint8_t NintendoSystem<V>::peek_ppu_memory(uint16_t addr) const {
 
     // Palette RAM ($3F00-$3F1F, mirrors above $3F20)
     if (addr >= 0x3F00) {
-        return board_.video().palette[PPU::pal_mirror_[addr & 0x1F]] & 0x3F;
+        return board_.video.palette[PPU::pal_mirror_[addr & 0x1F]] & 0x3F;
     }
 
     // CHR + nametable via block dispatch
@@ -1472,12 +1472,12 @@ uint8_t NintendoSystem<V>::peek_ppu_memory(uint16_t addr) const {
 
 template<NintendoVariant V>
 uint16_t NintendoSystem<V>::get_cpu_pc() const {
-    return static_cast<uint16_t>(board_.cpu().get(PC));
+    return static_cast<uint16_t>(board_.cpu.get(PC));
 }
 
 template<NintendoVariant V>
 void NintendoSystem<V>::set_cpu_pc(uint16_t addr) {
-    board_.cpu().set(PC, addr);
+    board_.cpu.set(PC, addr);
 }
 
 } // namespace nes_system

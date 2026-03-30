@@ -577,8 +577,8 @@ bool Commodore264System<V>::initialize() {
         ted_desc.mem_read_user_data = this;
         ted_desc.banking_change = ted_banking_changed;
         ted_desc.banking_change_user_data = this;
-        board_.video().init(ted_desc);
-        ted_ = &board_.video();
+        board_.video.init(ted_desc);
+        ted_ = &board_.video;
         printf("%s: Created TED 7360 (%s)\n", Traits::name, is_pal_region ? "PAL" : "NTSC");
         // Initialize sound subsystem: TED master clock is 2× CPU clock
         uint32_t ted_clock = is_pal_region ? TED_PAL_CLOCK_HZ : TED_NTSC_CLOCK_HZ;
@@ -594,10 +594,10 @@ bool Commodore264System<V>::initialize() {
     ram_        = board_.template find<RAMChip>();
     basic_rom_  = board_.template find<ROMChip>();
     kernal_rom_ = board_.template find<ROMChip>(1);
-    cpu_        = &board_.cpu();
-    pio1_       = &board_.io();
-    pio2_       = &board_.chips().pio2;
-    rom_bank_   = &board_.chips().rom_bank;
+    cpu_        = &board_.cpu;
+    pio1_       = &board_.io;
+    pio2_       = &board_.pio2;
+    rom_bank_   = &board_.rom_bank;
 
     // Wire ROM bank select callback — fires on $FDD0-$FDDF writes when
     // low_bank or high_bank actually changes.
@@ -626,12 +626,12 @@ bool Commodore264System<V>::initialize() {
     }
     
     // Initialize CPU and I/O port
-    board_.cpu().init();
+    board_.cpu.init();
     cpu_->init_io_port(0x00, 0x00, 0xFF);  // C16: DDR=0 (all inputs), data=0, pins=0xFF (all high)
 
     // Reset the CPU to start the hardware-accurate RESET sequence.
     // The deferred hijack fetches $FFFC/$FFFD through the bus on first tick.
-    board_.cpu().reset();
+    board_.cpu.reset();
     
     // Note: C16 doesn't use the io_port_mixin bank_change path.
     // Banking is handled by TED register writes.

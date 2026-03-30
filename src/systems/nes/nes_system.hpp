@@ -130,7 +130,7 @@ private:
     using MainBoard = Board<NESBusSpec, NESChipset>;
     MainBoard board_{kNESChips};
 
-    // Core components — CPU and PPU accessed via board_.cpu() / board_.video()
+    // Core components — CPU and PPU accessed via board_.cpu / board_.video
     bus_state_t pins_;               // Persistent CPU bus state across ticks
     std::unique_ptr<Cartridge> cartridge_;
     nes_bus::nes_bus_t bus_;                     // Page-pointer bus (replaces MemoryBus)
