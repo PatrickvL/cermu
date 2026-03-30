@@ -139,7 +139,7 @@ bool AppleIISystem<V>::initialize() {
     rom_      = board_.template find<ROMChip>();
     ram_ptr_  = board_.template find<RAMChip>()->data();
 
-    pins_ = board_.cpu().init();
+    pins_ = board_.cpu.init();
 
     configure_bus_memory_map();
     if (!load_roms()) {
@@ -168,7 +168,7 @@ void AppleIISystem<V>::shutdown() { system_ready_ = false; }
 template<AppleIIVariant V>
 void AppleIISystem<V>::reset() {
     if (!system_ready_) return;
-    pins_ = board_.cpu().reset(pins_);
+    pins_ = board_.cpu.reset(pins_);
     board_.reset_chips();
     sw_text_ = true; sw_mixed_ = false; sw_page2_ = false; sw_hires_ = false;
     kbd_data_ = 0; kbd_strobe_ = false;

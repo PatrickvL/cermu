@@ -71,28 +71,28 @@ inline constexpr RomFileInfo parse_rom_spec(const char* spec) noexcept {
 
 // ── Getter Declaration Visitor (mutable + const) ─────────────────────────────
 //
-// Returns a reference to the chip field in ctx.chips().
+// Returns a reference to the chip field in the Board.
 // Both mutable and const overloads are emitted.
 //
 #define CERMU_CHIP_VISITOR_DECLARE_GETTER(ctx, type, chip, base, mask, overlay, label, info_label, rom_files) \
-    type& get_##chip() { return ctx.chips().chip; }                              \
-    const type& get_##chip() const { return ctx.chips().chip; }
+    type& get_##chip() { return ctx.chip; }                              \
+    const type& get_##chip() const { return ctx.chip; }
 
 // ── Sequential Binding Visitor ────────────────────────────────────────────────
 //
-// Emits a ctx.bind_chip(slot_idx_++, &ctx.chips().chip) call.
+// Emits a ctx.bind_chip(slot_idx_++, &ctx.chip) call.
 // Requires a `size_t slot_idx_ = 0;` variable in scope before expansion.
 // Slot order matches manifest array order (both generated from the same macro).
 //
 #define CERMU_CHIP_VISITOR_BIND_SEQUENTIAL(ctx, type, chip, base, mask, overlay, label, info_label, rom_files) \
-    ctx.bind_chip(slot_idx_++, &ctx.chips().chip);
+    ctx.bind_chip(slot_idx_++, &ctx.chip);
 
 // ── Component Registration Visitor ───────────────────────────────────────────
 //
-// Emits a ctx.register_component(&ctx.chips().chip) call.
+// Emits a ctx.register_component(&ctx.chip) call.
 //
 #define CERMU_CHIP_VISITOR_REGISTER_COMPONENT(ctx, type, chip, base, mask, overlay, label, info_label, rom_files) \
-    ctx.register_component(&ctx.chips().chip);
+    ctx.register_component(&ctx.chip);
 
 // ── Info Row Visitor (for chip info tables) ──────────────────────────────────
 //
@@ -112,11 +112,11 @@ inline constexpr RomFileInfo parse_rom_spec(const char* spec) noexcept {
 
 // ── Convenience-Pointer Assignment Visitor ───────────────────────────────────
 //
-// Assigns each convenience pointer from ctx.chips().chip, where ctx is
+// Assigns each convenience pointer from ctx.chip, where ctx is
 // the Board reference.  Expand inside a member function (uses `this`).
 //
 #define CERMU_CHIP_VISITOR_ASSIGN_POINTER(ctx, type, chip, base, mask, overlay, label, info_label, rom_files) \
-    this->chip = &ctx.chips().chip;
+    this->chip = &ctx.chip;
 
 // ── Convenience-Pointer Null Visitor ─────────────────────────────────────────
 //

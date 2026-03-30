@@ -68,13 +68,13 @@ bool BombJackSystem::initialize() {
     sound_board_.apply(sound_bus_);
 
     // ── Init chips ───────────────────────────────────────────────────────
-    main_cpu_  = &main_board_.cpu();
-    sound_cpu_ = &sound_board_.cpu();
+    main_cpu_  = &main_board_.cpu;
+    sound_cpu_ = &sound_board_.cpu;
     fg_tilemap_chip_  = main_board_.find<RAMChip>(1);
     fg_attr_chip_     = main_board_.find<RAMChip>(2);
     palette_ram_chip_ = main_board_.find<RAMChip>(4);
-    main_pins_  = main_board_.cpu().init();
-    sound_pins_ = sound_board_.cpu().init();
+    main_pins_  = main_board_.cpu.init();
+    sound_pins_ = sound_board_.cpu.init();
     for (auto& ay : ay_) {
         ay.init();
         // AY clock = sound CPU / 2 = 1.5 MHz
@@ -129,8 +129,8 @@ void BombJackSystem::shutdown() {
 }
 
 void BombJackSystem::reset() {
-    main_pins_  = main_board_.cpu().reset(main_pins_);
-    sound_pins_ = sound_board_.cpu().reset(sound_pins_);
+    main_pins_  = main_board_.cpu.reset(main_pins_);
+    sound_pins_ = sound_board_.cpu.reset(sound_pins_);
     audio_thread_.stop();
     for (int i = 0; i < 3; i++) {
         ay_[i].reset();

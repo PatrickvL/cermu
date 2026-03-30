@@ -63,10 +63,10 @@ bool LC80System::initialize() {
     configure_bus_memory_map();
 
     // ── Init chips ──────────────────────────────────────────────────────
-    pins_ = board_.cpu().init();
-    board_.io().init();
-    board_.chips().pio2.init();
-    board_.chips().ctc.init();
+    pins_ = board_.cpu.init();
+    board_.io.init();
+    board_.pio2.init();
+    board_.ctc.init();
 
     load_roms();
 
@@ -82,7 +82,7 @@ void LC80System::shutdown() { system_ready_ = false; }
 void LC80System::reset() {
     if (!system_ready_) return;
     board_.reset_chips();
-    pins_ = board_.cpu().reset(pins_);
+    pins_ = board_.cpu.reset(pins_);
     std::memset(led_segments_, 0, sizeof(led_segments_));
 }
 
@@ -94,7 +94,7 @@ void LC80System::tick() {
     if (!system_ready_) return;
 
     // CPU tick
-    pins_ = board_.cpu().tick(pins_);
+    pins_ = board_.cpu.tick(pins_);
 
     // Bus dispatch
     bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);  // Active-low
@@ -107,7 +107,7 @@ void LC80System::tick() {
     }
 
     // CTC tick (speaker on channel 2)
-    board_.chips().ctc.tick();
+    board_.ctc.tick();
 
     total_cycles_++;
 }
@@ -137,8 +137,8 @@ void LC80System::configure_bus_memory_map() {
 bus_state_t LC80System::io_tick(bus_state_t pins) {
     // Interrupt acknowledge: IORQ + M1
     if (!BUS_GET_BIT(pins, Z80_M1_BIT)) {
-        if (board_.chips().ctc.interrupt_pending()) {
-            BUS_SET_DATA(pins, board_.chips().ctc.interrupt_vector());
+        if (board_.ctc.interrupt_pending()) {
+            BUS_SET_DATA(pins, board_.ctc.interrupt_vector());
         } else {
             BUS_SET_DATA(pins, 0xFF);
         }
@@ -155,12 +155,12 @@ bus_state_t LC80System::io_tick(bus_state_t pins) {
         int port_idx = port & 0x01;
         bool is_ctrl = (port >> 1) & 0x01;
         if (is_read) {
-            BUS_SET_DATA(pins, board_.io().read_data(port_idx));
+            BUS_SET_DATA(pins, board_.io.read_data(port_idx));
         } else {
             if (is_ctrl) {
-                board_.io().write_control(port_idx, data);
+                board_.io.write_control(port_idx, data);
             } else {
-                board_.io().write_data(port_idx, data);
+                board_.io.write_data(port_idx, data);
             }
         }
         return pins;
@@ -171,12 +171,12 @@ bus_state_t LC80System::io_tick(bus_state_t pins) {
         int port_idx = port & 0x01;
         bool is_ctrl = (port >> 1) & 0x01;
         if (is_read) {
-            BUS_SET_DATA(pins, board_.chips().pio2.read_data(port_idx));
+            BUS_SET_DATA(pins, board_.pio2.read_data(port_idx));
         } else {
             if (is_ctrl) {
-                board_.chips().pio2.write_control(port_idx, data);
+                board_.pio2.write_control(port_idx, data);
             } else {
-                board_.chips().pio2.write_data(port_idx, data);
+                board_.pio2.write_data(port_idx, data);
             }
         }
         return pins;
@@ -186,9 +186,9 @@ bus_state_t LC80System::io_tick(bus_state_t pins) {
     if ((port & 0xFC) == lc80_constants::CTC_CH0) {
         int channel = port & 0x03;
         if (is_read) {
-            BUS_SET_DATA(pins, board_.chips().ctc.read(channel));
+            BUS_SET_DATA(pins, board_.ctc.read(channel));
         } else {
-            board_.chips().ctc.write(channel, data);
+            board_.ctc.write(channel, data);
         }
         return pins;
     }

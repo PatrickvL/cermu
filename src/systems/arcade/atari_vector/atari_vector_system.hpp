@@ -733,8 +733,8 @@ private:
 
 
     // Convenience accessors for the video chip
-    VideoChip& vg() { return board_.video(); }
-    const VideoChip& vg() const { return board_.video(); }
+    VideoChip& vg() { return board_.video; }
+    const VideoChip& vg() const { return board_.video; }
 };
 
 // ============================================================================

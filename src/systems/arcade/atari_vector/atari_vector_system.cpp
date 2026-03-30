@@ -1015,8 +1015,8 @@ bool AtariVectorSystem<V>::initialize() {
     board_.apply(bus_);
 
     // Initialize CPU
-    board_.cpu().init();
-    board_.cpu().reset();
+    board_.cpu.init();
+    board_.cpu.reset();
 
     // Initialize vector generator (DVG or AVG via ChipSet)
     vg().init();
@@ -1057,8 +1057,8 @@ bool AtariVectorSystem<V>::initialize() {
 
     // Initialize POKEY (for games that have it)
     if constexpr (Traits::HAS_POKEY) {
-        board_.sound().init();
-        register_chip(&board_.sound(), "POKEY", "POKEY", "Sound");
+        board_.sound.init();
+        register_chip(&board_.sound, "POKEY", "POKEY", "Sound");
     }
 
     // Video port — VectorVideoPort for signal-based rendering
@@ -1081,23 +1081,23 @@ bool AtariVectorSystem<V>::initialize() {
 
     // Wire POKEY audio output
     if constexpr (Traits::HAS_POKEY) {
-        board_.sound().set_audio_port(audio_port_.get());
+        board_.sound.set_audio_port(audio_port_.get());
     }
 
     // Space Duel: DIP switches are wired to POKEY1 pot inputs.
     // MAME overrides ALLPOT to return the DIP bank value directly.
     // Individual POT reads also return per-bit values (228 = open, 0 = grounded).
     if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
-        board_.sound().allpot_read_callback = [](void* ctx) -> uint8_t {
+        board_.sound.allpot_read_callback = [](void* ctx) -> uint8_t {
             return static_cast<AtariVectorSystem*>(ctx)->dip_bank_[0].value;
         };
-        board_.sound().allpot_read_context = this;
-        board_.sound().pot_read_callback = [](void* ctx, uint8_t pot_index) -> uint8_t {
+        board_.sound.allpot_read_context = this;
+        board_.sound.pot_read_callback = [](void* ctx, uint8_t pot_index) -> uint8_t {
             auto* sys = static_cast<AtariVectorSystem*>(ctx);
             // Pot line grounded (0) when switch active, open (228) when inactive
             return (sys->dip_bank_[0].value & (1 << pot_index)) ? 228 : 0;
         };
-        board_.sound().pot_read_context = this;
+        board_.sound.pot_read_context = this;
     }
 
     // Initialize DIP switch banks with per-game descriptors (MAME factory defaults)
@@ -1133,7 +1133,7 @@ void AtariVectorSystem<V>::reset() {
     printf("%s: Reset\n", AtariVectorTraits<V>::NAME);
 
     board_.reset_chips();
-    board_.cpu().reset();
+    board_.cpu.reset();
 
     pins_ = MOS6502::default_bus_state();
     total_cycles_ = 0;
@@ -1142,7 +1142,7 @@ void AtariVectorSystem<V>::reset() {
     nmi_counter_ = atv::NMI_PERIOD_CYCLES;
 
     if constexpr (Traits::HAS_POKEY) {
-        board_.sound().reset();
+        board_.sound.reset();
     }
 
     // Internal button state uses active-HIGH convention (1=pressed, 0=not pressed).
@@ -1168,7 +1168,7 @@ void AtariVectorSystem<V>::tick() {
 
     // POKEY tick (runs at CPU clock for games with POKEY)
     if constexpr (Traits::HAS_POKEY) {
-        board_.sound().tick(0);  // Arcade POKEY: no bus-driven memory access
+        board_.sound.tick(0);  // Arcade POKEY: no bus-driven memory access
     }
 
     // ── Periodic interrupt timer ────────────────────────────────────────────
@@ -1270,7 +1270,7 @@ void AtariVectorSystem<V>::run_frame() {
 
 template<AtariVectorVariant V>
 void AtariVectorSystem<V>::tick_cpu() {
-    auto& cpu = board_.cpu();
+    auto& cpu = board_.cpu;
 
     pins_ = cpu.template tick<MOS6502::Phase::PHI2>(pins_);
 
@@ -1345,13 +1345,13 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
     // ── POKEY1 read — direct register access ──────────────────────
     if constexpr (Traits::HAS_POKEY) {
         if (addr >= Traits::POKEY1_BASE && addr < Traits::POKEY1_BASE + Traits::POKEY1_SIZE) {
-            BUS_SET_DATA(pins, board_.sound().read(static_cast<uint8_t>(addr & 0x0F)));
+            BUS_SET_DATA(pins, board_.sound.read(static_cast<uint8_t>(addr & 0x0F)));
             return pins;
         }
         // Tempest mirrors POKEY1 at $0800 and POKEY2 at $0900
         if constexpr (V == AtariVectorVariant::TEMPEST) {
             if (addr >= 0x0800 && addr < 0x0810) {
-                BUS_SET_DATA(pins, board_.sound().read(static_cast<uint8_t>(addr & 0x0F)));
+                BUS_SET_DATA(pins, board_.sound.read(static_cast<uint8_t>(addr & 0x0F)));
                 return pins;
             }
         }
@@ -1642,13 +1642,13 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
     // ── POKEY1 write — direct register access ──────────────────────
     if constexpr (Traits::HAS_POKEY) {
         if (addr >= Traits::POKEY1_BASE && addr < Traits::POKEY1_BASE + Traits::POKEY1_SIZE) {
-            board_.sound().write(static_cast<uint8_t>(addr & 0x0F), data);
+            board_.sound.write(static_cast<uint8_t>(addr & 0x0F), data);
             return pins;
         }
         // Tempest mirrors POKEY1 at $0800
         if constexpr (V == AtariVectorVariant::TEMPEST) {
             if (addr >= 0x0800 && addr < 0x0810) {
-                board_.sound().write(static_cast<uint8_t>(addr & 0x0F), data);
+                board_.sound.write(static_cast<uint8_t>(addr & 0x0F), data);
                 return pins;
             }
         }
@@ -1912,9 +1912,9 @@ bool AtariVectorSystem<V>::load_file(const char* filepath) {
     }
 
     if (cold_boot) {
-        board_.cpu().set(A, 0);
-        board_.cpu().set(X, 0);
-        board_.cpu().set(Y, 0);
+        board_.cpu.set(A, 0);
+        board_.cpu.set(X, 0);
+        board_.cpu.set(Y, 0);
     }
 
     printf("%s: ROM loaded, system ready\n", Traits::NAME);

@@ -34,13 +34,13 @@
 // Thread safety: none.  External synchronisation required if add/remove_chip
 // or apply() is called concurrently with bus accesses.
 //
-// Optional second parameter Chips (default: NoChips) embeds value-typed
-// chip members directly in the board, eliminating heap allocation and pointer
-// indirection for non-bus chips.  See core_chips.hpp.
+// Optional second parameter Chips (default: NoChips) is inherited via MI,
+// embedding value-typed chip fields directly in the board and making them
+// accessible as board_.field.  See core_chips.hpp.
 //
 
 template<BusSpecConcept Spec, typename Chips = NoChips>
-class Board : public BoardBase {
+class Board : public BoardBase, public Chips {
 public:
     using Map         = BusMap<Spec>;
     using Bus         = MemoryBus<Spec>;
@@ -405,17 +405,18 @@ public:
 
     void register_board_components() {
         clear_components();
-        // Register value-typed chips from the Chips (if present)
+        // Register value-typed chips from the inherited Chips base (if present)
         if constexpr (!std::is_same_v<Chips, NoChips>) {
-            register_component(&chips_.cpu);
+            auto& c = static_cast<Chips&>(*this);
+            register_component(&c.cpu);
             if constexpr (has_video_v<Chips>)
-                register_component(&chips_.video);
+                register_component(&c.video);
             if constexpr (has_sound_v<Chips>)
-                register_component(&chips_.sound);
+                register_component(&c.sound);
             if constexpr (has_io_v<Chips>)
-                register_component(&chips_.io);
+                register_component(&c.io);
             if constexpr (HasRegisterExtras<Chips, Board>)
-                chips_.register_extras(*this);
+                Chips::register_extras(*this);
         }
         for (auto& chip : owned_chips_)
             register_component(chip.get());
@@ -427,56 +428,59 @@ public:
     // §4.4c″  Value-typed chip access (Chips)
     // =====================================================================
     //
-    // When Board is instantiated with a Chips (not NoChips), these
-    // accessors provide direct, zero-indirection access to the embedded
-    // chip objects.  The compiler knows the exact concrete type and can
-    // fully inline chip member functions.
+    // Chips fields are inherited via MI, so direct access works:
+    //   board_.cpu, board_.pia, board_.sid, ...
+    //
+    // These get_*() accessors are provided for backward compatibility and
+    // for contexts where a method call reads better than field access.
+    // chips() returns *this cast to the Chips base — useful when the
+    // field name collides with a local variable.
     //
 
-    /// Full Chips access — for per-system extras (e.g. chips().ppi).
+    /// Full Chips access — returns *this cast to the Chips base.
     template<typename CS = Chips>
     [[nodiscard]] std::enable_if_t<!std::is_same_v<CS, NoChips>, CS&>
-    chips() noexcept { return chips_; }
+    chips() noexcept { return static_cast<CS&>(*this); }
 
     template<typename CS = Chips>
     [[nodiscard]] std::enable_if_t<!std::is_same_v<CS, NoChips>, const CS&>
-    chips() const noexcept { return chips_; }
+    chips() const noexcept { return static_cast<const CS&>(*this); }
 
-    /// CPU accessor — returns reference to the value-typed CPU.
+    /// CPU accessor.
     template<typename CS = Chips>
     [[nodiscard]] std::enable_if_t<!std::is_same_v<CS, NoChips>, typename CS::cpu_type&>
-    cpu() noexcept { return chips_.cpu; }
+    get_cpu() noexcept { return static_cast<CS&>(*this).cpu; }
 
     template<typename CS = Chips>
     [[nodiscard]] std::enable_if_t<!std::is_same_v<CS, NoChips>, const typename CS::cpu_type&>
-    cpu() const noexcept { return chips_.cpu; }
+    get_cpu() const noexcept { return static_cast<const CS&>(*this).cpu; }
 
     /// Video chip accessor — only available when Chips has a real video chip.
     template<typename CS = Chips>
     [[nodiscard]] std::enable_if_t<has_video_v<CS>, typename CS::video_type&>
-    video() noexcept { return chips_.video; }
+    get_video() noexcept { return static_cast<CS&>(*this).video; }
 
     template<typename CS = Chips>
     [[nodiscard]] std::enable_if_t<has_video_v<CS>, const typename CS::video_type&>
-    video() const noexcept { return chips_.video; }
+    get_video() const noexcept { return static_cast<const CS&>(*this).video; }
 
     /// Sound chip accessor — only available when Chips has a real sound chip.
     template<typename CS = Chips>
     [[nodiscard]] std::enable_if_t<has_sound_v<CS>, typename CS::sound_type&>
-    sound() noexcept { return chips_.sound; }
+    get_sound() noexcept { return static_cast<CS&>(*this).sound; }
 
     template<typename CS = Chips>
     [[nodiscard]] std::enable_if_t<has_sound_v<CS>, const typename CS::sound_type&>
-    sound() const noexcept { return chips_.sound; }
+    get_sound() const noexcept { return static_cast<const CS&>(*this).sound; }
 
     /// I/O chip accessor — only available when Chips has a real I/O chip.
     template<typename CS = Chips>
     [[nodiscard]] std::enable_if_t<has_io_v<CS>, typename CS::io_type&>
-    io() noexcept { return chips_.io; }
+    get_io() noexcept { return static_cast<CS&>(*this).io; }
 
     template<typename CS = Chips>
     [[nodiscard]] std::enable_if_t<has_io_v<CS>, const typename CS::io_type&>
-    io() const noexcept { return chips_.io; }
+    get_io() const noexcept { return static_cast<const CS&>(*this).io; }
 
     // =====================================================================
     // §4.4c‴  Automatic chipset binding
@@ -499,22 +503,23 @@ public:
     template<typename CS = Chips>
     std::enable_if_t<!std::is_same_v<CS, NoChips>>
     bind_chipset() {
+        auto& c = static_cast<CS&>(*this);
         // Standard roles
-        bind_chip(find_index<typename CS::cpu_type>(), &chips_.cpu);
+        bind_chip(find_index<typename CS::cpu_type>(), &c.cpu);
 
         if constexpr (has_video_v<CS>) {
-            bind_chip(find_index<typename CS::video_type>(), &chips_.video);
+            bind_chip(find_index<typename CS::video_type>(), &c.video);
         }
         if constexpr (has_sound_v<CS>) {
-            bind_chip(find_index<typename CS::sound_type>(), &chips_.sound);
+            bind_chip(find_index<typename CS::sound_type>(), &c.sound);
         }
         if constexpr (has_io_v<CS>) {
-            bind_chip(find_index<typename CS::io_type>(), &chips_.io);
+            bind_chip(find_index<typename CS::io_type>(), &c.io);
         }
 
         // Per-system extras
         if constexpr (HasBindExtras<CS, Board>) {
-            chips_.bind_extras(*this);
+            Chips::bind_extras(*this);
         }
     }
 
@@ -829,8 +834,8 @@ private:
     // Chips created by create_chips() — owned here for lifetime management.
     std::vector<std::unique_ptr<ChipBase>> owned_chips_;
 
-    // Value-typed chip members (NoChips = empty, 1 byte).
-    Chips chips_;
+    // Chip fields are inherited from Chips via MI (no member needed).
+    // Access as this->cpu, this->pia, etc.
 
     size_t               dynamic_base_ = 0;
     std::vector<FreeRun> free_list_;

@@ -86,10 +86,10 @@ bool Z9001System<V>::initialize() {
     configure_bus_memory_map();
 
     // ── Init chips ──────────────────────────────────────────────────────────
-    pins_ = board_.cpu().init();
-    board_.io().init();
-    board_.chips().pio2.init();
-    board_.chips().ctc.init();
+    pins_ = board_.cpu.init();
+    board_.io.init();
+    board_.pio2.init();
+    board_.ctc.init();
 
     // Character ROM — not bus-mapped, used for display rendering only
     char_rom_.resize(z9001_constants::CHAR_ROM_SIZE, 0xFF);
@@ -130,7 +130,7 @@ template<Z9001Variant V> void Z9001System<V>::shutdown() { system_ready_ = false
 template<Z9001Variant V> void Z9001System<V>::reset() {
     if (!system_ready_) return;
     board_.reset_chips();
-    pins_ = board_.cpu().reset(pins_);
+    pins_ = board_.cpu.reset(pins_);
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 }
 
@@ -153,7 +153,7 @@ void Z9001System<V>::tick() {
     if (!system_ready_) return;
 
     // CPU tick (one T-state)
-    pins_ = board_.cpu().tick(pins_);
+    pins_ = board_.cpu.tick(pins_);
 
     // Bus dispatch
     bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);
@@ -305,18 +305,18 @@ bus_state_t Z9001System<V>::io_tick(bus_state_t pins) {
         if (is_rd) {
             // Port A output holds the keyboard row select; Port B returns column data
             if (port_sel == 0) {
-                uint8_t row  = board_.io().get_output(0) & 0x07;
+                uint8_t row  = board_.io.get_output(0) & 0x07;
                 uint8_t cols = keyboard_matrix_[row];
-                board_.io().set_input(1, cols);
+                board_.io.set_input(1, cols);
             }
-            uint8_t data = board_.io().read_data(port_sel);
+            uint8_t data = board_.io.read_data(port_sel);
             BUS_SET_DATA(pins, data);
         } else {
             uint8_t data = BUS_GET_DATA(pins);
             if (is_ctrl) {
-                board_.io().write_control(port_sel, data);
+                board_.io.write_control(port_sel, data);
             } else {
-                board_.io().write_data(port_sel, data);
+                board_.io.write_data(port_sel, data);
             }
         }
     }
@@ -326,14 +326,14 @@ bus_state_t Z9001System<V>::io_tick(bus_state_t pins) {
         int     port_sel = pio_idx & 0x01;
         bool    is_ctrl  = (pio_idx & 0x02) != 0;
         if (is_rd) {
-            uint8_t data = board_.chips().pio2.read_data(port_sel);
+            uint8_t data = board_.pio2.read_data(port_sel);
             BUS_SET_DATA(pins, data);
         } else {
             uint8_t data = BUS_GET_DATA(pins);
             if (is_ctrl) {
-                board_.chips().pio2.write_control(port_sel, data);
+                board_.pio2.write_control(port_sel, data);
             } else {
-                board_.chips().pio2.write_data(port_sel, data);
+                board_.pio2.write_data(port_sel, data);
             }
         }
     }
