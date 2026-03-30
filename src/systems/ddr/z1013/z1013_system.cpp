@@ -75,22 +75,15 @@ bool Z1013System<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
     register_board(&board_);
 
-    // ── Create memory chips from manifest and wire bus ────────────────────
+    // ── Bind and create chips from manifest, wire bus ───────────────────
+    { size_t slot_idx_ = 0;
+      Z1013_64K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
     board_.create_chips(&pins_);
-    board_.bind_chipset();
     board_.apply(bus_);
 
-    // Retain pointers for post-init access (rendering, ROM loading)
-    video_ram_chip_   = board_.template find_last<RAMChip>();
-    monitor_rom_chip_ = board_.template find_last<ROMChip>();
-    if constexpr (Traits::has_basic_rom) {
-        basic_rom_lo_chip_ = board_.template find<ROMChip>();
-        basic_rom_hi_chip_ = board_.template find<ROMChip>(1);
-    }
-
     // ── Init chips ──────────────────────────────────────────────────────
-    pins_ = board_.cpu.init();
-    board_.io.init();
+    pins_ = board_.z80.init();
+    board_.pio.init();
 
     // Character ROM — not bus-mapped, used for display rendering only
     char_rom_.resize(z1013_constants::CHAR_ROM_SIZE, 0xFF);
@@ -130,7 +123,7 @@ template<Z1013Variant V> void Z1013System<V>::shutdown() { system_ready_ = false
 template<Z1013Variant V> void Z1013System<V>::reset() {
     if (!system_ready_) return;
     board_.reset_chips();
-    pins_ = board_.cpu.reset(pins_);
+    pins_ = board_.z80.reset(pins_);
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
     keyboard_column_select_ = 0xFF;
 }
@@ -140,7 +133,7 @@ void Z1013System<V>::tick() {
     if (!system_ready_) return;
 
     // CPU tick (one T-state)
-    pins_ = board_.cpu.tick(pins_);
+    pins_ = board_.z80.tick(pins_);
 
     // Bus dispatch — check Z80-specific MREQ/IORQ signals
     bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);
@@ -268,16 +261,16 @@ bus_state_t Z1013System<V>::io_tick(bus_state_t pins) {
                         cols &= keyboard_matrix_[r];
                     }
                 }
-                board_.io.set_input(0, cols);
+                board_.pio.set_input(0, cols);
             }
-            uint8_t data = board_.io.read_data(port_sel);
+            uint8_t data = board_.pio.read_data(port_sel);
             BUS_SET_DATA(pins, data);
         } else {
             uint8_t data = BUS_GET_DATA(pins);
             if (is_ctrl) {
-                board_.io.write_control(port_sel, data);
+                board_.pio.write_control(port_sel, data);
             } else {
-                board_.io.write_data(port_sel, data);
+                board_.pio.write_data(port_sel, data);
             }
         }
     } else if (port == z1013_constants::KEYBOARD_SEL_PORT) {
@@ -303,7 +296,7 @@ bus_state_t Z1013System<V>::io_tick(bus_state_t pins) {
 
 template<Z1013Variant V>
 void Z1013System<V>::render_frame() {
-    const uint8_t* vram = video_ram_chip_ ? video_ram_chip_->data() : nullptr;
+    const uint8_t* vram = board_.vram.data();
     if (!vram) return;
 
     video_gen_.set_vram(vram);
@@ -341,8 +334,8 @@ bool Z1013System<V>::load_roms() {
                                        "z1013_basic.rom|BASIC.ROM",
                                        z1013_constants::BASIC_ROM_SIZE,
                                        basic_buf, sizeof(basic_buf))) {
-            std::memcpy(basic_rom_lo_chip_->data(), basic_buf, 8192);
-            std::memcpy(basic_rom_hi_chip_->data(), basic_buf + 8192, 2048);
+            std::memcpy(board_.basic_lo.data(), basic_buf, 8192);
+            std::memcpy(board_.basic_hi.data(), basic_buf + 8192, 2048);
         } else {
             printf("%s: BASIC ROM not loaded\n", Traits::name);
             ok = false;

@@ -54,17 +54,18 @@ bool LC80System::initialize() {
     printf("LC 80: Initializing system\n");
     register_board(&board_);
 
-    // ── Create memory chips from manifest and wire bus ────────────────────
+    // ── Bind and create chips from manifest, wire bus ───────────────────
+    { size_t slot_idx_ = 0;
+      LC80_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
     board_.create_chips(&pins_);
-    board_.bind_chipset();
     board_.apply(bus_);
 
     // ── Configure page tables (mirroring) ───────────────────────────
     configure_bus_memory_map();
 
     // ── Init chips ──────────────────────────────────────────────────────
-    pins_ = board_.cpu.init();
-    board_.io.init();
+    pins_ = board_.z80.init();
+    board_.pio.init();
     board_.pio2.init();
     board_.ctc.init();
 
@@ -82,7 +83,7 @@ void LC80System::shutdown() { system_ready_ = false; }
 void LC80System::reset() {
     if (!system_ready_) return;
     board_.reset_chips();
-    pins_ = board_.cpu.reset(pins_);
+    pins_ = board_.z80.reset(pins_);
     std::memset(led_segments_, 0, sizeof(led_segments_));
 }
 
@@ -94,7 +95,7 @@ void LC80System::tick() {
     if (!system_ready_) return;
 
     // CPU tick
-    pins_ = board_.cpu.tick(pins_);
+    pins_ = board_.z80.tick(pins_);
 
     // Bus dispatch
     bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);  // Active-low
@@ -155,12 +156,12 @@ bus_state_t LC80System::io_tick(bus_state_t pins) {
         int port_idx = port & 0x01;
         bool is_ctrl = (port >> 1) & 0x01;
         if (is_read) {
-            BUS_SET_DATA(pins, board_.io.read_data(port_idx));
+            BUS_SET_DATA(pins, board_.pio.read_data(port_idx));
         } else {
             if (is_ctrl) {
-                board_.io.write_control(port_idx, data);
+                board_.pio.write_control(port_idx, data);
             } else {
-                board_.io.write_data(port_idx, data);
+                board_.pio.write_data(port_idx, data);
             }
         }
         return pins;

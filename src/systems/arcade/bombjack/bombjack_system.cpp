@@ -58,21 +58,23 @@ bool BombJackSystem::initialize() {
     printf("Bomb Jack: Initializing arcade system\n");
     register_board(&main_board_);
 
-    // ── Bind value-typed chips from Chips, then create remaining ─────
-    main_board_.bind_chipset();
+    // ── Bind value-typed chips, then create remaining ─────────────────
+    { size_t slot_idx_ = 0;
+      BOMBJACK_MAIN_FOR_EACH_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, main_board_) }
     main_board_.create_chips(&main_pins_);
     main_board_.apply(main_bus_);
 
-    sound_board_.bind_chipset();
+    { size_t slot_idx_ = 0;
+      BOMBJACK_SOUND_FOR_EACH_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, sound_board_) }
     sound_board_.create_chips(&sound_pins_);
     sound_board_.apply(sound_bus_);
 
-    // ── Init chips ───────────────────────────────────────────────────────
+    // ── Init chips ─────────────────────────────────────────────────────
     main_cpu_  = &main_board_.cpu;
     sound_cpu_ = &sound_board_.cpu;
-    fg_tilemap_chip_  = main_board_.find<RAMChip>(1);
-    fg_attr_chip_     = main_board_.find<RAMChip>(2);
-    palette_ram_chip_ = main_board_.find<RAMChip>(4);
+    fg_tilemap_chip_  = &main_board_.fg_map;
+    fg_attr_chip_     = &main_board_.fg_attr;
+    palette_ram_chip_ = &main_board_.palette;
     main_pins_  = main_board_.cpu.init();
     sound_pins_ = sound_board_.cpu.init();
     for (auto& ay : ay_) {

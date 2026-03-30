@@ -36,7 +36,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/sound/ay_psg/ay_3_8912.hpp"
@@ -83,35 +83,39 @@ template<> struct OricVariantTraits<OricVariant::ORIC_ATMOS> {
 #define ORIC_BUS_DEFAULT_STATE (MOS6502::default_bus_state())
 
 // =============================================================================
-// Oric chip manifests — declarative memory layout
+// Oric chip declarations — variant-specific single source of truth
 // =============================================================================
 //
-// Oric-1 (48K):
-//   Slot 0: RAM       — 64 KB at $0000 (address space covers up to $BFFF)
-//   Slot 1: ROM       — 16 KB at $C000 (BASIC 1.0 + Monitor)
-//   Slot 2: VIA       — MMIO-only, 16-byte window at $0300
+// Row: X(ctx, type, chip, base, size, mask, overlay, label, rom_files)
 //
-// Oric Atmos (48K):
-//   Same layout, different ROM (BASIC 1.1)
+// Oric-1 and Atmos have identical hardware layout; only the ROM differs.
+// VIA is MMIO-only: 16-byte window at $0300 (mask 0xFFF0).
 //
 
-inline constexpr auto kOric1Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
-    Slot<ROMChip>{0xC000, 16384, 0, "ROM"}.with_rom("oric1.rom|basic10.rom|BASIC10.ROM"),
-    Slot<mos6522_t>{0x0300, 0, 0xFFF0},    // MMIO-only, 16-byte window at $0300
-    // Non-bus chips — factory-created, not address-decoded
-    Slot<MOS6502>    {0, 0, 0, "MOS 6502"},
-    Slot<AY_3_8912>{0, 0, 0, "AY-3-8912"}
-);
+#define ORIC1_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                               \
+    X(ctx, MOS6502,    cpu,  0x0000,     0,      0, 0, "MOS 6502",  nullptr)                             \
+    X(ctx, RAMChip,    ram,  0x0000, 65536,      0, 0, "RAM",       nullptr)                             \
+    X(ctx, mos6522_t,  via,  0x0300,     0, 0xFFF0, 0, "VIA 6522",  nullptr)                             \
+    X(ctx, ROMChip,    rom,  0xC000, 16384,      0, 0, "ROM",       "oric1.rom|basic10.rom|BASIC10.ROM") \
+    X(ctx, AY_3_8912,  psg,  0x0000,     0,      0, 0, "AY-3-8912", nullptr)
 
-inline constexpr auto kOricAtmosChips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
-    Slot<ROMChip>{0xC000, 16384, 0, "ROM"}.with_rom("atmos.rom|basic11.rom|BASIC11.ROM"),
-    Slot<mos6522_t>{0x0300, 0, 0xFFF0},
-    // Non-bus chips — factory-created, not address-decoded
-    Slot<MOS6502>    {0, 0, 0, "MOS 6502"},
-    Slot<AY_3_8912>{0, 0, 0, "AY-3-8912"}
-);
+#define ORIC_ATMOS_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                          \
+    X(ctx, MOS6502,    cpu,  0x0000,     0,      0, 0, "MOS 6502",  nullptr)                             \
+    X(ctx, RAMChip,    ram,  0x0000, 65536,      0, 0, "RAM",       nullptr)                             \
+    X(ctx, mos6522_t,  via,  0x0300,     0, 0xFFF0, 0, "VIA 6522",  nullptr)                             \
+    X(ctx, ROMChip,    rom,  0xC000, 16384,      0, 0, "ROM",       "atmos.rom|basic11.rom|BASIC11.ROM") \
+    X(ctx, AY_3_8912,  psg,  0x0000,     0,      0, 0, "AY-3-8912", nullptr)
+
+static constexpr size_t kOric1ChipCount = 0 ORIC1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+static constexpr size_t kOricAtmosChipCount = 0 ORIC_ATMOS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+inline constexpr ChipManifest<kOric1ChipCount> kOric1Chips = ChipManifest<kOric1ChipCount>{{
+    ORIC1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
+
+inline constexpr ChipManifest<kOricAtmosChipCount> kOricAtmosChips = ChipManifest<kOricAtmosChipCount>{{
+    ORIC_ATMOS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
 
 // BusTraits — selects the correct manifest per variant
 template<OricVariant V> struct OricBusTraits;
@@ -130,7 +134,9 @@ template<> struct OricBusTraits<OricVariant::ORIC_ATMOS> {
 // Oric Chips — value-typed chips owned by Board
 // ============================================================================
 
-struct OricChips : CoreChips<MOS6502, NoChip, AY_3_8912, mos6522_t> {};
+struct OricChips {
+    ORIC1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+};
 
 // ============================================================================
 // Oric System

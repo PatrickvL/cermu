@@ -11,7 +11,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "chip/cpu/z80/u880.hpp"
 #include "chip/io/z80_pio.hpp"
 #include "chip/io/z80_ctc.hpp"
@@ -23,46 +23,36 @@
 #define LC80_BUS_DEFAULT_STATE (U880::default_bus_state())
 
 // =============================================================================
-// LC80 chip manifest — declarative memory layout
+// LC80 chip declaration — single source of truth
 // =============================================================================
 //
-// Slot 0: ROM — 2 KB at $0000 (mirrored 4× through $0000-$1FFF via addr_mask)
-// Slot 1: RAM — 1 KB at $2000 (mirrored 8× through $2000-$3FFF via addr_mask)
-// Slot 2: CPU — U880 (Z80A clone), non-bus
-// Slot 3: PIO #1 — U855, Z80 port-based I/O at $F4-$F7
-// Slot 4: PIO #2 — U855, Z80 port-based I/O at $F8-$FB
-// Slot 5: CTC   — U857, Z80 port-based I/O at $EC-$EF
+// Row: X(ctx, type, chip, base, size, mask, overlay, label, rom_files)
 //
 // All I/O is Z80 port-based (IORQ) — PIO/CTC slots are non-bus (no MMIO).
+// ROM and RAM use addr_mask for hardware mirroring:
+//   ROM: 2 KB physical, mirrored 4× through $0000-$1FFF (mask 0x07FF)
+//   RAM: 1 KB physical, mirrored 8× through $2000-$3FFF (mask 0x03FF)
 //
-inline constexpr auto kLC80Chips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 8192, 0x07FF, "Monitor ROM"},
-    Slot<RAMChip>{0x2000, 8192, 0x03FF, "RAM"},
-    // Non-bus chips — factory-created, not address-decoded
-    Slot<U880>      {0, 0, 0, "U880"},
-    Slot<z80_pio_t> {0, 0, 0, "U855 PIO #1"},
-    Slot<z80_pio_t> {0, 0, 0, "U855 PIO #2"},
-    Slot<z80_ctc_t> {0, 0, 0, "U857 CTC"}
-);
+
+#define LC80_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                              \
+    X(ctx, U880,       z80,  0x0000,    0,      0, 0, "U880",        nullptr)                          \
+    X(ctx, ROMChip,    rom,  0x0000, 8192, 0x07FF, 0, "Monitor ROM", nullptr)                          \
+    X(ctx, RAMChip,    ram,  0x2000, 8192, 0x03FF, 0, "RAM",         nullptr)                          \
+    X(ctx, z80_pio_t,  pio,  0x00F4,    0,      0, 0, "U855 PIO #1", nullptr)                          \
+    X(ctx, z80_pio_t,  pio2, 0x00F8,    0,      0, 0, "U855 PIO #2", nullptr)                          \
+    X(ctx, z80_ctc_t,  ctc,  0x00EC,    0,      0, 0, "U857 CTC",    nullptr)
+
+static constexpr size_t kLC80ChipCount = 0 LC80_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+inline constexpr ChipManifest<kLC80ChipCount> kLC80Chips = ChipManifest<kLC80ChipCount>{{
+    LC80_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
 
 using LC80BusSpec = ManifestBusSpec<kLC80Chips, 16, 8>;
 
 // ── Chips ──────────────────────────────────────────────────────────────
-struct LC80Chipset : CoreChips<U880, NoChip, NoChip, z80_pio_t> {
-    z80_pio_t pio2;     // U855 PIO #2 (keyboard scan + cassette)
-    z80_ctc_t ctc;      // U857 CTC (speaker on channel 2)
-
-    template<typename BoardT>
-    void bind_extras(BoardT& board) {
-        board.bind_chip(board.template find_index<z80_pio_t>(1), &pio2);
-        board.bind_chip(board.template find_index<z80_ctc_t>(), &ctc);
-    }
-
-    template<typename BoardT>
-    void register_extras(BoardT& board) {
-        board.register_component(&pio2);
-        board.register_component(&ctc);
-    }
+struct LC80Chipset {
+    LC80_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
 };
 
 class LC80System : public System {
