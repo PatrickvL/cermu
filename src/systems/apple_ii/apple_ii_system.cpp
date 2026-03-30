@@ -133,11 +133,19 @@ template<AppleIIVariant V>
 bool AppleIISystem<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
     register_board(&board_);
-    board_.bind_chipset();
+    {   size_t slot_idx_ = 0;
+        if constexpr (V == AppleIIVariant::APPLE_II) {
+            APPLE_II_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
+        } else if constexpr (V == AppleIIVariant::APPLE_IIE) {
+            APPLE_IIE_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
+        } else {
+            APPLE_IIC_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
+        }
+    }
     board_.create_chips(&pins_);
 
-    rom_      = board_.template find<ROMChip>();
-    ram_ptr_  = board_.template find<RAMChip>()->data();
+    rom_      = &board_.rom;
+    ram_ptr_  = board_.ram.data();
 
     pins_ = board_.cpu.init();
 
