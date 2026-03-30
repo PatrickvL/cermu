@@ -80,9 +80,9 @@ template<> struct Z9001VariantTraits<Z9001Variant::KC87> {
     V(ctx, RAMChip,   ram,       0x0000,  16384, 0, 0, "RAM",           nullptr) \
     V(ctx, RAMChip,   video_ram, 0xEC00,   1024, 0, 0, "Video RAM",     nullptr) \
     V(ctx, ROMChip,   os_rom,    0xF000,   4096, 0, 0, "OS ROM",        "z9001_os.rom|os.rom|OS.ROM") \
-    V(ctx, z80_pio_t, pio1,      0,            0, 0, 0, "U855 PIO #1",   nullptr) \
-    V(ctx, z80_pio_t, pio2,      0,            0, 0, 0, "U855 PIO #2",   nullptr) \
-    V(ctx, z80_ctc_t, ctc,       0,            0, 0, 0, "U857 CTC",      nullptr)
+    V(ctx, z80_pio_t, pio1,      0x0088,       0, 0x00FC, 0, "U855 PIO #1",   nullptr) \
+    V(ctx, z80_pio_t, pio2,      0x0090,       0, 0x00FC, 0, "U855 PIO #2",   nullptr) \
+    V(ctx, z80_ctc_t, ctc,       0x0080,       0, 0x00FC, 0, "U857 CTC",      nullptr)
 
 #define KC87_FOR_EACH_SYSTEM_CHIP(V, ctx) \
     V(ctx, U880,      z80,           0,            0, 0, 0, "U880",          nullptr) \
@@ -92,9 +92,9 @@ template<> struct Z9001VariantTraits<Z9001Variant::KC87> {
     V(ctx, RAMChip,   color_ram,     0xE800,   1024, 0, 0, "Color RAM",     nullptr) \
     V(ctx, RAMChip,   video_ram,     0xEC00,   1024, 0, 0, "Video RAM",     nullptr) \
     V(ctx, ROMChip,   os_rom,        0xF000,   4096, 0, 0, "OS ROM",        "z9001_os.rom|os.rom|OS.ROM") \
-    V(ctx, z80_pio_t, pio1,          0,            0, 0, 0, "U855 PIO #1",   nullptr) \
-    V(ctx, z80_pio_t, pio2,          0,            0, 0, 0, "U855 PIO #2",   nullptr) \
-    V(ctx, z80_ctc_t, ctc,           0,            0, 0, 0, "U857 CTC",      nullptr)
+    V(ctx, z80_pio_t, pio1,          0x0088,       0, 0x00FC, 0, "U855 PIO #1",   nullptr) \
+    V(ctx, z80_pio_t, pio2,          0x0090,       0, 0x00FC, 0, "U855 PIO #2",   nullptr) \
+    V(ctx, z80_ctc_t, ctc,           0x0080,       0, 0x00FC, 0, "U857 CTC",      nullptr)
 
 static constexpr size_t kZ9001ChipCount = 0 Z9001_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 static constexpr size_t kKC87ChipCount  = 0 KC87_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);

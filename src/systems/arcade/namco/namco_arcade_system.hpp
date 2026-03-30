@@ -80,7 +80,7 @@ template<> struct NamcoGameTraits<NamcoGame::Pengo> {
     X(ctx, RAMChip,     vram,  0x4000,  1024, 0, 0, "Video RAM",    nullptr)                            \
     X(ctx, RAMChip,     cram,  0x4400,  1024, 0, 0, "Color RAM",    nullptr)                            \
     X(ctx, RAMChip,     wram,  0x4C00,  1024, 0, 0, "Work RAM",     nullptr)                            \
-    X(ctx, namco_wsg_t, wsg,   0x0000,     0, 0, 0, "WSG3",         nullptr)
+    X(ctx, namco_wsg_t, wsg,   0x5040,     0, 0xFFE0, 0, "WSG3",         nullptr)
 
 #define PENGO_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                              \
     X(ctx, ZilogZ80A,   z80,   0x0000,     0, 0, 0, "Z80A",         nullptr)                            \
@@ -88,7 +88,7 @@ template<> struct NamcoGameTraits<NamcoGame::Pengo> {
     X(ctx, RAMChip,     vram,  0x8000,  1024, 0, 0, "Video RAM",    nullptr)                            \
     X(ctx, RAMChip,     cram,  0x8400,  1024, 0, 0, "Color RAM",    nullptr)                            \
     X(ctx, RAMChip,     wram,  0x8C00,  1024, 0, 0, "Work RAM",     nullptr)                            \
-    X(ctx, namco_wsg_t, wsg,   0x0000,     0, 0, 0, "WSG3",         nullptr)
+    X(ctx, namco_wsg_t, wsg,   0x9040,     0, 0xFFE0, 0, "WSG3",         nullptr)
 
 static constexpr size_t kPacManChipCount = 0 PACMAN_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 static constexpr size_t kPengoChipCount  = 0 PENGO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);

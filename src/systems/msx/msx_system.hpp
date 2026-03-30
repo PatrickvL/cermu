@@ -134,9 +134,9 @@ struct MSXChipset {
     V(ctx, ZilogZ80A,  z80,      0,          0,      0, 0, "Z80A",           nullptr) \
     V(ctx, ROMChip,    bios_rom, 0x0000, 32768,     0, 0, "BIOS+BASIC ROM", rom_files) \
     V(ctx, RAMChip,    main_ram, 0x0000, ram_size,   0, 0, "Main RAM",       nullptr) \
-    V(ctx, vdp_type,   vdp,      0,          0,      0, 0, vdp_label,        nullptr) \
-    V(ctx, AY_3_8910,  psg,      0,          0,      0, 0, "AY-3-8910",      nullptr) \
-    V(ctx, i8255_t,    ppi,      0,          0,      0, 0, "i8255 PPI",      nullptr)
+    V(ctx, vdp_type,   vdp,      0x0098,     0, 0x00FC, 0, vdp_label,        nullptr) \
+    V(ctx, AY_3_8910,  psg,      0x00A0,     0, 0x00FC, 0, "AY-3-8910",      nullptr) \
+    V(ctx, i8255_t,    ppi,      0x00A8,     0, 0x00FC, 0, "i8255 PPI",      nullptr)
 
 #define MSX1_FOR_EACH_SYSTEM_CHIP(V, ctx)  MSX_FOR_EACH_CHIP_IMPL(V, ctx, TMS9918A, "TMS9918A", "msx.rom|msx1.rom|MSX.ROM",        65536)
 #define MSX2_FOR_EACH_SYSTEM_CHIP(V, ctx)  MSX_FOR_EACH_CHIP_IMPL(V, ctx, V9938,    "V9938",    "msx2.rom|MSX2.ROM",               131072)

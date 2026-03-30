@@ -77,7 +77,7 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_64> {
     X(ctx, RAMChip,    ram,        0x0000, 16384,  0, 0, "RAM",          nullptr)                               \
     X(ctx, RAMChip,    vram,       0xEC00,  1024,  0, 0, "Video RAM",    nullptr)                               \
     X(ctx, ROMChip,    monitor,    0xF000,  2048,  0, 0, "Monitor ROM",  "z1013_mon.rom|monitor.rom|MON.ROM")   \
-    X(ctx, z80_pio_t,  pio,        0x0004,     0,  0, 0, "U855 PIO",     nullptr)
+    X(ctx, z80_pio_t,  pio,        0x0004,     0,  0x00FC, 0, "U855 PIO",     nullptr)
 
 #define Z1013_64K_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                  \
     X(ctx, U880,       z80,        0x0000,     0,  0, 0, "U880",         nullptr)                               \
@@ -86,7 +86,7 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_64> {
     X(ctx, ROMChip,    basic_hi,   0xE000,  2048,  0, 0, "BASIC ROM hi", nullptr)                               \
     X(ctx, RAMChip,    vram,       0xEC00,  1024,  0, 0, "Video RAM",    nullptr)                               \
     X(ctx, ROMChip,    monitor,    0xF000,  2048,  0, 0, "Monitor ROM",  "z1013_mon.rom|monitor.rom|MON.ROM")   \
-    X(ctx, z80_pio_t,  pio,        0x0004,     0,  0, 0, "U855 PIO",     nullptr)
+    X(ctx, z80_pio_t,  pio,        0x0004,     0,  0x00FC, 0, "U855 PIO",     nullptr)
 
 static constexpr size_t kZ1013_16K_ChipCount = 0 Z1013_16K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 static constexpr size_t kZ1013_64K_ChipCount = 0 Z1013_64K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
