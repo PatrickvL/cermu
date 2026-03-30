@@ -22,7 +22,7 @@
  *   - System descriptor metadata (name, aliases, ROM sizes)
  *   - POKEY presence and base address
  *
- * The system template uses CoreChips<MOS6502, VideoChip> where
+ * The system template uses an explicit ChipSet struct where
  * VideoChip is either dvg_t or avg_t, selected by traits.
  */
 
@@ -30,7 +30,7 @@
 #include "core/system.hpp"
 #include "core/board.hpp"
 #include "core/dip_switch.hpp"
-#include "core/core_chips.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
@@ -621,10 +621,24 @@ template<AtariVectorVariant V>
 class AtariVectorSystem : public System {
     using Traits    = AtariVectorTraits<V>;
     using VideoChip = typename Traits::VideoChip;
-    using SoundChip = std::conditional_t<Traits::HAS_POKEY, pokey::C012294, NoChip>;
     using Spec      = VectorBusSpec<V>;
     using Bus       = MemoryBus<Spec>;
-    using ChipSet   = CoreChips<MOS6502, VideoChip, SoundChip>;
+
+    // Value-typed chipset — superset of all variant chips.
+    // Only relevant fields are bound per variant; unused fields are inert.
+    struct ChipSet {
+        RAMChip          work_ram;
+        RAMChip          vec_ram;
+        ROMChip          vec_rom;
+        ROMChip          prog_rom;
+        MOS6502          m6502;
+        VideoChip        vg;
+        LS259            latch;
+        // Optional chips (variant-dependent)
+        ROMChip          prog_rom_hi;  // Space Duel only
+        pokey::C012294   pokey1;       // HAS_POKEY variants
+        ER2055           earom;        // HAS_EAROM variants
+    };
     using MainBoard = Board<Spec, ChipSet>;
 
 public:
@@ -677,8 +691,6 @@ public:
     void* get_video_port_ptr() override { return video_port_.get(); }
 
 private:
-    // ── Chips ────────────────────────────────────────────────────────────
-
     // Memory chips (non-owning; owned by board_)
     RAMChip*    vec_ram_     = nullptr;
     ROMChip*    vec_rom_     = nullptr;
@@ -713,17 +725,10 @@ private:
     DipSwitchBank dip_bank_[2];
 
     // ── 74LS259 addressable latch (coin counters, LEDs, NMI enable) ────
-    LS259 latch_259_;
     bool irq_asserted_ = false;     // Level-sensitive IRQ (Tempest, Gravitar, BW, SD, AD fallback)
 
     // ── Sound output latches ────────────────────────────────────────────
     uint8_t snd_latch_ = 0x00;
-
-    // ── EAROM (ER2055 512-bit Electrically Alterable ROM) ────────────────
-    // Used on: Asteroids Deluxe, Tempest, Gravitar, Black Widow, Space Duel,
-    // Red Baron, Centipede, Millipede, Dig Dug, Liberator, and others.
-    // Atari part number: 137161-001
-    ER2055 earom_;
 
     // ── Internal helpers ────────────────────────────────────────────────
     void tick_cpu();
@@ -733,8 +738,8 @@ private:
 
 
     // Convenience accessors for the video chip
-    VideoChip& vg() { return board_.video; }
-    const VideoChip& vg() const { return board_.video; }
+    VideoChip& vg() { return board_.vg; }
+    const VideoChip& vg() const { return board_.vg; }
 };
 
 // ============================================================================

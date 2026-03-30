@@ -994,29 +994,43 @@ bool AtariVectorSystem<V>::initialize() {
 
     register_board(&board_);
 
-    // Bind value-typed CPU/Video/Sound from ChipSet, then bind system-owned
-    // MMIO chips so create_chips() skips them (avoids heap duplicates).
-    board_.bind_chipset();
-    board_.bind_chip(board_.template find_index<LS259>(), &latch_259_);
-    if constexpr (Traits::HAS_EAROM) {
-        board_.bind_chip(board_.template find_index<ER2055>(), &earom_);
+    // Bind all chips from superset chipset — order matches make_atv_manifest<V>().
+    {   size_t slot_idx_ = 0;
+        // Core chips (always present)
+        board_.bind_chip(slot_idx_++, &board_.work_ram);
+        board_.bind_chip(slot_idx_++, &board_.vec_ram);
+        board_.bind_chip(slot_idx_++, &board_.vec_rom);
+        board_.bind_chip(slot_idx_++, &board_.prog_rom);
+        board_.bind_chip(slot_idx_++, &board_.m6502);
+        board_.bind_chip(slot_idx_++, &board_.vg);
+        board_.bind_chip(slot_idx_++, &board_.latch);
+        // Optional chips — order matches make_atv_manifest<V>() extra tuple
+        if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
+            board_.bind_chip(slot_idx_++, &board_.prog_rom_hi);
+            board_.bind_chip(slot_idx_++, &board_.pokey1);
+        } else if constexpr (Traits::HAS_POKEY && Traits::HAS_EAROM) {
+            board_.bind_chip(slot_idx_++, &board_.pokey1);
+            board_.bind_chip(slot_idx_++, &board_.earom);
+        } else if constexpr (Traits::HAS_POKEY) {
+            board_.bind_chip(slot_idx_++, &board_.pokey1);
+        }
     }
     board_.create_chips(&pins_);
-    vec_ram_  = board_.template find<RAMChip>(1);   // 2nd RAMChip = vector RAM
-    vec_rom_  = board_.template find<ROMChip>(0);   // 1st ROMChip = vector ROM
-    prog_rom_ = board_.template find<ROMChip>(1);   // 2nd ROMChip = program ROM
+    vec_ram_  = &board_.vec_ram;
+    vec_rom_  = &board_.vec_rom;
+    prog_rom_ = &board_.prog_rom;
 
     // 16-bit address games have a 3rd ROMChip for upper address space ($8000-$FFFF)
     if constexpr (!Traits::USES_15BIT_ADDR) {
-        prog_rom_hi_ = board_.template find<ROMChip>(2);
+        prog_rom_hi_ = &board_.prog_rom_hi;
     }
 
     // Wire MemoryBus page tables
     board_.apply(bus_);
 
     // Initialize CPU
-    board_.cpu.init();
-    board_.cpu.reset();
+    board_.m6502.init();
+    board_.m6502.reset();
 
     // Initialize vector generator (DVG or AVG via ChipSet)
     vg().init();
@@ -1057,8 +1071,8 @@ bool AtariVectorSystem<V>::initialize() {
 
     // Initialize POKEY (for games that have it)
     if constexpr (Traits::HAS_POKEY) {
-        board_.sound.init();
-        register_chip(&board_.sound, "POKEY", "POKEY", "Sound");
+        board_.pokey1.init();
+        register_chip(&board_.pokey1, "POKEY", "POKEY", "Sound");
     }
 
     // Video port — VectorVideoPort for signal-based rendering
@@ -1081,23 +1095,23 @@ bool AtariVectorSystem<V>::initialize() {
 
     // Wire POKEY audio output
     if constexpr (Traits::HAS_POKEY) {
-        board_.sound.set_audio_port(audio_port_.get());
+        board_.pokey1.set_audio_port(audio_port_.get());
     }
 
     // Space Duel: DIP switches are wired to POKEY1 pot inputs.
     // MAME overrides ALLPOT to return the DIP bank value directly.
     // Individual POT reads also return per-bit values (228 = open, 0 = grounded).
     if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
-        board_.sound.allpot_read_callback = [](void* ctx) -> uint8_t {
+        board_.pokey1.allpot_read_callback = [](void* ctx) -> uint8_t {
             return static_cast<AtariVectorSystem*>(ctx)->dip_bank_[0].value;
         };
-        board_.sound.allpot_read_context = this;
-        board_.sound.pot_read_callback = [](void* ctx, uint8_t pot_index) -> uint8_t {
+        board_.pokey1.allpot_read_context = this;
+        board_.pokey1.pot_read_callback = [](void* ctx, uint8_t pot_index) -> uint8_t {
             auto* sys = static_cast<AtariVectorSystem*>(ctx);
             // Pot line grounded (0) when switch active, open (228) when inactive
             return (sys->dip_bank_[0].value & (1 << pot_index)) ? 228 : 0;
         };
-        board_.sound.pot_read_context = this;
+        board_.pokey1.pot_read_context = this;
     }
 
     // Initialize DIP switch banks with per-game descriptors (MAME factory defaults)
@@ -1133,7 +1147,7 @@ void AtariVectorSystem<V>::reset() {
     printf("%s: Reset\n", AtariVectorTraits<V>::NAME);
 
     board_.reset_chips();
-    board_.cpu.reset();
+    board_.m6502.reset();
 
     pins_ = MOS6502::default_bus_state();
     total_cycles_ = 0;
@@ -1142,7 +1156,7 @@ void AtariVectorSystem<V>::reset() {
     nmi_counter_ = atv::NMI_PERIOD_CYCLES;
 
     if constexpr (Traits::HAS_POKEY) {
-        board_.sound.reset();
+        board_.pokey1.reset();
     }
 
     // Internal button state uses active-HIGH convention (1=pressed, 0=not pressed).
@@ -1150,7 +1164,7 @@ void AtariVectorSystem<V>::reset() {
     in1_ = 0x00;
     thrust_ = 0x00;
     snd_latch_ = 0x00;
-    latch_259_.reset();    // All Q outputs LOW (NMI gated off)
+    board_.latch.reset();    // All Q outputs LOW (NMI gated off)
     irq_asserted_ = false; // IRQ starts inactive
 }
 
@@ -1168,7 +1182,7 @@ void AtariVectorSystem<V>::tick() {
 
     // POKEY tick (runs at CPU clock for games with POKEY)
     if constexpr (Traits::HAS_POKEY) {
-        board_.sound.tick(0);  // Arcade POKEY: no bus-driven memory access
+        board_.pokey1.tick(0);  // Arcade POKEY: no bus-driven memory access
     }
 
     // ── Periodic interrupt timer ────────────────────────────────────────────
@@ -1212,10 +1226,10 @@ void AtariVectorSystem<V>::tick() {
             // Gated NMI: only fires when enabled via 74LS259 latch output.
             // AD: Q4 ($3C04), BZ/RB: Q5 ($1005).
             if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
-                if (latch_259_.q(4))
+                if (board_.latch.q(4))
                     BUS_CLR_BIT(pins_, BUS_NMI_BIT);
             } else {
-                if (latch_259_.q(5))
+                if (board_.latch.q(5))
                     BUS_CLR_BIT(pins_, BUS_NMI_BIT);
             }
 
@@ -1270,7 +1284,7 @@ void AtariVectorSystem<V>::run_frame() {
 
 template<AtariVectorVariant V>
 void AtariVectorSystem<V>::tick_cpu() {
-    auto& cpu = board_.cpu;
+    auto& cpu = board_.m6502;
 
     pins_ = cpu.template tick<MOS6502::Phase::PHI2>(pins_);
 
@@ -1345,13 +1359,13 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
     // ── POKEY1 read — direct register access ──────────────────────
     if constexpr (Traits::HAS_POKEY) {
         if (addr >= Traits::POKEY1_BASE && addr < Traits::POKEY1_BASE + Traits::POKEY1_SIZE) {
-            BUS_SET_DATA(pins, board_.sound.read(static_cast<uint8_t>(addr & 0x0F)));
+            BUS_SET_DATA(pins, board_.pokey1.read(static_cast<uint8_t>(addr & 0x0F)));
             return pins;
         }
         // Tempest mirrors POKEY1 at $0800 and POKEY2 at $0900
         if constexpr (V == AtariVectorVariant::TEMPEST) {
             if (addr >= 0x0800 && addr < 0x0810) {
-                BUS_SET_DATA(pins, board_.sound.read(static_cast<uint8_t>(addr & 0x0F)));
+                BUS_SET_DATA(pins, board_.pokey1.read(static_cast<uint8_t>(addr & 0x0F)));
                 return pins;
             }
         }
@@ -1377,13 +1391,13 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
     if constexpr (Traits::HAS_EAROM) {
         // ER2055 data read: returns the data output latch
         if (addr >= Traits::EAROM_BASE && addr < Traits::EAROM_BASE + Traits::EAROM_SIZE) {
-            BUS_SET_DATA(pins, earom_.read_data());
+            BUS_SET_DATA(pins, board_.earom.read_data());
             return pins;
         }
         // Dedicated EAROM data output port (Tempest $6050)
         if constexpr (Traits::EAROM_READ_ADDR != 0) {
             if (addr == Traits::EAROM_READ_ADDR) {
-                BUS_SET_DATA(pins, earom_.read_data());
+                BUS_SET_DATA(pins, board_.earom.read_data());
                 return pins;
             }
         }
@@ -1642,13 +1656,13 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
     // ── POKEY1 write — direct register access ──────────────────────
     if constexpr (Traits::HAS_POKEY) {
         if (addr >= Traits::POKEY1_BASE && addr < Traits::POKEY1_BASE + Traits::POKEY1_SIZE) {
-            board_.sound.write(static_cast<uint8_t>(addr & 0x0F), data);
+            board_.pokey1.write(static_cast<uint8_t>(addr & 0x0F), data);
             return pins;
         }
         // Tempest mirrors POKEY1 at $0800
         if constexpr (V == AtariVectorVariant::TEMPEST) {
             if (addr >= 0x0800 && addr < 0x0810) {
-                board_.sound.write(static_cast<uint8_t>(addr & 0x0F), data);
+                board_.pokey1.write(static_cast<uint8_t>(addr & 0x0F), data);
                 return pins;
             }
         }
@@ -1675,7 +1689,7 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
             bus_state_t eb = 0;
             BUS_SET_ADDR(eb, addr & 0x3F);
             BUS_SET_DATA(eb, data);
-            earom_.tick(eb);
+            board_.earom.tick(eb);
             return pins;
         }
         // EAROM control write — Tempest $6040 (AD handled in DVG switch below)
@@ -1683,14 +1697,14 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
             if (addr == Traits::EAROM_CTRL_ADDR) {
                 // CS1=bit3, CS2=tied high, C1=bit2, C2=bit1, CK=bit0
                 bus_state_t eb = 0;
-                BUS_SET_ADDR(eb, earom_.regs_.data[er2055::reg::ADDR_LATCH]);
-                BUS_SET_DATA(eb, earom_.regs_.data[er2055::reg::DATA_IN]);
+                BUS_SET_ADDR(eb, board_.earom.regs_.data[er2055::reg::ADDR_LATCH]);
+                BUS_SET_DATA(eb, board_.earom.regs_.data[er2055::reg::DATA_IN]);
                 if (data & 0x08) BUS_SET_BIT(eb, er2055::CS1_BIT);
                 BUS_SET_BIT(eb, er2055::CS2_BIT);  // tied high
                 if (data & 0x04) BUS_SET_BIT(eb, er2055::C1_BIT);
                 if (data & 0x02) BUS_SET_BIT(eb, er2055::C2_BIT);
                 if (data & 0x01) BUS_SET_BIT(eb, er2055::CK_BIT);
-                earom_.tick(eb);
+                board_.earom.tick(eb);
                 return pins;
             }
         }
@@ -1736,19 +1750,19 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
                     // AD EAROM control write: CS1=bit3, CS2=tied high,
                     // C1=bit2, C2=bit1, CK=bit0
                     bus_state_t eb = 0;
-                    BUS_SET_ADDR(eb, earom_.regs_.data[er2055::reg::ADDR_LATCH]);
-                    BUS_SET_DATA(eb, earom_.regs_.data[er2055::reg::DATA_IN]);
+                    BUS_SET_ADDR(eb, board_.earom.regs_.data[er2055::reg::ADDR_LATCH]);
+                    BUS_SET_DATA(eb, board_.earom.regs_.data[er2055::reg::DATA_IN]);
                     if (data & 0x08) BUS_SET_BIT(eb, er2055::CS1_BIT);
                     BUS_SET_BIT(eb, er2055::CS2_BIT);  // tied high
                     if (data & 0x04) BUS_SET_BIT(eb, er2055::C1_BIT);
                     if (data & 0x02) BUS_SET_BIT(eb, er2055::C2_BIT);
                     if (data & 0x01) BUS_SET_BIT(eb, er2055::CK_BIT);
-                    earom_.tick(eb);
+                    board_.earom.tick(eb);
                 }
                 break;
 
             case 0x3C00:   // COIN — 74LS259 addressable latch
-                latch_259_.write(addr, data);
+                board_.latch.write(addr, data);
                 break;
 
             case 0x3E00:   // NMI ACK
@@ -1771,7 +1785,7 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
             // 74LS259 addressable latch (MAME: ls259_device::write_a0)
             //   Q0 = coin counter 1, Q1 = coin counter 2, Q2 = start LED
             //   Q5 = NMI enable (game writes $1005 D0=1 to enable periodic NMI)
-            latch_259_.write(addr, data);
+            board_.latch.write(addr, data);
         } else if (addr >= 0x1840 && addr < 0x1A40) {
             snd_latch_ = data;
         } else if (addr >= Traits::VGGO_ADDR && addr < Traits::VGGO_ADDR + 0x0200) {
@@ -1912,9 +1926,9 @@ bool AtariVectorSystem<V>::load_file(const char* filepath) {
     }
 
     if (cold_boot) {
-        board_.cpu.set(A, 0);
-        board_.cpu.set(X, 0);
-        board_.cpu.set(Y, 0);
+        board_.m6502.set(A, 0);
+        board_.m6502.set(X, 0);
+        board_.m6502.set(Y, 0);
     }
 
     printf("%s: ROM loaded, system ready\n", Traits::NAME);
