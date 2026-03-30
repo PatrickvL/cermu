@@ -87,7 +87,7 @@ namespace nes_system {
 
 #define NES_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                     \
     X(ctx, RICOH_2A03, cpu,  0x0000, 0, 0, 0, "Ricoh 2A03",     "Ricoh 2A03",     nullptr)                  \
-    X(ctx, PPU,        ppu,  0x0000, 0, 0, 0, "Ricoh 2C02 PPU", "Ricoh 2C02 PPU", nullptr)
+    X(ctx, PPU,        ppu,  0x2000, 0, 0, 0, "Ricoh 2C02 PPU", "Ricoh 2C02 PPU", nullptr)
 
 static constexpr size_t kNESChipCount = 0 NES_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 
