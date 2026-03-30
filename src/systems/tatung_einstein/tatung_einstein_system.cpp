@@ -96,19 +96,20 @@ bool TatungEinsteinSystem::initialize() {
     printf("Tatung Einstein: Initializing system\n");
     register_board(&board_);
 
-    board_.bind_chipset();
+    { size_t slot_idx_ = 0;
+      EINSTEIN_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
     board_.create_chips(&pins_);
     board_.apply(bus_);
 
     configure_bus_memory_map();
 
-    pins_ = board_.cpu.init();
-    board_.sound.init();
+    pins_ = board_.z80.init();
+    board_.psg.init();
     board_.ctc.init();
-    board_.io.init();
+    board_.pio.init();
 
-    board_.sound.set_clock_frequency(einstein_constants::CPU_FREQ_HZ / 16);
-    board_.sound.set_audio_sample_rate(audio_sample_rate_);
+    board_.psg.set_clock_frequency(einstein_constants::CPU_FREQ_HZ / 16);
+    board_.psg.set_audio_sample_rate(audio_sample_rate_);
     audio_sample_period_ = einstein_constants::CPU_FREQ_HZ / audio_sample_rate_;
 
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
@@ -120,7 +121,7 @@ bool TatungEinsteinSystem::initialize() {
     register_bus_chips(board_);
 
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.video.set_video_out(&video_port_->output());
+    board_.vdp.set_video_out(&video_port_->output());
     video_port_->bind_frame_output(&last_frame_data_);
 
     audio_port_ = std::make_unique<AudioPort>();
@@ -138,7 +139,7 @@ void TatungEinsteinSystem::shutdown() {
 
 void TatungEinsteinSystem::reset() {
     board_.reset_chips();
-    pins_ = board_.cpu.reset(pins_);
+    pins_ = board_.z80.reset(pins_);
     frame_tstate_counter_ = 0;
     rom_enabled_ = true;
     configure_bus_memory_map();
@@ -153,7 +154,7 @@ void TatungEinsteinSystem::tick() {
 
     // VDP tick (PAL TMS9929A)
     bus_state_t vdp_bus = 0;
-    vdp_bus = board_.video.tick(vdp_bus);
+    vdp_bus = board_.vdp.tick(vdp_bus);
 
     if (BUS_GET_BIT(vdp_bus, BUS_IRQ_BIT) == 0)
         BUS_CLR_BIT(pins_, BUS_IRQ_BIT);
@@ -167,7 +168,7 @@ void TatungEinsteinSystem::tick() {
     }
 
     // CPU tick
-    pins_ = board_.cpu.tick(pins_);
+    pins_ = board_.z80.tick(pins_);
 
     bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);
     bool iorq = !BUS_GET_BIT(pins_, Z80_IORQ_BIT);
@@ -180,14 +181,14 @@ void TatungEinsteinSystem::tick() {
 
     // PSG tick (CPU/16)
     if ((frame_tstate_counter_ & 0x0F) == 0) {
-        board_.sound.tick();
+        board_.psg.tick();
     }
 
     // Audio sample generation
     audio_sample_counter_++;
     if (audio_sample_counter_ >= audio_sample_period_) {
         audio_sample_counter_ = 0;
-        float sample = board_.sound.get_sample();
+        float sample = board_.psg.get_sample();
         audio_ring_buf_.write(&sample, 1);
         if (audio_port_) audio_port_->drive_sample(sample);
     }
@@ -229,19 +230,19 @@ bus_state_t TatungEinsteinSystem::io_tick(bus_state_t pins) {
 
     // PSG address latch ($00)
     if (!is_read && port == einstein_constants::PSG_ADDR_PORT) {
-        board_.sound.latch_address(BUS_GET_DATA(pins));
+        board_.psg.latch_address(BUS_GET_DATA(pins));
         return pins;
     }
 
     // PSG data write ($01)
     if (!is_read && port == einstein_constants::PSG_DATA_WRITE_PORT) {
-        board_.sound.write_register(BUS_GET_DATA(pins));
+        board_.psg.write_register(BUS_GET_DATA(pins));
         return pins;
     }
 
     // PSG data read ($02)
     if (is_read && port == einstein_constants::PSG_DATA_READ_PORT) {
-        BUS_SET_DATA(pins, board_.sound.read_register());
+        BUS_SET_DATA(pins, board_.psg.read_register());
         return pins;
     }
 
@@ -251,10 +252,10 @@ bus_state_t TatungEinsteinSystem::io_tick(bus_state_t pins) {
         BUS_SET_ADDR(vdp_bus, 0);  // port 0 = data
         BUS_SET_DATA(vdp_bus, BUS_GET_DATA(pins));
         if (is_read) {
-            vdp_bus = TMS9929A::port_read(&board_.video, vdp_bus);
+            vdp_bus = TMS9929A::port_read(&board_.vdp, vdp_bus);
             BUS_SET_DATA(pins, BUS_GET_DATA(vdp_bus));
         } else {
-            TMS9929A::port_write(&board_.video, vdp_bus);
+            TMS9929A::port_write(&board_.vdp, vdp_bus);
         }
         return pins;
     }
@@ -265,10 +266,10 @@ bus_state_t TatungEinsteinSystem::io_tick(bus_state_t pins) {
         BUS_SET_ADDR(vdp_bus, 1);  // port 1 = control/status
         BUS_SET_DATA(vdp_bus, BUS_GET_DATA(pins));
         if (is_read) {
-            vdp_bus = TMS9929A::port_read(&board_.video, vdp_bus);
+            vdp_bus = TMS9929A::port_read(&board_.vdp, vdp_bus);
             BUS_SET_DATA(pins, BUS_GET_DATA(vdp_bus));
         } else {
-            TMS9929A::port_write(&board_.video, vdp_bus);
+            TMS9929A::port_write(&board_.vdp, vdp_bus);
         }
         return pins;
     }
@@ -287,7 +288,7 @@ bus_state_t TatungEinsteinSystem::io_tick(bus_state_t pins) {
     // PIO ($10-$13)
     if (port >= einstein_constants::PIO_BASE_PORT &&
         port <= (einstein_constants::PIO_BASE_PORT + 3)) {
-        pins = board_.io.io_tick(pins);
+        pins = board_.pio.io_tick(pins);
         return pins;
     }
 
@@ -330,7 +331,7 @@ uint32_t TatungEinsteinSystem::get_audio_samples(float* buffer, uint32_t max_sam
 void TatungEinsteinSystem::set_audio_sample_rate(int sample_rate_hz) {
     audio_sample_rate_ = static_cast<uint32_t>(sample_rate_hz);
     audio_sample_period_ = einstein_constants::CPU_FREQ_HZ / audio_sample_rate_;
-    board_.sound.set_audio_sample_rate(sample_rate_hz);
+    board_.psg.set_audio_sample_rate(sample_rate_hz);
 }
 
 // ============================================================================

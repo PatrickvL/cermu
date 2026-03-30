@@ -15,7 +15,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -35,39 +35,43 @@
 #define EINSTEIN_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
 
 // =============================================================================
-// Einstein chip manifest
+// Einstein chip declaration — single source of truth
 // =============================================================================
 //
-// Slot 0: RAM  — 64KB at $0000 (full address space)
-// Slot 1: ROM  — 8KB at $0000 (overlay, banked out by writing to port $23)
+// Row: X(ctx, type, chip, base, mask, overlay, label, info_label, rom_files)
+//
+//   Slot 0: RAM       — 64KB at $0000
+//   Slot 1: OS ROM    — 8KB at $0000 (overlay, banked out by writing port $23)
+//   Slot 2: Z80A      — not bus-mapped
+//   Slot 3: TMS9929A  — not bus-mapped (I/O port-accessed)
+//   Slot 4: AY-3-8910 — not bus-mapped (I/O port-accessed)
+//   Slot 5: Z80 CTC   — not bus-mapped (I/O port-accessed)
+//   Slot 6: Z80 PIO   — not bus-mapped (I/O port-accessed)
+//
 
-inline constexpr auto kEinsteinChips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536, 0, "Main RAM"},
-    Slot<ROMChip>{0x0000,  8192, 0, "OS ROM"}.with_rom("einstein.rom|EINSTEIN.ROM|tcei.rom"),
-    // Non-bus chips
-    Slot<ZilogZ80A>  {0, 0, 0, "Z80A"},
-    Slot<TMS9929A>   {0, 0, 0, "TMS9929A"},
-    Slot<AY_3_8910>  {0, 0, 0, "AY-3-8910"},
-    Slot<z80_ctc_t>  {0, 0, 0, "Z80 CTC"},
-    Slot<z80_pio_t>  {0, 0, 0, "Z80 PIO"}
-);
+#define EINSTEIN_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                         \
+    X(ctx, RAMChip,     ram,  0x0000, 0xFFFF, 0, "Main RAM",   "Main RAM",   nullptr)                                \
+    X(ctx, ROMChip,     rom,  0x0000, 0x1FFF, 0, "OS ROM",     "OS ROM",     "einstein.rom|EINSTEIN.ROM|tcei.rom")    \
+    X(ctx, ZilogZ80A,   z80,  0x0000,      0, 0, "Z80A",       "Z80A",       nullptr)                                \
+    X(ctx, TMS9929A,    vdp,  0x0000,      0, 0, "TMS9929A",   "TMS9929A",   nullptr)                                \
+    X(ctx, AY_3_8910,   psg,  0x0000,      0, 0, "AY-3-8910",  "AY-3-8910",  nullptr)                                \
+    X(ctx, z80_ctc_t,   ctc,  0x0000,      0, 0, "Z80 CTC",    "Z80 CTC",    nullptr)                                \
+    X(ctx, z80_pio_t,   pio,  0x0000,      0, 0, "Z80 PIO",    "Z80 PIO",    nullptr)
+
+static constexpr size_t kEinsteinChipCount = 0 EINSTEIN_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+inline constexpr ChipManifest<kEinsteinChipCount> kEinsteinChips = ChipManifest<kEinsteinChipCount>{{
+    EINSTEIN_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
 
 using EinsteinBusSpec = ManifestBusSpec<kEinsteinChips, 16, 8>;
 
 // ============================================================================
-// Einstein Chips — value-typed chips owned by Board
+// Einstein Chips — value-typed chips owned by Board (auto-generated)
 // ============================================================================
 
-struct EinsteinChips : CoreChips<ZilogZ80A, TMS9929A, AY_3_8910, z80_pio_t> {
-    z80_ctc_t ctc;
-
-    template<typename B> void bind_extras(B& board) {
-        board.bind_chip(board.template find_index<z80_ctc_t>(), &ctc);
-    }
-
-    void register_extras(BoardBase& board) {
-        board.register_component(&ctc);
-    }
+struct EinsteinChips {
+    EINSTEIN_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
 };
 
 // ============================================================================
