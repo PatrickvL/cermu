@@ -292,7 +292,6 @@ void c64_pla_render_debug(void* ctx, PLA906114& pla) {
                     ImGui::TableHeadersRow();
                     
                     // Table rows - properly handle PLA-dependent chip mapping
-                    using namespace c64_chip_ids;
                     for (int bank = 0; bank < 16; bank++) {
                         ImGui::TableNextRow(ImGuiTableRowFlags_None, 0.0f);
                         
@@ -300,15 +299,15 @@ void c64_pla_render_debug(void* ctx, PLA906114& pla) {
                         uint16_t bank_end = bank_start + 0x0FFF;
                         
                         // Get read/write chip for this bank and mode from PLA debug tables
-                        C64PlaChipId read_chip = C64PlaChipId(kRam);
-                        C64PlaChipId write_chip = C64PlaChipId(kRam);
+                        C64PlaChipId read_chip = C64PlaChipId::ram;
+                        C64PlaChipId write_chip = C64PlaChipId::ram;
                         if (pla_debug_selected_mode < 32) {
                             read_chip  = c64->pla_cpu_read_chip_[pla_debug_selected_mode][bank];
                             write_chip = c64->pla_cpu_write_chip_[pla_debug_selected_mode][bank];
                         }
                         
                         // Special handling for I/O area - this changes based on PLA mode
-                        if (read_chip == kIo || write_chip == kIo) {
+                        if (read_chip == C64PlaChipId::io || write_chip == C64PlaChipId::io) {
                             // Show I/O pages as individual rows (16 pages, $D000-$DFFF)
                             for (int page = 0; page < 16; page++) {
                                 if (page > 0) {
@@ -327,7 +326,7 @@ void c64_pla_render_debug(void* ctx, PLA906114& pla) {
                                 ImGui::TableSetColumnIndex(1);
                                 ImGui::Text("$%04X-$%04X", page_start, page_end);
                                 ImGui::TableSetColumnIndex(2);
-                                ImGui::Text("R:%02d W:%02d", read_chip, write_chip);
+                                ImGui::Text("R:%02d W:%02d", int(read_chip), int(write_chip));
                                 ImGui::TableSetColumnIndex(3);
                                 ImGui::Text("%s", get_io_chip_detail(page));
                                 ImGui::TableSetColumnIndex(4);
@@ -341,19 +340,18 @@ void c64_pla_render_debug(void* ctx, PLA906114& pla) {
                             }
                         } else {
                             // Regular bank - chip mapping depends on PLA mode
-                            C64ChipInfo read_info{}, write_info{};
-                            c64_chip_info(read_chip, &read_info);
-                            c64_chip_info(write_chip, &write_info);
+                            const auto& read_info  = kC64PlaChipTable[size_t(read_chip)];
+                            const auto& write_info = kC64PlaChipTable[size_t(write_chip)];
                             
                             // Calculate offsets - these can vary based on chip remapping
-                            uint16_t read_offset = (read_info.base <= bank_start) ? (bank_start - read_info.base) : 0;
-                            uint16_t write_offset = (write_info.base <= bank_start) ? (bank_start - write_info.base) : 0;
+                            uint16_t read_offset = (read_info.slot->base_addr <= bank_start) ? (bank_start - read_info.slot->base_addr) : 0;
+                            uint16_t write_offset = (write_info.slot->base_addr <= bank_start) ? (bank_start - write_info.slot->base_addr) : 0;
                             
                             // Special case for ROMH remap (appears at $E000/$F000 instead of $A000/$B000)
-                            if (read_chip == kRomh && (bank_start >= 0xE000)) {
+                            if (read_chip == C64PlaChipId::romh && (bank_start >= 0xE000)) {
                                 read_offset = bank_start - 0xE000;
                             }
-                            if (write_chip == kRomh && (bank_start >= 0xE000)) {
+                            if (write_chip == C64PlaChipId::romh && (bank_start >= 0xE000)) {
                                 write_offset = bank_start - 0xE000;
                             }
     
@@ -362,11 +360,11 @@ void c64_pla_render_debug(void* ctx, PLA906114& pla) {
                             ImGui::TableSetColumnIndex(1);
                             ImGui::Text("$%04X-$%04X", bank_start, bank_end);
                             ImGui::TableSetColumnIndex(2);
-                            ImGui::Text("R:%02d W:%02d", read_chip, write_chip);
+                            ImGui::Text("R:%02d W:%02d", int(read_chip), int(write_chip));
                             ImGui::TableSetColumnIndex(3);
-                            ImGui::Text("%s", c64_chip_title(read_chip));
+                            ImGui::Text("%s", read_info.slot->label);
                             ImGui::TableSetColumnIndex(4);
-                            ImGui::Text("%s", c64_chip_title(write_chip));
+                            ImGui::Text("%s", write_info.slot->label);
                             ImGui::TableSetColumnIndex(5);
                             ImGui::Text("$%04X", read_offset);
                             ImGui::TableSetColumnIndex(6);
@@ -377,12 +375,12 @@ void c64_pla_render_debug(void* ctx, PLA906114& pla) {
                             // Add context about what's actually mapped based on PLA mode
                             if (read_chip != write_chip) {
                                 ImGui::Text("%s (R:%s/W:%s)", base_notes,
-                                           c64_chip_title(read_chip),
-                                           c64_chip_title(write_chip));
-                            } else if (read_chip == kUnmapped) {
+                                           read_info.slot->label,
+                                           write_info.slot->label);
+                            } else if (read_chip == C64PlaChipId::unmapped) {
                                 ImGui::Text("%s (unmapped)", base_notes);
                             } else {
-                                ImGui::Text("%s (%s)", base_notes, c64_chip_title(read_chip));
+                                ImGui::Text("%s (%s)", base_notes, read_info.slot->label);
                             }
                         }
                     }
@@ -432,27 +430,25 @@ void c64_pla_render_debug(void* ctx, PLA906114& pla) {
                         ImGui::TableSetColumnIndex(2);
 
                         // Get chip for this VIC-II bank and mode - PLA-dependent!
-                        C64PlaChipId read_chip = C64PlaChipId(c64_chip_ids::kRam);
+                        C64PlaChipId read_chip = C64PlaChipId::ram;
                         if (pla_debug_selected_mode < 32) {
                             read_chip = c64->pla_vicii_read_chip_[pla_debug_selected_mode][bank];
                         }
 
-                        ImGui::Text("%02d", read_chip);
+                        ImGui::Text("%02d", int(read_chip));
                         ImGui::TableSetColumnIndex(3);
                         // Show what chip VIC-II actually sees at this address in this PLA mode
-                        const char* chip_title = c64_chip_title(read_chip);
-                        if (read_chip == c64_chip_ids::kCharrom && pla_debug_selected_mode != current_mode) {
-                            ImGui::Text("%s (mode-dep)", chip_title); // Character ROM visibility depends on PLA mode
-                        } else if (read_chip == c64_chip_ids::kRam && bank >= 0xA && bank <= 0xF) {
-                            ImGui::Text("%s (under ROM)", chip_title); // RAM under ROM areas
+                        const auto& chip_desc = kC64PlaChipTable[size_t(read_chip)];
+                        if (read_chip == C64PlaChipId::charrom && pla_debug_selected_mode != current_mode) {
+                            ImGui::Text("%s (mode-dep)", chip_desc.slot->label); // Character ROM visibility depends on PLA mode
+                        } else if (read_chip == C64PlaChipId::ram && bank >= 0xA && bank <= 0xF) {
+                            ImGui::Text("%s (under ROM)", chip_desc.slot->label); // RAM under ROM areas
                         } else {
-                            ImGui::Text("%s", chip_title);
+                            ImGui::Text("%s", chip_desc.slot->label);
                         }
                         ImGui::TableSetColumnIndex(4);
 
-                        C64ChipInfo read_info{};
-                        c64_chip_info(read_chip, &read_info);
-                        uint16_t read_offset = (read_info.base <= bank_start) ? (bank_start - read_info.base) : 0;
+                        uint16_t read_offset = (chip_desc.slot->base_addr <= (uint32_t)bank_start) ? (bank_start - chip_desc.slot->base_addr) : 0;
 
                         ImGui::Text("$%04X", read_offset);
                         ImGui::TableSetColumnIndex(5);
@@ -486,31 +482,29 @@ void c64_pla_render_debug(void* ctx, PLA906114& pla) {
             ImGui::TableSetupColumn("Title", ImGuiTableColumnFlags_None, 0.0f, 0);
             ImGui::TableHeadersRow();
             
-            // Show all chip IDs from manifest
-            for (size_t i = 0; i < kC64AllChipIdCount; i++) {
-                C64PlaChipId chip = kC64AllChipIds[i];
+            // Show all PLA chip types
+            for (size_t i = 0; i < kC64PlaChipCount; i++) {
+                const auto& d = kC64PlaChipTable[i];
                 ImGui::TableNextRow(ImGuiTableRowFlags_None, 0.0f);
                 ImGui::TableSetColumnIndex(0);
-                ImGui::Text("%02d", chip);
+                ImGui::Text("%02d", int(i));
                 ImGui::TableSetColumnIndex(1);
 
-                C64ChipInfo info{};
-                bool has_info = c64_chip_info(chip, &info);
-                if (has_info && info.size > 0) {
-                    ImGui::Text("$%04X-$%04X", info.base, (uint16_t)(info.base + info.size - 1));
+                if (d.slot->size_bytes > 0) {
+                    ImGui::Text("$%04X-$%04X", d.slot->base_addr, (uint16_t)(d.slot->base_addr + d.slot->size_bytes - 1));
                 } else {
                     ImGui::Text("-");
                 }
                 ImGui::TableSetColumnIndex(2);
                 // Inline size formatting
-                if (info.size >= 1024 && (info.size % 1024) == 0)
-                    ImGui::Text("%zuKB", info.size / 1024);
+                if (d.slot->size_bytes >= 1024 && (d.slot->size_bytes % 1024) == 0)
+                    ImGui::Text("%zuKB", d.slot->size_bytes / 1024);
                 else
-                    ImGui::Text("%zuB", info.size);
+                    ImGui::Text("%zuB", d.slot->size_bytes);
                 ImGui::TableSetColumnIndex(3);
-                ImGui::Text("%s", c64_chip_title(chip));
+                ImGui::Text("%s", d.slot->label);
                 ImGui::TableSetColumnIndex(4);
-                ImGui::Text("%s", info.label);
+                ImGui::Text("%s", d.slot->label);
             }
             ImGui::EndTable();
         }
