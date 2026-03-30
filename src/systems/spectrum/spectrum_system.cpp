@@ -206,7 +206,8 @@ bool SpectrumSystem<V>::initialize() {
     register_board(&board_);
 
     // ── Pre-bind stack-member chips, then factory-create all chips ─────
-    board_.bind_chipset();
+    { size_t slot_idx_ = 0;
+      SPECTRUM48K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
     board_.create_chips(&pins_);
     board_.apply(bus_);
 
@@ -214,10 +215,10 @@ bool SpectrumSystem<V>::initialize() {
     configure_bus_memory_map();
 
     // ── Init chips ──────────────────────────────────────────────────────
-    pins_ = board_.cpu.init();
-    board_.video.init();
+    pins_ = board_.z80.init();
+    board_.ula.init();
     if constexpr (Traits::has_ay_sound) {
-        board_.sound.init();
+        board_.psg.init();
     }
 
     // Audio setup
@@ -234,7 +235,7 @@ bool SpectrumSystem<V>::initialize() {
 
     // Video output — composite video from Ferranti ULA
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.video.set_video_out(&video_port_->output());
+    board_.ula.set_video_out(&video_port_->output());
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Audio port — system mixes beeper + AY, uses drive_sample()
@@ -255,7 +256,7 @@ void SpectrumSystem<V>::shutdown() {
 template<SpectrumVariant V>
 void SpectrumSystem<V>::reset() {
     board_.reset_chips();
-    pins_ = board_.cpu.reset(pins_);
+    pins_ = board_.z80.reset(pins_);
     bank_select_ = 0;
     bank_locked_ = false;
     frame_tstate_counter_ = 0;
@@ -271,10 +272,10 @@ template<SpectrumVariant V>
 void SpectrumSystem<V>::tick() {
 
     // ULA tick (same clock as CPU — one T-state)
-    board_.video.tick();
+    board_.ula.tick();
 
     // Frame interrupt: ULA asserts INT at start of frame, held for 32 T-states
-    if (board_.video.check_frame_interrupt()) {
+    if (board_.ula.check_frame_interrupt()) {
         BUS_CLR_BIT(pins_, BUS_IRQ_BIT);  // Assert INT (active-low)
         int_counter_ = 32;
     }
@@ -288,7 +289,7 @@ void SpectrumSystem<V>::tick() {
     // TODO: Implement contention pattern
 
     // CPU tick — one T-state
-    pins_ = board_.cpu.tick(pins_);
+    pins_ = board_.z80.tick(pins_);
 
     // Bus dispatch
     // Check for I/O request vs memory request
@@ -304,7 +305,7 @@ void SpectrumSystem<V>::tick() {
     // AY tick (128K: clocked at CPU/2)
     if constexpr (Traits::has_ay_sound) {
         if (frame_tstate_counter_ & 1) {
-            board_.sound.tick();
+            board_.psg.tick();
         }
     }
 
@@ -312,9 +313,9 @@ void SpectrumSystem<V>::tick() {
     audio_sample_counter_++;
     if (audio_sample_counter_ >= audio_sample_period_) {
         audio_sample_counter_ = 0;
-        float sample = board_.video.get_ear_output() ? 0.5f : 0.0f;
+        float sample = board_.ula.get_ear_output() ? 0.5f : 0.0f;
         if constexpr (Traits::has_ay_sound) {
-            sample += board_.sound.get_sample() * 0.5f;
+            sample += board_.psg.get_sample() * 0.5f;
         }
         audio_ring_buf_.write(&sample, 1);
         if (audio_port_) audio_port_->drive_sample(sample);
@@ -324,7 +325,7 @@ void SpectrumSystem<V>::tick() {
     frame_tstate_counter_++;
     if (frame_tstate_counter_ >= spectrum_constants::TSTATES_PER_FRAME) {
         frame_tstate_counter_ = 0;
-        board_.video.render_frame(screen_ram_ptr_);
+        board_.ula.render_frame(screen_ram_ptr_);
     }
 
     total_cycles_++;
@@ -359,8 +360,8 @@ void SpectrumSystem<V>::configure_bus_memory_map() {
         //   $8000-$BFFF: always bank 2
         //   $C000-$FFFF: selected by bank_select_ bits 0-2
         //   $0000-$3FFF: ROM bank selected by bank_select_ bit 4
-        board_.select_bank_at(bus_, 0, board_.template find_index<RAMChip>(), 5, 0x40);
-        board_.select_bank_at(bus_, 0, board_.template find_index<RAMChip>(), 2, 0x80);
+        board_.select_bank_at(bus_, 0, BT::kManifest.template find<RAMChip>(), 5, 0x40);
+        board_.select_bank_at(bus_, 0, BT::kManifest.template find<RAMChip>(), 2, 0x80);
 
         // Switchable bank at $C000 + ROM bank at $0000
         update_banking();
@@ -371,7 +372,7 @@ void SpectrumSystem<V>::configure_bus_memory_map() {
         bool use_bank7 = (bank_select_ & 0x08) != 0;
         size_t screen_bank = use_bank7 ? 7 : 5;
         screen_ram_ptr_ = board_.chip_buffer(
-            ChipId(size_t(board_.slot(board_.template find_index<RAMChip>()).base_id) + screen_bank));
+            ChipId(size_t(board_.slot(BT::kManifest.template find<RAMChip>()).base_id) + screen_bank));
     } else {
         // 48K: screen starts at $4000 = page $40 = chip ID 64
         screen_ram_ptr_ = board_.chip_buffer(ChipId(0x40));
@@ -386,17 +387,17 @@ void SpectrumSystem<V>::update_banking() {
 
     // Switchable RAM bank at $C000-$FFFF (bits 0-2 of bank_select_)
     uint8_t ram_bank = bank_select_ & 0x07;
-    board_.select_bank_at(bus_, 0, board_.template find_index<RAMChip>(), ram_bank, 0xC0);
+    board_.select_bank_at(bus_, 0, BT::kManifest.template find<RAMChip>(), ram_bank, 0xC0);
 
     // ROM bank at $0000-$3FFF (bit 4 of bank_select_)
     uint8_t rom_bank = (bank_select_ & 0x10) ? 1 : 0;
-    board_.select_bank_at(bus_, 0, board_.template find_index<ROMChip>(), rom_bank, 0x00);
+    board_.select_bank_at(bus_, 0, BT::kManifest.template find<ROMChip>(), rom_bank, 0x00);
 
     // Screen bank: bit 3 selects bank 5 or 7
     bool use_bank7 = (bank_select_ & 0x08) != 0;
     size_t screen_bank = use_bank7 ? 7 : 5;
     screen_ram_ptr_ = board_.chip_buffer(
-        ChipId(size_t(board_.slot(board_.template find_index<RAMChip>()).base_id) + screen_bank));
+        ChipId(size_t(board_.slot(BT::kManifest.template find<RAMChip>()).base_id) + screen_bank));
 }
 
 // ============================================================================
@@ -411,10 +412,10 @@ bus_state_t SpectrumSystem<V>::io_tick(bus_state_t pins) {
     if (!(addr & 0x01)) {
         // ULA port ($FE) — selected when A0=0
         if (is_read) {
-            uint8_t data = board_.video.read_port_fe(static_cast<uint8_t>(addr >> 8));
+            uint8_t data = board_.ula.read_port_fe(static_cast<uint8_t>(addr >> 8));
             BUS_SET_DATA(pins, data);
         } else {
-            board_.video.write_port_fe(BUS_GET_DATA(pins));
+            board_.ula.write_port_fe(BUS_GET_DATA(pins));
         }
     }
 
@@ -431,15 +432,15 @@ bus_state_t SpectrumSystem<V>::io_tick(bus_state_t pins) {
         // AY register select $FFFD (A1=0, A14=1, A15=1)
         if ((addr & 0xC002) == 0xC000) {
             if (is_read) {
-                BUS_SET_DATA(pins, board_.sound.read_register());
+                BUS_SET_DATA(pins, board_.psg.read_register());
             } else {
-                board_.sound.latch_address(BUS_GET_DATA(pins));
+                board_.psg.latch_address(BUS_GET_DATA(pins));
             }
         }
 
         // AY data write $BFFD (A1=0, A14=1, A15=0)
         if (!is_read && (addr & 0xC002) == 0x8000) {
-            board_.sound.write_register(BUS_GET_DATA(pins));
+            board_.psg.write_register(BUS_GET_DATA(pins));
         }
     }
 
@@ -476,35 +477,35 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
         }
 
         // Restore Z80 registers
-        board_.cpu.set(I, hdr.i_reg);
-        board_.cpu.set(R, hdr.r_reg);
-        board_.cpu.set(AF, hdr.af);
-        board_.cpu.set(BC, hdr.bc);
-        board_.cpu.set(DE, hdr.de);
-        board_.cpu.set(HL, hdr.hl);
-        board_.cpu.set(IX, hdr.ix);
-        board_.cpu.set(IY, hdr.iy);
-        board_.cpu.set(AF_, hdr.af_prime);
-        board_.cpu.set(BC_, hdr.bc_prime);
-        board_.cpu.set(DE_, hdr.de_prime);
-        board_.cpu.set(HL_, hdr.hl_prime);
-        board_.cpu.set(SP, hdr.sp);
-        board_.cpu.set_im(hdr.int_mode);
-        board_.cpu.set_iff1((hdr.iff2 & 0x04) != 0);
-        board_.cpu.set_iff2((hdr.iff2 & 0x04) != 0);
+        board_.z80.set(I, hdr.i_reg);
+        board_.z80.set(R, hdr.r_reg);
+        board_.z80.set(AF, hdr.af);
+        board_.z80.set(BC, hdr.bc);
+        board_.z80.set(DE, hdr.de);
+        board_.z80.set(HL, hdr.hl);
+        board_.z80.set(IX, hdr.ix);
+        board_.z80.set(IY, hdr.iy);
+        board_.z80.set(AF_, hdr.af_prime);
+        board_.z80.set(BC_, hdr.bc_prime);
+        board_.z80.set(DE_, hdr.de_prime);
+        board_.z80.set(HL_, hdr.hl_prime);
+        board_.z80.set(SP, hdr.sp);
+        board_.z80.set_im(hdr.int_mode);
+        board_.z80.set_iff1((hdr.iff2 & 0x04) != 0);
+        board_.z80.set_iff2((hdr.iff2 & 0x04) != 0);
 
         // SNA 48K: PC is on the stack — pop it
         uint16_t sp = hdr.sp;
         uint16_t pc_lo = ram[sp];
         uint16_t pc_hi = ram[(uint16_t)(sp + 1)];
-        board_.cpu.set(PC, pc_lo | (pc_hi << 8));
-        board_.cpu.set(SP, sp + 2);
+        board_.z80.set(PC, pc_lo | (pc_hi << 8));
+        board_.z80.set(SP, sp + 2);
 
         // Restore border color
-        board_.video.set_border_color(hdr.border & 0x07);
+        board_.ula.set_border_color(hdr.border & 0x07);
 
         printf("%s: SNA loaded — PC=$%04X SP=$%04X\n", Traits::name,
-               board_.cpu.get(PC), board_.cpu.get(SP));
+               board_.z80.get(PC), board_.z80.get(SP));
         result.release();
         return true;
     }
@@ -541,29 +542,29 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
         }
 
         // Restore Z80 registers
-        board_.cpu.set(AF, hdr.af);
-        board_.cpu.set(BC, hdr.bc);
-        board_.cpu.set(DE, hdr.de);
-        board_.cpu.set(HL, hdr.hl);
-        board_.cpu.set(IX, hdr.ix);
-        board_.cpu.set(IY, hdr.iy);
-        board_.cpu.set(SP, hdr.sp);
-        board_.cpu.set(PC, hdr.pc);
-        board_.cpu.set(I, hdr.i_reg);
-        board_.cpu.set(R, hdr.r_reg);
-        board_.cpu.set_im(hdr.im_mode);
-        board_.cpu.set_iff1(hdr.iff1 != 0);
-        board_.cpu.set_iff2(hdr.iff2 != 0);
-        board_.cpu.set(AF_, hdr.af_prime);
-        board_.cpu.set(BC_, hdr.bc_prime);
-        board_.cpu.set(DE_, hdr.de_prime);
-        board_.cpu.set(HL_, hdr.hl_prime);
+        board_.z80.set(AF, hdr.af);
+        board_.z80.set(BC, hdr.bc);
+        board_.z80.set(DE, hdr.de);
+        board_.z80.set(HL, hdr.hl);
+        board_.z80.set(IX, hdr.ix);
+        board_.z80.set(IY, hdr.iy);
+        board_.z80.set(SP, hdr.sp);
+        board_.z80.set(PC, hdr.pc);
+        board_.z80.set(I, hdr.i_reg);
+        board_.z80.set(R, hdr.r_reg);
+        board_.z80.set_im(hdr.im_mode);
+        board_.z80.set_iff1(hdr.iff1 != 0);
+        board_.z80.set_iff2(hdr.iff2 != 0);
+        board_.z80.set(AF_, hdr.af_prime);
+        board_.z80.set(BC_, hdr.bc_prime);
+        board_.z80.set(DE_, hdr.de_prime);
+        board_.z80.set(HL_, hdr.hl_prime);
 
         // Restore border color
-        board_.video.set_border_color(hdr.border & 0x07);
+        board_.ula.set_border_color(hdr.border & 0x07);
 
         printf("%s: Z80 v%d loaded — PC=$%04X SP=$%04X\n", Traits::name,
-               hdr.version, board_.cpu.get(PC), board_.cpu.get(SP));
+               hdr.version, board_.z80.get(PC), board_.z80.get(SP));
         result.release();
         return true;
     }
@@ -664,11 +665,11 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
         // Jump target: prefer CODE blocks (machine code entry point),
         // otherwise enter the ROM's main execution loop for BASIC.
         if (has_code) {
-            board_.cpu.set(PC, code_addr);
+            board_.z80.set(PC, code_addr);
             printf("%s: Jumping to CODE at $%04X\n", Traits::name, code_addr);
         } else if (has_basic) {
             // Enter the ROM main execution loop — it will honour NEWPPC/NSPPC
-            board_.cpu.set(PC, 0x12A2);  // MAIN-EXEC in the 48K ROM
+            board_.z80.set(PC, 0x12A2);  // MAIN-EXEC in the 48K ROM
             printf("%s: Entering BASIC via ROM MAIN-EXEC ($12A2)\n", Traits::name);
         }
 
@@ -692,7 +693,7 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
 
             bool is_code = entry && entry->type == 'C';
             if (is_code) {
-                board_.cpu.set(PC, addr);
+                board_.z80.set(PC, addr);
                 printf("%s: %s Code loaded %zu bytes at $%04X — jumping\n",
                        Traits::name, result.format->name, len, addr);
             } else {
@@ -795,7 +796,7 @@ void SpectrumSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
             else
                 row_state |= (1 << m.bit);   // Release: set bit
             keyboard_rows_[m.row] = row_state;
-            board_.video.set_keyboard_row(m.row, row_state);
+            board_.ula.set_keyboard_row(m.row, row_state);
         }
     }
 }
@@ -807,7 +808,7 @@ void SpectrumSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 template<SpectrumVariant V>
 void SpectrumSystem<V>::render_configuration_ui() {
 #ifdef CERMU_HAS_GUI
-    if (palette_selector::render(board_.video, config_.custom_settings)) {
+    if (palette_selector::render(board_.ula, config_.custom_settings)) {
         set_configuration(config_);
         apply_configuration();
     }

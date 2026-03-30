@@ -26,7 +26,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -85,34 +85,53 @@ template<> struct SpectrumVariantTraits<SpectrumVariant::ZX128K> {
 // =============================================================================
 //
 // 48K:
-//   Slot 0: RAM — 64 KB at $0000 (only $4000–$FFFF used; ROM overlays reads)
-//   Slot 1: ROM — 16 KB at $0000 (read overlay)
+//   RAM — 64 KB at $0000 (only $4000–$FFFF used; ROM overlays reads)
+//   ROM — 16 KB at $0000 (read overlay)
 //
 // 128K:
-//   Slot 0: RAM — 128 KB at $0000 (8 × 16 KB banks; $4000=$bank5, $8000=$bank2,
-//                                  $C000=switchable via port $7FFD)
-//   Slot 1: ROM —  32 KB at $0000 (2 × 16 KB banks; selected by $7FFD bit 4)
+//   RAM — 128 KB at $0000 (8 × 16 KB banks; $4000=$bank5, $8000=$bank2,
+//                          $C000=switchable via port $7FFD)
+//   ROM —  32 KB at $0000 (2 × 16 KB banks; selected by $7FFD bit 4)
 //
-inline constexpr auto kSpectrum48KChips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
-    Slot<ROMChip>{0x0000, 16384, 0, "ROM"}.with_rom("spectrum48k.rom|48.rom|spectrum.rom|zx48.rom"),
-    // Non-bus chips — factory-created or pre-bound, not address-decoded
-    Slot<ZilogZ80A>     {0, 0, 0, "Z80A"},
-    Slot<ferranti_ula_t>{0, 0, 0, "Ferranti ULA"},
-    Slot<AY_3_8912>     {0, 0, 0, "AY-3-8912"}
-);
 
-inline constexpr auto kSpectrum128KChips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 131072, 0, "RAM", 0, 16384},
-    Slot<ROMChip>{0x0000,  32768, 0, "ROM", 0, 16384}.with_rom("spectrum128k.rom|128.rom|128-0.rom"),
-    // Non-bus chips — factory-created or pre-bound, not address-decoded
-    Slot<ZilogZ80A>     {0, 0, 0, "Z80A"},
-    Slot<ferranti_ula_t>{0, 0, 0, "Ferranti ULA"},
-    Slot<AY_3_8912>     {0, 0, 0, "AY-3-8912"}
-);
+// ── 48K manifest ─────────────────────────────────────────────────────────
+#define SPECTRUM48K_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                \
+    X(ctx, ZilogZ80A,      z80,  0x0000,      0, 0, 0, "Z80A",         nullptr)                                 \
+    X(ctx, RAMChip,        ram,  0x0000,  65536, 0, 0, "RAM",          nullptr)                                 \
+    X(ctx, ROMChip,        rom,  0x0000,  16384, 0, 1, "ROM",          "spectrum48k.rom|48.rom|spectrum.rom|zx48.rom") \
+    X(ctx, ferranti_ula_t, ula,  0x0000,      0, 0, 0, "Ferranti ULA", nullptr)                                 \
+    X(ctx, AY_3_8912,      psg,  0x0000,      0, 0, 0, "AY-3-8912",    nullptr)
 
+static constexpr size_t kSpectrum48KChipCount = 0 SPECTRUM48K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 
-// BusTraits — selects the correct manifest per variant
+inline constexpr ChipManifest<kSpectrum48KChipCount> kSpectrum48KChips = ChipManifest<kSpectrum48KChipCount>{{
+    SPECTRUM48K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
+
+// ── 128K manifest ────────────────────────────────────────────────────────
+#define SPECTRUM128K_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                               \
+    X(ctx, ZilogZ80A,      z80,  0x0000,       0, 0, 0, "Z80A",         nullptr)                                \
+    X(ctx, RAMChip,        ram,  0x0000,  131072, 0, 0, "RAM",          nullptr)                                \
+    X(ctx, ROMChip,        rom,  0x0000,   32768, 0, 1, "ROM",          "spectrum128k.rom|128.rom|128-0.rom")   \
+    X(ctx, ferranti_ula_t, ula,  0x0000,       0, 0, 0, "Ferranti ULA", nullptr)                                \
+    X(ctx, AY_3_8912,      psg,  0x0000,       0, 0, 0, "AY-3-8912",    nullptr)
+
+static constexpr size_t kSpectrum128KChipCount = 0 SPECTRUM128K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+// Helper: set bank_size on RAM and ROM slots for 128K banked memory.
+template<size_t N>
+constexpr ChipManifest<N> with_bank_size_on_memory(ChipManifest<N> m, size_t bs) {
+    for (size_t i = 0; i < N; ++i)
+        if (m.chips[i].size_bytes > 0) m.chips[i].bank_size = bs;
+    return m;
+}
+
+inline constexpr ChipManifest<kSpectrum128KChipCount> kSpectrum128KChips =
+    with_bank_size_on_memory(ChipManifest<kSpectrum128KChipCount>{{
+        SPECTRUM128K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+    }}, 16384);
+
+// ── BusTraits — selects the correct manifest per variant ─────────────────
 template<SpectrumVariant V> struct SpectrumBusTraits;
 
 template<> struct SpectrumBusTraits<SpectrumVariant::ZX48K> {
@@ -128,8 +147,12 @@ template<> struct SpectrumBusTraits<SpectrumVariant::ZX128K> {
 // ============================================================================
 // Spectrum Chips — value-typed chips owned by Board
 // ============================================================================
+// Both 48K and 128K share the same chip types, so one struct suffices.
+// (The X-macros are identical in field layout, only ROM/RAM sizes differ.)
 
-struct SpectrumChips : CoreChips<ZilogZ80A, ferranti_ula_t, AY_3_8912> {};
+struct SpectrumChips {
+    SPECTRUM48K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+};
 
 // ============================================================================
 // ZX Spectrum System
