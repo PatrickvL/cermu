@@ -102,20 +102,20 @@ template<> struct CPCModelTraits<CPCModel::CPC6128> {
 //
 //                                      ctx   type                chip        base    size    mask  ovl  label              rom
 #define CPC464_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, ZilogZ80A,            z80,        0,           0, 0, 0, "Z80A",            nullptr) \
     V(ctx, RAMChip,              ram,        0x0000,  65536, 0, 0, "RAM",             nullptr) \
     V(ctx, ROMChip,              lower_rom,  0x0000,  16384, 0, 1, "Lower ROM",       nullptr) \
     V(ctx, ROMChip,              upper_rom,  0xC000,  16384, 0, 2, "Upper ROM",       nullptr) \
-    V(ctx, ZilogZ80A,            z80,        0,           0, 0, 0, "Z80A",            nullptr) \
     V(ctx, mc6845_t,             crtc,       0,           0, 0, 0, "MC6845 CRTC",     nullptr) \
     V(ctx, i8255_t,              ppi,        0,           0, 0, 0, "8255 PPI",        nullptr) \
     V(ctx, AY_3_8912,            psg,        0,           0, 0, 0, "AY-3-8912 PSG",   nullptr) \
     V(ctx, amstrad_gate_array_t, gate_array, 0,           0, 0, 0, "Gate Array",      nullptr)
 
 #define CPC6128_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, ZilogZ80A,            z80,        0,           0, 0, 0, "Z80A",            nullptr) \
     V(ctx, RAMChip,              ram,        0x0000, 131072, 0, 0, "RAM",             nullptr) \
     V(ctx, ROMChip,              lower_rom,  0x0000,  16384, 0, 1, "Lower ROM",       nullptr) \
     V(ctx, ROMChip,              upper_rom,  0xC000,  16384, 0, 2, "Upper ROM",       nullptr) \
-    V(ctx, ZilogZ80A,            z80,        0,           0, 0, 0, "Z80A",            nullptr) \
     V(ctx, mc6845_t,             crtc,       0,           0, 0, 0, "MC6845 CRTC",     nullptr) \
     V(ctx, i8255_t,              ppi,        0,           0, 0, 0, "8255 PPI",        nullptr) \
     V(ctx, AY_3_8912,            psg,        0,           0, 0, 0, "AY-3-8912 PSG",   nullptr) \
@@ -132,7 +132,7 @@ constexpr ChipManifest<kCPC6128ChipCount> make_cpc6128_manifest() {
     ChipManifest<kCPC6128ChipCount> m = {{
         CPC6128_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
     }};
-    m.chips[0].bank_size = 16384;  // RAM (8 × 16 KB banks)
+    m.chips[1].bank_size = 16384;  // RAM (8 × 16 KB banks)
     return m;
 }
 inline constexpr auto kCPC6128Chips = make_cpc6128_manifest();

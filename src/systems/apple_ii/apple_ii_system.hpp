@@ -126,24 +126,24 @@ template<> struct AppleIIVariantTraits<AppleIIVariant::APPLE_IIC> {
 // Character ROM not bus-mapped — loaded manually in initialize().
 //                                       ctx   type       chip       base    size     mask  ovl  label         rom
 #define APPLE_II_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, MOS6502,   cpu,       0,          0,   0, 0, "MOS 6502",  nullptr) \
     V(ctx, RAMChip,   ram,       0x0000, 32768,   0, 0, "Main RAM",  nullptr) \
     V(ctx, RAMChip,   upper_ram, 0x8000, 16384,   0, 0, "Upper RAM", nullptr) \
-    V(ctx, ROMChip,   rom,       0xC000, 16384,   0, 0, "ROM",       "apple2.rom|APPLE2.ROM|apple2o.rom") \
-    V(ctx, MOS6502,   cpu,       0,          0,   0, 0, "MOS 6502",  nullptr)
+    V(ctx, ROMChip,   rom,       0xC000, 16384,   0, 0, "ROM",       "apple2.rom|APPLE2.ROM|apple2o.rom")
 
 // Apple IIe (128K, 65C02)
 // Character ROM not bus-mapped — loaded manually in initialize().
 #define APPLE_IIE_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, WDC_65C02,  cpu, 0,          0,  0, 0, "WDC 65C02",  nullptr) \
     V(ctx, RAMChip,    ram, 0x0000, 131072, 0, 0, "RAM",        nullptr) \
-    V(ctx, ROMChip,    rom, 0xC000, 16384,  0, 0, "ROM",        "apple2e.rom|APPLE2E.ROM|apple2e_enhanced.rom") \
-    V(ctx, WDC_65C02,  cpu, 0,          0,  0, 0, "WDC 65C02",  nullptr)
+    V(ctx, ROMChip,    rom, 0xC000, 16384,  0, 0, "ROM",        "apple2e.rom|APPLE2E.ROM|apple2e_enhanced.rom")
 
 // Apple IIc (128K, 65C02, same layout as IIe)
 // Character ROM not bus-mapped — loaded manually in initialize().
 #define APPLE_IIC_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, WDC_65C02,  cpu, 0,          0,  0, 0, "WDC 65C02",  nullptr) \
     V(ctx, RAMChip,    ram, 0x0000, 131072, 0, 0, "RAM",        nullptr) \
-    V(ctx, ROMChip,    rom, 0xC000, 32768,  0, 0, "ROM",        "apple2c.rom|APPLE2C.ROM|apple2c_v4.rom") \
-    V(ctx, WDC_65C02,  cpu, 0,          0,  0, 0, "WDC 65C02",  nullptr)
+    V(ctx, ROMChip,    rom, 0xC000, 32768,  0, 0, "ROM",        "apple2c.rom|APPLE2C.ROM|apple2c_v4.rom")
 
 static constexpr size_t kAppleIIChipCount  = 0 APPLE_II_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 static constexpr size_t kAppleIIeChipCount = 0 APPLE_IIE_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
@@ -159,7 +159,7 @@ inline constexpr auto make_apple_iie_manifest() {
     ChipManifest<kAppleIIeChipCount> m = {{
         APPLE_IIE_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
     }};
-    m.chips[0].bank_size = 65536;
+    m.chips[1].bank_size = 65536;
     return m;
 }
 inline constexpr auto kAppleIIeChips = make_apple_iie_manifest();
@@ -169,8 +169,8 @@ inline constexpr auto make_apple_iic_manifest() {
     ChipManifest<kAppleIIcChipCount> m = {{
         APPLE_IIC_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
     }};
-    m.chips[0].bank_size = 65536;
-    m.chips[1].bank_size = 16384;
+    m.chips[1].bank_size = 65536;
+    m.chips[2].bank_size = 16384;
     return m;
 }
 inline constexpr auto kAppleIIcChips = make_apple_iic_manifest();
@@ -198,10 +198,10 @@ template<> struct AppleIIBusTraits<AppleIIVariant::APPLE_IIC> {
 template<AppleIIVariant V>
 struct AppleIIChipset {
     using CPU = std::conditional_t<AppleIIVariantTraits<V>::is_cmos, WDC_65C02, MOS6502>;
+    CPU        cpu;
     RAMChip    ram;
     RAMChip    upper_ram;  // Apple II only — unused for IIe/IIc
     ROMChip    rom;
-    CPU        cpu;
 };
 
 // ============================================================================

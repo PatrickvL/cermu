@@ -15,9 +15,46 @@
 #include "core/board_base.hpp"
 #include "core/bus_map.hpp"
 #include "core/port.hpp"
-#include "core/core_chips.hpp"
 #include "core/storage/rom_loader.hpp"
 #include <cstdio>
+#include <type_traits>
+
+// ── Sentinels for absent chip roles / boards without typed chips ────────────
+
+struct NoChip {};
+struct NoChips {};
+
+// ── Concepts: does a chips struct provide bind_extras / register_extras? ────
+
+template<typename CS, typename Board>
+concept HasBindExtras = requires(CS& cs, Board& b) {
+    cs.bind_extras(b);
+};
+
+template<typename CS, typename Board>
+concept HasRegisterExtras = requires(CS& cs, Board& b) {
+    cs.register_extras(b);
+};
+
+// ── Type traits for chip role detection ────────────────────────────────────
+//
+// Safe with any type — yields false for types without the expected aliases
+// (e.g. NoChips) instead of a hard error.
+
+template<typename CS>
+inline constexpr bool has_video_v = requires {
+    requires !std::is_same_v<typename CS::video_type, NoChip>;
+};
+
+template<typename CS>
+inline constexpr bool has_sound_v = requires {
+    requires !std::is_same_v<typename CS::sound_type, NoChip>;
+};
+
+template<typename CS>
+inline constexpr bool has_io_v = requires {
+    requires !std::is_same_v<typename CS::io_type, NoChip>;
+};
 
 // §4  Board<Spec> — runtime chip owner, buffer manager
 // =============================================================================
@@ -36,7 +73,7 @@
 //
 // Optional second parameter Chips (default: NoChips) is inherited via MI,
 // embedding value-typed chip fields directly in the board and making them
-// accessible as board_.field.  See core_chips.hpp.
+// accessible as board_.field.
 //
 
 template<BusSpecConcept Spec, typename Chips = NoChips>

@@ -70,14 +70,14 @@
 //
 //                                ctx   type       chip        base    size    mask  ovl  label              rom
 #define C128_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, CSG8502,    csg8502,     0,            0, 0,      0, "CSG 8502",        nullptr) \
     V(ctx, RAMChip,    main_ram,    0x0000, 131072, 0,      0, "Main RAM",        nullptr) \
     V(ctx, ROMChip,    basic_lo,    0x4000,  16384, 0,      1, "BASIC lo",        "basic-4000.318018-04.bin|c128_basic_lo.rom|basic_lo.rom|basiclo.rom|basic.318023-02.bin@0") \
     V(ctx, ROMChip,    basic_hi,    0x8000,  16384, 0,      1, "BASIC hi",        "basic-8000.318019-04.bin|c128_basic_hi.rom|basic_hi.rom|basichi.rom|basic.318023-02.bin@16384") \
     V(ctx, ROMChip,    editor_rom,  0xC000,   4096, 0,      1, "Editor ROM",      "c128_editor.rom|editor.rom|kernal.318020-05.bin@0") \
-    V(ctx, ROMChip,    kernal_rom,  0xE000,   8192, 0,      1, "Kernal ROM",      "c128_kernal.rom|kernal.rom|kernal.318020-05.bin@8192") \
     V(ctx, ROMChip,    char_rom,    0xD000,   8192, 0,      1, "Character ROM",   "characters.390059-01.bin|c128_chargen.rom|chargen.rom|characters.rom") \
+    V(ctx, ROMChip,    kernal_rom,  0xE000,   8192, 0,      1, "Kernal ROM",      "c128_kernal.rom|kernal.rom|kernal.318020-05.bin@8192") \
     V(ctx, RAMChip,    vdc_vram,    0x0000,  16384, 0,      1, "VDC VRAM",        nullptr) \
-    V(ctx, CSG8502,    csg8502,     0,            0, 0,      0, "CSG 8502",        nullptr) \
     V(ctx, ZilogZ80A,  z80,         0,            0, 0,      0, "Zilog Z80A",      nullptr) \
     V(ctx, mos8566_t,  vic_iie,     0,            0, 0,      0, "MOS 8566 VIC-IIe", nullptr) \
     V(ctx, mos6581_t,  sid,         0,            0, 0,      0, "MOS 6581 SID",    nullptr) \
@@ -92,7 +92,7 @@ inline constexpr auto make_c128_manifest() {
         C128_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
     }};
     // Main RAM: 2 × 64 KB banks
-    m.chips[0].bank_size = 65536;
+    m.chips[1].bank_size = 65536;
     // All overlay-group 1 chips: bank_size = size_bytes (single bank each)
     for (auto& s : m.chips)
         if (s.overlay_group == 1) s.bank_size = s.size_bytes;

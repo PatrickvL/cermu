@@ -70,33 +70,33 @@ enum class KC85Variant { KC85_2, KC85_3, KC85_4 };
 //
 //                                    ctx   type                chip       base    size    mask  ovl  label            rom
 #define KC852_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, U880,                 z80,      0,            0, 0, 0, "U880",          nullptr) \
     V(ctx, RAMChip,              ram,      0x0000,  16384, 0, 0, "RAM",           nullptr) \
     V(ctx, RAMChip,              irm,      0x8000,  16384, 0, 1, "IRM",           nullptr) \
     V(ctx, ROMChip,              caos_rom, 0xE000,   8192, 0, 2, "CAOS ROM",      "caos.rom|CAOS.ROM") \
-    V(ctx, U880,                 z80,      0,            0, 0, 0, "U880",          nullptr) \
     V(ctx, z80_pio_t,            pio1,     0,            0, 0, 0, "U855 PIO #1",   nullptr) \
     V(ctx, z80_pio_t,            pio2,     0,            0, 0, 0, "U855 PIO #2",   nullptr) \
     V(ctx, z80_ctc_t,            ctc,      0,            0, 0, 0, "U857 CTC",      nullptr) \
     V(ctx, kc85_module_system_t, modules,  0,            0, 0, 0, "Module System", nullptr)
 
 #define KC853_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, U880,                 z80,       0,            0, 0, 0, "U880",          nullptr) \
     V(ctx, RAMChip,              ram,       0x0000,  16384, 0, 0, "RAM",           nullptr) \
     V(ctx, RAMChip,              irm,       0x8000,  16384, 0, 1, "IRM",           nullptr) \
     V(ctx, ROMChip,              basic_rom, 0xC000,   8192, 0, 2, "BASIC ROM",     "basic.rom|BASIC.ROM") \
     V(ctx, ROMChip,              caos_rom,  0xE000,   8192, 0, 3, "CAOS ROM",      "caos.rom|CAOS.ROM") \
-    V(ctx, U880,                 z80,       0,            0, 0, 0, "U880",          nullptr) \
     V(ctx, z80_pio_t,            pio1,      0,            0, 0, 0, "U855 PIO #1",   nullptr) \
     V(ctx, z80_pio_t,            pio2,      0,            0, 0, 0, "U855 PIO #2",   nullptr) \
     V(ctx, z80_ctc_t,            ctc,       0,            0, 0, 0, "U857 CTC",      nullptr) \
     V(ctx, kc85_module_system_t, modules,   0,            0, 0, 0, "Module System", nullptr)
 
 #define KC854_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, U880,                 z80,        0,            0, 0, 0, "U880",          nullptr) \
     V(ctx, RAMChip,              ram,        0x0000,  32768, 0, 0, "RAM",           nullptr) \
     V(ctx, RAMChip,              irm,        0x8000,  65536, 0, 0, "IRM",           nullptr) \
     V(ctx, ROMChip,              basic_rom,  0xC000,   8192, 0, 1, "BASIC ROM",     "basic.rom|BASIC.ROM") \
     V(ctx, ROMChip,              caos_c_rom, 0xC000,   4096, 0, 3, "CAOS-C ROM",    "?caos_c.rom|CAOS_C.ROM") \
     V(ctx, ROMChip,              caos_rom,   0xE000,   8192, 0, 2, "CAOS ROM",      "caos.rom|CAOS.ROM") \
-    V(ctx, U880,                 z80,        0,            0, 0, 0, "U880",          nullptr) \
     V(ctx, z80_pio_t,            pio1,       0,            0, 0, 0, "U855 PIO #1",   nullptr) \
     V(ctx, z80_pio_t,            pio2,       0,            0, 0, 0, "U855 PIO #2",   nullptr) \
     V(ctx, z80_ctc_t,            ctc,        0,            0, 0, 0, "U857 CTC",      nullptr) \
@@ -118,8 +118,8 @@ constexpr ChipManifest<kKC854ChipCount> make_kc854_manifest() {
     ChipManifest<kKC854ChipCount> m = {{
         KC854_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
     }};
-    m.chips[1].bank_size       = 16384;  // IRM (4 × 16 KB banks)
-    m.chips[1].effective_size  = 16384;  // Only 16 KB visible at a time
+    m.chips[2].bank_size       = 16384;  // IRM (4 × 16 KB banks)
+    m.chips[2].effective_size  = 16384;  // Only 16 KB visible at a time
     return m;
 }
 inline constexpr auto kKC854Chips = make_kc854_manifest();

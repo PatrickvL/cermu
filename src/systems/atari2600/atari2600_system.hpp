@@ -86,10 +86,10 @@ private:
 //
 //                                ctx   type                chip  base    size  mask    ovl  label          rom
 #define ATARI2600_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, MOS6507,            cpu,  0,       0, 0,      0, "MOS 6507",     nullptr) \
     V(ctx, tia_t,              tia,  0x0000,  0, 0x0080, 0, "TIA",          nullptr) \
     V(ctx, pia6532_t,          riot, 0x0080,  0, 0x0080, 0, "PIA 6532",     nullptr) \
-    V(ctx, Atari2600CartChip,  cart, 0x1000,  0, 0,      0, "Cartridge",    nullptr) \
-    V(ctx, MOS6507,            cpu,  0,       0, 0,      0, "MOS 6507",     nullptr)
+    V(ctx, Atari2600CartChip,  cart, 0x1000,  0, 0,      0, "Cartridge",    nullptr)
 
 static constexpr size_t kAtari2600ChipCount = 0 ATARI2600_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 
