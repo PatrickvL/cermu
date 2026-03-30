@@ -4,8 +4,8 @@
 #include "core/system_lines.hpp"
 #include "core/text_terminal.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
 #include "core/signal/video_port.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "systems/apple1/apple1_constants.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/io/pia6820.hpp"
@@ -20,38 +20,48 @@
 
 
 // =============================================================================
-// Apple 1 chip manifest — declarative memory layout
+// Apple 1 chip declaration — single source of truth
 // =============================================================================
 //
-// Slot 0: RAM         — 64 KB (full address space, actual size configurable)
-// Slot 1: Monitor ROM — 256 bytes at $FF00
-// Slot 2: BASIC ROM   — 4 KB at $E000
-// Slot 3: PIA         — MMIO-only, 4-byte window at $D010
+// Every chip is declared once.  Visitors generate manifest, chipset fields,
+// binding, and component registration from this list.
+//
+// Row: X(ctx, type, chip, base, mask, overlay, label, info_label, rom_files)
+//
+//   Slot 0: RAM         — 64 KB (full address space, actual size configurable)
+//   Slot 1: Monitor ROM — 256 bytes at $FF00
+//   Slot 2: BASIC ROM   — 4 KB at $E000 (optional — ?prefix)
+//   Slot 3: PIA         — MMIO-only, 4-byte window at $D010
+//   Slot 4: CPU         — not bus-mapped
 //
 // Write side: only RAM.  ROM reads overlay RAM; writes pass through to RAM
 // (4K/8K modes unmap ROM read pages; 64K mode never maps ROM at all).
 // Page $D0 uses an auto-created MaskedSubTable for PIA ($D010–$D013).
 //
-inline constexpr auto kApple1Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
-    Slot<ROMChip>{0xFF00,   256, 0, "Monitor"}.with_rom("apple1.rom|monitor.rom|wozmon.rom"),
-    Slot<ROMChip>{0xE000,  4096, 0, "BASIC"}.with_rom("apple1basic.rom|basic.rom", true),
-    Slot<pia6820_t> {0xD010,     0, 0xFFFC},               // MMIO-only, 4-byte window
-    // Non-bus chip — factory-created, not address-decoded
-    Slot<MOS6502>   {0, 0, 0, "MOS 6502"}
-);
+
+#define APPLE1_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                \
+    X(ctx, RAMChip,    ram,     0x0000, 0xFFFF, 0, "RAM",     "RAM",          nullptr)                     \
+    X(ctx, ROMChip,    monitor, 0xFF00, 0x00FF, 0, "Monitor", "Monitor ROM",  "apple1.rom|monitor.rom|wozmon.rom") \
+    X(ctx, ROMChip,    basic,   0xE000, 0x0FFF, 0, "BASIC",   "BASIC ROM",   "?apple1basic.rom|basic.rom") \
+    X(ctx, pia6820_t,  pia,     0xD010, 0xFFFC, 0, "PIA",     "PIA 6820",    nullptr)                     \
+    X(ctx, MOS6502,    cpu,     0x0000,      0, 0, "MOS 6502","MOS 6502",    nullptr)
+
+static constexpr size_t kApple1ChipCount = 0 APPLE1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+inline constexpr ChipManifest<kApple1ChipCount> kApple1Chips = ChipManifest<kApple1ChipCount>{{
+    APPLE1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
 
 // BusSpec auto-derived from the manifest
 using Apple1BusSpec = ManifestBusSpec<kApple1Chips, 16, 8>;
 
 // ============================================================================
-// Apple 1 Chips — value-typed chips owned by Board
+// Apple 1 Chips — value-typed chips owned by Board (auto-generated)
 // ============================================================================
 
-struct Apple1Chips : CoreChips<MOS6502, NoChip, NoChip, pia6820_t> {};
-
-
-
+struct Apple1Chips {
+    APPLE1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+};
 
 /**
  * Apple 1 System Implementation
@@ -105,9 +115,7 @@ private:
     // Chip instances
     TextTerminal* terminal_;         // Text terminal (40x24)
     
-    // Memory chips — owned by board_, borrowed here for post-init access
-    ROMChip* monitor_rom_ = nullptr;  // Woz Monitor ROM at $FF00-$FFFF (256 bytes)
-    ROMChip* basic_rom_   = nullptr;  // Optional Apple 1 BASIC (4KB at various addresses)
+    // Memory chips — Signetics 2513 not on the bus (terminal renderer only)
     ROMChip* char_rom_    = nullptr;  // Signetics 2513 character ROM (512 bytes)
     
     // MemoryBus — declarative setup via chip manifest + Board::apply()
