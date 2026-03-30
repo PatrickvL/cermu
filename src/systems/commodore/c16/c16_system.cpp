@@ -577,8 +577,8 @@ bool Commodore264System<V>::initialize() {
         ted_desc.mem_read_user_data = this;
         ted_desc.banking_change = ted_banking_changed;
         ted_desc.banking_change_user_data = this;
-        board_.video.init(ted_desc);
-        ted_ = &board_.video;
+        board_.ted.init(ted_desc);
+        ted_ = &board_.ted;
         printf("%s: Created TED 7360 (%s)\n", Traits::name, is_pal_region ? "PAL" : "NTSC");
         // Initialize sound subsystem: TED master clock is 2× CPU clock
         uint32_t ted_clock = is_pal_region ? TED_PAL_CLOCK_HZ : TED_NTSC_CLOCK_HZ;
@@ -586,16 +586,18 @@ bool Commodore264System<V>::initialize() {
     }
 
     // Bind value-typed chips from Chips, then factory-create remaining
-    board_.bind_chipset();
+    {   size_t slot_idx_ = 0;
+        C264_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
+    }
     board_.create_chips(&bus_state_);
     board_.apply(bus_);
 
     // Convenience pointers for direct buffer access (ROM loading, KERNAL checks, etc.)
-    ram_        = board_.template find<RAMChip>();
-    basic_rom_  = board_.template find<ROMChip>();
-    kernal_rom_ = board_.template find<ROMChip>(1);
-    cpu_        = &board_.cpu;
-    pio1_       = &board_.io;
+    ram_        = &board_.ram;
+    basic_rom_  = &board_.basic_rom;
+    kernal_rom_ = &board_.kernal_rom;
+    cpu_        = &board_.csg7501;
+    pio1_       = &board_.pio1;
     pio2_       = &board_.pio2;
     rom_bank_   = &board_.rom_bank;
 
@@ -626,12 +628,12 @@ bool Commodore264System<V>::initialize() {
     }
     
     // Initialize CPU and I/O port
-    board_.cpu.init();
+    board_.csg7501.init();
     cpu_->init_io_port(0x00, 0x00, 0xFF);  // C16: DDR=0 (all inputs), data=0, pins=0xFF (all high)
 
     // Reset the CPU to start the hardware-accurate RESET sequence.
     // The deferred hijack fetches $FFFC/$FFFD through the bus on first tick.
-    board_.cpu.reset();
+    board_.csg7501.reset();
     
     // Note: C16 doesn't use the io_port_mixin bank_change path.
     // Banking is handled by TED register writes.

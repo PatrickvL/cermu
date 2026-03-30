@@ -10,6 +10,7 @@
 #include "chip/video/ted/ted7360.hpp"
 #include "chip/cpu/fam65xx/mos7501.hpp"
 #include "chip/io/mos6529.hpp"
+#include "core/system_chip_visitors.hpp"
 #include <memory>
 
 // C264 series (C16/C116/Plus4) default bus state — derived from CPU.
@@ -140,18 +141,29 @@ public:
 // ROM bank pair selected by writes to $FDD0-$FDDF.
 // RAM size varies: 16 KB (C16/C116) with mirroring, 64 KB (Plus/4).
 //
-inline constexpr auto kC264Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536, 0, "RAM",        0, 65536, 0, 0, {}},
-    Slot<ROMChip>{0x8000, 16384, 0, "BASIC ROM",  0, 16384, 1, 0, {}}.with_rom("basic.318006-01.bin|basic.rom|318006-01.bin"),   // overlay group 1
-    Slot<ROMChip>{0xC000, 16384, 0, "KERNAL ROM", 0, 16384, 1, 0, {}}.with_rom("kernal.318004-05.bin|kernal.rom|318004-05.bin"), // overlay group 1
-    // Non-bus chip — factory-created, not address-decoded
-    Slot<CSG7501>               {0, 0, 0, "CSG 7501",         0, 0, 0, 0, {}},
-    // MMIO chips — address-decoded by MemoryBus via MaskedSubTables
-    Slot<ted7360_t>             {0xFF00, 0, 0xFFC0, "TED 7360",        0, 0, 0, 0, {}},  // page $FF sub-table 0
-    Slot<mos6529_t>             {0xFD10, 0, 0xFFF0, "MOS 6529B PIO1",  0, 0, 0, 0, {}},  // page $FD sub-table 1
-    Slot<mos6529_t>             {0xFD30, 0, 0xFFF0, "MOS 6529B PIO2",  0, 0, 0, 0, {}},  // page $FD sub-table 1
-    Slot<c264_rom_bank_select_t>{0xFDD0, 0, 0xFFF0, "ROM Bank Select", 0, 0, 0, 0, {}}   // page $FD sub-table 1
-);
+//                                ctx   type                    chip       base    size    mask    ovl  label              rom
+#define C264_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, RAMChip,                 ram,       0x0000, 65536,  0,      0, "RAM",             nullptr) \
+    V(ctx, ROMChip,                 basic_rom, 0x8000, 16384,  0,      1, "BASIC ROM",       "basic.318006-01.bin|basic.rom|318006-01.bin") \
+    V(ctx, ROMChip,                 kernal_rom,0xC000, 16384,  0,      1, "KERNAL ROM",      "kernal.318004-05.bin|kernal.rom|318004-05.bin") \
+    V(ctx, CSG7501,                 csg7501,   0,          0,  0,      0, "CSG 7501",        nullptr) \
+    V(ctx, ted7360_t,               ted,       0xFF00,     0,  0xFFC0, 0, "TED 7360",        nullptr) \
+    V(ctx, mos6529_t,               pio1,      0xFD10,     0,  0xFFF0, 0, "MOS 6529B PIO1",  nullptr) \
+    V(ctx, mos6529_t,               pio2,      0xFD30,     0,  0xFFF0, 0, "MOS 6529B PIO2",  nullptr) \
+    V(ctx, c264_rom_bank_select_t,  rom_bank,  0xFDD0,     0,  0xFFF0, 0, "ROM Bank Select", nullptr)
+
+static constexpr size_t kC264ChipCount = 0 C264_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+inline constexpr auto make_c264_manifest() {
+    ChipManifest<kC264ChipCount> m = {{
+        C264_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+    }};
+    // All buffer chips: bank_size = size_bytes
+    for (auto& s : m.chips)
+        if (s.size_bytes > 0) s.bank_size = s.size_bytes;
+    return m;
+}
+inline constexpr auto kC264Chips = make_c264_manifest();
 
 // MaskedSubTable indices (determined by manifest slot order during apply())
 namespace c264_sub {
@@ -170,20 +182,10 @@ namespace c264_viewer {
     inline constexpr size_t kTedVideo = 1;  // TED video fetches (controlled by video_romsel)
 }
 
-// Value-typed chips: CPU + TED (video) + PIO1 + PIO2 + ROM bank select.
+// Value-typed chips: all chips are fields via X-macro.
 // TED is default-constructed and configured via init(desc) in initialize().
-struct C264Chipset : CoreChips<CSG7501, ted7360_t, NoChip, mos6529_t> {
-    mos6529_t               pio2;
-    c264_rom_bank_select_t  rom_bank;
-
-    template<typename Board> void bind_extras(Board& board) {
-        board.bind_chip(board.template find_index<mos6529_t>(1),             &pio2);
-        board.bind_chip(board.template find_index<c264_rom_bank_select_t>(), &rom_bank);
-    }
-    template<typename Board> void register_extras(Board& board) {
-        board.register_component(&pio2);
-        board.register_component(&rom_bank);
-    }
+struct C264Chipset {
+    C264_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
 };
 
 // ============================================================================
@@ -248,10 +250,10 @@ public:
 
     // --- Test / debug accessors ---
     CSG7501*     cpu()       { return cpu_; }
-    ted7360_t*   ted()       { return &board_.video; }
+    ted7360_t*   ted()       { return &board_.ted; }
     RAMChip*  ram()       { return ram_; }
     const CSG7501*    cpu() const { return cpu_; }
-    const ted7360_t*  ted() const { return &board_.video; }
+    const ted7360_t*  ted() const { return &board_.ted; }
     const RAMChip* ram() const { return ram_; }
 
     // Debug cart ($FDCF) — VICE convention for Plus4 test programs.
