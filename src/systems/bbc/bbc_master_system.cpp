@@ -151,18 +151,19 @@ bool BBCMasterSystem<V>::initialize() {
     register_board(&board_);
 
     // Pre-bind all value-typed chips
-    board_.bind_chipset();
+    { size_t slot_idx_ = 0;
+      BBC_BPLUS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
     board_.create_chips(&pins_);
 
-    ram_chip_       = board_.template find<RAMChip>();
-    paged_rom_chip_ = board_.template find<ROMChip>();
-    os_rom_chip_    = board_.template find<ROMChip>(1);
+    ram_chip_       = &board_.ram;
+    paged_rom_chip_ = &board_.paged_rom;
+    os_rom_chip_    = &board_.os_rom;
     memory_         = ram_chip_->data();
 
-    pins_ = board_.cpu.init();
-    board_.io.reset();
+    pins_ = board_.w65c02.init();
+    board_.sys_via.reset();
     board_.user_via.reset();
-    board_.io.interrupt_bit = BUS_IRQ_BIT;
+    board_.sys_via.interrupt_bit = BUS_IRQ_BIT;
     board_.user_via.interrupt_bit   = BUS_IRQ_BIT;
 
     configure_bus_memory_map();
@@ -171,20 +172,20 @@ bool BBCMasterSystem<V>::initialize() {
     }
 
     // ── CRTC (MC6845) ───────────────────────────────────────────────────
-    board_.video.init();
+    board_.crtc.init();
 
     // Program CRTC with Mode 7 register values (the MOS does this too, but
     // we prime them so the display works even before the ROM runs)
     for (int i = 0; i < 14; i++) {
-        board_.video.regs_[i] = bbc_constants::MODE7_CRTC_REGS[i];
+        board_.crtc.regs_[i] = bbc_constants::MODE7_CRTC_REGS[i];
     }
 
     // Wire CRTC callbacks
-    board_.video.on_display_char = [this](uint16_t ma, uint8_t ra, bool cursor) {
+    board_.crtc.on_display_char = [this](uint16_t ma, uint8_t ra, bool cursor) {
         this->crtc_display_char(ma, ra, cursor);
     };
-    board_.video.on_vsync = [this]() { this->crtc_vsync(); };
-    board_.video.on_hsync = [this]() { this->crtc_hsync(); };
+    board_.crtc.on_vsync = [this]() { this->crtc_vsync(); };
+    board_.crtc.on_hsync = [this]() { this->crtc_hsync(); };
 
     // Set memory for video rendering
     board_.vidproc.set_memory(memory_);
@@ -214,11 +215,11 @@ void BBCMasterSystem<V>::shutdown() { system_ready_ = false; }
 template<BBCMasterVariant V>
 void BBCMasterSystem<V>::reset() {
     if (!system_ready_) return;
-    pins_ = board_.cpu.reset(pins_);
+    pins_ = board_.w65c02.reset(pins_);
     board_.reset_chips();
-    board_.io.reset();
+    board_.sys_via.reset();
     board_.user_via.reset();
-    board_.io.interrupt_bit = BUS_IRQ_BIT;
+    board_.sys_via.interrupt_bit = BUS_IRQ_BIT;
     board_.user_via.interrupt_bit   = BUS_IRQ_BIT;
     rom_select_ = 0;
     acccon_ = 0;
@@ -340,13 +341,13 @@ uint8_t BBCMasterSystem<V>::scan_keyboard(uint8_t /*column*/) const {
 template<BBCMasterVariant V>
 void BBCMasterSystem<V>::crtc_display_char(uint16_t ma, uint8_t ra, bool cursor) {
     board_.vidproc.display_char(ma, ra, cursor,
-                                        board_.video.regs_[R9_MAX_SCANLINE]);
+                                        board_.crtc.regs_[R9_MAX_SCANLINE]);
 }
 
 template<BBCMasterVariant V>
 void BBCMasterSystem<V>::crtc_vsync() {
     board_.vidproc.vsync();
-    board_.io.ifr |= MOS6522_IFR_CA1;
+    board_.sys_via.ifr |= MOS6522_IFR_CA1;
 }
 
 template<BBCMasterVariant V>
