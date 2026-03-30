@@ -72,19 +72,19 @@ template<> struct MTXVariantTraits<MTXVariant::MTX512> {
 
 #define MTX500_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                               \
     X(ctx, ZilogZ80A,  z80,  0x0000,      0, 0, 0, "Z80A",         "Z80A",         nullptr)                               \
-    X(ctx, TMS9918A,   vdp,  0x0000,      0, 0, 0, "TMS9918A",     "TMS9918A",     nullptr)                               \
-    X(ctx, AY_3_8910,  psg,  0x0000,      0, 0, 0, "AY-3-8910",    "AY-3-8910",    nullptr)                               \
-    X(ctx, z80_ctc_t,  ctc,  0x0000,      0, 0, 0, "Z80 CTC",      "Z80 CTC",      nullptr)                               \
     X(ctx, ROMChip,    rom,  0x0000, 0x4000, 0, 0, "OS+BASIC ROM", "OS+BASIC ROM", "mtx500.rom|mtx.rom|MTX.ROM")         \
+    X(ctx, TMS9918A,   vdp,  0x0001,      0, 0, 0, "TMS9918A",     "TMS9918A",     nullptr)                               \
+    X(ctx, AY_3_8910,  psg,  0x0003,      0, 0, 0, "AY-3-8910",    "AY-3-8910",    nullptr)                               \
+    X(ctx, z80_ctc_t,  ctc,  0x0008,      0, 0, 0, "Z80 CTC",      "Z80 CTC",      nullptr)                               \
     X(ctx, RAMChip,    ram,  0x4000, 0x8000, 0, 0, "RAM",          "RAM",          nullptr)
 
 #define MTX512_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                               \
     X(ctx, ZilogZ80A,  z80,  0x0000,       0, 0, 0, "Z80A",         "Z80A",         nullptr)                              \
-    X(ctx, TMS9918A,   vdp,  0x0000,       0, 0, 0, "TMS9918A",     "TMS9918A",     nullptr)                              \
-    X(ctx, AY_3_8910,  psg,  0x0000,       0, 0, 0, "AY-3-8910",    "AY-3-8910",    nullptr)                              \
-    X(ctx, z80_ctc_t,  ctc,  0x0000,       0, 0, 0, "Z80 CTC",      "Z80 CTC",      nullptr)                              \
     X(ctx, ROMChip,    rom,  0x0000,  0x4000, 0, 0, "OS+BASIC ROM", "OS+BASIC ROM", "mtx512.rom|mtx.rom|MTX.ROM")        \
-    X(ctx, RAMChip,    ram,  0x0000, 0x10000, 0, 0, "RAM",          "RAM",          nullptr)
+    X(ctx, RAMChip,    ram,  0x0000, 0x10000, 0, 0, "RAM",          "RAM",          nullptr)                              \
+    X(ctx, TMS9918A,   vdp,  0x0001,       0, 0, 0, "TMS9918A",     "TMS9918A",     nullptr)                              \
+    X(ctx, AY_3_8910,  psg,  0x0003,       0, 0, 0, "AY-3-8910",    "AY-3-8910",    nullptr)                              \
+    X(ctx, z80_ctc_t,  ctc,  0x0008,       0, 0, 0, "Z80 CTC",      "Z80 CTC",      nullptr)
 
 static constexpr size_t kMTX500ChipCount = 0 MTX500_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 static constexpr size_t kMTX512ChipCount = 0 MTX512_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
