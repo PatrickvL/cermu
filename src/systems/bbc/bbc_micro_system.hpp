@@ -3,7 +3,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/audio_port.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
@@ -25,47 +25,44 @@
 // BBC Micro chip manifest — declarative memory layout
 // =============================================================================
 //
-// Slot 0: RAM — 32 KB at $0000-$7FFF
-// Slot 1: Paged ROM pool — 256 KB at $8000 (16 × 16 KB sideways ROM slots)
+// Slot 1: RAM — 32 KB at $0000-$7FFF
+// Slot 2: Paged ROM pool — 256 KB at $8000 (16 × 16 KB sideways ROM slots)
 //         Only one 16 KB bank visible at $8000-$BFFF; selected by rom_select_.
 //         apply() clips to available pages; configure_bus_memory_map() remaps.
-// Slot 2: OS ROM — 16 KB at $C000-$FFFF
+// Slot 3: OS ROM — 16 KB at $C000-$FFFF
 //         $FC00-$FEFF (FRED/JIM/SHEILA) handled by sheila_tick(), not the bus.
 //
-inline constexpr auto kBBCMicroChips = make_chip_manifest(
-    Slot<RAMChip>{0x0000,  32768, 0, "RAM"},
-    Slot<ROMChip>{0x8000, 262144, 0, "Paged ROM", 0, 16384},      // 16 × 16 KB banks
-    Slot<ROMChip>{0xC000,  16384, 0, "MOS ROM"}.with_rom("os12.rom|OS12.ROM|os.rom|OS-1.20.rom|MOS120.rom|bbc_os.rom|os1.2.rom"),
-    // Non-bus chips — factory-created, not address-decoded
-    Slot<MOS6502>     {0, 0, 0, "MOS 6502"},
-    Slot<mc6845_t>    {0, 0, 0, "MC6845 CRTC"},
-    Slot<sn76489_t>   {0, 0, 0, "SN76489 PSG"},
-    Slot<mos6522_t>   {0, 0, 0, "System VIA"},
-    Slot<mos6522_t>   {0, 0, 0, "User VIA"},
-    Slot<bbc_vidproc_t>{0, 0, 0, "Video ULA"}
-);
+//                                      ctx   type           chip       base    size    mask  ovl  label            rom
+#define BBC_MICRO_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, MOS6502,        m6502,     0,           0, 0,     0, "MOS 6502",    nullptr) \
+    V(ctx, RAMChip,        ram,       0x0000,  32768, 0,     0, "RAM",         nullptr) \
+    V(ctx, ROMChip,        paged_rom, 0x8000, 262144, 0,     0, "Paged ROM",   nullptr) \
+    V(ctx, ROMChip,        os_rom,    0xC000,  16384, 0,     0, "MOS ROM",     "os12.rom|OS12.ROM|os.rom|OS-1.20.rom|MOS120.rom|bbc_os.rom|os1.2.rom") \
+    V(ctx, mc6845_t,       crtc,      0,           0, 0,     0, "MC6845 CRTC", nullptr) \
+    V(ctx, sn76489_t,      psg,       0,           0, 0,     0, "SN76489 PSG", nullptr) \
+    V(ctx, mos6522_t,      sys_via,   0,           0, 0,     0, "System VIA",  nullptr) \
+    V(ctx, mos6522_t,      user_via,  0,           0, 0,     0, "User VIA",    nullptr) \
+    V(ctx, bbc_vidproc_t,  vidproc,   0,           0, 0,     0, "Video ULA",   nullptr)
+
+static constexpr size_t kBBCMicroChipCount = 0 BBC_MICRO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+constexpr ChipManifest<kBBCMicroChipCount> make_bbc_micro_manifest() {
+    ChipManifest<kBBCMicroChipCount> m = {{
+        BBC_MICRO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+    }};
+    m.chips[2].bank_size = 16384;  // Paged ROM (16 × 16 KB sideways banks)
+    return m;
+}
+inline constexpr auto kBBCMicroChips = make_bbc_micro_manifest();
 
 using BBCMicroBusSpec = ManifestBusSpec<kBBCMicroChips, 16, 8>;
 
 // ============================================================================
 // BBC Micro Chips — value-typed chips owned by Board
 // ============================================================================
-// Video slot = VIDPROC (pixel generator + palette owner).
-// MC6845 CRTC is a timing/address generator — kept as extra member.
 
-struct BBCMicroChips : CoreChips<MOS6502, bbc_vidproc_t, sn76489_t, mos6522_t> {
-    mos6522_t      user_via;
-    mc6845_t       crtc;
-
-    template<typename B> void bind_extras(B& board) {
-        board.bind_chip(board.template find_index<mos6522_t>(1),   &user_via);
-        board.bind_chip(board.template find_index<mc6845_t>(), &crtc);
-    }
-
-    void register_extras(BoardBase& board) {
-        board.register_component(&user_via);
-        board.register_component(&crtc);
-    }
+struct BBCMicroChips {
+    BBC_MICRO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
 };
 
 /**
