@@ -168,8 +168,9 @@ bool Atari2600System::initialize() {
     printf("Atari2600: Initializing system\n");
     register_board(&board_);
 
-    // ── Factory-create ALL chips from the manifest ──────────────────────
-    board_.bind_chipset();
+    // ── Bind all value-typed chips to manifest slots ──────────────────
+    { size_t slot_idx_ = 0;
+      ATARI2600_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
     board_.create_chips(&pins_);
 
     // ── Configure MemoryBus page tables (mirrors + cart pages) ──────────
@@ -178,9 +179,9 @@ bool Atari2600System::initialize() {
     // ── Initialize chips ───────────────────────────────────────────
     board_.cpu.init();
     board_.cpu.reset();
-    board_.video.init();
-    board_.video.set_audio_sample_rate(atari2600_constants::DEFAULT_SAMPLE_RATE);
-    board_.io.init();
+    board_.tia.init();
+    board_.tia.set_audio_sample_rate(atari2600_constants::DEFAULT_SAMPLE_RATE);
+    board_.riot.init();
 
     // Console switches default: color mode, both difficulty A, not pressed
     console_switches_ = 0xFF;  // All bits high = not pressed (active-low)
@@ -193,14 +194,14 @@ bool Atari2600System::initialize() {
 
     // Video output — composite video from TIA
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.video.set_video_out(&video_port_->output());
+    board_.tia.set_video_out(&video_port_->output());
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Audio port — TIA does its own decimation, uses drive_sample()
     audio_port_ = std::make_unique<AudioPort>();
     audio_port_->configure(atari2600_constants::DEFAULT_SAMPLE_RATE,
                            atari2600_constants::DEFAULT_SAMPLE_RATE);
-    board_.video.set_audio_port(audio_port_.get());
+    board_.tia.set_audio_port(audio_port_.get());
 
     printf("Atari2600: System initialized\n");
     return true;
@@ -236,15 +237,15 @@ void Atari2600System::reset() {
 
 void Atari2600System::tick() {
     // TIA tick: 3 color clocks per CPU cycle
-    board_.video.tick_cpu_cycle();
+    board_.tia.tick_cpu_cycle();
 
     // If WSYNC is pending, the CPU is halted — skip the CPU tick
-    if (!board_.video.is_cpu_halted()) {
+    if (!board_.tia.is_cpu_halted()) {
         tick_cpu();
     }
 
     // RIOT timer tick (once per CPU cycle)
-    board_.io.tick();
+    board_.riot.tick();
 
     // Read joystick inputs from connector ports
     update_joystick_state();
@@ -255,9 +256,9 @@ void Atari2600System::tick() {
     // When TIA VSYNC transitions from active to inactive, reset the TIA
     // scanline counter for the new frame.  Frame sync itself is now
     // stream-driven (TIA drives FrameEnd on VSYNC rising edge).
-    bool vsync_active = (board_.video.regs_[VSYNC] & 0x02) != 0;
+    bool vsync_active = (board_.tia.regs_[VSYNC] & 0x02) != 0;
     if (in_vsync_ && !vsync_active) {
-        board_.video.scanline = 0;  // Reset scanline counter for new frame
+        board_.tia.scanline = 0;  // Reset scanline counter for new frame
     }
     in_vsync_ = vsync_active;
 }
@@ -278,7 +279,7 @@ void Atari2600System::run_frame() {
 
     // If we hit the safety limit, force scanline reset
     if (!output.frame_ended()) {
-        board_.video.scanline = 0;
+        board_.tia.scanline = 0;
     }
 
     video_port_->swap_frame();
@@ -399,7 +400,7 @@ bool Atari2600System::load_file(const char* filepath) {
         }
 
         // Flush stale audio from the ring buffer
-        board_.video.audio_buffer_.reset();
+        board_.tia.audio_buffer_.reset();
     }
 
     return true;
@@ -417,11 +418,11 @@ bool Atari2600System::load_file(const char* filepath) {
 uint32_t Atari2600System::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
     if (audio_port_) return audio_port_->read_samples(buffer, max_samples);
-    return board_.video.audio_read(buffer, max_samples);
+    return board_.tia.audio_read(buffer, max_samples);
 }
 
 void Atari2600System::set_audio_sample_rate(int sample_rate_hz) {
-    board_.video.set_audio_sample_rate(sample_rate_hz);
+    board_.tia.set_audio_sample_rate(sample_rate_hz);
 }
 
 // ============================================================================
@@ -489,7 +490,7 @@ void Atari2600System::update_joystick_state() {
         if (!(sig0 & (1u << PortSignals::JOY_LEFT)))  joystick_state_ &= ~0x40;
         if (!(sig0 & (1u << PortSignals::JOY_RIGHT))) joystick_state_ &= ~0x80;
         // Fire button → TIA INPT4 (active-low: 0=pressed, 1=not pressed)
-        board_.video.read_regs_[INPT4] = (sig0 & (1u << PortSignals::JOY_FIRE)) ? 0x80 : 0x00;
+        board_.tia.read_regs_[INPT4] = (sig0 & (1u << PortSignals::JOY_FIRE)) ? 0x80 : 0x00;
     }
 
     // Player 1 (connector port 1)
@@ -499,12 +500,12 @@ void Atari2600System::update_joystick_state() {
         if (!(sig1 & (1u << PortSignals::JOY_DOWN)))  joystick_state_ &= ~0x02;
         if (!(sig1 & (1u << PortSignals::JOY_LEFT)))  joystick_state_ &= ~0x04;
         if (!(sig1 & (1u << PortSignals::JOY_RIGHT))) joystick_state_ &= ~0x08;
-        board_.video.read_regs_[INPT5] = (sig1 & (1u << PortSignals::JOY_FIRE)) ? 0x80 : 0x00;
+        board_.tia.read_regs_[INPT5] = (sig1 & (1u << PortSignals::JOY_FIRE)) ? 0x80 : 0x00;
     }
 
     // Write joystick state to RIOT Port A and console switches to Port B
-    board_.io.port_a_input = joystick_state_;
-    board_.io.port_b_input = console_switches_;
+    board_.riot.port_a_input = joystick_state_;
+    board_.riot.port_b_input = console_switches_;
 }
 
 // ============================================================================
