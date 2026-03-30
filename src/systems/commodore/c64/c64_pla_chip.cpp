@@ -343,17 +343,9 @@ void c64_pla_render_debug(void* ctx, PLA906114& pla) {
                             const auto& read_info  = kC64PlaChipTable[size_t(read_chip)];
                             const auto& write_info = kC64PlaChipTable[size_t(write_chip)];
                             
-                            // Calculate offsets - these can vary based on chip remapping
-                            uint16_t read_offset = (read_info.slot->base_addr <= bank_start) ? (bank_start - read_info.slot->base_addr) : 0;
-                            uint16_t write_offset = (write_info.slot->base_addr <= bank_start) ? (bank_start - write_info.slot->base_addr) : 0;
-                            
-                            // Special case for ROMH remap (appears at $E000/$F000 instead of $A000/$B000)
-                            if (read_chip == C64PlaChipId::romh && (bank_start >= 0xE000)) {
-                                read_offset = bank_start - 0xE000;
-                            }
-                            if (write_chip == C64PlaChipId::romh && (bank_start >= 0xE000)) {
-                                write_offset = bank_start - 0xE000;
-                            }
+                            // Offset within chip: low bits of bank masked by chip's bank count
+                            uint16_t read_offset  = (bank & read_info.bank_mask)  << 12;
+                            uint16_t write_offset = (bank & write_info.bank_mask) << 12;
     
                             ImGui::TableSetColumnIndex(0);
                             ImGui::Text("$%X", bank);
@@ -448,7 +440,7 @@ void c64_pla_render_debug(void* ctx, PLA906114& pla) {
                         }
                         ImGui::TableSetColumnIndex(4);
 
-                        uint16_t read_offset = (chip_desc.slot->base_addr <= (uint32_t)bank_start) ? (bank_start - chip_desc.slot->base_addr) : 0;
+                        uint16_t read_offset = (bank & chip_desc.bank_mask) << 12;
 
                         ImGui::Text("$%04X", read_offset);
                         ImGui::TableSetColumnIndex(5);
