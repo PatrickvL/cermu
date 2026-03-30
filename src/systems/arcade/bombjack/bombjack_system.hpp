@@ -15,6 +15,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/audio_port.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -30,43 +31,40 @@
 #define BOMBJACK_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
 
 // ============================================================================
-// Bomb Jack chip manifests — declarative memory layout (dual-CPU)
+// Bomb Jack chip declarations — single source of truth (dual-CPU)
 // ============================================================================
 //
-// Main CPU ($0000-$7FFF ROM, $8000 RAM, $9xxx video/sprite/palette, $Bxxx I/O):
-//   Slot 0: Program ROM    — 32 KB at $0000  (read-only)
-//   Slot 1: Work RAM       —  4 KB at $8000
-//   Slot 2: FG tilemap     —  1 KB at $9000
-//   Slot 3: FG attributes  —  1 KB at $9400
-//   Slot 4: Sprite area    — 256 bytes at $9800  (sprite RAM at offset $20)
-//   Slot 5: Palette RAM    — 256 bytes at $9C00
+// Row: X(ctx, type, chip, base, size, mask, overlay, label, rom_files)
 //
-// Sound CPU ($0000-$1FFF ROM, $4000 RAM, $6000 latch via manual dispatch):
-//   Slot 0: Sound ROM  — 8 KB at $0000  (read-only)
-//   Slot 1: Sound RAM  — 1 KB at $4000
+// Main CPU: $0000-$7FFF ROM, $8000 RAM, $9xxx video/sprite/palette.
+// Sound CPU: $0000-$1FFF ROM, $4000 RAM.
+// I/O registers and AY ports handled separately.
 //
-// I/O registers ($B000+ main, $6000 sound latch) handled separately due to
-// side effects (NMI clear, overlapping read/write semantics).
-// AY-3-8910 ports use Z80 IORQ, not memory-mapped.
-// Graphics ROMs (char, sprite, bg) are NOT bus-mapped.
-//
-inline constexpr auto kBombJackMainChips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 32768, 0, "Program ROM"},
-    Slot<RAMChip>{0x8000,  4096, 0, "Work RAM"},
-    Slot<RAMChip>{0x9000,  1024, 0, "FG Tilemap"},
-    Slot<RAMChip>{0x9400,  1024, 0, "FG Attributes"},
-    Slot<RAMChip>{0x9800,   256, 0, "Sprite Area"},
-    Slot<RAMChip>{0x9C00,   256, 0, "Palette RAM"},
-    // Non-bus chip — factory-created, not address-decoded
-    Slot<ZilogZ80A>{0, 0, 0, "Main CPU"}
-);
 
-inline constexpr auto kBombJackSoundChips = make_chip_manifest(
-    Slot<ROMChip>{0x0000,  8192, 0, "Sound ROM"},
-    Slot<RAMChip>{0x4000,  1024, 0, "Sound RAM"},
-    // Non-bus chip — factory-created, not address-decoded
-    Slot<ZilogZ80A>{0, 0, 0, "Sound CPU"}
-);
+#define BOMBJACK_MAIN_FOR_EACH_CHIP(X, ctx)                                                             \
+    X(ctx, ZilogZ80A,  cpu,       0x0000,     0, 0, 0, "Main CPU",       nullptr)                       \
+    X(ctx, ROMChip,    rom,       0x0000, 32768, 0, 0, "Program ROM",    nullptr)                       \
+    X(ctx, RAMChip,    work_ram,  0x8000,  4096, 0, 0, "Work RAM",       nullptr)                       \
+    X(ctx, RAMChip,    fg_map,    0x9000,  1024, 0, 0, "FG Tilemap",     nullptr)                       \
+    X(ctx, RAMChip,    fg_attr,   0x9400,  1024, 0, 0, "FG Attributes",  nullptr)                       \
+    X(ctx, RAMChip,    sprites,   0x9800,   256, 0, 0, "Sprite Area",    nullptr)                       \
+    X(ctx, RAMChip,    palette,   0x9C00,   256, 0, 0, "Palette RAM",    nullptr)
+
+#define BOMBJACK_SOUND_FOR_EACH_CHIP(X, ctx)                                                            \
+    X(ctx, ZilogZ80A,  cpu,       0x0000,     0, 0, 0, "Sound CPU",      nullptr)                       \
+    X(ctx, ROMChip,    rom,       0x0000,  8192, 0, 0, "Sound ROM",      nullptr)                       \
+    X(ctx, RAMChip,    ram,       0x4000,  1024, 0, 0, "Sound RAM",      nullptr)
+
+static constexpr size_t kBJMainChipCount  = 0 BOMBJACK_MAIN_FOR_EACH_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+static constexpr size_t kBJSoundChipCount = 0 BOMBJACK_SOUND_FOR_EACH_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+inline constexpr ChipManifest<kBJMainChipCount> kBombJackMainChips = ChipManifest<kBJMainChipCount>{{
+    BOMBJACK_MAIN_FOR_EACH_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
+
+inline constexpr ChipManifest<kBJSoundChipCount> kBombJackSoundChips = ChipManifest<kBJSoundChipCount>{{
+    BOMBJACK_SOUND_FOR_EACH_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
 
 
 // ── Bus traits — one per CPU ─────────────────────────────────────────────
@@ -81,9 +79,14 @@ struct BombJackSoundBusTraits {
     using Spec = ManifestBusSpec<kBombJackSoundChips, 16, 8>;
 };
 
-// Value-typed chips: one Z80A per board, no video/sound/IO in slots.
-using BombJackMainChipset  = CoreChips<ZilogZ80A>;
-using BombJackSoundChipset = CoreChips<ZilogZ80A>;
+// Value-typed chips per board
+struct BombJackMainChipset {
+    BOMBJACK_MAIN_FOR_EACH_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+};
+
+struct BombJackSoundChipset {
+    BOMBJACK_SOUND_FOR_EACH_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+};
 
 class BombJackSystem : public System {
 public:

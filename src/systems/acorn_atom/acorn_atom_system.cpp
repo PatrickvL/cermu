@@ -51,21 +51,19 @@ bool AcornAtomSystem::initialize() {
     printf("Acorn Atom: Initializing system\n");
     register_board(&board_);
 
-    // ── Create chips from manifest and bind chipset ───────────────────
-    board_.bind_chipset();
+    // ── Bind and create chips from manifest ─────────────────────────
+    { size_t slot_idx_ = 0;
+      ATOM_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
     board_.create_chips(&pins_);
-    basic_rom_ = board_.find<ROMChip>();
-    fp_rom_    = board_.find<ROMChip>(1);
-    os_rom_    = board_.find<ROMChip>(2);
 
     // Direct pointer for MC6847 rendering
-    video_ram_ptr_ = board_.find<RAMChip>(1)->data();
+    video_ram_ptr_ = board_.vram.data();
 
     // ── Init chips ──────────────────────────────────────────────────────
     pins_ = board_.cpu.init();
-    board_.video.init();
-    board_.io.init();
-    board_.io.set_port_b_read_callback(ppi_keyboard_scan, this);
+    board_.vdg.init();
+    board_.ppi.init();
+    board_.ppi.set_port_b_read_callback(ppi_keyboard_scan, this);
     board_.via.reset();
     board_.via.interrupt_bit = BUS_IRQ_BIT;
 
@@ -84,7 +82,7 @@ bool AcornAtomSystem::initialize() {
 
     // Video output — composite video from MC6847 VDG
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.video.set_video_out(&video_port_->output());
+    board_.vdg.set_video_out(&video_port_->output());
     video_port_->bind_frame_output(&last_frame_data_);
 
     printf("Acorn Atom: System initialized (RAM: %dKB)\n", ram_size_kb_);
@@ -99,7 +97,7 @@ void AcornAtomSystem::reset() {
     pins_ = board_.cpu.reset(pins_);
     // Reset all manifest chips (VDG, PPI, VIA; RAM/ROM are no-op)
     board_.reset_chips();
-    board_.io.set_port_b_read_callback(ppi_keyboard_scan, this);
+    board_.ppi.set_port_b_read_callback(ppi_keyboard_scan, this);
     board_.via.interrupt_bit = BUS_IRQ_BIT;
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 }
@@ -130,8 +128,8 @@ void AcornAtomSystem::tick() {
     BUS_SET_BIT(pins_, BUS_RW_BIT);
 
     // ---- VDG timing: one pixel clock per CPU cycle ----
-    board_.video.tick();
-    if (board_.video.check_fs()) {
+    board_.vdg.tick();
+    if (board_.vdg.check_fs()) {
         render_frame();
     }
 
@@ -285,7 +283,7 @@ uint8_t AcornAtomSystem::ppi_keyboard_scan(void* context, uint8_t port_a_output)
 void AcornAtomSystem::render_frame() {
     // Delegate rendering to the MC6847 chip — it owns the font ROM,
     // palette, and frame index buffer.
-    board_.video.render_frame(video_ram_ptr_);
+    board_.vdg.render_frame(video_ram_ptr_);
 }
 
 // ============================================================================

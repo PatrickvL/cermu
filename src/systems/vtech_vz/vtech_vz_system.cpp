@@ -120,13 +120,14 @@ template<VZVariant V>
 bool VTechVZSystem<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
     register_board(&board_);
+    { size_t slot_idx_ = 0;
+      VZ200_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
     board_.create_chips(&pins_);
-    board_.bind_chipset();
 
-    video_ram_ptr_ = board_.template find<RAMChip>()->data();  // First RAMChip = Video RAM
+    video_ram_ptr_ = board_.vram.data();
 
-    pins_ = board_.cpu.init();
-    board_.video.init();
+    pins_ = board_.z80.init();
+    board_.vdg.init();
 
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 
@@ -139,7 +140,7 @@ bool VTechVZSystem<V>::initialize() {
 
     // Video output — composite video from MC6847 VDG
     video_port_ = std::make_unique<CompositeVideoPort>();
-    board_.video.set_video_out(&video_port_->output());
+    board_.vdg.set_video_out(&video_port_->output());
     video_port_->bind_frame_output(&last_frame_data_);
 
     system_ready_ = true;
@@ -154,7 +155,7 @@ void VTechVZSystem<V>::shutdown() { system_ready_ = false; }
 template<VZVariant V>
 void VTechVZSystem<V>::reset() {
     if (!system_ready_) return;
-    pins_ = board_.cpu.reset(pins_);
+    pins_ = board_.z80.reset(pins_);
     board_.reset_chips();
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 }

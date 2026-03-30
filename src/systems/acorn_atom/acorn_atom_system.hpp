@@ -29,7 +29,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/video/mc6847/mc6847.hpp"
@@ -43,50 +43,38 @@
 
 
 // =============================================================================
-// Acorn Atom chip manifest — declarative memory layout
+// Acorn Atom chip declaration — single source of truth
 // =============================================================================
 //
-// Slot 0: RAM       — 32 KB at $0000 (covers full lower half; actual size configurable)
-// Slot 1: Video RAM — 8 KB at $8000 (real hardware: 6 KB at $8000–$97FF)
-// Slot 2: BASIC ROM — 4 KB at $C000
-// Slot 3: FP ROM    — 2 KB at $D000
-// Slot 4: OS ROM    — 4 KB at $F000
-// Slot 5: PPI       — MMIO-only, 4-byte window at $B000
-// Slot 6: VIA       — MMIO-only, 16-byte window at $B800
+// Row: X(ctx, type, chip, base, size, mask, overlay, label, rom_files)
 //
-// RAM is allocated as 32 KB (power of 2) covering $0000–$7FFF; the system
-// trims actual read/write pages to the configured size (2/5/8/12 KB).
-// Video RAM is 8 KB (power of 2); only $8000–$97FF is used by the MC6847.
+// PPI and VIA are MMIO-only (sub-page decode via addr_mask).
+// FP ROM is optional (loaded if available).
 //
-inline constexpr auto kAcornAtomChips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 32768, 0, "RAM"},
-    Slot<RAMChip>{0x8000,  8192, 0, "Video RAM"},
-    Slot<ROMChip>{0xC000,  4096, 0, "BASIC"}.with_rom("atom_basic.rom|BASIC.ROM|basic.rom"),
-    Slot<ROMChip>{0xD000,  2048, 0, "FP ROM"}.with_rom("atom_fp.rom|FP.ROM|fp.rom", true),
-    Slot<ROMChip>{0xF000,  4096, 0, "OS ROM"}.with_rom("atom_os.rom|ABASIC.ROM|os.rom"),
-    Slot<i8255_t>   {0xB000,     0, 0xFFFC},           // MMIO-only, 4-byte window
-    Slot<mos6522_t> {0xB800,     0, 0xFFF0},           // MMIO-only, 16-byte window
-    // Non-bus chips — factory-created, not address-decoded
-    Slot<MOS6502>   {0, 0, 0, "MOS 6502"},
-    Slot<mc6847_t>  {0, 0, 0, "MC6847 VDG"}
-);
+
+#define ATOM_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                    \
+    X(ctx, MOS6502,    cpu,    0x0000,     0,      0, 0, "MOS 6502",   nullptr)                              \
+    X(ctx, RAMChip,    ram,    0x0000, 32768,      0, 0, "RAM",        nullptr)                              \
+    X(ctx, RAMChip,    vram,   0x8000,  8192,      0, 0, "Video RAM",  nullptr)                              \
+    X(ctx, i8255_t,    ppi,    0xB000,     0, 0xFFFC, 0, "i8255 PPI",  nullptr)                              \
+    X(ctx, mos6522_t,  via,    0xB800,     0, 0xFFF0, 0, "VIA 6522",   nullptr)                              \
+    X(ctx, ROMChip,    basic,  0xC000,  4096,      0, 0, "BASIC",      "atom_basic.rom|BASIC.ROM|basic.rom") \
+    X(ctx, ROMChip,    fp_rom, 0xD000,  2048,      0, 0, "FP ROM",     "?atom_fp.rom|FP.ROM|fp.rom")         \
+    X(ctx, ROMChip,    os_rom, 0xF000,  4096,      0, 0, "OS ROM",     "atom_os.rom|ABASIC.ROM|os.rom")      \
+    X(ctx, mc6847_t,   vdg,    0x0000,     0,      0, 0, "MC6847 VDG", nullptr)
+
+static constexpr size_t kAtomChipCount = 0 ATOM_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+inline constexpr ChipManifest<kAtomChipCount> kAcornAtomChips = ChipManifest<kAtomChipCount>{{
+    ATOM_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
 
 // BusSpec auto-derived from the manifest
 using AcornAtomBusSpec = ManifestBusSpec<kAcornAtomChips, 16, 8>;
 
 // ── Chips ──────────────────────────────────────────────────────────────
-struct AtomChipset : CoreChips<MOS6502, mc6847_t, NoChip, i8255_t> {
-    mos6522_t via;    // MOS 6522 VIA (timers, cassette, printer)
-
-    template<typename BoardT>
-    void bind_extras(BoardT& board) {
-        board.bind_chip(board.template find_index<mos6522_t>(), &via);
-    }
-
-    template<typename BoardT>
-    void register_extras(BoardT& board) {
-        board.register_component(&via);
-    }
+struct AtomChipset {
+    ATOM_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
 };
 
 class AcornAtomSystem : public System {
@@ -112,11 +100,6 @@ public:
 
 private:
     // ── Chips (value-typed via Board Chips) ────────────────────────────
-
-    // ── Memory chips — post-init pointers via chip_as<>() ───────────────
-    ROMChip* basic_rom_ = nullptr;  // 4 KB at $C000
-    ROMChip* fp_rom_    = nullptr;  // 2 KB at $D000
-    ROMChip* os_rom_    = nullptr;  // 4 KB at $F000
 
     // Direct pointer into flat mem for VDG rendering
     uint8_t* video_ram_ptr_ = nullptr;

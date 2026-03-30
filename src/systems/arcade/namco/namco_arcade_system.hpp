@@ -11,7 +11,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/audio_port.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -62,42 +62,44 @@ template<> struct NamcoGameTraits<NamcoGame::Pengo> {
 };
 
 // ============================================================================
-// Namco chip manifests — declarative memory layout
+// Namco chip declarations — single source of truth
 // ============================================================================
 //
-// Pac-Man ($0000-$3FFF ROM, $4000/$4400/$4C00 work areas, $5xxx I/O):
-//   Slot 0: ROM       — 16 KB at $0000     (read-only)
-//   Slot 1: Video RAM —  1 KB at $4000
-//   Slot 2: Color RAM —  1 KB at $4400
-//   Slot 3: Work RAM  —  1 KB at $4C00
+// Row: X(ctx, type, chip, base, size, mask, overlay, label, rom_files)
 //
-// Pengo ($0000-$7FFF ROM, $8000/$8400/$8C00 work areas, $9xxx I/O):
-//   Slot 0: ROM       — 32 KB at $0000     (read-only)
-//   Slot 1: Video RAM —  1 KB at $8000
-//   Slot 2: Color RAM —  1 KB at $8400
-//   Slot 3: Work RAM  —  1 KB at $8C00
-//
+// Pac-Man ($0000-$3FFF ROM, $4000/$4400/$4C00 work areas, $5xxx I/O).
+// Pengo   ($0000-$7FFF ROM, $8000/$8400/$8C00 work areas, $9xxx I/O).
 // I/O registers at $5000/$9000 are memory-mapped but handled separately
 // (asymmetric read/write behavior: reads → input ports, writes → control regs).
 // Graphics ROMs (char, sprite, palette, waveform) are NOT bus-mapped.
 //
-inline constexpr auto kPacManChips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 16384, 0, "Program ROM"},
-    Slot<RAMChip>{0x4000,  1024, 0, "Video RAM"},
-    Slot<RAMChip>{0x4400,  1024, 0, "Color RAM"},
-    Slot<RAMChip>{0x4C00,  1024, 0, "Work RAM"},
-    // Non-bus chip — factory-created, not address-decoded
-    Slot<ZilogZ80A>{0, 0, 0, "Z80A"}
-);
 
-inline constexpr auto kPengoChips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 32768, 0, "Program ROM"},
-    Slot<RAMChip>{0x8000,  1024, 0, "Video RAM"},
-    Slot<RAMChip>{0x8400,  1024, 0, "Color RAM"},
-    Slot<RAMChip>{0x8C00,  1024, 0, "Work RAM"},
-    // Non-bus chip — factory-created, not address-decoded
-    Slot<ZilogZ80A>{0, 0, 0, "Z80A"}
-);
+#define PACMAN_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                             \
+    X(ctx, ZilogZ80A,   z80,   0x0000,     0, 0, 0, "Z80A",         nullptr)                            \
+    X(ctx, ROMChip,     rom,   0x0000, 16384, 0, 0, "Program ROM",  nullptr)                            \
+    X(ctx, RAMChip,     vram,  0x4000,  1024, 0, 0, "Video RAM",    nullptr)                            \
+    X(ctx, RAMChip,     cram,  0x4400,  1024, 0, 0, "Color RAM",    nullptr)                            \
+    X(ctx, RAMChip,     wram,  0x4C00,  1024, 0, 0, "Work RAM",     nullptr)                            \
+    X(ctx, namco_wsg_t, wsg,   0x0000,     0, 0, 0, "WSG3",         nullptr)
+
+#define PENGO_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                              \
+    X(ctx, ZilogZ80A,   z80,   0x0000,     0, 0, 0, "Z80A",         nullptr)                            \
+    X(ctx, ROMChip,     rom,   0x0000, 32768, 0, 0, "Program ROM",  nullptr)                            \
+    X(ctx, RAMChip,     vram,  0x8000,  1024, 0, 0, "Video RAM",    nullptr)                            \
+    X(ctx, RAMChip,     cram,  0x8400,  1024, 0, 0, "Color RAM",    nullptr)                            \
+    X(ctx, RAMChip,     wram,  0x8C00,  1024, 0, 0, "Work RAM",     nullptr)                            \
+    X(ctx, namco_wsg_t, wsg,   0x0000,     0, 0, 0, "WSG3",         nullptr)
+
+static constexpr size_t kPacManChipCount = 0 PACMAN_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+static constexpr size_t kPengoChipCount  = 0 PENGO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+inline constexpr ChipManifest<kPacManChipCount> kPacManChips = ChipManifest<kPacManChipCount>{{
+    PACMAN_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
+
+inline constexpr ChipManifest<kPengoChipCount> kPengoChips = ChipManifest<kPengoChipCount>{{
+    PENGO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
 
 // BusTraits — selects the correct manifest per game
 template<NamcoGame G> struct NamcoBusTraits;
@@ -113,7 +115,9 @@ template<> struct NamcoBusTraits<NamcoGame::Pengo> {
 };
 
 // ── Chips ──────────────────────────────────────────────────────────────
-struct NamcoChipset : CoreChips<ZilogZ80A, NoChip, namco_wsg_t> {};
+struct NamcoChipset {
+    PACMAN_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+};
 
 // ── System ───────────────────────────────────────────────────────────────
 template<NamcoGame G>
@@ -165,10 +169,6 @@ private:
     // ── Display ──────────────────────────────────────────────────────────
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video output
     NamcoVideo video_gen_;                            // TTL tile renderer with 90° rotation
-
-    // ── Memory chips (cached for hot-path rendering) ────────────
-    RAMChip* vram_chip_ = nullptr;  // Video RAM (tile indices)
-    RAMChip* cram_chip_ = nullptr;  // Color RAM (palette attributes)
 
     // ── I/O state ────────────────────────────────────────────────────────
     uint8_t in0_        = 0xFF;          // Input port 0 (P1 + coins)

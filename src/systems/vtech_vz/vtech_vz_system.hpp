@@ -21,7 +21,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/video/mc6847/mc6847.hpp"
@@ -65,37 +65,39 @@ template<> struct VZVariantTraits<VZVariant::VZ300> {
 #define VZ_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
 
 // =============================================================================
-// VZ chip manifests — declarative memory layout
+// VZ chip declarations — variant-specific single source of truth
 // =============================================================================
 //
-// VZ200 (8KB user RAM):
-//   Slot 0: ROM       — 16 KB at $0000 (BASIC interpreter)
-//   Slot 1: Video RAM —  2 KB at $7000
-//   Slot 2: User RAM  — 16 KB at $7800 (only 8 KB used for VZ200)
+// Row: X(ctx, type, chip, base, size, mask, overlay, label, rom_files)
 //
-// VZ300 (16KB user RAM):
-//   Slot 0: ROM       — 16 KB at $0000 (BASIC interpreter)
-//   Slot 1: Video RAM —  2 KB at $7000
-//   Slot 2: User RAM  — 16 KB at $7800
+// VZ200: 16 KB ROM at $0000, 2 KB Video RAM at $7000, 16 KB User RAM at $7800
+// VZ300: same layout, only ROM filename differs
 //
 
-inline constexpr auto kVZ200Chips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 16384, 0, "BASIC ROM"}.with_rom("vz200.rom|BASIC.ROM|laser200.rom"),
-    Slot<RAMChip>{0x7000,  2048, 0, "Video RAM"},
-    Slot<RAMChip>{0x7800, 16384, 0, "User RAM"},
-    // Non-bus chips — factory-created, not address-decoded
-    Slot<ZilogZ80A> {0, 0, 0, "Z80A"},
-    Slot<mc6847_t>  {0, 0, 0, "MC6847 VDG"}
-);
+#define VZ200_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                  \
+    X(ctx, ZilogZ80A,  z80,   0x0000,     0, 0, 0, "Z80A",       nullptr)                                   \
+    X(ctx, ROMChip,    rom,   0x0000, 16384, 0, 0, "BASIC ROM",  "vz200.rom|BASIC.ROM|laser200.rom")        \
+    X(ctx, RAMChip,    vram,  0x7000,  2048, 0, 0, "Video RAM",  nullptr)                                   \
+    X(ctx, RAMChip,    ram,   0x7800, 16384, 0, 0, "User RAM",   nullptr)                                   \
+    X(ctx, mc6847_t,   vdg,   0x0000,     0, 0, 0, "MC6847 VDG", nullptr)
 
-inline constexpr auto kVZ300Chips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 16384, 0, "BASIC ROM"}.with_rom("vz300.rom|BASIC.ROM|laser310.rom"),
-    Slot<RAMChip>{0x7000,  2048, 0, "Video RAM"},
-    Slot<RAMChip>{0x7800, 16384, 0, "User RAM"},
-    // Non-bus chips — factory-created, not address-decoded
-    Slot<ZilogZ80A> {0, 0, 0, "Z80A"},
-    Slot<mc6847_t>  {0, 0, 0, "MC6847 VDG"}
-);
+#define VZ300_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                  \
+    X(ctx, ZilogZ80A,  z80,   0x0000,     0, 0, 0, "Z80A",       nullptr)                                   \
+    X(ctx, ROMChip,    rom,   0x0000, 16384, 0, 0, "BASIC ROM",  "vz300.rom|BASIC.ROM|laser310.rom")        \
+    X(ctx, RAMChip,    vram,  0x7000,  2048, 0, 0, "Video RAM",  nullptr)                                   \
+    X(ctx, RAMChip,    ram,   0x7800, 16384, 0, 0, "User RAM",   nullptr)                                   \
+    X(ctx, mc6847_t,   vdg,   0x0000,     0, 0, 0, "MC6847 VDG", nullptr)
+
+static constexpr size_t kVZ200ChipCount = 0 VZ200_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+static constexpr size_t kVZ300ChipCount = 0 VZ300_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+inline constexpr ChipManifest<kVZ200ChipCount> kVZ200Chips = ChipManifest<kVZ200ChipCount>{{
+    VZ200_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
+
+inline constexpr ChipManifest<kVZ300ChipCount> kVZ300Chips = ChipManifest<kVZ300ChipCount>{{
+    VZ300_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
 
 // BusTraits — selects the correct manifest per variant
 template<VZVariant V> struct VZBusTraits;
@@ -111,7 +113,9 @@ template<> struct VZBusTraits<VZVariant::VZ300> {
 };
 
 // ── Chips ──────────────────────────────────────────────────────────────
-using VZChips = CoreChips<ZilogZ80A, mc6847_t>;
+struct VZChips {
+    VZ200_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+};
 
 // ============================================================================
 // VTech VZ System

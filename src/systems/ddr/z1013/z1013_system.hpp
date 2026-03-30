@@ -11,7 +11,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 
 #include "chip/cpu/z80/u880.hpp"
@@ -53,49 +53,51 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_64> {
     static constexpr bool        has_basic_rom   = true;
 };
 
-// ============================================================================
-// Z1013 chip manifests — declarative memory layout
-// ============================================================================
+// =============================================================================
+// Z1013 chip declarations — variant-specific single source of truth
+// =============================================================================
+//
+// Row: X(ctx, type, chip, base, size, mask, overlay, label, rom_files)
 //
 // Z1013.01 / Z1013.16 (16 KB RAM):
-//   Slot 0: RAM          — 16 KB at $0000
-//   Slot 1: Video RAM    —  1 KB at $EC00
-//   Slot 2: Monitor ROM  —  2 KB at $F000
+//   RAM 16 KB at $0000, Video RAM 1 KB at $EC00, Monitor ROM 2 KB at $F000
 //
 // Z1013.64 (64 KB RAM, ROM BASIC):
-//   Slot 0: RAM          — 64 KB at $0000
-//   Slot 1: BASIC ROM lo —  8 KB at $C000  (first 8 KB of 10 KB BASIC ROM)
-//   Slot 2: BASIC ROM hi —  2 KB at $E000  (last 2 KB of 10 KB BASIC ROM)
-//   Slot 3: Video RAM    —  1 KB at $EC00
-//   Slot 4: Monitor ROM  —  2 KB at $F000
+//   RAM 64 KB at $0000, BASIC ROM 8+2 KB split at $C000/$E000,
+//   Video RAM 1 KB at $EC00, Monitor ROM 2 KB at $F000
 //
 // The character ROM is NOT bus-mapped (used only for display rendering).
 // All I/O is Z80 port-based (IORQ) — no MMIO slots needed.
-//
 // BASIC ROM is split into 8 KB + 2 KB because ChipSlot requires power-of-2
-// sizes and the original 10 KB is not a power of 2.  The ordering ensures
-// apply() maps them correctly: RAM first (base layer), BASIC ROM overlays
-// RAM reads, then Video RAM and Monitor ROM overlay the remaining gaps.
+// sizes and the original 10 KB is not a power of 2.
 //
-inline constexpr auto kZ1013_16K_Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 16384, 0, "RAM"},
-    Slot<RAMChip>{0xEC00,  1024, 0, "Video RAM"},
-    Slot<ROMChip>{0xF000,  2048, 0, "Monitor ROM"}.with_rom("z1013_mon.rom|monitor.rom|MON.ROM"),
-    // Non-bus chips — factory-created, not address-decoded
-    Slot<U880>      {0, 0, 0, "U880"},
-    Slot<z80_pio_t> {0, 0, 0, "U855 PIO"}
-);
 
-inline constexpr auto kZ1013_64K_Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
-    Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM lo"},
-    Slot<ROMChip>{0xE000,  2048, 0, "BASIC ROM hi"},
-    Slot<RAMChip>{0xEC00,  1024, 0, "Video RAM"},
-    Slot<ROMChip>{0xF000,  2048, 0, "Monitor ROM"}.with_rom("z1013_mon.rom|monitor.rom|MON.ROM"),
-    // Non-bus chips — factory-created, not address-decoded
-    Slot<U880>      {0, 0, 0, "U880"},
-    Slot<z80_pio_t> {0, 0, 0, "U855 PIO"}
-);
+#define Z1013_16K_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                  \
+    X(ctx, U880,       z80,        0x0000,     0,  0, 0, "U880",         nullptr)                               \
+    X(ctx, RAMChip,    ram,        0x0000, 16384,  0, 0, "RAM",          nullptr)                               \
+    X(ctx, RAMChip,    vram,       0xEC00,  1024,  0, 0, "Video RAM",    nullptr)                               \
+    X(ctx, ROMChip,    monitor,    0xF000,  2048,  0, 0, "Monitor ROM",  "z1013_mon.rom|monitor.rom|MON.ROM")   \
+    X(ctx, z80_pio_t,  pio,        0x0004,     0,  0, 0, "U855 PIO",     nullptr)
+
+#define Z1013_64K_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                  \
+    X(ctx, U880,       z80,        0x0000,     0,  0, 0, "U880",         nullptr)                               \
+    X(ctx, RAMChip,    ram,        0x0000, 65536,  0, 0, "RAM",          nullptr)                               \
+    X(ctx, ROMChip,    basic_lo,   0xC000,  8192,  0, 0, "BASIC ROM lo", nullptr)                               \
+    X(ctx, ROMChip,    basic_hi,   0xE000,  2048,  0, 0, "BASIC ROM hi", nullptr)                               \
+    X(ctx, RAMChip,    vram,       0xEC00,  1024,  0, 0, "Video RAM",    nullptr)                               \
+    X(ctx, ROMChip,    monitor,    0xF000,  2048,  0, 0, "Monitor ROM",  "z1013_mon.rom|monitor.rom|MON.ROM")   \
+    X(ctx, z80_pio_t,  pio,        0x0004,     0,  0, 0, "U855 PIO",     nullptr)
+
+static constexpr size_t kZ1013_16K_ChipCount = 0 Z1013_16K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+static constexpr size_t kZ1013_64K_ChipCount = 0 Z1013_64K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+inline constexpr ChipManifest<kZ1013_16K_ChipCount> kZ1013_16K_Chips = ChipManifest<kZ1013_16K_ChipCount>{{
+    Z1013_16K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
+
+inline constexpr ChipManifest<kZ1013_64K_ChipCount> kZ1013_64K_Chips = ChipManifest<kZ1013_64K_ChipCount>{{
+    Z1013_64K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
 
 // BusTraits — selects the correct manifest per variant
 template<Z1013Variant V> struct Z1013BusTraits;
@@ -116,7 +118,11 @@ template<> struct Z1013BusTraits<Z1013Variant::Z1013_64> {
 };
 
 // ── Chips ──────────────────────────────────────────────────────────────
-struct Z1013Chipset : CoreChips<U880, NoChip, NoChip, z80_pio_t> {};
+// Uses the 64K macro (superset) for struct generation — 16K variants
+// simply leave the basic_lo/basic_hi fields unused.
+struct Z1013Chipset {
+    Z1013_64K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+};
 
 // ── System ───────────────────────────────────────────────────────────────
 template<Z1013Variant V>
@@ -143,12 +149,6 @@ public:
 
 private:
     // ── Chips (value-typed via Board Chips) ────────────────────────────
-
-    // ── Memory — chip pointers for post-init access (owned by Board) ─
-    ROMChip* basic_rom_lo_chip_    = nullptr;  // Z1013.64 only
-    ROMChip* basic_rom_hi_chip_    = nullptr;  // Z1013.64 only
-    RAMChip* video_ram_chip_       = nullptr;
-    ROMChip* monitor_rom_chip_     = nullptr;
 
     // Character ROM — NOT bus-mapped (used for display rendering only)
     std::vector<uint8_t> char_rom_;
