@@ -128,10 +128,10 @@ Apple1System::Apple1System()
     current_palette_ = hardware_traits_.display.default_palette;
     
     // Initialize PIA with callbacks
-    board_.io().init();
-    board_.io().user_data = this;
-    board_.io().on_port_a_read = pia_keyboard_read;  // Port A: keyboard input
-    board_.io().on_port_b_write = pia_display_write; // Port B: display output
+    board_.chips().pia.init();
+    board_.chips().pia.user_data = this;
+    board_.chips().pia.on_port_a_read = pia_keyboard_read;  // Port A: keyboard input
+    board_.chips().pia.on_port_b_write = pia_display_write; // Port B: display output
     // DDR left at 0x00 — Woz Monitor configures PIA during boot.
 }
 
@@ -178,11 +178,9 @@ bool Apple1System::initialize() {
     printf("Apple1: Initializing system\n");
     register_board(&board_);
     
-    // ── Pre-bind all value-typed chips, then factory-create remaining ───
-    board_.bind_chipset();
-    board_.create_chips(&pins_);
-    monitor_rom_ = board_.find<ROMChip>();
-    basic_rom_   = board_.find<ROMChip>(1);
+    // ── Bind all value-typed chips (sequential — matches macro order) ───
+    { size_t slot_idx_ = 0;
+      APPLE1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
 
     // Character ROM — not on the bus (used by terminal renderer only).
     auto char_chip = std::make_unique<ROMChip>(
@@ -208,14 +206,14 @@ bool Apple1System::initialize() {
     configure_bus_memory_map();
     
     // Initialize CPU (descriptor-free — memory I/O is handled via bus_state_t pins)
-    board_.cpu().init();
-    board_.cpu().reset();
+    board_.chips().cpu.init();
+    board_.chips().cpu.reset();
     
     // Reset PIA with callbacks
-    board_.io().init();
-    board_.io().user_data = this;
-    board_.io().on_port_a_read = pia_keyboard_read;
-    board_.io().on_port_b_write = pia_display_write;
+    board_.chips().pia.init();
+    board_.chips().pia.user_data = this;
+    board_.chips().pia.on_port_a_read = pia_keyboard_read;
+    board_.chips().pia.on_port_b_write = pia_display_write;
     // DDR left at 0x00 after init — the Woz Monitor sets DDRB = $7F
     // via STY $D012 during its boot sequence (control bit 2 = 0 → DDR mode).
     
@@ -251,9 +249,9 @@ void Apple1System::reset() {
     
     // Reset all manifest chips (PIA; RAM/ROM are no-op)
     board_.reset_chips();
-    board_.io().user_data = this;
-    board_.io().on_port_a_read = pia_keyboard_read;
-    board_.io().on_port_b_write = pia_display_write;
+    board_.chips().pia.user_data = this;
+    board_.chips().pia.on_port_a_read = pia_keyboard_read;
+    board_.chips().pia.on_port_b_write = pia_display_write;
     
     // Clear terminal
     if (terminal_) {
@@ -264,7 +262,7 @@ void Apple1System::reset() {
     }
     
     if (system_ready_) {
-        board_.cpu().reset();
+        board_.chips().cpu.reset();
     }
     pins_ = APPLE1_BUS_DEFAULT_STATE;
     total_cycles_ = 0;
@@ -450,7 +448,7 @@ void Apple1System::configure_bus_memory_map() {
 
     // effective_size trims RAM in Phase 1 and gives MMIO sub-tables
     // (PIA at $D0) an open-bus base when RAM doesn't reach that page.
-    board_.set_effective_size(board_.find_index<RAMChip>(), ram_size_);
+    board_.set_effective_size(0, ram_size_);  // slot 0 = RAM
     board_.apply(bus_);
 
     // ── BASIC ROM — unmap if not loaded ─────────────────────────────────────
@@ -478,10 +476,10 @@ void Apple1System::configure_bus_memory_map() {
 
 void Apple1System::tick_cpu() {
     if (system_ready_) {
-        pins_ = board_.cpu().tick<MOS6502::Phase::PHI2>(pins_);
+        pins_ = board_.chips().cpu.tick<MOS6502::Phase::PHI2>(pins_);
         pins_ = bus_.tick(pins_);
-        pins_ = board_.cpu().tick<MOS6502::Phase::PHI1>(pins_);
-        board_.cpu().sample_nmi_pin(pins_);
+        pins_ = board_.chips().cpu.tick<MOS6502::Phase::PHI1>(pins_);
+        board_.chips().cpu.sample_nmi_pin(pins_);
     }
 }
 
@@ -492,7 +490,7 @@ uint8_t Apple1System::pia_keyboard_read(void* user_data) {
     // Return current keyboard state
     // Note: The Apple 1 keyboard hardware clears bit 7 (strobe) when Port A is read
     // This is NOT PIA behavior - it's the external keyboard circuit's behavior
-    uint8_t data = sys->board_.io().port_a_data;
+    uint8_t data = sys->board_.chips().pia.port_a_data;
     
     // Simulate Apple 1 keyboard circuit: clear strobe on read
     sys->clear_keyboard_strobe();
@@ -550,25 +548,25 @@ void Apple1System::display_char(uint8_t ch) {
 // Apple 1 keyboard helpers (system-specific PIA Port A usage)
 void Apple1System::set_keyboard_data(uint8_t key_code) {
     // Apple 1 convention: Set bit 7 (strobe) and key code in bits 0-6
-    board_.io().set_port_a_input(0x80 | (key_code & 0x7F));
+    board_.chips().pia.set_port_a_input(0x80 | (key_code & 0x7F));
     
     // Simulate MM5740 keyboard encoder strobe pulse:
     // Ensure CA1 is low first so the rising edge is always detected,
     // even if a previous key press left CA1 high.
-    board_.io().set_ca1(false);
-    board_.io().set_ca1(true);
+    board_.chips().pia.set_ca1(false);
+    board_.chips().pia.set_ca1(true);
 }
 
 bool Apple1System::keyboard_ready() const {
     // Check if bit 7 is set (keyboard data available)
-    return (board_.io().port_a_data & 0x80) != 0;
+    return (board_.chips().pia.port_a_data & 0x80) != 0;
 }
 
 void Apple1System::clear_keyboard_strobe() {
     // Apple 1 keyboard hardware behavior: The keyboard circuit clears bit 7 (strobe)
     // when the CPU reads Port A. This is NOT PIA behavior - it's the external
     // keyboard hardware responding to the PIA's read signal.
-    board_.io().port_a_data &= 0x7F;
+    board_.chips().pia.port_a_data &= 0x7F;
 }
 
 // ============================================================================
@@ -625,7 +623,7 @@ bool Apple1System::load_roms() {
     bool ok = board_.load_roms(rom_root, "Apple1");
 
     // Detect whether optional BASIC ROM was loaded (buffer starts as 0xFF)
-    has_basic_ = basic_rom_ && basic_rom_->data()[0] != 0xFF;
+    has_basic_ = board_.chips().basic.data()[0] != 0xFF;
 
     // Load Signetics 2513 Character ROM (512 bytes, not bus-mapped)
     bool char_ok = rom_loader_load_from_root(
