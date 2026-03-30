@@ -3,6 +3,7 @@
 #include "systems/commodore/commodore_system.hpp"
 #include "systems/commodore/pet/pet_constants.hpp"
 #include "core/board.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/io/pia6820.hpp"
@@ -62,37 +63,35 @@
 // I/O at $E800–$E8FF handled separately (PIA1, PIA2, VIA, CRTC).
 // Character ROM is NOT bus-mapped.
 //
-inline constexpr auto kPETChips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 32768, 0, "Main RAM"},
-    Slot<RAMChip>{0x8000,  2048, 0x03FF, "Screen RAM"},
-    Slot<ROMChip>{0xB000,  4096, 0, "BASIC ROM $B000"},
-    Slot<ROMChip>{0xC000,  4096, 0, "BASIC ROM $C000"},
-    Slot<ROMChip>{0xD000,  4096, 0, "BASIC ROM $D000"},
-    Slot<ROMChip>{0xE000,  2048, 0, "Editor ROM"}.with_rom("edit-4-40-n-50Hz.901498-01.bin|edit-4-40-n-60Hz.901499-01.bin|editor.rom|901498-01.bin|901499-01.bin"),
-    Slot<ROMChip>{0xF000,  4096, 0, "Kernal ROM"}.with_rom("kernal-4.901465-22.bin|kernal4.rom|kernal.rom|901465-22.bin"),
-    // Non-bus chips — factory-created, not address-decoded
-    Slot<MOS6502>   {0, 0, 0, "MOS 6502"},
-    Slot<mc6845_t>  {0, 0, 0, "MC6845 CRTC"},
-    Slot<pia6820_t> {0, 0, 0, "PIA 1 (Keyboard)"},
-    Slot<pia6820_t> {0, 0, 0, "PIA 2 (IEEE-488)"},
-    Slot<mos6522_t> {0, 0, 0, "MOS 6522 VIA"}
-);
+//                                ctx   type       chip           base    size    mask    ovl  label              rom
+#define PET_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, RAMChip,   main_ram,     0x0000,  32768, 0,      0, "Main RAM",        nullptr) \
+    V(ctx, RAMChip,   screen_ram,   0x8000,   2048, 0x03FF, 0, "Screen RAM",      nullptr) \
+    V(ctx, ROMChip,   basic_rom_b,  0xB000,   4096, 0,      0, "BASIC ROM $B000", nullptr) \
+    V(ctx, ROMChip,   basic_rom_c,  0xC000,   4096, 0,      0, "BASIC ROM $C000", nullptr) \
+    V(ctx, ROMChip,   basic_rom_d,  0xD000,   4096, 0,      0, "BASIC ROM $D000", nullptr) \
+    V(ctx, ROMChip,   editor_rom,   0xE000,   2048, 0,      0, "Editor ROM",      "edit-4-40-n-50Hz.901498-01.bin|edit-4-40-n-60Hz.901499-01.bin|editor.rom|901498-01.bin|901499-01.bin") \
+    V(ctx, ROMChip,   kernal_rom,   0xF000,   4096, 0,      0, "Kernal ROM",      "kernal-4.901465-22.bin|kernal4.rom|kernal.rom|901465-22.bin") \
+    V(ctx, MOS6502,   m6502,        0,            0, 0,      0, "MOS 6502",        nullptr) \
+    V(ctx, mc6845_t,  crtc,         0,            0, 0,      0, "MC6845 CRTC",     nullptr) \
+    V(ctx, pia6820_t, pia1,         0,            0, 0,      0, "PIA 1 (Keyboard)", nullptr) \
+    V(ctx, pia6820_t, pia2,         0,            0, 0,      0, "PIA 2 (IEEE-488)", nullptr) \
+    V(ctx, mos6522_t, via,          0,            0, 0,      0, "MOS 6522 VIA",    nullptr)
+
+static constexpr size_t kPETChipCount = 0 PET_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+inline constexpr ChipManifest<kPETChipCount> kPETChips = {{
+    PET_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
 
 struct PETBusTraits {
     static constexpr const auto& kManifest = kPETChips;
     using Spec = ManifestBusSpec<kPETChips, 16, 8>;
 };
 
-// Value-typed chips: CPU + CRTC + VIA + PIA1 + PIA2.
-struct PETChipset : CoreChips<MOS6502, mc6845_t, mos6522_t, pia6820_t> {
-    pia6820_t pia2;
-
-    template<typename Board> void bind_extras(Board& board) {
-        board.bind_chip(board.template find_index<pia6820_t>(1), &pia2);
-    }
-    template<typename Board> void register_extras(Board& board) {
-        board.register_component(&pia2);
-    }
+// Value-typed chips: all chips are fields via X-macro.
+struct PETChipset {
+    PET_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
 };
 
 class PETSystem : public CommodoreSystem {
