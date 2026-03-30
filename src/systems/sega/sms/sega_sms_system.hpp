@@ -42,8 +42,8 @@
     V(ctx, ZilogZ80A,       z80,         0,           0, 0,      0, "Z80A",          nullptr) \
     V(ctx, ROMChip,         cart_rom,    0x0000, 524288, 0,      0, "Cartridge ROM", nullptr) \
     V(ctx, RAMChip,         system_ram,  0xC000,   8192, 0x1FFF, 0, "System RAM",    nullptr) \
-    V(ctx, SEGA_315_5124,   vdp,         0,           0, 0,      0, "315-5124 VDP",  nullptr) \
-    V(ctx, sn76489_t,       psg,         0,           0, 0,      0, "SN76489 PSG",   nullptr)
+    V(ctx, SEGA_315_5124,   vdp,         0x00BE,      0, 0x00FE, 0, "315-5124 VDP",  nullptr) \
+    V(ctx, sn76489_t,       psg,         0x007E,      0, 0x00FE, 0, "SN76489 PSG",   nullptr)
 
 static constexpr size_t kSMSChipCount = 0 SMS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 

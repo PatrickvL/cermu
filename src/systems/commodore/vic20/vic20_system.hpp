@@ -91,9 +91,9 @@
     X(ctx, RAMChip,    blk2,     0x4000,  8192,      0, 0, "Expansion Block 2",  nullptr)                                           \
     X(ctx, RAMChip,    blk3,     0x6000,  8192,      0, 0, "Expansion Block 3",  nullptr)                                           \
     X(ctx, ROMChip,    charrom,  0x8000,  4096,      0, 0, "CHARROM",            "characters.901460-03.bin|chargen.rom|901460-03.bin") \
-    X(ctx, mos6561_t,  vic,      0x9000,     0, 0x000F, 0, "MOS 6561 (PAL)",     nullptr)                                           \
-    X(ctx, mos6522_t,  via1,     0x9010,     0, 0x000F, 0, "VIA 1",              nullptr)                                           \
-    X(ctx, mos6522_t,  via2,     0x9020,     0, 0x000F, 0, "VIA 2",              nullptr)                                           \
+    X(ctx, mos6561_t,  vic,      0x9000,     0, 0xFFF0, 0, "MOS 6561 (PAL)",     nullptr)                                           \
+    X(ctx, mos6522_t,  via1,     0x9010,     0, 0xFFF0, 0, "VIA 1",              nullptr)                                           \
+    X(ctx, mos6522_t,  via2,     0x9020,     0, 0xFFF0, 0, "VIA 2",              nullptr)                                           \
     X(ctx, RAMChip,    colorram, 0x9400,  1024,      0, 0, "Color RAM",          nullptr)                                           \
     X(ctx, RAMChip,    cart,     0xA000,  8192,      0, 0, "Cartridge Area",     nullptr)                                           \
     X(ctx, ROMChip,    basic,    0xC000,  8192,      0, 0, "BASIC ROM",          "basic.901486-01.bin|basic.rom|901486-01.bin")       \

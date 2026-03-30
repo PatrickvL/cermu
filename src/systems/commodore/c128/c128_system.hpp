@@ -66,7 +66,7 @@
 // 8722 MMU at $D500-$D50B and $FF00-$FF04.
 //
 // Non-bus chips:
-//   CSG 8502, Z80A, VIC-IIe, SID, CIA ×2
+//   CSG 8502, Z80A
 //
 //                                ctx   type       chip        base    size    mask  ovl  label              rom
 #define C128_FOR_EACH_SYSTEM_CHIP(V, ctx) \
@@ -79,11 +79,11 @@
     V(ctx, ROMChip,    kernal_rom,  0xE000,   8192, 0,      1, "Kernal ROM",      "c128_kernal.rom|kernal.rom|kernal.318020-05.bin@8192") \
     V(ctx, RAMChip,    vdc_vram,    0x0000,  16384, 0,      1, "VDC VRAM",        nullptr) \
     V(ctx, ZilogZ80A,  z80,         0,            0, 0,      0, "Zilog Z80A",      nullptr) \
-    V(ctx, mos8566_t,  vic_iie,     0,            0, 0,      0, "MOS 8566 VIC-IIe", nullptr) \
-    V(ctx, mos6581_t,  sid,         0,            0, 0,      0, "MOS 6581 SID",    nullptr) \
-    V(ctx, MOS2114,    colorram,    0,            0, 0,      0, "Color RAM",       nullptr) \
-    V(ctx, mos6526_t,  cia1,        0,            0, 0,      0, "CIA 1",           nullptr) \
-    V(ctx, mos6526_t,  cia2,        0,            0, 0,      0, "CIA 2",           nullptr)
+    V(ctx, mos8566_t,  vic_iie,     0xD000,       0, 0,      0, "MOS 8566 VIC-IIe", nullptr) \
+    V(ctx, mos6581_t,  sid,         0xD400,       0, 0,      0, "MOS 6581 SID",    nullptr) \
+    V(ctx, MOS2114,    colorram,    0xD800,  0x0400, 0,      0, "Color RAM",       nullptr) \
+    V(ctx, mos6526_t,  cia1,        0xDC00,       0, 0,      0, "CIA 1",           nullptr) \
+    V(ctx, mos6526_t,  cia2,        0xDD00,       0, 0,      0, "CIA 2",           nullptr)
 
 static constexpr size_t kC128ChipCount = 0 C128_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 
@@ -96,6 +96,9 @@ inline constexpr auto make_c128_manifest() {
     // All overlay-group 1 chips: bank_size = size_bytes (single bank each)
     for (auto& s : m.chips)
         if (s.overlay_group == 1) s.bank_size = s.size_bytes;
+    // MMIO mirror ranges
+    m.chips[9].bank_size  = 0x400;   // VIC-IIe: mirrors across $D000-$D3FF
+    m.chips[10].bank_size = 0x400;   // SID: mirrors across $D400-$D7FF
     return m;
 }
 inline constexpr auto kC128Chips = make_c128_manifest();

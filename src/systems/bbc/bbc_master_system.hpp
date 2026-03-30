@@ -119,22 +119,22 @@ template<> struct BBCMasterVariantTraits<BBCMasterVariant::MASTER_128> {
     V(ctx, RAMChip,         ram,       0x0000,  65536, 0,     0, "RAM",         nullptr) \
     V(ctx, ROMChip,         paged_rom, 0x8000, 262144, 0,     0, "Paged ROM",   nullptr) \
     V(ctx, ROMChip,         os_rom,    0xC000,  16384, 0,     0, "MOS ROM",     "bplus_os.rom|OS20.ROM|os20.rom") \
-    V(ctx, mc6845_t,        crtc,      0,           0, 0,     0, "MC6845 CRTC", nullptr) \
+    V(ctx, mc6845_t,        crtc,      0xFE00,      0, 0xFFF8, 0, "MC6845 CRTC", nullptr) \
     V(ctx, sn76489_t,       psg,       0,           0, 0,     0, "SN76489 PSG", nullptr) \
-    V(ctx, mos6522_t,       sys_via,   0,           0, 0,     0, "System VIA",  nullptr) \
-    V(ctx, mos6522_t,       user_via,  0,           0, 0,     0, "User VIA",    nullptr) \
-    V(ctx, bbc_vidproc_t,   vidproc,   0,           0, 0,     0, "Video ULA",   nullptr)
+    V(ctx, mos6522_t,       sys_via,   0xFE40,      0, 0xFFF0, 0, "System VIA",  nullptr) \
+    V(ctx, mos6522_t,       user_via,  0xFE60,      0, 0xFFF0, 0, "User VIA",    nullptr) \
+    V(ctx, bbc_vidproc_t,   vidproc,   0xFE20,      0, 0xFFF0, 0, "Video ULA",   nullptr)
 
 #define BBC_MASTER_FOR_EACH_SYSTEM_CHIP(V, ctx) \
     V(ctx, WDC_65C02,       w65c02,    0,           0, 0,     0, "WDC 65C02",   nullptr) \
     V(ctx, RAMChip,         ram,       0x0000, 131072, 0,     0, "RAM",         nullptr) \
     V(ctx, ROMChip,         paged_rom, 0x8000, 262144, 0,     0, "Paged ROM",   nullptr) \
     V(ctx, ROMChip,         os_rom,    0xC000,  65536, 0,     0, "MOS ROM",     "master_mos320.rom|MOS320.ROM|mos3.20.rom") \
-    V(ctx, mc6845_t,        crtc,      0,           0, 0,     0, "MC6845 CRTC", nullptr) \
+    V(ctx, mc6845_t,        crtc,      0xFE00,      0, 0xFFF8, 0, "MC6845 CRTC", nullptr) \
     V(ctx, sn76489_t,       psg,       0,           0, 0,     0, "SN76489 PSG", nullptr) \
-    V(ctx, mos6522_t,       sys_via,   0,           0, 0,     0, "System VIA",  nullptr) \
-    V(ctx, mos6522_t,       user_via,  0,           0, 0,     0, "User VIA",    nullptr) \
-    V(ctx, bbc_vidproc_t,   vidproc,   0,           0, 0,     0, "Video ULA",   nullptr)
+    V(ctx, mos6522_t,       sys_via,   0xFE40,      0, 0xFFF0, 0, "System VIA",  nullptr) \
+    V(ctx, mos6522_t,       user_via,  0xFE60,      0, 0xFFF0, 0, "User VIA",    nullptr) \
+    V(ctx, bbc_vidproc_t,   vidproc,   0xFE20,      0, 0xFFF0, 0, "Video ULA",   nullptr)
 
 static constexpr size_t kBBCBPlusChipCount  = 0 BBC_BPLUS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 static constexpr size_t kBBCMasterChipCount = 0 BBC_MASTER_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);

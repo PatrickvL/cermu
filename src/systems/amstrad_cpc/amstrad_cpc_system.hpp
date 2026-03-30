@@ -106,20 +106,20 @@ template<> struct CPCModelTraits<CPCModel::CPC6128> {
     V(ctx, RAMChip,              ram,        0x0000,  65536, 0, 0, "RAM",             nullptr) \
     V(ctx, ROMChip,              lower_rom,  0x0000,  16384, 0, 1, "Lower ROM",       nullptr) \
     V(ctx, ROMChip,              upper_rom,  0xC000,  16384, 0, 2, "Upper ROM",       nullptr) \
-    V(ctx, mc6845_t,             crtc,       0,           0, 0, 0, "MC6845 CRTC",     nullptr) \
-    V(ctx, i8255_t,              ppi,        0,           0, 0, 0, "8255 PPI",        nullptr) \
+    V(ctx, mc6845_t,             crtc,       0xBC00,      0, 0, 0, "MC6845 CRTC",     nullptr) \
+    V(ctx, i8255_t,              ppi,        0xF400,      0, 0, 0, "8255 PPI",        nullptr) \
     V(ctx, AY_3_8912,            psg,        0,           0, 0, 0, "AY-3-8912 PSG",   nullptr) \
-    V(ctx, amstrad_gate_array_t, gate_array, 0,           0, 0, 0, "Gate Array",      nullptr)
+    V(ctx, amstrad_gate_array_t, gate_array, 0x7F00,      0, 0, 0, "Gate Array",      nullptr)
 
 #define CPC6128_FOR_EACH_SYSTEM_CHIP(V, ctx) \
     V(ctx, ZilogZ80A,            z80,        0,           0, 0, 0, "Z80A",            nullptr) \
     V(ctx, RAMChip,              ram,        0x0000, 131072, 0, 0, "RAM",             nullptr) \
     V(ctx, ROMChip,              lower_rom,  0x0000,  16384, 0, 1, "Lower ROM",       nullptr) \
     V(ctx, ROMChip,              upper_rom,  0xC000,  16384, 0, 2, "Upper ROM",       nullptr) \
-    V(ctx, mc6845_t,             crtc,       0,           0, 0, 0, "MC6845 CRTC",     nullptr) \
-    V(ctx, i8255_t,              ppi,        0,           0, 0, 0, "8255 PPI",        nullptr) \
+    V(ctx, mc6845_t,             crtc,       0xBC00,      0, 0, 0, "MC6845 CRTC",     nullptr) \
+    V(ctx, i8255_t,              ppi,        0xF400,      0, 0, 0, "8255 PPI",        nullptr) \
     V(ctx, AY_3_8912,            psg,        0,           0, 0, 0, "AY-3-8912 PSG",   nullptr) \
-    V(ctx, amstrad_gate_array_t, gate_array, 0,           0, 0, 0, "Gate Array",      nullptr)
+    V(ctx, amstrad_gate_array_t, gate_array, 0x7F00,      0, 0, 0, "Gate Array",      nullptr)
 
 static constexpr size_t kCPC464ChipCount  = 0 CPC464_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 static constexpr size_t kCPC6128ChipCount = 0 CPC6128_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);

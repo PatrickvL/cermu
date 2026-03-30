@@ -38,11 +38,11 @@
     V(ctx, RAMChip,        ram,       0x0000,  32768, 0,     0, "RAM",         nullptr) \
     V(ctx, ROMChip,        paged_rom, 0x8000, 262144, 0,     0, "Paged ROM",   nullptr) \
     V(ctx, ROMChip,        os_rom,    0xC000,  16384, 0,     0, "MOS ROM",     "os12.rom|OS12.ROM|os.rom|OS-1.20.rom|MOS120.rom|bbc_os.rom|os1.2.rom") \
-    V(ctx, mc6845_t,       crtc,      0,           0, 0,     0, "MC6845 CRTC", nullptr) \
+    V(ctx, mc6845_t,       crtc,      0xFE00,      0, 0xFFF8, 0, "MC6845 CRTC", nullptr) \
     V(ctx, sn76489_t,      psg,       0,           0, 0,     0, "SN76489 PSG", nullptr) \
-    V(ctx, mos6522_t,      sys_via,   0,           0, 0,     0, "System VIA",  nullptr) \
-    V(ctx, mos6522_t,      user_via,  0,           0, 0,     0, "User VIA",    nullptr) \
-    V(ctx, bbc_vidproc_t,  vidproc,   0,           0, 0,     0, "Video ULA",   nullptr)
+    V(ctx, mos6522_t,      sys_via,   0xFE40,      0, 0xFFF0, 0, "System VIA",  nullptr) \
+    V(ctx, mos6522_t,      user_via,  0xFE60,      0, 0xFFF0, 0, "User VIA",    nullptr) \
+    V(ctx, bbc_vidproc_t,  vidproc,   0xFE20,      0, 0xFFF0, 0, "Video ULA",   nullptr)
 
 static constexpr size_t kBBCMicroChipCount = 0 BBC_MICRO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 

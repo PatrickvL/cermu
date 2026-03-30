@@ -79,14 +79,14 @@
         "C64 - 901226-01 - Commodore (F833D117) Basic.rom|"                                                      \
         "basic.901226-01.bin|901226-01.bin|basic.rom")                                                           \
     X(ctx, ROMChip,      romh,     0xA000,  0x2000,      0, 1, "ROMH",        nullptr)                             \
-    X(ctx, vicii_base_t, vicii,    0xD000,       0,   0x3F, 0, "VIC-II",      nullptr)                             \
+    X(ctx, vicii_base_t, vicii,    0xD000,       0,      0, 0, "VIC-II",      nullptr)                             \
     X(ctx, ROMChip,      charrom,  0xD000,  0x1000,      0, 1, "CHARROM",                                          \
         "C64 - 901225-01 - Commodore (EC4272EE) Characters.rom|"                                                 \
         "characters.901225-01.bin|901225-01.bin|chargen.rom|char.rom")                                           \
-    X(ctx, mos6581_t,    sid,      0xD400,       0,   0x1F, 0, "SID",         nullptr)                             \
+    X(ctx, mos6581_t,    sid,      0xD400,       0,      0, 0, "SID",         nullptr)                             \
     X(ctx, MOS2114,      colorram, 0xD800,  0x0400,      0, 0, "Color RAM",   nullptr)                             \
-    X(ctx, mos6526_t,    cia1,     0xDC00,       0,   0x0F, 0, "CIA1",        nullptr)                             \
-    X(ctx, mos6526_t,    cia2,     0xDD00,       0,   0x0F, 0, "CIA2",        nullptr)                             \
+    X(ctx, mos6526_t,    cia1,     0xDC00,       0,      0, 0, "CIA1",        nullptr)                             \
+    X(ctx, mos6526_t,    cia2,     0xDD00,       0,      0, 0, "CIA2",        nullptr)                             \
     X(ctx, ROMChip,      kernal,   0xE000,  0x2000,      0, 1, "KERNAL",                                           \
         "C64 - 901227-03 - Commodore (DBE3E7C7) Kernal.rom|"                                                     \
         "kernal.901227-03.bin|901227-03.bin|kernal.rom")
@@ -104,9 +104,15 @@ static constexpr size_t kC64ChipCount = 0 C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VI
 // in the PLA page tables and activates the shift-addressable optimization.
 //
 
-inline constexpr ChipManifest<kC64ChipCount> kC64Chips = ChipManifest<kC64ChipCount>{{
-    C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}}.with_page_banking().with_sorted_ids();
+inline constexpr auto make_c64_manifest() {
+    ChipManifest<kC64ChipCount> m = {{
+        C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+    }};
+    m.chips[5].bank_size = 0x400;   // VIC-II: mirrors across $D000-$D3FF (4 pages)
+    m.chips[7].bank_size = 0x400;   // SID: mirrors across $D400-$D7FF (4 pages)
+    return m.with_page_banking().with_sorted_ids();
+}
+inline constexpr ChipManifest<kC64ChipCount> kC64Chips = make_c64_manifest();
 
 // =============================================================================
 // §3  Type Aliases
