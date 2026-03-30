@@ -38,7 +38,7 @@
 // Einstein chip declaration — single source of truth
 // =============================================================================
 //
-// Row: X(ctx, type, chip, base, mask, overlay, label, info_label, rom_files)
+// Row: X(ctx, type, chip, base, size, mask, overlay, label, rom_files)
 //
 //   Slot 0: RAM       — 64KB at $0000
 //   Slot 1: OS ROM    — 8KB at $0000 (overlay, banked out by writing port $23)
@@ -50,13 +50,13 @@
 //
 
 #define EINSTEIN_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                         \
-    X(ctx, ZilogZ80A,   z80,  0x0000,       0, 0, 0, "Z80A",       "Z80A",       nullptr)                            \
-    X(ctx, AY_3_8910,   psg,  0x0000,       0, 0, 0, "AY-3-8910",  "AY-3-8910",  nullptr)                            \
-    X(ctx, ROMChip,     rom,  0x0000,  0x2000, 0, 0, "OS ROM",     "OS ROM",     "einstein.rom|EINSTEIN.ROM|tcei.rom") \
-    X(ctx, RAMChip,     ram,  0x0000, 0x10000, 0, 0, "Main RAM",   "Main RAM",   nullptr)                            \
-    X(ctx, TMS9929A,    vdp,  0x0003,       0, 0, 0, "TMS9929A",   "TMS9929A",   nullptr)                            \
-    X(ctx, z80_ctc_t,   ctc,  0x0008,       0, 0, 0, "Z80 CTC",    "Z80 CTC",    nullptr)                            \
-    X(ctx, z80_pio_t,   pio,  0x0010,       0, 0, 0, "Z80 PIO",    "Z80 PIO",    nullptr)
+    X(ctx, ZilogZ80A,   z80,  0x0000,       0, 0, 0, "Z80A",       nullptr)                                            \
+    X(ctx, AY_3_8910,   psg,  0x0000,       0, 0, 0, "AY-3-8910",  nullptr)                                            \
+    X(ctx, ROMChip,     rom,  0x0000,  0x2000, 0, 0, "OS ROM",     "einstein.rom|EINSTEIN.ROM|tcei.rom")                \
+    X(ctx, RAMChip,     ram,  0x0000, 0x10000, 0, 0, "Main RAM",   nullptr)                                            \
+    X(ctx, TMS9929A,    vdp,  0x0003,       0, 0, 0, "TMS9929A",   nullptr)                                            \
+    X(ctx, z80_ctc_t,   ctc,  0x0008,       0, 0, 0, "Z80 CTC",    nullptr)                                            \
+    X(ctx, z80_pio_t,   pio,  0x0010,       0, 0, 0, "Z80 PIO",    nullptr)
 
 static constexpr size_t kEinsteinChipCount = 0 EINSTEIN_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 
