@@ -69,15 +69,6 @@ inline constexpr RomFileInfo parse_rom_spec(const char* spec) noexcept {
 #define CERMU_CHIP_VISITOR_DECLARE_FIELD(ctx, type, chip, base, mask, overlay, label, info_label, rom_files) \
     type chip;
 
-// ── Getter Declaration Visitor (mutable + const) ─────────────────────────────
-//
-// Returns a reference to the chip field in the Board.
-// Both mutable and const overloads are emitted.
-//
-#define CERMU_CHIP_VISITOR_DECLARE_GETTER(ctx, type, chip, base, mask, overlay, label, info_label, rom_files) \
-    type& get_##chip() { return ctx.chip; }                              \
-    const type& get_##chip() const { return ctx.chip; }
-
 // ── Sequential Binding Visitor ────────────────────────────────────────────────
 //
 // Emits a ctx.bind_chip(slot_idx_++, &ctx.chip) call.
