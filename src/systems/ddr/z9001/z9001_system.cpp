@@ -66,28 +66,34 @@ bool Z9001System<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
     register_board(&board_);
 
-    // ── Create chips via factory, wire the bus ────────────────────────
+    // ── Bind value-typed chips, then factory-create remaining ──────────
+    if constexpr (V == Z9001Variant::Z9001) {
+        size_t slot_idx_ = 0;
+        Z9001_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
+    } else {
+        size_t slot_idx_ = 0;
+        KC87_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
+    }
     board_.create_chips(&pins_);
-    board_.bind_chipset();
     board_.apply(bus_);
 
-    // Retrieve typed pointers for memory chips accessed after initialize()
-    video_ram_chip_ = board_.template find_last<RAMChip>();
-    os_rom_chip_    = board_.template find_last<ROMChip>();
+    // Typed pointers for memory chips accessed after initialize()
+    video_ram_chip_ = &board_.video_ram;
+    os_rom_chip_    = &board_.os_rom;
     if constexpr (Traits::has_basic_rom) {
-        basic_rom_lo_chip_ = board_.template find<ROMChip>();
-        basic_rom_hi_chip_ = board_.template find<ROMChip>(1);
+        basic_rom_lo_chip_ = &board_.basic_rom_lo;
+        basic_rom_hi_chip_ = &board_.basic_rom_hi;
     }
     if constexpr (Traits::has_color_ram) {
-        color_ram_chip_ = board_.template find<RAMChip>(1);
+        color_ram_chip_ = &board_.color_ram;
     }
 
     // ── Trim RAM pages for KC87 (48 KB out of 64 KB allocated) ──────────
     configure_bus_memory_map();
 
     // ── Init chips ──────────────────────────────────────────────────────────
-    pins_ = board_.cpu.init();
-    board_.io.init();
+    pins_ = board_.z80.init();
+    board_.pio1.init();
     board_.pio2.init();
     board_.ctc.init();
 
@@ -130,7 +136,7 @@ template<Z9001Variant V> void Z9001System<V>::shutdown() { system_ready_ = false
 template<Z9001Variant V> void Z9001System<V>::reset() {
     if (!system_ready_) return;
     board_.reset_chips();
-    pins_ = board_.cpu.reset(pins_);
+    pins_ = board_.z80.reset(pins_);
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 }
 
@@ -153,7 +159,7 @@ void Z9001System<V>::tick() {
     if (!system_ready_) return;
 
     // CPU tick (one T-state)
-    pins_ = board_.cpu.tick(pins_);
+    pins_ = board_.z80.tick(pins_);
 
     // Bus dispatch
     bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);
@@ -305,18 +311,18 @@ bus_state_t Z9001System<V>::io_tick(bus_state_t pins) {
         if (is_rd) {
             // Port A output holds the keyboard row select; Port B returns column data
             if (port_sel == 0) {
-                uint8_t row  = board_.io.get_output(0) & 0x07;
+                uint8_t row  = board_.pio1.get_output(0) & 0x07;
                 uint8_t cols = keyboard_matrix_[row];
-                board_.io.set_input(1, cols);
+                board_.pio1.set_input(1, cols);
             }
-            uint8_t data = board_.io.read_data(port_sel);
+            uint8_t data = board_.pio1.read_data(port_sel);
             BUS_SET_DATA(pins, data);
         } else {
             uint8_t data = BUS_GET_DATA(pins);
             if (is_ctrl) {
-                board_.io.write_control(port_sel, data);
+                board_.pio1.write_control(port_sel, data);
             } else {
-                board_.io.write_data(port_sel, data);
+                board_.pio1.write_data(port_sel, data);
             }
         }
     }

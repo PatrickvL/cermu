@@ -12,7 +12,7 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/core_chips.hpp"
+#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 
 #include "chip/cpu/z80/u880.hpp"
@@ -74,30 +74,43 @@ template<> struct Z9001VariantTraits<Z9001Variant::KC87> {
 // RAM for KC87 is allocated as 64 KB (power of 2); effective_size in the
 // manifest limits Phase 1 to 48 KB ($C000), leaving $C000+ for ROM/I/O.
 //
-inline constexpr auto kZ9001Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 16384, 0, "RAM"},
-    Slot<RAMChip>{0xEC00,  1024, 0, "Video RAM"},
-    Slot<ROMChip>{0xF000,  4096, 0, "OS ROM"}.with_rom("z9001_os.rom|os.rom|OS.ROM"),
-    // Non-bus chips — factory-created, not address-decoded
-    Slot<U880>      {0, 0, 0, "U880"},
-    Slot<z80_pio_t> {0, 0, 0, "U855 PIO #1"},
-    Slot<z80_pio_t> {0, 0, 0, "U855 PIO #2"},
-    Slot<z80_ctc_t> {0, 0, 0, "U857 CTC"}
-);
+//                                  ctx   type       chip           base    size    mask  ovl  label            rom
+#define Z9001_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, RAMChip,   ram,       0x0000,  16384, 0, 0, "RAM",           nullptr) \
+    V(ctx, RAMChip,   video_ram, 0xEC00,   1024, 0, 0, "Video RAM",     nullptr) \
+    V(ctx, ROMChip,   os_rom,    0xF000,   4096, 0, 0, "OS ROM",        "z9001_os.rom|os.rom|OS.ROM") \
+    V(ctx, U880,      z80,       0,            0, 0, 0, "U880",          nullptr) \
+    V(ctx, z80_pio_t, pio1,      0,            0, 0, 0, "U855 PIO #1",   nullptr) \
+    V(ctx, z80_pio_t, pio2,      0,            0, 0, 0, "U855 PIO #2",   nullptr) \
+    V(ctx, z80_ctc_t, ctc,       0,            0, 0, 0, "U857 CTC",      nullptr)
 
-inline constexpr auto kKC87Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536, 0, "RAM", 0, 0, 0, 0xC000},  // 48 KB visible of 64 KB
-    Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM lo"},
-    Slot<ROMChip>{0xE000,  2048, 0, "BASIC ROM hi"},
-    Slot<RAMChip>{0xE800,  1024, 0, "Color RAM"},
-    Slot<RAMChip>{0xEC00,  1024, 0, "Video RAM"},
-    Slot<ROMChip>{0xF000,  4096, 0, "OS ROM"}.with_rom("z9001_os.rom|os.rom|OS.ROM"),
-    // Non-bus chips — factory-created, not address-decoded
-    Slot<U880>      {0, 0, 0, "U880"},
-    Slot<z80_pio_t> {0, 0, 0, "U855 PIO #1"},
-    Slot<z80_pio_t> {0, 0, 0, "U855 PIO #2"},
-    Slot<z80_ctc_t> {0, 0, 0, "U857 CTC"}
-);
+#define KC87_FOR_EACH_SYSTEM_CHIP(V, ctx) \
+    V(ctx, RAMChip,   ram,           0x0000,  65536, 0, 0, "RAM",           nullptr) \
+    V(ctx, ROMChip,   basic_rom_lo,  0xC000,   8192, 0, 0, "BASIC ROM lo",  nullptr) \
+    V(ctx, ROMChip,   basic_rom_hi,  0xE000,   2048, 0, 0, "BASIC ROM hi",  nullptr) \
+    V(ctx, RAMChip,   color_ram,     0xE800,   1024, 0, 0, "Color RAM",     nullptr) \
+    V(ctx, RAMChip,   video_ram,     0xEC00,   1024, 0, 0, "Video RAM",     nullptr) \
+    V(ctx, ROMChip,   os_rom,        0xF000,   4096, 0, 0, "OS ROM",        "z9001_os.rom|os.rom|OS.ROM") \
+    V(ctx, U880,      z80,           0,            0, 0, 0, "U880",          nullptr) \
+    V(ctx, z80_pio_t, pio1,          0,            0, 0, 0, "U855 PIO #1",   nullptr) \
+    V(ctx, z80_pio_t, pio2,          0,            0, 0, 0, "U855 PIO #2",   nullptr) \
+    V(ctx, z80_ctc_t, ctc,           0,            0, 0, 0, "U857 CTC",      nullptr)
+
+static constexpr size_t kZ9001ChipCount = 0 Z9001_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+static constexpr size_t kKC87ChipCount  = 0 KC87_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+
+inline constexpr ChipManifest<kZ9001ChipCount> kZ9001Chips = {{
+    Z9001_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+}};
+
+constexpr ChipManifest<kKC87ChipCount> make_kc87_manifest() {
+    ChipManifest<kKC87ChipCount> m = {{
+        KC87_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+    }};
+    m.chips[0].effective_size = 0xC000;  // 48 KB visible of 64 KB allocation
+    return m;
+}
+inline constexpr auto kKC87Chips = make_kc87_manifest();
 
 // BusTraits — selects the correct manifest per variant
 template<Z9001Variant V> struct Z9001BusTraits;
@@ -113,21 +126,10 @@ template<> struct Z9001BusTraits<Z9001Variant::KC87> {
 };
 
 // ── Chips ──────────────────────────────────────────────────────────────
-struct Z9001Chipset : CoreChips<U880, NoChip, NoChip, z80_pio_t> {
-    z80_pio_t pio2;     // U855 PIO #2 (keyboard + cassette)
-    z80_ctc_t ctc;      // U857 CTC (timing + sound)
-
-    template<typename BoardT>
-    void bind_extras(BoardT& board) {
-        board.bind_chip(board.template find_index<z80_pio_t>(1), &pio2);
-        board.bind_chip(board.template find_index<z80_ctc_t>(), &ctc);
-    }
-
-    template<typename BoardT>
-    void register_extras(BoardT& board) {
-        board.register_component(&pio2);
-        board.register_component(&ctc);
-    }
+// Uses KC87 X-macro (superset) for field declarations.
+// Z9001 leaves unused fields (basic_rom_lo, basic_rom_hi, color_ram) unbound.
+struct Z9001Chipset {
+    KC87_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
 };
 
 // ── System ───────────────────────────────────────────────────────────────
