@@ -10,6 +10,7 @@
 #include "chip/video/ted/ted7360.hpp"
 #include "chip/cpu/fam65xx/mos7501.hpp"
 #include "chip/io/mos6529.hpp"
+#include "systems/commodore/c16/c264_io_decoder.hpp"
 #include "core/system_chip_visitors.hpp"
 #include <memory>
 
@@ -70,57 +71,6 @@ template<> struct C264SeriesVariantTraits<C264SeriesVariant::PLUS4> {
 };
 
 // ============================================================================
-// C264 ROM Bank Select ($FDD0-$FDDF) — address-decoded latch
-// ============================================================================
-//
-// Writing to $FDDx selects the active ROM bank pair.  The written data byte
-// is irrelevant — only the address bits A0-A3 matter:
-//   A1:A0 = low ROM bank  (0=BASIC, 1=Function LO, 2=Cartridge LO)
-//   A3:A2 = high ROM bank (0=KERNAL, 1=Function HI, 2=Cartridge HI)
-//
-// Reads return open bus.  On write, fires an optional callback so the system
-// can update banking immediately (no per-tick polling).
-
-using rom_bank_change_fn = void (*)(void* user_data);
-
-class c264_rom_bank_select_t : public ChipBase {
-public:
-    c264_rom_bank_select_t()
-        : ChipBase(ChipInfo{"ROM Bank Select", "ROM Bank", {}}) {
-        category_ = "Logic";
-    }
-
-    bool has_mmio() const override { return true; }
-
-    bus_state_t on_bus_read(bus_state_t bus) noexcept override {
-        return bus;   // write-only; reads return open bus
-    }
-
-    bus_state_t on_bus_write(bus_state_t bus) noexcept override {
-        uint8_t nibble = BUS_GET_ADDR(bus) & 0x0F;
-        uint8_t new_low  = nibble & 0x03;
-        uint8_t new_high = (nibble >> 2) & 0x03;
-        if (new_low != low_bank || new_high != high_bank) {
-            low_bank  = new_low;
-            high_bank = new_high;
-            if (on_change) on_change(on_change_user_data);
-        }
-        return bus;
-    }
-
-    void reset() override {
-        low_bank  = 0;   // BASIC
-        high_bank = 0;   // KERNAL
-        // on_change / on_change_user_data are preserved across reset
-    }
-
-    uint8_t low_bank  = 0;     // 0=BASIC, 1=Function LO, 2=Cartridge LO
-    uint8_t high_bank = 0;     // 0=KERNAL, 1=Function HI, 2=Cartridge HI
-    rom_bank_change_fn on_change = nullptr;
-    void* on_change_user_data    = nullptr;
-};
-
-// ============================================================================
 // C264 chip manifest — declarative memory layout
 // ============================================================================
 //
@@ -128,10 +78,10 @@ public:
 //   $0000-$7FFF  RAM (always)
 //   $8000-$BFFF  BASIC ROM (read, when ROM enabled) / RAM
 //   $C000-$FCFF  KERNAL ROM (read, when ROM enabled) / RAM
-//   $FD00-$FDFF  I/O area — MaskedSubTable with individual chip MMIO:
+//   $FD00-$FDFF  I/O area — c264_io_decoder_t dispatches via 74LS139:
 //                  $FD10-$FD1F  PIO1 (MOS 6529B) — user port / tape sense
 //                  $FD30-$FD3F  PIO2 (MOS 6529B) — keyboard row select
-//                  $FDD0-$FDDF  ROM bank select — address-decoded latch
+//                  $FDD0-$FDDF  74LS175 ROM bank latch — write-only
 //                  Other $FD addresses → open bus (no chip)
 //   $FE00-$FEFF  KERNAL ROM (cont.) / RAM
 //   $FF00-$FF3F  TED registers — MaskedSubTable sub-page MMIO
@@ -148,9 +98,9 @@ public:
     V(ctx, ROMChip,                 kernal_rom,0xC000, 16384,  0,      1, "KERNAL ROM",      "kernal.318004-05.bin|kernal.rom|318004-05.bin") \
     V(ctx, CSG7501,                 csg7501,   0,          0,  0,      0, "CSG 7501",        nullptr) \
     V(ctx, ted7360_t,               ted,       0xFF00,     0,  0xFFC0, 0, "TED 7360",        nullptr) \
-    V(ctx, mos6529_t,               pio1,      0xFD10,     0,  0xFFF0, 0, "MOS 6529B PIO1",  nullptr) \
-    V(ctx, mos6529_t,               pio2,      0xFD30,     0,  0xFFF0, 0, "MOS 6529B PIO2",  nullptr) \
-    V(ctx, c264_rom_bank_select_t,  rom_bank,  0xFDD0,     0,  0xFFF0, 0, "ROM Bank Select", nullptr)
+    V(ctx, mos6529_t,               pio1,      0,          0,  0,      0, "MOS 6529B PIO1",  nullptr) \
+    V(ctx, mos6529_t,               pio2,      0,          0,  0,      0, "MOS 6529B PIO2",  nullptr) \
+    V(ctx, c264_io_decoder_t,       io_dec,    0xFD00,     0,  0xFF00, 0, "C264 I/O Decoder",nullptr)
 
 static constexpr size_t kC264ChipCount = 0 C264_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 
@@ -168,12 +118,12 @@ inline constexpr auto kC264Chips = make_c264_manifest();
 // MaskedSubTable indices (determined by manifest slot order during apply())
 namespace c264_sub {
     inline constexpr size_t kTedPage = 0;    // page $FF — TED registers
-    inline constexpr size_t kIoPage  = 1;    // page $FD — PIO1, PIO2, ROM bank select
+    inline constexpr size_t kIoPage  = 1;    // page $FD — I/O decoder (74LS139 + 74LS175)
 }
 
 struct C264BusTraits {
     static constexpr const auto& kManifest = kC264Chips;
-    using Spec = ManifestBusSpec<kC264Chips, 16, 8, 2>;  // 2 viewers: CPU + TED video
+    using Spec = ManifestBusSpec<kC264Chips, 16, 8, 2, true>;  // 2 viewers: CPU + TED video, CS-enabled
 };
 
 // Viewer IDs for the C264 bus
@@ -294,7 +244,7 @@ private:
     ROMChip* kernal_rom_  = nullptr;  // Kernal ROM $C000-$FFFF (16KB)
     mos6529_t* pio1_      = nullptr;  // MOS 6529B PIO1 ($FD10) — user port + tape sense
     mos6529_t* pio2_      = nullptr;  // MOS 6529B PIO2 ($FD30) — keyboard row select
-    c264_rom_bank_select_t* rom_bank_ = nullptr;  // ROM bank select ($FDD0)
+    c264_io_decoder_t* io_dec_ = nullptr;  // I/O decoder ($FD00, 74LS139 + 74LS175)
     size_t  ram_size_ = 16384;           // Cached configured RAM size (updated in apply_configuration)
 
     // Debug cart state (VICE test convention, not real hardware)
@@ -315,7 +265,6 @@ private:
 
     // Helper methods
     bool load_roms();
-    bus_state_t mem_tick(bus_state_t s);
     void setup_ram_mirroring();                 // configure chip_info_ mask for current ram_size_
     void build_banking_snapshots();             // populate overlay snapshots via generic builder
     void apply_cpu_banking();                   // load CPU viewer snapshot for current rom_enabled

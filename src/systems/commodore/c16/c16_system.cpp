@@ -599,14 +599,15 @@ bool Commodore264System<V>::initialize() {
     cpu_        = &board_.csg7501;
     pio1_       = &board_.pio1;
     pio2_       = &board_.pio2;
-    rom_bank_   = &board_.rom_bank;
+    io_dec_     = &board_.io_dec;
 
-    // Wire ROM bank select callback — fires on $FDD0-$FDDF writes when
-    // low_bank or high_bank actually changes.
-    rom_bank_->on_change = [](void* ctx) {
+    // Wire I/O decoder: connect PIO chips and ROM bank change callback.
+    // The 74LS139 + 74LS175 inside the I/O decoder handle sub-page dispatch
+    // and ROM bank latching respectively.
+    io_dec_->wire(pio1_, pio2_);
+    io_dec_->set_bank_change_callback([](void* ctx) {
         static_cast<Commodore264System<V>*>(ctx)->apply_cpu_banking();
-    };
-    rom_bank_->on_change_user_data = this;
+    }, this);
 
     // Page $FD is always I/O — unmatched addresses return open bus.
     // The MaskedSubTable base was captured from the underlying ROM/RAM page
@@ -779,14 +780,23 @@ void Commodore264System<V>::tick() {
     // PHASE 2: CPU PHI2
     s = cpu_->tick<CSG7501::Phase::PHI2>(s);
     
-    // PHASE 3: Memory service
-    s = mem_tick(s);
+    // PHASE 3: Address decode + flat-mem service + MMIO self-dispatch
+    s = bus_.resolve(s);
+    s = bus_.service(s);
+    s = io_dec_->tick(s);
+
+    // Debug cart capture ($FDCF) — VICE test convention, not real hardware.
+    if (unlikely(debug_cart_enabled_ && !BUS_GET_BIT(s, BUS_RW_BIT)
+                 && BUS_GET_ADDR(s) == 0xFDCF)) {
+        debug_cart_value_ = BUS_GET_DATA(s);
+        debug_cart_written_ = true;
+    }
 
     // NMI edge detection — sample after bus dispatch (post-dispatch state)
     cpu_->sample_nmi_pin(s);
     
-    // PHASE 3.1: TED PHI2 delivery
-    ted_->tick_phi2(s);
+    // PHASE 3.1: TED PHI2 — CS register dispatch + DMA data delivery
+    s = ted_->tick_phi2(s);
     
     // PHASE 4: CPU PHI1
     s = cpu_->tick<CSG7501::Phase::PHI1>(s);
@@ -1016,27 +1026,6 @@ bool Commodore264System<V>::load_roms() {
         return false;
     }
     return board_.load_roms(rom_root, Traits::name);
-}
-
-// ============================================================================
-// BUS MEMORY SERVICE
-// ============================================================================
-
-// Unified bus dispatch: TED ($FF00-$FF3F), PIO1/PIO2, and ROM bank select
-// are all handled by MMIO handlers registered via the manifest.  Banking
-// changes are callback-driven from TED register writes — no per-tick polling.
-template<C264SeriesVariant V>
-bus_state_t Commodore264System<V>::mem_tick(bus_state_t s) {
-    s = bus_.tick(s);
-    // Debug cart capture ($FDCF) — VICE test convention, not real hardware.
-    // Writes to unmatched $FD addresses are silently dropped by the bus
-    // (open-bus base), so we intercept here.
-    if (unlikely(debug_cart_enabled_ && !BUS_GET_BIT(s, BUS_RW_BIT)
-                 && BUS_GET_ADDR(s) == 0xFDCF)) {
-        debug_cart_value_ = BUS_GET_DATA(s);
-        debug_cart_written_ = true;
-    }
-    return s;
 }
 
 // ── RAM mirroring ────────────────────────────────────────────────────────

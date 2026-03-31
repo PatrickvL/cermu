@@ -1212,7 +1212,14 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
 // PHI2 DELIVERY — receive screen matrix data fetched by the memory system
 // ============================================================================
 
-void ted7360_t::tick_phi2(bus_state_t bus_state) {
+bus_state_t ted7360_t::tick_phi2(bus_state_t bus_state) {
+    // CS-tick MMIO dispatch — service register read/write if selected
+    if (is_cs_selected(bus_state)) {
+        bus_state = BUS_GET_BIT(bus_state, BUS_RW_BIT)
+            ? on_bus_read(bus_state) : on_bus_write(bus_state);
+        mark_cs_serviced(bus_state);
+    }
+
     if (bus.pending_access == TED_ACCESS_C) {
         const uint8_t data = BUS_GET_DATA(bus_state);
         // vmli was incremented after the g-access, so the c-access slot is vmli-1.
@@ -1232,6 +1239,7 @@ void ted7360_t::tick_phi2(bus_state_t bus_state) {
 #ifdef CERMU_HAS_GUI
     bus_snapshot_ = bus_state;
 #endif
+    return bus_state;
 }
 
 // ============================================================================
