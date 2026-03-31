@@ -215,8 +215,10 @@ int main(int argc, char** argv) {
                    system->get_descriptor().short_name);
             printf("Description: %s\n", system->get_descriptor().description);
 
-            // ROM set path: system is already initialized + loaded
-            if (!system->is_system_ready()) {
+            // Some create_system_for_file() paths can return an instance that
+            // has not yet built its board graph. Ensure initialization/load is
+            // complete before handing the system to the GUI.
+            if (system->get_boards().empty() || !system->is_system_ready()) {
                 // Initialize the system
                 if (!system->initialize()) {
                     printf("ERROR: Failed to initialize %s system\n", 
