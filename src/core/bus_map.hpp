@@ -315,13 +315,20 @@ public:
 
                         slot.sub_table_idx = sub_idx;
 
-                        bus.add_masked_region(
-                            viewer_id, size_t(sub_idx),
-                            Addr(slot.addr_mask),
-                            Addr(slot.base_addr & slot.addr_mask),
-                            ChipId(size_t(PT::kRegChipBase) + size_t(slot.mmio_idx)),
-                            WriteChipId(size_t(PT::kRegChipBaseWrite)
-                                        + size_t(slot.mmio_idx)));
+                        // When CS is enabled, Phase 3 will add the region
+                        // with the real chip ID for resolve() dispatch.
+                        // Skip the sentinel-based region here to avoid a
+                        // duplicate that would shadow the real ID (since
+                        // resolve_read iterates regions first-match-wins).
+                        if constexpr (spec_cs_line_bits_v<Spec> == 0) {
+                            bus.add_masked_region(
+                                viewer_id, size_t(sub_idx),
+                                Addr(slot.addr_mask),
+                                Addr(slot.base_addr & slot.addr_mask),
+                                ChipId(size_t(PT::kRegChipBase) + size_t(slot.mmio_idx)),
+                                WriteChipId(size_t(PT::kRegChipBaseWrite)
+                                            + size_t(slot.mmio_idx)));
+                        }
                         continue;  // skip full-page fallback
                     }
                 }
@@ -381,22 +388,32 @@ public:
                             }
                         }
                         if (sub_idx < 0) {
+                            // Check if Phase 2 already created a masked
+                            // sub-table for this page — reuse it instead
+                            // of allocating a duplicate.
                             auto base_rd = bus.viewer(viewer_id).read_chip(page);
-                            auto base_wr = bus.viewer(viewer_id).write_chip(page);
-                            sub_idx = bus.add_masked_sub_table(
-                                viewer_id, base_rd, base_wr);
-                            assert(sub_idx >= 0);
-                            bus.map_to_masked_sub(
-                                viewer_id, page, size_t(sub_idx));
-                            cs_sub_infos[cs_num_subs++] = {page, sub_idx};
+                            const auto msb = size_t(PT::kMaskedSubBase);
+                            if (size_t(base_rd) >= msb
+                                && size_t(base_rd) < msb + Bus::kMaxMaskedSubs)
+                            {
+                                sub_idx = int(size_t(base_rd) - msb);
+                            } else {
+                                auto base_wr = bus.viewer(viewer_id).write_chip(page);
+                                sub_idx = bus.add_masked_sub_table(
+                                    viewer_id, base_rd, base_wr);
+                                assert(sub_idx >= 0);
+                                bus.map_to_masked_sub(
+                                    viewer_id, page, size_t(sub_idx));
 
-                            if (mmio_pages > 1) {
-                                for (size_t p = 1;
-                                     p < mmio_pages && (page + p) < kNumPages;
-                                     ++p)
-                                    bus.map_to_masked_sub(
-                                        viewer_id, page + p, size_t(sub_idx));
+                                if (mmio_pages > 1) {
+                                    for (size_t p = 1;
+                                         p < mmio_pages && (page + p) < kNumPages;
+                                         ++p)
+                                        bus.map_to_masked_sub(
+                                            viewer_id, page + p, size_t(sub_idx));
+                                }
                             }
+                            cs_sub_infos[cs_num_subs++] = {page, sub_idx};
                         }
 
                         bus.add_masked_region(

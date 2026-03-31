@@ -509,7 +509,7 @@ struct ted7360_t : public VideoChipBase {
      *
      * @param bus_state  Bus state after memory service (DATA field contains fetched byte)
      */
-    void tick_phi2(bus_state_t bus_state);
+    bus_state_t tick_phi2(bus_state_t bus_state);
 
     // ========================================================================
     // Public API — Register I/O
