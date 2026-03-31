@@ -114,18 +114,55 @@ void c64_write_sid_info_page(uint8_t* screen, uint8_t* color,
 // 6502 Stub Builder — Helper functions
 // =============================================================================
 
-// Memory layout in the cassette buffer ($0340-$03FF):
-//   $0340-$038F  — Init/playback stub (executed once at startup)
-//   $0390-$03AF  — IRQ handler (called by hardware IRQ vector)
-static constexpr uint16_t STUB_BASE   = 0x0340;
-static constexpr uint16_t IRQ_HANDLER = 0x0390;
+// Memory layout:
+//   $0340–$03BF — Init/playback stub (max 128 bytes)
+//   irq_addr    — IRQ handler (max 64 bytes, placed dynamically — see find_safe_irq_addr)
+//
+// Default IRQ candidate ($03C0) sits at the tail of the cassette buffer and is safe
+// for the vast majority of SID tunes.  The fallback ($0200, KERNAL workspace) is
+// used when the SID payload overlaps the default location.
+static constexpr uint16_t STUB_BASE            = 0x0340;
+static constexpr uint16_t IRQ_SIZE             = 0x40;  // Max bytes for the IRQ handler
+static constexpr uint8_t  CPU_PORT_DDR_DEFAULT = 0x2F;
+
+// Candidate IRQ handler locations (priority order).  find_safe_irq_addr() picks
+// the first entry that does not overlap the SID payload or the init stub.
+static constexpr uint16_t IRQ_CANDIDATES[] = {
+    0x03C0,   // Tail of cassette buffer — default, safe for 99%+ of tunes
+    0x0200,   // KERNAL workspace — safe when KERNAL is banked out (PSID)
+};
+
+static uint8_t select_sid_banking(uint16_t addr) {
+    // Hardware-faithful $01 selection for SID init/play calls
+    if (addr >= 0xD000 && addr <= 0xDFFF) return 0x34; // I/O only
+    if (addr >= 0xE000 && addr <= 0xFFFA) return 0x35; // RAM at $E000+, I/O
+    if (addr >= 0xA000 && addr <= 0xCFFF) return 0x36; // KERNAL ROM, I/O
+    return 0x37; // all ROMs visible, I/O
+}
 
 /**
- * Build a self-contained IRQ handler at IRQ_HANDLER ($0390).
+ * Return the first IRQ candidate address that does not overlap with:
+ *   - the init stub region   [$STUB_BASE, $STUB_BASE + 0x80)
+ *   - the SID payload region [load_addr,  load_addr  + data_size)
+ */
+static uint16_t find_safe_irq_addr(uint16_t load_addr, uint32_t data_size) {
+    for (uint16_t cand : IRQ_CANDIDATES) {
+        uint32_t cand_end    = cand + IRQ_SIZE;
+        uint32_t payload_end = static_cast<uint32_t>(load_addr) + data_size;
+        bool payload_ok = (cand_end <= load_addr) || (static_cast<uint32_t>(cand) >= payload_end);
+        bool stub_ok    = (cand_end <= STUB_BASE)  || (static_cast<uint32_t>(cand) >= STUB_BASE + 0x80);
+        if (payload_ok && stub_ok) return cand;
+    }
+    printf("C64: WARNING — all IRQ candidates conflict with SID payload; using $%04X\n", IRQ_CANDIDATES[0]);
+    return IRQ_CANDIDATES[0];
+}
+
+/**
+ * Build a self-contained IRQ handler at irq_addr.
  *
- * This handler is fully independent of KERNAL ROM — it saves/restores
- * all CPU registers, ensures correct RAM banking, calls the SID play
- * routine, acknowledges the CIA1 timer interrupt, and returns via RTI.
+ * Fully independent of KERNAL ROM — saves/restores all CPU registers,
+ * ensures correct RAM banking, calls the SID play routine, acknowledges
+ * the CIA1 timer interrupt, re-arms it, and returns via RTI.
  *
  * Banking strategy:
  *   idle_banking ($35) — used during the idle loop so the CPU reads our
@@ -135,14 +172,9 @@ static constexpr uint16_t IRQ_HANDLER = 0x0390;
  *     (a common pattern to access RAM under BASIC ROM).  Without HIRAM,
  *     AND #$FE on $35 gives $34 which disables I/O entirely.
  */
-static void build_irq_handler(uint8_t* ram, uint16_t play_addr,
-                               uint8_t idle_banking) {
-    // Play banking: set HIRAM (bit 1) so AND #$FE doesn't disable I/O.
-    // Clear LORAM (bit 0) — play routines that toggle it won't change state.
-    // $35 → $36: I/O visible, KERNAL ROM at $E000, no BASIC ROM.
-    uint8_t play_banking = (idle_banking | 0x02) & ~0x01;
-
-    asm6510 a(ram + IRQ_HANDLER, 0x20, IRQ_HANDLER);
+static void build_irq_handler(uint8_t* ram, uint16_t irq_addr,
+                               uint16_t play_addr, uint8_t idle_banking) {
+    asm6510 a(ram + irq_addr, IRQ_SIZE, irq_addr);
 
     a.pha();
     a.txa();
@@ -150,15 +182,39 @@ static void build_irq_handler(uint8_t* ram, uint16_t play_addr,
     a.tya();
     a.pha();
 
-    a.lda_imm(play_banking);      // LDA #$36 — I/O stays visible after AND #$FE
-    a.sta_zp(0x01);               // STA $01
+    // Ensure predictable I/O/banking state before each play() call.
+    a.lda_imm(CPU_PORT_DDR_DEFAULT); // Hardware-faithful DDR; bits 0-2 remain outputs
+    a.sta_zp(0x00);
+
+    if (play_addr >= 0xE000) {
+        // High-memory play routines live under KERNAL ROM; force RAM visible.
+        a.lda_imm(0x35);
+        a.sta_zp(0x01);
+    } else {
+        // Keep current RAM/ROM choice but guarantee I/O visibility for SID MMIO.
+        a.lda_zp(0x01);
+        a.ora_imm(0x04);          // CHAREN=1 => I/O visible at $D000-$DFFF
+        a.sta_zp(0x01);
+    }
+
+    // Common SID player convention: play() is called with A=0.
+    a.lda_imm(0x00);
 
     a.jsr(play_addr);             // JSR play_addr
 
-    a.lda_imm(idle_banking);      // LDA #$35 — RAM at $E000+ for IRQ vector
-    a.sta_zp(0x01);               // STA $01
-
     a.lda_abs(c64_constants::CIA1_ICR);            // LDA $DC0D (acknowledge CIA1)
+
+    // Keep our playback IRQ source alive even if the tune touches CIA1 control.
+    // Some players alter $DC0D/$DC0E; re-arming here prevents one-shot silence.
+    a.store_imm(c64_constants::CIA1_ICR, 0x81);    // Enable Timer A interrupt mask
+    a.store_imm(0xDC0E, 0x11);                     // Start Timer A, continuous mode
+
+    // Restore idle banking before RTI so the next IRQ vector fetch still
+    // reaches our RAM vector at $FFFE/$FFFF.
+    a.lda_imm(CPU_PORT_DDR_DEFAULT);
+    a.sta_zp(0x00);
+    a.lda_imm(idle_banking);
+    a.sta_zp(0x01);
 
     a.pla();
     a.tay();
@@ -191,12 +247,12 @@ static void build_irq_handler(uint8_t* ram, uint16_t play_addr,
  *   LDA #$36 / STA $01          — KERNAL back for IRQ dispatch (PSID only)
  *   CLI / JMP self
  */
-static void build_init_stub(uint8_t* ram,
+static void build_init_stub(uint8_t* ram, uint16_t irq_addr,
                              const sid_header_t* sid,
                              uint16_t subtune,
                              uint16_t timer_period,
                              bool needs_timer_irq) {
-    asm6510 a(ram + STUB_BASE, 0xC0, STUB_BASE);
+    asm6510 a(ram + STUB_BASE, 0x80, STUB_BASE);
 
     a.sei();
 
@@ -212,32 +268,38 @@ static void build_init_stub(uint8_t* ram,
     a.lda_abs(c64_constants::CIA1_ICR);            // ack CIA1
     a.lda_abs(c64_constants::CIA2_ICR);            // ack CIA2
 
+    // Determine if we must force $01=$35 for all phases (RAM at $E000+ needed)
+    bool force_kernal_ram = (sid->load_addr >= 0xE000) || (sid->init_addr >= 0xE000) || (sid->play_addr >= 0xE000);
     if (needs_timer_irq) {
         // ---- PSID with play_addr != 0: we manage the playback IRQ ----
 
         // Bank out KERNAL, keep I/O visible ($01=$35) so we can write
         // our IRQ vector to RAM at $FFFE/$FFFF and the CPU will read it.
+        a.lda_imm(CPU_PORT_DDR_DEFAULT); // Use C64 default DDR
+        a.sta_zp(0x00);               // STA $00
         a.lda_imm(0x35);
         a.sta_zp(0x01);
 
         // Write our IRQ handler address to the hardware vector $FFFE/$FFFF.
         // With KERNAL banked out, the 6510 reads these from RAM on IRQ.
-        a.lda_imm(IRQ_HANDLER & 0xFF);
+        a.lda_imm(irq_addr & 0xFF);
         a.sta_abs(0xFFFE);
-        a.lda_imm(IRQ_HANDLER >> 8);
+        a.lda_imm(irq_addr >> 8);
         a.sta_abs(0xFFFF);
 
-        // Switch to $36 (HIRAM=1) before calling init — keeps I/O visible
-        // even if init does AND #$FE on $01 (common banking pattern).
-        a.lda_imm(0x36);
+        // Keep classic PSID init banking: $01=$35 for broad compatibility.
+        a.lda_imm(CPU_PORT_DDR_DEFAULT); // Use C64 default DDR
+        a.sta_zp(0x00);               // STA $00
+        a.lda_imm(0x35);
         a.sta_zp(0x01);
 
         // Call SID init routine BEFORE starting the timer.
         a.lda_imm(static_cast<uint8_t>(subtune));
         a.jsr(sid->init_addr);
 
-        // Restore $35 — RAM at $E000+ so IRQ vector reads from our RAM
-        // copy at $FFFE.  I/O remains visible for CIA register writes.
+        // Always restore $35 after init
+        a.lda_imm(CPU_PORT_DDR_DEFAULT); // Use C64 default DDR
+        a.sta_zp(0x00);               // STA $00
         a.lda_imm(0x35);
         a.sta_zp(0x01);
 
@@ -258,7 +320,9 @@ static void build_init_stub(uint8_t* ram,
 
         // For PSID: bank out ROMs so init code in RAM is visible ($01=$35)
         // For RSID: keep all ROMs visible as required by spec ($01=$37)
-        uint8_t init_banking = (sid->type == SID_TYPE_RSID) ? 0x37 : 0x35;
+        uint8_t init_banking = (sid->type == SID_TYPE_RSID) ? 0x37 : select_sid_banking(sid->init_addr);
+        a.lda_imm(CPU_PORT_DDR_DEFAULT); // Use C64 default DDR
+        a.sta_zp(0x00);               // STA $00
         a.lda_imm(init_banking);
         a.sta_zp(0x01);
 
@@ -266,10 +330,11 @@ static void build_init_stub(uint8_t* ram,
         a.lda_imm(static_cast<uint8_t>(subtune));
         a.jsr(sid->init_addr);
 
-        // For PSID: after init, switch to $36 so the KERNAL IRQ dispatcher
-        // at $FF48 is visible.  Many PSID tunes hook $0314/$0315.
+        // For PSID: after init, always set $01=$36 (unless KERNAL RAM is needed, then $35)
         if (sid->type != SID_TYPE_RSID) {
-            a.lda_imm(0x36);
+            a.lda_imm(CPU_PORT_DDR_DEFAULT); // Use C64 default DDR
+            a.sta_zp(0x00);               // STA $00
+            a.lda_imm(force_kernal_ram ? 0x35 : 0x36);
             a.sta_zp(0x01);
         }
     }
@@ -298,13 +363,27 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
     auto& cpu = *c64->cpu;
 
     // ---- Step 1: Write tune payload to C64 RAM ----
-    if (prog && prog->data && prog->data_size > 0) {
-        memcpy(&ram[sid->load_addr], prog->data, prog->data_size);
-        printf("C64: SID payload written: $%04X–$%04X (%zu bytes)\n",
-               sid->load_addr,
-               (unsigned)(sid->load_addr + prog->data_size - 1),
-               prog->data_size);
+    // If the SID needs RAM at $E000–$FFFF (KERNAL area), bank out KERNAL before copying.
+    bool needs_kernal_ram = (sid->load_addr >= 0xE000) || (sid->init_addr >= 0xE000) || (sid->play_addr >= 0xE000);
+    uint8_t orig_bank = 0x37;
+    if (needs_kernal_ram) {
+        orig_bank = cpu.read_io_port();
+        cpu.write_io_data(0x35); // RAM at $E000–$FFFF, I/O visible
     }
+    const size_t payload_size = (prog && prog->data) ? prog->data_size : 0;
+    if (payload_size > 0) {
+        memcpy(&ram[sid->load_addr], prog->data, payload_size);
+    }
+    if (needs_kernal_ram) {
+        cpu.write_io_data(orig_bank); // Restore original banking
+    }
+
+    // ---- Safe IRQ handler placement ----
+    // Pick a 64-byte region that does not overlap the SID payload or the init stub.
+    const bool needs_timer_irq = (sid->type == SID_TYPE_PSID && sid->play_addr != 0);
+    const uint16_t irq_addr    = needs_timer_irq
+        ? find_safe_irq_addr(sid->load_addr, static_cast<uint32_t>(payload_size))
+        : 0;
 
     // ---- Step 2: Set SID revision from metadata (v2+ flags) ----
     if (sid->version >= 2 && sid->sid_model != SID_MODEL_UNKNOWN && c64->sid) {
@@ -335,35 +414,46 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
     printf("C64: Speed flag for subtune %u: %s (timer=%u cycles, cpu=%u Hz)\n",
            subtune + 1, use_cia_rate ? "CIA" : "VBI", timer_period, timing.cpu_frequency_hz);
 
-    // ---- Step 4: Write SID info page to screen RAM ----
-    uint8_t* screen_ram = &ram[c64_constants::SCREEN_RAM_BASE];
-    uint8_t* color_ram = c64->colorram ? c64->colorram->memory : nullptr;
-    c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
+    // ---- Step 4: Optional SID info page (only when it won't clobber tune RAM) ----
+    const uint16_t screen_base = 0x0400;
+    const uint32_t screen_end  = 0x07E8; // 1000-byte text screen: $0400-$07E7
+    const uint32_t load_end    = static_cast<uint32_t>(sid->load_addr) + payload_size;
+    const bool screen_overlap  = (payload_size > 0)
+                               && (load_end > static_cast<uint32_t>(screen_base))
+                               && (static_cast<uint32_t>(sid->load_addr) < screen_end);
 
-    // Switch VIC-II to uppercase/lowercase character set so metadata
-    // text renders in mixed case.  $D018=$16 → screen at $0400,
-    // charset at ROM $1800 (upper/lower).  Default $14 uses $1000 (upper/graphics).
-    // Must update both the register byte AND the internal memory mapping that
-    // the VIC-II rendering actually uses (regs_[] is just storage).
-    if (c64->vicii) {
-        vicii_base_t& vicii_chip = *c64->vicii;
-        vicii_chip.regs_[0x18] = 0x16;
-        vicii_chip.memory.vm_base = ((uint16_t)0x16 & 0xF0) << 6;   // $0400
-        vicii_chip.memory.cb_base = ((uint16_t)0x16 & 0x0E) << 10;  // $1800
+    if (!screen_overlap) {
+        uint8_t* screen_ram = &ram[screen_base];
+        // Color RAM is hardwired at IO space ($D800–$DBFF).
+        uint8_t* color_ram  = c64->colorram ? c64->colorram->memory : nullptr;
+        c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
+
+        // Restore charset/font selection for readable screen codes while
+        // preserving the current screen base nibble managed by the tune.
+        if (c64->vicii) {
+            vicii_base_t& vicii_chip = *c64->vicii;
+            uint8_t d018 = vicii_chip.regs_[0x18];
+            d018 = static_cast<uint8_t>((d018 & 0xF0) | 0x06);
+            vicii_chip.regs_[0x18] = d018;
+            vicii_chip.memory.cb_base = 0x1800;
+        }
+    } else {
+        printf("C64: SID info page skipped (payload overlaps screen RAM $0400-$07E7)\n");
     }
 
     // ---- Step 5: Inject 6502 player stub ----
-    bool needs_timer_irq = (sid->type == SID_TYPE_PSID && sid->play_addr != 0);
-
     if (needs_timer_irq) {
-        build_irq_handler(ram, sid->play_addr, 0x35);
+        build_irq_handler(ram, irq_addr, sid->play_addr, 0x35);
+        printf("C64: Player stub at $%04X, IRQ handler at $%04X\n", STUB_BASE, irq_addr);
+    } else {
+        printf("C64: Player stub at $%04X (init-only)\n", STUB_BASE);
     }
-    build_init_stub(ram, sid, subtune, timer_period, needs_timer_irq);
-
-    printf("C64: Player stub at $%04X%s\n", STUB_BASE,
-           needs_timer_irq ? ", self-contained IRQ at $0390" : " (init-only)");
+    build_init_stub(ram, irq_addr, sid, subtune, timer_period, needs_timer_irq);
 
     // ---- Step 6: Set CPU to execute the stub ----
+    if (needs_kernal_ram) {
+        cpu.write_io_data(0x35);
+    }
     cpu.set(A, (uint8_t)subtune);
     cpu.set(X, 0);
     cpu.set(Y, 0);
@@ -411,30 +501,42 @@ void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
         timer_period = static_cast<uint16_t>(timing.cycles_per_frame);
     }
 
-    // ---- Update info page ----
-    uint8_t* screen_ram = &ram[c64_constants::SCREEN_RAM_BASE];
-    uint8_t* color_ram = c64->colorram ? c64->colorram->memory : nullptr;
-    c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
+    // ---- Optional info page refresh (only when it won't clobber tune RAM) ----
+    const uint16_t screen_base = 0x0400;
+    const uint32_t screen_end  = 0x07E8; // 1000-byte text screen: $0400-$07E7
+    const uint32_t load_end    = static_cast<uint32_t>(sid->load_addr) + payload_size;
+    const bool screen_overlap  = (payload_size > 0)
+                               && (load_end > static_cast<uint32_t>(screen_base))
+                               && (static_cast<uint32_t>(sid->load_addr) < screen_end);
 
-    // Switch VIC-II to uppercase/lowercase character set so metadata
-    // text renders in mixed case.  $D018=$16 → screen at $0400,
-    // charset at ROM $1800 (upper/lower).  Default $14 uses $1000 (upper/graphics).
-    // Must update both the register byte AND the internal memory mapping that
-    // the VIC-II rendering actually uses (regs_[] is just storage).
-    if (c64->vicii) {
-        vicii_base_t& vicii_chip = *c64->vicii;
-        vicii_chip.regs_[0x18] = 0x16;
-        vicii_chip.memory.vm_base = ((uint16_t)0x16 & 0xF0) << 6;   // $0400
-        vicii_chip.memory.cb_base = ((uint16_t)0x16 & 0x0E) << 10;  // $1800
+    if (!screen_overlap) {
+        uint8_t* screen_ram = &ram[screen_base];
+        // Color RAM is hardwired at IO space ($D800–$DBFF).
+        uint8_t* color_ram  = c64->colorram ? c64->colorram->memory : nullptr;
+        c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
+
+        // Restore charset/font selection for readable screen codes while
+        // preserving the current screen base nibble managed by the tune.
+        if (c64->vicii) {
+            vicii_base_t& vicii_chip = *c64->vicii;
+            uint8_t d018 = vicii_chip.regs_[0x18];
+            d018 = static_cast<uint8_t>((d018 & 0xF0) | 0x06);
+            vicii_chip.regs_[0x18] = d018;
+            vicii_chip.memory.cb_base = 0x1800;
+        }
+    } else {
+        printf("C64: SID info page refresh skipped (payload overlaps screen RAM $0400-$07E7)\n");
     }
 
-    // ---- Step 5: Inject 6502 player stub ----
     // ---- Re-inject stub ----
-    bool needs_timer_irq = (sid->type == SID_TYPE_PSID && sid->play_addr != 0);
+    const bool needs_timer_irq = (sid->type == SID_TYPE_PSID && sid->play_addr != 0);
+    const uint16_t irq_addr    = needs_timer_irq
+        ? find_safe_irq_addr(sid->load_addr, static_cast<uint32_t>(payload_size))
+        : 0;
     if (needs_timer_irq) {
-        build_irq_handler(ram, sid->play_addr, 0x35);
+        build_irq_handler(ram, irq_addr, sid->play_addr, 0x35);
     }
-    build_init_stub(ram, sid, subtune, timer_period, needs_timer_irq);
+    build_init_stub(ram, irq_addr, sid, subtune, timer_period, needs_timer_irq);
 
     // ---- Reset CPU to start of stub ----
     cpu.set(A, (uint8_t)subtune);
