@@ -118,8 +118,26 @@ void AcornAtomSystem::tick() {
     // ---- CPU PHI2 — address/R#W valid on bus ----
     pins_ = board_.cpu.tick<MOS6502::Phase::PHI2>(pins_);
 
-    // ---- Memory dispatch via MemoryBus ----
-    pins_ = bus_.tick(pins_);
+    // ---- Address decode (CS-tick) ----
+    pins_ = bus_.resolve(pins_);
+
+    // ---- CS-driven dispatch: PPI / VIA handle registers, rest → flat mem ----
+    {
+        auto cs = Bus::get_cs_from_bus(pins_);
+        if (cs == board_.ppi.bus_chip_id()) {
+            if (BUS_GET_BIT(pins_, BUS_RW_BIT))
+                pins_ = board_.ppi.on_bus_read(pins_);
+            else
+                board_.ppi.on_bus_write(pins_);
+        } else if (cs == board_.via.bus_chip_id()) {
+            if (BUS_GET_BIT(pins_, BUS_RW_BIT))
+                pins_ = board_.via.on_bus_read(pins_);
+            else
+                board_.via.on_bus_write(pins_);
+        } else {
+            pins_ = bus_.service(pins_);
+        }
+    }
 
     // ---- CPU PHI1 ----
     pins_ = board_.cpu.tick<MOS6502::Phase::PHI1>(pins_);
