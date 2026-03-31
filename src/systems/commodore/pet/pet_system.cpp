@@ -514,18 +514,32 @@ void PETSystem::tick() {
     // ---- Phase 3: CPU PHI2 ----
     s = cpu_->tick<MOS6502::Phase::PHI2>(s);
 
-    // ---- Phase 4: Memory service ----
+    // ---- Phase 4: Memory service (CS-tick) ----
+    s = bus_.resolve(s);
     {
-        uint16_t addr = BUS_GET_ADDR(s);
-        if (addr >= pet_constants::IO_START && addr < pet_constants::IO_END) {
-            // I/O page ($E800-$E8FF) — manual dispatch to PIAs, VIA, CRTC
-            if (!BUS_GET_BIT(s, BUS_RW_BIT)) {
-                io_write(addr, BUS_GET_DATA(s));
-            } else {
-                BUS_SET_DATA(s, io_read(addr));
-            }
+        auto cs = Bus::get_cs_from_bus(s);
+        if (cs == board_.pia1.bus_chip_id()) {
+            if (BUS_GET_BIT(s, BUS_RW_BIT))
+                s = board_.pia1.on_bus_read(s);
+            else
+                board_.pia1.on_bus_write(s);
+        } else if (cs == board_.pia2.bus_chip_id()) {
+            if (BUS_GET_BIT(s, BUS_RW_BIT))
+                s = board_.pia2.on_bus_read(s);
+            else
+                board_.pia2.on_bus_write(s);
+        } else if (cs == board_.via.bus_chip_id()) {
+            if (BUS_GET_BIT(s, BUS_RW_BIT))
+                s = board_.via.on_bus_read(s);
+            else
+                board_.via.on_bus_write(s);
+        } else if (cs == board_.crtc.bus_chip_id()) {
+            if (BUS_GET_BIT(s, BUS_RW_BIT))
+                s = board_.crtc.on_bus_read(s);
+            else
+                board_.crtc.on_bus_write(s);
         } else {
-            s = bus_.tick(s);
+            s = bus_.service(s);
         }
     }
 

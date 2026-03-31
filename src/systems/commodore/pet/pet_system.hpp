@@ -86,7 +86,7 @@ inline constexpr ChipManifest<kPETChipCount> kPETChips = {{
 
 struct PETBusTraits {
     static constexpr const auto& kManifest = kPETChips;
-    using Spec = ManifestBusSpec<kPETChips, 16, 8>;
+    using Spec = ManifestBusSpec<kPETChips, 16, 8, 1, 55>;
 };
 
 // Value-typed chips: all chips are fields via X-macro.
