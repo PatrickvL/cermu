@@ -533,6 +533,19 @@ struct ChipManifest {
         return count;
     }
 
+    // Count of MMIO-only slots that participate in bus address decode.
+    // These are chips with size_bytes == 0 AND base_addr != 0, excluding
+    // CPUs and non-bus peripherals (which have base_addr == 0).
+    // Used by ManifestBusSpec to compute the CS line width.
+    [[nodiscard]] constexpr size_t bus_mmio_slot_count() const noexcept {
+        size_t count = 0;
+        for (size_t i = 0; i < N; ++i) {
+            if (chips[i].size_bytes == 0 && chips[i].base_addr != 0)
+                ++count;
+        }
+        return count;
+    }
+
     // Count of unique pages requiring a MaskedSubTable.
     // A sub-table is needed when an MMIO-only slot has addr_mask != 0,
     // meaning it occupies a sub-page region carved from the page's base chip.
@@ -716,7 +729,8 @@ make_chip_manifest(Slot<Chips>... slots) noexcept
 template<const auto& Manifest,
          size_t AddrBits = 16,
          size_t PgBits   = 8,
-         size_t NViewers = 1>
+         size_t NViewers = 1,
+         size_t CsBitShiftParam = 0>
 struct ManifestBusSpec {
     using AddrType = uint_least_bits_t<AddrBits>;
 
@@ -731,9 +745,15 @@ struct ManifestBusSpec {
     static constexpr size_t NumViewers     = NViewers;
 
     // Chip id range — derived from manifest bank-id layout.
+    // When CS is enabled, MMIO-only slots (bus-decoded, zero-sized) also get
+    // real chip IDs above the buffer range, so MaxChipId includes them.
     // MaxWriteChipId = MaxChipId (conservative; is_read_only() known at runtime only).
-    static constexpr size_t MaxChipId      = Manifest.max_chip_id(PgBits);
-    static constexpr size_t MaxWriteChipId = MaxChipId;
+    static constexpr size_t BufferMaxChipId = Manifest.max_chip_id(PgBits);
+    static constexpr size_t BusMmioCount    = Manifest.bus_mmio_slot_count();
+    static constexpr size_t MaxChipId       = (CsBitShiftParam > 0)
+                                            ? BufferMaxChipId + BusMmioCount
+                                            : BufferMaxChipId;
+    static constexpr size_t MaxWriteChipId  = MaxChipId;
 
     // MMIO — derived from manifest slot analysis.
     static constexpr bool   EnableMmio       = Manifest.mmio_slot_count() > 0;
@@ -755,6 +775,34 @@ struct ManifestBusSpec {
     //
     static constexpr bool   ShiftAddressable = Manifest.has_shift_addressable_banks(PgBits);
     static constexpr size_t ShiftBankBits    = ShiftAddressable ? Manifest.shift_bank_bits(PgBits) : 0;
+
+    // ── CS line support (chip-select field in bus_state_t) ─────────────
+    //
+    // When CsBitShift > 0 the spec advertises a CS field in bus_state_t.
+    // CsLineBits is auto-derived to cover all chip IDs (buffer + MMIO)
+    // plus sentinels.  resolve() embeds the decoded chip ID into this
+    // field; each chip's tick() checks it against its own bus_chip_id_.
+    //
+    // CsBitShift = 0 (the default) disables CS — the system uses the
+    // callback-driven tick() path instead.
+    //
+    static constexpr size_t CsBitShift = CsBitShiftParam;
+
+    // Auto-derive CsLineBits when CS is enabled.
+    // Width must cover all chip IDs (buffer + MMIO) plus sentinels.
+    // MaxChipId already includes MMIO slot IDs when CS is active.
+    static constexpr size_t CsLineBits = []() -> size_t {
+        if constexpr (CsBitShift == 0) return 0;
+        // Sentinel count: kNoChipSelected(1) + sub-tables + MMIO handlers
+        constexpr size_t subs       = 1 + Manifest.masked_sub_count(PgBits);
+        constexpr size_t max_id     = MaxChipId + subs
+                                    + (EnableMmio ? MaxMmioHandlers : 0);
+        return std::bit_width(max_id);
+    }();
+
+    static_assert(CsBitShift == 0 || CsBitShift + CsLineBits <= 64,
+                  "CS field overflows bus_state_t — reduce PageBits or "
+                  "lower CsBitShift to make room");
 };
 
 

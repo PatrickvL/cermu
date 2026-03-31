@@ -111,6 +111,19 @@ public:
                 s.rom,
             });
         }
+
+        // Assign real chip IDs to bus-decoded MMIO-only slots (size==0,
+        // base_addr!=0).  These IDs sit above the buffer bank range so
+        // resolve() can emit them into the CS field.  Non-bus zero-sized
+        // slots (CPUs, peripherals with base_addr==0) keep base_id 0.
+        if constexpr (spec_cs_line_bits_v<Spec> > 0) {
+            size_t next_mmio_id = manifest.total_banks(kPageBits);
+            for (auto& slot : slots_) {
+                if (slot.byte_size == 0 && slot.base_addr != 0) {
+                    slot.base_id = ChipId(next_mmio_id++);
+                }
+            }
+        }
     }
 
     // =====================================================================
@@ -329,6 +342,81 @@ public:
                     : (slot.num_pages > 0 ? slot.num_pages : 1);
                 bus.map_register_file(
                     viewer_id, first_page, count, size_t(slot.mmio_idx));
+            }
+        }
+
+        // ── Phase 3: CS page mapping for MMIO-only slots ─────────────────
+        //
+        // When CS is enabled, MMIO-only slots (size==0, base_addr!=0) get
+        // their real chip IDs mapped into page tables so resolve() embeds
+        // them in the CS field.  Chips self-select via bus_chip_id_ in
+        // their tick() — no handler callback needed.
+        //
+        // Sub-page MMIO (addr_mask != 0) goes through MaskedSubTable with
+        // real chip IDs instead of sentinel kRegChipBase IDs.
+        //
+        if constexpr (spec_cs_line_bits_v<Spec> > 0) {
+            struct CsSubInfo { size_t page; int sub_idx; };
+            static constexpr size_t kMaxCsSubs =
+                Bus::kHasMaskedSub ? Bus::kMaxMaskedSubs : 1;
+            std::array<CsSubInfo, kMaxCsSubs> cs_sub_infos{};
+            size_t cs_num_subs = 0;
+
+            for (const auto& slot : slots_) {
+                if (slot.byte_size != 0 || slot.base_addr == 0) continue;
+
+                const size_t mmio_pages =
+                    (slot.bank_size > kPageSize)
+                        ? (slot.bank_size >> kPageBits) : 0;
+
+                if constexpr (Bus::kHasMaskedSub) {
+                    if (slot.addr_mask != 0) {
+                        const size_t page = slot.base_addr >> kPageBits;
+
+                        int sub_idx = -1;
+                        for (size_t k = 0; k < cs_num_subs; ++k) {
+                            if (cs_sub_infos[k].page == page) {
+                                sub_idx = cs_sub_infos[k].sub_idx;
+                                break;
+                            }
+                        }
+                        if (sub_idx < 0) {
+                            auto base_rd = bus.viewer(viewer_id).read_chip(page);
+                            auto base_wr = bus.viewer(viewer_id).write_chip(page);
+                            sub_idx = bus.add_masked_sub_table(
+                                viewer_id, base_rd, base_wr);
+                            assert(sub_idx >= 0);
+                            bus.map_to_masked_sub(
+                                viewer_id, page, size_t(sub_idx));
+                            cs_sub_infos[cs_num_subs++] = {page, sub_idx};
+
+                            if (mmio_pages > 1) {
+                                for (size_t p = 1;
+                                     p < mmio_pages && (page + p) < kNumPages;
+                                     ++p)
+                                    bus.map_to_masked_sub(
+                                        viewer_id, page + p, size_t(sub_idx));
+                            }
+                        }
+
+                        bus.add_masked_region(
+                            viewer_id, size_t(sub_idx),
+                            Addr(slot.addr_mask),
+                            Addr(slot.base_addr & slot.addr_mask),
+                            slot.base_id,
+                            WriteChipId(slot.base_id));
+                        continue;
+                    }
+                }
+
+                // Full-page MMIO — fill page table with real chip ID.
+                const size_t first_page = slot.base_addr >> kPageBits;
+                const size_t count = mmio_pages > 0 ? mmio_pages
+                    : (slot.num_pages > 0 ? slot.num_pages : 1);
+                bus.fill_read_constant(viewer_id, first_page, count,
+                                       slot.base_id);
+                bus.fill_write_constant(viewer_id, first_page, count,
+                                        WriteChipId(slot.base_id));
             }
         }
     }
