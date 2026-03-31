@@ -353,6 +353,11 @@ struct vic_base_t : public VideoChipBase {
     uint32_t audio_available() const;
     uint32_t audio_read(uint8_t* dest, uint32_t max_samples);
 
+    // --- ChipBase MMIO interface ---
+    bool has_mmio() const override { return true; }
+    bus_state_t on_bus_read(bus_state_t bus) noexcept override  { return registers_read(bus); }
+    bus_state_t on_bus_write(bus_state_t bus) noexcept override { return registers_write(bus); }
+
     // --- ChipBase interface ---
 #ifdef CERMU_HAS_GUI
     bool has_settings_content() const override;

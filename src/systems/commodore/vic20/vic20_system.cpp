@@ -627,6 +627,10 @@ bool VIC20System::initialize() {
 
     board_.via2.reset();
     board_.via2.interrupt_bit = BUS_IRQ_BIT;
+
+    // I/O decoder — wire to VIC and VIAs
+    io_dec_ = &board_.io_dec;
+    io_dec_->wire(vic_, &board_.via1, &board_.via2);
     
     // Create keyboard matrix and connect to VIA2
     // VIC-20 keyboard: VIA2 Port B selects columns, VIA2 Port A reads rows
@@ -719,137 +723,56 @@ void VIC20System::reset() {
 // ============================================================================
 
 // Unified bus dispatch: I/O region handled manually, everything else through MemoryBus.
-bus_state_t VIC20System::mem_tick(bus_state_t s) {
-    uint16_t addr = BUS_GET_ADDR(s);
-    uint8_t page = addr >> 8;
-
-    // I/O region $9000-$9FFF (VIC + VIAs, Color RAM, expansion I/O)
-    if (page >= 0x90 && page <= 0x9F)
-        return io_tick(s);
-
-    // Everything else: MemoryBus page-pointer dispatch
-    return mem_bus_.tick(s);
-}
-
-// ── I/O dispatch for $9000-$9FFF ─────────────────────────────────────────
-// $9000-$93FF: VIC registers + VIA1 + VIA2 (with 64-byte mirror pattern)
-// $9400-$97FF: Color RAM (4-bit wide, upper nibble reads 0xF0)
-// $9800-$9FFF: I/O expansion slots (unmapped → floating bus)
-bus_state_t VIC20System::io_tick(bus_state_t s) {
-    uint16_t addr = BUS_GET_ADDR(s);
-    uint8_t io_page = (addr >> 10) & 3;  // 0-3 for $9000-$9FFF
-    bool is_read = BUS_GET_BIT(s, BUS_RW_BIT);
-
-    switch (io_page) {
-    case 0: {
-        // $9000-$93FF: VIC + VIA1 + VIA2 with 64-byte mirror pattern
-        uint8_t offset = addr & 0x3F;
-        if (offset < 0x10 || offset >= 0x30) {
-            // VIC registers ($9x00-$9x0F and mirrors at $9x30-$9x3F)
-            bus_state_t chip_state = 0;
-            BUS_SET_ADDR(chip_state, offset & 0x0F);
-            if (is_read) {
-                chip_state = vic_->registers_read(chip_state);
-                BUS_SET_DATA(s, BUS_GET_DATA(chip_state));
-            } else {
-                BUS_SET_DATA(chip_state, BUS_GET_DATA(s));
-                vic_->registers_write(chip_state);
-            }
-        } else if (offset < 0x20) {
-            // VIA1 registers ($9x10-$9x1F)
-            bus_state_t chip_state = 0;
-            BUS_SET_ADDR(chip_state, offset & 0x0F);
-            if (is_read) {
-                chip_state = board_.via1.registers_read(chip_state);
-                BUS_SET_DATA(s, BUS_GET_DATA(chip_state));
-            } else {
-                BUS_SET_DATA(chip_state, BUS_GET_DATA(s));
-                board_.via1.registers_write(chip_state);
-            }
-        } else {
-            // VIA2 registers ($9x20-$9x2F)
-            bus_state_t chip_state = 0;
-            BUS_SET_ADDR(chip_state, offset & 0x0F);
-            if (is_read) {
-                chip_state = board_.via2.registers_read(chip_state);
-                BUS_SET_DATA(s, BUS_GET_DATA(chip_state));
-            } else {
-                BUS_SET_DATA(chip_state, BUS_GET_DATA(s));
-                board_.via2.registers_write(chip_state);
-            }
-        }
-        break;
-    }
-    case 1: {
-        // $9400-$97FF: Color RAM (4-bit wide)
-        uint16_t offset = addr & 0x03FF;
-        uint8_t* colorram = board_.colorram.data();
-        if (is_read) {
-            BUS_SET_DATA(s, colorram[offset] | 0xF0);  // Upper nibble is garbage
-        } else {
-            colorram[offset] = BUS_GET_DATA(s) & 0x0F;  // Only lower 4 bits stored
-        }
-        break;
-    }
-    default:
-        // $9800-$9FFF: I/O expansion slots (unmapped by default)
-        if (is_read) {
-            BUS_SET_DATA(s, 0xFF);  // Floating bus
-        }
-        // Writes ignored
-        break;
-    }
-    return s;
-}
+// mem_tick / io_tick removed — CS-tick architecture:
+//   resolve() → service() handles RAM/ROM/Color RAM via page table,
+//   io_dec_->tick() dispatches VIC/VIA1/VIA2 via 74LS138 decode.
 
 void VIC20System::tick() {
-    // Proper PHI1/PHI2 timing following C64 pattern
-    // VIC-20 has simpler fixed memory mapping without PLA
-    
     // Start with clean bus state (pull-up resistors)
     bus_state_t s = bus_.default_state;
-    
+
     // Preserve address and data from previous cycle
     BUS_SET_ADDR(s, BUS_GET_ADDR(bus_.state));
     BUS_SET_DATA(s, BUS_GET_DATA(bus_.state));
-    
+
     // =========================================================================
     // PHASE 1: VIC CHIP TICKING
     // VIC-20's VIC chip runs continuously, generating video and handling DMA
     // =========================================================================
     s = vic_->tick(s);
-    
+
     // =========================================================================
     // PHASE 2: VIA CHIPS TICKING (BEFORE CPU PHI2)
     // VIA chips handle I/O and timing, must tick before CPU to set interrupt lines
     // =========================================================================
     s = board_.via1.tick(s);
     s = board_.via2.tick(s);
-    
+
     // =========================================================================
     // PHASE 3: CPU TICKING (PHI2 phase - sets up memory access)
     // CPU executes instruction and puts address/control on bus
     // =========================================================================
     auto& cpu = board_.cpu;
     s = cpu.tick<MOS6502::Phase::PHI2>(s);
-    
+
     // =========================================================================
-    // PHASE 4: MEMORY SERVICE PHASE
-    // Service memory access set up by CPU during PHI2
-    // This is CRITICAL - memory access happens BETWEEN PHI2 and PHI1
-    // so data is ready for CPU to complete the cycle
+    // PHASE 4: Address decode + flat-mem service + MMIO self-dispatch
+    // resolve() sets CS from page table, service() handles RAM/ROM/Color RAM,
+    // io_dec_->tick() dispatches VIC/VIA1/VIA2 via 74LS138 decode.
     // =========================================================================
-    s = mem_tick(s);
+    s = mem_bus_.resolve(s);
+    s = mem_bus_.service(s);
+    s = io_dec_->tick(s);
 
     // NMI edge detection — sample after bus dispatch (post-dispatch state)
     cpu.sample_nmi_pin(s);
-    
+
     // =========================================================================
     // PHASE 5: CPU TICKING (PHI1 phase - completes cycle)
     // CPU prepares next instruction fetch
     // =========================================================================
     s = cpu.tick<MOS6502::Phase::PHI1>(s);
-    
+
     // Restore R/W line to read mode after CPU PHI1 has consumed write info.
     // Maintains invariant: BUS_MASK_RW is always set outside the CPU write window.
     BUS_SET_BIT(s, BUS_RW_BIT);
@@ -1119,28 +1042,28 @@ void VIC20System::render_system_menu_items() {
 // After apply(), all 256 pages point to RAM (read+write) with ROM overlays.
 // We override only the expansion blocks that are NOT present + I/O region.
 void VIC20System::setup_expansion_map() {
-    // Reset: apply() gives us full RAM + ROM overlays for all declared chips
+    // Reset: apply() gives us full RAM + ROM overlays for all declared chips.
+    // With 1 KB pages: page = addr >> 10.
     board_.apply(mem_bus_);
 
-    // $9000-$9FFF (pages $90-$9F): I/O — handled manually in mem_tick/io_tick
-    // Pages don't matter since they're intercepted, but set to no-chip for correctness
-    mem_bus_.map_no_chip_selected(0, 0x90, 0x10);
+    // $9800-$9FFF (pages 38-39): expansion I/O, unmapped (floating bus)
+    mem_bus_.map_no_chip_selected(0, 38, 2);
 
-    // Expansion block 0: $0400-$0FFF (pages $04-$0F, 3KB = 12 pages)
+    // Expansion block 0: $0400-$0FFF (pages 1-3, 3KB = 3 pages)
     if (!(expansion_flags_ & VIC20_EXP_BLOCK0))
-        mem_bus_.map_no_chip_selected(0, 0x04, 0x0C);
+        mem_bus_.map_no_chip_selected(0, 1, 3);
 
-    // Expansion block 2: $2000-$3FFF (pages $20-$3F, 8KB = 32 pages)
+    // Expansion block 2: $2000-$3FFF (pages 8-15, 8KB = 8 pages)
     if (!(expansion_flags_ & VIC20_EXP_BLOCK2))
-        mem_bus_.map_no_chip_selected(0, 0x20, 0x20);
+        mem_bus_.map_no_chip_selected(0, 8, 8);
 
-    // Expansion block 3: $4000-$5FFF (pages $40-$5F, 8KB = 32 pages)
+    // Expansion block 3: $4000-$5FFF (pages 16-23, 8KB = 8 pages)
     if (!(expansion_flags_ & VIC20_EXP_BLOCK3))
-        mem_bus_.map_no_chip_selected(0, 0x40, 0x20);
+        mem_bus_.map_no_chip_selected(0, 16, 8);
 
-    // Expansion block 5: $6000-$7FFF (pages $60-$7F, 8KB = 32 pages)
+    // Expansion block 5: $6000-$7FFF (pages 24-31, 8KB = 8 pages)
     if (!(expansion_flags_ & VIC20_EXP_BLOCK5))
-        mem_bus_.map_no_chip_selected(0, 0x60, 0x20);
+        mem_bus_.map_no_chip_selected(0, 24, 8);
 
     // Cartridge ROM at $A000-$BFFF: handled via setup_cartridge_pages
     setup_cartridge_pages(cartridge_present_);
@@ -1155,15 +1078,20 @@ void VIC20System::setup_expansion_map() {
 // When absent: $A000-$BFFF is unmapped (no chip selected for both read and write).
 void VIC20System::setup_cartridge_pages(bool present) {
     using CId = typename Bus::ChipId;
-    constexpr size_t kCartBase = kVIC20Chips.base_id(kVIC20_CartSlot, 8);
+    // 1 KB pages (matches PgBits=10 in ManifestBusSpec)
+    constexpr size_t kPgBits = 10;
+    constexpr size_t kCartBase = kVIC20Chips.base_id(kVIC20_CartSlot, kPgBits);
+    // $A000 >> 10 = page 40, $BFFF = 8 pages
+    constexpr size_t kCartPage = 0xA000 >> kPgBits;   // 40
+    constexpr size_t kCartPages = 0x2000 >> kPgBits;  // 8
 
     if (present) {
         // Reads from cart chip buffer (cartridge data loaded there), writes blocked
-        mem_bus_.fill_read_pages(0, 0xA0, 0x20, CId(kCartBase));
-        mem_bus_.map_write_no_chip_selected(0, 0xA0, 0x20);
+        mem_bus_.fill_read_pages(0, kCartPage, kCartPages, CId(kCartBase));
+        mem_bus_.map_write_no_chip_selected(0, kCartPage, kCartPages);
     } else {
         // Unmapped: floating bus on read, writes ignored
-        mem_bus_.map_no_chip_selected(0, 0xA0, 0x20);
+        mem_bus_.map_no_chip_selected(0, kCartPage, kCartPages);
     }
 }
 

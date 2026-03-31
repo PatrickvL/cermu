@@ -14,6 +14,7 @@
 #include "systems/commodore/vic20/vic20_bus.hpp"
 #include "systems/commodore/vic20/vic20_chips.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
+#include "systems/commodore/vic20/vic20_io_decoder.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -77,27 +78,28 @@
 // here.  NTSC systems swap the VIC at runtime via Board::override_factory()
 // before create_chips(); see VIC20System::initialize().
 //
-// MMIO chips have their real I/O addresses ($9000/$9010/$9020) and decode
-// masks in the manifest.  io_tick() still hand-dispatches for now (mirrors,
-// Color RAM, expansion I/O), but the metadata is authoritative.
+// MMIO chips have base=0, size=0, mask=0 — they are NOT directly bus-mapped.
+// The I/O decoder routes bus accesses to VIC/VIA1/VIA2 via CS-tick dispatch.
+// Color RAM ($9400) is a regular 1 KB buffer chip (4-bit masking TODO: MOS2114).
 //
 
 #define VIC20_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                                          \
-    V(ctx, MOS6502,    cpu,      0x0000,     0,      0, 0, "MOS 6502",           nullptr)                                           \
-    V(ctx, RAMChip,    ram0,     0x0000,  1024,      0, 0, "Base RAM 0",         nullptr)                                           \
-    V(ctx, RAMChip,    blk0,     0x0400,  3072,      0, 0, "Expansion Block 0",  nullptr)                                           \
-    V(ctx, RAMChip,    ram1,     0x1000,  4096,      0, 0, "Base RAM 1",         nullptr)                                           \
-    V(ctx, RAMChip,    blk1,     0x2000,  8192,      0, 0, "Expansion Block 1",  nullptr)                                           \
-    V(ctx, RAMChip,    blk2,     0x4000,  8192,      0, 0, "Expansion Block 2",  nullptr)                                           \
-    V(ctx, RAMChip,    blk3,     0x6000,  8192,      0, 0, "Expansion Block 3",  nullptr)                                           \
-    V(ctx, ROMChip,    charrom,  0x8000,  4096,      0, 0, "CHARROM",            "characters.901460-03.bin|chargen.rom|901460-03.bin") \
-    V(ctx, mos6561_t,  vic,      0x9000,     0, 0xFFF0, 0, "MOS 6561 (PAL)",     nullptr)                                           \
-    V(ctx, mos6522_t,  via1,     0x9010,     0, 0xFFF0, 0, "VIA 1",              nullptr)                                           \
-    V(ctx, mos6522_t,  via2,     0x9020,     0, 0xFFF0, 0, "VIA 2",              nullptr)                                           \
-    V(ctx, RAMChip,    colorram, 0x9400,  1024,      0, 0, "Color RAM",          nullptr)                                           \
-    V(ctx, RAMChip,    cart,     0xA000,  8192,      0, 0, "Cartridge Area",     nullptr)                                           \
-    V(ctx, ROMChip,    basic,    0xC000,  8192,      0, 0, "BASIC ROM",          "basic.901486-01.bin|basic.rom|901486-01.bin")       \
-    V(ctx, ROMChip,    kernal,   0xE000,  8192,      0, 0, "KERNAL ROM",         "kernal.901486-07.bin|kernal.rom|901486-07.bin")
+    V(ctx, MOS6502,              cpu,       0x0000,     0,      0, 0, "MOS 6502",           nullptr)                                           \
+    V(ctx, RAMChip,              ram0,      0x0000,  1024,      0, 0, "Base RAM 0",         nullptr)                                           \
+    V(ctx, RAMChip,              blk0,      0x0400,  3072,      0, 0, "Expansion Block 0",  nullptr)                                           \
+    V(ctx, RAMChip,              ram1,      0x1000,  4096,      0, 0, "Base RAM 1",         nullptr)                                           \
+    V(ctx, RAMChip,              blk1,      0x2000,  8192,      0, 0, "Expansion Block 1",  nullptr)                                           \
+    V(ctx, RAMChip,              blk2,      0x4000,  8192,      0, 0, "Expansion Block 2",  nullptr)                                           \
+    V(ctx, RAMChip,              blk3,      0x6000,  8192,      0, 0, "Expansion Block 3",  nullptr)                                           \
+    V(ctx, ROMChip,              charrom,   0x8000,  4096,      0, 0, "CHARROM",            "characters.901460-03.bin|chargen.rom|901460-03.bin") \
+    V(ctx, mos6561_t,            vic,       0,          0,      0, 0, "MOS 6561 (PAL)",     nullptr)                                           \
+    V(ctx, mos6522_t,            via1,      0,          0,      0, 0, "VIA 1",              nullptr)                                           \
+    V(ctx, mos6522_t,            via2,      0,          0,      0, 0, "VIA 2",              nullptr)                                           \
+    V(ctx, vic20_io_decoder_t,   io_dec,    0x9000,     0,      0, 0, "I/O Decoder",        nullptr)                                           \
+    V(ctx, RAMChip,              colorram,  0x9400,  1024,      0, 0, "Color RAM",          nullptr)                                           \
+    V(ctx, RAMChip,              cart,      0xA000,  8192,      0, 0, "Cartridge Area",     nullptr)                                           \
+    V(ctx, ROMChip,              basic,     0xC000,  8192,      0, 0, "BASIC ROM",          "basic.901486-01.bin|basic.rom|901486-01.bin")       \
+    V(ctx, ROMChip,              kernal,    0xE000,  8192,      0, 0, "KERNAL ROM",         "kernal.901486-07.bin|kernal.rom|901486-07.bin")
 
 // ── Chip count, manifest, BusTraits ──────────────────────────────────────
 
@@ -119,7 +121,7 @@ inline constexpr size_t kVIC20_CartSlot = [] {
 
 struct VIC20BusTraits {
     static constexpr const auto& kManifest = kVIC20Chips;
-    using Spec = ManifestBusSpec<kVIC20Chips, 16, 8>;
+    using Spec = ManifestBusSpec<kVIC20Chips, 16, 10, 1, true>;  // 1 KB pages, CS-enabled
 };
 
 // ============================================================================
@@ -188,6 +190,7 @@ private:
     // PAL: points to value-typed board_.vic (mos6561_t).
     // NTSC: points to heap-owned mos6560_t created by Board::create_chips().
     vic_base_t* vic_ = nullptr;
+    vic20_io_decoder_t* io_dec_ = nullptr;  // I/O decoder for $9000-$93FF
     
     // System state
     uint8_t expansion_flags_;        // Expansion RAM configuration
@@ -220,8 +223,6 @@ private:
     bool load_roms();
     
     // Memory access for CPU
-    bus_state_t mem_tick(bus_state_t s);
-    bus_state_t io_tick(bus_state_t s);             // $9000-$9FFF I/O dispatch
     void setup_expansion_map();                     // configure page pointers for expansion_flags_
     void setup_cartridge_pages(bool present);       // write-protect or restore $A000-$BFFF
 

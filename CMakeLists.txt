@@ -428,6 +428,7 @@ list(APPEND CHIP_SOURCES
     # Logic
     src/chip/logic/pla.cpp
     src/chip/logic/logic_registry.cpp
+    src/chip/logic/ls138.cpp
 
     # Memory
     src/chip/memory/mos2114.cpp

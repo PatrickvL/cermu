@@ -61,6 +61,8 @@
     PLBL_INV(_CSR,        "CSR",        "chip select read (TMS9918)")           \
     PLBL_INV(_CSW,        "CSW",        "chip select write (TMS9918)")          \
     PLBL_INV(_DTACK,      "DTACK",      "data transfer acknowledge (M68K)")     \
+    PLBL_INV(_E1,         "E1",         "enable 1 (74LS138)")                   \
+    PLBL_INV(_E2,         "E2",         "enable 2 (74LS138)")                   \
     PLBL_INV(_EXROM,      "EXROM",      "external ROM")                         \
     PLBL_INV(_FIRQ,       "FIRQ",       "fast interrupt request (MC6809)")      \
     PLBL_INV(_G,          "G",          "gate/enable (74LS249)")                \
@@ -107,6 +109,14 @@
     PLBL_INV(_WE,         "WE",         "write enable")                         \
     PLBL_INV(_WR,         "WR",         "write strobe (5A22)")                  \
     PLBL_INV(_WRAM,       "WRAM",       "work RAM chip select (5A22)")          \
+    PLBL_INV(_Y0,         "Y0",         "decoder output 0 (74LS138)")           \
+    PLBL_INV(_Y1,         "Y1",         "decoder output 1 (74LS138)")           \
+    PLBL_INV(_Y2,         "Y2",         "decoder output 2 (74LS138)")           \
+    PLBL_INV(_Y3,         "Y3",         "decoder output 3 (74LS138)")           \
+    PLBL_INV(_Y4,         "Y4",         "decoder output 4 (74LS138)")           \
+    PLBL_INV(_Y5,         "Y5",         "decoder output 5 (74LS138)")           \
+    PLBL_INV(_Y6,         "Y6",         "decoder output 6 (74LS138)")           \
+    PLBL_INV(_Y7,         "Y7",         "decoder output 7 (74LS138)")           \
     \
     /* ════════════════════════════════════════════════════════════════ */ \
     /* Active-high pins — grouped by PinType category.                */ \
@@ -648,13 +658,19 @@
     PLBL_PIN(POT6,        "POT6",       "pot input 6")                          \
     PLBL_PIN(POT7,        "POT7",       "pot input 7")                          \
     PLBL_PIN(SIO_CLK_IN,  "SIO CLK IN", "serial I/O clock input")               \
-    PLBL_PIN(SIO_CLK_OUT, "SIO CLK OUT", "serial I/O clock output")              \
+    PLBL_PIN(SIO_CLK_OUT, "SIO CLK OUT", "serial I/O clock output")             \
     PLBL_PIN(SIO_IN,      "SIO IN",     "serial I/O data input")                \
     PLBL_PIN(SIO_OUT,     "SIO OUT",    "serial I/O data output")               \
     \
     /* ── Logic chip pins (I, Q, Y, S, G sequential sub-groups) ───── */ \
     PLBL_CAT(LOGIC)                                                             \
+    PLBL_PIN(A,           "A",          "select A (74LS138)")                   \
+    PLBL_PIN(B,           "B",          "select B (74LS138)")                   \
+    PLBL_PIN(C,           "C",          "select C (74LS138)")                   \
     PLBL_PIN(DS,          "DS",         "data serial input (shift register)")   \
+    PLBL_PIN(E1,          "E1",         "enable 1 (active-high)")               \
+    PLBL_PIN(E2,          "E2",         "enable 2 (active-high)")               \
+    PLBL_PIN(E3,          "E3",         "enable 3 (74LS138)")                   \
     PLBL_PIN(G,           "G",          "gate/enable")                          \
     PLBL_PIN(I0,          "I0",         "input 0")                              \
     PLBL_PIN(I1,          "I1",         "input 1")                              \
