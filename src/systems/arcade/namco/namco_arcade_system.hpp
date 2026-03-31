@@ -65,7 +65,7 @@ template<> struct NamcoGameTraits<NamcoGame::Pengo> {
 // Namco chip declarations — single source of truth
 // ============================================================================
 //
-// Row: X(ctx, type, chip, base, size, mask, overlay, label, rom_files)
+// Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
 //
 // Pac-Man ($0000-$3FFF ROM, $4000/$4400/$4C00 work areas, $5xxx I/O).
 // Pengo   ($0000-$7FFF ROM, $8000/$8400/$8C00 work areas, $9xxx I/O).
@@ -74,21 +74,21 @@ template<> struct NamcoGameTraits<NamcoGame::Pengo> {
 // Graphics ROMs (char, sprite, palette, waveform) are NOT bus-mapped.
 //
 
-#define PACMAN_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                             \
-    X(ctx, ZilogZ80A,   z80,   0x0000,     0, 0, 0, "Z80A",         nullptr)                            \
-    X(ctx, ROMChip,     rom,   0x0000, 16384, 0, 0, "Program ROM",  nullptr)                            \
-    X(ctx, RAMChip,     vram,  0x4000,  1024, 0, 0, "Video RAM",    nullptr)                            \
-    X(ctx, RAMChip,     cram,  0x4400,  1024, 0, 0, "Color RAM",    nullptr)                            \
-    X(ctx, RAMChip,     wram,  0x4C00,  1024, 0, 0, "Work RAM",     nullptr)                            \
-    X(ctx, namco_wsg_t, wsg,   0x5040,     0, 0xFFE0, 0, "WSG3",         nullptr)
+#define PACMAN_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                             \
+    V(ctx, ZilogZ80A,   z80,   0x0000,     0, 0, 0, "Z80A",         nullptr)                            \
+    V(ctx, ROMChip,     rom,   0x0000, 16384, 0, 0, "Program ROM",  nullptr)                            \
+    V(ctx, RAMChip,     vram,  0x4000,  1024, 0, 0, "Video RAM",    nullptr)                            \
+    V(ctx, RAMChip,     cram,  0x4400,  1024, 0, 0, "Color RAM",    nullptr)                            \
+    V(ctx, RAMChip,     wram,  0x4C00,  1024, 0, 0, "Work RAM",     nullptr)                            \
+    V(ctx, namco_wsg_t, wsg,   0x5040,     0, 0xFFE0, 0, "WSG3",         nullptr)
 
-#define PENGO_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                              \
-    X(ctx, ZilogZ80A,   z80,   0x0000,     0, 0, 0, "Z80A",         nullptr)                            \
-    X(ctx, ROMChip,     rom,   0x0000, 32768, 0, 0, "Program ROM",  nullptr)                            \
-    X(ctx, RAMChip,     vram,  0x8000,  1024, 0, 0, "Video RAM",    nullptr)                            \
-    X(ctx, RAMChip,     cram,  0x8400,  1024, 0, 0, "Color RAM",    nullptr)                            \
-    X(ctx, RAMChip,     wram,  0x8C00,  1024, 0, 0, "Work RAM",     nullptr)                            \
-    X(ctx, namco_wsg_t, wsg,   0x9040,     0, 0xFFE0, 0, "WSG3",         nullptr)
+#define PENGO_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                              \
+    V(ctx, ZilogZ80A,   z80,   0x0000,     0, 0, 0, "Z80A",         nullptr)                            \
+    V(ctx, ROMChip,     rom,   0x0000, 32768, 0, 0, "Program ROM",  nullptr)                            \
+    V(ctx, RAMChip,     vram,  0x8000,  1024, 0, 0, "Video RAM",    nullptr)                            \
+    V(ctx, RAMChip,     cram,  0x8400,  1024, 0, 0, "Color RAM",    nullptr)                            \
+    V(ctx, RAMChip,     wram,  0x8C00,  1024, 0, 0, "Work RAM",     nullptr)                            \
+    V(ctx, namco_wsg_t, wsg,   0x9040,     0, 0xFFE0, 0, "WSG3",         nullptr)
 
 static constexpr size_t kPacManChipCount = 0 PACMAN_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 static constexpr size_t kPengoChipCount  = 0 PENGO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);

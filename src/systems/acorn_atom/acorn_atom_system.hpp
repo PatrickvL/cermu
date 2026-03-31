@@ -46,22 +46,22 @@
 // Acorn Atom chip declaration — single source of truth
 // =============================================================================
 //
-// Row: X(ctx, type, chip, base, size, mask, overlay, label, rom_files)
+// Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
 //
 // PPI and VIA are MMIO-only (sub-page decode via addr_mask).
 // FP ROM is optional (loaded if available).
 //
 
-#define ATOM_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                    \
-    X(ctx, MOS6502,    cpu,    0x0000,     0,      0, 0, "MOS 6502",   nullptr)                              \
-    X(ctx, RAMChip,    ram,    0x0000, 32768,      0, 0, "RAM",        nullptr)                              \
-    X(ctx, RAMChip,    vram,   0x8000,  8192,      0, 0, "Video RAM",  nullptr)                              \
-    X(ctx, i8255_t,    ppi,    0xB000,     0, 0xFFFC, 0, "i8255 PPI",  nullptr)                              \
-    X(ctx, mos6522_t,  via,    0xB800,     0, 0xFFF0, 0, "VIA 6522",   nullptr)                              \
-    X(ctx, ROMChip,    basic,  0xC000,  4096,      0, 0, "BASIC",      "atom_basic.rom|BASIC.ROM|basic.rom") \
-    X(ctx, ROMChip,    fp_rom, 0xD000,  2048,      0, 0, "FP ROM",     "?atom_fp.rom|FP.ROM|fp.rom")         \
-    X(ctx, ROMChip,    os_rom, 0xF000,  4096,      0, 0, "OS ROM",     "atom_os.rom|ABASIC.ROM|os.rom")      \
-    X(ctx, mc6847_t,   vdg,    0x0000,     0,      0, 0, "MC6847 VDG", nullptr)
+#define ATOM_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                    \
+    V(ctx, MOS6502,    cpu,    0x0000,     0,      0, 0, "MOS 6502",   nullptr)                              \
+    V(ctx, RAMChip,    ram,    0x0000, 32768,      0, 0, "RAM",        nullptr)                              \
+    V(ctx, RAMChip,    vram,   0x8000,  8192,      0, 0, "Video RAM",  nullptr)                              \
+    V(ctx, i8255_t,    ppi,    0xB000,     0, 0xFFFC, 0, "i8255 PPI",  nullptr)                              \
+    V(ctx, mos6522_t,  via,    0xB800,     0, 0xFFF0, 0, "VIA 6522",   nullptr)                              \
+    V(ctx, ROMChip,    basic,  0xC000,  4096,      0, 0, "BASIC",      "atom_basic.rom|BASIC.ROM|basic.rom") \
+    V(ctx, ROMChip,    fp_rom, 0xD000,  2048,      0, 0, "FP ROM",     "?atom_fp.rom|FP.ROM|fp.rom")         \
+    V(ctx, ROMChip,    os_rom, 0xF000,  4096,      0, 0, "OS ROM",     "atom_os.rom|ABASIC.ROM|os.rom")      \
+    V(ctx, mc6847_t,   vdg,    0x0000,     0,      0, 0, "MC6847 VDG", nullptr)
 
 static constexpr size_t kAtomChipCount = 0 ATOM_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 

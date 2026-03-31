@@ -34,26 +34,26 @@
 // Bomb Jack chip declarations — single source of truth (dual-CPU)
 // ============================================================================
 //
-// Row: X(ctx, type, chip, base, size, mask, overlay, label, rom_files)
+// Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
 //
 // Main CPU: $0000-$7FFF ROM, $8000 RAM, $9xxx video/sprite/palette.
 // Sound CPU: $0000-$1FFF ROM, $4000 RAM.
 // I/O registers and AY ports handled separately.
 //
 
-#define BOMBJACK_MAIN_FOR_EACH_CHIP(X, ctx)                                                             \
-    X(ctx, ZilogZ80A,  cpu,       0x0000,     0, 0, 0, "Main CPU",       nullptr)                       \
-    X(ctx, ROMChip,    rom,       0x0000, 32768, 0, 0, "Program ROM",    nullptr)                       \
-    X(ctx, RAMChip,    work_ram,  0x8000,  4096, 0, 0, "Work RAM",       nullptr)                       \
-    X(ctx, RAMChip,    fg_map,    0x9000,  1024, 0, 0, "FG Tilemap",     nullptr)                       \
-    X(ctx, RAMChip,    fg_attr,   0x9400,  1024, 0, 0, "FG Attributes",  nullptr)                       \
-    X(ctx, RAMChip,    sprites,   0x9800,   256, 0, 0, "Sprite Area",    nullptr)                       \
-    X(ctx, RAMChip,    palette,   0x9C00,   256, 0, 0, "Palette RAM",    nullptr)
+#define BOMBJACK_MAIN_FOR_EACH_CHIP(V, ctx)                                                             \
+    V(ctx, ZilogZ80A,  cpu,       0x0000,     0, 0, 0, "Main CPU",       nullptr)                       \
+    V(ctx, ROMChip,    rom,       0x0000, 32768, 0, 0, "Program ROM",    nullptr)                       \
+    V(ctx, RAMChip,    work_ram,  0x8000,  4096, 0, 0, "Work RAM",       nullptr)                       \
+    V(ctx, RAMChip,    fg_map,    0x9000,  1024, 0, 0, "FG Tilemap",     nullptr)                       \
+    V(ctx, RAMChip,    fg_attr,   0x9400,  1024, 0, 0, "FG Attributes",  nullptr)                       \
+    V(ctx, RAMChip,    sprites,   0x9800,   256, 0, 0, "Sprite Area",    nullptr)                       \
+    V(ctx, RAMChip,    palette,   0x9C00,   256, 0, 0, "Palette RAM",    nullptr)
 
-#define BOMBJACK_SOUND_FOR_EACH_CHIP(X, ctx)                                                            \
-    X(ctx, ZilogZ80A,  cpu,       0x0000,     0, 0, 0, "Sound CPU",      nullptr)                       \
-    X(ctx, ROMChip,    rom,       0x0000,  8192, 0, 0, "Sound ROM",      nullptr)                       \
-    X(ctx, RAMChip,    ram,       0x4000,  1024, 0, 0, "Sound RAM",      nullptr)
+#define BOMBJACK_SOUND_FOR_EACH_CHIP(V, ctx)                                                            \
+    V(ctx, ZilogZ80A,  cpu,       0x0000,     0, 0, 0, "Sound CPU",      nullptr)                       \
+    V(ctx, ROMChip,    rom,       0x0000,  8192, 0, 0, "Sound ROM",      nullptr)                       \
+    V(ctx, RAMChip,    ram,       0x4000,  1024, 0, 0, "Sound RAM",      nullptr)
 
 static constexpr size_t kBJMainChipCount  = 0 BOMBJACK_MAIN_FOR_EACH_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 static constexpr size_t kBJSoundChipCount = 0 BOMBJACK_SOUND_FOR_EACH_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);

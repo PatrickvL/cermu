@@ -95,12 +95,12 @@ template<> struct SpectrumVariantTraits<SpectrumVariant::ZX128K> {
 //
 
 // ── 48K manifest ─────────────────────────────────────────────────────────
-#define SPECTRUM48K_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                \
-    X(ctx, ZilogZ80A,      z80,  0x0000,      0, 0, 0, "Z80A",         nullptr)                                 \
-    X(ctx, RAMChip,        ram,  0x0000,  65536, 0, 0, "RAM",          nullptr)                                 \
-    X(ctx, ROMChip,        rom,  0x0000,  16384, 0, 1, "ROM",          "spectrum48k.rom|48.rom|spectrum.rom|zx48.rom") \
-    X(ctx, ferranti_ula_t, ula,  0x00FE,      0, 0x0001, 0, "Ferranti ULA", nullptr)                                 \
-    X(ctx, AY_3_8912,      psg,  0x0000,      0, 0,      0, "AY-3-8912",    nullptr)
+#define SPECTRUM48K_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                \
+    V(ctx, ZilogZ80A,      z80,  0x0000,      0, 0, 0, "Z80A",         nullptr)                                 \
+    V(ctx, RAMChip,        ram,  0x0000,  65536, 0, 0, "RAM",          nullptr)                                 \
+    V(ctx, ROMChip,        rom,  0x0000,  16384, 0, 1, "ROM",          "spectrum48k.rom|48.rom|spectrum.rom|zx48.rom") \
+    V(ctx, ferranti_ula_t, ula,  0x00FE,      0, 0x0001, 0, "Ferranti ULA", nullptr)                                 \
+    V(ctx, AY_3_8912,      psg,  0x0000,      0, 0,      0, "AY-3-8912",    nullptr)
 
 static constexpr size_t kSpectrum48KChipCount = 0 SPECTRUM48K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 
@@ -109,12 +109,12 @@ inline constexpr ChipManifest<kSpectrum48KChipCount> kSpectrum48KChips = ChipMan
 }};
 
 // ── 128K manifest ────────────────────────────────────────────────────────
-#define SPECTRUM128K_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                               \
-    X(ctx, ZilogZ80A,      z80,  0x0000,       0, 0, 0, "Z80A",         nullptr)                                \
-    X(ctx, RAMChip,        ram,  0x0000,  131072, 0, 0, "RAM",          nullptr)                                \
-    X(ctx, ROMChip,        rom,  0x0000,   32768, 0, 1, "ROM",          "spectrum128k.rom|128.rom|128-0.rom")   \
-    X(ctx, ferranti_ula_t, ula,  0x00FE,       0, 0x0001, 0, "Ferranti ULA", nullptr)                                \
-    X(ctx, AY_3_8912,      psg,  0xFFFD,       0, 0xC002, 0, "AY-3-8912",    nullptr)
+#define SPECTRUM128K_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                               \
+    V(ctx, ZilogZ80A,      z80,  0x0000,       0, 0, 0, "Z80A",         nullptr)                                \
+    V(ctx, RAMChip,        ram,  0x0000,  131072, 0, 0, "RAM",          nullptr)                                \
+    V(ctx, ROMChip,        rom,  0x0000,   32768, 0, 1, "ROM",          "spectrum128k.rom|128.rom|128-0.rom")   \
+    V(ctx, ferranti_ula_t, ula,  0x00FE,       0, 0x0001, 0, "Ferranti ULA", nullptr)                                \
+    V(ctx, AY_3_8912,      psg,  0xFFFD,       0, 0xC002, 0, "AY-3-8912",    nullptr)
 
 static constexpr size_t kSpectrum128KChipCount = 0 SPECTRUM128K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 

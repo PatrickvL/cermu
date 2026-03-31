@@ -55,7 +55,7 @@
 // VIC-20 chip manifest — declarative system chip list
 // ============================================================================
 //
-// Row: X(ctx, type, chip, base, size, mask, overlay, label, rom_files)
+// Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
 //
 // Memory map (CPU view):
 //   $0000-$03FF  RAM (always present, base RAM 0)
@@ -82,22 +82,22 @@
 // Color RAM, expansion I/O), but the metadata is authoritative.
 //
 
-#define VIC20_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                                          \
-    X(ctx, MOS6502,    cpu,      0x0000,     0,      0, 0, "MOS 6502",           nullptr)                                           \
-    X(ctx, RAMChip,    ram0,     0x0000,  1024,      0, 0, "Base RAM 0",         nullptr)                                           \
-    X(ctx, RAMChip,    blk0,     0x0400,  3072,      0, 0, "Expansion Block 0",  nullptr)                                           \
-    X(ctx, RAMChip,    ram1,     0x1000,  4096,      0, 0, "Base RAM 1",         nullptr)                                           \
-    X(ctx, RAMChip,    blk1,     0x2000,  8192,      0, 0, "Expansion Block 1",  nullptr)                                           \
-    X(ctx, RAMChip,    blk2,     0x4000,  8192,      0, 0, "Expansion Block 2",  nullptr)                                           \
-    X(ctx, RAMChip,    blk3,     0x6000,  8192,      0, 0, "Expansion Block 3",  nullptr)                                           \
-    X(ctx, ROMChip,    charrom,  0x8000,  4096,      0, 0, "CHARROM",            "characters.901460-03.bin|chargen.rom|901460-03.bin") \
-    X(ctx, mos6561_t,  vic,      0x9000,     0, 0xFFF0, 0, "MOS 6561 (PAL)",     nullptr)                                           \
-    X(ctx, mos6522_t,  via1,     0x9010,     0, 0xFFF0, 0, "VIA 1",              nullptr)                                           \
-    X(ctx, mos6522_t,  via2,     0x9020,     0, 0xFFF0, 0, "VIA 2",              nullptr)                                           \
-    X(ctx, RAMChip,    colorram, 0x9400,  1024,      0, 0, "Color RAM",          nullptr)                                           \
-    X(ctx, RAMChip,    cart,     0xA000,  8192,      0, 0, "Cartridge Area",     nullptr)                                           \
-    X(ctx, ROMChip,    basic,    0xC000,  8192,      0, 0, "BASIC ROM",          "basic.901486-01.bin|basic.rom|901486-01.bin")       \
-    X(ctx, ROMChip,    kernal,   0xE000,  8192,      0, 0, "KERNAL ROM",         "kernal.901486-07.bin|kernal.rom|901486-07.bin")
+#define VIC20_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                                          \
+    V(ctx, MOS6502,    cpu,      0x0000,     0,      0, 0, "MOS 6502",           nullptr)                                           \
+    V(ctx, RAMChip,    ram0,     0x0000,  1024,      0, 0, "Base RAM 0",         nullptr)                                           \
+    V(ctx, RAMChip,    blk0,     0x0400,  3072,      0, 0, "Expansion Block 0",  nullptr)                                           \
+    V(ctx, RAMChip,    ram1,     0x1000,  4096,      0, 0, "Base RAM 1",         nullptr)                                           \
+    V(ctx, RAMChip,    blk1,     0x2000,  8192,      0, 0, "Expansion Block 1",  nullptr)                                           \
+    V(ctx, RAMChip,    blk2,     0x4000,  8192,      0, 0, "Expansion Block 2",  nullptr)                                           \
+    V(ctx, RAMChip,    blk3,     0x6000,  8192,      0, 0, "Expansion Block 3",  nullptr)                                           \
+    V(ctx, ROMChip,    charrom,  0x8000,  4096,      0, 0, "CHARROM",            "characters.901460-03.bin|chargen.rom|901460-03.bin") \
+    V(ctx, mos6561_t,  vic,      0x9000,     0, 0xFFF0, 0, "MOS 6561 (PAL)",     nullptr)                                           \
+    V(ctx, mos6522_t,  via1,     0x9010,     0, 0xFFF0, 0, "VIA 1",              nullptr)                                           \
+    V(ctx, mos6522_t,  via2,     0x9020,     0, 0xFFF0, 0, "VIA 2",              nullptr)                                           \
+    V(ctx, RAMChip,    colorram, 0x9400,  1024,      0, 0, "Color RAM",          nullptr)                                           \
+    V(ctx, RAMChip,    cart,     0xA000,  8192,      0, 0, "Cartridge Area",     nullptr)                                           \
+    V(ctx, ROMChip,    basic,    0xC000,  8192,      0, 0, "BASIC ROM",          "basic.901486-01.bin|basic.rom|901486-01.bin")       \
+    V(ctx, ROMChip,    kernal,   0xE000,  8192,      0, 0, "KERNAL ROM",         "kernal.901486-07.bin|kernal.rom|901486-07.bin")
 
 // ── Chip count, manifest, BusTraits ──────────────────────────────────────
 
