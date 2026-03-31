@@ -307,6 +307,13 @@ bus_state_t mos6522_t::tick(bus_state_t bus_state) {
         ifr &= ~MOS6522_IFR_IRQ;
     }
 
+    // CS-driven MMIO self-dispatch
+    if (is_cs_selected(bus_state)) {
+        bus_state = BUS_GET_BIT(bus_state, BUS_RW_BIT)
+            ? on_bus_read(bus_state) : on_bus_write(bus_state);
+        mark_cs_serviced(bus_state);
+    }
+
 #ifdef CERMU_HAS_GUI
     bus_snapshot_ = bus_state;
 #endif

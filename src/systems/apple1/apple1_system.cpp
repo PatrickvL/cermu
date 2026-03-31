@@ -478,17 +478,8 @@ void Apple1System::tick_cpu() {
     if (system_ready_) {
         pins_ = board_.cpu.tick<MOS6502::Phase::PHI2>(pins_);
         pins_ = bus_.resolve(pins_);
-
-        // CS-driven dispatch: PIA handles register access when selected,
-        // otherwise service() handles buffer reads/writes (RAM/ROM).
-        if (Bus::get_cs_from_bus(pins_) == board_.pia.bus_chip_id()) {
-            if (BUS_GET_BIT(pins_, BUS_RW_BIT))
-                pins_ = board_.pia.on_bus_read(pins_);
-            else
-                board_.pia.on_bus_write(pins_);
-        } else {
-            pins_ = bus_.service(pins_);
-        }
+        pins_ = bus_.service(pins_);
+        pins_ = board_.pia.tick(pins_);
 
         pins_ = board_.cpu.tick<MOS6502::Phase::PHI1>(pins_);
         board_.cpu.sample_nmi_pin(pins_);

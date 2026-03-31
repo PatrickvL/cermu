@@ -239,13 +239,18 @@ void Atari2600System::tick() {
     // TIA tick: 3 color clocks per CPU cycle
     board_.tia.tick_cpu_cycle();
 
-    // If WSYNC is pending, the CPU is halted — skip the CPU tick
+    // If WSYNC is pending, the CPU is halted — skip the CPU tick.
+    // Clear CS so MMIO chips only see idle ticks during halt.
     if (!board_.tia.is_cpu_halted()) {
         tick_cpu();
+    } else {
+        pins_ &= ~uint64_t(BUS_CS_MASK);
     }
 
-    // RIOT timer tick (once per CPU cycle)
-    board_.riot.tick();
+    // RIOT timer tick (once per CPU cycle, unconditional).
+    // When the CPU is halted by WSYNC, CS is cleared above so only
+    // the timer portion runs (is_cs_selected returns false).
+    pins_ = board_.riot.tick(pins_);
 
     // Read joystick inputs from connector ports
     update_joystick_state();
@@ -296,27 +301,12 @@ void Atari2600System::tick_cpu() {
     {
         pins_ = board_.cpu.tick<MOS6507::Phase::PHI2>(pins_);
 
-        // Address decode (CS-tick) — all chips are MMIO on the 2600
+        // Address decode + MMIO self-dispatch (all chips MMIO on the 2600)
         pins_ = bus_.resolve(pins_);
-        {
-            auto cs = Bus::get_cs_from_bus(pins_);
-            if (cs == board_.tia.bus_chip_id()) {
-                if (BUS_GET_BIT(pins_, BUS_RW_BIT))
-                    pins_ = board_.tia.on_bus_read(pins_);
-                else
-                    board_.tia.on_bus_write(pins_);
-            } else if (cs == board_.riot.bus_chip_id()) {
-                if (BUS_GET_BIT(pins_, BUS_RW_BIT))
-                    pins_ = board_.riot.on_bus_read(pins_);
-                else
-                    board_.riot.on_bus_write(pins_);
-            } else if (cs == board_.cart.bus_chip_id()) {
-                if (BUS_GET_BIT(pins_, BUS_RW_BIT))
-                    pins_ = board_.cart.on_bus_read(pins_);
-                else
-                    board_.cart.on_bus_write(pins_);
-            }
-        }
+        pins_ = board_.tia.tick(pins_);
+        pins_ = board_.cart.tick(pins_);
+        // RIOT is ticked unconditionally in tick() — not here, to avoid
+        // double-ticking the timer on CPU-active cycles.
 
         // Bus snooping for mappers that monitor all accesses
         // (e.g. 3F watches TIA writes, FE watches stack at $01FE)

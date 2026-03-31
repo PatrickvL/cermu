@@ -57,6 +57,16 @@ public:
         return bus;
     }
 
+    // --- CS-tick: MMIO self-dispatch ---
+    bus_state_t tick(bus_state_t bus) noexcept {
+        if (is_cs_selected(bus)) {
+            bus = BUS_GET_BIT(bus, BUS_RW_BIT)
+                ? on_bus_read(bus) : on_bus_write(bus);
+            mark_cs_serviced(bus);
+        }
+        return bus;
+    }
+
 private:
     A2600Mapper* mapper_ = nullptr;  // non-owning; system owns the mapper
 };
