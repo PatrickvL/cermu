@@ -68,25 +68,25 @@ template<> struct VZVariantTraits<VZVariant::VZ300> {
 // VZ chip declarations — variant-specific single source of truth
 // =============================================================================
 //
-// Row: X(ctx, type, chip, base, size, mask, overlay, label, rom_files)
+// Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
 //
 // VZ200: 16 KB ROM at $0000, 2 KB Video RAM at $7000, 16 KB User RAM at $7800
 // VZ300: same layout, only ROM filename differs
 //
 
-#define VZ200_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                  \
-    X(ctx, ZilogZ80A,  z80,   0x0000,     0, 0, 0, "Z80A",       nullptr)                                   \
-    X(ctx, ROMChip,    rom,   0x0000, 16384, 0, 0, "BASIC ROM",  "vz200.rom|BASIC.ROM|laser200.rom")        \
-    X(ctx, RAMChip,    vram,  0x7000,  2048, 0, 0, "Video RAM",  nullptr)                                   \
-    X(ctx, RAMChip,    ram,   0x7800, 16384, 0, 0, "User RAM",   nullptr)                                   \
-    X(ctx, mc6847_t,   vdg,   0x0000,     0, 0, 0, "MC6847 VDG", nullptr)
+#define VZ200_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                  \
+    V(ctx, ZilogZ80A,  z80,   0x0000,     0, 0, 0, "Z80A",       nullptr)                                   \
+    V(ctx, ROMChip,    rom,   0x0000, 16384, 0, 0, "BASIC ROM",  "vz200.rom|BASIC.ROM|laser200.rom")        \
+    V(ctx, RAMChip,    vram,  0x7000,  2048, 0, 0, "Video RAM",  nullptr)                                   \
+    V(ctx, RAMChip,    ram,   0x7800, 16384, 0, 0, "User RAM",   nullptr)                                   \
+    V(ctx, mc6847_t,   vdg,   0x0000,     0, 0, 0, "MC6847 VDG", nullptr)
 
-#define VZ300_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                  \
-    X(ctx, ZilogZ80A,  z80,   0x0000,     0, 0, 0, "Z80A",       nullptr)                                   \
-    X(ctx, ROMChip,    rom,   0x0000, 16384, 0, 0, "BASIC ROM",  "vz300.rom|BASIC.ROM|laser310.rom")        \
-    X(ctx, RAMChip,    vram,  0x7000,  2048, 0, 0, "Video RAM",  nullptr)                                   \
-    X(ctx, RAMChip,    ram,   0x7800, 16384, 0, 0, "User RAM",   nullptr)                                   \
-    X(ctx, mc6847_t,   vdg,   0x0000,     0, 0, 0, "MC6847 VDG", nullptr)
+#define VZ300_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                  \
+    V(ctx, ZilogZ80A,  z80,   0x0000,     0, 0, 0, "Z80A",       nullptr)                                   \
+    V(ctx, ROMChip,    rom,   0x0000, 16384, 0, 0, "BASIC ROM",  "vz300.rom|BASIC.ROM|laser310.rom")        \
+    V(ctx, RAMChip,    vram,  0x7000,  2048, 0, 0, "Video RAM",  nullptr)                                   \
+    V(ctx, RAMChip,    ram,   0x7800, 16384, 0, 0, "User RAM",   nullptr)                                   \
+    V(ctx, mc6847_t,   vdg,   0x0000,     0, 0, 0, "MC6847 VDG", nullptr)
 
 static constexpr size_t kVZ200ChipCount = 0 VZ200_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 static constexpr size_t kVZ300ChipCount = 0 VZ300_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);

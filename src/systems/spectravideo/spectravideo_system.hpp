@@ -65,27 +65,27 @@ template<> struct SVIVariantTraits<SVIVariant::SVI328> {
 // SVI chip declarations — variant-specific single source of truth
 // =============================================================================
 //
-// Row: X(ctx, type, chip, base, size, mask, overlay, label, rom_files)
+// Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
 //
 // SVI-318: ROM 32KB at $0000, RAM 16KB at $8000
 // SVI-328: ROM 32KB at $0000, RAM 64KB at $0000
 //
 
-#define SVI318_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                               \
-    X(ctx, ZilogZ80A,  z80,  0x0000,      0, 0, 0, "Z80A",        nullptr)                                                 \
-    X(ctx, ROMChip,    bios, 0x0000, 0x8000, 0, 0, "BASIC ROM",   "svi318.rom|SVI318.ROM|svi.rom")                        \
-    X(ctx, TMS9918A,   vdp,  0x0080,      0, 0, 0, "TMS9918A",    nullptr)                                                 \
-    X(ctx, AY_3_8910,  psg,  0x0088,      0, 0, 0, "AY-3-8910",   nullptr)                                                \
-    X(ctx, i8255_t,    ppi,  0x0096,      0, 0, 0, "i8255 PPI",   nullptr)                                                 \
-    X(ctx, RAMChip,    ram,  0x8000, 0x4000, 0, 0, "RAM",         nullptr)
+#define SVI318_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                               \
+    V(ctx, ZilogZ80A,  z80,  0x0000,      0, 0, 0, "Z80A",        nullptr)                                                 \
+    V(ctx, ROMChip,    bios, 0x0000, 0x8000, 0, 0, "BASIC ROM",   "svi318.rom|SVI318.ROM|svi.rom")                        \
+    V(ctx, TMS9918A,   vdp,  0x0080,      0, 0, 0, "TMS9918A",    nullptr)                                                 \
+    V(ctx, AY_3_8910,  psg,  0x0088,      0, 0, 0, "AY-3-8910",   nullptr)                                                \
+    V(ctx, i8255_t,    ppi,  0x0096,      0, 0, 0, "i8255 PPI",   nullptr)                                                 \
+    V(ctx, RAMChip,    ram,  0x8000, 0x4000, 0, 0, "RAM",         nullptr)
 
-#define SVI328_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                               \
-    X(ctx, ZilogZ80A,  z80,  0x0000,       0, 0, 0, "Z80A",        nullptr)                                                \
-    X(ctx, ROMChip,    bios, 0x0000,  0x8000, 0, 0, "BASIC ROM",   "svi328.rom|SVI328.ROM|svi.rom")                       \
-    X(ctx, RAMChip,    ram,  0x0000, 0x10000, 0, 0, "RAM",         nullptr)                                                \
-    X(ctx, TMS9918A,   vdp,  0x0080,       0, 0, 0, "TMS9918A",    nullptr)                                                \
-    X(ctx, AY_3_8910,  psg,  0x0088,       0, 0, 0, "AY-3-8910",   nullptr)                                               \
-    X(ctx, i8255_t,    ppi,  0x0096,       0, 0, 0, "i8255 PPI",   nullptr)
+#define SVI328_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                               \
+    V(ctx, ZilogZ80A,  z80,  0x0000,       0, 0, 0, "Z80A",        nullptr)                                                \
+    V(ctx, ROMChip,    bios, 0x0000,  0x8000, 0, 0, "BASIC ROM",   "svi328.rom|SVI328.ROM|svi.rom")                       \
+    V(ctx, RAMChip,    ram,  0x0000, 0x10000, 0, 0, "RAM",         nullptr)                                                \
+    V(ctx, TMS9918A,   vdp,  0x0080,       0, 0, 0, "TMS9918A",    nullptr)                                                \
+    V(ctx, AY_3_8910,  psg,  0x0088,       0, 0, 0, "AY-3-8910",   nullptr)                                               \
+    V(ctx, i8255_t,    ppi,  0x0096,       0, 0, 0, "i8255 PPI",   nullptr)
 
 static constexpr size_t kSVI318ChipCount = 0 SVI318_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 static constexpr size_t kSVI328ChipCount = 0 SVI328_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);

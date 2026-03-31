@@ -76,7 +76,7 @@ namespace nes_system {
 // NES chip declaration — single source of truth
 // =============================================================================
 //
-// Row: X(ctx, type, chip, base, size, mask, overlay, label, rom_files)
+// Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
 //
 // Actual memory dispatch uses nes_bus_t (page-pointer bus), not MemoryBus.
 // These are non-bus chip declarations for Board typed access.
@@ -85,9 +85,9 @@ namespace nes_system {
 //   Slot 1: Ricoh 2C02  — PPU (not bus-mapped via MemoryBus)
 //
 
-#define NES_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                                     \
-    X(ctx, RICOH_2A03, cpu,  0x0000, 0, 0, 0, "Ricoh 2A03",     nullptr)                                    \
-    X(ctx, PPU,        ppu,  0x2000, 0, 0, 0, "Ricoh 2C02 PPU", nullptr)
+#define NES_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                     \
+    V(ctx, RICOH_2A03, cpu,  0x0000, 0, 0, 0, "Ricoh 2A03",     nullptr)                                    \
+    V(ctx, PPU,        ppu,  0x2000, 0, 0, 0, "Ricoh 2C02 PPU", nullptr)
 
 static constexpr size_t kNESChipCount = 0 NES_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 

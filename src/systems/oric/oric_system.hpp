@@ -86,25 +86,25 @@ template<> struct OricVariantTraits<OricVariant::ORIC_ATMOS> {
 // Oric chip declarations — variant-specific single source of truth
 // =============================================================================
 //
-// Row: X(ctx, type, chip, base, size, mask, overlay, label, rom_files)
+// Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
 //
 // Oric-1 and Atmos have identical hardware layout; only the ROM differs.
 // VIA is MMIO-only: 16-byte window at $0300 (mask 0xFFF0).
 //
 
-#define ORIC1_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                               \
-    X(ctx, MOS6502,    cpu,  0x0000,     0,      0, 0, "MOS 6502",  nullptr)                             \
-    X(ctx, RAMChip,    ram,  0x0000, 65536,      0, 0, "RAM",       nullptr)                             \
-    X(ctx, mos6522_t,  via,  0x0300,     0, 0xFFF0, 0, "VIA 6522",  nullptr)                             \
-    X(ctx, ROMChip,    rom,  0xC000, 16384,      0, 0, "ROM",       "oric1.rom|basic10.rom|BASIC10.ROM") \
-    X(ctx, AY_3_8912,  psg,  0x0000,     0,      0, 0, "AY-3-8912", nullptr)
+#define ORIC1_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                               \
+    V(ctx, MOS6502,    cpu,  0x0000,     0,      0, 0, "MOS 6502",  nullptr)                             \
+    V(ctx, RAMChip,    ram,  0x0000, 65536,      0, 0, "RAM",       nullptr)                             \
+    V(ctx, mos6522_t,  via,  0x0300,     0, 0xFFF0, 0, "VIA 6522",  nullptr)                             \
+    V(ctx, ROMChip,    rom,  0xC000, 16384,      0, 0, "ROM",       "oric1.rom|basic10.rom|BASIC10.ROM") \
+    V(ctx, AY_3_8912,  psg,  0x0000,     0,      0, 0, "AY-3-8912", nullptr)
 
-#define ORIC_ATMOS_FOR_EACH_SYSTEM_CHIP(X, ctx)                                                          \
-    X(ctx, MOS6502,    cpu,  0x0000,     0,      0, 0, "MOS 6502",  nullptr)                             \
-    X(ctx, RAMChip,    ram,  0x0000, 65536,      0, 0, "RAM",       nullptr)                             \
-    X(ctx, mos6522_t,  via,  0x0300,     0, 0xFFF0, 0, "VIA 6522",  nullptr)                             \
-    X(ctx, ROMChip,    rom,  0xC000, 16384,      0, 0, "ROM",       "atmos.rom|basic11.rom|BASIC11.ROM") \
-    X(ctx, AY_3_8912,  psg,  0x0000,     0,      0, 0, "AY-3-8912", nullptr)
+#define ORIC_ATMOS_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                          \
+    V(ctx, MOS6502,    cpu,  0x0000,     0,      0, 0, "MOS 6502",  nullptr)                             \
+    V(ctx, RAMChip,    ram,  0x0000, 65536,      0, 0, "RAM",       nullptr)                             \
+    V(ctx, mos6522_t,  via,  0x0300,     0, 0xFFF0, 0, "VIA 6522",  nullptr)                             \
+    V(ctx, ROMChip,    rom,  0xC000, 16384,      0, 0, "ROM",       "atmos.rom|basic11.rom|BASIC11.ROM") \
+    V(ctx, AY_3_8912,  psg,  0x0000,     0,      0, 0, "AY-3-8912", nullptr)
 
 static constexpr size_t kOric1ChipCount = 0 ORIC1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 static constexpr size_t kOricAtmosChipCount = 0 ORIC_ATMOS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
