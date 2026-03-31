@@ -107,8 +107,9 @@ inline constexpr ChipManifest<kAtari2600ChipCount> kAtari2600Chips =
         ATARI2600_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
     }}, 4096);
 
-// BusSpec auto-derived from the manifest (13-bit address, 256-byte pages)
-using Atari2600BusSpec = ManifestBusSpec<kAtari2600Chips, 13, 8>;
+// BusSpec auto-derived from the manifest (13-bit address, 256-byte pages).
+// CsBitShift=55 enables CS-tick.
+using Atari2600BusSpec = ManifestBusSpec<kAtari2600Chips, 13, 8, 1, 55>;
 
 // ── Chips ──────────────────────────────────────────────────────────────
 struct Atari2600Chipset {

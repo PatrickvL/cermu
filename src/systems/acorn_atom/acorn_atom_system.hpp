@@ -69,8 +69,8 @@ inline constexpr ChipManifest<kAtomChipCount> kAcornAtomChips = ChipManifest<kAt
     ATOM_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
 }};
 
-// BusSpec auto-derived from the manifest
-using AcornAtomBusSpec = ManifestBusSpec<kAcornAtomChips, 16, 8>;
+// BusSpec auto-derived from the manifest.  CsBitShift=55 enables CS-tick.
+using AcornAtomBusSpec = ManifestBusSpec<kAcornAtomChips, 16, 8, 1, 55>;
 
 // ── Chips ──────────────────────────────────────────────────────────────
 struct AtomChipset {

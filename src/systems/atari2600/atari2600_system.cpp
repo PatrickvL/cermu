@@ -296,8 +296,27 @@ void Atari2600System::tick_cpu() {
     {
         pins_ = board_.cpu.tick<MOS6507::Phase::PHI2>(pins_);
 
-        // Memory dispatch through MemoryBus (TIA, RIOT, Cart all via MMIO)
-        pins_ = bus_.tick(pins_);
+        // Address decode (CS-tick) — all chips are MMIO on the 2600
+        pins_ = bus_.resolve(pins_);
+        {
+            auto cs = Bus::get_cs_from_bus(pins_);
+            if (cs == board_.tia.bus_chip_id()) {
+                if (BUS_GET_BIT(pins_, BUS_RW_BIT))
+                    pins_ = board_.tia.on_bus_read(pins_);
+                else
+                    board_.tia.on_bus_write(pins_);
+            } else if (cs == board_.riot.bus_chip_id()) {
+                if (BUS_GET_BIT(pins_, BUS_RW_BIT))
+                    pins_ = board_.riot.on_bus_read(pins_);
+                else
+                    board_.riot.on_bus_write(pins_);
+            } else if (cs == board_.cart.bus_chip_id()) {
+                if (BUS_GET_BIT(pins_, BUS_RW_BIT))
+                    pins_ = board_.cart.on_bus_read(pins_);
+                else
+                    board_.cart.on_bus_write(pins_);
+            }
+        }
 
         // Bus snooping for mappers that monitor all accesses
         // (e.g. 3F watches TIA writes, FE watches stack at $01FE)
