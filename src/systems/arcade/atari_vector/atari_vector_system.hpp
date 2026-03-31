@@ -579,18 +579,24 @@ constexpr auto make_atv_manifest() {
     // Variant-specific optional slots (extra ROM, POKEY, EAROM)
     auto extra = []() {
         if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
+            // Mask = inverted SIZE → matches the hardware decode window.
+            // e.g. SIZE=0x10 → mask=0xFFF0; SIZE=0x0400 → mask=0xFC00.
+            constexpr uint16_t pokey_mask = uint16_t(~(T::POKEY1_SIZE - 1));
             return std::make_tuple(
                 Slot<ROMChip>{T::PROGROM_HI_BASE, T::PROGROM_HI_SIZE, 0, "Program ROM High"},
-                Slot<pokey::C012294>{T::POKEY1_BASE, 0, 0x0F, "POKEY 1"}
+                Slot<pokey::C012294>{T::POKEY1_BASE, 0, pokey_mask, "POKEY 1"}
             );
         } else if constexpr (T::HAS_POKEY && T::HAS_EAROM) {
+            constexpr uint16_t pokey_mask = uint16_t(~(T::POKEY1_SIZE - 1));
+            constexpr uint16_t earom_mask = uint16_t(~(T::EAROM_SIZE - 1));
             return std::make_tuple(
-                Slot<pokey::C012294>{T::POKEY1_BASE, 0, 0x0F, "POKEY 1"},
-                Slot<ER2055>{T::EAROM_BASE, 0, 0x3F, "ER2055 EAROM"}
+                Slot<pokey::C012294>{T::POKEY1_BASE, 0, pokey_mask, "POKEY 1"},
+                Slot<ER2055>{T::EAROM_BASE, 0, earom_mask, "ER2055 EAROM"}
             );
         } else if constexpr (T::HAS_POKEY) {
+            constexpr uint16_t pokey_mask = uint16_t(~(T::POKEY1_SIZE - 1));
             return std::make_tuple(
-                Slot<pokey::C012294>{T::POKEY1_BASE, 0, 0x0F, "POKEY 1"}
+                Slot<pokey::C012294>{T::POKEY1_BASE, 0, pokey_mask, "POKEY 1"}
             );
         } else {
             return std::tuple<>();
