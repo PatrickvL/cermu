@@ -51,8 +51,14 @@ typedef uint64_t bus_state_t;
 #define BUS_SP_BIT      51  // CIA SP pin (Serial Port data)
 #define BUS_BA_BIT      52  // Bus available
 #define BUS_VP_BIT      53  // Vector Pull
-#define BUS_ML_BIT      54  // Memory Lock
-/* 55-63 reserved */
+#define BUS_ML_BIT      54  // Memory Lock (overlaps CS field — layout rendering only)
+
+/* Chip-select field — globally fixed position & width in bus_state_t.
+   When resolve() is active, the decoded chip ID is embedded here.
+   10 bits at position 54 covers up to 1023 chip IDs + sentinels. */
+#define BUS_CS_SHIFT    54
+#define BUS_CS_BITS     10
+#define BUS_CS_MASK     (((1ULL << BUS_CS_BITS) - 1) << BUS_CS_SHIFT)
 
 /* Helpers */
 #define BUS_BIT(bit)            (1ULL << (bit))

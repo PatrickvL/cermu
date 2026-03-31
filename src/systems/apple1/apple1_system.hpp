@@ -52,10 +52,10 @@ inline constexpr ChipManifest<kApple1ChipCount> kApple1Chips = ChipManifest<kApp
     APPLE1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
 }};
 
-// BusSpec auto-derived from the manifest.  CsBitShift=55 enables CS-tick:
-// resolve() embeds the decoded chip ID into bus_state_t bits [55..63],
+// BusSpec auto-derived from the manifest.  EnableCs=true enables CS-tick:
+// resolve() embeds the decoded chip ID into bus_state_t CS field,
 // and each chip self-selects via its bus_chip_id_.
-using Apple1BusSpec = ManifestBusSpec<kApple1Chips, 16, 8, 1, 55>;
+using Apple1BusSpec = ManifestBusSpec<kApple1Chips, 16, 8, 1, true>;
 
 // ============================================================================
 // Apple 1 Chips — value-typed chips owned by Board (auto-generated)

@@ -730,7 +730,7 @@ template<const auto& Manifest,
          size_t AddrBits = 16,
          size_t PgBits   = 8,
          size_t NViewers = 1,
-         size_t CsBitShiftParam = 0>
+         bool   EnableCs = false>
 struct ManifestBusSpec {
     using AddrType = uint_least_bits_t<AddrBits>;
 
@@ -750,7 +750,7 @@ struct ManifestBusSpec {
     // MaxWriteChipId = MaxChipId (conservative; is_read_only() known at runtime only).
     static constexpr size_t BufferMaxChipId = Manifest.max_chip_id(PgBits);
     static constexpr size_t BusMmioCount    = Manifest.bus_mmio_slot_count();
-    static constexpr size_t MaxChipId       = (CsBitShiftParam > 0)
+    static constexpr size_t MaxChipId       = EnableCs
                                             ? BufferMaxChipId + BusMmioCount
                                             : BufferMaxChipId;
     static constexpr size_t MaxWriteChipId  = MaxChipId;
@@ -778,31 +778,15 @@ struct ManifestBusSpec {
 
     // ── CS line support (chip-select field in bus_state_t) ─────────────
     //
-    // When CsBitShift > 0 the spec advertises a CS field in bus_state_t.
-    // CsLineBits is auto-derived to cover all chip IDs (buffer + MMIO)
-    // plus sentinels.  resolve() embeds the decoded chip ID into this
-    // field; each chip's tick() checks it against its own bus_chip_id_.
+    // When EnableCs is true, resolve() embeds the decoded chip ID into the
+    // global CS field (BUS_CS_SHIFT / BUS_CS_BITS defined in system_lines.hpp).
+    // Each chip's tick() checks it against its own bus_chip_id_.
     //
-    // CsBitShift = 0 (the default) disables CS — the system uses the
+    // EnableCs = false (the default) disables CS — the system uses the
     // callback-driven tick() path instead.
     //
-    static constexpr size_t CsBitShift = CsBitShiftParam;
-
-    // Auto-derive CsLineBits when CS is enabled.
-    // Width must cover all chip IDs (buffer + MMIO) plus sentinels.
-    // MaxChipId already includes MMIO slot IDs when CS is active.
-    static constexpr size_t CsLineBits = []() -> size_t {
-        if constexpr (CsBitShift == 0) return 0;
-        // Sentinel count: kNoChipSelected(1) + sub-tables + MMIO handlers
-        constexpr size_t subs       = 1 + Manifest.masked_sub_count(PgBits);
-        constexpr size_t max_id     = MaxChipId + subs
-                                    + (EnableMmio ? MaxMmioHandlers : 0);
-        return std::bit_width(max_id);
-    }();
-
-    static_assert(CsBitShift == 0 || CsBitShift + CsLineBits <= 64,
-                  "CS field overflows bus_state_t — reduce PageBits or "
-                  "lower CsBitShift to make room");
+    static constexpr size_t CsBitShift = EnableCs ? BUS_CS_SHIFT : 0;
+    static constexpr size_t CsLineBits = EnableCs ? BUS_CS_BITS  : 0;
 };
 
 

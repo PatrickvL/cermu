@@ -108,8 +108,8 @@ inline constexpr ChipManifest<kAtari2600ChipCount> kAtari2600Chips =
     }}, 4096);
 
 // BusSpec auto-derived from the manifest (13-bit address, 256-byte pages).
-// CsBitShift=55 enables CS-tick.
-using Atari2600BusSpec = ManifestBusSpec<kAtari2600Chips, 13, 8, 1, 55>;
+// EnableCs=true enables CS-tick.
+using Atari2600BusSpec = ManifestBusSpec<kAtari2600Chips, 13, 8, 1, true>;
 
 // ── Chips ──────────────────────────────────────────────────────────────
 struct Atari2600Chipset {

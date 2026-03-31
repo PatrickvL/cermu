@@ -68,8 +68,8 @@ struct NesCpuBusSpec {
     static constexpr size_t MaxWriteChipId = 20;   // WRAM + CIRAM + PRG-RAM
     static constexpr bool   EnableMmio     = true;
     static constexpr size_t MaxMmioHandlers= 4;    // PPU, APU/IO, mapper, exp
-    static constexpr size_t CsLineBits     = 10;   // optional; remove to disable
-    static constexpr size_t CsBitShift     = 54;   // fits exactly: 54 + 10 = 64
+    static constexpr size_t CsLineBits     = BUS_CS_BITS;   // global width
+    static constexpr size_t CsBitShift     = BUS_CS_SHIFT;  // global position
 };
 
 // ── NES / Famicom — PPU bus ───────────────────────────────────────────────────

@@ -112,22 +112,21 @@ struct PackingTraits {
     static constexpr WriteChipId kRegChipBaseWrite =
         WriteChipId(size_t(kMaskedSubBaseWrite) + kMaxMaskedSubs);
 
-    // ── CS line bits (multiplexed encoding) ─────────────────────────────────
+    // ── CS line bits ────────────────────────────────────────────────────────
+    // Position and width are globally fixed (BUS_CS_SHIFT / BUS_CS_BITS).
+    // The spec only controls whether CS is enabled (CsLineBits > 0).
     static constexpr size_t kCsLineBits = spec_cs_line_bits_v<Spec>;
-    static constexpr size_t kCsBitShift = spec_cs_bit_shift_v<Spec>;
+    static constexpr size_t kCsBitShift = BUS_CS_SHIFT;
     static constexpr bool   kCsLines    = (kCsLineBits > 0);
-    static constexpr uint64_t kCsMask =
-        kCsLines ? (((uint64_t(1) << kCsLineBits) - 1) << kCsBitShift) : 0;
+    static constexpr uint64_t kCsMask   = kCsLines ? BUS_CS_MASK : 0;
 
     // ── Static assertions ───────────────────────────────────────────────────
     static_assert(Spec::MaxWriteChipId <= Spec::MaxChipId);
     static_assert(Spec::PageBits >= 1 && Spec::PageBits < Spec::AddressBits);
     static_assert(kReadMaxId  < (size_t(1) << (sizeof(ChipId)      * 8)));
     static_assert(kWriteMaxId < (size_t(1) << (sizeof(WriteChipId) * 8)));
-    static_assert(!kCsLines || kCsLineBits >= std::bit_width(kReadMaxId),
-        "CsLineBits is too narrow to represent all chip ids including sentinels");
-    static_assert(!kCsLines || (kCsBitShift + kCsLineBits <= 64),
-        "CS field overflows bus_state_t (64 bits)");
+    static_assert(!kCsLines || BUS_CS_BITS >= std::bit_width(kReadMaxId),
+        "BUS_CS_BITS is too narrow to represent all chip ids including sentinels");
     static_assert(!kHasIndexedSub || kIndexedSubBits > 0,
         "IndexedSubBits must be > 0 when MaxIndexedSubTables > 0");
     static_assert(!kHasMaskedSub || kMaxMaskedRegions > 0,
