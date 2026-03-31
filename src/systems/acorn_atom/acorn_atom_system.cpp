@@ -105,39 +105,22 @@ void AcornAtomSystem::reset() {
 void AcornAtomSystem::tick() {
     if (!system_ready_) return;
 
-    // ---- VIA timer tick — may assert IRQ ----
-    {
-        bus_state_t vbus = ATOM_BUS_DEFAULT_STATE;
-        BUS_SET_BIT(vbus, BUS_RW_BIT);
-        vbus = board_.via.tick(vbus);
-        if (!BUS_GET_BIT(vbus, BUS_IRQ_BIT)) {
-            BUS_CLR_BIT(pins_, BUS_IRQ_BIT);
-        }
+    // ---- Propagate VIA interrupt state from previous cycle ----
+    // The VIA's IRQ assertion persists in ifr/ier across ticks.
+    // The CPU samples IRQ during PHI2, so we propagate before the CPU tick.
+    if (board_.via.ifr & board_.via.ier & 0x7F) {
+        if (board_.via.interrupt_bit != 0)
+            BUS_CLR_BIT(pins_, board_.via.interrupt_bit);
     }
 
     // ---- CPU PHI2 — address/R#W valid on bus ----
     pins_ = board_.cpu.tick<MOS6502::Phase::PHI2>(pins_);
 
-    // ---- Address decode (CS-tick) ----
+    // ---- Address decode + flat-mem service + MMIO self-dispatch ----
     pins_ = bus_.resolve(pins_);
-
-    // ---- CS-driven dispatch: PPI / VIA handle registers, rest → flat mem ----
-    {
-        auto cs = Bus::get_cs_from_bus(pins_);
-        if (cs == board_.ppi.bus_chip_id()) {
-            if (BUS_GET_BIT(pins_, BUS_RW_BIT))
-                pins_ = board_.ppi.on_bus_read(pins_);
-            else
-                board_.ppi.on_bus_write(pins_);
-        } else if (cs == board_.via.bus_chip_id()) {
-            if (BUS_GET_BIT(pins_, BUS_RW_BIT))
-                pins_ = board_.via.on_bus_read(pins_);
-            else
-                board_.via.on_bus_write(pins_);
-        } else {
-            pins_ = bus_.service(pins_);
-        }
-    }
+    pins_ = bus_.service(pins_);
+    pins_ = board_.ppi.tick(pins_);
+    pins_ = board_.via.tick(pins_);
 
     // ---- CPU PHI1 ----
     pins_ = board_.cpu.tick<MOS6502::Phase::PHI1>(pins_);

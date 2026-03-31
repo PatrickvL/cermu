@@ -139,6 +139,16 @@ public:
         return bus;
     }
 
+    // --- CS-tick: MMIO self-dispatch ---
+    bus_state_t tick(bus_state_t bus) noexcept {
+        if (is_cs_selected(bus)) {
+            bus = BUS_GET_BIT(bus, BUS_RW_BIT)
+                ? on_bus_read(bus) : on_bus_write(bus);
+            mark_cs_serviced(bus);
+        }
+        return bus;
+    }
+
     // === External port inputs from system/devices ===
 
     void set_port_a_input(uint8_t data) { port_a_in_ = data; }

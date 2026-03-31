@@ -258,6 +258,16 @@ struct tia_t : public VideoChipBase {
         return bus;
     }
 
+    // --- CS-tick: MMIO self-dispatch ---
+    bus_state_t tick(bus_state_t bus) noexcept {
+        if (is_cs_selected(bus)) {
+            bus = BUS_GET_BIT(bus, BUS_RW_BIT)
+                ? on_bus_read(bus) : on_bus_write(bus);
+            mark_cs_serviced(bus);
+        }
+        return bus;
+    }
+
     // --- ChipBase GUI interface ---
 #ifdef CERMU_HAS_GUI
     ChipLayout* create_chip_layout() const override;

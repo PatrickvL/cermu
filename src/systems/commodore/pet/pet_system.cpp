@@ -478,79 +478,34 @@ void PETSystem::io_write(uint16_t addr, uint8_t data) {
 // ============================================================================
 
 void PETSystem::tick() {
-    bus_state_t s = PET_BUS_DEFAULT_STATE;
+    // Bus state wraps around from the previous cycle.
+    // IRQ/NMI lines asserted by chip ticks in the previous cycle are
+    // naturally visible to the CPU at the start of this cycle.
 
-    // Preserve address and data from previous cycle
-    BUS_SET_ADDR(s, BUS_GET_ADDR(pins_));
-    BUS_SET_DATA(s, BUS_GET_DATA(pins_));
-
-    // ---- Phase 1: CRTC character clock ----
-    // MC6845 runs at the same 1 MHz character clock as the CPU.
-    // The display callback fires during tick() for visible characters.
-    if (crtc_) {
-        crtc_->tick();
-    }
-
-    // ---- Phase 2: VIA tick (timers, interrupts) ----
-    if (via_) {
-        // VIA tick — don't pass CPU bus state; VIA is accessed via I/O dispatch.
-        // But we need the VIA to tick for timer countdown + IRQ generation.
-        bus_state_t via_bus = PET_BUS_DEFAULT_STATE;
-        BUS_SET_BIT(via_bus, BUS_RW_BIT);  // Idle read (no chip select)
-        via_bus = via_->tick(via_bus);
-
-        // Propagate IRQ from VIA to CPU bus
-        if (!BUS_GET_BIT(via_bus, BUS_IRQ_BIT)) {
-            BUS_CLR_BIT(s, BUS_IRQ_BIT);
-        }
-    }
-
-    // ---- Propagate PIA IRQ lines ----
-    // PIA1: IRQA drives the main IRQ line
+    // ---- Propagate PIA IRQ lines (active-low, directly from chip state) ----
     if (pia1_ && (pia1_->irq_a1 || pia1_->irq_a2)) {
-        BUS_CLR_BIT(s, BUS_IRQ_BIT);
+        BUS_CLR_BIT(pins_, BUS_IRQ_BIT);
     }
 
-    // ---- Phase 3: CPU PHI2 ----
-    s = cpu_->tick<MOS6502::Phase::PHI2>(s);
+    // ---- CPU PHI2 ----
+    pins_ = cpu_->tick<MOS6502::Phase::PHI2>(pins_);
 
-    // ---- Phase 4: Memory service (CS-tick) ----
-    s = bus_.resolve(s);
-    {
-        auto cs = Bus::get_cs_from_bus(s);
-        if (cs == board_.pia1.bus_chip_id()) {
-            if (BUS_GET_BIT(s, BUS_RW_BIT))
-                s = board_.pia1.on_bus_read(s);
-            else
-                board_.pia1.on_bus_write(s);
-        } else if (cs == board_.pia2.bus_chip_id()) {
-            if (BUS_GET_BIT(s, BUS_RW_BIT))
-                s = board_.pia2.on_bus_read(s);
-            else
-                board_.pia2.on_bus_write(s);
-        } else if (cs == board_.via.bus_chip_id()) {
-            if (BUS_GET_BIT(s, BUS_RW_BIT))
-                s = board_.via.on_bus_read(s);
-            else
-                board_.via.on_bus_write(s);
-        } else if (cs == board_.crtc.bus_chip_id()) {
-            if (BUS_GET_BIT(s, BUS_RW_BIT))
-                s = board_.crtc.on_bus_read(s);
-            else
-                board_.crtc.on_bus_write(s);
-        } else {
-            s = bus_.service(s);
-        }
-    }
+    // ---- Address decode + flat-mem service + MMIO self-dispatch ----
+    pins_ = bus_.resolve(pins_);
+    pins_ = bus_.service(pins_);
+    pins_ = board_.pia1.tick(pins_);
+    pins_ = board_.pia2.tick(pins_);
+    pins_ = board_.via.tick(pins_);
+    pins_ = board_.crtc.tick(pins_);
 
     // NMI edge detection
-    cpu_->sample_nmi_pin(s);
+    cpu_->sample_nmi_pin(pins_);
 
-    // ---- Phase 5: CPU PHI1 ----
-    s = cpu_->tick<MOS6502::Phase::PHI1>(s);
+    // ---- CPU PHI1 ----
+    pins_ = cpu_->tick<MOS6502::Phase::PHI1>(pins_);
 
     // Restore R/W to read mode
-    BUS_SET_BIT(s, BUS_RW_BIT);
+    BUS_SET_BIT(pins_, BUS_RW_BIT);
 
     // ---- Audio sample generation ----
     audio_cycle_counter_++;
@@ -562,7 +517,6 @@ void PETSystem::tick() {
         audio_write_pos_++;
     }
 
-    pins_ = s;
     total_cycles_++;
 }
 

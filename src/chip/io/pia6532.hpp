@@ -83,6 +83,18 @@ struct pia6532_t : public IoChipBase {
         return bus;
     }
 
+    // --- CS-tick: timer + MMIO self-dispatch ---
+    // Combines interval timer countdown with CS-conditional register access.
+    bus_state_t tick(bus_state_t bus) noexcept {
+        tick();  // timer countdown (existing void tick)
+        if (is_cs_selected(bus)) {
+            bus = BUS_GET_BIT(bus, BUS_RW_BIT)
+                ? on_bus_read(bus) : on_bus_write(bus);
+            mark_cs_serviced(bus);
+        }
+        return bus;
+    }
+
     // --- ChipBase GUI interface ---
 #ifdef CERMU_HAS_GUI
     ChipLayout* create_chip_layout() const override;
