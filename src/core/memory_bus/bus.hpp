@@ -714,12 +714,12 @@ private:
 
     static FORCE_INLINE
     ChipId get_cs(bus_state_t bus) noexcept {
-        return ChipId((bus >> PT::kCsBitShift) & ((bus_state_t(1) << PT::kCsLineBits) - 1));
+        return ChipId((bus & BUS_CS_MASK) >> BUS_CS_SHIFT);
     }
 
     static FORCE_INLINE
     void set_cs(bus_state_t& bus, size_t cs_id) noexcept {
-        bus = (bus & ~PT::kCsMask) | (bus_state_t(cs_id) << PT::kCsBitShift);
+        bus = (bus & ~uint64_t(BUS_CS_MASK)) | (bus_state_t(cs_id) << BUS_CS_SHIFT);
     }
 
     // =========================================================================

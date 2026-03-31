@@ -119,6 +119,21 @@ public:
     uint16_t bus_chip_id() const { return bus_chip_id_; }
     void set_bus_chip_id(uint16_t id) { bus_chip_id_ = id; }
 
+    // --- CS self-dispatch helpers (global CS field position) ---
+    // Chips call is_cs_selected(bus) to check if the resolved CS field
+    // matches their bus_chip_id_.  After servicing, mark_cs_serviced()
+    // sets the CS field to all-ones as a "handled" sentinel.
+    // These use the global BUS_CS_SHIFT / BUS_CS_MASK constants.
+    bool is_cs_selected(bus_state_t bus) const noexcept {
+        return uint16_t((bus & BUS_CS_MASK) >> BUS_CS_SHIFT) == bus_chip_id_;
+    }
+    static void mark_cs_serviced(bus_state_t& bus) noexcept {
+        bus |= BUS_CS_MASK;
+    }
+    static bool is_cs_serviced(bus_state_t bus) noexcept {
+        return (bus & BUS_CS_MASK) == BUS_CS_MASK;
+    }
+
     // --- Placement metadata setters (used by Board::create_chips) ---
     void set_display_name(const char* name) { display_name_ = name; }
     void set_short_name(const char* name) { short_name_ = name; }

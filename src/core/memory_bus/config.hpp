@@ -14,6 +14,7 @@
 #pragma once
 
 #include "core/cermu.hpp"          // uint_least_bits_t, bitmix, FORCE_INLINE
+#include "core/system_lines.hpp"   // BUS_CS_SHIFT, BUS_CS_BITS, BUS_CS_MASK
 
 #include <cstddef>
 #include <cstdint>
@@ -110,9 +111,10 @@ template<typename C>
 inline constexpr size_t spec_cs_line_bits_v = spec_cs_line_bits<C>::value;
 
 // ── CsBitShift — starting bit position of the CS field in bus_state_t ────────
-// Defaults to 55 (first reserved output pin).  Systems may override.
+// Defaults to BUS_CS_SHIFT (global).  Specs may still override for
+// backward compatibility, but all new code uses the global position.
 template<typename C, typename = void>
-struct spec_cs_bit_shift : std::integral_constant<size_t, 55> {};
+struct spec_cs_bit_shift : std::integral_constant<size_t, BUS_CS_SHIFT> {};
 template<typename C>
 struct spec_cs_bit_shift<C, std::void_t<decltype(C::CsBitShift)>>
     : std::integral_constant<size_t, C::CsBitShift> {};
