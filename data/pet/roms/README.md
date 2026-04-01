@@ -16,8 +16,18 @@ ROM files required by the Commodore PET emulation (PET 4032 target).
 
 The ROM loader also accepts these alternative names:
 - Character ROM: `chargen`, `chargen.rom`, `901447-10.bin`, `characters.901640-01.bin` (4KB 8032 version)
-- BASIC ROM: individual chips `901465-23.bin` ($B000), `901465-20.bin` ($C000), `901465-21.bin` ($D000)
+- BASIC ROM: individual chips `901465-23.bin` ($B000), `901465-20.bin` ($C000), `901465-21.bin` ($D000), or `basic-b.rom`, `basic-c.rom`, `basic-d.rom`
 - Kernal ROM: `kernal4.rom`, `kernal.rom`, `901465-22.bin`
+
+The combined BASIC ROM file (`basic-4.901465-23-20-21.bin`) is automatically
+split using `@offset` syntax:
+- `basic-4.901465-23-20-21.bin@0` → $B000 (4 KB)
+- `basic-4.901465-23-20-21.bin@4096` → $C000 (4 KB)
+- `basic-4.901465-23-20-21.bin@8192` → $D000 (4 KB)
+
+## Missing Files
+
+No files are missing. All required ROMs are present.
 
 ## Where to Obtain
 

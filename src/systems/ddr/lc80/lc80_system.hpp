@@ -36,7 +36,7 @@
 
 #define LC80_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                              \
     V(ctx, U880,       z80,  0x0000,    0,      0, 0, "U880",        nullptr)                          \
-    V(ctx, ROMChip,    rom,  0x0000, 8192, 0x07FF, 0, "Monitor ROM", nullptr)                          \
+    V(ctx, ROMChip,    rom,  0x0000, 8192, 0x07FF, 0, "Monitor ROM", "lc80_mon.rom|monitor.rom|MON.ROM")                          \
     V(ctx, RAMChip,    ram,  0x2000, 8192, 0x03FF, 0, "RAM",         nullptr)                          \
     V(ctx, z80_pio_t,  pio,  0x00F4,    0, 0x00FC, 0, "U855 PIO #1", nullptr)                          \
     V(ctx, z80_pio_t,  pio2, 0x00F8,    0, 0x00FC, 0, "U855 PIO #2", nullptr)                          \

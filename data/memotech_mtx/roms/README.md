@@ -25,6 +25,13 @@ are copyrighted by Memotech and are **not** included in this repository.
 Both variants share this directory. The emulator selects the correct ROM
 based on the system variant chosen at startup.
 
+## Missing Files
+
+| Filename | Size | Description |
+|----------|------|-------------|
+| `mtx500.rom` | 16 KB | **MISSING** — MTX500 OS + BASIC |
+| `mtx512.rom` | 16 KB | **MISSING** — MTX512 OS + BASIC |
+
 ## Where to Obtain
 
 - **MAME ROM set** — `mtx512.zip` contains the ROM images

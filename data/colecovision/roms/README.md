@@ -13,6 +13,12 @@ by Coleco Industries and is **not** included in this repository.
 
 - `coleco.rom`, `colecovision.rom`, `COLECO.ROM`
 
+## Missing Files
+
+| Filename | Size | Description |
+|----------|------|-------------|
+| `coleco.rom` | 8 KB | **MISSING** — ColecoVision BIOS |
+
 ## Where to Obtain
 
 - **MAME ROM set** — `coleco.zip` contains the BIOS ROM

@@ -27,6 +27,23 @@ Acorn Computers and are **not** included in this repository.
 |----------|------|-------------|
 | `master_mos320.rom` | 64 KB | MOS 3.20 — Master 128 OS (4 × 16 KB banks) |
 
+## Included ROMs
+
+| Filename | Size | Model | Description |
+|----------|------|-------|-------------|
+| `OS12.ROM` | 16 KB | Model B | MOS 1.20 operating system |
+| `BASIC2.ROM` | 16 KB | Model B | BBC BASIC II sideways ROM |
+
+## Missing Files
+
+| Filename | Size | Model | Description |
+|----------|------|-------|-------------|
+| `bplus_os.rom` | 16 KB | B+ | **MISSING** — BBC B+ OS 2.0 |
+| `master_mos320.rom` | 64 KB | Master 128 | **MISSING** — MOS 3.20 (4 × 16 KB banks) |
+
+Only the Model B ROMs are present. B+ and Master ROMs must be obtained
+separately.
+
 ## Alternative Filenames Accepted
 
 ### Model B
