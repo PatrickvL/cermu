@@ -65,6 +65,38 @@ public:
 
     void set_memory(const uint8_t* mem) { memory_ = mem; }
 
+    // === ChipBase MMIO interface ===
+    //
+    // Write-only: $FE20 = control, $FE21 = palette.  A0 selects register.
+    // Reads return open bus (the real chip doesn't drive the data bus).
+
+    bool has_mmio() const override { return true; }
+
+    bus_state_t on_bus_read(bus_state_t bus) noexcept override {
+        // Write-only — don't drive data bus
+        return bus;
+    }
+
+    bus_state_t on_bus_write(bus_state_t bus) noexcept override {
+        uint8_t data = BUS_GET_DATA(bus);
+        if (BUS_GET_ADDR(bus) & 0x01)
+            write_palette(data);
+        else
+            write_control(data);
+        return bus;
+    }
+
+    // CS-tick: MMIO self-dispatch
+    bus_state_t tick(bus_state_t bus) noexcept {
+        if (is_cs_selected(bus)) {
+            if (!BUS_GET_BIT(bus, BUS_RW_BIT))
+                on_bus_write(bus);
+            // Reads are write-only → no-op
+            mark_cs_serviced(bus);
+        }
+        return bus;
+    }
+
     // === I/O register writes ===
 
     /// Write to Video ULA control register ($FE20)

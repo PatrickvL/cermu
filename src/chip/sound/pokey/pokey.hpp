@@ -603,6 +603,15 @@ public:
             }
         }
 
+        // CS-driven MMIO self-dispatch — register access when bus resolver
+        // has matched our chip ID.  Backward-compatible: systems that don't
+        // use CS (EnableCs=false) or pass bus=0 will never match.
+        if (is_cs_selected(pins)) {
+            pins = BUS_GET_BIT(pins, BUS_RW_BIT)
+                ? on_bus_read(pins) : on_bus_write(pins);
+            mark_cs_serviced(pins);
+        }
+
         // Store bus snapshot for edge detection / GUI pin rendering
         bus_snapshot_ = pins;
 
