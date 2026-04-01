@@ -113,11 +113,12 @@ public:
         }
 
         // Assign real chip IDs to bus-decoded MMIO-only slots (size==0,
-        // base_addr!=0).  These IDs sit above the buffer bank range so
-        // resolve() can emit them into the CS field.  Non-bus zero-sized
-        // slots (CPUs, peripherals with base_addr==0) keep base_id 0.
+        // base_addr!=0).  These IDs sit above ALL sentinels (kMmioChipBase)
+        // so that service() naturally skips them — only tick_mmio() handles
+        // the register access.  Non-bus zero-sized slots (CPUs, peripherals
+        // with base_addr==0) keep base_id 0.
         if constexpr (spec_cs_line_bits_v<Spec> > 0) {
-            size_t next_mmio_id = manifest.total_banks(kPageBits);
+            size_t next_mmio_id = size_t(PT::kMmioChipBase);
             for (auto& slot : slots_) {
                 if (slot.byte_size == 0 && slot.base_addr != 0) {
                     slot.base_id = ChipId(next_mmio_id++);

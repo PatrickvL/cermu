@@ -110,6 +110,19 @@ struct spec_cs_line_bits<C, std::void_t<decltype(C::CsLineBits)>>
 template<typename C>
 inline constexpr size_t spec_cs_line_bits_v = spec_cs_line_bits<C>::value;
 
+// ── CsMmioChipCount — number of MMIO-only slots that get real CS chip IDs ────
+// When CS is enabled, MMIO-only chips (size=0, base_addr!=0) are placed above
+// all sentinels so service() skips them.  This count is used by PackingTraits
+// to reserve the kMmioChipBase range.  Defaults to 0.
+template<typename C, typename = void>
+struct spec_cs_mmio_chip_count : std::integral_constant<size_t, 0> {};
+template<typename C>
+struct spec_cs_mmio_chip_count<C, std::void_t<decltype(C::CsMmioChipCount)>>
+    : std::integral_constant<size_t, C::CsMmioChipCount> {};
+
+template<typename C>
+inline constexpr size_t spec_cs_mmio_chip_count_v = spec_cs_mmio_chip_count<C>::value;
+
 // ── CsBitShift — starting bit position of the CS field in bus_state_t ────────
 // Defaults to BUS_CS_SHIFT (global).  Specs may still override for
 // backward compatibility, but all new code uses the global position.

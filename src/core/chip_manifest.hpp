@@ -750,10 +750,15 @@ struct ManifestBusSpec {
     // MaxWriteChipId = MaxChipId (conservative; is_read_only() known at runtime only).
     static constexpr size_t BufferMaxChipId = Manifest.max_chip_id(PgBits);
     static constexpr size_t BusMmioCount    = Manifest.bus_mmio_slot_count();
-    static constexpr size_t MaxChipId       = EnableCs
-                                            ? BufferMaxChipId + BusMmioCount
-                                            : BufferMaxChipId;
-    static constexpr size_t MaxWriteChipId  = MaxChipId;
+
+    // MaxChipId covers the buffer chip-id range only.  MMIO-only chips (when
+    // CS is enabled) get IDs above all sentinels via kMmioChipBase in
+    // PackingTraits — they are NOT included in MaxChipId so that service()
+    // naturally skips them.  CsMmioChipCount reserves room in the sentinel
+    // count for these real CS chip IDs.
+    static constexpr size_t MaxChipId          = BufferMaxChipId;
+    static constexpr size_t MaxWriteChipId     = MaxChipId;
+    static constexpr size_t CsMmioChipCount    = EnableCs ? BusMmioCount : 0;
 
     // MMIO — derived from manifest slot analysis.
     static constexpr bool   EnableMmio       = Manifest.mmio_slot_count() > 0;
