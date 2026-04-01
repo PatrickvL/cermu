@@ -1,12 +1,18 @@
 #define SDL_MAIN_HANDLED
 #include "core/system.hpp"
+#include "core/chip_registry.hpp"
+#include "core/device_registry.hpp"
+#include "core/port_registry.hpp"
+#include "core/formats/format_registry.hpp"
 #include "gui/session_gui.hpp"
 #include "testing/vicii_test_harness.hpp"
 #include "testing/vicii_pixel_tests.hpp"
 #include "testing/sid_write_log.hpp"
+#include <algorithm>
 #include <cstdio>
-#include <memory>
 #include <cstring>
+#include <memory>
+#include <vector>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -78,6 +84,366 @@ static void win32_attach_parent_console() {
 #include "systems/commodore/c64/c64_system.hpp"
 
 // ============================================================================
+// INFORMATIONAL DUMP HELPERS
+// ============================================================================
+
+static const char* video_standard_name(VideoStandard s) {
+    switch (s) {
+        case VideoStandard::NTSC:   return "NTSC";
+        case VideoStandard::PAL:    return "PAL";
+        case VideoStandard::PAL_M:  return "PAL-M";
+        case VideoStandard::SECAM:  return "SECAM";
+        case VideoStandard::CUSTOM: return "Custom";
+    }
+    return "Unknown";
+}
+
+static const char* system_type_name(SystemType t) {
+    switch (t) {
+        case SystemType::Home:    return "Home Computer";
+        case SystemType::Console: return "Console";
+        case SystemType::Arcade:  return "Arcade";
+        case SystemType::Other:   return "Other";
+    }
+    return "Unknown";
+}
+
+/// --list systems
+static int dump_systems() {
+    const auto& systems = SystemRegistry::instance().get_systems();
+    std::vector<const SystemDescriptor*> sorted;
+    sorted.reserve(systems.size());
+    for (const auto& [desc, factory] : systems) sorted.push_back(&desc);
+    std::sort(sorted.begin(), sorted.end(), [](auto* a, auto* b) {
+        return strcasecmp(a->short_name, b->short_name) < 0;
+    });
+    printf("Registered systems (%zu):\n", sorted.size());
+    for (const auto* dp : sorted) {
+        const auto& desc = *dp;
+        printf("  %-10s  %-24s  %-14s",
+               desc.short_name, desc.name, system_type_name(desc.type));
+        if (desc.maker && desc.year > 0)
+            printf("  %s %d", desc.maker, desc.year);
+        else if (desc.maker)
+            printf("  %s", desc.maker);
+        else if (desc.year > 0)
+            printf("  %d", desc.year);
+        if (desc.cpu_summary)
+            printf("  [%s]", desc.cpu_summary);
+        printf("\n");
+    }
+    return 0;
+}
+
+/// --list chips
+static int dump_chips() {
+    const auto& entries = ChipRegistry::instance().entries();
+    std::vector<const ChipRegistry::Entry*> sorted;
+    sorted.reserve(entries.size());
+    for (const auto& entry : entries) sorted.push_back(&entry);
+    std::sort(sorted.begin(), sorted.end(), [](auto* a, auto* b) {
+        return a->name < b->name;
+    });
+    printf("Registered chip types (%zu):\n", sorted.size());
+    for (const auto* entry : sorted) {
+        printf("  %.*s\n", static_cast<int>(entry->name.size()), entry->name.data());
+    }
+    return 0;
+}
+
+/// --list devices
+static int dump_devices() {
+    const auto& devices = DeviceRegistry::instance().get_all_devices();
+    std::vector<const DeviceDescriptor*> sorted;
+    sorted.reserve(devices.size());
+    for (const auto& [desc, factory] : devices) sorted.push_back(&desc);
+    std::sort(sorted.begin(), sorted.end(), [](auto* a, auto* b) {
+        return strcasecmp(a->id, b->id) < 0;
+    });
+    printf("Registered peripheral devices (%zu):\n", sorted.size());
+    for (const auto* dp : sorted) {
+        const auto& desc = *dp;
+        printf("  %-16s  %-28s  [%s]%s\n",
+               desc.id, desc.name,
+               port_type_name(desc.port_type),
+               desc.is_bus_device ? "  (bus)" : "");
+        if (desc.description)
+            printf("                    %s\n", desc.description);
+    }
+    return 0;
+}
+
+/// --list ports
+static int dump_ports() {
+    const auto& entries = PortRegistry::instance().entries();
+    std::vector<const PortDefinition*> sorted;
+    sorted.reserve(entries.size());
+    for (const auto& def : entries) sorted.push_back(&def);
+    std::sort(sorted.begin(), sorted.end(), [](auto* a, auto* b) {
+        return strcasecmp(a->name, b->name) < 0;
+    });
+    printf("Registered port definitions (%zu):\n", sorted.size());
+    for (const auto* pp : sorted) {
+        const auto& def = *pp;
+        printf("  %-32s  %d signal(s)%s%s\n",
+               def.name,
+               def.signal_count,
+               def.is_internal ? "  [internal]" : "",
+               def.is_bus      ? "  [bus]"      : "");
+        if (def.signals && def.signal_count > 0) {
+            printf("    Signals:");
+            for (uint8_t i = 0; i < def.signal_count; ++i) {
+                const char* dir = "?";
+                switch (def.signals[i].direction) {
+                    case SignalDirection::INPUT:         dir = "in";    break;
+                    case SignalDirection::OUTPUT:        dir = "out";   break;
+                    case SignalDirection::BIDIRECTIONAL: dir = "bidir"; break;
+                }
+                printf(" %s(%s)", def.signals[i].name, dir);
+            }
+            printf("\n");
+        }
+    }
+    return 0;
+}
+
+/// --list formats
+static int dump_formats() {
+    auto formats = FormatRegistry::instance().get_formats();
+    std::sort(formats.begin(), formats.end(), [](auto* a, auto* b) {
+        return strcasecmp(a->name, b->name) < 0;
+    });
+    printf("Registered file formats (%zu):\n", formats.size());
+    for (const auto* fmt : formats) {
+        // Collect extensions
+        std::string exts;
+        if (fmt->extensions) {
+            for (const char** ext = fmt->extensions; *ext; ++ext) {
+                if (!exts.empty()) exts += ", ";
+                exts += *ext;
+            }
+        }
+        // Collect capabilities
+        std::string caps;
+        if (fmt->capabilities & FORMAT_CAP_LOADABLE)  caps += "load ";
+        if (fmt->capabilities & FORMAT_CAP_CONTAINER) caps += "container ";
+        if (fmt->capabilities & FORMAT_CAP_STREAMABLE) caps += "stream ";
+        if (fmt->capabilities & FORMAT_CAP_METADATA)  caps += "meta ";
+        if (fmt->capabilities & FORMAT_CAP_VOLUME)    caps += "volume ";
+        printf("  %-8s  %-28s  %-16s  [%s]\n",
+               fmt->name,
+               fmt->description ? fmt->description : "",
+               exts.c_str(),
+               caps.empty() ? "none" : caps.c_str());
+    }
+    return 0;
+}
+
+/// Dispatch --list <registry>
+static int dump_registry(const char* which) {
+    if (strcmp(which, "systems") == 0) return dump_systems();
+    if (strcmp(which, "chips")   == 0) return dump_chips();
+    if (strcmp(which, "devices") == 0) return dump_devices();
+    if (strcmp(which, "ports")   == 0) return dump_ports();
+    if (strcmp(which, "formats") == 0) return dump_formats();
+    printf("ERROR: Unknown registry '%s'\n", which);
+    printf("Valid registries: systems, chips, devices, ports, formats\n");
+    return 1;
+}
+
+/// --manifest <system>
+static int dump_manifest(const char* name) {
+    // Find the descriptor from the registry first (no system creation needed)
+    const auto& systems = SystemRegistry::instance().get_systems();
+    const SystemDescriptor* found = nullptr;
+    for (const auto& [desc, factory] : systems) {
+        if (strcasecmp(name, desc.short_name) == 0) { found = &desc; break; }
+        for (const char* alias : desc.aliases) {
+            if (strcasecmp(name, alias) == 0) { found = &desc; break; }
+        }
+        if (found) break;
+    }
+    if (!found) {
+        printf("ERROR: System not found: %s\n", name);
+        printf("Available systems:\n");
+        for (const auto& [desc, factory] : systems) {
+            printf("  %-10s  %s\n", desc.short_name, desc.name);
+        }
+        return 1;
+    }
+
+    const auto& d = *found;
+    printf("=== System: %s ===\n", d.name);
+    printf("  Short name:   %s\n", d.short_name);
+    if (d.description) printf("  Description:  %s\n", d.description);
+    if (d.maker)       printf("  Manufacturer: %s\n", d.maker);
+    if (d.year > 0)    printf("  Year:         %d\n", d.year);
+    if (d.cpu_summary) printf("  CPU:          %s\n", d.cpu_summary);
+    printf("  Type:         %s\n", system_type_name(d.type));
+    if (d.data_folder) printf("  Data folder:  %s\n", d.data_folder);
+
+    // Aliases
+    if (!d.aliases.empty()) {
+        printf("  Aliases:      ");
+        for (size_t i = 0; i < d.aliases.size(); ++i) {
+            if (i > 0) printf(", ");
+            printf("%s", d.aliases[i]);
+        }
+        printf("\n");
+    }
+
+    // Hardware traits — display
+    const auto& disp = d.hardware_traits.display;
+    printf("\n  Display:\n");
+    printf("    Native:    %d x %d\n", disp.native_width, disp.native_height);
+    printf("    Visible:   %d x %d\n", disp.visible_width, disp.visible_height);
+    printf("    Palette:   %d colors\n", disp.palette_size);
+    printf("    PAR:       %.3f\n", disp.pixel_aspect_ratio);
+    printf("    Overscan:  %s\n", disp.has_overscan ? "yes" : "no");
+
+    // Hardware traits — audio
+    const auto& aud = d.hardware_traits.audio;
+    if (aud.format != AudioFormat::NONE) {
+        printf("\n  Audio:\n");
+        printf("    Sample rate:  %d Hz\n", aud.sample_rate_hz);
+        printf("    Channels:     %d\n", aud.channels);
+        if (aud.chip_name) printf("    Chip:         %s\n", aud.chip_name);
+    }
+
+    // Hardware traits — timing
+    const auto& t = d.hardware_traits.timing;
+    if (t.cpu_frequency_hz > 0) {
+        printf("\n  Timing:\n");
+        printf("    CPU clock:     %u Hz\n", t.cpu_frequency_hz);
+        if (t.video_frequency_hz) printf("    Video clock:   %u Hz\n", t.video_frequency_hz);
+        printf("    Target FPS:    %u\n", t.target_fps);
+        printf("    Cycles/frame:  %u\n", t.cycles_per_frame);
+        printf("    Standard:      %s\n", video_standard_name(t.standard));
+    }
+
+    // Video standard configs
+    const auto& vscs = d.hardware_traits.video_standard_configs;
+    if (!vscs.empty()) {
+        printf("\n  Video standards:\n");
+        for (const auto& vs : vscs) {
+            printf("    %s%s — %u Hz CPU, %u FPS\n",
+                   vs.name,
+                   vs.is_default ? " (default)" : "",
+                   vs.timing.cpu_frequency_hz,
+                   vs.timing.target_fps);
+        }
+    }
+
+    // Memory options
+    const auto& memos = d.hardware_traits.memory_options;
+    if (!memos.empty()) {
+        printf("\n  Memory options:\n");
+        for (const auto& m : memos) {
+            printf("    %s%s — RAM %u, ROM %u\n",
+                   m.name,
+                   m.is_default ? " (default)" : "",
+                   m.ram_size, m.rom_size);
+        }
+    }
+
+    // Peripheral options
+    const auto& perifs = d.hardware_traits.peripheral_options;
+    if (!perifs.empty()) {
+        printf("\n  Peripheral options:\n");
+        for (const auto& p : perifs) {
+            printf("    %-20s  %s%s\n", p.name,
+                   p.description ? p.description : "",
+                   p.enabled_by_default ? "  [default]" : "");
+        }
+    }
+
+    // Custom options
+    const auto& customs = d.hardware_traits.custom_options;
+    if (!customs.empty()) {
+        printf("\n  Custom options:\n");
+        for (const auto& c : customs) {
+            printf("    %s:", c.name);
+            for (size_t i = 0; i < c.choices.size(); ++i) {
+                printf(" %s%s", c.choices[i],
+                       (static_cast<int>(i) == c.default_index) ? "*" : "");
+            }
+            printf("\n");
+        }
+    }
+
+    // Supported file formats
+    if (d.supported_formats) {
+        printf("\n  Supported formats:\n");
+        for (const format_descriptor_t* const* fp = d.supported_formats; *fp; ++fp) {
+            const auto* fmt = *fp;
+            std::string exts;
+            if (fmt->extensions) {
+                for (const char** ext = fmt->extensions; *ext; ++ext) {
+                    if (!exts.empty()) exts += ", ";
+                    exts += *ext;
+                }
+            }
+            printf("    %-8s  %-28s  %s\n", fmt->name,
+                   fmt->description ? fmt->description : "",
+                   exts.c_str());
+        }
+    }
+
+    // Try to create and initialize the system for chip/port enumeration.
+    // Suppress log output from system initialization.
+    auto sys = SystemRegistry::instance().create_system(name);
+    if (sys) {
+        LogLevelGuard guard(LogLevel::Silent);
+        if (!sys->initialize()) { sys->shutdown(); sys.reset(); }
+    }
+    if (sys) {
+        // Registered chips
+        const auto& chips = sys->get_registered_chips();
+        if (!chips.empty()) {
+            printf("\n  Chips (%zu):\n", chips.size());
+            for (const auto& sc : chips) {
+                const char* cat = sc.category ? sc.category : "";
+                const char* disp = sc.display_name ? sc.display_name : "";
+                const char* part = "";
+                const char* mfr  = "";
+                if (sc.chip) {
+                    const auto& ci = sc.chip->chip_info();
+                    if (!ci.part_number.empty()) part = ci.part_number.data();
+                    if (!ci.manufacturer.empty()) mfr = ci.manufacturer.data();
+                }
+                if (sc.base_address > 0) {
+                    printf("    $%04X  %-8s  %-28s", sc.base_address, cat, disp);
+                } else {
+                    printf("           %-8s  %-28s", cat, disp);
+                }
+                if (*mfr)  printf("  [%s]", mfr);
+                if (*part && strcmp(part, disp) != 0) printf("  (%s)", part);
+                printf("\n");
+            }
+        }
+
+        // Ports
+        const auto& boards = sys->get_boards();
+        for (const auto* board : boards) {
+            const auto& ports = board->get_ports();
+            if (!ports.empty()) {
+                printf("\n  Ports (%zu):\n", ports.size());
+                for (const auto& port : ports) {
+                    const auto& def = port->get_definition();
+                    printf("    %-28s  %d signal(s)", def.name, def.signal_count);
+                    if (def.is_bus) printf("  [bus]");
+                    printf("\n");
+                }
+            }
+        }
+
+        sys->shutdown();
+    }
+
+    return 0;
+}
+
+// ============================================================================
 // MAIN FUNCTION - Multi-System Emulator with Automatic Detection
 // ============================================================================
 int main(int argc, char** argv) {
@@ -97,7 +463,7 @@ int main(int argc, char** argv) {
         if (strcmp(argv[i], "--system") == 0 || strcmp(argv[i], "-s") == 0) {
             if (i + 1 < argc) {
                 system_name = argv[++i];
-                printf("System specified: %s\n", system_name);
+                log_info("System specified: %s\n", system_name);
             } else {
                 printf("ERROR: --system requires an argument\n");
                 return 1;
@@ -105,21 +471,22 @@ int main(int argc, char** argv) {
         } else if (strcmp(argv[i], "--vicii-test") == 0) {
             vicii_test_mode = true;
             system_name = "C64";  // Force C64 system
-            printf("VIC-II test mode enabled\n");
+            log_info("VIC-II test mode enabled\n");
         } else if (strcmp(argv[i], "--vicii-dump") == 0) {
             vicii_dump_mode = true;
             system_name = "C64";
-            printf("VIC-II dump mode enabled\n");
+            log_info("VIC-II dump mode enabled\n");
         } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {
-            g_verbose = true;
+            log_level = LogLevel::Debug;
+            g_verbose = true;  // backward compat for code still checking this
         } else if (strcmp(argv[i], "--skip-memtest") == 0) {
             skip_memtest = true;
-            printf("KERNAL memory test skip enabled\n");
+            log_info("KERNAL memory test skip enabled\n");
         } else if (strcmp(argv[i], "--sid-log") == 0) {
             if (i + 1 < argc) {
                 sid_log_path = argv[++i];
                 system_name = "C64";
-                printf("SID log capture mode → %s\n", sid_log_path);
+                log_info("SID log capture mode → %s\n", sid_log_path);
             } else {
                 printf("ERROR: --sid-log requires an output file path\n");
                 return 1;
@@ -132,24 +499,37 @@ int main(int argc, char** argv) {
                 printf("ERROR: --seconds requires a value\n");
                 return 1;
             }
+        } else if (strcmp(argv[i], "--list") == 0 || strcmp(argv[i], "-l") == 0) {
+            if (i + 1 < argc) {
+                return dump_registry(argv[++i]);
+            } else {
+                printf("ERROR: --list requires an argument (systems, chips, devices, ports, formats)\n");
+                return 1;
+            }
+        } else if (strcmp(argv[i], "--manifest") == 0 || strcmp(argv[i], "-m") == 0) {
+            if (i + 1 < argc) {
+                return dump_manifest(argv[++i]);
+            } else {
+                printf("ERROR: --manifest requires a system name\n");
+                return 1;
+            }
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             printf("Usage: %s [options] [file]\n", argv[0]);
             printf("\nOptions:\n");
             printf("  --system, -s <name>   Select system by short name (e.g., C64, CHIP8)\n");
+            printf("  --list, -l <registry> List registry contents and exit\n");
+            printf("                        Registries: systems, chips, devices, ports, formats\n");
+            printf("  --manifest, -m <sys>  Dump system manifest and hardware details\n");
             printf("  --vicii-test          Run VIC-II register test suite (headless)\n");
             printf("  --sid-log <file>      Capture SID register writes to binary log (headless)\n");
             printf("  --seconds <N>         Duration for --sid-log capture (default: 60)\n");
             printf("  --skip-memtest        Patch C64 KERNAL to skip RAMTAS memory test\n");
             printf("  --verbose, -v         Enable verbose startup messages\n");
             printf("  --help, -h            Show this help message\n");
-            printf("\nAvailable systems:\n");
-            for (const auto& desc : SystemRegistry::instance().get_all_descriptors()) {
-                printf("  %-10s  %s\n", desc.short_name, desc.name);
-            }
             return 0;
         } else if (file_path == nullptr) {
             file_path = argv[i];
-            printf("File specified: %s\n", file_path);
+            log_info("File specified: %s\n", file_path);
         }
     }
     
@@ -157,19 +537,19 @@ int main(int argc, char** argv) {
     
     // If system name specified, create it directly
     if (system_name != nullptr) {
-        printf("Creating system: %s\n", system_name);
+        log_info("Creating system: %s\n", system_name);
         system = SystemRegistry::instance().create_system(system_name);
         
         if (!system) {
-            printf("ERROR: System not found: %s\n", system_name);
-            printf("Available systems:\n");
+            log_error("ERROR: System not found: %s\n", system_name);
+            log_error("Available systems:\n");
             for (const auto& desc : SystemRegistry::instance().get_all_descriptors()) {
-                printf("  %s (%s)\n", desc.short_name, desc.name);
+                log_error("  %s (%s)\n", desc.short_name, desc.name);
             }
             return 1;
         }
         
-        printf("Created system: %s (%s)\n", 
+        log_info("Created system: %s (%s)\n", 
                system->get_descriptor().name,
                system->get_descriptor().short_name);
         
@@ -181,7 +561,7 @@ int main(int argc, char** argv) {
 
         // Initialize the system
         if (!system->initialize()) {
-            printf("ERROR: Failed to initialize %s system\n", 
+            log_error("ERROR: Failed to initialize %s system\n", 
                    system->get_descriptor().name);
             return 1;
         }
@@ -192,28 +572,28 @@ int main(int argc, char** argv) {
         // Load file if specified
         if (file_path != nullptr) {
             if (!system->load_file(file_path)) {
-                printf("ERROR: Failed to load file: %s\n", file_path);
+                log_error("ERROR: Failed to load file: %s\n", file_path);
                 system->shutdown();
                 return 1;
             }
-            printf("Successfully loaded file into %s\n", system->get_descriptor().name);
+            log_info("Successfully loaded file into %s\n", system->get_descriptor().name);
         }
     }
     // If file was specified (but no system), try to auto-detect system
     else if (file_path != nullptr) {
-        printf("Detecting system for file: %s\n", file_path);
+        log_info("Detecting system for file: %s\n", file_path);
         system = SystemRegistry::instance().create_system_for_file(file_path);
         
         if (!system) {
-            printf("WARNING: Could not detect system for file: %s\n", file_path);
-            printf("No emulator supports this file format.\n");
-            printf("System selection dialog will be shown...\n\n");
+            log_warn("WARNING: Could not detect system for file: %s\n", file_path);
+            log_warn("No emulator supports this file format.\n");
+            log_warn("System selection dialog will be shown...\n\n");
             // Keep file_path so the GUI can load it after user picks a system
         } else {
-            printf("Detected system: %s (%s)\n", 
+            log_info("Detected system: %s (%s)\n", 
                    system->get_descriptor().name,
                    system->get_descriptor().short_name);
-            printf("Description: %s\n", system->get_descriptor().description);
+            log_info("Description: %s\n", system->get_descriptor().description);
 
             // Some create_system_for_file() paths can return an instance that
             // has not yet built its board graph. Ensure initialization/load is
@@ -221,7 +601,7 @@ int main(int argc, char** argv) {
             if (system->get_boards().empty() || !system->is_system_ready()) {
                 // Initialize the system
                 if (!system->initialize()) {
-                    printf("ERROR: Failed to initialize %s system\n", 
+                    log_error("ERROR: Failed to initialize %s system\n", 
                            system->get_descriptor().name);
                     return 1;
                 }
@@ -231,12 +611,12 @@ int main(int argc, char** argv) {
             
                 // Load the file
                 if (!system->load_file(file_path)) {
-                    printf("ERROR: Failed to load file: %s\n", file_path);
+                    log_error("ERROR: Failed to load file: %s\n", file_path);
                     system->shutdown();
                     return 1;
                 }
             }
-            printf("Successfully loaded file into %s\n", system->get_descriptor().name);
+            log_info("Successfully loaded file into %s\n", system->get_descriptor().name);
         }
     }
     
@@ -291,9 +671,9 @@ int main(int argc, char** argv) {
         uint32_t target_fps = system->get_target_fps();
         uint32_t total_frames = static_cast<uint32_t>(sid_log_seconds) * target_fps;
 
-        printf("SID-LOG: Capturing %d seconds (%u frames) → %s\n",
+        log_info("SID-LOG: Capturing %d seconds (%u frames) → %s\n",
                sid_log_seconds, total_frames, sid_log_path);
-        printf("SID-LOG: Model %s, clock %u Hz\n",
+        log_info("SID-LOG: Model %s, clock %u Hz\n",
                log.chip_model ? "8580" : "6581", log.cpu_clock);
 
         float drain[4096];
@@ -303,7 +683,7 @@ int main(int argc, char** argv) {
 
             // Progress every 10 seconds
             if (frame > 0 && frame % (target_fps * 10) == 0) {
-                printf("SID-LOG: %u/%u frames, %zu writes so far\n",
+                log_info("SID-LOG: %u/%u frames, %zu writes so far\n",
                        frame, total_frames, log.entries.size());
             }
         }
@@ -312,14 +692,14 @@ int main(int argc, char** argv) {
         c64->sid->write_capture_fn  = nullptr;
         c64->sid->write_capture_ctx = nullptr;
 
-        printf("SID-LOG: Capture complete — %zu register writes\n", log.entries.size());
+        log_info("SID-LOG: Capture complete — %zu register writes\n", log.entries.size());
 
         // Write to file
         if (sid_log::write_file(sid_log_path, log)) {
-            printf("SID-LOG: Saved to %s (%zu bytes)\n", sid_log_path,
+            log_info("SID-LOG: Saved to %s (%zu bytes)\n", sid_log_path,
                    sizeof(sid_log::header_t) + log.entries.size() * sizeof(sid_log::entry_t));
         } else {
-            printf("ERROR: Failed to write %s\n", sid_log_path);
+            log_error("ERROR: Failed to write %s\n", sid_log_path);
             system->shutdown();
             return 1;
         }
@@ -333,7 +713,7 @@ int main(int argc, char** argv) {
     // =========================================================================
     if (vicii_dump_mode && system) {
         C64System* c64 = dynamic_cast<C64System*>(system.get());
-        if (!c64) { printf("ERROR: --vicii-dump requires C64\n"); return 1; }
+        if (!c64) { log_error("ERROR: --vicii-dump requires C64\n"); return 1; }
 
         // Allocate headless framebuffer (no GUI)
         int fb_width, fb_height;
@@ -364,7 +744,7 @@ int main(int argc, char** argv) {
         int frame_targets[] = { 5, 500 };
         int frame_count = 0;
         if (!c64->vicii || !c64->ram) {
-            printf("ERROR: --vicii-dump requires VIC-II and RAM chips\n");
+            log_error("ERROR: --vicii-dump requires VIC-II and RAM chips\n");
             system->shutdown();
             return 1;
         }
@@ -628,7 +1008,7 @@ int main(int argc, char** argv) {
     
     // Initialize GUI — window title is managed dynamically by update_window_title()
     if (!gui.init("cermu", 1200, 800)) {
-        printf("ERROR: Failed to initialize GUI\n");
+        log_error("ERROR: Failed to initialize GUI\n");
         return 1;
     }
     
