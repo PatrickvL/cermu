@@ -24,6 +24,7 @@
 #include "chip/cpu/fam65xx/wdc65c02.hpp"
 #include "chip/cpu/fam65xx/wdc_w65c02s.hpp"
 #include "chip/cpu/fam65xx/wdc65c816.hpp"
+#include "chip/cpu/fam65xx/ricoh_5a22.hpp"
 #include "chip/cpu/fam65xx/rockwell65c02.hpp"
 #include "chip/cpu/fam65xx/synertek65c02.hpp"
 
@@ -38,7 +39,7 @@ REGISTER_CHIP_TYPE("WDC_65C816",     WDC_65C816)
 REGISTER_CHIP_TYPE("ROCKWELL_R65C02", ROCKWELL_R65C02)
 REGISTER_CHIP_TYPE("SYNERTEK_65C02", SYNERTEK_65C02)
 
-// NOTE: MOS6509, RICOH_5A22 are omitted — their GUI virtual
-// methods are not yet instantiated in fam65xx_gui.cpp (no system uses
-// them yet).  Register them when their systems are added.
+// NOTE: MOS6509 is omitted — its GUI virtual methods are not yet
+// instantiated in fam65xx_gui.cpp (no system uses it yet).
+REGISTER_CHIP_TYPE("RICOH_5A22",     RICOH_5A22)
 REGISTER_CHIP_TYPE("CSG8502",         CSG8502)

@@ -1,6 +1,7 @@
 #define SDL_MAIN_HANDLED
 #include "core/system.hpp"
 #include "core/chip_registry.hpp"
+#include "core/chip_manifest.hpp"
 #include "core/device_registry.hpp"
 #include "core/port_registry.hpp"
 #include "core/formats/format_registry.hpp"
@@ -8,6 +9,7 @@
 #include "testing/vicii_test_harness.hpp"
 #include "testing/vicii_pixel_tests.hpp"
 #include "testing/sid_write_log.hpp"
+#include "core/chip_layout_ascii.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -84,6 +86,55 @@ static void win32_attach_parent_console() {
 #include "systems/commodore/c64/c64_system.hpp"
 
 // ============================================================================
+// PREFIX-MATCHING HELPERS
+// ============================================================================
+
+/// Case-insensitive prefix match.  Returns true if `prefix` is a
+/// case-insensitive prefix of `full` (including exact match).
+static bool iprefix(const char* full, const char* prefix) {
+    for (; *prefix; ++full, ++prefix) {
+        if (tolower(static_cast<unsigned char>(*full)) !=
+            tolower(static_cast<unsigned char>(*prefix)))
+            return false;
+    }
+    return true;
+}
+
+/// Find a system descriptor by case-insensitive prefix of short_name or any
+/// alias.  Returns the matched descriptor, or nullptr on no match / ambiguity.
+/// On ambiguity, prints an error listing the conflicting matches.
+static const SystemDescriptor* prefix_match_system(const char* input) {
+    const auto& systems = SystemRegistry::instance().get_systems();
+    const SystemDescriptor* found = nullptr;
+
+    // Exact match first (short_name + aliases)
+    for (const auto& [desc, factory] : systems) {
+        if (strcasecmp(input, desc.short_name) == 0) return &desc;
+        for (const char* alias : desc.aliases)
+            if (strcasecmp(input, alias) == 0) return &desc;
+    }
+
+    // Prefix match
+    for (const auto& [desc, factory] : systems) {
+        bool hit = iprefix(desc.short_name, input);
+        if (!hit) {
+            for (const char* alias : desc.aliases)
+                if (iprefix(alias, input)) { hit = true; break; }
+        }
+        if (hit) {
+            if (found) {
+                printf("ERROR: '%s' is ambiguous.  Matches at least:\n", input);
+                printf("  %s  (%s)\n", found->short_name, found->name);
+                printf("  %s  (%s)\n", desc.short_name, desc.name);
+                return nullptr;
+            }
+            found = &desc;
+        }
+    }
+    return found;
+}
+
+// ============================================================================
 // INFORMATIONAL DUMP HELPERS
 // ============================================================================
 
@@ -145,8 +196,35 @@ static int dump_chips() {
         return a->name < b->name;
     });
     printf("Registered chip types (%zu):\n", sorted.size());
+
+    ChipSlot dummy_slot{};
     for (const auto* entry : sorted) {
-        printf("  %.*s\n", static_cast<int>(entry->name.size()), entry->name.data());
+        std::unique_ptr<ChipBase> chip;
+        if (entry->factory)
+            chip.reset(entry->factory(dummy_slot, nullptr, nullptr));
+
+        const char* cat = "";
+        const char* mfr = "";
+        const char* disp = "";
+        std::string pkg;
+        if (chip) {
+            cat = chip->category();
+            const auto& ci = chip->chip_info();
+            if (!ci.manufacturer.empty()) mfr = ci.manufacturer.data();
+            if (!ci.display_name.empty()) disp = ci.display_name.data();
+#ifdef CERMU_HAS_GUI
+            if (auto* layout = chip->get_chip_layout())
+                pkg = layout->get_package_name();
+#endif
+        }
+
+        printf("  %-20.*s  %-8s",
+               static_cast<int>(entry->name.size()), entry->name.data(),
+               cat);
+        if (*disp) printf("  %-24s", disp);
+        if (*mfr)  printf("  [%s]", mfr);
+        if (!pkg.empty()) printf("  %s", pkg.c_str());
+        printf("\n");
     }
     return 0;
 }
@@ -239,35 +317,220 @@ static int dump_formats() {
     return 0;
 }
 
-/// Dispatch --list <registry>
+/// Dispatch --list <registry> (accepts unique prefix)
 static int dump_registry(const char* which) {
-    if (strcmp(which, "systems") == 0) return dump_systems();
-    if (strcmp(which, "chips")   == 0) return dump_chips();
-    if (strcmp(which, "devices") == 0) return dump_devices();
-    if (strcmp(which, "ports")   == 0) return dump_ports();
-    if (strcmp(which, "formats") == 0) return dump_formats();
+    struct { const char* name; int (*fn)(); } regs[] = {
+        {"systems", dump_systems}, {"chips", dump_chips},
+        {"devices", dump_devices}, {"ports", dump_ports},
+        {"formats", dump_formats},
+    };
+    // Exact match first
+    for (const auto& r : regs)
+        if (strcmp(which, r.name) == 0) return r.fn();
+    // Prefix match
+    decltype(&regs[0]) match = nullptr;
+    for (auto& r : regs) {
+        if (iprefix(r.name, which)) {
+            if (match) {
+                printf("ERROR: '%s' is ambiguous (matches '%s' and '%s')\n",
+                       which, match->name, r.name);
+                return 1;
+            }
+            match = &r;
+        }
+    }
+    if (match) return match->fn();
     printf("ERROR: Unknown registry '%s'\n", which);
     printf("Valid registries: systems, chips, devices, ports, formats\n");
     return 1;
 }
 
-/// --manifest <system>
-static int dump_manifest(const char* name) {
-    // Find the descriptor from the registry first (no system creation needed)
-    const auto& systems = SystemRegistry::instance().get_systems();
-    const SystemDescriptor* found = nullptr;
-    for (const auto& [desc, factory] : systems) {
-        if (strcasecmp(name, desc.short_name) == 0) { found = &desc; break; }
-        for (const char* alias : desc.aliases) {
-            if (strcasecmp(name, alias) == 0) { found = &desc; break; }
+/// --pinout <name> [chip]
+/// If <name> matches a registered chip type, dump its pinout directly.
+/// If <name> matches a system, dump pinouts for all (or filtered) chips in
+/// that system.  Chip filter matches case-insensitively against display
+/// name, short name, part number, or as a substring of the display name.
+
+/// Try to instantiate a chip from the registry and render its pinout.
+/// Returns true if the name matched a registered chip type.
+static bool try_dump_chip_pinout(const char* name) {
+#ifdef CERMU_HAS_GUI
+    auto factory = ChipRegistry::instance().lookup(name);
+    if (!factory) {
+        // Try case-insensitive exact match, then prefix match
+        const auto& entries = ChipRegistry::instance().entries();
+        ChipSlot::FactoryFn prefix_hit = nullptr;
+        bool ambiguous = false;
+        for (const auto& entry : entries) {
+            if (entry.name.size() == strlen(name) &&
+                strncasecmp(name, entry.name.data(), entry.name.size()) == 0) {
+                factory = entry.factory;
+                break;
+            }
+            if (iprefix(entry.name.data(), name)) {
+                if (prefix_hit) ambiguous = true;
+                prefix_hit = entry.factory;
+            }
         }
-        if (found) break;
+        if (!factory && prefix_hit) {
+            if (ambiguous) {
+                printf("ERROR: '%s' is ambiguous.  Matches:\n", name);
+                for (const auto& e : entries) {
+                    if (iprefix(e.name.data(), name))
+                        printf("  %s\n", std::string(e.name).c_str());
+                }
+                return true;  // Matched (ambiguously) — don't fall through to systems
+            }
+            factory = prefix_hit;
+        }
     }
+    if (!factory) return false;
+
+    ChipSlot dummy_slot{};
+    std::unique_ptr<ChipBase> chip(factory(dummy_slot, nullptr, nullptr));
+    if (!chip) return false;
+
+    ChipLayout* layout = chip->get_chip_layout();
+    if (!layout) {
+        printf("Chip '%s' has no pinout layout defined.\n", name);
+        return true;  // Matched the name, just no layout
+    }
+
+    const char* label = chip->get_layout_chip_name();
+    if (!label) label = chip->display_name();
+    // Short name for the chip body (part number fits inside narrow DIP outline)
+    const auto& ci = chip->chip_info();
+    const char* body_name = !ci.part_number.empty() ? ci.part_number.data() : label;
+    std::string pkg = layout->get_package_name();
+    printf("\n=== %s ===", label);
+    if (!pkg.empty()) printf("  (%s)", pkg.c_str());
+    printf("\n\n");
+    render_chip_pinout_ascii(*layout, body_name);
+    return true;
+#else
+    (void)name;
+    printf("ERROR: Pinout rendering requires a GUI-enabled build (CERMU_HAS_GUI)\n");
+    return true;
+#endif
+}
+
+/// Dump pinouts for all (or filtered) chips in a system.
+static int dump_system_pinouts(const char* sys_name, const char* chip_filter) {
+    LogLevelGuard guard(LogLevel::Silent);
+    auto sys = SystemRegistry::instance().create_system(sys_name);
+    if (!sys) {
+        printf("ERROR: System not found: %s\n", sys_name);
+        return 1;
+    }
+    if (!sys->initialize()) {
+        printf("ERROR: Failed to initialize %s\n", sys_name);
+        sys->shutdown();
+        return 1;
+    }
+
+    const auto& chips = sys->get_registered_chips();
+    bool found_any = false;
+
+    for (const auto& sc : chips) {
+        if (!sc.chip) continue;
+
+#ifdef CERMU_HAS_GUI
+        ChipLayout* layout = sc.chip->get_chip_layout();
+        if (!layout) continue;
+
+        // Apply chip filter if specified
+        if (chip_filter) {
+            bool match = false;
+            if (sc.display_name && strcasecmp(chip_filter, sc.display_name) == 0)
+                match = true;
+            if (sc.short_name && strcasecmp(chip_filter, sc.short_name) == 0)
+                match = true;
+            const auto& ci = sc.chip->chip_info();
+            if (!ci.part_number.empty() &&
+                strcasecmp(chip_filter, std::string(ci.part_number).c_str()) == 0)
+                match = true;
+            // Substring match for convenience
+            if (!match) {
+                auto icontains = [](const char* haystack, const char* needle) {
+                    if (!haystack || !needle) return false;
+                    std::string h(haystack), n(needle);
+                    std::transform(h.begin(), h.end(), h.begin(), ::tolower);
+                    std::transform(n.begin(), n.end(), n.begin(), ::tolower);
+                    return h.find(n) != std::string::npos;
+                };
+                if (icontains(sc.display_name, chip_filter)) match = true;
+                else if (icontains(sc.short_name, chip_filter)) match = true;
+                else if (!ci.part_number.empty() &&
+                         icontains(ci.part_number.data(), chip_filter)) match = true;
+            }
+            if (!match) continue;
+        }
+
+        found_any = true;
+        const char* name = sc.chip->get_layout_chip_name();
+        if (!name) name = sc.display_name ? sc.display_name : sc.chip->display_name();
+        // Short name for the chip body
+        const auto& ci = sc.chip->chip_info();
+        const char* body_name = !ci.part_number.empty() ? ci.part_number.data() : name;
+        std::string pkg = layout->get_package_name();
+        printf("\n=== %s ===", name);
+        if (sc.base_address > 0) printf("  ($%04X)", sc.base_address);
+        if (!pkg.empty()) printf("  (%s)", pkg.c_str());
+        printf("\n\n");
+        render_chip_pinout_ascii(*layout, body_name);
+#else
+        (void)chip_filter;
+        printf("ERROR: Pinout rendering requires a GUI-enabled build (CERMU_HAS_GUI)\n");
+        sys->shutdown();
+        return 1;
+#endif
+    }
+
+    if (!found_any) {
+        if (chip_filter)
+            printf("No chip matching \"%s\" found in %s (or it has no layout defined).\n",
+                   chip_filter, sys_name);
+        else
+            printf("No chips with pinout layouts found in %s.\n", sys_name);
+    }
+
+    sys->shutdown();
+    return 0;
+}
+
+static int dump_pinout(const char* first_arg, const char* second_arg) {
+    // First, try as a standalone chip name from the registry
+    if (try_dump_chip_pinout(first_arg))
+        return 0;
+
+    // Next, try as a system name (prefix match, with optional chip filter)
+    const SystemDescriptor* sd = prefix_match_system(first_arg);
+    if (sd) return dump_system_pinouts(sd->short_name, second_arg);
+
+    printf("ERROR: '%s' is not a registered chip or system name.\n", first_arg);
+    printf("\nUse --list chips to see all registered chip types.\n");
+    printf("Use --list systems to see all registered systems.\n");
+    return 1;
+}
+
+/// --manifest <system> (prefix match on short_name / aliases)
+static int dump_manifest(const char* name) {
+    const SystemDescriptor* found = prefix_match_system(name);
     if (!found) {
-        printf("ERROR: System not found: %s\n", name);
-        printf("Available systems:\n");
-        for (const auto& [desc, factory] : systems) {
-            printf("  %-10s  %s\n", desc.short_name, desc.name);
+        if (found == nullptr) {
+            // prefix_match_system already printed ambiguity error, or no match
+            const auto& systems = SystemRegistry::instance().get_systems();
+            bool any_prefix = false;
+            for (const auto& [desc, factory] : systems) {
+                if (iprefix(desc.short_name, name)) { any_prefix = true; break; }
+            }
+            if (!any_prefix) {
+                printf("ERROR: System not found: %s\n", name);
+                printf("Available systems:\n");
+                for (const auto& [desc, factory] : systems) {
+                    printf("  %-10s  %s\n", desc.short_name, desc.name);
+                }
+            }
         }
         return 1;
     }
@@ -501,11 +764,10 @@ int main(int argc, char** argv) {
                 return 1;
             }
         } else if (strcmp(argv[i], "--list") == 0 || strcmp(argv[i], "-l") == 0) {
-            if (i + 1 < argc) {
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
                 return dump_registry(argv[++i]);
             } else {
-                printf("ERROR: --list requires an argument (systems, chips, devices, ports, formats)\n");
-                return 1;
+                return dump_systems(); // default: list systems
             }
         } else if (strcmp(argv[i], "--manifest") == 0 || strcmp(argv[i], "-m") == 0) {
             if (i + 1 < argc) {
@@ -514,19 +776,40 @@ int main(int argc, char** argv) {
                 printf("ERROR: --manifest requires a system name\n");
                 return 1;
             }
+        } else if (strcmp(argv[i], "--pinout") == 0 || strcmp(argv[i], "-p") == 0) {
+            if (i + 1 < argc) {
+                const char* first_arg = argv[++i];
+                const char* second_arg = nullptr;
+                // Optional second arg (chip filter for system mode)
+                if (i + 1 < argc && argv[i + 1][0] != '-')
+                    second_arg = argv[++i];
+                return dump_pinout(first_arg, second_arg);
+            } else {
+                printf("ERROR: --pinout requires a chip or system name\n");
+                return 1;
+            }
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            // Check if --verbose / -v appears anywhere in argv
+            bool verbose_help = g_verbose;
+            for (int j = 1; j < argc && !verbose_help; j++)
+                verbose_help = (strcmp(argv[j], "--verbose") == 0 || strcmp(argv[j], "-v") == 0);
+
             printf("Usage: %s [options] [file]\n", argv[0]);
             printf("\nOptions:\n");
             printf("  --system, -s <name>   Select system by short name (e.g., C64, CHIP8)\n");
-            printf("  --list, -l <registry> List registry contents and exit\n");
+            printf("  --list, -l [registry] List registry contents and exit (default: systems)\n");
             printf("                        Registries: systems, chips, devices, ports, formats\n");
             printf("  --manifest, -m <sys>  Dump system manifest and hardware details\n");
-            printf("  --vicii-test          Run VIC-II register test suite (headless)\n");
-            printf("  --sid-log <file>      Capture SID register writes to binary log (headless)\n");
-            printf("  --seconds <N>         Duration for --sid-log capture (default: 60)\n");
-            printf("  --skip-memtest        Patch C64 KERNAL to skip RAMTAS memory test\n");
+            printf("  --pinout, -p <name> [chip] Dump ASCII chip pinout (chip or system name)\n");
             printf("  --verbose, -v         Enable verbose startup messages\n");
-            printf("  --help, -h            Show this help message\n");
+            printf("  --help, -h            Show this help message (use -h -v for more)\n");
+            if (verbose_help) {
+                printf("\nSystem-specific options:\n");
+                printf("  --vicii-test          Run VIC-II register test suite (headless)\n");
+                printf("  --sid-log <file>      Capture SID register writes to binary log (headless)\n");
+                printf("  --seconds <N>         Duration for --sid-log capture (default: 60)\n");
+                printf("  --skip-memtest        Patch C64 KERNAL to skip RAMTAS memory test\n");
+            }
             return 0;
         } else if (file_path == nullptr) {
             file_path = argv[i];
@@ -538,6 +821,10 @@ int main(int argc, char** argv) {
     
     // If system name specified, create it directly
     if (system_name != nullptr) {
+        // Resolve prefix / alias to canonical short_name
+        const SystemDescriptor* sd = prefix_match_system(system_name);
+        if (sd) system_name = sd->short_name;
+
         log_info("Creating system: %s\n", system_name);
         system = SystemRegistry::instance().create_system(system_name);
         
