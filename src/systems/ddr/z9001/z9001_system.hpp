@@ -87,8 +87,8 @@ template<> struct Z9001VariantTraits<Z9001Variant::KC87> {
 #define KC87_FOR_EACH_SYSTEM_CHIP(V, ctx) \
     V(ctx, U880,      z80,           0,            0, 0, 0, "U880",          nullptr) \
     V(ctx, RAMChip,   ram,           0x0000,  65536, 0, 0, "RAM",           nullptr) \
-    V(ctx, ROMChip,   basic_rom_lo,  0xC000,   8192, 0, 0, "BASIC ROM lo",  nullptr) \
-    V(ctx, ROMChip,   basic_rom_hi,  0xE000,   2048, 0, 0, "BASIC ROM hi",  nullptr) \
+    V(ctx, ROMChip,   basic_rom_lo,  0xC000,   8192, 0, 0, "BASIC ROM lo",  "z9001_basic.rom@0|kc87_basic_lo.rom|basic_lo.rom") \
+    V(ctx, ROMChip,   basic_rom_hi,  0xE000,   2048, 0, 0, "BASIC ROM hi",  "z9001_basic.rom@8192|kc87_basic_hi.rom|basic_hi.rom") \
     V(ctx, RAMChip,   color_ram,     0xE800,   1024, 0, 0, "Color RAM",     nullptr) \
     V(ctx, RAMChip,   video_ram,     0xEC00,   1024, 0, 0, "Video RAM",     nullptr) \
     V(ctx, ROMChip,   os_rom,        0xF000,   4096, 0, 0, "OS ROM",        "z9001_os.rom|os.rom|OS.ROM") \

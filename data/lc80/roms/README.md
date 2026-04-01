@@ -1,16 +1,24 @@
 # LC80 ROM Files
 
-> **Note:** The LC80 emulation is not yet functional. ROM loading is not
-> implemented. The ROM is included for when the system is complete.
+> **Note:** The LC80 emulation is not yet functional. The ROM is included
+> for when the system is complete.
 
 The LC80 (Lerncomputer 80) was an educational single-board computer produced
 by VEB Mikroelektronik Mühlhausen in the DDR (East Germany).
 
 ## Included ROMs
 
-| Filename | Size | Description |
-|----------|------|-------------|
-| `lc80_mon.rom` | 2,048 bytes | Monitor ROM at $0000 (mirrored via addr_mask) |
+| Filename | Size | Address | Description |
+|----------|------|---------|-------------|
+| `lc80_mon.rom` | 2,048 bytes | $0000 (mirrored via addr_mask 0x07FF) | Monitor ROM |
+
+## Alternative Filenames Accepted
+
+- **Monitor ROM:** `lc80_mon.rom`, `monitor.rom`, `MON.ROM`
+
+## Missing Files
+
+No files are missing. All required ROMs are present.
 
 ## Source
 

@@ -21,6 +21,15 @@ ROMs required by the Oric-1 and Oric Atmos emulation.
 - **Oric-1:** `oric1.rom`, `basic10.rom`, `BASIC10.ROM`
 - **Atmos:** `atmos.rom`, `basic11.rom`, `BASIC11.ROM`
 
+## Missing Files
+
+| Filename | Size | Description |
+|----------|------|-------------|
+| `oric1.rom` | 16 KB | **MISSING** — Oric-1 BASIC 1.0 + OS |
+| `atmos.rom` | 16 KB | **MISSING** — Oric Atmos BASIC 1.1 + OS |
+
+Both ROM files must be obtained from one of the sources below.
+
 ## Where to Obtain
 
 These ROMs are copyrighted by Tangerine Computer Systems / Oric International

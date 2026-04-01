@@ -18,13 +18,23 @@ are freely distributed by preservation communities.
 | `z1013_basic.rom` | 10,240 bytes | Z1013.64 | BASIC ROM (split across $C000–$E7FF) |
 
 The Z1013 BASIC ROM is not included. It can be sourced from the Z1013
-preservation community (see below).
+preservation community (see below). The combined file is automatically
+split using `@offset` syntax:
+- `z1013_basic.rom@0` → BASIC lo, 8 KB at $C000
+- `z1013_basic.rom@8192` → BASIC hi, 2 KB at $E000
+
+## Missing Files
+
+| Filename | Size | Description |
+|----------|------|-------------|
+| `z1013_basic.rom` | 10,240 bytes | **MISSING** — Required for Z1013.64 variant only |
 
 ## Alternative Filenames Accepted
 
 - **Monitor:** `z1013_mon.rom`, `monitor.rom`, `MON.ROM`
 - **Character ROM:** `z1013_char.rom`, `charrom.bin`, `CHAR.ROM`
-- **BASIC:** `z1013_basic.rom`, `BASIC.ROM`
+- **BASIC lo:** `z1013_basic.rom@0`, `basic_lo.rom`, `BASIC.ROM@0`
+- **BASIC hi:** `z1013_basic.rom@8192`, `basic_hi.rom`, `BASIC.ROM@8192`
 
 ## Source
 

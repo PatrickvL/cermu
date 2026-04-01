@@ -26,6 +26,13 @@ ROMs are copyrighted by Spectravideo and Microsoft (BASIC), and are
 Both variants share this directory. The emulator selects the correct ROM
 based on the system variant chosen at startup.
 
+## Missing Files
+
+| Filename | Size | Description |
+|----------|------|-------------|
+| `svi318.rom` | 32 KB | **MISSING** — SVI-318 BASIC ROM |
+| `svi328.rom` | 32 KB | **MISSING** — SVI-328 BASIC ROM |
+
 ## Where to Obtain
 
 - **MAME ROM set** — `svi318.zip` / `svi328.zip` contain the ROM images

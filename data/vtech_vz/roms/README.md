@@ -21,6 +21,13 @@ ROMs required by the VTech VZ200 and VZ300 emulation.
 - **VZ200:** `vz200.rom`, `BASIC.ROM`, `laser200.rom`
 - **VZ300:** `vz300.rom`, `BASIC.ROM`, `laser310.rom`
 
+## Missing Files
+
+| Filename | Size | Description |
+|----------|------|-------------|
+| `vz200.rom` | 16 KB | **MISSING** — VZ200 (Laser 200) BASIC ROM |
+| `vz300.rom` | 16 KB | **MISSING** — VZ300 (Laser 310) BASIC ROM |
+
 ## Where to Obtain
 
 These ROMs are copyrighted by VTech Holdings and are **not** included in this

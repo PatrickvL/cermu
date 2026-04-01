@@ -33,6 +33,17 @@ and are **not** included in this repository.
 All variants share this directory. The emulator selects the correct ROM
 based on the system variant chosen at startup.
 
+## Missing Files
+
+| Filename | Size | Description |
+|----------|------|-------------|
+| `msx.rom` | 32 KB | **MISSING** — MSX1 BIOS + BASIC |
+| `msx2.rom` | 32 KB | **MISSING** — MSX2 BIOS + BASIC |
+| `msx2p.rom` | 32 KB | **MISSING** — MSX2+ BIOS + BASIC |
+
+All ROM files must be obtained from the sources below. C-BIOS is a
+free open-source alternative for MSX1.
+
 ## Where to Obtain
 
 - **MAME ROM set** — `msx.zip`, `msx2.zip` etc. contain BIOS images

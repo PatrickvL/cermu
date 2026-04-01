@@ -18,6 +18,12 @@ by Tatung and is **not** included in this repository.
 The OS ROM is mapped at $0000 at boot and can be banked out by writing
 to port $23, giving the CPU full access to 64 KB of RAM.
 
+## Missing Files
+
+| Filename | Size | Description |
+|----------|------|-------------|
+| `einstein.rom` | 8 KB | **MISSING** — Einstein OS ROM |
+
 ## Where to Obtain
 
 - **MAME ROM set** — `einstein.zip` contains the OS ROM

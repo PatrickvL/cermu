@@ -28,6 +28,16 @@ ROMs required by the Apple II, Apple IIe, and Apple IIc emulation.
 - **Apple IIe:** `apple2e.rom`, `APPLE2E.ROM`, `apple2e_enhanced.rom`
 - **Apple IIc:** `apple2c.rom`, `APPLE2C.ROM`, `apple2c_v4.rom`
 
+## Missing Files
+
+| Filename | Size | Description |
+|----------|------|-------------|
+| `apple2.rom` | 16 KB | **MISSING** — Apple II ROM |
+| `apple2e.rom` | 16 KB | **MISSING** — Apple IIe enhanced ROM |
+| `apple2c.rom` | 32 KB | **MISSING** — Apple IIc ROM |
+
+All ROM files must be obtained from one of the sources below.
+
 ## Where to Obtain
 
 These ROMs are copyrighted by Apple Inc. and are **not** included in this

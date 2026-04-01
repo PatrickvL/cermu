@@ -82,8 +82,8 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_64> {
 #define Z1013_64K_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                  \
     V(ctx, U880,       z80,        0x0000,     0,  0, 0, "U880",         nullptr)                               \
     V(ctx, RAMChip,    ram,        0x0000, 65536,  0, 0, "RAM",          nullptr)                               \
-    V(ctx, ROMChip,    basic_lo,   0xC000,  8192,  0, 0, "BASIC ROM lo", nullptr)                               \
-    V(ctx, ROMChip,    basic_hi,   0xE000,  2048,  0, 0, "BASIC ROM hi", nullptr)                               \
+    V(ctx, ROMChip,    basic_lo,   0xC000,  8192,  0, 0, "BASIC ROM lo", "z1013_basic.rom@0|basic_lo.rom|BASIC.ROM@0")   \
+    V(ctx, ROMChip,    basic_hi,   0xE000,  2048,  0, 0, "BASIC ROM hi", "z1013_basic.rom@8192|basic_hi.rom|BASIC.ROM@8192")                               \
     V(ctx, RAMChip,    vram,       0xEC00,  1024,  0, 0, "Video RAM",    nullptr)                               \
     V(ctx, ROMChip,    monitor,    0xF000,  2048,  0, 0, "Monitor ROM",  "z1013_mon.rom|monitor.rom|MON.ROM")   \
     V(ctx, z80_pio_t,  pio,        0x0004,     0,  0x00FC, 0, "U855 PIO",     nullptr)
