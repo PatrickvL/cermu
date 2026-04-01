@@ -81,10 +81,10 @@ CPU sets address on bus
 ### bus_state_t layout (64 bits)
 
 ```
- Bit  63                           48  47                          32
-      ├─ OUTPUT PINS ────────────────┤  ├─ INPUT PINS ──────────────┤
- Bit  31         24  23            8   7                            0
-      ├─ BANK ────┤  ├── ADDR ────┤   ├──── DATA ─────────────────┤
+ Bit  63                                               48 47             32
+      ├────────────────── OUTPUT PINS ──────────────────┤ ├─ INPUT PINS ─┤
+ Bit  31            24 23                               8 7              0
+      ├──── BANK ────┤ ├───────────── ADDR ─────────────┤ ├──── DATA ────┤
 ```
 
 **Output pins (bits 48–63):**
