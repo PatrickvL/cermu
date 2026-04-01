@@ -165,12 +165,12 @@ template<BBCMasterVariant V> struct BBCMasterBusTraits;
 
 template<> struct BBCMasterBusTraits<BBCMasterVariant::MODEL_B_PLUS> {
     static constexpr const auto& kManifest = kBBCBPlusChips;
-    using Spec = ManifestBusSpec<kBBCBPlusChips, 16, 8>;
+    using Spec = ManifestBusSpec<kBBCBPlusChips, 16, 8, 1, true>;
 };
 
 template<> struct BBCMasterBusTraits<BBCMasterVariant::MASTER_128> {
     static constexpr const auto& kManifest = kBBCMasterChips;
-    using Spec = ManifestBusSpec<kBBCMasterChips, 16, 8>;
+    using Spec = ManifestBusSpec<kBBCMasterChips, 16, 8, 1, true>;
 };
 
 // ============================================================================
@@ -269,4 +269,5 @@ private:
     // VIA callbacks
     static uint8_t sys_via_port_a_read(void* ctx, uint8_t output);
     static uint8_t sys_via_port_b_read(void* ctx, uint8_t output);
+    static void sys_via_port_b_write(void* ctx, uint8_t data);
 };

@@ -230,12 +230,74 @@ void BBCMasterSystem<V>::reset() {
 }
 
 // ============================================================================
-// EXECUTION (stub — to be filled in)
+// EXECUTION
 // ============================================================================
+
+// CS-tick architecture (same as Model B):
+//   resolve() → service() handles RAM/ROM via page table.
+//   CRTC, VIDPROC, System VIA, User VIA self-select via CS field.
+//   ROM select ($FE30) handled as system glue after CS dispatch.
 
 template<BBCMasterVariant V>
 void BBCMasterSystem<V>::tick() {
-    // TODO: 65C02 tick + SHEILA I/O + CRTC + VIA + SN76489 + shadow RAM
+    bus_state_t s = pins_;
+
+    // ---- CRTC character clock (1 MHz = every other CPU cycle) ----
+    crtc_divider_++;
+    if (crtc_divider_ >= 2) {
+        crtc_divider_ = 0;
+        board_.crtc.tick();  // character clock only (void)
+    }
+
+    // ---- Propagate VIA interrupt state from previous cycle ----
+    if (board_.sys_via.ifr & board_.sys_via.ier & 0x7F) {
+        if (board_.sys_via.interrupt_bit != 0)
+            BUS_CLR_BIT(s, board_.sys_via.interrupt_bit);
+    }
+    if (board_.user_via.ifr & board_.user_via.ier & 0x7F) {
+        if (board_.user_via.interrupt_bit != 0)
+            BUS_CLR_BIT(s, board_.user_via.interrupt_bit);
+    }
+
+    // ---- CPU PHI2 — address/R#W valid on bus ----
+    s = board_.w65c02.template tick<WDC_65C02::Phase::PHI2>(s);
+
+    // ---- Address decode + flat-mem service + MMIO self-dispatch ----
+    s = bus_.resolve(s);
+    s = bus_.service(s);
+
+    // VIA ticks: advance timers (every cycle) + CS-gated register access
+    s = board_.sys_via.tick(s);
+    s = board_.user_via.tick(s);
+
+    // CRTC register access (CS-gated, no character clock — already ticked above)
+    if (board_.crtc.is_cs_selected(s)) {
+        s = BUS_GET_BIT(s, BUS_RW_BIT)
+            ? board_.crtc.on_bus_read(s) : board_.crtc.on_bus_write(s);
+        board_.crtc.mark_cs_serviced(s);
+    }
+
+    // Video ULA register access (CS-gated, write-only)
+    s = board_.vidproc.tick(s);
+
+    // ROM select register ($FE30) — system glue, not a chip.
+    if (unlikely(!BUS_GET_BIT(s, BUS_RW_BIT))) {
+        uint16_t addr = BUS_GET_ADDR(s);
+        if (addr == bbc_constants::ROM_SELECT_REG) {
+            rom_select_ = BUS_GET_DATA(s) & 0x0F;
+            update_paged_rom();
+        }
+    }
+
+    // ---- NMI edge detection ----
+    board_.w65c02.sample_nmi_pin(s);
+
+    // ---- CPU PHI1 ----
+    s = board_.w65c02.template tick<WDC_65C02::Phase::PHI1>(s);
+
+    BUS_SET_BIT(s, BUS_RW_BIT);
+    pins_ = s;
+    total_cycles_++;
 }
 
 template<BBCMasterVariant V>
@@ -251,6 +313,8 @@ void BBCMasterSystem<V>::run_frame() {
         }
         video_port_->swap_frame();
     }
+    audio_thread_.signal_progress(total_cycles_);
+    tick_peripherals();
 }
 
 // ============================================================================
@@ -299,23 +363,37 @@ void BBCMasterSystem<V>::handle_keyboard_event(SDL_Keycode /*key*/, bool /*press
 
 template<BBCMasterVariant V>
 void BBCMasterSystem<V>::tick_cpu() {
-    // TODO: 65C02 CPU tick with per-cycle accuracy
+    // Unused — tick() does inline PHI2/PHI1 dispatch
 }
 
 template<BBCMasterVariant V>
 bus_state_t BBCMasterSystem<V>::sheila_tick(bus_state_t s) {
-    // TODO: FRED/JIM/SHEILA I/O dispatch (same structure as Model B)
+    // Unused — CS dispatch handles SHEILA chips inline in tick()
     return s;
 }
 
 template<BBCMasterVariant V>
 void BBCMasterSystem<V>::configure_bus_memory_map() {
-    // TODO: setup page tables with shadow RAM support
+    // apply() establishes the default linear map from the manifest:
+    //   $00-$7F: RAM (read+write)
+    //   $80-$BF: Paged ROM bank 0 (read) — clipped from 256 KB pool
+    //   $C0-$FF: OS ROM (read)
+    //
+    // With EnableCs=true, Phase 3 creates MaskedSubTable entries for
+    // SHEILA ($FE) with regions for CRTC, VIDPROC, two VIAs.
+    board_.apply(bus_);
+
+    // Unmap FRED ($FC) and JIM ($FD) — no hardware on these pages yet
+    bus_.map_no_chip_selected(0, 0xFC, 2);
+
+    // Map currently selected paged ROM bank to $80-$BF
+    update_paged_rom();
 }
 
 template<BBCMasterVariant V>
 void BBCMasterSystem<V>::update_paged_rom() {
-    // TODO: remap $8000-$BFFF after rom_select_ change
+    board_.select_bank_at(bus_, 0, BTraits::kManifest.template find<ROMChip>(),
+                           rom_select_ & 0x0F, 0x80);
 }
 
 template<BBCMasterVariant V>
@@ -363,6 +441,39 @@ uint8_t BBCMasterSystem<V>::sys_via_port_a_read(void* /*ctx*/, uint8_t /*output*
 template<BBCMasterVariant V>
 uint8_t BBCMasterSystem<V>::sys_via_port_b_read(void* /*ctx*/, uint8_t /*output*/) {
     return 0xFF;
+}
+
+// ============================================================================
+// System VIA Port B Write — Addressable Latch + SN76489 Trigger
+// ============================================================================
+//
+// Same mechanism as Model B: 74LS259 addressable latch driven by Port B.
+//   PB0-PB2: latch address (0-7)
+//   PB3:     latch data (1 = set, 0 = clear)
+//
+// Latch bit 0 = SN76489 /WE.  SN76489 data comes from VIA Port A.
+// We detect the falling edge and enqueue a timestamped write.
+
+template<BBCMasterVariant V>
+void BBCMasterSystem<V>::sys_via_port_b_write(void* context, uint8_t data) {
+    auto* sys = static_cast<BBCMasterSystem*>(context);
+
+    uint8_t latch_addr = data & 0x07;
+    bool latch_data = (data >> 3) & 0x01;
+    uint8_t old_latch = sys->addressable_latch_;
+
+    if (latch_data)
+        sys->addressable_latch_ |= (1 << latch_addr);
+    else
+        sys->addressable_latch_ &= ~(1 << latch_addr);
+
+    // SN76489 /WE falling edge: old bit 0 was HIGH, now LOW
+    if (latch_addr == 0 && (old_latch & 0x01) && !latch_data) {
+        if (sys->psg_adapter_) {
+            uint8_t psg_data = sys->board_.sys_via.regs_[PORTA];
+            sys->psg_adapter_->cmd_queue().push_write(sys->total_cycles_, 0, psg_data);
+        }
+    }
 }
 
 // ============================================================================
