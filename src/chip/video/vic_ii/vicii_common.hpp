@@ -584,6 +584,15 @@ struct vicii_base_t : public VideoChipBase {
     // Destructor — cleans up dynamically allocated pixel line buffers
     ~vicii_base_t() override;
 
+    // --- ChipBase bus interface (MMIO) ---
+    bool has_mmio() const override { return true; }
+    bus_state_t on_bus_read(bus_state_t bus) noexcept override {
+        return registers_read(this, bus);
+    }
+    bus_state_t on_bus_write(bus_state_t bus) noexcept override {
+        return registers_write(this, bus);
+    }
+
     // ChipBase interface
 #ifdef CERMU_HAS_GUI
     bool has_settings_content() const override { return true; }
@@ -600,6 +609,18 @@ struct vicii_base_t : public VideoChipBase {
     // Tick functions
     bus_state_t tick_phi1(bus_state_t bus_state);
     void tick_phi2(bus_state_t bus_state);
+
+    /// CS-tick: self-dispatch register access when chip-selected.
+    /// Called after resolve() during the CPU's bus phase, between phi1 and phi2.
+    bus_state_t tick_mmio(bus_state_t bus_state) {
+        if (is_cs_selected(bus_state)) {
+            bus_state = BUS_GET_BIT(bus_state, BUS_RW_BIT)
+                ? registers_read(this, bus_state)
+                : registers_write(this, bus_state);
+            mark_cs_serviced(bus_state);
+        }
+        return bus_state;
+    }
 
     // Register I/O (static — for io_page_handlers_t function pointer tables)
     static bus_state_t registers_read(void* context, bus_state_t bus_state);
