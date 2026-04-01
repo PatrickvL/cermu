@@ -26,6 +26,7 @@
 
 #ifndef CERMU_NO_SQLITE
 
+#include "core/cermu.hpp"
 #include <sqlite3.h>
 #include <string>
 #include <vector>
@@ -116,7 +117,7 @@ public:
 
         int rc = sqlite3_open(db_path.c_str(), &db_);
         if (rc != SQLITE_OK) {
-            fprintf(stderr, "CatalogStore: failed to open %s: %s\n",
+            log_error("CatalogStore: failed to open %s: %s\n",
                     db_path.c_str(), sqlite3_errmsg(db_));
             db_ = nullptr;
             return false;
@@ -433,7 +434,7 @@ private:
         char* err = nullptr;
         int rc = sqlite3_exec(db_, sql, nullptr, nullptr, &err);
         if (rc != SQLITE_OK) {
-            fprintf(stderr, "CatalogStore SQL error: %s\n", err ? err : "unknown");
+            log_error("CatalogStore SQL error: %s\n", err ? err : "unknown");
             sqlite3_free(err);
             return false;
         }

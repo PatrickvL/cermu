@@ -5,6 +5,7 @@
  * a FORMAT_LOAD_PROGRAM result with SID metadata in the metadata blob.
  */
 
+#include "core/cermu.hpp"
 #include "core/formats/sid_format.hpp"
 #include "core/formats/format_registry.hpp"
 #include <cstdio>
@@ -45,14 +46,14 @@ bool sid_parse_header(const uint8_t* data, size_t size, sid_header_t* out) {
 
     // Validate version
     if (out->version < 1 || out->version > 4) {
-        printf("SIDFormat: Unsupported version %u\n", out->version);
+        log_info("SIDFormat: Unsupported version %u\n", out->version);
         return false;
     }
 
     // Validate minimum header size
     size_t min_header = (out->version == 1) ? SID_V1_HEADER_SIZE : SID_V2_HEADER_SIZE;
     if (size < min_header || size < out->data_offset) {
-        printf("SIDFormat: File too small (%zu bytes, need %zu)\n", size, min_header);
+        log_info("SIDFormat: File too small (%zu bytes, need %zu)\n", size, min_header);
         return false;
     }
 
@@ -114,7 +115,7 @@ bool sid_parse_header(const uint8_t* data, size_t size, sid_header_t* out) {
         // The first 2 bytes of the C64 payload are the little-endian load address
         size_t payload_offset = out->data_offset;
         if (payload_offset + 2 > size) {
-            printf("SIDFormat: No room for embedded load address\n");
+            log_info("SIDFormat: No room for embedded load address\n");
             return false;
         }
         out->load_addr = format_read_le16(data + payload_offset);
@@ -126,7 +127,7 @@ bool sid_parse_header(const uint8_t* data, size_t size, sid_header_t* out) {
         // RSID init_addr == 0 is valid — it indicates a BASIC program SID
         // that should be loaded at the BASIC start address and RUN.
         if (out->play_addr != 0) {
-            printf("SIDFormat: RSID with play_addr != 0 is invalid\n");
+            log_info("SIDFormat: RSID with play_addr != 0 is invalid\n");
             return false;
         }
     }
@@ -205,7 +206,7 @@ static bool sid_load(const uint8_t* data, size_t size, format_load_result_t* out
 
     // Validate payload fits in C64 address space
     if ((uint32_t)header.load_addr + payload_size > 0x10000) {
-        printf("SIDFormat: Warning — payload exceeds 64KB (load=$%04X, size=%zu), truncating\n",
+        log_info("SIDFormat: Warning — payload exceeds 64KB (load=$%04X, size=%zu), truncating\n",
                header.load_addr, payload_size);
         payload_size = 0x10000 - header.load_addr;
     }
@@ -233,16 +234,16 @@ static bool sid_load(const uint8_t* data, size_t size, format_load_result_t* out
         out->metadata_size = sizeof(sid_metadata_blob_t);
     }
 
-    printf("SIDFormat: %s v%u — \"%s\" by %s\n",
+    log_info("SIDFormat: %s v%u — \"%s\" by %s\n",
            header.type == SID_TYPE_PSID ? "PSID" : "RSID",
            header.version, header.name, header.author);
-    printf("SIDFormat: load=$%04X init=$%04X play=$%04X songs=%u default=%u\n",
+    log_info("SIDFormat: load=$%04X init=$%04X play=$%04X songs=%u default=%u\n",
            header.load_addr, header.init_addr, header.play_addr,
            header.num_songs, header.start_song);
     if (header.version >= 2) {
         const char* vid_names[] = {"Unknown", "PAL", "NTSC", "PAL+NTSC"};
         const char* sid_names[] = {"Unknown", "6581", "8580", "6581+8580"};
-        printf("SIDFormat: video=%s sid=%s\n",
+        log_info("SIDFormat: video=%s sid=%s\n",
                vid_names[header.video & 3], sid_names[header.sid_model & 3]);
     }
 

@@ -2,6 +2,7 @@
 // chip_registry.cpp — Global chip factory registry implementation
 // =============================================================================
 
+#include "core/cermu.hpp"
 #include "core/chip_registry.hpp"
 #include <cstdio>
 
@@ -21,7 +22,7 @@ ChipRegistry& ChipRegistry::instance() {
 void ChipRegistry::register_chip(std::string_view name, FactoryFn factory) {
     // Reject null factories — they can't create anything.
     if (!factory) {
-        printf("ChipRegistry: WARNING — null factory for '%.*s' ignored\n",
+        log_info("ChipRegistry: WARNING — null factory for '%.*s' ignored\n",
                int(name.size()), name.data());
         return;
     }
@@ -29,7 +30,7 @@ void ChipRegistry::register_chip(std::string_view name, FactoryFn factory) {
     // Reject duplicate names (first registration wins).
     for (const auto& entry : entries_) {
         if (entry.name == name) {
-            printf("ChipRegistry: WARNING — duplicate chip name '%.*s' ignored\n",
+            log_info("ChipRegistry: WARNING — duplicate chip name '%.*s' ignored\n",
                    int(name.size()), name.data());
             return;
         }

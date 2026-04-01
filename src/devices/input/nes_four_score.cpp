@@ -13,6 +13,7 @@
  * reading 24 bits from each port.
  */
 
+#include "core/cermu.hpp"
 #include "devices/input/nes_four_score.hpp"
 #include "core/device_registry.hpp"
 
@@ -61,7 +62,7 @@ void NesFourScore::on_attach(Port* port) {
     if (port) {
         int idx = port->get_port_index();
         signature_ = (idx == 2) ? SIGNATURE_PORT2 : SIGNATURE_PORT1;
-        printf("Four Score: Attached to port %d (signature $%02X)\n", idx, signature_);
+        log_info("Four Score: Attached to port %d (signature $%02X)\n", idx, signature_);
     }
 }
 

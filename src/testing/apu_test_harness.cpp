@@ -2,6 +2,7 @@
 // NES APU Digital Test Harness — Implementation
 // =============================================================================
 
+#include "core/cermu.hpp"
 #include "testing/apu_test_harness.hpp"
 #include <cassert>
 
@@ -191,7 +192,7 @@ int run_script(harness_t* h, const test_script_t* script) {
         }
         case cmd_type_t::LABEL:
             if (h->verbose)
-                printf("  [%s]\n", cmd.label);
+                log_info("  [%s]\n", cmd.label);
             break;
         }
     }
@@ -200,15 +201,15 @@ int run_script(harness_t* h, const test_script_t* script) {
 }
 
 void print_results(const harness_t* h, const test_script_t* script) {
-    printf("\n── %s ─────────────────────────────────────\n", script->name.c_str());
+    log_info("\n── %s ─────────────────────────────────────\n", script->name.c_str());
     for (const auto& r : h->results) {
         if (r.type == result_type_t::FAIL) {
-            printf("  FAIL [%s] %s\n", r.check_name, r.message);
+            log_info("  FAIL [%s] %s\n", r.check_name, r.message);
         } else if (r.type == result_type_t::PASS && h->verbose) {
-            printf("  PASS [%s] %s\n", r.check_name, r.message);
+            log_info("  PASS [%s] %s\n", r.check_name, r.message);
         }
     }
-    printf("  %d passed, %d failed\n\n", h->pass_count, h->fail_count);
+    log_info("  %d passed, %d failed\n\n", h->pass_count, h->fail_count);
 }
 
 // =============================================================================
@@ -240,7 +241,7 @@ static void enable_channel(harness_t* h, uint8_t mask) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_length_counter_table(harness_t* h) {
-    printf("  Testing length counter table...\n");
+    log_info("  Testing length counter table...\n");
     int failures = 0;
 
     // Expected values from NESdev wiki
@@ -267,12 +268,12 @@ int test_length_counter_table(harness_t* h) {
         // The length counter should be loaded with expected[i]
         uint8_t loaded = h->apu->pulse1.length.value();
         if (loaded != expected[i]) {
-            printf("    FAIL: Length table[%d] = %d, expected %d\n", i, loaded, expected[i]);
+            log_info("    FAIL: Length table[%d] = %d, expected %d\n", i, loaded, expected[i]);
             failures++;
         }
     }
 
-    if (failures == 0) printf("    PASS: All 32 length counter table entries correct\n");
+    if (failures == 0) log_info("    PASS: All 32 length counter table entries correct\n");
     return failures;
 }
 
@@ -281,7 +282,7 @@ int test_length_counter_table(harness_t* h) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_length_counter_halt(harness_t* h) {
-    printf("  Testing length counter halt...\n");
+    log_info("  Testing length counter halt...\n");
     int failures = 0;
 
     reset(h);
@@ -296,7 +297,7 @@ int test_length_counter_halt(harness_t* h) {
 
     // Verify initial length
     if (h->apu->pulse1.length.value() != 2) {
-        printf("    FAIL: Initial length = %d, expected 2\n", h->apu->pulse1.length.value());
+        log_info("    FAIL: Initial length = %d, expected 2\n", h->apu->pulse1.length.value());
         failures++;
     }
 
@@ -307,7 +308,7 @@ int test_length_counter_halt(harness_t* h) {
     clock_cycles(h, 14914); // Past step 1 (half frame)
 
     if (h->apu->pulse1.length.value() != 1) {
-        printf("    FAIL: After 1 half-frame, length = %d, expected 1\n", h->apu->pulse1.length.value());
+        log_info("    FAIL: After 1 half-frame, length = %d, expected 1\n", h->apu->pulse1.length.value());
         failures++;
     }
 
@@ -319,11 +320,11 @@ int test_length_counter_halt(harness_t* h) {
 
     // Length should NOT have decremented because halt is set
     if (h->apu->pulse1.length.value() != 1) {
-        printf("    FAIL: After halt, length = %d, expected 1 (unchanged)\n", h->apu->pulse1.length.value());
+        log_info("    FAIL: After halt, length = %d, expected 1 (unchanged)\n", h->apu->pulse1.length.value());
         failures++;
     }
 
-    if (failures == 0) printf("    PASS: Length counter halt works correctly\n");
+    if (failures == 0) log_info("    PASS: Length counter halt works correctly\n");
     return failures;
 }
 
@@ -332,7 +333,7 @@ int test_length_counter_halt(harness_t* h) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_length_counter_enable(harness_t* h) {
-    printf("  Testing length counter enable/disable...\n");
+    log_info("  Testing length counter enable/disable...\n");
     int failures = 0;
 
     reset(h);
@@ -346,7 +347,7 @@ int test_length_counter_enable(harness_t* h) {
     clock_cycles(h, 1); // Resolve deferred length counter reload
 
     if (!h->apu->pulse1.length.active()) {
-        printf("    FAIL: Pulse1 length should be active after load\n");
+        log_info("    FAIL: Pulse1 length should be active after load\n");
         failures++;
     }
 
@@ -354,18 +355,18 @@ int test_length_counter_enable(harness_t* h) {
     enable_channel(h, 0x00);
 
     if (h->apu->pulse1.length.active()) {
-        printf("    FAIL: Pulse1 length should be inactive after disable\n");
+        log_info("    FAIL: Pulse1 length should be inactive after disable\n");
         failures++;
     }
 
     // Verify counter is cleared
     if (h->apu->pulse1.length.value() != 0) {
-        printf("    FAIL: Length counter = %d, expected 0 after disable\n",
+        log_info("    FAIL: Length counter = %d, expected 0 after disable\n",
                h->apu->pulse1.length.value());
         failures++;
     }
 
-    if (failures == 0) printf("    PASS: Length counter enable/disable correct\n");
+    if (failures == 0) log_info("    PASS: Length counter enable/disable correct\n");
     return failures;
 }
 
@@ -374,7 +375,7 @@ int test_length_counter_enable(harness_t* h) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_envelope_constant(harness_t* h) {
-    printf("  Testing constant volume envelope...\n");
+    log_info("  Testing constant volume envelope...\n");
     int failures = 0;
 
     reset(h);
@@ -391,11 +392,11 @@ int test_envelope_constant(harness_t* h) {
 
     uint8_t env = h->apu->pulse1.envelope.volume();
     if (env != 10) {
-        printf("    FAIL: Constant volume = %d, expected 10\n", env);
+        log_info("    FAIL: Constant volume = %d, expected 10\n", env);
         failures++;
     }
 
-    if (failures == 0) printf("    PASS: Constant volume envelope correct\n");
+    if (failures == 0) log_info("    PASS: Constant volume envelope correct\n");
     return failures;
 }
 
@@ -404,7 +405,7 @@ int test_envelope_constant(harness_t* h) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_envelope_decay(harness_t* h) {
-    printf("  Testing envelope decay...\n");
+    log_info("  Testing envelope decay...\n");
     int failures = 0;
 
     reset(h);
@@ -428,7 +429,7 @@ int test_envelope_decay(harness_t* h) {
 
     uint8_t env = h->apu->pulse1.envelope.volume();
     if (env != 15) {
-        printf("    FAIL: After first QF, envelope = %d, expected 15 (start reloads)\n", env);
+        log_info("    FAIL: After first QF, envelope = %d, expected 15 (start reloads)\n", env);
         failures++;
     }
 
@@ -437,7 +438,7 @@ int test_envelope_decay(harness_t* h) {
     clock_cycles(h, 14913 - 7458 + 1);
     env = h->apu->pulse1.envelope.volume();
     if (env != 14) {
-        printf("    FAIL: After second QF, envelope = %d, expected 14\n", env);
+        log_info("    FAIL: After second QF, envelope = %d, expected 14\n", env);
         failures++;
     }
 
@@ -445,11 +446,11 @@ int test_envelope_decay(harness_t* h) {
     clock_cycles(h, 22371 - 14914 + 1);
     env = h->apu->pulse1.envelope.volume();
     if (env != 13) {
-        printf("    FAIL: After third QF, envelope = %d, expected 13\n", env);
+        log_info("    FAIL: After third QF, envelope = %d, expected 13\n", env);
         failures++;
     }
 
-    if (failures == 0) printf("    PASS: Envelope decay correct\n");
+    if (failures == 0) log_info("    PASS: Envelope decay correct\n");
     return failures;
 }
 
@@ -458,7 +459,7 @@ int test_envelope_decay(harness_t* h) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_envelope_loop(harness_t* h) {
-    printf("  Testing envelope loop...\n");
+    log_info("  Testing envelope loop...\n");
     int failures = 0;
 
     reset(h);
@@ -486,11 +487,11 @@ int test_envelope_loop(harness_t* h) {
     // After 17 quarter frames: start(15), 14,13,...,1,0, loop(15)
     uint8_t env = h->apu->pulse1.envelope.volume();
     if (env != 15) {
-        printf("    FAIL: After loop, envelope = %d, expected 15\n", env);
+        log_info("    FAIL: After loop, envelope = %d, expected 15\n", env);
         failures++;
     }
 
-    if (failures == 0) printf("    PASS: Envelope loop correct\n");
+    if (failures == 0) log_info("    PASS: Envelope loop correct\n");
     return failures;
 }
 
@@ -499,7 +500,7 @@ int test_envelope_loop(harness_t* h) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_pulse_duty_cycles(harness_t* h) {
-    printf("  Testing pulse duty cycles...\n");
+    log_info("  Testing pulse duty cycles...\n");
     int failures = 0;
 
     // Expected duty sequences
@@ -547,7 +548,7 @@ int test_pulse_duty_cycles(harness_t* h) {
         }
 
         if (!producing_sound) {
-            printf("    WARN: Duty %d: Channel silent (muted by sweep?)\n", duty);
+            log_info("    WARN: Duty %d: Channel silent (muted by sweep?)\n", duty);
             // Don't count as failure - sweep muting can affect very short periods
         }
     }
@@ -556,14 +557,14 @@ int test_pulse_duty_cycles(harness_t* h) {
     for (int d = 0; d < 4; d++) {
         for (int s = 0; s < 8; s++) {
             if (DUTY_TABLE[d][s] != expected[d][s]) {
-                printf("    FAIL: DUTY_TABLE[%d][%d] = %d, expected %d\n",
+                log_info("    FAIL: DUTY_TABLE[%d][%d] = %d, expected %d\n",
                        d, s, DUTY_TABLE[d][s], expected[d][s]);
                 failures++;
             }
         }
     }
 
-    if (failures == 0) printf("    PASS: Pulse duty cycle tables correct\n");
+    if (failures == 0) log_info("    PASS: Pulse duty cycle tables correct\n");
     return failures;
 }
 
@@ -572,7 +573,7 @@ int test_pulse_duty_cycles(harness_t* h) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_pulse_sweep_basic(harness_t* h) {
-    printf("  Testing pulse sweep (basic up)...\n");
+    log_info("  Testing pulse sweep (basic up)...\n");
     int failures = 0;
 
     reset(h);
@@ -586,7 +587,7 @@ int test_pulse_sweep_basic(harness_t* h) {
 
     uint16_t initial_period = h->apu->pulse1.timer_period;
     if (initial_period != 0x200) {
-        printf("    FAIL: Initial period = 0x%03X, expected 0x200\n", initial_period);
+        log_info("    FAIL: Initial period = 0x%03X, expected 0x200\n", initial_period);
         failures++;
     }
 
@@ -609,11 +610,11 @@ int test_pulse_sweep_basic(harness_t* h) {
     // With shift=1 and negate=0: target = current + (current >> 1)
     // = 512 + 256 = 768
     if (new_period != 768) {
-        printf("    FAIL: After sweep, period = %d, expected 768\n", new_period);
+        log_info("    FAIL: After sweep, period = %d, expected 768\n", new_period);
         failures++;
     }
 
-    if (failures == 0) printf("    PASS: Pulse sweep basic correct\n");
+    if (failures == 0) log_info("    PASS: Pulse sweep basic correct\n");
     return failures;
 }
 
@@ -622,7 +623,7 @@ int test_pulse_sweep_basic(harness_t* h) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_pulse_sweep_negate(harness_t* h) {
-    printf("  Testing pulse sweep negate difference...\n");
+    log_info("  Testing pulse sweep negate difference...\n");
     int failures = 0;
 
     // Pulse 1 negate uses one's complement: target = period - (period >> shift) - 1
@@ -654,15 +655,15 @@ int test_pulse_sweep_negate(harness_t* h) {
     // Pulse 1 (one's complement negate): 512 - 256 - 1 = 255
     // Pulse 2 (two's complement negate): 512 - 256 = 256
     if (p1 != 255) {
-        printf("    FAIL: Pulse1 negate period = %d, expected 255\n", p1);
+        log_info("    FAIL: Pulse1 negate period = %d, expected 255\n", p1);
         failures++;
     }
     if (p2 != 256) {
-        printf("    FAIL: Pulse2 negate period = %d, expected 256\n", p2);
+        log_info("    FAIL: Pulse2 negate period = %d, expected 256\n", p2);
         failures++;
     }
 
-    if (failures == 0) printf("    PASS: Pulse sweep negate difference correct\n");
+    if (failures == 0) log_info("    PASS: Pulse sweep negate difference correct\n");
     return failures;
 }
 
@@ -671,7 +672,7 @@ int test_pulse_sweep_negate(harness_t* h) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_pulse_sweep_muting(harness_t* h) {
-    printf("  Testing pulse sweep muting...\n");
+    log_info("  Testing pulse sweep muting...\n");
     int failures = 0;
 
     reset(h);
@@ -686,7 +687,7 @@ int test_pulse_sweep_muting(harness_t* h) {
     clock_cycles(h, 100);
     uint8_t out = get_pulse1_output(h);
     if (out != 0) {
-        printf("    FAIL: Period < 8 should mute, got output %d\n", out);
+        log_info("    FAIL: Period < 8 should mute, got output %d\n", out);
         failures++;
     }
 
@@ -705,11 +706,11 @@ int test_pulse_sweep_muting(harness_t* h) {
     clock_cycles(h, 100);
     out = get_pulse1_output(h);
     if (out != 0) {
-        printf("    FAIL: Target > 0x7FF should mute, got output %d\n", out);
+        log_info("    FAIL: Target > 0x7FF should mute, got output %d\n", out);
         failures++;
     }
 
-    if (failures == 0) printf("    PASS: Pulse sweep muting correct\n");
+    if (failures == 0) log_info("    PASS: Pulse sweep muting correct\n");
     return failures;
 }
 
@@ -718,7 +719,7 @@ int test_pulse_sweep_muting(harness_t* h) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_triangle_waveform(harness_t* h) {
-    printf("  Testing triangle waveform shape...\n");
+    log_info("  Testing triangle waveform shape...\n");
     int failures = 0;
 
     reset(h);
@@ -755,10 +756,10 @@ int test_triangle_waveform(harness_t* h) {
     }
 
     if (!has_descent || !has_ascent) {
-        printf("    FAIL: Triangle not producing ascending/descending pattern\n");
-        printf("    Samples: ");
-        for (int i = 0; i < 32; i++) printf("%d ", sequence[i]);
-        printf("\n");
+        log_info("    FAIL: Triangle not producing ascending/descending pattern\n");
+        log_info("    Samples: ");
+        for (int i = 0; i < 32; i++) log_info("%d ", sequence[i]);
+        log_info("\n");
         failures++;
     }
 
@@ -769,13 +770,13 @@ int test_triangle_waveform(harness_t* h) {
     };
     for (int i = 0; i < 32; i++) {
         if (TRIANGLE_TABLE[i] != expected_table[i]) {
-            printf("    FAIL: TRIANGLE_TABLE[%d] = %d, expected %d\n",
+            log_info("    FAIL: TRIANGLE_TABLE[%d] = %d, expected %d\n",
                    i, TRIANGLE_TABLE[i], expected_table[i]);
             failures++;
         }
     }
 
-    if (failures == 0) printf("    PASS: Triangle waveform correct\n");
+    if (failures == 0) log_info("    PASS: Triangle waveform correct\n");
     return failures;
 }
 
@@ -784,7 +785,7 @@ int test_triangle_waveform(harness_t* h) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_triangle_linear_counter(harness_t* h) {
-    printf("  Testing triangle linear counter...\n");
+    log_info("  Testing triangle linear counter...\n");
     int failures = 0;
 
     reset(h);
@@ -814,11 +815,11 @@ int test_triangle_linear_counter(harness_t* h) {
     // Verify triangle is now muted (linear counter = 0)
     uint8_t tri_lc = h->apu->triangle.linear_counter_value();
     if (tri_lc != 0) {
-        printf("    FAIL: Linear counter = %d, expected 0 after 3 QF\n", tri_lc);
+        log_info("    FAIL: Linear counter = %d, expected 0 after 3 QF\n", tri_lc);
         failures++;
     }
 
-    if (failures == 0) printf("    PASS: Triangle linear counter correct\n");
+    if (failures == 0) log_info("    PASS: Triangle linear counter correct\n");
     return failures;
 }
 
@@ -827,14 +828,14 @@ int test_triangle_linear_counter(harness_t* h) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_noise_lfsr_long_mode(harness_t* h) {
-    printf("  Testing noise LFSR long mode...\n");
+    log_info("  Testing noise LFSR long mode...\n");
     int failures = 0;
 
     reset(h);
 
     // Verify initial LFSR state immediately after reset (before any ticks)
     if (h->apu->noise.shift_register != 1) {
-        printf("    FAIL: Initial LFSR = %d, expected 1\n", h->apu->noise.shift_register);
+        log_info("    FAIL: Initial LFSR = %d, expected 1\n", h->apu->noise.shift_register);
         failures++;
     }
 
@@ -866,18 +867,18 @@ int test_noise_lfsr_long_mode(harness_t* h) {
 
     // Verify LFSR changed (it should have stepped at least once)
     if (lfsr_after == lfsr_before) {
-        printf("    FAIL: LFSR didn't advance after 20 cycles (stuck at 0x%04X)\n", lfsr_before);
+        log_info("    FAIL: LFSR didn't advance after 20 cycles (stuck at 0x%04X)\n", lfsr_before);
         failures++;
     }
 
     // Run many more cycles and verify LFSR is still non-zero (15-bit LFSR should never be 0)
     clock_cycles(h, 10000);
     if (h->apu->noise.shift_register == 0) {
-        printf("    FAIL: LFSR became 0 (should never happen)\n");
+        log_info("    FAIL: LFSR became 0 (should never happen)\n");
         failures++;
     }
 
-    if (failures == 0) printf("    PASS: Noise LFSR long mode correct\n");
+    if (failures == 0) log_info("    PASS: Noise LFSR long mode correct\n");
     return failures;
 }
 
@@ -886,7 +887,7 @@ int test_noise_lfsr_long_mode(harness_t* h) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_noise_lfsr_short_mode(harness_t* h) {
-    printf("  Testing noise LFSR short mode...\n");
+    log_info("  Testing noise LFSR short mode...\n");
     int failures = 0;
 
     reset(h);
@@ -908,7 +909,7 @@ int test_noise_lfsr_short_mode(harness_t* h) {
 
     // Verify LFSR changed
     if (lfsr_after == lfsr_before) {
-        printf("    FAIL: LFSR didn't advance after 20 cycles (stuck at 0x%04X)\n", lfsr_before);
+        log_info("    FAIL: LFSR didn't advance after 20 cycles (stuck at 0x%04X)\n", lfsr_before);
         failures++;
     }
 
@@ -925,11 +926,11 @@ int test_noise_lfsr_short_mode(harness_t* h) {
     // Due to timing alignment, we may not hit exactly 93 steps.
     // Instead verify the LFSR never becomes 0 (invariant for all LFSR modes).
     if (h->apu->noise.shift_register == 0) {
-        printf("    FAIL: LFSR became 0 in short mode\n");
+        log_info("    FAIL: LFSR became 0 in short mode\n");
         failures++;
     }
 
-    if (failures == 0) printf("    PASS: Noise LFSR short mode correct\n");
+    if (failures == 0) log_info("    PASS: Noise LFSR short mode correct\n");
     return failures;
 }
 
@@ -938,7 +939,7 @@ int test_noise_lfsr_short_mode(harness_t* h) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_dmc_direct_load(harness_t* h) {
-    printf("  Testing DMC direct load...\n");
+    log_info("  Testing DMC direct load...\n");
     int failures = 0;
 
     reset(h);
@@ -947,7 +948,7 @@ int test_dmc_direct_load(harness_t* h) {
     // DMC output starts at 0
     uint8_t out = get_dmc_output(h);
     if (out != 0) {
-        printf("    FAIL: Initial DMC output = %d, expected 0\n", out);
+        log_info("    FAIL: Initial DMC output = %d, expected 0\n", out);
         failures++;
     }
 
@@ -955,7 +956,7 @@ int test_dmc_direct_load(harness_t* h) {
     write_reg(h, REG_DMC_RAW, 0x40); // Load 64
     out = get_dmc_output(h);
     if (out != 64) {
-        printf("    FAIL: After direct load, DMC output = %d, expected 64\n", out);
+        log_info("    FAIL: After direct load, DMC output = %d, expected 64\n", out);
         failures++;
     }
 
@@ -963,11 +964,11 @@ int test_dmc_direct_load(harness_t* h) {
     write_reg(h, REG_DMC_RAW, 0x7F);
     out = get_dmc_output(h);
     if (out != 127) {
-        printf("    FAIL: DMC direct load max = %d, expected 127\n", out);
+        log_info("    FAIL: DMC direct load max = %d, expected 127\n", out);
         failures++;
     }
 
-    if (failures == 0) printf("    PASS: DMC direct load correct\n");
+    if (failures == 0) log_info("    PASS: DMC direct load correct\n");
     return failures;
 }
 
@@ -976,7 +977,7 @@ int test_dmc_direct_load(harness_t* h) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_frame_counter_4step(harness_t* h) {
-    printf("  Testing frame counter 4-step mode...\n");
+    log_info("  Testing frame counter 4-step mode...\n");
     int failures = 0;
 
     reset(h);
@@ -991,7 +992,7 @@ int test_frame_counter_4step(harness_t* h) {
 
     uint8_t initial_len = h->apu->pulse1.length.value();
     if (initial_len != 10) {
-        printf("    FAIL: Initial length = %d, expected 10\n", initial_len);
+        log_info("    FAIL: Initial length = %d, expected 10\n", initial_len);
         failures++;
     }
 
@@ -1001,7 +1002,7 @@ int test_frame_counter_4step(harness_t* h) {
 
     uint8_t len = h->apu->pulse1.length.value();
     if (len != 9) {
-        printf("    FAIL: After step 1 (half frame), length = %d, expected 9\n", len);
+        log_info("    FAIL: After step 1 (half frame), length = %d, expected 9\n", len);
         failures++;
     }
 
@@ -1010,18 +1011,18 @@ int test_frame_counter_4step(harness_t* h) {
 
     len = h->apu->pulse1.length.value();
     if (len != 8) {
-        printf("    FAIL: After step 3 (half frame), length = %d, expected 8\n", len);
+        log_info("    FAIL: After step 3 (half frame), length = %d, expected 8\n", len);
         failures++;
     }
 
     // Check IRQ flag should be set at step 3 in 4-step mode
     bool irq = h->apu->frame.irq_flag;
     if (!irq) {
-        printf("    FAIL: Frame IRQ flag should be set in 4-step mode at step 3\n");
+        log_info("    FAIL: Frame IRQ flag should be set in 4-step mode at step 3\n");
         failures++;
     }
 
-    if (failures == 0) printf("    PASS: Frame counter 4-step mode correct\n");
+    if (failures == 0) log_info("    PASS: Frame counter 4-step mode correct\n");
     return failures;
 }
 
@@ -1030,7 +1031,7 @@ int test_frame_counter_4step(harness_t* h) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_frame_counter_5step(harness_t* h) {
-    printf("  Testing frame counter 5-step mode...\n");
+    log_info("  Testing frame counter 5-step mode...\n");
     int failures = 0;
 
     reset(h);
@@ -1051,7 +1052,7 @@ int test_frame_counter_5step(harness_t* h) {
     // But the immediate HF fires before we load the length counter,
     // so only step 1 HF counts → length should be 9
     if (len != 9) {
-        printf("    FAIL: After step 1, length = %d, expected 9\n", len);
+        log_info("    FAIL: After step 1, length = %d, expected 9\n", len);
         failures++;
     }
 
@@ -1059,18 +1060,18 @@ int test_frame_counter_5step(harness_t* h) {
     clock_cycles(h, 23000);
     len = h->apu->pulse1.length.value();
     if (len != 8) {
-        printf("    FAIL: After step 3, length = %d, expected 8\n", len);
+        log_info("    FAIL: After step 3, length = %d, expected 8\n", len);
         failures++;
     }
 
     // No IRQ in 5-step mode
     bool irq = h->apu->frame.irq_flag;
     if (irq) {
-        printf("    FAIL: Frame IRQ should NOT be set in 5-step mode\n");
+        log_info("    FAIL: Frame IRQ should NOT be set in 5-step mode\n");
         failures++;
     }
 
-    if (failures == 0) printf("    PASS: Frame counter 5-step mode correct\n");
+    if (failures == 0) log_info("    PASS: Frame counter 5-step mode correct\n");
     return failures;
 }
 
@@ -1079,7 +1080,7 @@ int test_frame_counter_5step(harness_t* h) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_mixer_formula(harness_t* h) {
-    printf("  Testing mixer formula...\n");
+    log_info("  Testing mixer formula...\n");
     int failures = 0;
 
     reset(h);
@@ -1095,7 +1096,7 @@ int test_mixer_formula(harness_t* h) {
     uint8_t p1 = h->apu->pulse1.output();
     uint8_t p2 = h->apu->pulse2.output();
     if (p1 != 0 || p2 != 0) {
-        printf("    FAIL: Pulse outputs after reset: p1=%d, p2=%d, expected 0,0\n", p1, p2);
+        log_info("    FAIL: Pulse outputs after reset: p1=%d, p2=%d, expected 0,0\n", p1, p2);
         failures++;
     }
 
@@ -1109,7 +1110,7 @@ int test_mixer_formula(harness_t* h) {
     uint8_t dm  = h->apu->dmc.output();      // 64 (direct loaded)
 
     if (dm != 64) {
-        printf("    FAIL: DMC output = %d, expected 64\n", dm);
+        log_info("    FAIL: DMC output = %d, expected 64\n", dm);
         failures++;
     }
 
@@ -1122,11 +1123,11 @@ int test_mixer_formula(harness_t* h) {
     for (int i = 0; i < 100000; i++) get_sample(h);
     float settled = get_sample(h);
     if (std::fabs(settled) > 0.01f) {
-        printf("    FAIL: HP filter didn't converge to ~0: %.6f\n", settled);
+        log_info("    FAIL: HP filter didn't converge to ~0: %.6f\n", settled);
         failures++;
     }
 
-    if (failures == 0) printf("    PASS: Mixer formula correct\n");
+    if (failures == 0) log_info("    PASS: Mixer formula correct\n");
     return failures;
 }
 
@@ -1135,7 +1136,7 @@ int test_mixer_formula(harness_t* h) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_status_register(harness_t* h) {
-    printf("  Testing status register...\n");
+    log_info("  Testing status register...\n");
     int failures = 0;
 
     reset(h);
@@ -1144,7 +1145,7 @@ int test_status_register(harness_t* h) {
     // All channels disabled
     uint8_t status = read_status(h);
     if (status & 0x1F) {
-        printf("    FAIL: Initial status = 0x%02X, expected no length bits\n", status);
+        log_info("    FAIL: Initial status = 0x%02X, expected no length bits\n", status);
         failures++;
     }
 
@@ -1162,7 +1163,7 @@ int test_status_register(harness_t* h) {
 
     status = read_status(h);
     if ((status & 0x0F) != 0x0F) {
-        printf("    FAIL: After loading, status = 0x%02X, expected 0x0F lower bits\n", status);
+        log_info("    FAIL: After loading, status = 0x%02X, expected 0x0F lower bits\n", status);
         failures++;
     }
 
@@ -1171,11 +1172,11 @@ int test_status_register(harness_t* h) {
     h->apu->frame.irq_flag = true;
     status = read_status(h);
     if (h->apu->frame.irq_flag) {
-        printf("    FAIL: Reading $4015 should clear frame IRQ flag\n");
+        log_info("    FAIL: Reading $4015 should clear frame IRQ flag\n");
         failures++;
     }
 
-    if (failures == 0) printf("    PASS: Status register correct\n");
+    if (failures == 0) log_info("    PASS: Status register correct\n");
     return failures;
 }
 
@@ -1187,9 +1188,9 @@ int run_all_builtin_tests(harness_t* h, bool verbose) {
     h->verbose = verbose;
     int total_failures = 0;
 
-    printf("\n══════════════════════════════════════════════════\n");
-    printf("  NES APU Digital Verification Tests\n");
-    printf("══════════════════════════════════════════════════\n\n");
+    log_info("\n══════════════════════════════════════════════════\n");
+    log_info("  NES APU Digital Verification Tests\n");
+    log_info("══════════════════════════════════════════════════\n\n");
 
     total_failures += test_length_counter_table(h);
     total_failures += test_length_counter_halt(h);
@@ -1211,13 +1212,13 @@ int run_all_builtin_tests(harness_t* h, bool verbose) {
     total_failures += test_mixer_formula(h);
     total_failures += test_status_register(h);
 
-    printf("══════════════════════════════════════════════════\n");
+    log_info("══════════════════════════════════════════════════\n");
     if (total_failures == 0) {
-        printf("  ALL TESTS PASSED\n");
+        log_info("  ALL TESTS PASSED\n");
     } else {
-        printf("  %d TEST(S) FAILED\n", total_failures);
+        log_info("  %d TEST(S) FAILED\n", total_failures);
     }
-    printf("══════════════════════════════════════════════════\n\n");
+    log_info("══════════════════════════════════════════════════\n\n");
 
     return total_failures;
 }

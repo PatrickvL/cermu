@@ -1,4 +1,5 @@
-﻿#include "systems/commodore/c64/c64_system.hpp"
+#include "core/cermu.hpp"
+#include "systems/commodore/c64/c64_system.hpp"
 #include "systems/commodore/c64/c64_kernal_patches.hpp"
 #include "systems/commodore/c64/c64_sid_player.hpp"
 #include "chip/input/commodore_keyboard.hpp"
@@ -433,13 +434,13 @@ bool C64System::initialize() {
     // Create keyboard matrix
     this->keyboard = new commodore_keyboard_t();
     if (!this->keyboard->init(&c64_keyboard_config)) {
-        printf("ERROR: Failed to create keyboard\n");
+        log_info("ERROR: Failed to create keyboard\n");
         delete this->keyboard;
         this->keyboard = nullptr;
         cleanup();
         return false;
     }
-    printf("C64: Keyboard matrix initialized (all keys released)\n");
+    log_info("C64: Keyboard matrix initialized (all keys released)\n");
 
     // No cartridge I/O by default
     this->io1 = nullptr;
@@ -509,7 +510,7 @@ bool C64System::initialize() {
     if (this->sid) {
         this->sid->set_revision(pending_sid_revision_);
         const char* rev_name = (pending_sid_revision_ == SID_REVISION_8580_R5) ? "MOS 8580" : "MOS 6581";
-        printf("C64: SID revision initialized as %s\n", rev_name);
+        log_info("C64: SID revision initialized as %s\n", rev_name);
     }
 
     // Create the layered keyboard mapper for character-based input
@@ -549,7 +550,7 @@ bool C64System::initialize() {
     audio_port_ = std::make_unique<AudioPort>();
     sid->set_audio_port(audio_port_.get());
 
-    printf("C64: System initialized successfully\n");
+    log_info("C64: System initialized successfully\n");
     return true;
 }
 
@@ -581,7 +582,7 @@ void C64System::reset() {
     sid_player_active_ = false;
     active_sid_data_.clear();
     if (initialized_) {
-        printf("C64 System: Performing system-wide reset...\n");
+        log_info("C64 System: Performing system-wide reset...\n");
 
         // Reset CIA chips first (they control interrupts and I/O)
         if (this->cia1) this->cia1->reset();
@@ -634,7 +635,7 @@ void C64System::reset() {
         // Reset serial trap state
         serial_trap_ = {};
 
-        printf("C64 System: Reset complete\n");
+        log_info("C64 System: Reset complete\n");
     }
 }
 
@@ -1071,7 +1072,7 @@ bool C64System::pre_apply_pending_load() {
     // RSID with init_addr=0: BASIC program SID — fall through to standard path
     bool is_basic_sid = (sid->type == SID_TYPE_RSID && sid->init_addr == 0);
     if (is_basic_sid) {
-        printf("C64: RSID BASIC program — loading as standard BASIC PRG\n");
+        log_info("C64: RSID BASIC program — loading as standard BASIC PRG\n");
         return false;
     }
 
@@ -1150,7 +1151,7 @@ void C64System::ensure_compatible_for_sid(const sid_header_t* sid) {
     bool region_changed = (needed_standard != created_vicii_standard_);
 
     if (region_changed) {
-        printf("C64: SID requires %s — recreating system (was %s)\n",
+        log_info("C64: SID requires %s — recreating system (was %s)\n",
                needed_standard == VIC_NTSC ? "NTSC" : "PAL",
                get_vicii_standard() == VIC_NTSC ? "NTSC" : "PAL");
 
@@ -1176,7 +1177,7 @@ void C64System::ensure_compatible_for_sid(const sid_header_t* sid) {
         apply_configuration();
 
         if (!initialize()) {
-            printf("C64: ERROR — failed to reinitialize after region change\n");
+            log_info("C64: ERROR — failed to reinitialize after region change\n");
             return;
         }
 
@@ -1195,7 +1196,7 @@ void C64System::ensure_compatible_for_sid(const sid_header_t* sid) {
             pending_sid_revision_ = needed_revision;
             if (initialized_ && this->sid) {
                 this->sid->set_revision(needed_revision);
-                printf("C64: SID revision set to %s (from SID file flags)\n",
+                log_info("C64: SID revision set to %s (from SID file flags)\n",
                        needed_revision == SID_REVISION_8580_R5 ? "MOS 8580" : "MOS 6581");
             }
         }
@@ -1413,7 +1414,7 @@ bool C64System::apply_configuration() {
         }
         if (initialized_ && this->sid) {
             this->sid->set_revision(rev);
-            printf("C64: SID revision set to %s\n", sid_it->second.c_str());
+            log_info("C64: SID revision set to %s\n", sid_it->second.c_str());
         }
         // Store for later (SID may not exist yet during initial config)
         pending_sid_revision_ = rev;
@@ -1664,17 +1665,17 @@ void C64System::setup_ports() {
         this->cia1->port_a_read_context  = &s_port_callback_ctx;
         this->cia1->port_b_read_callback = c64_cia1_port_b_read_with_joystick;
         this->cia1->port_b_read_context  = &s_port_callback_ctx;
-        printf("C64: Wired joystick-aware CIA1 port callbacks\n");
+        log_info("C64: Wired joystick-aware CIA1 port callbacks\n");
     }
 
     // Wire VIC-II LP pin read callback (Control Port 1 pin 6 → VIC-II LP input)
     if (initialized_ && this->vicii) {
         this->vicii->bus.lp_pin_read    = c64_vicii_lp_pin_read;
         this->vicii->bus.lp_pin_context = &s_port_callback_ctx;
-        printf("C64: Wired VIC-II lightpen pin callback\n");
+        log_info("C64: Wired VIC-II lightpen pin callback\n");
     }
 
-    printf("C64: Created %zu ports\n", get_ports().size());
+    log_info("C64: Created %zu ports\n", get_ports().size());
 }
 
 void C64System::update_lightpen_display_rect() {
@@ -1734,7 +1735,7 @@ uint32_t C64System::get_audio_samples(float* buffer, uint32_t max_samples) {
 
 void C64System::set_audio_sample_rate(int sample_rate_hz) {
     if (initialized_ && this->sid && sample_rate_hz > 0) {
-        printf("C64: Updating SID sample rate from %.0f to %d Hz\n",
+        log_info("C64: Updating SID sample rate from %.0f to %d Hz\n",
                this->sid->sample_rate, sample_rate_hz);
         this->sid->set_sample_rate(static_cast<float>(sample_rate_hz));
     }
@@ -1859,7 +1860,7 @@ bool C64System::pla_maps_generate() {
     uint8_t initial_mode = generate_pla_mode(0x07);
     mode_switch(initial_mode);
 
-    printf("C64: PLA banking initialized (mode=$%02X, %zu snapshots per viewer)\n",
+    log_info("C64: PLA banking initialized (mode=$%02X, %zu snapshots per viewer)\n",
            initial_mode, kC64NumPlaModes);
     return true;
 }
@@ -1913,7 +1914,7 @@ void C64System::init_io_dispatch() {
     bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, 15,
         C64ChipId(C64PT::kNoChipSelected), C64WriteId(C64PT::kNoChipSelectedWrite));
 
-    printf("C64: I/O dispatch initialized (CS-tick, sub-table IDs: VIC-II=%u SID=%u ColRAM=%u CIA1=%u CIA2=%u)\n",
+    log_info("C64: I/O dispatch initialized (CS-tick, sub-table IDs: VIC-II=%u SID=%u ColRAM=%u CIA1=%u CIA2=%u)\n",
            idVicII, idSid, idColRam, idCia1, idCia2);
 }
 
@@ -2008,10 +2009,10 @@ void C64System::memory_init() {
     // Initialize RAM (normal boot: clear to zero)
     // -------------------------------------------------------------------------
     if (this->ram && this->ram->data()) {
-        printf("Normal boot mode: RAM cleared\n");
+        log_info("Normal boot mode: RAM cleared\n");
         memset(this->ram->data(), 0, 0x10000);
     } else {
-        printf("ERROR: RAM memory pointer is NULL!\n");
+        log_info("ERROR: RAM memory pointer is NULL!\n");
     }
 
     // -------------------------------------------------------------------------
@@ -2028,7 +2029,7 @@ void C64System::memory_init() {
     if (system_config_discover_rom_root("c64", rom_root_path, sizeof(rom_root_path))) {
         board_.load_roms(rom_root_path, "C64");
     } else {
-        printf("C64: ROM root not found, skipping ROM loading\n");
+        log_info("C64: ROM root not found, skipping ROM loading\n");
     }
 
     // Cartridge ROMs: not loaded by default (filled with 0xFF if present)

@@ -2,6 +2,7 @@
  * acorn_atom_system.cpp — Acorn Atom system implementation
  */
 
+#include "core/cermu.hpp"
 #include "systems/acorn_atom/acorn_atom_system.hpp"
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
@@ -48,7 +49,7 @@ bool AcornAtomSystem::set_configuration(const SystemConfiguration& config) { con
 bool AcornAtomSystem::apply_configuration() { return true; }
 
 bool AcornAtomSystem::initialize() {
-    printf("Acorn Atom: Initializing system\n");
+    log_info("Acorn Atom: Initializing system\n");
     register_board(&board_);
 
     // ── Bind and create chips from manifest ─────────────────────────
@@ -74,7 +75,7 @@ bool AcornAtomSystem::initialize() {
 
     // ── Load ROMs into flat mem ───────────────────────────────────
     if (!load_roms()) {
-        printf("Acorn Atom: Warning — ROMs not loaded, system will not boot correctly\n");
+        log_info("Acorn Atom: Warning — ROMs not loaded, system will not boot correctly\n");
     }
 
     // ── Register all manifest-created chips for Hardware menu ────────
@@ -85,7 +86,7 @@ bool AcornAtomSystem::initialize() {
     board_.vdg.set_video_out(&video_port_->output());
     video_port_->bind_frame_output(&last_frame_data_);
 
-    printf("Acorn Atom: System initialized (RAM: %dKB)\n", ram_size_kb_);
+    log_info("Acorn Atom: System initialized (RAM: %dKB)\n", ram_size_kb_);
     system_ready_ = true;
     return true;
 }
@@ -295,7 +296,7 @@ bool AcornAtomSystem::load_roms() {
     char rom_root[512];
     const char* names[] = {"acorn_atom", "atom", nullptr};
     if (!system_config_discover_rom_root(names, rom_root, sizeof(rom_root))) {
-        printf("Acorn Atom: ROM path not found\n");
+        log_info("Acorn Atom: ROM path not found\n");
         return false;
     }
     return board_.load_roms(rom_root, "Acorn Atom");

@@ -1,3 +1,4 @@
+#include "core/cermu.hpp"
 #include "chip/input/commodore_keyboard.hpp"
 #include <cstdio>
 #include <cstring>
@@ -34,7 +35,7 @@ bool commodore_keyboard_t::init(const keyboard_matrix_config_t* config) {
     if (!config || !config->keys || !config->decode_tables || config->num_decode_tables == 0) return false;
     if (config->rows == 0 || config->cols == 0) return false;
     if (config->rows > MAX_KEYBOARD_ROWS || config->cols > MAX_KEYBOARD_COLS) {
-        printf("ERROR: Keyboard matrix %dx%d exceeds maximum %dx%d\n",
+        log_info("ERROR: Keyboard matrix %dx%d exceeds maximum %dx%d\n",
                config->rows, config->cols, MAX_KEYBOARD_ROWS, MAX_KEYBOARD_COLS);
         return false;
     }
@@ -53,7 +54,7 @@ bool commodore_keyboard_t::init(const keyboard_matrix_config_t* config) {
     // Initialize keyboard state
     reset();
 
-    printf("Keyboard: Created %s %dx%d matrix (scan: %s)\n",
+    log_info("Keyboard: Created %s %dx%d matrix (scan: %s)\n",
            config->description ? config->description : keyboard_model_names[config->model],
            config->rows, config->cols,
            keyboard_scan_chip_names[config->scan_chip]);
@@ -81,7 +82,7 @@ void commodore_keyboard_t::reset() {
     key_ext_lookup.clear();
 
     if (!active_keys) {
-        printf("ERROR: commodore_keyboard_t::reset called with no active keys set!\n");
+        log_info("ERROR: commodore_keyboard_t::reset called with no active keys set!\n");
         return;
     }
 
@@ -122,7 +123,7 @@ void commodore_keyboard_t::reset() {
     scan_port_a_reference = NULL;
     scan_port_b_reference = NULL;
 
-    printf("Keyboard: Built lookup (%d identity + %d extended keys)\n",
+    log_info("Keyboard: Built lookup (%d identity + %d extended keys)\n",
            identity_count, ext_count);
 }
 
@@ -306,42 +307,42 @@ void commodore_keyboard_t::print_matrix() {
     uint8_t rows = matrix_rows;
     uint8_t cols = matrix_cols;
 
-    printf("Commodore Keyboard Matrix State (%s, %dx%d):\n",
+    log_info("Commodore Keyboard Matrix State (%s, %dx%d):\n",
            keyboard_model_names[model], rows, cols);
-    printf("Row/Col |");
-    for (int col = 0; col < cols; col++) printf(" %d ", col);
-    printf("\n--------+");
-    for (int col = 0; col < cols; col++) printf("---");
-    printf("\n");
+    log_info("Row/Col |");
+    for (int col = 0; col < cols; col++) log_info(" %d ", col);
+    log_info("\n--------+");
+    for (int col = 0; col < cols; col++) log_info("---");
+    log_info("\n");
 
     for (int row = 0; row < rows; row++) {
-        printf("  %2d    |", row);
+        log_info("  %2d    |", row);
         for (int col = 0; col < cols; col++) {
             bool contact_closed = !(row_open_contacts[col] & (1 << row));
-            printf(" %c ", contact_closed ? 'X' : 'O');
+            log_info(" %c ", contact_closed ? 'X' : 'O');
         }
-        printf("\n");
+        log_info("\n");
     }
 
-    printf("\nRow Contact States:\n");
+    log_info("\nRow Contact States:\n");
     for (int r = 0; r < rows; r++) {
-        printf("Row %2d: 0x%02X ", r, row_open_contacts[r]);
+        log_info("Row %2d: 0x%02X ", r, row_open_contacts[r]);
     }
-    printf("\nCol Contact States:\n");
+    log_info("\nCol Contact States:\n");
     for (int c = 0; c < cols; c++) {
-        printf("Col %2d: 0x%04X ", c, col_open_contacts[c]);
+        log_info("Col %2d: 0x%04X ", c, col_open_contacts[c]);
     }
-    printf("\n");
+    log_info("\n");
 }
 
 void commodore_keyboard_t::print_state() {
-    printf("Keyboard State (%s %dx%d, scan: %s):\n",
+    log_info("Keyboard State (%s %dx%d, scan: %s):\n",
            keyboard_model_names[model],
            matrix_rows, matrix_cols,
            keyboard_scan_chip_names[scan_chip]);
-    printf("  RESTORE Key: %s\n", restore_key_pressed ? "PRESSED" : "RELEASED");
-    printf("  CAPS LOCK: %s\n", caps_lock_active ? "ACTIVE" : "INACTIVE");
-    printf("  Lookup: %d direct + %zu extended keys\n",
+    log_info("  RESTORE Key: %s\n", restore_key_pressed ? "PRESSED" : "RELEASED");
+    log_info("  CAPS LOCK: %s\n", caps_lock_active ? "ACTIVE" : "INACTIVE");
+    log_info("  Lookup: %d direct + %zu extended keys\n",
            [&]{ int c=0; for(int i=0;i<EMUKEY_EMU_BASE;i++) if(key_direct_valid[i]) c++; return c; }(),
            key_ext_lookup.size());
 }

@@ -1,3 +1,4 @@
+#include "core/cermu.hpp"
 #include "core/system_registry.hpp"
 #include "core/system.hpp"
 #include "core/formats/format_handler.hpp"
@@ -20,8 +21,7 @@ SystemRegistry& SystemRegistry::instance() {
 }
 
 void SystemRegistry::register_system(const SystemDescriptor& descriptor, SystemFactory factory) {
-    if (g_verbose)
-        printf("SystemRegistry: Registering system: %s (%s)\n", descriptor.name, descriptor.short_name);
+            log_debug("SystemRegistry: Registering system: %s (%s)\n", descriptor.name, descriptor.short_name);
     systems_.push_back({descriptor, factory});
 }
 
@@ -132,8 +132,7 @@ std::unique_ptr<System> SystemRegistry::create_system_for_file(const char* filep
         return nullptr;
     }
 
-    if (g_verbose)
-        printf("SystemRegistry: %zu systems registered\n", systems_.size());
+            log_debug("SystemRegistry: %zu systems registered\n", systems_.size());
 
     // For archive files, try ROM set probing first — many arcade ROM
     // archives contain multiple chip dumps that can't be identified
@@ -142,7 +141,7 @@ std::unique_ptr<System> SystemRegistry::create_system_for_file(const char* filep
     if (!ext_str.empty() && vfs_is_archive_extension(ext_str.c_str())) {
         auto probe = rom_set_probe(filepath);
         if (probe.confidence >= 0.5f) {
-            printf("SystemRegistry: ROM set identified: %s (confidence: %.2f)\n",
+            log_info("SystemRegistry: ROM set identified: %s (confidence: %.2f)\n",
                    probe.system_name.c_str(), probe.confidence);
             for (const auto& [descriptor, factory] : systems_) {
                 if (probe.system_name == descriptor.short_name) {
@@ -151,7 +150,7 @@ std::unique_ptr<System> SystemRegistry::create_system_for_file(const char* filep
                     // after initialize().  For now, do init+load here
                     // since the caller doesn't know about ROM sets.
                     if (!system->initialize()) {
-                        printf("SystemRegistry: Failed to initialize %s for ROM set\n",
+                        log_info("SystemRegistry: Failed to initialize %s for ROM set\n",
                                descriptor.short_name);
                         return nullptr;
                     }
@@ -170,19 +169,17 @@ std::unique_ptr<System> SystemRegistry::create_system_for_file(const char* filep
     size_t file_size = 0;
     uint8_t* data = format_read_entire_file(filepath, &file_size);
     if (!data) {
-        printf("SystemRegistry: Failed to open file: %s\n", filepath);
+        log_info("SystemRegistry: Failed to open file: %s\n", filepath);
         return nullptr;
     }
 
-    if (g_verbose)
-        printf("SystemRegistry: File size: %zu bytes\n", file_size);
+            log_debug("SystemRegistry: File size: %zu bytes\n", file_size);
 
     // Delegate to the two-phase identification authority
     auto match = identify_system(filepath, data, file_size);
     free(data);
 
-    if (g_verbose)
-        printf("SystemRegistry: Best match: %s (confidence: %.2f)\n",
+            log_debug("SystemRegistry: Best match: %s (confidence: %.2f)\n",
                match.system_name.empty() ? "none" : match.system_name.c_str(),
                match.confidence);
 

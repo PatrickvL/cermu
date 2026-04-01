@@ -23,6 +23,7 @@
 
 #ifdef CERMU_HAS_GUI
 
+#include "core/cermu.hpp"
 #include <imgui.h>
 #include <string>
 #include <vector>
@@ -157,7 +158,7 @@ public:
         fprintf(f, "]\n");
         fclose(f);
 
-        printf("Scan roots saved to %s (%zu entries)\n",
+        log_info("Scan roots saved to %s (%zu entries)\n",
                config_path_.c_str(), roots_.size());
         return true;
     }

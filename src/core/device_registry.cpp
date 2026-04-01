@@ -24,14 +24,13 @@ void DeviceRegistry::register_device(const DeviceDescriptor& descriptor, DeviceF
     // Check for duplicate ID
     for (const auto& [desc, _] : devices_) {
         if (std::strcmp(desc.id, descriptor.id) == 0) {
-            printf("DeviceRegistry: WARNING — duplicate device ID '%s' ignored\n", descriptor.id);
+            log_info("DeviceRegistry: WARNING — duplicate device ID '%s' ignored\n", descriptor.id);
             return;
         }
     }
 
     devices_.emplace_back(descriptor, std::move(factory));
-    if (g_verbose)
-        printf("DeviceRegistry: Registered device '%s' (%s) for %s\n",
+            log_debug("DeviceRegistry: Registered device '%s' (%s) for %s\n",
                descriptor.id, descriptor.name,
                port_type_name(descriptor.port_type));
 }
@@ -56,7 +55,7 @@ std::unique_ptr<PeripheralDevice> DeviceRegistry::create_device(const char* devi
             return factory();
         }
     }
-    printf("DeviceRegistry: Unknown device ID '%s'\n", device_id);
+    log_info("DeviceRegistry: Unknown device ID '%s'\n", device_id);
     return nullptr;
 }
 

@@ -11,6 +11,7 @@
  * All functions are side-effect-free and header-only for inlining.
  */
 
+#include "core/cermu.hpp"
 #include <cstdint>
 #include <cstddef>
 
@@ -330,11 +331,11 @@ inline uint16_t extract_sys_address(const uint8_t* basic, size_t len,
                     size_t arg_start = i + 1;
                     size_t arg_len = line_end - arg_start;
                     if (arg_len > 24) arg_len = 24;
-                    fprintf(stderr, "probe: unparsed SYS at $%04X+%zu: ",
+                    log_error("probe: unparsed SYS at $%04X+%zu: ",
                             (unsigned)load_addr, i);
                     for (size_t k = 0; k < arg_len; ++k)
-                        fprintf(stderr, "%02X ", basic[arg_start + k]);
-                    fprintf(stderr, "\n");
+                        log_error("%02X ", basic[arg_start + k]);
+                    log_error("\n");
                 }
 
                 // SYS found but couldn't evaluate — return 0

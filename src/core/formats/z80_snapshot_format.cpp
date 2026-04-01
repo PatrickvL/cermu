@@ -8,6 +8,7 @@
  * For 128K snapshots: program.data = 128KB (banks 0-7 concatenated, 16KB each)
  */
 
+#include "core/cermu.hpp"
 #include "core/formats/z80_snapshot_format.hpp"
 #include "core/formats/format_registry.hpp"
 #include <cstdio>
@@ -342,7 +343,7 @@ static bool z80_snapshot_load(const uint8_t* data, size_t size,
     out->metadata_size = sizeof(header);
 
     out->type = FORMAT_LOAD_RAW;
-    printf("Z80: Parsed v%d %s snapshot (PC=$%04X, SP=$%04X, IM=%d, border=%d)\n",
+    log_info("Z80: Parsed v%d %s snapshot (PC=$%04X, SP=$%04X, IM=%d, border=%d)\n",
            header.version, header.is_128k ? "128K" : "48K",
            header.pc, header.sp, header.im_mode, header.border);
     return true;

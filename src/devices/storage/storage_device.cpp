@@ -5,6 +5,7 @@
  * concrete storage peripherals.
  */
 
+#include "core/cermu.hpp"
 #include "devices/storage/storage_device.hpp"
 #include <cstdio>
 
@@ -34,7 +35,7 @@ void StorageDevice::fliplist_add(const char* filepath) {
     if (media_loaded_ && media_path_ == filepath) {
         fliplist_index_ = static_cast<int>(fliplist_.size()) - 1;
     }
-    printf("StorageDevice: Fliplist add '%s' (total: %zu)\n", filepath,
+    log_info("StorageDevice: Fliplist add '%s' (total: %zu)\n", filepath,
            fliplist_.size());
 }
 

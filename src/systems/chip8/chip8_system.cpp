@@ -1,3 +1,4 @@
+#include "core/cermu.hpp"
 #include "systems/chip8/chip8_system.hpp"
 #include "systems/chip8/chip8_constants.hpp"
 #include "core/chip.hpp"
@@ -270,20 +271,20 @@ static SystemProbeResult chip8_probe_file(
     if (size > chip8_constants::MAX_ROM_STANDARD) {
         detected = Chip8Mode::XOCHIP;
         result.configuration.memory_option_index = 1;  // 64KB
-        printf("CHIP8: ROM size %zu > %u, selecting XO-CHIP mode with 64KB\n", size, chip8_constants::MAX_ROM_STANDARD);
+        log_info("CHIP8: ROM size %zu > %u, selecting XO-CHIP mode with 64KB\n", size, chip8_constants::MAX_ROM_STANDARD);
     }
 
     switch (detected) {
         case Chip8Mode::SCHIP:
             result.configuration.custom_settings["chip8_mode"] = "SCHIP 1.1";
             result.configuration.region_option_index = 1;  // Fast (1200 Hz)
-            printf("CHIP8: Detected SCHIP mode\n");
+            log_info("CHIP8: Detected SCHIP mode\n");
             break;
         case Chip8Mode::XOCHIP:
             result.configuration.custom_settings["chip8_mode"] = "XO-CHIP";
             result.configuration.memory_option_index = 1;  // 64KB
             result.configuration.region_option_index = 2;   // XO-CHIP (1000 Hz)
-            printf("CHIP8: Detected XO-CHIP mode\n");
+            log_info("CHIP8: Detected XO-CHIP mode\n");
             break;
         default:
             result.configuration.custom_settings["chip8_mode"] = "CHIP-8";
@@ -630,7 +631,7 @@ bool Chip8System::load_file(const char* filepath) {
     size_t size = 0;
     uint8_t* file_data = vfs_read_file(filepath, &size);
     if (!file_data) {
-        printf("CHIP-8: Failed to open file: %s\n", filepath);
+        log_info("CHIP-8: Failed to open file: %s\n", filepath);
         return false;
     }
     
@@ -640,9 +641,9 @@ bool Chip8System::load_file(const char* filepath) {
         if (size <= 65024) {
             memory_.resize(65536, 0);
             mode_ = Chip8Mode::XOCHIP;
-            printf("CHIP-8: ROM %zu bytes > 4KB, auto-extending to 64KB (XO-CHIP)\n", size);
+            log_info("CHIP-8: ROM %zu bytes > 4KB, auto-extending to 64KB (XO-CHIP)\n", size);
         } else {
-            printf("CHIP-8: File too large: %zu bytes (max 65024)\n", size);
+            log_info("CHIP-8: File too large: %zu bytes (max 65024)\n", size);
             free(file_data);
             return false;
         }
@@ -657,7 +658,7 @@ bool Chip8System::load_file(const char* filepath) {
     std::string name_str = vfs_filename(filepath);
     program_title_ = name_str.empty() ? filepath : name_str;
 
-    printf("CHIP-8: Loaded %zu bytes from %s (mode: %s)\n", size, filepath,
+    log_info("CHIP-8: Loaded %zu bytes from %s (mode: %s)\n", size, filepath,
            mode_ == Chip8Mode::XOCHIP ? "XO-CHIP" :
            mode_ == Chip8Mode::SCHIP ? "SCHIP" : "CHIP-8");
     

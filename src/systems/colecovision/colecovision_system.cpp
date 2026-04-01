@@ -13,6 +13,7 @@
  *   $E0-$FF odd write:  SN76489 data
  */
 
+#include "core/cermu.hpp"
 #include "systems/colecovision/colecovision_system.hpp"
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
@@ -90,7 +91,7 @@ bool ColecoVisionSystem::apply_configuration() { return true; }
 // ============================================================================
 
 bool ColecoVisionSystem::initialize() {
-    printf("ColecoVision: Initializing system\n");
+    log_info("ColecoVision: Initializing system\n");
     register_board(&board_);
 
     { size_t slot_idx_ = 0;
@@ -107,7 +108,7 @@ bool ColecoVisionSystem::initialize() {
     board_.psg.set_audio_sample_rate(audio_sample_rate_);
 
     if (!load_roms()) {
-        printf("ColecoVision: Warning — BIOS ROM not loaded\n");
+        log_info("ColecoVision: Warning — BIOS ROM not loaded\n");
     }
 
     register_bus_chips(board_);
@@ -123,7 +124,7 @@ bool ColecoVisionSystem::initialize() {
     board_.psg.set_audio_port(audio_port_.get());
 
     system_ready_ = true;
-    printf("ColecoVision: System initialized\n");
+    log_info("ColecoVision: System initialized\n");
     return true;
 }
 
@@ -263,7 +264,7 @@ bus_state_t ColecoVisionSystem::io_tick(bus_state_t pins) {
 bool ColecoVisionSystem::load_file(const char* filepath) {
     if (!filepath) return false;
     // TODO: Load .col/.rom cartridge
-    printf("ColecoVision: File loading not yet implemented: %s\n", filepath);
+    log_info("ColecoVision: File loading not yet implemented: %s\n", filepath);
     return false;
 }
 
@@ -319,7 +320,7 @@ void ColecoVisionSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 bool ColecoVisionSystem::load_roms() {
     char rom_root[1024];
     if (!system_config_discover_rom_root("colecovision", rom_root, sizeof(rom_root))) {
-        printf("ColecoVision: Could not find ROM root folder\n");
+        log_info("ColecoVision: Could not find ROM root folder\n");
         return false;
     }
     return board_.load_roms(rom_root, "ColecoVision");

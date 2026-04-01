@@ -6,6 +6,7 @@
  * sna_header_t so the system can restore Z80 registers and ULA state.
  */
 
+#include "core/cermu.hpp"
 #include "core/formats/sna_format.hpp"
 #include "core/formats/format_registry.hpp"
 #include <cstdio>
@@ -120,7 +121,7 @@ static bool sna_load(const uint8_t* data, size_t size, format_load_result_t* out
     out->metadata_size = sizeof(header);
 
     out->type = FORMAT_LOAD_RAW;
-    printf("SNA: Parsed %s snapshot (SP=$%04X, IM=%d, border=%d)\n",
+    log_info("SNA: Parsed %s snapshot (SP=$%04X, IM=%d, border=%d)\n",
            size == SNA_48K_SIZE ? "48K" : "128K",
            header.sp, header.int_mode, header.border);
     return true;

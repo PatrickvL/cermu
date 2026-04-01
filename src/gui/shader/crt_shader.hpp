@@ -17,6 +17,7 @@
 // Requires: OpenGL 3.0 / GLSL 130
 // ============================================================================
 
+#include "core/cermu.hpp"
 #include "gui/gl_api.hpp"
 #include <cstdio>
 
@@ -206,7 +207,7 @@ inline bool create(CRTPostProcess* p, int w, int h) {
     GLenum status = gl_api::glCheckFramebufferStatus(GL_FRAMEBUFFER);
     gl_api::glBindFramebuffer(GL_FRAMEBUFFER, 0);
     if (status != GL_FRAMEBUFFER_COMPLETE) {
-        fprintf(stderr, "crt_shader: FBO incomplete (0x%x)\n", status);
+        log_error("crt_shader: FBO incomplete (0x%x)\n", status);
         return false;
     }
 
@@ -228,7 +229,7 @@ inline bool create(CRTPostProcess* p, int w, int h) {
     if (link_ok != GL_TRUE) {
         char log[512];
         gl_api::glGetProgramInfoLog(p->shader, sizeof(log), nullptr, log);
-        fprintf(stderr, "crt_shader: link error: %s\n", log);
+        log_error("crt_shader: link error: %s\n", log);
         gl_api::glDeleteProgram(p->shader);
         p->shader = 0;
         return false;

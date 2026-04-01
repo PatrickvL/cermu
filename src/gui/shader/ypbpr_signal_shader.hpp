@@ -21,6 +21,7 @@
 // Requires: OpenGL 3.0 / GLSL 130
 // ============================================================================
 
+#include "core/cermu.hpp"
 #include "gui/gl_api.hpp"            // GL function pointers, gl_api::compile_shader()
 #include "gui/shader/rgb_signal_shader.hpp"    // RGBShaderLocations, vertex_src, constants
 #include "gui/shader/signal_shader.hpp"        // SIGNAL_TEX_WIDTH constant
@@ -135,7 +136,7 @@ inline GLuint create_program(rgb_signal_shader::RGBShaderLocations* locs) {
     if (status != GL_TRUE) {
         char log[512];
         gl_api::glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
-        fprintf(stderr, "ypbpr_signal_shader: link error: %s\n", log);
+        log_error("ypbpr_signal_shader: link error: %s\n", log);
         gl_api::glDeleteProgram(prog);
         return 0;
     }
@@ -153,7 +154,7 @@ inline GLuint create_program(rgb_signal_shader::RGBShaderLocations* locs) {
         locs->display_width    = gl_api::glGetUniformLocation(prog, "DisplayWidth");
     }
 
-    printf("ypbpr_signal_shader: program %u compiled and linked successfully\n", prog);
+    log_info("ypbpr_signal_shader: program %u compiled and linked successfully\n", prog);
     return prog;
 }
 

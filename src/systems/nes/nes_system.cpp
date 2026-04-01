@@ -5,6 +5,7 @@
  * hardware-accurate components and precise timing.
  */
 
+#include "core/cermu.hpp"
 #include "systems/nes/nes_system.hpp"
 #include "chip/sound/nes_apu_synth_engine.hpp"
 #include "chip/video/nes_ppu/nes_palette.hpp"
@@ -306,7 +307,7 @@ bool NintendoSystem<V>::initialize() {
         return true;
     }
     
-    printf("%s: Initializing system (%s)\n", Traits::name,
+    log_info("%s: Initializing system (%s)\n", Traits::name,
            is_pal_ ? "PAL" : "NTSC");
 
     // Register main board (owns connector ports)
@@ -379,7 +380,7 @@ void NintendoSystem<V>::shutdown() {
     audio_thread_.clear_engines();
     apu_synth_engine_.reset();
 
-    printf("%s: Shutting down system\n", Traits::name);
+    log_info("%s: Shutting down system\n", Traits::name);
 
     // Release cartridge — mapper pointers reference the flat mem which
     // bus_.init() will reallocate on re-initialize, so the cartridge is
@@ -396,7 +397,7 @@ template<NintendoVariant V>
 void NintendoSystem<V>::reset() {
     if (!initialized_) return;
     
-    printf("%s: Resetting system\n", Traits::name);
+    log_info("%s: Resetting system\n", Traits::name);
     
     pins_ = NES_BUS_DEFAULT_STATE;
     board_.cpu.reset(pins_);
@@ -464,7 +465,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         }
     }
     
-    printf("%s: Loading file: %s\n", Traits::name, filepath);
+    log_info("%s: Loading file: %s\n", Traits::name, filepath);
 
     // =========================================================================
     // Single VFS read — reuse buffer for format detection and loading
@@ -472,7 +473,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
     size_t file_size = 0;
     uint8_t* file_data = vfs_read_file(filepath, &file_size);
     if (!file_data || file_size == 0) {
-        printf("%s: Failed to read file: %s\n", Traits::name, filepath);
+        log_info("%s: Failed to read file: %s\n", Traits::name, filepath);
         free(file_data);
         return false;
     }
@@ -497,7 +498,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         // Parse NSF header
         nsf_header_t header;
         if (!nsf_parse_header(file_data, file_size, &header)) {
-            printf("%s: Invalid NSF header\n", Traits::name);
+            log_info("%s: Invalid NSF header\n", Traits::name);
             free(file_data);
             return false;
         }
@@ -576,8 +577,8 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         cartridge_->update_bank_map(&bus_, bus_.ciram);
 
         // ---- Write vectors and 6502 stubs ----
-        printf("NES NSF: Loading \"%s\" by %s\n", header.name, header.artist);
-        printf("NES NSF: load=$%04X init=$%04X play=$%04X songs=%d start=%d\n",
+        log_info("NES NSF: Loading \"%s\" by %s\n", header.name, header.artist);
+        log_info("NES NSF: load=$%04X init=$%04X play=$%04X songs=%d start=%d\n",
                header.load_addr, header.init_addr, header.play_addr,
                header.num_songs, header.start_song);
 
@@ -607,7 +608,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
             program_title_ += header.artist;
         }
 
-        printf("%s: NSF player active — \"%s\" by %s\n",
+        log_info("%s: NSF player active — \"%s\" by %s\n",
                Traits::name, header.name, header.artist);
         free(file_data);
         return true;
@@ -621,7 +622,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
     try {
         cartridge_ = std::make_unique<Cartridge>();
         if (!cartridge_->load_from_buffer(file_data, file_size, filepath)) {
-            printf("%s: Failed to parse cartridge data\n", Traits::name);
+            log_info("%s: Failed to parse cartridge data\n", Traits::name);
             free(file_data);
             return false;
         }
@@ -661,10 +662,10 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         std::string fname = vfs_filename(filepath);
         program_title_ = fname.empty() ? filepath : fname;
         
-        printf("%s: Cartridge loaded successfully\n", Traits::name);
+        log_info("%s: Cartridge loaded successfully\n", Traits::name);
         return true;
     } catch (const std::exception& e) {
-        printf("%s: Failed to load cartridge: %s\n", Traits::name, e.what());
+        log_info("%s: Failed to load cartridge: %s\n", Traits::name, e.what());
         return false;
     }
 }
@@ -1322,7 +1323,7 @@ bool NintendoSystem<V>::save_state(const std::string& filename) const {
         f.write(reinterpret_cast<const char*>(&zero), sizeof(zero));
     }
 
-    printf("%s: Saved state to %s\n", Traits::name, filename.c_str());
+    log_info("%s: Saved state to %s\n", Traits::name, filename.c_str());
     return true;
 }
 
@@ -1336,7 +1337,7 @@ bool NintendoSystem<V>::load_state(const std::string& filename) {
     char magic[4];
     f.read(magic, 4);
     if (magic[0] != 'C' || magic[1] != 'S' || magic[2] != 'S' || magic[3] != '1') {
-        printf("%s: Invalid save state file\n", Traits::name);
+        log_info("%s: Invalid save state file\n", Traits::name);
         return false;
     }
 
@@ -1374,7 +1375,7 @@ bool NintendoSystem<V>::load_state(const std::string& filename) {
         f.read(reinterpret_cast<char*>(bus_.prg_ram), ram_size);
     }
 
-    printf("%s: Loaded state from %s\n", Traits::name, filename.c_str());
+    log_info("%s: Loaded state from %s\n", Traits::name, filename.c_str());
     return true;
 }
 
@@ -1411,7 +1412,7 @@ void NintendoSystem<V>::setup_ports() {
     add_port(NesPorts::NES_VIDEO_OUT, 0);
     add_port(NesPorts::NES_AUDIO_OUT, 0);
 
-    printf("%s: Created %zu ports\n", Traits::name, get_ports().size());
+    log_info("%s: Created %zu ports\n", Traits::name, get_ports().size());
 
 }
 

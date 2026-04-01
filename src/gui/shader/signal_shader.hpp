@@ -29,6 +29,7 @@
 // Requires: OpenGL 3.0 / GLSL 130
 // ============================================================================
 
+#include "core/cermu.hpp"
 #include "gui/gl_api.hpp"            // GL function pointers, gl_api::compile_shader()
 #include "core/signal/sync_types.hpp"
 #include <cstdio>
@@ -207,7 +208,7 @@ inline GLuint create_program(SignalShaderLocations* locs) {
     if (status != GL_TRUE) {
         char log[512];
         gl_api::glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
-        fprintf(stderr, "signal_shader: link error: %s\n", log);
+        log_error("signal_shader: link error: %s\n", log);
         gl_api::glDeleteProgram(prog);
         return 0;
     }
@@ -226,7 +227,7 @@ inline GLuint create_program(SignalShaderLocations* locs) {
         locs->display_width   = gl_api::glGetUniformLocation(prog, "DisplayWidth");
     }
 
-    printf("signal_shader: program %u compiled and linked successfully\n", prog);
+    log_info("signal_shader: program %u compiled and linked successfully\n", prog);
     return prog;
 }
 
@@ -253,7 +254,7 @@ inline GLuint create_signal_texture(int max_signal_output_len) {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8, SIGNAL_TEX_WIDTH, tex_height, 0,
                  GL_RG, GL_UNSIGNED_BYTE, nullptr);
 
-    printf("signal_shader: created %dx%d RG8 signal texture %u (max %d samples)\n",
+    log_info("signal_shader: created %dx%d RG8 signal texture %u (max %d samples)\n",
            SIGNAL_TEX_WIDTH, tex_height, tex, max_signal_output_len);
     return tex;
 }

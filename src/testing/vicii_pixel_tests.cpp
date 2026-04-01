@@ -9,6 +9,7 @@
 //   4. Samples specific framebuffer pixels and compares to palette
 // =============================================================================
 
+#include "core/cermu.hpp"
 #include "testing/vicii_pixel_tests.hpp"
 #include "chip/cpu/fam65xx/asm6510.hpp"  // src/core/asm6510.h (via include path)
 #include "chip/video/vic_ii/vicii_common.hpp"
@@ -194,10 +195,10 @@ static void check_pixel(check_ctx_t& ctx, int x, int y, uint8_t expected_color,
         ctx.pass++;
     } else {
         ctx.fail++;
-        printf("  PIXEL FAIL [P%d %s] at (%d,%d): expected color %d ($%08X) got $%08X",
+        log_info("  PIXEL FAIL [P%d %s] at (%d,%d): expected color %d ($%08X) got $%08X",
                ctx.test_group, ctx.group_name, x, y, expected_color, want, got);
-        if (desc) printf(" — %s", desc);
-        printf("\n");
+        if (desc) log_info(" — %s", desc);
+        log_info("\n");
     }
 }
 
@@ -220,7 +221,7 @@ static void check_pixel(check_ctx_t& ctx, int x, int y, uint8_t expected_color,
 static void test_border_color(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 1;
     ctx.group_name = "Border Color";
-    printf("  P1: Border Color\n");
+    log_info("  P1: Border Color\n");
 
     // Test multiple border colors
     uint8_t test_colors[] = { 0, 1, 2, 5, 7, 11, 14 };
@@ -243,7 +244,7 @@ static void test_border_color(C64System* c64, System* sys, check_ctx_t& ctx) {
 static void test_background_color(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 2;
     ctx.group_name = "Background Color";
-    printf("  P2: Background Color\n");
+    log_info("  P2: Background Color\n");
 
     uint8_t test_colors[] = { 0, 1, 6, 9, 15 };
     for (uint8_t c : test_colors) {
@@ -264,7 +265,7 @@ static void test_background_color(C64System* c64, System* sys, check_ctx_t& ctx)
 static void test_text_character(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 3;
     ctx.group_name = "Text Char Render";
-    printf("  P3: Standard Text Character\n");
+    log_info("  P3: Standard Text Character\n");
 
     reset_vic_state(c64);
     // Set background = black (0), border = black (0) for clarity
@@ -307,7 +308,7 @@ static void test_text_character(C64System* c64, System* sys, check_ctx_t& ctx) {
 static void test_multicolor_text(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 4;
     ctx.group_name = "MC Text Mode";
-    printf("  P4: Multicolor Text Mode\n");
+    log_info("  P4: Multicolor Text Mode\n");
 
     reset_vic_state(c64);
     write_vic(c64, 0x21, 0);  // B0C = black
@@ -365,7 +366,7 @@ static void test_multicolor_text(C64System* c64, System* sys, check_ctx_t& ctx) 
 static void test_ecm_mode(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 5;
     ctx.group_name = "ECM Text Mode";
-    printf("  P5: ECM Text Mode\n");
+    log_info("  P5: ECM Text Mode\n");
 
     reset_vic_state(c64);
     // ECM=1 via $D011 bit 6
@@ -400,7 +401,7 @@ static void test_ecm_mode(C64System* c64, System* sys, check_ctx_t& ctx) {
 static void test_bitmap_mode(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 6;
     ctx.group_name = "Bitmap Mode";
-    printf("  P6: Standard Bitmap Mode\n");
+    log_info("  P6: Standard Bitmap Mode\n");
 
     reset_vic_state(c64);
     // BMM=1 via $D011 bit 5
@@ -437,7 +438,7 @@ static void test_bitmap_mode(C64System* c64, System* sys, check_ctx_t& ctx) {
 static void test_mc_bitmap_mode(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 7;
     ctx.group_name = "MC Bitmap Mode";
-    printf("  P7: Multicolor Bitmap Mode\n");
+    log_info("  P7: Multicolor Bitmap Mode\n");
 
     reset_vic_state(c64);
     // BMM=1, MCM=1
@@ -480,7 +481,7 @@ static void test_mc_bitmap_mode(C64System* c64, System* sys, check_ctx_t& ctx) {
 static void test_sprite_pixels(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 8;
     ctx.group_name = "Sprite Pixels";
-    printf("  P8: Sprite Standard Rendering\n");
+    log_info("  P8: Sprite Standard Rendering\n");
 
     reset_vic_state(c64);
     write_vic(c64, 0x21, 0); // BG = black for contrast
@@ -520,7 +521,7 @@ static void test_sprite_pixels(C64System* c64, System* sys, check_ctx_t& ctx) {
             ctx.pass++;  // Good — outside pixel differs from sprite
         } else {
             ctx.fail++;
-            printf("  PIXEL FAIL [P8] sprite boundary: pixel left of sprite matches sprite color\n");
+            log_info("  PIXEL FAIL [P8] sprite boundary: pixel left of sprite matches sprite color\n");
         }
     }
 }
@@ -529,7 +530,7 @@ static void test_sprite_pixels(C64System* c64, System* sys, check_ctx_t& ctx) {
 static void test_sprite_multicolor(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 9;
     ctx.group_name = "Sprite MC Mode";
-    printf("  P9: Sprite Multicolor\n");
+    log_info("  P9: Sprite Multicolor\n");
 
     reset_vic_state(c64);
     write_vic(c64, 0x21, 0); // BG = black
@@ -566,7 +567,7 @@ static void test_sprite_multicolor(C64System* c64, System* sys, check_ctx_t& ctx
 static void test_sprite_x_expand(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 10;
     ctx.group_name = "Sprite X-Expand";
-    printf("  P10: Sprite X-Expand\n");
+    log_info("  P10: Sprite X-Expand\n");
 
     reset_vic_state(c64);
     write_vic(c64, 0x21, 0); // BG = black
@@ -597,7 +598,7 @@ static void test_sprite_x_expand(C64System* c64, System* sys, check_ctx_t& ctx) 
 static void test_sprite_y_expand(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 11;
     ctx.group_name = "Sprite Y-Expand";
-    printf("  P11: Sprite Y-Expand\n");
+    log_info("  P11: Sprite Y-Expand\n");
 
     reset_vic_state(c64);
     write_vic(c64, 0x21, 0); // BG = black
@@ -626,7 +627,7 @@ static void test_sprite_y_expand(C64System* c64, System* sys, check_ctx_t& ctx) 
 static void test_sprite_priority(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 12;
     ctx.group_name = "Sprite Priority";
-    printf("  P12: Sprite Priority (behind graphics)\n");
+    log_info("  P12: Sprite Priority (behind graphics)\n");
 
     reset_vic_state(c64);
     setup_custom_charset(c64);
@@ -676,7 +677,7 @@ static void test_sprite_priority(C64System* c64, System* sys, check_ctx_t& ctx) 
 static void test_display_enable(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 13;
     ctx.group_name = "Display Enable";
-    printf("  P13: DEN=0 Blanks Display\n");
+    log_info("  P13: DEN=0 Blanks Display\n");
 
     reset_vic_state(c64);
     write_vic(c64, 0x20, 14); // Border = light blue
@@ -696,7 +697,7 @@ static void test_display_enable(C64System* c64, System* sys, check_ctx_t& ctx) {
 static void test_xscroll(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 14;
     ctx.group_name = "XSCROLL";
-    printf("  P14: XSCROLL Horizontal Shift\n");
+    log_info("  P14: XSCROLL Horizontal Shift\n");
 
     reset_vic_state(c64);
     setup_custom_charset(c64);
@@ -730,7 +731,7 @@ static void test_xscroll(C64System* c64, System* sys, check_ctx_t& ctx) {
 static void test_yscroll(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 15;
     ctx.group_name = "YSCROLL";
-    printf("  P15: YSCROLL Vertical Shift\n");
+    log_info("  P15: YSCROLL Vertical Shift\n");
 
     reset_vic_state(c64);
     setup_custom_charset(c64);
@@ -761,7 +762,7 @@ static void test_yscroll(C64System* c64, System* sys, check_ctx_t& ctx) {
 static void test_csel(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 16;
     ctx.group_name = "CSEL=0 38-Column";
-    printf("  P16: CSEL=0 (38-Column Mode)\n");
+    log_info("  P16: CSEL=0 (38-Column Mode)\n");
 
     reset_vic_state(c64);
     setup_custom_charset(c64);
@@ -790,7 +791,7 @@ static void test_csel(C64System* c64, System* sys, check_ctx_t& ctx) {
 static void test_rsel(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 17;
     ctx.group_name = "RSEL=0 24-Row";
-    printf("  P17: RSEL=0 (24-Row Mode)\n");
+    log_info("  P17: RSEL=0 (24-Row Mode)\n");
 
     reset_vic_state(c64);
     setup_custom_charset(c64);
@@ -819,7 +820,7 @@ static void test_rsel(C64System* c64, System* sys, check_ctx_t& ctx) {
 static void test_charset_base(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 18;
     ctx.group_name = "Charset Base";
-    printf("  P18: Character Set Base ($D018)\n");
+    log_info("  P18: Character Set Base ($D018)\n");
 
     reset_vic_state(c64);
     write_vic(c64, 0x21, 0); // BG = black
@@ -858,7 +859,7 @@ static void test_charset_base(C64System* c64, System* sys, check_ctx_t& ctx) {
 static void test_vic_bank(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 19;
     ctx.group_name = "VIC Bank Select";
-    printf("  P19: VIC Bank Selection (CIA2)\n");
+    log_info("  P19: VIC Bank Selection (CIA2)\n");
 
     reset_vic_state(c64);
     write_vic(c64, 0x21, 0); // BG = black
@@ -900,7 +901,7 @@ static void test_vic_bank(C64System* c64, System* sys, check_ctx_t& ctx) {
 static void test_invalid_mode(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 20;
     ctx.group_name = "Invalid Mode";
-    printf("  P20: Invalid Mode (ECM+BMM)\n");
+    log_info("  P20: Invalid Mode (ECM+BMM)\n");
 
     reset_vic_state(c64);
     write_vic(c64, 0x20, 14); // Border = light blue
@@ -926,7 +927,7 @@ static void test_invalid_mode(C64System* c64, System* sys, check_ctx_t& ctx) {
 static void test_raster_irq(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 21;
     ctx.group_name = "Raster IRQ Flag";
-    printf("  P21: Raster IRQ Register\n");
+    log_info("  P21: Raster IRQ Register\n");
 
     reset_vic_state(c64);
 
@@ -952,11 +953,11 @@ static void test_raster_irq(C64System* c64, System* sys, check_ctx_t& ctx) {
         // Also check that bit 7 (IRQ flag = OR of enabled sources) is set
         if (d019 & 0x80) ctx.pass++; else {
             ctx.fail++;
-            printf("  PIXEL FAIL [P21] $D019 bit 7 not set (got $%02X)\n", d019);
+            log_info("  PIXEL FAIL [P21] $D019 bit 7 not set (got $%02X)\n", d019);
         }
     } else {
         ctx.fail += 2;
-        printf("  PIXEL FAIL [P21] Raster IRQ flag not set after passing line 100 ($D019=$%02X)\n", d019);
+        log_info("  PIXEL FAIL [P21] Raster IRQ flag not set after passing line 100 ($D019=$%02X)\n", d019);
     }
 
     // Disable
@@ -973,7 +974,7 @@ static void test_raster_irq(C64System* c64, System* sys, check_ctx_t& ctx) {
 static void test_mid_frame_color(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 22;
     ctx.group_name = "Frame Color Change";
-    printf("  P22: Border Color Change Between Frames\n");
+    log_info("  P22: Border Color Change Between Frames\n");
 
     reset_vic_state(c64);
 
@@ -997,7 +998,7 @@ static void test_mid_frame_color(C64System* c64, System* sys, check_ctx_t& ctx) 
 static void test_sprite_collision_pixels(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 23;
     ctx.group_name = "Sprite Collision Pixels";
-    printf("  P23: Sprite Collision Rendering\n");
+    log_info("  P23: Sprite Collision Rendering\n");
 
     reset_vic_state(c64);
     write_vic(c64, 0x21, 0); // BG = black
@@ -1054,7 +1055,7 @@ static void test_sprite_collision_pixels(C64System* c64, System* sys, check_ctx_
         ctx.pass++;
     } else {
         ctx.fail++;
-        printf("  PIXEL FAIL [P23] Sprite collision register not set ($D01E=$%02X)\n", mxm);
+        log_info("  PIXEL FAIL [P23] Sprite collision register not set ($D01E=$%02X)\n", mxm);
     }
 }
 
@@ -1062,7 +1063,7 @@ static void test_sprite_collision_pixels(C64System* c64, System* sys, check_ctx_
 static void test_sprite_bg_collision_pixels(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 24;
     ctx.group_name = "Sprite-BG Collision Px";
-    printf("  P24: Sprite-Background Collision Pixels\n");
+    log_info("  P24: Sprite-Background Collision Pixels\n");
 
     reset_vic_state(c64);
     setup_custom_charset(c64);
@@ -1102,7 +1103,7 @@ static void test_sprite_bg_collision_pixels(C64System* c64, System* sys, check_c
         ctx.pass++;
     } else {
         ctx.fail++;
-        printf("  PIXEL FAIL [P24] Sprite-BG collision not set ($D01F=$%02X)\n", mxd);
+        log_info("  PIXEL FAIL [P24] Sprite-BG collision not set ($D01F=$%02X)\n", mxd);
     }
 }
 
@@ -1110,7 +1111,7 @@ static void test_sprite_bg_collision_pixels(C64System* c64, System* sys, check_c
 static void test_all_16_colors(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 25;
     ctx.group_name = "All 16 Colors";
-    printf("  P25: All 16 Palette Colors in Border\n");
+    log_info("  P25: All 16 Palette Colors in Border\n");
 
     for (uint8_t c = 0; c < 16; c++) {
         reset_vic_state(c64);
@@ -1127,7 +1128,7 @@ static void test_all_16_colors(C64System* c64, System* sys, check_ctx_t& ctx) {
 static void test_char_row_consistency(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 26;
     ctx.group_name = "Char Row Consistency";
-    printf("  P26: Character Row Consistency (VC reload)\n");
+    log_info("  P26: Character Row Consistency (VC reload)\n");
 
     reset_vic_state(c64);
     setup_custom_charset(c64);
@@ -1169,7 +1170,7 @@ static void test_char_row_consistency(C64System* c64, System* sys, check_ctx_t& 
 static void test_bitmap_row_consistency(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 27;
     ctx.group_name = "Bitmap Row Consistency";
-    printf("  P27: Bitmap Row Consistency (VC reload)\n");
+    log_info("  P27: Bitmap Row Consistency (VC reload)\n");
 
     reset_vic_state(c64);
     // Standard bitmap mode: BMM=1, DEN=1, RSEL=1, YSCROLL=3
@@ -1218,7 +1219,7 @@ static void test_bitmap_row_consistency(C64System* c64, System* sys, check_ctx_t
 static void test_char_scanline_alignment(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 28;
     ctx.group_name = "Char Scanline Align";
-    printf("  P28: Character Scanline Alignment\n");
+    log_info("  P28: Character Scanline Alignment\n");
 
     reset_vic_state(c64);
     write_vic(c64, 0x20, 0);  // border = black
@@ -1254,14 +1255,14 @@ static void test_char_scanline_alignment(C64System* c64, System* sys, check_ctx_
     int y_base = 59;  // Bad line raster for char row 1 (51 + 1*8)
 
     // Diagnostic: scan wider area to find where each RC appears
-    printf("    [P28-diag] Scanning char at fb(%d,%d), wide range:\n", x_base, y_base);
+    log_info("    [P28-diag] Scanning char at fb(%d,%d), wide range:\n", x_base, y_base);
     for (int dy = -4; dy <= 10; dy++) {
         int detected_rc = -1;
         for (int px = 0; px < 8; px++) {
             uint32_t c = fb_pixel(ctx.fb, ctx.width, x_base + px, y_base + dy);
             if (c == PAL[1]) { detected_rc = px; break; }
         }
-        printf("    [P28-diag]  dy=%+d (fb_y=%d): RC=%d\n", dy, y_base + dy, detected_rc);
+        log_info("    [P28-diag]  dy=%+d (fb_y=%d): RC=%d\n", dy, y_base + dy, detected_rc);
     }
     int rc_at_row[8];
     for (int row = 0; row < 8; row++) {
@@ -1273,7 +1274,7 @@ static void test_char_scanline_alignment(C64System* c64, System* sys, check_ctx_
                 break;
             }
         }
-        printf("    [P28-diag]  row %d (fb_y=%d): RC=%d\n", row, y_base + row, rc_at_row[row]);
+        log_info("    [P28-diag]  row %d (fb_y=%d): RC=%d\n", row, y_base + row, rc_at_row[row]);
     }
 
     // Expected: first visible fb row should show RC=0 data (pixel 0 set).
@@ -1293,15 +1294,15 @@ static void test_char_scanline_alignment(C64System* c64, System* sys, check_ctx_
 
     if (first_rc == -1) {
         ctx.fail++;
-        printf("  PIXEL FAIL [P28 %s] no foreground pixel found at row 0\n", ctx.group_name);
+        log_info("  PIXEL FAIL [P28 %s] no foreground pixel found at row 0\n", ctx.group_name);
     } else if (!consecutive) {
         ctx.fail++;
-        printf("  PIXEL FAIL [P28 %s] RC values not consecutive: ", ctx.group_name);
-        for (int row = 0; row < 8; row++) printf("%d ", rc_at_row[row]);
-        printf("\n");
+        log_info("  PIXEL FAIL [P28 %s] RC values not consecutive: ", ctx.group_name);
+        for (int row = 0; row < 8; row++) log_info("%d ", rc_at_row[row]);
+        log_info("\n");
     } else {
         ctx.pass++;
-        printf("    [P28] RC mapping: char_fb_y(1)+0 = RC=%d (consecutive ✓)\n", first_rc);
+        log_info("    [P28] RC mapping: char_fb_y(1)+0 = RC=%d (consecutive ✓)\n", first_rc);
     }
 
     // The character must not be wrapped — RC=0 should appear within the first 2 rows
@@ -1314,7 +1315,7 @@ static void test_char_scanline_alignment(C64System* c64, System* sys, check_ctx_
         ctx.pass++;
     } else {
         ctx.fail++;
-        printf("  PIXEL FAIL [P28 %s] RC=0 at row %d (expected row 0 or 1), character appears wrapped\n",
+        log_info("  PIXEL FAIL [P28 %s] RC=0 at row %d (expected row 0 or 1), character appears wrapped\n",
                ctx.group_name, rc0_row);
     }
 }
@@ -1330,7 +1331,7 @@ static void test_char_scanline_alignment(C64System* c64, System* sys, check_ctx_
 static void test_top_left_alignment(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 29;
     ctx.group_name = "TopLeft Align";
-    printf("  P29: Top-Left Pixel Alignment (KERNAL defaults)\n");
+    log_info("  P29: Top-Left Pixel Alignment (KERNAL defaults)\n");
 
     reset_vic_state(c64);
     setup_custom_charset(c64);
@@ -1362,7 +1363,7 @@ static void test_top_left_alignment(C64System* c64, System* sys, check_ctx_t& ct
             ctx.pass++;  // Not foreground — correct, it's border
         } else {
             ctx.fail++;
-            printf("  PIXEL FAIL [P29 %s] pixel at (%d,%d) should be border, not FG\n",
+            log_info("  PIXEL FAIL [P29 %s] pixel at (%d,%d) should be border, not FG\n",
                    ctx.group_name, x0 - 1, y0);
         }
     }
@@ -1378,7 +1379,7 @@ static void test_top_left_alignment(C64System* c64, System* sys, check_ctx_t& ct
 static void test_sprite_y_position(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 30;
     ctx.group_name = "Sprite Y Position";
-    printf("  P30: Sprite Y Position Accuracy\n");
+    log_info("  P30: Sprite Y Position Accuracy\n");
 
     reset_vic_state(c64);
     write_vic(c64, 0x20, 0);  // border = black
@@ -1412,7 +1413,7 @@ static void test_sprite_y_position(C64System* c64, System* sys, check_ctx_t& ctx
 static void test_sprite_dma_enable(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 31;
     ctx.group_name = "Sprite DMA Enable";
-    printf("  P31: Sprite DMA Enable\n");
+    log_info("  P31: Sprite DMA Enable\n");
 
     reset_vic_state(c64);
     write_vic(c64, 0x20, 0);
@@ -1456,7 +1457,7 @@ static void test_sprite_dma_enable(C64System* c64, System* sys, check_ctx_t& ctx
 static void test_sprite_sprite_collision(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 32;
     ctx.group_name = "Sprite-Sprite Collision";
-    printf("  P32: Sprite-Sprite Collision\n");
+    log_info("  P32: Sprite-Sprite Collision\n");
 
     reset_vic_state(c64);
     write_vic(c64, 0x20, 0);
@@ -1489,7 +1490,7 @@ static void test_sprite_sprite_collision(C64System* c64, System* sys, check_ctx_
         ctx.pass++;
     } else {
         ctx.fail++;
-        printf("  PIXEL FAIL [P32 %s] MxM=$%02X, expected bits 0+1 set ($03)\n",
+        log_info("  PIXEL FAIL [P32 %s] MxM=$%02X, expected bits 0+1 set ($03)\n",
                ctx.group_name, mxm);
     }
 }
@@ -1500,7 +1501,7 @@ static void test_sprite_sprite_collision(C64System* c64, System* sys, check_ctx_
 static void test_den_control(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 33;
     ctx.group_name = "DEN Control";
-    printf("  P33: DEN Control (enable/disable display)\n");
+    log_info("  P33: DEN Control (enable/disable display)\n");
 
     reset_vic_state(c64);
     setup_custom_charset(c64);
@@ -1529,7 +1530,7 @@ static void test_den_control(C64System* c64, System* sys, check_ctx_t& ctx) {
 static void test_y_position_diagnostic(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 34;
     ctx.group_name = "Y Position";
-    printf("  P34: Y Position Diagnostic (border-to-display transition)\n");
+    log_info("  P34: Y Position Diagnostic (border-to-display transition)\n");
 
     reset_vic_state(c64);
     setup_custom_charset(c64);
@@ -1566,7 +1567,7 @@ static void test_y_position_diagnostic(C64System* c64, System* sys, check_ctx_t&
     // This avoids any edge effects at column 0
     int test_x = char_fb_x(2) + 4;
 
-    printf("    Scanning rasters 49-56 at fb_x=%d:\n", test_x);
+    log_info("    Scanning rasters 49-56 at fb_x=%d:\n", test_x);
 
     // Define expected colors
     const uint32_t border_c = PAL[14];
@@ -1581,7 +1582,7 @@ static void test_y_position_diagnostic(C64System* c64, System* sys, check_ctx_t&
         else if (pixel == bg_c) label = "BG(6)";
         else if (pixel == fg_c) label = "FG(1/white)";
         else label = "OTHER";
-        printf("      raster %d: 0x%08X = %s\n", raster, pixel, label);
+        log_info("      raster %d: 0x%08X = %s\n", raster, pixel, label);
     }
 
     // Verification checks:
@@ -1593,16 +1594,16 @@ static void test_y_position_diagnostic(C64System* c64, System* sys, check_ctx_t&
     uint32_t r51_pixel = fb_pixel(ctx.fb, ctx.width, test_x, 51);
     if (r51_pixel == fg_c) {
         ctx.pass++;
-        printf("    ✓ Raster 51 (RC=0) = foreground (white) — correct alignment\n");
+        log_info("    ✓ Raster 51 (RC=0) = foreground (white) — correct alignment\n");
     } else if (r51_pixel == border_c) {
         ctx.fail++;
-        printf("    ✗ Raster 51 = BORDER — display not starting at border_top!\n");
+        log_info("    ✗ Raster 51 = BORDER — display not starting at border_top!\n");
     } else if (r51_pixel == bg_c) {
         ctx.fail++;
-        printf("    ✗ Raster 51 = BACKGROUND — display open but char data missing at RC=0\n");
+        log_info("    ✗ Raster 51 = BACKGROUND — display open but char data missing at RC=0\n");
     } else {
         ctx.fail++;
-        printf("    ✗ Raster 51 = 0x%08X — unexpected color\n", r51_pixel);
+        log_info("    ✗ Raster 51 = 0x%08X — unexpected color\n", r51_pixel);
     }
 
     // Raster 52 should be foreground (white) — RC=1
@@ -1616,9 +1617,9 @@ static void test_y_position_diagnostic(C64System* c64, System* sys, check_ctx_t&
             break;
         }
     }
-    printf("    First foreground pixel at raster: %d (expected: 51)\n", first_fg_raster);
+    log_info("    First foreground pixel at raster: %d (expected: 51)\n", first_fg_raster);
     if (first_fg_raster != 51 && first_fg_raster >= 0) {
-        printf("    *** Y OFFSET = %d pixels (first FG at %d instead of 51) ***\n",
+        log_info("    *** Y OFFSET = %d pixels (first FG at %d instead of 51) ***\n",
                first_fg_raster - 51, first_fg_raster);
     }
 }
@@ -1640,10 +1641,10 @@ static const char* color_name(uint32_t rgba) {
 }
 
 static void diagnostic_dump(C64System* c64, System* sys, check_ctx_t& ctx) {
-    printf("\n=== DIAGNOSTIC: Character row 0, columns 0-2, all 8 scanlines ===\n");
-    printf("Default boot: '@' (screen code 0), ROM pattern: $3C,$66,$6E,$6E,$60,$62,$3C,$00\n");
-    printf("Expected: bg=BLU(6), border=LBL(14), fg=LBL(14)\n");
-    printf("char_fb_x(0)=%d, char_fb_y(0)=%d\n\n", char_fb_x(0), char_fb_y(0));
+    log_info("\n=== DIAGNOSTIC: Character row 0, columns 0-2, all 8 scanlines ===\n");
+    log_info("Default boot: '@' (screen code 0), ROM pattern: $3C,$66,$6E,$6E,$60,$62,$3C,$00\n");
+    log_info("Expected: bg=BLU(6), border=LBL(14), fg=LBL(14)\n");
+    log_info("char_fb_x(0)=%d, char_fb_y(0)=%d\n\n", char_fb_x(0), char_fb_y(0));
     
     // Boot normally (no custom charset), run frames to stabilize
     reset_vic_state(c64);
@@ -1656,64 +1657,64 @@ static void diagnostic_dump(C64System* c64, System* sys, check_ctx_t& ctx) {
     
     // Dump around the left border edge: fb_x 36..57 (covers border->column0->column1)
     // for raster lines 51-58 (bad line + 7 subsequent lines = RC 0..7)
-    printf("fb_x:  ");
-    for (int fx = 36; fx <= 65; fx++) printf(" %3d", fx);
-    printf("\n");
-    printf("       ");
+    log_info("fb_x:  ");
+    for (int fx = 36; fx <= 65; fx++) log_info(" %3d", fx);
+    log_info("\n");
+    log_info("       ");
     for (int fx = 36; fx <= 65; fx++) {
-        if (fx == 42) printf("  c0>");
-        else if (fx == 50) printf("  c1>");
-        else if (fx == 58) printf("  c2>");
-        else printf("    ");
+        if (fx == 42) log_info("  c0>");
+        else if (fx == 50) log_info("  c1>");
+        else if (fx == 58) log_info("  c2>");
+        else log_info("    ");
     }
-    printf("\n");
+    log_info("\n");
     
     for (int fy = 51; fy <= 58; fy++) {
         int rc = fy - 51;
-        printf("y=%3d RC%d: ", fy, rc);
+        log_info("y=%3d RC%d: ", fy, rc);
         for (int fx = 36; fx <= 65; fx++) {
             uint32_t pix = fb_pixel(ctx.fb, ctx.width, fx, fy);
-            printf(" %s", color_name(pix));
+            log_info(" %s", color_name(pix));
         }
-        printf("\n");
+        log_info("\n");
     }
     
     // Also dump one row from character row 1 (rasters 59-66) to check line-wrap across rows
-    printf("\nCharacter row 1 (rasters 59-66):\n");
+    log_info("\nCharacter row 1 (rasters 59-66):\n");
     for (int fy = 59; fy <= 66; fy++) {
         int rc = fy - 59;
-        printf("y=%3d RC%d: ", fy, rc);
+        log_info("y=%3d RC%d: ", fy, rc);
         for (int fx = 36; fx <= 65; fx++) {
             uint32_t pix = fb_pixel(ctx.fb, ctx.width, fx, fy);
-            printf(" %s", color_name(pix));
+            log_info(" %s", color_name(pix));
         }
-        printf("\n");
+        log_info("\n");
     }
     
     // Dump the expected '@' ROM data for reference
-    printf("\n'@' character ROM (screen code 0):\n");
+    log_info("\n'@' character ROM (screen code 0):\n");
     // Read from char ROM. With $D018=0x14, charset is at $1000 (ROM).
     // We can read the ROM pattern directly: $D000 banking, or just hardcode the known values.
     static const uint8_t at_rom[8] = { 0x3C, 0x66, 0x6E, 0x6E, 0x60, 0x62, 0x3C, 0x00 };
     for (int row = 0; row < 8; row++) {
-        printf("  Row %d ($%02X): ", row, at_rom[row]);
+        log_info("  Row %d ($%02X): ", row, at_rom[row]);
         for (int bit = 7; bit >= 0; bit--) {
-            printf("%c", (at_rom[row] & (1 << bit)) ? '#' : '.');
+            log_info("%c", (at_rom[row] & (1 << bit)) ? '#' : '.');
         }
         // Show which bits are visible in col 0 (bits 3-0 if border eats bits 7-4)
-        printf("  col0_visible(bits3-0): ");
+        log_info("  col0_visible(bits3-0): ");
         for (int bit = 3; bit >= 0; bit--) {
-            printf("%c", (at_rom[row] & (1 << bit)) ? '#' : '.');
+            log_info("%c", (at_rom[row] & (1 << bit)) ? '#' : '.');
         }
-        printf("\n");
+        log_info("\n");
     }
-    printf("\n");
+    log_info("\n");
 }
 
 // Diagnostic dump after normal KERNAL boot (no reset_vic_state, just raw boot)
 static void diagnostic_dump_boot(C64System* c64, System* sys, check_ctx_t& ctx) {
-    printf("\n=== DIAGNOSTIC: KERNAL boot screen (no state reset, 200 frames) ===\n");
-    printf("This captures what the user actually sees during normal C64 boot.\n\n");
+    log_info("\n=== DIAGNOSTIC: KERNAL boot screen (no state reset, 200 frames) ===\n");
+    log_info("This captures what the user actually sees during normal C64 boot.\n\n");
     
     // Run 200 frames to let KERNAL boot complete and READY appear
     run_frames(sys, 200);
@@ -1726,48 +1727,48 @@ static void diagnostic_dump_boot(C64System* c64, System* sys, check_ctx_t& ctx) 
     uint8_t d018 = vicii.regs_[0x18];
     uint8_t d020 = vicii.regs_[0x20];
     uint8_t d021 = vicii.regs_[0x21];
-    printf("VIC regs: $D011=$%02X $D016=$%02X $D018=$%02X $D020=$%02X $D021=$%02X\n",
+    log_info("VIC regs: $D011=$%02X $D016=$%02X $D018=$%02X $D020=$%02X $D021=$%02X\n",
            d011, d016, d018, d020, d021);
-    printf("YSCROLL=%d XSCROLL=%d CSEL=%d RSEL=%d DEN=%d\n",
+    log_info("YSCROLL=%d XSCROLL=%d CSEL=%d RSEL=%d DEN=%d\n",
            d011 & 7, d016 & 7, (d016 >> 3) & 1, (d011 >> 3) & 1, (d011 >> 4) & 1);
     
     // Read first few screen bytes to see what characters are on screen
-    printf("Screen $0400-$0427 (first row): ");
+    log_info("Screen $0400-$0427 (first row): ");
     for (int i = 0; i < 40; i++) {
         uint8_t ch = ram[0x0400 + i];
-        printf("%02X ", ch);
+        log_info("%02X ", ch);
     }
-    printf("\n");
+    log_info("\n");
     
     // Dump character row 0 after boot
-    printf("\nBoot screen character row 0 (fb_x 36-65, rasters 51-58):\n");
-    printf("fb_x:  ");
-    for (int fx = 36; fx <= 65; fx++) printf(" %3d", fx);
-    printf("\n");
+    log_info("\nBoot screen character row 0 (fb_x 36-65, rasters 51-58):\n");
+    log_info("fb_x:  ");
+    for (int fx = 36; fx <= 65; fx++) log_info(" %3d", fx);
+    log_info("\n");
     
     for (int fy = 51; fy <= 58; fy++) {
         int rc = fy - 51;
-        printf("y=%3d RC%d: ", fy, rc);
+        log_info("y=%3d RC%d: ", fy, rc);
         for (int fx = 36; fx <= 65; fx++) {
             uint32_t pix = fb_pixel(ctx.fb, ctx.width, fx, fy);
-            printf(" %s", color_name(pix));
+            log_info(" %s", color_name(pix));
         }
-        printf("\n");
+        log_info("\n");
     }
     
     // Also check a few rows down where READY text might be (around row 6-7)
-    printf("\nBoot screen character rows 5-7 (rasters 91-114, cols 0-2):\n");
+    log_info("\nBoot screen character rows 5-7 (rasters 91-114, cols 0-2):\n");
     for (int fy = 91; fy <= 114; fy++) {
         int row = (fy - 51) / 8;
         int rc = (fy - 51) % 8;
-        printf("y=%3d r%d/RC%d: ", fy, row, rc);
+        log_info("y=%3d r%d/RC%d: ", fy, row, rc);
         for (int fx = 36; fx <= 65; fx++) {
             uint32_t pix = fb_pixel(ctx.fb, ctx.width, fx, fy);
-            printf(" %s", color_name(pix));
+            log_info(" %s", color_name(pix));
         }
-        printf("\n");
+        log_info("\n");
     }
-    printf("\n");
+    log_info("\n");
 }
 
 // =============================================================================
@@ -1798,7 +1799,7 @@ static void diagnostic_dump_boot(C64System* c64, System* sys, check_ctx_t& ctx) 
 static void test_raster_bar_cpu(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 35;
     ctx.group_name = "CPU Raster Bar";
-    printf("  P35: CPU-Driven Raster Bar\n");
+    log_info("  P35: CPU-Driven Raster Bar\n");
 
     reset_vic_state(c64);
 
@@ -1820,7 +1821,7 @@ static void test_raster_bar_cpu(C64System* c64, System* sys, check_ctx_t& ctx) {
     a.store_imm(vicii_regs::ADDR_D020, 0x00); // Border = BLACK
     a.jmp(loop);
 
-    printf("    Injecting %zu bytes of 6510 raster-bar code at $8000\n", a.pos);
+    log_info("    Injecting %zu bytes of 6510 raster-bar code at $8000\n", a.pos);
     for (size_t i = 0; i < a.pos; i++)
         write_ram(c64, 0x8000 + (uint16_t)i, code[i]);
 
@@ -1904,7 +1905,7 @@ static void test_raster_bar_cpu(C64System* c64, System* sys, check_ctx_t& ctx) {
 static void test_fli_bug_width(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 36;
     ctx.group_name = "D018 Matrix Switch";
-    printf("  P36: D018 Bad-Line Matrix Switch\n");
+    log_info("  P36: D018 Bad-Line Matrix Switch\n");
 
     reset_vic_state(c64);
 
@@ -1965,7 +1966,7 @@ static void test_fli_bug_width(C64System* c64, System* sys, check_ctx_t& ctx) {
     a.store_imm(vicii_regs::ADDR_D018, 0x1C);      // Screen A + charset $3000
     a.jmp(main_loop);
 
-    printf("    Injecting %zu bytes of D018 switch code at $8000\n", a.pos);
+    log_info("    Injecting %zu bytes of D018 switch code at $8000\n", a.pos);
     for (size_t i = 0; i < a.pos; i++) write_ram(c64, 0x8000 + (uint16_t)i, code[i]);
 
     // Redirect CPU
@@ -2012,7 +2013,7 @@ static void test_fli_bug_width(C64System* c64, System* sys, check_ctx_t& ctx) {
                 "RC=1 col10: screen B char (empty/black)");
 
     // Diagnostic: scan columns on the bad line to check for stale data
-    printf("    Bad line %d column scan:\n", test_y_bad);
+    log_info("    Bad line %d column scan:\n", test_y_bad);
     int fli_bug_width = 0;
     for (int col = 0; col < 40; col++) {
         uint32_t pix = fb_pixel(ctx.fb, ctx.width, char_fb_x(col) + 4, test_y_bad);
@@ -2021,11 +2022,11 @@ static void test_fli_bug_width(C64System* c64, System* sys, check_ctx_t& ctx) {
         } else if (pix == PAL[0]) {  // BLACK = correct (screen B empty char)
             break;  // First non-stale column found
         } else {
-            printf("      col%d: unexpected pixel $%08X\n", col, pix);
+            log_info("      col%d: unexpected pixel $%08X\n", col, pix);
             break;
         }
     }
-    printf("    FLI bug width: %d column(s) (%d pixels)\n", fli_bug_width, fli_bug_width * 8);
+    log_info("    FLI bug width: %d column(s) (%d pixels)\n", fli_bug_width, fli_bug_width * 8);
 
     // Verify column 20 on bad line is screen B (must pass — deep into the line)
     check_pixel(ctx, char_fb_x(20) + 4, test_y_bad, 0,
@@ -2081,7 +2082,7 @@ static uint8_t fli_read_pattern(const check_ctx_t& ctx, int col, int raster) {
 static void test_fli_diagnostic(C64System* c64, System* sys, check_ctx_t& ctx) {
     ctx.test_group = 37;
     ctx.group_name = "FLI Diagnostic";
-    printf("  P37: FLI Diagnostic\n");
+    log_info("  P37: FLI Diagnostic\n");
 
     reset_vic_state(c64);
 
@@ -2170,7 +2171,7 @@ static void test_fli_diagnostic(C64System* c64, System* sys, check_ctx_t& ctx) {
         a.store_imm(vicii_regs::ADDR_D018, d018_for_bank[banks[0]]);
         a.jmp(frame_loop);
 
-        printf("    Injecting %zu bytes at $8000\n", a.pos);
+        log_info("    Injecting %zu bytes at $8000\n", a.pos);
         for (size_t i = 0; i < a.pos; i++)
             write_ram(c64, 0x8000 + (uint16_t)i, code[i]);
         c64->cpu->set(PC, 0x8000);
@@ -2181,24 +2182,24 @@ static void test_fli_diagnostic(C64System* c64, System* sys, check_ctx_t& ctx) {
     // =========================================================================
     // SUB-TEST A: 8-line FLI (rasters 100-107), banks 0-7
     // =========================================================================
-    printf("    Sub-test A: 8-line FLI, rasters 100-107, banks 0-7\n");
+    log_info("    Sub-test A: 8-line FLI, rasters 100-107, banks 0-7\n");
     int banks_a[8] = {0, 1, 2, 3, 4, 5, 6, 7};
     run_fli_test("A", 8, banks_a);
 
-    printf("    Sub-test A results (col %d, rasters 100-107):\n", diag_col);
+    log_info("    Sub-test A results (col %d, rasters 100-107):\n", diag_col);
     for (int line = 0; line < 8; line++) {
         int raster = 100 + line;
         int expected_bank = banks_a[line];
         uint8_t pattern = fli_read_pattern(ctx, diag_col, raster);
         int actual_bank = pattern & 0x07;
-        printf("      Raster %d: pattern=$%02X expected=%d actual=%d %s\n",
+        log_info("      Raster %d: pattern=$%02X expected=%d actual=%d %s\n",
                raster, pattern, expected_bank, actual_bank,
                (actual_bank == expected_bank) ? "OK" : "MISMATCH");
     }
-    printf("    FLI bug zone (cols 0-3, raster 101): ");
+    log_info("    FLI bug zone (cols 0-3, raster 101): ");
     for (int col = 0; col < 4; col++)
-        printf("col%d=$%02X ", col, fli_read_pattern(ctx, col, 101));
-    printf("\n");
+        log_info("col%d=$%02X ", col, fli_read_pattern(ctx, col, 101));
+    log_info("\n");
 
     for (int line = 0; line < 8; line++) {
         int raster = 100 + line;
@@ -2216,12 +2217,12 @@ static void test_fli_diagnostic(C64System* c64, System* sys, check_ctx_t& ctx) {
     // =========================================================================
     // SUB-TEST B: 24-line FLI (rasters 100-123), 3 groups of 8
     // =========================================================================
-    printf("    Sub-test B: 24-line FLI, rasters 100-123\n");
+    log_info("    Sub-test B: 24-line FLI, rasters 100-123\n");
     int banks_b[24];
     for (int i = 0; i < 24; i++) banks_b[i] = i & 7;
     run_fli_test("B", 24, banks_b);
 
-    printf("    Sub-test B results (col %d, rasters 100-123):\n", diag_col);
+    log_info("    Sub-test B results (col %d, rasters 100-123):\n", diag_col);
     int group_mismatches[3] = {0, 0, 0};
     for (int line = 0; line < 24; line++) {
         int raster = 100 + line;
@@ -2231,11 +2232,11 @@ static void test_fli_diagnostic(C64System* c64, System* sys, check_ctx_t& ctx) {
         int actual_bank = pattern & 0x07;
         bool match = (actual_bank == expected_bank);
         if (!match) group_mismatches[group]++;
-        printf("      Raster %3d [g%d l%d]: pat=$%02X exp=%d act=%d %s\n",
+        log_info("      Raster %3d [g%d l%d]: pat=$%02X exp=%d act=%d %s\n",
                raster, group, line % 8, pattern, expected_bank, actual_bank,
                match ? "OK" : "MISMATCH");
     }
-    printf("    Mismatches per group: [0]=%d [1]=%d [2]=%d\n",
+    log_info("    Mismatches per group: [0]=%d [1]=%d [2]=%d\n",
            group_mismatches[0], group_mismatches[1], group_mismatches[2]);
 
     for (int line = 0; line < 24; line++) {
@@ -2252,18 +2253,18 @@ static void test_fli_diagnostic(C64System* c64, System* sys, check_ctx_t& ctx) {
     // =========================================================================
     // SUB-TEST C: Reversed banks 7-0
     // =========================================================================
-    printf("    Sub-test C: Reversed banks 7-0\n");
+    log_info("    Sub-test C: Reversed banks 7-0\n");
     int banks_c[8] = {7, 6, 5, 4, 3, 2, 1, 0};
     run_fli_test("C", 8, banks_c);
 
-    printf("    Sub-test C results (col %d, rasters 100-107):\n", diag_col);
+    log_info("    Sub-test C results (col %d, rasters 100-107):\n", diag_col);
     for (int line = 0; line < 8; line++) {
         int raster = 100 + line;
         int expected_bank = banks_c[line];
         uint8_t pattern = fli_read_pattern(ctx, diag_col, raster);
         int actual_bank = pattern & 0x07;
         const char* bl_type = (line == 0) ? "NAT" : "frc";
-        printf("      Raster %d (%s): pat=$%02X exp=%d act=%d %s\n",
+        log_info("      Raster %d (%s): pat=$%02X exp=%d act=%d %s\n",
                raster, bl_type, pattern, expected_bank, actual_bank,
                (actual_bank == expected_bank) ? "OK" : "MISMATCH");
     }
@@ -2299,12 +2300,12 @@ pixel_test_results_t run_pixel_verification_tests(
     int fb_width,
     int fb_height)
 {
-    printf("\n");
-    printf("╔══════════════════════════════════════════════════╗\n");
-    printf("║         VIC-II PIXEL VERIFICATION TESTS          ║\n");
-    printf("╠══════════════════════════════════════════════════╣\n");
-    printf("║  Framebuffer: %dx%-4d                           ║\n", fb_width, fb_height);
-    printf("╚══════════════════════════════════════════════════╝\n\n");
+    log_info("\n");
+    log_info("╔══════════════════════════════════════════════════╗\n");
+    log_info("║         VIC-II PIXEL VERIFICATION TESTS          ║\n");
+    log_info("╠══════════════════════════════════════════════════╣\n");
+    log_info("║  Framebuffer: %dx%-4d                           ║\n", fb_width, fb_height);
+    log_info("╚══════════════════════════════════════════════════╝\n\n");
 
     check_ctx_t ctx;
     ctx.fb = framebuffer;
@@ -2363,20 +2364,20 @@ pixel_test_results_t run_pixel_verification_tests(
     reset_vic_state(c64);
 
     // Summary
-    printf("\n");
-    printf("╔══════════════════════════════════════════════════╗\n");
-    printf("║       PIXEL VERIFICATION RESULTS                 ║\n");
-    printf("╠══════════════════════════════════════════════════╣\n");
-    printf("║  Test Groups:  %-5d                             ║\n", num_groups);
-    printf("║  Pixel Checks: %-5d                             ║\n", ctx.pass + ctx.fail);
-    printf("║  Passed:       %-5d                             ║\n", ctx.pass);
-    printf("║  Failed:       %-5d                             ║\n", ctx.fail);
-    printf("╚══════════════════════════════════════════════════╝\n");
+    log_info("\n");
+    log_info("╔══════════════════════════════════════════════════╗\n");
+    log_info("║       PIXEL VERIFICATION RESULTS                 ║\n");
+    log_info("╠══════════════════════════════════════════════════╣\n");
+    log_info("║  Test Groups:  %-5d                             ║\n", num_groups);
+    log_info("║  Pixel Checks: %-5d                             ║\n", ctx.pass + ctx.fail);
+    log_info("║  Passed:       %-5d                             ║\n", ctx.pass);
+    log_info("║  Failed:       %-5d                             ║\n", ctx.fail);
+    log_info("╚══════════════════════════════════════════════════╝\n");
 
     if (ctx.fail == 0) {
-        printf("\033[1;32m✓ All pixel verification tests passed!\033[0m\n");
+        log_info("\033[1;32m✓ All pixel verification tests passed!\033[0m\n");
     } else {
-        printf("\033[1;31m✗ %d pixel check(s) FAILED — see details above\033[0m\n", ctx.fail);
+        log_info("\033[1;31m✗ %d pixel check(s) FAILED — see details above\033[0m\n", ctx.fail);
     }
 
     return { ctx.pass, ctx.fail, ctx.pass + ctx.fail, num_groups };

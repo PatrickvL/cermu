@@ -3,6 +3,7 @@
 // =============================================================================
 
 #include "core/connection.hpp"
+#include "core/cermu.hpp"
 #include <cstdio>
 
 // ============================================================================
@@ -11,7 +12,7 @@
 
 void DirectConnection::connect(Port* a, Port* b) {
     if (!a || !b) {
-        printf("DirectConnection: cannot connect null port(s)\n");
+        log_info("DirectConnection: cannot connect null port(s)\n");
         return;
     }
 
@@ -33,7 +34,7 @@ void DirectConnection::connect(Port* a, Port* b) {
             a_->write_system_signals(0xFFFFFFFF, combined_state);
     });
 
-    printf("DirectConnection: %s <-> %s linked\n",
+    log_info("DirectConnection: %s <-> %s linked\n",
            a_->get_name(), b_->get_name());
 }
 
@@ -46,7 +47,7 @@ void DirectConnection::disconnect() {
     }
 
     if (a_ && b_) {
-        printf("DirectConnection: %s <-> %s unlinked\n",
+        log_info("DirectConnection: %s <-> %s unlinked\n",
                a_->get_name(), b_->get_name());
     }
 

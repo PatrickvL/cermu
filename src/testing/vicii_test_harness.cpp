@@ -7,6 +7,7 @@
 //   3. C++ harness that reads the results buffer after tests complete
 // =============================================================================
 
+#include "core/cermu.hpp"
 #include "testing/vicii_test_harness.hpp"
 #include "systems/commodore/c64/c64_kernal_patches.hpp"
 #include <cstring>
@@ -27,7 +28,7 @@ namespace vicii_test {
 
 void patch_kernal_for_test(C64System* c64) {
     if (!c64 || !c64->kernal || !c64->kernal->data()) {
-        printf("VICII-TEST: WARNING — cannot patch KERNAL (ROM not loaded)\n");
+        log_info("VICII-TEST: WARNING — cannot patch KERNAL (ROM not loaded)\n");
         return;
     }
 
@@ -35,7 +36,7 @@ void patch_kernal_for_test(C64System* c64) {
 
     // --- Patch A: Skip RAMTAS memory test (shared implementation) ---
     if (!c64_patch_skip_memtest(c64)) {
-        printf("VICII-TEST: WARNING — RAMTAS patch not applied (already patched or ROM mismatch)\n");
+        log_info("VICII-TEST: WARNING — RAMTAS patch not applied (already patched or ROM mismatch)\n");
     }
 
     // --- Patch B: Redirect BASIC cold-start to test program ---
@@ -47,9 +48,9 @@ void patch_kernal_for_test(C64System* c64) {
         rom[JMP_OFFSET]     = 0x4C;  // JMP absolute
         rom[JMP_OFFSET + 1] = TEST_LOAD_ADDR & 0xFF;
         rom[JMP_OFFSET + 2] = TEST_LOAD_ADDR >> 8;
-        printf("VICII-TEST: Patched $FCFF — BASIC start → JMP $%04X\n", TEST_LOAD_ADDR);
+        log_info("VICII-TEST: Patched $FCFF — BASIC start → JMP $%04X\n", TEST_LOAD_ADDR);
     } else {
-        printf("VICII-TEST: WARNING — bytes at $FCFF don't match ($%02X $%02X $%02X)\n",
+        log_info("VICII-TEST: WARNING — bytes at $FCFF don't match ($%02X $%02X $%02X)\n",
                rom[JMP_OFFSET], rom[JMP_OFFSET + 1], rom[JMP_OFFSET + 2]);
     }
 }
@@ -395,7 +396,7 @@ static size_t build_test_program(uint8_t* buffer, size_t buffer_size) {
         buffer[offset + 2] = record_subroutine >> 8;
     }
 
-    printf("VICII-TEST: Built test program: %zu bytes, %d tests, record_result at $%04X\n",
+    log_info("VICII-TEST: Built test program: %zu bytes, %d tests, record_result at $%04X\n",
            a.pos, num_fixups, record_subroutine);
 
     return a.pos;
@@ -411,7 +412,7 @@ void inject_test_program(C64System* c64) {
     size_t size = build_test_program(program, sizeof(program));
 
     if (size > sizeof(program)) {
-        printf("VICII-TEST: ERROR — program too large (%zu bytes)\n", size);
+        log_info("VICII-TEST: ERROR — program too large (%zu bytes)\n", size);
         return;
     }
 
@@ -422,7 +423,7 @@ void inject_test_program(C64System* c64) {
     // Clear results buffer
     memset(&ram[RESULTS_BASE], 0, RESULTS_MAX * RESULT_ENTRY_SIZE);
 
-    printf("VICII-TEST: Injected %zu bytes at $%04X\n", size, TEST_LOAD_ADDR);
+    log_info("VICII-TEST: Injected %zu bytes at $%04X\n", size, TEST_LOAD_ADDR);
 }
 // ============================================================================
 // 4. HARNESS — init, poll, read results, summary
@@ -449,7 +450,7 @@ bool harness_poll(vicii_test_state_t* state, C64System* c64) {
 
     // Safety timeout
     if (state->frames_run >= state->max_frames) {
-        printf("VICII-TEST: TIMEOUT after %d frames (done_flag=$%02X)\n",
+        log_info("VICII-TEST: TIMEOUT after %d frames (done_flag=$%02X)\n",
                state->frames_run, ram[ZP_DONE_FLAG]);
         state->active = false;
         return false;
@@ -468,14 +469,14 @@ void harness_read_results(vicii_test_state_t* state, C64System* c64) {
     int num_entries = (write_ptr - RESULTS_BASE) / RESULT_ENTRY_SIZE;
 
     if (num_entries <= 0 || num_entries > (int)RESULTS_MAX) {
-        printf("VICII-TEST: No valid results (ptr=$%04X, entries=%d)\n",
+        log_info("VICII-TEST: No valid results (ptr=$%04X, entries=%d)\n",
                write_ptr, num_entries);
         return;
     }
 
-    printf("\nVICII-TEST: %d test results:\n", num_entries);
-    printf("  %-6s %-4s %-6s %-8s %-8s\n", "Test", "Sub", "Result", "Expected", "Actual");
-    printf("  %-6s %-4s %-6s %-8s %-8s\n", "------", "----", "------", "--------", "--------");
+    log_info("\nVICII-TEST: %d test results:\n", num_entries);
+    log_info("  %-6s %-4s %-6s %-8s %-8s\n", "Test", "Sub", "Result", "Expected", "Actual");
+    log_info("  %-6s %-4s %-6s %-8s %-8s\n", "------", "----", "------", "--------", "--------");
 
     for (int i = 0; i < num_entries; i++) {
         uint16_t base = RESULTS_BASE + i * RESULT_ENTRY_SIZE;
@@ -490,33 +491,33 @@ void harness_read_results(vicii_test_state_t* state, C64System* c64) {
 
         if (result == RESULT_PASS) {
             state->total_pass++;
-            printf("  %-6d %-4d %-6s   $%02X       $%02X\n",
+            log_info("  %-6d %-4d %-6s   $%02X       $%02X\n",
                    test_num, sub_test, status, expected, actual);
         } else {
             state->total_fail++;
-            printf("  %-6d %-4d \033[1;31m%-6s\033[0m   $%02X       $%02X  ← MISMATCH\n",
+            log_info("  %-6d %-4d \033[1;31m%-6s\033[0m   $%02X       $%02X  ← MISMATCH\n",
                    test_num, sub_test, status, expected, actual);
         }
     }
 }
 
 void harness_summary(const vicii_test_state_t* state) {
-    printf("\n");
-    printf("╔══════════════════════════════════════════════════╗\n");
-    printf("║           VIC-II REGISTER TEST RESULTS           ║\n");
-    printf("╠══════════════════════════════════════════════════╣\n");
-    printf("║  Passed: %-5d                                   ║\n", state->total_pass);
-    printf("║  Failed: %-5d                                   ║\n", state->total_fail);
-    printf("║  Frames: %-5d                                   ║\n", state->frames_run);
-    printf("║  Status: %-40s║\n",
+    log_info("\n");
+    log_info("╔══════════════════════════════════════════════════╗\n");
+    log_info("║           VIC-II REGISTER TEST RESULTS           ║\n");
+    log_info("╠══════════════════════════════════════════════════╣\n");
+    log_info("║  Passed: %-5d                                   ║\n", state->total_pass);
+    log_info("║  Failed: %-5d                                   ║\n", state->total_fail);
+    log_info("║  Frames: %-5d                                   ║\n", state->frames_run);
+    log_info("║  Status: %-40s║\n",
            state->all_done ? "ALL TESTS COMPLETED" :
            (state->frames_run >= state->max_frames ? "TIMED OUT" : "INCOMPLETE"));
-    printf("╚══════════════════════════════════════════════════╝\n");
+    log_info("╚══════════════════════════════════════════════════╝\n");
 
     if (state->total_fail == 0 && state->all_done) {
-        printf("\033[1;32m✓ All VIC-II register tests passed!\033[0m\n");
+        log_info("\033[1;32m✓ All VIC-II register tests passed!\033[0m\n");
     } else if (state->total_fail > 0) {
-        printf("\033[1;31m✗ %d test(s) FAILED — see details above\033[0m\n", state->total_fail);
+        log_info("\033[1;31m✗ %d test(s) FAILED — see details above\033[0m\n", state->total_fail);
     }
 }
 

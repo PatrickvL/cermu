@@ -5,6 +5,7 @@
  * and registration.  Emulation logic to be filled in.
  */
 
+#include "core/cermu.hpp"
 #include "systems/vtech_vz/vtech_vz_system.hpp"
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
@@ -118,7 +119,7 @@ bool VTechVZSystem<V>::apply_configuration() {
 
 template<VZVariant V>
 bool VTechVZSystem<V>::initialize() {
-    printf("%s: Initializing system\n", Traits::name);
+    log_info("%s: Initializing system\n", Traits::name);
     register_board(&board_);
     { size_t slot_idx_ = 0;
       VZ200_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
@@ -133,7 +134,7 @@ bool VTechVZSystem<V>::initialize() {
 
     configure_bus_memory_map();
     if (!load_roms()) {
-        printf("%s: Warning — ROMs not loaded\n", Traits::name);
+        log_info("%s: Warning — ROMs not loaded\n", Traits::name);
     }
 
     register_bus_chips(board_);
@@ -144,7 +145,7 @@ bool VTechVZSystem<V>::initialize() {
     video_port_->bind_frame_output(&last_frame_data_);
 
     system_ready_ = true;
-    printf("%s: System initialized (RAM: %dKB)\n", Traits::name,
+    log_info("%s: System initialized (RAM: %dKB)\n", Traits::name,
            Traits::ram_size / 1024);
     return true;
 }

@@ -6,6 +6,7 @@
  * 0x20-0x7E (96 printable characters).
  */
 
+#include "core/cermu.hpp"
 #include "systems/nes/nes_screen_utils.hpp"
 #include "systems/nes/nes_system.hpp"
 #include <cstring>
@@ -253,7 +254,7 @@ void NesScreenUtils::init_font(PPU* ppu) {
         ppu->ppu_write_byte(0x0010 + row + 8, 0x00);   // Plane 1: zero
     }
 
-    printf("NES: Uploaded 8x8 ASCII font to CHR-RAM (tiles 0x20-0x7F)\n");
+    log_info("NES: Uploaded 8x8 ASCII font to CHR-RAM (tiles 0x20-0x7F)\n");
 }
 
 // ============================================================================

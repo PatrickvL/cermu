@@ -5,6 +5,7 @@
  * and battery-backed SRAM persistence.
  */
 
+#include "core/cermu.hpp"
 #include "systems/nes/cartridge/nes_cartridge.hpp"
 #include "systems/nes/cartridge/nes_mapper_factory.hpp"
 #include "systems/nes/bus/nes_bus.hpp"
@@ -95,7 +96,7 @@ bool Cartridge::load_sram(const std::string& sav_path) {
     if (!f.is_open()) return false;
     f.read(reinterpret_cast<char*>(prg_ram.data()),
            static_cast<std::streamsize>(prg_ram.size()));
-    printf("NES: Loaded SRAM from %s (%zu bytes)\n", sav_path.c_str(), prg_ram.size());
+    log_info("NES: Loaded SRAM from %s (%zu bytes)\n", sav_path.c_str(), prg_ram.size());
     return true;
 }
 
@@ -105,7 +106,7 @@ bool Cartridge::save_sram(const std::string& sav_path) const {
     if (!f.is_open()) return false;
     f.write(reinterpret_cast<const char*>(prg_ram.data()),
             static_cast<std::streamsize>(prg_ram.size()));
-    printf("NES: Saved SRAM to %s (%zu bytes)\n", sav_path.c_str(), prg_ram.size());
+    log_info("NES: Saved SRAM to %s (%zu bytes)\n", sav_path.c_str(), prg_ram.size());
     return true;
 }
 
@@ -144,14 +145,14 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
         if (header.unused[1] != 0 || header.unused[2] != 0 ||
             header.unused[3] != 0 || header.unused[4] != 0) {
             archaic_ines = true;
-            printf("NES: Archaic iNES header detected (garbage in bytes 12-15) — "
+            log_info("NES: Archaic iNES header detected (garbage in bytes 12-15) — "
                    "sanitizing mapper from %d", ((header.mapper2 >> 4) << 4) | (header.mapper1 >> 4));
             header.mapper2 = 0;
             header.prg_ram_size = 0;
             header.tv_system1 = 0;
             header.tv_system2 = 0;
             memset(header.unused, 0, sizeof(header.unused));
-            printf(" to %d\n", (header.mapper1 >> 4));
+            log_info(" to %d\n", (header.mapper1 >> 4));
         }
     }
 
@@ -171,7 +172,7 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
     // mapper from ROM geometry:
     //   - Mapper 0 + CHR > 8KB → Mapper 3 (CNROM, simple CHR bank switch)
     if (archaic_ines && mapper_id == 0 && chr_banks > 1) {
-        printf("NES: Mapper 0 with %dKB CHR — inferring mapper 3 (CNROM)\n",
+        log_info("NES: Mapper 0 with %dKB CHR — inferring mapper 3 (CNROM)\n",
                chr_banks * 8);
         mapper_id = 3;
     }

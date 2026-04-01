@@ -1,3 +1,4 @@
+#include "core/cermu.hpp"
 #include "testing/c64_test_loader.hpp"
 #include "chip/memory/memory_chip.hpp"
 #include <cstdio>
@@ -13,13 +14,13 @@ static uint16_t read_le16(const uint8_t* data) {
 bool c64_test_load_prg_file(const char* filename, RAMChip* ram, 
                             uint16_t* out_load_address, uint16_t* out_sys_address) {
     if (!filename || !ram || !ram->data()) {
-        printf("ERROR: Invalid parameters for PRG loading\n");
+        log_info("ERROR: Invalid parameters for PRG loading\n");
         return false;
     }
 
     FILE* file = fopen(filename, "rb");
     if (!file) {
-        printf("ERROR: Cannot open PRG file: %s\n", filename);
+        log_info("ERROR: Cannot open PRG file: %s\n", filename);
         return false;
     }
 
@@ -29,7 +30,7 @@ bool c64_test_load_prg_file(const char* filename, RAMChip* ram,
     fseek(file, 0, SEEK_SET);
 
     if (file_size < 2) {
-        printf("ERROR: PRG file too small (needs at least 2-byte load address header)\n");
+        log_info("ERROR: PRG file too small (needs at least 2-byte load address header)\n");
         fclose(file);
         return false;
     }
@@ -37,7 +38,7 @@ bool c64_test_load_prg_file(const char* filename, RAMChip* ram,
     // Read 2-byte load address (little-endian)
     uint8_t load_addr_bytes[2];
     if (fread(load_addr_bytes, 1, 2, file) != 2) {
-        printf("ERROR: Failed to read PRG load address\n");
+        log_info("ERROR: Failed to read PRG load address\n");
         fclose(file);
         return false;
     }
@@ -46,7 +47,7 @@ bool c64_test_load_prg_file(const char* filename, RAMChip* ram,
     size_t data_size = file_size - 2;
 
     if (load_address + data_size > 0x10000) {
-        printf("ERROR: PRG file too large for memory (load_addr=$%04X, size=%zu)\n",
+        log_info("ERROR: PRG file too large for memory (load_addr=$%04X, size=%zu)\n",
                load_address, data_size);
         fclose(file);
         return false;
@@ -54,17 +55,17 @@ bool c64_test_load_prg_file(const char* filename, RAMChip* ram,
 
     // Read file data into RAM
     if (fread(&ram->data()[load_address], 1, data_size, file) != data_size) {
-        printf("ERROR: Failed to read PRG file data\n");
+        log_info("ERROR: Failed to read PRG file data\n");
         fclose(file);
         return false;
     }
 
     fclose(file);
 
-    printf("Loaded PRG file: %s\n", filename);
-    printf("  Load address: $%04X\n", load_address);
-    printf("  Data size: %zu bytes\n", data_size);
-    printf("  End address: $%04X\n", (unsigned int)(load_address + data_size - 1));
+    log_info("Loaded PRG file: %s\n", filename);
+    log_info("  Load address: $%04X\n", load_address);
+    log_info("  Data size: %zu bytes\n", data_size);
+    log_info("  End address: $%04X\n", (unsigned int)(load_address + data_size - 1));
 
     if (out_load_address) {
         *out_load_address = load_address;
@@ -74,7 +75,7 @@ bool c64_test_load_prg_file(const char* filename, RAMChip* ram,
     if (out_sys_address) {
         *out_sys_address = c64_test_parse_sys_address(ram, load_address, load_address);
         if (*out_sys_address != 0) {
-            printf("  Found SYS address: $%04X\n", *out_sys_address);
+            log_info("  Found SYS address: $%04X\n", *out_sys_address);
         }
     }
 
@@ -83,13 +84,13 @@ bool c64_test_load_prg_file(const char* filename, RAMChip* ram,
 
 bool c64_test_load_bin_file(const char* filename, RAMChip* ram, uint16_t load_address) {
     if (!filename || !ram || !ram->data()) {
-        printf("ERROR: Invalid parameters for BIN loading\n");
+        log_info("ERROR: Invalid parameters for BIN loading\n");
         return false;
     }
 
     FILE* file = fopen(filename, "rb");
     if (!file) {
-        printf("ERROR: Cannot open BIN file: %s\n", filename);
+        log_info("ERROR: Cannot open BIN file: %s\n", filename);
         return false;
     }
 
@@ -99,7 +100,7 @@ bool c64_test_load_bin_file(const char* filename, RAMChip* ram, uint16_t load_ad
     fseek(file, 0, SEEK_SET);
 
     if (load_address + file_size > 0x10000) {
-        printf("ERROR: BIN file too large for memory (load_addr=$%04X, size=%ld)\n",
+        log_info("ERROR: BIN file too large for memory (load_addr=$%04X, size=%ld)\n",
                load_address, file_size);
         fclose(file);
         return false;
@@ -107,17 +108,17 @@ bool c64_test_load_bin_file(const char* filename, RAMChip* ram, uint16_t load_ad
 
     // Read file data directly into RAM at specified address
     if (fread(&ram->data()[load_address], 1, file_size, file) != (size_t)file_size) {
-        printf("ERROR: Failed to read BIN file data\n");
+        log_info("ERROR: Failed to read BIN file data\n");
         fclose(file);
         return false;
     }
 
     fclose(file);
 
-    printf("Loaded BIN file: %s\n", filename);
-    printf("  Load address: $%04X\n", load_address);
-    printf("  File size: %ld bytes\n", file_size);
-    printf("  End address: $%04X\n", (unsigned int)(load_address + file_size - 1));
+    log_info("Loaded BIN file: %s\n", filename);
+    log_info("  Load address: $%04X\n", load_address);
+    log_info("  File size: %ld bytes\n", file_size);
+    log_info("  End address: $%04X\n", (unsigned int)(load_address + file_size - 1));
 
     return true;
 }
@@ -295,11 +296,11 @@ uint16_t c64_test_parse_sys_address(RAMChip* ram, uint16_t start_address, uint16
                 uint16_t sys_addr = evaluate_basic_expression(ram, expr_buffer, expr_len, start_address);
                 
                 // Debug: print what we're evaluating
-                printf("  BASIC line %u: Evaluating SYS expression (len=%zu, result=%u/$%04X)\n",
+                log_info("  BASIC line %u: Evaluating SYS expression (len=%zu, result=%u/$%04X)\n",
                        line_number, expr_len, sys_addr, sys_addr);
                 
                 if (sys_addr != 0) {
-                    printf("  Found BASIC line %u: SYS %u ($%04X)\n",
+                    log_info("  Found BASIC line %u: SYS %u ($%04X)\n",
                            line_number, sys_addr, sys_addr);
                     return sys_addr;
                 }

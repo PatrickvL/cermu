@@ -14,6 +14,7 @@
  * Reference: cbmconvert lynx.c by Marko Mäkelä.
  */
 
+#include "core/cermu.hpp"
 #include "core/formats/lnx_format.hpp"
 #include "core/formats/format_registry.hpp"
 #include "systems/commodore/petscii.hpp"
@@ -74,7 +75,7 @@ bool commodore_lynx_t::read_directory(commodore_lynx_directory_t* out_dir) const
         pos++;
     }
     if (blkcount == 0) {
-        printf("LNXFormat: Invalid block count\n");
+        log_info("LNXFormat: Invalid block count\n");
         return false;
     }
 
@@ -94,7 +95,7 @@ bool commodore_lynx_t::read_directory(commodore_lynx_directory_t* out_dir) const
         }
     }
     if (!has_lynx_sig) {
-        printf("LNXFormat: LYNX signature not found\n");
+        log_info("LNXFormat: LYNX signature not found\n");
         return false;
     }
     pos++; /* skip CR */
@@ -109,14 +110,14 @@ bool commodore_lynx_t::read_directory(commodore_lynx_directory_t* out_dir) const
     while (pos < size && (buf[pos] == ' ' || buf[pos] == 0x0D)) pos++;
 
     if (fcount == 0 || fcount > LNX_MAX_FILES) {
-        printf("LNXFormat: Invalid file count: %u\n", fcount);
+        log_info("LNXFormat: Invalid file count: %u\n", fcount);
         return false;
     }
 
     out_dir->header_blocks = blkcount;
     out_dir->file_count    = fcount;
 
-    printf("LNXFormat: header_blocks=%u, files=%u, data_start=%u\n",
+    log_info("LNXFormat: header_blocks=%u, files=%u, data_start=%u\n",
            blkcount, fcount, blkcount * 254);
 
     /* Step 3: Parse per-file entries */
@@ -171,7 +172,7 @@ bool commodore_lynx_t::read_directory(commodore_lynx_directory_t* out_dir) const
         else
             entry->data_length = 0;
 
-        printf("LNXFormat: [%u] \"%s\" type=%c blocks=%u lastlen=%u len=%zu off=%zu\n",
+        log_info("LNXFormat: [%u] \"%s\" type=%c blocks=%u lastlen=%u len=%zu off=%zu\n",
                f, entry->filename, ftype, blocks, last_len,
                entry->data_length, entry->data_offset);
 
@@ -194,7 +195,7 @@ bool commodore_lynx_t::extract_file(const commodore_lynx_directory_t* dir,
     const commodore_lynx_entry_t* entry = &dir->entries[entry_idx];
 
     if (entry->data_length < 2) {
-        printf("LNXFormat: File \"%s\" too small (%zu bytes)\n",
+        log_info("LNXFormat: File \"%s\" too small (%zu bytes)\n",
                entry->filename, entry->data_length);
         return false;
     }
@@ -202,7 +203,7 @@ bool commodore_lynx_t::extract_file(const commodore_lynx_directory_t* dir,
     if (entry->data_offset + entry->data_length > data_size) {
         size_t avail = data_size - entry->data_offset;
         if (avail < 2) return false;
-        printf("LNXFormat: File \"%s\" truncated (%zu of %zu bytes available)\n",
+        log_info("LNXFormat: File \"%s\" truncated (%zu of %zu bytes available)\n",
                entry->filename, avail, entry->data_length);
         return commodore_prg_parse(data + entry->data_offset, avail, out_prg);
     }
@@ -227,12 +228,12 @@ bool commodore_lynx_t::extract_all_prgs(commodore_prg_t* out_prgs, int max_prgs,
         if (extract_file(&dir, (int)i, &prg)) {
             out_prgs[*out_count] = prg;
             (*out_count)++;
-            printf("LNXFormat: Extracted PRG \"%s\": $%04X-$%04X (%zu bytes)\n",
+            log_info("LNXFormat: Extracted PRG \"%s\": $%04X-$%04X (%zu bytes)\n",
                    dir.entries[i].filename, prg.load_addr, prg.end_addr, prg.data_size);
         }
     }
 
-    printf("LNXFormat: Extracted %d PRG files\n", *out_count);
+    log_info("LNXFormat: Extracted %d PRG files\n", *out_count);
     return *out_count > 0;
 }
 

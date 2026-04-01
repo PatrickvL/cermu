@@ -2,6 +2,7 @@
  * bombjack_system.cpp — Bomb Jack arcade system implementation
  */
 
+#include "core/cermu.hpp"
 #include "systems/arcade/bombjack/bombjack_system.hpp"
 #include "utils/resistor_dac.hpp"
 #include "core/system_registry.hpp"
@@ -55,7 +56,7 @@ bool BombJackSystem::set_configuration(const SystemConfiguration& config) { conf
 bool BombJackSystem::apply_configuration() { return true; }
 
 bool BombJackSystem::initialize() {
-    printf("Bomb Jack: Initializing arcade system\n");
+    log_info("Bomb Jack: Initializing arcade system\n");
     register_board(&main_board_);
 
     // ── Bind value-typed chips, then create remaining ─────────────────

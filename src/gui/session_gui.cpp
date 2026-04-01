@@ -1,3 +1,4 @@
+#include "core/cermu.hpp"
 #include "gui/session_gui.hpp"
 #include "gui/gl_api.hpp"
 #include "gui/display_pipeline.hpp"
@@ -89,10 +90,10 @@ SessionGUI::SessionGUI(std::unique_ptr<System> system, const char* pending_file)
         // so clear the pending file path — it must not survive into a later
         // system switch (otherwise the new system would try to load it).
         pending_file_path_.clear();
-        printf("SessionGUI created for system: %s\n",
+        log_info("SessionGUI created for system: %s\n",
                system_->get_descriptor().name);
     } else {
-        printf("SessionGUI created without system - launcher will be shown\n");
+        log_info("SessionGUI created without system - launcher will be shown\n");
         launcher_panel_.open();  // Open launcher if no system provided
     }
 }
@@ -537,7 +538,7 @@ void SessionGUI::render_frame() {
         } else if (result) {
             if (cermu::FileDialogInstance()->IsOk()) {
                 std::string filePathName = cermu::FileDialogInstance()->GetFilePathName();
-                printf("User selected file: %s\n", filePathName.c_str());
+                log_info("User selected file: %s\n", filePathName.c_str());
 
                 // Save the dialog's current directory for next time.
                 std::string currentPath = cermu::FileDialogInstance()->GetCurrentPath();
@@ -552,7 +553,7 @@ void SessionGUI::render_frame() {
                 // The format layer's format_read_entire_file() handles
                 // container extraction transparently.
                 std::string vfs_path = VfsFileSystem::to_vfs_path(filePathName);
-                printf("VFS path: %s\n", vfs_path.c_str());
+                log_info("VFS path: %s\n", vfs_path.c_str());
                 load_selected_file(vfs_path);
             } else {
                 // User canceled via Cancel button
@@ -587,18 +588,18 @@ void SessionGUI::render_frame() {
             if (cermu::FileDialogInstance()->IsOk() && pending_drive_insert_) {
                 std::string filePathName = cermu::FileDialogInstance()->GetFilePathName();
                 std::string vfs_path = VfsFileSystem::to_vfs_path(filePathName);
-                printf("Drive insert: user selected file: %s\n", filePathName.c_str());
+                log_info("Drive insert: user selected file: %s\n", filePathName.c_str());
                 if (vfs_path != filePathName) {
-                    printf("Drive insert VFS path: %s\n", vfs_path.c_str());
+                    log_info("Drive insert VFS path: %s\n", vfs_path.c_str());
                 }
                 last_file_path_ = filePathName;
 
                 std::lock_guard<std::mutex> lock(emu_mutex_);
                 if (pending_drive_insert_->insert_disk(vfs_path.c_str())) {
-                    printf("Disk inserted successfully into drive %d: %s\n",
+                    log_info("Disk inserted successfully into drive %d: %s\n",
                            pending_drive_insert_->get_device_number(), filePathName.c_str());
                 } else {
-                    printf("Failed to insert disk into drive %d: %s\n",
+                    log_info("Failed to insert disk into drive %d: %s\n",
                            pending_drive_insert_->get_device_number(), filePathName.c_str());
                 }
             } else {
@@ -1099,7 +1100,7 @@ void SessionGUI::render_menu_bar() {
 
             std::lock_guard<std::mutex> lock(emu_mutex_);
             if (system_->save_screenshot(filename)) {
-                printf("Screenshot saved: %s\n", filename);
+                log_info("Screenshot saved: %s\n", filename);
             }
         }
         ImGui::EndDisabled();
@@ -1837,7 +1838,7 @@ void SessionGUI::reset_emulation() {
         emulation_running_.store(true);
         emulation_paused_.store(false);
         start_emu_thread();
-        printf("System reset\n");
+        log_info("System reset\n");
     }
 }
 
@@ -1857,7 +1858,7 @@ void SessionGUI::step_emulation() {
                 }
             }
         }
-        printf("Single step executed\n");
+        log_info("Single step executed\n");
     }
 }
 
@@ -1983,10 +1984,10 @@ void SessionGUI::allocate_framebuffer() {
                 idx_dec->upload_palette(
                     system_->get_gpu_palette_data(), gpu_palette_size_);
                 signal_decoder_ = std::move(idx_dec);
-                printf("GPU indexed palette rendering enabled (%d colors)\n",
+                log_info("GPU indexed palette rendering enabled (%d colors)\n",
                        gpu_palette_size_);
             } else {
-                printf("GPU indexed palette rendering FAILED\n");
+                log_info("GPU indexed palette rendering FAILED\n");
             }
         }
 
@@ -2007,7 +2008,7 @@ void SessionGUI::allocate_framebuffer() {
                 if (decoder->create()) {
                     signal_decoder_ = std::move(decoder);
                     system_->set_video_bridge_suppressed(true);
-                    printf("GPU signal reconstruction enabled (signal: %s)\n",
+                    log_info("GPU signal reconstruction enabled (signal: %s)\n",
                            signal_type_name(active_signal_type_));
                 }
                 break;
@@ -2024,7 +2025,7 @@ void SessionGUI::allocate_framebuffer() {
                 if (decoder->create()) {
                     signal_decoder_ = std::move(decoder);
                     system_->set_video_bridge_suppressed(true);
-                    printf("GPU signal reconstruction enabled (signal: %s)\n",
+                    log_info("GPU signal reconstruction enabled (signal: %s)\n",
                            signal_type_name(active_signal_type_));
                 }
                 break;
@@ -2053,19 +2054,19 @@ void SessionGUI::allocate_framebuffer() {
             auto panel = std::make_unique<CRTPanel>();
             if (panel->create(crt_w, crt_h)) {
                 display_panel_ = std::move(panel);
-                printf("Display panel: CRT (shader compiled)\n");
+                log_info("Display panel: CRT (shader compiled)\n");
             } else {
                 use_crt_shader_ = false;
-                printf("CRT post-processing shader failed — disabled\n");
+                log_info("CRT post-processing shader failed — disabled\n");
             }
         }
         if (!use_crt_shader_) {
             display_panel_ = std::make_unique<DirectPanel>();
             display_panel_->create(fb_width_, fb_height_);
-            printf("Display panel: Direct\n");
+            log_info("Display panel: Direct\n");
         }
     } else {
-        printf("Allocated %dx%d framebuffer (texture creation deferred until init)\n", fb_width_, fb_height_);
+        log_info("Allocated %dx%d framebuffer (texture creation deferred until init)\n", fb_width_, fb_height_);
     }
 
     // ================================================================
@@ -2084,7 +2085,7 @@ void SessionGUI::allocate_framebuffer() {
                 auto pipeline = std::make_unique<CompositeDisplayPipeline>();
                 pipeline->connect(*port);
                 display_pipeline_ = std::move(pipeline);
-                printf("Display pipeline connected (Composite double-buffer)\n");
+                log_info("Display pipeline connected (Composite double-buffer)\n");
                 break;
             }
             case VideoSignalType::RGB:
@@ -2094,7 +2095,7 @@ void SessionGUI::allocate_framebuffer() {
                 auto pipeline = std::make_unique<RGBDisplayPipeline>();
                 pipeline->connect(*port);
                 display_pipeline_ = std::move(pipeline);
-                printf("Display pipeline connected (RGB double-buffer)\n");
+                log_info("Display pipeline connected (RGB double-buffer)\n");
                 break;
             }
             case VideoSignalType::RGBI: {
@@ -2102,7 +2103,7 @@ void SessionGUI::allocate_framebuffer() {
                 auto pipeline = std::make_unique<RGBIDisplayPipeline>();
                 pipeline->connect(*port);
                 display_pipeline_ = std::move(pipeline);
-                printf("Display pipeline connected (RGBI double-buffer)\n");
+                log_info("Display pipeline connected (RGBI double-buffer)\n");
                 break;
             }
             case VideoSignalType::Vector: {
@@ -2110,7 +2111,7 @@ void SessionGUI::allocate_framebuffer() {
                 auto pipeline = std::make_unique<VectorDisplayPipeline>();
                 pipeline->connect(*port);
                 display_pipeline_ = std::move(pipeline);
-                printf("Display pipeline connected (Vector double-buffer)\n");
+                log_info("Display pipeline connected (Vector double-buffer)\n");
                 break;
             }
             default:
@@ -2137,7 +2138,7 @@ void SessionGUI::teardown_current_system() {
     }
 
     if (system_) {
-        printf("Tearing down current system: %s\n", system_->get_descriptor().name);
+        log_info("Tearing down current system: %s\n", system_->get_descriptor().name);
         system_->shutdown();
         system_ = nullptr;
         session_ = Session{};  // destroy the old session (and the system it owns)
@@ -2158,11 +2159,11 @@ void SessionGUI::teardown_current_system() {
 }
 void SessionGUI::switch_system(const char* system_name, int memory_option, int region_option, const std::map<std::string, bool>* peripherals, const char* pending_file, const std::map<std::string, std::string>* custom_settings) {
     if (!system_name) {
-        printf("ERROR: switch_system called with null system name\n");
+        log_info("ERROR: switch_system called with null system name\n");
         return;
     }
     
-    printf("Switching to system: %s (memory=%d, region=%d)\n", system_name, memory_option, region_option);
+    log_info("Switching to system: %s (memory=%d, region=%d)\n", system_name, memory_option, region_option);
     
     // Reset remembered dialog directory so it defaults to the new system's data folder
     last_file_path_.clear();
@@ -2174,13 +2175,13 @@ void SessionGUI::switch_system(const char* system_name, int memory_option, int r
     auto new_system = SystemRegistry::instance().create_system_by_name(system_name);
     
     if (!new_system) {
-        printf("ERROR: Failed to create system: %s\n", system_name);
+        log_info("ERROR: Failed to create system: %s\n", system_name);
         return;
     }
 
     system_ = session_.add_system(system_name, std::move(new_system));
     
-    printf("Created system: %s (%s)\n",
+    log_info("Created system: %s (%s)\n",
            system_->get_descriptor().name,
            system_->get_descriptor().short_name);
     
@@ -2193,26 +2194,26 @@ void SessionGUI::switch_system(const char* system_name, int memory_option, int r
         // Apply peripheral selections if provided
         if (peripherals) {
             config.enabled_peripherals = *peripherals;
-            printf("Applied %zu peripheral selections\n", peripherals->size());
+            log_info("Applied %zu peripheral selections\n", peripherals->size());
         }
         
         // Apply custom settings if provided
         if (custom_settings) {
             config.custom_settings = *custom_settings;
             for (const auto& [key, value] : *custom_settings) {
-                printf("Custom setting: %s = %s\n", key.c_str(), value.c_str());
+                log_info("Custom setting: %s = %s\n", key.c_str(), value.c_str());
             }
         }
         
         if (!system_->set_configuration(config)) {
-            printf("WARNING: Failed to set configuration\n");
+            log_info("WARNING: Failed to set configuration\n");
         } else {
-            printf("Applied configuration: memory option %d, region option %d\n",
+            log_info("Applied configuration: memory option %d, region option %d\n",
                    config.memory_option_index, config.region_option_index);
         }
         
         if (!system_->apply_configuration()) {
-            printf("WARNING: Failed to apply configuration\n");
+            log_info("WARNING: Failed to apply configuration\n");
         }
     }
     
@@ -2228,7 +2229,7 @@ void SessionGUI::switch_system(const char* system_name, int memory_option, int r
             auto scan = scan_archive(pending_file);
             if (!scan.loadable_files.empty()) {
                 resolved_pending = scan.loadable_files[0].full_path;
-                printf("Archive resolved to: %s\n", resolved_pending.c_str());
+                log_info("Archive resolved to: %s\n", resolved_pending.c_str());
             }
         }
         system_->apply_file_configuration(resolved_pending.c_str());
@@ -2236,7 +2237,7 @@ void SessionGUI::switch_system(const char* system_name, int memory_option, int r
     
     // Initialize the system
     if (!system_->initialize()) {
-        printf("ERROR: Failed to initialize %s system\n",
+        log_info("ERROR: Failed to initialize %s system\n",
                system_->get_descriptor().name);
         system_ = nullptr;
         session_ = Session{};
@@ -2257,12 +2258,12 @@ void SessionGUI::switch_system(const char* system_name, int memory_option, int r
 
     // Load pending file after system is fully initialized
     if (pending_file) {
-        printf("Loading pending file into %s: %s\n",
+        log_info("Loading pending file into %s: %s\n",
                system_->get_descriptor().short_name, resolved_pending.c_str());
         if (system_->load_file(resolved_pending.c_str())) {
-            printf("Pending file loaded successfully\n");
+            log_info("Pending file loaded successfully\n");
         } else {
-            printf("Failed to load pending file: %s\n", resolved_pending.c_str());
+            log_info("Failed to load pending file: %s\n", resolved_pending.c_str());
         }
     }
 
@@ -2276,7 +2277,7 @@ void SessionGUI::switch_system(const char* system_name, int memory_option, int r
     // Update window title with system name and loaded program
     update_window_title();
 
-    printf("Successfully switched to %s\n", system_->get_descriptor().name);
+    log_info("Successfully switched to %s\n", system_->get_descriptor().name);
 }
 
 // ============================================================================
@@ -2299,7 +2300,7 @@ void SessionGUI::load_file_dialog() {
 // ============================================================================
 
 void SessionGUI::handle_dropped_file(const std::string& filepath) {
-    printf("Drop received: %s\n", filepath.c_str());
+    log_info("Drop received: %s\n", filepath.c_str());
 
     // Resolve archives: if the dropped file is a .zip/.7z/etc., find the
     // first loadable file inside it — same logic as switch_system().
@@ -2314,13 +2315,13 @@ void SessionGUI::handle_dropped_file(const std::string& filepath) {
         // and avoids false positives from single-file probes.
         auto probe = rom_set_probe(filepath.c_str());
         if (probe.confidence >= 0.5f) {
-            printf("ROM set identified: %s (confidence: %.2f)\n",
+            log_info("ROM set identified: %s (confidence: %.2f)\n",
                    probe.system_name.c_str(), probe.confidence);
             switch_system(probe.system_name.c_str());
             if (system_) {
                 stop_emu_thread();
                 if (system_->load_rom_set(probe.rom_match)) {
-                    printf("ROM set loaded successfully\n");
+                    log_info("ROM set loaded successfully\n");
                     emulation_running_.store(true);
                     emulation_paused_.store(false);
                 }
@@ -2334,9 +2335,9 @@ void SessionGUI::handle_dropped_file(const std::string& filepath) {
         auto scan = scan_archive(filepath.c_str());
         if (!scan.loadable_files.empty()) {
             resolved = scan.loadable_files[0].full_path;
-            printf("Archive resolved to: %s\n", resolved.c_str());
+            log_info("Archive resolved to: %s\n", resolved.c_str());
         } else {
-            printf("WARNING: Archive contains no loadable files: %s\n",
+            log_info("WARNING: Archive contains no loadable files: %s\n",
                    filepath.c_str());
             return;
         }
@@ -2346,7 +2347,7 @@ void SessionGUI::handle_dropped_file(const std::string& filepath) {
     size_t file_size = 0;
     uint8_t* data = format_read_entire_file(resolved.c_str(), &file_size);
     if (!data) {
-        printf("WARNING: Failed to read dropped file: %s\n", resolved.c_str());
+        log_info("WARNING: Failed to read dropped file: %s\n", resolved.c_str());
         return;
     }
 
@@ -2362,13 +2363,13 @@ void SessionGUI::handle_dropped_file(const std::string& filepath) {
         if (!parent.empty()) {
             auto probe = rom_set_probe(parent.c_str());
             if (probe.confidence >= 0.5f) {
-                printf("ROM set identified via parent: %s (confidence: %.2f)\n",
+                log_info("ROM set identified via parent: %s (confidence: %.2f)\n",
                        probe.system_name.c_str(), probe.confidence);
                 switch_system(probe.system_name.c_str());
                 if (system_) {
                     stop_emu_thread();
                     if (system_->load_rom_set(probe.rom_match)) {
-                        printf("ROM set loaded successfully\n");
+                        log_info("ROM set loaded successfully\n");
                         emulation_running_.store(true);
                         emulation_paused_.store(false);
                     }
@@ -2378,19 +2379,19 @@ void SessionGUI::handle_dropped_file(const std::string& filepath) {
                 return;
             }
         }
-        printf("WARNING: Could not identify system for dropped file: %s\n",
+        log_info("WARNING: Could not identify system for dropped file: %s\n",
                resolved.c_str());
         return;
     }
 
-    printf("Identified system: %s (confidence: %.2f)\n",
+    log_info("Identified system: %s (confidence: %.2f)\n",
            match.system_name.c_str(), match.confidence);
 
     // --- No system running, or different system: full switch ---
     if (!system_ ||
         match.system_name != system_->get_descriptor().short_name) {
         if (system_) {
-            printf("Switching from %s to %s for dropped file\n",
+            log_info("Switching from %s to %s for dropped file\n",
                    system_->get_descriptor().short_name,
                    match.system_name.c_str());
         }
@@ -2412,7 +2413,7 @@ void SessionGUI::handle_dropped_file(const std::string& filepath) {
             ? traits.memory_options[cur_cfg.memory_option_index].name : "?";
         const char* req_mem = (match.configuration.memory_option_index < (int)traits.memory_options.size())
             ? traits.memory_options[match.configuration.memory_option_index].name : "?";
-        printf("WARNING: Dropped file expects memory config '%s' but system is "
+        log_info("WARNING: Dropped file expects memory config '%s' but system is "
                "configured as '%s' — continuing with current config\n",
                req_mem, cur_mem);
     }
@@ -2422,7 +2423,7 @@ void SessionGUI::handle_dropped_file(const std::string& filepath) {
             ? traits.video_standard_configs[cur_cfg.region_option_index].name : "?";
         const char* req_rgn = (match.configuration.region_option_index < (int)traits.video_standard_configs.size())
             ? traits.video_standard_configs[match.configuration.region_option_index].name : "?";
-        printf("WARNING: Dropped file expects region '%s' but system is "
+        log_info("WARNING: Dropped file expects region '%s' but system is "
                "configured as '%s' — continuing with current config\n",
                req_rgn, cur_rgn);
     }
@@ -2493,7 +2494,7 @@ void SessionGUI::open_file_dialog(const char* dialog_key, const char* title) {
         char data_root[1024];
         if (system_config_discover_data_root(candidates.data(), data_root, sizeof(data_root))) {
             default_path = data_root;
-            printf("File dialog defaulting to data folder: %s\n", data_root);
+            log_info("File dialog defaulting to data folder: %s\n", data_root);
         }
     }
     
@@ -2509,7 +2510,7 @@ void SessionGUI::open_file_dialog(const char* dialog_key, const char* title) {
 #else
     (void)dialog_key;
     (void)title;
-    printf("ImGuiFileDialog not available - file loading disabled\n");
+    log_info("ImGuiFileDialog not available - file loading disabled\n");
 #endif
 }
 
@@ -2522,7 +2523,7 @@ void SessionGUI::load_selected_file(const std::string& resolved_path,
     if (!system_) return;
     (void)display_path;  // TODO: use for window title when loading from containers
 
-    printf("Loading file: %s\n", resolved_path.c_str());
+    log_info("Loading file: %s\n", resolved_path.c_str());
 
     // Check if this is a container/streamable format that should be
     // swap-attached to a storage device rather than loaded into RAM.
@@ -2534,13 +2535,13 @@ void SessionGUI::load_selected_file(const std::string& resolved_path,
     if (fmt && (fmt->capabilities & (FORMAT_CAP_VOLUME | FORMAT_CAP_STREAMABLE))) {
         std::lock_guard<std::mutex> lock(emu_mutex_);
         if (system_->attach_media(resolved_path.c_str())) {
-            printf("Media swap-attached: %s\n", resolved_path.c_str());
+            log_info("Media swap-attached: %s\n", resolved_path.c_str());
             update_window_title();
             return;
         }
         // attach_media returned false — fall through to full load path
         // (e.g. system has no matching storage device)
-        printf("No storage device accepted the media — falling through to full load\n");
+        log_info("No storage device accepted the media — falling through to full load\n");
     }
 
     // Stop emulation thread while loading for exclusive system access
@@ -2556,12 +2557,12 @@ void SessionGUI::load_selected_file(const std::string& resolved_path,
 
     // Load the file (VFS-aware — handles archive paths transparently)
     if (system_->load_file(resolved_path.c_str())) {
-        printf("File loaded successfully: %s\n", resolved_path.c_str());
+        log_info("File loaded successfully: %s\n", resolved_path.c_str());
         update_window_title();
         emulation_running_.store(true);
         emulation_paused_.store(false);
     } else {
-        printf("Failed to load file: %s\n", resolved_path.c_str());
+        log_info("Failed to load file: %s\n", resolved_path.c_str());
         if (was_running) {
             emulation_running_.store(true);
             emulation_paused_.store(false);
@@ -2837,7 +2838,7 @@ void SessionGUI::open_audio_device() {
 
     const AudioTraits& traits = system_->get_audio_traits();
     if (traits.format == AudioFormat::NONE || traits.sample_rate_hz == 0) {
-        printf("Audio: system reports no audio\n");
+        log_info("Audio: system reports no audio\n");
         return;
     }
 
@@ -2853,12 +2854,12 @@ void SessionGUI::open_audio_device() {
     audio_device_ = SDL_OpenAudioDevice(nullptr, 0, &want, &have,
                                          SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
     if (audio_device_ == 0) {
-        printf("Audio: SDL_OpenAudioDevice failed: %s\n", SDL_GetError());
+        log_info("Audio: SDL_OpenAudioDevice failed: %s\n", SDL_GetError());
         return;
     }
 
     audio_sample_rate_ = have.freq;
-    printf("Audio: opened device — requested %d Hz, got %d Hz (buffer %d samples)\n",
+    log_info("Audio: opened device — requested %d Hz, got %d Hz (buffer %d samples)\n",
            want.freq, have.freq, have.samples);
 
     // Initialize speaker simulation filter chain at the negotiated sample rate

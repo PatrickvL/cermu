@@ -1,3 +1,4 @@
+#include "core/cermu.hpp"
 #include "testing/c64_screenshot.hpp"
 #include <cstdio>
 #include <cstdlib>
@@ -166,7 +167,7 @@ bool analyze_reference_image(const std::string& reference_png, ReferenceImageInf
     unsigned char* img_data = stbi_load(reference_png.c_str(), &width, &height, &channels, 4);
     
     if (!img_data) {
-        fprintf(stderr, "ERROR: Failed to load reference image: %s\n", reference_png.c_str());
+        log_error("ERROR: Failed to load reference image: %s\n", reference_png.c_str());
         return false;
     }
     
@@ -184,14 +185,14 @@ bool analyze_reference_image(const std::string& reference_png, ReferenceImageInf
     info.has_palette = !info.palette.empty();
     
     if (info.borders.detected) {
-        printf("  Border detection: L=%d R=%d T=%d B=%d (color=0x%06X)\n",
+        log_info("  Border detection: L=%d R=%d T=%d B=%d (color=0x%06X)\n",
                info.borders.left_border, info.borders.right_border,
                info.borders.top_border, info.borders.bottom_border,
                info.borders.border_color & 0x00FFFFFF);
     }
     
     if (info.has_palette) {
-        printf("  Palette extracted: %zu unique colors\n", info.palette.size());
+        log_info("  Palette extracted: %zu unique colors\n", info.palette.size());
     }
     
     stbi_image_free(img_data);
@@ -211,7 +212,7 @@ bool compare_png_images(const std::string& generated_png,
     unsigned char* gen_data = stbi_load(generated_png.c_str(), &gen_width, &gen_height, 
                                        &gen_channels, 4); // Force RGBA
     if (!gen_data) {
-        fprintf(stderr, "ERROR: Failed to load generated PNG: %s\n", generated_png.c_str());
+        log_error("ERROR: Failed to load generated PNG: %s\n", generated_png.c_str());
         return false;
     }
 
@@ -220,14 +221,14 @@ bool compare_png_images(const std::string& generated_png,
     unsigned char* ref_data = stbi_load(reference_png.c_str(), &ref_width, &ref_height, 
                                        &ref_channels, 4); // Force RGBA
     if (!ref_data) {
-        fprintf(stderr, "ERROR: Failed to load reference PNG: %s\n", reference_png.c_str());
+        log_error("ERROR: Failed to load reference PNG: %s\n", reference_png.c_str());
         stbi_image_free(gen_data);
         return false;
     }
 
     // Check dimensions match
     if (gen_width != ref_width || gen_height != ref_height) {
-        fprintf(stderr, "ERROR: Image dimensions mismatch: generated %dx%d vs reference %dx%d\n",
+        log_error("ERROR: Image dimensions mismatch: generated %dx%d vs reference %dx%d\n",
                 gen_width, gen_height, ref_width, ref_height);
         stbi_image_free(gen_data);
         stbi_image_free(ref_data);
@@ -293,7 +294,7 @@ bool compare_png_images(const std::string& generated_png,
     bool match = (diff_count <= max_diff_pixels);
     
     if (!match) {
-        fprintf(stderr, "Image comparison failed: %d pixels differ (threshold: %d, max_allowed: %d, palette: %s)\n",
+        log_error("Image comparison failed: %d pixels differ (threshold: %d, max_allowed: %d, palette: %s)\n",
                 diff_count, diff_threshold, max_diff_pixels, use_palette ? "yes" : "no");
     }
     

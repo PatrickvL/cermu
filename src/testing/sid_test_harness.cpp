@@ -5,6 +5,7 @@
 // See sid_test_harness.h for the full API and format documentation.
 // =============================================================================
 
+#include "core/cermu.hpp"
 #include "testing/sid_test_harness.hpp"
 #include <algorithm>
 #include <cctype>
@@ -494,25 +495,25 @@ int run_script(harness_t* h, const test_script_t* script) {
 void print_results(const harness_t* h, const test_script_t* script) {
     if (!h) return;
 
-    printf("\n");
+    log_info("\n");
     if (script && !script->name.empty()) {
-        printf("═══ Test: %s ═══\n", script->name.c_str());
+        log_info("═══ Test: %s ═══\n", script->name.c_str());
     }
     if (script && !script->description.empty()) {
-        printf("    %s\n", script->description.c_str());
+        log_info("    %s\n", script->description.c_str());
     }
 
     for (const auto& r : h->results) {
         if (r.type == result_type_t::INFO) {
-            printf("  [INFO]  %s\n", r.message);
+            log_info("  [INFO]  %s\n", r.message);
         } else if (r.type == result_type_t::FAIL) {
-            printf("  [FAIL]  Line %d: %s\n", r.line_number, r.message);
+            log_info("  [FAIL]  Line %d: %s\n", r.line_number, r.message);
         } else if (h->verbose) {
-            printf("  [PASS]  Line %d: %s\n", r.line_number, r.message);
+            log_info("  [PASS]  Line %d: %s\n", r.line_number, r.message);
         }
     }
 
-    printf("  Result: %d passed, %d failed\n\n", h->pass_count, h->fail_count);
+    log_info("  Result: %d passed, %d failed\n\n", h->pass_count, h->fail_count);
 }
 
 void print_trace(const harness_t* h, uint32_t start_cycle, uint32_t count) {
@@ -521,9 +522,9 @@ void print_trace(const harness_t* h, uint32_t start_cycle, uint32_t count) {
     uint32_t end = count > 0 ? std::min(start_cycle + count, (uint32_t)h->trace.size())
                              : (uint32_t)h->trace.size();
 
-    printf("Trace [cycle: OSC3 ENV3]:\n");
+    log_info("Trace [cycle: OSC3 ENV3]:\n");
     for (uint32_t i = start_cycle; i < end; i++) {
-        printf("  %8u: OSC3=%02X ENV3=%02X\n",
+        log_info("  %8u: OSC3=%02X ENV3=%02X\n",
                i, h->trace[i].osc3, h->trace[i].env3);
     }
 }
@@ -584,7 +585,7 @@ int compare_traces(const harness_t* h, const std::vector<trace_entry_t>& ref,
         if (h->trace[i].osc3 != ref[i].osc3 || h->trace[i].env3 != ref[i].env3) {
             mismatches++;
             if (mismatches <= 20) { // Limit output
-                printf("  Mismatch at cycle %u: OSC3 got %02X ref %02X | ENV3 got %02X ref %02X\n",
+                log_info("  Mismatch at cycle %u: OSC3 got %02X ref %02X | ENV3 got %02X ref %02X\n",
                        i, h->trace[i].osc3, ref[i].osc3, h->trace[i].env3, ref[i].env3);
             }
         }
@@ -885,11 +886,11 @@ int test_noise_waveform(harness_t* h) {
             }
         }
         if (all_same) {
-            printf("  [FAIL]  Noise LFSR not advancing: all snapshots = 0x%02X\n",
+            log_info("  [FAIL]  Noise LFSR not advancing: all snapshots = 0x%02X\n",
                    h->snapshots[0].osc3);
             failures++;
         } else {
-            printf("  [PASS]  Noise LFSR producing varying output\n");
+            log_info("  [PASS]  Noise LFSR producing varying output\n");
         }
     }
 
@@ -967,9 +968,9 @@ int test_noise_lfsr_sequence(harness_t* h) {
     // Verify internal LFSR state matches reference
     uint32_t actual_lfsr = h->sid->voice3.noise_lfsr;
     if (actual_lfsr == ref_lfsr) {
-        printf("  [PASS]  LFSR state after 100 cycles: 0x%06X (matches reference)\n", actual_lfsr);
+        log_info("  [PASS]  LFSR state after 100 cycles: 0x%06X (matches reference)\n", actual_lfsr);
     } else {
-        printf("  [FAIL]  LFSR state: expected 0x%06X, got 0x%06X\n", ref_lfsr, actual_lfsr);
+        log_info("  [FAIL]  LFSR state: expected 0x%06X, got 0x%06X\n", ref_lfsr, actual_lfsr);
         failures++;
     }
 
@@ -1054,33 +1055,33 @@ int test_envelope_attack(harness_t* h) {
 
         // Early attack: should have incremented a few times
         if (env_early > 0 && env_early < 20) {
-            printf("  [PASS]  Early attack ENV3=%u (expected 1-19)\n", env_early);
+            log_info("  [PASS]  Early attack ENV3=%u (expected 1-19)\n", env_early);
         } else if (env_early == 0) {
-            printf("  [FAIL]  Attack not started: ENV3=0 after 50 cycles\n");
+            log_info("  [FAIL]  Attack not started: ENV3=0 after 50 cycles\n");
             failures++;
         } else {
-            printf("  [INFO]  Early attack ENV3=%u (higher than expected, pipeline variation)\n", env_early);
+            log_info("  [INFO]  Early attack ENV3=%u (higher than expected, pipeline variation)\n", env_early);
         }
 
         // Full attack: should be at 0xFF
         if (env_full == 0xFF) {
-            printf("  [PASS]  Full attack reached: ENV3=0xFF\n");
+            log_info("  [PASS]  Full attack reached: ENV3=0xFF\n");
         } else if (env_full >= 0xF0) {
-            printf("  [PASS]  Near-full attack: ENV3=0x%02X (pipeline timing)\n", env_full);
+            log_info("  [PASS]  Near-full attack: ENV3=0x%02X (pipeline timing)\n", env_full);
         } else {
-            printf("  [FAIL]  Attack incomplete: ENV3=0x%02X (expected 0xFF)\n", env_full);
+            log_info("  [FAIL]  Attack incomplete: ENV3=0x%02X (expected 0xFF)\n", env_full);
             failures++;
         }
 
         // Medium attack: should show a few increments at rate 2 (period 63)
         // After 200 cycles at period 63: ~3 rate ticks → ~2-3 increments
         if (env_med > 0 && env_med < 10) {
-            printf("  [PASS]  Medium attack ENV3=%u at rate 2 (expected 1-9)\n", env_med);
+            log_info("  [PASS]  Medium attack ENV3=%u at rate 2 (expected 1-9)\n", env_med);
         } else if (env_med == 0) {
-            printf("  [FAIL]  Medium attack not started: ENV3=0 after 200 cycles\n");
+            log_info("  [FAIL]  Medium attack not started: ENV3=0 after 200 cycles\n");
             failures++;
         } else {
-            printf("  [INFO]  Medium attack ENV3=%u (pipeline variation)\n", env_med);
+            log_info("  [INFO]  Medium attack ENV3=%u (pipeline variation)\n", env_med);
         }
     }
 
@@ -1133,15 +1134,15 @@ int test_envelope_decay_sustain(harness_t* h) {
         uint8_t env2 = h->snapshots[1].env3;
         // Allow small tolerance for the nonlinear decay approach
         if (env1 >= 0x80 && env1 <= 0x90) {
-            printf("  [PASS]  Envelope reached sustain region: ENV3=0x%02X\n", env1);
+            log_info("  [PASS]  Envelope reached sustain region: ENV3=0x%02X\n", env1);
         } else {
-            printf("  [FAIL]  Envelope not at sustain: ENV3=0x%02X (expected ~0x88)\n", env1);
+            log_info("  [FAIL]  Envelope not at sustain: ENV3=0x%02X (expected ~0x88)\n", env1);
             failures++;
         }
         if (env1 == env2) {
-            printf("  [PASS]  Sustain held steady at ENV3=0x%02X\n", env2);
+            log_info("  [PASS]  Sustain held steady at ENV3=0x%02X\n", env2);
         } else {
-            printf("  [FAIL]  Sustain not stable: 0x%02X → 0x%02X\n", env1, env2);
+            log_info("  [FAIL]  Sustain not stable: 0x%02X → 0x%02X\n", env1, env2);
             failures++;
         }
     }
@@ -1188,16 +1189,16 @@ int test_envelope_release(harness_t* h) {
         uint8_t after = h->snapshots[1].env3;
 
         if (before >= 0xF0) {
-            printf("  [PASS]  Envelope at sustain max: ENV3=0x%02X\n", before);
+            log_info("  [PASS]  Envelope at sustain max: ENV3=0x%02X\n", before);
         } else {
-            printf("  [FAIL]  Envelope didn't reach max: ENV3=0x%02X\n", before);
+            log_info("  [FAIL]  Envelope didn't reach max: ENV3=0x%02X\n", before);
             failures++;
         }
 
         if (after == 0x00) {
-            printf("  [PASS]  Envelope released to zero: ENV3=0x%02X\n", after);
+            log_info("  [PASS]  Envelope released to zero: ENV3=0x%02X\n", after);
         } else {
-            printf("  [FAIL]  Envelope didn't reach zero: ENV3=0x%02X\n", after);
+            log_info("  [FAIL]  Envelope didn't reach zero: ENV3=0x%02X\n", after);
             failures++;
         }
     }
@@ -1257,9 +1258,9 @@ int test_envelope_adsr_bug(harness_t* h) {
     // This test documents the behavior — if the rate counter resets on
     // retrigger, the behavior differs from real hardware.
     if (h->snapshots.size() >= 2) {
-        printf("  [INFO]  Pre-retrigger ENV3: 0x%02X, Post-retrigger+100cyc ENV3: 0x%02X\n",
+        log_info("  [INFO]  Pre-retrigger ENV3: 0x%02X, Post-retrigger+100cyc ENV3: 0x%02X\n",
                h->snapshots[0].env3, h->snapshots[1].env3);
-        printf("  [INFO]  (ADSR bug: rate counter should persist across gate transitions)\n");
+        log_info("  [INFO]  (ADSR bug: rate counter should persist across gate transitions)\n");
     }
 
     return failures;
@@ -1315,16 +1316,16 @@ int test_ring_modulation(harness_t* h) {
     print_results(h, &script);
 
     if (h->snapshots.size() >= 3) {
-        printf("  [INFO]  Ring mod snapshots:\n");
-        printf("  [INFO]    V2 MSB=0, early:  OSC3=0x%02X\n", h->snapshots[0].osc3);
-        printf("  [INFO]    V2 MSB transition: OSC3=0x%02X\n", h->snapshots[1].osc3);
-        printf("  [INFO]    V2 MSB=1, after:   OSC3=0x%02X\n", h->snapshots[2].osc3);
+        log_info("  [INFO]  Ring mod snapshots:\n");
+        log_info("  [INFO]    V2 MSB=0, early:  OSC3=0x%02X\n", h->snapshots[0].osc3);
+        log_info("  [INFO]    V2 MSB transition: OSC3=0x%02X\n", h->snapshots[1].osc3);
+        log_info("  [INFO]    V2 MSB=1, after:   OSC3=0x%02X\n", h->snapshots[2].osc3);
 
         // With ring mod, the output should differ between MSB=0 and MSB=1 phases
         if (h->snapshots[0].osc3 != h->snapshots[2].osc3) {
-            printf("  [PASS]  Ring modulation changes OSC3 output\n");
+            log_info("  [PASS]  Ring modulation changes OSC3 output\n");
         } else {
-            printf("  [FAIL]  Ring modulation has no effect on OSC3\n");
+            log_info("  [FAIL]  Ring modulation has no effect on OSC3\n");
             failures++;
         }
     }
@@ -1378,12 +1379,12 @@ int test_oscillator_sync(harness_t* h) {
     print_results(h, &script);
 
     if (h->snapshots.size() >= 3) {
-        printf("  [INFO]  Sync snapshots:\n");
-        printf("  [INFO]    Pre-sync (cycle 4096):  ACC2=%06X, V3 OSC3=0x%02X\n",
+        log_info("  [INFO]  Sync snapshots:\n");
+        log_info("  [INFO]    Pre-sync (cycle 4096):  ACC2=%06X, V3 OSC3=0x%02X\n",
                h->snapshots[0].acc[1], h->snapshots[0].osc3);
-        printf("  [INFO]    At sync (cycle 32768): ACC2=%06X, V3 OSC3=0x%02X\n",
+        log_info("  [INFO]    At sync (cycle 32768): ACC2=%06X, V3 OSC3=0x%02X\n",
                h->snapshots[1].acc[1], h->snapshots[1].osc3);
-        printf("  [INFO]    Post-sync:              ACC2=%06X, V3 OSC3=0x%02X\n",
+        log_info("  [INFO]    Post-sync:              ACC2=%06X, V3 OSC3=0x%02X\n",
                h->snapshots[2].acc[1], h->snapshots[2].osc3);
     }
 
@@ -1449,11 +1450,11 @@ int test_test_bit(harness_t* h) {
     print_results(h, &script);
 
     if (h->snapshots.size() >= 2) {
-        printf("  [INFO]  Pre-test LFSR: 0x%06X, Post-test LFSR: 0x%06X\n",
+        log_info("  [INFO]  Pre-test LFSR: 0x%06X, Post-test LFSR: 0x%06X\n",
                h->snapshots[0].acc[2], // Not the LFSR but we capture acc
                h->snapshots[1].acc[2]);
         // Check the actual LFSR via internal state
-        printf("  [INFO]  Voice 3 LFSR = 0x%06X (expected 0x7FFFFF after test bit)\n",
+        log_info("  [INFO]  Voice 3 LFSR = 0x%06X (expected 0x7FFFFF after test bit)\n",
                h->sid->voice3.noise_lfsr);
     }
 
@@ -1511,11 +1512,11 @@ int test_combined_waveforms(harness_t* h) {
     print_results(h, &script);
 
     // Print all combined waveform outputs
-    printf("  Combined waveform OSC3 values (AND approximation):\n");
+    log_info("  Combined waveform OSC3 values (AND approximation):\n");
     size_t pair_idx = 0;
     for (const auto& snap : h->snapshots) {
         if (pair_idx < 6) {
-            printf("    %-24s OSC3=0x%02X\n", pairs[pair_idx].name, snap.osc3);
+            log_info("    %-24s OSC3=0x%02X\n", pairs[pair_idx].name, snap.osc3);
         }
         pair_idx++;
     }
@@ -1586,12 +1587,12 @@ int test_resid_rate_counter_15bit(harness_t* h) {
     if (h->snapshots.size() >= 1) {
         uint8_t env = h->snapshots[0].env3;
         if (env > 0 && env < 50) {
-            printf("  [PASS]  Post-wrap ENV3=%u (expected ~24 given wrap delay)\n", env);
+            log_info("  [PASS]  Post-wrap ENV3=%u (expected ~24 given wrap delay)\n", env);
         } else if (env == 0) {
-            printf("  [FAIL]  ENV3=0, rate counter may have stalled\n");
+            log_info("  [FAIL]  ENV3=0, rate counter may have stalled\n");
             failures++;
         } else {
-            printf("  [FAIL]  ENV3=%u, too high — rate counter not wrapping (missing ADSR delay)\n", env);
+            log_info("  [FAIL]  ENV3=%u, too high — rate counter not wrapping (missing ADSR delay)\n", env);
             failures++;
         }
     }
@@ -1677,9 +1678,9 @@ int test_resid_lfsr_reset_value(harness_t* h) {
     // Also check internal state
     uint32_t lfsr = h->sid->voice3.noise_lfsr;
     if (lfsr == 0x7FFFFE) {
-        printf("  [PASS]  Internal LFSR = 0x%06X (matches reSID)\n", lfsr);
+        log_info("  [PASS]  Internal LFSR = 0x%06X (matches reSID)\n", lfsr);
     } else {
-        printf("  [FAIL]  Internal LFSR = 0x%06X (expected 0x7FFFFE)\n", lfsr);
+        log_info("  [FAIL]  Internal LFSR = 0x%06X (expected 0x7FFFFE)\n", lfsr);
         failures++;
     }
 
@@ -1797,11 +1798,11 @@ int test_resid_gate_retrigger(harness_t* h) {
 
     if (h->snapshots.size() >= 1) {
         uint8_t mid = h->snapshots[0].env3;
-        printf("  [INFO]  Mid-release envelope: 0x%02X (retrigger resumes from here)\n", mid);
+        log_info("  [INFO]  Mid-release envelope: 0x%02X (retrigger resumes from here)\n", mid);
         if (mid > 0 && mid < 0xFF) {
-            printf("  [PASS]  Release produced partial decay before retrigger\n");
+            log_info("  [PASS]  Release produced partial decay before retrigger\n");
         } else {
-            printf("  [WARN]  Unexpected mid-release level\n");
+            log_info("  [WARN]  Unexpected mid-release level\n");
         }
     }
 
@@ -1865,9 +1866,9 @@ int test_resid_hold_zero(harness_t* h) {
 int run_all_builtin_tests(harness_t* h, bool verbose) {
     if (!h) return -1;
 
-    printf("╔══════════════════════════════════════════════════════════════╗\n");
-    printf("║           SID MOS6581 Digital Verification Suite            ║\n");
-    printf("╚══════════════════════════════════════════════════════════════╝\n\n");
+    log_info("╔══════════════════════════════════════════════════════════════╗\n");
+    log_info("║           SID MOS6581 Digital Verification Suite            ║\n");
+    log_info("╚══════════════════════════════════════════════════════════════╝\n\n");
 
     h->verbose = verbose;
 
@@ -1917,14 +1918,14 @@ int run_all_builtin_tests(harness_t* h, bool verbose) {
         if (f == 0) tests_passed++;
     }
 
-    printf("══════════════════════════════════════════════════════════════\n");
-    printf("  TOTAL: %d/%d test categories passed", tests_passed, total_tests);
+    log_info("══════════════════════════════════════════════════════════════\n");
+    log_info("  TOTAL: %d/%d test categories passed", tests_passed, total_tests);
     if (total_failures > 0) {
-        printf(" (%d individual failures)\n", total_failures);
+        log_info(" (%d individual failures)\n", total_failures);
     } else {
-        printf("\n");
+        log_info("\n");
     }
-    printf("══════════════════════════════════════════════════════════════\n\n");
+    log_info("══════════════════════════════════════════════════════════════\n\n");
 
     return total_failures;
 }

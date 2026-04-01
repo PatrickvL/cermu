@@ -92,7 +92,7 @@ static bool search_upward_for_data(const char* start_dir, const char* system_nam
         else if (dir_exists(test_path)) {
             strncpy(out_path, test_path, path_size - 1);
             out_path[path_size - 1] = '\0';
-            printf("Data root discovered: %s\n", out_path);
+            log_info("Data root discovered: %s\n", out_path);
             return true;
         }
 
@@ -121,7 +121,7 @@ static bool search_upward_for_roms(const char* start_dir, const char* system_nam
         else if (dir_exists(test_path)) {
             strncpy(out_path, test_path, path_size - 1);
             out_path[path_size - 1] = '\0';
-            printf("ROM root discovered: %s\n", out_path);
+            log_info("ROM root discovered: %s\n", out_path);
             return true;
         }
 
@@ -151,7 +151,7 @@ bool system_config_discover_data_root(const char* system_name, char* out_path, s
             return true;
     }
 
-    printf("Warning: Could not find data root folder for system '%s'\n", system_name);
+    log_info("Warning: Could not find data root folder for system '%s'\n", system_name);
     return false;
 }
 
@@ -183,7 +183,7 @@ bool system_config_discover_rom_root(const char* system_name, char* out_path, si
             return true;
     }
 
-    printf("Warning: Could not find ROM root folder for system '%s'\n", system_name);
+    log_info("Warning: Could not find ROM root folder for system '%s'\n", system_name);
     return false;
 }
 

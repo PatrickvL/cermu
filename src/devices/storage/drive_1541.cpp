@@ -22,6 +22,7 @@
  * mode can address this).
  */
 
+#include "core/cermu.hpp"
 #include "devices/storage/drive_1541.hpp"
 #include "core/device_registry.hpp"
 #include "core/vfs/vfs.hpp"
@@ -478,14 +479,14 @@ bool Drive1541Device::insert_disk(const char* filepath) {
     size_t size = 0;
     uint8_t* data = vfs_read_file(filepath, &size);
     if (!data) {
-        printf("1541: Cannot open disk image '%s'\n", filepath);
+        log_info("1541: Cannot open disk image '%s'\n", filepath);
         return false;
     }
 
     // Validate D64 size
     if (size != DRIVE_D64_STD_SIZE && size != DRIVE_D64_STD_SIZE_ERR &&
         size != DRIVE_D64_EXT_SIZE && size != DRIVE_D64_EXT_SIZE_ERR) {
-        printf("1541: Invalid D64 size %zu for '%s'\n", size, filepath);
+        log_info("1541: Invalid D64 size %zu for '%s'\n", size, filepath);
         free(data);
         return false;
     }
@@ -501,12 +502,12 @@ bool Drive1541Device::insert_disk(const char* filepath) {
     if (fliplist_.empty()) {
         auto disc_set = detect_disc_set(filepath);
         if (!disc_set.empty()) {
-            printf("1541: Detected disc set (%zu discs):\n",
+            log_info("1541: Detected disc set (%zu discs):\n",
                    disc_set.size());
             for (size_t i = 0; i < disc_set.size(); i++) {
                 const char* p = disc_set[i].c_str();
                 const char* s = strrchr(p, '/');
-                printf("  %zu: %s%s\n", i + 1, s ? s + 1 : p,
+                log_info("  %zu: %s%s\n", i + 1, s ? s + 1 : p,
                        (disc_set[i] == std::string(filepath)) ? " [current]" : "");
                 fliplist_add(disc_set[i].c_str());
             }
@@ -525,7 +526,7 @@ bool Drive1541Device::insert_disk(const char* filepath) {
         fliplist_add(filepath);
     }
 
-    printf("1541: Disk inserted: '%s' (%ld bytes)\n", filepath, size);
+    log_info("1541: Disk inserted: '%s' (%ld bytes)\n", filepath, size);
     return true;
 }
 
@@ -534,7 +535,7 @@ void Drive1541Device::eject_disk() {
     eject_media();  // Clears media_path_ and media_loaded_ via base class
     for (auto& ch : channels_) ch.clear();
     set_error(74, "DRIVE NOT READY");
-    printf("1541: Disk ejected\n");
+    log_info("1541: Disk ejected\n");
 }
 
 bool Drive1541Device::swap_disk(const char* filepath) {
@@ -545,13 +546,13 @@ bool Drive1541Device::swap_disk(const char* filepath) {
     size_t size = 0;
     uint8_t* data = vfs_read_file(filepath, &size);
     if (!data) {
-        printf("1541: Cannot open disk image '%s' for swap\n", filepath);
+        log_info("1541: Cannot open disk image '%s' for swap\n", filepath);
         return false;
     }
 
     if (size != DRIVE_D64_STD_SIZE && size != DRIVE_D64_STD_SIZE_ERR &&
         size != DRIVE_D64_EXT_SIZE && size != DRIVE_D64_EXT_SIZE_ERR) {
-        printf("1541: Invalid D64 size %zu for swap '%s'\n", size, filepath);
+        log_info("1541: Invalid D64 size %zu for swap '%s'\n", size, filepath);
         free(data);
         return false;
     }
@@ -566,7 +567,7 @@ bool Drive1541Device::swap_disk(const char* filepath) {
     media_loaded_ = true;
     set_error(0, "OK");
 
-    printf("1541: Disk swapped: '%s' (%ld bytes)\n", filepath, size);
+    log_info("1541: Disk swapped: '%s' (%ld bytes)\n", filepath, size);
     return true;
 }
 
@@ -721,7 +722,7 @@ bool Drive1541Device::open_file(DriveChannel& channel, const std::string& filena
 
                 channel.open = true;
                 set_error(0, "OK");
-                printf("1541: Opened '%s' (%zu bytes, %d blocks)\n",
+                log_info("1541: Opened '%s' (%zu bytes, %d blocks)\n",
                        entry_name, channel.buffer.size(), file_blocks);
                 return true;
             }

@@ -8,6 +8,7 @@
 
 #ifdef NES_PROFILING
 
+#include "core/cermu.hpp"
 #include <cstdint>
 #include <cstdio>
 #include <x86intrin.h>
@@ -30,28 +31,28 @@ struct NesProfileCounters {
         auto pct = [total](uint64_t c) {
             return total ? 100.0 * c / total : 0.0;
         };
-        printf("\n  === Component Cycle Breakdown (rdtsc) ===\n");
-        printf("  PPU clock():     %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
+        log_info("\n  === Component Cycle Breakdown (rdtsc) ===\n");
+        log_info("  PPU clock():     %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
                ppu_clock_cycles, pct(ppu_clock_cycles),
                (double)ppu_clock_cycles / total_ticks);
-        printf("  CPU PHI2:        %12lu cycles  %5.1f%%  (%.1f cy/tick)\n",
+        log_info("  CPU PHI2:        %12lu cycles  %5.1f%%  (%.1f cy/tick)\n",
                cpu_phi2_cycles, pct(cpu_phi2_cycles),
                cpu_ticks ? (double)cpu_phi2_cycles / cpu_ticks : 0);
-        printf("  Bus dispatch:    %12lu cycles  %5.1f%%  (%.1f cy/tick)\n",
+        log_info("  Bus dispatch:    %12lu cycles  %5.1f%%  (%.1f cy/tick)\n",
                bus_dispatch_cycles, pct(bus_dispatch_cycles),
                cpu_ticks ? (double)bus_dispatch_cycles / cpu_ticks : 0);
-        printf("  IRQ/NMI:         %12lu cycles  %5.1f%%  (%.1f cy/tick)\n",
+        log_info("  IRQ/NMI:         %12lu cycles  %5.1f%%  (%.1f cy/tick)\n",
                irq_nmi_cycles, pct(irq_nmi_cycles),
                cpu_ticks ? (double)irq_nmi_cycles / cpu_ticks : 0);
-        printf("  CPU PHI1 (APU):  %12lu cycles  %5.1f%%  (%.1f cy/tick)\n",
+        log_info("  CPU PHI1 (APU):  %12lu cycles  %5.1f%%  (%.1f cy/tick)\n",
                cpu_phi1_cycles, pct(cpu_phi1_cycles),
                cpu_ticks ? (double)cpu_phi1_cycles / cpu_ticks : 0);
-        printf("  DMA:             %12lu cycles  %5.1f%%\n",
+        log_info("  DMA:             %12lu cycles  %5.1f%%\n",
                dma_cycles, pct(dma_cycles));
-        printf("  -----------------------------------------\n");
-        printf("  Total measured:  %12lu rdtsc cycles\n", total);
-        printf("  Total dots:      %12lu\n", total_ticks);
-        printf("  CPU ticks:       %12lu (ratio %.2f:1)\n",
+        log_info("  -----------------------------------------\n");
+        log_info("  Total measured:  %12lu rdtsc cycles\n", total);
+        log_info("  Total dots:      %12lu\n", total_ticks);
+        log_info("  CPU ticks:       %12lu (ratio %.2f:1)\n",
                cpu_ticks, cpu_ticks ? (double)total_ticks / cpu_ticks : 0);
     }
 

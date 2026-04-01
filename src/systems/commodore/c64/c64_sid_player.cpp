@@ -2,6 +2,7 @@
 // C64 SID Player — Implementation
 // =============================================================================
 
+#include "core/cermu.hpp"
 #include "systems/commodore/c64/c64_sid_player.hpp"
 #include "systems/commodore/c64/c64_screen_utils.hpp"
 #include "systems/commodore/c64/c64_constants.hpp"
@@ -244,7 +245,7 @@ static uint16_t find_safe_irq_addr(uint16_t load_addr, uint32_t data_size) {
         bool stub_ok    = (cand_end <= STUB_BASE)  || (static_cast<uint32_t>(cand) >= STUB_BASE + 0x80);
         if (payload_ok && stub_ok) return cand;
     }
-    printf("C64: WARNING — all IRQ candidates conflict with SID payload; using $%04X\n", IRQ_CANDIDATES[0]);
+    log_info("C64: WARNING — all IRQ candidates conflict with SID payload; using $%04X\n", IRQ_CANDIDATES[0]);
     return IRQ_CANDIDATES[0];
 }
 
@@ -482,19 +483,19 @@ static void sid_inject_player(C64System* c64, const sid_header_t* sid,
             configure_vic_screen_base(c64, screen_addr);
 
             if (screen_addr != default_screen) {
-                printf("C64: Screen relocated to $%04X (payload overlaps default $0400)\n", screen_addr);
+                log_info("C64: Screen relocated to $%04X (payload overlaps default $0400)\n", screen_addr);
             }
         } else {
-            printf("C64: SID info page skipped (no free screen location found)\n");
+            log_info("C64: SID info page skipped (no free screen location found)\n");
         }
     }
 
     // ---- Inject 6502 player stub ----
     if (needs_timer_irq) {
         build_irq_handler(ram, irq_addr, sid->play_addr, 0x35);
-        printf("C64: Player stub at $%04X, IRQ handler at $%04X\n", STUB_BASE, irq_addr);
+        log_info("C64: Player stub at $%04X, IRQ handler at $%04X\n", STUB_BASE, irq_addr);
     } else {
-        printf("C64: Player stub at $%04X (init-only)\n", STUB_BASE);
+        log_info("C64: Player stub at $%04X (init-only)\n", STUB_BASE);
     }
     build_init_stub(ram, irq_addr, sid, subtune, timer_period, needs_timer_irq);
 }
@@ -509,8 +510,8 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
     if (!c64->ram->data()) return;
 
     const char* type_str = (sid->type == SID_TYPE_RSID) ? "RSID" : "PSID";
-    printf("C64: %s loader \u2014 \"%s\" by %s\n", type_str, sid->name, sid->author);
-    printf("C64: load=$%04X init=$%04X play=$%04X songs=%u default=%u\n",
+    log_info("C64: %s loader \u2014 \"%s\" by %s\n", type_str, sid->name, sid->author);
+    log_info("C64: load=$%04X init=$%04X play=$%04X songs=%u default=%u\n",
            sid->load_addr, sid->init_addr, sid->play_addr,
            sid->num_songs, sid->start_song);
 
@@ -539,7 +540,7 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
                              ? SID_REVISION_8580_R5
                              : SID_REVISION_6581_R4AR;
         c64->sid->set_revision(rev);
-        printf("C64: SID revision set to %s (from SID file flags)\n",
+        log_info("C64: SID revision set to %s (from SID file flags)\n",
                rev == SID_REVISION_8580_R5 ? "MOS 8580" : "MOS 6581");
     }
 
@@ -559,7 +560,7 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
     } else {
         timer_period = static_cast<uint16_t>(timing.cycles_per_frame);
     }
-    printf("C64: Speed flag for subtune %u: %s (timer=%u cycles, cpu=%u Hz)\n",
+    log_info("C64: Speed flag for subtune %u: %s (timer=%u cycles, cpu=%u Hz)\n",
            subtune + 1, use_cia_rate ? "CIA" : "VBI", timer_period, timing.cpu_frequency_hz);
 
     // ---- Step 4 + 5: Info page, IRQ handler, init stub ----
@@ -576,7 +577,7 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
     cpu.set(PC, STUB_BASE);
     cpu.transition_to_fetch();  // Reset pipeline for clean fetch
 
-    printf("C64: PC set to $%04X — subtune %u/%u starting\n",
+    log_info("C64: PC set to $%04X — subtune %u/%u starting\n",
            STUB_BASE, subtune + 1, sid->num_songs);
 }
 
@@ -627,5 +628,5 @@ void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
     cpu.set(PC, STUB_BASE);
     cpu.transition_to_fetch();
 
-    printf("C64: Switched to subtune %u/%u\n", subtune + 1, sid->num_songs);
+    log_info("C64: Switched to subtune %u/%u\n", subtune + 1, sid->num_songs);
 }

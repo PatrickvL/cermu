@@ -21,6 +21,7 @@
 // Requires: OpenGL 3.0 / GLSL 130
 // ============================================================================
 
+#include "core/cermu.hpp"
 #include "gui/gl_api.hpp"            // GL function pointers, gl_api::compile_shader()
 #include "gui/shader/signal_shader.hpp"    // SignalShaderLocations, vertex_src, constants
 #include <cstdio>
@@ -140,7 +141,7 @@ inline GLuint create_program(signal_shader::SignalShaderLocations* locs) {
     if (status != GL_TRUE) {
         char log[512];
         gl_api::glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
-        fprintf(stderr, "svideo_signal_shader: link error: %s\n", log);
+        log_error("svideo_signal_shader: link error: %s\n", log);
         gl_api::glDeleteProgram(prog);
         return 0;
     }
@@ -159,7 +160,7 @@ inline GLuint create_program(signal_shader::SignalShaderLocations* locs) {
         locs->display_width   = gl_api::glGetUniformLocation(prog, "DisplayWidth");
     }
 
-    printf("svideo_signal_shader: program %u compiled and linked successfully\n", prog);
+    log_info("svideo_signal_shader: program %u compiled and linked successfully\n", prog);
     return prog;
 }
 

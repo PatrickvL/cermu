@@ -133,7 +133,7 @@ bool rom_loader_load_file(const char* file_paths, size_t expected_size,
             if (bytes_read != read_size) { free(buffer); continue; }
             *out_buffer = buffer;
             *out_size = read_size;
-            printf("Successfully loaded ROM: %s @%zu (%zu bytes)\n", path, file_offset, read_size);
+            log_info("Successfully loaded ROM: %s @%zu (%zu bytes)\n", path, file_offset, read_size);
             return true;
         }
 
@@ -164,12 +164,12 @@ bool rom_loader_load_file(const char* file_paths, size_t expected_size,
         // Success!
         *out_buffer = buffer;
         *out_size = (size_t)file_size;
-        printf("Successfully loaded ROM: %s (%zu bytes)\n", path, *out_size);
+        log_info("Successfully loaded ROM: %s (%zu bytes)\n", path, *out_size);
         return true;
     }
     
     // All paths failed
-    printf("Failed to load ROM from any of the specified paths\n");
+    log_info("Failed to load ROM from any of the specified paths\n");
     return false;
 }
 
@@ -188,7 +188,7 @@ bool rom_loader_load_to_buffer(const char* file_paths, size_t expected_size,
     
     // Check if loaded data fits in destination buffer
     if (temp_size > dest_size) {
-        printf("ROM data too large: %zu bytes (buffer size: %zu)\n", temp_size, dest_size);
+        log_info("ROM data too large: %zu bytes (buffer size: %zu)\n", temp_size, dest_size);
         free(temp_buffer);
         return false;
     }

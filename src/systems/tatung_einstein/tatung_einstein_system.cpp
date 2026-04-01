@@ -16,6 +16,7 @@
  *   $23:     ROM bank control
  */
 
+#include "core/cermu.hpp"
 #include "systems/tatung_einstein/tatung_einstein_system.hpp"
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
@@ -93,7 +94,7 @@ bool TatungEinsteinSystem::apply_configuration() { return true; }
 // ============================================================================
 
 bool TatungEinsteinSystem::initialize() {
-    printf("Tatung Einstein: Initializing system\n");
+    log_info("Tatung Einstein: Initializing system\n");
     register_board(&board_);
 
     { size_t slot_idx_ = 0;
@@ -115,7 +116,7 @@ bool TatungEinsteinSystem::initialize() {
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 
     if (!load_roms()) {
-        printf("Tatung Einstein: Warning — ROMs not loaded\n");
+        log_info("Tatung Einstein: Warning — ROMs not loaded\n");
     }
 
     register_bus_chips(board_);
@@ -129,7 +130,7 @@ bool TatungEinsteinSystem::initialize() {
                            einstein_constants::DEFAULT_SAMPLE_RATE);
 
     system_ready_ = true;
-    printf("Tatung Einstein: System initialized (64KB RAM)\n");
+    log_info("Tatung Einstein: System initialized (64KB RAM)\n");
     return true;
 }
 
@@ -308,7 +309,7 @@ bus_state_t TatungEinsteinSystem::io_tick(bus_state_t pins) {
 
 bool TatungEinsteinSystem::load_file(const char* filepath) {
     if (!filepath || !system_ready_) return false;
-    printf("Tatung Einstein: File loading not yet implemented: %s\n", filepath);
+    log_info("Tatung Einstein: File loading not yet implemented: %s\n", filepath);
     return false;
 }
 
@@ -383,7 +384,7 @@ void TatungEinsteinSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) 
 bool TatungEinsteinSystem::load_roms() {
     char rom_root[1024];
     if (!system_config_discover_rom_root("tatung_einstein", rom_root, sizeof(rom_root))) {
-        printf("Tatung Einstein: Could not find ROM root folder\n");
+        log_info("Tatung Einstein: Could not find ROM root folder\n");
         return false;
     }
     return board_.load_roms(rom_root, "Tatung Einstein");

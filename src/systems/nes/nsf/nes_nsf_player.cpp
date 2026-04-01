@@ -17,6 +17,7 @@
  *   $0770-$077F  — IRQ handler
  */
 
+#include "core/cermu.hpp"
 #include "systems/nes/nsf/nes_nsf_player.hpp"
 #include "systems/nes/cartridge/mappers/mapper_nsf.hpp"
 #include "systems/nes/nes_screen_utils.hpp"
@@ -307,7 +308,7 @@ void NsfPlayer::setup_cpu(
     // Write CPU vectors to ROM buffer
     write_vectors(prg_rom, prg_rom_size, bankswitched, bank_regs, load_addr);
 
-    printf("NES NSF: Stub at $%04X, NMI handler at $%04X\n",
+    log_info("NES NSF: Stub at $%04X, NMI handler at $%04X\n",
            STUB_BASE, NMI_HANDLER);
 
     // Reset CPU to RESET vector
@@ -371,7 +372,7 @@ void NsfPlayer::switch_subtune(
     bus_state_t pins = NES_BUS_DEFAULT_STATE;
     cpu->reset(pins);
 
-    printf("NES NSF: Switched to subtune %d/%d\n",
+    log_info("NES NSF: Switched to subtune %d/%d\n",
            subtune + 1, nsf->num_songs);
 }
 

@@ -428,13 +428,80 @@ template<std::unsigned_integral T, T Taps>
 }
 
 /* ========================================================================== */
-/* RUNTIME VERBOSITY                                                          */
+/* LOGGING                                                                    */
 /* ========================================================================== */
 
-/* When true, registries and subsystems print informational messages during
-   startup ("Registered ...", "Attached ...", etc.).  Off by default;
-   enable with --verbose / -v on the command line. */
+/* Leveled logging with printf-compatible signatures.
+ *
+ * Log levels (ascending verbosity):
+ *   Silent  — nothing at all
+ *   Error   — unrecoverable / user-visible failures
+ *   Warn    — degraded operation, non-fatal issues
+ *   Info    — normal operational messages (system init, ROM loaded, …)
+ *   Debug   — detailed diagnostic output (register dumps, bus traces, …)
+ *
+ * Runtime level:
+ *   log_level   — messages at this level and below are printed.
+ *                        Default: Info.  Set to Silent to suppress all output.
+ *
+ * API:
+ *   log_error(fmt, ...)   — always prints unless Silent
+ *   log_warn(fmt, ...)    — prints at Warn and above
+ *   log_info(fmt, ...)    — prints at Info and above (replaces printf)
+ *   log_debug(fmt, ...)   — prints at Debug (replaces g_verbose guards)
+ *
+ * RAII guard:
+ *   LogLevelGuard guard(LogLevel::Silent);
+ *   // … all logging suppressed in this scope …
+ */
+
+#include <cstdio>
+#include <cstdarg>
+
+enum class LogLevel : uint8_t {
+    Silent = 0,
+    Error  = 1,
+    Warn   = 2,
+    Info   = 3,
+    Debug  = 4,
+};
+
+inline LogLevel log_level = LogLevel::Info;
+
+/* Backward compatibility — g_verbose now maps to Debug level */
 inline bool g_verbose = false;
+
+inline void log_emit_(const char* fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    vprintf(fmt, ap);
+    va_end(ap);
+}
+
+/* Logging macros — zero overhead when level is below threshold.
+ * Using macros avoids argument evaluation when the message is suppressed. */
+#define log_error(...) \
+    do { if (log_level >= LogLevel::Error) log_emit_(__VA_ARGS__); } while (0)
+
+#define log_warn(...) \
+    do { if (log_level >= LogLevel::Warn) log_emit_(__VA_ARGS__); } while (0)
+
+#define log_info(...) \
+    do { if (log_level >= LogLevel::Info) log_emit_(__VA_ARGS__); } while (0)
+
+#define log_debug(...) \
+    do { if (log_level >= LogLevel::Debug) log_emit_(__VA_ARGS__); } while (0)
+
+/* RAII guard — temporarily overrides the log level for a scope */
+struct LogLevelGuard {
+    LogLevel saved;
+    explicit LogLevelGuard(LogLevel level) : saved(log_level) {
+        log_level = level;
+    }
+    ~LogLevelGuard() { log_level = saved; }
+    LogLevelGuard(const LogLevelGuard&) = delete;
+    LogLevelGuard& operator=(const LogLevelGuard&) = delete;
+};
 
 /* ========================================================================== */
 /* FEATURE FLAGS — AUTOMATIC IMPLICATIONS                                     */

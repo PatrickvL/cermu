@@ -2,6 +2,7 @@
  * CRT Format Handler — Implementation
  */
 
+#include "core/cermu.hpp"
 #include "core/formats/crt_format.hpp"
 #include "core/formats/format_registry.hpp"
 #include <cstdio>
@@ -20,7 +21,7 @@ bool commodore_crt_read_header_mem(const uint8_t* data, size_t data_size, commod
     /* Validate signature — accept both C64 and VIC-20 */
     if (memcmp(raw, "C64 CARTRIDGE   ", 16) != 0 &&
         memcmp(raw, "VIC20 CARTRIDGE ", 16) != 0) {
-        printf("CRTFormat: Invalid CRT signature\n");
+        log_info("CRTFormat: Invalid CRT signature\n");
         return false;
     }
 
@@ -34,7 +35,7 @@ bool commodore_crt_read_header_mem(const uint8_t* data, size_t data_size, commod
     memcpy(out_header->name, raw + 32, 32);
     out_header->name[31] = '\0';
 
-    printf("CRTFormat: \"%s\" hw_type=%d EXROM=%d GAME=%d\n",
+    log_info("CRTFormat: \"%s\" hw_type=%d EXROM=%d GAME=%d\n",
            out_header->name, out_header->hardware_type,
            out_header->exrom, out_header->game);
     return true;
@@ -101,7 +102,7 @@ int commodore_crt_iterate_chips(
 
         // Validate packet bounds
         if (chip.packet_length < 16 || offset + chip.packet_length > data_size) {
-            printf("CRTFormat: CHIP packet %d: invalid length %u at offset %zu\n",
+            log_info("CRTFormat: CHIP packet %d: invalid length %u at offset %zu\n",
                    count, chip.packet_length, offset);
             break;
         }
@@ -112,7 +113,7 @@ int commodore_crt_iterate_chips(
         // Ensure rom_size doesn't exceed the packet payload
         uint32_t payload_size = chip.packet_length - 16;
         if (chip.rom_size > payload_size) {
-            printf("CRTFormat: CHIP packet %d: rom_size %u > payload %u\n",
+            log_info("CRTFormat: CHIP packet %d: rom_size %u > payload %u\n",
                    count, chip.rom_size, payload_size);
             break;
         }

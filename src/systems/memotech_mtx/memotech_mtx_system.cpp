@@ -14,6 +14,7 @@
  *   $08-$0B: CTC channels 0-3
  */
 
+#include "core/cermu.hpp"
 #include "systems/memotech_mtx/memotech_mtx_system.hpp"
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
@@ -109,7 +110,7 @@ bool MemotechMTXSystem<V>::apply_configuration() { return true; }
 
 template<MTXVariant V>
 bool MemotechMTXSystem<V>::initialize() {
-    printf("%s: Initializing system\n", Traits::name);
+    log_info("%s: Initializing system\n", Traits::name);
     register_board(&board_);
 
     { size_t slot_idx_ = 0;
@@ -130,7 +131,7 @@ bool MemotechMTXSystem<V>::initialize() {
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 
     if (!load_roms()) {
-        printf("%s: Warning — ROMs not loaded\n", Traits::name);
+        log_info("%s: Warning — ROMs not loaded\n", Traits::name);
     }
 
     register_bus_chips(board_);
@@ -144,7 +145,7 @@ bool MemotechMTXSystem<V>::initialize() {
                            mtx_constants::DEFAULT_SAMPLE_RATE);
 
     system_ready_ = true;
-    printf("%s: System initialized (RAM: %dKB)\n", Traits::name,
+    log_info("%s: System initialized (RAM: %dKB)\n", Traits::name,
            Traits::ram_size / 1024);
     return true;
 }
@@ -325,7 +326,7 @@ bus_state_t MemotechMTXSystem<V>::io_tick(bus_state_t pins) {
 template<MTXVariant V>
 bool MemotechMTXSystem<V>::load_file(const char* filepath) {
     if (!filepath) return false;
-    printf("%s: File loading not yet implemented: %s\n", Traits::name, filepath);
+    log_info("%s: File loading not yet implemented: %s\n", Traits::name, filepath);
     return false;
 }
 
@@ -403,7 +404,7 @@ template<MTXVariant V>
 bool MemotechMTXSystem<V>::load_roms() {
     char rom_root[1024];
     if (!system_config_discover_rom_root(Traits::data_folder, rom_root, sizeof(rom_root))) {
-        printf("%s: Could not find ROM root folder\n", Traits::name);
+        log_info("%s: Could not find ROM root folder\n", Traits::name);
         return false;
     }
     return board_.load_roms(rom_root, Traits::name);
