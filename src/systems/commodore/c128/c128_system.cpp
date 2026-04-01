@@ -133,6 +133,7 @@ bool C128System::initialize() {
     vdc_vram_     = &board_.vdc_vram;
 
     configure_bus_memory_map();
+    init_io_dispatch();
     if (!load_roms()) {
         printf("C128: Warning — ROMs not loaded\n");
     }
@@ -240,12 +241,24 @@ void C128System::tick() {
     // PHASE 2: CPU PHI2 — instruction execution
     s = cpu.tick<CSG8502::Phase::PHI2>(s);
 
-    // PHASE 3: Memory service — AEC determines CPU vs VIC-IIe bus ownership
+    // PHASE 3: Address decode + buffer service + MMIO self-dispatch
     {
         const bool is_write = !BUS_GET_BIT(s, BUS_RW_BIT);
         const size_t viewer = (is_write || BUS_GET_BIT(s, BUS_AEC_BIT))
                                   ? kViewerCpu : kViewerVicII;
-        s = bus_.tick(s, viewer);
+
+        // 1. resolve() — address decode, embed CS field
+        s = bus_.resolve(s, viewer);
+
+        // 2. service() — buffer (RAM/ROM) access, MMIO IDs skipped
+        s = bus_.service(s);
+
+        // 3. Self-dispatch — each chip checks is_cs_selected() and handles own I/O
+        s = vic_iie.tick_mmio(s);
+        s = sid.tick_mmio(s);
+        s = board_.colorram.tick_mmio(s);
+        s = cia1.tick_mmio(s);
+        s = cia2.tick_mmio(s);
     }
 
     // NMI edge detection
@@ -337,14 +350,14 @@ void C128System::configure_bus_memory_map() {
     //   $D000-$DFFF : I/O (TODO: register MMIO handlers for VIC, SID, CIA, MMU, VDC)
     //   $E000-$FFFF : Kernal ROM
     //
-    // Chip IDs (4 KB pages, bank_size = chip size for ROMs):
-    //   Slot 0 (RAM 128KB, bank_size=65536): 2 banks → IDs 0-1
-    //   Slot 1 (BASIC lo 16KB):  1 bank → ID 2
-    //   Slot 2 (BASIC hi 16KB): 1 bank → ID 3
-    //   Slot 3 (Editor 4KB):    1 bank → ID 4
-    //   Slot 4 (Kernal 8KB):    1 bank → ID 5
-    //   Slot 5 (Char ROM 8KB):  1 bank → ID 6
-    //   Slot 6 (VDC VRAM 16KB): 1 bank → ID 7
+    // Chip IDs (4 KB pages, declaration order, bank_size = chip size for ROMs):
+    //   main_ram  (128KB, bank_size=64KB): 2 banks → IDs 0-1
+    //   basic_lo  ( 16KB):                 1 bank  → ID 2
+    //   basic_hi  ( 16KB):                 1 bank  → ID 3
+    //   editor_rom(  4KB):                 1 bank  → ID 4
+    //   char_rom  (  8KB):                 1 bank  → ID 5
+    //   kernal_rom(  8KB):                 1 bank  → ID 6
+    //   vdc_vram  ( 16KB):                 1 bank  → ID 7
 
     using ChipId    = Bus::ChipId;
     using WriteId   = Bus::WriteChipId;
@@ -354,8 +367,8 @@ void C128System::configure_bus_memory_map() {
     constexpr ChipId  kBasicLo   = ChipId(2);
     constexpr ChipId  kBasicHi   = ChipId(3);
     constexpr ChipId  kEditor    = ChipId(4);
-    constexpr ChipId  kKernal    = ChipId(5);
-    constexpr ChipId  kCharRom   = ChipId(6);
+    constexpr ChipId  kCharRom   = ChipId(5);
+    constexpr ChipId  kKernal    = ChipId(6);
 
     // ── CPU viewer (viewer 0) ────────────────────────────────────────
     // apply() already mapped RAM bank 0 at $0000-$FFFF.
@@ -377,8 +390,8 @@ void C128System::configure_bus_memory_map() {
     // $C000-$CFFF → Editor ROM (read), RAM (write)
     bus_.set_page(kViewerCpu, 0xC, kEditor, kRamBank0W);
 
-    // $D000-$DFFF → RAM for now (I/O dispatch TODO)
-    // (apply() already mapped RAM here)
+    // $D000-$DFFF → I/O sub-table (default boot config has I/O visible)
+    bus_.map_to_indexed_sub(kViewerCpu, 0xD, 0);
 
     // $E000-$FFFF → Kernal ROM (read), RAM (write)
     bus_.set_page(kViewerCpu, 0xE, kKernal, kRamBank0W);
@@ -402,6 +415,72 @@ bool C128System::load_roms() {
         return false;
     }
     return board_.load_roms(rom_root, "C128");
+}
+
+void C128System::init_io_dispatch() {
+    using PT = PackingTraits<C128BusSpec>;
+
+    // Register legacy MMIO handlers (for debug peek/poke)
+    (void)bus_.register_handler({&board_.vic_iie,  vicii_base_t::registers_read,  vicii_base_t::registers_write});
+    (void)bus_.register_handler({&board_.sid,      mos6581_t::registers_read,     mos6581_t::registers_write});
+    (void)bus_.register_handler({&board_.colorram, MOS2114::bus_read,             MOS2114::bus_write});
+    (void)bus_.register_handler({&board_.cia1,     mos6526_t::registers_read,     mos6526_t::registers_write});
+    (void)bus_.register_handler({&board_.cia2,     mos6526_t::registers_read,     mos6526_t::registers_write});
+
+    // Create indexed sub-table for I/O page ($D000-$DFFF)
+    // 4 bits → 16 entries, extracted from address bits 11-8
+    const int io_sub = bus_.add_indexed_sub_table(kViewerCpu, 4, 8);
+    (void)bus_.add_indexed_sub_table(kViewerVicII, 4, 8);
+
+    // Helper to wrap bus_chip_id into typed ChipId/WriteChipId
+    using ChipId  = Bus::ChipId;
+    using WriteId = Bus::WriteChipId;
+    auto cs_rd = [](uint16_t id) { return ChipId(id); };
+    auto cs_wr = [](uint16_t id) { return WriteId(id); };
+
+    const uint16_t idVicIIe = board_.vic_iie.bus_chip_id();
+    const uint16_t idSid    = board_.sid.bus_chip_id();
+    const uint16_t idColRam = board_.colorram.bus_chip_id();
+    const uint16_t idCia1   = board_.cia1.bus_chip_id();
+    const uint16_t idCia2   = board_.cia2.bus_chip_id();
+
+    const auto no_chip_rd = ChipId(PT::kNoChipSelected);
+    const auto no_chip_wr = WriteId(PT::kNoChipSelectedWrite);
+
+    // VIC-IIe: $D000-$D3FF (sub-entries 0-3)
+    for (int i = 0; i < 4; ++i)
+        bus_.set_indexed_entry(kViewerCpu, io_sub, i, cs_rd(idVicIIe), cs_wr(idVicIIe));
+
+    // SID: $D400-$D4FF (sub-entry 4)
+    bus_.set_indexed_entry(kViewerCpu, io_sub, 4, cs_rd(idSid), cs_wr(idSid));
+
+    // MMU (8722): $D500-$D5FF (sub-entry 5) — TODO: no chip yet
+    bus_.set_indexed_entry(kViewerCpu, io_sub, 5, no_chip_rd, no_chip_wr);
+
+    // VDC (8563): $D600-$D6FF (sub-entry 6) — TODO: no chip yet
+    bus_.set_indexed_entry(kViewerCpu, io_sub, 6, no_chip_rd, no_chip_wr);
+
+    // $D700: unused
+    bus_.set_indexed_entry(kViewerCpu, io_sub, 7, no_chip_rd, no_chip_wr);
+
+    // Color RAM: $D800-$DBFF (sub-entries 8-11)
+    for (int i = 8; i < 12; ++i)
+        bus_.set_indexed_entry(kViewerCpu, io_sub, i, cs_rd(idColRam), cs_wr(idColRam));
+
+    // CIA1: $DC00-$DCFF (sub-entry 12)
+    bus_.set_indexed_entry(kViewerCpu, io_sub, 12, cs_rd(idCia1), cs_wr(idCia1));
+
+    // CIA2: $DD00-$DDFF (sub-entry 13)
+    bus_.set_indexed_entry(kViewerCpu, io_sub, 13, cs_rd(idCia2), cs_wr(idCia2));
+
+    // I/O 1: $DE00-$DEFF (sub-entry 14) — expansion port
+    bus_.set_indexed_entry(kViewerCpu, io_sub, 14, no_chip_rd, no_chip_wr);
+
+    // I/O 2: $DF00-$DFFF (sub-entry 15) — expansion port
+    bus_.set_indexed_entry(kViewerCpu, io_sub, 15, no_chip_rd, no_chip_wr);
+
+    printf("C128: I/O dispatch initialized (CS-tick, VIC-IIe=%u SID=%u ColRAM=%u CIA1=%u CIA2=%u)\n",
+           idVicIIe, idSid, idColRam, idCia1, idCia2);
 }
 
 void C128System::mmu_write(uint16_t /*addr*/, uint8_t /*data*/) {
