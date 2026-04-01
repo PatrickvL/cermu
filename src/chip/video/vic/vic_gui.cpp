@@ -111,8 +111,8 @@ std::vector<PinSignalState> vic_base_t::get_layout_pin_states(ChipLayout& layout
 }
 
 static const char* get_vic_type_name(const vic_base_t* vic) {
-    if (vic->is_pal) return "MOS 6561 (PAL)";
-    return "MOS 6560 (NTSC)";
+    if (vic->traits_) return vic->traits_->chip_name;
+    return vic->is_pal ? "MOS 6561 (PAL)" : "MOS 6560 (NTSC)";
 }
 
 const char* vic_base_t::get_layout_chip_name() const {

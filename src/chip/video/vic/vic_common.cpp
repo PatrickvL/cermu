@@ -56,6 +56,35 @@ static const uint32_t vic_voice_divisor[VIC_NUM_VOICES] = {
     2       // Voice 3: Noise   — ÷2
 };
 
+// ============================================================================
+// Trait-driven initialization (replaces per-variant init() methods)
+// ============================================================================
+
+void vic_base_t::init_base(const VicTraits& traits) {
+    is_pal = traits.is_pal;
+    traits_ = &traits;
+    info_ = ChipInfo{traits.chip_id, traits.vendor, traits.chip_name};
+    clock_frequency = traits.clock_frequency;
+
+    // Initialize registers
+    regs_.clear();
+    memset(color_ram, 0, sizeof(color_ram));
+
+    // Timing from traits
+    cycles_per_line = traits.cycles_per_line;
+    total_lines = traits.total_lines;
+
+    // Reset video generation state
+    reset();
+
+    // Initialise audio with chip clock and default sample rate
+    audio_reset(traits.clock_frequency, VIC_DEFAULT_SAMPLE_RATE);
+
+#ifdef CERMU_HAS_CHIP_DEBUG
+    register_debug_fields();
+#endif
+}
+
 // System reset function
 void vic_base_t::reset() {
     // Reset registers to default values matching C# initialization
