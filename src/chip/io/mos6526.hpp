@@ -217,6 +217,18 @@ struct mos6526_t : public IoChipBase {
     bus_state_t tick_phi2(bus_state_t bus_state);
     bus_state_t tick_phi1(bus_state_t bus_state);
 
+    /// CS-tick: self-dispatch register access when chip-selected.
+    /// For split-phase systems (C64) that call phi2/phi1 separately.
+    bus_state_t tick_mmio(bus_state_t bus_state) {
+        if (is_cs_selected(bus_state)) {
+            bus_state = BUS_GET_BIT(bus_state, BUS_RW_BIT)
+                ? registers_read(this, bus_state)
+                : registers_write(this, bus_state);
+            mark_cs_serviced(bus_state);
+        }
+        return bus_state;
+    }
+
     // Static methods for function pointer table compatibility (io_page_handlers_t)
     static bus_state_t registers_read(void* context, bus_state_t bus_state);
     static bus_state_t registers_write(void* context, bus_state_t bus_state);
