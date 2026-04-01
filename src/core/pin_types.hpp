@@ -310,6 +310,7 @@
     PLBL_PIN(IRQ,         "IRQ",        "interrupt request (active-high)")      \
     PLBL_PIN(IRQA,        "IRQA",       "interrupt request A (PIA, act-h)")     \
     PLBL_PIN(IRQB,        "IRQB",       "interrupt request B (PIA, act-h)")     \
+    PLBL_PIN(INTR,        "INTR",       "interrupt (MOS 8563 VDC, act-h)")     \
     PLBL_PIN(LIC,         "LIC",        "last instruction cycle (MC6809)")      \
     PLBL_PIN(NMI,         "NMI",        "non-maskable interrupt (active-high)") \
     PLBL_PIN(RES,         "RES",        "reset (active-high)")                  \
@@ -908,6 +909,8 @@ constexpr PinLabel pin_canonical(PinLabel label) {
     case PinLabel::_CSR:         return PinLabel::CSR;
     case PinLabel::_CSW:         return PinLabel::CSW;
     case PinLabel::_DTACK:       return PinLabel::DTACK;
+    case PinLabel::_E1:          return PinLabel::E1;
+    case PinLabel::_E2:          return PinLabel::E2;
     case PinLabel::_EXROM:       return PinLabel::EXROM;
     case PinLabel::_FIRQ:        return PinLabel::FIRQ;
     case PinLabel::_G:           return PinLabel::G;
@@ -924,6 +927,7 @@ constexpr PinLabel pin_canonical(PinLabel label) {
     case PinLabel::_IRQ:         return PinLabel::IRQ;
     case PinLabel::_IRQA:        return PinLabel::IRQA;
     case PinLabel::_IRQB:        return PinLabel::IRQB;
+    case PinLabel::_INTR:        return PinLabel::INTR;
     case PinLabel::_KERNAL:      return PinLabel::KERNAL;
     case PinLabel::_LDS:         return PinLabel::LDS;
     case PinLabel::_LORAM:       return PinLabel::LORAM;
@@ -954,6 +958,14 @@ constexpr PinLabel pin_canonical(PinLabel label) {
     case PinLabel::_WE:          return PinLabel::WE;
     case PinLabel::_WR:          return PinLabel::WR;
     case PinLabel::_WRAM:        return PinLabel::WRAM;
+    case PinLabel::_Y0:          return PinLabel::Y0;
+    case PinLabel::_Y1:          return PinLabel::Y1;
+    case PinLabel::_Y2:          return PinLabel::Y2;
+    case PinLabel::_Y3:          return PinLabel::Y3;
+    case PinLabel::_Y4:          return PinLabel::Y4;
+    case PinLabel::_Y5:          return PinLabel::Y5;
+    case PinLabel::_Y6:          return PinLabel::Y6;
+    case PinLabel::_Y7:          return PinLabel::Y7;
 
     // ── Power synonyms ─────────────────────────────────────────────
     case PinLabel::GND:          return PinLabel::VSS;
@@ -1027,6 +1039,21 @@ constexpr bool pin_canonical_is_idempotent() {
 }
 static_assert(pin_canonical_is_idempotent(),
     "pin_canonical() is not idempotent — a chain exists (X→Y where Y→Z)");
+
+// Compile-time coverage proof: every active-low label must resolve to a
+// non-active-low canonical.  A missing case in pin_canonical() returns the
+// label unchanged; the recursive call in pin_label_to_pin_type() then
+// stack-overflows at runtime.  Catch it here instead.
+constexpr bool pin_canonical_covers_all_active_low() {
+    for (int i = 0; i < static_cast<int>(PinLabel::ACTIVE_LOW_END); ++i) {
+        auto l = static_cast<PinLabel>(i);
+        if (pin_canonical(l) < PinLabel::ACTIVE_LOW_END)
+            return false;  // active-low mapped to active-low → infinite recursion
+    }
+    return true;
+}
+static_assert(pin_canonical_covers_all_active_low(),
+    "pin_canonical() has an unmapped active-low label — add the missing case");
 
 // ============================================================================
 // PIN-TO-BUS-BIT MAPPING
