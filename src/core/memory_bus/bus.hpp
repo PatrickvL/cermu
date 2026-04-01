@@ -18,6 +18,24 @@
 // BusView is a thin compile-time–bound wrapper: BusView<Spec, ViewerId> binds
 // a viewer id at compile time so call sites pass only bus_state_t.
 //
+// Hardware accuracy:
+//   All bus signals (ADDR, DATA, CS, R/W, IRQ, …) are propagated to every
+//   chip each clock cycle.  No explicit bus-master abstraction; arbitration
+//   emerges from correct chip-tick sequencing and signal observation.
+//   Address drivers (CPU, VIC-II, DMA) tick first; responding chips observe
+//   the bus and act if selected.
+//
+// Bus floating (open-bus behaviour):
+//   On systems where undriven data lines float toward VCC (e.g. NES), call
+//   BUS_FLOAT_DATA_HIGH(bus) or BUS_FLOAT_DATA_DECAY_HIGH(bus, lfsr) before
+//   resolve().  Connected chips overwrite the floated data; unconnected
+//   addresses (kNoChipSelected) leave the floated bits intact.
+//
+// Partial data-bus (EnablePartialBus):
+//   Use EnablePartialBus ONLY when a narrow chip is directly chip-selected
+//   (chip_id < kNoChipSelected) with no MMIO handler in front of it and no
+//   dedicated side-channel fetch.  Otherwise apply bitmix at the call site.
+//
 // =============================================================================
 #pragma once
 
