@@ -147,9 +147,13 @@ bus_state_t mos6522_t::registers_write(bus_state_t bus_state) {
     switch (reg) {
         case PORTB:
             (void)port_b.write_data(value);
+            if (port_b_write_callback)
+                port_b_write_callback(port_b_write_context, value);
             break;
         case PORTA:
             (void)port_a.write_data(value);
+            if (port_a_write_callback)
+                port_a_write_callback(port_a_write_context, value);
             break;
         case DDRB:
             (void)port_b.write_ddr(value);

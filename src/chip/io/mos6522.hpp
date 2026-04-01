@@ -142,6 +142,14 @@ struct mos6522_t : public IoChipBase {
     uint8_t (*port_b_read_callback)(void* context, uint8_t port_b_output) = nullptr;
     void* port_b_read_context = nullptr;
 
+    // Callbacks for port output writes
+    // Called when the CPU writes to a port data register (ORx), allowing the
+    // system to react to output changes (e.g. addressable latch, bank select).
+    void (*port_a_write_callback)(void* context, uint8_t data) = nullptr;
+    void* port_a_write_context = nullptr;
+    void (*port_b_write_callback)(void* context, uint8_t data) = nullptr;
+    void* port_b_write_context = nullptr;
+
     // Timers
     uint16_t timer1_latch = 0xFFFF;
     uint16_t timer1_counter = 0xFFFF;
@@ -198,6 +206,16 @@ struct mos6522_t : public IoChipBase {
     // Port read callback registration (used for keyboard matrix scanning, joystick, etc.)
     void set_port_a_read_callback(uint8_t (*callback)(void*, uint8_t), void* context);
     void set_port_b_read_callback(uint8_t (*callback)(void*, uint8_t), void* context);
+
+    // Port write callback registration (used for addressable latches, bank select, etc.)
+    void set_port_a_write_callback(void (*callback)(void*, uint8_t), void* context) {
+        port_a_write_callback = callback;
+        port_a_write_context  = context;
+    }
+    void set_port_b_write_callback(void (*callback)(void*, uint8_t), void* context) {
+        port_b_write_callback = callback;
+        port_b_write_context  = context;
+    }
 
 private:
 #ifdef CERMU_HAS_CHIP_DEBUG
