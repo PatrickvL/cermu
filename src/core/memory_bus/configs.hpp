@@ -10,40 +10,6 @@
 // §1  Pre-baked specs
 // =============================================================================
 
-// ── NES / Famicom — CPU bus ───────────────────────────────────────────────────
-//
-// Chip ids 0–512 address up to 512 KB of PRG-ROM in 1 KB pages.
-// The write side has far fewer chips (only writable RAM), so the write chip-id
-// field is narrower, keeping the packed page slot at uint16_t.
-//
-// CsLineBits = 10: the resolved chip id is emitted into bus_state_t after each
-// access.  10 bits covers all ids (512 buffer + sentinels).
-//
-struct NesCpuBusSpec {
-    using AddrType = uint16_t;
-    static constexpr size_t AddressBits    = 16;
-    static constexpr size_t PageBits       = 10;   // 1 KB pages → 64 pages
-    static constexpr size_t NumViewers     = 1;
-    static constexpr size_t MaxChipId      = 512;  // 512 KB max PRG-ROM / 1 KB per chip-id
-    static constexpr size_t MaxWriteChipId = 20;   // WRAM + CIRAM + PRG-RAM
-    static constexpr bool   EnableMmio     = true;
-    static constexpr size_t MaxMmioHandlers= 4;    // PPU, APU/IO, mapper, exp
-    static constexpr size_t CsLineBits     = BUS_CS_BITS;   // global width
-    static constexpr size_t CsBitShift     = BUS_CS_SHIFT;  // global position
-};
-
-// ── NES / Famicom — PPU bus ───────────────────────────────────────────────────
-struct NesPpuBusSpec {
-    using AddrType = uint16_t;
-    static constexpr size_t AddressBits    = 14;
-    static constexpr size_t PageBits       = 10;   // 1 KB pages → 16 pages
-    static constexpr size_t NumViewers     = 1;
-    static constexpr size_t MaxChipId      = 256;  // 256 KB max CHR / 1 KB
-    static constexpr size_t MaxWriteChipId = 12;   // CHR-RAM + CIRAM
-    static constexpr bool   EnableMmio     = false;
-    static constexpr size_t MaxMmioHandlers= 0;
-};
-
 // ── Generic 8-bit microcomputer ───────────────────────────────────────────────
 //
 // EnablePartialBus = true: covers systems (e.g. Apple I) where 4-bit SRAM is
@@ -72,14 +38,6 @@ struct MinimalBusSpec {
     static constexpr bool   EnableMmio     = false;
     static constexpr size_t MaxMmioHandlers= 0;
 };
-
-
-// =============================================================================
-// §2  Convenience type aliases
-// =============================================================================
-
-using NesCpuBus = MemoryBus<NesCpuBusSpec>;
-using NesPpuBus = MemoryBus<NesPpuBusSpec>;
 
 
 // =============================================================================
