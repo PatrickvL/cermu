@@ -185,7 +185,28 @@ void OricSystem<V>::reset() {
 
 template<OricVariant V>
 void OricSystem<V>::tick() {
-    // TODO: CPU tick + VIA tick + ULA video scan + AY sound via VIA
+    bus_state_t s = pins_;
+
+    // ---- Propagate VIA interrupt state from previous cycle ----
+    if (board_.via.ifr & board_.via.ier & 0x7F) {
+        if (board_.via.interrupt_bit != 0)
+            BUS_CLR_BIT(s, board_.via.interrupt_bit);
+    }
+
+    // ---- CPU PHI2 — address/R#W valid on bus ----
+    s = board_.cpu.template tick<MOS6502::Phase::PHI2>(s);
+
+    // ---- Address decode + flat-mem service + VIA CS dispatch ----
+    s = bus_.resolve(s);
+    s = bus_.service(s);
+    s = board_.via.tick(s);
+
+    // ---- CPU PHI1 ----
+    s = board_.cpu.template tick<MOS6502::Phase::PHI1>(s);
+
+    BUS_SET_BIT(s, BUS_RW_BIT);
+    pins_ = s;
+    total_cycles_++;
 }
 
 template<OricVariant V>
@@ -241,7 +262,12 @@ void OricSystem<V>::handle_keyboard_event(SDL_Keycode /*key*/, bool /*pressed*/)
 
 template<OricVariant V>
 void OricSystem<V>::configure_bus_memory_map() {
-    // TODO: setup page tables — RAM at $0000-$BFFF, ROM overlay at $C000-$FFFF
+    // apply() establishes the default linear map from the manifest:
+    //   $00-$FF: RAM (read+write)
+    //   $C0-$FF: ROM overlay (read)
+    // With EnableCs=true, Phase 3 creates a MaskedSubTable on page $03
+    // for the VIA ($0300-$030F, mask 0xFFF0).
+    board_.apply(bus_);
 }
 
 template<OricVariant V>

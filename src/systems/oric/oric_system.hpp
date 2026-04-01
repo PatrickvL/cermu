@@ -122,12 +122,12 @@ template<OricVariant V> struct OricBusTraits;
 
 template<> struct OricBusTraits<OricVariant::ORIC_1> {
     static constexpr const auto& kManifest = kOric1Chips;
-    using Spec = ManifestBusSpec<kOric1Chips, 16, 8>;
+    using Spec = ManifestBusSpec<kOric1Chips, 16, 8, 1, true>;
 };
 
 template<> struct OricBusTraits<OricVariant::ORIC_ATMOS> {
     static constexpr const auto& kManifest = kOricAtmosChips;
-    using Spec = ManifestBusSpec<kOricAtmosChips, 16, 8>;
+    using Spec = ManifestBusSpec<kOricAtmosChips, 16, 8, 1, true>;
 };
 
 // ============================================================================
