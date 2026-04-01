@@ -166,7 +166,48 @@ void VTechVZSystem<V>::reset() {
 
 template<VZVariant V>
 void VTechVZSystem<V>::tick() {
-    // TODO: Z80 tick + memory-mapped I/O dispatch + MC6847 video scan
+    bus_state_t s = pins_;
+
+    // ---- Z80 CPU tick ----
+    s = board_.z80.tick(s);
+
+    // ---- Bus dispatch: MREQ → memory, IORQ → port I/O ----
+    bool mreq = !BUS_GET_BIT(s, Z80_MREQ_BIT);
+    bool iorq = !BUS_GET_BIT(s, Z80_IORQ_BIT);
+
+    if (mreq) {
+        uint16_t addr = BUS_GET_ADDR(s);
+
+        // Memory-mapped I/O at $6800-$6FFF
+        if (addr >= vtech_vz_constants::IO_BASE &&
+            addr <= vtech_vz_constants::IO_END) {
+            if (BUS_GET_BIT(s, BUS_RW_BIT)) {
+                // Read: return keyboard matrix row selected by address bits
+                uint8_t row = addr & 0x07;
+                BUS_SET_DATA(s, (row < vtech_vz_constants::KEYBOARD_ROWS)
+                                ? keyboard_matrix_[row] : 0xFF);
+            } else {
+                // Write: display mode / cassette / speaker control
+                uint8_t data = BUS_GET_DATA(s);
+                // Bit 3: speaker toggle
+                spkr_state_ = (data >> 0) & 1;
+                // Bits 3-4 control MC6847 mode pins
+                board_.vdg.set_ag((data >> 3) & 1);   // text/graphics
+                board_.vdg.set_css((data >> 5) & 1);  // color set
+            }
+        } else {
+            // Normal memory access via page table
+            s = bus_.tick(s);
+        }
+    } else if (iorq) {
+        io_tick(s);
+    }
+
+    // ---- MC6847 VDG tick (pixel clock) ----
+    board_.vdg.tick();
+
+    pins_ = s;
+    total_cycles_++;
 }
 
 template<VZVariant V>
@@ -174,6 +215,10 @@ void VTechVZSystem<V>::run_frame() {
     if (!system_ready_) return;
     for (uint32_t i = 0; i < static_cast<uint32_t>(vtech_vz_constants::TSTATES_PER_FRAME_PAL); ++i)
         tick();
+
+    // Render current frame from video RAM
+    board_.vdg.render_frame(video_ram_ptr_);
+
     if (video_port_) video_port_->swap_frame();
 }
 
@@ -223,7 +268,12 @@ void VTechVZSystem<V>::handle_keyboard_event(SDL_Keycode /*key*/, bool /*pressed
 
 template<VZVariant V>
 void VTechVZSystem<V>::configure_bus_memory_map() {
-    // TODO: setup page tables — ROM at $0000, Video RAM at $7000, User RAM at $7800
+    // apply() establishes the default linear map from the manifest:
+    //   $00-$3F: ROM (read)
+    //   $70-$77: Video RAM (read+write)
+    //   $78-$B7: User RAM (read+write)
+    // The gap at $4000-$6FFF and $B800+ is unmapped (open bus).
+    board_.apply(bus_);
 }
 
 template<VZVariant V>
@@ -232,8 +282,23 @@ bool VTechVZSystem<V>::load_roms() {
 }
 
 template<VZVariant V>
-void VTechVZSystem<V>::io_tick(bus_state_t& /*bus*/) {
-    // TODO: Z80 port I/O dispatch (keyboard read, speaker toggle)
+void VTechVZSystem<V>::io_tick(bus_state_t& bus) {
+    uint8_t port = BUS_GET_ADDR(bus) & 0xFF;
+    bool is_read = BUS_GET_BIT(bus, BUS_RW_BIT);
+
+    if (is_read) {
+        // Port reads — keyboard rows
+        if (port < vtech_vz_constants::KEYBOARD_ROWS) {
+            BUS_SET_DATA(bus, keyboard_matrix_[port]);
+        } else {
+            BUS_SET_DATA(bus, 0xFF);
+        }
+    } else {
+        // Port writes — speaker control
+        if ((port & 0xF0) == vtech_vz_constants::PORT_SPEAKER) {
+            spkr_state_ = BUS_GET_DATA(bus) & 1;
+        }
+    }
 }
 
 // ============================================================================
