@@ -281,7 +281,7 @@ void KC85System<V>::apply_banking() {
 
         // IRM bank selection
         if (irm_enabled_) {
-            constexpr size_t kIrmSlot = 1;
+            constexpr size_t kIrmSlot = 2;
             uint8_t bank = (bank_ctrl_ >> 1) & 0x03;  // io84 bits [2:1] select CPU bank
             board_.select_bank_at(bus_, 0, kIrmSlot, bank, 0x80);
         } else {
@@ -769,7 +769,7 @@ bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
             uint8_t new_bank = (bank_ctrl_ >> 1) & 0x03;
 
             if (new_bank != old_bank && irm_enabled_) {
-                constexpr size_t kIrmSlot = 1;
+                constexpr size_t kIrmSlot = 2;
                 board_.select_bank_at(bus_, 0, kIrmSlot, new_bank, 0x80);
             }
             active_plane_ = bank_ctrl_ & 0x01;

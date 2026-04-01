@@ -28,11 +28,11 @@
 //
 // Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
 //
-//   Slot 0: RAM         — 64 KB (full address space, actual size configurable)
-//   Slot 1: Monitor ROM — 256 bytes at $FF00
-//   Slot 2: BASIC ROM   — 4 KB at $E000 (optional — ?prefix)
-//   Slot 3: PIA         — MMIO-only, 4-byte window at $D010
-//   Slot 4: CPU         — not bus-mapped
+//   Slot 0: CPU         — not bus-mapped
+//   Slot 1: RAM         — 64 KB (full address space, actual size configurable)
+//   Slot 2: PIA         — MMIO-only, 4-byte window at $D010
+//   Slot 3: BASIC ROM   — 4 KB at $E000 (optional — ?prefix)
+//   Slot 4: Monitor ROM — 256 bytes at $FF00
 //
 // Write side: only RAM.  ROM reads overlay RAM; writes pass through to RAM
 // (4K/8K modes unmap ROM read pages; 64K mode never maps ROM at all).
