@@ -183,10 +183,41 @@ bool C128System::initialize() {
     board_.csg8502.init_io_port();
     board_.csg8502.reset();
 
-    // Video output — VIC-IIe drives composite video
+    // Video output — VIC-IIe drives composite video (primary, 40-col)
     video_port_ = std::make_unique<CompositeVideoPort>();
     vic_iie.set_video_out(&video_port_->output());
     video_port_->bind_frame_output(&last_frame_data_);
+
+    // VDC (8563) — 80-column RGBI output (secondary display)
+    auto& vdc = board_.vdc;
+    vdc.init();
+    vdc.bind_vram(vdc_vram_->data(), static_cast<uint32_t>(vdc_vram_->size_bytes()));
+
+    // Program VDC with power-on defaults matching the C128 KERNAL's
+    // initialization sequence.  Without these the VDC's zero-initialized
+    // registers produce degenerate timing (R0=0 → instant line wraps)
+    // that overflows the signal buffer before a FrameEnd is ever emitted.
+    {
+        using namespace fam6845::reg;
+        auto& r = vdc.regs_;
+        r[R0_HTOTAL]       = 126;  //  127 character clocks per line
+        r[R1_HDISPLAYED]   =  80;  //   80 visible characters
+        r[R2_HSYNC_POS]    = 102;  //  HSYNC at char 102
+        r[R3_SYNC_WIDTHS]  = 0x49; //  HSYNC width 9, VSYNC width 4
+        r[R4_VTOTAL]       =  32;  //   33 character rows total
+        r[R5_VADJUST]      =   0;
+        r[R6_VDISPLAYED]   =  25;  //   25 visible rows
+        r[R7_VSYNC_POS]    =  29;  //  VSYNC at row 29
+        r[R8_MODE_CTRL]    = 0x00; //  Non-interlaced
+        r[R9_MAX_SCANLINE] =   7;  //    8 scan lines per character row
+        r[R10_CURSOR_START]= 0x20; //  Cursor: no blink, start line 0
+        r[R11_CURSOR_END]  =   7;  //  Cursor end at line 7
+    }
+
+    // VDC video output: not wired yet.  On the real C128 the VDC
+    // drives a separate RGBI connector; a dual-display pipeline is
+    // needed before pixel output can be enabled.  Register I/O and
+    // DRAM operations work without it.
 
     system_ready_ = true;
     printf("C128: System initialized\n");
@@ -259,6 +290,7 @@ void C128System::tick() {
         s = board_.colorram.tick_mmio(s);
         s = cia1.tick_mmio(s);
         s = cia2.tick_mmio(s);
+        s = board_.vdc.tick_mmio(s);
     }
 
     // NMI edge detection
@@ -279,6 +311,9 @@ void C128System::tick() {
 
     // PHASE 5: SID — sound generation
     s = sid.tick(s);
+
+    // VDC character clock — runs at ~1 MHz (same rate as slow-mode CPU)
+    board_.vdc.tick();
 
     pins_ = s;
 }
@@ -457,8 +492,9 @@ void C128System::init_io_dispatch() {
     // MMU (8722): $D500-$D5FF (sub-entry 5) — TODO: no chip yet
     bus_.set_indexed_entry(kViewerCpu, io_sub, 5, no_chip_rd, no_chip_wr);
 
-    // VDC (8563): $D600-$D6FF (sub-entry 6) — TODO: no chip yet
-    bus_.set_indexed_entry(kViewerCpu, io_sub, 6, no_chip_rd, no_chip_wr);
+    // VDC (8563): $D600-$D6FF (sub-entry 6)
+    const uint16_t idVdc = board_.vdc.bus_chip_id();
+    bus_.set_indexed_entry(kViewerCpu, io_sub, 6, cs_rd(idVdc), cs_wr(idVdc));
 
     // $D700: unused
     bus_.set_indexed_entry(kViewerCpu, io_sub, 7, no_chip_rd, no_chip_wr);
@@ -479,8 +515,8 @@ void C128System::init_io_dispatch() {
     // I/O 2: $DF00-$DFFF (sub-entry 15) — expansion port
     bus_.set_indexed_entry(kViewerCpu, io_sub, 15, no_chip_rd, no_chip_wr);
 
-    printf("C128: I/O dispatch initialized (CS-tick, VIC-IIe=%u SID=%u ColRAM=%u CIA1=%u CIA2=%u)\n",
-           idVicIIe, idSid, idColRam, idCia1, idCia2);
+    printf("C128: I/O dispatch initialized (CS-tick, VIC-IIe=%u SID=%u ColRAM=%u CIA1=%u CIA2=%u VDC=%u)\n",
+           idVicIIe, idSid, idColRam, idCia1, idCia2, idVdc);
 }
 
 void C128System::mmu_write(uint16_t /*addr*/, uint8_t /*data*/) {
