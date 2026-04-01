@@ -182,11 +182,27 @@ bool C128System::initialize() {
     // Initialize CPU — reset vector will come from Kernal ROM
     board_.csg8502.init();
     board_.csg8502.init_io_port();
+    board_.csg8502.bank_change_fn = cpu_banking_callback;
+    board_.csg8502.bank_change_ctx = this;
     board_.csg8502.reset();
+
+    // Sync bank config with the freshly-reset I/O port so KERNAL ROM is
+    // visible during the vector fetch ticks.
+    uint8_t banking_bits = board_.csg8502.io_port_regs.data
+                         & board_.csg8502.io_port_regs.ddr
+                         & 0x07;
+    cpu_banking_callback(this, banking_bits);
 
     // Video output — VIC-IIe drives composite video (primary, 40-col)
     video_port_ = std::make_unique<CompositeVideoPort>();
     vic_iie.set_video_out(&video_port_->output());
+
+    // Compute back porch for signal→framebuffer reconstruction.
+    // Back porch = distance from HSync falling edge to first visible pixel.
+    const uint16_t ppl = MOS8566_traits.cycles_per_line * 8;
+    const int back_porch = (int(MOS8566_traits.first_visible_x_coord) - int(MOS8566_traits.hsync_end) + ppl) % ppl;
+    video_port_->bind_display(nullptr, nullptr,
+                              c128_constants::VIC_DISPLAY_WIDTH_PAL, back_porch);
     video_port_->bind_frame_output(&last_frame_data_);
 
     // VDC (8563) — 80-column RGBI output (secondary display)
@@ -232,10 +248,8 @@ void C128System::reset() {
     board_.reset_chips();
     cpu_mode_ = CPUMode::MODE_8502;
     c64_mode_ = false;
-    std::memset(mmu_pcr_, 0, sizeof(mmu_pcr_));
-    mmu_cr_ = 0; mmu_mcr_ = 0; mmu_rcr_ = 0;
-    mmu_p0_[0] = 0; mmu_p0_[1] = 0;
-    mmu_p1_[0] = 0; mmu_p1_[1] = 1;
+    cpu_port_bits_ = 0x07;
+    update_bank_config();
     reset_load_state();
 }
 
@@ -275,23 +289,53 @@ void C128System::tick() {
 
     // PHASE 3: Address decode + buffer service + MMIO self-dispatch
     {
+        const uint16_t addr = BUS_GET_ADDR(s);
         const bool is_write = !BUS_GET_BIT(s, BUS_RW_BIT);
-        const size_t viewer = (is_write || BUS_GET_BIT(s, BUS_AEC_BIT))
-                                  ? kViewerCpu : kViewerVicII;
 
-        // 1. resolve() — address decode, embed CS field
-        s = bus_.resolve(s, viewer);
+        // $FF00-$FF04: MMU configuration registers (always visible)
+        // Intercepted before bus resolve because they exist outside the
+        // normal I/O page and must be accessible regardless of bank config.
+        if (addr >= 0xFF00 && addr <= 0xFF04) {
+            if (is_write) {
+                const uint8_t data = BUS_GET_DATA(s);
+                if (addr == 0xFF00) {
+                    board_.mmu.write_ff00(data);
+                } else {
+                    board_.mmu.write_ff01_ff04(static_cast<uint8_t>(addr - 0xFF01));
+                }
+            } else {
+                uint8_t data;
+                if (addr == 0xFF00) {
+                    data = board_.mmu.read_ff00();
+                } else {
+                    data = board_.mmu.read_ff01_ff04(static_cast<uint8_t>(addr - 0xFF01));
+                }
+                BUS_SET_DATA(s, data);
+            }
+        } else {
+            const size_t viewer = (is_write || BUS_GET_BIT(s, BUS_AEC_BIT))
+                                      ? kViewerCpu : kViewerVicII;
 
-        // 2. service() — buffer (RAM/ROM) access, MMIO IDs skipped
-        s = bus_.service(s);
+            // 1. resolve() — address decode, embed CS field
+            s = bus_.resolve(s, viewer);
 
-        // 3. Self-dispatch — each chip checks is_cs_selected() and handles own I/O
-        s = vic_iie.tick_mmio(s);
-        s = sid.tick_mmio(s);
-        s = board_.colorram.tick_mmio(s);
-        s = cia1.tick_mmio(s);
-        s = cia2.tick_mmio(s);
-        s = board_.vdc.tick_mmio(s);
+            // 2. service() — buffer (RAM/ROM) access, MMIO IDs skipped
+            s = bus_.service(s);
+
+            // 3. Self-dispatch — each chip checks is_cs_selected() and handles own I/O
+            s = vic_iie.tick_mmio(s);
+            s = sid.tick_mmio(s);
+            s = board_.colorram.tick_mmio(s);
+            s = board_.mmu.tick_mmio(s);
+            s = cia1.tick_mmio(s);
+            s = cia2.tick_mmio(s);
+            s = board_.vdc.tick_mmio(s);
+        }
+
+        // If the MMU's bank config was changed, apply it now
+        if (unlikely(board_.mmu.bank_config_dirty())) {
+            update_bank_config();
+        }
     }
 
     // NMI edge detection
@@ -490,8 +534,9 @@ void C128System::init_io_dispatch() {
     // SID: $D400-$D4FF (sub-entry 4)
     bus_.set_indexed_entry(kViewerCpu, io_sub, 4, cs_rd(idSid), cs_wr(idSid));
 
-    // MMU (8722): $D500-$D5FF (sub-entry 5) — TODO: no chip yet
-    bus_.set_indexed_entry(kViewerCpu, io_sub, 5, no_chip_rd, no_chip_wr);
+    // MMU (8722): $D500-$D5FF (sub-entry 5)
+    const uint16_t idMmu = board_.mmu.bus_chip_id();
+    bus_.set_indexed_entry(kViewerCpu, io_sub, 5, cs_rd(idMmu), cs_wr(idMmu));
 
     // VDC (8563): $D600-$D6FF (sub-entry 6)
     const uint16_t idVdc = board_.vdc.bus_chip_id();
@@ -516,25 +561,119 @@ void C128System::init_io_dispatch() {
     // I/O 2: $DF00-$DFFF (sub-entry 15) — expansion port
     bus_.set_indexed_entry(kViewerCpu, io_sub, 15, no_chip_rd, no_chip_wr);
 
-    log_info("C128: I/O dispatch initialized (CS-tick, VIC-IIe=%u SID=%u ColRAM=%u CIA1=%u CIA2=%u VDC=%u)\n",
-           idVicIIe, idSid, idColRam, idCia1, idCia2, idVdc);
-}
-
-void C128System::mmu_write(uint16_t /*addr*/, uint8_t /*data*/) {
-    // TODO: 8722 MMU register writes → update bank configuration
-}
-
-uint8_t C128System::mmu_read(uint16_t /*addr*/) {
-    // TODO: 8722 MMU register reads
-    return 0;
+    log_info("C128: I/O dispatch initialized (CS-tick, VIC-IIe=%u SID=%u ColRAM=%u CIA1=%u CIA2=%u VDC=%u MMU=%u)\n",
+           idVicIIe, idSid, idColRam, idCia1, idCia2, idVdc, idMmu);
 }
 
 void C128System::update_bank_config() {
-    // TODO: apply MMU configuration register to page table mapping
+    // Apply the MMU configuration register + processor port bits to the
+    // CPU viewer's page tables.  Called whenever CR, RCR, MCR, or the
+    // processor port changes.
+
+    auto& mmu = board_.mmu;
+    mmu.acknowledge_bank_config();
+
+    using ChipId  = Bus::ChipId;
+    using WriteId = Bus::WriteChipId;
+
+    // Chip IDs (from manifest declaration order, bank_size splits):
+    //   main_ram  (128KB, bank_size=64KB): bank 0 → ID 0, bank 1 → ID 1
+    //   basic_lo  ( 16KB):                 ID 2
+    //   basic_hi  ( 16KB):                 ID 3
+    //   editor_rom(  4KB):                 ID 4
+    //   char_rom  (  8KB):                 ID 5
+    //   kernal_rom(  8KB):                 ID 6
+    constexpr ChipId  kRamBank0  = ChipId(0);
+    constexpr ChipId  kRamBank1  = ChipId(1);
+    constexpr WriteId kRamBank0W = WriteId(0);
+    constexpr WriteId kRamBank1W = WriteId(1);
+    constexpr ChipId  kBasicLo   = ChipId(2);
+    constexpr ChipId  kBasicHi   = ChipId(3);
+    constexpr ChipId  kEditor    = ChipId(4);
+    constexpr ChipId  kCharRom   = ChipId(5);
+    constexpr ChipId  kKernal    = ChipId(6);
+
+    // Determine the "base" RAM bank from CR bit 6
+    const uint8_t bank = mmu.ram_bank();
+    const ChipId  ramRd = bank ? kRamBank1 : kRamBank0;
+    const WriteId ramWr = bank ? kRamBank1W : kRamBank0W;
+
+    // ── $0000-$3FFF: always RAM (selected bank) ─────────────────────
+    for (size_t p = 0; p < 4; ++p)
+        bus_.set_page(kViewerCpu, p, ramRd, ramWr);
+
+    // ── $4000-$7FFF: mid-lo ROM select ──────────────────────────────
+    {
+        const uint8_t sel = mmu.mid_lo_select();
+        ChipId rd = ramRd;
+        if (sel == mos8722::cr::ROM_DEFAULT) rd = kBasicLo;
+        // sel == 1 or 2: function ROM (not implemented, fall back to RAM)
+        for (size_t p = 4; p < 8; ++p)
+            bus_.set_page(kViewerCpu, p, rd, ramWr);
+    }
+
+    // ── $8000-$BFFF: mid-hi ROM select ──────────────────────────────
+    {
+        const uint8_t sel = mmu.mid_hi_select();
+        ChipId rd = ramRd;
+        if (sel == mos8722::cr::ROM_DEFAULT) rd = kBasicHi;
+        for (size_t p = 8; p < 12; ++p)
+            bus_.set_page(kViewerCpu, p, rd, ramWr);
+    }
+
+    // ── $C000-$CFFF: Editor ROM / RAM ───────────────────────────────
+    // ── $D000-$DFFF: I/O / Char ROM / RAM ───────────────────────────
+    // ── $E000-$FFFF: Kernal ROM / RAM ───────────────────────────────
+    {
+        const uint8_t high_sel = mmu.high_rom_select();
+        const uint8_t port = cpu_port_bits_;  // LORAM (0), HIRAM (1), CHAREN (2)
+        const bool hiram  = (port & 0x02) != 0;
+        const bool charen = (port & 0x04) != 0;
+
+        // $C000-$CFFF
+        if (high_sel == mos8722::cr::ROM_DEFAULT) {
+            // Editor ROM visible when HIRAM=1
+            bus_.set_page(kViewerCpu, 0xC, hiram ? kEditor : ramRd, ramWr);
+        } else {
+            bus_.set_page(kViewerCpu, 0xC, ramRd, ramWr);
+        }
+
+        // $D000-$DFFF
+        if (high_sel == mos8722::cr::ROM_RAM) {
+            // All RAM — no I/O, no char ROM
+            bus_.set_page(kViewerCpu, 0xD, ramRd, ramWr);
+        } else if (!charen && high_sel == mos8722::cr::ROM_DEFAULT) {
+            // CHAREN=0: character ROM visible at $D000-$DFFF (read)
+            bus_.set_page(kViewerCpu, 0xD, kCharRom, ramWr);
+        } else {
+            // Default: I/O space visible
+            bus_.map_to_indexed_sub(kViewerCpu, 0xD, 0);
+        }
+
+        // $E000-$FFFF
+        if (high_sel == mos8722::cr::ROM_DEFAULT && hiram) {
+            bus_.set_page(kViewerCpu, 0xE, kKernal, ramWr);
+            bus_.set_page(kViewerCpu, 0xF, kKernal, ramWr);
+        } else {
+            bus_.set_page(kViewerCpu, 0xE, ramRd, ramWr);
+            bus_.set_page(kViewerCpu, 0xF, ramRd, ramWr);
+        }
+    }
+
+    // ── VIC-IIe viewer — always sees bank 0 by default ──────────────
+    // The VIC bank from RCR bits 7-6 is separate from the CIA2 bank select
+    // (which selects 16KB windows).  For now, keep bank 0 as default.
+    // Character ROM ghosts remain at $1000 and $9000.
 }
 
 void C128System::switch_cpu_mode(CPUMode /*mode*/) {
     // TODO: switch between 8502 and Z80
+}
+
+void C128System::cpu_banking_callback(void* ctx, uint8_t banking_state) {
+    auto* sys = static_cast<C128System*>(ctx);
+    sys->cpu_port_bits_ = banking_state & 0x07;
+    sys->update_bank_config();
 }
 
 // ============================================================================
