@@ -193,6 +193,15 @@ struct mos6526_t : public IoChipBase {
     using DelayLine = StaticShiftRegister<uint64_t, 3, 3, 2, 2, 2, 2, 2, 2>;
     DelayLine delay_line;
 
+    // --- ChipBase bus interface (MMIO) ---
+    bool has_mmio() const override { return true; }
+    bus_state_t on_bus_read(bus_state_t bus) noexcept override {
+        return registers_read(this, bus);
+    }
+    bus_state_t on_bus_write(bus_state_t bus) noexcept override {
+        return registers_write(this, bus);
+    }
+
     // --- ChipBase interface ---
 #ifdef CERMU_HAS_GUI
     bool has_settings_content() const override;

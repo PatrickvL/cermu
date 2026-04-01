@@ -483,6 +483,15 @@ struct mos6581_t : public SoundChipBase {
     void register_debug_fields();
 #endif
 
+    // --- ChipBase bus interface (MMIO) ---
+    bool has_mmio() const override { return true; }
+    bus_state_t on_bus_read(bus_state_t bus) noexcept override {
+        return registers_read(this, bus);
+    }
+    bus_state_t on_bus_write(bus_state_t bus) noexcept override {
+        return registers_write(this, bus);
+    }
+
     // ChipBase interface
 #ifdef CERMU_HAS_GUI
     bool has_settings_content() const override { return true; }

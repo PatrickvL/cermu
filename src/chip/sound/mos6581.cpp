@@ -1369,6 +1369,15 @@ mos6581_t::~mos6581_t() {
  */
 bus_state_t mos6581_t::tick(bus_state_t bus_state) {
     bus_state = advance_cycle(bus_state);
+
+    // CS-tick: self-dispatch register access when chip-selected
+    if (is_cs_selected(bus_state)) {
+        bus_state = BUS_GET_BIT(bus_state, BUS_RW_BIT)
+            ? registers_read(this, bus_state)
+            : registers_write(this, bus_state);
+        mark_cs_serviced(bus_state);
+    }
+
 #ifdef CERMU_HAS_GUI
     bus_snapshot_ = bus_state;
 #endif
