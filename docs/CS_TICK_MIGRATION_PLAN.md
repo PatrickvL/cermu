@@ -331,6 +331,25 @@ until the CS model is proven on all other systems.
 
 ## Chip Tick Pattern
 
+### Tick Ordering Rule (MANDATORY)
+
+Every chip tick that combines MMIO register access with internal state advance
+**must** follow this order:
+
+1. **Service writes** — input latched on clock edge
+2. **State advance** — counters, timers, shift registers, etc.
+3. **Interrupt processing** — flag assertion from newly-advanced state
+4. **Service reads** — combinatorial output from new state
+
+**Rationale:** Writes are latched first so that e.g. a timer latch write in
+the same cycle as a timer underflow causes the reload to use the NEW latch
+value. Reads see post-advance state. Interrupt flags reflect just-completed
+advance and recently-cleared flags from phase-1 writes.
+
+Split-phase chips (CIA, SID, VIC-II) are naturally correct because the system
+tick loop controls the ordering: phi2 (IRQ) → tick_mmio (regs) → phi1
+(timers). Combined-tick chips (VIA) must enforce the ordering internally.
+
 ### MMIO chip (registers only)
 
 ```cpp
@@ -607,3 +626,70 @@ Phase 7:  Cleanup (remove has_mmio, callback path, dead code)
 
 Each phase is independently shippable and testable.
 No phase requires all prior phases to be complete across all systems.
+
+---
+
+## Migration Status (updated 2026-04-01)
+
+### Completed
+
+| System | Commit(s) | Notes |
+|--------|-----------|-------|
+| C64 | `5ca59d86` | resolve+service+tick_mmio; IndexedSubTable for $D000 I/O; PLA overlay untouched |
+| C128 | `f9645c90` | Same pattern as C64; VIC-IIe, SID, ColorRAM, CIA1, CIA2; MMU/VDC placeholders |
+| C16/Plus4 | earlier | resolve+service; TED via io_dec_->tick() |
+| VIC-20 | earlier | resolve+service; I/O via io_dec_->tick() |
+| PET | earlier | resolve+service; PIA1, PIA2, VIA, CRTC |
+| BBC Micro | earlier | resolve+service; VIA, CRTC, manual ROM select |
+| Apple 1 | earlier | resolve+service; PIA |
+| Acorn Atom | earlier | resolve+service; PPI, VIA |
+| Atari 2600 | earlier | resolve; TIA, cartridge (no buffer service — all MMIO) |
+
+### Tick ordering fix
+
+| Chip | Commit | Fix |
+|------|--------|-----|
+| MOS 6522 VIA | `f9645c90` | Reordered tick() to write→advance→read (was advance→read/write) |
+
+All split-phase chips (CIA, SID, VIC-II) are already correct — ordering is
+enforced by the system tick loop.
+
+### Not applicable (Z80 port-based I/O systems)
+
+These use `bus_.tick()` for memory (RAM/ROM) and manual `io_tick()` for Z80
+port I/O. No memory-mapped MMIO chips exist on their bus. Migration is
+**blocked on the Z80 I/O bus design decision** (Open Question §2: one bus
+or two?).
+
+| System | I/O mechanism |
+|--------|--------------|
+| DDR LC80 | Z80 PIO × 2, CTC — port I/O |
+| DDR Z1013 | Z80 PIO — port I/O |
+| DDR Z9001/KC87 | Z80 PIO × 2, CTC — port I/O |
+| DDR KC85/2/3/4 | Z80 PIO, CTC — port I/O |
+| ZX Spectrum 48K/128K | ULA, AY — port I/O |
+| Amstrad CPC | MC6845, i8255, Gate Array, AY — port I/O |
+| MSX / MSX2 / MSX2+ | TMS9918A/V9938, AY, PPI — port I/O |
+| ColecoVision | TMS9918A, SN76489 — port I/O |
+| Memotech MTX | TMS9918A, AY, CTC — port I/O |
+| Tatung Einstein | TMS9929A, AY, CTC, PIO — port I/O |
+| Spectravideo SVI | TMS9918A, AY, PPI — port I/O |
+| Sega SG-1000 | TMS9918A, SN76489 — port I/O |
+| Sega SMS | VDP 315-5124, SN76489 — port I/O |
+
+### Not applicable (arcade system-level glue)
+
+These have memory-mapped I/O but it's **system-level glue** (input ports,
+DIP switches, sound latches, control flags) — not `ChipBase` instances
+that could self-dispatch via `tick_mmio()`. Migration requires first
+creating proper chip implementations for their I/O hardware.
+
+| System | I/O type |
+|--------|----------|
+| BombJack | Manual $B000 dispatch: inputs, DIP, sound latch, bg select |
+| Namco (Pac-Man, Pengo) | Manual $5xxx/$9xxx dispatch: inputs, WSG regs, control |
+| Atari Vector (7 games) | Per-variant dispatch: POKEY, EAROM, LS259, inputs |
+
+### Stubs (not yet implemented)
+
+Oric, Apple II, VTech VZ, BBC Master — tick loops are TODO skeletons.
