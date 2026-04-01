@@ -26,7 +26,7 @@
 #include "core/signal/audio_port.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
-#include "chip/video/mc6845/mc6845.hpp"
+#include "chip/video/fam6845/mc6845.hpp"
 #include "chip/io/i8255.hpp"
 #include "chip/sound/ay_psg/ay_3_8912.hpp"
 #include "chip/memory/memory_chip.hpp"

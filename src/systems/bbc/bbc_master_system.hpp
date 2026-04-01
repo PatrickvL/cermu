@@ -48,7 +48,7 @@
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/wdc65c02.hpp"
 #include "chip/io/mos6522.hpp"
-#include "chip/video/mc6845/mc6845.hpp"
+#include "chip/video/fam6845/mc6845.hpp"
 #include "chip/video/bbc_vidproc/bbc_vidproc.hpp"
 #include "chip/sound/sn76489/sn76489.hpp"
 #include "chip/memory/memory_chip.hpp"

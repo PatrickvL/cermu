@@ -41,6 +41,6 @@ struct FrameData {
 };
 
 // Maximum signal buffer: enough for one full frame of the largest system.
-// C64 PAL: 504×312 ≈ 157K samples.  Allow generous headroom.
-inline constexpr uint32_t MAX_SIGNAL_SAMPLES = 512 * 320;  // ~163K
+// BBC frame dump: 640×256 + 257 sync markers ≈ 164K.  Allow generous headroom.
+inline constexpr uint32_t MAX_SIGNAL_SAMPLES = 640 * 280;  // ~179K
 inline constexpr uint32_t MAX_SYNC_EVENTS    = 400;

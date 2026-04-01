@@ -8,7 +8,7 @@
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/io/pia6820.hpp"
 #include "chip/io/mos6522.hpp"
-#include "chip/video/mc6845/mc6845.hpp"
+#include "chip/video/fam6845/mc6845.hpp"
 #include "chip/memory/memory_chip.hpp"
 
 #include <cstdint>
