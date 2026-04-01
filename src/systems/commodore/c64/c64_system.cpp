@@ -1289,8 +1289,8 @@ void C64System::handle_controller_event(int controller, int button, bool pressed
 //
 // Digits 1-9:  select subtune 1-9 directly (0-based index 0-8)
 // Digit 0:     select subtune 10 (0-based index 9)
-// Right arrow:  next subtune (wraps from last → first)
-// Left arrow:   previous subtune (wraps from first → last)
+// Right / + / PageDown:  next subtune (wraps from last → first)
+// Left / - / PageUp:     previous subtune (wraps from first → last)
 // =============================================================================
 
 bool C64System::handle_sid_player_key(SDL_Keycode key) {
@@ -1306,12 +1306,12 @@ bool C64System::handle_sid_player_key(SDL_Keycode key) {
             new_subtune = digit - 1;  // Convert to 0-based
         }
     }
-    // Cursor right = next subtune (with wrapping)
-    else if (key == SDLK_RIGHT) {
+    // Cursor right / Plus / = / PageDown = next subtune (with wrapping)
+    else if (key == SDLK_RIGHT || key == SDLK_PLUS || key == SDLK_EQUALS || key == SDLK_KP_PLUS || key == SDLK_PAGEDOWN) {
         new_subtune = (active_subtune_ + 1) % num_songs;
     }
-    // Cursor left = previous subtune (with wrapping)
-    else if (key == SDLK_LEFT) {
+    // Cursor left / Minus / PageUp = previous subtune (with wrapping)
+    else if (key == SDLK_LEFT || key == SDLK_MINUS || key == SDLK_KP_MINUS || key == SDLK_PAGEUP) {
         new_subtune = (active_subtune_ == 0) ? (num_songs - 1)
                                               : (active_subtune_ - 1);
     }
