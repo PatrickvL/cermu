@@ -39,6 +39,7 @@
 #include "chip/cpu/fam65xx/csg8502.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/video/vic_ii/mos8566.hpp"
+#include "chip/video/fam6845/mos8563.hpp"
 #include "chip/sound/mos6581.hpp"
 #include "chip/io/mos6526.hpp"
 #include "chip/memory/memory_chip.hpp"
@@ -82,6 +83,7 @@
     V(ctx, mos8566_t,  vic_iie,     0xD000,       0, 0,      0, "MOS 8566 VIC-IIe", nullptr) \
     V(ctx, mos6581_t,  sid,         0xD400,       0, 0,      0, "MOS 6581 SID",    nullptr) \
     V(ctx, MOS2114,    colorram,    0xD800,       0, 0,      0, "Color RAM",       nullptr) \
+    V(ctx, mos8563_t,  vdc,         0xD600,       0, 0,      0, "MOS 8563 VDC",   nullptr) \
     V(ctx, mos6526_t,  cia1,        0xDC00,       0, 0,      0, "CIA 1",           nullptr) \
     V(ctx, mos6526_t,  cia2,        0xDD00,       0, 0,      0, "CIA 2",           nullptr)
 
@@ -97,8 +99,8 @@ inline constexpr auto make_c128_manifest() {
     for (auto& s : m.chips)
         if (s.overlay_group == 1) s.bank_size = s.size_bytes;
     // MMIO mirror ranges
-    m.chips[9].bank_size  = 0x400;   // VIC-IIe: mirrors across $D000-$D3FF
-    m.chips[10].bank_size = 0x400;   // SID: mirrors across $D400-$D7FF
+    m.chips[10].bank_size = 0x400;   // VIC-IIe: mirrors across $D000-$D3FF
+    m.chips[11].bank_size = 0x400;   // SID: mirrors across $D400-$D7FF
     return m;
 }
 inline constexpr auto kC128Chips = make_c128_manifest();
@@ -166,7 +168,8 @@ private:
 
     // ── Display ──────────────────────────────────────────────────────────
     std::unique_ptr<CompositeVideoPort> video_port_;  // VIC-IIe output (40-col)
-    // TODO: second video port for VDC 80-column output
+    // VDC RGBI port: deferred until dual-display pipeline is implemented.
+    // The VDC ticks counters and services MMIO without pixel output.
 
     // ── 8722 MMU state ───────────────────────────────────────────────────
     uint8_t mmu_cr_        = 0;          // Configuration register
