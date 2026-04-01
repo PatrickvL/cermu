@@ -20,6 +20,7 @@
 #include "chip/cpu/fam65xx/mos6510.hpp"
 #include "chip/cpu/fam65xx/mos7501.hpp"
 #include "chip/cpu/fam65xx/ricoh_2a03.hpp"
+#include "chip/cpu/fam65xx/ricoh_5a22.hpp"
 #include "chip/cpu/fam65xx/mos6507.hpp"
 #include "chip/cpu/fam65xx/wdc65c02.hpp"
 #include "chip/cpu/fam65xx/synertek65c02.hpp"
@@ -265,6 +266,11 @@ template void fam65xx_t<CSG8502Traits>::render_settings_content();
 template ChipLayout* fam65xx_t<CSG8502Traits>::create_chip_layout() const;
 template std::vector<PinSignalState> fam65xx_t<CSG8502Traits>::get_layout_pin_states(ChipLayout&);
 template const char* fam65xx_t<CSG8502Traits>::get_layout_chip_name() const;
+
+template void fam65xx_t<RICOH_5A22Traits>::render_settings_content();
+template ChipLayout* fam65xx_t<RICOH_5A22Traits>::create_chip_layout() const;
+template std::vector<PinSignalState> fam65xx_t<RICOH_5A22Traits>::get_layout_pin_states(ChipLayout&);
+template const char* fam65xx_t<RICOH_5A22Traits>::get_layout_chip_name() const;
 
 } // namespace fam65xx
 

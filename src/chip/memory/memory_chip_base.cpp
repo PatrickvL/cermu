@@ -259,7 +259,7 @@ static ChipLayout create_memory_layout(size_t size_bytes,
     }
 
     // Data pins D7..D0 (top to bottom = D7 first)
-    for (int i = data_bits - 1; i >= 0 && rpin > pin; i--) {
+    for (int i = data_bits - 1; i >= 0 && rpin >= pin; i--) {
         PinLabel lbl = static_cast<PinLabel>(static_cast<int>(PinLabel::D0) + i);
         layout.right_pins.push_back(make_pin(rpin, lbl));
         rpin--;
@@ -268,22 +268,22 @@ static ChipLayout create_memory_layout(size_t size_bytes,
     // Control pins at bottom of right side
     if (type == MemoryChipBase::RAM || type == MemoryChipBase::SRAM) {
         // WE, OE, CE from bottom up
-        if (rpin > pin) {
+        if (rpin >= pin) {
             layout.right_pins.push_back(CHIP_PIN(rpin, _WE));
             rpin--;
         }
     }
-    if (rpin > pin) {
+    if (rpin >= pin) {
         layout.right_pins.push_back(CHIP_PIN(rpin, _OE));
         rpin--;
     }
-    if (rpin > pin) {
+    if (rpin >= pin) {
         layout.right_pins.push_back(CHIP_PIN(rpin, _CS));
         rpin--;
     }
 
     // Fill any remaining right-side pins as NC
-    while (rpin > pin) {
+    while (rpin >= pin) {
         layout.right_pins.push_back(CHIP_PIN(rpin, NC));
         rpin--;
     }
@@ -298,11 +298,15 @@ static ChipLayout create_memory_layout(size_t size_bytes,
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* MemoryChipBase::get_chip_layout() const {
+    // Prefer subclass custom layout (e.g. MOS2114's hardware-accurate DIP-18)
+    ChipLayout* custom = create_chip_layout();
+    if (custom) return custom;
+
+    // Fallback: generic layout derived from size_bytes_ and type_
     static thread_local ChipLayout* cached_layout = nullptr;
     static thread_local size_t cached_size = 0;
     static thread_local MemoryType cached_type = RAM;
 
-    // Rebuild layout if parameters changed (typically stable after first call)
     if (!cached_layout || cached_size != size_bytes_ || cached_type != type_) {
         static thread_local ChipLayout layout_storage;
         layout_storage = create_memory_layout(size_bytes_, type_);
