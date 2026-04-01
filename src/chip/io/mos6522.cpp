@@ -255,6 +255,17 @@ bus_state_t mos6522_t::tick(bus_state_t bus_state) {
     bool t1_continuous = (acr & MOS6522_ACR_T1_CONT) != 0;
     bool t2_pulse_count_mode = (acr & MOS6522_ACR_T2_CONT) != 0;  // T2 in pulse counting mode, not used here
 
+    // ── Phase 1: Service writes (input latched on clock edge) ──
+    // Writes are applied before state advance so that e.g. a T1CH write
+    // in the same cycle as a timer underflow reloads from the NEW latch.
+    const bool cs = is_cs_selected(bus_state);
+    const bool rw = BUS_GET_BIT(bus_state, BUS_RW_BIT);
+    if (cs && !rw) {
+        bus_state = on_bus_write(bus_state);
+    }
+
+    // ── Phase 2: State advance (timers) ──
+
     // Timer 1 processing
     if (timer1_running) {
         // Decrement counter first
@@ -294,9 +305,11 @@ bus_state_t mos6522_t::tick(bus_state_t bus_state) {
         }
     }
 
-    // Interrupt processing - CONTINUOUS ASSERTION
-    // The VIA continuously asserts IRQ as long as any enabled interrupt flag is set
-    // Check if any enabled interrupt is active (bits 0-6 of IFR AND IER)
+    // ── Phase 3: Interrupt processing ──
+    // The VIA continuously asserts IRQ as long as any enabled interrupt flag is set.
+    // Check if any enabled interrupt is active (bits 0-6 of IFR AND IER).
+    // Placed after state advance so newly-set flags (from underflow) and
+    // recently-cleared flags (from phase-1 writes to IFR/IER) are visible.
     if (ifr & ier & 0x7F) {
         // Set the master IRQ bit in IFR
         ifr |= MOS6522_IFR_IRQ;
@@ -311,10 +324,12 @@ bus_state_t mos6522_t::tick(bus_state_t bus_state) {
         ifr &= ~MOS6522_IFR_IRQ;
     }
 
-    // CS-driven MMIO self-dispatch
-    if (is_cs_selected(bus_state)) {
-        bus_state = BUS_GET_BIT(bus_state, BUS_RW_BIT)
-            ? on_bus_read(bus_state) : on_bus_write(bus_state);
+    // ── Phase 4: Service reads (combinatorial from new state) ──
+    // Reads see post-advance state: updated counters, freshly-set IFR bits, etc.
+    if (cs) {
+        if (rw) {
+            bus_state = on_bus_read(bus_state);
+        }
         mark_cs_serviced(bus_state);
     }
 

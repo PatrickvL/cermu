@@ -81,7 +81,7 @@
     V(ctx, ZilogZ80A,  z80,         0,            0, 0,      0, "Zilog Z80A",      nullptr) \
     V(ctx, mos8566_t,  vic_iie,     0xD000,       0, 0,      0, "MOS 8566 VIC-IIe", nullptr) \
     V(ctx, mos6581_t,  sid,         0xD400,       0, 0,      0, "MOS 6581 SID",    nullptr) \
-    V(ctx, MOS2114,    colorram,    0xD800,  0x0400, 0,      0, "Color RAM",       nullptr) \
+    V(ctx, MOS2114,    colorram,    0xD800,       0, 0,      0, "Color RAM",       nullptr) \
     V(ctx, mos6526_t,  cia1,        0xDC00,       0, 0,      0, "CIA 1",           nullptr) \
     V(ctx, mos6526_t,  cia2,        0xDD00,       0, 0,      0, "CIA 2",           nullptr)
 
@@ -103,8 +103,11 @@ inline constexpr auto make_c128_manifest() {
 }
 inline constexpr auto kC128Chips = make_c128_manifest();
 
-// 4 KB pages, 2 viewers (CPU + VIC-IIe)
-using C128BusSpec = ManifestBusSpec<kC128Chips, 16, 12, 2>;
+// 4 KB pages, 2 viewers (CPU + VIC-IIe), CS-tick enabled
+struct C128BusSpec : ManifestBusSpec<kC128Chips, 16, 12, 2, true> {
+    static constexpr size_t MaxIndexedSubTables = 1;    // I/O page ($D000-$DFFF)
+    static constexpr size_t IndexedSubBits      = 4;    // 16 × 256B entries (bits 11-8)
+};
 
 // Value-typed chips: all chips are fields via X-macro.
 struct C128Chipset {
@@ -194,4 +197,5 @@ private:
     uint8_t mmu_read(uint16_t addr);
     void update_bank_config();           // Apply MMU state to page tables
     void switch_cpu_mode(CPUMode mode);  // Toggle between 8502 and Z80
+    void init_io_dispatch();                // Set up CS-tick indexed sub-table for I/O page
 };
