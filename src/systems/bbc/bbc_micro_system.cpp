@@ -243,6 +243,7 @@ bool BBCMicroSystem::initialize() {
     board_.sys_via.port_a_read_context = this;
     board_.sys_via.port_b_read_callback = sys_via_port_b_read;
     board_.sys_via.port_b_read_context = this;
+    board_.sys_via.set_port_b_write_callback(sys_via_port_b_write, this);
 
     // ---- User VIA ($FE60-$FE7F) ----
     board_.user_via.reset();
@@ -287,6 +288,7 @@ void BBCMicroSystem::reset() {
     board_.sys_via.port_a_read_context = this;
     board_.sys_via.port_b_read_callback = sys_via_port_b_read;
     board_.sys_via.port_b_read_context = this;
+    board_.sys_via.set_port_b_write_callback(sys_via_port_b_write, this);
     board_.user_via.interrupt_bit = BUS_IRQ_BIT;
 
     // Reset audio thread adapter (both threads quiescent during reset)
@@ -309,48 +311,63 @@ void BBCMicroSystem::reset() {
 // Execution
 // ============================================================================
 
+// CS-tick architecture:
+//   resolve() → service() handles RAM/ROM via page table.
+//   CRTC, VIDPROC, System VIA, User VIA self-select via CS field.
+//   ROM select ($FE30) handled as system glue after CS dispatch.
+
 void BBCMicroSystem::tick() {
     bus_state_t s = pins_;
 
     // ---- CRTC character clock (1 MHz = every other CPU cycle) ----
+    // The CRTC character clock divides the 2 MHz CPU clock by 2.
+    // Register access happens at full CPU rate via CS dispatch below.
     crtc_divider_++;
     if (crtc_divider_ >= 2) {
         crtc_divider_ = 0;
-        if (true) {
-            board_.crtc.tick();
-        }
-        // SN76489 synthesis is now driven by the audio thread — no direct
-        // tick here.  signal_progress() is called once per CPU tick below.
+        board_.crtc.tick();  // character clock only (void)
     }
 
-    // ---- VIA tick (both VIAs) ----
-    {
-        bus_state_t via_bus = BBC_BUS_DEFAULT_STATE;
-        BUS_SET_BIT(via_bus, BUS_RW_BIT);
-        via_bus = board_.sys_via.tick(via_bus);
-        if (!BUS_GET_BIT(via_bus, BUS_IRQ_BIT)) {
-            BUS_CLR_BIT(s, BUS_IRQ_BIT);
-        }
+    // ---- Propagate VIA interrupt state from previous cycle ----
+    // VIA IRQ assertion persists in ifr/ier across ticks.  The CPU
+    // samples IRQ during PHI2, so propagate before the CPU tick.
+    if (board_.sys_via.ifr & board_.sys_via.ier & 0x7F) {
+        if (board_.sys_via.interrupt_bit != 0)
+            BUS_CLR_BIT(s, board_.sys_via.interrupt_bit);
     }
-    {
-        bus_state_t via_bus = BBC_BUS_DEFAULT_STATE;
-        BUS_SET_BIT(via_bus, BUS_RW_BIT);
-        via_bus = board_.user_via.tick(via_bus);
-        if (!BUS_GET_BIT(via_bus, BUS_IRQ_BIT)) {
-            BUS_CLR_BIT(s, BUS_IRQ_BIT);
-        }
+    if (board_.user_via.ifr & board_.user_via.ier & 0x7F) {
+        if (board_.user_via.interrupt_bit != 0)
+            BUS_CLR_BIT(s, board_.user_via.interrupt_bit);
     }
 
-    // ---- CPU PHI2 ----
+    // ---- CPU PHI2 — address/R#W valid on bus ----
     s = board_.m6502.tick<MOS6502::Phase::PHI2>(s);
 
-    // ---- Memory / I/O service ----
-    {
+    // ---- Address decode + flat-mem service + MMIO self-dispatch ----
+    s = bus_.resolve(s);
+    s = bus_.service(s);
+
+    // VIA ticks: advance timers (every cycle) + CS-gated register access
+    s = board_.sys_via.tick(s);
+    s = board_.user_via.tick(s);
+
+    // CRTC register access (CS-gated, no character clock — already ticked above)
+    if (board_.crtc.is_cs_selected(s)) {
+        s = BUS_GET_BIT(s, BUS_RW_BIT)
+            ? board_.crtc.on_bus_read(s) : board_.crtc.on_bus_write(s);
+        board_.crtc.mark_cs_serviced(s);
+    }
+
+    // Video ULA register access (CS-gated, write-only)
+    s = board_.vidproc.tick(s);
+
+    // ROM select register ($FE30) — system glue, not a chip.
+    // Not mapped to any chip ID → CS field won't match any chip.
+    if (unlikely(!BUS_GET_BIT(s, BUS_RW_BIT))) {
         uint16_t addr = BUS_GET_ADDR(s);
-        if (unlikely(addr >= bbc_constants::FRED_START && addr <= bbc_constants::SHEILA_END)) {
-            s = sheila_tick(s);     // FRED/JIM/SHEILA I/O ($FC00-$FEFF)
-        } else {
-            s = bus_.tick(s);    // Memory dispatch via MemoryBus
+        if (addr == bbc_constants::ROM_SELECT_REG) {
+            rom_select_ = BUS_GET_DATA(s) & 0x0F;
+            update_paged_rom();
         }
     }
 
@@ -391,11 +408,13 @@ void BBCMicroSystem::configure_bus_memory_map() {
     //   $80-$BF: Paged ROM bank 0 (read) — clipped from 256 KB pool
     //   $C0-$FF: OS ROM (read) — overrides clipped paged ROM pages
     //
-    // We fix up: write-protect ROM regions, unmap I/O pages, select active bank.
+    // With EnableCs=true, apply() Phase 3 also creates MaskedSubTable
+    // entries for SHEILA ($FE) with regions for CRTC, VIDPROC, two VIAs.
+    // FRED ($FC) and JIM ($FD) remain unmapped → open-bus on read.
     board_.apply(bus_);
 
-    // Unmap FRED ($FC), JIM ($FD), SHEILA ($FE) — handled by sheila_tick()
-    bus_.map_no_chip_selected(0, 0xFC, 3);
+    // Unmap FRED ($FC) and JIM ($FD) — no hardware on the 1 MHz bus yet
+    bus_.map_no_chip_selected(0, 0xFC, 2);
 
     // Map currently selected paged ROM bank to $80-$BF
     update_paged_rom();
@@ -407,113 +426,55 @@ void BBCMicroSystem::update_paged_rom() {
 }
 
 // ============================================================================
-// SHEILA / FRED / JIM I/O Dispatch ($FC00-$FEFF)
+// System VIA Port B Write Callback — Addressable Latch + SN76489 Trigger
 // ============================================================================
+//
+// The BBC Micro's 74LS259 addressable latch is driven by System VIA Port B:
+//   PB0-PB2: latch address (0-7)
+//   PB3:     latch data (1 = set, 0 = clear)
+//
+// Latch bit assignments:
+//   D0: SN76489 /WE (active-low → falling edge triggers sound write)
+//   D1-D2: speech processor /RS, /WS
+//   D3: keyboard auto-scan enable
+//   D4-D5: caps/shift lock LEDs
+//
+// SN76489 data comes from System VIA Port A.  The write sequence:
+//   1. CPU writes data byte to VIA Port A (ORA)
+//   2. CPU writes latch address 0, data=0 to VIA Port B (ORB) → /WE goes low
+//   3. CPU writes latch address 0, data=1 to VIA Port B (ORB) → /WE goes high
+// We detect the falling edge of latch bit 0 and enqueue a timestamped write.
 
-bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
-    uint16_t addr = BUS_GET_ADDR(s);
+void BBCMicroSystem::sys_via_port_b_write(void* context, uint8_t data) {
+    auto* sys = static_cast<BBCMicroSystem*>(context);
 
-    // FRED ($FC00-$FCFF) and JIM ($FD00-$FDFF): 1 MHz bus, not implemented
-    if (addr < bbc_constants::SHEILA_START) {
-        if (BUS_GET_BIT(s, BUS_RW_BIT))
-            BUS_SET_DATA(s, 0xFF);
-        return s;
-    }
+    uint8_t latch_addr = data & 0x07;
+    bool latch_data = (data >> 3) & 0x01;
+    uint8_t old_latch = sys->addressable_latch_;
 
-    // SHEILA I/O page ($FE00-$FEFF)
-    if (BUS_GET_BIT(s, BUS_RW_BIT)) {
-        // ---- Read cycle ----
-        uint8_t data = 0xFF;
+    if (latch_data)
+        sys->addressable_latch_ |= (1 << latch_addr);
+    else
+        sys->addressable_latch_ &= ~(1 << latch_addr);
 
-        if (addr >= bbc_constants::CRTC_BASE && addr <= bbc_constants::CRTC_END) {
-            data = board_.crtc.read(addr);
-        }
-        else if (addr >= bbc_constants::SYSTEM_VIA_BASE && addr <= bbc_constants::SYSTEM_VIA_END) {
-            bus_state_t via_s = BBC_BUS_DEFAULT_STATE;
-            BUS_SET_ADDR(via_s, addr - bbc_constants::SYSTEM_VIA_BASE);
-            BUS_SET_BIT(via_s, BUS_RW_BIT);
-            via_s = board_.sys_via.registers_read(via_s);
-            data = BUS_GET_DATA(via_s);
-        }
-        else if (addr >= bbc_constants::USER_VIA_BASE && addr <= bbc_constants::USER_VIA_END) {
-            bus_state_t via_s = BBC_BUS_DEFAULT_STATE;
-            BUS_SET_ADDR(via_s, addr - bbc_constants::USER_VIA_BASE);
-            BUS_SET_BIT(via_s, BUS_RW_BIT);
-            via_s = board_.user_via.registers_read(via_s);
-            data = BUS_GET_DATA(via_s);
-        }
-
-        BUS_SET_DATA(s, data);
-    } else {
-        // ---- Write cycle ----
-        uint8_t data = BUS_GET_DATA(s);
-
-        if (addr >= bbc_constants::CRTC_BASE && addr <= bbc_constants::CRTC_END) {
-            board_.crtc.write(addr, data);
-        }
-        else if (addr == bbc_constants::VIDEO_ULA_CONTROL) {
-            board_.vidproc.write_control(data);
-        }
-        else if (addr == bbc_constants::VIDEO_ULA_PALETTE) {
-            board_.vidproc.write_palette(data);
-        }
-        else if (addr == bbc_constants::ROM_SELECT_REG) {
-            rom_select_ = data & 0x0F;
-            update_paged_rom();
-        }
-        else if (addr >= bbc_constants::SYSTEM_VIA_BASE && addr <= bbc_constants::SYSTEM_VIA_END) {
-            bus_state_t via_s = BBC_BUS_DEFAULT_STATE;
-            BUS_SET_ADDR(via_s, addr - bbc_constants::SYSTEM_VIA_BASE);
-            BUS_SET_DATA(via_s, data);
-            BUS_CLR_BIT(via_s, BUS_RW_BIT);
-            board_.sys_via.registers_write(via_s);
-
-            // Check if writing to Port B triggers sound chip or addressable latch
-            uint8_t via_reg = (addr - bbc_constants::SYSTEM_VIA_BASE) & 0x0F;
-            if (via_reg == 0x00) {  // ORB — Port B output
-                // Addressable latch: PB0-PB2 = address, PB3 = data
-                uint8_t latch_addr = data & 0x07;
-                bool latch_data = (data >> 3) & 0x01;
-                uint8_t old_latch = addressable_latch_;
-                if (latch_data) {
-                    addressable_latch_ |= (1 << latch_addr);
-                } else {
-                    addressable_latch_ &= ~(1 << latch_addr);
-                }
-
-                // SN76489 /WE is active-low on latch bit 0.
-                // Trigger write on falling edge: old bit 0 was HIGH, now LOW.
-                if (latch_addr == 0 && (old_latch & 0x01) && !latch_data) {
-                    if (psg_adapter_) {
-                        // Data comes from System VIA Port A output register.
-                        // Enqueue timestamped write for the audio thread.
-                        uint8_t psg_data = board_.sys_via.regs_[PORTA];
-                        psg_adapter_->cmd_queue().push_write(total_cycles_, 0, psg_data);
-                    }
-                }
-            }
-        }
-        else if (addr >= bbc_constants::USER_VIA_BASE && addr <= bbc_constants::USER_VIA_END) {
-            bus_state_t via_s = BBC_BUS_DEFAULT_STATE;
-            BUS_SET_ADDR(via_s, addr - bbc_constants::USER_VIA_BASE);
-            BUS_SET_DATA(via_s, data);
-            BUS_CLR_BIT(via_s, BUS_RW_BIT);
-            board_.user_via.registers_write(via_s);
+    // SN76489 /WE falling edge: old bit 0 was HIGH, now LOW
+    if (latch_addr == 0 && (old_latch & 0x01) && !latch_data) {
+        if (sys->psg_adapter_) {
+            uint8_t psg_data = sys->board_.sys_via.regs_[PORTA];
+            sys->psg_adapter_->cmd_queue().push_write(sys->total_cycles_, 0, psg_data);
         }
     }
-
-    return s;
 }
 
 // ============================================================================
-// Sound Chip Write — triggered via System VIA Port A
+// Sound Chip Write — triggered via System VIA Port B write callback
 // ============================================================================
 // The SN76489 /WE line is active-low.  On the BBC Micro, writing to the
 // sound chip is a multi-step process via the System VIA:
-//   1. Write data nibble to VIA Port A (slow data bus)
-//   2. Toggle addressable latch bit 0 low (/WE active)
-//   3. Toggle addressable latch bit 0 high (/WE inactive)
-// We handle this in the VIA Port A read callback by checking the latch state.
+//   1. Write data byte to VIA Port A (slow data bus)
+//   2. Toggle addressable latch bit 0 low via Port B write (/WE active)
+//   3. Toggle addressable latch bit 0 high via Port B write (/WE inactive)
+// The port_b_write_callback above handles the latch and SN76489 trigger.
 
 // ============================================================================
 // CRTC Display Callbacks

@@ -55,7 +55,7 @@ constexpr ChipManifest<kBBCMicroChipCount> make_bbc_micro_manifest() {
 }
 inline constexpr auto kBBCMicroChips = make_bbc_micro_manifest();
 
-using BBCMicroBusSpec = ManifestBusSpec<kBBCMicroChips, 16, 8>;
+using BBCMicroBusSpec = ManifestBusSpec<kBBCMicroChips, 16, 8, 1, true>;
 
 // ============================================================================
 // BBC Micro Chips — value-typed chips owned by Board
@@ -167,10 +167,11 @@ private:
     uint32_t    crtc_divider_ = 0;       // CPU runs at 2 MHz, CRTC at 1 MHz
 
     // Helper methods
-    void tick_cpu();
-    bus_state_t sheila_tick(bus_state_t s);   // FRED/JIM/SHEILA I/O ($FC00-$FEFF)
     void configure_bus_memory_map();          // Post-apply() page table fixups
     void update_paged_rom();                  // Remap $8000-$BFFF after rom_select_ change
+
+    // System VIA Port B write callback — addressable latch + SN76489 trigger
+    static void sys_via_port_b_write(void* context, uint8_t data);
 
     // CRTC display callbacks — forward to VIDPROC
     void crtc_display_char(uint16_t ma, uint8_t ra, bool cursor);
