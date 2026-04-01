@@ -449,7 +449,7 @@ void Apple1System::configure_bus_memory_map() {
 
     // effective_size trims RAM in Phase 1 and gives MMIO sub-tables
     // (PIA at $D0) an open-bus base when RAM doesn't reach that page.
-    board_.set_effective_size(0, ram_size_);  // slot 0 = RAM
+    board_.set_effective_size(1, ram_size_);  // slot 1 = RAM
     board_.apply(bus_);
 
     // ── BASIC ROM — unmap if not loaded ─────────────────────────────────────

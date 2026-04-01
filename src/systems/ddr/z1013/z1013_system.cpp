@@ -77,8 +77,13 @@ bool Z1013System<V>::initialize() {
     register_board(&board_);
 
     // ── Bind and create chips from manifest, wire bus ───────────────────
-    { size_t slot_idx_ = 0;
-      Z1013_64K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
+    if constexpr (V == Z1013Variant::Z1013_64) {
+        size_t slot_idx_ = 0;
+        Z1013_64K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
+    } else {
+        size_t slot_idx_ = 0;
+        Z1013_16K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
+    }
     board_.create_chips(&pins_);
     board_.apply(bus_);
 
