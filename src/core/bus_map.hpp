@@ -13,7 +13,7 @@
 #pragma once
 
 #include "core/chip_manifest.hpp"
-#include "core/memory_bus.hpp"
+#include "core/memory_bus/bus.hpp"
 
 // §3  BusMap<Spec> — address-decode: page tables, MMIO handlers, sub-tables
 // =============================================================================
