@@ -74,8 +74,8 @@
     V(ctx, ROMChip,   editor_rom,   0xE000,   2048, 0,      0, "Editor ROM",      "edit-4-40-n-50Hz.901498-01.bin|edit-4-40-n-60Hz.901499-01.bin|editor.rom|901498-01.bin|901499-01.bin") \
     V(ctx, ROMChip,   kernal_rom,   0xF000,   4096, 0,      0, "Kernal ROM",      "kernal-4.901465-22.bin|kernal4.rom|kernal.rom|901465-22.bin") \
     V(ctx, mc6845_t,  crtc,         0xE880,       0, 0xFFF0, 0, "MC6845 CRTC",     nullptr) \
-    V(ctx, pia6820_t, pia1,         0xE810,       0, 0xFFF0, 0, "PIA 1 (Keyboard)", nullptr) \
-    V(ctx, pia6820_t, pia2,         0xE820,       0, 0xFFF0, 0, "PIA 2 (IEEE-488)", nullptr) \
+    V(ctx, mos6520_t, pia1,         0xE810,       0, 0xFFF0, 0, "PIA 1 (Keyboard)", nullptr) \
+    V(ctx, mos6520_t, pia2,         0xE820,       0, 0xFFF0, 0, "PIA 2 (IEEE-488)", nullptr) \
     V(ctx, mos6522_t, via,          0xE840,       0, 0xFFF0, 0, "MOS 6522 VIA",    nullptr)
 
 static constexpr size_t kPETChipCount = 0 PET_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
@@ -149,8 +149,8 @@ private:
 
     // Chip instances — all owned by board_ (manifest non-bus slots)
     MOS6502*    cpu_  = nullptr;    // MOS 6502 CPU @ 1 MHz
-    pia6820_t*  pia1_ = nullptr;    // PIA 1 — keyboard matrix + cassette sense
-    pia6820_t*  pia2_ = nullptr;    // PIA 2 — IEEE-488 bus interface
+    mos6520_t*  pia1_ = nullptr;    // PIA 1 — keyboard matrix + cassette sense
+    mos6520_t*  pia2_ = nullptr;    // PIA 2 — IEEE-488 bus interface
     mos6522_t*  via_  = nullptr;    // VIA — user port, timers, CB2 speaker
     mc6845_t*   crtc_ = nullptr;    // MC6845 CRTC — display timing
 
