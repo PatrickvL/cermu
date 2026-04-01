@@ -184,3 +184,44 @@ private:
     }
 #endif
 };
+
+// ============================================================================
+// PIA 6821 — Motorola 6821 Peripheral Interface Adapter
+// ============================================================================
+//
+// The 6821 is register-identical to the 6820.  The only hardware
+// difference is that Port B outputs are open-drain (active-low,
+// accent-external-pullup) instead of the 6820's push-pull NMOS
+// totem-pole drivers.  This matters for wired-OR bus sharing but
+// has no effect on register-level emulation.
+//
+// Systems using the 6821:
+//   - Apple II (slot I/O, game port, annunciators via dual PIA)
+//   - Motorola MEK6800D2 evaluation board
+//   - SWTPC 6800 (serial + parallel I/O)
+//   - Ohio Scientific C1P / Superboard II (keyboard + DAC audio)
+//   - Dragon 32/64 (keyboard matrix, joysticks, cartridge control)
+//   - Tandy Color Computer (CoCo) (keyboard, joysticks, DAC audio)
+//   - Acorn System 1 (I/O expansion)
+//   - Thomson TO7 / MO5 (keyboard + cassette + printer)
+//   - Vectrex (controller / DAC / sound via dual 6522+6821 pair)
+//
+struct pia6821_t : public pia6820_t {
+    pia6821_t() {
+        info_ = ChipInfo{"PIA6821", "Motorola", "Motorola 6821 PIA"};
+    }
+};
+
+// ============================================================================
+// MOS 6520 — MOS Technology second-source of the Motorola 6821
+// ============================================================================
+//
+// Register-identical and pin-compatible with the 6821 (open-drain Port B).
+// MOS Technology manufactured these for Commodore; used in the PET/CBM
+// series for keyboard scanning (PIA 1) and IEEE-488 bus interface (PIA 2).
+//
+struct mos6520_t : public pia6821_t {
+    mos6520_t() {
+        info_ = ChipInfo{"MOS6520", "MOS Technology", "MOS 6520 PIA"};
+    }
+};

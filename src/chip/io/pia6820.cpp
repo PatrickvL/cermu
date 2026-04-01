@@ -392,3 +392,5 @@ uint8_t pia6820_t::read_port_with_direction(uint8_t output_reg, uint8_t ddr,
 }
 
 REGISTER_CHIP_TYPE("PIA6820", pia6820_t)
+REGISTER_CHIP_TYPE("PIA6821", pia6821_t)
+REGISTER_CHIP_TYPE("MOS6520", mos6520_t)
