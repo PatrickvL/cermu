@@ -27,6 +27,25 @@ public:
     MOS2114();
     ~MOS2114() override = default;
 
+    // --- ChipBase bus interface (MMIO) ---
+    bool has_mmio() const override { return true; }
+    bus_state_t on_bus_read(bus_state_t bus) noexcept override {
+        return bus_read(this, bus);
+    }
+    bus_state_t on_bus_write(bus_state_t bus) noexcept override {
+        return bus_write(this, bus);
+    }
+
+    // --- CS-tick: self-dispatch when chip-selected ---
+    bus_state_t tick_mmio(bus_state_t bus) noexcept {
+        if (is_cs_selected(bus)) {
+            bus = BUS_GET_BIT(bus, BUS_RW_BIT)
+                ? bus_read(this, bus) : bus_write(this, bus);
+            mark_cs_serviced(bus);
+        }
+        return bus;
+    }
+
     // --- ChipBase interface ---
 #ifdef CERMU_HAS_GUI
     bool has_settings_content() const override;

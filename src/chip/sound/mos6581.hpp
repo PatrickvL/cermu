@@ -511,6 +511,21 @@ struct mos6581_t : public SoundChipBase {
     void set_cpu_clock(float clock_hz);
     void set_audio_port(AudioPort* port) { audio_port_ = port; }
 
+    /// CS-tick: self-dispatch register access when chip-selected.
+    /// For split-phase systems (C64) where advance_cycle runs separately.
+    bus_state_t tick_mmio(bus_state_t bus_state) {
+        if (is_cs_selected(bus_state)) {
+            bus_state = BUS_GET_BIT(bus_state, BUS_RW_BIT)
+                ? registers_read(this, bus_state)
+                : registers_write(this, bus_state);
+            mark_cs_serviced(bus_state);
+        }
+        return bus_state;
+    }
+
+    /// Advance one cycle of sound synthesis (no register access).
+    bus_state_t tick_audio(bus_state_t bus_state);
+
     // Static methods for C function pointer compatibility (io_page_handlers_t)
     static bus_state_t registers_read(void* context, bus_state_t bus_state);
     static bus_state_t registers_write(void* context, bus_state_t bus_state);
