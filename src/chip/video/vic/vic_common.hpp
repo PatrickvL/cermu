@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include "chip/video/vic/vic_traits.hpp"
 #include "chip/video/video_chip_base.hpp"
 #include "core/signal/composite_video_out.hpp"
 #include "core/system_lines.hpp"
@@ -188,15 +189,6 @@ enum vic_color_t {
     VIC_COLOR_LIGHT_GREY = 15
 };
 
-// VIC chip configuration
-struct vic_chip_config_t {
-    uint8_t cycles_per_line;
-    uint16_t total_lines;
-    uint32_t clock_frequency;
-    const char* chip_name;
-    bool is_pal;
-};
-
 // Memory read callback type for VIC to access system memory
 typedef uint8_t (*vic_mem_read_fn_t)(void* user_data, uint16_t addr);
 
@@ -304,7 +296,7 @@ struct vic_base_t : public VideoChipBase {
 
     // Configuration
     bool is_pal = false;
-    const vic_chip_config_t* config = nullptr;
+    const VicTraits* traits_ = nullptr;
 
     // Memory access callbacks
     vic_mem_read_fn_t mem_read = nullptr;
@@ -337,6 +329,7 @@ struct vic_base_t : public VideoChipBase {
     vic_audio_state_t audio = {};
 
     // --- Public methods ---
+    void init_base(const VicTraits& traits);   // Trait-driven initialization
     virtual void reset();
     bus_state_t tick(bus_state_t bus_state);
     void set_memory_callbacks(vic_mem_read_fn_t mem_read, void* mem_user_data,
@@ -371,4 +364,26 @@ protected:
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields();
 #endif
+};
+
+// ============================================================================
+// vic_t<VicTraits> — NTTP-driven VIC template
+// ============================================================================
+//
+// Thin wrapper that inherits all state and implementation from vic_base_t.
+// The template parameter bakes variant-specific constants into the type,
+// enabling type-safe PAL/NTSC distinction and compile-time identity.
+//
+// Usage:
+//   using mos6561_t = vic_t<MOS6561_traits>;   // PAL
+//   using mos6560_t = vic_t<MOS6560_traits>;   // NTSC
+//
+template<const VicTraits& Traits>
+struct vic_t : public vic_base_t {
+    static constexpr const VicTraits& traits = Traits;
+
+    // Initialize with Traits-derived config
+    void init() {
+        init_base(Traits);
+    }
 };
