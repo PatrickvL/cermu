@@ -33,10 +33,10 @@
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/io/pia6820.hpp"
 #include "chip/io/mos6522.hpp"
-#include "chip/video/mc6845/mc6845.hpp"
+#include "chip/video/fam6845/mc6845.hpp"
 #include "core/chip.hpp"
 
-using namespace mc6845::reg;
+using namespace fam6845::reg;
 
 // Include ROM loader
 #include "core/storage/rom_loader.hpp"

@@ -455,8 +455,8 @@ list(APPEND CHIP_SOURCES
     # Video - TED (C16/Plus4)
     src/chip/video/ted/ted7360.cpp
     
-    # Video - MC6845 CRTC (PET, BBC Micro, Amstrad CPC, ...)
-    src/chip/video/mc6845/mc6845.cpp
+    # Video - MC6845/VDC CRTC family (PET, BBC Micro, Amstrad CPC, C128, ...)
+    src/chip/video/fam6845/crtc_common.cpp
     
     # Video - TIA (Atari 2600)
     src/chip/video/tia/tia.cpp
@@ -647,7 +647,7 @@ if(BUILD_GUI)
         src/chip/logic/ls259_gui.cpp
         src/chip/logic/pla_gui.cpp
         src/chip/video/tia/tia_gui.cpp
-        src/chip/video/mc6845/mc6845_gui.cpp
+        src/chip/video/fam6845/crtc_gui.cpp
         src/chip/io/pia6532_gui.cpp
         src/chip/io/pia6820_gui.cpp
         src/chip/io/i8255_gui.cpp
@@ -699,7 +699,7 @@ set(GUI_STUB_SOURCES
     src/chip/logic/ls259_gui.cpp
     src/chip/logic/pla_gui.cpp
     src/chip/video/tia/tia_gui.cpp
-    src/chip/video/mc6845/mc6845_gui.cpp
+    src/chip/video/fam6845/crtc_gui.cpp
     src/chip/io/pia6532_gui.cpp
     src/chip/io/pia6820_gui.cpp
     src/chip/io/i8255_gui.cpp

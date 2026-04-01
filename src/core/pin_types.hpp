@@ -71,6 +71,7 @@
     PLBL_INV(_HIRAM,      "HIRAM",      "high RAM")                             \
     PLBL_INV(_IC,         "IC",         "initial clear (Yamaha FM)")            \
     PLBL_INV(_INT,        "INT",        "interrupt (Z80)")                      \
+    PLBL_INV(_INTR,       "INTR",       "interrupt (MOS 8563 VDC)")             \
     PLBL_INV(_IO,         "I/O",        "I/O area select")                      \
     PLBL_INV(_IORQ,       "IORQ",       "I/O request (Z80)")                    \
     PLBL_INV(_IPL0,       "IPL0",       "interrupt priority level 0 (M68K)")    \
@@ -128,8 +129,10 @@
     PLBL_PIN(AVCC,        "AVCC",       "analog supply voltage")                \
     PLBL_PIN(GND,         "GND",        "ground")                               \
     PLBL_PIN(VCC,         "VCC",        "+5V power")                            \
+    PLBL_PIN(VCC_DRAM,    "VCC DRAM",   "DRAM +5V supply (MOS 8563 VDC)")       \
     PLBL_PIN(VDD,         "VDD",        "+5V power supply")                     \
     PLBL_PIN(VSS,         "VSS",        "ground (0V)")                          \
+    PLBL_PIN(VSS_DRAM,    "VSS DRAM",   "DRAM ground (MOS 8563 VDC)")           \
     PLBL_PIN(VTIA,        "Vtia",       "TIA analog supply voltage")            \
     \
     /* ── Clock / oscillator ──────────────────────────────────────── */ \
@@ -202,6 +205,23 @@
     PLBL_PIN(D13,         "D13",        "data bit 13")                          \
     PLBL_PIN(D14,         "D14",        "data bit 14")                          \
     PLBL_PIN(D15,         "D15",        "data bit 15")                          \
+    /* ── Secondary data buses (DB=CPU, DD=DRAM — VDC, sequential) ── */ \
+    PLBL_PIN(DB0,         "DB0",        "CPU data 0 (MOS 8563 VDC)")            \
+    PLBL_PIN(DB1,         "DB1",        "CPU data 1 (MOS 8563 VDC)")            \
+    PLBL_PIN(DB2,         "DB2",        "CPU data 2 (MOS 8563 VDC)")            \
+    PLBL_PIN(DB3,         "DB3",        "CPU data 3 (MOS 8563 VDC)")            \
+    PLBL_PIN(DB4,         "DB4",        "CPU data 4 (MOS 8563 VDC)")            \
+    PLBL_PIN(DB5,         "DB5",        "CPU data 5 (MOS 8563 VDC)")            \
+    PLBL_PIN(DB6,         "DB6",        "CPU data 6 (MOS 8563 VDC)")            \
+    PLBL_PIN(DB7,         "DB7",        "CPU data 7 (MOS 8563 VDC)")            \
+    PLBL_PIN(DD0,         "DD0",        "DRAM data 0 (MOS 8563 VDC)")           \
+    PLBL_PIN(DD1,         "DD1",        "DRAM data 1 (MOS 8563 VDC)")           \
+    PLBL_PIN(DD2,         "DD2",        "DRAM data 2 (MOS 8563 VDC)")           \
+    PLBL_PIN(DD3,         "DD3",        "DRAM data 3 (MOS 8563 VDC)")           \
+    PLBL_PIN(DD4,         "DD4",        "DRAM data 4 (MOS 8563 VDC)")           \
+    PLBL_PIN(DD5,         "DD5",        "DRAM data 5 (MOS 8563 VDC)")           \
+    PLBL_PIN(DD6,         "DD6",        "DRAM data 6 (MOS 8563 VDC)")           \
+    PLBL_PIN(DD7,         "DD7",        "DRAM data 7 (MOS 8563 VDC)")           \
     \
     /* ── Control signals ─────────────────────────────────────────── */ \
     PLBL_CAT(CONTROL)                                                           \
@@ -411,17 +431,20 @@
     PLBL_PIN(CSYNC,       "CSYNC",      "composite sync")                       \
     PLBL_PIN(HSYNC,       "HSYNC",      "horizontal sync")                      \
     PLBL_PIN(LUMA,        "LUMA",       "luminance output")                     \
+    PLBL_PIN(RGBI,        "RGBI",       "RGBI digital video (MOS 8563 VDC)")    \
     PLBL_PIN(VOUT,        "VOUT",       "composite video output")               \
     PLBL_PIN(VSYNC,       "VSYNC",      "vertical sync")                        \
     \
     /* ── Video control ───────────────────────────────────────────── */ \
     PLBL_CAT(VIDEO_CONTROL)                                                     \
     PLBL_PIN(CURSOR,      "CURSOR",     "cursor output (MC6845 CRTC)")          \
+    PLBL_PIN(DRDY,        "DRDY",       "DRAM ready output (MOS 8563 VDC)")     \
     PLBL_PIN(DE,          "DE",         "display enable (MC6845 CRTC)")         \
     PLBL_PIN(EXTVDP,      "EXTVDP",     "external VDP input (TMS9918)")         \
     PLBL_PIN(DUMP,        "DUMP",       "paddle dump/discharge (TIA)")          \
     PLBL_PIN(HBLANK,      "HBLANK",     "horizontal blank output (5A22)")       \
     PLBL_PIN(LIGHT_PEN,   "LP",         "light pen input")                      \
+    PLBL_PIN(LPEN,        "LP",         "light pen input (MOS 8563 VDC)")       \
     PLBL_PIN(LPSTB,       "LPSTB",      "light pen strobe (MC6845 CRTC)")       \
     PLBL_PIN(REFRESH,     "REFRESH",    "WRAM refresh output (5A22)")           \
     PLBL_PIN(VBLANK,      "VBLANK",     "vertical blank output (5A22)")         \

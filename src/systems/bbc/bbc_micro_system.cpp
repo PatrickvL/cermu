@@ -6,7 +6,7 @@
 #include <cstring>
 #include <cstdio>
 
-using namespace mc6845::reg;
+using namespace fam6845::reg;
 
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>

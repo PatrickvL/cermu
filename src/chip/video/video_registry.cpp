@@ -10,7 +10,9 @@
 #include "core/chip_registry.hpp"
 
 #include "chip/video/mc6847/mc6847.hpp"
-#include "chip/video/mc6845/mc6845.hpp"
+#include "chip/video/fam6845/mc6845.hpp"
+#include "chip/video/fam6845/mos8563.hpp"
+#include "chip/video/fam6845/mos8568.hpp"
 #include "chip/video/dvg/dvg.hpp"
 #include "chip/video/bbc_vidproc/bbc_vidproc.hpp"
 #include "chip/video/spectrum_ula/ferranti_ula.hpp"
@@ -20,6 +22,8 @@
 
 REGISTER_CHIP_TYPE("MC6847", mc6847_t)
 REGISTER_CHIP_TYPE("MC6845", mc6845_t)
+REGISTER_CHIP_TYPE("MOS8563", mos8563_t)
+REGISTER_CHIP_TYPE("MOS8568", mos8568_t)
 REGISTER_CHIP_TYPE("DVG",    dvg_t)
 REGISTER_CHIP_TYPE("Video ULA", bbc_vidproc_t)
 REGISTER_CHIP_TYPE("6C001E-7",  ferranti_ula_t)
