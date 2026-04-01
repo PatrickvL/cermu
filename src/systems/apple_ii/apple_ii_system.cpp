@@ -188,7 +188,33 @@ void AppleIISystem<V>::reset() {
 
 template<AppleIIVariant V>
 void AppleIISystem<V>::tick() {
-    // TODO: implement tick — CPU tick + soft-switch I/O dispatch + video scan
+    using CPU = typename AppleIIChipset<V>::CPU;
+    bus_state_t s = pins_;
+
+    // ---- CPU PHI2 — address/R#W valid on bus ----
+    s = board_.cpu.template tick<CPU::Phase::PHI2>(s);
+
+    // ---- Address decode ----
+    uint16_t addr = BUS_GET_ADDR(s);
+
+    // Soft switch interception: $C000-$C0FF
+    if ((addr >> 8) == 0xC0) {
+        if (BUS_GET_BIT(s, BUS_RW_BIT)) {
+            BUS_SET_DATA(s, soft_switch_read(addr));
+        } else {
+            soft_switch_write(addr, BUS_GET_DATA(s));
+        }
+    } else {
+        // Normal memory access via page table (RAM + ROM)
+        s = bus_.tick(s);
+    }
+
+    // ---- CPU PHI1 ----
+    s = board_.cpu.template tick<CPU::Phase::PHI1>(s);
+
+    BUS_SET_BIT(s, BUS_RW_BIT);
+    pins_ = s;
+    total_cycles_++;
 }
 
 template<AppleIIVariant V>
@@ -251,7 +277,12 @@ void AppleIISystem<V>::handle_text_input(const char* text) {
 
 template<AppleIIVariant V>
 void AppleIISystem<V>::configure_bus_memory_map() {
-    // TODO: setup page tables, ROM overlay, soft-switch regions
+    // apply() establishes the default linear map from the manifest:
+    //   Apple II:  $0000-$7FFF RAM, $8000-$BFFF upper RAM, $C000-$FFFF ROM
+    //   Apple IIe: $0000-$FFFF RAM (128KB banked), $C000-$FFFF ROM overlay
+    //   Apple IIc: same as IIe + larger ROM
+    // Soft switches at $C000-$C0FF are intercepted in tick(), not mapped.
+    board_.apply(bus_);
 }
 
 template<AppleIIVariant V>
@@ -265,14 +296,48 @@ bool AppleIISystem<V>::load_roms() {
 }
 
 template<AppleIIVariant V>
-uint8_t AppleIISystem<V>::soft_switch_read(uint16_t /*addr*/) {
-    // TODO: implement soft switch read dispatch
-    return 0;
+uint8_t AppleIISystem<V>::soft_switch_read(uint16_t addr) {
+    using namespace apple_ii_constants;
+
+    switch (addr) {
+    // Keyboard
+    case KBD_DATA:       return kbd_data_;
+    case KBD_STROBE_CLR: kbd_data_ &= 0x7F; kbd_strobe_ = false; return kbd_data_;
+
+    // Speaker toggle (read triggers click)
+    case SPKR_TOGGLE:    spkr_state_ = !spkr_state_; return 0;
+
+    // Video mode switches (accent == read) — toggle on access
+    case TXTCLR:  sw_text_  = false; return 0;
+    case TXTSET:  sw_text_  = true;  return 0;
+    case MIXCLR:  sw_mixed_ = false; return 0;
+    case MIXSET:  sw_mixed_ = true;  return 0;
+    case LOWSCR:  sw_page2_ = false; return 0;
+    case HISCR:   sw_page2_ = true;  return 0;
+    case LORES:   sw_hires_ = false; return 0;
+    case HIRES:   sw_hires_ = true;  return 0;
+
+    default: return 0;
+    }
 }
 
 template<AppleIIVariant V>
-void AppleIISystem<V>::soft_switch_write(uint16_t /*addr*/, uint8_t /*data*/) {
-    // TODO: implement soft switch write dispatch
+void AppleIISystem<V>::soft_switch_write(uint16_t addr, uint8_t /*data*/) {
+    using namespace apple_ii_constants;
+
+    // Write-triggered soft switches (same behavior as read for most)
+    switch (addr) {
+    case SPKR_TOGGLE: spkr_state_ = !spkr_state_; break;
+    case TXTCLR:  sw_text_  = false; break;
+    case TXTSET:  sw_text_  = true;  break;
+    case MIXCLR:  sw_mixed_ = false; break;
+    case MIXSET:  sw_mixed_ = true;  break;
+    case LOWSCR:  sw_page2_ = false; break;
+    case HISCR:   sw_page2_ = true;  break;
+    case LORES:   sw_hires_ = false; break;
+    case HIRES:   sw_hires_ = true;  break;
+    default: break;
+    }
 }
 
 // ============================================================================
