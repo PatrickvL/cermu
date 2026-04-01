@@ -46,13 +46,17 @@ struct PackingTraits {
     // ── Sentinel count ──────────────────────────────────────────────────────
     //
     // Every sentinel consumes one id in the chip-id space.  The total number
-    // is: 1 (kNoChipSelected) + indexed sub-tables + masked sub-tables + MMIO.
+    // is: 1 (kNoChipSelected) + indexed sub-tables + masked sub-tables + MMIO
+    //     handlers + CS MMIO chip IDs (real chip IDs above sentinels).
     //
+    static constexpr size_t kCsMmioChipCount = spec_cs_mmio_chip_count_v<Spec>;
+
     static constexpr size_t kNumSentinels =
         1
         + kMaxIndexedSubs
         + kMaxMaskedSubs
-        + (Spec::EnableMmio ? Spec::MaxMmioHandlers : 0);
+        + (Spec::EnableMmio ? Spec::MaxMmioHandlers : 0)
+        + kCsMmioChipCount;
 
     // ── Chip-id range and type derivation ───────────────────────────────────
     static constexpr size_t kReadMaxId  = Spec::MaxChipId      + kNumSentinels;
@@ -111,6 +115,15 @@ struct PackingTraits {
         ChipId     (size_t(kMaskedSubBase)      + kMaxMaskedSubs);
     static constexpr WriteChipId kRegChipBaseWrite =
         WriteChipId(size_t(kMaskedSubBaseWrite) + kMaxMaskedSubs);
+
+    // kMmioChipBase: CS-tick real chip IDs for MMIO-only slots.
+    // Range [kMmioChipBase, kMmioChipBase + kCsMmioChipCount).
+    // These sit above ALL sentinels so service() naturally skips them
+    // (they are ≥ kReadSentinelMin).  Each chip matches via bus_chip_id_.
+    static constexpr size_t kMmioChipBaseVal =
+        size_t(kRegChipBase) + (Spec::EnableMmio ? Spec::MaxMmioHandlers : 0);
+    static constexpr ChipId      kMmioChipBase      = ChipId     (kMmioChipBaseVal);
+    static constexpr WriteChipId kMmioChipBaseWrite = WriteChipId(kMmioChipBaseVal);
 
     // ── CS line bits ────────────────────────────────────────────────────────
     // Position and width are globally fixed (BUS_CS_SHIFT / BUS_CS_BITS).
