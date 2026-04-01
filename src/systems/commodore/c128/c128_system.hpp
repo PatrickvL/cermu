@@ -44,6 +44,7 @@
 #include "chip/io/mos6526.hpp"
 #include "chip/memory/memory_chip.hpp"
 #include "chip/memory/mos2114.hpp"
+#include "systems/commodore/c128/mos8722.hpp"
 
 #include <cstdint>
 
@@ -84,6 +85,7 @@
     V(ctx, mos6581_t,  sid,         0xD400,       0, 0,      0, "MOS 6581 SID",    nullptr) \
     V(ctx, MOS2114,    colorram,    0xD800,       0, 0,      0, "Color RAM",       nullptr) \
     V(ctx, mos8563_t,  vdc,         0xD600,       0, 0,      0, "MOS 8563 VDC",   nullptr) \
+    V(ctx, mos8722_t,  mmu,         0xD500,       0, 0,      0, "MOS 8722 MMU",   nullptr) \
     V(ctx, mos6526_t,  cia1,        0xDC00,       0, 0,      0, "CIA 1",           nullptr) \
     V(ctx, mos6526_t,  cia2,        0xDD00,       0, 0,      0, "CIA 2",           nullptr)
 
@@ -171,13 +173,8 @@ private:
     // VDC RGBI port: deferred until dual-display pipeline is implemented.
     // The VDC ticks counters and services MMIO without pixel output.
 
-    // ── 8722 MMU state ───────────────────────────────────────────────────
-    uint8_t mmu_cr_        = 0;          // Configuration register
-    uint8_t mmu_pcr_[4]    = {};         // Preconfiguration registers A-D
-    uint8_t mmu_mcr_       = 0;          // Mode config register
-    uint8_t mmu_rcr_       = 0;          // RAM config register
-    uint8_t mmu_p0_[2]     = {};         // Page 0 pointer (lo/hi)
-    uint8_t mmu_p1_[2]     = {0, 1};    // Page 1 pointer (lo/hi) — default $0100
+    // Cached processor port bits for bank config interaction
+    uint8_t cpu_port_bits_  = 0x07;      // LORAM|HIRAM|CHAREN defaults (all high)
 
     // ── CPU mode ─────────────────────────────────────────────────────────
     enum class CPUMode : uint8_t { MODE_8502, MODE_Z80 };
@@ -196,9 +193,8 @@ private:
     // ── Internal helpers ─────────────────────────────────────────────────
     void configure_bus_memory_map();
     bool load_roms();
-    void mmu_write(uint16_t addr, uint8_t data);
-    uint8_t mmu_read(uint16_t addr);
-    void update_bank_config();           // Apply MMU state to page tables
+    void update_bank_config();           // Apply MMU CR + RCR to page tables
     void switch_cpu_mode(CPUMode mode);  // Toggle between 8502 and Z80
-    void init_io_dispatch();                // Set up CS-tick indexed sub-table for I/O page
+    void init_io_dispatch();             // Set up CS-tick indexed sub-table for I/O page
+    static void cpu_banking_callback(void* ctx, uint8_t banking_state);
 };
