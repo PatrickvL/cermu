@@ -47,6 +47,10 @@ struct C64BusSpec {
     static constexpr bool   ShiftAddressable    = true;
     static constexpr size_t ShiftBankBits       = 12;   // 4 KB stride
 
+    // CS-tick: enable chip-select field in bus_state_t for self-dispatch.
+    static constexpr size_t CsLineBits          = BUS_CS_BITS;
+    static constexpr size_t CsMmioChipCount     = 5;    // VIC-II, SID, ColorRAM, CIA1, CIA2
+
     enum ViewerId : size_t { Cpu = 0, Vic = 1 };
 };
 

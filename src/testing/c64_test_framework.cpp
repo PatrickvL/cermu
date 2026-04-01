@@ -27,45 +27,34 @@
 namespace c64_test {
 
 // =============================================================================
-// IO Write Intercept - generic handler for intercepting chip writes
+// Debug Register Intercept — uses C64System's debug cart ($D7FF capture)
 // =============================================================================
-bus_state_t io_write_intercept_handler(void* context, bus_state_t bus_state) {
-    io_write_intercept_t* intercept = (io_write_intercept_t*)context;
-    uint16_t address = BUS_GET_ADDR(bus_state);
-    if (address == intercept->watch_address) {
-        intercept->value = BUS_GET_DATA(bus_state);
-        intercept->written = true;
-    }
-    // Always pass through to the original chip handler
-    return intercept->original_write_handler(intercept->original_chip_instance, bus_state);
-}
 
-// Install the $D7FF debug register interceptor on SID MMIO handler
+// Install the $D7FF debug register interceptor via debug cart mechanism
 void TestFramework::install_debug_intercept(C64System* c64) {
     if (debug_intercept_installed_) return;
 
-    // SID is registered as handler index 1 (see init_io_dispatch order)
-    auto& h = c64->bus_.handler(DEBUG_REGISTER_MMIO_HANDLER);
-    debug_intercept_.original_write_handler = h.on_write;
-    debug_intercept_.original_chip_instance = h.ctx;
-    debug_intercept_.watch_address = DEBUG_REGISTER;
+    c64->enable_debug_cart(true);
+    c64->clear_debug_cart();
     debug_intercept_.written = false;
     debug_intercept_.value = 0;
-
-    // Patch the MMIO handler to route writes through the interceptor
-    h.on_write = io_write_intercept_handler;
-    h.ctx = &debug_intercept_;
     debug_intercept_installed_ = true;
 }
 
-// Uninstall the interceptor — restore original chip handler
+// Uninstall the interceptor
 void TestFramework::uninstall_debug_intercept(C64System* c64) {
     if (!debug_intercept_installed_) return;
 
-    auto& h = c64->bus_.handler(DEBUG_REGISTER_MMIO_HANDLER);
-    h.on_write = debug_intercept_.original_write_handler;
-    h.ctx = debug_intercept_.original_chip_instance;
+    c64->enable_debug_cart(false);
     debug_intercept_installed_ = false;
+}
+
+void TestFramework::sync_debug_cart(C64System* c64) {
+    if (c64->debug_cart_written()) {
+        debug_intercept_.value = c64->debug_cart_value();
+        debug_intercept_.written = true;
+        c64->clear_debug_cart();
+    }
 }
 
 // Utility function implementations
@@ -1129,9 +1118,10 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
     // Main execution loop
     while (cycles < max_cycles) {
         c64->tick();
+        sync_debug_cart(c64);
         cycles++;
         
-        // Check debug register intercept (set by io_write_intercept on write to $D7FF)
+        // Check debug register intercept (set by debug cart on write to $D7FF)
         if (debug_intercept_.written) {
             uint8_t value = debug_intercept_.value;
             debug_intercept_.written = false;  // Acknowledge
@@ -1271,9 +1261,10 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
     // Run emulation until debug register is written or timeout
     while (cycles < max_cycles) {
         c64->tick();
+        sync_debug_cart(c64);
         cycles++;
         
-        // Check IO write intercept for $D7FF writes (every cycle - it's just a bool check)
+        // Check debug cart for $D7FF writes (every cycle - it's just a bool check)
         if (debug_intercept_.written) {
             debug_value = debug_intercept_.value;
             debug_intercept_.written = false;
