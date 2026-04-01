@@ -436,6 +436,70 @@ static void build_init_stub(uint8_t* ram, uint16_t irq_addr,
 }
 
 // =============================================================================
+// Shared playback setup — info page, IRQ handler, init stub
+// =============================================================================
+
+/**
+ * Compute IRQ placement, display the info page (with screen relocation if the
+ * SID payload overlaps $0400), and inject the 6502 player stub + IRQ handler.
+ *
+ * Called by both c64_apply_sid_load (initial load) and c64_sid_switch_subtune
+ * (subtune change) after the payload is already in RAM.
+ */
+static void sid_inject_player(C64System* c64, const sid_header_t* sid,
+                               uint16_t subtune, size_t payload_size,
+                               uint16_t timer_period, bool use_cia_rate) {
+    uint8_t* ram = c64->ram->data();
+
+    // ---- IRQ handler placement ----
+    const bool needs_timer_irq = (sid->type == SID_TYPE_PSID && sid->play_addr != 0);
+    const uint16_t irq_addr    = needs_timer_irq
+        ? find_safe_irq_addr(sid->load_addr, static_cast<uint32_t>(payload_size))
+        : 0;
+
+    // ---- Info page with screen relocation ----
+    // Default screen at $0400.  If the SID payload overlaps it, relocate the
+    // text screen to a free 1 KB-aligned address and reconfigure VIC-II/CIA2.
+    {
+        const uint16_t default_screen = 0x0400;
+        const uint32_t default_end    = 0x07E8; // 1000-byte screen: $0400–$07E7
+        const uint32_t load_end       = static_cast<uint32_t>(sid->load_addr) + payload_size;
+        const bool default_overlap    = (payload_size > 0)
+                                      && (load_end > static_cast<uint32_t>(default_screen))
+                                      && (static_cast<uint32_t>(sid->load_addr) < default_end);
+
+        uint16_t screen_addr = default_screen;
+        if (default_overlap) {
+            screen_addr = find_free_screen_base(sid->load_addr,
+                                                 static_cast<uint32_t>(payload_size),
+                                                 irq_addr);
+        }
+
+        if (screen_addr) {
+            uint8_t* screen_ram = &ram[screen_addr];
+            uint8_t* color_ram  = c64->colorram ? c64->colorram->memory : nullptr;
+            c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
+            configure_vic_screen_base(c64, screen_addr);
+
+            if (screen_addr != default_screen) {
+                printf("C64: Screen relocated to $%04X (payload overlaps default $0400)\n", screen_addr);
+            }
+        } else {
+            printf("C64: SID info page skipped (no free screen location found)\n");
+        }
+    }
+
+    // ---- Inject 6502 player stub ----
+    if (needs_timer_irq) {
+        build_irq_handler(ram, irq_addr, sid->play_addr, 0x35);
+        printf("C64: Player stub at $%04X, IRQ handler at $%04X\n", STUB_BASE, irq_addr);
+    } else {
+        printf("C64: Player stub at $%04X (init-only)\n", STUB_BASE);
+    }
+    build_init_stub(ram, irq_addr, sid, subtune, timer_period, needs_timer_irq);
+}
+
+// =============================================================================
 // SID Loader — Payload injection + 6502 player stub
 // =============================================================================
 
@@ -469,13 +533,6 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
         cpu.write_io_data(orig_bank); // Restore original banking
     }
 
-    // ---- Safe IRQ handler placement ----
-    // Pick a 64-byte region that does not overlap the SID payload or the init stub.
-    const bool needs_timer_irq = (sid->type == SID_TYPE_PSID && sid->play_addr != 0);
-    const uint16_t irq_addr    = needs_timer_irq
-        ? find_safe_irq_addr(sid->load_addr, static_cast<uint32_t>(payload_size))
-        : 0;
-
     // ---- Step 2: Set SID revision from metadata (v2+ flags) ----
     if (sid->version >= 2 && sid->sid_model != SID_MODEL_UNKNOWN && c64->sid) {
         sid_revision_t rev = (sid->sid_model == SID_MODEL_8580)
@@ -505,48 +562,8 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
     printf("C64: Speed flag for subtune %u: %s (timer=%u cycles, cpu=%u Hz)\n",
            subtune + 1, use_cia_rate ? "CIA" : "VBI", timer_period, timing.cpu_frequency_hz);
 
-    // ---- Step 4: SID info page ----
-    // Default screen at $0400.  If the SID payload overlaps it, relocate the
-    // text screen to a free 1 KB-aligned address and reconfigure VIC-II/CIA2.
-    {
-        const uint16_t default_screen = 0x0400;
-        const uint32_t default_end    = 0x07E8; // 1000-byte screen: $0400–$07E7
-        const uint32_t load_end       = static_cast<uint32_t>(sid->load_addr) + payload_size;
-        const bool default_overlap    = (payload_size > 0)
-                                      && (load_end > static_cast<uint32_t>(default_screen))
-                                      && (static_cast<uint32_t>(sid->load_addr) < default_end);
-
-        uint16_t screen_addr = default_screen;
-        if (default_overlap) {
-            screen_addr = find_free_screen_base(sid->load_addr,
-                                                 static_cast<uint32_t>(payload_size),
-                                                 irq_addr);
-        }
-
-        if (screen_addr) {
-            uint8_t* screen_ram = &ram[screen_addr];
-            uint8_t* color_ram  = c64->colorram ? c64->colorram->memory : nullptr;
-            c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
-
-            // Point VIC-II at the (possibly relocated) screen + uppercase/lowercase charset
-            configure_vic_screen_base(c64, screen_addr);
-
-            if (screen_addr != default_screen) {
-                printf("C64: Screen relocated to $%04X (payload overlaps default $0400)\n", screen_addr);
-            }
-        } else {
-            printf("C64: SID info page skipped (no free screen location found)\n");
-        }
-    }
-
-    // ---- Step 5: Inject 6502 player stub ----
-    if (needs_timer_irq) {
-        build_irq_handler(ram, irq_addr, sid->play_addr, 0x35);
-        printf("C64: Player stub at $%04X, IRQ handler at $%04X\n", STUB_BASE, irq_addr);
-    } else {
-        printf("C64: Player stub at $%04X (init-only)\n", STUB_BASE);
-    }
-    build_init_stub(ram, irq_addr, sid, subtune, timer_period, needs_timer_irq);
+    // ---- Step 4 + 5: Info page, IRQ handler, init stub ----
+    sid_inject_player(c64, sid, subtune, payload_size, timer_period, use_cia_rate);
 
     // ---- Step 6: Set CPU to execute the stub ----
     if (needs_kernal_ram) {
@@ -599,45 +616,8 @@ void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
         timer_period = static_cast<uint16_t>(timing.cycles_per_frame);
     }
 
-    // ---- Info page refresh with possible screen relocation ----
-    {
-        const uint16_t default_screen = 0x0400;
-        const uint32_t default_end    = 0x07E8;
-        const uint32_t load_end       = static_cast<uint32_t>(sid->load_addr) + payload_size;
-        const bool default_overlap    = (payload_size > 0)
-                                      && (load_end > static_cast<uint32_t>(default_screen))
-                                      && (static_cast<uint32_t>(sid->load_addr) < default_end);
-
-        // Need irq_addr here for the overlap check inside find_free_screen_base
-        const bool needs_timer_irq_tmp = (sid->type == SID_TYPE_PSID && sid->play_addr != 0);
-        const uint16_t irq_addr_tmp    = needs_timer_irq_tmp
-            ? find_safe_irq_addr(sid->load_addr, static_cast<uint32_t>(payload_size))
-            : 0;
-
-        uint16_t screen_addr = default_screen;
-        if (default_overlap) {
-            screen_addr = find_free_screen_base(sid->load_addr,
-                                                 static_cast<uint32_t>(payload_size),
-                                                 irq_addr_tmp);
-        }
-
-        if (screen_addr) {
-            uint8_t* screen_ram = &ram[screen_addr];
-            uint8_t* color_ram  = c64->colorram ? c64->colorram->memory : nullptr;
-            c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
-            configure_vic_screen_base(c64, screen_addr);
-        }
-    }
-
-    // ---- Re-inject stub ----
-    const bool needs_timer_irq = (sid->type == SID_TYPE_PSID && sid->play_addr != 0);
-    const uint16_t irq_addr    = needs_timer_irq
-        ? find_safe_irq_addr(sid->load_addr, static_cast<uint32_t>(payload_size))
-        : 0;
-    if (needs_timer_irq) {
-        build_irq_handler(ram, irq_addr, sid->play_addr, 0x35);
-    }
-    build_init_stub(ram, irq_addr, sid, subtune, timer_period, needs_timer_irq);
+    // ---- Info page, IRQ handler, init stub ----
+    sid_inject_player(c64, sid, subtune, payload_size, timer_period, use_cia_rate);
 
     // ---- Reset CPU to start of stub ----
     cpu.set(A, (uint8_t)subtune);
