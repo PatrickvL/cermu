@@ -92,6 +92,13 @@ public:
     // Returns true if the patch was applied.
     bool patch_skip_memtest();
 
+    // Debug cart — $D7FF write interception for test harnesses.
+    // When enabled, writes to $D7FF are captured after MMIO dispatch.
+    void    enable_debug_cart(bool enable) { debug_cart_enabled_ = enable; }
+    bool    debug_cart_written() const     { return debug_cart_written_; }
+    uint8_t debug_cart_value() const       { return debug_cart_value_; }
+    void    clear_debug_cart()             { debug_cart_written_ = false; debug_cart_value_ = 0; }
+
     // --- Connector Port Access -----------------------------------------
     //
     // Connector ports, owned devices, attach/detach, and the generic
@@ -254,6 +261,11 @@ private:
     /// Updated by on_port_device_changed() to skip the per-cycle opdone()
     /// + PC range check when no drive is present.
     bool serial_traps_enabled_ = false;
+
+    // Debug cart ($D7FF write capture)
+    bool    debug_cart_enabled_ = false;
+    bool    debug_cart_written_ = false;
+    uint8_t debug_cart_value_   = 0;
 
     // =========================================================================
     // KERNAL SERIAL TRAPS

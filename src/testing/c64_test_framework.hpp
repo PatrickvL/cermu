@@ -265,15 +265,17 @@ private:
     TestResult run_screenshot_test(const TestDescriptor& test, C64System* c64);
     bool compare_screenshots(const std::string& generated, const std::string& reference, double& similarity);
     
-    // Debug register monitoring via IO write intercept (zero-cost to main emulator)
+    // Debug register monitoring via debug cart ($D7FF write capture in system_tick)
     static constexpr uint16_t DEBUG_REGISTER = 0xD7FF;
-    static constexpr size_t   DEBUG_REGISTER_MMIO_HANDLER = 1; // SID handler index (see init_io_dispatch order)
     io_write_intercept_t debug_intercept_;  // Intercept state for $D7FF
     bool debug_intercept_installed_;        // Whether intercept is currently active
 
-    // Install/uninstall the $D7FF write interceptor on the bus io_handlers
+    // Install/uninstall the $D7FF write interceptor
     void install_debug_intercept(C64System* c64);
     void uninstall_debug_intercept(C64System* c64);
+
+    // Sync debug cart state to intercept struct (call after each tick)
+    void sync_debug_cart(C64System* c64);
 };
 
 // Utility functions

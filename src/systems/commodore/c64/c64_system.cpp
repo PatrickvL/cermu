@@ -877,14 +877,30 @@ void C64System::system_tick() {
     // PHASE 2: CPU PHI2 — instruction execution (direct C++ call, inlineable)
     s = cpu->tick<MOS6510::Phase::PHI2>(s);
 
-    // PHASE 3: Memory service — AEC determines CPU vs VIC-II bus ownership
-    // Writes always use CPU viewer (viewer 0).  Reads use VIC-II viewer
-    // (viewer 1) when AEC is low (VIC-II DMA cycle).
+    // PHASE 3: Address decode + buffer service + MMIO self-dispatch.
+    // AEC determines CPU vs VIC-II bus ownership for read viewer selection.
+    // Writes always use CPU viewer (viewer 0).
     {
         const bool is_write = !BUS_GET_BIT(s, BUS_RW_BIT);
         const size_t viewer = (is_write || BUS_GET_BIT(s, BUS_AEC_BIT))
                                   ? C64BusSpec::Cpu : C64BusSpec::Vic;
-        s = bus_.tick(s, viewer);
+        s = bus_.resolve(s, viewer);  // page table → CS field
+        s = bus_.service(s);          // buffer (RAM/ROM) access — MMIO IDs skipped
+
+        // MMIO self-dispatch — each chip checks is_cs_selected() and handles
+        // its own register I/O.  Chips not selected return bus unchanged.
+        s = vicii->tick_mmio(s);
+        s = sid->tick_mmio(s);
+        s = colorram->tick_mmio(s);
+        s = cia1->tick_mmio(s);
+        s = cia2->tick_mmio(s);
+
+        // Debug cart capture ($D7FF) — VICE test convention, not real hardware.
+        if (unlikely(debug_cart_enabled_ && !BUS_GET_BIT(s, BUS_RW_BIT)
+                     && BUS_GET_ADDR(s) == 0xD7FF)) {
+            debug_cart_value_ = BUS_GET_DATA(s);
+            debug_cart_written_ = true;
+        }
     }
 
     // NMI edge detection — sample after bus dispatch (post-dispatch state)
@@ -914,8 +930,8 @@ void C64System::system_tick() {
     // Restore R/W line to read mode
     BUS_SET_BIT(s, BUS_RW_BIT);
 
-    // PHASE 5: SID — sound generation
-    s = sid->tick(s);
+    // PHASE 5: SID — sound generation (audio only, register I/O handled above)
+    s = sid->tick_audio(s);
 
     bus_state_ = s;
 }
@@ -1853,49 +1869,52 @@ bool C64System::pla_maps_generate() {
 // ============================================================================
 
 void C64System::init_io_dispatch() {
-    // Register MMIO handlers for each I/O chip
-    int hVicII  = bus_.register_handler({this->vicii,    vicii_base_t::registers_read, vicii_base_t::registers_write});
-    int hSid    = bus_.register_handler({this->sid,      mos6581_t::registers_read,  mos6581_t::registers_write});
-    int hColRam = bus_.register_handler({this->colorram, MOS2114::bus_read,          MOS2114::bus_write});
-    int hCia1   = bus_.register_handler({this->cia1,     mos6526_t::registers_read,  mos6526_t::registers_write});
-    int hCia2   = bus_.register_handler({this->cia2,     mos6526_t::registers_read,  mos6526_t::registers_write});
-
-    // Floating bus handlers for I/O1 and I/O2 expansion areas
-    auto unmapped_read  = [](void*, bus_state_t bus) -> bus_state_t { return bus; };
-    auto unmapped_write = [](void*, bus_state_t bus) -> bus_state_t { return bus; };
-    int hIO1 = bus_.register_handler({nullptr, unmapped_read, unmapped_write});
-    int hIO2 = bus_.register_handler({nullptr, unmapped_read, unmapped_write});
+    // Register MMIO handlers (kept for debug tools and non-CS fallback paths)
+    (void)bus_.register_handler({this->vicii,    vicii_base_t::registers_read, vicii_base_t::registers_write});
+    (void)bus_.register_handler({this->sid,      mos6581_t::registers_read,  mos6581_t::registers_write});
+    (void)bus_.register_handler({this->colorram, MOS2114::bus_read,          MOS2114::bus_write});
+    (void)bus_.register_handler({this->cia1,     mos6526_t::registers_read,  mos6526_t::registers_write});
+    (void)bus_.register_handler({this->cia2,     mos6526_t::registers_read,  mos6526_t::registers_write});
 
     // Create the IndexedSubTable for the I/O page ($D000-$DFFF)
     // 4 bits → 16 × 256 B entries, bit_shift=8 (extract bits 11-8)
     const int io_sub = bus_.add_indexed_sub_table(C64BusSpec::Cpu, 4, 8);
-    // Also add it for VIC-II viewer (though VIC-II rarely hits I/O)
     (void)bus_.add_indexed_sub_table(C64BusSpec::Vic, 4, 8);
 
-    // Helper to create MMIO sentinel chip ids
-    auto mmio_rd = [](int h) { return C64ChipId(C64PT::kRegChipBase + h); };
-    auto mmio_wr = [](int h) { return C64WriteId(C64PT::kRegChipBaseWrite + h); };
+    // Real MMIO chip IDs — assigned by BusMap Phase 3 above all sentinels.
+    // resolve() embeds these in the CS field; each chip self-selects via
+    // is_cs_selected() in tick_mmio().
+    auto cs_rd = [](uint16_t id) { return C64ChipId(id); };
+    auto cs_wr = [](uint16_t id) { return C64WriteId(id); };
+    const uint16_t idVicII  = this->vicii->bus_chip_id();
+    const uint16_t idSid    = this->sid->bus_chip_id();
+    const uint16_t idColRam = this->colorram->bus_chip_id();
+    const uint16_t idCia1   = this->cia1->bus_chip_id();
+    const uint16_t idCia2   = this->cia2->bus_chip_id();
 
-    // Populate sub-table entries
+    // Populate sub-table entries with real CS chip IDs
     // VIC-II: $D000-$D3FF (pages 0-3)
     for (int i = 0; i < 4; ++i)
-        bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, i, mmio_rd(hVicII), mmio_wr(hVicII));
+        bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, i, cs_rd(idVicII), cs_wr(idVicII));
     // SID: $D400-$D7FF (pages 4-7)
     for (int i = 4; i < 8; ++i)
-        bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, i, mmio_rd(hSid), mmio_wr(hSid));
+        bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, i, cs_rd(idSid), cs_wr(idSid));
     // Color RAM: $D800-$DBFF (pages 8-11)
     for (int i = 8; i < 12; ++i)
-        bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, i, mmio_rd(hColRam), mmio_wr(hColRam));
+        bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, i, cs_rd(idColRam), cs_wr(idColRam));
     // CIA1: $DC00-$DCFF (page 12)
-    bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, 12, mmio_rd(hCia1), mmio_wr(hCia1));
+    bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, 12, cs_rd(idCia1), cs_wr(idCia1));
     // CIA2: $DD00-$DDFF (page 13)
-    bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, 13, mmio_rd(hCia2), mmio_wr(hCia2));
-    // I/O1: $DE00-$DEFF (page 14) — expansion port
-    bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, 14, mmio_rd(hIO1), mmio_wr(hIO1));
-    // I/O2: $DF00-$DFFF (page 15) — expansion port
-    bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, 15, mmio_rd(hIO2), mmio_wr(hIO2));
+    bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, 13, cs_rd(idCia2), cs_wr(idCia2));
+    // I/O1: $DE00-$DEFF (page 14) — expansion port, floating bus
+    bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, 14,
+        C64ChipId(C64PT::kNoChipSelected), C64WriteId(C64PT::kNoChipSelectedWrite));
+    // I/O2: $DF00-$DFFF (page 15) — expansion port, floating bus
+    bus_.set_indexed_entry(C64BusSpec::Cpu, io_sub, 15,
+        C64ChipId(C64PT::kNoChipSelected), C64WriteId(C64PT::kNoChipSelectedWrite));
 
-    printf("C64: I/O dispatch initialized (IndexedSubTable with %d MMIO handlers)\n", 7);
+    printf("C64: I/O dispatch initialized (CS-tick, sub-table IDs: VIC-II=%u SID=%u ColRAM=%u CIA1=%u CIA2=%u)\n",
+           idVicII, idSid, idColRam, idCia1, idCia2);
 }
 
 // ============================================================================

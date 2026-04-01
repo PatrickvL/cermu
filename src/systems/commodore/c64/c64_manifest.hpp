@@ -84,7 +84,7 @@
         "C64 - 901225-01 - Commodore (EC4272EE) Characters.rom|"                                                 \
         "characters.901225-01.bin|901225-01.bin|chargen.rom|char.rom")                                           \
     V(ctx, mos6581_t,    sid,      0xD400,       0,      0, 0, "SID",         nullptr)                             \
-    V(ctx, MOS2114,      colorram, 0xD800,  0x0400,      0, 0, "Color RAM",   nullptr)                             \
+    V(ctx, MOS2114,      colorram, 0xD800,       0,      0, 0, "Color RAM",   nullptr)                             \
     V(ctx, mos6526_t,    cia1,     0xDC00,       0,      0, 0, "CIA1",        nullptr)                             \
     V(ctx, mos6526_t,    cia2,     0xDD00,       0,      0, 0, "CIA2",        nullptr)                             \
     V(ctx, ROMChip,      kernal,   0xE000,  0x2000,      0, 1, "KERNAL",                                           \
