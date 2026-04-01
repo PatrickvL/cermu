@@ -7,41 +7,7 @@
 
 
 // =============================================================================
-// §1  Pre-baked specs
-// =============================================================================
-
-// ── Generic 8-bit microcomputer ───────────────────────────────────────────────
-//
-// EnablePartialBus = true: covers systems (e.g. Apple I) where 4-bit SRAM is
-// directly chip-selected with no register-file handler in front of it.
-//
-struct Generic8BitBusSpec {
-    using AddrType = uint16_t;
-    static constexpr size_t AddressBits    = 16;
-    static constexpr size_t PageBits       = 12;   // 4 KB pages → 16 pages
-    static constexpr size_t NumViewers     = 1;
-    static constexpr size_t MaxChipId      = 15;   // up to 16 chips
-    static constexpr size_t MaxWriteChipId = 15;
-    static constexpr bool   EnableMmio     = true;
-    static constexpr size_t MaxMmioHandlers= 4;
-    static constexpr bool   EnablePartialBus = true;
-};
-
-// ── Minimal / embedded ────────────────────────────────────────────────────────
-struct MinimalBusSpec {
-    using AddrType = uint16_t;
-    static constexpr size_t AddressBits    = 16;
-    static constexpr size_t PageBits       = 12;
-    static constexpr size_t NumViewers     = 1;
-    static constexpr size_t MaxChipId      = 7;
-    static constexpr size_t MaxWriteChipId = 7;
-    static constexpr bool   EnableMmio     = false;
-    static constexpr size_t MaxMmioHandlers= 0;
-};
-
-
-// =============================================================================
-// §3  Usage examples
+// §1  Usage examples
 // =============================================================================
 //
 // ── How chip selection works ────────────────────────────────────────────────
