@@ -19,6 +19,7 @@
  * by ROM size and content analysis in a2600_mapper_factory.
  */
 
+#include "core/cermu.hpp"
 #include "systems/atari2600/atari2600_system.hpp"
 #include "systems/atari2600/mappers/a2600_mapper_factory.hpp"
 #include "core/system_registry.hpp"
@@ -165,7 +166,7 @@ bool Atari2600System::apply_configuration() {
 // ============================================================================
 
 bool Atari2600System::initialize() {
-    printf("Atari2600: Initializing system\n");
+    log_info("Atari2600: Initializing system\n");
     register_board(&board_);
 
     // ── Bind all value-typed chips to manifest slots ──────────────────
@@ -203,17 +204,17 @@ bool Atari2600System::initialize() {
                            atari2600_constants::DEFAULT_SAMPLE_RATE);
     board_.tia.set_audio_port(audio_port_.get());
 
-    printf("Atari2600: System initialized\n");
+    log_info("Atari2600: System initialized\n");
     return true;
 }
 
 void Atari2600System::shutdown() {
-    printf("Atari2600: Shutting down\n");
+    log_info("Atari2600: Shutting down\n");
     System::shutdown();
 }
 
 void Atari2600System::reset() {
-    printf("Atari2600: Reset\n");
+    log_info("Atari2600: Reset\n");
 
     // Reset all manifest chips (TIA, RIOT; CartChip is no-op)
     board_.reset_chips();
@@ -352,19 +353,19 @@ bool Atari2600System::load_file(const char* filepath) {
         }
     }
 
-    printf("Atari2600: Loading file: %s\n", filepath);
+    log_info("Atari2600: Loading file: %s\n", filepath);
 
     // Read the ROM file (VFS-aware — handles archive paths like
     // "roms.7z!/Atari 2600/G/Galaxian.a26" transparently).
     size_t file_size = 0;
     uint8_t* file_data = vfs_read_file(filepath, &file_size);
     if (!file_data) {
-        printf("Atari2600: Failed to open file: %s\n", filepath);
+        log_info("Atari2600: Failed to open file: %s\n", filepath);
         return false;
     }
 
     if (file_size == 0 || file_size > 524288) {
-        printf("Atari2600: Invalid file size: %zu bytes\n", file_size);
+        log_info("Atari2600: Invalid file size: %zu bytes\n", file_size);
         free(file_data);
         return false;
     }
@@ -381,7 +382,7 @@ bool Atari2600System::load_file(const char* filepath) {
     // Wire the mapper into the cart MMIO adapter for MemoryBus dispatch
     board_.cart.set_mapper(mapper_.get());
 
-    printf("Atari2600: Loaded %u bytes, mapper=%s, %d bank(s)\n",
+    log_info("Atari2600: Loaded %u bytes, mapper=%s, %d bank(s)\n",
            cart_size_, mapper_->name(), mapper_->bank_count());
 
     // Set program title from filename
@@ -561,7 +562,7 @@ void Atari2600System::setup_ports() {
     add_port(atari_video_out_def, 0);
     add_port(atari_audio_out_def, 0);
 
-    printf("Atari2600: Created %zu ports\n", get_ports().size());
+    log_info("Atari2600: Created %zu ports\n", get_ports().size());
 }
 
 std::vector<System::DefaultPeripheral>

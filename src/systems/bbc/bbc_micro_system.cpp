@@ -167,7 +167,7 @@ bool BBCMicroSystem::apply_configuration() {
 // ============================================================================
 
 bool BBCMicroSystem::initialize() {
-    printf("BBC Micro: Initializing system\n");
+    log_info("BBC Micro: Initializing system\n");
     register_board(&board_);
 
     // ── Pre-bind all value-typed chips, then factory-create remaining ───
@@ -188,7 +188,7 @@ bool BBCMicroSystem::initialize() {
     // Load ROMs (into flat mem via chip data pointers)
     bool roms_loaded = load_roms();
     if (!roms_loaded) {
-        printf("BBC Micro: Warning — ROMs not loaded, system will not boot correctly\n");
+        log_info("BBC Micro: Warning — ROMs not loaded, system will not boot correctly\n");
     }
 
     // ---- CPU (MOS 6502 @ 2 MHz) ----
@@ -265,18 +265,18 @@ bool BBCMicroSystem::initialize() {
     // Register all manifest-created chips for Hardware debug menu
     register_bus_chips(board_);
 
-    printf("BBC Micro: System initialized\n");
+    log_info("BBC Micro: System initialized\n");
     return true;
 }
 
 void BBCMicroSystem::shutdown() {
-    printf("BBC Micro: Shutting down\n");
+    log_info("BBC Micro: Shutting down\n");
     audio_thread_.stop();
     System::shutdown();
 }
 
 void BBCMicroSystem::reset() {
-    printf("BBC Micro: Resetting\n");
+    log_info("BBC Micro: Resetting\n");
 
     // Reset all manifest chips (CRTC, PSG, VIAs; RAM/ROM are no-op)
     board_.reset_chips();
@@ -646,17 +646,17 @@ uint8_t BBCMicroSystem::scan_keyboard(uint8_t column) const {
 // ============================================================================
 
 bool BBCMicroSystem::load_file(const char* filepath) {
-    printf("BBC Micro: Loading file: %s\n", filepath);
+    log_info("BBC Micro: Loading file: %s\n", filepath);
     const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
     if (!ext) {
-        printf("BBC Micro: Unknown file type\n");
+        log_info("BBC Micro: Unknown file type\n");
         return false;
     }
 
     // TODO: Implement SSD/DSD disc image loading
     // TODO: Implement UEF tape loading
     // TODO: Implement sideways ROM loading (.rom)
-    printf("BBC Micro: File format not yet supported: %s\n", ext);
+    log_info("BBC Micro: File format not yet supported: %s\n", ext);
     return false;
 }
 
@@ -728,11 +728,11 @@ bool BBCMicroSystem::load_roms() {
     const char* search_names[] = {"bbc", "bbcb", "bbc-b", "bbcmicro", nullptr};
     char rom_root[1024];
     if (!system_config_discover_rom_root(search_names, rom_root, sizeof(rom_root))) {
-        printf("BBC Micro: ROM root directory not found\n");
+        log_info("BBC Micro: ROM root directory not found\n");
         return false;
     }
 
-    printf("BBC Micro: ROM root: %s\n", rom_root);
+    log_info("BBC Micro: ROM root: %s\n", rom_root);
 
     // Load manifest-declared ROMs (MOS ROM at slot 2)
     bool os_ok = board_.load_roms(rom_root, "BBC Micro");
@@ -746,7 +746,7 @@ bool BBCMicroSystem::load_roms() {
         bbc_constants::PAGED_ROM_SIZE,
         basic_rom_data, bbc_constants::PAGED_ROM_SIZE);
     if (!basic_ok) {
-        printf("BBC Micro: BASIC ROM not found\n");
+        log_info("BBC Micro: BASIC ROM not found\n");
     }
 
     return os_ok;  // System won't boot without OS ROM

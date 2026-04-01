@@ -1,5 +1,6 @@
 //#define DEBUG_PLA_BANKING
 
+#include "core/cermu.hpp"
 #include "chip/logic/pla.hpp"
 #ifdef DEBUG_PLA_BANKING
 #include <cstdio>
@@ -92,7 +93,7 @@ void PLA906114::update_outputs() {
     static int debug_call_count = 0;
     debug_call_count++;
     if (debug_call_count <= 5) {
-        printf("PLA update_outputs called %d times\n", debug_call_count);
+        log_info("PLA update_outputs called %d times\n", debug_call_count);
     }
     #endif
 
@@ -256,20 +257,20 @@ void PLA906114::update_outputs() {
 #ifdef DEBUG_PLA_BANKING
     // Debug output for banking issue
     if (a15 == 0 && a14 == 0 && a13 == 0 && a12 == 0) { // Bank 0
-        printf("PLA Bank 0: n_casram=%d n_basic=%d n_kernal=%d n_charrom=%d n_io=%d n_roml=%d n_romh=%d\n",
+        log_info("PLA Bank 0: n_casram=%d n_basic=%d n_kernal=%d n_charrom=%d n_io=%d n_roml=%d n_romh=%d\n",
                outputs_.n_casram, outputs_.n_basic, outputs_.n_kernal,
                outputs_.n_charrom, outputs_.n_io, outputs_.n_roml, outputs_.n_romh);
-        printf("PLA Inputs: n_loram=%d n_hiram=%d n_charen=%d n_exrom=%d n_game=%d n_aec=%d r_w=%d n_cas=%d\n",
+        log_info("PLA Inputs: n_loram=%d n_hiram=%d n_charen=%d n_exrom=%d n_game=%d n_aec=%d r_w=%d n_cas=%d\n",
                inputs_.n_loram, inputs_.n_hiram, inputs_.n_charen,
                inputs_.n_exrom, inputs_.n_game, inputs_.n_aec, inputs_.r_w, inputs_.n_cas);
 
         // Check which product terms are active for n_casram
         bool casram_terms[] = {p0, p1, p2, p3, p4, p5, p6, p7, false, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22, p23, p24, p25, p26, p27, p28, false, false, false};
-        printf("Active CASRAM terms: ");
+        log_info("Active CASRAM terms: ");
         for (int i = 0; i < 32; i++) {
-            if (casram_terms[i]) printf("p%d ", i);
+            if (casram_terms[i]) log_info("p%d ", i);
         }
-        printf("\n");
+        log_info("\n");
     }
 #endif
 }

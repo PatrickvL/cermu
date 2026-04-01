@@ -23,6 +23,7 @@
  *   $BFFD:     AY data write
  */
 
+#include "core/cermu.hpp"
 #include "systems/spectrum/spectrum_system.hpp"
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
@@ -202,7 +203,7 @@ bool SpectrumSystem<V>::apply_configuration() {
 
 template<SpectrumVariant V>
 bool SpectrumSystem<V>::initialize() {
-    printf("%s: Initializing system\n", Traits::name);
+    log_info("%s: Initializing system\n", Traits::name);
     register_board(&board_);
 
     // ── Pre-bind stack-member chips, then factory-create all chips ─────
@@ -226,7 +227,7 @@ bool SpectrumSystem<V>::initialize() {
 
     // Load ROMs
     if (!load_roms()) {
-        printf("%s: Warning — ROMs not loaded, system may not function\n", Traits::name);
+        log_info("%s: Warning — ROMs not loaded, system may not function\n", Traits::name);
     }
 
     // ── Register chips for Hardware menu ────────────────────────────────
@@ -243,7 +244,7 @@ bool SpectrumSystem<V>::initialize() {
     audio_port_->configure(spectrum_constants::DEFAULT_SAMPLE_RATE,
                            spectrum_constants::DEFAULT_SAMPLE_RATE);
 
-    printf("%s: System initialized (%dKB RAM)\n", Traits::name, Traits::ram_size_kb);
+    log_info("%s: System initialized (%dKB RAM)\n", Traits::name, Traits::ram_size_kb);
     system_ready_ = true;
     return true;
 }
@@ -457,7 +458,7 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
 
     format_load_result_t result;
     if (!format_load_file(filepath, &result)) {
-        printf("%s: Failed to load file: %s\n", Traits::name, result.error_msg);
+        log_info("%s: Failed to load file: %s\n", Traits::name, result.error_msg);
         return false;
     }
 
@@ -504,7 +505,7 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
         // Restore border color
         board_.ula.set_border_color(hdr.border & 0x07);
 
-        printf("%s: SNA loaded — PC=$%04X SP=$%04X\n", Traits::name,
+        log_info("%s: SNA loaded — PC=$%04X SP=$%04X\n", Traits::name,
                board_.z80.get(PC), board_.z80.get(SP));
         result.release();
         return true;
@@ -563,7 +564,7 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
         // Restore border color
         board_.ula.set_border_color(hdr.border & 0x07);
 
-        printf("%s: Z80 v%d loaded — PC=$%04X SP=$%04X\n", Traits::name,
+        log_info("%s: Z80 v%d loaded — PC=$%04X SP=$%04X\n", Traits::name,
                hdr.version, board_.z80.get(PC), board_.z80.get(SP));
         result.release();
         return true;
@@ -590,7 +591,7 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
             size_t len = prog.data_size;
             if (addr + len > 0x10000) len = 0x10000 - addr;
             std::memcpy(ram + addr, prog.data, len);
-            printf("%s: TAP loaded %zu bytes at $%04X\n", Traits::name, len, addr);
+            log_info("%s: TAP loaded %zu bytes at $%04X\n", Traits::name, len, addr);
 
             // Use header type info to classify blocks
             if (block_idx < header_count) {
@@ -655,10 +656,10 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
             }
 
             if (autostart_line < 32768)
-                printf("%s: BASIC program loaded (vars=$%04X, eline=$%04X, autostart=%u)\n",
+                log_info("%s: BASIC program loaded (vars=$%04X, eline=$%04X, autostart=%u)\n",
                        Traits::name, vars_addr, eline_addr, autostart_line);
             else
-                printf("%s: BASIC program loaded (vars=$%04X, eline=$%04X, no autostart)\n",
+                log_info("%s: BASIC program loaded (vars=$%04X, eline=$%04X, no autostart)\n",
                        Traits::name, vars_addr, eline_addr);
         }
 
@@ -666,11 +667,11 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
         // otherwise enter the ROM's main execution loop for BASIC.
         if (has_code) {
             board_.z80.set(PC, code_addr);
-            printf("%s: Jumping to CODE at $%04X\n", Traits::name, code_addr);
+            log_info("%s: Jumping to CODE at $%04X\n", Traits::name, code_addr);
         } else if (has_basic) {
             // Enter the ROM main execution loop — it will honour NEWPPC/NSPPC
             board_.z80.set(PC, 0x12A2);  // MAIN-EXEC in the 48K ROM
-            printf("%s: Entering BASIC via ROM MAIN-EXEC ($12A2)\n", Traits::name);
+            log_info("%s: Entering BASIC via ROM MAIN-EXEC ($12A2)\n", Traits::name);
         }
 
         result.release();
@@ -694,10 +695,10 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
             bool is_code = entry && entry->type == 'C';
             if (is_code) {
                 board_.z80.set(PC, addr);
-                printf("%s: %s Code loaded %zu bytes at $%04X — jumping\n",
+                log_info("%s: %s Code loaded %zu bytes at $%04X — jumping\n",
                        Traits::name, result.format->name, len, addr);
             } else {
-                printf("%s: %s loaded %zu bytes at $%04X\n",
+                log_info("%s: %s loaded %zu bytes at $%04X\n",
                        Traits::name, result.format->name, len, addr);
             }
         }
@@ -705,7 +706,7 @@ bool SpectrumSystem<V>::load_file(const char* filepath) {
         return true;
     }
 
-    printf("%s: Unsupported format for file: %s\n", Traits::name, filepath);
+    log_info("%s: Unsupported format for file: %s\n", Traits::name, filepath);
     result.release();
     return false;
 }
@@ -823,7 +824,7 @@ template<SpectrumVariant V>
 bool SpectrumSystem<V>::load_roms() {
     char rom_root[1024];
     if (!system_config_discover_rom_root(Traits::data_folder, rom_root, sizeof(rom_root))) {
-        printf("Spectrum: Could not find ROM root folder\n");
+        log_info("Spectrum: Could not find ROM root folder\n");
         return false;
     }
     return board_.load_roms(rom_root, Traits::name);

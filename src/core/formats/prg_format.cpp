@@ -2,6 +2,7 @@
  * PRG Format Handler — Implementation
  */
 
+#include "core/cermu.hpp"
 #include "core/formats/prg_format.hpp"
 #include "core/formats/format_registry.hpp"
 #include <cstdio>
@@ -20,7 +21,7 @@ bool commodore_prg_parse(const uint8_t* buffer, size_t size, commodore_prg_t* ou
     size_t data_size = size - 2;
 
     if ((uint32_t)load_addr + data_size > 0x10000) {
-        printf("PRGFormat: PRG data exceeds 64KB (load=$%04X, size=%zu)\n",
+        log_info("PRGFormat: PRG data exceeds 64KB (load=$%04X, size=%zu)\n",
                load_addr, data_size);
         return false;
     }

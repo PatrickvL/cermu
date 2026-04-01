@@ -173,7 +173,7 @@ bool commodore_basic_parse_sys(commodore_mem_read_fn mem_read, void* mem_ctx,
                     out_sys->sys_address = sys_addr;
                     out_sys->line_number = line_number;
                     out_sys->found = true;
-                    printf("BASICParser: Line %u: SYS %u ($%04X)\n",
+                    log_info("BASICParser: Line %u: SYS %u ($%04X)\n",
                            line_number, sys_addr, sys_addr);
                     return true;
                 }

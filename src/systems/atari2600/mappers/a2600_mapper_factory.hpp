@@ -15,6 +15,7 @@
  *    -               16KB  → F6
  */
 
+#include "core/cermu.hpp"
 #include "systems/atari2600/mappers/a2600_mapper.hpp"
 #include "systems/atari2600/mappers/a2600_mapper_2k.hpp"
 #include "systems/atari2600/mappers/a2600_mapper_4k.hpp"
@@ -105,51 +106,51 @@ inline std::unique_ptr<A2600Mapper> create(const uint8_t* rom, uint32_t size) {
 
     if (size <= 2048) {
         mapper = std::make_unique<A2600Mapper2K>();
-        printf("Atari2600: Mapper = 2K (no bank switching)\n");
+        log_info("Atari2600: Mapper = 2K (no bank switching)\n");
     }
     else if (size <= 4096) {
         mapper = std::make_unique<A2600Mapper4K>();
-        printf("Atari2600: Mapper = 4K (no bank switching)\n");
+        log_info("Atari2600: Mapper = 4K (no bank switching)\n");
     }
     else if (size == 8192) {
         // 8KB: most likely F8, but could be E0 (Parker Bros) or FE (Activision)
         if (detect_e0(rom, size)) {
             mapper = std::make_unique<A2600MapperE0>();
-            printf("Atari2600: Mapper = E0 (Parker Brothers)\n");
+            log_info("Atari2600: Mapper = E0 (Parker Brothers)\n");
         } else if (detect_fe(rom, size)) {
             mapper = std::make_unique<A2600MapperFE>();
-            printf("Atari2600: Mapper = FE (Activision)\n");
+            log_info("Atari2600: Mapper = FE (Activision)\n");
         } else {
             mapper = std::make_unique<A2600MapperF8>();
-            printf("Atari2600: Mapper = F8 (standard 8KB)\n");
+            log_info("Atari2600: Mapper = F8 (standard 8KB)\n");
         }
     }
     else if (size == 12288) {
         mapper = std::make_unique<A2600MapperFA>();
-        printf("Atari2600: Mapper = FA (CBS RAM Plus 12KB)\n");
+        log_info("Atari2600: Mapper = FA (CBS RAM Plus 12KB)\n");
     }
     else if (size == 16384) {
         mapper = std::make_unique<A2600MapperF6>();
-        printf("Atari2600: Mapper = F6 (standard 16KB)\n");
+        log_info("Atari2600: Mapper = F6 (standard 16KB)\n");
     }
     else if (size == 32768) {
         if (detect_3f(rom, size)) {
             mapper = std::make_unique<A2600Mapper3F>();
-            printf("Atari2600: Mapper = 3F (Tigervision 32KB)\n");
+            log_info("Atari2600: Mapper = 3F (Tigervision 32KB)\n");
         } else {
             mapper = std::make_unique<A2600MapperF4>();
-            printf("Atari2600: Mapper = F4 (standard 32KB)\n");
+            log_info("Atari2600: Mapper = F4 (standard 32KB)\n");
         }
     }
     else if (size > 32768) {
         // Large ROMs: likely 3F (Tigervision) — supports up to 512KB
         mapper = std::make_unique<A2600Mapper3F>();
-        printf("Atari2600: Mapper = 3F (Tigervision %uKB)\n", size / 1024);
+        log_info("Atari2600: Mapper = 3F (Tigervision %uKB)\n", size / 1024);
     }
     else {
         // Unusual size — fall back to 4K with mirroring
         mapper = std::make_unique<A2600Mapper4K>();
-        printf("Atari2600: Mapper = 4K (fallback for %u bytes)\n", size);
+        log_info("Atari2600: Mapper = 4K (fallback for %u bytes)\n", size);
     }
 
     mapper->set_rom(rom, size);

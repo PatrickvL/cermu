@@ -1,3 +1,4 @@
+#include "core/cermu.hpp"
 #include "systems/apple1/apple1_system.hpp"
 #include "systems/apple1/apple1_constants.hpp"
 #include "core/chip.hpp"
@@ -175,7 +176,7 @@ bool Apple1System::apply_configuration() {
 // System Lifecycle
 // ============================================================================
 bool Apple1System::initialize() {
-    printf("Apple1: Initializing system\n");
+    log_info("Apple1: Initializing system\n");
     register_board(&board_);
     
     // ── Bind all value-typed chips (sequential — matches macro order) ───
@@ -197,7 +198,7 @@ bool Apple1System::initialize() {
     // Load ROMs using common ROM loader
     bool roms_loaded = load_roms();
     if (!roms_loaded) {
-        printf("Apple1: Warning - ROMs not loaded, system may not function correctly\n");
+        log_info("Apple1: Warning - ROMs not loaded, system may not function correctly\n");
     }
 
     // ── Configure page tables for the current ram_size_ ─────────────────────
@@ -235,17 +236,17 @@ bool Apple1System::initialize() {
     video_port_->set_palette(palette_.data(), 2);
     video_port_->bind_frame_output(&last_frame_data_);
     
-    printf("Apple1: System initialized (RAM: %dKB)\n", ram_size_ / 1024);
+    log_info("Apple1: System initialized (RAM: %dKB)\n", ram_size_ / 1024);
     return true;
 }
 
 void Apple1System::shutdown() {
-    printf("Apple1: Shutting down system\n");
+    log_info("Apple1: Shutting down system\n");
     System::shutdown();
 }
 
 void Apple1System::reset() {
-    printf("Apple1: Resetting system\n");
+    log_info("Apple1: Resetting system\n");
     
     // Reset all manifest chips (PIA; RAM/ROM are no-op)
     board_.reset_chips();
@@ -315,22 +316,22 @@ void Apple1System::run_frame() {
 // ============================================================================
 
 bool Apple1System::load_file(const char* filepath) {
-    printf("Apple1: Loading file: %s\n", filepath);
+    log_info("Apple1: Loading file: %s\n", filepath);
     
     // Determine file type
     const char* ext = strrchr(filepath, '.');
     if (!ext) {
-        printf("Apple1: Unknown file type (no extension)\n");
+        log_info("Apple1: Unknown file type (no extension)\n");
         return false;
     }
     
     if (strcmp(ext, ".bin") == 0 || strcmp(ext, ".BIN") == 0) {
         // TODO: Implement binary file loading
-        printf("Apple1: Binary file loading not yet implemented\n");
+        log_info("Apple1: Binary file loading not yet implemented\n");
         return false;
     }
     
-    printf("Apple1: Unsupported file type: %s\n", ext);
+    log_info("Apple1: Unsupported file type: %s\n", ext);
     return false;
 }
 
@@ -618,7 +619,7 @@ void Apple1System::pump_paste_queue() {
 bool Apple1System::load_roms() {
     char rom_root[1024];
     if (!system_config_discover_rom_root("apple1", rom_root, sizeof(rom_root))) {
-        printf("Apple1: Could not find ROM root folder\n");
+        log_info("Apple1: Could not find ROM root folder\n");
         return false;
     }
 
@@ -636,14 +637,14 @@ bool Apple1System::load_roms() {
     );
     
     if (char_ok && terminal_) {
-        printf("Apple1: Signetics 2513 character ROM loaded\n");
+        log_info("Apple1: Signetics 2513 character ROM loaded\n");
         // Convert 2513 ROM format to 8x8 font for TextTerminal
         uint8_t font_8x8[256 * 8];
         memset(font_8x8, 0, sizeof(font_8x8));
         convert_2513_to_8x8_font(char_rom_->data(), font_8x8);
         terminal_->set_font(font_8x8);
     } else {
-        printf("Apple1: Character ROM not found, using built-in font\n");
+        log_info("Apple1: Character ROM not found, using built-in font\n");
     }
 
     return ok;  // Only monitor ROM is required
@@ -725,7 +726,7 @@ void Apple1System::setup_ports() {
     };
     add_port(apple1_video_out_def, 0);
 
-    printf("Apple1: Created %zu ports\n", get_ports().size());
+    log_info("Apple1: Created %zu ports\n", get_ports().size());
 }
 
 std::vector<System::DefaultPeripheral>

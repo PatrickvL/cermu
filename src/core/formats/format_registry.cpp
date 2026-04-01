@@ -24,8 +24,7 @@ FormatRegistry& FormatRegistry::instance() {
 
 void FormatRegistry::register_format(const format_descriptor_t* descriptor) {
     if (!descriptor) return;
-    if (g_verbose)
-        printf("FormatRegistry: Registered format: %s (%s)\n",
+            log_debug("FormatRegistry: Registered format: %s (%s)\n",
                descriptor->name, descriptor->description);
     formats_.push_back(descriptor);
 }

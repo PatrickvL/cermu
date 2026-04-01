@@ -545,7 +545,7 @@ bool VIC20System::apply_configuration() {
             setup_expansion_map();
         }
         
-        printf("VIC20: Expansion configuration: $%02X\n", expansion_flags_);
+        log_info("VIC20: Expansion configuration: $%02X\n", expansion_flags_);
     }
     
     return true;
@@ -558,7 +558,7 @@ bool VIC20System::apply_configuration() {
 bool VIC20System::initialize() {
     if (initialized_) return true;
     
-    printf("VIC20: Initializing system\n");
+    log_info("VIC20: Initializing system\n");
     register_board(&board_);
     
     // ── Bind all value-typed chips, then factory-create memory chips ─────
@@ -589,7 +589,7 @@ bool VIC20System::initialize() {
     // Load ROMs into ROMChip buffers
     bool roms_loaded = load_roms();
     if (!roms_loaded) {
-        printf("VIC20: Warning - ROMs not loaded, system may not function correctly\n");
+        log_info("VIC20: Warning - ROMs not loaded, system may not function correctly\n");
     }
     
     // ── Post-creation wiring: init/reset/callbacks ──────────────────────
@@ -601,7 +601,7 @@ bool VIC20System::initialize() {
     // VIC — PAL uses value-typed board_.vic, NTSC uses heap-created mos6560_t.
     // Both accessed uniformly via vic_ (vic_base_t*).
     if (!vic_) {
-        printf("VIC20: Failed to create VIC chip\n");
+        log_info("VIC20: Failed to create VIC chip\n");
         return false;
     }
     if (is_ntsc) {
@@ -609,7 +609,7 @@ bool VIC20System::initialize() {
     } else {
         board_.vic.init();
     }
-    printf("VIC20: Created %s VIC chip\n",
+    log_info("VIC20: Created %s VIC chip\n",
            is_ntsc ? "MOS6560 (NTSC)" : "MOS6561 (PAL)");
     
     // Set up VIC memory callbacks for accessing video and character memory
@@ -647,9 +647,9 @@ bool VIC20System::initialize() {
         // Port A reads rows, Port B reads columns (reverse scanning)
         board_.via2.set_port_a_read_callback(vic20_via2_port_a_read, this);
         board_.via2.set_port_b_read_callback(vic20_via2_port_b_read, this);
-        printf("VIC20: Keyboard connected to VIA2 via callbacks\n");
+        log_info("VIC20: Keyboard connected to VIA2 via callbacks\n");
     } else {
-        printf("VIC20: Warning: Could not create keyboard\n");
+        log_info("VIC20: Warning: Could not create keyboard\n");
     }
     
     // Setup connector ports (generic framework from System)
@@ -678,12 +678,12 @@ bool VIC20System::initialize() {
 }
 
 void VIC20System::shutdown() {
-    printf("VIC20: Shutting down system\n");
+    log_info("VIC20: Shutting down system\n");
     System::shutdown();
 }
 
 void VIC20System::reset() {
-    printf("VIC20: Resetting system\n");
+    log_info("VIC20: Resetting system\n");
     
     // Reset all manifest chips (VIC, VIA1, VIA2; RAM/ROM/CPU are no-op)
     board_.reset_chips();
@@ -897,13 +897,13 @@ static bool vic20_crt_chip_loader(const commodore_crt_chip_t* chip,
                                   void* user_data) {
     auto* ctx = static_cast<vic20_crt_load_ctx*>(user_data);
 
-    printf("VIC20: CRT CHIP bank=%u type=%u addr=$%04X size=%u\n",
+    log_info("VIC20: CRT CHIP bank=%u type=%u addr=$%04X size=%u\n",
            chip->bank_number, chip->chip_type,
            chip->load_address, chip->rom_size);
 
     // Validate address range
     if (chip->load_address + chip->rom_size > 65536) {
-        printf("VIC20: CHIP bank %u address out of range\n", chip->bank_number);
+        log_info("VIC20: CHIP bank %u address out of range\n", chip->bank_number);
         return false;
     }
 
@@ -915,13 +915,13 @@ static bool vic20_crt_chip_loader(const commodore_crt_chip_t* chip,
     else if (chip->load_address < 0x8000)
         dest = ctx->ram_base + chip->load_address;
     else {
-        printf("VIC20: CHIP bank %u at unexpected address $%04X\n",
+        log_info("VIC20: CHIP bank %u at unexpected address $%04X\n",
                chip->bank_number, chip->load_address);
         return false;
     }
 
     memcpy(dest, rom_data, chip->rom_size);
-    printf("VIC20: Loaded %uKB ROM at $%04X\n", chip->rom_size / 1024, chip->load_address);
+    log_info("VIC20: Loaded %uKB ROM at $%04X\n", chip->rom_size / 1024, chip->load_address);
 
     ctx->chips_loaded++;
     return true;  // Continue iterating
@@ -941,12 +941,12 @@ bool VIC20System::pre_apply_pending_load() {
 
     // Verify this is a VIC-20 CRT
     if (commodore_crt_machine(hdr->signature) != CRT_MACHINE_VIC20) {
-        printf("VIC20: CRT file is not a VIC-20 cartridge (signature: %.16s)\n",
+        log_info("VIC20: CRT file is not a VIC-20 cartridge (signature: %.16s)\n",
                hdr->signature);
         return false;
     }
 
-    printf("VIC20: Loading CRT cartridge \"%s\" (hw_type=%u)\n",
+    log_info("VIC20: Loading CRT cartridge \"%s\" (hw_type=%u)\n",
            hdr->name, hdr->hardware_type);
 
     // Re-read the raw file to iterate CHIP packets
@@ -955,7 +955,7 @@ bool VIC20System::pre_apply_pending_load() {
     uint8_t* file_data = format_read_entire_file(
         pending_load_.filepath.c_str(), &file_size);
     if (!file_data) {
-        printf("VIC20: Failed to re-read CRT file: %s\n",
+        log_info("VIC20: Failed to re-read CRT file: %s\n",
                pending_load_.filepath.c_str());
         return false;
     }
@@ -973,14 +973,14 @@ bool VIC20System::pre_apply_pending_load() {
     free(file_data);
 
     if (chip_count <= 0) {
-        printf("VIC20: No valid CHIP packets found in CRT file\n");
+        log_info("VIC20: No valid CHIP packets found in CRT file\n");
         // Revert cartridge state
         cartridge_present_ = false;
         setup_cartridge_pages(false);
         return false;
     }
 
-    printf("VIC20: Loaded %d CHIP packet(s) — resetting CPU for cartridge boot\n",
+    log_info("VIC20: Loaded %d CHIP packet(s) — resetting CPU for cartridge boot\n",
            chip_count);
 
     // Reset the system so the CPU picks up the new RESET vector
@@ -1068,7 +1068,7 @@ void VIC20System::setup_expansion_map() {
     // Cartridge ROM at $A000-$BFFF: handled via setup_cartridge_pages
     setup_cartridge_pages(cartridge_present_);
 
-    printf("VIC20: Expansion map configured (flags=$%02X, cart=%s)\n",
+    log_info("VIC20: Expansion map configured (flags=$%02X, cart=%s)\n",
            expansion_flags_, cartridge_present_ ? "yes" : "no");
 }
 
@@ -1329,7 +1329,7 @@ void VIC20System::setup_ports() {
     get_port(kb_port)->attach_device(kb_raw);
     owned_devices_.push_back(std::move(kb_device));
 
-    printf("VIC20: Created %zu ports\n", get_ports().size());
+    log_info("VIC20: Created %zu ports\n", get_ports().size());
 }
 
 std::vector<System::DefaultPeripheral>
@@ -1379,7 +1379,7 @@ uint8_t VIC20System::vic_color_read(void* user_data, uint16_t addr) {
 bool VIC20System::load_roms() {
     char rom_root[1024];
     if (!system_config_discover_rom_root("vic20", rom_root, sizeof(rom_root))) {
-        printf("VIC20: ROM root directory not found\n");
+        log_info("VIC20: ROM root directory not found\n");
         return false;
     }
     return board_.load_roms(rom_root, "VIC20");

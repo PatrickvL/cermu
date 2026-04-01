@@ -1,3 +1,4 @@
+#include "core/cermu.hpp"
 #include "gui/emulator_host.hpp"
 #include "gui/display_panel.hpp"
 #include "gui/gl_api.hpp"
@@ -79,7 +80,7 @@ bool EmulatorHost::init(const char* window_title, int width, int height) {
     // Initialize SDL (including game controller/joystick for peripheral input)
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_EVENTS |
                  SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK) < 0) {
-        printf("Failed to initialize SDL: %s\n", SDL_GetError());
+        log_info("Failed to initialize SDL: %s\n", SDL_GetError());
         return false;
     }
 
@@ -132,14 +133,14 @@ bool EmulatorHost::init(const char* window_title, int width, int height) {
         window_flags);
     
     if (!window_) {
-        printf("Failed to create window: %s\n", SDL_GetError());
+        log_info("Failed to create window: %s\n", SDL_GetError());
         SDL_Quit();
         return false;
     }
     
     gl_context_ = SDL_GL_CreateContext(window_);
     if (!gl_context_) {
-        printf("Failed to create GL context: %s\n", SDL_GetError());
+        log_info("Failed to create GL context: %s\n", SDL_GetError());
         SDL_DestroyWindow(window_);
         SDL_Quit();
         return false;
@@ -182,7 +183,7 @@ bool EmulatorHost::init(const char* window_title, int width, int height) {
     ImGui_ImplSDL2_InitForOpenGL(window_, gl_context_);
     ImGui_ImplOpenGL3_Init(glsl_version_);
     
-    printf("Generic GUI initialized: %s (%dx%d)\n", window_title, width, height);
+    log_info("Generic GUI initialized: %s (%dx%d)\n", window_title, width, height);
     return true;
 }
 
@@ -221,7 +222,7 @@ void EmulatorHost::cleanup() {
 // ============================================================================
 
 void EmulatorHost::run() {
-    printf("Starting main loop\n");
+    log_info("Starting main loop\n");
     
     while (!should_quit_) {
         // Handle events (system-specific)
@@ -249,7 +250,7 @@ void EmulatorHost::run() {
         cursor_hidden_ = false;
     }
 
-    printf("Main loop ended\n");
+    log_info("Main loop ended\n");
 }
 
 // ============================================================================
@@ -649,12 +650,12 @@ void EmulatorHost::start_emulation() {
     emulation_paused_.store(false);
     // Frame pacing is reset inside the emu thread when it detects
     // the transition from paused/stopped to running.
-    printf("Emulation started\n");
+    log_info("Emulation started\n");
 }
 
 void EmulatorHost::pause_emulation() {
     emulation_paused_.store(true);
-    printf("Emulation paused\n");
+    log_info("Emulation paused\n");
 }
 
 void EmulatorHost::update_fps() {
@@ -709,7 +710,7 @@ void EmulatorHost::start_emu_thread() {
     emu_thread_running_.store(true);
     audio_ring_->reset();
     emu_thread_ = std::thread(&EmulatorHost::emu_thread_func, this);
-    printf("Emulation thread started\n");
+    log_info("Emulation thread started\n");
 }
 
 void EmulatorHost::stop_emu_thread() {
@@ -718,7 +719,7 @@ void EmulatorHost::stop_emu_thread() {
     if (emu_thread_.joinable()) {
         emu_thread_.join();
     }
-    printf("Emulation thread stopped\n");
+    log_info("Emulation thread stopped\n");
 }
 
 // ============================================================================
@@ -759,6 +760,6 @@ void EmulatorHost::close_audio_device() {
         audio_device_ = 0;
         audio_sample_rate_ = 0;
         speaker_sim_.reset();
-        printf("Audio: device closed\n");
+        log_info("Audio: device closed\n");
     }
 }

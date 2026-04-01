@@ -22,6 +22,7 @@
  *   concatenated with vector ROM if separate.
  */
 
+#include "core/cermu.hpp"
 #include "systems/arcade/atari_vector/atari_vector_system.hpp"
 #include "core/dip_switch.hpp"
 #include "core/rom_set.hpp"
@@ -990,7 +991,7 @@ bool AtariVectorSystem<V>::apply_configuration() {
 template<AtariVectorVariant V>
 bool AtariVectorSystem<V>::initialize() {
     using Traits = AtariVectorTraits<V>;
-    printf("%s: Initializing system\n", Traits::NAME);
+    log_info("%s: Initializing system\n", Traits::NAME);
 
     register_board(&board_);
 
@@ -1132,19 +1133,19 @@ bool AtariVectorSystem<V>::initialize() {
         }
     }
 
-    printf("%s: System initialized\n", Traits::NAME);
+    log_info("%s: System initialized\n", Traits::NAME);
     return true;
 }
 
 template<AtariVectorVariant V>
 void AtariVectorSystem<V>::shutdown() {
-    printf("%s: Shutting down\n", AtariVectorTraits<V>::NAME);
+    log_info("%s: Shutting down\n", AtariVectorTraits<V>::NAME);
     System::shutdown();
 }
 
 template<AtariVectorVariant V>
 void AtariVectorSystem<V>::reset() {
-    printf("%s: Reset\n", AtariVectorTraits<V>::NAME);
+    log_info("%s: Reset\n", AtariVectorTraits<V>::NAME);
 
     board_.reset_chips();
     board_.m6502.reset();
@@ -1829,7 +1830,7 @@ bool AtariVectorSystem<V>::load_file(const char* filepath) {
         if (!initialize()) return false;
     }
 
-    printf("%s: Loading file: %s\n", Traits::NAME, filepath);
+    log_info("%s: Loading file: %s\n", Traits::NAME, filepath);
 
     // Archive files (zip, 7z, …) may contain a multi-file ROM set.
     // Try ROM set matching before falling back to single-blob loading.
@@ -1840,13 +1841,13 @@ bool AtariVectorSystem<V>::load_file(const char* filepath) {
             auto match = rom_set_scan_and_match(
                 filepath, descriptors.data(), static_cast<int>(descriptors.size()));
             if (match.matched) {
-                printf("%s: Archive contains ROM set '%s'\n",
+                log_info("%s: Archive contains ROM set '%s'\n",
                        Traits::NAME, match.rom_set ? match.rom_set->name : "?");
                 return load_rom_set(match);
             }
         }
         // Archive didn't match any ROM set — cannot load raw ZIP as ROM data
-        printf("%s: Archive '%s' did not match any known ROM set\n",
+        log_info("%s: Archive '%s' did not match any known ROM set\n",
                Traits::NAME, filepath);
         return false;
     }
@@ -1855,17 +1856,17 @@ bool AtariVectorSystem<V>::load_file(const char* filepath) {
     size_t file_size = 0;
     uint8_t* file_data = vfs_read_file(filepath, &file_size);
     if (!file_data) {
-        printf("%s: Failed to open file: %s\n", Traits::NAME, filepath);
+        log_info("%s: Failed to open file: %s\n", Traits::NAME, filepath);
         return false;
     }
 
     if (file_size == 0) {
-        printf("%s: Empty file\n", Traits::NAME);
+        log_info("%s: Empty file\n", Traits::NAME);
         free(file_data);
         return false;
     }
 
-    printf("%s: ROM file is %zu bytes\n", Traits::NAME, file_size);
+    log_info("%s: ROM file is %zu bytes\n", Traits::NAME, file_size);
 
     // Determine ROM layout:
     // The file may contain:
@@ -1921,7 +1922,7 @@ bool AtariVectorSystem<V>::load_file(const char* filepath) {
         uint16_t rst_offset = Traits::PROGROM_SIZE - 4;  // $FFFC relative
         uint16_t rst_lo = prog_rom_->data()[rst_offset];
         uint16_t rst_hi = prog_rom_->data()[rst_offset + 1];
-        printf("%s: Reset vector = $%04X (chip offset $%04X)\n",
+        log_info("%s: Reset vector = $%04X (chip offset $%04X)\n",
                Traits::NAME, rst_lo | (rst_hi << 8), rst_offset);
     }
 
@@ -1931,7 +1932,7 @@ bool AtariVectorSystem<V>::load_file(const char* filepath) {
         board_.m6502.set(Y, 0);
     }
 
-    printf("%s: ROM loaded, system ready\n", Traits::NAME);
+    log_info("%s: ROM loaded, system ready\n", Traits::NAME);
     return true;
 }
 
@@ -1977,7 +1978,7 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
         if (!initialize()) return false;
     }
 
-    printf("%s: Loading ROM set '%s' (%zu entries)\n",
+    log_info("%s: Loading ROM set '%s' (%zu entries)\n",
            Traits::NAME, match.rom_set ? match.rom_set->name : "?",
            match.entries.size());
 
@@ -1993,7 +1994,7 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
             uint32_t offset = load_address - Traits::VECROM_BASE;
             size_t to_copy = std::min(size, static_cast<size_t>(Traits::VECROM_SIZE - offset));
             std::memcpy(vec_rom_->data() + offset, data, to_copy);
-            printf("  Vector ROM: %zu bytes at $%04X\n", to_copy, load_address);
+            log_info("  Vector ROM: %zu bytes at $%04X\n", to_copy, load_address);
             return true;
         }
 
@@ -2004,7 +2005,7 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
             uint32_t offset = load_address - Traits::PROGROM_BASE;
             size_t to_copy = std::min(size, static_cast<size_t>(Traits::PROGROM_SIZE - offset));
             std::memcpy(prog_rom_->data() + offset, data, to_copy);
-            printf("  Program ROM: %zu bytes at $%04X (offset $%04X)\n",
+            log_info("  Program ROM: %zu bytes at $%04X (offset $%04X)\n",
                    to_copy, load_address, offset);
             return true;
         }
@@ -2015,19 +2016,19 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
                 uint32_t offset = load_address - 0x8000;
                 size_t to_copy = std::min(size, static_cast<size_t>(0x8000u - offset));
                 std::memcpy(prog_rom_hi_->data() + offset, data, to_copy);
-                printf("  Program ROM (high): %zu bytes at $%04X (offset $%04X)\n",
+                log_info("  Program ROM (high): %zu bytes at $%04X (offset $%04X)\n",
                        to_copy, load_address, offset);
                 return true;
             }
         }
 
-        printf("  WARNING: Unhandled ROM address $%04X (%zu bytes) — skipped\n",
+        log_info("  WARNING: Unhandled ROM address $%04X (%zu bytes) — skipped\n",
                load_address, size);
         return true;  // Not a fatal error
     });
 
     if (!ok) {
-        printf("%s: Failed to load ROM set\n", Traits::NAME);
+        log_info("%s: Failed to load ROM set\n", Traits::NAME);
         return false;
     }
 
@@ -2041,7 +2042,7 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
                 // Copy $C000-$DFFF → $E000-$FFFF (chip offset $4000-$5FFF → $6000-$7FFF)
                 std::memcpy(prog_rom_->data() + 0x6000,
                             prog_rom_->data() + 0x4000, 0x2000);
-                printf("  Reset vector mirror: $C000-$DFFF → $E000-$FFFF\n");
+                log_info("  Reset vector mirror: $C000-$DFFF → $E000-$FFFF\n");
             }
         } else if constexpr (V == AtariVectorVariant::GRAVITAR ||
                              V == AtariVectorVariant::BLACK_WIDOW) {
@@ -2051,7 +2052,7 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
             if (prog_rom_) {
                 std::memcpy(prog_rom_->data() + 0x6000,
                             prog_rom_->data() + 0x5000, 0x1000);
-                printf("  Reset vector mirror: $E000 → $F000\n");
+                log_info("  Reset vector mirror: $E000 → $F000\n");
             }
         } else if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
             // Space Duel: prog_rom_hi_ at $8000 (32KB alloc), .105 loads at $8000 (4KB).
@@ -2062,7 +2063,7 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
                     std::memcpy(prog_rom_hi_->data() + off,
                                 prog_rom_hi_->data(), 0x1000);
                 }
-                printf("  Reset vector mirror: .105 mirrored across $8000-$FFFF\n");
+                log_info("  Reset vector mirror: .105 mirrored across $8000-$FFFF\n");
             }
         }
     }
@@ -2103,18 +2104,18 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
         if (rst_chip) {
             uint16_t rst_lo = rst_chip->data()[rst_offset];
             uint16_t rst_hi = rst_chip->data()[rst_offset + 1];
-            printf("%s: Reset vector = $%04X (chip offset $%04X)\n",
+            log_info("%s: Reset vector = $%04X (chip offset $%04X)\n",
                    Traits::NAME, rst_lo | (rst_hi << 8), rst_offset);
         }
     } else if (prog_rom_) {
         uint16_t rst_offset = Traits::PROGROM_SIZE - 4;  // $FFFC relative
         uint16_t rst_lo = prog_rom_->data()[rst_offset];
         uint16_t rst_hi = prog_rom_->data()[rst_offset + 1];
-        printf("%s: Reset vector = $%04X (chip offset $%04X)\n",
+        log_info("%s: Reset vector = $%04X (chip offset $%04X)\n",
                Traits::NAME, rst_lo | (rst_hi << 8), rst_offset);
     }
 
-    printf("%s: ROM set loaded, system ready\n", Traits::NAME);
+    log_info("%s: ROM set loaded, system ready\n", Traits::NAME);
     return true;
 }
 

@@ -2,6 +2,7 @@
 // session.cpp — Session implementation
 // =============================================================================
 
+#include "core/cermu.hpp"
 #include "core/session.hpp"
 #include <cstdio>
 
@@ -11,7 +12,7 @@
 
 System* Session::add_system(std::string name, std::unique_ptr<System> system) {
     if (!system) {
-        printf("Session: WARNING — null system '%s' ignored\n", name.c_str());
+        log_info("Session: WARNING — null system '%s' ignored\n", name.c_str());
         return nullptr;
     }
 

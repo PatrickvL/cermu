@@ -16,6 +16,7 @@
 // Requires: OpenGL 3.0 / GLSL 130
 // ============================================================================
 
+#include "core/cermu.hpp"
 #include "gui/gl_api.hpp"
 
 namespace indexed_shader {
@@ -91,7 +92,7 @@ inline GLuint create_program(GLint* out_loc_proj, GLint* out_loc_palette) {
     if (status != GL_TRUE) {
         char log[512];
         gl_api::glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
-        fprintf(stderr, "indexed_shader: link error: %s\n", log);
+        log_error("indexed_shader: link error: %s\n", log);
         gl_api::glDeleteProgram(prog);
         return 0;
     }
@@ -105,7 +106,7 @@ inline GLuint create_program(GLint* out_loc_proj, GLint* out_loc_palette) {
     if (out_loc_proj)    *out_loc_proj    = gl_api::glGetUniformLocation(prog, "ProjMtx");
     if (out_loc_palette) *out_loc_palette = gl_api::glGetUniformLocation(prog, "Palette");
 
-    printf("indexed_shader: program %u compiled and linked successfully\n", prog);
+    log_info("indexed_shader: program %u compiled and linked successfully\n", prog);
     return prog;
 }
 

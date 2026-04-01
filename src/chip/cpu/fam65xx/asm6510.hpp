@@ -24,9 +24,10 @@
 //   a.cmp_imm(100);
 //   a.bne(loop);              // branch back to label
 //   a.jmp(loop);              // absolute jump to label
-//   printf("Generated %zu bytes at $%04X\n", a.pos, a.origin);
+//   log_info("Generated %zu bytes at $%04X\n", a.pos, a.origin);
 // =============================================================================
 
+#include "core/cermu.hpp"
 #include <cstdint>
 #include <cstddef>
 #include <cstdio>

@@ -2,6 +2,7 @@
  * z1013_system.cpp — Robotron Z1013 system implementation
  */
 
+#include "core/cermu.hpp"
 #include "systems/ddr/z1013/z1013_system.hpp"
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
@@ -72,7 +73,7 @@ template<Z1013Variant V> bool Z1013System<V>::apply_configuration() { return tru
 
 template<Z1013Variant V>
 bool Z1013System<V>::initialize() {
-    printf("%s: Initializing system\n", Traits::name);
+    log_info("%s: Initializing system\n", Traits::name);
     register_board(&board_);
 
     // ── Bind and create chips from manifest, wire bus ───────────────────
@@ -92,7 +93,7 @@ bool Z1013System<V>::initialize() {
     keyboard_column_select_ = 0xFF;
 
     if (!load_roms()) {
-        printf("%s: Warning — ROMs not loaded\n", Traits::name);
+        log_info("%s: Warning — ROMs not loaded\n", Traits::name);
     }
 
     // ── Register chips for Hardware menu ────────────────────────────────
@@ -313,7 +314,7 @@ bool Z1013System<V>::load_roms() {
     char rom_root[512];
     const char* names[] = {"z1013", "Z1013", nullptr};
     if (!system_config_discover_rom_root(names, rom_root, sizeof(rom_root))) {
-        printf("%s: ROM path not found\n", Traits::name);
+        log_info("%s: ROM path not found\n", Traits::name);
         return false;
     }
 
@@ -337,7 +338,7 @@ bool Z1013System<V>::load_roms() {
             std::memcpy(board_.basic_lo.data(), basic_buf, 8192);
             std::memcpy(board_.basic_hi.data(), basic_buf + 8192, 2048);
         } else {
-            printf("%s: BASIC ROM not loaded\n", Traits::name);
+            log_info("%s: BASIC ROM not loaded\n", Traits::name);
             ok = false;
         }
     }

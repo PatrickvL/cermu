@@ -21,6 +21,7 @@
 // approach with the two-pass persistence rendering (decay + additive beams).
 // ============================================================================
 
+#include "core/cermu.hpp"
 #include "gui/decoder/signal_decoder.hpp"
 #include "gui/shader/vector_shader.hpp"
 
@@ -80,7 +81,7 @@ public:
             return false;
         }
 
-        printf("GPU vector display rendering enabled\n");
+        log_info("GPU vector display rendering enabled\n");
         return true;
     }
 

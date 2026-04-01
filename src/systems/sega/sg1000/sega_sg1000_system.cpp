@@ -12,6 +12,7 @@
  *   $DD read: I/O port B (joystick 2 + misc)
  */
 
+#include "core/cermu.hpp"
 #include "systems/sega/sg1000/sega_sg1000_system.hpp"
 #include "core/system_registry.hpp"
 #include "core/config/path_discovery.hpp"
@@ -114,7 +115,7 @@ bool SegaSG1000System<V>::apply_configuration() { return true; }
 
 template<SG1000Variant V>
 bool SegaSG1000System<V>::initialize() {
-    printf("%s: Initializing system\n", Traits::name);
+    log_info("%s: Initializing system\n", Traits::name);
     register_board(&board_);
 
     { size_t slot_idx_ = 0;
@@ -143,7 +144,7 @@ bool SegaSG1000System<V>::initialize() {
     board_.psg.set_audio_port(audio_port_.get());
 
     system_ready_ = true;
-    printf("%s: System initialized (RAM: %dB)\n", Traits::name, Traits::ram_size);
+    log_info("%s: System initialized (RAM: %dB)\n", Traits::name, Traits::ram_size);
     return true;
 }
 
@@ -284,7 +285,7 @@ template<SG1000Variant V>
 bool SegaSG1000System<V>::load_file(const char* filepath) {
     if (!filepath || !system_ready_) return false;
     // TODO: Load .sg cartridge ROM
-    printf("%s: File loading not yet implemented: %s\n", Traits::name, filepath);
+    log_info("%s: File loading not yet implemented: %s\n", Traits::name, filepath);
     return false;
 }
 

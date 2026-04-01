@@ -190,7 +190,7 @@ TestFramework::~TestFramework() {
 }
 
 bool TestFramework::scan_tests() {
-    printf("Scanning tests in: %s\n", vice_testprogs_path_.c_str());
+    log_info("Scanning tests in: %s\n", vice_testprogs_path_.c_str());
     
     // Define categories to scan
     std::vector<std::string> categories = {
@@ -203,7 +203,7 @@ bool TestFramework::scan_tests() {
         discover_tests_in_directory(category_path, category);
     }
     
-    printf("Found %zu tests in %zu categories\n", 
+    log_info("Found %zu tests in %zu categories\n", 
            test_registry_.size(), test_suites_.size());
     
     return !test_registry_.empty();
@@ -214,7 +214,7 @@ bool TestFramework::discover_tests_in_directory(const std::string& category_path
     // C++17 filesystem implementation (MSVC — no dirent.h)
     if (!cermu_fs::is_directory(category_path)) {
         if (verbose_) {
-            printf("  Category not found: %s\n", category.c_str());
+            log_info("  Category not found: %s\n", category.c_str());
         }
         return false;
     }
@@ -244,7 +244,7 @@ bool TestFramework::discover_tests_in_directory(const std::string& category_path
     if (!suite.tests.empty()) {
         test_suites_.push_back(suite);
         if (verbose_) {
-            printf("  %s: %zu tests\n", category.c_str(), suite.tests.size());
+            log_info("  %s: %zu tests\n", category.c_str(), suite.tests.size());
         }
     }
     
@@ -254,7 +254,7 @@ bool TestFramework::discover_tests_in_directory(const std::string& category_path
     DIR* dir = opendir(category_path.c_str());
     if (!dir) {
         if (verbose_) {
-            printf("  Category not found: %s\n", category.c_str());
+            log_info("  Category not found: %s\n", category.c_str());
         }
         return false;
     }
@@ -298,7 +298,7 @@ bool TestFramework::discover_tests_in_directory(const std::string& category_path
     if (!suite.tests.empty()) {
         test_suites_.push_back(suite);
         if (verbose_) {
-            printf("  %s: %zu tests\n", category.c_str(), suite.tests.size());
+            log_info("  %s: %zu tests\n", category.c_str(), suite.tests.size());
         }
     }
     
@@ -508,7 +508,7 @@ TestResult TestFramework::run_test_safe(const TestDescriptor& test, C64System* c
         result.test = test;
         result.status = TestStatus::ERROR;
         result.message = "CRASH: Access violation during test execution";
-        printf("  !!! CRASH detected in %s\n", test.name.c_str());
+        log_info("  !!! CRASH detected in %s\n", test.name.c_str());
         return result;
     }
     return args.result;
@@ -524,8 +524,8 @@ TestResult TestFramework::run_test(const TestDescriptor& test, C64System* c64) {
     auto start_time = std::chrono::high_resolution_clock::now();
     
     if (verbose_) {
-        printf("\nRunning test: %s\n", test.path.c_str());
-        printf("  Type: %s\n", test_type_to_string(test.type).c_str());
+        log_info("\nRunning test: %s\n", test.path.c_str());
+        log_info("  Type: %s\n", test_type_to_string(test.type).c_str());
     }
     
     // Load test program
@@ -557,10 +557,10 @@ TestResult TestFramework::run_test(const TestDescriptor& test, C64System* c64) {
     result.execution_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
     
     if (verbose_) {
-        printf("  Result: %s (%s)\n", 
+        log_info("  Result: %s (%s)\n", 
                test_status_to_string(result.status).c_str(),
                result.message.c_str());
-        printf("  Time: %.2f ms\n", result.execution_time_ms);
+        log_info("  Time: %.2f ms\n", result.execution_time_ms);
     }
     
     return result;
@@ -576,7 +576,7 @@ TestEnvironment TestFramework::detect_test_environment(const TestDescriptor& tes
     // 1. BASIC loader pattern: load at $0801 with SYS command
     if (load_addr == 0x0801 && sys_addr != 0) {
         if (verbose_) {
-            printf("  Environment: BASIC_BOOT (BASIC two-stage loader detected)\n");
+            log_info("  Environment: BASIC_BOOT (BASIC two-stage loader detected)\n");
         }
         return TestEnvironment::BASIC_BOOT;
     }
@@ -585,7 +585,7 @@ TestEnvironment TestFramework::detect_test_environment(const TestDescriptor& tes
     if (test.category == "CIA" || test.path.find("Lorenz") != std::string::npos) {
         // Lorenz tests typically need BASIC boot for proper initialization
         if (verbose_) {
-            printf("  Environment: BASIC_BOOT (Lorenz/CIA test)\n");
+            log_info("  Environment: BASIC_BOOT (Lorenz/CIA test)\n");
         }
         return TestEnvironment::BASIC_BOOT;
     }
@@ -593,7 +593,7 @@ TestEnvironment TestFramework::detect_test_environment(const TestDescriptor& tes
     if (test.category == "CPU") {
         // CPU tests usually work with direct execution
         if (verbose_) {
-            printf("  Environment: DIRECT_EXECUTION (CPU test)\n");
+            log_info("  Environment: DIRECT_EXECUTION (CPU test)\n");
         }
         return TestEnvironment::DIRECT_EXECUTION;
     }
@@ -602,7 +602,7 @@ TestEnvironment TestFramework::detect_test_environment(const TestDescriptor& tes
     if (load_addr < 0x0800) {
         // Loaded into zero page/stack area - unusual, direct execution
         if (verbose_) {
-            printf("  Environment: DIRECT_EXECUTION (low address $%04X)\n", load_addr);
+            log_info("  Environment: DIRECT_EXECUTION (low address $%04X)\n", load_addr);
         }
         return TestEnvironment::DIRECT_EXECUTION;
     }
@@ -610,14 +610,14 @@ TestEnvironment TestFramework::detect_test_environment(const TestDescriptor& tes
     if (load_addr >= 0x1000) {
         // Loaded above BASIC area - likely direct execution
         if (verbose_) {
-            printf("  Environment: DIRECT_EXECUTION (high address $%04X)\n", load_addr);
+            log_info("  Environment: DIRECT_EXECUTION (high address $%04X)\n", load_addr);
         }
         return TestEnvironment::DIRECT_EXECUTION;
     }
     
     // 4. Default: try BASIC boot for safety (can fall back to direct if timeout)
     if (verbose_) {
-        printf("  Environment: BASIC_BOOT (default for load_addr=$%04X)\n", load_addr);
+        log_info("  Environment: BASIC_BOOT (default for load_addr=$%04X)\n", load_addr);
     }
     return TestEnvironment::BASIC_BOOT;
 }
@@ -633,7 +633,7 @@ bool TestFramework::execute_kernal_boot(C64System* c64) {
     uint16_t reset_vector = reset_low | (reset_high << 8);
     
     if (verbose_) {
-        printf("  KERNAL reset vector: $%04X\n", reset_vector);
+        log_info("  KERNAL reset vector: $%04X\n", reset_vector);
     }
     
     // Load reset vector into CPU
@@ -651,7 +651,7 @@ bool TestFramework::execute_kernal_boot(C64System* c64) {
     uint32_t boot_cycles = 0;
     
     if (verbose_) {
-        printf("  Running KERNAL initialization for up to %u cycles...\n", MAX_KERNAL_BOOT_CYCLES);
+        log_info("  Running KERNAL initialization for up to %u cycles...\n", MAX_KERNAL_BOOT_CYCLES);
     }
     
     while (boot_cycles < MAX_KERNAL_BOOT_CYCLES) {
@@ -661,13 +661,13 @@ bool TestFramework::execute_kernal_boot(C64System* c64) {
         // Progress indicator
         if (verbose_ && boot_cycles % 500000 == 0) {
             uint16_t current_pc = cpu->get(PC);
-            printf("  Still booting... PC=$%04X (cycle %u)\n", current_pc, boot_cycles);
+            log_info("  Still booting... PC=$%04X (cycle %u)\n", current_pc, boot_cycles);
         }
     }
     
     if (verbose_) {
         uint16_t final_pc = cpu->get(PC);
-        printf("  KERNAL boot complete after %u cycles (PC=$%04X)\n", boot_cycles, final_pc);
+        log_info("  KERNAL boot complete after %u cycles (PC=$%04X)\n", boot_cycles, final_pc);
     }
     return true;
 }
@@ -677,7 +677,7 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
     auto* cpu = c64->cpu;
     
     if (verbose_) {
-        printf("  Executing BASIC boot sequence...\n");
+        log_info("  Executing BASIC boot sequence...\n");
     }
     
     // First, execute KERNAL boot
@@ -694,7 +694,7 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
     uint32_t stable_cycles = 0;
     
     if (verbose_) {
-        printf("  Running BASIC initialization (detecting keyboard loop completion)...\n");
+        log_info("  Running BASIC initialization (detecting keyboard loop completion)...\n");
     }
     
     while (boot_cycles < MAX_BASIC_BOOT_CYCLES) {
@@ -712,8 +712,8 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
                     stable_cycles++;
                     if (stable_cycles >= 5) {  // Stable for 5000 cycles = boot complete
                         if (verbose_) {
-                            printf("  BASIC keyboard input loop detected at PC=$%04X\n", current_pc);
-                            printf("  BASIC boot complete after %u cycles\n", boot_cycles);
+                            log_info("  BASIC keyboard input loop detected at PC=$%04X\n", current_pc);
+                            log_info("  BASIC boot complete after %u cycles\n", boot_cycles);
                         }
                         break;
                     }
@@ -729,15 +729,15 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
         
         // Progress indicator
         if (verbose_ && boot_cycles % 500000 == 0) {
-            printf("  Still booting... PC=$%04X (cycle %u)\n", current_pc, boot_cycles);
+            log_info("  Still booting... PC=$%04X (cycle %u)\n", current_pc, boot_cycles);
         }
     }
     
     uint16_t final_pc = cpu->get(PC);
     
     if (verbose_) {
-        printf("  Boot sequence finished at PC=$%04X after %u cycles\n", final_pc, boot_cycles);
-        printf("  Setting PC to SYS address $%04X\n", sys_addr);
+        log_info("  Boot sequence finished at PC=$%04X after %u cycles\n", final_pc, boot_cycles);
+        log_info("  Setting PC to SYS address $%04X\n", sys_addr);
     }
     
     // After boot, set PC to target address (simulating SYS command)
@@ -800,12 +800,12 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
     switch (environment) {
         case TestEnvironment::BASIC_BOOT:
             if (verbose_) {
-                printf("  Using BASIC boot environment\n");
+                log_info("  Using BASIC boot environment\n");
             }
             // Execute full KERNAL+BASIC boot, then jump to SYS address
             if (!execute_basic_boot(c64, test, sys_addr != 0 ? sys_addr : load_addr)) {
                 if (verbose_) {
-                    printf("  BASIC boot failed, falling back to direct execution\n");
+                    log_info("  BASIC boot failed, falling back to direct execution\n");
                 }
                 // Fall through to direct execution
             } else {
@@ -816,11 +816,11 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
             
         case TestEnvironment::KERNAL_BOOT:
             if (verbose_) {
-                printf("  Using KERNAL boot environment\n");
+                log_info("  Using KERNAL boot environment\n");
             }
             if (!execute_kernal_boot(c64)) {
                 if (verbose_) {
-                    printf("  KERNAL boot failed, falling back to direct execution\n");
+                    log_info("  KERNAL boot failed, falling back to direct execution\n");
                 }
                 // Fall through to direct execution
             } else {
@@ -830,7 +830,7 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
                 cpu->transition_to_fetch();
                 cpu->set(AB, start_addr);
                 if (verbose_) {
-                    printf("  Set PC to test entry: $%04X\n", start_addr);
+                    log_info("  Set PC to test entry: $%04X\n", start_addr);
                 }
                 return true;
             }
@@ -841,7 +841,7 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
         default:
             // Direct execution: load and run immediately
             if (verbose_) {
-                printf("  Using direct execution environment\n");
+                log_info("  Using direct execution environment\n");
             }
             
             uint16_t start_addr = (sys_addr != 0) ? sys_addr : load_addr;
@@ -858,8 +858,8 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
             // So we don't change the I flag here - let tests control it
             
             if (verbose_) {
-                printf("  Set CPU PC to: $%04X\n", start_addr);
-                printf("  Interrupts left as-is (tests control I flag)\n");
+                log_info("  Set CPU PC to: $%04X\n", start_addr);
+                log_info("  Interrupts left as-is (tests control I flag)\n");
             }
             break;
     }
@@ -883,7 +883,7 @@ TestProtocol TestFramework::detect_test_protocol(const TestDescriptor& test, C64
     // BASIC two-stage loaders start at $0801 and have SYS command
     if (pc == 0x0801 && detect_basic_two_stage_loader(ram, pc)) {
         if (verbose_) {
-            printf("  Detected: BASIC two-stage loader\n");
+            log_info("  Detected: BASIC two-stage loader\n");
         }
         return TestProtocol::BASIC_LOADER;
     }
@@ -894,7 +894,7 @@ TestProtocol TestFramework::detect_test_protocol(const TestDescriptor& test, C64
         (test.name.find("6502_functional_test") != std::string::npos ||
          test.name.find("decimal") != std::string::npos)) {
         if (verbose_) {
-            printf("  Detected: Infinite-loop protocol (kdormann style)\n");
+            log_info("  Detected: Infinite-loop protocol (kdormann style)\n");
         }
         return TestProtocol::INFINITE_LOOP;
     }
@@ -996,15 +996,15 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
     uint16_t start_pc = cpu->get(PC);
     
     if (verbose_) {
-        printf("  Protocol: ");
+        log_info("  Protocol: ");
         switch (protocol) {
-            case TestProtocol::DEBUG_REGISTER: printf("DEBUG_REGISTER\n"); break;
-            case TestProtocol::INFINITE_LOOP: printf("INFINITE_LOOP\n"); break;
-            case TestProtocol::BASIC_LOADER: printf("BASIC_LOADER\n"); break;
-            case TestProtocol::KERNAL_EXIT: printf("KERNAL_EXIT\n"); break;
-            default: printf("AUTO_DETECT\n"); break;
+            case TestProtocol::DEBUG_REGISTER: log_info("DEBUG_REGISTER\n"); break;
+            case TestProtocol::INFINITE_LOOP: log_info("INFINITE_LOOP\n"); break;
+            case TestProtocol::BASIC_LOADER: log_info("BASIC_LOADER\n"); break;
+            case TestProtocol::KERNAL_EXIT: log_info("KERNAL_EXIT\n"); break;
+            default: log_info("AUTO_DETECT\n"); break;
         }
-        printf("  Starting at PC=$%04X\n", start_pc);
+        log_info("  Starting at PC=$%04X\n", start_pc);
     }
     
     // Handle BASIC loader protocol
@@ -1013,7 +1013,7 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
         // For now, just run for extended time to let BASIC execute
         // TODO: Implement minimal BASIC interpreter or parse SYS command
         if (verbose_) {
-            printf("  Note: BASIC loader requires BASIC ROM - skipping for now\n");
+            log_info("  Note: BASIC loader requires BASIC ROM - skipping for now\n");
         }
         result.status = TestStatus::SKIPPED;
         result.message = "BASIC loader protocol not yet fully implemented";
@@ -1035,11 +1035,11 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
             if (tr.debug_value == 0x00) {
                 result.status = TestStatus::PASSED;
                 result.message = "Test passed ($D7FF = $00)";
-                if (verbose_) printf("\n  Test passed at cycle %u\n", cycles);
+                if (verbose_) log_info("\n  Test passed at cycle %u\n", cycles);
             } else if (tr.debug_value == 0xFF) {
                 result.status = TestStatus::FAILED;
                 result.message = "Test failed ($D7FF = $FF)";
-                if (verbose_) printf("\n  Test failed at cycle %u\n", cycles);
+                if (verbose_) log_info("\n  Test failed at cycle %u\n", cycles);
             } else {
                 // Subtest indicator was the last write before timeout/loop
                 result.status = TestStatus::TIMEOUT;
@@ -1051,12 +1051,12 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
         case 1: // timeout
             result.status = TestStatus::TIMEOUT;
             result.message = "Test timeout - no completion detected";
-            if (verbose_) printf("  Timeout at cycle %u\n", cycles);
+            if (verbose_) log_info("  Timeout at cycle %u\n", cycles);
             break;
         case 2: // crash
             result.status = TestStatus::ERROR;
             result.message = "CRASH: Access violation during test execution";
-            printf("  !!! CRASH detected in %s at ~cycle %u\n", test.name.c_str(), cycles);
+            log_info("  !!! CRASH detected in %s at ~cycle %u\n", test.name.c_str(), cycles);
             break;
         case 3: { // infinite loop
             uint8_t border_color = tr.border_color;
@@ -1104,7 +1104,7 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
             }
             
             if (verbose_) {
-                printf("\n  Infinite loop at PC=$%04X, border=%u\n", stable_pc, border_color);
+                log_info("\n  Infinite loop at PC=$%04X, border=%u\n", stable_pc, border_color);
             }
             break;
         }
@@ -1137,11 +1137,11 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
                 // Diagnostic dump for CIA tests: show first subtest error buffer
                 // ERRBUF ($5F00) stores color per subtest: 5=pass (green), 10=fail (red)
                 if (verbose_) {
-                    printf("\n  ERRBUF ($5F00): ");
+                    log_info("\n  ERRBUF ($5F00): ");
                     for (int di = 0; di < 24; di++) {
-                        printf("%02X ", c64->ram->data()[0x5F00 + di]);
+                        log_info("%02X ", c64->ram->data()[0x5F00 + di]);
                     }
-                    printf("\n");
+                    log_info("\n");
                     
                     // Detect TMP/DATA base addresses by scanning common locations
                     // cia1-3,5: TMP=$8000 DATA=$9000; cia4,6+: TMP=$6000 DATA=$8000
@@ -1161,17 +1161,17 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
                         if (c64->ram->data()[0x5F00 + st] == 0x0A) {
                             uint16_t tmp_addr = tmp_base + st * sub_size;
                             uint16_t data_addr = dat_base + st * sub_size;
-                            printf("  Fail subtest %d (TMP=$%04X DATA=$%04X)\n", st, tmp_addr, data_addr);
-                            printf("  TMP (actual):    ");
-                            for (int di = 0; di < 48; di++) printf("%02X ", c64->ram->data()[tmp_addr + di]);
-                            printf("\n  DATA (expected): ");
-                            for (int di = 0; di < 48; di++) printf("%02X ", c64->ram->data()[data_addr + di]);
-                            printf("\n  Differences:     ");
+                            log_info("  Fail subtest %d (TMP=$%04X DATA=$%04X)\n", st, tmp_addr, data_addr);
+                            log_info("  TMP (actual):    ");
+                            for (int di = 0; di < 48; di++) log_info("%02X ", c64->ram->data()[tmp_addr + di]);
+                            log_info("\n  DATA (expected): ");
+                            for (int di = 0; di < 48; di++) log_info("%02X ", c64->ram->data()[data_addr + di]);
+                            log_info("\n  Differences:     ");
                             for (int di = 0; di < 48; di++) {
                                 if (c64->ram->data()[tmp_addr + di] != c64->ram->data()[data_addr + di])
-                                    printf("^^ "); else printf("   ");
+                                    log_info("^^ "); else log_info("   ");
                             }
-                            printf("\n");
+                            log_info("\n");
                             shown++;
                         }
                     }
@@ -1255,7 +1255,7 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
     uint32_t kernal_entry_cycle = 0;
     
     if (verbose_) {
-        printf("  Starting execution at PC=$%04X\n", start_pc);
+        log_info("  Starting execution at PC=$%04X\n", start_pc);
     }
     
     // Run emulation until debug register is written or timeout
@@ -1274,7 +1274,7 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
                 result.exit_code = 0x00;
                 result.message = "Test passed";
                 if (verbose_) {
-                    printf("\n  ✓ Test passed - $D7FF = $00 at cycle %u\n", cycles);
+                    log_info("\n  ✓ Test passed - $D7FF = $00 at cycle %u\n", cycles);
                 }
                 break;
             } else if (debug_value == 0xFF) {
@@ -1282,13 +1282,13 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
                 result.exit_code = 0xFF;
                 result.message = "Test failed";
                 if (verbose_) {
-                    printf("\n  ✗ Test failed - $D7FF = $FF at cycle %u\n", cycles);
+                    log_info("\n  ✗ Test failed - $D7FF = $FF at cycle %u\n", cycles);
                 }
                 break;
             } else if (cycles <= 1000) {
                 // Debug register changed to a non-pass/fail value early on
                 if (verbose_) {
-                    printf("\n  ℹ️  $D7FF changed to $%02X at cycle ≤1000 (test is using debug register)\n", debug_value);
+                    log_info("\n  ℹ️  $D7FF changed to $%02X at cycle ≤1000 (test is using debug register)\n", debug_value);
                 }
             }
         }
@@ -1305,7 +1305,7 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
                     entered_kernal = true;
                     kernal_entry_cycle = cycles;
                     if (verbose_) {
-                        printf("\n  ⚠️  PC entered KERNAL at cycle %u: $%04X\n", cycles, current_pc);
+                        log_info("\n  ⚠️  PC entered KERNAL at cycle %u: $%04X\n", cycles, current_pc);
                     }
                 }
                 
@@ -1315,13 +1315,13 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
         
         // Print progress dots in verbose mode
         if (verbose_ && cycles % 100000 == 0) {
-            printf(".");
+            log_info(".");
             fflush(stdout);
         }
     }
     
     if (verbose_ && cycles >= 100000) {
-        printf("\n");
+        log_info("\n");
     }
     
     result.cycles_executed = cycles;
@@ -1339,19 +1339,19 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
             result.message += " - CPU may not be executing)";
             
             if (verbose_) {
-                printf("  ⚠️  DIAGNOSTIC: PC never changed from $%04X\n", start_pc);
-                printf("  ⚠️  This suggests the CPU is not executing instructions\n");
+                log_info("  ⚠️  DIAGNOSTIC: PC never changed from $%04X\n", start_pc);
+                log_info("  ⚠️  This suggests the CPU is not executing instructions\n");
             }
         } else {
             if (verbose_) {
-                printf("  PC changed %u times, last PC=$%04X\n", pc_change_count, last_pc);
-                printf("  Final $D7FF value: $%02X\n", debug_value);
+                log_info("  PC changed %u times, last PC=$%04X\n", pc_change_count, last_pc);
+                log_info("  Final $D7FF value: $%02X\n", debug_value);
                 if (entered_kernal) {
-                    printf("  ⚠️  Test entered KERNAL code at cycle %u\n", kernal_entry_cycle);
-                    printf("  ⚠️  This suggests: interrupt occurred, JSR to KERNAL, or memory banking issue\n");
+                    log_info("  ⚠️  Test entered KERNAL code at cycle %u\n", kernal_entry_cycle);
+                    log_info("  ⚠️  This suggests: interrupt occurred, JSR to KERNAL, or memory banking issue\n");
                 } else if (debug_value == 0xFF) {
-                    printf("  ⚠️  $D7FF never changed from initial - test may not use this debug register\n");
-                    printf("  ⚠️  Test might be waiting for VIC-II timing or other hardware\n");
+                    log_info("  ⚠️  $D7FF never changed from initial - test may not use this debug register\n");
+                    log_info("  ⚠️  Test might be waiting for VIC-II timing or other hardware\n");
                 }
             }
         }
@@ -1370,7 +1370,7 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
     uint32_t cycles = 0;
     
     if (verbose_) {
-        printf("  Running for %u cycles to generate screenshot...\n", max_cycles);
+        log_info("  Running for %u cycles to generate screenshot...\n", max_cycles);
     }
     
     // Run emulation for specified cycles to let test generate output
@@ -1380,13 +1380,13 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
         
         // Print progress dots
         if (verbose_ && cycles % 100000 == 0) {
-            printf(".");
+            log_info(".");
             fflush(stdout);
         }
     }
     
     if (verbose_ && cycles >= 100000) {
-        printf("\n");
+        log_info("\n");
     }
     
     result.cycles_executed = cycles;
@@ -1425,7 +1425,7 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
     result.screenshot_path = output_png;
     
     if (verbose_) {
-        printf("  Saved screenshot: %s\n", output_png.c_str());
+        log_info("  Saved screenshot: %s\n", output_png.c_str());
     }
     
     // Compare with reference image if available
@@ -1450,7 +1450,7 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
             ref_info.height != fb_h) {
             
             if (verbose_) {
-                printf("  Reference dimensions (%dx%d) differ from framebuffer (%dx%d)\n",
+                log_info("  Reference dimensions (%dx%d) differ from framebuffer (%dx%d)\n",
                        ref_info.width, ref_info.height,
                        fb_w, fb_h);
             }
@@ -1495,7 +1495,7 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
             }
             
             if (verbose_) {
-                printf("  Resaved screenshot with crop: %d,%d %dx%d\n",
+                log_info("  Resaved screenshot with crop: %d,%d %dx%d\n",
                        crop_x, crop_y, crop_w, crop_h);
             }
         }
@@ -1510,7 +1510,7 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
             result.status = TestStatus::PASSED;
             result.message = "Screenshot matches reference";
             if (verbose_) {
-                printf("  ✓ Screenshot matches reference (%d pixels differ)\n", diff_count);
+                log_info("  ✓ Screenshot matches reference (%d pixels differ)\n", diff_count);
             }
         } else {
             result.status = TestStatus::FAILED;
@@ -1520,7 +1520,7 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
                     diff_count, max_diff_pixels);
             result.message = buf;
             if (verbose_) {
-                printf("  ✗ %s\n", buf);
+                log_info("  ✗ %s\n", buf);
             }
         }
     } else {
@@ -1528,7 +1528,7 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
         result.status = TestStatus::SKIPPED;
         result.message = "No reference image available for comparison";
         if (verbose_) {
-            printf("  ⚠ No reference image, screenshot saved for manual review\n");
+            log_info("  ⚠ No reference image, screenshot saved for manual review\n");
         }
     }
     
@@ -1538,10 +1538,10 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
 std::vector<TestResult> TestFramework::run_tests(const std::vector<TestDescriptor>& tests, C64System* c64) {
     std::vector<TestResult> results;
     
-    printf("\n=== Running %zu tests ===\n", tests.size());
+    log_info("\n=== Running %zu tests ===\n", tests.size());
     
     for (size_t i = 0; i < tests.size(); i++) {
-        printf("[%zu/%zu] ", i + 1, tests.size());
+        log_info("[%zu/%zu] ", i + 1, tests.size());
         TestResult result = run_test_safe(tests[i], c64);
         results.push_back(result);
         
@@ -1555,7 +1555,7 @@ std::vector<TestResult> TestFramework::run_tests(const std::vector<TestDescripto
             case TestStatus::ERROR: status_symbol = "!"; break;
             default: break;
         }
-        printf("%s %s\n", status_symbol, tests[i].name.c_str());
+        log_info("%s %s\n", status_symbol, tests[i].name.c_str());
     }
     
     return results;
@@ -1589,30 +1589,30 @@ TestFramework::TestStats TestFramework::get_statistics(const std::vector<TestRes
 void TestFramework::print_statistics(const std::vector<TestResult>& results) const {
     TestStats stats = get_statistics(results);
     
-    printf("\n=== Test Statistics ===\n");
-    printf("Total tests:    %d\n", stats.total);
-    printf("Passed:         %d (%.1f%%)\n", stats.passed, stats.pass_rate());
-    printf("Failed:         %d\n", stats.failed);
-    printf("Timeout:        %d\n", stats.timeout);
-    printf("Skipped:        %d\n", stats.skipped);
-    printf("Error:          %d\n", stats.error);
-    printf("Total time:     %.2f seconds\n", stats.total_time_ms / 1000.0);
+    log_info("\n=== Test Statistics ===\n");
+    log_info("Total tests:    %d\n", stats.total);
+    log_info("Passed:         %d (%.1f%%)\n", stats.passed, stats.pass_rate());
+    log_info("Failed:         %d\n", stats.failed);
+    log_info("Timeout:        %d\n", stats.timeout);
+    log_info("Skipped:        %d\n", stats.skipped);
+    log_info("Error:          %d\n", stats.error);
+    log_info("Total time:     %.2f seconds\n", stats.total_time_ms / 1000.0);
 }
 
 void TestFramework::print_summary(const std::vector<TestResult>& results) const {
     print_statistics(results);
     
     // Print failed tests
-    printf("\n=== Failed Tests ===\n");
+    log_info("\n=== Failed Tests ===\n");
     bool has_failures = false;
     for (const auto& result : results) {
         if (result.status == TestStatus::FAILED || result.status == TestStatus::TIMEOUT) {
-            printf("  %s: %s\n", result.test.path.c_str(), result.message.c_str());
+            log_info("  %s: %s\n", result.test.path.c_str(), result.message.c_str());
             has_failures = true;
         }
     }
     if (!has_failures) {
-        printf("  None\n");
+        log_info("  None\n");
     }
 }
 
@@ -1629,7 +1629,7 @@ std::vector<TestDescriptor> TestFramework::get_failed_tests(const std::vector<Te
 void TestFramework::save_results(const std::string& output_file, const std::vector<TestResult>& results) {
     std::ofstream out(output_file);
     if (!out.is_open()) {
-        printf("ERROR: Cannot write results to: %s\n", output_file.c_str());
+        log_info("ERROR: Cannot write results to: %s\n", output_file.c_str());
         return;
     }
     
@@ -1658,13 +1658,13 @@ void TestFramework::save_results(const std::string& output_file, const std::vect
     out << "  Error: " << stats.error << "\n";
     
     out.close();
-    printf("Results saved to: %s\n", output_file.c_str());
+    log_info("Results saved to: %s\n", output_file.c_str());
 }
 
 void TestFramework::save_results_json(const std::string& output_file, const std::vector<TestResult>& results) {
     std::ofstream out(output_file);
     if (!out.is_open()) {
-        printf("ERROR: Cannot write JSON results to: %s\n", output_file.c_str());
+        log_info("ERROR: Cannot write JSON results to: %s\n", output_file.c_str());
         return;
     }
     
@@ -1702,17 +1702,17 @@ void TestFramework::save_results_json(const std::string& output_file, const std:
     out << "}\n";
     
     out.close();
-    printf("JSON results saved to: %s\n", output_file.c_str());
+    log_info("JSON results saved to: %s\n", output_file.c_str());
 }
 
 void TestFramework::save_results_html(const std::string& output_file, const std::vector<TestResult>& results) {
     // TODO: Implement HTML report generation
-    printf("HTML report generation not yet implemented\n");
+    log_info("HTML report generation not yet implemented\n");
 }
 
 std::vector<TestResult> TestFramework::load_previous_results(const std::string& results_file) {
     // TODO: Implement loading previous results from JSON
-    printf("Loading previous results not yet implemented\n");
+    log_info("Loading previous results not yet implemented\n");
     return std::vector<TestResult>();
 }
 
@@ -1748,13 +1748,13 @@ C64System* TestFramework::create_system_for_test(const TestDescriptor& test) {
         is_pal_system_ = false;
         is_ntsc_system_ = true;
         if (verbose_) {
-            printf("Creating NTSC C64 system for test\n");
+            log_info("Creating NTSC C64 system for test\n");
         }
     } else {
         is_pal_system_ = true;
         is_ntsc_system_ = false;
         if (needs_pal && verbose_) {
-            printf("Creating PAL C64 system for test\n");
+            log_info("Creating PAL C64 system for test\n");
         }
     }
     
@@ -1764,7 +1764,7 @@ C64System* TestFramework::create_system_for_test(const TestDescriptor& test) {
     cfg.region_option_index = region_index;
     c64->set_configuration(cfg);
     if (!c64->initialize()) {
-        printf("ERROR: Failed to create C64 system for test\n");
+        log_info("ERROR: Failed to create C64 system for test\n");
         delete c64;
         return nullptr;
     }
@@ -1778,10 +1778,10 @@ C64System* TestFramework::create_system_for_test(const TestDescriptor& test) {
         c64->set_framebuffer(framebuffer, fb_width, fb_height);
         last_allocated_framebuffer_ = framebuffer;
         if (verbose_) {
-            printf("Allocated %dx%d framebuffer for VIC-II\n", fb_width, fb_height);
+            log_info("Allocated %dx%d framebuffer for VIC-II\n", fb_width, fb_height);
         }
     } else {
-        printf("ERROR: Failed to allocate framebuffer\n");
+        log_info("ERROR: Failed to allocate framebuffer\n");
         c64->shutdown();
         delete c64;
         return nullptr;
@@ -1824,7 +1824,7 @@ TestResult TestFramework::run_test_with_config(const TestDescriptor& test) {
 std::vector<TestResult> TestFramework::run_tests_with_auto_config(const std::vector<TestDescriptor>& tests) {
     std::vector<TestResult> results;
     
-    printf("\n=== Running %zu tests with automatic hardware configuration ===\n", tests.size());
+    log_info("\n=== Running %zu tests with automatic hardware configuration ===\n", tests.size());
     
     C64System* current_c64 = nullptr;
     uint32_t* current_framebuffer = nullptr;  // Track framebuffer for cleanup
@@ -1832,7 +1832,7 @@ std::vector<TestResult> TestFramework::run_tests_with_auto_config(const std::vec
     for (size_t i = 0; i < tests.size(); i++) {
         const TestDescriptor& test = tests[i];
         
-        printf("[%zu/%zu] ", i + 1, tests.size());
+        log_info("[%zu/%zu] ", i + 1, tests.size());
         
         // Check if we need to reconfigure
         bool need_reconfig = (current_c64 == nullptr) || requires_reconfiguration(test);
@@ -1841,7 +1841,7 @@ std::vector<TestResult> TestFramework::run_tests_with_auto_config(const std::vec
             // Destroy old system if it exists
             if (current_c64) {
                 if (verbose_) {
-                    printf("\n  Hardware reconfiguration needed for test\n");
+                    log_info("\n  Hardware reconfiguration needed for test\n");
                 }
                 current_c64->shutdown(); delete current_c64;
                 current_c64 = nullptr;
@@ -1862,7 +1862,7 @@ std::vector<TestResult> TestFramework::run_tests_with_auto_config(const std::vec
                 result.message = "Failed to create C64 system";
                 results.push_back(result);
                 
-                printf("! %s (system creation failed)\n", test.name.c_str());
+                log_info("! %s (system creation failed)\n", test.name.c_str());
                 continue;
             }
             
@@ -1896,7 +1896,7 @@ std::vector<TestResult> TestFramework::run_tests_with_auto_config(const std::vec
             case TestStatus::ERROR: status_symbol = "!"; break;
             default: break;
         }
-        printf("%s %s\n", status_symbol, test.name.c_str());
+        log_info("%s %s\n", status_symbol, test.name.c_str());
     }
     
     // Clean up final system

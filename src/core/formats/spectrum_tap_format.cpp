@@ -11,6 +11,7 @@
  * all header+data block pairs found in the file.
  */
 
+#include "core/cermu.hpp"
 #include "core/formats/spectrum_tap_format.hpp"
 #include "core/formats/format_registry.hpp"
 #include <cstdio>
@@ -171,7 +172,7 @@ static bool spectrum_tap_load(const uint8_t* data, size_t size,
             prog.load_addr = load_addr;
             prog.end_addr  = static_cast<uint16_t>(load_addr + payload_size);
 
-            printf("Spectrum TAP: Block %d '%s' (type=%d, addr=$%04X, size=%zu)\n",
+            log_info("Spectrum TAP: Block %d '%s' (type=%d, addr=$%04X, size=%zu)\n",
                    out->file_count, header.filename, header.type, load_addr, payload_size);
             out->file_count++;
         }

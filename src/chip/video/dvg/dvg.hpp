@@ -44,6 +44,7 @@
  *   Write to VGRST address → reset vector state machine
  */
 
+#include "core/cermu.hpp"
 #include "chip/video/video_chip_base.hpp"
 #include "core/signal/vector_video_out.hpp"
 #include <cstdint>
@@ -165,12 +166,12 @@ struct dvg_t : public VideoChipBase {
 
         // DEBUG: trace first words of display list on VGGO
         if (vec_ram_) {
-            printf("DVG GO: first 8 words:");
+            log_info("DVG GO: first 8 words:");
             for (int i = 0; i < 16; i += 2) {
                 uint16_t w = vec_ram_[i] | (vec_ram_[i+1] << 8);
-                printf(" %04X", w);
+                log_info(" %04X", w);
             }
-            printf("\n");
+            log_info("\n");
         }
     }
 

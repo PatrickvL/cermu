@@ -1,3 +1,4 @@
+#include "core/cermu.hpp"
 #include "core/input/emu_key_sdl_map.hpp"
 #include <SDL_scancode.h>
 #include <SDL_keycode.h>
@@ -94,7 +95,7 @@ EmuKeySDLMap::EmuKeySDLMap() {
     // ========================================================================
     register_mapping(EMUKEY_CBM_RESTORE, SDL_SCANCODE_GRAVE);  // backtick → RESTORE
 
-    printf("EmuKeySDLMap: Initialised (%zu identity-mapped, %zu deviations)\n",
+    log_info("EmuKeySDLMap: Initialised (%zu identity-mapped, %zu deviations)\n",
            identity_.count(), emu_to_sdl_.size());
 }
 

@@ -10,6 +10,7 @@
 //   - System: address decoding, CPU-TIA sync timing, frame cycle count
 // =============================================================================
 
+#include "core/cermu.hpp"
 #include "testing/a2600_test_harness.hpp"
 #include "systems/atari2600/mappers/a2600_mapper_3f.hpp"
 #include "systems/atari2600/mappers/a2600_mapper_e0.hpp"
@@ -276,7 +277,7 @@ int run_script(harness_t* h, const test_script_t* script) {
             break;
         case cmd_type_t::LABEL:
             if (h->verbose)
-                printf("  [%s]\n", cmd.label);
+                log_info("  [%s]\n", cmd.label);
             break;
         }
     }
@@ -285,15 +286,15 @@ int run_script(harness_t* h, const test_script_t* script) {
 }
 
 void print_results(const harness_t* h, const test_script_t* script) {
-    printf("  %s: %d passed, %d failed\n",
+    log_info("  %s: %d passed, %d failed\n",
            script->name.c_str(), h->pass_count, h->fail_count);
 
     for (const auto& r : h->results) {
         if (r.type == result_type_t::FAIL) {
-            printf("    FAIL @ cycle %u: [%s] %s\n",
+            log_info("    FAIL @ cycle %u: [%s] %s\n",
                    r.cycle, r.check_name, r.message);
         } else if (r.type == result_type_t::PASS && h->verbose) {
-            printf("    PASS @ cycle %u: [%s] %s\n",
+            log_info("    PASS @ cycle %u: [%s] %s\n",
                    r.cycle, r.check_name, r.message);
         }
     }
@@ -4424,9 +4425,9 @@ int run_all_builtin_tests(harness_t* h, bool verbose) {
     int total_tests = 0;
     int total_pass = 0;
 
-    printf("=============================================================\n");
-    printf("  Atari 2600 Hardware Verification Test Suite\n");
-    printf("=============================================================\n\n");
+    log_info("=============================================================\n");
+    log_info("  Atari 2600 Hardware Verification Test Suite\n");
+    log_info("=============================================================\n\n");
 
     // Helper macro for running each test
     #define RUN_TEST(fn, label) do { \
@@ -4436,17 +4437,17 @@ int run_all_builtin_tests(harness_t* h, bool verbose) {
         total_pass += h->pass_count; \
         total_tests++; \
         if (_failures == 0) { \
-            printf("  PASS  %s (%d checks)\n", label, h->pass_count); \
+            log_info("  PASS  %s (%d checks)\n", label, h->pass_count); \
         } else { \
-            printf("  FAIL  %s (%d failures, %d passed)\n", label, _failures, h->pass_count); \
+            log_info("  FAIL  %s (%d failures, %d passed)\n", label, _failures, h->pass_count); \
             for (const auto& r : h->results) { \
                 if (r.type == result_type_t::FAIL) \
-                    printf("        → %s\n", r.message); \
+                    log_info("        → %s\n", r.message); \
             } \
         } \
     } while(0)
 
-    printf("─── TIA (Television Interface Adapter) ──────────────────────\n");
+    log_info("─── TIA (Television Interface Adapter) ──────────────────────\n");
     RUN_TEST(test_tia_register_readback,      "Register read/write");
     RUN_TEST(test_tia_collision_detection,     "Collision detection");
     RUN_TEST(test_tia_collision_clear,         "Collision clear (CXCLR)");
@@ -4469,7 +4470,7 @@ int run_all_builtin_tests(harness_t* h, bool verbose) {
     RUN_TEST(test_tia_audio_waveforms,         "Audio waveforms");
     RUN_TEST(test_tia_grp_delayed_latch,       "GRP delayed latch");
 
-    printf("\n─── PIA 6532 RIOT ───────────────────────────────────────────\n");
+    log_info("\n─── PIA 6532 RIOT ───────────────────────────────────────────\n");
     RUN_TEST(test_riot_ram_read_write,         "RAM basic read/write");
     RUN_TEST(test_riot_ram_full_coverage,       "RAM full 128-byte coverage");
     RUN_TEST(test_riot_timer_1t,               "Timer divide-by-1");
@@ -4481,7 +4482,7 @@ int run_all_builtin_tests(harness_t* h, bool verbose) {
     RUN_TEST(test_riot_port_b_ddr_masking,     "Port B DDR masking");
     RUN_TEST(test_riot_port_input_override,    "Port I/O register write");
 
-    printf("\n─── Cartridge Mappers ───────────────────────────────────────\n");
+    log_info("\n─── Cartridge Mappers ───────────────────────────────────────\n");
     RUN_TEST(test_mapper_2k,                   "2K mapper (mirroring)");
     RUN_TEST(test_mapper_4k,                   "4K mapper");
     RUN_TEST(test_mapper_f8_bank_switching,    "F8 bank switching (8KB)");
@@ -4492,12 +4493,12 @@ int run_all_builtin_tests(harness_t* h, bool verbose) {
     RUN_TEST(test_mapper_fa_cbs_ram_plus,      "FA CBS RAM Plus (12KB)");
     RUN_TEST(test_mapper_factory_detection,    "Factory auto-detection");
 
-    printf("\n─── System Integration ──────────────────────────────────────\n");
+    log_info("\n─── System Integration ──────────────────────────────────────\n");
     RUN_TEST(test_address_decoding,            "Address decoding");
     RUN_TEST(test_cpu_tia_sync_timing,         "CPU-TIA sync timing");
     RUN_TEST(test_frame_cycle_count,           "Frame cycle count");
 
-    printf("\n─── TIA Extended Accuracy ───────────────────────────────────\n");
+    log_info("\n─── TIA Extended Accuracy ───────────────────────────────────\n");
     RUN_TEST(test_tia_nusiz_all_modes,         "NUSIZ all 8 modes");
     RUN_TEST(test_tia_missile_widths,          "Missile widths (1-8px)");
     RUN_TEST(test_tia_ball_sizes,              "Ball sizes (1-8px)");
@@ -4520,14 +4521,14 @@ int run_all_builtin_tests(harness_t* h, bool verbose) {
     RUN_TEST(test_tia_hmove_clears_after_hmclr, "HMOVE after HMCLR");
     RUN_TEST(test_tia_input_latch_mode,        "Input latch mode");
 
-    printf("\n─── RIOT Extended Accuracy ──────────────────────────────────\n");
+    log_info("\n─── RIOT Extended Accuracy ──────────────────────────────────\n");
     RUN_TEST(test_riot_timer_reload_during_countdown, "Timer reload mid-count");
     RUN_TEST(test_riot_instat_flag_persistence, "INSTAT flag persistence");
     RUN_TEST(test_riot_timer_underflow_countdown, "Timer underflow countdown");
     RUN_TEST(test_riot_port_a_read_via_io,     "Port A read via I/O");
     RUN_TEST(test_riot_port_b_console_switches, "Port B console switches");
 
-    printf("\n─── TIA Cycle-Level Accuracy ─────────────────────────────────\n");
+    log_info("\n─── TIA Cycle-Level Accuracy ─────────────────────────────────\n");
     RUN_TEST(test_tia_hmove_blanking,                  "HMOVE blanking (8px)");
     RUN_TEST(test_tia_score_mode_priority_interaction,  "Score + PF priority");
     RUN_TEST(test_tia_missile_copies,                   "Missile copy positions");
@@ -4548,12 +4549,12 @@ int run_all_builtin_tests(harness_t* h, bool verbose) {
     RUN_TEST(test_tia_enam_bit1_only,                   "ENAM/ENABL bit 1 only");
     RUN_TEST(test_tia_enabl_write_updates_old_on_grp1,  "ENABL_OLD on GRP1 write");
 
-    printf("\n─── RIOT Cycle-Level Accuracy ────────────────────────────────\n");
+    log_info("\n─── RIOT Cycle-Level Accuracy ────────────────────────────────\n");
     RUN_TEST(test_riot_timer_exact_divider_counting,    "Timer exact div counting");
     RUN_TEST(test_riot_io_address_decoding_bits,        "I/O address decoding");
     RUN_TEST(test_riot_ram_address_range,               "RAM address range");
 
-    printf("\n─── TIA Advanced Accuracy ────────────────────────────────────\n");
+    log_info("\n─── TIA Advanced Accuracy ────────────────────────────────────\n");
     RUN_TEST(test_tia_late_hmove_no_blanking,               "Late HMOVE no blanking");
     RUN_TEST(test_tia_write_address_mirroring,              "Write address mirroring");
     RUN_TEST(test_tia_read_address_mirroring,               "Read address mirroring");
@@ -4572,22 +4573,22 @@ int run_all_builtin_tests(harness_t* h, bool verbose) {
     RUN_TEST(test_tia_vblank_dump_paddle_capacitors,        "VBLANK paddle dump");
     RUN_TEST(test_tia_collision_all_15_pairs,               "All 15 collision pairs");
 
-    printf("\n─── RIOT Advanced Accuracy ──────────────────────────────────\n");
+    log_info("\n─── RIOT Advanced Accuracy ──────────────────────────────────\n");
     RUN_TEST(test_riot_address_mirror_aliasing,              "Address mirror aliasing");
     RUN_TEST(test_riot_timer_write_clears_underflow,         "Timer write clears UF");
     RUN_TEST(test_riot_ram_read_write_via_io,                "RAM read/write via API");
 
     #undef RUN_TEST
 
-    printf("\n=============================================================\n");
-    printf("  TOTAL: %d tests, %d checks passed, %d failures\n",
+    log_info("\n=============================================================\n");
+    log_info("  TOTAL: %d tests, %d checks passed, %d failures\n",
            total_tests, total_pass, total_failures);
     if (total_failures == 0) {
-        printf("  ★ ALL TESTS PASSED ★\n");
+        log_info("  ★ ALL TESTS PASSED ★\n");
     } else {
-        printf("  ✗ %d TEST(S) FAILED\n", total_failures);
+        log_info("  ✗ %d TEST(S) FAILED\n", total_failures);
     }
-    printf("=============================================================\n");
+    log_info("=============================================================\n");
 
     return total_failures;
 }

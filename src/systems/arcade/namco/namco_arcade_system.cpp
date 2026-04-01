@@ -2,6 +2,7 @@
  * namco_arcade_system.cpp — Namco Pac-Man / Pengo arcade system implementation
  */
 
+#include "core/cermu.hpp"
 #include "systems/arcade/namco/namco_arcade_system.hpp"
 #include "utils/resistor_dac.hpp"
 #include "core/system_registry.hpp"
@@ -73,7 +74,7 @@ template<NamcoGame G> bool NamcoArcadeSystem<G>::apply_configuration() { return 
 
 template<NamcoGame G>
 bool NamcoArcadeSystem<G>::initialize() {
-    printf("%s: Initializing arcade system\n", Traits::name);
+    log_info("%s: Initializing arcade system\n", Traits::name);
     register_board(&board_);
 
     // ── Bind and create chips from manifest, wire bus ────────────────
@@ -128,7 +129,7 @@ bool NamcoArcadeSystem<G>::initialize() {
     // ── Register chips for Hardware menu ────────────────────────────────
     register_bus_chips(board_);
 
-    printf("%s: System initialized (ROM: %d KB)\n",
+    log_info("%s: System initialized (ROM: %d KB)\n",
            Traits::name, Traits::rom_size / 1024);
     system_ready_ = true;
     return true;

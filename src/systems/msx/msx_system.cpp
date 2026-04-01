@@ -20,6 +20,7 @@
  *   $AB:  PPI control word
  */
 
+#include "core/cermu.hpp"
 #include "systems/msx/msx_system.hpp"
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
@@ -140,7 +141,7 @@ bool MSXSystem<V>::apply_configuration() {
 
 template<MSXVariant V>
 bool MSXSystem<V>::initialize() {
-    printf("%s: Initializing system\n", Traits::name);
+    log_info("%s: Initializing system\n", Traits::name);
     register_board(&board_);
 
     // Bind value-typed Chips members, then factory-create remaining (RAM/ROM)
@@ -187,7 +188,7 @@ bool MSXSystem<V>::initialize() {
 
     // Load ROMs
     if (!load_roms()) {
-        printf("%s: Warning — ROMs not loaded, system may not function\n", Traits::name);
+        log_info("%s: Warning — ROMs not loaded, system may not function\n", Traits::name);
     }
 
     // Register chips for Hardware menu
@@ -203,7 +204,7 @@ bool MSXSystem<V>::initialize() {
     audio_port_->configure(msx_constants::DEFAULT_SAMPLE_RATE,
                            msx_constants::DEFAULT_SAMPLE_RATE);
 
-    printf("%s: System initialized (RAM: %dKB)\n", Traits::name,
+    log_info("%s: System initialized (RAM: %dKB)\n", Traits::name,
            Traits::ram_size / 1024);
     system_ready_ = true;
     return true;
@@ -362,7 +363,7 @@ template<MSXVariant V>
 bool MSXSystem<V>::load_file(const char* filepath) {
     if (!filepath) return false;
     // TODO: support ROM cartridge (.rom) and disk image formats
-    printf("%s: File loading not yet implemented: %s\n", Traits::name, filepath);
+    log_info("%s: File loading not yet implemented: %s\n", Traits::name, filepath);
     return false;
 }
 
@@ -462,7 +463,7 @@ template<MSXVariant V>
 bool MSXSystem<V>::load_roms() {
     char rom_root[1024];
     if (!system_config_discover_rom_root(Traits::data_folder, rom_root, sizeof(rom_root))) {
-        printf("%s: Could not find ROM root folder\n", Traits::name);
+        log_info("%s: Could not find ROM root folder\n", Traits::name);
         return false;
     }
     return board_.load_roms(rom_root, Traits::name);

@@ -47,6 +47,7 @@
 // Requires: OpenGL 3.0 / GLSL 130
 // ============================================================================
 
+#include "core/cermu.hpp"
 #include "gui/gl_api.hpp"            // GL function pointers, gl_api::compile_shader()
 #include "core/signal/sync_types.hpp"
 #include <cstdio>
@@ -157,7 +158,7 @@ inline GLuint create_program(VectorShaderLocations* locs) {
     if (status != GL_TRUE) {
         char log[512];
         gl_api::glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
-        fprintf(stderr, "vector_shader: link error: %s\n", log);
+        log_error("vector_shader: link error: %s\n", log);
         gl_api::glDeleteProgram(prog);
         return 0;
     }
@@ -175,7 +176,7 @@ inline GLuint create_program(VectorShaderLocations* locs) {
         locs->phosphor_color = gl_api::glGetUniformLocation(prog, "PhosphorColor");
     }
 
-    printf("vector_shader: program %u compiled and linked successfully\n", prog);
+    log_info("vector_shader: program %u compiled and linked successfully\n", prog);
     return prog;
 }
 
@@ -241,7 +242,7 @@ inline bool create_resources(VectorDisplayResources* res) {
     gl_api::glBindVertexArray(0);
     gl_api::glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    printf("vector_shader: created VAO %u, VBO %u\n", res->vao, res->vbo);
+    log_info("vector_shader: created VAO %u, VBO %u\n", res->vao, res->vbo);
     return true;
 }
 
@@ -542,7 +543,7 @@ inline bool create_persistence(PhosphorPersistence* p, int w, int h,
     GLenum status = gl_api::glCheckFramebufferStatus(GL_FRAMEBUFFER);
     gl_api::glBindFramebuffer(GL_FRAMEBUFFER, 0);
     if (status != GL_FRAMEBUFFER_COMPLETE) {
-        fprintf(stderr, "vector_shader: persistence FBO incomplete (0x%x)\n", status);
+        log_error("vector_shader: persistence FBO incomplete (0x%x)\n", status);
         return false;
     }
 
@@ -564,7 +565,7 @@ inline bool create_persistence(PhosphorPersistence* p, int w, int h,
     if (link_ok != GL_TRUE) {
         char log[512];
         gl_api::glGetProgramInfoLog(p->decay_shader, sizeof(log), nullptr, log);
-        fprintf(stderr, "vector_shader: decay shader link error: %s\n", log);
+        log_error("vector_shader: decay shader link error: %s\n", log);
         gl_api::glDeleteProgram(p->decay_shader);
         p->decay_shader = 0;
         return false;
@@ -581,7 +582,7 @@ inline bool create_persistence(PhosphorPersistence* p, int w, int h,
     // Empty VAO for fullscreen triangle (gl_VertexID-based)
     gl_api::glGenVertexArrays(1, &p->dummy_vao);
 
-    printf("vector_shader: persistence FBO %u (%dx%d), decay shader %u\n",
+    log_info("vector_shader: persistence FBO %u (%dx%d), decay shader %u\n",
            p->fbo, w, h, p->decay_shader);
     return true;
 }

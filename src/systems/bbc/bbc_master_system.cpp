@@ -9,6 +9,7 @@
  * All new behavior is system-level glue — no new chips required.
  */
 
+#include "core/cermu.hpp"
 #include "systems/bbc/bbc_master_system.hpp"
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
@@ -147,7 +148,7 @@ bool BBCMasterSystem<V>::apply_configuration() {
 
 template<BBCMasterVariant V>
 bool BBCMasterSystem<V>::initialize() {
-    printf("%s: Initializing system\n", Traits::name);
+    log_info("%s: Initializing system\n", Traits::name);
     register_board(&board_);
 
     // Pre-bind all value-typed chips
@@ -168,7 +169,7 @@ bool BBCMasterSystem<V>::initialize() {
 
     configure_bus_memory_map();
     if (!load_roms()) {
-        printf("%s: Warning — ROMs not loaded\n", Traits::name);
+        log_info("%s: Warning — ROMs not loaded\n", Traits::name);
     }
 
     // ── CRTC (MC6845) ───────────────────────────────────────────────────
@@ -204,7 +205,7 @@ bool BBCMasterSystem<V>::initialize() {
     register_bus_chips(board_);
 
     system_ready_ = true;
-    printf("%s: System initialized (%dKB RAM)\n", Traits::name,
+    log_info("%s: System initialized (%dKB RAM)\n", Traits::name,
            Traits::ram_size / 1024);
     return true;
 }

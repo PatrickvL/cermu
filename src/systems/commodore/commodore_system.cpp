@@ -1,3 +1,4 @@
+#include "core/cermu.hpp"
 #include "systems/commodore/commodore_system.hpp"
 #include "devices/storage/drive_1541.hpp"
 #include "devices/storage/datasette_1530.hpp"
@@ -114,14 +115,14 @@ bool CommodoreSystem::load_file(const char* filepath) {
     const char* name = get_descriptor().short_name;
 
     if (!is_system_initialized()) {
-        printf("%s: System not initialized, initializing now...\n", name);
+        log_info("%s: System not initialized, initializing now...\n", name);
         if (!initialize()) {
-            printf("%s: Failed to initialize system for file loading\n", name);
+            log_info("%s: Failed to initialize system for file loading\n", name);
             return false;
         }
     }
 
-    printf("%s: Loading file: %s\n", name, filepath);
+    log_info("%s: Loading file: %s\n", name, filepath);
 
     // Clear any previous pending load
     clear_pending_load();
@@ -129,7 +130,7 @@ bool CommodoreSystem::load_file(const char* filepath) {
     // Parse the file into a format result
     format_load_result_t result = {};
     if (!format_load_file(filepath, &result)) {
-        printf("%s: Failed to load file: %s\n", name, result.error_msg);
+        log_info("%s: Failed to load file: %s\n", name, result.error_msg);
         result.release();
         return false;
     }
@@ -167,7 +168,7 @@ bool CommodoreSystem::load_file(const char* filepath) {
         program_title_ = bare;
     }
 
-    printf("%s: File parsed (mode=%s) — deferred until BASIC READY\n",
+    log_info("%s: File parsed (mode=%s) — deferred until BASIC READY\n",
            name,
            mode == LoadMode::DISK_FAST ? "DISK_FAST" :
            mode == LoadMode::TAPE_INSERTED ? "TAPE_INSERTED" : "DIRECT");
@@ -209,7 +210,7 @@ void CommodoreSystem::apply_pending_load() {
     // DISK_FAST PATH — D64: Insert disk into 1541 + extract first PRG to RAM
     // =========================================================================
     if (pending_load_.mode == LoadMode::DISK_FAST) {
-        printf("%s: BASIC READY — DISK_FAST load\n", name);
+        log_info("%s: BASIC READY — DISK_FAST load\n", name);
 
         int iec_port = get_iec_port_index();
         Drive1541Device* drive = nullptr;
@@ -231,17 +232,17 @@ void CommodoreSystem::apply_pending_load() {
                         if (drive) break;
                     }
                     if (drive) {
-                        printf("%s: Auto-attached 1541 drive #8\n", name);
+                        log_info("%s: Auto-attached 1541 drive #8\n", name);
                     }
                 }
             }
 
             if (drive) {
                 drive->insert_disk(pending_load_.filepath.c_str());
-                printf("%s: D64 inserted into drive #%d\n", name,
+                log_info("%s: D64 inserted into drive #%d\n", name,
                        drive->get_device_number());
             } else {
-                printf("%s: No IEC serial port available — D64 not mounted\n", name);
+                log_info("%s: No IEC serial port available — D64 not mounted\n", name);
             }
         }
 
@@ -253,14 +254,14 @@ void CommodoreSystem::apply_pending_load() {
                                         pending_load_.filepath.c_str());
         } else if (drive) {
             inject_keys("LOAD\"*\",8,1\r");
-            printf("%s: Injected LOAD\"*\",8,1 for disk loading\n", name);
+            log_info("%s: Injected LOAD\"*\",8,1 for disk loading\n", name);
         }
     }
     // =========================================================================
     // TAPE_INSERTED PATH — TAP: Insert tape + inject LOAD
     // =========================================================================
     else if (pending_load_.mode == LoadMode::TAPE_INSERTED) {
-        printf("%s: BASIC READY — TAPE_INSERTED load\n", name);
+        log_info("%s: BASIC READY — TAPE_INSERTED load\n", name);
 
         int cass_port = get_cassette_port_index();
         Datasette1530Device* datasette = nullptr;
@@ -276,17 +277,17 @@ void CommodoreSystem::apply_pending_load() {
         if (datasette) {
             datasette->load_tap(pending_load_.filepath.c_str());
             datasette->press_play();
-            printf("%s: TAP loaded into datasette, PLAY pressed\n", name);
+            log_info("%s: TAP loaded into datasette, PLAY pressed\n", name);
             inject_keys("LOAD\r");
         } else {
-            printf("%s: No datasette attached — TAP not loaded\n", name);
+            log_info("%s: No datasette attached — TAP not loaded\n", name);
         }
     }
     // =========================================================================
     // STANDARD PATH — PRG / T64 / LNX / BIN: Write to RAM + auto-run
     // =========================================================================
     else {
-        printf("%s: BASIC READY — applying deferred load\n", name);
+        log_info("%s: BASIC READY — applying deferred load\n", name);
 
         auto ctx = build_load_context();
         commodore_apply_load_result(&ctx, &pending_load_.result,
@@ -320,7 +321,7 @@ bool CommodoreSystem::attach_media(const char* filepath) {
     if (fmt->capabilities & FORMAT_CAP_VOLUME) {
         int iec_port = get_iec_port_index();
         if (iec_port < 0) {
-            printf("%s: No IEC serial port defined — cannot attach media\n", sysname);
+            log_info("%s: No IEC serial port defined — cannot attach media\n", sysname);
             return false;
         }
 
@@ -341,7 +342,7 @@ bool CommodoreSystem::attach_media(const char* filepath) {
                     if (drive) break;
                 }
                 if (drive) {
-                    printf("%s: Auto-attached 1541 drive #%d for media insert\n",
+                    log_info("%s: Auto-attached 1541 drive #%d for media insert\n",
                            sysname, drive->get_device_number());
                 }
             }
@@ -349,7 +350,7 @@ bool CommodoreSystem::attach_media(const char* filepath) {
 
         if (drive) {
             if (drive->swap_disk(filepath)) {
-                printf("%s: Disk swapped in drive #%d: %s\n",
+                log_info("%s: Disk swapped in drive #%d: %s\n",
                        sysname, drive->get_device_number(), filepath);
                 return true;
             }
@@ -361,7 +362,7 @@ bool CommodoreSystem::attach_media(const char* filepath) {
     if (fmt->capabilities & FORMAT_CAP_STREAMABLE) {
         int cass_port = get_cassette_port_index();
         if (cass_port < 0) {
-            printf("%s: No cassette port defined — cannot attach media\n", sysname);
+            log_info("%s: No cassette port defined — cannot attach media\n", sysname);
             return false;
         }
 
@@ -375,14 +376,14 @@ bool CommodoreSystem::attach_media(const char* filepath) {
             if (attach_device_to_port(cass_port, "datasette")) {
                 datasette = dynamic_cast<Datasette1530Device*>(port->get_attached_device());
                 if (datasette) {
-                    printf("%s: Auto-attached datasette for tape insert\n", sysname);
+                    log_info("%s: Auto-attached datasette for tape insert\n", sysname);
                 }
             }
         }
 
         if (datasette) {
             if (datasette->load_tap(filepath)) {
-                printf("%s: Tape inserted: %s\n", sysname, filepath);
+                log_info("%s: Tape inserted: %s\n", sysname, filepath);
                 return true;
             }
         }

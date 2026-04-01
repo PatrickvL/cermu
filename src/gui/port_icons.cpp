@@ -9,6 +9,7 @@
  * sizes in the ImGui menu bar.
  */
 
+#include "core/cermu.hpp"
 #include "gui/port_icons.hpp"
 #include <cstring>
 #include <cstdio>
@@ -268,7 +269,7 @@ void init() {
     textures_[static_cast<int>(PortType::AUDIO_HDMI)]        = create_icon_texture(ICON_SPEAKER,   255, 255, 255);  // white
 
     initialised_ = true;
-    printf("PortIcons: Initialised %d icon textures\n",
+    log_info("PortIcons: Initialised %d icon textures\n",
            static_cast<int>(PortType::COUNT));
 }
 

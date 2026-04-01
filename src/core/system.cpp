@@ -1,3 +1,4 @@
+#include "core/cermu.hpp"
 #include "core/system.hpp"
 #include "core/chip.hpp"
 #include "core/formats/format_handler.hpp"
@@ -87,14 +88,14 @@ void System::set_framebuffer(uint32_t* buffer, int width, int height) {
 
 bool System::save_screenshot(const char* filename) const {
     if (!rgba_framebuffer_ || rgba_width_ <= 0 || rgba_height_ <= 0 || !filename) {
-        fprintf(stderr, "ERROR: Cannot save screenshot — framebuffer not initialized\n");
+        log_error("ERROR: Cannot save screenshot — framebuffer not initialized\n");
         return false;
     }
 
     int ok = stbi_write_png(filename, rgba_width_, rgba_height_, 4,
                             rgba_framebuffer_, rgba_width_ * 4);
     if (!ok) {
-        fprintf(stderr, "ERROR: Failed to write PNG: %s\n", filename);
+        log_error("ERROR: Failed to write PNG: %s\n", filename);
         return false;
     }
     return true;
@@ -104,13 +105,13 @@ bool System::save_screenshot_cropped(const char* filename,
                                              int crop_x, int crop_y,
                                              int crop_w, int crop_h) const {
     if (!rgba_framebuffer_ || rgba_width_ <= 0 || rgba_height_ <= 0 || !filename) {
-        fprintf(stderr, "ERROR: Cannot save screenshot — framebuffer not initialized\n");
+        log_error("ERROR: Cannot save screenshot — framebuffer not initialized\n");
         return false;
     }
 
     if (crop_x < 0 || crop_y < 0 || crop_w <= 0 || crop_h <= 0 ||
         crop_x + crop_w > rgba_width_ || crop_y + crop_h > rgba_height_) {
-        fprintf(stderr, "ERROR: Invalid crop parameters (%d,%d %dx%d) for %dx%d framebuffer\n",
+        log_error("ERROR: Invalid crop parameters (%d,%d %dx%d) for %dx%d framebuffer\n",
                 crop_x, crop_y, crop_w, crop_h, rgba_width_, rgba_height_);
         return false;
     }
@@ -128,7 +129,7 @@ bool System::save_screenshot_cropped(const char* filename,
     delete[] cropped;
 
     if (!ok) {
-        fprintf(stderr, "ERROR: Failed to write PNG: %s\n", filename);
+        log_error("ERROR: Failed to write PNG: %s\n", filename);
         return false;
     }
     return true;
@@ -376,7 +377,7 @@ void System::attach_default_peripherals() {
         if (display_id) {
             auto display_dev = DeviceRegistry::instance().create_device(display_id);
             if (display_dev) {
-                printf("System: Auto-attached display '%s'\n", display_dev->get_name());
+                log_info("System: Auto-attached display '%s'\n", display_dev->get_name());
                 owned_devices_.push_back(std::move(display_dev));
             }
         }
@@ -433,7 +434,7 @@ void System::auto_assign_controller_keymaps() {
         const auto& chosen = input->get_keymap_preset(best);
         chosen.add_to_bitset(claimed);
 
-        printf("Auto-keymap: %s -> '%s' (%d guest-keyboard collisions)\n",
+        log_info("Auto-keymap: %s -> '%s' (%d guest-keyboard collisions)\n",
                dev->get_name(), chosen.name,
                guest_count > 0 ? count_keymap_collisions(chosen, guest_bitset) : 0);
     }
@@ -442,14 +443,14 @@ void System::auto_assign_controller_keymaps() {
 bool System::attach_device_to_port(int port_index, const char* device_id) {
     Port* port = get_port(port_index);
     if (!port) {
-        printf("System: Invalid port index %d\n", port_index);
+        log_info("System: Invalid port index %d\n", port_index);
         return false;
     }
 
     // Create device from registry
     auto device = DeviceRegistry::instance().create_device(device_id);
     if (!device) {
-        printf("System: Unknown device '%s'\n", device_id);
+        log_info("System: Unknown device '%s'\n", device_id);
         return false;
     }
 
@@ -466,7 +467,7 @@ bool System::attach_device_to_port(int port_index, const char* device_id) {
 
     raw_ptr->reset();
     owned_devices_.push_back(std::move(device));
-    printf("System: Attached '%s' to %s\n", raw_ptr->get_name(), port->get_name());
+    log_info("System: Attached '%s' to %s\n", raw_ptr->get_name(), port->get_name());
     on_port_device_changed(port_index);
 
     // Auto-bind host input to newly attached device (gamepad if available, etc.)
@@ -482,7 +483,7 @@ void System::detach_device_from_port(int port_index) {
     if (devices_copy.empty()) return;
 
     for (auto* device : devices_copy) {
-        printf("System: Detached '%s' from %s\n", device->get_name(), port->get_name());
+        log_info("System: Detached '%s' from %s\n", device->get_name(), port->get_name());
     }
     port->detach_device(nullptr);  // Detach all
 
@@ -503,7 +504,7 @@ void System::detach_device_from_port(int port_index, PeripheralDevice* device) {
     Port* port = get_port(port_index);
     if (!port || !device) return;
 
-    printf("System: Detached '%s' from %s\n", device->get_name(), port->get_name());
+    log_info("System: Detached '%s' from %s\n", device->get_name(), port->get_name());
     port->detach_device(device);
 
     // Remove from owned_devices_
@@ -1095,7 +1096,7 @@ void System::auto_bind_host_inputs() {
             snprintf(label, sizeof(label), "Gamepad #%d: %s", gp.device_index, gp.name);
             b.label = label;
             input->set_host_input_binding(b);
-            printf("Auto-bind: %s -> %s\n", input->get_name(), label);
+            log_info("Auto-bind: %s -> %s\n", input->get_name(), label);
             gp_idx++;
         } else {
             // No more gamepads available; fall back to keyboard if supported
@@ -1112,7 +1113,7 @@ void System::auto_bind_host_inputs() {
                 b.type = HostInputType::KEYBOARD;
                 b.label = "Keyboard";
                 input->set_host_input_binding(b);
-                printf("Auto-bind: %s -> Keyboard (no gamepad available)\n", input->get_name());
+                log_info("Auto-bind: %s -> Keyboard (no gamepad available)\n", input->get_name());
             }
         }
     }
@@ -1123,7 +1124,7 @@ void System::auto_bind_host_inputs() {
         b.type = HostInputType::KEYBOARD;
         b.label = "Keyboard";
         input->set_host_input_binding(b);
-        printf("Auto-bind: %s -> Keyboard\n", input->get_name());
+        log_info("Auto-bind: %s -> Keyboard\n", input->get_name());
     }
 
     // --- Mouse devices ---
@@ -1136,11 +1137,11 @@ void System::auto_bind_host_inputs() {
         b.type = HostInputType::HOST_MOUSE;
         b.label = "Host Mouse";
         input->set_host_input_binding(b);
-        printf("Auto-bind: %s -> Host Mouse\n", input->get_name());
+        log_info("Auto-bind: %s -> Host Mouse\n", input->get_name());
     }
 
     if (gamepads.empty() && gamepad_devices.empty() && mouse_devices.empty()
         && keyboard_devices.empty()) {
-        printf("Auto-bind: no input-accepting devices on this system\n");
+        log_info("Auto-bind: no input-accepting devices on this system\n");
     }
 }

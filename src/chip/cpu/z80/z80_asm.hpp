@@ -24,9 +24,10 @@
 //   a.cp_n(0);
 //   a.jr_nz(loop);
 //   a.halt();
-//   printf("Generated %zu bytes at $%04X\n", a.pos, a.origin);
+//   log_info("Generated %zu bytes at $%04X\n", a.pos, a.origin);
 // =============================================================================
 
+#include "core/cermu.hpp"
 #include <cstdint>
 #include <cstddef>
 

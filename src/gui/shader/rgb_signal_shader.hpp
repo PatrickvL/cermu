@@ -28,6 +28,7 @@
 // Requires: OpenGL 3.0 / GLSL 130
 // ============================================================================
 
+#include "core/cermu.hpp"
 #include "gui/gl_api.hpp"            // GL function pointers, gl_api::compile_shader()
 #include "gui/shader/signal_shader.hpp"    // MAX_SCANLINES, SIGNAL_TEX_WIDTH, compute_scanline_map()
 #include <cstdio>
@@ -144,7 +145,7 @@ inline GLuint create_program(RGBShaderLocations* locs) {
     if (status != GL_TRUE) {
         char log[512];
         gl_api::glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
-        fprintf(stderr, "rgb_signal_shader: link error: %s\n", log);
+        log_error("rgb_signal_shader: link error: %s\n", log);
         gl_api::glDeleteProgram(prog);
         return 0;
     }
@@ -162,7 +163,7 @@ inline GLuint create_program(RGBShaderLocations* locs) {
         locs->display_width    = gl_api::glGetUniformLocation(prog, "DisplayWidth");
     }
 
-    printf("rgb_signal_shader: program %u compiled and linked successfully\n", prog);
+    log_info("rgb_signal_shader: program %u compiled and linked successfully\n", prog);
     return prog;
 }
 
@@ -187,7 +188,7 @@ inline GLuint create_signal_texture(int max_signal_output_len) {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, signal_shader::SIGNAL_TEX_WIDTH,
                  tex_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
-    printf("rgb_signal_shader: created %dx%d RGBA8 signal texture %u (max %d samples)\n",
+    log_info("rgb_signal_shader: created %dx%d RGBA8 signal texture %u (max %d samples)\n",
            signal_shader::SIGNAL_TEX_WIDTH, tex_height, tex, max_signal_output_len);
     return tex;
 }

@@ -6,6 +6,7 @@
  * TAP v1: byte 0x00 signals a 3-byte little-endian long pulse.
  */
 
+#include "core/cermu.hpp"
 #include "devices/storage/datasette_1530.hpp"
 #include "core/device_registry.hpp"
 #include "core/vfs/vfs.hpp"
@@ -74,13 +75,13 @@ bool Datasette1530Device::load_tap(const char* filepath) {
     size_t file_size = 0;
     uint8_t* file_data = vfs_read_file(filepath, &file_size);
     if (!file_data) {
-        printf("Datasette: Cannot open '%s'\n", filepath);
+        log_info("Datasette: Cannot open '%s'\n", filepath);
         return false;
     }
 
     if (file_size < sizeof(TAPHeader)) {
         free(file_data);
-        printf("Datasette: File too small for TAP header in '%s'\n", filepath);
+        log_info("Datasette: File too small for TAP header in '%s'\n", filepath);
         return false;
     }
 
@@ -90,7 +91,7 @@ bool Datasette1530Device::load_tap(const char* filepath) {
     // Verify signature
     if (memcmp(header.signature, "C64-TAPE-RAW", 12) != 0) {
         free(file_data);
-        printf("Datasette: Invalid TAP signature in '%s'\n", filepath);
+        log_info("Datasette: Invalid TAP signature in '%s'\n", filepath);
         return false;
     }
 
@@ -105,7 +106,7 @@ bool Datasette1530Device::load_tap(const char* filepath) {
     free(file_data);
 
     if (pulse_length != header.data_length) {
-        printf("Datasette: Warning — read %zu of %u bytes from '%s'\n",
+        log_info("Datasette: Warning — read %zu of %u bytes from '%s'\n",
                pulse_length, header.data_length, filepath);
     }
 
@@ -116,7 +117,7 @@ bool Datasette1530Device::load_tap(const char* filepath) {
     pulse_countdown_ = 0;
     read_level_ = true;
 
-    printf("Datasette: Loaded '%s' (TAP v%d, %u bytes of pulse data)\n",
+    log_info("Datasette: Loaded '%s' (TAP v%d, %u bytes of pulse data)\n",
            filepath, tap_version_, header.data_length);
     return true;
 }

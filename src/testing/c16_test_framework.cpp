@@ -5,6 +5,7 @@
 // Detection: $FDCF debug cart register, infinite loop + border color fallback.
 // =============================================================================
 
+#include "core/cermu.hpp"
 #include "testing/c16_test_framework.hpp"
 #include "testing/c64_test_loader.hpp"     // Reuse PRG loader (writes raw bytes to RAMChip)
 #include "systems/commodore/c16/c16_system.hpp"
@@ -100,7 +101,7 @@ TestFramework::~TestFramework() = default;
 // =============================================================================
 
 bool TestFramework::scan_tests() {
-    printf("Scanning Plus4/TED tests in: %s\n", vice_testprogs_path_.c_str());
+    log_info("Scanning Plus4/TED tests in: %s\n", vice_testprogs_path_.c_str());
     test_registry_.clear();
 
     // 1. Scan known VICE-testprogs directories
@@ -110,7 +111,7 @@ bool TestFramework::scan_tests() {
     // 2. Register tests from the VICE testbench test list
     register_testlist_tests();
 
-    printf("Found %zu Plus4/TED tests\n", test_registry_.size());
+    log_info("Found %zu Plus4/TED tests\n", test_registry_.size());
     return !test_registry_.empty();
 }
 
@@ -120,7 +121,7 @@ bool TestFramework::discover_tests_in_directory(
 {
 #ifdef CERMU_USE_STD_FILESYSTEM
     if (!cermu_fs::is_directory(dir_path)) {
-        if (verbose_) printf("  Category not found: %s\n", category.c_str());
+        if (verbose_) log_info("  Category not found: %s\n", category.c_str());
         return false;
     }
     int count = 0;
@@ -137,13 +138,13 @@ bool TestFramework::discover_tests_in_directory(
         test_registry_[td.path] = td;
         count++;
     }
-    if (verbose_) printf("  %s: %d tests\n", category.c_str(), count);
+    if (verbose_) log_info("  %s: %d tests\n", category.c_str(), count);
     return count > 0;
 #else
     // POSIX implementation
     DIR* dir = opendir(dir_path.c_str());
     if (!dir) {
-        if (verbose_) printf("  Category not found: %s\n", category.c_str());
+        if (verbose_) log_info("  Category not found: %s\n", category.c_str());
         return false;
     }
     closedir(dir);
@@ -175,7 +176,7 @@ bool TestFramework::discover_tests_in_directory(
         closedir(d);
     };
     scan_recursive(dir_path, "");
-    if (verbose_) printf("  %s: %d tests\n", category.c_str(), count);
+    if (verbose_) log_info("  %s: %d tests\n", category.c_str(), count);
     return count > 0;
 #endif
 }
@@ -228,7 +229,7 @@ void TestFramework::register_testlist_tests() {
         std::string full = vice_testprogs_path_ + "/testbench/" + rel_dir + "/" + filename;
         struct stat st;
         if (stat(full.c_str(), &st) != 0) {
-            if (verbose_) printf("  Testlist file not found: %s\n", full.c_str());
+            if (verbose_) log_info("  Testlist file not found: %s\n", full.c_str());
             return;
         }
         TestDescriptor td;
@@ -302,7 +303,7 @@ TestResult TestFramework::run_test(const TestDescriptor& test) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     if (verbose_) {
-        printf("\nRunning test: %s [%s]\n", test.path.c_str(),
+        log_info("\nRunning test: %s [%s]\n", test.path.c_str(),
                test_type_to_string(test.type).c_str());
     }
 
@@ -356,7 +357,7 @@ TestResult TestFramework::run_test(const TestDescriptor& test) {
     }
 
     if (verbose_) {
-        printf("  Loaded: $%04X (SYS $%04X)\n", load_addr, sys_addr);
+        log_info("  Loaded: $%04X (SYS $%04X)\n", load_addr, sys_addr);
     }
 
     // ---- Enable debug cart register at $FDCF ----
@@ -379,7 +380,7 @@ TestResult TestFramework::run_test(const TestDescriptor& test) {
     if (needs_basic_boot) {
         // Boot the system through KERNAL+BASIC until the READY prompt
         // appears, then simulate "RUN" by jumping to the SYS address.
-        if (verbose_) printf("  BASIC boot: waiting for READY prompt...\n");
+        if (verbose_) log_info("  BASIC boot: waiting for READY prompt...\n");
 
         const uint32_t MAX_BOOT_CYCLES = 5000000; // ~5.6 seconds PAL
         for (uint32_t i = 0; i < MAX_BOOT_CYCLES; i++) {
@@ -390,7 +391,7 @@ TestResult TestFramework::run_test(const TestDescriptor& test) {
                 if (ram->data()[0x0302] == c16_constants::BASIC_WARMSTART_LO &&
                     ram->data()[0x0303] == c16_constants::BASIC_WARMSTART_HI &&
                     ram->data()[c16_constants::KBD_BUFFER_COUNT] == 0) {
-                    if (verbose_) printf("  BASIC ready at cycle %u\n", i);
+                    if (verbose_) log_info("  BASIC ready at cycle %u\n", i);
                     break;
                 }
             }
@@ -411,7 +412,7 @@ TestResult TestFramework::run_test(const TestDescriptor& test) {
         sp--;
         cpu->set(S, sp);
 
-        if (verbose_) printf("  Jumping to SYS $%04X\n", sys_addr);
+        if (verbose_) log_info("  Jumping to SYS $%04X\n", sys_addr);
     } else {
         // Direct execution: boot KERNAL, then jump
         const uint32_t KERNAL_BOOT_CYCLES = 2200000;
@@ -423,7 +424,7 @@ TestResult TestFramework::run_test(const TestDescriptor& test) {
         cpu->transition_to_fetch();
         cpu->set(AB, start);
 
-        if (verbose_) printf("  Direct execution at $%04X\n", start);
+        if (verbose_) log_info("  Direct execution at $%04X\n", start);
     }
 
     // ---- Main execution loop ----
@@ -497,7 +498,7 @@ TestResult TestFramework::run_test(const TestDescriptor& test) {
                         }
 
                         if (verbose_) {
-                            printf("  Infinite loop at PC=$%04X, border hue=%u\n",
+                            log_info("  Infinite loop at PC=$%04X, border hue=%u\n",
                                    current_pc, border_hue);
                         }
                         break;
@@ -528,7 +529,7 @@ TestResult TestFramework::run_test(const TestDescriptor& test) {
         std::chrono::duration<double, std::milli>(end_time - start_time).count();
 
     if (verbose_) {
-        printf("  Result: %s (%s) — %.1f ms, %u cycles\n",
+        log_info("  Result: %s (%s) — %.1f ms, %u cycles\n",
                test_status_to_string(result.status).c_str(),
                result.message.c_str(),
                result.execution_time_ms,
@@ -544,10 +545,10 @@ std::vector<TestResult> TestFramework::run_all_tests(const TestFilter& filter) {
     std::vector<TestResult> results;
     results.reserve(tests.size());
 
-    printf("\n=== Running %zu Plus4/TED tests ===\n", tests.size());
+    log_info("\n=== Running %zu Plus4/TED tests ===\n", tests.size());
 
     for (size_t i = 0; i < tests.size(); i++) {
-        printf("[%zu/%zu] ", i + 1, tests.size());
+        log_info("[%zu/%zu] ", i + 1, tests.size());
 
         TestResult result = run_test(tests[i]);
         results.push_back(result);
@@ -561,7 +562,7 @@ std::vector<TestResult> TestFramework::run_all_tests(const TestFilter& filter) {
             case TestStatus::ERROR:   sym = "!"; break;
             default: break;
         }
-        printf("%s %s\n", sym, tests[i].name.c_str());
+        log_info("%s %s\n", sym, tests[i].name.c_str());
     }
 
     return results;
@@ -591,27 +592,27 @@ TestStats TestFramework::get_statistics(const std::vector<TestResult>& results) 
 void TestFramework::print_summary(const std::vector<TestResult>& results) const {
     TestStats s = get_statistics(results);
 
-    printf("\n=== Plus4/TED Test Statistics ===\n");
-    printf("Total tests:    %d\n", s.total);
-    printf("Passed:         %d (%.1f%%)\n", s.passed, s.pass_rate());
-    printf("Failed:         %d\n", s.failed);
-    printf("Timeout:        %d\n", s.timeout);
-    printf("Skipped:        %d\n", s.skipped);
-    printf("Error:          %d\n", s.error);
-    printf("Total time:     %.2f seconds\n", s.total_time_ms / 1000.0);
+    log_info("\n=== Plus4/TED Test Statistics ===\n");
+    log_info("Total tests:    %d\n", s.total);
+    log_info("Passed:         %d (%.1f%%)\n", s.passed, s.pass_rate());
+    log_info("Failed:         %d\n", s.failed);
+    log_info("Timeout:        %d\n", s.timeout);
+    log_info("Skipped:        %d\n", s.skipped);
+    log_info("Error:          %d\n", s.error);
+    log_info("Total time:     %.2f seconds\n", s.total_time_ms / 1000.0);
 
     // List failures
     bool has_failures = false;
     for (const auto& r : results) {
         if (r.status == TestStatus::FAILED || r.status == TestStatus::TIMEOUT) {
             if (!has_failures) {
-                printf("\n=== Failed Tests ===\n");
+                log_info("\n=== Failed Tests ===\n");
                 has_failures = true;
             }
-            printf("  %s: %s\n", r.test.path.c_str(), r.message.c_str());
+            log_info("  %s: %s\n", r.test.path.c_str(), r.message.c_str());
         }
     }
-    if (!has_failures) printf("\nNo failures.\n");
+    if (!has_failures) log_info("\nNo failures.\n");
 }
 
 void TestFramework::save_results(
@@ -619,7 +620,7 @@ void TestFramework::save_results(
 {
     std::ofstream out(output_file);
     if (!out.is_open()) {
-        printf("ERROR: Cannot write results to: %s\n", output_file.c_str());
+        log_info("ERROR: Cannot write results to: %s\n", output_file.c_str());
         return;
     }
 
@@ -647,7 +648,7 @@ void TestFramework::save_results(
     out << "  Error: "   << s.error   << "\n";
 
     out.close();
-    printf("Results saved to: %s\n", output_file.c_str());
+    log_info("Results saved to: %s\n", output_file.c_str());
 }
 
 void TestFramework::save_results_json(
@@ -655,7 +656,7 @@ void TestFramework::save_results_json(
 {
     std::ofstream out(output_file);
     if (!out.is_open()) {
-        printf("ERROR: Cannot write JSON results to: %s\n", output_file.c_str());
+        log_info("ERROR: Cannot write JSON results to: %s\n", output_file.c_str());
         return;
     }
 
@@ -689,7 +690,7 @@ void TestFramework::save_results_json(
     out << "  }\n}\n";
 
     out.close();
-    printf("JSON results saved to: %s\n", output_file.c_str());
+    log_info("JSON results saved to: %s\n", output_file.c_str());
 }
 
 } // namespace c16_test

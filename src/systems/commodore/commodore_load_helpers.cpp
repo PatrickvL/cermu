@@ -5,6 +5,7 @@
  * systems.  See commodore_load_helpers.h for design rationale.
  */
 
+#include "core/cermu.hpp"
 #include "systems/commodore/commodore_load_helpers.hpp"
 #include "core/formats/tap_format.hpp"
 #include "core/formats/crt_format.hpp"
@@ -140,13 +141,13 @@ static bool handle_program(const commodore_load_context_t* ctx,
 {
     const program_data_t* prg = &result->program;
 
-    printf("%s: Loading %s: $%04X-$%04X (%zu bytes)\n",
+    log_info("%s: Loading %s: $%04X-$%04X (%zu bytes)\n",
            ctx->system_name, format_load_type_name(result->type),
            prg->load_addr, prg->end_addr, prg->data_size);
 
     /* Validate address range */
     if (prg->data_size == 0 || (uint32_t)prg->load_addr + prg->data_size > 0x10000) {
-        printf("%s: Invalid PRG address range: $%04X-$%04X\n",
+        log_info("%s: Invalid PRG address range: $%04X-$%04X\n",
                ctx->system_name, prg->load_addr, prg->end_addr);
         return false;
     }
@@ -165,7 +166,7 @@ static bool handle_program(const commodore_load_context_t* ctx,
                                           ctx->basic_params,
                                           10, &sys_result)) {
                 run_addr = sys_result.sys_address;
-                printf("%s: Found SYS %u on BASIC line %u\n",
+                log_info("%s: Found SYS %u on BASIC line %u\n",
                        ctx->system_name, run_addr, sys_result.line_number);
             }
         }
@@ -196,11 +197,11 @@ static bool handle_program(const commodore_load_context_t* ctx,
          * correctness over speed.
          */
         if (run_addr != 0) {
-            printf("%s: Auto-running from $%04X\n",
+            log_info("%s: Auto-running from $%04X\n",
                    ctx->system_name, run_addr);
         }
         default_inject_keys(ctx, "RUN\r");
-        printf("%s: Set BASIC pointers and injected RUN command\n",
+        log_info("%s: Set BASIC pointers and injected RUN command\n",
                ctx->system_name);
     } else {
         /* Machine language program at non-BASIC address */
@@ -216,7 +217,7 @@ static bool handle_program(const commodore_load_context_t* ctx,
 
         if (run_addr != 0) {
             if (ctx->set_pc) {
-                printf("%s: Auto-running ML from $%04X\n",
+                log_info("%s: Auto-running ML from $%04X\n",
                        ctx->system_name, run_addr);
                 ctx->set_pc(ctx->pc_ctx, run_addr);
             } else {
@@ -225,12 +226,12 @@ static bool handle_program(const commodore_load_context_t* ctx,
                 int len = snprintf(cmd, sizeof(cmd), "SYS%u\r", run_addr);
                 if (len > 0 && len <= 10) {
                     default_inject_keys(ctx, cmd);
-                    printf("%s: Injected auto-start: SYS%u\n",
+                    log_info("%s: Injected auto-start: SYS%u\n",
                            ctx->system_name, run_addr);
                 }
             }
         } else {
-            printf("%s: No SYS found — program loaded, use RUN to start\n",
+            log_info("%s: No SYS found — program loaded, use RUN to start\n",
                    ctx->system_name);
         }
     }
@@ -248,20 +249,20 @@ static bool handle_metadata(const commodore_load_context_t* ctx,
     if (result->format && strcmp(result->format->name, "TAP") == 0) {
         const commodore_tap_header_t* hdr =
             (const commodore_tap_header_t*)result->metadata;
-        printf("%s: TAP file detected (platform=%u, version=%u)\n",
+        log_info("%s: TAP file detected (platform=%u, version=%u)\n",
                ctx->system_name, hdr->platform, hdr->version);
-        printf("%s: TAP tape emulation not yet implemented\n",
+        log_info("%s: TAP tape emulation not yet implemented\n",
                ctx->system_name);
     } else if (result->format && strcmp(result->format->name, "CRT") == 0) {
         const commodore_crt_header_t* hdr =
             (const commodore_crt_header_t*)result->metadata;
-        printf("%s: CRT cartridge: \"%s\" (type=%u, exrom=%u, game=%u)\n",
+        log_info("%s: CRT cartridge: \"%s\" (type=%u, exrom=%u, game=%u)\n",
                ctx->system_name, hdr->name,
                hdr->hardware_type, hdr->exrom, hdr->game);
-        printf("%s: CRT cartridge loading not yet fully implemented\n",
+        log_info("%s: CRT cartridge loading not yet fully implemented\n",
                ctx->system_name);
     } else {
-        printf("%s: Unknown metadata format: %s\n",
+        log_info("%s: Unknown metadata format: %s\n",
                ctx->system_name,
                result->format ? result->format->name : "(null)");
     }
@@ -278,11 +279,11 @@ static bool handle_raw(const commodore_load_context_t* ctx,
     const uint16_t addr = ctx->default_raw_addr;
     const program_data_t* prg = &result->program;
 
-    printf("%s: Loading BIN at default $%04X (%zu bytes)\n",
+    log_info("%s: Loading BIN at default $%04X (%zu bytes)\n",
            ctx->system_name, addr, prg->data_size);
 
     if ((uint32_t)addr + prg->data_size > 0x10000) {
-        printf("%s: BIN too large for address space\n", ctx->system_name);
+        log_info("%s: BIN too large for address space\n", ctx->system_name);
         return false;
     }
 
@@ -297,7 +298,7 @@ static bool handle_raw(const commodore_load_context_t* ctx,
 static bool handle_archive(const commodore_load_context_t* ctx,
                            const format_load_result_t* result)
 {
-    printf("%s: Loading archive with %d files\n",
+    log_info("%s: Loading archive with %d files\n",
            ctx->system_name, result->file_count);
 
     bool any_basic = false;
@@ -309,12 +310,12 @@ static bool handle_archive(const commodore_load_context_t* ctx,
 
         if (prg->data_size == 0 ||
             (uint32_t)prg->load_addr + prg->data_size > 0x10000) {
-            printf("%s: Archive file %d: Invalid address range $%04X-$%04X, skipping\n",
+            log_info("%s: Archive file %d: Invalid address range $%04X-$%04X, skipping\n",
                    ctx->system_name, f, prg->load_addr, prg->end_addr);
             continue;
         }
 
-        printf("%s: Archive file %d: $%04X-$%04X (%zu bytes)\n",
+        log_info("%s: Archive file %d: $%04X-$%04X (%zu bytes)\n",
                ctx->system_name, f, prg->load_addr, prg->end_addr, prg->data_size);
 
         ctx_write_block(ctx, prg->load_addr, prg->data, prg->data_size);
@@ -331,7 +332,7 @@ static bool handle_archive(const commodore_load_context_t* ctx,
         /* Set all BASIC pointers (start + end) and inject RUN */
         set_basic_pointers(ctx, basic_load_addr, basic_end_addr);
         default_inject_keys(ctx, "RUN\r");
-        printf("%s: Archive: Set BASIC pointers ($%04X-$%04X) and injected RUN\n",
+        log_info("%s: Archive: Set BASIC pointers ($%04X-$%04X) and injected RUN\n",
                ctx->system_name, basic_load_addr, basic_end_addr);
     }
 
@@ -362,7 +363,7 @@ bool commodore_apply_load_result(const commodore_load_context_t* ctx,
             return handle_archive(ctx, result);
 
         default:
-            printf("%s: Unsupported load result type: %d\n",
+            log_info("%s: Unsupported load result type: %d\n",
                    ctx->system_name, result->type);
             return false;
     }

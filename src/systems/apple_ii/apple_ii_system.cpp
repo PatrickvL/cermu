@@ -5,6 +5,7 @@
  * and registration.  Emulation logic to be filled in.
  */
 
+#include "core/cermu.hpp"
 #include "systems/apple_ii/apple_ii_system.hpp"
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
@@ -131,7 +132,7 @@ bool AppleIISystem<V>::apply_configuration() {
 
 template<AppleIIVariant V>
 bool AppleIISystem<V>::initialize() {
-    printf("%s: Initializing system\n", Traits::name);
+    log_info("%s: Initializing system\n", Traits::name);
     register_board(&board_);
     {   size_t slot_idx_ = 0;
         if constexpr (V == AppleIIVariant::APPLE_II) {
@@ -151,7 +152,7 @@ bool AppleIISystem<V>::initialize() {
 
     configure_bus_memory_map();
     if (!load_roms()) {
-        printf("%s: Warning — ROMs not loaded\n", Traits::name);
+        log_info("%s: Warning — ROMs not loaded\n", Traits::name);
     }
 
     register_bus_chips(board_);
@@ -166,7 +167,7 @@ bool AppleIISystem<V>::initialize() {
     video_port_->bind_frame_output(&last_frame_data_);
 
     system_ready_ = true;
-    printf("%s: System initialized\n", Traits::name);
+    log_info("%s: System initialized\n", Traits::name);
     return true;
 }
 

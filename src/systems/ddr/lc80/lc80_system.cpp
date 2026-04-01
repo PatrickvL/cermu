@@ -2,6 +2,7 @@
  * lc80_system.cpp — LC 80 learning computer system implementation
  */
 
+#include "core/cermu.hpp"
 #include "systems/ddr/lc80/lc80_system.hpp"
 #include "core/system_registry.hpp"
 #include <cstring>
@@ -51,7 +52,7 @@ bool LC80System::apply_configuration() { return true; }
 // ============================================================================
 
 bool LC80System::initialize() {
-    printf("LC 80: Initializing system\n");
+    log_info("LC 80: Initializing system\n");
     register_board(&board_);
 
     // ── Bind and create chips from manifest, wire bus ───────────────────

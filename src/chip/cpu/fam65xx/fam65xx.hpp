@@ -29,6 +29,7 @@
  * USAGE:
  * ======
  * ```cpp
+#include "core/cermu.hpp"
  * #include "chip/cpu/fam65xx/fam65xx.hpp"
  *
  * // Create a C64 CPU instance
@@ -232,17 +233,17 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
         fam65xx_disassemble_instruction(pc, this->opcode_entry, 0x00, 0x00,
                                        disasm_buffer, sizeof(disasm_buffer));
 
-        printf("[%03d] PC=$%04X AB=$%04X IR=$%02X (%s) ", instruction_count, pc,
+        log_info("[%03d] PC=$%04X AB=$%04X IR=$%02X (%s) ", instruction_count, pc,
                ab, ir, disasm_buffer);
 
         // Get instruction info if opcode is valid
-        printf("A=$%02X X=$%02X Y=$%02X S=$%02X P=$%02X\n",
+        log_info("A=$%02X X=$%02X Y=$%02X S=$%02X P=$%02X\n",
                uint8_t(regs_[A]), uint8_t(regs_[X]), uint8_t(regs_[Y]),
                uint8_t(regs_[SPL]), uint8_t(regs_[P]));
 
         instruction_count++;
         if (instruction_count == 100) {
-          printf("=== Instruction trace complete (%d instructions) ===\n",
+          log_info("=== Instruction trace complete (%d instructions) ===\n",
                  instruction_count);
         }
       }
@@ -253,7 +254,7 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
     if constexpr (ENABLE_TRACING) {
       // Print indentation
       for (int i = 0; i < trace_indent; i++) {
-        printf("  ");
+        log_info("  ");
       }
 
       // Print formatted message
@@ -261,7 +262,7 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
       va_start(args, format);
       vprintf(format, args);
       va_end(args);
-      printf("\n");
+      log_info("\n");
     }
   }
 
@@ -1169,14 +1170,14 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
     if constexpr (ENABLE_TRACING) {
       // Validate op_index bounds
       if (this->opcode_entry.op_index >= to_index(OP::COUNT)) {
-        printf("ERROR: op_index %d >= COUNT %d\n", this->opcode_entry.op_index,
+        log_info("ERROR: op_index %d >= COUNT %d\n", this->opcode_entry.op_index,
                 to_index(OP::COUNT));
         return &fam65xx_t::op_nop; // Safe fallback
       }
 
       // Validate am_index bounds
       if (this->opcode_entry.am_index >= to_index(AM::COUNT)) {
-        printf("ERROR: am_index %d >= COUNT %d\n", this->opcode_entry.am_index,
+        log_info("ERROR: am_index %d >= COUNT %d\n", this->opcode_entry.am_index,
                 to_index(AM::COUNT));
         return &fam65xx_t::op_nop; // Safe fallback
       }

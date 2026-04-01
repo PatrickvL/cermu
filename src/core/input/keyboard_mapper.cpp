@@ -1,3 +1,4 @@
+#include "core/cermu.hpp"
 #include "core/input/keyboard_mapper.hpp"
 #include "core/input/emu_key_sdl_map.hpp"
 #include <SDL.h>
@@ -171,7 +172,7 @@ void KeyboardMapper::build_character_map_from_matrix(const keyboard_matrix_confi
         }
     }
 
-    printf("KeyboardMapper: Built character map for %s (%d×%d matrix)\n",
+    log_info("KeyboardMapper: Built character map for %s (%d×%d matrix)\n",
            config->description ? config->description : "unknown",
            rows, cols);
 
@@ -180,7 +181,7 @@ void KeyboardMapper::build_character_map_from_matrix(const keyboard_matrix_confi
     for (int i = 0; i < 128; i++) {
         if (char_map_[i].valid) count++;
     }
-    printf("KeyboardMapper: %d character mappings active\n", count);
+    log_info("KeyboardMapper: %d character mappings active\n", count);
 }
 
 void KeyboardMapper::set_emulator_modifier(SDL_Keycode key) {
@@ -265,8 +266,7 @@ void KeyboardMapper::register_default_synthetic_mappings() {
         add_synthetic_mapping(SDLK_d, del, "INST/DEL");
     }
 
-    if (g_verbose)
-        printf("KeyboardMapper: Registered %zu synthetic mappings (modifier: %s)\n",
+            log_debug("KeyboardMapper: Registered %zu synthetic mappings (modifier: %s)\n",
                synthetic_mappings_.size(),
                SDL_GetKeyName(emu_modifier_key_));
 }

@@ -240,7 +240,7 @@ bool PETSystem::apply_configuration() {
 // ============================================================================
 
 bool PETSystem::initialize() {
-    printf("PET: Initializing system\n");
+    log_info("PET: Initializing system\n");
     register_board(&board_);
 
     // ── Bind value-typed chips, then create remaining ──────────────────
@@ -268,7 +268,7 @@ bool PETSystem::initialize() {
     // Load ROMs into memory
     bool roms_loaded = load_roms();
     if (!roms_loaded) {
-        printf("PET: Warning - ROMs not loaded, system may not function correctly\n");
+        log_info("PET: Warning - ROMs not loaded, system may not function correctly\n");
     }
 
     // ---- CPU (MOS 6502) ----
@@ -340,7 +340,7 @@ bool PETSystem::initialize() {
     if (!keyboard_->init(&pet_keyboard_config)) {
         delete keyboard_;
         keyboard_ = nullptr;
-        printf("PET: Warning: Could not create keyboard\n");
+        log_info("PET: Warning: Could not create keyboard\n");
     }
     if (keyboard_) {
         // Create keyboard mapper (same pattern as VIC-20 / C16)
@@ -354,17 +354,17 @@ bool PETSystem::initialize() {
     // Register all manifest-created chips for Hardware debug menu
     register_bus_chips(board_);
 
-    printf("PET: Initialization complete\n");
+    log_info("PET: Initialization complete\n");
     return true;
 }
 
 void PETSystem::shutdown() {
-    printf("PET: Shutting down system\n");
+    log_info("PET: Shutting down system\n");
     System::shutdown();
 }
 
 void PETSystem::reset() {
-    printf("PET: Resetting system\n");
+    log_info("PET: Resetting system\n");
 
     // Reset all manifest chips (CRTC, PIAs, VIA; RAM/ROM are no-op)
     board_.reset_chips();
@@ -768,18 +768,18 @@ void PETSystem::inject_keys(const char* str) {
 
 bool PETSystem::load_roms() {
     if (!basic_rom_b_chip_) {
-        printf("PET: Cannot load ROMs - memory not initialized\n");
+        log_info("PET: Cannot load ROMs - memory not initialized\n");
         return false;
     }
 
     // Discover ROM root path
     char rom_root[1024];
     if (!system_config_discover_rom_root("pet", rom_root, sizeof(rom_root))) {
-        printf("PET: ROM root directory not found\n");
+        log_info("PET: ROM root directory not found\n");
         return false;
     }
 
-    printf("PET: ROM root discovered: %s\n", rom_root);
+    log_info("PET: ROM root discovered: %s\n", rom_root);
 
     // Load manifest-declared ROMs (Editor ROM at $E000, Kernal ROM at $F000)
     bool ok = board_.load_roms(rom_root, "PET");
@@ -805,9 +805,9 @@ bool PETSystem::load_roms() {
     }
     if (char_ok) {
         memcpy(char_rom_, char_buf, sizeof(char_rom_));
-        printf("PET: Character ROM loaded\n");
+        log_info("PET: Character ROM loaded\n");
     } else {
-        printf("PET: Failed to load Character ROM\n");
+        log_info("PET: Failed to load Character ROM\n");
     }
 
     // BASIC 4.0 ROM (12KB at $B000-$DFFF)
@@ -820,7 +820,7 @@ bool PETSystem::load_roms() {
         memcpy(basic_rom_b_chip_->data(), basic_buf, 4096);
         memcpy(basic_rom_c_chip_->data(), basic_buf + 4096, 4096);
         memcpy(basic_rom_d_chip_->data(), basic_buf + 8192, 4096);
-        printf("PET: BASIC 4.0 ROM loaded (12KB combined)\n");
+        log_info("PET: BASIC 4.0 ROM loaded (12KB combined)\n");
     } else {
         // Try loading as three 4KB ROMs
         uint8_t rom_b[4096], rom_c[4096], rom_d[4096];
@@ -831,7 +831,7 @@ bool PETSystem::load_roms() {
             memcpy(basic_rom_b_chip_->data(), rom_b, 4096);
             memcpy(basic_rom_c_chip_->data(), rom_c, 4096);
             memcpy(basic_rom_d_chip_->data(), rom_d, 4096);
-            printf("PET: BASIC 4.0 ROM loaded (3 × 4KB)\n");
+            log_info("PET: BASIC 4.0 ROM loaded (3 × 4KB)\n");
             basic_ok = true;
         } else {
             // Last resort: try 8KB combined at $C000 (missing $B000 bank)
@@ -840,10 +840,10 @@ bool PETSystem::load_roms() {
             if (ok8) {
                 memcpy(basic_rom_c_chip_->data(), basic8k, 4096);
                 memcpy(basic_rom_d_chip_->data(), basic8k + 4096, 4096);
-                printf("PET: BASIC ROM loaded (8KB fallback at $C000)\n");
+                log_info("PET: BASIC ROM loaded (8KB fallback at $C000)\n");
                 basic_ok = true;
             } else {
-                printf("PET: Failed to load BASIC ROM\n");
+                log_info("PET: Failed to load BASIC ROM\n");
             }
         }
     }

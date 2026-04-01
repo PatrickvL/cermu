@@ -20,6 +20,7 @@
  * inherit from PotInputDevice instead.
  */
 
+#include "core/cermu.hpp"
 #include "core/peripherals/input_peripheral_device.hpp"
 
 class ControlPortInputDevice : public InputPeripheralDevice {
@@ -44,7 +45,7 @@ public:
         on_input_source_will_change();
         notify_port();
         binding_ = binding;
-        printf("%s: Input source changed to %s\n", get_name(), binding_.label.c_str());
+        log_info("%s: Input source changed to %s\n", get_name(), binding_.label.c_str());
     }
 
 protected:

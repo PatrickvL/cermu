@@ -2,6 +2,7 @@
  * kc85_system.cpp — KC 85/2, /3, /4 system implementation
  */
 
+#include "core/cermu.hpp"
 #include "systems/ddr/kc85/kc85_system.hpp"
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
@@ -88,7 +89,7 @@ template<KC85Variant V> bool KC85System<V>::apply_configuration() { return true;
 
 template<KC85Variant V>
 bool KC85System<V>::initialize() {
-    printf("%s: Initializing system (CAOS %s)\n", Traits::name, Traits::caos_version);
+    log_info("%s: Initializing system (CAOS %s)\n", Traits::name, Traits::caos_version);
     register_board(&board_);
 
     // ── Bind value-typed chips, then factory-create remaining ──────────
@@ -191,7 +192,7 @@ bool KC85System<V>::initialize() {
     beeper1_state_ = false;
     beeper2_state_ = false;
 
-    printf("%s: System initialized (RAM: %d KB, IRM: %d KB)\n",
+    log_info("%s: System initialized (RAM: %d KB, IRM: %d KB)\n",
            Traits::name, Traits::ram_size / 1024,
            Traits::has_extended_video ? 64 : 16);
     system_ready_ = true;
@@ -553,7 +554,7 @@ void KC85System<V>::build_reverse_ktab() {
     }
 
     ktab_valid_ = true;
-    printf("%s: Built reverse KTAB (keycode→scancode) from CAOS at $%04X\n",
+    log_info("%s: Built reverse KTAB (keycode→scancode) from CAOS at $%04X\n",
            Traits::name, ktab_addr);
 }
 
@@ -793,7 +794,7 @@ bool KC85System<V>::load_roms() {
     char rom_root[512];
     const char* names[] = {"kc85", "KC85", nullptr};
     if (!system_config_discover_rom_root(names, rom_root, sizeof(rom_root))) {
-        printf("%s: ROM path not found\n", Traits::name);
+        log_info("%s: ROM path not found\n", Traits::name);
         return false;
     }
     return board_.load_roms(rom_root, Traits::name);

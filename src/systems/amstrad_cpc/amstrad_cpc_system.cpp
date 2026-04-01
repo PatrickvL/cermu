@@ -7,6 +7,7 @@
  *   screen memory + mode/color decoding.  AY-3-8912 driven via PPI port.
  */
 
+#include "core/cermu.hpp"
 #include "systems/amstrad_cpc/amstrad_cpc_system.hpp"
 #include "core/system_registry.hpp"
 #include <cstring>
@@ -106,7 +107,7 @@ bool AmstradCPCSystem<M>::apply_configuration() { return true; }
 
 template<CPCModel M>
 bool AmstradCPCSystem<M>::initialize() {
-    printf("%s: Initializing system\n", Traits::name);
+    log_info("%s: Initializing system\n", Traits::name);
     register_board(&board_);
 
     // ── Create chips from manifest and bind chipset ───────────────────
@@ -154,7 +155,7 @@ bool AmstradCPCSystem<M>::initialize() {
     // ── Register all manifest chips for Hardware menu ────────────────
     register_bus_chips(board_);
 
-    printf("%s: System initialized (%dKB RAM)\n", Traits::name, Traits::ram_size_kb);
+    log_info("%s: System initialized (%dKB RAM)\n", Traits::name, Traits::ram_size_kb);
     system_ready_ = true;
     return true;
 }

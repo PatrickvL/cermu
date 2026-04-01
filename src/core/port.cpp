@@ -224,7 +224,7 @@ bool Port::attach_device(PeripheralDevice* device) {
 
     // Type compatibility check
     if (!device->is_compatible_with(definition_.type)) {
-        printf("Port: Cannot attach '%s' — incompatible port type "
+        log_info("Port: Cannot attach '%s' — incompatible port type "
                "(device needs %s, port is %s)\n",
                device->get_name(),
                port_type_name(device->get_port_type()),
@@ -240,7 +240,7 @@ bool Port::attach_device(PeripheralDevice* device) {
     // Check for duplicate attachment
     for (auto* d : attached_devices_) {
         if (d == device) {
-            printf("Port: '%s' already attached to %s (port %d)\n",
+            log_info("Port: '%s' already attached to %s (port %d)\n",
                    device->get_name(), definition_.name, port_index_);
             return false;
         }
@@ -250,8 +250,7 @@ bool Port::attach_device(PeripheralDevice* device) {
     recompute_device_signals();
     device->on_attach(this);
 
-    if (g_verbose)
-        printf("Port: '%s' attached to %s (port %d)%s\n",
+            log_debug("Port: '%s' attached to %s (port %d)%s\n",
                device->get_name(), definition_.name, port_index_,
                definition_.is_bus ? " [bus]" : "");
     return true;
@@ -263,8 +262,7 @@ void Port::detach_device(PeripheralDevice* device) {
     if (device == nullptr) {
         // Detach ALL devices
         for (auto* d : attached_devices_) {
-            if (g_verbose)
-                printf("Port: '%s' detached from %s (port %d)\n",
+                            log_debug("Port: '%s' detached from %s (port %d)\n",
                        d->get_name(), definition_.name, port_index_);
             d->on_detach(this);
         }
@@ -274,8 +272,7 @@ void Port::detach_device(PeripheralDevice* device) {
         auto it = std::find(attached_devices_.begin(), attached_devices_.end(), device);
         if (it == attached_devices_.end()) return;
 
-        if (g_verbose)
-            printf("Port: '%s' detached from %s (port %d)\n",
+                    log_debug("Port: '%s' detached from %s (port %d)\n",
                    device->get_name(), definition_.name, port_index_);
         device->on_detach(this);
         attached_devices_.erase(it);

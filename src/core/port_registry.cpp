@@ -3,6 +3,7 @@
 // =============================================================================
 
 #include "core/port_registry.hpp"
+#include "core/cermu.hpp"
 #include <cstdio>
 #include <cstring>
 
@@ -31,7 +32,7 @@ void PortRegistry::register_port(const PortDefinition& definition) {
     // Reject duplicate types (first registration wins).
     for (const auto& entry : entries_) {
         if (entry.type == definition.type) {
-            printf("PortRegistry: WARNING — duplicate type '%s' ignored\n",
+            log_info("PortRegistry: WARNING — duplicate type '%s' ignored\n",
                    definition.name ? definition.name : "?");
             return;
         }

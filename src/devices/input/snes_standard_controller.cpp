@@ -14,6 +14,7 @@
  * same LATCH/CLK/D0 signals but shifts out 16 bits instead of 8.
  */
 
+#include "core/cermu.hpp"
 #include "devices/input/snes_standard_controller.hpp"
 #include "core/device_registry.hpp"
 
@@ -47,7 +48,7 @@ void SnesStandardController::reset() {
 void SnesStandardController::set_host_input_binding(const HostInputBinding& binding) {
     on_input_source_will_change();
     binding_ = binding;
-    printf("SNES Controller: Input source changed to %s\n", binding_.label.c_str());
+    log_info("SNES Controller: Input source changed to %s\n", binding_.label.c_str());
 }
 
 void SnesStandardController::on_input_source_will_change() {

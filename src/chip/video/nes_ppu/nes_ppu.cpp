@@ -11,6 +11,7 @@
  */
 
 // Include nes_system.h for full type definitions (Cartridge, etc.)
+#include "core/cermu.hpp"
 #include "systems/nes/nes_system.hpp"
 
 // nes_ppu.h is transitively included via nes_system.h but be explicit
@@ -42,21 +43,21 @@ struct PpuSubProfile {
         uint64_t total = bg_fetch_cycles + pixel_render_cycles + sprite_eval_cycles +
                          scroll_cycles + vbl_misc_cycles + shifter_cycles;
         auto pct = [total](uint64_t c) { return total ? 100.0 * c / total : 0.0; };
-        printf("\n  === PPU Sub-Component Breakdown (rdtsc) ===\n");
-        printf("  BG fetch:        %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
+        log_info("\n  === PPU Sub-Component Breakdown (rdtsc) ===\n");
+        log_info("  BG fetch:        %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
                bg_fetch_cycles, pct(bg_fetch_cycles), (double)bg_fetch_cycles / total_dots);
-        printf("  Pixel render:    %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
+        log_info("  Pixel render:    %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
                pixel_render_cycles, pct(pixel_render_cycles), (double)pixel_render_cycles / total_dots);
-        printf("  Sprite eval:     %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
+        log_info("  Sprite eval:     %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
                sprite_eval_cycles, pct(sprite_eval_cycles), (double)sprite_eval_cycles / total_dots);
-        printf("  Shifter update:  %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
+        log_info("  Shifter update:  %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
                shifter_cycles, pct(shifter_cycles), (double)shifter_cycles / total_dots);
-        printf("  Scroll:          %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
+        log_info("  Scroll:          %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
                scroll_cycles, pct(scroll_cycles), (double)scroll_cycles / total_dots);
-        printf("  VBL/misc:        %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
+        log_info("  VBL/misc:        %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
                vbl_misc_cycles, pct(vbl_misc_cycles), (double)vbl_misc_cycles / total_dots);
-        printf("  -----------------------------------------\n");
-        printf("  Total measured:  %12lu rdtsc cycles\n", total);
+        log_info("  -----------------------------------------\n");
+        log_info("  Total measured:  %12lu rdtsc cycles\n", total);
     }
 
     void reset() { *this = {}; }

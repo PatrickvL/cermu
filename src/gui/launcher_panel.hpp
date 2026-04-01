@@ -14,6 +14,7 @@
 
 #ifdef CERMU_HAS_GUI
 
+#include "core/cermu.hpp"
 #include <imgui.h>
 #include <string>
 #include <vector>
@@ -1441,9 +1442,9 @@ inline void LauncherPanel::ensure_catalog_open() {
     std::string db_path = config_dir + "/catalog.db";
     if (catalog_store_.open(db_path)) {
         catalog_opened_ = true;
-        printf("Catalog database opened: %s\n", db_path.c_str());
+        log_info("Catalog database opened: %s\n", db_path.c_str());
     } else {
-        printf("Failed to open catalog database: %s\n", db_path.c_str());
+        log_info("Failed to open catalog database: %s\n", db_path.c_str());
     }
 }
 

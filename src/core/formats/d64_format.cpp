@@ -2,6 +2,7 @@
  * D64 Format Handler — Implementation
  */
 
+#include "core/cermu.hpp"
 #include "core/formats/d64_format.hpp"
 #include "core/formats/format_registry.hpp"
 #include "systems/commodore/petscii.hpp"
@@ -132,7 +133,7 @@ bool commodore_d64_t::read_directory(commodore_d64_directory_t* out_dir) const {
     }
 
     out_dir->count = entry_count;
-    printf("D64Format: Directory: \"%s\" [%s], %d entries\n",
+    log_info("D64Format: Directory: \"%s\" [%s], %d entries\n",
            out_dir->disk_name, out_dir->disk_id, entry_count);
     return true;
 }
@@ -161,7 +162,7 @@ bool commodore_d64_t::extract_file(int entry_idx,
 
     for (int chain = 0; chain < 1000 && track != 0; chain++) {
         if (track < 1 || track > num_tracks || sector >= d64_max_sector(track)) {
-            printf("D64Format: Bad track/sector: %d/%d\n", track, sector);
+            log_info("D64Format: Bad track/sector: %d/%d\n", track, sector);
             free(buf);
             return false;
         }
@@ -202,7 +203,7 @@ bool commodore_d64_t::extract_file(int entry_idx,
 
     *out_data = buf;
     *out_size = total;
-    printf("D64Format: Extracted \"%s\": %zu bytes\n", entry->filename, total);
+    log_info("D64Format: Extracted \"%s\": %zu bytes\n", entry->filename, total);
     return true;
 }
 
@@ -222,7 +223,7 @@ bool commodore_d64_t::extract_first_prg(commodore_prg_t* out_prg) const {
                 bool ok = commodore_prg_parse(raw, raw_size, out_prg);
                 free(raw);
                 if (ok) {
-                    printf("D64Format: First PRG: \"%s\" load=$%04X size=%zu\n",
+                    log_info("D64Format: First PRG: \"%s\" load=$%04X size=%zu\n",
                            dir.entries[i].filename, out_prg->load_addr, out_prg->data_size);
                     return true;
                 }
@@ -230,7 +231,7 @@ bool commodore_d64_t::extract_first_prg(commodore_prg_t* out_prg) const {
         }
     }
 
-    printf("D64Format: No PRG files found in directory\n");
+    log_info("D64Format: No PRG files found in directory\n");
     return false;
 }
 

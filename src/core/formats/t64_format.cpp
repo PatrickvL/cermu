@@ -2,6 +2,7 @@
  * T64 Format Handler — Implementation
  */
 
+#include "core/cermu.hpp"
 #include "core/formats/t64_format.hpp"
 #include "core/formats/format_registry.hpp"
 #include "systems/commodore/petscii.hpp"
@@ -23,12 +24,12 @@ bool commodore_t64_t::open_mem(const uint8_t* buf, size_t buf_size) {
 
     if (data_size < T64_HEADER_SIZE ||
         memcmp(data, "C64", 3) != 0) {
-        printf("T64Format: Invalid T64 signature\n");
+        log_info("T64Format: Invalid T64 signature\n");
         data = NULL;
         return false;
     }
 
-    printf("T64Format: Opened T64 from memory: %zu bytes\n", data_size);
+    log_info("T64Format: Opened T64 from memory: %zu bytes\n", data_size);
     return true;
 }
 
@@ -89,7 +90,7 @@ bool commodore_t64_t::read_directory(commodore_t64_directory_t* out_dir) const {
     }
 
     out_dir->count = count;
-    printf("T64Format: Directory: \"%s\", %d entries\n", out_dir->tape_name, count);
+    log_info("T64Format: Directory: \"%s\", %d entries\n", out_dir->tape_name, count);
     return true;
 }
 
@@ -108,12 +109,12 @@ bool commodore_t64_t::extract_file(int entry_idx, commodore_prg_t* out_prg) cons
     const commodore_t64_entry_t* entry = &dir.entries[entry_idx];
 
     if (entry->data_size == 0 || entry->data_offset == 0) {
-        printf("T64Format: Entry %d has no data\n", entry_idx);
+        log_info("T64Format: Entry %d has no data\n", entry_idx);
         return false;
     }
 
     if (entry->data_offset + entry->data_size > data_size) {
-        printf("T64Format: Entry %d data extends beyond file\n", entry_idx);
+        log_info("T64Format: Entry %d data extends beyond file\n", entry_idx);
         return false;
     }
 
@@ -125,7 +126,7 @@ bool commodore_t64_t::extract_file(int entry_idx, commodore_prg_t* out_prg) cons
 
     memcpy(out_prg->data, data + entry->data_offset, entry->data_size);
 
-    printf("T64Format: Extracted \"%s\": load=$%04X size=%u\n",
+    log_info("T64Format: Extracted \"%s\": load=$%04X size=%u\n",
            entry->filename, entry->start_addr, entry->data_size);
     return true;
 }
@@ -141,7 +142,7 @@ bool commodore_t64_t::extract_first_prg(commodore_prg_t* out_prg) const {
             return extract_file(i, out_prg);
     }
 
-    printf("T64Format: No valid entries found\n");
+    log_info("T64Format: No valid entries found\n");
     return false;
 }
 

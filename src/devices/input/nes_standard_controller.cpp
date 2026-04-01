@@ -10,6 +10,7 @@
  *   D0 output         → active-low (bit CLEAR = button pressed)
  */
 
+#include "core/cermu.hpp"
 #include "devices/input/nes_standard_controller.hpp"
 #include "core/device_registry.hpp"
 
@@ -43,7 +44,7 @@ void NesStandardController::reset() {
 void NesStandardController::set_host_input_binding(const HostInputBinding& binding) {
     on_input_source_will_change();
     binding_ = binding;
-    printf("NES Controller: Input source changed to %s\n", binding_.label.c_str());
+    log_info("NES Controller: Input source changed to %s\n", binding_.label.c_str());
 }
 
 void NesStandardController::on_input_source_will_change() {

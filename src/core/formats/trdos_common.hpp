@@ -19,6 +19,7 @@
  * Both formats share the same parsed representation: trdos_file_entry_t.
  */
 
+#include "core/cermu.hpp"
 #include "core/formats/format_handler.hpp"
 #include <cstdint>
 #include <cstring>
@@ -195,7 +196,7 @@ inline bool load_best_entry(const file_entry_t* entries, int count,
 
     out->type = FORMAT_LOAD_PROGRAM;
 
-    printf("%s: Loading '%s' (type=%c, addr=$%04X, len=%zu, sectors=%u)\n",
+    log_info("%s: Loading '%s' (type=%c, addr=$%04X, len=%zu, sectors=%u)\n",
            format_name, e.name, e.type ? e.type : '?',
            out->program.load_addr,
            payload_size, e.sectors);

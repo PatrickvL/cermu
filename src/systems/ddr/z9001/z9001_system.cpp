@@ -2,6 +2,7 @@
  * z9001_system.cpp — Robotron Z9001 / KC 87 system implementation
  */
 
+#include "core/cermu.hpp"
 #include "systems/ddr/z9001/z9001_system.hpp"
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
@@ -63,7 +64,7 @@ template<Z9001Variant V> bool Z9001System<V>::apply_configuration() { return tru
 
 template<Z9001Variant V>
 bool Z9001System<V>::initialize() {
-    printf("%s: Initializing system\n", Traits::name);
+    log_info("%s: Initializing system\n", Traits::name);
     register_board(&board_);
 
     // ── Bind value-typed chips, then factory-create remaining ──────────
@@ -103,7 +104,7 @@ bool Z9001System<V>::initialize() {
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 
     if (!load_roms()) {
-        printf("%s: Warning — ROMs not loaded\n", Traits::name);
+        log_info("%s: Warning — ROMs not loaded\n", Traits::name);
     }
 
     // ── Register chips for Hardware menu ────────────────────────────────
@@ -127,7 +128,7 @@ bool Z9001System<V>::initialize() {
                             z9001_constants::FB_WIDTH, z9001_constants::FB_HEIGHT);
     video_gen_.set_default_colors(8, 0);  // white on black
 
-    printf("%s: System initialized (RAM: %d KB)\n", Traits::name, Traits::ram_size / 1024);
+    log_info("%s: System initialized (RAM: %d KB)\n", Traits::name, Traits::ram_size / 1024);
     system_ready_ = true;
     return true;
 }
@@ -389,7 +390,7 @@ bool Z9001System<V>::load_roms() {
     char rom_root[512];
     const char* names[] = {"z9001", "kc87", "Z9001", nullptr};
     if (!system_config_discover_rom_root(names, rom_root, sizeof(rom_root))) {
-        printf("%s: ROM path not found\n", Traits::name);
+        log_info("%s: ROM path not found\n", Traits::name);
         return false;
     }
 
@@ -413,7 +414,7 @@ bool Z9001System<V>::load_roms() {
             std::memcpy(basic_rom_lo_chip_->data(), full_basic.data(), 8192);
             std::memcpy(basic_rom_hi_chip_->data(), full_basic.data() + 8192, 2048);
         } else {
-            printf("%s: BASIC ROM not loaded\n", Traits::name);
+            log_info("%s: BASIC ROM not loaded\n", Traits::name);
             ok = false;
         }
     }

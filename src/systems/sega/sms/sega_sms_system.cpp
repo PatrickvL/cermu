@@ -18,6 +18,7 @@
  *   Writes to $FFFC-$FFFF control cartridge ROM banking.
  */
 
+#include "core/cermu.hpp"
 #include "systems/sega/sms/sega_sms_system.hpp"
 #include "core/system_registry.hpp"
 #include "core/config/path_discovery.hpp"
@@ -94,7 +95,7 @@ bool SegaSMSSystem::apply_configuration() { return true; }
 // ============================================================================
 
 bool SegaSMSSystem::initialize() {
-    printf("Sega Master System: Initializing system\n");
+    log_info("Sega Master System: Initializing system\n");
     register_board(&board_);
 
     { size_t slot_idx_ = 0;
@@ -123,7 +124,7 @@ bool SegaSMSSystem::initialize() {
     board_.psg.set_audio_port(audio_port_.get());
 
     system_ready_ = true;
-    printf("Sega Master System: System initialized\n");
+    log_info("Sega Master System: System initialized\n");
     return true;
 }
 
@@ -278,7 +279,7 @@ bus_state_t SegaSMSSystem::io_tick(bus_state_t pins) {
 bool SegaSMSSystem::load_file(const char* filepath) {
     if (!filepath || !system_ready_) return false;
     // TODO: Load .sms ROM file
-    printf("Sega Master System: File loading not yet implemented: %s\n", filepath);
+    log_info("Sega Master System: File loading not yet implemented: %s\n", filepath);
     return false;
 }
 

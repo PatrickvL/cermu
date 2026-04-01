@@ -2,18 +2,19 @@
 // C64 KERNAL ROM Patches — Implementation
 // =============================================================================
 
+#include "core/cermu.hpp"
 #include "systems/commodore/c64/c64_kernal_patches.hpp"
 #include <cstdio>
 #include <cstring>
 
 bool c64_patch_skip_memtest(C64System* c64) {
     if (!c64) {
-        printf("C64: WARNING — cannot patch KERNAL (system is null)\n");
+        log_info("C64: WARNING — cannot patch KERNAL (system is null)\n");
         return false;
     }
 
     if (!c64->kernal || !c64->kernal->data()) {
-        printf("C64: WARNING — cannot patch KERNAL (ROM not loaded)\n");
+        log_info("C64: WARNING — cannot patch KERNAL (ROM not loaded)\n");
         return false;
     }
 
@@ -39,6 +40,6 @@ bool c64_patch_skip_memtest(C64System* c64) {
     };
     memcpy(&rom[RAMTAS_OFFSET], ramtas_patch, sizeof(ramtas_patch));
 
-    printf("C64: Patched RAMTAS at $FD5F — memory test skipped (fast boot)\n");
+    log_info("C64: Patched RAMTAS at $FD5F — memory test skipped (fast boot)\n");
     return true;
 }

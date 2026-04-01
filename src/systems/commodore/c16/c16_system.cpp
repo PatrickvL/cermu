@@ -1,3 +1,4 @@
+#include "core/cermu.hpp"
 #include "systems/commodore/c16/c16_system.hpp"
 #include "systems/commodore/c16/c16_constants.hpp"
 #include "systems/commodore/c16/c16_keyboard_matrix.hpp"
@@ -562,7 +563,7 @@ bool Commodore264System<V>::initialize() {
         return true;
     }
     
-    printf("%s: Initializing system\n", Traits::name);
+    log_info("%s: Initializing system\n", Traits::name);
     register_board(&board_);
     
     // Initialize TED 7360 (video, sound, timers, keyboard scanning)
@@ -579,7 +580,7 @@ bool Commodore264System<V>::initialize() {
         ted_desc.banking_change_user_data = this;
         board_.ted.init(ted_desc);
         ted_ = &board_.ted;
-        printf("%s: Created TED 7360 (%s)\n", Traits::name, is_pal_region ? "PAL" : "NTSC");
+        log_info("%s: Created TED 7360 (%s)\n", Traits::name, is_pal_region ? "PAL" : "NTSC");
         // Initialize sound subsystem: TED master clock is 2× CPU clock
         uint32_t ted_clock = is_pal_region ? TED_PAL_CLOCK_HZ : TED_NTSC_CLOCK_HZ;
         ted_->audio_reset(ted_clock, c16_constants::AUDIO_SAMPLE_RATE);
@@ -619,12 +620,12 @@ bool Commodore264System<V>::initialize() {
     // Load ROMs using common ROM loader
     bool roms_loaded = load_roms();
     if (!roms_loaded) {
-        printf("%s: Warning - ROMs not loaded, system may not function correctly\n", Traits::name);
+        log_info("%s: Warning - ROMs not loaded, system may not function correctly\n", Traits::name);
     }
     
     // Initialize MOS 7501 CPU — owned by board_, retrieved via chip_as
     if (!cpu_) {
-        printf("%s: Failed to get MOS 7501 CPU from board\n", Traits::name);
+        log_info("%s: Failed to get MOS 7501 CPU from board\n", Traits::name);
         return false;
     }
     
@@ -652,7 +653,7 @@ bool Commodore264System<V>::initialize() {
         // Create the layered keyboard mapper for character-based input
         keyboard_mapper_.reset(create_c16_keyboard_mapper(keyboard_));
     } else {
-        printf("%s: Warning - keyboard matrix creation failed\n", Traits::name);
+        log_info("%s: Warning - keyboard matrix creation failed\n", Traits::name);
     }
     
     setup_ports();
@@ -689,7 +690,7 @@ bool Commodore264System<V>::initialize() {
 
 template<C264SeriesVariant V>
 void Commodore264System<V>::shutdown() {
-    printf("%s: Shutting down system\n", Traits::name);
+    log_info("%s: Shutting down system\n", Traits::name);
     
     // Destroy keyboard
     if (keyboard_) {
@@ -704,7 +705,7 @@ void Commodore264System<V>::shutdown() {
 
 template<C264SeriesVariant V>
 void Commodore264System<V>::reset() {
-    printf("%s: Resetting system\n", Traits::name);
+    log_info("%s: Resetting system\n", Traits::name);
     
     // Reset all manifest chips (CPU, TED, PIO1, PIO2, ROM bank select; RAM/ROM are no-op)
     board_.reset_chips();
@@ -1022,7 +1023,7 @@ template<C264SeriesVariant V>
 bool Commodore264System<V>::load_roms() {
     char rom_root[1024];
     if (!system_config_discover_rom_root("c16", rom_root, sizeof(rom_root))) {
-        printf("%s: ROM root not found — cannot load ROMs\n", Traits::name);
+        log_info("%s: ROM root not found — cannot load ROMs\n", Traits::name);
         return false;
     }
     return board_.load_roms(rom_root, Traits::name);
@@ -1161,7 +1162,7 @@ void Commodore264System<V>::set_cpu_pc(void* user_data, uint16_t addr) {
         sys->cpu_->set(PC, addr);
         sys->cpu_->set(AB, addr);
         sys->cpu_->transition_to_fetch();
-        printf("%s: PC set to $%04X\n", Traits::name, addr);
+        log_info("%s: PC set to $%04X\n", Traits::name, addr);
     }
 }
 
@@ -1208,7 +1209,7 @@ void Commodore264System<V>::setup_ports() {
     get_port(kb_port)->attach_device(kb_raw);
     owned_devices_.push_back(std::move(kb_device));
 
-    printf("%s: Created %zu ports\n",
+    log_info("%s: Created %zu ports\n",
            Traits::name, get_ports().size());
 }
 

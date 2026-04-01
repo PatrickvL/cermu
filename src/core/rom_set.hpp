@@ -41,6 +41,7 @@
  *   usable by any system, not specific to any hardware family.
  */
 
+#include "core/cermu.hpp"
 #include "core/vfs/vfs.hpp"
 
 #include <cstdint>
@@ -369,7 +370,7 @@ inline bool rom_set_load_matched(const RomSetMatch& match,
             // Check if this entry is required
             if (em.entry_index < match.rom_set->entry_count &&
                 match.rom_set->entries[em.entry_index].required) {
-                printf("ROM set: failed to read required ROM: %s\n",
+                log_info("ROM set: failed to read required ROM: %s\n",
                        em.vfs_path.c_str());
                 ok = false;
             }
@@ -377,7 +378,7 @@ inline bool rom_set_load_matched(const RomSetMatch& match,
         }
 
         if (!write_fn(em.load_address, data, file_size, em.entry_index)) {
-            printf("ROM set: failed to write ROM at $%04X from %s\n",
+            log_info("ROM set: failed to write ROM at $%04X from %s\n",
                    em.load_address, em.vfs_path.c_str());
             ok = false;
         }

@@ -16,6 +16,7 @@
 // Requires: SDL2 (for SDL_GL_GetProcAddress), OpenGL 3.0 / GLSL 130
 // ============================================================================
 
+#include "core/cermu.hpp"
 #include <SDL.h>
 #include <SDL_opengl.h>
 #include <cstdio>
@@ -186,7 +187,7 @@ inline bool load_gl() {
            && glGenFramebuffers && glBindFramebuffer
            && glFramebufferTexture2D && glCheckFramebufferStatus;
     if (!ok)
-        fprintf(stderr, "gl_api: failed to load one or more GL functions\n");
+        log_error("gl_api: failed to load one or more GL functions\n");
     return ok;
 }
 
@@ -204,7 +205,7 @@ inline GLuint compile_shader(GLenum type, const char* source) {
     if (status != GL_TRUE) {
         char log[512];
         glGetShaderInfoLog(shader, sizeof(log), nullptr, log);
-        fprintf(stderr, "gl_api: compile error: %s\n", log);
+        log_error("gl_api: compile error: %s\n", log);
         glDeleteShader(shader);
         return 0;
     }

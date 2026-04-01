@@ -12,6 +12,7 @@
 // =============================================================================
 #pragma once
 
+#include "core/cermu.hpp"
 #include "core/board_base.hpp"
 #include "core/bus_map.hpp"
 #include "core/port.hpp"
@@ -696,13 +697,13 @@ public:
             const char* label = rec.label ? rec.label : "(unnamed)";
             if (ok) {
                 if (system_name)
-                    printf("%s: %s loaded (%zu bytes)\n", system_name, label, rec.byte_size);
+                    log_info("%s: %s loaded (%zu bytes)\n", system_name, label, rec.byte_size);
             } else if (rec.rom.optional) {
                 if (system_name)
-                    printf("%s: %s not found (optional)\n", system_name, label);
+                    log_info("%s: %s not found (optional)\n", system_name, label);
             } else {
                 if (system_name)
-                    printf("%s: Failed to load %s\n", system_name, label);
+                    log_info("%s: Failed to load %s\n", system_name, label);
                 all_ok = false;
             }
         }

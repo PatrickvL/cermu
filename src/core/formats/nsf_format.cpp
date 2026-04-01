@@ -6,6 +6,7 @@
  * to SID files for the Commodore 64.
  */
 
+#include "core/cermu.hpp"
 #include "core/formats/nsf_format.hpp"
 #include "core/formats/format_registry.hpp"
 #include <cstdio>
@@ -167,30 +168,30 @@ static bool nsf_load(const uint8_t* data, size_t size, format_load_result_t* out
         out->metadata_size = sizeof(nsf_metadata_blob_t);
     }
 
-    printf("NSF: \"%s\" by %s\n", header.name, header.artist);
-    printf("NSF: %d songs, start=%d, load=$%04X init=$%04X play=$%04X\n",
+    log_info("NSF: \"%s\" by %s\n", header.name, header.artist);
+    log_info("NSF: %d songs, start=%d, load=$%04X init=$%04X play=$%04X\n",
            header.num_songs, header.start_song,
            header.load_addr, header.init_addr, header.play_addr);
-    printf("NSF: Payload: $%04X-$%04X (%zu bytes)\n",
+    log_info("NSF: Payload: $%04X-$%04X (%zu bytes)\n",
            header.load_addr,
            (unsigned)(header.load_addr + payload_size - 1),
            payload_size);
 
     if (header.uses_bankswitching) {
-        printf("NSF: Uses bankswitching — banks:");
-        for (int i = 0; i < 8; i++) printf(" %02X", header.bankswitch[i]);
-        printf("\n");
+        log_info("NSF: Uses bankswitching — banks:");
+        for (int i = 0; i < 8; i++) log_info(" %02X", header.bankswitch[i]);
+        log_info("\n");
     }
 
     if (header.chip_flags) {
-        printf("NSF: Extra chips: 0x%02X", header.chip_flags);
-        if (header.chip_flags & NSF_CHIP_VRC6)      printf(" VRC6");
-        if (header.chip_flags & NSF_CHIP_VRC7)       printf(" VRC7");
-        if (header.chip_flags & NSF_CHIP_FDS)        printf(" FDS");
-        if (header.chip_flags & NSF_CHIP_MMC5)       printf(" MMC5");
-        if (header.chip_flags & NSF_CHIP_NAMCO163)   printf(" N163");
-        if (header.chip_flags & NSF_CHIP_SUNSOFT5B)  printf(" 5B");
-        printf("\n");
+        log_info("NSF: Extra chips: 0x%02X", header.chip_flags);
+        if (header.chip_flags & NSF_CHIP_VRC6)      log_info(" VRC6");
+        if (header.chip_flags & NSF_CHIP_VRC7)       log_info(" VRC7");
+        if (header.chip_flags & NSF_CHIP_FDS)        log_info(" FDS");
+        if (header.chip_flags & NSF_CHIP_MMC5)       log_info(" MMC5");
+        if (header.chip_flags & NSF_CHIP_NAMCO163)   log_info(" N163");
+        if (header.chip_flags & NSF_CHIP_SUNSOFT5B)  log_info(" 5B");
+        log_info("\n");
     }
 
     return true;

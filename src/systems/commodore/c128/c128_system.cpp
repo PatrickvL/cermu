@@ -5,6 +5,7 @@
  * and registration.  Emulation logic to be filled in.
  */
 
+#include "core/cermu.hpp"
 #include "systems/commodore/c128/c128_system.hpp"
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
@@ -110,7 +111,7 @@ bool C128System::apply_configuration() {
 // ============================================================================
 
 bool C128System::initialize() {
-    printf("C128: Initializing system\n");
+    log_info("C128: Initializing system\n");
     register_board(&board_);
 
     // Bus pull-up defaults — same as C64 (BA, CNT, FLAG, data lines)
@@ -135,7 +136,7 @@ bool C128System::initialize() {
     configure_bus_memory_map();
     init_io_dispatch();
     if (!load_roms()) {
-        printf("C128: Warning — ROMs not loaded\n");
+        log_info("C128: Warning — ROMs not loaded\n");
     }
 
     // VIC-IIe — initialize with PAL traits (MOS8566)
@@ -220,7 +221,7 @@ bool C128System::initialize() {
     // DRAM operations work without it.
 
     system_ready_ = true;
-    printf("C128: System initialized\n");
+    log_info("C128: System initialized\n");
     return true;
 }
 
@@ -446,7 +447,7 @@ void C128System::configure_bus_memory_map() {
 bool C128System::load_roms() {
     char rom_root[1024];
     if (!system_config_discover_rom_root("c128", rom_root, sizeof(rom_root))) {
-        printf("C128: ROM root not found — cannot load ROMs\n");
+        log_info("C128: ROM root not found — cannot load ROMs\n");
         return false;
     }
     return board_.load_roms(rom_root, "C128");
@@ -515,7 +516,7 @@ void C128System::init_io_dispatch() {
     // I/O 2: $DF00-$DFFF (sub-entry 15) — expansion port
     bus_.set_indexed_entry(kViewerCpu, io_sub, 15, no_chip_rd, no_chip_wr);
 
-    printf("C128: I/O dispatch initialized (CS-tick, VIC-IIe=%u SID=%u ColRAM=%u CIA1=%u CIA2=%u VDC=%u)\n",
+    log_info("C128: I/O dispatch initialized (CS-tick, VIC-IIe=%u SID=%u ColRAM=%u CIA1=%u CIA2=%u VDC=%u)\n",
            idVicIIe, idSid, idColRam, idCia1, idCia2, idVdc);
 }
 
