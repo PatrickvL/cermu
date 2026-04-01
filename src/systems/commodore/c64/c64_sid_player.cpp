@@ -132,6 +132,97 @@ static constexpr uint16_t IRQ_CANDIDATES[] = {
     0x0200,   // KERNAL workspace — safe when KERNAL is banked out (PSID)
 };
 
+/**
+ * Scan for a free 1 KB–aligned screen address that does not collide with the
+ * SID payload, the 6502 player stub, or the IRQ handler.
+ *
+ * Prefers VIC bank 0 ($0000–$3FFF) where character ROM is visible at $1000–$1FFF.
+ * Falls back to VIC bank 2 ($8000–$BFFF) with char ROM at $9000–$9FFF.
+ * Avoids placing the screen at addresses where the VIC-II sees character ROM
+ * instead of RAM ($1000–$1FFF in bank 0, $9000–$9FFF in bank 2).
+ *
+ * Returns the absolute screen address, or 0 if no free slot exists.
+ */
+static uint16_t find_free_screen_base(uint16_t load_addr, uint32_t payload_size,
+                                       uint16_t irq_addr) {
+    const uint32_t load_end = static_cast<uint32_t>(load_addr) + payload_size;
+
+    auto overlaps = [&](uint16_t base) -> bool {
+        uint32_t end = static_cast<uint32_t>(base) + 0x0400;
+        // Overlap with SID payload
+        if (payload_size > 0 && end > load_addr && base < load_end) return true;
+        // Overlap with init stub ($0340–$03BF)
+        if (end > STUB_BASE && base < STUB_BASE + 0x80) return true;
+        // Overlap with IRQ handler
+        if (irq_addr && end > irq_addr && base < static_cast<uint32_t>(irq_addr) + IRQ_SIZE) return true;
+        return false;
+    };
+
+    // Bank 0 ($0000–$3FFF) — char ROM visible at $1000–$1FFF.
+    // Skip $0000–$07FF (zero page, stack, cassette buffer / stub / IRQ area).
+    // Skip $1000–$1FFF (VIC-II sees char ROM there, not RAM — screen codes invisible).
+    static constexpr uint16_t bank0_candidates[] = {
+        0x0C00, 0x0800,
+        0x2000, 0x2400, 0x2800, 0x2C00,
+        0x3000, 0x3400, 0x3800, 0x3C00,
+    };
+    for (uint16_t cand : bank0_candidates) {
+        if (!overlaps(cand)) return cand;
+    }
+
+    // Bank 2 ($8000–$BFFF) — char ROM visible at $9000–$9FFF.
+    static constexpr uint16_t bank2_candidates[] = {
+        0x8000, 0x8400, 0x8800, 0x8C00,
+        0xA000, 0xA400, 0xA800, 0xAC00,
+        0xB000, 0xB400, 0xB800, 0xBC00,
+    };
+    for (uint16_t cand : bank2_candidates) {
+        if (!overlaps(cand)) return cand;
+    }
+
+    return 0;
+}
+
+/**
+ * Configure the VIC-II to display the text screen from the given absolute address.
+ *
+ * Sets D018 bits 7–4 (screen base within bank) and the charset to uppercase/
+ * lowercase (D018 bits 3–0 = $06 → offset $1800 within the bank, i.e. the
+ * upper half of the character ROM visible in banks 0 and 2).
+ *
+ * If the target address is outside the current VIC bank, switches the bank via
+ * CIA2 Port A (bits 1–0, active-low) and updates the VIC-II bank_base cache.
+ */
+static void configure_vic_screen_base(C64System* c64, uint16_t screen_addr) {
+    if (!c64->vicii) return;
+
+    vicii_base_t& vicii = *c64->vicii;
+    uint8_t bank = static_cast<uint8_t>(screen_addr >> 14);       // 0–3
+    uint16_t bank_base = static_cast<uint16_t>(bank) * 0x4000;
+    uint16_t offset    = screen_addr - bank_base;
+
+    // D018: bits 7–4 = screen offset / $0400, bits 3–0 = charset ($06 → $1800)
+    uint8_t d018 = static_cast<uint8_t>(((offset >> 10) << 4) | 0x06);
+    vicii.regs_[0x18] = d018;
+
+    // Update VIC-II memory mapping caches directly:
+    //   vm_base = (D018 & 0xF0) << 6     → screen offset within bank
+    //   cb_base = (D018 & 0x0E) << 10    → charset offset within bank
+    vicii.memory.vm_base = static_cast<uint16_t>((d018 & 0xF0) << 6);
+    vicii.memory.cb_base = static_cast<uint16_t>((d018 & 0x0E) << 10);
+
+    // Switch VIC bank if needed
+    if (vicii.memory.bank_base != bank_base) {
+        vicii.memory.bank_base = bank_base;
+        // CIA2 Port A bits 1–0 are inverted: bank 0=%11, 1=%10, 2=%01, 3=%00
+        if (c64->cia2) {
+            uint8_t pra = c64->cia2->regs_.data[0];
+            pra = static_cast<uint8_t>((pra & 0xFC) | (3 - bank));
+            c64->cia2->regs_.data[0] = pra;
+        }
+    }
+}
+
 static uint8_t select_sid_banking(uint16_t addr) {
     // Hardware-faithful $01 selection for SID init/play calls
     if (addr >= 0xD000 && addr <= 0xDFFF) return 0x34; // I/O only
@@ -414,31 +505,38 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
     printf("C64: Speed flag for subtune %u: %s (timer=%u cycles, cpu=%u Hz)\n",
            subtune + 1, use_cia_rate ? "CIA" : "VBI", timer_period, timing.cpu_frequency_hz);
 
-    // ---- Step 4: Optional SID info page (only when it won't clobber tune RAM) ----
-    const uint16_t screen_base = 0x0400;
-    const uint32_t screen_end  = 0x07E8; // 1000-byte text screen: $0400-$07E7
-    const uint32_t load_end    = static_cast<uint32_t>(sid->load_addr) + payload_size;
-    const bool screen_overlap  = (payload_size > 0)
-                               && (load_end > static_cast<uint32_t>(screen_base))
-                               && (static_cast<uint32_t>(sid->load_addr) < screen_end);
+    // ---- Step 4: SID info page ----
+    // Default screen at $0400.  If the SID payload overlaps it, relocate the
+    // text screen to a free 1 KB-aligned address and reconfigure VIC-II/CIA2.
+    {
+        const uint16_t default_screen = 0x0400;
+        const uint32_t default_end    = 0x07E8; // 1000-byte screen: $0400–$07E7
+        const uint32_t load_end       = static_cast<uint32_t>(sid->load_addr) + payload_size;
+        const bool default_overlap    = (payload_size > 0)
+                                      && (load_end > static_cast<uint32_t>(default_screen))
+                                      && (static_cast<uint32_t>(sid->load_addr) < default_end);
 
-    if (!screen_overlap) {
-        uint8_t* screen_ram = &ram[screen_base];
-        // Color RAM is hardwired at IO space ($D800–$DBFF).
-        uint8_t* color_ram  = c64->colorram ? c64->colorram->memory : nullptr;
-        c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
-
-        // Restore charset/font selection for readable screen codes while
-        // preserving the current screen base nibble managed by the tune.
-        if (c64->vicii) {
-            vicii_base_t& vicii_chip = *c64->vicii;
-            uint8_t d018 = vicii_chip.regs_[0x18];
-            d018 = static_cast<uint8_t>((d018 & 0xF0) | 0x06);
-            vicii_chip.regs_[0x18] = d018;
-            vicii_chip.memory.cb_base = 0x1800;
+        uint16_t screen_addr = default_screen;
+        if (default_overlap) {
+            screen_addr = find_free_screen_base(sid->load_addr,
+                                                 static_cast<uint32_t>(payload_size),
+                                                 irq_addr);
         }
-    } else {
-        printf("C64: SID info page skipped (payload overlaps screen RAM $0400-$07E7)\n");
+
+        if (screen_addr) {
+            uint8_t* screen_ram = &ram[screen_addr];
+            uint8_t* color_ram  = c64->colorram ? c64->colorram->memory : nullptr;
+            c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
+
+            // Point VIC-II at the (possibly relocated) screen + uppercase/lowercase charset
+            configure_vic_screen_base(c64, screen_addr);
+
+            if (screen_addr != default_screen) {
+                printf("C64: Screen relocated to $%04X (payload overlaps default $0400)\n", screen_addr);
+            }
+        } else {
+            printf("C64: SID info page skipped (no free screen location found)\n");
+        }
     }
 
     // ---- Step 5: Inject 6502 player stub ----
@@ -501,31 +599,34 @@ void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
         timer_period = static_cast<uint16_t>(timing.cycles_per_frame);
     }
 
-    // ---- Optional info page refresh (only when it won't clobber tune RAM) ----
-    const uint16_t screen_base = 0x0400;
-    const uint32_t screen_end  = 0x07E8; // 1000-byte text screen: $0400-$07E7
-    const uint32_t load_end    = static_cast<uint32_t>(sid->load_addr) + payload_size;
-    const bool screen_overlap  = (payload_size > 0)
-                               && (load_end > static_cast<uint32_t>(screen_base))
-                               && (static_cast<uint32_t>(sid->load_addr) < screen_end);
+    // ---- Info page refresh with possible screen relocation ----
+    {
+        const uint16_t default_screen = 0x0400;
+        const uint32_t default_end    = 0x07E8;
+        const uint32_t load_end       = static_cast<uint32_t>(sid->load_addr) + payload_size;
+        const bool default_overlap    = (payload_size > 0)
+                                      && (load_end > static_cast<uint32_t>(default_screen))
+                                      && (static_cast<uint32_t>(sid->load_addr) < default_end);
 
-    if (!screen_overlap) {
-        uint8_t* screen_ram = &ram[screen_base];
-        // Color RAM is hardwired at IO space ($D800–$DBFF).
-        uint8_t* color_ram  = c64->colorram ? c64->colorram->memory : nullptr;
-        c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
+        // Need irq_addr here for the overlap check inside find_free_screen_base
+        const bool needs_timer_irq_tmp = (sid->type == SID_TYPE_PSID && sid->play_addr != 0);
+        const uint16_t irq_addr_tmp    = needs_timer_irq_tmp
+            ? find_safe_irq_addr(sid->load_addr, static_cast<uint32_t>(payload_size))
+            : 0;
 
-        // Restore charset/font selection for readable screen codes while
-        // preserving the current screen base nibble managed by the tune.
-        if (c64->vicii) {
-            vicii_base_t& vicii_chip = *c64->vicii;
-            uint8_t d018 = vicii_chip.regs_[0x18];
-            d018 = static_cast<uint8_t>((d018 & 0xF0) | 0x06);
-            vicii_chip.regs_[0x18] = d018;
-            vicii_chip.memory.cb_base = 0x1800;
+        uint16_t screen_addr = default_screen;
+        if (default_overlap) {
+            screen_addr = find_free_screen_base(sid->load_addr,
+                                                 static_cast<uint32_t>(payload_size),
+                                                 irq_addr_tmp);
         }
-    } else {
-        printf("C64: SID info page refresh skipped (payload overlaps screen RAM $0400-$07E7)\n");
+
+        if (screen_addr) {
+            uint8_t* screen_ram = &ram[screen_addr];
+            uint8_t* color_ram  = c64->colorram ? c64->colorram->memory : nullptr;
+            c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
+            configure_vic_screen_base(c64, screen_addr);
+        }
     }
 
     // ---- Re-inject stub ----
