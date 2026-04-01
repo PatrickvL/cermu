@@ -390,10 +390,11 @@ static int dump_manifest(const char* name) {
     }
 
     // Try to create and initialize the system for chip/port enumeration.
-    // Suppress log output from system initialization.
+    // Suppress log output from system init/shutdown — only our printf matters.
+    // Guard declared first so it outlives `sys` (reverse destruction order).
+    LogLevelGuard guard(LogLevel::Silent);
     auto sys = SystemRegistry::instance().create_system(name);
     if (sys) {
-        LogLevelGuard guard(LogLevel::Silent);
         if (!sys->initialize()) { sys->shutdown(); sys.reset(); }
     }
     if (sys) {
