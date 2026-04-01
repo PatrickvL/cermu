@@ -36,7 +36,7 @@
 // =============================================================================
 
 #include "core/chip_manifest.hpp"
-#include "core/memory_bus/configs.hpp"
+#include "core/memory_bus/bus.hpp"
 #include "core/board.hpp"
 #include "core/system_chip_visitors.hpp"
 #include "chip/memory/memory_chip.hpp"
@@ -45,6 +45,53 @@
 #include "chip/sound/mos6581.hpp"
 #include "chip/memory/mos2114.hpp"
 #include "chip/io/mos6526.hpp"
+
+
+// =============================================================================
+// §0  C64 Bus Spec — manual spec (not ManifestBusSpec)
+// =============================================================================
+//
+// With page banking (bank_size=0, effective=4096), each buffer chip gets
+// ceil(size / 4096) consecutive chip IDs.  Sorted by size ascending:
+//
+//   CHARROM  4 KB  →  1 ID  → base_id = 0     (IDs  0)
+//   ROML     8 KB  →  2 IDs → base_id = 1     (IDs  1-2)
+//   ROMH     8 KB  →  2 IDs → base_id = 3     (IDs  3-4)
+//   BASIC    8 KB  →  2 IDs → base_id = 5     (IDs  5-6)
+//   KERNAL   8 KB  →  2 IDs → base_id = 7     (IDs  7-8)
+//   RAM     64 KB  → 16 IDs → base_id = 9     (IDs  9-24)
+//
+// EnablePartialBus is NOT set: the MOS 2114 colour RAM's 4-bit behaviour is
+// handled outside the bus (via the I/O register-file handler on the CPU side,
+// and via a dedicated internal fetch on the VIC-II side).
+//
+// The $D000–$DFFF I/O page is modelled as an indexed sub-table with 4 bits
+// (16 × 256 B entries), each routing to a separate MMIO handler (VIC-II,
+// SID, Color RAM, CIA1, CIA2, I/O1, I/O2).  Dispatch is O(1): one shift,
+// one mask, one table lookup.
+//
+struct C64BusSpec {
+    using AddrType = uint16_t;
+    static constexpr size_t AddressBits         = 16;
+    static constexpr size_t PageBits            = 12;   // 4 KB pages → 16 pages
+    static constexpr size_t NumViewers          = 2;    // CPU=0, VIC-II=1
+    static constexpr size_t MaxChipId           = 24;   // 25 bank IDs (CHARROM..RAM with page banking)
+    static constexpr size_t MaxWriteChipId      = 24;
+    static constexpr bool   EnableMmio          = true;
+    static constexpr size_t MaxMmioHandlers     = 8;    // VIC-II, SID, ColorRAM, CIA1, CIA2, I/O1, I/O2, + spare
+    static constexpr size_t MaxIndexedSubTables = 1;    // one sub-table: the I/O page
+    static constexpr size_t IndexedSubBits      = 4;    // 16 × 256 B entries
+
+    // Shift-addressable: flat_mem offset = chip_id << 12 (no table lookup).
+    static constexpr bool   ShiftAddressable    = true;
+    static constexpr size_t ShiftBankBits       = 12;   // 4 KB stride
+
+    // CS-tick: enable chip-select field in bus_state_t for self-dispatch.
+    static constexpr size_t CsLineBits          = BUS_CS_BITS;
+    static constexpr size_t CsMmioChipCount     = 5;    // VIC-II, SID, ColorRAM, CIA1, CIA2
+
+    enum ViewerId : size_t { Cpu = 0, Vic = 1 };
+};
 
 
 // =============================================================================
