@@ -49,26 +49,51 @@
     PLBL_INV(_BUSAK,      "BUSAK",      "bus acknowledge (Z80)")                \
     PLBL_INV(_BUSRQ,      "BUSRQ",      "bus request (Z80)")                    \
     PLBL_INV(_CAS,        "CAS",        "column address strobe")                \
+    PLBL_INV(_CAS0,       "CAS0",       "column address strobe 0 (V9938)")      \
+    PLBL_INV(_CAS1,       "CAS1",       "column address strobe 1 (V9938)")      \
+    PLBL_INV(_CASAD,      "CASAD",      "CAS address (Amstrad GA)")             \
     PLBL_INV(_CASRAM_PLA, "CASRAM",     "CAS RAM (PLA output F0)")              \
+    PLBL_INV(_CCLK,       "CCLK",       "character clock (Amstrad GA)")          \
     PLBL_INV(_CE,         "CE",         "chip enable")                          \
     PLBL_INV(_CHAREN,     "CHAREN",     "character ROM enable")                 \
     PLBL_INV(_CHAROM,     "CHAROM",     "character ROM select")                 \
     PLBL_INV(_CLR,        "CLR",        "master clear (74LS259)")               \
+    PLBL_INV(_CPUCLK,     "CPUCLK",     "CPU clock output")                     \
     PLBL_INV(_CS,         "CS",         "chip select")                          \
     PLBL_INV(_CS0,        "CS0",        "chip select 0")                        \
     PLBL_INV(_CS1,        "CS1",        "chip select 1")                        \
     PLBL_INV(_CS2,        "CS2",        "chip select 2")                        \
     PLBL_INV(_CSR,        "CSR",        "chip select read (TMS9918)")           \
+    PLBL_INV(_CSYNC,      "CSYNC",      "composite sync")                       \
     PLBL_INV(_CSW,        "CSW",        "chip select write (TMS9918)")          \
+    PLBL_INV(_DEC1_G,     "1G",         "decoder 1 enable (74LS139)")            \
+    PLBL_INV(_DEC1_Y0,    "1Y0",        "decoder 1 output 0 (74LS139)")          \
+    PLBL_INV(_DEC1_Y1,    "1Y1",        "decoder 1 output 1 (74LS139)")          \
+    PLBL_INV(_DEC1_Y2,    "1Y2",        "decoder 1 output 2 (74LS139)")          \
+    PLBL_INV(_DEC1_Y3,    "1Y3",        "decoder 1 output 3 (74LS139)")          \
+    PLBL_INV(_DEC2_G,     "2G",         "decoder 2 enable (74LS139)")            \
+    PLBL_INV(_DEC2_Y0,    "2Y0",        "decoder 2 output 0 (74LS139)")          \
+    PLBL_INV(_DEC2_Y1,    "2Y1",        "decoder 2 output 1 (74LS139)")          \
+    PLBL_INV(_DEC2_Y2,    "2Y2",        "decoder 2 output 2 (74LS139)")          \
+    PLBL_INV(_DEC2_Y3,    "2Y3",        "decoder 2 output 3 (74LS139)")          \
+    PLBL_INV(_DHCLK,      "DHCLK",      "display half clock (V9938)")            \
+    PLBL_INV(_DISPEN,     "DISPEN",     "display enable (Amstrad GA)")           \
+    PLBL_INV(_DLCLK,      "DLCLK",      "display low clock (V9938)")             \
     PLBL_INV(_DTACK,      "DTACK",      "data transfer acknowledge (M68K)")     \
     PLBL_INV(_E1,         "E1",         "enable 1 (74LS138)")                   \
     PLBL_INV(_E2,         "E2",         "enable 2 (74LS138)")                   \
+    PLBL_INV(_EN244,      "244EN",      "244 buffer enable (Amstrad GA)")        \
     PLBL_INV(_EXROM,      "EXROM",      "external ROM")                         \
+    PLBL_INV(_FF1_Q,      "1Q",         "flip-flop 1 complement (74LS175)")      \
+    PLBL_INV(_FF2_Q,      "2Q",         "flip-flop 2 complement (74LS175)")      \
+    PLBL_INV(_FF3_Q,      "3Q",         "flip-flop 3 complement (74LS175)")      \
+    PLBL_INV(_FF4_Q,      "4Q",         "flip-flop 4 complement (74LS175)")      \
     PLBL_INV(_FIRQ,       "FIRQ",       "fast interrupt request (MC6809)")      \
     PLBL_INV(_G,          "G",          "gate/enable (74LS249)")                \
     PLBL_INV(_GAME,       "GAME",       "game line")                            \
     PLBL_INV(_HALT,       "HALT",       "halt (Z80)")                           \
     PLBL_INV(_HIRAM,      "HIRAM",      "high RAM")                             \
+    PLBL_INV(_HSYNC,      "HSYNC",      "horizontal sync")                      \
     PLBL_INV(_IC,         "IC",         "initial clear (Yamaha FM)")            \
     PLBL_INV(_INT,        "INT",        "interrupt (Z80)")                      \
     PLBL_INV(_INTR,       "INTR",       "interrupt (MOS 8563 VDC)")             \
@@ -83,6 +108,7 @@
     PLBL_INV(_KERNAL,     "KERNAL",     "KERNAL ROM select")                    \
     PLBL_INV(_LDS,        "LDS",        "lower data strobe (M68K)")             \
     PLBL_INV(_LORAM,      "LORAM",      "low RAM")                              \
+    PLBL_INV(_LPEN,       "LPEN",       "light pen")                             \
     PLBL_INV(_M1,         "M1",         "machine cycle 1 (Z80)")                \
     PLBL_INV(_ML,         "ML",         "memory lock (65C02/65C816)")           \
     PLBL_INV(_MREQ,       "MREQ",       "memory request (Z80)")                 \
@@ -94,7 +120,10 @@
     PLBL_INV(_RAS,        "RAS",        "row address strobe")                   \
     PLBL_INV(_RD,         "RD",         "read strobe")                          \
     PLBL_INV(_RES,        "RES",        "reset")                                \
+    PLBL_INV(_RESET,      "RESET",      "reset")                                \
     PLBL_INV(_RFSH,       "RFSH",       "refresh (Z80)")                        \
+    PLBL_INV(_ROM,        "ROM",        "ROM select")                            \
+    PLBL_INV(_ROMEN,      "ROMEN",      "ROM enable (Amstrad GA)")               \
     PLBL_INV(_ROMH,       "ROMH",       "ROM high")                             \
     PLBL_INV(_ROML,       "ROML",       "ROM low")                              \
     PLBL_INV(_ROMSEL,     "ROMSEL",     "ROM select (5A22 cartridge)")          \
@@ -106,6 +135,7 @@
     PLBL_INV(_VP,         "VP",         "vector pull")                          \
     PLBL_INV(_VPA_M68K,   "VPA",        "valid peripheral address (M68K)")      \
     PLBL_INV(_VPB,        "VPB",        "vector pull bar")                      \
+    PLBL_INV(_VSYNC,      "VSYNC",      "vertical sync")                        \
     PLBL_INV(_WAIT,       "WAIT",       "wait (Z80)")                           \
     PLBL_INV(_WE,         "WE",         "write enable")                         \
     PLBL_INV(_WR,         "WR",         "write strobe (5A22)")                  \
@@ -138,9 +168,15 @@
     /* ── Clock / oscillator ──────────────────────────────────────── */ \
     PLBL_PIN(CK,          "CK",         "clock (EAROM/general)")                \
     PLBL_CAT(CLOCK)                                                             \
+    PLBL_PIN(CCLK,        "CCLK",       "character clock (active-high)")         \
     PLBL_PIN(CLK,         "CLK",        "generic clock input")                  \
+    PLBL_PIN(CLK_1M,      "CLK 1M",     "1 MHz clock (BBC Micro VIDPROC)")       \
+    PLBL_PIN(CLK_2M,      "CLK 2M",     "2 MHz clock (BBC Micro VIDPROC)")       \
     PLBL_PIN(COLOR_CLK,   "COLOR CLK",  "color clock")                          \
     PLBL_PIN(CPUCLK,      "CPUCLK",     "CPU clock output (5A22)")              \
+    PLBL_PIN(CRTC_CLK,    "CRTC CLK",   "CRTC clock (BBC Micro VIDPROC)")        \
+    PLBL_PIN(DHCLK,       "DHCLK",      "display half clock (V9938)")            \
+    PLBL_PIN(DLCLK,       "DLCLK",      "display low clock (V9938)")             \
     PLBL_PIN(DOT_CLK,     "DOT CLK",    "dot clock")                            \
     PLBL_PIN(ENABLE,      "E",          "enable clock input (6800 bus)")        \
     PLBL_PIN(EXTAL,       "EXTAL",      "external crystal input (MC6809)")      \
@@ -150,8 +186,10 @@
     PLBL_PIN(OSC_IN,      "OSC IN",     "oscillator input")                     \
     PLBL_PIN(OSC_OUT,     "OSC OUT",    "oscillator output")                    \
     PLBL_PIN(PHI0,        "Φ0",         "clock input")                          \
+    PLBL_PIN(PHI,         "Φ",          "clock (Amstrad GA)")                    \
     PLBL_PIN(PHI1,        "Φ1",         "inverted clock output")                \
     PLBL_PIN(PHI2,        "Φ2",         "primary clock output")                 \
+    PLBL_PIN(PHI_N,       "ΦN",         "inverted clock (Amstrad GA)")           \
     PLBL_PIN(PHI_M,       "ΦM",         "master clock input (Yamaha FM)")       \
     PLBL_PIN(PHI_S,       "ΦS",         "SSG/secondary clock (Yamaha OPN)")     \
     PLBL_PIN(Q_CLK,       "Q",          "Q clock output (MC6809)")              \
@@ -242,9 +280,13 @@
     PLBL_PIN(C1,          "C1",         "control pin 1")                        \
     PLBL_PIN(C2,          "C2",         "control pin 2")                        \
     PLBL_PIN(CAS,         "CAS",        "column address strobe (active-high)")  \
+    PLBL_PIN(CAS0,        "CAS0",       "column addr strobe 0 (active-high)")   \
+    PLBL_PIN(CAS1,        "CAS1",       "column addr strobe 1 (active-high)")   \
+    PLBL_PIN(CASAD,       "CASAD",      "CAS address (Amstrad, active-high)")   \
     PLBL_PIN(CASRAM,      "CASRAM",     "CAS for RAM")                          \
     PLBL_PIN(CE,          "CE",         "chip enable (active-high)")            \
     PLBL_PIN(CLR,         "CLR",        "master clear (active-high)")           \
+    PLBL_PIN(CPU_A,       "CPU A",      "CPU address output (Amstrad GA)")      \
     PLBL_PIN(CS,          "CS",         "chip select (active-high)")            \
     PLBL_PIN(CS0,         "CS0",        "chip select 0 (active-high)")          \
     PLBL_PIN(CS1,         "CS1",        "chip select 1 (active-high)")          \
@@ -252,7 +294,9 @@
     PLBL_PIN(CS3,         "CS3",        "chip select 3 (TIA)")                  \
     PLBL_PIN(CSR,         "CSR",        "chip select read (TMS9918, act-h)")    \
     PLBL_PIN(CSW,         "CSW",        "chip select write (TMS9918, act-h)")   \
+    PLBL_PIN(DISPEN,      "DISPEN",     "display enable (active-high)")          \
     PLBL_PIN(DTACK,       "DTACK",      "data transfer ack (M68K, active-h)")   \
+    PLBL_PIN(EN244,       "244EN",      "244 buffer enable (active-high)")       \
     PLBL_PIN(HALT,        "HALT",       "halt (Z80, active-high)")              \
     PLBL_PIN(INT,         "INT",        "interrupt (Z80, active-high)")         \
     PLBL_PIN(IORQ,        "IORQ",       "I/O request (Z80, active-high)")       \
@@ -266,12 +310,17 @@
     PLBL_PIN(PARD,        "PARD",       "peripheral addr read (5A22, act-h)")   \
     PLBL_PIN(PAWR,        "PAWR",       "peripheral addr write (5A22, act-h)")  \
     PLBL_PIN(P_S,         "P/S",        "parallel/serial (shift register)")     \
+    PLBL_PIN(RAMDIS,      "RAMDIS",     "RAM disable (Amstrad GA)")              \
+    PLBL_PIN(RAMRD,       "RAMRD",      "RAM read (Amstrad GA)")                 \
     PLBL_PIN(RAS,         "RAS",        "row address strobe (active-high)")     \
     PLBL_PIN(RD,          "RD",         "read strobe (active-high)")            \
     PLBL_PIN(RDY,         "RDY",        "ready input/output")                   \
     PLBL_PIN(RFSH,        "RFSH",       "refresh (Z80, active-high)")           \
     PLBL_PIN(ROMCS,       "ROMCS",      "ROM chip select (Yamaha OPNA)")        \
+    PLBL_PIN(ROMEN,       "ROMEN",      "ROM enable (Amstrad, active-high)")     \
     PLBL_PIN(ROMSEL,      "ROMSEL",     "ROM select (5A22 cart, active-high)")  \
+    PLBL_PIN(RESET,       "RESET",      "reset (active-high)")                  \
+    PLBL_PIN(ROM,         "ROM",        "ROM select (active-high)")              \
     PLBL_PIN(RS,          "RS",         "register select")                      \
     PLBL_PIN(RS0,         "RS0",        "register select 0 (PIA)")              \
     PLBL_PIN(RS1,         "RS1",        "register select 1 (PIA)")              \
@@ -408,6 +457,7 @@
     \
     /* ── Serial communication ────────────────────────────────────── */ \
     PLBL_CAT(SERIAL)                                                            \
+    PLBL_PIN(DATA,        "DATA",       "serial data")                           \
     PLBL_PIN(SPI_CLK,     "SPI CLK",    "SPI clock")                            \
     PLBL_PIN(SPI_CS,      "SPI CS",     "SPI chip select")                      \
     PLBL_PIN(SPI_MISO,    "SPI MISO",   "SPI data in")                          \
@@ -424,21 +474,30 @@
     \
     /* ── Video output ────────────────────────────────────────────── */ \
     PLBL_CAT(VIDEO)                                                             \
+    PLBL_PIN(B_VID,       "B",          "blue video output")                     \
+    PLBL_PIN(CBDR,        "CBDR",       "color bus direction (V9938)")           \
     PLBL_PIN(CHROMA,      "CHROMA",     "chrominance output")                   \
     PLBL_PIN(COLOR,       "COLOR",      "color signal output (VIC-II)")         \
+    PLBL_PIN(COLOR_BUS,   "COLOR",      "color bus (V9938)")                     \
     PLBL_PIN(COLU,        "COLU",       "color/luminance output (TIA)")         \
     PLBL_PIN(COMVID,      "COMVID",     "composite video output (TMS9918)")     \
     PLBL_PIN(COMP_BLK,    "BLK",        "composite blank (TIA)")                \
     PLBL_PIN(CSYNC,       "CSYNC",      "composite sync")                       \
+    PLBL_PIN(G_VID,       "G",          "green video output")                    \
+    PLBL_PIN(HL,          "HL",         "horizontal lock (Sega VDP)")            \
     PLBL_PIN(HSYNC,       "HSYNC",      "horizontal sync")                      \
     PLBL_PIN(LUMA,        "LUMA",       "luminance output")                     \
+    PLBL_PIN(R_VID,       "R",          "red video output")                      \
     PLBL_PIN(RGBI,        "RGBI",       "RGBI digital video (MOS 8563 VDC)")    \
     PLBL_PIN(VOUT,        "VOUT",       "composite video output")               \
     PLBL_PIN(VSYNC,       "VSYNC",      "vertical sync")                        \
+    PLBL_PIN(Y_VID,       "Y",          "luminance output (Sega VDP)")           \
+    PLBL_PIN(YS,          "YS",         "external superimpose (V9938)")          \
     \
     /* ── Video control ───────────────────────────────────────────── */ \
     PLBL_CAT(VIDEO_CONTROL)                                                     \
     PLBL_PIN(CURSOR,      "CURSOR",     "cursor output (MC6845 CRTC)")          \
+    PLBL_PIN(DISEN,       "DISEN",      "display enable (BBC Micro VIDPROC)")    \
     PLBL_PIN(DRDY,        "DRDY",       "DRAM ready output (MOS 8563 VDC)")     \
     PLBL_PIN(DE,          "DE",         "display enable (MC6845 CRTC)")         \
     PLBL_PIN(EXTVDP,      "EXTVDP",     "external VDP input (TMS9918)")         \
@@ -448,6 +507,7 @@
     PLBL_PIN(LPEN,        "LP",         "light pen input (MOS 8563 VDC)")       \
     PLBL_PIN(LPSTB,       "LPSTB",      "light pen strobe (MC6845 CRTC)")       \
     PLBL_PIN(REFRESH,     "REFRESH",    "WRAM refresh output (5A22)")           \
+    PLBL_PIN(TTEXT,       "TTEXT",      "teletext mode (BBC Micro VIDPROC)")     \
     PLBL_PIN(VBLANK,      "VBLANK",     "vertical blank output (5A22)")         \
     \
     /* ── Raster address (RA0-RA4, MC6845, must remain sequential) ── */ \
@@ -610,6 +670,14 @@
     \
     /* ── Keyboard matrix (K0-K7, must remain sequential) ─────────── */ \
     PLBL_CAT(KEYBOARD)                                                          \
+    PLBL_PIN(COL0,        "COL0",       "keyboard matrix column 0")              \
+    PLBL_PIN(COL1,        "COL1",       "keyboard matrix column 1")              \
+    PLBL_PIN(COL2,        "COL2",       "keyboard matrix column 2")              \
+    PLBL_PIN(COL3,        "COL3",       "keyboard matrix column 3")              \
+    PLBL_PIN(COL4,        "COL4",       "keyboard matrix column 4")              \
+    PLBL_PIN(COL5,        "COL5",       "keyboard matrix column 5")              \
+    PLBL_PIN(COL6,        "COL6",       "keyboard matrix column 6")              \
+    PLBL_PIN(COL7,        "COL7",       "keyboard matrix column 7")              \
     PLBL_PIN(K0,          "K0",         "keyboard 0")                           \
     PLBL_PIN(K1,          "K1",         "keyboard 1")                           \
     PLBL_PIN(K2,          "K2",         "keyboard 2")                           \
@@ -618,6 +686,14 @@
     PLBL_PIN(K5,          "K5",         "keyboard 5")                           \
     PLBL_PIN(K6,          "K6",         "keyboard 6")                           \
     PLBL_PIN(K7,          "K7",         "keyboard 7")                           \
+    PLBL_PIN(ROW0,        "ROW0",       "keyboard matrix row 0")                \
+    PLBL_PIN(ROW1,        "ROW1",       "keyboard matrix row 1")                \
+    PLBL_PIN(ROW2,        "ROW2",       "keyboard matrix row 2")                \
+    PLBL_PIN(ROW3,        "ROW3",       "keyboard matrix row 3")                \
+    PLBL_PIN(ROW4,        "ROW4",       "keyboard matrix row 4")                \
+    PLBL_PIN(ROW5,        "ROW5",       "keyboard matrix row 5")                \
+    PLBL_PIN(ROW6,        "ROW6",       "keyboard matrix row 6")                \
+    PLBL_PIN(ROW7,        "ROW7",       "keyboard matrix row 7")                \
     \
     /* ── Multiplexed addr/data & chip I/O (2A03 / 2C02 / TMS9918) ── */ \
     PLBL_CAT(NES_IO)                                                            \
@@ -691,10 +767,32 @@
     PLBL_PIN(A,           "A",          "select A (74LS138)")                   \
     PLBL_PIN(B,           "B",          "select B (74LS138)")                   \
     PLBL_PIN(C,           "C",          "select C (74LS138)")                   \
+    PLBL_PIN(DEC1_A,      "1A",         "decoder 1 select A (74LS139)")          \
+    PLBL_PIN(DEC1_B,      "1B",         "decoder 1 select B (74LS139)")          \
+    PLBL_PIN(DEC1_G,      "1G",         "decoder 1 enable (74LS139)")            \
+    PLBL_PIN(DEC1_Y0,     "1Y0",        "decoder 1 output 0 (74LS139)")          \
+    PLBL_PIN(DEC1_Y1,     "1Y1",        "decoder 1 output 1 (74LS139)")          \
+    PLBL_PIN(DEC1_Y2,     "1Y2",        "decoder 1 output 2 (74LS139)")          \
+    PLBL_PIN(DEC1_Y3,     "1Y3",        "decoder 1 output 3 (74LS139)")          \
+    PLBL_PIN(DEC2_A,      "2A",         "decoder 2 select A (74LS139)")          \
+    PLBL_PIN(DEC2_B,      "2B",         "decoder 2 select B (74LS139)")          \
+    PLBL_PIN(DEC2_G,      "2G",         "decoder 2 enable (74LS139)")            \
+    PLBL_PIN(DEC2_Y0,     "2Y0",        "decoder 2 output 0 (74LS139)")          \
+    PLBL_PIN(DEC2_Y1,     "2Y1",        "decoder 2 output 1 (74LS139)")          \
+    PLBL_PIN(DEC2_Y2,     "2Y2",        "decoder 2 output 2 (74LS139)")          \
+    PLBL_PIN(DEC2_Y3,     "2Y3",        "decoder 2 output 3 (74LS139)")          \
     PLBL_PIN(DS,          "DS",         "data serial input (shift register)")   \
     PLBL_PIN(E1,          "E1",         "enable 1 (active-high)")               \
     PLBL_PIN(E2,          "E2",         "enable 2 (active-high)")               \
     PLBL_PIN(E3,          "E3",         "enable 3 (74LS138)")                   \
+    PLBL_PIN(FF1_D,       "1D",         "flip-flop 1 data (74LS175)")            \
+    PLBL_PIN(FF1_Q,       "1Q",         "flip-flop 1 output (74LS175)")          \
+    PLBL_PIN(FF2_D,       "2D",         "flip-flop 2 data (74LS175)")            \
+    PLBL_PIN(FF2_Q,       "2Q",         "flip-flop 2 output (74LS175)")          \
+    PLBL_PIN(FF3_D,       "3D",         "flip-flop 3 data (74LS175)")            \
+    PLBL_PIN(FF3_Q,       "3Q",         "flip-flop 3 output (74LS175)")          \
+    PLBL_PIN(FF4_D,       "4D",         "flip-flop 4 data (74LS175)")            \
+    PLBL_PIN(FF4_Q,       "4Q",         "flip-flop 4 output (74LS175)")          \
     PLBL_PIN(G,           "G",          "gate/enable")                          \
     PLBL_PIN(I0,          "I0",         "input 0")                              \
     PLBL_PIN(I1,          "I1",         "input 1")                              \
@@ -897,26 +995,51 @@ constexpr PinLabel pin_canonical(PinLabel label) {
     case PinLabel::_BUSAK:       return PinLabel::BUSAK;
     case PinLabel::_BUSRQ:       return PinLabel::BUSRQ;
     case PinLabel::_CAS:         return PinLabel::CAS;
+    case PinLabel::_CAS0:        return PinLabel::CAS0;
+    case PinLabel::_CAS1:        return PinLabel::CAS1;
+    case PinLabel::_CASAD:       return PinLabel::CASAD;
     case PinLabel::_CASRAM_PLA:  return PinLabel::CASRAM_PLA;
+    case PinLabel::_CCLK:        return PinLabel::CCLK;
     case PinLabel::_CE:          return PinLabel::CE;
     case PinLabel::_CHAREN:      return PinLabel::CHAREN;
     case PinLabel::_CHAROM:      return PinLabel::CHAROM;
     case PinLabel::_CLR:         return PinLabel::CLR;
+    case PinLabel::_CPUCLK:      return PinLabel::CPUCLK;
     case PinLabel::_CS:          return PinLabel::CS;
     case PinLabel::_CS0:         return PinLabel::CS0;
     case PinLabel::_CS1:         return PinLabel::CS1;
     case PinLabel::_CS2:         return PinLabel::CS2;
     case PinLabel::_CSR:         return PinLabel::CSR;
+    case PinLabel::_CSYNC:       return PinLabel::CSYNC;
     case PinLabel::_CSW:         return PinLabel::CSW;
+    case PinLabel::_DEC1_G:      return PinLabel::DEC1_G;
+    case PinLabel::_DEC1_Y0:     return PinLabel::DEC1_Y0;
+    case PinLabel::_DEC1_Y1:     return PinLabel::DEC1_Y1;
+    case PinLabel::_DEC1_Y2:     return PinLabel::DEC1_Y2;
+    case PinLabel::_DEC1_Y3:     return PinLabel::DEC1_Y3;
+    case PinLabel::_DEC2_G:      return PinLabel::DEC2_G;
+    case PinLabel::_DEC2_Y0:     return PinLabel::DEC2_Y0;
+    case PinLabel::_DEC2_Y1:     return PinLabel::DEC2_Y1;
+    case PinLabel::_DEC2_Y2:     return PinLabel::DEC2_Y2;
+    case PinLabel::_DEC2_Y3:     return PinLabel::DEC2_Y3;
+    case PinLabel::_DHCLK:       return PinLabel::DHCLK;
+    case PinLabel::_DISPEN:      return PinLabel::DISPEN;
+    case PinLabel::_DLCLK:       return PinLabel::DLCLK;
     case PinLabel::_DTACK:       return PinLabel::DTACK;
     case PinLabel::_E1:          return PinLabel::E1;
     case PinLabel::_E2:          return PinLabel::E2;
+    case PinLabel::_EN244:       return PinLabel::EN244;
     case PinLabel::_EXROM:       return PinLabel::EXROM;
+    case PinLabel::_FF1_Q:       return PinLabel::FF1_Q;
+    case PinLabel::_FF2_Q:       return PinLabel::FF2_Q;
+    case PinLabel::_FF3_Q:       return PinLabel::FF3_Q;
+    case PinLabel::_FF4_Q:       return PinLabel::FF4_Q;
     case PinLabel::_FIRQ:        return PinLabel::FIRQ;
     case PinLabel::_G:           return PinLabel::G;
     case PinLabel::_GAME:        return PinLabel::GAME;
     case PinLabel::_HALT:        return PinLabel::HALT;
     case PinLabel::_HIRAM:       return PinLabel::HIRAM;
+    case PinLabel::_HSYNC:       return PinLabel::HSYNC;
     case PinLabel::_IC:          return PinLabel::RES;    // /IC = reset (Yamaha)
     case PinLabel::_INT:         return PinLabel::INT;
     case PinLabel::_IO:          return PinLabel::IO;
@@ -931,6 +1054,7 @@ constexpr PinLabel pin_canonical(PinLabel label) {
     case PinLabel::_KERNAL:      return PinLabel::KERNAL;
     case PinLabel::_LDS:         return PinLabel::LDS;
     case PinLabel::_LORAM:       return PinLabel::LORAM;
+    case PinLabel::_LPEN:        return PinLabel::LPEN;
     case PinLabel::_M1:          return PinLabel::M1;
     case PinLabel::_ML:          return PinLabel::ML;
     case PinLabel::_MREQ:        return PinLabel::MREQ;
@@ -942,7 +1066,10 @@ constexpr PinLabel pin_canonical(PinLabel label) {
     case PinLabel::_RAS:         return PinLabel::RAS;
     case PinLabel::_RD:          return PinLabel::RD;
     case PinLabel::_RES:         return PinLabel::RES;
+    case PinLabel::_RESET:       return PinLabel::RESET;
     case PinLabel::_RFSH:        return PinLabel::RFSH;
+    case PinLabel::_ROM:         return PinLabel::ROM;
+    case PinLabel::_ROMEN:       return PinLabel::ROMEN;
     case PinLabel::_ROMH:        return PinLabel::ROMH;
     case PinLabel::_ROML:        return PinLabel::ROML;
     case PinLabel::_ROMSEL:      return PinLabel::ROMSEL;
@@ -954,6 +1081,7 @@ constexpr PinLabel pin_canonical(PinLabel label) {
     case PinLabel::_VP:          return PinLabel::VP;
     case PinLabel::_VPA_M68K:    return PinLabel::VPA_M68K;
     case PinLabel::_VPB:         return PinLabel::VPB;
+    case PinLabel::_VSYNC:       return PinLabel::VSYNC;
     case PinLabel::_WAIT:        return PinLabel::WAIT;
     case PinLabel::_WE:          return PinLabel::WE;
     case PinLabel::_WR:          return PinLabel::WR;

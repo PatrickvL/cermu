@@ -659,8 +659,11 @@ if(BUILD_GUI)
         src/chip/sound/sn76489/sn76489_gui.cpp
         src/chip/sound/ym_fm/ym_fm_gui.cpp
         src/chip/video/spectrum_ula/ferranti_ula_gui.cpp
+        src/chip/video/amstrad_gate_array/amstrad_gate_array_gui.cpp
+        src/chip/video/bbc_vidproc/bbc_vidproc_gui.cpp
         src/chip/video/mc6847/mc6847_gui.cpp
         src/chip/video/tms9918/tms9918_gui.cpp
+        src/chip/input/keyboard_encoder_gui.cpp
         src/systems/nes/cartridge/nes_cartridge_gui.cpp
     )
     
@@ -711,8 +714,11 @@ set(GUI_STUB_SOURCES
     src/chip/sound/sn76489/sn76489_gui.cpp
     src/chip/sound/ym_fm/ym_fm_gui.cpp
     src/chip/video/spectrum_ula/ferranti_ula_gui.cpp
+    src/chip/video/amstrad_gate_array/amstrad_gate_array_gui.cpp
+    src/chip/video/bbc_vidproc/bbc_vidproc_gui.cpp
     src/chip/video/mc6847/mc6847_gui.cpp
     src/chip/video/tms9918/tms9918_gui.cpp
+    src/chip/input/keyboard_encoder_gui.cpp
     src/systems/nes/cartridge/nes_cartridge_gui.cpp
 )
 
