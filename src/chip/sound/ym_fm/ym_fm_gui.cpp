@@ -61,6 +61,8 @@ void ym_fm_t<Traits>::register_debug_fields() {
     }, 8);
 
     // --- Timers ---
+    // Timer B is visible in the DECL register walk (REG TIMER_B).
+    // Timer A combines TIMER_A_H (8 bits) + TIMER_A_L low 2 bits → 10-bit value.
     r.category("Timers");
     r.value("Timer A", +[](const ChipBase* c) -> uint32_t {
         auto* s = static_cast<S*>(c);
@@ -68,9 +70,6 @@ void ym_fm_t<Traits>::register_debug_fields() {
                     | (s->regs_[ym_fm::reg::TIMER_A_L_REG] & 0x03);
         return ta;
     }, 10);
-    r.value("Timer B", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->regs_[ym_fm::reg::TIMER_B_REG];
-    }, 8);
 
     // --- FM Channels (summary: F-Num/Block from registers) ---
     // Per-channel frequency/algorithm are in the hardware register file,
@@ -148,27 +147,8 @@ void ym_fm_t<Traits>::register_debug_fields() {
         }, 11);
     }
 
-    // --- DAC (OPN2 only) ---
-    if constexpr (Traits.has_dac) {
-        r.category("DAC");
-        r.value("DAC Value", +[](const ChipBase* c) -> uint32_t {
-            return static_cast<S*>(c)->regs_[ym_fm::reg::DAC_DATA_REG];
-        }, 8);
-        r.flag("DAC Enabled", +[](const ChipBase* c) -> uint32_t {
-            return (static_cast<S*>(c)->regs_[ym_fm::reg::DAC_EN_REG] & 0x80) ? 1 : 0;
-        });
-    }
-
-    // --- LFO (if present) ---
-    if constexpr (Traits.has_lfo) {
-        r.category("LFO");
-        r.value("LFO Rate", +[](const ChipBase* c) -> uint32_t {
-            return static_cast<S*>(c)->regs_[ym_fm::reg::LFO_REG] & 0x07;
-        }, 3);
-        r.flag("LFO Enable", +[](const ChipBase* c) -> uint32_t {
-            return (static_cast<S*>(c)->regs_[ym_fm::reg::LFO_REG] & 0x08) ? 1 : 0;
-        });
-    }
+    // DAC Value/Enabled (OPN2) and LFO Rate/Enable are visible in the
+    // DECL register walk (REG DAC_DATA, FLD DAC_ENABLE, FLD LFO_EN/LFO_RATE).
 }
 
 // Explicit template instantiation — debug fields

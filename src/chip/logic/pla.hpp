@@ -248,35 +248,9 @@ private:
 
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
-        using PLA = const PLA906114;
+        // All input/output flag fields are rendered by the DECL walk.
         debug_registry_
             .set_decl_entries(PLA906114_DECL_ENTRIES.data(), PLA906114_DECL_ENTRIES.size());
-
-        static const char* const input_lo_labels[] = {
-            "A13", "A14", "A15", "#VA14", "#CHAREN", "#HIRAM", "#LORAM", "#CAS"
-        };
-        static const char* const input_hi_labels[] = {
-            "VA12", "VA13", "#GAME", "#EXROM", "R/#W", "#AEC", "BA", "A12"
-        };
-        static const char* const output_labels[] = {
-            "#ROMH", "#ROML", "#I/O", "GR/#W", "#CHARROM", "#KERNAL", "#BASIC", "#CASRAM"
-        };
-
-        debug_registry_
-            .category("906114-01 — Inputs I0..I7")
-            .bitfield("I0..I7", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<PLA*>(c)->regs_[pla906114::reg::INPUTS_LO];
-            }, 8, input_lo_labels);
-        debug_registry_
-            .category("906114-01 — Inputs I8..I15")
-            .bitfield("I8..I15", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<PLA*>(c)->regs_[pla906114::reg::INPUTS_HI];
-            }, 8, input_hi_labels);
-        debug_registry_
-            .category("906114-01 — Outputs F0..F7")
-            .bitfield("F0..F7", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<PLA*>(c)->regs_[pla906114::reg::OUTPUTS];
-            }, 8, output_labels);
     }
 #endif
 };

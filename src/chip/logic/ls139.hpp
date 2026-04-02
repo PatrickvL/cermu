@@ -93,65 +93,57 @@ public:
 
     /// Decode half A.
     uint8_t decode_a(uint8_t inputs) noexcept {
-        inputs_a_ = inputs & 0x07;
-        regs_[ls139::reg::INPUTS_A] = inputs_a_;
+        regs_[ls139::reg::INPUTS_A] = inputs & 0x07;
 
         if (inputs & 0x04) {  // _G HIGH → disabled
-            outputs_a_ = 0x0F;
+            regs_[ls139::reg::OUTPUTS_A] = 0x0F;
         } else {
-            outputs_a_ = ~(1u << (inputs & 0x03)) & 0x0F;
+            regs_[ls139::reg::OUTPUTS_A] = ~(1u << (inputs & 0x03)) & 0x0F;
         }
-        regs_[ls139::reg::OUTPUTS_A] = outputs_a_;
-        return outputs_a_;
+        return regs_[ls139::reg::OUTPUTS_A];
     }
 
     /// Decode half B.
     uint8_t decode_b(uint8_t inputs) noexcept {
-        inputs_b_ = inputs & 0x07;
-        regs_[ls139::reg::INPUTS_B] = inputs_b_;
+        regs_[ls139::reg::INPUTS_B] = inputs & 0x07;
 
         if (inputs & 0x04) {  // _G HIGH → disabled
-            outputs_b_ = 0x0F;
+            regs_[ls139::reg::OUTPUTS_B] = 0x0F;
         } else {
-            outputs_b_ = ~(1u << (inputs & 0x03)) & 0x0F;
+            regs_[ls139::reg::OUTPUTS_B] = ~(1u << (inputs & 0x03)) & 0x0F;
         }
-        regs_[ls139::reg::OUTPUTS_B] = outputs_b_;
-        return outputs_b_;
+        return regs_[ls139::reg::OUTPUTS_B];
     }
 
     /// Decode half A and return selected output index (0–3), or -1 if disabled.
     int decode_select_a(uint8_t inputs) noexcept {
         decode_a(inputs);
-        return (outputs_a_ != 0x0F) ? (inputs & 0x03) : -1;
+        return (regs_[ls139::reg::OUTPUTS_A] != 0x0F) ? (inputs & 0x03) : -1;
     }
 
     /// Decode half B and return selected output index (0–3), or -1 if disabled.
     int decode_select_b(uint8_t inputs) noexcept {
         decode_b(inputs);
-        return (outputs_b_ != 0x0F) ? (inputs & 0x03) : -1;
+        return (regs_[ls139::reg::OUTPUTS_B] != 0x0F) ? (inputs & 0x03) : -1;
     }
 
     // ── Output queries ──────────────────────────────────────────────────
 
-    uint8_t ya_all()              const { return outputs_a_; }
-    uint8_t yb_all()              const { return outputs_b_; }
-    bool    ya_active(uint8_t n)  const { return !(outputs_a_ & (1u << (n & 3))); }
-    bool    yb_active(uint8_t n)  const { return !(outputs_b_ & (1u << (n & 3))); }
-    int     active_output_a()     const { return (outputs_a_ != 0x0F) ? (inputs_a_ & 0x03) : -1; }
-    int     active_output_b()     const { return (outputs_b_ != 0x0F) ? (inputs_b_ & 0x03) : -1; }
+    uint8_t ya_all()              const { return regs_[ls139::reg::OUTPUTS_A]; }
+    uint8_t yb_all()              const { return regs_[ls139::reg::OUTPUTS_B]; }
+    bool    ya_active(uint8_t n)  const { return !(regs_[ls139::reg::OUTPUTS_A] & (1u << (n & 3))); }
+    bool    yb_active(uint8_t n)  const { return !(regs_[ls139::reg::OUTPUTS_B] & (1u << (n & 3))); }
+    int     active_output_a()     const { return (regs_[ls139::reg::OUTPUTS_A] != 0x0F) ? (regs_[ls139::reg::INPUTS_A] & 0x03) : -1; }
+    int     active_output_b()     const { return (regs_[ls139::reg::OUTPUTS_B] != 0x0F) ? (regs_[ls139::reg::INPUTS_B] & 0x03) : -1; }
 
     // ── ChipBase overrides ──────────────────────────────────────────────
 
     void reset() override {
-        inputs_a_  = 0x04;  // _G = 1 → disabled at power-on
-        inputs_b_  = 0x04;
-        outputs_a_ = 0x0F;  // all inactive
-        outputs_b_ = 0x0F;
         if (num_regs_ >= LS139_NUM_REGS) {
-            regs_[ls139::reg::INPUTS_A]  = inputs_a_;
-            regs_[ls139::reg::OUTPUTS_A] = outputs_a_;
-            regs_[ls139::reg::INPUTS_B]  = inputs_b_;
-            regs_[ls139::reg::OUTPUTS_B] = outputs_b_;
+            regs_[ls139::reg::INPUTS_A]  = 0x04;  // _G = 1 → disabled at power-on
+            regs_[ls139::reg::INPUTS_B]  = 0x04;
+            regs_[ls139::reg::OUTPUTS_A] = 0x0F;  // all inactive
+            regs_[ls139::reg::OUTPUTS_B] = 0x0F;
         }
     }
 
@@ -161,52 +153,21 @@ public:
 #endif
 
 private:
-    uint8_t inputs_a_  = 0x04;
-    uint8_t outputs_a_ = 0x0F;
-    uint8_t inputs_b_  = 0x04;
-    uint8_t outputs_b_ = 0x0F;
-
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
+        // Input/output flag fields are rendered by the DECL walk.
         debug_registry_
-            .category("74LS139 — Half A Inputs")
-            .flag("1A (Select 0)", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<const LS139*>(c)->inputs_a_ & 0x01;
-            })
-            .flag("1B (Select 1)", +[](const ChipBase* c) -> uint32_t {
-                return (static_cast<const LS139*>(c)->inputs_a_ >> 1) & 1;
-            })
-            .flag("1_G (Enable)", +[](const ChipBase* c) -> uint32_t {
-                return (static_cast<const LS139*>(c)->inputs_a_ >> 2) & 1;
-            })
+            .set_decl_entries(LS139_DECL_ENTRIES.data(), LS139_DECL_ENTRIES.size());
 
-            .category("74LS139 — Half A Outputs (active-low)")
+        debug_registry_
+            .category("74LS139 — Derived")
             .value("Active Output A", +[](const ChipBase* c) -> uint32_t {
                 int out = static_cast<const LS139*>(c)->active_output_a();
                 return out < 0 ? 0xFF : uint32_t(out);
             })
-            .value("1_Y3..1_Y0", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<const LS139*>(c)->outputs_a_;
-            })
-
-            .category("74LS139 — Half B Inputs")
-            .flag("2A (Select 0)", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<const LS139*>(c)->inputs_b_ & 0x01;
-            })
-            .flag("2B (Select 1)", +[](const ChipBase* c) -> uint32_t {
-                return (static_cast<const LS139*>(c)->inputs_b_ >> 1) & 1;
-            })
-            .flag("2_G (Enable)", +[](const ChipBase* c) -> uint32_t {
-                return (static_cast<const LS139*>(c)->inputs_b_ >> 2) & 1;
-            })
-
-            .category("74LS139 — Half B Outputs (active-low)")
             .value("Active Output B", +[](const ChipBase* c) -> uint32_t {
                 int out = static_cast<const LS139*>(c)->active_output_b();
                 return out < 0 ? 0xFF : uint32_t(out);
-            })
-            .value("2_Y3..2_Y0", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<const LS139*>(c)->outputs_b_;
             });
     }
 #endif

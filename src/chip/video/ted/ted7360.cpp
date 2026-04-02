@@ -1571,6 +1571,7 @@ void ted7360_t::register_debug_fields() {
     wire_debug_registers(TED_REG_INFO, 0xFF00);
     r.set_decl_entries(TED_DECL_ENTRIES.data(), TED_DECL_ENTRIES.size());
     const uint32_t* palette = get_palette();
+    r.set_palette(palette, 128);
 
     static constexpr const char* gfx_mode_names[] = {
         "Standard Text", "Multicolor Text", "Standard Bitmap",
@@ -1655,12 +1656,7 @@ void ted7360_t::register_debug_fields() {
      .flag("Border Main FF", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->border.main_ff; })
      .flag("Border Vert FF", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->border.vert_ff; });
 
-    // ---- Colors (palette swatches — DataKind::Color deferred) ----
-    r.category("Colors", false)
-     .color("BG0 ($FF15)", COLOR_BG0, palette, 128)
-     .color("BG1 ($FF16)", COLOR_BG1, palette, 128)
-     .color("BG2 ($FF17)", COLOR_BG2, palette, 128)
-     .color("BG3 ($FF18)", COLOR_BG3, palette, 128)
-     .color("Border ($FF19)", BORDER, palette, 128);
+    // Color registers (BG0-BG3, Border) are rendered with palette swatches
+    // by the DECL walk (REG entries with DataKind::Color + set_palette()).
 }
 #endif // CERMU_HAS_CHIP_DEBUG

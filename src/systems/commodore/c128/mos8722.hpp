@@ -268,12 +268,13 @@ struct mos8722_t : public IoChipBase {
                 break;
 
             case MCR:
-                // Bit 6: C64 mode trigger — latches on write, cannot be cleared
-                // by software (only by hardware reset)
-                if (data & mos8722::mcr::C64_MODE) {
-                    c64_mode_requested_ = true;
+                // Bit 6: C64 mode trigger — sticky: once set, only cleared by
+                // reset or explicit clear_c64_mode_request().  Software writes
+                // cannot clear it.
+                if (old & mos8722::mcr::C64_MODE) {
+                    regs_[MCR] |= mos8722::mcr::C64_MODE;
                 }
-                if (data != old) bank_config_dirty_ = true;
+                if (regs_[MCR] != old) bank_config_dirty_ = true;
                 break;
 
             case RCR:
@@ -351,11 +352,11 @@ struct mos8722_t : public IoChipBase {
         return (regs_[mos8722::reg::CR] & mos8722::cr::HIGH_ROM_MASK) >> mos8722::cr::HIGH_ROM_SHIFT;
     }
 
-    /// True if C64 mode has been requested (latched, only cleared by reset).
-    bool c64_mode_requested() const { return c64_mode_requested_; }
+    /// True if C64 mode has been requested (MCR bit 6, sticky until reset/clear).
+    bool c64_mode_requested() const { return (regs_[mos8722::reg::MCR] & mos8722::mcr::C64_MODE) != 0; }
 
     /// Clear C64 mode request (called by system after entering C64 mode).
-    void clear_c64_mode_request() { c64_mode_requested_ = false; }
+    void clear_c64_mode_request() { regs_[mos8722::reg::MCR] &= ~mos8722::mcr::C64_MODE; }
 
     /// True if bank config has changed since last acknowledgement.
     bool bank_config_dirty() const { return bank_config_dirty_; }
@@ -407,7 +408,6 @@ struct mos8722_t : public IoChipBase {
     }
 
 private:
-    bool c64_mode_requested_ = false;
     bool bank_config_dirty_  = true;
 
 #ifdef CERMU_HAS_CHIP_DEBUG
@@ -417,38 +417,17 @@ private:
         wire_debug_registers(MOS8722_REG_INFO, 0xD500);
         debug_registry_.set_decl_entries(MOS8722_DECL_ENTRIES.data(), MOS8722_DECL_ENTRIES.size());
 
-        debug_registry_.category("Bank State")
-            .value("RAM Bank", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<M*>(c)->ram_bank();
-            })
-            .flag("BASIC LO Enabled", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<M*>(c)->basic_lo_rom_enabled() ? 1 : 0;
-            })
-            .flag("I/O Visible", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<M*>(c)->io_visible() ? 1 : 0;
-            })
-            .value("Mid-Hi Select", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<M*>(c)->mid_hi_select();
-            })
-            .value("High ROM Select", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<M*>(c)->high_rom_select();
-            })
-            .flag("C64 Mode Req", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<M*>(c)->c64_mode_requested_ ? 1 : 0;
-            })
+        // CR bitfields (RAM Bank, BASIC LO, I/O Select, Mid-Hi, High ROM)
+        // RCR bitfields (Bottom/Top Enable) and MCR C64 Mode flag are in the
+        // DECL register walk.  Only internal latches and derived values remain.
+        debug_registry_.category("Internal State")
             .flag("Config Dirty", +[](const ChipBase* c) -> uint32_t {
                 return static_cast<M*>(c)->bank_config_dirty_ ? 1 : 0;
             });
 
-        debug_registry_.category("Common RAM", false)
-            .flag("Bottom Enable", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<M*>(c)->bottom_common_enabled() ? 1 : 0;
-            })
+        debug_registry_.category("Common RAM (derived)", false)
             .value("Bottom Size", +[](const ChipBase* c) -> uint32_t {
                 return static_cast<M*>(c)->bottom_common_size();
-            })
-            .flag("Top Enable", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<M*>(c)->top_common_enabled() ? 1 : 0;
             })
             .value("Top Start", +[](const ChipBase* c) -> uint32_t {
                 return static_cast<M*>(c)->top_common_start();
