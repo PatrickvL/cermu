@@ -61,25 +61,26 @@ namespace reg {
 //              01 = Internal function ROM
 //              10 = External function ROM
 //              11 = RAM
-//   Bits 1-0 : $4000-$7FFF mid-low ROM select
-//              00 = BASIC lo ROM
-//              01 = Internal function ROM
-//              10 = External function ROM
-//              11 = RAM
+//   Bit 1    : $4000-$7FFF BASIC LO ROM select
+//              0 = BASIC lo ROM visible
+//              1 = RAM
+//   Bit 0    : $D000-$DFFF I/O / character ROM select
+//              0 = I/O devices visible
+//              1 = Character ROM (or ROM from bits 5-4)
 namespace cr {
-    inline constexpr uint8_t CPU_SPEED    = 0x80;  // Bit 7
-    inline constexpr uint8_t RAM_BANK     = 0x40;  // Bit 6
-    inline constexpr uint8_t HIGH_ROM_MASK = 0x30; // Bits 5-4
+    inline constexpr uint8_t CPU_SPEED      = 0x80;  // Bit 7
+    inline constexpr uint8_t RAM_BANK       = 0x40;  // Bit 6
+    inline constexpr uint8_t HIGH_ROM_MASK  = 0x30;  // Bits 5-4
     inline constexpr uint8_t HIGH_ROM_SHIFT = 4;
-    inline constexpr uint8_t MID_HI_MASK  = 0x0C;  // Bits 3-2
-    inline constexpr uint8_t MID_HI_SHIFT = 2;
-    inline constexpr uint8_t MID_LO_MASK  = 0x03;  // Bits 1-0
-    inline constexpr uint8_t MID_LO_SHIFT = 0;
-    // ROM select values (for each 2-bit field)
-    inline constexpr uint8_t ROM_DEFAULT  = 0;  // Default ROM (BASIC/Kernal/Editor)
-    inline constexpr uint8_t ROM_INT_FUNC = 1;  // Internal function ROM
-    inline constexpr uint8_t ROM_EXT_FUNC = 2;  // External function ROM
-    inline constexpr uint8_t ROM_RAM      = 3;  // RAM (no ROM overlay)
+    inline constexpr uint8_t MID_HI_MASK   = 0x0C;  // Bits 3-2
+    inline constexpr uint8_t MID_HI_SHIFT  = 2;
+    inline constexpr uint8_t BASIC_LO       = 0x02;  // Bit 1: 0 = BASIC LO ROM, 1 = RAM
+    inline constexpr uint8_t IO_SELECT      = 0x01;  // Bit 0: 0 = I/O visible, 1 = char ROM
+    // ROM select values (for 2-bit HIGH_ROM and MID_HI fields)
+    inline constexpr uint8_t ROM_DEFAULT   = 0;  // Default ROM (BASIC/Kernal/Editor)
+    inline constexpr uint8_t ROM_INT_FUNC  = 1;  // Internal function ROM
+    inline constexpr uint8_t ROM_EXT_FUNC  = 2;  // External function ROM
+    inline constexpr uint8_t ROM_RAM       = 3;  // RAM (no ROM overlay)
 } // namespace cr
 
 // Mode Configuration Register (MCR, $D505) bit fields
@@ -142,7 +143,8 @@ inline constexpr uint8_t VERSION_8722 = 0x00;
       FLD(CR,  CR_BANK,     6:6, "RAM bank select",         Value, 0, 0)           \
       FLD(CR,  CR_HIGH_ROM, 5:4, "High ROM ($C000+)",       Value, 0, 0)           \
       FLD(CR,  CR_MID_HI,   3:2, "Mid-hi ROM ($8000+)",     Value, 0, 0)           \
-      FLD(CR,  CR_MID_LO,   1:0, "Mid-lo ROM ($4000+)",     Value, 0, 0)           \
+      FLD(CR,  CR_BASIC_LO, 1:1, "BASIC LO (0=ROM)",        Flag, 0, 0)            \
+      FLD(CR,  CR_IO_SEL,   0:0, "I/O sel (0=I/O)",         Flag, 0, 0)            \
     REG(0x01, PCR_A,   "Preconfiguration A")                                       \
     REG(0x02, PCR_B,   "Preconfiguration B")                                       \
     REG(0x03, PCR_C,   "Preconfiguration C")                                       \
@@ -328,9 +330,15 @@ struct mos8722_t : public IoChipBase {
         return (regs_[mos8722::reg::CR] & mos8722::cr::RAM_BANK) ? 1 : 0;
     }
 
-    /// ROM selection for $4000-$7FFF (0=BASIC lo, 1=int func, 2=ext func, 3=RAM).
-    uint8_t mid_lo_select() const {
-        return regs_[mos8722::reg::CR] & mos8722::cr::MID_LO_MASK;
+    /// True if BASIC LO ROM is visible at $4000-$7FFF (CR bit 1 = 0).
+    bool basic_lo_rom_enabled() const {
+        return (regs_[mos8722::reg::CR] & mos8722::cr::BASIC_LO) == 0;
+    }
+
+    /// True if I/O devices are visible at $D000-$DFFF (CR bit 0 = 0).
+    /// When false, character ROM (or ROM from bits 5-4) is mapped there.
+    bool io_visible() const {
+        return (regs_[mos8722::reg::CR] & mos8722::cr::IO_SELECT) == 0;
     }
 
     /// ROM selection for $8000-$BFFF.
@@ -413,8 +421,11 @@ private:
             .value("RAM Bank", +[](const ChipBase* c) -> uint32_t {
                 return static_cast<M*>(c)->ram_bank();
             })
-            .value("Mid-Lo Select", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<M*>(c)->mid_lo_select();
+            .flag("BASIC LO Enabled", +[](const ChipBase* c) -> uint32_t {
+                return static_cast<M*>(c)->basic_lo_rom_enabled() ? 1 : 0;
+            })
+            .flag("I/O Visible", +[](const ChipBase* c) -> uint32_t {
+                return static_cast<M*>(c)->io_visible() ? 1 : 0;
             })
             .value("Mid-Hi Select", +[](const ChipBase* c) -> uint32_t {
                 return static_cast<M*>(c)->mid_hi_select();

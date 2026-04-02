@@ -283,3 +283,6 @@ KeyboardMapper* create_vic20_keyboard_mapper(commodore_keyboard_t* keyboard);
 
 // Create a mapper configured for the C16/Plus4 keyboard
 KeyboardMapper* create_c16_keyboard_mapper(commodore_keyboard_t* keyboard);
+
+// Create a mapper configured for the C128 keyboard
+KeyboardMapper* create_c128_keyboard_mapper(commodore_keyboard_t* keyboard);

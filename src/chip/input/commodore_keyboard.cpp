@@ -68,7 +68,7 @@ void commodore_keyboard_t::reset() {
 
     // Initialize all contacts as open (no keys pressed)
     for (int r = 0; r < MAX_KEYBOARD_ROWS; r++) {
-        row_open_contacts[r] = (r < rows) ? (uint8_t)((1 << cols) - 1) : 0x00;
+        row_open_contacts[r] = (r < rows) ? (uint16_t)((1 << cols) - 1) : 0x0000;
     }
     for (int c = 0; c < MAX_KEYBOARD_COLS; c++) {
         col_open_contacts[c] = (c < cols) ? (uint16_t)((1 << rows) - 1) : 0x0000;
@@ -326,7 +326,7 @@ void commodore_keyboard_t::print_matrix() {
 
     log_info("\nRow Contact States:\n");
     for (int r = 0; r < rows; r++) {
-        log_info("Row %2d: 0x%02X ", r, row_open_contacts[r]);
+        log_info("Row %2d: 0x%04X ", r, row_open_contacts[r]);
     }
     log_info("\nCol Contact States:\n");
     for (int c = 0; c < cols; c++) {

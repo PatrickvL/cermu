@@ -186,6 +186,13 @@ typedef uint32_t emu_key_t;
 #define EMUKEY_CBM_RESTORE       515   // RESTORE (NMI trigger, not in matrix)
 #define EMUKEY_CBM_PI            516   // π (shifted ↑ on C64/VIC-20) — character marker
 
+// C128-specific keys (no host equivalent)
+#define EMUKEY_CBM_HELP          520   // HELP key (C128)
+#define EMUKEY_CBM_LINE_FEED     521   // LINE FEED key (C128)
+#define EMUKEY_CBM_40_80_DISPLAY 522   // 40/80 DISPLAY key (C128, directly reads 8722 MMU)
+#define EMUKEY_CBM_NO_SCROLL     523   // NO SCROLL key (C128)
+#define EMUKEY_CBM_ALT           524   // ALT key (C128)
+
 // Commodore-specific aliases for identity-mapped keys.
 // These share the same numeric value as their host equivalent but give
 // Commodore-meaningful names for use in Commodore-context code.

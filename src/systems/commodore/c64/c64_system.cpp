@@ -1542,7 +1542,7 @@ static uint8_t c64_cia1_port_a_read_with_joystick(void* context, uint8_t port_a_
         uint8_t row_select = ~port_b_output;
         for (int row = 0; row < 8; row++) {
             if (row_select & (1 << row)) {
-                col_state &= c64->keyboard->row_open_contacts[row];
+                col_state &= static_cast<uint8_t>(c64->keyboard->row_open_contacts[row]);
             }
         }
     }

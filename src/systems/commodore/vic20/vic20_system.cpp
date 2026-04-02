@@ -1204,7 +1204,7 @@ uint8_t VIC20System::vic20_via2_port_a_read(void* context, uint8_t port_a_output
     for (int col = 0; col < 8; col++) {
         if (column_select & (1 << col)) {
             // This column is selected - AND in the row contacts
-            row_state &= sys->keyboard_->row_open_contacts[col];
+            row_state &= static_cast<uint8_t>(sys->keyboard_->row_open_contacts[col]);
         }
     }
     return row_state;

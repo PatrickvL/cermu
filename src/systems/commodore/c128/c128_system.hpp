@@ -33,6 +33,7 @@
 
 #include "systems/commodore/c128/c128_constants.hpp"
 #include "systems/commodore/commodore_system.hpp"
+#include "systems/commodore/c128/c128_keyboard_matrix.hpp"
 #include "core/board.hpp"
 #include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
@@ -79,6 +80,8 @@
     V(ctx, ROMChip,    editor_rom,  0xC000,   4096, 0,      1, "Editor ROM",      "c128_editor.rom|editor.rom|kernal.318020-05.bin@0") \
     V(ctx, ROMChip,    char_rom,    0xD000,   8192, 0,      1, "Character ROM",   "characters.390059-01.bin|c128_chargen.rom|chargen.rom|characters.rom") \
     V(ctx, ROMChip,    kernal_rom,  0xE000,   8192, 0,      1, "Kernal ROM",      "c128_kernal.rom|kernal.rom|kernal.318020-05.bin@8192") \
+    V(ctx, ROMChip,    c64_basic,   0xA000,   8192, 0,      1, "C64 BASIC",       "basic64-901226-01.bin|basic.901226-01.bin|c64_basic.rom") \
+    V(ctx, ROMChip,    c64_kernal,  0xE000,   8192, 0,      1, "C64 Kernal",      "kernal64-901227-03.bin|kernal.901227-03.bin|c64_kernal.rom") \
     V(ctx, RAMChip,    vdc_vram,    0x0000,  16384, 0,      1, "VDC VRAM",        nullptr) \
     V(ctx, ZilogZ80A,  z80,         0,            0, 0,      0, "Zilog Z80A",      nullptr) \
     V(ctx, mos8566_t,  vic_iie,     0xD000,       0, 0,      0, "MOS 8566 VIC-IIe", nullptr) \
@@ -101,8 +104,8 @@ inline constexpr auto make_c128_manifest() {
     for (auto& s : m.chips)
         if (s.overlay_group == 1) s.bank_size = s.size_bytes;
     // MMIO mirror ranges
-    m.chips[10].bank_size = 0x400;   // VIC-IIe: mirrors across $D000-$D3FF
-    m.chips[11].bank_size = 0x400;   // SID: mirrors across $D400-$D7FF
+    m.chips[12].bank_size = 0x400;   // VIC-IIe: mirrors across $D000-$D3FF
+    m.chips[13].bank_size = 0x400;   // SID: mirrors across $D400-$D7FF
     return m;
 }
 inline constexpr auto kC128Chips = make_c128_manifest();
@@ -146,6 +149,9 @@ public:
 
     void* get_video_port_ptr() override { return video_port_.get(); }
 
+    void render_system_menu_items() override;
+    const char* get_mode_label() const override;
+
 protected:
     // ── CommodoreSystem hooks ────────────────────────────────────
     bool is_basic_ready() const override;
@@ -160,6 +166,8 @@ private:
     ROMChip* editor_rom_   = nullptr;
     ROMChip* kernal_rom_   = nullptr;
     ROMChip* char_rom_     = nullptr;
+    ROMChip* c64_basic_rom_  = nullptr;  // C64 BASIC V2 (8KB, for C64 mode)
+    ROMChip* c64_kernal_rom_ = nullptr;  // C64 KERNAL (8KB, for C64 mode)
     RAMChip* vdc_vram_     = nullptr;    // 16KB VDC video RAM
 
     // ── Board + bus ──────────────────────────────────────────────────────
@@ -180,7 +188,6 @@ private:
     enum class CPUMode : uint8_t { MODE_8502, MODE_Z80 };
     CPUMode  cpu_mode_ = CPUMode::MODE_8502;
     bool     c64_mode_ = false;          // C64 compatibility mode
-
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t default_state_ = 0;     // Pull-up defaults (reset each tick)
     bus_state_t pins_      = C128_BUS_DEFAULT_STATE;
@@ -194,7 +201,12 @@ private:
     void configure_bus_memory_map();
     bool load_roms();
     void update_bank_config();           // Apply MMU CR + RCR to page tables
+    void enter_c64_mode();               // Transition to C64 compatibility mode
     void switch_cpu_mode(CPUMode mode);  // Toggle between 8502 and Z80
     void init_io_dispatch();             // Set up CS-tick indexed sub-table for I/O page
     static void cpu_banking_callback(void* ctx, uint8_t banking_state);
+
+    // CIA1 keyboard matrix scan callbacks
+    static uint8_t c128_cia1_port_a_read(void* context, uint8_t port_a_output);
+    static uint8_t c128_cia1_port_b_read(void* context, uint8_t port_b_output);
 };
