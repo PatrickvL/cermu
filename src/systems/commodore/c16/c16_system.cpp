@@ -1117,7 +1117,7 @@ uint8_t Commodore264System<V>::ted_keyboard_scan(void* user_data, uint8_t column
     uint8_t result = 0xFF;
     for (int row = 0; row < 8; row++) {
         if (!(row_select & (1 << row))) {
-            result &= sys->keyboard_->row_open_contacts[row];
+            result &= static_cast<uint8_t>(sys->keyboard_->row_open_contacts[row]);
         }
     }
     return result;

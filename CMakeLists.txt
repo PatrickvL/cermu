@@ -549,6 +549,7 @@ set(SYSTEM_SOURCES
 
     # Commodore 128
     src/systems/commodore/c128/c128_system.cpp
+    src/systems/commodore/c128/c128_keyboard_matrix.cpp
 
     # VTech Laser / VZ series (VZ200, VZ300)
     src/systems/vtech_vz/vtech_vz_system.cpp

@@ -10,8 +10,13 @@
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
+#include "core/input/emu_key_sdl_map.hpp"
+#include "devices/keyboard/commodore_keyboard_device.hpp"
 #include <cstring>
 #include <cstdio>
+#ifdef CERMU_HAS_GUI
+#include <imgui.h>
+#endif
 
 // ============================================================================
 // HARDWARE TRAITS
@@ -107,6 +112,69 @@ bool C128System::apply_configuration() {
 }
 
 // ============================================================================
+// CIA1 KEYBOARD MATRIX CALLBACKS
+// ============================================================================
+//
+// The C128 scans an 11×8 keyboard matrix through CIA1:
+//   Columns 0-7:  selected by CIA1 Port A output (active-low, same as C64)
+//   Columns 8-10: selected by VIC-IIe register $D02F bits 0-2 (active-low)
+//
+// Forward scan: KERNAL writes to Port A → reads Port B (row contacts)
+// Reverse scan: some routines write to Port B → read Port A (column contacts)
+//
+// Reverse scan only returns columns 0-7 (8-bit Port A); extended columns
+// are not observable in reverse direction (matching VICE behavior).
+
+/// CIA1 Port A read — reverse scan: given row select from Port B, return column contacts.
+uint8_t C128System::c128_cia1_port_a_read(void* context, uint8_t /*port_a_output*/) {
+    auto* sys = static_cast<C128System*>(context);
+    if (!sys->keyboard_) return 0xFF;
+
+    // Port B output selects rows (active-low); we narrow to columns 0-7
+    uint8_t port_b_output = sys->board_.cia1.port_b_value;
+    uint8_t row_select = ~port_b_output;
+    uint8_t col_state = 0xFF;
+    for (int row = 0; row < 8; row++) {
+        if (row_select & (1 << row)) {
+            // row_open_contacts[row] holds column bitmask; truncate to 8 bits
+            // (reverse scan only returns columns 0-7)
+            col_state &= static_cast<uint8_t>(sys->keyboard_->row_open_contacts[row]);
+        }
+    }
+    return col_state;
+}
+
+/// CIA1 Port B read — forward scan: given column select from Port A + extended mask,
+/// return row contacts.
+uint8_t C128System::c128_cia1_port_b_read(void* context, uint8_t /*port_b_output*/) {
+    auto* sys = static_cast<C128System*>(context);
+    if (!sys->keyboard_) return 0xFF;
+
+    uint8_t port_a_value = sys->board_.cia1.port_a_value;
+    uint8_t column_select = ~port_a_value;
+    uint8_t row_state = 0xFF;
+
+    // Standard columns 0-7 via CIA Port A
+    for (int col = 0; col < 8; col++) {
+        if (column_select & (1 << col)) {
+            row_state &= static_cast<uint8_t>(sys->keyboard_->col_open_contacts[col]);
+        }
+    }
+
+    // Extended columns 8-10 via VIC-IIe register $D02F (active-low bits 0-2).
+    // On C128 hardware, the VIC-IIe drives these signals directly to the
+    // keyboard matrix; we read the register value each scan.
+    uint8_t ext_mask = sys->board_.vic_iie.regs_[0x2F];
+    for (int i = 0; i < 3; i++) {
+        if (!(ext_mask & (1 << i))) {
+            row_state &= static_cast<uint8_t>(sys->keyboard_->col_open_contacts[8 + i]);
+        }
+    }
+
+    return row_state;
+}
+
+// ============================================================================
 // LIFECYCLE
 // ============================================================================
 
@@ -126,12 +194,14 @@ bool C128System::initialize() {
     board_.create_chips(&pins_);
     board_.apply(bus_);
 
-    basic_lo_rom_ = &board_.basic_lo;
-    basic_hi_rom_ = &board_.basic_hi;
-    editor_rom_   = &board_.editor_rom;
-    kernal_rom_   = &board_.kernal_rom;
-    char_rom_     = &board_.char_rom;
-    vdc_vram_     = &board_.vdc_vram;
+    basic_lo_rom_    = &board_.basic_lo;
+    basic_hi_rom_    = &board_.basic_hi;
+    editor_rom_      = &board_.editor_rom;
+    kernal_rom_      = &board_.kernal_rom;
+    char_rom_        = &board_.char_rom;
+    c64_basic_rom_   = &board_.c64_basic;
+    c64_kernal_rom_  = &board_.c64_kernal;
+    vdc_vram_        = &board_.vdc_vram;
 
     configure_bus_memory_map();
     init_io_dispatch();
@@ -166,6 +236,9 @@ bool C128System::initialize() {
     };
     cia2.port_a_callback_context = this;
 
+    // CIA1 interrupt line → IRQ (keyboard scan, cursor blink, timer events)
+    cia1.configured_interrupt_bit = BUS_IRQ_BIT;
+
     // CIA2 interrupt line → NMI
     cia2.configured_interrupt_bit = BUS_NMI_BIT;
 
@@ -185,13 +258,6 @@ bool C128System::initialize() {
     board_.csg8502.bank_change_fn = cpu_banking_callback;
     board_.csg8502.bank_change_ctx = this;
     board_.csg8502.reset();
-
-    // Sync bank config with the freshly-reset I/O port so KERNAL ROM is
-    // visible during the vector fetch ticks.
-    uint8_t banking_bits = board_.csg8502.io_port_regs.data
-                         & board_.csg8502.io_port_regs.ddr
-                         & 0x07;
-    cpu_banking_callback(this, banking_bits);
 
     // Video output — VIC-IIe drives composite video (primary, 40-col)
     video_port_ = std::make_unique<CompositeVideoPort>();
@@ -236,12 +302,38 @@ bool C128System::initialize() {
     // needed before pixel output can be enabled.  Register I/O and
     // DRAM operations work without it.
 
+    // ── Keyboard matrix ──────────────────────────────────────────────
+    keyboard_ = new commodore_keyboard_t();
+    if (!keyboard_->init(&c128_keyboard_config)) {
+        log_info("C128: ERROR — Failed to create keyboard\n");
+        delete keyboard_;
+        keyboard_ = nullptr;
+        return false;
+    }
+
+    // Create keyboard mapper (host layout → C128 matrix)
+    keyboard_mapper_.reset(create_c128_keyboard_mapper(keyboard_));
+
+    // Wire CIA1 port read callbacks for keyboard matrix scanning.
+    // Port A read = reverse scan (Port B output selects rows → return column contacts)
+    // Port B read = forward scan (Port A output selects columns → return row contacts)
+    cia1.port_a_read_callback = c128_cia1_port_a_read;
+    cia1.port_a_read_context  = this;
+    cia1.port_b_read_callback = c128_cia1_port_b_read;
+    cia1.port_b_read_context  = this;
+    log_info("C128: Keyboard matrix wired to CIA1\n");
+
     system_ready_ = true;
     log_info("C128: System initialized\n");
     return true;
 }
 
-void C128System::shutdown() { system_ready_ = false; }
+void C128System::shutdown() {
+    keyboard_mapper_.reset();
+    delete keyboard_;
+    keyboard_ = nullptr;
+    system_ready_ = false;
+}
 
 void C128System::reset() {
     pins_ = board_.csg8502.reset(pins_);
@@ -249,6 +341,7 @@ void C128System::reset() {
     cpu_mode_ = CPUMode::MODE_8502;
     c64_mode_ = false;
     cpu_port_bits_ = 0x07;
+    if (keyboard_) keyboard_->reset();
     update_bank_config();
     reset_load_state();
 }
@@ -336,6 +429,11 @@ void C128System::tick() {
         if (unlikely(board_.mmu.bank_config_dirty())) {
             update_bank_config();
         }
+
+        // Check for C64 mode transition (MCR bit 6 latched)
+        if (unlikely(!c64_mode_ && board_.mmu.c64_mode_requested())) {
+            enter_c64_mode();
+        }
     }
 
     // NMI edge detection
@@ -358,7 +456,9 @@ void C128System::tick() {
     s = sid.tick(s);
 
     // VDC character clock — runs at ~1 MHz (same rate as slow-mode CPU)
-    board_.vdc.tick();
+    // Disabled in C64 mode (VDC is not accessible).
+    if (!c64_mode_)
+        board_.vdc.tick();
 
     pins_ = s;
 }
@@ -395,8 +495,23 @@ void C128System::set_audio_sample_rate(int rate) {
 // INPUT
 // ============================================================================
 
-void C128System::handle_keyboard_event(SDL_Keycode /*key*/, bool /*pressed*/) {
-    // TODO: C128 keyboard matrix (11 columns × 8 rows)
+void C128System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
+    if (keyboard_mapper_) {
+        if (pressed) {
+            keyboard_mapper_->process_key_down(key, SDL_SCANCODE_UNKNOWN, 0, false);
+        } else {
+            keyboard_mapper_->process_key_up(key, SDL_SCANCODE_UNKNOWN, 0);
+        }
+    } else if (keyboard_) {
+        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(key);
+        if (ek != EMUKEY_NONE) {
+            if (pressed) {
+                keyboard_->key_down(ek, false);
+            } else {
+                keyboard_->key_up(ek, false);
+            }
+        }
+    }
 }
 
 // ============================================================================
@@ -431,13 +546,15 @@ void C128System::configure_bus_memory_map() {
     //   $E000-$FFFF : Kernal ROM
     //
     // Chip IDs (4 KB pages, declaration order, bank_size = chip size for ROMs):
-    //   main_ram  (128KB, bank_size=64KB): 2 banks → IDs 0-1
-    //   basic_lo  ( 16KB):                 1 bank  → ID 2
-    //   basic_hi  ( 16KB):                 1 bank  → ID 3
-    //   editor_rom(  4KB):                 1 bank  → ID 4
-    //   char_rom  (  8KB):                 1 bank  → ID 5
-    //   kernal_rom(  8KB):                 1 bank  → ID 6
-    //   vdc_vram  ( 16KB):                 1 bank  → ID 7
+    //   main_ram    (128KB, bank_size=64KB): 2 banks → IDs 0-1
+    //   basic_lo    ( 16KB):                 1 bank  → ID 2
+    //   basic_hi    ( 16KB):                 1 bank  → ID 3
+    //   editor_rom  (  4KB):                 1 bank  → ID 4
+    //   char_rom    (  8KB):                 1 bank  → ID 5
+    //   kernal_rom  (  8KB):                 1 bank  → ID 6
+    //   c64_basic   (  8KB):                 1 bank  → ID 7
+    //   c64_kernal  (  8KB):                 1 bank  → ID 8
+    //   vdc_vram    ( 16KB):                 1 bank  → ID 9
 
     using ChipId    = Bus::ChipId;
     using WriteId   = Bus::WriteChipId;
@@ -566,9 +683,9 @@ void C128System::init_io_dispatch() {
 }
 
 void C128System::update_bank_config() {
-    // Apply the MMU configuration register + processor port bits to the
-    // CPU viewer's page tables.  Called whenever CR, RCR, MCR, or the
-    // processor port changes.
+    // Apply MMU configuration to CPU viewer page tables.
+    // In C128 mode: only the MMU CR register controls banking.
+    // In C64 mode:  processor port bits 0-2 control banking (like C64 PLA).
 
     auto& mmu = board_.mmu;
     mmu.acknowledge_bank_config();
@@ -577,81 +694,135 @@ void C128System::update_bank_config() {
     using WriteId = Bus::WriteChipId;
 
     // Chip IDs (from manifest declaration order, bank_size splits):
-    //   main_ram  (128KB, bank_size=64KB): bank 0 → ID 0, bank 1 → ID 1
-    //   basic_lo  ( 16KB):                 ID 2
-    //   basic_hi  ( 16KB):                 ID 3
-    //   editor_rom(  4KB):                 ID 4
-    //   char_rom  (  8KB):                 ID 5
-    //   kernal_rom(  8KB):                 ID 6
-    constexpr ChipId  kRamBank0  = ChipId(0);
-    constexpr ChipId  kRamBank1  = ChipId(1);
-    constexpr WriteId kRamBank0W = WriteId(0);
-    constexpr WriteId kRamBank1W = WriteId(1);
-    constexpr ChipId  kBasicLo   = ChipId(2);
-    constexpr ChipId  kBasicHi   = ChipId(3);
-    constexpr ChipId  kEditor    = ChipId(4);
-    constexpr ChipId  kCharRom   = ChipId(5);
-    constexpr ChipId  kKernal    = ChipId(6);
+    //   main_ram    (128KB, bank_size=64KB): bank 0 → ID 0, bank 1 → ID 1
+    //   basic_lo    ( 16KB):                 ID 2
+    //   basic_hi    ( 16KB):                 ID 3
+    //   editor_rom  (  4KB):                 ID 4
+    //   char_rom    (  8KB):                 ID 5
+    //   kernal_rom  (  8KB):                 ID 6
+    //   c64_basic   (  8KB):                 ID 7
+    //   c64_kernal  (  8KB):                 ID 8
+    constexpr ChipId  kRamBank0    = ChipId(0);
+    constexpr ChipId  kRamBank1    = ChipId(1);
+    constexpr WriteId kRamBank0W   = WriteId(0);
+    constexpr WriteId kRamBank1W   = WriteId(1);
+    constexpr ChipId  kBasicLo     = ChipId(2);
+    constexpr ChipId  kBasicHi     = ChipId(3);
+    constexpr ChipId  kEditor      = ChipId(4);
+    constexpr ChipId  kCharRom     = ChipId(5);
+    constexpr ChipId  kKernal      = ChipId(6);
+    constexpr ChipId  kC64Basic    = ChipId(7);
+    constexpr ChipId  kC64Kernal   = ChipId(8);
 
-    // Determine the "base" RAM bank from CR bit 6
+    if (c64_mode_) {
+        // ── C64 compatibility mode ──────────────────────────────────
+        // Processor port bits 0-2 control banking (same as C64 PLA).
+        // Writes always go to RAM bank 0.
+        const uint8_t port = cpu_port_bits_;
+        const bool loram  = (port & 0x01) != 0;
+        const bool hiram  = (port & 0x02) != 0;
+        const bool charen = (port & 0x04) != 0;
+
+        // $0000-$3FFF: always RAM bank 0
+        for (size_t p = 0; p < 4; ++p)
+            bus_.set_page(kViewerCpu, p, kRamBank0, kRamBank0W);
+
+        // $4000-$7FFF: always RAM in C64 mode
+        for (size_t p = 4; p < 8; ++p)
+            bus_.set_page(kViewerCpu, p, kRamBank0, kRamBank0W);
+
+        // $8000-$9FFF: always RAM in C64 mode
+        bus_.set_page(kViewerCpu, 0x8, kRamBank0, kRamBank0W);
+        bus_.set_page(kViewerCpu, 0x9, kRamBank0, kRamBank0W);
+
+        // $A000-$BFFF: C64 BASIC ROM when LORAM=1 && HIRAM=1, else RAM
+        {
+            ChipId rd = (loram && hiram) ? kC64Basic : kRamBank0;
+            bus_.set_page(kViewerCpu, 0xA, rd, kRamBank0W);
+            bus_.set_page(kViewerCpu, 0xB, rd, kRamBank0W);
+        }
+
+        // $C000-$CFFF: always RAM in C64 mode
+        bus_.set_page(kViewerCpu, 0xC, kRamBank0, kRamBank0W);
+
+        // $D000-$DFFF: I/O, char ROM, or RAM depending on port bits
+        if (hiram || loram) {
+            if (charen) {
+                // I/O visible
+                bus_.map_to_indexed_sub(kViewerCpu, 0xD, 0);
+            } else {
+                // Character ROM visible
+                bus_.set_page(kViewerCpu, 0xD, kCharRom, kRamBank0W);
+            }
+        } else {
+            // All RAM
+            bus_.set_page(kViewerCpu, 0xD, kRamBank0, kRamBank0W);
+        }
+
+        // $E000-$FFFF: C64 Kernal ROM when HIRAM=1, else RAM
+        {
+            ChipId rd = hiram ? kC64Kernal : kRamBank0;
+            bus_.set_page(kViewerCpu, 0xE, rd, kRamBank0W);
+            bus_.set_page(kViewerCpu, 0xF, rd, kRamBank0W);
+        }
+        return;
+    }
+
+    // ── C128 native mode ────────────────────────────────────────────
+    // Only the MMU CR register controls ROM/RAM/I/O banking.
+    // Processor port bits are NOT consulted.
+
+    // RAM bank from CR bit 6
     const uint8_t bank = mmu.ram_bank();
     const ChipId  ramRd = bank ? kRamBank1 : kRamBank0;
     const WriteId ramWr = bank ? kRamBank1W : kRamBank0W;
 
-    // ── $0000-$3FFF: always RAM (selected bank) ─────────────────────
+    // $0000-$3FFF: always RAM (selected bank)
     for (size_t p = 0; p < 4; ++p)
         bus_.set_page(kViewerCpu, p, ramRd, ramWr);
 
-    // ── $4000-$7FFF: mid-lo ROM select ──────────────────────────────
+    // $4000-$7FFF: BASIC LO ROM (bit 1 = 0) or RAM (bit 1 = 1)
     {
-        const uint8_t sel = mmu.mid_lo_select();
-        ChipId rd = ramRd;
-        if (sel == mos8722::cr::ROM_DEFAULT) rd = kBasicLo;
-        // sel == 1 or 2: function ROM (not implemented, fall back to RAM)
+        ChipId rd = mmu.basic_lo_rom_enabled() ? kBasicLo : ramRd;
         for (size_t p = 4; p < 8; ++p)
             bus_.set_page(kViewerCpu, p, rd, ramWr);
     }
 
-    // ── $8000-$BFFF: mid-hi ROM select ──────────────────────────────
+    // $8000-$BFFF: mid-hi ROM select (bits 3-2)
     {
         const uint8_t sel = mmu.mid_hi_select();
         ChipId rd = ramRd;
         if (sel == mos8722::cr::ROM_DEFAULT) rd = kBasicHi;
+        // sel == 1 or 2: function ROM (not implemented, fall back to RAM)
         for (size_t p = 8; p < 12; ++p)
             bus_.set_page(kViewerCpu, p, rd, ramWr);
     }
 
-    // ── $C000-$CFFF: Editor ROM / RAM ───────────────────────────────
-    // ── $D000-$DFFF: I/O / Char ROM / RAM ───────────────────────────
-    // ── $E000-$FFFF: Kernal ROM / RAM ───────────────────────────────
+    // $C000-$FFFF: high ROM select (bits 5-4)
     {
         const uint8_t high_sel = mmu.high_rom_select();
-        const uint8_t port = cpu_port_bits_;  // LORAM (0), HIRAM (1), CHAREN (2)
-        const bool hiram  = (port & 0x02) != 0;
-        const bool charen = (port & 0x04) != 0;
 
-        // $C000-$CFFF
+        // $C000-$CFFF: Editor ROM when default, else RAM
         if (high_sel == mos8722::cr::ROM_DEFAULT) {
-            // Editor ROM visible when HIRAM=1
-            bus_.set_page(kViewerCpu, 0xC, hiram ? kEditor : ramRd, ramWr);
+            bus_.set_page(kViewerCpu, 0xC, kEditor, ramWr);
         } else {
             bus_.set_page(kViewerCpu, 0xC, ramRd, ramWr);
         }
 
-        // $D000-$DFFF
+        // $D000-$DFFF: controlled by high_sel AND CR bit 0 (I/O select)
         if (high_sel == mos8722::cr::ROM_RAM) {
-            // All RAM — no I/O, no char ROM
+            // All RAM — bits 5-4 = 11 overrides everything
             bus_.set_page(kViewerCpu, 0xD, ramRd, ramWr);
-        } else if (!charen && high_sel == mos8722::cr::ROM_DEFAULT) {
-            // CHAREN=0: character ROM visible at $D000-$DFFF (read)
-            bus_.set_page(kViewerCpu, 0xD, kCharRom, ramWr);
-        } else {
-            // Default: I/O space visible
+        } else if (mmu.io_visible()) {
+            // CR bit 0 = 0: I/O devices visible
             bus_.map_to_indexed_sub(kViewerCpu, 0xD, 0);
+        } else {
+            // CR bit 0 = 1: character ROM visible (or function ROM for sel 1/2)
+            bus_.set_page(kViewerCpu, 0xD, kCharRom, ramWr);
         }
 
-        // $E000-$FFFF
-        if (high_sel == mos8722::cr::ROM_DEFAULT && hiram) {
+        // $E000-$FFFF: Kernal ROM when default, else RAM
+        if (high_sel == mos8722::cr::ROM_DEFAULT) {
             bus_.set_page(kViewerCpu, 0xE, kKernal, ramWr);
             bus_.set_page(kViewerCpu, 0xF, kKernal, ramWr);
         } else {
@@ -666,6 +837,23 @@ void C128System::update_bank_config() {
     // Character ROM ghosts remain at $1000 and $9000.
 }
 
+void C128System::enter_c64_mode() {
+    c64_mode_ = true;
+    board_.mmu.clear_c64_mode_request();
+
+    // Default processor port: LORAM=1, HIRAM=1, CHAREN=1
+    cpu_port_bits_ = 0x07;
+
+    // Reconfigure memory map to use C64 ROMs
+    update_bank_config();
+
+    // Reset CPU — it must fetch the C64 KERNAL reset vector from $FFFC/$FFFD
+    // to boot with the classic "**** COMMODORE 64 BASIC V2 ****" screen.
+    pins_ = board_.csg8502.reset(pins_);
+
+    log_info("C128: Entered C64 compatibility mode\n");
+}
+
 void C128System::switch_cpu_mode(CPUMode /*mode*/) {
     // TODO: switch between 8502 and Z80
 }
@@ -673,7 +861,31 @@ void C128System::switch_cpu_mode(CPUMode /*mode*/) {
 void C128System::cpu_banking_callback(void* ctx, uint8_t banking_state) {
     auto* sys = static_cast<C128System*>(ctx);
     sys->cpu_port_bits_ = banking_state & 0x07;
-    sys->update_bank_config();
+    // In C128 native mode, processor port does NOT affect memory banking —
+    // only the MMU CR does.  In C64 mode, port bits drive the PLA.
+    if (sys->c64_mode_) {
+        sys->update_bank_config();
+    }
+}
+
+// ============================================================================
+// SYSTEM MENU
+// ============================================================================
+
+void C128System::render_system_menu_items() {
+#ifdef CERMU_HAS_GUI
+    if (ImGui::MenuItem("Reset C128")) {
+        reset();
+    }
+    if (ImGui::MenuItem("Enter C64 Mode", nullptr, false, !c64_mode_)) {
+        // Emulate BASIC's GO64 command: write MCR bit 6 to trigger C64 mode.
+        enter_c64_mode();
+    }
+#endif
+}
+
+const char* C128System::get_mode_label() const {
+    return c64_mode_ ? "C64 Mode" : nullptr;
 }
 
 // ============================================================================

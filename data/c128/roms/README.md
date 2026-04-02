@@ -67,6 +67,32 @@ Three operating modes:
 - **C64 mode:** Full hardware compatibility with Commodore 64
 - **CP/M mode:** Z80 CPU running CP/M 3.0
 
+## C64 Compatibility Mode
+
+The C128 can enter C64 mode in three ways:
+
+### 1. Holding the Commodore key during boot
+On the real hardware, the C128 KERNAL scans the keyboard matrix during its
+initialization routine.  If the **Commodore (C=) key** is held down when
+the machine is powered on or reset, it boots directly into C64 mode,
+bypassing the C128 BASIC 7.0 screen entirely.
+
+In cermu this is mapped to the **Left GUI key** (Left ⌘ on macOS, Left
+⊞ Windows key on PC).  Hold it while the system is booting (within the
+first ~2.5 frames after reset) to enter C64 mode.
+
+### 2. BASIC command `GO64`
+From the C128 BASIC prompt, typing `GO64` followed by `Y` at the
+confirmation prompt triggers C64 mode via the 8722 MMU (MCR bit 6).
+
+### 3. System menu
+Use **System → Enter C64 Mode** to switch immediately.  This emulates
+the same hardware signal as `GO64`.
+
+### Returning to C128 mode
+C64 mode is a one-way latch in hardware — the only way back to C128 mode
+is a full system reset (**System → Reset C128** or the reset key binding).
+
 ## ROM Layout Notes
 
 The C128 uses a split ROM layout across multiple physical chips:

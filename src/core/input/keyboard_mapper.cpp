@@ -864,6 +864,7 @@ bool KeyboardMapper::has_direct_mapping(SDL_Keycode sym) const {
 extern const keyboard_matrix_config_t c64_keyboard_config;
 extern const keyboard_matrix_config_t vic20_keyboard_config;
 extern const keyboard_matrix_config_t c16_keyboard_config;
+extern const keyboard_matrix_config_t c128_keyboard_config;
 
 KeyboardMapper* create_c64_keyboard_mapper(commodore_keyboard_t* keyboard) {
     KeyboardMapper* mapper = new KeyboardMapper();
@@ -902,6 +903,16 @@ KeyboardMapper* create_c16_keyboard_mapper(commodore_keyboard_t* keyboard) {
 
     // Commodore-specific character mappings are now handled automatically
     // by the PETSCII decode tables + petscii_to_host_char().
+
+    return mapper;
+}
+
+KeyboardMapper* create_c128_keyboard_mapper(commodore_keyboard_t* keyboard) {
+    KeyboardMapper* mapper = new KeyboardMapper();
+    mapper->set_guest_keyboard(keyboard);
+    mapper->build_character_map_from_matrix(&c128_keyboard_config);
+
+    mapper->register_default_synthetic_mappings();
 
     return mapper;
 }

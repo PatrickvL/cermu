@@ -163,7 +163,7 @@ struct keyboard_decode_table_t {
 // Matrix dimension limits
 // ============================================================================
 #define MAX_KEYBOARD_ROWS 16   // Generous max (C128 needs 11, PET/CBM-II need 10)
-#define MAX_KEYBOARD_COLS  8   // All Commodore models use 8-bit data lines
+#define MAX_KEYBOARD_COLS 16   // C128 needs 11 columns; padded to 16 for alignment
 
 // ============================================================================
 // Keyboard model and scanning chip identification
@@ -252,7 +252,7 @@ struct commodore_keyboard_t {
     // col_open_contacts[col_bit] = bitmask of row contacts
     // 0xFF/0xFFFF = all contacts open (no keys pressed)
     // Bit cleared = contact closed (key pressed)
-    uint8_t  row_open_contacts[MAX_KEYBOARD_ROWS];
+    uint16_t row_open_contacts[MAX_KEYBOARD_ROWS];
     uint16_t col_open_contacts[MAX_KEYBOARD_COLS];
 
     // Optimised EmuKey → {row, col} lookup
