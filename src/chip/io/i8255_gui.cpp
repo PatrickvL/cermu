@@ -97,7 +97,7 @@ std::vector<PinSignalState> i8255_t::get_layout_pin_states(ChipLayout& layout) {
     };
 
     bool pa_out = !port_a_input();
-    uint8_t pa_val = pa_out ? port_a_out_ : port_a_in_;
+    uint8_t pa_val = pa_out ? regs_[i8255::reg::PORT_A] : port_a_in_;
     // Left side: PA3=pin1(idx0), PA2=pin2(idx1), PA1=pin3(idx2), PA0=pin4(idx3)
     set_port_pin(0, (pa_val >> 3) & 1, pa_out);
     set_port_pin(1, (pa_val >> 2) & 1, pa_out);
@@ -111,7 +111,7 @@ std::vector<PinSignalState> i8255_t::get_layout_pin_states(ChipLayout& layout) {
 
     // Port B pins: PB0=pin18(idx17)..PB2=pin20(idx19), PB3=pin21(idx20)..PB7=pin25(idx24)
     bool pb_out = !port_b_input();
-    uint8_t pb_val = pb_out ? port_b_out_ : port_b_in_;
+    uint8_t pb_val = pb_out ? regs_[i8255::reg::PORT_B] : port_b_in_;
     // Left: PB0(17), PB1(18), PB2(19)
     set_port_pin(17, (pb_val >> 0) & 1, pb_out);
     set_port_pin(18, (pb_val >> 1) & 1, pb_out);

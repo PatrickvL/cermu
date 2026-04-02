@@ -63,25 +63,23 @@ public:
         uint8_t q_sel = addr & 0x07;
         uint8_t bit   = data & 0x01;
         if (bit)
-            q_outputs_ |= (1u << q_sel);
+            regs_[ls259::reg::Q_OUTPUTS] |= (1u << q_sel);
         else
-            q_outputs_ &= ~(1u << q_sel);
-        regs_[ls259::reg::Q_OUTPUTS] = q_outputs_;
+            regs_[ls259::reg::Q_OUTPUTS] &= ~(1u << q_sel);
     }
 
     // ── Output queries ──────────────────────────────────────────────────
 
     /// Return the full Q7..Q0 byte.
-    uint8_t q_all()               const { return q_outputs_; }
+    uint8_t q_all()               const { return regs_[ls259::reg::Q_OUTPUTS]; }
 
     /// Return a single Q output (0-7).
-    bool    q(uint8_t n)          const { return (q_outputs_ >> (n & 7)) & 1; }
+    bool    q(uint8_t n)          const { return (regs_[ls259::reg::Q_OUTPUTS] >> (n & 7)) & 1; }
 
     // ── ChipBase overrides ──────────────────────────────────────────────
 
     void reset() override {
-        q_outputs_ = 0x00;   // /CLR asserted: all Q outputs LOW
-        regs_[ls259::reg::Q_OUTPUTS] = 0;
+        regs_[ls259::reg::Q_OUTPUTS] = 0x00;   // /CLR asserted: all Q outputs LOW
     }
 
     // Layout virtuals — defined in ls259_gui.cpp (GUI builds only)
@@ -91,8 +89,6 @@ public:
 #endif
 
 private:
-    uint8_t q_outputs_ = 0x00;
-
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
         // All output flag fields are rendered by the DECL walk.
