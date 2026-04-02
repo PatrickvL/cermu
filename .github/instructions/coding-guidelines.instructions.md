@@ -50,7 +50,7 @@ PeripheralDevice                            (src/core/port.hpp)
 | Peripheral devices | `src/devices/<category>/` | NES gamepad, Zapper, joystick, mice |
 | CPU cores | `src/chip/cpu/<family>/` | fam65xx (6502/6510/2A03/…) |
 
-Categories: `cpu/`, `io/`, `input/`, `video/`, `sound/`, `logic/`, `memory/`, `storage/`.
+Categories: `cpu/`, `io/`, `input/`, `video/`, `sound/`, `logic/`, `memory/`, `mmu/`, `storage/`.
 
 System-specific code (system glue, tick loop, system-unique chips) stays under `src/systems/<name>/`.
 
@@ -179,6 +179,7 @@ src/
 │   ├── io/             #   I/O controllers (MOS6522 VIA, MOS6526 CIA, …)
 │   ├── logic/          #   Logic chips (PLA, …)
 │   ├── memory/         #   Memory chips (MOS2114 color RAM, …)
+│   ├── mmu/            #   Memory management units (MOS 8722, …)
 │   ├── sound/          #   Sound chips (MOS6581 SID, …)
 │   └── video/          #   Video chips (VIC-II, TED, VIC 6560/6561, …)
 ├── ports/         # Cross-system PortDefinition constants

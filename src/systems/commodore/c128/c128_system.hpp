@@ -45,7 +45,7 @@
 #include "chip/io/mos6526.hpp"
 #include "chip/memory/memory_chip.hpp"
 #include "chip/memory/mos2114.hpp"
-#include "systems/commodore/c128/mos8722.hpp"
+#include "chip/mmu/mos8722.hpp"
 
 #include <cstdint>
 
@@ -63,6 +63,7 @@
 //   Slot 3: Editor ROM  —   4 KB at $C000
 //   Slot 4: Kernal ROM  —   8 KB at $E000
 //   Slot 5: Char ROM    —   4 KB at $D000 (banked via MMU, not always visible)
+//   Slot 6: Z80 BIOS    —   4 KB at $0000 (Z80 only, from KERNAL chip offset $1000)
 //
 // I/O at $D000-$DFFF handled by io_tick() when MMU selects I/O mode.
 // VDC (8563) at $D600-$D601 — indirect register access (address/data latch).
@@ -80,6 +81,7 @@
     V(ctx, ROMChip,    editor_rom,  0xC000,   4096, 0,      1, "Editor ROM",      "c128_editor.rom|editor.rom|kernal.318020-05.bin@0") \
     V(ctx, ROMChip,    char_rom,    0xD000,   8192, 0,      1, "Character ROM",   "characters.390059-01.bin|c128_chargen.rom|chargen.rom|characters.rom") \
     V(ctx, ROMChip,    kernal_rom,  0xE000,   8192, 0,      1, "Kernal ROM",      "c128_kernal.rom|kernal.rom|kernal.318020-05.bin@8192") \
+    V(ctx, ROMChip,    z80_bios,    0x0000,   4096, 0,      1, "Z80 BIOS",        "z80bios-128.rom|z80bios.rom|kernal.318020-05.bin@4096") \
     V(ctx, ROMChip,    c64_basic,   0xA000,   8192, 0,      1, "C64 BASIC",       "basic64-901226-01.bin|basic.901226-01.bin|c64_basic.rom") \
     V(ctx, ROMChip,    c64_kernal,  0xE000,   8192, 0,      1, "C64 Kernal",      "kernal64-901227-03.bin|kernal.901227-03.bin|c64_kernal.rom") \
     V(ctx, RAMChip,    vdc_vram,    0x0000,  16384, 0,      1, "VDC VRAM",        nullptr) \
@@ -168,6 +170,7 @@ private:
     ROMChip* char_rom_     = nullptr;
     ROMChip* c64_basic_rom_  = nullptr;  // C64 BASIC V2 (8KB, for C64 mode)
     ROMChip* c64_kernal_rom_ = nullptr;  // C64 KERNAL (8KB, for C64 mode)
+    ROMChip* z80_bios_rom_   = nullptr;  // Z80 BIOS (4KB, from KERNAL chip)
     RAMChip* vdc_vram_     = nullptr;    // 16KB VDC video RAM
 
     // ── Board + bus ──────────────────────────────────────────────────────
@@ -186,11 +189,12 @@ private:
 
     // ── CPU mode ─────────────────────────────────────────────────────────
     enum class CPUMode : uint8_t { MODE_8502, MODE_Z80 };
-    CPUMode  cpu_mode_ = CPUMode::MODE_8502;
+    CPUMode  cpu_mode_ = CPUMode::MODE_Z80;  // Z80 starts first after reset
     bool     c64_mode_ = false;          // C64 compatibility mode
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t default_state_ = 0;     // Pull-up defaults (reset each tick)
-    bus_state_t pins_      = C128_BUS_DEFAULT_STATE;
+    bus_state_t pins_      = C128_BUS_DEFAULT_STATE;  // 8502 bus state
+    bus_state_t z80_pins_  = 0;                       // Z80 bus state
     int         audio_sample_rate_ = c128_constants::DEFAULT_SAMPLE_RATE;
 
     // ── Viewer IDs ───────────────────────────────────────────────────────
@@ -204,6 +208,8 @@ private:
     void enter_c64_mode();               // Transition to C64 compatibility mode
     void switch_cpu_mode(CPUMode mode);  // Toggle between 8502 and Z80
     void init_io_dispatch();             // Set up CS-tick indexed sub-table for I/O page
+    void tick_z80();                     // Z80 tick (T-state) + bus servicing
+    bus_state_t z80_io_tick(bus_state_t pins); // Z80 I/O port dispatch
     static void cpu_banking_callback(void* ctx, uint8_t banking_state);
 
     // CIA1 keyboard matrix scan callbacks

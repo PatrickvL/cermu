@@ -431,6 +431,8 @@ list(APPEND CHIP_SOURCES
     src/chip/logic/ls138.cpp
     src/chip/logic/ls139.cpp
     src/chip/logic/ls175.cpp
+    # MMU
+    src/chip/mmu/mmu_registry.cpp
 
     # Memory
     src/chip/memory/mos2114.cpp
@@ -639,6 +641,7 @@ if(BUILD_GUI)
         src/chip/io/mos6526_gui.cpp
         src/chip/io/mos6522_gui.cpp
         src/chip/io/mos6529_gui.cpp
+        src/chip/mmu/mos8722_gui.cpp
         src/chip/memory/mos2114_gui.cpp
         src/chip/memory/er2055_gui.cpp
         src/chip/sound/mos6581_gui.cpp
@@ -690,6 +693,7 @@ set(GUI_STUB_SOURCES
     src/chip/io/mos6526_gui.cpp
     src/chip/io/mos6522_gui.cpp
     src/chip/io/mos6529_gui.cpp
+    src/chip/mmu/mos8722_gui.cpp
     src/chip/memory/mos2114_gui.cpp
     src/chip/memory/er2055_gui.cpp
     src/chip/sound/mos6581_gui.cpp
