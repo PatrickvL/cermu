@@ -71,14 +71,13 @@ public:
     }
 
     void init() {
-        control_ = 0x9B;  // Mode 0, all ports input (power-on default)
-        port_a_out_ = 0x00;
-        port_b_out_ = 0x00;
-        port_c_out_ = 0x00;
+        regs_[i8255::reg::CONTROL] = 0x9B;  // Mode 0, all ports input (power-on default)
+        regs_[i8255::reg::PORT_A]  = 0x00;
+        regs_[i8255::reg::PORT_B]  = 0x00;
+        regs_[i8255::reg::PORT_C]  = 0x00;
         port_a_in_ = 0xFF;
         port_b_in_ = 0xFF;
         port_c_in_ = 0xFF;
-        update_regs();
     }
 
     void reset() { init(); }
@@ -92,36 +91,35 @@ public:
 
     void write(uint8_t addr, uint8_t data) {
         switch (addr & 0x03) {
-        case 0: port_a_out_ = data; break;
-        case 1: port_b_out_ = data; break;
-        case 2: port_c_out_ = data; break;
+        case 0: regs_[i8255::reg::PORT_A] = data; break;
+        case 1: regs_[i8255::reg::PORT_B] = data; break;
+        case 2: regs_[i8255::reg::PORT_C] = data; break;
         case 3:
             if (data & 0x80) {
                 // Mode set (bit 7 = 1)
-                control_ = data;
+                regs_[i8255::reg::CONTROL] = data;
                 // Reset output latches
-                port_a_out_ = 0x00;
-                port_b_out_ = 0x00;
-                port_c_out_ = 0x00;
+                regs_[i8255::reg::PORT_A] = 0x00;
+                regs_[i8255::reg::PORT_B] = 0x00;
+                regs_[i8255::reg::PORT_C] = 0x00;
             } else {
                 // Bit set/reset on Port C (bit 7 = 0)
                 uint8_t bit = (data >> 1) & 0x07;
                 if (data & 0x01)
-                    port_c_out_ |= (1 << bit);
+                    regs_[i8255::reg::PORT_C] |= (1 << bit);
                 else
-                    port_c_out_ &= ~(1 << bit);
+                    regs_[i8255::reg::PORT_C] &= ~(1 << bit);
             }
             break;
         }
-        update_regs();
     }
 
     uint8_t read(uint8_t addr) const {
         switch (addr & 0x03) {
-        case 0: return port_a_input() ? port_a_in_ : port_a_out_;
-        case 1: return port_b_input() ? port_b_in_ : port_b_out_;
+        case 0: return port_a_input() ? port_a_in_ : regs_[i8255::reg::PORT_A];
+        case 1: return port_b_input() ? port_b_in_ : regs_[i8255::reg::PORT_B];
         case 2: return read_port_c();
-        case 3: return control_;  // Control register read-back
+        case 3: return regs_[i8255::reg::CONTROL];  // Control register read-back
         }
         return 0xFF;
     }
@@ -130,7 +128,7 @@ public:
     bool has_mmio() const override { return true; }
     bus_state_t on_bus_read(bus_state_t bus) noexcept override {
         if (port_b_read_callback_)
-            port_b_in_ = port_b_read_callback_(port_b_read_context_, port_a_out_);
+            port_b_in_ = port_b_read_callback_(port_b_read_context_, regs_[i8255::reg::PORT_A]);
         BUS_SET_DATA(bus, read(BUS_GET_ADDR(bus)));
         return bus;
     }
@@ -155,9 +153,9 @@ public:
     void set_port_b_input(uint8_t data) { port_b_in_ = data; }
     void set_port_c_input(uint8_t data) { port_c_in_ = data; }
 
-    uint8_t get_port_a_output() const { return port_a_out_; }
-    uint8_t get_port_b_output() const { return port_b_out_; }
-    uint8_t get_port_c_output() const { return port_c_out_; }
+    uint8_t get_port_a_output() const { return regs_[i8255::reg::PORT_A]; }
+    uint8_t get_port_b_output() const { return regs_[i8255::reg::PORT_B]; }
+    uint8_t get_port_c_output() const { return regs_[i8255::reg::PORT_C]; }
 
     // Port B read callback — called before every register read to refresh
     // external input (e.g. keyboard matrix column data driven by Port A rows).
@@ -168,10 +166,10 @@ public:
     }
 
     // === Direction queries ===
-    bool port_a_input() const { return (control_ & 0x10) != 0; }
-    bool port_b_input() const { return (control_ & 0x02) != 0; }
-    bool port_c_upper_input() const { return (control_ & 0x08) != 0; }
-    bool port_c_lower_input() const { return (control_ & 0x01) != 0; }
+    bool port_a_input() const { return (regs_[i8255::reg::CONTROL] & 0x10) != 0; }
+    bool port_b_input() const { return (regs_[i8255::reg::CONTROL] & 0x02) != 0; }
+    bool port_c_upper_input() const { return (regs_[i8255::reg::CONTROL] & 0x08) != 0; }
+    bool port_c_lower_input() const { return (regs_[i8255::reg::CONTROL] & 0x01) != 0; }
 
     // === ChipBase GUI virtuals ===
 #ifdef CERMU_HAS_GUI
@@ -186,34 +184,21 @@ private:
         if (port_c_upper_input())
             result |= (port_c_in_ & 0xF0);
         else
-            result |= (port_c_out_ & 0xF0);
+            result |= (regs_[i8255::reg::PORT_C] & 0xF0);
         // Lower nibble
         if (port_c_lower_input())
             result |= (port_c_in_ & 0x0F);
         else
-            result |= (port_c_out_ & 0x0F);
+            result |= (regs_[i8255::reg::PORT_C] & 0x0F);
         return result;
     }
 
-    uint8_t control_ = 0x9B;
-    uint8_t port_a_out_ = 0x00;
-    uint8_t port_b_out_ = 0x00;
-    uint8_t port_c_out_ = 0x00;
     uint8_t port_a_in_ = 0xFF;
     uint8_t port_b_in_ = 0xFF;
     uint8_t port_c_in_ = 0xFF;
 
     uint8_t (*port_b_read_callback_)(void*, uint8_t) = nullptr;
     void* port_b_read_context_ = nullptr;
-
-    // Register file mirror (for debug inspection — backed by ChipBase::regs_)
-
-    void update_regs() {
-        regs_[i8255::reg::PORT_A]  = port_a_out_;
-        regs_[i8255::reg::PORT_B]  = port_b_out_;
-        regs_[i8255::reg::PORT_C]  = port_c_out_;
-        regs_[i8255::reg::CONTROL] = control_;
-    }
 
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields();
