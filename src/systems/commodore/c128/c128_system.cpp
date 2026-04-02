@@ -201,6 +201,7 @@ bool C128System::initialize() {
     char_rom_        = &board_.char_rom;
     c64_basic_rom_   = &board_.c64_basic;
     c64_kernal_rom_  = &board_.c64_kernal;
+    z80_bios_rom_    = &board_.z80_bios;
     vdc_vram_        = &board_.vdc_vram;
 
     configure_bus_memory_map();
@@ -252,12 +253,18 @@ bool C128System::initialize() {
 
     register_bus_chips(board_);
 
-    // Initialize CPU — reset vector will come from Kernal ROM
+    // Initialize 8502 CPU — held in reset while Z80 runs bootstrap
     board_.csg8502.init();
     board_.csg8502.init_io_port();
     board_.csg8502.bank_change_fn = cpu_banking_callback;
     board_.csg8502.bank_change_ctx = this;
     board_.csg8502.reset();
+
+    // Initialize Z80 CPU — starts first after reset (real hardware behavior)
+    // Z80 PC = $0000, which maps to the Z80 BIOS ROM.  The BIOS checks for
+    // CP/M boot conditions and hands off to the 8502 by writing MCR bit 0.
+    z80_pins_ = board_.z80.init();
+    cpu_mode_ = CPUMode::MODE_Z80;
 
     // Video output — VIC-IIe drives composite video (primary, 40-col)
     video_port_ = std::make_unique<CompositeVideoPort>();
@@ -336,9 +343,11 @@ void C128System::shutdown() {
 }
 
 void C128System::reset() {
-    pins_ = board_.csg8502.reset(pins_);
     board_.reset_chips();
-    cpu_mode_ = CPUMode::MODE_8502;
+    // Z80 starts first after reset (real hardware behavior)
+    z80_pins_ = board_.z80.init();
+    pins_ = board_.csg8502.reset(pins_);
+    cpu_mode_ = CPUMode::MODE_Z80;
     c64_mode_ = false;
     cpu_port_bits_ = 0x07;
     if (keyboard_) keyboard_->reset();
@@ -353,11 +362,42 @@ void C128System::reset() {
 void C128System::tick() {
     total_cycles_++;
 
-    auto& cpu     = board_.csg8502;
     auto& vic_iie = board_.vic_iie;
     auto& sid     = board_.sid;
     auto& cia1    = board_.cia1;
     auto& cia2    = board_.cia2;
+
+    // ── Z80 mode: tick Z80 + peripherals ─────────────────────────────
+    if (cpu_mode_ == CPUMode::MODE_Z80) {
+        tick_z80();
+        // VIC-IIe still runs (generates video timing / display)
+        bus_state_t dummy = default_state_;
+        dummy = vic_iie.tick_phi1(dummy);
+        vic_iie.tick_phi2(dummy);
+        // CIAs run (timers, keyboard scan, interrupts)
+        cia2.tick_phi2(dummy);
+        cia1.tick_phi2(dummy);
+        cia2.tick_phi1(dummy);
+        cia1.tick_phi1(dummy);
+        // SID + VDC
+        sid.tick(dummy);
+        board_.vdc.tick();
+
+        // Check for CPU switch or C64 mode
+        if (unlikely(board_.mmu.cpu_switch_requested())) {
+            board_.mmu.acknowledge_cpu_switch();
+            if (board_.mmu.cpu_is_8502()) {
+                switch_cpu_mode(CPUMode::MODE_8502);
+            }
+        }
+        if (unlikely(!c64_mode_ && board_.mmu.c64_mode_requested())) {
+            enter_c64_mode();
+        }
+        return;
+    }
+
+    // ── 8502 mode: standard C128/C64 tick ────────────────────────────
+    auto& cpu = board_.csg8502;
 
     // Start each cycle with pull-up defaults
     bus_state_t s = default_state_;
@@ -386,8 +426,6 @@ void C128System::tick() {
         const bool is_write = !BUS_GET_BIT(s, BUS_RW_BIT);
 
         // $FF00-$FF04: MMU configuration registers (always visible)
-        // Intercepted before bus resolve because they exist outside the
-        // normal I/O page and must be accessible regardless of bank config.
         if (addr >= 0xFF00 && addr <= 0xFF04) {
             if (is_write) {
                 const uint8_t data = BUS_GET_DATA(s);
@@ -409,13 +447,9 @@ void C128System::tick() {
             const size_t viewer = (is_write || BUS_GET_BIT(s, BUS_AEC_BIT))
                                       ? kViewerCpu : kViewerVicII;
 
-            // 1. resolve() — address decode, embed CS field
             s = bus_.resolve(s, viewer);
-
-            // 2. service() — buffer (RAM/ROM) access, MMIO IDs skipped
             s = bus_.service(s);
 
-            // 3. Self-dispatch — each chip checks is_cs_selected() and handles own I/O
             s = vic_iie.tick_mmio(s);
             s = sid.tick_mmio(s);
             s = board_.colorram.tick_mmio(s);
@@ -425,9 +459,16 @@ void C128System::tick() {
             s = board_.vdc.tick_mmio(s);
         }
 
-        // If the MMU's bank config was changed, apply it now
         if (unlikely(board_.mmu.bank_config_dirty())) {
             update_bank_config();
+        }
+
+        // Check for CPU switch (8502 → Z80 via MCR bit 0)
+        if (unlikely(board_.mmu.cpu_switch_requested())) {
+            board_.mmu.acknowledge_cpu_switch();
+            if (!board_.mmu.cpu_is_8502()) {
+                switch_cpu_mode(CPUMode::MODE_Z80);
+            }
         }
 
         // Check for C64 mode transition (MCR bit 6 latched)
@@ -552,9 +593,10 @@ void C128System::configure_bus_memory_map() {
     //   editor_rom  (  4KB):                 1 bank  → ID 4
     //   char_rom    (  8KB):                 1 bank  → ID 5
     //   kernal_rom  (  8KB):                 1 bank  → ID 6
-    //   c64_basic   (  8KB):                 1 bank  → ID 7
-    //   c64_kernal  (  8KB):                 1 bank  → ID 8
-    //   vdc_vram    ( 16KB):                 1 bank  → ID 9
+    //   z80_bios    (  4KB):                 1 bank  → ID 7
+    //   c64_basic   (  8KB):                 1 bank  → ID 8
+    //   c64_kernal  (  8KB):                 1 bank  → ID 9
+    //   vdc_vram    ( 16KB):                 1 bank  → ID 10
 
     using ChipId    = Bus::ChipId;
     using WriteId   = Bus::WriteChipId;
@@ -700,8 +742,9 @@ void C128System::update_bank_config() {
     //   editor_rom  (  4KB):                 ID 4
     //   char_rom    (  8KB):                 ID 5
     //   kernal_rom  (  8KB):                 ID 6
-    //   c64_basic   (  8KB):                 ID 7
-    //   c64_kernal  (  8KB):                 ID 8
+    //   z80_bios    (  4KB):                 ID 7
+    //   c64_basic   (  8KB):                 ID 8
+    //   c64_kernal  (  8KB):                 ID 9
     constexpr ChipId  kRamBank0    = ChipId(0);
     constexpr ChipId  kRamBank1    = ChipId(1);
     constexpr WriteId kRamBank0W   = WriteId(0);
@@ -711,8 +754,9 @@ void C128System::update_bank_config() {
     constexpr ChipId  kEditor      = ChipId(4);
     constexpr ChipId  kCharRom     = ChipId(5);
     constexpr ChipId  kKernal      = ChipId(6);
-    constexpr ChipId  kC64Basic    = ChipId(7);
-    constexpr ChipId  kC64Kernal   = ChipId(8);
+    // constexpr ChipId kZ80Bios   = ChipId(7);  // Z80 BIOS — accessed directly, not via page table
+    constexpr ChipId  kC64Basic    = ChipId(8);
+    constexpr ChipId  kC64Kernal   = ChipId(9);
 
     if (c64_mode_) {
         // ── C64 compatibility mode ──────────────────────────────────
@@ -841,6 +885,9 @@ void C128System::enter_c64_mode() {
     c64_mode_ = true;
     board_.mmu.clear_c64_mode_request();
 
+    // Must be in 8502 mode for C64 compatibility
+    cpu_mode_ = CPUMode::MODE_8502;
+
     // Default processor port: LORAM=1, HIRAM=1, CHAREN=1
     cpu_port_bits_ = 0x07;
 
@@ -854,8 +901,195 @@ void C128System::enter_c64_mode() {
     log_info("C128: Entered C64 compatibility mode\n");
 }
 
-void C128System::switch_cpu_mode(CPUMode /*mode*/) {
-    // TODO: switch between 8502 and Z80
+void C128System::switch_cpu_mode(CPUMode mode) {
+    if (mode == cpu_mode_) return;
+
+    if (mode == CPUMode::MODE_8502) {
+        // Z80 → 8502: the 8502 starts from its reset vector.
+        // On real hardware the 8502 was held in reset while Z80 was active.
+        cpu_mode_ = CPUMode::MODE_8502;
+        pins_ = board_.csg8502.reset(pins_);
+        log_info("C128: CPU switch → 8502\n");
+    } else {
+        // 8502 → Z80: re-enter Z80 mode (e.g. for CP/M)
+        cpu_mode_ = CPUMode::MODE_Z80;
+        z80_pins_ = board_.z80.init();
+        log_info("C128: CPU switch → Z80\n");
+    }
+}
+
+// ============================================================================
+// Z80 TICK — one T-state per call
+// ============================================================================
+//
+// The Z80 shares the same address bus as the 8502 through the MMU.
+// Memory map while Z80 is active:
+//   $0000-$0FFF : Z80 BIOS ROM (4KB, overlay from KERNAL chip)
+//   $1000-$FFFF : Same as 8502 view (controlled by MMU CR)
+//   $D000-$DFFF : I/O when MMU CR bit 0 = 0 (same as 8502)
+//   $FF00-$FF04 : MMU registers (always visible)
+//
+// The Z80 BIOS ROM is only visible to the Z80, not to the 8502.
+// Writes to $0000-$0FFF pass through to RAM underneath.
+
+void C128System::tick_z80() {
+    z80_pins_ = board_.z80.tick(z80_pins_);
+
+    const bool mreq = !BUS_GET_BIT(z80_pins_, Z80_MREQ_BIT);
+    const bool iorq = !BUS_GET_BIT(z80_pins_, Z80_IORQ_BIT);
+    // IORQ + M1 = interrupt acknowledge (not a port I/O operation)
+    const bool m1   = !BUS_GET_BIT(z80_pins_, Z80_M1_BIT);
+
+    if (mreq) {
+        const uint16_t addr = BUS_GET_ADDR(z80_pins_);
+        const bool is_write = !BUS_GET_BIT(z80_pins_, BUS_RW_BIT);
+
+        // $FF00-$FF04: MMU registers (always visible, same as 8502)
+        if (addr >= 0xFF00 && addr <= 0xFF04) {
+            if (is_write) {
+                const uint8_t data = BUS_GET_DATA(z80_pins_);
+                if (addr == 0xFF00) {
+                    board_.mmu.write_ff00(data);
+                } else {
+                    board_.mmu.write_ff01_ff04(static_cast<uint8_t>(addr - 0xFF01));
+                }
+            } else {
+                uint8_t data;
+                if (addr == 0xFF00) {
+                    data = board_.mmu.read_ff00();
+                } else {
+                    data = board_.mmu.read_ff01_ff04(static_cast<uint8_t>(addr - 0xFF01));
+                }
+                BUS_SET_DATA(z80_pins_, data);
+            }
+        }
+        // $0000-$0FFF: Z80 BIOS ROM overlay (read) / RAM (write)
+        else if (addr < 0x1000 && !is_write) {
+            if (z80_bios_rom_ && z80_bios_rom_->data()) {
+                BUS_SET_DATA(z80_pins_, z80_bios_rom_->data()[addr & 0x0FFF]);
+            } else {
+                BUS_SET_DATA(z80_pins_, 0xFF);
+            }
+        }
+        // Everything else: use the normal memory bus (same as 8502 viewer)
+        else {
+            z80_pins_ = bus_.resolve(z80_pins_, kViewerCpu);
+            z80_pins_ = bus_.service(z80_pins_);
+
+            // CS-tick MMIO dispatch (for I/O page $D000-$DFFF)
+            z80_pins_ = board_.vic_iie.tick_mmio(z80_pins_);
+            z80_pins_ = board_.sid.tick_mmio(z80_pins_);
+            z80_pins_ = board_.colorram.tick_mmio(z80_pins_);
+            z80_pins_ = board_.mmu.tick_mmio(z80_pins_);
+            z80_pins_ = board_.cia1.tick_mmio(z80_pins_);
+            z80_pins_ = board_.cia2.tick_mmio(z80_pins_);
+            z80_pins_ = board_.vdc.tick_mmio(z80_pins_);
+        }
+
+        if (unlikely(board_.mmu.bank_config_dirty())) {
+            update_bank_config();
+        }
+    } else if (iorq && !m1) {
+        // IORQ without M1 = port I/O (IN/OUT)
+        z80_pins_ = z80_io_tick(z80_pins_);
+    }
+}
+
+bus_state_t C128System::z80_io_tick(bus_state_t pins) {
+    // On real C128 hardware the Z80 IORQ signal is decoded the same way as
+    // 8502 memory-mapped I/O.  OUT (C),A with BC=$D505 reaches the MMU at
+    // $D505, etc.  The Z80 BIOS relies on this — it programs VIC-IIe, MMU,
+    // and CIA registers exclusively via OUT (C),A / IN A,(C).
+    //
+    // Direct dispatch by address range — bypasses CS-tick because the bus
+    // resolve / page-table path only works for MREQ (the CS field isn't
+    // populated during IORQ cycles).
+    const uint16_t addr = BUS_GET_ADDR(pins);
+    const bool is_read = BUS_GET_BIT(pins, BUS_RW_BIT);  // HIGH = read
+    const uint8_t data = BUS_GET_DATA(pins);
+
+    // $FF00-$FF04: MMU configuration registers
+    if (addr >= 0xFF00 && addr <= 0xFF04) {
+        if (!is_read) {
+            if (addr == 0xFF00)
+                board_.mmu.write_ff00(data);
+            else
+                board_.mmu.write_ff01_ff04(static_cast<uint8_t>(addr - 0xFF01));
+        } else {
+            BUS_SET_DATA(pins, (addr == 0xFF00)
+                ? board_.mmu.read_ff00()
+                : board_.mmu.read_ff01_ff04(static_cast<uint8_t>(addr - 0xFF01)));
+        }
+        if (unlikely(board_.mmu.bank_config_dirty()))
+            update_bank_config();
+        return pins;
+    }
+
+    // $D500-$D50B: MMU registers
+    if (addr >= 0xD500 && addr <= 0xD50B) {
+        const uint8_t reg = static_cast<uint8_t>(addr - 0xD500);
+        if (!is_read) {
+            board_.mmu.write_register(reg, data);
+        } else {
+            BUS_SET_DATA(pins, board_.mmu.read_register(reg));
+        }
+        if (unlikely(board_.mmu.bank_config_dirty()))
+            update_bank_config();
+        return pins;
+    }
+
+    // Helper: populate the CS field so that tick_mmio() recognises the chip.
+    auto set_cs = [](bus_state_t& b, uint16_t id) {
+        b = (b & ~uint64_t(BUS_CS_MASK)) | (bus_state_t(id) << BUS_CS_SHIFT);
+    };
+
+    // $DC00-$DC0F: CIA1
+    if ((addr & 0xFF00) == 0xDC00) {
+        set_cs(pins, board_.cia1.bus_chip_id());
+        pins = board_.cia1.tick_mmio(pins);
+        return pins;
+    }
+
+    // $DD00-$DD0F: CIA2
+    if ((addr & 0xFF00) == 0xDD00) {
+        set_cs(pins, board_.cia2.bus_chip_id());
+        pins = board_.cia2.tick_mmio(pins);
+        return pins;
+    }
+
+    // $D000-$D3FF: VIC-IIe
+    if (addr >= 0xD000 && addr < 0xD400) {
+        set_cs(pins, board_.vic_iie.bus_chip_id());
+        pins = board_.vic_iie.tick_mmio(pins);
+        return pins;
+    }
+
+    // $D400-$D4FF: SID
+    if (addr >= 0xD400 && addr < 0xD500) {
+        set_cs(pins, board_.sid.bus_chip_id());
+        pins = board_.sid.tick_mmio(pins);
+        return pins;
+    }
+
+    // $D600-$D601: VDC
+    if (addr >= 0xD600 && addr < 0xD700) {
+        set_cs(pins, board_.vdc.bus_chip_id());
+        pins = board_.vdc.tick_mmio(pins);
+        return pins;
+    }
+
+    // $D800-$DBFF: Color RAM
+    if (addr >= 0xD800 && addr < 0xDC00) {
+        set_cs(pins, board_.colorram.bus_chip_id());
+        pins = board_.colorram.tick_mmio(pins);
+        return pins;
+    }
+
+    // All other ports: open bus
+    if (is_read) {
+        BUS_SET_DATA(pins, 0xFF);
+    }
+    return pins;
 }
 
 void C128System::cpu_banking_callback(void* ctx, uint8_t banking_state) {
