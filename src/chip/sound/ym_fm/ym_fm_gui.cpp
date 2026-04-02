@@ -13,8 +13,9 @@
  *   YM3812 (OPL2):  24-pin DIP
  *
  * SHORTCOMINGS:
- *   - YM2610 (OPNB) shares the 64-pin DIP layout with YM2608; the actual
- *     YM2610 pinout differs slightly and needs its own variant.
+ *   - YM2608/YM2610 64-pin QFP: pin-signal mapping uses SDIP numbering
+ *     order redistributed across four QFP sides.  Needs per-variant
+ *     datasheet verification for the actual QFP-64 pinout.
  *   - Debug fields show per-channel F-Num/Block from live state but do not
  *     expose per-operator envelope level, phase, or output — the most useful
  *     debug data for FM synthesis work.
@@ -247,44 +248,51 @@ ChipLayout* ym_fm_t<Traits>::create_chip_layout() const {
         return &layout;
     }
 
-    // ---------- 64-pin SDIP (YM2608 OPNA) ----------
+    // ---------- 64-pin QFP (YM2608 OPNA, YM2610 OPNB) ----------
+    // NOTE: Pin-signal mapping preserves the SDIP numbering order
+    // redistributed across four QFP sides.  Needs datasheet verification
+    // for the actual QFP-64 pinout when available.
     if constexpr (Traits.pin_count == 64) {
         static ChipLayout layout = [] {
-            ChipLayout layout = create_custom_dip(64, "YM2608");
+            ChipLayout layout = create_qfp64_layout();
 
-            //           Left side                Right side
-            PIN_LR(layout,  1, GND,        PHI_S,        64)
-            PIN_LR(layout,  2, D0,         PHI_M,        63)
-            PIN_LR(layout,  3, D1,         VCC,          62)
-            PIN_LR(layout,  4, D2,         A1,           61)
-            PIN_LR(layout,  5, D3,         A0,           60)
-            PIN_LR(layout,  6, D4,         _RD,          59)
-            PIN_LR(layout,  7, D5,         _WR,          58)
-            PIN_LR(layout,  8, D6,         _CS,          57)
-            PIN_LR(layout,  9, D7,         _IRQ,         56)
-            PIN_LR(layout, 10, IOA7,       DM7,          55)
-            PIN_LR(layout, 11, IOA6,       DM6,          54)
-            PIN_LR(layout, 12, IOA5,       DM5,          53)
-            PIN_LR(layout, 13, IOA4,       DM4,          52)
-            PIN_LR(layout, 14, IOA3,       DM3,          51)
-            PIN_LR(layout, 15, IOA2,       DM2,          50)
-            PIN_LR(layout, 16, IOA1,       DM1,          49)
-            PIN_LR(layout, 17, IOA0,       DM0,          48)
-            PIN_LR(layout, 18, IOB7,       _RAS,         47)
-            PIN_LR(layout, 19, IOB6,       _CAS,         46)
-            PIN_LR(layout, 20, IOB5,       _WE,          45)
-            PIN_LR(layout, 21, IOB4,       MDEN,         44)
-            PIN_LR(layout, 22, IOB3,       ROMCS,        43)
-            PIN_LR(layout, 23, IOB2,       A8,           42)
-            PIN_LR(layout, 24, IOB1,       DTO,          41)
-            PIN_LR(layout, 25, IOB0,       _TEST,        40)
-            PIN_LR(layout, 26, AGND,       AGND,         39)
-            PIN_LR(layout, 27, ANALOG_OUT, DA,           38)
-            PIN_LR(layout, 28, AVCC,       C_DAC,        37)
-            PIN_LR(layout, 29, SH1,        AD_FM,        36)
-            PIN_LR(layout, 30, SH2,        AVCC,         35)
-            PIN_LR(layout, 31, OPO,        SPOFF,        34)
-            PIN_LR(layout, 32, GND,        _IC,          33)
+            // Left pins 1-16 (top→bottom) paired with Right pins 48-33 (top→bottom)
+            //           Left                          Right
+            PIN_LR(layout,  1, GND,        DM0,          48)
+            PIN_LR(layout,  2, D0,         _RAS,         47)
+            PIN_LR(layout,  3, D1,         _CAS,         46)
+            PIN_LR(layout,  4, D2,         _WE,          45)
+            PIN_LR(layout,  5, D3,         MDEN,         44)
+            PIN_LR(layout,  6, D4,         ROMCS,        43)
+            PIN_LR(layout,  7, D5,         A8,           42)
+            PIN_LR(layout,  8, D6,         DTO,          41)
+            PIN_LR(layout,  9, D7,         _TEST,        40)
+            PIN_LR(layout, 10, IOA7,       AGND,         39)
+            PIN_LR(layout, 11, IOA6,       DA,           38)
+            PIN_LR(layout, 12, IOA5,       C_DAC,        37)
+            PIN_LR(layout, 13, IOA4,       AD_FM,        36)
+            PIN_LR(layout, 14, IOA3,       AVCC,         35)
+            PIN_LR(layout, 15, IOA2,       SPOFF,        34)
+            PIN_LR(layout, 16, IOA1,       _IC,          33)
+
+            // Top pins 64-49 (left→right) paired with Bottom pins 17-32 (left→right)
+            //           Top                           Bottom
+            PIN_TB(layout, 64, PHI_S,      IOA0,         17)
+            PIN_TB(layout, 63, PHI_M,      IOB7,         18)
+            PIN_TB(layout, 62, VCC,        IOB6,         19)
+            PIN_TB(layout, 61, A1,         IOB5,         20)
+            PIN_TB(layout, 60, A0,         IOB4,         21)
+            PIN_TB(layout, 59, _RD,        IOB3,         22)
+            PIN_TB(layout, 58, _WR,        IOB2,         23)
+            PIN_TB(layout, 57, _CS,        IOB1,         24)
+            PIN_TB(layout, 56, _IRQ,       IOB0,         25)
+            PIN_TB(layout, 55, DM7,        AGND,         26)
+            PIN_TB(layout, 54, DM6,        ANALOG_OUT,   27)
+            PIN_TB(layout, 53, DM5,        AVCC,         28)
+            PIN_TB(layout, 52, DM4,        SH1,          29)
+            PIN_TB(layout, 51, DM3,        SH2,          30)
+            PIN_TB(layout, 50, DM2,        OPO,          31)
+            PIN_TB(layout, 49, DM1,        GND,          32)
 
             return layout;
         }();

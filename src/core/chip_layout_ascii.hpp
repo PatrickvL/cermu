@@ -7,6 +7,7 @@
 
 #include "core/chip_layout.hpp"
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -53,6 +54,40 @@ inline std::string format_pin_label_ascii(const ChipPin& pin) {
 }
 
 // ============================================================================
+// BODY TEXT HELPERS
+// ============================================================================
+
+// Collect the lines to render inside the chip body: manufacturer,
+// part name, package variant, and custom text.
+inline std::vector<std::string> collect_body_lines(const ChipLayout& layout,
+                                                    const char* chip_name) {
+    std::vector<std::string> lines;
+    if (layout.chip_info && !layout.chip_info->manufacturer.empty())
+        lines.push_back(std::string(layout.chip_info->manufacturer));
+    if (chip_name && *chip_name)
+        lines.push_back(chip_name);
+    if (!layout.markings.package_variant.empty())
+        lines.push_back(std::string(layout.markings.package_variant));
+    if (!layout.markings.custom_text.empty())
+        lines.push_back(std::string(layout.markings.custom_text));
+    return lines;
+}
+
+// Truncate a string to at most `max_cols` visible columns.
+inline void truncate_to_width(std::string& s, size_t max_cols) {
+    size_t cols = 0, byte_pos = 0;
+    while (byte_pos < s.size() && cols < max_cols) {
+        auto c = static_cast<unsigned char>(s[byte_pos]);
+        if (c < 0x80)       byte_pos += 1;
+        else if (c < 0xE0)  byte_pos += 2;
+        else if (c < 0xF0)  byte_pos += 3;
+        else                 byte_pos += 4;
+        ++cols;
+    }
+    if (byte_pos < s.size()) s = s.substr(0, byte_pos);
+}
+
+// ============================================================================
 // DIP / SOIC RENDERER (left + right pins only)
 // ============================================================================
 
@@ -84,82 +119,103 @@ inline void render_dip_ascii(const ChipLayout& layout,
         max_right_num = std::max(max_right_num, right_nums[i].size());
     }
 
-    // Chip name centered inside the body — no package suffix
-    std::string name_str = chip_name ? chip_name : "";
-    size_t name_dw = display_width(name_str);
+    // --- Body text lines: manufacturer, chip name, variant, custom ---
+    auto body_lines = collect_body_lines(layout, chip_name);
 
-    // Fixed narrow body width — real DIP packages are thin and tall.
-    // 12 columns looks right for most chips; allow the name to widen
-    // it slightly if needed, but cap at a reasonable maximum.
+    // Minimum rows for body text when no pins are defined
+    if (rows == 0) rows = std::max(body_lines.size() + 2, size_t(3));
+
+    // --- Body width: base from package width, expand for text ---
+    // 300mil narrow body → 12 cols; 600mil wide → 16; 800mil+ extra-wide → 20
     size_t body_inner = 12;
-    if (name_dw + 4 > body_inner) {
-        // Name needs more room — allow up to 20, truncate beyond that
-        body_inner = std::min(name_dw + 4, size_t(20));
+    if (layout.package.width >= 800.0f) body_inner = 20;
+    else if (layout.package.width >= 500.0f) body_inner = 16;
+
+    for (const auto& line : body_lines) {
+        size_t need = display_width(line) + 4;
+        if (need > body_inner) body_inner = std::min(need, size_t(24));
     }
-    // Ensure even so the notch looks ok
     if (body_inner % 2 != 0) ++body_inner;
 
-    // Truncate name if it still doesn't fit
-    if (name_dw > body_inner - 2) {
-        // Shorten to fit with 1 space each side
-        size_t max_name = body_inner - 2;
-        // Trim to max_name visible columns
-        size_t cols = 0;
-        size_t byte_pos = 0;
-        while (byte_pos < name_str.size() && cols < max_name) {
-            auto c = static_cast<unsigned char>(name_str[byte_pos]);
-            if (c < 0x80)       byte_pos += 1;
-            else if (c < 0xE0)  byte_pos += 2;
-            else if (c < 0xF0)  byte_pos += 3;
-            else                byte_pos += 4;
-            ++cols;
-        }
-        name_str = name_str.substr(0, byte_pos);
-        name_dw = cols;
-    }
+    // Truncate body lines that still don't fit
+    for (auto& line : body_lines)
+        truncate_to_width(line, body_inner - 2);
 
-    // Margin = left label column + " " + left number column + " "
     size_t left_margin = max_left_lbl + 1 + max_left_num + 1;
 
-    // --- Top border with notch ---
+    // --- Orientation marker → top-left corner character + border style ---
+    OrientationMarker marker = layout.package.marker;
+    char top_left_ch = '+';
+    bool pin1_dot_in_body = false;
+    switch (marker) {
+        case OrientationMarker::DOT:           top_left_ch = '*'; break;
+        case OrientationMarker::CHAMFER:       top_left_ch = '/'; break;
+        case OrientationMarker::CIRCLE:        top_left_ch = 'o'; break;
+        case OrientationMarker::NOTCH_AND_DOT: pin1_dot_in_body = true; break;
+        default: break;
+    }
+
+    bool has_notch = (marker == OrientationMarker::NOTCH ||
+                      marker == OrientationMarker::NOTCH_AND_DOT);
+    bool has_bar   = (marker == OrientationMarker::BAR);
+    bool has_tri   = (marker == OrientationMarker::TRIANGLE);
+    char fill = has_bar ? '=' : '-';
+
+    // --- Top border ---
     std::string top_border(left_margin, ' ');
-    {
+    top_border += top_left_ch;
+    if (has_notch) {
         size_t half = body_inner / 2;
         size_t notch = std::min(size_t(4), half);
         size_t solid_left = half - notch / 2;
         size_t solid_right = body_inner - solid_left - notch;
-        // Use box-drawing characters that work in most terminals
-        top_border += "+";
-        for (size_t j = 0; j < solid_left; ++j) top_border += "-";
-        // Notch
+        for (size_t j = 0; j < solid_left; ++j) top_border += fill;
         top_border += "\\";
         for (size_t j = 0; j < notch - 2; ++j) top_border += " ";
         top_border += "/";
-        for (size_t j = 0; j < solid_right; ++j) top_border += "-";
-        top_border += "+";
+        for (size_t j = 0; j < solid_right; ++j) top_border += fill;
+    } else if (has_tri) {
+        size_t half = body_inner / 2;
+        for (size_t j = 0; j < half; ++j) top_border += fill;
+        top_border += "v";
+        for (size_t j = half + 1; j < body_inner; ++j) top_border += fill;
+    } else {
+        for (size_t j = 0; j < body_inner; ++j) top_border += fill;
     }
+    top_border += "+";
     fprintf(out, "%s\n", top_border.c_str());
+
+    // --- Body text block, vertically centered ---
+    size_t block_size = body_lines.size();
+    size_t block_start = (rows > block_size) ? (rows - block_size) / 2 : 0;
 
     // --- Pin rows ---
     for (size_t i = 0; i < rows; ++i) {
-        // Left side: "  LABEL  NUM |"
-        // Right-align label, right-align number
         fprintf(out, "%*s %*s |",
                 pad_width(left_labels[i], max_left_lbl), left_labels[i].c_str(),
                 static_cast<int>(max_left_num), left_nums[i].c_str());
 
-        // Body interior — chip name centered on middle row
-        if (i == rows / 2 && !name_str.empty()) {
-            int pad_total = static_cast<int>(body_inner) - static_cast<int>(name_dw);
-            int pad_left = pad_total / 2;
-            int pad_right = pad_total - pad_left;
-            fprintf(out, "%*s%s%*s",
-                    pad_left, "", name_str.c_str(), pad_right, "");
+        // Body interior — text block centered vertically
+        size_t line_idx = i - block_start;
+        bool show_line = (i >= block_start && line_idx < block_size);
+
+        if (show_line) {
+            const auto& line = body_lines[line_idx];
+            size_t ldw = display_width(line);
+            int pad_total = static_cast<int>(body_inner) - static_cast<int>(ldw);
+            int pl = pad_total / 2;
+            int pr = pad_total - pl;
+            if (pin1_dot_in_body && i == 0 && pl >= 1) {
+                fprintf(out, "*%*s%s%*s", pl - 1, "", line.c_str(), pr, "");
+            } else {
+                fprintf(out, "%*s%s%*s", pl, "", line.c_str(), pr, "");
+            }
+        } else if (pin1_dot_in_body && i == 0) {
+            fprintf(out, "*%*s", static_cast<int>(body_inner) - 1, "");
         } else {
             fprintf(out, "%*s", static_cast<int>(body_inner), "");
         }
 
-        // Right side: "| NUM  LABEL"
         fprintf(out, "| %-*s %-s\n",
                 static_cast<int>(max_right_num), right_nums[i].c_str(),
                 right_labels[i].c_str());
@@ -171,6 +227,17 @@ inline void render_dip_ascii(const ChipLayout& layout,
     for (size_t j = 0; j < body_inner; ++j) bot_border += "-";
     bot_border += "+";
     fprintf(out, "%s\n", bot_border.c_str());
+
+    // --- Package name footer ---
+    std::string pkg_name = layout.get_package_name();
+    if (!pkg_name.empty()) {
+        size_t total_body = body_inner + 2;
+        size_t pkg_dw = display_width(pkg_name);
+        size_t pkg_pad = left_margin + (total_body > pkg_dw ? (total_body - pkg_dw) / 2 : 0);
+        fprintf(out, "%*s%s\n", static_cast<int>(pkg_pad), "", pkg_name.c_str());
+    }
+    if (layout.package.has_thermal_pad || layout.package.has_center_slug)
+        fprintf(out, "%*s[Thermal pad]\n", static_cast<int>(left_margin + 1), "");
 }
 
 // ============================================================================
@@ -211,19 +278,16 @@ inline void render_quad_ascii(const ChipLayout& layout,
     std::vector<std::string> top_labels(T.size()), top_nums(T.size());
     std::vector<std::string> bot_labels(B.size()), bot_nums(B.size());
     size_t max_top_lbl = 0, max_bot_lbl = 0;
-    size_t max_top_num = 0, max_bot_num = 0;
 
     for (size_t i = 0; i < T.size(); ++i) {
         top_labels[i] = format_pin_label_ascii(T[i]);
         top_nums[i] = std::to_string(T[i].pin_number);
         max_top_lbl = std::max(max_top_lbl, display_width(top_labels[i]));
-        max_top_num = std::max(max_top_num, top_nums[i].size());
     }
     for (size_t i = 0; i < B.size(); ++i) {
         bot_labels[i] = format_pin_label_ascii(B[i]);
         bot_nums[i] = std::to_string(B[i].pin_number);
         max_bot_lbl = std::max(max_bot_lbl, display_width(bot_labels[i]));
-        max_bot_num = std::max(max_bot_num, bot_nums[i].size());
     }
 
     // Per-column width: max digit width of top/bottom pin number at each position
@@ -241,8 +305,15 @@ inline void render_quad_ascii(const ChipLayout& layout,
 
     size_t left_margin = max_left_lbl + 1 + max_left_num + 1;
 
-    std::string name_str = chip_name ? chip_name : "";
-    size_t name_dw = display_width(name_str);
+    // Body text
+    auto body_lines = collect_body_lines(layout, chip_name);
+    // Ensure body is wide enough for text
+    for (const auto& line : body_lines) {
+        size_t need = display_width(line) + 4;
+        if (need > body_inner) body_inner = need;
+    }
+    for (auto& line : body_lines)
+        truncate_to_width(line, body_inner - 2);
     
     // Stride helper: column width + trailing gap (0 for last column)
     auto col_stride = [&](size_t i) -> size_t {
@@ -298,14 +369,29 @@ inline void render_quad_ascii(const ChipLayout& layout,
         fprintf(out, "\n");
     }
 
+    // --- Pin-1 corner marker ---
+    OrientationMarker marker = layout.package.marker;
+    char corner_ch = '+';
+    switch (marker) {
+        case OrientationMarker::DOT:
+        case OrientationMarker::NOTCH_AND_DOT: corner_ch = '*'; break;
+        case OrientationMarker::CHAMFER:        corner_ch = '/'; break;
+        case OrientationMarker::CIRCLE:         corner_ch = 'o'; break;
+        default: break;
+    }
+
     // --- Top border ---
     {
         std::string border(left_margin, ' ');
-        border += "+";
+        border += corner_ch;
         for (size_t j = 0; j < body_inner; ++j) border += "-";
         border += "+";
         fprintf(out, "%s\n", border.c_str());
     }
+
+    // --- Body text block, vertically centered ---
+    size_t block_size = body_lines.size();
+    size_t block_start = (rows > block_size) ? (rows - block_size) / 2 : 0;
 
     // --- Pin rows (left / right sides) ---
     for (size_t i = 0; i < rows; ++i) {
@@ -313,12 +399,16 @@ inline void render_quad_ascii(const ChipLayout& layout,
                 pad_width(left_labels[i], max_left_lbl), left_labels[i].c_str(),
                 static_cast<int>(max_left_num), left_nums[i].c_str());
 
-        if (i == rows / 2 && !name_str.empty()) {
-            int pad_total = static_cast<int>(body_inner) - static_cast<int>(name_dw);
-            int pad_left = pad_total / 2;
-            int pad_right = pad_total - pad_left;
-            fprintf(out, "%*s%s%*s",
-                    pad_left, "", name_str.c_str(), pad_right, "");
+        size_t line_idx = i - block_start;
+        bool show_line = (i >= block_start && line_idx < block_size);
+
+        if (show_line) {
+            const auto& line = body_lines[line_idx];
+            size_t ldw = display_width(line);
+            int pad_total = static_cast<int>(body_inner) - static_cast<int>(ldw);
+            int pl = pad_total / 2;
+            int pr = pad_total - pl;
+            fprintf(out, "%*s%s%*s", pl, "", line.c_str(), pr, "");
         } else {
             fprintf(out, "%*s", static_cast<int>(body_inner), "");
         }
@@ -353,6 +443,17 @@ inline void render_quad_ascii(const ChipLayout& layout,
         fprintf(out, "\n");
         render_vertical_labels(bot_labels, B.size(), max_bot_lbl);
     }
+
+    // --- Package name footer ---
+    std::string pkg_name = layout.get_package_name();
+    if (!pkg_name.empty()) {
+        size_t total_body = body_inner + 2;
+        size_t pkg_dw = display_width(pkg_name);
+        size_t pkg_pad = left_margin + (total_body > pkg_dw ? (total_body - pkg_dw) / 2 : 0);
+        fprintf(out, "%*s%s\n", static_cast<int>(pkg_pad), "", pkg_name.c_str());
+    }
+    if (layout.package.has_thermal_pad || layout.package.has_center_slug)
+        fprintf(out, "%*s[Thermal pad]\n", static_cast<int>(left_margin + 1), "");
 }
 
 // ============================================================================
@@ -362,22 +463,65 @@ inline void render_quad_ascii(const ChipLayout& layout,
 inline void render_bga_ascii(const ChipLayout& layout,
                              const char* chip_name,
                              FILE* out = stdout) {
-    // Simple table: row letter + column numbers
     const auto& G = layout.grid_pins;
     if (G.empty()) {
         fprintf(out, "  (no grid pins defined)\n");
         return;
     }
 
-    fprintf(out, "  %s  %s  (BGA — pin grid listing)\n\n",
-            chip_name ? chip_name : "",
-            layout.get_package_name().c_str());
+    // Header
+    std::string name_str = chip_name ? chip_name : "";
+    std::string pkg_name = layout.get_package_name();
+    fprintf(out, "  %s", name_str.c_str());
+    if (!pkg_name.empty()) fprintf(out, "  (%s)", pkg_name.c_str());
+    fprintf(out, "\n");
+    if (layout.chip_info && !layout.chip_info->manufacturer.empty())
+        fprintf(out, "  %.*s\n",
+                static_cast<int>(layout.chip_info->manufacturer.size()),
+                layout.chip_info->manufacturer.data());
+    fprintf(out, "\n");
 
-    // Just list pins in order
-    for (const auto& pin : G) {
-        std::string lbl = format_pin_label_ascii(pin);
-        fprintf(out, "  %3d  %-s\n", pin.pin_number, lbl.c_str());
+    // Try grid layout for perfect squares
+    size_t total = G.size();
+    size_t grid_cols = static_cast<size_t>(std::sqrt(static_cast<double>(total)));
+    if (grid_cols > 0 && grid_cols * grid_cols == total) {
+        size_t grid_rows = grid_cols;
+        // Measure max label width per cell
+        size_t max_lbl = 3;
+        for (const auto& pin : G) {
+            std::string lbl = format_pin_label_ascii(pin);
+            max_lbl = std::max(max_lbl, display_width(lbl));
+        }
+        size_t cell_w = std::min(max_lbl, size_t(5)) + 1;
+
+        // Column headers
+        fprintf(out, "      ");
+        for (size_t c = 0; c < grid_cols; ++c)
+            fprintf(out, "%-*zu", static_cast<int>(cell_w), c + 1);
+        fprintf(out, "\n");
+
+        // Grid rows
+        for (size_t r = 0; r < grid_rows; ++r) {
+            fprintf(out, "   %c  ", static_cast<char>('A' + r));
+            for (size_t c = 0; c < grid_cols; ++c) {
+                size_t idx = r * grid_cols + c;
+                std::string lbl = format_pin_label_ascii(G[idx]);
+                truncate_to_width(lbl, cell_w - 1);
+                fprintf(out, "%-*s", static_cast<int>(cell_w), lbl.c_str());
+            }
+            fprintf(out, "\n");
+        }
+    } else {
+        // Non-square — list format
+        for (const auto& pin : G) {
+            std::string lbl = format_pin_label_ascii(pin);
+            fprintf(out, "  %3d  %-s\n", pin.pin_number, lbl.c_str());
+        }
     }
+
+    // Thermal pad / center slug annotation
+    if (layout.package.has_thermal_pad || layout.package.has_center_slug)
+        fprintf(out, "\n  [Exposed thermal/center pad]\n");
 }
 
 // ============================================================================

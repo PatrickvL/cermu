@@ -38,9 +38,6 @@ using MOS6507 = fam65xx::fam65xx_t<fam65xx::MOS6507Traits>;
 inline ChipLayout create_mos6507_layout() {
     ChipLayout layout = create_dip28_layout();
 
-    layout.left_pins.clear();
-    layout.right_pins.clear();
-
     // Hardware-accurate MOS 6507 pinout (28-pin DIP)
     PIN_LR(layout,  1, _RES,   PHI0,  28);  // Reset / Clock input
     PIN_LR(layout,  2, VSS,    RW,    27);  // GND / Read-Write

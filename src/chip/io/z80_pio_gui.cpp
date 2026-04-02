@@ -76,8 +76,6 @@ void z80_pio_t::register_debug_fields() {
 ChipLayout* z80_pio_t::create_chip_layout() const {
     static ChipLayout layout = [] {
         ChipLayout layout = create_dip40_layout();
-        layout.left_pins.clear();
-        layout.right_pins.clear();
 
         // Z80 PIO (Z8420) — 40-pin DIP
         //           Left side                Right side

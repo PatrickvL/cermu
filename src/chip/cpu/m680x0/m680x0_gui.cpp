@@ -66,9 +66,7 @@ template void m680x0_t<MC68020Traits>::register_debug_fields();
 template <const M680x0Traits& Traits>
 ChipLayout* m680x0_t<Traits>::create_chip_layout() const {
     static ChipLayout layout = [] {
-        ChipLayout layout = create_custom_dip(64);
-        layout.left_pins.clear();
-        layout.right_pins.clear();
+        ChipLayout layout = create_dip64_layout();
 
         // MC68000 64-pin DIP pinout
         // Left side: pins 1-32 (top to bottom)

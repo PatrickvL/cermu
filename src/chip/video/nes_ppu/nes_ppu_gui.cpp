@@ -31,9 +31,6 @@
 inline ChipLayout create_ppu_layout() {
     ChipLayout layout = create_dip40_layout();
 
-    layout.left_pins.clear();
-    layout.right_pins.clear();
-
     // Hardware-accurate Ricoh 2C02 PPU pinout (40-pin DIP)
     PIN_LR(layout,  1, RW,      VCC, 40)       // R/W / +5V
     PIN_LR(layout,  2, D0,      ALE, 39)       // data lo / addr latch en

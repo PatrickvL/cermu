@@ -189,7 +189,7 @@ static ChipLayout create_memory_layout(size_t size_bytes,
     const int total_pins = (total_signal_pins + 1) & ~1; // Round up to even for DIP
     const int pins_per_side = total_pins / 2;
 
-    // Select DIP base layout by pin count
+    // Select empty DIP layout by pin count (rounded up to standard DIP size)
     ChipLayout layout;
     if (total_pins <= 16)       layout = create_dip16_layout();
     else if (total_pins <= 18)  layout = create_dip18_layout();
@@ -197,9 +197,6 @@ static ChipLayout create_memory_layout(size_t size_bytes,
     else if (total_pins <= 24)  layout = create_dip24_layout();
     else if (total_pins <= 28)  layout = create_dip28_layout();
     else                        layout = create_dip40_layout();
-
-    layout.left_pins.clear();
-    layout.right_pins.clear();
 
     // Determine memory type string for display
     const char* type_str = "Memory";

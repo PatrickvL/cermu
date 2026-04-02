@@ -22,12 +22,8 @@
 
 ChipLayout* mos6581_t::create_chip_layout() const {
     static ChipLayout layout = [] {
-        // Start with DIP-28 base layout
+        // MOS6581 SID — 28-pin DIP
         ChipLayout layout = create_dip28_layout();
-
-        // Clear default pins and add hardware-accurate MOS6581 pins
-        layout.left_pins.clear();
-        layout.right_pins.clear();
 
         // Hardware-accurate MOS6581 SID pinout (28-pin DIP)
         // Right-hand pins (15-28) are numbered bottom-up, not top-down

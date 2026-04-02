@@ -52,8 +52,6 @@ ChipLayout* i8255_t::create_chip_layout() const {
     // Intel 8255A — 40-pin DIP (per datasheet)
     static ChipLayout layout = [] {
         ChipLayout layout = create_dip40_layout();
-        layout.left_pins.clear();
-        layout.right_pins.clear();
 
         //           Left side                Right side
         PIN_LR(layout,  1,  PA3,   PA4,   40)

@@ -19,7 +19,7 @@
 
 ChipLayout* MOS2114::create_chip_layout() const {
     static ChipLayout layout = [] {
-        // Start with DIP-18 base layout (provides package dimensions only)
+        // MOS2114 — 18-pin DIP
         ChipLayout layout = create_dip18_layout();
 
         // Update package info for MOS2114
@@ -27,10 +27,6 @@ ChipLayout* MOS2114::create_chip_layout() const {
             "1K x 4-bit SRAM",           // package_variant
             {} // custom_text
         };
-
-        // Clear default pins and add hardware-accurate MOS2114 pins
-        layout.left_pins.clear();
-        layout.right_pins.clear();
 
         // Hardware-accurate MOS2114 pinout (18-pin DIP) from Intel/MOS 2114 datasheet
         // Pin layout exactly as specified in the datasheet:

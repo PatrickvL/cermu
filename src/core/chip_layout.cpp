@@ -210,13 +210,6 @@ ChipLayout create_dip8_layout() {
         0.0f                         // thermal_pad_size
     };
     
-    PIN_LR(layout, 1, VCC,  VDD, 8);
-    PIN_LR(layout, 2, PA0,  PB0, 7);
-    PIN_LR(layout, 3, PA1,  PB1, 6);
-    PIN_LR(layout, 4, GND,  VSS, 5);
-    
-    layout.markings = {};
-    
     return layout;
 }
 
@@ -233,24 +226,7 @@ ChipLayout create_dip14_layout() {
         0.0f                         // thermal_pad_size
     };
     
-    // Left side (pins 1-7)
-    for (uint8_t i = 1; i <= 7; i++) {
-        if (i == 7) {
-            layout.left_pins.push_back(make_pin(7, PinLabel::GND));
-        } else {
-            layout.left_pins.push_back(make_pin(i, PinLabel::PA0, "PORT"));
-        }
-    }
-    
-    // Right side (pins 8-14)
-    for (uint8_t i = 14; i >= 8; i--) {
-        if (i == 14) {
-            layout.right_pins.push_back(make_pin(14, PinLabel::VCC));
-        } else {
-            layout.right_pins.push_back(make_pin(i, PinLabel::PB0, "PORT"));
-        }
-    }
-        return layout;
+    return layout;
 }
 
 ChipLayout create_dip16_layout() {
@@ -265,15 +241,6 @@ ChipLayout create_dip16_layout() {
         false,                       // has_center_slug
         0.0f                         // thermal_pad_size
     };
-    
-    // 8 pins per side
-    for (uint8_t i = 1; i <= 8; i++) {
-        layout.left_pins.push_back(make_pin(i, PinLabel::PA0, "PORTA"));
-    }
-    
-    for (uint8_t i = 16; i >= 9; i--) {
-        layout.right_pins.push_back(make_pin(i, PinLabel::PB0, "PORTB"));
-    }
     
     return layout;
 }
@@ -307,15 +274,6 @@ ChipLayout create_dip18_layout() {
         0.0f                         // thermal_pad_size
     };
     
-    // 9 pins per side
-    for (uint8_t i = 1; i <= 9; i++) {
-        layout.left_pins.push_back(make_pin(i, PinLabel::MA0));
-    }
-    
-    for (uint8_t i = 18; i >= 10; i--) {
-        layout.right_pins.push_back(make_pin(i, PinLabel::DQ0));
-    }
-    
     return layout;
 }
 
@@ -331,15 +289,6 @@ ChipLayout create_dip22_layout() {
         false,                       // has_center_slug
         0.0f                         // thermal_pad_size
     };
-
-    // 11 pins per side
-    for (uint8_t i = 1; i <= 11; i++) {
-        layout.left_pins.push_back(make_pin(i, PinLabel::A0));
-    }
-
-    for (uint8_t i = 22; i >= 12; i--) {
-        layout.right_pins.push_back(make_pin(i, PinLabel::D0));
-    }
 
     return layout;
 }
@@ -392,6 +341,38 @@ ChipLayout create_dip40_layout() {
     return layout;
 }
 
+ChipLayout create_dip48_layout() {
+    ChipLayout layout = {};
+    layout.package = {
+        600.0f,                      // width (mil) - DIP48 wide body (15.24mm)
+        2400.0f,                     // height (mil) - DIP48 body length (60.96mm)
+        PackageType::DIP,            // package_type
+        OrientationMarker::NOTCH,    // marker
+        100.0f,                      // pin_pitch (mil) - standard DIP pitch
+        false,                       // has_thermal_pad
+        false,                       // has_center_slug
+        0.0f                         // thermal_pad_size
+    };
+    
+    return layout;
+}
+
+ChipLayout create_dip64_layout() {
+    ChipLayout layout = {};
+    layout.package = {
+        900.0f,                      // width (mil) - DIP64 extra-wide body (22.86mm)
+        3400.0f,                     // height (mil) - DIP64 body length (86.36mm)
+        PackageType::DIP,            // package_type
+        OrientationMarker::NOTCH,    // marker
+        100.0f,                      // pin_pitch (mil) - standard DIP pitch
+        false,                       // has_thermal_pad
+        false,                       // has_center_slug
+        0.0f                         // thermal_pad_size
+    };
+    
+    return layout;
+}
+
 // SOIC layouts
 ChipLayout create_soic8_layout() {
     ChipLayout layout = {};
@@ -404,20 +385,6 @@ ChipLayout create_soic8_layout() {
         false,                       // has_thermal_pad
         false,                       // has_center_slug
         0.0f                         // thermal_pad_size
-    };
-    
-    layout.left_pins = {
-        make_pin(1, PinLabel::PA0),
-        make_pin(2, PinLabel::PA1),
-        make_pin(3, PinLabel::PA2),
-        make_pin(4, PinLabel::GND)
-    };
-    
-    layout.right_pins = {
-        make_pin(8, PinLabel::VCC),
-        make_pin(7, PinLabel::PB0),
-        make_pin(6, PinLabel::PB1),
-        make_pin(5, PinLabel::PB2)
     };
     
     return layout;
@@ -484,23 +451,6 @@ ChipLayout create_plcc28_layout() {
         false,                       // has_center_slug
         0.0f                         // thermal_pad_size
     };
-    
-    // PLCC has pins on all 4 sides: 7 per side
-    for (int i = 1; i <= 7; i++) {
-        layout.left_pins.push_back(make_pin(i, PinLabel::PA0, "LEFT"));
-    }
-    
-    for (int i = 8; i <= 14; i++) {
-        layout.bottom_pins.push_back(make_pin(i, PinLabel::PA1, "BOTTOM"));
-    }
-    
-    for (int i = 15; i <= 21; i++) {
-        layout.right_pins.push_back(make_pin(i, PinLabel::PA2, "RIGHT"));
-    }
-    
-    for (int i = 22; i <= 28; i++) {
-        layout.top_pins.push_back(make_pin(i, PinLabel::PA3, "TOP"));
-    }
     
     return layout;
 }
@@ -889,108 +839,6 @@ ChipLayout create_sip9_layout() {
         {},                          // package_variant
         "10K Resistor Network",      // custom_text
     };
-    
-    return layout;
-}
-
-// Custom layout builders
-ChipLayout create_custom_dip(uint8_t total_pins, const char* part_name) {
-    ChipLayout layout = {};
-    
-    uint8_t pins_per_side = total_pins / 2;
-    
-    // Calculate proper DIP dimensions based on pin count
-    float width = (total_pins <= 20) ? 300.0f : 600.0f;  // 300 or 600 mil width
-    float length = (pins_per_side - 1) * 100.0f + 300.0f; // Pin pitch × (pins-1) + end margins
-    
-    layout.package = {
-        width,                       // width (mil) - DIP width (300 or 600 mil)
-        length,                      // height (mil) - DIP length based on pin count
-        PackageType::DIP,            // package_type
-        OrientationMarker::NOTCH,    // marker
-        100.0f,                      // pin_pitch (mil) - 100 mil standard
-        false,                       // has_thermal_pad
-        false,                       // has_center_slug
-        0.0f                         // thermal_pad_size
-    };
-    
-    // Generate generic pins
-    for (uint8_t i = 1; i <= pins_per_side; i++) {
-        layout.left_pins.push_back(make_pin(i, PinLabel::PA0));
-    }
-    
-    for (uint8_t i = total_pins; i > pins_per_side; i--) {
-        layout.right_pins.push_back(make_pin(i, PinLabel::PB0));
-    }
-    
-    return layout;
-}
-
-ChipLayout create_custom_qfp(uint8_t total_pins, const char* part_name) {
-    ChipLayout layout = {};
-    
-    uint8_t pins_per_side = total_pins / 4;
-    float size_mil = 393.7f + pins_per_side * 31.5f; // QFP size in mil based on pin count
-    
-    layout.package = {
-        size_mil,                    // width (mil)
-        size_mil,                    // height (mil) 
-        PackageType::QFP,            // package_type
-        OrientationMarker::DOT,      // marker
-        19.7f,                       // pin_pitch (mil, typical QFP 0.5mm)
-        false,                       // has_thermal_pad
-        false,                       // has_center_slug
-        0.0f                         // thermal_pad_size
-    };
-    
-    // Generate pins for each side
-    for (uint8_t i = 1; i <= pins_per_side; i++) {
-        layout.left_pins.push_back(make_pin(i, PinLabel::PA0));
-    }
-    
-    for (uint8_t i = pins_per_side + 1; i <= 2 * pins_per_side; i++) {
-        layout.top_pins.push_back(make_pin(i, PinLabel::PA1));
-    }
-    
-    for (uint8_t i = 2 * pins_per_side + 1; i <= 3 * pins_per_side; i++) {
-        layout.right_pins.push_back(make_pin(i, PinLabel::PA2));
-    }
-    
-    for (uint8_t i = 3 * pins_per_side + 1; i <= total_pins; i++) {
-        layout.bottom_pins.push_back(make_pin(i, PinLabel::PA3));
-    }
-    
-    layout.markings = {};
-    
-    return layout;
-}
-
-ChipLayout create_custom_bga(uint8_t rows, uint8_t cols, const char* part_name) {
-    ChipLayout layout = {};
-    
-    float width_mil = 393.7f + cols * 50.0f;   // BGA size based on grid
-    float height_mil = 393.7f + rows * 50.0f;
-    
-    layout.package = {
-        width_mil,                   // width (mil)
-        height_mil,                  // height (mil)
-        PackageType::BGA,            // package_type
-        OrientationMarker::DOT,      // marker
-        50.0f,                       // pin_pitch (mil, typical BGA 1.27mm)
-        false,                       // has_thermal_pad
-        false,                       // has_center_slug
-        0.0f                         // thermal_pad_size
-    };
-    
-    // Generate grid pins (A1, A2, ..., B1, B2, ...)
-    for (uint8_t row = 0; row < rows; row++) {
-        for (uint8_t col = 0; col < cols; col++) {
-            uint8_t pin_number = row * cols + col + 1;
-            layout.grid_pins.push_back(make_pin(pin_number, PinLabel::PA0));
-        }
-    }
-    
-    layout.markings = {};
     
     return layout;
 }
