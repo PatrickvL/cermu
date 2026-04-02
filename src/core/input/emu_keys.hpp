@@ -161,6 +161,14 @@ typedef uint32_t emu_key_t;
 #define EMUKEY_KP_0         98
 #define EMUKEY_KP_PERIOD    99
 
+// --- ISO / international ---
+#define EMUKEY_NONUSBACKSLASH 100  // ISO key between left shift and Y
+
+// --- Extended keys (uncommon but present on some keyboards) ---
+#define EMUKEY_HELP        117   // Help key (Sun, Mac, some multimedia keyboards)
+#define EMUKEY_SYSREQ      154   // SysRq / Attention key
+#define EMUKEY_RETURN2     158   // Second Return key (some ISO / terminal keyboards)
+
 // --- Modifier keys ---
 #define EMUKEY_LCTRL       224
 #define EMUKEY_LSHIFT      225
@@ -171,6 +179,9 @@ typedef uint32_t emu_key_t;
 #define EMUKEY_RALT        230
 #define EMUKEY_RGUI        231
 
+// --- Mode key ---
+#define EMUKEY_MODE        257   // Mode toggle key (some international keyboards)
+
 // ============================================================================
 // Emulator-specific keys  (value >= 512)
 // ============================================================================
@@ -180,13 +191,16 @@ typedef uint32_t emu_key_t;
 #define EMUKEY_EMU_BASE    512
 
 // --- Commodore family (512–575) ---
+// Keys with no standard host equivalent.  Mapped to host scancodes at
+// runtime via EmuKeySDLMap::register_candidates() so the mapper can
+// probe keyboard availability and apply fallbacks.
 #define EMUKEY_CBM_ARROW_LEFT    512   // ← character key (C64, VIC-20)
 #define EMUKEY_CBM_ARROW_UP      513   // ↑ character key (C64, VIC-20)
 #define EMUKEY_CBM_POUND         514   // £ key (C64, VIC-20, C16)
 #define EMUKEY_CBM_RESTORE       515   // RESTORE (NMI trigger, not in matrix)
 #define EMUKEY_CBM_PI            516   // π (shifted ↑ on C64/VIC-20) — character marker
 
-// C128-specific keys (no host equivalent)
+// C128-specific keys (runtime-mapped via register_candidates)
 #define EMUKEY_CBM_HELP          520   // HELP key (C128)
 #define EMUKEY_CBM_LINE_FEED     521   // LINE FEED key (C128)
 #define EMUKEY_CBM_40_80_DISPLAY 522   // 40/80 DISPLAY key (C128, directly reads 8722 MMU)
@@ -196,9 +210,9 @@ typedef uint32_t emu_key_t;
 // Commodore-specific aliases for identity-mapped keys.
 // These share the same numeric value as their host equivalent but give
 // Commodore-meaningful names for use in Commodore-context code.
-#define EMUKEY_CBM_RUN_STOP      EMUKEY_TAB        // RUN/STOP key (VIC-20/C64 — same position as host TAB)
-#define EMUKEY_CBM_COMMODORE     EMUKEY_LGUI       // C= key (host: Super/Windows/Command)
-#define EMUKEY_CBM_DEL           EMUKEY_BACKSPACE   // INST/DEL key
+#define EMUKEY_CBM_RUN_STOP      EMUKEY_TAB            // RUN/STOP key (VIC-20/C64 — same position as host TAB)
+#define EMUKEY_CBM_COMMODORE     EMUKEY_LGUI           // C= key (host: Super/Windows/Command)
+#define EMUKEY_CBM_DEL           EMUKEY_BACKSPACE      // INST/DEL key
 
 // --- Reserved for NES/Famicom (576–639) ---
 // #define EMUKEY_NES_SELECT      576
