@@ -267,7 +267,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
     // Only pending_vbl_clear_ can fire here (pre-render scanline -1, dot 2).
     if (unlikely(pending_vbl_clear_)) {
         // Clear VBL (bit 7), Sprite 0 Hit (bit 6), Sprite Overflow (bit 5)
-        regs_[PPUSTATUS] &= ~0xE0;
+        regs_[PPUSTATUS] &= uint8_t(~0xE0);
         pending_vbl_clear_ = false;
     }
 
