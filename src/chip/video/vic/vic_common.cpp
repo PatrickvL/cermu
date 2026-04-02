@@ -689,6 +689,7 @@ void vic_base_t::register_debug_fields() {
     wire_debug_registers(VIC_REG_INFO, 0x9000);
     r.set_decl_entries(VIC_DECL_ENTRIES.data(), VIC_DECL_ENTRIES.size());
     uint32_t* palette = get_default_palette();
+    r.set_palette(palette, 16);
 
     // Register values, control bitfields, audio enables/freq, and volume
     // are all in the DECL walk.  Raster timing, computed base addresses,
@@ -708,10 +709,7 @@ void vic_base_t::register_debug_fields() {
      .address("Video Matrix Base", +[](const ChipBase* c) -> uint32_t { return static_cast<V*>(c)->cached_base_video; }, 16)
      .address("Character Base", +[](const ChipBase* c) -> uint32_t { return static_cast<V*>(c)->cached_base_char; }, 16);
 
-    // ---- Colors (palette swatches — DataKind::Color deferred) ----
-    r.category("Colors", false)
-     .color("Border", +[](const ChipBase* c) -> uint32_t { return static_cast<V*>(c)->regs_[BACKGROUND] & VIC_BG_BORDER_MASK; }, palette, 16)
-     .color("Background", +[](const ChipBase* c) -> uint32_t { return (static_cast<V*>(c)->regs_[BACKGROUND] & VIC_BG_BACKGROUND_MASK) >> VIC_BG_BACKGROUND_SHIFT; }, palette, 16)
-     .color("Aux Color", +[](const ChipBase* c) -> uint32_t { return (static_cast<V*>(c)->regs_[AUX_COLOR] & VIC_AUX_COLOR_MASK) >> VIC_AUX_COLOR_SHIFT; }, palette, 16);
+    // Border, Background, and Aux Color are rendered with palette swatches
+    // by the DECL walk (FLD entries with DataKind::Color + set_palette()).
 }
 #endif // CERMU_HAS_CHIP_DEBUG

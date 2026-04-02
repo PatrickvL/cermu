@@ -86,17 +86,15 @@ public:
     // All bits HIGH (0xFF) when disabled; exactly one bit LOW when enabled.
 
     uint8_t decode(uint8_t inputs) noexcept {
-        inputs_ = inputs & 0x3F;
-        regs_[ls138::reg::INPUTS] = inputs_;
+        regs_[ls138::reg::INPUTS] = inputs & 0x3F;
 
         bool enabled = !(inputs & 0x08) && !(inputs & 0x10) && (inputs & 0x20);
         if (!enabled) {
-            outputs_ = 0xFF;  // all outputs inactive (HIGH)
+            regs_[ls138::reg::OUTPUTS] = 0xFF;  // all outputs inactive (HIGH)
         } else {
-            outputs_ = ~(1u << (inputs & 0x07));  // selected output LOW
+            regs_[ls138::reg::OUTPUTS] = ~(1u << (inputs & 0x07));  // selected output LOW
         }
-        regs_[ls138::reg::OUTPUTS] = outputs_;
-        return outputs_;
+        return regs_[ls138::reg::OUTPUTS];
     }
 
     // ── Output queries ──────────────────────────────────────────────────
@@ -105,32 +103,30 @@ public:
     /// Same as decode() but returns the select value directly.
     int decode_select(uint8_t inputs) noexcept {
         decode(inputs);
-        return (outputs_ != 0xFF) ? (inputs & 0x07) : -1;
+        return (regs_[ls138::reg::OUTPUTS] != 0xFF) ? (inputs & 0x07) : -1;
     }
 
     /// Return the full _Y7.._Y0 byte (active-low).
-    uint8_t y_all()               const { return outputs_; }
+    uint8_t y_all()               const { return regs_[ls138::reg::OUTPUTS]; }
 
     /// Return true if output Yn is active (LOW).
-    bool    y_active(uint8_t n)   const { return !(outputs_ & (1u << (n & 7))); }
+    bool    y_active(uint8_t n)   const { return !(regs_[ls138::reg::OUTPUTS] & (1u << (n & 7))); }
 
     /// Return the index of the single active output (0–7), or -1 if disabled.
     int     active_output()       const {
-        if (outputs_ == 0xFF) return -1;
+        if (regs_[ls138::reg::OUTPUTS] == 0xFF) return -1;
         // Exactly one bit is clear — find it
         for (int i = 0; i < 8; ++i)
-            if (!(outputs_ & (1u << i))) return i;
+            if (!(regs_[ls138::reg::OUTPUTS] & (1u << i))) return i;
         return -1;
     }
 
     // ── ChipBase overrides ──────────────────────────────────────────────
 
     void reset() override {
-        inputs_  = 0;
-        outputs_ = 0xFF;  // all outputs inactive
         if (num_regs_ >= LS138_NUM_REGS) {
-            regs_[ls138::reg::INPUTS]  = inputs_;
-            regs_[ls138::reg::OUTPUTS] = outputs_;
+            regs_[ls138::reg::INPUTS]  = 0;
+            regs_[ls138::reg::OUTPUTS] = 0xFF;  // all outputs inactive
         }
     }
 
@@ -140,39 +136,17 @@ public:
 #endif
 
 private:
-    uint8_t inputs_  = 0;
-    uint8_t outputs_ = 0xFF;
-
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
+        // Input/output flag fields are rendered by the DECL walk.
         debug_registry_
-            .category("74LS138 — Inputs")
-            .flag("A (Select 0)", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<const LS138*>(c)->inputs_ & 0x01;
-            })
-            .flag("B (Select 1)", +[](const ChipBase* c) -> uint32_t {
-                return (static_cast<const LS138*>(c)->inputs_ >> 1) & 1;
-            })
-            .flag("C (Select 2)", +[](const ChipBase* c) -> uint32_t {
-                return (static_cast<const LS138*>(c)->inputs_ >> 2) & 1;
-            })
-            .flag("_E1", +[](const ChipBase* c) -> uint32_t {
-                return (static_cast<const LS138*>(c)->inputs_ >> 3) & 1;
-            })
-            .flag("_E2", +[](const ChipBase* c) -> uint32_t {
-                return (static_cast<const LS138*>(c)->inputs_ >> 4) & 1;
-            })
-            .flag("E3", +[](const ChipBase* c) -> uint32_t {
-                return (static_cast<const LS138*>(c)->inputs_ >> 5) & 1;
-            })
+            .set_decl_entries(LS138_DECL_ENTRIES.data(), LS138_DECL_ENTRIES.size());
 
-            .category("74LS138 — Outputs (active-low)")
+        debug_registry_
+            .category("74LS138 — Derived")
             .value("Active Output", +[](const ChipBase* c) -> uint32_t {
                 int out = static_cast<const LS138*>(c)->active_output();
                 return out < 0 ? 0xFF : uint32_t(out);
-            })
-            .value("_Y7.._Y0", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<const LS138*>(c)->outputs_;
             });
     }
 #endif

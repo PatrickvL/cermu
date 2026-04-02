@@ -105,10 +105,10 @@ public:
     // @return          Q outputs (bits 3:0 = Q3..Q0)
 
     uint8_t clock_pulse(uint8_t d_inputs) noexcept {
-        d_ = d_inputs & 0x0F;
-        q_ = d_;
-        update_regs();
-        return q_;
+        uint8_t d = d_inputs & 0x0F;
+        regs_[ls175::reg::INPUTS]  = d | (1 << 4);  // _MR=1 (not asserted)
+        regs_[ls175::reg::OUTPUTS] = d | ((~d & 0x0F) << 4);
+        return d;
     }
 
     // ── Master reset (asynchronous, active-low) ─────────────────────────
@@ -116,29 +116,27 @@ public:
     // clear() forces all Q outputs LOW, regardless of clock state.
 
     void clear() noexcept {
-        q_ = 0;
-        update_regs();
+        regs_[ls175::reg::INPUTS]  = (regs_[ls175::reg::INPUTS] & 0x0F);  // _MR=0 (asserted)
+        regs_[ls175::reg::OUTPUTS] = 0xF0;  // Q all LOW, /Q all HIGH
     }
 
     // ── Output queries ──────────────────────────────────────────────────
 
     /// Return Q3..Q0 as a 4-bit value.
-    uint8_t q_all()           const { return q_; }
+    uint8_t q_all()           const { return regs_[ls175::reg::OUTPUTS] & 0x0F; }
 
     /// Return individual Q output (0–3).
-    bool    q(uint8_t n)      const { return (q_ >> (n & 3)) & 1; }
+    bool    q(uint8_t n)      const { return (regs_[ls175::reg::OUTPUTS] >> (n & 3)) & 1; }
 
     /// Return complement /Q output (0–3).
     bool    q_not(uint8_t n)  const { return !q(n); }
 
     /// Return D3..D0 as last seen.
-    uint8_t d_all()           const { return d_; }
+    uint8_t d_all()           const { return regs_[ls175::reg::INPUTS] & 0x0F; }
 
     // ── ChipBase overrides ──────────────────────────────────────────────
 
     void reset() override {
-        d_ = 0;
-        q_ = 0;
         if (num_regs_ >= LS175_NUM_REGS) {
             regs_[ls175::reg::INPUTS]  = 0;
             regs_[ls175::reg::OUTPUTS] = 0xF0;  // /Q all HIGH when Q all LOW
@@ -151,49 +149,11 @@ public:
 #endif
 
 private:
-    uint8_t d_ = 0;   // last D inputs
-    uint8_t q_ = 0;   // current Q outputs
-
-    void update_regs() noexcept {
-        if (num_regs_ >= LS175_NUM_REGS) {
-            regs_[ls175::reg::INPUTS]  = d_ | (1 << 4);  // _MR=1 (not asserted)
-            regs_[ls175::reg::OUTPUTS] = q_ | ((~q_ & 0x0F) << 4);
-        }
-    }
-
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
+        // All input/output flag fields are rendered by the DECL walk.
         debug_registry_
-            .category("74LS175 — D Inputs")
-            .flag("D0", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<const LS175*>(c)->d_ & 0x01;
-            })
-            .flag("D1", +[](const ChipBase* c) -> uint32_t {
-                return (static_cast<const LS175*>(c)->d_ >> 1) & 1;
-            })
-            .flag("D2", +[](const ChipBase* c) -> uint32_t {
-                return (static_cast<const LS175*>(c)->d_ >> 2) & 1;
-            })
-            .flag("D3", +[](const ChipBase* c) -> uint32_t {
-                return (static_cast<const LS175*>(c)->d_ >> 3) & 1;
-            })
-
-            .category("74LS175 — Q Outputs")
-            .value("Q3..Q0", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<const LS175*>(c)->q_;
-            })
-            .flag("Q0", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<const LS175*>(c)->q_ & 0x01;
-            })
-            .flag("Q1", +[](const ChipBase* c) -> uint32_t {
-                return (static_cast<const LS175*>(c)->q_ >> 1) & 1;
-            })
-            .flag("Q2", +[](const ChipBase* c) -> uint32_t {
-                return (static_cast<const LS175*>(c)->q_ >> 2) & 1;
-            })
-            .flag("Q3", +[](const ChipBase* c) -> uint32_t {
-                return (static_cast<const LS175*>(c)->q_ >> 3) & 1;
-            });
+            .set_decl_entries(LS175_DECL_ENTRIES.data(), LS175_DECL_ENTRIES.size());
     }
 #endif
 };

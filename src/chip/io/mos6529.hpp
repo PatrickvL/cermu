@@ -103,11 +103,10 @@ private:
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
         using S = const mos6529_t;
+        // Output Latch is visible in the DECL register walk (REG PORT).
+        // External Pins and Effective (read) are not in any register.
         debug_registry_
             .category("6529B I/O Port")
-            .value("Output Latch", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<S*>(c)->output_latch;
-            }, 8)
             .value("External Pins", +[](const ChipBase* c) -> uint32_t {
                 return static_cast<S*>(c)->external_pins;
             }, 8)

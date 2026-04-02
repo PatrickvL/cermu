@@ -95,18 +95,9 @@ private:
 
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
-        using LS = const LS259;
+        // All output flag fields are rendered by the DECL walk.
         debug_registry_
             .set_decl_entries(LS259_DECL_ENTRIES.data(), LS259_DECL_ENTRIES.size());
-
-        static const char* const q_labels[] = {
-            "Q7", "Q6", "Q5", "Q4", "Q3", "Q2", "Q1", "Q0"
-        };
-        debug_registry_
-            .category("74LS259 Latch Outputs")
-            .bitfield("Q Outputs", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<LS*>(c)->q_outputs_;
-            }, 8, q_labels);
     }
 #endif
 };
