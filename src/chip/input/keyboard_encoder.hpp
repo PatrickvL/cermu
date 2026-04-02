@@ -207,6 +207,11 @@ public:
 
     const KeyboardEncoderConfig& config() const { return config_; }
 
+#ifdef CERMU_HAS_GUI
+    ChipLayout* create_chip_layout() const override;
+    std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
+#endif
+
 private:
     enum class State : uint8_t {
         IDLE,           // Waiting for key press

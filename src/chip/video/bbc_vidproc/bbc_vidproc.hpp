@@ -200,6 +200,11 @@ public:
     CompositeVideoOut* video_out_ = nullptr;
     void set_video_out(CompositeVideoOut* s) { video_out_ = s; }
 
+#ifdef CERMU_HAS_GUI
+    ChipLayout* create_chip_layout() const override;
+    std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
+#endif
+
 private:
     // === Mode 7 Teletext rendering ===
     //

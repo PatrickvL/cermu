@@ -9,7 +9,25 @@
 #ifdef CERMU_HAS_GUI
 #include "core/chip_layout.hpp"
 
-ChipLayout* LS138::create_chip_layout() const { return nullptr; }
+// 74LS138 — 3-to-8 line decoder/demultiplexer — DIP-16
+// Pinout from TI SN74LS138 datasheet
+ChipLayout* LS138::create_chip_layout() const {
+    static ChipLayout layout = [] {
+        ChipLayout layout = create_dip16_layout();
+
+        PIN_LR(layout,  1, A0,    VCC,   16);
+        PIN_LR(layout,  2, A1,    _Y0,   15);
+        PIN_LR(layout,  3, A2,    _Y1,   14);
+        PIN_LR(layout,  4, _E1,   _Y2,   13);
+        PIN_LR(layout,  5, _E2,   _Y3,   12);
+        PIN_LR(layout,  6, E3,    _Y4,   11);
+        PIN_LR(layout,  7, _Y7,   _Y5,   10);
+        PIN_LR(layout,  8, GND,   _Y6,    9);
+
+        return layout;
+    }();
+    return &layout;
+}
 
 std::vector<PinSignalState> LS138::get_layout_pin_states(ChipLayout& /*layout*/) {
     return {};
