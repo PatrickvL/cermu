@@ -878,6 +878,14 @@ KeyboardMapper* create_c64_keyboard_mapper(commodore_keyboard_t* keyboard) {
     // automatically by the PETSCII decode tables + petscii_to_host_char().
     // No manual add_char_mapping calls needed.
 
+    // Register emu-specific key candidates for this system.
+    // RESTORE: prefer SysRq (thematic NMI match), fall back to Grave.
+    // POUND: prefer ISO # key (produces £ on UK keyboards).
+    auto& sdl_map = EmuKeySDLMap::instance();
+    sdl_map.clear_system_mappings();
+    sdl_map.register_candidates(EMUKEY_CBM_RESTORE, {SDL_SCANCODE_SYSREQ, SDL_SCANCODE_GRAVE});
+    sdl_map.register_candidates(EMUKEY_CBM_POUND,   {SDL_SCANCODE_NONUSHASH});
+
     return mapper;
 }
 
@@ -890,6 +898,11 @@ KeyboardMapper* create_vic20_keyboard_mapper(commodore_keyboard_t* keyboard) {
 
     // Commodore-specific character mappings (£, ↑, ←, π) are now handled
     // automatically by the PETSCII decode tables + petscii_to_host_char().
+
+    auto& sdl_map = EmuKeySDLMap::instance();
+    sdl_map.clear_system_mappings();
+    sdl_map.register_candidates(EMUKEY_CBM_RESTORE, {SDL_SCANCODE_SYSREQ, SDL_SCANCODE_GRAVE});
+    sdl_map.register_candidates(EMUKEY_CBM_POUND,   {SDL_SCANCODE_NONUSHASH});
 
     return mapper;
 }
@@ -904,6 +917,11 @@ KeyboardMapper* create_c16_keyboard_mapper(commodore_keyboard_t* keyboard) {
     // Commodore-specific character mappings are now handled automatically
     // by the PETSCII decode tables + petscii_to_host_char().
 
+    auto& sdl_map = EmuKeySDLMap::instance();
+    sdl_map.clear_system_mappings();
+    sdl_map.register_candidates(EMUKEY_CBM_RESTORE, {SDL_SCANCODE_SYSREQ, SDL_SCANCODE_GRAVE});
+    sdl_map.register_candidates(EMUKEY_CBM_POUND,   {SDL_SCANCODE_NONUSHASH});
+
     return mapper;
 }
 
@@ -913,6 +931,25 @@ KeyboardMapper* create_c128_keyboard_mapper(commodore_keyboard_t* keyboard) {
     mapper->build_character_map_from_matrix(&c128_keyboard_config);
 
     mapper->register_default_synthetic_mappings();
+
+    // Register emu-specific key candidates for C128.
+    // Shared Commodore keys first, then C128-specific extras.
+    auto& sdl_map = EmuKeySDLMap::instance();
+    sdl_map.clear_system_mappings();
+    sdl_map.register_candidates(EMUKEY_CBM_RESTORE,       {SDL_SCANCODE_SYSREQ, SDL_SCANCODE_GRAVE});
+    sdl_map.register_candidates(EMUKEY_CBM_POUND,         {SDL_SCANCODE_NONUSHASH});
+
+    // C128-specific keys:
+    // ALT: C128 has one ALT key (top-left area). Map both host ALTs to it.
+    sdl_map.register_candidates(EMUKEY_CBM_ALT,           {SDL_SCANCODE_LALT, SDL_SCANCODE_RALT}, true);
+    // HELP: prefer the rare HELP scancode (117), no common fallback.
+    sdl_map.register_candidates(EMUKEY_CBM_HELP,          {SDL_SCANCODE_HELP});
+    // LINE FEED: prefer RETURN2 (second Return on ISO/terminal keyboards).
+    sdl_map.register_candidates(EMUKEY_CBM_LINE_FEED,     {SDL_SCANCODE_RETURN2});
+    // 40/80 DISPLAY: MODE key (rare international keyboards).
+    sdl_map.register_candidates(EMUKEY_CBM_40_80_DISPLAY, {SDL_SCANCODE_MODE});
+    // NO SCROLL: Scroll Lock (present on most full-size keyboards).
+    sdl_map.register_candidates(EMUKEY_CBM_NO_SCROLL,     {SDL_SCANCODE_SCROLLLOCK});
 
     return mapper;
 }

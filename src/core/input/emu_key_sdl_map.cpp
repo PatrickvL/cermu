@@ -2,6 +2,7 @@
 #include "core/input/emu_key_sdl_map.hpp"
 #include <SDL_scancode.h>
 #include <SDL_keycode.h>
+#include <SDL_keyboard.h>
 #include <cstring>
 #include <cstdio>
 
@@ -31,8 +32,16 @@ EmuKeySDLMap::EmuKeySDLMap() {
     // Letters, digits, common keys (4–99)
     for (int i = 4; i <= 99; i++) identity_.set(i);
 
+    // ISO key between left shift and Y
+    identity_.set(100);  // NONUSBACKSLASH
+
     // F13–F24, other keys (104–115)
     for (int i = 104; i <= 115; i++) identity_.set(i);
+
+    // Extended keys (uncommon but present on some keyboards)
+    identity_.set(117);  // HELP
+    identity_.set(154);  // SYSREQ
+    identity_.set(158);  // RETURN2
 
     // International / language keys (some scattered values)
     for (int i = 133; i <= 135; i++) identity_.set(i);  // INTERNATIONAL1-3
@@ -47,6 +56,9 @@ EmuKeySDLMap::EmuKeySDLMap() {
 
     // Modifiers (224–231)
     for (int i = 224; i <= 231; i++) identity_.set(i);
+
+    // Mode toggle key
+    identity_.set(257);  // MODE
 
     // ========================================================================
     // Step 2: Build ASCII keycode → scancode table for sdl_keycode_to_emu_key.
@@ -90,13 +102,13 @@ EmuKeySDLMap::EmuKeySDLMap() {
     ascii_to_scancode_[0x7F] = SDL_SCANCODE_DELETE;     // SDLK_DELETE = 127
 
     // ========================================================================
-    // Step 3: Register default non-identity mappings.
-    // Emulator-specific keys that should respond to a default host key.
+    // Step 3: No default system-specific mappings here.
+    // Systems register their emu-specific key candidates via
+    // register_candidates() during initialize() / mapper creation.
     // ========================================================================
-    register_mapping(EMUKEY_CBM_RESTORE, SDL_SCANCODE_GRAVE);  // backtick → RESTORE
 
-    log_info("EmuKeySDLMap: Initialised (%zu identity-mapped, %zu deviations)\n",
-           identity_.count(), emu_to_sdl_.size());
+    log_info("EmuKeySDLMap: Initialised (%zu identity-mapped)\n",
+           identity_.count());
 }
 
 // ============================================================================
@@ -104,12 +116,15 @@ EmuKeySDLMap::EmuKeySDLMap() {
 // ============================================================================
 
 emu_key_t EmuKeySDLMap::scancode_to_emu_key(SDL_Scancode_t scancode) const {
-    if (scancode < EMUKEY_EMU_BASE && identity_[scancode]) {
-        return (emu_key_t)scancode;
-    }
+    // System overrides take priority over identity mappings.
+    // This allows register_candidates() to redirect standard scancodes
+    // (e.g. LALT) to emu-specific keys (e.g. EMUKEY_CBM_ALT).
     auto it = sdl_to_emu_.find(scancode);
     if (it != sdl_to_emu_.end()) {
         return it->second;
+    }
+    if (scancode < EMUKEY_EMU_BASE && identity_[scancode]) {
+        return (emu_key_t)scancode;
     }
     return EMUKEY_NONE;
 }
@@ -155,9 +170,65 @@ void EmuKeySDLMap::register_mapping(emu_key_t key, SDL_Scancode_t scancode) {
 void EmuKeySDLMap::remove_mapping(emu_key_t key) {
     auto it = emu_to_sdl_.find(key);
     if (it != emu_to_sdl_.end()) {
-        sdl_to_emu_.erase(it->second);
+        // Remove all sdl_to_emu_ entries that point to this key
+        // (there may be multiple due to map_all)
+        for (auto sit = sdl_to_emu_.begin(); sit != sdl_to_emu_.end(); ) {
+            if (sit->second == key)
+                sit = sdl_to_emu_.erase(sit);
+            else
+                ++sit;
+        }
         emu_to_sdl_.erase(it);
     }
+}
+
+// ============================================================================
+// System-specific candidate mapping
+// ============================================================================
+
+bool EmuKeySDLMap::is_scancode_available(SDL_Scancode_t scancode) {
+    return SDL_GetKeyFromScancode(static_cast<SDL_Scancode>(scancode)) != SDLK_UNKNOWN;
+}
+
+void EmuKeySDLMap::register_candidates(emu_key_t key,
+                                       std::initializer_list<SDL_Scancode_t> candidates,
+                                       bool map_all) {
+    // Remove any previous mapping for this key
+    remove_mapping(key);
+
+    // Find the first available candidate (becomes the primary)
+    SDL_Scancode_t primary = 0xFFFFFFFF;
+    for (SDL_Scancode_t sc : candidates) {
+        if (is_scancode_available(sc)) {
+            primary = sc;
+            break;
+        }
+    }
+
+    if (primary == 0xFFFFFFFF) {
+        // No candidate available — key unmapped
+        return;
+    }
+
+    // Register primary: emu_key ↔ scancode (bidirectional)
+    emu_to_sdl_[key] = primary;
+    sdl_to_emu_[primary] = key;
+
+    if (map_all) {
+        // Also map all OTHER available candidates → same emu_key.
+        // Only the sdl→emu direction is added (many-to-one);
+        // emu→sdl keeps the primary for display/reverse lookup.
+        for (SDL_Scancode_t sc : candidates) {
+            if (sc != primary && is_scancode_available(sc)) {
+                sdl_to_emu_[sc] = key;
+            }
+        }
+    }
+}
+
+void EmuKeySDLMap::clear_system_mappings() {
+    emu_to_sdl_.clear();
+    sdl_to_emu_.clear();
 }
 
 // ============================================================================
