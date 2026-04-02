@@ -142,14 +142,14 @@ void mos6526_t::render_settings_content() {
     ImGui::Text("Data Ports (Detailed)");
     ImGui::Separator();
     
-    ImGui::Text("Port A Data (PRA): $%02X", cia->regs_[PRA]);
-    ImGui::Text("Port A DDR (DDRA): $%02X", cia->regs_[DDRA]);
+    ImGui::Text("Port A Data (PRA): $%02X", (unsigned)cia->regs_[PRA]);
+    ImGui::Text("Port A DDR (DDRA): $%02X", (unsigned)cia->regs_[DDRA]);
     ImGui::Text("Port A Value: $%02X", cia->port_a_value);
     ImGui::Separator();
     
-    ImGui::Text("Port B Data (PRB): $%02X", cia->regs_[PRB]);
-    ImGui::Text("Port B DDR (DDRB): $%02X", cia->regs_[DDRB]);
-    ImGui::Text("Port B Internal DDR: $%02X", cia->regs_[IDDRB_OFFSET]);
+    ImGui::Text("Port B Data (PRB): $%02X", (unsigned)cia->regs_[PRB]);
+    ImGui::Text("Port B DDR (DDRB): $%02X", (unsigned)cia->regs_[DDRB]);
+    ImGui::Text("Port B Internal DDR: $%02X", (unsigned)cia->regs_[IDDRB_OFFSET]);
     ImGui::Text("Port B Value: $%02X", cia->port_b_value);
     
     ImGui::Separator();
@@ -161,13 +161,13 @@ void mos6526_t::render_settings_content() {
     uint16_t timer_a_latch = (cia->regs_[TIMER_OFFSET + TA_HI] << 8) | cia->regs_[TIMER_OFFSET + TA_LO];
     ImGui::Text("Timer A: $%04X", cia->timer_counter_[A]);
     ImGui::Text("Timer A Latch: $%04X", timer_a_latch);
-    ImGui::Text("Timer A Control: $%02X", cia->regs_[CRA]);
+    ImGui::Text("Timer A Control: $%02X", (unsigned)cia->regs_[CRA]);
     ImGui::Text("Timer A Running: %s", (cia->regs_[CRA] & CRA_START) ? "YES" : "NO");
     
     uint16_t timer_b_latch = (cia->regs_[TIMER_OFFSET + TB_HI] << 8) | cia->regs_[TIMER_OFFSET + TB_LO];
     ImGui::Text("Timer B: $%04X", cia->timer_counter_[B]);
     ImGui::Text("Timer B Latch: $%04X", timer_b_latch);
-    ImGui::Text("Timer B Control: $%02X", cia->regs_[CRB]);
+    ImGui::Text("Timer B Control: $%02X", (unsigned)cia->regs_[CRB]);
     ImGui::Text("Timer B Running: %s", (cia->regs_[CRB] & CRB_START) ? "YES" : "NO");
     
     ImGui::Separator();
@@ -176,10 +176,10 @@ void mos6526_t::render_settings_content() {
     ImGui::Text("Time of Day Clock (Detailed)");
     ImGui::Separator();
     
-    ImGui::Text("TOD 10ths: $%02X", cia->regs_[TOD_10THS]);
-    ImGui::Text("TOD Seconds: $%02X", cia->regs_[TOD_SEC]);
-    ImGui::Text("TOD Minutes: $%02X", cia->regs_[TOD_MIN]);
-    ImGui::Text("TOD Hours: $%02X", cia->regs_[TOD_HR]);
+    ImGui::Text("TOD 10ths: $%02X", (unsigned)cia->regs_[TOD_10THS]);
+    ImGui::Text("TOD Seconds: $%02X", (unsigned)cia->regs_[TOD_SEC]);
+    ImGui::Text("TOD Minutes: $%02X", (unsigned)cia->regs_[TOD_MIN]);
+    ImGui::Text("TOD Hours: $%02X", (unsigned)cia->regs_[TOD_HR]);
     ImGui::Text("TOD Running: %s", cia->is_running_tod ? "YES" : "NO");
     ImGui::Text("TOD Cycles: %d", cia->tod_cycles);
     ImGui::Text("TOD Read Delta: %u", cia->read_tod_delta);
@@ -191,10 +191,10 @@ void mos6526_t::render_settings_content() {
     ImGui::Text("Alarm Registers");
     ImGui::Separator();
     
-    ImGui::Text("Alarm 10ths: $%02X", cia->regs_[ALARM_OFFSET + TOD_10THS]);
-    ImGui::Text("Alarm Seconds: $%02X", cia->regs_[ALARM_OFFSET + TOD_SEC]);
-    ImGui::Text("Alarm Minutes: $%02X", cia->regs_[ALARM_OFFSET + TOD_MIN]);
-    ImGui::Text("Alarm Hours: $%02X", cia->regs_[ALARM_OFFSET + TOD_HR]);
+    ImGui::Text("Alarm 10ths: $%02X", (unsigned)cia->regs_[ALARM_OFFSET + TOD_10THS]);
+    ImGui::Text("Alarm Seconds: $%02X", (unsigned)cia->regs_[ALARM_OFFSET + TOD_SEC]);
+    ImGui::Text("Alarm Minutes: $%02X", (unsigned)cia->regs_[ALARM_OFFSET + TOD_MIN]);
+    ImGui::Text("Alarm Hours: $%02X", (unsigned)cia->regs_[ALARM_OFFSET + TOD_HR]);
     
     ImGui::Separator();
     
@@ -202,7 +202,7 @@ void mos6526_t::render_settings_content() {
     ImGui::Text("Interrupt Control (Detailed)");
     ImGui::Separator();
     
-    ImGui::Text("ICR: $%02X", cia->regs_[ICR]);
+    ImGui::Text("ICR: $%02X", (unsigned)cia->regs_[ICR]);
     ImGui::Text("Interrupt Mask: $%02X", cia->interrupt_mask);
     ImGui::Text("IRQ Active: %s", (cia->regs_[ICR] & ICR_IRQ) ? "YES" : "NO");
     ImGui::Text("Timer A IRQ: %s", (cia->regs_[ICR] & ICR_TA) ? "YES" : "NO");
@@ -217,7 +217,7 @@ void mos6526_t::render_settings_content() {
     ImGui::Text("Serial Data (Detailed)");
     ImGui::Separator();
     
-    ImGui::Text("SDR: $%02X", cia->regs_[SDR]);
+    ImGui::Text("SDR: $%02X", (unsigned)cia->regs_[SDR]);
     ImGui::Text("Shifter: $%04X", cia->shifter);
     ImGui::Text("SR Bits: %d", cia->sr_bits);
     ImGui::Text("SDR Valid: %s", cia->sdr_valid ? "YES" : "NO");

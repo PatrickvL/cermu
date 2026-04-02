@@ -108,7 +108,7 @@ std::pair<bus_state_t, ppu_bus_state_t> PPU::service_cpu_bus(
 
                 // Clear VBL on read — both internal (NMI) and external ($2002).
                 // Also cancel any pending propagation since the read overtakes it.
-                regs_[PPUSTATUS] &= ~0x80;
+                regs_[PPUSTATUS] &= uint8_t(~0x80);
                 vbl_flag_internal_ = false;
                 pending_vbl_set_ = false;
                 internal.w = false;   // Reset write toggle

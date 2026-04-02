@@ -109,7 +109,7 @@ inline void perform_adc(uint8_t operand) {
 
   // Binary mode
   regs_[A] = result;
-  regs_[P] = (regs_[P] & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C) |
+  regs_[P] = ((regs_[P] & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
                        calc_nz_flags<WidthMode::ACC>(result) |
                        calc_v_flag_add(old_a, operand, result) |
                        calc_c_flag(full_result));
@@ -197,7 +197,7 @@ inline void perform_sbc(uint8_t operand) {
 
   // Binary mode
   regs_[A] = result;
-  regs_[P] = (regs_[P] & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C) |
+  regs_[P] = ((regs_[P] & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
                        calc_nz_flags<WidthMode::ACC>(result) |
                        calc_v_flag_sub(old_a, operand, full_result) |
                        (!(full_result & 0x0100) ? FLAG_C : 0));

@@ -1055,7 +1055,6 @@ inline void LauncherPanel::render_config_strip() {
 
         // Value as toggle text
         const char* val_str = enabled ? "On" : "None";
-        ImVec4 border_col = enabled ? launcher_theme::kCfgBorderChanged : launcher_theme::kCfgBorderDefault;
         ImVec4 bg_col = enabled ? launcher_theme::kCfgBgChanged : launcher_theme::kCfgBgDefault;
         ImGui::PushStyleColor(ImGuiCol_Button, bg_col);
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, launcher_theme::kCfgBgChanged);
