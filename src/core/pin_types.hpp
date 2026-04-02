@@ -118,6 +118,8 @@
     PLBL_INV(_PAWR,       "PAWR",       "peripheral address write (5A22)")      \
     PLBL_INV(_Q7,         "Q7",         "complement output (shift register)")   \
     PLBL_INV(_RAS,        "RAS",        "row address strobe")                   \
+    PLBL_INV(_RAS0,       "RAS0",       "row address strobe 0 (C128 MMU)")      \
+    PLBL_INV(_RAS1,       "RAS1",       "row address strobe 1 (C128 MMU)")      \
     PLBL_INV(_RD,         "RD",         "read strobe")                          \
     PLBL_INV(_RES,        "RES",        "reset")                                \
     PLBL_INV(_RESET,      "RESET",      "reset")                                \
@@ -140,6 +142,7 @@
     PLBL_INV(_WE,         "WE",         "write enable")                         \
     PLBL_INV(_WR,         "WR",         "write strobe (5A22)")                  \
     PLBL_INV(_WRAM,       "WRAM",       "work RAM chip select (5A22)")          \
+    PLBL_INV(_Z80EN,      "Z80EN",      "Z80 enable (C128 MMU)")                \
     PLBL_INV(_Y0,         "Y0",         "decoder output 0 (74LS138)")           \
     PLBL_INV(_Y1,         "Y1",         "decoder output 1 (74LS138)")           \
     PLBL_INV(_Y2,         "Y2",         "decoder output 2 (74LS138)")           \
@@ -297,6 +300,7 @@
     PLBL_PIN(DISPEN,      "DISPEN",     "display enable (active-high)")          \
     PLBL_PIN(DTACK,       "DTACK",      "data transfer ack (M68K, active-h)")   \
     PLBL_PIN(EN244,       "244EN",      "244 buffer enable (active-high)")       \
+    PLBL_PIN(FSDIR,       "FSDIR",      "fast serial direction (C128 MMU)")     \
     PLBL_PIN(HALT,        "HALT",       "halt (Z80, active-high)")              \
     PLBL_PIN(INT,         "INT",        "interrupt (Z80, active-high)")         \
     PLBL_PIN(IORQ,        "IORQ",       "I/O request (Z80, active-high)")       \
@@ -313,6 +317,8 @@
     PLBL_PIN(RAMDIS,      "RAMDIS",     "RAM disable (Amstrad GA)")              \
     PLBL_PIN(RAMRD,       "RAMRD",      "RAM read (Amstrad GA)")                 \
     PLBL_PIN(RAS,         "RAS",        "row address strobe (active-high)")     \
+    PLBL_PIN(RAS0,        "RAS0",       "row addr strobe 0 (active-high)")      \
+    PLBL_PIN(RAS1,        "RAS1",       "row addr strobe 1 (active-high)")      \
     PLBL_PIN(RD,          "RD",         "read strobe (active-high)")            \
     PLBL_PIN(RDY,         "RDY",        "ready input/output")                   \
     PLBL_PIN(RFSH,        "RFSH",       "refresh (Z80, active-high)")           \
@@ -333,6 +339,7 @@
     PLBL_PIN(WE,          "WE",         "write enable (active-high)")           \
     PLBL_PIN(WR,          "WR",         "write strobe (5A22, active-high)")     \
     PLBL_PIN(WRAM,        "WRAM",       "work RAM chip sel (5A22, active-h)")   \
+    PLBL_PIN(Z80EN,       "Z80EN",      "Z80 enable (active-high)")              \
     \
     /* ── Bus control (Z80 PIO/CTC, AY-3-8910 bus protocol) ──────── */ \
     PLBL_CAT(BUS_CONTROL)                                                       \
@@ -1064,6 +1071,8 @@ constexpr PinLabel pin_canonical(PinLabel label) {
     case PinLabel::_PAWR:        return PinLabel::PAWR;
     case PinLabel::_Q7:          return PinLabel::Q7;
     case PinLabel::_RAS:         return PinLabel::RAS;
+    case PinLabel::_RAS0:        return PinLabel::RAS0;
+    case PinLabel::_RAS1:        return PinLabel::RAS1;
     case PinLabel::_RD:          return PinLabel::RD;
     case PinLabel::_RES:         return PinLabel::RES;
     case PinLabel::_RESET:       return PinLabel::RESET;
@@ -1086,6 +1095,7 @@ constexpr PinLabel pin_canonical(PinLabel label) {
     case PinLabel::_WE:          return PinLabel::WE;
     case PinLabel::_WR:          return PinLabel::WR;
     case PinLabel::_WRAM:        return PinLabel::WRAM;
+    case PinLabel::_Z80EN:       return PinLabel::Z80EN;
     case PinLabel::_Y0:          return PinLabel::Y0;
     case PinLabel::_Y1:          return PinLabel::Y1;
     case PinLabel::_Y2:          return PinLabel::Y2;

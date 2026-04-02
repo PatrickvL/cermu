@@ -17,9 +17,9 @@
 //
 // 48-pin DIP package.
 //
-// Used in: Commodore 128, Commodore 128D (system-specific, not shared)
+// Used in: Commodore 128, Commodore 128D
 
-#include "chip/io/io_chip_base.hpp"
+#include "chip/mmu/mmu_chip_base.hpp"
 #include "core/chip_debug_registry.hpp"
 #include <cstdint>
 
@@ -99,6 +99,7 @@ namespace mcr {
     inline constexpr uint8_t COL_KEY      = 0x20;  // Bit 5 — 40/80 column key
     inline constexpr uint8_t FSDIR        = 0x08;  // Bit 3 — fast serial direction
     inline constexpr uint8_t FSIN         = 0x04;  // Bit 2 — fast serial input
+    inline constexpr uint8_t CPU_SELECT   = 0x01;  // Bit 0 — 0 = Z80 active, 1 = 8502 active
 } // namespace mcr
 
 // RAM Configuration Register (RCR, $D506) bit fields
@@ -171,12 +172,11 @@ DECL_EXTRACT(MOS8722, MOS8722_DECL)
 // mos8722_t — MOS 8722 Memory Management Unit
 // ============================================================================
 
-struct mos8722_t : public IoChipBase {
+struct mos8722_t : public MmuChipBase {
 
     mos8722_t()
-        : IoChipBase(ChipInfo{"MOS8722", "MOS Technology", "MOS 8722 MMU"})
+        : MmuChipBase(ChipInfo{"MOS8722", "MOS Technology", "MOS 8722 MMU"})
     {
-        category_ = "I/O";
         init_regs(mos8722::reg::NUM_REGS);
         reset();
 #ifdef CERMU_HAS_CHIP_DEBUG
@@ -220,7 +220,7 @@ struct mos8722_t : public IoChipBase {
         regs_[mos8722::reg::PCR_B]   = 0x00;
         regs_[mos8722::reg::PCR_C]   = 0x00;
         regs_[mos8722::reg::PCR_D]   = 0x00;
-        regs_[mos8722::reg::MCR]     = 0x00;
+        regs_[mos8722::reg::MCR]     = 0x00;  // Z80 active (bit 0=0), C128 mode (bit 6=0)
         regs_[mos8722::reg::RCR]     = 0x00;
         regs_[mos8722::reg::P0L]     = 0x00;  // Page 0 = $0000
         regs_[mos8722::reg::P0H]     = 0x00;
@@ -228,7 +228,8 @@ struct mos8722_t : public IoChipBase {
         regs_[mos8722::reg::P1H]     = 0x01;
         regs_[mos8722::reg::VERSION] = mos8722::VERSION_8722;
 
-        bank_config_dirty_ = true;
+        bank_config_dirty_    = true;
+        cpu_switch_requested_ = false;
     }
 
     // ── Register access (called by on_bus_read/write and by system for $FF00) ──
@@ -268,9 +269,13 @@ struct mos8722_t : public IoChipBase {
                 break;
 
             case MCR:
+                // Bit 0: CPU select — 0=Z80, 1=8502.
+                // A change in bit 0 triggers a CPU switch request.
+                if ((data ^ old) & mos8722::mcr::CPU_SELECT) {
+                    cpu_switch_requested_ = true;
+                }
                 // Bit 6: C64 mode trigger — sticky: once set, only cleared by
-                // reset or explicit clear_c64_mode_request().  Software writes
-                // cannot clear it.
+                // reset or explicit clear_c64_mode_request().
                 if (old & mos8722::mcr::C64_MODE) {
                     regs_[MCR] |= mos8722::mcr::C64_MODE;
                 }
@@ -358,6 +363,13 @@ struct mos8722_t : public IoChipBase {
     /// Clear C64 mode request (called by system after entering C64 mode).
     void clear_c64_mode_request() { regs_[mos8722::reg::MCR] &= ~mos8722::mcr::C64_MODE; }
 
+    /// CPU select from MCR bit 0: true = 8502 active, false = Z80 active.
+    bool cpu_is_8502() const { return (regs_[mos8722::reg::MCR] & mos8722::mcr::CPU_SELECT) != 0; }
+
+    /// True if a CPU switch was requested by MCR write (consumed by system).
+    bool cpu_switch_requested() const { return cpu_switch_requested_; }
+    void acknowledge_cpu_switch() { cpu_switch_requested_ = false; }
+
     /// True if bank config has changed since last acknowledgement.
     bool bank_config_dirty() const { return bank_config_dirty_; }
     void acknowledge_bank_config() { bank_config_dirty_ = false; }
@@ -395,6 +407,11 @@ struct mos8722_t : public IoChipBase {
         return (regs_[mos8722::reg::RCR] & mos8722::rcr::VIC_BANK_MASK) >> mos8722::rcr::VIC_BANK_SHIFT;
     }
 
+#ifdef CERMU_HAS_GUI
+    ChipLayout* create_chip_layout() const override;
+    std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
+#endif
+
     // ── Static methods for legacy handler registration ───────────────
 
     static bus_state_t registers_read(void* context, bus_state_t bus) {
@@ -408,7 +425,8 @@ struct mos8722_t : public IoChipBase {
     }
 
 private:
-    bool bank_config_dirty_  = true;
+    bool bank_config_dirty_   = true;
+    bool cpu_switch_requested_ = false;
 
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
