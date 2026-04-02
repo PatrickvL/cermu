@@ -41,9 +41,6 @@ using SYNERTEK_65C02 = fam65xx::SYNERTEK_65C02;
 inline ChipLayout create_synertek65c02_layout() {
     ChipLayout layout = create_dip40_layout();
 
-    layout.left_pins.clear();
-    layout.right_pins.clear();
-
     // Same pinout as MOS 6502 (40-pin DIP, pin-compatible)
     PIN_LR(layout,  1, VSS,   VSS,  21);
     PIN_LR(layout,  2, RDY,   A12,  22);

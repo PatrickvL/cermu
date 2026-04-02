@@ -17,12 +17,8 @@
 
 ChipLayout* vicii_base_t::create_chip_layout() const {
     static ChipLayout layout = [] {
-        // Start with DIP-40 base layout
+        // MOS6567/6569 VIC-II — 40-pin DIP
         ChipLayout layout = create_dip40_layout();
-
-        // Clear default pins and add hardware-accurate VIC-II pins
-        layout.left_pins.clear();
-        layout.right_pins.clear();
 
         // Hardware-accurate MOS6567/6569 VIC-II pinout (40-pin DIP)
         // Right-hand pins (21-40) are numbered bottom-up, not top-down

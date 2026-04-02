@@ -31,10 +31,7 @@ bool ted7360_t::has_settings_content() const { return true; }
 
 ChipLayout* ted7360_t::create_chip_layout() const {
     static ChipLayout layout = [] {
-        ChipLayout layout = create_custom_dip(48, "TED7360");
-
-        layout.left_pins.clear();
-        layout.right_pins.clear();
+        ChipLayout layout = create_dip48_layout();
 
         // Hardware-accurate TED 7360 pinout (48-pin DIP, 24 pins per side)
         PIN_LR(layout,  1, VSS,     VDD, 48)       // gnd / +5V supply

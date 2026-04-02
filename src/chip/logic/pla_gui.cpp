@@ -26,9 +26,6 @@ ChipLayout* PLA906114::create_chip_layout() const {
     static ChipLayout layout = [] {
         ChipLayout layout = create_dip28_layout();
 
-        layout.left_pins.clear();
-        layout.right_pins.clear();
-
         layout.markings.custom_text  = "Programmable Logic Array";
 
         // Hardware-accurate PLA pinout (28-pin DIP)

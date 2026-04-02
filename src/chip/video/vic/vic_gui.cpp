@@ -31,9 +31,6 @@ using namespace vic::reg;
 inline ChipLayout create_vic_layout() {
     ChipLayout layout = create_dip40_layout();
 
-    layout.left_pins.clear();
-    layout.right_pins.clear();
-
     // Hardware-accurate MOS 6560/6561 VIC pinout (40-pin DIP)
     PIN_LR(layout,  1, D7,      VDD, 40)       // data hi / +5V
     PIN_LR(layout,  2, D6,      CSYNC, 39)     // / comp sync

@@ -45,9 +45,6 @@ using WDC_65C02 = fam65xx::WDC_65C02;
 inline ChipLayout create_wdc65c02_early_layout() {
     ChipLayout layout = create_dip40_layout();
 
-    layout.left_pins.clear();
-    layout.right_pins.clear();
-
     // Same pinout as MOS 6502 (40-pin DIP, pin-compatible)
     // Early WDC 65C02 has no Bus Enable (pin 36 = NC)
     PIN_LR(layout,  1, VSS,   VSS,  21);

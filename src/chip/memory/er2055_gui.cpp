@@ -21,9 +21,6 @@ ChipLayout* ER2055::create_chip_layout() const {
             {}
         };
 
-        layout.left_pins.clear();
-        layout.right_pins.clear();
-
         PIN_LR(layout,  1, A0,   VCC,  22)   // address 0  / +5V
         PIN_LR(layout,  2, A1,   VSS,  21)   // address 1  / ground
         PIN_LR(layout,  3, A2,   A5,   20)   // address 2  / address 5

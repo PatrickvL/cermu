@@ -57,6 +57,8 @@ struct ChipLayout {
 // ============================================================================
 
 // Create standard DIP package layouts
+ChipLayout create_dip64_layout();
+ChipLayout create_dip48_layout();
 ChipLayout create_dip40_layout();
 ChipLayout create_dip28_layout();
 ChipLayout create_dip24_layout();
@@ -105,11 +107,6 @@ ChipLayout create_sot223_layout();  // Power package
 // Create SIP layouts
 ChipLayout create_sip8_layout();
 ChipLayout create_sip9_layout();
-
-// Helper functions for building custom layouts
-ChipLayout create_custom_dip(uint8_t total_pins, const char* part_name = nullptr);
-ChipLayout create_custom_qfp(uint8_t total_pins, const char* part_name = nullptr);
-ChipLayout create_custom_bga(uint8_t rows, uint8_t cols, const char* part_name = nullptr);
 
 // ============================================================================
 // GENERIC BUS STATE → PIN SIGNAL POPULATION

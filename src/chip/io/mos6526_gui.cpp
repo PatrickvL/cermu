@@ -22,12 +22,8 @@ using namespace MOS6526::cia_detail;
 
 ChipLayout* mos6526_t::create_chip_layout() const {
     static ChipLayout layout = [] {
-        // Start with DIP-40 base layout
+        // MOS6526 CIA — 40-pin DIP
         ChipLayout layout = create_dip40_layout();
-
-        // Clear default pins and add hardware-accurate MOS6526 pins
-        layout.left_pins.clear();
-        layout.right_pins.clear();
 
         // Hardware-accurate MOS6526 CIA pinout (40-pin DIP)
         // Per MOS 6526 Complex Interface Adapter datasheet
