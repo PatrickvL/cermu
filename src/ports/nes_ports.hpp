@@ -1,97 +1,41 @@
 #pragma once
 /*
- * nes_ports.hpp — NES/Famicom Port Definitions (shared, header-only)
+ * nes_ports.hpp — NES/Famicom Port Manifests (shared, header-only)
  *
- * Static PortDefinition constants for all NES-family ports.
- * These are used by NES, Famicom, VS. System, and PlayChoice-10.
+ * Declarative port manifests for all NES-family systems.
+ * Used by NES, Famicom, VS. System, and PlayChoice-10.
  *
  * Lives in src/ports/ because multiple system variants reference them.
  */
 
-#include "core/port.hpp"
-
-namespace NesPorts {
+#include "core/port_manifest.hpp"
 
 // ============================================================================
-// NES Controller Ports (7-pin, removable)
+// NES Port Manifest (removable controllers, 48-pin expansion)
 // ============================================================================
+//                              tag       type             name                       num  int  bus  default_device
+#define NES_FOR_EACH_PORT(V, ctx)                                                                                  \
+    V(ctx, CTRL1,     CONTROLLER_NES,   "Controller Port 1",         1, false, false, "nes_gamepad")               \
+    V(ctx, CTRL2,     CONTROLLER_NES,   "Controller Port 2",         2, false, false, "nes_gamepad")               \
+    V(ctx, EXPANSION, EXPANSION_PORT,   "Expansion Port",            0, false, false, nullptr)                     \
+    V(ctx, VIDEO,     VIDEO_COMPOSITE,  "Video Out",                 0, false, false, "crt_tv")                    \
+    V(ctx, AUDIO,     AUDIO_MONO,       "Audio Out",                 0, false, false, nullptr)
 
-inline const PortDefinition NES_CONTROLLER_1 = {
-    PortType::CONTROLLER_NES,
-    "Controller Port 1",
-    PortSignals::NES_CONTROLLER_SIGNALS,
-    PortSignals::NES_CONTROLLER_SIGNAL_COUNT,
-    false, false
-};
-
-inline const PortDefinition NES_CONTROLLER_2 = {
-    PortType::CONTROLLER_NES,
-    "Controller Port 2",
-    PortSignals::NES_CONTROLLER_SIGNALS,
-    PortSignals::NES_CONTROLLER_SIGNAL_COUNT,
-    false, false
+inline constexpr PortSlot kNESPorts[] = {
+    NES_FOR_EACH_PORT(PORT_VISITOR_SLOT, unused)
 };
 
 // ============================================================================
-// NES Expansion Port (bottom, 48-pin)
+// Famicom Port Manifest (hardwired controllers, 15-pin expansion)
 // ============================================================================
+//                             tag       type             name                                num  int  bus  default_device
+#define FC_FOR_EACH_PORT(V, ctx)                                                                                              \
+    V(ctx, CTRL1,     CONTROLLER_NES,   "Controller I (hardwired)",              1, false, false, "nes_gamepad")               \
+    V(ctx, CTRL2,     CONTROLLER_NES,   "Controller II (hardwired, microphone)", 2, false, false, "nes_gamepad")               \
+    V(ctx, EXPANSION, EXPANSION_PORT,   "Expansion Port (15-pin)",               0, false, false, nullptr)                     \
+    V(ctx, VIDEO,     VIDEO_COMPOSITE,  "Video Out",                             0, false, false, "crt_tv")                    \
+    V(ctx, AUDIO,     AUDIO_MONO,       "Audio Out",                             0, false, false, nullptr)
 
-inline const PortDefinition NES_EXPANSION = {
-    PortType::EXPANSION_PORT,
-    "Expansion Port",
-    PortSignals::NES_EXPANSION_SIGNALS,
-    PortSignals::NES_EXPANSION_SIGNAL_COUNT,
-    false, false
+inline constexpr PortSlot kFCPorts[] = {
+    FC_FOR_EACH_PORT(PORT_VISITOR_SLOT, unused)
 };
-
-// ============================================================================
-// Famicom Controller Ports (hardwired, not removable)
-// ============================================================================
-
-inline const PortDefinition FC_CONTROLLER_1 = {
-    PortType::CONTROLLER_NES,
-    "Controller I (hardwired)",
-    PortSignals::NES_CONTROLLER_SIGNALS,
-    PortSignals::NES_CONTROLLER_SIGNAL_COUNT,
-    false, false
-};
-
-inline const PortDefinition FC_CONTROLLER_2 = {
-    PortType::CONTROLLER_NES,
-    "Controller II (hardwired, microphone)",
-    PortSignals::NES_CONTROLLER_SIGNALS,
-    PortSignals::NES_CONTROLLER_SIGNAL_COUNT,
-    false, false
-};
-
-// ============================================================================
-// Famicom Expansion Port (15-pin)
-// ============================================================================
-
-inline const PortDefinition FC_EXPANSION = {
-    PortType::EXPANSION_PORT,
-    "Expansion Port (15-pin)",
-    PortSignals::NES_EXPANSION_SIGNALS,
-    PortSignals::NES_EXPANSION_SIGNAL_COUNT,
-    false, false
-};
-
-// ============================================================================
-// Video / Audio Output Ports
-// ============================================================================
-
-inline const PortDefinition NES_VIDEO_OUT = {
-    PortType::VIDEO_COMPOSITE,
-    "Video Out",
-    nullptr, 0,
-    false, false
-};
-
-inline const PortDefinition NES_AUDIO_OUT = {
-    PortType::AUDIO_MONO,
-    "Audio Out",
-    nullptr, 0,
-    false, false
-};
-
-} // namespace NesPorts

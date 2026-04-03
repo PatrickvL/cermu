@@ -1388,40 +1388,16 @@ void NintendoSystem<V>::power_cycle() {
 // ============================================================================
 // NES has: 2× front controller ports (7-pin) and 1× bottom expansion port (48-pin).
 // Controller ports use a serial shift-register protocol (LATCH + CLK + D0).
-// Connector definitions are now in src/ports/nes_ports.h (shared).
+// Port manifests are now in src/ports/nes_ports.hpp (shared).
 #include "ports/nes_ports.hpp"
 
 template<NintendoVariant V>
 void NintendoSystem<V>::setup_ports() {
-
     if constexpr (Traits::is_famicom) {
-        // Famicom: hardwired controllers, 15-pin expansion port
-        add_port(NesPorts::FC_CONTROLLER_1, 1);
-        add_port(NesPorts::FC_CONTROLLER_2, 2);
-        add_port(NesPorts::FC_EXPANSION, 0);
+        create_ports_from_manifest(kFCPorts);
     } else {
-        // NES: removable controller ports, bottom expansion
-        add_port(NesPorts::NES_CONTROLLER_1, 1);
-        add_port(NesPorts::NES_CONTROLLER_2, 2);
-        add_port(NesPorts::NES_EXPANSION, 0);
+        create_ports_from_manifest(kNESPorts);
     }
-
-    // Video/Audio output ports (shared across all variants)
-    add_port(NesPorts::NES_VIDEO_OUT, 0);
-    add_port(NesPorts::NES_AUDIO_OUT, 0);
-
-    log_info("%s: Created %zu ports\n", Traits::name, get_ports().size());
-
-}
-
-template<NintendoVariant V>
-std::vector<System::DefaultPeripheral>
-NintendoSystem<V>::get_default_peripherals() const {
-    return {
-        { 0, "nes_gamepad" },   // Controller Port 1
-        { 1, "nes_gamepad" },   // Controller Port 2
-        { 3, "crt_tv"      },   // Video Out — Color TV
-    };
 }
 
 // ============================================================================

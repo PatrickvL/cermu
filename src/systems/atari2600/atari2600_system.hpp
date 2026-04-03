@@ -228,7 +228,6 @@ private:
 
     // Connector port setup
     void setup_ports() override;
-    std::vector<DefaultPeripheral> get_default_peripherals() const override;
 
     // Read joystick signals from connector ports into RIOT/TIA
     void update_joystick_state();

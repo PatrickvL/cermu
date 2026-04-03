@@ -1,4 +1,5 @@
 #include "core/cermu.hpp"
+#include "core/port_manifest.hpp"
 #include "systems/commodore/c16/c16_system.hpp"
 #include "systems/commodore/c16/c16_constants.hpp"
 #include "systems/commodore/c16/c16_keyboard_matrix.hpp"
@@ -394,75 +395,39 @@ static void c16_mem_write_block(void* ctx, uint16_t addr,
 }
 
 // ============================================================================
-// Connector Definitions (non-template file-scope statics)
+// CONNECTOR PORT MANIFESTS
 // ============================================================================
+// C16/C116 — no user port;  Plus/4 — has user port.
+// Two manifests so create_ports_from_manifest produces correct indices.
 
-static const PortDefinition c16_joy_port_1_def = {
-    PortType::CONTROL_PORT_DB9,
-    "Joystick Port 1",
-    PortSignals::CONTROL_PORT_SIGNALS,
-    PortSignals::CONTROL_PORT_SIGNAL_COUNT,
-    false, false
+//                               tag         type              name                   num  int  bus  default_device
+#define C16_FOR_EACH_PORT(V, ctx) \
+    V(ctx, JOY1,       CONTROL_PORT_DB9, "Joystick Port 1",   1, false, false, "joystick")      \
+    V(ctx, JOY2,       CONTROL_PORT_DB9, "Joystick Port 2",   2, false, false, "joystick")      \
+    V(ctx, IEC_SERIAL, IEC_SERIAL,       "IEC Serial Bus",    0, false, true,  "1541")          \
+    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",     0, false, false, "datasette")     \
+    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Port",    0, false, false, nullptr)         \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",         0, false, false, "crt_tv")        \
+    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",         0, false, false, nullptr)         \
+    V(ctx, KEYBOARD,   CUSTOM,           "Keyboard",          0, true,  false, nullptr)
+
+#define PLUS4_FOR_EACH_PORT(V, ctx) \
+    V(ctx, JOY1,       CONTROL_PORT_DB9, "Joystick Port 1",   1, false, false, "joystick")      \
+    V(ctx, JOY2,       CONTROL_PORT_DB9, "Joystick Port 2",   2, false, false, "joystick")      \
+    V(ctx, IEC_SERIAL, IEC_SERIAL,       "IEC Serial Bus",    0, false, true,  "1541")          \
+    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",     0, false, false, "datasette")     \
+    V(ctx, USER,       USER_PORT,        "User Port",         0, false, false, nullptr)         \
+    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Port",    0, false, false, nullptr)         \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",         0, false, false, "crt_tv")        \
+    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",         0, false, false, nullptr)         \
+    V(ctx, KEYBOARD,   CUSTOM,           "Keyboard",          0, true,  false, nullptr)
+
+static constexpr PortSlot kC16Ports[] = {
+    C16_FOR_EACH_PORT(PORT_VISITOR_SLOT, unused)
 };
 
-static const PortDefinition c16_joy_port_2_def = {
-    PortType::CONTROL_PORT_DB9,
-    "Joystick Port 2",
-    PortSignals::CONTROL_PORT_SIGNALS,
-    PortSignals::CONTROL_PORT_SIGNAL_COUNT,
-    false, false
-};
-
-static const PortDefinition c16_iec_serial_def = {
-    PortType::IEC_SERIAL,
-    "IEC Serial Bus",
-    PortSignals::IEC_SERIAL_SIGNALS,
-    PortSignals::IEC_SERIAL_SIGNAL_COUNT,
-    false,  // is_internal
-    true    // is_bus — shared bus, multiple drives/printers
-};
-
-static const PortDefinition c16_cassette_def = {
-    PortType::CASSETTE_PORT,
-    "Cassette Port",
-    PortSignals::CASSETTE_PORT_SIGNALS,
-    PortSignals::CASSETTE_PORT_SIGNAL_COUNT,
-    false, false
-};
-
-static const PortDefinition plus4_user_port_def = {
-    PortType::USER_PORT,
-    "User Port",
-    PortSignals::USER_PORT_SIGNALS,
-    PortSignals::USER_PORT_SIGNAL_COUNT,
-    false, false
-};
-
-static const SignalLine c16_expansion_signals[] = {
-    { "/RESET", SignalDirection::OUTPUT, 0 },
-    { "/IRQ",   SignalDirection::INPUT,  1 },
-};
-static const PortDefinition c16_expansion_def = {
-    PortType::EXPANSION_PORT,
-    "Expansion Port",
-    c16_expansion_signals,
-    2,
-    false, false
-};
-
-// A/V output — DIN-8 connector carries composite video + audio
-static const PortDefinition c16_video_out_def = {
-    PortType::VIDEO_COMPOSITE,
-    "Video Out",
-    nullptr, 0,
-    false, false
-};
-
-static const PortDefinition c16_audio_out_def = {
-    PortType::AUDIO_MONO,
-    "Audio Out",
-    nullptr, 0,
-    false, false
+static constexpr PortSlot kPlus4Ports[] = {
+    PLUS4_FOR_EACH_PORT(PORT_VISITOR_SLOT, unused)
 };
 
 // ============================================================================
@@ -1171,58 +1136,22 @@ void Commodore264System<V>::set_cpu_pc(void* user_data, uint16_t addr) {
 template<C264SeriesVariant V>
 void Commodore264System<V>::setup_ports() {
 
-    // Port 0 — Joystick Port 1
-    add_port(c16_joy_port_1_def, 1);
+    if constexpr (Traits::has_user_port)
+        create_ports_from_manifest(kPlus4Ports);
+    else
+        create_ports_from_manifest(kC16Ports);
 
-    // Port 1 — Joystick Port 2
-    add_port(c16_joy_port_2_def, 2);
-
-    // Port 2 — IEC Serial Bus
-    add_port(c16_iec_serial_def, 0);
-
-    // Port 3 — Cassette Port
-    add_port(c16_cassette_def, 0);
-
-    // Port 4 — User Port (Plus/4 only)
-    if constexpr (Traits::has_user_port) {
-        add_port(plus4_user_port_def, 0);
-    }
-
-    // Port 5 — Expansion Port (cartridge slot)
-    add_port(c16_expansion_def, 0);
-
-    // Video/Audio output ports
-    add_port(c16_video_out_def, 0);
-    add_port(c16_audio_out_def, 0);
-
-    // Internal Keyboard (always attached)
-    static const PortDefinition c16_keyboard_def = {
-        PortType::CUSTOM, "Keyboard", nullptr, 0, true, false
-    };
-    int kb_port = add_port(c16_keyboard_def, 0);
-
-    // Attach internal keyboard device
+    // Attach internal keyboard device (last port in manifest)
+    const auto& manifest = Traits::has_user_port ? kPlus4Ports : kC16Ports;
+    int kb_idx = static_cast<int>(Traits::has_user_port
+        ? std::size(kPlus4Ports) : std::size(kC16Ports)) - 1;
     auto kb_device = std::make_unique<CommodoreKeyboardDevice>(keyboard_);
     auto* kb_raw = kb_device.get();
-    get_port(kb_port)->attach_device(kb_raw);
+    get_port(kb_idx)->attach_device(kb_raw);
     owned_devices_.push_back(std::move(kb_device));
 
     log_info("%s: Created %zu ports\n",
            Traits::name, get_ports().size());
-}
-
-template<C264SeriesVariant V>
-std::vector<System::DefaultPeripheral>
-Commodore264System<V>::get_default_peripherals() const {
-    // Video port index depends on variant (Plus/4 has user port at index 4)
-    int video_idx = Traits::has_user_port ? 6 : 5;
-    return {
-        { 0, "joystick"  },  // Joystick Port 1
-        { 1, "joystick"  },  // Joystick Port 2
-        { 2, "1541"      },  // IEC Serial Bus — 1541 disk drive
-        { 3, "datasette" },  // Cassette Port  — datasette (1530)
-        { video_idx, "crt_tv" },  // Video Out — Color TV
-    };
 }
 
 // ============================================================================

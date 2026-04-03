@@ -23,6 +23,7 @@
 #include "systems/atari2600/atari2600_system.hpp"
 #include "systems/atari2600/mappers/a2600_mapper_factory.hpp"
 #include "core/system_registry.hpp"
+#include "core/port_manifest.hpp"
 #include "core/port.hpp"
 #include "core/vfs/vfs.hpp"
 #include <cstring>
@@ -516,59 +517,19 @@ void Atari2600System::update_joystick_state() {
 }
 
 // ============================================================================
-// CONNECTOR PORTS
+// CONNECTOR PORT MANIFEST
 // ============================================================================
+//                          tag       type              name                 num  int  bus  default_device
+#define A2600_FOR_EACH_PORT(V, ctx) \
+    V(ctx, LEFT,     CONTROL_PORT_DB9,  "Left Controller",   1, false, false, "joystick") \
+    V(ctx, RIGHT,    CONTROL_PORT_DB9,  "Right Controller",  2, false, false, "joystick") \
+    V(ctx, VIDEO,    VIDEO_COMPOSITE,   "Video Out",         0, false, false, "crt_tv")   \
+    V(ctx, AUDIO,    AUDIO_MONO,        "Audio Out",         0, false, false, nullptr)
+
+CERMU_PORT_MANIFEST(A2600, A2600_FOR_EACH_PORT)
 
 void Atari2600System::setup_ports() {
-
-    // The Atari 2600 uses the same DB-9 joystick connector as Commodore systems.
-    // We use CONTROL_PORT_DB9 PortType since JoystickDevice already
-    // registers as compatible with this connector type.
-    static const PortDefinition atari_joy_1_def = {
-        PortType::CONTROL_PORT_DB9,
-        "Left Controller",
-        PortSignals::CONTROL_PORT_SIGNALS,
-        PortSignals::CONTROL_PORT_SIGNAL_COUNT,
-        false, false
-    };
-
-    static const PortDefinition atari_joy_2_def = {
-        PortType::CONTROL_PORT_DB9,
-        "Right Controller",
-        PortSignals::CONTROL_PORT_SIGNALS,
-        PortSignals::CONTROL_PORT_SIGNAL_COUNT,
-        false, false
-    };
-
-    add_port(atari_joy_1_def, 1);  // Player 1
-    add_port(atari_joy_2_def, 2);  // Player 2
-
-    // Video/Audio output (RF modulator on real hardware)
-    static const PortDefinition atari_video_out_def = {
-        PortType::VIDEO_COMPOSITE,
-        "Video Out",
-        nullptr, 0,
-        false, false
-    };
-    static const PortDefinition atari_audio_out_def = {
-        PortType::AUDIO_MONO,
-        "Audio Out",
-        nullptr, 0,
-        false, false
-    };
-    add_port(atari_video_out_def, 0);
-    add_port(atari_audio_out_def, 0);
-
-    log_info("Atari2600: Created %zu ports\n", get_ports().size());
-}
-
-std::vector<System::DefaultPeripheral>
-Atari2600System::get_default_peripherals() const {
-    return {
-        { 0, "joystick" },   // Left Controller
-        { 1, "joystick" },   // Right Controller
-        { 2, "crt_tv"   },   // Video Out — Color TV
-    };
+    create_ports_from_manifest(kA2600Ports);
 }
 
 // ============================================================================

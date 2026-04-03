@@ -236,5 +236,4 @@ private:
     
     // Connector port setup (registers VIC-20 connector ports with base class)
     void setup_ports() override;
-    std::vector<DefaultPeripheral> get_default_peripherals() const override;
 };
