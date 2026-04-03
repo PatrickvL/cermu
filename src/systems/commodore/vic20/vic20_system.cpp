@@ -2,6 +2,7 @@
 #include "systems/commodore/vic20/vic20_constants.hpp"
 #include "systems/commodore/vic20/vic20_chips.hpp"
 #include "core/cermu.hpp"
+#include "core/port_manifest.hpp"
 #include "chip/input/commodore_keyboard.hpp"
 #include "core/input/emu_key_sdl_map.hpp"
 #include "systems/commodore/vic20/vic20_keyboard_matrix.hpp" // VIC-20 keyboard matrix data
@@ -1229,114 +1230,35 @@ uint8_t VIC20System::vic20_via2_port_b_read(void* context, uint8_t port_b_output
 }
 
 // ============================================================================
-// CONNECTOR PORT SETUP — VIC-20
+// CONNECTOR PORT MANIFEST
 // ============================================================================
-// VIC-20 has: 1× Control Port (DB-9), IEC Serial Bus, Cassette Port,
-// User Port, and Expansion Port (cartridge slot).
+//                              tag         type              name                   num  int  bus  default_device
+#define VIC20_FOR_EACH_PORT(V, ctx) \
+    V(ctx, CONTROL,    CONTROL_PORT_DB9, "Control Port",      1, false, false, "joystick")      \
+    V(ctx, IEC_SERIAL, IEC_SERIAL,       "IEC Serial Bus",    0, false, true,  "1541")          \
+    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",     0, false, false, "datasette")     \
+    V(ctx, USER,       USER_PORT,        "User Port",         0, false, false, nullptr)         \
+    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Port",    0, false, false, nullptr)         \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",         0, false, false, "crt_tv")        \
+    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",         0, false, false, nullptr)         \
+    V(ctx, KEYBOARD,   CUSTOM,           "Keyboard",          0, true,  false, nullptr)
 
-static const PortDefinition vic20_control_port_def = {
-    PortType::CONTROL_PORT_DB9,
-    "Control Port",
-    PortSignals::CONTROL_PORT_SIGNALS,
-    PortSignals::CONTROL_PORT_SIGNAL_COUNT,
-    false, false
-};
-
-static const PortDefinition vic20_iec_serial_def = {
-    PortType::IEC_SERIAL,
-    "IEC Serial Bus",
-    PortSignals::IEC_SERIAL_SIGNALS,
-    PortSignals::IEC_SERIAL_SIGNAL_COUNT,
-    false,  // is_internal
-    true    // is_bus — shared bus, multiple drives/printers
-};
-
-static const PortDefinition vic20_cassette_def = {
-    PortType::CASSETTE_PORT,
-    "Cassette Port",
-    PortSignals::CASSETTE_PORT_SIGNALS,
-    PortSignals::CASSETTE_PORT_SIGNAL_COUNT,
-    false, false
-};
-
-static const PortDefinition vic20_user_port_def = {
-    PortType::USER_PORT,
-    "User Port",
-    PortSignals::USER_PORT_SIGNALS,
-    PortSignals::USER_PORT_SIGNAL_COUNT,
-    false, false
-};
-
-static const SignalLine vic20_expansion_signals[] = {
-    { "RESET", SignalDirection::OUTPUT, 0 },
-};
-static const PortDefinition vic20_expansion_def = {
-    PortType::EXPANSION_PORT,
-    "Expansion Port",
-    vic20_expansion_signals,
-    1,
-    false, false
-};
-
-// A/V output — DIN-5 connector
-static const PortDefinition vic20_video_out_def = {
-    PortType::VIDEO_COMPOSITE,
-    "Video Out",
-    nullptr, 0,
-    false, false
-};
-
-static const PortDefinition vic20_audio_out_def = {
-    PortType::AUDIO_MONO,
-    "Audio Out",
-    nullptr, 0,
-    false, false
+static constexpr PortSlot kVIC20Ports[] = {
+    VIC20_FOR_EACH_PORT(PORT_VISITOR_SLOT, unused)
 };
 
 void VIC20System::setup_ports() {
 
-    // Port 0 — Control Port (joystick/paddles/lightpen)
-    add_port(vic20_control_port_def, 1);
+    create_ports_from_manifest(kVIC20Ports);
 
-    // Port 1 — IEC Serial Bus (disk drive, printer)
-    add_port(vic20_iec_serial_def, 0);
-
-    // Port 2 — Cassette Port (datasette)
-    add_port(vic20_cassette_def, 0);
-
-    // Port 3 — User Port (modems, RS-232, custom peripherals)
-    add_port(vic20_user_port_def, 0);
-
-    // Port 4 — Expansion Port (cartridge)
-    add_port(vic20_expansion_def, 0);
-
-    // Port 5/6 — Video/Audio output
-    add_port(vic20_video_out_def, 0);
-    add_port(vic20_audio_out_def, 0);
-
-    // Port 7 — Internal Keyboard (always attached)
-    static const PortDefinition vic20_keyboard_def = {
-        PortType::CUSTOM, "Keyboard", nullptr, 0, true, false
-    };
-    int kb_port = add_port(vic20_keyboard_def, 0);
-
-    // Attach internal keyboard device
+    // Attach internal keyboard device (last port in manifest)
+    constexpr int KB_IDX = static_cast<int>(std::size(kVIC20Ports)) - 1;
     auto kb_device = std::make_unique<CommodoreKeyboardDevice>(keyboard_);
     auto* kb_raw = kb_device.get();
-    get_port(kb_port)->attach_device(kb_raw);
+    get_port(KB_IDX)->attach_device(kb_raw);
     owned_devices_.push_back(std::move(kb_device));
 
     log_info("VIC20: Created %zu ports\n", get_ports().size());
-}
-
-std::vector<System::DefaultPeripheral>
-VIC20System::get_default_peripherals() const {
-    return {
-        { 0, "joystick"  },  // Control Port — joystick
-        { 1, "1541"      },  // IEC Serial Bus — 1541 disk drive
-        { 2, "datasette" },  // Cassette Port — datasette (1530)
-        { 5, "crt_tv"    },  // Video Out — Color TV
-    };
 }
 
 // ============================================================================

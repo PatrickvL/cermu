@@ -4,6 +4,7 @@
 #include "systems/commodore/c64/c64_sid_player.hpp"
 #include "chip/input/commodore_keyboard.hpp"
 #include "core/input/emu_key_sdl_map.hpp"
+#include "core/port_manifest.hpp"
 // gui_state_t dependency eliminated — chip debug uses base class,
 // system menu items are inlined, test binary dialog removed.
 #ifdef CERMU_HAS_GUI
@@ -1437,78 +1438,22 @@ void C64System::render_configuration_ui() {
 }
 
 // ============================================================================
-// CONNECTOR PORT SETUP
+// CONNECTOR PORT MANIFEST
 // ============================================================================
+//                            tag         type              name                   num  int  bus  default_device
+#define C64_FOR_EACH_PORT(V, ctx) \
+    V(ctx, CONTROL1,   CONTROL_PORT_DB9, "Control Port 1",    1, false, false, "mouse_1351")    \
+    V(ctx, CONTROL2,   CONTROL_PORT_DB9, "Control Port 2",    2, false, false, "joystick")      \
+    V(ctx, IEC_SERIAL, IEC_SERIAL,       "IEC Serial Bus",    0, false, true,  "1541")          \
+    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",     0, false, false, "datasette")     \
+    V(ctx, USER,       USER_PORT,        "User Port",         0, false, false, nullptr)         \
+    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Port",    0, false, false, nullptr)         \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",         0, false, false, "direct_output") \
+    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",         0, false, false, nullptr)         \
+    V(ctx, KEYBOARD,   CUSTOM,           "Keyboard",          0, true,  false, nullptr)
 
-// Connector definitions for C64 system ports
-static const PortDefinition c64_control_port_1_def = {
-    PortType::CONTROL_PORT_DB9,
-    "Control Port 1",
-    PortSignals::CONTROL_PORT_SIGNALS,
-    PortSignals::CONTROL_PORT_SIGNAL_COUNT,
-    false, false
-};
-
-static const PortDefinition c64_control_port_2_def = {
-    PortType::CONTROL_PORT_DB9,
-    "Control Port 2",
-    PortSignals::CONTROL_PORT_SIGNALS,
-    PortSignals::CONTROL_PORT_SIGNAL_COUNT,
-    false, false
-};
-
-static const PortDefinition c64_iec_serial_def = {
-    PortType::IEC_SERIAL,
-    "IEC Serial Bus",
-    PortSignals::IEC_SERIAL_SIGNALS,
-    PortSignals::IEC_SERIAL_SIGNAL_COUNT,
-    false,  // is_internal
-    true    // is_bus — shared bus, multiple drives/printers
-};
-
-static const PortDefinition c64_cassette_def = {
-    PortType::CASSETTE_PORT,
-    "Cassette Port",
-    PortSignals::CASSETTE_PORT_SIGNALS,
-    PortSignals::CASSETTE_PORT_SIGNAL_COUNT,
-    false, false
-};
-
-static const PortDefinition c64_user_port_def = {
-    PortType::USER_PORT,
-    "User Port",
-    PortSignals::USER_PORT_SIGNALS,
-    PortSignals::USER_PORT_SIGNAL_COUNT,
-    false, false
-};
-
-// Expansion port definition (minimal — cartridge insertion is handled separately)
-static const SignalLine expansion_signals[] = {
-    { "EXROM", SignalDirection::INPUT,  0 },
-    { "GAME",  SignalDirection::INPUT,  1 },
-    { "RESET", SignalDirection::OUTPUT, 2 },
-};
-static const PortDefinition c64_expansion_def = {
-    PortType::EXPANSION_PORT,
-    "Expansion Port",
-    expansion_signals,
-    3,
-    false, false
-};
-
-// A/V output — DIN-8 connector carries composite video + audio
-static const PortDefinition c64_video_out_def = {
-    PortType::VIDEO_COMPOSITE,
-    "Video Out",
-    nullptr, 0,
-    false, false
-};
-
-static const PortDefinition c64_audio_out_def = {
-    PortType::AUDIO_MONO,
-    "Audio Out",
-    nullptr, 0,
-    false, false
+static constexpr PortSlot kC64Ports[] = {
+    C64_FOR_EACH_PORT(PORT_VISITOR_SLOT, unused)
 };
 
 // ============================================================================
@@ -1617,40 +1562,13 @@ static bool c64_vicii_lp_pin_read(void* context) {
 
 void C64System::setup_ports() {
 
-    // PORT_CONTROL1 = 0 — Control Port 1 (directly connected to CIA1 Port B bits 0-4)
-    add_port(c64_control_port_1_def, 1);
+    create_ports_from_manifest(kC64Ports);
 
-    // PORT_CONTROL2 = 1 — Control Port 2 (directly connected to CIA1 Port A bits 0-4)
-    add_port(c64_control_port_2_def, 2);
-
-    // PORT_IEC_SERIAL = 2 — IEC Serial Bus (connected to CIA2 Port A bits 3-5)
-    add_port(c64_iec_serial_def, 0);
-
-    // PORT_CASSETTE = 3 — Cassette Port (CPU I/O port + CIA1 FLAG)
-    add_port(c64_cassette_def, 0);
-
-    // PORT_USER = 4 — User Port (CIA2 Port B + control lines)
-    add_port(c64_user_port_def, 0);
-
-    // PORT_EXPANSION = 5 — Expansion Port (cartridge slot)
-    add_port(c64_expansion_def, 0);
-
-    // PORT_VIDEO = 6 — Video Output (composite, DIN-8 A/V connector)
-    add_port(c64_video_out_def, 0);
-
-    // PORT_AUDIO = 7 — Audio Output (mono, DIN-8 A/V connector)
-    add_port(c64_audio_out_def, 0);
-
-    // PORT_KEYBOARD = 8 — Internal Keyboard (always attached)
-    static const PortDefinition c64_keyboard_def = {
-        PortType::CUSTOM, "Keyboard", nullptr, 0, true, false  // is_internal, not bus
-    };
-    int kb_port = add_port(c64_keyboard_def, 0);
-
-    // Attach internal keyboard device
+    // Attach internal keyboard device (last port in manifest)
+    constexpr int KB_IDX = static_cast<int>(std::size(kC64Ports)) - 1;
     auto kb_device = std::make_unique<CommodoreKeyboardDevice>(initialized_ ? this->keyboard : nullptr);
     auto* kb_raw = kb_device.get();
-    get_port(kb_port)->attach_device(kb_raw);
+    get_port(KB_IDX)->attach_device(kb_raw);
     owned_devices_.push_back(std::move(kb_device));
 
     // Wire joystick-aware CIA1 callbacks (replace the defaults set during initialize)
@@ -1679,17 +1597,6 @@ void C64System::update_lightpen_display_rect() {
     if (!cached_lightpen_) return;
     const auto& rect = get_display_screen_rect();
     cached_lightpen_->set_display_screen_rect(rect.x, rect.y, rect.w, rect.h);
-}
-
-std::vector<System::DefaultPeripheral>
-C64System::get_default_peripherals() const {
-    return {
-        { PORT_CONTROL1,   "mouse_1351" },  // Control Port 1 — mouse (GEOS, etc.)
-        { PORT_CONTROL2,   "joystick"   },  // Control Port 2 — standard game port
-        { PORT_IEC_SERIAL, "1541"       },  // IEC Serial Bus — 1541 disk drive
-        { PORT_CASSETTE,   "datasette"  },  // Cassette Port  — datasette (1530)
-        { PORT_VIDEO,      "direct_output" },  // Video Out  — Direct Output (no CRT effects)
-    };
 }
 
 void C64System::on_port_device_changed(int port_index) {

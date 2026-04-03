@@ -10,6 +10,7 @@
 #include "core/hardware_traits.hpp"
 #include "core/chip.hpp"     // ChipBase, ChipInfo
 #include "core/port.hpp"
+#include "core/port_manifest.hpp"
 #include "core/peripherals/input_peripheral_device.hpp"
 #include "core/device_registry.hpp"
 
@@ -363,7 +364,6 @@ protected:
     /// Create ports from a declarative PortSlot manifest.
     /// Calls add_port() for each slot and stores the manifest for
     /// auto-generating default peripherals.
-    struct PortSlot;  // forward (defined in port_manifest.hpp)
     void create_ports_from_manifest(const PortSlot* slots, size_t count);
 
     /// Convenience: create ports from a constexpr PortSlot array.

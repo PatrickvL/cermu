@@ -2,6 +2,7 @@
 #include "systems/apple1/apple1_system.hpp"
 #include "systems/apple1/apple1_constants.hpp"
 #include "core/chip.hpp"
+#include "core/port_manifest.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -684,54 +685,22 @@ void Apple1System::convert_2513_to_8x8_font(const uint8_t* char_rom, uint8_t* fo
 }
 
 // ============================================================================
-// CONNECTOR PORT SETUP — Apple 1
+// CONNECTOR PORT MANIFEST — Apple 1
 // ============================================================================
-// Apple 1 has: 1× Expansion Connector (44-pin edge, exposes full 6502 bus)
-// and 1× Cassette Interface (the Apple Cassette Interface / ACI was a
-// separately sold card that plugged into the expansion slot; modeled as
-// its own port since nearly all Apple 1 setups included it).
+// Apple 1 has: 1× Expansion Connector (44-pin edge, exposes full 6502 bus),
+// 1× Cassette Interface (the ACI was separately sold; modeled as its own
+// port since nearly all Apple 1 setups included it), and 1× Video Output.
+//
+//                  tag         type              name                        num  int  bus  default_device
+#define APPLE1_FOR_EACH_PORT(V, ctx) \
+    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Connector",              0, false, false, nullptr)     \
+    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Interface (ACI)",         0, false, false, nullptr)     \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",                        0, false, false, "crt_green")
 
-static const PortDefinition apple1_expansion_def = {
-    PortType::EXPANSION_PORT,
-    "Expansion Connector",
-    PortSignals::APPLE1_EXPANSION_SIGNALS,
-    PortSignals::APPLE1_EXPANSION_SIGNAL_COUNT,
-    false, false
-};
-
-static const PortDefinition apple1_cassette_def = {
-    PortType::CASSETTE_PORT,
-    "Cassette Interface (ACI)",
-    PortSignals::APPLE1_CASSETTE_SIGNALS,
-    PortSignals::APPLE1_CASSETTE_SIGNAL_COUNT,
-    false, false
-};
+CERMU_PORT_MANIFEST(Apple1, APPLE1_FOR_EACH_PORT)
 
 void Apple1System::setup_ports() {
-
-    // Port 0 — Expansion Connector (44-pin edge, full 6502 bus)
-    add_port(apple1_expansion_def, 0);
-
-    // Port 1 — Cassette Interface (ACI card, audio in/out)
-    add_port(apple1_cassette_def, 0);
-
-    // Port 2 — Video Output (composite, active-high)
-    static const PortDefinition apple1_video_out_def = {
-        PortType::VIDEO_COMPOSITE,
-        "Video Out",
-        nullptr, 0,
-        false, false
-    };
-    add_port(apple1_video_out_def, 0);
-
-    log_info("Apple1: Created %zu ports\n", get_ports().size());
-}
-
-std::vector<System::DefaultPeripheral>
-Apple1System::get_default_peripherals() const {
-    return {
-        { 2, "crt_green" },   // Video Out — green phosphor monitor
-    };
+    create_ports_from_manifest(kApple1Ports);
 }
 
 // ============================================================================

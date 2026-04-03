@@ -270,7 +270,6 @@ private:
     void apply_cpu_banking();                   // load CPU viewer snapshot for current rom_enabled
     void apply_ted_video_banking();             // load TED viewer snapshot for current video_romsel
     void setup_ports() override;
-    std::vector<DefaultPeripheral> get_default_peripherals() const override;
     static uint8_t io_port_in(void* user_data);
     static void io_port_out(uint8_t data, void* user_data);
     static uint8_t ted_keyboard_scan(void* user_data, uint8_t column);

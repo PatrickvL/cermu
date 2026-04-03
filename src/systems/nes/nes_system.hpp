@@ -251,7 +251,6 @@ public:
     
 private:
     void setup_ports() override;
-    std::vector<DefaultPeripheral> get_default_peripherals() const override;
 
     /// Register all NES chips into registered_chips_ for the Hardware menu.
     void register_nes_chips();
