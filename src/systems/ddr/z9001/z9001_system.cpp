@@ -430,6 +430,21 @@ template class Z9001System<Z9001Variant::Z9001>;
 template class Z9001System<Z9001Variant::KC87>;
 
 // ============================================================================
+// PORT MANIFEST
+// ============================================================================
+//                                tag       type              name                 num  int  bus  default_device
+#define Z9001_FOR_EACH_PORT(V, ctx) \
+    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)         \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")
+
+CERMU_PORT_MANIFEST(Z9001, Z9001_FOR_EACH_PORT)
+
+template<Z9001Variant V>
+void Z9001System<V>::setup_ports() {
+    create_ports_from_manifest(kZ9001Ports);
+}
+
+// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 

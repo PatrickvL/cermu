@@ -177,6 +177,7 @@ private:
     bus_state_t pins_      = VZ_BUS_DEFAULT_STATE;
 
     // ── Internal helpers ─────────────────────────────────────────────────
+    void setup_ports() override;
     void configure_bus_memory_map();
     bool load_roms();
     void io_tick(bus_state_t& bus);   // Z80 port I/O dispatch

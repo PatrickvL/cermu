@@ -737,6 +737,7 @@ private:
     uint8_t snd_latch_ = 0x00;
 
     // ── Internal helpers ────────────────────────────────────────────────
+    void setup_ports() override;
     void tick_cpu();
     bus_state_t io_read(uint16_t addr, bus_state_t pins);
     bus_state_t io_write(uint16_t addr, uint8_t data, bus_state_t pins);

@@ -478,6 +478,25 @@ template class MSXSystem<MSXVariant::MSX2>;
 template class MSXSystem<MSXVariant::MSX2P>;
 
 // ============================================================================
+// PORT MANIFEST
+// ============================================================================
+//                              tag        type              name                 num  int  bus  default_device
+#define MSX_FOR_EACH_PORT(V, ctx) \
+    V(ctx, JOY1,       CONTROL_PORT_DB9, "Joystick Port 1",     1, false, false, "joystick")      \
+    V(ctx, JOY2,       CONTROL_PORT_DB9, "Joystick Port 2",     2, false, false, "joystick")      \
+    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)         \
+    V(ctx, CARTRIDGE,  EXPANSION_PORT,   "Cartridge Slot",      0, false, false, nullptr)         \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")        \
+    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",           0, false, false, nullptr)
+
+CERMU_PORT_MANIFEST(MSX, MSX_FOR_EACH_PORT)
+
+template<MSXVariant V>
+void MSXSystem<V>::setup_ports() {
+    create_ports_from_manifest(kMSXPorts);
+}
+
+// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 

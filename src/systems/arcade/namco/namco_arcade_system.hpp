@@ -184,6 +184,7 @@ private:
     int audio_sample_rate_  = namco_arcade_constants::DEFAULT_SAMPLE_RATE;
 
     // ── Internal helpers ─────────────────────────────────────────────────
+    void setup_ports() override;
     bus_state_t io_tick(bus_state_t pins);   // Handle I/O region ($5xxx/$9xxx)
     bool load_roms();
     void decode_palette();                   // Build palette from palette PROM

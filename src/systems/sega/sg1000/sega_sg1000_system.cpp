@@ -345,6 +345,24 @@ template class SegaSG1000System<SG1000Variant::SG1000>;
 template class SegaSG1000System<SG1000Variant::SC3000>;
 
 // ============================================================================
+// PORT MANIFEST
+// ============================================================================
+//                                  tag        type              name                  num  int  bus  default_device
+#define SG1000_FOR_EACH_PORT(V, ctx) \
+    V(ctx, CTRL1,      CONTROL_PORT_DB9, "Controller Port 1",    1, false, false, "joystick")      \
+    V(ctx, CTRL2,      CONTROL_PORT_DB9, "Controller Port 2",    2, false, false, "joystick")      \
+    V(ctx, CARTRIDGE,  EXPANSION_PORT,   "Cartridge Slot",       0, false, false, nullptr)         \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",            0, false, false, "crt_tv")        \
+    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",            0, false, false, nullptr)
+
+CERMU_PORT_MANIFEST(SG1000, SG1000_FOR_EACH_PORT)
+
+template<SG1000Variant V>
+void SegaSG1000System<V>::setup_ports() {
+    create_ports_from_manifest(kSG1000Ports);
+}
+
+// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 

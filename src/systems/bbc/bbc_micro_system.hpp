@@ -185,6 +185,8 @@ private:
     // ROM loading
     bool load_roms();
 
+    void setup_ports() override;
+
     // Keyboard mapping
     void update_key_matrix(SDL_Keycode key, bool pressed);
     uint8_t scan_keyboard(uint8_t column) const;

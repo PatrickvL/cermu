@@ -123,6 +123,7 @@ private:
     int audio_sample_rate_ = acorn_atom_constants::DEFAULT_SAMPLE_RATE;
 
     // ── Internal helpers ─────────────────────────────────────────────────
+    void setup_ports() override;
     void configure_bus_memory_map();  // Setup page tables for current config
     void render_frame();   // Render one complete video frame to framebuffer_
     bool load_roms();

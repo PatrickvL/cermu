@@ -283,6 +283,7 @@ private:
     bus_state_t pins_      = APPLE_II_BUS_DEFAULT_STATE;
 
     // ── Internal helpers ─────────────────────────────────────────────────
+    void setup_ports() override;
     void configure_bus_memory_map();
     void render_frame();
     bool load_roms();

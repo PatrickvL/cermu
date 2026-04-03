@@ -418,6 +418,23 @@ template class MemotechMTXSystem<MTXVariant::MTX500>;
 template class MemotechMTXSystem<MTXVariant::MTX512>;
 
 // ============================================================================
+// PORT MANIFEST
+// ============================================================================
+//                               tag        type              name                 num  int  bus  default_device
+#define MTX_FOR_EACH_PORT(V, ctx) \
+    V(ctx, JOY1,       CONTROL_PORT_DB9, "Joystick Port",       1, false, false, "joystick")      \
+    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)         \
+    V(ctx, VIDEO,      VIDEO_RGB,        "Video Out (RGB)",     0, false, false, "crt_tv")        \
+    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",           0, false, false, nullptr)
+
+CERMU_PORT_MANIFEST(MTX, MTX_FOR_EACH_PORT)
+
+template<MTXVariant V>
+void MemotechMTXSystem<V>::setup_ports() {
+    create_ports_from_manifest(kMTXPorts);
+}
+
+// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 

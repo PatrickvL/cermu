@@ -246,6 +246,7 @@ private:
     // HELPERS
     // ========================================================================
 
+    void setup_ports() override;
     void configure_bus_memory_map();
     void update_banking();           // 128K: remap pages after $7FFD write
     bus_state_t io_tick(bus_state_t pins);

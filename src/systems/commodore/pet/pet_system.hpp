@@ -195,6 +195,7 @@ private:
 
     // VIA CB2 callback — speaker output
     static void via_cb2_output(void* user_data, bool state);
+    void setup_ports() override;
 
     // CRTC display callback — renders one character cell
     void crtc_display_char(uint16_t ma, uint8_t ra, bool cursor);

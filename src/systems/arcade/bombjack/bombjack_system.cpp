@@ -385,6 +385,20 @@ bus_state_t BombJackSystem::sound_io_tick(bus_state_t pins) {
 bool BombJackSystem::load_roms() { return false; }
 
 // ============================================================================
+// PORT MANIFEST
+// ============================================================================
+//                                    tag      type              name                 num  int  bus  default_device
+#define BOMBJACK_FOR_EACH_PORT(V, ctx) \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")        \
+    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",           0, false, false, nullptr)
+
+CERMU_PORT_MANIFEST(BombJack, BOMBJACK_FOR_EACH_PORT)
+
+void BombJackSystem::setup_ports() {
+    create_ports_from_manifest(kBombJackPorts);
+}
+
+// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 

@@ -169,6 +169,7 @@ private:
     // ── Internal helpers ─────────────────────────────────────────────────
     bus_state_t main_io_tick(bus_state_t pins);   // $B000+ I/O registers
     bus_state_t sound_io_tick(bus_state_t pins);   // AY-3-8910 port I/O
+    void setup_ports() override;
     bool load_roms();
     void decode_palette();                         // Rebuild palette from palette RAM
     void render_frame();                           // Decode FG tilemap into indexed framebuffer

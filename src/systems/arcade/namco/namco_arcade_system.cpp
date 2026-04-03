@@ -317,6 +317,21 @@ template class NamcoArcadeSystem<NamcoGame::PacMan>;
 template class NamcoArcadeSystem<NamcoGame::Pengo>;
 
 // ============================================================================
+// PORT MANIFEST
+// ============================================================================
+//                                  tag       type              name                 num  int  bus  default_device
+#define NAMCO_FOR_EACH_PORT(V, ctx) \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")        \
+    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",           0, false, false, nullptr)
+
+CERMU_PORT_MANIFEST(Namco, NAMCO_FOR_EACH_PORT)
+
+template<NamcoGame G>
+void NamcoArcadeSystem<G>::setup_ports() {
+    create_ports_from_manifest(kNamcoPorts);
+}
+
+// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 

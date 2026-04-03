@@ -453,6 +453,25 @@ template class SpectravideoSystem<SVIVariant::SVI318>;
 template class SpectravideoSystem<SVIVariant::SVI328>;
 
 // ============================================================================
+// PORT MANIFEST
+// ============================================================================
+//                               tag        type              name                 num  int  bus  default_device
+#define SVI_FOR_EACH_PORT(V, ctx) \
+    V(ctx, JOY1,       CONTROL_PORT_DB9, "Joystick Port 1",     1, false, false, "joystick")      \
+    V(ctx, JOY2,       CONTROL_PORT_DB9, "Joystick Port 2",     2, false, false, "joystick")      \
+    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)         \
+    V(ctx, CARTRIDGE,  EXPANSION_PORT,   "Cartridge Slot",      0, false, false, nullptr)         \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")        \
+    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",           0, false, false, nullptr)
+
+CERMU_PORT_MANIFEST(SVI, SVI_FOR_EACH_PORT)
+
+template<SVIVariant V>
+void SpectravideoSystem<V>::setup_ports() {
+    create_ports_from_manifest(kSVIPorts);
+}
+
+// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 

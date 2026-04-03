@@ -103,6 +103,7 @@ private:
     int audio_sample_rate_  = lc80_constants::DEFAULT_SAMPLE_RATE;
 
     // ── Internal helpers ─────────────────────────────────────────────────
+    void setup_ports() override;
     void configure_bus_memory_map();
     bus_state_t io_tick(bus_state_t pins);
     bool load_roms();
