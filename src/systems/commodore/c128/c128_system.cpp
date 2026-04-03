@@ -260,9 +260,13 @@ bool C128System::initialize() {
 
     // CIA1 interrupt line → IRQ (keyboard scan, cursor blink, timer events)
     cia1.configured_interrupt_bit = BUS_IRQ_BIT;
+    cia1.cycles_tod[0] = 1000000 / 60;  // NTSC TOD frequency
+    cia1.cycles_tod[1] = 1000000 / 50;  // PAL TOD frequency
 
     // CIA2 interrupt line → NMI
     cia2.configured_interrupt_bit = BUS_NMI_BIT;
+    cia2.cycles_tod[0] = 1000000 / 60;
+    cia2.cycles_tod[1] = 1000000 / 50;
 
     // SID — initialize
     sid.init();
@@ -281,12 +285,23 @@ bool C128System::initialize() {
     board_.csg8502.bank_change_ctx = this;
     board_.csg8502.reset();
 
+    // Sync PLA-style banking with freshly-reset I/O port (same as C64)
+    {
+        uint8_t banking_bits = board_.csg8502.io_port_regs.data
+                             & board_.csg8502.io_port_regs.ddr
+                             & 0x07;
+        cpu_banking_callback(this, banking_bits);
+    }
+
     // Initialize Z80 CPU — starts first after reset (real hardware behavior)
     // Z80 PC = $0000, which maps to the Z80 BIOS ROM.  The BIOS checks for
     // CP/M boot conditions and hands off to the 8502 by writing MCR bit 0.
     z80_pins_ = board_.z80.init();
     cpu_mode_ = CPUMode::MODE_Z80;
     active_cpu_ = &board_.z80;
+
+    // Set initial VIC-IIe bank from CIA2 PA (defaults to bank 0 = $0000-$3FFF)
+    vicii_base_t::memory_bank_change(&vic_iie, cia2.port_a_value & 0x03);
 
     // Video output — VIC-IIe drives composite video (primary, 40-col)
     video_port_ = std::make_unique<CompositeVideoPort>();
@@ -374,8 +389,21 @@ void C128System::reset() {
     c64_mode_ = false;
     cpu_port_bits_ = 0x07;
     if (keyboard_) keyboard_->reset();
+
+    // Sync CPU I/O port banking with freshly-reset state
+    {
+        uint8_t banking_bits = board_.csg8502.io_port_regs.data
+                             & board_.csg8502.io_port_regs.ddr
+                             & 0x07;
+        cpu_banking_callback(this, banking_bits);
+    }
     update_bank_config();
+
+    // Re-sync VIC-IIe bank from CIA2 PA
+    vicii_base_t::memory_bank_change(&board_.vic_iie, board_.cia2.port_a_value & 0x03);
+
     reset_load_state();
+    total_cycles_ = 0;
 }
 
 // ============================================================================
@@ -499,7 +527,7 @@ void C128System::tick() {
     }
 
     // ── PHASE 5: SID — sound generation ──────────────────────────────
-    s = sid.tick(s);
+    s = sid.tick_audio(s);
 
     // ── VDC character clock (~1 MHz, same rate as slow-mode CPU) ─────
     // Disabled in C64 mode (VDC is not accessible).
@@ -838,9 +866,18 @@ void C128System::update_bank_config() {
     const ChipId  ramRd = bank ? kRamBank1 : kRamBank0;
     const WriteId ramWr = bank ? kRamBank1W : kRamBank0W;
 
-    // $0000-$3FFF: always RAM (selected bank)
-    for (size_t p = 0; p < 4; ++p)
-        bus_.set_page(kViewerCpu, p, ramRd, ramWr);
+    // Common RAM: bottom/top areas always use bank 0, regardless of CR bank.
+    const uint8_t bot_common_pages = mmu.bottom_common_pages();  // 0 = disabled
+    const uint8_t top_common_start = mmu.top_common_start_page(); // 16 = disabled
+
+    // $0000-$3FFF: RAM (selected bank, but common pages stay bank 0)
+    for (size_t p = 0; p < 4; ++p) {
+        if (p < bot_common_pages) {
+            bus_.set_page(kViewerCpu, p, kRamBank0, kRamBank0W);
+        } else {
+            bus_.set_page(kViewerCpu, p, ramRd, ramWr);
+        }
+    }
 
     // $4000-$7FFF: BASIC LO ROM (bit 1 = 0) or RAM (bit 1 = 1)
     {
@@ -863,32 +900,44 @@ void C128System::update_bank_config() {
     {
         const uint8_t high_sel = mmu.high_rom_select();
 
+        // Per-page RAM chip IDs, accounting for top common RAM.
+        // Common pages always use bank 0 regardless of CR bank select.
+        auto ram_for_page = [&](size_t page) -> std::pair<ChipId, WriteId> {
+            if (page >= top_common_start)
+                return { kRamBank0, kRamBank0W };
+            return { ramRd, ramWr };
+        };
+
         // $C000-$CFFF: Editor ROM when default, else RAM
-        if (high_sel == mos8722::cr::ROM_DEFAULT) {
-            bus_.set_page(kViewerCpu, 0xC, kEditor, ramWr);
-        } else {
-            bus_.set_page(kViewerCpu, 0xC, ramRd, ramWr);
+        {
+            auto [rd, wr] = ram_for_page(0xC);
+            if (high_sel == mos8722::cr::ROM_DEFAULT) {
+                bus_.set_page(kViewerCpu, 0xC, kEditor, wr);
+            } else {
+                bus_.set_page(kViewerCpu, 0xC, rd, wr);
+            }
         }
 
         // $D000-$DFFF: controlled by high_sel AND CR bit 0 (I/O select)
         if (high_sel == mos8722::cr::ROM_RAM) {
-            // All RAM — bits 5-4 = 11 overrides everything
-            bus_.set_page(kViewerCpu, 0xD, ramRd, ramWr);
+            auto [rd, wr] = ram_for_page(0xD);
+            bus_.set_page(kViewerCpu, 0xD, rd, wr);
         } else if (mmu.io_visible()) {
             // CR bit 0 = 0: I/O devices visible
             bus_.map_to_indexed_sub(kViewerCpu, 0xD, 0);
         } else {
-            // CR bit 0 = 1: character ROM visible (or function ROM for sel 1/2)
-            bus_.set_page(kViewerCpu, 0xD, kCharRom, ramWr);
+            auto [_, wr] = ram_for_page(0xD);
+            bus_.set_page(kViewerCpu, 0xD, kCharRom, wr);
         }
 
         // $E000-$FFFF: Kernal ROM when default, else RAM
-        if (high_sel == mos8722::cr::ROM_DEFAULT) {
-            bus_.set_page(kViewerCpu, 0xE, kKernal, ramWr);
-            bus_.set_page(kViewerCpu, 0xF, kKernal, ramWr);
-        } else {
-            bus_.set_page(kViewerCpu, 0xE, ramRd, ramWr);
-            bus_.set_page(kViewerCpu, 0xF, ramRd, ramWr);
+        for (size_t p = 0xE; p <= 0xF; ++p) {
+            auto [rd, wr] = ram_for_page(p);
+            if (high_sel == mos8722::cr::ROM_DEFAULT) {
+                bus_.set_page(kViewerCpu, p, kKernal, wr);
+            } else {
+                bus_.set_page(kViewerCpu, p, rd, wr);
+            }
         }
     }
 

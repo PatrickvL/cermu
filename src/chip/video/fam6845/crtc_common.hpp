@@ -230,8 +230,9 @@ struct crtc_base_t : public VideoChipBase {
     // ── Block copy / fill DMA engine ─────────────────────────────────
     bool     block_copy_armed_ = false;  // R24 bit 7 sets this
     uint16_t block_src_addr_   = 0;      // From R32:R33
-    uint16_t block_count_      = 0;      // From R30 (byte count - 1)
+    uint16_t block_count_      = 0;      // From R30
     bool     dma_active_       = false;  // DMA transfer in progress
+    bool     dma_is_copy_      = false;  // true = block copy, false = fill
     uint16_t dma_remaining_    = 0;      // Bytes remaining in current DMA
     uint8_t  dma_latch_        = 0;      // Current byte being transferred
 

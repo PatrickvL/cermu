@@ -218,34 +218,36 @@ void crtc_base_t::vdc_write_register(uint8_t reg, uint8_t data) {
             break;
 
         case R30_WORD_COUNT:
-            // Store byte count for DMA (actual count = R30 + 1)
-            block_count_ = static_cast<uint16_t>(data) + 1;
-            break;
-
-        case R31_DATA_PORT:
-            if (block_copy_armed_ && !dma_active_) {
-                // Block copy/fill: writing R31 fires the DMA
-                block_src_addr_ = block_source_address();
+            // Writing R30 triggers fill or copy (count 0 means 256)
+            block_count_ = data ? static_cast<uint16_t>(data) : 256;
+            if (!dma_active_) {
+                dma_is_copy_    = block_copy_armed_;
                 dma_active_     = true;
                 dma_remaining_  = block_count_;
                 ready_          = false;
-                // First read from source address
-                if (vram_) {
+                status_register &= ~fam6845::STATUS_READY;
+                block_src_addr_ = block_source_address();
+                if (dma_is_copy_ && vram_) {
                     dma_latch_ = vram_[block_src_addr_ & vram_addr_mask_];
+                } else {
+                    dma_latch_ = regs_[R31_DATA_PORT];
                 }
-            } else {
-                // Normal write: store data byte, auto-increment
-                if (vram_) {
-                    vram_[update_addr_ & vram_addr_mask_] = data;
-                }
-                update_addr_ = (update_addr_ + 1) & vram_addr_mask_;
-                regs_[R18_UPDATE_ADDR_HI] = static_cast<uint8_t>(update_addr_ >> 8);
-                regs_[R19_UPDATE_ADDR_LO] = static_cast<uint8_t>(update_addr_ & 0xFF);
-                // Insert DRAM wait
-                ready_ = false;
-                dram_wait_ = 9;
             }
             break;
+
+        case R31_DATA_PORT: {
+            // Normal write: store data byte, auto-increment
+            if (vram_) {
+                vram_[update_addr_ & vram_addr_mask_] = data;
+            }
+            update_addr_ = (update_addr_ + 1) & vram_addr_mask_;
+            regs_[R18_UPDATE_ADDR_HI] = static_cast<uint8_t>(update_addr_ >> 8);
+            regs_[R19_UPDATE_ADDR_LO] = static_cast<uint8_t>(update_addr_ & 0xFF);
+            // Insert DRAM wait
+            ready_ = false;
+            dram_wait_ = 9;
+            break;
+        }
 
         case R32_BLOCK_SRC_HI:
         case R33_BLOCK_SRC_LO:
@@ -312,11 +314,14 @@ void crtc_base_t::dma_step() {
     // Advance destination
     update_addr_ = (update_addr_ + 1) & vram_addr_mask_;
 
-    // Read next source byte (for block copy — for fill this re-reads same addr)
-    block_src_addr_ = (block_src_addr_ + 1) & vram_addr_mask_;
-    if (vram_) {
-        dma_latch_ = vram_[block_src_addr_ & vram_addr_mask_];
+    if (dma_is_copy_) {
+        // Block copy: advance source and read next byte
+        block_src_addr_ = (block_src_addr_ + 1) & vram_addr_mask_;
+        if (vram_) {
+            dma_latch_ = vram_[block_src_addr_ & vram_addr_mask_];
+        }
     }
+    // Fill: dma_latch_ stays the same (R31 value)
 
     dma_remaining_--;
 
