@@ -656,8 +656,6 @@ bool Commodore264System<V>::initialize() {
         log_info("%s: Warning - keyboard matrix creation failed\n", Traits::name);
     }
     
-    setup_ports();
-
     // Register chips for the Hardware menu and debug windows
     register_bus_chips(board_);
 

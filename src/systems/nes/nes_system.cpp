@@ -339,8 +339,6 @@ bool NintendoSystem<V>::initialize() {
     // Connect bus to PPU for page-pointer VRAM access
     board_.ppu.connect_bus(&bus_);
 
-    setup_ports();
-
     // Register chips for the Hardware menu and debug windows
     register_nes_chips();
 

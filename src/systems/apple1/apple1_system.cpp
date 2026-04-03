@@ -218,8 +218,6 @@ bool Apple1System::initialize() {
     // DDR left at 0x00 after init — the Woz Monitor sets DDRB = $7F
     // via STY $D012 during its boot sequence (control bit 2 = 0 → DDR mode).
     
-    setup_ports();
-
     // Register chips for the Hardware menu
     register_bus_chips(board_);
     register_chip(std::make_unique<ChipPlaceholder>(

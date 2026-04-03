@@ -187,9 +187,6 @@ bool Atari2600System::initialize() {
     // Console switches default: color mode, both difficulty A, not pressed
     console_switches_ = 0xFF;  // All bits high = not pressed (active-low)
 
-    // Setup connector ports for joysticks
-    setup_ports();
-
     // Register all manifest-created chips for the Hardware menu
     register_bus_chips(board_);
 

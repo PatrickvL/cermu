@@ -247,7 +247,7 @@ public:
 
 private:
     /// Create and wire up all C64 connector ports (CIA1 joystick callbacks etc).
-    void setup_ports();
+    void setup_ports() override;
     std::vector<DefaultPeripheral> get_default_peripherals() const override;
 
     /// Pass the current display rect to any lightpen on Control Port 1 (once per frame).

@@ -144,7 +144,7 @@ private:
     void configure_bus_memory_map();  // (Re)configure page tables for current ram_size_
 
     // Connector port setup (registers Apple 1 connector ports with base class)
-    void setup_ports();
+    void setup_ports() override;
 
     // Default peripherals
     std::vector<DefaultPeripheral> get_default_peripherals() const override;
