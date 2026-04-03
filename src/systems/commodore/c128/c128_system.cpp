@@ -360,14 +360,6 @@ void C128System::reset() {
 // ============================================================================
 // EXECUTION
 // ============================================================================
-//
-// TODO: Unify into a single tick sequence.  The peripheral ticks (VIC-IIe,
-// CIAs, SID, VDC, MMIO dispatch, bank-config / mode-switch checks) are
-// identical in both CPU modes — only the CPU tick itself differs (Z80
-// T-state with inline bus servicing vs. 8502 PHI2/PHI1 with interleaved
-// address decode).  With active_cpu_ already pointing to the live CPU,
-// the unified loop would branch only on cpu_mode_ for the CPU-specific
-// steps and keep one copy of the peripheral sequence.
 
 void C128System::tick() {
     total_cycles_++;
@@ -376,62 +368,42 @@ void C128System::tick() {
     auto& sid     = board_.sid;
     auto& cia1    = board_.cia1;
     auto& cia2    = board_.cia2;
+    auto& cpu     = board_.csg8502;
 
-    // ── Z80 mode: tick Z80 + peripherals ─────────────────────────────
-    if (cpu_mode_ == CPUMode::MODE_Z80) {
+    // In Z80 mode the Z80 runs its own T-state with inline bus servicing
+    // (MREQ/IORQ dispatch).  Peripherals still tick but receive a dummy bus
+    // state — only the Z80 drives real addresses this cycle.
+    if (cpu_mode_ == CPUMode::MODE_Z80)
         tick_z80();
-        // VIC-IIe still runs (generates video timing / display)
-        bus_state_t dummy = default_state_;
-        dummy = vic_iie.tick_phi1(dummy);
-        vic_iie.tick_phi2(dummy);
-        // CIAs run (timers, keyboard scan, interrupts)
-        cia2.tick_phi2(dummy);
-        cia1.tick_phi2(dummy);
-        cia2.tick_phi1(dummy);
-        cia1.tick_phi1(dummy);
-        // SID + VDC
-        sid.tick(dummy);
-        board_.vdc.tick();
 
-        // Check for CPU switch or C64 mode
-        if (unlikely(board_.mmu.cpu_switch_requested())) {
-            board_.mmu.acknowledge_cpu_switch();
-            if (board_.mmu.cpu_is_8502()) {
-                switch_cpu_mode(CPUMode::MODE_8502);
-            }
-        }
-        if (unlikely(!c64_mode_ && board_.mmu.c64_mode_requested())) {
-            enter_c64_mode();
-        }
-        return;
+    // ── Bus state setup ──────────────────────────────────────────────
+    // In 8502 mode the bus state flows through every phase; in Z80 mode
+    // peripherals see a neutral default (no address, data = pull-ups).
+    bus_state_t s = default_state_;
+    if (cpu_mode_ == CPUMode::MODE_8502) {
+        BUS_SET_ADDR(s, BUS_GET_ADDR(pins_));
+        BUS_SET_DATA(s, BUS_GET_DATA(pins_));
     }
 
-    // ── 8502 mode: standard C128/C64 tick ────────────────────────────
-    auto& cpu = board_.csg8502;
-
-    // Start each cycle with pull-up defaults
-    bus_state_t s = default_state_;
-    BUS_SET_ADDR(s, BUS_GET_ADDR(pins_));
-    BUS_SET_DATA(s, BUS_GET_DATA(pins_));
-
-    // PHASE 1: VIC-IIe PHI1 — g-access read, pixel sequencing
+    // ── PHASE 1: VIC-IIe PHI1 — g-access read, pixel sequencing ─────
     s = vic_iie.tick_phi1(s);
 
-    // PHASE 1.5: CIA PHI2 — apply pending interrupt lines before CPU
+    // ── PHASE 1.5: CIA PHI2 — apply pending interrupt lines before CPU
     s = cia2.tick_phi2(s);
     s = cia1.tick_phi2(s);
 
-    // BA→RDY wiring (direct bit test + set/clear)
-    if (BUS_GET_BIT(s, BUS_BA_BIT))
-        BUS_SET_BIT(s, BUS_RDY_BIT);
-    else
-        BUS_CLR_BIT(s, BUS_RDY_BIT);
+    // ── 8502-only: BA→RDY wiring + CPU PHI2 + address decode ────────
+    if (cpu_mode_ == CPUMode::MODE_8502) {
+        // BA→RDY wiring (direct bit test + set/clear)
+        if (BUS_GET_BIT(s, BUS_BA_BIT))
+            BUS_SET_BIT(s, BUS_RDY_BIT);
+        else
+            BUS_CLR_BIT(s, BUS_RDY_BIT);
 
-    // PHASE 2: CPU PHI2 — instruction execution
-    s = cpu.tick<CSG8502::Phase::PHI2>(s);
+        // CPU PHI2 — instruction execution
+        s = cpu.tick<CSG8502::Phase::PHI2>(s);
 
-    // PHASE 3: Address decode + buffer service + MMIO self-dispatch
-    {
+        // Address decode + buffer service + MMIO self-dispatch
         const uint16_t addr = BUS_GET_ADDR(s);
         const bool is_write = !BUS_GET_BIT(s, BUS_RW_BIT);
 
@@ -468,50 +440,53 @@ void C128System::tick() {
             s = cia2.tick_mmio(s);
             s = board_.vdc.tick_mmio(s);
         }
-
-        if (unlikely(board_.mmu.bank_config_dirty())) {
-            update_bank_config();
-        }
-
-        // Check for CPU switch (8502 → Z80 via MCR bit 0)
-        if (unlikely(board_.mmu.cpu_switch_requested())) {
-            board_.mmu.acknowledge_cpu_switch();
-            if (!board_.mmu.cpu_is_8502()) {
-                switch_cpu_mode(CPUMode::MODE_Z80);
-            }
-        }
-
-        // Check for C64 mode transition (MCR bit 6 latched)
-        if (unlikely(!c64_mode_ && board_.mmu.c64_mode_requested())) {
-            enter_c64_mode();
-        }
     }
 
-    // NMI edge detection
-    cpu.sample_nmi_pin(s);
+    // ── MMU bank config + CPU/mode switch checks (both modes) ────────
+    if (unlikely(board_.mmu.bank_config_dirty())) {
+        update_bank_config();
+    }
 
-    // PHASE 3.1: VIC-IIe PHI2 — c/p/s-access data delivery
+    if (unlikely(board_.mmu.cpu_switch_requested())) {
+        board_.mmu.acknowledge_cpu_switch();
+        bool want_8502 = board_.mmu.cpu_is_8502();
+        if (want_8502 && cpu_mode_ != CPUMode::MODE_8502)
+            switch_cpu_mode(CPUMode::MODE_8502);
+        else if (!want_8502 && cpu_mode_ != CPUMode::MODE_Z80)
+            switch_cpu_mode(CPUMode::MODE_Z80);
+    }
+
+    if (unlikely(!c64_mode_ && board_.mmu.c64_mode_requested())) {
+        enter_c64_mode();
+    }
+
+    // ── 8502-only: NMI edge detection ────────────────────────────────
+    if (cpu_mode_ == CPUMode::MODE_8502)
+        cpu.sample_nmi_pin(s);
+
+    // ── PHASE 3.1: VIC-IIe PHI2 — c/p/s-access data delivery ────────
     vic_iie.tick_phi2(s);
 
-    // PHASE 3.5: CIA PHI1 — timer counting, TOD, interrupt generation
+    // ── PHASE 3.5: CIA PHI1 — timer counting, TOD, interrupt gen ─────
     s = cia2.tick_phi1(s);
     s = cia1.tick_phi1(s);
 
-    // PHASE 4: CPU PHI1 — prepare next fetch
-    s = cpu.tick<CSG8502::Phase::PHI1>(s);
+    // ── 8502-only: CPU PHI1 + R/W restore ────────────────────────────
+    if (cpu_mode_ == CPUMode::MODE_8502) {
+        s = cpu.tick<CSG8502::Phase::PHI1>(s);
+        BUS_SET_BIT(s, BUS_RW_BIT);
+    }
 
-    // Restore R/W line to read mode
-    BUS_SET_BIT(s, BUS_RW_BIT);
-
-    // PHASE 5: SID — sound generation
+    // ── PHASE 5: SID — sound generation ──────────────────────────────
     s = sid.tick(s);
 
-    // VDC character clock — runs at ~1 MHz (same rate as slow-mode CPU)
+    // ── VDC character clock (~1 MHz, same rate as slow-mode CPU) ─────
     // Disabled in C64 mode (VDC is not accessible).
     if (!c64_mode_)
         board_.vdc.tick();
 
-    pins_ = s;
+    if (cpu_mode_ == CPUMode::MODE_8502)
+        pins_ = s;
 }
 
 void C128System::run_frame() {
@@ -1138,6 +1113,13 @@ void C128System::cpu_banking_callback(void* ctx, uint8_t banking_state) {
 // ============================================================================
 // SYSTEM MENU
 // ============================================================================
+//
+// TODO: "Reset C128" duplicates the generic "System > Reset" menu item.
+// If they stay identical, remove the system-specific one.  Alternatively,
+// give them distinct roles — e.g. "Power Cycle" (cold boot: full chip
+// re-init, RAM cleared) vs "Reset" (warm reset: reset vector fetch, RAM
+// preserved).  Use era-appropriate terms and expose the distinction for
+// all systems that support it, not just C128.
 
 void C128System::render_system_menu_items() {
 #ifdef CERMU_HAS_GUI
