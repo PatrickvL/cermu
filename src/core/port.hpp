@@ -133,15 +133,15 @@ struct SignalLine {
 
 /// Static descriptor for a connector type — shared by all ports of the same kind.
 struct PortDefinition {
-    PortType       type;
-    const char*         name;           ///< E.g. "Control Port 1", "IEC Serial Bus"
-    const SignalLine*   signals;        ///< Array of signal line descriptors
-    uint8_t             signal_count;   ///< Number of entries in `signals`
-    bool                is_internal;    ///< True for internal connectors (keyboard, etc.)
-                                        ///< Internal devices cannot be detached via UI.
-    bool                is_bus;         ///< True for shared bus connectors (e.g. IEC serial)
-                                        ///< Bus ports allow multiple devices attached simultaneously.
-                                        ///< Signal lines use open-collector AND of all device outputs.
+    PortType            type          = PortType::CUSTOM;
+    const char*         name          = nullptr; ///< E.g. "Control Port 1", "IEC Serial Bus"
+    const SignalLine*   signals       = nullptr; ///< Array of signal line descriptors
+    uint8_t             signal_count  = 0;       ///< Number of entries in `signals`
+    bool                is_internal   = false;   ///< True for internal connectors (keyboard, etc.)
+                                                 ///< Internal devices cannot be detached via UI.
+    bool                is_bus        = false;   ///< True for shared bus connectors (e.g. IEC serial)
+                                                 ///< Bus ports allow multiple devices attached simultaneously.
+                                                 ///< Signal lines use open-collector AND of all device outputs.
 };
 
 // ============================================================================
@@ -172,6 +172,16 @@ public:
     explicit Port(const PortDefinition& def, int port_index = 0);
     ~Port() override;
 
+    /// Deferred initialization for value-typed ports (default-constructed
+    /// then initialized during bind_all).  Must be called exactly once.
+    void init(const PortDefinition& def, int port_index = 0);
+
+protected:
+    /// Default constructor for use by TypedPort<PT> — produces an
+    /// uninitialized port that MUST be init()'d before use.
+    Port();
+
+public:
     // --- ComponentBase interface ----------------------------------------
     const char* name() const override { return get_name(); }
 
@@ -248,10 +258,10 @@ public:
     const AudioOutput* audio_output() const { return audio_output_ ? &*audio_output_ : nullptr; }
 
 private:
-    PortDefinition                 definition_;
-    int                                 port_index_;        ///< E.g. port 1 vs port 2
-    uint32_t                            system_signals_;    ///< System-side output (all 1s = idle)
-    uint32_t                            combined_device_signals_;  ///< AND of all device outputs
+    PortDefinition                      definition_{};
+    int                                 port_index_ = 0;    ///< E.g. port 1 vs port 2
+    uint32_t                            system_signals_ = 0xFFFFFFFF;    ///< System-side output (all 1s = idle)
+    uint32_t                            combined_device_signals_ = 0xFFFFFFFF;  ///< AND of all device outputs
     std::vector<PeripheralDevice*>      attached_devices_;  ///< Attached devices (1 for point-to-point, N for bus)
     SignalChangeCallback                on_device_output_changed_;
     std::optional<VideoOutput>          video_output_;      ///< Present on video output connectors

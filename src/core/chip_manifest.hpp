@@ -64,6 +64,9 @@
 
 #include "core/chip.hpp"
 
+// Forward declaration — full definition in typed_manifest.hpp.
+template<typename... Ts> struct TypedManifest;
+
 
 // =============================================================================
 // §0.1  RomFileInfo — ROM file loading metadata
@@ -685,14 +688,15 @@ struct ChipManifest {
 //   );
 //
 // Types are visible in the source but stripped at compile time — the result
-// is a plain ChipManifest<N>.  size_bytes must be 0 or a power of two.
+// is a TypedManifest<Chips...> (IS-A ChipManifest<N>).
+// size_bytes must be 0 or a power of two.
 // Chain .with_dynamic_pool(n) to reserve a dynamic chip pool.
 
 template<typename... Chips>
-[[nodiscard]] constexpr ChipManifest<sizeof...(Chips)>
+[[nodiscard]] constexpr TypedManifest<Chips...>
 make_chip_manifest(Slot<Chips>... slots) noexcept
 {
-    ChipManifest<sizeof...(Chips)> manifest{};
+    TypedManifest<Chips...> manifest{};
     size_t i = 0;
     ((assert(slots.size_bytes == 0 || (slots.size_bytes & (slots.size_bytes - 1)) == 0),
       manifest.chips[i++] = ChipSlot{

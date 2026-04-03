@@ -94,12 +94,16 @@ public:
         return result;
     }
 
-    // ── Port ownership ───────────────────────────────────────────────────
+    // ── Port access ────────────────────────────────────────────────────
     //
-    // Physical connector jacks on this board.  Ports are template-independent,
-    // so ownership lives here in the non-templated base rather than in
-    // Board<Spec>.  Ports created via add_port() are automatically included
-    // in register_board_components().
+    // Physical connector jacks on this board.  Two creation paths:
+    //
+    //   add_port()     — heap-allocates a Port, board takes ownership.
+    //   add_port_ref() — registers a non-owning reference to a value-typed
+    //                    port (e.g. TypedPort<PT> in a board subclass tuple).
+    //
+    // Both paths push to the same ports_ index, so get_port(i) and
+    // get_ports() work uniformly regardless of creation path.
     //
 
     /// Add a port from a definition (creates the Port internally).
@@ -109,12 +113,17 @@ public:
     /// Add a pre-constructed port (takes ownership).  Returns the port index.
     int add_port(std::unique_ptr<Port> port);
 
+    /// Register a non-owning reference to a value-typed port.
+    /// The caller must ensure the port outlives the board.
+    /// Returns the port index.
+    int add_port_ref(Port* port);
+
     /// Get a port by index (nullptr if out of range).
     [[nodiscard]] Port* get_port(int index);
     [[nodiscard]] const Port* get_port(int index) const;
 
-    /// Get all ports on this board.
-    [[nodiscard]] const std::vector<std::unique_ptr<Port>>& get_ports() const {
+    /// Get all ports on this board (ordered by creation/registration).
+    [[nodiscard]] const std::vector<Port*>& get_ports() const {
         return ports_;
     }
 
@@ -143,7 +152,8 @@ protected:
         components_.clear();
     }
 
-    std::vector<std::unique_ptr<Port>> ports_;
+    std::vector<Port*> ports_;                         // all ports, ordered (non-owning refs)
+    std::vector<std::unique_ptr<Port>> owned_ports_;   // heap-allocated ports (ownership)
     System*        system_     = nullptr;  // Non-owning back-reference to parent system
 
 private:

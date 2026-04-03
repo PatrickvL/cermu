@@ -16,6 +16,7 @@
 #include "core/board_base.hpp"
 #include "core/bus_map.hpp"
 #include "core/port.hpp"
+#include "core/typed_manifest.hpp"
 #include "core/storage/rom_loader.hpp"
 #include <cstdio>
 #include <type_traits>
@@ -152,6 +153,13 @@ public:
             free_list_.push_back({dynamic_base_, manifest.num_dynamic_pages});
         }
     }
+
+    // TypedManifest overload — delegates to ChipManifest constructor.
+    // (Template deduction cannot see through inheritance, so we need this.)
+    // count_chips_v filters out ports and dip switches from the type list.
+    template<typename... Ts>
+    explicit Board(const TypedManifest<Ts...>& manifest)
+        : Board(static_cast<const ChipManifest<count_chips_v<Ts...>>&>(manifest)) {}
 
     // =====================================================================
     // §4.2  Chip binding
@@ -493,8 +501,8 @@ public:
         }
         for (auto& chip : owned_chips_)
             register_component(chip.get());
-        for (auto& port : ports_)
-            register_component(port.get());
+        for (auto* port : ports_)
+            register_component(port);
     }
 
     // =====================================================================

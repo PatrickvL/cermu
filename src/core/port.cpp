@@ -219,6 +219,21 @@ Port::Port(const PortDefinition& def, int port_index)
 {
 }
 
+Port::Port()
+    : definition_{}
+    , port_index_(0)
+    , system_signals_(0xFFFFFFFF)
+    , combined_device_signals_(0xFFFFFFFF)
+{
+}
+
+void Port::init(const PortDefinition& def, int port_index) {
+    definition_ = def;
+    port_index_ = port_index;
+    system_signals_ = 0xFFFFFFFF;
+    combined_device_signals_ = 0xFFFFFFFF;
+}
+
 Port::~Port() {
     // Don't call detach_device() here — it accesses device objects
     // (get_name, on_detach) that may already be destroyed when the
