@@ -87,7 +87,7 @@ static const keyboard_decode_table_t c128_decode_tables[] = {
 };
 
 const keyboard_matrix_config_t c128_keyboard_config = {
-    .model = KEYBOARD_MODEL_C64,  // Same scan method as C64 (CIA-based)
+    .model = KEYBOARD_MODEL_C128,
     .scan_chip = KEYBOARD_SCAN_CIA,
     .rows = C128_KEYBOARD_ROWS,
     .cols = C128_KEYBOARD_COLS,

@@ -155,12 +155,21 @@ public:
     void render_system_menu_items() override;
     const char* get_mode_label() const override;
 
+    // ── Port index constants (declaration order in port manifest) ────
+    static constexpr int PORT_CONTROL1    = 0;
+    static constexpr int PORT_CONTROL2    = 1;
+    static constexpr int PORT_IEC_SERIAL  = 2;
+
+    /// Update cached state when devices are attached/detached.
+    void on_port_device_changed(int port_index) override;
+
 protected:
     // ── CommodoreSystem hooks ────────────────────────────────────
     bool is_basic_ready() const override;
     commodore_load_context_t build_load_context() override;
     void inject_keys(const char* str) override;
     bool is_system_initialized() const override { return system_ready_; }
+    int get_iec_port_index() const override { return PORT_IEC_SERIAL; }
 
 private:
     // ── Memory chips — post-init pointers ────────────────────────────────
@@ -203,6 +212,15 @@ private:
     bus_state_t z80_pins_  = 0;                       // Z80 bus state
     int         audio_sample_rate_ = c128_constants::DEFAULT_SAMPLE_RATE;
 
+    // ── IEC serial traps ──────────────────────────────────────────────
+    bool serial_traps_enabled_ = false;
+
+    struct SerialTrapState {
+        uint8_t trap_device = 0;
+        uint8_t trap_secondary = 0;
+        int active_device = -1;
+    } serial_trap_;
+
     // ── Viewer IDs ───────────────────────────────────────────────────────
     static constexpr size_t kViewerCpu   = 0;
     static constexpr size_t kViewerVicII = 1;
@@ -218,6 +236,14 @@ private:
     bus_state_t z80_io_tick(bus_state_t pins); // Z80 I/O port dispatch
     void setup_ports() override;
     static void cpu_banking_callback(void* ctx, uint8_t banking_state);
+
+    // ── IEC serial trap helpers ───────────────────────────────────────
+    class Drive1541Device* find_iec_drive(int device_number);
+    bool check_serial_traps(uint16_t pc);
+    bool serial_trap_attention(uint16_t resume);
+    bool serial_trap_send(uint16_t resume);
+    bool serial_trap_receive(uint16_t resume);
+    bool serial_trap_ready(uint16_t resume);
 
     // CIA1 keyboard matrix scan callbacks
     static uint8_t c128_cia1_port_a_read(void* context, uint8_t port_a_output);
