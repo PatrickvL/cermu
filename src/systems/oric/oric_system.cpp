@@ -300,6 +300,23 @@ template class OricSystem<OricVariant::ORIC_1>;
 template class OricSystem<OricVariant::ORIC_ATMOS>;
 
 // ============================================================================
+// PORT MANIFEST
+// ============================================================================
+//                                tag       type              name                 num  int  bus  default_device
+#define ORIC_FOR_EACH_PORT(V, ctx) \
+    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)         \
+    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Port",      0, false, false, nullptr)         \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")        \
+    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",           0, false, false, nullptr)
+
+CERMU_PORT_MANIFEST(Oric, ORIC_FOR_EACH_PORT)
+
+template<OricVariant V>
+void OricSystem<V>::setup_ports() {
+    create_ports_from_manifest(kOricPorts);
+}
+
+// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 

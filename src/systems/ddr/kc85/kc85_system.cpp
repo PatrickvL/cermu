@@ -809,6 +809,22 @@ template class KC85System<KC85Variant::KC85_3>;
 template class KC85System<KC85Variant::KC85_4>;
 
 // ============================================================================
+// PORT MANIFEST
+// ============================================================================
+//                              tag        type              name                 num  int  bus  default_device
+#define KC85_FOR_EACH_PORT(V, ctx) \
+    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)         \
+    V(ctx, EXPANSION,  EXPANSION_PORT,   "Module Slot",         0, false, false, nullptr)         \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")
+
+CERMU_PORT_MANIFEST(KC85, KC85_FOR_EACH_PORT)
+
+template<KC85Variant M>
+void KC85System<M>::setup_ports() {
+    create_ports_from_manifest(kKC85Ports);
+}
+
+// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 

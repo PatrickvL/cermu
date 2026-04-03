@@ -862,6 +862,22 @@ void PETSystem::configure_memory_map() {
 }
 
 // ============================================================================
+// PORT MANIFEST
+// ============================================================================
+//                               tag        type              name                 num  int  bus  default_device
+#define PET_FOR_EACH_PORT(V, ctx) \
+    V(ctx, IEC_SERIAL, IEC_SERIAL,       "IEC Serial Bus",      0, false, true,  nullptr)         \
+    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, "datasette")     \
+    V(ctx, USER,       USER_PORT,        "User Port",           0, false, false, nullptr)         \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_green")
+
+CERMU_PORT_MANIFEST(PET, PET_FOR_EACH_PORT)
+
+void PETSystem::setup_ports() {
+    create_ports_from_manifest(kPETPorts);
+}
+
+// ============================================================================
 // System Registration
 // ============================================================================
 

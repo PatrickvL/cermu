@@ -329,6 +329,23 @@ void SegaSMSSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 }
 
 // ============================================================================
+// PORT MANIFEST
+// ============================================================================
+//                                tag        type              name                 num  int  bus  default_device
+#define SMS_FOR_EACH_PORT(V, ctx) \
+    V(ctx, CTRL1,      CONTROL_PORT_DB9, "Controller Port 1",   1, false, false, "joystick")      \
+    V(ctx, CTRL2,      CONTROL_PORT_DB9, "Controller Port 2",   2, false, false, "joystick")      \
+    V(ctx, CARTRIDGE,  EXPANSION_PORT,   "Cartridge Slot",      0, false, false, nullptr)         \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")        \
+    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",           0, false, false, nullptr)
+
+CERMU_PORT_MANIFEST(SMS, SMS_FOR_EACH_PORT)
+
+void SegaSMSSystem::setup_ports() {
+    create_ports_from_manifest(kSMSPorts);
+}
+
+// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 

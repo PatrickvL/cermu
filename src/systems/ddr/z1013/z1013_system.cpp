@@ -360,6 +360,21 @@ template class Z1013System<Z1013Variant::Z1013_16>;
 template class Z1013System<Z1013Variant::Z1013_64>;
 
 // ============================================================================
+// PORT MANIFEST
+// ============================================================================
+//                                tag       type              name                 num  int  bus  default_device
+#define Z1013_FOR_EACH_PORT(V, ctx) \
+    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)         \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")
+
+CERMU_PORT_MANIFEST(Z1013, Z1013_FOR_EACH_PORT)
+
+template<Z1013Variant V>
+void Z1013System<V>::setup_ports() {
+    create_ports_from_manifest(kZ1013Ports);
+}
+
+// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 

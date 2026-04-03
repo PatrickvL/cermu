@@ -303,6 +303,21 @@ bool AcornAtomSystem::load_roms() {
 }
 
 // ============================================================================
+// PORT MANIFEST
+// ============================================================================
+//                                   tag       type              name                  num  int  bus  default_device
+#define ATOM_FOR_EACH_PORT(V, ctx) \
+    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",        0, false, false, nullptr)         \
+    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Port",       0, false, false, nullptr)         \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",            0, false, false, "crt_tv")
+
+CERMU_PORT_MANIFEST(Atom, ATOM_FOR_EACH_PORT)
+
+void AcornAtomSystem::setup_ports() {
+    create_ports_from_manifest(kAtomPorts);
+}
+
+// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 

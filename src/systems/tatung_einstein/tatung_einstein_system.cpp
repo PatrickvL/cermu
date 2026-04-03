@@ -391,6 +391,21 @@ bool TatungEinsteinSystem::load_roms() {
 }
 
 // ============================================================================
+// PORT MANIFEST
+// ============================================================================
+//                                      tag       type              name                  num  int  bus  default_device
+#define EINSTEIN_FOR_EACH_PORT(V, ctx) \
+    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Port",       0, false, false, nullptr)         \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",            0, false, false, "crt_tv")        \
+    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",            0, false, false, nullptr)
+
+CERMU_PORT_MANIFEST(Einstein, EINSTEIN_FOR_EACH_PORT)
+
+void TatungEinsteinSystem::setup_ports() {
+    create_ports_from_manifest(kEinsteinPorts);
+}
+
+// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 

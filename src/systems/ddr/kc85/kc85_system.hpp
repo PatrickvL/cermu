@@ -286,6 +286,7 @@ private:
     void        render_frame();               // Decode IRM into indexed framebuffer
     void        handle_keyboard();            // Patch keycode into CAOS via IX register
     void        build_reverse_ktab();         // Build keycode→scancode from CAOS KTAB
+    void        setup_ports() override;
 
     // Pre-computed overlay snapshots.
     // KC85/2: 4 modes (IRM×CAOS), KC85/3: 8 modes (IRM×BASIC×CAOS),

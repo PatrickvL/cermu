@@ -201,6 +201,19 @@ bus_state_t LC80System::io_tick(bus_state_t pins) {
 bool LC80System::load_roms() { return false; }
 
 // ============================================================================
+// PORT MANIFEST
+// ============================================================================
+//                               tag       type              name                 num  int  bus  default_device
+#define LC80_FOR_EACH_PORT(V, ctx) \
+    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)
+
+CERMU_PORT_MANIFEST(LC80, LC80_FOR_EACH_PORT)
+
+void LC80System::setup_ports() {
+    create_ports_from_manifest(kLC80Ports);
+}
+
+// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 

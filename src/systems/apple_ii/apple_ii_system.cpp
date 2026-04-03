@@ -350,6 +350,22 @@ template class AppleIISystem<AppleIIVariant::APPLE_IIE>;
 template class AppleIISystem<AppleIIVariant::APPLE_IIC>;
 
 // ============================================================================
+// PORT MANIFEST
+// ============================================================================
+//                                     tag       type              name                   num  int  bus  default_device
+#define APPLE_II_FOR_EACH_PORT(V, ctx) \
+    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",         0, false, false, nullptr)         \
+    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Slots",       0, false, false, nullptr)         \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",             0, false, false, "crt_tv")
+
+CERMU_PORT_MANIFEST(AppleII, APPLE_II_FOR_EACH_PORT)
+
+template<AppleIIVariant V>
+void AppleIISystem<V>::setup_ports() {
+    create_ports_from_manifest(kAppleIIPorts);
+}
+
+// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 

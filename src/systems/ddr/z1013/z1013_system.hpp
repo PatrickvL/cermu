@@ -174,6 +174,7 @@ private:
     int audio_sample_rate_  = z1013_constants::DEFAULT_SAMPLE_RATE;
 
     // ── Internal helpers ─────────────────────────────────────────────────
+    void        setup_ports() override;
     bus_state_t io_tick(bus_state_t pins);
     void        render_frame();   // Render one complete video frame to framebuffer_
     bool        load_roms();

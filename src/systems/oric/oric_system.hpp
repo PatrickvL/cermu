@@ -199,6 +199,7 @@ private:
     int         audio_sample_rate_ = oric_constants::DEFAULT_SAMPLE_RATE;
 
     // ── Internal helpers ─────────────────────────────────────────────────
+    void setup_ports() override;
     void configure_bus_memory_map();
     void render_frame();             // ULA: render display from RAM
     bool load_roms();

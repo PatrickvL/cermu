@@ -485,6 +485,24 @@ template class BBCMasterSystem<BBCMasterVariant::MODEL_B_PLUS>;
 template class BBCMasterSystem<BBCMasterVariant::MASTER_128>;
 
 // ============================================================================
+// PORT MANIFEST
+// ============================================================================
+//                                     tag       type              name                  num  int  bus  default_device
+#define BBC_MASTER_FOR_EACH_PORT(V, ctx) \
+    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",        0, false, false, nullptr)         \
+    V(ctx, USER,       USER_PORT,        "User Port",            0, false, false, nullptr)         \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",            0, false, false, "crt_tv")        \
+    V(ctx, VIDEO_RGB,  VIDEO_RGB,        "Video Out (RGB)",      0, false, false, nullptr)         \
+    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",            0, false, false, nullptr)
+
+CERMU_PORT_MANIFEST(BBCMaster, BBC_MASTER_FOR_EACH_PORT)
+
+template<BBCMasterVariant V>
+void BBCMasterSystem<V>::setup_ports() {
+    create_ports_from_manifest(kBBCMasterPorts);
+}
+
+// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 

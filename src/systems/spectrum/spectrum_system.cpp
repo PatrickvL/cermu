@@ -838,6 +838,23 @@ template class SpectrumSystem<SpectrumVariant::ZX48K>;
 template class SpectrumSystem<SpectrumVariant::ZX128K>;
 
 // ============================================================================
+// PORT MANIFEST
+// ============================================================================
+//                                   tag       type              name                 num  int  bus  default_device
+#define SPECTRUM_FOR_EACH_PORT(V, ctx) \
+    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Port",      0, false, false, nullptr)         \
+    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)         \
+    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")        \
+    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",           0, false, false, nullptr)
+
+CERMU_PORT_MANIFEST(Spectrum, SPECTRUM_FOR_EACH_PORT)
+
+template<SpectrumVariant V>
+void SpectrumSystem<V>::setup_ports() {
+    create_ports_from_manifest(kSpectrumPorts);
+}
+
+// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 

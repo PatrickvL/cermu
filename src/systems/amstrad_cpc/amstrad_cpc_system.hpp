@@ -236,6 +236,7 @@ private:
 
     void configure_bus_memory_map();
     void update_banking();           // Remap pages after ROM toggle / 6128 bank switch
+    void setup_ports() override;
     void apply_rom_overlay();        // Load ROM overlay snapshot for current ga state
     bus_state_t io_tick(bus_state_t pins);
     bool load_roms();
