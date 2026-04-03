@@ -40,6 +40,8 @@ struct FileBrowserEntry {
     bool        is_directory = false;
     bool        is_archive   = false;  ///< ZIP/7z/RAR — always navigable
     bool        is_container = false;  ///< D64/T64/LNX — navigable when enabled
+    bool        is_container_entry = false; ///< Entry inside a container (D64/T64/LNX directory)
+    bool        is_foreign_format  = false; ///< Doesn't match the selected system's formats
 
     // Parsed from filename (TOSEC / No-Intro / GoodTools conventions)
     std::string parsed_title;   ///< Cleaned title (empty = use name)
@@ -141,6 +143,9 @@ private:
     // Region filter
     std::string region_filter_;  // empty = show all
 
+    // True when browsing inside a container (D64/T64/LNX directory)
+    bool inside_container_ = false;
+
     // Filesystem watch — auto-rescan when directory contents change on disk
     file_watcher::FileWatcher dir_watcher_;
     uint32_t watcher_cooldown_ = 0;  // frames to skip after rescan (debounce)
@@ -233,19 +238,46 @@ inline void FileBrowser::navigate_up() {
 
 inline void FileBrowser::scan_directory() {
     entries_.clear();
+    inside_container_ = false;
+
+    // Handle paths with "!/" VFS delimiter (archive/container boundaries).
+    // The FileBrowser uses "!/" to denote entering a browsable file;
+    // VfsFileSystem::ScanDirectory expects the real path without the
+    // trailing "!/" for container-at-root (Case 1).
+    std::string scan_path = current_path_;
+    {
+        // Strip trailing "!/" or "/" to get the canonical scan target.
+        while (scan_path.size() > 1 && scan_path.back() == '/')
+            scan_path.pop_back();
+        if (scan_path.size() >= 2 &&
+            scan_path[scan_path.size() - 1] == '!' &&
+            (scan_path.size() < 3 || scan_path[scan_path.size() - 2] != '/')) {
+            // Path ends with "!" (from "container.d64!/" after stripping '/'):
+            // remove the trailing '!' so ScanDirectory sees the real file path.
+            scan_path.pop_back();
+        }
+    }
 
     // Check if we're inside a VFS path
-    if (VfsFileSystem::is_virtual_path(current_path_)) {
+    if (VfsFileSystem::is_virtual_path(scan_path)) {
         // Inside an archive or container — use VfsFileSystem to scan
-        // Create a temporary VfsFileSystem instance for scanning
         VfsFileSystem vfs;
         VfsFileSystem::set_browse_containers(true);
-        auto igfd_entries = vfs.ScanDirectory(current_path_);
+        auto igfd_entries = vfs.ScanDirectory(scan_path);
+
+        // Detect container-entry mode: if scan_path is a container file
+        // (D64/T64/LNX), the entries inside are container entries.
+        bool is_container_root = VfsFileSystem::has_container_extension(scan_path);
+        inside_container_ = is_container_root;
 
         for (const auto& e : igfd_entries) {
             FileBrowserEntry entry;
             entry.name = e.fileNameExt;
-            entry.full_path = current_path_ + "/" + e.fileNameExt;
+            // Avoid double-slash: current_path_ may already end with '/'
+            if (!current_path_.empty() && current_path_.back() == '/')
+                entry.full_path = current_path_ + e.fileNameExt;
+            else
+                entry.full_path = current_path_ + "/" + e.fileNameExt;
 
             // Check if directory type
             if (e.fileType.isDir()) {
@@ -254,6 +286,7 @@ inline void FileBrowser::scan_directory() {
                 entry.size = e.fileSize;
                 entry.is_archive = VfsFileSystem::has_archive_extension(entry.name);
                 entry.is_container = VfsFileSystem::has_container_extension(entry.name);
+                entry.is_container_entry = is_container_root;
             }
             entries_.push_back(std::move(entry));
         }
@@ -299,7 +332,7 @@ inline void FileBrowser::scan_directory() {
 inline void FileBrowser::apply_filter_and_sort() {
     filtered_entries_.clear();
 
-    for (const auto& entry : entries_) {
+    for (auto entry : entries_) {
         // Directories always pass format filter
         if (!entry.is_directory && !matches_format_filter(entry))
             continue;
@@ -307,7 +340,26 @@ inline void FileBrowser::apply_filter_and_sort() {
             continue;
         if (!matches_region_filter(entry))
             continue;
-        filtered_entries_.push_back(entry);
+
+        // Mark files that don't match the selected system's formats.
+        // Inside containers (D64/T64/LNX): all entries pass the filter,
+        // but files with extensions that belong to a different system get
+        // the foreign flag.  Container entries (no ext) are never foreign.
+        entry.is_foreign_format = false;
+        if (active_formats_ && !entry.is_directory &&
+            !entry.is_archive && !entry.is_container &&
+            !entry.is_container_entry) {
+            std::string ext = VfsFileSystem::get_extension(entry.name);
+            if (!ext.empty()) {
+                bool found = false;
+                for (const auto& ae : active_extensions_) {
+                    if (ext == ae) { found = true; break; }
+                }
+                entry.is_foreign_format = !found;
+            }
+        }
+
+        filtered_entries_.push_back(std::move(entry));
     }
 
     // Sort: directories first, then by selected column
@@ -362,8 +414,12 @@ inline void FileBrowser::apply_filter_and_sort() {
 }
 
 inline bool FileBrowser::matches_format_filter(const FileBrowserEntry& entry) const {
-    // Archives are always visible
+    // Archives and containers are always visible (navigable)
     if (entry.is_archive || entry.is_container) return true;
+
+    // Container entries (files inside D64/T64/LNX) always pass —
+    // they have no file extension, but are implicitly loadable.
+    if (entry.is_container_entry) return true;
 
     // No filter set — show everything
     if (active_extensions_.empty()) return true;
@@ -816,8 +872,11 @@ inline void FileBrowser::render_file_list() {
         const char* display_name = (!entry.parsed_title.empty() && !entry.is_directory)
                                    ? entry.parsed_title.c_str()
                                    : entry.name.c_str();
+        ImVec4 name_color = entry.is_foreign_format
+                            ? launcher_theme::kTextForeignFormat
+                            : launcher_theme::kTextPrimary;
         dl->AddText(ImVec2(row_min.x + 24, row_min.y + 2),
-                     ImGui::GetColorU32(launcher_theme::kTextPrimary),
+                     ImGui::GetColorU32(name_color),
                      display_name);
 
         // Tag/flag badges — rendered as small colored pills after the title
