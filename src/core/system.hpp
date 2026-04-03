@@ -462,7 +462,7 @@ public:
     // --- Port Access (always via main_board()) ---------------------------
 
     /// Get all connector ports on this system.
-    const std::vector<std::unique_ptr<Port>>& get_ports() const {
+    const std::vector<Port*>& get_ports() const {
         return main_board().get_ports();
     }
 

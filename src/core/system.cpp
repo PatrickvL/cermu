@@ -820,7 +820,7 @@ float System::render_port_menu_bar_icons() {
     for (int i = 0; i < static_cast<int>(ports.size()); i++) {
         const auto& def = ports[i]->get_definition();
         if (def.is_internal) continue;  // Skip keyboard etc.
-        visible.push_back({ i, ports[i].get() });
+        visible.push_back({ i, ports[i] });
     }
     if (visible.empty()) return 0.0f;
 

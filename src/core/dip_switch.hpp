@@ -114,6 +114,29 @@ struct DipSwitchBank {
     }
 };
 
+// ── DipSwitchBankComponent — ComponentBase wrapper ───────────────────────────
+//
+// Promotes DipSwitchBank to a first-class board component so it can
+// participate in TypedManifest type lists alongside chips and ports.
+// Used only by arcade systems (Atari Vector, Bomb Jack, Namco, …).
+
+#include "core/component_base.hpp"
+
+struct DipSwitchBankComponent : ComponentBase {
+    DipSwitchBank bank;
+
+    const char* name() const override {
+        return bank.descriptor ? bank.descriptor->name : "DIP Switch";
+    }
+    void reset() override { bank.reset_to_defaults(); }
+};
+
+// Type trait for compile-time dispatch in make_manifest / bind_all.
+template<typename T> struct is_dip_switch_component : std::false_type {};
+template<> struct is_dip_switch_component<DipSwitchBankComponent> : std::true_type {};
+template<typename T> inline constexpr bool is_dip_switch_component_v =
+    is_dip_switch_component<T>::value;
+
 // ── GUI rendering (ImGui, compiled only in GUI builds) ───────────────────────
 
 #ifdef CERMU_HAS_GUI

@@ -180,9 +180,12 @@ bool Apple1System::initialize() {
     log_info("Apple1: Initializing system\n");
     register_board(&board_);
     
-    // ── Bind all value-typed chips (sequential — matches macro order) ───
-    { size_t slot_idx_ = 0;
-      APPLE1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
+    // ── Bind all components (chips + ports, manifest declaration order) ──
+    bind_all(board_, board_.components_, kApple1Manifest);
+
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = kApple1Manifest.port_slots;
+    port_manifest_count_ = kApple1Manifest.port_count;
 
     // Character ROM — not on the bus (used by terminal renderer only).
     auto char_chip = std::make_unique<ROMChip>(
@@ -682,25 +685,6 @@ void Apple1System::convert_2513_to_8x8_font(const uint8_t* char_rom, uint8_t* fo
             font_8x8[dst_offset + row] = (char_rom[src_offset + row] & 0x3F) << 2;
         }
     }
-}
-
-// ============================================================================
-// CONNECTOR PORT MANIFEST — Apple 1
-// ============================================================================
-// Apple 1 has: 1× Expansion Connector (44-pin edge, exposes full 6502 bus),
-// 1× Cassette Interface (the ACI was separately sold; modeled as its own
-// port since nearly all Apple 1 setups included it), and 1× Video Output.
-//
-//                  tag         type              name                        num  int  bus  default_device
-#define APPLE1_FOR_EACH_PORT(V, ctx) \
-    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Connector",              0, false, false, nullptr)     \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Interface (ACI)",         0, false, false, nullptr)     \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",                        0, false, false, "crt_green")
-
-CERMU_PORT_MANIFEST(Apple1, APPLE1_FOR_EACH_PORT)
-
-void Apple1System::setup_ports() {
-    create_ports_from_manifest(kApple1Ports);
 }
 
 // ============================================================================
