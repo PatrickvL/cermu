@@ -105,27 +105,20 @@ namespace mcr {
 // RAM Configuration Register (RCR, $D506) bit fields
 //
 //   Bits 7-6 : RAM bank for VIC-IIe (00=bank0, 01=bank1, 10/11=bank0)
-//   Bits 5-4 : Common RAM top-of-memory size
-//              00 = 1 KB  ($FC00-$FFFF)
-//              01 = 4 KB  ($F000-$FFFF)
-//              10 = 8 KB  ($E000-$FFFF)
-//              11 = 16 KB ($C000-$FFFF)
-//   Bits 3-2 : Common RAM bottom-of-memory size
-//              00 = 1 KB  ($0000-$03FF)
-//              01 = 4 KB  ($0000-$0FFF)
-//              10 = 8 KB  ($0000-$1FFF)
-//              11 = 16 KB ($0000-$3FFF)
-//   Bit 1    : Bottom common RAM enable (1 = enabled)
-//   Bit 0    : Top common RAM enable (1 = enabled)
+//   Bits 5-4 : Unused (read as 0)
+//   Bit 3    : Top common RAM enable (1 = enabled)
+//   Bit 2    : Bottom common RAM enable (1 = enabled)
+//   Bits 1-0 : Common RAM area size (shared by top and bottom)
+//              00 = 1 KB   (bottom: $0000-$03FF,  top: $FC00-$FFFF)
+//              01 = 4 KB   (bottom: $0000-$0FFF,  top: $F000-$FFFF)
+//              10 = 8 KB   (bottom: $0000-$1FFF,  top: $E000-$FFFF)
+//              11 = 16 KB  (bottom: $0000-$3FFF,  top: $C000-$FFFF)
 namespace rcr {
-    inline constexpr uint8_t VIC_BANK_MASK  = 0xC0;
-    inline constexpr uint8_t VIC_BANK_SHIFT = 6;
-    inline constexpr uint8_t TOP_SIZE_MASK  = 0x30;
-    inline constexpr uint8_t TOP_SIZE_SHIFT = 4;
-    inline constexpr uint8_t BOT_SIZE_MASK  = 0x0C;
-    inline constexpr uint8_t BOT_SIZE_SHIFT = 2;
-    inline constexpr uint8_t BOT_COMMON_EN  = 0x02;
-    inline constexpr uint8_t TOP_COMMON_EN  = 0x01;
+    inline constexpr uint8_t VIC_BANK_MASK    = 0xC0;
+    inline constexpr uint8_t VIC_BANK_SHIFT   = 6;
+    inline constexpr uint8_t TOP_COMMON_EN    = 0x08;  // Bit 3
+    inline constexpr uint8_t BOT_COMMON_EN    = 0x04;  // Bit 2
+    inline constexpr uint8_t COMMON_SIZE_MASK = 0x03;  // Bits 1-0
 } // namespace rcr
 
 // Version register ($D50B) — read-only chip revision
@@ -156,10 +149,9 @@ inline constexpr uint8_t VERSION_8722 = 0x00;
       FLD(MCR, MCR_FSDIR,   3:3, "Fast serial dir",        Flag, 0, 0)            \
     REG(0x06, RCR,     "RAM configuration")                                        \
       FLD(RCR, RCR_VICBANK, 7:6, "VIC-IIe bank",           Value, 0, 0)           \
-      FLD(RCR, RCR_TOP_SZ,  5:4, "Top common size",        Value, 0, 0)           \
-      FLD(RCR, RCR_BOT_SZ,  3:2, "Bottom common size",     Value, 0, 0)           \
-      FLD(RCR, RCR_BOT_EN,  1:1, "Bottom common enable",   Flag, 0, 0)            \
-      FLD(RCR, RCR_TOP_EN,  0:0, "Top common enable",      Flag, 0, 0)            \
+      FLD(RCR, RCR_TOP_EN,  3:3, "Top common enable",      Flag, 0, 0)            \
+      FLD(RCR, RCR_BOT_EN,  2:2, "Bottom common enable",   Flag, 0, 0)            \
+      FLD(RCR, RCR_COM_SZ,  1:0, "Common area size",       Value, 0, 0)           \
     REG(0x07, P0L,     "Page 0 pointer low")                                       \
     REG(0x08, P0H,     "Page 0 pointer high")                                      \
     REG(0x09, P1L,     "Page 1 pointer low")                                       \
@@ -378,16 +370,25 @@ struct mos8722_t : public MmuChipBase {
     bool bottom_common_enabled() const { return (regs_[mos8722::reg::RCR] & mos8722::rcr::BOT_COMMON_EN) != 0; }
     bool top_common_enabled()    const { return (regs_[mos8722::reg::RCR] & mos8722::rcr::TOP_COMMON_EN) != 0; }
 
-    /// Bottom common RAM size in bytes (1K, 4K, 8K, or 16K).
-    uint16_t bottom_common_size() const {
-        static constexpr uint16_t sizes[] = { 0x0400, 0x1000, 0x2000, 0x4000 };
-        return sizes[(regs_[mos8722::reg::RCR] & mos8722::rcr::BOT_SIZE_MASK) >> mos8722::rcr::BOT_SIZE_SHIFT];
+    /// Common RAM size in bytes (1K, 4K, 8K, or 16K) — same for both top and bottom.
+    uint32_t common_size() const {
+        const uint8_t sel = regs_[mos8722::reg::RCR] & mos8722::rcr::COMMON_SIZE_MASK;
+        if (sel == 0) return 1024;
+        return 2048U << sel;  // 01→4K, 10→8K, 11→16K
     }
 
-    /// Top common RAM start address (e.g. 0xFC00 for 1K, 0xC000 for 16K).
-    uint16_t top_common_start() const {
-        static constexpr uint16_t starts[] = { 0xFC00, 0xF000, 0xE000, 0xC000 };
-        return starts[(regs_[mos8722::reg::RCR] & mos8722::rcr::TOP_SIZE_MASK) >> mos8722::rcr::TOP_SIZE_SHIFT];
+    /// Number of 4KB pages covered by bottom common RAM (rounded up).
+    /// Returns 0 if bottom common is disabled.
+    uint8_t bottom_common_pages() const {
+        if (!bottom_common_enabled()) return 0;
+        return static_cast<uint8_t>((common_size() + 0xFFF) >> 12);
+    }
+
+    /// Starting 4KB page of top common RAM.
+    /// Returns 16 (= no pages) if top common is disabled.
+    uint8_t top_common_start_page() const {
+        if (!top_common_enabled()) return 16;
+        return static_cast<uint8_t>((0x10000 - common_size()) >> 12);
     }
 
     /// Page 0 physical address (relocated zero page).
@@ -444,11 +445,14 @@ private:
             });
 
         debug_registry_.category("Common RAM (derived)", false)
-            .value("Bottom Size", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<M*>(c)->bottom_common_size();
+            .value("Common Size", +[](const ChipBase* c) -> uint32_t {
+                return static_cast<M*>(c)->common_size();
             })
-            .value("Top Start", +[](const ChipBase* c) -> uint32_t {
-                return static_cast<M*>(c)->top_common_start();
+            .value("Bottom Pages", +[](const ChipBase* c) -> uint32_t {
+                return static_cast<M*>(c)->bottom_common_pages();
+            })
+            .value("Top Start Page", +[](const ChipBase* c) -> uint32_t {
+                return static_cast<M*>(c)->top_common_start_page();
             });
 
         debug_registry_.category("Page Relocation", false)
