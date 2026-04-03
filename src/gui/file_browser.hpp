@@ -123,6 +123,9 @@ private:
     void render_path_bar();
     void render_file_list();
 
+    // Deferred navigation — set during render, executed after the loop
+    std::string pending_navigate_;
+
     // Helpers
     void scan_directory();
     void apply_filter_and_sort();
@@ -587,9 +590,9 @@ inline void FileBrowser::render_path_bar() {
 
         std::string btn_id = "##seg" + std::to_string(s);
         if (ImGui::SmallButton((seg + btn_id).c_str())) {
-            // Navigate to this path
+            // Defer navigation to after rendering (same reason as file list)
             if (s < segments.size() - 1) {
-                navigate_to(rebuilt_path);
+                pending_navigate_ = rebuilt_path;
             }
         }
         ImGui::PopStyleColor(3);
@@ -765,11 +768,10 @@ inline void FileBrowser::render_file_list() {
 
             if (entry.is_directory || entry.is_archive || entry.is_container) {
                 if (ImGui::IsMouseDoubleClicked(0)) {
-                    std::string target = entry.full_path;
+                    pending_navigate_ = entry.full_path;
                     if (entry.is_archive || entry.is_container) {
-                        target += "!/";
+                        pending_navigate_ += "!/";
                     }
-                    navigate_to(target);
                 } else {
                     selected_file_ = entry.full_path;
                     file_selection_changed_ = true;
@@ -906,6 +908,14 @@ inline void FileBrowser::render_file_list() {
     }
 
     ImGui::EndChild();
+
+    // Execute deferred navigation (must happen outside the entry loop
+    // because navigate_to() invalidates filtered_entries_).
+    if (!pending_navigate_.empty()) {
+        std::string target = std::move(pending_navigate_);
+        pending_navigate_.clear();
+        navigate_to(target);
+    }
 }
 
 #endif // CERMU_HAS_GUI
