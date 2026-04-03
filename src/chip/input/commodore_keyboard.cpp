@@ -185,7 +185,10 @@ void commodore_keyboard_t::key_down(emu_key_t key, bool shifted) {
     uint8_t row, col;
     if (find_key(key, &row, &col)) {
         uint8_t row_bit = (matrix_rows - 1) - row;
-        uint8_t col_bit = (matrix_cols - 1) - col;
+        // Standard columns 0-7 are bit-reversed within the 8-bit CIA range
+        // so that code column order matches the hardware convention.  Extended
+        // columns (8+, e.g. C128 numpad via VIC-IIe $D02F) map directly.
+        uint8_t col_bit = (col < 8) ? (7 - col) : col;
 
         // Close the contact (key pressed)
         row_open_contacts[row_bit] &= ~(1 << col_bit);
@@ -232,7 +235,7 @@ void commodore_keyboard_t::key_up(emu_key_t key, bool shifted) {
     uint8_t row, col;
     if (find_key(key, &row, &col)) {
         uint8_t row_bit = (matrix_rows - 1) - row;
-        uint8_t col_bit = (matrix_cols - 1) - col;
+        uint8_t col_bit = (col < 8) ? (7 - col) : col;
 
         // Open the contact (key released)
         row_open_contacts[row_bit] |= (1 << col_bit);
