@@ -184,6 +184,30 @@ const uint8_t APPLE1_CASSETTE_SIGNAL_COUNT = sizeof(APPLE1_CASSETTE_SIGNALS) / s
 } // namespace PortSignals
 
 // ============================================================================
+// MANIFEST SUPPORT — make_port_definition()
+// ============================================================================
+
+#include "core/port_manifest.hpp"
+#include "core/port_registry.hpp"
+
+PortDefinition make_port_definition(const PortSlot& slot) {
+    // Look up standard signal table from the global registry.
+    // For types without a registry entry (CUSTOM, EXPANSION_PORT with
+    // system-specific signals) this returns an empty definition
+    // (signals=nullptr, signal_count=0) which is perfectly valid.
+    const auto& base = PortRegistry::instance().lookup(slot.type);
+
+    return PortDefinition{
+        slot.type,
+        slot.name,
+        base.signals,
+        base.signal_count,
+        slot.is_internal,
+        slot.is_bus,
+    };
+}
+
+// ============================================================================
 // CONNECTOR PORT IMPLEMENTATION
 // ============================================================================
 

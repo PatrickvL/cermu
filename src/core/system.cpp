@@ -1,5 +1,6 @@
 #include "core/cermu.hpp"
 #include "core/system.hpp"
+#include "core/port_manifest.hpp"
 #include "core/chip.hpp"
 #include "core/formats/format_handler.hpp"
 #include "core/vfs/vfs.hpp"
@@ -353,6 +354,14 @@ void System::tick_peripherals() {
     }
 }
 
+void System::create_ports_from_manifest(const PortSlot* slots, size_t count) {
+    port_manifest_       = slots;
+    port_manifest_count_ = count;
+    for (size_t i = 0; i < count; i++) {
+        add_port(make_port_definition(slots[i]), slots[i].port_number);
+    }
+}
+
 void System::attach_default_peripherals() {
     // Register connector ports before attaching devices to them.
     // Each system overrides setup_ports() to call add_port().
@@ -361,7 +370,16 @@ void System::attach_default_peripherals() {
         setup_ports();
     }
 
+    // Explicit defaults from get_default_peripherals() take priority.
+    // If none are declared, fall back to manifest default_device fields.
     auto defaults = get_default_peripherals();
+    if (defaults.empty() && port_manifest_) {
+        for (size_t i = 0; i < port_manifest_count_; i++) {
+            if (port_manifest_[i].default_device) {
+                defaults.push_back({static_cast<int>(i), port_manifest_[i].default_device});
+            }
+        }
+    }
     for (auto& dp : defaults) {
         attach_device_to_port(dp.port_index, dp.device_id);
     }
