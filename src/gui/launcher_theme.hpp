@@ -89,6 +89,9 @@ namespace launcher_theme {
     inline constexpr ImVec4 kTagDefault     = {0.300f, 0.380f, 0.480f, 1.0f};  // other — dim
     inline constexpr ImVec4 kTagBg          = {0.039f, 0.047f, 0.094f, 0.8f};  // pill background
 
+    // File from a different system than the one selected
+    inline constexpr ImVec4 kTextForeignFormat = {0.55f, 0.30f, 0.30f, 1.0f};
+
     // =========================================================================
     // Manufacturer accent colours
     // =========================================================================
