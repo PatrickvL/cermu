@@ -518,9 +518,6 @@ bool C64System::initialize() {
         keyboard_mapper_.reset(create_c64_keyboard_mapper(this->keyboard));
     }
 
-    // Set up connector ports and wire them to the C64 hardware
-    setup_ports();
-
     // Register chips for the Hardware menu and debug windows
     register_bus_chips(board_);
     {

@@ -652,9 +652,6 @@ bool VIC20System::initialize() {
         log_info("VIC20: Warning: Could not create keyboard\n");
     }
     
-    // Setup connector ports (generic framework from System)
-    setup_ports();
-
     // Register all manifest-created chips for the Hardware menu and debug windows
     register_bus_chips(board_);
     

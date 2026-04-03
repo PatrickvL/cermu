@@ -367,6 +367,11 @@ protected:
     /// Derived systems can override to update cached device pointers.
     virtual void on_port_device_changed(int /*port_index*/) {}
 
+    /// Create and register connector ports for this system.
+    /// Called automatically by attach_default_peripherals() after initialize().
+    /// Override in derived systems to call add_port() for each connector.
+    virtual void setup_ports() {}
+
     // =========================================================================
     // DEFAULT PERIPHERAL ATTACHMENT (declarative, data-driven)
     // =========================================================================

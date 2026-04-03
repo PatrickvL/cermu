@@ -354,6 +354,13 @@ void System::tick_peripherals() {
 }
 
 void System::attach_default_peripherals() {
+    // Register connector ports before attaching devices to them.
+    // Each system overrides setup_ports() to call add_port().
+    // Guard: skip if ports were already registered (e.g. reinit path).
+    if (get_ports().empty()) {
+        setup_ports();
+    }
+
     auto defaults = get_default_peripherals();
     for (auto& dp : defaults) {
         attach_device_to_port(dp.port_index, dp.device_id);
