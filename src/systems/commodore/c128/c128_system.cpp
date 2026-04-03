@@ -265,6 +265,7 @@ bool C128System::initialize() {
     // CP/M boot conditions and hands off to the 8502 by writing MCR bit 0.
     z80_pins_ = board_.z80.init();
     cpu_mode_ = CPUMode::MODE_Z80;
+    active_cpu_ = &board_.z80;
 
     // Video output — VIC-IIe drives composite video (primary, 40-col)
     video_port_ = std::make_unique<CompositeVideoPort>();
@@ -348,6 +349,7 @@ void C128System::reset() {
     z80_pins_ = board_.z80.init();
     pins_ = board_.csg8502.reset(pins_);
     cpu_mode_ = CPUMode::MODE_Z80;
+    active_cpu_ = &board_.z80;
     c64_mode_ = false;
     cpu_port_bits_ = 0x07;
     if (keyboard_) keyboard_->reset();
@@ -356,8 +358,16 @@ void C128System::reset() {
 }
 
 // ============================================================================
-// EXECUTION (stub — to be filled in)
+// EXECUTION
 // ============================================================================
+//
+// TODO: Unify into a single tick sequence.  The peripheral ticks (VIC-IIe,
+// CIAs, SID, VDC, MMIO dispatch, bank-config / mode-switch checks) are
+// identical in both CPU modes — only the CPU tick itself differs (Z80
+// T-state with inline bus servicing vs. 8502 PHI2/PHI1 with interleaved
+// address decode).  With active_cpu_ already pointing to the live CPU,
+// the unified loop would branch only on cpu_mode_ for the CPU-specific
+// steps and keep one copy of the peripheral sequence.
 
 void C128System::tick() {
     total_cycles_++;
@@ -506,6 +516,17 @@ void C128System::tick() {
 
 void C128System::run_frame() {
     if (!system_ready_ || !video_port_) return;
+
+    // Service GUI-requested actions (safe: we're on the emu thread)
+    if (reset_requested_.exchange(false)) {
+        reset();
+        // After reset, restore C128 keyboard mapper (reset clears C64 mode)
+        keyboard_mapper_.reset(create_c128_keyboard_mapper(keyboard_));
+    }
+    if (c64_mode_requested_.exchange(false) && !c64_mode_) {
+        enter_c64_mode();
+    }
+
     auto& output = video_port_->output();
     while (!output.frame_ended()) {
         tick();
@@ -887,6 +908,7 @@ void C128System::enter_c64_mode() {
 
     // Must be in 8502 mode for C64 compatibility
     cpu_mode_ = CPUMode::MODE_8502;
+    active_cpu_ = &board_.csg8502;
 
     // Default processor port: LORAM=1, HIRAM=1, CHAREN=1
     cpu_port_bits_ = 0x07;
@@ -896,7 +918,16 @@ void C128System::enter_c64_mode() {
 
     // Reset CPU — it must fetch the C64 KERNAL reset vector from $FFFC/$FFFD
     // to boot with the classic "**** COMMODORE 64 BASIC V2 ****" screen.
-    pins_ = board_.csg8502.reset(pins_);
+    pins_ = active_cpu_->reset(pins_);
+
+    // Switch keyboard mapper to C64 layout (8×8 matrix, no numpad).
+    // The C128 keyboard matrix columns 0-7 are identical to the C64 matrix,
+    // but the C128 mapper includes numpad keys in columns 8-10 that duplicate
+    // standard characters.  The C64 KERNAL only scans columns 0-7, so numpad
+    // mappings would produce "dead" keys.  Using the C64 mapper ensures
+    // character→matrix-position assignments stay within columns 0-7.
+    if (keyboard_)
+        keyboard_mapper_.reset(create_c64_keyboard_mapper(keyboard_));
 
     log_info("C128: Entered C64 compatibility mode\n");
 }
@@ -908,12 +939,14 @@ void C128System::switch_cpu_mode(CPUMode mode) {
         // Z80 → 8502: the 8502 starts from its reset vector.
         // On real hardware the 8502 was held in reset while Z80 was active.
         cpu_mode_ = CPUMode::MODE_8502;
-        pins_ = board_.csg8502.reset(pins_);
+        active_cpu_ = &board_.csg8502;
+        pins_ = active_cpu_->reset(pins_);
         log_info("C128: CPU switch → 8502\n");
     } else {
         // 8502 → Z80: re-enter Z80 mode (e.g. for CP/M)
         cpu_mode_ = CPUMode::MODE_Z80;
-        z80_pins_ = board_.z80.init();
+        active_cpu_ = &board_.z80;
+        z80_pins_ = active_cpu_->init();
         log_info("C128: CPU switch → Z80\n");
     }
 }
@@ -1109,11 +1142,10 @@ void C128System::cpu_banking_callback(void* ctx, uint8_t banking_state) {
 void C128System::render_system_menu_items() {
 #ifdef CERMU_HAS_GUI
     if (ImGui::MenuItem("Reset C128")) {
-        reset();
+        reset_requested_.store(true, std::memory_order_relaxed);
     }
     if (ImGui::MenuItem("Enter C64 Mode", nullptr, false, !c64_mode_)) {
-        // Emulate BASIC's GO64 command: write MCR bit 6 to trigger C64 mode.
-        enter_c64_mode();
+        c64_mode_requested_.store(true, std::memory_order_relaxed);
     }
 #endif
 }
