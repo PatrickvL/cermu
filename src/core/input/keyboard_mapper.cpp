@@ -766,12 +766,12 @@ void KeyboardMapper::close_contact(uint8_t row, uint8_t col) {
     if (!keyboard_) return;
     if (row >= matrix_rows_ || col >= matrix_cols_) return;
 
-    // Convert from array indices to hardware port bit numbers
-    // Same convention as commodore_keyboard_key_down:
+    // Convert from array indices to hardware port bit numbers.
+    // Same convention as commodore_keyboard_t::key_down:
     //   row_bit = (matrix_rows - 1) - row
-    //   col_bit = (matrix_cols - 1) - col
+    //   col_bit = (7 - col) for standard cols 0-7, col for extended cols 8+
     uint8_t row_bit = (matrix_rows_ - 1) - row;
-    uint8_t col_bit = (matrix_cols_ - 1) - col;
+    uint8_t col_bit = (col < 8) ? (7 - col) : col;
 
     keyboard_->row_open_contacts[row_bit] &= ~(1 << col_bit);
     keyboard_->col_open_contacts[col_bit] &= ~(1 << row_bit);
@@ -782,7 +782,7 @@ void KeyboardMapper::open_contact(uint8_t row, uint8_t col) {
     if (row >= matrix_rows_ || col >= matrix_cols_) return;
 
     uint8_t row_bit = (matrix_rows_ - 1) - row;
-    uint8_t col_bit = (matrix_cols_ - 1) - col;
+    uint8_t col_bit = (col < 8) ? (7 - col) : col;
 
     keyboard_->row_open_contacts[row_bit] |= (1 << col_bit);
     keyboard_->col_open_contacts[col_bit] |= (1 << row_bit);

@@ -13,6 +13,7 @@
 #include "core/input/emu_key_sdl_map.hpp"
 #include "core/port_manifest.hpp"
 #include "devices/keyboard/commodore_keyboard_device.hpp"
+#include "devices/storage/drive_1541.hpp"
 #include <cstring>
 #include <cstdio>
 #ifdef CERMU_HAS_GUI
@@ -38,6 +39,46 @@
 static constexpr PortSlot kC128Ports[] = {
     C128_FOR_EACH_PORT(PORT_VISITOR_SLOT, unused)
 };
+
+// ============================================================================
+// KERNAL SERIAL TRAPS — IEC bus trap handlers
+// ============================================================================
+// Intercept KERNAL serial bus routines to provide instant drive I/O.
+// The C128 has two sets: C128-mode KERNAL and C64-mode KERNAL.
+// Addresses from VICE c128.c c128_serial_traps[].
+// ============================================================================
+
+// C128-mode KERNAL serial routine addresses
+static constexpr uint16_t C128_TRAP_SERIAL_LISTEN      = 0xE355;
+static constexpr uint16_t C128_TRAP_SERIAL_SA_LISTEN    = 0xE37C;
+static constexpr uint16_t C128_TRAP_SERIAL_SEND_BYTE    = 0xE38C;
+static constexpr uint16_t C128_TRAP_SERIAL_RECEIVE_BYTE = 0xE43E;
+static constexpr uint16_t C128_TRAP_SERIAL_READY        = 0xE569;
+static constexpr uint16_t C128_TRAP_SERIAL_READY_ALT    = 0xE4F5;
+static constexpr uint16_t C128_TRAP_RESUME_ADDRESS      = 0xE5BA;
+static constexpr uint16_t C128_TRAP_READY_RESUME        = 0xE572;
+
+// C64-mode KERNAL serial routine addresses (same as standalone C64)
+static constexpr uint16_t C64_TRAP_SERIAL_LISTEN        = 0xED24;
+static constexpr uint16_t C64_TRAP_SERIAL_SA_LISTEN     = 0xED37;
+static constexpr uint16_t C64_TRAP_SERIAL_SEND_BYTE     = 0xED41;
+static constexpr uint16_t C64_TRAP_SERIAL_RECEIVE_BYTE  = 0xEE14;
+static constexpr uint16_t C64_TRAP_SERIAL_READY         = 0xEEA9;
+static constexpr uint16_t C64_TRAP_RESUME_ADDRESS       = 0xEDAB;
+
+// KERNAL zero-page addresses for serial I/O (same for C128 and C64 mode)
+static constexpr uint16_t ZP_BSOUR  = 0x95;
+static constexpr uint16_t ZP_TMP_IN = 0xA4;
+static constexpr uint16_t ZP_STATUS = 0x90;
+
+// IEC command byte masks
+static constexpr uint8_t IEC_LISTEN_MASK   = 0x20;
+static constexpr uint8_t IEC_TALK_MASK     = 0x40;
+static constexpr uint8_t IEC_SECOND_MASK   = 0x60;
+static constexpr uint8_t IEC_CLOSE_MASK    = 0xE0;
+static constexpr uint8_t IEC_OPEN_MASK     = 0xF0;
+static constexpr uint8_t IEC_UNLISTEN      = 0x3F;
+static constexpr uint8_t IEC_UNTALK        = 0x5F;
 
 // ============================================================================
 // HARDWARE TRAITS
@@ -407,6 +448,172 @@ void C128System::reset() {
 }
 
 // ============================================================================
+// KERNAL SERIAL TRAPS — IEC bus trap handlers
+// ============================================================================
+
+Drive1541Device* C128System::find_iec_drive(int device_number) {
+    if (device_number < 4) return nullptr;
+    auto* port = get_port(PORT_IEC_SERIAL);
+    if (!port) return nullptr;
+    for (auto* dev : port->get_attached_devices()) {
+        auto* drive = dynamic_cast<Drive1541Device*>(dev);
+        if (drive && drive->get_device_number() == device_number) return drive;
+    }
+    return nullptr;
+}
+
+bool C128System::check_serial_traps(uint16_t pc) {
+    if (c64_mode_) {
+        // C64-mode KERNAL addresses
+        switch (pc) {
+            case C64_TRAP_SERIAL_LISTEN:
+            case C64_TRAP_SERIAL_SA_LISTEN:
+                return serial_trap_attention(C64_TRAP_RESUME_ADDRESS);
+            case C64_TRAP_SERIAL_SEND_BYTE:
+                return serial_trap_send(C64_TRAP_RESUME_ADDRESS);
+            case C64_TRAP_SERIAL_RECEIVE_BYTE:
+                return serial_trap_receive(C64_TRAP_RESUME_ADDRESS);
+            case C64_TRAP_SERIAL_READY:
+                return serial_trap_ready(C64_TRAP_RESUME_ADDRESS);
+            default:
+                return false;
+        }
+    } else {
+        // C128-mode KERNAL addresses
+        switch (pc) {
+            case C128_TRAP_SERIAL_LISTEN:
+            case C128_TRAP_SERIAL_SA_LISTEN:
+                return serial_trap_attention(C128_TRAP_RESUME_ADDRESS);
+            case C128_TRAP_SERIAL_SEND_BYTE:
+                return serial_trap_send(C128_TRAP_RESUME_ADDRESS);
+            case C128_TRAP_SERIAL_RECEIVE_BYTE:
+                return serial_trap_receive(C128_TRAP_RESUME_ADDRESS);
+            case C128_TRAP_SERIAL_READY:
+            case C128_TRAP_SERIAL_READY_ALT:
+                return serial_trap_ready(C128_TRAP_READY_RESUME);
+            default:
+                return false;
+        }
+    }
+}
+
+bool C128System::serial_trap_attention(uint16_t resume) {
+    auto& cpu = board_.csg8502;
+    uint8_t iecdata = board_.main_ram.data()[ZP_BSOUR];
+
+    if (iecdata == IEC_UNLISTEN) {
+        auto* drive = find_iec_drive(serial_trap_.active_device);
+        if (drive) drive->trap_unlisten();
+        serial_trap_.active_device = -1;
+    } else if (iecdata == IEC_UNTALK) {
+        auto* drive = find_iec_drive(serial_trap_.active_device);
+        if (drive) drive->trap_untalk();
+        serial_trap_.active_device = -1;
+    } else if ((iecdata & 0xF0) == IEC_LISTEN_MASK || (iecdata & 0xF0) == IEC_TALK_MASK) {
+        serial_trap_.active_device = iecdata & 0x0F;
+        serial_trap_.trap_device = iecdata;
+        serial_trap_.trap_secondary = 0;
+    } else if ((iecdata & 0xF0) == IEC_SECOND_MASK) {
+        serial_trap_.trap_secondary = iecdata;
+        auto* drive = find_iec_drive(serial_trap_.active_device);
+        if (drive) drive->trap_second(iecdata & 0x0F);
+    } else if ((iecdata & 0xF0) == IEC_OPEN_MASK) {
+        serial_trap_.trap_secondary = iecdata;
+        auto* drive = find_iec_drive(serial_trap_.active_device);
+        if (drive) drive->trap_open(iecdata & 0x0F);
+    } else if ((iecdata & 0xF0) == IEC_CLOSE_MASK) {
+        serial_trap_.trap_secondary = iecdata;
+        auto* drive = find_iec_drive(serial_trap_.active_device);
+        if (drive) drive->trap_close(iecdata & 0x0F);
+    }
+
+    if (serial_trap_.active_device >= 4) {
+        auto* drive = find_iec_drive(serial_trap_.active_device);
+        if (!drive) board_.main_ram.data()[ZP_STATUS] |= 0x80;
+    }
+
+    uint8_t p = cpu.get(reg::P);
+    p &= ~0x01;  // Clear carry
+    p &= ~0x04;  // Clear interrupt disable
+    cpu.set(reg::P, p);
+    cpu.set(reg::PC, resume);
+    cpu.transition_to_fetch();
+    return true;
+}
+
+bool C128System::serial_trap_send(uint16_t resume) {
+    if (serial_trap_.active_device < 4) return false;
+    auto* drive = find_iec_drive(serial_trap_.active_device);
+    if (!drive) return false;
+
+    auto& cpu = board_.csg8502;
+    uint8_t iecdata = board_.main_ram.data()[ZP_BSOUR];
+
+    if (serial_trap_.trap_secondary == 0) {
+        serial_trap_.trap_secondary = IEC_SECOND_MASK;
+        drive->trap_second(0);
+    }
+    drive->trap_send(iecdata);
+
+    uint8_t p = cpu.get(reg::P);
+    p &= ~0x01;
+    p &= ~0x04;
+    cpu.set(reg::P, p);
+    cpu.set(reg::PC, resume);
+    cpu.transition_to_fetch();
+    return true;
+}
+
+bool C128System::serial_trap_receive(uint16_t resume) {
+    if (serial_trap_.active_device < 4) return false;
+    auto* drive = find_iec_drive(serial_trap_.active_device);
+    if (!drive) return false;
+
+    auto& cpu = board_.csg8502;
+
+    if (serial_trap_.trap_secondary == 0) {
+        serial_trap_.trap_secondary = IEC_SECOND_MASK;
+        drive->trap_second(0);
+    }
+
+    uint8_t data = 0;
+    int status = drive->trap_receive(data);
+
+    board_.main_ram.data()[ZP_TMP_IN] = data;
+    cpu.set(reg::A, data);
+
+    if (status) board_.main_ram.data()[ZP_STATUS] |= static_cast<uint8_t>(status);
+
+    uint8_t p = cpu.get(reg::P);
+    p &= ~0x01;
+    p &= ~0x04;
+    if (data & 0x80) p |= 0x80; else p &= ~0x80;
+    if (data == 0)   p |= 0x02; else p &= ~0x02;
+    cpu.set(reg::P, p);
+    cpu.set(reg::PC, resume);
+    cpu.transition_to_fetch();
+    return true;
+}
+
+bool C128System::serial_trap_ready(uint16_t resume) {
+    if (serial_trap_.active_device < 4) return false;
+    auto* drive = find_iec_drive(serial_trap_.active_device);
+    if (!drive) return false;
+
+    auto& cpu = board_.csg8502;
+    cpu.set(reg::A, 1);
+
+    uint8_t p = cpu.get(reg::P);
+    p &= ~0x80;
+    p &= ~0x02;
+    p &= ~0x04;
+    cpu.set(reg::P, p);
+    cpu.set(reg::PC, resume);
+    cpu.transition_to_fetch();
+    return true;
+}
+
+// ============================================================================
 // EXECUTION
 // ============================================================================
 
@@ -524,6 +731,18 @@ void C128System::tick() {
     if (cpu_mode_ == CPUMode::MODE_8502) {
         s = cpu.tick<CSG8502::Phase::PHI1>(s);
         BUS_SET_BIT(s, BUS_RW_BIT);
+
+        // KERNAL serial trap check — intercept IEC bus routines at instruction boundaries
+        if (serial_traps_enabled_ && cpu.opdone()) {
+            uint16_t pc = cpu.get(reg::PC);
+            if (c64_mode_) {
+                if (pc >= 0xED00 && pc < 0xEF00)
+                    check_serial_traps(pc);
+            } else {
+                if (pc >= 0xE300 && pc < 0xE600)
+                    check_serial_traps(pc);
+            }
+        }
     }
 
     // ── PHASE 5: SID — sound generation ──────────────────────────────
@@ -557,6 +776,7 @@ void C128System::run_frame() {
     }
     video_port_->swap_frame();
     check_deferred_load();
+    tick_peripherals();
 }
 
 // ============================================================================
@@ -605,17 +825,51 @@ void C128System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 // ============================================================================
 
 bool C128System::is_basic_ready() const {
-    // TODO: check C128 BASIC 7.0 READY state
-    return false;
+    // C128 BASIC 7.0 stores the cursor blink phase in $0A27.  When it
+    // reaches a non-zero value after boot, BASIC has printed "READY." and
+    // the main loop is running.  This is the same approach used for the C64
+    // ($D3 cursor column check) adapted to C128's different memory layout.
+    // Alternatively, check the KERNAL warm-start vector at $0300-$0301.
+    const uint8_t* ram = board_.main_ram.data();
+    // $0300/$0301 = BASIC warm-start vector.  BASIC 7.0 sets this to $4DC6.
+    uint16_t warm = static_cast<uint16_t>(ram[0x0300]) | (static_cast<uint16_t>(ram[0x0301]) << 8);
+    return warm == 0x4DC6;
 }
 
 commodore_load_context_t C128System::build_load_context() {
-    // TODO: build load context with C128 memory callbacks
-    return {};
+    commodore_load_context_t ctx = {};
+    ctx.system_name     = "C128";
+    ctx.write_byte      = [](void* c, uint16_t a, uint8_t v) {
+        static_cast<RAMChip*>(c)->data()[a] = v;
+    };
+    ctx.write_block     = [](void* c, uint16_t a, const uint8_t* d, size_t n) {
+        memcpy(&static_cast<RAMChip*>(c)->data()[a], d, n);
+    };
+    ctx.mem_read        = [](void* c, uint16_t a) -> uint8_t {
+        return static_cast<RAMChip*>(c)->data()[a];
+    };
+    ctx.mem_ctx         = &board_.main_ram;
+    ctx.basic_params    = &COMMODORE_BASIC_C64;  // BASIC 7.0 shares V2 tokens for SYS
+    ctx.basic_start_addrs[0] = 0x1C01;           // C128 BASIC start (TXTTAB)
+    ctx.default_raw_addr = 0xC000;
+    ctx.set_pc          = nullptr;
+    ctx.pc_ctx          = nullptr;
+    return ctx;
 }
 
-void C128System::inject_keys(const char* /*str*/) {
-    // TODO: inject into C128 keyboard buffer
+void C128System::inject_keys(const char* str) {
+    uint8_t* ram = board_.main_ram.data();
+    int len = static_cast<int>(strlen(str));
+    if (len > 10) len = 10;
+
+    // C128 mode: buffer at $034A, count at $D0
+    // C64 mode:  buffer at $0277, count at $C6
+    const uint16_t buf_addr   = c64_mode_ ? 0x0277 : 0x034A;
+    const uint16_t count_addr = c64_mode_ ? 0x00C6 : 0x00D0;
+
+    for (int i = 0; i < len; i++)
+        ram[buf_addr + i] = static_cast<uint8_t>(str[i]);
+    ram[count_addr] = static_cast<uint8_t>(len);
 }
 
 // ============================================================================
@@ -1199,6 +1453,21 @@ void C128System::setup_ports() {
     owned_devices_.push_back(std::move(kb_device));
 
     log_info("C128: Created %zu ports\n", get_ports().size());
+}
+
+void C128System::on_port_device_changed(int port_index) {
+    if (port_index == PORT_IEC_SERIAL) {
+        serial_traps_enabled_ = false;
+        auto* port = get_port(PORT_IEC_SERIAL);
+        if (port) {
+            for (auto* dev : port->get_attached_devices()) {
+                if (dynamic_cast<Drive1541Device*>(dev)) {
+                    serial_traps_enabled_ = true;
+                    break;
+                }
+            }
+        }
+    }
 }
 
 // TODO: "Reset C128" duplicates the generic "System > Reset" menu item.
