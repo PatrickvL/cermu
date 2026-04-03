@@ -216,6 +216,7 @@ private:
     void init_io_dispatch();             // Set up CS-tick indexed sub-table for I/O page
     void tick_z80();                     // Z80 tick (T-state) + bus servicing
     bus_state_t z80_io_tick(bus_state_t pins); // Z80 I/O port dispatch
+    void setup_ports() override;
     static void cpu_banking_callback(void* ctx, uint8_t banking_state);
 
     // CIA1 keyboard matrix scan callbacks
