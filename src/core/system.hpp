@@ -360,6 +360,22 @@ protected:
     /// Helper: add a connector port (called by derived systems in initialize).
     int add_port(const PortDefinition& def, int port_number = 0);
 
+    /// Create ports from a declarative PortSlot manifest.
+    /// Calls add_port() for each slot and stores the manifest for
+    /// auto-generating default peripherals.
+    struct PortSlot;  // forward (defined in port_manifest.hpp)
+    void create_ports_from_manifest(const PortSlot* slots, size_t count);
+
+    /// Convenience: create ports from a constexpr PortSlot array.
+    template<size_t N>
+    void create_ports_from_manifest(const PortSlot (&slots)[N]) {
+        create_ports_from_manifest(slots, N);
+    }
+
+    /// Stored manifest (set by create_ports_from_manifest).
+    const PortSlot* port_manifest_       = nullptr;
+    size_t          port_manifest_count_ = 0;
+
     /// Tick all attached peripheral devices (call once per frame).
     void tick_peripherals();
 
