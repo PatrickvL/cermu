@@ -47,6 +47,7 @@
 #include "chip/memory/mos2114.hpp"
 #include "chip/mmu/mos8722.hpp"
 
+#include <atomic>
 #include <cstdint>
 
 // Default bus state — CSG 8502 (same pinout as MOS 6510)
@@ -189,8 +190,13 @@ private:
 
     // ── CPU mode ─────────────────────────────────────────────────────────
     enum class CPUMode : uint8_t { MODE_8502, MODE_Z80 };
-    CPUMode  cpu_mode_ = CPUMode::MODE_Z80;  // Z80 starts first after reset
-    bool     c64_mode_ = false;          // C64 compatibility mode
+    CPUMode       cpu_mode_ = CPUMode::MODE_Z80;  // Z80 starts first after reset
+    CpuChipBase*  active_cpu_ = nullptr;           // Points to whichever CPU is active
+    bool          c64_mode_ = false;               // C64 compatibility mode
+
+    // ── GUI-requested actions (set on GUI thread, consumed on emu thread) ─
+    std::atomic<bool> reset_requested_{false};
+    std::atomic<bool> c64_mode_requested_{false};
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t default_state_ = 0;     // Pull-up defaults (reset each tick)
     bus_state_t pins_      = C128_BUS_DEFAULT_STATE;  // 8502 bus state
