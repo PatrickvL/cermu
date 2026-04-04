@@ -47,13 +47,6 @@
 #include "chip/memory/mos2114.hpp"
 #include "chip/io/mos6526.hpp"
 
-inline constexpr RomFileInfo parse_rom_spec(const char* spec) noexcept {
-    if (!spec) return {nullptr, false};
-    if (spec[0] == '?') return {spec + 1, true};
-    return {spec, false};
-}
-
-
 // =============================================================================
 // §0  C64 Bus Spec — manual spec (not ManifestBusSpec)
 // =============================================================================
@@ -124,47 +117,43 @@ struct C64BusSpec {
 // with_sorted_ids()   → IDs assigned in size-ascending order:
 //   CHARROM=0, ROML=1, ROMH=3, BASIC=5, KERNAL=7, RAM=9
 //
+// VIC-II and SID use bank_size=0x400 for $D000-$D3FF / $D400-$D7FF mirroring.
+//
 
-inline constexpr size_t kC64ChipCount = 12;
+inline constexpr auto kC64Chips = make_manifest(
+    // Chips [0..11]
+    Slot<MOS6510>    {.label = "MOS 6510"},
+    Slot<RAMChip>    {.base_addr = 0x0000, .size_bytes = 0x10000, .label = "RAM", .overlay_group = 1},
+    Slot<ROMChip>    {.base_addr = 0x8000, .size_bytes = 0x2000, .label = "ROML", .overlay_group = 1},
+    Slot<ROMChip>    {.base_addr = 0xA000, .size_bytes = 0x2000, .label = "BASIC ROM", .overlay_group = 1,
+                      .rom = {"C64 - 901226-01 - Commodore (F833D117) Basic.rom|"
+                              "basic.901226-01.bin|901226-01.bin|basic.rom"}},
+    Slot<ROMChip>    {.base_addr = 0xA000, .size_bytes = 0x2000, .label = "ROMH", .overlay_group = 1},
+    Slot<vicii_base_t>{.base_addr = 0xD000, .label = "VIC-II", .bank_size = 0x400},
+    Slot<ROMChip>    {.base_addr = 0xD000, .size_bytes = 0x1000, .label = "CHARROM", .overlay_group = 1,
+                      .rom = {"C64 - 901225-01 - Commodore (EC4272EE) Characters.rom|"
+                              "characters.901225-01.bin|901225-01.bin|chargen.rom|char.rom"}},
+    Slot<mos6581_t>  {.base_addr = 0xD400, .label = "SID", .bank_size = 0x400},
+    Slot<MOS2114>    {.base_addr = 0xD800, .label = "Color RAM"},
+    Slot<mos6526_t>  {.base_addr = 0xDC00, .label = "CIA1"},
+    Slot<mos6526_t>  {.base_addr = 0xDD00, .label = "CIA2"},
+    Slot<ROMChip>    {.base_addr = 0xE000, .size_bytes = 0x2000, .label = "KERNAL", .overlay_group = 1,
+                      .rom = {"C64 - 901227-03 - Commodore (DBE3E7C7) Kernal.rom|"
+                              "kernal.901227-03.bin|901227-03.bin|kernal.rom"}},
+    // Ports [12..20]
+    Slot<PortControlDB9>    {.name = "Control Port 1",  .port_number = 1, .default_device = "mouse_1351"},
+    Slot<PortControlDB9>    {.name = "Control Port 2",  .port_number = 2, .default_device = "joystick"},
+    Slot<PortIecSerial>     {.name = "IEC Serial Bus",  .is_bus = true, .default_device = "1541"},
+    Slot<PortCassette>      {.name = "Cassette Port",   .default_device = "datasette"},
+    Slot<PortUserPort>      {.name = "User Port"},
+    Slot<PortExpansion>     {.name = "Expansion Port"},
+    Slot<PortCompositeVideo>{.name = "Video Out",       .default_device = "direct_output"},
+    Slot<PortAudioMono>     {.name = "Audio Out"},
+    Slot<PortCustom>        {.name = "Keyboard",        .is_internal = true}
+).with_page_banking()
+ .with_sorted_ids();
 
-inline constexpr auto make_c64_manifest() {
-    ChipManifest<kC64ChipCount> m = {{
-        // [0] MOS 6510 CPU
-        ChipSlot{0x0000, 0, 0, 0, 0, 0, resolve_slot_factory<MOS6510>(), "MOS 6510", 0, parse_rom_spec(nullptr)},
-        // [1] 64 KB RAM
-        ChipSlot{0x0000, 0x10000, 0, 0, 0, 1, resolve_slot_factory<RAMChip>(), "RAM", 0, parse_rom_spec(nullptr)},
-        // [2] ROML — cartridge ROM low (8 KB)
-        ChipSlot{0x8000, 0x2000, 0, 0, 0, 1, resolve_slot_factory<ROMChip>(), "ROML", 0, parse_rom_spec(nullptr)},
-        // [3] BASIC ROM (8 KB)
-        ChipSlot{0xA000, 0x2000, 0, 0, 0, 1, resolve_slot_factory<ROMChip>(), "BASIC ROM", 0,
-            parse_rom_spec("C64 - 901226-01 - Commodore (F833D117) Basic.rom|"
-                           "basic.901226-01.bin|901226-01.bin|basic.rom")},
-        // [4] ROMH — cartridge ROM high (8 KB)
-        ChipSlot{0xA000, 0x2000, 0, 0, 0, 1, resolve_slot_factory<ROMChip>(), "ROMH", 0, parse_rom_spec(nullptr)},
-        // [5] VIC-II (MMIO)
-        ChipSlot{0xD000, 0, 0, 0, 0, 0, resolve_slot_factory<vicii_base_t>(), "VIC-II", 0, parse_rom_spec(nullptr)},
-        // [6] CHARROM (4 KB)
-        ChipSlot{0xD000, 0x1000, 0, 0, 0, 1, resolve_slot_factory<ROMChip>(), "CHARROM", 0,
-            parse_rom_spec("C64 - 901225-01 - Commodore (EC4272EE) Characters.rom|"
-                           "characters.901225-01.bin|901225-01.bin|chargen.rom|char.rom")},
-        // [7] SID (MMIO)
-        ChipSlot{0xD400, 0, 0, 0, 0, 0, resolve_slot_factory<mos6581_t>(), "SID", 0, parse_rom_spec(nullptr)},
-        // [8] Color RAM (MMIO)
-        ChipSlot{0xD800, 0, 0, 0, 0, 0, resolve_slot_factory<MOS2114>(), "Color RAM", 0, parse_rom_spec(nullptr)},
-        // [9] CIA1 (MMIO)
-        ChipSlot{0xDC00, 0, 0, 0, 0, 0, resolve_slot_factory<mos6526_t>(), "CIA1", 0, parse_rom_spec(nullptr)},
-        // [10] CIA2 (MMIO)
-        ChipSlot{0xDD00, 0, 0, 0, 0, 0, resolve_slot_factory<mos6526_t>(), "CIA2", 0, parse_rom_spec(nullptr)},
-        // [11] KERNAL (8 KB)
-        ChipSlot{0xE000, 0x2000, 0, 0, 0, 1, resolve_slot_factory<ROMChip>(), "KERNAL", 0,
-            parse_rom_spec("C64 - 901227-03 - Commodore (DBE3E7C7) Kernal.rom|"
-                           "kernal.901227-03.bin|901227-03.bin|kernal.rom")},
-    }};
-    m.chips[5].bank_size = 0x400;   // VIC-II: mirrors across $D000-$D3FF
-    m.chips[7].bank_size = 0x400;   // SID: mirrors across $D400-$D7FF
-    return m.with_page_banking().with_sorted_ids();
-}
-inline constexpr ChipManifest<kC64ChipCount> kC64Chips = make_c64_manifest();
+inline constexpr size_t kC64ChipCount = decltype(kC64Chips)::chip_count;
 
 // =============================================================================
 // §3  Type Aliases

@@ -24,56 +24,40 @@
 
 class LightpenDevice;
 
-// C64Board — value-typed chip fields.
+// C64Board — value-typed chip and port fields via TypedManifest component_tuple.
 // Buffer-backed chips (RAMChip, ROMChip) get their flat-memory buffer via
 // Board::bind_chip() → on_bind_buffer().  MMIO chips (size==0) are bound
-// without a buffer.  All are value members — no heap allocation.
+// without a buffer.  Ports are initialized via bind_all().
 struct C64Board : Board<C64BusSpec> {
-    MOS6510      cpu;
-    RAMChip      ram;
-    ROMChip      roml;
-    ROMChip      basic;
-    ROMChip      romh;
-    vicii_base_t vicii;
-    ROMChip      charrom;
-    mos6581_t    sid;
-    MOS2114      colorram;
-    mos6526_t    cia1;
-    mos6526_t    cia2;
-    ROMChip      kernal;
+    using ComponentTuple = decltype(kC64Chips)::component_tuple;
+    ComponentTuple components_;
 
-    C64Board(const ChipManifest<kC64ChipCount>& m) : Board<C64BusSpec>(m) {}
+    // Chip aliases [0..11]
+    MOS6510&      cpu      = std::get<0>(components_);
+    RAMChip&      ram      = std::get<1>(components_);
+    ROMChip&      roml     = std::get<2>(components_);
+    ROMChip&      basic    = std::get<3>(components_);
+    ROMChip&      romh     = std::get<4>(components_);
+    vicii_base_t& vicii    = std::get<5>(components_);
+    ROMChip&      charrom  = std::get<6>(components_);
+    mos6581_t&    sid      = std::get<7>(components_);
+    MOS2114&      colorram = std::get<8>(components_);
+    mos6526_t&    cia1     = std::get<9>(components_);
+    mos6526_t&    cia2     = std::get<10>(components_);
+    ROMChip&      kernal   = std::get<11>(components_);
 
-    void bind_all_chips() {
-        size_t i = 0;
-        bind_chip(i++, &cpu);
-        bind_chip(i++, &ram);
-        bind_chip(i++, &roml);
-        bind_chip(i++, &basic);
-        bind_chip(i++, &romh);
-        bind_chip(i++, &vicii);
-        bind_chip(i++, &charrom);
-        bind_chip(i++, &sid);
-        bind_chip(i++, &colorram);
-        bind_chip(i++, &cia1);
-        bind_chip(i++, &cia2);
-        bind_chip(i++, &kernal);
-    }
+    // Port aliases [12..20]
+    PortControlDB9&     control1_port  = std::get<12>(components_);
+    PortControlDB9&     control2_port  = std::get<13>(components_);
+    PortIecSerial&      iec_port       = std::get<14>(components_);
+    PortCassette&       cassette_port  = std::get<15>(components_);
+    PortUserPort&       user_port      = std::get<16>(components_);
+    PortExpansion&      expansion_port = std::get<17>(components_);
+    PortCompositeVideo& video_port     = std::get<18>(components_);
+    PortAudioMono&      audio_port     = std::get<19>(components_);
+    PortCustom&         keyboard_port  = std::get<20>(components_);
 
-    void register_all_chips() {
-        register_component(&cpu);
-        register_component(&ram);
-        register_component(&roml);
-        register_component(&basic);
-        register_component(&romh);
-        register_component(&vicii);
-        register_component(&charrom);
-        register_component(&sid);
-        register_component(&colorram);
-        register_component(&cia1);
-        register_component(&cia2);
-        register_component(&kernal);
-    }
+    C64Board() : Board(kC64Chips) {}
 };
 
 /**
@@ -134,8 +118,8 @@ public:
     //
     // Connector ports, owned devices, attach/detach, and the generic
     // peripheral connector UI are all provided by the System base
-    // class.  The C64 only defines its port layout constants and the
-    // system-specific setup_ports() initializer below.
+    // class.  Ports are declared in kC64Chips (the TypedManifest) and
+    // created by bind_all() during initialize().
     //
 
     // =========================================================================
@@ -182,7 +166,7 @@ public:
     // MANIFEST-DRIVEN BUS
     // =========================================================================
     C64Bus   bus_;                       // MemoryBus<C64BusSpec> — page-table dispatch
-    C64Board board_{kC64Chips};          // Board — owns flat mem, chip binding
+    C64Board board_;                     // Board — owns flat mem, chip binding
 
     // PLA banking — 32 modes × 2 viewers (CPU + VIC-II)
     std::array<C64Snapshot, kC64NumPlaModes> cpu_snapshots_;    // Viewer 0
@@ -279,6 +263,7 @@ public:
     static constexpr int PORT_EXPANSION  = 5;
     static constexpr int PORT_VIDEO      = 6;
     static constexpr int PORT_AUDIO      = 7;
+    static constexpr int PORT_KEYBOARD   = 8;
 
     /// Cached lightpen pointer (used by LP pin callback for zero-overhead access).
     LightpenDevice* get_cached_lightpen() const { return cached_lightpen_; }
@@ -287,9 +272,6 @@ public:
     void on_port_device_changed(int port_index) override;
 
 private:
-    /// Create and wire up all C64 connector ports (CIA1 joystick callbacks etc).
-    void setup_ports() override;
-
     /// Pass the current display rect to any lightpen on Control Port 1 (once per frame).
     void update_lightpen_display_rect();
 
