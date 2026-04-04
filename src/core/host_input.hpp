@@ -91,29 +91,7 @@ struct JoystickKeyMap {
     }
 };
 
-/// Preset: WASD + Space fire.
-inline JoystickKeyMap joystick_keymap_wasd() {
-    JoystickKeyMap m;
-    m.up    = SDL_SCANCODE_W;
-    m.down  = SDL_SCANCODE_S;
-    m.left  = SDL_SCANCODE_A;
-    m.right = SDL_SCANCODE_D;
-    m.fire  = SDL_SCANCODE_SPACE;
-    m.fire2 = SDL_SCANCODE_LCTRL;
-    return m;
-}
 
-/// Preset: Numpad (8/2/4/6 + 0).
-inline JoystickKeyMap joystick_keymap_numpad() {
-    JoystickKeyMap m;
-    m.up    = SDL_SCANCODE_KP_8;
-    m.down  = SDL_SCANCODE_KP_2;
-    m.left  = SDL_SCANCODE_KP_4;
-    m.right = SDL_SCANCODE_KP_6;
-    m.fire  = SDL_SCANCODE_KP_0;
-    m.fire2 = SDL_SCANCODE_KP_ENTER;
-    return m;
-}
 
 // ============================================================================
 // SCANCODE BITSET — O(1) membership test for SDL scancode sets

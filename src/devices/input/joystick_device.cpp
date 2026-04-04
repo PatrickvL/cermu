@@ -109,6 +109,28 @@ int JoystickDevice::get_keymap_presets_table_size() const {
     return JOYSTICK_PRESET_COUNT;
 }
 
+static JoystickKeyMap joystick_keymap_numpad() {
+    JoystickKeyMap m;
+    m.up    = SDL_SCANCODE_KP_8;
+    m.down  = SDL_SCANCODE_KP_2;
+    m.left  = SDL_SCANCODE_KP_4;
+    m.right = SDL_SCANCODE_KP_6;
+    m.fire  = SDL_SCANCODE_KP_0;
+    m.fire2 = SDL_SCANCODE_KP_ENTER;
+    return m;
+}
+
+static JoystickKeyMap joystick_keymap_wasd() {
+    JoystickKeyMap m;
+    m.up    = SDL_SCANCODE_W;
+    m.down  = SDL_SCANCODE_S;
+    m.left  = SDL_SCANCODE_A;
+    m.right = SDL_SCANCODE_D;
+    m.fire  = SDL_SCANCODE_SPACE;
+    m.fire2 = SDL_SCANCODE_LCTRL;
+    return m;
+}
+
 void JoystickDevice::apply_keymap_preset(int index) {
     switch (index) {
         case 0:  key_map_ = joystick_keymap_numpad(); break;
