@@ -69,6 +69,13 @@ private:
     // ========================================================================
     scan_roots::ScanRootManager scan_root_manager_;
     bool show_scan_roots_dialog_ = false;  ///< Library → Scan roots… dialog
+
+    // ========================================================================
+    // Display source switching — for systems with multiple video outputs
+    // ========================================================================
+    /// -1 = auto-follow (use system's get_active_video_port_index()),
+    /// ≥0 = manually locked to a specific port index.
+    int  display_source_override_ = -1;
     
 public:
     /**

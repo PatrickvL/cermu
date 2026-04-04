@@ -1563,6 +1563,13 @@ const char* C128System::get_mode_label() const {
     return c64_mode_ ? "C64 Mode" : nullptr;
 }
 
+int C128System::get_active_video_port_index() const {
+    // The 40/80 DISPLAY key is a hardware toggle wired to MMU MCR bit 5.
+    // When pressed (40-col selected), return the VIC-IIe composite port;
+    // when not pressed (80-col selected), return the VDC RGBI port.
+    return board_.mmu.key_40_80_pressed ? PORT_VIDEO_40 : PORT_VIDEO_80;
+}
+
 // ============================================================================
 // Keyboard mapper factory
 // ============================================================================

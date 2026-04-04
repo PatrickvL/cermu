@@ -105,7 +105,7 @@ inline constexpr auto kC128Manifest = make_manifest(
     Slot<PortUserPort>{.name = "User Port"},
     Slot<PortExpansion>{.name = "Expansion Port"},
     Slot<PortCompositeVideo>{.name = "Video Out (40-col)", .default_device = "direct_output"},
-    Slot<PortRgbi>{.name = "Video Out (80-col)"},
+    Slot<PortRgbi>{.name = "Video Out (80-col)", .default_device = "crt_1902"},
     Slot<PortAudioMono>{.name = "Audio Out"},
     Slot<PortCustom>{.name = "Keyboard", .is_internal = true}
 );
@@ -188,6 +188,8 @@ public:
     void set_audio_sample_rate(int sample_rate_hz) override;
 
     void* get_video_port_ptr() override { return video_port_.get(); }
+    int get_active_video_port_index() const override;
+    int get_video_port_count() const override { return 2; }
 
     void render_system_menu_items() override;
     void on_unmapped_toggle_changed(emu_key_t key, bool pressed) override;
@@ -197,6 +199,8 @@ public:
     static constexpr int PORT_CONTROL1    = 0;
     static constexpr int PORT_CONTROL2    = 1;
     static constexpr int PORT_IEC_SERIAL  = 2;
+    static constexpr int PORT_VIDEO_40    = 6;  // VIC-IIe composite (40-col)
+    static constexpr int PORT_VIDEO_80    = 7;  // VDC RGBI (80-col)
 
     /// Update cached state when devices are attached/detached.
     void on_port_device_changed(int port_index) override;

@@ -24,6 +24,7 @@
 enum class CRTPreset : uint8_t {
     ConsumerTV,       ///< 13" composite TV with built-in speaker
     Commodore1702,    ///< Commodore 1702 — composite + S-Video, speaker
+    Commodore1902,    ///< Commodore 1902 — composite + S-Video + RGBI, speaker
     RGBMonitor,       ///< Professional RGB monitor (composite + S-Video + RGB)
     MonochromeGreen,  ///< Green phosphor monochrome (P31)
     MonochromeAmber,  ///< Amber phosphor monochrome (P3-like)

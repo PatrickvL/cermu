@@ -43,6 +43,22 @@ GenericCRT::GenericCRT(CRTPreset preset)
             };
             break;
 
+        case CRTPreset::Commodore1902:
+            name_              = "Commodore 1902";
+            id_                = "crt_1902";
+            primary_port_type_ = PortType::VIDEO_RGBI;
+            accepted_signals_  = DisplaySignals::COMPOSITE | DisplaySignals::SVIDEO
+                               | DisplaySignals::RGBI;
+            has_speakers_      = true;
+            characteristics_   = {
+                DisplayTechnology::CRT_Shadow, PhosphorType::P22,
+                /*diagonal*/ 13.0f, /*aspect*/ 4.0f / 3.0f, /*curvature*/ 0.32f,
+                /*persistence*/ 2.0f, /*color_temp*/ 6500.0f,
+                /*dot_pitch*/ 0.31f, /*scanline_gap*/ 0.10f,
+                /*brightness*/ 1.0f, /*contrast*/ 1.0f, /*gamma*/ 2.2f
+            };
+            break;
+
         case CRTPreset::RGBMonitor:
             name_              = "RGB Monitor";
             id_                = "crt_rgb";
@@ -156,6 +172,18 @@ REGISTER_DEVICE(crt_tv_descriptor, []() {
 
 REGISTER_DEVICE(crt_1702_descriptor, []() {
     return std::make_unique<GenericCRT>(CRTPreset::Commodore1702);
+})
+
+static const DeviceDescriptor crt_1902_descriptor = {
+    "crt_1902",
+    "Commodore 1902",
+    "Commodore 1902 monitor (composite + S-Video + RGBI, built-in speakers)",
+    PortType::VIDEO_RGBI,
+    false
+};
+
+REGISTER_DEVICE(crt_1902_descriptor, []() {
+    return std::make_unique<GenericCRT>(CRTPreset::Commodore1902);
 })
 
 REGISTER_DEVICE(crt_rgb_descriptor, []() {
