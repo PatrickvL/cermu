@@ -45,29 +45,6 @@ void Session::set_focused_system(size_t index) {
         focused_index_ = index;
 }
 
-System* Session::find_system(std::string_view name) {
-    for (auto& entry : systems_)
-        if (entry.name == name)
-            return entry.system.get();
-    return nullptr;
-}
-
-const System* Session::find_system(std::string_view name) const {
-    for (const auto& entry : systems_)
-        if (entry.name == name)
-            return entry.system.get();
-    return nullptr;
-}
-
-// ============================================================================
-// Connection management
-// ============================================================================
-
-void Session::add_connection(std::unique_ptr<Connection> connection) {
-    if (connection)
-        connections_.push_back(std::move(connection));
-}
-
 // ============================================================================
 // Lifecycle
 // ============================================================================

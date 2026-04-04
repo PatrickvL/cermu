@@ -9,11 +9,21 @@
                                   // zero runtime overhead.
 
 #include "core/component_base.hpp"
-#include "core/component_info.hpp"
 #include <cstdint>
+#include <string_view>
 #include <memory>
 #include <vector>
 #include "core/system_lines.hpp"
+
+// ============================================================================
+// ChipInfo — identity for an integrated circuit on a PCB
+// ============================================================================
+
+struct ChipInfo {
+    std::string_view part_number;     // "MOS6510", "RP2C02", "Z80A"
+    std::string_view manufacturer;    // "MOS Technology", "Ricoh", "Zilog"
+    std::string_view display_name;    // "MOS 6510", "Ricoh 2A03" — human-readable
+};
 
 // Forward declarations for layout support
 struct ChipLayout;

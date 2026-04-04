@@ -12,13 +12,14 @@
 #include "core/pin_types.hpp"
 #include "core/package_types.hpp"
 #include "core/pin_macros.hpp"
-#include "core/component_info.hpp"
 #include <vector>
 #include <string>
 
 // ============================================================================
 // COMPLETE PIN LAYOUT STRUCTURE
 // ============================================================================
+
+struct ChipInfo;  // Forward declaration — defined in chip.hpp
 
 // Complete pin layout structure
 struct ChipLayout {

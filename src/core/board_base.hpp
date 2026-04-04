@@ -54,10 +54,6 @@ public:
 
     // ── Board lifecycle ──────────────────────────────────────────────────
 
-    /// Optional power-on hook.  Called once before the first tick() when the
-    /// board is powered up (cold start).  Default is a no-op.
-    virtual void power_on() {}
-
     /// Per-cycle (or per-machine-cycle) tick.  Default is a no-op.
     /// Concrete boards override this to run the tick loop (CPU + chips).
     virtual void tick() {}
@@ -71,27 +67,6 @@ public:
 
     [[nodiscard]] std::span<ComponentBase* const> components() const {
         return components_;
-    }
-
-    [[nodiscard]] ComponentBase* find_component(std::string_view comp_name) const {
-        for (auto* c : components_)
-            if (c->name() && comp_name == c->name()) return c;
-        return nullptr;
-    }
-
-    template<typename T>
-    [[nodiscard]] T* find_component() const {
-        for (auto* c : components_)
-            if (auto* t = dynamic_cast<T*>(c)) return t;
-        return nullptr;
-    }
-
-    template<typename T>
-    [[nodiscard]] std::vector<T*> find_components() const {
-        std::vector<T*> result;
-        for (auto* c : components_)
-            if (auto* t = dynamic_cast<T*>(c)) result.push_back(t);
-        return result;
     }
 
     // ── Port access ────────────────────────────────────────────────────

@@ -4,6 +4,7 @@
 
 #include "gui/chip_visualization.hpp"
 #include "gui/global_chip_style.hpp"
+#include "core/chip.hpp"             // ChipInfo (full definition for layout rendering)
 #include <algorithm>
 #include <cstdio>
 

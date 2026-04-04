@@ -14,10 +14,8 @@
 // =============================================================================
 
 #include "core/system.hpp"
-#include "core/connection.hpp"
 #include <memory>
 #include <string>
-#include <string_view>
 #include <vector>
 
 // =============================================================================
@@ -55,20 +53,6 @@ public:
     [[nodiscard]] size_t focused_system_index() const { return focused_index_; }
     void set_focused_system(size_t index);
 
-    /// Look up a system by name.  Returns nullptr if not found.
-    [[nodiscard]] System*       find_system(std::string_view name);
-    [[nodiscard]] const System* find_system(std::string_view name) const;
-
-    // ── Connection management ───────────────────────────────────────────
-
-    /// Add a connection.  The session takes ownership.
-    void add_connection(std::unique_ptr<Connection> connection);
-
-    /// Access all connections.
-    [[nodiscard]] const std::vector<std::unique_ptr<Connection>>& connections() const {
-        return connections_;
-    }
-
     // ── Lifecycle ───────────────────────────────────────────────────────
 
     /// Reset all systems and reconnect all connections.
@@ -79,8 +63,6 @@ private:
         std::string             name;
         std::unique_ptr<System> system;
     };
-
-    std::vector<Entry>                       systems_;
-    std::vector<std::unique_ptr<Connection>> connections_;
-    size_t                                   focused_index_ = 0;
+    std::vector<Entry>  systems_;
+    size_t              focused_index_ = 0;
 };
