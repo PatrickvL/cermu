@@ -1604,6 +1604,10 @@ VideoSignalType C128System::get_video_signal_type() const {
 void C128System::rebind_active_video_output() {
     // Switch which port writes to last_frame_data_ so the emu thread's
     // snapshot code picks up the correct signal data.
+    // Clear stale frame data first — the old pipeline's buffers are gone,
+    // so signal_output would be a dangling pointer.
+    last_frame_data_ = {};
+
     // Unbind the inactive port first (set its frame_output_ to nullptr),
     // then bind the active one.
     if (board_.mmu.key_40_80_pressed) {

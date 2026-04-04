@@ -2040,7 +2040,11 @@ void SessionGUI::rebuild_signal_pipeline() {
     // 5. Rebind so the active port writes to last_frame_data_
     system_->rebind_active_video_output();
 
-    // 6. Resume emulation
+    // 6. Clear stale frame notification — the old pipeline's data is gone.
+    //    The emu thread will produce a fresh frame after resume.
+    fb_new_frame_.store(false, std::memory_order_release);
+
+    // 7. Resume emulation
     if (was_running) {
         emulation_paused_.store(false);
     }
