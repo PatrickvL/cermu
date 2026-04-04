@@ -357,6 +357,20 @@ static void cpu_banking_callback(void* context, uint8_t banking_state) {
     C64System* c64 = static_cast<C64System*>(context);
     c64->on_banking_change(banking_state);
 }
+
+// Context structure for CIA1 joystick + VIC-II lightpen callbacks.
+// Defined here (above initialize) so the global instance is visible.
+struct C64PortCallbackContext {
+    C64System*   c64;
+    C64System*   system;
+};
+static C64PortCallbackContext s_port_callback_ctx;
+
+// Forward declarations — full definitions follow after the callback section.
+static uint8_t c64_cia1_port_a_read_with_joystick(void* context, uint8_t port_a_output);
+static uint8_t c64_cia1_port_b_read_with_joystick(void* context, uint8_t port_b_output);
+static bool c64_vicii_lp_pin_read(void* context);
+
 bool C64System::initialize() {
     if (initialized_) {
         return true;  // Already initialized
@@ -389,13 +403,15 @@ bool C64System::initialize() {
     system_lines_  = SYS_MASK_EXROM | SYS_MASK_GAME;
 
     // =========================================================================
-    // Bind value-typed chips, then factory-create remaining
+    // Bind all components (chips + ports) from the manifest
     // =========================================================================
-    board_.bind_all_chips();
+    bind_all(board_, board_.components_, kC64Chips);
+    port_manifest_       = kC64Chips.port_slots;
+    port_manifest_count_ = kC64Chips.port_count;
     board_.create_chips(&bus_state_);
     board_.apply(bus_);
 
-    // Convenience pointers — all point into board_ value fields.
+    // Convenience pointers — all point into board_ component fields.
     this->cpu      = &board_.cpu;
     this->ram      = &board_.ram;
     this->roml     = &board_.roml;
@@ -557,6 +573,30 @@ bool C64System::initialize() {
     // Wire SID to audio signal port
     audio_port_ = std::make_unique<AudioPort>();
     sid->set_audio_port(audio_port_.get());
+
+    // =========================================================================
+    // Wire connector-port callbacks (CIA1 joystick, VIC-II lightpen, keyboard)
+    // =========================================================================
+
+    // Attach internal keyboard device (PORT_KEYBOARD is the last manifest port)
+    {
+        auto kb_device = std::make_unique<CommodoreKeyboardDevice>(this->keyboard);
+        auto* kb_raw = kb_device.get();
+        get_port(PORT_KEYBOARD)->attach_device(kb_raw);
+        owned_devices_.push_back(std::move(kb_device));
+    }
+
+    // Wire joystick-aware CIA1 callbacks (keyboard + wired-AND joystick)
+    s_port_callback_ctx.c64 = this;
+    s_port_callback_ctx.system = this;
+    this->cia1->port_a_read_callback = c64_cia1_port_a_read_with_joystick;
+    this->cia1->port_a_read_context  = &s_port_callback_ctx;
+    this->cia1->port_b_read_callback = c64_cia1_port_b_read_with_joystick;
+    this->cia1->port_b_read_context  = &s_port_callback_ctx;
+
+    // Wire VIC-II LP pin read callback (Control Port 1 pin 6 → VIC-II LP input)
+    this->vicii->bus.lp_pin_read    = c64_vicii_lp_pin_read;
+    this->vicii->bus.lp_pin_context = &s_port_callback_ctx;
 
     log_info("C64: System initialized successfully\n");
     return true;
@@ -1459,36 +1499,11 @@ void C64System::render_configuration_ui() {
 }
 
 // ============================================================================
-// CONNECTOR PORT MANIFEST
-// ============================================================================
-
-static constexpr PortSlot kC64Ports[] = {
-    {PortType::CONTROL_PORT_DB9, "Control Port 1",  1, false, false, "mouse_1351"},
-    {PortType::CONTROL_PORT_DB9, "Control Port 2",  2, false, false, "joystick"},
-    {PortType::IEC_SERIAL,       "IEC Serial Bus",  0, false, true,  "1541"},
-    {PortType::CASSETTE_PORT,    "Cassette Port",   0, false, false, "datasette"},
-    {PortType::USER_PORT,        "User Port",       0, false, false, nullptr},
-    {PortType::EXPANSION_PORT,   "Expansion Port",  0, false, false, nullptr},
-    {PortType::VIDEO_COMPOSITE,  "Video Out",       0, false, false, "direct_output"},
-    {PortType::AUDIO_MONO,       "Audio Out",       0, false, false, nullptr},
-    {PortType::CUSTOM,           "Keyboard",        0, true,  false, nullptr},
-};
-
-// ============================================================================
 // JOYSTICK-AWARE CIA1 PORT CALLBACKS
 // ============================================================================
 // These replace the default CIA1 port callbacks set during initialize().
 // They first call the keyboard scanning logic, then AND-in the joystick
 // state from the connector port (wired-AND, matching real hardware).
-
-// Context structure passed to the CIA1 callback overrides
-struct C64PortCallbackContext {
-    C64System*   c64;
-    C64System*   system;
-};
-
-// Global instance (one per system lifetime — safe because only one C64 at a time)
-static C64PortCallbackContext s_port_callback_ctx;
 
 /// CIA1 Port A read callback — combines keyboard reverse-scan with Control Port 2 joystick.
 static uint8_t c64_cia1_port_a_read_with_joystick(void* context, uint8_t port_a_output) {
@@ -1576,39 +1591,6 @@ static bool c64_vicii_lp_pin_read(void* context) {
     uint16_t beam_x = ctx->c64->vicii->get_x_coordinate();
     uint16_t beam_y = ctx->c64->vicii->get_raster_counter();
     return lightpen->get_lp_pin_state(beam_x, beam_y);
-}
-
-void C64System::setup_ports() {
-
-    create_ports_from_manifest(kC64Ports);
-
-    // Attach internal keyboard device (last port in manifest)
-    constexpr int KB_IDX = static_cast<int>(std::size(kC64Ports)) - 1;
-    auto kb_device = std::make_unique<CommodoreKeyboardDevice>(initialized_ ? this->keyboard : nullptr);
-    auto* kb_raw = kb_device.get();
-    get_port(KB_IDX)->attach_device(kb_raw);
-    owned_devices_.push_back(std::move(kb_device));
-
-    // Wire joystick-aware CIA1 callbacks (replace the defaults set during initialize)
-    if (initialized_ && this->cia1) {
-        s_port_callback_ctx.c64 = this;
-        s_port_callback_ctx.system = this;
-
-        this->cia1->port_a_read_callback = c64_cia1_port_a_read_with_joystick;
-        this->cia1->port_a_read_context  = &s_port_callback_ctx;
-        this->cia1->port_b_read_callback = c64_cia1_port_b_read_with_joystick;
-        this->cia1->port_b_read_context  = &s_port_callback_ctx;
-        log_info("C64: Wired joystick-aware CIA1 port callbacks\n");
-    }
-
-    // Wire VIC-II LP pin read callback (Control Port 1 pin 6 → VIC-II LP input)
-    if (initialized_ && this->vicii) {
-        this->vicii->bus.lp_pin_read    = c64_vicii_lp_pin_read;
-        this->vicii->bus.lp_pin_context = &s_port_callback_ctx;
-        log_info("C64: Wired VIC-II lightpen pin callback\n");
-    }
-
-    log_info("C64: Created %zu ports\n", get_ports().size());
 }
 
 void C64System::update_lightpen_display_rect() {
