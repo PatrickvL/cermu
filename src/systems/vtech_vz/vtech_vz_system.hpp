@@ -105,7 +105,7 @@ template<> struct VZBusTraits<VZVariant::VZ300> {
 };
 
 template<typename BSpec>
-struct VZBoard : Board<BSpec, NoChips> {
+struct VZBoard : Board<BSpec> {
     using ComponentTuple = decltype(kVZ200Manifest)::component_tuple;
     ComponentTuple components_;
 
@@ -122,7 +122,7 @@ struct VZBoard : Board<BSpec, NoChips> {
     PortCompositeVideo& video_port    = std::get<7>(components_);
 
     template<size_t N>
-    VZBoard(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
+    VZBoard(const ChipManifest<N>& m) : Board<BSpec>(m) {}
 };
 
 

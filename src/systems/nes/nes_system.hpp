@@ -80,7 +80,7 @@ inline constexpr auto kNESManifest = make_manifest(
 inline constexpr size_t kNESChipCount = decltype(kNESManifest)::chip_count;
 using NESBusSpec = ManifestBusSpec<kNESManifest, 16, 8>;
 
-struct NESBoard : Board<NESBusSpec, NoChips> {
+struct NESBoard : Board<NESBusSpec> {
     using ComponentTuple = decltype(kNESManifest)::component_tuple;
     ComponentTuple components_;
 

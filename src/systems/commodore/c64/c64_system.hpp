@@ -24,24 +24,55 @@
 
 class LightpenDevice;
 
-// All C64 chips as value-typed fields, generated from C64_FOR_EACH_SYSTEM_CHIP.
+// C64Board — value-typed chip fields.
 // Buffer-backed chips (RAMChip, ROMChip) get their flat-memory buffer via
 // Board::bind_chip() → on_bind_buffer().  MMIO chips (size==0) are bound
 // without a buffer.  All are value members — no heap allocation.
-struct C64Chipset {
-    C64_FOR_EACH_SYSTEM_CHIP(C64_CHIP_VISITOR_DECLARE_FIELD, unused)
+struct C64Board : Board<C64BusSpec> {
+    MOS6510      cpu;
+    RAMChip      ram;
+    ROMChip      roml;
+    ROMChip      basic;
+    ROMChip      romh;
+    vicii_base_t vicii;
+    ROMChip      charrom;
+    mos6581_t    sid;
+    MOS2114      colorram;
+    mos6526_t    cia1;
+    mos6526_t    cia2;
+    ROMChip      kernal;
 
-    // cpu_type alias required by Board::bind_chipset()
-    using cpu_type = MOS6510;
+    C64Board(const ChipManifest<kC64ChipCount>& m) : Board<C64BusSpec>(m) {}
 
-    template<typename BoardT> void bind_extras(BoardT& board) {
-        // Bind all chips except CPU (which Board::bind_chipset handles).
-        // Sequential counter matches manifest array order.
-        size_t slot_idx_ = 0;
-        C64_FOR_EACH_SYSTEM_CHIP(C64_CHIP_VISITOR_BIND_SEQUENTIAL, board)
+    void bind_all_chips() {
+        size_t i = 0;
+        bind_chip(i++, &cpu);
+        bind_chip(i++, &ram);
+        bind_chip(i++, &roml);
+        bind_chip(i++, &basic);
+        bind_chip(i++, &romh);
+        bind_chip(i++, &vicii);
+        bind_chip(i++, &charrom);
+        bind_chip(i++, &sid);
+        bind_chip(i++, &colorram);
+        bind_chip(i++, &cia1);
+        bind_chip(i++, &cia2);
+        bind_chip(i++, &kernal);
     }
-    template<typename BoardT> void register_extras(BoardT& board) {
-        C64_FOR_EACH_SYSTEM_CHIP(C64_CHIP_VISITOR_REGISTER_COMPONENT, board)
+
+    void register_all_chips() {
+        register_component(&cpu);
+        register_component(&ram);
+        register_component(&roml);
+        register_component(&basic);
+        register_component(&romh);
+        register_component(&vicii);
+        register_component(&charrom);
+        register_component(&sid);
+        register_component(&colorram);
+        register_component(&cia1);
+        register_component(&cia2);
+        register_component(&kernal);
     }
 };
 
@@ -108,11 +139,21 @@ public:
     //
 
     // =========================================================================
-    // CHIP INSTANCES — convenience pointers into board_.chips() value fields.
-    // Generated from C64_FOR_EACH_SYSTEM_CHIP; non-manifest chips are manual.
+    // CHIP INSTANCES — convenience pointers into board_ value fields.
     // =========================================================================
 public:
-    C64_FOR_EACH_SYSTEM_CHIP(C64_CHIP_VISITOR_DECLARE_POINTER, unused)
+    MOS6510*      cpu      = nullptr;
+    RAMChip*      ram      = nullptr;
+    ROMChip*      roml     = nullptr;
+    ROMChip*      basic    = nullptr;
+    ROMChip*      romh     = nullptr;
+    vicii_base_t* vicii    = nullptr;
+    ROMChip*      charrom  = nullptr;
+    mos6581_t*    sid      = nullptr;
+    MOS2114*      colorram = nullptr;
+    mos6526_t*    cia1     = nullptr;
+    mos6526_t*    cia2     = nullptr;
+    ROMChip*      kernal   = nullptr;
     commodore_keyboard_t* keyboard = nullptr; // Keyboard matrix (connected to CIA1)
     void* io1 = nullptr;               // Cartridge I/O 1 ($DE00-$DEFF)
     void* io2 = nullptr;               // Cartridge I/O 2 ($DF00-$DFFF)
@@ -141,7 +182,7 @@ public:
     // MANIFEST-DRIVEN BUS
     // =========================================================================
     C64Bus   bus_;                       // MemoryBus<C64BusSpec> — page-table dispatch
-    Board<C64BusSpec, C64Chipset> board_{kC64Chips}; // Board — owns flat mem, chip binding
+    C64Board board_{kC64Chips};          // Board — owns flat mem, chip binding
 
     // PLA banking — 32 modes × 2 viewers (CPU + VIC-II)
     std::array<C64Snapshot, kC64NumPlaModes> cpu_snapshots_;    // Viewer 0

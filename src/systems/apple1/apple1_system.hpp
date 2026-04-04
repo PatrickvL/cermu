@@ -66,7 +66,7 @@ using Apple1BusSpec = ManifestBusSpec<kApple1Manifest, 16, 8, 1, true>;
 // Chips and ports live as value members in a std::tuple; reference aliases
 // preserve board_.field syntax for chip access and provide typed port access.
 
-struct Apple1Board : Board<Apple1BusSpec, NoChips> {
+struct Apple1Board : Board<Apple1BusSpec> {
     using ComponentTuple = decltype(kApple1Manifest)::component_tuple;
     ComponentTuple components_;
 

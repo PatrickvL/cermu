@@ -81,7 +81,7 @@ struct BombJackSoundBusTraits {
 };
 
 // ── Main Board ────────────────────────────────────────────────────────────
-struct BombJackMainBoard : Board<BombJackMainBusTraits::Spec, NoChips> {
+struct BombJackMainBoard : Board<BombJackMainBusTraits::Spec> {
     using ComponentTuple = decltype(kBombJackMainManifest)::component_tuple;
     ComponentTuple components_;
 
@@ -94,11 +94,11 @@ struct BombJackMainBoard : Board<BombJackMainBusTraits::Spec, NoChips> {
     RAMChip&   palette  = std::get<6>(components_);
 
     template<size_t N>
-    BombJackMainBoard(const ChipManifest<N>& m) : Board<BombJackMainBusTraits::Spec, NoChips>(m) {}
+    BombJackMainBoard(const ChipManifest<N>& m) : Board<BombJackMainBusTraits::Spec>(m) {}
 };
 
 // ── Sound Board ───────────────────────────────────────────────────────────
-struct BombJackSoundBoard : Board<BombJackSoundBusTraits::Spec, NoChips> {
+struct BombJackSoundBoard : Board<BombJackSoundBusTraits::Spec> {
     using ComponentTuple = decltype(kBombJackSoundManifest)::component_tuple;
     ComponentTuple components_;
 
@@ -107,7 +107,7 @@ struct BombJackSoundBoard : Board<BombJackSoundBusTraits::Spec, NoChips> {
     RAMChip&   ram = std::get<2>(components_);
 
     template<size_t N>
-    BombJackSoundBoard(const ChipManifest<N>& m) : Board<BombJackSoundBusTraits::Spec, NoChips>(m) {}
+    BombJackSoundBoard(const ChipManifest<N>& m) : Board<BombJackSoundBusTraits::Spec>(m) {}
 };
 
 class BombJackSystem : public System {

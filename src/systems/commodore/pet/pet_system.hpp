@@ -94,7 +94,7 @@ struct PETBusTraits {
     using Spec = ManifestBusSpec<kPETManifest, 16, 8, 1, true>;
 };
 
-struct PETBoard : Board<PETBusTraits::Spec, NoChips> {
+struct PETBoard : Board<PETBusTraits::Spec> {
     using ComponentTuple = decltype(kPETManifest)::component_tuple;
     ComponentTuple components_;
 

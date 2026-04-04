@@ -125,7 +125,7 @@ template<> struct OricBusTraits<OricVariant::ORIC_ATMOS> {
 };
 
 template<typename BSpec>
-struct OricBoard : Board<BSpec, NoChips> {
+struct OricBoard : Board<BSpec> {
     using ComponentTuple = decltype(kOric1Manifest)::component_tuple;
     ComponentTuple components_;
 
@@ -143,7 +143,7 @@ struct OricBoard : Board<BSpec, NoChips> {
     PortAudioMono&      audio_port     = std::get<8>(components_);
 
     template<size_t N>
-    OricBoard(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
+    OricBoard(const ChipManifest<N>& m) : Board<BSpec>(m) {}
 };
 // ============================================================================
 // Oric System

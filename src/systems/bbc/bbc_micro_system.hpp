@@ -56,7 +56,7 @@ inline constexpr size_t kBBCMicroChipCount = decltype(kBBCMicroManifest)::chip_c
 
 using BBCMicroBusSpec = ManifestBusSpec<kBBCMicroManifest, 16, 8, 1, true>;
 
-struct BBCMicroBoard : Board<BBCMicroBusSpec, NoChips> {
+struct BBCMicroBoard : Board<BBCMicroBusSpec> {
     using ComponentTuple = decltype(kBBCMicroManifest)::component_tuple;
     ComponentTuple components_;
 

@@ -55,7 +55,7 @@ inline constexpr size_t kSMSChipCount = decltype(kSMSManifest)::chip_count;
 
 using SMSBusSpec  = ManifestBusSpec<kSMSManifest, 16, 8>;
 
-struct SMSBoard : Board<SMSBusSpec, NoChips> {
+struct SMSBoard : Board<SMSBusSpec> {
     using ComponentTuple = decltype(kSMSManifest)::component_tuple;
     ComponentTuple components_;
 

@@ -279,24 +279,14 @@ protected:
             registered_chips_.push_back(std::move(sc));
         }
         // Auto-register palette from the board's primary video chip
-        auto_register_video_palette_(board, 0);
+        auto_register_video_palette_(board);
     }
 
 private:
-    // SFINAE overload: board has a get_video() accessor with a non-null palette
+    // Scan all bound slots for a VideoChipBase with a palette and register
+    // the first match as the primary video chip (for palette UI, etc.).
     template<typename B>
-    auto auto_register_video_palette_(B& board, int)
-        -> decltype(board.get_video().system_palette(), void()) {
-        if (auto* p = board.get_video().system_palette()) {
-            palette_.set(p, board.get_video().palette_size());
-            primary_video_chip_ = &board.get_video();
-        }
-    }
-    // Fallback: board has no typed video() — scan all bound slots for a
-    // VideoChipBase with a palette (covers C64, VIC-20, C16 where the
-    // video chip is a value-typed chipset member or factory-created).
-    template<typename B>
-    void auto_register_video_palette_(B& board, long) {
+    void auto_register_video_palette_(B& board) {
         for (size_t i = 0; i < board.slot_count(); ++i) {
             if (auto* vc = dynamic_cast<VideoChipBase*>(board.bound_chip(i))) {
                 if (auto* p = vc->system_palette()) {

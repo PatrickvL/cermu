@@ -128,7 +128,7 @@ struct C264BusTraits {
     using Spec = ManifestBusSpec<kC264Manifest, 16, 8, 2, true>;  // 2 viewers: CPU + TED video, CS-enabled
 };
 
-struct C264Board : Board<C264BusTraits::Spec, NoChips> {
+struct C264Board : Board<C264BusTraits::Spec> {
     using ComponentTuple = decltype(kC264Manifest)::component_tuple;
     ComponentTuple components_;
 

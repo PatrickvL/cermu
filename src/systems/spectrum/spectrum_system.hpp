@@ -146,7 +146,7 @@ template<> struct SpectrumBusTraits<SpectrumVariant::ZX128K> {
 };
 
 template<typename BSpec>
-struct SpectrumBoard : Board<BSpec, NoChips> {
+struct SpectrumBoard : Board<BSpec> {
     using ComponentTuple = decltype(kSpectrum48KManifest)::component_tuple;
     ComponentTuple components_;
 
@@ -164,7 +164,7 @@ struct SpectrumBoard : Board<BSpec, NoChips> {
     PortAudioMono&      audio_port     = std::get<8>(components_);
 
     template<size_t N>
-    SpectrumBoard(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
+    SpectrumBoard(const ChipManifest<N>& m) : Board<BSpec>(m) {}
 };
 // ============================================================================
 // ZX Spectrum System

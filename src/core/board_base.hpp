@@ -136,12 +136,11 @@ public:
     void clear_ports();
 
     /// Register a component in the board's component index (non-owning).
-    /// Public so that Chips::register_extras() can add extra value-typed
-    /// chips from outside the class hierarchy.
+    /// Public so that derived board structs can register their value-typed
+    /// chips alongside factory-created ones.
     void register_component(ComponentBase* c) {
         if (!c) return;
-        // Avoid duplicate entries (can happen when visitor macros
-        // register chips that bind_chipset() already registered).
+        // Avoid duplicate entries.
         for (auto* existing : components_)
             if (existing == c) return;
         components_.push_back(c);

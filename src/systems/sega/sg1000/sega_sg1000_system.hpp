@@ -79,7 +79,7 @@ inline constexpr auto kSG1000Manifest = make_manifest(
 inline constexpr size_t kSG1000ChipCount = decltype(kSG1000Manifest)::chip_count;
 using SG1000BusSpec = ManifestBusSpec<kSG1000Manifest, 16, 8>;
 
-struct SG1000Board : Board<SG1000BusSpec, NoChips> {
+struct SG1000Board : Board<SG1000BusSpec> {
     using ComponentTuple = decltype(kSG1000Manifest)::component_tuple;
     ComponentTuple components_;
 

@@ -124,7 +124,7 @@ template<> struct Z1013BusTraits<Z1013Variant::Z1013_64> {
 // Uses the 64K manifest component tuple (superset) — 16K variants
 // simply leave the basic_lo/basic_hi fields unused.
 template<typename BSpec>
-struct Z1013Board : Board<BSpec, NoChips> {
+struct Z1013Board : Board<BSpec> {
     using ComponentTuple = decltype(kZ1013_64K_Manifest)::component_tuple;
     ComponentTuple components_;
 
@@ -142,7 +142,7 @@ struct Z1013Board : Board<BSpec, NoChips> {
     PortCompositeVideo& video_port    = std::get<8>(components_);
 
     template<size_t N>
-    Z1013Board(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
+    Z1013Board(const ChipManifest<N>& m) : Board<BSpec>(m) {}
 };
 
 // ── System ───────────────────────────────────────────────────────────────

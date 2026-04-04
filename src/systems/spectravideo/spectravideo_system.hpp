@@ -109,7 +109,7 @@ template<> struct SVIBusTraits<SVIVariant::SVI328> {
 };
 
 template<typename BSpec>
-struct SVIBoard : Board<BSpec, NoChips> {
+struct SVIBoard : Board<BSpec> {
     using ComponentTuple = decltype(kSVI318Manifest)::component_tuple;
     ComponentTuple components_;
 
@@ -130,7 +130,7 @@ struct SVIBoard : Board<BSpec, NoChips> {
     PortAudioMono&      audio_port     = std::get<11>(components_);
 
     template<size_t N>
-    SVIBoard(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
+    SVIBoard(const ChipManifest<N>& m) : Board<BSpec>(m) {}
 };
 // ============================================================================
 // Spectravideo System

@@ -179,7 +179,7 @@ template<> struct KC85BusTraits<KC85Variant::KC85_4> {
 // Uses KC85/4 manifest component tuple (superset) for field declarations.
 // KC85/2 and /3 leave unused fields (basic_rom, caos_c_rom) unbound.
 template<typename BSpec>
-struct KC85Board : Board<BSpec, NoChips> {
+struct KC85Board : Board<BSpec> {
     using ComponentTuple = decltype(kKC854Manifest)::component_tuple;
     ComponentTuple components_;
 
@@ -201,7 +201,7 @@ struct KC85Board : Board<BSpec, NoChips> {
     PortCompositeVideo& video_port     = std::get<12>(components_);
 
     template<size_t N>
-    KC85Board(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
+    KC85Board(const ChipManifest<N>& m) : Board<BSpec>(m) {}
 };
 
 // ── Keyboard emulation modes ─────────────────────────────────────────────────

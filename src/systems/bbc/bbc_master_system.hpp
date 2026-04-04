@@ -168,7 +168,7 @@ template<> struct BBCMasterBusTraits<BBCMasterVariant::MASTER_128> {
 };
 
 template<typename BSpec>
-struct BBCMasterBoard : Board<BSpec, NoChips> {
+struct BBCMasterBoard : Board<BSpec> {
     using ComponentTuple = decltype(kBBCBPlusManifest)::component_tuple;
     ComponentTuple components_;
 
@@ -191,7 +191,7 @@ struct BBCMasterBoard : Board<BSpec, NoChips> {
     PortAudioMono&      audio_port     = std::get<13>(components_);
 
     template<size_t N>
-    BBCMasterBoard(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
+    BBCMasterBoard(const ChipManifest<N>& m) : Board<BSpec>(m) {}
 };
 // ============================================================================
 // BBC B+ / Master System
