@@ -81,5 +81,4 @@ struct ChipMarkings {
 
 // Enum-to-string conversion functions
 const std::string get_package_type_string(PackageType package_type);
-bool get_package_name_shows_pin_count(PackageType package_type);
 
