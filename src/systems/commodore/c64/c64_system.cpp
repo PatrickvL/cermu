@@ -47,6 +47,9 @@
 #include <algorithm>
 #include "systems/commodore/c64/c64_constants.hpp"
 
+// Forward declarations
+KeyboardMapper* create_c64_keyboard_mapper(commodore_keyboard_t* keyboard);
+
 // Bitmasks for cartridge control lines stored in system_lines_
 static constexpr uint8_t SYS_MASK_EXROM = 0x01;
 static constexpr uint8_t SYS_MASK_GAME  = 0x02;
@@ -1891,6 +1894,35 @@ void C64System::memory_init() {
     if (this->romh && this->romh->data()) {
         memset(this->romh->data(), 0xFF, c64_constants::BASIC_ROM_SIZE);
     }
+}
+
+// ============================================================================
+// Keyboard mapper factory
+// ============================================================================
+
+KeyboardMapper* create_c64_keyboard_mapper(commodore_keyboard_t* keyboard) {
+    KeyboardMapper* mapper = new KeyboardMapper();
+    mapper->set_guest_keyboard(keyboard);
+    mapper->build_character_map_from_matrix(&c64_keyboard_config);
+
+    // Register default emulator modifier mappings
+    mapper->register_default_synthetic_mappings();
+
+    // Commodore-specific character mappings (£, ↑, ←, π) are now handled
+    // automatically by the PETSCII decode tables + petscii_to_host_char().
+    // No manual add_char_mapping calls needed.
+
+    // Register emu-specific key candidates for this system.
+    // RESTORE: prefer SysRq (thematic NMI match), fall back to Grave.
+    // POUND: prefer ISO # key (produces £ on UK keyboards).
+    auto& sdl_map = EmuKeySDLMap::instance();
+    sdl_map.clear_system_mappings();
+    sdl_map.register_candidates(EMUKEY_CBM_RESTORE, {SDL_SCANCODE_SYSREQ, SDL_SCANCODE_GRAVE});
+    sdl_map.register_candidates(EMUKEY_CBM_POUND,   {SDL_SCANCODE_NONUSHASH});
+    // Both host ALTs → CBM key (more accessible than Super/LGUI on Linux)
+    sdl_map.register_candidates(EMUKEY_CBM_COMMODORE, {SDL_SCANCODE_LALT, SDL_SCANCODE_RALT}, true);
+
+    return mapper;
 }
 
 // Register C64 system with the registry
