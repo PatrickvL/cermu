@@ -188,6 +188,7 @@ public:
     void set_audio_sample_rate(int sample_rate_hz) override;
 
     void* get_video_port_ptr() override { return video_port_.get(); }
+    int get_primary_video_port_index() const override { return PORT_VIDEO_40; }
     int get_active_video_port_index() const override;
     int get_video_port_count() const override { return 2; }
 

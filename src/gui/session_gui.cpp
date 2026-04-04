@@ -1234,7 +1234,45 @@ void SessionGUI::render_screen() {
         ImGuiWindowFlags_NoMouseInputs;
     
     ImGui::Begin("##Screen", nullptr, flags);
-    
+
+    // ================================================================
+    // Multi-display port switching — determine if the currently active
+    // video output matches the port our display pipeline is connected to.
+    // When they differ (e.g. C128 switched to 80-col VDC but pipeline
+    // is wired to 40-col VIC-IIe), we suppress rendering and show a
+    // "No Signal" overlay.  Pipeline frames are still drained to prevent
+    // emu-thread stalls.
+    //
+    // Also suppress when no display device (monitor/CRT) is attached to
+    // the viewed port — a disconnected monitor can't show anything.
+    // ================================================================
+    bool display_suppressed = false;
+    if (system_) {
+        int desired = -1;
+        if (connected_port_index_ >= 0) {
+            desired = (display_source_override_ >= 0)
+                        ? display_source_override_
+                        : system_->get_active_video_port_index();
+            if (desired >= 0 && desired != connected_port_index_) {
+                display_suppressed = true;
+            }
+        }
+
+        // Check whether the viewed port has a display device attached.
+        // For multi-output systems, check the specific desired port.
+        // For single-output systems, fall back to the global display_device_.
+        if (!display_suppressed) {
+            int viewed_port = (desired >= 0) ? desired : connected_port_index_;
+            if (viewed_port >= 0) {
+                Port* p = system_->get_port(viewed_port);
+                if (p && !p->get_attached_device())
+                    display_suppressed = true;
+            } else if (!display_device_) {
+                display_suppressed = true;
+            }
+        }
+    }
+
     // Read the latest framebuffer snapshot produced by the emulation thread.
     // Only re-upload the texture when a new frame is available; otherwise
     // the GPU keeps displaying the previously uploaded texture.
@@ -1310,6 +1348,22 @@ void SessionGUI::render_screen() {
             (float)fb_width_, (float)fb_height_,
             is_pal, use_pixel_aspect,
             &display_w, &display_h, &pos_x, &pos_y);
+    }
+
+    // ================================================================
+    // Display suppressed — active port differs from connected port.
+    // Show a centered "No Signal" message instead of the framebuffer.
+    // The pipeline frames were already drained above to prevent stalls.
+    // ================================================================
+    if (display_suppressed) {
+        const char* label = "No Signal";
+        ImVec2 text_size = ImGui::CalcTextSize(label);
+        ImVec2 center(viewport->Size.x * 0.5f - text_size.x * 0.5f,
+                      viewport->Size.y * 0.5f - text_size.y * 0.5f);
+        ImGui::SetCursorPos(center);
+        ImGui::TextDisabled("%s", label);
+        ImGui::End();
+        return;
     }
 
     if (use_vector) {
@@ -1964,6 +2018,11 @@ void SessionGUI::allocate_framebuffer() {
     // Cache the system's signal type for emu thread dispatch
     active_signal_type_ = system_->get_video_signal_type();
 
+    // Cache which port the display pipeline is connected to.
+    // For multi-display systems (C128: VIC-IIe + VDC), this identifies
+    // the port that actually produces pixels into our framebuffer.
+    connected_port_index_ = system_->get_primary_video_port_index();
+
     // Look up the active display device from ports and owned peripherals.
     // Port-attached displays take priority over passive owned devices.
     display_device_ = nullptr;
@@ -2187,6 +2246,7 @@ void SessionGUI::teardown_current_system() {
     
     // Reset display source override (auto-follow for new system)
     display_source_override_ = -1;
+    connected_port_index_ = -1;
 
     // Reset emulation state
     emulation_running_.store(false);

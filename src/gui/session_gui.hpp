@@ -76,6 +76,11 @@ private:
     /// -1 = auto-follow (use system's get_active_video_port_index()),
     /// ≥0 = manually locked to a specific port index.
     int  display_source_override_ = -1;
+
+    /// Port index that the display pipeline is physically connected to.
+    /// Set during allocate_framebuffer() from get_primary_video_port_index().
+    /// -1 means "not applicable" (single-port system — no switching logic).
+    int  connected_port_index_ = -1;
     
 public:
     /**

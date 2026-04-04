@@ -400,8 +400,8 @@ bool CommodoreSystem::attach_media(const char* filepath) {
 // Unmapped input — virtual key menu for keys without host mapping
 // ============================================================================
 
-void CommodoreSystem::register_unmapped_input(const char* label, emu_key_t key, bool toggle) {
-    unmapped_inputs_.emplace_back(label, key, toggle);
+void CommodoreSystem::register_unmapped_input(const char* label, emu_key_t key, bool toggle, bool initial_state) {
+    unmapped_inputs_.emplace_back(label, key, toggle, initial_state);
 }
 
 void CommodoreSystem::render_unmapped_inputs_menu() {
