@@ -151,6 +151,32 @@ bool commodore_keyboard_t::find_key(emu_key_t key, uint8_t* out_row, uint8_t* ou
 }
 
 // ============================================================================
+// Auto-shift helpers
+// ============================================================================
+
+emu_key_t commodore_keyboard_t::resolve_fkey_physical(emu_key_t key) const {
+    // Even F-keys → physical odd F-key that needs SHIFT.
+    // Mapping varies by system: C64/VIC-20/C128 have F1/F3/F5/F7 in matrix;
+    // C16/Plus4 has F1/F2/F3/F7 (HELP).
+    switch (key) {
+        case EMUKEY_F2:
+            return EMUKEY_F1;  // Same on all systems
+        case EMUKEY_F4:
+            return (model == KEYBOARD_MODEL_PLUS4_C16) ? EMUKEY_F1 : EMUKEY_F3;
+        case EMUKEY_F5:
+            // C16/Plus4: F5 = SHIFT + F2 (F2 is in its matrix).
+            // Others: F5 is a physical key — no auto-shift needed.
+            return (model == KEYBOARD_MODEL_PLUS4_C16) ? EMUKEY_F2 : EMUKEY_NONE;
+        case EMUKEY_F6:
+            return (model == KEYBOARD_MODEL_PLUS4_C16) ? EMUKEY_F3 : EMUKEY_F5;
+        case EMUKEY_F8:
+            return EMUKEY_F7;  // Same on all systems
+        default:
+            return EMUKEY_NONE;
+    }
+}
+
+// ============================================================================
 // Key down / up — EmuKey based
 // ============================================================================
 
@@ -163,9 +189,7 @@ void commodore_keyboard_t::key_down(emu_key_t key, bool shifted) {
 
     // Handle cursor LEFT: on C64/VIC-20 this is SHIFT + CRSR→ (no dedicated key).
     // Plus/4 and C128 have real CRSR← keys in the matrix.
-    if (key == EMUKEY_LEFT &&
-        model != KEYBOARD_MODEL_PLUS4_C16 &&
-        model != KEYBOARD_MODEL_C128) {
+    if (key == EMUKEY_LEFT && needs_cursor_auto_shift()) {
         auto_shift_left_active = true;
         key_down(EMUKEY_LSHIFT, false);
         key_down(EMUKEY_RIGHT, false);
@@ -173,9 +197,7 @@ void commodore_keyboard_t::key_down(emu_key_t key, bool shifted) {
     }
 
     // Handle cursor UP: on C64/VIC-20 this is SHIFT + CRSR↓ (no dedicated key).
-    if (key == EMUKEY_UP &&
-        model != KEYBOARD_MODEL_PLUS4_C16 &&
-        model != KEYBOARD_MODEL_C128) {
+    if (key == EMUKEY_UP && needs_cursor_auto_shift()) {
         auto_shift_up_active = true;
         key_down(EMUKEY_LSHIFT, false);
         key_down(EMUKEY_DOWN, false);
@@ -183,30 +205,8 @@ void commodore_keyboard_t::key_down(emu_key_t key, bool shifted) {
     }
 
     // Even F-keys → SHIFT + physical odd F-key.
-    // The mapping varies by system: C64/VIC-20/C128 have F1/F3/F5/F7 in matrix;
-    // C16/Plus4 has F1/F2/F3/F7 (HELP).
     {
-        emu_key_t physical = EMUKEY_NONE;
-        switch (key) {
-            case EMUKEY_F2:
-                physical = (model == KEYBOARD_MODEL_PLUS4_C16) ? EMUKEY_F1 : EMUKEY_F1;
-                break;
-            case EMUKEY_F4:
-                physical = (model == KEYBOARD_MODEL_PLUS4_C16) ? EMUKEY_F1 : EMUKEY_F3;
-                break;
-            case EMUKEY_F5:
-                // C16/Plus4: F5 = SHIFT + F2 (F2 is in its matrix).
-                // Others: F5 is a physical key — no auto-shift needed.
-                if (model == KEYBOARD_MODEL_PLUS4_C16) physical = EMUKEY_F2;
-                break;
-            case EMUKEY_F6:
-                physical = (model == KEYBOARD_MODEL_PLUS4_C16) ? EMUKEY_F3 : EMUKEY_F5;
-                break;
-            case EMUKEY_F8:
-                physical = EMUKEY_F7;  // Same on all systems
-                break;
-            default: break;
-        }
+        emu_key_t physical = resolve_fkey_physical(key);
         if (physical != EMUKEY_NONE) {
             auto_shift_fkey_count++;
             key_down(EMUKEY_LSHIFT, false);
@@ -238,9 +238,7 @@ void commodore_keyboard_t::key_up(emu_key_t key, bool shifted) {
     }
 
     // Handle cursor LEFT release
-    if (key == EMUKEY_LEFT &&
-        model != KEYBOARD_MODEL_PLUS4_C16 &&
-        model != KEYBOARD_MODEL_C128) {
+    if (key == EMUKEY_LEFT && needs_cursor_auto_shift()) {
         key_up(EMUKEY_RIGHT, false);
         if (auto_shift_left_active) {
             auto_shift_left_active = false;
@@ -252,9 +250,7 @@ void commodore_keyboard_t::key_up(emu_key_t key, bool shifted) {
     }
 
     // Handle cursor UP release
-    if (key == EMUKEY_UP &&
-        model != KEYBOARD_MODEL_PLUS4_C16 &&
-        model != KEYBOARD_MODEL_C128) {
+    if (key == EMUKEY_UP && needs_cursor_auto_shift()) {
         key_up(EMUKEY_DOWN, false);
         if (auto_shift_up_active) {
             auto_shift_up_active = false;
@@ -265,27 +261,9 @@ void commodore_keyboard_t::key_up(emu_key_t key, bool shifted) {
         return;
     }
 
-    // Even F-key release — mirror the key_down mapping
+    // Even F-key release — uses same mapping as key_down
     {
-        emu_key_t physical = EMUKEY_NONE;
-        switch (key) {
-            case EMUKEY_F2:
-                physical = (model == KEYBOARD_MODEL_PLUS4_C16) ? EMUKEY_F1 : EMUKEY_F1;
-                break;
-            case EMUKEY_F4:
-                physical = (model == KEYBOARD_MODEL_PLUS4_C16) ? EMUKEY_F1 : EMUKEY_F3;
-                break;
-            case EMUKEY_F5:
-                if (model == KEYBOARD_MODEL_PLUS4_C16) physical = EMUKEY_F2;
-                break;
-            case EMUKEY_F6:
-                physical = (model == KEYBOARD_MODEL_PLUS4_C16) ? EMUKEY_F3 : EMUKEY_F5;
-                break;
-            case EMUKEY_F8:
-                physical = EMUKEY_F7;
-                break;
-            default: break;
-        }
+        emu_key_t physical = resolve_fkey_physical(key);
         if (physical != EMUKEY_NONE) {
             key_up(physical, false);
             if (auto_shift_fkey_count > 0) {

@@ -305,6 +305,12 @@ struct commodore_keyboard_t {
     bool any_auto_shift_active() const {
         return auto_shift_left_active || auto_shift_up_active || auto_shift_fkey_count > 0;
     }
+    // True when cursor LEFT/UP need auto-shift (C64/VIC-20 only — no dedicated keys)
+    bool needs_cursor_auto_shift() const {
+        return model != KEYBOARD_MODEL_PLUS4_C16 && model != KEYBOARD_MODEL_C128;
+    }
+    // Map an even F-key to its physical odd F-key, or EMUKEY_NONE if no auto-shift needed
+    emu_key_t resolve_fkey_physical(emu_key_t key) const;
 
     // Keyboard scanning and I/O chip integration
     void update_matrix();
