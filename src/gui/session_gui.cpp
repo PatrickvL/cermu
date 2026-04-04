@@ -1729,6 +1729,11 @@ void SessionGUI::render_display_settings() {
         if (current_filtered >= 0 && current_filtered < filtered_count && system_) {
             int sel = filtered_indices[current_filtered];
 
+            // Save current device's settings before switching
+            if (display_device_ && display_device_->get_id()) {
+                device_settings_cache_[display_device_->get_id()] = display_characteristics_;
+            }
+
             // Find the port that has the current display attached (if any)
             int display_port_idx = -1;
             const auto& ports = system_->get_ports();
@@ -1798,9 +1803,7 @@ void SessionGUI::render_display_settings() {
         }
     }
 
-    ImGui::Text("Adjustments:");
-
-    // Reset buttons above sliders
+    // Reset buttons
     if (ImGui::Button("Reset Zoom/Pan")) {
         display_zoom_ = 1.0f;
         display_pan_x_ = 0.0f;
@@ -1813,23 +1816,119 @@ void SessionGUI::render_display_settings() {
             GenericCRT fresh(crt->get_preset());
             crt->mutable_characteristics() = fresh.get_display_characteristics();
             dc = crt->get_display_characteristics();
+            // Clear cached settings so fresh defaults stick
+            device_settings_cache_.erase(crt->get_id());
         }
     }
 
     bool changed = false;
+
+    // --- View controls ---
     changed |= ImGui::SliderFloat("Zoom##disp", &display_zoom_, 0.25f, 4.0f, "%.2fx");
     changed |= ImGui::SliderFloat("Pan X##disp", &display_pan_x_, -1.0f, 1.0f, "%.2f");
     changed |= ImGui::SliderFloat("Pan Y##disp", &display_pan_y_, -1.0f, 1.0f, "%.2f");
-    changed |= ImGui::SliderFloat("Brightness", &dc.brightness, 0.5f, 2.0f, "%.2f");
-    changed |= ImGui::SliderFloat("Contrast",   &dc.contrast,   0.5f, 2.0f, "%.2f");
-    changed |= ImGui::SliderFloat("Gamma",       &dc.gamma,      1.0f, 3.0f, "%.2f");
-    changed |= ImGui::SliderFloat("Color Temp (K)", &dc.color_temp, 3000.0f, 12000.0f, "%.0f");
 
-    // CRT-only sliders — only shown for CRT display types
-    if (is_crt) {
-        changed |= ImGui::SliderFloat("Curvature",   &dc.optics.curvature,  0.0f, 1.0f, "%.2f");
-        changed |= ImGui::SliderFloat("Scanline Gap", &dc.scanlines.gap, 0.0f, 1.0f, "%.2f");
+    ImGui::Separator();
+
+    // --- Display (top-level scalars) ---
+    if (ImGui::TreeNodeEx("Display", ImGuiTreeNodeFlags_DefaultOpen)) {
+        changed |= ImGui::SliderFloat("Brightness", &dc.brightness, 0.5f, 2.0f, "%.2f");
+        changed |= ImGui::SliderFloat("Contrast",   &dc.contrast,   0.5f, 2.0f, "%.2f");
+        changed |= ImGui::SliderFloat("Gamma",      &dc.gamma,      1.0f, 3.0f, "%.2f");
+        changed |= ImGui::SliderFloat("Color Temp (K)", &dc.color_temp, 3000.0f, 12000.0f, "%.0f");
         changed |= ImGui::SliderFloat("Dot Pitch (mm)", &dc.dot_pitch, 0.1f, 1.0f, "%.2f");
+        ImGui::TreePop();
+    }
+
+    // CRT-only groups
+    if (is_crt) {
+        // --- Phosphor ---
+        if (ImGui::TreeNode("Phosphor")) {
+            const char* phosphor_names[] = {
+                "P1 (Green)", "P4 (White)", "P7 (Blue/Yellow)", "P22 (Tricolor)",
+                "P31 (Green)", "P39 (Green LP)", "P43 (Green Mil)", "Custom"
+            };
+            int ptype = static_cast<int>(dc.phosphor.type);
+            if (ImGui::Combo("Type##phos", &ptype, phosphor_names, IM_ARRAYSIZE(phosphor_names))) {
+                dc.phosphor.type = static_cast<PhosphorType>(ptype);
+                // Auto-set glow color from phosphor type
+                phosphor_tint_rgb(dc.phosphor.type,
+                    dc.phosphor.glow_color[0],
+                    dc.phosphor.glow_color[1],
+                    dc.phosphor.glow_color[2]);
+                changed = true;
+            }
+            changed |= ImGui::ColorEdit3("Glow Color", dc.phosphor.glow_color);
+            changed |= ImGui::SliderFloat("Persistence (ms)", &dc.phosphor.persistence, 0.1f, 20.0f, "%.1f");
+            changed |= ImGui::SliderFloat("Bloom Radius", &dc.phosphor.bloom_radius, 0.0f, 5.0f, "%.2f");
+            changed |= ImGui::SliderFloat("Bloom Threshold", &dc.phosphor.bloom_threshold, 0.0f, 1.0f, "%.2f");
+            const char* decay_names[] = { "Exponential", "Linear" };
+            int dcurve = static_cast<int>(dc.phosphor.decay_curve);
+            if (ImGui::Combo("Decay Curve", &dcurve, decay_names, IM_ARRAYSIZE(decay_names))) {
+                dc.phosphor.decay_curve = static_cast<PhosphorDecay>(dcurve);
+                changed = true;
+            }
+            ImGui::TreePop();
+        }
+
+        // --- Beam ---
+        if (ImGui::TreeNode("Beam")) {
+            changed |= ImGui::SliderFloat("Width",    &dc.beam.width,    0.1f, 2.0f, "%.2f");
+            changed |= ImGui::SliderFloat("Softness", &dc.beam.softness, 0.0f, 1.0f, "%.2f");
+            changed |= ImGui::SliderFloat("Pincushion", &dc.beam.pincushion, 0.0f, 0.2f, "%.3f");
+            changed |= ImGui::SliderFloat("H Linearity", &dc.beam.h_linearity, 0.9f, 1.0f, "%.3f");
+            changed |= ImGui::SliderFloat("V Linearity", &dc.beam.v_linearity, 0.9f, 1.0f, "%.3f");
+            changed |= ImGui::SliderFloat2("Convergence (edge, center)", dc.beam.convergence_error, 0.0f, 2.0f, "%.2f");
+            if (ImGui::TreeNode("Corner Pin")) {
+                changed |= ImGui::SliderFloat4("TL/TR/BL/BR", dc.beam.corner_pin, -0.05f, 0.05f, "%.3f");
+                ImGui::TreePop();
+            }
+            ImGui::TreePop();
+        }
+
+        // --- Mask ---
+        if (ImGui::TreeNode("Shadow Mask")) {
+            const char* mask_names[] = { "Shadow", "Aperture", "Slot Mask" };
+            int mpat = static_cast<int>(dc.mask.pattern);
+            if (ImGui::Combo("Pattern", &mpat, mask_names, IM_ARRAYSIZE(mask_names))) {
+                dc.mask.pattern = static_cast<MaskPattern>(mpat);
+                changed = true;
+            }
+            changed |= ImGui::SliderFloat("Opacity",    &dc.mask.opacity,         0.0f, 1.0f, "%.2f");
+            changed |= ImGui::SliderFloat("Triad Size", &dc.mask.triad_size,      0.5f, 3.0f, "%.2f");
+            changed |= ImGui::SliderFloat("Slot Width", &dc.mask.slot_mask_width,  0.0f, 1.0f, "%.2f");
+            ImGui::TreePop();
+        }
+
+        // --- Scanlines ---
+        if (ImGui::TreeNode("Scanlines")) {
+            changed |= ImGui::SliderFloat("Gap",      &dc.scanlines.gap,      0.0f, 1.0f, "%.2f");
+            changed |= ImGui::SliderFloat("Strength", &dc.scanlines.strength, 0.0f, 1.0f, "%.2f");
+            changed |= ImGui::SliderFloat("Phase",    &dc.scanlines.phase,    -1.0f, 1.0f, "%.2f");
+            changed |= ImGui::Checkbox("Interlace",   &dc.scanlines.interlace);
+            ImGui::TreePop();
+        }
+
+        // --- Optics ---
+        if (ImGui::TreeNode("Optics")) {
+            changed |= ImGui::SliderFloat("Curvature",    &dc.optics.curvature,           0.0f, 1.0f, "%.2f");
+            changed |= ImGui::SliderFloat("Vignette",     &dc.optics.vignette_strength,   0.0f, 1.0f, "%.2f");
+            changed |= ImGui::SliderFloat("Reflection",   &dc.optics.reflection_strength, 0.0f, 0.5f, "%.2f");
+            changed |= ImGui::SliderFloat("Edge Glow",    &dc.optics.edge_glow,           0.0f, 0.3f, "%.2f");
+            changed |= ImGui::ColorEdit3("Glass Tint",    dc.optics.glass_tint);
+            ImGui::TreePop();
+        }
+
+        // --- Signal ---
+        if (ImGui::TreeNode("Signal")) {
+            changed |= ImGui::SliderFloat("Bandwidth (MHz)",   &dc.signal.bandwidth,          1.0f, 10.0f, "%.1f");
+            changed |= ImGui::SliderFloat("Noise",             &dc.signal.noise_level,        0.0f, 0.2f,  "%.3f");
+            changed |= ImGui::SliderFloat("Hum Bar",           &dc.signal.hum_bar_strength,   0.0f, 0.2f,  "%.3f");
+            changed |= ImGui::SliderFloat("Ghosting",          &dc.signal.ghosting_strength,  0.0f, 0.3f,  "%.3f");
+            changed |= ImGui::SliderFloat("Chroma Phase (\xC2\xB0)", &dc.signal.chroma_phase_error, -10.0f, 10.0f, "%.1f");
+            changed |= ImGui::SliderFloat("Sync Stability",    &dc.signal.sync_stability,     0.5f, 1.0f,  "%.3f");
+            ImGui::TreePop();
+        }
     }
 
     if (changed) {
@@ -1885,11 +1984,27 @@ void SessionGUI::refresh_display_device() {
     const char* found_id = found ? found->get_id() : "";
     if (found_id == cached_display_id_) return;  // same device type — no change
 
+    // Save current device's adjusted settings before switching away
+    if (!cached_display_id_.empty()) {
+        device_settings_cache_[cached_display_id_] = display_characteristics_;
+    }
+
     cached_display_id_ = found_id;
     display_device_ = found;
-    display_characteristics_ = found
-        ? found->get_display_characteristics()
-        : DisplayCharacteristics{};
+
+    // Restore cached settings for the new device, or use factory defaults
+    auto it = device_settings_cache_.find(cached_display_id_);
+    if (it != device_settings_cache_.end()) {
+        display_characteristics_ = it->second;
+        // Push cached settings back to the device
+        auto* crt = dynamic_cast<GenericCRT*>(found);
+        if (crt) crt->mutable_characteristics() = display_characteristics_;
+    } else {
+        display_characteristics_ = found
+            ? found->get_display_characteristics()
+            : DisplayCharacteristics{};
+    }
+
     display_has_speakers_.store(
         found ? found->has_builtin_speakers() : false,
         std::memory_order_relaxed);

@@ -27,6 +27,7 @@ enum class VideoSignalType : uint8_t {
     YPbPr,              ///< Analog component (Y/Pb/Pr) — reserved, uses RGBVideoSample
     Digital,            ///< Generic digital (HDMI, DVI, etc.)
     Vector,             ///< Vector display (x/y beam deflection + intensity)
+    RF,                 ///< RF modulated composite (antenna / channel 3-4)
 };
 
 /// Audio signal encoding.
@@ -46,6 +47,7 @@ inline const char* signal_type_name(VideoSignalType t) {
         case VideoSignalType::YPbPr:             return "YPbPr";
         case VideoSignalType::Digital:           return "Digital";
         case VideoSignalType::Vector:            return "Vector";
+        case VideoSignalType::RF:                return "RF";
     }
     return "Unknown";
 }
