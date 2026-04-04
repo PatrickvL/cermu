@@ -6,13 +6,12 @@
  * Consumer code includes just this header to get the CSG 8502 variant.
  *
  * The 8502 is the Commodore 128 CPU — an NMOS 65xx with a 7-bit I/O
- * port (bits 0-6 active, bit 7 always reads 1), and support for
- * variable clock speed (1 MHz / 2 MHz switching via port bit 6).
+ * port (bits 0-6 active, bit 7 always reads 1).
  *
  * Physically the 8502 is pin-identical to the MOS 6510 (40-pin DIP).
- * Port bit 6 (clock speed select) is internal-only and does not appear
- * on an external pin — it directly controls the clock divider logic
- * inside the chip.
+ * Port bits 0-5 connect to external pins P0-P5.  Bit 6 connects to
+ * the CAPS LOCK key sense line on the C128 — active-low, directly
+ * wired to the physical CAPS LOCK key switch (no debounce circuitry).
  */
 
 #include "chip/cpu/fam65xx/fam65xx.hpp"
@@ -42,11 +41,13 @@ inline constexpr CPUTraits CSG8502Traits = {
 //   Bit 3: Cassette data output (directly drives tape write)
 //   Bit 4: Cassette motor control (active low, output)
 //   Bit 5: Cassette sense (active low, input — tape button pressed)
-//   Bit 6: Processor clock rate (0 = 1 MHz, 1 = 2 MHz) — INTERNAL ONLY
+//   Bit 6: CAPS LOCK key sense (active low, input — directly wired to key)
 //   Bit 7: Always reads 1 (absent from mask — no physical pin)
 //
 // Bits 0-5 have dedicated external pins (P0-P5), identical to the 6510.
-// Bit 6 has no external pin — it controls the internal clock divider.
+// Bit 6 connects to the CAPS LOCK key on the C128 motherboard.  The
+// KERNAL keyboard scan pre-code ($C55D) reads this bit to set the
+// initial shift-flag state (D3 bit 4) before scanning the matrix.
 
 using CSG8502 = fam65xx_t<CSG8502Traits>;
 
