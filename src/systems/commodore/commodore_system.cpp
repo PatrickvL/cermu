@@ -410,24 +410,32 @@ void CommodoreSystem::render_unmapped_inputs_menu() {
     if (!keyboard_) return;
 
     if (ImGui::BeginMenu("Virtual Keys")) {
+        // Momentary keys first (press-and-release on click)
         for (int i = 0; i < static_cast<int>(unmapped_inputs_.size()); i++) {
             auto& input = unmapped_inputs_[i];
-            if (input.toggle) {
-                // Toggle: stays pressed until clicked again
-                if (ImGui::MenuItem(input.label, nullptr, input.pressed)) {
-                    input.pressed = !input.pressed;
-                    if (input.pressed)
-                        keyboard_->key_down(input.key, false);
-                    else
-                        keyboard_->key_up(input.key, false);
-                }
-            } else {
-                // Momentary: press on click, release after a few frames
-                if (ImGui::MenuItem(input.label)) {
+            if (input.toggle) continue;
+            if (ImGui::MenuItem(input.label)) {
+                keyboard_->key_down(input.key, false);
+                unmapped_release_index_ = i;
+                unmapped_release_countdown_ = 3;  // Release after 3 frames
+            }
+        }
+        // Separator between momentary and toggle groups
+        bool has_toggles = false;
+        for (auto& input : unmapped_inputs_) {
+            if (input.toggle) { has_toggles = true; break; }
+        }
+        if (has_toggles) ImGui::Separator();
+        // Toggle keys (stay pressed until clicked again)
+        for (int i = 0; i < static_cast<int>(unmapped_inputs_.size()); i++) {
+            auto& input = unmapped_inputs_[i];
+            if (!input.toggle) continue;
+            if (ImGui::MenuItem(input.label, nullptr, input.pressed)) {
+                input.pressed = !input.pressed;
+                if (input.pressed)
                     keyboard_->key_down(input.key, false);
-                    unmapped_release_index_ = i;
-                    unmapped_release_countdown_ = 3;  // Release after 3 frames
-                }
+                else
+                    keyboard_->key_up(input.key, false);
             }
         }
         ImGui::EndMenu();

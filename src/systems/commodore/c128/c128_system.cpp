@@ -395,10 +395,10 @@ bool C128System::initialize() {
     keyboard_mapper_.reset(create_c128_keyboard_mapper(keyboard_));
 
     // Register virtual key menu items for C128 keys that have no common
-    // host keyboard equivalent.  Only keys that register_candidates()
-    // failed to map (no available scancode) appear in the menu.
+    // host keyboard equivalent (HELP, LINE FEED, 40/80 DISPLAY, NO SCROLL).
+    // Always registered: SDL may report rare scancodes as "available" even
+    // when no physical key produces them, leaving the menu empty.
     {
-        auto& sdl_map = EmuKeySDLMap::instance();
         struct { const char* label; emu_key_t key; bool toggle; } c128_extra_keys[] = {
             {"HELP",           EMUKEY_CBM_HELP,          false},
             {"LINE FEED",      EMUKEY_CBM_LINE_FEED,     false},
@@ -406,9 +406,7 @@ bool C128System::initialize() {
             {"NO SCROLL",      EMUKEY_CBM_NO_SCROLL,     true },
         };
         for (auto& k : c128_extra_keys) {
-            if (sdl_map.emu_key_to_scancode(k.key) == 0xFFFFFFFF) {
-                register_unmapped_input(k.label, k.key, k.toggle);
-            }
+            register_unmapped_input(k.label, k.key, k.toggle);
         }
     }
 
@@ -1545,9 +1543,6 @@ void C128System::on_port_device_changed(int port_index) {
 
 void C128System::render_system_menu_items() {
 #ifdef CERMU_HAS_GUI
-    if (ImGui::MenuItem("Reset C128")) {
-        reset_requested_.store(true, std::memory_order_relaxed);
-    }
     if (ImGui::MenuItem("Enter C64 Mode", nullptr, false, !c64_mode_)) {
         c64_mode_requested_.store(true, std::memory_order_relaxed);
     }

@@ -768,12 +768,6 @@ bool NintendoSystem<V>::handle_nsf_player_key(SDL_Keycode key) {
 template<NintendoVariant V>
 void NintendoSystem<V>::render_system_menu_items() {
 #ifdef CERMU_HAS_GUI
-    char reset_label[32];
-    snprintf(reset_label, sizeof(reset_label), "Reset %s", Traits::name);
-    if (ImGui::MenuItem(reset_label)) {
-        reset();
-    }
-    
     if (ImGui::MenuItem("Eject Cartridge", nullptr, false, is_cartridge_loaded())) {
         eject_cartridge();
     }

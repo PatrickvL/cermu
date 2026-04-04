@@ -699,10 +699,6 @@ void BBCMicroSystem::set_audio_sample_rate(int sample_rate_hz) {
 
 void BBCMicroSystem::render_system_menu_items() {
 #ifdef CERMU_HAS_GUI
-    if (ImGui::MenuItem("Reset BBC Micro")) {
-        reset();
-    }
-    ImGui::Separator();
     ImGui::Text("ROM Bank: %d", rom_select_);
     ImGui::Text("Video Mode: %d",
         board_.vidproc.get_display_mode(board_.crtc.regs_[R9_MAX_SCANLINE]));

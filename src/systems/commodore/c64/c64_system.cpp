@@ -1413,9 +1413,7 @@ bool C64System::handle_sid_player_key(SDL_Keycode key) {
 
 void C64System::render_system_menu_items() {
 #ifdef CERMU_HAS_GUI
-    if (ImGui::MenuItem("Reset C64")) {
-        reset();
-    }
+    (void)0;  // System-specific items go here
 #endif
 }
 
