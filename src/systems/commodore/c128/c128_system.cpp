@@ -314,6 +314,7 @@ bool C128System::initialize() {
     // Must be AFTER reset() — reset_conditional_features() clobbers
     // init_io_port() with default init_pins (0x17, bit 6 = 0).
     board_.csg8502.init_io_port(0x2F, 0x17, 0x57);
+    sync_caps_lock_from_host();
 
     // Sync PLA-style banking with freshly-reset I/O port (same as C64)
     {
@@ -417,6 +418,7 @@ void C128System::reset() {
     // Restore CAPS LOCK sense line (bit 6 = 1 = not pressed) after CPU reset
     // clobbers it with the default init_pins (0x17).
     board_.csg8502.init_io_port(0x2F, 0x17, 0x57);
+    sync_caps_lock_from_host();
     cpu_mode_ = CPUMode::MODE_Z80;
     active_cpu_ = &board_.z80;
     c64_mode_ = false;
@@ -812,9 +814,33 @@ void C128System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     }
 }
 
+void C128System::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode,
+                                          uint16_t mod, bool pressed, bool repeat) {
+    // CAPS LOCK → processor port $01 bit 6 (active-low, directly wired).
+    // The C128 CAPS LOCK is a physical toggle; mirror the host lock state.
+    // SDL updates KMOD_CAPS in the event's mod field on key-down.
+    if (key == SDLK_CAPSLOCK && pressed) {
+        if (mod & KMOD_CAPS)
+            board_.csg8502.port.pull_low(0x40);   // bit 6 → 0 (engaged)
+        else
+            board_.csg8502.port.release(0x40);     // bit 6 → 1 (released)
+    }
+
+    // Delegate to CommodoreSystem for keyboard mapper dispatch
+    CommodoreSystem::handle_keyboard_event_ex(key, scancode, mod, pressed, repeat);
+}
+
 // ============================================================================
 // COMMODORE SYSTEM HOOKS
 // ============================================================================
+
+void C128System::sync_caps_lock_from_host() {
+    // Mirror host Caps Lock state to processor port $01 bit 6 (active-low).
+    if (SDL_GetModState() & KMOD_CAPS)
+        board_.csg8502.port.pull_low(0x40);    // engaged
+    else
+        board_.csg8502.port.release(0x40);      // released
+}
 
 bool C128System::is_basic_ready() const {
     // C128 BASIC 7.0 stores the cursor blink phase in $0A27.  When it
@@ -1271,6 +1297,7 @@ void C128System::switch_cpu_mode(CPUMode mode) {
         pins_ = active_cpu_->reset(pins_);
         // Restore CAPS LOCK sense line after CPU reset clobbers init_pins.
         board_.csg8502.init_io_port(0x2F, 0x17, 0x57);
+        sync_caps_lock_from_host();
         log_info("C128: CPU switch → 8502\n");
     } else {
         // 8502 → Z80: re-enter Z80 mode (e.g. for CP/M)

@@ -288,7 +288,7 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
     if (sym == SDLK_LCTRL || sym == SDLK_RCTRL) {
         host_ctrl_held_ = true;
     }
-    if (sym == SDLK_LGUI) {
+    if (sym == SDLK_LALT || sym == SDLK_LGUI) {
         host_cbm_held_ = true;
     }
 
@@ -301,7 +301,9 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
     // Open the stuck matrix contact and reset tracking — but only when the
     // current key is NOT the modifier itself (its own key-down legitimately
     // sets tracking before we get here, and `mod` doesn't include it yet).
-    if (host_cbm_held_ && !(mod & KMOD_LGUI) && sym != SDLK_LGUI) {
+    if (host_cbm_held_
+        && !(mod & (KMOD_LALT | KMOD_LGUI))
+        && sym != SDLK_LALT && sym != SDLK_LGUI) {
         host_cbm_held_ = false;
         if (cbm_key_pos_.valid) {
             open_contact(cbm_key_pos_.row, cbm_key_pos_.col);
@@ -391,22 +393,23 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
     }
 
     // ====================================================================
-    // Guest modifier pass-through: CBM + key or CTRL + key
+    // Guest modifier pass-through: Shift, CBM, or CTRL + printable key
     // ====================================================================
-    // When the host user holds LGUI (→ Commodore key) or LCTRL (→ CTRL)
-    // and presses a printable key, we bypass the TEXTINPUT path entirely.
-    // The modifier contact is already closed in the matrix from its own
-    // key_down event.  We just close the printable key's contact and let
-    // the guest KERNAL see the combined modifier + key state.
+    // When the host user holds a guest-meaningful modifier and presses a
+    // printable key, we bypass the TEXTINPUT path entirely.  The modifier
+    // contact is already closed in the matrix from its own key_down event.
+    // We just close the printable key's contact and let the guest KERNAL
+    // see the combined modifier + key state.
     //
-    // This enables graphics characters (C= + letter), colour codes
+    // Shift is included because Commodore Shift+letter produces graphics
+    // characters (in uppercase charset) or uppercase letters (in lowercase
+    // charset), NOT the host notion of "shifted character".  The TEXTINPUT
+    // path would suppress the guest Shift contact, losing this behavior.
+    //
+    // This also enables graphics characters (C= + letter), colour codes
     // (CTRL + digit), and other modifier-specific outputs that have no
     // host TEXTINPUT equivalent.
-    //
-    // The inject_press call uses a modifier bitmask built from the ACTUAL
-    // host modifier state, so it won't force or suppress anything — the
-    // modifiers are already down.
-    if ((host_cbm_held_ || host_ctrl_held_) && is_printable_key(sym)) {
+    if ((host_shift_held() || host_cbm_held_ || host_ctrl_held_) && is_printable_key(sym)) {
         emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
         if (ek != EMUKEY_NONE) {
             uint8_t row, col;
@@ -458,8 +461,8 @@ bool KeyboardMapper::process_key_up(SDL_Keycode sym, SDL_Scancode scancode, uint
     if (sym == SDLK_LCTRL || sym == SDLK_RCTRL) {
         host_ctrl_held_ = (mod & (KMOD_LCTRL | KMOD_RCTRL)) != 0;
     }
-    if (sym == SDLK_LGUI) {
-        host_cbm_held_ = (mod & KMOD_LGUI) != 0;
+    if (sym == SDLK_LALT || sym == SDLK_LGUI) {
+        host_cbm_held_ = (mod & (KMOD_LALT | KMOD_LGUI)) != 0;
     }
 
     // Emulator modifier release
@@ -885,6 +888,8 @@ KeyboardMapper* create_c64_keyboard_mapper(commodore_keyboard_t* keyboard) {
     sdl_map.clear_system_mappings();
     sdl_map.register_candidates(EMUKEY_CBM_RESTORE, {SDL_SCANCODE_SYSREQ, SDL_SCANCODE_GRAVE});
     sdl_map.register_candidates(EMUKEY_CBM_POUND,   {SDL_SCANCODE_NONUSHASH});
+    // Host LAlt → CBM key (more accessible than Super/LGUI on Linux)
+    sdl_map.register_candidates(EMUKEY_CBM_COMMODORE, {SDL_SCANCODE_LALT});
 
     return mapper;
 }
@@ -903,6 +908,8 @@ KeyboardMapper* create_vic20_keyboard_mapper(commodore_keyboard_t* keyboard) {
     sdl_map.clear_system_mappings();
     sdl_map.register_candidates(EMUKEY_CBM_RESTORE, {SDL_SCANCODE_SYSREQ, SDL_SCANCODE_GRAVE});
     sdl_map.register_candidates(EMUKEY_CBM_POUND,   {SDL_SCANCODE_NONUSHASH});
+    // Host LAlt → CBM key (more accessible than Super/LGUI on Linux)
+    sdl_map.register_candidates(EMUKEY_CBM_COMMODORE, {SDL_SCANCODE_LALT});
 
     return mapper;
 }
@@ -921,6 +928,8 @@ KeyboardMapper* create_c16_keyboard_mapper(commodore_keyboard_t* keyboard) {
     sdl_map.clear_system_mappings();
     sdl_map.register_candidates(EMUKEY_CBM_RESTORE, {SDL_SCANCODE_SYSREQ, SDL_SCANCODE_GRAVE});
     sdl_map.register_candidates(EMUKEY_CBM_POUND,   {SDL_SCANCODE_NONUSHASH});
+    // Host LAlt → CBM key (more accessible than Super/LGUI on Linux)
+    sdl_map.register_candidates(EMUKEY_CBM_COMMODORE, {SDL_SCANCODE_LALT});
 
     return mapper;
 }
@@ -940,8 +949,10 @@ KeyboardMapper* create_c128_keyboard_mapper(commodore_keyboard_t* keyboard) {
     sdl_map.register_candidates(EMUKEY_CBM_POUND,         {SDL_SCANCODE_NONUSHASH});
 
     // C128-specific keys:
-    // ALT: C128 has one ALT key (top-left area). Map both host ALTs to it.
-    sdl_map.register_candidates(EMUKEY_CBM_ALT,           {SDL_SCANCODE_LALT, SDL_SCANCODE_RALT}, true);
+    // Host LAlt → CBM key (Commodore key, more accessible than Super/LGUI
+    // which Linux WMs intercept).  Host RAlt → C128 ALT key.
+    sdl_map.register_candidates(EMUKEY_CBM_COMMODORE,     {SDL_SCANCODE_LALT});
+    sdl_map.register_candidates(EMUKEY_CBM_ALT,           {SDL_SCANCODE_RALT});
     // HELP: prefer the rare HELP scancode (117), no common fallback.
     sdl_map.register_candidates(EMUKEY_CBM_HELP,          {SDL_SCANCODE_HELP});
     // LINE FEED: prefer RETURN2 (second Return on ISO/terminal keyboards).
