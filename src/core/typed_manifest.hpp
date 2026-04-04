@@ -271,20 +271,3 @@ void bind_all(BoardT& board, Tuple& components, const Manifest& manifest) {
         }(), ...);
     }, components);
 }
-
-
-// =============================================================================
-// §6  bind_all_chips — chip-only binding (backward compatibility)
-// =============================================================================
-//
-// For manifests that contain only chips (no ports or dip switches).
-// This is the simpler version used during the transition period.
-//
-
-template<typename BoardT, typename Tuple>
-void bind_all_chips(BoardT& board, Tuple& chips) {
-    size_t i = 0;
-    std::apply([&](auto&... chip) {
-        ((board.bind_chip(i++, &chip), board.register_component(&chip)), ...);
-    }, chips);
-}

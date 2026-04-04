@@ -49,18 +49,6 @@ const char* pin_label_to_description(PinLabel label) {
 }
 
 // ============================================================================
-// pin_label_to_display_string
-// ============================================================================
-//
-// For most labels, the display string stored in the X-macro already
-// contains Unicode symbols (Φ, combining overline, etc.).  This function
-// exists for backward compatibilty and simply forwards.
-
-std::string pin_label_to_display_string(PinLabel label) {
-    return std::string(pin_label_to_string(label));
-}
-
-// ============================================================================
 // pin_label_to_pin_type — range-based derivation via sentinels
 // ============================================================================
 //

@@ -966,8 +966,6 @@ const char* pin_type_to_group_name(PinType type);
 // Enum-to-string conversion functions
 const char* pin_label_to_string(PinLabel label);
 const char* pin_label_to_description(PinLabel label);
-std::string pin_label_to_display_string(PinLabel label);
-
 // Derive pin type from pin label
 PinType pin_label_to_pin_type(PinLabel label);
 

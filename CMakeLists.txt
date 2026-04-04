@@ -336,7 +336,6 @@ set(CORE_SOURCES
     src/core/device_registry.cpp
     src/core/chip_registry.cpp
     src/core/port_registry.cpp
-    src/core/connection.cpp
     src/core/session.cpp
     src/core/board_base.cpp
     src/core/audio_thread.cpp
