@@ -104,24 +104,6 @@ static SystemProbeResult bbc_probe_file(
 // ============================================================================
 // System Descriptor
 // ============================================================================
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                                  tag       type              name                  num  int  bus  default_device
-#define BBC_MICRO_FOR_EACH_PORT(V, ctx) \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",        0, false, false, nullptr)         \
-    V(ctx, USER,       USER_PORT,        "User Port",            0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",            0, false, false, "crt_tv")        \
-    V(ctx, VIDEO_RGB,  VIDEO_RGB,        "Video Out (RGB)",      0, false, false, nullptr)         \
-    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",            0, false, false, nullptr)
-
-CERMU_PORT_MANIFEST(BBCMicro, BBC_MICRO_FOR_EACH_PORT)
-
-void BBCMicroSystem::setup_ports() {
-    create_ports_from_manifest(kBBCMicroPorts);
-}
-
 static SystemDescriptor bbc_descriptor = {
     "BBC Micro Model B",
     "BBC",
@@ -188,9 +170,11 @@ bool BBCMicroSystem::initialize() {
     register_board(&board_);
 
     // ── Pre-bind all value-typed chips, then factory-create remaining ───
-    { size_t slot_idx_ = 0;
-      BBC_MICRO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
-    board_.create_chips(&pins_);
+    bind_all(board_, board_.components_, kBBCMicroManifest);
+
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = kBBCMicroManifest.port_slots;
+    port_manifest_count_ = kBBCMicroManifest.port_count;
     ram_chip_        = &board_.ram;
     paged_rom_chip_  = &board_.paged_rom;
     os_rom_chip_     = &board_.os_rom;
@@ -438,7 +422,7 @@ void BBCMicroSystem::configure_bus_memory_map() {
 }
 
 void BBCMicroSystem::update_paged_rom() {
-    board_.select_bank_at(bus_, 0, kBBCMicroChips.find<ROMChip>(),
+    board_.select_bank_at(bus_, 0, kBBCMicroManifest.find<ROMChip>(),
                            rom_select_ & 0x0F, 0x80);
 }
 

@@ -11,7 +11,6 @@
 #include "chip/cpu/fam65xx/mos7501.hpp"
 #include "chip/io/mos6529.hpp"
 #include "systems/commodore/c16/c264_io_decoder.hpp"
-#include "core/system_chip_visitors.hpp"
 #include <memory>
 
 // C264 series (C16/C116/Plus4) default bus state — derived from CPU.
@@ -92,28 +91,7 @@ template<> struct C264SeriesVariantTraits<C264SeriesVariant::PLUS4> {
 // RAM size varies: 16 KB (C16/C116) with mirroring, 64 KB (Plus/4).
 //
 //                                ctx   type                    chip       base    size    mask    ovl  label              rom
-#define C264_FOR_EACH_SYSTEM_CHIP(V, ctx) \
-    V(ctx, RAMChip,                 ram,       0x0000, 65536,  0,      0, "RAM",             nullptr) \
-    V(ctx, ROMChip,                 basic_rom, 0x8000, 16384,  0,      1, "BASIC ROM",       "basic.318006-01.bin|basic.rom|318006-01.bin") \
-    V(ctx, ROMChip,                 kernal_rom,0xC000, 16384,  0,      1, "KERNAL ROM",      "kernal.318004-05.bin|kernal.rom|318004-05.bin") \
-    V(ctx, CSG7501,                 csg7501,   0,          0,  0,      0, "CSG 7501",        nullptr) \
-    V(ctx, ted7360_t,               ted,       0xFF00,     0,  0xFFC0, 0, "TED 7360",        nullptr) \
-    V(ctx, mos6529_t,               pio1,      0,          0,  0,      0, "MOS 6529B PIO1",  nullptr) \
-    V(ctx, mos6529_t,               pio2,      0,          0,  0,      0, "MOS 6529B PIO2",  nullptr) \
-    V(ctx, c264_io_decoder_t,       io_dec,    0xFD00,     0,  0xFF00, 0, "C264 I/O Decoder",nullptr)
 
-static constexpr size_t kC264ChipCount = 0 C264_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-
-inline constexpr auto make_c264_manifest() {
-    ChipManifest<kC264ChipCount> m = {{
-        C264_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-    }};
-    // All buffer chips: bank_size = size_bytes
-    for (auto& s : m.chips)
-        if (s.size_bytes > 0) s.bank_size = s.size_bytes;
-    return m;
-}
-inline constexpr auto kC264Chips = make_c264_manifest();
 
 // MaskedSubTable indices (determined by manifest slot order during apply())
 namespace c264_sub {
@@ -121,22 +99,68 @@ namespace c264_sub {
     inline constexpr size_t kIoPage  = 1;    // page $FD — I/O decoder (74LS139 + 74LS175)
 }
 
+inline constexpr auto kC264Manifest = make_manifest(
+    // Chips — bank_size = size_bytes for all buffer chips (ROM banking via TED latch)
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 0x00010000, .label = "RAM", .bank_size = 0x00010000},
+    Slot<ROMChip>{.base_addr = 0x8000, .size_bytes = 0x4000, .label = "BASIC ROM", .bank_size = 0x4000, .overlay_group = 1, .rom = {"basic.318006-01.bin|basic.rom|318006-01.bin"}},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 0x4000, .label = "KERNAL ROM", .bank_size = 0x4000, .overlay_group = 1, .rom = {"kernal.318004-05.bin|kernal.rom|318004-05.bin"}},
+    Slot<CSG7501>{.label = "CSG 7501"},
+    Slot<ted7360_t>{.base_addr = 0xFF00, .addr_mask = 0xFFC0, .label = "TED 7360"},
+    Slot<mos6529_t>{.label = "MOS 6529B PIO1"},
+    Slot<mos6529_t>{.label = "MOS 6529B PIO2"},
+    Slot<c264_io_decoder_t>{.base_addr = 0xFD00, .addr_mask = 0xFF00, .label = "C264 I/O Decoder"},
+    // Ports
+    Slot<PortControlDB9>{.name = "Joystick Port 1", .port_number = 1, .default_device = "joystick"},
+    Slot<PortControlDB9>{.name = "Joystick Port 2", .port_number = 2, .default_device = "joystick"},
+    Slot<PortIecSerial>{.name = "IEC Serial Bus", .is_bus = true, .default_device = "1541"},
+    Slot<PortCassette>{.name = "Cassette Port", .default_device = "datasette"},
+    Slot<PortExpansion>{.name = "Expansion Port"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"},
+    Slot<PortCustom>{.name = "Keyboard", .is_internal = true}
+);
+
+inline constexpr size_t kC264ChipCount = decltype(kC264Manifest)::chip_count;
+
+
 struct C264BusTraits {
-    static constexpr const auto& kManifest = kC264Chips;
-    using Spec = ManifestBusSpec<kC264Chips, 16, 8, 2, true>;  // 2 viewers: CPU + TED video, CS-enabled
+    static constexpr const auto& kManifest = kC264Manifest;
+    using Spec = ManifestBusSpec<kC264Manifest, 16, 8, 2, true>;  // 2 viewers: CPU + TED video, CS-enabled
 };
+
+struct C264Board : Board<C264BusTraits::Spec, NoChips> {
+    using ComponentTuple = decltype(kC264Manifest)::component_tuple;
+    ComponentTuple components_;
+
+    // Chip aliases
+    RAMChip&           ram        = std::get<0>(components_);
+    ROMChip&           basic_rom  = std::get<1>(components_);
+    ROMChip&           kernal_rom = std::get<2>(components_);
+    CSG7501&           csg7501    = std::get<3>(components_);
+    ted7360_t&         ted        = std::get<4>(components_);
+    mos6529_t&         pio1       = std::get<5>(components_);
+    mos6529_t&         pio2       = std::get<6>(components_);
+    c264_io_decoder_t& io_dec     = std::get<7>(components_);
+
+    // Port aliases
+    PortControlDB9&     joy1_port       = std::get<8>(components_);
+    PortControlDB9&     joy2_port       = std::get<9>(components_);
+    PortIecSerial&      iec_serial_port = std::get<10>(components_);
+    PortCassette&       cassette_port   = std::get<11>(components_);
+    PortExpansion&      expansion_port  = std::get<12>(components_);
+    PortCompositeVideo& video_port      = std::get<13>(components_);
+    PortAudioMono&      audio_port      = std::get<14>(components_);
+    PortCustom&         keyboard_port   = std::get<15>(components_);
+
+    C264Board() : Board(kC264Manifest) {}
+};
+
 
 // Viewer IDs for the C264 bus
 namespace c264_viewer {
     inline constexpr size_t kCpu      = 0;  // CPU memory map (controlled by rom_enabled)
     inline constexpr size_t kTedVideo = 1;  // TED video fetches (controlled by video_romsel)
 }
-
-// Value-typed chips: all chips are fields via X-macro.
-// TED is default-constructed and configured via init(desc) in initialize().
-struct C264Chipset {
-    C264_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
-};
 
 // ============================================================================
 // Commodore264System — Commodore 264 Series Emulator (C16, C116, Plus/4)
@@ -234,9 +258,9 @@ private:
 
     // ── Memory bus (declarative manifest + page-pointer dispatch) ────────
     using Bus = MemoryBus<C264BusTraits::Spec>;
-    using MainBoard = Board<C264BusTraits::Spec, C264Chipset>;
+    using MainBoard = C264Board;
     Bus bus_;
-    MainBoard board_{kC264Chips};
+    MainBoard board_;
 
     // Convenience chip pointers (owned by board_, accessed via chip_as)
     RAMChip* ram_         = nullptr;  // Up to 64KB RAM (C16/C116 use 16KB, Plus/4 uses 64KB)
@@ -269,7 +293,6 @@ private:
     void build_banking_snapshots();             // populate overlay snapshots via generic builder
     void apply_cpu_banking();                   // load CPU viewer snapshot for current rom_enabled
     void apply_ted_video_banking();             // load TED viewer snapshot for current video_romsel
-    void setup_ports() override;
     static uint8_t io_port_in(void* user_data);
     static void io_port_out(uint8_t data, void* user_data);
     static uint8_t ted_keyboard_scan(void* user_data, uint8_t column);
@@ -281,7 +304,7 @@ private:
     // Indexed as snapshots_[viewer][mode]: mode 0 = RAM only, mode 1 = ROM overlaid.
     // Generated by Board::build_overlay_snapshots() from manifest overlay groups.
     static constexpr size_t kNumViewers = 2;
-    static constexpr size_t kNumModes   = kC264Chips.overlay_mode_count();  // 2
+    static constexpr size_t kNumModes   = kC264Manifest.overlay_mode_count();  // 2
     std::array<std::array<Bus::Snapshot, kNumModes>, kNumViewers> snapshots_;
 };
 

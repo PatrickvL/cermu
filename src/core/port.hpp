@@ -145,6 +145,27 @@ struct PortDefinition {
 };
 
 // ============================================================================
+// PORT SLOT — compact port descriptor for manifest-driven creation
+// ============================================================================
+
+/// Declarative port descriptor used in constexpr manifest arrays.
+/// Systems define inline constexpr PortSlot arrays; the base class
+/// converts each slot into a full PortDefinition at runtime via
+/// make_port_definition().
+struct PortSlot {
+    PortType    type;           ///< Connector type (determines default signals)
+    const char* name;           ///< Display name ("Control Port 1", "IEC Serial Bus")
+    int         port_number;    ///< 0 = no numbering, 1+ = player/slot number
+    bool        is_internal;    ///< Internal connectors (keyboard) hidden from icon bar
+    bool        is_bus;         ///< Shared bus (IEC): multiple devices may attach
+    const char* default_device; ///< DeviceRegistry ID for auto-attach, or nullptr
+};
+
+/// Build a full PortDefinition from a PortSlot, auto-resolving standard
+/// signal tables based on PortType.  Call once per port during setup.
+PortDefinition make_port_definition(const PortSlot& slot);
+
+// ============================================================================
 // FORWARD DECLARATIONS
 // ============================================================================
 

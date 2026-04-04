@@ -13,7 +13,6 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -37,37 +36,45 @@
 // Slot 0: Cartridge ROM — up to 512KB at $0000 (banked, 16KB pages)
 // Slot 1: System RAM   — 8KB at $C000 (mirrored to $E000)
 //
-//                               ctx   type            chip       base    size    mask    ovl  label            rom
-#define SMS_FOR_EACH_SYSTEM_CHIP(V, ctx) \
-    V(ctx, ZilogZ80A,       z80,         0,           0, 0,      0, "Z80A",          nullptr) \
-    V(ctx, ROMChip,         cart_rom,    0x0000, 524288, 0,      0, "Cartridge ROM", nullptr) \
-    V(ctx, RAMChip,         system_ram,  0xC000,   8192, 0x1FFF, 0, "System RAM",    nullptr) \
-    V(ctx, SEGA_315_5124,   vdp,         0x00BE,      0, 0x00FE, 0, "315-5124 VDP",  nullptr) \
-    V(ctx, sn76489_t,       psg,         0x007E,      0, 0x00FE, 0, "SN76489 PSG",   nullptr)
+inline constexpr auto kSMSManifest = make_manifest(
+    // Chips
+    Slot<ZilogZ80A>{.label = "Z80A"},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x00080000, .label = "Cartridge ROM", .bank_size = 16384},
+    Slot<RAMChip>{.base_addr = 0xC000, .size_bytes = 0x2000, .addr_mask = 0x1FFF, .label = "System RAM"},
+    Slot<SEGA_315_5124>{.base_addr = 0x00BE, .addr_mask = 0x00FE, .label = "315-5124 VDP"},
+    Slot<sn76489_t>{.base_addr = 0x007E, .addr_mask = 0x00FE, .label = "SN76489 PSG"},
+    // Ports
+    Slot<PortControlDB9>{.name = "Controller Port 1", .port_number = 1, .default_device = "joystick"},
+    Slot<PortControlDB9>{.name = "Controller Port 2", .port_number = 2, .default_device = "joystick"},
+    Slot<PortExpansion>{.name = "Cartridge Slot"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-static constexpr size_t kSMSChipCount = 0 SMS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+inline constexpr size_t kSMSChipCount = decltype(kSMSManifest)::chip_count;
 
-constexpr ChipManifest<kSMSChipCount> make_sms_manifest() {
-    ChipManifest<kSMSChipCount> m = {{
-        SMS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-    }};
-    m.chips[0].bank_size = 16384;  // Cartridge ROM banking (16KB pages)
-    return m;
-}
-inline constexpr auto kSMSChips = make_sms_manifest();
+using SMSBusSpec  = ManifestBusSpec<kSMSManifest, 16, 8>;
 
-using SMSBusSpec  = ManifestBusSpec<kSMSChips, 16, 8>;
+struct SMSBoard : Board<SMSBusSpec, NoChips> {
+    using ComponentTuple = decltype(kSMSManifest)::component_tuple;
+    ComponentTuple components_;
 
-// ============================================================================
-// SMS Chips — value-typed chips owned by Board
-// ============================================================================
+    // Chip aliases
+    ZilogZ80A&     z80        = std::get<0>(components_);
+    ROMChip&       cart_rom   = std::get<1>(components_);
+    RAMChip&       system_ram = std::get<2>(components_);
+    SEGA_315_5124& vdp        = std::get<3>(components_);
+    sn76489_t&     psg        = std::get<4>(components_);
 
-struct SMSChips {
-    SMS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
-    // PSG needs explicit Sega variant selection
-    SMSChips() : psg(SN76489Variant::SEGA_PSG) {}
+    // Port aliases
+    PortControlDB9&     ctrl1_port     = std::get<5>(components_);
+    PortControlDB9&     ctrl2_port     = std::get<6>(components_);
+    PortExpansion&      cartridge_port = std::get<7>(components_);
+    PortCompositeVideo& video_port     = std::get<8>(components_);
+    PortAudioMono&      audio_port     = std::get<9>(components_);
+
+    SMSBoard() : Board(kSMSManifest) {}
 };
-
 // ============================================================================
 // Sega Master System
 // ============================================================================
@@ -101,9 +108,9 @@ private:
     // ── Board + bus ──────────────────────────────────────────────────────
     using Bus       = MemoryBus<SMSBusSpec>;
     using PT        = PackingTraits<SMSBusSpec>;
-    using MainBoard = Board<SMSBusSpec, SMSChips>;
+    using MainBoard = SMSBoard;
     Bus       bus_;
-    MainBoard board_{kSMSChips};
+    MainBoard board_;
 
     // ── Mapper state ─────────────────────────────────────────────────────
     uint8_t mapper_ctrl_  = 0;
@@ -125,7 +132,6 @@ private:
     uint32_t    frame_tstate_counter_ = 0;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    void setup_ports() override;
     void configure_bus_memory_map();
     bus_state_t io_tick(bus_state_t pins);
     void update_mapper();

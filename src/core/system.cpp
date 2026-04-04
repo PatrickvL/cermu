@@ -1,6 +1,5 @@
 #include "core/cermu.hpp"
 #include "core/system.hpp"
-#include "core/port_manifest.hpp"
 #include "core/chip.hpp"
 #include "core/formats/format_handler.hpp"
 #include "core/vfs/vfs.hpp"
@@ -364,10 +363,15 @@ void System::create_ports_from_manifest(const PortSlot* slots, size_t count) {
 
 void System::attach_default_peripherals() {
     // Register connector ports before attaching devices to them.
-    // Each system overrides setup_ports() to call add_port().
     // Guard: skip if ports were already registered (e.g. reinit path).
     if (get_ports().empty()) {
+        // Legacy path: systems override setup_ports() to call add_port().
         setup_ports();
+        // Modern path: if setup_ports() is a no-op but port_manifest_ was
+        // populated in initialize(), create the ports from the manifest now.
+        if (get_ports().empty() && port_manifest_) {
+            create_ports_from_manifest(port_manifest_, port_manifest_count_);
+        }
     }
 
     // Explicit defaults from get_default_peripherals() take priority.

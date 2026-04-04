@@ -12,7 +12,6 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -60,63 +59,72 @@ template<> struct MTXVariantTraits<MTXVariant::MTX512> {
 
 #define MTX_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
 
-// =============================================================================
-// MTX chip declarations — variant-specific single source of truth
-// =============================================================================
-//
-// Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
-//
-// MTX500: ROM 16KB at $0000, RAM 32KB at $4000
-// MTX512: ROM 16KB at $0000, RAM 64KB at $0000
-//
+inline constexpr auto kMTX500Manifest = make_manifest(
+    // Chips
+    Slot<ZilogZ80A>{.base_addr = 0x0000, .label = "Z80A"},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x4000, .label = "OS+BASIC ROM", .rom = {"mtx500.rom|mtx.rom|MTX.ROM"}},
+    Slot<TMS9918A>{.base_addr = 0x0001, .label = "TMS9918A"},
+    Slot<AY_3_8910>{.base_addr = 0x0003, .label = "AY-3-8910"},
+    Slot<z80_ctc_t>{.base_addr = 0x0008, .label = "Z80 CTC"},
+    Slot<RAMChip>{.base_addr = 0x4000, .size_bytes = 0x8000, .label = "RAM"},
+    // Ports
+    Slot<PortControlDB9>{.name = "Joystick Port", .port_number = 1, .default_device = "joystick"},
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortRgb>{.name = "Video Out (RGB)", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-#define MTX500_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                               \
-    V(ctx, ZilogZ80A,  z80,  0x0000,      0, 0, 0, "Z80A",         nullptr)                                               \
-    V(ctx, ROMChip,    rom,  0x0000, 0x4000, 0, 0, "OS+BASIC ROM", "mtx500.rom|mtx.rom|MTX.ROM")                         \
-    V(ctx, TMS9918A,   vdp,  0x0001,      0, 0, 0, "TMS9918A",     nullptr)                                               \
-    V(ctx, AY_3_8910,  psg,  0x0003,      0, 0, 0, "AY-3-8910",    nullptr)                                               \
-    V(ctx, z80_ctc_t,  ctc,  0x0008,      0, 0, 0, "Z80 CTC",      nullptr)                                               \
-    V(ctx, RAMChip,    ram,  0x4000, 0x8000, 0, 0, "RAM",          nullptr)
+inline constexpr auto kMTX512Manifest = make_manifest(
+    // Chips
+    Slot<ZilogZ80A>{.base_addr = 0x0000, .label = "Z80A"},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x4000, .label = "OS+BASIC ROM", .rom = {"mtx512.rom|mtx.rom|MTX.ROM"}},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 0x10000, .label = "RAM"},
+    Slot<TMS9918A>{.base_addr = 0x0001, .label = "TMS9918A"},
+    Slot<AY_3_8910>{.base_addr = 0x0003, .label = "AY-3-8910"},
+    Slot<z80_ctc_t>{.base_addr = 0x0008, .label = "Z80 CTC"},
+    // Ports
+    Slot<PortControlDB9>{.name = "Joystick Port", .port_number = 1, .default_device = "joystick"},
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortRgb>{.name = "Video Out (RGB)", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-#define MTX512_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                               \
-    V(ctx, ZilogZ80A,  z80,  0x0000,       0, 0, 0, "Z80A",         nullptr)                                              \
-    V(ctx, ROMChip,    rom,  0x0000,  0x4000, 0, 0, "OS+BASIC ROM", "mtx512.rom|mtx.rom|MTX.ROM")                        \
-    V(ctx, RAMChip,    ram,  0x0000, 0x10000, 0, 0, "RAM",          nullptr)                                              \
-    V(ctx, TMS9918A,   vdp,  0x0001,       0, 0, 0, "TMS9918A",     nullptr)                                              \
-    V(ctx, AY_3_8910,  psg,  0x0003,       0, 0, 0, "AY-3-8910",    nullptr)                                              \
-    V(ctx, z80_ctc_t,  ctc,  0x0008,       0, 0, 0, "Z80 CTC",      nullptr)
-
-static constexpr size_t kMTX500ChipCount = 0 MTX500_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-static constexpr size_t kMTX512ChipCount = 0 MTX512_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-
-inline constexpr ChipManifest<kMTX500ChipCount> kMTX500Chips = ChipManifest<kMTX500ChipCount>{{
-    MTX500_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
-
-inline constexpr ChipManifest<kMTX512ChipCount> kMTX512Chips = ChipManifest<kMTX512ChipCount>{{
-    MTX512_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
-
+inline constexpr size_t kMTX500ChipCount = decltype(kMTX500Manifest)::chip_count;
+inline constexpr size_t kMTX512ChipCount = decltype(kMTX512Manifest)::chip_count;
 template<MTXVariant V> struct MTXBusTraits;
 
 template<> struct MTXBusTraits<MTXVariant::MTX500> {
-    static constexpr const auto& kManifest = kMTX500Chips;
-    using Spec = ManifestBusSpec<kMTX500Chips, 16, 8>;
+    static constexpr const auto& kManifest = kMTX500Manifest;
+    using Spec = ManifestBusSpec<kMTX500Manifest, 16, 8>;
 };
 
 template<> struct MTXBusTraits<MTXVariant::MTX512> {
-    static constexpr const auto& kManifest = kMTX512Chips;
-    using Spec = ManifestBusSpec<kMTX512Chips, 16, 8>;
+    static constexpr const auto& kManifest = kMTX512Manifest;
+    using Spec = ManifestBusSpec<kMTX512Manifest, 16, 8>;
 };
 
-// ============================================================================
-// MTX Chips — value-typed chips owned by Board (auto-generated)
-// ============================================================================
+template<typename BSpec>
+struct MTXBoard : Board<BSpec, NoChips> {
+    using ComponentTuple = decltype(kMTX500Manifest)::component_tuple;
+    ComponentTuple components_;
 
-struct MTXChips {
-    MTX500_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+    // Chip aliases
+    ZilogZ80A& z80 = std::get<0>(components_);
+    ROMChip&   rom = std::get<1>(components_);
+    TMS9918A&  vdp = std::get<2>(components_);
+    AY_3_8910& psg = std::get<3>(components_);
+    z80_ctc_t& ctc = std::get<4>(components_);
+    RAMChip&   ram = std::get<5>(components_);
+
+    // Port aliases
+    PortControlDB9& joy1_port     = std::get<6>(components_);
+    PortCassette&   cassette_port = std::get<7>(components_);
+    PortRgb&        video_port    = std::get<8>(components_);
+    PortAudioMono&  audio_port    = std::get<9>(components_);
+
+    template<size_t N>
+    MTXBoard(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
 };
-
 // ============================================================================
 // Memotech MTX System
 // ============================================================================
@@ -154,7 +162,7 @@ private:
     // ── Board + bus (chips live inside board_) ────────────────────────────
     using Bus       = MemoryBus<typename BT::Spec>;
     using PT        = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec, MTXChips>;
+    using MainBoard = MTXBoard<typename BT::Spec>;
     Bus       bus_;
     MainBoard board_{BT::kManifest};
 
@@ -177,7 +185,6 @@ private:
     uint32_t    frame_tstate_counter_ = 0;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    void setup_ports() override;
     void configure_bus_memory_map();
     bus_state_t io_tick(bus_state_t pins);
     bool load_roms();

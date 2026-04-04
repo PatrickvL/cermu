@@ -2,7 +2,6 @@
 #include "systems/apple1/apple1_system.hpp"
 #include "systems/apple1/apple1_constants.hpp"
 #include "core/chip.hpp"
-#include "core/port_manifest.hpp"
 #include <cstring>
 #include <cstdio>
 

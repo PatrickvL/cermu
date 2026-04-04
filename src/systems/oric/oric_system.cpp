@@ -133,10 +133,11 @@ bool OricSystem<V>::initialize() {
     register_board(&board_);
 
     // Bind and create value-typed chips before factory-creating other chips
-    { size_t slot_idx_ = 0;
-      ORIC1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
-    board_.create_chips(&pins_);
+    bind_all(board_, board_.components_, BTraits::kManifest);
 
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = BTraits::kManifest.port_slots;
+    port_manifest_count_ = BTraits::kManifest.port_count;
     ram_ptr_ = board_.ram.data();
 
     pins_ = board_.cpu.init();
@@ -298,27 +299,6 @@ uint8_t OricSystem<V>::via_port_b_read(void* /*context*/, uint8_t /*output*/) {
 
 template class OricSystem<OricVariant::ORIC_1>;
 template class OricSystem<OricVariant::ORIC_ATMOS>;
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                                tag       type              name                 num  int  bus  default_device
-#define ORIC_FOR_EACH_PORT(V, ctx) \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)         \
-    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Port",      0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")        \
-    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",           0, false, false, nullptr)
-
-CERMU_PORT_MANIFEST(Oric, ORIC_FOR_EACH_PORT)
-
-template<OricVariant V>
-void OricSystem<V>::setup_ports() {
-    create_ports_from_manifest(kOricPorts);
-}
-
-// ============================================================================
-// SYSTEM REGISTRATION
-// ============================================================================
 
 REGISTER_SYSTEM(oric1_descriptor, [] {
     return std::make_unique<OricSystem<OricVariant::ORIC_1>>();

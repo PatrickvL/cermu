@@ -56,9 +56,11 @@ bool LC80System::initialize() {
     register_board(&board_);
 
     // ── Bind and create chips from manifest, wire bus ───────────────────
-    { size_t slot_idx_ = 0;
-      LC80_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
-    board_.create_chips(&pins_);
+    bind_all(board_, board_.components_, kLC80Manifest);
+
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = kLC80Manifest.port_slots;
+    port_manifest_count_ = kLC80Manifest.port_count;
     board_.apply(bus_);
 
     // ── Configure page tables (mirroring) ───────────────────────────
@@ -199,22 +201,5 @@ bus_state_t LC80System::io_tick(bus_state_t pins) {
 }
 
 bool LC80System::load_roms() { return false; }
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                               tag       type              name                 num  int  bus  default_device
-#define LC80_FOR_EACH_PORT(V, ctx) \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)
-
-CERMU_PORT_MANIFEST(LC80, LC80_FOR_EACH_PORT)
-
-void LC80System::setup_ports() {
-    create_ports_from_manifest(kLC80Ports);
-}
-
-// ============================================================================
-// SYSTEM REGISTRATION
-// ============================================================================
 
 REGISTER_SYSTEM(lc80_descriptor, [] { return std::make_unique<LC80System>(); });

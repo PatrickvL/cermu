@@ -38,13 +38,58 @@
 #include "core/chip_manifest.hpp"
 #include "core/memory_bus/bus.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
+#include "core/typed_manifest.hpp"
+#include "core/typed_port.hpp"
 #include "chip/memory/memory_chip.hpp"
 #include "chip/cpu/fam65xx/mos6510.hpp"
 #include "chip/video/vic_ii/vicii_common.hpp"
 #include "chip/sound/mos6581.hpp"
 #include "chip/memory/mos2114.hpp"
 #include "chip/io/mos6526.hpp"
+
+// =============================================================================
+// C64-local chip visitor macros
+// =============================================================================
+//
+// These one-liner visitors are used ONLY by C64's FOR_EACH_SYSTEM_CHIP to
+// generate manifest entries, chipset fields, binding logic, enum values,
+// pointers, and component registration from the single authoritative chip
+// row list.  The C64's PLA-driven architecture requires the X-macro approach
+// for its chip enum and page-table descriptor table generation.
+//
+
+inline constexpr RomFileInfo parse_rom_spec(const char* spec) noexcept {
+    if (!spec) return {nullptr, false};
+    if (spec[0] == '?') return {spec + 1, true};
+    return {spec, false};
+}
+
+#define C64_CHIP_VISITOR_MANIFEST_ROW(ctx, type, chip, base, size, mask, overlay, label, rom_files) \
+    ChipSlot{base, (size_t)(size), (uint32_t)(mask),                                                  \
+             0, 0, overlay, resolve_slot_factory<type>(), label, 0, parse_rom_spec(rom_files)},
+
+#define C64_CHIP_VISITOR_DECLARE_FIELD(ctx, type, chip, base, size, mask, overlay, label, rom_files) \
+    type chip;
+
+#define C64_CHIP_VISITOR_BIND_SEQUENTIAL(ctx, type, chip, base, size, mask, overlay, label, rom_files) \
+    ctx.bind_chip(slot_idx_++, &ctx.chip);
+
+#define C64_CHIP_VISITOR_REGISTER_COMPONENT(ctx, type, chip, base, size, mask, overlay, label, rom_files) \
+    ctx.register_component(&ctx.chip);
+
+#define C64_CHIP_VISITOR_DECLARE_POINTER(ctx, type, chip, base, size, mask, overlay, label, rom_files) \
+    type* chip = nullptr;
+
+#define C64_CHIP_VISITOR_ASSIGN_POINTER(ctx, type, chip, base, size, mask, overlay, label, rom_files) \
+    this->chip = &ctx.chip;
+
+#define C64_CHIP_VISITOR_NULL_POINTER(ctx, type, chip, base, size, mask, overlay, label, rom_files) \
+    this->chip = nullptr;
+
+#define C64_CHIP_VISITOR_ENUM_VALUE(ctx, type, chip, base, size, mask, overlay, label, rom_files) \
+    chip,
+
+#define C64_CHIP_VISITOR_COUNT_ONE(ctx, type, chip, base, size, mask, overlay, label, rom_files) +1
 
 
 // =============================================================================
@@ -139,7 +184,7 @@ struct C64BusSpec {
         "kernal.901227-03.bin|901227-03.bin|kernal.rom")
 
 // Total chip count (auto-derived from macro)
-static constexpr size_t kC64ChipCount = 0 C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+static constexpr size_t kC64ChipCount = 0 C64_FOR_EACH_SYSTEM_CHIP(C64_CHIP_VISITOR_COUNT_ONE, unused);
 
 
 // =============================================================================
@@ -153,7 +198,7 @@ static constexpr size_t kC64ChipCount = 0 C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VI
 
 inline constexpr auto make_c64_manifest() {
     ChipManifest<kC64ChipCount> m = {{
-        C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
+        C64_FOR_EACH_SYSTEM_CHIP(C64_CHIP_VISITOR_MANIFEST_ROW, unused)
     }};
     m.chips[5].bank_size = 0x400;   // VIC-II: mirrors across $D000-$D3FF (4 pages)
     m.chips[7].bank_size = 0x400;   // SID: mirrors across $D400-$D7FF (4 pages)
@@ -178,7 +223,7 @@ using C64WriteId  = C64PT::WriteChipId;  // MemoryBus write-side chip/bank ID
 // directly from kC64Chips.chips[i] with no manual find<>() mapping.
 enum class C64PlaChipId : uint8_t {
     // Auto-generated from C64_FOR_EACH_SYSTEM_CHIP — order matches manifest
-    C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_ENUM_VALUE, unused)
+    C64_FOR_EACH_SYSTEM_CHIP(C64_CHIP_VISITOR_ENUM_VALUE, unused)
     // PLA-only sentinels (no manifest slot)
     io, unmapped,
     count

@@ -35,7 +35,6 @@
 #include "systems/commodore/commodore_system.hpp"
 #include "systems/commodore/c128/c128_keyboard_matrix.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/csg8502.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -74,55 +73,90 @@
 //   CSG 8502, Z80A
 //
 //                                ctx   type       chip        base    size    mask  ovl  label              rom
-#define C128_FOR_EACH_SYSTEM_CHIP(V, ctx) \
-    V(ctx, CSG8502,    csg8502,     0,            0, 0,      0, "CSG 8502",        nullptr) \
-    V(ctx, RAMChip,    main_ram,    0x0000, 131072, 0,      0, "Main RAM",        nullptr) \
-    V(ctx, ROMChip,    basic_lo,    0x4000,  16384, 0,      1, "BASIC lo",        "basic-4000.318018-04.bin|c128_basic_lo.rom|basic_lo.rom|basiclo.rom|basic.318023-02.bin@0") \
-    V(ctx, ROMChip,    basic_hi,    0x8000,  16384, 0,      1, "BASIC hi",        "basic-8000.318019-04.bin|c128_basic_hi.rom|basic_hi.rom|basichi.rom|basic.318023-02.bin@16384") \
-    V(ctx, ROMChip,    editor_rom,  0xC000,   4096, 0,      1, "Editor ROM",      "c128_editor.rom|editor.rom|kernal.318020-05.bin@0") \
-    V(ctx, ROMChip,    char_rom,    0xD000,   8192, 0,      1, "Character ROM",   "characters.390059-01.bin|c128_chargen.rom|chargen.rom|characters.rom") \
-    V(ctx, ROMChip,    kernal_rom,  0xE000,   8192, 0,      1, "Kernal ROM",      "c128_kernal.rom|kernal.rom|kernal.318020-05.bin@8192") \
-    V(ctx, ROMChip,    z80_bios,    0x0000,   4096, 0,      1, "Z80 BIOS",        "z80bios-128.rom|z80bios.rom|kernal.318020-05.bin@4096") \
-    V(ctx, ROMChip,    c64_basic,   0xA000,   8192, 0,      1, "C64 BASIC",       "basic64-901226-01.bin|basic.901226-01.bin|c64_basic.rom") \
-    V(ctx, ROMChip,    c64_kernal,  0xE000,   8192, 0,      1, "C64 Kernal",      "kernal64-901227-03.bin|kernal.901227-03.bin|c64_kernal.rom") \
-    V(ctx, RAMChip,    vdc_vram,    0x0000,  16384, 0,      1, "VDC VRAM",        nullptr) \
-    V(ctx, ZilogZ80A,  z80,         0,            0, 0,      0, "Zilog Z80A",      nullptr) \
-    V(ctx, mos8566_t,  vic_iie,     0xD000,       0, 0,      0, "MOS 8566 VIC-IIe", nullptr) \
-    V(ctx, mos6581_t,  sid,         0xD400,       0, 0,      0, "MOS 6581 SID",    nullptr) \
-    V(ctx, MOS2114,    colorram,    0xD800,       0, 0,      0, "Color RAM",       nullptr) \
-    V(ctx, mos8563_t,  vdc,         0xD600,       0, 0,      0, "MOS 8563 VDC",   nullptr) \
-    V(ctx, mos8722_t,  mmu,         0xD500,       0, 0,      0, "MOS 8722 MMU",   nullptr) \
-    V(ctx, mos6526_t,  cia1,        0xDC00,       0, 0,      0, "CIA 1",           nullptr) \
-    V(ctx, mos6526_t,  cia2,        0xDD00,       0, 0,      0, "CIA 2",           nullptr)
 
-static constexpr size_t kC128ChipCount = 0 C128_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 
-inline constexpr auto make_c128_manifest() {
-    ChipManifest<kC128ChipCount> m = {{
-        C128_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-    }};
-    // Main RAM: 2 × 64 KB banks
-    m.chips[1].bank_size = 65536;
-    // All overlay-group 1 chips: bank_size = size_bytes (single bank each)
-    for (auto& s : m.chips)
-        if (s.overlay_group == 1) s.bank_size = s.size_bytes;
-    // MMIO mirror ranges
-    m.chips[12].bank_size = 0x400;   // VIC-IIe: mirrors across $D000-$D3FF
-    m.chips[13].bank_size = 0x400;   // SID: mirrors across $D400-$D7FF
-    return m;
-}
-inline constexpr auto kC128Chips = make_c128_manifest();
+inline constexpr auto kC128Manifest = make_manifest(
+    // Chips
+    Slot<CSG8502>{.label = "CSG 8502"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 0x00020000, .label = "Main RAM", .bank_size = 65536},
+    Slot<ROMChip>{.base_addr = 0x4000, .size_bytes = 0x4000, .label = "BASIC lo", .bank_size = 0x4000, .overlay_group = 1, .rom = {"basic-4000.318018-04.bin|c128_basic_lo.rom|basic_lo.rom|basiclo.rom|basic.318023-02.bin@0"}},
+    Slot<ROMChip>{.base_addr = 0x8000, .size_bytes = 0x4000, .label = "BASIC hi", .bank_size = 0x4000, .overlay_group = 1, .rom = {"basic-8000.318019-04.bin|c128_basic_hi.rom|basic_hi.rom|basichi.rom|basic.318023-02.bin@16384"}},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 0x1000, .label = "Editor ROM", .bank_size = 0x1000, .overlay_group = 1, .rom = {"c128_editor.rom|editor.rom|kernal.318020-05.bin@0"}},
+    Slot<ROMChip>{.base_addr = 0xD000, .size_bytes = 0x2000, .label = "Character ROM", .bank_size = 0x2000, .overlay_group = 1, .rom = {"characters.390059-01.bin|c128_chargen.rom|chargen.rom|characters.rom"}},
+    Slot<ROMChip>{.base_addr = 0xE000, .size_bytes = 0x2000, .label = "Kernal ROM", .bank_size = 0x2000, .overlay_group = 1, .rom = {"c128_kernal.rom|kernal.rom|kernal.318020-05.bin@8192"}},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x1000, .label = "Z80 BIOS", .bank_size = 0x1000, .overlay_group = 1, .rom = {"z80bios-128.rom|z80bios.rom|kernal.318020-05.bin@4096"}},
+    Slot<ROMChip>{.base_addr = 0xA000, .size_bytes = 0x2000, .label = "C64 BASIC", .bank_size = 0x2000, .overlay_group = 1, .rom = {"basic64-901226-01.bin|basic.901226-01.bin|c64_basic.rom"}},
+    Slot<ROMChip>{.base_addr = 0xE000, .size_bytes = 0x2000, .label = "C64 Kernal", .bank_size = 0x2000, .overlay_group = 1, .rom = {"kernal64-901227-03.bin|kernal.901227-03.bin|c64_kernal.rom"}},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 0x4000, .label = "VDC VRAM", .bank_size = 0x4000, .overlay_group = 1},
+    Slot<ZilogZ80A>{.label = "Zilog Z80A"},
+    Slot<mos8566_t>{.base_addr = 0xD000, .label = "MOS 8566 VIC-IIe", .bank_size = 0x400},
+    Slot<mos6581_t>{.base_addr = 0xD400, .label = "MOS 6581 SID", .bank_size = 0x400},
+    Slot<MOS2114>{.base_addr = 0xD800, .label = "Color RAM"},
+    Slot<mos8563_t>{.base_addr = 0xD600, .label = "MOS 8563 VDC"},
+    Slot<mos8722_t>{.base_addr = 0xD500, .label = "MOS 8722 MMU"},
+    Slot<mos6526_t>{.base_addr = 0xDC00, .label = "CIA 1"},
+    Slot<mos6526_t>{.base_addr = 0xDD00, .label = "CIA 2"},
+    // Ports
+    Slot<PortControlDB9>{.name = "Control Port 1", .port_number = 1, .default_device = "mouse_1351"},
+    Slot<PortControlDB9>{.name = "Control Port 2", .port_number = 2, .default_device = "joystick"},
+    Slot<PortIecSerial>{.name = "IEC Serial Bus", .is_bus = true, .default_device = "1541"},
+    Slot<PortCassette>{.name = "Cassette Port", .default_device = "datasette"},
+    Slot<PortUserPort>{.name = "User Port"},
+    Slot<PortExpansion>{.name = "Expansion Port"},
+    Slot<PortCompositeVideo>{.name = "Video Out (40-col)", .default_device = "direct_output"},
+    Slot<PortRgbi>{.name = "Video Out (80-col)"},
+    Slot<PortAudioMono>{.name = "Audio Out"},
+    Slot<PortCustom>{.name = "Keyboard", .is_internal = true}
+);
+
+inline constexpr size_t kC128ChipCount = decltype(kC128Manifest)::chip_count;
 
 // 4 KB pages, 2 viewers (CPU + VIC-IIe), CS-tick enabled
-struct C128BusSpec : ManifestBusSpec<kC128Chips, 16, 12, 2, true> {
+struct C128BusSpec : ManifestBusSpec<kC128Manifest, 16, 12, 2, true> {
     static constexpr size_t MaxIndexedSubTables = 1;    // I/O page ($D000-$DFFF)
     static constexpr size_t IndexedSubBits      = 4;    // 16 × 256B entries (bits 11-8)
 };
 
-// Value-typed chips: all chips are fields via X-macro.
-struct C128Chipset {
-    C128_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+struct C128Board : Board<C128BusSpec, NoChips> {
+    using ComponentTuple = decltype(kC128Manifest)::component_tuple;
+    ComponentTuple components_;
+
+    // Chip aliases
+    CSG8502&   csg8502    = std::get<0>(components_);
+    RAMChip&   main_ram   = std::get<1>(components_);
+    ROMChip&   basic_lo   = std::get<2>(components_);
+    ROMChip&   basic_hi   = std::get<3>(components_);
+    ROMChip&   editor_rom = std::get<4>(components_);
+    ROMChip&   char_rom   = std::get<5>(components_);
+    ROMChip&   kernal_rom = std::get<6>(components_);
+    ROMChip&   z80_bios   = std::get<7>(components_);
+    ROMChip&   c64_basic  = std::get<8>(components_);
+    ROMChip&   c64_kernal = std::get<9>(components_);
+    RAMChip&   vdc_vram   = std::get<10>(components_);
+    ZilogZ80A& z80        = std::get<11>(components_);
+    mos8566_t& vic_iie    = std::get<12>(components_);
+    mos6581_t& sid        = std::get<13>(components_);
+    MOS2114&   colorram   = std::get<14>(components_);
+    mos8563_t& vdc        = std::get<15>(components_);
+    mos8722_t& mmu        = std::get<16>(components_);
+    mos6526_t& cia1       = std::get<17>(components_);
+    mos6526_t& cia2       = std::get<18>(components_);
+
+    // Port aliases
+    PortControlDB9&     control1_port   = std::get<19>(components_);
+    PortControlDB9&     control2_port   = std::get<20>(components_);
+    PortIecSerial&      iec_serial_port = std::get<21>(components_);
+    PortCassette&       cassette_port   = std::get<22>(components_);
+    PortUserPort&       user_port       = std::get<23>(components_);
+    PortExpansion&      expansion_port  = std::get<24>(components_);
+    PortCompositeVideo& video_40_port   = std::get<25>(components_);
+    PortRgbi&           video_80_port   = std::get<26>(components_);
+    PortAudioMono&      audio_port      = std::get<27>(components_);
+    PortCustom&         keyboard_port   = std::get<28>(components_);
+
+    C128Board() : Board(kC128Manifest) {}
 };
+
 
 // =============================================================================
 // C128 System
@@ -185,9 +219,9 @@ private:
 
     // ── Board + bus ──────────────────────────────────────────────────────
     using Bus       = MemoryBus<C128BusSpec>;
-    using MainBoard = Board<C128BusSpec, C128Chipset>;
+    using MainBoard = C128Board;
     Bus       bus_;
-    MainBoard board_{kC128Chips};
+    MainBoard board_;
 
     // ── Display ──────────────────────────────────────────────────────────
     std::unique_ptr<CompositeVideoPort> video_port_;  // VIC-IIe output (40-col)
@@ -234,7 +268,6 @@ private:
     void init_io_dispatch();             // Set up CS-tick indexed sub-table for I/O page
     void tick_z80();                     // Z80 tick (T-state) + bus servicing
     bus_state_t z80_io_tick(bus_state_t pins); // Z80 I/O port dispatch
-    void setup_ports() override;
     static void cpu_banking_callback(void* ctx, uint8_t banking_state);
 
     // ── IEC serial trap helpers ───────────────────────────────────────

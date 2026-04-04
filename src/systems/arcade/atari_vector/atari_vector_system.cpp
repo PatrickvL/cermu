@@ -2476,11 +2476,10 @@ void AtariVectorSystem<V>::set_speed_multiplier(float multiplier) {
 // ============================================================================
 // PORT MANIFEST
 // ============================================================================
-//                                        tag       type              name                 num  int  bus  default_device
-#define ATARI_VECTOR_FOR_EACH_PORT(V, ctx) \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, nullptr)
 
-CERMU_PORT_MANIFEST(AtariVector, ATARI_VECTOR_FOR_EACH_PORT)
+static constexpr PortSlot kAtariVectorPorts[] = {
+    {PortType::VIDEO_COMPOSITE, "Video Out", 0, false, false, nullptr},
+};
 
 template<AtariVectorVariant V>
 void AtariVectorSystem<V>::setup_ports() {

@@ -2,7 +2,6 @@
 #include "systems/commodore/vic20/vic20_constants.hpp"
 #include "systems/commodore/vic20/vic20_chips.hpp"
 #include "core/cermu.hpp"
-#include "core/port_manifest.hpp"
 #include "chip/input/commodore_keyboard.hpp"
 #include "core/input/emu_key_sdl_map.hpp"
 #include "systems/commodore/vic20/vic20_keyboard_matrix.hpp" // VIC-20 keyboard matrix data
@@ -563,8 +562,11 @@ bool VIC20System::initialize() {
     register_board(&board_);
     
     // ── Bind all value-typed chips, then factory-create memory chips ─────
-    { size_t slot_idx_ = 0;
-      VIC20_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
+    bind_all(board_, board_.components_, kVIC20Manifest);
+
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = kVIC20Manifest.port_slots;
+    port_manifest_count_ = kVIC20Manifest.port_count;
 
     // ── NTSC: swap the PAL VIC for a factory-created MOS 6560 ────────────
     const bool is_ntsc = (config_.region_option_index > 0);
@@ -1078,7 +1080,7 @@ void VIC20System::setup_cartridge_pages(bool present) {
     using CId = typename Bus::ChipId;
     // 1 KB pages (matches PgBits=10 in ManifestBusSpec)
     constexpr size_t kPgBits = 10;
-    constexpr size_t kCartBase = kVIC20Chips.base_id(kVIC20_CartSlot, kPgBits);
+    constexpr size_t kCartBase = kVIC20Manifest.base_id(kVIC20_CartSlot, kPgBits);
     // $A000 >> 10 = page 40, $BFFF = 8 pages
     constexpr size_t kCartPage = 0xA000 >> kPgBits;   // 40
     constexpr size_t kCartPages = 0x2000 >> kPgBits;  // 8
@@ -1227,38 +1229,6 @@ uint8_t VIC20System::vic20_via2_port_b_read(void* context, uint8_t port_b_output
         }
     }
     return col_state;
-}
-
-// ============================================================================
-// CONNECTOR PORT MANIFEST
-// ============================================================================
-//                              tag         type              name                   num  int  bus  default_device
-#define VIC20_FOR_EACH_PORT(V, ctx) \
-    V(ctx, CONTROL,    CONTROL_PORT_DB9, "Control Port",      1, false, false, "joystick")      \
-    V(ctx, IEC_SERIAL, IEC_SERIAL,       "IEC Serial Bus",    0, false, true,  "1541")          \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",     0, false, false, "datasette")     \
-    V(ctx, USER,       USER_PORT,        "User Port",         0, false, false, nullptr)         \
-    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Port",    0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",         0, false, false, "crt_tv")        \
-    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",         0, false, false, nullptr)         \
-    V(ctx, KEYBOARD,   CUSTOM,           "Keyboard",          0, true,  false, nullptr)
-
-static constexpr PortSlot kVIC20Ports[] = {
-    VIC20_FOR_EACH_PORT(PORT_VISITOR_SLOT, unused)
-};
-
-void VIC20System::setup_ports() {
-
-    create_ports_from_manifest(kVIC20Ports);
-
-    // Attach internal keyboard device (last port in manifest)
-    constexpr int KB_IDX = static_cast<int>(std::size(kVIC20Ports)) - 1;
-    auto kb_device = std::make_unique<CommodoreKeyboardDevice>(keyboard_);
-    auto* kb_raw = kb_device.get();
-    get_port(KB_IDX)->attach_device(kb_raw);
-    owned_devices_.push_back(std::move(kb_device));
-
-    log_info("VIC20: Created %zu ports\n", get_ports().size());
 }
 
 // ============================================================================

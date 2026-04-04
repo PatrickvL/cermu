@@ -60,15 +60,17 @@ bool BombJackSystem::initialize() {
     register_board(&main_board_);
 
     // ── Bind value-typed chips, then create remaining ─────────────────
-    { size_t slot_idx_ = 0;
-      BOMBJACK_MAIN_FOR_EACH_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, main_board_) }
+    bind_all(main_board_, main_board_.components_, kBombJackMainManifest);
     main_board_.create_chips(&main_pins_);
     main_board_.apply(main_bus_);
 
-    { size_t slot_idx_ = 0;
-      BOMBJACK_SOUND_FOR_EACH_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, sound_board_) }
+    bind_all(sound_board_, sound_board_.components_, kBombJackSoundManifest);
     sound_board_.create_chips(&sound_pins_);
     sound_board_.apply(sound_bus_);
+
+    // ── Set port manifest ───────────────────────────────────────────────
+    port_manifest_       = kBombJackPortManifest.port_slots;
+    port_manifest_count_ = kBombJackPortManifest.port_count;
 
     // ── Init chips ─────────────────────────────────────────────────────
     main_cpu_  = &main_board_.cpu;
@@ -383,20 +385,6 @@ bus_state_t BombJackSystem::sound_io_tick(bus_state_t pins) {
     return pins;
 }
 bool BombJackSystem::load_roms() { return false; }
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                                    tag      type              name                 num  int  bus  default_device
-#define BOMBJACK_FOR_EACH_PORT(V, ctx) \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")        \
-    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",           0, false, false, nullptr)
-
-CERMU_PORT_MANIFEST(BombJack, BOMBJACK_FOR_EACH_PORT)
-
-void BombJackSystem::setup_ports() {
-    create_ports_from_manifest(kBombJackPorts);
-}
 
 // ============================================================================
 // SYSTEM REGISTRATION

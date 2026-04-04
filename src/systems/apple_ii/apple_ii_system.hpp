@@ -36,7 +36,8 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
+#include "core/typed_manifest.hpp"
+#include "core/typed_port.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/cpu/fam65xx/wdc65c02.hpp"
@@ -124,84 +125,132 @@ template<> struct AppleIIVariantTraits<AppleIIVariant::APPLE_IIC> {
 // RAM split into 32KB + 16KB (sizes must be power-of-2).
 // ROM extended to 16KB at $C000 — soft switches at $C000-$C0FF handled in tick.
 // Character ROM not bus-mapped — loaded manually in initialize().
-//                                       ctx   type       chip       base    size     mask  ovl  label         rom
-#define APPLE_II_FOR_EACH_SYSTEM_CHIP(V, ctx) \
-    V(ctx, MOS6502,   cpu,       0,          0,   0, 0, "MOS 6502",  nullptr) \
-    V(ctx, RAMChip,   ram,       0x0000, 32768,   0, 0, "Main RAM",  nullptr) \
-    V(ctx, RAMChip,   upper_ram, 0x8000, 16384,   0, 0, "Upper RAM", nullptr) \
-    V(ctx, ROMChip,   rom,       0xC000, 16384,   0, 0, "ROM",       "apple2.rom|APPLE2.ROM|apple2o.rom")
+inline constexpr auto kAppleIIManifest = make_manifest(
+    // Chips
+    Slot<MOS6502>{.base_addr = 0, .label = "MOS 6502"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 32768, .label = "Main RAM"},
+    Slot<RAMChip>{.base_addr = 0x8000, .size_bytes = 16384, .label = "Upper RAM"},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 16384, .label = "ROM", .rom = {"apple2.rom|APPLE2.ROM|apple2o.rom"}},
+    // Ports
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortExpansion>{.name = "Expansion Slots"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+);
 
 // Apple IIe (128K, 65C02)
 // Character ROM not bus-mapped — loaded manually in initialize().
-#define APPLE_IIE_FOR_EACH_SYSTEM_CHIP(V, ctx) \
-    V(ctx, WDC_65C02,  cpu, 0,          0,  0, 0, "WDC 65C02",  nullptr) \
-    V(ctx, RAMChip,    ram, 0x0000, 131072, 0, 0, "RAM",        nullptr) \
-    V(ctx, ROMChip,    rom, 0xC000, 16384,  0, 0, "ROM",        "apple2e.rom|APPLE2E.ROM|apple2e_enhanced.rom")
+inline constexpr auto kAppleIIeManifest = make_manifest(
+    // Chips
+    Slot<WDC_65C02>{.base_addr = 0, .label = "WDC 65C02"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 131072, .label = "RAM", .bank_size = 65536},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 16384, .label = "ROM", .rom = {"apple2e.rom|APPLE2E.ROM|apple2e_enhanced.rom"}},
+    // Ports
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortExpansion>{.name = "Expansion Slots"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+);
 
 // Apple IIc (128K, 65C02, same layout as IIe)
 // Character ROM not bus-mapped — loaded manually in initialize().
-#define APPLE_IIC_FOR_EACH_SYSTEM_CHIP(V, ctx) \
-    V(ctx, WDC_65C02,  cpu, 0,          0,  0, 0, "WDC 65C02",  nullptr) \
-    V(ctx, RAMChip,    ram, 0x0000, 131072, 0, 0, "RAM",        nullptr) \
-    V(ctx, ROMChip,    rom, 0xC000, 32768,  0, 0, "ROM",        "apple2c.rom|APPLE2C.ROM|apple2c_v4.rom")
+inline constexpr auto kAppleIIcManifest = make_manifest(
+    // Chips
+    Slot<WDC_65C02>{.base_addr = 0, .label = "WDC 65C02"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 131072, .label = "RAM", .bank_size = 65536},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 32768, .label = "ROM", .bank_size = 16384, .rom = {"apple2c.rom|APPLE2C.ROM|apple2c_v4.rom"}},
+    // Ports
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortExpansion>{.name = "Expansion Slots"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+);
 
-static constexpr size_t kAppleIIChipCount  = 0 APPLE_II_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-static constexpr size_t kAppleIIeChipCount = 0 APPLE_IIE_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-static constexpr size_t kAppleIIcChipCount = 0 APPLE_IIC_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-
-// Apple II: no bank_size needed
-inline constexpr ChipManifest<kAppleIIChipCount> kAppleIIChips = {{
-    APPLE_II_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
-
-// Apple IIe: RAM bank_size = 65536 (2 × 64KB banks)
-inline constexpr auto make_apple_iie_manifest() {
-    ChipManifest<kAppleIIeChipCount> m = {{
-        APPLE_IIE_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-    }};
-    m.chips[1].bank_size = 65536;
-    return m;
-}
-inline constexpr auto kAppleIIeChips = make_apple_iie_manifest();
-
-// Apple IIc: RAM bank_size = 65536, ROM bank_size = 16384
-inline constexpr auto make_apple_iic_manifest() {
-    ChipManifest<kAppleIIcChipCount> m = {{
-        APPLE_IIC_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-    }};
-    m.chips[1].bank_size = 65536;
-    m.chips[2].bank_size = 16384;
-    return m;
-}
-inline constexpr auto kAppleIIcChips = make_apple_iic_manifest();
+inline constexpr size_t kAppleIIChipCount  = decltype(kAppleIIManifest)::chip_count;
+inline constexpr size_t kAppleIIeChipCount = decltype(kAppleIIeManifest)::chip_count;
+inline constexpr size_t kAppleIIcChipCount = decltype(kAppleIIcManifest)::chip_count;
 
 // BusTraits — selects the correct manifest per variant
 template<AppleIIVariant V> struct AppleIIBusTraits;
 
 template<> struct AppleIIBusTraits<AppleIIVariant::APPLE_II> {
-    static constexpr const auto& kManifest = kAppleIIChips;
-    using Spec = ManifestBusSpec<kAppleIIChips, 16, 8>;
+    static constexpr const auto& kManifest = kAppleIIManifest;
+    using Spec = ManifestBusSpec<kAppleIIManifest, 16, 8>;
 };
 
 template<> struct AppleIIBusTraits<AppleIIVariant::APPLE_IIE> {
-    static constexpr const auto& kManifest = kAppleIIeChips;
-    using Spec = ManifestBusSpec<kAppleIIeChips, 16, 8>;
+    static constexpr const auto& kManifest = kAppleIIeManifest;
+    using Spec = ManifestBusSpec<kAppleIIeManifest, 16, 8>;
 };
 
 template<> struct AppleIIBusTraits<AppleIIVariant::APPLE_IIC> {
-    static constexpr const auto& kManifest = kAppleIIcChips;
-    using Spec = ManifestBusSpec<kAppleIIcChips, 16, 8>;
+    static constexpr const auto& kManifest = kAppleIIcManifest;
+    using Spec = ManifestBusSpec<kAppleIIcManifest, 16, 8>;
 };
 
-// ── Chipset ────────────────────────────────────────────────────────────
-// CPU type varies per variant; Apple II has extra upper_ram field.
-template<AppleIIVariant V>
-struct AppleIIChipset {
-    using CPU = std::conditional_t<AppleIIVariantTraits<V>::is_cmos, WDC_65C02, MOS6502>;
-    CPU        cpu;
-    RAMChip    ram;
-    RAMChip    upper_ram;  // Apple II only — unused for IIe/IIc
-    ROMChip    rom;
+// ── Board specializations ──────────────────────────────────────────────
+// CPU type varies per variant (MOS6502 vs WDC_65C02), so each
+// variant needs its own Board specialization with the correct
+// component tuple and aliases.
+
+template<AppleIIVariant V> struct AppleIIBoard;
+
+template<>
+struct AppleIIBoard<AppleIIVariant::APPLE_II>
+    : Board<AppleIIBusTraits<AppleIIVariant::APPLE_II>::Spec, NoChips> {
+    using BT  = AppleIIBusTraits<AppleIIVariant::APPLE_II>;
+    using CPU = MOS6502;
+    using ComponentTuple = decltype(kAppleIIManifest)::component_tuple;
+    ComponentTuple components_;
+
+    MOS6502& cpu       = std::get<0>(components_);
+    RAMChip& ram       = std::get<1>(components_);
+    RAMChip& upper_ram = std::get<2>(components_);
+    ROMChip& rom       = std::get<3>(components_);
+
+    PortCassette&       cassette_port  = std::get<4>(components_);
+    PortExpansion&      expansion_port = std::get<5>(components_);
+    PortCompositeVideo& video_port     = std::get<6>(components_);
+
+    template<size_t N>
+    AppleIIBoard(const ChipManifest<N>& m) : Board<BT::Spec, NoChips>(m) {}
+};
+
+template<>
+struct AppleIIBoard<AppleIIVariant::APPLE_IIE>
+    : Board<AppleIIBusTraits<AppleIIVariant::APPLE_IIE>::Spec, NoChips> {
+    using BT  = AppleIIBusTraits<AppleIIVariant::APPLE_IIE>;
+    using CPU = WDC_65C02;
+    using ComponentTuple = decltype(kAppleIIeManifest)::component_tuple;
+    ComponentTuple components_;
+
+    WDC_65C02& cpu = std::get<0>(components_);
+    RAMChip&   ram = std::get<1>(components_);
+    ROMChip&   rom = std::get<2>(components_);
+
+    PortCassette&       cassette_port  = std::get<3>(components_);
+    PortExpansion&      expansion_port = std::get<4>(components_);
+    PortCompositeVideo& video_port     = std::get<5>(components_);
+
+    template<size_t N>
+    AppleIIBoard(const ChipManifest<N>& m) : Board<BT::Spec, NoChips>(m) {}
+};
+
+template<>
+struct AppleIIBoard<AppleIIVariant::APPLE_IIC>
+    : Board<AppleIIBusTraits<AppleIIVariant::APPLE_IIC>::Spec, NoChips> {
+    using BT  = AppleIIBusTraits<AppleIIVariant::APPLE_IIC>;
+    using CPU = WDC_65C02;
+    using ComponentTuple = decltype(kAppleIIcManifest)::component_tuple;
+    ComponentTuple components_;
+
+    WDC_65C02& cpu = std::get<0>(components_);
+    RAMChip&   ram = std::get<1>(components_);
+    ROMChip&   rom = std::get<2>(components_);
+
+    PortCassette&       cassette_port  = std::get<3>(components_);
+    PortExpansion&      expansion_port = std::get<4>(components_);
+    PortCompositeVideo& video_port     = std::get<5>(components_);
+
+    template<size_t N>
+    AppleIIBoard(const ChipManifest<N>& m) : Board<BT::Spec, NoChips>(m) {}
 };
 
 // ============================================================================
@@ -248,7 +297,7 @@ private:
 
     // ── Board + bus ──────────────────────────────────────────────────────
     using Bus       = MemoryBus<typename BTraits::Spec>;
-    using MainBoard = Board<typename BTraits::Spec, AppleIIChipset<V>>;
+    using MainBoard = AppleIIBoard<V>;
     Bus       bus_;
     MainBoard board_{BTraits::kManifest};
 
@@ -283,7 +332,6 @@ private:
     bus_state_t pins_      = APPLE_II_BUS_DEFAULT_STATE;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    void setup_ports() override;
     void configure_bus_memory_map();
     void render_frame();
     bool load_roms();

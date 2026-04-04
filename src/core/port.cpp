@@ -187,7 +187,6 @@ const uint8_t APPLE1_CASSETTE_SIGNAL_COUNT = sizeof(APPLE1_CASSETTE_SIGNALS) / s
 // MANIFEST SUPPORT — make_port_definition()
 // ============================================================================
 
-#include "core/port_manifest.hpp"
 #include "core/port_registry.hpp"
 
 PortDefinition make_port_definition(const PortSlot& slot) {

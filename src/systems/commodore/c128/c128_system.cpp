@@ -11,7 +11,6 @@
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
 #include "core/input/emu_key_sdl_map.hpp"
-#include "core/port_manifest.hpp"
 #include "devices/keyboard/commodore_keyboard_device.hpp"
 #include "devices/storage/drive_1541.hpp"
 #include <cstring>
@@ -19,26 +18,6 @@
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #endif
-
-// ============================================================================
-// CONNECTOR PORT MANIFEST
-// ============================================================================
-//                              tag         type              name                   num  int  bus  default_device
-#define C128_FOR_EACH_PORT(V, ctx) \
-    V(ctx, CONTROL1,   CONTROL_PORT_DB9, "Control Port 1",    1, false, false, "mouse_1351")    \
-    V(ctx, CONTROL2,   CONTROL_PORT_DB9, "Control Port 2",    2, false, false, "joystick")      \
-    V(ctx, IEC_SERIAL, IEC_SERIAL,       "IEC Serial Bus",    0, false, true,  "1541")          \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",     0, false, false, "datasette")     \
-    V(ctx, USER,       USER_PORT,        "User Port",         0, false, false, nullptr)         \
-    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Port",    0, false, false, nullptr)         \
-    V(ctx, VIDEO_40,   VIDEO_COMPOSITE,  "Video Out (40-col)",0, false, false, "direct_output") \
-    V(ctx, VIDEO_80,   VIDEO_RGBI,       "Video Out (80-col)",0, false, false, nullptr)         \
-    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",         0, false, false, nullptr)         \
-    V(ctx, KEYBOARD,   CUSTOM,           "Keyboard",          0, true,  false, nullptr)
-
-static constexpr PortSlot kC128Ports[] = {
-    C128_FOR_EACH_PORT(PORT_VISITOR_SLOT, unused)
-};
 
 // ============================================================================
 // KERNAL SERIAL TRAPS — IEC bus trap handlers
@@ -250,10 +229,11 @@ bool C128System::initialize() {
                    | BUS_BIT(BUS_FLAG_BIT) | BUS_DATA_MASK;
     pins_ = default_state_;
 
-    {   size_t slot_idx_ = 0;
-        C128_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
-    }
-    board_.create_chips(&pins_);
+    bind_all(board_, board_.components_, kC128Manifest);
+
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = kC128Manifest.port_slots;
+    port_manifest_count_ = kC128Manifest.port_count;
     board_.apply(bus_);
 
     basic_lo_rom_    = &board_.basic_lo;
@@ -1438,22 +1418,6 @@ void C128System::cpu_banking_callback(void* ctx, uint8_t banking_state) {
 // SYSTEM MENU
 // ============================================================================
 //
-// ============================================================================
-// PORT SETUP
-// ============================================================================
-
-void C128System::setup_ports() {
-    create_ports_from_manifest(kC128Ports);
-
-    // Attach internal keyboard device (last port in manifest)
-    constexpr int KB_IDX = static_cast<int>(std::size(kC128Ports)) - 1;
-    auto kb_device = std::make_unique<CommodoreKeyboardDevice>(keyboard_);
-    auto* kb_raw = kb_device.get();
-    get_port(KB_IDX)->attach_device(kb_raw);
-    owned_devices_.push_back(std::move(kb_device));
-
-    log_info("C128: Created %zu ports\n", get_ports().size());
-}
 
 void C128System::on_port_device_changed(int port_index) {
     if (port_index == PORT_IEC_SERIAL) {

@@ -32,7 +32,7 @@
 #include "core/chip_manifest.hpp"
 #include "core/typed_port.hpp"
 #include "core/dip_switch.hpp"
-#include "core/port_manifest.hpp"
+#include "core/port.hpp"
 #include <tuple>
 
 
@@ -210,9 +210,8 @@ make_manifest(Slot<Ts>... slots) noexcept
         } else if constexpr (is_dip_switch_component_v<T>) {
             m.dip_descriptors[dip_idx++] = s.descriptor;
         } else {
-            // Chip slot — same processing as make_chip_manifest
-            assert(s.size_bytes == 0 ||
-                   (s.size_bytes & (s.size_bytes - 1)) == 0);
+            // Chip slot — same processing as make_chip_manifest.
+            // Note: size_bytes need not be a power of 2 (e.g. VIC-20 3K expansion).
             m.chips[chip_idx++] = ChipSlot{
                 s.base_addr, s.size_bytes, s.addr_mask,
                 s.bank_size,

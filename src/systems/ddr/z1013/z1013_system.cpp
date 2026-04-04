@@ -77,15 +77,13 @@ bool Z1013System<V>::initialize() {
     register_board(&board_);
 
     // ── Bind and create chips from manifest, wire bus ───────────────────
-    if constexpr (V == Z1013Variant::Z1013_64) {
-        size_t slot_idx_ = 0;
-        Z1013_64K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
-    } else {
-        size_t slot_idx_ = 0;
-        Z1013_16K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
-    }
+    bind_all(board_, board_.components_, BT::kManifest);
     board_.create_chips(&pins_);
     board_.apply(bus_);
+
+    // ── Set port manifest ───────────────────────────────────────────────
+    port_manifest_       = BT::kManifest.port_slots;
+    port_manifest_count_ = BT::kManifest.port_count;
 
     // ── Init chips ──────────────────────────────────────────────────────
     pins_ = board_.z80.init();
@@ -358,21 +356,6 @@ bool Z1013System<V>::load_roms() {
 template class Z1013System<Z1013Variant::Z1013_01>;
 template class Z1013System<Z1013Variant::Z1013_16>;
 template class Z1013System<Z1013Variant::Z1013_64>;
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                                tag       type              name                 num  int  bus  default_device
-#define Z1013_FOR_EACH_PORT(V, ctx) \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")
-
-CERMU_PORT_MANIFEST(Z1013, Z1013_FOR_EACH_PORT)
-
-template<Z1013Variant V>
-void Z1013System<V>::setup_ports() {
-    create_ports_from_manifest(kZ1013Ports);
-}
 
 // ============================================================================
 // SYSTEM REGISTRATION

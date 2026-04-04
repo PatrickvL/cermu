@@ -22,7 +22,6 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
 #include "core/signal/audio_port.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -101,65 +100,88 @@ template<> struct CPCModelTraits<CPCModel::CPC6128> {
 // All I/O is Z80 port-based (IORQ) — no MMIO slots needed.
 //
 //                                      ctx   type                chip        base    size    mask  ovl  label              rom
-#define CPC464_FOR_EACH_SYSTEM_CHIP(V, ctx) \
-    V(ctx, ZilogZ80A,            z80,        0,           0, 0, 0, "Z80A",            nullptr) \
-    V(ctx, RAMChip,              ram,        0x0000,  65536, 0, 0, "RAM",             nullptr) \
-    V(ctx, ROMChip,              lower_rom,  0x0000,  16384, 0, 1, "Lower ROM",       "cpc464.rom@0|cpc464_os.rom") \
-    V(ctx, ROMChip,              upper_rom,  0xC000,  16384, 0, 2, "Upper ROM",       "cpc464.rom@16384|cpc464_basic.rom") \
-    V(ctx, mc6845_t,             crtc,       0xBC00,      0, 0, 0, "MC6845 CRTC",     nullptr) \
-    V(ctx, i8255_t,              ppi,        0xF400,      0, 0, 0, "8255 PPI",        nullptr) \
-    V(ctx, AY_3_8912,            psg,        0,           0, 0, 0, "AY-3-8912 PSG",   nullptr) \
-    V(ctx, amstrad_gate_array_t, gate_array, 0x7F00,      0, 0, 0, "Gate Array",      nullptr)
 
-#define CPC6128_FOR_EACH_SYSTEM_CHIP(V, ctx) \
-    V(ctx, ZilogZ80A,            z80,        0,           0, 0, 0, "Z80A",            nullptr) \
-    V(ctx, RAMChip,              ram,        0x0000, 131072, 0, 0, "RAM",             nullptr) \
-    V(ctx, ROMChip,              lower_rom,  0x0000,  16384, 0, 1, "Lower ROM",       "cpc6128.rom@0|cpc6128_os.rom") \
-    V(ctx, ROMChip,              upper_rom,  0xC000,  16384, 0, 2, "Upper ROM",       "cpc6128.rom@16384|cpc6128_basic.rom") \
-    V(ctx, mc6845_t,             crtc,       0xBC00,      0, 0, 0, "MC6845 CRTC",     nullptr) \
-    V(ctx, i8255_t,              ppi,        0xF400,      0, 0, 0, "8255 PPI",        nullptr) \
-    V(ctx, AY_3_8912,            psg,        0,           0, 0, 0, "AY-3-8912 PSG",   nullptr) \
-    V(ctx, amstrad_gate_array_t, gate_array, 0x7F00,      0, 0, 0, "Gate Array",      nullptr)
 
-static constexpr size_t kCPC464ChipCount  = 0 CPC464_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-static constexpr size_t kCPC6128ChipCount = 0 CPC6128_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+inline constexpr auto kCPC464Manifest = make_manifest(
+    // Chips
+    Slot<ZilogZ80A>{.label = "Z80A"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 0x00010000, .label = "RAM"},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x4000, .label = "Lower ROM", .overlay_group = 1, .rom = {"cpc464.rom@0|cpc464_os.rom"}},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 0x4000, .label = "Upper ROM", .overlay_group = 2, .rom = {"cpc464.rom@16384|cpc464_basic.rom"}},
+    Slot<mc6845_t>{.base_addr = 0xBC00, .label = "MC6845 CRTC"},
+    Slot<i8255_t>{.base_addr = 0xF400, .label = "8255 PPI"},
+    Slot<AY_3_8912>{.label = "AY-3-8912 PSG"},
+    Slot<amstrad_gate_array_t>{.base_addr = 0x7F00, .label = "Gate Array"},
+    // Ports
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortExpansion>{.name = "Expansion Port"},
+    Slot<PortRgb>{.name = "Video Out (RGB)", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-inline constexpr ChipManifest<kCPC464ChipCount> kCPC464Chips = {{
-    CPC464_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
+inline constexpr auto kCPC6128Manifest = make_manifest(
+    // Chips
+    Slot<ZilogZ80A>{.label = "Z80A"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 0x00020000, .label = "RAM", .bank_size = 16384},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x4000, .label = "Lower ROM", .overlay_group = 1, .rom = {"cpc6128.rom@0|cpc6128_os.rom"}},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 0x4000, .label = "Upper ROM", .overlay_group = 2, .rom = {"cpc6128.rom@16384|cpc6128_basic.rom"}},
+    Slot<mc6845_t>{.base_addr = 0xBC00, .label = "MC6845 CRTC"},
+    Slot<i8255_t>{.base_addr = 0xF400, .label = "8255 PPI"},
+    Slot<AY_3_8912>{.label = "AY-3-8912 PSG"},
+    Slot<amstrad_gate_array_t>{.base_addr = 0x7F00, .label = "Gate Array"},
+    // Ports
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortExpansion>{.name = "Expansion Port"},
+    Slot<PortRgb>{.name = "Video Out (RGB)", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-constexpr ChipManifest<kCPC6128ChipCount> make_cpc6128_manifest() {
-    ChipManifest<kCPC6128ChipCount> m = {{
-        CPC6128_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-    }};
-    m.chips[1].bank_size = 16384;  // RAM (8 × 16 KB banks)
-    return m;
-}
-inline constexpr auto kCPC6128Chips = make_cpc6128_manifest();
-
+inline constexpr size_t kCPC464ChipCount = decltype(kCPC464Manifest)::chip_count;
+inline constexpr size_t kCPC6128ChipCount = decltype(kCPC6128Manifest)::chip_count;
 
 // BusTraits — selects the correct manifest per CPC model
 template<CPCModel M> struct CPCBusTraits;
 
 template<> struct CPCBusTraits<CPCModel::CPC464> {
-    static constexpr const auto& kManifest = kCPC464Chips;
-    using Spec = ManifestBusSpec<kCPC464Chips, 16, 8>;
+    static constexpr const auto& kManifest = kCPC464Manifest;
+    using Spec = ManifestBusSpec<kCPC464Manifest, 16, 8>;
 };
 
 template<> struct CPCBusTraits<CPCModel::CPC664> {
-    static constexpr const auto& kManifest = kCPC464Chips;  // Same layout as 464
-    using Spec = ManifestBusSpec<kCPC464Chips, 16, 8>;
+    static constexpr const auto& kManifest = kCPC464Manifest;  // Same layout as 464
+    using Spec = ManifestBusSpec<kCPC464Manifest, 16, 8>;
 };
 
 template<> struct CPCBusTraits<CPCModel::CPC6128> {
-    static constexpr const auto& kManifest = kCPC6128Chips;
-    using Spec = ManifestBusSpec<kCPC6128Chips, 16, 8>;
+    static constexpr const auto& kManifest = kCPC6128Manifest;
+    using Spec = ManifestBusSpec<kCPC6128Manifest, 16, 8>;
 };
 
-// ── Chips ──────────────────────────────────────────────────────────────
-struct CPCChipset {
-    CPC464_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+template<typename BSpec>
+struct CPCBoard : Board<BSpec, NoChips> {
+    using ComponentTuple = decltype(kCPC464Manifest)::component_tuple;
+    ComponentTuple components_;
+
+    // Chip aliases
+    ZilogZ80A&            z80        = std::get<0>(components_);
+    RAMChip&              ram        = std::get<1>(components_);
+    ROMChip&              lower_rom  = std::get<2>(components_);
+    ROMChip&              upper_rom  = std::get<3>(components_);
+    mc6845_t&             crtc       = std::get<4>(components_);
+    i8255_t&              ppi        = std::get<5>(components_);
+    AY_3_8912&            psg        = std::get<6>(components_);
+    amstrad_gate_array_t& gate_array = std::get<7>(components_);
+
+    // Port aliases
+    PortCassette&  cassette_port  = std::get<8>(components_);
+    PortExpansion& expansion_port = std::get<9>(components_);
+    PortRgb&       video_port     = std::get<10>(components_);
+    PortAudioMono& audio_port     = std::get<11>(components_);
+
+    template<size_t N>
+    CPCBoard(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
 };
+
 
 // ============================================================================
 // Amstrad CPC System
@@ -201,7 +223,7 @@ private:
     using BT  = CPCBusTraits<M>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec, CPCChipset>;
+    using MainBoard = CPCBoard<typename BT::Spec>;
     Bus bus_;
     MainBoard board_{BT::kManifest};
 
@@ -236,7 +258,6 @@ private:
 
     void configure_bus_memory_map();
     void update_banking();           // Remap pages after ROM toggle / 6128 bank switch
-    void setup_ports() override;
     void apply_rom_overlay();        // Load ROM overlay snapshot for current ga state
     bus_state_t io_tick(bus_state_t pins);
     bool load_roms();

@@ -4,7 +4,6 @@
 #include "systems/commodore/c64/c64_sid_player.hpp"
 #include "chip/input/commodore_keyboard.hpp"
 #include "core/input/emu_key_sdl_map.hpp"
-#include "core/port_manifest.hpp"
 // gui_state_t dependency eliminated — chip debug uses base class,
 // system menu items are inlined, test binary dialog removed.
 #ifdef CERMU_HAS_GUI
@@ -397,7 +396,7 @@ bool C64System::initialize() {
     board_.apply(bus_);
 
     // Convenience pointers — all point into board_.chips() value fields.
-    C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_ASSIGN_POINTER, board_)
+    C64_FOR_EACH_SYSTEM_CHIP(C64_CHIP_VISITOR_ASSIGN_POINTER, board_)
 
     if (!this->cpu) { cleanup(); return false; }
 
@@ -566,7 +565,7 @@ void C64System::shutdown() {
         }
 
         // Null out convenience pointers (Board owns the chip lifetimes)
-        C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_NULL_POINTER, unused)
+        C64_FOR_EACH_SYSTEM_CHIP(C64_CHIP_VISITOR_NULL_POINTER, unused)
 
         initialized_ = false;
     }
@@ -1440,20 +1439,17 @@ void C64System::render_configuration_ui() {
 // ============================================================================
 // CONNECTOR PORT MANIFEST
 // ============================================================================
-//                            tag         type              name                   num  int  bus  default_device
-#define C64_FOR_EACH_PORT(V, ctx) \
-    V(ctx, CONTROL1,   CONTROL_PORT_DB9, "Control Port 1",    1, false, false, "mouse_1351")    \
-    V(ctx, CONTROL2,   CONTROL_PORT_DB9, "Control Port 2",    2, false, false, "joystick")      \
-    V(ctx, IEC_SERIAL, IEC_SERIAL,       "IEC Serial Bus",    0, false, true,  "1541")          \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",     0, false, false, "datasette")     \
-    V(ctx, USER,       USER_PORT,        "User Port",         0, false, false, nullptr)         \
-    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Port",    0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",         0, false, false, "direct_output") \
-    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",         0, false, false, nullptr)         \
-    V(ctx, KEYBOARD,   CUSTOM,           "Keyboard",          0, true,  false, nullptr)
 
 static constexpr PortSlot kC64Ports[] = {
-    C64_FOR_EACH_PORT(PORT_VISITOR_SLOT, unused)
+    {PortType::CONTROL_PORT_DB9, "Control Port 1",  1, false, false, "mouse_1351"},
+    {PortType::CONTROL_PORT_DB9, "Control Port 2",  2, false, false, "joystick"},
+    {PortType::IEC_SERIAL,       "IEC Serial Bus",  0, false, true,  "1541"},
+    {PortType::CASSETTE_PORT,    "Cassette Port",   0, false, false, "datasette"},
+    {PortType::USER_PORT,        "User Port",       0, false, false, nullptr},
+    {PortType::EXPANSION_PORT,   "Expansion Port",  0, false, false, nullptr},
+    {PortType::VIDEO_COMPOSITE,  "Video Out",       0, false, false, "direct_output"},
+    {PortType::AUDIO_MONO,       "Audio Out",       0, false, false, nullptr},
+    {PortType::CUSTOM,           "Keyboard",        0, true,  false, nullptr},
 };
 
 // ============================================================================

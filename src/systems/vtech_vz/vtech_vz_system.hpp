@@ -21,7 +21,6 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/video/mc6847/mc6847.hpp"
@@ -64,58 +63,68 @@ template<> struct VZVariantTraits<VZVariant::VZ300> {
 
 #define VZ_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
 
-// =============================================================================
-// VZ chip declarations — variant-specific single source of truth
-// =============================================================================
-//
-// Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
-//
-// VZ200: 16 KB ROM at $0000, 2 KB Video RAM at $7000, 16 KB User RAM at $7800
-// VZ300: same layout, only ROM filename differs
-//
+inline constexpr auto kVZ200Manifest = make_manifest(
+    // Chips
+    Slot<ZilogZ80A>{.base_addr = 0x0000, .label = "Z80A"},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x4000, .label = "BASIC ROM", .rom = {"vz200.rom|BASIC.ROM|laser200.rom"}},
+    Slot<RAMChip>{.base_addr = 0x7000, .size_bytes = 0x0800, .label = "Video RAM"},
+    Slot<RAMChip>{.base_addr = 0x7800, .size_bytes = 0x4000, .label = "User RAM"},
+    Slot<mc6847_t>{.base_addr = 0x0000, .label = "MC6847 VDG"},
+    // Ports
+    Slot<PortControlDB9>{.name = "Joystick Port", .port_number = 1, .default_device = "joystick"},
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+);
 
-#define VZ200_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                  \
-    V(ctx, ZilogZ80A,  z80,   0x0000,     0, 0, 0, "Z80A",       nullptr)                                   \
-    V(ctx, ROMChip,    rom,   0x0000, 16384, 0, 0, "BASIC ROM",  "vz200.rom|BASIC.ROM|laser200.rom")        \
-    V(ctx, RAMChip,    vram,  0x7000,  2048, 0, 0, "Video RAM",  nullptr)                                   \
-    V(ctx, RAMChip,    ram,   0x7800, 16384, 0, 0, "User RAM",   nullptr)                                   \
-    V(ctx, mc6847_t,   vdg,   0x0000,     0, 0, 0, "MC6847 VDG", nullptr)
+inline constexpr auto kVZ300Manifest = make_manifest(
+    // Chips
+    Slot<ZilogZ80A>{.base_addr = 0x0000, .label = "Z80A"},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x4000, .label = "BASIC ROM", .rom = {"vz300.rom|BASIC.ROM|laser310.rom"}},
+    Slot<RAMChip>{.base_addr = 0x7000, .size_bytes = 0x0800, .label = "Video RAM"},
+    Slot<RAMChip>{.base_addr = 0x7800, .size_bytes = 0x4000, .label = "User RAM"},
+    Slot<mc6847_t>{.base_addr = 0x0000, .label = "MC6847 VDG"},
+    // Ports
+    Slot<PortControlDB9>{.name = "Joystick Port", .port_number = 1, .default_device = "joystick"},
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+);
 
-#define VZ300_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                  \
-    V(ctx, ZilogZ80A,  z80,   0x0000,     0, 0, 0, "Z80A",       nullptr)                                   \
-    V(ctx, ROMChip,    rom,   0x0000, 16384, 0, 0, "BASIC ROM",  "vz300.rom|BASIC.ROM|laser310.rom")        \
-    V(ctx, RAMChip,    vram,  0x7000,  2048, 0, 0, "Video RAM",  nullptr)                                   \
-    V(ctx, RAMChip,    ram,   0x7800, 16384, 0, 0, "User RAM",   nullptr)                                   \
-    V(ctx, mc6847_t,   vdg,   0x0000,     0, 0, 0, "MC6847 VDG", nullptr)
-
-static constexpr size_t kVZ200ChipCount = 0 VZ200_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-static constexpr size_t kVZ300ChipCount = 0 VZ300_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-
-inline constexpr ChipManifest<kVZ200ChipCount> kVZ200Chips = ChipManifest<kVZ200ChipCount>{{
-    VZ200_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
-
-inline constexpr ChipManifest<kVZ300ChipCount> kVZ300Chips = ChipManifest<kVZ300ChipCount>{{
-    VZ300_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
-
+inline constexpr size_t kVZ200ChipCount = decltype(kVZ200Manifest)::chip_count;
+inline constexpr size_t kVZ300ChipCount = decltype(kVZ300Manifest)::chip_count;
 // BusTraits — selects the correct manifest per variant
 template<VZVariant V> struct VZBusTraits;
 
 template<> struct VZBusTraits<VZVariant::VZ200> {
-    static constexpr const auto& kManifest = kVZ200Chips;
-    using Spec = ManifestBusSpec<kVZ200Chips, 16, 8>;
+    static constexpr const auto& kManifest = kVZ200Manifest;
+    using Spec = ManifestBusSpec<kVZ200Manifest, 16, 8>;
 };
 
 template<> struct VZBusTraits<VZVariant::VZ300> {
-    static constexpr const auto& kManifest = kVZ300Chips;
-    using Spec = ManifestBusSpec<kVZ300Chips, 16, 8>;
+    static constexpr const auto& kManifest = kVZ300Manifest;
+    using Spec = ManifestBusSpec<kVZ300Manifest, 16, 8>;
 };
 
-// ── Chips ──────────────────────────────────────────────────────────────
-struct VZChips {
-    VZ200_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+template<typename BSpec>
+struct VZBoard : Board<BSpec, NoChips> {
+    using ComponentTuple = decltype(kVZ200Manifest)::component_tuple;
+    ComponentTuple components_;
+
+    // Chip aliases
+    ZilogZ80A& z80  = std::get<0>(components_);
+    ROMChip&   rom  = std::get<1>(components_);
+    RAMChip&   vram = std::get<2>(components_);
+    RAMChip&   ram  = std::get<3>(components_);
+    mc6847_t&  vdg  = std::get<4>(components_);
+
+    // Port aliases
+    PortControlDB9&     joy_port      = std::get<5>(components_);
+    PortCassette&       cassette_port = std::get<6>(components_);
+    PortCompositeVideo& video_port    = std::get<7>(components_);
+
+    template<size_t N>
+    VZBoard(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
 };
+
 
 // ============================================================================
 // VTech VZ System
@@ -159,7 +168,7 @@ private:
 
     // ── Board + bus ──────────────────────────────────────────────────────
     using Bus       = MemoryBus<typename BTraits::Spec>;
-    using MainBoard = Board<typename BTraits::Spec, VZChips>;
+    using MainBoard = VZBoard<typename BTraits::Spec>;
     Bus       bus_;
     MainBoard board_{BTraits::kManifest};
 
@@ -177,7 +186,6 @@ private:
     bus_state_t pins_      = VZ_BUS_DEFAULT_STATE;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    void setup_ports() override;
     void configure_bus_memory_map();
     bool load_roms();
     void io_tick(bus_state_t& bus);   // Z80 port I/O dispatch

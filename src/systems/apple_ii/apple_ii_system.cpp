@@ -134,16 +134,12 @@ template<AppleIIVariant V>
 bool AppleIISystem<V>::initialize() {
     log_info("%s: Initializing system\n", Traits::name);
     register_board(&board_);
-    {   size_t slot_idx_ = 0;
-        if constexpr (V == AppleIIVariant::APPLE_II) {
-            APPLE_II_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
-        } else if constexpr (V == AppleIIVariant::APPLE_IIE) {
-            APPLE_IIE_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
-        } else {
-            APPLE_IIC_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
-        }
-    }
+    bind_all(board_, board_.components_, BTraits::kManifest);
     board_.create_chips(&pins_);
+
+    // ── Set port manifest ───────────────────────────────────────────────
+    port_manifest_       = BTraits::kManifest.port_slots;
+    port_manifest_count_ = BTraits::kManifest.port_count;
 
     rom_      = &board_.rom;
     ram_ptr_  = board_.ram.data();
@@ -189,7 +185,7 @@ void AppleIISystem<V>::reset() {
 
 template<AppleIIVariant V>
 void AppleIISystem<V>::tick() {
-    using CPU = typename AppleIIChipset<V>::CPU;
+    using CPU = typename MainBoard::CPU;
     bus_state_t s = pins_;
 
     // ---- CPU PHI2 — address/R#W valid on bus ----
@@ -348,22 +344,6 @@ void AppleIISystem<V>::soft_switch_write(uint16_t addr, uint8_t /*data*/) {
 template class AppleIISystem<AppleIIVariant::APPLE_II>;
 template class AppleIISystem<AppleIIVariant::APPLE_IIE>;
 template class AppleIISystem<AppleIIVariant::APPLE_IIC>;
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                                     tag       type              name                   num  int  bus  default_device
-#define APPLE_II_FOR_EACH_PORT(V, ctx) \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",         0, false, false, nullptr)         \
-    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Slots",       0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",             0, false, false, "crt_tv")
-
-CERMU_PORT_MANIFEST(AppleII, APPLE_II_FOR_EACH_PORT)
-
-template<AppleIIVariant V>
-void AppleIISystem<V>::setup_ports() {
-    create_ports_from_manifest(kAppleIIPorts);
-}
 
 // ============================================================================
 // SYSTEM REGISTRATION

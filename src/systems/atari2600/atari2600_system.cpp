@@ -23,7 +23,6 @@
 #include "systems/atari2600/atari2600_system.hpp"
 #include "systems/atari2600/mappers/a2600_mapper_factory.hpp"
 #include "core/system_registry.hpp"
-#include "core/port_manifest.hpp"
 #include "core/port.hpp"
 #include "core/vfs/vfs.hpp"
 #include <cstring>
@@ -171,10 +170,11 @@ bool Atari2600System::initialize() {
     register_board(&board_);
 
     // ── Bind all value-typed chips to manifest slots ──────────────────
-    { size_t slot_idx_ = 0;
-      ATARI2600_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
-    board_.create_chips(&pins_);
+    bind_all(board_, board_.components_, kAtari2600Manifest);
 
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = kAtari2600Manifest.port_slots;
+    port_manifest_count_ = kAtari2600Manifest.port_count;
     // ── Configure MemoryBus page tables (mirrors + cart pages) ──────────
     configure_bus_memory_map();
 
@@ -520,18 +520,6 @@ void Atari2600System::update_joystick_state() {
 // CONNECTOR PORT MANIFEST
 // ============================================================================
 //                          tag       type              name                 num  int  bus  default_device
-#define A2600_FOR_EACH_PORT(V, ctx) \
-    V(ctx, LEFT,     CONTROL_PORT_DB9,  "Left Controller",   1, false, false, "joystick") \
-    V(ctx, RIGHT,    CONTROL_PORT_DB9,  "Right Controller",  2, false, false, "joystick") \
-    V(ctx, VIDEO,    VIDEO_COMPOSITE,   "Video Out",         0, false, false, "crt_tv")   \
-    V(ctx, AUDIO,    AUDIO_MONO,        "Audio Out",         0, false, false, nullptr)
-
-CERMU_PORT_MANIFEST(A2600, A2600_FOR_EACH_PORT)
-
-void Atari2600System::setup_ports() {
-    create_ports_from_manifest(kA2600Ports);
-}
-
 // ============================================================================
 // GUI
 // ============================================================================

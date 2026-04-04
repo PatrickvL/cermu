@@ -152,10 +152,11 @@ bool BBCMasterSystem<V>::initialize() {
     register_board(&board_);
 
     // Pre-bind all value-typed chips
-    { size_t slot_idx_ = 0;
-      BBC_BPLUS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
-    board_.create_chips(&pins_);
+    bind_all(board_, board_.components_, BTraits::kManifest);
 
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = BTraits::kManifest.port_slots;
+    port_manifest_count_ = BTraits::kManifest.port_count;
     ram_chip_       = &board_.ram;
     paged_rom_chip_ = &board_.paged_rom;
     os_rom_chip_    = &board_.os_rom;
@@ -483,28 +484,6 @@ void BBCMasterSystem<V>::sys_via_port_b_write(void* context, uint8_t data) {
 
 template class BBCMasterSystem<BBCMasterVariant::MODEL_B_PLUS>;
 template class BBCMasterSystem<BBCMasterVariant::MASTER_128>;
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                                     tag       type              name                  num  int  bus  default_device
-#define BBC_MASTER_FOR_EACH_PORT(V, ctx) \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",        0, false, false, nullptr)         \
-    V(ctx, USER,       USER_PORT,        "User Port",            0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",            0, false, false, "crt_tv")        \
-    V(ctx, VIDEO_RGB,  VIDEO_RGB,        "Video Out (RGB)",      0, false, false, nullptr)         \
-    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",            0, false, false, nullptr)
-
-CERMU_PORT_MANIFEST(BBCMaster, BBC_MASTER_FOR_EACH_PORT)
-
-template<BBCMasterVariant V>
-void BBCMasterSystem<V>::setup_ports() {
-    create_ports_from_manifest(kBBCMasterPorts);
-}
-
-// ============================================================================
-// SYSTEM REGISTRATION
-// ============================================================================
 
 REGISTER_SYSTEM(bbc_bplus_descriptor, [] {
     return std::make_unique<BBCMasterSystem<BBCMasterVariant::MODEL_B_PLUS>>();

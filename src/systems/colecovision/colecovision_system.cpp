@@ -94,9 +94,11 @@ bool ColecoVisionSystem::initialize() {
     log_info("ColecoVision: Initializing system\n");
     register_board(&board_);
 
-    { size_t slot_idx_ = 0;
-      COLECO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
-    board_.create_chips(&pins_);
+    bind_all(board_, board_.components_, kColecoManifest);
+
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = kColecoManifest.port_slots;
+    port_manifest_count_ = kColecoManifest.port_count;
     board_.apply(bus_);
 
     configure_bus_memory_map();
@@ -325,27 +327,6 @@ bool ColecoVisionSystem::load_roms() {
     }
     return board_.load_roms(rom_root, "ColecoVision");
 }
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                                  tag        type              name                  num  int  bus  default_device
-#define COLECO_FOR_EACH_PORT(V, ctx) \
-    V(ctx, CTRL1,      CONTROL_PORT_DB9, "Controller Port 1",    1, false, false, "joystick")      \
-    V(ctx, CTRL2,      CONTROL_PORT_DB9, "Controller Port 2",    2, false, false, "joystick")      \
-    V(ctx, CARTRIDGE,  EXPANSION_PORT,   "Cartridge Slot",       0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",            0, false, false, "crt_tv")        \
-    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",            0, false, false, nullptr)
-
-CERMU_PORT_MANIFEST(Coleco, COLECO_FOR_EACH_PORT)
-
-void ColecoVisionSystem::setup_ports() {
-    create_ports_from_manifest(kColecoPorts);
-}
-
-// ============================================================================
-// SYSTEM REGISTRATION
-// ============================================================================
 
 REGISTER_SYSTEM(coleco_descriptor, [] {
     return std::make_unique<ColecoVisionSystem>();

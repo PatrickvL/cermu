@@ -3,7 +3,6 @@
 #include "systems/commodore/commodore_system.hpp"
 #include "systems/commodore/pet/pet_constants.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/io/pia6820.hpp"
@@ -47,6 +46,30 @@
  * $F000–$FFFF  4KB   KERNAL ROM
  */
 
+inline constexpr auto kPETManifest = make_manifest(
+    // Chips
+    Slot<MOS6502>{.label = "MOS 6502"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 0x8000, .label = "Main RAM"},
+    Slot<RAMChip>{.base_addr = 0x8000, .size_bytes = 0x0800, .addr_mask = 0x03FF, .label = "Screen RAM"},
+    Slot<ROMChip>{.base_addr = 0xB000, .size_bytes = 0x1000, .label = "BASIC ROM $B000", .rom = {"basic-4.901465-23-20-21.bin@0|901465-23.bin|basic-b.rom"}},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 0x1000, .label = "BASIC ROM $C000", .rom = {"basic-4.901465-23-20-21.bin@4096|901465-20.bin|basic-c.rom"}},
+    Slot<ROMChip>{.base_addr = 0xD000, .size_bytes = 0x1000, .label = "BASIC ROM $D000", .rom = {"basic-4.901465-23-20-21.bin@8192|901465-21.bin|basic-d.rom"}},
+    Slot<ROMChip>{.base_addr = 0xE000, .size_bytes = 0x0800, .label = "Editor ROM", .rom = {"edit-4-40-n-50Hz.901498-01.bin|edit-4-40-n-60Hz.901499-01.bin|editor.rom|901498-01.bin|901499-01.bin"}},
+    Slot<ROMChip>{.base_addr = 0xF000, .size_bytes = 0x1000, .label = "Kernal ROM", .rom = {"kernal-4.901465-22.bin|kernal4.rom|kernal.rom|901465-22.bin"}},
+    Slot<mc6845_t>{.base_addr = 0xE880, .addr_mask = 0xFFF0, .label = "MC6845 CRTC"},
+    Slot<mos6520_t>{.base_addr = 0xE810, .addr_mask = 0xFFF0, .label = "PIA 1 (Keyboard)"},
+    Slot<mos6520_t>{.base_addr = 0xE820, .addr_mask = 0xFFF0, .label = "PIA 2 (IEEE-488)"},
+    Slot<mos6522_t>{.base_addr = 0xE840, .addr_mask = 0xFFF0, .label = "MOS 6522 VIA"},
+    // Ports
+    Slot<PortIecSerial>{.name = "IEC Serial Bus", .is_bus = true},
+    Slot<PortCassette>{.name = "Cassette Port", .default_device = "datasette"},
+    Slot<PortUserPort>{.name = "User Port"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_green"}
+);
+
+inline constexpr size_t kPETChipCount = decltype(kPETManifest)::chip_count;
+
+
 // ============================================================================
 // PET chip manifest — declarative memory layout
 // ============================================================================
@@ -64,35 +87,40 @@
 // Character ROM is NOT bus-mapped.
 //
 //                                ctx   type       chip           base    size    mask    ovl  label              rom
-#define PET_FOR_EACH_SYSTEM_CHIP(V, ctx) \
-    V(ctx, MOS6502,   m6502,        0,            0, 0,      0, "MOS 6502",        nullptr) \
-    V(ctx, RAMChip,   main_ram,     0x0000,  32768, 0,      0, "Main RAM",        nullptr) \
-    V(ctx, RAMChip,   screen_ram,   0x8000,   2048, 0x03FF, 0, "Screen RAM",      nullptr) \
-    V(ctx, ROMChip,   basic_rom_b,  0xB000,   4096, 0,      0, "BASIC ROM $B000", "basic-4.901465-23-20-21.bin@0|901465-23.bin|basic-b.rom") \
-    V(ctx, ROMChip,   basic_rom_c,  0xC000,   4096, 0,      0, "BASIC ROM $C000", "basic-4.901465-23-20-21.bin@4096|901465-20.bin|basic-c.rom") \
-    V(ctx, ROMChip,   basic_rom_d,  0xD000,   4096, 0,      0, "BASIC ROM $D000", "basic-4.901465-23-20-21.bin@8192|901465-21.bin|basic-d.rom") \
-    V(ctx, ROMChip,   editor_rom,   0xE000,   2048, 0,      0, "Editor ROM",      "edit-4-40-n-50Hz.901498-01.bin|edit-4-40-n-60Hz.901499-01.bin|editor.rom|901498-01.bin|901499-01.bin") \
-    V(ctx, ROMChip,   kernal_rom,   0xF000,   4096, 0,      0, "Kernal ROM",      "kernal-4.901465-22.bin|kernal4.rom|kernal.rom|901465-22.bin") \
-    V(ctx, mc6845_t,  crtc,         0xE880,       0, 0xFFF0, 0, "MC6845 CRTC",     nullptr) \
-    V(ctx, mos6520_t, pia1,         0xE810,       0, 0xFFF0, 0, "PIA 1 (Keyboard)", nullptr) \
-    V(ctx, mos6520_t, pia2,         0xE820,       0, 0xFFF0, 0, "PIA 2 (IEEE-488)", nullptr) \
-    V(ctx, mos6522_t, via,          0xE840,       0, 0xFFF0, 0, "MOS 6522 VIA",    nullptr)
 
-static constexpr size_t kPETChipCount = 0 PET_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-
-inline constexpr ChipManifest<kPETChipCount> kPETChips = {{
-    PET_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
 
 struct PETBusTraits {
-    static constexpr const auto& kManifest = kPETChips;
-    using Spec = ManifestBusSpec<kPETChips, 16, 8, 1, true>;
+    static constexpr const auto& kManifest = kPETManifest;
+    using Spec = ManifestBusSpec<kPETManifest, 16, 8, 1, true>;
 };
 
-// Value-typed chips: all chips are fields via X-macro.
-struct PETChipset {
-    PET_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+struct PETBoard : Board<PETBusTraits::Spec, NoChips> {
+    using ComponentTuple = decltype(kPETManifest)::component_tuple;
+    ComponentTuple components_;
+
+    // Chip aliases
+    MOS6502&   m6502       = std::get<0>(components_);
+    RAMChip&   main_ram    = std::get<1>(components_);
+    RAMChip&   screen_ram  = std::get<2>(components_);
+    ROMChip&   basic_rom_b = std::get<3>(components_);
+    ROMChip&   basic_rom_c = std::get<4>(components_);
+    ROMChip&   basic_rom_d = std::get<5>(components_);
+    ROMChip&   editor_rom  = std::get<6>(components_);
+    ROMChip&   kernal_rom  = std::get<7>(components_);
+    mc6845_t&  crtc        = std::get<8>(components_);
+    mos6520_t& pia1        = std::get<9>(components_);
+    mos6520_t& pia2        = std::get<10>(components_);
+    mos6522_t& via         = std::get<11>(components_);
+
+    // Port aliases
+    PortIecSerial&      iec_serial_port = std::get<12>(components_);
+    PortCassette&       cassette_port   = std::get<13>(components_);
+    PortUserPort&       user_port       = std::get<14>(components_);
+    PortCompositeVideo& video_port      = std::get<15>(components_);
+
+    PETBoard() : Board(kPETManifest) {}
 };
+
 
 class PETSystem : public CommodoreSystem {
 public:
@@ -130,9 +158,9 @@ public:
 private:
     // ── Bus ──────────────────────────────────────────────────────────────
     using Bus    = MemoryBus<PETBusTraits::Spec>;
-    using MainBoard = Board<PETBusTraits::Spec, PETChipset>;
+    using MainBoard = PETBoard;
     Bus    bus_;
-    MainBoard board_{kPETChips};
+    MainBoard board_;
     bus_state_t pins_ = PET_BUS_DEFAULT_STATE;
 
     // ── Memory chips (owned by registered_chips_, managed via Board) ─
@@ -195,8 +223,6 @@ private:
 
     // VIA CB2 callback — speaker output
     static void via_cb2_output(void* user_data, bool state);
-    void setup_ports() override;
-
     // CRTC display callback — renders one character cell
     void crtc_display_char(uint16_t ma, uint8_t ra, bool cursor);
     void crtc_vsync();

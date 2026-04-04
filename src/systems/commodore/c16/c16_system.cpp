@@ -1,5 +1,4 @@
 #include "core/cermu.hpp"
-#include "core/port_manifest.hpp"
 #include "systems/commodore/c16/c16_system.hpp"
 #include "systems/commodore/c16/c16_constants.hpp"
 #include "systems/commodore/c16/c16_keyboard_matrix.hpp"
@@ -397,39 +396,6 @@ static void c16_mem_write_block(void* ctx, uint16_t addr,
 // ============================================================================
 // CONNECTOR PORT MANIFESTS
 // ============================================================================
-// C16/C116 — no user port;  Plus/4 — has user port.
-// Two manifests so create_ports_from_manifest produces correct indices.
-
-//                               tag         type              name                   num  int  bus  default_device
-#define C16_FOR_EACH_PORT(V, ctx) \
-    V(ctx, JOY1,       CONTROL_PORT_DB9, "Joystick Port 1",   1, false, false, "joystick")      \
-    V(ctx, JOY2,       CONTROL_PORT_DB9, "Joystick Port 2",   2, false, false, "joystick")      \
-    V(ctx, IEC_SERIAL, IEC_SERIAL,       "IEC Serial Bus",    0, false, true,  "1541")          \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",     0, false, false, "datasette")     \
-    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Port",    0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",         0, false, false, "crt_tv")        \
-    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",         0, false, false, nullptr)         \
-    V(ctx, KEYBOARD,   CUSTOM,           "Keyboard",          0, true,  false, nullptr)
-
-#define PLUS4_FOR_EACH_PORT(V, ctx) \
-    V(ctx, JOY1,       CONTROL_PORT_DB9, "Joystick Port 1",   1, false, false, "joystick")      \
-    V(ctx, JOY2,       CONTROL_PORT_DB9, "Joystick Port 2",   2, false, false, "joystick")      \
-    V(ctx, IEC_SERIAL, IEC_SERIAL,       "IEC Serial Bus",    0, false, true,  "1541")          \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",     0, false, false, "datasette")     \
-    V(ctx, USER,       USER_PORT,        "User Port",         0, false, false, nullptr)         \
-    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Port",    0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",         0, false, false, "crt_tv")        \
-    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",         0, false, false, nullptr)         \
-    V(ctx, KEYBOARD,   CUSTOM,           "Keyboard",          0, true,  false, nullptr)
-
-static constexpr PortSlot kC16Ports[] = {
-    C16_FOR_EACH_PORT(PORT_VISITOR_SLOT, unused)
-};
-
-static constexpr PortSlot kPlus4Ports[] = {
-    PLUS4_FOR_EACH_PORT(PORT_VISITOR_SLOT, unused)
-};
-
 // ============================================================================
 // Constructor / Destructor
 // ============================================================================
@@ -552,10 +518,11 @@ bool Commodore264System<V>::initialize() {
     }
 
     // Bind value-typed chips from Chips, then factory-create remaining
-    {   size_t slot_idx_ = 0;
-        C264_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
-    }
-    board_.create_chips(&bus_state_);
+    bind_all(board_, board_.components_, kC264Manifest);
+
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = kC264Manifest.port_slots;
+    port_manifest_count_ = kC264Manifest.port_count;
     board_.apply(bus_);
 
     // Convenience pointers for direct buffer access (ROM loading, KERNAL checks, etc.)
@@ -1001,7 +968,7 @@ bool Commodore264System<V>::load_roms() {
 // mask 0x3FFF so all accesses wrap to the first 16KB of the 64KB buffer.
 template<C264SeriesVariant V>
 void Commodore264System<V>::setup_ram_mirroring() {
-    constexpr size_t kRamBase = kC264Chips.base_id(kC264Chips.find<RAMChip>(), 8);
+    constexpr size_t kRamBase = kC264Manifest.base_id(kC264Manifest.find<RAMChip>(), 8);
 
     // Update chip_info_ address mask to reflect actual RAM size.
     // 16KB: mask = 0x3FFF → hardware address mirroring.
@@ -1130,30 +1097,6 @@ void Commodore264System<V>::set_cpu_pc(void* user_data, uint16_t addr) {
 }
 
 // ============================================================================
-// CONNECTOR PORT SETUP
-// ============================================================================
-
-template<C264SeriesVariant V>
-void Commodore264System<V>::setup_ports() {
-
-    if constexpr (Traits::has_user_port)
-        create_ports_from_manifest(kPlus4Ports);
-    else
-        create_ports_from_manifest(kC16Ports);
-
-    // Attach internal keyboard device (last port in manifest)
-    const auto& manifest = Traits::has_user_port ? kPlus4Ports : kC16Ports;
-    int kb_idx = static_cast<int>(Traits::has_user_port
-        ? std::size(kPlus4Ports) : std::size(kC16Ports)) - 1;
-    auto kb_device = std::make_unique<CommodoreKeyboardDevice>(keyboard_);
-    auto* kb_raw = kb_device.get();
-    get_port(kb_idx)->attach_device(kb_raw);
-    owned_devices_.push_back(std::move(kb_device));
-
-    log_info("%s: Created %zu ports\n",
-           Traits::name, get_ports().size());
-}
-
 // ============================================================================
 // Explicit Template Instantiations
 // ============================================================================

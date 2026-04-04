@@ -36,7 +36,6 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/sound/ay_psg/ay_3_8912.hpp"
@@ -82,62 +81,70 @@ template<> struct OricVariantTraits<OricVariant::ORIC_ATMOS> {
 
 #define ORIC_BUS_DEFAULT_STATE (MOS6502::default_bus_state())
 
-// =============================================================================
-// Oric chip declarations — variant-specific single source of truth
-// =============================================================================
-//
-// Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
-//
-// Oric-1 and Atmos have identical hardware layout; only the ROM differs.
-// VIA is MMIO-only: 16-byte window at $0300 (mask 0xFFF0).
-//
+inline constexpr auto kOric1Manifest = make_manifest(
+    // Chips
+    Slot<MOS6502>{.base_addr = 0x0000, .label = "MOS 6502"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 0x00010000, .label = "RAM"},
+    Slot<mos6522_t>{.base_addr = 0x0300, .addr_mask = 0xFFF0, .label = "VIA 6522"},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 0x4000, .label = "ROM", .rom = {"oric1.rom|basic10.rom|BASIC10.ROM"}},
+    Slot<AY_3_8912>{.base_addr = 0x0000, .label = "AY-3-8912"},
+    // Ports
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortExpansion>{.name = "Expansion Port"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-#define ORIC1_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                               \
-    V(ctx, MOS6502,    cpu,  0x0000,     0,      0, 0, "MOS 6502",  nullptr)                             \
-    V(ctx, RAMChip,    ram,  0x0000, 65536,      0, 0, "RAM",       nullptr)                             \
-    V(ctx, mos6522_t,  via,  0x0300,     0, 0xFFF0, 0, "VIA 6522",  nullptr)                             \
-    V(ctx, ROMChip,    rom,  0xC000, 16384,      0, 0, "ROM",       "oric1.rom|basic10.rom|BASIC10.ROM") \
-    V(ctx, AY_3_8912,  psg,  0x0000,     0,      0, 0, "AY-3-8912", nullptr)
+inline constexpr auto kOricAtmosManifest = make_manifest(
+    // Chips
+    Slot<MOS6502>{.base_addr = 0x0000, .label = "MOS 6502"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 0x00010000, .label = "RAM"},
+    Slot<mos6522_t>{.base_addr = 0x0300, .addr_mask = 0xFFF0, .label = "VIA 6522"},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 0x4000, .label = "ROM", .rom = {"atmos.rom|basic11.rom|BASIC11.ROM"}},
+    Slot<AY_3_8912>{.base_addr = 0x0000, .label = "AY-3-8912"},
+    // Ports
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortExpansion>{.name = "Expansion Port"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-#define ORIC_ATMOS_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                          \
-    V(ctx, MOS6502,    cpu,  0x0000,     0,      0, 0, "MOS 6502",  nullptr)                             \
-    V(ctx, RAMChip,    ram,  0x0000, 65536,      0, 0, "RAM",       nullptr)                             \
-    V(ctx, mos6522_t,  via,  0x0300,     0, 0xFFF0, 0, "VIA 6522",  nullptr)                             \
-    V(ctx, ROMChip,    rom,  0xC000, 16384,      0, 0, "ROM",       "atmos.rom|basic11.rom|BASIC11.ROM") \
-    V(ctx, AY_3_8912,  psg,  0x0000,     0,      0, 0, "AY-3-8912", nullptr)
-
-static constexpr size_t kOric1ChipCount = 0 ORIC1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-static constexpr size_t kOricAtmosChipCount = 0 ORIC_ATMOS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-
-inline constexpr ChipManifest<kOric1ChipCount> kOric1Chips = ChipManifest<kOric1ChipCount>{{
-    ORIC1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
-
-inline constexpr ChipManifest<kOricAtmosChipCount> kOricAtmosChips = ChipManifest<kOricAtmosChipCount>{{
-    ORIC_ATMOS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
-
+inline constexpr size_t kOric1ChipCount = decltype(kOric1Manifest)::chip_count;
+inline constexpr size_t kOricAtmosChipCount = decltype(kOricAtmosManifest)::chip_count;
 // BusTraits — selects the correct manifest per variant
 template<OricVariant V> struct OricBusTraits;
 
 template<> struct OricBusTraits<OricVariant::ORIC_1> {
-    static constexpr const auto& kManifest = kOric1Chips;
-    using Spec = ManifestBusSpec<kOric1Chips, 16, 8, 1, true>;
+    static constexpr const auto& kManifest = kOric1Manifest;
+    using Spec = ManifestBusSpec<kOric1Manifest, 16, 8, 1, true>;
 };
 
 template<> struct OricBusTraits<OricVariant::ORIC_ATMOS> {
-    static constexpr const auto& kManifest = kOricAtmosChips;
-    using Spec = ManifestBusSpec<kOricAtmosChips, 16, 8, 1, true>;
+    static constexpr const auto& kManifest = kOricAtmosManifest;
+    using Spec = ManifestBusSpec<kOricAtmosManifest, 16, 8, 1, true>;
 };
 
-// ============================================================================
-// Oric Chips — value-typed chips owned by Board
-// ============================================================================
+template<typename BSpec>
+struct OricBoard : Board<BSpec, NoChips> {
+    using ComponentTuple = decltype(kOric1Manifest)::component_tuple;
+    ComponentTuple components_;
 
-struct OricChips {
-    ORIC1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+    // Chip aliases
+    MOS6502&   cpu = std::get<0>(components_);
+    RAMChip&   ram = std::get<1>(components_);
+    mos6522_t& via = std::get<2>(components_);
+    ROMChip&   rom = std::get<3>(components_);
+    AY_3_8912& psg = std::get<4>(components_);
+
+    // Port aliases
+    PortCassette&       cassette_port  = std::get<5>(components_);
+    PortExpansion&      expansion_port = std::get<6>(components_);
+    PortCompositeVideo& video_port     = std::get<7>(components_);
+    PortAudioMono&      audio_port     = std::get<8>(components_);
+
+    template<size_t N>
+    OricBoard(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
 };
-
 // ============================================================================
 // Oric System
 // ============================================================================
@@ -175,7 +182,7 @@ public:
 private:
     // ── Board + bus ──────────────────────────────────────────────────────
     using Bus       = MemoryBus<typename BTraits::Spec>;
-    using MainBoard = Board<typename BTraits::Spec, OricChips>;
+    using MainBoard = OricBoard<typename BTraits::Spec>;
     Bus       bus_;
     MainBoard board_{BTraits::kManifest};
 
@@ -199,7 +206,6 @@ private:
     int         audio_sample_rate_ = oric_constants::DEFAULT_SAMPLE_RATE;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    void setup_ports() override;
     void configure_bus_memory_map();
     void render_frame();             // ULA: render display from RAM
     bool load_roms();

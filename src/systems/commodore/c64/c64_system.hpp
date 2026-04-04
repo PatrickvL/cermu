@@ -29,7 +29,7 @@ class LightpenDevice;
 // Board::bind_chip() → on_bind_buffer().  MMIO chips (size==0) are bound
 // without a buffer.  All are value members — no heap allocation.
 struct C64Chipset {
-    C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+    C64_FOR_EACH_SYSTEM_CHIP(C64_CHIP_VISITOR_DECLARE_FIELD, unused)
 
     // cpu_type alias required by Board::bind_chipset()
     using cpu_type = MOS6510;
@@ -38,10 +38,10 @@ struct C64Chipset {
         // Bind all chips except CPU (which Board::bind_chipset handles).
         // Sequential counter matches manifest array order.
         size_t slot_idx_ = 0;
-        C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board)
+        C64_FOR_EACH_SYSTEM_CHIP(C64_CHIP_VISITOR_BIND_SEQUENTIAL, board)
     }
     template<typename BoardT> void register_extras(BoardT& board) {
-        C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_REGISTER_COMPONENT, board)
+        C64_FOR_EACH_SYSTEM_CHIP(C64_CHIP_VISITOR_REGISTER_COMPONENT, board)
     }
 };
 
@@ -112,7 +112,7 @@ public:
     // Generated from C64_FOR_EACH_SYSTEM_CHIP; non-manifest chips are manual.
     // =========================================================================
 public:
-    C64_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_POINTER, unused)
+    C64_FOR_EACH_SYSTEM_CHIP(C64_CHIP_VISITOR_DECLARE_POINTER, unused)
     commodore_keyboard_t* keyboard = nullptr; // Keyboard matrix (connected to CIA1)
     void* io1 = nullptr;               // Cartridge I/O 1 ($DE00-$DEFF)
     void* io2 = nullptr;               // Cartridge I/O 2 ($DF00-$DFFF)

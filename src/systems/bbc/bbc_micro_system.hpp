@@ -3,7 +3,6 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
 #include "core/signal/audio_port.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
@@ -32,39 +31,55 @@
 // Slot 3: OS ROM — 16 KB at $C000-$FFFF
 //         $FC00-$FEFF (FRED/JIM/SHEILA) handled by sheila_tick(), not the bus.
 //
-//                                      ctx   type           chip       base    size    mask  ovl  label            rom
-#define BBC_MICRO_FOR_EACH_SYSTEM_CHIP(V, ctx) \
-    V(ctx, MOS6502,        m6502,     0,           0, 0,     0, "MOS 6502",    nullptr) \
-    V(ctx, RAMChip,        ram,       0x0000,  32768, 0,     0, "RAM",         nullptr) \
-    V(ctx, ROMChip,        paged_rom, 0x8000, 262144, 0,     0, "Paged ROM",   nullptr) \
-    V(ctx, ROMChip,        os_rom,    0xC000,  16384, 0,     0, "MOS ROM",     "os12.rom|OS12.ROM|os.rom|OS-1.20.rom|MOS120.rom|bbc_os.rom|os1.2.rom") \
-    V(ctx, mc6845_t,       crtc,      0xFE00,      0, 0xFFF8, 0, "MC6845 CRTC", nullptr) \
-    V(ctx, sn76489_t,      psg,       0,           0, 0,     0, "SN76489 PSG", nullptr) \
-    V(ctx, mos6522_t,      sys_via,   0xFE40,      0, 0xFFF0, 0, "System VIA",  nullptr) \
-    V(ctx, mos6522_t,      user_via,  0xFE60,      0, 0xFFF0, 0, "User VIA",    nullptr) \
-    V(ctx, bbc_vidproc_t,  vidproc,   0xFE20,      0, 0xFFF0, 0, "Video ULA",   nullptr)
 
-static constexpr size_t kBBCMicroChipCount = 0 BBC_MICRO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 
-constexpr ChipManifest<kBBCMicroChipCount> make_bbc_micro_manifest() {
-    ChipManifest<kBBCMicroChipCount> m = {{
-        BBC_MICRO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-    }};
-    m.chips[2].bank_size = 16384;  // Paged ROM (16 × 16 KB sideways banks)
-    return m;
-}
-inline constexpr auto kBBCMicroChips = make_bbc_micro_manifest();
+inline constexpr auto kBBCMicroManifest = make_manifest(
+    // Chips
+    Slot<MOS6502>{.label = "MOS 6502"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 0x8000, .label = "RAM"},
+    Slot<ROMChip>{.base_addr = 0x8000, .size_bytes = 0x00040000, .label = "Paged ROM", .bank_size = 16384},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 0x4000, .label = "MOS ROM", .rom = {"os12.rom|OS12.ROM|os.rom|OS-1.20.rom|MOS120.rom|bbc_os.rom|os1.2.rom"}},
+    Slot<mc6845_t>{.base_addr = 0xFE00, .addr_mask = 0xFFF8, .label = "MC6845 CRTC"},
+    Slot<sn76489_t>{.label = "SN76489 PSG"},
+    Slot<mos6522_t>{.base_addr = 0xFE40, .addr_mask = 0xFFF0, .label = "System VIA"},
+    Slot<mos6522_t>{.base_addr = 0xFE60, .addr_mask = 0xFFF0, .label = "User VIA"},
+    Slot<bbc_vidproc_t>{.base_addr = 0xFE20, .addr_mask = 0xFFF0, .label = "Video ULA"},
+    // Ports
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortUserPort>{.name = "User Port"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortRgb>{.name = "Video Out (RGB)"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-using BBCMicroBusSpec = ManifestBusSpec<kBBCMicroChips, 16, 8, 1, true>;
+inline constexpr size_t kBBCMicroChipCount = decltype(kBBCMicroManifest)::chip_count;
 
-// ============================================================================
-// BBC Micro Chips — value-typed chips owned by Board
-// ============================================================================
+using BBCMicroBusSpec = ManifestBusSpec<kBBCMicroManifest, 16, 8, 1, true>;
 
-struct BBCMicroChips {
-    BBC_MICRO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+struct BBCMicroBoard : Board<BBCMicroBusSpec, NoChips> {
+    using ComponentTuple = decltype(kBBCMicroManifest)::component_tuple;
+    ComponentTuple components_;
+
+    // Chip aliases
+    MOS6502&       m6502     = std::get<0>(components_);
+    RAMChip&       ram       = std::get<1>(components_);
+    ROMChip&       paged_rom = std::get<2>(components_);
+    ROMChip&       os_rom    = std::get<3>(components_);
+    mc6845_t&      crtc      = std::get<4>(components_);
+    sn76489_t&     psg       = std::get<5>(components_);
+    mos6522_t&     sys_via   = std::get<6>(components_);
+    mos6522_t&     user_via  = std::get<7>(components_);
+    bbc_vidproc_t& vidproc   = std::get<8>(components_);
+
+    // Port aliases
+    PortCassette&       cassette_port  = std::get<9>(components_);
+    PortUserPort&       user_port      = std::get<10>(components_);
+    PortCompositeVideo& video_port     = std::get<11>(components_);
+    PortRgb&            video_rgb_port = std::get<12>(components_);
+    PortAudioMono&      audio_port     = std::get<13>(components_);
+
+    BBCMicroBoard() : Board(kBBCMicroManifest) {}
 };
-
 /**
  * BBC Micro Model B System Implementation
  *
@@ -127,9 +142,9 @@ private:
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using Bus = MemoryBus<BBCMicroBusSpec>;
     using PT  = PackingTraits<BBCMicroBusSpec>;
-    using MainBoard = Board<BBCMicroBusSpec, BBCMicroChips>;
+    using MainBoard = BBCMicroBoard;
     Bus bus_;
-    MainBoard board_{kBBCMicroChips};
+    MainBoard board_;
 
     // Memory chip pointers (into registered_chips_; board_ owns buffer)
     RAMChip* ram_chip_       = nullptr;
@@ -184,8 +199,6 @@ private:
 
     // ROM loading
     bool load_roms();
-
-    void setup_ports() override;
 
     // Keyboard mapping
     void update_key_matrix(SDL_Keycode key, bool pressed);

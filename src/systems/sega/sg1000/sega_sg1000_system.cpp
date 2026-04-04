@@ -118,9 +118,11 @@ bool SegaSG1000System<V>::initialize() {
     log_info("%s: Initializing system\n", Traits::name);
     register_board(&board_);
 
-    { size_t slot_idx_ = 0;
-      SG1000_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
-    board_.create_chips(&pins_);
+    bind_all(board_, board_.components_, kSG1000Manifest);
+
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = kSG1000Manifest.port_slots;
+    port_manifest_count_ = kSG1000Manifest.port_count;
     board_.apply(bus_);
 
     configure_bus_memory_map();
@@ -343,28 +345,6 @@ void SegaSG1000System<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 
 template class SegaSG1000System<SG1000Variant::SG1000>;
 template class SegaSG1000System<SG1000Variant::SC3000>;
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                                  tag        type              name                  num  int  bus  default_device
-#define SG1000_FOR_EACH_PORT(V, ctx) \
-    V(ctx, CTRL1,      CONTROL_PORT_DB9, "Controller Port 1",    1, false, false, "joystick")      \
-    V(ctx, CTRL2,      CONTROL_PORT_DB9, "Controller Port 2",    2, false, false, "joystick")      \
-    V(ctx, CARTRIDGE,  EXPANSION_PORT,   "Cartridge Slot",       0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",            0, false, false, "crt_tv")        \
-    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",            0, false, false, nullptr)
-
-CERMU_PORT_MANIFEST(SG1000, SG1000_FOR_EACH_PORT)
-
-template<SG1000Variant V>
-void SegaSG1000System<V>::setup_ports() {
-    create_ports_from_manifest(kSG1000Ports);
-}
-
-// ============================================================================
-// SYSTEM REGISTRATION
-// ============================================================================
 
 REGISTER_SYSTEM(sg1000_descriptor, [] {
     return std::make_unique<SegaSG1000System<SG1000Variant::SG1000>>();

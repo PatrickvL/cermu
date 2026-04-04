@@ -207,9 +207,11 @@ bool SpectrumSystem<V>::initialize() {
     register_board(&board_);
 
     // ── Pre-bind stack-member chips, then factory-create all chips ─────
-    { size_t slot_idx_ = 0;
-      SPECTRUM48K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
-    board_.create_chips(&pins_);
+    bind_all(board_, board_.components_, BT::kManifest);
+
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = BT::kManifest.port_slots;
+    port_manifest_count_ = BT::kManifest.port_count;
     board_.apply(bus_);
 
     // ── Configure page tables for this variant ──────────────────────────
@@ -836,27 +838,6 @@ bool SpectrumSystem<V>::load_roms() {
 
 template class SpectrumSystem<SpectrumVariant::ZX48K>;
 template class SpectrumSystem<SpectrumVariant::ZX128K>;
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                                   tag       type              name                 num  int  bus  default_device
-#define SPECTRUM_FOR_EACH_PORT(V, ctx) \
-    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Port",      0, false, false, nullptr)         \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")        \
-    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",           0, false, false, nullptr)
-
-CERMU_PORT_MANIFEST(Spectrum, SPECTRUM_FOR_EACH_PORT)
-
-template<SpectrumVariant V>
-void SpectrumSystem<V>::setup_ports() {
-    create_ports_from_manifest(kSpectrumPorts);
-}
-
-// ============================================================================
-// SYSTEM REGISTRATION
-// ============================================================================
 
 REGISTER_SYSTEM(spectrum48k_descriptor, [] {
     return std::make_unique<SpectrumSystem<SpectrumVariant::ZX48K>>();

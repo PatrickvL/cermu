@@ -13,7 +13,6 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -61,63 +60,78 @@ template<> struct SVIVariantTraits<SVIVariant::SVI328> {
 
 #define SVI_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
 
-// =============================================================================
-// SVI chip declarations — variant-specific single source of truth
-// =============================================================================
-//
-// Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
-//
-// SVI-318: ROM 32KB at $0000, RAM 16KB at $8000
-// SVI-328: ROM 32KB at $0000, RAM 64KB at $0000
-//
+inline constexpr auto kSVI318Manifest = make_manifest(
+    // Chips
+    Slot<ZilogZ80A>{.base_addr = 0x0000, .label = "Z80A"},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x8000, .label = "BASIC ROM", .rom = {"svi318.rom|SVI318.ROM|svi.rom"}},
+    Slot<TMS9918A>{.base_addr = 0x0080, .label = "TMS9918A"},
+    Slot<AY_3_8910>{.base_addr = 0x0088, .label = "AY-3-8910"},
+    Slot<i8255_t>{.base_addr = 0x0096, .label = "i8255 PPI"},
+    Slot<RAMChip>{.base_addr = 0x8000, .size_bytes = 0x4000, .label = "RAM"},
+    // Ports
+    Slot<PortControlDB9>{.name = "Joystick Port 1", .port_number = 1, .default_device = "joystick"},
+    Slot<PortControlDB9>{.name = "Joystick Port 2", .port_number = 2, .default_device = "joystick"},
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortExpansion>{.name = "Cartridge Slot"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-#define SVI318_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                               \
-    V(ctx, ZilogZ80A,  z80,  0x0000,      0, 0, 0, "Z80A",        nullptr)                                                 \
-    V(ctx, ROMChip,    bios, 0x0000, 0x8000, 0, 0, "BASIC ROM",   "svi318.rom|SVI318.ROM|svi.rom")                        \
-    V(ctx, TMS9918A,   vdp,  0x0080,      0, 0, 0, "TMS9918A",    nullptr)                                                 \
-    V(ctx, AY_3_8910,  psg,  0x0088,      0, 0, 0, "AY-3-8910",   nullptr)                                                \
-    V(ctx, i8255_t,    ppi,  0x0096,      0, 0, 0, "i8255 PPI",   nullptr)                                                 \
-    V(ctx, RAMChip,    ram,  0x8000, 0x4000, 0, 0, "RAM",         nullptr)
+inline constexpr auto kSVI328Manifest = make_manifest(
+    // Chips
+    Slot<ZilogZ80A>{.base_addr = 0x0000, .label = "Z80A"},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x8000, .label = "BASIC ROM", .rom = {"svi328.rom|SVI328.ROM|svi.rom"}},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 0x10000, .label = "RAM"},
+    Slot<TMS9918A>{.base_addr = 0x0080, .label = "TMS9918A"},
+    Slot<AY_3_8910>{.base_addr = 0x0088, .label = "AY-3-8910"},
+    Slot<i8255_t>{.base_addr = 0x0096, .label = "i8255 PPI"},
+    // Ports
+    Slot<PortControlDB9>{.name = "Joystick Port 1", .port_number = 1, .default_device = "joystick"},
+    Slot<PortControlDB9>{.name = "Joystick Port 2", .port_number = 2, .default_device = "joystick"},
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortExpansion>{.name = "Cartridge Slot"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-#define SVI328_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                               \
-    V(ctx, ZilogZ80A,  z80,  0x0000,       0, 0, 0, "Z80A",        nullptr)                                                \
-    V(ctx, ROMChip,    bios, 0x0000,  0x8000, 0, 0, "BASIC ROM",   "svi328.rom|SVI328.ROM|svi.rom")                       \
-    V(ctx, RAMChip,    ram,  0x0000, 0x10000, 0, 0, "RAM",         nullptr)                                                \
-    V(ctx, TMS9918A,   vdp,  0x0080,       0, 0, 0, "TMS9918A",    nullptr)                                                \
-    V(ctx, AY_3_8910,  psg,  0x0088,       0, 0, 0, "AY-3-8910",   nullptr)                                               \
-    V(ctx, i8255_t,    ppi,  0x0096,       0, 0, 0, "i8255 PPI",   nullptr)
-
-static constexpr size_t kSVI318ChipCount = 0 SVI318_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-static constexpr size_t kSVI328ChipCount = 0 SVI328_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-
-inline constexpr ChipManifest<kSVI318ChipCount> kSVI318Chips = ChipManifest<kSVI318ChipCount>{{
-    SVI318_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
-
-inline constexpr ChipManifest<kSVI328ChipCount> kSVI328Chips = ChipManifest<kSVI328ChipCount>{{
-    SVI328_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
-
+inline constexpr size_t kSVI318ChipCount = decltype(kSVI318Manifest)::chip_count;
+inline constexpr size_t kSVI328ChipCount = decltype(kSVI328Manifest)::chip_count;
 template<SVIVariant V> struct SVIBusTraits;
 
 template<> struct SVIBusTraits<SVIVariant::SVI318> {
-    static constexpr const auto& kManifest = kSVI318Chips;
-    using Spec = ManifestBusSpec<kSVI318Chips, 16, 8>;
+    static constexpr const auto& kManifest = kSVI318Manifest;
+    using Spec = ManifestBusSpec<kSVI318Manifest, 16, 8>;
 };
 
 template<> struct SVIBusTraits<SVIVariant::SVI328> {
-    static constexpr const auto& kManifest = kSVI328Chips;
-    using Spec = ManifestBusSpec<kSVI328Chips, 16, 8>;
+    static constexpr const auto& kManifest = kSVI328Manifest;
+    using Spec = ManifestBusSpec<kSVI328Manifest, 16, 8>;
 };
 
-// ============================================================================
-// SVI Chips — value-typed chips owned by Board (auto-generated)
-// ============================================================================
+template<typename BSpec>
+struct SVIBoard : Board<BSpec, NoChips> {
+    using ComponentTuple = decltype(kSVI318Manifest)::component_tuple;
+    ComponentTuple components_;
 
-struct SVIChips {
-    SVI318_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+    // Chip aliases
+    ZilogZ80A& z80  = std::get<0>(components_);
+    ROMChip&   bios = std::get<1>(components_);
+    TMS9918A&  vdp  = std::get<2>(components_);
+    AY_3_8910& psg  = std::get<3>(components_);
+    i8255_t&   ppi  = std::get<4>(components_);
+    RAMChip&   ram  = std::get<5>(components_);
+
+    // Port aliases
+    PortControlDB9&     joy1_port      = std::get<6>(components_);
+    PortControlDB9&     joy2_port      = std::get<7>(components_);
+    PortCassette&       cassette_port  = std::get<8>(components_);
+    PortExpansion&      cartridge_port = std::get<9>(components_);
+    PortCompositeVideo& video_port     = std::get<10>(components_);
+    PortAudioMono&      audio_port     = std::get<11>(components_);
+
+    template<size_t N>
+    SVIBoard(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
 };
-
 // ============================================================================
 // Spectravideo System
 // ============================================================================
@@ -155,7 +169,7 @@ private:
     // ── Board + bus (chips live inside board_) ────────────────────────────
     using Bus       = MemoryBus<typename BT::Spec>;
     using PT        = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec, SVIChips>;
+    using MainBoard = SVIBoard<typename BT::Spec>;
     Bus       bus_;
     MainBoard board_{BT::kManifest};
 
@@ -177,7 +191,6 @@ private:
     uint32_t    frame_tstate_counter_ = 0;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    void setup_ports() override;
     void configure_bus_memory_map();
     bus_state_t io_tick(bus_state_t pins);
     bool load_roms();

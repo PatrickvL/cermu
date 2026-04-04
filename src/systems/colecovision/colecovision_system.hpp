@@ -14,7 +14,6 @@
 #include "core/board.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
-#include "core/system_chip_visitors.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/video/tms9918/tms9918a.hpp"
 #include "chip/sound/sn76489/sn76489.hpp"
@@ -29,44 +28,46 @@
 
 #define COLECO_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
 
-// =============================================================================
-// ColecoVision chip declaration — single source of truth
-// =============================================================================
-//
-// Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
-//
-//   Slot 0: BIOS ROM — 8KB at $0000
-//   Slot 1: Cart ROM — 32KB at $8000
-//   Slot 2: RAM      — 1KB at $6000 (mirrored)
-//   Slot 3: Z80A     — not bus-mapped
-//   Slot 4: TMS9918A — not bus-mapped (I/O port-accessed)
-//   Slot 5: SN76489  — not bus-mapped (I/O port-accessed)
-//
+inline constexpr auto kColecoManifest = make_manifest(
+    // Chips
+    Slot<ZilogZ80A>{.base_addr = 0x0000, .label = "Z80A"},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x2000, .label = "BIOS ROM", .rom = {"coleco.rom|colecovision.rom|COLECO.ROM"}},
+    Slot<RAMChip>{.base_addr = 0x6000, .size_bytes = 0x0400, .label = "RAM"},
+    Slot<ROMChip>{.base_addr = 0x8000, .size_bytes = 0x8000, .label = "Cart ROM"},
+    Slot<TMS9918A>{.base_addr = 0x00BE, .label = "TMS9918A"},
+    Slot<sn76489_t>{.base_addr = 0x00FF, .label = "SN76489"},
+    // Ports
+    Slot<PortControlDB9>{.name = "Controller Port 1", .port_number = 1, .default_device = "joystick"},
+    Slot<PortControlDB9>{.name = "Controller Port 2", .port_number = 2, .default_device = "joystick"},
+    Slot<PortExpansion>{.name = "Cartridge Slot"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-#define COLECO_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                \
-    V(ctx, ZilogZ80A,   z80,   0x0000,      0, 0, 0, "Z80A",      nullptr)                                 \
-    V(ctx, ROMChip,     bios,  0x0000, 0x2000, 0, 0, "BIOS ROM",  "coleco.rom|colecovision.rom|COLECO.ROM") \
-    V(ctx, RAMChip,     ram,   0x6000, 0x0400, 0, 0, "RAM",       nullptr)                                 \
-    V(ctx, ROMChip,     cart,  0x8000, 0x8000, 0, 0, "Cart ROM",  nullptr)                                 \
-    V(ctx, TMS9918A,    vdp,   0x00BE,      0, 0, 0, "TMS9918A",  nullptr)                                 \
-    V(ctx, sn76489_t,   psg,   0x00FF,      0, 0, 0, "SN76489",   nullptr)
+inline constexpr size_t kColecoChipCount = decltype(kColecoManifest)::chip_count;
+using ColecoBusSpec = ManifestBusSpec<kColecoManifest, 16, 8>;
 
-static constexpr size_t kColecoChipCount = 0 COLECO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+struct ColecoBoard : Board<ColecoBusSpec, NoChips> {
+    using ComponentTuple = decltype(kColecoManifest)::component_tuple;
+    ComponentTuple components_;
 
-inline constexpr ChipManifest<kColecoChipCount> kColecoChips = ChipManifest<kColecoChipCount>{{
-    COLECO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
+    // Chip aliases
+    ZilogZ80A& z80  = std::get<0>(components_);
+    ROMChip&   bios = std::get<1>(components_);
+    RAMChip&   ram  = std::get<2>(components_);
+    ROMChip&   cart = std::get<3>(components_);
+    TMS9918A&  vdp  = std::get<4>(components_);
+    sn76489_t& psg  = std::get<5>(components_);
 
-using ColecoBusSpec = ManifestBusSpec<kColecoChips, 16, 8>;
+    // Port aliases
+    PortControlDB9&     ctrl1_port     = std::get<6>(components_);
+    PortControlDB9&     ctrl2_port     = std::get<7>(components_);
+    PortExpansion&      cartridge_port = std::get<8>(components_);
+    PortCompositeVideo& video_port     = std::get<9>(components_);
+    PortAudioMono&      audio_port     = std::get<10>(components_);
 
-// ============================================================================
-// ColecoVision Chips — value-typed chips owned by Board (auto-generated)
-// ============================================================================
-
-struct ColecoChips {
-    COLECO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+    ColecoBoard() : Board(kColecoManifest) {}
 };
-
 // ============================================================================
 // ColecoVision System
 // ============================================================================
@@ -100,9 +101,9 @@ private:
     // ── Board + bus (chips live inside board_) ────────────────────────────
     using Bus       = MemoryBus<ColecoBusSpec>;
     using PT        = PackingTraits<ColecoBusSpec>;
-    using MainBoard = Board<ColecoBusSpec, ColecoChips>;
+    using MainBoard = ColecoBoard;
     Bus       bus_;
-    MainBoard board_{kColecoChips};
+    MainBoard board_;
 
     // ── Video ────────────────────────────────────────────────────────────
     std::unique_ptr<CompositeVideoPort> video_port_;
@@ -121,7 +122,6 @@ private:
     uint32_t    frame_tstate_counter_ = 0;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    void setup_ports() override;
     void configure_bus_memory_map();
     bus_state_t io_tick(bus_state_t pins);
     bool load_roms();
