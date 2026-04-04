@@ -169,6 +169,11 @@ protected:
     /// from the derived system's run_frame() or tick loop.
     void tick_unmapped_inputs();
 
+    /// Called when a toggle-type virtual key changes state.
+    /// Override in derived systems to wire keys that bypass the matrix
+    /// (e.g., C128 40/80 DISPLAY → MMU sense line).
+    virtual void on_unmapped_toggle_changed(emu_key_t /*key*/, bool /*pressed*/) {}
+
     std::vector<UnmappedInput> unmapped_inputs_;
     int unmapped_release_countdown_ = 0;    // Frames until pending release
     int unmapped_release_index_ = -1;       // Index of key awaiting release

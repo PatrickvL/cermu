@@ -190,6 +190,7 @@ public:
     void* get_video_port_ptr() override { return video_port_.get(); }
 
     void render_system_menu_items() override;
+    void on_unmapped_toggle_changed(emu_key_t key, bool pressed) override;
     const char* get_mode_label() const override;
 
     // ── Port index constants (declaration order in port manifest) ────
