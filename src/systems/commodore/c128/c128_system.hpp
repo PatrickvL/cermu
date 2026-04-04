@@ -237,6 +237,7 @@ private:
     // ── Display ──────────────────────────────────────────────────────────
     std::unique_ptr<CompositeVideoPort> video_port_;      // VIC-IIe output (40-col)
     std::unique_ptr<RGBIVideoPort>      vdc_video_port_;  // VDC output (80-col RGBI)
+    PaletteTable vicii_palette_;                           // Saved VIC-IIe palette for mode switching
 
     // Cached processor port bits for bank config interaction
     uint8_t cpu_port_bits_  = 0x07;      // LORAM|HIRAM|CHAREN defaults (all high)
