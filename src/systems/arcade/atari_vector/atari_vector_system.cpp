@@ -995,35 +995,18 @@ bool AtariVectorSystem<V>::initialize() {
 
     register_board(&board_);
 
-    // Bind all chips from superset chipset — order matches make_atv_manifest<V>().
-    {   size_t slot_idx_ = 0;
-        // Core chips (always present)
-        board_.bind_chip(slot_idx_++, &board_.work_ram);
-        board_.bind_chip(slot_idx_++, &board_.vec_ram);
-        board_.bind_chip(slot_idx_++, &board_.vec_rom);
-        board_.bind_chip(slot_idx_++, &board_.prog_rom);
-        board_.bind_chip(slot_idx_++, &board_.m6502);
-        board_.bind_chip(slot_idx_++, &board_.vg);
-        board_.bind_chip(slot_idx_++, &board_.latch);
-        // Optional chips — order matches make_atv_manifest<V>() extra tuple
-        if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
-            board_.bind_chip(slot_idx_++, &board_.prog_rom_hi);
-            board_.bind_chip(slot_idx_++, &board_.pokey1);
-        } else if constexpr (Traits::HAS_POKEY && Traits::HAS_EAROM) {
-            board_.bind_chip(slot_idx_++, &board_.pokey1);
-            board_.bind_chip(slot_idx_++, &board_.earom);
-        } else if constexpr (Traits::HAS_POKEY) {
-            board_.bind_chip(slot_idx_++, &board_.pokey1);
-        }
-    }
+    // Bind all components (chips + ports) from the manifest
+    bind_all(board_, board_.components_, kVectorChips<V>);
+    port_manifest_       = kVectorChips<V>.port_slots;
+    port_manifest_count_ = kVectorChips<V>.port_count;
     board_.create_chips(&pins_);
     vec_ram_  = &board_.vec_ram;
     vec_rom_  = &board_.vec_rom;
     prog_rom_ = &board_.prog_rom;
 
-    // 16-bit address games have a 3rd ROMChip for upper address space ($8000-$FFFF)
-    if constexpr (!Traits::USES_15BIT_ADDR) {
-        prog_rom_hi_ = &board_.prog_rom_hi;
+    // Space Duel has a 3rd ROMChip for upper address space ($8000-$FFFF)
+    if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
+        prog_rom_hi_ = &board_.prog_rom_hi();
     }
 
     // Wire MemoryBus page tables
@@ -1072,8 +1055,8 @@ bool AtariVectorSystem<V>::initialize() {
 
     // Initialize POKEY (for games that have it)
     if constexpr (Traits::HAS_POKEY) {
-        board_.pokey1.init();
-        register_chip(&board_.pokey1, "POKEY", "POKEY", "Sound");
+        board_.pokey1().init();
+        register_chip(&board_.pokey1(), "POKEY", "POKEY", "Sound");
     }
 
     // Video port — VectorVideoPort for signal-based rendering
@@ -1096,23 +1079,23 @@ bool AtariVectorSystem<V>::initialize() {
 
     // Wire POKEY audio output
     if constexpr (Traits::HAS_POKEY) {
-        board_.pokey1.set_audio_port(audio_port_.get());
+        board_.pokey1().set_audio_port(audio_port_.get());
     }
 
     // Space Duel: DIP switches are wired to POKEY1 pot inputs.
     // MAME overrides ALLPOT to return the DIP bank value directly.
     // Individual POT reads also return per-bit values (228 = open, 0 = grounded).
     if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
-        board_.pokey1.allpot_read_callback = [](void* ctx) -> uint8_t {
+        board_.pokey1().allpot_read_callback = [](void* ctx) -> uint8_t {
             return static_cast<AtariVectorSystem*>(ctx)->dip_bank_[0].value;
         };
-        board_.pokey1.allpot_read_context = this;
-        board_.pokey1.pot_read_callback = [](void* ctx, uint8_t pot_index) -> uint8_t {
+        board_.pokey1().allpot_read_context = this;
+        board_.pokey1().pot_read_callback = [](void* ctx, uint8_t pot_index) -> uint8_t {
             auto* sys = static_cast<AtariVectorSystem*>(ctx);
             // Pot line grounded (0) when switch active, open (228) when inactive
             return (sys->dip_bank_[0].value & (1 << pot_index)) ? 228 : 0;
         };
-        board_.pokey1.pot_read_context = this;
+        board_.pokey1().pot_read_context = this;
     }
 
     // Initialize DIP switch banks with per-game descriptors (MAME factory defaults)
@@ -1157,7 +1140,7 @@ void AtariVectorSystem<V>::reset() {
     nmi_counter_ = atv::NMI_PERIOD_CYCLES;
 
     if constexpr (Traits::HAS_POKEY) {
-        board_.pokey1.reset();
+        board_.pokey1().reset();
     }
 
     // Internal button state uses active-HIGH convention (1=pressed, 0=not pressed).
@@ -1183,7 +1166,7 @@ void AtariVectorSystem<V>::tick() {
 
     // POKEY tick (runs at CPU clock for games with POKEY)
     if constexpr (Traits::HAS_POKEY) {
-        board_.pokey1.tick(0);  // Arcade POKEY: no bus-driven memory access
+        board_.pokey1().tick(0);  // Arcade POKEY: no bus-driven memory access
     }
 
     // ── Periodic interrupt timer ────────────────────────────────────────────
@@ -1360,13 +1343,13 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
     // ── POKEY1 read — direct register access ──────────────────────
     if constexpr (Traits::HAS_POKEY) {
         if (addr >= Traits::POKEY1_BASE && addr < Traits::POKEY1_BASE + Traits::POKEY1_SIZE) {
-            BUS_SET_DATA(pins, board_.pokey1.read(static_cast<uint8_t>(addr & 0x0F)));
+            BUS_SET_DATA(pins, board_.pokey1().read(static_cast<uint8_t>(addr & 0x0F)));
             return pins;
         }
         // Tempest mirrors POKEY1 at $0800 and POKEY2 at $0900
         if constexpr (V == AtariVectorVariant::TEMPEST) {
             if (addr >= 0x0800 && addr < 0x0810) {
-                BUS_SET_DATA(pins, board_.pokey1.read(static_cast<uint8_t>(addr & 0x0F)));
+                BUS_SET_DATA(pins, board_.pokey1().read(static_cast<uint8_t>(addr & 0x0F)));
                 return pins;
             }
         }
@@ -1392,13 +1375,13 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
     if constexpr (Traits::HAS_EAROM) {
         // ER2055 data read: returns the data output latch
         if (addr >= Traits::EAROM_BASE && addr < Traits::EAROM_BASE + Traits::EAROM_SIZE) {
-            BUS_SET_DATA(pins, board_.earom.read_data());
+            BUS_SET_DATA(pins, board_.earom().read_data());
             return pins;
         }
         // Dedicated EAROM data output port (Tempest $6050)
         if constexpr (Traits::EAROM_READ_ADDR != 0) {
             if (addr == Traits::EAROM_READ_ADDR) {
-                BUS_SET_DATA(pins, board_.earom.read_data());
+                BUS_SET_DATA(pins, board_.earom().read_data());
                 return pins;
             }
         }
@@ -1657,13 +1640,13 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
     // ── POKEY1 write — direct register access ──────────────────────
     if constexpr (Traits::HAS_POKEY) {
         if (addr >= Traits::POKEY1_BASE && addr < Traits::POKEY1_BASE + Traits::POKEY1_SIZE) {
-            board_.pokey1.write(static_cast<uint8_t>(addr & 0x0F), data);
+            board_.pokey1().write(static_cast<uint8_t>(addr & 0x0F), data);
             return pins;
         }
         // Tempest mirrors POKEY1 at $0800
         if constexpr (V == AtariVectorVariant::TEMPEST) {
             if (addr >= 0x0800 && addr < 0x0810) {
-                board_.pokey1.write(static_cast<uint8_t>(addr & 0x0F), data);
+                board_.pokey1().write(static_cast<uint8_t>(addr & 0x0F), data);
                 return pins;
             }
         }
@@ -1690,7 +1673,7 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
             bus_state_t eb = 0;
             BUS_SET_ADDR(eb, addr & 0x3F);
             BUS_SET_DATA(eb, data);
-            board_.earom.tick(eb);
+            board_.earom().tick(eb);
             return pins;
         }
         // EAROM control write — Tempest $6040 (AD handled in DVG switch below)
@@ -1698,14 +1681,14 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
             if (addr == Traits::EAROM_CTRL_ADDR) {
                 // CS1=bit3, CS2=tied high, C1=bit2, C2=bit1, CK=bit0
                 bus_state_t eb = 0;
-                BUS_SET_ADDR(eb, board_.earom.regs_.data[er2055::reg::ADDR_LATCH]);
-                BUS_SET_DATA(eb, board_.earom.regs_.data[er2055::reg::DATA_IN]);
+                BUS_SET_ADDR(eb, board_.earom().regs_.data[er2055::reg::ADDR_LATCH]);
+                BUS_SET_DATA(eb, board_.earom().regs_.data[er2055::reg::DATA_IN]);
                 if (data & 0x08) BUS_SET_BIT(eb, er2055::CS1_BIT);
                 BUS_SET_BIT(eb, er2055::CS2_BIT);  // tied high
                 if (data & 0x04) BUS_SET_BIT(eb, er2055::C1_BIT);
                 if (data & 0x02) BUS_SET_BIT(eb, er2055::C2_BIT);
                 if (data & 0x01) BUS_SET_BIT(eb, er2055::CK_BIT);
-                board_.earom.tick(eb);
+                board_.earom().tick(eb);
                 return pins;
             }
         }
@@ -1751,14 +1734,14 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
                     // AD EAROM control write: CS1=bit3, CS2=tied high,
                     // C1=bit2, C2=bit1, CK=bit0
                     bus_state_t eb = 0;
-                    BUS_SET_ADDR(eb, board_.earom.regs_.data[er2055::reg::ADDR_LATCH]);
-                    BUS_SET_DATA(eb, board_.earom.regs_.data[er2055::reg::DATA_IN]);
+                    BUS_SET_ADDR(eb, board_.earom().regs_.data[er2055::reg::ADDR_LATCH]);
+                    BUS_SET_DATA(eb, board_.earom().regs_.data[er2055::reg::DATA_IN]);
                     if (data & 0x08) BUS_SET_BIT(eb, er2055::CS1_BIT);
                     BUS_SET_BIT(eb, er2055::CS2_BIT);  // tied high
                     if (data & 0x04) BUS_SET_BIT(eb, er2055::C1_BIT);
                     if (data & 0x02) BUS_SET_BIT(eb, er2055::C2_BIT);
                     if (data & 0x01) BUS_SET_BIT(eb, er2055::CK_BIT);
-                    board_.earom.tick(eb);
+                    board_.earom().tick(eb);
                 }
                 break;
 
@@ -2471,19 +2454,6 @@ void AtariVectorSystem<V>::render_configuration_ui() {
 template<AtariVectorVariant V>
 void AtariVectorSystem<V>::set_speed_multiplier(float multiplier) {
     speed_multiplier_ = multiplier;
-}
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-
-static constexpr PortSlot kAtariVectorPorts[] = {
-    {PortType::VIDEO_COMPOSITE, "Video Out", 0, false, false, nullptr},
-};
-
-template<AtariVectorVariant V>
-void AtariVectorSystem<V>::setup_ports() {
-    create_ports_from_manifest(kAtariVectorPorts);
 }
 
 // ============================================================================

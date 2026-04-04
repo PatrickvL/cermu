@@ -29,6 +29,8 @@
 #include "systems/arcade/atari_vector/atari_vector_constants.hpp"
 #include "core/system.hpp"
 #include "core/board.hpp"
+#include "core/typed_manifest.hpp"
+#include "core/typed_port.hpp"
 #include "core/dip_switch.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
@@ -602,9 +604,14 @@ constexpr auto make_atv_manifest() {
         }
     }();
 
+    // Port — always present
+    auto port = std::make_tuple(
+        Slot<PortCompositeVideo>{.name = "Video Out"}
+    );
+
     return std::apply([](auto&&... slots) {
-        return make_chip_manifest(std::forward<decltype(slots)>(slots)...);
-    }, std::tuple_cat(core, extra));
+        return make_manifest(std::forward<decltype(slots)>(slots)...);
+    }, std::tuple_cat(core, extra, port));
 }
 
 template<AtariVectorVariant V>
@@ -626,23 +633,28 @@ template<AtariVectorVariant V>
 struct AtariVectorBoard : Board<VectorBusSpec<V>> {
     using Traits    = AtariVectorTraits<V>;
     using VideoChip = typename Traits::VideoChip;
+    using Manifest  = decltype(kVectorChips<V>);
+    using Components = typename Manifest::component_tuple;
 
-    // Value-typed chipset — superset of all variant chips.
-    // Only relevant fields are bound per variant; unused fields are inert.
-    RAMChip          work_ram;
-    RAMChip          vec_ram;
-    ROMChip          vec_rom;
-    ROMChip          prog_rom;
-    MOS6502          m6502;
-    VideoChip        vg;
-    LS259            latch;
-    // Optional chips (variant-dependent)
-    ROMChip          prog_rom_hi;  // Space Duel only
-    pokey::C012294   pokey1;       // HAS_POKEY variants
-    ER2055           earom;        // HAS_EAROM variants
+    Components components_;
 
-    template<size_t N>
-    AtariVectorBoard(const ChipManifest<N>& m) : Board<VectorBusSpec<V>>(m) {}
+    // Core chips (indices 0-6, always present in every variant)
+    RAMChip&  work_ram = std::get<0>(components_);
+    RAMChip&  vec_ram  = std::get<1>(components_);
+    ROMChip&  vec_rom  = std::get<2>(components_);
+    ROMChip&  prog_rom = std::get<3>(components_);
+    MOS6502&  m6502    = std::get<4>(components_);
+    VideoChip& vg      = std::get<5>(components_);
+    LS259&    latch    = std::get<6>(components_);
+
+    // Optional chip accessors — only valid when the variant has the chip.
+    // Callers must guard with if constexpr (Traits::HAS_POKEY) etc.
+    auto& pokey1()     { return std::get<Manifest::template find_nth<pokey::C012294>()>(components_); }
+    auto& earom()      { return std::get<Manifest::template find_nth<ER2055>()>(components_); }
+    // prog_rom_hi = 3rd ROMChip (after vec_rom @idx0 and prog_rom @idx1)
+    auto& prog_rom_hi(){ return std::get<Manifest::template find_nth<ROMChip, 2>()>(components_); }
+
+    AtariVectorBoard() : Board<VectorBusSpec<V>>(kVectorChips<V>) {}
 };
 
 // ============================================================================
@@ -715,7 +727,7 @@ private:
 
     // ── Memory bus ───────────────────────────────────────────────────────
     Bus bus_;
-    MainBoard board_{kVectorChips<V>};
+    MainBoard board_;
 
     // ── Display ──────────────────────────────────────────────────────────
     std::unique_ptr<VectorVideoPort> video_port_;
@@ -747,7 +759,6 @@ private:
     uint8_t snd_latch_ = 0x00;
 
     // ── Internal helpers ────────────────────────────────────────────────
-    void setup_ports() override;
     void tick_cpu();
     bus_state_t io_read(uint16_t addr, bus_state_t pins);
     bus_state_t io_write(uint16_t addr, uint8_t data, bus_state_t pins);
