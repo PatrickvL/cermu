@@ -7,6 +7,7 @@
 
 #include "core/cermu.hpp"
 #include "systems/commodore/c128/c128_system.hpp"
+#include "systems/commodore/pla_banking.hpp"
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
@@ -248,6 +249,7 @@ bool C128System::initialize() {
 
     configure_bus_memory_map();
     init_io_dispatch();
+    generate_bank_snapshots();
     if (!load_roms()) {
         log_info("C128: Warning — ROMs not loaded\n");
     }
@@ -1013,27 +1015,27 @@ void C128System::init_io_dispatch() {
            idVicIIe, idSid, idColRam, idCia1, idCia2, idVdc, idMmu);
 }
 
-void C128System::update_bank_config() {
-    // Apply MMU configuration to CPU viewer page tables.
-    // In C128 mode: only the MMU CR register controls banking.
-    // In C64 mode:  processor port bits 0-2 control banking (like C64 PLA).
+// ============================================================================
+// BANK MAP SNAPSHOT GENERATION
+// ============================================================================
+//
+// Pre-computes all possible memory mappings for both operating modes:
+//
+//   C64 mode:    32 PLA modes (LORAM/HIRAM/CHAREN/EXROM/GAME) × 2 viewers.
+//                Uses the shared PLA906114 simulation from pla_banking.hpp.
+//
+//   C128 native: CR[6:0] × RCR[3:0] = 2048 CPU modes + 4 VIC-IIe modes.
+//                Encoding: cpu_mode_index = (CR & 0x7F) | ((RCR & 0x0F) << 7).
+//
+// At runtime, update_bank_config() is a single snapshot load instead of
+// a per-page reprogramming loop.
+//
 
-    auto& mmu = board_.mmu;
-    mmu.acknowledge_bank_config();
-
+void C128System::generate_bank_snapshots() {
     using ChipId  = Bus::ChipId;
     using WriteId = Bus::WriteChipId;
+    using PT = PackingTraits<C128BusSpec>;
 
-    // Chip IDs (from manifest declaration order, bank_size splits):
-    //   main_ram    (128KB, bank_size=64KB): bank 0 → ID 0, bank 1 → ID 1
-    //   basic_lo    ( 16KB):                 ID 2
-    //   basic_hi    ( 16KB):                 ID 3
-    //   editor_rom  (  4KB):                 ID 4
-    //   char_rom    (  8KB):                 ID 5
-    //   kernal_rom  (  8KB):                 ID 6
-    //   z80_bios    (  4KB):                 ID 7
-    //   c64_basic   (  8KB):                 ID 8
-    //   c64_kernal  (  8KB):                 ID 9
     constexpr ChipId  kRamBank0    = ChipId(0);
     constexpr ChipId  kRamBank1    = ChipId(1);
     constexpr WriteId kRamBank0W   = WriteId(0);
@@ -1043,152 +1045,189 @@ void C128System::update_bank_config() {
     constexpr ChipId  kEditor      = ChipId(4);
     constexpr ChipId  kCharRom     = ChipId(5);
     constexpr ChipId  kKernal      = ChipId(6);
-    // constexpr ChipId kZ80Bios   = ChipId(7);  // Z80 BIOS — accessed directly, not via page table
     constexpr ChipId  kC64Basic    = ChipId(8);
     constexpr ChipId  kC64Kernal   = ChipId(9);
+    const auto no_chip_rd = ChipId(PT::kNoChipSelected);
+    const auto no_chip_wr = WriteId(PT::kNoChipSelectedWrite);
 
-    if (c64_mode_) {
-        // ── C64 compatibility mode ──────────────────────────────────
-        // Processor port bits 0-2 control banking (same as C64 PLA).
-        // Writes always go to RAM bank 0.
-        const uint8_t port = cpu_port_bits_;
-        const bool loram  = (port & 0x01) != 0;
-        const bool hiram  = (port & 0x02) != 0;
-        const bool charen = (port & 0x04) != 0;
+    // ── C64-mode PLA snapshots ──────────────────────────────────────────
+    {
+        PlaChipMapping<C128BusSpec> mapping;
+        // RAM bank 0 — single chip ID covers entire 64 KB (bank_size=64K)
+        mapping.ram           = {kRamBank0, 0};
+        mapping.basic         = {kC64Basic, 0};
+        mapping.kernal        = {kC64Kernal, 0};
+        mapping.charrom       = {kCharRom, 0};
+        mapping.roml          = {no_chip_rd, 0};   // No C64 cartridge ROM in manifest
+        mapping.romh          = {no_chip_rd, 0};
+        mapping.io_sub_read   = Bus::indexed_sub_chip(0);
+        mapping.io_sub_write  = Bus::indexed_sub_write_chip(0);
+        mapping.no_chip_read  = no_chip_rd;
+        mapping.no_chip_write = no_chip_wr;
+        mapping.ram_write_base = kRamBank0W;
+        mapping.ram_write_mask = 0;
 
-        // $0000-$3FFF: always RAM bank 0
-        for (size_t p = 0; p < 4; ++p)
-            bus_.set_page(kViewerCpu, p, kRamBank0, kRamBank0W);
+        generate_pla_mode_snapshots<C128BusSpec>(
+            bus_, mapping, kViewerCpu, kViewerVicII,
+            c64_cpu_snapshots_, c64_vic_snapshots_);
 
-        // $4000-$7FFF: always RAM in C64 mode
-        for (size_t p = 4; p < 8; ++p)
-            bus_.set_page(kViewerCpu, p, kRamBank0, kRamBank0W);
+        log_info("C128: C64-mode PLA snapshots generated (%zu modes × 2 viewers)\n",
+                kNumPlaModes);
+    }
 
-        // $8000-$9FFF: always RAM in C64 mode
-        bus_.set_page(kViewerCpu, 0x8, kRamBank0, kRamBank0W);
-        bus_.set_page(kViewerCpu, 0x9, kRamBank0, kRamBank0W);
+    // ── C128-native CPU snapshots ───────────────────────────────────────
+    // Enumerate all CR[6:0] × RCR[3:0] = 2048 combinations.
+    {
+        c128_cpu_snapshots_.resize(kC128NumCpuModes);
+        const auto io_sub_rd = Bus::indexed_sub_chip(0);
 
-        // $A000-$BFFF: C64 BASIC ROM when LORAM=1 && HIRAM=1, else RAM
-        {
-            ChipId rd = (loram && hiram) ? kC64Basic : kRamBank0;
-            bus_.set_page(kViewerCpu, 0xA, rd, kRamBank0W);
-            bus_.set_page(kViewerCpu, 0xB, rd, kRamBank0W);
-        }
+        for (uint16_t mode = 0; mode < kC128NumCpuModes; ++mode) {
+            const uint8_t cr  = mode & 0x7F;
+            const uint8_t rcr = (mode >> 7) & 0x0F;
 
-        // $C000-$CFFF: always RAM in C64 mode
-        bus_.set_page(kViewerCpu, 0xC, kRamBank0, kRamBank0W);
+            // Decode CR bits
+            const uint8_t ram_bank    = (cr & 0x40) ? 1 : 0;
+            const uint8_t high_sel    = (cr >> 4) & 0x03;
+            const uint8_t mid_hi_sel  = (cr >> 2) & 0x03;
+            const bool    basic_lo_en = (cr & 0x02) == 0;   // Bit 1: 0=ROM, 1=RAM
+            const bool    io_visible  = (cr & 0x01) == 0;   // Bit 0: 0=I/O, 1=char ROM
 
-        // $D000-$DFFF: I/O, char ROM, or RAM depending on port bits
-        if (hiram || loram) {
-            if (charen) {
-                // I/O visible
+            // Decode RCR common RAM bits
+            const bool    top_en        = (rcr & 0x08) != 0;
+            const bool    bot_en        = (rcr & 0x04) != 0;
+            const uint8_t common_sz_sel = rcr & 0x03;
+            const uint32_t common_size  = (common_sz_sel == 0) ? 1024 : (2048U << common_sz_sel);
+            const uint8_t bot_pages     = bot_en ? (uint8_t)((common_size + 0xFFF) >> 12) : 0;
+            const uint8_t top_start     = top_en ? (uint8_t)((0x10000 - common_size) >> 12) : 16;
+
+            const ChipId  ramRd = ram_bank ? kRamBank1 : kRamBank0;
+            const WriteId ramWr = ram_bank ? kRamBank1W : kRamBank0W;
+
+            // Per-page RAM chip, accounting for common areas (always bank 0)
+            auto ram_for_page = [&](size_t page) -> std::pair<ChipId, WriteId> {
+                if (page < bot_pages || page >= top_start)
+                    return {kRamBank0, kRamBank0W};
+                return {ramRd, ramWr};
+            };
+
+            bus_.reset_viewer(kViewerCpu);
+
+            // $0000-$3FFF: RAM (common pages stay bank 0)
+            for (size_t p = 0; p < 4; ++p) {
+                auto [rd, wr] = ram_for_page(p);
+                bus_.set_page(kViewerCpu, p, rd, wr);
+            }
+
+            // $4000-$7FFF: BASIC LO ROM or RAM (CR bit 1)
+            {
+                ChipId rd = basic_lo_en ? kBasicLo : ramRd;
+                for (size_t p = 4; p < 8; ++p)
+                    bus_.set_page(kViewerCpu, p, rd, ramWr);
+            }
+
+            // $8000-$BFFF: mid-hi ROM select (CR bits 3-2)
+            {
+                ChipId rd = ramRd;
+                if (mid_hi_sel == mos8722::cr::ROM_DEFAULT) rd = kBasicHi;
+                // sel 1/2 = internal/external function ROM (not yet implemented → RAM)
+                for (size_t p = 8; p < 12; ++p)
+                    bus_.set_page(kViewerCpu, p, rd, ramWr);
+            }
+
+            // $C000-$CFFF: Editor ROM when default, else RAM
+            {
+                auto [rd, wr] = ram_for_page(0xC);
+                bus_.set_page(kViewerCpu, 0xC,
+                    (high_sel == mos8722::cr::ROM_DEFAULT) ? kEditor : rd, wr);
+            }
+
+            // $D000-$DFFF: I/O / char ROM / RAM (CR bits 5-4 + bit 0)
+            if (high_sel == mos8722::cr::ROM_RAM) {
+                auto [rd, wr] = ram_for_page(0xD);
+                bus_.set_page(kViewerCpu, 0xD, rd, wr);
+            } else if (io_visible) {
                 bus_.map_to_indexed_sub(kViewerCpu, 0xD, 0);
             } else {
-                // Character ROM visible
-                bus_.set_page(kViewerCpu, 0xD, kCharRom, kRamBank0W);
+                auto [_, wr] = ram_for_page(0xD);
+                bus_.set_page(kViewerCpu, 0xD, kCharRom, wr);
             }
-        } else {
-            // All RAM
-            bus_.set_page(kViewerCpu, 0xD, kRamBank0, kRamBank0W);
+
+            // $E000-$FFFF: Kernal ROM when default, else RAM
+            for (size_t p = 0xE; p <= 0xF; ++p) {
+                auto [rd, wr] = ram_for_page(p);
+                bus_.set_page(kViewerCpu, p,
+                    (high_sel == mos8722::cr::ROM_DEFAULT) ? kKernal : rd, wr);
+            }
+
+            bus_.save_snapshot(kViewerCpu, c128_cpu_snapshots_[mode]);
         }
 
-        // $E000-$FFFF: C64 Kernal ROM when HIRAM=1, else RAM
-        {
-            ChipId rd = hiram ? kC64Kernal : kRamBank0;
-            bus_.set_page(kViewerCpu, 0xE, rd, kRamBank0W);
-            bus_.set_page(kViewerCpu, 0xF, rd, kRamBank0W);
+        log_info("C128: Native-mode CPU snapshots generated (%zu modes)\n",
+                kC128NumCpuModes);
+    }
+
+    // ── C128-native VIC-IIe snapshots ───────────────────────────────────
+    // VIC-IIe always sees 64 KB of RAM (bank 0 or 1 from RCR[7:6]) with
+    // character ROM ghosts at $1000 and $9000.
+    {
+        for (uint8_t vic_mode = 0; vic_mode < kC128NumVicModes; ++vic_mode) {
+            bus_.reset_viewer(kViewerVicII);
+            // RCR bits 7-6: 00/10/11 = bank 0, 01 = bank 1
+            ChipId ram_chip = (vic_mode == 1) ? kRamBank1 : kRamBank0;
+            for (size_t p = 0; p < 16; ++p)
+                bus_.set_read_page(kViewerVicII, p, ram_chip);
+            // Character ROM ghosts at $1000 and $9000 (VIC bank 0 and 2)
+            bus_.set_read_page(kViewerVicII, 0x1, kCharRom);
+            bus_.set_read_page(kViewerVicII, 0x9, kCharRom);
+            bus_.save_snapshot(kViewerVicII, c128_vic_snapshots_[vic_mode]);
         }
+
+        log_info("C128: Native-mode VIC-IIe snapshots generated (%zu modes)\n",
+                (size_t)kC128NumVicModes);
+    }
+
+    // Load initial configuration (C128 native boot: CR=0x00, RCR=0x00)
+    c128_cpu_mode_ = 0;
+    c128_vic_mode_ = 0;
+    bus_.load_snapshot(kViewerCpu, c128_cpu_snapshots_[0]);
+    bus_.load_snapshot(kViewerVicII, c128_vic_snapshots_[0]);
+}
+
+void C128System::update_bank_config() {
+    // Load the correct pre-computed snapshot for the current MMU state.
+    // All 2048 C128-native + 32 C64-mode memory maps were generated by
+    // generate_bank_snapshots() during initialize().
+
+    auto& mmu = board_.mmu;
+    mmu.acknowledge_bank_config();
+
+    if (c64_mode_) {
+        // C64 mode: PLA-style banking from processor port bits 0-2.
+        // EXROM/GAME default to 1/1 (no cartridge) → bits 3-4 of PLA mode.
+        // When C128 cartridge support is added, these would come from
+        // the expansion port device signals.
+        c64_pla_mode_ = cpu_port_bits_ & 0x07;
+        c64_pla_mode_ |= 0x18;    // EXROM=1, GAME=1 (no cartridge)
+        bus_.load_snapshot(kViewerCpu, c64_cpu_snapshots_[c64_pla_mode_]);
+        bus_.load_snapshot(kViewerVicII, c64_vic_snapshots_[c64_pla_mode_]);
         return;
     }
 
-    // ── C128 native mode ────────────────────────────────────────────
-    // Only the MMU CR register controls ROM/RAM/I/O banking.
-    // Processor port bits are NOT consulted.
+    // C128 native mode: indexed by CR[6:0] | (RCR[3:0] << 7).
+    const uint8_t cr  = mmu.cr();
+    const uint8_t rcr_lo = mmu.rcr_banking_bits();  // RCR[3:0]
+    const uint16_t cpu_mode = (cr & 0x7F) | (uint16_t(rcr_lo) << 7);
 
-    // RAM bank from CR bit 6
-    const uint8_t bank = mmu.ram_bank();
-    const ChipId  ramRd = bank ? kRamBank1 : kRamBank0;
-    const WriteId ramWr = bank ? kRamBank1W : kRamBank0W;
-
-    // Common RAM: bottom/top areas always use bank 0, regardless of CR bank.
-    const uint8_t bot_common_pages = mmu.bottom_common_pages();  // 0 = disabled
-    const uint8_t top_common_start = mmu.top_common_start_page(); // 16 = disabled
-
-    // $0000-$3FFF: RAM (selected bank, but common pages stay bank 0)
-    for (size_t p = 0; p < 4; ++p) {
-        if (p < bot_common_pages) {
-            bus_.set_page(kViewerCpu, p, kRamBank0, kRamBank0W);
-        } else {
-            bus_.set_page(kViewerCpu, p, ramRd, ramWr);
-        }
+    if (cpu_mode != c128_cpu_mode_) {
+        c128_cpu_mode_ = cpu_mode;
+        bus_.load_snapshot(kViewerCpu, c128_cpu_snapshots_[cpu_mode]);
     }
 
-    // $4000-$7FFF: BASIC LO ROM (bit 1 = 0) or RAM (bit 1 = 1)
-    {
-        ChipId rd = mmu.basic_lo_rom_enabled() ? kBasicLo : ramRd;
-        for (size_t p = 4; p < 8; ++p)
-            bus_.set_page(kViewerCpu, p, rd, ramWr);
+    const uint8_t vic_mode = mmu.vic_ram_bank() & 0x03;
+    if (vic_mode != c128_vic_mode_) {
+        c128_vic_mode_ = vic_mode;
+        bus_.load_snapshot(kViewerVicII, c128_vic_snapshots_[vic_mode]);
     }
-
-    // $8000-$BFFF: mid-hi ROM select (bits 3-2)
-    {
-        const uint8_t sel = mmu.mid_hi_select();
-        ChipId rd = ramRd;
-        if (sel == mos8722::cr::ROM_DEFAULT) rd = kBasicHi;
-        // sel == 1 or 2: function ROM (not implemented, fall back to RAM)
-        for (size_t p = 8; p < 12; ++p)
-            bus_.set_page(kViewerCpu, p, rd, ramWr);
-    }
-
-    // $C000-$FFFF: high ROM select (bits 5-4)
-    {
-        const uint8_t high_sel = mmu.high_rom_select();
-
-        // Per-page RAM chip IDs, accounting for top common RAM.
-        // Common pages always use bank 0 regardless of CR bank select.
-        auto ram_for_page = [&](size_t page) -> std::pair<ChipId, WriteId> {
-            if (page >= top_common_start)
-                return { kRamBank0, kRamBank0W };
-            return { ramRd, ramWr };
-        };
-
-        // $C000-$CFFF: Editor ROM when default, else RAM
-        {
-            auto [rd, wr] = ram_for_page(0xC);
-            if (high_sel == mos8722::cr::ROM_DEFAULT) {
-                bus_.set_page(kViewerCpu, 0xC, kEditor, wr);
-            } else {
-                bus_.set_page(kViewerCpu, 0xC, rd, wr);
-            }
-        }
-
-        // $D000-$DFFF: controlled by high_sel AND CR bit 0 (I/O select)
-        if (high_sel == mos8722::cr::ROM_RAM) {
-            auto [rd, wr] = ram_for_page(0xD);
-            bus_.set_page(kViewerCpu, 0xD, rd, wr);
-        } else if (mmu.io_visible()) {
-            // CR bit 0 = 0: I/O devices visible
-            bus_.map_to_indexed_sub(kViewerCpu, 0xD, 0);
-        } else {
-            auto [_, wr] = ram_for_page(0xD);
-            bus_.set_page(kViewerCpu, 0xD, kCharRom, wr);
-        }
-
-        // $E000-$FFFF: Kernal ROM when default, else RAM
-        for (size_t p = 0xE; p <= 0xF; ++p) {
-            auto [rd, wr] = ram_for_page(p);
-            if (high_sel == mos8722::cr::ROM_DEFAULT) {
-                bus_.set_page(kViewerCpu, p, kKernal, wr);
-            } else {
-                bus_.set_page(kViewerCpu, p, rd, wr);
-            }
-        }
-    }
-
-    // ── VIC-IIe viewer — always sees bank 0 by default ──────────────
-    // The VIC bank from RCR bits 7-6 is separate from the CIA2 bank select
-    // (which selects 16KB windows).  For now, keep bank 0 as default.
-    // Character ROM ghosts remain at $1000 and $9000.
 }
 
 void C128System::enter_c64_mode() {

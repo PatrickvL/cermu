@@ -2,6 +2,7 @@
 #include "systems/commodore/c64/c64_system.hpp"
 #include "systems/commodore/c64/c64_kernal_patches.hpp"
 #include "systems/commodore/c64/c64_sid_player.hpp"
+#include "systems/commodore/pla_banking.hpp"
 #include "chip/input/commodore_keyboard.hpp"
 #include "core/input/emu_key_sdl_map.hpp"
 // gui_state_t dependency eliminated — chip debug uses base class,
@@ -1657,107 +1658,54 @@ bool C64System::patch_skip_memtest() {
 // PLA Memory Map Generation
 // ============================================================================
 
-// Convert PLA output signals to a C64PlaChipId enum value.
-static C64PlaChipId pla_outputs_to_chip(const PLA906114& pla) {
-    if (!pla.outputs().n_casram)  return C64PlaChipId::ram;
-    if (!pla.outputs().n_basic)   return C64PlaChipId::basic;
-    if (!pla.outputs().n_kernal)  return C64PlaChipId::kernal;
-    if (!pla.outputs().n_io)      return C64PlaChipId::io;
-    if (!pla.outputs().n_charrom) return C64PlaChipId::charrom;
-    if (!pla.outputs().n_roml)    return C64PlaChipId::roml;
-    if (!pla.outputs().n_romh)    return C64PlaChipId::romh;
-    return C64PlaChipId::unmapped;
-}
+// Convert shared PlaOutput enum back to C64-specific C64PlaChipId for debug GUI.
+static constexpr C64PlaChipId kPlaOutputToC64Id[] = {
+    C64PlaChipId::ram,       // PlaOutput::ram
+    C64PlaChipId::basic,     // PlaOutput::basic
+    C64PlaChipId::kernal,    // PlaOutput::kernal
+    C64PlaChipId::charrom,   // PlaOutput::charrom
+    C64PlaChipId::io,        // PlaOutput::io
+    C64PlaChipId::roml,      // PlaOutput::roml
+    C64PlaChipId::romh,      // PlaOutput::romh
+    C64PlaChipId::unmapped,  // PlaOutput::unmapped
+};
 
 bool C64System::pla_maps_generate() {
-    // Create a temporary PLA instance for generating memory maps
-    PLA906114 pla;
+    const auto no_chip_rd = C64ChipId(C64PT::kNoChipSelected);
+    const auto no_chip_wr = C64WriteId(C64PT::kNoChipSelectedWrite);
 
-    // The IndexedSubTable sentinel for the I/O page — used in PLA modes
-    // where the $D000 page routes to the I/O sub-table.
-    const auto io_sub_read  = C64Bus::indexed_sub_chip(0);
-    const auto io_sub_write = C64Bus::indexed_sub_write_chip(0);
-    const auto no_chip_rd   = C64ChipId(C64PT::kNoChipSelected);
-    const auto no_chip_wr   = C64WriteId(C64PT::kNoChipSelectedWrite);
-
-    // Map PLA output chip → MemoryBus read chip.
-    // Buffer base_ids are converted to per-bank chip_ids using the
-    // descriptor's bank_mask; Io→sub-table, Unmapped→no-chip.
-    auto pla_to_read_chip = [&](C64PlaChipId chip, uint32_t bank) -> C64ChipId {
-        if (chip == C64PlaChipId::io)       return io_sub_read;
-        if (chip == C64PlaChipId::unmapped) return no_chip_rd;
-        const auto& d = kC64PlaChipTable[size_t(chip)];
-        return C64ChipId(size_t(d.base_id) + (bank & d.bank_mask));
+    // Build the chip-ID mapping from the C64 manifest's PLA chip table.
+    PlaChipMapping<C64BusSpec> mapping;
+    auto entry = [](C64PlaChipId id) -> PlaChipMapping<C64BusSpec>::ReadEntry {
+        const auto& d = kC64PlaChipTable[size_t(id)];
+        return {d.base_id, d.bank_mask};
     };
+    mapping.ram           = entry(C64PlaChipId::ram);
+    mapping.basic         = entry(C64PlaChipId::basic);
+    mapping.kernal        = entry(C64PlaChipId::kernal);
+    mapping.charrom       = entry(C64PlaChipId::charrom);
+    mapping.roml          = entry(C64PlaChipId::roml);
+    mapping.romh          = entry(C64PlaChipId::romh);
+    mapping.io_sub_read   = C64Bus::indexed_sub_chip(0);
+    mapping.io_sub_write  = C64Bus::indexed_sub_write_chip(0);
+    mapping.no_chip_read  = no_chip_rd;
+    mapping.no_chip_write = no_chip_wr;
+    mapping.ram_write_base = C64WriteId(kC64PlaChipTable[size_t(C64PlaChipId::ram)].base_id);
+    mapping.ram_write_mask = kC64PlaChipTable[size_t(C64PlaChipId::ram)].bank_mask;
 
-    // Map PLA output chip → MemoryBus write chip.
-    // Only RAM and I/O are writable; ROMs and unmapped ignore writes.
-    auto pla_to_write_chip = [&](C64PlaChipId chip, uint32_t bank) -> C64WriteId {
-        if (chip == C64PlaChipId::ram) {
-            const auto& d = kC64PlaChipTable[size_t(C64PlaChipId::ram)];
-            return C64WriteId(size_t(d.base_id) + (bank & d.bank_mask));
-        }
-        if (chip == C64PlaChipId::io)  return io_sub_write;
-        return no_chip_wr;
-    };
+    // Generate all 32 PLA mode snapshots with debug info collection
+    PlaDebugInfo debug{};
+    generate_pla_mode_snapshots<C64BusSpec>(
+        bus_, mapping, C64BusSpec::Cpu, C64BusSpec::Vic,
+        cpu_snapshots_, vicii_snapshots_, &debug);
 
-    // Generate all 32 modes for both viewers
+    // Convert PlaOutput debug arrays to C64PlaChipId for the PLA debug GUI
     for (int mode = 0; mode < 32; mode++) {
-        pla.set_banking_mode((uint8_t)mode);
-
-        // ── CPU viewer (viewer 0) ────────────────────────────────────────
-        pla.inputs().n_cas = false;
-        bus_.reset_viewer(C64BusSpec::Cpu);
-
-        for (uint32_t bank = 0; bank < 16; bank++) {
-            bus_state_t pla_bus = 0;
-            BUS_SET_ADDR(pla_bus, bank << 12);
-            BUS_SET_BIT(pla_bus, BUS_AEC_BIT);
-            BUS_SET_BIT(pla_bus, BUS_BA_BIT);
-
-            // Read: R/W high
-            BUS_SET_BIT(pla_bus, BUS_RW_BIT);
-            pla.tick(pla_bus);
-            C64PlaChipId read_chip = pla_outputs_to_chip(pla);
-
-            // Write: R/W low
-            BUS_CLR_BIT(pla_bus, BUS_RW_BIT);
-            pla.tick(pla_bus);
-            C64PlaChipId write_chip = pla_outputs_to_chip(pla);
-
-            // Store raw PLA outputs for debug GUI
-            pla_cpu_read_chip_[mode][bank]  = read_chip;
-            pla_cpu_write_chip_[mode][bank] = write_chip;
-
-            bus_.set_page(C64BusSpec::Cpu, bank,
-                          pla_to_read_chip(read_chip, bank),
-                          pla_to_write_chip(write_chip, bank));
+        for (int bank = 0; bank < 16; bank++) {
+            pla_cpu_read_chip_[mode][bank]  = kPlaOutputToC64Id[size_t(debug.cpu_read[mode][bank])];
+            pla_cpu_write_chip_[mode][bank] = kPlaOutputToC64Id[size_t(debug.cpu_write[mode][bank])];
+            pla_vicii_read_chip_[mode][bank] = kPlaOutputToC64Id[size_t(debug.vic_read[mode][bank])];
         }
-        bus_.save_snapshot(C64BusSpec::Cpu, cpu_snapshots_[mode]);
-
-        // ── VIC-II viewer (viewer 1) ─────────────────────────────────────
-        pla.inputs().n_cas = false;
-        bus_.reset_viewer(C64BusSpec::Vic);
-
-        for (uint32_t bank = 0; bank < 16; bank++) {
-            pla.inputs().va12   = (bank & 0x01) != 0;
-            pla.inputs().va13   = (bank & 0x02) != 0;
-            pla.inputs().n_va14 = (bank & 0x04) == 0;
-
-            bus_state_t pla_bus = 0;
-            BUS_SET_ADDR(pla_bus, bank << 12);
-            BUS_SET_BIT(pla_bus, BUS_RW_BIT);
-            pla.tick(pla_bus);
-            C64PlaChipId read_chip = pla_outputs_to_chip(pla);
-
-            // Store raw PLA output for debug GUI
-            pla_vicii_read_chip_[mode][bank] = read_chip;
-
-            // VIC-II only reads — set read page, write stays no-chip
-            bus_.set_read_page(C64BusSpec::Vic, bank,
-                               pla_to_read_chip(read_chip, bank));
-        }
-        bus_.save_snapshot(C64BusSpec::Vic, vicii_snapshots_[mode]);
     }
 
     // Set initial mode ($1F = standard, no cartridge)

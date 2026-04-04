@@ -48,6 +48,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <vector>
 
 // Default bus state — CSG 8502 (same pinout as MOS 6510)
 #define C128_BUS_DEFAULT_STATE (CSG8502::default_bus_state())
@@ -259,10 +260,36 @@ private:
     static constexpr size_t kViewerCpu   = 0;
     static constexpr size_t kViewerVicII = 1;
 
+    // ── Pre-computed bank map snapshots ──────────────────────────────────
+    //
+    // C64 mode: 32 PLA modes (LORAM/HIRAM/CHAREN/EXROM/GAME) × 2 viewers.
+    // Same PLA decode logic as the real C64, but mapped to C128 chip IDs.
+    //
+    // C128 native mode: CR[6:0] × RCR[3:0] = 2048 CPU modes, plus
+    // RCR[7:6] = 4 VIC-IIe bank modes.
+    //
+    static constexpr size_t kNumPlaModes       = 32;
+    static constexpr size_t kC128NumCpuModes   = 2048;   // 7 CR bits × 4 RCR bits
+    static constexpr size_t kC128NumVicModes   = 4;      // RCR[7:6]
+
+    using Snapshot = Bus::Snapshot;
+
+    // C64-mode snapshots (PLA-driven, generated via shared pla_banking.hpp)
+    std::array<Snapshot, kNumPlaModes> c64_cpu_snapshots_;
+    std::array<Snapshot, kNumPlaModes> c64_vic_snapshots_;
+    uint8_t c64_pla_mode_ = 0x1F;       // Current PLA mode in C64 mode
+
+    // C128-native snapshots (MMU-driven, indexed by CR/RCR register bits)
+    std::vector<Snapshot> c128_cpu_snapshots_;
+    std::array<Snapshot, kC128NumVicModes> c128_vic_snapshots_;
+    uint16_t c128_cpu_mode_ = 0;         // Current CR/RCR mode index
+    uint8_t  c128_vic_mode_ = 0;         // Current VIC bank mode
+
     // ── Internal helpers ─────────────────────────────────────────────────
     void configure_bus_memory_map();
     bool load_roms();
-    void update_bank_config();           // Apply MMU CR + RCR to page tables
+    void generate_bank_snapshots();      // Pre-compute all bank map snapshots
+    void update_bank_config();           // Load correct snapshot for current config
     void enter_c64_mode();               // Transition to C64 compatibility mode
     void switch_cpu_mode(CPUMode mode);  // Toggle between 8502 and Z80
     void init_io_dispatch();             // Set up CS-tick indexed sub-table for I/O page
