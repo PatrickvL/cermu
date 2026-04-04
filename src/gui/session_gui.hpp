@@ -7,6 +7,7 @@
 #include "core/session.hpp"
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 class Drive1541Device;  // Forward declaration for drive file dialog
 class DisplayPipelineBase;  // Forward declaration for display pipeline
@@ -160,6 +161,11 @@ private:
     /// Cached display device ID for change detection (avoids ABA
     /// pointer-reuse when the allocator gives the same address).
     std::string cached_display_id_;
+
+    /// Per-device display characteristics cache.  Keyed by device ID
+    /// (e.g. "crt_tv", "crt_1702").  Saves user-adjusted settings so
+    /// switching monitors and switching back preserves tweaks.
+    std::unordered_map<std::string, DisplayCharacteristics> device_settings_cache_;
 
     /// Display pipeline — owns the double-buffered frame sample buffers.
     /// Created during allocate_framebuffer() and connected to the system's

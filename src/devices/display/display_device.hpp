@@ -194,12 +194,13 @@ namespace VideoSignalMask {
     inline constexpr video_signal_mask_t YPbPr          = video_signal_bit(VideoSignalType::YPbPr);
     inline constexpr video_signal_mask_t Digital        = video_signal_bit(VideoSignalType::Digital);
     inline constexpr video_signal_mask_t Vector         = video_signal_bit(VideoSignalType::Vector);
+    inline constexpr video_signal_mask_t RF             = video_signal_bit(VideoSignalType::RF);
 
     // --- Common combinations ---
     inline constexpr video_signal_mask_t CompositeSVideo = Composite | SVideo;
     inline constexpr video_signal_mask_t CompositeRGB    = Composite | RGB;
     inline constexpr video_signal_mask_t AllAnalog        = Composite | SVideo | RGB | YPbPr;
-    inline constexpr video_signal_mask_t All              = Composite | SVideo | RGB | RGBI | YPbPr | Digital;
+    inline constexpr video_signal_mask_t All              = Composite | SVideo | RGB | RGBI | YPbPr | Digital | RF;
 }
 
 // ============================================================================

@@ -58,6 +58,7 @@ using PortSVideo         = TypedPort<PortType::VIDEO_SVIDEO>;
 using PortRgb            = TypedPort<PortType::VIDEO_RGB>;
 using PortRgbi           = TypedPort<PortType::VIDEO_RGBI>;
 using PortComponentVideo = TypedPort<PortType::VIDEO_COMPONENT>;
+using PortRf             = TypedPort<PortType::VIDEO_RF>;
 using PortHdmiVideo      = TypedPort<PortType::VIDEO_HDMI>;
 
 // Audio outputs

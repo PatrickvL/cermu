@@ -70,6 +70,7 @@ enum class PortType {
     VIDEO_RGB,          ///< RGB analog (SCART, DB-23, DIN, etc.)
     VIDEO_RGBI,         ///< RGBI digital (TTL, e.g. C128 80-column)
     VIDEO_COMPONENT,    ///< Component video (YPbPr)
+    VIDEO_RF,           ///< RF modulated composite (antenna / channel 3-4)
     VIDEO_HDMI,         ///< HDMI digital video/audio
 
     // --- Audio outputs ---
