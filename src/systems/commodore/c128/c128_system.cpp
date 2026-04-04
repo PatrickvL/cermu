@@ -394,6 +394,24 @@ bool C128System::initialize() {
     // Create keyboard mapper (host layout → C128 matrix)
     keyboard_mapper_.reset(create_c128_keyboard_mapper(keyboard_));
 
+    // Register virtual key menu items for C128 keys that have no common
+    // host keyboard equivalent.  Only keys that register_candidates()
+    // failed to map (no available scancode) appear in the menu.
+    {
+        auto& sdl_map = EmuKeySDLMap::instance();
+        struct { const char* label; emu_key_t key; bool toggle; } c128_extra_keys[] = {
+            {"HELP",           EMUKEY_CBM_HELP,          false},
+            {"LINE FEED",      EMUKEY_CBM_LINE_FEED,     false},
+            {"40/80 DISPLAY",  EMUKEY_CBM_40_80_DISPLAY, true },
+            {"NO SCROLL",      EMUKEY_CBM_NO_SCROLL,     true },
+        };
+        for (auto& k : c128_extra_keys) {
+            if (sdl_map.emu_key_to_scancode(k.key) == 0xFFFFFFFF) {
+                register_unmapped_input(k.label, k.key, k.toggle);
+            }
+        }
+    }
+
     // Wire CIA1 port read callbacks for keyboard matrix scanning.
     // Port A read = reverse scan (Port B output selects rows → return column contacts)
     // Port B read = forward scan (Port A output selects columns → return row contacts)
@@ -776,6 +794,7 @@ void C128System::run_frame() {
     video_port_->swap_frame();
     check_deferred_load();
     tick_peripherals();
+    tick_unmapped_inputs();
 }
 
 // ============================================================================
@@ -1532,6 +1551,8 @@ void C128System::render_system_menu_items() {
     if (ImGui::MenuItem("Enter C64 Mode", nullptr, false, !c64_mode_)) {
         c64_mode_requested_.store(true, std::memory_order_relaxed);
     }
+    ImGui::Separator();
+    render_unmapped_inputs_menu();
 #endif
 }
 
