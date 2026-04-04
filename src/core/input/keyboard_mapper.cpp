@@ -410,14 +410,30 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
     // (CTRL + digit), and other modifier-specific outputs that have no
     // host TEXTINPUT equivalent.
     if ((host_shift_held() || host_cbm_held_ || host_ctrl_held_) && is_printable_key(sym)) {
+        // Try char_map first: for remapped characters (e.g., host '\' → guest ←,
+        // host '|' → guest ↑) the char_map has the correct guest key position,
+        // while the scancode-based EmuKey lookup would hit the host's physical
+        // key position (which may be a different guest key entirely).
+        char c = 0;
+        if (sym >= 0 && sym < 128) c = static_cast<char>(sym);
+        if (c && char_map_[(unsigned char)c].valid) {
+            uint8_t mods = KEYMOD_NONE;
+            if (host_cbm_held_)    mods |= KEYMOD_CBM;
+            if (host_ctrl_held_)   mods |= KEYMOD_CTRL;
+            if (host_shift_held()) mods |= KEYMOD_SHIFT;
+            inject_press(GuestKeyAction(char_map_[(unsigned char)c].row,
+                                        char_map_[(unsigned char)c].col, mods),
+                         scancode, false);
+            return true;
+        }
+        // Fallback: use scancode → EmuKey → matrix lookup
         emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
         if (ek != EMUKEY_NONE) {
             uint8_t row, col;
             if (keyboard_->find_key(ek, &row, &col)) {
-                // Build modifier mask from actual host state — no forcing/suppressing
                 uint8_t mods = KEYMOD_NONE;
-                if (host_cbm_held_)   mods |= KEYMOD_CBM;
-                if (host_ctrl_held_)  mods |= KEYMOD_CTRL;
+                if (host_cbm_held_)    mods |= KEYMOD_CBM;
+                if (host_ctrl_held_)   mods |= KEYMOD_CTRL;
                 if (host_shift_held()) mods |= KEYMOD_SHIFT;
                 inject_press(GuestKeyAction(row, col, mods), scancode, false);
                 return true;
