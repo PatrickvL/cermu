@@ -187,7 +187,9 @@ public:
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
     void set_audio_sample_rate(int sample_rate_hz) override;
 
-    void* get_video_port_ptr() override { return video_port_.get(); }
+    void* get_video_port_ptr() override;
+    VideoSignalType get_video_signal_type() const override;
+    void rebind_active_video_output() override;
     int get_primary_video_port_index() const override { return PORT_VIDEO_40; }
     int get_active_video_port_index() const override;
     int get_video_port_count() const override { return 2; }
@@ -233,9 +235,8 @@ private:
     MainBoard board_;
 
     // ── Display ──────────────────────────────────────────────────────────
-    std::unique_ptr<CompositeVideoPort> video_port_;  // VIC-IIe output (40-col)
-    // VDC RGBI port: deferred until dual-display pipeline is implemented.
-    // The VDC ticks counters and services MMIO without pixel output.
+    std::unique_ptr<CompositeVideoPort> video_port_;      // VIC-IIe output (40-col)
+    std::unique_ptr<RGBIVideoPort>      vdc_video_port_;  // VDC output (80-col RGBI)
 
     // Cached processor port bits for bank config interaction
     uint8_t cpu_port_bits_  = 0x07;      // LORAM|HIRAM|CHAREN defaults (all high)

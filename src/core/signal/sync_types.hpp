@@ -41,6 +41,7 @@ struct FrameData {
 };
 
 // Maximum signal buffer: enough for one full frame of the largest system.
-// BBC frame dump: 640×256 + 257 sync markers ≈ 164K.  Allow generous headroom.
-inline constexpr uint32_t MAX_SIGNAL_SAMPLES = 640 * 280;  // ~179K
+// VDC (MOS 8563): 128 chars × 8 pixels × ~264 lines ≈ 270K samples.
+// Allow generous headroom for non-standard CRTC timing.
+inline constexpr uint32_t MAX_SIGNAL_SAMPLES = 1024 * 312;  // ~319K
 inline constexpr uint32_t MAX_SYNC_EVENTS    = 400;

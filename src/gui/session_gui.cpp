@@ -447,6 +447,12 @@ void SessionGUI::render_frame() {
     // and attach a new one without notifying EmulatorHost, so the cached
     // display_device_ pointer can go stale.
     refresh_display_device();
+
+    // Detect signal type changes at runtime (e.g. C128 40/80 toggle)
+    // and rebuild the signal decoder + display pipeline to match.
+    if (system_ && system_->get_video_signal_type() != active_signal_type_) {
+        rebuild_signal_pipeline();
+    }
     
     // Only render dialog if it's actually open
     if (system_selection_dialog_.is_open()) {
@@ -1910,6 +1916,139 @@ void SessionGUI::refresh_display_device() {
             display_panel_ = std::move(panel);
         }
     }
+}
+
+// ----------------------------------------------------------------------------
+// rebuild_signal_pipeline — hot-swap signal decoder + display pipeline
+//
+// Called from render_frame() when the system's active video signal type
+// changes at runtime (e.g. C128 40/80 toggle switches between VIC-IIe
+// Composite and VDC RGBI).  Pauses emulation briefly to safely disconnect
+// the old pipeline and reconnect to the new video port.
+// ----------------------------------------------------------------------------
+
+void SessionGUI::rebuild_signal_pipeline() {
+    if (!system_) return;
+
+    VideoSignalType new_type = system_->get_video_signal_type();
+    if (new_type == active_signal_type_) return;  // no change
+
+    log_info("Signal type changed: %s → %s\n",
+             signal_type_name(active_signal_type_),
+             signal_type_name(new_type));
+
+    // Pause emulation to safely disconnect the pipeline.
+    // The emu thread holds emu_mutex_ during run_frame(); pausing +
+    // locking ensures no concurrent writes to the pipeline buffers.
+    bool was_running = emulation_running_.load();
+    if (was_running)
+        emulation_paused_.store(true);
+
+    // Lock emu_mutex_ for the entire rebuild — if the emu thread is
+    // mid-frame, this blocks until it finishes.  With paused=true the
+    // emu thread won't start another frame.
+    std::lock_guard<std::mutex> lock(emu_mutex_);
+
+    // 1. Disconnect old display pipeline
+    if (display_pipeline_) {
+        display_pipeline_->disconnect();
+        display_pipeline_.reset();
+    }
+
+    // 2. Update cached signal type
+    active_signal_type_ = new_type;
+    connected_port_index_ = system_->get_primary_video_port_index();
+
+    // Determine which port index we should actually show.
+    // In auto-follow mode, get_active_video_port_index() reflects hardware state.
+    int target_port = (display_source_override_ >= 0)
+                    ? display_source_override_
+                    : system_->get_active_video_port_index();
+    if (target_port >= 0)
+        connected_port_index_ = target_port;
+
+    // 3. Recreate signal decoder for the new signal type
+    switch (new_type) {
+        case VideoSignalType::Composite:
+        case VideoSignalType::SVideo: {
+            CompositeShaderVariant variant = (new_type == VideoSignalType::SVideo)
+                ? CompositeShaderVariant::SVideo
+                : CompositeShaderVariant::Standard;
+            auto decoder = std::make_unique<CompositeSignalDecoder>(variant);
+            if (decoder->create()) {
+                signal_decoder_ = std::move(decoder);
+                system_->set_video_bridge_suppressed(true);
+            }
+            break;
+        }
+        case VideoSignalType::RGBI: {
+            auto decoder = std::make_unique<CompositeSignalDecoder>(CompositeShaderVariant::Standard);
+            if (decoder->create()) {
+                signal_decoder_ = std::move(decoder);
+                system_->set_video_bridge_suppressed(true);
+            }
+            break;
+        }
+        case VideoSignalType::RGB:
+        case VideoSignalType::YPbPr:
+        case VideoSignalType::Digital: {
+            RGBShaderVariant variant = (new_type == VideoSignalType::YPbPr)
+                ? RGBShaderVariant::YPbPr : RGBShaderVariant::Standard;
+            auto decoder = std::make_unique<RGBSignalDecoder>(variant);
+            if (decoder->create()) {
+                signal_decoder_ = std::move(decoder);
+                system_->set_video_bridge_suppressed(true);
+            }
+            break;
+        }
+        default:
+            break;
+    }
+
+    // 4. Create and connect new display pipeline to the appropriate port
+    if (void* port_ptr = system_->get_video_port_ptr()) {
+        switch (new_type) {
+            case VideoSignalType::Composite:
+            case VideoSignalType::SVideo: {
+                auto* port = static_cast<CompositeVideoPort*>(port_ptr);
+                auto pipeline = std::make_unique<CompositeDisplayPipeline>();
+                pipeline->connect(*port);
+                display_pipeline_ = std::move(pipeline);
+                break;
+            }
+            case VideoSignalType::RGBI: {
+                auto* port = static_cast<RGBIVideoPort*>(port_ptr);
+                auto pipeline = std::make_unique<RGBIDisplayPipeline>();
+                pipeline->connect(*port);
+                display_pipeline_ = std::move(pipeline);
+                break;
+            }
+            case VideoSignalType::RGB:
+            case VideoSignalType::YPbPr:
+            case VideoSignalType::Digital: {
+                auto* port = static_cast<RGBVideoPort*>(port_ptr);
+                auto pipeline = std::make_unique<RGBDisplayPipeline>();
+                pipeline->connect(*port);
+                display_pipeline_ = std::move(pipeline);
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
+    // 5. Rebind so the active port writes to last_frame_data_
+    system_->rebind_active_video_output();
+
+    // 6. Resume emulation
+    if (was_running) {
+        emulation_paused_.store(false);
+    }
+
+    // Refresh display device — the new port may have a different monitor
+    refresh_display_device();
+
+    log_info("Signal pipeline rebuilt for %s\n", signal_type_name(new_type));
 }
 
 // ============================================================================
