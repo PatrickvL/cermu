@@ -132,9 +132,11 @@ bool SpectravideoSystem<V>::initialize() {
     register_board(&board_);
 
     // Bind value-typed Chips members, then factory-create remaining (RAM/ROM)
-    { size_t slot_idx_ = 0;
-      SVI318_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
-    board_.create_chips(&pins_);
+    bind_all(board_, board_.components_, BT::kManifest);
+
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = BT::kManifest.port_slots;
+    port_manifest_count_ = BT::kManifest.port_count;
     board_.apply(bus_);
 
     // Configure memory map
@@ -451,29 +453,6 @@ bool SpectravideoSystem<V>::load_roms() {
 
 template class SpectravideoSystem<SVIVariant::SVI318>;
 template class SpectravideoSystem<SVIVariant::SVI328>;
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                               tag        type              name                 num  int  bus  default_device
-#define SVI_FOR_EACH_PORT(V, ctx) \
-    V(ctx, JOY1,       CONTROL_PORT_DB9, "Joystick Port 1",     1, false, false, "joystick")      \
-    V(ctx, JOY2,       CONTROL_PORT_DB9, "Joystick Port 2",     2, false, false, "joystick")      \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)         \
-    V(ctx, CARTRIDGE,  EXPANSION_PORT,   "Cartridge Slot",      0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")        \
-    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",           0, false, false, nullptr)
-
-CERMU_PORT_MANIFEST(SVI, SVI_FOR_EACH_PORT)
-
-template<SVIVariant V>
-void SpectravideoSystem<V>::setup_ports() {
-    create_ports_from_manifest(kSVIPorts);
-}
-
-// ============================================================================
-// SYSTEM REGISTRATION
-// ============================================================================
 
 REGISTER_SYSTEM(svi318_descriptor, [] {
     return std::make_unique<SpectravideoSystem<SVIVariant::SVI318>>();

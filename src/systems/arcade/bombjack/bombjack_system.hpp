@@ -15,7 +15,8 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
+#include "core/typed_manifest.hpp"
+#include "core/typed_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -41,51 +42,72 @@
 // I/O registers and AY ports handled separately.
 //
 
-#define BOMBJACK_MAIN_FOR_EACH_CHIP(V, ctx)                                                             \
-    V(ctx, ZilogZ80A,  cpu,       0x0000,     0, 0, 0, "Main CPU",       nullptr)                       \
-    V(ctx, ROMChip,    rom,       0x0000, 32768, 0, 0, "Program ROM",    nullptr)                       \
-    V(ctx, RAMChip,    work_ram,  0x8000,  4096, 0, 0, "Work RAM",       nullptr)                       \
-    V(ctx, RAMChip,    fg_map,    0x9000,  1024, 0, 0, "FG Tilemap",     nullptr)                       \
-    V(ctx, RAMChip,    fg_attr,   0x9400,  1024, 0, 0, "FG Attributes",  nullptr)                       \
-    V(ctx, RAMChip,    sprites,   0x9800,   256, 0, 0, "Sprite Area",    nullptr)                       \
-    V(ctx, RAMChip,    palette,   0x9C00,   256, 0, 0, "Palette RAM",    nullptr)
+inline constexpr auto kBombJackMainManifest = make_manifest(
+    Slot<ZilogZ80A>{.base_addr = 0x0000, .label = "Main CPU"},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 32768, .label = "Program ROM"},
+    Slot<RAMChip>{.base_addr = 0x8000, .size_bytes = 4096, .label = "Work RAM"},
+    Slot<RAMChip>{.base_addr = 0x9000, .size_bytes = 1024, .label = "FG Tilemap"},
+    Slot<RAMChip>{.base_addr = 0x9400, .size_bytes = 1024, .label = "FG Attributes"},
+    Slot<RAMChip>{.base_addr = 0x9800, .size_bytes = 256, .label = "Sprite Area"},
+    Slot<RAMChip>{.base_addr = 0x9C00, .size_bytes = 256, .label = "Palette RAM"}
+);
 
-#define BOMBJACK_SOUND_FOR_EACH_CHIP(V, ctx)                                                            \
-    V(ctx, ZilogZ80A,  cpu,       0x0000,     0, 0, 0, "Sound CPU",      nullptr)                       \
-    V(ctx, ROMChip,    rom,       0x0000,  8192, 0, 0, "Sound ROM",      nullptr)                       \
-    V(ctx, RAMChip,    ram,       0x4000,  1024, 0, 0, "Sound RAM",      nullptr)
+inline constexpr auto kBombJackSoundManifest = make_manifest(
+    Slot<ZilogZ80A>{.base_addr = 0x0000, .label = "Sound CPU"},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 8192, .label = "Sound ROM"},
+    Slot<RAMChip>{.base_addr = 0x4000, .size_bytes = 1024, .label = "Sound RAM"}
+);
 
-static constexpr size_t kBJMainChipCount  = 0 BOMBJACK_MAIN_FOR_EACH_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-static constexpr size_t kBJSoundChipCount = 0 BOMBJACK_SOUND_FOR_EACH_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+// Port manifest — shared between both boards
+inline constexpr auto kBombJackPortManifest = make_manifest(
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-inline constexpr ChipManifest<kBJMainChipCount> kBombJackMainChips = ChipManifest<kBJMainChipCount>{{
-    BOMBJACK_MAIN_FOR_EACH_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
-
-inline constexpr ChipManifest<kBJSoundChipCount> kBombJackSoundChips = ChipManifest<kBJSoundChipCount>{{
-    BOMBJACK_SOUND_FOR_EACH_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
+inline constexpr size_t kBJMainChipCount  = decltype(kBombJackMainManifest)::chip_count;
+inline constexpr size_t kBJSoundChipCount = decltype(kBombJackSoundManifest)::chip_count;
 
 
 // ── Bus traits — one per CPU ─────────────────────────────────────────────
 
 struct BombJackMainBusTraits {
-    static constexpr const auto& kManifest = kBombJackMainChips;
-    using Spec = ManifestBusSpec<kBombJackMainChips, 16, 8>;
+    static constexpr const auto& kManifest = kBombJackMainManifest;
+    using Spec = ManifestBusSpec<kBombJackMainManifest, 16, 8>;
 };
 
 struct BombJackSoundBusTraits {
-    static constexpr const auto& kManifest = kBombJackSoundChips;
-    using Spec = ManifestBusSpec<kBombJackSoundChips, 16, 8>;
+    static constexpr const auto& kManifest = kBombJackSoundManifest;
+    using Spec = ManifestBusSpec<kBombJackSoundManifest, 16, 8>;
 };
 
-// Value-typed chips per board
-struct BombJackMainChipset {
-    BOMBJACK_MAIN_FOR_EACH_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+// ── Main Board ────────────────────────────────────────────────────────────
+struct BombJackMainBoard : Board<BombJackMainBusTraits::Spec, NoChips> {
+    using ComponentTuple = decltype(kBombJackMainManifest)::component_tuple;
+    ComponentTuple components_;
+
+    ZilogZ80A& cpu      = std::get<0>(components_);
+    ROMChip&   rom      = std::get<1>(components_);
+    RAMChip&   work_ram = std::get<2>(components_);
+    RAMChip&   fg_map   = std::get<3>(components_);
+    RAMChip&   fg_attr  = std::get<4>(components_);
+    RAMChip&   sprites  = std::get<5>(components_);
+    RAMChip&   palette  = std::get<6>(components_);
+
+    template<size_t N>
+    BombJackMainBoard(const ChipManifest<N>& m) : Board<BombJackMainBusTraits::Spec, NoChips>(m) {}
 };
 
-struct BombJackSoundChipset {
-    BOMBJACK_SOUND_FOR_EACH_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+// ── Sound Board ───────────────────────────────────────────────────────────
+struct BombJackSoundBoard : Board<BombJackSoundBusTraits::Spec, NoChips> {
+    using ComponentTuple = decltype(kBombJackSoundManifest)::component_tuple;
+    ComponentTuple components_;
+
+    ZilogZ80A& cpu = std::get<0>(components_);
+    ROMChip&   rom = std::get<1>(components_);
+    RAMChip&   ram = std::get<2>(components_);
+
+    template<size_t N>
+    BombJackSoundBoard(const ChipManifest<N>& m) : Board<BombJackSoundBusTraits::Spec, NoChips>(m) {}
 };
 
 class BombJackSystem : public System {
@@ -135,15 +157,13 @@ private:
 
     // ── Main bus ─────────────────────────────────────────────────────────
     using MainBus = MemoryBus<BombJackMainBusTraits::Spec>;
-    using MainBoard = Board<BombJackMainBusTraits::Spec, BombJackMainChipset>;
     MainBus main_bus_;
-    MainBoard main_board_{kBombJackMainChips};
+    BombJackMainBoard main_board_{kBombJackMainManifest};
 
     // ── Sound bus ────────────────────────────────────────────────────────
     using SoundBus = MemoryBus<BombJackSoundBusTraits::Spec>;
-    using SoundBoard = Board<BombJackSoundBusTraits::Spec, BombJackSoundChipset>;
     SoundBus sound_bus_;
-    SoundBoard sound_board_{kBombJackSoundChips};
+    BombJackSoundBoard sound_board_{kBombJackSoundManifest};
 
     // ── Inter-CPU communication ──────────────────────────────────────────
     uint8_t sound_latch_ = 0;           // Main → Sound command latch
@@ -169,7 +189,6 @@ private:
     // ── Internal helpers ─────────────────────────────────────────────────
     bus_state_t main_io_tick(bus_state_t pins);   // $B000+ I/O registers
     bus_state_t sound_io_tick(bus_state_t pins);   // AY-3-8910 port I/O
-    void setup_ports() override;
     bool load_roms();
     void decode_palette();                         // Rebuild palette from palette RAM
     void render_frame();                           // Decode FG tilemap into indexed framebuffer

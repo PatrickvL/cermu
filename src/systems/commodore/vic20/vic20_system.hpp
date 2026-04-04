@@ -2,7 +2,6 @@
 
 #include "systems/commodore/commodore_system.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/memory/ram_chip.hpp"
@@ -83,65 +82,91 @@
 // Color RAM ($9400) is a regular 1 KB buffer chip (4-bit masking TODO: MOS2114).
 //
 
-#define VIC20_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                                          \
-    V(ctx, MOS6502,              cpu,       0x0000,     0,      0, 0, "MOS 6502",           nullptr)                                           \
-    V(ctx, RAMChip,              ram0,      0x0000,  1024,      0, 0, "Base RAM 0",         nullptr)                                           \
-    V(ctx, RAMChip,              blk0,      0x0400,  3072,      0, 0, "Expansion Block 0",  nullptr)                                           \
-    V(ctx, RAMChip,              ram1,      0x1000,  4096,      0, 0, "Base RAM 1",         nullptr)                                           \
-    V(ctx, RAMChip,              blk1,      0x2000,  8192,      0, 0, "Expansion Block 1",  nullptr)                                           \
-    V(ctx, RAMChip,              blk2,      0x4000,  8192,      0, 0, "Expansion Block 2",  nullptr)                                           \
-    V(ctx, RAMChip,              blk3,      0x6000,  8192,      0, 0, "Expansion Block 3",  nullptr)                                           \
-    V(ctx, ROMChip,              charrom,   0x8000,  4096,      0, 0, "CHARROM",            "characters.901460-03.bin|chargen.rom|901460-03.bin") \
-    V(ctx, mos6561_t,            vic,       0,          0,      0, 0, "MOS 6561 (PAL)",     nullptr)                                           \
-    V(ctx, mos6522_t,            via1,      0,          0,      0, 0, "VIA 1",              nullptr)                                           \
-    V(ctx, mos6522_t,            via2,      0,          0,      0, 0, "VIA 2",              nullptr)                                           \
-    V(ctx, vic20_io_decoder_t,   io_dec,    0x9000,     0,      0, 0, "I/O Decoder",        nullptr)                                           \
-    V(ctx, RAMChip,              colorram,  0x9400,  1024,      0, 0, "Color RAM",          nullptr)                                           \
-    V(ctx, RAMChip,              cart,      0xA000,  8192,      0, 0, "Cartridge Area",     nullptr)                                           \
-    V(ctx, ROMChip,              basic,     0xC000,  8192,      0, 0, "BASIC ROM",          "basic.901486-01.bin|basic.rom|901486-01.bin")       \
-    V(ctx, ROMChip,              kernal,    0xE000,  8192,      0, 0, "KERNAL ROM",         "kernal.901486-07.bin|kernal.rom|901486-07.bin")
 
 // ── Chip count, manifest, BusTraits ──────────────────────────────────────
 
-static constexpr size_t kVIC20ChipCount = 0 VIC20_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 
-inline constexpr ChipManifest<kVIC20ChipCount> kVIC20Chips = ChipManifest<kVIC20ChipCount>{{
-    VIC20_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
+inline constexpr auto kVIC20Manifest = make_manifest(
+    // Chips
+    Slot<MOS6502>{.base_addr = 0x0000, .label = "MOS 6502"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 0x0400, .label = "Base RAM 0"},
+    Slot<RAMChip>{.base_addr = 0x0400, .size_bytes = 0x0C00, .label = "Expansion Block 0"},
+    Slot<RAMChip>{.base_addr = 0x1000, .size_bytes = 0x1000, .label = "Base RAM 1"},
+    Slot<RAMChip>{.base_addr = 0x2000, .size_bytes = 0x2000, .label = "Expansion Block 1"},
+    Slot<RAMChip>{.base_addr = 0x4000, .size_bytes = 0x2000, .label = "Expansion Block 2"},
+    Slot<RAMChip>{.base_addr = 0x6000, .size_bytes = 0x2000, .label = "Expansion Block 3"},
+    Slot<ROMChip>{.base_addr = 0x8000, .size_bytes = 0x1000, .label = "CHARROM", .rom = {"characters.901460-03.bin|chargen.rom|901460-03.bin"}},
+    Slot<mos6561_t>{.label = "MOS 6561 (PAL)"},
+    Slot<mos6522_t>{.label = "VIA 1"},
+    Slot<mos6522_t>{.label = "VIA 2"},
+    Slot<vic20_io_decoder_t>{.base_addr = 0x9000, .label = "I/O Decoder"},
+    Slot<RAMChip>{.base_addr = 0x9400, .size_bytes = 0x0400, .label = "Color RAM"},
+    Slot<RAMChip>{.base_addr = 0xA000, .size_bytes = 0x2000, .label = "Cartridge Area"},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 0x2000, .label = "BASIC ROM", .rom = {"basic.901486-01.bin|basic.rom|901486-01.bin"}},
+    Slot<ROMChip>{.base_addr = 0xE000, .size_bytes = 0x2000, .label = "KERNAL ROM", .rom = {"kernal.901486-07.bin|kernal.rom|901486-07.bin"}},
+    // Ports
+    Slot<PortControlDB9>{.name = "Control Port", .port_number = 1, .default_device = "joystick"},
+    Slot<PortIecSerial>{.name = "IEC Serial Bus", .is_bus = true, .default_device = "1541"},
+    Slot<PortCassette>{.name = "Cassette Port", .default_device = "datasette"},
+    Slot<PortUserPort>{.name = "User Port"},
+    Slot<PortExpansion>{.name = "Expansion Port"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"},
+    Slot<PortCustom>{.name = "Keyboard", .is_internal = true}
+);
+
+inline constexpr size_t kVIC20ChipCount = decltype(kVIC20Manifest)::chip_count;
 
 // Slot indices for runtime override (constexpr lookup by factory pointer).
-inline constexpr size_t kVIC20_VicSlot = kVIC20Chips.find<mos6561_t>();
+inline constexpr size_t kVIC20_VicSlot = kVIC20Manifest.find<mos6561_t>();
 
 // Cart slot index (constexpr lookup by base address).
 inline constexpr size_t kVIC20_CartSlot = [] {
     for (size_t i = 0; i < kVIC20ChipCount; ++i)
-        if (kVIC20Chips.chips[i].base_addr == 0xA000) return i;
+        if (kVIC20Manifest.chips[i].base_addr == 0xA000) return i;
     return kVIC20ChipCount;
 }();
 
+
 struct VIC20BusTraits {
-    static constexpr const auto& kManifest = kVIC20Chips;
-    using Spec = ManifestBusSpec<kVIC20Chips, 16, 10, 1, true>;  // 1 KB pages, CS-enabled
+    static constexpr const auto& kManifest = kVIC20Manifest;
+    using Spec = ManifestBusSpec<kVIC20Manifest, 16, 10, 1, true>;  // 1 KB pages, CS-enabled
 };
 
-// ============================================================================
-// VIC-20 Chips — value-typed chipset owned by Board
-// ============================================================================
-// All 16 chips are value-typed.  The PAL VIC (mos6561_t) is the default.
-// For NTSC, the VIC slot is unbound and factory-replaced with mos6560_t
-// before create_chips() — the value-typed field sits unused (~200 bytes).
-// Both variants are accessed uniformly via vic_base_t* vic_.
-//
-// RAM layout: ram0/blk0/ram1/blk1/blk2/blk3 are declared in address order
-// and thus contiguous in Board's flat memory ($0000-$7FFF, 32 KB).  Code
-// that reads this range (VIC video callbacks, load helpers) may index
-// ram0.data() beyond the chip's own 1 KB — the contiguity guarantee
-// makes this safe.
+struct VIC20Board : Board<VIC20BusTraits::Spec, NoChips> {
+    using ComponentTuple = decltype(kVIC20Manifest)::component_tuple;
+    ComponentTuple components_;
 
-struct VIC20Chipset {
-    VIC20_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+    // Chip aliases
+    MOS6502&            cpu      = std::get<0>(components_);
+    RAMChip&            ram0     = std::get<1>(components_);
+    RAMChip&            blk0     = std::get<2>(components_);
+    RAMChip&            ram1     = std::get<3>(components_);
+    RAMChip&            blk1     = std::get<4>(components_);
+    RAMChip&            blk2     = std::get<5>(components_);
+    RAMChip&            blk3     = std::get<6>(components_);
+    ROMChip&            charrom  = std::get<7>(components_);
+    mos6561_t&          vic      = std::get<8>(components_);
+    mos6522_t&          via1     = std::get<9>(components_);
+    mos6522_t&          via2     = std::get<10>(components_);
+    vic20_io_decoder_t& io_dec   = std::get<11>(components_);
+    RAMChip&            colorram = std::get<12>(components_);
+    RAMChip&            cart     = std::get<13>(components_);
+    ROMChip&            basic    = std::get<14>(components_);
+    ROMChip&            kernal   = std::get<15>(components_);
+
+    // Port aliases
+    PortControlDB9&     control_port    = std::get<16>(components_);
+    PortIecSerial&      iec_serial_port = std::get<17>(components_);
+    PortCassette&       cassette_port   = std::get<18>(components_);
+    PortUserPort&       user_port       = std::get<19>(components_);
+    PortExpansion&      expansion_port  = std::get<20>(components_);
+    PortCompositeVideo& video_port      = std::get<21>(components_);
+    PortAudioMono&      audio_port      = std::get<22>(components_);
+    PortCustom&         keyboard_port   = std::get<23>(components_);
+
+    VIC20Board() : Board(kVIC20Manifest) {}
 };
-
 class VIC20System : public CommodoreSystem {
 public:
     VIC20System();
@@ -182,9 +207,9 @@ private:
     
     // ── Memory bus (declarative manifest + page-pointer dispatch) ────────
     using Bus = MemoryBus<VIC20BusTraits::Spec>;
-    using MainBoard = Board<VIC20BusTraits::Spec, VIC20Chipset>;
+    using MainBoard = VIC20Board;
     Bus mem_bus_;
-    MainBoard board_{kVIC20Chips};
+    MainBoard board_;
 
     // VIC chip — polymorphic pointer, concrete type depends on PAL/NTSC config.
     // PAL: points to value-typed board_.vic (mos6561_t).
@@ -235,5 +260,4 @@ private:
     static uint8_t vic20_via2_port_b_read(void* context, uint8_t port_b_output);
     
     // Connector port setup (registers VIC-20 connector ports with base class)
-    void setup_ports() override;
 };

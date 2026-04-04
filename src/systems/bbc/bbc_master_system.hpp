@@ -44,7 +44,6 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/wdc65c02.hpp"
 #include "chip/io/mos6522.hpp"
@@ -113,75 +112,87 @@ template<> struct BBCMasterVariantTraits<BBCMasterVariant::MASTER_128> {
 //   Slot 1: Paged ROM — 256KB (16 × 16KB sideways slots)
 //   Slot 2: OS ROM — 64KB at $C000 (4 × 16KB MOS banks, selected by ACCCON)
 //
-//                                       ctx   type           chip       base    size    mask  ovl  label            rom
-#define BBC_BPLUS_FOR_EACH_SYSTEM_CHIP(V, ctx) \
-    V(ctx, WDC_65C02,       w65c02,    0,           0, 0,     0, "WDC 65C02",   nullptr) \
-    V(ctx, RAMChip,         ram,       0x0000,  65536, 0,     0, "RAM",         nullptr) \
-    V(ctx, ROMChip,         paged_rom, 0x8000, 262144, 0,     0, "Paged ROM",   nullptr) \
-    V(ctx, ROMChip,         os_rom,    0xC000,  16384, 0,     0, "MOS ROM",     "bplus_os.rom|OS20.ROM|os20.rom") \
-    V(ctx, mc6845_t,        crtc,      0xFE00,      0, 0xFFF8, 0, "MC6845 CRTC", nullptr) \
-    V(ctx, sn76489_t,       psg,       0,           0, 0,     0, "SN76489 PSG", nullptr) \
-    V(ctx, mos6522_t,       sys_via,   0xFE40,      0, 0xFFF0, 0, "System VIA",  nullptr) \
-    V(ctx, mos6522_t,       user_via,  0xFE60,      0, 0xFFF0, 0, "User VIA",    nullptr) \
-    V(ctx, bbc_vidproc_t,   vidproc,   0xFE20,      0, 0xFFF0, 0, "Video ULA",   nullptr)
+inline constexpr auto kBBCBPlusManifest = make_manifest(
+    // Chips
+    Slot<WDC_65C02>{.label = "WDC 65C02"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 0x00010000, .label = "RAM"},
+    Slot<ROMChip>{.base_addr = 0x8000, .size_bytes = 0x00040000, .label = "Paged ROM", .bank_size = 16384},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 0x4000, .label = "MOS ROM", .rom = {"bplus_os.rom|OS20.ROM|os20.rom"}},
+    Slot<mc6845_t>{.base_addr = 0xFE00, .addr_mask = 0xFFF8, .label = "MC6845 CRTC"},
+    Slot<sn76489_t>{.label = "SN76489 PSG"},
+    Slot<mos6522_t>{.base_addr = 0xFE40, .addr_mask = 0xFFF0, .label = "System VIA"},
+    Slot<mos6522_t>{.base_addr = 0xFE60, .addr_mask = 0xFFF0, .label = "User VIA"},
+    Slot<bbc_vidproc_t>{.base_addr = 0xFE20, .addr_mask = 0xFFF0, .label = "Video ULA"},
+    // Ports
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortUserPort>{.name = "User Port"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortRgb>{.name = "Video Out (RGB)"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-#define BBC_MASTER_FOR_EACH_SYSTEM_CHIP(V, ctx) \
-    V(ctx, WDC_65C02,       w65c02,    0,           0, 0,     0, "WDC 65C02",   nullptr) \
-    V(ctx, RAMChip,         ram,       0x0000, 131072, 0,     0, "RAM",         nullptr) \
-    V(ctx, ROMChip,         paged_rom, 0x8000, 262144, 0,     0, "Paged ROM",   nullptr) \
-    V(ctx, ROMChip,         os_rom,    0xC000,  65536, 0,     0, "MOS ROM",     "master_mos320.rom|MOS320.ROM|mos3.20.rom") \
-    V(ctx, mc6845_t,        crtc,      0xFE00,      0, 0xFFF8, 0, "MC6845 CRTC", nullptr) \
-    V(ctx, sn76489_t,       psg,       0,           0, 0,     0, "SN76489 PSG", nullptr) \
-    V(ctx, mos6522_t,       sys_via,   0xFE40,      0, 0xFFF0, 0, "System VIA",  nullptr) \
-    V(ctx, mos6522_t,       user_via,  0xFE60,      0, 0xFFF0, 0, "User VIA",    nullptr) \
-    V(ctx, bbc_vidproc_t,   vidproc,   0xFE20,      0, 0xFFF0, 0, "Video ULA",   nullptr)
+inline constexpr auto kBBCMasterManifest = make_manifest(
+    // Chips
+    Slot<WDC_65C02>{.label = "WDC 65C02"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 0x00020000, .label = "RAM", .bank_size = 32768},
+    Slot<ROMChip>{.base_addr = 0x8000, .size_bytes = 0x00040000, .label = "Paged ROM", .bank_size = 16384},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 0x00010000, .label = "MOS ROM", .bank_size = 16384, .rom = {"master_mos320.rom|MOS320.ROM|mos3.20.rom"}},
+    Slot<mc6845_t>{.base_addr = 0xFE00, .addr_mask = 0xFFF8, .label = "MC6845 CRTC"},
+    Slot<sn76489_t>{.label = "SN76489 PSG"},
+    Slot<mos6522_t>{.base_addr = 0xFE40, .addr_mask = 0xFFF0, .label = "System VIA"},
+    Slot<mos6522_t>{.base_addr = 0xFE60, .addr_mask = 0xFFF0, .label = "User VIA"},
+    Slot<bbc_vidproc_t>{.base_addr = 0xFE20, .addr_mask = 0xFFF0, .label = "Video ULA"},
+    // Ports
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortUserPort>{.name = "User Port"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortRgb>{.name = "Video Out (RGB)"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-static constexpr size_t kBBCBPlusChipCount  = 0 BBC_BPLUS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-static constexpr size_t kBBCMasterChipCount = 0 BBC_MASTER_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+inline constexpr size_t kBBCBPlusChipCount = decltype(kBBCBPlusManifest)::chip_count;
+inline constexpr size_t kBBCMasterChipCount = decltype(kBBCMasterManifest)::chip_count;
 
-constexpr ChipManifest<kBBCBPlusChipCount> make_bbc_bplus_manifest() {
-    ChipManifest<kBBCBPlusChipCount> m = {{
-        BBC_BPLUS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-    }};
-    m.chips[2].bank_size = 16384;  // Paged ROM (16 × 16KB sideways banks)
-    return m;
-}
-
-constexpr ChipManifest<kBBCMasterChipCount> make_bbc_master_manifest() {
-    ChipManifest<kBBCMasterChipCount> m = {{
-        BBC_MASTER_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-    }};
-    m.chips[1].bank_size = 32768;  // RAM (4 × 32KB banks)
-    m.chips[2].bank_size = 16384;  // Paged ROM (16 × 16KB sideways banks)
-    m.chips[3].bank_size = 16384;  // OS ROM (4 × 16KB MOS banks)
-    return m;
-}
-
-inline constexpr auto kBBCBPlusChips  = make_bbc_bplus_manifest();
-inline constexpr auto kBBCMasterChips = make_bbc_master_manifest();
 
 // BusTraits — selects the correct manifest per variant
 template<BBCMasterVariant V> struct BBCMasterBusTraits;
 
 template<> struct BBCMasterBusTraits<BBCMasterVariant::MODEL_B_PLUS> {
-    static constexpr const auto& kManifest = kBBCBPlusChips;
-    using Spec = ManifestBusSpec<kBBCBPlusChips, 16, 8, 1, true>;
+    static constexpr const auto& kManifest = kBBCBPlusManifest;
+    using Spec = ManifestBusSpec<kBBCBPlusManifest, 16, 8, 1, true>;
 };
 
 template<> struct BBCMasterBusTraits<BBCMasterVariant::MASTER_128> {
-    static constexpr const auto& kManifest = kBBCMasterChips;
-    using Spec = ManifestBusSpec<kBBCMasterChips, 16, 8, 1, true>;
+    static constexpr const auto& kManifest = kBBCMasterManifest;
+    using Spec = ManifestBusSpec<kBBCMasterManifest, 16, 8, 1, true>;
 };
 
-// ============================================================================
-// BBC Master Chips — value-typed chips owned by Board
-// ============================================================================
-// Both B+ and Master 128 share the same chip types; only RAM/ROM sizes differ.
+template<typename BSpec>
+struct BBCMasterBoard : Board<BSpec, NoChips> {
+    using ComponentTuple = decltype(kBBCBPlusManifest)::component_tuple;
+    ComponentTuple components_;
 
-struct BBCMasterChipset {
-    BBC_BPLUS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+    // Chip aliases
+    WDC_65C02&     w65c02    = std::get<0>(components_);
+    RAMChip&       ram       = std::get<1>(components_);
+    ROMChip&       paged_rom = std::get<2>(components_);
+    ROMChip&       os_rom    = std::get<3>(components_);
+    mc6845_t&      crtc      = std::get<4>(components_);
+    sn76489_t&     psg       = std::get<5>(components_);
+    mos6522_t&     sys_via   = std::get<6>(components_);
+    mos6522_t&     user_via  = std::get<7>(components_);
+    bbc_vidproc_t& vidproc   = std::get<8>(components_);
+
+    // Port aliases
+    PortCassette&       cassette_port  = std::get<9>(components_);
+    PortUserPort&       user_port      = std::get<10>(components_);
+    PortCompositeVideo& video_port     = std::get<11>(components_);
+    PortRgb&            video_rgb_port = std::get<12>(components_);
+    PortAudioMono&      audio_port     = std::get<13>(components_);
+
+    template<size_t N>
+    BBCMasterBoard(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
 };
-
 // ============================================================================
 // BBC B+ / Master System
 // ============================================================================
@@ -223,7 +234,7 @@ private:
 
     // ── Board + bus ──────────────────────────────────────────────────────
     using Bus       = MemoryBus<typename BTraits::Spec>;
-    using MainBoard = Board<typename BTraits::Spec, BBCMasterChipset>;
+    using MainBoard = BBCMasterBoard<typename BTraits::Spec>;
     Bus       bus_;
     MainBoard board_{BTraits::kManifest};
 
@@ -258,7 +269,6 @@ private:
     void update_paged_rom();
     void update_shadow_mapping();        // Apply ACCCON shadow state
     bool load_roms();
-    void setup_ports() override;
     void update_key_matrix(SDL_Keycode key, bool pressed);
     uint8_t scan_keyboard(uint8_t column) const;
 

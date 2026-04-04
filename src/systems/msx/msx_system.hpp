@@ -22,7 +22,8 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
+#include "core/typed_manifest.hpp"
+#include "core/typed_port.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -90,23 +91,6 @@ template<> struct MSXVariantTraits<MSXVariant::MSX2P> {
 };
 
 // ============================================================================
-// MSX Chips — value-typed chips embedded in Board
-// ============================================================================
-
-// Value-typed chips: all chips are fields.
-// VDP type varies per variant (TMS9918A / V9938 / V9958).
-template<MSXVariant V>
-struct MSXChipset {
-    using VDP = typename MSXVariantTraits<V>::VDP;
-    ZilogZ80A  z80;
-    ROMChip    bios_rom;
-    RAMChip    main_ram;
-    VDP        vdp;
-    AY_3_8910  psg;
-    i8255_t    ppi;
-};
-
-// ============================================================================
 // MSX default bus state
 // ============================================================================
 
@@ -128,55 +112,139 @@ struct MSXChipset {
 //   Slot 0: ROM  — 32 KB at $0000
 //   Slot 1: RAM  — 64 KB at $0000
 
-// Parameterized X-macro — VDP type/label, ROM files, and RAM size vary per variant
-//                                             ctx   type       chip      base    size      mask  ovl  label              rom
-#define MSX_FOR_EACH_CHIP_IMPL(V, ctx, vdp_type, vdp_label, rom_files, ram_size) \
-    V(ctx, ZilogZ80A,  z80,      0,          0,      0, 0, "Z80A",           nullptr) \
-    V(ctx, ROMChip,    bios_rom, 0x0000, 32768,     0, 0, "BIOS+BASIC ROM", rom_files) \
-    V(ctx, RAMChip,    main_ram, 0x0000, ram_size,   0, 0, "Main RAM",       nullptr) \
-    V(ctx, vdp_type,   vdp,      0x0098,     0, 0x00FC, 0, vdp_label,        nullptr) \
-    V(ctx, AY_3_8910,  psg,      0x00A0,     0, 0x00FC, 0, "AY-3-8910",      nullptr) \
-    V(ctx, i8255_t,    ppi,      0x00A8,     0, 0x00FC, 0, "i8255 PPI",      nullptr)
+inline constexpr auto kMSX1Manifest = make_manifest(
+    // Chips
+    Slot<ZilogZ80A>{.base_addr = 0, .label = "Z80A"},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 32768, .label = "BIOS+BASIC ROM", .rom = {"msx.rom|msx1.rom|MSX.ROM"}},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 65536, .label = "Main RAM"},
+    Slot<TMS9918A>{.base_addr = 0x0098, .addr_mask = 0x00FC, .label = "TMS9918A"},
+    Slot<AY_3_8910>{.base_addr = 0x00A0, .addr_mask = 0x00FC, .label = "AY-3-8910"},
+    Slot<i8255_t>{.base_addr = 0x00A8, .addr_mask = 0x00FC, .label = "i8255 PPI"},
+    // Ports
+    Slot<PortControlDB9>{.name = "Joystick Port 1", .port_number = 1, .default_device = "joystick"},
+    Slot<PortControlDB9>{.name = "Joystick Port 2", .port_number = 2, .default_device = "joystick"},
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortExpansion>{.name = "Cartridge Slot"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-#define MSX1_FOR_EACH_SYSTEM_CHIP(V, ctx)  MSX_FOR_EACH_CHIP_IMPL(V, ctx, TMS9918A, "TMS9918A", "msx.rom|msx1.rom|MSX.ROM",        65536)
-#define MSX2_FOR_EACH_SYSTEM_CHIP(V, ctx)  MSX_FOR_EACH_CHIP_IMPL(V, ctx, V9938,    "V9938",    "msx2.rom|MSX2.ROM",               131072)
-#define MSX2P_FOR_EACH_SYSTEM_CHIP(V, ctx) MSX_FOR_EACH_CHIP_IMPL(V, ctx, V9958,    "V9958",    "msx2p.rom|MSX2P.ROM|msx2+.rom",   65536)
+inline constexpr auto kMSX2Manifest = make_manifest(
+    // Chips
+    Slot<ZilogZ80A>{.base_addr = 0, .label = "Z80A"},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 32768, .label = "BIOS+BASIC ROM", .rom = {"msx2.rom|MSX2.ROM"}},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 131072, .label = "Main RAM", .bank_size = 16384},
+    Slot<V9938>{.base_addr = 0x0098, .addr_mask = 0x00FC, .label = "V9938"},
+    Slot<AY_3_8910>{.base_addr = 0x00A0, .addr_mask = 0x00FC, .label = "AY-3-8910"},
+    Slot<i8255_t>{.base_addr = 0x00A8, .addr_mask = 0x00FC, .label = "i8255 PPI"},
+    // Ports
+    Slot<PortControlDB9>{.name = "Joystick Port 1", .port_number = 1, .default_device = "joystick"},
+    Slot<PortControlDB9>{.name = "Joystick Port 2", .port_number = 2, .default_device = "joystick"},
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortExpansion>{.name = "Cartridge Slot"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-static constexpr size_t kMSXChipCount = 0 MSX1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+inline constexpr auto kMSX2PManifest = make_manifest(
+    // Chips
+    Slot<ZilogZ80A>{.base_addr = 0, .label = "Z80A"},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 32768, .label = "BIOS+BASIC ROM", .rom = {"msx2p.rom|MSX2P.ROM|msx2+.rom"}},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 65536, .label = "Main RAM"},
+    Slot<V9958>{.base_addr = 0x0098, .addr_mask = 0x00FC, .label = "V9958"},
+    Slot<AY_3_8910>{.base_addr = 0x00A0, .addr_mask = 0x00FC, .label = "AY-3-8910"},
+    Slot<i8255_t>{.base_addr = 0x00A8, .addr_mask = 0x00FC, .label = "i8255 PPI"},
+    // Ports
+    Slot<PortControlDB9>{.name = "Joystick Port 1", .port_number = 1, .default_device = "joystick"},
+    Slot<PortControlDB9>{.name = "Joystick Port 2", .port_number = 2, .default_device = "joystick"},
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortExpansion>{.name = "Cartridge Slot"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-inline constexpr ChipManifest<kMSXChipCount> kMSX1Chips = {{
-    MSX1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
-
-inline constexpr auto make_msx2_manifest() {
-    ChipManifest<kMSXChipCount> m = {{
-        MSX2_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-    }};
-    m.chips[2].bank_size = 16384;  // Main RAM: memory mapper with 16KB banks
-    return m;
-}
-inline constexpr auto kMSX2Chips = make_msx2_manifest();
-
-inline constexpr ChipManifest<kMSXChipCount> kMSX2PChips = {{
-    MSX2P_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
+inline constexpr size_t kMSXChipCount = decltype(kMSX1Manifest)::chip_count;
 
 // BusTraits — selects the correct manifest per variant
 template<MSXVariant V> struct MSXBusTraits;
 
 template<> struct MSXBusTraits<MSXVariant::MSX1> {
-    static constexpr const auto& kManifest = kMSX1Chips;
-    using Spec = ManifestBusSpec<kMSX1Chips, 16, 8>;
+    static constexpr const auto& kManifest = kMSX1Manifest;
+    using Spec = ManifestBusSpec<kMSX1Manifest, 16, 8>;
 };
 
 template<> struct MSXBusTraits<MSXVariant::MSX2> {
-    static constexpr const auto& kManifest = kMSX2Chips;
-    using Spec = ManifestBusSpec<kMSX2Chips, 16, 8>;
+    static constexpr const auto& kManifest = kMSX2Manifest;
+    using Spec = ManifestBusSpec<kMSX2Manifest, 16, 8>;
 };
 
 template<> struct MSXBusTraits<MSXVariant::MSX2P> {
-    static constexpr const auto& kManifest = kMSX2PChips;
-    using Spec = ManifestBusSpec<kMSX2PChips, 16, 8>;
+    static constexpr const auto& kManifest = kMSX2PManifest;
+    using Spec = ManifestBusSpec<kMSX2PManifest, 16, 8>;
+};
+
+// ── Board specializations ──────────────────────────────────────────────
+// VDP type varies per variant (TMS9918A / V9938 / V9958), so each
+// variant needs its own Board specialization with the correct
+// component tuple and aliases.
+
+template<MSXVariant V> struct MSXBoard;
+
+template<>
+struct MSXBoard<MSXVariant::MSX1>
+    : Board<MSXBusTraits<MSXVariant::MSX1>::Spec, NoChips> {
+    using BT  = MSXBusTraits<MSXVariant::MSX1>;
+    using VDP = TMS9918A;
+    using ComponentTuple = decltype(kMSX1Manifest)::component_tuple;
+    ComponentTuple components_;
+
+    ZilogZ80A& z80      = std::get<0>(components_);
+    ROMChip&   bios_rom = std::get<1>(components_);
+    RAMChip&   main_ram = std::get<2>(components_);
+    TMS9918A&  vdp      = std::get<3>(components_);
+    AY_3_8910& psg      = std::get<4>(components_);
+    i8255_t&   ppi      = std::get<5>(components_);
+
+    template<size_t N>
+    MSXBoard(const ChipManifest<N>& m) : Board<BT::Spec, NoChips>(m) {}
+};
+
+template<>
+struct MSXBoard<MSXVariant::MSX2>
+    : Board<MSXBusTraits<MSXVariant::MSX2>::Spec, NoChips> {
+    using BT  = MSXBusTraits<MSXVariant::MSX2>;
+    using VDP = V9938;
+    using ComponentTuple = decltype(kMSX2Manifest)::component_tuple;
+    ComponentTuple components_;
+
+    ZilogZ80A& z80      = std::get<0>(components_);
+    ROMChip&   bios_rom = std::get<1>(components_);
+    RAMChip&   main_ram = std::get<2>(components_);
+    V9938&     vdp      = std::get<3>(components_);
+    AY_3_8910& psg      = std::get<4>(components_);
+    i8255_t&   ppi      = std::get<5>(components_);
+
+    template<size_t N>
+    MSXBoard(const ChipManifest<N>& m) : Board<BT::Spec, NoChips>(m) {}
+};
+
+template<>
+struct MSXBoard<MSXVariant::MSX2P>
+    : Board<MSXBusTraits<MSXVariant::MSX2P>::Spec, NoChips> {
+    using BT  = MSXBusTraits<MSXVariant::MSX2P>;
+    using VDP = V9958;
+    using ComponentTuple = decltype(kMSX2PManifest)::component_tuple;
+    ComponentTuple components_;
+
+    ZilogZ80A& z80      = std::get<0>(components_);
+    ROMChip&   bios_rom = std::get<1>(components_);
+    RAMChip&   main_ram = std::get<2>(components_);
+    V9958&     vdp      = std::get<3>(components_);
+    AY_3_8910& psg      = std::get<4>(components_);
+    i8255_t&   ppi      = std::get<5>(components_);
+
+    template<size_t N>
+    MSXBoard(const ChipManifest<N>& m) : Board<BT::Spec, NoChips>(m) {}
 };
 
 // ============================================================================
@@ -188,7 +256,6 @@ class MSXSystem : public System {
     using Traits = MSXVariantTraits<V>;
     using BT     = MSXBusTraits<V>;
     using VDP    = typename Traits::VDP;
-    using Chips  = MSXChipset<V>;
 
 public:
     MSXSystem();
@@ -226,7 +293,7 @@ private:
     // ── Board + bus (chips live inside board_) ────────────────────────────
     using Bus       = MemoryBus<typename BT::Spec>;
     using PT        = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec, Chips>;
+    using MainBoard = MSXBoard<V>;
     Bus       bus_;
     MainBoard board_{BT::kManifest};
 
@@ -251,7 +318,6 @@ private:
     uint32_t    frame_tstate_counter_ = 0;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    void setup_ports() override;
     void configure_bus_memory_map();
     bus_state_t io_tick(bus_state_t pins);
     bool load_roms();

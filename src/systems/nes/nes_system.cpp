@@ -314,8 +314,7 @@ bool NintendoSystem<V>::initialize() {
     register_board(&board_);
 
     // Bind value-typed Chips (CPU + PPU) to manifest slots
-    { size_t slot_idx_ = 0;
-      NES_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
+    bind_all(board_, board_.components_, kNESManifest);
 
     // Initialize CPU with integrated APU
     board_.cpu.init();
@@ -667,7 +666,6 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         return false;
     }
 }
-
 
 
 template<NintendoVariant V>
@@ -1390,16 +1388,6 @@ void NintendoSystem<V>::power_cycle() {
 // Controller ports use a serial shift-register protocol (LATCH + CLK + D0).
 // Port manifests are now in src/ports/nes_ports.hpp (shared).
 #include "ports/nes_ports.hpp"
-
-template<NintendoVariant V>
-void NintendoSystem<V>::setup_ports() {
-    if constexpr (Traits::is_famicom) {
-        create_ports_from_manifest(kFCPorts);
-    } else {
-        create_ports_from_manifest(kNESPorts);
-    }
-}
-
 // ============================================================================
 // Debug / Test harness helpers
 // ============================================================================

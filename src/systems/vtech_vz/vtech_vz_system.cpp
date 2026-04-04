@@ -121,10 +121,11 @@ template<VZVariant V>
 bool VTechVZSystem<V>::initialize() {
     log_info("%s: Initializing system\n", Traits::name);
     register_board(&board_);
-    { size_t slot_idx_ = 0;
-      VZ200_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
-    board_.create_chips(&pins_);
+    bind_all(board_, board_.components_, BTraits::kManifest);
 
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = BTraits::kManifest.port_slots;
+    port_manifest_count_ = BTraits::kManifest.port_count;
     video_ram_ptr_ = board_.vram.data();
 
     pins_ = board_.z80.init();
@@ -308,26 +309,6 @@ void VTechVZSystem<V>::io_tick(bus_state_t& bus) {
 
 template class VTechVZSystem<VZVariant::VZ200>;
 template class VTechVZSystem<VZVariant::VZ300>;
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                              tag        type              name                 num  int  bus  default_device
-#define VZ_FOR_EACH_PORT(V, ctx) \
-    V(ctx, JOY,        CONTROL_PORT_DB9, "Joystick Port",       1, false, false, "joystick")      \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")
-
-CERMU_PORT_MANIFEST(VZ, VZ_FOR_EACH_PORT)
-
-template<VZVariant V>
-void VTechVZSystem<V>::setup_ports() {
-    create_ports_from_manifest(kVZPorts);
-}
-
-// ============================================================================
-// SYSTEM REGISTRATION
-// ============================================================================
 
 REGISTER_SYSTEM(vz200_descriptor, [] {
     return std::make_unique<VTechVZSystem<VZVariant::VZ200>>();

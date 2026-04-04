@@ -113,9 +113,11 @@ bool MemotechMTXSystem<V>::initialize() {
     log_info("%s: Initializing system\n", Traits::name);
     register_board(&board_);
 
-    { size_t slot_idx_ = 0;
-      MTX500_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
-    board_.create_chips(&pins_);
+    bind_all(board_, board_.components_, BT::kManifest);
+
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = BT::kManifest.port_slots;
+    port_manifest_count_ = BT::kManifest.port_count;
     board_.apply(bus_);
 
     configure_bus_memory_map();
@@ -416,27 +418,6 @@ bool MemotechMTXSystem<V>::load_roms() {
 
 template class MemotechMTXSystem<MTXVariant::MTX500>;
 template class MemotechMTXSystem<MTXVariant::MTX512>;
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                               tag        type              name                 num  int  bus  default_device
-#define MTX_FOR_EACH_PORT(V, ctx) \
-    V(ctx, JOY1,       CONTROL_PORT_DB9, "Joystick Port",       1, false, false, "joystick")      \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_RGB,        "Video Out (RGB)",     0, false, false, "crt_tv")        \
-    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",           0, false, false, nullptr)
-
-CERMU_PORT_MANIFEST(MTX, MTX_FOR_EACH_PORT)
-
-template<MTXVariant V>
-void MemotechMTXSystem<V>::setup_ports() {
-    create_ports_from_manifest(kMTXPorts);
-}
-
-// ============================================================================
-// SYSTEM REGISTRATION
-// ============================================================================
 
 REGISTER_SYSTEM(mtx500_descriptor, [] {
     return std::make_unique<MemotechMTXSystem<MTXVariant::MTX500>>();

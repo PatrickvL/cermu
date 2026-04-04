@@ -11,7 +11,8 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
+#include "core/typed_manifest.hpp"
+#include "core/typed_port.hpp"
 #include "core/signal/video_port.hpp"
 
 #include "chip/cpu/z80/u880.hpp"
@@ -72,56 +73,76 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_64> {
 // sizes and the original 10 KB is not a power of 2.
 //
 
-#define Z1013_16K_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                  \
-    V(ctx, U880,       z80,        0x0000,     0,  0, 0, "U880",         nullptr)                               \
-    V(ctx, RAMChip,    ram,        0x0000, 16384,  0, 0, "RAM",          nullptr)                               \
-    V(ctx, RAMChip,    vram,       0xEC00,  1024,  0, 0, "Video RAM",    nullptr)                               \
-    V(ctx, ROMChip,    monitor,    0xF000,  2048,  0, 0, "Monitor ROM",  "z1013_mon.rom|monitor.rom|MON.ROM")   \
-    V(ctx, z80_pio_t,  pio,        0x0004,     0,  0x00FC, 0, "U855 PIO",     nullptr)
+inline constexpr auto kZ1013_16K_Manifest = make_manifest(
+    // Chips
+    Slot<U880>{.base_addr = 0x0000, .label = "U880"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 16384, .label = "RAM"},
+    Slot<RAMChip>{.base_addr = 0xEC00, .size_bytes = 1024, .label = "Video RAM"},
+    Slot<ROMChip>{.base_addr = 0xF000, .size_bytes = 2048, .label = "Monitor ROM", .rom = {"z1013_mon.rom|monitor.rom|MON.ROM"}},
+    Slot<z80_pio_t>{.base_addr = 0x0004, .addr_mask = 0x00FC, .label = "U855 PIO"},
+    // Ports
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+);
 
-#define Z1013_64K_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                  \
-    V(ctx, U880,       z80,        0x0000,     0,  0, 0, "U880",         nullptr)                               \
-    V(ctx, RAMChip,    ram,        0x0000, 65536,  0, 0, "RAM",          nullptr)                               \
-    V(ctx, ROMChip,    basic_lo,   0xC000,  8192,  0, 0, "BASIC ROM lo", "z1013_basic.rom@0|basic_lo.rom|BASIC.ROM@0")   \
-    V(ctx, ROMChip,    basic_hi,   0xE000,  2048,  0, 0, "BASIC ROM hi", "z1013_basic.rom@8192|basic_hi.rom|BASIC.ROM@8192")                               \
-    V(ctx, RAMChip,    vram,       0xEC00,  1024,  0, 0, "Video RAM",    nullptr)                               \
-    V(ctx, ROMChip,    monitor,    0xF000,  2048,  0, 0, "Monitor ROM",  "z1013_mon.rom|monitor.rom|MON.ROM")   \
-    V(ctx, z80_pio_t,  pio,        0x0004,     0,  0x00FC, 0, "U855 PIO",     nullptr)
+inline constexpr auto kZ1013_64K_Manifest = make_manifest(
+    // Chips
+    Slot<U880>{.base_addr = 0x0000, .label = "U880"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 65536, .label = "RAM"},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 8192, .label = "BASIC ROM lo", .rom = {"z1013_basic.rom@0|basic_lo.rom|BASIC.ROM@0"}},
+    Slot<ROMChip>{.base_addr = 0xE000, .size_bytes = 2048, .label = "BASIC ROM hi", .rom = {"z1013_basic.rom@8192|basic_hi.rom|BASIC.ROM@8192"}},
+    Slot<RAMChip>{.base_addr = 0xEC00, .size_bytes = 1024, .label = "Video RAM"},
+    Slot<ROMChip>{.base_addr = 0xF000, .size_bytes = 2048, .label = "Monitor ROM", .rom = {"z1013_mon.rom|monitor.rom|MON.ROM"}},
+    Slot<z80_pio_t>{.base_addr = 0x0004, .addr_mask = 0x00FC, .label = "U855 PIO"},
+    // Ports
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+);
 
-static constexpr size_t kZ1013_16K_ChipCount = 0 Z1013_16K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-static constexpr size_t kZ1013_64K_ChipCount = 0 Z1013_64K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-
-inline constexpr ChipManifest<kZ1013_16K_ChipCount> kZ1013_16K_Chips = ChipManifest<kZ1013_16K_ChipCount>{{
-    Z1013_16K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
-
-inline constexpr ChipManifest<kZ1013_64K_ChipCount> kZ1013_64K_Chips = ChipManifest<kZ1013_64K_ChipCount>{{
-    Z1013_64K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
+inline constexpr size_t kZ1013_16K_ChipCount = decltype(kZ1013_16K_Manifest)::chip_count;
+inline constexpr size_t kZ1013_64K_ChipCount = decltype(kZ1013_64K_Manifest)::chip_count;
 
 // BusTraits — selects the correct manifest per variant
 template<Z1013Variant V> struct Z1013BusTraits;
 
 template<> struct Z1013BusTraits<Z1013Variant::Z1013_01> {
-    static constexpr const auto& kManifest = kZ1013_16K_Chips;
-    using Spec = ManifestBusSpec<kZ1013_16K_Chips, 16, 8>;
+    static constexpr const auto& kManifest = kZ1013_16K_Manifest;
+    using Spec = ManifestBusSpec<kZ1013_16K_Manifest, 16, 8>;
 };
 
 template<> struct Z1013BusTraits<Z1013Variant::Z1013_16> {
-    static constexpr const auto& kManifest = kZ1013_16K_Chips;
-    using Spec = ManifestBusSpec<kZ1013_16K_Chips, 16, 8>;
+    static constexpr const auto& kManifest = kZ1013_16K_Manifest;
+    using Spec = ManifestBusSpec<kZ1013_16K_Manifest, 16, 8>;
 };
 
 template<> struct Z1013BusTraits<Z1013Variant::Z1013_64> {
-    static constexpr const auto& kManifest = kZ1013_64K_Chips;
-    using Spec = ManifestBusSpec<kZ1013_64K_Chips, 16, 8>;
+    static constexpr const auto& kManifest = kZ1013_64K_Manifest;
+    using Spec = ManifestBusSpec<kZ1013_64K_Manifest, 16, 8>;
 };
 
-// ── Chips ──────────────────────────────────────────────────────────────
-// Uses the 64K macro (superset) for struct generation — 16K variants
+// ── Board ──────────────────────────────────────────────────────────────
+// Uses the 64K manifest component tuple (superset) — 16K variants
 // simply leave the basic_lo/basic_hi fields unused.
-struct Z1013Chipset {
-    Z1013_64K_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+template<typename BSpec>
+struct Z1013Board : Board<BSpec, NoChips> {
+    using ComponentTuple = decltype(kZ1013_64K_Manifest)::component_tuple;
+    ComponentTuple components_;
+
+    // Chip aliases
+    U880&       z80      = std::get<0>(components_);
+    RAMChip&    ram      = std::get<1>(components_);
+    ROMChip&    basic_lo = std::get<2>(components_);
+    ROMChip&    basic_hi = std::get<3>(components_);
+    RAMChip&    vram     = std::get<4>(components_);
+    ROMChip&    monitor  = std::get<5>(components_);
+    z80_pio_t&  pio      = std::get<6>(components_);
+
+    // Port aliases
+    PortCassette&       cassette_port = std::get<7>(components_);
+    PortCompositeVideo& video_port    = std::get<8>(components_);
+
+    template<size_t N>
+    Z1013Board(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
 };
 
 // ── System ───────────────────────────────────────────────────────────────
@@ -157,7 +178,7 @@ private:
     using BT  = Z1013BusTraits<V>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec, Z1013Chipset>;
+    using MainBoard = Z1013Board<typename BT::Spec>;
     Bus bus_;
     MainBoard board_{BT::kManifest};
 
@@ -174,7 +195,6 @@ private:
     int audio_sample_rate_  = z1013_constants::DEFAULT_SAMPLE_RATE;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    void        setup_ports() override;
     bus_state_t io_tick(bus_state_t pins);
     void        render_frame();   // Render one complete video frame to framebuffer_
     bool        load_roms();

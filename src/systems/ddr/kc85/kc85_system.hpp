@@ -13,7 +13,8 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
+#include "core/typed_manifest.hpp"
+#include "core/typed_port.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 
@@ -68,61 +69,60 @@ enum class KC85Variant { KC85_2, KC85_3, KC85_4 };
 //   CAOS ROM at $E000-$FFFF: enabled/disabled via PIO B bit 0
 //   KC85/4 IRM bank: selected via port $84 bits 0-1
 //
-//                                    ctx   type                chip       base    size    mask  ovl  label            rom
-#define KC852_FOR_EACH_SYSTEM_CHIP(V, ctx) \
-    V(ctx, U880,                 z80,      0,            0, 0, 0, "U880",          nullptr) \
-    V(ctx, RAMChip,              ram,      0x0000,  16384, 0, 0, "RAM",           nullptr) \
-    V(ctx, RAMChip,              irm,      0x8000,  16384, 0, 1, "IRM",           nullptr) \
-    V(ctx, ROMChip,              caos_rom, 0xE000,   8192, 0, 2, "CAOS ROM",      "caos.rom|CAOS.ROM") \
-    V(ctx, z80_pio_t,            pio1,     0x0088,       0, 0x00FC, 0, "U855 PIO #1",   nullptr) \
-    V(ctx, z80_pio_t,            pio2,     0,            0, 0,      0, "U855 PIO #2",   nullptr) \
-    V(ctx, z80_ctc_t,            ctc,      0x008C,       0, 0x00FC, 0, "U857 CTC",      nullptr) \
-    V(ctx, kc85_module_system_t, modules,  0x0080,       0, 0,      0, "Module System", nullptr)
+inline constexpr auto kKC852Manifest = make_manifest(
+    // Chips
+    Slot<U880>{.base_addr = 0, .label = "U880"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 16384, .label = "RAM"},
+    Slot<RAMChip>{.base_addr = 0x8000, .size_bytes = 16384, .label = "IRM", .overlay_group = 1},
+    Slot<ROMChip>{.base_addr = 0xE000, .size_bytes = 8192, .label = "CAOS ROM", .overlay_group = 2, .rom = {"caos.rom|CAOS.ROM"}},
+    Slot<z80_pio_t>{.base_addr = 0x0088, .addr_mask = 0x00FC, .label = "U855 PIO #1"},
+    Slot<z80_pio_t>{.base_addr = 0, .label = "U855 PIO #2"},
+    Slot<z80_ctc_t>{.base_addr = 0x008C, .addr_mask = 0x00FC, .label = "U857 CTC"},
+    Slot<kc85_module_system_t>{.base_addr = 0x0080, .label = "Module System"},
+    // Ports
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortExpansion>{.name = "Module Slot"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+);
 
-#define KC853_FOR_EACH_SYSTEM_CHIP(V, ctx) \
-    V(ctx, U880,                 z80,       0,            0, 0, 0, "U880",          nullptr) \
-    V(ctx, RAMChip,              ram,       0x0000,  16384, 0, 0, "RAM",           nullptr) \
-    V(ctx, RAMChip,              irm,       0x8000,  16384, 0, 1, "IRM",           nullptr) \
-    V(ctx, ROMChip,              basic_rom, 0xC000,   8192, 0, 2, "BASIC ROM",     "basic.rom|BASIC.ROM") \
-    V(ctx, ROMChip,              caos_rom,  0xE000,   8192, 0, 3, "CAOS ROM",      "caos.rom|CAOS.ROM") \
-    V(ctx, z80_pio_t,            pio1,      0x0088,       0, 0x00FC, 0, "U855 PIO #1",   nullptr) \
-    V(ctx, z80_pio_t,            pio2,      0,            0, 0,      0, "U855 PIO #2",   nullptr) \
-    V(ctx, z80_ctc_t,            ctc,       0x008C,       0, 0x00FC, 0, "U857 CTC",      nullptr) \
-    V(ctx, kc85_module_system_t, modules,   0x0080,       0, 0,      0, "Module System", nullptr)
+inline constexpr auto kKC853Manifest = make_manifest(
+    // Chips
+    Slot<U880>{.base_addr = 0, .label = "U880"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 16384, .label = "RAM"},
+    Slot<RAMChip>{.base_addr = 0x8000, .size_bytes = 16384, .label = "IRM", .overlay_group = 1},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 8192, .label = "BASIC ROM", .overlay_group = 2, .rom = {"basic.rom|BASIC.ROM"}},
+    Slot<ROMChip>{.base_addr = 0xE000, .size_bytes = 8192, .label = "CAOS ROM", .overlay_group = 3, .rom = {"caos.rom|CAOS.ROM"}},
+    Slot<z80_pio_t>{.base_addr = 0x0088, .addr_mask = 0x00FC, .label = "U855 PIO #1"},
+    Slot<z80_pio_t>{.base_addr = 0, .label = "U855 PIO #2"},
+    Slot<z80_ctc_t>{.base_addr = 0x008C, .addr_mask = 0x00FC, .label = "U857 CTC"},
+    Slot<kc85_module_system_t>{.base_addr = 0x0080, .label = "Module System"},
+    // Ports
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortExpansion>{.name = "Module Slot"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+);
 
-#define KC854_FOR_EACH_SYSTEM_CHIP(V, ctx) \
-    V(ctx, U880,                 z80,        0,            0, 0, 0, "U880",          nullptr) \
-    V(ctx, RAMChip,              ram,        0x0000,  32768, 0, 0, "RAM",           nullptr) \
-    V(ctx, RAMChip,              irm,        0x8000,  65536, 0, 0, "IRM",           nullptr) \
-    V(ctx, ROMChip,              basic_rom,  0xC000,   8192, 0, 1, "BASIC ROM",     "basic.rom|BASIC.ROM") \
-    V(ctx, ROMChip,              caos_c_rom, 0xC000,   4096, 0, 3, "CAOS-C ROM",    "?caos_c.rom|CAOS_C.ROM") \
-    V(ctx, ROMChip,              caos_rom,   0xE000,   8192, 0, 2, "CAOS ROM",      "caos.rom|CAOS.ROM") \
-    V(ctx, z80_pio_t,            pio1,       0x0088,       0, 0x00FC, 0, "U855 PIO #1",   nullptr) \
-    V(ctx, z80_pio_t,            pio2,       0,            0, 0,      0, "U855 PIO #2",   nullptr) \
-    V(ctx, z80_ctc_t,            ctc,        0x008C,       0, 0x00FC, 0, "U857 CTC",      nullptr) \
-    V(ctx, kc85_module_system_t, modules,    0x0080,       0, 0,      0, "Module System", nullptr)
+inline constexpr auto kKC854Manifest = make_manifest(
+    // Chips
+    Slot<U880>{.base_addr = 0, .label = "U880"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 32768, .label = "RAM"},
+    Slot<RAMChip>{.base_addr = 0x8000, .size_bytes = 65536, .label = "IRM", .bank_size = 16384, .effective_size = 16384},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 8192, .label = "BASIC ROM", .overlay_group = 1, .rom = {"basic.rom|BASIC.ROM"}},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 4096, .label = "CAOS-C ROM", .overlay_group = 3, .rom = {"caos_c.rom|CAOS_C.ROM", true}},
+    Slot<ROMChip>{.base_addr = 0xE000, .size_bytes = 8192, .label = "CAOS ROM", .overlay_group = 2, .rom = {"caos.rom|CAOS.ROM"}},
+    Slot<z80_pio_t>{.base_addr = 0x0088, .addr_mask = 0x00FC, .label = "U855 PIO #1"},
+    Slot<z80_pio_t>{.base_addr = 0, .label = "U855 PIO #2"},
+    Slot<z80_ctc_t>{.base_addr = 0x008C, .addr_mask = 0x00FC, .label = "U857 CTC"},
+    Slot<kc85_module_system_t>{.base_addr = 0x0080, .label = "Module System"},
+    // Ports
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortExpansion>{.name = "Module Slot"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+);
 
-static constexpr size_t kKC852ChipCount = 0 KC852_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-static constexpr size_t kKC853ChipCount = 0 KC853_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-static constexpr size_t kKC854ChipCount = 0 KC854_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-
-inline constexpr ChipManifest<kKC852ChipCount> kKC852Chips = {{
-    KC852_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
-
-inline constexpr ChipManifest<kKC853ChipCount> kKC853Chips = {{
-    KC853_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
-
-constexpr ChipManifest<kKC854ChipCount> make_kc854_manifest() {
-    ChipManifest<kKC854ChipCount> m = {{
-        KC854_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-    }};
-    m.chips[2].bank_size       = 16384;  // IRM (4 × 16 KB banks)
-    m.chips[2].effective_size  = 16384;  // Only 16 KB visible at a time
-    return m;
-}
-inline constexpr auto kKC854Chips = make_kc854_manifest();
+inline constexpr size_t kKC852ChipCount = decltype(kKC852Manifest)::chip_count;
+inline constexpr size_t kKC853ChipCount = decltype(kKC853Manifest)::chip_count;
+inline constexpr size_t kKC854ChipCount = decltype(kKC854Manifest)::chip_count;
 
 // ── Variant traits ───────────────────────────────────────────────────────
 template<KC85Variant V> struct KC85VariantTraits;
@@ -161,25 +161,47 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
 template<KC85Variant V> struct KC85BusTraits;
 
 template<> struct KC85BusTraits<KC85Variant::KC85_2> {
-    static constexpr const auto& kManifest = kKC852Chips;
-    using Spec = ManifestBusSpec<kKC852Chips, 16, 8>;
+    static constexpr const auto& kManifest = kKC852Manifest;
+    using Spec = ManifestBusSpec<kKC852Manifest, 16, 8>;
 };
 
 template<> struct KC85BusTraits<KC85Variant::KC85_3> {
-    static constexpr const auto& kManifest = kKC853Chips;
-    using Spec = ManifestBusSpec<kKC853Chips, 16, 8>;
+    static constexpr const auto& kManifest = kKC853Manifest;
+    using Spec = ManifestBusSpec<kKC853Manifest, 16, 8>;
 };
 
 template<> struct KC85BusTraits<KC85Variant::KC85_4> {
-    static constexpr const auto& kManifest = kKC854Chips;
-    using Spec = ManifestBusSpec<kKC854Chips, 16, 8>;
+    static constexpr const auto& kManifest = kKC854Manifest;
+    using Spec = ManifestBusSpec<kKC854Manifest, 16, 8>;
 };
 
-// ── Chips ──────────────────────────────────────────────────────────────
-// Uses KC85/4 X-macro (superset) for field declarations.
+// ── Board ──────────────────────────────────────────────────────────────
+// Uses KC85/4 manifest component tuple (superset) for field declarations.
 // KC85/2 and /3 leave unused fields (basic_rom, caos_c_rom) unbound.
-struct KC85Chipset {
-    KC854_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+template<typename BSpec>
+struct KC85Board : Board<BSpec, NoChips> {
+    using ComponentTuple = decltype(kKC854Manifest)::component_tuple;
+    ComponentTuple components_;
+
+    // Chip aliases
+    U880&                 z80        = std::get<0>(components_);
+    RAMChip&              ram        = std::get<1>(components_);
+    RAMChip&              irm        = std::get<2>(components_);
+    ROMChip&              basic_rom  = std::get<3>(components_);
+    ROMChip&              caos_c_rom = std::get<4>(components_);
+    ROMChip&              caos_rom   = std::get<5>(components_);
+    z80_pio_t&            pio1       = std::get<6>(components_);
+    z80_pio_t&            pio2       = std::get<7>(components_);
+    z80_ctc_t&            ctc        = std::get<8>(components_);
+    kc85_module_system_t& modules    = std::get<9>(components_);
+
+    // Port aliases
+    PortCassette&       cassette_port  = std::get<10>(components_);
+    PortExpansion&      expansion_port = std::get<11>(components_);
+    PortCompositeVideo& video_port     = std::get<12>(components_);
+
+    template<size_t N>
+    KC85Board(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
 };
 
 // ── Keyboard emulation modes ─────────────────────────────────────────────────
@@ -228,7 +250,7 @@ private:
     using BT  = KC85BusTraits<V>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec, KC85Chipset>;
+    using MainBoard = KC85Board<typename BT::Spec>;
     Bus bus_;
     MainBoard board_{BT::kManifest};
 
@@ -286,7 +308,6 @@ private:
     void        render_frame();               // Decode IRM into indexed framebuffer
     void        handle_keyboard();            // Patch keycode into CAOS via IX register
     void        build_reverse_ktab();         // Build keycode→scancode from CAOS KTAB
-    void        setup_ports() override;
 
     // Pre-computed overlay snapshots.
     // KC85/2: 4 modes (IRM×CAOS), KC85/3: 8 modes (IRM×BASIC×CAOS),

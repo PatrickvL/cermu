@@ -10,7 +10,6 @@
 #include "core/hardware_traits.hpp"
 #include "core/chip.hpp"     // ChipBase, ChipInfo
 #include "core/port.hpp"
-#include "core/port_manifest.hpp"
 #include "core/peripherals/input_peripheral_device.hpp"
 #include "core/device_registry.hpp"
 

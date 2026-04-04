@@ -12,7 +12,8 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
+#include "core/typed_manifest.hpp"
+#include "core/typed_port.hpp"
 #include "core/signal/video_port.hpp"
 
 #include "chip/cpu/z80/u880.hpp"
@@ -74,62 +75,79 @@ template<> struct Z9001VariantTraits<Z9001Variant::KC87> {
 // RAM for KC87 is allocated as 64 KB (power of 2); effective_size in the
 // manifest limits Phase 1 to 48 KB ($C000), leaving $C000+ for ROM/I/O.
 //
-//                                  ctx   type       chip           base    size    mask  ovl  label            rom
-#define Z9001_FOR_EACH_SYSTEM_CHIP(V, ctx) \
-    V(ctx, U880,      z80,       0,            0, 0, 0, "U880",          nullptr) \
-    V(ctx, RAMChip,   ram,       0x0000,  16384, 0, 0, "RAM",           nullptr) \
-    V(ctx, RAMChip,   video_ram, 0xEC00,   1024, 0, 0, "Video RAM",     nullptr) \
-    V(ctx, ROMChip,   os_rom,    0xF000,   4096, 0, 0, "OS ROM",        "z9001_os.rom|os.rom|OS.ROM") \
-    V(ctx, z80_pio_t, pio1,      0x0088,       0, 0x00FC, 0, "U855 PIO #1",   nullptr) \
-    V(ctx, z80_pio_t, pio2,      0x0090,       0, 0x00FC, 0, "U855 PIO #2",   nullptr) \
-    V(ctx, z80_ctc_t, ctc,       0x0080,       0, 0x00FC, 0, "U857 CTC",      nullptr)
+inline constexpr auto kZ9001Manifest = make_manifest(
+    // Chips
+    Slot<U880>{.base_addr = 0, .label = "U880"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 16384, .label = "RAM"},
+    Slot<RAMChip>{.base_addr = 0xEC00, .size_bytes = 1024, .label = "Video RAM"},
+    Slot<ROMChip>{.base_addr = 0xF000, .size_bytes = 4096, .label = "OS ROM", .rom = {"z9001_os.rom|os.rom|OS.ROM"}},
+    Slot<z80_pio_t>{.base_addr = 0x0088, .addr_mask = 0x00FC, .label = "U855 PIO #1"},
+    Slot<z80_pio_t>{.base_addr = 0x0090, .addr_mask = 0x00FC, .label = "U855 PIO #2"},
+    Slot<z80_ctc_t>{.base_addr = 0x0080, .addr_mask = 0x00FC, .label = "U857 CTC"},
+    // Ports
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+);
 
-#define KC87_FOR_EACH_SYSTEM_CHIP(V, ctx) \
-    V(ctx, U880,      z80,           0,            0, 0, 0, "U880",          nullptr) \
-    V(ctx, RAMChip,   ram,           0x0000,  65536, 0, 0, "RAM",           nullptr) \
-    V(ctx, ROMChip,   basic_rom_lo,  0xC000,   8192, 0, 0, "BASIC ROM lo",  "z9001_basic.rom@0|kc87_basic_lo.rom|basic_lo.rom") \
-    V(ctx, ROMChip,   basic_rom_hi,  0xE000,   2048, 0, 0, "BASIC ROM hi",  "z9001_basic.rom@8192|kc87_basic_hi.rom|basic_hi.rom") \
-    V(ctx, RAMChip,   color_ram,     0xE800,   1024, 0, 0, "Color RAM",     nullptr) \
-    V(ctx, RAMChip,   video_ram,     0xEC00,   1024, 0, 0, "Video RAM",     nullptr) \
-    V(ctx, ROMChip,   os_rom,        0xF000,   4096, 0, 0, "OS ROM",        "z9001_os.rom|os.rom|OS.ROM") \
-    V(ctx, z80_pio_t, pio1,          0x0088,       0, 0x00FC, 0, "U855 PIO #1",   nullptr) \
-    V(ctx, z80_pio_t, pio2,          0x0090,       0, 0x00FC, 0, "U855 PIO #2",   nullptr) \
-    V(ctx, z80_ctc_t, ctc,           0x0080,       0, 0x00FC, 0, "U857 CTC",      nullptr)
+inline constexpr auto kKC87Manifest = make_manifest(
+    // Chips
+    Slot<U880>{.base_addr = 0, .label = "U880"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 65536, .label = "RAM", .effective_size = 0xC000},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 8192, .label = "BASIC ROM lo", .rom = {"z9001_basic.rom@0|kc87_basic_lo.rom|basic_lo.rom"}},
+    Slot<ROMChip>{.base_addr = 0xE000, .size_bytes = 2048, .label = "BASIC ROM hi", .rom = {"z9001_basic.rom@8192|kc87_basic_hi.rom|basic_hi.rom"}},
+    Slot<RAMChip>{.base_addr = 0xE800, .size_bytes = 1024, .label = "Color RAM"},
+    Slot<RAMChip>{.base_addr = 0xEC00, .size_bytes = 1024, .label = "Video RAM"},
+    Slot<ROMChip>{.base_addr = 0xF000, .size_bytes = 4096, .label = "OS ROM", .rom = {"z9001_os.rom|os.rom|OS.ROM"}},
+    Slot<z80_pio_t>{.base_addr = 0x0088, .addr_mask = 0x00FC, .label = "U855 PIO #1"},
+    Slot<z80_pio_t>{.base_addr = 0x0090, .addr_mask = 0x00FC, .label = "U855 PIO #2"},
+    Slot<z80_ctc_t>{.base_addr = 0x0080, .addr_mask = 0x00FC, .label = "U857 CTC"},
+    // Ports
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+);
 
-static constexpr size_t kZ9001ChipCount = 0 Z9001_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-static constexpr size_t kKC87ChipCount  = 0 KC87_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-
-inline constexpr ChipManifest<kZ9001ChipCount> kZ9001Chips = {{
-    Z9001_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
-
-constexpr ChipManifest<kKC87ChipCount> make_kc87_manifest() {
-    ChipManifest<kKC87ChipCount> m = {{
-        KC87_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-    }};
-    m.chips[1].effective_size = 0xC000;  // 48 KB visible of 64 KB allocation
-    return m;
-}
-inline constexpr auto kKC87Chips = make_kc87_manifest();
+inline constexpr size_t kZ9001ChipCount = decltype(kZ9001Manifest)::chip_count;
+inline constexpr size_t kKC87ChipCount  = decltype(kKC87Manifest)::chip_count;
 
 // BusTraits — selects the correct manifest per variant
 template<Z9001Variant V> struct Z9001BusTraits;
 
 template<> struct Z9001BusTraits<Z9001Variant::Z9001> {
-    static constexpr const auto& kManifest = kZ9001Chips;
-    using Spec = ManifestBusSpec<kZ9001Chips, 16, 8>;
+    static constexpr const auto& kManifest = kZ9001Manifest;
+    using Spec = ManifestBusSpec<kZ9001Manifest, 16, 8>;
 };
 
 template<> struct Z9001BusTraits<Z9001Variant::KC87> {
-    static constexpr const auto& kManifest = kKC87Chips;
-    using Spec = ManifestBusSpec<kKC87Chips, 16, 8>;
+    static constexpr const auto& kManifest = kKC87Manifest;
+    using Spec = ManifestBusSpec<kKC87Manifest, 16, 8>;
 };
 
-// ── Chips ──────────────────────────────────────────────────────────────
-// Uses KC87 X-macro (superset) for field declarations.
+// ── Board ──────────────────────────────────────────────────────────────
+// Uses KC87 manifest component tuple (superset) for field declarations.
 // Z9001 leaves unused fields (basic_rom_lo, basic_rom_hi, color_ram) unbound.
-struct Z9001Chipset {
-    KC87_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+template<typename BSpec>
+struct Z9001Board : Board<BSpec, NoChips> {
+    using ComponentTuple = decltype(kKC87Manifest)::component_tuple;
+    ComponentTuple components_;
+
+    // Chip aliases
+    U880&       z80          = std::get<0>(components_);
+    RAMChip&    ram          = std::get<1>(components_);
+    ROMChip&    basic_rom_lo = std::get<2>(components_);
+    ROMChip&    basic_rom_hi = std::get<3>(components_);
+    RAMChip&    color_ram    = std::get<4>(components_);
+    RAMChip&    video_ram    = std::get<5>(components_);
+    ROMChip&    os_rom       = std::get<6>(components_);
+    z80_pio_t&  pio1         = std::get<7>(components_);
+    z80_pio_t&  pio2         = std::get<8>(components_);
+    z80_ctc_t&  ctc          = std::get<9>(components_);
+
+    // Port aliases
+    PortCassette&       cassette_port = std::get<10>(components_);
+    PortCompositeVideo& video_port    = std::get<11>(components_);
+
+    template<size_t N>
+    Z9001Board(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
 };
 
 // ── System ───────────────────────────────────────────────────────────────
@@ -172,7 +190,7 @@ private:
     using BT  = Z9001BusTraits<V>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec, Z9001Chipset>;
+    using MainBoard = Z9001Board<typename BT::Spec>;
     Bus bus_;
     MainBoard board_{BT::kManifest};
 
@@ -188,7 +206,6 @@ private:
     int audio_sample_rate_  = z9001_constants::DEFAULT_SAMPLE_RATE;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    void        setup_ports() override;
     void        configure_bus_memory_map();  // Trim RAM pages for KC87
     bus_state_t io_tick(bus_state_t pins);
     void        render_frame();   // Render one complete video frame to framebuffer_

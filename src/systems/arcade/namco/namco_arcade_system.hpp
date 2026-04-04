@@ -11,7 +11,6 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
 #include "core/signal/audio_port.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
@@ -61,63 +60,68 @@ template<> struct NamcoGameTraits<NamcoGame::Pengo> {
     static constexpr uint16_t    io_base         = 0x9000;
 };
 
-// ============================================================================
-// Namco chip declarations — single source of truth
-// ============================================================================
-//
-// Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
-//
-// Pac-Man ($0000-$3FFF ROM, $4000/$4400/$4C00 work areas, $5xxx I/O).
-// Pengo   ($0000-$7FFF ROM, $8000/$8400/$8C00 work areas, $9xxx I/O).
-// I/O registers at $5000/$9000 are memory-mapped but handled separately
-// (asymmetric read/write behavior: reads → input ports, writes → control regs).
-// Graphics ROMs (char, sprite, palette, waveform) are NOT bus-mapped.
-//
+inline constexpr auto kPacManManifest = make_manifest(
+    // Chips
+    Slot<ZilogZ80A>{.base_addr = 0x0000, .label = "Z80A"},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x4000, .label = "Program ROM"},
+    Slot<RAMChip>{.base_addr = 0x4000, .size_bytes = 0x0400, .label = "Video RAM"},
+    Slot<RAMChip>{.base_addr = 0x4400, .size_bytes = 0x0400, .label = "Color RAM"},
+    Slot<RAMChip>{.base_addr = 0x4C00, .size_bytes = 0x0400, .label = "Work RAM"},
+    Slot<namco_wsg_t>{.base_addr = 0x5040, .addr_mask = 0xFFE0, .label = "WSG3"},
+    // Ports
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-#define PACMAN_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                             \
-    V(ctx, ZilogZ80A,   z80,   0x0000,     0, 0, 0, "Z80A",         nullptr)                            \
-    V(ctx, ROMChip,     rom,   0x0000, 16384, 0, 0, "Program ROM",  nullptr)                            \
-    V(ctx, RAMChip,     vram,  0x4000,  1024, 0, 0, "Video RAM",    nullptr)                            \
-    V(ctx, RAMChip,     cram,  0x4400,  1024, 0, 0, "Color RAM",    nullptr)                            \
-    V(ctx, RAMChip,     wram,  0x4C00,  1024, 0, 0, "Work RAM",     nullptr)                            \
-    V(ctx, namco_wsg_t, wsg,   0x5040,     0, 0xFFE0, 0, "WSG3",         nullptr)
+inline constexpr auto kPengoManifest = make_manifest(
+    // Chips
+    Slot<ZilogZ80A>{.base_addr = 0x0000, .label = "Z80A"},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x8000, .label = "Program ROM"},
+    Slot<RAMChip>{.base_addr = 0x8000, .size_bytes = 0x0400, .label = "Video RAM"},
+    Slot<RAMChip>{.base_addr = 0x8400, .size_bytes = 0x0400, .label = "Color RAM"},
+    Slot<RAMChip>{.base_addr = 0x8C00, .size_bytes = 0x0400, .label = "Work RAM"},
+    Slot<namco_wsg_t>{.base_addr = 0x9040, .addr_mask = 0xFFE0, .label = "WSG3"},
+    // Ports
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-#define PENGO_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                              \
-    V(ctx, ZilogZ80A,   z80,   0x0000,     0, 0, 0, "Z80A",         nullptr)                            \
-    V(ctx, ROMChip,     rom,   0x0000, 32768, 0, 0, "Program ROM",  nullptr)                            \
-    V(ctx, RAMChip,     vram,  0x8000,  1024, 0, 0, "Video RAM",    nullptr)                            \
-    V(ctx, RAMChip,     cram,  0x8400,  1024, 0, 0, "Color RAM",    nullptr)                            \
-    V(ctx, RAMChip,     wram,  0x8C00,  1024, 0, 0, "Work RAM",     nullptr)                            \
-    V(ctx, namco_wsg_t, wsg,   0x9040,     0, 0xFFE0, 0, "WSG3",         nullptr)
-
-static constexpr size_t kPacManChipCount = 0 PACMAN_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-static constexpr size_t kPengoChipCount  = 0 PENGO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-
-inline constexpr ChipManifest<kPacManChipCount> kPacManChips = ChipManifest<kPacManChipCount>{{
-    PACMAN_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
-
-inline constexpr ChipManifest<kPengoChipCount> kPengoChips = ChipManifest<kPengoChipCount>{{
-    PENGO_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
-
+inline constexpr size_t kPacManChipCount = decltype(kPacManManifest)::chip_count;
+inline constexpr size_t kPengoChipCount = decltype(kPengoManifest)::chip_count;
 // BusTraits — selects the correct manifest per game
 template<NamcoGame G> struct NamcoBusTraits;
 
 template<> struct NamcoBusTraits<NamcoGame::PacMan> {
-    static constexpr const auto& kManifest = kPacManChips;
-    using Spec = ManifestBusSpec<kPacManChips, 16, 8>;
+    static constexpr const auto& kManifest = kPacManManifest;
+    using Spec = ManifestBusSpec<kPacManManifest, 16, 8>;
 };
 
 template<> struct NamcoBusTraits<NamcoGame::Pengo> {
-    static constexpr const auto& kManifest = kPengoChips;
-    using Spec = ManifestBusSpec<kPengoChips, 16, 8>;
+    static constexpr const auto& kManifest = kPengoManifest;
+    using Spec = ManifestBusSpec<kPengoManifest, 16, 8>;
 };
 
-// ── Chips ──────────────────────────────────────────────────────────────
-struct NamcoChipset {
-    PACMAN_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+template<typename BSpec>
+struct NamcoBoard : Board<BSpec, NoChips> {
+    using ComponentTuple = decltype(kPacManManifest)::component_tuple;
+    ComponentTuple components_;
+
+    // Chip aliases
+    ZilogZ80A&   z80  = std::get<0>(components_);
+    ROMChip&     rom  = std::get<1>(components_);
+    RAMChip&     vram = std::get<2>(components_);
+    RAMChip&     cram = std::get<3>(components_);
+    RAMChip&     wram = std::get<4>(components_);
+    namco_wsg_t& wsg  = std::get<5>(components_);
+
+    // Port aliases
+    PortCompositeVideo& video_port = std::get<6>(components_);
+    PortAudioMono&      audio_port = std::get<7>(components_);
+
+    template<size_t N>
+    NamcoBoard(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
 };
+
 
 // ── System ───────────────────────────────────────────────────────────────
 template<NamcoGame G>
@@ -162,7 +166,7 @@ private:
     using BT  = NamcoBusTraits<G>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using MainBoard = Board<typename BT::Spec, NamcoChipset>;
+    using MainBoard = NamcoBoard<typename BT::Spec>;
     Bus bus_;
     MainBoard board_{BT::kManifest};
 
@@ -184,7 +188,6 @@ private:
     int audio_sample_rate_  = namco_arcade_constants::DEFAULT_SAMPLE_RATE;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    void setup_ports() override;
     bus_state_t io_tick(bus_state_t pins);   // Handle I/O region ($5xxx/$9xxx)
     bool load_roms();
     void decode_palette();                   // Build palette from palette PROM

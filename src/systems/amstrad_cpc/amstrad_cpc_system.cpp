@@ -111,10 +111,11 @@ bool AmstradCPCSystem<M>::initialize() {
     register_board(&board_);
 
     // ── Create chips from manifest and bind chipset ───────────────────
-    { size_t slot_idx_ = 0;
-      CPC464_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
-    board_.create_chips(&pins_);
+    bind_all(board_, board_.components_, BT::kManifest);
 
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = BT::kManifest.port_slots;
+    port_manifest_count_ = BT::kManifest.port_count;
     // ── Configure page tables for this variant ──────────────────────
     configure_bus_memory_map();
 
@@ -421,27 +422,6 @@ bool AmstradCPCSystem<M>::load_roms() { return false; }
 template class AmstradCPCSystem<CPCModel::CPC464>;
 template class AmstradCPCSystem<CPCModel::CPC664>;
 template class AmstradCPCSystem<CPCModel::CPC6128>;
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                                tag        type              name                 num  int  bus  default_device
-#define CPC_FOR_EACH_PORT(V, ctx) \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)         \
-    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Port",      0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_RGB,        "Video Out (RGB)",     0, false, false, "crt_tv")        \
-    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",           0, false, false, nullptr)
-
-CERMU_PORT_MANIFEST(CPC, CPC_FOR_EACH_PORT)
-
-template<CPCModel M>
-void AmstradCPCSystem<M>::setup_ports() {
-    create_ports_from_manifest(kCPCPorts);
-}
-
-// ============================================================================
-// SYSTEM REGISTRATION
-// ============================================================================
 
 REGISTER_SYSTEM(cpc464_descriptor, [] { return std::make_unique<AmstradCPCSystem<CPCModel::CPC464>>(); });
 REGISTER_SYSTEM(cpc664_descriptor, [] { return std::make_unique<AmstradCPCSystem<CPCModel::CPC664>>(); });

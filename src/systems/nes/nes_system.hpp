@@ -26,7 +26,6 @@
 #include "core/signal/audio_port.hpp"
 #include "core/audio_thread.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
 #include "core/chip_manifest.hpp"
 #include "chip/sound/nes_apu_synth_engine.hpp"
 
@@ -72,35 +71,26 @@ namespace nes_constants {
 
 namespace nes_system {
 
-// =============================================================================
-// NES chip declaration — single source of truth
-// =============================================================================
-//
-// Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
-//
-// Actual memory dispatch uses nes_bus_t (page-pointer bus), not MemoryBus.
-// These are non-bus chip declarations for Board typed access.
-//
-//   Slot 0: Ricoh 2A03  — CPU + APU (not bus-mapped via MemoryBus)
-//   Slot 1: Ricoh 2C02  — PPU (not bus-mapped via MemoryBus)
-//
+inline constexpr auto kNESManifest = make_manifest(
+    // Chips
+    Slot<RICOH_2A03>{.base_addr = 0x0000, .label = "Ricoh 2A03"},
+    Slot<PPU>{.base_addr = 0x2000, .label = "Ricoh 2C02 PPU"}
+);
 
-#define NES_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                     \
-    V(ctx, RICOH_2A03, cpu,  0x0000, 0, 0, 0, "Ricoh 2A03",     nullptr)                                    \
-    V(ctx, PPU,        ppu,  0x2000, 0, 0, 0, "Ricoh 2C02 PPU", nullptr)
+inline constexpr size_t kNESChipCount = decltype(kNESManifest)::chip_count;
+using NESBusSpec = ManifestBusSpec<kNESManifest, 16, 8>;
 
-static constexpr size_t kNESChipCount = 0 NES_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+struct NESBoard : Board<NESBusSpec, NoChips> {
+    using ComponentTuple = decltype(kNESManifest)::component_tuple;
+    ComponentTuple components_;
 
-inline constexpr ChipManifest<kNESChipCount> kNESChips = ChipManifest<kNESChipCount>{{
-    NES_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
+    // Chip aliases
+    RICOH_2A03& cpu = std::get<0>(components_);
+    PPU&        ppu = std::get<1>(components_);
 
-using NESBusSpec = ManifestBusSpec<kNESChips, 16, 8>;
-
-// ── NES Chips — PPU in the struct for auto-palette discovery ──────────
-struct NESChipset {
-    NES_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+    NESBoard() : Board(kNESManifest) {}
 };
+
 
 // ============================================================================
 // Nintendo system variant (compile-time template parameter)
@@ -143,8 +133,8 @@ class NintendoSystem : public System {
 private:
     // Main board — typed Board with NESChipset for auto-palette discovery.
     // Memory dispatch is handled separately by nes_bus_t (page-pointer bus).
-    using MainBoard = Board<NESBusSpec, NESChipset>;
-    MainBoard board_{kNESChips};
+    using MainBoard = NESBoard;
+    MainBoard board_;
 
     // Core components — CPU and PPU accessed via board_.cpu / board_.ppu
     bus_state_t pins_;               // Persistent CPU bus state across ticks
@@ -250,8 +240,6 @@ public:
     void set_cpu_pc(uint16_t addr);
     
 private:
-    void setup_ports() override;
-
     /// Register all NES chips into registered_chips_ for the Hardware menu.
     void register_nes_chips();
 

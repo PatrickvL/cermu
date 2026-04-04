@@ -97,9 +97,11 @@ bool TatungEinsteinSystem::initialize() {
     log_info("Tatung Einstein: Initializing system\n");
     register_board(&board_);
 
-    { size_t slot_idx_ = 0;
-      EINSTEIN_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
-    board_.create_chips(&pins_);
+    bind_all(board_, board_.components_, kEinsteinManifest);
+
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = kEinsteinManifest.port_slots;
+    port_manifest_count_ = kEinsteinManifest.port_count;
     board_.apply(bus_);
 
     configure_bus_memory_map();
@@ -389,25 +391,6 @@ bool TatungEinsteinSystem::load_roms() {
     }
     return board_.load_roms(rom_root, "Tatung Einstein");
 }
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                                      tag       type              name                  num  int  bus  default_device
-#define EINSTEIN_FOR_EACH_PORT(V, ctx) \
-    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Port",       0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",            0, false, false, "crt_tv")        \
-    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",            0, false, false, nullptr)
-
-CERMU_PORT_MANIFEST(Einstein, EINSTEIN_FOR_EACH_PORT)
-
-void TatungEinsteinSystem::setup_ports() {
-    create_ports_from_manifest(kEinsteinPorts);
-}
-
-// ============================================================================
-// SYSTEM REGISTRATION
-// ============================================================================
 
 REGISTER_SYSTEM(einstein_descriptor, [] {
     return std::make_unique<TatungEinsteinSystem>();

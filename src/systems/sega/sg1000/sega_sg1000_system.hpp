@@ -15,7 +15,6 @@
 #include "core/board.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
-#include "core/system_chip_visitors.hpp"
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/video/tms9918/tms9918a.hpp"
 #include "chip/sound/sn76489/sn76489.hpp"
@@ -62,42 +61,44 @@ template<> struct SG1000VariantTraits<SG1000Variant::SC3000> {
 
 #define SG1000_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
 
-// =============================================================================
-// SG-1000 chip declaration — single source of truth
-// =============================================================================
-//
-// Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
-//
-//   Slot 0: RAM      — 64KB at $0000 (effective size set per variant)
-//   Slot 1: Cart ROM — 32KB at $0000
-//   Slot 2: Z80A     — not bus-mapped
-//   Slot 3: TMS9918A — not bus-mapped (I/O port-accessed)
-//   Slot 4: SN76489  — not bus-mapped (I/O port-accessed)
-//
+inline constexpr auto kSG1000Manifest = make_manifest(
+    // Chips
+    Slot<ZilogZ80A>{.base_addr = 0x0000, .label = "Z80A"},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x8000, .label = "Cart ROM"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 0x10000, .label = "RAM"},
+    Slot<sn76489_t>{.base_addr = 0x007E, .label = "SN76489"},
+    Slot<TMS9918A>{.base_addr = 0x00BE, .label = "TMS9918A"},
+    // Ports
+    Slot<PortControlDB9>{.name = "Controller Port 1", .port_number = 1, .default_device = "joystick"},
+    Slot<PortControlDB9>{.name = "Controller Port 2", .port_number = 2, .default_device = "joystick"},
+    Slot<PortExpansion>{.name = "Cartridge Slot"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
 
-#define SG1000_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                \
-    V(ctx, ZilogZ80A,   z80,   0x0000,       0, 0, 0, "Z80A",      nullptr)                                \
-    V(ctx, ROMChip,     cart,  0x0000,  0x8000, 0, 0, "Cart ROM",  nullptr)                                \
-    V(ctx, RAMChip,     ram,   0x0000, 0x10000, 0, 0, "RAM",       nullptr)                                \
-    V(ctx, sn76489_t,   psg,   0x007E,       0, 0, 0, "SN76489",   nullptr)                                \
-    V(ctx, TMS9918A,    vdp,   0x00BE,       0, 0, 0, "TMS9918A",  nullptr)
+inline constexpr size_t kSG1000ChipCount = decltype(kSG1000Manifest)::chip_count;
+using SG1000BusSpec = ManifestBusSpec<kSG1000Manifest, 16, 8>;
 
-static constexpr size_t kSG1000ChipCount = 0 SG1000_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+struct SG1000Board : Board<SG1000BusSpec, NoChips> {
+    using ComponentTuple = decltype(kSG1000Manifest)::component_tuple;
+    ComponentTuple components_;
 
-inline constexpr ChipManifest<kSG1000ChipCount> kSG1000Chips = ChipManifest<kSG1000ChipCount>{{
-    SG1000_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
+    // Chip aliases
+    ZilogZ80A& z80  = std::get<0>(components_);
+    ROMChip&   cart = std::get<1>(components_);
+    RAMChip&   ram  = std::get<2>(components_);
+    sn76489_t& psg  = std::get<3>(components_);
+    TMS9918A&  vdp  = std::get<4>(components_);
 
-using SG1000BusSpec = ManifestBusSpec<kSG1000Chips, 16, 8>;
+    // Port aliases
+    PortControlDB9&     ctrl1_port     = std::get<5>(components_);
+    PortControlDB9&     ctrl2_port     = std::get<6>(components_);
+    PortExpansion&      cartridge_port = std::get<7>(components_);
+    PortCompositeVideo& video_port     = std::get<8>(components_);
+    PortAudioMono&      audio_port     = std::get<9>(components_);
 
-// ============================================================================
-// SG-1000 Chips — value-typed chips owned by Board (auto-generated)
-// ============================================================================
-
-struct SG1000Chips {
-    SG1000_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+    SG1000Board() : Board(kSG1000Manifest) {}
 };
-
 // ============================================================================
 // Sega SG-1000 / SC-3000 System
 // ============================================================================
@@ -133,9 +134,9 @@ private:
     // ── Board + bus ──────────────────────────────────────────────────────
     using Bus       = MemoryBus<SG1000BusSpec>;
     using PT        = PackingTraits<SG1000BusSpec>;
-    using MainBoard = Board<SG1000BusSpec, SG1000Chips>;
+    using MainBoard = SG1000Board;
     Bus       bus_;
-    MainBoard board_{kSG1000Chips};
+    MainBoard board_;
 
     // ── Video ────────────────────────────────────────────────────────────
     std::unique_ptr<CompositeVideoPort> video_port_;
@@ -152,7 +153,6 @@ private:
     uint32_t    frame_tstate_counter_ = 0;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    void setup_ports() override;
     void configure_bus_memory_map();
     bus_state_t io_tick(bus_state_t pins);
 };

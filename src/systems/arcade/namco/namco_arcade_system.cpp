@@ -78,9 +78,11 @@ bool NamcoArcadeSystem<G>::initialize() {
     register_board(&board_);
 
     // ── Bind and create chips from manifest, wire bus ────────────────
-    { size_t slot_idx_ = 0;
-      PACMAN_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
-    board_.create_chips(&pins_);
+    bind_all(board_, board_.components_, BT::kManifest);
+
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = BT::kManifest.port_slots;
+    port_manifest_count_ = BT::kManifest.port_count;
     board_.apply(bus_);
 
     // ── Init CPU + sound ────────────────────────────────────────────
@@ -315,25 +317,6 @@ bool NamcoArcadeSystem<G>::load_roms() {
 
 template class NamcoArcadeSystem<NamcoGame::PacMan>;
 template class NamcoArcadeSystem<NamcoGame::Pengo>;
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                                  tag       type              name                 num  int  bus  default_device
-#define NAMCO_FOR_EACH_PORT(V, ctx) \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")        \
-    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",           0, false, false, nullptr)
-
-CERMU_PORT_MANIFEST(Namco, NAMCO_FOR_EACH_PORT)
-
-template<NamcoGame G>
-void NamcoArcadeSystem<G>::setup_ports() {
-    create_ports_from_manifest(kNamcoPorts);
-}
-
-// ============================================================================
-// SYSTEM REGISTRATION
-// ============================================================================
 
 REGISTER_SYSTEM(pacman_descriptor, [] { return std::make_unique<NamcoArcadeSystem<NamcoGame::PacMan>>(); });
 REGISTER_SYSTEM(pengo_descriptor,  [] { return std::make_unique<NamcoArcadeSystem<NamcoGame::Pengo>>(); });

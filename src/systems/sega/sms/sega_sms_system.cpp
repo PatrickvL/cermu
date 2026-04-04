@@ -98,9 +98,11 @@ bool SegaSMSSystem::initialize() {
     log_info("Sega Master System: Initializing system\n");
     register_board(&board_);
 
-    { size_t slot_idx_ = 0;
-      SMS_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
-    board_.create_chips(&pins_);
+    bind_all(board_, board_.components_, kSMSManifest);
+
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = kSMSManifest.port_slots;
+    port_manifest_count_ = kSMSManifest.port_count;
     board_.apply(bus_);
 
     configure_bus_memory_map();
@@ -327,27 +329,6 @@ void SegaSMSSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
         }
     }
 }
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                                tag        type              name                 num  int  bus  default_device
-#define SMS_FOR_EACH_PORT(V, ctx) \
-    V(ctx, CTRL1,      CONTROL_PORT_DB9, "Controller Port 1",   1, false, false, "joystick")      \
-    V(ctx, CTRL2,      CONTROL_PORT_DB9, "Controller Port 2",   2, false, false, "joystick")      \
-    V(ctx, CARTRIDGE,  EXPANSION_PORT,   "Cartridge Slot",      0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")        \
-    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",           0, false, false, nullptr)
-
-CERMU_PORT_MANIFEST(SMS, SMS_FOR_EACH_PORT)
-
-void SegaSMSSystem::setup_ports() {
-    create_ports_from_manifest(kSMSPorts);
-}
-
-// ============================================================================
-// SYSTEM REGISTRATION
-// ============================================================================
 
 REGISTER_SYSTEM(sms_descriptor, [] {
     return std::make_unique<SegaSMSSystem>();

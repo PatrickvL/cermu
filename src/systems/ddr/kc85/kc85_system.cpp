@@ -93,18 +93,13 @@ bool KC85System<V>::initialize() {
     register_board(&board_);
 
     // ── Bind value-typed chips, then factory-create remaining ──────────
-    if constexpr (V == KC85Variant::KC85_2) {
-        size_t slot_idx_ = 0;
-        KC852_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
-    } else if constexpr (V == KC85Variant::KC85_3) {
-        size_t slot_idx_ = 0;
-        KC853_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
-    } else {
-        size_t slot_idx_ = 0;
-        KC854_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
-    }
+    bind_all(board_, board_.components_, BT::kManifest);
     board_.create_chips(&pins_);
     board_.apply(bus_);
+
+    // ── Set port manifest ───────────────────────────────────────────────
+    port_manifest_       = BT::kManifest.port_slots;
+    port_manifest_count_ = BT::kManifest.port_count;
 
     // Typed pointers for memory chips accessed after initialize()
     if constexpr (Traits::has_basic_rom) {
@@ -807,22 +802,6 @@ bool KC85System<V>::load_roms() {
 template class KC85System<KC85Variant::KC85_2>;
 template class KC85System<KC85Variant::KC85_3>;
 template class KC85System<KC85Variant::KC85_4>;
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                              tag        type              name                 num  int  bus  default_device
-#define KC85_FOR_EACH_PORT(V, ctx) \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)         \
-    V(ctx, EXPANSION,  EXPANSION_PORT,   "Module Slot",         0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")
-
-CERMU_PORT_MANIFEST(KC85, KC85_FOR_EACH_PORT)
-
-template<KC85Variant M>
-void KC85System<M>::setup_ports() {
-    create_ports_from_manifest(kKC85Ports);
-}
 
 // ============================================================================
 // SYSTEM REGISTRATION

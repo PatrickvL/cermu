@@ -29,7 +29,6 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"
 #include "chip/video/mc6847/mc6847.hpp"
@@ -41,41 +40,50 @@
 // Default bus state for the Atom — inherited from MOS 6502 defaults.
 #define ATOM_BUS_DEFAULT_STATE (MOS6502::default_bus_state())
 
+inline constexpr auto kAtomManifest = make_manifest(
+    // Chips
+    Slot<MOS6502>{.base_addr = 0x0000, .label = "MOS 6502"},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 0x8000, .label = "RAM"},
+    Slot<RAMChip>{.base_addr = 0x8000, .size_bytes = 0x2000, .label = "Video RAM"},
+    Slot<i8255_t>{.base_addr = 0xB000, .addr_mask = 0xFFFC, .label = "i8255 PPI"},
+    Slot<mos6522_t>{.base_addr = 0xB800, .addr_mask = 0xFFF0, .label = "VIA 6522"},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 0x1000, .label = "BASIC", .rom = {"atom_basic.rom|BASIC.ROM|basic.rom"}},
+    Slot<ROMChip>{.base_addr = 0xD000, .size_bytes = 0x0800, .label = "FP ROM", .rom = {"atom_fp.rom|FP.ROM|fp.rom", true}},
+    Slot<ROMChip>{.base_addr = 0xF000, .size_bytes = 0x1000, .label = "OS ROM", .rom = {"atom_os.rom|ABASIC.ROM|os.rom"}},
+    Slot<mc6847_t>{.base_addr = 0x0000, .label = "MC6847 VDG"},
+    // Ports
+    Slot<PortCassette>{.name = "Cassette Port"},
+    Slot<PortExpansion>{.name = "Expansion Port"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+);
 
-// =============================================================================
-// Acorn Atom chip declaration — single source of truth
-// =============================================================================
-//
-// Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
-//
-// PPI and VIA are MMIO-only (sub-page decode via addr_mask).
-// FP ROM is optional (loaded if available).
-//
-
-#define ATOM_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                                    \
-    V(ctx, MOS6502,    cpu,    0x0000,     0,      0, 0, "MOS 6502",   nullptr)                              \
-    V(ctx, RAMChip,    ram,    0x0000, 32768,      0, 0, "RAM",        nullptr)                              \
-    V(ctx, RAMChip,    vram,   0x8000,  8192,      0, 0, "Video RAM",  nullptr)                              \
-    V(ctx, i8255_t,    ppi,    0xB000,     0, 0xFFFC, 0, "i8255 PPI",  nullptr)                              \
-    V(ctx, mos6522_t,  via,    0xB800,     0, 0xFFF0, 0, "VIA 6522",   nullptr)                              \
-    V(ctx, ROMChip,    basic,  0xC000,  4096,      0, 0, "BASIC",      "atom_basic.rom|BASIC.ROM|basic.rom") \
-    V(ctx, ROMChip,    fp_rom, 0xD000,  2048,      0, 0, "FP ROM",     "?atom_fp.rom|FP.ROM|fp.rom")         \
-    V(ctx, ROMChip,    os_rom, 0xF000,  4096,      0, 0, "OS ROM",     "atom_os.rom|ABASIC.ROM|os.rom")      \
-    V(ctx, mc6847_t,   vdg,    0x0000,     0,      0, 0, "MC6847 VDG", nullptr)
-
-static constexpr size_t kAtomChipCount = 0 ATOM_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
-
-inline constexpr ChipManifest<kAtomChipCount> kAcornAtomChips = ChipManifest<kAtomChipCount>{{
-    ATOM_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
-
+inline constexpr size_t kAtomChipCount = decltype(kAtomManifest)::chip_count;
 // BusSpec auto-derived from the manifest.  EnableCs=true enables CS-tick.
-using AcornAtomBusSpec = ManifestBusSpec<kAcornAtomChips, 16, 8, 1, true>;
+using AcornAtomBusSpec = ManifestBusSpec<kAtomManifest, 16, 8, 1, true>;
 
-// ── Chips ──────────────────────────────────────────────────────────────
-struct AtomChipset {
-    ATOM_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+struct AtomBoard : Board<AcornAtomBusSpec, NoChips> {
+    using ComponentTuple = decltype(kAtomManifest)::component_tuple;
+    ComponentTuple components_;
+
+    // Chip aliases
+    MOS6502&   cpu    = std::get<0>(components_);
+    RAMChip&   ram    = std::get<1>(components_);
+    RAMChip&   vram   = std::get<2>(components_);
+    i8255_t&   ppi    = std::get<3>(components_);
+    mos6522_t& via    = std::get<4>(components_);
+    ROMChip&   basic  = std::get<5>(components_);
+    ROMChip&   fp_rom = std::get<6>(components_);
+    ROMChip&   os_rom = std::get<7>(components_);
+    mc6847_t&  vdg    = std::get<8>(components_);
+
+    // Port aliases
+    PortCassette&       cassette_port  = std::get<9>(components_);
+    PortExpansion&      expansion_port = std::get<10>(components_);
+    PortCompositeVideo& video_port     = std::get<11>(components_);
+
+    AtomBoard() : Board(kAtomManifest) {}
 };
+
 
 class AcornAtomSystem : public System {
 public:
@@ -107,9 +115,9 @@ private:
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using Bus = MemoryBus<AcornAtomBusSpec>;
     using PT  = PackingTraits<AcornAtomBusSpec>;
-    using MainBoard = Board<AcornAtomBusSpec, AtomChipset>;
+    using MainBoard = AtomBoard;
     Bus bus_;
-    MainBoard board_{kAcornAtomChips};
+    MainBoard board_;
 
     // ── Video ────────────────────────────────────────────────────────────
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video output
@@ -123,7 +131,6 @@ private:
     int audio_sample_rate_ = acorn_atom_constants::DEFAULT_SAMPLE_RATE;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    void setup_ports() override;
     void configure_bus_memory_map();  // Setup page tables for current config
     void render_frame();   // Render one complete video frame to framebuffer_
     bool load_roms();

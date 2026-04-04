@@ -53,10 +53,11 @@ bool AcornAtomSystem::initialize() {
     register_board(&board_);
 
     // ── Bind and create chips from manifest ─────────────────────────
-    { size_t slot_idx_ = 0;
-      ATOM_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
-    board_.create_chips(&pins_);
+    bind_all(board_, board_.components_, kAtomManifest);
 
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = kAtomManifest.port_slots;
+    port_manifest_count_ = kAtomManifest.port_count;
     // Direct pointer for MC6847 rendering
     video_ram_ptr_ = board_.vram.data();
 
@@ -301,24 +302,5 @@ bool AcornAtomSystem::load_roms() {
     }
     return board_.load_roms(rom_root, "Acorn Atom");
 }
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                                   tag       type              name                  num  int  bus  default_device
-#define ATOM_FOR_EACH_PORT(V, ctx) \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",        0, false, false, nullptr)         \
-    V(ctx, EXPANSION,  EXPANSION_PORT,   "Expansion Port",       0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",            0, false, false, "crt_tv")
-
-CERMU_PORT_MANIFEST(Atom, ATOM_FOR_EACH_PORT)
-
-void AcornAtomSystem::setup_ports() {
-    create_ports_from_manifest(kAtomPorts);
-}
-
-// ============================================================================
-// SYSTEM REGISTRATION
-// ============================================================================
 
 REGISTER_SYSTEM(atom_descriptor, [] { return std::make_unique<AcornAtomSystem>(); });

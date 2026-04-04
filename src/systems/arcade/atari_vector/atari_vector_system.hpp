@@ -30,7 +30,6 @@
 #include "core/system.hpp"
 #include "core/board.hpp"
 #include "core/dip_switch.hpp"
-#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/fam65xx/mos6502.hpp"

@@ -68,15 +68,13 @@ bool Z9001System<V>::initialize() {
     register_board(&board_);
 
     // ── Bind value-typed chips, then factory-create remaining ──────────
-    if constexpr (V == Z9001Variant::Z9001) {
-        size_t slot_idx_ = 0;
-        Z9001_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
-    } else {
-        size_t slot_idx_ = 0;
-        KC87_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
-    }
+    bind_all(board_, board_.components_, BT::kManifest);
     board_.create_chips(&pins_);
     board_.apply(bus_);
+
+    // ── Set port manifest ───────────────────────────────────────────────
+    port_manifest_       = BT::kManifest.port_slots;
+    port_manifest_count_ = BT::kManifest.port_count;
 
     // Typed pointers for memory chips accessed after initialize()
     video_ram_chip_ = &board_.video_ram;
@@ -428,21 +426,6 @@ bool Z9001System<V>::load_roms() {
 
 template class Z9001System<Z9001Variant::Z9001>;
 template class Z9001System<Z9001Variant::KC87>;
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                                tag       type              name                 num  int  bus  default_device
-#define Z9001_FOR_EACH_PORT(V, ctx) \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")
-
-CERMU_PORT_MANIFEST(Z9001, Z9001_FOR_EACH_PORT)
-
-template<Z9001Variant V>
-void Z9001System<V>::setup_ports() {
-    create_ports_from_manifest(kZ9001Ports);
-}
 
 // ============================================================================
 // SYSTEM REGISTRATION

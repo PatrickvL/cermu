@@ -244,9 +244,11 @@ bool PETSystem::initialize() {
     register_board(&board_);
 
     // ── Bind value-typed chips, then create remaining ──────────────────
-    { size_t slot_idx_ = 0;
-      PET_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_) }
-    board_.create_chips(&pins_);
+    bind_all(board_, board_.components_, kPETManifest);
+
+    // Set port manifest for default peripheral attachment.
+    port_manifest_       = kPETManifest.port_slots;
+    port_manifest_count_ = kPETManifest.port_count;
     board_.apply(bus_);
 
     main_ram_chip_    = &board_.main_ram;
@@ -860,26 +862,6 @@ void PETSystem::configure_memory_map() {
     // manifest: the slot declares size_bytes=2048 with addr_mask=0x03FF,
     // so apply() wraps all accesses to the physical 1 KB chip.
 }
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                               tag        type              name                 num  int  bus  default_device
-#define PET_FOR_EACH_PORT(V, ctx) \
-    V(ctx, IEC_SERIAL, IEC_SERIAL,       "IEC Serial Bus",      0, false, true,  nullptr)         \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, "datasette")     \
-    V(ctx, USER,       USER_PORT,        "User Port",           0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_green")
-
-CERMU_PORT_MANIFEST(PET, PET_FOR_EACH_PORT)
-
-void PETSystem::setup_ports() {
-    create_ports_from_manifest(kPETPorts);
-}
-
-// ============================================================================
-// System Registration
-// ============================================================================
 
 REGISTER_SYSTEM(pet_descriptor, []() {
     return std::make_unique<PETSystem>();

@@ -17,7 +17,6 @@
 
 #include "core/system.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
 #include "chip/cpu/fam65xx/mos6507.hpp"
@@ -71,6 +70,22 @@ private:
     A2600Mapper* mapper_ = nullptr;  // non-owning; system owns the mapper
 };
 
+inline constexpr auto kAtari2600Manifest = make_manifest(
+    // Chips
+    Slot<MOS6507>{.label = "MOS 6507"},
+    Slot<tia_t>{.base_addr = 0x0000, .addr_mask = 0x0080, .label = "TIA"},
+    Slot<pia6532_t>{.base_addr = 0x0080, .addr_mask = 0x0080, .label = "PIA 6532"},
+    Slot<Atari2600CartChip>{.base_addr = 0x1000, .label = "Cartridge"},
+    // Ports
+    Slot<PortControlDB9>{.name = "Left Controller", .port_number = 1, .default_device = "joystick"},
+    Slot<PortControlDB9>{.name = "Right Controller", .port_number = 2, .default_device = "joystick"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
+
+inline constexpr size_t kAtari2600ChipCount = decltype(kAtari2600Manifest)::chip_count;
+
+
 
 // =============================================================================
 // Atari 2600 chip manifest — declarative memory layout
@@ -95,35 +110,30 @@ private:
 //     via bank_size = 4096 (A12=1 always selects cart)
 //
 //                                ctx   type                chip  base    size  mask    ovl  label          rom
-#define ATARI2600_FOR_EACH_SYSTEM_CHIP(V, ctx) \
-    V(ctx, MOS6507,            cpu,  0,       0, 0,      0, "MOS 6507",     nullptr) \
-    V(ctx, tia_t,              tia,  0x0000,  0, 0x0080, 0, "TIA",          nullptr) \
-    V(ctx, pia6532_t,          riot, 0x0080,  0, 0x0080, 0, "PIA 6532",     nullptr) \
-    V(ctx, Atari2600CartChip,  cart, 0x1000,  0, 0,      0, "Cartridge",    nullptr)
 
-static constexpr size_t kAtari2600ChipCount = 0 ATARI2600_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
 
 // Helper: set bank_size on all bus-mapped slots (those with non-zero base, size, or mask).
-template<size_t N>
-constexpr ChipManifest<N> with_bank_size_on_mapped(ChipManifest<N> m, size_t bs) {
-    for (size_t i = 0; i < N; ++i)
-        if (m.chips[i].base_addr > 0 || m.chips[i].size_bytes > 0 || m.chips[i].addr_mask > 0)
-            m.chips[i].bank_size = bs;
-    return m;
-}
-
-inline constexpr ChipManifest<kAtari2600ChipCount> kAtari2600Chips =
-    with_bank_size_on_mapped(ChipManifest<kAtari2600ChipCount>{{
-        ATARI2600_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-    }}, 4096);
-
 // BusSpec auto-derived from the manifest (13-bit address, 256-byte pages).
 // EnableCs=true enables CS-tick.
-using Atari2600BusSpec = ManifestBusSpec<kAtari2600Chips, 13, 8, 1, true>;
+using Atari2600BusSpec = ManifestBusSpec<kAtari2600Manifest, 13, 8, 1, true>;
 
-// ── Chips ──────────────────────────────────────────────────────────────
-struct Atari2600Chipset {
-    ATARI2600_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+struct Atari2600Board : Board<Atari2600BusSpec, NoChips> {
+    using ComponentTuple = decltype(kAtari2600Manifest)::component_tuple;
+    ComponentTuple components_;
+
+    // Chip aliases
+    MOS6507&           cpu  = std::get<0>(components_);
+    tia_t&             tia  = std::get<1>(components_);
+    pia6532_t&         riot = std::get<2>(components_);
+    Atari2600CartChip& cart = std::get<3>(components_);
+
+    // Port aliases
+    PortControlDB9&     left_port  = std::get<4>(components_);
+    PortControlDB9&     right_port = std::get<5>(components_);
+    PortCompositeVideo& video_port = std::get<6>(components_);
+    PortAudioMono&      audio_port = std::get<7>(components_);
+
+    Atari2600Board() : Board(kAtari2600Manifest) {}
 };
 
 
@@ -188,10 +198,10 @@ private:
     // ========================================================================
 
     using Bus = MemoryBus<Atari2600BusSpec>;
-    using MainBoard = Board<Atari2600BusSpec, Atari2600Chipset>;
+    using MainBoard = Atari2600Board;
 
     Bus bus_;
-    MainBoard board_{kAtari2600Chips};
+    MainBoard board_;
 
     // ========================================================================
     // SYSTEM STATE
@@ -227,8 +237,6 @@ private:
     void configure_bus_memory_map();
 
     // Connector port setup
-    void setup_ports() override;
-
     // Read joystick signals from connector ports into RIOT/TIA
     void update_joystick_state();
 

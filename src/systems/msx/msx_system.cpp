@@ -145,17 +145,13 @@ bool MSXSystem<V>::initialize() {
     register_board(&board_);
 
     // Bind value-typed Chips members, then factory-create remaining (RAM/ROM)
-    {   size_t slot_idx_ = 0;
-        if constexpr (V == MSXVariant::MSX1) {
-            MSX1_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
-        } else if constexpr (V == MSXVariant::MSX2) {
-            MSX2_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
-        } else {
-            MSX2P_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_BIND_SEQUENTIAL, board_)
-        }
-    }
+    bind_all(board_, board_.components_, BT::kManifest);
     board_.create_chips(&pins_);
     board_.apply(bus_);
+
+    // ── Set port manifest ───────────────────────────────────────────────
+    port_manifest_       = BT::kManifest.port_slots;
+    port_manifest_count_ = BT::kManifest.port_count;
 
     // Configure memory map
     configure_bus_memory_map();
@@ -476,25 +472,6 @@ bool MSXSystem<V>::load_roms() {
 template class MSXSystem<MSXVariant::MSX1>;
 template class MSXSystem<MSXVariant::MSX2>;
 template class MSXSystem<MSXVariant::MSX2P>;
-
-// ============================================================================
-// PORT MANIFEST
-// ============================================================================
-//                              tag        type              name                 num  int  bus  default_device
-#define MSX_FOR_EACH_PORT(V, ctx) \
-    V(ctx, JOY1,       CONTROL_PORT_DB9, "Joystick Port 1",     1, false, false, "joystick")      \
-    V(ctx, JOY2,       CONTROL_PORT_DB9, "Joystick Port 2",     2, false, false, "joystick")      \
-    V(ctx, CASSETTE,   CASSETTE_PORT,    "Cassette Port",       0, false, false, nullptr)         \
-    V(ctx, CARTRIDGE,  EXPANSION_PORT,   "Cartridge Slot",      0, false, false, nullptr)         \
-    V(ctx, VIDEO,      VIDEO_COMPOSITE,  "Video Out",           0, false, false, "crt_tv")        \
-    V(ctx, AUDIO,      AUDIO_MONO,       "Audio Out",           0, false, false, nullptr)
-
-CERMU_PORT_MANIFEST(MSX, MSX_FOR_EACH_PORT)
-
-template<MSXVariant V>
-void MSXSystem<V>::setup_ports() {
-    create_ports_from_manifest(kMSXPorts);
-}
 
 // ============================================================================
 // SYSTEM REGISTRATION

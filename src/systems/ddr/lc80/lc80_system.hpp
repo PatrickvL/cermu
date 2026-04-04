@@ -11,7 +11,6 @@
 #include "core/system.hpp"
 #include "core/system_lines.hpp"
 #include "core/board.hpp"
-#include "core/system_chip_visitors.hpp"
 #include "chip/cpu/z80/u880.hpp"
 #include "chip/io/z80_pio.hpp"
 #include "chip/io/z80_ctc.hpp"
@@ -22,38 +21,39 @@
 // LC80 bus — Z80 bus defaults
 #define LC80_BUS_DEFAULT_STATE (U880::default_bus_state())
 
-// =============================================================================
-// LC80 chip declaration — single source of truth
-// =============================================================================
-//
-// Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
-//
-// All I/O is Z80 port-based (IORQ) — PIO/CTC slots are non-bus (no MMIO).
-// ROM and RAM use addr_mask for hardware mirroring:
-//   ROM: 2 KB physical, mirrored 4× through $0000-$1FFF (mask 0x07FF)
-//   RAM: 1 KB physical, mirrored 8× through $2000-$3FFF (mask 0x03FF)
-//
+inline constexpr auto kLC80Manifest = make_manifest(
+    // Chips
+    Slot<U880>{.base_addr = 0x0000, .label = "U880"},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x2000, .addr_mask = 0x07FF, .label = "Monitor ROM", .rom = {"lc80_mon.rom|monitor.rom|MON.ROM"}},
+    Slot<RAMChip>{.base_addr = 0x2000, .size_bytes = 0x2000, .addr_mask = 0x03FF, .label = "RAM"},
+    Slot<z80_pio_t>{.base_addr = 0x00F4, .addr_mask = 0x00FC, .label = "U855 PIO #1"},
+    Slot<z80_pio_t>{.base_addr = 0x00F8, .addr_mask = 0x00FC, .label = "U855 PIO #2"},
+    Slot<z80_ctc_t>{.base_addr = 0x00EC, .addr_mask = 0x00FC, .label = "U857 CTC"},
+    // Ports
+    Slot<PortCassette>{.name = "Cassette Port"}
+);
 
-#define LC80_FOR_EACH_SYSTEM_CHIP(V, ctx)                                                              \
-    V(ctx, U880,       z80,  0x0000,    0,      0, 0, "U880",        nullptr)                          \
-    V(ctx, ROMChip,    rom,  0x0000, 8192, 0x07FF, 0, "Monitor ROM", "lc80_mon.rom|monitor.rom|MON.ROM")                          \
-    V(ctx, RAMChip,    ram,  0x2000, 8192, 0x03FF, 0, "RAM",         nullptr)                          \
-    V(ctx, z80_pio_t,  pio,  0x00F4,    0, 0x00FC, 0, "U855 PIO #1", nullptr)                          \
-    V(ctx, z80_pio_t,  pio2, 0x00F8,    0, 0x00FC, 0, "U855 PIO #2", nullptr)                          \
-    V(ctx, z80_ctc_t,  ctc,  0x00EC,    0, 0x00FC, 0, "U857 CTC",    nullptr)
+inline constexpr size_t kLC80ChipCount = decltype(kLC80Manifest)::chip_count;
+using LC80BusSpec = ManifestBusSpec<kLC80Manifest, 16, 8>;
 
-static constexpr size_t kLC80ChipCount = 0 LC80_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_COUNT_ONE, unused);
+struct LC80Board : Board<LC80BusSpec, NoChips> {
+    using ComponentTuple = decltype(kLC80Manifest)::component_tuple;
+    ComponentTuple components_;
 
-inline constexpr ChipManifest<kLC80ChipCount> kLC80Chips = ChipManifest<kLC80ChipCount>{{
-    LC80_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_MANIFEST_ROW, unused)
-}};
+    // Chip aliases
+    U880&      z80  = std::get<0>(components_);
+    ROMChip&   rom  = std::get<1>(components_);
+    RAMChip&   ram  = std::get<2>(components_);
+    z80_pio_t& pio  = std::get<3>(components_);
+    z80_pio_t& pio2 = std::get<4>(components_);
+    z80_ctc_t& ctc  = std::get<5>(components_);
 
-using LC80BusSpec = ManifestBusSpec<kLC80Chips, 16, 8>;
+    // Port aliases
+    PortCassette& cassette_port = std::get<6>(components_);
 
-// ── Chips ──────────────────────────────────────────────────────────────
-struct LC80Chipset {
-    LC80_FOR_EACH_SYSTEM_CHIP(CERMU_CHIP_VISITOR_DECLARE_FIELD, unused)
+    LC80Board() : Board(kLC80Manifest) {}
 };
+
 
 class LC80System : public System {
 public:
@@ -79,9 +79,9 @@ private:
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using Bus = MemoryBus<LC80BusSpec>;
     using PT  = PackingTraits<LC80BusSpec>;
-    using MainBoard = Board<LC80BusSpec, LC80Chipset>;
+    using MainBoard = LC80Board;
     Bus bus_;
-    MainBoard board_{kLC80Chips};
+    MainBoard board_;
 
     // ── LED display ──────────────────────────────────────────────────────
     // Segment data for each of the 6 digits (bit 0..6 = a..g, bit 7 = dp)
@@ -103,7 +103,6 @@ private:
     int audio_sample_rate_  = lc80_constants::DEFAULT_SAMPLE_RATE;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    void setup_ports() override;
     void configure_bus_memory_map();
     bus_state_t io_tick(bus_state_t pins);
     bool load_roms();
