@@ -18,6 +18,9 @@
 #include "devices/storage/drive_1541.hpp"
 #include "devices/storage/datasette_1530.hpp"
 #include "systems/commodore/prg_content_analysis.hpp"
+
+// Forward declarations
+static KeyboardMapper* create_c16_keyboard_mapper(commodore_keyboard_t* keyboard);
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -1112,6 +1115,30 @@ template class Commodore264System<C264SeriesVariant::PLUS4>;
 REGISTER_SYSTEM(C116System::static_descriptor(), []() {
     return std::make_unique<C116System>();
 })
+
+// ============================================================================
+// Keyboard mapper factory
+// ============================================================================
+
+static KeyboardMapper* create_c16_keyboard_mapper(commodore_keyboard_t* keyboard) {
+    KeyboardMapper* mapper = new KeyboardMapper();
+    mapper->set_guest_keyboard(keyboard);
+    mapper->build_character_map_from_matrix(&c16_keyboard_config);
+
+    mapper->register_default_synthetic_mappings();
+
+    // Commodore-specific character mappings are now handled automatically
+    // by the PETSCII decode tables + petscii_to_host_char().
+
+    auto& sdl_map = EmuKeySDLMap::instance();
+    sdl_map.clear_system_mappings();
+    sdl_map.register_candidates(EMUKEY_CBM_RESTORE, {SDL_SCANCODE_SYSREQ, SDL_SCANCODE_GRAVE});
+    sdl_map.register_candidates(EMUKEY_CBM_POUND,   {SDL_SCANCODE_NONUSHASH});
+    // Both host ALTs → CBM key (more accessible than Super/LGUI on Linux)
+    sdl_map.register_candidates(EMUKEY_CBM_COMMODORE, {SDL_SCANCODE_LALT, SDL_SCANCODE_RALT}, true);
+
+    return mapper;
+}
 
 REGISTER_SYSTEM(C16System::static_descriptor(), []() {
     return std::make_unique<C16System>();

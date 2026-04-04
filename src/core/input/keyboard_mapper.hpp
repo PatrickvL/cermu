@@ -271,18 +271,4 @@ private:
     uint8_t matrix_cols_;
 };
 
-// ============================================================================
-// Factory functions — create pre-configured mappers for each system
-// ============================================================================
 
-// Create a mapper configured for the C64 keyboard
-KeyboardMapper* create_c64_keyboard_mapper(commodore_keyboard_t* keyboard);
-
-// Create a mapper configured for the VIC-20 keyboard
-KeyboardMapper* create_vic20_keyboard_mapper(commodore_keyboard_t* keyboard);
-
-// Create a mapper configured for the C16/Plus4 keyboard
-KeyboardMapper* create_c16_keyboard_mapper(commodore_keyboard_t* keyboard);
-
-// Create a mapper configured for the C128 keyboard
-KeyboardMapper* create_c128_keyboard_mapper(commodore_keyboard_t* keyboard);

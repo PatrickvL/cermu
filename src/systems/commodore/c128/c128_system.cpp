@@ -16,6 +16,11 @@
 #include "devices/storage/drive_1541.hpp"
 #include <cstring>
 #include <cstdio>
+
+// Forward declarations
+static KeyboardMapper* create_c128_keyboard_mapper(commodore_keyboard_t* keyboard);
+// C64 mapper factory — defined in c64_system.cpp, used for C64 compatibility mode
+extern KeyboardMapper* create_c64_keyboard_mapper(commodore_keyboard_t* keyboard);
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #endif
@@ -1532,6 +1537,41 @@ void C128System::render_system_menu_items() {
 
 const char* C128System::get_mode_label() const {
     return c64_mode_ ? "C64 Mode" : nullptr;
+}
+
+// ============================================================================
+// Keyboard mapper factory
+// ============================================================================
+
+static KeyboardMapper* create_c128_keyboard_mapper(commodore_keyboard_t* keyboard) {
+    KeyboardMapper* mapper = new KeyboardMapper();
+    mapper->set_guest_keyboard(keyboard);
+    mapper->build_character_map_from_matrix(&c128_keyboard_config);
+
+    mapper->register_default_synthetic_mappings();
+
+    // Register emu-specific key candidates for C128.
+    // Shared Commodore keys first, then C128-specific extras.
+    auto& sdl_map = EmuKeySDLMap::instance();
+    sdl_map.clear_system_mappings();
+    sdl_map.register_candidates(EMUKEY_CBM_RESTORE,       {SDL_SCANCODE_SYSREQ, SDL_SCANCODE_GRAVE});
+    sdl_map.register_candidates(EMUKEY_CBM_POUND,         {SDL_SCANCODE_NONUSHASH});
+
+    // C128-specific keys:
+    // Host LAlt → CBM key (Commodore key, more accessible than Super/LGUI
+    // which Linux WMs intercept).  Host RAlt → C128 ALT key.
+    sdl_map.register_candidates(EMUKEY_CBM_COMMODORE,     {SDL_SCANCODE_LALT});
+    sdl_map.register_candidates(EMUKEY_CBM_ALT,           {SDL_SCANCODE_RALT});
+    // HELP: prefer the rare HELP scancode (117), no common fallback.
+    sdl_map.register_candidates(EMUKEY_CBM_HELP,          {SDL_SCANCODE_HELP});
+    // LINE FEED: prefer RETURN2 (second Return on ISO/terminal keyboards).
+    sdl_map.register_candidates(EMUKEY_CBM_LINE_FEED,     {SDL_SCANCODE_RETURN2});
+    // 40/80 DISPLAY: MODE key (rare international keyboards).
+    sdl_map.register_candidates(EMUKEY_CBM_40_80_DISPLAY, {SDL_SCANCODE_MODE});
+    // NO SCROLL: Scroll Lock (present on most full-size keyboards).
+    sdl_map.register_candidates(EMUKEY_CBM_NO_SCROLL,     {SDL_SCANCODE_SCROLLLOCK});
+
+    return mapper;
 }
 
 // ============================================================================
