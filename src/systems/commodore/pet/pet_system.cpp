@@ -676,9 +676,7 @@ void PETSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 
 void PETSystem::render_system_menu_items() {
 #ifdef CERMU_HAS_GUI
-    if (ImGui::MenuItem("Reset PET")) {
-        reset();
-    }
+    (void)0;  // System-specific items go here
 #endif
 }
 

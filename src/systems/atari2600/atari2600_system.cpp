@@ -526,10 +526,6 @@ void Atari2600System::update_joystick_state() {
 
 void Atari2600System::render_system_menu_items() {
 #ifdef CERMU_HAS_GUI
-    if (ImGui::MenuItem("Reset Atari 2600")) {
-        reset();
-    }
-    ImGui::Separator();
     // Console switch controls
     bool color_mode = (console_switches_ & atari2600_constants::SWCHB_BW) != 0;
     if (ImGui::MenuItem("Color Mode", nullptr, color_mode)) {

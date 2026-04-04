@@ -902,11 +902,7 @@ void Commodore264System<V>::handle_keyboard_event(SDL_Keycode key, bool pressed)
 template<C264SeriesVariant V>
 void Commodore264System<V>::render_system_menu_items() {
 #ifdef CERMU_HAS_GUI
-    char reset_label[32];
-    snprintf(reset_label, sizeof(reset_label), "Reset %s", Traits::name);
-    if (ImGui::MenuItem(reset_label)) {
-        reset();
-    }
+    (void)0;  // System-specific items go here
 #endif
 }
 

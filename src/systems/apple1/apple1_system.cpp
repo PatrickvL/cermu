@@ -384,10 +384,6 @@ void Apple1System::handle_text_input(const char* text) {
 
 void Apple1System::render_system_menu_items() {
 #ifdef CERMU_HAS_GUI
-    if (ImGui::MenuItem("Reset Apple 1")) {
-        reset();
-    }
-    ImGui::Separator();
     if (has_basic_ && ImGui::MenuItem("Start BASIC")) {
         queue_text("E000R\r");
     }

@@ -708,9 +708,7 @@ void Chip8System::register_chip8_chips() {
 
 void Chip8System::render_system_menu_items() {
 #ifdef CERMU_HAS_GUI
-    if (ImGui::MenuItem("Reset CHIP-8")) {
-        reset();
-    }
+    (void)0;  // System-specific items go here
 #endif
 }
 
