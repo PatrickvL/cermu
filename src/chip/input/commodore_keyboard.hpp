@@ -275,6 +275,10 @@ struct commodore_keyboard_t {
     // Auto-shift tracking: cursor left/up require SHIFT + physical cursor key
     bool auto_shift_left_active;
     bool auto_shift_up_active;
+    // F-key auto-shift: even F-keys (F2/F4/F6/F8) → SHIFT + physical odd F-key.
+    // Counter tracks how many even-F-key auto-shifts are currently active,
+    // so SHIFT is only released when ALL auto-shifts (cursor + F-key) are done.
+    uint8_t auto_shift_fkey_count;
 
     // Reference to connected scanning chip ports
     void* scan_port_a_reference;
@@ -298,6 +302,9 @@ struct commodore_keyboard_t {
     // Utility
     static bool is_special_key(emu_key_t key);
     void toggle_caps_lock();
+    bool any_auto_shift_active() const {
+        return auto_shift_left_active || auto_shift_up_active || auto_shift_fkey_count > 0;
+    }
 
     // Keyboard scanning and I/O chip integration
     void update_matrix();

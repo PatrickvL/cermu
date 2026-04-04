@@ -120,6 +120,7 @@ void commodore_keyboard_t::reset() {
     caps_lock_active = false;
     auto_shift_left_active = false;
     auto_shift_up_active = false;
+    auto_shift_fkey_count = 0;
     scan_port_a_reference = NULL;
     scan_port_b_reference = NULL;
 
@@ -181,6 +182,39 @@ void commodore_keyboard_t::key_down(emu_key_t key, bool shifted) {
         return;
     }
 
+    // Even F-keys → SHIFT + physical odd F-key.
+    // The mapping varies by system: C64/VIC-20/C128 have F1/F3/F5/F7 in matrix;
+    // C16/Plus4 has F1/F2/F3/F7 (HELP).
+    {
+        emu_key_t physical = EMUKEY_NONE;
+        switch (key) {
+            case EMUKEY_F2:
+                physical = (model == KEYBOARD_MODEL_PLUS4_C16) ? EMUKEY_F1 : EMUKEY_F1;
+                break;
+            case EMUKEY_F4:
+                physical = (model == KEYBOARD_MODEL_PLUS4_C16) ? EMUKEY_F1 : EMUKEY_F3;
+                break;
+            case EMUKEY_F5:
+                // C16/Plus4: F5 = SHIFT + F2 (F2 is in its matrix).
+                // Others: F5 is a physical key — no auto-shift needed.
+                if (model == KEYBOARD_MODEL_PLUS4_C16) physical = EMUKEY_F2;
+                break;
+            case EMUKEY_F6:
+                physical = (model == KEYBOARD_MODEL_PLUS4_C16) ? EMUKEY_F3 : EMUKEY_F5;
+                break;
+            case EMUKEY_F8:
+                physical = EMUKEY_F7;  // Same on all systems
+                break;
+            default: break;
+        }
+        if (physical != EMUKEY_NONE) {
+            auto_shift_fkey_count++;
+            key_down(EMUKEY_LSHIFT, false);
+            key_down(physical, false);
+            return;
+        }
+    }
+
     // Find the key position using optimised lookup
     uint8_t row, col;
     if (find_key(key, &row, &col)) {
@@ -210,7 +244,7 @@ void commodore_keyboard_t::key_up(emu_key_t key, bool shifted) {
         key_up(EMUKEY_RIGHT, false);
         if (auto_shift_left_active) {
             auto_shift_left_active = false;
-            if (!auto_shift_up_active) {
+            if (!any_auto_shift_active()) {
                 key_up(EMUKEY_LSHIFT, false);
             }
         }
@@ -224,11 +258,44 @@ void commodore_keyboard_t::key_up(emu_key_t key, bool shifted) {
         key_up(EMUKEY_DOWN, false);
         if (auto_shift_up_active) {
             auto_shift_up_active = false;
-            if (!auto_shift_left_active) {
+            if (!any_auto_shift_active()) {
                 key_up(EMUKEY_LSHIFT, false);
             }
         }
         return;
+    }
+
+    // Even F-key release — mirror the key_down mapping
+    {
+        emu_key_t physical = EMUKEY_NONE;
+        switch (key) {
+            case EMUKEY_F2:
+                physical = (model == KEYBOARD_MODEL_PLUS4_C16) ? EMUKEY_F1 : EMUKEY_F1;
+                break;
+            case EMUKEY_F4:
+                physical = (model == KEYBOARD_MODEL_PLUS4_C16) ? EMUKEY_F1 : EMUKEY_F3;
+                break;
+            case EMUKEY_F5:
+                if (model == KEYBOARD_MODEL_PLUS4_C16) physical = EMUKEY_F2;
+                break;
+            case EMUKEY_F6:
+                physical = (model == KEYBOARD_MODEL_PLUS4_C16) ? EMUKEY_F3 : EMUKEY_F5;
+                break;
+            case EMUKEY_F8:
+                physical = EMUKEY_F7;
+                break;
+            default: break;
+        }
+        if (physical != EMUKEY_NONE) {
+            key_up(physical, false);
+            if (auto_shift_fkey_count > 0) {
+                auto_shift_fkey_count--;
+                if (!any_auto_shift_active()) {
+                    key_up(EMUKEY_LSHIFT, false);
+                }
+            }
+            return;
+        }
     }
 
     // Find the key position using optimised lookup
