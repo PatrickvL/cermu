@@ -1243,26 +1243,28 @@ void SessionGUI::render_screen() {
     // "No Signal" overlay.  Pipeline frames are still drained to prevent
     // emu-thread stalls.
     //
-    // Also suppress when no display device (monitor/CRT) is attached to
-    // the viewed port — a disconnected monitor can't show anything.
+    // Suppression only triggers when the user has manually selected a
+    // different display source via the Display Source menu, OR when no
+    // display device (monitor/CRT) is attached to the viewed port.
+    // In "Auto" mode (display_source_override_ == -1) we always show
+    // the pipeline's output — even if the hardware's active port differs —
+    // because we may not have pixel output for the other port yet.
     // ================================================================
     bool display_suppressed = false;
     if (system_) {
-        int desired = -1;
-        if (connected_port_index_ >= 0) {
-            desired = (display_source_override_ >= 0)
-                        ? display_source_override_
-                        : system_->get_active_video_port_index();
-            if (desired >= 0 && desired != connected_port_index_) {
-                display_suppressed = true;
-            }
+        // Manual override: user explicitly selected a port that differs
+        // from the one the pipeline is wired to.
+        if (display_source_override_ >= 0 && connected_port_index_ >= 0 &&
+            display_source_override_ != connected_port_index_) {
+            display_suppressed = true;
         }
 
         // Check whether the viewed port has a display device attached.
-        // For multi-output systems, check the specific desired port.
+        // For multi-output systems, check the specific viewed port.
         // For single-output systems, fall back to the global display_device_.
         if (!display_suppressed) {
-            int viewed_port = (desired >= 0) ? desired : connected_port_index_;
+            int viewed_port = (display_source_override_ >= 0)
+                            ? display_source_override_ : connected_port_index_;
             if (viewed_port >= 0) {
                 Port* p = system_->get_port(viewed_port);
                 if (p && !p->get_attached_device())
