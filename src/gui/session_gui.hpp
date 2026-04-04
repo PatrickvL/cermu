@@ -151,6 +151,12 @@ private:
     /// seeing a stale display_device_ pointer mid-swap.
     void refresh_display_device();
 
+    /// Rebuild the signal decoder and display pipeline when the system's
+    /// active video signal type changes (e.g. C128 40/80 toggle switches
+    /// between VIC-IIe Composite and VDC RGBI).  Called each frame from
+    /// render_frame() when a signal type change is detected.
+    void rebuild_signal_pipeline();
+
     /// Cached display device ID for change detection (avoids ABA
     /// pointer-reuse when the allocator gives the same address).
     std::string cached_display_id_;

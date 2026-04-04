@@ -724,6 +724,12 @@ public:
     /// The GUI uses this at init time to allocate the correct shader pipeline.
     virtual VideoSignalType get_video_signal_type() const { return VideoSignalType::Composite; }
 
+    /// Rebind the frame output so that last_frame_data_ receives data from
+    /// the currently active video port.  Called by the host after a signal
+    /// type change (e.g. C128 40/80 toggle).  Default is a no-op; override
+    /// in multi-display systems.
+    virtual void rebind_active_video_output() {}
+
     /// Type-erased access to the system's primary video port.
     /// Returns nullptr by default.  Override in concrete systems to return
     /// &video_port_ (or equivalent).  The caller uses get_video_signal_type()

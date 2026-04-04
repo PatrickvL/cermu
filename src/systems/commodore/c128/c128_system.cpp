@@ -377,10 +377,17 @@ bool C128System::initialize() {
         r[R11_CURSOR_END]  =   7;  //  Cursor end at line 7
     }
 
-    // VDC video output: not wired yet.  On the real C128 the VDC
-    // drives a separate RGBI connector; a dual-display pipeline is
-    // needed before pixel output can be enabled.  Register I/O and
-    // DRAM operations work without it.
+    // VDC RGBI video output — create port and connect to VDC's video_out_.
+    // The VDC drives RGBI samples into this port at its 1 MHz character
+    // clock rate (8 or 16 pixels per character cell).  The port collects
+    // samples and classifies sync edges; swap_frame() retrieves completed
+    // frames for the display pipeline.
+    vdc_video_port_ = std::make_unique<RGBIVideoPort>();
+    vdc.set_video_out(&vdc_video_port_->output());
+    vdc_video_port_->bind_display(nullptr, nullptr,
+                                  c128_constants::VDC_DISPLAY_WIDTH, 0);
+    log_info("C128: VDC RGBI video output connected (%dx%d)\n",
+             c128_constants::VDC_DISPLAY_WIDTH, c128_constants::VDC_DISPLAY_HEIGHT);
 
     // ── Keyboard matrix ──────────────────────────────────────────────
     keyboard_ = new commodore_keyboard_t();
@@ -790,6 +797,15 @@ void C128System::run_frame() {
         tick();
     }
     video_port_->swap_frame();
+
+    // VDC runs on its own frame timing (driven by `tick()` above).
+    // Swap its frame independently — the VDC FrameEnd signal may or
+    // may not have fired this iteration depending on timing alignment.
+    if (vdc_video_port_) {
+        auto& vdc_out = vdc_video_port_->output();
+        if (vdc_out.frame_ended())
+            vdc_video_port_->swap_frame();
+    }
     check_deferred_load();
     tick_peripherals();
     tick_unmapped_inputs();
@@ -1568,6 +1584,41 @@ int C128System::get_active_video_port_index() const {
     // When pressed (40-col selected), return the VIC-IIe composite port;
     // when not pressed (80-col selected), return the VDC RGBI port.
     return board_.mmu.key_40_80_pressed ? PORT_VIDEO_40 : PORT_VIDEO_80;
+}
+
+void* C128System::get_video_port_ptr() {
+    // Return whichever video port is currently active.
+    // The display pipeline (SessionGUI) uses this to connect the signal
+    // decoder.  In 40-col mode → VIC-IIe composite; 80-col → VDC RGBI.
+    if (board_.mmu.key_40_80_pressed)
+        return video_port_.get();
+    return vdc_video_port_.get();
+}
+
+VideoSignalType C128System::get_video_signal_type() const {
+    if (board_.mmu.key_40_80_pressed)
+        return VideoSignalType::Composite;
+    return VideoSignalType::RGBI;
+}
+
+void C128System::rebind_active_video_output() {
+    // Switch which port writes to last_frame_data_ so the emu thread's
+    // snapshot code picks up the correct signal data.
+    // Unbind the inactive port first (set its frame_output_ to nullptr),
+    // then bind the active one.
+    if (board_.mmu.key_40_80_pressed) {
+        // 40-col: VIC-IIe composite
+        if (vdc_video_port_)
+            vdc_video_port_->bind_frame_output(nullptr);
+        if (video_port_)
+            video_port_->bind_frame_output(&last_frame_data_);
+    } else {
+        // 80-col: VDC RGBI
+        if (video_port_)
+            video_port_->bind_frame_output(nullptr);
+        if (vdc_video_port_)
+            vdc_video_port_->bind_frame_output(&last_frame_data_);
+    }
 }
 
 // ============================================================================
