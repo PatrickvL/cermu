@@ -436,6 +436,7 @@ void CommodoreSystem::render_unmapped_inputs_menu() {
                     keyboard_->key_down(input.key, false);
                 else
                     keyboard_->key_up(input.key, false);
+                on_unmapped_toggle_changed(input.key, input.pressed);
             }
         }
         ImGui::EndMenu();

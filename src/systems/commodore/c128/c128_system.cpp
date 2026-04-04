@@ -1551,6 +1551,14 @@ void C128System::render_system_menu_items() {
 #endif
 }
 
+void C128System::on_unmapped_toggle_changed(emu_key_t key, bool pressed) {
+    if (key == EMUKEY_CBM_40_80_DISPLAY) {
+        // 40/80 DISPLAY is a hardware switch wired to MMU MCR bit 5,
+        // not a keyboard matrix key.  Update the MMU sense line directly.
+        board_.mmu.key_40_80_pressed = pressed;
+    }
+}
+
 const char* C128System::get_mode_label() const {
     return c64_mode_ ? "C64 Mode" : nullptr;
 }

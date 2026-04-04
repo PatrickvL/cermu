@@ -226,15 +226,22 @@ struct mos8722_t : public MmuChipBase {
 
     // ── Register access (called by on_bus_read/write and by system for $FF00) ──
 
+    /// 40/80 DISPLAY key state.  true = pressed (40-col), false = not pressed (80-col).
+    /// Directly read by MCR bit 5 (active-low: pressed → bit clear).
+    bool key_40_80_pressed = false;
+
     uint8_t read_register(uint8_t reg) const {
         using namespace mos8722::reg;
         if (reg >= NUM_REGS) return 0xFF;
 
         switch (reg) {
-            case MCR:
+            case MCR: {
                 // Bit 5 reads the 40/80 column key (active-low)
-                // Default: not pressed → bit 5 = 1 (80-col mode)
-                return (regs_[MCR] & ~mos8722::mcr::COL_KEY) | mos8722::mcr::COL_KEY;
+                // 0 = pressed (40-col), 1 = not pressed (80-col)
+                uint8_t val = regs_[MCR] & ~mos8722::mcr::COL_KEY;
+                if (!key_40_80_pressed) val |= mos8722::mcr::COL_KEY;
+                return val;
+            }
 
             case VERSION:
                 return mos8722::VERSION_8722;
@@ -429,7 +436,7 @@ struct mos8722_t : public MmuChipBase {
     }
 
 private:
-    bool bank_config_dirty_   = true;
+    bool bank_config_dirty_    = true;
     bool cpu_switch_requested_ = false;
 
 #ifdef CERMU_HAS_CHIP_DEBUG
