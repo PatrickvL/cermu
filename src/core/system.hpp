@@ -738,6 +738,12 @@ public:
     /// Returns -1 if no video port is active.
     virtual int get_active_video_port_index() const { return -1; }
 
+    /// Port index (in the port manifest) of the video port returned by
+    /// get_video_port_ptr().  Systems with multiple video outputs override
+    /// this so the GUI knows which physical port the display pipeline is
+    /// connected to.  Returns -1 when not applicable (single-port systems).
+    virtual int get_primary_video_port_index() const { return -1; }
+
     /// Number of video output ports this system has.
     /// Used by the GUI to enable multi-display controls.
     virtual int get_video_port_count() const { return 1; }

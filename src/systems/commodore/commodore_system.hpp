@@ -155,12 +155,12 @@ protected:
         bool toggle;            // true = toggle (press/release on alternate clicks)
         bool pressed;           // Current state for toggles
 
-        UnmappedInput(const char* l, emu_key_t k, bool t = false)
-            : label(l), key(k), toggle(t), pressed(false) {}
+        UnmappedInput(const char* l, emu_key_t k, bool t = false, bool initial = false)
+            : label(l), key(k), toggle(t), pressed(initial) {}
     };
 
     /// Register a guest key as unmapped (call from derived initialize()).
-    void register_unmapped_input(const char* label, emu_key_t key, bool toggle = false);
+    void register_unmapped_input(const char* label, emu_key_t key, bool toggle = false, bool initial_state = false);
 
     /// Render the "Virtual Keys" sub-menu.  Call from render_system_menu_items().
     void render_unmapped_inputs_menu();

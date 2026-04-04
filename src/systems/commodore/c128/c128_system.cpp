@@ -399,14 +399,14 @@ bool C128System::initialize() {
     // Always registered: SDL may report rare scancodes as "available" even
     // when no physical key produces them, leaving the menu empty.
     {
-        struct { const char* label; emu_key_t key; bool toggle; } c128_extra_keys[] = {
-            {"HELP",           EMUKEY_CBM_HELP,          false},
-            {"LINE FEED",      EMUKEY_CBM_LINE_FEED,     false},
-            {"40/80 DISPLAY",  EMUKEY_CBM_40_80_DISPLAY, true },
-            {"NO SCROLL",      EMUKEY_CBM_NO_SCROLL,     true },
+        struct { const char* label; emu_key_t key; bool toggle; bool initial; } c128_extra_keys[] = {
+            {"HELP",           EMUKEY_CBM_HELP,          false, false},
+            {"LINE FEED",      EMUKEY_CBM_LINE_FEED,     false, false},
+            {"40/80 DISPLAY",  EMUKEY_CBM_40_80_DISPLAY, true,  true },
+            {"NO SCROLL",      EMUKEY_CBM_NO_SCROLL,     true,  false},
         };
         for (auto& k : c128_extra_keys) {
-            register_unmapped_input(k.label, k.key, k.toggle);
+            register_unmapped_input(k.label, k.key, k.toggle, k.initial);
         }
     }
 

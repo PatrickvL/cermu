@@ -228,7 +228,10 @@ struct mos8722_t : public MmuChipBase {
 
     /// 40/80 DISPLAY key state.  true = pressed (40-col), false = not pressed (80-col).
     /// Directly read by MCR bit 5 (active-low: pressed → bit clear).
-    bool key_40_80_pressed = false;
+    /// Default: pressed (40-col) — matches the display pipeline, which is
+    /// connected to the VIC-IIe composite output.  The user can toggle to
+    /// 80-col via the Virtual Keys menu once VDC output is implemented.
+    bool key_40_80_pressed = true;
 
     uint8_t read_register(uint8_t reg) const {
         using namespace mos8722::reg;
