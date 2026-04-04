@@ -61,7 +61,7 @@ inline constexpr size_t kAtomChipCount = decltype(kAtomManifest)::chip_count;
 // BusSpec auto-derived from the manifest.  EnableCs=true enables CS-tick.
 using AcornAtomBusSpec = ManifestBusSpec<kAtomManifest, 16, 8, 1, true>;
 
-struct AtomBoard : Board<AcornAtomBusSpec, NoChips> {
+struct AtomBoard : Board<AcornAtomBusSpec> {
     using ComponentTuple = decltype(kAtomManifest)::component_tuple;
     ComponentTuple components_;
 

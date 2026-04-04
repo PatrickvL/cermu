@@ -36,7 +36,7 @@ inline constexpr auto kLC80Manifest = make_manifest(
 inline constexpr size_t kLC80ChipCount = decltype(kLC80Manifest)::chip_count;
 using LC80BusSpec = ManifestBusSpec<kLC80Manifest, 16, 8>;
 
-struct LC80Board : Board<LC80BusSpec, NoChips> {
+struct LC80Board : Board<LC80BusSpec> {
     using ComponentTuple = decltype(kLC80Manifest)::component_tuple;
     ComponentTuple components_;
 

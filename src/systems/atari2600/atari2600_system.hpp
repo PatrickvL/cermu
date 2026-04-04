@@ -117,7 +117,7 @@ inline constexpr size_t kAtari2600ChipCount = decltype(kAtari2600Manifest)::chip
 // EnableCs=true enables CS-tick.
 using Atari2600BusSpec = ManifestBusSpec<kAtari2600Manifest, 13, 8, 1, true>;
 
-struct Atari2600Board : Board<Atari2600BusSpec, NoChips> {
+struct Atari2600Board : Board<Atari2600BusSpec> {
     using ComponentTuple = decltype(kAtari2600Manifest)::component_tuple;
     ComponentTuple components_;
 

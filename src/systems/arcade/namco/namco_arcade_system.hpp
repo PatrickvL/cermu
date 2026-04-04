@@ -102,7 +102,7 @@ template<> struct NamcoBusTraits<NamcoGame::Pengo> {
 };
 
 template<typename BSpec>
-struct NamcoBoard : Board<BSpec, NoChips> {
+struct NamcoBoard : Board<BSpec> {
     using ComponentTuple = decltype(kPacManManifest)::component_tuple;
     ComponentTuple components_;
 
@@ -119,7 +119,7 @@ struct NamcoBoard : Board<BSpec, NoChips> {
     PortAudioMono&      audio_port = std::get<7>(components_);
 
     template<size_t N>
-    NamcoBoard(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
+    NamcoBoard(const ChipManifest<N>& m) : Board<BSpec>(m) {}
 };
 
 

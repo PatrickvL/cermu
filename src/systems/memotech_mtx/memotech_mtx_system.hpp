@@ -104,7 +104,7 @@ template<> struct MTXBusTraits<MTXVariant::MTX512> {
 };
 
 template<typename BSpec>
-struct MTXBoard : Board<BSpec, NoChips> {
+struct MTXBoard : Board<BSpec> {
     using ComponentTuple = decltype(kMTX500Manifest)::component_tuple;
     ComponentTuple components_;
 
@@ -123,7 +123,7 @@ struct MTXBoard : Board<BSpec, NoChips> {
     PortAudioMono&  audio_port    = std::get<9>(components_);
 
     template<size_t N>
-    MTXBoard(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
+    MTXBoard(const ChipManifest<N>& m) : Board<BSpec>(m) {}
 };
 // ============================================================================
 // Memotech MTX System

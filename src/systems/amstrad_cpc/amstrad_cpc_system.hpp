@@ -158,7 +158,7 @@ template<> struct CPCBusTraits<CPCModel::CPC6128> {
 };
 
 template<typename BSpec>
-struct CPCBoard : Board<BSpec, NoChips> {
+struct CPCBoard : Board<BSpec> {
     using ComponentTuple = decltype(kCPC464Manifest)::component_tuple;
     ComponentTuple components_;
 
@@ -179,7 +179,7 @@ struct CPCBoard : Board<BSpec, NoChips> {
     PortAudioMono& audio_port     = std::get<11>(components_);
 
     template<size_t N>
-    CPCBoard(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
+    CPCBoard(const ChipManifest<N>& m) : Board<BSpec>(m) {}
 };
 
 

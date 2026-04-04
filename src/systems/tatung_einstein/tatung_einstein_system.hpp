@@ -51,7 +51,7 @@ inline constexpr auto kEinsteinManifest = make_manifest(
 inline constexpr size_t kEinsteinChipCount = decltype(kEinsteinManifest)::chip_count;
 using EinsteinBusSpec = ManifestBusSpec<kEinsteinManifest, 16, 8>;
 
-struct EinsteinBoard : Board<EinsteinBusSpec, NoChips> {
+struct EinsteinBoard : Board<EinsteinBusSpec> {
     using ComponentTuple = decltype(kEinsteinManifest)::component_tuple;
     ComponentTuple components_;
 

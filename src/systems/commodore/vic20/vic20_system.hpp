@@ -133,7 +133,7 @@ struct VIC20BusTraits {
     using Spec = ManifestBusSpec<kVIC20Manifest, 16, 10, 1, true>;  // 1 KB pages, CS-enabled
 };
 
-struct VIC20Board : Board<VIC20BusTraits::Spec, NoChips> {
+struct VIC20Board : Board<VIC20BusTraits::Spec> {
     using ComponentTuple = decltype(kVIC20Manifest)::component_tuple;
     ComponentTuple components_;
 

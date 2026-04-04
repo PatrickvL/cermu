@@ -619,6 +619,33 @@ using VectorBusSpec = ManifestBusSpec<kVectorChips<V>, 16, 8>;
 
 
 // ============================================================================
+// AtariVectorBoard — board struct with value-typed chips
+// ============================================================================
+
+template<AtariVectorVariant V>
+struct AtariVectorBoard : Board<VectorBusSpec<V>> {
+    using Traits    = AtariVectorTraits<V>;
+    using VideoChip = typename Traits::VideoChip;
+
+    // Value-typed chipset — superset of all variant chips.
+    // Only relevant fields are bound per variant; unused fields are inert.
+    RAMChip          work_ram;
+    RAMChip          vec_ram;
+    ROMChip          vec_rom;
+    ROMChip          prog_rom;
+    MOS6502          m6502;
+    VideoChip        vg;
+    LS259            latch;
+    // Optional chips (variant-dependent)
+    ROMChip          prog_rom_hi;  // Space Duel only
+    pokey::C012294   pokey1;       // HAS_POKEY variants
+    ER2055           earom;        // HAS_EAROM variants
+
+    template<size_t N>
+    AtariVectorBoard(const ChipManifest<N>& m) : Board<VectorBusSpec<V>>(m) {}
+};
+
+// ============================================================================
 // AtariVectorSystem — unified system for all Atari 6502 vector games
 // ============================================================================
 
@@ -628,23 +655,7 @@ class AtariVectorSystem : public System {
     using VideoChip = typename Traits::VideoChip;
     using Spec      = VectorBusSpec<V>;
     using Bus       = MemoryBus<Spec>;
-
-    // Value-typed chipset — superset of all variant chips.
-    // Only relevant fields are bound per variant; unused fields are inert.
-    struct ChipSet {
-        RAMChip          work_ram;
-        RAMChip          vec_ram;
-        ROMChip          vec_rom;
-        ROMChip          prog_rom;
-        MOS6502          m6502;
-        VideoChip        vg;
-        LS259            latch;
-        // Optional chips (variant-dependent)
-        ROMChip          prog_rom_hi;  // Space Duel only
-        pokey::C012294   pokey1;       // HAS_POKEY variants
-        ER2055           earom;        // HAS_EAROM variants
-    };
-    using MainBoard = Board<Spec, ChipSet>;
+    using MainBoard = AtariVectorBoard<V>;
 
 public:
     AtariVectorSystem();

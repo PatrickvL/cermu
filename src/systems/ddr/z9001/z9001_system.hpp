@@ -126,7 +126,7 @@ template<> struct Z9001BusTraits<Z9001Variant::KC87> {
 // Uses KC87 manifest component tuple (superset) for field declarations.
 // Z9001 leaves unused fields (basic_rom_lo, basic_rom_hi, color_ram) unbound.
 template<typename BSpec>
-struct Z9001Board : Board<BSpec, NoChips> {
+struct Z9001Board : Board<BSpec> {
     using ComponentTuple = decltype(kKC87Manifest)::component_tuple;
     ComponentTuple components_;
 
@@ -147,7 +147,7 @@ struct Z9001Board : Board<BSpec, NoChips> {
     PortCompositeVideo& video_port    = std::get<11>(components_);
 
     template<size_t N>
-    Z9001Board(const ChipManifest<N>& m) : Board<BSpec, NoChips>(m) {}
+    Z9001Board(const ChipManifest<N>& m) : Board<BSpec>(m) {}
 };
 
 // ── System ───────────────────────────────────────────────────────────────

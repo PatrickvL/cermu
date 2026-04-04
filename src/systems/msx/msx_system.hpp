@@ -192,7 +192,7 @@ template<MSXVariant V> struct MSXBoard;
 
 template<>
 struct MSXBoard<MSXVariant::MSX1>
-    : Board<MSXBusTraits<MSXVariant::MSX1>::Spec, NoChips> {
+    : Board<MSXBusTraits<MSXVariant::MSX1>::Spec> {
     using BT  = MSXBusTraits<MSXVariant::MSX1>;
     using VDP = TMS9918A;
     using ComponentTuple = decltype(kMSX1Manifest)::component_tuple;
@@ -206,12 +206,12 @@ struct MSXBoard<MSXVariant::MSX1>
     i8255_t&   ppi      = std::get<5>(components_);
 
     template<size_t N>
-    MSXBoard(const ChipManifest<N>& m) : Board<BT::Spec, NoChips>(m) {}
+    MSXBoard(const ChipManifest<N>& m) : Board<BT::Spec>(m) {}
 };
 
 template<>
 struct MSXBoard<MSXVariant::MSX2>
-    : Board<MSXBusTraits<MSXVariant::MSX2>::Spec, NoChips> {
+    : Board<MSXBusTraits<MSXVariant::MSX2>::Spec> {
     using BT  = MSXBusTraits<MSXVariant::MSX2>;
     using VDP = V9938;
     using ComponentTuple = decltype(kMSX2Manifest)::component_tuple;
@@ -225,12 +225,12 @@ struct MSXBoard<MSXVariant::MSX2>
     i8255_t&   ppi      = std::get<5>(components_);
 
     template<size_t N>
-    MSXBoard(const ChipManifest<N>& m) : Board<BT::Spec, NoChips>(m) {}
+    MSXBoard(const ChipManifest<N>& m) : Board<BT::Spec>(m) {}
 };
 
 template<>
 struct MSXBoard<MSXVariant::MSX2P>
-    : Board<MSXBusTraits<MSXVariant::MSX2P>::Spec, NoChips> {
+    : Board<MSXBusTraits<MSXVariant::MSX2P>::Spec> {
     using BT  = MSXBusTraits<MSXVariant::MSX2P>;
     using VDP = V9958;
     using ComponentTuple = decltype(kMSX2PManifest)::component_tuple;
@@ -244,7 +244,7 @@ struct MSXBoard<MSXVariant::MSX2P>
     i8255_t&   ppi      = std::get<5>(components_);
 
     template<size_t N>
-    MSXBoard(const ChipManifest<N>& m) : Board<BT::Spec, NoChips>(m) {}
+    MSXBoard(const ChipManifest<N>& m) : Board<BT::Spec>(m) {}
 };
 
 // ============================================================================

@@ -117,7 +117,7 @@ struct C128BusSpec : ManifestBusSpec<kC128Manifest, 16, 12, 2, true> {
     static constexpr size_t IndexedSubBits      = 4;    // 16 × 256B entries (bits 11-8)
 };
 
-struct C128Board : Board<C128BusSpec, NoChips> {
+struct C128Board : Board<C128BusSpec> {
     using ComponentTuple = decltype(kC128Manifest)::component_tuple;
     ComponentTuple components_;
 

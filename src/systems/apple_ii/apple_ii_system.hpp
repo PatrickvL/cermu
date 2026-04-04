@@ -194,7 +194,7 @@ template<AppleIIVariant V> struct AppleIIBoard;
 
 template<>
 struct AppleIIBoard<AppleIIVariant::APPLE_II>
-    : Board<AppleIIBusTraits<AppleIIVariant::APPLE_II>::Spec, NoChips> {
+    : Board<AppleIIBusTraits<AppleIIVariant::APPLE_II>::Spec> {
     using BT  = AppleIIBusTraits<AppleIIVariant::APPLE_II>;
     using CPU = MOS6502;
     using ComponentTuple = decltype(kAppleIIManifest)::component_tuple;
@@ -210,12 +210,12 @@ struct AppleIIBoard<AppleIIVariant::APPLE_II>
     PortCompositeVideo& video_port     = std::get<6>(components_);
 
     template<size_t N>
-    AppleIIBoard(const ChipManifest<N>& m) : Board<BT::Spec, NoChips>(m) {}
+    AppleIIBoard(const ChipManifest<N>& m) : Board<BT::Spec>(m) {}
 };
 
 template<>
 struct AppleIIBoard<AppleIIVariant::APPLE_IIE>
-    : Board<AppleIIBusTraits<AppleIIVariant::APPLE_IIE>::Spec, NoChips> {
+    : Board<AppleIIBusTraits<AppleIIVariant::APPLE_IIE>::Spec> {
     using BT  = AppleIIBusTraits<AppleIIVariant::APPLE_IIE>;
     using CPU = WDC_65C02;
     using ComponentTuple = decltype(kAppleIIeManifest)::component_tuple;
@@ -230,12 +230,12 @@ struct AppleIIBoard<AppleIIVariant::APPLE_IIE>
     PortCompositeVideo& video_port     = std::get<5>(components_);
 
     template<size_t N>
-    AppleIIBoard(const ChipManifest<N>& m) : Board<BT::Spec, NoChips>(m) {}
+    AppleIIBoard(const ChipManifest<N>& m) : Board<BT::Spec>(m) {}
 };
 
 template<>
 struct AppleIIBoard<AppleIIVariant::APPLE_IIC>
-    : Board<AppleIIBusTraits<AppleIIVariant::APPLE_IIC>::Spec, NoChips> {
+    : Board<AppleIIBusTraits<AppleIIVariant::APPLE_IIC>::Spec> {
     using BT  = AppleIIBusTraits<AppleIIVariant::APPLE_IIC>;
     using CPU = WDC_65C02;
     using ComponentTuple = decltype(kAppleIIcManifest)::component_tuple;
@@ -250,7 +250,7 @@ struct AppleIIBoard<AppleIIVariant::APPLE_IIC>
     PortCompositeVideo& video_port     = std::get<5>(components_);
 
     template<size_t N>
-    AppleIIBoard(const ChipManifest<N>& m) : Board<BT::Spec, NoChips>(m) {}
+    AppleIIBoard(const ChipManifest<N>& m) : Board<BT::Spec>(m) {}
 };
 
 // ============================================================================

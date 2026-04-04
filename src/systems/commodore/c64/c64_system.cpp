@@ -389,14 +389,25 @@ bool C64System::initialize() {
     system_lines_  = SYS_MASK_EXROM | SYS_MASK_GAME;
 
     // =========================================================================
-    // Bind value-typed chips from Chips, then factory-create remaining
+    // Bind value-typed chips, then factory-create remaining
     // =========================================================================
-    board_.bind_chipset();
+    board_.bind_all_chips();
     board_.create_chips(&bus_state_);
     board_.apply(bus_);
 
-    // Convenience pointers — all point into board_.chips() value fields.
-    C64_FOR_EACH_SYSTEM_CHIP(C64_CHIP_VISITOR_ASSIGN_POINTER, board_)
+    // Convenience pointers — all point into board_ value fields.
+    this->cpu      = &board_.cpu;
+    this->ram      = &board_.ram;
+    this->roml     = &board_.roml;
+    this->basic    = &board_.basic;
+    this->romh     = &board_.romh;
+    this->vicii    = &board_.vicii;
+    this->charrom  = &board_.charrom;
+    this->sid      = &board_.sid;
+    this->colorram = &board_.colorram;
+    this->cia1     = &board_.cia1;
+    this->cia2     = &board_.cia2;
+    this->kernal   = &board_.kernal;
 
     if (!this->cpu) { cleanup(); return false; }
 
@@ -565,7 +576,18 @@ void C64System::shutdown() {
         }
 
         // Null out convenience pointers (Board owns the chip lifetimes)
-        C64_FOR_EACH_SYSTEM_CHIP(C64_CHIP_VISITOR_NULL_POINTER, unused)
+        this->cpu      = nullptr;
+        this->ram      = nullptr;
+        this->roml     = nullptr;
+        this->basic    = nullptr;
+        this->romh     = nullptr;
+        this->vicii    = nullptr;
+        this->charrom  = nullptr;
+        this->sid      = nullptr;
+        this->colorram = nullptr;
+        this->cia1     = nullptr;
+        this->cia2     = nullptr;
+        this->kernal   = nullptr;
 
         initialized_ = false;
     }

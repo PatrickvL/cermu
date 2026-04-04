@@ -47,7 +47,7 @@ inline constexpr auto kColecoManifest = make_manifest(
 inline constexpr size_t kColecoChipCount = decltype(kColecoManifest)::chip_count;
 using ColecoBusSpec = ManifestBusSpec<kColecoManifest, 16, 8>;
 
-struct ColecoBoard : Board<ColecoBusSpec, NoChips> {
+struct ColecoBoard : Board<ColecoBusSpec> {
     using ComponentTuple = decltype(kColecoManifest)::component_tuple;
     ComponentTuple components_;
 

@@ -498,7 +498,7 @@ bool Commodore264System<V>::initialize() {
     register_board(&board_);
     
     // Initialize TED 7360 (video, sound, timers, keyboard scanning)
-    // TED is a value member of board_.chips() — configure via two-phase init.
+    // TED is a value member of board_ — configure via two-phase init.
     {
         bool is_pal_region = (config_.region_option_index <= 0);
         ted7360_desc_t ted_desc = {};
