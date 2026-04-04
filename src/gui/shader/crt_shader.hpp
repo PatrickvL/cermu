@@ -61,18 +61,32 @@ uniform float ScanlineStrength; // Scanline darkening intensity (ScanlineParams.
 uniform vec2  ConvergenceError; // RGB convergence misalignment in texels (BeamParams)
 uniform float VignetteStrength; // Screen-edge darkening (OpticsParams)
 uniform vec3  GlassTint;      // CRT glass color filter (OpticsParams)
-// TODO: Add uniforms for remaining DisplayCharacteristics sub-struct fields:
+uniform float TriadSize;       // Mask pattern scale factor (MaskParams.triad_size)
+uniform float SlotMaskWidth;   // Aperture open ratio for grille types (MaskParams)
+uniform float ScanlinePhase;   // Sub-pixel phase offset per scanline (ScanlineParams)
+uniform int   Interlace;       // 1 = interlaced field alternation, 0 = progressive
+uniform float NoiseLevel;      // Per-pixel random noise intensity (SignalParams)
+uniform float HumBarStrength;  // AC hum bar brightness modulation (SignalParams)
+uniform float GhostingStrength; // Composite echo/ghosting (SignalParams)
+uniform float ChromaPhaseError; // Chroma hue rotation in degrees (SignalParams)
+uniform float SyncStability;   // Horizontal sync jitter (SignalParams, 1.0 = perfect)
+uniform int   FrameCount;      // Monotonic frame counter for temporal effects
+// TODO: Add uniforms for remaining DisplayCharacteristics fields:
 //   PhosphorParams  — float Persistence, float BloomRadius,
 //                     float BloomThreshold, int DecayCurve
 //   BeamParams      — float BeamWidth, float BeamSoftness, float Pincushion,
 //                     float HLinearity, float VLinearity, vec4 CornerPin
-//   MaskParams      — float TriadSize, float SlotMaskWidth
-//   ScanlineParams  — float ScanlinePhase, bool Interlace
+//   SignalParams    — float Bandwidth
 //   OpticsParams    — float ReflectionStrength, float EdgeGlow
-//   SignalParams    — float Bandwidth, float NoiseLevel, float HumBarStrength,
-//                     float GhostingStrength, float ChromaPhaseError,
-//                     float SyncStability
 out vec4 Out_Color;
+
+// Fast integer hash for noise generation (Wang hash).
+float hash_noise(vec2 co, int frame) {
+    uint n = uint(co.x * 1973.0 + co.y * 9277.0 + float(frame) * 26699.0);
+    n = (n << 13u) ^ n;
+    n = n * (n * n * 15731u + 789221u) + 1376312589u;
+    return float(n & 0x7FFFFFFFu) / float(0x7FFFFFFF);
+}
 
 // Barrel distortion for CRT screen curvature.
 vec2 barrel_distort(vec2 uv, float k) {
@@ -82,19 +96,23 @@ vec2 barrel_distort(vec2 uv, float k) {
     return cc * f + 0.5;
 }
 
-// Shadow mask pattern (RGB vertical stripes, 3-pixel period).
-vec3 shadow_mask(vec2 frag_coord, int mask_type) {
+// Shadow mask pattern (RGB vertical stripes, scaled by TriadSize).
+vec3 shadow_mask(vec2 frag_coord, int mask_type, float triad_sz, float slot_w) {
     if (mask_type >= 4) return vec3(1.0);  // none
 
-    int ix = int(frag_coord.x);
-    int iy = int(frag_coord.y);
+    // Scale coordinates by triad size
+    vec2 fc = frag_coord / max(triad_sz, 0.1);
+    int ix = int(fc.x);
+    int iy = int(fc.y);
 
     if (mask_type == 1) {
-        // Aperture grille — vertical RGB stripes
+        // Aperture grille — vertical RGB stripes with configurable open ratio
+        float open = clamp(slot_w, 0.1, 1.0);
         int phase = ix % 3;
-        if (phase == 0) return vec3(1.0, 0.6, 0.6);
-        if (phase == 1) return vec3(0.6, 1.0, 0.6);
-        return vec3(0.6, 0.6, 1.0);
+        float dim = 1.0 - (1.0 - open) * 0.6;  // darker in closed portion
+        if (phase == 0) return vec3(1.0, dim, dim);
+        if (phase == 1) return vec3(dim, 1.0, dim);
+        return vec3(dim, dim, 1.0);
     } else if (mask_type == 2) {
         // Slot mask — alternating offset RGB triads
         int phase = (ix + (iy / 2) * 1) % 3;
@@ -105,7 +123,7 @@ vec3 shadow_mask(vec2 frag_coord, int mask_type) {
         else                 rgb = vec3(0.5, 0.5, 1.0);
         return rgb * slot;
     } else if (mask_type == 3) {
-        // Monochrome — no color mask, just luminance
+        // Monochrome — no color mask
         return vec3(1.0);
     } else {
         // Shadow mask — classic triad pattern with row offset
@@ -132,11 +150,13 @@ void main() {
 
     // TODO: Apply SignalParams.bandwidth — low-pass filter (horizontal blur proportional
     //       to 1/bandwidth) to simulate analogue bandwidth limiting
-    // TODO: Apply SignalParams.noise_level — add per-pixel gaussian noise
-    // TODO: Apply SignalParams.chroma_phase_error — hue rotation on chroma
-    // TODO: Apply SignalParams.ghosting_strength — offset duplicate blend
-    // TODO: Apply SignalParams.hum_bar_strength — slow-moving brightness bar
-    // TODO: Apply SignalParams.sync_stability — per-line horizontal jitter
+
+    // Sync instability — per-line horizontal jitter (composite/RF artifact)
+    if (SyncStability < 0.999) {
+        float line = floor(uv.y * InputSize.y);
+        float jitter = (hash_noise(vec2(line, 0.0), FrameCount) - 0.5) * (1.0 - SyncStability) * 0.01;
+        uv.x += jitter;
+    }
 
     // Sample the input texture with per-channel convergence error (RGB misalignment)
     vec2 texel = 1.0 / InputSize;
@@ -146,25 +166,48 @@ void main() {
     color.g = texture(InputTexture, uv).g;
     color.b = texture(InputTexture, uv + vec2( conv.x,  conv.y)).b;
 
+    // Ghosting — composite echo from impedance mismatch / multipath
+    if (GhostingStrength > 0.001) {
+        vec3 ghost = texture(InputTexture, uv + vec2(3.0 / InputSize.x, 0.0)).rgb;
+        color = mix(color, ghost, GhostingStrength);
+    }
+
+    // Chroma phase error — hue rotation via YIQ transform
+    if (abs(ChromaPhaseError) > 0.01) {
+        float y = dot(color, vec3(0.299, 0.587, 0.114));
+        float i = dot(color, vec3(0.596, -0.274, -0.322));
+        float q = dot(color, vec3(0.211, -0.523,  0.312));
+        float angle = radians(ChromaPhaseError);
+        float ca = cos(angle), sa = sin(angle);
+        float i2 = i * ca - q * sa;
+        float q2 = i * sa + q * ca;
+        color = vec3(y + 0.956*i2 + 0.621*q2,
+                     y - 0.272*i2 - 0.647*q2,
+                     y - 1.106*i2 + 1.703*q2);
+        color = clamp(color, 0.0, 1.0);
+    }
+
     // TODO: Apply BeamParams.width / softness — gaussian beam profile per scanline
 
     // Scanline darkening — darken pixels between emulated scan lines
-    // TODO: Use ScanlineParams.phase for sub-pixel phase offset per line
-    // TODO: Use ScanlineParams.interlace to alternate field rendering
     if (ScanlineGap > 0.001) {
-        float scanline_y = uv.y * InputSize.y;
-        float scanline_phase = fract(scanline_y);
+        float scanline_y = uv.y * InputSize.y + ScanlinePhase;
+        float scanline_frac = fract(scanline_y);
+        // Interlace: darken alternate fields each frame
+        if (Interlace > 0) {
+            int line = int(floor(scanline_y));
+            if ((line + FrameCount) % 2 == 0)
+                scanline_frac = 1.0;  // force full darkening on inactive field line
+        }
         // Darken near the boundary between scanlines
-        float line_dist = abs(scanline_phase - 0.5) * 2.0;  // 0 at center, 1 at edge
+        float line_dist = abs(scanline_frac - 0.5) * 2.0;  // 0 at center, 1 at edge
         float scanline_mask = 1.0 - ScanlineGap * ScanlineStrength * smoothstep(0.4, 1.0, line_dist);
         color *= scanline_mask;
     }
 
     // Shadow mask / aperture grille
-    // TODO: Use MaskParams.triad_size to scale the mask pattern period
-    // TODO: Use MaskParams.slot_mask_width (aperture open ratio) for grille types
     if (DotPitch > 0.001) {
-        vec3 mask = shadow_mask(gl_FragCoord.xy, MaskType);
+        vec3 mask = shadow_mask(gl_FragCoord.xy, MaskType, TriadSize, SlotMaskWidth);
         color *= mix(vec3(1.0), mask, MaskOpacity);
     }
 
@@ -195,6 +238,18 @@ void main() {
 
     // Glass tint — CRT faceplate color filter
     color *= GlassTint;
+
+    // Analogue noise — per-pixel random intensity variation
+    if (NoiseLevel > 0.001) {
+        float n = hash_noise(gl_FragCoord.xy, FrameCount) - 0.5;
+        color += vec3(n * NoiseLevel);
+    }
+
+    // Hum bar — slow-moving horizontal brightness band from AC coupling
+    if (HumBarStrength > 0.001) {
+        float phase = float(FrameCount) * 0.02 + v_uv.y * 6.2832;
+        color *= 1.0 + sin(phase) * HumBarStrength;
+    }
 
     // TODO: Apply OpticsParams.reflection_strength — specular highlight overlay
     // TODO: Apply OpticsParams.edge_glow — bright halo at screen perimeter
@@ -233,17 +288,25 @@ struct CRTPostProcess {
     GLint loc_convergence_error  = -1;
     GLint loc_vignette_strength  = -1;
     GLint loc_glass_tint         = -1;
+    GLint loc_triad_size         = -1;
+    GLint loc_slot_mask_width    = -1;
+    GLint loc_scanline_phase     = -1;
+    GLint loc_interlace          = -1;
+    GLint loc_noise_level        = -1;
+    GLint loc_hum_bar_strength   = -1;
+    GLint loc_ghosting_strength  = -1;
+    GLint loc_chroma_phase_error = -1;
+    GLint loc_sync_stability     = -1;
+    GLint loc_frame_count        = -1;
     // TODO: Add uniform locations for remaining fields when implemented:
     //   PhosphorParams:  loc_persistence, loc_bloom_radius,
     //                    loc_bloom_threshold, loc_decay_curve
     //   BeamParams:      loc_beam_width, loc_beam_softness, loc_pincushion,
     //                    loc_h_linearity, loc_v_linearity, loc_corner_pin
-    //   MaskParams:      loc_triad_size, loc_slot_mask_width
-    //   ScanlineParams:  loc_scanline_phase, loc_interlace
     //   OpticsParams:    loc_reflection_strength, loc_edge_glow
-    //   SignalParams:    loc_bandwidth, loc_noise_level, loc_hum_bar_strength,
-    //                    loc_ghosting_strength, loc_chroma_phase_error,
-    //                    loc_sync_stability
+    //   SignalParams:    loc_bandwidth
+
+    uint32_t frame_count = 0;  ///< Monotonic frame counter for temporal effects
 };
 
 // ============================================================================
@@ -319,6 +382,16 @@ inline bool create(CRTPostProcess* p, int w, int h) {
     p->loc_convergence_error = gl_api::glGetUniformLocation(p->shader, "ConvergenceError");
     p->loc_vignette_strength = gl_api::glGetUniformLocation(p->shader, "VignetteStrength");
     p->loc_glass_tint        = gl_api::glGetUniformLocation(p->shader, "GlassTint");
+    p->loc_triad_size        = gl_api::glGetUniformLocation(p->shader, "TriadSize");
+    p->loc_slot_mask_width   = gl_api::glGetUniformLocation(p->shader, "SlotMaskWidth");
+    p->loc_scanline_phase    = gl_api::glGetUniformLocation(p->shader, "ScanlinePhase");
+    p->loc_interlace         = gl_api::glGetUniformLocation(p->shader, "Interlace");
+    p->loc_noise_level       = gl_api::glGetUniformLocation(p->shader, "NoiseLevel");
+    p->loc_hum_bar_strength  = gl_api::glGetUniformLocation(p->shader, "HumBarStrength");
+    p->loc_ghosting_strength = gl_api::glGetUniformLocation(p->shader, "GhostingStrength");
+    p->loc_chroma_phase_error = gl_api::glGetUniformLocation(p->shader, "ChromaPhaseError");
+    p->loc_sync_stability    = gl_api::glGetUniformLocation(p->shader, "SyncStability");
+    p->loc_frame_count       = gl_api::glGetUniformLocation(p->shader, "FrameCount");
 
     // Set texture unit (always 0)
     gl_api::glUseProgram(p->shader);
@@ -437,11 +510,8 @@ inline void render(CRTPostProcess* p,
     // TODO: Wire remaining DisplayCharacteristics sub-struct fields to uniforms:
     //   dc.phosphor  — persistence, bloom_radius, bloom_threshold, decay_curve
     //   dc.beam      — width, softness, pincushion, h/v_linearity, corner_pin
-    //   dc.mask      — triad_size, slot_mask_width
-    //   dc.scanlines — phase, interlace
     //   dc.optics    — reflection_strength, edge_glow
-    //   dc.signal    — bandwidth, noise_level, hum_bar_strength, ghosting_strength,
-    //                  chroma_phase_error, sync_stability
+    //   dc.signal    — bandwidth
 
     // Ensure FBO size matches output
     resize(p, static_cast<int>(output_w), static_cast<int>(output_h));
@@ -484,6 +554,16 @@ inline void render(CRTPostProcess* p,
                         dc.optics.glass_tint[0],
                         dc.optics.glass_tint[1],
                         dc.optics.glass_tint[2]);
+    gl_api::glUniform1f(p->loc_triad_size, dc.mask.triad_size);
+    gl_api::glUniform1f(p->loc_slot_mask_width, dc.mask.slot_mask_width);
+    gl_api::glUniform1f(p->loc_scanline_phase, dc.scanlines.phase);
+    gl_api::glUniform1i(p->loc_interlace, dc.scanlines.interlace ? 1 : 0);
+    gl_api::glUniform1f(p->loc_noise_level, dc.signal.noise_level);
+    gl_api::glUniform1f(p->loc_hum_bar_strength, dc.signal.hum_bar_strength);
+    gl_api::glUniform1f(p->loc_ghosting_strength, dc.signal.ghosting_strength);
+    gl_api::glUniform1f(p->loc_chroma_phase_error, dc.signal.chroma_phase_error);
+    gl_api::glUniform1f(p->loc_sync_stability, dc.signal.sync_stability);
+    gl_api::glUniform1i(p->loc_frame_count, static_cast<GLint>(p->frame_count++));
 
     // Compute and set color temperature tint
     float ct_r, ct_g, ct_b;
