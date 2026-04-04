@@ -730,6 +730,18 @@ public:
     /// to cast to the correct VideoPort specialization.
     virtual void* get_video_port_ptr() { return nullptr; }
 
+    /// Index of the currently active video output port in the port manifest.
+    /// Systems with a single video output return a fixed index.
+    /// Systems with multiple video outputs (e.g. C128: VIC-IIe 40-col +
+    /// VDC 80-col) override this to reflect the hardware's active display
+    /// selection (e.g. 40/80 key → MMU MCR bit 5).
+    /// Returns -1 if no video port is active.
+    virtual int get_active_video_port_index() const { return -1; }
+
+    /// Number of video output ports this system has.
+    /// Used by the GUI to enable multi-display controls.
+    virtual int get_video_port_count() const { return 1; }
+
     /// Default display device ID from the DeviceRegistry (e.g. "crt_tv", "crt_1702").
     /// Override to select an era-appropriate default display for the system.
     /// Return nullptr to skip auto-attaching a display device.

@@ -1088,6 +1088,41 @@ void SessionGUI::render_menu_bar() {
     if (ImGui::BeginMenu("Screen")) {
         render_screen_menu_generic();
 
+        // Display Source submenu — only for systems with multiple video outputs
+        if (system_ && system_->get_video_port_count() > 1) {
+            ImGui::Separator();
+            if (ImGui::BeginMenu("Display Source")) {
+                const auto& ports = system_->get_ports();
+                int active_idx = system_->get_active_video_port_index();
+                bool is_auto = (display_source_override_ == -1);
+
+                // Auto-follow option
+                if (ImGui::MenuItem("Auto (follow system)", nullptr, is_auto)) {
+                    display_source_override_ = -1;
+                }
+                ImGui::Separator();
+
+                // List each video port as a selectable source
+                for (int i = 0; i < static_cast<int>(ports.size()); i++) {
+                    auto* port = ports[i];
+                    if (!port) continue;
+                    auto pt = port->get_type();
+                    // Only show video-type ports
+                    if (pt != PortType::VIDEO_COMPOSITE && pt != PortType::VIDEO_SVIDEO &&
+                        pt != PortType::VIDEO_RGB && pt != PortType::VIDEO_RGBI &&
+                        pt != PortType::VIDEO_COMPONENT) continue;
+
+                    bool selected = is_auto ? (i == active_idx)
+                                            : (i == display_source_override_);
+                    const char* name = port->get_name();
+                    if (ImGui::MenuItem(name ? name : "Video", nullptr, selected)) {
+                        display_source_override_ = i;
+                    }
+                }
+                ImGui::EndMenu();
+            }
+        }
+
         ImGui::Separator();
         ImGui::BeginDisabled(!system_ || !framebuffer_);
         if (ImGui::MenuItem("Save Screenshot...")) {
@@ -2150,6 +2185,9 @@ void SessionGUI::teardown_current_system() {
     // Free framebuffer
     free_framebuffer();
     
+    // Reset display source override (auto-follow for new system)
+    display_source_override_ = -1;
+
     // Reset emulation state
     emulation_running_.store(false);
     emulation_paused_.store(false);
