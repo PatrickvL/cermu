@@ -370,6 +370,9 @@ struct mos8722_t : public MmuChipBase {
     bool bottom_common_enabled() const { return (regs_[mos8722::reg::RCR] & mos8722::rcr::BOT_COMMON_EN) != 0; }
     bool top_common_enabled()    const { return (regs_[mos8722::reg::RCR] & mos8722::rcr::TOP_COMMON_EN) != 0; }
 
+    /// RCR bits 3-0 (common RAM control) — used as snapshot index extension.
+    uint8_t rcr_banking_bits() const { return regs_[mos8722::reg::RCR] & 0x0F; }
+
     /// Common RAM size in bytes (1K, 4K, 8K, or 16K) — same for both top and bottom.
     uint32_t common_size() const {
         const uint8_t sel = regs_[mos8722::reg::RCR] & mos8722::rcr::COMMON_SIZE_MASK;
