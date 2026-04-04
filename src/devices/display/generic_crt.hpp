@@ -7,11 +7,13 @@
  * of display characteristics and accepted signal types.
  *
  * Presets cover the most common real-world monitor categories:
- *   - Consumer TV (composite only, shadow mask, built-in speaker)
- *   - Commodore 1702 (composite + S-Video, shadow mask)
- *   - RGB monitor (composite + S-Video + RGB, aperture grille)
- *   - Monochrome green screen (composite, P31 phosphor)
- *   - Monochrome amber screen (composite, P3-like amber phosphor)
+ *   - Consumer TV        (composite, shadow mask, built-in speaker)
+ *   - Commodore 1702     (composite + S-Video, shadow mask, speaker)
+ *   - Commodore 1902A    (composite + S-Video + RGBI, shadow mask, speaker)
+ *   - RGB monitor        (composite + S-Video + RGB, aperture grille)
+ *   - Monochrome green   (composite, P31 phosphor, 525 nm)
+ *   - Monochrome amber   (composite, P3 phosphor, 590 nm)
+ *   - Direct output      (flat display, no CRT effects)
  */
 
 #include "devices/display/display_device.hpp"
@@ -24,10 +26,10 @@
 enum class CRTPreset : uint8_t {
     ConsumerTV,       ///< 13" composite TV with built-in speaker
     Commodore1702,    ///< Commodore 1702 — composite + S-Video, speaker
-    Commodore1902,    ///< Commodore 1902 — composite + S-Video + RGBI, speaker
+    Commodore1902,    ///< Commodore 1902A — composite + S-Video + RGBI, speaker
     RGBMonitor,       ///< Professional RGB monitor (composite + S-Video + RGB)
-    MonochromeGreen,  ///< Green phosphor monochrome (P31)
-    MonochromeAmber,  ///< Amber phosphor monochrome (P3-like)
+    MonochromeGreen,  ///< Green phosphor monochrome (P31, 525 nm)
+    MonochromeAmber,  ///< Amber phosphor monochrome (P3, 590 nm)
     DirectOutput,     ///< Flat/direct output — no CRT effects
 };
 
@@ -46,7 +48,7 @@ public:
     PortType get_port_type() const override { return primary_port_type_; }
 
     // --- DisplayDevice interface ---------------------------------------
-    VideoSignalMask get_accepted_video_signals() const override { return accepted_signals_; }
+    video_signal_mask_t get_accepted_video_signals() const override { return accepted_signals_; }
     const DisplayCharacteristics& get_display_characteristics() const override { return characteristics_; }
     bool has_builtin_speakers() const override { return has_speakers_; }
 
@@ -61,7 +63,7 @@ private:
     const char*            name_;
     const char*            id_;
     PortType               primary_port_type_;
-    VideoSignalMask        accepted_signals_;
+    video_signal_mask_t    accepted_signals_;
     DisplayCharacteristics characteristics_;
     bool                   has_speakers_;
 };

@@ -74,17 +74,10 @@ public:
                   float output_w, float output_h,
                   const DisplayCharacteristics& dc) override {
         if (!state_.shader) return input_tex;
-        int mask = crt_shader::mask_type_from_technology(
-            static_cast<int>(dc.technology));
-        float pr, pg, pb;
-        phosphor_tint_rgb(dc.phosphor, pr, pg, pb);
         crt_shader::render(&state_, input_tex,
                            input_w, input_h,
                            output_w, output_h,
-                           dc.curvature, dc.scanline_gap, dc.dot_pitch_mm,
-                           dc.brightness, dc.contrast, dc.gamma, mask,
-                           pr, pg, pb,
-                           dc.color_temperature_k);
+                           dc);
         return state_.texture;
     }
 
