@@ -5,8 +5,10 @@
 #include "systems/commodore/commodore_load_helpers.hpp"
 #include "chip/input/commodore_keyboard.hpp"
 #include "core/input/keyboard_mapper.hpp"
+#include "core/input/emu_keys.hpp"
 #include <memory>
 #include <string>
+#include <vector>
 
 /**
  * CommodoreSystem — shared base class for all Commodore 8-bit systems
@@ -133,6 +135,43 @@ protected:
 
     /// Reset all deferred-loading state.  Called from derived reset().
     void reset_load_state();
+
+    // =========================================================================
+    // UNMAPPED INPUT — on-screen buttons for guest keys with no host mapping
+    //
+    // Some guest keys (C128 HELP, LINE FEED, 40/80 DISPLAY, etc.) have no
+    // common host keyboard equivalent.  This mechanism exposes them as
+    // clickable menu items so the user can still trigger them.
+    //
+    // Derived systems register entries in their initialize() via
+    // register_unmapped_input().  The shared render_unmapped_inputs_menu()
+    // draws a "Virtual Keys" sub-menu if any entries exist.
+    // =========================================================================
+
+    /// Descriptor for a guest key that has no host keyboard mapping.
+    struct UnmappedInput {
+        const char* label;      // Menu label (e.g., "HELP", "LINE FEED")
+        emu_key_t key;          // EmuKey to inject
+        bool toggle;            // true = toggle (press/release on alternate clicks)
+        bool pressed;           // Current state for toggles
+
+        UnmappedInput(const char* l, emu_key_t k, bool t = false)
+            : label(l), key(k), toggle(t), pressed(false) {}
+    };
+
+    /// Register a guest key as unmapped (call from derived initialize()).
+    void register_unmapped_input(const char* label, emu_key_t key, bool toggle = false);
+
+    /// Render the "Virtual Keys" sub-menu.  Call from render_system_menu_items().
+    void render_unmapped_inputs_menu();
+
+    /// Release any pending momentary key presses.  Call once per frame
+    /// from the derived system's run_frame() or tick loop.
+    void tick_unmapped_inputs();
+
+    std::vector<UnmappedInput> unmapped_inputs_;
+    int unmapped_release_countdown_ = 0;    // Frames until pending release
+    int unmapped_release_index_ = -1;       // Index of key awaiting release
 
 public:
     CommodoreSystem() = default;

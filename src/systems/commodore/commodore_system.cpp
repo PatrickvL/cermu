@@ -6,6 +6,9 @@
 #include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <cstdio>
+#ifdef CERMU_HAS_GUI
+#include <imgui.h>
+#endif
 
 // ============================================================================
 // CommodoreSystem — shared Commodore 8-bit base class implementation
@@ -391,4 +394,55 @@ bool CommodoreSystem::attach_media(const char* filepath) {
     }
 
     return false;
+}
+
+// ============================================================================
+// Unmapped input — virtual key menu for keys without host mapping
+// ============================================================================
+
+void CommodoreSystem::register_unmapped_input(const char* label, emu_key_t key, bool toggle) {
+    unmapped_inputs_.emplace_back(label, key, toggle);
+}
+
+void CommodoreSystem::render_unmapped_inputs_menu() {
+#ifdef CERMU_HAS_GUI
+    if (unmapped_inputs_.empty()) return;
+    if (!keyboard_) return;
+
+    if (ImGui::BeginMenu("Virtual Keys")) {
+        for (int i = 0; i < static_cast<int>(unmapped_inputs_.size()); i++) {
+            auto& input = unmapped_inputs_[i];
+            if (input.toggle) {
+                // Toggle: stays pressed until clicked again
+                if (ImGui::MenuItem(input.label, nullptr, input.pressed)) {
+                    input.pressed = !input.pressed;
+                    if (input.pressed)
+                        keyboard_->key_down(input.key, false);
+                    else
+                        keyboard_->key_up(input.key, false);
+                }
+            } else {
+                // Momentary: press on click, release after a few frames
+                if (ImGui::MenuItem(input.label)) {
+                    keyboard_->key_down(input.key, false);
+                    unmapped_release_index_ = i;
+                    unmapped_release_countdown_ = 3;  // Release after 3 frames
+                }
+            }
+        }
+        ImGui::EndMenu();
+    }
+#endif
+}
+
+void CommodoreSystem::tick_unmapped_inputs() {
+    if (unmapped_release_countdown_ > 0) {
+        if (--unmapped_release_countdown_ == 0 && keyboard_) {
+            if (unmapped_release_index_ >= 0 &&
+                unmapped_release_index_ < static_cast<int>(unmapped_inputs_.size())) {
+                keyboard_->key_up(unmapped_inputs_[unmapped_release_index_].key, false);
+            }
+            unmapped_release_index_ = -1;
+        }
+    }
 }
