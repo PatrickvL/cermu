@@ -306,6 +306,12 @@ bool C128System::initialize() {
 
     register_bus_chips(board_);
 
+    // Save VIC-IIe palette for 40/80 mode switching.
+    // register_bus_chips → auto_register_video_palette_ sets palette_
+    // from the VIC-IIe chip.  We need to restore it when switching
+    // back from RGBI (VDC) mode.
+    vicii_palette_.set(palette_.data(), palette_.size());
+
     // Initialize 8502 CPU — held in reset while Z80 runs bootstrap
     board_.csg8502.init();
     board_.csg8502.bank_change_fn = cpu_banking_callback;
@@ -388,6 +394,13 @@ bool C128System::initialize() {
                                   c128_constants::VDC_DISPLAY_WIDTH, 0);
     log_info("C128: VDC RGBI video output connected (%dx%d)\n",
              c128_constants::VDC_DISPLAY_WIDTH, c128_constants::VDC_DISPLAY_HEIGHT);
+
+    // Bind the correct video port to last_frame_data_ based on the
+    // initial 40/80 key state (key_40_80_pressed = false at power-on
+    // → 80-col VDC active).  Without this, only the VIC-IIe port was
+    // bound, causing the emu thread to read VIC-IIe data even when the
+    // display pipeline was connected to the VDC RGBI port.
+    rebind_active_video_output();
 
     // ── Keyboard matrix ──────────────────────────────────────────────
     keyboard_ = new commodore_keyboard_t();
@@ -1609,19 +1622,22 @@ void C128System::rebind_active_video_output() {
     last_frame_data_ = {};
 
     // Unbind the inactive port first (set its frame_output_ to nullptr),
-    // then bind the active one.
+    // then bind the active one.  Also switch palette_ so the GPU shader
+    // gets the correct palette for the active display mode.
     if (board_.mmu.key_40_80_pressed) {
         // 40-col: VIC-IIe composite
         if (vdc_video_port_)
             vdc_video_port_->bind_frame_output(nullptr);
         if (video_port_)
             video_port_->bind_frame_output(&last_frame_data_);
+        palette_.set(vicii_palette_.data(), vicii_palette_.size());
     } else {
         // 80-col: VDC RGBI
         if (video_port_)
             video_port_->bind_frame_output(nullptr);
         if (vdc_video_port_)
             vdc_video_port_->bind_frame_output(&last_frame_data_);
+        palette_.set(fam6845::RGBI_PALETTE, 16);
     }
 }
 
