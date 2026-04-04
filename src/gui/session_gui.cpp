@@ -1664,17 +1664,17 @@ void SessionGUI::render_display_settings() {
     ImGui::Text("Monitor: %s", display_device_->get_name());
 
     // Determine the signal type the system's video port outputs
-    VideoSignalMask port_signal_mask = 0;
+    video_signal_mask_t port_signal_mask = 0;
     if (system_) {
         const auto& ports = system_->get_ports();
         for (const auto& port : ports) {
             if (port->get_attached_device() == display_device_) {
                 // Map port type to the signal mask it carries
                 switch (port->get_type()) {
-                    case PortType::VIDEO_COMPOSITE: port_signal_mask = DisplaySignals::COMPOSITE; break;
-                    case PortType::VIDEO_SVIDEO:    port_signal_mask = DisplaySignals::SVIDEO; break;
-                    case PortType::VIDEO_RGB:       port_signal_mask = DisplaySignals::RGB; break;
-                    case PortType::VIDEO_RGBI:      port_signal_mask = DisplaySignals::RGBI; break;
+                    case PortType::VIDEO_COMPOSITE: port_signal_mask = VideoSignalMask::Composite; break;
+                    case PortType::VIDEO_SVIDEO:    port_signal_mask = VideoSignalMask::SVideo; break;
+                    case PortType::VIDEO_RGB:       port_signal_mask = VideoSignalMask::RGB; break;
+                    case PortType::VIDEO_RGBI:      port_signal_mask = VideoSignalMask::RGBI; break;
                     default: break;
                 }
                 break;
@@ -1687,9 +1687,9 @@ void SessionGUI::render_display_settings() {
     }
 
     // Combo to switch between available display presets — filtered by signal compatibility
-    static const char* preset_ids[]   = {"direct_output", "crt_tv", "crt_1702", "crt_rgb", "crt_green", "crt_amber"};
-    static const char* preset_names[] = {"Direct Output", "Color TV", "Commodore 1702", "RGB Monitor", "Green Monitor", "Amber Monitor"};
-    static constexpr int preset_count = 6;
+    static const char* preset_ids[]   = {"direct_output", "crt_tv", "crt_1702", "crt_1902", "crt_rgb", "crt_green", "crt_amber"};
+    static const char* preset_names[] = {"Direct Output", "Color TV", "Commodore 1702", "Commodore 1902A", "RGB Monitor", "Green Monitor", "Amber Monitor"};
+    static constexpr int preset_count = 7;
 
     // Build filtered list of compatible presets
     int filtered_indices[preset_count];
@@ -1767,11 +1767,11 @@ void SessionGUI::render_display_settings() {
     // --- Display characteristics (read-only info) ---
     auto& dc = display_characteristics_;
     ImGui::Text("Technology: %s", display_technology_name(dc.technology));
-    ImGui::Text("Phosphor: %s", phosphor_type_name(dc.phosphor));
+    ImGui::Text("Phosphor: %s", phosphor_type_name(dc.phosphor.type));
     ImGui::Text("Screen: %.0f\" diagonal, %.0f:%.0f",
-                dc.screen_diagonal_inches,
-                dc.aspect_ratio > 1.0f ? dc.aspect_ratio : 1.0f,
-                dc.aspect_ratio > 1.0f ? 1.0f : 1.0f / dc.aspect_ratio);
+                dc.diagonal,
+                dc.aspect > 1.0f ? dc.aspect : 1.0f,
+                dc.aspect > 1.0f ? 1.0f : 1.0f / dc.aspect);
 
     ImGui::Separator();
 
@@ -1823,13 +1823,13 @@ void SessionGUI::render_display_settings() {
     changed |= ImGui::SliderFloat("Brightness", &dc.brightness, 0.5f, 2.0f, "%.2f");
     changed |= ImGui::SliderFloat("Contrast",   &dc.contrast,   0.5f, 2.0f, "%.2f");
     changed |= ImGui::SliderFloat("Gamma",       &dc.gamma,      1.0f, 3.0f, "%.2f");
-    changed |= ImGui::SliderFloat("Color Temp (K)", &dc.color_temperature_k, 3000.0f, 12000.0f, "%.0f");
+    changed |= ImGui::SliderFloat("Color Temp (K)", &dc.color_temp, 3000.0f, 12000.0f, "%.0f");
 
     // CRT-only sliders — only shown for CRT display types
     if (is_crt) {
-        changed |= ImGui::SliderFloat("Curvature",   &dc.curvature,  0.0f, 1.0f, "%.2f");
-        changed |= ImGui::SliderFloat("Scanline Gap", &dc.scanline_gap, 0.0f, 1.0f, "%.2f");
-        changed |= ImGui::SliderFloat("Dot Pitch (mm)", &dc.dot_pitch_mm, 0.1f, 1.0f, "%.2f");
+        changed |= ImGui::SliderFloat("Curvature",   &dc.optics.curvature,  0.0f, 1.0f, "%.2f");
+        changed |= ImGui::SliderFloat("Scanline Gap", &dc.scanlines.gap, 0.0f, 1.0f, "%.2f");
+        changed |= ImGui::SliderFloat("Dot Pitch (mm)", &dc.dot_pitch, 0.1f, 1.0f, "%.2f");
     }
 
     if (changed) {
@@ -1842,14 +1842,14 @@ void SessionGUI::render_display_settings() {
 
     ImGui::Separator();
     ImGui::Text("Accepted signals:");
-    VideoSignalMask mask = display_device_->get_accepted_video_signals();
-    if (mask & DisplaySignals::COMPOSITE) ImGui::BulletText("Composite");
-    if (mask & DisplaySignals::SVIDEO)    ImGui::BulletText("S-Video");
-    if (mask & DisplaySignals::RGB)       ImGui::BulletText("RGB");
-    if (mask & DisplaySignals::RGBI)      ImGui::BulletText("RGBI");
-    if (mask & DisplaySignals::YPBPR)     ImGui::BulletText("Component (YPbPr)");
-    if (mask & DisplaySignals::DIGITAL)   ImGui::BulletText("Digital");
-    if (mask & DisplaySignals::VECTOR)    ImGui::BulletText("Vector");
+    video_signal_mask_t mask = display_device_->get_accepted_video_signals();
+    if (mask & VideoSignalMask::Composite) ImGui::BulletText("Composite");
+    if (mask & VideoSignalMask::SVideo)    ImGui::BulletText("S-Video");
+    if (mask & VideoSignalMask::RGB)       ImGui::BulletText("RGB");
+    if (mask & VideoSignalMask::RGBI)      ImGui::BulletText("RGBI");
+    if (mask & VideoSignalMask::YPbPr)     ImGui::BulletText("Component (YPbPr)");
+    if (mask & VideoSignalMask::Digital)   ImGui::BulletText("Digital");
+    if (mask & VideoSignalMask::Vector)    ImGui::BulletText("Vector");
     if (display_device_->has_builtin_speakers()) {
         ImGui::BulletText("Built-in speaker");
         ImGui::Separator();

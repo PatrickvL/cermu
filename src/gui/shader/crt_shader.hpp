@@ -18,6 +18,7 @@
 // ============================================================================
 
 #include "core/cermu.hpp"
+#include "devices/display/display_device.hpp"
 #include "gui/gl_api.hpp"
 #include <cstdio>
 
@@ -53,8 +54,24 @@ uniform float Brightness;     // multiplier, 1.0 = neutral
 uniform float Contrast;       // multiplier, 1.0 = neutral
 uniform float Gamma;          // display gamma, typically 2.2
 uniform int   MaskType;       // 0=shadow mask, 1=aperture grille, 2=slot mask, 3=mono, 4=none
-uniform vec3  PhosphorTint;   // Phosphor color for monochrome displays (e.g. green, amber)
+uniform vec3  PhosphorTint;   // Phosphor glow color (from PhosphorParams.glow_color)
 uniform vec3  ColorTempTint;  // Color temperature tint (normalized to 6500K reference)
+uniform float MaskOpacity;    // Shadow mask blend strength (MaskParams.opacity)
+uniform float ScanlineStrength; // Scanline darkening intensity (ScanlineParams.strength)
+uniform vec2  ConvergenceError; // RGB convergence misalignment in texels (BeamParams)
+uniform float VignetteStrength; // Screen-edge darkening (OpticsParams)
+uniform vec3  GlassTint;      // CRT glass color filter (OpticsParams)
+// TODO: Add uniforms for remaining DisplayCharacteristics sub-struct fields:
+//   PhosphorParams  — float Persistence, float BloomRadius,
+//                     float BloomThreshold, int DecayCurve
+//   BeamParams      — float BeamWidth, float BeamSoftness, float Pincushion,
+//                     float HLinearity, float VLinearity, vec4 CornerPin
+//   MaskParams      — float TriadSize, float SlotMaskWidth
+//   ScanlineParams  — float ScanlinePhase, bool Interlace
+//   OpticsParams    — float ReflectionStrength, float EdgeGlow
+//   SignalParams    — float Bandwidth, float NoiseLevel, float HumBarStrength,
+//                     float GhostingStrength, float ChromaPhaseError,
+//                     float SyncStability
 out vec4 Out_Color;
 
 // Barrel distortion for CRT screen curvature.
@@ -100,6 +117,10 @@ vec3 shadow_mask(vec2 frag_coord, int mask_type) {
 }
 
 void main() {
+    // TODO: Apply BeamParams.pincushion (separate from barrel curvature)
+    // TODO: Apply BeamParams.h_linearity / v_linearity stretch correction
+    // TODO: Apply BeamParams.corner_pin trapezoid warp
+
     // Apply barrel distortion
     vec2 uv = (Curvature > 0.001) ? barrel_distort(v_uv, Curvature) : v_uv;
 
@@ -109,31 +130,48 @@ void main() {
         return;
     }
 
-    // Sample the input texture
-    vec3 color = texture(InputTexture, uv).rgb;
+    // TODO: Apply SignalParams.bandwidth — low-pass filter (horizontal blur proportional
+    //       to 1/bandwidth) to simulate analogue bandwidth limiting
+    // TODO: Apply SignalParams.noise_level — add per-pixel gaussian noise
+    // TODO: Apply SignalParams.chroma_phase_error — hue rotation on chroma
+    // TODO: Apply SignalParams.ghosting_strength — offset duplicate blend
+    // TODO: Apply SignalParams.hum_bar_strength — slow-moving brightness bar
+    // TODO: Apply SignalParams.sync_stability — per-line horizontal jitter
+
+    // Sample the input texture with per-channel convergence error (RGB misalignment)
+    vec2 texel = 1.0 / InputSize;
+    vec2 conv = ConvergenceError * texel;
+    vec3 color;
+    color.r = texture(InputTexture, uv + vec2(-conv.x, -conv.y)).r;
+    color.g = texture(InputTexture, uv).g;
+    color.b = texture(InputTexture, uv + vec2( conv.x,  conv.y)).b;
+
+    // TODO: Apply BeamParams.width / softness — gaussian beam profile per scanline
 
     // Scanline darkening — darken pixels between emulated scan lines
+    // TODO: Use ScanlineParams.phase for sub-pixel phase offset per line
+    // TODO: Use ScanlineParams.interlace to alternate field rendering
     if (ScanlineGap > 0.001) {
         float scanline_y = uv.y * InputSize.y;
         float scanline_phase = fract(scanline_y);
-        // Darken the gap between lines (lower half of each line)
-        float scanline = 1.0 - ScanlineGap * 0.5 * (1.0 - smoothstep(0.3, 0.5, scanline_phase)
-                                                       + 1.0 - smoothstep(0.5, 0.7, 1.0 - scanline_phase));
-        // Simplified: darken near the boundary between scanlines
+        // Darken near the boundary between scanlines
         float line_dist = abs(scanline_phase - 0.5) * 2.0;  // 0 at center, 1 at edge
-        float scanline_mask = 1.0 - ScanlineGap * 0.6 * smoothstep(0.4, 1.0, line_dist);
+        float scanline_mask = 1.0 - ScanlineGap * ScanlineStrength * smoothstep(0.4, 1.0, line_dist);
         color *= scanline_mask;
     }
 
     // Shadow mask / aperture grille
+    // TODO: Use MaskParams.triad_size to scale the mask pattern period
+    // TODO: Use MaskParams.slot_mask_width (aperture open ratio) for grille types
     if (DotPitch > 0.001) {
         vec3 mask = shadow_mask(gl_FragCoord.xy, MaskType);
-        // Blend mask intensity based on dot pitch (larger pitch = more visible)
-        float mask_strength = clamp(DotPitch * 1.5, 0.0, 1.0);
-        color *= mix(vec3(1.0), mask, mask_strength);
+        color *= mix(vec3(1.0), mask, MaskOpacity);
     }
 
-    // Monochrome phosphor — convert to luminance and apply tint
+    // Monochrome phosphor — convert to luminance and apply glow color
+    // TODO: Apply PhosphorParams.persistence — temporal blend with previous frame
+    // TODO: Apply PhosphorParams.bloom_radius / bloom_threshold — bright-pixel bloom
+    // TODO: Use PhosphorParams.decay_curve to select exponential vs linear decay
     if (MaskType == 3) {
         float luma = dot(color, vec3(0.299, 0.587, 0.114));
         color = vec3(luma) * PhosphorTint;
@@ -148,6 +186,18 @@ void main() {
 
     // Color temperature tint (pre-computed on CPU, normalized to 6500K)
     color *= ColorTempTint;
+
+    // Vignette — darken screen edges based on distance from center
+    if (VignetteStrength > 0.001) {
+        vec2 vc = v_uv - 0.5;
+        color *= 1.0 - VignetteStrength * dot(vc, vc) * 4.0;
+    }
+
+    // Glass tint — CRT faceplate color filter
+    color *= GlassTint;
+
+    // TODO: Apply OpticsParams.reflection_strength — specular highlight overlay
+    // TODO: Apply OpticsParams.edge_glow — bright halo at screen perimeter
 
     Out_Color = vec4(clamp(color, 0.0, 1.0), 1.0);
 }
@@ -178,6 +228,22 @@ struct CRTPostProcess {
     GLint loc_mask_type      = -1;
     GLint loc_phosphor_tint  = -1;
     GLint loc_color_temp_tint = -1;
+    GLint loc_mask_opacity       = -1;
+    GLint loc_scanline_strength  = -1;
+    GLint loc_convergence_error  = -1;
+    GLint loc_vignette_strength  = -1;
+    GLint loc_glass_tint         = -1;
+    // TODO: Add uniform locations for remaining fields when implemented:
+    //   PhosphorParams:  loc_persistence, loc_bloom_radius,
+    //                    loc_bloom_threshold, loc_decay_curve
+    //   BeamParams:      loc_beam_width, loc_beam_softness, loc_pincushion,
+    //                    loc_h_linearity, loc_v_linearity, loc_corner_pin
+    //   MaskParams:      loc_triad_size, loc_slot_mask_width
+    //   ScanlineParams:  loc_scanline_phase, loc_interlace
+    //   OpticsParams:    loc_reflection_strength, loc_edge_glow
+    //   SignalParams:    loc_bandwidth, loc_noise_level, loc_hum_bar_strength,
+    //                    loc_ghosting_strength, loc_chroma_phase_error,
+    //                    loc_sync_stability
 };
 
 // ============================================================================
@@ -248,6 +314,11 @@ inline bool create(CRTPostProcess* p, int w, int h) {
     p->loc_mask_type     = gl_api::glGetUniformLocation(p->shader, "MaskType");
     p->loc_phosphor_tint = gl_api::glGetUniformLocation(p->shader, "PhosphorTint");
     p->loc_color_temp_tint = gl_api::glGetUniformLocation(p->shader, "ColorTempTint");
+    p->loc_mask_opacity      = gl_api::glGetUniformLocation(p->shader, "MaskOpacity");
+    p->loc_scanline_strength = gl_api::glGetUniformLocation(p->shader, "ScanlineStrength");
+    p->loc_convergence_error = gl_api::glGetUniformLocation(p->shader, "ConvergenceError");
+    p->loc_vignette_strength = gl_api::glGetUniformLocation(p->shader, "VignetteStrength");
+    p->loc_glass_tint        = gl_api::glGetUniformLocation(p->shader, "GlassTint");
 
     // Set texture unit (always 0)
     gl_api::glUseProgram(p->shader);
@@ -345,25 +416,32 @@ inline void color_temp_tint(float temp_k, float& tr, float& tg, float& tb) {
 /// @param input_h      Source texture height (emulated framebuffer)
 /// @param output_w     Display output width (screen pixels)
 /// @param output_h     Display output height (screen pixels)
-/// @param curvature    Barrel distortion amount (0–1)
-/// @param scanline_gap Scanline darkening (0–1)
-/// @param dot_pitch    Shadow mask dot pitch in mm
-/// @param brightness   Brightness multiplier
-/// @param contrast     Contrast multiplier
-/// @param gamma        Display gamma
-/// @param mask_type    Mask type (0=shadow, 1=aperture, 2=slot, 3=mono, 4=none)
-/// @param tint_r/g/b   Phosphor tint for monochrome displays (1,1,1 = no tint)
-/// @param color_temp_k  Color temperature in Kelvin (6500 = neutral)
+/// @param dc           Display characteristics (phosphor, beam, mask, etc.)
 inline void render(CRTPostProcess* p,
                    GLuint input_tex,
                    float input_w, float input_h,
                    float output_w, float output_h,
-                   float curvature, float scanline_gap, float dot_pitch,
-                   float brightness, float contrast, float gamma,
-                   int mask_type,
-                   float tint_r = 1.0f, float tint_g = 1.0f, float tint_b = 1.0f,
-                   float color_temp_k = 6500.0f) {
+                   const DisplayCharacteristics& dc) {
     if (!p->shader || !p->fbo) return;
+
+    // Unpack fields wired to shader uniforms
+    float curvature    = dc.optics.curvature;
+    float scanline_gap = dc.scanlines.gap;
+    float dot_pitch    = dc.dot_pitch;
+    float brightness   = dc.brightness;
+    float contrast     = dc.contrast;
+    float gamma        = dc.gamma;
+    int   mask_type    = mask_type_from_technology(static_cast<int>(dc.technology));
+    float color_temp_k = dc.color_temp;
+
+    // TODO: Wire remaining DisplayCharacteristics sub-struct fields to uniforms:
+    //   dc.phosphor  — persistence, bloom_radius, bloom_threshold, decay_curve
+    //   dc.beam      — width, softness, pincushion, h/v_linearity, corner_pin
+    //   dc.mask      — triad_size, slot_mask_width
+    //   dc.scanlines — phase, interlace
+    //   dc.optics    — reflection_strength, edge_glow
+    //   dc.signal    — bandwidth, noise_level, hum_bar_strength, ghosting_strength,
+    //                  chroma_phase_error, sync_stability
 
     // Ensure FBO size matches output
     resize(p, static_cast<int>(output_w), static_cast<int>(output_h));
@@ -392,7 +470,20 @@ inline void render(CRTPostProcess* p,
     gl_api::glUniform1f(p->loc_contrast, contrast);
     gl_api::glUniform1f(p->loc_gamma, gamma);
     gl_api::glUniform1i(p->loc_mask_type, mask_type);
-    gl_api::glUniform3f(p->loc_phosphor_tint, tint_r, tint_g, tint_b);
+    gl_api::glUniform3f(p->loc_phosphor_tint,
+                        dc.phosphor.glow_color[0],
+                        dc.phosphor.glow_color[1],
+                        dc.phosphor.glow_color[2]);
+    gl_api::glUniform1f(p->loc_mask_opacity, dc.mask.opacity);
+    gl_api::glUniform1f(p->loc_scanline_strength, dc.scanlines.strength);
+    gl_api::glUniform2f(p->loc_convergence_error,
+                        dc.beam.convergence_error[0],
+                        dc.beam.convergence_error[1]);
+    gl_api::glUniform1f(p->loc_vignette_strength, dc.optics.vignette_strength);
+    gl_api::glUniform3f(p->loc_glass_tint,
+                        dc.optics.glass_tint[0],
+                        dc.optics.glass_tint[1],
+                        dc.optics.glass_tint[2]);
 
     // Compute and set color temperature tint
     float ct_r, ct_g, ct_b;

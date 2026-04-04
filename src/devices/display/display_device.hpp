@@ -58,34 +58,103 @@ enum class PhosphorType : uint8_t {
 };
 
 // ============================================================================
-// DISPLAY CHARACTERISTICS
+// PHOSPHOR DECAY & MASK PATTERN ENUMS
 // ============================================================================
+
+/// Phosphor luminance decay model.
+enum class PhosphorDecay : uint8_t {
+    Exponential,  ///< Standard phosphor exponential decay (most CRTs)
+    Linear,       ///< Linear fade (synthetic / direct output)
+};
+
+/// Shadow mask / aperture grille pattern type.
+enum class MaskPattern : uint8_t {
+    Shadow,     ///< Delta-gun shadow mask (most color CRTs)
+    Aperture,   ///< Aperture grille / Trinitron (vertical stripes)
+    SlotMask,   ///< Slot mask (some professional monitors)
+};
+
+// ============================================================================
+// DISPLAY CHARACTERISTICS — grouped sub-struct design
+// ============================================================================
+
+/// Phosphor parameters: material type, glow, persistence, bloom.
+struct PhosphorParams {
+    PhosphorType  type            = PhosphorType::P22;
+    float         glow_color[3]   = {1.0f, 1.0f, 1.0f};
+    float         persistence     = 2.0f;    ///< ms; decay to 10%
+    float         bloom_radius    = 1.0f;
+    float         bloom_threshold = 0.7f;
+    PhosphorDecay decay_curve     = PhosphorDecay::Exponential;
+};
+
+/// Electron beam geometry and deflection accuracy.
+struct BeamParams {
+    float width             = 0.70f;
+    float softness          = 0.40f;
+    float pincushion        = 0.03f;
+    float h_linearity       = 0.99f;
+    float v_linearity       = 0.99f;
+    float convergence_error[2] = {0.30f, 0.20f}; ///< {edge, center} in mm
+    float corner_pin[4]     = {0.0f, 0.0f, 0.0f, 0.0f};
+};
+
+/// Shadow mask / aperture grille parameters.
+struct MaskParams {
+    MaskPattern pattern         = MaskPattern::Shadow;
+    float       opacity         = 0.25f;
+    float       triad_size      = 1.00f;
+    float       slot_mask_width = 0.00f;   ///< Aperture open ratio for grille types
+};
+
+/// Raster scanline simulation.
+struct ScanlineParams {
+    float gap       = 0.12f;   ///< Inter-line gap darkness
+    float strength  = 0.45f;   ///< Scanline darkening intensity
+    float phase     = 0.00f;   ///< Sub-pixel phase shift per line
+    bool  interlace = false;   ///< Interlaced scanning
+};
+
+/// Glass optics, curvature, and surface reflections.
+struct OpticsParams {
+    float curvature           = 0.30f;   ///< 0 = flat, 1 = deep curve
+    float vignette_strength   = 0.20f;
+    float reflection_strength = 0.08f;
+    float edge_glow           = 0.05f;
+    float glass_tint[3]       = {0.94f, 0.97f, 0.92f};
+};
+
+/// Analogue signal path impairments.
+struct SignalParams {
+    float bandwidth          = 4.20f;   ///< MHz; luma bandwidth limit
+    float noise_level        = 0.020f;
+    float hum_bar_strength   = 0.020f;
+    float ghosting_strength  = 0.040f;
+    float chroma_phase_error = 1.00f;   ///< degrees
+    float sync_stability     = 0.90f;
+};
 
 /// Physical properties of a display device that influence rendering.
 /// Concrete display devices provide these; the rendering pipeline reads them
 /// to configure shaders, geometry correction, and post-processing.
 struct DisplayCharacteristics {
-    // --- Technology ---
-    DisplayTechnology technology   = DisplayTechnology::CRT_Shadow;
-    PhosphorType      phosphor     = PhosphorType::P22;
+    // --- Top-level scalars ---
+    DisplayTechnology technology = DisplayTechnology::CRT_Shadow;
+    float diagonal   = 13.0f;         ///< Nominal screen diagonal (inches)
+    float aspect     = 4.0f / 3.0f;   ///< Width / height
+    float dot_pitch  = 0.28f;         ///< Mask dot pitch or grille pitch (mm)
+    float brightness = 1.0f;          ///< Relative brightness (1.0 = nominal)
+    float contrast   = 1.0f;          ///< Relative contrast
+    float gamma      = 2.2f;          ///< Display gamma
+    float color_temp = 6500.0f;       ///< Color temperature (Kelvin)
 
-    // --- Geometry ---
-    float screen_diagonal_inches   = 13.0f;  ///< Nominal screen diagonal
-    float aspect_ratio             = 4.0f / 3.0f;  ///< Width / height
-    float curvature                = 0.0f;   ///< 0 = flat, 1 = typical CRT curve
-
-    // --- Phosphor response ---
-    float persistence_ms           = 2.0f;   ///< Phosphor decay to 10% (milliseconds)
-    float color_temperature_k      = 6500.0f; ///< Color temperature (Kelvin)
-
-    // --- Mask / grille ---
-    float dot_pitch_mm             = 0.28f;  ///< Mask dot pitch or grille pitch
-    float scanline_gap             = 0.0f;   ///< 0 = no visible gap, 1 = full gap
-
-    // --- Tone response ---
-    float brightness               = 1.0f;   ///< Relative brightness (1.0 = nominal)
-    float contrast                 = 1.0f;   ///< Relative contrast
-    float gamma                    = 2.2f;   ///< Display gamma
+    // --- Grouped sub-structs ---
+    PhosphorParams  phosphor;
+    BeamParams      beam;
+    MaskParams      mask;
+    ScanlineParams  scanlines;
+    OpticsParams    optics;
+    SignalParams    signal;
 };
 
 /// Map a PhosphorType to an RGB tint color for monochrome rendering.
@@ -109,28 +178,28 @@ inline constexpr void phosphor_tint_rgb(PhosphorType p, float& r, float& g, floa
 // ============================================================================
 
 /// Bitmask for video signal type acceptance.
-using VideoSignalMask = uint16_t;
+using video_signal_mask_t = uint16_t;
 
 /// Convert a VideoSignalType to its corresponding bitmask bit.
-inline constexpr VideoSignalMask video_signal_bit(VideoSignalType t) {
-    return static_cast<VideoSignalMask>(1u << static_cast<uint8_t>(t));
+inline constexpr video_signal_mask_t video_signal_bit(VideoSignalType t) {
+    return static_cast<video_signal_mask_t>(1u << static_cast<uint8_t>(t));
 }
 
 /// Predefined masks for common monitor signal configurations.
-namespace DisplaySignals {
-    inline constexpr VideoSignalMask COMPOSITE   = video_signal_bit(VideoSignalType::Composite);
-    inline constexpr VideoSignalMask SVIDEO      = video_signal_bit(VideoSignalType::SVideo);
-    inline constexpr VideoSignalMask RGB         = video_signal_bit(VideoSignalType::RGB);
-    inline constexpr VideoSignalMask RGBI        = video_signal_bit(VideoSignalType::RGBI);
-    inline constexpr VideoSignalMask YPBPR       = video_signal_bit(VideoSignalType::YPbPr);
-    inline constexpr VideoSignalMask DIGITAL     = video_signal_bit(VideoSignalType::Digital);
-    inline constexpr VideoSignalMask VECTOR      = video_signal_bit(VideoSignalType::Vector);
+namespace VideoSignalMask {
+    inline constexpr video_signal_mask_t Composite      = video_signal_bit(VideoSignalType::Composite);
+    inline constexpr video_signal_mask_t SVideo         = video_signal_bit(VideoSignalType::SVideo);
+    inline constexpr video_signal_mask_t RGB            = video_signal_bit(VideoSignalType::RGB);
+    inline constexpr video_signal_mask_t RGBI           = video_signal_bit(VideoSignalType::RGBI);
+    inline constexpr video_signal_mask_t YPbPr          = video_signal_bit(VideoSignalType::YPbPr);
+    inline constexpr video_signal_mask_t Digital        = video_signal_bit(VideoSignalType::Digital);
+    inline constexpr video_signal_mask_t Vector         = video_signal_bit(VideoSignalType::Vector);
 
     // --- Common combinations ---
-    inline constexpr VideoSignalMask COMPOSITE_SVIDEO  = COMPOSITE | SVIDEO;
-    inline constexpr VideoSignalMask COMPOSITE_RGB     = COMPOSITE | RGB;
-    inline constexpr VideoSignalMask ALL_ANALOG        = COMPOSITE | SVIDEO | RGB | YPBPR;
-    inline constexpr VideoSignalMask ALL_RASTER        = COMPOSITE | SVIDEO | RGB | RGBI | YPBPR | DIGITAL;
+    inline constexpr video_signal_mask_t CompositeSVideo = Composite | SVideo;
+    inline constexpr video_signal_mask_t CompositeRGB    = Composite | RGB;
+    inline constexpr video_signal_mask_t AllAnalog        = Composite | SVideo | RGB | YPbPr;
+    inline constexpr video_signal_mask_t All              = Composite | SVideo | RGB | RGBI | YPbPr | Digital;
 }
 
 // ============================================================================
@@ -158,7 +227,7 @@ public:
     // --- Signal acceptance ----------------------------------------------
 
     /// Bitmask of VideoSignalType values this display can accept.
-    virtual VideoSignalMask get_accepted_video_signals() const = 0;
+    virtual video_signal_mask_t get_accepted_video_signals() const = 0;
 
     /// Check if a specific signal type is accepted.
     bool accepts_signal(VideoSignalType type) const {
