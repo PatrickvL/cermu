@@ -181,6 +181,8 @@ public:
     void run_frame() override;
 
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
+    void handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode,
+                                  uint16_t mod, bool pressed, bool repeat) override;
 
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
     void set_audio_sample_rate(int sample_rate_hz) override;
@@ -292,6 +294,7 @@ private:
     void update_bank_config();           // Load correct snapshot for current config
     void enter_c64_mode();               // Transition to C64 compatibility mode
     void switch_cpu_mode(CPUMode mode);  // Toggle between 8502 and Z80
+    void sync_caps_lock_from_host();     // Mirror host Caps Lock to port $01 bit 6
     void init_io_dispatch();             // Set up CS-tick indexed sub-table for I/O page
     void tick_z80();                     // Z80 tick (T-state) + bus servicing
     bus_state_t z80_io_tick(bus_state_t pins); // Z80 I/O port dispatch
