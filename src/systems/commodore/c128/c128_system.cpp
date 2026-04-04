@@ -301,10 +301,17 @@ bool C128System::initialize() {
 
     // Initialize 8502 CPU — held in reset while Z80 runs bootstrap
     board_.csg8502.init();
-    board_.csg8502.init_io_port();
     board_.csg8502.bank_change_fn = cpu_banking_callback;
     board_.csg8502.bank_change_ctx = this;
     board_.csg8502.reset();
+    // CSG 8502 port bit 6 is the CAPS LOCK key sense line (active-low,
+    // directly wired to the physical key).  Bit 6 must default to 1
+    // (key not pressed), otherwise the KERNAL scan routine at $C55D
+    // thinks CAPS LOCK is engaged and uses the shifted decode table,
+    // producing graphics characters ($C1) instead of letters ($41).
+    // Must be AFTER reset() — reset_conditional_features() clobbers
+    // init_io_port() with default init_pins (0x17, bit 6 = 0).
+    board_.csg8502.init_io_port(0x2F, 0x17, 0x57);
 
     // Sync PLA-style banking with freshly-reset I/O port (same as C64)
     {
@@ -405,6 +412,9 @@ void C128System::reset() {
     // Z80 starts first after reset (real hardware behavior)
     z80_pins_ = board_.z80.init();
     pins_ = board_.csg8502.reset(pins_);
+    // Restore CAPS LOCK sense line (bit 6 = 1 = not pressed) after CPU reset
+    // clobbers it with the default init_pins (0x17).
+    board_.csg8502.init_io_port(0x2F, 0x17, 0x57);
     cpu_mode_ = CPUMode::MODE_Z80;
     active_cpu_ = &board_.z80;
     c64_mode_ = false;
@@ -1220,6 +1230,8 @@ void C128System::switch_cpu_mode(CPUMode mode) {
         cpu_mode_ = CPUMode::MODE_8502;
         active_cpu_ = &board_.csg8502;
         pins_ = active_cpu_->reset(pins_);
+        // Restore CAPS LOCK sense line after CPU reset clobbers init_pins.
+        board_.csg8502.init_io_port(0x2F, 0x17, 0x57);
         log_info("C128: CPU switch → 8502\n");
     } else {
         // 8502 → Z80: re-enter Z80 mode (e.g. for CP/M)
