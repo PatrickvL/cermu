@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include "core/signal/sync_types.hpp"
 
 // ============================================================================
 // BBC MICRO MODEL B SYSTEM CONSTANTS
@@ -79,6 +80,8 @@ namespace bbc_constants {
     // Bitmap modes: max is Mode 0 (640×256, 2 colors)
     inline constexpr uint32_t DISPLAY_WIDTH         = 640;
     inline constexpr uint32_t DISPLAY_HEIGHT        = 256;
+    static_assert(MAX_SIGNAL_SAMPLES >= DISPLAY_WIDTH * DISPLAY_HEIGHT + SIGNAL_BUFFER_MARGIN,
+                  "MAX_SIGNAL_SAMPLES too small for BBC Micro framebuffer");
 
     // Default audio sample rate
     inline constexpr uint32_t DEFAULT_SAMPLE_RATE   = 44100;

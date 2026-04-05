@@ -150,7 +150,6 @@ public:
         active_buf_            = buf_;
         output_.ptr            = active_buf_;
         output_.base           = active_buf_;
-        output_.end            = active_buf_ + MAX_SIGNAL_SAMPLES;
         output_.prev_flags     = SyncFlag::None;
         output_.ctx            = this;
         output_.on_sync_change = &VideoPort::cold_path;
@@ -172,7 +171,6 @@ public:
         active_buf_  = buf;
         output_.base = buf;
         output_.ptr  = buf;
-        output_.end  = buf + MAX_SIGNAL_SAMPLES;
         // Clear stale frame-completion state — any previous completed_base
         // pointed into the old buffer and is now dangling.  Also reset
         // prev_flags so the first sample doesn't trigger a spurious sync
@@ -207,7 +205,6 @@ public:
         active_buf_        = buf_;
         output_.base       = buf_;
         output_.ptr        = buf_;
-        output_.end        = buf_ + MAX_SIGNAL_SAMPLES;
         output_.prev_flags = SyncFlag::None;
         output_.frame_len      = 0;
         output_.completed_base = nullptr;
@@ -312,7 +309,6 @@ public:
         if (!on_frame_end_) {
             output_.base        = active_buf_;
             output_.ptr         = active_buf_;
-            output_.end         = active_buf_ + MAX_SIGNAL_SAMPLES;
             output_.prev_flags  = SyncFlag::None;
             *active_sync_count_ = 0;
             sync_run_           = 0;

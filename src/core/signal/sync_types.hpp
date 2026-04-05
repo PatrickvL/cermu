@@ -46,3 +46,7 @@ struct FrameData {
 // the callback-provided buffer.  This only needs to cover up to FrameEnd.
 inline constexpr uint32_t MAX_SIGNAL_SAMPLES = 1024 * 640;  // 655360
 inline constexpr uint32_t MAX_SYNC_EVENTS    = 400;
+
+// Minimum headroom above the largest frame, to accommodate h/v blanking
+// signals and partial-scanline overhead at frame boundaries.
+inline constexpr uint32_t SIGNAL_BUFFER_MARGIN = 8192;

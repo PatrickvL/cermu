@@ -23,6 +23,7 @@
 
 #include "chip/video/video_chip_base.hpp"
 #include "core/signal/composite_video_out.hpp"
+#include "core/signal/sync_types.hpp"
 #include "core/system_lines.hpp"
 #include "systems/nes/bus/nes_bus.hpp"
 #include "systems/nes/bus/nes_bus_signals.hpp"
@@ -32,6 +33,12 @@
 namespace nes_system {
     class Cartridge;
 }
+
+// PPU timing constants — worst-case (PAL) frame dimensions for buffer sizing.
+inline constexpr uint32_t NES_PPU_DOTS_PER_SCANLINE = 341;
+inline constexpr uint32_t NES_PPU_TOTAL_SCANLINES_PAL = 312;
+static_assert(MAX_SIGNAL_SAMPLES >= NES_PPU_DOTS_PER_SCANLINE * NES_PPU_TOTAL_SCANLINES_PAL + SIGNAL_BUFFER_MARGIN,
+              "MAX_SIGNAL_SAMPLES too small for NES PPU PAL");
 
 // ============================================================================
 // NES PPU REGISTER TABLE — single source of truth

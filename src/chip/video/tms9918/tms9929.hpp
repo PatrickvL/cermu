@@ -7,6 +7,7 @@
  */
 
 #include "chip/video/tms9918/tms9918.hpp"
+#include "core/signal/sync_types.hpp"
 
 namespace tms9918 {
 
@@ -26,6 +27,10 @@ inline constexpr VDPTraits TMS9929Traits = {
     192,                             // visible_lines
     5'320'000,                       // dot_clock_hz
 };
+
+// PAL is the worst-case TMS9918 variant (most total lines).
+static_assert(MAX_SIGNAL_SAMPLES >= VDPTraits::dots_per_line * TMS9929Traits.total_lines + SIGNAL_BUFFER_MARGIN,
+              "MAX_SIGNAL_SAMPLES too small for TMS9929 PAL");
 
 using TMS9929 = tms9918_t<TMS9929Traits>;
 
