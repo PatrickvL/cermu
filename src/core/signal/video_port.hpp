@@ -379,12 +379,21 @@ private:
                                  self->output_.prev_flags, flags, pos);
         if (!has_flag(flags, SyncFlag::FrameEnd))
             return static_cast<Sample*>(nullptr);
-        // Snapshot completed frame's sync data before the callback swaps buffers
-        self->completed_sync_       = self->active_sync_;
-        self->completed_sync_count_ = *self->active_sync_count_;
-        return self->on_frame_end_
+
+        // Snapshot the completed frame's sync data to locals BEFORE the
+        // callback redirects active_sync_ to a new buffer.  The callback
+        // (DisplayPipeline::on_frame_end → set_active_sync_buffer) clears
+        // completed_sync_, so we must write it AFTER the callback returns.
+        SyncEvent* done_sync  = self->active_sync_;
+        uint32_t   done_count = *self->active_sync_count_;
+
+        Sample* new_buf = self->on_frame_end_
             ? self->on_frame_end_(self->frame_end_ctx_)
             : self->active_buf_;
+
+        self->completed_sync_       = done_sync;
+        self->completed_sync_count_ = done_count;
+        return new_buf;
     }
 };
 
