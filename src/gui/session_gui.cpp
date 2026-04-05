@@ -2071,7 +2071,12 @@ void SessionGUI::rebuild_signal_pipeline() {
     // Lock emu_mutex_ for the entire rebuild — if the emu thread is
     // mid-frame, this blocks until it finishes.  With paused=true the
     // emu thread won't start another frame.
+    //
+    // Also lock fb_mutex_ to prevent the emu thread's snapshot code
+    // (which runs AFTER releasing emu_mutex_) from accessing
+    // signal_decoder_ / display_pipeline_ while we swap them.
     std::lock_guard<std::mutex> lock(emu_mutex_);
+    std::lock_guard<std::mutex> fb_lock(fb_mutex_);
 
     // 1. Disconnect old display pipeline
     if (display_pipeline_) {
