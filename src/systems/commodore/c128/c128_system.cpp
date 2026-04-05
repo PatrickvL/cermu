@@ -779,25 +779,6 @@ void C128System::set_audio_sample_rate(int rate) {
 // INPUT
 // ============================================================================
 
-void C128System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
-    if (keyboard_mapper_) {
-        if (pressed) {
-            keyboard_mapper_->process_key_down(key, SDL_SCANCODE_UNKNOWN, 0, false);
-        } else {
-            keyboard_mapper_->process_key_up(key, SDL_SCANCODE_UNKNOWN, 0);
-        }
-    } else if (keyboard_) {
-        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(key);
-        if (ek != EMUKEY_NONE) {
-            if (pressed) {
-                keyboard_->key_down(ek, false);
-            } else {
-                keyboard_->key_up(ek, false);
-            }
-        }
-    }
-}
-
 void C128System::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode,
                                           uint16_t mod, bool pressed, bool repeat) {
     // CAPS LOCK → processor port $01 bit 6 (active-low, directly wired).
@@ -1483,16 +1464,7 @@ void C128System::cpu_banking_callback(void* ctx, uint8_t banking_state) {
 
 void C128System::on_port_device_changed(int port_index) {
     if (port_index == PORT_IEC_SERIAL) {
-        serial_traps_enabled_ = false;
-        auto* port = get_port(PORT_IEC_SERIAL);
-        if (port) {
-            for (auto* dev : port->get_attached_devices()) {
-                if (dynamic_cast<Drive1541Device*>(dev)) {
-                    serial_traps_enabled_ = true;
-                    break;
-                }
-            }
-        }
+        update_serial_traps_enabled();
     }
 }
 

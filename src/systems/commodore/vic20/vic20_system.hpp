@@ -187,9 +187,6 @@ public:
     void tick() override;
     void run_frame() override;
     
-    // Input
-    void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
-    
     // GUI integration
     void render_system_menu_items() override;
     void render_configuration_ui() override;

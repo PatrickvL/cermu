@@ -702,10 +702,7 @@ void C64System::reset() {
             this->ram->data()[c64_constants::KBD_BUFFER_COUNT] = 0;
         }
 
-        // Reset serial trap state
-        serial_trap_ = {};
-
-        // Reset cycle-accurate drive subsystem
+        // Reset cycle-accurate drive subsystem (also resets serial_trap_)
         reset_drive_subsystem();
 
         log_info("C64 System: Reset complete\n");

@@ -311,9 +311,28 @@ protected:
     int unmapped_release_countdown_ = 0;    // Frames until pending release
     int unmapped_release_index_ = -1;       // Index of key awaiting release
 
+    // =========================================================================
+    // DEBUG CART — test harness write-capture convention
+    //
+    // When enabled, writes to a system-specific address ($D7FF on C64,
+    // $FDCF on C16/Plus4) are captured by the tick loop.  The test
+    // framework polls debug_cart_written() each frame and reads the value.
+    // Members live here; the address-specific capture stays in derived tick().
+    // =========================================================================
+
+    bool    debug_cart_enabled_ = false;
+    bool    debug_cart_written_ = false;
+    uint8_t debug_cart_value_   = 0;
+
 public:
     CommodoreSystem() = default;
     ~CommodoreSystem() override = default;
+
+    // ---- Debug cart interface (used by test frameworks) ----
+    void    enable_debug_cart(bool enable) { debug_cart_enabled_ = enable; }
+    bool    debug_cart_written() const     { return debug_cart_written_; }
+    uint8_t debug_cart_value() const       { return debug_cart_value_; }
+    void    clear_debug_cart()             { debug_cart_written_ = false; debug_cart_value_ = 0; }
 
     // ---- File loading (shared implementation) ----
     bool load_file(const char* filepath) override;
@@ -329,6 +348,11 @@ public:
     bool is_warping() const override { return is_drive_warping(); }
     void handle_text_input(const char* text) override;
     void release_all_keys() override;
+
+    // Shared keyboard event handler — routes through keyboard_mapper_ when
+    // available, else falls back to direct keyboard_->key_down/up.
+    // C64System overrides (uses its own `keyboard` member + initialized_ guard).
+    void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
 
     // Default implementation dispatches to keyboard_mapper_ if available,
     // else falls back to handle_keyboard_event(key, pressed).
