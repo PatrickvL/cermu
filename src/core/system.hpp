@@ -485,6 +485,11 @@ public:
     /// Detach a specific device from a bus port.
     void detach_device_from_port(int port_index, PeripheralDevice* device);
 
+    /// Swap the attached devices between two point-to-point ports.
+    /// Both ports must exist and be non-bus.  Host input bindings are
+    /// preserved on the devices (they follow the device, not the port).
+    void swap_port_devices(int port_a, int port_b);
+
     /// Route an SDL event to all owned devices that accept host input.
     /// Returns true if any device consumed the event.
     bool process_sdl_event_for_devices(const SDL_Event& event);

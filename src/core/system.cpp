@@ -547,6 +547,32 @@ void System::detach_device_from_port(int port_index, PeripheralDevice* device) {
     on_port_device_changed(port_index);
 }
 
+void System::swap_port_devices(int port_a, int port_b) {
+    Port* pa = get_port(port_a);
+    Port* pb = get_port(port_b);
+    if (!pa || !pb) return;
+    if (pa->is_bus() || pb->is_bus()) return;  // Only point-to-point
+
+    PeripheralDevice* dev_a = pa->get_attached_device();
+    PeripheralDevice* dev_b = pb->get_attached_device();
+    if (!dev_a && !dev_b) return;  // Nothing to swap
+
+    // Detach both (without destroying — we still hold ownership in owned_devices_)
+    if (dev_a) pa->detach_device(dev_a);
+    if (dev_b) pb->detach_device(dev_b);
+
+    // Re-attach to the opposite port
+    if (dev_b) pa->attach_device(dev_b);
+    if (dev_a) pb->attach_device(dev_a);
+
+    log_info("System: Swapped devices between %s and %s\n",
+             pa->get_name(), pb->get_name());
+
+    on_port_device_changed(port_a);
+    on_port_device_changed(port_b);
+    auto_bind_host_inputs();
+}
+
 bool System::process_sdl_event_for_devices(const SDL_Event& event) {
     bool consumed = false;
     for (auto& device : owned_devices_) {
@@ -1043,6 +1069,42 @@ float System::render_port_menu_bar_icons() {
                             }
                         }
                         ImGui::EndMenu();
+                    }
+                }
+
+                // "Swap Ports" — offer to swap devices with sibling ports of the same type
+                {
+                    bool has_sibling = false;
+                    for (size_t si = 0; si < visible.size(); si++) {
+                        if (si == vi) continue;
+                        auto* sibling = visible[si].port;
+                        if (sibling->get_type() == def.type && !sibling->is_bus()) {
+                            has_sibling = true;
+                            break;
+                        }
+                    }
+                    if (has_sibling) {
+                        ImGui::Separator();
+                        for (size_t si = 0; si < visible.size(); si++) {
+                            if (si == vi) continue;
+                            auto* sibling = visible[si].port;
+                            if (sibling->get_type() != def.type || sibling->is_bus()) continue;
+
+                            char swap_label[128];
+                            auto* sib_dev = sibling->get_attached_device();
+                            snprintf(swap_label, sizeof(swap_label),
+                                     "Swap with %s%s%s%s",
+                                     sibling->get_name(),
+                                     sib_dev ? " (" : "",
+                                     sib_dev ? sib_dev->get_name() : "",
+                                     sib_dev ? ")" : "");
+                            if (ImGui::MenuItem(swap_label)) {
+                                swap_port_devices(vp.index, visible[si].index);
+                                ImGui::EndPopup();
+                                ImGui::PopID();
+                                return total_w;
+                            }
+                        }
                     }
                 }
             }
