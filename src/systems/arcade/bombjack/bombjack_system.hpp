@@ -60,7 +60,7 @@ inline constexpr auto kBombJackSoundManifest = make_manifest(
 
 // Port manifest — shared between both boards
 inline constexpr auto kBombJackPortManifest = make_manifest(
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortRgb>{.name = "Video Out", .default_device = "crt_arcade"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 

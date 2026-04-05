@@ -91,7 +91,7 @@ inline constexpr auto kOric1Manifest = make_manifest(
     // Ports
     Slot<PortCassette>{.name = "Cassette Port"},
     Slot<PortExpansion>{.name = "Expansion Port"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv_pal"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 
@@ -105,7 +105,7 @@ inline constexpr auto kOricAtmosManifest = make_manifest(
     // Ports
     Slot<PortCassette>{.name = "Cassette Port"},
     Slot<PortExpansion>{.name = "Expansion Port"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv_pal"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 

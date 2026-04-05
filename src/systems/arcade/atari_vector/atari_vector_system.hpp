@@ -606,7 +606,7 @@ constexpr auto make_atv_manifest() {
 
     // Port — always present
     auto port = std::make_tuple(
-        Slot<PortCompositeVideo>{.name = "Video Out"}
+        Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_vector"}
     );
 
     return std::apply([](auto&&... slots) {

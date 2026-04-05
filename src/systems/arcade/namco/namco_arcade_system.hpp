@@ -69,7 +69,7 @@ inline constexpr auto kPacManManifest = make_manifest(
     Slot<RAMChip>{.base_addr = 0x4C00, .size_bytes = 0x0400, .label = "Work RAM"},
     Slot<namco_wsg_t>{.base_addr = 0x5040, .addr_mask = 0xFFE0, .label = "WSG3"},
     // Ports
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortRgb>{.name = "Video Out", .default_device = "crt_arcade"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 
@@ -82,7 +82,7 @@ inline constexpr auto kPengoManifest = make_manifest(
     Slot<RAMChip>{.base_addr = 0x8C00, .size_bytes = 0x0400, .label = "Work RAM"},
     Slot<namco_wsg_t>{.base_addr = 0x9040, .addr_mask = 0xFFE0, .label = "WSG3"},
     // Ports
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortRgb>{.name = "Video Out", .default_device = "crt_arcade"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 
@@ -115,7 +115,7 @@ struct NamcoBoard : Board<BSpec> {
     namco_wsg_t& wsg  = std::get<5>(components_);
 
     // Port aliases
-    PortCompositeVideo& video_port = std::get<6>(components_);
+    PortRgb&            video_port = std::get<6>(components_);
     PortAudioMono&      audio_port = std::get<7>(components_);
 
     template<size_t N>

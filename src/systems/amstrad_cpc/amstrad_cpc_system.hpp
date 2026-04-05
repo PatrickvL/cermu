@@ -115,7 +115,7 @@ inline constexpr auto kCPC464Manifest = make_manifest(
     // Ports
     Slot<PortCassette>{.name = "Cassette Port"},
     Slot<PortExpansion>{.name = "Expansion Port"},
-    Slot<PortRgb>{.name = "Video Out (RGB)", .default_device = "crt_tv"},
+    Slot<PortRgb>{.name = "Video Out (RGB)", .default_device = "crt_ctm644"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 
@@ -132,7 +132,7 @@ inline constexpr auto kCPC6128Manifest = make_manifest(
     // Ports
     Slot<PortCassette>{.name = "Cassette Port"},
     Slot<PortExpansion>{.name = "Expansion Port"},
-    Slot<PortRgb>{.name = "Video Out (RGB)", .default_device = "crt_tv"},
+    Slot<PortRgb>{.name = "Video Out (RGB)", .default_device = "crt_ctm644"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 

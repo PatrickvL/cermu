@@ -73,7 +73,7 @@ inline constexpr auto kVZ200Manifest = make_manifest(
     // Ports
     Slot<PortControlDB9>{.name = "Joystick Port", .port_number = 1, .default_device = "joystick"},
     Slot<PortCassette>{.name = "Cassette Port"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv_pal"}
 );
 
 inline constexpr auto kVZ300Manifest = make_manifest(
@@ -86,7 +86,7 @@ inline constexpr auto kVZ300Manifest = make_manifest(
     // Ports
     Slot<PortControlDB9>{.name = "Joystick Port", .port_number = 1, .default_device = "joystick"},
     Slot<PortCassette>{.name = "Cassette Port"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv_pal"}
 );
 
 inline constexpr size_t kVZ200ChipCount = decltype(kVZ200Manifest)::chip_count;

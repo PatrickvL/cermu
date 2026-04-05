@@ -44,7 +44,7 @@ inline constexpr auto kEinsteinManifest = make_manifest(
     Slot<z80_pio_t>{.base_addr = 0x0010, .label = "Z80 PIO"},
     // Ports
     Slot<PortExpansion>{.name = "Expansion Port"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv_pal"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 

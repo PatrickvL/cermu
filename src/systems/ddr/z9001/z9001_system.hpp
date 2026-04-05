@@ -86,7 +86,7 @@ inline constexpr auto kZ9001Manifest = make_manifest(
     Slot<z80_ctc_t>{.base_addr = 0x0080, .addr_mask = 0x00FC, .label = "U857 CTC"},
     // Ports
     Slot<PortCassette>{.name = "Cassette Port"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_junost"}
 );
 
 inline constexpr auto kKC87Manifest = make_manifest(
@@ -103,7 +103,7 @@ inline constexpr auto kKC87Manifest = make_manifest(
     Slot<z80_ctc_t>{.base_addr = 0x0080, .addr_mask = 0x00FC, .label = "U857 CTC"},
     // Ports
     Slot<PortCassette>{.name = "Cassette Port"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_junost"}
 );
 
 inline constexpr size_t kZ9001ChipCount = decltype(kZ9001Manifest)::chip_count;

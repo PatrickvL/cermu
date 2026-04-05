@@ -115,7 +115,7 @@ inline constexpr auto kC264Manifest = make_manifest(
     Slot<PortIecSerial>{.name = "IEC Serial Bus", .is_bus = true, .default_device = "1541"},
     Slot<PortCassette>{.name = "Cassette Port", .default_device = "datasette"},
     Slot<PortExpansion>{.name = "Expansion Port"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_1702"},
     Slot<PortAudioMono>{.name = "Audio Out"},
     Slot<PortCustom>{.name = "Keyboard", .is_internal = true}
 );
