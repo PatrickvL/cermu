@@ -285,15 +285,6 @@ private:
     bus_state_t z80_pins_  = 0;                       // Z80 bus state
     int         audio_sample_rate_ = c128_constants::DEFAULT_SAMPLE_RATE;
 
-    // ── IEC serial traps ──────────────────────────────────────────────
-    bool serial_traps_enabled_ = false;
-
-    struct SerialTrapState {
-        uint8_t trap_device = 0;
-        uint8_t trap_secondary = 0;
-        int active_device = -1;
-    } serial_trap_;
-
     // ── Viewer IDs ───────────────────────────────────────────────────────
     static constexpr size_t kViewerCpu   = 0;
     static constexpr size_t kViewerVicII = 1;
@@ -337,12 +328,7 @@ private:
     static void cpu_banking_callback(void* ctx, uint8_t banking_state);
 
     // ── IEC serial trap helpers ───────────────────────────────────────
-    class Drive1541Device* find_iec_drive(int device_number);
     bool check_serial_traps(uint16_t pc);
-    bool serial_trap_attention(uint16_t resume);
-    bool serial_trap_send(uint16_t resume);
-    bool serial_trap_receive(uint16_t resume);
-    bool serial_trap_ready(uint16_t resume);
 
     // CIA1 keyboard matrix scan callbacks
     static uint8_t c128_cia1_port_a_read(void* context, uint8_t port_a_output);

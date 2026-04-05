@@ -75,6 +75,47 @@ void CommodoreSystem::init_drive_subsystem() {
 
 void CommodoreSystem::reset_drive_subsystem() {
     drive_subsystem_.reset();
+    serial_trap_ = {};
+}
+
+// static
+void CommodoreSystem::add_drive_mode_option(HardwareTraits& traits) {
+    traits.custom_options.push_back({
+        "drive_mode",
+        "Drive Mode",
+        "Warp: cycle-accurate drive CPU with auto-warp when motor spins. "
+        "Cycle-accurate: real-time drive CPU (slow but accurate). "
+        "Hooked I/O: instant KERNAL serial traps (fast, less compatible).",
+        { "Warp (recommended)", "Cycle-accurate", "Hooked I/O" },
+        0  // Warp default
+    });
+}
+
+Drive1541Device* CommodoreSystem::find_iec_drive(int device_number) {
+    if (device_number < 4) return nullptr;
+    int iec_port = get_iec_port_index();
+    if (iec_port < 0) return nullptr;
+    auto* port = get_port(iec_port);
+    if (!port) return nullptr;
+    for (auto* dev : port->get_attached_devices()) {
+        auto* drive = dynamic_cast<Drive1541Device*>(dev);
+        if (drive && drive->get_device_number() == device_number) return drive;
+    }
+    return nullptr;
+}
+
+void CommodoreSystem::update_serial_traps_enabled() {
+    serial_traps_enabled_ = false;
+    int iec_port = get_iec_port_index();
+    if (iec_port < 0) return;
+    auto* port = get_port(iec_port);
+    if (!port) return;
+    for (auto* dev : port->get_attached_devices()) {
+        if (dynamic_cast<Drive1541Device*>(dev)) {
+            serial_traps_enabled_ = true;
+            break;
+        }
+    }
 }
 
 void CommodoreSystem::handle_text_input(const char* text) {

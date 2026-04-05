@@ -39,6 +39,7 @@
 #include "devices/input/lightpen_device.hpp"
 #include "devices/storage/drive_1541.hpp"
 #include "devices/storage/datasette_1530.hpp"
+#include "systems/commodore/commodore_serial_traps.inl"
 #include "devices/keyboard/commodore_keyboard_device.hpp"
 #include "systems/commodore/prg_content_analysis.hpp"
 #include <cstring>
@@ -313,15 +314,7 @@ static HardwareTraits create_c64_hardware_traits() {
     });
 
     // Drive emulation mode
-    traits.custom_options.push_back({
-        "drive_mode",
-        "Drive Mode",
-        "Warp: cycle-accurate drive CPU with auto-warp when motor spins. "
-        "Cycle-accurate: real-time drive CPU (slow but accurate). "
-        "Hooked I/O: instant KERNAL serial traps (fast, less compatible).",
-        { "Warp (recommended)", "Cycle-accurate", "Hooked I/O" },
-        0  // Warp default
-    });
+    CommodoreSystem::add_drive_mode_option(traits);
 
     return traits;
 }
@@ -724,8 +717,7 @@ void C64System::reset() {
 // ============================================================================
 // Intercept KERNAL serial bus routines to provide instant drive I/O.
 // Addresses match the standard C64 KERNAL ROM (901227-03).
-// Same approach as VICE's serial-trap.c but dispatching directly to our
-// Drive1541Device channel buffers.
+// Handler bodies live in CommodoreSystem (shared with C128).
 // ============================================================================
 
 // KERNAL serial routine addresses (from VICE c64.c c64_serial_traps[])
@@ -736,196 +728,20 @@ static constexpr uint16_t TRAP_SERIAL_RECEIVE_BYTE = 0xEE14;
 static constexpr uint16_t TRAP_SERIAL_READY        = 0xEEA9;
 static constexpr uint16_t TRAP_RESUME_ADDRESS      = 0xEDAB;  // RTS in KERNAL
 
-// KERNAL zero-page addresses for serial I/O
-static constexpr uint16_t ZP_BSOUR  = 0x95;   // Buffered character for serial bus
-static constexpr uint16_t ZP_TMP_IN = 0xA4;   // Temp storage for received byte
-static constexpr uint16_t ZP_STATUS = 0x90;   // I/O status word (ST)
-
-// IEC command byte masks
-static constexpr uint8_t IEC_LISTEN_MASK   = 0x20;
-static constexpr uint8_t IEC_TALK_MASK     = 0x40;
-static constexpr uint8_t IEC_SECOND_MASK   = 0x60;
-static constexpr uint8_t IEC_CLOSE_MASK    = 0xE0;
-static constexpr uint8_t IEC_OPEN_MASK     = 0xF0;
-static constexpr uint8_t IEC_UNLISTEN      = 0x3F;
-static constexpr uint8_t IEC_UNTALK        = 0x5F;
-static constexpr uint8_t IEC_DEVNR_MASK    = 0x0F;
-
-Drive1541Device* C64System::find_iec_drive(int device_number) {
-    if (device_number < 4) return nullptr;
-    auto* port = get_port(PORT_IEC_SERIAL);
-    if (!port) return nullptr;
-    for (auto* dev : port->get_attached_devices()) {
-        auto* drive = dynamic_cast<Drive1541Device*>(dev);
-        if (drive && drive->get_device_number() == device_number) return drive;
-    }
-    return nullptr;
-}
-
 bool C64System::check_serial_traps(uint16_t pc) {
     switch (pc) {
         case TRAP_SERIAL_LISTEN:
         case TRAP_SERIAL_SA_LISTEN:
-            return serial_trap_attention();
+            return serial_trap_attention(*cpu, ram->data(), TRAP_RESUME_ADDRESS);
         case TRAP_SERIAL_SEND_BYTE:
-            return serial_trap_send();
+            return serial_trap_send(*cpu, ram->data(), TRAP_RESUME_ADDRESS);
         case TRAP_SERIAL_RECEIVE_BYTE:
-            return serial_trap_receive();
+            return serial_trap_receive(*cpu, ram->data(), TRAP_RESUME_ADDRESS);
         case TRAP_SERIAL_READY:
-            return serial_trap_ready();
+            return serial_trap_ready(*cpu, TRAP_RESUME_ADDRESS);
         default:
             return false;
     }
-}
-
-bool C64System::serial_trap_attention() {
-    uint8_t iecdata = ram->data()[ZP_BSOUR];
-
-    if (iecdata == IEC_UNLISTEN) {
-        // UNLISTEN — finalize pending OPEN (send accumulated filename)
-        auto* drive = find_iec_drive(serial_trap_.active_device);
-        if (drive) {
-            drive->trap_unlisten();
-        }
-        serial_trap_.active_device = -1;
-    } else if (iecdata == IEC_UNTALK) {
-        // UNTALK — end talk session
-        auto* drive = find_iec_drive(serial_trap_.active_device);
-        if (drive) {
-            drive->trap_untalk();
-        }
-        serial_trap_.active_device = -1;
-    } else if ((iecdata & 0xF0) == IEC_LISTEN_MASK || (iecdata & 0xF0) == IEC_TALK_MASK) {
-        // LISTEN or TALK — address a device
-        serial_trap_.active_device = iecdata & IEC_DEVNR_MASK;
-        serial_trap_.trap_device = iecdata;
-        serial_trap_.trap_secondary = 0;
-    } else if ((iecdata & 0xF0) == IEC_SECOND_MASK) {
-        // SECONDARY — set secondary address for data transfer
-        serial_trap_.trap_secondary = iecdata;
-        auto* drive = find_iec_drive(serial_trap_.active_device);
-        if (drive) {
-            drive->trap_second(iecdata & 0x0F);
-        }
-    } else if ((iecdata & 0xF0) == IEC_OPEN_MASK) {
-        // OPEN — begin opening a channel (filename follows via CIOUT)
-        serial_trap_.trap_secondary = iecdata;
-        auto* drive = find_iec_drive(serial_trap_.active_device);
-        if (drive) {
-            drive->trap_open(iecdata & 0x0F);
-        }
-    } else if ((iecdata & 0xF0) == IEC_CLOSE_MASK) {
-        // CLOSE — close a channel
-        serial_trap_.trap_secondary = iecdata;
-        auto* drive = find_iec_drive(serial_trap_.active_device);
-        if (drive) {
-            drive->trap_close(iecdata & 0x0F);
-        }
-    }
-
-    // Check if the addressed device is present
-    if (serial_trap_.active_device >= 4) {
-        auto* drive = find_iec_drive(serial_trap_.active_device);
-        if (!drive) {
-            ram->data()[ZP_STATUS] |= 0x80;  // Device not present
-        }
-    }
-
-    // Clear carry and interrupt disable flags (as the real KERNAL would)
-    uint8_t p = cpu->get(P);
-    p &= ~0x01;  // Clear carry
-    p &= ~0x04;  // Clear interrupt disable
-    cpu->set(P, p);
-
-    // Resume at the KERNAL's RTS
-    cpu->set(PC, TRAP_RESUME_ADDRESS);
-    cpu->transition_to_fetch();
-    return true;
-}
-
-bool C64System::serial_trap_send() {
-    // Only handle if we have a valid device
-    if (serial_trap_.active_device < 4) return false;
-    auto* drive = find_iec_drive(serial_trap_.active_device);
-    if (!drive) return false;
-
-    uint8_t iecdata = ram->data()[ZP_BSOUR];
-
-    // If no secondary address was sent, default to SA 0
-    if (serial_trap_.trap_secondary == 0) {
-        serial_trap_.trap_secondary = IEC_SECOND_MASK;
-        drive->trap_second(0);
-    }
-
-    drive->trap_send(iecdata);
-
-    // Clear carry and interrupt disable
-    uint8_t p = cpu->get(P);
-    p &= ~0x01;
-    p &= ~0x04;
-    cpu->set(P, p);
-
-    cpu->set(PC, TRAP_RESUME_ADDRESS);
-    cpu->transition_to_fetch();
-    return true;
-}
-
-bool C64System::serial_trap_receive() {
-    // Only handle if we have a valid device
-    if (serial_trap_.active_device < 4) return false;
-    auto* drive = find_iec_drive(serial_trap_.active_device);
-    if (!drive) return false;
-
-    // If no secondary address was sent, default to SA 0
-    if (serial_trap_.trap_secondary == 0) {
-        serial_trap_.trap_secondary = IEC_SECOND_MASK;
-        drive->trap_second(0);
-    }
-
-    uint8_t data = 0;
-    int status = drive->trap_receive(data);
-
-    // Store received byte in TMP_IN and A register
-    ram->data()[ZP_TMP_IN] = data;
-    cpu->set(A, data);
-
-    // Set/update I/O status (ST)
-    if (status) {
-        ram->data()[ZP_STATUS] |= static_cast<uint8_t>(status);
-    }
-
-    // Set CPU flags to match the received byte
-    uint8_t p = cpu->get(P);
-    p &= ~0x01;  // Clear carry
-    p &= ~0x04;  // Clear interrupt disable
-    // Set N (sign) and Z (zero) flags based on data
-    if (data & 0x80) p |= 0x80; else p &= ~0x80;
-    if (data == 0)   p |= 0x02; else p &= ~0x02;
-    cpu->set(P, p);
-
-    cpu->set(PC, TRAP_RESUME_ADDRESS);
-    cpu->transition_to_fetch();
-    return true;
-}
-
-bool C64System::serial_trap_ready() {
-    // Only handle if we have a valid device on the bus
-    if (serial_trap_.active_device < 4) return false;
-    auto* drive = find_iec_drive(serial_trap_.active_device);
-    if (!drive) return false;
-
-    // Fake the serial-ready check: pretend the bus signals are fine
-    cpu->set(A, 1);
-
-    uint8_t p = cpu->get(P);
-    p &= ~0x80;  // Clear sign
-    p &= ~0x02;  // Clear zero
-    p &= ~0x04;  // Clear interrupt disable
-    cpu->set(P, p);
-
-    cpu->set(PC, TRAP_RESUME_ADDRESS);
-    cpu->transition_to_fetch();
-    return true;
 }
 
 // ============================================================================
@@ -1654,16 +1470,7 @@ void C64System::on_port_device_changed(int port_index) {
 
     // Update serial-traps-enabled flag when IEC serial port changes
     if (port_index == PORT_IEC_SERIAL) {
-        serial_traps_enabled_ = false;
-        auto* port = get_port(PORT_IEC_SERIAL);
-        if (port) {
-            for (auto* dev : port->get_attached_devices()) {
-                if (dynamic_cast<Drive1541Device*>(dev)) {
-                    serial_traps_enabled_ = true;
-                    break;
-                }
-            }
-        }
+        update_serial_traps_enabled();
     }
 }
 

@@ -14,6 +14,7 @@
 #include "core/input/emu_key_sdl_map.hpp"
 #include "devices/keyboard/commodore_keyboard_device.hpp"
 #include "devices/storage/drive_1541.hpp"
+#include "systems/commodore/commodore_serial_traps.inl"
 #include <cstring>
 #include <cstdio>
 
