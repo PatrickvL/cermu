@@ -5,6 +5,7 @@
 #include "core/formats/format_registry.hpp"
 #include "core/config/path_discovery.hpp"
 #include "core/vfs/vfs.hpp"
+#include "core/input/emu_key_sdl_map.hpp"
 #include <cstring>
 #include <cstdio>
 #ifdef CERMU_HAS_GUI
@@ -127,6 +128,25 @@ void CommodoreSystem::handle_text_input(const char* text) {
 void CommodoreSystem::release_all_keys() {
     if (keyboard_mapper_) {
         keyboard_mapper_->release_all();
+    }
+}
+
+void CommodoreSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
+    if (keyboard_mapper_) {
+        if (pressed) {
+            keyboard_mapper_->process_key_down(key, SDL_SCANCODE_UNKNOWN, 0, false);
+        } else {
+            keyboard_mapper_->process_key_up(key, SDL_SCANCODE_UNKNOWN, 0);
+        }
+    } else if (keyboard_) {
+        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(key);
+        if (ek != EMUKEY_NONE) {
+            if (pressed) {
+                keyboard_->key_down(ek, false);
+            } else {
+                keyboard_->key_up(ek, false);
+            }
+        }
     }
 }
 

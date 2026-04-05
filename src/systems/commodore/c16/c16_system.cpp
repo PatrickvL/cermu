@@ -120,15 +120,7 @@ HardwareTraits Commodore264System<V>::create_hardware_traits() {
     });
 
     // Drive emulation mode
-    traits.custom_options.push_back({
-        "drive_mode",
-        "Drive Mode",
-        "Warp: cycle-accurate drive CPU with auto-warp when motor spins. "
-        "Cycle-accurate: real-time drive CPU (slow but accurate). "
-        "Hooked I/O: instant KERNAL serial traps (fast, less compatible).",
-        { "Warp (recommended)", "Cycle-accurate", "Hooked I/O" },
-        0  // Warp default
-    });
+    CommodoreSystem::add_drive_mode_option(traits);
 
     return traits;
 }
@@ -920,30 +912,6 @@ void Commodore264System<V>::set_audio_sample_rate(int sample_rate_hz) {
 
     // Also update legacy path (TED internal ring buffer downsample ratio)
     ted_->audio_reset(ted_clock, static_cast<uint32_t>(sample_rate_hz));
-}
-
-// ============================================================================
-// Input
-// ============================================================================
-
-template<C264SeriesVariant V>
-void Commodore264System<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
-    if (keyboard_mapper_) {
-        if (pressed) {
-            keyboard_mapper_->process_key_down(key, SDL_SCANCODE_UNKNOWN, 0, false);
-        } else {
-            keyboard_mapper_->process_key_up(key, SDL_SCANCODE_UNKNOWN, 0);
-        }
-    } else if (keyboard_) {
-        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(key);
-        if (ek != EMUKEY_NONE) {
-            if (pressed) {
-                keyboard_->key_down(ek, false);
-            } else {
-                keyboard_->key_up(ek, false);
-            }
-        }
-    }
 }
 
 // ============================================================================

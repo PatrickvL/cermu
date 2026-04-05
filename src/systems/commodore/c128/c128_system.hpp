@@ -202,7 +202,6 @@ public:
     void tick() override;
     void run_frame() override;
 
-    void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
     void handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode,
                                   uint16_t mod, bool pressed, bool repeat) override;
 

@@ -210,9 +210,6 @@ public:
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
     void set_audio_sample_rate(int sample_rate_hz) override;
 
-    // Input
-    void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
-
     // GUI integration
     void render_system_menu_items() override;
     void render_configuration_ui() override;
@@ -229,15 +226,6 @@ public:
     const CSG7501*    cpu() const { return cpu_; }
     const ted7360_t*  ted() const { return &board_.ted; }
     const RAMChip* ram() const { return ram_; }
-
-    // Debug cart ($FDCF) — VICE convention for Plus4 test programs.
-    // When enabled, writes to $FDCF are captured instead of being silently ignored.
-    // $00 = test passed, $FF = test failed (matching C64 $D7FF convention).
-    // Not real hardware — captured in mem_tick() post-processing.
-    void    enable_debug_cart(bool enable) { debug_cart_enabled_ = enable; }
-    bool    debug_cart_written() const     { return debug_cart_written_; }
-    uint8_t debug_cart_value() const       { return debug_cart_value_; }
-    void    clear_debug_cart()             { debug_cart_written_ = false; debug_cart_value_ = 0; }
 
     // File probe — returns confidence + optimal configuration for this TED variant
     static SystemProbeResult probe_file_static(
@@ -270,11 +258,6 @@ private:
     mos6529_t* pio2_      = nullptr;  // MOS 6529B PIO2 ($FD30) — keyboard row select
     c264_io_decoder_t* io_dec_ = nullptr;  // I/O decoder ($FD00, 74LS139 + 74LS175)
     size_t  ram_size_ = 16384;           // Cached configured RAM size (updated in apply_configuration)
-
-    // Debug cart state (VICE test convention, not real hardware)
-    bool    debug_cart_enabled_ = false;
-    bool    debug_cart_written_ = false;
-    uint8_t debug_cart_value_   = 0;
 
     // System state
     bool initialized_;
