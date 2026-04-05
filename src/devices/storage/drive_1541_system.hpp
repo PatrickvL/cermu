@@ -41,6 +41,7 @@
 #include "core/system_lines.hpp"
 #include "core/typed_manifest.hpp"
 #include "devices/storage/drive_traits.hpp"
+#include "devices/storage/gcr.hpp"
 
 #include <cstdint>
 #include <cstring>
@@ -210,8 +211,16 @@ public:
 
     // ── Disk image ──────────────────────────────────────────────────────
 
-    bool insert_disk(const char* filepath) { return disk_.load(filepath); }
-    void eject_disk()                      { disk_.eject(); }
+    bool insert_disk(const char* filepath) {
+        if (!disk_.load(filepath)) return false;
+        gcr_dirty_ = true;
+        return true;
+    }
+    void eject_disk() {
+        disk_.eject();
+        gcr_dirty_ = true;
+        for (auto& t : gcr_tracks_) t = gcr::GCRTrack{};
+    }
     bool swap_disk(const char* filepath);
     bool is_disk_inserted() const          { return disk_.loaded; }
     const std::string& disk_path() const   { return disk_.filepath; }
@@ -311,6 +320,39 @@ private:
 
     D64Image       disk_;
     DriveHeadState head_;
+
+    // ── GCR bitstream state ─────────────────────────────────────────────
+    //
+    // The 1541 reads the disk surface through a shift register clocked by
+    // the UE7/UF4 timing chain.  UE7 divides a 16 MHz reference by
+    // (16 - speed_zone), then UF4 counts 4 of those pulses per bit cell.
+    // Every 4 UE7 overflows the next flux bit is shifted into a 10-bit
+    // window (last_read_data_).  After 8 non-SYNC bits, byte-ready fires.
+
+    gcr::GCRTrack  gcr_tracks_[43] = {};  // Pre-encoded tracks (1-42, index 0 unused)
+    bool           gcr_dirty_ = true;     // Need to re-encode tracks from D64
+    uint8_t        gcr_cached_track_ = 0; // Track currently under the head
+
+    // Shift register / timing chain state
+    uint16_t       last_read_data_ = 0;   // 10-bit shift window (bits 9..0)
+    uint8_t        gcr_data_byte_ = 0xFF; // Last complete GCR byte (VIA#2 PA)
+    uint8_t        bit_counter_   = 0;    // Counts 0..7 bits between byte-ready
+    bool           sync_detected_ = false;// True while 10+ consecutive 1-bits
+    bool           byte_ready_    = false;// Triggers VIA#2 CA1 interrupt (SOE)
+
+    // UE7/UF4 clock divider state
+    uint8_t        ue7_counter_   = 0;    // UE7 frequency divider (counts to threshold)
+    uint8_t        uf4_counter_   = 0;    // UF4 divide-by-4 (counts 0..3)
+
+    // Disk ID bytes (from BAM sector, for track encoding)
+    uint8_t        disk_id1_ = 0;
+    uint8_t        disk_id2_ = 0;
+
+    /// Encode all tracks from the current D64 image into GCR bitstreams.
+    void encode_disk_to_gcr();
+
+    /// Ensure the track under the head is encoded.
+    void ensure_gcr_track();
 
     // ── Timing ──────────────────────────────────────────────────────────
 
