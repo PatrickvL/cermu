@@ -280,48 +280,15 @@ private:
     LightpenDevice* cached_lightpen_ = nullptr;
 
     /// True when at least one drive is attached to PORT_IEC_SERIAL.
-    /// Updated by on_port_device_changed() to skip the per-cycle opdone()
-    /// + PC range check when no drive is present.
-    bool serial_traps_enabled_ = false;
-
     // Debug cart ($D7FF write capture)
     bool    debug_cart_enabled_ = false;
     bool    debug_cart_written_ = false;
     uint8_t debug_cart_value_   = 0;
 
     // =========================================================================
-    // KERNAL SERIAL TRAPS
-    // =========================================================================
-    // Intercept KERNAL ROM serial bus routines to provide instant IEC I/O.
-    // This is the standard approach (same as VICE's serial-trap.c) — when the
-    // CPU reaches specific KERNAL addresses, the C++ trap handler executes
-    // the operation directly on the Drive1541Device channel buffers instead
-    // of bit-banging the IEC bus protocol.
-    //
-    // Trap addresses for KERNAL 901227-03:
-    //   $ED24: SerialListen      → serial_trap_attention()
-    //   $ED37: SerialSaListen    → serial_trap_attention()
-    //   $ED41: SerialSendByte    → serial_trap_send()
-    //   $EE14: SerialReceiveByte → serial_trap_receive()
-    //   $EEA9: SerialReady       → serial_trap_ready()
-    // Resume address: $EDAB (RTS)
+    // KERNAL SERIAL TRAPS — dispatch (uses shared handlers from CommodoreSystem)
     // =========================================================================
 
-    struct SerialTrapState {
-        uint8_t trap_device = 0;      ///< LISTEN/TALK command (0x20+dev or 0x40+dev)
-        uint8_t trap_secondary = 0;   ///< Secondary address command byte
-        int active_device = -1;       ///< Device number currently addressed (-1 = none)
-    } serial_trap_;
-
-    /// Find a 1541 drive for a given device number on the IEC bus.
-    class Drive1541Device* find_iec_drive(int device_number);
-
-    /// Check if PC matches a serial trap address; if so, handle it.
+    /// Check if PC matches a C64 KERNAL serial trap address; if so, handle it.
     bool check_serial_traps(uint16_t pc);
-
-    /// Trap handlers (return true if handled).
-    bool serial_trap_attention();
-    bool serial_trap_send();
-    bool serial_trap_receive();
-    bool serial_trap_ready();
 };

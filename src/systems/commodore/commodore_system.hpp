@@ -7,9 +7,13 @@
 #include "core/input/keyboard_mapper.hpp"
 #include "core/input/emu_keys.hpp"
 #include "devices/storage/drive_subsystem.hpp"
+#include "chip/cpu/fam65xx/fam65xx_types.hpp"
 #include <memory>
 #include <string>
 #include <vector>
+
+// Forward declaration — drive device for serial trap finding
+class Drive1541Device;
 
 // ── Drive emulation modes ───────────────────────────────────────────────────
 //
@@ -99,6 +103,86 @@ protected:
 
     /// Apply drive_mode from SystemConfiguration custom_settings.
     void apply_drive_mode_config();
+
+    /// Add the DriveMode custom option to a HardwareTraits struct.
+    /// Call from derived create_*_hardware_traits() functions.
+    /// Public because it's called from free functions that build HardwareTraits.
+public:
+    static void add_drive_mode_option(HardwareTraits& traits);
+protected:
+
+    // =========================================================================
+    // KERNAL SERIAL TRAPS — shared IEC bus trap infrastructure
+    //
+    // Intercept KERNAL ROM serial bus routines to provide instant drive I/O.
+    // This is the standard approach (same as VICE's serial-trap.c) — when the
+    // CPU reaches specific KERNAL addresses, the C++ trap handler executes
+    // the operation directly on the Drive1541Device channel buffers.
+    //
+    // Trap addresses differ per KERNAL ROM (C64, C128 mode, C128 C64-mode).
+    // The dispatch (check_serial_traps) stays in derived classes.  The handler
+    // bodies live here because the logic is identical.
+    // =========================================================================
+
+    /// IEC command byte constants (shared across all Commodore KERNALs).
+    struct IEC {
+        static constexpr uint8_t LISTEN_MASK  = 0x20;
+        static constexpr uint8_t TALK_MASK    = 0x40;
+        static constexpr uint8_t SECOND_MASK  = 0x60;
+        static constexpr uint8_t CLOSE_MASK   = 0xE0;
+        static constexpr uint8_t OPEN_MASK    = 0xF0;
+        static constexpr uint8_t UNLISTEN     = 0x3F;
+        static constexpr uint8_t UNTALK       = 0x5F;
+        static constexpr uint8_t DEVNR_MASK   = 0x0F;
+
+        // KERNAL zero-page locations (identical across C64/C128/VIC-20)
+        static constexpr uint16_t ZP_BSOUR    = 0x95;
+        static constexpr uint16_t ZP_TMP_IN   = 0xA4;
+        static constexpr uint16_t ZP_STATUS   = 0x90;
+    };
+
+    /// Per-device serial trap tracking state.
+    struct SerialTrapState {
+        uint8_t trap_device    = 0;     ///< LISTEN/TALK command byte
+        uint8_t trap_secondary = 0;     ///< Secondary address command byte
+        int     active_device  = -1;    ///< Device number currently addressed (-1 = none)
+    };
+
+    bool           serial_traps_enabled_ = false;
+    SerialTrapState serial_trap_;
+
+    /// Find a 1541 drive for a given device number on the IEC bus.
+    /// Uses get_iec_port_index() to locate the IEC serial port.
+    Drive1541Device* find_iec_drive(int device_number);
+
+    /// Update serial_traps_enabled_ flag based on attached devices.
+    /// Call from on_port_device_changed() when port_index == get_iec_port_index().
+    void update_serial_traps_enabled();
+
+    // ── Serial trap handler bodies ──────────────────────────────────────
+    //
+    // Shared handler logic.  Templated on the CPU type (any fam65xx_t<Traits>
+    // instantiation — MOS6510, CSG8502, etc.) so we avoid virtual dispatch
+    // and the register accessor types resolve naturally.
+    //
+    // Parameters:
+    //   cpu        — reference to the active fam65xx CPU
+    //   ram        — flat RAM buffer (for ZP access)
+    //   resume_pc  — KERNAL return address after trap execution
+    //
+    // Returns true if the trap was handled.
+
+    template <typename CPU>
+    bool serial_trap_attention(CPU& cpu, uint8_t* ram, uint16_t resume_pc);
+
+    template <typename CPU>
+    bool serial_trap_send(CPU& cpu, uint8_t* ram, uint16_t resume_pc);
+
+    template <typename CPU>
+    bool serial_trap_receive(CPU& cpu, uint8_t* ram, uint16_t resume_pc);
+
+    template <typename CPU>
+    bool serial_trap_ready(CPU& cpu, uint16_t resume_pc);
 
     // =========================================================================
     // DEFERRED LOADING — shared infrastructure for all Commodore systems
@@ -258,3 +342,7 @@ public:
     // and C16/Plus4 keyboards.
     int get_guest_keyboard_scancodes(const SDL_Scancode** out) const override;
 };
+
+// Template definitions for serial_trap_attention/send/receive/ready live in
+// commodore_serial_traps.inl — include that file from .cpp files that call
+// check_serial_traps() to avoid pulling Drive1541Device into every TU.
