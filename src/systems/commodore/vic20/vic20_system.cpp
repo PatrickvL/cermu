@@ -153,7 +153,18 @@ static HardwareTraits create_vic20_hardware_traits() {
         ntsc_timing,
         false
     });
-    
+
+    // Drive emulation mode
+    traits.custom_options.push_back({
+        "drive_mode",
+        "Drive Mode",
+        "Warp: cycle-accurate drive CPU with auto-warp when motor spins. "
+        "Cycle-accurate: real-time drive CPU (slow but accurate). "
+        "Hooked I/O: instant KERNAL serial traps (fast, less compatible).",
+        { "Warp (recommended)", "Cycle-accurate", "Hooked I/O" },
+        0  // Warp default
+    });
+
     return traits;
 }
 
@@ -676,6 +687,9 @@ bool VIC20System::initialize() {
     audio_port_->configure(vic_->clock_frequency, vic20_constants::AUDIO_SAMPLE_RATE);
     vic_->set_audio_port(audio_port_.get());
 
+    // Initialize cycle-accurate drive subsystem (reads drive_mode from config)
+    init_drive_subsystem();
+
     initialized_ = true;
     return true;
 }
@@ -719,6 +733,9 @@ void VIC20System::reset() {
 
     // Reset deferred loading state
     reset_load_state();
+
+    // Reset cycle-accurate drive subsystem
+    reset_drive_subsystem();
 }
 
 // ============================================================================
@@ -775,6 +792,50 @@ void VIC20System::tick() {
     // CPU prepares next instruction fetch
     // =========================================================================
     s = cpu.tick<MOS6502::Phase::PHI1>(s);
+
+    // =========================================================================
+    // PHASE 5.5: Cycle-accurate IEC drive integration
+    //
+    // VIC-20 IEC bus wiring (from VICE vic20iec.c):
+    //   VIA1 PA7     = ATN OUT   (bit 7 HIGH → ATN asserted → line LOW)
+    //   VIA2 CA2     = CLK OUT   (PCR bits 3:1 = 110 → LOW, 111 → HIGH)
+    //   VIA2 CB2     = DATA OUT  (PCR bits 7:5 = 110 → LOW, 111 → HIGH)
+    //   VIA1 PA0     = CLK IN    (bit 0 HIGH → bus CLK is LOW)
+    //   VIA1 PA1     = DATA IN   (bit 1 HIGH → bus DATA is LOW)
+    // =========================================================================
+    if (is_drive_cycle_accurate()) {
+        // Read host VIA output → IEC bus
+        uint8_t via1_pa_out = board_.via1.port_a.output();
+        uint8_t via2_pcr    = board_.via2.pcr;
+
+        // ATN OUT: VIA1 PA7 HIGH = ATN asserted (transistor inverts → line LOW)
+        bool atn_released = !(via1_pa_out & 0x80);
+
+        // CLK OUT: VIA2 CA2 manual output (PCR bits 3:1)
+        //   110 (0x0C) = manual LOW = CLK asserted (transistor inverts)
+        //   111 (0x0E) = manual HIGH = CLK released
+        bool clk_released = ((via2_pcr & 0x0E) == 0x0E);
+
+        // DATA OUT: VIA2 CB2 manual output (PCR bits 7:5)
+        //   110 (0xC0) = manual LOW = DATA asserted
+        //   111 (0xE0) = manual HIGH = DATA released
+        bool data_released = ((via2_pcr & 0xE0) == 0xE0);
+
+        drive_subsystem_.sync_host_to_iec_signals(atn_released, clk_released, data_released);
+        drive_subsystem_.advance_drives(total_cycles_);
+
+        // Read IEC bus → VIA1 PA input pins (bits 0-1)
+        bool bus_clk_released, bus_data_released;
+        drive_subsystem_.sync_iec_to_host_signals(bus_clk_released, bus_data_released);
+
+        // VIA1 PA0 = CLK IN: bus CLK LOW → PA0 HIGH (inverted by hardware)
+        // VIA1 PA1 = DATA IN: bus DATA LOW → PA1 HIGH
+        uint8_t pa_in = board_.via1.port_a_pins_;
+        pa_in = (pa_in & 0xFC)
+              | (bus_clk_released  ? 0 : 0x01)   // CLK LOW → PA0 HIGH
+              | (bus_data_released ? 0 : 0x02);   // DATA LOW → PA1 HIGH
+        board_.via1.port_a_pins_ = pa_in;
+    }
 
     // Restore R/W line to read mode after CPU PHI1 has consumed write info.
     // Maintains invariant: BUS_MASK_RW is always set outside the CPU write window.

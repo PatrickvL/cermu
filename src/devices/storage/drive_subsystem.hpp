@@ -139,6 +139,19 @@ public:
         host.set(iec::DATA, !(cia2_port_a & 0x20));
     }
 
+    /// Push individual IEC signal states to the bus (slot 0).
+    ///
+    /// Used by systems where IEC lines come from different chip registers
+    /// (e.g. VIC-20: ATN from VIA#1 PA7, CLK from VIA#2 CA2, DATA from
+    /// VIA#2 CB2).  Each parameter: true = line released (HIGH), false =
+    /// line pulled LOW (asserted).
+    void sync_host_to_iec_signals(bool atn_released, bool clk_released, bool data_released) {
+        auto& host = iec_bus_.output(0);
+        host.set(iec::ATN,  atn_released);
+        host.set(iec::CLK,  clk_released);
+        host.set(iec::DATA, data_released);
+    }
+
     /// Read IEC bus combined state back into host CIA input format.
     ///
     /// CIA#2 port A input bits:
@@ -160,6 +173,14 @@ public:
             pa_in |= 0x80;
 
         return pa_in;
+    }
+
+    /// Read IEC bus combined state as raw signal booleans.
+    /// Returns true for each signal that is released (HIGH).
+    void sync_iec_to_host_signals(bool& clk_released, bool& data_released) const {
+        uint8_t combined = iec_bus_.combined();
+        clk_released  = (combined & (1u << iec::CLK)) != 0;
+        data_released = (combined & (1u << iec::DATA)) != 0;
     }
 
     /// Advance all attached drives by one cycle.

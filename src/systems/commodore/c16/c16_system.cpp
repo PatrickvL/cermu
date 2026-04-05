@@ -118,7 +118,18 @@ HardwareTraits Commodore264System<V>::create_hardware_traits() {
         ntsc_timing,
         false
     });
-    
+
+    // Drive emulation mode
+    traits.custom_options.push_back({
+        "drive_mode",
+        "Drive Mode",
+        "Warp: cycle-accurate drive CPU with auto-warp when motor spins. "
+        "Cycle-accurate: real-time drive CPU (slow but accurate). "
+        "Hooked I/O: instant KERNAL serial traps (fast, less compatible).",
+        { "Warp (recommended)", "Cycle-accurate", "Hooked I/O" },
+        0  // Warp default
+    });
+
     return traits;
 }
 
@@ -617,6 +628,9 @@ bool Commodore264System<V>::initialize() {
     audio_port_->configure(ted_clock, c16_constants::AUDIO_SAMPLE_RATE);
     ted_->set_audio_port(audio_port_.get());
 
+    // Initialize cycle-accurate drive subsystem (reads drive_mode from config)
+    init_drive_subsystem();
+
     initialized_ = true;
     return true;
 }
@@ -676,6 +690,9 @@ void Commodore264System<V>::reset() {
 
     // Reset deferred loading state
     reset_load_state();
+
+    // Reset cycle-accurate drive subsystem
+    reset_drive_subsystem();
     
     total_cycles_ = 0;
 }
@@ -735,6 +752,40 @@ void Commodore264System<V>::tick() {
     // PHASE 4: CPU PHI1
     s = cpu_->tick<CSG7501::Phase::PHI1>(s);
     
+    // =========================================================================
+    // PHASE 4.5: Cycle-accurate IEC drive integration
+    //
+    // C16/Plus4 IEC bus wiring (from VICE plus4iec.c):
+    //   CPU I/O port bit 0 → DATA OUT  (active-LOW: 0 = asserted, 1 = released)
+    //   CPU I/O port bit 1 → CLK OUT   (active-LOW: 0 = asserted, 1 = released)
+    //   CPU I/O port bit 2 → ATN OUT   (active-LOW: 0 = asserted, 1 = released)
+    //   CPU I/O port bit 6 ← CLK IN    (from bus)
+    //   CPU I/O port bit 7 ← DATA IN   (from bus)
+    // =========================================================================
+    if (is_drive_cycle_accurate()) {
+        uint8_t port_out = board_.csg7501.port.output();
+
+        // Active-LOW: bit=0 → line asserted (LOW), bit=1 → released (HIGH)
+        bool data_released = (port_out & 0x01) != 0;
+        bool clk_released  = (port_out & 0x02) != 0;
+        bool atn_released  = (port_out & 0x04) != 0;
+
+        drive_subsystem_.sync_host_to_iec_signals(atn_released, clk_released, data_released);
+        drive_subsystem_.advance_drives(total_cycles_);
+
+        // Read IEC bus → CPU I/O port input pins (bits 6-7)
+        bool bus_clk_released, bus_data_released;
+        drive_subsystem_.sync_iec_to_host_signals(bus_clk_released, bus_data_released);
+
+        // Bit 6 = CLK IN: bus CLK LOW → bit 6 LOW (active-LOW readback)
+        // Bit 7 = DATA IN: bus DATA LOW → bit 7 LOW
+        uint8_t pins = board_.csg7501.io_port_regs.pins;
+        pins = (pins & 0x3F)
+             | (bus_clk_released  ? 0x40 : 0)
+             | (bus_data_released ? 0x80 : 0);
+        board_.csg7501.io_port_regs.pins = pins;
+    }
+
     // Restore R/W line to read mode after CPU PHI1 has consumed write info
     BUS_SET_BIT(s, BUS_RW_BIT);
     
@@ -1015,9 +1066,21 @@ void Commodore264System<V>::apply_ted_video_banking() {
 
 template<C264SeriesVariant V>
 uint8_t Commodore264System<V>::io_port_in(void* user_data) {
-    (void)user_data;
-    // Stub: all input lines HIGH (no external devices connected yet)
-    return 0x5F;
+    auto* sys = static_cast<Commodore264System<V>*>(user_data);
+
+    // Base: all input lines HIGH (bits 6-7 = IEC CLK/DATA IN, released)
+    uint8_t input = 0x5F;
+
+    // When cycle-accurate drive is active, IEC readback is handled
+    // in the tick loop (pins injected directly).  This callback provides
+    // the baseline for other bit reads (cassette sense, etc.).
+    if (sys->is_drive_cycle_accurate()) {
+        // Bits 6-7 already updated by tick loop; return current pin state
+        uint8_t pins = sys->board_.csg7501.io_port_regs.pins;
+        input = (input & 0x3F) | (pins & 0xC0);
+    }
+
+    return input;
 }
 
 template<C264SeriesVariant V>
