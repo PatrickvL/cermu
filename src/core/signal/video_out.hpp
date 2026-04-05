@@ -20,7 +20,6 @@
 // ============================================================================
 
 #include "core/signal/sync_flag.hpp"
-#include "core/signal/sync_types.hpp"   // MAX_SIGNAL_SAMPLES
 #include "core/cermu.hpp"       // FORCE_INLINE
 
 #include <cstdint>
@@ -31,7 +30,6 @@ struct VideoOut {
 
     SampleT*   ptr;
     SampleT*   base;
-    SampleT*   end;            // one-past-last element of the active buffer
     SyncFlag prev_flags = SyncFlag::None;
 
     // Length of the most recently completed frame (samples).
@@ -65,7 +63,6 @@ struct VideoOut {
 
     FORCE_INLINE
     void drive(SampleT s) noexcept {
-        if (unlikely(ptr >= end)) return;  // buffer full — drop sample
         *ptr++ = s;
 
         if (unlikely(prev_flags != s.flags)) {
@@ -76,7 +73,6 @@ struct VideoOut {
                 completed_base = base;
                 base = new_base;
                 ptr  = new_base;
-                end  = new_base + MAX_SIGNAL_SAMPLES;
             }
             prev_flags = s.flags;
         }

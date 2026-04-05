@@ -28,6 +28,7 @@
 
 #include "chip/video/video_chip_base.hpp"
 #include "core/signal/composite_video_out.hpp"
+#include "core/signal/sync_types.hpp"
 #include "core/system_lines.hpp"
 #include <cstdint>
 #include <cstring>
@@ -79,6 +80,8 @@ namespace spectrum_ula {
     inline constexpr int TSTATES_PER_LINE  = 224;
     inline constexpr int LINES_PER_FRAME   = 312;
     inline constexpr int TSTATES_PER_FRAME = TSTATES_PER_LINE * LINES_PER_FRAME;  // 69888
+    static_assert(MAX_SIGNAL_SAMPLES >= TSTATES_PER_LINE * LINES_PER_FRAME + SIGNAL_BUFFER_MARGIN,
+                  "MAX_SIGNAL_SAMPLES too small for Spectrum ULA");
 
     // Color palette (GRB → RGB conversion, 15 colors + black)
     // 8 normal + 8 bright, with bright black = normal black

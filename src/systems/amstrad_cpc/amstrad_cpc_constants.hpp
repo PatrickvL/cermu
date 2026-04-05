@@ -8,6 +8,7 @@
  */
 
 #include <cstdint>
+#include "core/signal/sync_types.hpp"
 
 namespace amstrad_cpc_constants {
 
@@ -29,6 +30,8 @@ namespace amstrad_cpc_constants {
     // Framebuffer uses Mode 2 resolution (highest)
     inline constexpr int FB_WIDTH            = 640;
     inline constexpr int FB_HEIGHT           = 400;  // Double for display aspect
+    static_assert(MAX_SIGNAL_SAMPLES >= FB_WIDTH * FB_HEIGHT + SIGNAL_BUFFER_MARGIN,
+                  "MAX_SIGNAL_SAMPLES too small for Amstrad CPC framebuffer");
 
     // ========================================================================
     // Audio

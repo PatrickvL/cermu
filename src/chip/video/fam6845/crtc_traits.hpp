@@ -21,6 +21,7 @@
  */
 
 #include <cstdint>
+#include "core/signal/sync_types.hpp"
 
 // ============================================================================
 // CRTCTraits — compile-time chip configuration for NTTP variants
@@ -114,7 +115,13 @@ inline constexpr uint32_t RGBI_PALETTE[16] = {
 inline constexpr uint32_t VDC_CRYSTAL_HZ  = 16000000;   // 16.000 MHz master clock
 inline constexpr uint8_t  VDC_PIXELS_PER_CHAR = 8;      // Default (double-pixel = 16)
 inline constexpr uint8_t  VDC_CHAR_CLOCK_DIV  = 16;     // CLK / 16 = 1 MHz char clock
-
+// Worst-case frame dimensions (register-programmable; values from KERNAL
+// initialization and PAL timing).  Used for signal buffer sizing.
+inline constexpr uint32_t VDC_MAX_CHARS_PER_LINE = 128;  // R0+1 (KERNAL: R0=126 → 127)
+inline constexpr uint32_t VDC_MAX_PPC_DOUBLE     = 16;   // Double-pixel mode
+inline constexpr uint32_t VDC_MAX_LINES          = 313;  // PAL total raster lines
+static_assert(MAX_SIGNAL_SAMPLES >= VDC_MAX_CHARS_PER_LINE * VDC_MAX_PPC_DOUBLE * VDC_MAX_LINES + SIGNAL_BUFFER_MARGIN,
+              "MAX_SIGNAL_SAMPLES too small for VDC double-pixel mode");
 // ── Status register bits ─────────────────────────────────────────────
 
 inline constexpr uint8_t STATUS_READY       = 0x80;   // Bit 7: VDC ready for CPU access

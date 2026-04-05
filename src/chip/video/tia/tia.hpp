@@ -25,6 +25,7 @@
 
 #include "chip/video/video_chip_base.hpp"
 #include "core/signal/composite_video_out.hpp"
+#include "core/signal/sync_types.hpp"
 #include "core/signal/audio_port.hpp"
 #include "utils/ring_buffer.hpp"
 #include <cstdint>
@@ -208,6 +209,8 @@ namespace tia_constants {
     inline constexpr int VISIBLE_CLOCKS      = 160;
     inline constexpr int LINES_PER_FRAME_NTSC = 262;
     inline constexpr int LINES_PER_FRAME_PAL  = 312;
+    static_assert(MAX_SIGNAL_SAMPLES >= CLOCKS_PER_LINE * LINES_PER_FRAME_PAL + SIGNAL_BUFFER_MARGIN,
+                  "MAX_SIGNAL_SAMPLES too small for TIA PAL");
 
     inline constexpr int DISPLAY_WIDTH       = 160;
     inline constexpr int DISPLAY_HEIGHT      = 192;    // Typical visible area (varies by game)
