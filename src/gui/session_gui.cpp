@@ -3010,6 +3010,7 @@ void SessionGUI::emu_thread_func() {
         if (accumulator > target_frame_time * 3.0)
             accumulator = target_frame_time * 3.0;
 
+        const bool warping = system_->is_warping();
         int frames_ran = 0;
         uint32_t samples_needed = 0;
         {
@@ -3050,55 +3051,103 @@ void SessionGUI::emu_thread_func() {
                 system_->process_sdl_event_for_devices(evt);
             }
 
-            // Run emulation frames
-            // When the system is warping (e.g. drive motor active in Warp mode),
-            // force the accumulator high so multiple frames run per host cycle.
-            if (system_->is_warping())
-                accumulator = target_frame_time * 3.0;
+            // ----- Run emulation frames -----
+            //
+            // Normal mode: consume accumulated time, max 3 frames (death-spiral
+            // prevention).
+            //
+            // Warp mode: run as many frames as possible within a wall-clock time
+            // budget (16 ms).  This allows 50–200× speedup on typical hardware.
+            // The accumulator is ignored during warp — we just run flat-out.
+            if (warping) {
+                // Time-budgeted warp loop.  16 ms budget ≈ one host vsync period,
+                // keeps the GUI thread responsive for debug panels and input.
+                constexpr double WARP_BUDGET_S = 0.016;
+                uint64_t warp_start = SDL_GetPerformanceCounter();
+                double warp_elapsed = 0.0;
 
-            while (accumulator >= target_frame_time) {
-                uint64_t t0 = SDL_GetPerformanceCounter();
-                system_->run_frame();
-                uint64_t t1 = SDL_GetPerformanceCounter();
-                total_frames_.fetch_add(1, std::memory_order_relaxed);
-                accumulator -= target_frame_time;
-                frames_ran++;
+                while (warp_elapsed < WARP_BUDGET_S) {
+                    system_->run_frame();
+                    total_frames_.fetch_add(1, std::memory_order_relaxed);
+                    frames_ran++;
 
-                // Exponential moving average of frame emulation time (µs).
-                // Alpha ≈ 0.05 gives a ~20-frame smoothing window.
-                double frame_us = static_cast<double>(t1 - t0) / freq * 1e6;
-                uint32_t prev = emu_frame_time_us_.load(std::memory_order_relaxed);
-                uint32_t smoothed = prev == 0
-                    ? static_cast<uint32_t>(frame_us)
-                    : static_cast<uint32_t>(prev * 0.95 + frame_us * 0.05);
-                emu_frame_time_us_.store(smoothed, std::memory_order_relaxed);
+                    uint64_t warp_now = SDL_GetPerformanceCounter();
+                    warp_elapsed = static_cast<double>(warp_now - warp_start) / freq;
+                }
 
-                // ---- Performance metrics ----
-                double now_s = static_cast<double>(t1) / freq;
-                double frame_ms = frame_us * 0.001;
-                perf_metrics_.frame_time.push(now_s, frame_ms);
-                perf_metrics_.frame_time_long.push(now_s, frame_ms);
-                // Actual wall-clock interval since the previous frame
-                double interval_since_last = static_cast<double>(t1 - last_frame_counter) / freq * 1000.0;
-                last_frame_counter = t1;
-                perf_metrics_.frame_interval.push(now_s, interval_since_last);
-                perf_metrics_.total_frames++;
-                perf_metrics_.uptime_s = now_s - perf_metrics_.start_timestamp_s;
+                // Update performance metrics with the last frame's timing.
+                // During warp we care about throughput, not per-frame EMA.
+                if (frames_ran > 0) {
+                    double frame_us = (warp_elapsed / frames_ran) * 1e6;
+                    emu_frame_time_us_.store(static_cast<uint32_t>(frame_us),
+                                             std::memory_order_relaxed);
+                    double now_s = static_cast<double>(SDL_GetPerformanceCounter()) / freq;
+                    double frame_ms = frame_us * 0.001;
+                    perf_metrics_.frame_time.push(now_s, frame_ms);
+                    perf_metrics_.frame_time_long.push(now_s, frame_ms);
 
-                // Speed: target / actual interval.  >100% means faster than real-time.
-                double interval_ms = perf_metrics_.frame_interval.ema();
-                double target_ms = target_frame_time * 1000.0;
-                if (interval_ms > 0.0)
-                    perf_metrics_.speed_percent = (target_ms / interval_ms) * 100.0;
-                // Max speed: target / emu time (headroom without throttle sleep)
-                if (frame_ms > 0.0)
-                    perf_metrics_.max_speed_percent = (target_ms / frame_ms) * 100.0;
-                perf_metrics_.target_fps = target_fps;
+                    // Warp speed = frames_ran * target_frame_time / warp_elapsed
+                    double target_ms = target_frame_time * 1000.0;
+                    if (frame_ms > 0.0)
+                        perf_metrics_.max_speed_percent = (target_ms / frame_ms) * 100.0;
+                    perf_metrics_.speed_percent = perf_metrics_.max_speed_percent;
+                    perf_metrics_.target_fps = target_fps;
+                    perf_metrics_.total_frames += frames_ran;
+                    perf_metrics_.uptime_s = now_s - perf_metrics_.start_timestamp_s;
+
+                    last_frame_counter = SDL_GetPerformanceCounter();
+                }
+
+                // Drain the accumulator so we don't burst extra frames
+                // when warp ends.
+                accumulator = 0.0;
+            } else {
+                while (accumulator >= target_frame_time) {
+                    uint64_t t0 = SDL_GetPerformanceCounter();
+                    system_->run_frame();
+                    uint64_t t1 = SDL_GetPerformanceCounter();
+                    total_frames_.fetch_add(1, std::memory_order_relaxed);
+                    accumulator -= target_frame_time;
+                    frames_ran++;
+
+                    // Exponential moving average of frame emulation time (µs).
+                    // Alpha ≈ 0.05 gives a ~20-frame smoothing window.
+                    double frame_us = static_cast<double>(t1 - t0) / freq * 1e6;
+                    uint32_t prev = emu_frame_time_us_.load(std::memory_order_relaxed);
+                    uint32_t smoothed = prev == 0
+                        ? static_cast<uint32_t>(frame_us)
+                        : static_cast<uint32_t>(prev * 0.95 + frame_us * 0.05);
+                    emu_frame_time_us_.store(smoothed, std::memory_order_relaxed);
+
+                    // ---- Performance metrics ----
+                    double now_s = static_cast<double>(t1) / freq;
+                    double frame_ms = frame_us * 0.001;
+                    perf_metrics_.frame_time.push(now_s, frame_ms);
+                    perf_metrics_.frame_time_long.push(now_s, frame_ms);
+                    // Actual wall-clock interval since the previous frame
+                    double interval_since_last = static_cast<double>(t1 - last_frame_counter) / freq * 1000.0;
+                    last_frame_counter = t1;
+                    perf_metrics_.frame_interval.push(now_s, interval_since_last);
+                    perf_metrics_.total_frames++;
+                    perf_metrics_.uptime_s = now_s - perf_metrics_.start_timestamp_s;
+
+                    // Speed: target / actual interval.  >100% means faster than real-time.
+                    double interval_ms = perf_metrics_.frame_interval.ema();
+                    double target_ms = target_frame_time * 1000.0;
+                    if (interval_ms > 0.0)
+                        perf_metrics_.speed_percent = (target_ms / interval_ms) * 100.0;
+                    // Max speed: target / emu time (headroom without throttle sleep)
+                    if (frame_ms > 0.0)
+                        perf_metrics_.max_speed_percent = (target_ms / frame_ms) * 100.0;
+                    perf_metrics_.target_fps = target_fps;
+                }
             }
 
             // Compute how many audio samples to generate (under lock for
             // consistent frames_ran, but the actual generation is outside).
-            if (frames_ran > 0 && audio_ring_ && audio_sample_rate_ > 0) {
+            // Skip audio during warp — samples would overflow the ring and
+            // the output is muted anyway.
+            if (!warping && frames_ran > 0 && audio_ring_ && audio_sample_rate_ > 0) {
                 uint32_t samples_per_frame = static_cast<uint32_t>(
                     audio_sample_rate_ / target_fps + 0.5);
                 samples_needed = samples_per_frame * static_cast<uint32_t>(frames_ran);
@@ -3124,7 +3173,21 @@ void SessionGUI::emu_thread_func() {
         }
 
         // ----- Snapshot framebuffer (separate fb_mutex_) -----
-        if (frames_ran > 0) {
+        // During warp, snapshot only once per ~100ms for visual feedback
+        // (otherwise the mutex + memcpy every iteration wastes throughput).
+        bool should_snapshot = (frames_ran > 0);
+        if (warping) {
+            static uint64_t last_warp_snapshot = 0;
+            uint64_t snap_now = SDL_GetPerformanceCounter();
+            double since_last = static_cast<double>(snap_now - last_warp_snapshot) / freq;
+            if (since_last < 0.1) {
+                should_snapshot = false;
+            } else {
+                last_warp_snapshot = snap_now;
+            }
+        }
+
+        if (should_snapshot) {
             std::lock_guard<std::mutex> lock(fb_mutex_);
 
             // Stream snapshot — delegate to the active signal decoder.
@@ -3175,7 +3238,8 @@ void SessionGUI::emu_thread_func() {
         }
 
         // ----- Yield CPU if we're ahead of schedule -----
-        if (accumulator < target_frame_time * 0.5) {
+        // Skip sleep during warp — we want maximum throughput.
+        if (!warping && accumulator < target_frame_time * 0.5) {
             std::this_thread::sleep_for(std::chrono::microseconds(500));
         }
     }
