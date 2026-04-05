@@ -47,7 +47,9 @@
 #include <string>
 #include <vector>
 
-using namespace fam65xx;
+// Import only the types we need — avoid `using namespace fam65xx` in a header
+// to prevent namespace pollution (fam65xx::detail conflicts with ::detail).
+using fam65xx::MOS6502;
 
 // ============================================================================
 // GCR disk state
@@ -122,14 +124,14 @@ struct D64Image {
 inline constexpr auto kDrive1541Manifest = make_manifest(
     Slot<MOS6502>   {.label = "MOS 6502"},
     Slot<RAMChip>   {.base_addr = 0x0000, .size_bytes = 0x0800,
-                     .effective_size = 0x1000,                        // Mirror to fill $0000–$0FFF
-                     .label = "RAM"},
+                     .label = "RAM",
+                     .effective_size = 0x1000},                       // Mirror to fill $0000–$0FFF
     Slot<mos6522_t> {.base_addr = 0x1800, .addr_mask = 0xFFF0,
-                     .bank_size = 0x0400,                             // Mirror across $1800–$1BFF
-                     .label = "VIA 1 (IEC)"},
+                     .label = "VIA 1 (IEC)",
+                     .bank_size = 0x0400},                            // Mirror across $1800–$1BFF
     Slot<mos6522_t> {.base_addr = 0x1C00, .addr_mask = 0xFFF0,
-                     .bank_size = 0x0400,                             // Mirror across $1C00–$1FFF
-                     .label = "VIA 2 (Drive)"},
+                     .label = "VIA 2 (Drive)",
+                     .bank_size = 0x0400},                            // Mirror across $1C00–$1FFF
     Slot<ROMChip>   {.base_addr = 0xC000, .size_bytes = 0x4000,
                      .label = "DOS ROM",
                      .rom = {"1541.rom|1541-c000.901229-05.bin"}}

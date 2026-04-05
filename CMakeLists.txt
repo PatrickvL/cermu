@@ -358,6 +358,7 @@ set(CORE_SOURCES
     src/devices/storage/storage_device.cpp
     src/devices/storage/datasette_1530.cpp
     src/devices/storage/drive_1541.cpp
+    src/devices/storage/drive_1541_system.cpp
     # Devices — keyboard
     src/devices/keyboard/commodore_keyboard_device.cpp
     # Devices — display

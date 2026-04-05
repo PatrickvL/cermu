@@ -609,6 +609,10 @@ public:
 
     uint32_t get_target_fps() const { return cached_target_fps_; }
 
+    /// True when the system wants maximum-speed execution (e.g. drive warp).
+    /// The host frame loop should bypass throttle/sleep when this returns true.
+    virtual bool is_warping() const { return false; }
+
     /// Precise frame time in seconds, derived from hardware timing.
     /// Avoids integer-FPS rounding error (e.g. PAL=19656/985248≈19.95ms,
     /// not 1/50=20.00ms).  Falls back to 1/target_fps if cycles_per_frame is 0.

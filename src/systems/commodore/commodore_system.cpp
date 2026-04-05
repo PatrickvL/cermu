@@ -3,6 +3,7 @@
 #include "devices/storage/drive_1541.hpp"
 #include "devices/storage/datasette_1530.hpp"
 #include "core/formats/format_registry.hpp"
+#include "core/config/path_discovery.hpp"
 #include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <cstdio>
@@ -25,7 +26,55 @@ bool CommodoreSystem::set_configuration(const SystemConfiguration& config) {
         cached_target_fps_ = 50;  // Default PAL
     }
 
+    // Apply drive mode from custom settings
+    apply_drive_mode_config();
+
     return true;
+}
+
+// ============================================================================
+// Drive Subsystem — shared cycle-accurate drive infrastructure
+// ============================================================================
+
+void CommodoreSystem::apply_drive_mode_config() {
+    auto it = config_.custom_settings.find("drive_mode");
+    if (it != config_.custom_settings.end()) {
+        if (it->second == "Cycle-accurate")
+            drive_mode_ = DriveMode::ACCURATE;
+        else if (it->second == "Hooked I/O")
+            drive_mode_ = DriveMode::HOOKED;
+        else
+            drive_mode_ = DriveMode::WARP;  // Default
+    }
+    // Update warp controller based on mode
+    drive_subsystem_.warp().set_auto_warp(drive_mode_ == DriveMode::WARP);
+}
+
+void CommodoreSystem::init_drive_subsystem() {
+    apply_drive_mode_config();
+
+    if (!is_drive_cycle_accurate()) return;
+
+    // Attach a default 1541 as device #8
+    drive_subsystem_.attach_drive<CBM1541Traits>(8);
+
+    // Load drive ROM from the standard data directory
+    auto* drive = drive_subsystem_.get_drive(8);
+    if (drive) {
+        auto* adapter = dynamic_cast<IECDriveAdapter<CBM1541Traits>*>(drive);
+        if (adapter) {
+            char rom_root[1024];
+            if (system_config_discover_rom_root("1541", rom_root, sizeof(rom_root))) {
+                adapter->drive().load_roms(rom_root);
+            } else {
+                log_info("1541: ROM directory not found — drive may not boot\n");
+            }
+        }
+    }
+}
+
+void CommodoreSystem::reset_drive_subsystem() {
+    drive_subsystem_.reset();
 }
 
 void CommodoreSystem::handle_text_input(const char* text) {
@@ -246,6 +295,15 @@ void CommodoreSystem::apply_pending_load() {
                        drive->get_device_number());
             } else {
                 log_info("%s: No IEC serial port available — D64 not mounted\n", name);
+            }
+        }
+
+        // Also insert D64 into cycle-accurate drive (if active)
+        if (is_drive_cycle_accurate()) {
+            auto* iec_drive = drive_subsystem_.get_drive(8);
+            if (iec_drive) {
+                iec_drive->insert_disk(pending_load_.filepath.c_str());
+                log_info("%s: D64 also inserted into cycle-accurate drive #8\n", name);
             }
         }
 

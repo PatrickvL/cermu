@@ -6,9 +6,21 @@
 #include "chip/input/commodore_keyboard.hpp"
 #include "core/input/keyboard_mapper.hpp"
 #include "core/input/emu_keys.hpp"
+#include "devices/storage/drive_subsystem.hpp"
 #include <memory>
 #include <string>
 #include <vector>
+
+// ── Drive emulation modes ───────────────────────────────────────────────────
+//
+// Controls how the IEC serial bus and attached drives are emulated.
+// Applies to all Commodore systems with an IEC port.
+
+enum class DriveMode : uint8_t {
+    WARP,       ///< Cycle-accurate drive CPU, auto-warp when motor on (default)
+    ACCURATE,   ///< Cycle-accurate drive CPU, no warp (real-time)
+    HOOKED,     ///< KERNAL serial traps — instant I/O, no drive CPU
+};
 
 /**
  * CommodoreSystem — shared base class for all Commodore 8-bit systems
@@ -50,6 +62,43 @@ protected:
     // CPU cycles per video frame — set by apply_configuration() from
     // the selected region option's timing.cycles_per_frame.
     uint32_t cycles_per_frame_ = 0;
+
+    // =========================================================================
+    // CYCLE-ACCURATE DRIVE SUBSYSTEM
+    //
+    // When drive_mode_ is WARP or ACCURATE, the DriveSubsystem owns one or
+    // more C1541System instances that are ticked every CPU cycle.  The host
+    // system wires its CIA/VIA/TED IEC output pins to the shared IEC bus
+    // and reads back the combined bus state.
+    //
+    // When drive_mode_ is HOOKED, the DriveSubsystem is unused and the
+    // existing KERNAL serial traps provide instant I/O.
+    //
+    // Systems call drive_tick() once per CPU cycle from their system_tick().
+    // =========================================================================
+
+    DriveMode      drive_mode_ = DriveMode::WARP;
+    DriveSubsystem drive_subsystem_;
+
+    /// True when drive_mode_ is WARP or ACCURATE (cycle-accurate drives active).
+    bool is_drive_cycle_accurate() const {
+        return drive_mode_ != DriveMode::HOOKED;
+    }
+
+    /// True when the drive subsystem is actively warping (skip video + sleep).
+    bool is_drive_warping() const {
+        return drive_mode_ == DriveMode::WARP && drive_subsystem_.warp().is_warping();
+    }
+
+    /// Initialize the drive subsystem — call from derived initialize().
+    /// Reads drive_mode from config_.custom_settings["drive_mode"].
+    void init_drive_subsystem();
+
+    /// Reset the drive subsystem — call from derived reset().
+    void reset_drive_subsystem();
+
+    /// Apply drive_mode from SystemConfiguration custom_settings.
+    void apply_drive_mode_config();
 
     // =========================================================================
     // DEFERRED LOADING — shared infrastructure for all Commodore systems
@@ -193,6 +242,7 @@ public:
     // ---- Identical across all Commodore systems ----
 
     bool set_configuration(const SystemConfiguration& config) override;
+    bool is_warping() const override { return is_drive_warping(); }
     void handle_text_input(const char* text) override;
     void release_all_keys() override;
 
