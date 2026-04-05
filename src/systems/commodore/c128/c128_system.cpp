@@ -51,20 +51,6 @@ static constexpr uint16_t C64_TRAP_SERIAL_RECEIVE_BYTE  = 0xEE14;
 static constexpr uint16_t C64_TRAP_SERIAL_READY         = 0xEEA9;
 static constexpr uint16_t C64_TRAP_RESUME_ADDRESS       = 0xEDAB;
 
-// KERNAL zero-page addresses for serial I/O (same for C128 and C64 mode)
-static constexpr uint16_t ZP_BSOUR  = 0x95;
-static constexpr uint16_t ZP_TMP_IN = 0xA4;
-static constexpr uint16_t ZP_STATUS = 0x90;
-
-// IEC command byte masks
-static constexpr uint8_t IEC_LISTEN_MASK   = 0x20;
-static constexpr uint8_t IEC_TALK_MASK     = 0x40;
-static constexpr uint8_t IEC_SECOND_MASK   = 0x60;
-static constexpr uint8_t IEC_CLOSE_MASK    = 0xE0;
-static constexpr uint8_t IEC_OPEN_MASK     = 0xF0;
-static constexpr uint8_t IEC_UNLISTEN      = 0x3F;
-static constexpr uint8_t IEC_UNTALK        = 0x5F;
-
 // ============================================================================
 // HARDWARE TRAITS
 // ============================================================================
@@ -110,6 +96,9 @@ static HardwareTraits create_c128_hardware_traits() {
         "NTSC", VideoStandard::NTSC, ntsc, false
     });
 
+    // Drive emulation mode
+    CommodoreSystem::add_drive_mode_option(traits);
+
     return traits;
 }
 
@@ -132,7 +121,13 @@ static SystemDescriptor c128_descriptor = {
 // ============================================================================
 
 C128System::C128System()
+    : C128System(kC128Manifest)
+{}
+
+C128System::C128System(const Manifest& manifest)
     : CommodoreSystem()
+    , manifest_(&manifest)
+    , board_(manifest)
     , pins_(C128_BUS_DEFAULT_STATE)
 {
     hardware_traits_ = create_c128_hardware_traits();
@@ -235,11 +230,11 @@ bool C128System::initialize() {
                    | BUS_BIT(BUS_FLAG_BIT) | BUS_DATA_MASK;
     pins_ = default_state_;
 
-    bind_all(board_, board_.components_, kC128Manifest);
+    bind_all(board_, board_.components_, *manifest_);
 
     // Set port manifest for default peripheral attachment.
-    port_manifest_       = kC128Manifest.port_slots;
-    port_manifest_count_ = kC128Manifest.port_count;
+    port_manifest_       = manifest_->port_slots;
+    port_manifest_count_ = manifest_->port_count;
     board_.apply(bus_);
 
     basic_lo_rom_    = &board_.basic_lo;
@@ -547,19 +542,8 @@ void C128System::reset() {
 }
 
 // ============================================================================
-// KERNAL SERIAL TRAPS — IEC bus trap handlers
+// KERNAL SERIAL TRAPS — dispatch (uses shared handlers from CommodoreSystem)
 // ============================================================================
-
-Drive1541Device* C128System::find_iec_drive(int device_number) {
-    if (device_number < 4) return nullptr;
-    auto* port = get_port(PORT_IEC_SERIAL);
-    if (!port) return nullptr;
-    for (auto* dev : port->get_attached_devices()) {
-        auto* drive = dynamic_cast<Drive1541Device*>(dev);
-        if (drive && drive->get_device_number() == device_number) return drive;
-    }
-    return nullptr;
-}
 
 bool C128System::check_serial_traps(uint16_t pc) {
     if (c64_mode_) {
@@ -567,13 +551,13 @@ bool C128System::check_serial_traps(uint16_t pc) {
         switch (pc) {
             case C64_TRAP_SERIAL_LISTEN:
             case C64_TRAP_SERIAL_SA_LISTEN:
-                return serial_trap_attention(C64_TRAP_RESUME_ADDRESS);
+                return serial_trap_attention(board_.csg8502, board_.main_ram.data(), C64_TRAP_RESUME_ADDRESS);
             case C64_TRAP_SERIAL_SEND_BYTE:
-                return serial_trap_send(C64_TRAP_RESUME_ADDRESS);
+                return serial_trap_send(board_.csg8502, board_.main_ram.data(), C64_TRAP_RESUME_ADDRESS);
             case C64_TRAP_SERIAL_RECEIVE_BYTE:
-                return serial_trap_receive(C64_TRAP_RESUME_ADDRESS);
+                return serial_trap_receive(board_.csg8502, board_.main_ram.data(), C64_TRAP_RESUME_ADDRESS);
             case C64_TRAP_SERIAL_READY:
-                return serial_trap_ready(C64_TRAP_RESUME_ADDRESS);
+                return serial_trap_ready(board_.csg8502, C64_TRAP_RESUME_ADDRESS);
             default:
                 return false;
         }
@@ -582,134 +566,18 @@ bool C128System::check_serial_traps(uint16_t pc) {
         switch (pc) {
             case C128_TRAP_SERIAL_LISTEN:
             case C128_TRAP_SERIAL_SA_LISTEN:
-                return serial_trap_attention(C128_TRAP_RESUME_ADDRESS);
+                return serial_trap_attention(board_.csg8502, board_.main_ram.data(), C128_TRAP_RESUME_ADDRESS);
             case C128_TRAP_SERIAL_SEND_BYTE:
-                return serial_trap_send(C128_TRAP_RESUME_ADDRESS);
+                return serial_trap_send(board_.csg8502, board_.main_ram.data(), C128_TRAP_RESUME_ADDRESS);
             case C128_TRAP_SERIAL_RECEIVE_BYTE:
-                return serial_trap_receive(C128_TRAP_RESUME_ADDRESS);
+                return serial_trap_receive(board_.csg8502, board_.main_ram.data(), C128_TRAP_RESUME_ADDRESS);
             case C128_TRAP_SERIAL_READY:
             case C128_TRAP_SERIAL_READY_ALT:
-                return serial_trap_ready(C128_TRAP_READY_RESUME);
+                return serial_trap_ready(board_.csg8502, C128_TRAP_READY_RESUME);
             default:
                 return false;
         }
     }
-}
-
-bool C128System::serial_trap_attention(uint16_t resume) {
-    auto& cpu = board_.csg8502;
-    uint8_t iecdata = board_.main_ram.data()[ZP_BSOUR];
-
-    if (iecdata == IEC_UNLISTEN) {
-        auto* drive = find_iec_drive(serial_trap_.active_device);
-        if (drive) drive->trap_unlisten();
-        serial_trap_.active_device = -1;
-    } else if (iecdata == IEC_UNTALK) {
-        auto* drive = find_iec_drive(serial_trap_.active_device);
-        if (drive) drive->trap_untalk();
-        serial_trap_.active_device = -1;
-    } else if ((iecdata & 0xF0) == IEC_LISTEN_MASK || (iecdata & 0xF0) == IEC_TALK_MASK) {
-        serial_trap_.active_device = iecdata & 0x0F;
-        serial_trap_.trap_device = iecdata;
-        serial_trap_.trap_secondary = 0;
-    } else if ((iecdata & 0xF0) == IEC_SECOND_MASK) {
-        serial_trap_.trap_secondary = iecdata;
-        auto* drive = find_iec_drive(serial_trap_.active_device);
-        if (drive) drive->trap_second(iecdata & 0x0F);
-    } else if ((iecdata & 0xF0) == IEC_OPEN_MASK) {
-        serial_trap_.trap_secondary = iecdata;
-        auto* drive = find_iec_drive(serial_trap_.active_device);
-        if (drive) drive->trap_open(iecdata & 0x0F);
-    } else if ((iecdata & 0xF0) == IEC_CLOSE_MASK) {
-        serial_trap_.trap_secondary = iecdata;
-        auto* drive = find_iec_drive(serial_trap_.active_device);
-        if (drive) drive->trap_close(iecdata & 0x0F);
-    }
-
-    if (serial_trap_.active_device >= 4) {
-        auto* drive = find_iec_drive(serial_trap_.active_device);
-        if (!drive) board_.main_ram.data()[ZP_STATUS] |= 0x80;
-    }
-
-    uint8_t p = cpu.get(reg::P);
-    p &= ~0x01;  // Clear carry
-    p &= ~0x04;  // Clear interrupt disable
-    cpu.set(reg::P, p);
-    cpu.set(reg::PC, resume);
-    cpu.transition_to_fetch();
-    return true;
-}
-
-bool C128System::serial_trap_send(uint16_t resume) {
-    if (serial_trap_.active_device < 4) return false;
-    auto* drive = find_iec_drive(serial_trap_.active_device);
-    if (!drive) return false;
-
-    auto& cpu = board_.csg8502;
-    uint8_t iecdata = board_.main_ram.data()[ZP_BSOUR];
-
-    if (serial_trap_.trap_secondary == 0) {
-        serial_trap_.trap_secondary = IEC_SECOND_MASK;
-        drive->trap_second(0);
-    }
-    drive->trap_send(iecdata);
-
-    uint8_t p = cpu.get(reg::P);
-    p &= ~0x01;
-    p &= ~0x04;
-    cpu.set(reg::P, p);
-    cpu.set(reg::PC, resume);
-    cpu.transition_to_fetch();
-    return true;
-}
-
-bool C128System::serial_trap_receive(uint16_t resume) {
-    if (serial_trap_.active_device < 4) return false;
-    auto* drive = find_iec_drive(serial_trap_.active_device);
-    if (!drive) return false;
-
-    auto& cpu = board_.csg8502;
-
-    if (serial_trap_.trap_secondary == 0) {
-        serial_trap_.trap_secondary = IEC_SECOND_MASK;
-        drive->trap_second(0);
-    }
-
-    uint8_t data = 0;
-    int status = drive->trap_receive(data);
-
-    board_.main_ram.data()[ZP_TMP_IN] = data;
-    cpu.set(reg::A, data);
-
-    if (status) board_.main_ram.data()[ZP_STATUS] |= static_cast<uint8_t>(status);
-
-    uint8_t p = cpu.get(reg::P);
-    p &= ~0x01;
-    p &= ~0x04;
-    if (data & 0x80) p |= 0x80; else p &= ~0x80;
-    if (data == 0)   p |= 0x02; else p &= ~0x02;
-    cpu.set(reg::P, p);
-    cpu.set(reg::PC, resume);
-    cpu.transition_to_fetch();
-    return true;
-}
-
-bool C128System::serial_trap_ready(uint16_t resume) {
-    if (serial_trap_.active_device < 4) return false;
-    auto* drive = find_iec_drive(serial_trap_.active_device);
-    if (!drive) return false;
-
-    auto& cpu = board_.csg8502;
-    cpu.set(reg::A, 1);
-
-    uint8_t p = cpu.get(reg::P);
-    p &= ~0x80;
-    p &= ~0x02;
-    p &= ~0x04;
-    cpu.set(reg::P, p);
-    cpu.set(reg::PC, resume);
-    cpu.transition_to_fetch();
-    return true;
 }
 
 // ============================================================================
@@ -1747,4 +1615,53 @@ static KeyboardMapper* create_c128_keyboard_mapper(commodore_keyboard_t* keyboar
 
 REGISTER_SYSTEM(c128_descriptor, [] {
     return std::make_unique<C128System>();
+});
+
+// ============================================================================
+// C128DCR VARIANT — MOS 8568 VDC with 64 KB VRAM
+// ============================================================================
+
+static SystemDescriptor c128dcr_descriptor = {
+    "Commodore 128DCR", "C128DCR",
+    "Commodore 128D/CR (1986) — cost-reduced, MOS 8568 VDC, 64KB VRAM",
+    "c128", {"C128DCR", "C128D", "Commodore128DCR", "CBM128DCR"},
+    nullptr,
+    create_c128_hardware_traits(),
+    nullptr,
+    "Commodore", 1986, "CSG 8502 + Z80", SystemType::Home
+};
+
+const SystemDescriptor& C128DCRSystem::get_descriptor() const {
+    return c128dcr_descriptor;
+}
+
+C128DCRSystem::C128DCRSystem()
+    : C128System(kC128DCRManifest)
+{}
+
+bool C128DCRSystem::initialize() {
+    // Full C128 initialization — parent uses kC128DCRManifest which
+    // allocates 64KB VDC VRAM and marks the IEC drive as built-in.
+    if (!C128System::initialize()) return false;
+
+    // Swap VDC chip identity from MOS 8563 to MOS 8568.
+    // The chip instance is mos8563_t (compile-time type from the manifest),
+    // but crtc_base_t::traits_ is a runtime pointer — swapping it makes
+    // the chip behave as an 8568 for all trait-gated logic.
+    auto& vdc = vdc_chip();
+    vdc.traits_ = &MOS8568_traits;
+
+    // Fix status register version bits: 8563=0x00, 8568=0x01.
+    vdc.status_register = (vdc.status_register & 0xF0) | fam6845::VDC_VERSION_8568;
+
+    // R28 bit 4: signal 64K DRAM type to software.
+    using namespace fam6845::reg;
+    vdc.regs_[R28_CHARSET_BASE] = 0x30;
+
+    log_info("C128DCR: VDC configured as MOS 8568 (64KB VRAM)\n");
+    return true;
+}
+
+REGISTER_SYSTEM(c128dcr_descriptor, [] {
+    return std::make_unique<C128DCRSystem>();
 });
