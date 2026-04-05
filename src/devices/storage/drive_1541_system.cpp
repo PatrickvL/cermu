@@ -115,6 +115,16 @@ void C1541System<Traits>::reset() {
     // Reset drive head
     head_ = DriveHeadState{};
 
+    // Reset GCR bitstream state
+    last_read_data_ = 0;
+    gcr_data_byte_  = 0xFF;
+    bit_counter_    = 0;
+    sync_detected_  = false;
+    byte_ready_     = false;
+    ue7_counter_    = 0;
+    uf4_counter_    = 0;
+    gcr_cached_track_ = 0;
+
     // Reset IEC output
     if (iec_bus_)
         iec_bus_->output(iec_slot_).lines = iec::ALL_RELEASED;
@@ -149,7 +159,9 @@ bool C1541System<Traits>::load_roms(const char* rom_root) {
 template <const DriveTraits& Traits>
 bool C1541System<Traits>::swap_disk(const char* filepath) {
     disk_.eject();
-    return disk_.load(filepath);
+    if (!disk_.load(filepath)) return false;
+    encode_disk_to_gcr();
+    return true;
 }
 
 // ── Tick loop ───────────────────────────────────────────────────────────────
@@ -330,19 +342,80 @@ void C1541System<Traits>::drive_mechanics_update() {
 
 template <const DriveTraits& Traits>
 void C1541System<Traits>::gcr_advance() {
-    // TODO: Full GCR bitstream emulation.
+    // The 1541 R/W timing chain:
+    //   - UE7 divides the 16 MHz master clock by (16 - speed_zone)
+    //   - UF4 counts 4 UE7 overflows per bit cell
+    //   - On each bit cell, one flux bit is shifted into the 10-bit window
     //
-    // For now, this is a placeholder. The full implementation needs:
-    // 1. GCR-encode D64 sector data into a bitstream per track
-    // 2. Advance the bit pointer at the rate determined by the speed zone
-    // 3. Feed bits into VIA#2 port A (GCR data register) via the shift register
-    // 4. Detect SYNC marks (10+ consecutive 1-bits → set VIA#2 PB bit 7)
-    // 5. Handle byte-ready signal (VIA#2 CA1, triggers SOE → byte available)
-    //
-    // This is the most complex part of 1541 emulation and will be built
-    // incrementally.  The IEC bus protocol and drive CPU/VIA infrastructure
-    // above can be tested with ROM code that doesn't directly access the
-    // disk (e.g., the 1541 startup self-test, IEC handshake).
+    // At 1 MHz CPU clock, we get 16 reference cycles per CPU cycle.
+    // Bits per CPU cycle = 16 / (16 - speed_zone) / 4 * 16
+    //   Zone 3: 16/(16-3)/4 = 16/52 ≈ 0.308 bits/ref → ~4.92 bits/CPU_cycle
+    // But we simplify: run 16 reference ticks per CPU cycle.
+
+    if (!disk_.loaded) return;
+    ensure_gcr_track();
+
+    uint8_t track = head_.track();
+    if (track < 1 || track > 42) return;
+    auto& trk = gcr_tracks_[track];
+    if (trk.num_bits == 0) return;
+
+    uint8_t zone = head_.speed_zone;
+    uint8_t ue7_threshold = static_cast<uint8_t>(16 - zone);  // 13-16
+
+    // Run 16 reference clock ticks per CPU cycle (16 MHz / 1 MHz)
+    for (int ref = 0; ref < 16; ++ref) {
+        // UE7 frequency divider
+        if (++ue7_counter_ >= ue7_threshold) {
+            ue7_counter_ = 0;
+
+            // UF4 divide-by-4
+            uf4_counter_ = (uf4_counter_ + 1) & 0x03;
+            if (uf4_counter_ == 0x02) {
+                // Shift one bit from the track into the 10-bit window
+                uint8_t bit = trk.read_bit(head_.bit_position);
+                head_.bit_position = (head_.bit_position + 1) % trk.num_bits;
+
+                last_read_data_ = ((last_read_data_ << 1) | bit) & 0x3FF;
+
+                // SYNC detection: 10 consecutive 1-bits
+                if (last_read_data_ == 0x3FF) {
+                    // SYNC detected — reset bit counter, negate byte-ready
+                    sync_detected_ = true;
+                    bit_counter_ = 0;
+                    byte_ready_ = false;
+                } else if (sync_detected_ && !(last_read_data_ & 1)) {
+                    // First zero after SYNC — sync is over, start counting
+                    sync_detected_ = false;
+                }
+
+                // Count bits toward byte-ready (only when not in SYNC)
+                if (!sync_detected_) {
+                    if (++bit_counter_ >= 8) {
+                        bit_counter_ = 0;
+                        gcr_data_byte_ = static_cast<uint8_t>(last_read_data_ & 0xFF);
+                        byte_ready_ = true;
+
+                        // Signal byte-ready on VIA#2 CA1 if SOE (byte-ready enable)
+                        // is active.  The 1541 uses VIA#2 CB2 as SOE (directly
+                        // accessible as PCR bit 5 in manual output mode).
+                        // When SOE is HIGH, byte-ready triggers CA1 interrupt.
+                        uint8_t pcr = board_.via2.pcr;
+                        bool soe = (pcr & 0xE0) >= 0xC0;  // CB2 manual HIGH
+                        if (soe) {
+                            board_.via2.ifr |= MOS6522_IFR_CA1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Update SYNC bit in VIA#2 port B (bit 7, active-LOW: 0 = SYNC detected)
+    if (sync_detected_)
+        board_.via2.port_b_pins_ &= ~VIA2_PB_SYNC;
+    else
+        board_.via2.port_b_pins_ |= VIA2_PB_SYNC;
 }
 
 // ── VIA callbacks ──────────────────────────────────────────────────────────
@@ -367,10 +440,10 @@ void C1541System<Traits>::via1_port_b_write(void* ctx, uint8_t data) {
 template <const DriveTraits& Traits>
 uint8_t C1541System<Traits>::via2_port_a_read(void* ctx, uint8_t output) {
     // VIA#2 port A = GCR data byte from the disk head.
-    // TODO: Return the current GCR byte from the bitstream.
-    (void)ctx;
-    (void)output;
-    return 0xFF;  // No data (placeholder)
+    // Returns the last complete byte shifted in from the GCR bitstream.
+    auto* self = static_cast<C1541System*>(ctx);
+    self->byte_ready_ = false;
+    return self->gcr_data_byte_;
 }
 
 template <const DriveTraits& Traits>
@@ -378,6 +451,66 @@ void C1541System<Traits>::via2_port_b_write(void* ctx, uint8_t data) {
     // VIA#2 port B write — update motor/LED/stepper immediately.
     auto* self = static_cast<C1541System*>(ctx);
     self->drive_mechanics_update();
+}
+
+// ── GCR disk encoding ──────────────────────────────────────────────────────
+
+template <const DriveTraits& Traits>
+void C1541System<Traits>::encode_disk_to_gcr() {
+    if (!disk_.loaded) return;
+
+    // Read disk ID bytes from BAM sector (track 18, sector 0, offsets 0xA2-0xA3)
+    uint8_t bam[256];
+    if (disk_.read_sector(18, 0, bam)) {
+        disk_id1_ = bam[0xA2];
+        disk_id2_ = bam[0xA3];
+    } else {
+        disk_id1_ = disk_id2_ = 0x30;  // Fallback: ASCII '0'
+    }
+
+    // Encode all tracks
+    for (uint8_t t = 1; t <= disk_.num_tracks; ++t) {
+        uint8_t num_sectors = gcr::sectors_per_track(t);
+        std::vector<uint8_t> sector_buf(256 * num_sectors);
+        std::vector<const uint8_t*> sector_ptrs(num_sectors);
+
+        for (uint8_t s = 0; s < num_sectors; ++s) {
+            disk_.read_sector(t, s, sector_buf.data() + s * 256);
+            sector_ptrs[s] = sector_buf.data() + s * 256;
+        }
+
+        gcr_tracks_[t] = gcr::encode_track(t, sector_ptrs.data(), num_sectors,
+                                            disk_id1_, disk_id2_);
+    }
+
+    gcr_dirty_ = false;
+    gcr_cached_track_ = head_.track();
+}
+
+template <const DriveTraits& Traits>
+void C1541System<Traits>::ensure_gcr_track() {
+    uint8_t track = head_.track();
+
+    // Re-encode all tracks if disk was just inserted
+    if (gcr_dirty_ && disk_.loaded) {
+        encode_disk_to_gcr();
+    }
+
+    // When the head moves to a different track, update the bit position
+    // to a proportional position on the new track (approximate rotation continuity)
+    if (track != gcr_cached_track_) {
+        auto& old_trk = gcr_tracks_[gcr_cached_track_];
+        auto& new_trk = gcr_tracks_[track];
+        if (old_trk.num_bits > 0 && new_trk.num_bits > 0) {
+            // Scale bit position proportionally
+            head_.bit_position = static_cast<uint32_t>(
+                static_cast<uint64_t>(head_.bit_position) * new_trk.num_bits / old_trk.num_bits
+            ) % new_trk.num_bits;
+        } else {
+            head_.bit_position = 0;
+        }
+        gcr_cached_track_ = track;
+    }
 }
 
 // ── Explicit template instantiations ────────────────────────────────────────
