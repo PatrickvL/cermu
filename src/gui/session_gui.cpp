@@ -651,6 +651,11 @@ void SessionGUI::render_frame() {
             render_menu_bar();
             vp->Pos = saved_pos;
         }
+
+        // The port-icon popup (rendered inside render_menu_bar) can destroy
+        // and replace a display device via attach_device_to_port().  Re-scan
+        // so that display_device_ is valid for the rest of this frame.
+        refresh_display_device();
     }
     
     // Render optional windows
