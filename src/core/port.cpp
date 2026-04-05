@@ -203,6 +203,7 @@ PortDefinition make_port_definition(const PortSlot& slot) {
         base.signal_count,
         slot.is_internal,
         slot.is_bus,
+        slot.built_in_device,
     };
 }
 

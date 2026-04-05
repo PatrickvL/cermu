@@ -40,6 +40,7 @@
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/video/vic_ii/mos8566.hpp"
 #include "chip/video/fam6845/mos8563.hpp"
+#include "chip/video/fam6845/mos8568.hpp"
 #include "chip/sound/mos6581.hpp"
 #include "chip/io/mos6526.hpp"
 #include "chip/memory/memory_chip.hpp"
@@ -49,6 +50,12 @@
 #include <atomic>
 #include <cstdint>
 #include <vector>
+
+// ============================================================================
+// C128 system variant (compile-time template parameter)
+// ============================================================================
+
+enum class C128Variant { C128, C128DCR };
 
 // Default bus state — CSG 8502 (same pinout as MOS 6510)
 #define C128_BUS_DEFAULT_STATE (CSG8502::default_bus_state())
@@ -112,6 +119,19 @@ inline constexpr auto kC128Manifest = make_manifest(
 
 inline constexpr size_t kC128ChipCount = decltype(kC128Manifest)::chip_count;
 
+// C128DCR manifest — identical to C128 except:
+//   - VDC VRAM expanded to 64 KB (MOS 8568 DVDC, 4× DRAM chips)
+//   - Built-in 1571 drive on IEC bus (using 1541 emulation for now)
+inline constexpr auto kC128DCRManifest = []() {
+    auto m = kC128Manifest;
+    m.chips[10].size_bytes = 0x10000;
+    m.chips[10].bank_size  = 0x10000;
+    m.chips[10].label      = "VDC VRAM (64KB)";
+    m.port_slots[2].built_in_device = "1541";
+    m.port_slots[2].default_device  = nullptr;
+    return m;
+}();
+
 // 4 KB pages, 2 viewers (CPU + VIC-IIe), CS-tick enabled
 struct C128BusSpec : ManifestBusSpec<kC128Manifest, 16, 12, 2, true> {
     static constexpr size_t MaxIndexedSubTables = 1;    // I/O page ($D000-$DFFF)
@@ -155,7 +175,9 @@ struct C128Board : Board<C128BusSpec> {
     PortAudioMono&      audio_port      = std::get<27>(components_);
     PortCustom&         keyboard_port   = std::get<28>(components_);
 
-    C128Board() : Board(kC128Manifest) {}
+    using ManifestType = decltype(kC128Manifest);
+    explicit C128Board(const ManifestType& manifest = kC128Manifest)
+        : Board(manifest) {}
 };
 
 
@@ -216,6 +238,11 @@ protected:
     bool is_system_initialized() const override { return system_ready_; }
     int get_iec_port_index() const override { return PORT_IEC_SERIAL; }
 
+    // ── Subclass access for C128DCR variant ─────────────────────────
+    using Manifest = decltype(kC128Manifest);
+    explicit C128System(const Manifest& manifest);
+    crtc_base_t& vdc_chip() { return board_.vdc; }
+
 private:
     // ── Memory chips — post-init pointers ────────────────────────────────
     ROMChip* basic_lo_rom_ = nullptr;
@@ -231,6 +258,7 @@ private:
     // ── Board + bus ──────────────────────────────────────────────────────
     using Bus       = MemoryBus<C128BusSpec>;
     using MainBoard = C128Board;
+    const Manifest* manifest_ = &kC128Manifest;
     Bus       bus_;
     MainBoard board_;
 
@@ -319,4 +347,24 @@ private:
     // CIA1 keyboard matrix scan callbacks
     static uint8_t c128_cia1_port_a_read(void* context, uint8_t port_a_output);
     static uint8_t c128_cia1_port_b_read(void* context, uint8_t port_b_output);
+};
+
+
+// =============================================================================
+// C128DCR System — Commodore 128D/CR (cost-reduced, MOS 8568 VDC, 64KB VRAM)
+// =============================================================================
+//
+// The C128DCR is electrically identical to the C128 except for the VDC:
+//   - MOS 8568 replaces MOS 8563 (same register interface)
+//   - 64 KB VDC VRAM (4× DRAM chips) instead of 16 KB
+//
+// Implementation: inherits C128System, reconfigures the VDC chip at init
+// time by swapping traits pointer, status version bits, and VRAM binding.
+
+class C128DCRSystem : public C128System {
+public:
+    C128DCRSystem();
+
+    const SystemDescriptor& get_descriptor() const override;
+    bool initialize() override;
 };

@@ -143,6 +143,9 @@ struct PortDefinition {
     bool                is_bus        = false;   ///< True for shared bus connectors (e.g. IEC serial)
                                                  ///< Bus ports allow multiple devices attached simultaneously.
                                                  ///< Signal lines use open-collector AND of all device outputs.
+    const char*         built_in_device = nullptr; ///< When non-null, this device is permanently
+                                                   ///< attached (physically integrated into the system).
+                                                   ///< UI hides detach/swap and shows the device as fixed.
 };
 
 // ============================================================================
@@ -160,6 +163,8 @@ struct PortSlot {
     bool        is_internal;    ///< Internal connectors (keyboard) hidden from icon bar
     bool        is_bus;         ///< Shared bus (IEC): multiple devices may attach
     const char* default_device; ///< DeviceRegistry ID for auto-attach, or nullptr
+    const char* built_in_device; ///< DeviceRegistry ID for permanently attached device,
+                                 ///< or nullptr.  Built-in devices cannot be detached.
 };
 
 /// Build a full PortDefinition from a PortSlot, auto-resolving standard

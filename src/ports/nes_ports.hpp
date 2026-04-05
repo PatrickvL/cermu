@@ -15,11 +15,11 @@
 // ============================================================================
 
 inline constexpr PortSlot kNESPorts[] = {
-    {PortType::CONTROLLER_NES,  "Controller Port 1",  1, false, false, "nes_gamepad"},
-    {PortType::CONTROLLER_NES,  "Controller Port 2",  2, false, false, "nes_gamepad"},
-    {PortType::EXPANSION_PORT,  "Expansion Port",     0, false, false, nullptr},
-    {PortType::VIDEO_COMPOSITE, "Video Out",          0, false, false, "crt_tv"},
-    {PortType::AUDIO_MONO,      "Audio Out",          0, false, false, nullptr},
+    {PortType::CONTROLLER_NES,  "Controller Port 1",  1, false, false, "nes_gamepad", nullptr},
+    {PortType::CONTROLLER_NES,  "Controller Port 2",  2, false, false, "nes_gamepad", nullptr},
+    {PortType::EXPANSION_PORT,  "Expansion Port",     0, false, false, nullptr,        nullptr},
+    {PortType::VIDEO_COMPOSITE, "Video Out",          0, false, false, "crt_tv",      nullptr},
+    {PortType::AUDIO_MONO,      "Audio Out",          0, false, false, nullptr,        nullptr},
 };
 
 // ============================================================================
@@ -27,9 +27,9 @@ inline constexpr PortSlot kNESPorts[] = {
 // ============================================================================
 
 inline constexpr PortSlot kFCPorts[] = {
-    {PortType::CONTROLLER_NES,  "Controller I (hardwired)",              1, false, false, "nes_gamepad"},
-    {PortType::CONTROLLER_NES,  "Controller II (hardwired, microphone)", 2, false, false, "nes_gamepad"},
-    {PortType::EXPANSION_PORT,  "Expansion Port (15-pin)",               0, false, false, nullptr},
-    {PortType::VIDEO_COMPOSITE, "Video Out",                             0, false, false, "crt_tv"},
-    {PortType::AUDIO_MONO,      "Audio Out",                             0, false, false, nullptr},
+    {PortType::CONTROLLER_NES,  "Controller I (hardwired)",              1, false, false, "nes_gamepad", nullptr},
+    {PortType::CONTROLLER_NES,  "Controller II (hardwired, microphone)", 2, false, false, "nes_gamepad", nullptr},
+    {PortType::EXPANSION_PORT,  "Expansion Port (15-pin)",               0, false, false, nullptr,        nullptr},
+    {PortType::VIDEO_COMPOSITE, "Video Out",                             0, false, false, "crt_tv",      nullptr},
+    {PortType::AUDIO_MONO,      "Audio Out",                             0, false, false, nullptr,        nullptr},
 };

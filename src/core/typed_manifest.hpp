@@ -163,6 +163,7 @@ struct Slot<TypedPort<PT>> {
     bool        is_internal    = false;     ///< Internal connectors (keyboard) hidden from icon bar
     bool        is_bus         = false;     ///< Shared bus (IEC): multiple devices may attach
     const char* default_device = nullptr;   ///< DeviceRegistry ID for auto-attach, or nullptr
+    const char* built_in_device = nullptr;  ///< DeviceRegistry ID for permanently attached device
 };
 
 
@@ -205,7 +206,8 @@ make_manifest(Slot<Ts>... slots) noexcept
         if constexpr (is_typed_port_v<T>) {
             m.port_slots[port_idx++] = PortSlot{
                 T::port_type, s.name, s.port_number,
-                s.is_internal, s.is_bus, s.default_device
+                s.is_internal, s.is_bus, s.default_device,
+                s.built_in_device
             };
         } else if constexpr (is_dip_switch_component_v<T>) {
             m.dip_descriptors[dip_idx++] = s.descriptor;

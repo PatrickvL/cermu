@@ -379,7 +379,16 @@ void System::attach_default_peripherals() {
     auto defaults = get_default_peripherals();
     if (defaults.empty() && port_manifest_) {
         for (size_t i = 0; i < port_manifest_count_; i++) {
+            // Built-in devices are always attached (physically integrated).
+            if (port_manifest_[i].built_in_device) {
+                defaults.push_back({static_cast<int>(i), port_manifest_[i].built_in_device});
+            }
             if (port_manifest_[i].default_device) {
+                // Skip if identical to the built-in device (already queued).
+                if (port_manifest_[i].built_in_device &&
+                    strcmp(port_manifest_[i].default_device,
+                           port_manifest_[i].built_in_device) == 0)
+                    continue;
                 defaults.push_back({static_cast<int>(i), port_manifest_[i].default_device});
             }
         }
@@ -649,13 +658,17 @@ void System::render_peripheral_port_ui() {
                     auto* dev = devices[d];
                     ImGui::PushID(d);
 
-                    // Remove button
-                    if (ImGui::SmallButton("x")) {
-                        detach_device_from_port(i, dev);
-                        ImGui::PopID();
-                        break;  // Vector invalidated — exit loop, will redraw next frame
+                    // Remove button — hidden for built-in devices
+                    bool is_built_in = def.built_in_device &&
+                                       strcmp(dev->get_id(), def.built_in_device) == 0;
+                    if (!is_built_in) {
+                        if (ImGui::SmallButton("x")) {
+                            detach_device_from_port(i, dev);
+                            ImGui::PopID();
+                            break;  // Vector invalidated — exit loop, will redraw next frame
+                        }
+                        ImGui::SameLine();
                     }
-                    ImGui::SameLine();
                     ImGui::Text("%s", dev->get_name());
 
                     // Device-specific UI
@@ -694,28 +707,34 @@ void System::render_peripheral_port_ui() {
                 continue;
             }
 
-            const char* current_name = attached ? attached->get_name() : "<none>";
+            if (def.built_in_device && attached) {
+                // Built-in device — show as fixed label (cannot be changed)
+                ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f),
+                                   "%s: %s", def.name, attached->get_name());
+            } else {
+                const char* current_name = attached ? attached->get_name() : "<none>";
 
-            if (ImGui::BeginCombo(def.name, current_name)) {
-                // "<none>" option — detach
-                if (ImGui::Selectable("<none>", attached == nullptr)) {
-                    detach_device_from_port(i);
-                    attached = nullptr;  // Device destroyed — clear dangling pointer
-                }
+                if (ImGui::BeginCombo(def.name, current_name)) {
+                    // "<none>" option — detach
+                    if (ImGui::Selectable("<none>", attached == nullptr)) {
+                        detach_device_from_port(i);
+                        attached = nullptr;  // Device destroyed — clear dangling pointer
+                    }
 
-                for (const auto* desc : compatible) {
-                    bool is_selected = (attached && strcmp(attached->get_id(), desc->id) == 0);
-                    if (ImGui::Selectable(desc->name, is_selected)) {
-                        if (!is_selected) {
-                            attach_device_to_port(i, desc->id);
-                            attached = port->get_attached_device();  // Refresh pointer
+                    for (const auto* desc : compatible) {
+                        bool is_selected = (attached && strcmp(attached->get_id(), desc->id) == 0);
+                        if (ImGui::Selectable(desc->name, is_selected)) {
+                            if (!is_selected) {
+                                attach_device_to_port(i, desc->id);
+                                attached = port->get_attached_device();  // Refresh pointer
+                            }
+                        }
+                        if (ImGui::IsItemHovered() && desc->description) {
+                            ImGui::SetTooltip("%s", desc->description);
                         }
                     }
-                    if (ImGui::IsItemHovered() && desc->description) {
-                        ImGui::SetTooltip("%s", desc->description);
-                    }
+                    ImGui::EndCombo();
                 }
-                ImGui::EndCombo();
             }
 
             // Show device-specific UI if attached
@@ -972,8 +991,10 @@ float System::render_port_menu_bar_icons() {
                             dev->get_name(), ImGuiTreeNodeFlags_DefaultOpen);
 
                         if (dev_open) {
-                            // Detach button
-                            if (ImGui::MenuItem("Detach")) {
+                            // Detach button — hidden for built-in devices
+                            bool is_built_in = def.built_in_device &&
+                                               strcmp(dev->get_id(), def.built_in_device) == 0;
+                            if (!is_built_in && ImGui::MenuItem("Detach")) {
                                 detach_device_from_port(vp.index, dev);
                                 ImGui::TreePop();
                                 ImGui::PopID();
@@ -1018,10 +1039,12 @@ float System::render_port_menu_bar_icons() {
                     ImGui::Text("Current: %s", attached->get_name());
                     ImGui::Separator();
 
-                    // Detach
-                    if (ImGui::MenuItem("Detach")) {
-                        detach_device_from_port(vp.index);
-                        attached = nullptr;
+                    // Detach — hidden for built-in devices
+                    if (!def.built_in_device) {
+                        if (ImGui::MenuItem("Detach")) {
+                            detach_device_from_port(vp.index);
+                            attached = nullptr;
+                        }
                     }
 
                     // Device UI (inline in popup)
@@ -1042,8 +1065,8 @@ float System::render_port_menu_bar_icons() {
                     ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%s", no_msg);
                 }
 
-                // Switch / attach device submenu
-                if (!compatible.empty()) {
+                // Switch / attach device submenu — hidden for built-in devices
+                if (!compatible.empty() && !def.built_in_device) {
                     ImGui::Separator();
                     const char* noun = port_device_noun(def.type);
                     char submenu_label[64];
@@ -1083,7 +1106,7 @@ float System::render_port_menu_bar_icons() {
                             break;
                         }
                     }
-                    if (has_sibling) {
+                    if (has_sibling && !def.built_in_device) {
                         ImGui::Separator();
                         for (size_t si = 0; si < visible.size(); si++) {
                             if (si == vi) continue;
