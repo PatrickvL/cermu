@@ -5,6 +5,8 @@
 #include "core/device_registry.hpp"
 #include "core/port_registry.hpp"
 #include "core/formats/format_registry.hpp"
+#include "core/archive_scanner.hpp"
+#include "core/vfs/vfs.hpp"
 #include "gui/session_gui.hpp"
 #include "testing/vicii_test_harness.hpp"
 #include "testing/vicii_pixel_tests.hpp"
@@ -816,9 +818,25 @@ int main(int argc, char** argv) {
             log_info("File specified: %s\n", file_path);
         }
     }
-    
+
+    // Resolve archive paths (ZIP, 7z, etc.) to inner loadable files
+    // so that "cermu -s c64 game.zip" finds and loads the D64/PRG inside.
+    std::string resolved_file;
+    if (file_path) {
+        std::string ext = vfs_extension(file_path);
+        if (vfs_is_archive_extension(ext.c_str())) {
+            auto scan = scan_archive(file_path);
+            if (!scan.loadable_files.empty()) {
+                resolved_file = scan.loadable_files[0].full_path;
+                log_info("Archive resolved to: %s\n", resolved_file.c_str());
+            }
+        }
+        if (resolved_file.empty()) resolved_file = file_path;
+    }
+    const char* load_path = resolved_file.empty() ? nullptr : resolved_file.c_str();
+
     std::unique_ptr<System> system;
-    
+
     // If system name specified, create it directly
     if (system_name != nullptr) {
         // Resolve prefix / alias to canonical short_name
@@ -843,8 +861,8 @@ int main(int argc, char** argv) {
         
         // If a file was specified, auto-detect optimal configuration
         // (e.g. memory expansion) before initializing
-        if (file_path != nullptr) {
-            system->apply_file_configuration(file_path);
+        if (load_path) {
+            system->apply_file_configuration(load_path);
         }
 
         // Initialize the system
@@ -856,11 +874,11 @@ int main(int argc, char** argv) {
 
         // Attach default peripheral devices declared by the system
         system->attach_default_peripherals();
-        
+
         // Load file if specified
-        if (file_path != nullptr) {
-            if (!system->load_file(file_path)) {
-                log_error("ERROR: Failed to load file: %s\n", file_path);
+        if (load_path) {
+            if (!system->load_file(load_path)) {
+                log_error("ERROR: Failed to load file: %s\n", load_path);
                 system->shutdown();
                 return 1;
             }
@@ -868,15 +886,15 @@ int main(int argc, char** argv) {
         }
     }
     // If file was specified (but no system), try to auto-detect system
-    else if (file_path != nullptr) {
-        log_info("Detecting system for file: %s\n", file_path);
-        system = SystemRegistry::instance().create_system_for_file(file_path);
-        
+    else if (load_path) {
+        log_info("Detecting system for file: %s\n", load_path);
+        system = SystemRegistry::instance().create_system_for_file(load_path);
+
         if (!system) {
-            log_warn("WARNING: Could not detect system for file: %s\n", file_path);
+            log_warn("WARNING: Could not detect system for file: %s\n", load_path);
             log_warn("No emulator supports this file format.\n");
             log_warn("System selection dialog will be shown...\n\n");
-            // Keep file_path so the GUI can load it after user picks a system
+            // Keep load_path / resolved_file so the GUI can load it after user picks a system
         } else {
             log_info("Detected system: %s (%s)\n", 
                    system->get_descriptor().name,
@@ -896,10 +914,10 @@ int main(int argc, char** argv) {
 
                 // Attach default peripheral devices declared by the system
                 system->attach_default_peripherals();
-            
+
                 // Load the file
-                if (!system->load_file(file_path)) {
-                    log_error("ERROR: Failed to load file: %s\n", file_path);
+                if (!system->load_file(load_path)) {
+                    log_error("ERROR: Failed to load file: %s\n", load_path);
                     system->shutdown();
                     return 1;
                 }
@@ -1291,8 +1309,8 @@ int main(int argc, char** argv) {
 
     // Create GUI (with or without a system)
     // If no system, nullptr will cause GUI to show system selection dialog
-    // Pass any pending file path so it can be loaded after system selection
-    SessionGUI gui(std::move(system), file_path);
+    // Pass resolved file path so the GUI can load it after system selection
+    SessionGUI gui(std::move(system), load_path);
     
     // Initialize GUI — window title is managed dynamically by update_window_title()
     if (!gui.init("cermu", 1200, 800)) {
