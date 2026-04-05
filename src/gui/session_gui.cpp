@@ -1859,30 +1859,35 @@ void SessionGUI::render_display_settings() {
                 changed = true;
             }
             changed |= ImGui::ColorEdit3("Glow Color", dc.phosphor.glow_color);
-            changed |= ImGui::SliderFloat("Persistence (ms)", &dc.phosphor.persistence, 0.1f, 20.0f, "%.1f");
-            changed |= ImGui::SliderFloat("Bloom Radius", &dc.phosphor.bloom_radius, 0.0f, 5.0f, "%.2f");
-            changed |= ImGui::SliderFloat("Bloom Threshold", &dc.phosphor.bloom_threshold, 0.0f, 1.0f, "%.2f");
+            ImGui::BeginDisabled();
+            ImGui::SliderFloat("Persistence (ms)", &dc.phosphor.persistence, 0.1f, 20.0f, "%.1f");
+            ImGui::SliderFloat("Bloom Radius", &dc.phosphor.bloom_radius, 0.0f, 5.0f, "%.2f");
+            ImGui::SliderFloat("Bloom Threshold", &dc.phosphor.bloom_threshold, 0.0f, 1.0f, "%.2f");
             const char* decay_names[] = { "Exponential", "Linear" };
             int dcurve = static_cast<int>(dc.phosphor.decay_curve);
-            if (ImGui::Combo("Decay Curve", &dcurve, decay_names, IM_ARRAYSIZE(decay_names))) {
-                dc.phosphor.decay_curve = static_cast<PhosphorDecay>(dcurve);
-                changed = true;
-            }
+            ImGui::Combo("Decay Curve", &dcurve, decay_names, IM_ARRAYSIZE(decay_names));
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+                ImGui::SetTooltip("Not yet implemented in shader");
             ImGui::TreePop();
         }
 
         // --- Beam ---
         if (ImGui::TreeNode("Beam")) {
-            changed |= ImGui::SliderFloat("Width",    &dc.beam.width,    0.1f, 2.0f, "%.2f");
-            changed |= ImGui::SliderFloat("Softness", &dc.beam.softness, 0.0f, 1.0f, "%.2f");
-            changed |= ImGui::SliderFloat("Pincushion", &dc.beam.pincushion, 0.0f, 0.2f, "%.3f");
-            changed |= ImGui::SliderFloat("H Linearity", &dc.beam.h_linearity, 0.9f, 1.0f, "%.3f");
-            changed |= ImGui::SliderFloat("V Linearity", &dc.beam.v_linearity, 0.9f, 1.0f, "%.3f");
+            ImGui::BeginDisabled();
+            ImGui::SliderFloat("Width",    &dc.beam.width,    0.1f, 2.0f, "%.2f");
+            ImGui::SliderFloat("Softness", &dc.beam.softness, 0.0f, 1.0f, "%.2f");
+            ImGui::SliderFloat("Pincushion", &dc.beam.pincushion, 0.0f, 0.2f, "%.3f");
+            ImGui::SliderFloat("H Linearity", &dc.beam.h_linearity, 0.9f, 1.0f, "%.3f");
+            ImGui::SliderFloat("V Linearity", &dc.beam.v_linearity, 0.9f, 1.0f, "%.3f");
+            ImGui::EndDisabled();
             changed |= ImGui::SliderFloat2("Convergence (edge, center)", dc.beam.convergence_error, 0.0f, 2.0f, "%.2f");
+            ImGui::BeginDisabled();
             if (ImGui::TreeNode("Corner Pin")) {
-                changed |= ImGui::SliderFloat4("TL/TR/BL/BR", dc.beam.corner_pin, -0.05f, 0.05f, "%.3f");
+                ImGui::SliderFloat4("TL/TR/BL/BR", dc.beam.corner_pin, -0.05f, 0.05f, "%.3f");
                 ImGui::TreePop();
             }
+            ImGui::EndDisabled();
             ImGui::TreePop();
         }
 
@@ -1913,15 +1918,19 @@ void SessionGUI::render_display_settings() {
         if (ImGui::TreeNode("Optics")) {
             changed |= ImGui::SliderFloat("Curvature",    &dc.optics.curvature,           0.0f, 1.0f, "%.2f");
             changed |= ImGui::SliderFloat("Vignette",     &dc.optics.vignette_strength,   0.0f, 1.0f, "%.2f");
-            changed |= ImGui::SliderFloat("Reflection",   &dc.optics.reflection_strength, 0.0f, 0.5f, "%.2f");
-            changed |= ImGui::SliderFloat("Edge Glow",    &dc.optics.edge_glow,           0.0f, 0.3f, "%.2f");
+            ImGui::BeginDisabled();
+            ImGui::SliderFloat("Reflection",   &dc.optics.reflection_strength, 0.0f, 0.5f, "%.2f");
+            ImGui::SliderFloat("Edge Glow",    &dc.optics.edge_glow,           0.0f, 0.3f, "%.2f");
+            ImGui::EndDisabled();
             changed |= ImGui::ColorEdit3("Glass Tint",    dc.optics.glass_tint);
             ImGui::TreePop();
         }
 
         // --- Signal ---
         if (ImGui::TreeNode("Signal")) {
-            changed |= ImGui::SliderFloat("Bandwidth (MHz)",   &dc.signal.bandwidth,          1.0f, 10.0f, "%.1f");
+            ImGui::BeginDisabled();
+            ImGui::SliderFloat("Bandwidth (MHz)",   &dc.signal.bandwidth,          1.0f, 10.0f, "%.1f");
+            ImGui::EndDisabled();
             changed |= ImGui::SliderFloat("Noise",             &dc.signal.noise_level,        0.0f, 0.2f,  "%.3f");
             changed |= ImGui::SliderFloat("Hum Bar",           &dc.signal.hum_bar_strength,   0.0f, 0.2f,  "%.3f");
             changed |= ImGui::SliderFloat("Ghosting",          &dc.signal.ghosting_strength,  0.0f, 0.3f,  "%.3f");
