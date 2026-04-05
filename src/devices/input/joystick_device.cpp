@@ -20,6 +20,24 @@ JoystickDevice::JoystickDevice() {
 
 void JoystickDevice::reset() {
     ControlPortInputDevice::reset();
+    autofire_counter_ = 0;
+    autofire_phase_   = false;
+    fire_held_        = false;
+}
+
+void JoystickDevice::tick() {
+    if (!autofire_enabled_ || !fire_held_) {
+        autofire_counter_ = 0;
+        autofire_phase_   = false;
+        return;
+    }
+
+    // Toggle fire signal every autofire_rate_ frames
+    if (++autofire_counter_ >= autofire_rate_) {
+        autofire_counter_ = 0;
+        autofire_phase_ = !autofire_phase_;
+    }
+    set_signal(PortSignals::JOY_FIRE, autofire_phase_);
 }
 
 // ============================================================================
@@ -163,6 +181,28 @@ void JoystickDevice::render_device_ui() {
     ImGui::Text("  %s %s %s %s %s",
                 up ? "U" : ".", down ? "D" : ".", left ? "L" : ".",
                 right ? "R" : ".", fire ? "F" : ".");
+
+    // Auto-fire toggle + speed
+    bool af = autofire_enabled_;
+    if (ImGui::Checkbox("Auto-fire", &af)) {
+        autofire_enabled_ = af;
+        if (!af) {
+            // Release fire signal when disabling auto-fire
+            set_signal(PortSignals::JOY_FIRE, fire_held_);
+        }
+    }
+    if (autofire_enabled_) {
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0f);
+        int rate = autofire_rate_;
+        if (ImGui::SliderInt("##af_rate", &rate, 1, 10, "%d")) {
+            autofire_rate_ = rate;
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Toggle every %d frame%s (lower = faster)",
+                              rate, rate == 1 ? "" : "s");
+        }
+    }
 
     render_input_source_badge();
 }

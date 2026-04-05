@@ -29,6 +29,7 @@ public:
     const char* get_name() const override { return "Digital Joystick"; }
     const char* get_id() const override   { return "joystick"; }
     void reset() override;
+    void tick() override;
 
     // --- Host Input support --------------------------------------------
     int get_supported_input_type_count() const override { return 2; }
@@ -57,7 +58,12 @@ public:
     void set_down(bool pressed)  { set_signal(PortSignals::JOY_DOWN,  pressed); }
     void set_left(bool pressed)  { set_signal(PortSignals::JOY_LEFT,  pressed); }
     void set_right(bool pressed) { set_signal(PortSignals::JOY_RIGHT, pressed); }
-    void set_fire(bool pressed)  { set_signal(PortSignals::JOY_FIRE,  pressed); }
+    void set_fire(bool pressed) {
+        fire_held_ = pressed;
+        if (!autofire_enabled_)
+            set_signal(PortSignals::JOY_FIRE, pressed);
+        // When autofire is active, tick() drives the actual signal
+    }
 
     /// Get raw button state (active-low: 0 = pressed).
     uint32_t get_state() const { return signal_state_; }
@@ -66,8 +72,22 @@ public:
     const JoystickKeyMap& get_key_map() const { return key_map_; }
     void set_key_map(const JoystickKeyMap& map) { key_map_ = map; }
 
+    /// Auto-fire: when enabled, fire button toggles on/off each
+    /// autofire_rate_ frames while the user holds fire.
+    bool autofire_enabled() const { return autofire_enabled_; }
+    void set_autofire_enabled(bool enabled) { autofire_enabled_ = enabled; }
+    int  autofire_rate() const { return autofire_rate_; }
+    void set_autofire_rate(int frames_per_toggle) { autofire_rate_ = frames_per_toggle; }
+
 private:
     JoystickKeyMap key_map_;      ///< Keyboard scancode mapping
+
+    // Auto-fire state (toggled per frame via tick())
+    bool autofire_enabled_ = false;
+    int  autofire_rate_    = 3;   ///< Toggle fire every N frames (lower = faster)
+    int  autofire_counter_ = 0;
+    bool autofire_phase_   = false; ///< Current on/off phase
+    bool fire_held_        = false; ///< True while user is holding fire
 
     // SDL event handlers for each input type
     bool process_keyboard_event(const SDL_Event& event);
