@@ -390,8 +390,25 @@ bool C128System::initialize() {
     // frames for the display pipeline.
     vdc_video_port_ = std::make_unique<RGBIVideoPort>();
     vdc.set_video_out(&vdc_video_port_->output());
-    vdc_video_port_->bind_display(nullptr, nullptr,
-                                  c128_constants::VDC_DISPLAY_WIDTH, 0);
+
+    // Compute VDC back porch from the register values programmed above.
+    // The VDC emits visible characters (0..R1-1) BEFORE HSync in the
+    // per-line signal stream, so the offset from HSync falling edge to
+    // the first visible pixel is NEGATIVE.  The shader's uint32_t
+    // scanline-map arithmetic wraps correctly, mapping each HSync event
+    // back to its own line's start position rather than the next line's.
+    {
+        using namespace fam6845::reg;
+        const int ppc = 8;  // pixels per VDC character
+        uint8_t hsw = vdc.regs_[R3_SYNC_WIDTHS] & 0x0F;
+        if (hsw == 0) hsw = 16;
+        // HSync falls at character (R2 + HSW - 1) due to the counter
+        // starting at 0 and incrementing before the width check.
+        int hsync_end_px = (vdc.regs_[R2_HSYNC_POS] + hsw - 1) * ppc;
+        vdc_video_port_->bind_display(nullptr, nullptr,
+                                      c128_constants::VDC_DISPLAY_WIDTH,
+                                      -hsync_end_px);
+    }
     log_info("C128: VDC RGBI video output connected (%dx%d)\n",
              c128_constants::VDC_DISPLAY_WIDTH, c128_constants::VDC_DISPLAY_HEIGHT);
 
