@@ -183,6 +183,18 @@ struct mos6522_t : public IoChipBase {
         return registers_write(bus);
     }
 
+    /// CS-tick: self-dispatch register access when chip-selected.
+    /// Mirrors mos6526_t::tick_mmio() for use in Board-based systems (1541).
+    bus_state_t tick_mmio(bus_state_t bus) noexcept {
+        if (is_cs_selected(bus)) {
+            bus = BUS_GET_BIT(bus, BUS_RW_BIT)
+                ? registers_read(bus)
+                : registers_write(bus);
+            mark_cs_serviced(bus);
+        }
+        return bus;
+    }
+
     // --- ChipBase interface ---
 #ifdef CERMU_HAS_GUI
     bool has_settings_content() const override;

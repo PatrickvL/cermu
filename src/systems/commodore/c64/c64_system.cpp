@@ -312,6 +312,17 @@ static HardwareTraits create_c64_hardware_traits() {
         0  // 6581 default
     });
 
+    // Drive emulation mode
+    traits.custom_options.push_back({
+        "drive_mode",
+        "Drive Mode",
+        "Warp: cycle-accurate drive CPU with auto-warp when motor spins. "
+        "Cycle-accurate: real-time drive CPU (slow but accurate). "
+        "Hooked I/O: instant KERNAL serial traps (fast, less compatible).",
+        { "Warp (recommended)", "Cycle-accurate", "Hooked I/O" },
+        0  // Warp default
+    });
+
     return traits;
 }
 
@@ -602,6 +613,9 @@ bool C64System::initialize() {
     this->vicii->bus.lp_pin_read    = c64_vicii_lp_pin_read;
     this->vicii->bus.lp_pin_context = &s_port_callback_ctx;
 
+    // Initialize cycle-accurate drive subsystem (reads drive_mode from config)
+    init_drive_subsystem();
+
     log_info("C64: System initialized successfully\n");
     return true;
 }
@@ -697,6 +711,9 @@ void C64System::reset() {
 
         // Reset serial trap state
         serial_trap_ = {};
+
+        // Reset cycle-accurate drive subsystem
+        reset_drive_subsystem();
 
         log_info("C64 System: Reset complete\n");
     }
@@ -980,8 +997,29 @@ void C64System::system_tick() {
     // PHASE 4: CPU PHI1 — prepare next fetch (direct C++ call, inlineable)
     s = cpu->tick<MOS6510::Phase::PHI1>(s);
 
+    // =========================================================================
+    // PHASE 4.5: Cycle-accurate IEC drive integration
+    //
+    // When drive_mode_ is WARP or ACCURATE, the 1541 drive CPU runs in
+    // lockstep.  CIA2 Port A bits 3-5 drive the IEC bus (ATN/CLK/DATA out);
+    // the combined bus state feeds back into CIA2 PA bits 6-7 (CLK/DATA in).
+    // =========================================================================
+    if (is_drive_cycle_accurate()) {
+        // Push CIA2 IEC output → shared IEC bus (slot 0 = host)
+        drive_subsystem_.sync_host_to_iec(cia2->port_a.output());
+
+        // Advance all drives by one cycle
+        drive_subsystem_.advance_drives(total_cycles_);
+
+        // Pull IEC bus state → CIA2 input pins (bits 6-7 only)
+        uint8_t iec_in = drive_subsystem_.sync_iec_to_host();
+        cia2->port_a_value = (cia2->port_a_value & 0x3F) | iec_in;
+    }
+
     // KERNAL serial trap check — intercept IEC bus routines at instruction boundaries
-    if (serial_traps_enabled_) {
+    // Only active when drive_mode_ is HOOKED (instant I/O) and a trap-based
+    // Drive1541Device is attached.  Cycle-accurate modes bypass traps entirely.
+    if (serial_traps_enabled_ && !is_drive_cycle_accurate()) {
         if (cpu->opdone()) {
             uint16_t pc = cpu->get(PC);
             // All serial trap addresses are in the $ED00-$EEFF range

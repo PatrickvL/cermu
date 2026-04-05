@@ -4,7 +4,6 @@
 // the tick loop, memory map, IEC bus bridge, and drive mechanics.
 
 #include "devices/storage/drive_1541_system.hpp"
-#include "core/bus_defs.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -268,7 +267,7 @@ void C1541System<Traits>::iec_update_bus_output() {
     if (!iec_bus_) return;
 
     auto& out = iec_bus_->output(iec_slot_);
-    uint8_t pb = board_.via1.port_b.read_output();
+    uint8_t pb = board_.via1.port_b.output();
 
     // DATA OUT (bit 1): HIGH in register = pull DATA low on bus
     out.set(iec::DATA, !(pb & VIA1_PB_DATA_OUT));
@@ -291,7 +290,7 @@ void C1541System<Traits>::iec_update_bus_output() {
 
 template <const DriveTraits& Traits>
 void C1541System<Traits>::drive_mechanics_update() {
-    uint8_t pb = board_.via2.port_b.read_output();
+    uint8_t pb = board_.via2.port_b.output();
 
     // Motor control (bit 2)
     head_.motor_on = (pb & VIA2_PB_MOTOR) != 0;

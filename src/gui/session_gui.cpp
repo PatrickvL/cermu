@@ -3051,6 +3051,11 @@ void SessionGUI::emu_thread_func() {
             }
 
             // Run emulation frames
+            // When the system is warping (e.g. drive motor active in Warp mode),
+            // force the accumulator high so multiple frames run per host cycle.
+            if (system_->is_warping())
+                accumulator = target_frame_time * 3.0;
+
             while (accumulator >= target_frame_time) {
                 uint64_t t0 = SDL_GetPerformanceCounter();
                 system_->run_frame();
