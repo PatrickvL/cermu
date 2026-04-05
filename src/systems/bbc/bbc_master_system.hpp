@@ -126,8 +126,8 @@ inline constexpr auto kBBCBPlusManifest = make_manifest(
     // Ports
     Slot<PortCassette>{.name = "Cassette Port"},
     Slot<PortUserPort>{.name = "User Port"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
-    Slot<PortRgb>{.name = "Video Out (RGB)"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv_pal"},
+    Slot<PortRgb>{.name = "Video Out (RGB)", .default_device = "crt_cub1431"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 
@@ -145,8 +145,8 @@ inline constexpr auto kBBCMasterManifest = make_manifest(
     // Ports
     Slot<PortCassette>{.name = "Cassette Port"},
     Slot<PortUserPort>{.name = "User Port"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
-    Slot<PortRgb>{.name = "Video Out (RGB)"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv_pal"},
+    Slot<PortRgb>{.name = "Video Out (RGB)", .default_device = "crt_cub1431"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 

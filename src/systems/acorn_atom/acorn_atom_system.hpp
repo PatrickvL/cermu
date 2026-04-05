@@ -54,7 +54,7 @@ inline constexpr auto kAtomManifest = make_manifest(
     // Ports
     Slot<PortCassette>{.name = "Cassette Port"},
     Slot<PortExpansion>{.name = "Expansion Port"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv_pal"}
 );
 
 inline constexpr size_t kAtomChipCount = decltype(kAtomManifest)::chip_count;

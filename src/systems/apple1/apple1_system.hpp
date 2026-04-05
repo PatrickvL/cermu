@@ -51,7 +51,7 @@ inline constexpr auto kApple1Manifest = make_manifest(
     // Ports
     Slot<PortExpansion>      {.name = "Expansion Connector"},
     Slot<PortCassette>       {.name = "Cassette Interface (ACI)"},
-    Slot<PortCompositeVideo> {.name = "Video Out", .default_device = "crt_green"}
+    Slot<PortCompositeVideo> {.name = "Video Out", .default_device = "crt_amber"}
 );
 
 // BusSpec auto-derived from the manifest.  EnableCs=true enables CS-tick:

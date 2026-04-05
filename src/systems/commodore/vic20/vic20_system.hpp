@@ -110,7 +110,7 @@ inline constexpr auto kVIC20Manifest = make_manifest(
     Slot<PortCassette>{.name = "Cassette Port", .default_device = "datasette"},
     Slot<PortUserPort>{.name = "User Port"},
     Slot<PortExpansion>{.name = "Expansion Port"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_1702"},
     Slot<PortAudioMono>{.name = "Audio Out"},
     Slot<PortCustom>{.name = "Keyboard", .is_internal = true}
 );

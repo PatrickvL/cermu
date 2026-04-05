@@ -134,7 +134,7 @@ inline constexpr auto kAppleIIManifest = make_manifest(
     // Ports
     Slot<PortCassette>{.name = "Cassette Port"},
     Slot<PortExpansion>{.name = "Expansion Slots"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_green"}
 );
 
 // Apple IIe (128K, 65C02)
@@ -147,7 +147,7 @@ inline constexpr auto kAppleIIeManifest = make_manifest(
     // Ports
     Slot<PortCassette>{.name = "Cassette Port"},
     Slot<PortExpansion>{.name = "Expansion Slots"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_green"}
 );
 
 // Apple IIc (128K, 65C02, same layout as IIe)
@@ -160,7 +160,7 @@ inline constexpr auto kAppleIIcManifest = make_manifest(
     // Ports
     Slot<PortCassette>{.name = "Cassette Port"},
     Slot<PortExpansion>{.name = "Expansion Slots"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_green"}
 );
 
 inline constexpr size_t kAppleIIChipCount  = decltype(kAppleIIManifest)::chip_count;

@@ -89,7 +89,7 @@ inline constexpr auto kSpectrum48KManifest = make_manifest(
     // Ports
     Slot<PortExpansion>{.name = "Expansion Port"},
     Slot<PortCassette>{.name = "Cassette Port"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv_pal"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 
@@ -103,7 +103,7 @@ inline constexpr auto kSpectrum128KManifest = make_manifest(
     // Ports
     Slot<PortExpansion>{.name = "Expansion Port"},
     Slot<PortCassette>{.name = "Cassette Port"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv_pal"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 

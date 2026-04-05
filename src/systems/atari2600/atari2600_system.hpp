@@ -79,7 +79,7 @@ inline constexpr auto kAtari2600Manifest = make_manifest(
     // Ports
     Slot<PortControlDB9>{.name = "Left Controller", .port_number = 1, .default_device = "joystick"},
     Slot<PortControlDB9>{.name = "Right Controller", .port_number = 2, .default_device = "joystick"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortRf>{.name = "Video Out", .default_device = "crt_tv_rf"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 
@@ -130,7 +130,7 @@ struct Atari2600Board : Board<Atari2600BusSpec> {
     // Port aliases
     PortControlDB9&     left_port  = std::get<4>(components_);
     PortControlDB9&     right_port = std::get<5>(components_);
-    PortCompositeVideo& video_port = std::get<6>(components_);
+    PortRf&             video_port = std::get<6>(components_);
     PortAudioMono&      audio_port = std::get<7>(components_);
 
     Atari2600Board() : Board(kAtari2600Manifest) {}

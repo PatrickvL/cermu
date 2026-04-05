@@ -82,7 +82,7 @@ inline constexpr auto kZ1013_16K_Manifest = make_manifest(
     Slot<z80_pio_t>{.base_addr = 0x0004, .addr_mask = 0x00FC, .label = "U855 PIO"},
     // Ports
     Slot<PortCassette>{.name = "Cassette Port"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_junost"}
 );
 
 inline constexpr auto kZ1013_64K_Manifest = make_manifest(
@@ -96,7 +96,7 @@ inline constexpr auto kZ1013_64K_Manifest = make_manifest(
     Slot<z80_pio_t>{.base_addr = 0x0004, .addr_mask = 0x00FC, .label = "U855 PIO"},
     // Ports
     Slot<PortCassette>{.name = "Cassette Port"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_junost"}
 );
 
 inline constexpr size_t kZ1013_16K_ChipCount = decltype(kZ1013_16K_Manifest)::chip_count;

@@ -70,7 +70,7 @@ inline constexpr auto kMTX500Manifest = make_manifest(
     // Ports
     Slot<PortControlDB9>{.name = "Joystick Port", .port_number = 1, .default_device = "joystick"},
     Slot<PortCassette>{.name = "Cassette Port"},
-    Slot<PortRgb>{.name = "Video Out (RGB)", .default_device = "crt_tv"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv_pal"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 
@@ -85,7 +85,7 @@ inline constexpr auto kMTX512Manifest = make_manifest(
     // Ports
     Slot<PortControlDB9>{.name = "Joystick Port", .port_number = 1, .default_device = "joystick"},
     Slot<PortCassette>{.name = "Cassette Port"},
-    Slot<PortRgb>{.name = "Video Out (RGB)", .default_device = "crt_tv"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv_pal"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 
@@ -118,9 +118,9 @@ struct MTXBoard : Board<BSpec> {
 
     // Port aliases
     PortControlDB9& joy1_port     = std::get<6>(components_);
-    PortCassette&   cassette_port = std::get<7>(components_);
-    PortRgb&        video_port    = std::get<8>(components_);
-    PortAudioMono&  audio_port    = std::get<9>(components_);
+    PortCassette&       cassette_port = std::get<7>(components_);
+    PortCompositeVideo& video_port    = std::get<8>(components_);
+    PortAudioMono&      audio_port    = std::get<9>(components_);
 
     template<size_t N>
     MTXBoard(const ChipManifest<N>& m) : Board<BSpec>(m) {}

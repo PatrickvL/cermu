@@ -125,7 +125,7 @@ inline constexpr auto kMSX1Manifest = make_manifest(
     Slot<PortControlDB9>{.name = "Joystick Port 2", .port_number = 2, .default_device = "joystick"},
     Slot<PortCassette>{.name = "Cassette Port"},
     Slot<PortExpansion>{.name = "Cartridge Slot"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortRgb>{.name = "Video Out", .default_device = "crt_rgb"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 
@@ -142,7 +142,7 @@ inline constexpr auto kMSX2Manifest = make_manifest(
     Slot<PortControlDB9>{.name = "Joystick Port 2", .port_number = 2, .default_device = "joystick"},
     Slot<PortCassette>{.name = "Cassette Port"},
     Slot<PortExpansion>{.name = "Cartridge Slot"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortRgb>{.name = "Video Out", .default_device = "crt_rgb"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 
@@ -159,7 +159,7 @@ inline constexpr auto kMSX2PManifest = make_manifest(
     Slot<PortControlDB9>{.name = "Joystick Port 2", .port_number = 2, .default_device = "joystick"},
     Slot<PortCassette>{.name = "Cassette Port"},
     Slot<PortExpansion>{.name = "Cartridge Slot"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortRgb>{.name = "Video Out", .default_device = "crt_rgb"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 

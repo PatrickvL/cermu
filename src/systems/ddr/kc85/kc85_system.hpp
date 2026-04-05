@@ -82,7 +82,7 @@ inline constexpr auto kKC852Manifest = make_manifest(
     // Ports
     Slot<PortCassette>{.name = "Cassette Port"},
     Slot<PortExpansion>{.name = "Module Slot"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_junost"}
 );
 
 inline constexpr auto kKC853Manifest = make_manifest(
@@ -99,7 +99,7 @@ inline constexpr auto kKC853Manifest = make_manifest(
     // Ports
     Slot<PortCassette>{.name = "Cassette Port"},
     Slot<PortExpansion>{.name = "Module Slot"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_junost"}
 );
 
 inline constexpr auto kKC854Manifest = make_manifest(
@@ -117,7 +117,7 @@ inline constexpr auto kKC854Manifest = make_manifest(
     // Ports
     Slot<PortCassette>{.name = "Cassette Port"},
     Slot<PortExpansion>{.name = "Module Slot"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"}
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_junost"}
 );
 
 inline constexpr size_t kKC852ChipCount = decltype(kKC852Manifest)::chip_count;

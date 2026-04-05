@@ -64,7 +64,7 @@ inline constexpr auto kPETManifest = make_manifest(
     Slot<PortIecSerial>{.name = "IEC Serial Bus", .is_bus = true},
     Slot<PortCassette>{.name = "Cassette Port", .default_device = "datasette"},
     Slot<PortUserPort>{.name = "User Port"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_green"}
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_pet_green"}
 );
 
 inline constexpr size_t kPETChipCount = decltype(kPETManifest)::chip_count;

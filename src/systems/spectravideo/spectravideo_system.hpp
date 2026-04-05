@@ -73,7 +73,7 @@ inline constexpr auto kSVI318Manifest = make_manifest(
     Slot<PortControlDB9>{.name = "Joystick Port 2", .port_number = 2, .default_device = "joystick"},
     Slot<PortCassette>{.name = "Cassette Port"},
     Slot<PortExpansion>{.name = "Cartridge Slot"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv_pal"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 
@@ -90,7 +90,7 @@ inline constexpr auto kSVI328Manifest = make_manifest(
     Slot<PortControlDB9>{.name = "Joystick Port 2", .port_number = 2, .default_device = "joystick"},
     Slot<PortCassette>{.name = "Cassette Port"},
     Slot<PortExpansion>{.name = "Cartridge Slot"},
-    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv_pal"},
     Slot<PortAudioMono>{.name = "Audio Out"}
 );
 
