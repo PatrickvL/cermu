@@ -366,21 +366,57 @@ bool C128System::initialize() {
     // initialization sequence.  Without these the VDC's zero-initialized
     // registers produce degenerate timing (R0=0 → instant line wraps)
     // that overflows the signal buffer before a FrameEnd is ever emitted.
+    //
+    // Values from the KERNAL init table at $CE0C (PAL, 80-col text mode).
     {
         using namespace fam6845::reg;
         auto& r = vdc.regs_;
-        r[R0_HTOTAL]       = 126;  //  127 character clocks per line
-        r[R1_HDISPLAYED]   =  80;  //   80 visible characters
-        r[R2_HSYNC_POS]    = 102;  //  HSYNC at char 102
-        r[R3_SYNC_WIDTHS]  = 0x49; //  HSYNC width 9, VSYNC width 4
-        r[R4_VTOTAL]       =  32;  //   33 character rows total
-        r[R5_VADJUST]      =   0;
-        r[R6_VDISPLAYED]   =  25;  //   25 visible rows
-        r[R7_VSYNC_POS]    =  29;  //  VSYNC at row 29
-        r[R8_MODE_CTRL]    = 0x00; //  Non-interlaced
-        r[R9_MAX_SCANLINE] =   7;  //    8 scan lines per character row
-        r[R10_CURSOR_START]= 0x20; //  Cursor: no blink, start line 0
-        r[R11_CURSOR_END]  =   7;  //  Cursor end at line 7
+        r[R0_HTOTAL]        = 126;  //  127 character clocks per line
+        r[R1_HDISPLAYED]    =  80;  //   80 visible characters
+        r[R2_HSYNC_POS]     = 102;  //  HSYNC at char 102
+        r[R3_SYNC_WIDTHS]   = 0x49; //  HSYNC width 9, VSYNC width 4
+        r[R4_VTOTAL]        =  32;  //   33 character rows total
+        r[R5_VADJUST]       =   0;
+        r[R6_VDISPLAYED]    =  25;  //   25 visible rows
+        r[R7_VSYNC_POS]     =  29;  //  VSYNC at row 29
+        r[R8_MODE_CTRL]     = 0x00; //  Non-interlaced
+        r[R9_MAX_SCANLINE]  =   7;  //    8 scan lines per character row
+        r[R10_CURSOR_START] = 0x20; //  Cursor: no blink, start line 0
+        r[R11_CURSOR_END]   =   7;  //  Cursor end at line 7
+        r[R12_START_ADDR_HI]=   0;  //  Screen RAM at $0000
+        r[R13_START_ADDR_LO]=   0;
+        r[R14_CURSOR_HI]    =   0;  //  Cursor at $0000
+        r[R15_CURSOR_LO]    =   0;
+        r[R20_ATTR_ADDR_HI] = 0x08; //  Attribute RAM at $0800
+        r[R21_ATTR_ADDR_LO] = 0x00;
+        r[R22_CHAR_DISP_HZ] = 0x78; //  8 pixels wide, 8 displayed per char
+        r[R23_CHAR_DISP_VT] =   8;  //  8 scan lines displayed per char
+        r[R24_VSCROLL]       = 0x00; //  VScroll=0, no reverse
+        r[R25_HSCROLL]       = 0x00; //  Text mode, no attr, no double-pixel, scroll=0
+        r[R26_FGBG_COLOR]    = 0xF0; //  FG=15 (white), BG=0 (black)
+        r[R27_ROW_INC]       =   0;  //  No inter-row address increment
+        r[R28_CHARSET_BASE]  = 0x20; //  Charset at VRAM $2000, 16K DRAM
+        r[R29_UNDERLINE]     =   7;  //  Underline at scanline 7
+        r[R34_DISP_BEGIN]    = 0x7D; //  Display begin (KERNAL default)
+        r[R35_DISP_END]      = 0x64; //  Display end (KERNAL default)
+        r[R36_DRAM_REFRESH]  =   5;  //  DRAM refresh cycles
+    }
+
+    // Copy upper/lowercase character ROM (second 4KB half) into VDC VRAM
+    // at $2000, matching the KERNAL's init routine.  Without this the VDC
+    // reads glyph data from uninitialised VRAM.
+    {
+        auto* vram = vdc_vram_->data();
+        const auto* crom = char_rom_->data();
+        if (crom && vram && char_rom_->size_bytes() >= 0x2000) {
+            std::memcpy(vram + 0x2000, crom + 0x1000, 0x1000);
+        }
+
+        // Fill screen RAM ($0000) with spaces ($20)
+        std::memset(vram, 0x20, 80 * 25);
+
+        // Fill attribute RAM ($0800) with default colour ($F0 = white on black)
+        std::memset(vram + 0x0800, 0xF0, 80 * 25);
     }
 
     // VDC RGBI video output — create port and connect to VDC's video_out_.

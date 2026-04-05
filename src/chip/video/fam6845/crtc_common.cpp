@@ -364,25 +364,34 @@ void crtc_base_t::render_char(uint16_t screen_addr, uint8_t scanline) {
     uint8_t fg, bg;
 
     if (traits_->has_attribute_ram && (regs_[R25_HSCROLL] & 0x40)) {
-        // Attribute mode enabled: read attribute from attribute RAM
+        // Attribute mode enabled: read attribute from attribute RAM.
+        // VDC attribute byte: bit 7 = alt charset, bit 6 = reverse,
+        // bit 5 = underline, bit 4 = blink, bits 3:0 = fg colour.
+        // Background colour always comes from R26[3:0].
         uint16_t attr_base = attribute_address();
         uint16_t attr_addr = attr_base + (screen_addr - start_address());
         uint8_t attr = vram_[attr_addr & vram_addr_mask_];
-        fg = (attr >> 4) & 0x0F;
-        bg = attr & 0x0F;
+        fg = attr & 0x0F;
+        bg = regs_[R26_FGBG_COLOR] & 0x0F;
 
-        // Underline: check R29
-        if (scanline == regs_[R29_UNDERLINE]) {
-            pixel_row = 0xFF;  // Full underline
-        }
-
-        // Blink: bit 4 of attribute (alternating)
-        if ((attr & 0x10) && (frame_count & 0x10)) {
-            pixel_row = 0x00;  // Blanked during blink-off phase
-        }
-
-        // Reverse: bit 6 of attribute
+        // Alternate charset (bit 7): offset glyph lookup by 0x1000
         if (attr & 0x80) {
+            glyph_addr += 0x1000;
+            pixel_row = vram_[glyph_addr & vram_addr_mask_];
+        }
+
+        // Underline (bit 5): full-width line at R29 scanline
+        if ((attr & 0x20) && scanline == regs_[R29_UNDERLINE]) {
+            pixel_row = 0xFF;
+        }
+
+        // Blink (bit 4): blank during blink-off phase
+        if ((attr & 0x10) && (frame_count & 0x10)) {
+            pixel_row = 0x00;
+        }
+
+        // Reverse (bit 6): invert glyph pixels
+        if (attr & 0x40) {
             pixel_row = ~pixel_row;
         }
     } else {
