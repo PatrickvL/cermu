@@ -913,9 +913,13 @@ inline void LauncherPanel::render_system_header() {
     }
 
     // Action buttons: favourite star + settings + launch (right-aligned)
-    float launch_width = 80.0f;
-    float button_group_width = launch_width + 60.0f;  // launch + star + settings + gaps
-    ImGui::SameLine(ImGui::GetWindowWidth() - button_group_width - 12);
+    float launch_width = ImGui::CalcTextSize("\xe2\x96\xb6 Launch").x + 20.0f;
+    if (launch_width < 80.0f) launch_width = 80.0f;
+    float button_group_width = 28.0f + 4.0f + 28.0f + 4.0f + launch_width;  // star + gap + settings + gap + launch
+    float content_w = ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x;
+    float group_x = content_w - button_group_width - 8.0f;
+    if (group_x < 84.0f) group_x = 84.0f;  // don't overlap CRT/info area
+    ImGui::SameLine(group_x);
     ImGui::SetCursorPosY(18);
 
     // Favourite toggle
