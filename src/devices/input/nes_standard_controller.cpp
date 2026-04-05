@@ -32,9 +32,40 @@ NesStandardController::NesStandardController() {
 
 void NesStandardController::reset() {
     button_state_   = 0;
+    held_state_     = 0;
     latch_was_high_ = false;
     output_signals_ = 0xFFFFFFFF;  // All signals released (active-low)
     cd4021_.reset();
+    autofire_counter_ = 0;
+    autofire_phase_   = false;
+}
+
+void NesStandardController::tick() {
+    if (!autofire_a_enabled_ && !autofire_b_enabled_) return;
+
+    bool a_held = (held_state_ & A) != 0;
+    bool b_held = (held_state_ & B) != 0;
+    bool any_active = (autofire_a_enabled_ && a_held) ||
+                      (autofire_b_enabled_ && b_held);
+    if (!any_active) {
+        autofire_counter_ = 0;
+        autofire_phase_   = false;
+        // Restore button_state_ from held_state_ (no auto-fire override)
+        button_state_ = held_state_;
+        return;
+    }
+
+    if (++autofire_counter_ >= autofire_rate_) {
+        autofire_counter_ = 0;
+        autofire_phase_ = !autofire_phase_;
+    }
+
+    // Start from the raw held state, then override auto-fire buttons
+    button_state_ = held_state_;
+    if (autofire_a_enabled_ && a_held && !autofire_phase_)
+        button_state_ &= ~A;
+    if (autofire_b_enabled_ && b_held && !autofire_phase_)
+        button_state_ &= ~B;
 }
 
 // ============================================================================
@@ -49,6 +80,7 @@ void NesStandardController::set_host_input_binding(const HostInputBinding& bindi
 
 void NesStandardController::on_input_source_will_change() {
     button_state_ = 0;
+    held_state_   = 0;
     output_signals_ = 0xFFFFFFFF;
 }
 
@@ -95,18 +127,6 @@ void NesStandardController::on_signal_change(uint32_t signal_state) {
 
     // Keep Port cache in sync so read_signals() returns fresh D0
     if (port_) port_->notify_device_output_changed(output_signals_);
-}
-
-// ============================================================================
-// BUTTON STATE
-// ============================================================================
-
-void NesStandardController::set_button_state(Button button, bool pressed) {
-    if (pressed) {
-        button_state_ |= static_cast<uint8_t>(button);
-    } else {
-        button_state_ &= ~static_cast<uint8_t>(button);
-    }
 }
 
 // ============================================================================
@@ -238,6 +258,25 @@ void NesStandardController::render_device_ui() {
                 left  ? "L" : ".", right ? "R" : ".",
                 sel   ? "Se" : "..", start ? "St" : "..",
                 b     ? "B" : ".", a     ? "A" : ".");
+
+    // Auto-fire checkboxes for A and B buttons
+    bool af_a = autofire_a_enabled_;
+    bool af_b = autofire_b_enabled_;
+    if (ImGui::Checkbox("Auto-fire A", &af_a)) autofire_a_enabled_ = af_a;
+    ImGui::SameLine();
+    if (ImGui::Checkbox("Auto-fire B", &af_b)) autofire_b_enabled_ = af_b;
+    if (autofire_a_enabled_ || autofire_b_enabled_) {
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0f);
+        int rate = autofire_rate_;
+        if (ImGui::SliderInt("##af_rate", &rate, 1, 10, "%d")) {
+            autofire_rate_ = rate;
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Toggle every %d frame%s (lower = faster)",
+                              rate, rate == 1 ? "" : "s");
+        }
+    }
 
     render_input_source_badge();
 }
