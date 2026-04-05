@@ -41,7 +41,8 @@ struct FrameData {
 };
 
 // Maximum signal buffer: enough for one full frame of the largest system.
-// VDC (MOS 8563): 128 chars × 8 pixels × ~313 total lines (312 active +
-// blanking/sync) ≈ 321K samples.  Use 1024×320 for generous headroom.
-inline constexpr uint32_t MAX_SIGNAL_SAMPLES = 1024 * 320;  // 327680
+// VDC (MOS 8563) double-pixel mode: 128 chars × 16 ppc × ~313 lines ≈ 641K.
+// FrameEnd fires partway through the frame; post-FrameEnd samples go into
+// the callback-provided buffer.  This only needs to cover up to FrameEnd.
+inline constexpr uint32_t MAX_SIGNAL_SAMPLES = 1024 * 640;  // 655360
 inline constexpr uint32_t MAX_SYNC_EVENTS    = 400;
