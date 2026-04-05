@@ -402,9 +402,9 @@ bool C128System::initialize() {
         const int ppc = 8;  // pixels per VDC character
         uint8_t hsw = vdc.regs_[R3_SYNC_WIDTHS] & 0x0F;
         if (hsw == 0) hsw = 16;
-        // HSync falls at character (R2 + HSW - 1) due to the counter
-        // starting at 0 and incrementing before the width check.
-        int hsync_end_px = (vdc.regs_[R2_HSYNC_POS] + hsw - 1) * ppc;
+        // HSync deactivates at char (R2 + HSW - 1) but the drive() flag
+        // transition fires at the first pixel of char (R2 + HSW).
+        int hsync_end_px = (vdc.regs_[R2_HSYNC_POS] + hsw) * ppc;
         vdc_video_port_->bind_display(nullptr, nullptr,
                                       c128_constants::VDC_DISPLAY_WIDTH,
                                       -hsync_end_px);
