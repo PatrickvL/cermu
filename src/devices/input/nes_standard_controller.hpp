@@ -94,6 +94,7 @@ public:
     const char* get_id()   const override { return "nes_gamepad"; }
     PortType get_port_type() const override { return PortType::CONTROLLER_NES; }
     void reset() override;
+    void tick() override;
 
     // --- Signal protocol -----------------------------------------------
     void on_signal_change(uint32_t signal_state) override;
@@ -118,12 +119,27 @@ public:
 #endif
 
     // --- Controller-specific API ---------------------------------------
-    void set_button_state(Button button, bool pressed);
+    void set_button_state(Button button, bool pressed) {
+        if (pressed)
+            held_state_ |= static_cast<uint8_t>(button);
+        else
+            held_state_ &= ~static_cast<uint8_t>(button);
+        button_state_ = held_state_;  // Sync; tick() may override auto-fire bits
+    }
     uint8_t get_button_state() const { return button_state_; }
 
     /// Set the keyboard-to-button mapping (default: arrows + Z/X/Enter/RShift).
     void set_key_map(const NesKeyMap& map) { keymap_ = map; }
     const NesKeyMap& get_key_map() const { return keymap_; }
+
+    /// Auto-fire: when enabled, A and/or B toggle on/off each
+    /// autofire_rate_ frames while the user holds the button.
+    bool autofire_a_enabled() const { return autofire_a_enabled_; }
+    bool autofire_b_enabled() const { return autofire_b_enabled_; }
+    void set_autofire_a_enabled(bool e) { autofire_a_enabled_ = e; }
+    void set_autofire_b_enabled(bool e) { autofire_b_enabled_ = e; }
+    int  autofire_rate() const { return autofire_rate_; }
+    void set_autofire_rate(int frames) { autofire_rate_ = frames; }
 
 private:
     bool process_keyboard_event(const SDL_Event& event);
@@ -134,8 +150,16 @@ private:
     int get_keymap_presets_table_size() const override;
 
     CD4021 cd4021_;                         // Internal shift register
-    uint8_t button_state_ = 0;             // Current button bitmask (active-high)
+    uint8_t button_state_ = 0;             // Current button bitmask (active-high), may be modified by auto-fire
+    uint8_t held_state_   = 0;             // Raw user-held buttons (unmodified by auto-fire)
     bool latch_was_high_ = false;          // Edge detection for LATCH signal
     uint32_t output_signals_ = 0xFFFFFFFF; // Active-low output (all released)
     NesKeyMap keymap_{};                   // Keyboard scancode → button mapping
+
+    // Auto-fire state (toggled per frame via tick())
+    bool autofire_a_enabled_ = false;
+    bool autofire_b_enabled_ = false;
+    int  autofire_rate_      = 3;   ///< Toggle every N frames
+    int  autofire_counter_   = 0;
+    bool autofire_phase_     = false;
 };
