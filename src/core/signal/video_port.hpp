@@ -280,15 +280,27 @@ public:
                                        bound_line_width_, bound_back_porch_);
         }
 
-        output_.base           = active_buf_;
-        output_.ptr            = active_buf_;
-        output_.prev_flags     = SyncFlag::None;
+        // In triple-buffer mode (DisplayPipeline connected via on_frame_end_),
+        // the callback already rotated buffers at FrameEnd and the chip may
+        // be actively writing to the new slot.  Don't touch base, ptr,
+        // prev_flags, or sync_count — the new frame is already in progress.
+        //
+        // In single-buffer mode (no DisplayPipeline), reset to the start of
+        // the internal buffer so the next frame overwrites the old one.
+        if (!on_frame_end_) {
+            output_.base        = active_buf_;
+            output_.ptr         = active_buf_;
+            output_.prev_flags  = SyncFlag::None;
+            *active_sync_count_ = 0;
+            sync_run_           = 0;
+        }
+
+        // Always clear frame-completion bookkeeping so frame_ended()
+        // returns false and the next FrameEnd can be detected.
         output_.frame_len      = 0;
         output_.completed_base = nullptr;
         completed_sync_        = nullptr;
         completed_sync_count_  = 0;
-        *active_sync_count_    = 0;
-        sync_run_              = 0;
         return fd;
     }
 
