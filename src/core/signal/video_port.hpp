@@ -171,11 +171,23 @@ public:
         active_buf_  = buf;
         output_.base = buf;
         output_.ptr  = buf;
+        // Clear stale frame-completion state — any previous completed_base
+        // pointed into the old buffer and is now dangling.  Also reset
+        // prev_flags so the first sample doesn't trigger a spurious sync
+        // edge from whatever state the port was in before the switch.
+        output_.prev_flags     = SyncFlag::None;
+        output_.frame_len      = 0;
+        output_.completed_base = nullptr;
     }
 
     void set_active_sync_buffer(SyncEvent* events, uint32_t* count) noexcept {
         active_sync_        = events;
         active_sync_count_  = count;
+        // Clear stale completed-sync pointers — they referenced the old
+        // sync array which may be freed or belong to a different pipeline.
+        completed_sync_       = nullptr;
+        completed_sync_count_ = 0;
+        sync_run_             = 0;
     }
 
     void set_frame_end_callback(Sample* (*cb)(void*) noexcept, void* ctx) noexcept {
@@ -193,8 +205,15 @@ public:
         active_buf_        = buf_;
         output_.base       = buf_;
         output_.ptr        = buf_;
+        output_.prev_flags = SyncFlag::None;
+        output_.frame_len      = 0;
+        output_.completed_base = nullptr;
         active_sync_       = sync_events_;
         active_sync_count_ = &sync_count_;
+        *active_sync_count_ = 0;
+        completed_sync_        = nullptr;
+        completed_sync_count_  = 0;
+        sync_run_          = 0;
         on_frame_end_      = nullptr;
         frame_end_ctx_     = nullptr;
     }
