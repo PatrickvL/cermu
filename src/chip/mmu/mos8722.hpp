@@ -85,20 +85,20 @@ namespace cr {
 
 // Mode Configuration Register (MCR, $D505) bit fields
 //
-//   Bit 7    : Reserved (normally 0)
-//   Bit 6    : C64 mode — 1 = enter C64 compatibility mode
-//   Bit 5    : 40/80 key sense — 0 = pressed (40-col), 1 = not pressed (80-col)
-//              (directly reads the physical key, active-low wired-AND)
-//   Bit 4    : Fast serial output — directly controls serial clock line
+//   Bit 7    : 40/80 key sense — read-only; 0 = pressed (80-col), 1 = released (40-col)
+//              (directly reads the physical latch key, active-low)
+//   Bit 6    : C64 mode — write 1 to enter C64 compatibility mode (read as 0)
+//   Bit 5    : /EXROM sense — read-only, active-low, 1 = no EXROM cartridge
+//   Bit 4    : /GAME  sense — read-only, active-low, 1 = no GAME cartridge
 //   Bit 3    : Fast serial direction — 0 = input, 1 = output
-//   Bit 2    : Fast serial input (active-low, directly reads serial clock)
-//   Bit 1    : OS ROM select bit 1 (operating system version)
-//   Bit 0    : OS ROM select bit 0
+//   Bits 1-2 : Read as 1 (reserved, forced on write)
+//   Bit 0    : CPU select — 0 = Z80 active, 1 = 8502 active
 namespace mcr {
-    inline constexpr uint8_t C64_MODE     = 0x40;  // Bit 6 — enter C64 mode
-    inline constexpr uint8_t COL_KEY      = 0x20;  // Bit 5 — 40/80 column key
+    inline constexpr uint8_t COL_KEY      = 0x80;  // Bit 7 — 40/80 column key (read-only)
+    inline constexpr uint8_t C64_MODE     = 0x40;  // Bit 6 — enter C64 mode (write-only)
+    inline constexpr uint8_t EXROM_SENSE  = 0x20;  // Bit 5 — /EXROM cartridge line (read-only)
+    inline constexpr uint8_t GAME_SENSE   = 0x10;  // Bit 4 — /GAME cartridge line (read-only)
     inline constexpr uint8_t FSDIR        = 0x08;  // Bit 3 — fast serial direction
-    inline constexpr uint8_t FSIN         = 0x04;  // Bit 2 — fast serial input
     inline constexpr uint8_t CPU_SELECT   = 0x01;  // Bit 0 — 0 = Z80 active, 1 = 8502 active
 } // namespace mcr
 
@@ -226,12 +226,18 @@ struct mos8722_t : public MmuChipBase {
 
     // ── Register access (called by on_bus_read/write and by system for $FF00) ──
 
-    /// 40/80 DISPLAY key state.  true = pressed (40-col), false = not pressed (80-col).
-    /// Directly read by MCR bit 5 (active-low: pressed → bit clear).
-    /// Default: not pressed (80-col) — matches real hardware power-on state.
-    /// The Z80 BIOS writes $B0 to MCR then reads it back; if bit 5 doesn't
-    /// match (because the key overrides it), the BIOS enters C64 mode.
-    bool key_40_80_pressed = false;
+    /// 40/80 DISPLAY key state.  true = pressed/latched (80-col), false = released (40-col).
+    /// Directly read by MCR bit 7 (active-low: pressed → bit clear → 80-col).
+    /// Default: pressed (80-col) — matches real hardware power-on state.
+    bool key_40_80_pressed = true;
+
+    /// /EXROM cartridge line state.  true = asserted (cartridge present).
+    /// Read at MCR bit 5 (inverted: 1 = not asserted = no cartridge).
+    bool exrom_asserted = false;
+
+    /// /GAME cartridge line state.  true = asserted (cartridge present).
+    /// Read at MCR bit 4 (inverted: 1 = not asserted = no cartridge).
+    bool game_asserted = false;
 
     uint8_t read_register(uint8_t reg) const {
         using namespace mos8722::reg;
@@ -239,9 +245,14 @@ struct mos8722_t : public MmuChipBase {
 
         switch (reg) {
             case MCR: {
-                // Bit 5 reads the 40/80 column key (active-low)
-                // 0 = pressed (40-col), 1 = not pressed (80-col)
-                uint8_t val = regs_[MCR] & ~mos8722::mcr::COL_KEY;
+                // Bits 0-3: from stored register (CPU select, fast serial, reserved)
+                uint8_t val = regs_[MCR] & 0x0F;
+                // Bit 4: /GAME sense (inverted: 1 = not asserted)
+                if (!game_asserted) val |= mos8722::mcr::GAME_SENSE;
+                // Bit 5: /EXROM sense (inverted: 1 = not asserted)
+                if (!exrom_asserted) val |= mos8722::mcr::EXROM_SENSE;
+                // Bit 6: always 0 on read (C64 mode is write-only trigger)
+                // Bit 7: 40/80 key (0 = pressed/80-col, 1 = released/40-col)
                 if (!key_40_80_pressed) val |= mos8722::mcr::COL_KEY;
                 return val;
             }
@@ -270,7 +281,11 @@ struct mos8722_t : public MmuChipBase {
                 if (data != old) bank_config_dirty_ = true;
                 break;
 
-            case MCR:
+            case MCR: {
+                // Only bits 0-3 and 6 are writable; bits 4-5, 7 are read-only sense lines.
+                // Read handler overrides bits 4-7 with live signals.
+                regs_[MCR] = data & 0x4F;  // Keep bits 0-3 and 6; discard 4-5, 7
+
                 // Bit 0: CPU select — 0=Z80, 1=8502.
                 // A change in bit 0 triggers a CPU switch request.
                 if ((data ^ old) & mos8722::mcr::CPU_SELECT) {
@@ -283,6 +298,7 @@ struct mos8722_t : public MmuChipBase {
                 }
                 if (regs_[MCR] != old) bank_config_dirty_ = true;
                 break;
+            }
 
             case RCR:
                 // RAM config changed → bank config needs update

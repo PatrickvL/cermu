@@ -11,7 +11,6 @@
 
 #include "chip/video/fam6845/crtc_common.hpp"
 
-#include <cstdio>
 #include <cstring>
 
 using namespace fam6845::reg;
@@ -101,7 +100,6 @@ uint8_t crtc_base_t::read(uint16_t addr) {
     if (traits_ && traits_->has_private_dram) {
         // VDC two-step protocol: RS=0 reads status, RS=1 reads data
         if ((addr & 1) == 0) {
-            // RS=0: Status register
             return status_register;
         }
         // RS=1: Read from selected register
@@ -354,10 +352,13 @@ void crtc_base_t::render_char(uint16_t screen_addr, uint8_t scanline) {
     // Read character code from screen RAM
     uint8_t char_code = vram_[screen_addr & vram_addr_mask_];
 
-    // Read character glyph row from charset in VRAM
+    // Read character glyph row from charset in VRAM.
+    // The VDC allocates 16 bytes per character definition when R9 < 16,
+    // or 32 bytes when R9 >= 16 — regardless of the displayed height.
+    // Only scanlines 0..R9 are displayed; the rest is padding.
     uint16_t charset = charset_base();
-    uint8_t char_height = regs_[R9_MAX_SCANLINE] + 1;
-    uint16_t glyph_addr = charset + (static_cast<uint16_t>(char_code) * char_height) + scanline;
+    uint16_t bytes_per_char = (regs_[R9_MAX_SCANLINE] < 16) ? 16 : 32;
+    uint16_t glyph_addr = charset + (static_cast<uint16_t>(char_code) * bytes_per_char) + scanline;
     uint8_t pixel_row = vram_[glyph_addr & vram_addr_mask_];
 
     // Determine foreground/background colours
@@ -374,9 +375,9 @@ void crtc_base_t::render_char(uint16_t screen_addr, uint8_t scanline) {
         fg = attr & 0x0F;
         bg = regs_[R26_FGBG_COLOR] & 0x0F;
 
-        // Alternate charset (bit 7): offset glyph lookup by 0x1000
+        // Alternate charset (bit 7): offset by 256 * bytes_per_char
         if (attr & 0x80) {
-            glyph_addr += 0x1000;
+            glyph_addr += 256u * bytes_per_char;
             pixel_row = vram_[glyph_addr & vram_addr_mask_];
         }
 

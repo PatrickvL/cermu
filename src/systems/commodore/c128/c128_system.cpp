@@ -375,10 +375,10 @@ bool C128System::initialize() {
         r[R1_HDISPLAYED]    =  80;  //   80 visible characters
         r[R2_HSYNC_POS]     = 102;  //  HSYNC at char 102
         r[R3_SYNC_WIDTHS]   = 0x49; //  HSYNC width 9, VSYNC width 4
-        r[R4_VTOTAL]        =  32;  //   33 character rows total
+        r[R4_VTOTAL]        =  38;  //   39 character rows total (PAL: 39×8 = 312 lines)
         r[R5_VADJUST]       =   0;
         r[R6_VDISPLAYED]    =  25;  //   25 visible rows
-        r[R7_VSYNC_POS]     =  29;  //  VSYNC at row 29
+        r[R7_VSYNC_POS]     =  32;  //  VSYNC at row 32 (PAL)
         r[R8_MODE_CTRL]     = 0x00; //  Non-interlaced
         r[R9_MAX_SCANLINE]  =   7;  //    8 scan lines per character row
         r[R10_CURSOR_START] = 0x20; //  Cursor: no blink, start line 0
@@ -408,8 +408,19 @@ bool C128System::initialize() {
     {
         auto* vram = vdc_vram_->data();
         const auto* crom = char_rom_->data();
+        // The VDC uses 16 bytes per character definition (R9 < 16).
+        // The character ROM stores glyphs in 8-byte format, so we
+        // copy each character's 8 glyph bytes into the first 8 bytes
+        // of each 16-byte slot and zero-fill the remaining 8.
         if (crom && vram && char_rom_->size_bytes() >= 0x2000) {
-            std::memcpy(vram + 0x2000, crom + 0x1000, 0x1000);
+            constexpr int stride = 16;  // VDC bytes_per_char
+            constexpr int glyph_h = 8;  // ROM bytes per character
+            const auto* src = crom + 0x1000;  // Upper/lower case set
+            auto* dst = vram + 0x2000;         // Charset base in VRAM
+            for (int c = 0; c < 256; ++c) {
+                std::memcpy(dst + c * stride, src + c * glyph_h, glyph_h);
+                std::memset(dst + c * stride + glyph_h, 0, stride - glyph_h);
+            }
         }
 
         // Fill screen RAM ($0000) with spaces ($20)
@@ -449,7 +460,7 @@ bool C128System::initialize() {
              c128_constants::VDC_DISPLAY_WIDTH, c128_constants::VDC_DISPLAY_HEIGHT);
 
     // Bind the correct video port to last_frame_data_ based on the
-    // initial 40/80 key state (key_40_80_pressed = false at power-on
+    // initial 40/80 key state (key_40_80_pressed = true at power-on
     // → 80-col VDC active).  Without this, only the VIC-IIe port was
     // bound, causing the emu thread to read VIC-IIe data even when the
     // display pipeline was connected to the VDC RGBI port.
@@ -1635,8 +1646,9 @@ void C128System::render_system_menu_items() {
 
 void C128System::on_unmapped_toggle_changed(emu_key_t key, bool pressed) {
     if (key == EMUKEY_CBM_40_80_DISPLAY) {
-        // 40/80 DISPLAY is a hardware switch wired to MMU MCR bit 5,
+        // 40/80 DISPLAY is a hardware latch key wired to MMU MCR bit 7,
         // not a keyboard matrix key.  Update the MMU sense line directly.
+        // Pressed/latched = 80-col (VDC), released = 40-col (VIC-IIe).
         board_.mmu.key_40_80_pressed = pressed;
     }
 }
@@ -1646,25 +1658,25 @@ const char* C128System::get_mode_label() const {
 }
 
 int C128System::get_active_video_port_index() const {
-    // The 40/80 DISPLAY key is a hardware toggle wired to MMU MCR bit 5.
-    // When pressed (40-col selected), return the VIC-IIe composite port;
-    // when not pressed (80-col selected), return the VDC RGBI port.
-    return board_.mmu.key_40_80_pressed ? PORT_VIDEO_40 : PORT_VIDEO_80;
+    // The 40/80 DISPLAY key is a hardware latch wired to MMU MCR bit 7.
+    // When pressed/latched (80-col selected), return the VDC RGBI port;
+    // when released (40-col selected), return the VIC-IIe composite port.
+    return board_.mmu.key_40_80_pressed ? PORT_VIDEO_80 : PORT_VIDEO_40;
 }
 
 void* C128System::get_video_port_ptr() {
     // Return whichever video port is currently active.
     // The display pipeline (SessionGUI) uses this to connect the signal
-    // decoder.  In 40-col mode → VIC-IIe composite; 80-col → VDC RGBI.
+    // decoder.  Pressed/latched → 80-col VDC RGBI; released → 40-col VIC-IIe.
     if (board_.mmu.key_40_80_pressed)
-        return video_port_.get();
-    return vdc_video_port_.get();
+        return vdc_video_port_.get();
+    return video_port_.get();
 }
 
 VideoSignalType C128System::get_video_signal_type() const {
     if (board_.mmu.key_40_80_pressed)
-        return VideoSignalType::Composite;
-    return VideoSignalType::RGBI;
+        return VideoSignalType::RGBI;
+    return VideoSignalType::Composite;
 }
 
 void C128System::rebind_active_video_output() {
@@ -1678,19 +1690,19 @@ void C128System::rebind_active_video_output() {
     // then bind the active one.  Also switch palette_ so the GPU shader
     // gets the correct palette for the active display mode.
     if (board_.mmu.key_40_80_pressed) {
-        // 40-col: VIC-IIe composite
-        if (vdc_video_port_)
-            vdc_video_port_->bind_frame_output(nullptr);
-        if (video_port_)
-            video_port_->bind_frame_output(&last_frame_data_);
-        palette_.set(vicii_palette_.data(), vicii_palette_.size());
-    } else {
-        // 80-col: VDC RGBI
+        // 80-col: VDC RGBI (key pressed/latched = 80-column mode)
         if (video_port_)
             video_port_->bind_frame_output(nullptr);
         if (vdc_video_port_)
             vdc_video_port_->bind_frame_output(&last_frame_data_);
         palette_.set(fam6845::RGBI_PALETTE, 16);
+    } else {
+        // 40-col: VIC-IIe composite (key released = 40-column mode)
+        if (vdc_video_port_)
+            vdc_video_port_->bind_frame_output(nullptr);
+        if (video_port_)
+            video_port_->bind_frame_output(&last_frame_data_);
+        palette_.set(vicii_palette_.data(), vicii_palette_.size());
     }
 }
 
