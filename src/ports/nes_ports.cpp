@@ -5,7 +5,7 @@
  * and tooling can discover them by PortType at runtime.
  */
 
-#include "ports/nes_ports.hpp"
+#include "core/port.hpp"
 #include "core/port_registry.hpp"
 
 using namespace PortSignals;

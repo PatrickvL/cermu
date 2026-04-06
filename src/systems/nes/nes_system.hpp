@@ -71,10 +71,36 @@ namespace nes_constants {
 
 namespace nes_system {
 
+// ============================================================================
+// NES Manifest — chips + removable controller ports (7-pin, 48-pin expansion)
+// ============================================================================
+
 inline constexpr auto kNESManifest = make_manifest(
     // Chips
     Slot<RICOH_2A03>{.base_addr = 0x0000, .label = "Ricoh 2A03"},
-    Slot<PPU>{.base_addr = 0x2000, .label = "Ricoh 2C02 PPU"}
+    Slot<PPU>{.base_addr = 0x2000, .label = "Ricoh 2C02 PPU"},
+    // Ports
+    Slot<PortControllerNes>{.name = "Controller Port 1", .port_number = 1, .default_device = "nes_gamepad"},
+    Slot<PortControllerNes>{.name = "Controller Port 2", .port_number = 2, .default_device = "nes_gamepad"},
+    Slot<PortExpansion>{.name = "Expansion Port"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
+);
+
+// ============================================================================
+// Famicom Manifest — same chips, hardwired controllers + 15-pin expansion
+// ============================================================================
+
+inline constexpr auto kFCManifest = make_manifest(
+    // Chips
+    Slot<RICOH_2A03>{.base_addr = 0x0000, .label = "Ricoh 2A03"},
+    Slot<PPU>{.base_addr = 0x2000, .label = "Ricoh 2C02 PPU"},
+    // Ports
+    Slot<PortControllerNes>{.name = "Controller I (hardwired)",              .port_number = 1, .default_device = "nes_gamepad"},
+    Slot<PortControllerNes>{.name = "Controller II (hardwired, microphone)", .port_number = 2, .default_device = "nes_gamepad"},
+    Slot<PortExpansion>{.name = "Expansion Port (15-pin)"},
+    Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_tv"},
+    Slot<PortAudioMono>{.name = "Audio Out"}
 );
 
 inline constexpr size_t kNESChipCount = decltype(kNESManifest)::chip_count;
@@ -84,7 +110,7 @@ struct NESBoard : Board<NESBusSpec> {
     using ComponentTuple = decltype(kNESManifest)::component_tuple;
     ComponentTuple components_;
 
-    // Chip aliases
+    // Chip aliases (ports are at indices 2+ but managed by the port framework)
     RICOH_2A03& cpu = std::get<0>(components_);
     PPU&        ppu = std::get<1>(components_);
 
