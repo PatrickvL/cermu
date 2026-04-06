@@ -99,14 +99,17 @@ public:
 
         auto* ptr = adapter.get();
         drives_[slot] = std::move(adapter);
+        has_drives_ = true;
         return ptr;
     }
 
     /// Detach the drive at the given device number.
     void detach_drive(uint8_t device_number) {
         int slot = device_number - 8;
-        if (slot >= 0 && slot < MAX_IEC_DRIVES)
+        if (slot >= 0 && slot < MAX_IEC_DRIVES) {
             drives_[slot].reset();
+            update_has_drives();
+        }
     }
 
     /// Get a drive by device number (nullptr if not attached).
@@ -187,9 +190,15 @@ public:
         data_released = (combined & (1u << iec::DATA)) != 0;
     }
 
+    /// True when at least one drive is attached.  Cached to avoid
+    /// per-cycle iteration over the drive array when no drives exist.
+    bool has_drives() const noexcept { return has_drives_; }
+
     /// Advance all attached drives by one cycle.
     /// Also updates warp state based on drive activity.
     void advance_drives(uint64_t host_cycle) {
+        if (!has_drives_) return;
+
         bool any_active = false;
 
         for (auto& drive : drives_) {
@@ -223,6 +232,13 @@ public:
 private:
     IECBus          iec_bus_;
     WarpController  warp_;
+    bool            has_drives_ = false;   // Cached: any drive slot occupied?
 
     std::array<std::unique_ptr<IECDriveBase>, MAX_IEC_DRIVES> drives_;
+
+    void update_has_drives() noexcept {
+        has_drives_ = false;
+        for (auto& d : drives_)
+            if (d) { has_drives_ = true; return; }
+    }
 };

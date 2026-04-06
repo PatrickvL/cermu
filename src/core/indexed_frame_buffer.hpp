@@ -224,12 +224,15 @@ public:
                     row_ptr[x] = palette[color_line[x]];
                 }
             }
-        }
 
-        // Also copy into the internal index buffer for screenshot/debug use
-        if (indices_ && color_line != indices_ + row * width_) {
-            std::memcpy(indices_ + row * width_ + x_start,
-                        color_line + x_start, span);
+            // Also copy into the internal index buffer for screenshot/debug use.
+            // On the GPU path ext_indices_ already holds the data — skip the
+            // redundant memcpy to avoid ~1 byte/pixel of wasted writes per
+            // scanline.
+            if (indices_ && color_line != indices_ + row * width_) {
+                std::memcpy(indices_ + row * width_ + x_start,
+                            color_line + x_start, span);
+            }
         }
     }
 
