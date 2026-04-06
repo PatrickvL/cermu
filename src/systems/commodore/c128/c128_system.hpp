@@ -242,17 +242,6 @@ protected:
     crtc_base_t& vdc_chip() { return board_.vdc; }
 
 private:
-    // ── Memory chips — post-init pointers ────────────────────────────────
-    ROMChip* basic_lo_rom_ = nullptr;
-    ROMChip* basic_hi_rom_ = nullptr;
-    ROMChip* editor_rom_   = nullptr;
-    ROMChip* kernal_rom_   = nullptr;
-    ROMChip* char_rom_     = nullptr;
-    ROMChip* c64_basic_rom_  = nullptr;  // C64 BASIC V2 (8KB, for C64 mode)
-    ROMChip* c64_kernal_rom_ = nullptr;  // C64 KERNAL (8KB, for C64 mode)
-    ROMChip* z80_bios_rom_   = nullptr;  // Z80 BIOS (4KB, from KERNAL chip)
-    RAMChip* vdc_vram_     = nullptr;    // 16KB VDC video RAM
-
     // ── Board + bus ──────────────────────────────────────────────────────
     using Bus       = MemoryBus<C128BusSpec>;
     using MainBoard = C128Board;

@@ -238,16 +238,6 @@ bool C128System::initialize() {
     port_manifest_count_ = manifest_->port_count;
     board_.apply(bus_);
 
-    basic_lo_rom_    = &board_.basic_lo;
-    basic_hi_rom_    = &board_.basic_hi;
-    editor_rom_      = &board_.editor_rom;
-    kernal_rom_      = &board_.kernal_rom;
-    char_rom_        = &board_.char_rom;
-    c64_basic_rom_   = &board_.c64_basic;
-    c64_kernal_rom_  = &board_.c64_kernal;
-    z80_bios_rom_    = &board_.z80_bios;
-    vdc_vram_        = &board_.vdc_vram;
-
     configure_bus_memory_map();
     init_io_dispatch();
     generate_bank_snapshots();
@@ -356,7 +346,7 @@ bool C128System::initialize() {
     // VDC (8563) — 80-column RGBI output (secondary display)
     auto& vdc = board_.vdc;
     vdc.init();
-    vdc.bind_vram(vdc_vram_->data(), static_cast<uint32_t>(vdc_vram_->size_bytes()));
+    vdc.bind_vram(board_.vdc_vram.data(), static_cast<uint32_t>(board_.vdc_vram.size_bytes()));
 
     // Program VDC with power-on defaults matching the C128 KERNAL's
     // initialization sequence.  Without these the VDC's zero-initialized
@@ -402,13 +392,13 @@ bool C128System::initialize() {
     // at $2000, matching the KERNAL's init routine.  Without this the VDC
     // reads glyph data from uninitialised VRAM.
     {
-        auto* vram = vdc_vram_->data();
-        const auto* crom = char_rom_->data();
+        auto* vram = board_.vdc_vram.data();
+        const auto* crom = board_.char_rom.data();
         // The VDC uses 16 bytes per character definition (R9 < 16).
         // The character ROM stores glyphs in 8-byte format, so we
         // copy each character's 8 glyph bytes into the first 8 bytes
         // of each 16-byte slot and zero-fill the remaining 8.
-        if (crom && vram && char_rom_->size_bytes() >= 0x2000) {
+        if (crom && vram && board_.char_rom.size_bytes() >= 0x2000) {
             constexpr int stride = 16;  // VDC bytes_per_char
             constexpr int glyph_h = 8;  // ROM bytes per character
             const auto* src = crom + 0x1000;  // Upper/lower case set
@@ -1311,8 +1301,8 @@ void C128System::tick_z80() {
         }
         // $0000-$0FFF: Z80 BIOS ROM overlay (read) / RAM (write)
         else if (addr < 0x1000 && !is_write) {
-            if (z80_bios_rom_ && z80_bios_rom_->data()) {
-                BUS_SET_DATA(z80_pins_, z80_bios_rom_->data()[addr & 0x0FFF]);
+            if (board_.z80_bios.data()) {
+                BUS_SET_DATA(z80_pins_, board_.z80_bios.data()[addr & 0x0FFF]);
             } else {
                 BUS_SET_DATA(z80_pins_, 0xFF);
             }
