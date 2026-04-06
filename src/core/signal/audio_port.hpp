@@ -70,6 +70,7 @@ struct AudioPort {
     float     accumulator_  = 0.f;
     uint32_t  acc_count_    = 0;
     uint32_t  period_       = 1;        // chip clocks per host sample
+    float     inv_period_   = 1.f;      // 1.0f / period_ (pre-computed to avoid per-sample division)
     float     prev_         = 0.f;
     float     scale_        = 1.f;      // output scaling factor
     bool      suppress_     = false;    // warp mode: skip ring buffer writes
@@ -82,6 +83,7 @@ struct AudioPort {
         if (host_sample_hz == 0) host_sample_hz = 44100;
         period_ = chip_clock_hz / host_sample_hz;
         if (period_ == 0) period_ = 1;
+        inv_period_ = 1.0f / static_cast<float>(period_);
     }
 
     /// Set output scaling factor (maps chip DAC range to [-1,+1])
@@ -103,7 +105,7 @@ struct AudioPort {
         accumulator_ += value;
 
         if (++acc_count_ >= period_) {
-            float s = (accumulator_ / static_cast<float>(acc_count_)) * scale_;
+            float s = (accumulator_ * inv_period_) * scale_;
             ring_.push_unchecked(s);
             acc_count_   = 0;
             accumulator_ = 0.f;
