@@ -339,17 +339,11 @@ TestResult TestFramework::run_test(const TestDescriptor& test) {
     sys.set_framebuffer(framebuffer.data(), fb_w, fb_h);
 
     // ---- Load PRG into RAM ----
-    RAMChip* ram = sys.ram();
-    if (!ram) {
-        result.status = TestStatus::ERROR;
-        result.message = "No RAM chip available";
-        sys.shutdown();
-        return result;
-    }
+    RAMChip& ram = sys.ram();
 
     std::string full_path = vice_testprogs_path_ + "/" + test.path;
     uint16_t load_addr = 0, sys_addr = 0;
-    if (!c64_test_load_prg_file(full_path.c_str(), ram, &load_addr, &sys_addr)) {
+    if (!c64_test_load_prg_file(full_path.c_str(), &ram, &load_addr, &sys_addr)) {
         result.status = TestStatus::ERROR;
         result.message = "Failed to load PRG file: " + full_path;
         sys.shutdown();
@@ -369,13 +363,7 @@ TestResult TestFramework::run_test(const TestDescriptor& test) {
     // BASIC boot.  Others can be direct-executed after KERNAL boot.
     bool needs_basic_boot = (load_addr == c16_constants::BASIC_START && sys_addr != 0);
 
-    auto* cpu = sys.cpu();
-    if (!cpu) {
-        result.status = TestStatus::ERROR;
-        result.message = "No CPU available";
-        sys.shutdown();
-        return result;
-    }
+    auto& cpu = sys.cpu();
 
     if (needs_basic_boot) {
         // Boot the system through KERNAL+BASIC until the READY prompt
@@ -388,9 +376,9 @@ TestResult TestFramework::run_test(const TestDescriptor& test) {
 
             // Check BASIC warm-start vector at $0302/$0303
             if ((i & 0x3FF) == 0) { // every 1024 cycles
-                if (ram->data()[0x0302] == c16_constants::BASIC_WARMSTART_LO &&
-                    ram->data()[0x0303] == c16_constants::BASIC_WARMSTART_HI &&
-                    ram->data()[c16_constants::KBD_BUFFER_COUNT] == 0) {
+                if (ram.data()[0x0302] == c16_constants::BASIC_WARMSTART_LO &&
+                    ram.data()[0x0303] == c16_constants::BASIC_WARMSTART_HI &&
+                    ram.data()[c16_constants::KBD_BUFFER_COUNT] == 0) {
                     if (verbose_) log_info("  BASIC ready at cycle %u\n", i);
                     break;
                 }
@@ -398,19 +386,19 @@ TestResult TestFramework::run_test(const TestDescriptor& test) {
         }
 
         // Jump to SYS address
-        cpu->set(PC, sys_addr);
-        cpu->transition_to_fetch();
-        cpu->set(AB, sys_addr);
+        cpu.set(PC, sys_addr);
+        cpu.transition_to_fetch();
+        cpu.set(AB, sys_addr);
 
         // Set up return address on stack pointing to BASIC warm start ($8712)
         // so RTS returns safely to BASIC
-        uint8_t sp = cpu->get(S);
+        uint8_t sp = cpu.get(S);
         uint16_t return_addr = 0x8712 - 1; // RTS adds 1
-        ram->data()[0x0100 + sp] = (return_addr >> 8) & 0xFF;
+        ram.data()[0x0100 + sp] = (return_addr >> 8) & 0xFF;
         sp--;
-        ram->data()[0x0100 + sp] = return_addr & 0xFF;
+        ram.data()[0x0100 + sp] = return_addr & 0xFF;
         sp--;
-        cpu->set(S, sp);
+        cpu.set(S, sp);
 
         if (verbose_) log_info("  Jumping to SYS $%04X\n", sys_addr);
     } else {
@@ -420,9 +408,9 @@ TestResult TestFramework::run_test(const TestDescriptor& test) {
             sys.tick();
 
         uint16_t start = (sys_addr != 0) ? sys_addr : load_addr;
-        cpu->set(PC, start);
-        cpu->transition_to_fetch();
-        cpu->set(AB, start);
+        cpu.set(PC, start);
+        cpu.transition_to_fetch();
+        cpu.set(AB, start);
 
         if (verbose_) log_info("  Direct execution at $%04X\n", start);
     }
@@ -460,24 +448,22 @@ TestResult TestFramework::run_test(const TestDescriptor& test) {
 
         // Periodic infinite-loop check (every 256 cycles)
         if ((cycles & 0xFF) == 0) {
-            uint16_t current_pc = cpu->get(PC);
+            uint16_t current_pc = cpu.get(PC);
             if (current_pc == last_pc) {
                 pc_stable_count++;
                 if (pc_stable_count >= 2) {
                     // Verify JMP * (opcode $4C with target == PC)
-                    uint8_t opcode = ram->data()[current_pc];
+                    uint8_t opcode = ram.data()[current_pc];
                     bool is_jmp_self = false;
                     if (opcode == 0x4C) {
-                        uint16_t target = ram->data()[(current_pc + 1) & 0xFFFF]
-                                        | (ram->data()[(current_pc + 2) & 0xFFFF] << 8);
+                        uint16_t target = ram.data()[(current_pc + 1) & 0xFFFF]
+                                        | (ram.data()[(current_pc + 2) & 0xFFFF] << 8);
                         is_jmp_self = (target == current_pc);
                     }
                     if (is_jmp_self || pc_stable_count >= 8) {
                         // Read TED border color ($FF19): lower 4 bits = hue
-                        ted7360_t* ted = sys.ted();
-                        uint8_t border_hue = ted
-                            ? (ted->regs_[BORDER] & 0x0F)
-                            : 0;
+                        auto& ted = sys.ted();
+                        uint8_t border_hue = ted.regs_[BORDER] & 0x0F;
 
                         if (border_hue == TED_HUE_GREEN) {
                             result.status = TestStatus::PASSED;

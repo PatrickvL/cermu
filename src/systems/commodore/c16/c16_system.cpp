@@ -409,8 +409,6 @@ static void c16_mem_write_block(void* ctx, uint16_t addr,
 template<C264SeriesVariant V>
 Commodore264System<V>::Commodore264System()
     : CommodoreSystem()
-    , cpu_(nullptr)
-    , ted_(nullptr)
     , bus_state_(0)
     , initialized_(false)
 {
@@ -516,11 +514,10 @@ bool Commodore264System<V>::initialize() {
         ted_desc.banking_change = ted_banking_changed;
         ted_desc.banking_change_user_data = this;
         board_.ted.init(ted_desc);
-        ted_ = &board_.ted;
         log_info("%s: Created TED 7360 (%s)\n", Traits::name, is_pal_region ? "PAL" : "NTSC");
         // Initialize sound subsystem: TED master clock is 2× CPU clock
         uint32_t ted_clock = is_pal_region ? TED_PAL_CLOCK_HZ : TED_NTSC_CLOCK_HZ;
-        ted_->audio_reset(ted_clock, c16_constants::AUDIO_SAMPLE_RATE);
+        board_.ted.audio_reset(ted_clock, c16_constants::AUDIO_SAMPLE_RATE);
     }
 
     // Bind value-typed chips from Chips, then factory-create remaining
@@ -531,20 +528,11 @@ bool Commodore264System<V>::initialize() {
     port_manifest_count_ = kC264Manifest.port_count;
     board_.apply(bus_);
 
-    // Convenience pointers for direct buffer access (ROM loading, KERNAL checks, etc.)
-    ram_        = &board_.ram;
-    basic_rom_  = &board_.basic_rom;
-    kernal_rom_ = &board_.kernal_rom;
-    cpu_        = &board_.csg7501;
-    pio1_       = &board_.pio1;
-    pio2_       = &board_.pio2;
-    io_dec_     = &board_.io_dec;
-
     // Wire I/O decoder: connect PIO chips and ROM bank change callback.
     // The 74LS139 + 74LS175 inside the I/O decoder handle sub-page dispatch
     // and ROM bank latching respectively.
-    io_dec_->wire(pio1_, pio2_);
-    io_dec_->set_bank_change_callback([](void* ctx) {
+    board_.io_dec.wire(&board_.pio1, &board_.pio2);
+    board_.io_dec.set_bank_change_callback([](void* ctx) {
         static_cast<Commodore264System<V>*>(ctx)->apply_cpu_banking();
     }, this);
 
@@ -561,15 +549,9 @@ bool Commodore264System<V>::initialize() {
         log_info("%s: Warning - ROMs not loaded, system may not function correctly\n", Traits::name);
     }
     
-    // Initialize MOS 7501 CPU — owned by board_, retrieved via chip_as
-    if (!cpu_) {
-        log_info("%s: Failed to get MOS 7501 CPU from board\n", Traits::name);
-        return false;
-    }
-    
     // Initialize CPU and I/O port
     board_.csg7501.init();
-    cpu_->init_io_port(0x00, 0x00, 0xFF);  // C16: DDR=0 (all inputs), data=0, pins=0xFF (all high)
+    board_.csg7501.init_io_port(0x00, 0x00, 0xFF);  // C16: DDR=0 (all inputs), data=0, pins=0xFF (all high)
 
     // Reset the CPU to start the hardware-accurate RESET sequence.
     // The deferred hijack fetches $FFFC/$FFFD through the bus on first tick.
@@ -610,16 +592,16 @@ bool Commodore264System<V>::initialize() {
 
     // Wire TED to composite video output port
     video_port_ = std::make_unique<CompositeVideoPort>();
-    ted_->set_video_out(&video_port_->output());
+    board_.ted.set_video_out(&video_port_->output());
     video_port_->bind_display(nullptr, nullptr,
                               c16_constants::DISPLAY_WIDTH, 0);
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Wire TED to audio port (decimates TED master-clock-rate audio to host sample rate)
     audio_port_ = std::make_unique<AudioPort>();
-    uint32_t ted_clock = ted_->timing.is_pal ? TED_PAL_CLOCK_HZ : TED_NTSC_CLOCK_HZ;
+    uint32_t ted_clock = board_.ted.timing.is_pal ? TED_PAL_CLOCK_HZ : TED_NTSC_CLOCK_HZ;
     audio_port_->configure(ted_clock, c16_constants::AUDIO_SAMPLE_RATE);
-    ted_->set_audio_port(audio_port_.get());
+    board_.ted.set_audio_port(audio_port_.get());
 
     // Initialize cycle-accurate drive subsystem (reads drive_mode from config)
     init_drive_subsystem();
@@ -663,14 +645,14 @@ void Commodore264System<V>::reset() {
     // KERNAL boot will set these properly: RAMTAS clears zero page
     // (including $2D), the vector copy writes $0302/$0303, and NEW sets
     // VARTAB ($2D) to TXTTAB+2.
-    if (ram_) {
-        ram_->data()[0x0302] = 0;
-        ram_->data()[0x0303] = 0;
-        ram_->data()[0x002D] = 0;
+    {
+        board_.ram.data()[0x0302] = 0;
+        board_.ram.data()[0x0303] = 0;
+        board_.ram.data()[0x002D] = 0;
         // Clear the keyboard buffer count so is_basic_ready() doesn't
         // get stuck waiting for a stale non-zero $EF left by a
         // previously running program.
-        ram_->data()[c16_constants::KBD_BUFFER_COUNT] = 0;
+        board_.ram.data()[c16_constants::KBD_BUFFER_COUNT] = 0;
     }
 
     // Reset debug cart state (not real hardware, not part of board_.reset_chips())
@@ -713,7 +695,7 @@ void Commodore264System<V>::tick() {
     }
     
     // PHASE 1: TED PHI1
-    s = ted_->tick_phi1(s);
+    s = board_.ted.tick_phi1(s);
     
     // HARDWARE WIRING: BA -> RDY (direct bit test + set/clear)
     if (BUS_GET_BIT(s, BUS_BA_BIT))
@@ -722,12 +704,12 @@ void Commodore264System<V>::tick() {
         BUS_CLR_BIT(s, BUS_RDY_BIT);
     
     // PHASE 2: CPU PHI2
-    s = cpu_->tick<CSG7501::Phase::PHI2>(s);
+    s = board_.csg7501.tick<CSG7501::Phase::PHI2>(s);
     
     // PHASE 3: Address decode + flat-mem service + MMIO self-dispatch
     s = bus_.resolve(s);
     s = bus_.service(s);
-    s = io_dec_->tick(s);
+    s = board_.io_dec.tick(s);
 
     // Debug cart capture ($FDCF) — VICE test convention, not real hardware.
     if (unlikely(debug_cart_enabled_ && !BUS_GET_BIT(s, BUS_RW_BIT)
@@ -737,13 +719,13 @@ void Commodore264System<V>::tick() {
     }
 
     // NMI edge detection — sample after bus dispatch (post-dispatch state)
-    cpu_->sample_nmi_pin(s);
+    board_.csg7501.sample_nmi_pin(s);
     
     // PHASE 3.1: TED PHI2 — CS register dispatch + DMA data delivery
-    s = ted_->tick_phi2(s);
+    s = board_.ted.tick_phi2(s);
     
     // PHASE 4: CPU PHI1
-    s = cpu_->tick<CSG7501::Phase::PHI1>(s);
+    s = board_.csg7501.tick<CSG7501::Phase::PHI1>(s);
     
     // =========================================================================
     // PHASE 4.5: Cycle-accurate IEC drive integration
@@ -814,9 +796,9 @@ void Commodore264System<V>::run_frame() {
 
 template<C264SeriesVariant V>
 bool Commodore264System<V>::is_basic_ready() const {
-    if (!initialized_ || !ram_) return false;
+    if (!initialized_) return false;
 
-    const uint8_t* ram = ram_->data();
+    const uint8_t* ram = board_.ram.data();
 
     // BASIC 3.5 warm-start vector at $0302/$0303 = $8712.
     // Also check VARTAB ($2D) on first boot to ensure NEW has run.
@@ -840,7 +822,7 @@ commodore_load_context_t Commodore264System<V>::build_load_context() {
     ctx.write_byte      = c16_mem_write_byte;
     ctx.write_block     = c16_mem_write_block;
     ctx.mem_read        = c16_mem_read;
-    ctx.mem_ctx         = ram_->data();
+    ctx.mem_ctx         = board_.ram.data();
     ctx.basic_params    = &COMMODORE_BASIC_C16;
     ctx.basic_start_addrs[0] = c16_constants::BASIC_START;
     ctx.default_raw_addr = 0x4000;
@@ -874,16 +856,15 @@ uint32_t Commodore264System<V>::get_audio_samples(float* buffer, uint32_t max_sa
     }
 
     // Legacy path: read float samples from TED's internal ring buffer
-    if (!ted_) return 0;
-    uint32_t avail = ted_->audio_available();
+    uint32_t avail = board_.ted.audio_available();
     uint32_t to_read = (avail < max_samples) ? avail : max_samples;
     if (to_read == 0) return 0;
-    return ted_->audio_read(buffer, to_read);
+    return board_.ted.audio_read(buffer, to_read);
 }
 
 template<C264SeriesVariant V>
 void Commodore264System<V>::set_audio_sample_rate(int sample_rate_hz) {
-    if (!ted_ || sample_rate_hz <= 0) return;
+    if (sample_rate_hz <= 0) return;
 
     bool is_pal = (config_.region_option_index <= 0);
     uint32_t ted_clock = is_pal ? TED_PAL_CLOCK_HZ : TED_NTSC_CLOCK_HZ;
@@ -894,7 +875,7 @@ void Commodore264System<V>::set_audio_sample_rate(int sample_rate_hz) {
     }
 
     // Also update legacy path (TED internal ring buffer downsample ratio)
-    ted_->audio_reset(ted_clock, static_cast<uint32_t>(sample_rate_hz));
+    board_.ted.audio_reset(ted_clock, static_cast<uint32_t>(sample_rate_hz));
 }
 
 // ============================================================================
@@ -997,7 +978,7 @@ void Commodore264System<V>::build_banking_snapshots() {
 // snapshot, so a single load_snapshot covers everything.
 template<C264SeriesVariant V>
 void Commodore264System<V>::apply_cpu_banking() {
-    bool rom_on = ted_ && ted_->rom_enabled;
+    bool rom_on = board_.ted.rom_enabled;
     bus_.load_snapshot(c264_viewer::kCpu, snapshots_[c264_viewer::kCpu][rom_on ? 1 : 0]);
 }
 
@@ -1006,7 +987,7 @@ void Commodore264System<V>::apply_cpu_banking() {
 // No sub-tables to update — viewer 1 is pure page table.
 template<C264SeriesVariant V>
 void Commodore264System<V>::apply_ted_video_banking() {
-    bool romsel = ted_ && (ted_->regs_[MEM_CTRL] & 0x04) != 0;
+    bool romsel = (board_.ted.regs_[MEM_CTRL] & 0x04) != 0;
     bus_.load_snapshot(c264_viewer::kTedVideo,
                        snapshots_[c264_viewer::kTedVideo][romsel ? 1 : 0]);
 }
@@ -1056,7 +1037,7 @@ uint8_t Commodore264System<V>::ted_keyboard_scan(void* user_data, uint8_t column
     // (active-low).  The value written to $FF08 (the 'column' parameter)
     // only controls joystick port selection — the keyboard row select comes
     // from PIO2.  See VICE ted-mem.c ted08_store() for reference.
-    uint8_t row_select = sys->pio2_ ? sys->pio2_->output_latch : 0xFF;
+    uint8_t row_select = sys->board_.pio2.output_latch;
     uint8_t result = 0xFF;
     for (int row = 0; row < 8; row++) {
         if (!(row_select & (1 << row))) {
@@ -1101,10 +1082,10 @@ void Commodore264System<V>::ted_banking_changed(void* user_data, uint8_t changes
 template<C264SeriesVariant V>
 void Commodore264System<V>::set_cpu_pc(void* user_data, uint16_t addr) {
     auto* sys = static_cast<Commodore264System<V>*>(user_data);
-    if (sys->cpu_) {
-        sys->cpu_->set(PC, addr);
-        sys->cpu_->set(AB, addr);
-        sys->cpu_->transition_to_fetch();
+    if (sys->initialized_) {
+        sys->board_.csg7501.set(PC, addr);
+        sys->board_.csg7501.set(AB, addr);
+        sys->board_.csg7501.transition_to_fetch();
         log_info("%s: PC set to $%04X\n", Traits::name, addr);
     }
 }
