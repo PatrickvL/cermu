@@ -863,6 +863,10 @@ void C64System::tick() {
 void C64System::run_frame() {
     if (!initialized_ || !video_port_) return;
 
+    // During warp, skip VIC-II pixel rendering (border, graphics, sprites)
+    // while keeping timing/BA/AEC and video signal driving for frame detection.
+    vicii->suppress_pixel_output_ = is_warping();
+
     // Update per-frame state for peripheral devices before cycle loop.
     // Lightpen: pass display rect so it can convert SDL mouse → VIC-II coords.
     update_lightpen_display_rect();

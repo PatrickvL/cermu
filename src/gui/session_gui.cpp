@@ -3060,19 +3060,27 @@ void SessionGUI::emu_thread_func() {
             // budget (16 ms).  This allows 50–200× speedup on typical hardware.
             // The accumulator is ignored during warp — we just run flat-out.
             if (warping) {
-                // Time-budgeted warp loop.  16 ms budget ≈ one host vsync period,
-                // keeps the GUI thread responsive for debug panels and input.
-                constexpr double WARP_BUDGET_S = 0.016;
+                // Time-budgeted warp loop.  200 ms budget gives the GUI
+                // thread enough opportunities to process events and redraw
+                // (at least 5 Hz) while allowing maximum emulation throughput.
+                // The emulation run on a separate thread, so this only
+                // needs to yield often enough for snapshot+audio collection.
+                constexpr double WARP_BUDGET_S = 0.200;
+                constexpr int    WARP_CHECK_INTERVAL = 16;
                 uint64_t warp_start = SDL_GetPerformanceCounter();
                 double warp_elapsed = 0.0;
+                int warp_check = 0;
 
                 while (warp_elapsed < WARP_BUDGET_S) {
                     system_->run_frame();
                     total_frames_.fetch_add(1, std::memory_order_relaxed);
                     frames_ran++;
 
-                    uint64_t warp_now = SDL_GetPerformanceCounter();
-                    warp_elapsed = static_cast<double>(warp_now - warp_start) / freq;
+                    if (++warp_check >= WARP_CHECK_INTERVAL) {
+                        warp_check = 0;
+                        uint64_t warp_now = SDL_GetPerformanceCounter();
+                        warp_elapsed = static_cast<double>(warp_now - warp_start) / freq;
+                    }
                 }
 
                 // Update performance metrics with the last frame's timing.

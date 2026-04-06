@@ -559,6 +559,12 @@ struct vicii_base_t : public VideoChipBase {
     CompositeVideoOut* video_out_ = nullptr;
     void set_video_out(CompositeVideoOut* s) { video_out_ = s; }
 
+    // When true, the pixel sequencer skips all rendering work (border
+    // detection, graphics decoding, sprite compositing, color resolution)
+    // but still drives the video signal for frame boundary detection.
+    // Set by the system during warp mode to cut per-cycle overhead.
+    bool suppress_pixel_output_ = false;
+
     // Cached VBlank start for signal flag computation
     uint16_t cached_first_vblank_line = 0;
 
