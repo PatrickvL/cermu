@@ -80,11 +80,11 @@ bool BombJackSystem::initialize() {
     palette_ram_chip_ = &main_board_.palette;
     main_pins_  = main_board_.cpu.init();
     sound_pins_ = sound_board_.cpu.init();
-    for (auto& ay : ay_) {
-        ay.init();
+    for (int i = 0; i < 3; i++) {
+        ay_[i].init();
         // AY clock = sound CPU / 2 = 1.5 MHz
-        ay.set_clock_frequency(1500000);
-        ay.set_audio_sample_rate(bombjack_constants::DEFAULT_SAMPLE_RATE);
+        ay_[i].set_clock_frequency(1500000);
+        ay_[i].set_audio_sample_rate(bombjack_constants::DEFAULT_SAMPLE_RATE);
     }
 
     // Wire 3× AY to audio thread — cpu_cycles_per_tick=2 (AY = sound CPU / 2)
@@ -285,7 +285,7 @@ uint32_t BombJackSystem::get_audio_samples(float* buffer, uint32_t max_samples) 
 }
 void BombJackSystem::set_audio_sample_rate(int hz) {
     audio_sample_rate_ = hz;
-    for (auto& ay : ay_) ay.set_audio_sample_rate(hz);
+    for (int i = 0; i < 3; i++) ay_[i].set_audio_sample_rate(hz);
 }
 
 // ============================================================================
@@ -330,8 +330,8 @@ bus_state_t BombJackSystem::main_io_tick(bus_state_t pins) {
         if (addr == bombjack_constants::INPUT_P1)         data = input_p1_;
         else if (addr == bombjack_constants::INPUT_P2)    data = input_p2_;
         else if (addr == bombjack_constants::INPUT_SYSTEM) data = input_system_;
-        else if (addr == bombjack_constants::DSW1)        data = dsw1_;
-        else if (addr == bombjack_constants::DSW2)        data = dsw2_;
+        else if (addr == bombjack_constants::DSW1)        data = main_board_.dsw1.bank.value;
+        else if (addr == bombjack_constants::DSW2)        data = main_board_.dsw2.bank.value;
         BUS_SET_DATA(pins, data);
     } else {
         // Writes: sound latch, background select, watchdog

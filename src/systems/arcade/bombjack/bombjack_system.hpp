@@ -24,6 +24,7 @@
 #include "chip/memory/ram_chip.hpp"
 #include "chip/memory/rom_chip.hpp"
 #include "chip/video/bombjack_video/bombjack_video.hpp"
+#include "core/dip_switch.hpp"
 #include "core/audio_thread.hpp"
 #include "utils/write_only_synth_adapter.hpp"
 #include <cstdint>
@@ -49,13 +50,18 @@ inline constexpr auto kBombJackMainManifest = make_manifest(
     Slot<RAMChip>{.base_addr = 0x9000, .size_bytes = 1024, .label = "FG Tilemap"},
     Slot<RAMChip>{.base_addr = 0x9400, .size_bytes = 1024, .label = "FG Attributes"},
     Slot<RAMChip>{.base_addr = 0x9800, .size_bytes = 256, .label = "Sprite Area"},
-    Slot<RAMChip>{.base_addr = 0x9C00, .size_bytes = 256, .label = "Palette RAM"}
+    Slot<RAMChip>{.base_addr = 0x9C00, .size_bytes = 256, .label = "Palette RAM"},
+    Slot<DipSwitchBankComponent>{.descriptor = &bombjack_constants::kBjDSW1, .label = "DSW1"},
+    Slot<DipSwitchBankComponent>{.descriptor = &bombjack_constants::kBjDSW2, .label = "DSW2"}
 );
 
 inline constexpr auto kBombJackSoundManifest = make_manifest(
     Slot<ZilogZ80A>{.base_addr = 0x0000, .label = "Sound CPU"},
     Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 8192, .label = "Sound ROM"},
-    Slot<RAMChip>{.base_addr = 0x4000, .size_bytes = 1024, .label = "Sound RAM"}
+    Slot<RAMChip>{.base_addr = 0x4000, .size_bytes = 1024, .label = "Sound RAM"},
+    Slot<AY_3_8910>{.label = "PSG 1"},
+    Slot<AY_3_8910>{.label = "PSG 2"},
+    Slot<AY_3_8910>{.label = "PSG 3"}
 );
 
 // Port manifest — shared between both boards
@@ -92,6 +98,8 @@ struct BombJackMainBoard : Board<BombJackMainBusTraits::Spec> {
     RAMChip&   fg_attr  = std::get<4>(components_);
     RAMChip&   sprites  = std::get<5>(components_);
     RAMChip&   palette  = std::get<6>(components_);
+    DipSwitchBankComponent& dsw1 = std::get<7>(components_);
+    DipSwitchBankComponent& dsw2 = std::get<8>(components_);
 
     template<size_t N>
     BombJackMainBoard(const ChipManifest<N>& m) : Board<BombJackMainBusTraits::Spec>(m) {}
@@ -105,6 +113,9 @@ struct BombJackSoundBoard : Board<BombJackSoundBusTraits::Spec> {
     ZilogZ80A& cpu = std::get<0>(components_);
     ROMChip&   rom = std::get<1>(components_);
     RAMChip&   ram = std::get<2>(components_);
+    AY_3_8910& ay0 = std::get<3>(components_);
+    AY_3_8910& ay1 = std::get<4>(components_);
+    AY_3_8910& ay2 = std::get<5>(components_);
 
     template<size_t N>
     BombJackSoundBoard(const ChipManifest<N>& m) : Board<BombJackSoundBusTraits::Spec>(m) {}
@@ -137,9 +148,6 @@ private:
     ZilogZ80A*  main_cpu_  = nullptr;    // Z80A @ 4 MHz (main) — owned by main_board_
     ZilogZ80A*  sound_cpu_ = nullptr;    // Z80A @ 3 MHz (sound) — owned by sound_board_
 
-    // ── Sound ────────────────────────────────────────────────────────────
-    AY_3_8910 ay_[3];                    // 3× AY-3-8910 PSG
-
     // ── Audio thread — synthesis runs off the emu thread ────────────────
     AudioThread audio_thread_;
     std::unique_ptr<WriteOnlySynthAdapter<AY_3_8910, true>> ay_adapter_[3];
@@ -165,6 +173,13 @@ private:
     SoundBus sound_bus_;
     BombJackSoundBoard sound_board_{kBombJackSoundManifest};
 
+    // ── Sound — AY refs into sound_board_ (manifest slots, always valid) ──
+    struct {
+        AY_3_8910* p[3];
+        AY_3_8910& operator[](int i)       { return *p[i]; }
+        const AY_3_8910& operator[](int i) const { return *p[i]; }
+    } ay_ = {{ &sound_board_.ay0, &sound_board_.ay1, &sound_board_.ay2 }};
+
     // ── Inter-CPU communication ──────────────────────────────────────────
     uint8_t sound_latch_ = 0;           // Main → Sound command latch
     bool    sound_nmi_   = false;       // NMI to sound CPU on latch write
@@ -178,8 +193,6 @@ private:
     uint8_t input_p1_     = 0xFF;       // Player 1 (active low)
     uint8_t input_p2_     = 0xFF;       // Player 2 (active low)
     uint8_t input_system_ = 0xFF;       // Coin/start (active low)
-    uint8_t dsw1_         = 0xFF;       // DIP switch bank 1
-    uint8_t dsw2_         = 0xFF;       // DIP switch bank 2
 
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t main_pins_  = BOMBJACK_BUS_DEFAULT_STATE;

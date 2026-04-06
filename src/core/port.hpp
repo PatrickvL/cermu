@@ -217,6 +217,8 @@ public:
     const PortDefinition& get_definition() const { return definition_; }
     PortType get_type() const { return definition_.type; }
     const char* get_name() const { return definition_.name; }
+    bool is_internal() const { return definition_.is_internal; }
+    void set_internal(bool internal) { definition_.is_internal = internal; }
     int get_port_index() const { return port_index_; }
 
     // --- Signal state --------------------------------------------------

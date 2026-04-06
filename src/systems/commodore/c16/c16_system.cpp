@@ -523,6 +523,11 @@ bool Commodore264System<V>::initialize() {
     // Bind value-typed chips from Chips, then factory-create remaining
     bind_all(board_, board_.components_, kC264Manifest);
 
+    // C16/C116 have no physical user port connector — hide it from the UI.
+    if constexpr (!Traits::has_user_port) {
+        board_.user_port.set_internal(true);
+    }
+
     // Set port manifest for default peripheral attachment.
     port_manifest_       = kC264Manifest.port_slots;
     port_manifest_count_ = kC264Manifest.port_count;
