@@ -251,19 +251,6 @@ bool PETSystem::initialize() {
     port_manifest_count_ = kPETManifest.port_count;
     board_.apply(bus_);
 
-    main_ram_chip_    = &board_.main_ram;
-    screen_ram_chip_  = &board_.screen_ram;
-    basic_rom_b_chip_ = &board_.basic_rom_b;
-    basic_rom_c_chip_ = &board_.basic_rom_c;
-    basic_rom_d_chip_ = &board_.basic_rom_d;
-    editor_rom_chip_  = &board_.editor_rom;
-    kernal_rom_chip_  = &board_.kernal_rom;
-    cpu_              = &board_.m6502;
-    crtc_             = &board_.crtc;
-    pia1_             = &board_.pia1;
-    pia2_             = &board_.pia2;
-    via_              = &board_.via;
-
     // Screen RAM mirror at $8400-$87FF and configure memory map
     configure_memory_map();
 
@@ -278,28 +265,28 @@ bool PETSystem::initialize() {
     board_.m6502.reset();
 
     // ---- CRTC (MC6845) ----
-    crtc_->init();
+    board_.crtc.init();
 
     // Program CRTC with PET-standard 40×25 register values (BASIC 4.0 editor ROM does this,
     // but we prime them for display before KERNAL has run)
-    crtc_->regs_[R0_HTOTAL]       = 63;   // 64 characters per line (R0+1)
-    crtc_->regs_[R1_HDISPLAYED]   = 40;   // 40 visible characters
-    crtc_->regs_[R2_HSYNC_POS]    = 50;   // H-sync at char 50
-    crtc_->regs_[R3_SYNC_WIDTHS]  = 0x04; // H-sync width = 4, V-sync width = 0 (16 default)
-    crtc_->regs_[R4_VTOTAL]       = 32;   // 33 char rows per frame (R4+1)
-    crtc_->regs_[R5_VADJUST]      = 5;    // Vertical fine adjust
-    crtc_->regs_[R6_VDISPLAYED]   = 25;   // 25 visible rows
-    crtc_->regs_[R7_VSYNC_POS]    = 28;   // V-sync at row 28
-    crtc_->regs_[R9_MAX_SCANLINE] = 7;    // 8 scan lines per character (R9+1)
-    crtc_->regs_[R12_START_ADDR_HI] = 0x10; // Display start = $1000 (screen RAM offset)
-    crtc_->regs_[R13_START_ADDR_LO] = 0x00;
+    board_.crtc.regs_[R0_HTOTAL]       = 63;   // 64 characters per line (R0+1)
+    board_.crtc.regs_[R1_HDISPLAYED]   = 40;   // 40 visible characters
+    board_.crtc.regs_[R2_HSYNC_POS]    = 50;   // H-sync at char 50
+    board_.crtc.regs_[R3_SYNC_WIDTHS]  = 0x04; // H-sync width = 4, V-sync width = 0 (16 default)
+    board_.crtc.regs_[R4_VTOTAL]       = 32;   // 33 char rows per frame (R4+1)
+    board_.crtc.regs_[R5_VADJUST]      = 5;    // Vertical fine adjust
+    board_.crtc.regs_[R6_VDISPLAYED]   = 25;   // 25 visible rows
+    board_.crtc.regs_[R7_VSYNC_POS]    = 28;   // V-sync at row 28
+    board_.crtc.regs_[R9_MAX_SCANLINE] = 7;    // 8 scan lines per character (R9+1)
+    board_.crtc.regs_[R12_START_ADDR_HI] = 0x10; // Display start = $1000 (screen RAM offset)
+    board_.crtc.regs_[R13_START_ADDR_LO] = 0x00;
 
     // GPU indexed palette rendering via CRTC's built-in character renderer
     palette_.set(pet_constants::PALETTE, 2);
     std::memset(pixel_buffer_, 0, sizeof(pixel_buffer_));
-    crtc_->configure_char_render(
+    board_.crtc.configure_char_render(
         nullptr, pixel_buffer_,
-        char_rom_, screen_ram_chip_->data(),
+        char_rom_, board_.screen_ram.data(),
         pet_constants::SCREEN_COLS,
         pet_constants::PET_CHAR_HEIGHT,
         pet_constants::DISPLAY_WIDTH,
@@ -317,25 +304,25 @@ bool PETSystem::initialize() {
     video_port_->bind_frame_output(&last_frame_data_);
 
     // VSYNC/HSYNC callbacks (display rendering handled by CRTC internally)
-    crtc_->on_vsync = [this]() { this->crtc_vsync(); };
-    crtc_->on_hsync = [this]() { this->crtc_hsync(); };
+    board_.crtc.on_vsync = [this]() { this->crtc_vsync(); };
+    board_.crtc.on_hsync = [this]() { this->crtc_hsync(); };
 
     // ---- PIA 1 (keyboard + cassette sense) ----
-    pia1_->init();
-    pia1_->user_data       = this;
-    pia1_->on_port_a_read  = pia1_port_a_read;
-    pia1_->on_port_a_write = pia1_port_a_write;
-    pia1_->on_port_b_read  = pia1_port_b_read;
-    pia1_->on_port_b_write = pia1_port_b_write;
+    board_.pia1.init();
+    board_.pia1.user_data       = this;
+    board_.pia1.on_port_a_read  = pia1_port_a_read;
+    board_.pia1.on_port_a_write = pia1_port_a_write;
+    board_.pia1.on_port_b_read  = pia1_port_b_read;
+    board_.pia1.on_port_b_write = pia1_port_b_write;
 
     // ---- PIA 2 (IEEE-488 bus) ----
-    pia2_->init();
-    pia2_->user_data = this;
+    board_.pia2.init();
+    board_.pia2.user_data = this;
     // IEEE-488 callbacks not wired yet — returns open bus ($FF)
 
     // ---- VIA (timers, CB2 speaker, user port) ----
-    via_->reset();
-    via_->interrupt_bit = BUS_IRQ_BIT;
+    board_.via.reset();
+    board_.via.interrupt_bit = BUS_IRQ_BIT;
 
     // ---- Keyboard ----
     keyboard_ = new commodore_keyboard_t();
@@ -357,6 +344,7 @@ bool PETSystem::initialize() {
     // Register all manifest-created chips for Hardware debug menu
     register_bus_chips(board_);
 
+    initialized_ = true;
     log_info("PET: Initialization complete\n");
     return true;
 }
@@ -373,12 +361,8 @@ void PETSystem::reset() {
     board_.reset_chips();
 
     // Clear RAM but preserve ROMs
-    if (main_ram_chip_) {
-        memset(main_ram_chip_->data(), 0, 32768);
-    }
-    if (screen_ram_chip_) {
-        memset(screen_ram_chip_->data(), 0, 1024);
-    }
+    memset(board_.main_ram.data(), 0, 32768);
+    memset(board_.screen_ram.data(), 0, 1024);
 
     // Clear pixel buffer
     std::memset(pixel_buffer_, 0, sizeof(pixel_buffer_));
@@ -418,28 +402,25 @@ uint8_t PETSystem::io_read(uint16_t addr) {
 
     if ((offset & 0xF0) == 0x10) {
         // PIA 1 ($E810-$E81F → addr bits 1:0 select register)
-        return pia1_ ? pia1_->read(addr & 0x03) : 0xFF;
+        return board_.pia1.read(addr & 0x03);
     }
     if ((offset & 0xF0) == 0x20) {
         // PIA 2 ($E820-$E82F)
-        return pia2_ ? pia2_->read(addr & 0x03) : 0xFF;
+        return board_.pia2.read(addr & 0x03);
     }
     if ((offset & 0xF0) == 0x40) {
         // VIA ($E840-$E84F)
-        if (via_) {
-            // VIA registers are at offset 0-15 within the chip
-            // Build a bus state for the VIA read
-            bus_state_t vs = PET_BUS_DEFAULT_STATE;
-            BUS_SET_ADDR(vs, addr & 0x0F);
-            BUS_SET_BIT(vs, BUS_RW_BIT);  // Read
-            vs = via_->tick(vs);
-            return BUS_GET_DATA(vs);
-        }
-        return 0xFF;
+        // VIA registers are at offset 0-15 within the chip
+        // Build a bus state for the VIA read
+        bus_state_t vs = PET_BUS_DEFAULT_STATE;
+        BUS_SET_ADDR(vs, addr & 0x0F);
+        BUS_SET_BIT(vs, BUS_RW_BIT);  // Read
+        vs = board_.via.tick(vs);
+        return BUS_GET_DATA(vs);
     }
     if ((offset & 0xF0) == 0x80) {
         // CRTC ($E880-$E88F → addr bit 0 selects address/data)
-        return crtc_ ? crtc_->read(addr & 0x01) : 0xFF;
+        return board_.crtc.read(addr & 0x01);
     }
 
     return 0xFF;  // Unmapped I/O
@@ -450,28 +431,28 @@ void PETSystem::io_write(uint16_t addr, uint8_t data) {
 
     if ((offset & 0xF0) == 0x10) {
         // PIA 1
-        if (pia1_) pia1_->write(addr & 0x03, data);
+        board_.pia1.write(addr & 0x03, data);
         return;
     }
     if ((offset & 0xF0) == 0x20) {
         // PIA 2
-        if (pia2_) pia2_->write(addr & 0x03, data);
+        board_.pia2.write(addr & 0x03, data);
         return;
     }
     if ((offset & 0xF0) == 0x40) {
         // VIA
-        if (via_) {
+        {
             bus_state_t vs = PET_BUS_DEFAULT_STATE;
             BUS_SET_ADDR(vs, addr & 0x0F);
             BUS_CLR_BIT(vs, BUS_RW_BIT);  // Write
             BUS_SET_DATA(vs, data);
-            via_->tick(vs);
+            board_.via.tick(vs);
         }
         return;
     }
     if ((offset & 0xF0) == 0x80) {
         // CRTC
-        if (crtc_) crtc_->write(addr & 0x01, data);
+        board_.crtc.write(addr & 0x01, data);
         return;
     }
 }
@@ -486,12 +467,12 @@ void PETSystem::tick() {
     // naturally visible to the CPU at the start of this cycle.
 
     // ---- Propagate PIA IRQ lines (active-low, directly from chip state) ----
-    if (pia1_ && (pia1_->irq_a1 || pia1_->irq_a2)) {
+    if (board_.pia1.irq_a1 || board_.pia1.irq_a2) {
         BUS_CLR_BIT(pins_, BUS_IRQ_BIT);
     }
 
     // ---- CPU PHI2 ----
-    pins_ = cpu_->tick<MOS6502::Phase::PHI2>(pins_);
+    pins_ = board_.m6502.tick<MOS6502::Phase::PHI2>(pins_);
 
     // ---- Address decode + flat-mem service + MMIO self-dispatch ----
     pins_ = bus_.resolve(pins_);
@@ -502,10 +483,10 @@ void PETSystem::tick() {
     pins_ = board_.crtc.tick(pins_);
 
     // NMI edge detection
-    cpu_->sample_nmi_pin(pins_);
+    board_.m6502.sample_nmi_pin(pins_);
 
     // ---- CPU PHI1 ----
-    pins_ = cpu_->tick<MOS6502::Phase::PHI1>(pins_);
+    pins_ = board_.m6502.tick<MOS6502::Phase::PHI1>(pins_);
 
     // Restore R/W to read mode
     BUS_SET_BIT(pins_, BUS_RW_BIT);
@@ -706,27 +687,25 @@ void PETSystem::render_configuration_ui() {
 uint8_t PETSystem::load_mem_read(void* ctx, uint16_t addr) {
     auto* sys = static_cast<PETSystem*>(ctx);
     if (addr < pet_constants::RAM_END_32K)
-        return sys->main_ram_chip_->data()[addr];
+        return sys->board_.main_ram.data()[addr];
     if (addr >= pet_constants::SCREEN_RAM_START && addr < pet_constants::SCREEN_RAM_END)
-        return sys->screen_ram_chip_->data()[addr - pet_constants::SCREEN_RAM_START];
+        return sys->board_.screen_ram.data()[addr - pet_constants::SCREEN_RAM_START];
     return 0xFF;
 }
 
 void PETSystem::load_mem_write(void* ctx, uint16_t addr, uint8_t val) {
     auto* sys = static_cast<PETSystem*>(ctx);
     if (addr < pet_constants::RAM_END_32K) {
-        sys->main_ram_chip_->data()[addr] = val;
+        sys->board_.main_ram.data()[addr] = val;
     } else if (addr >= pet_constants::SCREEN_RAM_START && addr < pet_constants::SCREEN_RAM_END) {
-        sys->screen_ram_chip_->data()[addr - pet_constants::SCREEN_RAM_START] = val;
+        sys->board_.screen_ram.data()[addr - pet_constants::SCREEN_RAM_START] = val;
     }
 }
 
 bool PETSystem::is_basic_ready() const {
-    if (!main_ram_chip_ || !cpu_) return false;
-
     // PET BASIC warm-start vector at $0302/$0303 — should point to BASIC's main loop
     // For BASIC 4.0, the warm-start vector is typically $B3FF
-    const uint8_t* ram = main_ram_chip_->data();
+    const uint8_t* ram = board_.main_ram.data();
     uint16_t warmstart = ram[0x0302] | (ram[0x0303] << 8);
     if (warmstart < 0xB000 || warmstart > 0xE000) return false;
 
@@ -763,11 +742,6 @@ commodore_load_context_t PETSystem::build_load_context() {
 // ============================================================================
 
 bool PETSystem::load_roms() {
-    if (!basic_rom_b_chip_) {
-        log_info("PET: Cannot load ROMs - memory not initialized\n");
-        return false;
-    }
-
     // Discover ROM root path
     char rom_root[1024];
     if (!system_config_discover_rom_root("pet", rom_root, sizeof(rom_root))) {
@@ -813,9 +787,9 @@ bool PETSystem::load_roms() {
                                                "basic-4.901465-23-20-21.bin",
                                                sizeof(basic_buf), basic_buf, sizeof(basic_buf));
     if (basic_ok) {
-        memcpy(basic_rom_b_chip_->data(), basic_buf, 4096);
-        memcpy(basic_rom_c_chip_->data(), basic_buf + 4096, 4096);
-        memcpy(basic_rom_d_chip_->data(), basic_buf + 8192, 4096);
+        memcpy(board_.basic_rom_b.data(), basic_buf, 4096);
+        memcpy(board_.basic_rom_c.data(), basic_buf + 4096, 4096);
+        memcpy(board_.basic_rom_d.data(), basic_buf + 8192, 4096);
         log_info("PET: BASIC 4.0 ROM loaded (12KB combined)\n");
     } else {
         // Try loading as three 4KB ROMs
@@ -824,9 +798,9 @@ bool PETSystem::load_roms() {
         bool c_ok = rom_loader_load_from_root(rom_root, "basic-4-c000.901465-20.bin|901465-20.bin", 4096, rom_c, sizeof(rom_c));
         bool d_ok = rom_loader_load_from_root(rom_root, "basic-4-d000.901465-21.bin|901465-21.bin", 4096, rom_d, sizeof(rom_d));
         if (b_ok && c_ok && d_ok) {
-            memcpy(basic_rom_b_chip_->data(), rom_b, 4096);
-            memcpy(basic_rom_c_chip_->data(), rom_c, 4096);
-            memcpy(basic_rom_d_chip_->data(), rom_d, 4096);
+            memcpy(board_.basic_rom_b.data(), rom_b, 4096);
+            memcpy(board_.basic_rom_c.data(), rom_c, 4096);
+            memcpy(board_.basic_rom_d.data(), rom_d, 4096);
             log_info("PET: BASIC 4.0 ROM loaded (3 × 4KB)\n");
             basic_ok = true;
         } else {
@@ -834,8 +808,8 @@ bool PETSystem::load_roms() {
             uint8_t basic8k[8192];
             bool ok8 = rom_loader_load_from_root(rom_root, "basic4.rom", 8192, basic8k, sizeof(basic8k));
             if (ok8) {
-                memcpy(basic_rom_c_chip_->data(), basic8k, 4096);
-                memcpy(basic_rom_d_chip_->data(), basic8k + 4096, 4096);
+                memcpy(board_.basic_rom_c.data(), basic8k, 4096);
+                memcpy(board_.basic_rom_d.data(), basic8k + 4096, 4096);
                 log_info("PET: BASIC ROM loaded (8KB fallback at $C000)\n");
                 basic_ok = true;
             } else {

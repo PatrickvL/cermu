@@ -162,25 +162,10 @@ private:
     Bus    bus_;
     MainBoard board_;
     bus_state_t pins_ = PET_BUS_DEFAULT_STATE;
-
-    // ── Memory chips (owned by registered_chips_, managed via Board) ─
-    RAMChip* main_ram_chip_      = nullptr;  // 32 KB main RAM
-    RAMChip* screen_ram_chip_    = nullptr;  // 1 KB screen RAM
-    ROMChip* basic_rom_b_chip_   = nullptr;  // 4 KB BASIC $B000
-    ROMChip* basic_rom_c_chip_   = nullptr;  // 4 KB BASIC $C000
-    ROMChip* basic_rom_d_chip_   = nullptr;  // 4 KB BASIC $D000
-    ROMChip* editor_rom_chip_    = nullptr;  // 2 KB Editor ROM
-    ROMChip* kernal_rom_chip_    = nullptr;  // 4 KB Kernal ROM
+    bool initialized_ = false;
 
     // Character ROM (loaded separately, not mapped directly in address space for display)
     uint8_t char_rom_[4096] = {};
-
-    // Chip instances — all owned by board_ (manifest non-bus slots)
-    MOS6502*    cpu_  = nullptr;    // MOS 6502 CPU @ 1 MHz
-    mos6520_t*  pia1_ = nullptr;    // PIA 1 — keyboard matrix + cassette sense
-    mos6520_t*  pia2_ = nullptr;    // PIA 2 — IEEE-488 bus interface
-    mos6522_t*  via_  = nullptr;    // VIA — user port, timers, CB2 speaker
-    mc6845_t*   crtc_ = nullptr;    // MC6845 CRTC — display timing
 
     // Display — pixel buffer rendered by CRTC, streamed via video port
     uint8_t pixel_buffer_[pet_constants::DISPLAY_WIDTH * pet_constants::DISPLAY_HEIGHT] = {};
@@ -198,7 +183,7 @@ private:
     // ---- CommodoreSystem loading hooks ----
     bool is_basic_ready() const override;
     commodore_load_context_t build_load_context() override;
-    bool is_system_initialized() const override { return main_ram_chip_ != nullptr && cpu_ != nullptr; }
+    bool is_system_initialized() const override { return initialized_; }
 
     // Static callbacks for CommodoreSystem load context
     static uint8_t load_mem_read(void* ctx, uint16_t addr);
