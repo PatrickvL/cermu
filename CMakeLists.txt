@@ -24,6 +24,14 @@ project(cermu
     LANGUAGES CXX
 )
 
+# Default to RelWithDebInfo (optimized with debug symbols) for single-config
+# generators.  Debug builds disable all inlining, making cycle-accurate chip
+# emulation 3-5× slower than real-time.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
+    message(STATUS "Build type defaulted to RelWithDebInfo")
+endif()
+
 # Add toml++ library using FetchContent
 include(FetchContent)
 FetchContent_Declare(
