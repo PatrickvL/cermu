@@ -291,6 +291,42 @@ bool CommodoreSystem::load_file(const char* filepath) {
 void CommodoreSystem::check_deferred_load() {
     if (pending_load_.active && is_basic_ready()) {
         apply_pending_load();
+        return;
+    }
+
+    // Post-load injection: after an IEC LOAD completes and BASIC prints
+    // READY again, inject the deferred command (typically "RUN\r").
+    // Three-phase handshake prevents premature injection:
+    //   Phase 0: queue draining (LOAD"*",8,1\r still being typed)
+    //   Phase 1: drive active (LOAD in progress — 1541 motor spinning)
+    //   Phase 2: drive idle + BASIC ready (LOAD complete → inject RUN)
+    if (!post_load_inject_.empty()) {
+        auto* drive = drive_subsystem_.get_drive(8);
+        switch (post_load_phase_) {
+        case 0:
+            // Wait for the LOAD command to finish typing
+            if (key_inject_queue_.empty() &&
+                key_inject_state_ == KeyInjectState::IDLE)
+                post_load_phase_ = 1;
+            break;
+        case 1:
+            // Wait for drive to become active (motor on = LOAD started)
+            if (drive && drive->is_active())
+                post_load_phase_ = 2;
+            break;
+        case 2:
+            // Wait for drive to become idle (motor off = LOAD finished)
+            // then confirm BASIC is back at its READY prompt.
+            if (drive && !drive->is_active() && is_basic_ready()) {
+                inject_keys(post_load_inject_.c_str());
+                log_info("%s: Post-load: injecting %s\n",
+                         get_descriptor().short_name,
+                         post_load_inject_.c_str());
+                post_load_inject_.clear();
+                post_load_phase_ = 0;
+            }
+            break;
+        }
     }
 }
 
@@ -306,6 +342,8 @@ void CommodoreSystem::reset_load_state() {
     clear_pending_load();
     // Clear any in-progress keyboard injection
     key_inject_queue_.clear();
+    post_load_inject_.clear();
+    post_load_phase_ = 0;
     if (key_inject_state_ == KeyInjectState::PRESSED)
         release_petscii_action(key_inject_current_);
     key_inject_state_ = KeyInjectState::IDLE;
@@ -347,8 +385,9 @@ void CommodoreSystem::apply_pending_load() {
                     log_info("%s: Failed to insert D64 into cycle-accurate drive #8\n", name);
                 }
             }
-            inject_keys("LOAD\"*\",8,1\rRUN\r");
-            log_info("%s: Injected LOAD\"*\",8,1 + RUN for cycle-accurate disk load\n", name);
+            inject_keys("LOAD\"*\",8,1\r");
+            post_load_inject_ = "RUN\r";
+            log_info("%s: Injected LOAD\"*\",8,1 (RUN deferred until LOAD completes)\n", name);
         } else {
             // ── HOOKED: fast-extract PRG to RAM, also mount for browsing ──
             int iec_port = get_iec_port_index();
