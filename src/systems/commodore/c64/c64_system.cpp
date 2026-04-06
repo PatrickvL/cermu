@@ -357,7 +357,7 @@ const SystemDescriptor& C64System::get_descriptor() const {
 // CIA2 Port A change callback — updates VIC-II bank select
 static void cia2_port_a_bank_callback(void* context, uint8_t port_a_value) {
     C64System* c64 = static_cast<C64System*>(context);
-    vicii_base_t::memory_bank_change(c64->vicii, port_a_value & 0x03);
+    vicii_base_t::memory_bank_change(&c64->board_.vicii, port_a_value & 0x03);
 }
 
 // CPU I/O port banking callback — updates PLA memory mode
@@ -419,52 +419,36 @@ bool C64System::initialize() {
     board_.create_chips(&bus_state_);
     board_.apply(bus_);
 
-    // Convenience pointers — all point into board_ component fields.
-    this->cpu      = &board_.cpu;
-    this->ram      = &board_.ram;
-    this->roml     = &board_.roml;
-    this->basic    = &board_.basic;
-    this->romh     = &board_.romh;
-    this->vicii    = &board_.vicii;
-    this->charrom  = &board_.charrom;
-    this->sid      = &board_.sid;
-    this->colorram = &board_.colorram;
-    this->cia1     = &board_.cia1;
-    this->cia2     = &board_.cia2;
-    this->kernal   = &board_.kernal;
-
-    if (!this->cpu) { cleanup(); return false; }
-
     // =========================================================================
     // Post-creation chip initialization (callbacks, timing, etc.)
     // =========================================================================
 
     // VIC-II
-    this->vicii->init_base(
+    board_.vicii.init_base(
         get_vicii_standard() == VIC_PAL ? MOS6569_traits : MOS6567R8_traits,
         vicii_base_t::memory_bank_change);
-    this->vicii->colorram = this->colorram;
+    board_.vicii.colorram = &board_.colorram;
 
     // SID — clock, timing, revision
-    this->sid->init();
+    board_.sid.init();
     {
         bool is_pal = (get_vicii_standard() == VIC_PAL);
         float cpu_clock = is_pal ? static_cast<float>(c64_constants::CPU_FREQ_PAL) : static_cast<float>(c64_constants::CPU_FREQ_NTSC);
-        this->sid->set_cpu_clock(cpu_clock);
-        this->sid->set_timing(is_pal);
+        board_.sid.set_cpu_clock(cpu_clock);
+        board_.sid.set_timing(is_pal);
     }
 
     // CIA1 — IRQ, TOD timing
-    this->cia1->configured_interrupt_bit = BUS_IRQ_BIT;
-    this->cia1->cycles_tod[0] = 1000000 / 60;
-    this->cia1->cycles_tod[1] = 1000000 / 50;
-    this->cia1->reset();
+    board_.cia1.configured_interrupt_bit = BUS_IRQ_BIT;
+    board_.cia1.cycles_tod[0] = 1000000 / 60;
+    board_.cia1.cycles_tod[1] = 1000000 / 50;
+    board_.cia1.reset();
 
     // CIA2 — NMI, TOD timing
-    this->cia2->configured_interrupt_bit = BUS_NMI_BIT;
-    this->cia2->cycles_tod[0] = 1000000 / 60;
-    this->cia2->cycles_tod[1] = 1000000 / 50;
-    this->cia2->reset();
+    board_.cia2.configured_interrupt_bit = BUS_NMI_BIT;
+    board_.cia2.cycles_tod[0] = 1000000 / 60;
+    board_.cia2.cycles_tod[1] = 1000000 / 50;
+    board_.cia2.reset();
 
     // Create keyboard matrix
     this->keyboard = new commodore_keyboard_t();
@@ -487,16 +471,16 @@ bool C64System::initialize() {
     init_io_dispatch();
 
     // VIC-II memory read callback — routes through MemoryBus viewer 1
-    this->vicii->bus.bus = nullptr;   // No longer using c64_bus_t
-    this->vicii->bus.bank_change = nullptr;
-    this->vicii->bus.mem_read = [](void* ctx, bus_state_t bus, uint16_t addr) -> bus_state_t {
+    board_.vicii.bus.bus = nullptr;   // No longer using c64_bus_t
+    board_.vicii.bus.bank_change = nullptr;
+    board_.vicii.bus.mem_read = [](void* ctx, bus_state_t bus, uint16_t addr) -> bus_state_t {
         auto* sys = static_cast<C64System*>(ctx);
         // Use peek_byte for VIC-II viewer (viewer 1) — returns 0xFF for unmapped
         uint8_t data = sys->bus_.peek_byte(addr, C64BusSpec::Vic);
         BUS_SET_DATA(bus, data);
         return bus;
     };
-    this->vicii->bus.mem_read_ctx = this;
+    board_.vicii.bus.mem_read_ctx = this;
 
     // =========================================================================
     // PLA memory maps — generate 32×2 ModeSnapshots
@@ -511,26 +495,26 @@ bool C64System::initialize() {
     // =========================================================================
 
     // CIA2 Port A → VIC-II bank selection
-    this->cia2->port_a_change_callback = cia2_port_a_bank_callback;
-    this->cia2->port_a_callback_context = this;
-    cia2_port_a_bank_callback(this, this->cia2->port_a_value);  // Set initial bank
+    board_.cia2.port_a_change_callback = cia2_port_a_bank_callback;
+    board_.cia2.port_a_callback_context = this;
+    cia2_port_a_bank_callback(this, board_.cia2.port_a_value);  // Set initial bank
 
     // CIA2 interrupt line → NMI (CIA1 defaults to IRQ)
-    this->cia2->configured_interrupt_bit = BUS_NMI_BIT;
+    board_.cia2.configured_interrupt_bit = BUS_NMI_BIT;
 
     // Initialize CPU and point it at the reset vector
-    cpu->init();
-    cpu->init_io_port();
-    cpu->bank_change_fn = cpu_banking_callback;
-    cpu->bank_change_ctx = this;
+    board_.cpu.init();
+    board_.cpu.init_io_port();
+    board_.cpu.bank_change_fn = cpu_banking_callback;
+    board_.cpu.bank_change_ctx = this;
 
     // Reset the CPU to start the hardware-accurate 7-cycle RESET sequence.
-    cpu->reset();
+    board_.cpu.reset();
 
     // Sync PLA banking with the freshly-reset IO port so KERNAL ROM is
     // visible during the vector fetch ticks.
-    uint8_t banking_bits = cpu->io_port_regs.data
-                         & cpu->io_port_regs.ddr
+    uint8_t banking_bits = board_.cpu.io_port_regs.data
+                         & board_.cpu.io_port_regs.ddr
                          & 0x07;
     cpu_banking_callback(this, banking_bits);
 
@@ -542,8 +526,8 @@ bool C64System::initialize() {
     created_vicii_standard_ = get_vicii_standard();
 
     // Apply SID revision from configuration
-    if (this->sid) {
-        this->sid->set_revision(pending_sid_revision_);
+    board_.sid.set_revision(pending_sid_revision_);
+    {
         const char* rev_name = (pending_sid_revision_ == SID_REVISION_8580_R5) ? "MOS 8580" : "MOS 6581";
         log_info("C64: SID revision initialized as %s\n", rev_name);
     }
@@ -569,7 +553,7 @@ bool C64System::initialize() {
 
     // Wire VIC-II to composite video output port
     video_port_ = std::make_unique<CompositeVideoPort>();
-    vicii->set_video_out(&video_port_->output());
+    board_.vicii.set_video_out(&video_port_->output());
 
     // Compute back porch for signal→framebuffer reconstruction.
     // Back porch = distance in samples from HSync falling edge to first visible pixel.
@@ -582,7 +566,7 @@ bool C64System::initialize() {
 
     // Wire SID to audio signal port
     audio_port_ = std::make_unique<AudioPort>();
-    sid->set_audio_port(audio_port_.get());
+    board_.sid.set_audio_port(audio_port_.get());
 
     // =========================================================================
     // Wire connector-port callbacks (CIA1 joystick, VIC-II lightpen, keyboard)
@@ -599,14 +583,14 @@ bool C64System::initialize() {
     // Wire joystick-aware CIA1 callbacks (keyboard + wired-AND joystick)
     s_port_callback_ctx.c64 = this;
     s_port_callback_ctx.system = this;
-    this->cia1->port_a_read_callback = c64_cia1_port_a_read_with_joystick;
-    this->cia1->port_a_read_context  = &s_port_callback_ctx;
-    this->cia1->port_b_read_callback = c64_cia1_port_b_read_with_joystick;
-    this->cia1->port_b_read_context  = &s_port_callback_ctx;
+    board_.cia1.port_a_read_callback = c64_cia1_port_a_read_with_joystick;
+    board_.cia1.port_a_read_context  = &s_port_callback_ctx;
+    board_.cia1.port_b_read_callback = c64_cia1_port_b_read_with_joystick;
+    board_.cia1.port_b_read_context  = &s_port_callback_ctx;
 
     // Wire VIC-II LP pin read callback (Control Port 1 pin 6 → VIC-II LP input)
-    this->vicii->bus.lp_pin_read    = c64_vicii_lp_pin_read;
-    this->vicii->bus.lp_pin_context = &s_port_callback_ctx;
+    board_.vicii.bus.lp_pin_read    = c64_vicii_lp_pin_read;
+    board_.vicii.bus.lp_pin_context = &s_port_callback_ctx;
 
     // Initialize cycle-accurate drive subsystem (reads drive_mode from config)
     init_drive_subsystem();
@@ -628,20 +612,6 @@ void C64System::shutdown() {
             this->keyboard = nullptr;
         }
 
-        // Null out convenience pointers (Board owns the chip lifetimes)
-        this->cpu      = nullptr;
-        this->ram      = nullptr;
-        this->roml     = nullptr;
-        this->basic    = nullptr;
-        this->romh     = nullptr;
-        this->vicii    = nullptr;
-        this->charrom  = nullptr;
-        this->sid      = nullptr;
-        this->colorram = nullptr;
-        this->cia1     = nullptr;
-        this->cia2     = nullptr;
-        this->kernal   = nullptr;
-
         initialized_ = false;
     }
 
@@ -657,28 +627,29 @@ void C64System::reset() {
         log_info("C64 System: Performing system-wide reset...\n");
 
         // Reset CIA chips first (they control interrupts and I/O)
-        if (this->cia1) this->cia1->reset();
-        if (this->cia2) this->cia2->reset();
+        board_.cia1.reset();
+        board_.cia2.reset();
 
         // Reset VIC-II to clear sprite pipeline state
-        if (this->vicii) this->vicii->reset();
+        board_.vicii.reset();
 
         // Reset SID — clears all registers, envelopes, and the sample ring buffer
-        if (this->sid) this->sid->reset();
+        board_.sid.reset();
 
         // Reset CPU last (so it can read the reset vector after other chips are ready)
         // Use mos6510_reset (not mos6510_init) to properly reset the instruction
         // decoder state (current_handler, half_cycle, opcode_entry).  init() only
         // reinitialises the IO port — it leaves the CPU mid-instruction, which
         // causes a segfault when emulation resumes with an inconsistent pipeline.
-        if (this->cpu) {
-            cpu->reset();
-            cpu->bank_change_fn = cpu_banking_callback;
-            cpu->bank_change_ctx = this;
+        {
+            auto& cpu = board_.cpu;
+            cpu.reset();
+            cpu.bank_change_fn = cpu_banking_callback;
+            cpu.bank_change_ctx = this;
 
             // Trigger banking callback so PLA matches the freshly-reset IO port
-            uint8_t banking_bits = cpu->io_port_regs.data
-                                 & cpu->io_port_regs.ddr
+            uint8_t banking_bits = cpu.io_port_regs.data
+                                 & cpu.io_port_regs.ddr
                                  & 0x07;
             cpu_banking_callback(this, banking_bits);
         }
@@ -694,14 +665,14 @@ void C64System::reset() {
         // KERNAL boot will set these properly: RAMTAS clears zero page
         // (including $2D), $E453 copies the vector table ($0302/$0303),
         // and NEW sets VARTAB ($2D) to TXTTAB+2.
-        if (this->ram) {
-            this->ram->data()[0x0302] = 0;
-            this->ram->data()[0x0303] = 0;
-            this->ram->data()[0x002D] = 0;
+        {
+            board_.ram.data()[0x0302] = 0;
+            board_.ram.data()[0x0303] = 0;
+            board_.ram.data()[0x002D] = 0;
             // Clear the keyboard buffer count so is_basic_ready() doesn't
             // get stuck waiting for a stale non-zero $C6 left by a
             // previously running program.
-            this->ram->data()[c64_constants::KBD_BUFFER_COUNT] = 0;
+            board_.ram.data()[c64_constants::KBD_BUFFER_COUNT] = 0;
         }
 
         // Reset cycle-accurate drive subsystem (also resets serial_trap_)
@@ -731,13 +702,13 @@ bool C64System::check_serial_traps(uint16_t pc) {
     switch (pc) {
         case TRAP_SERIAL_LISTEN:
         case TRAP_SERIAL_SA_LISTEN:
-            return serial_trap_attention(*cpu, ram->data(), TRAP_RESUME_ADDRESS);
+            return serial_trap_attention(board_.cpu, board_.ram.data(), TRAP_RESUME_ADDRESS);
         case TRAP_SERIAL_SEND_BYTE:
-            return serial_trap_send(*cpu, ram->data(), TRAP_RESUME_ADDRESS);
+            return serial_trap_send(board_.cpu, board_.ram.data(), TRAP_RESUME_ADDRESS);
         case TRAP_SERIAL_RECEIVE_BYTE:
-            return serial_trap_receive(*cpu, ram->data(), TRAP_RESUME_ADDRESS);
+            return serial_trap_receive(board_.cpu, board_.ram.data(), TRAP_RESUME_ADDRESS);
         case TRAP_SERIAL_READY:
-            return serial_trap_ready(*cpu, TRAP_RESUME_ADDRESS);
+            return serial_trap_ready(board_.cpu, TRAP_RESUME_ADDRESS);
         default:
             return false;
     }
@@ -758,11 +729,11 @@ void C64System::system_tick() {
     BUS_SET_DATA(s, BUS_GET_DATA(bus_state_));
 
     // PHASE 1: VIC-II PHI1 — g-access read, pixel sequencing
-    s = vicii->tick_phi1(s);
+    s = board_.vicii.tick_phi1(s);
 
     // PHASE 1.5: CIA PHI2 — apply pending interrupt lines before CPU
-    s = cia2->tick_phi2(s);
-    s = cia1->tick_phi2(s);
+    s = board_.cia2.tick_phi2(s);
+    s = board_.cia1.tick_phi2(s);
 
     // BA→RDY wiring (direct bit test + set/clear)
     if (BUS_GET_BIT(s, BUS_BA_BIT))
@@ -771,7 +742,7 @@ void C64System::system_tick() {
         BUS_CLR_BIT(s, BUS_RDY_BIT);
 
     // PHASE 2: CPU PHI2 — instruction execution (direct C++ call, inlineable)
-    s = cpu->tick<MOS6510::Phase::PHI2>(s);
+    s = board_.cpu.tick<MOS6510::Phase::PHI2>(s);
 
     // PHASE 3: Address decode + buffer service + MMIO self-dispatch.
     // AEC determines CPU vs VIC-II bus ownership for read viewer selection.
@@ -785,11 +756,11 @@ void C64System::system_tick() {
 
         // MMIO self-dispatch — each chip checks is_cs_selected() and handles
         // its own register I/O.  Chips not selected return bus unchanged.
-        s = vicii->tick_mmio(s);
-        s = sid->tick_mmio(s);
-        s = colorram->tick_mmio(s);
-        s = cia1->tick_mmio(s);
-        s = cia2->tick_mmio(s);
+        s = board_.vicii.tick_mmio(s);
+        s = board_.sid.tick_mmio(s);
+        s = board_.colorram.tick_mmio(s);
+        s = board_.cia1.tick_mmio(s);
+        s = board_.cia2.tick_mmio(s);
 
         // Debug cart capture ($D7FF) — VICE test convention, not real hardware.
         if (unlikely(debug_cart_enabled_ && !BUS_GET_BIT(s, BUS_RW_BIT)
@@ -800,17 +771,17 @@ void C64System::system_tick() {
     }
 
     // NMI edge detection — sample after bus dispatch (post-dispatch state)
-    cpu->sample_nmi_pin(s);
+    board_.cpu.sample_nmi_pin(s);
 
     // PHASE 3.1: VIC-II PHI2 — c/p/s-access data delivery
-    vicii->tick_phi2(s);
+    board_.vicii.tick_phi2(s);
 
     // PHASE 3.5: CIA PHI1 — timer counting, TOD, interrupt generation
-    s = cia2->tick_phi1(s);
-    s = cia1->tick_phi1(s);
+    s = board_.cia2.tick_phi1(s);
+    s = board_.cia1.tick_phi1(s);
 
     // PHASE 4: CPU PHI1 — prepare next fetch (direct C++ call, inlineable)
-    s = cpu->tick<MOS6510::Phase::PHI1>(s);
+    s = board_.cpu.tick<MOS6510::Phase::PHI1>(s);
 
     // =========================================================================
     // PHASE 4.5: Cycle-accurate IEC drive integration
@@ -821,22 +792,22 @@ void C64System::system_tick() {
     // =========================================================================
     if (is_drive_cycle_accurate()) {
         // Push CIA2 IEC output → shared IEC bus (slot 0 = host)
-        drive_subsystem_.sync_host_to_iec(cia2->port_a.output());
+        drive_subsystem_.sync_host_to_iec(board_.cia2.port_a.output());
 
         // Advance all drives by one cycle
         drive_subsystem_.advance_drives(total_cycles_);
 
         // Pull IEC bus state → CIA2 input pins (bits 6-7 only)
         uint8_t iec_in = drive_subsystem_.sync_iec_to_host();
-        cia2->port_a_value = (cia2->port_a_value & 0x3F) | iec_in;
+        board_.cia2.port_a_value = (board_.cia2.port_a_value & 0x3F) | iec_in;
     }
 
     // KERNAL serial trap check — intercept IEC bus routines at instruction boundaries
     // Only active when drive_mode_ is HOOKED (instant I/O) and a trap-based
     // Drive1541Device is attached.  Cycle-accurate modes bypass traps entirely.
     if (serial_traps_enabled_ && !is_drive_cycle_accurate()) {
-        if (cpu->opdone()) {
-            uint16_t pc = cpu->get(PC);
+        if (board_.cpu.opdone()) {
+            uint16_t pc = board_.cpu.get(PC);
             // All serial trap addresses are in the $ED00-$EEFF range
             if (pc >= 0xED00 && pc < 0xEF00) {
                 check_serial_traps(pc);
@@ -848,7 +819,7 @@ void C64System::system_tick() {
     BUS_SET_BIT(s, BUS_RW_BIT);
 
     // PHASE 5: SID — sound generation (audio only, register I/O handled above)
-    s = sid->tick_audio(s);
+    s = board_.sid.tick_audio(s);
 
     bus_state_ = s;
 }
@@ -922,9 +893,9 @@ static void c64_mem_write_block(void* ctx, uint16_t addr,
 // ============================================================================
 
 bool C64System::is_basic_ready() const {
-    if (!initialized_ || !this->ram) return false;
+    if (!initialized_) return false;
 
-    const uint8_t* ram = this->ram->data();
+    const uint8_t* ram = board_.ram.data();
 
     // BASIC warm-start vector at $0302/$0303 = $A483.  NEW must also have
     // run (VARTAB $2D != 0) to avoid $0801/$0802 corruption on first boot.
@@ -944,7 +915,7 @@ commodore_load_context_t C64System::build_load_context() {
     ctx.write_byte      = c64_mem_write_byte;
     ctx.write_block     = c64_mem_write_block;
     ctx.mem_read        = c64_mem_read;
-    ctx.mem_ctx         = this->ram;
+    ctx.mem_ctx         = &board_.ram;
     ctx.basic_params    = &COMMODORE_BASIC_C64;
     ctx.basic_start_addrs[0] = c64_constants::BASIC_START;
     ctx.default_raw_addr = 0xC000;
@@ -1114,8 +1085,8 @@ void C64System::ensure_compatible_for_sid(const sid_header_t* sid) {
         // Same region — just update SID revision in-place and reset
         if (needed_revision != pending_sid_revision_) {
             pending_sid_revision_ = needed_revision;
-            if (initialized_ && this->sid) {
-                this->sid->set_revision(needed_revision);
+            if (initialized_) {
+                board_.sid.set_revision(needed_revision);
                 log_info("C64: SID revision set to %s (from SID file flags)\n",
                        needed_revision == SID_REVISION_8580_R5 ? "MOS 8580" : "MOS 6581");
             }
@@ -1330,8 +1301,8 @@ bool C64System::apply_configuration() {
         if (sid_it->second == "MOS 8580") {
             rev = SID_REVISION_8580_R5;
         }
-        if (initialized_ && this->sid) {
-            this->sid->set_revision(rev);
+        if (initialized_) {
+            board_.sid.set_revision(rev);
             log_info("C64: SID revision set to %s\n", sid_it->second.c_str());
         }
         // Store for later (SID may not exist yet during initial config)
@@ -1348,8 +1319,8 @@ bool C64System::apply_configuration() {
 
 void C64System::render_configuration_ui() {
 #ifdef CERMU_HAS_GUI
-    if (initialized_ && this->vicii) {
-        if (palette_selector::render(*this->vicii, config_.custom_settings)) {
+    if (initialized_) {
+        if (palette_selector::render(board_.vicii, config_.custom_settings)) {
             set_configuration(config_);
             apply_configuration();
         }
@@ -1371,8 +1342,8 @@ static uint8_t c64_cia1_port_a_read_with_joystick(void* context, uint8_t port_a_
 
     // Keyboard reverse scanning
     uint8_t col_state = 0xFF;
-    if (c64 && c64->keyboard && c64->cia1) {
-        uint8_t port_b_output = c64->cia1->port_b_value;
+    if (c64 && c64->keyboard) {
+        uint8_t port_b_output = c64->board_.cia1.port_b_value;
         uint8_t row_select = ~port_b_output;
         for (int row = 0; row < 8; row++) {
             if (row_select & (1 << row)) {
@@ -1409,8 +1380,8 @@ static uint8_t c64_cia1_port_b_read_with_joystick(void* context, uint8_t port_b_
 
     // Keyboard forward scanning
     uint8_t row_state = 0xFF;
-    if (c64 && c64->keyboard && c64->cia1) {
-        uint8_t port_a_value = c64->cia1->port_a_value;
+    if (c64 && c64->keyboard) {
+        uint8_t port_a_value = c64->board_.cia1.port_a_value;
         uint8_t column_select = ~port_a_value;
         for (int col = 0; col < 8; col++) {
             if (column_select & (1 << col)) {
@@ -1447,8 +1418,8 @@ static bool c64_vicii_lp_pin_read(void* context) {
     auto* lightpen = ctx->system ? ctx->system->get_cached_lightpen() : nullptr;
     if (!lightpen) return true;
 
-    uint16_t beam_x = ctx->c64->vicii->get_x_coordinate();
-    uint16_t beam_y = ctx->c64->vicii->get_raster_counter();
+    uint16_t beam_x = ctx->c64->board_.vicii.get_x_coordinate();
+    uint16_t beam_y = ctx->c64->board_.vicii.get_raster_counter();
     return lightpen->get_lp_pin_state(beam_x, beam_y);
 }
 
@@ -1482,16 +1453,16 @@ uint32_t C64System::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (audio_port_) {
         return static_cast<uint32_t>(audio_port_->read_samples(buffer, static_cast<int>(max_samples)));
     }
-    if (!this->sid) return 0;
-    this->sid->generate_samples(buffer, max_samples);
+    if (!initialized_) return 0;
+    board_.sid.generate_samples(buffer, max_samples);
     return max_samples;
 }
 
 void C64System::set_audio_sample_rate(int sample_rate_hz) {
-    if (initialized_ && this->sid && sample_rate_hz > 0) {
+    if (initialized_ && sample_rate_hz > 0) {
         log_info("C64: Updating SID sample rate from %.0f to %d Hz\n",
-               this->sid->sample_rate, sample_rate_hz);
-        this->sid->set_sample_rate(static_cast<float>(sample_rate_hz));
+               board_.sid.sample_rate, sample_rate_hz);
+        board_.sid.set_sample_rate(static_cast<float>(sample_rate_hz));
     }
 }
 
@@ -1572,11 +1543,11 @@ bool C64System::pla_maps_generate() {
 
 void C64System::init_io_dispatch() {
     // Register MMIO handlers (kept for debug tools and non-CS fallback paths)
-    (void)bus_.register_handler({this->vicii,    vicii_base_t::registers_read, vicii_base_t::registers_write});
-    (void)bus_.register_handler({this->sid,      mos6581_t::registers_read,  mos6581_t::registers_write});
-    (void)bus_.register_handler({this->colorram, MOS2114::bus_read,          MOS2114::bus_write});
-    (void)bus_.register_handler({this->cia1,     mos6526_t::registers_read,  mos6526_t::registers_write});
-    (void)bus_.register_handler({this->cia2,     mos6526_t::registers_read,  mos6526_t::registers_write});
+    (void)bus_.register_handler({&board_.vicii,    vicii_base_t::registers_read, vicii_base_t::registers_write});
+    (void)bus_.register_handler({&board_.sid,      mos6581_t::registers_read,  mos6581_t::registers_write});
+    (void)bus_.register_handler({&board_.colorram, MOS2114::bus_read,          MOS2114::bus_write});
+    (void)bus_.register_handler({&board_.cia1,     mos6526_t::registers_read,  mos6526_t::registers_write});
+    (void)bus_.register_handler({&board_.cia2,     mos6526_t::registers_read,  mos6526_t::registers_write});
 
     // Create the IndexedSubTable for the I/O page ($D000-$DFFF)
     // 4 bits → 16 × 256 B entries, bit_shift=8 (extract bits 11-8)
@@ -1588,11 +1559,11 @@ void C64System::init_io_dispatch() {
     // is_cs_selected() in tick_mmio().
     auto cs_rd = [](uint16_t id) { return C64ChipId(id); };
     auto cs_wr = [](uint16_t id) { return C64WriteId(id); };
-    const uint16_t idVicII  = this->vicii->bus_chip_id();
-    const uint16_t idSid    = this->sid->bus_chip_id();
-    const uint16_t idColRam = this->colorram->bus_chip_id();
-    const uint16_t idCia1   = this->cia1->bus_chip_id();
-    const uint16_t idCia2   = this->cia2->bus_chip_id();
+    const uint16_t idVicII  = board_.vicii.bus_chip_id();
+    const uint16_t idSid    = board_.sid.bus_chip_id();
+    const uint16_t idColRam = board_.colorram.bus_chip_id();
+    const uint16_t idCia1   = board_.cia1.bus_chip_id();
+    const uint16_t idCia2   = board_.cia2.bus_chip_id();
 
     // Populate sub-table entries with real CS chip IDs
     // VIC-II: $D000-$D3FF (pages 0-3)
@@ -1709,19 +1680,15 @@ void C64System::memory_init() {
     // -------------------------------------------------------------------------
     // Initialize RAM (normal boot: clear to zero)
     // -------------------------------------------------------------------------
-    if (this->ram && this->ram->data()) {
+    {
         log_info("Normal boot mode: RAM cleared\n");
-        memset(this->ram->data(), 0, 0x10000);
-    } else {
-        log_info("ERROR: RAM memory pointer is NULL!\n");
+        memset(board_.ram.data(), 0, 0x10000);
     }
 
     // -------------------------------------------------------------------------
     // Initialize Color RAM
     // -------------------------------------------------------------------------
-    if (this->colorram) {
-        memset(this->colorram->memory, 0, 1024);
-    }
+    memset(board_.colorram.memory, 0, 1024);
 
     // -------------------------------------------------------------------------
     // Load ROMs from manifest metadata (filenames in C64_FOR_EACH_SYSTEM_CHIP)
@@ -1734,11 +1701,11 @@ void C64System::memory_init() {
     }
 
     // Cartridge ROMs: not loaded by default (filled with 0xFF if present)
-    if (this->roml && this->roml->data()) {
-        memset(this->roml->data(), 0xFF, c64_constants::BASIC_ROM_SIZE);
+    if (board_.roml.data()) {
+        memset(board_.roml.data(), 0xFF, c64_constants::BASIC_ROM_SIZE);
     }
-    if (this->romh && this->romh->data()) {
-        memset(this->romh->data(), 0xFF, c64_constants::BASIC_ROM_SIZE);
+    if (board_.romh.data()) {
+        memset(board_.romh.data(), 0xFF, c64_constants::BASIC_ROM_SIZE);
     }
 }
 

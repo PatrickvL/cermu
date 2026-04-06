@@ -116,21 +116,13 @@ public:
     //
 
     // =========================================================================
-    // CHIP INSTANCES — convenience pointers into board_ value fields.
+    // CHIP ACCESS — zero-cost references into board_ component tuple.
+    //
+    // All manifest-declared chips and ports are owned by board_ and accessed
+    // via its named std::get<N> references (e.g. board_.cpu, board_.vicii).
+    // The following members are NOT board components:
     // =========================================================================
 public:
-    MOS6510*      cpu      = nullptr;
-    RAMChip*      ram      = nullptr;
-    ROMChip*      roml     = nullptr;
-    ROMChip*      basic    = nullptr;
-    ROMChip*      romh     = nullptr;
-    vicii_base_t* vicii    = nullptr;
-    ROMChip*      charrom  = nullptr;
-    mos6581_t*    sid      = nullptr;
-    MOS2114*      colorram = nullptr;
-    mos6526_t*    cia1     = nullptr;
-    mos6526_t*    cia2     = nullptr;
-    ROMChip*      kernal   = nullptr;
     commodore_keyboard_t* keyboard = nullptr; // Keyboard matrix (connected to CIA1)
     void* io1 = nullptr;               // Cartridge I/O 1 ($DE00-$DEFF)
     void* io2 = nullptr;               // Cartridge I/O 2 ($DF00-$DFFF)

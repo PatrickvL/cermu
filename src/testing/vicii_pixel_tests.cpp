@@ -93,7 +93,7 @@ static void write_colorram(C64System* c64, uint16_t offset, uint8_t val) {
 
 // Write directly to RAM (bypasses banking/IO)
 static void write_ram(C64System* c64, uint16_t addr, uint8_t val) {
-    c64->ram->data()[addr] = val;
+    c64->board_.ram.data()[addr] = val;
 }
 
 // Run N frames (with audio drain)
@@ -1720,8 +1720,8 @@ static void diagnostic_dump_boot(C64System* c64, System* sys, check_ctx_t& ctx) 
     run_frames(sys, 200);
     
     // Read VIC-II register state
-    auto& vicii = *c64->vicii;
-    uint8_t* ram = c64->ram->data();
+    auto& vicii = c64->board_.vicii;
+    uint8_t* ram = c64->board_.ram.data();
     uint8_t d011 = vicii.regs_[0x11];
     uint8_t d016 = vicii.regs_[0x16];
     uint8_t d018 = vicii.regs_[0x18];
@@ -1826,8 +1826,8 @@ static void test_raster_bar_cpu(C64System* c64, System* sys, check_ctx_t& ctx) {
         write_ram(c64, 0x8000 + (uint16_t)i, code[i]);
 
     // Redirect CPU to $8000 and reset its pipeline
-    c64->cpu->set(PC, 0x8000);
-    c64->cpu->transition_to_fetch();
+    c64->board_.cpu.set(PC, 0x8000);
+    c64->board_.cpu.transition_to_fetch();
 
     // Run enough frames for the effect to stabilize (3+ frames)
     run_frames(sys, 5);
@@ -1868,8 +1868,8 @@ static void test_raster_bar_cpu(C64System* c64, System* sys, check_ctx_t& ctx) {
     // Restore: halt CPU with JMP * at $8000, then reset VIC
     { asm6510 h(code, sizeof(code), 0x8000); h.jmp_self(); }
     for (int i = 0; i < 3; i++) write_ram(c64, 0x8000 + i, code[i]);
-    c64->cpu->set(PC, 0x8000);
-    c64->cpu->transition_to_fetch();
+    c64->board_.cpu.set(PC, 0x8000);
+    c64->board_.cpu.transition_to_fetch();
 
     reset_vic_state(c64);
     run_frames(sys, 2);
@@ -1970,8 +1970,8 @@ static void test_fli_bug_width(C64System* c64, System* sys, check_ctx_t& ctx) {
     for (size_t i = 0; i < a.pos; i++) write_ram(c64, 0x8000 + (uint16_t)i, code[i]);
 
     // Redirect CPU
-    c64->cpu->set(PC, 0x8000);
-    c64->cpu->transition_to_fetch();
+    c64->board_.cpu.set(PC, 0x8000);
+    c64->board_.cpu.transition_to_fetch();
 
     // Run frames for effect to stabilize
     run_frames(sys, 5);
@@ -2035,8 +2035,8 @@ static void test_fli_bug_width(C64System* c64, System* sys, check_ctx_t& ctx) {
     // Test 2: Stop CPU, set D018 to screen A, run frames → should show screen A
     { asm6510 h(code, sizeof(code), 0x8000); h.jmp_self(); }
     for (int i = 0; i < 3; i++) write_ram(c64, 0x8000 + i, code[i]);
-    c64->cpu->set(PC, 0x8000);
-    c64->cpu->transition_to_fetch();
+    c64->board_.cpu.set(PC, 0x8000);
+    c64->board_.cpu.transition_to_fetch();
 
     write_vic(c64, 0x18, 0x1C);   // Restore screen A
     run_frames(sys, 3);
@@ -2174,8 +2174,8 @@ static void test_fli_diagnostic(C64System* c64, System* sys, check_ctx_t& ctx) {
         log_info("    Injecting %zu bytes at $8000\n", a.pos);
         for (size_t i = 0; i < a.pos; i++)
             write_ram(c64, 0x8000 + (uint16_t)i, code[i]);
-        c64->cpu->set(PC, 0x8000);
-        c64->cpu->transition_to_fetch();
+        c64->board_.cpu.set(PC, 0x8000);
+        c64->board_.cpu.transition_to_fetch();
         run_frames(sys, 5);
     };
 
@@ -2282,8 +2282,8 @@ static void test_fli_diagnostic(C64System* c64, System* sys, check_ctx_t& ctx) {
 
     { uint8_t hcode[4]; asm6510 h(hcode, sizeof(hcode), 0x8000); h.jmp_self();
       for (int i = 0; i < 3; i++) write_ram(c64, 0x8000 + i, hcode[i]); }
-    c64->cpu->set(PC, 0x8000);
-    c64->cpu->transition_to_fetch();
+    c64->board_.cpu.set(PC, 0x8000);
+    c64->board_.cpu.transition_to_fetch();
 
     reset_vic_state(c64);
     run_frames(sys, 2);

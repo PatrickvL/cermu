@@ -195,9 +195,9 @@ static uint16_t find_free_screen_base(uint16_t load_addr, uint32_t payload_size,
  * CIA2 Port A (bits 1–0, active-low) and updates the VIC-II bank_base cache.
  */
 static void configure_vic_screen_base(C64System* c64, uint16_t screen_addr) {
-    if (!c64->vicii) return;
+    if (!c64) return;
 
-    vicii_base_t& vicii = *c64->vicii;
+    vicii_base_t& vicii = c64->board_.vicii;
     uint8_t bank = static_cast<uint8_t>(screen_addr >> 14);       // 0–3
     uint16_t bank_base = static_cast<uint16_t>(bank) * 0x4000;
     uint16_t offset    = screen_addr - bank_base;
@@ -216,10 +216,10 @@ static void configure_vic_screen_base(C64System* c64, uint16_t screen_addr) {
     if (vicii.memory.bank_base != bank_base) {
         vicii.memory.bank_base = bank_base;
         // CIA2 Port A bits 1–0 are inverted: bank 0=%11, 1=%10, 2=%01, 3=%00
-        if (c64->cia2) {
-            uint8_t pra = c64->cia2->regs_.data[0];
+        {
+            uint8_t pra = c64->board_.cia2.regs_.data[0];
             pra = static_cast<uint8_t>((pra & 0xFC) | (3 - bank));
-            c64->cia2->regs_.data[0] = pra;
+            c64->board_.cia2.regs_.data[0] = pra;
         }
     }
 }
@@ -450,7 +450,7 @@ static void build_init_stub(uint8_t* ram, uint16_t irq_addr,
 static void sid_inject_player(C64System* c64, const sid_header_t* sid,
                                uint16_t subtune, size_t payload_size,
                                uint16_t timer_period, bool use_cia_rate) {
-    uint8_t* ram = c64->ram->data();
+    uint8_t* ram = c64->board_.ram.data();
 
     // ---- IRQ handler placement ----
     const bool needs_timer_irq = (sid->type == SID_TYPE_PSID && sid->play_addr != 0);
@@ -478,7 +478,7 @@ static void sid_inject_player(C64System* c64, const sid_header_t* sid,
 
         if (screen_addr) {
             uint8_t* screen_ram = &ram[screen_addr];
-            uint8_t* color_ram  = c64->colorram ? c64->colorram->memory : nullptr;
+            uint8_t* color_ram  = c64->board_.colorram.memory;
             c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
             configure_vic_screen_base(c64, screen_addr);
 
@@ -506,17 +506,17 @@ static void sid_inject_player(C64System* c64, const sid_header_t* sid,
 
 void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
                         const program_data_t* prog, uint16_t subtune) {
-    if (!sid || !c64 || !c64->ram || !c64->cpu) return;
-    if (!c64->ram->data()) return;
+    if (!sid || !c64) return;
+    if (!c64->board_.ram.data()) return;
 
     const char* type_str = (sid->type == SID_TYPE_RSID) ? "RSID" : "PSID";
-    log_info("C64: %s loader \u2014 \"%s\" by %s\n", type_str, sid->name, sid->author);
+    log_info("C64: %s loader — \"%s\" by %s\n", type_str, sid->name, sid->author);
     log_info("C64: load=$%04X init=$%04X play=$%04X songs=%u default=%u\n",
            sid->load_addr, sid->init_addr, sid->play_addr,
            sid->num_songs, sid->start_song);
 
-    uint8_t* ram = c64->ram->data();
-    auto& cpu = *c64->cpu;
+    uint8_t* ram = c64->board_.ram.data();
+    auto& cpu = c64->board_.cpu;
 
     // ---- Step 1: Write tune payload to C64 RAM ----
     // If the SID needs RAM at $E000–$FFFF (KERNAL area), bank out KERNAL before copying.
@@ -535,11 +535,11 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
     }
 
     // ---- Step 2: Set SID revision from metadata (v2+ flags) ----
-    if (sid->version >= 2 && sid->sid_model != SID_MODEL_UNKNOWN && c64->sid) {
+    if (sid->version >= 2 && sid->sid_model != SID_MODEL_UNKNOWN) {
         sid_revision_t rev = (sid->sid_model == SID_MODEL_8580)
                              ? SID_REVISION_8580_R5
                              : SID_REVISION_6581_R4AR;
-        c64->sid->set_revision(rev);
+        c64->board_.sid.set_revision(rev);
         log_info("C64: SID revision set to %s (from SID file flags)\n",
                rev == SID_REVISION_8580_R5 ? "MOS 8580" : "MOS 6581");
     }
@@ -588,16 +588,14 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
 void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
                              const uint8_t* payload, size_t payload_size,
                              uint16_t subtune) {
-    if (!sid || !c64 || !c64->ram || !c64->cpu) return;
-    if (!c64->ram->data()) return;
+    if (!sid || !c64) return;
+    if (!c64->board_.ram.data()) return;
 
-    uint8_t* ram = c64->ram->data();
-    auto& cpu = *c64->cpu;
+    uint8_t* ram = c64->board_.ram.data();
+    auto& cpu = c64->board_.cpu;
 
     // ---- Silence SID: reset all voice state ----
-    if (c64->sid) {
-        c64->sid->reset();
-    }
+    c64->board_.sid.reset();
 
     // ---- Re-copy payload (in case the tune self-modified during play) ----
     if (payload && payload_size > 0) {

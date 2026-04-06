@@ -404,8 +404,8 @@ static TickLoopResult tick_loop_protected(C64System* c64, uint32_t max_cycles, i
     r.reason = 1; // timeout by default
     
     __try {
-        auto* cpu = c64->cpu;
-        uint16_t last_pc = cpu->get(PC);
+        auto& cpu = c64->board_.cpu;
+        uint16_t last_pc = cpu.get(PC);
         uint32_t pc_stable_count = 0;
         
         for (uint32_t i = 0; i < max_cycles; i++) {
@@ -427,16 +427,16 @@ static TickLoopResult tick_loop_protected(C64System* c64, uint32_t max_cycles, i
             
             // Periodic infinite-loop check every 256 cycles
             if ((i & 0xFF) == 0) {
-                uint16_t current_pc = cpu->get(PC);
+                uint16_t current_pc = cpu.get(PC);
                 if (current_pc == last_pc) {
                     pc_stable_count++;
                     if (pc_stable_count >= 2) {
                         // Verify JMP *
-                        uint8_t opcode = c64->ram->data()[current_pc];
+                        uint8_t opcode = c64->board_.ram.data()[current_pc];
                         bool is_jmp_self = false;
                         if (opcode == 0x4C) {
-                            uint16_t target = c64->ram->data()[(current_pc + 1) & 0xFFFF] |
-                                             (c64->ram->data()[(current_pc + 2) & 0xFFFF] << 8);
+                            uint16_t target = c64->board_.ram.data()[(current_pc + 1) & 0xFFFF] |
+                                             (c64->board_.ram.data()[(current_pc + 2) & 0xFFFF] << 8);
                             is_jmp_self = (target == current_pc);
                         }
                         if (is_jmp_self || pc_stable_count >= 8) {
@@ -445,8 +445,8 @@ static TickLoopResult tick_loop_protected(C64System* c64, uint32_t max_cycles, i
                             r.loop_pc = current_pc;
                             // Get border color
                             if (c64) {
-                                vicii_base_t* vicii = c64->vicii;
-                                r.border_color = vicii->regs_[vicii_regs::EC] & 0x0F;
+                                auto& vicii = c64->board_.vicii;
+                                r.border_color = vicii.regs_[vicii_regs::EC] & 0x0F;
                             }
                             return r;
                         }
@@ -624,7 +624,7 @@ TestEnvironment TestFramework::detect_test_environment(const TestDescriptor& tes
 
 // Execute KERNAL boot sequence
 bool TestFramework::execute_kernal_boot(C64System* c64) {
-    auto* cpu = c64->cpu;
+    auto& cpu = c64->board_.cpu;
     
     // Read KERNAL reset vector from ROM via the new MemoryBus
     uint8_t reset_low  = c64->read_memory(0xFFFC);
@@ -637,12 +637,12 @@ bool TestFramework::execute_kernal_boot(C64System* c64) {
     }
     
     // Load reset vector into CPU
-    cpu->load_reset_vector(reset_vector);
+    cpu.load_reset_vector(reset_vector);
     
     // Enable interrupts for KERNAL (it needs them for initialization)
-    uint8_t status = cpu->get(P);
+    uint8_t status = cpu.get(P);
     status &= ~0x04;  // Clear I flag
-    cpu->set(P, status);
+    cpu.set(P, status);
     
     // Execute KERNAL initialization
     // KERNAL boot takes about 2.1 million cycles (includes memory test)
@@ -660,13 +660,13 @@ bool TestFramework::execute_kernal_boot(C64System* c64) {
         
         // Progress indicator
         if (verbose_ && boot_cycles % 500000 == 0) {
-            uint16_t current_pc = cpu->get(PC);
+            uint16_t current_pc = cpu.get(PC);
             log_info("  Still booting... PC=$%04X (cycle %u)\n", current_pc, boot_cycles);
         }
     }
     
     if (verbose_) {
-        uint16_t final_pc = cpu->get(PC);
+        uint16_t final_pc = cpu.get(PC);
         log_info("  KERNAL boot complete after %u cycles (PC=$%04X)\n", boot_cycles, final_pc);
     }
     return true;
@@ -674,7 +674,7 @@ bool TestFramework::execute_kernal_boot(C64System* c64) {
 
 // Execute BASIC boot sequence (KERNAL + BASIC initialization)
 bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& test, uint16_t sys_addr) {
-    auto* cpu = c64->cpu;
+    auto& cpu = c64->board_.cpu;
     
     if (verbose_) {
         log_info("  Executing BASIC boot sequence...\n");
@@ -701,7 +701,7 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
         c64->tick();
         boot_cycles++;
         
-        uint16_t current_pc = cpu->get(PC);
+        uint16_t current_pc = cpu.get(PC);
         
         // Check every 1000 cycles for keyboard input loop
         if (boot_cycles % 1000 == 0) {
@@ -733,7 +733,7 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
         }
     }
     
-    uint16_t final_pc = cpu->get(PC);
+    uint16_t final_pc = cpu.get(PC);
     
     if (verbose_) {
         log_info("  Boot sequence finished at PC=$%04X after %u cycles\n", final_pc, boot_cycles);
@@ -741,16 +741,16 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
     }
     
     // After boot, set PC to target address (simulating SYS command)
-    cpu->set(PC, sys_addr);
+    cpu.set(PC, sys_addr);
     
     // CRITICAL: Reset CPU pipeline state machine to fetch mode.
     // Without this, the CPU's current_handler and half_cycle are still
     // mid-instruction from the KERNAL keyboard loop, causing the CPU to
     // finish that stale instruction instead of fetching from the new PC.
-    cpu->transition_to_fetch();
+    cpu.transition_to_fetch();
     
     // Sync address bus register with new PC (needed for first fetch)
-    cpu->set(AB, sys_addr);
+    cpu.set(AB, sys_addr);
     
     // Set up stack for SYS command context.
     // Real BASIC SYS uses JSR internally: it pushes the return address - 1
@@ -759,13 +759,13 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
     // Use the current stack pointer from BASIC boot (don't clobber it).
     // Push return address pointing to BASIC warm start ($A7AE) so if the
     // test does RTS, it returns to BASIC safely.
-    uint8_t sp = cpu->get(S);
+    uint8_t sp = cpu.get(S);
     uint16_t return_addr = 0xA7AE - 1;  // BASIC warm start, adjusted for RTS convention
-    c64->ram->data()[0x0100 + sp] = (return_addr >> 8) & 0xFF;  // High byte
+    c64->board_.ram.data()[0x0100 + sp] = (return_addr >> 8) & 0xFF;  // High byte
     sp--;
-    c64->ram->data()[0x0100 + sp] = return_addr & 0xFF;          // Low byte
+    c64->board_.ram.data()[0x0100 + sp] = return_addr & 0xFF;          // Low byte
     sp--;
-    cpu->set(S, sp);
+    cpu.set(S, sp);
     
     return true;
 }
@@ -778,7 +778,7 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
     
     // Load PRG file
     uint16_t load_addr, sys_addr;
-    if (!c64_test_load_prg_file(full_path.c_str(), c64->ram, &load_addr, &sys_addr)) {
+    if (!c64_test_load_prg_file(full_path.c_str(), &c64->board_.ram, &load_addr, &sys_addr)) {
         return false;
     }
     
@@ -787,14 +787,11 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
     
     // Set up CPU I/O port for standard C64 configuration (needed for all environments)
     // Banking mode 0x07: LORAM=1, HIRAM=1, CHAREN=1 (standard C64 boot configuration)
-    c64->ram->data()[0x00] = 0x2F;  // DDR: bits 0-2 output, others input
-    c64->ram->data()[0x01] = 0x37;  // Data: LORAM=1, HIRAM=1, CHAREN=1
+    c64->board_.ram.data()[0x00] = 0x2F;  // DDR: bits 0-2 output, others input
+    c64->board_.ram.data()[0x01] = 0x37;  // Data: LORAM=1, HIRAM=1, CHAREN=1
     c64->on_banking_change(0x07);
     
-    auto* cpu = c64->cpu;
-    if (!cpu) {
-        return false;
-    }
+    auto& cpu = c64->board_.cpu;
     
     // Execute appropriate boot sequence based on environment
     switch (environment) {
@@ -826,9 +823,9 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
             } else {
                 // After KERNAL boot, set PC to test entry point
                 uint16_t start_addr = (sys_addr != 0) ? sys_addr : load_addr;
-                cpu->set(PC, start_addr);
-                cpu->transition_to_fetch();
-                cpu->set(AB, start_addr);
+                cpu.set(PC, start_addr);
+                cpu.transition_to_fetch();
+                cpu.set(AB, start_addr);
                 if (verbose_) {
                     log_info("  Set PC to test entry: $%04X\n", start_addr);
                 }
@@ -845,11 +842,11 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
             }
             
             uint16_t start_addr = (sys_addr != 0) ? sys_addr : load_addr;
-            cpu->set(PC, start_addr);
+            cpu.set(PC, start_addr);
             
             // CRITICAL: Reset CPU pipeline and sync AB register for first fetch
-            cpu->transition_to_fetch();
-            cpu->set(AB, start_addr);
+            cpu.transition_to_fetch();
+            cpu.set(AB, start_addr);
             
             // IMPORTANT: Leave interrupts ENABLED for direct execution
             // Many tests (especially CIA/Lorenz tests) rely on interrupts for timing
@@ -876,12 +873,12 @@ TestProtocol TestFramework::detect_test_protocol(const TestDescriptor& test, C64
     }
     
     // Check for BASIC two-stage loader pattern
-    RAMChip* ram = c64->ram;
-    auto* cpu = c64->cpu;
-    uint16_t pc = cpu->get(PC);
+    auto& ram = c64->board_.ram;
+    auto& cpu = c64->board_.cpu;
+    uint16_t pc = cpu.get(PC);
     
     // BASIC two-stage loaders start at $0801 and have SYS command
-    if (pc == 0x0801 && detect_basic_two_stage_loader(ram, pc)) {
+    if (pc == 0x0801 && detect_basic_two_stage_loader(&ram, pc)) {
         if (verbose_) {
             log_info("  Detected: BASIC two-stage loader\n");
         }
@@ -943,8 +940,8 @@ uint16_t TestFramework::calculate_basic_entry_point(RAMChip* ram, uint16_t sys_a
 }
 // Detect if CPU is stuck in infinite loop and check border color
 bool TestFramework::detect_infinite_loop(C64System* c64, uint16_t& loop_pc, uint32_t check_cycles) {
-    auto* cpu = c64->cpu;
-    uint16_t pc = cpu->get(PC);
+    auto& cpu = c64->board_.cpu;
+    uint16_t pc = cpu.get(PC);
     
     // Run for check_cycles and see if PC stays at same address
     uint32_t stable_count = 0;
@@ -952,7 +949,7 @@ bool TestFramework::detect_infinite_loop(C64System* c64, uint16_t& loop_pc, uint
     
     for (uint32_t i = 0; i < check_cycles; i++) {
         c64->tick();
-        uint16_t current_pc = cpu->get(PC);
+        uint16_t current_pc = cpu.get(PC);
         
         if (current_pc == last_pc) {
             stable_count++;
@@ -975,9 +972,9 @@ uint8_t TestFramework::get_border_color(C64System* c64) {
         return 0;
     }
     
-    vicii_base_t* vicii = c64->vicii;
+    auto& vicii = c64->board_.vicii;
     // Border color is at register $D020 (vicii_regs::EC = register 32)
-    return vicii->regs_[vicii_regs::EC] & 0x0F;  // Only lower 4 bits are color
+    return vicii.regs_[vicii_regs::EC] & 0x0F;  // Only lower 4 bits are color
 }
 
 // Enhanced exitcode test with multi-protocol support
@@ -992,8 +989,8 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
     uint32_t max_cycles = test.timeout_cycles;
     uint32_t cycles = 0;
     
-    auto* cpu = c64->cpu;
-    uint16_t start_pc = cpu->get(PC);
+    auto& cpu = c64->board_.cpu;
+    uint16_t start_pc = cpu.get(PC);
     
     if (verbose_) {
         log_info("  Protocol: ");
@@ -1139,7 +1136,7 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
                 if (verbose_) {
                     log_info("\n  ERRBUF ($5F00): ");
                     for (int di = 0; di < 24; di++) {
-                        log_info("%02X ", c64->ram->data()[0x5F00 + di]);
+                        log_info("%02X ", c64->board_.ram.data()[0x5F00 + di]);
                     }
                     log_info("\n");
                     
@@ -1151,24 +1148,24 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
                     // Heuristic: if $6000-$60FF has non-zero data, use $6000/$8000
                     bool has_6000_data = false;
                     for (int di = 0; di < 64; di++) {
-                        if (c64->ram->data()[0x6000 + di] != 0) { has_6000_data = true; break; }
+                        if (c64->board_.ram.data()[0x6000 + di] != 0) { has_6000_data = true; break; }
                     }
                     if (has_6000_data) { tmp_base = 0x6000; dat_base = 0x8000; }
                     
                     // Dump up to 3 failing subtests
                     int shown = 0;
                     for (int st = 0; st < 24 && shown < 3; st++) {
-                        if (c64->ram->data()[0x5F00 + st] == 0x0A) {
+                        if (c64->board_.ram.data()[0x5F00 + st] == 0x0A) {
                             uint16_t tmp_addr = tmp_base + st * sub_size;
                             uint16_t data_addr = dat_base + st * sub_size;
                             log_info("  Fail subtest %d (TMP=$%04X DATA=$%04X)\n", st, tmp_addr, data_addr);
                             log_info("  TMP (actual):    ");
-                            for (int di = 0; di < 48; di++) log_info("%02X ", c64->ram->data()[tmp_addr + di]);
+                            for (int di = 0; di < 48; di++) log_info("%02X ", c64->board_.ram.data()[tmp_addr + di]);
                             log_info("\n  DATA (expected): ");
-                            for (int di = 0; di < 48; di++) log_info("%02X ", c64->ram->data()[data_addr + di]);
+                            for (int di = 0; di < 48; di++) log_info("%02X ", c64->board_.ram.data()[data_addr + di]);
                             log_info("\n  Differences:     ");
                             for (int di = 0; di < 48; di++) {
-                                if (c64->ram->data()[tmp_addr + di] != c64->ram->data()[data_addr + di])
+                                if (c64->board_.ram.data()[tmp_addr + di] != c64->board_.ram.data()[data_addr + di])
                                     log_info("^^ "); else log_info("   ");
                             }
                             log_info("\n");
@@ -1182,16 +1179,16 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
         
         // Periodic checks every 256 cycles
         if ((cycles & 0xFF) == 0) {
-            uint16_t current_pc = cpu->get(PC);
+            uint16_t current_pc = cpu.get(PC);
             if (current_pc == last_pc) {
                 if (pc_stable_count == 0) stable_pc = current_pc;
                 pc_stable_count++;
                 if (pc_stable_count >= 2) {
-                    uint8_t opcode = c64->ram->data()[current_pc];
+                    uint8_t opcode = c64->board_.ram.data()[current_pc];
                     bool is_jmp_self = false;
                     if (opcode == 0x4C) {
-                        uint16_t target = c64->ram->data()[(current_pc + 1) & 0xFFFF] |
-                                         (c64->ram->data()[(current_pc + 2) & 0xFFFF] << 8);
+                        uint16_t target = c64->board_.ram.data()[(current_pc + 1) & 0xFFFF] |
+                                         (c64->board_.ram.data()[(current_pc + 2) & 0xFFFF] << 8);
                         is_jmp_self = (target == current_pc);
                     }
                     if (is_jmp_self || pc_stable_count >= 8) {
@@ -1244,8 +1241,8 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
     debug_intercept_.value = 0;
     
     // Get initial PC for diagnostics
-    auto* cpu = c64->cpu;
-    uint16_t start_pc = cpu->get(PC);
+    auto& cpu = c64->board_.cpu;
+    uint16_t start_pc = cpu.get(PC);
     uint16_t last_pc = start_pc;
     bool pc_changed = false;
     uint32_t pc_change_count = 0;
@@ -1295,7 +1292,7 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
         
         // Check PC every 1000 cycles for diagnostic
         if (cycles % 1000 == 0) {
-            uint16_t current_pc = cpu->get(PC);
+            uint16_t current_pc = cpu.get(PC);
             if (current_pc != last_pc) {
                 pc_changed = true;
                 pc_change_count++;
@@ -1392,12 +1389,7 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
     result.cycles_executed = cycles;
     
     // Verify VIC-II chip is available
-    vicii_base_t* vicii = c64->vicii;
-    if (!vicii) {
-        result.status = TestStatus::ERROR;
-        result.message = "VIC-II chip not available";
-        return result;
-    }
+    auto& vicii = c64->board_.vicii;
     
     // Generate output filename
     std::string output_dir = output_directory_ + "/screenshots";
