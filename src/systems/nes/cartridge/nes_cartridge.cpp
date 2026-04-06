@@ -34,9 +34,12 @@ void Cartridge::update_bank_map(nes_bus::nes_bus_t* bus, uint8_t* ciram) {
     // open bus, but every major emulator (Mesen, FCEUX, Nestopia)
     // provides RAM here unconditionally.  The mapper stays hardware-
     // accurate; this shim lives at the cartridge/system layer.
-    if (!prg_config.prg_ram_enabled && !prg_ram.empty()) {
-        prg_config.prg_ram_base = prg_ram.data();
-        prg_config.prg_ram_size = static_cast<uint32_t>(prg_ram.size());
+    //
+    // Use the bus's flat-mem copy of PRG-RAM (not the Cartridge vector),
+    // because ptr_to_block() can only resolve pointers inside flat_mem.
+    if (!prg_config.prg_ram_enabled && bus->prg_ram_size > 0) {
+        prg_config.prg_ram_base = bus->prg_ram;
+        prg_config.prg_ram_size = bus->prg_ram_size;
         prg_config.prg_ram_enabled = true;
     }
 
