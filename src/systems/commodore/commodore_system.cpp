@@ -326,69 +326,60 @@ void CommodoreSystem::apply_pending_load() {
     }
 
     // =========================================================================
-    // DISK_FAST PATH — D64: Insert disk into 1541 + extract first PRG to RAM
+    // DISK_FAST PATH — D64: behaviour depends on drive emulation mode
+    //
+    //   WARP / ACCURATE  — insert D64 into cycle-accurate 1541, inject
+    //                       LOAD"*",8,1 so the KERNAL loads via IEC bus.
+    //   HOOKED           — extract PRG from D64 directly to RAM (instant),
+    //                       also insert into hooked drive for directory access.
     // =========================================================================
     if (pending_load_.mode == LoadMode::DISK_FAST) {
-        log_info("%s: BASIC READY — DISK_FAST load\n", name);
+        log_info("%s: BASIC READY — DISK_FAST load (drive mode: %s)\n", name,
+                 is_drive_cycle_accurate() ? "cycle-accurate" : "hooked");
 
-        int iec_port = get_iec_port_index();
-        Drive1541Device* drive = nullptr;
-
-        if (iec_port >= 0) {
-            auto* port = get_port(iec_port);
-            if (port) {
-                for (auto* dev : port->get_attached_devices()) {
-                    drive = dynamic_cast<Drive1541Device*>(dev);
-                    if (drive) break;
-                }
+        if (is_drive_cycle_accurate()) {
+            // ── WARP / ACCURATE: let the real 1541 handle everything ────
+            auto* iec_drive = drive_subsystem_.get_drive(8);
+            if (iec_drive) {
+                iec_drive->insert_disk(pending_load_.filepath.c_str());
+                log_info("%s: D64 inserted into cycle-accurate drive #8\n", name);
             }
-
-            if (!drive) {
-                // Auto-attach a 1541 drive
-                if (port && attach_device_to_port(iec_port, "1541")) {
+            inject_keys("LOAD\"*\",8,1\rRUN\r");
+            log_info("%s: Injected LOAD\"*\",8,1 + RUN for cycle-accurate disk load\n", name);
+        } else {
+            // ── HOOKED: fast-extract PRG to RAM, also mount for browsing ──
+            int iec_port = get_iec_port_index();
+            if (iec_port >= 0) {
+                auto* port = get_port(iec_port);
+                Drive1541Device* drive = nullptr;
+                if (port) {
                     for (auto* dev : port->get_attached_devices()) {
                         drive = dynamic_cast<Drive1541Device*>(dev);
                         if (drive) break;
                     }
-                    if (drive) {
-                        log_info("%s: Auto-attached 1541 drive #8\n", name);
+                }
+                if (!drive && port && attach_device_to_port(iec_port, "1541")) {
+                    for (auto* dev : port->get_attached_devices()) {
+                        drive = dynamic_cast<Drive1541Device*>(dev);
+                        if (drive) break;
                     }
+                    if (drive) log_info("%s: Auto-attached 1541 drive #8\n", name);
+                }
+                if (drive) {
+                    drive->insert_disk(pending_load_.filepath.c_str());
+                    log_info("%s: D64 inserted into hooked drive #%d\n", name,
+                             drive->get_device_number());
                 }
             }
 
-            if (drive) {
-                drive->insert_disk(pending_load_.filepath.c_str());
-                log_info("%s: D64 inserted into drive #%d\n", name,
-                       drive->get_device_number());
+            if (pending_load_.result.type == FORMAT_LOAD_PROGRAM &&
+                pending_load_.result.program.data) {
+                auto ctx = build_load_context();
+                commodore_apply_load_result(&ctx, &pending_load_.result,
+                                            pending_load_.filepath.c_str());
             } else {
-                log_info("%s: No IEC serial port available — D64 not mounted\n", name);
+                log_info("%s: No PRG data in D64 — cannot fast-load in hooked mode\n", name);
             }
-        }
-
-        // Also insert D64 into cycle-accurate drive (if active)
-        if (is_drive_cycle_accurate()) {
-            auto* iec_drive = drive_subsystem_.get_drive(8);
-            if (iec_drive) {
-                iec_drive->insert_disk(pending_load_.filepath.c_str());
-                log_info("%s: D64 also inserted into cycle-accurate drive #8\n", name);
-            }
-        }
-
-        // When cycle-accurate drives are active (WARP or ACCURATE mode),
-        // let the KERNAL load through the real IEC bus — warp mode makes
-        // this fast.  Only fall back to fast RAM extraction in HOOKED mode
-        // where there's no cycle-accurate drive running.
-        if (is_drive_cycle_accurate()) {
-            inject_keys("LOAD\"*\",8,1\rRUN\r");
-            log_info("%s: Injected LOAD\"*\",8,1 + RUN for cycle-accurate disk load\n", name);
-        } else if (pending_load_.result.type == FORMAT_LOAD_PROGRAM &&
-                   pending_load_.result.program.data) {
-            auto ctx = build_load_context();
-            commodore_apply_load_result(&ctx, &pending_load_.result,
-                                        pending_load_.filepath.c_str());
-        } else if (drive) {
-            inject_keys("LOAD\"*\",8,1\r");
-            log_info("%s: Injected LOAD\"*\",8,1 for disk loading\n", name);
         }
     }
     // =========================================================================
