@@ -114,6 +114,7 @@ inline constexpr auto kC264Manifest = make_manifest(
     Slot<PortControlDB9>{.name = "Joystick Port 2", .port_number = 2, .default_device = "joystick"},
     Slot<PortIecSerial>{.name = "IEC Serial Bus", .is_bus = true, .default_device = "1541"},
     Slot<PortCassette>{.name = "Cassette Port", .default_device = "datasette"},
+    Slot<PortUserPort>{.name = "User Port"},
     Slot<PortExpansion>{.name = "Expansion Port"},
     Slot<PortCompositeVideo>{.name = "Video Out", .default_device = "crt_1702"},
     Slot<PortAudioMono>{.name = "Audio Out"},
@@ -147,10 +148,11 @@ struct C264Board : Board<C264BusTraits::Spec> {
     PortControlDB9&     joy2_port       = std::get<9>(components_);
     PortIecSerial&      iec_serial_port = std::get<10>(components_);
     PortCassette&       cassette_port   = std::get<11>(components_);
-    PortExpansion&      expansion_port  = std::get<12>(components_);
-    PortCompositeVideo& video_port      = std::get<13>(components_);
-    PortAudioMono&      audio_port      = std::get<14>(components_);
-    PortCustom&         keyboard_port   = std::get<15>(components_);
+    PortUserPort&       user_port       = std::get<12>(components_);
+    PortExpansion&      expansion_port  = std::get<13>(components_);
+    PortCompositeVideo& video_port      = std::get<14>(components_);
+    PortAudioMono&      audio_port      = std::get<15>(components_);
+    PortCustom&         keyboard_port   = std::get<16>(components_);
 
     C264Board() : Board(kC264Manifest) {}
 };

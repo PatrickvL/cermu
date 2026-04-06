@@ -17,6 +17,7 @@
  */
 
 #include <cstdint>
+#include "core/dip_switch.hpp"
 
 namespace bombjack_constants {
 
@@ -47,5 +48,91 @@ inline constexpr int PALETTE_ENTRIES           = 128;
 inline constexpr int REFRESH_HZ               = 60;
 inline constexpr uint32_t MAIN_CYCLES_PER_FRAME = MAIN_CPU_FREQ_HZ / REFRESH_HZ;    // ~66667
 inline constexpr int DEFAULT_SAMPLE_RATE       = 44100;
+
+// ── DIP switches ────────────────────────────────────────────────────────
+//
+// DSW1 ($B003 read) — coinage and cabinet type
+// DSW2 ($B004 read) — lives, bonus, difficulty, demo sounds
+//
+// Bit patterns match Tehkan Bomb Jack PCB manual.  All active-low:
+// factory default = 0xFF (all switches OFF).
+
+// ── DSW1 settings ───────────────────────────────────────────────────────
+
+inline constexpr DipSetting kBjCoinA[] = {
+    { "1 Coin / 1 Credit",   0x00 },   // default (bit pattern in mask)
+    { "1 Coin / 2 Credits",  0x01 },
+    { "1 Coin / 3 Credits",  0x02 },
+    { "1 Coin / 6 Credits",  0x03 },
+    { "2 Coins / 1 Credit",  0x04 },
+    { "3 Coins / 1 Credit",  0x05 },
+    { "4 Coins / 1 Credit",  0x06 },
+    { "5 Coins / 1 Credit",  0x07 },
+};
+
+inline constexpr DipSetting kBjCoinB[] = {
+    { "1 Coin / 1 Credit",   0x00 },   // default
+    { "1 Coin / 2 Credits",  0x08 },
+    { "1 Coin / 3 Credits",  0x10 },
+    { "1 Coin / 6 Credits",  0x18 },
+    { "2 Coins / 1 Credit",  0x20 },
+    { "3 Coins / 1 Credit",  0x28 },
+    { "4 Coins / 1 Credit",  0x30 },
+    { "5 Coins / 1 Credit",  0x38 },
+};
+
+inline constexpr DipSetting kBjCabinet[] = {
+    { "Upright",   0x00 },   // default
+    { "Cocktail",  0x80 },
+};
+
+inline constexpr DipSwitch kBjDsw1Switches[] = {
+    { "Coin A",    0x07, 0, kBjCoinA,   8 },
+    { "Coin B",    0x38, 0, kBjCoinB,   8 },
+    { "Cabinet",   0x80, 0, kBjCabinet, 2 },
+};
+
+inline constexpr DipSwitchBankDescriptor kBjDSW1 = {
+    "DSW1", kBjDsw1Switches, 3
+};
+
+// ── DSW2 settings ───────────────────────────────────────────────────────
+
+inline constexpr DipSetting kBjLives[] = {
+    { "3",  0x00 },   // default
+    { "4",  0x01 },
+    { "5",  0x02 },
+    { "2",  0x03 },
+};
+
+inline constexpr DipSetting kBjBirdSpeed[] = {
+    { "Easy",    0x00 },
+    { "Medium",  0x08 },   // default
+    { "Hard",    0x10 },
+    { "Hardest", 0x18 },
+};
+
+inline constexpr DipSetting kBjEnemiesSpeed[] = {
+    { "Easy",    0x00 },
+    { "Medium",  0x20 },   // default
+    { "Hard",    0x40 },
+    { "Hardest", 0x60 },
+};
+
+inline constexpr DipSetting kBjSpecialCoin[] = {
+    { "Easy",  0x00 },
+    { "Hard",  0x80 },   // default
+};
+
+inline constexpr DipSwitch kBjDsw2Switches[] = {
+    { "Lives",           0x03, 0, kBjLives,        4 },
+    { "Bird Speed",      0x18, 1, kBjBirdSpeed,    4 },
+    { "Enemies Speed",   0x60, 1, kBjEnemiesSpeed, 4 },
+    { "Special Coin",    0x80, 1, kBjSpecialCoin,  2 },
+};
+
+inline constexpr DipSwitchBankDescriptor kBjDSW2 = {
+    "DSW2", kBjDsw2Switches, 4
+};
 
 } // namespace bombjack_constants
