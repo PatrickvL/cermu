@@ -146,13 +146,8 @@ private:
     Bus bus_;
     MainBoard board_;
 
-    // Memory chip pointers (into registered_chips_; board_ owns buffer)
-    RAMChip* ram_chip_       = nullptr;
-    ROMChip* paged_rom_chip_ = nullptr;   // 256 KB pool (16 × 16 KB sideways slots)
-    ROMChip* os_rom_chip_    = nullptr;
-
-    // Convenience pointers into the flat mem
-    uint8_t*    memory_ = nullptr;       // → ram_chip_->data() (for rendering)
+    // Convenience pointer into flat RAM for rendering hot path
+    uint8_t*    memory_ = nullptr;       // → board_.ram.data()
 
     // Paged ROM state
     uint8_t     rom_select_ = 0;         // Currently selected paged ROM bank (0-15)

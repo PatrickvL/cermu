@@ -175,12 +175,9 @@ bool BBCMicroSystem::initialize() {
     // Set port manifest for default peripheral attachment.
     port_manifest_       = kBBCMicroManifest.port_slots;
     port_manifest_count_ = kBBCMicroManifest.port_count;
-    ram_chip_        = &board_.ram;
-    paged_rom_chip_  = &board_.paged_rom;
-    os_rom_chip_     = &board_.os_rom;
 
     // ── Convenience pointer for rendering functions ─────────────────────
-    memory_ = ram_chip_->data();
+    memory_ = board_.ram.data();
 
     // ── Post-apply page table fixups ────────────────────────────────────
     rom_select_ = 15;
@@ -735,7 +732,7 @@ bool BBCMicroSystem::load_roms() {
     bool os_ok = board_.load_roms(rom_root, "BBC Micro");
 
     // BASIC ROM (BBC BASIC II — 16 KB) → into paged ROM pool slot 15
-    uint8_t* basic_rom_data = paged_rom_chip_->data()
+    uint8_t* basic_rom_data = board_.paged_rom.data()
                             + 15 * bbc_constants::PAGED_ROM_SIZE;
     bool basic_ok = rom_loader_load_from_root(
         rom_root,
