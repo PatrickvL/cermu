@@ -901,6 +901,12 @@ template<NintendoVariant V>
 void NintendoSystem<V>::eject_cartridge() {
     // Save battery-backed SRAM before ejecting
     if (cartridge_ && cartridge_->battery_backed) {
+        // Sync PRG-RAM from flat mem back to cartridge vector for save
+        if (bus_.prg_ram && bus_.prg_ram_size > 0 && !cartridge_->prg_ram.empty()) {
+            std::memcpy(cartridge_->prg_ram.data(), bus_.prg_ram,
+                        std::min(static_cast<size_t>(bus_.prg_ram_size),
+                                 cartridge_->prg_ram.size()));
+        }
         cartridge_->save_sram(cartridge_->sram_path_for_rom(cartridge_->get_rom_filepath()));
     }
     cartridge_.reset();
