@@ -355,6 +355,16 @@ bool NintendoSystem<V>::initialize() {
         apu_synth_engine_->set_audio_port(audio_port_.get());
     }
 
+    // Register connector port manifest — attach_default_peripherals()
+    // will create the actual Port objects and attach default devices.
+    if constexpr (Traits::is_famicom) {
+        port_manifest_       = kFCManifest.port_slots;
+        port_manifest_count_ = kFCManifest.port_count;
+    } else {
+        port_manifest_       = kNESManifest.port_slots;
+        port_manifest_count_ = kNESManifest.port_count;
+    }
+
     initialized_ = true;
     
     return true;
@@ -1380,8 +1390,7 @@ void NintendoSystem<V>::power_cycle() {
 // ============================================================================
 // NES has: 2× front controller ports (7-pin) and 1× bottom expansion port (48-pin).
 // Controller ports use a serial shift-register protocol (LATCH + CLK + D0).
-// Port manifests are now in src/ports/nes_ports.hpp (shared).
-#include "ports/nes_ports.hpp"
+// Port manifests are declared in nes_system.hpp (kNESManifest / kFCManifest).
 // ============================================================================
 // Debug / Test harness helpers
 // ============================================================================
