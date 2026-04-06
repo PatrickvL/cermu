@@ -638,8 +638,7 @@ bool VIC20System::initialize() {
     board_.via2.interrupt_bit = BUS_IRQ_BIT;
 
     // I/O decoder — wire to VIC and VIAs
-    io_dec_ = &board_.io_dec;
-    io_dec_->wire(vic_, &board_.via1, &board_.via2);
+    board_.io_dec.wire(vic_, &board_.via1, &board_.via2);
     
     // Create keyboard matrix and connect to VIA2
     // VIC-20 keyboard: VIA2 Port B selects columns, VIA2 Port A reads rows
@@ -738,7 +737,7 @@ void VIC20System::reset() {
 // Unified bus dispatch: I/O region handled manually, everything else through MemoryBus.
 // mem_tick / io_tick removed — CS-tick architecture:
 //   resolve() → service() handles RAM/ROM/Color RAM via page table,
-//   io_dec_->tick() dispatches VIC/VIA1/VIA2 via 74LS138 decode.
+//   board_.io_dec.tick() dispatches VIC/VIA1/VIA2 via 74LS138 decode.
 
 void VIC20System::tick() {
     // Start with clean bus state (pull-up resistors)
@@ -771,11 +770,11 @@ void VIC20System::tick() {
     // =========================================================================
     // PHASE 4: Address decode + flat-mem service + MMIO self-dispatch
     // resolve() sets CS from page table, service() handles RAM/ROM/Color RAM,
-    // io_dec_->tick() dispatches VIC/VIA1/VIA2 via 74LS138 decode.
+    // board_.io_dec.tick() dispatches VIC/VIA1/VIA2 via 74LS138 decode.
     // =========================================================================
     s = mem_bus_.resolve(s);
     s = mem_bus_.service(s);
-    s = io_dec_->tick(s);
+    s = board_.io_dec.tick(s);
 
     // NMI edge detection — sample after bus dispatch (post-dispatch state)
     cpu.sample_nmi_pin(s);
