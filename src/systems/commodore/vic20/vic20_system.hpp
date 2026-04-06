@@ -212,7 +212,6 @@ private:
     // PAL: points to value-typed board_.vic (mos6561_t).
     // NTSC: points to heap-owned mos6560_t created by Board::create_chips().
     vic_base_t* vic_ = nullptr;
-    vic20_io_decoder_t* io_dec_ = nullptr;  // I/O decoder for $9000-$93FF
     
     // System state
     uint8_t expansion_flags_;        // Expansion RAM configuration
