@@ -198,7 +198,6 @@ private:
     // ---- CommodoreSystem loading hooks ----
     bool is_basic_ready() const override;
     commodore_load_context_t build_load_context() override;
-    void inject_keys(const char* str) override;
     bool is_system_initialized() const override { return main_ram_chip_ != nullptr && cpu_ != nullptr; }
 
     // Static callbacks for CommodoreSystem load context

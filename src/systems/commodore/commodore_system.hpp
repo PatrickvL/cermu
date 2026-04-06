@@ -196,7 +196,6 @@ protected:
     // Systems provide hardware-specific behaviour through virtual hooks:
     //   is_basic_ready()        — query BASIC state (warm-start vector, VARTAB)
     //   build_load_context()    — provide memory callbacks + BASIC parameters
-    //   inject_keys()           — write into the keyboard buffer
     //   is_system_initialized() — check whether initialize() has completed
     //
     // Optional hooks for system-specific extensions:
@@ -230,11 +229,59 @@ protected:
     /// Build the system-specific commodore_load_context_t.
     virtual commodore_load_context_t build_load_context() = 0;
 
-    /// Inject a NUL-terminated string into the system's keyboard buffer.
-    virtual void inject_keys(const char* str) = 0;
-
     /// Check whether the system has completed initialization.
     virtual bool is_system_initialized() const = 0;
+
+    // =========================================================================
+    // PER-FRAME KEYBOARD INJECTION
+    //
+    // Types characters at keyboard-matrix level: one key press per frame,
+    // released on the next frame.  This feeds the KERNAL's normal keyboard
+    // scan routine so there's no buffer overflow, no per-system RAM hacking,
+    // and the approach works identically across C64/VIC-20/C16/C128.
+    //
+    // inject_keys() enqueues a PETSCII string.  tick_key_injection() is
+    // called from run_frame() and drives a PRESS→RELEASE state machine.
+    // =========================================================================
+
+    /// Matrix position + modifier for a single PETSCII character.
+    struct PetsciiKeyAction {
+        uint8_t row;
+        uint8_t col;
+        uint8_t modifiers;  // KEYMOD_SHIFT, KEYMOD_CBM, etc.
+        bool    valid;
+    };
+
+    /// Reverse lookup: PETSCII code → matrix position.
+    /// Built once from the keyboard's decode tables via build_petscii_map().
+    PetsciiKeyAction petscii_map_[256] = {};
+
+    /// Pending characters to type (raw PETSCII bytes).
+    std::string key_inject_queue_;
+
+    /// State machine: IDLE → PRESSED (hold 1 frame) → release → next char.
+    enum class KeyInjectState : uint8_t { IDLE, PRESSED };
+    KeyInjectState       key_inject_state_   = KeyInjectState::IDLE;
+    PetsciiKeyAction     key_inject_current_ = {};
+
+    /// Build petscii_map_ from the keyboard's decode tables.
+    /// Call after keyboard_ is initialised (from derived initialize()).
+    void build_petscii_map();
+
+    /// Per-frame drain: press/release one character per frame.
+    /// Call from derived run_frame() after check_deferred_load().
+    void tick_key_injection();
+
+    /// Close/open matrix contacts for a PetsciiKeyAction.
+    void press_petscii_action(const PetsciiKeyAction& action);
+    void release_petscii_action(const PetsciiKeyAction& action);
+
+public:
+    /// Enqueue a NUL-terminated PETSCII string for per-frame keyboard
+    /// injection.  Replaces the old per-system RAM-buffer approach.
+    void inject_keys(const char* str);
+
+protected:
 
     // ---- Optional virtual hooks (have defaults) ----
 

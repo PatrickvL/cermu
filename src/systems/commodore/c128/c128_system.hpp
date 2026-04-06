@@ -233,7 +233,6 @@ protected:
     // ── CommodoreSystem hooks ────────────────────────────────────
     bool is_basic_ready() const override;
     commodore_load_context_t build_load_context() override;
-    void inject_keys(const char* str) override;
     bool is_system_initialized() const override { return system_ready_; }
     int get_iec_port_index() const override { return PORT_IEC_SERIAL; }
 

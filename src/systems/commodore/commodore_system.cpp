@@ -304,6 +304,12 @@ void CommodoreSystem::clear_pending_load() {
 void CommodoreSystem::reset_load_state() {
     boot_completed_ = false;
     clear_pending_load();
+    // Clear any in-progress keyboard injection
+    key_inject_queue_.clear();
+    if (key_inject_state_ == KeyInjectState::PRESSED)
+        release_petscii_action(key_inject_current_);
+    key_inject_state_ = KeyInjectState::IDLE;
+    key_inject_current_ = {};
 }
 
 void CommodoreSystem::apply_pending_load() {
@@ -372,12 +378,8 @@ void CommodoreSystem::apply_pending_load() {
         // let the KERNAL load through the real IEC bus — warp mode makes
         // this fast.  Only fall back to fast RAM extraction in HOOKED mode
         // where there's no cycle-accurate drive running.
-        //
-        // Use BASIC keyword abbreviations to fit in the keyboard buffer:
-        //   L + shifted-O ($CF) = LOAD    R + shifted-U ($D5) = RUN
-        //   Total: 13 chars (fits 16-byte physical buffer at $0277)
         if (is_drive_cycle_accurate()) {
-            inject_keys("L\xCF\"*\",8,1\rR\xD5\r");
+            inject_keys("LOAD\"*\",8,1\rRUN\r");
             log_info("%s: Injected LOAD\"*\",8,1 + RUN for cycle-accurate disk load\n", name);
         } else if (pending_load_.result.type == FORMAT_LOAD_PROGRAM &&
                    pending_load_.result.program.data) {
@@ -429,6 +431,169 @@ void CommodoreSystem::apply_pending_load() {
     pending_load_.result.release();
     pending_load_.active = false;
     boot_completed_ = true;
+}
+
+// ============================================================================
+// Per-frame keyboard injection
+//
+// Types characters at the keyboard matrix level, one key per frame.
+// Works identically across all Commodore systems (C64, VIC-20, C16, C128)
+// because it operates on the shared commodore_keyboard_t matrix contacts.
+// ============================================================================
+
+void CommodoreSystem::inject_keys(const char* str) {
+    if (!str) return;
+    key_inject_queue_.append(str, strlen(str));
+}
+
+void CommodoreSystem::build_petscii_map() {
+    // Clear the map
+    for (int i = 0; i < 256; i++)
+        petscii_map_[i] = {0, 0, 0, false};
+
+    if (!keyboard_ || !keyboard_->decode_tables) return;
+
+    uint8_t rows = keyboard_->matrix_rows;
+    uint8_t cols = keyboard_->matrix_cols;
+
+    // Reverse-map the decode tables: for each PETSCII code, record the
+    // first (row, col, modifier) that produces it.  KEYMOD_NONE first,
+    // then KEYMOD_SHIFT, so unshifted mappings win for duplicates.
+    for (int t = 0; t < keyboard_->num_decode_tables; t++) {
+        const keyboard_decode_table_t& table = keyboard_->decode_tables[t];
+        if (!table.petscii) continue;
+
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < cols; col++) {
+                petscii_t p = table.petscii[row * cols + col];
+                if (p == 0) continue;
+
+                // First-write-wins: don't overwrite existing mappings
+                if (!petscii_map_[p].valid) {
+                    petscii_map_[p] = {
+                        static_cast<uint8_t>(row),
+                        static_cast<uint8_t>(col),
+                        table.modifiers, true
+                    };
+                }
+            }
+        }
+    }
+
+    // Map RETURN ($0D) — not in decode tables (listed as 0).
+    // Find EMUKEY_RETURN in the key identity table.
+    if (!petscii_map_[0x0D].valid && keyboard_->active_keys) {
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < cols; col++) {
+                if (keyboard_->active_keys[row * cols + col] == EMUKEY_RETURN) {
+                    petscii_map_[0x0D] = {
+                        static_cast<uint8_t>(row),
+                        static_cast<uint8_t>(col),
+                        KEYMOD_NONE, true
+                    };
+                    goto found_return;
+                }
+            }
+        }
+        found_return:;
+    }
+
+    int count = 0;
+    for (int i = 0; i < 256; i++)
+        if (petscii_map_[i].valid) count++;
+    log_info("CommodoreSystem: Built PETSCII→matrix map (%d entries)\n", count);
+}
+
+void CommodoreSystem::press_petscii_action(const PetsciiKeyAction& action) {
+    if (!keyboard_ || !action.valid) return;
+
+    uint8_t rows = keyboard_->matrix_rows;
+    uint8_t cols = keyboard_->matrix_cols;
+    if (action.row >= rows || action.col >= cols) return;
+
+    // Convert array indices to hardware port bit numbers (same as KeyboardMapper)
+    auto close_contact = [&](uint8_t row, uint8_t col) {
+        uint8_t row_bit = (rows - 1) - row;
+        uint8_t col_bit = (col < 8) ? (7 - col) : col;
+        keyboard_->row_open_contacts[row_bit] &= ~(1 << col_bit);
+        keyboard_->col_open_contacts[col_bit] &= ~(1 << row_bit);
+    };
+
+    // Press modifier(s) if required
+    if (action.modifiers & KEYMOD_SHIFT) {
+        // Find left shift position
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < cols; c++) {
+                if (keyboard_->active_keys[r * cols + c] == EMUKEY_LSHIFT) {
+                    close_contact(r, c);
+                    goto shift_done;
+                }
+            }
+        }
+        shift_done:;
+    }
+
+    // Press the main key
+    close_contact(action.row, action.col);
+}
+
+void CommodoreSystem::release_petscii_action(const PetsciiKeyAction& action) {
+    if (!keyboard_ || !action.valid) return;
+
+    uint8_t rows = keyboard_->matrix_rows;
+    uint8_t cols = keyboard_->matrix_cols;
+    if (action.row >= rows || action.col >= cols) return;
+
+    auto open_contact = [&](uint8_t row, uint8_t col) {
+        uint8_t row_bit = (rows - 1) - row;
+        uint8_t col_bit = (col < 8) ? (7 - col) : col;
+        keyboard_->row_open_contacts[row_bit] |= (1 << col_bit);
+        keyboard_->col_open_contacts[col_bit] |= (1 << row_bit);
+    };
+
+    // Release the main key
+    open_contact(action.row, action.col);
+
+    // Release modifier(s)
+    if (action.modifiers & KEYMOD_SHIFT) {
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < cols; c++) {
+                if (keyboard_->active_keys[r * cols + c] == EMUKEY_LSHIFT) {
+                    open_contact(r, c);
+                    goto shift_released;
+                }
+            }
+        }
+        shift_released:;
+    }
+}
+
+void CommodoreSystem::tick_key_injection() {
+    if (key_inject_queue_.empty() && key_inject_state_ == KeyInjectState::IDLE)
+        return;
+
+    switch (key_inject_state_) {
+    case KeyInjectState::IDLE: {
+        // Pop next character and press it
+        uint8_t ch = static_cast<uint8_t>(key_inject_queue_.front());
+        key_inject_queue_.erase(key_inject_queue_.begin());
+
+        const auto& action = petscii_map_[ch];
+        if (action.valid) {
+            key_inject_current_ = action;
+            press_petscii_action(action);
+            key_inject_state_ = KeyInjectState::PRESSED;
+        }
+        // If no mapping for this char, skip it silently
+        break;
+    }
+    case KeyInjectState::PRESSED:
+        // Release the previously pressed key
+        release_petscii_action(key_inject_current_);
+        key_inject_current_ = {};
+        key_inject_state_ = KeyInjectState::IDLE;
+        break;
+    }
 }
 
 // ============================================================================

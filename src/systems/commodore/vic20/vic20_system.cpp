@@ -651,6 +651,7 @@ bool VIC20System::initialize() {
     if (keyboard_) {
         // Create the layered keyboard mapper for character-based input
         keyboard_mapper_.reset(create_vic20_keyboard_mapper(keyboard_));
+        build_petscii_map();
         
         // Register port read callbacks for keyboard matrix scanning
         // Port A reads rows, Port B reads columns (reverse scanning)
@@ -844,6 +845,9 @@ void VIC20System::run_frame() {
     // Check if a deferred file load is waiting for BASIC to reach READY
     check_deferred_load();
 
+    // Per-frame keyboard injection (one key per frame, matrix level)
+    tick_key_injection();
+
     // Run until the video chip drives FrameEnd into the output.
     auto& output = video_port_->output();
     while (!output.frame_ended()) {
@@ -906,17 +910,11 @@ commodore_load_context_t VIC20System::build_load_context() {
     ctx.default_raw_addr = 0xA000;
     ctx.set_pc          = nullptr;  // VIC-20 uses keyboard buffer injection
     ctx.try_sys_from_filename = true;
+    ctx.inject_keys     = [](void* sys_ctx, const char* str) {
+        static_cast<CommodoreSystem*>(sys_ctx)->inject_keys(str);
+    };
+    ctx.keys_ctx        = this;
     return ctx;
-}
-
-void VIC20System::inject_keys(const char* str) {
-    uint8_t* ram = board_.ram0.data();
-    int len = static_cast<int>(strlen(str));
-    if (len > 10) len = 10;  // VIC-20 keyboard buffer capacity
-    for (int i = 0; i < len; i++) {
-        ram[vic20_constants::KBD_BUFFER_BASE + i] = static_cast<uint8_t>(str[i]);
-    }
-    ram[vic20_constants::KBD_BUFFER_COUNT] = static_cast<uint8_t>(len);
 }
 
 // ============================================================================

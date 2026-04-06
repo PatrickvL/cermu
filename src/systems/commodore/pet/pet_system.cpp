@@ -351,6 +351,7 @@ bool PETSystem::initialize() {
         mapper->build_character_map_from_matrix(&pet_keyboard_config);
         mapper->register_default_synthetic_mappings();
         keyboard_mapper_.reset(mapper);
+        build_petscii_map();
     }
 
     // Register all manifest-created chips for Hardware debug menu
@@ -525,6 +526,9 @@ void PETSystem::tick() {
 void PETSystem::run_frame() {
     // Check deferred loading
     check_deferred_load();
+
+    // Per-frame keyboard injection (one key per frame, matrix level)
+    tick_key_injection();
 
     if (!video_port_) return;
     auto& output = video_port_->output();
@@ -747,19 +751,11 @@ commodore_load_context_t PETSystem::build_load_context() {
     ctx.default_raw_addr  = 0xA000;      // Expansion ROM area for raw ML
     ctx.set_pc            = nullptr;
     ctx.try_sys_from_filename = true;
+    ctx.inject_keys       = [](void* sys_ctx, const char* str) {
+        static_cast<CommodoreSystem*>(sys_ctx)->inject_keys(str);
+    };
+    ctx.keys_ctx          = this;
     return ctx;
-}
-
-void PETSystem::inject_keys(const char* str) {
-    if (!main_ram_chip_) return;
-    uint8_t* ram = main_ram_chip_->data();
-    int len = static_cast<int>(strlen(str));
-    if (len > static_cast<int>(pet_constants::KBD_BUFFER_SIZE))
-        len = static_cast<int>(pet_constants::KBD_BUFFER_SIZE);
-    for (int i = 0; i < len; i++) {
-        ram[pet_constants::KBD_BUFFER + i] = static_cast<uint8_t>(str[i]);
-    }
-    ram[pet_constants::KBD_BUFFER_COUNT] = static_cast<uint8_t>(len);
 }
 
 // ============================================================================

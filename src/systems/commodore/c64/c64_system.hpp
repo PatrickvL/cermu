@@ -184,7 +184,6 @@ private:
     // ---- CommodoreSystem loading hooks ----
     bool is_basic_ready() const override;
     commodore_load_context_t build_load_context() override;
-    void inject_keys(const char* str) override;
     bool is_system_initialized() const override { return initialized_; }
     bool on_file_parsed(format_load_result_t& result, const char* filepath) override;
     bool pre_apply_pending_load() override;

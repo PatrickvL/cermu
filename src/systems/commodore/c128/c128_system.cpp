@@ -473,6 +473,7 @@ bool C128System::initialize() {
 
     // Create keyboard mapper (host layout → C128 matrix)
     keyboard_mapper_.reset(create_c128_keyboard_mapper(keyboard_));
+    build_petscii_map();
 
     // Register virtual key menu items for C128 keys that have no common
     // host keyboard equivalent (HELP, LINE FEED, 40/80 DISPLAY, NO SCROLL).
@@ -753,6 +754,7 @@ void C128System::run_frame() {
             vdc_video_port_->swap_frame();
     }
     check_deferred_load();
+    tick_key_injection();
     tick_peripherals();
     tick_unmapped_inputs();
 }
@@ -837,22 +839,11 @@ commodore_load_context_t C128System::build_load_context() {
     ctx.default_raw_addr = 0xC000;
     ctx.set_pc          = nullptr;
     ctx.pc_ctx          = nullptr;
+    ctx.inject_keys     = [](void* sys_ctx, const char* str) {
+        static_cast<CommodoreSystem*>(sys_ctx)->inject_keys(str);
+    };
+    ctx.keys_ctx        = this;
     return ctx;
-}
-
-void C128System::inject_keys(const char* str) {
-    uint8_t* ram = board_.main_ram.data();
-    int len = static_cast<int>(strlen(str));
-    if (len > 10) len = 10;
-
-    // C128 mode: buffer at $034A, count at $D0
-    // C64 mode:  buffer at $0277, count at $C6
-    const uint16_t buf_addr   = c64_mode_ ? 0x0277 : 0x034A;
-    const uint16_t count_addr = c64_mode_ ? 0x00C6 : 0x00D0;
-
-    for (int i = 0; i < len; i++)
-        ram[buf_addr + i] = static_cast<uint8_t>(str[i]);
-    ram[count_addr] = static_cast<uint8_t>(len);
 }
 
 // ============================================================================
