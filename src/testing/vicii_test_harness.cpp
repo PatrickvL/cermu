@@ -27,12 +27,12 @@ namespace vicii_test {
 // ============================================================================
 
 void patch_kernal_for_test(C64System* c64) {
-    if (!c64 || !c64->kernal || !c64->kernal->data()) {
+    if (!c64 || !c64->board_.kernal.data()) {
         log_info("VICII-TEST: WARNING — cannot patch KERNAL (ROM not loaded)\n");
         return;
     }
 
-    uint8_t* rom = c64->kernal->data();
+    uint8_t* rom = c64->board_.kernal.data();
 
     // --- Patch A: Skip RAMTAS memory test (shared implementation) ---
     if (!c64_patch_skip_memtest(c64)) {
@@ -417,7 +417,7 @@ void inject_test_program(C64System* c64) {
     }
 
     // Copy to C64 RAM
-    uint8_t* ram = c64->ram->data();
+    uint8_t* ram = c64->board_.ram.data();
     memcpy(&ram[TEST_LOAD_ADDR], program, size);
 
     // Clear results buffer
@@ -436,9 +436,9 @@ void harness_init(vicii_test_state_t* state) {
 }
 
 bool harness_poll(vicii_test_state_t* state, C64System* c64) {
-    if (!state->active || !c64 || !c64->ram) return false;
+    if (!state->active || !c64) return false;
 
-    uint8_t* ram = c64->ram->data();
+    uint8_t* ram = c64->board_.ram.data();
     state->frames_run++;
 
     // Check done flag
@@ -460,9 +460,9 @@ bool harness_poll(vicii_test_state_t* state, C64System* c64) {
 }
 
 void harness_read_results(vicii_test_state_t* state, C64System* c64) {
-    if (!c64 || !c64->ram) return;
+    if (!c64) return;
 
-    const uint8_t* ram = c64->ram->data();
+    const uint8_t* ram = c64->board_.ram.data();
 
     // Read the results write pointer to know how many entries were written
     uint16_t write_ptr = ram[ZP_RESULT_PTR_LO] | (ram[ZP_RESULT_PTR_HI] << 8);

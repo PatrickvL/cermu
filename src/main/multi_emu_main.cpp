@@ -960,19 +960,13 @@ int main(int argc, char** argv) {
         system->set_framebuffer(fb.get(), fb_width, fb_height);
 
         // Set up write-capture callback
-        if (!c64->sid) {
-            printf("ERROR: --sid-log requires SID chip\n");
-            system->shutdown();
-            return 1;
-        }
-
         sid_log::write_log_t log;
-        log.chip_model = (c64->sid->revision == SID_REVISION_8580_R5) ? 1 : 0;
+        log.chip_model = (c64->board_.sid.revision == SID_REVISION_8580_R5) ? 1 : 0;
         log.cpu_clock  = system->get_current_timing().cpu_frequency_hz;
         log.entries.reserve(256 * 1024);  // Pre-allocate ~1.5 MB
 
-        c64->sid->write_capture_fn  = sid_log::capture_callback;
-        c64->sid->write_capture_ctx = &log;
+        c64->board_.sid.write_capture_fn  = sid_log::capture_callback;
+        c64->board_.sid.write_capture_ctx = &log;
 
         uint32_t target_fps = system->get_target_fps();
         uint32_t total_frames = static_cast<uint32_t>(sid_log_seconds) * target_fps;
@@ -995,8 +989,8 @@ int main(int argc, char** argv) {
         }
 
         // Detach callback
-        c64->sid->write_capture_fn  = nullptr;
-        c64->sid->write_capture_ctx = nullptr;
+        c64->board_.sid.write_capture_fn  = nullptr;
+        c64->board_.sid.write_capture_ctx = nullptr;
 
         log_info("SID-LOG: Capture complete — %zu register writes\n", log.entries.size());
 
@@ -1049,14 +1043,8 @@ int main(int argc, char** argv) {
         float drain[4096];
         int frame_targets[] = { 5, 500 };
         int frame_count = 0;
-        if (!c64->vicii || !c64->ram) {
-            log_error("ERROR: --vicii-dump requires VIC-II and RAM chips\n");
-            system->shutdown();
-            return 1;
-        }
-
-        auto& vicii = *c64->vicii;
-        uint8_t* ram_data = c64->ram->data();
+        auto& vicii = c64->board_.vicii;
+        uint8_t* ram_data = c64->board_.ram.data();
 
         for (int t = 0; t < 2; t++) {
             while (frame_count < frame_targets[t]) {
@@ -1191,7 +1179,7 @@ int main(int argc, char** argv) {
             // Check CIA2 DD00 for bank config
             printf("\nCIA2 $DD00 port A value: $%02X\n", ram_data[0xDD00]);
             // Actually read from CIA2 register directly
-            printf("CIA2 PRA register: $%02X\n", c64->cia2 ? (uint8_t(c64->cia2->regs_[0]) & 0x03) : 0xFF);
+            printf("CIA2 PRA register: $%02X\n", uint8_t(c64->board_.cia2.regs_[0]) & 0x03);
             
             // ===== BITMAP MODE DATA =====
             if (bmm) {
@@ -1231,7 +1219,7 @@ int main(int argc, char** argv) {
             printf("IRQ vector: $%04X, NMI vector: $%04X, HW IRQ ($0314): $%04X\n", 
                    irq_lo, nmi_lo, hw_irq);
             printf("CIA1 ICR: $%02X, VIC $D01A: $%02X\n",
-                   c64->cia1 ? uint8_t(c64->cia1->regs_[0x0D]) : 0xFF,
+                   uint8_t(c64->board_.cia1.regs_[0x0D]),
                    uint8_t(vicii.regs_[0x1A]));
         }
         
