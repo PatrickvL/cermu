@@ -259,6 +259,18 @@ protected:
     /// Pending characters to type (raw PETSCII bytes).
     std::string key_inject_queue_;
 
+    /// Deferred injection: queued after BASIC returns to READY following an
+    /// IEC LOAD.  The KERNAL clears the keyboard buffer during screen scroll
+    /// (e.g. when printing READY after LOAD), so RUN must be injected after
+    /// the LOAD completes rather than pre-buffered.
+    std::string post_load_inject_;
+
+    /// Phase tracking for post-load injection:
+    ///   0 = waiting for injection queue to drain (LOAD command still typing)
+    ///   1 = waiting for BASIC to leave READY (LOAD in progress)
+    ///   2 = waiting for BASIC to return to READY (LOAD complete)
+    uint8_t post_load_phase_ = 0;
+
     /// State machine: IDLE → PRESSED (hold 1 frame) → release → next char.
     enum class KeyInjectState : uint8_t { IDLE, PRESSED };
     KeyInjectState       key_inject_state_   = KeyInjectState::IDLE;
