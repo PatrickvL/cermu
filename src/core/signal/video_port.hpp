@@ -258,7 +258,36 @@ public:
     void set_bridge_suppressed(bool suppress) noexcept { bridge_suppressed_ = suppress; }
     bool bridge_suppressed() const noexcept { return bridge_suppressed_; }
 
+    // ====================================================================
+    // Warp mode — keep drive() running at full speed (zero hot-path
+    // cost) but wrap ptr within the current buffer on every flag change
+    // so sample writes stay in L1 cache.  Downstream: swap_frame()
+    // returns the last real frame, skipping reconstruction and GPU upload.
+    //
+    // Call at frame boundaries (before run_frame loop).  Safe to call
+    // while emulation is running — cold_path sees the flag on the next
+    // sync edge (~once per scanline).
+    // ====================================================================
+
+    void set_warp_mode(bool warp) noexcept {
+        warping_ = warp;
+        output_.on_sync_change = warp ? &VideoPort::warp_cold_path
+                                      : &VideoPort::cold_path;
+    }
+    bool is_warping() const noexcept { return warping_; }
+
     FrameData swap_frame() noexcept {
+        // Warp fast-path: the chip drove into a wrapping scratch region,
+        // no usable frame data was produced.  Reset bookkeeping and return
+        // the last real frame so the GUI keeps showing a frozen picture.
+        if (warping_) {
+            output_.frame_len      = 0;
+            output_.completed_base = nullptr;
+            completed_sync_        = nullptr;
+            completed_sync_count_  = 0;
+            return last_frame_;
+        }
+
         // Use the snapshot taken at FrameEnd (self-bounding reset);
         // fall back to current ptr position for non-FrameEnd callers.
         // completed_base points to the buffer that holds the finished frame;
@@ -368,7 +397,28 @@ private:
     int                 bound_line_width_    = 0;
     int                 bound_back_porch_    = 0;
     bool                bridge_suppressed_   = false;
+    bool                warping_             = false;
 
+    // ── Warp handler ────────────────────────────────────────────
+    // Installed by set_warp_mode(true) as on_sync_change, replacing
+    // cold_path.  No sync event logging, no buffer rotation.  On
+    // every flag change (HSync, ~once per scanline) reset ptr = base
+    // so drive() writes wrap within the same small cache-hot region.
+    // On FrameEnd, return base — drive() naturally sets frame_len
+    // and resets ptr/base via its existing non-null return path.
+    FORCE_NOINLINE
+    static Sample* warp_cold_path(void* ctx, SyncFlag flags, uint32_t /*pos*/) noexcept {
+        auto* self = static_cast<VideoPort*>(ctx);
+        if (has_flag(flags, SyncFlag::FrameEnd))
+            return self->output_.base;
+        // Non-frame flag change: wrap ptr to keep writes in L1.
+        // The function-pointer call is a compiler barrier — drive()
+        // will re-read ptr from the struct on the next invocation.
+        self->output_.ptr = self->output_.base;
+        return nullptr;
+    }
+
+    // ── Normal handler ──────────────────────────────────────────
     FORCE_NOINLINE
     static Sample* cold_path(void* ctx, SyncFlag flags, uint32_t pos) noexcept {
         auto* self = static_cast<VideoPort*>(ctx);

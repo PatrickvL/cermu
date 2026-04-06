@@ -865,9 +865,14 @@ void C64System::tick() {
 void C64System::run_frame() {
     if (!initialized_ || !video_port_) return;
 
-    // During warp, skip VIC-II pixel rendering (border, graphics, sprites)
-    // while keeping timing/BA/AEC and video signal driving for frame detection.
-    vicii->suppress_pixel_output_ = is_warping();
+    // Warp mode: redirect video signal writes to a cache-friendly scratch
+    // region (handled inside VideoPort::cold_path) and suppress audio ring
+    // buffer production.  The video chip continues full rendering — all
+    // internal state (border flip-flops, shift register, sprite collisions)
+    // evolves correctly.  Zero hot-path cost: drive() is unchanged.
+    const bool warping = is_warping();
+    video_port_->set_warp_mode(warping);
+    if (audio_port_) audio_port_->set_suppress(warping);
 
     // Update per-frame state for peripheral devices before cycle loop.
     // Lightpen: pass display rect so it can convert SDL mouse → VIC-II coords.
