@@ -17,7 +17,6 @@
 
 #include "systems/nes/cartridge/nes_mapper.hpp"
 #include "systems/nes/cartridge/mappers/mapper_helpers.hpp"
-#include <cstring>
 
 namespace nes_system {
 
@@ -26,15 +25,17 @@ private:
     uint8_t prg_bank_select_ = 0;
     uint8_t chr_bank_select_ = 0;
 
-    // 6KB on-board CHR-RAM for pattern table $0800-$1FFF.
-    // (Separate from the nametable VRAM, which is handled by FOUR_SCREEN.)
-    static constexpr size_t CHR_RAM_SIZE = 6 * 1024;
-    uint8_t chr_ram_buf_[CHR_RAM_SIZE] = {};
+    // CHR-ROM size in bytes — CHR-RAM starts at chr_mem_ + chr_rom_size_.
+    // The cartridge extends chr_memory with extra_chr_ram_size() bytes so
+    // the CHR-RAM lives in flat_mem and ptr_to_block() can resolve it.
+    static constexpr uint32_t CHR_RAM_SIZE = 6 * 1024;
+    uint32_t chr_rom_size_ = 0;
 
 public:
     Mapper077(uint8_t prgBanks, uint8_t chrBanks) {
-        (void)prgBanks; (void)chrBanks;
-        std::memset(chr_ram_buf_, 0, sizeof(chr_ram_buf_));
+        (void)prgBanks;
+        // chrBanks is the iNES chr_rom_chunks field (number of 8KB CHR-ROM banks)
+        chr_rom_size_ = chrBanks * 8192;
     }
 
     void reset() override {
@@ -44,13 +45,15 @@ public:
 
     Mirror mirror() override { return Mirror::FOUR_SCREEN; }
 
+    uint32_t extra_chr_ram_size() const override { return CHR_RAM_SIZE; }
+
     void get_prg_bank_config(MapperBankConfig& config) const override {
         mapper_helpers::set_prg_32k(config, prg_rom_, prg_rom_size_, prg_bank_select_);
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {
         // $0000-$07FF: 2KB switchable CHR-ROM bank (pages 0-1, read-only)
-        uint32_t num_2k = (chr_mem_size_ > 0) ? static_cast<uint32_t>(chr_mem_size_ / 0x0800) : 1;
+        uint32_t num_2k = (chr_rom_size_ > 0) ? (chr_rom_size_ / 0x0800) : 1;
         if (num_2k == 0) num_2k = 1;
         uint32_t chr_base = (chr_bank_select_ % num_2k) * 0x0800;
 
@@ -60,8 +63,11 @@ public:
         config.chr_writable[1] = false;
 
         // $0800-$1FFF: 6KB fixed CHR-RAM (pages 2-7, writable)
+        // CHR-RAM lives at chr_mem_ + chr_rom_size_ (appended by Cartridge
+        // via extra_chr_ram_size()).
+        const uint8_t* chr_ram = chr_mem_ + chr_rom_size_;
         for (int i = 0; i < 6; i++) {
-            config.chr_pages[2 + i] = const_cast<const uint8_t*>(chr_ram_buf_ + i * 0x0400);
+            config.chr_pages[2 + i] = chr_ram + i * 0x0400;
             config.chr_writable[2 + i] = true;
         }
     }

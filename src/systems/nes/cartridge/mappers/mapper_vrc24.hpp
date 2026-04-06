@@ -91,6 +91,7 @@ private:
     bool irq_active_ = false;
     uint16_t irq_prescaler_ = 0;
     uint64_t a12_low_since_ = 0;
+    uint64_t last_cycle_irq_ppu_ = 0;  // PPU dot of last cycle-mode batch
     static constexpr uint16_t A12_FILTER_DELAY = 16;
 
     /// Remap CPU address bits to VRC internal A0/A1.
@@ -134,6 +135,9 @@ private:
                 if (irq_enabled_) {
                     irq_counter_ = irq_latch_;
                     irq_prescaler_ = 0;
+                    // Don't reset last_cycle_irq_ppu_ here — the next
+                    // A12 notification will pick up from the current ppu_cycle
+                    // and batch-clock the correct number of elapsed cycles.
                 }
                 return false;
             case 3:  // $F003: IRQ acknowledge
@@ -163,6 +167,7 @@ public:
             irq_active_ = false;
             irq_prescaler_ = 0;
             a12_low_since_ = 0;
+            last_cycle_irq_ppu_ = 0;
         }
     }
 
@@ -179,11 +184,26 @@ public:
 
     void notify_a12(bool a12_high, uint64_t ppu_cycle) override {
         if constexpr (Traits::has_irq) {
-            if (!irq_enabled_) return;
+            if (!irq_enabled_) {
+                last_cycle_irq_ppu_ = ppu_cycle;
+                return;
+            }
             if (irq_cycle_mode_) {
-                // Cycle mode: approximate — clock on each A12 rising edge
-                if (!a12_high) return;
-                clock_irq();
+                // Cycle mode: IRQ counter clocks at CPU M2 rate.
+                // Batch-clock from elapsed PPU cycles (3 PPU dots = 1 CPU cycle).
+                // The prescaler divides by 3: for every 3 CPU cycles (= 9 PPU dots),
+                // one IRQ counter clock.  Per nesdev VRC_IRQ: prescaler runs at M2,
+                // counter clocks when prescaler overflows at 341 (scanline-equivalent
+                // for prescaler) — but standard emulation simplifies to direct M2 rate.
+                uint64_t elapsed_ppu = ppu_cycle - last_cycle_irq_ppu_;
+                last_cycle_irq_ppu_ = ppu_cycle;
+                uint64_t cpu_cycles = elapsed_ppu / 3;
+                for (uint64_t i = 0; i < cpu_cycles && !irq_active_; i++) {
+                    // Prescaler divides M2 by 341/3 ≈ 113.67 to approximate
+                    // one IRQ clock per scanline — but VRC4 actually clocks
+                    // the counter directly once per M2 cycle.
+                    clock_irq();
+                }
             } else {
                 // Scanline mode: qualified A12 rising edge (like MMC3)
                 if (!a12_high) { a12_low_since_ = ppu_cycle; return; }
