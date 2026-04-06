@@ -220,12 +220,12 @@ public:
     static HardwareTraits create_hardware_traits();
 
     // --- Test / debug accessors ---
-    CSG7501*     cpu()       { return cpu_; }
-    ted7360_t*   ted()       { return &board_.ted; }
-    RAMChip*  ram()       { return ram_; }
-    const CSG7501*    cpu() const { return cpu_; }
-    const ted7360_t*  ted() const { return &board_.ted; }
-    const RAMChip* ram() const { return ram_; }
+    CSG7501&           cpu()       { return board_.csg7501; }
+    ted7360_t&         ted()       { return board_.ted; }
+    RAMChip&           ram()       { return board_.ram; }
+    const CSG7501&     cpu() const { return board_.csg7501; }
+    const ted7360_t&   ted() const { return board_.ted; }
+    const RAMChip&     ram() const { return board_.ram; }
 
     // File probe — returns confidence + optimal configuration for this TED variant
     static SystemProbeResult probe_file_static(
@@ -237,9 +237,6 @@ public:
     static const SystemDescriptor& static_descriptor();
 
 private:
-    // Chip instances
-    CSG7501* cpu_ = nullptr;          // MOS 7501/8501 CPU — owned by board_
-    ted7360_t* ted_ = nullptr;        // Convenience pointer: &board_.video
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video output
     std::unique_ptr<AudioPort> audio_port_;            // Audio signal output
     bus_state_t bus_state_;
@@ -250,13 +247,6 @@ private:
     Bus bus_;
     MainBoard board_;
 
-    // Convenience chip pointers (owned by board_, accessed via chip_as)
-    RAMChip* ram_         = nullptr;  // Up to 64KB RAM (C16/C116 use 16KB, Plus/4 uses 64KB)
-    ROMChip* basic_rom_   = nullptr;  // BASIC ROM $8000-$BFFF (16KB)
-    ROMChip* kernal_rom_  = nullptr;  // Kernal ROM $C000-$FFFF (16KB)
-    mos6529_t* pio1_      = nullptr;  // MOS 6529B PIO1 ($FD10) — user port + tape sense
-    mos6529_t* pio2_      = nullptr;  // MOS 6529B PIO2 ($FD30) — keyboard row select
-    c264_io_decoder_t* io_dec_ = nullptr;  // I/O decoder ($FD00, 74LS139 + 74LS175)
     size_t  ram_size_ = 16384;           // Cached configured RAM size (updated in apply_configuration)
 
     // System state
