@@ -311,6 +311,7 @@ private:
     void sync_caps_lock_from_host();     // Mirror host Caps Lock to port $01 bit 6
     void init_io_dispatch();             // Set up CS-tick indexed sub-table for I/O page
     void tick_z80();                     // Z80 tick (T-state) + bus servicing
+    template<CPUMode Mode> void tick_impl();  // Templated tick body — eliminates per-cycle cpu_mode_ branches
     bus_state_t z80_io_tick(bus_state_t pins); // Z80 I/O port dispatch
     static void cpu_banking_callback(void* ctx, uint8_t banking_state);
 

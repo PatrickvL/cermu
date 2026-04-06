@@ -577,6 +577,18 @@ bool C128System::check_serial_traps(uint16_t pc) {
 // ============================================================================
 
 void C128System::tick() {
+    if (cpu_mode_ == CPUMode::MODE_8502)
+        tick_impl<CPUMode::MODE_8502>();
+    else
+        tick_impl<CPUMode::MODE_Z80>();
+}
+
+// Templated tick body — the compiler generates two instantiations with all
+// cpu_mode_ branches resolved at compile time.  Eliminates 6 per-cycle
+// conditional checks on the hot path (~1 branch misprediction slot saved
+// per tick on average).
+template<C128System::CPUMode Mode>
+void C128System::tick_impl() {
     total_cycles_++;
 
     auto& vic_iie = board_.vic_iie;
@@ -588,14 +600,14 @@ void C128System::tick() {
     // In Z80 mode the Z80 runs its own T-state with inline bus servicing
     // (MREQ/IORQ dispatch).  Peripherals still tick but receive a dummy bus
     // state — only the Z80 drives real addresses this cycle.
-    if (cpu_mode_ == CPUMode::MODE_Z80)
+    if constexpr (Mode == CPUMode::MODE_Z80)
         tick_z80();
 
     // ── Bus state setup ──────────────────────────────────────────────
     // In 8502 mode the bus state flows through every phase; in Z80 mode
     // peripherals see a neutral default (no address, data = pull-ups).
     bus_state_t s = default_state_;
-    if (cpu_mode_ == CPUMode::MODE_8502) {
+    if constexpr (Mode == CPUMode::MODE_8502) {
         BUS_SET_ADDR(s, BUS_GET_ADDR(pins_));
         BUS_SET_DATA(s, BUS_GET_DATA(pins_));
     }
@@ -608,7 +620,7 @@ void C128System::tick() {
     s = cia1.tick_phi2(s);
 
     // ── 8502-only: BA→RDY wiring + CPU PHI2 + address decode ────────
-    if (cpu_mode_ == CPUMode::MODE_8502) {
+    if constexpr (Mode == CPUMode::MODE_8502) {
         // BA→RDY wiring (direct bit test + set/clear)
         if (BUS_GET_BIT(s, BUS_BA_BIT))
             BUS_SET_BIT(s, BUS_RDY_BIT);
@@ -676,7 +688,7 @@ void C128System::tick() {
     }
 
     // ── 8502-only: NMI edge detection ────────────────────────────────
-    if (cpu_mode_ == CPUMode::MODE_8502)
+    if constexpr (Mode == CPUMode::MODE_8502)
         cpu.sample_nmi_pin(s);
 
     // ── PHASE 3.1: VIC-IIe PHI2 — c/p/s-access data delivery ────────
@@ -687,7 +699,7 @@ void C128System::tick() {
     s = cia1.tick_phi1(s);
 
     // ── 8502-only: CPU PHI1 + R/W restore ────────────────────────────
-    if (cpu_mode_ == CPUMode::MODE_8502) {
+    if constexpr (Mode == CPUMode::MODE_8502) {
         s = cpu.tick<CSG8502::Phase::PHI1>(s);
         BUS_SET_BIT(s, BUS_RW_BIT);
 
@@ -712,9 +724,13 @@ void C128System::tick() {
     if (!c64_mode_)
         board_.vdc.tick();
 
-    if (cpu_mode_ == CPUMode::MODE_8502)
+    if constexpr (Mode == CPUMode::MODE_8502)
         pins_ = s;
 }
+
+// Explicit instantiation of both tick_impl variants in this TU.
+template void C128System::tick_impl<C128System::CPUMode::MODE_8502>();
+template void C128System::tick_impl<C128System::CPUMode::MODE_Z80>();
 
 void C128System::run_frame() {
     if (!system_ready_ || !video_port_) return;
