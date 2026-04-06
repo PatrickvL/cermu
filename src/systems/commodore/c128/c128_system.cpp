@@ -473,7 +473,7 @@ bool C128System::initialize() {
         struct { const char* label; emu_key_t key; bool toggle; bool initial; } c128_extra_keys[] = {
             {"HELP",           EMUKEY_CBM_HELP,          false, false},
             {"LINE FEED",      EMUKEY_CBM_LINE_FEED,     false, false},
-            {"40/80 DISPLAY",  EMUKEY_CBM_40_80_DISPLAY, true,  false},
+            {"40/80 DISPLAY",  EMUKEY_CBM_40_80_DISPLAY, true,  true},   // MMU defaults to 80-col (pressed)
             {"NO SCROLL",      EMUKEY_CBM_NO_SCROLL,     true,  false},
         };
         for (auto& k : c128_extra_keys) {
