@@ -341,8 +341,11 @@ void CommodoreSystem::apply_pending_load() {
             // ── WARP / ACCURATE: let the real 1541 handle everything ────
             auto* iec_drive = drive_subsystem_.get_drive(8);
             if (iec_drive) {
-                iec_drive->insert_disk(pending_load_.filepath.c_str());
-                log_info("%s: D64 inserted into cycle-accurate drive #8\n", name);
+                if (iec_drive->insert_disk(pending_load_.filepath.c_str())) {
+                    log_info("%s: D64 inserted into cycle-accurate drive #8\n", name);
+                } else {
+                    log_info("%s: Failed to insert D64 into cycle-accurate drive #8\n", name);
+                }
             }
             inject_keys("LOAD\"*\",8,1\rRUN\r");
             log_info("%s: Injected LOAD\"*\",8,1 + RUN for cycle-accurate disk load\n", name);

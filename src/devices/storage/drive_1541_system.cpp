@@ -4,6 +4,7 @@
 // the tick loop, memory map, IEC bus bridge, and drive mechanics.
 
 #include "devices/storage/drive_1541_system.hpp"
+#include "core/vfs/vfs.hpp"
 
 #include <cstring>
 #include <fstream>
@@ -13,17 +14,19 @@
 // ============================================================================
 
 bool D64Image::load(const char* path) {
-    std::ifstream f(path, std::ios::binary | std::ios::ate);
-    if (!f.is_open()) return false;
+    // Use VFS so archive paths ("game.zip!/disk.d64") work transparently.
+    size_t size = 0;
+    uint8_t* raw = vfs_read_file(path, &size);
+    if (!raw) return false;
 
-    auto size = f.tellg();
     if (size != SIZE_35_TRACKS && size != SIZE_35_TRACKS_ERR &&
-        size != SIZE_40_TRACKS && size != SIZE_40_TRACKS_ERR)
+        size != SIZE_40_TRACKS && size != SIZE_40_TRACKS_ERR) {
+        free(raw);
         return false;
+    }
 
-    data.resize(static_cast<size_t>(size));
-    f.seekg(0);
-    f.read(reinterpret_cast<char*>(data.data()), size);
+    data.assign(raw, raw + size);
+    free(raw);
 
     loaded    = true;
     filepath  = path;
