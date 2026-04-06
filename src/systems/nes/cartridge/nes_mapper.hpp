@@ -123,6 +123,18 @@ public:
         (void)addr; (void)data; return false;
     }
 
+    /// Handle CPU read from expansion area ($5000-$5FFF).
+    /// Override for mappers with readable registers in this range (MMC5).
+    /// Sets `handled` to true if the address was serviced.
+    virtual uint8_t expansion_read(uint16_t addr, bool& handled) {
+        (void)addr; handled = false; return 0;
+    }
+
+    /// Extra CHR-RAM bytes needed beyond CHR-ROM (e.g. on-board cart RAM).
+    /// The cartridge appends this to chr_memory so it lives in flat_mem.
+    /// Override for mappers with mixed CHR-ROM + CHR-RAM (mapper 077).
+    virtual uint32_t extra_chr_ram_size() const { return 0; }
+
     // =======================================================================
     // Shared interface
     // =======================================================================
@@ -137,6 +149,11 @@ public:
     /// Store the iNES header mirroring mode.  Called by Cartridge after
     /// mapper creation so that the default mirror() returns the correct mode.
     void set_header_mirror(Mirror m) { header_mirror_ = m; }
+
+    /// Give the mapper direct access to the CIRAM / nametable area.
+    /// Mappers that place custom data at nt_page indices 2-3 (MMC5 ExRAM,
+    /// fill mode) override this to store data at ciram + 0x800 / 0xC00.
+    virtual void set_ciram(uint8_t* /*ciram*/) {}
 
     // IRQ support (MMC3 scanline counter, etc.)
     virtual bool irq_state() { return false; }

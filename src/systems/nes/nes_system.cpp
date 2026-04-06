@@ -575,6 +575,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
             true,  // CHR is RAM
             bus_.prg_ram, bus_.prg_ram_size);
         nsf_mapper->set_header_mirror(Mirror::HORIZONTAL);
+        nsf_mapper->set_ciram(bus_.ciram);
 
         // Install mapper into cartridge (access via friend-like helper)
         cartridge_->install_mapper(std::move(nsf_mapper));
@@ -654,6 +655,9 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
                 bus_.chr_data_ptr, bus_.chr_data_size,
                 bus_.chr_is_ram,
                 bus_.prg_ram, bus_.prg_ram_size);
+            // Give mapper access to CIRAM for custom nametable pages
+            // (MMC5 ExRAM at ciram+0x800, fill mode at ciram+0xC00)
+            m->set_ciram(bus_.ciram);
         }
 
         // Re-connect PPU to bus (ciram pointer may have changed)
@@ -1142,7 +1146,17 @@ void NintendoSystem<V>::tick() {
                 }
                 // Other APU reads ($4015 etc.) handled by CPU PHI1
             } else {
-                // Unmapped expansion or cartridge I/O — open bus
+                // Unmapped expansion or cartridge I/O — check mapper
+                // for readable expansion registers ($5000-$5FFF).
+                if (cartridge_ && addr >= 0x5000 && addr < 0x6000) {
+                    if (auto* m = cartridge_->get_mapper()) {
+                        bool handled = false;
+                        uint8_t val = m->expansion_read(addr, handled);
+                        if (handled) {
+                            BUS_SET_DATA(pins_, val);
+                        }
+                    }
+                }
             }
         }
     } else {

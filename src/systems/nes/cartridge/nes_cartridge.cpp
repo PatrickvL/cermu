@@ -215,6 +215,15 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
     // Create appropriate mapper via factory
     mapper = MapperFactory::create(mapper_id, prg_banks, chr_banks);
 
+    // Some mappers need extra CHR-RAM alongside CHR-ROM (e.g. mapper 077
+    // has 6KB on-board CHR-RAM for pattern table $0800-$1FFF).
+    // Extend chr_memory so the extra RAM lives in flat_mem and
+    // ptr_to_block() can resolve pointers into it.
+    uint32_t extra_chr = mapper->extra_chr_ram_size();
+    if (extra_chr > 0) {
+        chr_memory.resize(chr_memory.size() + extra_chr, 0);
+    }
+
     // Phase 2: Give mapper direct pointers into our ROM/RAM vectors
     mapper->set_memory_pointers(
         prg_memory.data(), prg_memory.size(),
