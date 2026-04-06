@@ -155,21 +155,25 @@ public:
     /// Read IEC bus combined state back into host CIA input format.
     ///
     /// CIA#2 port A input bits:
-    ///   Bit 6: CLK IN  (directly from bus, active-low → bit HIGH when CLK is LOW)
-    ///   Bit 7: DATA IN (from bus, active-low → bit HIGH when DATA is LOW)
+    ///   Bit 6: CLK IN  (directly from bus — no inversion on true hardware)
+    ///   Bit 7: DATA IN (directly from bus — no inversion on true hardware)
     ///
-    /// Call this BEFORE the host's CIA#2 tick to present current bus state.
+    /// The C64's IEC input path reads the bus lines directly through
+    /// transistor buffers (not through the 7406 inverters used for output).
+    /// VICE confirms: cpu_port (combined bus state) maps directly to PA6/PA7.
+    ///
+    /// Call this AFTER advance_drives() to present current bus state.
     /// Returns the input bit pattern to OR into CIA#2 port A pins.
     uint8_t sync_iec_to_host() const {
         uint8_t combined = iec_bus_.combined();
         uint8_t pa_in = 0;
 
-        // CLK IN (bit 6): bus CLK LOW → CIA PA6 HIGH (inverted)
-        if (!(combined & (1u << iec::CLK)))
+        // CLK IN (bit 6): bus CLK HIGH → PA6 HIGH (direct, no inversion)
+        if (combined & (1u << iec::CLK))
             pa_in |= 0x40;
 
-        // DATA IN (bit 7): bus DATA LOW → CIA PA7 HIGH (inverted)
-        if (!(combined & (1u << iec::DATA)))
+        // DATA IN (bit 7): bus DATA HIGH → PA7 HIGH (direct, no inversion)
+        if (combined & (1u << iec::DATA))
             pa_in |= 0x80;
 
         return pa_in;

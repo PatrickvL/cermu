@@ -368,9 +368,19 @@ void CommodoreSystem::apply_pending_load() {
             }
         }
 
-        // Hybrid: also write the first extracted PRG to RAM for fast load
-        if (pending_load_.result.type == FORMAT_LOAD_PROGRAM &&
-            pending_load_.result.program.data) {
+        // When cycle-accurate drives are active (WARP or ACCURATE mode),
+        // let the KERNAL load through the real IEC bus — warp mode makes
+        // this fast.  Only fall back to fast RAM extraction in HOOKED mode
+        // where there's no cycle-accurate drive running.
+        //
+        // Use BASIC keyword abbreviations to fit in the keyboard buffer:
+        //   L + shifted-O ($CF) = LOAD    R + shifted-U ($D5) = RUN
+        //   Total: 13 chars (fits 16-byte physical buffer at $0277)
+        if (is_drive_cycle_accurate()) {
+            inject_keys("L\xCF\"*\",8,1\rR\xD5\r");
+            log_info("%s: Injected LOAD\"*\",8,1 + RUN for cycle-accurate disk load\n", name);
+        } else if (pending_load_.result.type == FORMAT_LOAD_PROGRAM &&
+                   pending_load_.result.program.data) {
             auto ctx = build_load_context();
             commodore_apply_load_result(&ctx, &pending_load_.result,
                                         pending_load_.filepath.c_str());

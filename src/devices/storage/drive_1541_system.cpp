@@ -5,7 +5,6 @@
 
 #include "devices/storage/drive_1541_system.hpp"
 
-#include <cstdio>
 #include <cstring>
 #include <fstream>
 
@@ -181,7 +180,12 @@ template <const DriveTraits& Traits>
 void C1541System<Traits>::tick() {
     total_cycles_++;
 
-    bus_state_t s = pins_;
+    // Start each cycle with default bus state (all control lines released).
+    // VIAs re-assert IRQ each cycle if they still have enabled interrupts.
+    // Without this precharge, IRQ stays asserted forever once any VIA fires.
+    bus_state_t s = MOS6502::default_bus_state();
+    BUS_SET_ADDR(s, BUS_GET_ADDR(pins_));
+    BUS_SET_DATA(s, BUS_GET_DATA(pins_));
 
     // Phase 1: VIA timer ticks + IRQ generation
     s = board_.via1.tick(s);
@@ -189,6 +193,19 @@ void C1541System<Traits>::tick() {
 
     // Phase 2: Sample IEC bus → VIA#1 port B input pins
     iec_update_via1_input();
+
+    // Drive SO pin from the byte-ready circuit.
+    // On the real 1541, the UF4 byte-ready signal is gated by SOE (VIA#2
+    // CB2 output).  When byte_ready_ is active and SOE is HIGH, the /SO
+    // pin is driven LOW.  The CPU's sample_so_pin() detects the falling
+    // edge and sets the V flag — this is how the disk controller code
+    // ($Dxxx) polls for byte-ready using CLV + BVC.
+    if (byte_ready_) {
+        uint8_t pcr = board_.via2.pcr;
+        bool soe = (pcr & 0xE0) == 0xE0;  // CB2 manual HIGH
+        if (soe)
+            s &= ~FAM65XX_SO;  // Pull SO LOW → falling edge sets V
+    }
 
     // Phase 3: CPU PHI2 — instruction execution
     s = board_.cpu.template tick<MOS6502::Phase::PHI2>(s);
@@ -205,6 +222,7 @@ void C1541System<Traits>::tick() {
     // Phase 5: CPU PHI1 — prepare next fetch
     s = board_.cpu.template tick<MOS6502::Phase::PHI1>(s);
     board_.cpu.sample_nmi_pin(s);
+    board_.cpu.sample_so_pin(s);
 
     // Phase 6: Push VIA#1 output → IEC bus
     iec_update_bus_output();
@@ -215,7 +233,6 @@ void C1541System<Traits>::tick() {
 
     drive_mechanics_update();
 
-    BUS_SET_BIT(s, BUS_RW_BIT);  // Default to read for next cycle
     pins_ = s;
 }
 
@@ -250,7 +267,10 @@ void C1541System<Traits>::iec_update_via1_input() {
     if (!(combined & (1u << iec::CLK)))
         pb_in |= VIA1_PB_CLK_IN;
 
-    // ATN IN (bit 7): inverted from bus
+    // ATN IN (bit 7): inverted from bus (bus LOW → VIA bit HIGH)
+    // Same inversion as DATA/CLK — the 1541's IEC input buffers (7414
+    // Schmitt triggers) invert all signals.  VICE confirms via ^0x85 XOR
+    // on read_prb: PB7=1 when ATN asserted (bus LOW), PB7=0 when released.
     if (!(combined & (1u << iec::ATN)))
         pb_in |= VIA1_PB_ATN_IN;
 
@@ -281,21 +301,45 @@ void C1541System<Traits>::iec_update_bus_output() {
     auto& out = iec_bus_->output(iec_slot_);
     uint8_t pb = board_.via1.port_b.output();
 
-    // DATA OUT (bit 1): HIGH in register = pull DATA low on bus
-    out.set(iec::DATA, !(pb & VIA1_PB_DATA_OUT));
-
     // CLK OUT (bit 3): HIGH in register = pull CLK low on bus
     out.set(iec::CLK, !(pb & VIA1_PB_CLK_OUT));
 
-    // ATN ACK (bit 4): when ATN is asserted, the device automatically
-    // pulls DATA low to acknowledge.  This is handled by the ATN logic
-    // in the 1541's hardware (auto-acknowledge circuit).
-    if (board_.via1.port_b_pins_ & VIA1_PB_ATN_IN) {
-        // ATN is asserted (bit 7 HIGH = bus ATN LOW) — acknowledge by
-        // additionally pulling DATA low if ATN ACK bit is set
-        if (pb & VIA1_PB_ATN_ACK)
-            out.pull_low(iec::DATA);
-    }
+    // DATA line is driven by TWO sources (active-low open-collector OR):
+    //
+    // 1. Software DATA OUT (VIA PB1): HIGH in register = pull DATA low.
+    //
+    // 2. ATN acknowledge XOR circuit (74LS86 on 1541 schematic):
+    //    The hardware XOR gate compares the VIA PB4 (ATNA) output with the
+    //    ATN input from the bus.  When ATNA == ATN_state, the XOR output is
+    //    LOW → inverted by 7406 → transistor ON → DATA pulled low.
+    //
+    //    The XOR gate input from ATN goes through a 7414 inverter, so:
+    //      XOR inputs: ATNA (PB4 pin) and inverted-ATN (~ATN_bus)
+    //      XOR output HIGH (→ 7406 → pull DATA) when inputs DIFFER.
+    //
+    //    Truth table (verified against VICE):
+    //      ATNA=0, ATN released: no pull  (idle, no acknowledge needed)
+    //      ATNA=0, ATN asserted: PULL     (auto-acknowledge ATN)
+    //      ATNA=1, ATN released: PULL     (ATNA held after ATN release)
+    //      ATNA=1, ATN asserted: no pull  (ISR matched, waiting for release)
+    //
+    // VICE formula: drv_bus_DATA = NOT(PRB[1]) AND (PRB[4] XOR cpu_ATN)
+    //   where cpu_ATN uses 0=asserted convention.  Our atn_active uses
+    //   true=asserted, so the XOR becomes: atna ^ atn_active.
+
+    bool data_out   = (pb & VIA1_PB_DATA_OUT) != 0;    // VIA PB1 software DATA (DDR-gated)
+
+    // ATNA for XOR: physical PB4 pin state.  When DDR=output, driven by
+    // register.  When DDR=input, pin floats HIGH (internal pull-up).
+    // The XOR gate is connected to the physical pin, not the register.
+    uint8_t ddr = *board_.via1.port_b.ddr;
+    bool atna = (ddr & VIA1_PB_ATN_ACK)
+        ? (*board_.via1.port_b.data & VIA1_PB_ATN_ACK) != 0
+        : true;   // Pull-up HIGH when DDR=input
+    bool atn_active = iec_bus_->line_low(iec::ATN);     // ATN asserted on bus (LOW = asserted)
+    bool xor_pulls  = (atna ^ atn_active);              // XOR=1 → pull DATA
+
+    out.set(iec::DATA, !(data_out || xor_pulls));
 }
 
 // ── Drive mechanics ─────────────────────────────────────────────────────────
@@ -347,10 +391,14 @@ void C1541System<Traits>::gcr_advance() {
     //   - UF4 counts 4 UE7 overflows per bit cell
     //   - On each bit cell, one flux bit is shifted into the 10-bit window
     //
-    // At 1 MHz CPU clock, we get 16 reference cycles per CPU cycle.
-    // Bits per CPU cycle = 16 / (16 - speed_zone) / 4 * 16
-    //   Zone 3: 16/(16-3)/4 = 16/52 ≈ 0.308 bits/ref → ~4.92 bits/CPU_cycle
-    // But we simplify: run 16 reference ticks per CPU cycle.
+    // The 1541 R/W timing chain:
+    //   - UE7 divides the 16 MHz master clock by (16 - speed_zone)
+    //   - UF4 counts 4 UE7 overflows per bit cell
+    //   - At 1 MHz CPU clock, 16 ref ticks per CPU cycle
+    //
+    // Optimized: advance UE7 by 16 ref ticks arithmetically instead of
+    // iterating 16 times.  At most 1-2 UE7 overflows per CPU cycle
+    // (16/13 ≈ 1.23 max), so the while loop body runs 0-2 times.
 
     if (!disk_.loaded) return;
     ensure_gcr_track();
@@ -360,52 +408,52 @@ void C1541System<Traits>::gcr_advance() {
     auto& trk = gcr_tracks_[track];
     if (trk.num_bits == 0) return;
 
-    uint8_t zone = head_.speed_zone;
-    uint8_t ue7_threshold = static_cast<uint8_t>(16 - zone);  // 13-16
+    uint8_t ue7_threshold = static_cast<uint8_t>(16 - head_.speed_zone);  // 13-16
 
-    // Run 16 reference clock ticks per CPU cycle (16 MHz / 1 MHz)
-    for (int ref = 0; ref < 16; ++ref) {
-        // UE7 frequency divider
-        if (++ue7_counter_ >= ue7_threshold) {
-            ue7_counter_ = 0;
+    // Advance UE7 counter by 16 reference ticks (16 MHz / 1 MHz)
+    ue7_counter_ += 16;
 
-            // UF4 divide-by-4
-            uf4_counter_ = (uf4_counter_ + 1) & 0x03;
-            if (uf4_counter_ == 0x02) {
-                // Shift one bit from the track into the 10-bit window
-                uint8_t bit = trk.read_bit(head_.bit_position);
-                head_.bit_position = (head_.bit_position + 1) % trk.num_bits;
+    // Process any UE7 overflows (typically 0-2 per CPU cycle)
+    while (ue7_counter_ >= ue7_threshold) {
+        ue7_counter_ -= ue7_threshold;
 
-                last_read_data_ = ((last_read_data_ << 1) | bit) & 0x3FF;
+        // UF4 divide-by-4 — bit cell fires at count 2
+        uf4_counter_ = (uf4_counter_ + 1) & 0x03;
+        if (uf4_counter_ != 0x02)
+            continue;
 
-                // SYNC detection: 10 consecutive 1-bits
-                if (last_read_data_ == 0x3FF) {
-                    // SYNC detected — reset bit counter, negate byte-ready
-                    sync_detected_ = true;
-                    bit_counter_ = 0;
-                    byte_ready_ = false;
-                } else if (sync_detected_ && !(last_read_data_ & 1)) {
-                    // First zero after SYNC — sync is over, start counting
-                    sync_detected_ = false;
-                }
+        // ── One bit cell: shift a flux bit into the 10-bit window ──
 
-                // Count bits toward byte-ready (only when not in SYNC)
-                if (!sync_detected_) {
-                    if (++bit_counter_ >= 8) {
-                        bit_counter_ = 0;
-                        gcr_data_byte_ = static_cast<uint8_t>(last_read_data_ & 0xFF);
-                        byte_ready_ = true;
+        uint8_t bit = trk.read_bit(head_.bit_position);
+        head_.bit_position = (head_.bit_position + 1) % trk.num_bits;
 
-                        // Signal byte-ready on VIA#2 CA1 if SOE (byte-ready enable)
-                        // is active.  The 1541 uses VIA#2 CB2 as SOE (directly
-                        // accessible as PCR bit 5 in manual output mode).
-                        // When SOE is HIGH, byte-ready triggers CA1 interrupt.
-                        uint8_t pcr = board_.via2.pcr;
-                        bool soe = (pcr & 0xE0) >= 0xC0;  // CB2 manual HIGH
-                        if (soe) {
-                            board_.via2.ifr |= MOS6522_IFR_CA1;
-                        }
-                    }
+        last_read_data_ = ((last_read_data_ << 1) | bit) & 0x3FF;
+
+        // SYNC detection: 10 consecutive 1-bits
+        if (last_read_data_ == 0x3FF) {
+            sync_detected_ = true;
+            bit_counter_ = 0;
+            byte_ready_ = false;
+        } else if (sync_detected_ && !(last_read_data_ & 1)) {
+            // First zero after SYNC — sync is over, start counting
+            sync_detected_ = false;
+        }
+
+        // Count bits toward byte-ready (only when not in SYNC)
+        if (!sync_detected_) {
+            if (++bit_counter_ >= 8) {
+                bit_counter_ = 0;
+                gcr_data_byte_ = static_cast<uint8_t>(last_read_data_ & 0xFF);
+                byte_ready_ = true;
+
+                // Signal byte-ready on VIA#2 CA1 if SOE (byte-ready enable)
+                // is active.  The 1541 uses VIA#2 CB2 as SOE (directly
+                // accessible as PCR bit 5 in manual output mode).
+                // When SOE is HIGH, byte-ready triggers CA1 interrupt.
+                uint8_t pcr = board_.via2.pcr;
+                bool soe = (pcr & 0xE0) >= 0xC0;  // CB2 manual HIGH
+                if (soe) {
+                    board_.via2.ifr |= MOS6522_IFR_CA1;
                 }
             }
         }

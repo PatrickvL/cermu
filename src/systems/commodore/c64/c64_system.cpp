@@ -941,14 +941,25 @@ commodore_load_context_t C64System::build_load_context() {
 
 void C64System::inject_keys(const char* str) {
     if (!this->ram) return;
+    uint8_t* mem = this->ram->data();
     int len = static_cast<int>(strlen(str));
-    if (len > 10) len = 10;  // C64 keyboard buffer capacity
+
+    // The C64 KERNAL limits keyboard buffer reads to $0289 (NDXMAX),
+    // defaulting to 10.  Physically the buffer ($0277–$0286) has room
+    // for 16 bytes.  Temporarily expand NDXMAX when the injected string
+    // exceeds the default, so commands like LOAD"*",8,1\rRUN\r work.
+    static constexpr int KBD_BUF_PHYSICAL = 16;
+    static constexpr uint16_t NDXMAX = 0x0289;  // KERNAL keyboard buffer size limit
+
+    if (len > KBD_BUF_PHYSICAL) len = KBD_BUF_PHYSICAL;
     for (int i = 0; i < len; i++) {
-        this->ram->data()[c64_constants::KBD_BUFFER_BASE + i] =
-            static_cast<uint8_t>(str[i]);
+        mem[c64_constants::KBD_BUFFER_BASE + i] = static_cast<uint8_t>(str[i]);
     }
-    this->ram->data()[c64_constants::KBD_BUFFER_COUNT] =
-        static_cast<uint8_t>(len);
+    mem[c64_constants::KBD_BUFFER_COUNT] = static_cast<uint8_t>(len);
+
+    // Expand the KERNAL's soft limit so it reads all injected characters
+    if (len > mem[NDXMAX])
+        mem[NDXMAX] = static_cast<uint8_t>(len);
 }
 
 bool C64System::on_file_parsed(format_load_result_t& result,
