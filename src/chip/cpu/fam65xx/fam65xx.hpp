@@ -184,12 +184,13 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
   ///  - RW (read mode), RDY (ready)
   ///  - IRQ (inactive, active-low) — unless NO_IRQ_LINE
   ///  - NMI (inactive, active-low) — unless NO_NMI_LINE
+  ///  - SO  (inactive, active-low) — internal pull-up on all 65xx variants
   ///  - AEC (CPU has bus) — only for CPUs with I/O port (6510/7501/8502)
   ///  - RES (inactive, active-low) — prevents continuous reset detection
   /// Systems should OR in additional system-specific signals (BA,
   /// CNT, FLAG, data bus pull-ups, etc.).
   static constexpr bus_state_t default_bus_state() {
-    bus_state_t s = BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_RDY_BIT) | BUS_BIT(BUS_RES_BIT);
+    bus_state_t s = BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_RDY_BIT) | BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_SO_BIT);
     if constexpr (has_irq_line()) { s |= BUS_BIT(BUS_IRQ_BIT); }
     if constexpr (has_nmi_line()) { s |= BUS_BIT(BUS_NMI_BIT); }
     if constexpr (has_aec_pin()) { s |= BUS_BIT(BUS_AEC_BIT); }
@@ -965,6 +966,25 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
     }
   }
 
+  /**
+   * Sample the SO (Set Overflow) pin.  Falling-edge triggered: when the
+   * /SO pin transitions HIGH→LOW, the processor's V (overflow) flag is
+   * set.  On real hardware this is used by the 1541 disk drive's byte-
+   * ready circuit to signal the CPU that a complete GCR byte has been
+   * shifted in.
+   *
+   * Must be called once per cycle, after bus dispatch (same timing as
+   * sample_nmi_pin).
+   */
+  inline void sample_so_pin(bus_state_t pins) {
+    uint8_t so_active = (pins & FAM65XX_SO) ? 0 : 1;  // Active LOW
+    // Falling edge: pin was HIGH (so_prev_=0), now LOW (so_active=1)
+    if (so_active && !this->so_prev_) {
+      regs_[P] |= FLAG_V;
+    }
+    this->so_prev_ = so_active;
+  }
+
   // Hardware-accurate interrupt detection with priority-order processing
   bool process_interrupt_detection(bus_state_t pins) {
     // Load state into registers to reduce memory accesses
@@ -1657,6 +1677,7 @@ public:
   bus_state_t reset(bus_state_t pins = 0) override {
     // Reset interrupt state
     this->nmi_prev = 0;
+    this->so_prev_ = 0;
     this->nmi_edge_latch = 0;
     this->nmi_output_latch_ = false;
     this->interrupt_shift_register = 0;
@@ -1715,6 +1736,7 @@ public:
     this->interrupt_shift_register =
         0x00000000;     /* No interrupt activity detected yet */
     this->nmi_prev = 0; /* NMI line inactive (inverted convention: 0=pin HIGH) */
+    this->so_prev_ = 0; /* SO line inactive (0=pin HIGH) */
     this->nmi_edge_latch = 0;
     this->nmi_output_latch_ = false;
 
@@ -1996,6 +2018,7 @@ public:
     half_cycle = 0;
     active_interrupt = FAM65XX_INT_NONE;
     nmi_prev = 0;
+    so_prev_ = 0;
     nmi_edge_latch = 0;
     nmi_output_latch_ = false;
     interrupt_shift_register = 0;
@@ -2100,6 +2123,8 @@ public:
   interrupt_t active_interrupt; /* Currently active interrupt (enum serves as
                                    vector index) */
   uint8_t nmi_prev;             /* Previous NMI line state for edge detection */
+  uint8_t so_prev_;             /* Previous SO line state for edge detection
+                                   (0 = pin HIGH/inactive, 1 = pin LOW/active) */
   uint8_t nmi_edge_latch;       /* Internal edge-detect flip-flop: set on /NMI falling edge,
                                    cleared when NMI vector is fetched.  Persists regardless of
                                    subsequent pin state — this IS the NMI pending flag. */
