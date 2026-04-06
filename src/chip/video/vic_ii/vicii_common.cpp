@@ -361,25 +361,6 @@ void vicii_sprite_sequencer(vicii_base_t* vicii) {
 // Pixel sequencer - sequences exactly 8 pixels per cycle
 // This is the ONLY function that emits pixels to the framebuffer
 static void vicii_pixel_sequencer(vicii_base_t* vicii) {
-    // Warp fast-path: skip all rendering (border, graphics, sprites, color
-    // resolution) but keep driving the video signal so frame_ended() still
-    // fires.  Saves ~100-200ns/cycle during warp.
-    if (unlikely(vicii->suppress_pixel_output_)) {
-        if (vicii->video_out_) {
-            const SyncFlag flags = vicii->drive_flags_;
-            const bool frame_end = vicii->frame_wrapped_;
-            if (frame_end) vicii->frame_wrapped_ = false;
-
-            for (int pixel = 0; pixel < 8; pixel++) {
-                SyncFlag pf = flags;
-                if (frame_end && pixel == 0)
-                    pf = pf | SyncFlag::FrameEnd;
-                vicii->video_out_->drive({0, pf});
-            }
-        }
-        return;
-    }
-
     // VICE-compatible deferred right border: Apply pending main_border=true from the
     // previous cycle's right border check. This 1-cycle deferral matches VICE's
     // border_state pipeline delay and gives the CPU time to change CSEL (via DEC $D016)

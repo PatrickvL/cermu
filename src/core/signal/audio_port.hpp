@@ -72,6 +72,7 @@ struct AudioPort {
     uint32_t  period_       = 1;        // chip clocks per host sample
     float     prev_         = 0.f;
     float     scale_        = 1.f;      // output scaling factor
+    bool      suppress_     = false;    // warp mode: skip ring buffer writes
     AudioRing ring_;
 
     /// Configure the decimation ratio.
@@ -86,9 +87,19 @@ struct AudioPort {
     /// Set output scaling factor (maps chip DAC range to [-1,+1])
     void set_scale(float s) noexcept { scale_ = s; }
 
+    /// Suppress sample output (warp mode).  The chip keeps calling drive()
+    /// but no samples reach the ring buffer, avoiding overproduction that
+    /// would cause pops/clicks in the audio callback.  The branch is
+    /// perfectly predicted (~0 cost) since warp state only changes at
+    /// frame boundaries.
+    void set_suppress(bool suppress) noexcept { suppress_ = suppress; }
+    bool is_suppressed() const noexcept { return suppress_; }
+
     /// Called once per chip clock with the current output amplitude.
     FORCE_INLINE
     void drive(float value) noexcept {
+        if (unlikely(suppress_)) return;
+
         accumulator_ += value;
 
         if (++acc_count_ >= period_) {
@@ -106,6 +117,7 @@ struct AudioPort {
     /// that already produce samples at the host sample rate.
     FORCE_INLINE
     void drive_sample(float value) noexcept {
+        if (unlikely(suppress_)) return;
         ring_.push_unchecked(value * scale_);
     }
 
