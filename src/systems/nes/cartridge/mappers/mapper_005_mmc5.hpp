@@ -53,10 +53,20 @@ private:
     uint8_t fill_attr_ = 0;            // $5107: fill-mode attribute (bits 1-0)
 
     // -----------------------------------------------------------------------
-    // ExRAM
+    // ExRAM — stored at ciram_ + 0x800 (nametable page 2 in flat_mem)
     // -----------------------------------------------------------------------
     uint8_t exram_mode_ = 0;           // $5104: ExRAM mode (0-3)
-    uint8_t exram_[1024] = {};         // 1KB internal extended RAM
+    uint8_t* exram_ = nullptr;         // Points to ciram_ + 0x800 (1KB in flat_mem)
+
+    // -----------------------------------------------------------------------
+    // Fill nametable page — stored at ciram_ + 0xC00 (nametable page 3)
+    // -----------------------------------------------------------------------
+    uint8_t* fill_page_ = nullptr;     // Points to ciram_ + 0xC00 (1KB in flat_mem)
+
+    // -----------------------------------------------------------------------
+    // CIRAM pointer — set via set_ciram() after init_flat_mem
+    // -----------------------------------------------------------------------
+    uint8_t* ciram_ = nullptr;
 
     // -----------------------------------------------------------------------
     // IRQ
@@ -66,6 +76,7 @@ private:
     bool irq_pending_ = false;         // IRQ pending flag
     bool in_frame_ = false;            // Whether PPU is rendering
     uint8_t scanline_counter_ = 0;     // Current scanline count
+    uint64_t last_count_cycle_ = 0;    // PPU dot of last scanline count
 
     // -----------------------------------------------------------------------
     // Multiplier
@@ -85,6 +96,17 @@ private:
 
     bool prg_ram_writable() const {
         return prg_ram_protect_1_ && prg_ram_protect_2_;
+    }
+
+    /// Rebuild the 1KB fill-mode nametable page at ciram_ + 0xC00.
+    /// Tile bytes (offsets 0-959) = fill_tile_.
+    /// Attribute bytes (offsets 960-1023) = fill_attr_ replicated to all quadrants.
+    void rebuild_fill_page() {
+        if (!fill_page_) return;
+        std::memset(fill_page_, fill_tile_, 960);
+        uint8_t attr_byte = fill_attr_ | (fill_attr_ << 2)
+                          | (fill_attr_ << 4) | (fill_attr_ << 6);
+        std::memset(fill_page_ + 960, attr_byte, 64);
     }
 
     /// Resolve a PRG bank register value to a ROM/RAM pointer.
@@ -118,6 +140,14 @@ public:
     Mapper005(uint8_t prgBanks, uint8_t chrBanks)
         : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
 
+    void set_ciram(uint8_t* ciram) override {
+        ciram_ = ciram;
+        exram_ = ciram + 0x800;   // NT page 2 slot in flat_mem
+        fill_page_ = ciram + 0xC00; // NT page 3 slot in flat_mem
+        // Initialize fill page
+        rebuild_fill_page();
+    }
+
     void reset() override {
         prg_mode_ = 3;
         chr_mode_ = 0;
@@ -129,7 +159,7 @@ public:
         fill_tile_ = 0;
         fill_attr_ = 0;
         exram_mode_ = 0;
-        std::memset(exram_, 0, sizeof(exram_));
+        if (exram_) std::memset(exram_, 0, 1024);
         prg_ram_protect_1_ = false;
         prg_ram_protect_2_ = false;
         irq_scanline_ = 0;
@@ -137,10 +167,12 @@ public:
         irq_pending_ = false;
         in_frame_ = false;
         scanline_counter_ = 0;
+        last_count_cycle_ = 0;
         multiplicand_ = 0xFF;
         multiplier_ = 0xFF;
         product_ = 0;
         mirror_mode_ = Mirror::VERTICAL;
+        rebuild_fill_page();
     }
 
     Mirror mirror() override { return mirror_mode_; }
@@ -150,14 +182,19 @@ public:
     void irq_clear() override { irq_pending_ = false; }
 
     // =======================================================================
-    // Scanline notification — called by PPU at each visible scanline
+    // Scanline notification — PPU-cycle-based scanline counting
     // =======================================================================
 
     void notify_a12(bool a12_high, uint64_t ppu_cycle) override {
-        // MMC5 doesn't use A12 directly; it uses an internal scanline
-        // detector. We repurpose this callback for scanline counting.
-        // The PPU should call this once per scanline with a12_high=true.
+        // MMC5 uses an internal scanline detector, not A12 directly.
+        // We approximate by filtering A12 rising edges to at most one per
+        // scanline (341 PPU dots).  Require >= 260 dots since last count
+        // to reject the many A12 transitions within a single scanline
+        // while still catching every scanline boundary.
         if (!a12_high) return;
+
+        if (ppu_cycle - last_count_cycle_ < 260) return;
+        last_count_cycle_ = ppu_cycle;
 
         if (!in_frame_) {
             in_frame_ = true;
@@ -170,8 +207,8 @@ public:
             irq_pending_ = true;
         }
 
-        // End of visible frame (after 240 scanlines)
-        if (scanline_counter_ >= 240) {
+        // End of visible frame (after ~240 scanlines)
+        if (scanline_counter_ >= 241) {
             in_frame_ = false;
         }
     }
@@ -347,7 +384,7 @@ public:
     /// CPU read in $5000-$5FFF range. Must be called by the bus for
     /// expansion area reads. Returns the byte and sets `handled` to true
     /// if the address was serviced.
-    uint8_t expansion_read(uint16_t addr, bool& handled) const {
+    uint8_t expansion_read(uint16_t addr, bool& handled) override {
         handled = true;
 
         if (addr == 0x5204) {
@@ -355,6 +392,8 @@ public:
             uint8_t val = 0;
             if (irq_pending_) val |= 0x80;
             if (in_frame_)    val |= 0x40;
+            // Reading $5204 acknowledges (clears) the IRQ
+            irq_pending_ = false;
             return val;
         }
 
@@ -367,7 +406,7 @@ public:
 
         // ExRAM read ($5C00-$5FFF)
         if (addr >= 0x5C00 && addr <= 0x5FFF) {
-            if (exram_mode_ >= 2) {  // Modes 2 & 3: readable
+            if (exram_mode_ >= 2 && exram_) {  // Modes 2 & 3: readable
                 return exram_[addr - 0x5C00];
             }
             return 0;  // Modes 0 & 1: returns open bus (0 as fallback)
@@ -423,10 +462,13 @@ private:
             // --- Nametable mapping ---
             case 0x5105:
                 nt_mapping_ = data;
-                // Derive a Mirror mode for the base class
-                // This is a simplification; real MMC5 NT mapping is per-slot
-                if (data == 0x50) mirror_mode_ = Mirror::VERTICAL;
-                else if (data == 0x44) mirror_mode_ = Mirror::HORIZONTAL;
+                // Derive a Mirror mode for the cartridge layer.
+                // The cartridge overrides nt_page from MIRROR_NT_PAGES for
+                // standard patterns; FOUR_SCREEN preserves the mapper's raw
+                // nt_page decode (required for ExRAM/fill nametable pages).
+                // 0x50 = {0,0,1,1} = HORIZONTAL, 0x44 = {0,1,0,1} = VERTICAL
+                if (data == 0x50) mirror_mode_ = Mirror::HORIZONTAL;
+                else if (data == 0x44) mirror_mode_ = Mirror::VERTICAL;
                 else if (data == 0x00) mirror_mode_ = Mirror::ONESCREEN_LO;
                 else if (data == 0x55) mirror_mode_ = Mirror::ONESCREEN_HI;
                 else mirror_mode_ = Mirror::FOUR_SCREEN;  // Custom mapping
@@ -435,9 +477,11 @@ private:
             // --- Fill-mode tile & attribute ---
             case 0x5106:
                 fill_tile_ = data;
+                rebuild_fill_page();
                 return false;
             case 0x5107:
                 fill_attr_ = data & 0x03;
+                rebuild_fill_page();
                 return false;
 
             // --- PRG bank registers ---
@@ -490,8 +534,8 @@ private:
                 break;
         }
 
-        // ExRAM write ($5C00-$5FFF)
-        if (addr >= 0x5C00 && addr <= 0x5FFF) {
+        // ExRAM write ($5C00-$5FFF) — stored at ciram_ + 0x800
+        if (addr >= 0x5C00 && addr <= 0x5FFF && exram_) {
             if (exram_mode_ <= 1) {
                 // Modes 0 & 1: writable during rendering (simplified: always writable)
                 exram_[addr - 0x5C00] = data;
