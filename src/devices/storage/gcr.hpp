@@ -208,8 +208,10 @@ inline GCRTrack encode_track(uint8_t track, const uint8_t* const* sector_data,
         uint8_t data_raw[260];
         data_raw[0] = DATA_ID;
         std::memcpy(data_raw + 1, sector_data[s], 256);
+        // Checksum covers the 256 data bytes only (NOT the block ID byte).
+        // The 1541 ROM computes: XOR of data_raw[1..256].
         uint8_t checksum = 0;
-        for (int i = 0; i < 257; ++i)
+        for (int i = 1; i < 257; ++i)
             checksum ^= data_raw[i];
         data_raw[257] = checksum;
         data_raw[258] = 0x00;
