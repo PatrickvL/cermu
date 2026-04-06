@@ -33,6 +33,12 @@ public:
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
         mapper_helpers::set_prg_fixed(config, prg_rom_, prg_rom_size_);
+        // Jaleco JF-05/06 boards have no PRG-RAM.  The $6000-$7FFF
+        // register must reach register_write() for CHR bank switching.
+        // Prevent the compatibility shim from wiring in PRG-RAM
+        // (which would intercept the writes).
+        config.prg_ram_enabled = true;   // shim triggers on !enabled
+        config.prg_ram_base = nullptr;   // no actual RAM → BLOCK_OPEN_BUS
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {

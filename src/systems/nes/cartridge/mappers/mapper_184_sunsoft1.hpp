@@ -35,6 +35,9 @@ public:
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
         mapper_helpers::set_prg_fixed(config, prg_rom_, prg_rom_size_);
+        // $6000 is a register — prevent compatibility shim from wiring PRG-RAM
+        config.prg_ram_enabled = true;
+        config.prg_ram_base = nullptr;
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {
