@@ -318,55 +318,114 @@ public:
         uint32_t chr_1k = (chr_mem_size_ > 0) ? static_cast<uint32_t>(chr_mem_size_ / 0x0400) : 1;
         if (chr_1k == 0) chr_1k = 1;
 
-        // Use the 'sprite' registers ($5120-$5127) — always the lower 8 slots
-        // BG registers ($5128-$512B) are used during rendering based on
-        // sprite-height mode; we simplify to sprite set here.
-        switch (chr_mode_) {
-            case 0: {
-                // 8KB mode — $5127 selects 8KB page
-                uint32_t base = (chr_bank_[7] * 8) % chr_1k;
-                for (int i = 0; i < 8; i++) {
-                    uint32_t b = (base + i) % chr_1k;
-                    config.chr_pages[i] = chr_mem_ + b * 0x0400;
-                    config.chr_writable[i] = chr_is_ram_;
+        // MMC5 has two CHR bank register sets:
+        //   - Sprite set ($5120-$5127): 8 registers for sprite tile fetches
+        //   - BG set ($5128-$512B): 4 registers for BG tile fetches
+        //
+        // The real hardware multiplexes based on the current PPU fetch type.
+        // Since we can't switch per-cycle, we use the "last written" set:
+        // chr_upper_set_ is true when the last CHR write was to the BG set.
+        //
+        // The BG set has only 4 registers; they replicate across 8 × 1KB:
+        //   slot 0,4 ← $5128    slot 1,5 ← $5129
+        //   slot 2,6 ← $512A    slot 3,7 ← $512B
+
+        if (chr_upper_set_) {
+            // --- BG set active: 4 registers replicated to 8 slots ---
+            switch (chr_mode_) {
+                case 0: {
+                    // 8KB mode — $512B selects 8KB page
+                    uint32_t base = (chr_bank_[11] * 8) % chr_1k;
+                    for (int i = 0; i < 8; i++) {
+                        config.chr_pages[i] = chr_mem_ + ((base + i) % chr_1k) * 0x0400;
+                        config.chr_writable[i] = chr_is_ram_;
+                    }
+                    break;
                 }
-                break;
+                case 1: {
+                    // 4KB mode — $512B selects the 4KB bank, replicated at $0000 and $1000
+                    uint32_t lo = (chr_bank_[11] * 4) % chr_1k;
+                    for (int i = 0; i < 4; i++) {
+                        uint32_t b = (lo + i) % chr_1k;
+                        config.chr_pages[i]     = chr_mem_ + b * 0x0400;
+                        config.chr_pages[4 + i] = chr_mem_ + b * 0x0400;
+                        config.chr_writable[i] = chr_is_ram_;
+                        config.chr_writable[4 + i] = chr_is_ram_;
+                    }
+                    break;
+                }
+                case 2: {
+                    // 2KB mode — $5129/$512B select 2KB banks, replicated
+                    for (int half = 0; half < 2; half++) {
+                        int reg = 9 + half * 2;  // registers 9,11
+                        uint32_t base = (chr_bank_[reg] * 2) % chr_1k;
+                        for (int i = 0; i < 2; i++) {
+                            uint32_t b = (base + i) % chr_1k;
+                            config.chr_pages[half * 2 + i]     = chr_mem_ + b * 0x0400;
+                            config.chr_pages[4 + half * 2 + i] = chr_mem_ + b * 0x0400;
+                            config.chr_writable[half * 2 + i] = chr_is_ram_;
+                            config.chr_writable[4 + half * 2 + i] = chr_is_ram_;
+                        }
+                    }
+                    break;
+                }
+                case 3: {
+                    // 1KB mode — 4 registers replicated to 8
+                    for (int i = 0; i < 4; i++) {
+                        uint32_t b = chr_bank_[8 + i] % chr_1k;
+                        config.chr_pages[i]     = chr_mem_ + b * 0x0400;
+                        config.chr_pages[4 + i] = chr_mem_ + b * 0x0400;
+                        config.chr_writable[i] = chr_is_ram_;
+                        config.chr_writable[4 + i] = chr_is_ram_;
+                    }
+                    break;
+                }
             }
-            case 1: {
-                // 4KB mode — $5123 at $0000, $5127 at $1000
-                uint32_t lo = (chr_bank_[3] * 4) % chr_1k;
-                uint32_t hi = (chr_bank_[7] * 4) % chr_1k;
-                for (int i = 0; i < 4; i++) {
-                    uint32_t b_lo = (lo + i) % chr_1k;
-                    uint32_t b_hi = (hi + i) % chr_1k;
-                    config.chr_pages[i]     = chr_mem_ + b_lo * 0x0400;
-                    config.chr_pages[4 + i] = chr_mem_ + b_hi * 0x0400;
-                    config.chr_writable[i] = chr_is_ram_;
-                    config.chr_writable[4 + i] = chr_is_ram_;
+        } else {
+            // --- Sprite set active: 8 registers (standard mapping) ---
+            switch (chr_mode_) {
+                case 0: {
+                    // 8KB mode — $5127 selects 8KB page
+                    uint32_t base = (chr_bank_[7] * 8) % chr_1k;
+                    for (int i = 0; i < 8; i++) {
+                        config.chr_pages[i] = chr_mem_ + ((base + i) % chr_1k) * 0x0400;
+                        config.chr_writable[i] = chr_is_ram_;
+                    }
+                    break;
                 }
-                break;
-            }
-            case 2: {
-                // 2KB mode — $5121/$5123 at $0000/$0800, $5125/$5127 at $1000/$1800
-                for (int pair = 0; pair < 4; pair++) {
-                    int reg = pair * 2 + 1;  // registers 1,3,5,7
-                    uint32_t base = (chr_bank_[reg] * 2) % chr_1k;
-                    int slot = pair * 2;
-                    config.chr_pages[slot]     = chr_mem_ + ((base) % chr_1k) * 0x0400;
-                    config.chr_pages[slot + 1] = chr_mem_ + ((base + 1) % chr_1k) * 0x0400;
-                    config.chr_writable[slot] = chr_is_ram_;
-                    config.chr_writable[slot + 1] = chr_is_ram_;
+                case 1: {
+                    // 4KB mode — $5123 at $0000, $5127 at $1000
+                    uint32_t lo = (chr_bank_[3] * 4) % chr_1k;
+                    uint32_t hi = (chr_bank_[7] * 4) % chr_1k;
+                    for (int i = 0; i < 4; i++) {
+                        config.chr_pages[i]     = chr_mem_ + ((lo + i) % chr_1k) * 0x0400;
+                        config.chr_pages[4 + i] = chr_mem_ + ((hi + i) % chr_1k) * 0x0400;
+                        config.chr_writable[i] = chr_is_ram_;
+                        config.chr_writable[4 + i] = chr_is_ram_;
+                    }
+                    break;
                 }
-                break;
-            }
-            case 3: {
-                // 1KB mode — each register maps 1KB
-                for (int i = 0; i < 8; i++) {
-                    uint32_t b = chr_bank_[i] % chr_1k;
-                    config.chr_pages[i] = chr_mem_ + b * 0x0400;
-                    config.chr_writable[i] = chr_is_ram_;
+                case 2: {
+                    // 2KB mode — $5121/$5123/$5125/$5127
+                    for (int pair = 0; pair < 4; pair++) {
+                        int reg = pair * 2 + 1;
+                        uint32_t base = (chr_bank_[reg] * 2) % chr_1k;
+                        int slot = pair * 2;
+                        config.chr_pages[slot]     = chr_mem_ + ((base) % chr_1k) * 0x0400;
+                        config.chr_pages[slot + 1] = chr_mem_ + ((base + 1) % chr_1k) * 0x0400;
+                        config.chr_writable[slot] = chr_is_ram_;
+                        config.chr_writable[slot + 1] = chr_is_ram_;
+                    }
+                    break;
                 }
-                break;
+                case 3: {
+                    // 1KB mode — each register maps 1KB
+                    for (int i = 0; i < 8; i++) {
+                        config.chr_pages[i] = chr_mem_ + (chr_bank_[i] % chr_1k) * 0x0400;
+                        config.chr_writable[i] = chr_is_ram_;
+                    }
+                    break;
+                }
             }
         }
 
