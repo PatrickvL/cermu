@@ -590,6 +590,7 @@ bool Commodore264System<V>::initialize() {
     if (keyboard_) {
         // Create the layered keyboard mapper for character-based input
         keyboard_mapper_.reset(create_c16_keyboard_mapper(keyboard_));
+        build_petscii_map();
     } else {
         log_info("%s: Warning - keyboard matrix creation failed\n", Traits::name);
     }
@@ -800,6 +801,9 @@ void Commodore264System<V>::run_frame() {
     // Check deferred load once per frame (only active during boot)
     check_deferred_load();
 
+    // Per-frame keyboard injection (one key per frame, matrix level)
+    tick_key_injection();
+
     // Tick all attached peripheral devices
     tick_peripherals();
 }
@@ -842,34 +846,13 @@ commodore_load_context_t Commodore264System<V>::build_load_context() {
     ctx.default_raw_addr = 0x4000;
     ctx.set_pc          = set_cpu_pc;
     ctx.pc_ctx          = this;
-    // inject_keys is left as nullptr — commodore_load_helpers uses the
-    // default $0277/$C6, but C16 needs $0527/$EF.  We set the custom
-    // callback so commodore_apply_load_result uses our inject_keys override.
-    ctx.inject_keys     = [](void* kctx, const char* str) {
-        auto* ram = static_cast<uint8_t*>(kctx);
-        int len = static_cast<int>(strlen(str));
-        if (len > c16_constants::KBD_BUFFER_SIZE)
-            len = c16_constants::KBD_BUFFER_SIZE;
-        for (int i = 0; i < len; i++) {
-            ram[c16_constants::KBD_BUFFER_BASE + i] = static_cast<uint8_t>(str[i]);
-        }
-        ram[c16_constants::KBD_BUFFER_COUNT] = static_cast<uint8_t>(len);
+    // inject_keys callback redirects through CommodoreSystem's per-frame
+    // keyboard injection queue (shared across all Commodore systems).
+    ctx.inject_keys     = [](void* sys_ctx, const char* str) {
+        static_cast<CommodoreSystem*>(sys_ctx)->inject_keys(str);
     };
-    ctx.keys_ctx        = ram_->data();
+    ctx.keys_ctx        = this;
     return ctx;
-}
-
-template<C264SeriesVariant V>
-void Commodore264System<V>::inject_keys(const char* str) {
-    if (!ram_) return;
-    auto* ram = ram_->data();
-    int len = static_cast<int>(strlen(str));
-    if (len > c16_constants::KBD_BUFFER_SIZE)
-        len = c16_constants::KBD_BUFFER_SIZE;
-    for (int i = 0; i < len; i++) {
-        ram[c16_constants::KBD_BUFFER_BASE + i] = static_cast<uint8_t>(str[i]);
-    }
-    ram[c16_constants::KBD_BUFFER_COUNT] = static_cast<uint8_t>(len);
 }
 
 // ============================================================================

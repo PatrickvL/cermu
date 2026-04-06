@@ -550,7 +550,9 @@ bool C64System::initialize() {
 
     // Create the layered keyboard mapper for character-based input
     if (this->keyboard) {
+        keyboard_ = this->keyboard;  // Sync base-class pointer for shared injection
         keyboard_mapper_.reset(create_c64_keyboard_mapper(this->keyboard));
+        build_petscii_map();
     }
 
     // Register chips for the Hardware menu and debug windows
@@ -883,6 +885,9 @@ void C64System::run_frame() {
     // Check deferred load once per frame (only active during boot)
     check_deferred_load();
 
+    // Per-frame keyboard injection (one key per frame, matrix level)
+    tick_key_injection();
+
     // Tick all attached peripheral devices (datasette timing, 1541 IEC, etc.)
     tick_peripherals();
 }
@@ -940,30 +945,11 @@ commodore_load_context_t C64System::build_load_context() {
     ctx.default_raw_addr = 0xC000;
     ctx.set_pc          = nullptr;
     ctx.pc_ctx          = nullptr;
+    ctx.inject_keys     = [](void* sys_ctx, const char* str) {
+        static_cast<CommodoreSystem*>(sys_ctx)->inject_keys(str);
+    };
+    ctx.keys_ctx        = this;
     return ctx;
-}
-
-void C64System::inject_keys(const char* str) {
-    if (!this->ram) return;
-    uint8_t* mem = this->ram->data();
-    int len = static_cast<int>(strlen(str));
-
-    // The C64 KERNAL limits keyboard buffer reads to $0289 (NDXMAX),
-    // defaulting to 10.  Physically the buffer ($0277–$0286) has room
-    // for 16 bytes.  Temporarily expand NDXMAX when the injected string
-    // exceeds the default, so commands like LOAD"*",8,1\rRUN\r work.
-    static constexpr int KBD_BUF_PHYSICAL = 16;
-    static constexpr uint16_t NDXMAX = 0x0289;  // KERNAL keyboard buffer size limit
-
-    if (len > KBD_BUF_PHYSICAL) len = KBD_BUF_PHYSICAL;
-    for (int i = 0; i < len; i++) {
-        mem[c64_constants::KBD_BUFFER_BASE + i] = static_cast<uint8_t>(str[i]);
-    }
-    mem[c64_constants::KBD_BUFFER_COUNT] = static_cast<uint8_t>(len);
-
-    // Expand the KERNAL's soft limit so it reads all injected characters
-    if (len > mem[NDXMAX])
-        mem[NDXMAX] = static_cast<uint8_t>(len);
 }
 
 bool C64System::on_file_parsed(format_load_result_t& result,
