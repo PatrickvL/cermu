@@ -180,8 +180,12 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
         mapper_id = 3;
     }
 
-    // Skip trainer if present
+    // Skip trainer if present (save pointer for later loading into PRG-RAM)
+    const uint8_t* trainer_data = nullptr;
     if (header.mapper1 & 0x04) {
+        if (offset + 512 <= data_size) {
+            trainer_data = data + offset;
+        }
         offset += 512;
     }
 
@@ -211,6 +215,13 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
     // Allocate PRG RAM (8KB, used by MMC1/MMC3 and others)
     uint32_t prg_ram_size = header.prg_ram_size ? header.prg_ram_size * nes_constants::INES_PRG_RAM_DEFAULT : nes_constants::INES_PRG_RAM_DEFAULT;
     prg_ram.resize(prg_ram_size, 0);
+
+    // Load trainer data into PRG-RAM at $7000-$71FF (offset $1000 in the
+    // 8KB RAM mapped at $6000).  Some multicart and pirate ROMs have their
+    // reset vector pointing into the trainer.
+    if (trainer_data && prg_ram_size >= 0x1200) {
+        memcpy(prg_ram.data() + 0x1000, trainer_data, 512);
+    }
 
     // Create appropriate mapper via factory
     mapper = MapperFactory::create(mapper_id, prg_banks, chr_banks);
