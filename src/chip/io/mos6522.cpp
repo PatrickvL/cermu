@@ -59,6 +59,10 @@ bus_state_t mos6522_t::registers_read(bus_state_t bus_state) {
                 port_b.set_input(port_b_read_callback(port_b_read_context, port_b_output));
             }
             BUS_SET_DATA(bus_state, port_b.read());
+            // Reading ORB clears CB1 and CB2 interrupt flags (6522 datasheet)
+            ifr &= ~(MOS6522_IFR_CB1 | MOS6522_IFR_CB2);
+            if (!(ifr & ier & 0x7F))
+                ifr &= ~MOS6522_IFR_IRQ;
             break;
         }
         case PORTA: {
@@ -68,6 +72,10 @@ bus_state_t mos6522_t::registers_read(bus_state_t bus_state) {
                 port_a.set_input(port_a_read_callback(port_a_read_context, port_a_output));
             }
             BUS_SET_DATA(bus_state, port_a.read());
+            // Reading ORA clears CA1 and CA2 interrupt flags (6522 datasheet)
+            ifr &= ~(MOS6522_IFR_CA1 | MOS6522_IFR_CA2);
+            if (!(ifr & ier & 0x7F))
+                ifr &= ~MOS6522_IFR_IRQ;
             break;
         }
         case DDRB:
@@ -149,11 +157,19 @@ bus_state_t mos6522_t::registers_write(bus_state_t bus_state) {
             (void)port_b.write_data(value);
             if (port_b_write_callback)
                 port_b_write_callback(port_b_write_context, value);
+            // Writing ORB clears CB1 and CB2 interrupt flags (6522 datasheet)
+            ifr &= ~(MOS6522_IFR_CB1 | MOS6522_IFR_CB2);
+            if (!(ifr & ier & 0x7F))
+                ifr &= ~MOS6522_IFR_IRQ;
             break;
         case PORTA:
             (void)port_a.write_data(value);
             if (port_a_write_callback)
                 port_a_write_callback(port_a_write_context, value);
+            // Writing ORA clears CA1 and CA2 interrupt flags (6522 datasheet)
+            ifr &= ~(MOS6522_IFR_CA1 | MOS6522_IFR_CA2);
+            if (!(ifr & ier & 0x7F))
+                ifr &= ~MOS6522_IFR_IRQ;
             break;
         case DDRB:
             (void)port_b.write_ddr(value);
