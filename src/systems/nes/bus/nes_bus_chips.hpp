@@ -10,12 +10,11 @@
  *
  * Fixed blocks (always present, independent of cartridge):
  *   0-1:    CPU WRAM (2KB internal RAM)
- *   2-3:    CIRAM (2KB PPU nametable VRAM)
- *   4:      Reserved (palette is PPU-internal, not on the bus)
- *   5-12:   PRG-RAM (8KB cartridge work RAM)
+ *   2-5:    CIRAM (4KB PPU nametable VRAM — 2KB hardware + 2KB for FOUR_SCREEN)
+ *   6-13:   PRG-RAM (8KB cartridge work RAM)
  *
- * Dynamic blocks (block 13+, sized at cartridge load):
- *   13..N:     CHR data (CHR-ROM or CHR-RAM, variable size)
+ * Dynamic blocks (block 14+, sized at cartridge load):
+ *   14..N:     CHR data (CHR-ROM or CHR-RAM, variable size)
  *   N+1..M:    PRG-ROM data (variable size)
  *
  * Block numbers >= BLOCK_SENTINEL_MIN are sentinel values that trigger
@@ -39,19 +38,19 @@ inline constexpr uint32_t BLOCK_MASK  = BLOCK_SIZE - 1;      // 0x3FF
 // ============================================================================
 
 inline constexpr uint16_t BLOCK_WRAM     = 0;    // 2 blocks  (2KB CPU internal RAM)
-inline constexpr uint16_t BLOCK_CIRAM    = 2;    // 2 blocks  (2KB PPU nametable VRAM)
-inline constexpr uint16_t BLOCK_RESERVED = 4;    // 1 block   (padding)
-inline constexpr uint16_t BLOCK_PRG_RAM  = 5;    // 8 blocks  (8KB cartridge work RAM)
-inline constexpr uint16_t BLOCK_DYNAMIC  = 13;   // First dynamic block
+inline constexpr uint16_t BLOCK_CIRAM    = 2;    // 4 blocks  (4KB — 2KB CIRAM + 2KB cart VRAM for FOUR_SCREEN)
+inline constexpr uint16_t BLOCK_PRG_RAM  = 6;    // 8 blocks  (8KB cartridge work RAM)
+inline constexpr uint16_t BLOCK_DYNAMIC  = 14;   // First dynamic block
 
 // Fixed region totals
-inline constexpr uint32_t FIXED_BLOCKS   = 13;
-inline constexpr uint32_t FIXED_SIZE     = FIXED_BLOCKS * BLOCK_SIZE;  // 13312 bytes
+inline constexpr uint32_t FIXED_BLOCKS   = 14;
+inline constexpr uint32_t FIXED_SIZE     = FIXED_BLOCKS * BLOCK_SIZE;  // 14336 bytes
 
 // Memory region sizes (hardware constants)
-inline constexpr uint32_t WRAM_SIZE      = 2048;
-inline constexpr uint32_t CIRAM_SIZE     = 2048;
-inline constexpr uint32_t PRG_RAM_MAX    = 8192;
+inline constexpr uint32_t WRAM_SIZE       = 2048;
+inline constexpr uint32_t CIRAM_SIZE      = 2048;   // Hardware CIRAM (nametable)
+inline constexpr uint32_t CIRAM_ALLOC     = 4096;   // Allocation: CIRAM + cart VRAM for FOUR_SCREEN
+inline constexpr uint32_t PRG_RAM_MAX     = 8192;
 
 // ============================================================================
 // Sentinel block values — trigger special dispatch, not buffer access
