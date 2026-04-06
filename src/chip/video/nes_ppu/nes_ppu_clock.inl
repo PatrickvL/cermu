@@ -293,6 +293,15 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
         if ((cycle >= 2 && cycle < 258) || (cycle >= 321 && cycle < 338)) {
             update_shifters(mask);
 
+            // When rendering is disabled (PPUMASK bits 3,4 both clear),
+            // the PPU does not perform tile/sprite fetches.  The address
+            // bus shows the current VRAM pointer (v) instead.  This
+            // prevents spurious A12 transitions from reaching the
+            // cartridge mapper (critical for MMC3 scanline counter).
+            if (!(mask & 0x18)) {
+                PPU_BUS_SET_ADDR(ppu_bus, internal.v & 0x3FFF);
+            } else {
+
             // Background tile fetch — bus-mediated pipeline.
             // Even sub-cycles (0,2,4,6): output address on PPU bus.
             // Odd sub-cycles (1,3,5,7): capture data from VRAM data latch.
@@ -346,6 +355,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                     increment_scroll_x(mask);
                     break;
             }
+            } // end rendering-enabled guard
         }
 
         // Point-event dispatch — one comparison per dot (whichever case is active).
@@ -391,7 +401,12 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                 }
                 // Sprite 0, sub-cycle 0: output garbage nametable address (A12 = 0).
                 // Starts the 64-cycle sprite fetch window (257-320).
-                PPU_BUS_SET_ADDR(ppu_bus, 0x2000 | (internal.v & 0x0FFF));
+                // When rendering is off, show v on the bus instead.
+                if (mask & 0x18) {
+                    PPU_BUS_SET_ADDR(ppu_bus, 0x2000 | (internal.v & 0x0FFF));
+                } else {
+                    PPU_BUS_SET_ADDR(ppu_bus, internal.v & 0x3FFF);
+                }
                 scanline_event_++;
                 break;
             case 3: // cycles 258-320 — per-cycle sprite pattern fetches
@@ -408,6 +423,11 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                     const uint8_t  idx = fc >> 3;      // sprite slot 0–7
                     const uint8_t  sub = fc & 7;       // sub-cycle within slot
 
+                    // When rendering is disabled, the PPU doesn't fetch
+                    // sprite patterns — the bus shows v instead.
+                    if (!(mask & 0x18)) {
+                        PPU_BUS_SET_ADDR(ppu_bus, internal.v & 0x3FFF);
+                    } else {
                     switch (sub) {
                         case 0: // Output garbage nametable address (A12 = 0)
                             PPU_BUS_SET_ADDR(ppu_bus, 0x2000 | (internal.v & 0x0FFF));
@@ -443,6 +463,7 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                             break;
                         }
                     }
+                    } // end rendering-enabled guard
 
                     // Pre-render: transfer_address_y overlaps with sprite
                     // fetch window (cycles 280-304 ⊂ 258-320).
