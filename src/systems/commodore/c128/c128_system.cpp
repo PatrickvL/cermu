@@ -150,7 +150,28 @@ const SystemDescriptor& C128System::get_descriptor() const {
 // ============================================================================
 
 bool C128System::apply_configuration() {
-    // TODO: apply region, SID model, etc.
+    // Apply region settings (PAL/NTSC timing)
+    if (config_.region_option_index >= 0 &&
+        config_.region_option_index < static_cast<int>(hardware_traits_.video_standard_configs.size())) {
+        const auto& std_cfg = hardware_traits_.video_standard_configs[config_.region_option_index];
+        hardware_traits_.timing = std_cfg.timing;
+        cached_target_fps_ = std_cfg.timing.target_fps;
+        if (system_ready_) {
+            bool pal = (std_cfg.standard == VideoStandard::PAL);
+            board_.sid.set_timing(pal);
+            board_.sid.set_cpu_clock(static_cast<float>(std_cfg.timing.cpu_frequency_hz));
+        }
+    }
+
+    // Apply SID revision from custom settings
+    auto sid_it = config_.custom_settings.find("sid_revision");
+    if (sid_it != config_.custom_settings.end() && system_ready_) {
+        sid_revision_t rev = SID_REVISION_6581_R4AR;
+        if (sid_it->second == "MOS 8580")
+            rev = SID_REVISION_8580_R5;
+        board_.sid.set_revision(rev);
+    }
+
     return true;
 }
 
