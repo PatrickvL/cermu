@@ -19,8 +19,11 @@
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
+#include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <cstdio>
+
+using namespace z80::reg;
 
 // ============================================================================
 // HARDWARE TRAITS
@@ -327,9 +330,69 @@ bus_state_t MemotechMTXSystem<V>::io_tick(bus_state_t pins) {
 
 template<MTXVariant V>
 bool MemotechMTXSystem<V>::load_file(const char* filepath) {
-    if (!filepath) return false;
-    log_info("%s: File loading not yet implemented: %s\n", Traits::name, filepath);
-    return false;
+    if (!filepath || !system_ready_) return false;
+
+    log_info("%s: Loading file: %s\n", Traits::name, filepath);
+
+    size_t file_size = 0;
+    uint8_t* file_data = vfs_read_file(filepath, &file_size);
+    if (!file_data) {
+        log_info("%s: Failed to open file: %s\n", Traits::name, filepath);
+        return false;
+    }
+
+    // The MTX has no simple cartridge slot in the manifest (software was
+    // primarily cassette-based).  Load raw binary images into user RAM
+    // starting at $4000.  The .run format has a 2-byte little-endian
+    // load address header; raw .mtx/.bin files default to $4000.
+    uint16_t load_addr = 0x4000;
+    const uint8_t* payload = file_data;
+    size_t payload_size = file_size;
+
+    std::string ext = vfs_extension(filepath);
+    if (ext == ".run" && file_size > 2) {
+        load_addr = static_cast<uint16_t>(file_data[0]) |
+                    (static_cast<uint16_t>(file_data[1]) << 8);
+        payload += 2;
+        payload_size -= 2;
+    }
+
+    // Validate: payload must fit within 64 KB address space
+    if (payload_size == 0 ||
+        static_cast<uint32_t>(load_addr) + payload_size > 0x10000) {
+        log_info("%s: File too large or invalid load address ($%04X + %zu)\n",
+                Traits::name, load_addr, payload_size);
+        free(file_data);
+        return false;
+    }
+
+    // Reset system and copy payload into RAM
+    reset();
+
+    uint8_t* ram = board_.ram.data();
+    if (!ram) { free(file_data); return false; }
+
+    // RAM chip base address differs per variant: MTX500 = $4000, MTX512 = $0000.
+    // Compute the offset into the RAM chip's buffer.
+    const uint16_t ram_base = (V == MTXVariant::MTX512) ? 0x0000 : 0x4000;
+    if (load_addr < ram_base) {
+        log_info("%s: Load address $%04X is below RAM ($%04X)\n",
+                Traits::name, load_addr, ram_base);
+        free(file_data);
+        return false;
+    }
+
+    memcpy(ram + (load_addr - ram_base), payload, payload_size);
+    free(file_data);
+
+    // Set Z80 PC to load address so execution starts there
+    board_.z80.set(PC, load_addr);
+
+    std::string name = vfs_filename(filepath);
+    program_title_ = name.empty() ? filepath : name;
+
+    log_info("%s: Loaded %zu bytes at $%04X\n", Traits::name, payload_size, load_addr);
+    return true;
 }
 
 // ============================================================================
