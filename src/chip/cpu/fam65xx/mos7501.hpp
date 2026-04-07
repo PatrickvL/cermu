@@ -16,13 +16,16 @@ namespace fam65xx {
 
 // CSG 7501/8501 — C16/Plus4 CPU
 // I/O Port bit assignments (active via DDR at $00/$01, mask 0x5F):
-//   Bit 0: Cassette motor control (active low, output)
-//   Bit 1: Serial bus SRQ IN (directly from IEC bus)
-//   Bit 2: Serial bus DATA (directly from IEC bus)
-//   Bit 3: Serial bus CLK  (directly from IEC bus)
-//   Bit 4: Serial bus ATN  (directly from IEC bus)
+//   Bit 0: Serial bus DATA OUT (active-low, directly from IEC bus)
+//   Bit 1: Serial bus CLK OUT  (active-low, directly from IEC bus)
+//   Bit 2: Serial bus ATN OUT  (active-low, directly from IEC bus)
+//   Bit 3: Cassette motor control (active-low, output; readable as input feedback)
+//   Bit 4: Cassette read (input from tape data line)
 //   Bit 5: Not connected   (absent from mask — no physical pin)
-//   Bit 6: Cassette sense   (active low, input — directly samples tape data)
+//   Bit 6: Serial bus CLK IN  (input from IEC bus)
+//   (Bit 7: Serial bus DATA IN — outside mask, directly on pin)
+//
+// Cassette sense (play button) is on PIO1 ($FD10) bit 2, not the CPU port.
 //
 // Banking: ROM selection is driven jointly by bits 0-3 and TED registers,
 // unlike the 6510 where LORAM/HIRAM/CHAREN in the CPU port drive PLA

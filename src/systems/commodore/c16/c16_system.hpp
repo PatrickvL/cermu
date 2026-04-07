@@ -13,6 +13,8 @@
 #include "systems/commodore/c16/c264_io_decoder.hpp"
 #include <memory>
 
+class Datasette1530Device;
+
 // C264 series (C16/C116/Plus4) default bus state — derived from CPU.
 // CSG7501 provides: RW, RDY, IRQ, AEC.  (No NMI — NO_NMI_LINE flag.)
 #define C264_BUS_DEFAULT_STATE  CSG7501::default_bus_state()
@@ -254,12 +256,19 @@ private:
     // System state
     bool initialized_;
 
+    /// Cached pointer to datasette on the cassette port (nullptr if none).
+    /// Updated by on_port_device_changed() to avoid per-cycle lookups.
+    Datasette1530Device* cached_datasette_ = nullptr;
+
     // ---- CommodoreSystem loading hooks ----
     bool is_basic_ready() const override;
     commodore_load_context_t build_load_context() override;
     bool is_system_initialized() const override { return initialized_; }
     int get_iec_port_index() const override { return 2; }   // IEC Serial Bus
     int get_cassette_port_index() const override { return 3; }  // Cassette Port
+
+    /// Update cached peripheral pointers when devices are attached/detached.
+    void on_port_device_changed(int port_index) override;
 
     // Helper methods
     bool load_roms();
