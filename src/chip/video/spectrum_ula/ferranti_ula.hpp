@@ -237,12 +237,17 @@ public:
     /// Is the ULA currently contending the bus? (CPU must wait)
     /// Contention occurs when ULA is fetching screen data from lower 16KB.
     bool is_contended() const {
-        // Contention pattern: during active display area, specific T-state phases
+        // 48K contention: during display lines, the first 128 T-states per
+        // line are the screen fetch window (32 chars × 4 T-states each).
+        // The 8-T-state fetch cycle delays the CPU at positions 0–5;
+        // positions 6–7 are the actual ULA read slots (no CPU delay).
+        // 128K timing differs slightly (offset due to port $7FFD paging).
         if (scanline_ < spectrum_ula::BORDER_TOP ||
             scanline_ >= spectrum_ula::BORDER_TOP + spectrum_ula::SCREEN_HEIGHT)
             return false;
-        // TODO: Exact contention pattern (depends on 48K vs 128K)
-        return false;
+        if (t_state_ >= 128)
+            return false;
+        return (t_state_ & 7) < 6;
     }
 
     // === Tape I/O ===
