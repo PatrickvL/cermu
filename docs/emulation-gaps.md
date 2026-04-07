@@ -44,6 +44,11 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - [x] **OPL waveform select** — OPL2 waveform lookup infrastructure.
 - [x] **MOS 6509 banking** — Exec/ind bank registers with self-clearing ($zp),Y indirection in bus_setup().
 - [x] **TMS9918 224/240-line** — Runtime line-count switching for SMS2 315-5246 VDP.
+- [x] **ColecoVision file loading** — Cartridge ROM loading with mirroring into 32KB cart window.
+- [x] **SG-1000 file loading** — Cartridge ROM loading with mirroring into 32KB cart window.
+- [x] **Memotech MTX file loading** — Binary file loading into RAM; `.run` header support.
+- [x] **SpectaVideo SVI file loading** — Cartridge ROM loading replacing BASIC ROM.
+- [x] **Tatung Einstein file loading** — COM/binary loading into RAM; ROM banking implemented.
 
 ---
 
@@ -208,13 +213,13 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 | Chip-8 | ChipPlaceholders for peripherals |
 | Acorn Atom | — |
 | BBC Micro | SSD/DSD disc, UEF tape, sideways ROM loading (SAA5050 done) |
-| Sega SG-1000 | Cartridge file loading |
+| Sega SG-1000 | — |
 | Sega SMS | Per-line scroll table |
 | MSX | Slot/page banking (critical), cartridge loading |
-| ColecoVision | Cartridge file loading |
-| Memotech MTX | File loading |
-| SpectaVideo | File loading |
-| Tatung Einstein | ROM overlay, file loading |
+| ColecoVision | — |
+| Memotech MTX | — |
+| SpectaVideo | — |
+| Tatung Einstein | — |
 | DDR (Z9001/KC85/Z1013/LC80) | KC85 module mapping, serial keyboard PIO |
 | Arcade — Bomb Jack | Background/sprite layers |
 | Arcade — Atari Vector | Mathbox, second POKEY, host input wiring |
@@ -235,9 +240,9 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 ### Quick Payoff (hours)
 1. ~~C128 SID audio wiring~~ **[DONE]**
 2. ~~SMS bank switching~~ **[DONE]**
-3. ColecoVision / SG-1000 / MTX / SVI / Einstein file loading (each ~30 min)
-4. MC6847 graphics modes (Acorn Atom)
-5. NES Mapper 068/069 fixes
+3. ~~ColecoVision / SG-1000 / MTX / SVI / Einstein file loading~~ **[DONE]**
+4. ~~MC6847 graphics modes (Acorn Atom)~~ **[DONE]**
+5. ~~NES Mapper 068/069 fixes~~ **[DONE]**
 
 ### Medium Effort, High Value (days)
 6. ~~TAP/CRT loading for Commodore systems~~ **[DONE]** (C64 cassette + CRT type 0; C16 cassette)
