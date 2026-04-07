@@ -23,6 +23,7 @@
 #include "chip/cpu/fam65xx/mos6510.hpp"
 
 class LightpenDevice;
+class Datasette1530Device;
 
 // C64Board — value-typed chip and port fields via TypedManifest component_tuple.
 // Buffer-backed chips (RAMChip, ROMChip) get their flat-memory buffer via
@@ -262,6 +263,10 @@ private:
     /// Cached pointer to lightpen device on Control Port 1 (nullptr if none).
     /// Updated by on_port_device_changed() to avoid per-cycle lookups.
     LightpenDevice* cached_lightpen_ = nullptr;
+
+    /// Cached pointer to datasette on the cassette port (nullptr if none).
+    /// Updated by on_port_device_changed() to avoid per-cycle lookups.
+    Datasette1530Device* cached_datasette_ = nullptr;
 
     /// True when at least one drive is attached to PORT_IEC_SERIAL.
 
