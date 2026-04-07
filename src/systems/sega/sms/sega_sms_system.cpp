@@ -142,6 +142,7 @@ void SegaSMSSystem::reset() {
     mapper_bank_[0] = 0; mapper_bank_[1] = 1; mapper_bank_[2] = 2;
     joypad1_state_ = 0xFF;
     joypad2_state_ = 0xFF;
+    configure_bus_memory_map();
 }
 
 // ============================================================================
@@ -210,11 +211,17 @@ void SegaSMSSystem::run_frame() {
 
 void SegaSMSSystem::configure_bus_memory_map() {
     board_.apply(bus_);
+    update_mapper();
 }
 
 void SegaSMSSystem::update_mapper() {
-    // TODO: Remap ROM banks based on mapper_bank_[] values
-    // Each bank is 16KB: bank0→$0000, bank1→$4000, bank2→$8000
+    // Sega mapper: three 16KB ROM bank slots controlled by $FFFD/$FFFE/$FFFF.
+    // Bank 0 ($0000-$3FFF), Bank 1 ($4000-$7FFF), Bank 2 ($8000-$BFFF).
+    // Bank indices wrap to the actual ROM size.
+    const uint8_t mask = rom_banks_ - 1;  // power-of-2 wrap
+    board_.select_bank_at(bus_, 0, kCartRomSlot, mapper_bank_[0] & mask, 0x00);
+    board_.select_bank_at(bus_, 0, kCartRomSlot, mapper_bank_[1] & mask, 0x40);
+    board_.select_bank_at(bus_, 0, kCartRomSlot, mapper_bank_[2] & mask, 0x80);
 }
 
 // ============================================================================
