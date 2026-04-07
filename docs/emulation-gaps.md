@@ -27,6 +27,11 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - [x] **CIA (MOS 6526)** — BCD increment verified correct (`> 9` + `+= 6`); 50/60Hz toggle verified (no counter reset needed).
 - [x] **PLA** — Ultimax RP4 verified: 0x0F default is correct, no known cartridge overrides.
 - [x] **SID GUI** — Test sound button implemented (A-440 sawtooth on voice 1).
+- [x] **VIC-II** — Graphics sequencer now runs during L/R border for MxD collision accuracy.
+- [x] **Spectrum ULA** — 48K bus contention pattern implemented (6-5-4-3-2-1-0-0 per 8 T-states).
+- [x] **YM FM sine table** — Replaced `std::sin()` with hardware-accurate log-sin + exp ROM pipeline.
+- [x] **YM2612 ladder effect** — DAC zero-crossing distortion modeled via `ladder_effect` trait flag.
+- [x] **MOS 6504** — Instantiated as distinct `fam65xx_t` type alias.
 
 ---
 
@@ -88,7 +93,7 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 
 ### Sound
 
-#### Yamaha FM (YM2612 / OPM / OPL) — 13 Major Gaps
+#### Yamaha FM (YM2612 / OPM / OPL) — 11 Remaining Gaps
 - [ ] **[LARGE]** FM modulation: operators advance independently, modulator→carrier phase feed not implemented (`ym_fm.hpp:17`)
 - [ ] **[LARGE]** Envelope generator: linear approximation, should be per-rate LUT with non-linear attack (`ym_fm.hpp:22`)
 - [ ] **[LARGE]** ADPCM-A & ADPCM-B: flags exist, no decode/playback logic (`ym_fm.hpp:49`)
@@ -97,11 +102,11 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - [ ] **[MEDIUM]** SSG-EG control: bits stored, shape alteration not applied (`ym_fm.hpp:67`)
 - [ ] **[MEDIUM]** DT1 detune: flat ±0-3 placeholder, should be block-dependent 32-entry LUT; DT2 absent (`ym_fm.hpp:45`)
 - [ ] **[MEDIUM]** Rate-scaling: RS bits stored, never factor into envelope rate (`ym_fm.hpp:63`)
-- [ ] **[EASY]** Sine table: using `std::sin()`, removing hardware quantization artifacts (`ym_fm.hpp:36`)
+- [x] **[DONE]** Sine table: hardware-accurate log-sin + exp ROM pipeline replaces `std::sin()`
+- [x] **[DONE]** YM2612 ladder-effect DAC distortion modeled via `ladder_effect` trait flag
 - [ ] **[MEDIUM]** SSG composition: AY PSG declared but never instantiated or clocked (`ym_fm.hpp:26`)
 - [ ] **[MEDIUM]** OPL-family: waveform select, rhythm mode percussion, OPLL ROM patches missing (`ym_fm.hpp:53`)
 - [ ] **[MEDIUM]** OPM-specific: noise channel, key-fraction register, OPM addressing missing (`ym_fm.hpp:57`)
-- [ ] **[EASY]** YM3438 ladder-effect difference not modeled (`ym_fm.hpp:75`)
 
 #### AY-3-8910 Variants
 - [ ] **[MEDIUM]** AY8930 extended mode: per-channel envelopes, extended noise period, duty cycle (`ay8930.hpp:11`)
@@ -124,22 +129,22 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - [ ] **[MEDIUM]** Proper SAA5050 12×20 Teletext character generator needed (`bbc_vidproc.hpp:213`)
 
 #### Signetics 2513 (Apple II font ROM)
-- [ ] **[EASY]** Placeholder font — needs verified CM4800 ROM dump (`signetics2513.hpp:227`)
+- [ ] **[BLOCKED]** Placeholder font — needs verified CM4800 ROM dump (physical chip read required)
 
 #### Bomb Jack Video
 - [ ] **[MEDIUM]** Background and sprite layers not implemented — only foreground tilemap (`bombjack_video.hpp:23`)
 
 #### VIC-II
-- [ ] **[EASY]** Graphics sequencer continues to run during left/right border — not implemented (`vicii_common.cpp:702`)
+- [x] **[DONE]** Graphics sequencer runs during L/R border for MxD collision accuracy
 
 #### Atari 2600 TIA
 - [ ] **[MEDIUM]** Paddle capacitor dump (INPT0-3) not implemented — VBLANK bit 7 (`tia.cpp:629`)
 
 #### Spectrum ULA
-- [ ] **[EASY]** Exact contention pattern (48K vs 128K variant) (`ferranti_ula.hpp:244`)
+- [x] **[DONE]** 48K contention pattern implemented (8-T-state cycle, 128 T-states per display line)
 
 #### Namco Video
-- [ ] **[EASY]** Output native 288×224 when GPU-side rotation available (`namco_video.hpp:37`)
+- [ ] **[BLOCKED]** Output native 288×224 when GPU-side rotation available (requires shader support)
 
 ### I/O
 
@@ -157,7 +162,7 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - [ ] **[LARGE]** CSG 4510: MAP instruction, 20-bit addressing, integrated DMA
 - [ ] **[LARGE]** 65CE02: Z register, PHZ/PLZ, TAZ/TZA, BASE page extensions
 - [ ] **[MEDIUM]** MOS 6509: banking for indirect addressing
-- [ ] **[EASY]** MOS 6504: not yet instantiated as distinct type
+- [x] **[DONE]** MOS 6504: instantiated as distinct fam65xx_t type alias
 - [ ] **[EASY]** CPU tracing: TODO to move to system level (`fam65xx.hpp:232`)
 
 #### Motorola M68000
@@ -180,7 +185,7 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 | NES | Expansion audio, FDS |
 | Atari 2600 | Paddle capacitor dump |
 | Amstrad CPC | — |
-| ZX Spectrum | Memory contention |
+| ZX Spectrum | — |
 
 ### Partially Working (core runs, significant features missing)
 | System | Key Missing Items |
