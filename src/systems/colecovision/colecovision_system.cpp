@@ -18,6 +18,7 @@
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
+#include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -264,10 +265,42 @@ bus_state_t ColecoVisionSystem::io_tick(bus_state_t pins) {
 // ============================================================================
 
 bool ColecoVisionSystem::load_file(const char* filepath) {
-    if (!filepath) return false;
-    // TODO: Load .col/.rom cartridge
-    log_info("ColecoVision: File loading not yet implemented: %s\n", filepath);
-    return false;
+    if (!filepath || !system_ready_) return false;
+
+    log_info("ColecoVision: Loading file: %s\n", filepath);
+
+    size_t file_size = 0;
+    uint8_t* file_data = vfs_read_file(filepath, &file_size);
+    if (!file_data) {
+        log_info("ColecoVision: Failed to open file: %s\n", filepath);
+        return false;
+    }
+
+    // ColecoVision cartridges are raw ROM images, up to 32 KB.
+    // Smaller ROMs are mirrored within the 32 KB window ($8000-$FFFF).
+    if (file_size == 0 || file_size > 0x8000) {
+        log_info("ColecoVision: Invalid ROM size: %zu bytes (max 32KB)\n", file_size);
+        free(file_data);
+        return false;
+    }
+
+    uint8_t* cart = board_.cart.data();
+    if (!cart) { free(file_data); return false; }
+
+    // Mirror smaller ROMs to fill the 32 KB cart window
+    for (size_t offset = 0; offset < 0x8000; offset += file_size)
+        memcpy(cart + offset, file_data,
+               std::min(file_size, 0x8000 - offset));
+    free(file_data);
+
+    // Set program title from filename
+    std::string name = vfs_filename(filepath);
+    program_title_ = name.empty() ? filepath : name;
+
+    log_info("ColecoVision: Loaded %zu bytes\n", file_size);
+
+    reset();
+    return true;
 }
 
 // ============================================================================
