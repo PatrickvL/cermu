@@ -174,12 +174,24 @@ inline constexpr uint8_t DATA[64][8] = {
     {0x3C,0x42,0x02,0x0C,0x08,0x00,0x08,0x00},  // 63: ?
 };
 
-// Color palette: index 0 = black, index 1 = green (phosphor)
-inline constexpr uint32_t PALETTE[2] = {
+// Color palette — 9 entries for alphanumeric + all graphics color sets
+inline constexpr uint32_t PALETTE[9] = {
     0xFF000000,  // 0: Black
-    0xFF00CC00,  // 1: Green (MC6847 phosphor green)
+    0xFF00CC00,  // 1: Green
+    0xFFCCCC00,  // 2: Yellow
+    0xFF0026CC,  // 3: Blue
+    0xFFCC0000,  // 4: Red
+    0xFFCCCCCC,  // 5: Buff/White
+    0xFF00CCCC,  // 6: Cyan
+    0xFFCC00CC,  // 7: Magenta
+    0xFFCC6600,  // 8: Orange
 };
-inline constexpr int PALETTE_SIZE = 2;
+inline constexpr int PALETTE_SIZE = 9;
+
+// CG (color graphics) color set index tables: 4 colors each
+// Indexed by 2-bit pixel value from VRAM
+inline constexpr uint8_t CG_CSS0[4] = { 1, 2, 3, 4 };  // green, yellow, blue, red
+inline constexpr uint8_t CG_CSS1[4] = { 5, 6, 7, 8 };  // buff, cyan, magenta, orange
 
 } // namespace mc6847_font
 
@@ -273,7 +285,8 @@ public:
     //   bits 5-0 = character index (0–63) for the internal font ROM.
     //   Cell size: 8 wide × 12 tall (font 8×8 centred in rows 2–9).
     //
-    // Graphics modes (AG=1): not yet rendered; frame is left black.
+    // Graphics modes (AG=1): GM[2:0] selects resolution (64×64 to 256×192)
+    //   and color depth (2-color RG or 4-color CG).  CSS selects color set.
     //
     // Parameters:
     //   vram  — pointer to video RAM (at least TEXT_COLS * TEXT_ROWS bytes
@@ -293,8 +306,54 @@ public:
         uint8_t* fb = frame_indices_;
 
         if (mode_ag_) {
-            // Full-graphics modes: clear to black (placeholder)
-            std::memset(fb, 0, W * H);
+            // Full-graphics modes: GM[2:0] selects resolution and color depth.
+            //   Even GM = CG (4-color, 2 bpp), Odd GM = RG (2-color, 1 bpp)
+            struct GfxMode { int w, h, bpp, bpr; };
+            static constexpr GfxMode gfx[8] = {
+                { 64,  64, 2, 16},  // 0: CG1  64×64×4
+                {128,  64, 1, 16},  // 1: RG1  128×64×2
+                {128,  64, 2, 32},  // 2: CG2  128×64×4
+                {128,  96, 1, 16},  // 3: RG2  128×96×2
+                {128,  96, 2, 32},  // 4: CG3  128×96×4
+                {128, 192, 1, 16},  // 5: RG3  128×192×2
+                {128, 192, 2, 32},  // 6: CG6  128×192×4
+                {256, 192, 1, 32},  // 7: RG6  256×192×2
+            };
+            const auto& m = gfx[mode_gm_];
+            int xs = W / m.w;   // 1, 2, or 4
+            int ys = H / m.h;   // 1, 2, or 3
+
+            for (int y = 0; y < m.h; y++) {
+                const uint8_t* row = vram + y * m.bpr;
+                int fb_y = y * ys;
+
+                if (m.bpp == 1) {
+                    // RG: 1 bit/pixel, 8 pixels per byte
+                    uint8_t fg = mode_css_ ? 5 : 1;
+                    for (int x = 0; x < m.w; x++) {
+                        bool px = (row[x >> 3] >> (7 - (x & 7))) & 1;
+                        uint8_t idx = px ? fg : 0;
+                        int fb_x = x * xs;
+                        for (int dy = 0; dy < ys; dy++)
+                            for (int dx = 0; dx < xs; dx++)
+                                fb[(fb_y + dy) * W + (fb_x + dx)] = idx;
+                    }
+                } else {
+                    // CG: 2 bits/pixel, 4 pixels per byte
+                    const uint8_t* cs = mode_css_
+                        ? mc6847_font::CG_CSS1 : mc6847_font::CG_CSS0;
+                    for (int x = 0; x < m.w; x++) {
+                        int shift = (3 - (x & 3)) * 2;
+                        uint8_t ci = (row[x >> 2] >> shift) & 0x03;
+                        uint8_t idx = cs[ci];
+                        int fb_x = x * xs;
+                        for (int dy = 0; dy < ys; dy++)
+                            for (int dx = 0; dx < xs; dx++)
+                                fb[(fb_y + dy) * W + (fb_x + dx)] = idx;
+                    }
+                }
+            }
+
             drive_video_out_from_indices(fb, W, H);
             return;
         }
