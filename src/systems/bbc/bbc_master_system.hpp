@@ -238,12 +238,6 @@ private:
     Bus       bus_;
     MainBoard board_{BTraits::kManifest};
 
-    // Memory chip pointers
-    RAMChip* ram_chip_        = nullptr;
-    ROMChip* paged_rom_chip_  = nullptr;
-    ROMChip* os_rom_chip_     = nullptr;
-    uint8_t* memory_          = nullptr;    // Direct pointer for rendering
-
     // ── Display ──────────────────────────────────────────────────────────
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video output
 
