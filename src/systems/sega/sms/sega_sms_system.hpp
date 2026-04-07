@@ -113,8 +113,10 @@ private:
     MainBoard board_;
 
     // ── Mapper state ─────────────────────────────────────────────────────
+    static constexpr size_t kCartRomSlot = kSMSManifest.find<ROMChip>();
     uint8_t mapper_ctrl_  = 0;
     uint8_t mapper_bank_[3] = {0, 1, 2};  // Default bank mapping
+    uint8_t rom_banks_    = 32;           // 16KB banks in loaded ROM (max 32 = 512KB)
 
     // ── Video ────────────────────────────────────────────────────────────
     std::unique_ptr<CompositeVideoPort> video_port_;
