@@ -209,7 +209,8 @@ protected:
     enum class LoadMode {
         DIRECT,         ///< Standard: write program data to RAM, inject RUN
         DISK_FAST,      ///< D64: disk inserted in 1541 + fast PRG extraction to RAM
-        TAPE_INSERTED   ///< TAP: tape loaded in datasette, inject LOAD + press play
+        TAPE_INSERTED,  ///< TAP: tape loaded in datasette, inject LOAD + press play
+        CARTRIDGE       ///< CRT: inject ROM data + EXROM/GAME lines, reset
     };
 
     struct PendingLoad {
@@ -313,6 +314,12 @@ protected:
 
     /// Cassette connector port index for TAP tape loading.  -1 = none.
     virtual int get_cassette_port_index() const { return -1; }
+
+    /// Install a CRT cartridge image.  Derived systems override to inject
+    /// ROM data into ROML/ROMH, set EXROM/GAME, and reset.
+    /// @param filepath  Path to the CRT file on disk
+    /// @return true if the cartridge was installed successfully
+    virtual bool install_cartridge(const char* filepath) { (void)filepath; return false; }
 
     // ---- Shared loading methods ----
 

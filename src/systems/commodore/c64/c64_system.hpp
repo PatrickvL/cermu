@@ -182,6 +182,7 @@ private:
     bool pre_apply_pending_load() override;
     int get_iec_port_index() const override { return PORT_IEC_SERIAL; }
     int get_cassette_port_index() const override { return PORT_CASSETTE; }
+    bool install_cartridge(const char* filepath) override;
 
     /** Single system tick — ticks all chips in correct phase order. */
     void system_tick();

@@ -18,6 +18,7 @@
 #include "core/formats/t64_format.hpp"
 #include "core/formats/tap_format.hpp"
 #include "core/formats/crt_format.hpp"
+#include "core/vfs/vfs.hpp"
 #include "core/formats/lnx_format.hpp"
 #include "core/formats/sid_format.hpp"
 #include "systems/commodore/commodore_load_helpers.hpp"
@@ -1687,6 +1688,97 @@ bool C64System::get_exrom_signal() const {
 
 bool C64System::get_game_signal() const {
     return (system_lines_ & SYS_MASK_GAME) == 0;
+}
+
+// ============================================================================
+// CARTRIDGE INSTALLATION — CRT image loading
+// ============================================================================
+
+/// Callback context for CRT CHIP packet iteration.
+struct CrtLoadContext {
+    C64Board* board;
+    int chips_loaded;
+};
+
+/// Process a single CRT CHIP packet — copy ROM data to ROML or ROMH.
+static bool crt_chip_loader(const commodore_crt_chip_t* chip,
+                            const uint8_t* rom_data, void* user_data) {
+    auto* ctx = static_cast<CrtLoadContext*>(user_data);
+    uint16_t addr = chip->load_address;
+    uint16_t size = chip->rom_size;
+
+    if (addr == 0x8000 && size <= 0x2000 && ctx->board->roml.data()) {
+        // ROML: $8000–$9FFF
+        memcpy(ctx->board->roml.data(), rom_data, size);
+        ctx->chips_loaded++;
+        log_info("C64: CRT CHIP bank %u → ROML ($8000, %u bytes)\n",
+                 chip->bank_number, size);
+    } else if ((addr == 0xA000 || addr == 0xE000) && size <= 0x2000
+               && ctx->board->romh.data()) {
+        // ROMH: $A000–$BFFF or $E000–$FFFF (Ultimax)
+        memcpy(ctx->board->romh.data(), rom_data, size);
+        ctx->chips_loaded++;
+        log_info("C64: CRT CHIP bank %u → ROMH ($%04X, %u bytes)\n",
+                 chip->bank_number, addr, size);
+    } else {
+        log_info("C64: CRT CHIP bank %u at $%04X (%u bytes) — skipped (unsupported)\n",
+                 chip->bank_number, addr, size);
+    }
+    return true;  // Continue iterating
+}
+
+bool C64System::install_cartridge(const char* filepath) {
+    // Re-read the CRT file from disk (the format parser only kept the header)
+    size_t file_size = 0;
+    uint8_t* file_data = vfs_read_file(filepath, &file_size);
+    if (!file_data) {
+        log_info("C64: Cannot read CRT file: %s\n", filepath);
+        return false;
+    }
+
+    // Parse the CRT header
+    commodore_crt_header_t header;
+    if (!commodore_crt_read_header_mem(file_data, file_size, &header)) {
+        free(file_data);
+        log_info("C64: Invalid CRT header in %s\n", filepath);
+        return false;
+    }
+
+    // Only support basic cartridge types for now (type 0 = Normal cartridge)
+    if (header.hardware_type != 0) {
+        log_info("C64: CRT hardware type %u not yet supported (only type 0)\n",
+                 header.hardware_type);
+        free(file_data);
+        return false;
+    }
+
+    // Clear cartridge ROM areas
+    if (board_.roml.data()) memset(board_.roml.data(), 0xFF, 0x2000);
+    if (board_.romh.data()) memset(board_.romh.data(), 0xFF, 0x2000);
+
+    // Iterate CHIP packets and load ROM data
+    CrtLoadContext ctx = { &board_, 0 };
+    int result = commodore_crt_iterate_chips(file_data, file_size, &header,
+                                             crt_chip_loader, &ctx);
+    free(file_data);
+
+    if (result < 0 || ctx.chips_loaded == 0) {
+        log_info("C64: No valid CHIP packets found in CRT\n");
+        return false;
+    }
+
+    // Set EXROM/GAME lines from the CRT header
+    // CRT header: 0 = line pulled LOW (active), 1 = line HIGH (inactive)
+    set_cartridge_signals(header.exrom == 0, header.game == 0);
+
+    log_info("C64: Cartridge \"%s\" installed (%d chips, EXROM=%s, GAME=%s)\n",
+             header.name, ctx.chips_loaded,
+             header.exrom == 0 ? "active" : "inactive",
+             header.game == 0 ? "active" : "inactive");
+
+    // Reset the system so the CPU boots with the cartridge ROM mapped
+    reset();
+    return true;
 }
 
 // ============================================================================

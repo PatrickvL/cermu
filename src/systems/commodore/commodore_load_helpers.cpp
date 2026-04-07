@@ -259,8 +259,7 @@ static bool handle_metadata(const commodore_load_context_t* ctx,
         log_info("%s: CRT cartridge: \"%s\" (type=%u, exrom=%u, game=%u)\n",
                ctx->system_name, hdr->name,
                hdr->hardware_type, hdr->exrom, hdr->game);
-        log_info("%s: CRT cartridge loading not yet fully implemented\n",
-               ctx->system_name);
+        // CRT loading is handled by install_cartridge() in the CARTRIDGE path
     } else {
         log_info("%s: Unknown metadata format: %s\n",
                ctx->system_name,
