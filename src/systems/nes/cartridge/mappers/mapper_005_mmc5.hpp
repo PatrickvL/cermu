@@ -13,7 +13,7 @@
  *   - PRG-RAM banking at $6000-$7FFF
  *   - 8×8 hardware multiplier ($5205/$5206)
  *   - Scanline IRQ counter ($5203/$5204)
- *   - Vertical split mode (stub)
+ *   - Vertical split mode (registers stored, rendering not yet intercepted)
  *
  * Games: Castlevania III, Laser Invasion, Uncharted Waters, etc.
  *
@@ -89,6 +89,16 @@ private:
     // Mirroring
     // -----------------------------------------------------------------------
     Mirror mirror_mode_ = Mirror::VERTICAL;
+
+    // -----------------------------------------------------------------------
+    // Vertical split mode ($5200-$5202)
+    // Registers stored; rendering intercept requires PPU-level integration.
+    // -----------------------------------------------------------------------
+    bool    split_enabled_ = false;    // $5200 bit 7
+    bool    split_right_ = false;      // $5200 bit 6 (0=left, 1=right)
+    uint8_t split_tile_ = 0;           // $5200 bits 4:0 (tile column 0-31)
+    uint8_t split_scroll_ = 0;         // $5201 fine Y scroll for split region
+    uint8_t split_bank_ = 0;           // $5202 CHR bank for split region
 
     // -----------------------------------------------------------------------
     // Expansion audio — two pulse channels (no sweep) + PCM DAC
@@ -297,6 +307,13 @@ public:
         pcm_value_ = 0;
         audio_enable_ = 0;
         audio_cycle_ = 0;
+
+        // Vertical split reset
+        split_enabled_ = false;
+        split_right_ = false;
+        split_tile_ = 0;
+        split_scroll_ = 0;
+        split_bank_ = 0;
     }
 
     Mirror mirror() override { return mirror_mode_; }
@@ -784,10 +801,14 @@ private:
             case 0x512A: chr_bank_[10] = data; return true;
             case 0x512B: chr_bank_[11] = data; return true;
 
-            // --- Vertical split (stub) ---
-            case 0x5200: return false;  // Split mode control
-            case 0x5201: return false;  // Split scroll
-            case 0x5202: return false;  // Split bank
+            // --- Vertical split (registers stored; rendering TODO) ---
+            case 0x5200:
+                split_enabled_ = (data & 0x80) != 0;
+                split_right_   = (data & 0x40) != 0;
+                split_tile_    = data & 0x1F;
+                return false;
+            case 0x5201: split_scroll_ = data; return false;
+            case 0x5202: split_bank_   = data; return false;
 
             // --- IRQ ---
             case 0x5203:
