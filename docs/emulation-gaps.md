@@ -39,8 +39,8 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 
 ### C64 — Near-Complete
 - [ ] **[EASY]** Auto-skip memtest optimization (`c64_kernal_patches.hpp:10`)
-- [ ] **[MEDIUM]** TAP (cassette) tape emulation (`commodore_load_helpers.cpp:254`)
-- [ ] **[MEDIUM]** CRT (cartridge image) loading (`commodore_load_helpers.cpp:262`)
+- [x] **[DONE]** TAP cassette signal wiring — per-cycle datasette tick, CASS_READ→CIA1 FLAG, motor/sense
+- [x] **[DONE]** CRT cartridge loading (type 0 — normal cartridge) — CHIP→ROML/ROMH, EXROM/GAME, reset
 
 ### VIC-20 — Near-Complete
 - [x] **[DONE]** True 4-bit color RAM via MOS2114 masking
@@ -49,7 +49,7 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 
 ### C16/Plus4 — Partial
 - [x] **[DONE]** C16 bus struct placeholder deleted — system uses shared `bus_state_t`
-- [ ] **[MEDIUM]** Cassette port I/O signals: motor, sense, serial bus bits (`c16_system.cpp:1027-1030`)
+- [x] **[DONE]** Cassette port I/O signals — per-cycle datasette tick, motor/read/sense wired
 - [ ] **[MEDIUM]** TAP tape emulation (shared)
 - [ ] **[MEDIUM]** CRT cartridge loading (shared)
 
@@ -178,8 +178,8 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 ### Mostly Complete (minor gaps)
 | System | Key Missing Items |
 |--------|-------------------|
-| C64 | TAP/CRT loading |
-| VIC-20 | TAP loading |
+| C64 | Banked CRT types, VIC-20/C128 CRT |
+| VIC-20 | TAP cassette wiring |
 | C128 | Z80/CP/M testing |
 | PET | — |
 | NES | Expansion audio, FDS |
@@ -190,7 +190,7 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 ### Partially Working (core runs, significant features missing)
 | System | Key Missing Items |
 |--------|-------------------|
-| C16/Plus4 | Cassette I/O port |
+| C16/Plus4 | TAP/CRT loading |
 | Chip-8 | ChipPlaceholders for peripherals |
 | Acorn Atom | MC6847 graphics modes |
 | BBC Micro | SSD/DSD disc, UEF tape, sideways ROM loading |
@@ -226,15 +226,16 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 5. NES Mapper 068/069 fixes
 
 ### Medium Effort, High Value (days)
-6. TAP/CRT loading for Commodore systems
-7. MSX slot banking
-8. Bomb Jack sprite/background layers
-9. TIA paddle support
-10. BBC Teletext font (SAA5050)
+6. ~~TAP/CRT loading for Commodore systems~~ **[DONE]** (C64 cassette + CRT type 0; C16 cassette)
+7. VIC-20 cassette wiring, C16/C128 CRT loading
+8. MSX slot banking
+9. Bomb Jack sprite/background layers
+10. TIA paddle support
+11. BBC Teletext font (SAA5050)
 
 ### Large Projects (weeks)
-11. Yamaha FM synthesizer overhaul
-12. NES expansion audio (VRC6 first — simplest: 2 pulse + sawtooth)
-13. FDS emulation
-14. Apple II full implementation
-15. HuC6280 / PC Engine support
+12. Yamaha FM synthesizer overhaul
+13. NES expansion audio (VRC6 first — simplest: 2 pulse + sawtooth)
+14. FDS emulation
+15. Apple II full implementation
+16. HuC6280 / PC Engine support
