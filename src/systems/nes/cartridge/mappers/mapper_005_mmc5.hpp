@@ -13,7 +13,7 @@
  *   - PRG-RAM banking at $6000-$7FFF
  *   - 8×8 hardware multiplier ($5205/$5206)
  *   - Scanline IRQ counter ($5203/$5204)
- *   - Vertical split mode (registers stored, rendering not yet intercepted)
+ *   - Vertical split mode ($5200-$5202) — PPU bus intercept for split region tiles
  *
  * Games: Castlevania III, Laser Invasion, Uncharted Waters, etc.
  *
@@ -92,13 +92,21 @@ private:
 
     // -----------------------------------------------------------------------
     // Vertical split mode ($5200-$5202)
-    // Registers stored; rendering intercept requires PPU-level integration.
+    // Overrides BG tile fetches for tiles in the split region: nametable
+    // data from ExRAM, attributes from ExRAM upper bits, CHR from
+    // split_bank_.  The split Y scroll is independent of the PPU's own
+    // scroll registers, allowing a fixed sidebar (e.g. status panel).
     // -----------------------------------------------------------------------
     bool    split_enabled_ = false;    // $5200 bit 7
     bool    split_right_ = false;      // $5200 bit 6 (0=left, 1=right)
     uint8_t split_tile_ = 0;           // $5200 bits 4:0 (tile column 0-31)
     uint8_t split_scroll_ = 0;         // $5201 fine Y scroll for split region
     uint8_t split_bank_ = 0;           // $5202 CHR bank for split region
+
+    // Per-fetch tracking for split intercept
+    bool    split_active_fetch_ = false;  // Current tile is in split region
+    uint8_t split_nt_byte_ = 0;           // Cached NT byte for pattern lookup
+    uint8_t split_at_byte_ = 0;           // Cached attribute for AT fetch
 
     // -----------------------------------------------------------------------
     // Expansion audio — two pulse channels (no sweep) + PCM DAC
@@ -397,6 +405,93 @@ public:
         if (scanline_counter_ >= 241) {
             in_frame_ = false;
         }
+    }
+
+    // =======================================================================
+    // Vertical split — PPU bus intercept
+    // =======================================================================
+    //
+    // The MMC5 sits between the PPU and VRAM/CHR, intercepting every PPU
+    // read during rendering.  When vertical split is enabled, tile fetches
+    // in the split region are redirected:
+    //
+    //   NT fetch  → ExRAM[split_y_coarse * 32 + coarse_x]
+    //   AT fetch  → ExRAM upper 2 bits, replicated to fill the byte
+    //   Pattern   → CHR at split_bank_ * 4KB + tile_index * 16 + fine_y
+    //
+    // The split uses its own independent Y scroll (split_scroll_), adding
+    // the current scanline number to compute the actual tile row and fine Y.
+
+    bool ppu_bus_intercept(uint16_t addr, uint8_t& data) override {
+        if (!split_enabled_ || !exram_) return false;
+
+        // Nametable fetch ($2000-$2FBF, excluding attribute range $2xC0-$2xFC)
+        if ((addr & 0x2000) && !(addr & 0x1000)) {
+            bool is_attr = (addr & 0x03C0) == 0x03C0;
+
+            if (!is_attr) {
+                // NT byte fetch — determine tile column and check split region
+                uint8_t coarse_x = addr & 0x1F;
+                bool in_split = split_right_ ? (coarse_x >= split_tile_)
+                                             : (coarse_x < split_tile_);
+                split_active_fetch_ = in_split;
+
+                if (!in_split) return false;
+
+                // Compute split Y from split_scroll_ + current scanline
+                uint16_t split_y = static_cast<uint16_t>(split_scroll_)
+                                 + scanline_counter_;
+                uint8_t coarse_y = (split_y >> 3) % 30;  // 30 tile rows, wraps
+                uint16_t exram_addr = coarse_y * 32 + coarse_x;
+
+                uint8_t exram_byte = exram_[exram_addr & 0x3FF];
+                split_nt_byte_ = exram_byte;
+
+                // Cache attribute: upper 2 bits of the same ExRAM byte,
+                // replicated across all quadrants so PPU quadrant selection
+                // always gets the correct value.
+                uint8_t attr2 = (exram_byte >> 6) & 0x03;
+                split_at_byte_ = attr2 | (attr2 << 2) | (attr2 << 4) | (attr2 << 6);
+
+                data = split_nt_byte_;
+                return true;
+            }
+
+            // Attribute fetch — in split region, return cached attribute
+            if (!split_active_fetch_) return false;
+            data = split_at_byte_;
+            return true;
+        }
+
+        // Pattern table fetch ($0000-$1FFF) — in split region, use split bank
+        if (!(addr & 0x2000) && split_active_fetch_) {
+            // split_bank_ selects a 4KB CHR bank
+            uint32_t chr_1k = (chr_mem_size_ > 0)
+                            ? static_cast<uint32_t>(chr_mem_size_ >> 10) : 1;
+            uint32_t bank_4k = split_bank_ % ((chr_1k + 3) / 4);
+            uint32_t base_offset = bank_4k * 0x1000;
+
+            // Use the split scroll's fine Y for the row within the tile
+            uint16_t split_y = static_cast<uint16_t>(split_scroll_)
+                             + scanline_counter_;
+            uint8_t fine_y = split_y & 0x07;
+
+            // Reconstruct pattern address using the cached NT byte
+            uint16_t pattern_offset = split_nt_byte_ * 16 + fine_y;
+            // Bit 3 of the original fetch address distinguishes lo/hi plane
+            if (addr & 0x08)
+                pattern_offset += 8;
+
+            uint32_t chr_addr = base_offset + (pattern_offset & 0x0FFF);
+            if (chr_addr < chr_mem_size_) {
+                data = chr_mem_[chr_addr];
+            } else {
+                data = 0;
+            }
+            return true;
+        }
+
+        return false;
     }
 
     // =======================================================================
@@ -801,7 +896,7 @@ private:
             case 0x512A: chr_bank_[10] = data; return true;
             case 0x512B: chr_bank_[11] = data; return true;
 
-            // --- Vertical split (registers stored; rendering TODO) ---
+            // --- Vertical split ---
             case 0x5200:
                 split_enabled_ = (data & 0x80) != 0;
                 split_right_   = (data & 0x40) != 0;
