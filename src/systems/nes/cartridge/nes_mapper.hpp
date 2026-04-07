@@ -80,6 +80,12 @@ struct MapperChrConfig {
     // HORIZONTAL: {0,0,1,1}  VERTICAL: {0,1,0,1}
     // ONESCREEN_LO: {0,0,0,0}  ONESCREEN_HI: {1,1,1,1}
     uint8_t nt_page[4] = {0, 1, 0, 1};  // default: vertical
+
+    // Optional direct nametable pointers — when non-null, the bus uses
+    // these 1KB pointers instead of ciram + nt_page[i] * 0x400.
+    // Used by Mapper 068 (Sunsoft-4) to map CHR-ROM into nametable slots.
+    // Read-only; writes still go to CIRAM via the standard nt_page mirror.
+    const uint8_t* nt_ptr[4] = {};
 };
 
 // ============================================================================

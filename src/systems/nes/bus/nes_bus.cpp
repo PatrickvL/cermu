@@ -195,11 +195,15 @@ void nes_bus_t::update_ppu_banks(const nes_system::MapperChrConfig& config,
     }
 
     // Pages 8-11 ($2000-$2FFF): Nametable (CIRAM) with mirroring
+    // Mappers may override individual slots with direct CHR-ROM pointers
+    // (e.g. Mapper 068 Sunsoft-4); writes always go to CIRAM.
     for (int i = 0; i < 4; i++) {
-        uint8_t* nt = ciram_ptr + config.nt_page[i] * 0x0400;
-        uint16_t block = ptr_to_block(nt);
-        ppu_read_block[8 + i]  = block;
-        ppu_write_block[8 + i] = block;
+        uint8_t* nt_wr = ciram_ptr + config.nt_page[i] * 0x0400;
+        uint16_t rd_block = config.nt_ptr[i]
+            ? ptr_to_block(config.nt_ptr[i])
+            : ptr_to_block(nt_wr);
+        ppu_read_block[8 + i]  = rd_block;
+        ppu_write_block[8 + i] = ptr_to_block(nt_wr);
     }
 
     // Pages 12-15 ($3000-$3FFF): Mirror of $2000-$2FFF nametables
