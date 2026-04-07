@@ -583,7 +583,9 @@ bool VIC20System::initialize() {
     }
 
     board_.create_chips(&bus_.state);
-    board_.apply(mem_bus_);
+
+    // Page tables + MMIO are configured later by setup_expansion_map()
+    // which calls apply() with condition-aware expansion block filtering.
 
     // ── Retrieve polymorphic VIC pointer ─────────────────────────────────
     vic_ = board_.chip_as<vic_base_t>(kVIC20_VicSlot);
@@ -1069,33 +1071,20 @@ void VIC20System::render_system_menu_items() {
 // ============================================================================
 
 // ── Expansion map ────────────────────────────────────────────────────────
-// Called after apply() and when expansion_flags_ changes.
-// Sets unmapped regions to "no chip selected" (floating bus on read, write ignored).
-// After apply(), all 256 pages point to RAM (read+write) with ROM overlays.
-// We override only the expansion blocks that are NOT present + I/O region.
+// Called at init and when expansion_flags_ changes.
+// Expansion blocks use condition tags on their manifest slots — apply()
+// maps only those whose condition bit is set in expansion_flags_.
+// The $9800-$9FFF I/O expansion range is always unmapped (floating bus).
 void VIC20System::setup_expansion_map() {
-    // Reset: apply() gives us full RAM + ROM overlays for all declared chips.
-    // With 1 KB pages: page = addr >> 10.
-    board_.apply(mem_bus_);
+    // Condition callback: condition tag is the expansion flag bit;
+    // context points to the current expansion_flags_ byte.
+    auto exp_condition = [](uint16_t cond, const void* ctx) -> bool {
+        return (*static_cast<const uint8_t*>(ctx) & cond) != 0;
+    };
+    board_.apply(mem_bus_, 0, exp_condition, &expansion_flags_);
 
-    // $9800-$9FFF (pages 38-39): expansion I/O, unmapped (floating bus)
+    // $9800-$9FFF (pages 38-39): expansion I/O, always unmapped (floating bus)
     mem_bus_.map_no_chip_selected(0, 38, 2);
-
-    // Expansion block 0: $0400-$0FFF (pages 1-3, 3KB = 3 pages)
-    if (!(expansion_flags_ & VIC20_EXP_BLOCK0))
-        mem_bus_.map_no_chip_selected(0, 1, 3);
-
-    // Expansion block 2: $2000-$3FFF (pages 8-15, 8KB = 8 pages)
-    if (!(expansion_flags_ & VIC20_EXP_BLOCK2))
-        mem_bus_.map_no_chip_selected(0, 8, 8);
-
-    // Expansion block 3: $4000-$5FFF (pages 16-23, 8KB = 8 pages)
-    if (!(expansion_flags_ & VIC20_EXP_BLOCK3))
-        mem_bus_.map_no_chip_selected(0, 16, 8);
-
-    // Expansion block 5: $6000-$7FFF (pages 24-31, 8KB = 8 pages)
-    if (!(expansion_flags_ & VIC20_EXP_BLOCK5))
-        mem_bus_.map_no_chip_selected(0, 24, 8);
 
     // Cartridge ROM at $A000-$BFFF: handled via setup_cartridge_pages
     setup_cartridge_pages(cartridge_present_);

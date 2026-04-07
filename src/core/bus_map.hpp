@@ -179,10 +179,19 @@ public:
     // Safe to call multiple times (e.g. after RAM size reconfiguration).
     // MMIO handlers are re-used on subsequent calls (update, not re-register).
     //
+    // When condition_fn is provided, Phase 1 skips page-table mapping for
+    // buffer slots whose condition tag is non-zero and not met.  Phase 0
+    // (chip_info) is still populated for all slots — their buffers exist
+    // even when unmapped, so bank-switch-in remains possible.
+    //
     // flat_mem: pointer to the flat buffer owned by Board.
     //
 
-    void apply(Bus& bus, uint8_t* flat_mem, size_t viewer_id = 0) {
+    using ConditionFn = bool (*)(uint16_t condition, const void* context);
+
+    void apply(Bus& bus, uint8_t* flat_mem, size_t viewer_id = 0,
+               ConditionFn condition_fn = nullptr,
+               const void* condition_ctx = nullptr) {
         bus.set_flat_mem(flat_mem);
         bus.reset_viewer(viewer_id);
         if constexpr (Bus::kHasMaskedSub) bus.reset_masked_subs(viewer_id);
@@ -225,6 +234,11 @@ public:
         static constexpr size_t kNumPages = Bus::kNumPages;
         for (const auto& slot : slots_) {
             if (slot.byte_size == 0 || slot.dynamic || slot.overlay_group > 0)
+                continue;
+            // Skip conditional slots whose condition is not met — their
+            // address range stays as kNoChipSelected (open bus).
+            if (slot.condition != 0 && condition_fn
+                && !condition_fn(slot.condition, condition_ctx))
                 continue;
             const size_t effective  = slot.effective_size > 0
                                         ? slot.effective_size : slot.byte_size;
