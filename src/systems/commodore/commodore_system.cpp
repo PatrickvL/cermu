@@ -262,6 +262,8 @@ bool CommodoreSystem::load_file(const char* filepath) {
             mode = LoadMode::DISK_FAST;
         } else if (fmt && strcmp(fmt, "TAP") == 0) {
             mode = LoadMode::TAPE_INSERTED;
+        } else if (fmt && strcmp(fmt, "CRT") == 0) {
+            mode = LoadMode::CARTRIDGE;
         }
     }
 
@@ -284,14 +286,23 @@ bool CommodoreSystem::load_file(const char* filepath) {
     log_info("%s: File parsed (mode=%s) — deferred until BASIC READY\n",
            name,
            mode == LoadMode::DISK_FAST ? "DISK_FAST" :
-           mode == LoadMode::TAPE_INSERTED ? "TAPE_INSERTED" : "DIRECT");
+           mode == LoadMode::TAPE_INSERTED ? "TAPE_INSERTED" :
+           mode == LoadMode::CARTRIDGE ? "CARTRIDGE" : "DIRECT");
     return true;
 }
 
 void CommodoreSystem::check_deferred_load() {
-    if (pending_load_.active && is_basic_ready()) {
-        apply_pending_load();
-        return;
+    if (pending_load_.active) {
+        // Cartridges are installed immediately — they provide the startup ROM,
+        // so there's no BASIC READY to wait for.
+        if (pending_load_.mode == LoadMode::CARTRIDGE) {
+            apply_pending_load();
+            return;
+        }
+        if (is_basic_ready()) {
+            apply_pending_load();
+            return;
+        }
     }
 
     // Post-load injection: after an IEC LOAD completes and BASIC prints
@@ -448,6 +459,17 @@ void CommodoreSystem::apply_pending_load() {
             inject_keys("LOAD\r");
         } else {
             log_info("%s: No datasette attached — TAP not loaded\n", name);
+        }
+    }
+    // =========================================================================
+    // CARTRIDGE PATH — CRT: inject ROM + EXROM/GAME + reset
+    // =========================================================================
+    else if (pending_load_.mode == LoadMode::CARTRIDGE) {
+        log_info("%s: Installing CRT cartridge from %s\n", name,
+                 pending_load_.filepath.c_str());
+
+        if (!install_cartridge(pending_load_.filepath.c_str())) {
+            log_info("%s: CRT cartridge installation failed\n", name);
         }
     }
     // =========================================================================
