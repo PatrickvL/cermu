@@ -28,12 +28,12 @@ enum class InstrGroup : uint8_t {
     GROUP_7  = 0x7,  // MOVEQ
     GROUP_8  = 0x8,  // OR / DIVU / DIVS / SBCD
     GROUP_9  = 0x9,  // SUB / SUBA / SUBX
-    GROUP_A  = 0xA,  // A-line (unimplemented — traps to Line-A vector)
+    GROUP_A  = 0xA,  // A-line emulator trap (vector 10)
     GROUP_B  = 0xB,  // CMP / CMPA / CMPM / EOR
     GROUP_C  = 0xC,  // AND / MULU / MULS / ABCD / EXG
     GROUP_D  = 0xD,  // ADD / ADDA / ADDX
     GROUP_E  = 0xE,  // Shift / Rotate (ASL, ASR, LSL, LSR, ROL, ROR, ROXL, ROXR)
-    GROUP_F  = 0xF,  // F-line (coprocessor / unimplemented — traps to Line-F vector)
+    GROUP_F  = 0xF,  // F-line emulator trap (vector 11)
 };
 
 // ============================================================================
