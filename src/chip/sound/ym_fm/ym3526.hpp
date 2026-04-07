@@ -26,6 +26,7 @@ inline constexpr YMTraits YM3526_Traits = {
     .has_adpcm_a          = false,
     .has_adpcm_b          = false,
     .has_dac              = false,
+    .ladder_effect        = false,
     .pin_count            = 24,
 };
 
