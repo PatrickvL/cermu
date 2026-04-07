@@ -50,6 +50,7 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - [x] **SpectaVideo SVI file loading** — Cartridge ROM loading replacing BASIC ROM.
 - [x] **Tatung Einstein file loading** — COM/binary loading into RAM; ROM banking implemented.
 - [x] **Namco Video rotation** — GPU-side `DisplayRotation` enum + CRT shader UV rotation; Namco outputs native 288×224.
+- [x] **NES MMC5 vertical split** — PPU bus intercept hook; ExRAM nametable, per-tile attributes, split CHR bank.
 
 ---
 
@@ -93,8 +94,7 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 ### Mappers — ~40 Implemented
 - [x] **[DONE]** Mapper 068 (Sunsoft): CHR-ROM nametable replacement wired via `nt_ptr`
 - [x] **[DONE]** Mapper 069 (FME-7): IRQ converted to CPU-cycle counter with `notify_cpu_cycle()`
-- [x] **[DONE]** Mapper 005 (MMC5): expansion audio (pulse + PCM DAC) implemented; vertical split registers stored
-- [ ] **[MEDIUM]** Mapper 005 (MMC5): vertical split mode rendering (requires PPU-level integration)
+- [x] **[DONE]** Mapper 005 (MMC5): expansion audio (pulse + PCM DAC) implemented; vertical split rendering via PPU bus intercept
 - [ ] **[LARGE]** Mapper 024/026 (VRC6a/b): Konami expansion audio — 2 pulse + sawtooth channels
 - [ ] **[LARGE]** Mapper 085 (VRC7): FM synthesis expansion audio
 - [ ] **[LARGE]** Mapper 019 (Namco 163): wavetable expansion audio, complex banking
