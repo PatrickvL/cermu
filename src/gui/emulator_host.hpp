@@ -144,6 +144,7 @@ protected:
     uint32_t* framebuffer_;
     int fb_width_;
     int fb_height_;
+    int display_rotation_ = 0;  ///< Cached DisplayRotation from HardwareTraits (0-3)
 
     // ========================================================================
     // Signal decoder — owns all GPU rendering resources for the active

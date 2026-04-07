@@ -77,6 +77,18 @@ struct PaletteColor {
 };
 
 /**
+ * Display rotation for systems with rotated monitors (arcade machines).
+ * Describes the physical rotation applied to the CRT — the framebuffer
+ * is output in native (unrotated) orientation and the shader rotates it.
+ */
+enum class DisplayRotation : uint8_t {
+    None   = 0,  // Landscape (default)
+    CW90   = 1,  // 90° clockwise  (portrait, top-right becomes top-left)
+    CW180  = 2,  // 180° (upside-down)
+    CW270  = 3,  // 270° clockwise / 90° counter-clockwise
+};
+
+/**
  * Display characteristics (fixed hardware traits)
  */
 struct DisplayTraits {
@@ -88,6 +100,7 @@ struct DisplayTraits {
     int palette_size;               // Number of colors in palette (0 if RGB)
     float pixel_aspect_ratio;       // Pixel aspect ratio (1.0 = square pixels)
     bool has_overscan;              // Whether system has overscan/border area
+    DisplayRotation rotation;       // Monitor rotation (arcade portrait screens)
     
     // Palette data (for palette-indexed modes)
     std::vector<PaletteColor> default_palette;  // Default color palette

@@ -1352,13 +1352,19 @@ void SessionGUI::render_screen() {
     }
 
     // Calculate display dimensions (needed by all paths)
+    // For rotated displays (CW90/CW270), swap guest dimensions so that
+    // aspect ratio calculation reflects the on-screen orientation.
     bool is_pal = true;
     bool use_pixel_aspect = true;
+    float guest_w = static_cast<float>(fb_width_);
+    float guest_h = static_cast<float>(fb_height_);
+    if (display_rotation_ == 1 || display_rotation_ == 3)
+        std::swap(guest_w, guest_h);
     float display_w = 0, display_h = 0, pos_x = 0, pos_y = 0;
     if (display_tex || use_vector) {
         calculate_display_dimensions(
             viewport->Size.x, viewport->Size.y,
-            (float)fb_width_, (float)fb_height_,
+            guest_w, guest_h,
             is_pal, use_pixel_aspect,
             &display_w, &display_h, &pos_x, &pos_y);
     }
@@ -1401,7 +1407,8 @@ void SessionGUI::render_screen() {
                                                static_cast<float>(fb_width_),
                                                static_cast<float>(fb_height_),
                                                display_w, display_h,
-                                               display_characteristics_);
+                                               display_characteristics_,
+                                               display_rotation_);
         }
 
         // Display the persistence FBO texture via ImGui
@@ -1440,7 +1447,8 @@ void SessionGUI::render_screen() {
                                                 static_cast<float>(fb_width_),
                                                 static_cast<float>(fb_height_),
                                                 display_w, display_h,
-                                                display_characteristics_);
+                                                display_characteristics_,
+                                                display_rotation_);
         }
 
         // Non-FBO path: bind custom shader via ImGui draw callback
@@ -2280,6 +2288,7 @@ void SessionGUI::allocate_framebuffer() {
     const auto& traits = system_->get_hardware_traits();
     fb_width_ = traits.display.visible_width;
     fb_height_ = traits.display.visible_height;
+    display_rotation_ = static_cast<int>(traits.display.rotation);
     
     size_t fb_bytes = static_cast<size_t>(fb_width_) * fb_height_ * sizeof(uint32_t);
 

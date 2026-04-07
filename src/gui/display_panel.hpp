@@ -38,10 +38,12 @@ public:
     /// Apply post-processing to the input texture.
     /// Returns the output texture ID for ImGui display.
     /// For pass-through panels, returns input_tex unchanged.
+    /// @param rotation  DisplayRotation enum value (0=none, 1=CW90, 2=CW180, 3=CW270)
     virtual GLuint render(GLuint input_tex,
                           float input_w, float input_h,
                           float output_w, float output_h,
-                          const DisplayCharacteristics& dc) = 0;
+                          const DisplayCharacteristics& dc,
+                          int rotation = 0) = 0;
 
     /// True when create() succeeded.
     virtual bool ready() const = 0;
@@ -72,12 +74,13 @@ public:
     GLuint render(GLuint input_tex,
                   float input_w, float input_h,
                   float output_w, float output_h,
-                  const DisplayCharacteristics& dc) override {
+                  const DisplayCharacteristics& dc,
+                  int rotation = 0) override {
         if (!state_.shader) return input_tex;
         crt_shader::render(&state_, input_tex,
                            input_w, input_h,
                            output_w, output_h,
-                           dc);
+                           dc, rotation);
         return state_.texture;
     }
 
@@ -104,7 +107,8 @@ public:
     GLuint render(GLuint input_tex,
                   float /*input_w*/, float /*input_h*/,
                   float /*output_w*/, float /*output_h*/,
-                  const DisplayCharacteristics& /*dc*/) override {
+                  const DisplayCharacteristics& /*dc*/,
+                  int /*rotation*/ = 0) override {
         return input_tex;
     }
 
