@@ -869,7 +869,7 @@ void C128System::configure_bus_memory_map() {
     //   $4000-$7FFF : BASIC lo ROM
     //   $8000-$BFFF : BASIC hi ROM
     //   $C000-$CFFF : Editor ROM
-    //   $D000-$DFFF : I/O (TODO: register MMIO handlers for VIC, SID, CIA, MMU, VDC)
+    //   $D000-$DFFF : I/O (VIC-IIe, SID, MMU, VDC, CIAs — see init_io_dispatch())
     //   $E000-$FFFF : Kernal ROM
     //
     // Chip IDs (4 KB pages, declaration order, bank_size = chip size for ROMs):
