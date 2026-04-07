@@ -67,9 +67,30 @@ public:
                 config.chr_writable[slot * 2 + i] = chr_is_ram_;
             }
         }
-        // NT mapping using CHR-ROM is not supported through the standard
-        // MapperChrConfig interface — would require bus-level integration.
-        // For now, standard CIRAM mirroring is used.
+
+        // Nametable mapping: when use_chr_for_nt_ is set ($E000 bit 4),
+        // nametable slots read from CHR-ROM banks selected by $C000/$D000.
+        // Each NT register selects a 1KB page in CHR-ROM (ORed with 0x80
+        // on write, giving the upper 128 × 1KB pages of the CHR space).
+        if (use_chr_for_nt_ && chr_mem_size_ > 0) {
+            uint32_t chr_1k = static_cast<uint32_t>(chr_mem_size_ / 0x0400);
+            if (chr_1k == 0) chr_1k = 1;
+            const Mirror m = mirror_mode_;
+            // Map the 4 NT slots using the two NT registers + mirror mode
+            for (int slot = 0; slot < 4; slot++) {
+                uint8_t reg_idx;
+                switch (m) {
+                    case Mirror::VERTICAL:     reg_idx = slot & 1; break;
+                    case Mirror::HORIZONTAL:   reg_idx = (slot >> 1) & 1; break;
+                    case Mirror::ONESCREEN_LO: reg_idx = 0; break;
+                    case Mirror::ONESCREEN_HI: reg_idx = 1; break;
+                    default:                   reg_idx = slot & 1; break;
+                }
+                uint32_t bank = nt_reg_[reg_idx] % chr_1k;
+                uint32_t offset = bank * 0x0400;
+                config.nt_ptr[slot] = (offset < chr_mem_size_) ? chr_mem_ + offset : chr_mem_;
+            }
+        }
     }
 
     bool register_write(uint16_t addr, uint8_t data) override {
