@@ -1029,6 +1029,7 @@ void NintendoSystem<V>::tick() {
                 if (--audio_sample_counter_ == 0) {
                     audio_sample_counter_ = audio_sample_period_;
                     float sample = board_.cpu.generate_audio_sample();
+                    if (cartridge_) sample += cartridge_->audio_output();
                     if (audio_port_) {
                         audio_port_->drive_sample(sample);
                     } else {
@@ -1058,7 +1059,10 @@ void NintendoSystem<V>::tick() {
     NES_PROF_CPU_TICK();
 
     // Notify mapper of CPU cycle — for CPU-clocked IRQ counters (FME-7)
-    if (cartridge_) cartridge_->notify_cpu_cycle();
+    if (cartridge_) {
+        cartridge_->notify_cpu_cycle();
+        cartridge_->audio_tick();
+    }
 
     // Transfer PPU /NMI onto CPU bus BEFORE PHI2, so the CPU's
     // edge-detect flip-flop samples the current NMI level.
@@ -1266,6 +1270,7 @@ void NintendoSystem<V>::tick() {
         if (--audio_sample_counter_ == 0) {
             audio_sample_counter_ = audio_sample_period_;
             float sample = board_.cpu.generate_audio_sample();
+            if (cartridge_) sample += cartridge_->audio_output();
             if (audio_port_) {
                 audio_port_->drive_sample(sample);
             } else {

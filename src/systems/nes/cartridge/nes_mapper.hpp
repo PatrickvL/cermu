@@ -176,6 +176,14 @@ public:
     // with CPU-clocked IRQ counters (FME-7, VRC6, VRC7, etc.).
     virtual void notify_cpu_cycle() {}
 
+    // Expansion audio — mappers with extra sound hardware (MMC5 pulse/PCM,
+    // VRC6 pulse/saw, VRC7 FM, Sunsoft 5B PSG, Namco 163 wavetable).
+    // audio_tick() is called once per CPU cycle.  audio_output() returns
+    // the current expansion sample in [-1.0, 1.0] range for mixing with
+    // the main APU output.
+    virtual void audio_tick() {}
+    virtual float audio_output() const { return 0.0f; }
+
     // PPUCTRL notification — called when CPU writes PPU $2000.
     // MMC5 uses bits 3-5 to split CHR bank sets between sprite and BG
     // pattern table halves.  Returns true if banking changed.
