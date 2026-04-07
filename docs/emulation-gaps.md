@@ -19,6 +19,14 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - [x] **C128: stale TODO comment** (line 872) — I/O dispatch was already implemented. Comment updated.
 - [x] **C128: SID audio output** — `get_audio_samples()` now calls `board_.sid.generate_samples()`, sample rate forwarded.
 - [x] **SMS: ROM bank switching** — `select_bank_at()` wired for Sega mapper.
+- [x] **VIC-20: color RAM** — Replaced RAMChip with MOS2114 for proper 4-bit masking.
+- [x] **C16: bus struct** — Deleted dead placeholder `c16_bus.hpp`; system uses shared `bus_state_t`.
+- [x] **C128: apply_configuration** — Region timing (PAL/NTSC) and SID revision now applied.
+- [x] **NES Mapper 068** — CHR-ROM nametable replacement wired via `nt_ptr[4]` in `MapperChrConfig`.
+- [x] **NES Mapper 069** — IRQ changed from A12 approximation to proper CPU-cycle counter.
+- [x] **CIA (MOS 6526)** — BCD increment verified correct (`> 9` + `+= 6`); 50/60Hz toggle verified (no counter reset needed).
+- [x] **PLA** — Ultimax RP4 verified: 0x0F default is correct, no known cartridge overrides.
+- [x] **SID GUI** — Test sound button implemented (A-440 sawtooth on voice 1).
 
 ---
 
@@ -30,19 +38,19 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - [ ] **[MEDIUM]** CRT (cartridge image) loading (`commodore_load_helpers.cpp:262`)
 
 ### VIC-20 — Near-Complete
-- [ ] **[EASY]** True 4-bit color RAM via MOS2114 masking (`vic20_system.hpp:82`)
+- [x] **[DONE]** True 4-bit color RAM via MOS2114 masking
 - [ ] **[MEDIUM]** TAP tape emulation (shared with C64)
 - [ ] **[MEDIUM]** Expansion RAM testing against real programs
 
 ### C16/Plus4 — Partial
-- [ ] **[EASY]** C16 bus struct is a placeholder (`c16_bus.hpp:5-8`) — works but should be cleaned up
+- [x] **[DONE]** C16 bus struct placeholder deleted — system uses shared `bus_state_t`
 - [ ] **[MEDIUM]** Cassette port I/O signals: motor, sense, serial bus bits (`c16_system.cpp:1027-1030`)
 - [ ] **[MEDIUM]** TAP tape emulation (shared)
 - [ ] **[MEDIUM]** CRT cartridge loading (shared)
 
 ### C128 — Substantially Complete
-- [ ] **[EASY]** `apply_configuration()` doesn't apply SID model or region variants (`c128_system.cpp:153`)
-- [ ] **[EASY]** Duplicate "Reset C128" menu item (`c128_system.cpp:1481`)
+- [x] **[DONE]** `apply_configuration()` now applies SID revision and region timing
+- [x] **[DONE]** Duplicate "Reset C128" menu item — verified as intentional design (two reset vectors)
 - [ ] **[MEDIUM]** Z80/CP/M compatibility testing — untested
 
 ### PET — Complete
@@ -60,8 +68,8 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - NSF player: functional
 
 ### Mappers — ~40 Implemented
-- [ ] **[EASY]** Mapper 068 (Sunsoft): CHR-ROM nametable replacement not wired (`nes_mapper_factory.hpp:138`)
-- [ ] **[EASY]** Mapper 069 (FME-7): IRQ should be CPU-cycle counter, not A12 approximation (`mapper_069_sunsoft_fme7.hpp:75`)
+- [x] **[DONE]** Mapper 068 (Sunsoft): CHR-ROM nametable replacement wired via `nt_ptr`
+- [x] **[DONE]** Mapper 069 (FME-7): IRQ converted to CPU-cycle counter with `notify_cpu_cycle()`
 - [ ] **[MEDIUM]** Mapper 005 (MMC5): expansion audio $5000-$5015 stub, vertical split mode stub (`mapper_005_mmc5.hpp:520, 593`)
 - [ ] **[LARGE]** Mapper 024/026 (VRC6a/b): Konami expansion audio — 2 pulse + sawtooth channels
 - [ ] **[LARGE]** Mapper 085 (VRC7): FM synthesis expansion audio
@@ -99,7 +107,7 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - [ ] **[MEDIUM]** AY8930 extended mode: per-channel envelopes, extended noise period, duty cycle (`ay8930.hpp:11`)
 
 #### MOS 6581 (SID)
-- [ ] **[EASY]** GUI: TODO to generate test sound (`mos6581_gui.cpp:185`)
+- [x] **[DONE]** GUI: Test sound button implemented (A-440 sawtooth on voice 1)
 
 ### Video
 
@@ -136,11 +144,11 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 ### I/O
 
 #### MOS 6526 (CIA)
-- [ ] **[EASY]** 50/60Hz toggle: should it reset cycle counter? (`mos6526.cpp:462`)
-- [ ] **[EASY]** BCD increment: verify overflow check `== 0x0A` vs `> 9` (`mos6526.cpp:636-637`)
+- [x] **[DONE]** 50/60Hz toggle: verified no counter reset needed — matches real hardware
+- [x] **[DONE]** BCD increment: verified `> 9` + `+= 6` is correct
 
 #### PLA
-- [ ] **[EASY]** Ultimax mode: let cartridge/EXROM set RP4 pulls (`pla.cpp:29`)
+- [x] **[DONE]** Ultimax mode: 0x0F default verified correct, no known cartridge overrides
 
 ### CPU
 
@@ -166,8 +174,8 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 | System | Key Missing Items |
 |--------|-------------------|
 | C64 | TAP/CRT loading |
-| VIC-20 | 4-bit color RAM, TAP loading |
-| C128 | Configuration apply, Z80/CP/M testing |
+| VIC-20 | TAP loading |
+| C128 | Z80/CP/M testing |
 | PET | — |
 | NES | Expansion audio, FDS |
 | Atari 2600 | Paddle capacitor dump |
