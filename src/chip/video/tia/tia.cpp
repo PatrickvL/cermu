@@ -145,6 +145,11 @@ void tia_t::reset() {
     read_regs_[INPT4] = 0x80;
     read_regs_[INPT5] = 0x80;
 
+    // Paddle charge state
+    memset(paddle_position_, 0, sizeof(paddle_position_));
+    memset(paddle_charge_, 0, sizeof(paddle_charge_));
+    paddle_dump_ = false;
+
     audio[0] = {};
     audio[1] = {};
 
@@ -504,6 +509,20 @@ void tia_t::render_pixel() {
 void tia_t::tick_color_clock() {
     bool vblank = (regs_[VBLANK] & 0x02) != 0;
 
+    // Paddle capacitor charge accumulation — once grounded by VBLANK bit 7,
+    // each pot input charges until its threshold (dependent on paddle position).
+    // When the charge exceeds the threshold, INPT bit 7 goes high.
+    if (!paddle_dump_) {
+        for (int i = 0; i < 4; i++) {
+            if (!(read_regs_[INPT0 + i] & 0x80)) {
+                paddle_charge_[i]++;
+                if (paddle_charge_[i] >= static_cast<uint32_t>(paddle_position_[i] + 1) * PADDLE_CHARGE_STEP) {
+                    read_regs_[INPT0 + i] = 0x80;
+                }
+            }
+        }
+    }
+
     // Detect VBLANK→visible transition before first pixel is rendered.
     // This ensures visible_row=0 is available for the first visible scanline.
     if (!vblank && visible_row < 0) {
@@ -626,7 +645,17 @@ void tia_t::write(uint16_t addr, uint8_t data) {
                 visible_row = 0;
             }
             regs_[VBLANK] = data;
-            // Bit 7: dump paddle capacitors (INPT0-3) — not implemented
+            // Bit 7: dump paddle capacitors (INPT0-3)
+            if (data & 0x80) {
+                // Dump — ground the capacitors: charge resets, INPT reads 0
+                paddle_dump_ = true;
+                for (int i = 0; i < 4; i++) {
+                    paddle_charge_[i] = 0;
+                    read_regs_[INPT0 + i] = 0x00;
+                }
+            } else {
+                paddle_dump_ = false;
+            }
             break;
         }
 

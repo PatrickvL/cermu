@@ -364,6 +364,30 @@ struct tia_t : public VideoChipBase {
     bool has_collision(uint8_t px_a, uint8_t px_b) const;
 
     // ========================================================================
+    // PADDLE (POT) INPUT — capacitor charge model
+    // ========================================================================
+
+    // Paddle position (0-255) — set by host/device. 0 = fastest charge, 255 = slowest.
+    uint8_t  paddle_position_[4] = {};
+
+    // Charge accumulator (TIA color clocks since dump). When charge
+    // exceeds the threshold for the paddle position, INPT bit 7 goes high.
+    uint32_t paddle_charge_[4] = {};
+
+    // Dump active — VBLANK bit 7 grounds the capacitors.
+    bool     paddle_dump_ = false;
+
+    // Threshold per paddle position step (~1 scanline = 228 clocks).
+    static constexpr uint32_t PADDLE_CHARGE_STEP = 228;
+
+    /// Set paddle position for a given pot input (0-3). Host input binding
+    /// calls this; the TIA's charge model converts position to timing.
+    void set_paddle_position(int index, uint8_t position) {
+        if (index >= 0 && index < 4)
+            paddle_position_[index] = position;
+    }
+
+    // ========================================================================
     // AUDIO
     // ========================================================================
 
