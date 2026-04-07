@@ -782,3 +782,12 @@ void CommodoreSystem::tick_unmapped_inputs() {
         }
     }
 }
+
+void CommodoreSystem::set_unmapped_toggle_state(emu_key_t key, bool pressed) {
+    for (auto& input : unmapped_inputs_) {
+        if (input.toggle && input.key == key) {
+            input.pressed = pressed;
+            return;
+        }
+    }
+}

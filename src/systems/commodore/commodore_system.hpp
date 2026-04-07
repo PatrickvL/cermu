@@ -366,6 +366,11 @@ protected:
     /// (e.g., C128 40/80 DISPLAY → MMU sense line).
     virtual void on_unmapped_toggle_changed(emu_key_t /*key*/, bool /*pressed*/) {}
 
+    /// Programmatically set a toggle-type virtual key's UI state.
+    /// Use when hardware changes the latch without a menu click
+    /// (e.g., enter_c64_mode forcing 40-col, or reset syncing state).
+    void set_unmapped_toggle_state(emu_key_t key, bool pressed);
+
     std::vector<UnmappedInput> unmapped_inputs_;
     int unmapped_release_countdown_ = 0;    // Frames until pending release
     int unmapped_release_index_ = -1;       // Index of key awaiting release
