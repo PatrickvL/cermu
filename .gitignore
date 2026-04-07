@@ -128,10 +128,9 @@ tests/fam65xx_lorenz_test_harness
 tests/fam65xx_processor_tests_runner
 .cache/
 
-# Hide mempalace MCP
+# Hide mcp-memory-service
 .vscode/mcp.json
-mempalace.yaml
-entities.json
+.memory/
 
 # Hide graphify output
 graphify-out/graph.json
