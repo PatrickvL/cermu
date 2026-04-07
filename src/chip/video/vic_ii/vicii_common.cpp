@@ -556,19 +556,12 @@ static void vicii_pixel_sequencer(vicii_base_t* vicii) {
             // which would incorrectly make earlier pixels appear as display.
             const bool pixel_in_border = (border_mask & (1 << pixel)) != 0;
             
-            // Skip if this pixel is in border (already handled in first loop).
-            // The shift register is not advanced during border because the border
-            // unit suppresses pixel output.  The SR will be loaded from the latch
-            // when the border opens and pixel_in_char == 0, starting from bit 7.
-            if (pixel_in_border) {
-                continue;
-            }
-            
             vicii_pixel_t pixel_data;
             
-            // XSCROLL handling - delay pixel output by XSCROLL pixels
-            // Background color during scroll delay uses the hoisted bg0 local.
-            if (seq->xscroll_counter > 0) {
+            // XSCROLL handling - delay pixel output by XSCROLL pixels.
+            // Only counted during display — border pixels must not consume
+            // xscroll ticks (the counter is initialized when the border opens).
+            if (!pixel_in_border && seq->xscroll_counter > 0) {
                 seq->xscroll_counter--;
                 pixel_data.color = static_cast<vicii_color_t>(bg0);
                 pixel_data.priority = VICII_PRIORITY_BACKGROUND;
@@ -692,19 +685,19 @@ static void vicii_pixel_sequencer(vicii_base_t* vicii) {
             
             const int16_t buf_pos = vicii_fetch_x_to_buffer_pos(vicii, pixel_x);
             if (buf_pos >= 0) {
-                vicii->pixel.pixel_line_priority[buf_pos] = pixel_data.priority;
-                vicii->pixel.color_line[buf_pos] = pixel_data.color;
+                // Visual pixel output — only during display area.
+                // Border pixels already have border color from the first loop.
+                if (!pixel_in_border) {
+                    vicii->pixel.pixel_line_priority[buf_pos] = pixel_data.priority;
+                    vicii->pixel.color_line[buf_pos] = pixel_data.color;
+                }
                 
                 // Track raw graphics foreground output for sprite-data collision
                 // detection.  Independent of the display priority buffer — collisions
                 // are based on the graphics data sequencer's raw output, not what's
-                // displayed.
-                // TODO: The graphics sequencer continues to run during left/right
-                // border (main_border_flip_flop set, vertical not set), but currently
-                // the pixel sequencer skips display processing for border pixels.
-                // This means MxD collisions in the left/right border area are missed.
-                // A future refactor should clock the shift register even during main
-                // border for full accuracy.
+                // displayed.  The sequencer runs continuously behind the border,
+                // so sprites overlapping graphics in the L/R border area still
+                // trigger MxD collisions.
                 if (!is_background) {
                     vicii->pixel.graphics_fg_line[buf_pos] = true;
                 }
