@@ -67,9 +67,9 @@ public:
     bool irq_state() override { return irq_active_; }
     void irq_clear() override { irq_active_ = false; }
 
-    // FME-7 IRQ is a CPU-cycle counter; we approximate via A12 notifications
-    void notify_a12(bool a12_high, uint64_t /*ppu_cycle*/) override {
-        if (!a12_high) return;
+    // FME-7 IRQ is a 16-bit CPU-cycle countdown counter.
+    // When enabled and the counter wraps from $0000 → $FFFF, IRQ fires.
+    void notify_cpu_cycle() override {
         if (irq_counter_enabled_) {
             irq_counter_--;
             if (irq_counter_ == 0xFFFF && irq_enabled_) {

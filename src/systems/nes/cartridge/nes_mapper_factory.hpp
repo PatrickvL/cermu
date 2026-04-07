@@ -136,7 +136,7 @@ struct MapperFactory {
             case 66:  return std::make_unique<Mapper066>(prg_banks, chr_banks);
             case 67:  return std::make_unique<Mapper067>(prg_banks, chr_banks);
             case 68:  return std::make_unique<Mapper068>(prg_banks, chr_banks);
-            case 69:  return std::make_unique<Mapper069>(prg_banks, chr_banks); // INCOMPLETE: no Yamaha 5B expansion audio; IRQ approximated via A12
+            case 69:  return std::make_unique<Mapper069>(prg_banks, chr_banks); // no Yamaha 5B expansion audio
             case 70:  return std::make_unique<Mapper070>(prg_banks, chr_banks);
             case 71:  return std::make_unique<Mapper071>(prg_banks, chr_banks);
             case 72:  return std::make_unique<Mapper072>(prg_banks, chr_banks);
