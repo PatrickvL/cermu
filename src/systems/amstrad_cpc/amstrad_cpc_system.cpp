@@ -146,8 +146,6 @@ bool AmstradCPCSystem<M>::initialize() {
     board_.psg.set_audio_port(audio_port_.get());
 
     load_roms();
-    // ── Cache RAM chip pointer for rendering ───────────────────────
-    ram_chip_ = &board_.ram;
 
     // Video output — composite video from Gate Array
     video_port_ = std::make_unique<CompositeVideoPort>();
@@ -250,13 +248,11 @@ template<CPCModel M> void AmstradCPCSystem<M>::set_audio_sample_rate(int hz) {
 
 template<CPCModel M>
 void AmstradCPCSystem<M>::render_frame() {
-    if (!ram_chip_) return;
-
     // CRTC display start address (R12:R13)
     uint16_t crtc_start = (board_.crtc.regs_[R12_START_ADDR_HI] << 8)
                         | board_.crtc.regs_[R13_START_ADDR_LO];
 
-    board_.gate_array.render_frame(ram_chip_->data(), crtc_start);
+    board_.gate_array.render_frame(board_.ram.data(), crtc_start);
 }
 
 // ============================================================================
