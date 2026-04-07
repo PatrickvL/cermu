@@ -6,6 +6,7 @@
 #include "core/input/emu_key_sdl_map.hpp"
 #include "systems/commodore/vic20/vic20_keyboard_matrix.hpp" // VIC-20 keyboard matrix data
 #include "systems/commodore/prg_content_analysis.hpp"
+#include "devices/storage/datasette_1530.hpp"
 #include <cstring>
 #include <cstdio>
 #include <cctype>
@@ -756,6 +757,36 @@ void VIC20System::tick() {
     s = vic_->tick(s);
 
     // =========================================================================
+    // PHASE 1.5: Cassette port — tick datasette and exchange signals.
+    // Must run before VIA tick so CA1 edge detection sees CASS_READ transitions.
+    // =========================================================================
+    if (cached_datasette_) {
+        // Motor control: VIA1 CA2 in manual output mode (PCR bits 3:1)
+        //   110 (0x0C) = CA2 LOW → motor ON, 111 (0x0E) = CA2 HIGH → motor OFF
+        uint8_t via1_pcr = board_.via1.pcr;
+        bool ca2_high = ((via1_pcr & 0x0E) == 0x0E);
+        cached_datasette_->on_signal_change(
+            ca2_high ? (1u << PortSignals::CASS_MOTOR) : 0u);
+
+        // Advance tape by one CPU cycle
+        cached_datasette_->tick();
+
+        // Read datasette output signals
+        uint32_t cass_out = cached_datasette_->get_output_signals();
+
+        // CASS_READ → VIA1 CA1 pin (pin level mirrors datasette output directly)
+        board_.via1.ca1_pin_ = (cass_out & (1u << PortSignals::CASS_READ)) != 0;
+
+        // CASS_SENSE → VIA1 Port A bit 6 (active-low: 0 = play button pressed)
+        uint8_t pa_pins = board_.via1.port_a_pins_;
+        if (cass_out & (1u << PortSignals::CASS_SENSE))
+            pa_pins |= 0x40;    // SENSE HIGH = button not pressed → PA6 HIGH
+        else
+            pa_pins &= ~0x40;   // SENSE LOW = button pressed → PA6 LOW
+        board_.via1.port_a_pins_ = pa_pins;
+    }
+
+    // =========================================================================
     // PHASE 2: VIA CHIPS TICKING (BEFORE CPU PHI2)
     // VIA chips handle I/O and timing, must tick before CPU to set interrupt lines
     // =========================================================================
@@ -916,6 +947,20 @@ commodore_load_context_t VIC20System::build_load_context() {
     };
     ctx.keys_ctx        = this;
     return ctx;
+}
+
+void VIC20System::on_port_device_changed(int port_index) {
+    // Update cached datasette for Cassette Port (index 2)
+    if (port_index == 2) {
+        cached_datasette_ = nullptr;
+        auto* port = get_port(2);
+        if (port) {
+            auto* device = port->get_attached_device();
+            if (device && strcmp(device->get_id(), "datasette") == 0) {
+                cached_datasette_ = static_cast<Datasette1530Device*>(device);
+            }
+        }
+    }
 }
 
 // ============================================================================

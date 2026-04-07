@@ -129,6 +129,12 @@ struct mos6522_t : public IoChipBase {
     uint8_t port_a_pins_ = 0xFF;   // Pull-ups default HIGH
     uint8_t port_b_pins_ = 0xFF;
 
+    // CA1/CB1 pin state for edge detection (system sets these before tick())
+    bool ca1_pin_ = true;          // Current CA1 input level (pull-up default)
+    bool ca1_prev_ = true;         // Previous CA1 level (snapshot for edge compare)
+    bool cb1_pin_ = true;          // Current CB1 input level
+    bool cb1_prev_ = true;         // Previous CB1 level
+
     // I/O Ports — io_port views over DDR/data bytes in regs_[] + separate pin bytes
     // CIA pattern: io_port(ddr_ref, data_ref, pins_ref)
     io_port<0xFF> port_a{regs_.data[DDRA], regs_.data[PORTA], port_a_pins_};

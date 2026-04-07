@@ -41,6 +41,12 @@ void mos6522_t::reset() {
 
     // Reset interrupt state (preserves interrupt_bit — that's hardware wiring config)
     interrupt_active = false;
+
+    // Reset CA1/CB1 pin state
+    ca1_pin_ = true;
+    ca1_prev_ = true;
+    cb1_pin_ = true;
+    cb1_prev_ = true;
 }
 
 void mos6522_t::bus_attach(void* b) {
@@ -278,6 +284,25 @@ bus_state_t mos6522_t::tick(bus_state_t bus_state) {
     const bool rw = BUS_GET_BIT(bus_state, BUS_RW_BIT);
     if (cs && !rw) {
         bus_state = on_bus_write(bus_state);
+    }
+
+    // ── Phase 1.5: CA1/CB1 edge detection ──
+    // Compare current pin level against previous to detect active edges.
+    // PCR bit 0: CA1 edge polarity (0=negative/falling, 1=positive/rising)
+    // PCR bit 4: CB1 edge polarity (0=negative/falling, 1=positive/rising)
+    if (ca1_pin_ != ca1_prev_) {
+        bool positive_edge = (pcr & 0x01) != 0;
+        bool rising = (!ca1_prev_ && ca1_pin_);
+        if (rising == positive_edge)
+            ifr |= MOS6522_IFR_CA1;
+        ca1_prev_ = ca1_pin_;
+    }
+    if (cb1_pin_ != cb1_prev_) {
+        bool positive_edge = (pcr & 0x10) != 0;
+        bool rising = (!cb1_prev_ && cb1_pin_);
+        if (rising == positive_edge)
+            ifr |= MOS6522_IFR_CB1;
+        cb1_prev_ = cb1_pin_;
     }
 
     // ── Phase 2: State advance (timers) ──
