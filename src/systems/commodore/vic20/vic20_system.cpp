@@ -591,7 +591,7 @@ bool VIC20System::initialize() {
     vic_ = board_.chip_as<vic_base_t>(kVIC20_VicSlot);
     
     // Initialize Color RAM to cyan (color 3) for proper text visibility
-    memset(board_.colorram.data(), VIC_COLOR_CYAN, 1024);
+    memset(board_.colorram.memory, VIC_COLOR_CYAN, 1024);
 
     // Initialize load callback pointers (ram0 through blk3 are contiguous
     // in Board flat memory, so ram0.data() serves as base for $0000-$7FFF).
@@ -710,7 +710,7 @@ void VIC20System::reset() {
     // ram0 through blk3 are contiguous in Board flat memory.
     memset(board_.ram0.data(), 0, 0x8000);            // $0000-$7FFF: all RAM
     // Reinitialize Color RAM to default cyan
-    memset(board_.colorram.data(), VIC_COLOR_CYAN, 1024);
+    memset(board_.colorram.memory, VIC_COLOR_CYAN, 1024);
     
     // Clear the framebuffer to black
     if (rgba_framebuffer_ && rgba_width_ > 0 && rgba_height_ > 0) {
@@ -1274,12 +1274,12 @@ uint8_t VIC20System::vic_mem_read(void* user_data, uint16_t addr) {
     }
 }
 
-// Color RAM read — 10-bit address (1 KB), 4-bit wide
+// Color RAM read — 10-bit address (1 KB), 4-bit wide (MOS 2114)
 uint8_t VIC20System::vic_color_read(void* user_data, uint16_t addr) {
     VIC20System* sys = static_cast<VIC20System*>(user_data);
     if (!sys) return 0x0F;
 
-    return sys->board_.colorram.data()[addr & 0x03FF] & 0x0F;
+    return sys->board_.colorram.memory[addr & 0x03FF] & 0x0F;
 }
 
 // ============================================================================

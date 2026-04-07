@@ -6,6 +6,7 @@
 #include "core/signal/audio_port.hpp"
 #include "chip/memory/ram_chip.hpp"
 #include "chip/memory/rom_chip.hpp"
+#include "chip/memory/mos2114.hpp"
 #include "chip/io/mos6522.hpp"
 #include "chip/video/vic/mos6560.hpp"
 #include "chip/video/vic/mos6561.hpp"
@@ -79,7 +80,7 @@
 //
 // MMIO chips have base=0, size=0, mask=0 — they are NOT directly bus-mapped.
 // The I/O decoder routes bus accesses to VIC/VIA1/VIA2 via CS-tick dispatch.
-// Color RAM ($9400) is a regular 1 KB buffer chip (4-bit masking TODO: MOS2114).
+// Color RAM ($9400) is a MOS 2114 (1K × 4-bit SRAM) — reads return upper 4 bits open-bus.
 //
 
 
@@ -100,7 +101,7 @@ inline constexpr auto kVIC20Manifest = make_manifest(
     Slot<mos6522_t>{.label = "VIA 1"},
     Slot<mos6522_t>{.label = "VIA 2"},
     Slot<vic20_io_decoder_t>{.base_addr = 0x9000, .label = "I/O Decoder"},
-    Slot<RAMChip>{.base_addr = 0x9400, .size_bytes = 0x0400, .label = "Color RAM"},
+    Slot<MOS2114>{.base_addr = 0x9400, .label = "Color RAM"},
     Slot<RAMChip>{.base_addr = 0xA000, .size_bytes = 0x2000, .label = "Cartridge Area"},
     Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 0x2000, .label = "BASIC ROM", .rom = {"basic.901486-01.bin|basic.rom|901486-01.bin"}},
     Slot<ROMChip>{.base_addr = 0xE000, .size_bytes = 0x2000, .label = "KERNAL ROM", .rom = {"kernal.901486-07.bin|kernal.rom|901486-07.bin"}},
@@ -150,7 +151,7 @@ struct VIC20Board : Board<VIC20BusTraits::Spec> {
     mos6522_t&          via1     = std::get<9>(components_);
     mos6522_t&          via2     = std::get<10>(components_);
     vic20_io_decoder_t& io_dec   = std::get<11>(components_);
-    RAMChip&            colorram = std::get<12>(components_);
+    MOS2114&            colorram = std::get<12>(components_);
     RAMChip&            cart     = std::get<13>(components_);
     ROMChip&            basic    = std::get<14>(components_);
     ROMChip&            kernal   = std::get<15>(components_);
