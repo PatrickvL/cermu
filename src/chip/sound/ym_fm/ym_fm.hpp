@@ -48,8 +48,12 @@
  *   7. ADPCM-A and ADPCM-B are unimplemented stubs — trait flags exist
  *      but no decode/playback logic is present.
  *
- *   8. OPL-family specifics missing: waveform select (WS), rhythm mode
- *      percussion, and OPLL ROM patch instruments.
+ *   8. OPL-family specifics partially implemented: waveform select (WS)
+ *      lookup is wired per-operator (0=sine, 1=half, 2=abs, 3=quarter),
+ *      but OPL register decode is missing — the waveform field is never
+ *      written.  Rhythm mode percussion and OPLL ROM patches are absent.
+ *      Requires an OPL register-decode path (separate from OPN) to become
+ *      functional.
  *
  *   9. OPM-specific features missing: noise channel, key-fraction
  *      register, and the OPM-specific channel/operator addressing.
@@ -299,6 +303,7 @@ struct FMOperator {
     bool     am_en       = false;   // Amplitude modulation enable
     uint8_t  ssg_eg      = 0;       // SSG-EG control
     uint8_t  keycode     = 0;       // (block << 2) | (fnum >> 9) for DT1 + rate-scaling
+    uint8_t  waveform    = 0;       // OPL2 waveform select (0-3)
     bool     ssg_inverted = false;  // SSG-EG output inversion state
 
     // Key state
@@ -481,6 +486,7 @@ public:
                 op.am_en       = false;
                 op.ssg_eg      = 0;
                 op.keycode     = 0;
+                op.waveform    = 0;
                 op.ssg_inverted = false;
                 op.key_on      = false;
                 op.output      = 0;
@@ -810,7 +816,21 @@ private:
                               ym_fm_tables::SINE_TABLE_BITS))
                           & (ym_fm_tables::SINE_TABLE_SIZE - 1);
 
-        int32_t sine_val = ym_fm_tables::sine_table[phase_idx];
+        // Waveform select (OPL2+): 0=sine, 1=half-sine, 2=abs-sine, 3=quarter-sine
+        int32_t sine_val;
+        if constexpr (has_waveform_sel()) {
+            switch (op.waveform & 0x03) {
+                default:
+                case 0: sine_val = ym_fm_tables::sine_table[phase_idx]; break;
+                case 1: sine_val = (phase_idx < 512)
+                                 ? ym_fm_tables::sine_table[phase_idx] : 0; break;
+                case 2: sine_val = ym_fm_tables::sine_table[phase_idx & 0x1FF]; break;
+                case 3: sine_val = (phase_idx & 0x100)
+                                 ? 0 : ym_fm_tables::sine_table[phase_idx & 0xFF]; break;
+            }
+        } else {
+            sine_val = ym_fm_tables::sine_table[phase_idx];
+        }
 
         // Apply envelope attenuation (linear multiply)
         // SSG-EG inversion: when active and inverted, flip the envelope level
