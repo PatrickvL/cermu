@@ -33,18 +33,17 @@
  *      to an AYTraits instance, but no ay_psg_t is instantiated or
  *      clocked inside ym_fm_t.  SSG output is therefore silent.
  *
- *   4. No Ch3 special mode.  The trait flag and register bits exist, but
- *      per-operator independent frequencies for channel 3 are never
- *      applied.  The supplementary F-Num registers ($A8-$AE) are decoded
- *      into the register file but ignored by update_channel_freq().
+ *   4. [DONE] Ch3 special mode — per-operator independent frequencies from
+ *      supplementary F-Num registers ($A8-$AE) are now decoded and applied
+ *      when Ch3 mode bits are set in register $27.
  *
  *   5. [DONE] Sine table now uses the hardware log-sin + exp ROM pipeline
  *      with integer arithmetic, replicating the characteristic quantization
  *      artifacts of real Yamaha FM chips.
  *
- *   6. DT1 detune table is a flat ±0-3 placeholder.  Real hardware has a
- *      block-dependent 32-entry lookup table per detune value.  DT2
- *      (OPM only) is entirely absent.
+ *   6. [DONE] DT1 detune now uses the hardware-accurate 32-entry lookup
+ *      table keyed by (block, keycode) for each of the 4 detune magnitudes.
+ *      DT2 (OPM only) is not yet implemented.
  *
  *   7. ADPCM-A and ADPCM-B are unimplemented stubs — trait flags exist
  *      but no decode/playback logic is present.
@@ -55,17 +54,16 @@
  *   9. OPM-specific features missing: noise channel, key-fraction
  *      register, and the OPM-specific channel/operator addressing.
  *
- *  10. No rate-scaling.  RS bits are stored but never factor into the
- *      effective envelope rate.  Real hardware adds (block << 1 | fnum_h)
- *      shifted by RS to the programmed rate.
+ *  10. [DONE] Rate-scaling is now applied — RS bits and keycode scale the
+ *      effective envelope rate via (2*rate + keycode>>(3-rs)), clamped to 63.
  *
- *  11. SSG-EG control bits are stored but have no effect on the envelope
- *      generator.  Real hardware alters the envelope shape (invert,
- *      alternate, hold) when SSG-EG is enabled.
+ *  11. [DONE] SSG-EG control implemented — enable/attack/alternate/hold
+ *      bits now alter the envelope shape (inversion + restart/hold on
+ *      reaching max attenuation).
  *
- *  12. LFO AM/PM modulation is accumulated but never applied to operator
- *      phase (PM) or envelope level (AM).  The advance_lfo() values are
- *      computed and then discarded.
+ *  12. [DONE] LFO AM/PM modulation is now applied to operators — PM
+ *      modulates the phase increment proportionally via PMS sensitivity,
+ *      AM adds attenuation to the envelope level via AMS sensitivity.
  *
  *  13. [DONE] YM2612 ladder-effect DAC distortion modeled via traits flag.
  *      The NMOS DAC's zero-crossing offset is applied when ladder_effect=true.
@@ -261,6 +259,20 @@ namespace ym_fm_constants {
     inline constexpr int SINE_TABLE_SIZE   = 1024;
     inline constexpr int ENV_MAX           = (1 << ENV_BITS) - 1;  // Full attenuation
     inline constexpr int TL_SHIFT          = 3;   // TL is in 0.75 dB steps → shift to env scale
+
+    // DT1 detune magnitude table: indexed by [dt1_mag (0-3)][keycode (0-31)]
+    // keycode = (block << 2) | (fnum >> 9)
+    // dt1 bit 2 gives sign (0=pos, 1=neg); magnitude from dt1 bits 1:0
+    inline constexpr uint8_t DT1_LUT[4][32] = {
+        { 0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+          0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0 },
+        { 0,  0,  0,  0,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,
+          2,  3,  3,  3,  4,  4,  4,  5,  5,  6,  6,  7,  8,  8,  8,  8 },
+        { 1,  1,  1,  1,  2,  2,  2,  2,  2,  3,  3,  3,  4,  4,  4,  5,
+          5,  6,  6,  7,  8,  8,  9, 10, 11, 12, 13, 14, 16, 16, 16, 16 },
+        { 2,  2,  2,  2,  2,  3,  3,  3,  4,  4,  4,  5,  5,  6,  6,  7,
+          8,  8,  9, 10, 11, 12, 13, 14, 16, 17, 19, 20, 22, 22, 22, 22 }
+    };
 } // namespace ym_fm_constants
 
 // ============================================================================
@@ -286,6 +298,8 @@ struct FMOperator {
     uint8_t  rs          = 0;       // Rate scaling
     bool     am_en       = false;   // Amplitude modulation enable
     uint8_t  ssg_eg      = 0;       // SSG-EG control
+    uint8_t  keycode     = 0;       // (block << 2) | (fnum >> 9) for DT1 + rate-scaling
+    bool     ssg_inverted = false;  // SSG-EG output inversion state
 
     // Key state
     bool     key_on      = false;
@@ -466,6 +480,8 @@ public:
                 op.rs          = 0;
                 op.am_en       = false;
                 op.ssg_eg      = 0;
+                op.keycode     = 0;
+                op.ssg_inverted = false;
                 op.key_on      = false;
                 op.output      = 0;
                 op.prev_output = 0;
@@ -483,6 +499,7 @@ public:
         lfo_counter_ = 0;
         lfo_am_ = 0;
         lfo_pm_ = 0;
+        for (int i = 0; i < 3; i++) { ch3_fnum_[i] = 0; ch3_block_[i] = 0; }
         dac_value_ = 0;
         dac_enabled_ = false;
         status_ = 0;
@@ -633,6 +650,10 @@ private:
     uint8_t  lfo_am_ = 0;          // Current AM modulation value
     int8_t   lfo_pm_ = 0;          // Current PM modulation value
 
+    // Ch3 special mode — per-operator frequencies (slots 0-2; slot 3 uses normal ch3 freq)
+    uint16_t ch3_fnum_[3] = {};
+    uint8_t  ch3_block_[3] = {};
+
     // DAC (OPN2)
     uint8_t  dac_value_ = 0;
     bool     dac_enabled_ = false;
@@ -720,9 +741,23 @@ private:
                 }
             }
 
-            // Advance operators
+            // Compute LFO modulation values for this channel
+            uint16_t am_mod = 0;
+            int32_t pm_fraction = 0;
+            if constexpr (has_lfo()) {
+                // AM: attenuation scaled by channel AMS sensitivity
+                // ams_shift: {31=off, 3, 1, 0} → lfo_am >> shift
+                static constexpr uint8_t ams_shift[4] = { 31, 3, 1, 0 };
+                am_mod = static_cast<uint16_t>(lfo_am_ >> ams_shift[c.ams]);
+
+                // PM: proportional frequency deviation scaled by PMS
+                static constexpr int16_t pms_depth[8] = { 0, 1, 2, 3, 4, 6, 12, 24 };
+                pm_fraction = static_cast<int32_t>(lfo_pm_) * pms_depth[c.pms];
+            }
+
+            // Advance operators with LFO modulation
             for (int op = 0; op < NUM_OPS; op++) {
-                advance_operator(c.ops[op]);
+                advance_operator(c.ops[op], am_mod, pm_fraction);
             }
 
             // Route through algorithm
@@ -753,13 +788,19 @@ private:
     // Operator advancement — phase + envelope
     // ========================================================================
 
-    void advance_operator(FMOperator& op) {
+    void advance_operator(FMOperator& op, uint16_t am_mod, int32_t pm_fraction) {
         // --- Phase generator ---
         uint32_t mul = op.mul ? op.mul : 1;  // MUL=0 → ×½ (we handle as ×1 with shift)
-        uint32_t phase_inc = op.freq * mul;
+        int32_t phase_inc = static_cast<int32_t>(op.freq * mul);
         if (op.mul == 0) phase_inc >>= 1;    // MUL=0 means ×0.5
 
-        op.phase += phase_inc;
+        // Apply LFO phase modulation (PM): proportional frequency deviation
+        if (pm_fraction != 0) {
+            phase_inc += (phase_inc * pm_fraction) >> 10;
+        }
+        if (phase_inc < 0) phase_inc = 0;
+
+        op.phase += static_cast<uint32_t>(phase_inc);
 
         // --- Envelope generator ---
         advance_envelope(op);
@@ -772,7 +813,13 @@ private:
         int32_t sine_val = ym_fm_tables::sine_table[phase_idx];
 
         // Apply envelope attenuation (linear multiply)
-        uint16_t env = op.env_level + (static_cast<uint16_t>(op.tl) << ym_fm_constants::TL_SHIFT);
+        // SSG-EG inversion: when active and inverted, flip the envelope level
+        uint16_t eff_env = op.env_level;
+        if ((op.ssg_eg & 0x08) && op.ssg_inverted) {
+            eff_env = ym_fm_constants::ENV_MAX - op.env_level;
+        }
+        uint16_t env = eff_env + (static_cast<uint16_t>(op.tl) << ym_fm_constants::TL_SHIFT);
+        if (op.am_en) env += am_mod;  // LFO amplitude modulation
         if (env > ym_fm_constants::ENV_MAX) env = ym_fm_constants::ENV_MAX;
 
         // Attenuation: 0 = full volume, ENV_MAX = silence
@@ -788,23 +835,31 @@ private:
     // SHORTCOMING: This is a rough linear approximation.  Real hardware uses
     // a rate counter with per-rate increment tables (4 increments per rate,
     // cycled by a global counter).  Attack is exponential (level += ~level*rate),
-    // decay/release are linear in log domain.  Rate scaling (RS + block/fnum)
-    // is not applied here.  SSG-EG modes are not implemented.
+    // decay/release are linear in log domain.
 
     void advance_envelope(FMOperator& op) {
+        // Rate-scaling: higher notes progress through the envelope faster.
+        // effective_rate = 2 * base_rate + (keycode >> (3 - rs)), clamped to 63.
+        auto scaled_rate = [&](uint8_t base_rate) -> uint8_t {
+            if (base_rate == 0) return 0;
+            uint8_t eff = base_rate * 2 + (op.keycode >> (3 - op.rs));
+            return eff > 63 ? static_cast<uint8_t>(63) : eff;
+        };
+
         switch (op.env_state) {
             case FMOperator::OFF:
                 op.env_level = ym_fm_constants::ENV_MAX;
                 break;
 
-            case FMOperator::ATTACK:
-                if (op.ar >= 31) {
+            case FMOperator::ATTACK: {
+                uint8_t rate = scaled_rate(op.ar);
+                if (rate >= 62) {
                     op.env_level = 0;
                     op.env_state = FMOperator::DECAY1;
-                } else if (op.ar > 0) {
+                } else if (rate > 0) {
                     // Exponential attack: level += (~level * rate) >> shift
                     uint16_t step = ((ym_fm_constants::ENV_MAX - op.env_level)
-                                    * static_cast<uint16_t>(op.ar)) >> 4;
+                                    * static_cast<uint16_t>(rate)) >> 4;
                     if (step == 0) step = 1;
                     if (op.env_level > step)
                         op.env_level -= step;
@@ -814,11 +869,13 @@ private:
                     }
                 }
                 break;
+            }
 
             case FMOperator::DECAY1: {
                 uint16_t target = static_cast<uint16_t>(op.d1l) << 5;  // D1L × 32
-                if (op.d1r > 0) {
-                    op.env_level += op.d1r;
+                uint8_t rate = scaled_rate(op.d1r);
+                if (rate > 0) {
+                    op.env_level += rate;
                     if (op.env_level >= target) {
                         op.env_level = target;
                         op.env_state = FMOperator::DECAY2;
@@ -827,17 +884,20 @@ private:
                 break;
             }
 
-            case FMOperator::DECAY2:
-                if (op.d2r > 0) {
-                    op.env_level += op.d2r;
+            case FMOperator::DECAY2: {
+                uint8_t rate = scaled_rate(op.d2r);
+                if (rate > 0) {
+                    op.env_level += rate;
                     if (op.env_level >= ym_fm_constants::ENV_MAX)
                         op.env_level = ym_fm_constants::ENV_MAX;
                 }
                 break;
+            }
 
-            case FMOperator::RELEASE:
-                if (op.rr > 0) {
-                    uint16_t step = (op.rr << 1) + 1;
+            case FMOperator::RELEASE: {
+                uint8_t rate = scaled_rate(op.rr);
+                if (rate > 0) {
+                    uint16_t step = (rate << 1) + 1;
                     op.env_level += step;
                     if (op.env_level >= ym_fm_constants::ENV_MAX) {
                         op.env_level = ym_fm_constants::ENV_MAX;
@@ -845,6 +905,26 @@ private:
                     }
                 }
                 break;
+            }
+        }
+
+        // SSG-EG: when enabled, alter envelope shape on reaching max attenuation.
+        // Bits 2:0 encode shape (attack-invert / alternate / hold).
+        if ((op.ssg_eg & 0x08) && op.env_state != FMOperator::OFF
+                               && op.env_state != FMOperator::ATTACK) {
+            if (op.env_level >= ym_fm_constants::ENV_MAX) {
+                if (op.ssg_eg & 0x01) {
+                    // Hold: stop cycling, optionally toggle inversion
+                    if (op.ssg_eg & 0x02) op.ssg_inverted = !op.ssg_inverted;
+                    op.env_level = 0;
+                    op.env_state = FMOperator::OFF;
+                } else {
+                    // Loop: restart envelope from attack
+                    op.env_level = 0;
+                    op.env_state = FMOperator::ATTACK;
+                    if (op.ssg_eg & 0x02) op.ssg_inverted = !op.ssg_inverted;
+                }
+            }
         }
     }
 
@@ -974,6 +1054,8 @@ private:
                         ch.ops[op].key_on = true;
                         ch.ops[op].env_state = FMOperator::ATTACK;
                         ch.ops[op].phase = 0;
+                        // SSG-EG: ATT bit sets initial inversion on key-on
+                        ch.ops[op].ssg_inverted = (ch.ops[op].ssg_eg & 0x0C) == 0x0C;
                     } else if (!new_key && ch.ops[op].key_on) {
                         // Key OFF → start release
                         ch.ops[op].key_on = false;
@@ -1066,6 +1148,22 @@ private:
             ch.block = (data >> 3) & 0x07;
             ch.fnum  = (ch.fnum & 0x0FF) | (static_cast<uint16_t>(data & 0x07) << 8);
             update_channel_freq(ch_idx);
+        } else if (addr >= 0xA8 && addr < 0xAC) {
+            // Ch3 special mode: per-operator F-Num low (slots 0-2)
+            if constexpr (has_ch3_special()) {
+                uint8_t slot = addr - 0xA8;
+                ch3_fnum_[slot] = (ch3_fnum_[slot] & 0x700) | data;
+                update_channel_freq(2);
+            }
+        } else if (addr >= 0xAC && addr < 0xB0) {
+            // Ch3 special mode: per-operator Block/F-Num high (slots 0-2)
+            if constexpr (has_ch3_special()) {
+                uint8_t slot = addr - 0xAC;
+                ch3_block_[slot] = (data >> 3) & 0x07;
+                ch3_fnum_[slot] = (ch3_fnum_[slot] & 0x0FF)
+                                | (static_cast<uint16_t>(data & 0x07) << 8);
+                update_channel_freq(2);
+            }
         } else if (addr >= 0xB0 && addr < 0xB4) {
             // FB/Algorithm
             ch.feedback  = (data >> 3) & 0x07;
@@ -1085,26 +1183,44 @@ private:
 
     void update_channel_freq(uint8_t ch_idx) {
         auto& ch = channel_[ch_idx];
-        // freq = fnum << block  (20-bit phase increment base)
-        uint32_t base_freq = static_cast<uint32_t>(ch.fnum) << ch.block;
+
+        // Ch3 special mode: per-operator frequencies from supplementary registers.
+        // Slots 0-2 use ch3_fnum_/ch3_block_; slot 3 uses normal channel freq.
+        if constexpr (has_ch3_special()) {
+            if (ch_idx == 2 && (regs_[ym_fm::reg::CH3_TIMER_REG]
+                                & ym_fm::fld::CH3_TIMER_CH3_MODE)) {
+                static constexpr uint8_t slot_to_op[3] = { 0, 2, 1 };
+                for (int slot = 0; slot < 3; slot++) {
+                    update_op_freq(2, slot_to_op[slot],
+                                   ch3_fnum_[slot], ch3_block_[slot]);
+                }
+                update_op_freq(2, 3, ch.fnum, ch.block);
+                return;
+            }
+        }
 
         for (int op = 0; op < NUM_OPS; op++) {
-            ch.ops[op].freq = base_freq;
-            update_op_freq(ch_idx, op);
+            update_op_freq(ch_idx, op, ch.fnum, ch.block);
         }
     }
 
     void update_op_freq(uint8_t ch_idx, uint8_t op_idx) {
-        auto& ch = channel_[ch_idx];
-        auto& op = ch.ops[op_idx];
-        uint32_t base_freq = static_cast<uint32_t>(ch.fnum) << ch.block;
+        update_op_freq(ch_idx, op_idx,
+                       channel_[ch_idx].fnum, channel_[ch_idx].block);
+    }
 
-        // SHORTCOMING: DT1 detune is a flat ±0-3 placeholder.  Real hardware
-        // uses a 32-entry table keyed by (block, key-code) for each of the
-        // 4 positive detune values, yielding musically meaningful pitch offsets.
-        // DT2 (OPM only) is entirely absent.
-        static constexpr int8_t dt1_table[8] = { 0, 1, 2, 3, 0, -1, -2, -3 };
-        int8_t detune = dt1_table[op.dt1 & 0x07];
+    void update_op_freq(uint8_t ch_idx, uint8_t op_idx,
+                        uint16_t fnum, uint8_t block) {
+        auto& op = channel_[ch_idx].ops[op_idx];
+        uint32_t base_freq = static_cast<uint32_t>(fnum) << block;
+
+        // DT1 detune via hardware-accurate 32-entry LUT keyed by keycode.
+        // keycode = (block << 2) | (fnum >> 9).  DT2 (OPM only) not yet implemented.
+        op.keycode = (block << 2) | ((fnum >> 9) & 0x03);
+        uint8_t dt_mag = op.dt1 & 0x03;
+        int32_t detune = ym_fm_constants::DT1_LUT[dt_mag][op.keycode];
+        if (op.dt1 & 0x04) detune = -detune;  // Bit 2 = sign
+
         op.freq = static_cast<uint32_t>(static_cast<int32_t>(base_freq) + detune);
     }
 };
