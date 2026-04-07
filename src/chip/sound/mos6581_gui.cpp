@@ -182,7 +182,26 @@ void mos6581_t::render_settings_content() {
     ImGui::SameLine();
     
     if (ImGui::Button("Test Sound")) {
-        // TODO: Generate test sound
+        // Poke SID registers to produce a brief A-440 sawtooth on voice 1.
+        // Uses the normal register-write path so all internal state updates.
+        auto poke = [sid](uint8_t reg, uint8_t val) {
+            bus_state_t bus = 0;
+            BUS_SET_ADDR(bus, reg);
+            BUS_SET_DATA(bus, val);
+            registers_write(sid, bus);
+        };
+
+        // Compute frequency register for A-440
+        // freq_reg = 440 * 16777216 / cpu_clock
+        float clk = sid->cpu_clock > 0.0f ? sid->cpu_clock : SID_DEFAULT_CPU_CLOCK_PAL;
+        uint16_t freq = (uint16_t)(440.0f * 16777216.0f / clk);
+
+        poke(VOICE_FRELO, freq & 0xFF);          // Voice 1 freq lo
+        poke(VOICE_FREHI, (freq >> 8) & 0xFF);   // Voice 1 freq hi
+        poke(VOICE_ATDCY, 0x09);                 // Attack=0, Decay=9
+        poke(VOICE_SUREL, 0xA0);                 // Sustain=10, Release=0
+        poke(SID_REG_SIGVOL, 0x0F);              // Max volume, no filter
+        poke(VOICE_VCREG, WAVEFORM_SAWTOOTH | VCREG_GATE); // Sawtooth + gate on
     }
 
     // Reset to single column at the end
