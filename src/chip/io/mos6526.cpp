@@ -459,9 +459,9 @@ void mos6526_t::write_control_register(uint32_t c, uint8_t v) { // c:A or B
     // CRA write logging disabled for performance
 
     if (c == A) {
-        // TODO : Should toggling 50/60Hz reset the cycle counter?
-        //if (c == A && (old_crv & CRA_TODIN) != (v & CRA_TODIN))
-        //    tod_cycles = 0;
+        // Toggling 50/60Hz (CRA_TODIN) does NOT reset the TOD cycle counter.
+        // The TOD pin is an external clock input — changing this bit only
+        // reinterprets the input frequency, it doesn't affect the counter state.
 
         // Detect a change in the Serial Port input/output bit
         if ((old_crx & CRA_SPMODE) != (v & CRA_SPMODE)) {
@@ -633,8 +633,8 @@ void mos6526_t::check_alarm_interrupt() {
 
 uint8_t mos6526_t::bcd_inc(uint32_t r) { // r:TOD_SEC,TOD_MIN or TOD_HR
     uint8_t v = ++regs_[r]; // Increment the TOD register
-    if ((v & 0x0F) > 9) { // Did low BCD nibble overflow? TODO : Verify; Should this be == 0x0A?
-        v += 6; // Carry over to a high nibble increase TODO : Verify; Should this also do & 0xF0?
+    if ((v & 0x0F) > 9) { // Low BCD nibble overflowed (can only be 0x0A after +1)
+        v += 6; // 0x0A + 6 = 0x10 — carry into high nibble, low nibble zeroed
         regs_[r] = v; // Update the TOD register too
     }
     return v; // Return the result, so that caller can immediately check and handle upper-bound
