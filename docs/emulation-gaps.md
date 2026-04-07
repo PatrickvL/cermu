@@ -42,6 +42,8 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - [x] **NES MMC5 split regs** — Vertical split registers ($5200-$5202) stored.
 - [x] **YM FM DT1/RS/LFO/SSG-EG/Ch3** — Detune LUT, rate-scaling, LFO AM/PM, SSG-EG shapes, Ch3 special mode.
 - [x] **OPL waveform select** — OPL2 waveform lookup infrastructure.
+- [x] **MOS 6509 banking** — Exec/ind bank registers with self-clearing ($zp),Y indirection in bus_setup().
+- [x] **TMS9918 224/240-line** — Runtime line-count switching for SMS2 315-5246 VDP.
 
 ---
 
@@ -173,7 +175,7 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - [ ] **[LARGE]** HuC6280: 8-bank mapper, unique instructions (TII/TAM/TMA/CSH/CSL), integrated 6-ch PSG
 - [ ] **[LARGE]** CSG 4510: MAP instruction, 20-bit addressing, integrated DMA
 - [ ] **[LARGE]** 65CE02: Z register, PHZ/PLZ, TAZ/TZA, BASE page extensions
-- [ ] **[MEDIUM]** MOS 6509: banking for indirect addressing
+- [x] **[DONE]** MOS 6509: exec/ind bank registers, self-clearing ($zp),Y indirection bank in bus_setup()
 - [x] **[DONE]** MOS 6504: instantiated as distinct fam65xx_t type alias
 - [ ] **[EASY]** CPU tracing: TODO to move to system level (`fam65xx.hpp:232`)
 
