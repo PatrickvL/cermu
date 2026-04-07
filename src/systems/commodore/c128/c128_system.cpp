@@ -1049,6 +1049,26 @@ void C128System::init_io_dispatch() {
 // At runtime, update_bank_config() is a single snapshot load instead of
 // a per-page reprogramming loop.
 //
+// Memory cost: 2048 snapshots × 32 bytes ≈ 64 KB.  Alternatives considered:
+//
+//   - Per-group LUTs (~1.1 KB): the 16 pages form 6 independent groups
+//     whose mappings depend on disjoint CR/RCR subsets.  Mode switch becomes
+//     6 table lookups + 16 stores — comparable to memcpy(32) but harder to
+//     maintain and debug.
+//
+//   - Deduplicated snapshots (~17 KB): many CR×RCR combinations produce
+//     identical maps (~416 unique today, ~1664 with function ROMs).  An
+//     indirection table trades space for a dependent load on every switch.
+//
+//   - Compute on demand (0 bytes): ~20 branches per CR/RCR write.  No
+//     table at all, but the evaluation logic must be kept in sync with the
+//     snapshot generator.
+//
+// The brute-force table wins on every practical axis: simplest code, fastest
+// mode switch (one memcpy), obviously correct, trivially debuggable.  64 KB
+// is negligible on any host, and the table doesn't compete for L1 cache
+// because mode switches are rare (a few per frame, not per-scanline).
+//
 
 void C128System::generate_bank_snapshots() {
     using ChipId  = Bus::ChipId;
