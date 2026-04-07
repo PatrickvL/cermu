@@ -114,6 +114,10 @@ public:
     // CPU cycle notification — for mappers with CPU-clocked IRQ counters
     inline void notify_cpu_cycle() { if (mapper) mapper->notify_cpu_cycle(); }
 
+    // Expansion audio — for mappers with extra sound hardware
+    inline void audio_tick() { if (mapper) mapper->audio_tick(); }
+    inline float audio_output() const { return mapper ? mapper->audio_output() : 0.0f; }
+
     // ====================================================================
     // Bus-mediated PPU memory access
     // ====================================================================

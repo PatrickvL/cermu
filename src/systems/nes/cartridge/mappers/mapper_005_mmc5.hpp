@@ -91,6 +91,123 @@ private:
     Mirror mirror_mode_ = Mirror::VERTICAL;
 
     // -----------------------------------------------------------------------
+    // Expansion audio — two pulse channels (no sweep) + PCM DAC
+    // -----------------------------------------------------------------------
+
+    // Duty cycle waveforms (shared with APU)
+    static constexpr uint8_t DUTY_TABLE[4][8] = {
+        {0,1,0,0,0,0,0,0},  // 12.5%
+        {0,1,1,0,0,0,0,0},  // 25%
+        {0,1,1,1,1,0,0,0},  // 50%
+        {1,0,0,1,1,1,1,1},  // 75% (inverted 25%)
+    };
+
+    // Length counter lookup table (identical to APU)
+    static constexpr uint8_t LENGTH_TABLE[32] = {
+        10,254, 20,  2, 40,  4, 80,  6, 160,  8, 60, 10, 14, 12, 26, 14,
+        12, 16, 24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30,
+    };
+
+    struct MMC5Envelope {
+        bool start = false;
+        bool loop = false;
+        bool constant_volume = false;
+        uint8_t divider_period = 0;
+        uint8_t constant_value = 0;
+        uint8_t decay_counter = 0;
+        uint8_t divider = 0;
+
+        void reset() { start = true; }
+
+        void clock() {
+            if (start) {
+                start = false;
+                decay_counter = 15;
+                divider = divider_period;
+            } else if (divider == 0) {
+                divider = divider_period;
+                if (decay_counter > 0) decay_counter--;
+                else if (loop) decay_counter = 15;
+            } else {
+                divider--;
+            }
+        }
+
+        uint8_t volume() const {
+            return constant_volume ? constant_value : decay_counter;
+        }
+    };
+
+    struct MMC5Pulse {
+        MMC5Envelope envelope;
+        uint8_t duty = 0;
+        uint16_t timer_period = 0;
+        uint16_t timer = 0;
+        uint8_t sequence_pos = 0;
+        uint8_t length_counter = 0;
+        bool length_halt = false;
+        bool enabled = false;
+
+        void write_control(uint8_t value) {
+            duty = (value >> 6) & 0x03;
+            length_halt = (value >> 5) & 1;
+            envelope.loop = (value >> 5) & 1;
+            envelope.constant_volume = (value >> 4) & 1;
+            envelope.divider_period = value & 0x0F;
+            envelope.constant_value = value & 0x0F;
+        }
+
+        void write_timer_low(uint8_t value) {
+            timer_period = (timer_period & 0x700) | value;
+        }
+
+        void write_timer_high(uint8_t value) {
+            timer_period = (timer_period & 0xFF) | ((value & 0x07) << 8);
+            if (enabled)
+                length_counter = LENGTH_TABLE[value >> 3];
+            sequence_pos = 0;
+            envelope.reset();
+        }
+
+        void clock_timer() {
+            if (timer == 0) {
+                timer = timer_period;
+                sequence_pos = (sequence_pos + 1) & 0x07;
+            } else {
+                timer--;
+            }
+        }
+
+        void clock_length() {
+            if (!length_halt && length_counter > 0)
+                length_counter--;
+        }
+
+        uint8_t output() const {
+            if (!enabled || length_counter == 0)
+                return 0;
+            if (timer_period < 8)
+                return 0;
+            if (DUTY_TABLE[duty][sequence_pos] == 0)
+                return 0;
+            return envelope.volume();
+        }
+    };
+
+    MMC5Pulse pulse1_;
+    MMC5Pulse pulse2_;
+    uint8_t pcm_value_ = 0;       // $5011 raw DAC value
+    uint8_t audio_enable_ = 0;    // $5015 (bits 0-1 = pulse 1/2 enable)
+
+    // Simple frame counter — counts CPU cycles for quarter/half-frame events.
+    // Uses 4-step mode timing (NTSC: 7457 CPU cycles per half-frame).
+    uint32_t audio_cycle_ = 0;
+    static constexpr uint32_t QUARTER_FRAME = 3729;
+    static constexpr uint32_t HALF_FRAME    = 7457;
+    static constexpr uint32_t THREE_QUARTER = 11186;
+    static constexpr uint32_t FULL_FRAME    = 14915;
+
+    // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 
@@ -173,6 +290,13 @@ public:
         product_ = 0;
         mirror_mode_ = Mirror::VERTICAL;
         rebuild_fill_page();
+
+        // Audio reset
+        pulse1_ = {};
+        pulse2_ = {};
+        pcm_value_ = 0;
+        audio_enable_ = 0;
+        audio_cycle_ = 0;
     }
 
     Mirror mirror() override { return mirror_mode_; }
@@ -180,6 +304,45 @@ public:
     bool irq_state() override { return irq_pending_ && irq_enabled_; }
 
     void irq_clear() override { irq_pending_ = false; }
+
+    // =======================================================================
+    // Expansion audio
+    // =======================================================================
+
+    void audio_tick() override {
+        // Clock pulse timers every other CPU cycle (APU half-rate)
+        if (audio_cycle_ & 1) {
+            pulse1_.clock_timer();
+            pulse2_.clock_timer();
+        }
+
+        // Frame counter — quarter and half frame events
+        uint32_t fc = audio_cycle_ % FULL_FRAME;
+        if (fc == QUARTER_FRAME || fc == HALF_FRAME ||
+            fc == THREE_QUARTER || fc == 0) {
+            // Quarter-frame: clock envelopes
+            pulse1_.envelope.clock();
+            pulse2_.envelope.clock();
+        }
+        if (fc == HALF_FRAME || fc == 0) {
+            // Half-frame: clock length counters
+            pulse1_.clock_length();
+            pulse2_.clock_length();
+        }
+
+        audio_cycle_++;
+    }
+
+    float audio_output() const override {
+        // Pulse output (0-15 each) — NES mixer formula (NESdev wiki)
+        uint8_t p = pulse1_.output() + pulse2_.output();
+        float pulse_out = (p > 0) ? 95.52f / (8128.0f / p + 100.0f) : 0.0f;
+
+        // PCM DAC (0-255) — scale to match APU output range (~0 to ~0.5)
+        float pcm_out = static_cast<float>(pcm_value_) / 255.0f * 0.4f;
+
+        return pulse_out + pcm_out;
+    }
 
     bool notify_ppuctrl(uint8_t value) override {
         if (ppuctrl_ == value) return false;
@@ -470,6 +633,14 @@ public:
     uint8_t expansion_read(uint16_t addr, bool& handled) override {
         handled = true;
 
+        if (addr == 0x5015) {
+            // Audio status — bit 0/1 = pulse 1/2 length counter > 0
+            uint8_t val = 0;
+            if (pulse1_.length_counter > 0) val |= 0x01;
+            if (pulse2_.length_counter > 0) val |= 0x02;
+            return val;
+        }
+
         if (addr == 0x5204) {
             // IRQ status — bit 7 = pending, bit 6 = in-frame
             uint8_t val = 0;
@@ -517,7 +688,30 @@ public:
 private:
     bool write_expansion(uint16_t addr, uint8_t data) {
         switch (addr) {
-            // --- Sound registers $5000-$5015 (stub — not implemented) ---
+            // --- Pulse 1 ($5000-$5003) ---
+            case 0x5000: pulse1_.write_control(data); return false;
+            case 0x5001: return false;  // No sweep on MMC5
+            case 0x5002: pulse1_.write_timer_low(data); return false;
+            case 0x5003: pulse1_.write_timer_high(data); return false;
+
+            // --- Pulse 2 ($5004-$5007) ---
+            case 0x5004: pulse2_.write_control(data); return false;
+            case 0x5005: return false;  // No sweep on MMC5
+            case 0x5006: pulse2_.write_timer_low(data); return false;
+            case 0x5007: pulse2_.write_timer_high(data); return false;
+
+            // --- PCM ($5010-$5011) ---
+            case 0x5010: return false;  // PCM mode/IRQ (not implemented)
+            case 0x5011: pcm_value_ = data; return false;
+
+            // --- Channel enable ---
+            case 0x5015:
+                audio_enable_ = data & 0x03;
+                pulse1_.enabled = (data & 0x01) != 0;
+                pulse2_.enabled = (data & 0x02) != 0;
+                if (!pulse1_.enabled) pulse1_.length_counter = 0;
+                if (!pulse2_.enabled) pulse2_.length_counter = 0;
+                return false;
 
             // --- PRG mode ---
             case 0x5100:
