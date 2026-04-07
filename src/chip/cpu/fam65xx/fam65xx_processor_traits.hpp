@@ -87,7 +87,7 @@ constexpr uint32_t VARIABLE_CLOCK =
 
 enum class BankingType : uint8_t {
   NONE = 0, // Standard 64KB flat addressing
-  MOS6509,  // ⚠ NOT IMPLEMENTED: 6509 banking (indirect-Y indexed, 20-bit addressing)
+  MOS6509,  // 6509 banking: $0000/$0001 select exec/indirection bank (20-bit addressing)
   HUC6280,  // ⚠ NOT IMPLEMENTED: HuC6280 8-bank mapper (21-bit addressing)
   CSG4510,  // ⚠ NOT IMPLEMENTED: 4510 MAP instruction (20-bit addressing with memory mapping)
             // Future: Add more as needed

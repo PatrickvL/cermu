@@ -447,6 +447,9 @@ bus_state_t am_iny(bus_state_t pins) {
        * correct address */
       regs_[AB] = final_addr;
       // Note: DBR (Data Bank Register) is applied by the memory system for final access
+      // MOS 6509: data access uses indirection bank (self-clearing countdown)
+      if constexpr (has_mos6509_banking())
+        mos6509_.ind_remaining = this->opcode_entry.is_rmw() ? 3 : 1;
       this->transition_to_operation();
     }
     return pins;
@@ -466,6 +469,9 @@ bus_state_t am_iny(bus_state_t pins) {
     regs_[ABL] = regs_[ABL] - (y_val & 0xFF); /* Recover original base low */
     regs_[AB] = regs_[AB] + y_val; /* Calculate correct final with carry */
     // Note: DBR (Data Bank Register) is applied by the memory system for final access
+    // MOS 6509: data access uses indirection bank (self-clearing countdown)
+    if constexpr (has_mos6509_banking())
+      mos6509_.ind_remaining = this->opcode_entry.is_rmw() ? 3 : 1;
     this->transition_to_operation();
     return pins;
   }
