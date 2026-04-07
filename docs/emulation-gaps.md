@@ -44,19 +44,19 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 
 ### VIC-20 — Near-Complete
 - [x] **[DONE]** True 4-bit color RAM via MOS2114 masking
-- [ ] **[MEDIUM]** TAP tape emulation (shared with C64)
-- [ ] **[MEDIUM]** Expansion RAM testing against real programs
+- [x] **[DONE]** TAP cassette signal wiring — per-cycle datasette tick, CASS_READ→VIA1 CA1, motor via CA2, sense→PA6
+- [ ] **[TESTING]** Expansion RAM testing against real programs (code implemented, needs QA)
 
 ### C16/Plus4 — Partial
 - [x] **[DONE]** C16 bus struct placeholder deleted — system uses shared `bus_state_t`
 - [x] **[DONE]** Cassette port I/O signals — per-cycle datasette tick, motor/read/sense wired
-- [ ] **[MEDIUM]** TAP tape emulation (shared)
-- [ ] **[MEDIUM]** CRT cartridge loading (shared)
+- [x] **[DONE]** TAP tape emulation — uses shared CommodoreSystem deferred-load path
+- ~~CRT cartridge loading~~ — invalid: TED machines (C16/Plus4/C116) do not use CRT format
 
 ### C128 — Substantially Complete
 - [x] **[DONE]** `apply_configuration()` now applies SID revision and region timing
 - [x] **[DONE]** Duplicate "Reset C128" menu item — verified as intentional design (two reset vectors)
-- [ ] **[MEDIUM]** Z80/CP/M compatibility testing — untested
+- [ ] **[TESTING]** Z80/CP/M compatibility testing — code implemented, needs QA with real CP/M software
 
 ### PET — Complete
 - No known gaps.
@@ -178,9 +178,10 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 ### Mostly Complete (minor gaps)
 | System | Key Missing Items |
 |--------|-------------------|
-| C64 | Banked CRT types, VIC-20/C128 CRT |
-| VIC-20 | TAP cassette wiring |
-| C128 | Z80/CP/M testing |
+| C64 | Banked CRT types |
+| VIC-20 | Expansion RAM testing (QA) |
+| C16/Plus4 | — |
+| C128 | Z80/CP/M testing (QA) |
 | PET | — |
 | NES | Expansion audio, FDS |
 | Atari 2600 | Paddle capacitor dump |
@@ -190,7 +191,6 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 ### Partially Working (core runs, significant features missing)
 | System | Key Missing Items |
 |--------|-------------------|
-| C16/Plus4 | TAP/CRT loading |
 | Chip-8 | ChipPlaceholders for peripherals |
 | Acorn Atom | MC6847 graphics modes |
 | BBC Micro | SSD/DSD disc, UEF tape, sideways ROM loading |
