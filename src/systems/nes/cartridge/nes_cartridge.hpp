@@ -80,6 +80,13 @@ public:
     /// Returns true if banking changed (caller should call update_bank_map).
     bool handle_mapper_write(uint16_t addr, uint8_t data);
 
+    /// Forward PPUCTRL ($2000) writes to the mapper.  Mappers like MMC5
+    /// use sprite size and pattern table bits to split CHR bank sets.
+    /// Returns true if banking changed (caller should call update_bank_map).
+    bool handle_ppuctrl_write(uint8_t data) {
+        return mapper && mapper->notify_ppuctrl(data);
+    }
+
     /// Get the mapper instance (for IRQ state, scanline, etc.)
     Mapper* get_mapper() const { return mapper.get(); }
 

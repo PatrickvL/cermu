@@ -1179,6 +1179,12 @@ void NintendoSystem<V>::tick() {
                 if (cartridge_) {
                     board_.ppu.bus_snapshot_ = cartridge_->ppu_memory_tick(
                         board_.ppu.bus_snapshot_, &bus_, board_.ppu.ppu_dot_count_);
+                    // PPUCTRL write — notify mapper for CHR bank splitting
+                    if ((addr & 7) == 0) {
+                        if (cartridge_->handle_ppuctrl_write(data)) {
+                            cartridge_->update_bank_map(&bus_, bus_.ciram);
+                        }
+                    }
                 }
             } else if (block == nes_bus::BLOCK_APU_IO) {
                 // APU/IO registers ($4000-$4FFF)
