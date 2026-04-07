@@ -439,37 +439,15 @@ void Apple1System::render_configuration_ui() {
 // ============================================================================
 
 void Apple1System::configure_bus_memory_map() {
-    using ChipId      = PT::ChipId;
-    using WriteChipId = PT::WriteChipId;
-
-    const size_t ram_pages = ram_size_ / Bus::kPageSize;  // 16 (4K), 32 (8K), or 256 (64K)
-
     // effective_size trims RAM in Phase 1 and gives MMIO sub-tables
     // (PIA at $D0) an open-bus base when RAM doesn't reach that page.
     board_.set_effective_size(1, ram_size_);  // slot 1 = RAM
-    board_.apply(bus_);
 
-    // ── BASIC ROM — unmap if not loaded ─────────────────────────────────────
-    if (!has_basic_) {
-        for (size_t i = 0; i < 16; ++i) {
-            const size_t page = 0xE0 + i;
-            // Restore underlying RAM (if present) or leave unmapped
-            if (page < ram_pages) {
-                bus_.set_read_page(0, page, ChipId(page));
-            } else {
-                bus_.set_read_page(0, page, PT::kNoChipSelected);
-            }
-        }
-    }
-
-    // ── 64K mode: ROM writes pass through to underlying RAM ─────────────────
-    if (ram_size_ == apple1_constants::RAM_64K) {
-        bus_.set_write_page(0, 0xFF, WriteChipId(0xFF));
-        if (has_basic_) {
-            for (size_t i = 0; i < 16; ++i)
-                bus_.set_write_page(0, 0xE0 + i, WriteChipId(0xE0 + i));
-        }
-    }
+    // Condition function: gate BASIC ROM slot on has_basic_.
+    auto condition_fn = [](uint16_t, const void* ctx) -> bool {
+        return *static_cast<const bool*>(ctx);
+    };
+    board_.apply(bus_, 0, condition_fn, &has_basic_);
 }
 
 void Apple1System::tick_cpu() {
