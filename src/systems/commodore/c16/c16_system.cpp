@@ -728,7 +728,32 @@ void Commodore264System<V>::tick() {
     
     // PHASE 3.1: TED PHI2 — CS register dispatch + DMA data delivery
     s = board_.ted.tick_phi2(s);
-    
+
+    // PHASE 3.2: Cassette port — tick datasette and exchange signals.
+    // Wired per-cycle for pulse-accurate TAP playback timing.
+    if (cached_datasette_) {
+        // Feed motor control: CPU I/O port bit 3 (active-low) → CASS_MOTOR
+        uint8_t cpu_out = board_.csg7501.port.output();
+        cached_datasette_->on_signal_change(
+            (cpu_out & 0x08) ? (1u << PortSignals::CASS_MOTOR) : 0u);
+
+        // Advance tape by one CPU cycle
+        cached_datasette_->tick();
+
+        // Read datasette output signals
+        uint32_t cass_out = cached_datasette_->get_output_signals();
+
+        // CASS_READ → CPU I/O port bit 4 (active-high on pin: 1 = idle, 0 = pulse)
+        // CASS_SENSE → PIO1 bit 2 (active-low: 0 = button pressed)
+        uint8_t tape_read_bit = (cass_out & (1u << PortSignals::CASS_READ)) ? 0x10 : 0x00;
+        uint8_t sense = (cass_out & (1u << PortSignals::CASS_SENSE)) ? 0x04 : 0x00;
+
+        board_.csg7501.set_io_input(tape_read_bit);   // Bit 4 into CPU port
+
+        // PIO1 external_pins bit 2: set if sense HIGH (released), clear if LOW (pressed)
+        board_.pio1.external_pins = (board_.pio1.external_pins & ~0x04) | sense;
+    }
+
     // PHASE 4: CPU PHI1
     s = board_.csg7501.tick<CSG7501::Phase::PHI1>(s);
     
@@ -1022,11 +1047,40 @@ uint8_t Commodore264System<V>::io_port_in(void* user_data) {
 
 template<C264SeriesVariant V>
 void Commodore264System<V>::io_port_out(uint8_t data, void* user_data) {
-    (void)data;
-    (void)user_data;
-    // Stub: ignore output for now
-    // TODO: Handle cassette motor (bit 0), serial bus SRQ/DATA/CLK/ATN (bits 1-4),
-    //       cassette sense (bit 6). Bit 5 absent (mask 0x5F).
+    auto* sys = static_cast<Commodore264System<V>*>(user_data);
+
+    // Cassette motor: bit 3 (active-low: 0 = motor ON)
+    if (sys->cached_datasette_) {
+        sys->cached_datasette_->on_signal_change(
+            (data & 0x08) ? (1u << PortSignals::CASS_MOTOR) : 0u);
+    }
+
+    // IEC serial bus output is handled separately in the tick loop
+    // (cycle-accurate drive integration at PHASE 4.5).
+}
+
+// ============================================================================
+// PORT DEVICE CHANGE — cached peripheral pointers
+// ============================================================================
+
+template<C264SeriesVariant V>
+void Commodore264System<V>::on_port_device_changed(int port_index) {
+    // Update cached datasette for Cassette Port (index 3)
+    if (port_index == 3) {
+        cached_datasette_ = nullptr;
+        auto* port = get_port(3);
+        if (port) {
+            auto* device = port->get_attached_device();
+            if (device && strcmp(device->get_id(), "datasette") == 0) {
+                cached_datasette_ = static_cast<Datasette1530Device*>(device);
+            }
+        }
+    }
+
+    // Update serial-traps-enabled flag when IEC serial port changes
+    if (port_index == 2) {
+        update_serial_traps_enabled();
+    }
 }
 
 // ============================================================================
