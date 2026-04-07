@@ -229,8 +229,10 @@ inline constexpr std::array<uint8_t, 64 * 8> cm2140_rom = {
 // Japanese Katakana characters instead of ASCII.
 // ---------------------------------------------------------------------------
 inline constexpr std::array<uint8_t, 64 * 8> cm4800_rom = {
-    // TODO: Replace with verified CM4800 ROM dump data.
-    // For now, initialize to zero. Use load_rom() to populate at runtime.
+    // TODO(blocked): Replace with verified CM4800 Katakana ROM dump.
+    // Requires sourcing an original ROM image (die-shot extraction or
+    // physical chip read).  Use load_rom() to populate at runtime if
+    // a dump becomes available.
     0
 };
 
