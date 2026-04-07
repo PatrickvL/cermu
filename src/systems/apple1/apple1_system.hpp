@@ -26,7 +26,7 @@
 //   Slot 0: CPU         — not bus-mapped
 //   Slot 1: RAM         — 64 KB (full address space, actual size configurable)
 //   Slot 2: PIA         — MMIO-only, 4-byte window at $D010
-//   Slot 3: BASIC ROM   — 4 KB at $E000 (optional)
+//   Slot 3: BASIC ROM   — 4 KB at $E000 (optional, condition-gated)
 //   Slot 4: Monitor ROM — 256 bytes at $FF00
 //
 // Ports:
@@ -34,10 +34,13 @@
 //   Slot 6: Cassette    — ACI cassette interface
 //   Slot 7: Video Out   — Composite video output
 //
-// Write side: only RAM.  ROM reads overlay RAM; writes pass through to RAM
-// (4K/8K modes unmap ROM read pages; 64K mode never maps ROM at all).
+// Write side: only RAM.  ROM is read-only so apply() never maps write pages
+// for ROM slots — writes fall through to the underlying RAM automatically.
 // Page $D0 uses an auto-created MaskedSubTable for PIA ($D010–$D013).
 //
+
+// Condition tag for optional BASIC ROM (slot 3).
+inline constexpr uint16_t kApple1HasBasic = 1;
 
 inline constexpr auto kApple1Manifest = make_manifest(
     // Chips
@@ -45,6 +48,7 @@ inline constexpr auto kApple1Manifest = make_manifest(
     Slot<RAMChip>  {.base_addr = 0x0000, .size_bytes = 0x10000,            .label = "RAM"},
     Slot<pia6820_t>{.base_addr = 0xD010,              .addr_mask = 0xFFFC, .label = "PIA"},
     Slot<ROMChip>  {.base_addr = 0xE000, .size_bytes = 0x1000,             .label = "BASIC",
+                    .condition = kApple1HasBasic,
                     .rom = {"apple1basic.rom|basic.rom", true}},
     Slot<ROMChip>  {.base_addr = 0xFF00, .size_bytes = 0x0100,             .label = "Monitor",
                     .rom = {"apple1.rom|monitor.rom|wozmon.rom"}},
