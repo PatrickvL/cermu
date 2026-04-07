@@ -731,6 +731,31 @@ void C64System::system_tick() {
     // PHASE 1: VIC-II PHI1 — g-access read, pixel sequencing
     s = board_.vicii.tick_phi1(s);
 
+    // PHASE 1.25: Cassette port — tick datasette and exchange signals.
+    // Must run before CIA PHI2 so FLAG edge detection sees CASS_READ.
+    if (cached_datasette_) {
+        // Feed motor control: CPU I/O port bit 5 (active-low) → CASS_MOTOR
+        uint8_t cpu_out = board_.cpu.port.output();
+        cached_datasette_->on_signal_change(
+            (cpu_out & 0x20) ? (1u << PortSignals::CASS_MOTOR) : 0u);
+
+        // Advance tape by one CPU cycle
+        cached_datasette_->tick();
+
+        // Read datasette output signals
+        uint32_t cass_out = cached_datasette_->get_output_signals();
+
+        // CASS_READ → CIA1 FLAG pin (active-low: 0 = pulse edge)
+        if (cass_out & (1u << PortSignals::CASS_READ))
+            BUS_SET_BIT(s, BUS_FLAG_BIT);
+        else
+            BUS_CLR_BIT(s, BUS_FLAG_BIT);
+
+        // CASS_SENSE → CPU I/O port bit 4 (active-low: 0 = button pressed)
+        uint8_t sense_bit = (cass_out & (1u << PortSignals::CASS_SENSE)) ? 0x10 : 0x00;
+        board_.cpu.set_io_input(sense_bit);
+    }
+
     // PHASE 1.5: CIA PHI2 — apply pending interrupt lines before CPU
     s = board_.cia2.tick_phi2(s);
     s = board_.cia1.tick_phi2(s);
@@ -1438,6 +1463,18 @@ void C64System::on_port_device_changed(int port_index) {
             auto* device = port->get_attached_device();
             if (device && strcmp(device->get_id(), "lightpen") == 0) {
                 cached_lightpen_ = static_cast<LightpenDevice*>(device);
+            }
+        }
+    }
+
+    // Update cached datasette for Cassette Port
+    if (port_index == PORT_CASSETTE) {
+        cached_datasette_ = nullptr;
+        auto* port = get_port(PORT_CASSETTE);
+        if (port) {
+            auto* device = port->get_attached_device();
+            if (device && strcmp(device->get_id(), "datasette") == 0) {
+                cached_datasette_ = static_cast<Datasette1530Device*>(device);
             }
         }
     }
