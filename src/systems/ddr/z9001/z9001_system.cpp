@@ -76,17 +76,6 @@ bool Z9001System<V>::initialize() {
     port_manifest_       = BT::kManifest.port_slots;
     port_manifest_count_ = BT::kManifest.port_count;
 
-    // Typed pointers for memory chips accessed after initialize()
-    video_ram_chip_ = &board_.video_ram;
-    os_rom_chip_    = &board_.os_rom;
-    if constexpr (Traits::has_basic_rom) {
-        basic_rom_lo_chip_ = &board_.basic_rom_lo;
-        basic_rom_hi_chip_ = &board_.basic_rom_hi;
-    }
-    if constexpr (Traits::has_color_ram) {
-        color_ram_chip_ = &board_.color_ram;
-    }
-
     // ── Trim RAM pages for KC87 (48 KB out of 64 KB allocated) ──────────
     configure_bus_memory_map();
 
@@ -360,20 +349,15 @@ bus_state_t Z9001System<V>::io_tick(bus_state_t pins) {
 
 template<Z9001Variant V>
 void Z9001System<V>::render_frame() {
-    const uint8_t* vram = video_ram_chip_ ? video_ram_chip_->data() : nullptr;
-    if (!vram) return;
+    const uint8_t* vram = board_.video_ram.data();
 
     video_gen_.set_vram(vram);
     video_gen_.set_char_rom(char_rom_.data());
 
     if constexpr (Traits::has_color_ram) {
-        const uint8_t* cram = color_ram_chip_ ? color_ram_chip_->data() : nullptr;
-        if (cram) {
-            // KC87: per-character fg (bits 2:0) and bg (bits 5:3) from color RAM
-            video_gen_.set_color_attr({cram, 0x07, 0, 0x38, 3});
-        } else {
-            video_gen_.set_color_attr({});
-        }
+        const uint8_t* cram = board_.color_ram.data();
+        // KC87: per-character fg (bits 2:0) and bg (bits 5:3) from color RAM
+        video_gen_.set_color_attr({cram, 0x07, 0, 0x38, 3});
     }
 
     video_gen_.render_frame();
@@ -409,8 +393,8 @@ bool Z9001System<V>::load_roms() {
                                       z9001_constants::BASIC_ROM_SIZE,
                                       full_basic.data(), full_basic.size())) {
             // Split: first 8 KB → basic_rom_lo, next 2 KB → basic_rom_hi
-            std::memcpy(basic_rom_lo_chip_->data(), full_basic.data(), 8192);
-            std::memcpy(basic_rom_hi_chip_->data(), full_basic.data() + 8192, 2048);
+            std::memcpy(board_.basic_rom_lo.data(), full_basic.data(), 8192);
+            std::memcpy(board_.basic_rom_hi.data(), full_basic.data() + 8192, 2048);
         } else {
             log_info("%s: BASIC ROM not loaded\n", Traits::name);
             ok = false;
