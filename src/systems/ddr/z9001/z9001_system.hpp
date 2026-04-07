@@ -174,15 +174,6 @@ public:
     void* get_video_port_ptr() override { return video_port_.get(); }
 
 private:
-    // ── Chips (value-typed via Board Chips) ────────────────────────────
-
-    // ── Memory — owned by Board, accessed via chip_as<>() ────────────
-    ROMChip* basic_rom_lo_chip_  = nullptr;  // KC 87 only
-    ROMChip* basic_rom_hi_chip_  = nullptr;  // KC 87 only
-    RAMChip* color_ram_chip_     = nullptr;  // KC 87 only
-    RAMChip* video_ram_chip_     = nullptr;
-    ROMChip* os_rom_chip_        = nullptr;
-
     // Character ROM — NOT bus-mapped (used for display rendering only)
     std::vector<uint8_t> char_rom_;
 
