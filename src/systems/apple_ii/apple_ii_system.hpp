@@ -289,12 +289,6 @@ public:
     void* get_video_port_ptr() override { return video_port_.get(); }
 
 private:
-    // ── Chips (value-typed via Board Chips) ────────────────────────────
-
-    // ── Memory chips — post-init pointers ────────────────────────────────
-    ROMChip* rom_       = nullptr;
-    uint8_t* ram_ptr_   = nullptr;   // Direct pointer for soft-switch video rendering
-
     // ── Board + bus ──────────────────────────────────────────────────────
     using Bus       = MemoryBus<typename BTraits::Spec>;
     using MainBoard = AppleIIBoard<V>;

@@ -141,9 +141,6 @@ bool AppleIISystem<V>::initialize() {
     port_manifest_       = BTraits::kManifest.port_slots;
     port_manifest_count_ = BTraits::kManifest.port_count;
 
-    rom_      = &board_.rom;
-    ram_ptr_  = board_.ram.data();
-
     pins_ = board_.cpu.init();
 
     configure_bus_memory_map();
