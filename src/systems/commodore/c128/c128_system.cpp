@@ -781,13 +781,16 @@ void C128System::run_frame() {
 // AUDIO
 // ============================================================================
 
-uint32_t C128System::get_audio_samples(float* /*buffer*/, uint32_t /*max_samples*/) {
-    // TODO: SID audio output
-    return 0;
+uint32_t C128System::get_audio_samples(float* buffer, uint32_t max_samples) {
+    if (!system_ready_ || !buffer || max_samples == 0) return 0;
+    board_.sid.generate_samples(buffer, max_samples);
+    return max_samples;
 }
 
 void C128System::set_audio_sample_rate(int rate) {
     audio_sample_rate_ = rate;
+    if (system_ready_ && rate > 0)
+        board_.sid.set_sample_rate(static_cast<float>(rate));
 }
 
 // ============================================================================
