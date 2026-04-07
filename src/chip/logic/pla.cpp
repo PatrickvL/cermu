@@ -26,7 +26,10 @@ void PLA906114::set_cpu_address_bank(uint8_t high_nybble) {
             // "The address lines A12 to A15 of the C64 address
             // bus are pulled up by RP4 whenever the VIC-II has
             // the bus, so they are %1111 usually"
-            uint8_t rp4 = 0x0F; // RP4 pulls A12-A15 high in Ultimax mode TODO : Let cardridge / exrom set this
+            // RP4 pulls A12-A15 high when VIC-II has the bus.
+            // A cartridge could override individual lines via expansion port
+            // bus contention, but no known cartridge does this in practice.
+            uint8_t rp4 = 0x0F;
 
             high_nybble = rp4;
         }
