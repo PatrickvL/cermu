@@ -135,6 +135,9 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
   static constexpr bool has_apu() { return Traits.has_apu(); }
   static constexpr bool has_io_port() { return Traits.has_io_port(); }
   static constexpr bool has_nmos_bugs() { return Traits.is_nmos(); }
+  static constexpr bool has_mos6509_banking() {
+    return Traits.banking == BankingType::MOS6509;
+  }
 
   static constexpr bool has_bcd() {
     return Traits.has(CPUCoreFlags::HAS_DECIMAL_MODE);
@@ -437,6 +440,24 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
       FAM65XX_SET_BANK(pins, bank);
     }
 
+    // MOS 6509: output ind_bank while ind_remaining > 0, then exec_bank.
+    // Self-clearing: am_iny() sets the count to the exact number of data-
+    // phase bus_setup() calls the operation will make (1 for load/store,
+    // 3 for RMW read-modify-write).  Each call here decrements it, so the
+    // count reaches zero by the time the operation completes — no external
+    // reset needed.  Interrupts and BRK are safe: the 6509 is NMOS, so
+    // interrupts only fire at instruction boundaries where ind_remaining
+    // is guaranteed zero (no mid-instruction abort exists).
+    // Single branch — common path (ind_remaining == 0) is predict-not-taken.
+    if constexpr (has_mos6509_banking()) {
+      if (UNLIKELY(mos6509_.ind_remaining > 0)) {
+        FAM65XX_SET_BANK(pins, mos6509_.ind_bank);
+        --mos6509_.ind_remaining;
+      } else {
+        FAM65XX_SET_BANK(pins, mos6509_.exec_bank);
+      }
+    }
+
     // Set R/W signal
     if constexpr (IsWrite) {
       pins &= ~FAM65XX_RW;                 // Clear RW for write
@@ -663,6 +684,63 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
       #else
         return this->write_apu_register(addr, data);
       #endif
+    }
+    return false;
+  }
+
+  // ========================================================================
+  // MOS 6509 BANK REGISTERS ($0000 exec, $0001 indirect)
+  // ========================================================================
+
+  // 6509 bank registers — only materialised when Traits selects MOS6509
+  // banking (zero overhead for all other 65xx variants).
+  //
+  // $0000 = execution bank (4-bit): selects 64K segment for instruction
+  //         fetches and all normal data access.  Default: 15.
+  // $0001 = indirection bank (4-bit): selects 64K segment for the final
+  //         data read/write in ($zp),Y addressing only.
+  //
+  // During ($zp),Y: zero-page pointer is read from the execution bank;
+  // the resolved address is accessed in the indirection bank.
+  //
+  // am_iny() sets ind_remaining to the number of data-phase bus accesses
+  // that should use ind_bank (1 for load/store, 3 for RMW).  bus_setup()
+  // decrements after each use — the flag is self-clearing.
+
+  struct Mos6509State {
+    uint8_t exec_bank     = 0x0F; // $0000: execution bank (power-up = 15)
+    uint8_t ind_bank      = 0x0F; // $0001: indirection bank
+    uint8_t ind_remaining = 0;    // data-phase accesses left at ind_bank
+  };
+
+  // Conditionally-typed member: full state for 6509, empty struct otherwise.
+  struct NoMos6509State {};
+  std::conditional_t<Traits.banking == BankingType::MOS6509,
+                     Mos6509State, NoMos6509State> mos6509_{};
+
+  /// Intercept reads at $0000/$0001 for MOS 6509 bank registers.
+  inline bool handle_mos6509_read(bus_state_t& pins, uint32_t addr) {
+    if constexpr (has_mos6509_banking()) {
+      if (addr <= 0x0001) {
+        uint8_t data = (addr == 0x0000) ? mos6509_.exec_bank
+                                        : mos6509_.ind_bank;
+        FAM65XX_SET_DATA(pins, data);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Intercept writes at $0000/$0001 for MOS 6509 bank registers.
+  inline bool handle_mos6509_write(uint32_t addr, uint8_t data) {
+    if constexpr (has_mos6509_banking()) {
+      if (addr <= 0x0001) {
+        if (addr == 0x0000)
+          mos6509_.exec_bank = data & 0x0F;
+        else
+          mos6509_.ind_bank = data & 0x0F;
+        return true;
+      }
     }
     return false;
   }
@@ -1352,6 +1430,13 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
     if constexpr (has_apu()) {
       this->reset_apu();
     }
+
+    // Reset MOS 6509 bank registers
+    if constexpr (has_mos6509_banking()) {
+      mos6509_.exec_bank     = 0x0F;
+      mos6509_.ind_bank      = 0x0F;
+      mos6509_.ind_remaining = 0;
+    }
   }
 
   void init_opcode_table() {
@@ -1949,16 +2034,22 @@ public:
       
       if (is_write) {
         const uint8_t data = FAM65XX_GET_DATA(pins);
-        // Handle I/O port writes (6510 only)
-        if (!this->handle_io_port_write(addr, data)) {
-          // Handle APU writes (NES 6502 only)
-          this->handle_apu_write(addr, data);
+        // Handle MOS 6509 bank register writes
+        if (!this->handle_mos6509_write(addr, data)) {
+          // Handle I/O port writes (6510 only)
+          if (!this->handle_io_port_write(addr, data)) {
+            // Handle APU writes (NES 6502 only)
+            this->handle_apu_write(addr, data);
+          }
         }
       } else {
-        // Handle I/O port reads (6510 only)
-        if (!this->handle_io_port_read(pins, addr)) {
-          // Handle APU reads (NES 6502 only)
-          this->handle_apu_read(pins, addr);
+        // Handle MOS 6509 bank register reads
+        if (!this->handle_mos6509_read(pins, addr)) {
+          // Handle I/O port reads (6510 only)
+          if (!this->handle_io_port_read(pins, addr)) {
+            // Handle APU reads (NES 6502 only)
+            this->handle_apu_read(pins, addr);
+          }
         }
       }
 
