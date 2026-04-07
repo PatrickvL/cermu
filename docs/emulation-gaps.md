@@ -49,6 +49,7 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - [x] **Memotech MTX file loading** — Binary file loading into RAM; `.run` header support.
 - [x] **SpectaVideo SVI file loading** — Cartridge ROM loading replacing BASIC ROM.
 - [x] **Tatung Einstein file loading** — COM/binary loading into RAM; ROM banking implemented.
+- [x] **Namco Video rotation** — GPU-side `DisplayRotation` enum + CRT shader UV rotation; Namco outputs native 288×224.
 
 ---
 
@@ -163,7 +164,7 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - [x] **[DONE]** 48K contention pattern implemented (8-T-state cycle, 128 T-states per display line)
 
 #### Namco Video
-- [ ] **[BLOCKED]** Output native 288×224 when GPU-side rotation available (requires shader support)
+- [x] **[DONE]** GPU-side display rotation — `DisplayRotation` in HardwareTraits, CRT shader UV rotation, native 288×224 output
 
 ### I/O
 
@@ -223,7 +224,7 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 | DDR (Z9001/KC85/Z1013/LC80) | KC85 module mapping, serial keyboard PIO |
 | Arcade — Bomb Jack | Background/sprite layers |
 | Arcade — Atari Vector | Mathbox, second POKEY, host input wiring |
-| Arcade — Namco | ROM loading (requires romset handling) |
+| Arcade — Namco | ROM loading (requires romset handling), sprites |
 
 ### Skeleton/Stub (framework only, not runnable)
 | System | Everything Missing |
