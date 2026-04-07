@@ -38,9 +38,9 @@
  *      applied.  The supplementary F-Num registers ($A8-$AE) are decoded
  *      into the register file but ignored by update_channel_freq().
  *
- *   5. Sine table uses a direct std::sin() computation, not the log-sin
- *      + exponential ROM tables found in real YM hardware.  This removes
- *      the characteristic quantization artifacts.
+ *   5. [DONE] Sine table now uses the hardware log-sin + exp ROM pipeline
+ *      with integer arithmetic, replicating the characteristic quantization
+ *      artifacts of real Yamaha FM chips.
  *
  *   6. DT1 detune table is a flat ±0-3 placeholder.  Real hardware has a
  *      block-dependent 32-entry lookup table per detune value.  DT2
@@ -67,7 +67,8 @@
  *      phase (PM) or envelope level (AM).  The advance_lfo() values are
  *      computed and then discarded.
  *
- *  13. YM3438 ladder-effect difference from YM2612 is not modeled.
+ *  13. [DONE] YM2612 ladder-effect DAC distortion modeled via traits flag.
+ *      The NMOS DAC's zero-crossing offset is applied when ladder_effect=true.
  *
  *  14. Timer prescaling differs between OPN sub-variants; this
  *      implementation uses a single advance-per-tick model.
@@ -321,28 +322,67 @@ struct FMChannel {
 // The YM2612 uses a log-sin ROM for phase→amplitude conversion.
 // We precompute it as a signed 14-bit sine table.
 //
-// SHORTCOMING: Real hardware stores a quarter-wave log-sin table (256 entries)
-// and an exponential table, combining them to produce the final amplitude.
-// This creates characteristic quantization steps absent from our smooth
-// std::sin() approach.  A proper implementation should replicate the
-// 10-bit log-sin → 12-bit exp ROM pipeline.
+// Hardware pipeline (replicated here with integer arithmetic):
+//   1. 10-bit phase → quarter-wave mirror (8-bit index)
+//   2. logsin ROM [256] → ~12-bit log attenuation
+//   3. Split attenuation: integer part (shift) + fractional part (exp index)
+//   4. exp ROM [256] + implicit bit 10 → 11-bit mantissa
+//   5. mantissa >> shift → linear amplitude (quantized!)
+//   6. Negate for quadrants 2 & 4
+//
+// The limited ROM resolution (256 entries each) introduces characteristic
+// quantization steps — especially at low amplitudes where the right-shift
+// loses precision.  This is a key part of the Yamaha FM sound.
 
 namespace ym_fm_tables {
 
 inline constexpr int SINE_TABLE_BITS = 10;
 inline constexpr int SINE_TABLE_SIZE = 1 << SINE_TABLE_BITS;
 
-// Runtime-initialized sine table (populated in init())
-inline int16_t sine_table[SINE_TABLE_SIZE];
-inline bool    sine_table_initialized = false;
+// Runtime-initialized tables (populated via init_sine_table)
+inline int16_t  sine_table[SINE_TABLE_SIZE];
+inline uint16_t logsin_rom[256];            // quarter-wave log-sin ROM
+inline uint16_t exp_rom[256];               // exponential ROM
+inline bool     sine_table_initialized = false;
 
 inline void init_sine_table() {
     if (sine_table_initialized) return;
+
+    // Build quarter-wave log-sin ROM (256 entries, ~12-bit unsigned values)
+    // logsin(i) = round(-log₂(sin((2i+1) × π / 2048)) × 256)
+    for (int i = 0; i < 256; i++) {
+        double angle = (2.0 * i + 1.0) / 1024.0 * (M_PI / 2.0);
+        logsin_rom[i] = static_cast<uint16_t>(-std::log2(std::sin(angle)) * 256.0 + 0.5);
+    }
+
+    // Build exponential ROM (256 entries, 10-bit unsigned values)
+    // exp(i) = round((2^((255-i)/256) - 1) × 1024)
+    for (int i = 0; i < 256; i++) {
+        double val = (std::pow(2.0, (255.0 - i) / 256.0) - 1.0) * 1024.0;
+        exp_rom[i] = static_cast<uint16_t>(val + 0.5);
+    }
+
+    // Build full 1024-entry sine table using the integer pipeline
     for (int i = 0; i < SINE_TABLE_SIZE; i++) {
-        // Full-cycle sine: 0..1023 → 0..2π
-        double phase = (static_cast<double>(i) + 0.5) / SINE_TABLE_SIZE * 2.0 * M_PI;
-        // 13-bit signed output (matches YM2612 DAC range)
-        sine_table[i] = static_cast<int16_t>(std::sin(phase) * 8191.0);
+        bool     negate = (i >> 9) & 1;     // bit 9: negative half-cycle
+        bool     mirror = (i >> 8) & 1;     // bit 8: descending quarter
+        uint8_t  idx    = i & 0xFF;
+        if (mirror) idx = ~idx;              // 255 - idx
+
+        uint16_t att   = logsin_rom[idx];    // ~12-bit log attenuation
+        uint16_t frac  = att & 0xFF;         // lower 8 bits → exp ROM index
+        uint16_t shift = att >> 8;           // upper bits   → right-shift amount
+
+        // exp ROM + implicit bit 10 → 11-bit mantissa (1024..2047)
+        uint16_t mantissa = exp_rom[frac] | 0x400;
+        uint16_t linear   = mantissa >> shift;
+
+        // Scale to 13-bit range (<<2) to match existing caller expectations.
+        // Hardware peak ≈ 2045; ×4 ≈ 8180 (close to the ideal 8191, the
+        // small deficit IS the hardware quantization).
+        int16_t result = static_cast<int16_t>(linear << 2);
+        if (negate) result = -result;
+        sine_table[i] = result;
     }
     sine_table_initialized = true;
 }
@@ -695,6 +735,17 @@ private:
         if (active_channels > 0) {
             // 8191 max per channel × N channels → normalize
             last_sample_ = mix / (8191.f * active_channels);
+
+            // YM2612 (NMOS) ladder-effect DAC distortion: the 9-bit internal
+            // DAC has non-uniform step sizes due to the NMOS process.  The most
+            // audible artifact is a zero-crossing discontinuity where positive
+            // values are offset by ~1 LSB relative to negative values.
+            // The YM3438 (CMOS) corrected this, producing a cleaner output.
+            if constexpr (Traits.ladder_effect) {
+                if (last_sample_ > 0.f) {
+                    last_sample_ += 1.f / 512.f;  // +1 LSB of 9-bit DAC
+                }
+            }
         }
     }
 

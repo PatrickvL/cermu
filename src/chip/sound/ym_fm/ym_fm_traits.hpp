@@ -71,6 +71,9 @@ struct YMTraits {
     // Direct DAC channel (YM2612 ch6 DAC mode)
     bool has_dac;
 
+    // YM2612 (NMOS) ladder-effect DAC distortion — absent from YM3438 (CMOS)
+    bool ladder_effect;
+
     // Package
     uint8_t pin_count;              // 18, 24, 40, or 64
 
