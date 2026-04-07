@@ -23,6 +23,7 @@
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
+#include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -338,10 +339,46 @@ bus_state_t SpectravideoSystem<V>::io_tick(bus_state_t pins) {
 
 template<SVIVariant V>
 bool SpectravideoSystem<V>::load_file(const char* filepath) {
-    if (!filepath) return false;
-    log_info("%s: File loading not yet implemented: %s\n",
-           SVIVariantTraits<V>::name, filepath);
-    return false;
+    if (!filepath || !system_ready_) return false;
+
+    log_info("%s: Loading file: %s\n", SVIVariantTraits<V>::name, filepath);
+
+    size_t file_size = 0;
+    uint8_t* file_data = vfs_read_file(filepath, &file_size);
+    if (!file_data) {
+        log_info("%s: Failed to open file: %s\n", SVIVariantTraits<V>::name, filepath);
+        return false;
+    }
+
+    // SVI cartridges are raw ROM images that replace BASIC ROM at $0000-$7FFF.
+    // Maximum 32 KB; smaller ROMs are mirrored within the window.
+    if (file_size == 0 || file_size > 0x8000) {
+        log_info("%s: Invalid ROM size: %zu bytes (max 32KB)\n",
+                SVIVariantTraits<V>::name, file_size);
+        free(file_data);
+        return false;
+    }
+
+    // Overwrite the BASIC ROM chip with cartridge data.
+    // On real hardware, inserting a cartridge physically replaces the
+    // BASIC ROM on the bus at $0000-$7FFF.
+    uint8_t* rom = board_.bios.data();
+    if (!rom) { free(file_data); return false; }
+
+    // Mirror smaller ROMs to fill the 32 KB window
+    for (size_t offset = 0; offset < 0x8000; offset += file_size)
+        memcpy(rom + offset, file_data,
+               std::min(file_size, 0x8000 - offset));
+    free(file_data);
+
+    std::string name = vfs_filename(filepath);
+    program_title_ = name.empty() ? filepath : name;
+
+    log_info("%s: Loaded %zu bytes as cartridge ROM\n",
+            SVIVariantTraits<V>::name, file_size);
+
+    reset();
+    return true;
 }
 
 // ============================================================================
