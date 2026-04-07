@@ -30,9 +30,9 @@ inline constexpr uint16_t PACMAN_ROM_SIZE      = 0x4000;    // 16 KB (4 × 4 KB)
 inline constexpr uint16_t PENGO_ROM_SIZE       = 0x8000;    // 32 KB (8 × 4 KB)
 
 // ── Display ─────────────────────────────────────────────────────────────
-// Physical display is rotated 90° CW: 288 tall × 224 wide → 224×288 in scanline order
-inline constexpr int FB_WIDTH                  = 224;
-inline constexpr int FB_HEIGHT                 = 288;
+// Native raster is 288×224 (36×28 tiles).  Physical monitor is rotated 90° CW.
+inline constexpr int FB_WIDTH                  = 288;
+inline constexpr int FB_HEIGHT                 = 224;
 
 // Palette
 inline constexpr int PALETTE_ENTRIES           = 32;

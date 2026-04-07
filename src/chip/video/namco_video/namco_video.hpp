@@ -1,15 +1,16 @@
 #pragma once
 
 // ============================================================================
-// Namco Arcade Video Generator — TTL tile rendering with 90° rotation
+// Namco Arcade Video Generator — TTL tile rendering (native 288×224 raster)
 // ============================================================================
 //
 // Models the discrete TTL video generation circuitry used by Namco arcade
 // boards: Pac-Man (1980), Pengo (1982), and other similar arcade hardware.
 //
-// Display: 224×288 visible pixels (physically rotated 90° CW from a
-// 288×224 monitor).  The VRAM stores a 32×32 tile grid; the video
-// hardware applies a coordinate transform to produce the rotated output.
+// Display: 288×224 native raster (36×28 tiles).  The physical arcade
+// monitor is rotated 90° CW, presenting a portrait display to the player.
+// GPU-side rotation is handled by the CRT shader via DisplayRotation::CW90
+// in the system's HardwareTraits.
 //
 // Hardware:
 //   VRAM (1 KB): tile indices in a 32×32 grid
@@ -17,10 +18,10 @@
 //   Character ROM: Namco interleaved 2bpp format, 16 bytes per tile
 //   Colortable PROM: maps (attr * 4 + pixel_2bit) → palette index
 //
-// VRAM-to-screen coordinate mapping (90° rotation):
-//   VRAM rows 0-1:   bottom score strip → screen rows 34-35
-//   VRAM rows 2-29:  main playfield     → screen cols 27..0 (reversed)
-//   VRAM rows 30-31: top score strip    → screen rows 0-1
+// VRAM-to-native-raster tile mapping:
+//   nx ∈ [0,1]:   left score strip  → VRAM row = 29-ny, col = nx+30
+//   nx ∈ [2,33]:  main playfield    → VRAM row = nx-2,  col = ny+2
+//   nx ∈ [34,35]: right score strip → VRAM row = 29-ny, col = nx-34
 // ============================================================================
 
 #include "core/signal/composite_video_out.hpp"
@@ -31,19 +32,18 @@
 #include <cstring>
 
 namespace namco_video_constants {
-    // Signal dimensions after TTL address mapping (rotated 90° CW for arcade monitor).
-    // Native raster is 288×224, but the address generation circuit maps VRAM entries
-    // into a 224×288 output directly usable on the rotated display.
-    // TODO(blocked): output native 288×224 when GPU-side rotation is available.
-    //   Requires HardwareTraits rotation field + shader support.
-    inline constexpr int WIDTH              = 224;   // visible width  (28 tile columns)
-    inline constexpr int HEIGHT             = 288;   // visible height (36 tile rows)
+    // Native raster dimensions — 288×224 (36×28 tiles).
+    // The physical arcade monitor is rotated 90° CW, presenting a portrait
+    // display to the player.  The shader handles this rotation via the
+    // DisplayRotation::CW90 trait; the video generator outputs unrotated.
+    inline constexpr int WIDTH              = 288;   // native width  (36 tile columns)
+    inline constexpr int HEIGHT             = 224;   // native height (28 tile rows)
     inline constexpr int TILE_SIZE          = 8;
     inline constexpr int VRAM_SIZE          = 1024;  // 32×32 grid
     inline constexpr int VRAM_COLS          = 32;
     inline constexpr int BYTES_PER_TILE     = 16;    // Namco 2bpp interleaved
-    inline constexpr int VISIBLE_TILE_COLS  = 28;    // tile columns in output (224/8)
-    inline constexpr int VISIBLE_TILE_ROWS  = 36;    // tile rows in output (288/8)
+    inline constexpr int VISIBLE_TILE_COLS  = 36;    // tile columns in native output (288/8)
+    inline constexpr int VISIBLE_TILE_ROWS  = 28;    // tile rows in native output (224/8)
 }
 
 struct NamcoVideo {

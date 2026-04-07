@@ -47,6 +47,7 @@ NamcoArcadeSystem<G>::NamcoArcadeSystem()
     traits.display.visible_height  = namco_arcade_constants::FB_HEIGHT;
     traits.display.format          = FramebufferFormat::RGBA8888;
     traits.display.palette_size    = namco_arcade_constants::PALETTE_ENTRIES;
+    traits.display.rotation        = DisplayRotation::CW90;
     traits.audio.format            = AudioFormat::CUSTOM;
     traits.audio.sample_rate_hz    = namco_arcade_constants::DEFAULT_SAMPLE_RATE;
     traits.audio.channels          = 1;
@@ -117,7 +118,7 @@ bool NamcoArcadeSystem<G>::initialize() {
     // Video output
     video_port_ = std::make_unique<CompositeVideoPort>();
 
-    // Video generator — models TTL tile rendering (224×288 already-rotated output)
+    // Video generator — models TTL tile rendering (native 288×224, rotated by shader)
     video_gen_.set_video_out(&video_port_->output());
     video_gen_.set_char_rom(char_rom_.data(), static_cast<int>(char_rom_.size()));
     video_gen_.set_colortable_prom(colortable_prom_.data());

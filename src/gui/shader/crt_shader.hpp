@@ -29,13 +29,23 @@ namespace crt_shader {
 // ============================================================================
 
 // Vertex shader — fullscreen triangle via gl_VertexID (no VBO needed).
+// Applies UV rotation for systems with rotated monitors (e.g. arcade portrait).
 static constexpr const char* vertex_src = R"glsl(
 #version 130
 out vec2 v_uv;
+uniform int Rotation;  // 0=none, 1=CW90, 2=CW180, 3=CW270
 void main() {
     float x = -1.0 + float((gl_VertexID & 1) << 2);
     float y = -1.0 + float((gl_VertexID & 2) << 1);
     v_uv = vec2(x * 0.5 + 0.5, y * 0.5 + 0.5);
+    // Rotate UV coordinates to match physical monitor orientation
+    if (Rotation == 1) {       // CW90  — portrait, top-right becomes top-left
+        v_uv = vec2(1.0 - v_uv.y, v_uv.x);
+    } else if (Rotation == 2) { // CW180 — upside-down
+        v_uv = vec2(1.0 - v_uv.x, 1.0 - v_uv.y);
+    } else if (Rotation == 3) { // CW270 — portrait, top-left becomes top-right
+        v_uv = vec2(v_uv.y, 1.0 - v_uv.x);
+    }
     gl_Position = vec4(x, y, 0.0, 1.0);
 }
 )glsl";
@@ -298,6 +308,7 @@ struct CRTPostProcess {
     GLint loc_chroma_phase_error = -1;
     GLint loc_sync_stability     = -1;
     GLint loc_frame_count        = -1;
+    GLint loc_rotation           = -1;
     // TODO: Add uniform locations for remaining fields when implemented:
     //   PhosphorParams:  loc_persistence, loc_bloom_radius,
     //                    loc_bloom_threshold, loc_decay_curve
@@ -392,6 +403,7 @@ inline bool create(CRTPostProcess* p, int w, int h) {
     p->loc_chroma_phase_error = gl_api::glGetUniformLocation(p->shader, "ChromaPhaseError");
     p->loc_sync_stability    = gl_api::glGetUniformLocation(p->shader, "SyncStability");
     p->loc_frame_count       = gl_api::glGetUniformLocation(p->shader, "FrameCount");
+    p->loc_rotation          = gl_api::glGetUniformLocation(p->shader, "Rotation");
 
     // Set texture unit (always 0)
     gl_api::glUseProgram(p->shader);
@@ -490,11 +502,13 @@ inline void color_temp_tint(float temp_k, float& tr, float& tg, float& tb) {
 /// @param output_w     Display output width (screen pixels)
 /// @param output_h     Display output height (screen pixels)
 /// @param dc           Display characteristics (phosphor, beam, mask, etc.)
+/// @param rotation     Monitor rotation (DisplayRotation enum value)
 inline void render(CRTPostProcess* p,
                    GLuint input_tex,
                    float input_w, float input_h,
                    float output_w, float output_h,
-                   const DisplayCharacteristics& dc) {
+                   const DisplayCharacteristics& dc,
+                   int rotation = 0) {
     if (!p->shader || !p->fbo) return;
 
     // Unpack fields wired to shader uniforms
@@ -564,6 +578,7 @@ inline void render(CRTPostProcess* p,
     gl_api::glUniform1f(p->loc_chroma_phase_error, dc.signal.chroma_phase_error);
     gl_api::glUniform1f(p->loc_sync_stability, dc.signal.sync_stability);
     gl_api::glUniform1i(p->loc_frame_count, static_cast<GLint>(p->frame_count++));
+    gl_api::glUniform1i(p->loc_rotation, rotation);
 
     // Compute and set color temperature tint
     float ct_r, ct_g, ct_b;
