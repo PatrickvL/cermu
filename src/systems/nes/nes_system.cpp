@@ -1057,6 +1057,9 @@ void NintendoSystem<V>::tick() {
 
     NES_PROF_CPU_TICK();
 
+    // Notify mapper of CPU cycle — for CPU-clocked IRQ counters (FME-7)
+    if (cartridge_) cartridge_->notify_cpu_cycle();
+
     // Transfer PPU /NMI onto CPU bus BEFORE PHI2, so the CPU's
     // edge-detect flip-flop samples the current NMI level.
     //

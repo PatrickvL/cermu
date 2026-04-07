@@ -172,6 +172,10 @@ public:
     // that A12 was low for >= ~16 dots before a rising edge counts).
     virtual void notify_a12(bool /*a12_high*/, uint64_t /*ppu_cycle*/) {}
 
+    // CPU cycle notification — called once per CPU cycle for mappers
+    // with CPU-clocked IRQ counters (FME-7, VRC6, VRC7, etc.).
+    virtual void notify_cpu_cycle() {}
+
     // PPUCTRL notification — called when CPU writes PPU $2000.
     // MMC5 uses bits 3-5 to split CHR bank sets between sprite and BG
     // pattern table halves.  Returns true if banking changed.

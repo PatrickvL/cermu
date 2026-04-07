@@ -111,6 +111,9 @@ public:
     inline bool irq_state() const { return mapper && mapper->irq_state(); }
     void irq_clear();
 
+    // CPU cycle notification — for mappers with CPU-clocked IRQ counters
+    inline void notify_cpu_cycle() { if (mapper) mapper->notify_cpu_cycle(); }
+
     // ====================================================================
     // Bus-mediated PPU memory access
     // ====================================================================
