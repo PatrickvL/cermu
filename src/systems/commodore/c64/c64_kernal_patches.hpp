@@ -7,10 +7,9 @@
 // routines during boot.  They are safe to apply after ROMs are loaded
 // (i.e. after initialize() / bus.init_flat_mem_pointers()).
 //
-// TODO: The skip-memtest flag could also be set automatically when
-//       whitelisted software is loaded (SID files, known-safe demos, etc.).
-//       A future "patch registry" could manage per-system patches that
-//       users can enable/disable via a configuration UI.
+// The skip-memtest patch is applied automatically whenever software is
+// loaded via on_file_parsed(), and can also be triggered explicitly with
+// the --skip-memtest CLI flag.
 // =============================================================================
 
 #include "systems/commodore/c64/c64_system.hpp"

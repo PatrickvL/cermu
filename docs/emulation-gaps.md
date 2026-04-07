@@ -32,13 +32,23 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - [x] **YM FM sine table** — Replaced `std::sin()` with hardware-accurate log-sin + exp ROM pipeline.
 - [x] **YM2612 ladder effect** — DAC zero-crossing distortion modeled via `ladder_effect` trait flag.
 - [x] **MOS 6504** — Instantiated as distinct `fam65xx_t` type alias.
+- [x] **M68000 A-line/F-line** — Traps wired to vectors 10/11 via `exception()`.
+- [x] **MC6847 AG=1** — CG1-CG6 and RG1-RG6 graphics modes rendered.
+- [x] **TMS9918 fine-scroll** — Sega Mode 4 sub-tile X offset and per-column tile fetch.
+- [x] **TMS9918 sprite priority** — BG-over-sprite priority bit implemented.
+- [x] **BBC VIDPROC SAA5050** — Verified Mullard ROM data, bit expansion, character rounding, mosaic graphics.
+- [x] **TIA paddle dump** — Capacitor dump (INPT0-3) via VBLANK bit 7.
+- [x] **NES MMC5 audio** — Pulse channels and PCM DAC expansion audio.
+- [x] **NES MMC5 split regs** — Vertical split registers ($5200-$5202) stored.
+- [x] **YM FM DT1/RS/LFO/SSG-EG/Ch3** — Detune LUT, rate-scaling, LFO AM/PM, SSG-EG shapes, Ch3 special mode.
+- [x] **OPL waveform select** — OPL2 waveform lookup infrastructure.
 
 ---
 
 ## Commodore Systems
 
 ### C64 — Near-Complete
-- [ ] **[EASY]** Auto-skip memtest optimization (`c64_kernal_patches.hpp:10`)
+- [x] **[DONE]** Auto-skip memtest — applied automatically via `on_file_parsed()` for all loaded software
 - [x] **[DONE]** TAP cassette signal wiring — per-cycle datasette tick, CASS_READ→CIA1 FLAG, motor/sense
 - [x] **[DONE]** CRT cartridge loading (type 0 — normal cartridge) — CHIP→ROML/ROMH, EXROM/GAME, reset
 
@@ -75,7 +85,8 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 ### Mappers — ~40 Implemented
 - [x] **[DONE]** Mapper 068 (Sunsoft): CHR-ROM nametable replacement wired via `nt_ptr`
 - [x] **[DONE]** Mapper 069 (FME-7): IRQ converted to CPU-cycle counter with `notify_cpu_cycle()`
-- [ ] **[MEDIUM]** Mapper 005 (MMC5): expansion audio $5000-$5015 stub, vertical split mode stub (`mapper_005_mmc5.hpp:520, 593`)
+- [x] **[DONE]** Mapper 005 (MMC5): expansion audio (pulse + PCM DAC) implemented; vertical split registers stored
+- [ ] **[MEDIUM]** Mapper 005 (MMC5): vertical split mode rendering (requires PPU-level integration)
 - [ ] **[LARGE]** Mapper 024/026 (VRC6a/b): Konami expansion audio — 2 pulse + sawtooth channels
 - [ ] **[LARGE]** Mapper 085 (VRC7): FM synthesis expansion audio
 - [ ] **[LARGE]** Mapper 019 (Namco 163): wavetable expansion audio, complex banking
@@ -93,19 +104,20 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 
 ### Sound
 
-#### Yamaha FM (YM2612 / OPM / OPL) — 11 Remaining Gaps
+#### Yamaha FM (YM2612 / OPM / OPL) — 5 Remaining Gaps
 - [ ] **[LARGE]** FM modulation: operators advance independently, modulator→carrier phase feed not implemented (`ym_fm.hpp:17`)
 - [ ] **[LARGE]** Envelope generator: linear approximation, should be per-rate LUT with non-linear attack (`ym_fm.hpp:22`)
 - [ ] **[LARGE]** ADPCM-A & ADPCM-B: flags exist, no decode/playback logic (`ym_fm.hpp:49`)
-- [ ] **[MEDIUM]** LFO AM/PM: values computed then discarded — not applied (`ym_fm.hpp:71`)
-- [ ] **[MEDIUM]** Ch3 special mode: register bits read but per-operator frequencies never applied (`ym_fm.hpp:31`)
-- [ ] **[MEDIUM]** SSG-EG control: bits stored, shape alteration not applied (`ym_fm.hpp:67`)
-- [ ] **[MEDIUM]** DT1 detune: flat ±0-3 placeholder, should be block-dependent 32-entry LUT; DT2 absent (`ym_fm.hpp:45`)
-- [ ] **[MEDIUM]** Rate-scaling: RS bits stored, never factor into envelope rate (`ym_fm.hpp:63`)
+- [x] **[DONE]** LFO AM/PM: applied to operator output
+- [x] **[DONE]** Ch3 special mode: per-operator frequencies applied
+- [x] **[DONE]** SSG-EG control: envelope shape alteration implemented
+- [x] **[DONE]** DT1 detune: block-dependent 32-entry LUT implemented
+- [x] **[DONE]** Rate-scaling: RS bits factor into envelope rate
 - [x] **[DONE]** Sine table: hardware-accurate log-sin + exp ROM pipeline replaces `std::sin()`
 - [x] **[DONE]** YM2612 ladder-effect DAC distortion modeled via `ladder_effect` trait flag
 - [ ] **[MEDIUM]** SSG composition: AY PSG declared but never instantiated or clocked (`ym_fm.hpp:26`)
-- [ ] **[MEDIUM]** OPL-family: waveform select, rhythm mode percussion, OPLL ROM patches missing (`ym_fm.hpp:53`)
+- [ ] **[MEDIUM]** OPL-family: rhythm mode percussion, OPLL ROM patches missing (`ym_fm.hpp:53`)
+- [x] **[DONE]** OPL-family: waveform select lookup implemented
 - [ ] **[MEDIUM]** OPM-specific: noise channel, key-fraction register, OPM addressing missing (`ym_fm.hpp:57`)
 
 #### AY-3-8910 Variants
@@ -117,16 +129,16 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 ### Video
 
 #### TMS9918 / Sega VDP
-- [ ] **[MEDIUM]** Sprite priority not implemented (`tms9918_render.inc.hpp:377`)
-- [ ] **[MEDIUM]** Sega Mode 4 fine-scroll (sub-tile X offset) not implemented (`tms9918_render.inc.hpp:431`)
+- [x] **[DONE]** Sprite priority (BG-over-sprite) implemented
+- [x] **[DONE]** Sega Mode 4 fine-scroll (sub-tile X offset) and per-column tile fetch
 - [ ] **[MEDIUM]** Per-line scroll table not implemented (`tms9918_mixins.hpp:141`)
 - [ ] **[LARGE]** VDP Command execution placeholder (`tms9918_mixins.hpp:125`)
 
 #### MC6847
-- [ ] **[MEDIUM]** Graphics modes (AG=1) not rendered — frame left black (`mc6847.hpp:276`)
+- [x] **[DONE]** Graphics modes (AG=1) — CG1-CG6 and RG1-RG6 rendered
 
 #### BBC VIDPROC (SAA5050 Teletext)
-- [ ] **[MEDIUM]** Proper SAA5050 12×20 Teletext character generator needed (`bbc_vidproc.hpp:213`)
+- [x] **[DONE]** SAA5050 Teletext — verified ROM data, bit expansion, character rounding, mosaic graphics
 
 #### Signetics 2513 (Apple II font ROM)
 - [ ] **[BLOCKED]** Placeholder font — needs verified CM4800 ROM dump (physical chip read required)
@@ -138,7 +150,7 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - [x] **[DONE]** Graphics sequencer runs during L/R border for MxD collision accuracy
 
 #### Atari 2600 TIA
-- [ ] **[MEDIUM]** Paddle capacitor dump (INPT0-3) not implemented — VBLANK bit 7 (`tia.cpp:629`)
+- [x] **[DONE]** Paddle capacitor dump (INPT0-3) via VBLANK bit 7
 
 #### Spectrum ULA
 - [x] **[DONE]** 48K contention pattern implemented (8-T-state cycle, 128 T-states per display line)
@@ -166,7 +178,7 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - [ ] **[EASY]** CPU tracing: TODO to move to system level (`fam65xx.hpp:232`)
 
 #### Motorola M68000
-- [ ] **[MEDIUM]** A-line & F-line traps: unimplemented, trap to respective vectors (`m680x0_opcodes.hpp:31,36`)
+- [x] **[DONE]** A-line & F-line traps: wired to vectors 10/11 via `exception()`
 
 #### Hitachi MC6809
 - [ ] **[MEDIUM]** HD6309 extensions: stubs (`mc6809_base_ops.inc.hpp:2082`)
@@ -184,7 +196,7 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 | C128 | Z80/CP/M testing (QA) |
 | PET | — |
 | NES | Expansion audio, FDS |
-| Atari 2600 | Paddle capacitor dump |
+| Atari 2600 | — |
 | Amstrad CPC | — |
 | ZX Spectrum | — |
 
@@ -192,10 +204,10 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 | System | Key Missing Items |
 |--------|-------------------|
 | Chip-8 | ChipPlaceholders for peripherals |
-| Acorn Atom | MC6847 graphics modes |
-| BBC Micro | SSD/DSD disc, UEF tape, sideways ROM loading |
+| Acorn Atom | — |
+| BBC Micro | SSD/DSD disc, UEF tape, sideways ROM loading (SAA5050 done) |
 | Sega SG-1000 | Cartridge file loading |
-| Sega SMS | (banking fixed) — VDP sprite priority, fine-scroll |
+| Sega SMS | Per-line scroll table |
 | MSX | Slot/page banking (critical), cartridge loading |
 | ColecoVision | Cartridge file loading |
 | Memotech MTX | File loading |
