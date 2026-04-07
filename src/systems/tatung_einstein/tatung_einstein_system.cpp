@@ -21,6 +21,7 @@
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
+#include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -215,11 +216,15 @@ void TatungEinsteinSystem::run_frame() {
 
 void TatungEinsteinSystem::configure_bus_memory_map() {
     board_.apply(bus_);
-    // ROM overlay is managed by the board's chip manifest:
-    // ROM at slot 1, RAM at slot 0. ROM overlays reads at $0000-$1FFF.
-    // When rom_enabled_ is false, we disable the ROM overlay.
-    if (!rom_enabled_) {
-        // TODO: Disable ROM read overlay so RAM is visible at $0000
+
+    // apply() maps ROM then RAM in declaration order; RAM (non-read-only)
+    // overwrites ROM's read pages, so all 256 pages default to RAM.
+    // When ROM is enabled, overlay OS ROM reads at $0000-$1FFF (32 pages).
+    if (rom_enabled_) {
+        constexpr auto kRomBase = Bus::ChipId(
+            kEinsteinManifest.base_id(kEinsteinManifest.find<ROMChip>(), 8));
+        constexpr size_t kRomPages = 0x2000 >> 8;  // 32 pages
+        bus_.fill_read_pages(0, 0, kRomPages, kRomBase);
     }
 }
 
@@ -311,8 +316,40 @@ bus_state_t TatungEinsteinSystem::io_tick(bus_state_t pins) {
 
 bool TatungEinsteinSystem::load_file(const char* filepath) {
     if (!filepath || !system_ready_) return false;
-    log_info("Tatung Einstein: File loading not yet implemented: %s\n", filepath);
-    return false;
+
+    size_t file_size = 0;
+    uint8_t* data = vfs_read_file(filepath, &file_size);
+    if (!data || file_size == 0) {
+        log_info("Einstein: failed to read file: %s\n", filepath);
+        return false;
+    }
+
+    // .com files load at $0100 (CP/M convention); others at $0000.
+    std::string ext = vfs_extension(filepath);
+    uint16_t load_addr = 0x0000;
+    if (ext == ".com")
+        load_addr = 0x0100;
+
+    // Clamp to available RAM
+    size_t max_bytes = 0x10000 - load_addr;
+    if (file_size > max_bytes) file_size = max_bytes;
+
+    std::memcpy(board_.ram.data() + load_addr, data, file_size);
+    free(data);
+
+    // Disable ROM overlay so the full 64KB RAM is visible
+    rom_enabled_ = false;
+    configure_bus_memory_map();
+
+    // Set CPU entry point and reset
+    using namespace z80::reg;
+    board_.z80.set(PC, load_addr);
+
+    std::string name = vfs_filename(filepath);
+    program_title_ = name.empty() ? filepath : name;
+    log_info("Einstein: loaded %zu bytes at $%04X from %s\n",
+             file_size, load_addr, filepath);
+    return true;
 }
 
 // ============================================================================
