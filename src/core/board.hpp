@@ -210,8 +210,10 @@ public:
     // manifest slots + bound chips.  Safe to call multiple times.
     //
 
-    void apply(Bus& bus, size_t viewer_id = 0) {
-        bus_map_.apply(bus, flat_mem_.data(), viewer_id);
+    void apply(Bus& bus, size_t viewer_id = 0,
+               typename BusMap<Spec>::ConditionFn condition_fn = nullptr,
+               const void* condition_ctx = nullptr) {
+        bus_map_.apply(bus, flat_mem_.data(), viewer_id, condition_fn, condition_ctx);
     }
 
     // Delegates to BusMap::build_overlay_snapshots() — generates banking
