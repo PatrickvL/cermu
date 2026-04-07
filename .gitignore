@@ -132,3 +132,7 @@ tests/fam65xx_processor_tests_runner
 .vscode/mcp.json
 mempalace.yaml
 entities.json
+
+# Hide graphify output
+graphify-out/graph.json
+src/graphify-out/
