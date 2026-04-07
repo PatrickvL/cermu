@@ -124,16 +124,20 @@ inline constexpr uint8_t decode_screen_mode(uint8_t r0, uint8_t r1) {
     const uint8_t m1 = (r1 >> 4) & 1;
     const uint8_t m2 = (r1 >> 3) & 1;
     const uint8_t m3 = (r0 >> 1) & 1;
-    // Standard modes (0–3); higher combos for extended modes
-    return static_cast<uint8_t>((m1 << 2) | (m3 << 1) | m2);
+    const uint8_t m4 = (r0 >> 2) & 1;  // Sega Mode 4 flag
+    // Standard modes (0–7); M4=1 → values 8+ (Sega Mode 4 variants)
+    return static_cast<uint8_t>((m4 << 3) | (m1 << 2) | (m3 << 1) | m2);
 }
 
 // Standard mode IDs returned by decode_screen_mode()
 namespace ScreenMode {
-    inline constexpr uint8_t GRAPHIC_I    = 0;  // M1=0 M3=0 M2=0
-    inline constexpr uint8_t TEXT         = 4;  // M1=1 M3=0 M2=0
-    inline constexpr uint8_t GRAPHIC_II   = 2;  // M1=0 M3=1 M2=0
-    inline constexpr uint8_t MULTICOLOR   = 1;  // M1=0 M3=0 M2=1
+    inline constexpr uint8_t GRAPHIC_I      = 0;   // M1=0 M3=0 M2=0
+    inline constexpr uint8_t TEXT           = 4;   // M1=1 M3=0 M2=0
+    inline constexpr uint8_t GRAPHIC_II     = 2;   // M1=0 M3=1 M2=0
+    inline constexpr uint8_t MULTICOLOR     = 1;   // M1=0 M3=0 M2=1
+    inline constexpr uint8_t SEGA_MODE4     = 8;   // M4=1, M2=0 — 192 lines
+    inline constexpr uint8_t SEGA_MODE4_224 = 9;   // M4=1, M2=1, M1=0 — 224 lines (315-5246)
+    inline constexpr uint8_t SEGA_MODE4_240 = 13;  // M4=1, M2=1, M1=1 — 240 lines (315-5246)
 }
 
 } // namespace tms9918

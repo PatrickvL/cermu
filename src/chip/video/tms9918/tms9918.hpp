@@ -46,6 +46,7 @@ public:
     tms9918_t() {
         info_ = ChipInfo{Traits.chip_id, Traits.vendor, Traits.display_name};
         init_regs(Traits.num_registers);
+        active_lines_ = Traits.visible_lines;
 
         // Register fixed palette for base TMS9918 variants
         if constexpr (!Traits.has_programmable_palette() && !Traits.is_sega()) {
@@ -111,7 +112,7 @@ public:
     // or when the line is in the vertical blanking interval.
 
     bus_state_t tick(bus_state_t bus) {
-        const bool visible_line = line_ < Traits.visible_lines;
+        const bool visible_line = line_ < active_lines_;
 
         if (visible_line) {
             if (dot_ < 256) {
@@ -145,14 +146,14 @@ public:
         if (dot_ == 258 && visible_line) {
             // Evaluate sprites for the NEXT visible line
             const uint16_t next_line = line_ + 1;
-            if (next_line < Traits.visible_lines) {
+            if (next_line < active_lines_) {
                 evaluate_sprites(next_line);
             }
         }
 
         // --- VBlank interrupt ---
         // F flag set at first dot of the first VBlank line
-        if (line_ == Traits.visible_lines && dot_ == 0) {
+        if (line_ == active_lines_ && dot_ == 0) {
             status_ |= reg::STATUS_F;
         }
 
@@ -184,7 +185,7 @@ public:
                 }
             }
             // Begin-of-line setup for the new line
-            if (line_ < Traits.visible_lines) {
+            if (line_ < active_lines_) {
                 begin_scanline();
             }
         }
@@ -208,6 +209,7 @@ public:
         line_ = 0;
         frame_ = 0;
         screen_mode_ = 0;
+        active_lines_ = Traits.visible_lines;
         std::memset(color_line_, 0, sizeof(color_line_));
         // Clear rendering pipeline
         bg_ = {};
@@ -314,6 +316,8 @@ private:
     uint16_t dot_ = 0;              // Horizontal dot counter (0–341)
     uint16_t line_ = 0;             // Vertical line counter (0–261/312)
     uint32_t frame_ = 0;            // Frame counter
+    uint16_t active_lines_ = Traits.visible_lines;  // Runtime visible line count
+                                    // (192/224/240 for Sega extended modes)
 
     // ====================================================================
     // Status register
@@ -436,8 +440,12 @@ private:
             latch_first_ = true;
 
             if (val & 0x80) {
-                // Register write: val[2:0] = register number, latch_byte_ = value
-                const uint8_t r = val & 0x07;
+                // Register write: register number from upper nibble bits
+                // Sega: 4-bit field (R0–R10); V9938+: 6-bit; base TMS: 3-bit
+                constexpr uint8_t reg_mask = Traits.is_v9938_class() ? 0x3F
+                                           : Traits.is_sega() ? 0x0F
+                                           : 0x07;
+                const uint8_t r = val & reg_mask;
                 if (r < Traits.num_registers) {
                     regs_[r] = latch_byte_;
                     on_register_write(r, latch_byte_);
@@ -464,6 +472,22 @@ private:
             if (r == 8) this->scroll_x_ = val;
             if (r == 9) this->scroll_y_ = val;
         }
+        // Mode register writes may change active line count (Sega 315-5246)
+        if constexpr (Traits.has_ext_lines()) {
+            if (r == 0 || r == 1) {
+                active_lines_ = compute_active_lines();
+            }
+        }
+    }
+
+    // --- Compute runtime active line count from mode bits (315-5246 only) ---
+    uint16_t compute_active_lines() const {
+        if constexpr (Traits.has_ext_lines()) {
+            const uint8_t mode = decode_screen_mode(regs_[reg::R0], regs_[reg::R1]);
+            if (mode == ScreenMode::SEGA_MODE4_240) return 240;
+            if (mode == ScreenMode::SEGA_MODE4_224) return 224;
+        }
+        return Traits.visible_lines;  // Default: 192
     }
 
     // ====================================================================
