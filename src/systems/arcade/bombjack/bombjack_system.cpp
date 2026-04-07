@@ -73,11 +73,6 @@ bool BombJackSystem::initialize() {
     port_manifest_count_ = kBombJackPortManifest.port_count;
 
     // ── Init chips ─────────────────────────────────────────────────────
-    main_cpu_  = &main_board_.cpu;
-    sound_cpu_ = &sound_board_.cpu;
-    fg_tilemap_chip_  = &main_board_.fg_map;
-    fg_attr_chip_     = &main_board_.fg_attr;
-    palette_ram_chip_ = &main_board_.palette;
     main_pins_  = main_board_.cpu.init();
     sound_pins_ = sound_board_.cpu.init();
     for (int i = 0; i < 3; i++) {
@@ -128,8 +123,6 @@ bool BombJackSystem::initialize() {
 
 void BombJackSystem::shutdown() {
     audio_thread_.stop();
-    main_cpu_  = nullptr;
-    sound_cpu_ = nullptr;
     system_ready_ = false;
 }
 
@@ -150,7 +143,7 @@ void BombJackSystem::reset() {
 void BombJackSystem::tick() {
 
     // Main CPU tick
-    main_pins_ = main_cpu_->tick(main_pins_);
+    main_pins_ = main_board_.cpu.tick(main_pins_);
 
     // Main CPU bus dispatch — memory-mapped only (no IORQ for main CPU)
     if (!BUS_GET_BIT(main_pins_, Z80_MREQ_BIT)) {
@@ -172,7 +165,7 @@ void BombJackSystem::tick() {
             BUS_SET_BIT(sound_pins_, BUS_NMI_BIT);
         }
 
-        sound_pins_ = sound_cpu_->tick(sound_pins_);
+        sound_pins_ = sound_board_.cpu.tick(sound_pins_);
 
         // Sound CPU bus dispatch
         if (!BUS_GET_BIT(sound_pins_, Z80_MREQ_BIT)) {
@@ -299,8 +292,7 @@ void BombJackSystem::set_audio_sample_rate(int hz) {
 //   bits [7:6] = blue  (2-bit, weights 0x51/0xAE)
 
 void BombJackSystem::decode_palette() {
-    if (!palette_ram_chip_) return;
-    const uint8_t* pal = palette_ram_chip_->data();
+    const uint8_t* pal = main_board_.palette.data();
     palette_.decode_from(pal, bombjack_constants::PALETTE_ENTRIES,
                          resistor_dac::decode_3_3_2);
 }
@@ -310,10 +302,10 @@ void BombJackSystem::decode_palette() {
 // ============================================================================
 
 void BombJackSystem::render_frame() {
-    if (!fg_tilemap_chip_ || !fg_attr_chip_ || char_rom_.empty()) return;
+    if (char_rom_.empty()) return;
 
-    video_gen_.set_tilemap(fg_tilemap_chip_->data());
-    video_gen_.set_attr_map(fg_attr_chip_->data());
+    video_gen_.set_tilemap(main_board_.fg_map.data());
+    video_gen_.set_attr_map(main_board_.fg_attr.data());
     video_gen_.render_frame();
 }
 

@@ -144,10 +144,6 @@ public:
     void* get_video_port_ptr() override { return video_port_.get(); }
 
 private:
-    // ── CPUs ─────────────────────────────────────────────────────────────
-    ZilogZ80A*  main_cpu_  = nullptr;    // Z80A @ 4 MHz (main) — owned by main_board_
-    ZilogZ80A*  sound_cpu_ = nullptr;    // Z80A @ 3 MHz (sound) — owned by sound_board_
-
     // ── Audio thread — synthesis runs off the emu thread ────────────────
     AudioThread audio_thread_;
     std::unique_ptr<WriteOnlySynthAdapter<AY_3_8910, true>> ay_adapter_[3];
@@ -205,9 +201,4 @@ private:
     bool load_roms();
     void decode_palette();                         // Rebuild palette from palette RAM
     void render_frame();                           // Decode FG tilemap into indexed framebuffer
-
-    // Chip pointers (cached for rendering hot path)
-    RAMChip* fg_tilemap_chip_ = nullptr;
-    RAMChip* fg_attr_chip_    = nullptr;
-    RAMChip* palette_ram_chip_ = nullptr;
 };
