@@ -22,7 +22,10 @@ inline constexpr CPUTraits MOS6504Traits = {
     {SoundChip::NONE, DMAController::NONE, false} // peripheral
 };
 
+using MOS6504 = fam65xx_t<MOS6504Traits>;
+
 } // namespace fam65xx
 
+// Re-export type alias outside fam65xx namespace for convenience.
 // Trait constants remain internal to namespace fam65xx.
-// No type alias — the 6504 is not yet instantiated as a distinct type.
+using MOS6504 = fam65xx::MOS6504;
