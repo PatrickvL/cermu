@@ -529,6 +529,13 @@ void C128System::reset() {
     // Re-sync VIC-IIe bank from CIA2 PA
     vicii_base_t::memory_bank_change(&board_.vic_iie, board_.cia2.port_a_value & 0x03);
 
+    // Sync 40/80 UI toggle with the MMU latch (survives reset — matches
+    // real hardware where the 40/80 DISPLAY key is a physical switch).
+    // Also rebind the video output so the display pipeline picks up the
+    // correct port after leaving C64 mode.
+    set_unmapped_toggle_state(EMUKEY_CBM_40_80_DISPLAY, board_.mmu.key_40_80_pressed);
+    rebind_active_video_output();
+
     reset_load_state();
     total_cycles_ = 0;
 }
@@ -1245,6 +1252,12 @@ void C128System::enter_c64_mode() {
     if (keyboard_)
         keyboard_mapper_.reset(create_c64_keyboard_mapper(keyboard_));
 
+    // Force 40-col display — VDC is inaccessible in C64 mode.
+    // Setting the latch triggers the GUI signal-pipeline rebuild on the
+    // next frame (SessionGUI polls get_video_signal_type() every frame).
+    board_.mmu.key_40_80_pressed = false;
+    set_unmapped_toggle_state(EMUKEY_CBM_40_80_DISPLAY, false);
+
     log_info("C128: Entered C64 compatibility mode\n");
 }
 
@@ -1496,6 +1509,8 @@ const char* C128System::get_mode_label() const {
 }
 
 int C128System::get_active_video_port_index() const {
+    // C64 mode forces VIC-IIe (40-col) — VDC is disabled.
+    if (c64_mode_) return PORT_VIDEO_40;
     // The 40/80 DISPLAY key is a hardware latch wired to MMU MCR bit 7.
     // When pressed/latched (80-col selected), return the VDC RGBI port;
     // when released (40-col selected), return the VIC-IIe composite port.
@@ -1503,6 +1518,8 @@ int C128System::get_active_video_port_index() const {
 }
 
 void* C128System::get_video_port_ptr() {
+    // C64 mode forces VIC-IIe — VDC is disabled.
+    if (c64_mode_) return video_port_.get();
     // Return whichever video port is currently active.
     // The display pipeline (SessionGUI) uses this to connect the signal
     // decoder.  Pressed/latched → 80-col VDC RGBI; released → 40-col VIC-IIe.
@@ -1512,6 +1529,8 @@ void* C128System::get_video_port_ptr() {
 }
 
 VideoSignalType C128System::get_video_signal_type() const {
+    // C64 mode forces Composite — VDC is disabled.
+    if (c64_mode_) return VideoSignalType::Composite;
     if (board_.mmu.key_40_80_pressed)
         return VideoSignalType::RGBI;
     return VideoSignalType::Composite;
@@ -1527,7 +1546,7 @@ void C128System::rebind_active_video_output() {
     // Unbind the inactive port first (set its frame_output_ to nullptr),
     // then bind the active one.  Also switch palette_ so the GPU shader
     // gets the correct palette for the active display mode.
-    if (board_.mmu.key_40_80_pressed) {
+    if (board_.mmu.key_40_80_pressed && !c64_mode_) {
         // 80-col: VDC RGBI (key pressed/latched = 80-column mode)
         if (video_port_)
             video_port_->bind_frame_output(nullptr);
