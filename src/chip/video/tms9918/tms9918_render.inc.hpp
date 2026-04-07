@@ -57,6 +57,14 @@ void tms9918_t<Traits>::begin_scanline() {
         break;
     }
 
+    // Sega fine-scroll: start mid-tile so the first tile is partially
+    // clipped on the left, producing sub-pixel horizontal scrolling.
+    if constexpr (Traits.has_scroll()) {
+        if (screen_mode_ >= ScreenMode::SEGA_MODE4) {
+            bg_.pixel_in_char = this->scroll_x_ & 7;
+        }
+    }
+
     // Clear collision tracking for this line
     std::memset(sprite_collision_, 0, 256);
 
@@ -209,6 +217,16 @@ void tms9918_t<Traits>::bg_fetch_step() {
         // Load shift register with previously-fetched data
         load_bg_shifter();
 
+        if constexpr (Traits.is_sega()) {
+            // Sega mode 4: full tile prefetch (nametable + 4 bitplanes)
+            // for the current column.  Unlike TMS modes, there's no
+            // pipelined fetch — everything loads in one shot.
+            if (screen_mode_ >= ScreenMode::SEGA_MODE4) {
+                prefetch_tile_sega(bg_.column);
+                break;
+            }
+        }
+
         // Begin fetching next tile (if not past last column)
         if (next_col < max_cols) {
             // Name table read for next tile
@@ -357,8 +375,10 @@ void tms9918_t<Traits>::prefetch_tile_sega([[maybe_unused]] uint8_t col) {
         const int scrolled_col = (col - (scroll_x >> 3)) & 0x1F;
 
         // Apply vertical scroll per-column
+        // Nametable height: 28 rows (192/224 lines) or 32 rows (240 lines)
         const uint8_t scroll_y = this->scroll_y_;
-        int scrolled_row = (static_cast<int>(line_) + scroll_y) % (28 * 8);
+        const int nt_rows = (active_lines_ == 240) ? 32 : 28;
+        int scrolled_row = (static_cast<int>(line_) + scroll_y) % (nt_rows * 8);
         const int tile_row_s = scrolled_row >> 3;
         const int fine_y_s = scrolled_row & 7;
 
@@ -428,8 +448,4 @@ uint8_t tms9918_t<Traits>::emit_bg_pixel_sega() {
         return color_idx + bg_.fg_color;  // fg_color holds palette bank offset
     }
     return backdrop_color();
-
-    // Sega mode 4 fine-scroll (sub-tile X offset) is not yet implemented.
-    // H-scroll fine bits (scroll_x & 7) would offset the starting pixel
-    // within each tile's 8-pixel group.
 }

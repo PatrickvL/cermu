@@ -60,6 +60,7 @@ namespace VDPFeatureFlags {
     inline constexpr uint32_t SEGA_GG_MODE     = 1u << 6;  // Game Gear: 12-bit CRAM, viewport
     inline constexpr uint32_t STATUS_EXT       = 1u << 7;  // V9938+: extended status registers
     inline constexpr uint32_t WAIT_STATE       = 1u << 8;  // V9938+: CPU wait signal
+    inline constexpr uint32_t SEGA_EXT_LINES   = 1u << 9;  // SMS2 315-5246: 224/240-line modes
 }
 
 // ============================================================================
@@ -114,6 +115,10 @@ struct VDPTraits {
 
     constexpr bool has_scroll() const {
         return scroll_model != VDPScrollModel::NONE;
+    }
+
+    constexpr bool has_ext_lines() const {
+        return has(VDPFeatureFlags::SEGA_EXT_LINES);
     }
 
     constexpr uint32_t vram_mask() const {

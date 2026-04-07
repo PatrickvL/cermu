@@ -20,7 +20,8 @@ inline constexpr VDPTraits SEGA_315_5246Traits = {
     VDPSpriteModel::SEGA,            // sprite_model
     VDPPaletteModel::FIXED_15,       // palette_model
     VDPScrollModel::SEGA,            // scroll_model
-    VDPFeatureFlags::SEGA_MODE_EXT,  // feature_flags
+    VDPFeatureFlags::SEGA_MODE_EXT
+    | VDPFeatureFlags::SEGA_EXT_LINES, // feature_flags (supports 224/240-line modes)
     11,                              // num_registers
     16,                              // vram_size_kb
     313,                             // total_lines
