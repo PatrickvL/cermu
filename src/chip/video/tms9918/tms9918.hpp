@@ -121,6 +121,8 @@ public:
                     bg_fetch_step();
                     // Emit background pixel from shift register
                     uint8_t pixel = emit_bg_pixel();
+                    // Store BG priority before sprite compositing
+                    bg_priority_[dot_] = bg_.priority;
                     // Sprite overlay (not in text mode)
                     if (screen_mode_ != ScreenMode::TEXT) {
                         pixel = composite_sprite_pixel(dot_, pixel);
@@ -344,6 +346,7 @@ private:
         // Pipeline position tracking
         uint8_t pixel_in_char = 0;  // Current pixel within character (0-7 or 0-5)
         uint8_t column      = 0;    // Current tile column being rendered
+        bool    priority    = false; // BG-over-sprite priority (Sega Mode 4)
 
         // Cached per-line values (set at begin_scanline)
         uint16_t nt_base    = 0;    // Name table base address
@@ -384,6 +387,7 @@ private:
     // ====================================================================
 
     uint8_t color_line_[256] = {};   // Palette index per pixel (current scanline)
+    bool    bg_priority_[256] = {};  // BG-over-sprite priority per pixel (Sega Mode 4)
 
     // ====================================================================
     // INTERNAL: Register / VRAM I/O

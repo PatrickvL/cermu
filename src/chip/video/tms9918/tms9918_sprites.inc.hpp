@@ -321,6 +321,11 @@ uint8_t tms9918_t<Traits>::composite_sprite_pixel(uint16_t pixel_x, uint8_t bg_p
 
     } else if constexpr (Traits.sprite_model == VDPSpriteModel::SEGA) {
         // Sega SMS sprite compositing: 4bpp sprite pixels from bitplane data
+        // BG priority: when bg_priority_[pixel_x] is set and BG pixel is
+        // non-transparent (not palette index 0), BG wins over sprites.
+        const bool bg_has_priority = bg_priority_[pixel_x]
+                                  && (bg_pixel & 0x0F) != 0;
+
         uint8_t result = bg_pixel;
         bool result_set = false;
         uint8_t collision_count = 0;
@@ -342,7 +347,7 @@ uint8_t tms9918_t<Traits>::composite_sprite_pixel(uint16_t pixel_x, uint8_t bg_p
 
             collision_count++;
 
-            if (!result_set) {
+            if (!result_set && !bg_has_priority) {
                 // SMS sprites always use second palette (entries 16-31)
                 result = color_idx + 16;
                 result_set = true;
