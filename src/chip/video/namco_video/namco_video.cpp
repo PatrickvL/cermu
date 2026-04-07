@@ -19,7 +19,8 @@ using namespace namco_video_constants;
 //   ty ∈ [2,33]:  main playfield    → VRAM row = 29-tx, col = ty-2
 //   ty ∈ [34,35]: bottom score strip → VRAM row = ty-34, col = tx+2
 //
-// TODO: output native 288×224 signal when GPU-side rotation is available.
+// TODO(blocked): output native 288×224 signal when GPU-side rotation is available.
+//   Requires HardwareTraits rotation field + shader support.
 
 void NamcoVideo::render_frame() {
     if (!vram_ || !cram_ || !char_rom_ || !colortable_ || !video_out_) return;

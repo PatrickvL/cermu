@@ -34,7 +34,8 @@ namespace namco_video_constants {
     // Signal dimensions after TTL address mapping (rotated 90° CW for arcade monitor).
     // Native raster is 288×224, but the address generation circuit maps VRAM entries
     // into a 224×288 output directly usable on the rotated display.
-    // TODO: output native 288×224 when GPU-side rotation is available.
+    // TODO(blocked): output native 288×224 when GPU-side rotation is available.
+    //   Requires HardwareTraits rotation field + shader support.
     inline constexpr int WIDTH              = 224;   // visible width  (28 tile columns)
     inline constexpr int HEIGHT             = 288;   // visible height (36 tile rows)
     inline constexpr int TILE_SIZE          = 8;
