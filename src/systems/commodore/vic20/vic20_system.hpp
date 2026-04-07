@@ -20,6 +20,8 @@
 #include <memory>
 #include <string>
 
+class Datasette1530Device;
+
 /**
  * VIC-20 System Implementation
  * Clean implementation using the new System architecture (CHIP-8 pattern)
@@ -219,6 +221,9 @@ private:
     bool cartridge_present_ = false; // Whether a cartridge ROM is loaded
     bool initialized_ = false;
 
+    // Cached peripheral pointers
+    Datasette1530Device* cached_datasette_ = nullptr;
+
 public:
     // Load callback context — two contiguous regions addressable by the
     // commodore_load_context_t callbacks (write_byte / mem_read).
@@ -235,6 +240,7 @@ private:
     bool is_system_initialized() const override { return initialized_; }
     int get_iec_port_index() const override { return 1; }       // IEC Serial Bus
     int get_cassette_port_index() const override { return 2; }  // Cassette Port
+    void on_port_device_changed(int port_index) override;
 
     // ---- CRT cartridge loading hooks ----
     bool on_file_parsed(format_load_result_t& result, const char* filepath) override;
