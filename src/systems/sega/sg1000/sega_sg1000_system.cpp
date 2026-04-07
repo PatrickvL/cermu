@@ -16,6 +16,7 @@
 #include "systems/sega/sg1000/sega_sg1000_system.hpp"
 #include "core/system_registry.hpp"
 #include "core/config/path_discovery.hpp"
+#include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -286,9 +287,41 @@ bus_state_t SegaSG1000System<V>::io_tick(bus_state_t pins) {
 template<SG1000Variant V>
 bool SegaSG1000System<V>::load_file(const char* filepath) {
     if (!filepath || !system_ready_) return false;
-    // TODO: Load .sg cartridge ROM
-    log_info("%s: File loading not yet implemented: %s\n", Traits::name, filepath);
-    return false;
+
+    log_info("%s: Loading file: %s\n", Traits::name, filepath);
+
+    size_t file_size = 0;
+    uint8_t* file_data = vfs_read_file(filepath, &file_size);
+    if (!file_data) {
+        log_info("%s: Failed to open file: %s\n", Traits::name, filepath);
+        return false;
+    }
+
+    // SG-1000 cartridges are raw ROM images, up to 32 KB.
+    // The manifest Cart ROM covers $0000-$7FFF (32 KB).
+    // Smaller ROMs are mirrored within the 32 KB window.
+    if (file_size == 0 || file_size > 0x8000) {
+        log_info("%s: Invalid ROM size: %zu bytes (max 32KB)\n", Traits::name, file_size);
+        free(file_data);
+        return false;
+    }
+
+    uint8_t* cart = board_.cart.data();
+    if (!cart) { free(file_data); return false; }
+
+    // Mirror smaller ROMs to fill the 32 KB cart window
+    for (size_t offset = 0; offset < 0x8000; offset += file_size)
+        memcpy(cart + offset, file_data,
+               std::min(file_size, 0x8000 - offset));
+    free(file_data);
+
+    std::string name = vfs_filename(filepath);
+    program_title_ = name.empty() ? filepath : name;
+
+    log_info("%s: Loaded %zu bytes\n", Traits::name, file_size);
+
+    reset();
+    return true;
 }
 
 // ============================================================================
