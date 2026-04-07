@@ -157,10 +157,6 @@ bool BBCMasterSystem<V>::initialize() {
     // Set port manifest for default peripheral attachment.
     port_manifest_       = BTraits::kManifest.port_slots;
     port_manifest_count_ = BTraits::kManifest.port_count;
-    ram_chip_       = &board_.ram;
-    paged_rom_chip_ = &board_.paged_rom;
-    os_rom_chip_    = &board_.os_rom;
-    memory_         = ram_chip_->data();
 
     pins_ = board_.w65c02.init();
     board_.sys_via.reset();
@@ -190,7 +186,7 @@ bool BBCMasterSystem<V>::initialize() {
     board_.crtc.on_hsync = [this]() { this->crtc_hsync(); };
 
     // Set memory for video rendering
-    board_.vidproc.set_memory(memory_);
+    board_.vidproc.set_memory(board_.ram.data());
 
     // ── Video output output ─────────────────────────────────────────────
     video_port_ = std::make_unique<CompositeVideoPort>();
