@@ -374,7 +374,7 @@ void tms9918_t<Traits>::prefetch_tile_sega([[maybe_unused]] uint8_t col) {
         const bool h_flip = (entry >> 9) & 1;
         const bool v_flip = (entry >> 10) & 1;
         const uint8_t palette_bank = ((entry >> 11) & 1) ? 16 : 0;
-        // const bool priority = (entry >> 12) & 1; // TODO: sprite priority
+        const bool priority = (entry >> 12) & 1;
 
         // Pattern data: 4 bytes per row, 32 bytes per tile
         int row_in_tile = v_flip ? (7 - fine_y_s) : fine_y_s;
@@ -394,6 +394,7 @@ void tms9918_t<Traits>::prefetch_tile_sega([[maybe_unused]] uint8_t col) {
         bg_.mc_right = bp3;       // Repurpose mc_right for bp3
         bg_.fg_color = palette_bank;
         bg_.bg_color = h_flip ? 1 : 0;  // Flag h_flip in bg_color
+        bg_.priority = priority;         // BG-over-sprite priority
     }
 }
 
