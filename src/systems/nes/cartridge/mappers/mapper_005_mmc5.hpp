@@ -43,7 +43,7 @@ private:
     // -----------------------------------------------------------------------
     uint8_t chr_mode_ = 0;             // $5101: CHR banking mode (0-3)
     uint16_t chr_bank_[12] = {};       // $5120-$512B: CHR bank registers
-    bool chr_upper_set_ = false;       // Tracks last set (sprite vs BG)
+    uint8_t ppuctrl_ = 0;              // Cached PPU $2000 for CHR split
 
     // -----------------------------------------------------------------------
     // Nametable mapping
@@ -154,7 +154,7 @@ public:
         std::memset(prg_bank_, 0, sizeof(prg_bank_));
         prg_bank_[4] = 0xFF;  // Last 8KB bank defaults to last page (ROM)
         std::memset(chr_bank_, 0, sizeof(chr_bank_));
-        chr_upper_set_ = false;
+        ppuctrl_ = 0;
         nt_mapping_ = 0;
         fill_tile_ = 0;
         fill_attr_ = 0;
@@ -180,6 +180,12 @@ public:
     bool irq_state() override { return irq_pending_ && irq_enabled_; }
 
     void irq_clear() override { irq_pending_ = false; }
+
+    bool notify_ppuctrl(uint8_t value) override {
+        if (ppuctrl_ == value) return false;
+        ppuctrl_ = value;
+        return true;  // CHR split depends on pattern table bits
+    }
 
     // =======================================================================
     // Scanline notification — PPU-cycle-based scanline counting
@@ -322,111 +328,129 @@ public:
         //   - Sprite set ($5120-$5127): 8 registers for sprite tile fetches
         //   - BG set ($5128-$512B): 4 registers for BG tile fetches
         //
-        // The real hardware multiplexes based on the current PPU fetch type.
-        // Since we can't switch per-cycle, we use the "last written" set:
-        // chr_upper_set_ is true when the last CHR write was to the BG set.
+        // Real hardware switches per-PPU-fetch.  We approximate by mapping
+        // each 4KB pattern table half from the appropriate set based on
+        // PPUCTRL ($2000):
+        //   bit 4: BG pattern table base (0=$0000, 1=$1000)
+        //   bit 3: sprite pattern table base (0=$0000, 1=$1000) [8×8 mode]
+        //
+        // The 4KB half that $2000.4 selects → BG set.
+        // The other 4KB half → sprite set.
+        // When both select the same half → BG set for that half, sprite
+        // set for the other (sprites can still work via 8×16 tile index).
         //
         // The BG set has only 4 registers; they replicate across 8 × 1KB:
         //   slot 0,4 ← $5128    slot 1,5 ← $5129
         //   slot 2,6 ← $512A    slot 3,7 ← $512B
 
-        if (chr_upper_set_) {
-            // --- BG set active: 4 registers replicated to 8 slots ---
+        // bg_half: which 4KB half (0=low $0000-$0FFF, 1=high $1000-$1FFF)
+        // uses the BG set.  The other half uses the sprite set.
+        const int bg_half = (ppuctrl_ & 0x10) ? 1 : 0;
+
+        // Helper: fill 4 slots from the BG set (registers 8-11, replicated)
+        auto fill_bg_set = [&](int base_slot) {
             switch (chr_mode_) {
                 case 0: {
-                    // 8KB mode — $512B selects 8KB page
+                    // 8KB — $512B selects 8KB; take the relevant 4 slots
                     uint32_t base = (chr_bank_[11] * 8) % chr_1k;
-                    for (int i = 0; i < 8; i++) {
-                        config.chr_pages[i] = chr_mem_ + ((base + i) % chr_1k) * 0x0400;
-                        config.chr_writable[i] = chr_is_ram_;
+                    int offset = base_slot;  // 0 or 4
+                    for (int i = 0; i < 4; i++) {
+                        config.chr_pages[base_slot + i] = chr_mem_ + ((base + offset + i) % chr_1k) * 0x0400;
+                        config.chr_writable[base_slot + i] = chr_is_ram_;
                     }
                     break;
                 }
                 case 1: {
-                    // 4KB mode — $512B selects the 4KB bank, replicated at $0000 and $1000
+                    // 4KB — $512B selects 4KB bank
                     uint32_t lo = (chr_bank_[11] * 4) % chr_1k;
                     for (int i = 0; i < 4; i++) {
-                        uint32_t b = (lo + i) % chr_1k;
-                        config.chr_pages[i]     = chr_mem_ + b * 0x0400;
-                        config.chr_pages[4 + i] = chr_mem_ + b * 0x0400;
-                        config.chr_writable[i] = chr_is_ram_;
-                        config.chr_writable[4 + i] = chr_is_ram_;
+                        config.chr_pages[base_slot + i] = chr_mem_ + ((lo + i) % chr_1k) * 0x0400;
+                        config.chr_writable[base_slot + i] = chr_is_ram_;
                     }
                     break;
                 }
                 case 2: {
-                    // 2KB mode — $5129/$512B select 2KB banks, replicated
+                    // 2KB — $5129/$512B
                     for (int half = 0; half < 2; half++) {
-                        int reg = 9 + half * 2;  // registers 9,11
+                        int reg = 9 + half * 2;  // registers 9, 11
                         uint32_t base = (chr_bank_[reg] * 2) % chr_1k;
                         for (int i = 0; i < 2; i++) {
-                            uint32_t b = (base + i) % chr_1k;
-                            config.chr_pages[half * 2 + i]     = chr_mem_ + b * 0x0400;
-                            config.chr_pages[4 + half * 2 + i] = chr_mem_ + b * 0x0400;
-                            config.chr_writable[half * 2 + i] = chr_is_ram_;
-                            config.chr_writable[4 + half * 2 + i] = chr_is_ram_;
+                            config.chr_pages[base_slot + half * 2 + i] = chr_mem_ + ((base + i) % chr_1k) * 0x0400;
+                            config.chr_writable[base_slot + half * 2 + i] = chr_is_ram_;
                         }
                     }
                     break;
                 }
                 case 3: {
-                    // 1KB mode — 4 registers replicated to 8
+                    // 1KB — 4 registers replicated
                     for (int i = 0; i < 4; i++) {
                         uint32_t b = chr_bank_[8 + i] % chr_1k;
-                        config.chr_pages[i]     = chr_mem_ + b * 0x0400;
-                        config.chr_pages[4 + i] = chr_mem_ + b * 0x0400;
-                        config.chr_writable[i] = chr_is_ram_;
-                        config.chr_writable[4 + i] = chr_is_ram_;
+                        config.chr_pages[base_slot + i] = chr_mem_ + b * 0x0400;
+                        config.chr_writable[base_slot + i] = chr_is_ram_;
                     }
                     break;
                 }
             }
-        } else {
-            // --- Sprite set active: 8 registers (standard mapping) ---
+        };
+
+        // Helper: fill 4 slots from the sprite set (registers 0-7)
+        auto fill_spr_set = [&](int base_slot) {
             switch (chr_mode_) {
                 case 0: {
-                    // 8KB mode — $5127 selects 8KB page
+                    // 8KB — $5127 selects 8KB; take the relevant 4 slots
                     uint32_t base = (chr_bank_[7] * 8) % chr_1k;
-                    for (int i = 0; i < 8; i++) {
-                        config.chr_pages[i] = chr_mem_ + ((base + i) % chr_1k) * 0x0400;
-                        config.chr_writable[i] = chr_is_ram_;
+                    int offset = base_slot;  // 0 or 4
+                    for (int i = 0; i < 4; i++) {
+                        config.chr_pages[base_slot + i] = chr_mem_ + ((base + offset + i) % chr_1k) * 0x0400;
+                        config.chr_writable[base_slot + i] = chr_is_ram_;
                     }
                     break;
                 }
                 case 1: {
-                    // 4KB mode — $5123 at $0000, $5127 at $1000
-                    uint32_t lo = (chr_bank_[3] * 4) % chr_1k;
-                    uint32_t hi = (chr_bank_[7] * 4) % chr_1k;
+                    // 4KB — $5123 at low half, $5127 at high half
+                    int reg = (base_slot == 0) ? 3 : 7;
+                    uint32_t lo = (chr_bank_[reg] * 4) % chr_1k;
                     for (int i = 0; i < 4; i++) {
-                        config.chr_pages[i]     = chr_mem_ + ((lo + i) % chr_1k) * 0x0400;
-                        config.chr_pages[4 + i] = chr_mem_ + ((hi + i) % chr_1k) * 0x0400;
-                        config.chr_writable[i] = chr_is_ram_;
-                        config.chr_writable[4 + i] = chr_is_ram_;
+                        config.chr_pages[base_slot + i] = chr_mem_ + ((lo + i) % chr_1k) * 0x0400;
+                        config.chr_writable[base_slot + i] = chr_is_ram_;
                     }
                     break;
                 }
                 case 2: {
-                    // 2KB mode — $5121/$5123/$5125/$5127
-                    for (int pair = 0; pair < 4; pair++) {
-                        int reg = pair * 2 + 1;
+                    // 2KB — base_slot=0: $5121/$5123, base_slot=4: $5125/$5127
+                    int start_pair = (base_slot == 0) ? 0 : 2;
+                    for (int half = 0; half < 2; half++) {
+                        int reg = (start_pair + half) * 2 + 1;
                         uint32_t base = (chr_bank_[reg] * 2) % chr_1k;
-                        int slot = pair * 2;
-                        config.chr_pages[slot]     = chr_mem_ + ((base) % chr_1k) * 0x0400;
-                        config.chr_pages[slot + 1] = chr_mem_ + ((base + 1) % chr_1k) * 0x0400;
-                        config.chr_writable[slot] = chr_is_ram_;
-                        config.chr_writable[slot + 1] = chr_is_ram_;
+                        for (int i = 0; i < 2; i++) {
+                            config.chr_pages[base_slot + half * 2 + i] = chr_mem_ + ((base + i) % chr_1k) * 0x0400;
+                            config.chr_writable[base_slot + half * 2 + i] = chr_is_ram_;
+                        }
                     }
                     break;
                 }
                 case 3: {
-                    // 1KB mode — each register maps 1KB
-                    for (int i = 0; i < 8; i++) {
-                        config.chr_pages[i] = chr_mem_ + (chr_bank_[i] % chr_1k) * 0x0400;
-                        config.chr_writable[i] = chr_is_ram_;
+                    // 1KB — 4 registers per half
+                    int start_reg = base_slot;  // 0 or 4
+                    for (int i = 0; i < 4; i++) {
+                        uint32_t b = chr_bank_[start_reg + i] % chr_1k;
+                        config.chr_pages[base_slot + i] = chr_mem_ + b * 0x0400;
+                        config.chr_writable[base_slot + i] = chr_is_ram_;
                     }
                     break;
                 }
             }
+        };
+
+        // Map each 4KB half from the appropriate set
+        if (bg_half == 0) {
+            // BG uses $0000-$0FFF, sprites use $1000-$1FFF
+            fill_bg_set(0);
+            fill_spr_set(4);
+        } else {
+            // Sprites use $0000-$0FFF, BG uses $1000-$1FFF
+            fill_spr_set(0);
+            fill_bg_set(4);
         }
 
         // Nametable mapping — decode $5105
@@ -551,20 +575,20 @@ private:
             case 0x5117: prg_bank_[4] = data;         return true;   // $E000-$FFFF (always ROM)
 
             // --- CHR bank registers (sprite set $5120-$5127) ---
-            case 0x5120: chr_bank_[0]  = data; chr_upper_set_ = false; return true;
-            case 0x5121: chr_bank_[1]  = data; chr_upper_set_ = false; return true;
-            case 0x5122: chr_bank_[2]  = data; chr_upper_set_ = false; return true;
-            case 0x5123: chr_bank_[3]  = data; chr_upper_set_ = false; return true;
-            case 0x5124: chr_bank_[4]  = data; chr_upper_set_ = false; return true;
-            case 0x5125: chr_bank_[5]  = data; chr_upper_set_ = false; return true;
-            case 0x5126: chr_bank_[6]  = data; chr_upper_set_ = false; return true;
-            case 0x5127: chr_bank_[7]  = data; chr_upper_set_ = false; return true;
+            case 0x5120: chr_bank_[0]  = data; return true;
+            case 0x5121: chr_bank_[1]  = data; return true;
+            case 0x5122: chr_bank_[2]  = data; return true;
+            case 0x5123: chr_bank_[3]  = data; return true;
+            case 0x5124: chr_bank_[4]  = data; return true;
+            case 0x5125: chr_bank_[5]  = data; return true;
+            case 0x5126: chr_bank_[6]  = data; return true;
+            case 0x5127: chr_bank_[7]  = data; return true;
 
             // --- CHR bank registers (BG set $5128-$512B) ---
-            case 0x5128: chr_bank_[8]  = data; chr_upper_set_ = true; return true;
-            case 0x5129: chr_bank_[9]  = data; chr_upper_set_ = true; return true;
-            case 0x512A: chr_bank_[10] = data; chr_upper_set_ = true; return true;
-            case 0x512B: chr_bank_[11] = data; chr_upper_set_ = true; return true;
+            case 0x5128: chr_bank_[8]  = data; return true;
+            case 0x5129: chr_bank_[9]  = data; return true;
+            case 0x512A: chr_bank_[10] = data; return true;
+            case 0x512B: chr_bank_[11] = data; return true;
 
             // --- Vertical split (stub) ---
             case 0x5200: return false;  // Split mode control

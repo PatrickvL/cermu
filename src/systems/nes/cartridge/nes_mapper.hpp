@@ -166,6 +166,11 @@ public:
     // that A12 was low for >= ~16 dots before a rising edge counts).
     virtual void notify_a12(bool /*a12_high*/, uint64_t /*ppu_cycle*/) {}
 
+    // PPUCTRL notification — called when CPU writes PPU $2000.
+    // MMC5 uses bits 3-5 to split CHR bank sets between sprite and BG
+    // pattern table halves.  Returns true if banking changed.
+    virtual bool notify_ppuctrl(uint8_t /*value*/) { return false; }
+
     // ====================================================================
     // Bus-mediated PPU memory access hooks
     // ====================================================================
