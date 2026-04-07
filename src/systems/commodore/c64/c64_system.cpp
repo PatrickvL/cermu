@@ -979,6 +979,11 @@ bool C64System::on_file_parsed(format_load_result_t& result,
         }
     }
 
+    // Skip RAMTAS memory test for all loaded software — the memtest is
+    // only useful for bare-metal boot; any file load implies a deferred
+    // injection after BASIC READY, so the faster we get there the better.
+    patch_skip_memtest();
+
     return true;
 }
 
