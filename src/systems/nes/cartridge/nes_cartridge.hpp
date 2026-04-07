@@ -177,7 +177,16 @@ public:
             PPU_BUS_SET_BIT(ppu_bus, PPU_BUS_WR_BIT);
         } else {
             // ---- READ transaction (default: rendering fetch) ----
-            if (likely(bus != nullptr)) {
+            // Give mapper a chance to intercept before block dispatch
+            // (MMC5 split mode / extended attributes).
+            uint8_t intercept_data = 0;
+            bool intercepted = false;
+            if (unlikely(mapper != nullptr))
+                intercepted = mapper->ppu_bus_intercept(addr, intercept_data);
+
+            if (intercepted) {
+                PPU_BUS_SET_DATA(ppu_bus, intercept_data);
+            } else if (likely(bus != nullptr)) {
                 const uint16_t block = bus->ppu_read_block[addr >> nes_bus::PPU_PAGE_SHIFT];
                 if (likely(block < nes_bus::BLOCK_SENTINEL_MIN)) {
                     PPU_BUS_SET_DATA(ppu_bus, bus->ppu_block_read(block, addr));

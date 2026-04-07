@@ -196,6 +196,12 @@ public:
     // Mappers that need to intercept PPU bus transactions override these.
     // Called by Cartridge::ppu_memory_tick() on every PPU dot.
     //
+    // ppu_bus_intercept: Called BEFORE default block dispatch on PPU
+    // reads.  If the mapper returns true, `data` is placed on the bus
+    // and block dispatch is skipped.  Used by MMC5 vertical split mode
+    // and extended attribute mode to substitute nametable / pattern data
+    // mid-scanline.
+    //
     // ppu_bus_read: Called AFTER default block dispatch has placed data
     // on the bus.  The mapper can inspect the address (e.g. $0FD8-$0FEF
     // for MMC2/MMC4 latch switching) and return true if it changed CHR
@@ -207,6 +213,7 @@ public:
     // write that targeted CHR or nametable space).  The mapper can
     // intercept the write for bus-conflict mappers or special behavior.
     // Returns true if banking changed.
+    virtual bool ppu_bus_intercept(uint16_t /*addr*/, uint8_t& /*data*/) { return false; }
     virtual bool ppu_bus_read(uint16_t /*addr*/) { return false; }
     virtual bool ppu_bus_write(uint16_t /*addr*/, uint8_t /*data*/) { return false; }
 
