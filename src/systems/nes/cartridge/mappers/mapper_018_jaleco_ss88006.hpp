@@ -158,12 +158,12 @@ public:
             case 0xF001:
                 irq_active_ = false;
                 irq_enabled_ = (data & 0x01) != 0;
-                // D1-D3 select counter size
-                switch ((data >> 1) & 0x07) {
+                // D1-D2 select counter size (D3+ unused)
+                switch ((data >> 1) & 0x03) {
                     case 0: irq_mask_ = 0xFFFF; break;  // 16-bit
                     case 1: irq_mask_ = 0x0FFF; break;  // 12-bit
-                    case 2: case 3: irq_mask_ = 0x00FF; break;  // 8-bit
-                    default: irq_mask_ = 0x000F; break;  // 4-bit
+                    case 2: irq_mask_ = 0x00FF; break;  // 8-bit
+                    case 3: irq_mask_ = 0x000F; break;  // 4-bit
                 }
                 return false;
 
