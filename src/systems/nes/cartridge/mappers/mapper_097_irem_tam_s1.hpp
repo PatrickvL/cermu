@@ -23,7 +23,7 @@ private:
 public:
     Mapper097(uint8_t prgBanks, uint8_t chrBanks) { (void)prgBanks; (void)chrBanks; }
 
-    void reset() override { prg_bank_ = 0; mirror_mode_ = Mirror::VERTICAL; }
+    void reset() override { prg_bank_ = 0; mirror_mode_ = header_mirror_; }
 
     Mirror mirror() override { return mirror_mode_; }
 
