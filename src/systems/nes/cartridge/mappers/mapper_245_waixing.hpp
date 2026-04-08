@@ -40,13 +40,13 @@ private:
         uint32_t total_8k = static_cast<uint32_t>(prg_rom_size_ / 0x2000);
         if (total_8k == 0) total_8k = 1;
 
-        // R0.D0 provides bit 6 of the 8KB bank number (A18 in address space)
-        uint32_t extra = static_cast<uint32_t>(prg_extra_bit_) << 6;
+        // R0.D0 provides bit 5 of the 8KB bank number (A18 in address space)
+        uint32_t extra = static_cast<uint32_t>(prg_extra_bit_) << 5;
 
-        uint32_t b6 = (extra | (registers_[6] & 0x3F)) % total_8k;
-        uint32_t b7 = (extra | (registers_[7] & 0x3F)) % total_8k;
-        uint32_t fixed_lo = (extra | (total_8k >= 2 ? (total_8k - 2) & 0x3F : 0)) % total_8k;
-        uint32_t fixed_hi = (extra | ((total_8k - 1) & 0x3F)) % total_8k;
+        uint32_t b6 = (extra | (registers_[6] & 0x1F)) % total_8k;
+        uint32_t b7 = (extra | (registers_[7] & 0x1F)) % total_8k;
+        uint32_t fixed_lo = (extra | 0x1E) % total_8k;
+        uint32_t fixed_hi = (extra | 0x1F) % total_8k;
 
         if (!prg_bank_mode_) {
             bank[0] = b6; bank[1] = b7; bank[2] = fixed_lo; bank[3] = fixed_hi;
