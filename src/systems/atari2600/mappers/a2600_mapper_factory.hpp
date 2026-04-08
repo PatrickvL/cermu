@@ -36,6 +36,7 @@
 #include "systems/atari2600/mappers/a2600_mapper_fa.hpp"
 #include "systems/atari2600/mappers/a2600_mapper_ua.hpp"
 #include "systems/atari2600/mappers/a2600_mapper_cv.hpp"
+#include "systems/atari2600/mappers/a2600_mapper_ar.hpp"
 #include <memory>
 #include <cstdio>
 
@@ -262,7 +263,13 @@ inline bool detect_cv(const uint8_t* rom, uint32_t size) {
 inline std::unique_ptr<A2600Mapper> create(const uint8_t* rom, uint32_t size) {
     std::unique_ptr<A2600Mapper> mapper;
 
-    if (size <= 2048) {
+    // Starpath Supercharger: each multiload image is 8448 bytes
+    if (size >= A2600MapperAR::LOAD_SIZE && (size % A2600MapperAR::LOAD_SIZE) == 0) {
+        mapper = std::make_unique<A2600MapperAR>();
+        log_info("Atari2600: Mapper = AR (Starpath Supercharger, %u load(s))\n",
+                 size / A2600MapperAR::LOAD_SIZE);
+    }
+    else if (size <= 2048) {
         // 2KB: plain 2K card, or CV (Commavid) with RAM
         if (detect_cv(rom, size)) {
             mapper = std::make_unique<A2600MapperCV>();
