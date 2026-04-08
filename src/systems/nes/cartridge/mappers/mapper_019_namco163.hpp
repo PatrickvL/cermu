@@ -47,6 +47,7 @@ private:
     uint8_t chr_bank_[12] = {};  // [0-7] = pattern, [8-11] = nametable
 
     // Internal 128-byte RAM (shared between audio wavetable + scratch)
+    // TODO: Implement Namco 163 wavetable audio synthesis for audio_tick()/audio_output()
     uint8_t internal_ram_[128] = {};
     uint8_t ram_addr_ = 0;
     bool auto_increment_ = false;
