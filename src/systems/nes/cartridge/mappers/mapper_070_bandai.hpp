@@ -35,6 +35,7 @@ public:
 
     bool register_write(uint16_t addr, uint8_t data) override {
         if (addr < 0x8000) return false;
+        data = mapper_helpers::apply_bus_conflict(data, prg_rom_, prg_rom_size_, addr);
         prg_bank_ = (data >> 4) & 0x0F;
         chr_bank_ = data & 0x0F;
         return true;

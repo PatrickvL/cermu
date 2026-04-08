@@ -198,6 +198,19 @@ inline void set_chr_1k_pages_wide(MapperChrConfig& config,
 }
 
 // ============================================================================
+// Bus conflict helper
+// ============================================================================
+
+/// Apply bus conflict for discrete-logic mappers: AND the written data byte
+/// with the ROM byte at the same address.  Real hardware has the ROM output
+/// driver and CPU fighting on the data bus; the result is the AND of both.
+inline uint8_t apply_bus_conflict(uint8_t data, const uint8_t* prg_rom,
+                                  size_t prg_rom_size, uint16_t addr) {
+    uint32_t offset = addr % prg_rom_size;
+    return data & prg_rom[offset];
+}
+
+// ============================================================================
 // Mirroring helper
 // ============================================================================
 
