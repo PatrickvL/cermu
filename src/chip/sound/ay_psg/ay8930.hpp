@@ -7,9 +7,11 @@
  * extended register set.  Rare in practice; used in some arcade and
  * homebrew hardware.
  *
- * NOTE: Extended-mode behaviour (per-channel envelope, duty cycle,
- * bank register) is not yet implemented.  The chip currently operates
- * in standard AY-3-8910 compatibility mode.
+ * Extended mode features implemented:
+ *   - Mode activation via register $0D bit 4
+ *   - Bank B register file for per-channel configuration
+ *   - Per-channel independent envelope generators (period + shape)
+ *   - Variable duty cycle per channel (4-bit, default 50%)
  */
 
 #include "chip/sound/ay_psg/ay_psg.hpp"
