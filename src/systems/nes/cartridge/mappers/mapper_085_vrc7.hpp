@@ -7,7 +7,8 @@
  * PRG: 3×8KB switchable ($8000,$A000,$C000) + 8KB fixed ($E000).
  * CHR: 8×1KB banks.
  * IRQ: VRC-style 8-bit up-counter with prescaler.
- * Audio: YM2413-compatible FM synthesizer (stub — no audio output).
+ * Audio: 6-channel 2-operator FM synthesizer (YM2413 OPLL subset)
+ *        with 15 Konami custom ROM patches + 1 user patch.
  *
  * Register map:
  *   $8000: PRG bank 0
@@ -25,8 +26,31 @@
  */
 
 #include "systems/nes/cartridge/mappers/mapper_helpers.hpp"
+#include "chip/sound/ym_fm/ym_fm.hpp"
 
 namespace nes_system {
+
+// VRC7 traits — stripped-down OPLL with 6 channels, no rhythm
+inline constexpr YMTraits VRC7_Traits = {
+    .vendor               = "Konami",
+    .chip_id              = "VRC7",
+    .display_name         = "Konami VRC7 (OPLL)",
+    .fm_channels          = 6,
+    .operators_per_channel = 2,
+    .fm_algorithms        = 4,
+    .has_ch3_special_mode = false,
+    .has_lfo              = false,
+    .has_rhythm_mode      = false,
+    .has_waveform_select  = false,
+    .has_rom_patches      = true,
+    .has_ssg              = false,
+    .ssg                  = nullptr,
+    .has_adpcm_a          = false,
+    .has_adpcm_b          = false,
+    .has_dac              = false,
+    .ladder_effect        = false,
+    .pin_count            = 24,
+};
 
 class Mapper085 : public Mapper {
 private:
@@ -38,21 +62,25 @@ private:
     // VRC IRQ
     mapper_helpers::VRCIRQ irq_;
 
-    // OPLL audio registers (stub — stores writes but doesn't synthesize)
-    // TODO: Implement YM2413 (OPLL) FM synthesis for audio_tick()/audio_output()
-    uint8_t opll_reg_select_ = 0;
-    uint8_t opll_regs_[64] = {};
+    // VRC7 FM expansion audio — 6-channel OPLL with Konami custom patches
+    ym_fm_t<VRC7_Traits> fm_;
+    uint8_t fm_reg_select_ = 0;
+    uint16_t fm_divider_ = 0;
 
 public:
-    Mapper085(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
+    Mapper085(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {
+        fm_.set_opll_rom_patches(opll_patches::VRC7_ROM);
+    }
 
     void reset() override {
         for (int i = 0; i < 3; i++) prg_bank_[i] = 0;
         for (int i = 0; i < 8; i++) chr_bank_[i] = 0;
         mirror_mode_ = header_mirror_;
         irq_.reset();
-        opll_reg_select_ = 0;
-        for (int i = 0; i < 64; i++) opll_regs_[i] = 0;
+        fm_.reset();
+        fm_.set_opll_rom_patches(opll_patches::VRC7_ROM);
+        fm_reg_select_ = 0;
+        fm_divider_ = 0;
     }
 
     Mirror mirror() override { return mirror_mode_; }
@@ -61,6 +89,22 @@ public:
 
     void notify_cpu_cycle() override {
         irq_.tick_cpu();
+    }
+
+    // VRC7 FM expansion audio — OPLL master clock ≈ 3.58 MHz (2× CPU)
+    // The OPLL internally divides by 72 for sample generation, so the
+    // effective sample rate is ~49.7 kHz.  We tick the FM engine at the
+    // CPU clock rate and let its internal prescaler handle the rest.
+    void audio_tick() override {
+        // The VRC7's OPLL runs at ~3.579545 MHz (NTSC master / 5, same as CPU×2).
+        // Tick twice per CPU cycle to approximate the 2× clock relationship.
+        bus_state_t dummy = 0;
+        fm_.tick(dummy);
+        fm_.tick(dummy);
+    }
+
+    float audio_output() const override {
+        return fm_.get_sample();
     }
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
@@ -94,9 +138,11 @@ public:
             case 0x8010: prg_bank_[1] = data & 0x3F; return true;
             case 0x9000: prg_bank_[2] = data & 0x3F; return true;
 
-            // OPLL audio (stub)
-            case 0x9010: opll_reg_select_ = data; return false;
-            case 0x9030: opll_regs_[opll_reg_select_ & 0x3F] = data; return false;
+            // OPLL FM audio
+            case 0x9010: fm_reg_select_ = data; return false;
+            case 0x9030:
+                fm_.write_register(fm_reg_select_, data);
+                return false;
 
             case 0xA000: chr_bank_[0] = data; return true;
             case 0xA010: chr_bank_[1] = data; return true;
