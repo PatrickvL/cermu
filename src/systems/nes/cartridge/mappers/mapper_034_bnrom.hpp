@@ -77,7 +77,7 @@ public:
 
     bool register_write(uint16_t addr, uint8_t data) override {
         if (is_nina001_) {
-            // NINA-001: registers at $7FFD-$7FFF
+            // NINA-001: registers at $7FFD-$7FFF only
             if (addr == 0x7FFD) {
                 prg_bank_select_ = data;
                 return true;
@@ -88,6 +88,7 @@ public:
                 chr_bank_hi_ = data;
                 return true;
             }
+            return false;  // NINA-001 ignores $8000+ writes
         }
 
         // BNROM: any write to $8000-$FFFF selects PRG bank
