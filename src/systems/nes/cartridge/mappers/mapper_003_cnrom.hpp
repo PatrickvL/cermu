@@ -34,7 +34,7 @@ public:
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {
-        mapper_helpers::set_chr_8k(config, chr_mem_, chr_mem_size_, false, chr_bank_select_);
+        mapper_helpers::set_chr_8k(config, chr_mem_, chr_mem_size_, chr_is_ram_, chr_bank_select_);
     }
 
     bool register_write(uint16_t addr, uint8_t data) override {
