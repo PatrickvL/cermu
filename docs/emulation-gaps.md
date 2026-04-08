@@ -154,7 +154,7 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 - [x] **[DONE]** Mapper 085 (VRC7): FM synthesis expansion audio (YM2413 OPLL) — 6-channel 2-op FM with Konami custom patches
 - [ ] **[LARGE]** Mapper 019 (Namco 163): wavetable expansion audio
 - [x] **[DONE]** Mapper 069 (Sunsoft 5B): Yamaha expansion audio (YM2149 PSG) — 3 square + noise + envelope
-- [ ] **[MEDIUM]** Mapper 016 (Bandai FCG): 24C01/24C02 EEPROM save support
+- [x] **[DONE]** Mapper 016 (Bandai FCG): 24C01/24C02 I2C EEPROM save support
 - [ ] **[LARGE]** Mapper 020 (FDS): Famicom Disk System — disk emulation, wavetable sound, entirely new hardware
 
 ### Missing Mapper Families (low priority — rare/pirate)
@@ -216,13 +216,13 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 - [x] **[DONE]** Rate-scaling: RS bits factor into envelope rate
 - [x] **[DONE]** Sine table: hardware-accurate log-sin + exp ROM pipeline replaces `std::sin()`
 - [x] **[DONE]** YM2612 ladder-effect DAC distortion modeled via `ladder_effect` trait flag
-- [ ] **[MEDIUM]** SSG composition: AY PSG declared but never instantiated or clocked (`ym_fm.hpp:26`)
+- [x] **[DONE]** SSG composition: ay_psg_t<YM2149_Traits> embedded in OPN-family chips, register routing, clocking, audio mix
 - [x] **[DONE]** OPL-family: OPLL ROM patches (15 YM2413 + 15 VRC7), register decode, instrument loading
 - [x] **[DONE]** OPL-family: waveform select lookup implemented
-- [ ] **[MEDIUM]** OPM-specific: noise channel, key-fraction register, OPM addressing missing (`ym_fm.hpp:57`)
+- [ ] **[LARGE]** OPM-specific: noise channel, key-fraction register, OPM register map (fundamentally different addressing from OPN)
 
 #### AY-3-8910 Variants
-- [ ] **[MEDIUM]** AY8930 extended mode: per-channel envelopes, extended noise period, duty cycle (`ay8930.hpp:11`)
+- [x] **[DONE]** AY8930 extended mode: per-channel envelopes, duty cycle, Bank B register routing
 
 #### MOS 6581 (SID)
 - [x] **[DONE]** GUI: Test sound button implemented (A-440 sawtooth on voice 1)
@@ -232,6 +232,7 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 #### TMS9918 / Sega VDP
 - [x] **[DONE]** Sprite priority (BG-over-sprite) implemented
 - [x] **[DONE]** Sega Mode 4 fine-scroll (sub-tile X offset) and per-column tile fetch
+- [x] **[DONE]** Sega Mode 4 scroll inhibit: R0.D6 H-scroll lock (top 2 rows), R0.D7 V-scroll lock (right 8 cols), R0.D5 left-column mask
 - [ ] **[MEDIUM]** Per-line scroll table not implemented (`tms9918_mixins.hpp:141`)
 - [ ] **[LARGE]** VDP Command execution placeholder (`tms9918_mixins.hpp:125`)
 
@@ -276,13 +277,13 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 - [ ] **[LARGE]** 65CE02: Z register, PHZ/PLZ, TAZ/TZA, BASE page extensions
 - [x] **[DONE]** MOS 6509: exec/ind bank registers, self-clearing ($zp),Y indirection bank in bus_setup()
 - [x] **[DONE]** MOS 6504: instantiated as distinct fam65xx_t type alias
-- [ ] **[EASY]** CPU tracing: TODO to move to system level (`fam65xx.hpp:232`)
+- [x] **[DONE]** CPU tracing: memory-read callback for operand readback in instruction trace
 
 #### Motorola M68000
 - [x] **[DONE]** A-line & F-line traps: wired to vectors 10/11 via `exception()`
 
 #### Hitachi MC6809
-- [ ] **[MEDIUM]** HD6309 extensions: stubs (`mc6809_base_ops.inc.hpp:2082`)
+- [x] **[DONE]** HD6309 extensions: OIM/AIM/EIM/TIM bitop instructions + SEXW + LDQ
 
 ---
 
