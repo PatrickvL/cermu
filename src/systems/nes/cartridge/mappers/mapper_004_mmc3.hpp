@@ -15,8 +15,6 @@ namespace nes_system {
 
 class Mapper004 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
 
     // Bank registers
     uint8_t target_register_ = 0;    // R0-R7 selection
@@ -39,48 +37,50 @@ private:
     uint32_t chr_bank_[8] = {};  // 8 × 1KB CHR banks
 
     void update_prg_banks() {
-        uint32_t last_bank = (prg_banks_ * 2) - 1;  // Total 8KB banks - 1
+        uint32_t total_8k = static_cast<uint32_t>(prg_rom_size_ / 0x2000);
+        if (total_8k == 0) total_8k = 1;
+        uint32_t last_bank = total_8k - 1;
 
         if (!prg_bank_mode_) {
-            prg_bank_[0] = (registers_[6] & 0x3F) % (prg_banks_ * 2);
-            prg_bank_[1] = (registers_[7] & 0x3F) % (prg_banks_ * 2);
-            prg_bank_[2] = (last_bank - 1) % (prg_banks_ * 2);
-            prg_bank_[3] = last_bank % (prg_banks_ * 2);
+            prg_bank_[0] = (registers_[6] & 0x3F) % total_8k;
+            prg_bank_[1] = (registers_[7] & 0x3F) % total_8k;
+            prg_bank_[2] = (total_8k >= 2) ? total_8k - 2 : 0;
+            prg_bank_[3] = last_bank;
         } else {
-            prg_bank_[0] = (last_bank - 1) % (prg_banks_ * 2);
-            prg_bank_[1] = (registers_[7] & 0x3F) % (prg_banks_ * 2);
-            prg_bank_[2] = (registers_[6] & 0x3F) % (prg_banks_ * 2);
-            prg_bank_[3] = last_bank % (prg_banks_ * 2);
+            prg_bank_[0] = (total_8k >= 2) ? total_8k - 2 : 0;
+            prg_bank_[1] = (registers_[7] & 0x3F) % total_8k;
+            prg_bank_[2] = (registers_[6] & 0x3F) % total_8k;
+            prg_bank_[3] = last_bank;
         }
     }
 
     void update_chr_banks() {
-        uint32_t chr_size = chr_banks_ == 0 ? 8 : chr_banks_ * 8; // in 1KB units
+        uint32_t chr_1k = static_cast<uint32_t>(chr_mem_size_ / 0x0400);
+        if (chr_1k == 0) chr_1k = 1;
 
         if (!chr_inversion_) {
-            chr_bank_[0] = ((registers_[0] & 0xFE) + 0) % chr_size;
-            chr_bank_[1] = ((registers_[0] & 0xFE) + 1) % chr_size;
-            chr_bank_[2] = ((registers_[1] & 0xFE) + 0) % chr_size;
-            chr_bank_[3] = ((registers_[1] & 0xFE) + 1) % chr_size;
-            chr_bank_[4] = registers_[2] % chr_size;
-            chr_bank_[5] = registers_[3] % chr_size;
-            chr_bank_[6] = registers_[4] % chr_size;
-            chr_bank_[7] = registers_[5] % chr_size;
+            chr_bank_[0] = ((registers_[0] & 0xFE) + 0) % chr_1k;
+            chr_bank_[1] = ((registers_[0] & 0xFE) + 1) % chr_1k;
+            chr_bank_[2] = ((registers_[1] & 0xFE) + 0) % chr_1k;
+            chr_bank_[3] = ((registers_[1] & 0xFE) + 1) % chr_1k;
+            chr_bank_[4] = registers_[2] % chr_1k;
+            chr_bank_[5] = registers_[3] % chr_1k;
+            chr_bank_[6] = registers_[4] % chr_1k;
+            chr_bank_[7] = registers_[5] % chr_1k;
         } else {
-            chr_bank_[0] = registers_[2] % chr_size;
-            chr_bank_[1] = registers_[3] % chr_size;
-            chr_bank_[2] = registers_[4] % chr_size;
-            chr_bank_[3] = registers_[5] % chr_size;
-            chr_bank_[4] = ((registers_[0] & 0xFE) + 0) % chr_size;
-            chr_bank_[5] = ((registers_[0] & 0xFE) + 1) % chr_size;
-            chr_bank_[6] = ((registers_[1] & 0xFE) + 0) % chr_size;
-            chr_bank_[7] = ((registers_[1] & 0xFE) + 1) % chr_size;
+            chr_bank_[0] = registers_[2] % chr_1k;
+            chr_bank_[1] = registers_[3] % chr_1k;
+            chr_bank_[2] = registers_[4] % chr_1k;
+            chr_bank_[3] = registers_[5] % chr_1k;
+            chr_bank_[4] = ((registers_[0] & 0xFE) + 0) % chr_1k;
+            chr_bank_[5] = ((registers_[0] & 0xFE) + 1) % chr_1k;
+            chr_bank_[6] = ((registers_[1] & 0xFE) + 0) % chr_1k;
+            chr_bank_[7] = ((registers_[1] & 0xFE) + 1) % chr_1k;
         }
     }
 
 public:
-    Mapper004(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+    Mapper004(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     Mirror mirror() override { return mirror_mode_; }
 
