@@ -245,7 +245,7 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 - [ ] **[BLOCKED]** Placeholder font — needs verified CM4800 ROM dump (physical chip read required)
 
 #### Bomb Jack Video
-- [ ] **[MEDIUM]** Background and sprite layers not implemented — only foreground tilemap (`bombjack_video.hpp:23`)
+- [x] **[DONE]** Background, sprite, and foreground layers fully implemented (render_background, render_sprites, render_foreground)
 
 #### VIC-II
 - [x] **[DONE]** Graphics sequencer runs during L/R border for MxD collision accuracy
@@ -296,7 +296,7 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 | C16/Plus4 | — |
 | C128 | Z80/CP/M testing (QA) |
 | PET | — |
-| NES | VRC7/N163/5B expansion audio, FDS |
+| NES | N163 expansion audio, FDS |
 | Atari 2600 | DPC (Pitfall II), Starpath Supercharger |
 | Amstrad CPC | — |
 | ZX Spectrum | — |
@@ -315,7 +315,7 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 | SpectaVideo | — |
 | Tatung Einstein | — |
 | DDR (Z9001/KC85/Z1013/LC80) | KC85 module mapping, serial keyboard PIO |
-| Arcade — Bomb Jack | Background/sprite layers |
+| Arcade — Bomb Jack | — |
 | Arcade — Atari Vector | Mathbox, second POKEY, host input wiring |
 | Arcade — Namco | ROM loading (requires romset handling), sprites |
 
