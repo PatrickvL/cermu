@@ -7,9 +7,10 @@
  * Used by HES multicart games and some AVE titles.
  *
  * Register ($4100-$5FFF):
- *   D5-D3: CHR 8KB bank (3 bits → 8 banks)
- *   D2-D0: PRG 32KB bank (3 bits → 8 banks)
- *   D7: Mirroring (0=vertical, 1=horizontal)  [on some boards]
+ *   D7:    Mirroring (0=vertical, 1=horizontal)  [on some boards]
+ *   D6:    CHR A15 (high bit of 8KB CHR bank)
+ *   D5-D3: PRG 32KB bank (3 bits → 8 banks)
+ *   D2-D0: CHR A14-A12 (low 3 bits of 8KB CHR bank)
  */
 
 #include "systems/nes/cartridge/nes_mapper.hpp"
@@ -44,8 +45,8 @@ public:
 
     bool register_write(uint16_t addr, uint8_t data) override {
         if ((addr & 0xE100) == 0x4100) {
-            prg_bank_select_ = (data >> 0) & 0x07;
-            chr_bank_select_ = (data >> 3) & 0x07;
+            prg_bank_select_ = (data >> 3) & 0x07;
+            chr_bank_select_ = (data & 0x07) | ((data >> 3) & 0x08);
             mirror_mode_ = (data & 0x80) ? Mirror::HORIZONTAL : Mirror::VERTICAL;
             return true;
         }
