@@ -31,7 +31,14 @@ inline constexpr uint16_t INPUT_SYSTEM         = 0xB002;    // Coin + start butt
 inline constexpr uint16_t DSW1                 = 0xB003;    // DIP switch bank 1
 inline constexpr uint16_t DSW2                 = 0xB004;    // DIP switch bank 2
 inline constexpr uint16_t SOUND_LATCH          = 0xB800;    // Write → sound CPU command
-inline constexpr uint16_t BG_SELECT            = 0xB004;    // Background image select (write)
+inline constexpr uint16_t BG_SELECT            = 0x9E00;    // Background image select (write)
+inline constexpr uint16_t NMI_MASK             = 0xB000;    // Write: NMI enable mask
+inline constexpr uint16_t FLIP_SCREEN          = 0xB004;    // Write: flip screen
+
+// ── Sprites ─────────────────────────────────────────────────────────────
+inline constexpr uint16_t SPRITE_RAM_BASE      = 0x9820;    // First sprite attribute
+inline constexpr int      SPRITE_COUNT         = 24;        // Hardware sprites
+inline constexpr int      SPRITE_BYTES         = 4;         // Bytes per sprite
 
 // AY-3-8910 ports (sound CPU I/O space)
 inline constexpr uint8_t AY1_ADDR              = 0x00;

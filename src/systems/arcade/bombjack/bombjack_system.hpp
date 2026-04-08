@@ -33,46 +33,52 @@
 #define BOMBJACK_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
 
 // ============================================================================
-// Bomb Jack chip declarations — single source of truth (dual-CPU)
+// Bomb Jack manifests — dual-board, dual-CPU arcade hardware
 // ============================================================================
 //
-// Row: V(ctx, type, chip, base, size, mask, overlay, label, rom_files)
+// Physical topology (Tehkan 1984):
+//   Top board:  Main Z80A @ 4 MHz, all video TTL, SRAM, EPROMs 01–08 (suffix t),
+//               resistor ladder DACs, 18-pin edge connector, 6-pin RGB header.
+//   Bottom board: Sound Z80A @ 3.072 MHz, 3× AY-3-8910 @ 1.536 MHz,
+//               EPROMs 09–13 (main CPU program ROMs, suffix b),
+//               EPROMs 14–16 (sprite ROMs, suffix b, accessed via ribbon cable).
+//   Inter-board ribbon cable bridges the two buses.
 //
-// Main CPU: $0000-$7FFF ROM, $8000 RAM, $9xxx video/sprite/palette.
-// Sound CPU: $0000-$1FFF ROM, $4000 RAM.
-// I/O registers and AY ports handled separately.
+// No custom ICs — all standard catalogue parts (Z80, AY-3-8910, 74LS TTL).
+// Only the NMI pin is connected on the main Z80; INT is permanently inactive.
+//
+// Manifests split by CPU bus domain (main vs sound), not physical board.
+// Both cabinet connectors (video + speaker) are on the top board.
 //
 
 inline constexpr auto kBombJackMainManifest = make_manifest(
-    Slot<ZilogZ80A>{.base_addr = 0x0000, .label = "Main CPU"},
-    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 32768, .label = "Program ROM"},
-    Slot<RAMChip>{.base_addr = 0x8000, .size_bytes = 4096, .label = "Work RAM"},
-    Slot<RAMChip>{.base_addr = 0x9000, .size_bytes = 1024, .label = "FG Tilemap"},
-    Slot<RAMChip>{.base_addr = 0x9400, .size_bytes = 1024, .label = "FG Attributes"},
-    Slot<RAMChip>{.base_addr = 0x9800, .size_bytes = 256, .label = "Sprite Area"},
-    Slot<RAMChip>{.base_addr = 0x9C00, .size_bytes = 256, .label = "Palette RAM"},
-    Slot<DipSwitchBankComponent>{.descriptor = &bombjack_constants::kBjDSW1, .label = "DSW1"},
-    Slot<DipSwitchBankComponent>{.descriptor = &bombjack_constants::kBjDSW2, .label = "DSW2"}
+    // ── Chips ──────────────────────────────────────────────────────────
+    Slot<ZilogZ80A>{.base_addr = 0x0000, .label = "Main CPU"},                      // [0]
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 32768, .label = "Program ROM"},  // [1]  EPROMs 09–12
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 8192, .label = "Program ROM 2"}, // [2]  EPROM 13
+    Slot<RAMChip>{.base_addr = 0x8000, .size_bytes = 4096, .label = "Work RAM"},      // [3]
+    Slot<RAMChip>{.base_addr = 0x9000, .size_bytes = 1024, .label = "FG Tilemap"},    // [4]
+    Slot<RAMChip>{.base_addr = 0x9400, .size_bytes = 1024, .label = "FG Attributes"}, // [5]
+    Slot<RAMChip>{.base_addr = 0x9800, .size_bytes = 256, .label = "Sprite RAM"},     // [6]
+    Slot<RAMChip>{.base_addr = 0x9C00, .size_bytes = 256, .label = "Palette RAM"},    // [7]
+    Slot<DipSwitchBankComponent>{.descriptor = &bombjack_constants::kBjDSW1, .label = "DSW1"},  // [8]
+    Slot<DipSwitchBankComponent>{.descriptor = &bombjack_constants::kBjDSW2, .label = "DSW2"},  // [9]
+    // ── Ports (top board connectors) ──────────────────────────────────
+    Slot<PortRgb>{.name = "Video Out", .default_device = "crt_arcade"},              // 6-pin RGB header
+    Slot<PortAudioMono>{.name = "Audio Out"}                                          // 18-pin edge (speaker)
 );
 
 inline constexpr auto kBombJackSoundManifest = make_manifest(
-    Slot<ZilogZ80A>{.base_addr = 0x0000, .label = "Sound CPU"},
-    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 8192, .label = "Sound ROM"},
+    Slot<ZilogZ80A>{.base_addr = 0x0000, .label = "Sound CPU"},                      // Z80A @ 3.072 MHz
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 8192, .label = "Sound ROM"},     // EPROM 01
     Slot<RAMChip>{.base_addr = 0x4000, .size_bytes = 1024, .label = "Sound RAM"},
-    Slot<AY_3_8910>{.label = "PSG 1"},
+    Slot<AY_3_8910>{.label = "PSG 1"},                                                // @ 1.536 MHz
     Slot<AY_3_8910>{.label = "PSG 2"},
     Slot<AY_3_8910>{.label = "PSG 3"}
 );
 
-// Port manifest — shared between both boards
-inline constexpr auto kBombJackPortManifest = make_manifest(
-    Slot<PortRgb>{.name = "Video Out", .default_device = "crt_arcade"},
-    Slot<PortAudioMono>{.name = "Audio Out"}
-);
-
 inline constexpr size_t kBJMainChipCount  = decltype(kBombJackMainManifest)::chip_count;
 inline constexpr size_t kBJSoundChipCount = decltype(kBombJackSoundManifest)::chip_count;
-
 
 // ── Bus traits — one per CPU ─────────────────────────────────────────────
 
@@ -93,13 +99,18 @@ struct BombJackMainBoard : Board<BombJackMainBusTraits::Spec> {
 
     ZilogZ80A& cpu      = std::get<0>(components_);
     ROMChip&   rom      = std::get<1>(components_);
-    RAMChip&   work_ram = std::get<2>(components_);
-    RAMChip&   fg_map   = std::get<3>(components_);
-    RAMChip&   fg_attr  = std::get<4>(components_);
-    RAMChip&   sprites  = std::get<5>(components_);
-    RAMChip&   palette  = std::get<6>(components_);
-    DipSwitchBankComponent& dsw1 = std::get<7>(components_);
-    DipSwitchBankComponent& dsw2 = std::get<8>(components_);
+    ROMChip&   rom2     = std::get<2>(components_);
+    RAMChip&   work_ram = std::get<3>(components_);
+    RAMChip&   fg_map   = std::get<4>(components_);
+    RAMChip&   fg_attr  = std::get<5>(components_);
+    RAMChip&   sprites  = std::get<6>(components_);
+    RAMChip&   palette  = std::get<7>(components_);
+    DipSwitchBankComponent& dsw1 = std::get<8>(components_);
+    DipSwitchBankComponent& dsw2 = std::get<9>(components_);
+
+    // Port aliases (top board connectors)
+    PortRgb&       video_out  = std::get<10>(components_);
+    PortAudioMono& audio_out  = std::get<11>(components_);
 
     template<size_t N>
     BombJackMainBoard(const ChipManifest<N>& m) : Board<BombJackMainBusTraits::Spec>(m) {}
@@ -143,6 +154,11 @@ public:
 
     void* get_video_port_ptr() override { return video_port_.get(); }
 
+    bool load_file(const char* filepath) override;
+
+    // ── ROM set support ─────────────────────────────────────────────
+    std::vector<const RomSetDescriptor*> get_rom_set_descriptors() const override;
+    bool load_rom_set(const RomSetMatch& match) override;
 private:
     // ── Audio thread — synthesis runs off the emu thread ────────────────
     AudioThread audio_thread_;
@@ -155,9 +171,10 @@ private:
     // via board_.chip_as<T>(slot_index).  No manual pointers needed.
 
     // ── Graphics ROM — NOT bus-mapped (display rendering only) ───────────
-    std::vector<uint8_t> char_rom_;      // Character/tile ROM
-    std::vector<uint8_t> sprite_rom_;    // Sprite graphics ROM
-    std::vector<uint8_t> bg_rom_;        // Background image ROM
+    std::vector<uint8_t> char_rom_;      // Character/tile ROM (3 planes, 12KB)
+    std::vector<uint8_t> sprite_rom_;    // Sprite graphics ROM (3 planes, 24KB)
+    std::vector<uint8_t> bg_tile_rom_;   // Background tile ROM (3 planes, 24KB)
+    std::vector<uint8_t> bg_map_rom_;    // Background map ROM (4KB)
 
     // ── Main bus ─────────────────────────────────────────────────────────
     using MainBus = MemoryBus<BombJackMainBusTraits::Spec>;
@@ -182,8 +199,9 @@ private:
 
     // ── Display ──────────────────────────────────────────────────────────
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video output
-    BombJackVideo video_gen_;                         // TTL foreground tile renderer
+    BombJackVideo video_gen_;                         // TTL video renderer
     uint8_t bg_image_select_ = 0;       // Active background (0–4)
+    uint8_t nmi_mask_        = 0;       // NMI enable (0 = disabled)
 
     // ── Inputs ───────────────────────────────────────────────────────────
     uint8_t input_p1_     = 0xFF;       // Player 1 (active low)

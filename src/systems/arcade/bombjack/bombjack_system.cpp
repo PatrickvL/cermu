@@ -4,10 +4,10 @@
 
 #include "core/cermu.hpp"
 #include "systems/arcade/bombjack/bombjack_system.hpp"
-#include "utils/resistor_dac.hpp"
+#include "core/rom_set.hpp"
+#include "core/vfs/vfs.hpp"
 #include "core/system_registry.hpp"
 #include <cstring>
-#include <cstdio>
 
 // ============================================================================
 // SYSTEM DESCRIPTOR
@@ -37,6 +37,7 @@ BombJackSystem::BombJackSystem()
     traits.display.visible_height  = bombjack_constants::FB_HEIGHT;
     traits.display.format          = FramebufferFormat::RGBA8888;
     traits.display.palette_size    = bombjack_constants::PALETTE_ENTRIES;
+    traits.display.rotation        = DisplayRotation::CW90;
     traits.audio.format            = AudioFormat::CUSTOM;
     traits.audio.sample_rate_hz    = bombjack_constants::DEFAULT_SAMPLE_RATE;
     traits.audio.channels          = 1;
@@ -68,9 +69,9 @@ bool BombJackSystem::initialize() {
     sound_board_.create_chips(&sound_pins_);
     sound_board_.apply(sound_bus_);
 
-    // ── Set port manifest ───────────────────────────────────────────────
-    port_manifest_       = kBombJackPortManifest.port_slots;
-    port_manifest_count_ = kBombJackPortManifest.port_count;
+    // ── Set port manifest (from main board manifest) ────────────────────
+    port_manifest_       = kBombJackMainManifest.port_slots;
+    port_manifest_count_ = kBombJackMainManifest.port_count;
 
     // ── Init chips ─────────────────────────────────────────────────────
     main_pins_  = main_board_.cpu.init();
@@ -102,13 +103,34 @@ bool BombJackSystem::initialize() {
     // Video output
     video_port_ = std::make_unique<CompositeVideoPort>();
 
-    // Video generator — models TTL foreground tile rendering hardware
+    // Video generator — models TTL video rendering hardware (all 3 layers)
     video_gen_.set_video_out(&video_port_->output());
-    video_gen_.set_char_rom(char_rom_.data(), static_cast<int>(char_rom_.size()));
+
+    // Wire graphics ROMs to video generator (set once at init)
+    if (!char_rom_.empty()) {
+        video_gen_.set_char_rom(char_rom_.data(), static_cast<int>(char_rom_.size()));
+    }
+    if (!bg_tile_rom_.empty()) {
+        int plane_size = static_cast<int>(bg_tile_rom_.size()) / 3;
+        video_gen_.set_bg_tile_rom(
+            bg_tile_rom_.data(),
+            bg_tile_rom_.data() + plane_size,
+            bg_tile_rom_.data() + plane_size * 2);
+    }
+    if (!bg_map_rom_.empty()) {
+        video_gen_.set_bg_map_rom(bg_map_rom_.data());
+    }
+    if (!sprite_rom_.empty()) {
+        int plane_size = static_cast<int>(sprite_rom_.size()) / 3;
+        video_gen_.set_sprite_rom(
+            sprite_rom_.data(),
+            sprite_rom_.data() + plane_size,
+            sprite_rom_.data() + plane_size * 2);
+    }
 
     // Auto-reconstruct signal → framebuffer (palette is dynamically decoded)
     video_port_->bind_display(nullptr, palette_.data(),
-                              bombjack_constants::FB_WIDTH, 1);
+                              bombjack_constants::FB_WIDTH, 0);
     video_port_->set_palette(palette_.data(), bombjack_constants::PALETTE_ENTRIES);
     video_port_->bind_frame_output(&last_frame_data_);
 
@@ -150,6 +172,9 @@ void BombJackSystem::tick() {
         uint16_t addr = BUS_GET_ADDR(main_pins_);
         if ((addr & 0xF000) == 0xB000) {
             main_pins_ = main_io_tick(main_pins_);
+        } else if (addr == bombjack_constants::BG_SELECT && !BUS_GET_BIT(main_pins_, BUS_RW_BIT)) {
+            // $9E00 write — background image select (intercepted before bus dispatch)
+            bg_image_select_ = BUS_GET_DATA(main_pins_) & 0x1F;
         } else {
             main_pins_ = main_bus_.tick(main_pins_);
         }
@@ -188,9 +213,9 @@ void BombJackSystem::tick() {
         sound_cycles_++;
     }
 
-    // VBLANK NMI to main CPU (edge-triggered, once per frame)
+    // VBLANK NMI to main CPU (edge-triggered, once per frame, gated by nmi_mask_)
     uint32_t frame_cycle = total_cycles_ % bombjack_constants::MAIN_CYCLES_PER_FRAME;
-    if (frame_cycle == 0 && total_cycles_ > 0) {
+    if (frame_cycle == 0 && total_cycles_ > 0 && nmi_mask_) {
         BUS_CLR_BIT(main_pins_, BUS_NMI_BIT);  // Assert NMI (falling edge)
     } else if (frame_cycle == 1) {
         BUS_SET_BIT(main_pins_, BUS_NMI_BIT);  // Deassert NMI
@@ -285,20 +310,33 @@ void BombJackSystem::set_audio_sample_rate(int hz) {
 // PALETTE DECODE — rebuild RGBA palette from palette RAM each frame
 // ============================================================================
 //
-// Palette RAM at $9C00 (128 bytes used): each byte encodes one color
-// using the same 3-3-2 resistor DAC as Pac-Man hardware.
-//   bits [2:0] = red   (3-bit, weights 0x21/0x47/0x97)
-//   bits [5:3] = green (3-bit, weights 0x21/0x47/0x97)
-//   bits [7:6] = blue  (2-bit, weights 0x51/0xAE)
+// Palette RAM at $9C00: 128 colors × 2 bytes = 256 bytes.
+// Even byte: GGGGRRRR (green high nibble, red low nibble)
+// Odd byte:  xxxxBBBB (blue low nibble, upper 4 bits unused)
+// Each 4-bit channel maps through a resistor ladder DAC.
+//
+// The resistor weights produce the following 4-bit → 8-bit mapping:
+//   val = (bit3 * 0x80) + (bit2 * 0x40) + (bit1 * 0x20) + (bit0 * 0x10)
+// Approximated as: (nibble << 4) | nibble  (full-range expansion).
 
 void BombJackSystem::decode_palette() {
     const uint8_t* pal = main_board_.palette.data();
-    palette_.decode_from(pal, bombjack_constants::PALETTE_ENTRIES,
-                         resistor_dac::decode_3_3_2);
+    for (int i = 0; i < bombjack_constants::PALETTE_ENTRIES; i++) {
+        uint8_t lo = pal[i * 2];       // GGGGRRRR
+        uint8_t hi = pal[i * 2 + 1];   // xxxxBBBB
+        uint8_t r4 = lo & 0x0F;
+        uint8_t g4 = (lo >> 4) & 0x0F;
+        uint8_t b4 = hi & 0x0F;
+        uint8_t r = (r4 << 4) | r4;
+        uint8_t g = (g4 << 4) | g4;
+        uint8_t b = (b4 << 4) | b4;
+        // PaletteTable format: 0xAABBGGRR (GL_RGBA byte order on little-endian)
+        palette_.set_entry(i, 0xFF000000u | (uint32_t(b) << 16) | (uint32_t(g) << 8) | r);
+    }
 }
 
 // ============================================================================
-// VIDEO RENDERING — delegate to BombJackVideo
+// VIDEO RENDERING — delegate to BombJackVideo (3-layer TTL pipeline)
 // ============================================================================
 
 void BombJackSystem::render_frame() {
@@ -306,6 +344,8 @@ void BombJackSystem::render_frame() {
 
     video_gen_.set_tilemap(main_board_.fg_map.data());
     video_gen_.set_attr_map(main_board_.fg_attr.data());
+    video_gen_.set_sprite_ram(main_board_.sprites.data());
+    video_gen_.set_bg_image_select(bg_image_select_);
     video_gen_.render_frame();
 }
 
@@ -326,13 +366,15 @@ bus_state_t BombJackSystem::main_io_tick(bus_state_t pins) {
         else if (addr == bombjack_constants::DSW2)        data = main_board_.dsw2.bank.value;
         BUS_SET_DATA(pins, data);
     } else {
-        // Writes: sound latch, background select, watchdog
+        // Writes: NMI mask, sound latch, background select, watchdog
         uint8_t data = BUS_GET_DATA(pins);
-        if (addr == bombjack_constants::SOUND_LATCH) {
+        if (addr == bombjack_constants::NMI_MASK) {
+            nmi_mask_ = data & 0x01;  // bit 0 = NMI enable
+        } else if (addr == bombjack_constants::FLIP_SCREEN) {
+            // Flip screen — ignored for now (cocktail mode)
+        } else if (addr == bombjack_constants::SOUND_LATCH) {
             sound_latch_ = data;
             sound_nmi_ = true;
-        } else if (addr == bombjack_constants::BG_SELECT) {
-            bg_image_select_ = data & 0x07;
         }
         // Watchdog write at $B800 is intentionally ignored
     }
@@ -377,6 +419,202 @@ bus_state_t BombJackSystem::sound_io_tick(bus_state_t pins) {
     return pins;
 }
 bool BombJackSystem::load_roms() { return false; }
+
+// ============================================================================
+// ROM SET — Bomb Jack MAME ROM set definitions
+// ============================================================================
+//
+// bombjack.zip (Set 1):
+//   EPROMs 09–12 (suffix b): main CPU $0000–$7FFF (4×8KB)
+//   EPROM 13 (13.1r):       main CPU $C000–$DFFF (8KB)
+//   EPROM 01 (suffix t):     sound CPU $0000–$1FFF (8KB)
+//   EPROMs 03–05 (suffix t): foreground character ROMs, 3 planes ×4KB
+//   EPROMs 06–08 (suffix t): background tile ROMs, 3 planes ×8KB
+//   EPROM 02 (suffix t):     background map ROM (4KB)
+//   EPROMs 14–16 (suffix b): sprite ROMs, 3 planes ×8KB
+//
+// bombjac2.zip (Set 2):
+//   Identical to Set 1 except EPROM 13 is named 13_r01b.bin
+
+// ROM entry indices (for the write callback)
+enum BjRomEntry {
+    BJ_MAIN_1 = 0,   // 09_j01b.bin   $0000
+    BJ_MAIN_2,       // 10_l01b.bin   $2000
+    BJ_MAIN_3,       // 11_m01b.bin   $4000
+    BJ_MAIN_4,       // 12_n01b.bin   $6000
+    BJ_MAIN_5,       // 13.1r         $C000
+    BJ_SOUND,        // 01_h03t.bin
+    BJ_CHAR_P0,      // 03_e08t.bin
+    BJ_CHAR_P1,      // 04_h08t.bin
+    BJ_CHAR_P2,      // 05_k08t.bin
+    BJ_TILE_P0,      // 06_l08t.bin
+    BJ_TILE_P1,      // 07_n08t.bin
+    BJ_TILE_P2,      // 08_r08t.bin
+    BJ_MAP,          // 02_p04t.bin
+    BJ_SPR_P0,       // 16_m07b.bin
+    BJ_SPR_P1,       // 15_l07b.bin
+    BJ_SPR_P2,       // 14_j07b.bin
+    BJ_ENTRY_COUNT
+};
+
+static const RomEntryDescriptor bj_set1_entries[] = {
+    // Main CPU program ROMs ($0000–$7FFF loaded into 32KB ROMChip)
+    { {"09_j01b"},   0x0000, 8192, true  },
+    { {"10_l01b"},   0x2000, 8192, true  },
+    { {"11_m01b"},   0x4000, 8192, true  },
+    { {"12_n01b"},   0x6000, 8192, true  },
+    { {"13.1r"},     0xC000, 8192, true  },  // Set 1 name
+    // Sound CPU ROM
+    { {"01_h03t"},   0x10000, 8192, true },  // address > $FFFF = sound CPU
+    // FG character ROMs (3 planes × 4KB)
+    { {"03_e08t"},   0x20000, 4096, true },
+    { {"04_h08t"},   0x20000, 4096, true },
+    { {"05_k08t"},   0x20000, 4096, true },
+    // BG tile ROMs (3 planes × 8KB)
+    { {"06_l08t"},   0x30000, 8192, true },
+    { {"07_n08t"},   0x30000, 8192, true },
+    { {"08_r08t"},   0x30000, 8192, true },
+    // BG map ROM
+    { {"02_p04t"},   0x40000, 4096, true },
+    // Sprite ROMs (3 planes × 8KB)
+    { {"16_m07b"},   0x50000, 8192, true },
+    { {"15_l07b"},   0x50000, 8192, true },
+    { {"14_j07b"},   0x50000, 8192, true },
+};
+
+static const RomSetDescriptor bj_romset_1 = {
+    "Bomb Jack (Set 1)", "BombJack",
+    bj_set1_entries, BJ_ENTRY_COUNT
+};
+
+static const RomEntryDescriptor bj_set2_entries[] = {
+    { {"09_j01b"},   0x0000, 8192, true  },
+    { {"10_l01b"},   0x2000, 8192, true  },
+    { {"11_m01b"},   0x4000, 8192, true  },
+    { {"12_n01b"},   0x6000, 8192, true  },
+    { {"13_r01b"},   0xC000, 8192, true  },  // Set 2 name
+    { {"01_h03t"},   0x10000, 8192, true },
+    { {"03_e08t"},   0x20000, 4096, true },
+    { {"04_h08t"},   0x20000, 4096, true },
+    { {"05_k08t"},   0x20000, 4096, true },
+    { {"06_l08t"},   0x30000, 8192, true },
+    { {"07_n08t"},   0x30000, 8192, true },
+    { {"08_r08t"},   0x30000, 8192, true },
+    { {"02_p04t"},   0x40000, 4096, true },
+    { {"16_m07b"},   0x50000, 8192, true },
+    { {"15_l07b"},   0x50000, 8192, true },
+    { {"14_j07b"},   0x50000, 8192, true },
+};
+
+static const RomSetDescriptor bj_romset_2 = {
+    "Bomb Jack (Set 2)", "BombJack",
+    bj_set2_entries, BJ_ENTRY_COUNT
+};
+
+std::vector<const RomSetDescriptor*> BombJackSystem::get_rom_set_descriptors() const {
+    return { &bj_romset_1, &bj_romset_2 };
+}
+
+bool BombJackSystem::load_file(const char* filepath) {
+    if (!filepath) return false;
+
+    // Determine the archive path — either the filepath itself is a .zip,
+    // or it's an archive-internal path (e.g. "bombjack.zip!/01_h03t.bin")
+    // from the main startup's scan_archive() resolution.
+    std::string archive_path;
+    if (vfs_is_archive_path(filepath)) {
+        // Extract parent archive: everything before "!/"
+        archive_path = vfs_parent_path(filepath);
+    } else {
+        std::string ext = vfs_extension(filepath);
+        if (!ext.empty() && vfs_is_archive_extension(ext.c_str()))
+            archive_path = filepath;
+    }
+
+    if (!archive_path.empty()) {
+        auto descriptors = get_rom_set_descriptors();
+        auto match = rom_set_scan_and_match(
+            archive_path.c_str(), descriptors.data(), static_cast<int>(descriptors.size()));
+        if (match.matched)
+            return load_rom_set(match);
+    }
+    return false;
+}
+
+bool BombJackSystem::load_rom_set(const RomSetMatch& match) {
+    if (!match.matched) return false;
+    if (!system_ready_) { if (!initialize()) return false; }
+
+    // Prepare buffers for graphics ROMs (concatenated planes)
+    char_rom_.resize(4096 * 3);     // 3 planes × 4KB
+    bg_tile_rom_.resize(8192 * 3);  // 3 planes × 8KB
+    bg_map_rom_.resize(4096);       // 1 × 4KB
+    sprite_rom_.resize(8192 * 3);   // 3 planes × 8KB
+
+    bool ok = rom_set_load_matched(match, [this](uint32_t load_address,
+                                                  const uint8_t* data,
+                                                  size_t size,
+                                                  int entry_index) -> bool {
+        switch (entry_index) {
+            case BJ_MAIN_1: case BJ_MAIN_2: case BJ_MAIN_3: case BJ_MAIN_4: {
+                // Main CPU program ROM ($0000–$7FFF) — 4×8KB into 32KB ROMChip
+                uint32_t offset = load_address;
+                if (offset + size <= main_board_.rom.size_bytes()) {
+                    std::memcpy(main_board_.rom.data() + offset, data, size);
+                }
+                return true;
+            }
+            case BJ_MAIN_5: {
+                // Main CPU program ROM 2 ($C000–$DFFF)
+                std::memcpy(main_board_.rom2.data(), data, std::min(size, main_board_.rom2.size_bytes()));
+                return true;
+            }
+            case BJ_SOUND: {
+                // Sound CPU ROM
+                std::memcpy(sound_board_.rom.data(), data, std::min(size, sound_board_.rom.size_bytes()));
+                return true;
+            }
+            case BJ_CHAR_P0: std::memcpy(char_rom_.data(),              data, std::min(size, (size_t)4096)); return true;
+            case BJ_CHAR_P1: std::memcpy(char_rom_.data() + 4096,      data, std::min(size, (size_t)4096)); return true;
+            case BJ_CHAR_P2: std::memcpy(char_rom_.data() + 8192,      data, std::min(size, (size_t)4096)); return true;
+            case BJ_TILE_P0: std::memcpy(bg_tile_rom_.data(),           data, std::min(size, (size_t)8192)); return true;
+            case BJ_TILE_P1: std::memcpy(bg_tile_rom_.data() + 8192,   data, std::min(size, (size_t)8192)); return true;
+            case BJ_TILE_P2: std::memcpy(bg_tile_rom_.data() + 16384,  data, std::min(size, (size_t)8192)); return true;
+            case BJ_MAP:     std::memcpy(bg_map_rom_.data(),            data, std::min(size, (size_t)4096)); return true;
+            case BJ_SPR_P0:  std::memcpy(sprite_rom_.data(),            data, std::min(size, (size_t)8192)); return true;
+            case BJ_SPR_P1:  std::memcpy(sprite_rom_.data() + 8192,    data, std::min(size, (size_t)8192)); return true;
+            case BJ_SPR_P2:  std::memcpy(sprite_rom_.data() + 16384,   data, std::min(size, (size_t)8192)); return true;
+            default: return true;
+        }
+    });
+
+    if (!ok) {
+        log_error("Bomb Jack: Failed to load ROM set '%s'\n", match.rom_set->name);
+        return false;
+    }
+
+    // Wire graphics ROMs to video generator
+    video_gen_.set_char_rom(char_rom_.data(), static_cast<int>(char_rom_.size()));
+    int tile_plane = static_cast<int>(bg_tile_rom_.size()) / 3;
+    video_gen_.set_bg_tile_rom(
+        bg_tile_rom_.data(),
+        bg_tile_rom_.data() + tile_plane,
+        bg_tile_rom_.data() + tile_plane * 2);
+    video_gen_.set_bg_map_rom(bg_map_rom_.data());
+    int spr_plane = static_cast<int>(sprite_rom_.size()) / 3;
+    video_gen_.set_sprite_rom(
+        sprite_rom_.data(),
+        sprite_rom_.data() + spr_plane,
+        sprite_rom_.data() + spr_plane * 2);
+
+    // Reset CPUs with new ROM data
+    main_pins_  = main_board_.cpu.reset(main_pins_);
+    sound_pins_ = sound_board_.cpu.reset(sound_pins_);
+
+    program_title_ = match.rom_set->name;
+    log_info("Bomb Jack: Loaded ROM set '%s'\n", match.rom_set->name);
+    return true;
+}
 
 // ============================================================================
 // SYSTEM REGISTRATION
