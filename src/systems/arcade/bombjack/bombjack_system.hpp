@@ -149,6 +149,8 @@ public:
     void tick() override;
     void run_frame() override;
 
+    void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
+
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
     void set_audio_sample_rate(int sample_rate_hz) override;
 
@@ -204,9 +206,9 @@ private:
     uint8_t nmi_mask_        = 0;       // NMI enable (0 = disabled)
 
     // ── Inputs ───────────────────────────────────────────────────────────
-    uint8_t input_p1_     = 0x00;       // Player 1 (active high)
+    uint8_t input_p1_     = 0x00;       // Player 1 (active high: 1 = pressed)
     uint8_t input_p2_     = 0x00;       // Player 2 (active high)
-    uint8_t input_system_ = 0xF0;       // Coin/start (bits 0-3 active high, bits 4-7 active low unused)
+    uint8_t input_system_ = 0xF0;       // Bits 0-3: coin/start (active high), bits 4-7: unused (active low, idle = 1)
 
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t main_pins_  = BOMBJACK_BUS_DEFAULT_STATE;

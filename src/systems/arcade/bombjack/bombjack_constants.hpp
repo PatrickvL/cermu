@@ -35,6 +35,20 @@ inline constexpr uint16_t BG_SELECT            = 0x9E00;    // Background image 
 inline constexpr uint16_t NMI_MASK             = 0xB000;    // Write: NMI enable mask
 inline constexpr uint16_t FLIP_SCREEN          = 0xB004;    // Write: flip screen
 
+// ── Player input bits (active high: 1 = pressed) ───────────────────────
+// P1/P2 share the same layout
+inline constexpr uint8_t INPUT_RIGHT           = 0x01;
+inline constexpr uint8_t INPUT_LEFT            = 0x02;
+inline constexpr uint8_t INPUT_UP              = 0x04;
+inline constexpr uint8_t INPUT_DOWN            = 0x08;
+inline constexpr uint8_t INPUT_BUTTON1         = 0x10;      // Jump
+
+// SYSTEM port ($B002)
+inline constexpr uint8_t SYSTEM_COIN1          = 0x01;
+inline constexpr uint8_t SYSTEM_COIN2          = 0x02;
+inline constexpr uint8_t SYSTEM_START1         = 0x04;      // 1P Start
+inline constexpr uint8_t SYSTEM_START2         = 0x08;      // 2P Start
+
 // ── Sprites ─────────────────────────────────────────────────────────────
 inline constexpr uint16_t SPRITE_RAM_BASE      = 0x9820;    // First sprite attribute
 inline constexpr int      SPRITE_COUNT         = 24;        // Hardware sprites
