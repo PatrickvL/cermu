@@ -28,8 +28,8 @@ inline constexpr uint32_t MAIN_CPU_FREQ_HZ     = 4000000;   // Z80A @ 4 MHz
 inline constexpr uint16_t INPUT_P1             = 0xB000;    // Player 1 inputs
 inline constexpr uint16_t INPUT_P2             = 0xB001;    // Player 2 inputs
 inline constexpr uint16_t INPUT_SYSTEM         = 0xB002;    // Coin + start buttons
-inline constexpr uint16_t DSW1                 = 0xB003;    // DIP switch bank 1
-inline constexpr uint16_t DSW2                 = 0xB004;    // DIP switch bank 2
+inline constexpr uint16_t DSW1                 = 0xB004;    // DIP switch bank 1 (read; write = flip screen)
+inline constexpr uint16_t DSW2                 = 0xB005;    // DIP switch bank 2 (read-only)
 inline constexpr uint16_t SOUND_LATCH          = 0xB800;    // Write → sound CPU command
 inline constexpr uint16_t BG_SELECT            = 0x9E00;    // Background image select (write)
 inline constexpr uint16_t NMI_MASK             = 0xB000;    // Write: NMI enable mask
@@ -58,84 +58,97 @@ inline constexpr int DEFAULT_SAMPLE_RATE       = 44100;
 
 // ── DIP switches ────────────────────────────────────────────────────────
 //
-// DSW1 ($B003 read) — coinage and cabinet type
-// DSW2 ($B004 read) — lives, bonus, difficulty, demo sounds
+// DSW1 ($B004 read) — coinage, lives, cabinet, demo sounds
+// DSW2 ($B005 read) — bonus life, difficulty settings
 //
-// Bit patterns match Tehkan Bomb Jack PCB manual.  All active-low:
-// factory default = 0xFF (all switches OFF).
+// Bit patterns and defaults match MAME bombjack.cpp (mamedev/mame).
+// All active-high: factory default bits produce the default_index setting.
+//
+// DSW1 default = 0xC0  (Cabinet=Upright, Demo_Sounds=On, rest=0)
+// DSW2 default = 0x50  (Bird_Speed=Hard, Enemies=Hard, rest=0)
 
 // ── DSW1 settings ───────────────────────────────────────────────────────
 
 inline constexpr DipSetting kBjCoinA[] = {
-    { "1 Coin / 1 Credit",   0x00 },   // default (bit pattern in mask)
+    { "1 Coin / 1 Credit",   0x00 },
     { "1 Coin / 2 Credits",  0x01 },
     { "1 Coin / 3 Credits",  0x02 },
     { "1 Coin / 6 Credits",  0x03 },
-    { "2 Coins / 1 Credit",  0x04 },
-    { "3 Coins / 1 Credit",  0x05 },
-    { "4 Coins / 1 Credit",  0x06 },
-    { "5 Coins / 1 Credit",  0x07 },
 };
 
 inline constexpr DipSetting kBjCoinB[] = {
-    { "1 Coin / 1 Credit",   0x00 },   // default
+    { "2 Coins / 1 Credit",  0x04 },
+    { "1 Coin / 1 Credit",   0x00 },
     { "1 Coin / 2 Credits",  0x08 },
-    { "1 Coin / 3 Credits",  0x10 },
-    { "1 Coin / 6 Credits",  0x18 },
-    { "2 Coins / 1 Credit",  0x20 },
-    { "3 Coins / 1 Credit",  0x28 },
-    { "4 Coins / 1 Credit",  0x30 },
-    { "5 Coins / 1 Credit",  0x38 },
+    { "1 Coin / 3 Credits",  0x0C },
+};
+
+inline constexpr DipSetting kBjLives[] = {
+    { "2",  0x30 },
+    { "3",  0x00 },
+    { "4",  0x10 },
+    { "5",  0x20 },
 };
 
 inline constexpr DipSetting kBjCabinet[] = {
-    { "Upright",   0x00 },   // default
-    { "Cocktail",  0x80 },
+    { "Upright",   0x40 },
+    { "Cocktail",  0x00 },
+};
+
+inline constexpr DipSetting kBjDemoSounds[] = {
+    { "Off",  0x00 },
+    { "On",   0x80 },
 };
 
 inline constexpr DipSwitch kBjDsw1Switches[] = {
-    { "Coin A",    0x07, 0, kBjCoinA,   8 },
-    { "Coin B",    0x38, 0, kBjCoinB,   8 },
-    { "Cabinet",   0x80, 0, kBjCabinet, 2 },
+    { "Coin A",       0x03, 0, kBjCoinA,      4 },
+    { "Coin B",       0x0C, 1, kBjCoinB,      4 },
+    { "Lives",        0x30, 1, kBjLives,      4 },
+    { "Cabinet",      0x40, 0, kBjCabinet,    2 },
+    { "Demo Sounds",  0x80, 1, kBjDemoSounds, 2 },
 };
 
 inline constexpr DipSwitchBankDescriptor kBjDSW1 = {
-    "DSW1", kBjDsw1Switches, 3
+    "DSW1", kBjDsw1Switches, 5
 };
 
 // ── DSW2 settings ───────────────────────────────────────────────────────
 
-inline constexpr DipSetting kBjLives[] = {
-    { "3",  0x00 },   // default
-    { "4",  0x01 },
-    { "5",  0x02 },
-    { "2",  0x03 },
+inline constexpr DipSetting kBjBonusLife[] = {
+    { "Every 30k",            0x02 },
+    { "Every 100k",           0x01 },
+    { "50k, 100k and 300k",   0x07 },
+    { "50k and 100k",         0x05 },
+    { "50k only",             0x03 },
+    { "100k and 300k",        0x06 },
+    { "100k only",            0x04 },
+    { "None",                 0x00 },
 };
 
 inline constexpr DipSetting kBjBirdSpeed[] = {
     { "Easy",    0x00 },
-    { "Medium",  0x08 },   // default
+    { "Medium",  0x08 },
     { "Hard",    0x10 },
     { "Hardest", 0x18 },
 };
 
 inline constexpr DipSetting kBjEnemiesSpeed[] = {
-    { "Easy",    0x00 },
-    { "Medium",  0x20 },   // default
+    { "Easy",    0x20 },
+    { "Medium",  0x00 },
     { "Hard",    0x40 },
     { "Hardest", 0x60 },
 };
 
 inline constexpr DipSetting kBjSpecialCoin[] = {
     { "Easy",  0x00 },
-    { "Hard",  0x80 },   // default
+    { "Hard",  0x80 },
 };
 
 inline constexpr DipSwitch kBjDsw2Switches[] = {
-    { "Lives",           0x03, 0, kBjLives,        4 },
-    { "Bird Speed",      0x18, 1, kBjBirdSpeed,    4 },
-    { "Enemies Speed",   0x60, 1, kBjEnemiesSpeed, 4 },
-    { "Special Coin",    0x80, 1, kBjSpecialCoin,  2 },
+    { "Bonus Life (Unused)",    0x07, 7, kBjBonusLife,    8 },
+    { "Bird Speed",             0x18, 2, kBjBirdSpeed,    4 },
+    { "Enemies Number & Speed", 0x60, 2, kBjEnemiesSpeed, 4 },
+    { "Special Coin",           0x80, 0, kBjSpecialCoin,  2 },
 };
 
 inline constexpr DipSwitchBankDescriptor kBjDSW2 = {
