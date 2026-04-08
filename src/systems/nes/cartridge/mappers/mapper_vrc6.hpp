@@ -52,6 +52,7 @@ private:
     uint8_t prg_bank_8k_ = 0;    // $C000 (8KB)
     uint8_t chr_bank_[8] = {};
     Mirror mirror_mode_ = Mirror::VERTICAL;
+    bool prg_ram_enable_ = false;   // $B003 D7
 
     // VRC IRQ
     mapper_helpers::VRCIRQ irq_;
@@ -161,6 +162,7 @@ public:
         prg_bank_8k_ = 0;
         for (int i = 0; i < 8; i++) chr_bank_[i] = 0;
         mirror_mode_ = header_mirror_;
+        prg_ram_enable_ = false;
         irq_.reset();
         pulse_[0] = {};
         pulse_[1] = {};
@@ -215,7 +217,7 @@ public:
 
         config.prg_ram_base = prg_ram_;
         config.prg_ram_size = static_cast<uint32_t>(prg_ram_size_);
-        config.prg_ram_enabled = (prg_ram_ != nullptr);
+        config.prg_ram_enabled = prg_ram_enable_ && (prg_ram_ != nullptr);
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {
@@ -243,7 +245,8 @@ public:
 
             case 0xB000:
                 if ((reg & 0x03) == 3) {
-                    // $B003: mirroring + PPU banking control
+                    // $B003: mirroring + PPU banking control + PRG-RAM enable
+                    prg_ram_enable_ = (data & 0x80) != 0;
                     mirror_mode_ = mapper_helpers::mirror_from_2bit((data >> 2) & 0x03);
                     return true;
                 }
