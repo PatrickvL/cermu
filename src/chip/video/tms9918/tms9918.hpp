@@ -128,6 +128,13 @@ public:
                     if (screen_mode_ != ScreenMode::TEXT) {
                         pixel = composite_sprite_pixel(dot_, pixel);
                     }
+                    // R0.D5: mask leftmost 8 pixels to backdrop (Sega mode 4)
+                    if constexpr (Traits.is_sega()) {
+                        if (dot_ < 8 && (regs_[reg::R0] & 0x20) &&
+                            screen_mode_ >= ScreenMode::SEGA_MODE4) {
+                            pixel = backdrop_color();
+                        }
+                    }
                     color_line_[dot_] = pixel;
                 } else {
                     // Screen blanked — backdrop
