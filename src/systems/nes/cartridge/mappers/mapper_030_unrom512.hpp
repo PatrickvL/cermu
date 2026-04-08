@@ -37,8 +37,7 @@ private:
     uint8_t chr_ram_buf_[CHR_RAM_SIZE] = {};
 
 public:
-    Mapper030(uint8_t prgBanks, uint8_t chrBanks) {
-        (void)prgBanks; (void)chrBanks;
+    Mapper030(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {
         std::memset(chr_ram_buf_, 0, sizeof(chr_ram_buf_));
     }
 

@@ -30,7 +30,7 @@ private:
     static constexpr uint32_t CONTRA_SIZE = 0x20000;  // 128KB
 
 public:
-    Mapper230(uint8_t prgBanks, uint8_t chrBanks) { (void)prgBanks; (void)chrBanks; }
+    Mapper230(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         mode_ = !mode_;   // Toggle mode on each reset

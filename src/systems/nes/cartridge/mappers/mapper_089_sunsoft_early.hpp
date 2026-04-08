@@ -24,7 +24,7 @@ private:
     Mirror mirror_mode_ = Mirror::ONESCREEN_LO;
 
 public:
-    Mapper089(uint8_t prgBanks, uint8_t chrBanks) { (void)prgBanks; (void)chrBanks; }
+    Mapper089(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         prg_bank_ = 0;

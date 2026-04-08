@@ -23,9 +23,7 @@ private:
     uint8_t chr_bank_select_ = 0;
 
 public:
-    Mapper038(uint8_t prgBanks, uint8_t chrBanks) {
-        (void)prgBanks; (void)chrBanks;
-    }
+    Mapper038(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         prg_bank_select_ = 0;

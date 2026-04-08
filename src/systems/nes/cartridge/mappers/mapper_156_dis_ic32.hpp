@@ -38,9 +38,7 @@ private:
     uint8_t mirror_reg_ = 2;   // Default: one-screen
 
 public:
-    Mapper156(uint8_t prgBanks, uint8_t chrBanks) {
-        (void)prgBanks; (void)chrBanks;
-    }
+    Mapper156(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         for (int i = 0; i < 8; i++) { chr_lo_[i] = 0; chr_hi_[i] = 0; }

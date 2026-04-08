@@ -20,7 +20,7 @@ private:
     uint8_t chr_bank_ = 0;
 
 public:
-    Mapper086(uint8_t prgBanks, uint8_t chrBanks) { (void)prgBanks; (void)chrBanks; }
+    Mapper086(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override { prg_bank_ = 0; chr_bank_ = 0; }
 
