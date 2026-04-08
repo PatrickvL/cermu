@@ -23,8 +23,6 @@ namespace nes_system {
 
 class Mapper189 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
 
     // 32KB PRG outer bank (set via $4120)
     uint8_t prg_outer_bank_ = 0;
@@ -40,7 +38,8 @@ private:
     mapper_helpers::MMC3IRQ irq_;
 
     void update_chr_banks(uint32_t chr_bank[8]) const {
-        uint32_t chr_size = chr_banks_ == 0 ? 8 : chr_banks_ * 8;
+        uint32_t chr_size = static_cast<uint32_t>(chr_mem_size_ / 0x0400);
+        if (chr_size == 0) chr_size = 1;
         if (!chr_inversion_) {
             chr_bank[0] = ((registers_[0] & 0xFE) + 0) % chr_size;
             chr_bank[1] = ((registers_[0] & 0xFE) + 1) % chr_size;
@@ -63,8 +62,7 @@ private:
     }
 
 public:
-    Mapper189(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+    Mapper189(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         prg_outer_bank_ = 0;

@@ -19,7 +19,6 @@ namespace nes_system {
 
 class Mapper119 : public Mapper {
 private:
-    uint8_t prg_banks_;
 
     uint8_t target_register_ = 0;
     bool prg_bank_mode_ = false;
@@ -42,23 +41,25 @@ private:
     uint32_t original_chr_rom_size_ = 0;
 
     void update_prg_banks() {
-        uint32_t last_bank = (prg_banks_ * 2) - 1;
+        uint32_t total_8k = static_cast<uint32_t>(prg_rom_size_ / 0x2000);
+        if (total_8k == 0) total_8k = 1;
+        uint32_t last_bank = total_8k - 1;
         if (!prg_bank_mode_) {
-            prg_bank_[0] = (registers_[6] & 0x3F) % (prg_banks_ * 2);
-            prg_bank_[1] = (registers_[7] & 0x3F) % (prg_banks_ * 2);
-            prg_bank_[2] = (last_bank - 1) % (prg_banks_ * 2);
-            prg_bank_[3] = last_bank % (prg_banks_ * 2);
+            prg_bank_[0] = (registers_[6] & 0x3F) % total_8k;
+            prg_bank_[1] = (registers_[7] & 0x3F) % total_8k;
+            prg_bank_[2] = (total_8k >= 2) ? total_8k - 2 : 0;
+            prg_bank_[3] = last_bank;
         } else {
-            prg_bank_[0] = (last_bank - 1) % (prg_banks_ * 2);
-            prg_bank_[1] = (registers_[7] & 0x3F) % (prg_banks_ * 2);
-            prg_bank_[2] = (registers_[6] & 0x3F) % (prg_banks_ * 2);
-            prg_bank_[3] = last_bank % (prg_banks_ * 2);
+            prg_bank_[0] = (total_8k >= 2) ? total_8k - 2 : 0;
+            prg_bank_[1] = (registers_[7] & 0x3F) % total_8k;
+            prg_bank_[2] = (registers_[6] & 0x3F) % total_8k;
+            prg_bank_[3] = last_bank;
         }
     }
 
 public:
-    Mapper119(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), original_chr_rom_size_(chrBanks * 8192) {}
+    Mapper119(uint8_t /*prgBanks*/, uint8_t chrBanks)
+        : original_chr_rom_size_(chrBanks * 8192u) {}
 
     Mirror mirror() override { return mirror_mode_; }
     bool irq_state() override { return irq_.active; }
