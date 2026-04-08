@@ -13,7 +13,7 @@
  *   $8001 (odd):  D7-D0 = bank data
  *   $E000: mirroring (Namco 340 only)
  *
- * R0-R5: 1KB CHR banks,  R6-R7: 8KB PRG banks.
+ * R0-R5: 1KB CHR banks (R0/R1 select 2KB, R2-R5 select 1KB),  R6-R7: 8KB PRG banks.
  * Fixed last two 8KB PRG banks at $C000/$E000.
  *
  * Games: Famista '91-'94, Splatter House SD, Dream Master, Genius Bakabon.
@@ -69,10 +69,13 @@ public:
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {
-        // R0-R5 for 1KB CHR; R6-R7 used for PRG, fill CHR slots 6-7 with 0
+        // R0/R1 select 2KB CHR banks ($0000/$0800), R2-R5 select 1KB ($1000-$1FFF)
         uint8_t chr[8] = {
-            registers_[0], registers_[1], registers_[2], registers_[3],
-            registers_[4], registers_[5], 0, 0
+            static_cast<uint8_t>(registers_[0] & 0xFE),       // R0 2KB even half
+            static_cast<uint8_t>((registers_[0] & 0xFE) | 1), // R0 2KB odd half
+            static_cast<uint8_t>(registers_[1] & 0xFE),       // R1 2KB even half
+            static_cast<uint8_t>((registers_[1] & 0xFE) | 1), // R1 2KB odd half
+            registers_[2], registers_[3], registers_[4], registers_[5]
         };
         mapper_helpers::set_chr_1k_pages(config, chr_mem_, chr_mem_size_, chr_is_ram_, chr);
     }
