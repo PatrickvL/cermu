@@ -6,6 +6,7 @@
  * 4 × 8KB switchable PRG (one can also map RAM), 8 × 1KB CHR.
  * 16-bit CPU-cycle IRQ counter.
  * FME-7 is the base; 5A/5B add Yamaha expansion audio (not emulated here).
+ * TODO: Implement YM2149 (Sunsoft 5B) PSG audio for Gimmick! et al.
  * Games: Batman: Return of the Joker, Gimmick!, Hebereke.
  *
  * $8000: Command register (selects target for $A000 write)

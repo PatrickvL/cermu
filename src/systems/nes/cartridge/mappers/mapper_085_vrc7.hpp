@@ -41,6 +41,7 @@ private:
     mapper_helpers::VRCIRQ irq_;
 
     // OPLL audio registers (stub — stores writes but doesn't synthesize)
+    // TODO: Implement YM2413 (OPLL) FM synthesis for audio_tick()/audio_output()
     uint8_t opll_reg_select_ = 0;
     uint8_t opll_regs_[64] = {};
 

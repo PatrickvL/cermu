@@ -123,7 +123,7 @@ public:
                 return false;
 
             case 0x0D:
-                // EEPROM I/O — not emulated (games still playable)
+                // TODO: Implement 24C01/24C02 EEPROM for save support (Dragon Ball Z, etc.)
                 return false;
         }
         return false;
