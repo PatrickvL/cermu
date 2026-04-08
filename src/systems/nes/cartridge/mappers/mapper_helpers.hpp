@@ -91,11 +91,14 @@ inline void set_prg_fixed(MapperBankConfig& config,
 inline void set_prg_8k_banks(MapperBankConfig& config,
                               const uint8_t* prg_rom, size_t prg_size,
                               const uint32_t banks[4]) {
+    uint32_t total_8k = static_cast<uint32_t>(prg_size / 0x2000);
+    if (total_8k == 0) total_8k = 1;
     for (int slot = 0; slot < 4; slot++) {
-        uint32_t base = banks[slot] * 0x2000;
-        config.prg_pages[slot * 2]     = (base         < prg_size) ? prg_rom + base         : nullptr;
-        config.prg_pages[slot * 2 + 1] = (base + 0x1000 < prg_size) ? prg_rom + base + 0x1000 : nullptr;
+        uint32_t base = (banks[slot] % total_8k) * 0x2000;
+        config.prg_pages[slot * 2]     = prg_rom + base;
+        config.prg_pages[slot * 2 + 1] = prg_rom + base + 0x1000;
     }
+    config.prg_ram_enabled = false;
 }
 
 /// Compute the total number of 8KB PRG banks, with a floor of 1.
