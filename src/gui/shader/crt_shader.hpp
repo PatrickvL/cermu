@@ -40,11 +40,11 @@ void main() {
     v_uv = vec2(x * 0.5 + 0.5, y * 0.5 + 0.5);
     // Rotate UV coordinates to match physical monitor orientation
     if (Rotation == 1) {       // CW90  — portrait, top-right becomes top-left
-        v_uv = vec2(1.0 - v_uv.y, v_uv.x);
+        v_uv = vec2(v_uv.y, 1.0 - v_uv.x);
     } else if (Rotation == 2) { // CW180 — upside-down
         v_uv = vec2(1.0 - v_uv.x, 1.0 - v_uv.y);
     } else if (Rotation == 3) { // CW270 — portrait, top-left becomes top-right
-        v_uv = vec2(v_uv.y, 1.0 - v_uv.x);
+        v_uv = vec2(1.0 - v_uv.y, v_uv.x);
     }
     gl_Position = vec4(x, y, 0.0, 1.0);
 }
