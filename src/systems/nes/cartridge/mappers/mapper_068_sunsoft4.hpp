@@ -101,8 +101,8 @@ public:
             case 0x9000: chr_bank_[1] = data; return true;
             case 0xA000: chr_bank_[2] = data; return true;
             case 0xB000: chr_bank_[3] = data; return true;
-            case 0xC000: nt_reg_[0] = data | 0x80; return false;
-            case 0xD000: nt_reg_[1] = data | 0x80; return false;
+            case 0xC000: nt_reg_[0] = data | 0x80; return true;
+            case 0xD000: nt_reg_[1] = data | 0x80; return true;
             case 0xE000:
                 use_chr_for_nt_ = (data & 0x10) != 0;
                 switch (data & 0x03) {
