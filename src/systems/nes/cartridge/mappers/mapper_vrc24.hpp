@@ -21,7 +21,7 @@
  * Scanline mode uses A12 rising edges; cycle mode is approximate.
  */
 
-#include "systems/nes/cartridge/nes_mapper.hpp"
+#include "systems/nes/cartridge/mappers/mapper_helpers.hpp"
 
 namespace nes_system {
 
@@ -72,9 +72,6 @@ struct VRC24_025Traits {
 template<typename Traits>
 class MapperVRC24 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
-
     uint8_t prg_bank_0_ = 0;    // $8000 (or $C000 in swap mode)
     uint8_t prg_bank_1_ = 0;    // $A000
     bool prg_swap_mode_ = false; // VRC4: swap $8000/$C000
@@ -82,31 +79,14 @@ private:
     uint8_t chr_reg_[8] = {};    // 8 × 1KB CHR bank registers (lo+hi nybble)
     Mirror mirror_mode_ = Mirror::VERTICAL;
 
-    // VRC4 IRQ state (compiled out for VRC2 via if constexpr)
-    uint8_t irq_latch_ = 0;
-    uint8_t irq_counter_ = 0;
-    bool irq_enabled_ = false;
-    bool irq_enable_after_ack_ = false;
-    bool irq_cycle_mode_ = false;
-    bool irq_active_ = false;
-    uint16_t irq_prescaler_ = 0;
-    uint64_t a12_low_since_ = 0;
-    uint64_t last_cycle_irq_ppu_ = 0;  // PPU dot of last cycle-mode batch
-    static constexpr uint16_t A12_FILTER_DELAY = 16;
+    // VRC4 IRQ (compiled out for VRC2 via if constexpr)
+    mapper_helpers::VRCIRQ irq_;
 
     /// Remap CPU address bits to VRC internal A0/A1.
     static uint16_t decode_addr(uint16_t addr) {
         uint8_t vrc_a0 = (addr & Traits::a0_mask) ? 1 : 0;
         uint8_t vrc_a1 = (addr & Traits::a1_mask) ? 1 : 0;
         return (addr & 0xF000) | (vrc_a1 << 1) | vrc_a0;
-    }
-
-    void clock_irq() {
-        irq_counter_++;
-        if (irq_counter_ == 0) {   // overflow 0xFF → 0x00
-            irq_counter_ = irq_latch_;
-            irq_active_ = true;
-        }
     }
 
     bool write_chr_reg(uint16_t reg, uint8_t data, int base_idx) {
@@ -119,38 +99,8 @@ private:
         }
     }
 
-    bool write_irq_reg(uint16_t reg, uint8_t data) {
-        switch (reg & 0x0003) {
-            case 0:  // $F000: IRQ latch low nybble
-                irq_latch_ = (irq_latch_ & 0xF0) | (data & 0x0F);
-                return false;
-            case 1:  // $F001: IRQ latch high nybble
-                irq_latch_ = (irq_latch_ & 0x0F) | ((data & 0x0F) << 4);
-                return false;
-            case 2:  // $F002: IRQ control
-                irq_active_ = false;
-                irq_enable_after_ack_ = (data & 0x01) != 0;
-                irq_enabled_ = (data & 0x02) != 0;
-                irq_cycle_mode_ = (data & 0x04) != 0;
-                if (irq_enabled_) {
-                    irq_counter_ = irq_latch_;
-                    irq_prescaler_ = 0;
-                    // Don't reset last_cycle_irq_ppu_ here — the next
-                    // A12 notification will pick up from the current ppu_cycle
-                    // and batch-clock the correct number of elapsed cycles.
-                }
-                return false;
-            case 3:  // $F003: IRQ acknowledge
-                irq_active_ = false;
-                irq_enabled_ = irq_enable_after_ack_;
-                return false;
-        }
-        return false;
-    }
-
 public:
-    MapperVRC24(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+    MapperVRC24(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         prg_bank_0_ = 0;
@@ -158,58 +108,27 @@ public:
         prg_swap_mode_ = false;
         for (int i = 0; i < 8; i++) chr_reg_[i] = 0;
         mirror_mode_ = Mirror::VERTICAL;
-        if constexpr (Traits::has_irq) {
-            irq_latch_ = 0;
-            irq_counter_ = 0;
-            irq_enabled_ = false;
-            irq_enable_after_ack_ = false;
-            irq_cycle_mode_ = false;
-            irq_active_ = false;
-            irq_prescaler_ = 0;
-            a12_low_since_ = 0;
-            last_cycle_irq_ppu_ = 0;
-        }
+        if constexpr (Traits::has_irq) irq_.reset();
     }
 
     Mirror mirror() override { return mirror_mode_; }
 
     bool irq_state() override {
-        if constexpr (Traits::has_irq) return irq_active_;
+        if constexpr (Traits::has_irq) return irq_.active;
         else return false;
     }
 
     void irq_clear() override {
-        if constexpr (Traits::has_irq) irq_active_ = false;
+        if constexpr (Traits::has_irq) irq_.active = false;
     }
 
-    void notify_a12(bool a12_high, uint64_t ppu_cycle) override {
+    void notify_cpu_cycle() override {
+        if constexpr (Traits::has_irq) irq_.tick_cpu();
+    }
+
+    void notify_a12(bool a12_high, uint64_t /*ppu_cycle*/) override {
         if constexpr (Traits::has_irq) {
-            if (!irq_enabled_) {
-                last_cycle_irq_ppu_ = ppu_cycle;
-                return;
-            }
-            if (irq_cycle_mode_) {
-                // Cycle mode: IRQ counter clocks at CPU M2 rate.
-                // Batch-clock from elapsed PPU cycles (3 PPU dots = 1 CPU cycle).
-                // The prescaler divides by 3: for every 3 CPU cycles (= 9 PPU dots),
-                // one IRQ counter clock.  Per nesdev VRC_IRQ: prescaler runs at M2,
-                // counter clocks when prescaler overflows at 341 (scanline-equivalent
-                // for prescaler) — but standard emulation simplifies to direct M2 rate.
-                uint64_t elapsed_ppu = ppu_cycle - last_cycle_irq_ppu_;
-                last_cycle_irq_ppu_ = ppu_cycle;
-                uint64_t cpu_cycles = elapsed_ppu / 3;
-                for (uint64_t i = 0; i < cpu_cycles && !irq_active_; i++) {
-                    // Prescaler divides M2 by 341/3 ≈ 113.67 to approximate
-                    // one IRQ clock per scanline — but VRC4 actually clocks
-                    // the counter directly once per M2 cycle.
-                    clock_irq();
-                }
-            } else {
-                // Scanline mode: qualified A12 rising edge (like MMC3)
-                if (!a12_high) { a12_low_since_ = ppu_cycle; return; }
-                if (ppu_cycle - a12_low_since_ < A12_FILTER_DELAY) return;
-                clock_irq();
-            }
+            if (a12_high) irq_.clock_scanline();
         }
     }
 
@@ -310,7 +229,7 @@ public:
             case 0xE000: return write_chr_reg(reg, data, 6);
 
             case 0xF000:
-                if constexpr (Traits::has_irq) return write_irq_reg(reg, data);
+                if constexpr (Traits::has_irq) return irq_.write(reg & 0x03, data);
                 return false;
 
             default:
