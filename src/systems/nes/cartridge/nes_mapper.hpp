@@ -81,6 +81,12 @@ struct MapperChrConfig {
     // ONESCREEN_LO: {0,0,0,0}  ONESCREEN_HI: {1,1,1,1}
     uint8_t nt_page[4] = {0, 1, 0, 1};  // default: vertical
 
+    // When true, the cartridge respects the mapper's nt_page[] values
+    // instead of overwriting them from mirror().  Used by TxSROM/118
+    // and similar mappers that derive per-slot nametable mapping from
+    // CHR bank registers.
+    bool custom_nt = false;
+
     // Optional direct nametable pointers — when non-null, the bus uses
     // these 1KB pointers instead of ciram + nt_page[i] * 0x400.
     // Used by Mapper 068 (Sunsoft-4) to map CHR-ROM into nametable slots.

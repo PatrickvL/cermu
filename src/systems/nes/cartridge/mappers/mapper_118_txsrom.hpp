@@ -142,6 +142,7 @@ public:
             config.nt_page[2] = (registers_[4] >> 7) & 0x01;
             config.nt_page[3] = (registers_[5] >> 7) & 0x01;
         }
+        config.custom_nt = true;  // TxSROM: nametable derived from CHR bank D7
     }
 
     // Do NOT override mirror() — TxSROM uses nt_page[] from get_chr_bank_config()

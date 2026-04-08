@@ -152,6 +152,7 @@ public:
                 config.nt_page[i] = 0;
             }
         }
+        config.custom_nt = true;  // Namco 163: per-slot NT from CHR bank regs
     }
 
     uint8_t expansion_read(uint16_t addr, bool& handled) override {
