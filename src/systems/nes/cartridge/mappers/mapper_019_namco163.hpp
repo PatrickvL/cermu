@@ -62,6 +62,11 @@ private:
     // Sound enable
     bool sound_enabled_ = false;
 
+    // CHR-ROM size — when CHR-ROM exists, extra CHR-RAM appended after it.
+    // Up to 8KB CHR-RAM for writable pattern table banks.
+    static constexpr uint32_t CHR_RAM_SIZE = 8 * 1024;
+    uint32_t chr_rom_size_ = 0;
+
     // Nametable CIRAM pointer (set by set_ciram)
     uint8_t* ciram_ = nullptr;
 
@@ -70,7 +75,8 @@ private:
     }
 
 public:
-    Mapper019(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
+    Mapper019(uint8_t /*prgBanks*/, uint8_t chrBanks)
+        : chr_rom_size_(chrBanks * 8192u) {}
 
     void reset() override {
         std::memset(prg_bank_, 0, sizeof(prg_bank_));
@@ -95,6 +101,11 @@ public:
 
     bool irq_state() override { return irq_active_; }
     void irq_clear() override { irq_active_ = false; }
+
+    // Request extra CHR-RAM when board has CHR-ROM (for writable bank modes)
+    uint32_t extra_chr_ram_size() const override {
+        return (chr_rom_size_ > 0) ? CHR_RAM_SIZE : 0;
+    }
 
     void notify_cpu_cycle() override {
         if (!irq_enabled_) return;
@@ -125,6 +136,9 @@ public:
     void get_chr_bank_config(MapperChrConfig& config) const override {
         uint32_t num_1k = mapper_helpers::chr_1k_count(chr_mem_size_);
 
+        // CHR-RAM region (appended after CHR-ROM by Cartridge)
+        const uint8_t* extra_ram = (chr_rom_size_ > 0) ? chr_mem_ + chr_rom_size_ : nullptr;
+
         // Pattern table: $0000-$1FFF (8 × 1KB)
         for (int i = 0; i < 8; i++) {
             uint32_t bank = chr_bank_[i];
@@ -132,10 +146,18 @@ public:
                 config.chr_pages[i] = ciram_ + ((bank & 0x01) * 0x0400);
                 config.chr_writable[i] = true;
             } else {
-                uint32_t offset = (bank % num_1k) * 0x0400;
-                config.chr_pages[i] = (offset < chr_mem_size_) ? chr_mem_ + offset : chr_mem_;
-                // Lower half uses chr_lo_ram_, upper half uses chr_hi_ram_
-                config.chr_writable[i] = (i < 4) ? chr_lo_ram_ : chr_hi_ram_;
+                bool want_ram = (i < 4) ? chr_lo_ram_ : chr_hi_ram_;
+                if (want_ram && extra_ram) {
+                    // Map to extra CHR-RAM (8KB, writable)
+                    uint32_t ram_1k = CHR_RAM_SIZE / 0x0400;
+                    uint32_t offset = (bank % ram_1k) * 0x0400;
+                    config.chr_pages[i] = extra_ram + offset;
+                    config.chr_writable[i] = true;
+                } else {
+                    uint32_t offset = (bank % num_1k) * 0x0400;
+                    config.chr_pages[i] = (offset < chr_mem_size_) ? chr_mem_ + offset : chr_mem_;
+                    config.chr_writable[i] = false;
+                }
             }
         }
 
