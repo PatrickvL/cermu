@@ -41,6 +41,7 @@ private:
     // -----------------------------------------------------------------------
     uint8_t chr_mode_ = 0;             // $5101: CHR banking mode (0-3)
     uint16_t chr_bank_[12] = {};       // $5120-$512B: CHR bank registers
+    uint8_t chr_upper_bits_ = 0;       // $5130: upper 2 bits for CHR banks (D1-D0 → bits 9-8)
     uint8_t ppuctrl_ = 0;              // Cached PPU $2000 for CHR split
 
     // -----------------------------------------------------------------------
@@ -936,20 +937,24 @@ private:
             case 0x5117: prg_bank_[4] = data;         return true;   // $E000-$FFFF (always ROM)
 
             // --- CHR bank registers (sprite set $5120-$5127) ---
-            case 0x5120: chr_bank_[0]  = data; return true;
-            case 0x5121: chr_bank_[1]  = data; return true;
-            case 0x5122: chr_bank_[2]  = data; return true;
-            case 0x5123: chr_bank_[3]  = data; return true;
-            case 0x5124: chr_bank_[4]  = data; return true;
-            case 0x5125: chr_bank_[5]  = data; return true;
-            case 0x5126: chr_bank_[6]  = data; return true;
-            case 0x5127: chr_bank_[7]  = data; return true;
+            // $5130 upper bits are OR'd in as bits 9-8
+            case 0x5120: chr_bank_[0]  = data | (chr_upper_bits_ << 8); return true;
+            case 0x5121: chr_bank_[1]  = data | (chr_upper_bits_ << 8); return true;
+            case 0x5122: chr_bank_[2]  = data | (chr_upper_bits_ << 8); return true;
+            case 0x5123: chr_bank_[3]  = data | (chr_upper_bits_ << 8); return true;
+            case 0x5124: chr_bank_[4]  = data | (chr_upper_bits_ << 8); return true;
+            case 0x5125: chr_bank_[5]  = data | (chr_upper_bits_ << 8); return true;
+            case 0x5126: chr_bank_[6]  = data | (chr_upper_bits_ << 8); return true;
+            case 0x5127: chr_bank_[7]  = data | (chr_upper_bits_ << 8); return true;
 
             // --- CHR bank registers (BG set $5128-$512B) ---
-            case 0x5128: chr_bank_[8]  = data; return true;
-            case 0x5129: chr_bank_[9]  = data; return true;
-            case 0x512A: chr_bank_[10] = data; return true;
-            case 0x512B: chr_bank_[11] = data; return true;
+            case 0x5128: chr_bank_[8]  = data | (chr_upper_bits_ << 8); return true;
+            case 0x5129: chr_bank_[9]  = data | (chr_upper_bits_ << 8); return true;
+            case 0x512A: chr_bank_[10] = data | (chr_upper_bits_ << 8); return true;
+            case 0x512B: chr_bank_[11] = data | (chr_upper_bits_ << 8); return true;
+
+            // --- CHR upper bank bits ---
+            case 0x5130: chr_upper_bits_ = data & 0x03; return true;
 
             // --- Vertical split ---
             case 0x5200:
