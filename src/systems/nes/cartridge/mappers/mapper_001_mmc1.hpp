@@ -29,6 +29,11 @@ private:
     // PRG RAM enable
     bool prg_ram_enabled_ = true;
 
+    // Consecutive-write filter: real MMC1 ignores the second of two
+    // writes on consecutive CPU cycles.
+    uint64_t cpu_cycle_ = 0;
+    uint64_t last_write_cycle_ = 0;
+
     // Derived state
     Mirror mirror_mode_ = Mirror::HORIZONTAL;
 
@@ -55,8 +60,12 @@ public:
         reg_chr_bank1_ = 0;
         reg_prg_bank_ = 0;
         prg_ram_enabled_ = true;
+        cpu_cycle_ = 0;
+        last_write_cycle_ = 0;
         update_mirroring();
     }
+
+    void notify_cpu_cycle() override { cpu_cycle_++; }
 
     // =======================================================================
     // Phase 2 — page-pointer bank configuration
@@ -153,6 +162,14 @@ public:
 
     bool register_write(uint16_t addr, uint8_t data) override {
         if (addr < 0x8000) return false;
+
+        // Consecutive-write filter: ignore if this write is on the cycle
+        // immediately following a previous write.
+        if (cpu_cycle_ == last_write_cycle_ + 1 && last_write_cycle_ != 0) {
+            last_write_cycle_ = cpu_cycle_;
+            return false;
+        }
+        last_write_cycle_ = cpu_cycle_;
 
         if (data & 0x80) {
             // Reset shift register
