@@ -14,8 +14,8 @@
  *     A5:      PRG mode (0 = 32KB, 1 = 16KB)
  *     A0:      Mirroring (0 = vertical, 1 = horizontal)
  *   Data:
- *     D3-D2:  CHR bank high bits
- *     D1-D0:  CHR bank low bits (from address A3-A1 too)
+ *     D3-D2:  CHR bank high 2 bits
+ *     (D1-D0 are unused)
  */
 
 #include "systems/nes/cartridge/nes_mapper.hpp"
@@ -86,8 +86,8 @@ public:
     void get_chr_bank_config(MapperChrConfig& config) const override {
         uint32_t max_8k = (chr_mem_size_ > 0) ? static_cast<uint32_t>(chr_mem_size_ / 0x2000) : 1;
 
-        // CHR bank: high 2 bits from data D3-D2, low 4 bits from A3-A1 + D1-D0
-        uint32_t chr_bank = (((latch_addr_ >> 1) & 0x07) << 2) | (latch_data_ & 0x03);
+        // CHR bank: D3-D2 as high bits, A3-A1 as low bits → 5-bit bank select
+        uint32_t chr_bank = ((latch_data_ & 0x0C) << 1) | ((latch_addr_ >> 1) & 0x07);
         if (max_8k > 0) chr_bank %= max_8k;
 
         uint32_t base = chr_bank * 0x2000;
