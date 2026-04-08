@@ -152,7 +152,7 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 - [x] **[DONE]** Standardized all mapper constructor unused-param style
 - [x] **[DONE]** Mapper 024/026 (VRC6a/b): Konami expansion audio — 2 pulse + sawtooth channels
 - [x] **[DONE]** Mapper 085 (VRC7): FM synthesis expansion audio (YM2413 OPLL) — 6-channel 2-op FM with Konami custom patches
-- [ ] **[LARGE]** Mapper 019 (Namco 163): wavetable expansion audio
+- [x] **[DONE]** Mapper 019 (Namco 163): wavetable expansion audio — 8-channel TDM synthesizer via internal RAM
 - [x] **[DONE]** Mapper 069 (Sunsoft 5B): Yamaha expansion audio (YM2149 PSG) — 3 square + noise + envelope
 - [x] **[DONE]** Mapper 016 (Bandai FCG): 24C01/24C02 I2C EEPROM save support
 - [ ] **[LARGE]** Mapper 020 (FDS): Famicom Disk System — disk emulation, wavetable sound, entirely new hardware
@@ -196,7 +196,7 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 - [x] **[DONE]** SuperchipRAM helper — composable 128B split-port RAM struct
 - [x] **[DONE]** Auto-detection factory with signature analysis (E0/FE/UA/SC/3F/3E/E7/EF/F0/CV)
 - [ ] **[LARGE]** DPC — Pitfall II data fetcher coprocessor (8 channels, music, display-data)
-- [ ] **[MEDIUM]** AR — Starpath Supercharger (6KB RAM, multiload from tape)
+- [x] **[DONE]** AR — Starpath Supercharger (6KB RAM, clean-room BIOS, multiload, bus-snoop write mechanism)
 - [ ] **[MEDIUM]** DPC+ — Enhanced DPC with fractional data fetchers + ARM coprocessor
 
 ---
@@ -233,7 +233,7 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 - [x] **[DONE]** Sprite priority (BG-over-sprite) implemented
 - [x] **[DONE]** Sega Mode 4 fine-scroll (sub-tile X offset) and per-column tile fetch
 - [x] **[DONE]** Sega Mode 4 scroll inhibit: R0.D6 H-scroll lock (top 2 rows), R0.D7 V-scroll lock (right 8 cols), R0.D5 left-column mask
-- [ ] **[MEDIUM]** Per-line scroll table not implemented (`tms9918_mixins.hpp:141`)
+- [x] **[DONE]** Line counter IRQ: R10 countdown, R0.D4 IE1 enable — games use the line-IRQ handler to write R8 for per-line H-scroll effects
 - [ ] **[LARGE]** VDP Command execution placeholder (`tms9918_mixins.hpp:125`)
 
 #### MC6847
@@ -297,8 +297,8 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 | C16/Plus4 | — |
 | C128 | Z80/CP/M testing (QA) |
 | PET | — |
-| NES | N163 expansion audio, FDS |
-| Atari 2600 | DPC (Pitfall II), Starpath Supercharger |
+| NES | FDS |
+| Atari 2600 | DPC (Pitfall II) |
 | Amstrad CPC | — |
 | ZX Spectrum | — |
 
@@ -309,7 +309,7 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 | Acorn Atom | — |
 | BBC Micro | SSD/DSD disc, UEF tape, sideways ROM loading (SAA5050 done) |
 | Sega SG-1000 | — |
-| Sega SMS | Per-line scroll table |
+| Sega SMS | — |
 | MSX | MSX2 memory mapper ($FC-$FF), sub-slot expansion |
 | ColecoVision | — |
 | Memotech MTX | — |
