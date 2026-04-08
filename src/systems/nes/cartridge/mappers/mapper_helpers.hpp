@@ -309,13 +309,13 @@ struct CPUCycleIRQ {
     }
 
     /// Clock the IRQ counter once per CPU cycle.
+    /// Decrements first; fires on underflow (0 → 0xFFFF).
     void tick() {
         if (!enabled) return;
-        if (counter == 0) {
+        counter--;
+        if (counter == 0xFFFF) {
             active = true;
             enabled = false;
-        } else {
-            counter--;
         }
     }
 };
