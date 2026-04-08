@@ -104,8 +104,6 @@ public:
 
     // Mirroring — the active mode may be changed by the mapper at runtime
     Mirror mirror_mode = Mirror::HORIZONTAL;
-    bool get_mirror_horizontal() const { return mirror_mode == Mirror::HORIZONTAL; }
-    bool get_mirror_vertical() const { return mirror_mode == Mirror::VERTICAL; }
     Mirror get_mirror_mode() const { return mirror_mode; }
 
     // Mapper IRQ (e.g. MMC3 scanline counter) — inlined for hot-path performance
@@ -137,9 +135,7 @@ public:
     //
     // WRITE (/WR low):  When the PPU wrote to $2007 targeting CHR or
     //     nametable space, the address + data + /WR flag are on the bus.
-    //     Default dispatch writes to the block.  The mapper's
-    //     ppu_bus_write() hook is called for bus-conflict detection or
-    //     special behavior.
+    //     Default dispatch writes to the block.
     //
     // ppu_dot_count is passed for the mapper's A12 timing filter
     // (e.g. MMC3's requirement that A12 was low for ≥16 dots).
@@ -167,12 +163,6 @@ public:
                 if (likely(block < nes_bus::BLOCK_SENTINEL_MIN)) {
                     bus->ppu_block_write(block, addr, PPU_BUS_GET_DATA(ppu_bus));
                 }
-            }
-            // Mapper write hook (bus-conflict, special behavior)
-            bool banking_changed = false;
-            if (mapper) banking_changed = mapper->ppu_bus_write(addr, PPU_BUS_GET_DATA(ppu_bus));
-            if (unlikely(banking_changed) && bus) {
-                update_bank_map(bus, bus->ciram);
             }
             // Clear /WR — transaction complete, return to idle (read) state
             PPU_BUS_SET_BIT(ppu_bus, PPU_BUS_WR_BIT);
