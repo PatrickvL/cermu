@@ -44,10 +44,14 @@ public:
 
     bool register_write(uint16_t addr, uint8_t data) override {
         if (addr >= 0x8000 && addr <= 0x9FFF) {
-            // Single-screen nametable select (BF9097 variant, e.g. Fire Hawk)
-            // D4: 0 = ONESCREEN_LO, 1 = ONESCREEN_HI
-            mirror_mode_ = (data & 0x10) ? Mirror::ONESCREEN_HI : Mirror::ONESCREEN_LO;
-            return true;
+            // BF9097 variant (e.g. Fire Hawk): single-screen nametable select
+            // BF9093 variant (submapper 1): no mirroring control, ignore writes
+            if (submapper_ != 1) {
+                mirror_mode_ = (data & 0x10) ? Mirror::ONESCREEN_HI
+                                             : Mirror::ONESCREEN_LO;
+                return true;
+            }
+            return false;
         }
         if (addr >= 0xC000) {
             prg_bank_select_ = data & 0x0F;
