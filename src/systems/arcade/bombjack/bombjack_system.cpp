@@ -6,6 +6,7 @@
 #include "systems/arcade/bombjack/bombjack_system.hpp"
 #include "core/rom_set.hpp"
 #include "core/vfs/vfs.hpp"
+#include "core/config/path_discovery.hpp"
 #include "core/system_registry.hpp"
 #include <cstring>
 
@@ -418,7 +419,26 @@ bus_state_t BombJackSystem::sound_io_tick(bus_state_t pins) {
 
     return pins;
 }
-bool BombJackSystem::load_roms() { return false; }
+bool BombJackSystem::load_roms() {
+    char rom_root[1024];
+    if (!system_config_discover_rom_root("bombjack", rom_root, sizeof(rom_root)))
+        return false;
+
+    auto descriptors = get_rom_set_descriptors();
+    if (descriptors.empty()) return false;
+
+    // Scan the ROM directory for archive files containing a valid ROM set
+    auto entries = vfs_list_entries(rom_root);
+    for (const auto& entry : entries) {
+        if (entry.type != VfsEntryType::Archive) continue;
+        auto match = rom_set_scan_and_match(
+            entry.full_path.c_str(), descriptors.data(),
+            static_cast<int>(descriptors.size()));
+        if (match.matched)
+            return load_rom_set(match);
+    }
+    return false;
+}
 
 // ============================================================================
 // ROM SET — Bomb Jack MAME ROM set definitions
