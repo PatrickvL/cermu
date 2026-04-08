@@ -90,7 +90,6 @@ public:
         switch (addr & 0xE003) {
             case 0x8000:
                 prg_bank_[0] = data;
-                mirror_mode_ = (data & 0x40) ? Mirror::HORIZONTAL : Mirror::VERTICAL;
                 return true;
             case 0x8001: prg_bank_[1] = data; return true;
             case 0x8002: chr_bank_2k_[0] = data; return true;
@@ -110,6 +109,7 @@ public:
                 return false;
             case 0xE000:
                 irq_.enabled = true;
+                mirror_mode_ = (data & 0x40) ? Mirror::HORIZONTAL : Mirror::VERTICAL;
                 return false;
             case 0xE001:
                 irq_.enabled = false;
