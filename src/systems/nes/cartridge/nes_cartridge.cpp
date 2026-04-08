@@ -48,10 +48,10 @@ void Cartridge::update_bank_map(nes_bus::nes_bus_t* bus, uint8_t* ciram) {
     mapper->get_chr_bank_config(chr_config);
 
     // Override nametable mirroring from the authoritative mirror mode.
-    // FOUR_SCREEN keeps the mapper's config (needs 4KB on-cart VRAM).
+    // FOUR_SCREEN and custom_nt keep the mapper's config as-is.
     Mirror m = mapper->mirror();
     mirror_mode = m;
-    if (m != Mirror::FOUR_SCREEN) {
+    if (m != Mirror::FOUR_SCREEN && !chr_config.custom_nt) {
         const auto& nt = MIRROR_NT_PAGES[static_cast<int>(m)];
         std::memcpy(chr_config.nt_page, nt, sizeof(chr_config.nt_page));
     }
