@@ -336,7 +336,6 @@ struct VRCIRQ {
     bool enable_after_ack = false;
     bool cycle_mode = false;
     bool active = false;
-    uint16_t prescaler = 0;
 
     void reset() {
         latch = 0;
@@ -345,7 +344,6 @@ struct VRCIRQ {
         enable_after_ack = false;
         cycle_mode = false;
         active = false;
-        prescaler = 0;
     }
 
     /// Clock the counter once — fires IRQ on overflow (0xFF→0x00).
@@ -389,7 +387,6 @@ struct VRCIRQ {
                 cycle_mode = (data & 0x04) != 0;
                 if (enabled) {
                     counter = latch;
-                    prescaler = 0;
                 }
                 return false;
             case 3:  // Acknowledge
