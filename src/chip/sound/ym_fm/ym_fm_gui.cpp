@@ -34,6 +34,7 @@
 #include "chip/sound/ym_fm/ym3438.hpp"
 #include "chip/sound/ym_fm/ym3526.hpp"
 #include "chip/sound/ym_fm/ym3812.hpp"
+#include "systems/nes/cartridge/mappers/mapper_085_vrc7.hpp"
 
 #include "core/chip_layout.hpp"
 
@@ -162,6 +163,7 @@ template void ym_fm_t<YM2612_Traits>::register_debug_fields();
 template void ym_fm_t<YM3438_Traits>::register_debug_fields();
 template void ym_fm_t<YM3526_Traits>::register_debug_fields();
 template void ym_fm_t<YM3812_Traits>::register_debug_fields();
+template void ym_fm_t<nes_system::VRC7_Traits>::register_debug_fields();
 #endif // CERMU_HAS_CHIP_DEBUG
 
 // ============================================================================
@@ -359,5 +361,8 @@ template std::vector<PinSignalState> ym_fm_t<YM3526_Traits>::get_layout_pin_stat
 
 template ChipLayout* ym_fm_t<YM3812_Traits>::create_chip_layout() const;
 template std::vector<PinSignalState> ym_fm_t<YM3812_Traits>::get_layout_pin_states(ChipLayout&);
+
+template ChipLayout* ym_fm_t<nes_system::VRC7_Traits>::create_chip_layout() const;
+template std::vector<PinSignalState> ym_fm_t<nes_system::VRC7_Traits>::get_layout_pin_states(ChipLayout&);
 
 #endif // CERMU_HAS_GUI
