@@ -134,8 +134,8 @@ private:
                 if (step >= 14) {
                     step = 0;
                     accumulator = 0;
-                } else if ((step & 1) == 0) {
-                    // Add rate every 2 clocks
+                } else if (step & 1) {
+                    // Add rate every 2 clocks (7 additions per 14-step cycle)
                     accumulator += rate;
                 }
             } else {
