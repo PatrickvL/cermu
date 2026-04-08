@@ -45,7 +45,6 @@ private:
     uint8_t chr_bank_[12] = {};  // [0-7] = pattern, [8-11] = nametable
 
     // Internal 128-byte RAM (shared between audio wavetable + scratch)
-    // TODO: Implement Namco 163 wavetable audio synthesis for audio_tick()/audio_output()
     uint8_t internal_ram_[128] = {};
     uint8_t ram_addr_ = 0;
     bool auto_increment_ = false;
@@ -61,6 +60,11 @@ private:
 
     // Sound enable
     bool sound_enabled_ = false;
+
+    // N163 wavetable audio state (time-division multiplexed, 1 channel per 15 CPU cycles)
+    uint16_t n163_tick_ = 0;
+    uint8_t n163_ch_index_ = 0;
+    float n163_ch_out_[8] = {};
 
     // CHR-ROM size — when CHR-ROM exists, extra CHR-RAM appended after it.
     // Up to 8KB CHR-RAM for writable pattern table banks.
@@ -90,6 +94,9 @@ public:
         irq_enabled_ = false;
         irq_active_ = false;
         sound_enabled_ = false;
+        n163_tick_ = 0;
+        n163_ch_index_ = 0;
+        std::memset(n163_ch_out_, 0, sizeof(n163_ch_out_));
     }
 
     void set_ciram(uint8_t* ciram) override { ciram_ = ciram; }
@@ -254,6 +261,72 @@ public:
                 return false;  // no banking change
         }
         return false;
+    }
+
+    // --- N163 wavetable expansion audio ---
+    // 8-channel time-division multiplexed synthesizer sharing internal_ram_.
+    // Hardware processes one channel every 15 CPU cycles, cycling through active
+    // channels from 7 downward.  Channel registers live at $40+ch*8 in the
+    // 128-byte internal RAM (same memory games also use for waveform data).
+
+    void audio_tick() override {
+        if (!sound_enabled_) return;
+
+        if (++n163_tick_ < 15) return;
+        n163_tick_ = 0;
+
+        uint8_t active = ((internal_ram_[0x7F] >> 4) & 0x07) + 1;
+        uint8_t ch = 7 - n163_ch_index_;
+        uint8_t r  = 0x40 + (ch << 3);
+
+        // 18-bit frequency
+        uint32_t freq = internal_ram_[r]
+                      | (static_cast<uint32_t>(internal_ram_[r + 2]) << 8)
+                      | (static_cast<uint32_t>(internal_ram_[r + 4] & 0x03) << 16);
+
+        // 24-bit phase accumulator
+        uint32_t phase = internal_ram_[r + 1]
+                       | (static_cast<uint32_t>(internal_ram_[r + 3]) << 8)
+                       | (static_cast<uint32_t>(internal_ram_[r + 5]) << 16);
+
+        // Advance phase
+        phase = (phase + freq) & 0x00FFFFFF;
+
+        // Wave length (in 4-bit samples): 256 - (reg & 0xFC)
+        uint32_t wave_len = 256 - (internal_ram_[r + 4] & 0xFC);
+
+        // Wrap phase to wavelength boundary
+        uint32_t hi_len = wave_len << 16;
+        while (phase >= hi_len) phase -= hi_len;
+
+        // Write phase back to internal RAM (hardware does this)
+        internal_ram_[r + 1] = phase & 0xFF;
+        internal_ram_[r + 3] = (phase >> 8) & 0xFF;
+        internal_ram_[r + 5] = (phase >> 16) & 0xFF;
+
+        // Fetch 4-bit waveform sample from internal RAM
+        uint8_t wave_off   = internal_ram_[r + 6];
+        uint8_t sample_idx = ((phase >> 16) + wave_off) & 0xFF;
+        uint8_t sample_byte = internal_ram_[sample_idx >> 1];
+        uint8_t sample = (sample_idx & 1) ? (sample_byte >> 4) : (sample_byte & 0x0F);
+
+        // Volume (4-bit)
+        uint8_t vol = internal_ram_[r + 7] & 0x0F;
+
+        // Cache normalized output: sample(0-15) * vol(0-15) / 225
+        n163_ch_out_[ch] = static_cast<float>(sample * vol) / 225.0f;
+
+        // Advance to next active channel
+        if (++n163_ch_index_ >= active) n163_ch_index_ = 0;
+    }
+
+    float audio_output() const override {
+        if (!sound_enabled_) return 0.0f;
+        uint8_t active = ((internal_ram_[0x7F] >> 4) & 0x07) + 1;
+        float sum = 0.0f;
+        for (uint8_t i = 0; i < active; i++)
+            sum += n163_ch_out_[7 - i];
+        return sum / static_cast<float>(active);
     }
 };
 
