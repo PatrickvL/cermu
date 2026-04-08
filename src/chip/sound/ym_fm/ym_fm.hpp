@@ -22,10 +22,12 @@
  *      via compute_op_output(mod_in).  Feedback on op1 uses the same
  *      path.  All 8 OPN and 2 OPL algorithm topologies are correct.
  *
- *   2. Envelope generator is simplified.  Real hardware uses per-rate
- *      increment tables indexed by rate + key-scale + rof counter, with
- *      non-linear attack curves.  This implementation uses a crude linear
- *      approximation that will produce noticeably wrong volume contours.
+ *   2. [DONE] Envelope generator now uses hardware-accurate per-rate
+ *      increment tables (EG_SHIFT/EG_SELECT/EG_INC) derived from OPN/OPN2
+ *      die analysis.  Attack is exponential (level += ~level*inc >> 4),
+ *      decay/release are linear in log domain (level += inc).  Global
+ *      env_counter_ drives update timing.  D1L=15 correctly maps to
+ *      ENV_MAX (silence) via D1L_TABLE.
  *
  *   3. SSG composition is declared but not wired.  YMTraits::ssg points
  *      to an AYTraits instance, but no ay_psg_t is instantiated or
@@ -275,6 +277,64 @@ namespace ym_fm_constants {
         { 2,  2,  2,  2,  2,  3,  3,  3,  4,  4,  4,  5,  5,  6,  6,  7,
           8,  8,  9, 10, 11, 12, 13, 14, 16, 17, 19, 20, 22, 22, 22, 22 }
     };
+
+    // ── Envelope generator rate tables ──────────────────────────────────
+    //
+    // Derived from Yamaha OPN/OPN2 die analysis (Nuked-OPN2, MAME).
+    //
+    // The EG uses a global counter.  For each effective rate (0-63):
+    //   - EG_SHIFT selects which counter bit determines update timing
+    //   - EG_SELECT picks an increment pattern row in EG_INC
+    //   - The 2 LSBs of (counter >> shift) pick the sub-step within the row
+    //
+    // Attack formula:  level += (~(int32_t)level * inc) >> 4   [exponential]
+    // Decay formula:   level += inc                            [linear in dB]
+
+    // Counter bits to skip — higher rate = lower shift = more frequent updates.
+    inline constexpr uint8_t EG_SHIFT[64] = {
+        11,11,11,11,  10,10,10,10,   9, 9, 9, 9,   8, 8, 8, 8,
+         7, 7, 7, 7,   6, 6, 6, 6,   5, 5, 5, 5,   4, 4, 4, 4,
+         3, 3, 3, 3,   2, 2, 2, 2,   1, 1, 1, 1,   0, 0, 0, 0,
+         0, 0, 0, 0,   0, 0, 0, 0,   0, 0, 0, 0,   0, 0, 0, 0,
+    };
+
+    // Row index into EG_INC for each rate.
+    inline constexpr uint8_t EG_SELECT[64] = {
+         0, 0, 0, 0,   1, 2, 3, 4,   1, 2, 3, 4,   1, 2, 3, 4,
+         1, 2, 3, 4,   1, 2, 3, 4,   1, 2, 3, 4,   1, 2, 3, 4,
+         1, 2, 3, 4,   1, 2, 3, 4,   1, 2, 3, 4,   1, 2, 3, 4,
+         5, 6, 7, 8,   9,10,11,12,  13,14,15,16,  17,17,17,17,
+    };
+
+    // Increment patterns: 4 sub-steps per row, cycled by counter LSBs.
+    // Row 0 = never increment.  Row 17 = maximum (rates 60-63).
+    inline constexpr uint8_t EG_INC[18][4] = {
+        { 0, 0, 0, 0 },  //  0: off (rates 0-3)
+        { 0, 0, 0, 1 },  //  1
+        { 0, 0, 1, 1 },  //  2
+        { 0, 1, 1, 1 },  //  3
+        { 1, 1, 1, 1 },  //  4
+        { 1, 1, 1, 2 },  //  5
+        { 1, 2, 1, 2 },  //  6
+        { 1, 2, 2, 2 },  //  7
+        { 2, 2, 2, 2 },  //  8
+        { 2, 2, 2, 4 },  //  9
+        { 2, 4, 2, 4 },  // 10
+        { 2, 4, 4, 4 },  // 11
+        { 4, 4, 4, 4 },  // 12
+        { 4, 4, 4, 8 },  // 13
+        { 4, 8, 4, 8 },  // 14
+        { 4, 8, 8, 8 },  // 15
+        { 8, 8, 8, 8 },  // 16
+        {16,16,16,16 },  // 17: instant (rates 60-63)
+    };
+
+    // D1L sustain-level table: D1L register (4-bit) → 10-bit env target.
+    // D1L 0 = 0 dB, D1L 1-14 = 3 dB steps, D1L 15 = -93 dB (silence).
+    inline constexpr uint16_t D1L_TABLE[16] = {
+          0,  32,  64,  96, 128, 160, 192, 224,
+        256, 288, 320, 352, 384, 416, 448, ENV_MAX,
+    };
 } // namespace ym_fm_constants
 
 // ============================================================================
@@ -506,6 +566,7 @@ public:
         for (int i = 0; i < 3; i++) { ch3_fnum_[i] = 0; ch3_block_[i] = 0; }
         dac_value_ = 0;
         dac_enabled_ = false;
+        env_counter_ = 0;
         status_ = 0;
     }
 
@@ -662,6 +723,9 @@ private:
     uint8_t  dac_value_ = 0;
     bool     dac_enabled_ = false;
 
+    // Envelope generator global counter (incremented once per FM sample)
+    uint32_t env_counter_ = 0;
+
     // Sample rate divider
     uint16_t sample_divider_ = 0;
 
@@ -729,6 +793,9 @@ private:
     // ========================================================================
 
     void generate_fm_sample() {
+        // Advance the global envelope counter (shared by all operators)
+        env_counter_++;
+
         float mix = 0.f;
         int active_channels = 0;
 
@@ -866,15 +933,23 @@ private:
     }
 
     // ========================================================================
-    // Envelope generator
+    // Envelope generator — hardware-accurate per-rate LUT model
     // ========================================================================
     //
-    // SHORTCOMING: This is a rough linear approximation.  Real hardware uses
-    // a rate counter with per-rate increment tables (4 increments per rate,
-    // cycled by a global counter).  Attack is exponential (level += ~level*rate),
-    // decay/release are linear in log domain.
+    // Uses the four-step increment tables derived from OPN/OPN2 die analysis.
+    //
+    //   Attack:        level += (~(int32_t)level * inc) >> 4
+    //                  → exponential curve (fast-then-slow approach to 0).
+    //   Decay/Release: level += inc
+    //                  → linear in log domain (constant dB/time).
+    //
+    // Global env_counter_ determines update timing per the EG_SHIFT table;
+    // EG_SELECT chooses an increment pattern row, and the counter's low
+    // bits select the sub-step within that row.
 
     void advance_envelope(FMOperator& op) {
+        using namespace ym_fm_constants;
+
         // Rate-scaling: higher notes progress through the envelope faster.
         // effective_rate = 2 * base_rate + (keycode >> (3 - rs)), clamped to 63.
         auto scaled_rate = [&](uint8_t base_rate) -> uint8_t {
@@ -883,73 +958,92 @@ private:
             return eff > 63 ? static_cast<uint8_t>(63) : eff;
         };
 
+        // Select rate for current phase
+        uint8_t rate;
         switch (op.env_state) {
             case FMOperator::OFF:
-                op.env_level = ym_fm_constants::ENV_MAX;
+                op.env_level = ENV_MAX;
+                return;
+            case FMOperator::ATTACK:
+                rate = scaled_rate(op.ar);
                 break;
+            case FMOperator::DECAY1:
+                rate = scaled_rate(op.d1r);
+                break;
+            case FMOperator::DECAY2:
+                rate = scaled_rate(op.d2r);
+                break;
+            case FMOperator::RELEASE:
+                // Hardware doubles the 4-bit release rate and adds 1
+                rate = scaled_rate(static_cast<uint8_t>((op.rr << 1) | 1));
+                break;
+            default: return;
+        }
 
-            case FMOperator::ATTACK: {
-                uint8_t rate = scaled_rate(op.ar);
+        if (rate == 0) return;
+
+        // Check global counter alignment — skip this tick if not yet due
+        uint8_t shift = EG_SHIFT[rate];
+        if (env_counter_ & ((1u << shift) - 1)) return;
+
+        // Select increment from pattern table
+        uint8_t select = EG_SELECT[rate];
+        uint8_t step_idx = (env_counter_ >> shift) & 0x03;
+        uint8_t inc = EG_INC[select][step_idx];
+        if (inc == 0) return;
+
+        // Apply increment based on envelope phase
+        switch (op.env_state) {
+            case FMOperator::ATTACK:
                 if (rate >= 62) {
+                    // Instant attack at maximum rate
                     op.env_level = 0;
+                } else {
+                    // Exponential attack: subtract a fraction of remaining level.
+                    // ~level (signed) is negative → the product is negative →
+                    // adding it to level decreases attenuation toward 0.
+                    int32_t level = static_cast<int32_t>(op.env_level);
+                    level += (~level * static_cast<int32_t>(inc)) >> 4;
+                    if (level < 0) level = 0;
+                    op.env_level = static_cast<uint16_t>(level);
+                }
+                if (op.env_level == 0) {
                     op.env_state = FMOperator::DECAY1;
-                } else if (rate > 0) {
-                    // Exponential attack: level += (~level * rate) >> shift
-                    uint16_t step = ((ym_fm_constants::ENV_MAX - op.env_level)
-                                    * static_cast<uint16_t>(rate)) >> 4;
-                    if (step == 0) step = 1;
-                    if (op.env_level > step)
-                        op.env_level -= step;
-                    else {
-                        op.env_level = 0;
-                        op.env_state = FMOperator::DECAY1;
-                    }
                 }
                 break;
-            }
 
             case FMOperator::DECAY1: {
-                uint16_t target = static_cast<uint16_t>(op.d1l) << 5;  // D1L × 32
-                uint8_t rate = scaled_rate(op.d1r);
-                if (rate > 0) {
-                    op.env_level += rate;
-                    if (op.env_level >= target) {
-                        op.env_level = target;
-                        op.env_state = FMOperator::DECAY2;
-                    }
+                uint16_t target = D1L_TABLE[op.d1l & 0x0F];
+                op.env_level += inc;
+                if (op.env_level >= target) {
+                    op.env_level = target;
+                    op.env_state = FMOperator::DECAY2;
                 }
                 break;
             }
 
-            case FMOperator::DECAY2: {
-                uint8_t rate = scaled_rate(op.d2r);
-                if (rate > 0) {
-                    op.env_level += rate;
-                    if (op.env_level >= ym_fm_constants::ENV_MAX)
-                        op.env_level = ym_fm_constants::ENV_MAX;
-                }
+            case FMOperator::DECAY2:
+                op.env_level += inc;
+                if (op.env_level >= ENV_MAX)
+                    op.env_level = ENV_MAX;
                 break;
-            }
 
-            case FMOperator::RELEASE: {
-                uint8_t rate = scaled_rate(op.rr);
-                if (rate > 0) {
-                    uint16_t step = (rate << 1) + 1;
-                    op.env_level += step;
-                    if (op.env_level >= ym_fm_constants::ENV_MAX) {
-                        op.env_level = ym_fm_constants::ENV_MAX;
-                        op.env_state = FMOperator::OFF;
-                    }
+            case FMOperator::RELEASE:
+                op.env_level += inc;
+                if (op.env_level >= ENV_MAX) {
+                    op.env_level = ENV_MAX;
+                    op.env_state = FMOperator::OFF;
                 }
                 break;
-            }
+
+            default: break;
         }
 
         // SSG-EG: when enabled, alter envelope shape on reaching max attenuation.
         // Bits 2:0 encode shape (attack-invert / alternate / hold).
         if ((op.ssg_eg & 0x08) && op.env_state != FMOperator::OFF
                                && op.env_state != FMOperator::ATTACK) {
-            if (op.env_level >= ym_fm_constants::ENV_MAX) {
+            if (op.env_level >= ENV_MAX) {
                 if (op.ssg_eg & 0x01) {
                     // Hold: stop cycling, optionally toggle inversion
                     if (op.ssg_eg & 0x02) op.ssg_inverted = !op.ssg_inverted;
