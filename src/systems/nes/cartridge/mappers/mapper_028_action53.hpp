@@ -17,10 +17,10 @@
  *   $81: Outer bank register
  *
  * PRG banking modes (bits 3-2 of mode register):
- *   0,1: 32KB fixed (outer bank only)
- *   2: 32KB switchable (inner OR outer)
- *   3: 16KB+16KB (Mapper 180 style: fixed first, switchable last) or
- *      UNROM style (switchable first, fixed last) depending on bit 1
+ *   0: 32KB switchable (inner OR outer, A14 from CPU)
+ *   1: 32KB fixed (outer bank only)
+ *   2: 16KB — fixed first ($8000), switchable last ($C000) (Mapper 180 style)
+ *   3: 16KB — switchable first ($8000), fixed last ($C000) (UNROM style)
  *
  * References: https://www.nesdev.org/wiki/Action_53_mapper
  */
@@ -65,32 +65,22 @@ private:
         uint8_t combined = outer | inner;
 
         switch (prg_mode) {
-            case 0: case 1:
-                // 32KB fixed — outer bank only, ignore inner.
-                // Both slots from same 32KB bank (combined is 16KB indexed)
-                return (reg_outer_ & outer_mask) * 2 + (upper_slot ? 1 : 0);
+            case 0:
+                // 32KB mode — inner bank provides all bits within outer slot.
+                // A14 comes from CPU address (bit 0 of bank index).
+                return upper_slot ? (combined | 1) : (combined & ~1);
+
+            case 1:
+                // 32KB fixed — outer bank provides all bits.
+                return upper_slot ? (reg_outer_ | 1) : (reg_outer_ & ~1);
 
             case 2:
-                // 32KB switchable
-                return combined * 2 + (upper_slot ? 1 : 0);
+                // Mapper 180 style: fixed $8000, switchable $C000
+                return upper_slot ? combined : outer;
 
             case 3:
-                // 16KB+16KB mode
-                if (reg_mode_ & 0x02) {
-                    // UNROM style: switchable at $8000, fixed at $C000
-                    if (!upper_slot) {
-                        return outer | (reg_inner_ & inner_mask);
-                    } else {
-                        return outer | inner_mask;  // Fixed to last inner bank
-                    }
-                } else {
-                    // Mapper-180 style: fixed at $8000, switchable at $C000
-                    if (!upper_slot) {
-                        return outer;  // Fixed to first inner bank
-                    } else {
-                        return outer | (reg_inner_ & inner_mask);
-                    }
-                }
+                // UNROM style: switchable $8000, fixed $C000
+                return upper_slot ? static_cast<uint8_t>(outer | inner_mask) : combined;
         }
         return 0;
     }
