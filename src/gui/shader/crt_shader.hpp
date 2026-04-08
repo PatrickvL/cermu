@@ -20,6 +20,7 @@
 #include "core/cermu.hpp"
 #include "devices/display/display_device.hpp"
 #include "gui/gl_api.hpp"
+#include <algorithm>
 #include <cstdio>
 
 namespace crt_shader {
@@ -545,7 +546,16 @@ inline void render(CRTPostProcess* p,
 
     // Bind shader and set uniforms
     gl_api::glUseProgram(p->shader);
-    gl_api::glUniform2f(p->loc_input_size, input_w, input_h);
+
+    // For 90°/270° rotations the vertex shader swaps UV axes, so the
+    // fragment shader's scanline/convergence maths must see the post-
+    // rotation dimensions (e.g. 224×256 instead of 256×224).
+    float eff_input_w = input_w;
+    float eff_input_h = input_h;
+    if (rotation == 1 || rotation == 3)
+        std::swap(eff_input_w, eff_input_h);
+
+    gl_api::glUniform2f(p->loc_input_size, eff_input_w, eff_input_h);
     gl_api::glUniform2f(p->loc_output_size, output_w, output_h);
     gl_api::glUniform1f(p->loc_curvature, curvature);
     gl_api::glUniform1f(p->loc_scanline_gap, scanline_gap);
