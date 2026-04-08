@@ -49,7 +49,6 @@ void BombJackVideo::render_background() {
     bool img_valid = (bg_image_select_ & 0x10) != 0;
     uint16_t img_base = (bg_image_select_ & 0x07) * 0x0200;
 
-    uint8_t* ptr = pixel_buf_;
     for (int ty = 0; ty < 16; ty++) {
         for (int tx = 0; tx < 16; tx++) {
             int addr = img_base + ty * 16 + tx;
@@ -58,29 +57,31 @@ void BombJackVideo::render_background() {
             uint8_t color_block = (attr & 0x0F) << 3;
             bool flip_y = (attr & 0x80) != 0;
 
-            uint8_t* tile_dst = ptr;
-            if (flip_y) tile_dst += 15 * WIDTH;
-
+            int tile_y0 = ty * 16;
             int off = tile_code * 32;
-            for (int yy = 0; yy < 16; yy++) {
-                // Gather 16 pixels from two 8-pixel halves
-                uint16_t bm0 = (uint16_t(bg_tile_rom_[0][off]) << 8) | bg_tile_rom_[0][off + 8];
-                uint16_t bm1 = (uint16_t(bg_tile_rom_[1][off]) << 8) | bg_tile_rom_[1][off + 8];
-                uint16_t bm2 = (uint16_t(bg_tile_rom_[2][off]) << 8) | bg_tile_rom_[2][off + 8];
-                off++;
-                if (yy == 7) off += 8;  // skip to bottom half
 
+            for (int yy = 0; yy < 16; yy++) {
+                int src_yy = flip_y ? (15 - yy) : yy;
+                int screen_y = tile_y0 + src_yy;
+
+                // Gather 16 pixels from two 8-pixel halves
+                int rom_row = yy;
+                int rom_off = off + (rom_row < 8 ? rom_row : rom_row + 8);
+                uint16_t bm0 = (uint16_t(bg_tile_rom_[0][rom_off]) << 8) | bg_tile_rom_[0][rom_off + 8];
+                uint16_t bm1 = (uint16_t(bg_tile_rom_[1][rom_off]) << 8) | bg_tile_rom_[1][rom_off + 8];
+                uint16_t bm2 = (uint16_t(bg_tile_rom_[2][rom_off]) << 8) | bg_tile_rom_[2][rom_off + 8];
+
+                if (screen_y >= HEIGHT) continue;  // clip to visible area
+
+                uint8_t* dst = pixel_buf_ + screen_y * WIDTH + tx * 16;
                 for (int xx = 15; xx >= 0; xx--) {
                     uint8_t pen = ((bm2 >> xx) & 1) |
                                   (((bm1 >> xx) & 1) << 1) |
                                   (((bm0 >> xx) & 1) << 2);
-                    *tile_dst++ = color_block | pen;
+                    *dst++ = color_block | pen;
                 }
-                tile_dst += flip_y ? -(WIDTH + 16) : (WIDTH - 16);
             }
-            ptr += 16;  // next tile column
         }
-        ptr += 15 * WIDTH;  // next tile row (skip 15 rows, did first row inline)
     }
 }
 
