@@ -14,7 +14,7 @@
  *   register that maps into that slot's address range.
  */
 
-#include "systems/nes/cartridge/nes_mapper.hpp"
+#include "systems/nes/cartridge/mappers/mapper_helpers.hpp"
 #include <cstring>
 
 namespace nes_system {
@@ -32,14 +32,7 @@ private:
     bool prg_ram_enabled_ = true;
     bool prg_ram_write_protect_ = false;
 
-    // IRQ (same as MMC3)
-    uint8_t irq_counter_ = 0;
-    uint8_t irq_reload_value_ = 0;
-    bool irq_enabled_ = false;
-    bool irq_active_ = false;
-    bool irq_reload_ = false;
-    uint64_t a12_low_since_ = 0;
-    static constexpr uint16_t A12_FILTER_DELAY = 16;
+    mapper_helpers::MMC3IRQ irq_;
 
     uint32_t prg_bank_[4] = {};
     uint32_t chr_bank_[8] = {};
@@ -86,21 +79,9 @@ public:
     Mapper118(uint8_t prgBanks, uint8_t chrBanks)
         : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
 
-    bool irq_state() override { return irq_active_; }
-    void irq_clear() override { irq_active_ = false; }
-
-    void notify_a12(bool a12_high, uint64_t ppu_cycle) override {
-        if (!a12_high) { a12_low_since_ = ppu_cycle; return; }
-        if (ppu_cycle - a12_low_since_ < A12_FILTER_DELAY) return;
-
-        if (irq_counter_ == 0 || irq_reload_) {
-            irq_counter_ = irq_reload_value_;
-            irq_reload_ = false;
-        } else {
-            irq_counter_--;
-        }
-        if (irq_counter_ == 0 && irq_enabled_) irq_active_ = true;
-    }
+    bool irq_state() override { return irq_.active; }
+    void irq_clear() override { irq_.active = false; }
+    void notify_a12(bool a12_high, uint64_t ppu_cycle) override { irq_.notify_a12(a12_high, ppu_cycle); }
 
     void reset() override {
         target_register_ = 0;
@@ -109,12 +90,7 @@ public:
         std::memset(registers_, 0, sizeof(registers_));
         prg_ram_enabled_ = true;
         prg_ram_write_protect_ = false;
-        irq_counter_ = 0;
-        irq_reload_value_ = 0;
-        irq_enabled_ = false;
-        irq_active_ = false;
-        irq_reload_ = false;
-        a12_low_since_ = 0;
+        irq_.reset();
         update_prg_banks();
         update_chr_banks();
     }
@@ -189,20 +165,10 @@ public:
             }
             return true;
         } else if (addr <= 0xDFFF) {
-            if (even) {
-                irq_reload_value_ = data;
-            } else {
-                irq_counter_ = 0;
-                irq_reload_ = true;
-            }
+            irq_.write(addr, data);
             return false;
         } else {
-            if (even) {
-                irq_enabled_ = false;
-                irq_active_ = false;
-            } else {
-                irq_enabled_ = true;
-            }
+            irq_.write(addr, data);
             return false;
         }
     }
