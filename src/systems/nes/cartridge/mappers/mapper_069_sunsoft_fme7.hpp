@@ -101,12 +101,17 @@ public:
             config.prg_ram_enabled = prg_ram_enabled_ && (prg_ram_ != nullptr);
             config.prg_ram_write_protected = !prg_ram_enabled_;
         } else {
-            // PRG-ROM mode (bit 6 clear): map ROM bank, read-only
-            uint32_t b = prg_bank_[0] % total_8k;
-            config.prg_ram_base = const_cast<uint8_t*>(prg_rom_ + b * 0x2000);
-            config.prg_ram_size = 0x2000;
-            config.prg_ram_enabled = true;
-            config.prg_ram_write_protected = true;
+            // PRG-ROM mode (bit 6 clear): map ROM bank, read-only.
+            // Bit 7 gates the chip-enable: when clear, $6000 is open bus.
+            if (prg_ram_enabled_) {
+                uint32_t b = prg_bank_[0] % total_8k;
+                config.prg_ram_base = const_cast<uint8_t*>(prg_rom_ + b * 0x2000);
+                config.prg_ram_size = 0x2000;
+                config.prg_ram_enabled = true;
+                config.prg_ram_write_protected = true;
+            } else {
+                config.prg_ram_enabled = false;
+            }
         }
     }
 
