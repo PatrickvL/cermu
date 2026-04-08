@@ -40,6 +40,11 @@ namespace bombjack_video_constants {
     inline constexpr int TILE_SIZE   = 8;
     inline constexpr int BPP         = 3;
     inline constexpr int BYTES_PER_TILE = 24;  // 3 planes × 8 rows (FG)
+
+    // The hardware renders a 256×256 tile space but the monitor shows only
+    // 256×224 starting at pixel row 16 (MAME visarea: 0,255,16,239).
+    // All layers must subtract this offset when mapping to the framebuffer.
+    inline constexpr int VISIBLE_Y_START = 16;  // 2 tile rows clipped at top
 }
 
 struct BombJackVideo {

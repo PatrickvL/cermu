@@ -62,7 +62,7 @@ void BombJackVideo::render_background() {
 
             for (int yy = 0; yy < 16; yy++) {
                 int src_yy = flip_y ? (15 - yy) : yy;
-                int screen_y = tile_y0 + src_yy;
+                int screen_y = tile_y0 + src_yy - VISIBLE_Y_START;
 
                 // Gather 16 pixels from two 8-pixel halves
                 int rom_row = yy;
@@ -71,7 +71,7 @@ void BombJackVideo::render_background() {
                 uint16_t bm1 = (uint16_t(bg_tile_rom_[1][rom_off]) << 8) | bg_tile_rom_[1][rom_off + 8];
                 uint16_t bm2 = (uint16_t(bg_tile_rom_[2][rom_off]) << 8) | bg_tile_rom_[2][rom_off + 8];
 
-                if (screen_y >= HEIGHT) continue;  // clip to visible area
+                if (screen_y < 0 || screen_y >= HEIGHT) continue;  // clip to visible area
 
                 uint8_t* dst = pixel_buf_ + screen_y * WIDTH + tx * 16;
                 for (int xx = 15; xx >= 0; xx--) {
@@ -111,7 +111,11 @@ void BombJackVideo::render_foreground() {
     // Char ROM has 3 planes concatenated: each plane = char_rom_size_ / 3 bytes
     int plane_size = char_rom_size_ / 3;
 
-    for (int ty = 0; ty < TILE_ROWS; ty++) {
+    // Visible tile rows: 2–29 (32×32 grid, 2 rows clipped top and bottom)
+    static constexpr int FG_FIRST_ROW = VISIBLE_Y_START / TILE_SIZE;
+    static constexpr int FG_LAST_ROW  = FG_FIRST_ROW + TILE_ROWS;
+
+    for (int ty = FG_FIRST_ROW; ty < FG_LAST_ROW; ty++) {
         for (int tx = 0; tx < TILE_COLS; tx++) {
             int offs = ty * TILE_COLS + tx;
             uint8_t chr = tilemap_[offs];
@@ -125,7 +129,7 @@ void BombJackVideo::render_foreground() {
 
             // Each 8×8 FG tile = 8 bytes per plane
             int tile_off = tile_code * 8;
-            uint8_t* dst = pixel_buf_ + ty * TILE_SIZE * WIDTH + tx * TILE_SIZE;
+            uint8_t* dst = pixel_buf_ + (ty - FG_FIRST_ROW) * TILE_SIZE * WIDTH + tx * TILE_SIZE;
 
             for (int py = 0; py < 8; py++) {
                 int src_y = flip_y ? (7 - py) : py;
@@ -185,7 +189,7 @@ void BombJackVideo::render_sprites() {
         if (b0 & 0x80) {
             // ── 32×32 large sprite ──────────────────────────────────
             int px = b2;
-            int py = 225 - b3;
+            int py = 225 - b3 - VISIBLE_Y_START;
             int off = sprite_code * 128;
 
             for (int y = 0; y < 32; y++) {
@@ -229,7 +233,7 @@ void BombJackVideo::render_sprites() {
         } else {
             // ── 16×16 small sprite ──────────────────────────────────
             int px = b2;
-            int py = 241 - b3;
+            int py = 241 - b3 - VISIBLE_Y_START;
             bool flip_x = (b1 & 0x80) != 0;
             bool flip_y = (b1 & 0x40) != 0;
             int off = sprite_code * 32;
