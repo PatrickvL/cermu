@@ -25,6 +25,7 @@ private:
     uint8_t prg_bank_ = 0;
     uint8_t chr_bank_ = 0;
     Mirror mirror_mode_ = Mirror::ONESCREEN_LO;
+    bool onescreen_mode_ = true; // submapper 1 default; submapper 3 uses H/V
 
 public:
     Mapper078(uint8_t prgBanks, uint8_t chrBanks) { (void)prgBanks; (void)chrBanks; }
@@ -32,7 +33,12 @@ public:
     void reset() override {
         prg_bank_ = 0;
         chr_bank_ = 0;
-        mirror_mode_ = Mirror::ONESCREEN_LO;
+        // Detect submapper from header mirroring:
+        // H or V → submapper 3 (Uchuusen): D3 toggles H/V
+        // otherwise → submapper 1: D3 toggles ONESCREEN_LO/HI
+        onescreen_mode_ = (header_mirror_ != Mirror::HORIZONTAL &&
+                           header_mirror_ != Mirror::VERTICAL);
+        mirror_mode_ = header_mirror_;
     }
 
     Mirror mirror() override { return mirror_mode_; }
@@ -49,7 +55,9 @@ public:
         if (addr < 0x8000) return false;
         prg_bank_ = data & 0x07;
         chr_bank_ = (data >> 4) & 0x0F;
-        mirror_mode_ = (data & 0x08) ? Mirror::ONESCREEN_HI : Mirror::ONESCREEN_LO;
+        mirror_mode_ = (data & 0x08)
+            ? (onescreen_mode_ ? Mirror::ONESCREEN_HI : Mirror::VERTICAL)
+            : (onescreen_mode_ ? Mirror::ONESCREEN_LO : Mirror::HORIZONTAL);
         return true;
     }
 };
