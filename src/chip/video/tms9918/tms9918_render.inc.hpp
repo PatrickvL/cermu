@@ -59,9 +59,11 @@ void tms9918_t<Traits>::begin_scanline() {
 
     // Sega fine-scroll: start mid-tile so the first tile is partially
     // clipped on the left, producing sub-pixel horizontal scrolling.
+    // R0.D6: inhibit horizontal scroll for the top 2 character rows (lines 0-15).
     if constexpr (Traits.has_scroll()) {
         if (screen_mode_ >= ScreenMode::SEGA_MODE4) {
-            bg_.pixel_in_char = this->scroll_x_ & 7;
+            const bool h_inhibit = (regs_[reg::R0] & 0x40) && line_ < 16;
+            bg_.pixel_in_char = h_inhibit ? 0 : (this->scroll_x_ & 7);
         }
     }
 
@@ -371,12 +373,16 @@ void tms9918_t<Traits>::prefetch_tile_sega([[maybe_unused]] uint8_t col) {
         //   bits 13-15: unused
 
         // Apply horizontal scroll
-        const uint8_t scroll_x = this->scroll_x_;
+        // R0.D6: inhibit H-scroll for the top 2 character rows (lines 0-15)
+        const bool h_inhibit = (regs_[reg::R0] & 0x40) && line_ < 16;
+        const uint8_t scroll_x = h_inhibit ? 0 : this->scroll_x_;
         const int scrolled_col = (col - (scroll_x >> 3)) & 0x1F;
 
         // Apply vertical scroll per-column
+        // R0.D7: inhibit V-scroll for the rightmost 8 columns (24-31)
         // Nametable height: 28 rows (192/224 lines) or 32 rows (240 lines)
-        const uint8_t scroll_y = this->scroll_y_;
+        const bool v_inhibit = (regs_[reg::R0] & 0x80) && col >= 24;
+        const uint8_t scroll_y = v_inhibit ? 0 : this->scroll_y_;
         const int nt_rows = (active_lines_ == 240) ? 32 : 28;
         int scrolled_row = (static_cast<int>(line_) + scroll_y) % (nt_rows * 8);
         const int tile_row_s = scrolled_row >> 3;

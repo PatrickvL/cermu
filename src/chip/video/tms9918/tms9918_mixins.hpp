@@ -138,8 +138,8 @@ struct vdp_scroll_mixin_t {
     uint8_t scroll_y_ = 0;
 
     // Effective horizontal scroll for a given scanline.
-    // Sega VDP: per-line scroll table in VRAM (not implemented here yet).
-    // V9958: register-based horizontal scroll.
+    // Note: Sega VDP scroll inhibit (R0.D6, top-row lock) is applied
+    // inline in the rendering functions where the register is accessible.
     uint16_t effective_scroll_x([[maybe_unused]] int line) const {
         return scroll_x_;
     }
