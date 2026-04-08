@@ -95,7 +95,7 @@ public:
     bool register_write(uint16_t addr, uint8_t data) override {
         if (addr < 0x8000) return false;
 
-        switch (addr & 0xA003) {
+        switch (addr & 0xE003) {
             case 0x8000:
                 prg_bank_[0] = data & 0x3F;
                 mirror_mode_ = (data & 0x40) ? Mirror::HORIZONTAL : Mirror::VERTICAL;
