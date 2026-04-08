@@ -48,7 +48,12 @@ public:
         mirror_mode_ = Mirror::ONESCREEN_LO;
     }
 
-    Mirror mirror() override { return mirror_mode_; }
+    Mirror mirror() override {
+        // Submappers 1/2: fixed mirroring (no software control)
+        if (submapper_ == 1) return Mirror::HORIZONTAL;
+        if (submapper_ == 2) return Mirror::VERTICAL;
+        return mirror_mode_;
+    }
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
         mapper_helpers::set_prg_16k_lo(config, prg_rom_, prg_rom_size_, prg_bank_select_);
