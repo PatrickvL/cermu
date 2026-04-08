@@ -123,18 +123,24 @@ public:
         }
 
         // TxSROM: nametable mirroring from CHR bank D7
-        // R0 covers slots 0-1, R1 covers slots 2-3 (or inverted)
-        // R2-R5 cover slots 4-7 (or inverted)
+        // NT addresses route through CHR banking: $2000→$0000, $2400→$0400,
+        // $2800→$0800, $2C00→$0C00.  The CHR bank register covering each
+        // address provides bit 7 as CIRAM A10.
+        //
+        // Without inversion: R0 is 2KB ($0000-$07FF) → NT0+NT1, R1 is 2KB
+        //   ($0800-$0FFF) → NT2+NT3.
+        // With inversion: R2=$0000→NT0, R3=$0400→NT1, R4=$0800→NT2,
+        //   R5=$0C00→NT3 (each 1KB).
         if (!chr_inversion_) {
             config.nt_page[0] = (registers_[0] >> 7) & 0x01;
-            config.nt_page[1] = (registers_[1] >> 7) & 0x01;
-            config.nt_page[2] = (registers_[2] >> 7) & 0x01;
-            config.nt_page[3] = (registers_[3] >> 7) & 0x01;
+            config.nt_page[1] = (registers_[0] >> 7) & 0x01;  // still R0 (2KB)
+            config.nt_page[2] = (registers_[1] >> 7) & 0x01;
+            config.nt_page[3] = (registers_[1] >> 7) & 0x01;  // still R1 (2KB)
         } else {
             config.nt_page[0] = (registers_[2] >> 7) & 0x01;
             config.nt_page[1] = (registers_[3] >> 7) & 0x01;
-            config.nt_page[2] = (registers_[0] >> 7) & 0x01;
-            config.nt_page[3] = (registers_[1] >> 7) & 0x01;
+            config.nt_page[2] = (registers_[4] >> 7) & 0x01;
+            config.nt_page[3] = (registers_[5] >> 7) & 0x01;
         }
     }
 
