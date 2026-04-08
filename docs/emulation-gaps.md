@@ -124,6 +124,29 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - [x] **[DONE]** `set_prg_8k_banks` helper: modulo wrapping + `prg_ram_enabled=false` default
 - [x] **[DONE]** Mapper 097: reset uses `header_mirror_` instead of hardcoded VERTICAL
 - [x] **[DONE]** Removed 52 unused `prg_banks_`/`chr_banks_` members across mappers
+- [x] **[DONE]** Mapper 097: PRG layout — last bank fixed at $8000, switchable at $C000
+- [x] **[DONE]** Mapper 113 (NINA-06): PRG/CHR bit field decode and D6 as CHR A15
+- [x] **[DONE]** Mapper 232 (BF9096): reset outer_block_ to 3 for correct reset vector
+- [x] **[DONE]** Cartridge: custom_nt flag — prevent NT page overwrite for mappers 118/019
+- [x] **[DONE]** Mapper 028 (Action 53): correct all four PRG banking modes per NESdev
+- [x] **[DONE]** Mapper 048 (TC0690): mirroring control at $E000 D6, not $8000 D6
+- [x] **[DONE]** Mapper 184 (Sunsoft-1): IC2 offset (|4) for upper CHR pattern table
+- [x] **[DONE]** MMC5: $5130 register — upper CHR bank bits for >256KB CHR-ROM
+- [x] **[DONE]** MMC1: SOROM/SZROM PRG-RAM banking via CHR bank 0 bit 3
+- [x] **[DONE]** Namco 163: allocate extra CHR-RAM for writable bank modes (prevents ROM corruption)
+- [x] **[DONE]** Mapper 032 (Irem G-101): submapper 1 one-screen mirroring (Major League)
+- [x] **[DONE]** Mapper 030 (UNROM 512): submappers 1/2 fixed H/V mirroring
+- [x] **[DONE]** FME-7: $6000 ROM mode — gate chip-enable on bit 7
+- [x] **[DONE]** VRC6 sawtooth: 7 rate additions per 14-step cycle (was 6)
+- [x] **[DONE]** Mapper 067 (Sunsoft-3): IRQ is CPU-cycle clocked, not A12-based
+- [x] **[DONE]** Mapper 079 (NINA): comment fix — PRG select is D3 not D5
+- [x] **[DONE]** VRCIRQ: removed dead prescaler member
+- [x] **[DONE]** Mapper 033 (TC0190): register mask 0xE003 prevents $C000+ aliasing
+- [x] **[DONE]** VRC6: B003.D7 PRG-RAM enable gate
+- [x] **[DONE]** MMC3 family (004/118/119/189): compute bank counts from rom sizes, fix UB if 0
+- [x] **[DONE]** Mapper 228 (Action 52): CHR bank uses D3-D2, not D1-D0
+- [x] **[DONE]** Removed dead `ppu_bus_write()` virtual and unused mirror getters
+- [x] **[DONE]** Standardized all mapper constructor unused-param style
 - [ ] **[LARGE]** Mapper 024/026 (VRC6a/b): Konami expansion audio — 2 pulse + sawtooth channels
 - [ ] **[LARGE]** Mapper 085 (VRC7): FM synthesis expansion audio (YM2413 OPLL)
 - [ ] **[LARGE]** Mapper 019 (Namco 163): wavetable expansion audio
