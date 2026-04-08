@@ -214,6 +214,18 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
   static constexpr bool ENABLE_TRACING = false; /* Compile-time tracing flag - DISABLED FOR PERFORMANCE */
   mutable int trace_indent = 0; /* Current tracing indentation level */
 
+  // Optional memory-read callback for instruction tracing.
+  // When set, the tracer fetches actual operand bytes from memory
+  // instead of using placeholder zeros.
+  using trace_mem_read_fn_t = uint8_t(*)(uint16_t addr, void* ctx);
+  trace_mem_read_fn_t trace_mem_read_ = nullptr;
+  void*               trace_mem_ctx_  = nullptr;
+
+  void set_trace_memory_read(trace_mem_read_fn_t fn, void* ctx) {
+      trace_mem_read_ = fn;
+      trace_mem_ctx_  = ctx;
+  }
+
   // ========================================================================
   // DEBUG TRACING HELPERS
   // ========================================================================
@@ -228,13 +240,16 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
         uint16_t ab = regs_[AB]; // Get address bus from register
         uint8_t ir = regs_[IR];  // Get instruction register
 
-        // NOTE: This trace uses placeholder operand values (0x00, 0x00)
-        // For accurate operand display, tracing should be done at the system level
-        // where memory can be accessed. See tools/test_disasm_trace.cpp for example
-        // of proper implementation using c64_read_memory() helper.
-        // TODO: Move tracing to system level or add memory callback parameter
+        // Fetch operand bytes from memory if callback is available,
+        // otherwise fall back to placeholders.
+        uint8_t op1 = 0x00, op2 = 0x00;
+        if (trace_mem_read_) {
+            op1 = trace_mem_read_(static_cast<uint16_t>(pc + 1), trace_mem_ctx_);
+            op2 = trace_mem_read_(static_cast<uint16_t>(pc + 2), trace_mem_ctx_);
+        }
+
         char disasm_buffer[32];
-        fam65xx_disassemble_instruction(pc, this->opcode_entry, 0x00, 0x00,
+        fam65xx_disassemble_instruction(pc, this->opcode_entry, op1, op2,
                                        disasm_buffer, sizeof(disasm_buffer));
 
         log_info("[%03d] PC=$%04X AB=$%04X IR=$%02X (%s) ", instruction_count, pc,
