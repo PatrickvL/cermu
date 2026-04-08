@@ -28,8 +28,16 @@ public:
     Mirror mirror() override { return mirror_mode_; }
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
-        // Fixed first (bank 0) at $8000, switchable at $C000
-        mapper_helpers::set_prg_16k_hi(config, prg_rom_, prg_rom_size_, prg_bank_);
+        // Last 16KB fixed at $8000, switchable at $C000
+        uint32_t num_16k = static_cast<uint32_t>(prg_rom_size_ / 0x4000);
+        if (num_16k == 0) num_16k = 1;
+        uint32_t fixed = (num_16k - 1) * 0x4000;           // last bank
+        uint32_t sw = (prg_bank_ % num_16k) * 0x4000;      // switchable
+        for (int i = 0; i < 4; i++) {
+            config.prg_pages[i]     = prg_rom_ + fixed + i * 0x1000;
+            config.prg_pages[4 + i] = prg_rom_ + sw + i * 0x1000;
+        }
+        config.prg_ram_enabled = false;
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {
