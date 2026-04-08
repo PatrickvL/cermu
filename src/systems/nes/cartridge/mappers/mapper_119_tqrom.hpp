@@ -14,7 +14,6 @@
  */
 
 #include "systems/nes/cartridge/mappers/mapper_helpers.hpp"
-#include <cstring>
 
 namespace nes_system {
 
@@ -37,11 +36,11 @@ private:
 
     uint32_t prg_bank_[4] = {};
 
-    // CHR-RAM pointer (set via set_memory_pointers — we re-use chr_mem_
-    // for CHR-ROM and need a separate pointer for TQROM's on-board CHR-RAM)
-    // TQROM boards have 8KB CHR-RAM on-board. We'll use chr_mem_ as CHR-ROM
-    // and allocate CHR-RAM in a fixed 8KB buffer.
-    uint8_t chr_ram_buf_[8192] = {};
+    // TQROM boards have 8KB CHR-RAM alongside CHR-ROM.  The
+    // CHR-RAM lives at chr_mem_ + original_chr_rom_size_, appended
+    // by Cartridge via extra_chr_ram_size().
+    static constexpr uint32_t CHR_RAM_SIZE = 8192;
+    uint32_t original_chr_rom_size_ = 0;
 
     void update_prg_banks() {
         uint32_t last_bank = (prg_banks_ * 2) - 1;
@@ -60,14 +59,15 @@ private:
 
 public:
     Mapper119(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {
-        std::memset(chr_ram_buf_, 0, sizeof(chr_ram_buf_));
-    }
+        : prg_banks_(prgBanks), chr_banks_(chrBanks),
+          original_chr_rom_size_(chrBanks * 8192) {}
 
     Mirror mirror() override { return mirror_mode_; }
     bool irq_state() override { return irq_.active; }
     void irq_clear() override { irq_.active = false; }
     void notify_a12(bool a12_high, uint64_t ppu_cycle) override { irq_.notify_a12(a12_high, ppu_cycle); }
+
+    uint32_t extra_chr_ram_size() const override { return CHR_RAM_SIZE; }
 
     void reset() override {
         target_register_ = 0;
@@ -119,15 +119,16 @@ public:
             slot_regs[7] = (registers_[1] & 0xFE) | 1;
         }
 
-        uint32_t chr_rom_1k = (chr_mem_size_ > 0) ? static_cast<uint32_t>(chr_mem_size_ / 0x0400) : 1;
+        uint32_t chr_rom_1k = (original_chr_rom_size_ > 0) ? static_cast<uint32_t>(original_chr_rom_size_ / 0x0400) : 1;
 
         for (int i = 0; i < 8; i++) {
             bool use_ram = (slot_regs[i] & 0x40) != 0;
             if (use_ram) {
-                // CHR-RAM: D1-D0 select 1KB page within 8KB RAM
+                // CHR-RAM: D2-D0 select 1KB page within 8KB RAM
+                // CHR-RAM is appended after CHR-ROM in chr_mem_.
                 uint32_t ram_page = slot_regs[i] & 0x07;
-                uint32_t offset = (ram_page * 0x0400) % sizeof(chr_ram_buf_);
-                config.chr_pages[i] = const_cast<const uint8_t*>(chr_ram_buf_ + offset);
+                uint32_t offset = original_chr_rom_size_ + (ram_page * 0x0400) % CHR_RAM_SIZE;
+                config.chr_pages[i] = chr_mem_ + offset;
                 config.chr_writable[i] = true;
             } else {
                 // CHR-ROM: D5-D0 select 1KB page
