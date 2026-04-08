@@ -36,6 +36,7 @@ private:
     bool irq_active_ = false;
     uint16_t irq_counter_ = 0;
     bool irq_latch_toggle_ = false;  // Alternates high/low byte writes
+    uint64_t last_a12_cycle_ = 0;    // For A12 edge filtering (one clock per scanline)
 
 public:
     Mapper067(uint8_t prgBanks, uint8_t chrBanks)
@@ -49,14 +50,19 @@ public:
         irq_active_ = false;
         irq_counter_ = 0;
         irq_latch_toggle_ = false;
+        last_a12_cycle_ = 0;
     }
 
     Mirror mirror() override { return mirror_mode_; }
     bool irq_state() override { return irq_active_; }
     void irq_clear() override { irq_active_ = false; }
 
-    void notify_a12(bool a12_high, uint64_t /*ppu_cycle*/) override {
+    void notify_a12(bool a12_high, uint64_t ppu_cycle) override {
         if (!irq_enabled_ || !a12_high) return;
+        // Filter: require A12 was low for at least 16 PPU cycles before
+        // counting a rising edge (prevents multiple clocks per scanline).
+        if (ppu_cycle - last_a12_cycle_ < 16) return;
+        last_a12_cycle_ = ppu_cycle;
         if (irq_counter_ > 0) {
             irq_counter_--;
             if (irq_counter_ == 0) {
