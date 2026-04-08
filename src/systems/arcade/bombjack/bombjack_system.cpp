@@ -163,6 +163,32 @@ void BombJackSystem::reset() {
     sound_cycles_ = 0;
 }
 
+// ── Input ────────────────────────────────────────────────────────────────────
+
+void BombJackSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
+    namespace bc = bombjack_constants;
+    auto set_clear = [](uint8_t& reg, uint8_t mask, bool set) {
+        if (set) reg |= mask; else reg &= ~mask;
+    };
+
+    switch (key) {
+        // Player 1 — arrow keys + Z
+        case SDLK_RIGHT: set_clear(input_p1_, bc::INPUT_RIGHT,   pressed); break;
+        case SDLK_LEFT:  set_clear(input_p1_, bc::INPUT_LEFT,    pressed); break;
+        case SDLK_UP:    set_clear(input_p1_, bc::INPUT_UP,      pressed); break;
+        case SDLK_DOWN:  set_clear(input_p1_, bc::INPUT_DOWN,    pressed); break;
+        case SDLK_z:     set_clear(input_p1_, bc::INPUT_BUTTON1, pressed); break;
+
+        // System — coins and start
+        case SDLK_5:     set_clear(input_system_, bc::SYSTEM_COIN1,  pressed); break;
+        case SDLK_6:     set_clear(input_system_, bc::SYSTEM_COIN2,  pressed); break;
+        case SDLK_1:     set_clear(input_system_, bc::SYSTEM_START1, pressed); break;
+        case SDLK_2:     set_clear(input_system_, bc::SYSTEM_START2, pressed); break;
+
+        default: break;
+    }
+}
+
 void BombJackSystem::tick() {
 
     // Main CPU tick
@@ -216,11 +242,13 @@ void BombJackSystem::tick() {
     }
 
     // VBLANK NMI to main CPU (edge-triggered, once per frame, gated by nmi_mask_)
+    // Real hardware holds NMI low for the entire VBLANK period (~128 CPU cycles).
+    // The Z80's edge-triggered NMI flip-flop latches on the falling edge.
     uint32_t frame_cycle = total_cycles_ % bombjack_constants::MAIN_CYCLES_PER_FRAME;
     if (frame_cycle == 0 && total_cycles_ > 0 && nmi_mask_) {
         BUS_CLR_BIT(main_pins_, BUS_NMI_BIT);  // Assert NMI (falling edge)
-    } else if (frame_cycle == 1) {
-        BUS_SET_BIT(main_pins_, BUS_NMI_BIT);  // Deassert NMI
+    } else if (frame_cycle == 128) {
+        BUS_SET_BIT(main_pins_, BUS_NMI_BIT);  // Deassert NMI after VBLANK
     }
 
     total_cycles_++;
@@ -388,7 +416,7 @@ bus_state_t BombJackSystem::main_io_tick(bus_state_t pins) {
         // Writes: NMI mask, flip screen
         uint8_t data = BUS_GET_DATA(pins);
         switch (reg) {
-            case 0: nmi_mask_ = data & 0x01; break;                // NMI enable
+            case 0: nmi_mask_ = data & 0x01; break;
             case 4: /* flip screen — ignored for now */ break;      // Cocktail mode
             default: break;
         }
