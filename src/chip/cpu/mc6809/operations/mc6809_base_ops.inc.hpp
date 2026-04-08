@@ -2079,23 +2079,172 @@ bus_state_t op_tfr(bus_state_t pins) {
 }
 
 // ========================================================================
-// HD6309 STUBS (only compiled for HD6309 variant)
+// HD6309 BIT-MANIPULATION INSTRUCTIONS (only compiled for HD6309 variant)
+// ========================================================================
+// OIM/AIM/EIM: OR/AND/EOR immediate with memory (read-modify-write)
+// TIM: test immediate AND memory (read-only, flags only)
+// All set N, Z from result and clear V.
+
+// --- Direct addressing: fetch imm, fetch DP:offset, read, modify, write ---
+
+#define MC6809_DEFINE_BITOP_DIRECT(name, op_fn, writeback)                      \
+    bus_state_t op_##name##_direct(bus_state_t pins) {                          \
+        switch (step_++) {                                                      \
+        case 0: return bus_setup_read(pins, regs_[PC]);  /* fetch imm */       \
+        case 1:                                                                 \
+            data_hi_ = bus_read_data(pins);  /* imm in data_hi_ */             \
+            regs_[PC]++;                                                        \
+            return bus_setup_read(pins, regs_[PC]);  /* fetch DP offset */     \
+        case 2:                                                                 \
+            ea_ = (static_cast<uint16_t>(regs_[DP]) << 8) | bus_read_data(pins); \
+            regs_[PC]++;                                                        \
+            return bus_setup_read(pins, ea_);  /* read mem[EA] */              \
+        case 3: {                                                               \
+            uint8_t result = op_fn(bus_read_data(pins), data_hi_);             \
+            if constexpr (writeback) {                                          \
+                return bus_setup_write(pins, ea_, result);                      \
+            } else {                                                            \
+                transition_to_fetch();                                          \
+                return pins;                                                    \
+            }                                                                   \
+        }                                                                       \
+        case 4:                                                                 \
+            transition_to_fetch();                                              \
+            return pins;                                                        \
+        default: transition_to_fetch(); return pins;                            \
+        }                                                                       \
+    }
+
+// --- Extended addressing: fetch imm, fetch hi:lo EA, read, modify, write ---
+
+#define MC6809_DEFINE_BITOP_EXTENDED(name, op_fn, writeback)                    \
+    bus_state_t op_##name##_extended(bus_state_t pins) {                        \
+        switch (step_++) {                                                      \
+        case 0: return bus_setup_read(pins, regs_[PC]);  /* fetch imm */       \
+        case 1:                                                                 \
+            data_hi_ = bus_read_data(pins);                                    \
+            regs_[PC]++;                                                        \
+            return bus_setup_read(pins, regs_[PC]);  /* fetch EA high */       \
+        case 2:                                                                 \
+            ea_ = static_cast<uint16_t>(bus_read_data(pins)) << 8;             \
+            regs_[PC]++;                                                        \
+            return bus_setup_read(pins, regs_[PC]);  /* fetch EA low */        \
+        case 3:                                                                 \
+            ea_ |= bus_read_data(pins);                                        \
+            regs_[PC]++;                                                        \
+            return bus_setup_read(pins, ea_);  /* read mem[EA] */              \
+        case 4: {                                                               \
+            uint8_t result = op_fn(bus_read_data(pins), data_hi_);             \
+            if constexpr (writeback) {                                          \
+                return bus_setup_write(pins, ea_, result);                      \
+            } else {                                                            \
+                transition_to_fetch();                                          \
+                return pins;                                                    \
+            }                                                                   \
+        }                                                                       \
+        case 5:                                                                 \
+            transition_to_fetch();                                              \
+            return pins;                                                        \
+        default: transition_to_fetch(); return pins;                            \
+        }                                                                       \
+    }
+
+// --- Indexed addressing: fetch imm, resolve indexed EA, read, modify, write ---
+
+#define MC6809_DEFINE_BITOP_INDEXED(name, op_fn, writeback)                     \
+    bus_state_t op_##name##_indexed(bus_state_t pins) {                         \
+        switch (step_++) {                                                      \
+        case 0: return bus_setup_read(pins, regs_[PC]);  /* fetch imm */       \
+        case 1:                                                                 \
+            data_hi_ = bus_read_data(pins);                                    \
+            regs_[PC]++;                                                        \
+            step_ = 0;  /* reset for addr_indexed_ea */                        \
+            return addr_indexed_ea(pins);                                       \
+        default:                                                                \
+            if (step_ <= 2) return addr_indexed_ea(pins);                       \
+            if (step_ == 3) return bus_setup_read(pins, ea_);                   \
+            if (step_ == 4) {                                                   \
+                uint8_t result = op_fn(bus_read_data(pins), data_hi_);         \
+                if constexpr (writeback) {                                      \
+                    return bus_setup_write(pins, ea_, result);                  \
+                } else {                                                        \
+                    transition_to_fetch();                                      \
+                    return pins;                                                \
+                }                                                               \
+            }                                                                   \
+            transition_to_fetch(); return pins;                                 \
+        }                                                                       \
+    }
+
+MC6809_DEFINE_BITOP_DIRECT(oim, alu_or8, true)
+MC6809_DEFINE_BITOP_DIRECT(aim, alu_and8, true)
+MC6809_DEFINE_BITOP_DIRECT(eim, alu_eor8, true)
+MC6809_DEFINE_BITOP_DIRECT(tim, alu_and8, false)
+
+MC6809_DEFINE_BITOP_EXTENDED(oim, alu_or8, true)
+MC6809_DEFINE_BITOP_EXTENDED(aim, alu_and8, true)
+MC6809_DEFINE_BITOP_EXTENDED(eim, alu_eor8, true)
+MC6809_DEFINE_BITOP_EXTENDED(tim, alu_and8, false)
+
+MC6809_DEFINE_BITOP_INDEXED(oim, alu_or8, true)
+MC6809_DEFINE_BITOP_INDEXED(aim, alu_and8, true)
+MC6809_DEFINE_BITOP_INDEXED(eim, alu_eor8, true)
+MC6809_DEFINE_BITOP_INDEXED(tim, alu_and8, false)
+
+#undef MC6809_DEFINE_BITOP_DIRECT
+#undef MC6809_DEFINE_BITOP_EXTENDED
+#undef MC6809_DEFINE_BITOP_INDEXED
+
+// ========================================================================
+// HD6309 SEXW — Sign-extend W to D:W (Q = 32-bit)
+// ========================================================================
+// If W bit 15 is set, D = $FFFF; else D = $0000.  Sets N, Z; clears V.
+
+bus_state_t op_sexw(bus_state_t pins) {
+    uint16_t w = regs_[W];
+    regs_[D] = (w & 0x8000) ? 0xFFFF : 0x0000;
+    // N = bit 15 of result (high bit of D, which mirrors W sign)
+    // Z = true only if entire 32-bit Q is zero
+    set_flag(Flags::N, (w & 0x8000) != 0);
+    set_flag(Flags::Z, regs_[D] == 0 && w == 0);
+    set_flag(Flags::V, false);
+    transition_to_fetch();
+    return pins;
+}
+
+// ========================================================================
+// HD6309 LDQ immediate — Load 32-bit immediate into Q (D:W)
 // ========================================================================
 
-bus_state_t op_oim_direct(bus_state_t pins)  { transition_to_fetch(); return pins; }
-bus_state_t op_aim_direct(bus_state_t pins)  { transition_to_fetch(); return pins; }
-bus_state_t op_eim_direct(bus_state_t pins)  { transition_to_fetch(); return pins; }
-bus_state_t op_tim_direct(bus_state_t pins)  { transition_to_fetch(); return pins; }
-bus_state_t op_oim_indexed(bus_state_t pins) { transition_to_fetch(); return pins; }
-bus_state_t op_aim_indexed(bus_state_t pins) { transition_to_fetch(); return pins; }
-bus_state_t op_eim_indexed(bus_state_t pins) { transition_to_fetch(); return pins; }
-bus_state_t op_tim_indexed(bus_state_t pins) { transition_to_fetch(); return pins; }
-bus_state_t op_oim_extended(bus_state_t pins) { transition_to_fetch(); return pins; }
-bus_state_t op_aim_extended(bus_state_t pins) { transition_to_fetch(); return pins; }
-bus_state_t op_eim_extended(bus_state_t pins) { transition_to_fetch(); return pins; }
-bus_state_t op_tim_extended(bus_state_t pins) { transition_to_fetch(); return pins; }
-bus_state_t op_sexw(bus_state_t pins)        { transition_to_fetch(); return pins; }
-bus_state_t op_ldq_imm(bus_state_t pins)     { transition_to_fetch(); return pins; }
+bus_state_t op_ldq_imm(bus_state_t pins) {
+    switch (step_++) {
+    case 0: return bus_setup_read(pins, regs_[PC]);  // fetch D high (A)
+    case 1:
+        regs_[A] = bus_read_data(pins);
+        regs_[PC]++;
+        return bus_setup_read(pins, regs_[PC]);  // fetch D low (B)
+    case 2:
+        regs_[B] = bus_read_data(pins);
+        regs_[PC]++;
+        return bus_setup_read(pins, regs_[PC]);  // fetch W high (E)
+    case 3:
+        regs_[E] = bus_read_data(pins);
+        regs_[PC]++;
+        return bus_setup_read(pins, regs_[PC]);  // fetch W low (F)
+    case 4: {
+        regs_[F] = bus_read_data(pins);
+        regs_[PC]++;
+        // Flags: N = bit 31 (A bit 7), Z = (Q == 0), V = 0
+        uint32_t q = (static_cast<uint32_t>(regs_[D]) << 16) | regs_[W];
+        set_flag(Flags::N, (q & 0x80000000u) != 0);
+        set_flag(Flags::Z, q == 0);
+        set_flag(Flags::V, false);
+        transition_to_fetch();
+        return pins;
+    }
+    default: transition_to_fetch(); return pins;
+    }
+}
 
 // Cleanup RMW macros
 #undef MC6809_DEFINE_RMW_DIRECT
