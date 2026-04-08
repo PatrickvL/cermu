@@ -35,10 +35,11 @@ public:
         using namespace mapper_helpers;
         uint32_t n = prg_8k_count(prg_rom_size_);
 
-        // $6000: switchable 8KB bank
+        // $6000: switchable 8KB PRG-ROM bank (read-only — this is ROM, not RAM)
         config.prg_ram_enabled = true;
         config.prg_ram_base = const_cast<uint8_t*>(prg_rom_ + (static_cast<uint32_t>(prg_bank_ & 0x07) % n) * 0x2000);
         config.prg_ram_size = 0x2000;
+        config.prg_ram_write_protected = true;
 
         // $8000-$FFFF: fixed last 32KB
         uint32_t fixed = (n >= 4) ? n - 4 : 0u;
