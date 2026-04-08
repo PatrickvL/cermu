@@ -164,9 +164,6 @@ public:
                 prg_ram_write_protect_ = (data & 0x40) != 0;
             }
             return true;
-        } else if (addr <= 0xDFFF) {
-            irq_.write(addr, data);
-            return false;
         } else {
             irq_.write(addr, data);
             return false;
