@@ -147,6 +147,17 @@ public:
         env_holding_ = false;
         if constexpr (Traits.has_io_port_a()) io_port_a_ = 0xFF;
         if constexpr (Traits.has_io_port_b()) io_port_b_ = 0xFF;
+        if constexpr (Traits.has_extended_mode()) {
+            ext_mode_ = false;
+            memset(ext_bank_b_, 0, sizeof(ext_bank_b_));
+            // Default duty = 8 (50%) for standard-compatible tone output
+            ext_bank_b_[0x09] = 8; ext_bank_b_[0x0A] = 8; ext_bank_b_[0x0B] = 8;
+            for (int i = 0; i < 3; i++) {
+                ext_env_counter_[i] = 0; ext_env_step_[i] = 0;
+                ext_env_volume_[i] = 0;
+                ext_env_ascending_[i] = false; ext_env_holding_[i] = false;
+            }
+        }
         audio_buffer_.reset();
         audio_cycle_accum_ = 0.0;
         audio_cycles_per_sample_ = 0.0;
@@ -173,6 +184,13 @@ public:
     }
 
     void write_register(uint8_t data) {
+        if constexpr (Traits.has_extended_mode()) {
+            if (ext_mode_ && latch_addr_ != ay::reg::ENV_SHAPE) {
+                ext_bank_b_[latch_addr_] = data;
+                on_ext_write(latch_addr_, data);
+                return;
+            }
+        }
         regs_[latch_addr_] = data;
         on_register_write(latch_addr_, data);
     }
@@ -182,6 +200,13 @@ public:
     /// emu thread owns latch_addr_ for read_register() / latch_address().
     void write_register(uint8_t reg, uint8_t data) {
         uint8_t r = map_reg(reg);
+        if constexpr (Traits.has_extended_mode()) {
+            if (ext_mode_ && r != ay::reg::ENV_SHAPE) {
+                ext_bank_b_[r] = data;
+                on_ext_write(r, data);
+                return;
+            }
+        }
         regs_[r] = data;
         on_register_write(r, data);
     }
@@ -232,6 +257,20 @@ public:
         for (int ch = 0; ch < 3; ch++) {
             uint16_t period = ((regs_[ch * 2 + 1] & 0x0F) << 8) | regs_[ch * 2];
             if (period == 0) period = 1;
+
+            if constexpr (Traits.has_extended_mode()) {
+                if (ext_mode_) {
+                    // Extended: full-period counter with variable duty cycle.
+                    // Duty 0-15 maps to ~0%-93.75% HIGH time.  Default=8 (50%).
+                    uint16_t full = period << 1;
+                    if (++tone_counter_[ch] >= full) tone_counter_[ch] = 0;
+                    uint8_t duty = ext_bank_b_[0x09 + ch] & 0x0F;
+                    uint16_t thresh = (full * duty) >> 4;
+                    tone_output_[ch] = (tone_counter_[ch] < thresh) ? 1 : 0;
+                    continue;
+                }
+            }
+
             if (++tone_counter_[ch] >= period) {
                 tone_counter_[ch] = 0;
                 tone_output_[ch] ^= 1;
@@ -251,7 +290,24 @@ public:
         }
 
         // --- Envelope generator ---
-        if (!env_holding_) {
+        bool ext_env_active = false;
+        if constexpr (Traits.has_extended_mode()) {
+            if (ext_mode_) {
+                ext_env_active = true;
+                // Per-channel independent envelopes from Bank B
+                // Bank B layout: $00/$01 = Ch A env period, $02/$03 = Ch B, $04/$05 = Ch C
+                for (int ch = 0; ch < 3; ch++) {
+                    if (ext_env_holding_[ch]) continue;
+                    uint16_t ep = (ext_bank_b_[ch * 2 + 1] << 8) | ext_bank_b_[ch * 2];
+                    if (ep == 0) ep = 1;
+                    if (++ext_env_counter_[ch] >= ep) {
+                        ext_env_counter_[ch] = 0;
+                        advance_ext_envelope(ch);
+                    }
+                }
+            }
+        }
+        if (!ext_env_active && !env_holding_) {
             uint16_t ep = (regs_[ay::reg::ENV_COARSE] << 8) | regs_[ay::reg::ENV_FINE];
             if (ep == 0) ep = 1;
             if (++env_counter_ >= ep) {
@@ -279,7 +335,13 @@ public:
             if (tone_out && noise_out) {
                 uint8_t amp_reg = regs_[ay::reg::AMP_A + ch];
                 bool env_mode = amp_reg & 0x10;
-                uint8_t level = env_mode ? env_volume_ : (amp_reg & 0x0F);
+                uint8_t level;
+                if constexpr (Traits.has_extended_mode()) {
+                    level = (ext_mode_ && env_mode) ? ext_env_volume_[ch]
+                          : env_mode ? env_volume_ : (amp_reg & 0x0F);
+                } else {
+                    level = env_mode ? env_volume_ : (amp_reg & 0x0F);
+                }
                 mix += dac_table_[level & 0x0F];
             }
         }
@@ -338,6 +400,18 @@ private:
     uint8_t   io_port_a_ = 0xFF;
     uint8_t   io_port_b_ = 0xFF;
 
+    // AY8930 extended mode state (accessed only under if constexpr guards)
+    // Bank B layout: $00-$05 = per-channel envelope periods (fine/coarse),
+    //                $06-$08 = per-channel envelope shapes,
+    //                $09-$0B = per-channel duty cycle (4-bit)
+    bool     ext_mode_ = false;
+    uint8_t  ext_bank_b_[16] = {};
+    uint16_t ext_env_counter_[3] = {};
+    uint8_t  ext_env_step_[3] = {};
+    uint8_t  ext_env_volume_[3] = {};
+    bool     ext_env_ascending_[3] = {};
+    bool     ext_env_holding_[3] = {};
+
     // Audio output — decimated from AY clock to audio sample rate
     AudioRingBuffer audio_buffer_;
     AudioPort* audio_port_ = nullptr;  // Optional analog signal output
@@ -377,6 +451,14 @@ private:
     /// Side effects triggered by writing to a specific internal register.
     void on_register_write(uint8_t internal_reg, uint8_t data) {
         if (internal_reg == ay::reg::ENV_SHAPE) {
+            // AY8930: bit 4 controls extended mode activation
+            if constexpr (Traits.has_extended_mode()) {
+                if (data & 0x10) {
+                    ext_mode_ = true;
+                    return;  // Enter extended mode — no envelope reset
+                }
+                ext_mode_ = false;  // Bit 4 clear → exit extended mode
+            }
             // Writing envelope shape resets the envelope generator
             env_step_ = 0;
             env_counter_ = 0;
@@ -387,6 +469,65 @@ private:
             if constexpr (Traits.has_half_step_envelope()) {
                 env_volume_ >>= 1;
             }
+        }
+    }
+
+    /// AY8930: handle Bank B register write side effects.
+    void on_ext_write(uint8_t reg, uint8_t data) {
+        if constexpr (Traits.has_extended_mode()) {
+            // Per-channel envelope shape reset (Bank B $06/$07/$08)
+            if (reg >= 0x06 && reg <= 0x08) {
+                int ch = reg - 0x06;
+                ext_env_step_[ch] = 0;
+                ext_env_counter_[ch] = 0;
+                ext_env_holding_[ch] = false;
+                ext_env_ascending_[ch] = (data & 0x04) != 0;
+                ext_env_volume_[ch] = ext_env_ascending_[ch] ? 0 : Traits.envelope_max();
+                if constexpr (Traits.has_half_step_envelope()) {
+                    ext_env_volume_[ch] >>= 1;
+                }
+            }
+        }
+    }
+
+    /// AY8930: advance one per-channel envelope step.
+    void advance_ext_envelope(int ch) {
+        if constexpr (!Traits.has_extended_mode()) return;
+
+        ext_env_step_[ch]++;
+        constexpr uint8_t steps = Traits.envelope_steps;
+
+        if (ext_env_step_[ch] < steps) {
+            if constexpr (Traits.has_half_step_envelope()) {
+                uint8_t raw = ext_env_ascending_[ch] ? ext_env_step_[ch]
+                            : (uint8_t(steps - 1) - ext_env_step_[ch]);
+                ext_env_volume_[ch] = raw >> 1;
+            } else {
+                ext_env_volume_[ch] = ext_env_ascending_[ch]
+                    ? ext_env_step_[ch] : (15 - ext_env_step_[ch]);
+            }
+            return;
+        }
+
+        // End of cycle — handle shape from Bank B ($06/$07/$08)
+        uint8_t shape = ext_bank_b_[0x06 + ch] & 0x0F;
+        bool cont = shape & 0x08;
+        bool alt  = shape & 0x02;
+        bool hold = shape & 0x01;
+
+        if (!cont) {
+            ext_env_volume_[ch] = 0;
+            ext_env_holding_[ch] = true;
+        } else if (hold) {
+            ext_env_volume_[ch] = (ext_env_ascending_[ch] != (bool)alt) ? 15 : 0;
+            ext_env_holding_[ch] = true;
+        } else if (alt) {
+            ext_env_ascending_[ch] = !ext_env_ascending_[ch];
+            ext_env_step_[ch] = 0;
+            ext_env_volume_[ch] = ext_env_ascending_[ch] ? 0 : 15;
+        } else {
+            ext_env_step_[ch] = 0;
+            ext_env_volume_[ch] = ext_env_ascending_[ch] ? 0 : 15;
         }
     }
 
