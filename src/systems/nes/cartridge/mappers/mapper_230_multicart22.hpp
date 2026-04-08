@@ -23,7 +23,7 @@ namespace nes_system {
 class Mapper230 : public Mapper {
 private:
     uint8_t prg_bank_ = 0;
-    bool mode_ = false;           // false = Contra, true = multicart
+    bool mode_ = true;            // toggled on reset; starts true so first reset → false (Contra)
     Mirror mirror_mode_ = Mirror::VERTICAL;
 
     // Contra uses first 8 × 16KB (128KB), multicart uses the rest.
