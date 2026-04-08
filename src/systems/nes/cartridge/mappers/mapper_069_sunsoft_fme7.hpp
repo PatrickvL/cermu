@@ -5,12 +5,14 @@
  * Versatile mapper with command/parameter register interface.
  * 4 × 8KB switchable PRG (one can also map RAM), 8 × 1KB CHR.
  * 16-bit CPU-cycle IRQ counter.
- * FME-7 is the base; 5A/5B add Yamaha expansion audio (not emulated here).
- * TODO: Implement YM2149 (Sunsoft 5B) PSG audio for Gimmick! et al.
+ * FME-7 is the base mapper; 5A adds audio register access;
+ * 5B adds a YM2149-compatible PSG for 3-channel expansion audio.
  * Games: Batman: Return of the Joker, Gimmick!, Hebereke.
  *
  * $8000: Command register (selects target for $A000 write)
  * $A000: Parameter register (data for the selected command)
+ * $C000: Audio register select (YM2149 address latch)
+ * $E000: Audio register write (YM2149 data)
  *
  * Commands 0-7: CHR 1KB bank select
  * Command 8: PRG bank at $6000 (ROM or RAM select)
@@ -22,6 +24,7 @@
  */
 
 #include "systems/nes/cartridge/nes_mapper.hpp"
+#include "chip/sound/ay_psg/ym2149.hpp"
 
 namespace nes_system {
 
@@ -41,6 +44,10 @@ private:
     bool irq_active_ = false;
     uint16_t irq_counter_ = 0;
 
+    // Sunsoft 5B expansion audio — YM2149-compatible PSG
+    YM2149 psg_;
+    uint16_t psg_divider_ = 0;  // CPU→PSG clock divider
+
 public:
     Mapper069(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
@@ -59,6 +66,8 @@ public:
         irq_counter_enabled_ = false;
         irq_active_ = false;
         irq_counter_ = 0;
+        psg_.reset();
+        psg_divider_ = 0;
     }
 
     Mirror mirror() override { return mirror_mode_; }
@@ -74,6 +83,20 @@ public:
                 irq_active_ = true;
             }
         }
+    }
+
+    // Sunsoft 5B expansion audio — YM2149 clocked at CPU/16
+    void audio_tick() override {
+        // The NES CPU clock is ~1.789 MHz.  The YM2149 on the Sunsoft 5B
+        // runs at CPU_CLK/16 ≈ 111.86 kHz.  Tick the PSG every 16 CPU cycles.
+        if (++psg_divider_ >= 16) {
+            psg_divider_ = 0;
+            psg_.tick();
+        }
+    }
+
+    float audio_output() const override {
+        return psg_.get_sample();
     }
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
@@ -168,6 +191,17 @@ public:
                     return false;
             }
         }
+
+        // Sunsoft 5B audio registers
+        if (addr >= 0xC000 && addr <= 0xDFFF) {
+            psg_.latch_address(data);
+            return false;
+        }
+        if (addr >= 0xE000 && addr <= 0xFFFF) {
+            psg_.write_register(data);
+            return false;
+        }
+
         return false;
     }
 };
