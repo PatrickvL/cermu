@@ -151,9 +151,9 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 - [x] **[DONE]** Removed dead `ppu_bus_write()` virtual and unused mirror getters
 - [x] **[DONE]** Standardized all mapper constructor unused-param style
 - [x] **[DONE]** Mapper 024/026 (VRC6a/b): Konami expansion audio — 2 pulse + sawtooth channels
-- [ ] **[LARGE]** Mapper 085 (VRC7): FM synthesis expansion audio (YM2413 OPLL)
+- [x] **[DONE]** Mapper 085 (VRC7): FM synthesis expansion audio (YM2413 OPLL) — 6-channel 2-op FM with Konami custom patches
 - [ ] **[LARGE]** Mapper 019 (Namco 163): wavetable expansion audio
-- [ ] **[LARGE]** Mapper 069 (Sunsoft 5B): Yamaha expansion audio (YM2149 PSG)
+- [x] **[DONE]** Mapper 069 (Sunsoft 5B): Yamaha expansion audio (YM2149 PSG) — 3 square + noise + envelope
 - [ ] **[MEDIUM]** Mapper 016 (Bandai FCG): 24C01/24C02 EEPROM save support
 - [ ] **[LARGE]** Mapper 020 (FDS): Famicom Disk System — disk emulation, wavetable sound, entirely new hardware
 
@@ -205,9 +205,9 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 
 ### Sound
 
-#### Yamaha FM (YM2612 / OPM / OPL) — 5 Remaining Gaps
-- [ ] **[LARGE]** FM modulation: operators advance independently, modulator→carrier phase feed not implemented (`ym_fm.hpp:17`)
-- [ ] **[LARGE]** Envelope generator: linear approximation, should be per-rate LUT with non-linear attack (`ym_fm.hpp:22`)
+#### Yamaha FM (YM2612 / OPM / OPL) — 3 Remaining Gaps
+- [x] **[DONE]** FM modulation: inter-operator phase feed implemented — operators evaluated in algorithm order
+- [x] **[DONE]** Envelope generator: hardware-accurate per-rate LUT with exponential attack, linear-in-dB decay
 - [ ] **[LARGE]** ADPCM-A & ADPCM-B: flags exist, no decode/playback logic (`ym_fm.hpp:49`)
 - [x] **[DONE]** LFO AM/PM: applied to operator output
 - [x] **[DONE]** Ch3 special mode: per-operator frequencies applied
@@ -217,7 +217,7 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 - [x] **[DONE]** Sine table: hardware-accurate log-sin + exp ROM pipeline replaces `std::sin()`
 - [x] **[DONE]** YM2612 ladder-effect DAC distortion modeled via `ladder_effect` trait flag
 - [ ] **[MEDIUM]** SSG composition: AY PSG declared but never instantiated or clocked (`ym_fm.hpp:26`)
-- [ ] **[MEDIUM]** OPL-family: rhythm mode percussion, OPLL ROM patches missing (`ym_fm.hpp:53`)
+- [x] **[DONE]** OPL-family: OPLL ROM patches (15 YM2413 + 15 VRC7), register decode, instrument loading
 - [x] **[DONE]** OPL-family: waveform select lookup implemented
 - [ ] **[MEDIUM]** OPM-specific: noise channel, key-fraction register, OPM addressing missing (`ym_fm.hpp:57`)
 
@@ -347,8 +347,8 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 11. BBC Teletext font (SAA5050)
 
 ### Large Projects (weeks)
-12. Yamaha FM synthesizer overhaul
-13. NES expansion audio (VRC7/N163/Sunsoft 5B — VRC6 **[DONE]**)
+12. ~~Yamaha FM synthesizer overhaul~~ **[DONE]** (inter-op modulation, EG LUT, OPLL patches)
+13. ~~NES expansion audio (VRC7/Sunsoft 5B)~~ **[DONE]** — N163 wavetable remains
 14. FDS emulation
 15. Apple II full implementation
 16. HuC6280 / PC Engine support
