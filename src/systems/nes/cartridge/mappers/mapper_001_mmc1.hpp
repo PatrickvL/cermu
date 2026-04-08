@@ -65,10 +65,17 @@ public:
     void get_prg_bank_config(MapperBankConfig& config) const override {
         uint8_t prg_mode = (reg_control_ >> 2) & 0x03;
 
+        // SUROM/SXROM: 512KB PRG boards use CHR bank 0 bit 4 as PRG A18,
+        // selecting between two 256KB halves.
+        uint32_t prg_base = 0;
+        if (prg_rom_size_ > 0x40000) {
+            prg_base = (reg_chr_bank0_ & 0x10) ? 0x40000 : 0;
+        }
+
         if (prg_mode <= 1) {
             // 32KB mode: ignore low bit of bank number
             uint32_t bank = (reg_prg_bank_ & 0x0E) >> 1;
-            uint32_t base = bank * 0x8000;
+            uint32_t base = prg_base + bank * 0x8000;
             for (int i = 0; i < 8; i++) {
                 uint32_t offset = base + i * 0x1000;
                 config.prg_pages[i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
@@ -76,21 +83,23 @@ public:
         } else if (prg_mode == 2) {
             // Fix first bank at $8000, switch second at $C000
             for (int i = 0; i < 4; i++) {
-                config.prg_pages[i] = prg_rom_ + (i * 0x1000);
+                uint32_t offset = prg_base + i * 0x1000;
+                config.prg_pages[i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
             }
-            uint32_t bank_base = (reg_prg_bank_ & 0x0F) * 0x4000;
+            uint32_t bank_base = prg_base + (reg_prg_bank_ & 0x0F) * 0x4000;
             for (int i = 0; i < 4; i++) {
                 uint32_t offset = bank_base + i * 0x1000;
                 config.prg_pages[4 + i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
             }
         } else {
             // Fix last bank at $C000, switch first at $8000
-            uint32_t bank_base = (reg_prg_bank_ & 0x0F) * 0x4000;
+            uint32_t bank_base = prg_base + (reg_prg_bank_ & 0x0F) * 0x4000;
             for (int i = 0; i < 4; i++) {
                 uint32_t offset = bank_base + i * 0x1000;
                 config.prg_pages[i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
             }
-            uint32_t last_base = (prg_banks_ - 1) * 0x4000;
+            // Fixed last 16KB within the 256KB half
+            uint32_t last_base = prg_base + 0x3C000; // last 16KB of 256KB half
             for (int i = 0; i < 4; i++) {
                 uint32_t offset = last_base + i * 0x1000;
                 config.prg_pages[4 + i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
