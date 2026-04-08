@@ -1,6 +1,6 @@
 # Emulation Gaps & Incomplete Features
 
-Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips under `src/chip/`.
+Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips under `src/chip/`.
 
 ---
 
@@ -51,6 +51,7 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - [x] **Tatung Einstein file loading** — COM/binary loading into RAM; ROM banking implemented.
 - [x] **Namco Video rotation** — GPU-side `DisplayRotation` enum + CRT shader UV rotation; Namco outputs native 288×224.
 - [x] **NES MMC5 vertical split** — PPU bus intercept hook; ExRAM nametable, per-tile attributes, split CHR bank.
+- [x] **Atari 2600 mappers** — 11 new bank-switching schemes: F8SC/F6SC/F4SC (Superchip), E7 (M-Network), EF/EFSC (64KB homebrew), F0 (Megaboy), UA (UA Ltd), CV (Commavid), 3E (Tigervision+RAM), plus SuperchipRAM composable helper.
 
 ---
 
@@ -162,6 +163,43 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 
 ---
 
+## Atari 2600
+
+### Core — Complete
+- TIA video/audio: fully implemented
+- PIA 6532 RIOT (RAM + I/O + timer): fully implemented
+- MOS 6507 CPU: instantiated via `fam65xx_t<Mos6507Traits>`
+- Console switches: implemented
+- Joystick ports: DB-9 active-low
+
+### Mappers — 21 Implemented
+- [x] **[DONE]** 2K — 2KB fixed (no bank switching)
+- [x] **[DONE]** 4K — 4KB fixed (no bank switching)
+- [x] **[DONE]** F8 — 8KB, 2 banks (hotspot $1FF8/$1FF9)
+- [x] **[DONE]** F8SC — F8 + 128B Superchip RAM
+- [x] **[DONE]** F6 — 16KB, 4 banks (hotspot $1FF6–$1FF9)
+- [x] **[DONE]** F6SC — F6 + 128B Superchip RAM
+- [x] **[DONE]** F4 — 32KB, 8 banks (hotspot $1FF4–$1FFB)
+- [x] **[DONE]** F4SC — F4 + 128B Superchip RAM
+- [x] **[DONE]** E0 — Parker Bros 8KB, 3 switchable + 1 fixed 1KB segments
+- [x] **[DONE]** E7 — M-Network 16KB ROM + 2KB RAM, segment/bank select
+- [x] **[DONE]** EF — 64KB homebrew, 16 banks (hotspot $1FE0–$1FEF)
+- [x] **[DONE]** EFSC — EF + 128B Superchip RAM
+- [x] **[DONE]** F0 — Megaboy 64KB, sequential auto-increment at $1FF0
+- [x] **[DONE]** 3F — Tigervision (8KB–512KB, bus-snoop STA $xx3F)
+- [x] **[DONE]** 3E — Tigervision + RAM banking (bus-snoop $xx3F/$xx3E)
+- [x] **[DONE]** FE — Activision 8KB (bus-snoop JSR $xxFE, D5 selects bank)
+- [x] **[DONE]** FA — CBS RAM Plus 12KB (3 × 4KB + 256B RAM)
+- [x] **[DONE]** UA — UA Limited 8KB (bus-snoop $0220/$0240)
+- [x] **[DONE]** CV — Commavid (2KB ROM + 1KB RAM)
+- [x] **[DONE]** SuperchipRAM helper — composable 128B split-port RAM struct
+- [x] **[DONE]** Auto-detection factory with signature analysis (E0/FE/UA/SC/3F/3E/E7/EF/F0/CV)
+- [ ] **[LARGE]** DPC — Pitfall II data fetcher coprocessor (8 channels, music, display-data)
+- [ ] **[MEDIUM]** AR — Starpath Supercharger (6KB RAM, multiload from tape)
+- [ ] **[MEDIUM]** DPC+ — Enhanced DPC with fractional data fetchers + ARM coprocessor
+
+---
+
 ## Shared Chips
 
 ### Sound
@@ -258,7 +296,7 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 | C128 | Z80/CP/M testing (QA) |
 | PET | — |
 | NES | Expansion audio, FDS |
-| Atari 2600 | — |
+| Atari 2600 | DPC (Pitfall II), Starpath Supercharger |
 | Amstrad CPC | — |
 | ZX Spectrum | — |
 
