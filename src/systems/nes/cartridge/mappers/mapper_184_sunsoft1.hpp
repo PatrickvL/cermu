@@ -61,8 +61,8 @@ public:
 
     bool register_write(uint16_t addr, uint8_t data) override {
         if (addr >= 0x6000 && addr < 0x8000) {
-            chr_lo_ = data & 0x07;          // D2-D0 select CHR bank for $0000
-            chr_hi_ = ((data >> 4) & 0x07); // D6-D4 select CHR bank for $1000
+            chr_lo_ = data & 0x07;              // D2-D0 select CHR bank for $0000 (IC1)
+            chr_hi_ = ((data >> 4) & 0x07) | 0x04; // D6-D4 select CHR bank for $1000 (IC2, A14 tied high)
             return true;
         }
         return false;
