@@ -16,6 +16,8 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 
 ## Recently Fixed
 
+- [x] **MSX: primary slot banking** — 256 precalculated ModeSnapshots (C64 PLA pattern), cart ROM loading, PPI Port A wiring.
+- [x] **NES: VRC6 expansion audio** — Already implemented; stale gap entry removed.
 - [x] **C128: stale TODO comment** (line 872) — I/O dispatch was already implemented. Comment updated.
 - [x] **C128: SID audio output** — `get_audio_samples()` now calls `board_.sid.generate_samples()`, sample rate forwarded.
 - [x] **SMS: ROM bank switching** — `select_bank_at()` wired for Sega mapper.
@@ -148,13 +150,12 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 - [x] **[DONE]** Mapper 228 (Action 52): CHR bank uses D3-D2, not D1-D0
 - [x] **[DONE]** Removed dead `ppu_bus_write()` virtual and unused mirror getters
 - [x] **[DONE]** Standardized all mapper constructor unused-param style
-- [ ] **[LARGE]** Mapper 024/026 (VRC6a/b): Konami expansion audio — 2 pulse + sawtooth channels
+- [x] **[DONE]** Mapper 024/026 (VRC6a/b): Konami expansion audio — 2 pulse + sawtooth channels
 - [ ] **[LARGE]** Mapper 085 (VRC7): FM synthesis expansion audio (YM2413 OPLL)
 - [ ] **[LARGE]** Mapper 019 (Namco 163): wavetable expansion audio
 - [ ] **[LARGE]** Mapper 069 (Sunsoft 5B): Yamaha expansion audio (YM2149 PSG)
 - [ ] **[MEDIUM]** Mapper 016 (Bandai FCG): 24C01/24C02 EEPROM save support
 - [ ] **[LARGE]** Mapper 020 (FDS): Famicom Disk System — disk emulation, wavetable sound, entirely new hardware
-- [ ] **[LARGE]** Mapper 069 (Sunsoft 5B): Yamaha expansion audio (on top of existing FME-7)
 
 ### Missing Mapper Families (low priority — rare/pirate)
 - Mappers 42–63: misc FDS-conversion hacks, multicarts
@@ -295,7 +296,7 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 | C16/Plus4 | — |
 | C128 | Z80/CP/M testing (QA) |
 | PET | — |
-| NES | Expansion audio, FDS |
+| NES | VRC7/N163/5B expansion audio, FDS |
 | Atari 2600 | DPC (Pitfall II), Starpath Supercharger |
 | Amstrad CPC | — |
 | ZX Spectrum | — |
@@ -308,7 +309,7 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 | BBC Micro | SSD/DSD disc, UEF tape, sideways ROM loading (SAA5050 done) |
 | Sega SG-1000 | — |
 | Sega SMS | Per-line scroll table |
-| MSX | Slot/page banking (critical), cartridge loading |
+| MSX | MSX2 memory mapper ($FC-$FF), sub-slot expansion |
 | ColecoVision | — |
 | Memotech MTX | — |
 | SpectaVideo | — |
@@ -340,14 +341,14 @@ Audit date: 2026-04-08. Covers all systems under `src/systems/` and shared chips
 ### Medium Effort, High Value (days)
 6. ~~TAP/CRT loading for Commodore systems~~ **[DONE]** (C64 cassette + CRT type 0; C16 cassette)
 7. VIC-20 cassette wiring, C16/C128 CRT loading
-8. MSX slot banking
+8. ~~MSX slot banking~~ **[DONE]** (256 precalculated snapshots, cartridge loading)
 9. Bomb Jack sprite/background layers
 10. TIA paddle support
 11. BBC Teletext font (SAA5050)
 
 ### Large Projects (weeks)
 12. Yamaha FM synthesizer overhaul
-13. NES expansion audio (VRC6 first — simplest: 2 pulse + sawtooth)
+13. NES expansion audio (VRC7/N163/Sunsoft 5B — VRC6 **[DONE]**)
 14. FDS emulation
 15. Apple II full implementation
 16. HuC6280 / PC Engine support
