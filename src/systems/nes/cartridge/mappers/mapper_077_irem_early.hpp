@@ -32,11 +32,8 @@ private:
     uint32_t chr_rom_size_ = 0;
 
 public:
-    Mapper077(uint8_t prgBanks, uint8_t chrBanks) {
-        (void)prgBanks;
-        // chrBanks is the iNES chr_rom_chunks field (number of 8KB CHR-ROM banks)
-        chr_rom_size_ = chrBanks * 8192;
-    }
+    Mapper077(uint8_t /*prgBanks*/, uint8_t chrBanks)
+        : chr_rom_size_(chrBanks * 8192u) {}
 
     void reset() override {
         prg_bank_select_ = 0;

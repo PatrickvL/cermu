@@ -28,7 +28,7 @@ private:
     bool onescreen_mode_ = true; // submapper 1 default; submapper 3 uses H/V
 
 public:
-    Mapper078(uint8_t prgBanks, uint8_t chrBanks) { (void)prgBanks; (void)chrBanks; }
+    Mapper078(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         prg_bank_ = 0;
