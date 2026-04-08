@@ -96,13 +96,19 @@ public:
         config.prg_pages[7] = prg_rom_ + last + 0x1000;
 
         // $6000-$7FFF: RAM or ROM depending on command 8
-        if (prg_ram_at_6000_ && prg_ram_ && prg_ram_size_ > 0) {
+        if (prg_ram_at_6000_) {
+            // PRG-RAM mode (bit 6 set): map writable RAM if enabled
             config.prg_ram_base = prg_ram_;
             config.prg_ram_size = static_cast<uint32_t>(prg_ram_size_);
-            config.prg_ram_enabled = prg_ram_enabled_;
+            config.prg_ram_enabled = prg_ram_enabled_ && (prg_ram_ != nullptr);
             config.prg_ram_write_protected = !prg_ram_enabled_;
         } else {
-            config.prg_ram_enabled = false;
+            // PRG-ROM mode (bit 6 clear): map ROM bank, read-only
+            uint32_t b = prg_bank_[0] % total_8k;
+            config.prg_ram_base = const_cast<uint8_t*>(prg_rom_ + b * 0x2000);
+            config.prg_ram_size = 0x2000;
+            config.prg_ram_enabled = true;
+            config.prg_ram_write_protected = true;
         }
     }
 
