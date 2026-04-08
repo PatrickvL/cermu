@@ -95,9 +95,40 @@ Audit date: 2026-04-07. Covers all systems under `src/systems/` and shared chips
 - [x] **[DONE]** Mapper 068 (Sunsoft): CHR-ROM nametable replacement wired via `nt_ptr`
 - [x] **[DONE]** Mapper 069 (FME-7): IRQ converted to CPU-cycle counter with `notify_cpu_cycle()`
 - [x] **[DONE]** Mapper 005 (MMC5): expansion audio (pulse + PCM DAC) implemented; vertical split rendering via PPU bus intercept
+- [x] **[DONE]** Mapper 005 (MMC5): ExRAM mode 1 extended attributes + CHR bank override for BG tiles
+- [x] **[DONE]** Mapper 005 (MMC5): scanline detection via consecutive NT read counting (replaces A12 timing)
+- [x] **[DONE]** VRC2/4 IRQ: cycle-mode counter clocks directly per M2 (was using scanline prescaler)
+- [x] **[DONE]** Mapper 118 (TxSROM): NT mirroring register mapping corrected (R0/R0/R1/R1 for 2KB regs)
+- [x] **[DONE]** Mapper 064 (RAMBO-1): cycle-mode IRQ via `notify_cpu_cycle()` override
+- [x] **[DONE]** Mapper 210 (Namco 175/340): R0/R1 treated as 2KB CHR banks
+- [x] **[DONE]** Mapper 018 (SS88006): IRQ size field D1-D2 corrected; case 3 = 4-bit (0x000F)
+- [x] **[DONE]** Mapper 001 (MMC1): SUROM 512KB support — CHR bank 0 bit 4 used as PRG A18
+- [x] **[DONE]** Mapper 001 (MMC1): consecutive-write filter via CPU cycle tracking
+- [x] **[DONE]** Mapper 068 (Sunsoft-4): NT register writes return true for bank map update
+- [x] **[DONE]** Mapper 096 (Oeka Kids): ONESCREEN_LO mirror; latch moved to `ppu_bus_read`
+- [x] **[DONE]** Mapper 245 (Waixing): PRG extra bit shift corrected; register masks fixed
+- [x] **[DONE]** Mapper 004 (MMC3): refactored to use shared `MMC3IRQ` composable
+- [x] **[DONE]** Mapper 120 (FDS hack): ROM-mapped PRG-RAM marked write-protected
+- [x] **[DONE]** Mapper 034 (BNROM/NINA-001): NINA-001 path returns false to prevent fallthrough
+- [x] **[DONE]** Bus conflict emulation added to 9 discrete-logic mappers (002/003/007/011/034/066/070/093/094)
+- [x] **[DONE]** Mapper 230 (22-in-1): power-on mode corrected — starts in Contra
+- [x] **[DONE]** Mapper 119 (TQROM): CHR-RAM via `extra_chr_ram_size()` instead of embedded buffer
+- [x] **[DONE]** VRC2/4: PRG-RAM at $6000 with WRAM enable bit support
+- [x] **[DONE]** MMC2/MMC4 (009/010): unified into shared `MapperMMC24` template
+- [x] **[DONE]** CPUCycleIRQ: fixed off-by-one — decrement before underflow check
+- [x] **[DONE]** NES 2.0 header: 12-bit mapper ID, submapper, extended PRG/CHR sizes
+- [x] **[DONE]** Mapper 069 (FME-7): ROM banking at $6000 when RAM disabled
+- [x] **[DONE]** Mapper 003 (CNROM): uses `chr_is_ram_` member instead of hardcoded false
+- [x] **[DONE]** Mapper 071 (Camerica): BF9093 submapper ignores $8000-$9FFF mirroring writes
+- [x] **[DONE]** Mapper 067 (Sunsoft-3): A12 filter delay on IRQ counter
+- [x] **[DONE]** `set_prg_8k_banks` helper: modulo wrapping + `prg_ram_enabled=false` default
+- [x] **[DONE]** Mapper 097: reset uses `header_mirror_` instead of hardcoded VERTICAL
+- [x] **[DONE]** Removed 52 unused `prg_banks_`/`chr_banks_` members across mappers
 - [ ] **[LARGE]** Mapper 024/026 (VRC6a/b): Konami expansion audio — 2 pulse + sawtooth channels
-- [ ] **[LARGE]** Mapper 085 (VRC7): FM synthesis expansion audio
-- [ ] **[LARGE]** Mapper 019 (Namco 163): wavetable expansion audio, complex banking
+- [ ] **[LARGE]** Mapper 085 (VRC7): FM synthesis expansion audio (YM2413 OPLL)
+- [ ] **[LARGE]** Mapper 019 (Namco 163): wavetable expansion audio
+- [ ] **[LARGE]** Mapper 069 (Sunsoft 5B): Yamaha expansion audio (YM2149 PSG)
+- [ ] **[MEDIUM]** Mapper 016 (Bandai FCG): 24C01/24C02 EEPROM save support
 - [ ] **[LARGE]** Mapper 020 (FDS): Famicom Disk System — disk emulation, wavetable sound, entirely new hardware
 - [ ] **[LARGE]** Mapper 069 (Sunsoft 5B): Yamaha expansion audio (on top of existing FME-7)
 
