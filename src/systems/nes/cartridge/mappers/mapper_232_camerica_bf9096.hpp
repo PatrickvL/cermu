@@ -18,15 +18,15 @@ namespace nes_system {
 
 class Mapper232 : public Mapper {
 private:
-    uint8_t outer_block_ = 0;    // 2-bit block select (0-3)
+    uint8_t outer_block_ = 3;    // 2-bit block select (0-3), starts at last block
     uint8_t inner_bank_ = 3;     // 2-bit bank within block (0-3)
 
 public:
     Mapper232(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
-        outer_block_ = 0;
-        inner_bank_ = 3;  // Default to last page of first block
+        outer_block_ = 3;  // Reset vector in last block
+        inner_bank_ = 3;   // Default to last page of block
     }
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
