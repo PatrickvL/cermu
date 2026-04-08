@@ -37,7 +37,11 @@ public:
         mirror_mode_ = Mirror::VERTICAL;
     }
 
-    Mirror mirror() override { return mirror_mode_; }
+    Mirror mirror() override {
+        // Submapper 1 (Major League): fixed one-screen mirroring
+        if (submapper_ == 1) return Mirror::ONESCREEN_LO;
+        return mirror_mode_;
+    }
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
         uint32_t num_8k = static_cast<uint32_t>(prg_rom_size_ / 0x2000);
