@@ -1354,19 +1354,33 @@ void SessionGUI::render_screen() {
     // Calculate display dimensions (needed by all paths)
     // For rotated displays (CW90/CW270), swap guest dimensions so that
     // aspect ratio calculation reflects the on-screen orientation.
-    bool is_pal = true;
+    bool is_portrait = (display_rotation_ == 1 || display_rotation_ == 3);
+    const auto& hw_traits = system_->get_hardware_traits();
+    bool is_pal = (hw_traits.timing.standard == VideoStandard::PAL);
     bool use_pixel_aspect = true;
     float guest_w = static_cast<float>(fb_width_);
     float guest_h = static_cast<float>(fb_height_);
-    if (display_rotation_ == 1 || display_rotation_ == 3)
+    if (is_portrait)
         std::swap(guest_w, guest_h);
     float display_w = 0, display_h = 0, pos_x = 0, pos_y = 0;
     if (display_tex || use_vector) {
+        // Portrait rotation: temporarily force ORIGINAL aspect ratio so the
+        // swapped guest dimensions produce a portrait output.  Fixed ratios
+        // like 4:3 are landscape assumptions that don't apply to rotated
+        // arcade monitors.
+        int saved_ar_mode = -1;
+        if (is_portrait && aspect_ratio_mode_ != ASPECT_RATIO_ORIGINAL
+                        && aspect_ratio_mode_ != ASPECT_RATIO_PIXEL_PERFECT) {
+            saved_ar_mode = static_cast<int>(aspect_ratio_mode_);
+            aspect_ratio_mode_ = ASPECT_RATIO_ORIGINAL;
+        }
         calculate_display_dimensions(
             viewport->Size.x, viewport->Size.y,
             guest_w, guest_h,
             is_pal, use_pixel_aspect,
             &display_w, &display_h, &pos_x, &pos_y);
+        if (saved_ar_mode >= 0)
+            aspect_ratio_mode_ = static_cast<aspect_ratio_mode_t>(saved_ar_mode);
     }
 
     // ================================================================
