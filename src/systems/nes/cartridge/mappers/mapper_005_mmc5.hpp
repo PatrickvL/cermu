@@ -108,6 +108,10 @@ private:
     uint8_t split_nt_byte_ = 0;           // Cached NT byte for pattern lookup
     uint8_t split_at_byte_ = 0;           // Cached attribute for AT fetch
 
+    // ExRAM mode 1: per-tile extended attribute tracking
+    uint8_t exattr_byte_ = 0;             // Cached ExRAM byte for current BG tile
+    uint16_t last_nt_addr_ = 0;           // Last NT byte fetch address (for ExRAM lookup)
+
     // -----------------------------------------------------------------------
     // Expansion audio — two pulse channels (no sweep) + PCM DAC
     // -----------------------------------------------------------------------
@@ -322,6 +326,8 @@ public:
         split_tile_ = 0;
         split_scroll_ = 0;
         split_bank_ = 0;
+        exattr_byte_ = 0;
+        last_nt_addr_ = 0;
     }
 
     Mirror mirror() override { return mirror_mode_; }
@@ -423,72 +429,107 @@ public:
     // the current scanline number to compute the actual tile row and fine Y.
 
     bool ppu_bus_intercept(uint16_t addr, uint8_t& data) override {
-        if (!split_enabled_ || !exram_) return false;
+        if (!exram_) return false;
 
-        // Nametable fetch ($2000-$2FBF, excluding attribute range $2xC0-$2xFC)
+        // Nametable fetch region ($2000-$2FFF, excluding pattern table $0-$1FFF)
         if ((addr & 0x2000) && !(addr & 0x1000)) {
             bool is_attr = (addr & 0x03C0) == 0x03C0;
 
-            if (!is_attr) {
-                // NT byte fetch — determine tile column and check split region
-                uint8_t coarse_x = addr & 0x1F;
-                bool in_split = split_right_ ? (coarse_x >= split_tile_)
-                                             : (coarse_x < split_tile_);
-                split_active_fetch_ = in_split;
+            // --- Vertical split mode (takes priority over ExRAM mode 1) ---
+            if (split_enabled_) {
+                if (!is_attr) {
+                    uint8_t coarse_x = addr & 0x1F;
+                    bool in_split = split_right_ ? (coarse_x >= split_tile_)
+                                                 : (coarse_x < split_tile_);
+                    split_active_fetch_ = in_split;
 
-                if (!in_split) return false;
+                    if (!in_split) goto exram_mode1_nt;
 
-                // Compute split Y from split_scroll_ + current scanline
-                uint16_t split_y = static_cast<uint16_t>(split_scroll_)
-                                 + scanline_counter_;
-                uint8_t coarse_y = (split_y >> 3) % 30;  // 30 tile rows, wraps
-                uint16_t exram_addr = coarse_y * 32 + coarse_x;
+                    uint16_t split_y = static_cast<uint16_t>(split_scroll_)
+                                     + scanline_counter_;
+                    uint8_t coarse_y = (split_y >> 3) % 30;
+                    uint16_t exram_addr = coarse_y * 32 + coarse_x;
 
-                uint8_t exram_byte = exram_[exram_addr & 0x3FF];
-                split_nt_byte_ = exram_byte;
+                    uint8_t exram_byte = exram_[exram_addr & 0x3FF];
+                    split_nt_byte_ = exram_byte;
 
-                // Cache attribute: upper 2 bits of the same ExRAM byte,
-                // replicated across all quadrants so PPU quadrant selection
-                // always gets the correct value.
-                uint8_t attr2 = (exram_byte >> 6) & 0x03;
-                split_at_byte_ = attr2 | (attr2 << 2) | (attr2 << 4) | (attr2 << 6);
+                    uint8_t attr2 = (exram_byte >> 6) & 0x03;
+                    split_at_byte_ = attr2 | (attr2 << 2) | (attr2 << 4) | (attr2 << 6);
 
-                data = split_nt_byte_;
+                    data = split_nt_byte_;
+                    return true;
+                }
+
+                if (split_active_fetch_) {
+                    data = split_at_byte_;
+                    return true;
+                }
+            } else {
+                split_active_fetch_ = false;
+            }
+
+        exram_mode1_nt:
+            // --- ExRAM mode 1: extended attributes ---
+            // In mode 1, ExRAM provides per-tile attributes (D7-D6) and
+            // upper CHR bank bits (D5-D0) for BG tiles (not sprites).
+            if (exram_mode_ == 1) {
+                if (!is_attr) {
+                    // NT byte fetch — cache tile address for ExRAM lookup
+                    last_nt_addr_ = addr & 0x03FF;
+                    // Look up ExRAM at the same offset
+                    exattr_byte_ = exram_[last_nt_addr_ & 0x3FF];
+                    // Don't override the NT byte itself — let normal CIRAM provide it
+                    return false;
+                }
+
+                // Attribute fetch — override with per-tile palette from ExRAM
+                // ExRAM D7-D6 = 2-bit palette select, replicated across all quadrants
+                uint8_t attr2 = (exattr_byte_ >> 6) & 0x03;
+                data = attr2 | (attr2 << 2) | (attr2 << 4) | (attr2 << 6);
                 return true;
             }
 
-            // Attribute fetch — in split region, return cached attribute
-            if (!split_active_fetch_) return false;
-            data = split_at_byte_;
-            return true;
+            return false;
         }
 
-        // Pattern table fetch ($0000-$1FFF) — in split region, use split bank
-        if (!(addr & 0x2000) && split_active_fetch_) {
-            // split_bank_ selects a 4KB CHR bank
-            uint32_t chr_1k = (chr_mem_size_ > 0)
-                            ? static_cast<uint32_t>(chr_mem_size_ >> 10) : 1;
-            uint32_t bank_4k = split_bank_ % ((chr_1k + 3) / 4);
-            uint32_t base_offset = bank_4k * 0x1000;
+        // Pattern table fetch ($0000-$1FFF)
+        if (!(addr & 0x2000)) {
+            // Split region pattern fetch
+            if (split_active_fetch_ && split_enabled_) {
+                uint32_t chr_1k = (chr_mem_size_ > 0)
+                                ? static_cast<uint32_t>(chr_mem_size_ >> 10) : 1;
+                uint32_t bank_4k = split_bank_ % ((chr_1k + 3) / 4);
+                uint32_t base_offset = bank_4k * 0x1000;
 
-            // Use the split scroll's fine Y for the row within the tile
-            uint16_t split_y = static_cast<uint16_t>(split_scroll_)
-                             + scanline_counter_;
-            uint8_t fine_y = split_y & 0x07;
+                uint16_t split_y = static_cast<uint16_t>(split_scroll_)
+                                 + scanline_counter_;
+                uint8_t fine_y = split_y & 0x07;
 
-            // Reconstruct pattern address using the cached NT byte
-            uint16_t pattern_offset = split_nt_byte_ * 16 + fine_y;
-            // Bit 3 of the original fetch address distinguishes lo/hi plane
-            if (addr & 0x08)
-                pattern_offset += 8;
+                uint16_t pattern_offset = split_nt_byte_ * 16 + fine_y;
+                if (addr & 0x08) pattern_offset += 8;
 
-            uint32_t chr_addr = base_offset + (pattern_offset & 0x0FFF);
-            if (chr_addr < chr_mem_size_) {
-                data = chr_mem_[chr_addr];
-            } else {
-                data = 0;
+                uint32_t chr_addr = base_offset + (pattern_offset & 0x0FFF);
+                data = (chr_addr < chr_mem_size_) ? chr_mem_[chr_addr] : 0;
+                return true;
             }
-            return true;
+
+            // ExRAM mode 1: use ExRAM D5-D0 as upper CHR bank bits for BG tiles
+            if (exram_mode_ == 1) {
+                // ExRAM D5-D0 provide the upper bits of the CHR address.
+                // Combined with the tile number from the NT byte, this allows
+                // up to 16384 unique BG tiles (256 tiles × 64 banks).
+                uint8_t exram_chr = exattr_byte_ & 0x3F;
+                uint32_t chr_1k = (chr_mem_size_ > 0)
+                                ? static_cast<uint32_t>(chr_mem_size_ >> 10) : 1;
+                // Each ExRAM bank value selects a 4KB CHR page
+                uint32_t bank_4k = exram_chr % ((chr_1k + 3) / 4);
+                uint32_t base_4k = bank_4k * 0x1000;
+
+                // Replace the CHR address with: base_4k + (tile_pattern_offset within 4KB)
+                uint32_t chr_addr = base_4k + (addr & 0x0FFF);
+                data = (chr_addr < chr_mem_size_) ? chr_mem_[chr_addr] : 0;
+                return true;
+            }
         }
 
         return false;
