@@ -27,6 +27,7 @@
 #include "core/config/path_discovery.hpp"
 #include <cstring>
 #include <cstdio>
+#include <vector>
 
 // ============================================================================
 // HARDWARE TRAITS
@@ -215,7 +216,8 @@ template<MSXVariant V>
 void MSXSystem<V>::reset() {
     board_.reset_chips();
     pins_ = board_.z80.reset(pins_);
-    slot_select_ = 0;
+    slot_select_ = 0xF0;  // pages 0-1: BIOS, pages 2-3: RAM
+    bus_.load_snapshot(0, slot_snapshots_[slot_select_]);
     frame_tstate_counter_ = 0;
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
     board_.ppi.init();
@@ -289,10 +291,106 @@ void MSXSystem<V>::run_frame() {
 
 template<MSXVariant V>
 void MSXSystem<V>::configure_bus_memory_map() {
-    // Default MSX slot layout:
-    //   Pages 0-1 ($0000-$7FFF): ROM (slot 0)
-    //   Pages 2-3 ($8000-$FFFF): RAM (slot 3)
+    // Register all chips with the bus (slot records, flat_mem allocation).
+    // This maps every slot at its base_addr; we immediately override the
+    // page tables with precalculated snapshots.
     board_.apply(bus_);
+
+    // Build 256 slot snapshots (one per PPI Port A value)
+    generate_slot_snapshots();
+
+    // Default MSX slot layout:
+    //   Pages 0-1 ($0000-$7FFF): BIOS ROM (slot 0)
+    //   Pages 2-3 ($8000-$FFFF): Main RAM  (slot 3)
+    slot_select_ = 0xF0;   // pp0=0, pp1=0, pp2=3, pp3=3
+    bus_.load_snapshot(0, slot_snapshots_[slot_select_]);
+}
+
+// ============================================================================
+// SLOT SNAPSHOT GENERATION
+// ============================================================================
+//
+// Precalculate one ModeSnapshot per possible PPI Port A value (0-255).
+// Each snapshot is a frozen page table mapping every 256-byte page to the
+// correct chip ID.  Switching the slot register at runtime is a single
+// load_snapshot() call — O(1) memcpy, no per-page branching.
+//
+// Slot mapping:
+//   Slot 0: BIOS+BASIC ROM (32 KB, pages 0-1 only)
+//   Slot 1: Cartridge ROM  (up to 64 KB, loaded at runtime)
+//   Slot 2: Expansion      (open bus for now)
+//   Slot 3: Main RAM       (full address space, writable)
+
+template<MSXVariant V>
+void MSXSystem<V>::generate_slot_snapshots() {
+    using ChipId      = typename Bus::ChipId;
+    using WriteChipId = typename Bus::WriteChipId;
+
+    constexpr auto& manifest = BT::kManifest;
+    constexpr size_t kPgBits       = BT::Spec::PageBits;   // 8
+    constexpr size_t kPagesPerSlot = 16384 >> kPgBits;      // 64 pages per 16 KB page
+
+    // Chip base IDs (manifest indices: 0=Z80, 1=BIOS, 2=Cart, 3=RAM)
+    constexpr size_t bios_base = manifest.base_id(1, kPgBits);
+    constexpr size_t cart_base = manifest.base_id(2, kPgBits);
+    constexpr size_t ram_base  = manifest.base_id(3, kPgBits);
+
+    // BIOS ROM coverage: 32 KB = 2 × 16 KB pages
+    constexpr size_t bios_16k_pages = manifest.chips[1].size_bytes >> 14;
+
+    for (uint32_t ppi = 0; ppi < 256; ppi++) {
+        bus_.reset_viewer(0);
+
+        for (int page = 0; page < 4; page++) {
+            uint8_t slot     = (ppi >> (page * 2)) & 0x03;
+            size_t  first_pg = static_cast<size_t>(page) * kPagesPerSlot;
+
+            switch (slot) {
+            case 0: // BIOS+BASIC ROM (32 KB — pages 0-1 only)
+                if (static_cast<size_t>(page) < bios_16k_pages) {
+                    bus_.fill_read_pages(0, first_pg, kPagesPerSlot,
+                        ChipId(bios_base + page * kPagesPerSlot));
+                }
+                // Pages beyond 32 KB: open bus (no-chip from reset_viewer)
+                break;
+
+            case 1: // Cartridge ROM
+                if (cart_loaded_ &&
+                    page >= cart_start_page_ && page < cart_end_page_) {
+                    size_t rom_offset = static_cast<size_t>(
+                        page - cart_start_page_) * kPagesPerSlot;
+                    bus_.fill_read_pages(0, first_pg, kPagesPerSlot,
+                        ChipId(cart_base + rom_offset));
+                }
+                // No cart / page outside cart: open bus
+                break;
+
+            case 2: // Expansion slot (open bus)
+                break;
+
+            case 3: { // Main RAM
+                constexpr auto& ram_slot = manifest.chips[3];
+                if constexpr (ram_slot.bank_size > 0) {
+                    // Banked RAM (MSX2: 128 KB / 8 × 16 KB banks)
+                    // Identity mapping: page N → bank N
+                    auto bank_id = ChipId(ram_base + page);
+                    bus_.fill_read_constant(0, first_pg, kPagesPerSlot, bank_id);
+                    bus_.fill_write_constant(0, first_pg, kPagesPerSlot,
+                        WriteChipId(ram_base + page));
+                } else {
+                    // Flat RAM — each 256-byte page gets its own chip ID
+                    bus_.fill_pages(0, first_pg, kPagesPerSlot,
+                        ChipId(ram_base + page * kPagesPerSlot),
+                        WriteChipId(ram_base + page * kPagesPerSlot));
+                }
+                break;
+            }
+            }
+        }
+        bus_.save_snapshot(0, slot_snapshots_[ppi]);
+    }
+    log_info("%s: Generated 256 slot snapshots (cart=%s)\n",
+             Traits::name, cart_loaded_ ? "yes" : "no");
 }
 
 // ============================================================================
@@ -339,10 +437,12 @@ bus_state_t MSXSystem<V>::io_tick(bus_state_t pins) {
             BUS_SET_DATA(pins, board_.ppi.read(port - msx_constants::PPI_PORT_A));
         } else {
             board_.ppi.write(port - msx_constants::PPI_PORT_A, BUS_GET_DATA(pins));
-            // Slot selection changed — update memory map
-            if (port == msx_constants::PPI_PORT_A) {
-                slot_select_ = board_.ppi.get_port_a_output();
-                // TODO: remap memory pages based on slot_select_
+            // Any PPI write can potentially change Port A output
+            // (direct write to $A8, or mode change via $AB control word)
+            uint8_t new_slot = board_.ppi.get_port_a_output();
+            if (new_slot != slot_select_) {
+                slot_select_ = new_slot;
+                bus_.load_snapshot(0, slot_snapshots_[slot_select_]);
             }
         }
         return pins;
@@ -358,9 +458,61 @@ bus_state_t MSXSystem<V>::io_tick(bus_state_t pins) {
 template<MSXVariant V>
 bool MSXSystem<V>::load_file(const char* filepath) {
     if (!filepath) return false;
-    // TODO: support ROM cartridge (.rom) and disk image formats
-    log_info("%s: File loading not yet implemented: %s\n", Traits::name, filepath);
-    return false;
+
+    // Read the ROM file
+    std::vector<uint8_t> rom_data;
+    {
+        FILE* f = fopen(filepath, "rb");
+        if (!f) {
+            log_info("%s: Cannot open file: %s\n", Traits::name, filepath);
+            return false;
+        }
+        fseek(f, 0, SEEK_END);
+        long size = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        if (size <= 0 || size > 65536) {
+            log_info("%s: Invalid ROM size (%ld bytes): %s\n",
+                     Traits::name, size, filepath);
+            fclose(f);
+            return false;
+        }
+        rom_data.resize(static_cast<size_t>(size));
+        fread(rom_data.data(), 1, rom_data.size(), f);
+        fclose(f);
+    }
+
+    // Determine cartridge page placement based on size:
+    //   ≤32 KB ROMs → $4000 (pages 1-2)
+    //   >32 KB ROMs → $0000 (pages 0-3)
+    cart_size_ = static_cast<uint32_t>(rom_data.size());
+    if (cart_size_ <= 32768) {
+        cart_start_page_ = 1;
+    } else {
+        cart_start_page_ = 0;
+    }
+    uint32_t pages_needed = (cart_size_ + 16383) / 16384;
+    cart_end_page_ = cart_start_page_ + static_cast<uint8_t>(pages_needed);
+    if (cart_end_page_ > 4) cart_end_page_ = 4;
+
+    // Copy ROM data into the cartridge ROM chip buffer
+    uint8_t* cart_buf = board_.cart_rom.data();
+    if (!cart_buf) {
+        log_info("%s: Cart ROM chip has no data buffer\n", Traits::name);
+        return false;
+    }
+    std::memset(cart_buf, 0xFF, 65536);  // fill unused space with $FF
+    std::memcpy(cart_buf, rom_data.data(), rom_data.size());
+    cart_loaded_ = true;
+
+    // Regenerate snapshots with cartridge mapped, reload current config
+    generate_slot_snapshots();
+    bus_.load_snapshot(0, slot_snapshots_[slot_select_]);
+
+    log_info("%s: Loaded %u byte ROM at page %d-%d: %s\n",
+             Traits::name, cart_size_, cart_start_page_, cart_end_page_ - 1, filepath);
+
+    reset();
+    return true;
 }
 
 // ============================================================================
