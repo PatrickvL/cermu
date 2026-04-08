@@ -76,7 +76,13 @@ private:
     bool irq_pending_ = false;         // IRQ pending flag
     bool in_frame_ = false;            // Whether PPU is rendering
     uint8_t scanline_counter_ = 0;     // Current scanline count
-    uint64_t last_count_cycle_ = 0;    // PPU dot of last scanline count
+
+    // Scanline detector: MMC5 counts consecutive nametable-address reads
+    // to detect scanline boundaries.  We track how many consecutive reads
+    // targeted the $2xxx range without an intervening $0xxx/$1xxx read.
+    // When the count reaches 3, we know rendering has started on a new
+    // scanline (the PPU fetches two dummy NT bytes then the first real tile).
+    uint8_t nt_read_count_ = 0;        // Consecutive $2xxx reads
 
     // -----------------------------------------------------------------------
     // Multiplier
@@ -306,7 +312,7 @@ public:
         irq_pending_ = false;
         in_frame_ = false;
         scanline_counter_ = 0;
-        last_count_cycle_ = 0;
+        nt_read_count_ = 0;
         multiplicand_ = 0xFF;
         multiplier_ = 0xFF;
         product_ = 0;
@@ -382,34 +388,45 @@ public:
     }
 
     // =======================================================================
-    // Scanline notification — PPU-cycle-based scanline counting
+    // Scanline detection — consecutive nametable-read counting
     // =======================================================================
+    //
+    // Real MMC5 detects scanline boundaries by watching PPU address lines.
+    // When A13 is high (nametable range $2xxx), it counts consecutive reads.
+    // After three $2xxx reads without an intervening pattern-table fetch
+    // ($0xxx/$1xxx), the MMC5 considers rendering active and increments the
+    // scanline counter.  During VBlank ($3Fxx palette reads or no reads),
+    // the consecutive-read counter resets and in_frame_ clears.
+    //
+    // We use notify_a12() to detect when the PPU switches between the
+    // pattern table (A12=0→1 transition = entering $1xxx) and nametable
+    // (A12 stays low during $2xxx fetches but A13 is high).  We track
+    // the A12 transitions to count scanlines: each A12 falling edge after
+    // a period of being high (pattern fetches done → NT fetches start)
+    // signals we've completed a set of fetches for one scanline.
 
-    void notify_a12(bool a12_high, uint64_t ppu_cycle) override {
-        // MMC5 uses an internal scanline detector, not A12 directly.
-        // We approximate by filtering A12 rising edges to at most one per
-        // scanline (341 PPU dots).  Require >= 260 dots since last count
-        // to reject the many A12 transitions within a single scanline
-        // while still catching every scanline boundary.
-        if (!a12_high) return;
+    void notify_a12(bool a12_high, uint64_t /*ppu_cycle*/) override {
+        if (a12_high) {
+            // Pattern table fetch ($1xxx) — interrupts consecutive NT reads
+            if (nt_read_count_ >= 3) {
+                // We had 3+ consecutive NT reads — a scanline just completed
+                if (!in_frame_) {
+                    in_frame_ = true;
+                    scanline_counter_ = 0;
+                }
+                scanline_counter_++;
 
-        if (ppu_cycle - last_count_cycle_ < 260) return;
-        last_count_cycle_ = ppu_cycle;
-
-        if (!in_frame_) {
-            in_frame_ = true;
-            scanline_counter_ = 0;
-        }
-
-        scanline_counter_++;
-
-        if (scanline_counter_ == irq_scanline_) {
-            irq_pending_ = true;
-        }
-
-        // End of visible frame (after ~240 scanlines)
-        if (scanline_counter_ >= 241) {
-            in_frame_ = false;
+                if (scanline_counter_ == irq_scanline_) {
+                    irq_pending_ = true;
+                }
+                if (scanline_counter_ >= 241) {
+                    in_frame_ = false;
+                }
+            }
+            nt_read_count_ = 0;
+        } else {
+            // A12 low — could be NT fetch ($2xxx where A13=1, A12=0)
+            nt_read_count_++;
         }
     }
 
