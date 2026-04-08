@@ -22,8 +22,6 @@ namespace nes_system {
 
 class Mapper075 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
 
     uint8_t prg_bank_[3] = {};       // Three 8KB PRG banks
     uint8_t chr_lo_[2] = {};         // CHR bank low nibbles (4 bits each)
@@ -31,8 +29,7 @@ private:
     Mirror mirror_mode_ = Mirror::VERTICAL;
 
 public:
-    Mapper075(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+    Mapper075(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         prg_bank_[0] = 0;

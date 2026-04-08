@@ -37,8 +37,6 @@ namespace nes_system {
 
 class Mapper019 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
 
     // PRG bank registers
     uint8_t prg_bank_[3] = {};
@@ -72,8 +70,7 @@ private:
     }
 
 public:
-    Mapper019(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+    Mapper019(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         std::memset(prg_bank_, 0, sizeof(prg_bank_));

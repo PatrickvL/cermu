@@ -13,8 +13,6 @@ namespace nes_system {
 
 class Mapper001 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
 
     // Shift register (serial writes)
     uint8_t shift_register_ = 0x10;  // bit 4 set = "empty"
@@ -47,8 +45,7 @@ private:
     }
 
 public:
-    Mapper001(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+    Mapper001(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     Mirror mirror() override { return mirror_mode_; }
 

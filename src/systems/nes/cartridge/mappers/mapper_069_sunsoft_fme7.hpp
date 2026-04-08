@@ -27,8 +27,6 @@ namespace nes_system {
 
 class Mapper069 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
 
     uint8_t command_ = 0;
     uint8_t prg_bank_[4] = {};  // 0 = $6000, 1 = $8000, 2 = $A000, 3 = $C000
@@ -44,8 +42,7 @@ private:
     uint16_t irq_counter_ = 0;
 
 public:
-    Mapper069(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+    Mapper069(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         command_ = 0;

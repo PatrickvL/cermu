@@ -18,8 +18,6 @@ namespace nes_system {
 
 class Mapper047 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
 
     // Inner MMC3 state
     uint8_t target_register_ = 0;
@@ -83,8 +81,7 @@ private:
     }
 
 public:
-    Mapper047(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+    Mapper047(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         target_register_ = 0;

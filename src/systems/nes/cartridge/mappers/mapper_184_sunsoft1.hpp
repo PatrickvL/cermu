@@ -19,14 +19,11 @@ namespace nes_system {
 
 class Mapper184 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
     uint8_t chr_lo_ = 0;  // 4KB bank for $0000-$0FFF
     uint8_t chr_hi_ = 0;  // 4KB bank for $1000-$1FFF
 
 public:
-    Mapper184(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+    Mapper184(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         chr_lo_ = 0;

@@ -34,8 +34,6 @@ namespace nes_system {
 
 class Mapper018 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
 
     uint8_t prg_bank_[3] = {};
     uint8_t chr_bank_[8] = {};
@@ -56,8 +54,7 @@ private:
     }
 
 public:
-    Mapper018(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+    Mapper018(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         for (int i = 0; i < 3; i++) prg_bank_[i] = 0;

@@ -20,7 +20,6 @@ namespace nes_system {
 class Mapper119 : public Mapper {
 private:
     uint8_t prg_banks_;
-    uint8_t chr_banks_;
 
     uint8_t target_register_ = 0;
     bool prg_bank_mode_ = false;
@@ -59,8 +58,7 @@ private:
 
 public:
     Mapper119(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks),
-          original_chr_rom_size_(chrBanks * 8192) {}
+        : prg_banks_(prgBanks), original_chr_rom_size_(chrBanks * 8192) {}
 
     Mirror mirror() override { return mirror_mode_; }
     bool irq_state() override { return irq_.active; }

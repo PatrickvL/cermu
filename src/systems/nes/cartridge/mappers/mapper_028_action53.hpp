@@ -31,8 +31,6 @@ namespace nes_system {
 
 class Mapper028 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
 
     uint8_t reg_select_ = 0x80; // Active register selection
     uint8_t reg_chr_ = 0;       // $00: CHR bank
@@ -98,8 +96,7 @@ private:
     }
 
 public:
-    Mapper028(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+    Mapper028(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         reg_select_ = 0x80;

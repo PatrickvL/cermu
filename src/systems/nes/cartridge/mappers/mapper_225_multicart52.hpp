@@ -21,14 +21,11 @@ namespace nes_system {
 
 class Mapper225 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
 
     uint16_t latch_addr_ = 0;  // Latched address bits
 
 public:
-    Mapper225(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+    Mapper225(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         latch_addr_ = 0;

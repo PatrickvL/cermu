@@ -47,8 +47,6 @@ struct VRC6bTraits {
 template<typename Traits>
 class MapperVRC6 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
 
     uint8_t prg_bank_16k_ = 0;   // $8000 (16KB)
     uint8_t prg_bank_8k_ = 0;    // $C000 (8KB)
@@ -156,8 +154,7 @@ private:
     Sawtooth saw_;
 
 public:
-    MapperVRC6(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+    MapperVRC6(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         prg_bank_16k_ = 0;

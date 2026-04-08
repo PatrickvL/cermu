@@ -23,15 +23,12 @@ namespace nes_system {
 
 class Mapper226 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
 
     uint8_t reg0_ = 0;
     uint8_t reg1_ = 0;
 
 public:
-    Mapper226(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+    Mapper226(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         reg0_ = 0;

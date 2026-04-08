@@ -21,14 +21,12 @@ namespace nes_system {
 
 class Mapper096 : public Mapper {
 private:
-    uint8_t prg_banks_;
     uint8_t prg_bank_ = 0;
     uint8_t chr_outer_ = 0;      // D2-D3 of write: selects 32KB CHR-RAM block
     uint8_t chr_latch_ = 0;      // PPU A8 latch: selects 4KB inner page
 
 public:
-    Mapper096(uint8_t prgBanks, uint8_t /*chrBanks*/)
-        : prg_banks_(prgBanks) {}
+    Mapper096(uint8_t prgBanks, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         prg_bank_ = 0;

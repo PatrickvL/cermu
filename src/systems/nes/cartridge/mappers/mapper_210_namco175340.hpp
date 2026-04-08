@@ -26,8 +26,6 @@ namespace nes_system {
 
 class Mapper210 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
 
     uint8_t target_register_ = 0;
     uint8_t registers_[8] = {};
@@ -35,8 +33,7 @@ private:
     bool hardwired_mirror_ = false;  // true for Namco 175
 
 public:
-    Mapper210(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+    Mapper210(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         target_register_ = 0;
