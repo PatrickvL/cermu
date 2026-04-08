@@ -78,6 +78,7 @@ private:
 
     uint8_t chr_reg_[8] = {};    // 8 × 1KB CHR bank registers (lo+hi nybble)
     Mirror mirror_mode_ = Mirror::VERTICAL;
+    bool prg_ram_enable_ = false; // VRC4: $9002 bit 0; VRC2: always true
 
     // VRC4 IRQ (compiled out for VRC2 via if constexpr)
     mapper_helpers::VRCIRQ irq_;
@@ -108,6 +109,7 @@ public:
         prg_swap_mode_ = false;
         for (int i = 0; i < 8; i++) chr_reg_[i] = 0;
         mirror_mode_ = Mirror::VERTICAL;
+        prg_ram_enable_ = !Traits::has_irq;  // VRC2: always enabled; VRC4: off at reset
         if constexpr (Traits::has_irq) irq_.reset();
     }
 
@@ -162,7 +164,9 @@ public:
             config.prg_pages[slot * 2 + 1] = (base + 0x1000 < prg_rom_size_)
                                                   ? prg_rom_ + base + 0x1000 : nullptr;
         }
-        config.prg_ram_enabled = false;
+        config.prg_ram_base = prg_ram_;
+        config.prg_ram_size = static_cast<uint32_t>(prg_ram_size_);
+        config.prg_ram_enabled = prg_ram_enable_ && (prg_ram_ != nullptr);
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {
@@ -207,6 +211,7 @@ public:
                         }
                     } else {
                         prg_swap_mode_ = (data & 0x02) != 0;
+                        prg_ram_enable_ = (data & 0x01) != 0;
                     }
                 } else {
                     // VRC2: all $9000–$9003 = mirroring
