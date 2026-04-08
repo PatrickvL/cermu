@@ -138,8 +138,9 @@ struct vdp_scroll_mixin_t {
     uint8_t scroll_y_ = 0;
 
     // Effective horizontal scroll for a given scanline.
-    // Note: Sega VDP scroll inhibit (R0.D6, top-row lock) is applied
-    // inline in the rendering functions where the register is accessible.
+    // For per-line scroll effects, games write R8 in a line-IRQ handler;
+    // scroll_x_ is updated immediately and begin_scanline() picks up the
+    // new value at the start of each line.  No scroll table is needed.
     uint16_t effective_scroll_x([[maybe_unused]] int line) const {
         return scroll_x_;
     }

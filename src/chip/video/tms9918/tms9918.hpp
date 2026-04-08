@@ -165,7 +165,12 @@ public:
         }
 
         // --- IRQ output (active-low, level-triggered) ---
-        if ((status_ & reg::STATUS_F) && irq_enabled()) {
+        // Assert if VBlank IRQ (F flag + IE) or line counter IRQ (pending + IE1)
+        bool irq_active = ((status_ & reg::STATUS_F) && irq_enabled());
+        if constexpr (Traits.is_sega()) {
+            irq_active |= (line_irq_pending_ && line_irq_enabled());
+        }
+        if (irq_active) {
             BUS_CLR_BIT(bus, BUS_IRQ_BIT);
         } else {
             BUS_SET_BIT(bus, BUS_IRQ_BIT);
@@ -190,7 +195,30 @@ public:
                 if (video_out_) {
                     video_out_->drive({0, SyncFlag::FrameEnd});
                 }
+                // Reload line counter at frame start
+                if constexpr (Traits.is_sega()) {
+                    line_counter_ = regs_[10];  // R10 — line counter
+                }
             }
+
+            // --- Sega line counter IRQ ---
+            // Decremented at each visible scanline boundary.
+            // On underflow: set pending flag, reload from R10.
+            // During VBlank: reload from R10 each line (no IRQ).
+            if constexpr (Traits.is_sega()) {
+                if (line_ < active_lines_) {
+                    if (line_counter_ == 0) {
+                        line_counter_ = regs_[10];  // Reload from R10
+                        line_irq_pending_ = true;
+                    } else {
+                        line_counter_--;
+                    }
+                } else {
+                    // VBlank: reload each line, no IRQ
+                    line_counter_ = regs_[10];
+                }
+            }
+
             // Begin-of-line setup for the new line
             if (line_ < active_lines_) {
                 begin_scanline();
@@ -218,6 +246,8 @@ public:
         screen_mode_ = 0;
         active_lines_ = Traits.visible_lines;
         std::memset(color_line_, 0, sizeof(color_line_));
+        line_counter_ = 0xFF;
+        line_irq_pending_ = false;
         // Clear rendering pipeline
         bg_ = {};
         sprite_count_ = 0;
@@ -333,6 +363,13 @@ private:
     uint8_t status_ = 0;
 
     // ====================================================================
+    // Line counter IRQ (Sega VDP)
+    // ====================================================================
+
+    uint8_t line_counter_ = 0xFF;   // Decremented each visible line; reloads from R10
+    bool    line_irq_pending_ = false;
+
+    // ====================================================================
     // Per-dot rendering state — background tile pipeline
     // ====================================================================
 
@@ -408,6 +445,11 @@ private:
         return BF_GET(regs_[reg::R1], 5:5) != 0;
     }
 
+    /// Line counter interrupt enable (Sega R0.D4 — IE1)
+    bool line_irq_enabled() const {
+        return (regs_[reg::R0] & 0x10) != 0;
+    }
+
     // --- VRAM data port read (port 0) ---
     uint8_t read_vram_data() {
         // TMS9918 read-ahead: return buffered byte, then fetch next
@@ -432,6 +474,10 @@ private:
         // Reading status clears all flags and the latch toggle
         status_ = 0;
         latch_first_ = true;
+        // Sega: reading status also clears the line IRQ pending flag
+        if constexpr (Traits.is_sega()) {
+            line_irq_pending_ = false;
+        }
         return val;
     }
 
