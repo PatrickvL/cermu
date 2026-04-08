@@ -22,7 +22,6 @@ private:
     uint8_t chr_banks_;
     uint8_t prg_bank_select_ = 0;
     Mirror mirror_mode_ = Mirror::VERTICAL;
-    bool has_mirroring_control_ = false;
 
 public:
     Mapper071(uint8_t prgBanks, uint8_t chrBanks)
@@ -31,7 +30,6 @@ public:
     void reset() override {
         prg_bank_select_ = 0;
         mirror_mode_ = header_mirror_;
-        has_mirroring_control_ = false;
     }
 
     Mirror mirror() override { return mirror_mode_; }
@@ -46,14 +44,10 @@ public:
 
     bool register_write(uint16_t addr, uint8_t data) override {
         if (addr >= 0x8000 && addr <= 0x9FFF) {
-            // Mirroring control (Codemasters variant)
-            if (data & 0x10) {
-                mirror_mode_ = Mirror::ONESCREEN_HI;
-                has_mirroring_control_ = true;
-            } else if (has_mirroring_control_) {
-                mirror_mode_ = Mirror::ONESCREEN_LO;
-            }
-            return has_mirroring_control_;
+            // Single-screen nametable select (BF9097 variant, e.g. Fire Hawk)
+            // D4: 0 = ONESCREEN_LO, 1 = ONESCREEN_HI
+            mirror_mode_ = (data & 0x10) ? Mirror::ONESCREEN_HI : Mirror::ONESCREEN_LO;
+            return true;
         }
         if (addr >= 0xC000) {
             prg_bank_select_ = data & 0x0F;
