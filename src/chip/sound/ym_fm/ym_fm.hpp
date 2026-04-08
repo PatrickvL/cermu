@@ -29,9 +29,10 @@
  *      env_counter_ drives update timing.  D1L=15 correctly maps to
  *      ENV_MAX (silence) via D1L_TABLE.
  *
- *   3. SSG composition is declared but not wired.  YMTraits::ssg points
- *      to an AYTraits instance, but no ay_psg_t is instantiated or
- *      clocked inside ym_fm_t.  SSG output is therefore silent.
+ *   3. [DONE] SSG composition: ay_psg_t<YM2149_Traits> is conditionally
+ *      embedded for OPN-family chips (YM2203/YM2608/YM2610).  Register
+ *      writes $00-$0F are routed to the SSG, ticked at master/4, and
+ *      mixed into audio output at 50/50 with FM.
  *
  *   4. [DONE] Ch3 special mode — per-operator independent frequencies from
  *      supplementary F-Num registers ($A8-$AE) are now decoded and applied
@@ -90,11 +91,13 @@
 
 #include "chip/sound/ym_fm/ym_fm_traits.hpp"
 #include "chip/sound/sound_chip_base.hpp"
+#include "chip/sound/ay_psg/ym2149.hpp"
 #include "core/chip_debug_registry.hpp"
 #include "core/signal/audio_port.hpp"
 #include "core/system_lines.hpp"
 #include <cstdint>
 #include <cstring>
+#include <type_traits>
 #ifndef _USE_MATH_DEFINES
   #define _USE_MATH_DEFINES   // M_PI on MSVC
 #endif
@@ -528,6 +531,20 @@ inline constexpr uint8_t VRC7_ROM[15][8] = {
 } // namespace opll_patches
 
 // ============================================================================
+// SSG dummy — zero-cost placeholder for FM chips without embedded PSG
+// ============================================================================
+
+struct ym_ssg_dummy {
+    void init() {}
+    void reset() { init(); }
+    void tick() {}
+    float get_sample() const { return 0.f; }
+    void write_register(uint8_t, uint8_t) {}
+    void latch_address(uint8_t) {}
+    uint8_t read_register() const { return 0; }
+};
+
+// ============================================================================
 // ym_fm_t — Yamaha FM chip family template
 // ============================================================================
 
@@ -552,6 +569,13 @@ public:
     static constexpr bool has_adpcm_b()       { return Traits.has_adpcm_b; }
     static constexpr bool has_dac()           { return Traits.has_dac; }
 
+    /// Embedded SSG type — real ay_psg_t for OPN chips, zero-cost dummy otherwise.
+    using ssg_type = std::conditional_t<Traits.has_ssg, ay_psg_t<YM2149_Traits>, ym_ssg_dummy>;
+
+    /// Access the embedded SSG (PSG) block.  Only meaningful when has_embedded_psg().
+    ssg_type&       ssg()       { return ssg_; }
+    const ssg_type& ssg() const { return ssg_; }
+
     // ========================================================================
     // Construction
     // ========================================================================
@@ -564,6 +588,9 @@ public:
         register_debug_fields();
 #endif
         ym_fm_tables::init_sine_table();
+        if constexpr (has_embedded_psg()) {
+            ssg_.init();
+        }
     }
 
     // ========================================================================
@@ -641,6 +668,11 @@ public:
         }
 
         status_ = 0;
+
+        if constexpr (has_embedded_psg()) {
+            ssg_.reset();
+            ssg_divider_ = 0;
+        }
     }
 
     // ========================================================================
@@ -680,6 +712,14 @@ public:
         if constexpr (has_rom_patches()) {
             on_opll_write(addr, data);
             return;
+        }
+
+        // SSG registers ($00-$0F, bank 0 only)
+        if constexpr (has_embedded_psg()) {
+            if (bank == 0 && addr <= 0x0F) {
+                ssg_.write_register(addr, data);
+                return;
+            }
         }
 
         // Global registers (bank 0 only, $20-$2F)
@@ -732,6 +772,15 @@ public:
         // --- LFO ---
         if constexpr (has_lfo()) {
             advance_lfo();
+        }
+
+        // --- SSG (embedded PSG) ---
+        // OPN SSG runs at master / 4
+        if constexpr (has_embedded_psg()) {
+            if (++ssg_divider_ >= 4) {
+                ssg_divider_ = 0;
+                ssg_.tick();
+            }
         }
 
         // --- FM sample generation (at internal sample rate) ---
@@ -821,6 +870,10 @@ private:
 
     // Sample rate divider
     uint16_t sample_divider_ = 0;
+
+    // Embedded SSG (conditionally present)
+    ssg_type ssg_;
+    uint8_t  ssg_divider_ = 0;
 
     // ========================================================================
     // Sample rate prescaler — varies by family
@@ -951,6 +1004,14 @@ private:
                     last_sample_ += 1.f / 512.f;  // +1 LSB of 9-bit DAC
                 }
             }
+        }
+
+        // Mix embedded SSG at 50/50 with FM output.
+        // On real hardware the SSG and FM have separate analog outputs
+        // mixed on the PCB; 50/50 is a reasonable starting default.
+        if constexpr (has_embedded_psg()) {
+            float ssg = ssg_.get_sample();
+            last_sample_ = last_sample_ * 0.5f + ssg * 0.5f;
         }
     }
 
