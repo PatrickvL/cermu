@@ -115,6 +115,14 @@ public:
         config.prg_ram_base = prg_ram_;
         config.prg_ram_size = static_cast<uint32_t>(prg_ram_size_);
         config.prg_ram_enabled = prg_ram_enabled_ && (prg_ram_ != nullptr);
+
+        // SOROM/SZROM: boards with 16KB PRG-RAM use CHR bank 0 bit 3
+        // to select between two 8KB PRG-RAM pages.
+        if (prg_ram_ && prg_ram_size_ > 0x2000) {
+            uint32_t ram_page = (reg_chr_bank0_ >> 3) & 0x01;
+            config.prg_ram_base = prg_ram_ + ram_page * 0x2000;
+            config.prg_ram_size = 0x2000;
+        }
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {
