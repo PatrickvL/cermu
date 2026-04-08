@@ -100,26 +100,31 @@ template<> struct MSXVariantTraits<MSXVariant::MSX2P> {
 // MSX chip manifests — declarative memory layout
 // =============================================================================
 //
-// MSX1:
-//   Slot 0: ROM  — 32 KB at $0000 (BIOS 16KB + BASIC 16KB)
-//   Slot 1: RAM  — 64 KB at $0000 (mapped to $8000-$FFFF by default)
+// MSX primary slot architecture:
+//   Slot 0: BIOS+BASIC ROM (32 KB)
+//   Slot 1: Cartridge ROM  (up to 64 KB, loaded at runtime)
+//   Slot 2: (unused in MSX1; expansion in MSX2+)
+//   Slot 3: Main RAM
 //
-// MSX2:
-//   Slot 0: ROM  — 32 KB at $0000
-//   Slot 1: RAM  — 128 KB at $0000 (banked via memory mapper)
+// PPI Port A ($A8) selects which slot appears in each 16 KB page:
+//   Bits 1:0 → page 0 ($0000-$3FFF)
+//   Bits 3:2 → page 1 ($4000-$7FFF)
+//   Bits 5:4 → page 2 ($8000-$BFFF)
+//   Bits 7:6 → page 3 ($C000-$FFFF)
 //
-// MSX2+:
-//   Slot 0: ROM  — 32 KB at $0000
-//   Slot 1: RAM  — 64 KB at $0000
+// Memory mapping uses precalculated snapshots (256 configurations,
+// one per PPI value), switched via load_snapshot() for O(1) banking.
 
 inline constexpr auto kMSX1Manifest = make_manifest(
-    // Chips
-    Slot<ZilogZ80A>{.base_addr = 0, .label = "Z80A"},
-    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 32768, .label = "BIOS+BASIC ROM", .rom = {"msx.rom|msx1.rom|MSX.ROM"}},
-    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 65536, .label = "Main RAM"},
-    Slot<TMS9918A>{.base_addr = 0x0098, .addr_mask = 0x00FC, .label = "TMS9918A"},
-    Slot<AY_3_8910>{.base_addr = 0x00A0, .addr_mask = 0x00FC, .label = "AY-3-8910"},
-    Slot<i8255_t>{.base_addr = 0x00A8, .addr_mask = 0x00FC, .label = "i8255 PPI"},
+    // Chips  (tuple indices 0-6)
+    Slot<ZilogZ80A>{.base_addr = 0, .label = "Z80A"},                                              // [0]
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 32768, .label = "BIOS+BASIC ROM",              // [1] slot 0
+                  .rom = {"msx.rom|msx1.rom|MSX.ROM"}},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 65536, .label = "Cartridge ROM"},               // [2] slot 1
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 65536, .label = "Main RAM"},                    // [3] slot 3
+    Slot<TMS9918A>{.base_addr = 0x0098, .addr_mask = 0x00FC, .label = "TMS9918A"},                   // [4]
+    Slot<AY_3_8910>{.base_addr = 0x00A0, .addr_mask = 0x00FC, .label = "AY-3-8910"},                 // [5]
+    Slot<i8255_t>{.base_addr = 0x00A8, .addr_mask = 0x00FC, .label = "i8255 PPI"},                   // [6]
     // Ports
     Slot<PortControlDB9>{.name = "Joystick Port 1", .port_number = 1, .default_device = "joystick"},
     Slot<PortControlDB9>{.name = "Joystick Port 2", .port_number = 2, .default_device = "joystick"},
@@ -130,13 +135,15 @@ inline constexpr auto kMSX1Manifest = make_manifest(
 );
 
 inline constexpr auto kMSX2Manifest = make_manifest(
-    // Chips
-    Slot<ZilogZ80A>{.base_addr = 0, .label = "Z80A"},
-    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 32768, .label = "BIOS+BASIC ROM", .rom = {"msx2.rom|MSX2.ROM"}},
-    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 131072, .label = "Main RAM", .bank_size = 16384},
-    Slot<V9938>{.base_addr = 0x0098, .addr_mask = 0x00FC, .label = "V9938"},
-    Slot<AY_3_8910>{.base_addr = 0x00A0, .addr_mask = 0x00FC, .label = "AY-3-8910"},
-    Slot<i8255_t>{.base_addr = 0x00A8, .addr_mask = 0x00FC, .label = "i8255 PPI"},
+    // Chips  (tuple indices 0-6)
+    Slot<ZilogZ80A>{.base_addr = 0, .label = "Z80A"},                                              // [0]
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 32768, .label = "BIOS+BASIC ROM",              // [1] slot 0
+                  .rom = {"msx2.rom|MSX2.ROM"}},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 65536, .label = "Cartridge ROM"},               // [2] slot 1
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 131072, .label = "Main RAM", .bank_size = 16384}, // [3] slot 3
+    Slot<V9938>{.base_addr = 0x0098, .addr_mask = 0x00FC, .label = "V9938"},                         // [4]
+    Slot<AY_3_8910>{.base_addr = 0x00A0, .addr_mask = 0x00FC, .label = "AY-3-8910"},                 // [5]
+    Slot<i8255_t>{.base_addr = 0x00A8, .addr_mask = 0x00FC, .label = "i8255 PPI"},                   // [6]
     // Ports
     Slot<PortControlDB9>{.name = "Joystick Port 1", .port_number = 1, .default_device = "joystick"},
     Slot<PortControlDB9>{.name = "Joystick Port 2", .port_number = 2, .default_device = "joystick"},
@@ -147,13 +154,15 @@ inline constexpr auto kMSX2Manifest = make_manifest(
 );
 
 inline constexpr auto kMSX2PManifest = make_manifest(
-    // Chips
-    Slot<ZilogZ80A>{.base_addr = 0, .label = "Z80A"},
-    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 32768, .label = "BIOS+BASIC ROM", .rom = {"msx2p.rom|MSX2P.ROM|msx2+.rom"}},
-    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 65536, .label = "Main RAM"},
-    Slot<V9958>{.base_addr = 0x0098, .addr_mask = 0x00FC, .label = "V9958"},
-    Slot<AY_3_8910>{.base_addr = 0x00A0, .addr_mask = 0x00FC, .label = "AY-3-8910"},
-    Slot<i8255_t>{.base_addr = 0x00A8, .addr_mask = 0x00FC, .label = "i8255 PPI"},
+    // Chips  (tuple indices 0-6)
+    Slot<ZilogZ80A>{.base_addr = 0, .label = "Z80A"},                                              // [0]
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 32768, .label = "BIOS+BASIC ROM",              // [1] slot 0
+                  .rom = {"msx2p.rom|MSX2P.ROM|msx2+.rom"}},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 65536, .label = "Cartridge ROM"},               // [2] slot 1
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 65536, .label = "Main RAM"},                    // [3] slot 3
+    Slot<V9958>{.base_addr = 0x0098, .addr_mask = 0x00FC, .label = "V9958"},                         // [4]
+    Slot<AY_3_8910>{.base_addr = 0x00A0, .addr_mask = 0x00FC, .label = "AY-3-8910"},                 // [5]
+    Slot<i8255_t>{.base_addr = 0x00A8, .addr_mask = 0x00FC, .label = "i8255 PPI"},                   // [6]
     // Ports
     Slot<PortControlDB9>{.name = "Joystick Port 1", .port_number = 1, .default_device = "joystick"},
     Slot<PortControlDB9>{.name = "Joystick Port 2", .port_number = 2, .default_device = "joystick"},
@@ -200,10 +209,11 @@ struct MSXBoard<MSXVariant::MSX1>
 
     ZilogZ80A& z80      = std::get<0>(components_);
     ROMChip&   bios_rom = std::get<1>(components_);
-    RAMChip&   main_ram = std::get<2>(components_);
-    TMS9918A&  vdp      = std::get<3>(components_);
-    AY_3_8910& psg      = std::get<4>(components_);
-    i8255_t&   ppi      = std::get<5>(components_);
+    ROMChip&   cart_rom = std::get<2>(components_);
+    RAMChip&   main_ram = std::get<3>(components_);
+    TMS9918A&  vdp      = std::get<4>(components_);
+    AY_3_8910& psg      = std::get<5>(components_);
+    i8255_t&   ppi      = std::get<6>(components_);
 
     template<size_t N>
     MSXBoard(const ChipManifest<N>& m) : Board<BT::Spec>(m) {}
@@ -219,10 +229,11 @@ struct MSXBoard<MSXVariant::MSX2>
 
     ZilogZ80A& z80      = std::get<0>(components_);
     ROMChip&   bios_rom = std::get<1>(components_);
-    RAMChip&   main_ram = std::get<2>(components_);
-    V9938&     vdp      = std::get<3>(components_);
-    AY_3_8910& psg      = std::get<4>(components_);
-    i8255_t&   ppi      = std::get<5>(components_);
+    ROMChip&   cart_rom = std::get<2>(components_);
+    RAMChip&   main_ram = std::get<3>(components_);
+    V9938&     vdp      = std::get<4>(components_);
+    AY_3_8910& psg      = std::get<5>(components_);
+    i8255_t&   ppi      = std::get<6>(components_);
 
     template<size_t N>
     MSXBoard(const ChipManifest<N>& m) : Board<BT::Spec>(m) {}
@@ -238,10 +249,11 @@ struct MSXBoard<MSXVariant::MSX2P>
 
     ZilogZ80A& z80      = std::get<0>(components_);
     ROMChip&   bios_rom = std::get<1>(components_);
-    RAMChip&   main_ram = std::get<2>(components_);
-    V9958&     vdp      = std::get<3>(components_);
-    AY_3_8910& psg      = std::get<4>(components_);
-    i8255_t&   ppi      = std::get<5>(components_);
+    ROMChip&   cart_rom = std::get<2>(components_);
+    RAMChip&   main_ram = std::get<3>(components_);
+    V9958&     vdp      = std::get<4>(components_);
+    AY_3_8910& psg      = std::get<5>(components_);
+    i8255_t&   ppi      = std::get<6>(components_);
 
     template<size_t N>
     MSXBoard(const ChipManifest<N>& m) : Board<BT::Spec>(m) {}
@@ -299,6 +311,16 @@ private:
 
     // ── Slot selection (PPI Port A) ──────────────────────────────────────
     uint8_t slot_select_ = 0;     // PPI Port A: 2 bits per page (pp3|pp2|pp1|pp0)
+    bool    cart_loaded_ = false; // true when a cartridge ROM has been loaded
+    uint32_t cart_size_ = 0;      // loaded ROM size in bytes
+    uint8_t cart_start_page_ = 0; // first 16 KB page occupied by cart (0-3)
+    uint8_t cart_end_page_   = 0; // end-exclusive
+
+    // ── Precalculated memory maps (256 PPI configurations) ───────────────
+    // One snapshot per possible PPI Port A value.  Switching the slot
+    // register is a single load_snapshot() call — O(1).
+    using Snapshot = typename Bus::Snapshot;
+    std::array<Snapshot, 256> slot_snapshots_{};
 
     std::unique_ptr<CompositeVideoPort> video_port_;
 
@@ -319,6 +341,7 @@ private:
 
     // ── Internal helpers ─────────────────────────────────────────────────
     void configure_bus_memory_map();
+    void generate_slot_snapshots();
     bus_state_t io_tick(bus_state_t pins);
     bool load_roms();
 };
