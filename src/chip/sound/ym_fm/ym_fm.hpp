@@ -48,12 +48,11 @@
  *   7. ADPCM-A and ADPCM-B are unimplemented stubs — trait flags exist
  *      but no decode/playback logic is present.
  *
- *   8. OPL-family specifics partially implemented: waveform select (WS)
- *      lookup is wired per-operator (0=sine, 1=half, 2=abs, 3=quarter),
- *      but OPL register decode is missing — the waveform field is never
- *      written.  Rhythm mode percussion and OPLL ROM patches are absent.
- *      Requires an OPL register-decode path (separate from OPN) to become
- *      functional.
+ *   8. [DONE] OPL-family: OPLL ROM patches implemented (15 standard
+ *      YM2413 + 15 VRC7 Konami patches).  OPLL register decode path
+ *      handles user instrument ($00-$07), F-number ($10-$18), key/block
+ *      ($20-$28), and instrument/volume ($30-$38).  Rhythm mode
+ *      percussion is still absent.
  *
  *   9. OPM-specific features missing: noise channel, key-fraction
  *      register, and the OPM-specific channel/operator addressing.
@@ -467,6 +466,68 @@ inline void init_sine_table() {
 } // namespace ym_fm_tables
 
 // ============================================================================
+// OPLL ROM instrument patches
+// ============================================================================
+//
+// The YM2413 (OPLL) has 15 hardcoded instrument patches in internal ROM,
+// plus 1 user-programmable patch (index 0).  Each patch is 8 bytes:
+//
+//   Byte 0: MOD — AM(7) VIB(6) EGT(5) KSR(4) MULTI(3:0)
+//   Byte 1: CAR — AM(7) VIB(6) EGT(5) KSR(4) MULTI(3:0)
+//   Byte 2: MOD — KSL(7:6) TL(5:0)
+//   Byte 3: CAR — KSL(7:6) -(5) DC(4) DM(3) FB(2:0)
+//   Byte 4: MOD — AR(7:4) DR(3:0)
+//   Byte 5: CAR — AR(7:4) DR(3:0)
+//   Byte 6: MOD — SL(7:4) RR(3:0)
+//   Byte 7: CAR — SL(7:4) RR(3:0)
+//
+// EGT: when set, D1R=0 (sustained tone).  When clear, normal decay (percussive).
+// DC/DM: carrier/modulator waveform (0=sine, 1=half-sine).
+// FB: self-feedback level on modulator (0=off, 1-7).
+
+namespace opll_patches {
+
+// Standard YM2413 ROM patches (from decapped chip analysis by Nuke.YKT)
+inline constexpr uint8_t YM2413_ROM[15][8] = {
+    { 0x61, 0x61, 0x1E, 0x17, 0xF0, 0x7F, 0x00, 0x17 }, //  1: Violin
+    { 0x13, 0x41, 0x16, 0x0E, 0xFD, 0xF4, 0x23, 0x23 }, //  2: Guitar
+    { 0x03, 0x01, 0x99, 0x04, 0xF3, 0xF3, 0x13, 0xF3 }, //  3: Piano
+    { 0x21, 0x61, 0x1B, 0x07, 0xAF, 0x64, 0x40, 0x27 }, //  4: Flute
+    { 0x22, 0x21, 0x1E, 0x06, 0xF0, 0x76, 0x08, 0x28 }, //  5: Clarinet
+    { 0x31, 0x22, 0x16, 0x05, 0x90, 0x71, 0x00, 0x13 }, //  6: Oboe
+    { 0x21, 0x61, 0x1D, 0x07, 0x82, 0x80, 0x17, 0x17 }, //  7: Trumpet
+    { 0x23, 0x21, 0x2D, 0x16, 0xC0, 0x70, 0x07, 0x07 }, //  8: Organ
+    { 0x61, 0x61, 0x1B, 0x06, 0x64, 0x65, 0x18, 0x18 }, //  9: Horn
+    { 0x61, 0x61, 0x0C, 0x18, 0x85, 0xF0, 0x70, 0x07 }, // 10: Synthesizer
+    { 0x23, 0x01, 0x07, 0x11, 0xF0, 0xA4, 0x00, 0x22 }, // 11: Harpsichord
+    { 0x97, 0xC1, 0x24, 0x07, 0xFF, 0xF8, 0x22, 0x12 }, // 12: Vibraphone
+    { 0x61, 0x10, 0x0C, 0x05, 0xF2, 0xF4, 0x40, 0x44 }, // 13: Synthesizer Bass
+    { 0x01, 0x01, 0x55, 0x03, 0xC9, 0x95, 0x03, 0x02 }, // 14: Acoustic Bass
+    { 0x61, 0x41, 0x89, 0x03, 0xF1, 0xE4, 0x40, 0x33 }, // 15: Electric Guitar
+};
+
+// Konami VRC7 custom patches (Nuke.YKT 2019 dump — used in Lagrange Point)
+inline constexpr uint8_t VRC7_ROM[15][8] = {
+    { 0x03, 0x21, 0x05, 0x06, 0xB8, 0x82, 0x42, 0x27 }, //  1
+    { 0x13, 0x41, 0x13, 0x0D, 0xD8, 0xD6, 0x23, 0x12 }, //  2
+    { 0x31, 0x11, 0x08, 0x08, 0xFA, 0x9A, 0x22, 0x02 }, //  3
+    { 0x31, 0x61, 0x18, 0x07, 0x78, 0x64, 0x30, 0x27 }, //  4
+    { 0x22, 0x21, 0x1E, 0x06, 0xF0, 0x76, 0x08, 0x28 }, //  5
+    { 0x02, 0x01, 0x06, 0x00, 0xF0, 0xF2, 0x03, 0xF5 }, //  6
+    { 0x21, 0x61, 0x1D, 0x07, 0x82, 0x81, 0x16, 0x07 }, //  7
+    { 0x23, 0x21, 0x1A, 0x17, 0xEF, 0x82, 0x25, 0x15 }, //  8
+    { 0x25, 0x11, 0x1F, 0x00, 0x86, 0x41, 0x20, 0x11 }, //  9
+    { 0x85, 0x01, 0x1F, 0x0F, 0xE4, 0xA2, 0x11, 0x12 }, // 10
+    { 0x07, 0xC1, 0x2B, 0x45, 0xB4, 0xF8, 0x22, 0x12 }, // 11
+    { 0x61, 0x23, 0x11, 0x06, 0x96, 0x96, 0x13, 0x16 }, // 12
+    { 0x01, 0x02, 0xD3, 0x05, 0x82, 0xA2, 0x31, 0x51 }, // 13
+    { 0x61, 0x22, 0x0D, 0x02, 0xC3, 0x7F, 0x24, 0x05 }, // 14
+    { 0x21, 0x62, 0x0E, 0x00, 0xA1, 0xA0, 0x44, 0x17 }, // 15
+};
+
+} // namespace opll_patches
+
+// ============================================================================
 // ym_fm_t — Yamaha FM chip family template
 // ============================================================================
 
@@ -567,6 +628,18 @@ public:
         dac_value_ = 0;
         dac_enabled_ = false;
         env_counter_ = 0;
+
+        // OPLL state
+        if constexpr (has_rom_patches()) {
+            for (int i = 0; i < 8; i++) opll_user_patch_[i] = 0;
+            for (int i = 0; i < NUM_FM_CH; i++) {
+                opll_inst_[i] = 0;
+                opll_vol_[i] = 0;
+                opll_sustain_[i] = false;
+                opll_key_prev_[i] = false;
+            }
+        }
+
         status_ = 0;
     }
 
@@ -575,6 +648,12 @@ public:
     // ========================================================================
 
     void set_audio_port(AudioPort* port) { audio_port_ = port; }
+
+    /// Set the OPLL ROM patch table (default: standard YM2413 patches).
+    /// Call before use to select VRC7 patches for Konami cartridge audio.
+    void set_opll_rom_patches(const uint8_t (*patches)[8]) {
+        opll_rom_ = patches;
+    }
 
     // ========================================================================
     // Register interface — address latch + read/write
@@ -596,6 +675,12 @@ public:
     void write_register(uint8_t addr, uint8_t data, uint8_t bank = 0) {
         // Store in register file
         regs_[addr] = data;
+
+        // OPLL (YM2413 / VRC7): completely different register layout
+        if constexpr (has_rom_patches()) {
+            on_opll_write(addr, data);
+            return;
+        }
 
         // Global registers (bank 0 only, $20-$2F)
         if (bank == 0 && addr < 0x30) {
@@ -725,6 +810,14 @@ private:
 
     // Envelope generator global counter (incremented once per FM sample)
     uint32_t env_counter_ = 0;
+
+    // OPLL-specific state (YM2413 / VRC7)
+    uint8_t  opll_user_patch_[8] = {};     // User-programmable instrument ($00-$07)
+    uint8_t  opll_inst_[ym_fm_constants::MAX_FM_CHANNELS] = {};  // Instrument select per ch
+    uint8_t  opll_vol_[ym_fm_constants::MAX_FM_CHANNELS] = {};   // Volume per ch (4-bit)
+    bool     opll_sustain_[ym_fm_constants::MAX_FM_CHANNELS] = {};
+    bool     opll_key_prev_[ym_fm_constants::MAX_FM_CHANNELS] = {};  // Previous key state for edge detect
+    const uint8_t (*opll_rom_)[8] = opll_patches::YM2413_ROM;  // Active ROM patch table
 
     // Sample rate divider
     uint16_t sample_divider_ = 0;
@@ -1387,5 +1480,151 @@ private:
         if (op.dt1 & 0x04) detune = -detune;  // Bit 2 = sign
 
         op.freq = static_cast<uint32_t>(static_cast<int32_t>(base_freq) + detune);
+    }
+
+    // ========================================================================
+    // OPLL register decode (YM2413 / VRC7)
+    // ========================================================================
+    //
+    // The OPLL register layout is entirely different from OPN:
+    //   $00-$07: User instrument definition (8 bytes)
+    //   $0E:     Rhythm mode + percussion key bits
+    //   $10-$18: F-number low 8 bits (per channel)
+    //   $20-$28: Sustain / Key-on / Block / F-number bit 8
+    //   $30-$38: Instrument select (high nibble) / Volume (low nibble)
+    //
+    // When a channel selects instrument I (1-15), the modulator and carrier
+    // parameters are loaded from the ROM patch table.  I=0 uses the user
+    // instrument defined by registers $00-$07.
+
+    void on_opll_write(uint8_t addr, uint8_t data) {
+        // User instrument patch ($00-$07)
+        if (addr < 0x08) {
+            opll_user_patch_[addr] = data;
+            // Re-apply to any channel using instrument 0
+            for (int ch = 0; ch < NUM_FM_CH; ch++) {
+                if (opll_inst_[ch] == 0) {
+                    apply_opll_patch(ch, 0);
+                }
+            }
+            return;
+        }
+
+        // F-number low ($10-$18)
+        if (addr >= 0x10 && addr <= 0x18) {
+            uint8_t ch_idx = addr - 0x10;
+            if (ch_idx >= NUM_FM_CH) return;
+            auto& ch = channel_[ch_idx];
+            ch.fnum = (ch.fnum & 0x100) | data;
+            update_channel_freq(ch_idx);
+            return;
+        }
+
+        // Sustain / Key-on / Block / F-number high ($20-$28)
+        if (addr >= 0x20 && addr <= 0x28) {
+            uint8_t ch_idx = addr - 0x20;
+            if (ch_idx >= NUM_FM_CH) return;
+            auto& ch = channel_[ch_idx];
+
+            opll_sustain_[ch_idx] = (data & 0x20) != 0;
+            bool key_on = (data & 0x10) != 0;
+            ch.block = (data >> 1) & 0x07;
+            ch.fnum = (ch.fnum & 0x0FF) | (static_cast<uint16_t>(data & 0x01) << 8);
+            update_channel_freq(ch_idx);
+
+            // Edge-detect key on/off
+            if (key_on && !opll_key_prev_[ch_idx]) {
+                for (int op = 0; op < NUM_OPS; op++) {
+                    ch.ops[op].key_on = true;
+                    ch.ops[op].env_state = FMOperator::ATTACK;
+                    ch.ops[op].phase = 0;
+                    ch.ops[op].ssg_inverted = false;
+                }
+            } else if (!key_on && opll_key_prev_[ch_idx]) {
+                for (int op = 0; op < NUM_OPS; op++) {
+                    ch.ops[op].key_on = false;
+                    ch.ops[op].env_state = FMOperator::RELEASE;
+                }
+            }
+            opll_key_prev_[ch_idx] = key_on;
+            return;
+        }
+
+        // Instrument / Volume ($30-$38)
+        if (addr >= 0x30 && addr <= 0x38) {
+            uint8_t ch_idx = addr - 0x30;
+            if (ch_idx >= NUM_FM_CH) return;
+
+            uint8_t inst = (data >> 4) & 0x0F;
+            opll_vol_[ch_idx] = data & 0x0F;
+            opll_inst_[ch_idx] = inst;
+
+            apply_opll_patch(ch_idx, inst);
+
+            // Carrier TL set from volume register (4-bit → scaled to 7-bit TL)
+            channel_[ch_idx].ops[1].tl = opll_vol_[ch_idx] << 3;
+            return;
+        }
+    }
+
+    /// Load an OPLL instrument patch into a channel's operator state.
+    void apply_opll_patch(uint8_t ch_idx, uint8_t inst) {
+        if (ch_idx >= NUM_FM_CH) return;
+        auto& ch = channel_[ch_idx];
+
+        const uint8_t* p = (inst == 0)
+            ? opll_user_patch_
+            : opll_rom_[inst - 1];
+
+        // Byte 0: MOD — AM(7) VIB(6) EGT(5) KSR(4) MULTI(3:0)
+        ch.ops[0].am_en = (p[0] & 0x80) != 0;
+        // VIB + EGT affect behavior but stored in register bits read by EG
+        ch.ops[0].mul = p[0] & 0x0F;
+
+        // Byte 1: CAR — AM(7) VIB(6) EGT(5) KSR(4) MULTI(3:0)
+        ch.ops[1].am_en = (p[1] & 0x80) != 0;
+        ch.ops[1].mul = p[1] & 0x0F;
+
+        // Byte 2: MOD — KSL(7:6) TL(5:0)
+        ch.ops[0].tl = p[2] & 0x3F;
+
+        // Byte 3: CAR — KSL(7:6) -(5) DC(4) DM(3) FB(2:0)
+        ch.ops[1].waveform = (p[3] >> 4) & 0x01;  // DC: carrier waveform
+        ch.ops[0].waveform = (p[3] >> 3) & 0x01;  // DM: modulator waveform
+        ch.feedback = p[3] & 0x07;
+        // Algorithm is always 0 (FM) for OPLL — modulator feeds carrier
+        ch.algorithm = 0;
+
+        // Byte 4: MOD — AR(7:4) DR(3:0)
+        ch.ops[0].ar  = (p[4] >> 4) & 0x0F;
+        ch.ops[0].d1r = p[4] & 0x0F;
+
+        // Byte 5: CAR — AR(7:4) DR(3:0)
+        ch.ops[1].ar  = (p[5] >> 4) & 0x0F;
+        ch.ops[1].d1r = p[5] & 0x0F;
+
+        // Byte 6: MOD — SL(7:4) RR(3:0)
+        ch.ops[0].d1l = (p[6] >> 4) & 0x0F;
+        ch.ops[0].rr  = p[6] & 0x0F;
+
+        // Byte 7: CAR — SL(7:4) RR(3:0)
+        ch.ops[1].d1l = (p[7] >> 4) & 0x0F;
+        ch.ops[1].rr  = p[7] & 0x0F;
+
+        // EGT flag: when set, D1R=0 (sustained tone behavior).
+        // Clear D1R for sustained instruments, leaving natural decay for percussive ones.
+        if (p[0] & 0x20) ch.ops[0].d1r = 0;  // MOD EGT
+        if (p[1] & 0x20) ch.ops[1].d1r = 0;  // CAR EGT
+
+        // KSR: rate scaling factor (0 or 2, OPLL uses 1-bit RS)
+        ch.ops[0].rs = (p[0] & 0x10) ? 2 : 0;
+        ch.ops[1].rs = (p[1] & 0x10) ? 2 : 0;
+
+        // OPLL outputs mono; enable both L/R
+        ch.left = true;
+        ch.right = true;
+
+        // Update frequencies with new MUL values
+        update_channel_freq(ch_idx);
     }
 };
