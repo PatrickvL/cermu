@@ -341,18 +341,12 @@ struct VRCIRQ {
         }
     }
 
-    /// Call once per CPU cycle.  In cycle mode, clocks the counter directly.
-    /// In scanline mode, does nothing (use clock_scanline instead).
+    /// Call once per CPU cycle.  In cycle mode, clocks the counter directly
+    /// at M2 rate.  In scanline mode, does nothing (use clock_scanline via
+    /// A12 rising edges instead).
     void tick_cpu() {
         if (!enabled || !cycle_mode) return;
-        // Prescaler: 3 CPU cycles per clock at M2 rate (VRC counts at M2)
-        // Actually: VRC4/6/7 clock IRQ directly at M2 with prescaler of 341
-        // (one clock per ~scanline).  Simplified: prescaler counts to 341÷3≈114.
-        prescaler += 3;
-        if (prescaler >= 341) {
-            prescaler -= 341;
-            clock();
-        }
+        clock();
     }
 
     /// Call from A12 rising edge (scanline mode).
