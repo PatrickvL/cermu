@@ -25,25 +25,20 @@ namespace nes_system {
 
 class Mapper073 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
-
     uint8_t prg_bank_select_ = 0;
 
-    // IRQ
+    // IRQ — 16-bit up-counter clocked at M2, with optional 8-bit mode.
+    // In 8-bit mode only the low 8 bits count (overflow at 0xFF→0x00).
+    // In 16-bit mode the full word counts (overflow at 0xFFFF→0x0000).
     uint16_t irq_latch_ = 0;
     uint16_t irq_counter_ = 0;
     bool irq_enabled_ = false;
     bool irq_enable_after_ack_ = false;
     bool irq_mode_8bit_ = false;
     bool irq_active_ = false;
-    uint16_t irq_prescaler_ = 0;
-
-    static constexpr uint16_t IRQ_PRESCALER_RELOAD = 341;  // ~CPU cycles per scanline
 
 public:
-    Mapper073(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+    Mapper073(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         prg_bank_select_ = 0;
@@ -53,11 +48,35 @@ public:
         irq_enable_after_ack_ = false;
         irq_mode_8bit_ = false;
         irq_active_ = false;
-        irq_prescaler_ = 0;
     }
 
     bool irq_state() override { return irq_active_; }
     void irq_clear() override { irq_active_ = false; }
+
+    // VRC3 IRQ counter clocks once per CPU cycle (M2).
+    void notify_cpu_cycle() override {
+        if (!irq_enabled_) return;
+        if (irq_mode_8bit_) {
+            // 8-bit mode: only low byte increments; overflow at 0xFF→0x00
+            uint8_t lo = static_cast<uint8_t>(irq_counter_);
+            lo++;
+            if (lo == 0) {
+                irq_active_ = true;
+                irq_enabled_ = false;
+                irq_counter_ = (irq_counter_ & 0xFF00) | (irq_latch_ & 0x00FF);
+            } else {
+                irq_counter_ = (irq_counter_ & 0xFF00) | lo;
+            }
+        } else {
+            // 16-bit mode: full counter increments
+            irq_counter_++;
+            if (irq_counter_ == 0) {
+                irq_active_ = true;
+                irq_enabled_ = false;
+                irq_counter_ = irq_latch_;
+            }
+        }
+    }
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
         mapper_helpers::set_prg_16k_lo(config, prg_rom_, prg_rom_size_, prg_bank_select_);
@@ -90,11 +109,10 @@ public:
             case 0xC000:
                 irq_active_ = false;
                 irq_mode_8bit_ = (data & 0x04) != 0;
-                irq_enable_after_ack_ = (data & 0x02) != 0;
-                irq_enabled_ = (data & 0x01) != 0;
+                irq_enable_after_ack_ = (data & 0x01) != 0;
+                irq_enabled_ = (data & 0x02) != 0;
                 if (irq_enabled_) {
                     irq_counter_ = irq_latch_;
-                    irq_prescaler_ = IRQ_PRESCALER_RELOAD;
                 }
                 return false;
 
