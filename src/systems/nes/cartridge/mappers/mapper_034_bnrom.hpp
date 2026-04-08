@@ -23,17 +23,14 @@ namespace nes_system {
 
 class Mapper034 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
     uint8_t prg_bank_select_ = 0;
     uint8_t chr_bank_lo_ = 0;    // NINA-001: CHR $0000-$0FFF
     uint8_t chr_bank_hi_ = 0;    // NINA-001: CHR $1000-$1FFF
     bool is_nina001_ = false;
 
 public:
-    Mapper034(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks),
-          is_nina001_(chrBanks > 0) {}
+    Mapper034(uint8_t /*prgBanks*/, uint8_t chrBanks)
+        : is_nina001_(chrBanks > 0) {}
 
     void reset() override {
         prg_bank_select_ = 0;

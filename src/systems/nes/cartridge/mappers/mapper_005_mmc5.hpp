@@ -27,8 +27,6 @@ namespace nes_system {
 
 class Mapper005 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
 
     // -----------------------------------------------------------------------
     // PRG banking
@@ -282,8 +280,7 @@ private:
     }
 
 public:
-    Mapper005(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+    Mapper005(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void set_ciram(uint8_t* ciram) override {
         ciram_ = ciram;

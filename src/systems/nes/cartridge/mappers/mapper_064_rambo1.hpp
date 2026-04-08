@@ -18,8 +18,6 @@ namespace nes_system {
 
 class Mapper064 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
 
     uint8_t target_register_ = 0;
     bool prg_bank_mode_ = false;     // Bit 6 of $8000
@@ -111,8 +109,7 @@ private:
     }
 
 public:
-    Mapper064(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+    Mapper064(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         target_register_ = 0;

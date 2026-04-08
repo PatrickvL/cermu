@@ -18,14 +18,11 @@ namespace nes_system {
 
 class Mapper071 : public Mapper {
 private:
-    uint8_t prg_banks_;
-    uint8_t chr_banks_;
     uint8_t prg_bank_select_ = 0;
     Mirror mirror_mode_ = Mirror::VERTICAL;
 
 public:
-    Mapper071(uint8_t prgBanks, uint8_t chrBanks)
-        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+    Mapper071(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
 
     void reset() override {
         prg_bank_select_ = 0;
