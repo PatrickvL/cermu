@@ -9,7 +9,7 @@
  * Games: Dudes with Attitude, Krazy Kreatures, Tiles of Fate, etc.
  *
  * Register ($4100-$5FFF):
- *   D5: PRG 32KB bank select
+ *   D3: PRG 32KB bank select
  *   D2-D0: CHR 8KB bank select
  */
 
