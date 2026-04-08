@@ -8,8 +8,8 @@
  * Games: Wing of Madoola, Kanshakudama Nage Kantarou no Toukaidou Gojuusan Tsugi
  *
  * Register ($6000-$7FFF):
- *   D3-D0: 4KB CHR bank at $0000
- *   D7-D4: 4KB CHR bank at $1000 (only low bits used, high bit often ignored)
+ *   D2-D0: 4KB CHR bank at $0000
+ *   D6-D4: 4KB CHR bank at $1000
  */
 
 #include "systems/nes/cartridge/nes_mapper.hpp"
