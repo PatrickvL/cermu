@@ -171,6 +171,7 @@ void BombJackSystem::tick() {
     // Main CPU bus dispatch — memory-mapped only (no IORQ for main CPU)
     if (!BUS_GET_BIT(main_pins_, Z80_MREQ_BIT)) {
         uint16_t addr = BUS_GET_ADDR(main_pins_);
+
         if ((addr & 0xF000) == 0xB000) {
             main_pins_ = main_io_tick(main_pins_);
         } else if (addr == bombjack_constants::BG_SELECT && !BUS_GET_BIT(main_pins_, BUS_RW_BIT)) {
@@ -231,6 +232,7 @@ void BombJackSystem::run_frame() {
     decode_palette();
     render_frame();
     if (video_port_) video_port_->swap_frame();
+
 }
 
 uint32_t BombJackSystem::get_audio_samples(float* buffer, uint32_t max_samples) {
@@ -357,27 +359,39 @@ void BombJackSystem::render_frame() {
 bus_state_t BombJackSystem::main_io_tick(bus_state_t pins) {
     uint16_t addr = BUS_GET_ADDR(pins);
 
+    if (addr & 0x0800) {
+        // $B800-$BFFF: Sound latch (write-only, mirrored)
+        if (!BUS_GET_BIT(pins, BUS_RW_BIT)) {
+            sound_latch_ = BUS_GET_DATA(pins);
+            sound_nmi_ = true;
+        }
+        return pins;
+    }
+
+    // $B000-$B7FF: I/O registers (mirrored every 8 bytes, low 3 bits select register)
+    uint8_t reg = addr & 0x07;
+
     if (BUS_GET_BIT(pins, BUS_RW_BIT)) {
         // Reads: input ports and DIP switches
         uint8_t data = 0xFF;
-        if (addr == bombjack_constants::INPUT_P1)         data = input_p1_;
-        else if (addr == bombjack_constants::INPUT_P2)    data = input_p2_;
-        else if (addr == bombjack_constants::INPUT_SYSTEM) data = input_system_;
-        else if (addr == bombjack_constants::DSW1)        data = main_board_.dsw1.bank.value;
-        else if (addr == bombjack_constants::DSW2)        data = main_board_.dsw2.bank.value;
+        switch (reg) {
+            case 0: data = input_p1_; break;                        // P1
+            case 1: data = input_p2_; break;                        // P2
+            case 2: data = input_system_; break;                    // SYSTEM (coins/start)
+            case 3: break;                                          // Watchdog (read resets timer)
+            case 4: data = main_board_.dsw1.bank.value; break;      // SW1
+            case 5: data = main_board_.dsw2.bank.value; break;      // SW2
+            default: break;                                         // 6,7: unused
+        }
         BUS_SET_DATA(pins, data);
     } else {
-        // Writes: NMI mask, sound latch, background select, watchdog
+        // Writes: NMI mask, flip screen
         uint8_t data = BUS_GET_DATA(pins);
-        if (addr == bombjack_constants::NMI_MASK) {
-            nmi_mask_ = data & 0x01;  // bit 0 = NMI enable
-        } else if (addr == bombjack_constants::FLIP_SCREEN) {
-            // Flip screen — ignored for now (cocktail mode)
-        } else if (addr == bombjack_constants::SOUND_LATCH) {
-            sound_latch_ = data;
-            sound_nmi_ = true;
+        switch (reg) {
+            case 0: nmi_mask_ = data & 0x01; break;                // NMI enable
+            case 4: /* flip screen — ignored for now */ break;      // Cocktail mode
+            default: break;
         }
-        // Watchdog write at $B800 is intentionally ignored
     }
 
     return pins;

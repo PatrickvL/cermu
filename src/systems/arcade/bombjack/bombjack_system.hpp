@@ -204,9 +204,9 @@ private:
     uint8_t nmi_mask_        = 0;       // NMI enable (0 = disabled)
 
     // ── Inputs ───────────────────────────────────────────────────────────
-    uint8_t input_p1_     = 0xFF;       // Player 1 (active low)
-    uint8_t input_p2_     = 0xFF;       // Player 2 (active low)
-    uint8_t input_system_ = 0xFF;       // Coin/start (active low)
+    uint8_t input_p1_     = 0x00;       // Player 1 (active high)
+    uint8_t input_p2_     = 0x00;       // Player 2 (active high)
+    uint8_t input_system_ = 0xF0;       // Coin/start (bits 0-3 active high, bits 4-7 active low unused)
 
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t main_pins_  = BOMBJACK_BUS_DEFAULT_STATE;
