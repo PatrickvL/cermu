@@ -16,13 +16,11 @@
  *
  * SHORTCOMINGS — known gaps vs. real hardware (in rough priority order):
  *
- *   1. Algorithm routing does not implement inter-operator FM modulation.
- *      Operators are advanced independently; compute_algorithm() merely
- *      selects which operator *outputs* to sum.  Real hardware feeds a
- *      modulator's output into the next operator's phase input, which is
- *      the entire basis of FM synthesis.  This must be rewritten so that
- *      operator evaluation order follows the algorithm graph, feeding each
- *      modulator result into the carrier's phase accumulator step.
+ *   1. [DONE] Algorithm routing now implements inter-operator FM modulation.
+ *      Operators are evaluated in algorithm-dependent order; each
+ *      modulator's output is fed into the next operator's phase input
+ *      via compute_op_output(mod_in).  Feedback on op1 uses the same
+ *      path.  All 8 OPN and 2 OPL algorithm topologies are correct.
  *
  *   2. Envelope generator is simplified.  Real hardware uses per-rate
  *      increment tables indexed by rate + key-scale + rof counter, with
@@ -761,13 +759,19 @@ private:
                 pm_fraction = static_cast<int32_t>(lfo_pm_) * pms_depth[c.pms];
             }
 
-            // Advance operators with LFO modulation
+            // Step 1: Advance phase + envelope for all operators
             for (int op = 0; op < NUM_OPS; op++) {
-                advance_operator(c.ops[op], am_mod, pm_fraction);
+                step_operator(c.ops[op], pm_fraction);
             }
 
-            // Route through algorithm
-            c.output = compute_algorithm(c);
+            // Step 2: Compute FM output with inter-operator modulation.
+            // Operators are evaluated in algorithm-dependent order so that
+            // each modulator's output feeds into the carrier's phase lookup.
+            if constexpr (NUM_OPS == 4) {
+                c.output = compute_4op_fm(c, am_mod);
+            } else {
+                c.output = compute_2op_fm(c, am_mod);
+            }
             mix += static_cast<float>(c.output);
             active_channels++;
         }
@@ -791,10 +795,10 @@ private:
     }
 
     // ========================================================================
-    // Operator advancement — phase + envelope
+    // Operator step — phase accumulator + envelope (no output computation)
     // ========================================================================
 
-    void advance_operator(FMOperator& op, uint16_t am_mod, int32_t pm_fraction) {
+    void step_operator(FMOperator& op, int32_t pm_fraction) {
         // --- Phase generator ---
         uint32_t mul = op.mul ? op.mul : 1;  // MUL=0 → ×½ (we handle as ×1 with shift)
         int32_t phase_inc = static_cast<int32_t>(op.freq * mul);
@@ -810,11 +814,23 @@ private:
 
         // --- Envelope generator ---
         advance_envelope(op);
+    }
 
-        // --- Compute operator output ---
+    // ========================================================================
+    // Operator output — sine lookup with modulation input + envelope
+    // ========================================================================
+    //
+    // mod_in: signed modulation from another operator (or feedback).
+    // Added to the 10-bit phase index before sine ROM lookup, implementing
+    // the core of FM synthesis.  The modulator's ~14-bit output is
+    // right-shifted by 1 to match the hardware phase-modulation scale.
+
+    int32_t compute_op_output(FMOperator& op, int32_t mod_in, uint16_t am_mod) {
+        // Phase index with modulation: upper 10 bits of accumulator + mod
         uint32_t phase_idx = (op.phase >> (ym_fm_constants::PHASE_BITS -
                               ym_fm_tables::SINE_TABLE_BITS))
-                          & (ym_fm_tables::SINE_TABLE_SIZE - 1);
+                          + static_cast<uint32_t>(mod_in >> 1);
+        phase_idx &= (ym_fm_tables::SINE_TABLE_SIZE - 1);
 
         // Waveform select (OPL2+): 0=sine, 1=half-sine, 2=abs-sine, 3=quarter-sine
         int32_t sine_val;
@@ -846,6 +862,7 @@ private:
         int32_t attenuation = ym_fm_constants::ENV_MAX - env;
         op.prev_output = op.output;
         op.output = (sine_val * attenuation) >> ym_fm_constants::ENV_BITS;
+        return op.output;
     }
 
     // ========================================================================
@@ -949,79 +966,113 @@ private:
     }
 
     // ========================================================================
-    // Algorithm routing — 4-op (algorithms 0-7) or 2-op (algorithms 0-3)
+    // Algorithm routing with inter-operator FM modulation
     // ========================================================================
     //
-    // SHORTCOMING: This is the most critical gap.  The algorithm diagrams
-    // below show modulator→carrier signal flow, but the current
-    // implementation advances all operators independently and then
-    // compute_Xop_algorithm() simply picks which *pre-computed* outputs
-    // to sum.  No operator's output is fed into another operator's phase.
-    // This means:
-    //   - Algorithms 0-6 all collapse to additive mixing of the selected
-    //     outputs, producing no FM timbral character whatsoever.
-    //   - Only algorithm 7 (all carriers, no modulation) is correct.
-    //   - Feedback on op1 does modulate its own phase, but that's the
-    //     only inter-sample modulation present.
-    //
-    // FIX: Evaluate operators in algorithm-dependent order, passing
-    // each modulator's output into the next operator's phase_inc before
-    // computing the sine lookup.
-    //
     // 4-op algorithms (OPN/OPM):
-    //   0: [op1→op2→op3→op4]→out
-    //   1: [op1+op2]→op3→op4→out
-    //   2: [op1+(op2→op3)]→op4→out
-    //   3: [(op1→op2)+op3]→op4→out
-    //   4: [(op1→op2)+(op3→op4)]→out
-    //   5: [op1→(op2+op3+op4)]→out
-    //   6: [(op1→op2)+op3+op4]→out
-    //   7: [op1+op2+op3+op4]→out
+    //   0: [op1→op2→op3→op4]→out               serial chain
+    //   1: [op1+op2]→op3→op4→out               parallel modulators
+    //   2: [op1+(op2→op3)]→op4→out             mixed
+    //   3: [(op1→op2)+op3]→op4→out             mixed
+    //   4: [(op1→op2)+(op3→op4)]→out           parallel pairs
+    //   5: [op1→(op2+op3+op4)]→out             one-to-three
+    //   6: [(op1→op2)+op3+op4]→out             pair + two carriers
+    //   7: [op1+op2+op3+op4]→out               all carriers (additive)
     //
     // 2-op algorithms (OPL):
     //   0: [op1→op2]→out  (FM)
     //   1: [op1+op2]→out  (additive)
+    //
+    // Each modulator's output is passed as mod_in to the carrier's
+    // compute_op_output(), which offsets the phase index before the
+    // sine ROM lookup — this IS frequency modulation.
 
-    int32_t compute_algorithm(FMChannel& c) {
+    int32_t compute_4op_fm(FMChannel& c, uint16_t am_mod) {
         auto& op = c.ops;
 
-        // Apply self-feedback to operator 1
+        // Self-feedback on operator 1 (average of current + previous output)
+        int32_t fb_mod = 0;
         if (c.feedback > 0) {
-            int32_t fb = (op[0].output + op[0].prev_output) >> (9 - c.feedback);
-            // Modulate op[0]'s phase by feedback
-            op[0].phase += static_cast<uint32_t>(fb) << (ym_fm_constants::PHASE_BITS -
-                           ym_fm_tables::SINE_TABLE_BITS);
+            fb_mod = (op[0].output + op[0].prev_output) >> (9 - c.feedback);
         }
 
-        if constexpr (NUM_OPS == 4) {
-            return compute_4op_algorithm(c);
-        } else {
-            return compute_2op_algorithm(c);
-        }
-    }
+        int32_t out0, out1, out2, out3;
 
-    int32_t compute_4op_algorithm(FMChannel& c) {
-        auto& op = c.ops;
         switch (c.algorithm) {
-            case 0:  return op[3].output;  // Serial: 1→2→3→4
-            case 1:  return op[3].output;  // (1+2)→3→4
-            case 2:  return op[3].output;  // (1+(2→3))→4
-            case 3:  return op[3].output;  // ((1→2)+3)→4
-            case 4:  return op[1].output + op[3].output;  // (1→2)+(3→4)
-            case 5:  return op[1].output + op[2].output + op[3].output;  // 1→(2+3+4)
-            case 6:  return op[1].output + op[2].output + op[3].output;  // (1→2)+3+4
-            case 7:  return op[0].output + op[1].output +
-                            op[2].output + op[3].output;  // 1+2+3+4
+            case 0:  // op1→op2→op3→op4
+                out0 = compute_op_output(op[0], fb_mod, am_mod);
+                out1 = compute_op_output(op[1], out0,   am_mod);
+                out2 = compute_op_output(op[2], out1,   am_mod);
+                out3 = compute_op_output(op[3], out2,   am_mod);
+                return out3;
+
+            case 1:  // (op1+op2)→op3→op4
+                out0 = compute_op_output(op[0], fb_mod,      am_mod);
+                out1 = compute_op_output(op[1], 0,           am_mod);
+                out2 = compute_op_output(op[2], out0 + out1, am_mod);
+                out3 = compute_op_output(op[3], out2,        am_mod);
+                return out3;
+
+            case 2:  // op1+(op2→op3) → all into op4
+                out0 = compute_op_output(op[0], fb_mod,      am_mod);
+                out1 = compute_op_output(op[1], 0,           am_mod);
+                out2 = compute_op_output(op[2], out1,        am_mod);
+                out3 = compute_op_output(op[3], out0 + out2, am_mod);
+                return out3;
+
+            case 3:  // (op1→op2)+op3 → all into op4
+                out0 = compute_op_output(op[0], fb_mod,      am_mod);
+                out1 = compute_op_output(op[1], out0,        am_mod);
+                out2 = compute_op_output(op[2], 0,           am_mod);
+                out3 = compute_op_output(op[3], out1 + out2, am_mod);
+                return out3;
+
+            case 4:  // (op1→op2)+(op3→op4)
+                out0 = compute_op_output(op[0], fb_mod, am_mod);
+                out1 = compute_op_output(op[1], out0,   am_mod);
+                out2 = compute_op_output(op[2], 0,      am_mod);
+                out3 = compute_op_output(op[3], out2,   am_mod);
+                return out1 + out3;
+
+            case 5:  // op1→(op2+op3+op4)
+                out0 = compute_op_output(op[0], fb_mod, am_mod);
+                out1 = compute_op_output(op[1], out0,   am_mod);
+                out2 = compute_op_output(op[2], out0,   am_mod);
+                out3 = compute_op_output(op[3], out0,   am_mod);
+                return out1 + out2 + out3;
+
+            case 6:  // (op1→op2)+op3+op4
+                out0 = compute_op_output(op[0], fb_mod, am_mod);
+                out1 = compute_op_output(op[1], out0,   am_mod);
+                out2 = compute_op_output(op[2], 0,      am_mod);
+                out3 = compute_op_output(op[3], 0,      am_mod);
+                return out1 + out2 + out3;
+
+            case 7:  // op1+op2+op3+op4 (all carriers, no modulation)
+                out0 = compute_op_output(op[0], fb_mod, am_mod);
+                out1 = compute_op_output(op[1], 0,      am_mod);
+                out2 = compute_op_output(op[2], 0,      am_mod);
+                out3 = compute_op_output(op[3], 0,      am_mod);
+                return out0 + out1 + out2 + out3;
+
             default: return 0;
         }
     }
 
-    int32_t compute_2op_algorithm(FMChannel& c) {
+    int32_t compute_2op_fm(FMChannel& c, uint16_t am_mod) {
         auto& op = c.ops;
+
+        int32_t fb_mod = 0;
+        if (c.feedback > 0) {
+            fb_mod = (op[0].output + op[0].prev_output) >> (9 - c.feedback);
+        }
+
+        int32_t out0 = compute_op_output(op[0], fb_mod, am_mod);
+
         switch (c.algorithm) {
-            case 0:  return op[1].output;              // FM: 1→2
-            case 1:  return op[0].output + op[1].output; // Additive: 1+2
-            default: return op[1].output;
+            case 0:  return compute_op_output(op[1], out0, am_mod);       // FM: op1→op2
+            case 1:  return out0 + compute_op_output(op[1], 0, am_mod);  // Additive: op1+op2
+            default: return compute_op_output(op[1], out0, am_mod);
         }
     }
 
