@@ -24,14 +24,21 @@
 #include "systems/nes/cartridge/mappers/mapper_011_color_dreams.hpp"
 #include "systems/nes/cartridge/mappers/mapper_013_cprom.hpp"
 #include "systems/nes/cartridge/mappers/mapper_015_100in1.hpp"
+#include "systems/nes/cartridge/mappers/mapper_016_bandai_fcg.hpp"
+#include "systems/nes/cartridge/mappers/mapper_018_jaleco_ss88006.hpp"
+#include "systems/nes/cartridge/mappers/mapper_019_namco163.hpp"
 #include "systems/nes/cartridge/mappers/mapper_vrc24.hpp"
+#include "systems/nes/cartridge/mappers/mapper_vrc6.hpp"
 #include "systems/nes/cartridge/mappers/mapper_028_action53.hpp"
 #include "systems/nes/cartridge/mappers/mapper_030_unrom512.hpp"
 #include "systems/nes/cartridge/mappers/mapper_032_irem_g101.hpp"
 #include "systems/nes/cartridge/mappers/mapper_033_taito_tc0190.hpp"
 #include "systems/nes/cartridge/mappers/mapper_034_bnrom.hpp"
 #include "systems/nes/cartridge/mappers/mapper_038_crime_busters.hpp"
+#include "systems/nes/cartridge/mappers/mapper_040_fds_hack.hpp"
 #include "systems/nes/cartridge/mappers/mapper_041_caltron.hpp"
+#include "systems/nes/cartridge/mappers/mapper_047_nesqj.hpp"
+#include "systems/nes/cartridge/mappers/mapper_048_taito_tc0690.hpp"
 #include "systems/nes/cartridge/mappers/mapper_064_rambo1.hpp"
 #include "systems/nes/cartridge/mappers/mapper_065_irem_h3001.hpp"
 #include "systems/nes/cartridge/mappers/mapper_066_gxrom.hpp"
@@ -43,29 +50,37 @@
 #include "systems/nes/cartridge/mappers/mapper_072_jaleco_jf17.hpp"
 #include "systems/nes/cartridge/mappers/mapper_073_vrc3.hpp"
 #include "systems/nes/cartridge/mappers/mapper_075_vrc1.hpp"
+#include "systems/nes/cartridge/mappers/mapper_076_namcot3446.hpp"
 #include "systems/nes/cartridge/mappers/mapper_077_irem_early.hpp"
 #include "systems/nes/cartridge/mappers/mapper_078_jaleco_jf16.hpp"
 #include "systems/nes/cartridge/mappers/mapper_079_nina.hpp"
+#include "systems/nes/cartridge/mappers/mapper_080_taito_x1005.hpp"
+#include "systems/nes/cartridge/mappers/mapper_082_taito_x1017.hpp"
+#include "systems/nes/cartridge/mappers/mapper_085_vrc7.hpp"
 #include "systems/nes/cartridge/mappers/mapper_086_jaleco_jf13.hpp"
 #include "systems/nes/cartridge/mappers/mapper_087_jaleco_jf05.hpp"
 #include "systems/nes/cartridge/mappers/mapper_namcot108.hpp"
 #include "systems/nes/cartridge/mappers/mapper_089_sunsoft_early.hpp"
+#include "systems/nes/cartridge/mappers/mapper_096_oeka_kids.hpp"
 #include "systems/nes/cartridge/mappers/mapper_093_sunsoft2.hpp"
 #include "systems/nes/cartridge/mappers/mapper_094_un1rom.hpp"
 #include "systems/nes/cartridge/mappers/mapper_097_irem_tam_s1.hpp"
 #include "systems/nes/cartridge/mappers/mapper_113_nina06.hpp"
 #include "systems/nes/cartridge/mappers/mapper_118_txsrom.hpp"
 #include "systems/nes/cartridge/mappers/mapper_119_tqrom.hpp"
+#include "systems/nes/cartridge/mappers/mapper_120_fds_hack.hpp"
 #include "systems/nes/cartridge/mappers/mapper_133_sachen.hpp"
 #include "systems/nes/cartridge/mappers/mapper_140_jaleco_jf11.hpp"
 #include "systems/nes/cartridge/mappers/mapper_151_vrc1_vs.hpp"
 #include "systems/nes/cartridge/mappers/mapper_152_bandai.hpp"
+#include "systems/nes/cartridge/mappers/mapper_154_namcot3453.hpp"
 #include "systems/nes/cartridge/mappers/mapper_156_dis_ic32.hpp"
 #include "systems/nes/cartridge/mappers/mapper_180_unrom_reverse.hpp"
 #include "systems/nes/cartridge/mappers/mapper_184_sunsoft1.hpp"
 #include "systems/nes/cartridge/mappers/mapper_185_cnrom_protect.hpp"
 #include "systems/nes/cartridge/mappers/mapper_189_mmc3_tfc.hpp"
 #include "systems/nes/cartridge/mappers/mapper_193_ntdec.hpp"
+#include "systems/nes/cartridge/mappers/mapper_210_namco175340.hpp"
 #include "systems/nes/cartridge/mappers/mapper_225_multicart52.hpp"
 #include "systems/nes/cartridge/mappers/mapper_226_multicart76.hpp"
 #include "systems/nes/cartridge/mappers/mapper_227_multicart1200.hpp"
@@ -107,17 +122,17 @@ struct MapperFactory {
             case 13:  return std::make_unique<Mapper013>(prg_banks, chr_banks);
             // missing: 14 — SL-1632 (rare pirate multicart)
             case 15:  return std::make_unique<Mapper015>(prg_banks, chr_banks);
-            // missing: 16 — Bandai FCG (24C02 EEPROM, complex)
+            case 16:  return std::make_unique<Mapper016>(prg_banks, chr_banks);
             // missing: 17 — FFE F8xxx (rare, FFE copier mapper)
-            // missing: 18 — Jaleco SS 88006 (PRG/CHR/IRQ, moderate)
-            // missing: 19 — Namco 163 (expansion audio + complex banking)
+            case 18:  return std::make_unique<Mapper018>(prg_banks, chr_banks);
+            case 19:  return std::make_unique<Mapper019>(prg_banks, chr_banks);
             // missing: 20 — FDS (Famicom Disk System, special hardware)
             case 21:  return std::make_unique<MapperVRC24<VRC4aTraits>>(prg_banks, chr_banks);
             case 22:  return std::make_unique<MapperVRC24<VRC2aTraits>>(prg_banks, chr_banks);
             case 23:  return std::make_unique<MapperVRC24<VRC24_023Traits>>(prg_banks, chr_banks);
-            // missing: 24 — VRC6a (Konami, expansion audio)
+            case 24:  return std::make_unique<Mapper024>(prg_banks, chr_banks);
             case 25:  return std::make_unique<MapperVRC24<VRC24_025Traits>>(prg_banks, chr_banks);
-            // missing: 26 — VRC6b (Konami, expansion audio)
+            case 26:  return std::make_unique<Mapper026>(prg_banks, chr_banks);
             // missing: 27 — VRC4 (pirate variant, rare)
             case 28:  return std::make_unique<Mapper028>(prg_banks, chr_banks);
             // missing: 29 — Sealie Computing (homebrew, rare)
@@ -128,9 +143,13 @@ struct MapperFactory {
             case 34:  return std::make_unique<Mapper034>(prg_banks, chr_banks);
             // missing: 35–37 — rare/pirate/FDS-conversion mappers
             case 38:  return std::make_unique<Mapper038>(prg_banks, chr_banks);
-            // missing: 39–40 — rare/pirate/FDS-conversion mappers
+            // missing: 39 — rare/pirate
+            case 40:  return std::make_unique<Mapper040>(prg_banks, chr_banks);
             case 41:  return std::make_unique<Mapper041>(prg_banks, chr_banks);
-            // missing: 42–63 — misc rare/pirate mappers (42=FDS hack, 46/47=multicarts, 48=Taito TC0690)
+            // missing: 42–46 — misc rare/pirate mappers
+            case 47:  return std::make_unique<Mapper047>(prg_banks, chr_banks);
+            case 48:  return std::make_unique<Mapper048>(prg_banks, chr_banks);
+            // missing: 49–63 — misc rare/pirate mappers
             case 64:  return std::make_unique<Mapper064>(prg_banks, chr_banks);
             case 65:  return std::make_unique<Mapper065>(prg_banks, chr_banks);
             case 66:  return std::make_unique<Mapper066>(prg_banks, chr_banks);
@@ -143,12 +162,15 @@ struct MapperFactory {
             case 73:  return std::make_unique<Mapper073>(prg_banks, chr_banks);
             // missing: 74 — Waixing (MMC3 variant, CHR-RAM pages, Chinese pirate)
             case 75:  return std::make_unique<Mapper075>(prg_banks, chr_banks);
-            // missing: 76 — Namco 3446 (NAMCOT-3446, rare)
+            case 76:  return std::make_unique<Mapper076>(prg_banks, chr_banks);
             case 77:  return std::make_unique<Mapper077>(prg_banks, chr_banks);
             case 78:  return std::make_unique<Mapper078>(prg_banks, chr_banks);
             case 79:  return std::make_unique<Mapper079>(prg_banks, chr_banks);
-            // missing: 80 — Taito X1-005 (PRG-RAM + CHR banking, moderate)
-            // missing: 81–85 — misc (82=Taito X1-017, 85=VRC7 Konami w/ expansion audio)
+            case 80:  return std::make_unique<Mapper080>(prg_banks, chr_banks);
+            // missing: 81 — rare
+            case 82:  return std::make_unique<Mapper082>(prg_banks, chr_banks);
+            // missing: 83–84 — misc rare
+            case 85:  return std::make_unique<Mapper085>(prg_banks, chr_banks);
             case 86:  return std::make_unique<Mapper086>(prg_banks, chr_banks);
             case 87:  return std::make_unique<Mapper087>(prg_banks, chr_banks);
             case 88:  return std::make_unique<MapperNamcot108<Namcot108Variant::ChrSplit>>(prg_banks, chr_banks);
@@ -157,23 +179,29 @@ struct MapperFactory {
             case 93:  return std::make_unique<Mapper093>(prg_banks, chr_banks);
             case 94:  return std::make_unique<Mapper094>(prg_banks, chr_banks);
             case 95:  return std::make_unique<MapperNamcot108<Namcot108Variant::NtFromD5>>(prg_banks, chr_banks);
-            // missing: 96 — Oeka Kids (special input, Bandai)
+            case 96:  return std::make_unique<Mapper096>(prg_banks, chr_banks);
             case 97:  return std::make_unique<Mapper097>(prg_banks, chr_banks);
             // missing: 98–112 — misc rare/pirate/complex mappers
             case 113: return std::make_unique<Mapper113>(prg_banks, chr_banks);
             // missing: 114–117 — misc (115=MMC3 pirate, 116=multiboard, 117=rare)
             case 118: return std::make_unique<Mapper118>(prg_banks, chr_banks);
             case 119: return std::make_unique<Mapper119>(prg_banks, chr_banks);
-            // missing: 120–132 — misc rare/pirate mappers
+            case 120: return std::make_unique<Mapper120>(prg_banks, chr_banks);
+            // missing: 121–132 — misc rare/pirate mappers
             case 133: return std::make_unique<Mapper133>(prg_banks, chr_banks);
             // missing: 134–139 — misc rare/pirate mappers
             case 140: return std::make_unique<Mapper140>(prg_banks, chr_banks);
             // missing: 141–150 — misc rare/pirate mappers (148/149=Sachen)
             case 151: return std::make_unique<Mapper151>(prg_banks, chr_banks);
             case 152: return std::make_unique<Mapper152>(prg_banks, chr_banks);
-            // missing: 153–155 — misc (154=Namco 3453)
+            // missing: 153 — Bandai (rare, SRAM variant)
+            case 154: return std::make_unique<Mapper154>(prg_banks, chr_banks);
+            // missing: 155 — MMC1A (rare)
             case 156: return std::make_unique<Mapper156>(prg_banks, chr_banks);
-            // missing: 157–179 — misc (159=Bandai LZ93D50)
+            case 157: return std::make_unique<Mapper157>(prg_banks, chr_banks);
+            // missing: 158 — rare
+            case 159: return std::make_unique<Mapper159>(prg_banks, chr_banks);
+            // missing: 160–179 — misc rare
             case 180: return std::make_unique<Mapper180>(prg_banks, chr_banks);
             // missing: 181–183 — misc rare
             case 184: return std::make_unique<Mapper184>(prg_banks, chr_banks);
@@ -184,7 +212,10 @@ struct MapperFactory {
             case 193: return std::make_unique<Mapper193>(prg_banks, chr_banks);
             // missing: 194–205 — misc rare/pirate mappers
             case 206: return std::make_unique<MapperNamcot108<Namcot108Variant::DxROM>>(prg_banks, chr_banks);
-            // missing: 207–224 — misc (210=Namco 175/340)
+            case 207: return std::make_unique<Mapper207>(prg_banks, chr_banks);
+            // missing: 208–209 — misc rare
+            case 210: return std::make_unique<Mapper210>(prg_banks, chr_banks);
+            // missing: 211–224 — misc rare
             case 225: return std::make_unique<Mapper225>(prg_banks, chr_banks);
             case 226: return std::make_unique<Mapper226>(prg_banks, chr_banks);
             case 227: return std::make_unique<Mapper227>(prg_banks, chr_banks);
