@@ -136,6 +136,20 @@ public:
     bool irq_state() override { return irq_active_; }
     void irq_clear() override { irq_active_ = false; }
 
+    void notify_cpu_cycle() override {
+        if (!irq_mode_) return;  // Scanline mode — not driven by CPU cycle
+
+        if (irq_counter_ == 0 || irq_reload_) {
+            irq_counter_ = irq_reload_value_;
+            irq_reload_ = false;
+        } else {
+            irq_counter_--;
+        }
+        if (irq_counter_ == 0 && irq_enabled_) {
+            irq_active_ = true;
+        }
+    }
+
     void notify_a12(bool a12_high, uint64_t ppu_cycle) override {
         if (irq_mode_) return;  // Cycle mode — not driven by A12
 
