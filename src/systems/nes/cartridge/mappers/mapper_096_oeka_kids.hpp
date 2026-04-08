@@ -36,7 +36,7 @@ public:
         chr_latch_ = 0;
     }
 
-    Mirror mirror() override { return Mirror::FOUR_SCREEN; }
+    Mirror mirror() override { return Mirror::ONESCREEN_LO; }
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
         using namespace mapper_helpers;
@@ -92,12 +92,16 @@ public:
         return true;
     }
 
-    // PPU bus intercept: latch PPU A8 on nametable reads ($2000-$2FFF)
-    bool ppu_bus_intercept(uint16_t ppu_addr, uint8_t& /*data*/) override {
+    // Latch PPU A8 on nametable reads ($2000-$2FFF) and trigger bank rebind
+    bool ppu_bus_read(uint16_t ppu_addr) override {
         if ((ppu_addr & 0x3000) == 0x2000) {
-            chr_latch_ = (ppu_addr >> 8) & 0x03;
+            uint8_t new_latch = (ppu_addr >> 8) & 0x03;
+            if (new_latch != chr_latch_) {
+                chr_latch_ = new_latch;
+                return true; // trigger bank map update
+            }
         }
-        return false; // don't override data
+        return false;
     }
 };
 
