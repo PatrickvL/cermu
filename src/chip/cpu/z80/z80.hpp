@@ -276,6 +276,15 @@ public:
         }
         BUS_SET_BIT(pins, Z80_BUSACK_BIT); // Release BUSACK
 
+        // NMI edge detection — asynchronous (real Z80 has an edge-triggered
+        // flip-flop that latches the falling edge of /NMI at any point in the
+        // instruction cycle, not just at instruction boundaries)
+        bool nmi_active = !BUS_GET_BIT(pins, Z80_NMI_BIT);
+        bool nmi_was    = !BUS_GET_BIT(bus_prev_, Z80_NMI_BIT);
+        if (nmi_active && !nmi_was) {
+            nmi_pending_ = true;
+        }
+
         // Normal execution — dispatch to current handler
         pins = (this->*current_handler_)(pins);
         bus_prev_ = pins;
@@ -456,14 +465,8 @@ private:
                 ei_pending_ = false;
             }
 
-            // NMI edge detection (falling edge of /NMI = HIGH→LOW transition)
-            bool nmi_active = !BUS_GET_BIT(pins, Z80_NMI_BIT);
-            bool nmi_was    = !BUS_GET_BIT(bus_prev_, Z80_NMI_BIT);
-            if (nmi_active && !nmi_was) {
-                nmi_pending_ = true;
-            }
-
             // Check NMI (higher priority than INT, not suppressed by EI)
+            // Edge detection now handled in tick() — just check the pending flag
             if (nmi_pending_) {
                 nmi_pending_ = false;
                 if (halted_) {
