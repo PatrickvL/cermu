@@ -100,9 +100,9 @@ namespace nes_system {
 struct MapperFactory {
     /// Create a mapper instance for the given iNES mapper ID.
     /// Returns nullptr only in theory — unsupported IDs fall back to NROM.
-    static inline std::unique_ptr<Mapper> create(uint8_t mapper_id,
-                                                  uint8_t prg_banks,
-                                                  uint8_t chr_banks) {
+    static inline std::unique_ptr<Mapper> create(uint16_t mapper_id,
+                                                  uint16_t prg_banks,
+                                                  uint16_t chr_banks) {
         switch (mapper_id) {
             // --- 000–004: Core mappers (NROM, SxROM/MMC1, UxROM, CNROM, TxROM/MMC3) ---
             case 0:   return std::make_unique<Mapper000>(prg_banks, chr_banks);
@@ -229,7 +229,7 @@ struct MapperFactory {
             case 245: return std::make_unique<Mapper245>(prg_banks, chr_banks);
             // missing: 246–255 — misc rare
             default:
-                std::cout << "Warning: Unsupported mapper " << (int)mapper_id
+                std::cout << "Warning: Unsupported mapper " << mapper_id
                           << ", falling back to NROM" << std::endl;
                 return std::make_unique<Mapper000>(prg_banks, chr_banks);
         }

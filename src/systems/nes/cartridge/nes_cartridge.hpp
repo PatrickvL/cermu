@@ -43,9 +43,10 @@ public:
     std::vector<uint8_t> prg_ram;     // Program RAM (battery backed)
 
     // Cartridge info
-    uint8_t mapper_id = 0;
-    uint8_t prg_banks = 0;
-    uint8_t chr_banks = 0;
+    uint16_t mapper_id = 0;
+    uint8_t submapper = 0;
+    uint16_t prg_banks = 0;
+    uint16_t chr_banks = 0;
     bool battery_backed = false;
 
     /** Protected default constructor — allows direct construction for

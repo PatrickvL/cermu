@@ -159,13 +159,32 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
         }
     }
 
-    // Extract mapper ID
-    mapper_id = ((header.mapper2 >> 4) << 4) | (header.mapper1 >> 4);
+    // Extract mapper ID and sizes
+    bool is_nes20 = (header.mapper2 & 0x0C) == 0x08;
     mirror_mode = (header.mapper1 & 0x01) ? Mirror::VERTICAL : Mirror::HORIZONTAL;
     battery_backed = (header.mapper1 & 0x02) != 0;
 
-    prg_banks = header.prg_rom_chunks;
-    chr_banks = header.chr_rom_chunks;
+    if (is_nes20) {
+        // NES 2.0: 12-bit mapper ID + 4-bit submapper
+        mapper_id = ((header.prg_ram_size & 0x0F) << 8)
+                     | ((header.mapper2 >> 4) << 4)
+                     | (header.mapper1 >> 4);
+        submapper = (header.prg_ram_size >> 4) & 0x0F;
+
+        // Extended PRG/CHR sizes (byte 9: D3-D0 = PRG MSB, D7-D4 = CHR MSB)
+        uint16_t prg_msb = header.tv_system1 & 0x0F;
+        uint16_t chr_msb = (header.tv_system1 >> 4) & 0x0F;
+        prg_banks = header.prg_rom_chunks | (prg_msb << 8);
+        chr_banks = header.chr_rom_chunks | (chr_msb << 8);
+
+        log_info("NES 2.0: mapper %d submapper %d, %d×16KB PRG, %d×8KB CHR\n",
+                 mapper_id, submapper, prg_banks, chr_banks);
+    } else {
+        mapper_id = ((header.mapper2 >> 4) << 4) | (header.mapper1 >> 4);
+        submapper = 0;
+        prg_banks = header.prg_rom_chunks;
+        chr_banks = header.chr_rom_chunks;
+    }
 
     // ====================================================================
     // Mapper inference heuristics for sanitized headers
@@ -246,6 +265,7 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
     // Propagate iNES header mirroring to mapper (used by the default
     // mirror() for mappers that don't dynamically change mirroring).
     mapper->set_header_mirror(mirror_mode);
+    mapper->set_submapper(submapper);
 
     // Store ROM path for SRAM persistence
     rom_filepath_ = filepath_for_sram;

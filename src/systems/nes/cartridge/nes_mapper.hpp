@@ -156,6 +156,10 @@ public:
     /// mapper creation so that the default mirror() returns the correct mode.
     void set_header_mirror(Mirror m) { header_mirror_ = m; }
 
+    /// Store the NES 2.0 submapper number.  Called by Cartridge when
+    /// a NES 2.0 header is detected.  Mappers that care can read submapper_.
+    void set_submapper(uint8_t s) { submapper_ = s; }
+
     /// Give the mapper direct access to the CIRAM / nametable area.
     /// Mappers that place custom data at nt_page indices 2-3 (MMC5 ExRAM,
     /// fill mode) override this to store data at ciram + 0x800 / 0xC00.
@@ -230,6 +234,7 @@ protected:
     uint8_t* prg_ram_ = nullptr;
     size_t prg_ram_size_ = 0;
     Mirror header_mirror_ = Mirror::HORIZONTAL;
+    uint8_t submapper_ = 0;
 };
 
 } // namespace nes_system
