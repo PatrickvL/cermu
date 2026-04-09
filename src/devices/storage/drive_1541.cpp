@@ -477,7 +477,7 @@ static std::vector<std::string> detect_disc_set(const std::string& filepath) {
 
 bool Drive1541Device::insert_disk(const char* filepath) {
     size_t size = 0;
-    uint8_t* data = vfs_read_file(filepath, &size);
+    VfsData data(vfs_read_file(filepath, &size));
     if (!data) {
         log_info("1541: Cannot open disk image '%s'\n", filepath);
         return false;
@@ -487,12 +487,10 @@ bool Drive1541Device::insert_disk(const char* filepath) {
     if (size != DRIVE_D64_STD_SIZE && size != DRIVE_D64_STD_SIZE_ERR &&
         size != DRIVE_D64_EXT_SIZE && size != DRIVE_D64_EXT_SIZE_ERR) {
         log_info("1541: Invalid D64 size %zu for '%s'\n", size, filepath);
-        free(data);
         return false;
     }
 
-    disk_image_.assign(data, data + size);
-    free(data);
+    disk_image_.assign(data.get(), data.get() + size);
 
     media_path_ = filepath;
     media_loaded_ = true;
@@ -544,7 +542,7 @@ bool Drive1541Device::swap_disk(const char* filepath) {
     // code, and VIA state are all preserved (like physically swapping a floppy).
 
     size_t size = 0;
-    uint8_t* data = vfs_read_file(filepath, &size);
+    VfsData data(vfs_read_file(filepath, &size));
     if (!data) {
         log_info("1541: Cannot open disk image '%s' for swap\n", filepath);
         return false;
@@ -553,12 +551,10 @@ bool Drive1541Device::swap_disk(const char* filepath) {
     if (size != DRIVE_D64_STD_SIZE && size != DRIVE_D64_STD_SIZE_ERR &&
         size != DRIVE_D64_EXT_SIZE && size != DRIVE_D64_EXT_SIZE_ERR) {
         log_info("1541: Invalid D64 size %zu for swap '%s'\n", size, filepath);
-        free(data);
         return false;
     }
 
-    disk_image_.assign(data, data + size);
-    free(data);
+    disk_image_.assign(data.get(), data.get() + size);
 
     // Invalidate open channels — file references are stale after swap
     for (auto& ch : channels_) ch.clear();
