@@ -344,10 +344,13 @@ Eliminates scattered `free()` calls across storage devices and format handlers.
 but Apple II system does not connect to it. Apple II hi-res artifact colors are a
 defining visual characteristic of the platform.
 
-### 10.2 CRT Post-Processing: Per-System Tuning — **[QUALITY] M**
-CRT shader exists with barrel distortion, scanline simulation, phosphor glow.
-Systems should expose recommended CRT parameters in their `HardwareTraits`
-(phosphor color, scanline intensity, curvature amount) for authentic defaults.
+### 10.2 CRT Post-Processing — No System-Side Action Needed
+CRT shader uniforms (curvature, phosphor tint, mask type, scanline gap, gamma, etc.)
+are all *monitor* characteristics, not system properties. The system's contribution
+to the display pipeline — signal encoding (`VideoSignalType`), interlace mode,
+pixel aspect ratio, display rotation, NTSC artifact phase — is already correctly
+modeled via `DisplayTraits`, shader selection, and `PhaseIncrement`. Architecture
+is sound; monitor presets are a GUI/user-preference concern.
 
 ### 10.3 Audio Thread Safety — **[QUALITY] S**
 Ring buffer uses correct SPSC acquire/release ordering. Verify no other audio paths
