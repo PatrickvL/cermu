@@ -5,6 +5,7 @@
 #include "core/system_registry.hpp"
 #include "core/formats/format_registry.hpp"
 #include "core/formats/format_load_helpers.hpp"
+#include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -647,6 +648,28 @@ uint8_t BBCMicroSystem::scan_keyboard(uint8_t column) const {
 
 bool BBCMicroSystem::load_file(const char* filepath) {
     if (!filepath || !memory_) return false;
+
+    // Sideways ROM: load .rom files into paged ROM slot 4, then select it
+    const char* ext = strrchr(filepath, '.');
+    if (ext && cermu_strcasecmp(ext, ".rom") == 0) {
+        size_t file_size = 0;
+        VfsData data(vfs_read_file(filepath, &file_size));
+        if (!data || file_size == 0 || file_size > bbc_constants::PAGED_ROM_SIZE) {
+            log_info("BBC Micro: Invalid sideways ROM (%zu bytes): %s\n",
+                     file_size, filepath);
+            return false;
+        }
+        constexpr uint8_t slot = 4;  // User ROM slot (BASIC is at 15)
+        uint8_t* dest = board_.paged_rom.data()
+                      + slot * bbc_constants::PAGED_ROM_SIZE;
+        std::memset(dest, 0xFF, bbc_constants::PAGED_ROM_SIZE);
+        std::memcpy(dest, data.get(), file_size);
+        rom_select_ = slot;
+        update_paged_rom();
+        log_info("BBC Micro: Loaded sideways ROM (%zu bytes) into slot %u\n",
+                 file_size, slot);
+        return true;
+    }
 
     format_apply_config_t cfg{};
     cfg.ram         = memory_;
