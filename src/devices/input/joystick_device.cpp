@@ -191,18 +191,7 @@ void JoystickDevice::render_device_ui() {
             set_signal(PortSignals::JOY_FIRE, fire_held_);
         }
     }
-    if (autofire_enabled_) {
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(80.0f);
-        int rate = autofire_rate_;
-        if (ImGui::SliderInt("##af_rate", &rate, 1, 10, "%d")) {
-            autofire_rate_ = rate;
-        }
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Toggle every %d frame%s (lower = faster)",
-                              rate, rate == 1 ? "" : "s");
-        }
-    }
+    render_autofire_rate_slider(autofire_rate_, autofire_enabled_);
 
     render_input_source_badge();
 }

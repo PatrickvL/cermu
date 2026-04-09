@@ -244,5 +244,19 @@ protected:
             default: break;
         }
     }
+
+    /// Render an autofire rate slider with tooltip (shared by controllers).
+    /// @param rate     Reference to the autofire rate field (frames per toggle)
+    /// @param visible  Show the slider only when autofire is active
+    static void render_autofire_rate_slider(int& rate, bool visible) {
+        if (!visible) return;
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0f);
+        if (ImGui::SliderInt("##af_rate", &rate, 1, 10, "%d")) {}
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Toggle every %d frame%s (lower = faster)",
+                              rate, rate == 1 ? "" : "s");
+        }
+    }
 #endif
 };
