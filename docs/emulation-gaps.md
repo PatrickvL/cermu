@@ -110,9 +110,9 @@ File format loading now works: SSD/DSD, UEF, CPC DSK all supported via format re
 Remaining:
 - ~~SSD/DSD disc image loading~~ — **DONE** (`ssd_format`)
 - ~~UEF tape loading~~ — **DONE** (`uef_format`, gzip via `os_decompress`)
+- ~~BBC Master `load_file()`~~ — **DONE** (wired via `format_load_and_apply`, commit `59acaa1b`)
 - Sideways ROM (.rom) loading: unimplemented
 - BBC Master ACCCON shadow screen RAM: not mapped
-- BBC Master `load_file()`: still returns false (stub)
 
 ### 2.5 ~~Sega Master System: ROM Loading~~ — **[DONE]**
 ROM loading implemented: raw `.sms` files with optional 512-byte header detection,
@@ -202,20 +202,26 @@ No duplication. `PerformanceTracker` is a generic circular-buffer time-series
 primitive; `PerformanceMetrics` is the application-level facade composing 5
 tracker instances + atomic audio counters. Clean composition hierarchy.
 
-### 5.6 File Watcher Platform Coverage — **[QUALITY] S**
+### 5.6 ~~Pin State Boilerplate in _gui.cpp~~ — **[DONE]**
+Added `build_pin_states<ChipType>()` template to `chip_layout.hpp` (two overloads:
+direct pass-through and lambda-based override). Migrated 31 `_gui.cpp` files from
+per-chip static helpers + manual `populate_pin_states_from_bus()` calls. Net −133 lines.
+Committed `0efd41db`.
+
+### 5.7 File Watcher Platform Coverage — **[QUALITY] S**
 `file_watcher.hpp` only implements Linux (`inotify`). macOS/Windows return no-op.
 Config/ROM hot-reload non-functional on those platforms. Document or implement.
 
-### 5.7 Drive Disc Set Detection: Regex on File Open Path — **[PERF] S**
+### 5.8 Drive Disc Set Detection: Regex on File Open Path — **[PERF] S**
 `drive_1541.cpp` uses regex-based multi-disc set detection (~700 lines of scanning logic).
 Profile under large directory listing scenarios. Consider simpler pattern matching
 if this becomes a bottleneck.
 
-### 5.8 Register Accessor Convention Inconsistency — **[QUALITY] S**
+### 5.9 Register Accessor Convention Inconsistency — **[QUALITY] S**
 Some chips use `r_(reg_name)` accessor helpers, others use `regs_.data[addr]` direct indexing.
 Not a functional issue but hurts readability consistency across chip implementations.
 
-### 5.9 MMIO Dispatch Signature Inconsistency — **[QUALITY] S**
+### 5.10 MMIO Dispatch Signature Inconsistency — **[QUALITY] S**
 Some chips use `bus_state_t on_bus_read()` member dispatch, others use static `bus_read()` callbacks.
 Both patterns work correctly. Standardize new code on one pattern.
 
@@ -350,6 +356,14 @@ migrated mappers 065 and 067. Net −75 lines. Committed `760758e4`.
 Storage devices converted to use it. Remaining system `load_file()` callers across
 ~15 systems still use raw `free()` — low-priority incremental cleanup.
 
+### 9.5 ~~format_load_and_apply + load_raw_rom_mirrored~~ — **[DONE]**
+Added `format_load_and_apply()` (full load→format→apply pipeline replacing 15-line
+boilerplate) and `load_raw_rom_mirrored()` (power-of-2 ROM mirroring for cartridge
+systems). Refactored 5 systems to `format_load_and_apply` (Oric, BBC Micro/Master,
+Apple II, VTech VZ) and 3 to `load_raw_rom_mirrored` (ColecoVision, Spectravideo,
+SG-1000). Also migrated MSX ROM loading from `fopen` to `vfs_read_file` for archive
+support. Net −26 lines across 11 files. Committed `59acaa1b`.
+
 ---
 
 ## 10 — Display & Audio Pipeline
@@ -380,36 +394,40 @@ bypass the ring buffer for direct sample output (which would cause races).
 2. ~~VFS RAII wrapper~~ (§9.4) — **DONE** (already existed)
 3. ~~Storage `malloc`/`free` cleanup~~ (§5.1) — **DONE**
 4. ~~ROM loader MD5 stub removal~~ (§5.4) — **DONE** (already removed)
+5. ~~Pin state GUI boilerplate~~ (§5.6) — **DONE**
+6. BBC sideways ROM (.rom) loading (§2.4) — **S**
+7. Audio thread safety verification (§10.3) — **S**
+8. SID combined waveform verification (§1.4) — **S**
 
 ### Medium Effort, High Value (days)
-6. ~~BBC disc format loading: SSD/DSD~~ (§7.2) — **DONE**
-7. Spectrum ULA memory contention (§1.1)
-8. MSX2 memory mapper + sub-slot expansion (§2.7)
+9. ~~BBC disc format loading: SSD/DSD~~ (§7.2) — **DONE**
 10. ~~Amstrad CPC DSK format loading~~ (§7.2) — **DONE**
-11. Device GUI deduplication (§5.2)
-12. Port definitions consolidation (§5.3)
-13. NES mapper regression tests (§6.3)
-14. Missing system test runners (§6.1)
+11. Spectrum ULA memory contention (§1.1)
+12. MSX2 memory mapper + sub-slot expansion (§2.7)
+13. Device GUI deduplication (§5.2)
+14. Port definitions consolidation (§5.3)
+15. NES mapper regression tests (§6.3)
+16. Missing system test runners (§6.1)
 
 ### Large Projects (week+)
-15. Apple II video rendering + disk controller (§2.3)
-16. ~~BBC UEF tape~~ (§7.2) — **DONE**; sideways ROM still needed (§2.4)
-17. TMS9918 VDP command engine for MSX2 (§1.2)
-18. YM ADPCM-A/B decode (§1.7)
-19. Oric full implementation (§2.1)
-20. C1541 cycle-accurate drive mode (§1.3)
-21. HD6309 full instruction coverage (§1.5)
-22. OPM (YM2151) register map (§1.8)
-23. Namco/Atari vector arcade ROM loading + input (§3.1, §3.2)
+17. Apple II video rendering + disk controller (§2.3)
+18. ~~BBC UEF tape~~ (§7.2) — **DONE**; sideways ROM still needed (§2.4)
+19. TMS9918 VDP command engine for MSX2 (§1.2)
+20. YM ADPCM-A/B decode (§1.7)
+21. Oric full implementation (§2.1)
+22. C1541 cycle-accurate drive mode (§1.3)
+23. HD6309 full instruction coverage (§1.5)
+24. OPM (YM2151) register map (§1.8)
+25. Namco/Atari vector arcade ROM loading + input (§3.1, §3.2)
 
 ### Expansion Goals (multi-week)
-24. NES FDS (mapper 020) — disk emulation + wavetable sound
-25. Atari 2600 DPC (Pitfall II)
-26. CoCo / Dragon systems (MC6809 + MC6847 reuse)
-27. HuC6280 CPU → PC Engine
-28. Sega Genesis (M68000 + YM2612 + SN76489 reuse)
-29. Game Boy (Z80 variant + custom PPU/APU)
-30. WDC 65C816 → Apple IIGS / SNES foundation
+26. NES FDS (mapper 020) — disk emulation + wavetable sound
+27. Atari 2600 DPC (Pitfall II)
+28. CoCo / Dragon systems (MC6809 + MC6847 reuse)
+29. HuC6280 CPU → PC Engine
+30. Sega Genesis (M68000 + YM2612 + SN76489 reuse)
+31. Game Boy (Z80 variant + custom PPU/APU)
+32. WDC 65C816 → Apple IIGS / SNES foundation
 
 ---
 
@@ -427,4 +445,4 @@ bypass the ring buffer for direct sample output (which would cause races).
 
 ---
 
-*This document supersedes the previous emulation-gaps.md dated 2026-04-08.*
+*This document supersedes the previous emulation-gaps.md dated 2026-04-09 (pre-format-helper).*
