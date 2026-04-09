@@ -78,10 +78,13 @@ public:
         };
         set_prg_8k_banks(config, prg_rom_, prg_rom_size_, banks);
 
-        // 128-byte PRG-RAM at $7F00
+        // PRG-RAM at $6000-$7FFF — reads work normally but writes must
+        // go through register_write() so register writes at $7EF0-$7EFF
+        // are intercepted instead of silently absorbed by RAM.
         config.prg_ram_base = prg_ram_;
         config.prg_ram_size = static_cast<uint32_t>(prg_ram_size_);
         config.prg_ram_enabled = (prg_ram_ != nullptr);
+        config.prg_ram_write_protected = true;
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {
@@ -112,27 +115,42 @@ public:
     }
 
     bool register_write(uint16_t addr, uint8_t data) override {
-        if (addr < 0x7EF0 || addr > 0x7EFF) return false;
+        if (addr >= 0x7EF0 && addr <= 0x7EFF) {
+            uint8_t reg = addr & 0x0F;
 
-        uint8_t reg = addr & 0x0F;
-        switch (reg) {
-            case 0x00: case 0x01: case 0x02: case 0x03: case 0x04: case 0x05:
-                chr_bank_[reg] = data;
-                if constexpr (NtFromChr) {
-                    if (reg <= 1) update_nametables();
-                }
-                return true;
+            // A2 is not decoded for the PRG bank group (A3=1):
+            // $7EFC-$7EFE mirror $7EF8-$7EFA.
+            if (reg >= 0x0C) reg &= ~0x04;
 
-            case 0x06: case 0x07:
-                if constexpr (!NtFromChr) {
-                    mirror_mode_ = (data & 0x01) ? Mirror::HORIZONTAL : Mirror::VERTICAL;
-                }
-                return true;
+            switch (reg) {
+                case 0x00: case 0x01: case 0x02: case 0x03: case 0x04: case 0x05:
+                    chr_bank_[reg] = data;
+                    if constexpr (NtFromChr) {
+                        if (reg <= 1) update_nametables();
+                    }
+                    return true;
 
-            case 0x08: prg_bank_[0] = data; return true;
-            case 0x09: prg_bank_[1] = data; return true;
-            case 0x0A: prg_bank_[2] = data; return true;
+                case 0x06: case 0x07:
+                    if constexpr (!NtFromChr) {
+                        mirror_mode_ = (data & 0x01) ? Mirror::HORIZONTAL : Mirror::VERTICAL;
+                    }
+                    return true;
+
+                case 0x08: prg_bank_[0] = data; return true;
+                case 0x09: prg_bank_[1] = data; return true;
+                case 0x0A: prg_bank_[2] = data; return true;
+            }
+            return false;
         }
+
+        // Write-through to PRG-RAM for non-register addresses ($6000-$7EEF, $7F00-$7FFF)
+        if (addr >= 0x6000 && addr <= 0x7FFF && prg_ram_ != nullptr) {
+            uint16_t offset = addr - 0x6000;
+            if (offset < prg_ram_size_)
+                prg_ram_[offset] = data;
+            return false;
+        }
+
         return false;
     }
 };

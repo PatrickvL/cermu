@@ -46,7 +46,10 @@ public:
 
     bool register_write(uint16_t addr, uint8_t data) override {
         if (addr >= 0x8000) {
-            data = mapper_helpers::apply_bus_conflict(data, *this, addr);
+            // No bus conflict applied: ANROM/AMROM boards have none, and
+            // AOROM games are designed to handle them gracefully.  Without
+            // NES 2.0 submapper info we can't distinguish, and omitting
+            // the conflict is the safe default.
             prg_bank_select_ = data & 0x07;
             mirror_mode_ = (data & 0x10) ? Mirror::ONESCREEN_HI : Mirror::ONESCREEN_LO;
             return true;

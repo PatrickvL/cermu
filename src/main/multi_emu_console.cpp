@@ -1,13 +1,38 @@
 #include "core/cermu.hpp"
 #include "core/system.hpp"
 #include "core/formats/format_handler.hpp"
+#include "core/signal/sync_types.hpp"
+#include "core/signal/video_sample_types.hpp"
 #include <cstdio>
 #include <cstring>
 #include <memory>
 #include <cstdlib>
+#include <unordered_set>
 
 // Simple console test for multi-system architecture
 int main(int argc, char** argv) {
+    // Parse --frames N option (before positional args)
+    int requested_frames = 300;
+    bool quiet = false;
+    bool gfx_check = false;
+    int first_positional = 1;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
+            requested_frames = atoi(argv[++i]);
+            first_positional = i + 1;
+        } else if (strcmp(argv[i], "--quiet") == 0 || strcmp(argv[i], "-q") == 0) {
+            quiet = true;
+            first_positional = i + 1;
+        } else if (strcmp(argv[i], "--gfx") == 0) {
+            gfx_check = true;
+            first_positional = i + 1;
+        } else {
+            first_positional = i;
+            break;
+        }
+    }
+    if (quiet) log_level = LogLevel::Error;
+
     log_info("=================================================\n");
     log_info("Multi-System Emulator - Console Test\n");
     log_info("=================================================\n\n");
@@ -30,8 +55,8 @@ int main(int argc, char** argv) {
     }
     
     // Test file detection if file provided
-    if (argc > 1) {
-        const char* filepath = argv[1];
+    if (first_positional < argc) {
+        const char* filepath = argv[first_positional];
         log_info("Testing file: %s\n", filepath);
         log_info("-------------------------------------------------\n");
         
@@ -82,7 +107,7 @@ int main(int argc, char** argv) {
         }
         
         // Run enough frames for boot + program loading
-        int total_frames = 300;
+        int total_frames = requested_frames;
         log_info("Running %d frames...\n", total_frames);
         
         // Drain audio periodically to prevent ring-buffer overflow
@@ -96,6 +121,28 @@ int main(int argc, char** argv) {
             }
         }
         log_info("\n");
+        
+        // Graphics detection — analyze signal data for non-blank content
+        if (gfx_check) {
+            const auto& fd = system->get_last_frame_data();
+            int unique = 0;
+            int visible_pixels = 0;
+            if (fd.signal_output && fd.signal_output_len > 0 &&
+                fd.signal_type == VideoSignalType::Composite) {
+                const auto* samples = static_cast<const CompositeVideoSample*>(fd.signal_output);
+                std::unordered_set<uint8_t> colors;
+                for (uint32_t i = 0; i < fd.signal_output_len; i++) {
+                    if (!has_flag(samples[i].flags, SyncFlag::Blank)) {
+                        colors.insert(samples[i].color_index);
+                        visible_pixels++;
+                    }
+                }
+                unique = static_cast<int>(colors.size());
+            }
+            // Machine-readable output (always printed, even in quiet mode)
+            fprintf(stdout, "GFX_RESULT: unique_colors=%d visible_pixels=%d\n",
+                    unique, visible_pixels);
+        }
         
         // Shutdown
         log_info("Shutting down %s...\n", desc.name);
