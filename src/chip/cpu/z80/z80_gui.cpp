@@ -13,6 +13,7 @@
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/cpu/z80/zilog_z80b.hpp"
 #include "chip/cpu/z80/u880.hpp"
+#include "chip/cpu/z80/sharp_sm83.hpp"
 
 #include "core/chip_layout.hpp"
 #ifdef CERMU_HAS_GUI
@@ -39,6 +40,7 @@ template void z80_t<ZilogZ80Traits>::register_debug_fields();
 template void z80_t<ZilogZ80ATraits>::register_debug_fields();
 template void z80_t<ZilogZ80BTraits>::register_debug_fields();
 template void z80_t<U880Traits>::register_debug_fields();
+template void z80_t<SharpSM83Traits>::register_debug_fields();
 
 #endif // CERMU_HAS_CHIP_DEBUG
 
@@ -179,6 +181,11 @@ template ChipLayout*               z80_t<U880Traits>::create_chip_layout() const
 template std::vector<PinSignalState> z80_t<U880Traits>::get_layout_pin_states(ChipLayout&);
 template const char*                z80_t<U880Traits>::get_layout_chip_name() const;
 template void                       z80_t<U880Traits>::render_debug_content();
+
+template ChipLayout*               z80_t<SharpSM83Traits>::create_chip_layout() const;
+template std::vector<PinSignalState> z80_t<SharpSM83Traits>::get_layout_pin_states(ChipLayout&);
+template const char*                z80_t<SharpSM83Traits>::get_layout_chip_name() const;
+template void                       z80_t<SharpSM83Traits>::render_debug_content();
 
 } // namespace z80
 

@@ -714,6 +714,17 @@ if(BUILD_GUI)
         src/chip/video/bbc_vidproc/bbc_vidproc_gui.cpp
         src/chip/video/mc6847/mc6847_gui.cpp
         src/chip/video/tms9918/tms9918_gui.cpp
+        src/chip/video/tms9918/genesis_315_5313_gui.cpp
+        src/chip/video/antic/antic_gui.cpp
+        src/chip/video/gtia/gtia_gui.cpp
+        src/chip/video/gb_ppu/gb_ppu_gui.cpp
+        src/chip/video/huc6270/huc6270_gui.cpp
+        src/chip/video/huc6260/huc6260_gui.cpp
+        src/chip/video/st_shifter/st_shifter_gui.cpp
+        src/chip/sound/gb_apu/gb_apu_gui.cpp
+        src/chip/io/mc6883_sam_gui.cpp
+        src/chip/io/mk68901/mk68901_gui.cpp
+        src/chip/storage/wd_fdc/wd1772_gui.cpp
         src/chip/input/keyboard_encoder_gui.cpp
         src/systems/nes/cartridge/nes_cartridge_gui.cpp
     )

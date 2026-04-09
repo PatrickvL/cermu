@@ -22,7 +22,7 @@
 #include "core/board.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
-#include "chip/cpu/fam65xx/wdc65c02.hpp"
+#include "chip/cpu/fam65xx/hudson_huc6280.hpp"
 #include "chip/video/huc6270/huc6270.hpp"
 #include "chip/video/huc6260/huc6260.hpp"
 #include "chip/memory/memory_chip.hpp"
@@ -36,15 +36,15 @@ enum class PCEVariant { PCE, TG16, SGX };
 // PC Engine default bus state
 // ============================================================================
 
-#define PCE_BUS_DEFAULT_STATE (WDC_65C02::default_bus_state())
+#define PCE_BUS_DEFAULT_STATE (HUDSON_HUC6280::default_bus_state())
 
 // ============================================================================
-// PC Engine Manifest  (using WDC_65C02 as HuC6280 stand-in)
+// PC Engine Manifest
 // ============================================================================
 
 inline constexpr auto kPCEManifest = make_manifest(
     // Chips
-    Slot<WDC_65C02>{.base_addr = 0x0000, .label = "HuC6280 (65C02 stand-in)"},
+    Slot<HUDSON_HUC6280>{.base_addr = 0x0000, .label = "HuC6280"},
     Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = pce_constants::MAX_ROM_SIZE,
                   .label = "HuCard ROM"},
     Slot<RAMChip>{.base_addr = 0x2000, .size_bytes = pce_constants::RAM_SIZE,
@@ -68,7 +68,7 @@ struct PCEBoard : Board<PCEBusSpec> {
     ComponentTuple components_;
 
     // Chip aliases
-    WDC_65C02&   cpu  = std::get<0>(components_);
+    HUDSON_HUC6280&   cpu  = std::get<0>(components_);
     ROMChip&     rom  = std::get<1>(components_);
     RAMChip&     ram  = std::get<2>(components_);
     huc6270_t&   vdc  = std::get<3>(components_);
