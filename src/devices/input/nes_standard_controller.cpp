@@ -265,18 +265,8 @@ void NesStandardController::render_device_ui() {
     if (ImGui::Checkbox("Auto-fire A", &af_a)) autofire_a_enabled_ = af_a;
     ImGui::SameLine();
     if (ImGui::Checkbox("Auto-fire B", &af_b)) autofire_b_enabled_ = af_b;
-    if (autofire_a_enabled_ || autofire_b_enabled_) {
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(80.0f);
-        int rate = autofire_rate_;
-        if (ImGui::SliderInt("##af_rate", &rate, 1, 10, "%d")) {
-            autofire_rate_ = rate;
-        }
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Toggle every %d frame%s (lower = faster)",
-                              rate, rate == 1 ? "" : "s");
-        }
-    }
+    render_autofire_rate_slider(autofire_rate_,
+                               autofire_a_enabled_ || autofire_b_enabled_);
 
     render_input_source_badge();
 }
