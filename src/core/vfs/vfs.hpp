@@ -29,8 +29,27 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <cstdlib>
+#include <memory>
 #include <string>
 #include <vector>
+
+// ============================================================================
+// RAII Wrapper for VFS File Data
+// ============================================================================
+
+/// Deleter for buffers returned by vfs_read_file() / vfs_read_from_memory_archive().
+struct VfsFreeDeleter {
+    void operator()(uint8_t* p) const noexcept { std::free(p); }
+};
+
+/// Owning pointer to a VFS-allocated buffer.  Automatically freed on destruction.
+/// Usage:
+///   size_t size = 0;
+///   VfsData data(vfs_read_file(path, &size));
+///   if (!data) { /* error */ }
+///   // data.get() is valid until VfsData goes out of scope
+using VfsData = std::unique_ptr<uint8_t[], VfsFreeDeleter>;
 
 // ============================================================================
 // Path Constants
