@@ -90,7 +90,7 @@ public:
 
         // BNROM: any write to $8000-$FFFF selects PRG bank
         if (addr >= 0x8000) {
-            data = mapper_helpers::apply_bus_conflict(data, prg_rom_, prg_rom_size_, addr);
+            data = mapper_helpers::apply_bus_conflict(data, *this, addr);
             prg_bank_select_ = data;
             return true;
         }
