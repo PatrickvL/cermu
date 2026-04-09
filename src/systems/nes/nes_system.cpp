@@ -1116,17 +1116,25 @@ void NintendoSystem<V>::tick() {
             dma_odd_cycle_ = !dma_odd_cycle_;
 
             // ============================================================
-            // Keep APU and interrupt detection running during DMA.
-            // On real hardware the APU clock continues and the NMI
-            // edge-detect flip-flop remains active while the bus is
-            // hijacked by DMA.  The IRQ shift register (part of the
-            // CPU pipeline) is stalled — NOT fed during DMA.  When
-            // DMA ends, the CPU re-samples IRQ from scratch, giving
-            // the normal 3-cycle detection latency.
+            // Keep APU, mapper, and interrupt detection running during DMA.
+            // On real hardware M2 (PHI2) continues while the bus is
+            // hijacked by DMA.  The APU and mapper IRQ counters (FME-7,
+            // Sunsoft 3, etc.) are clocked by M2, so they keep counting.
+            // The IRQ shift register (part of the CPU pipeline) is
+            // stalled — NOT fed during DMA.  When DMA ends, the CPU
+            // re-samples IRQ from scratch, giving the normal 3-cycle
+            // detection latency.
             // ============================================================
 
             // Clock APU — advances frame counter, timers, DMC
             pins_ = board_.cpu.clock_apu(pins_);
+
+            // Mapper CPU-cycle tick — IRQ counters and expansion audio
+            // must keep running during DMA (driven by M2 on real HW).
+            if (cartridge_) {
+                cartridge_->notify_cpu_cycle();
+                cartridge_->audio_tick();
+            }
 
             // Transfer PPU /NMI onto CPU bus
             pins_ = PPU_CPU_BITMIX(pins_, board_.ppu.bus_snapshot_);
