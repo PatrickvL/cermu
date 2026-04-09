@@ -1,7 +1,8 @@
 # NES Blank-Screen ROM Analysis
 
-**Date:** 2026-04-09
-**Test:** 1430 ROMs, 60 frames headless, composite-signal color detection
+**Date:** 2026-04-10
+**Test:** 1430 ROMs, 300 frames headless (early-exit), composite-signal color detection
+**Current Results:** 1396 PASS (97.6%), 17 BLANK (1.2%), 17 OTHER
 **Initial Results:** 919 PASS (64.3%), 509 BLANK (35.6%), 2 CRASH
 
 ---
@@ -18,6 +19,10 @@
 | NES-QJ: PRG-RAM write protection for outer bank register | 47 | 1 | `bc12abe1` | **VERIFIED** |
 | MMC1: PRG/CHR bank address mirroring for out-of-range banks | 1 | 6 | `2063cf3e` | **VERIFIED** |
 | Systemic PRG/CHR bank address mirroring across 8 mappers | 4,5,13,28,64,118,119,232 | 46 | `5c72e7a4` | **VERIFIED** |
+| DMA mapper tick: IRQ counters + expansion audio during OAM DMA | all | ~10 | `cc1e2ce3` | **VERIFIED** |
+| FME-7: $6000 PRG-ROM mapping (was reading open bus) | 69 | 2 | `344b95a5` | **VERIFIED** |
+| Mapper 037 (PAL-ZZ multicart) + CRC-based mapper override table | 4→37 | 1 | `42280be5` | **VERIFIED** |
+| Mapper 153 (Bandai SRAM) + 3 CRC overrides (M16→153, M19→210s1, M33→48) | 16,19,33 | 3 | `f1a0c357` | **VERIFIED** |
 
 ---
 
@@ -25,31 +30,26 @@
 
 ### Progression
 
-| Status | Initial (60f) | +MMC1/AxROM | +210/016/047 | +MMC1 wrap (300f) | +Systemic wrap (300f) | Total Delta |
-|--------|-------------:|------------:|-------------:|-----------------:|---------------------:|------------:|
-| PASS   |          919 |       1210  |         1226 |             1290 |                 1390 | **+471** |
-| BLANK  |          509 |        217  |          201 |              137 |                   37 | **-472** |
-| CRASH  |            2 |          2  |            2 |                2 |                    2 | 0 |
-| TIMEOUT|            0 |          1  |            1 |                1 |                    1 | +1 |
+| Status | Initial (60f) | +MMC1/AxROM | +210/016/047 | +MMC1 wrap (300f) | +Systemic wrap (300f) | +DMA/FME-7/037 | +CRC overrides | Total Delta |
+|--------|-------------:|------------:|-------------:|-----------------:|---------------------:|---------------:|---------------:|------------:|
+| PASS   |          919 |       1210  |         1226 |             1290 |                 1390 |           1393 |           1396 | **+477** |
+| BLANK  |          509 |        217  |          201 |              137 |                   37 |             20 |             17 | **-492** |
+| CRASH  |            2 |          2  |            2 |                2 |                    2 |              2 |              2 | 0 |
+| TIMEOUT|            0 |          1  |            1 |                1 |                    1 |              1 |              1 | +1 |
 
-**472 previously blank ROMs now show graphics (93% reduction).**
+**492 previously blank ROMs now show graphics (97% reduction).**
 
-### Remaining 37 Blanks by Mapper
+### Remaining 17 Blanks by Mapper
 
 | Mapper | Count | Description | Notes |
 |--------|------:|-------------|-------|
-| 5 | 10 | MMC5 | Complex mapper, incomplete impl |
-| 19 | 7 | Namco 163 | IRQ or sound RAM issue |
-| 80 | 6 | Taito X1-005 | Register fix applied but deeper issue |
-| 4 | 3 | MMC3/TxROM | Multi-cart + 2 genuine bugs |
+| 80 | 6 | Taito X1-005 | Register fix applied but deeper issue (security latch?) |
+| 5 | 3 | MMC5 | Complex mapper, incomplete impl |
+| 19 | 2 | Namco 163 | Expansion audio or IRQ timing |
 | 96 | 2 | Oeka Kids | Special input device required |
-| 69 | 2 | Sunsoft FME-7 | Dodge Danpei + translation |
-| 16 | 1 | Bandai FCG | Famicom Jump II (actually mapper 153) |
-| 33 | 1 | Taito TC0190 | Bakushou Jinsei Gekijou 3 |
 | 40 | 1 | FDS SMB2J Hack | Super Mario Bros 2 (J) FDS hack |
 | 75 | 1 | VRC1 | Ninja Jajamaru |
 | 120 | 1 | FDS Hack | Tobidase Daisakusen |
-| 140 | 1 | Jaleco JF-11 | Bio-Warrior Dan |
 | 207 | 1 | Taito X1-017 | Fudou Myouou Den |
 
 ---
@@ -60,14 +60,17 @@
 |---|-----------|-----------|--------:|----------:|----------------|
 | 1 | [MMC1 PRG bank bugs](#1-mmc1-prg-bank-calculation-bug) | 1 | 305 | 0 | **DONE** (241 bank offset + 58 slow starters + 6 bank wrapping) |
 | 2 | [Taito X1-005/X1-017 register shadowing](#2-taito-x1-005x1-017-register-shadowing) | 80, 82, 207 | 12 | 7 | Partial (deeper issue; mapper 82 now passes) |
-| 3 | [Bandai FCG mapper bugs](#3-bandai-fcg-mapper-16) | 16 | 19 | 1 | **NEAR-DONE** (8 I2C, 10 slow starters; 1 mapper 153 misidentified) |
+| 3 | [Bandai FCG mapper bugs](#3-bandai-fcg-mapper-16) | 16, 153 | 19 | 0 | **DONE** (8 I2C, 10 slow starters, 1 mapper 153 CRC override) |
 | 4 | [Namco 175/340 mapper bug](#4-namco-175340-mapper-210) | 210 | 7 | 0 | **DONE** (all 7 fixed) |
 | 5 | [AxROM partial failures](#5-axrom-mapper-7) | 7 | 16 | 0 | **DONE** (all 16 fixed) |
-| 6 | [MMC5 incomplete implementation](#6-mmc5-mapper-5) | 5 | 11 | 10 | Hard (1 fixed by bank wrapping) |
-| 7 | [Namco 163 issue](#7-namco-163-mapper-19) | 19 | 10 | 7 | Medium (3 were slow starters) |
+| 6 | [MMC5 incomplete implementation](#6-mmc5-mapper-5) | 5 | 11 | 3 | Hard (8 fixed by bank wrapping + DMA tick) |
+| 7 | [Namco 163 issue](#7-namco-163-mapper-19) | 19 | 10 | 2 | Medium (5 fixed by DMA tick + CRC override to mapper 210) |
 | 8 | [Systemic bank wrapping](#8-systemic-bank-wrapping) | multiple | ~100 | 0 | **DONE** (bank mirroring + slow starters) |
-| 9 | [Minor mappers](#9-minor-mapper-issues) | various | ~15 | 8 | Varies |
+| 9 | [Minor mappers](#9-minor-mapper-issues) | various | ~15 | 4 | Varies |
 | 10 | [Slow starters (need >60 frames)](#10-slow-starters) | 0,2,3,4,etc. | ~115 | 0 | **DONE** (all resolved at 300 frames) |
+| 11 | [DMA mapper tick](#11-dma-mapper-tick) | all | ~10 | 0 | **DONE** (IRQ + exp. audio during OAM DMA) |
+| 12 | [FME-7 $6000 mapping](#12-fme-7-6000-prg-rom-mapping) | 69 | 2 | 0 | **DONE** |
+| 13 | [CRC-based mapper correction](#13-crc-based-mapper-correction) | 4→37, 16→153, 19→210s1, 33→48 | 4 | 0 | **DONE** |
 
 **New TIMEOUT:** Days of Thunder (North America) — mapper 0, likely infinite loop or timing issue
 
@@ -296,8 +299,8 @@ RAM reads/writes for $7F00–$7FFF alongside register writes in `register_write(
 
 ### 3. Bandai FCG (Mapper 16)
 
-**Impact:** 19 ROMs → **1 remaining** (8 fixed by I2C in `bc12abe1`, 10 were slow starters)
-**Status:** Near-done
+**Impact:** 19 ROMs → **0 remaining** (8 fixed by I2C in `bc12abe1`, 10 slow starters, 1 CRC override to mapper 153)
+**Status:** **DONE**
 
 **Three bugs found and fixed:**
 1. **PRG-RAM write interception:** Writes to $6000-$7FFF absorbed by PRG-RAM
@@ -307,7 +310,10 @@ RAM reads/writes for $7F00–$7FFF alongside register writes in `register_write(
 3. **I2C EEPROM timing:** ACK sent on clock 8 (same cycle as last data bit) instead
    of clock 9. Standard I2C: 8 data + 1 ACK clock per byte. Games hung waiting for ACK.
 
-**Remaining 1:** Famicom Jump II (actually mapper 153, misidentified in iNES header).
+**Remaining 1:** ~~Famicom Jump II (actually mapper 153, misidentified in iNES header).~~
+**Fixed** in `f1a0c357`: CRC override 0x3F15D20D → mapper 153 (Bandai SRAM variant).
+Mapper 153 implemented as `BandaiFCGVariant::SRAM` — standard 8KB SRAM at $6000,
+CHR register bit 0 selects 256KB PRG outer bank, CHR-RAM fixed.
 4 Datach ROMs, all Dragon Ball Z ROMs, and others now pass at 300 frames.
 
 **Affected ROMs:**
@@ -396,11 +402,11 @@ Possible causes:
 
 ### 6. MMC5 (Mapper 5)
 
-**Impact:** 11 ROMs → **10 remaining** (1 fixed by bank wrapping in `5c72e7a4`)
+**Impact:** 11 ROMs → **3 remaining** (1 fixed by bank wrapping in `5c72e7a4`, 7 fixed by DMA mapper tick in `cc1e2ce3`)
 **Fix:** Hard — known incomplete (missing expansion audio, vertical split mode)
 
-4 ROMs pass (Metal Slader Glory fixed by PRG bank wrapping). 10 blank — likely
-exercise advanced features (extended attributes, fill mode, specific CHR banking modes).
+8 ROMs now pass. 3 blank — likely exercise advanced features (extended attributes,
+fill mode, specific CHR banking modes, or MMC5 multiplication register).
 
 **Remaining blank ROMs:**
 
@@ -408,34 +414,22 @@ exercise advanced features (extended attributes, fill mode, specific CHR banking
 |-----|----:|----:|
 | NES Japan ROMs/Aoki Ookami to Shiroki Mejika - Genchou Hishi (Japan).nes | 512 | 256 |
 | NES Japan ROMs/Ishin no Arashi (Japan).nes | 256 | 128 |
-| NES Japan ROMs/Nobunaga's Ambition III (Japan).nes | 512 | 256 |
-| NES North America ROMs/Bandit Kings of Ancient China (North America).nes | 256 | 128 |
-| NES North America ROMs/Gemfire (North America).nes | 256 | 256 |
-| NES North America ROMs/L'Empereur (North America).nes | 256 | 128 |
-| NES North America ROMs/Nobunaga's Ambition II (North America).nes | 256 | 128 |
-| NES North America ROMs/Romance of the Three Kingdoms II (North America).nes | 256 | 256 |
-| NES North America ROMs/Uncharted Waters (North America).nes | 512 | 128 |
 | NES Translated Japan ROMs/Just Breed (Translated) (Japan).nes | 512 | 256 |
 
 ---
 
 ### 7. Namco 163 (Mapper 19)
 
-**Impact:** 10 ROMs → **7 remaining** (3 were slow starters, now pass at 300 frames)
+**Impact:** 10 ROMs → **2 remaining** (3 slow starters, 4 fixed by DMA tick in `cc1e2ce3`, 1 CRC override to mapper 210 sub 1)
 **Fix:** Medium — expansion audio is stubbed, may affect timing
 
-19 ROMs pass, 7 blank. Could be timing-related or related to the stubbed
+8 ROMs now pass. 2 blank — could be timing-related or related to the stubbed
 expansion audio registers interfering with game logic.
 
 **Remaining blank ROMs:**
 
 | ROM | PRG | CHR |
 |-----|----:|----:|
-| NES Japan ROMs/Chibi Maruko-Chan - Uki Uki Shopping (Japan).nes | 128 | 128 |
-| NES Japan ROMs/Sangokushi II - Haou no Tairiku (Japan).nes | 256 | 256 |
-| NES Japan ROMs/Top Striker (Japan).nes | 128 | 128 |
-| NES Translated Japan ROMs/Digital Devil Story - Megami Tensei II (Translated) (Japan).nes | 512 | 256 |
-| NES Translated Japan ROMs/Dragon Ninja (Translated) (Japan).nes | 128 | 128 |
 | NES Translated Japan ROMs/Jubei Quest (Translated) (Japan).nes | 512 | 256 |
 | NES Translated Japan ROMs/Phantom Travel Journal (Translated) (Japan).nes | 128 | 128 |
 
@@ -465,22 +459,28 @@ at 300 frames with `--early-exit` was equally important.
 
 ### 9. Minor Mapper Issues
 
-Small-count mappers still blank after systemic fix:
+Small-count mappers still blank after all fixes:
 
 | Mapper | Name | Blank | Total | ROMs |
 |-------:|------|------:|------:|------|
-| 69 | Sunsoft FME-7 | 2 | 9 | Honoo no Doukyuuji (Dodge Danpei) × 2 |
 | 96 | Oeka Kids | 2 | 2 | Oeka Kids: Anpanman × 2 (need special input) |
 | 120 | FDS Hack | 1 | 1 | Tobidase Daisakusen |
-| 140 | Jaleco JF-11 | 1 | 3 | Bio-Warrior Dan |
 | 40 | FDS SMB2J Hack | 1 | 1 | Super Mario Bros 2 (J) FDS hack |
 | 75 | VRC1 | 1 | 6 | Ninja Jajamaru |
 | 207 | Taito X1-017 | 1 | 1 | Fudou Myouou Den |
-| 33 | Taito TC0190 | 1 | 9 | Bakushou Jinsei Gekijou 3 |
-| 16 | Bandai FCG | 1 | 19 | Famicom Jump II (actually mapper 153) |
 
-**Previously blank, now passing:** mappers 9, 10, 15, 26, 47, 65, 76, 82, 85, 88, 206
-(all resolved by bank wrapping fix + 300-frame re-test).
+**Resolved since last update:**
+
+| Mapper | Name | Fix | Commit |
+|-------:|------|-----|--------|
+| 69 | Sunsoft FME-7 | $6000 PRG-ROM mapping fix | `344b95a5` |
+| 4→37 | MMC3→PAL-ZZ | CRC-based mapper correction | `42280be5` |
+| 33→48 | TC0190→TC0690 | CRC-based mapper correction (needs scanline IRQ) | `f1a0c357` |
+| 140 | Jaleco JF-11 | Fixed by DMA mapper tick | `cc1e2ce3` |
+| 16→153 | Bandai FCG→SRAM | CRC override + new mapper 153 impl | `f1a0c357` |
+
+**Previously blank, now passing:** mappers 9, 10, 15, 26, 47, 65, 69, 76, 82, 85, 88, 140, 206
+(all resolved by bank wrapping fix + 300-frame re-test + DMA tick + FME-7 fix).
 
 ---
 
@@ -504,6 +504,63 @@ graphics. Re-testing at 300 frames with `--early-exit` resolved all of these.
 
 ---
 
+### 11. DMA Mapper Tick
+
+**Impact:** ~10 ROMs → 0 remaining
+**Status:** **DONE** (commit `cc1e2ce3`)
+
+OAM DMA transfers 256 bytes over 513-514 CPU cycles. During this time, mapper
+IRQ counters and expansion audio were not being ticked — the DMA code bypassed
+`notify_cpu_cycle()`. Games relying on precise CPU-cycle IRQ (MMC5 frame counter,
+Namco 163 IRQ, Jaleco JF-11 IRQ) hung or never reached rendering.
+
+**Fix:** Call `mapper->notify_cpu_cycle()` for each DMA byte transfer cycle.
+Also tick expansion audio during DMA for correct audio register behavior.
+
+---
+
+### 12. FME-7 $6000 PRG-ROM Mapping
+
+**Impact:** 2 ROMs → 0 remaining
+**Status:** **DONE** (commit `344b95a5`)
+
+Sunsoft FME-7 allows mapping PRG-ROM at $6000-$7FFF (register $8, bit 6 controls
+ROM/RAM select, bit 7 enables the region). When bit 6=0 and bit 7=1, PRG-ROM
+should be bank-switched into $6000. The mapper was treating this region as open bus,
+causing games like Mr. Gimmick and Dodge Danpei to read garbage.
+
+**Fix:** Correctly implement $6000 PRG-ROM banking in `get_prg_bank_config()`.
+
+**Affected ROMs:**
+
+| ROM | PRG | CHR |
+|-----|----:|----:|
+| NES Japan ROMs/Honoo no Doukyuuji - Dodge Danpei (Japan).nes | 128 | 128 |
+| NES Translated Japan ROMs/Dodge Danpei (Translated) (Japan).nes | 128 | 128 |
+
+---
+
+### 13. CRC-Based Mapper Correction
+
+**Impact:** 4 ROMs → 0 remaining
+**Status:** **DONE** (commits `42280be5`, `f1a0c357`)
+
+Some ROMs have incorrect mapper IDs in their iNES headers. Other emulators
+(Mesen2, FCEUX, Nestopia) maintain CRC-based override databases to correct these.
+Implemented a `MapperOverride` table in `nes_cartridge.cpp` keyed on PRG+CHR CRC32,
+with support for both mapper and submapper correction.
+
+**Override table:**
+
+| CRC32 | Header | Correct | ROM | Reason |
+|-------|-------:|--------:|-----|--------|
+| F46EF39A | 4 | **37** | Super Mario Bros + Tetris + NWC (Europe) | PAL-ZZ multicart, not standard MMC3 |
+| 3F15D20D | 16 | **153** | Famicom Jump II | Bandai SRAM variant, not EEPROM |
+| 0C47946D | 19 | **210 sub 1** | Chibi Maruko-Chan | Namco 175 (hardwired mirror), not N163 |
+| AEBD6549 | 33 | **48** | Bakushou!! Jinsei Gekijou 3 | TC0690 (has scanline IRQ), not TC0190 |
+
+---
+
 ## Test Infrastructure
 
 - **Boot warp** (`41945105`): NES GUI runs at max speed until PPU enables rendering
@@ -524,8 +581,10 @@ graphics. Re-testing at 300 frames with `--early-exit` resolved all of these.
 5. ~~NES-QJ PRG-RAM interception~~ — **DONE** (1 ROM)
 6. ~~MMC1 bank wrapping + slow-starter re-test~~ — **DONE** (64 ROMs)
 7. ~~Systemic bank wrapping + 300-frame re-test~~ — **DONE** (100 ROMs across 8 mappers)
-8. **MMC5 completion** — 10 ROMs, significant effort
-9. **Namco 163** — 7 ROMs, expansion audio or timing
-10. **Taito X1-005 deeper issue** — 6 ROMs
-11. **MMC3 remaining** — 3 ROMs (Nightshade, Ring King, SMB+Tetris+NWC multicart)
-12. **Minor mappers** — 8 ROMs across 9 mappers, triage individually
+8. ~~DMA mapper tick~~ — **DONE** (~10 ROMs across MMC5, Namco 163, Jaleco)
+9. ~~FME-7 $6000 PRG-ROM mapping~~ — **DONE** (2 ROMs)
+10. ~~CRC-based mapper correction~~ — **DONE** (4 ROMs: mapper 037, 153, 210s1, 48)
+11. **Taito X1-005 deeper issue** — 6 ROMs, likely security latch or specific register behavior
+12. **MMC5 completion** — 3 ROMs, significant effort (extended attributes, fill mode)
+13. **Namco 163** — 2 ROMs, expansion audio or timing
+14. **Minor mappers** — 4 ROMs across 4 mappers (96, 40, 75, 120), triage individually
