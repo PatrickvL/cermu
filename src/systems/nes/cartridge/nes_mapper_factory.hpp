@@ -34,6 +34,7 @@
 #include "systems/nes/cartridge/mappers/mapper_032_irem_g101.hpp"
 #include "systems/nes/cartridge/mappers/mapper_033_taito_tc0190.hpp"
 #include "systems/nes/cartridge/mappers/mapper_034_bnrom.hpp"
+#include "systems/nes/cartridge/mappers/mapper_037_pal_zz.hpp"
 #include "systems/nes/cartridge/mappers/mapper_038_crime_busters.hpp"
 #include "systems/nes/cartridge/mappers/mapper_040_fds_hack.hpp"
 #include "systems/nes/cartridge/mappers/mapper_041_caltron.hpp"
@@ -141,7 +142,8 @@ struct MapperFactory {
             case 32:  return std::make_unique<Mapper032>(prg_banks, chr_banks);
             case 33:  return std::make_unique<Mapper033>(prg_banks, chr_banks);
             case 34:  return std::make_unique<Mapper034>(prg_banks, chr_banks);
-            // missing: 35–37 — rare/pirate/FDS-conversion mappers
+            // missing: 35–36 — rare/pirate/FDS-conversion mappers
+            case 37:  return std::make_unique<Mapper037>(prg_banks, chr_banks);
             case 38:  return std::make_unique<Mapper038>(prg_banks, chr_banks);
             // missing: 39 — rare/pirate
             case 40:  return std::make_unique<Mapper040>(prg_banks, chr_banks);
