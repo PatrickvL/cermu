@@ -84,16 +84,16 @@ Framework exists (6502, AY-3-8912, MOS 6522 VIA instantiated) but functionally n
 - ULA text/hi-res rendering: not implemented
 - AY-3-8912 audio output routing through VIA: not wired
 - Keyboard matrix mapping: stub
-- TAP tape format loading: unimplemented
+- ~~TAP tape format loading: unimplemented~~ — **DONE** (`oric_tap_format`)
 
-All four items must be addressed together to produce any visible/audible output.
+Remaining three items must be addressed together to produce any visible/audible output.
 
 ### 2.2 VTech VZ (VZ200/VZ300) — **[STUB] L**
 Z80A instantiated with basic memory map, but:
 - Video rendering: stub (no pixel output)
 - Speaker synthesis: not wired
 - Keyboard mapping: stub
-- VZ tape format: unimplemented
+- ~~VZ tape format: unimplemented~~ — **DONE** (`vz_format`)
 
 ### 2.3 Apple II: Video Rendering Incomplete — **[INCOMPLETE] L**
 3-variant template exists (II/IIe/IIc) with correct soft-switch memory map, but:
@@ -102,14 +102,17 @@ Z80A instantiated with basic memory map, but:
 - Artifact color generation: shader infrastructure exists (`artifact_signal_shader.hpp`) but not wired to Apple II
 - Disk controller (Disk II): not implemented — blocks most software
 - Speaker toggle: not connected to audio output
+- ~~DSK/NIB/2MG format loading~~ — **DONE** (`apple_dsk_format`)
 
-### 2.4 BBC Micro/Master: File Format Loading Missing — **[INCOMPLETE] M**
-System emulation is functional (MC6845 + Video ULA + SN76489 + 2×VIA all working), but:
-- SSD/DSD disc image loading: unimplemented
-- UEF tape loading: unimplemented
+### 2.4 BBC Micro/Master: Remaining Gaps — **[INCOMPLETE] M**
+System emulation is functional (MC6845 + Video ULA + SN76489 + 2×VIA all working).
+File format loading now works: SSD/DSD, UEF, CPC DSK all supported via format registry.
+Remaining:
+- ~~SSD/DSD disc image loading~~ — **DONE** (`ssd_format`)
+- ~~UEF tape loading~~ — **DONE** (`uef_format`, gzip via `os_decompress`)
 - Sideways ROM (.rom) loading: unimplemented
 - BBC Master ACCCON shadow screen RAM: not mapped
-- No file format support means no software can be loaded beyond built-in BASIC.
+- BBC Master `load_file()`: still returns false (stub)
 
 ### 2.5 ~~Sega Master System: ROM Loading~~ — **[DONE]**
 ROM loading implemented: raw `.sms` files with optional 512-byte header detection,
@@ -248,22 +251,31 @@ for systematic coverage of banking, IRQ, and mirroring edge cases.
 
 ## 7 — File Format Gaps
 
-### 7.1 Supported Formats (17+)
+### 7.1 Supported Formats (26+)
 PRG, SID, CRT, D64, T64, TAP (Commodore), iNES, NSF, A26,
-SNA, Z80 snapshot, Spectrum TAP, SCL, TRD, BIN, LNX.
+SNA, Z80 snapshot, Spectrum TAP, SCL, TRD, BIN, LNX,
+SSD/DSD, UEF, CPC DSK, CPR, Apple DSK/NIB/2MG, MSX CAS,
+Oric TAP, VZ, KC TAP.
 
-### 7.2 Missing Formats — High Value
-| Format | System | Impact | Effort |
-|--------|--------|--------|--------|
-| **DSK** | Amstrad CPC, BBC Micro | Blocks all disc-based software | **M** |
-| **SSD/DSD** | BBC Micro | Standard disc images — no loading without this | **M** |
-| **UEF** | BBC Micro, Acorn Atom | Cassette format — alternative to disc | **M** |
-| **DSK/NIB/2MG** | Apple II | Disk formats — blocks most software | **L** |
-| **WAV/CAS** | MSX | Cassette audio format | **M** |
-| **TAP** | Oric | Standard tape format for Oric | **M** |
-| **CPR** | Amstrad CPC | Cartridge Plus format | **S** |
-| **VZ** | VTech VZ | Tape/program format | **S** |
-| **K7** | KC85 | Full KC85 tape emulation (partial exists) | **M** |
+### 7.2 ~~Missing Formats — High Value~~ — **[DONE]**
+All 9 high-value formats implemented with shared abstractions:
+- `tape_common.hpp`: shared `block_t` + `load_best_entry()` used by 5 tape formats
+- `disk_image_common.hpp`: shared `file_entry_t` + `load_best_entry()` used by 3 disk formats
+- `format_load_helpers.hpp`: `format_apply_program()` deduplicates per-system load logic
+- `CpuChipBase::set_pc()`: virtual PC setter with fam65xx/z80 overrides
+- UEF gzip decompression via `os_decompress()` (libarchive raw format)
+
+| Format | System | Status |
+|--------|--------|--------|
+| **DSK** | Amstrad CPC | ✅ `cpc_dsk_format` — standard + extended CPCEMU |
+| **SSD/DSD** | BBC Micro | ✅ `ssd_format` — Acorn DFS catalog parsing |
+| **UEF** | BBC Micro, Acorn Atom | ✅ `uef_format` — gzip support via libarchive |
+| **DSK/NIB/2MG** | Apple II | ✅ `apple_dsk_format` — DOS 3.3 VTOC + T/S lists |
+| **CAS** | MSX | ✅ `msx_cas_format` — binary + BASIC blocks |
+| **TAP** | Oric | ✅ `oric_tap_format` — multi-program support |
+| **CPR** | Amstrad CPC | ✅ `cpr_format` — RIFF/AMS! container |
+| **VZ** | VTech VZ | ✅ `vz_format` — VZF0/VZF1 tape files |
+| **K7/TAP** | KC85 | ✅ `kc_tap_format` — block-structured, COM/BASIC |
 
 ### 7.3 Missing Formats — Lower Priority
 | Format | System | Impact |
@@ -370,10 +382,10 @@ bypass the ring buffer for direct sample output (which would cause races).
 4. ~~ROM loader MD5 stub removal~~ (§5.4) — **DONE** (already removed)
 
 ### Medium Effort, High Value (days)
-6. BBC disc format loading: SSD/DSD (§7.2)
+6. ~~BBC disc format loading: SSD/DSD~~ (§7.2) — **DONE**
 7. Spectrum ULA memory contention (§1.1)
 8. MSX2 memory mapper + sub-slot expansion (§2.7)
-10. Amstrad CPC DSK format loading (§7.2)
+10. ~~Amstrad CPC DSK format loading~~ (§7.2) — **DONE**
 11. Device GUI deduplication (§5.2)
 12. Port definitions consolidation (§5.3)
 13. NES mapper regression tests (§6.3)
@@ -381,7 +393,7 @@ bypass the ring buffer for direct sample output (which would cause races).
 
 ### Large Projects (week+)
 15. Apple II video rendering + disk controller (§2.3)
-16. BBC UEF tape + sideways ROM (§2.4, §7.2)
+16. ~~BBC UEF tape~~ (§7.2) — **DONE**; sideways ROM still needed (§2.4)
 17. TMS9918 VDP command engine for MSX2 (§1.2)
 18. YM ADPCM-A/B decode (§1.7)
 19. Oric full implementation (§2.1)
