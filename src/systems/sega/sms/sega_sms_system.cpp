@@ -292,7 +292,7 @@ bool SegaSMSSystem::load_file(const char* filepath) {
     log_info("Sega Master System: Loading file: %s\n", filepath);
 
     size_t file_size = 0;
-    uint8_t* file_data = vfs_read_file(filepath, &file_size);
+    VfsData file_data(vfs_read_file(filepath, &file_size));
     if (!file_data) {
         log_info("SMS: Failed to open file: %s\n", filepath);
         return false;
@@ -308,16 +308,15 @@ bool SegaSMSSystem::load_file(const char* filepath) {
     if (file_size == 0 || file_size > sms_constants::MAX_CART_SIZE) {
         log_info("SMS: Invalid ROM size: %zu bytes (max %u)\n",
                  file_size, sms_constants::MAX_CART_SIZE);
-        free(file_data);
         return false;
     }
 
     uint8_t* cart = board_.cart_rom.data();
-    if (!cart) { free(file_data); return false; }
+    if (!cart) return false;
 
     // Clear cart ROM and copy the file data
     memset(cart, 0xFF, board_.cart_rom.size_bytes());
-    memcpy(cart, file_data + rom_offset, file_size);
+    memcpy(cart, file_data.get() + rom_offset, file_size);
 
     // Mirror smaller ROMs to fill power-of-2 bank space
     size_t filled = file_size;
@@ -326,7 +325,6 @@ bool SegaSMSSystem::load_file(const char* filepath) {
         memcpy(cart + filled, cart, chunk);
         filled += chunk;
     }
-    free(file_data);
 
     // Compute number of 16KB banks (round up to power of 2)
     uint8_t banks = static_cast<uint8_t>((file_size + 16383) / 16384);

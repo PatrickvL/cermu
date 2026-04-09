@@ -16,17 +16,15 @@
 bool D64Image::load(const char* path) {
     // Use VFS so archive paths ("game.zip!/disk.d64") work transparently.
     size_t size = 0;
-    uint8_t* raw = vfs_read_file(path, &size);
+    VfsData raw(vfs_read_file(path, &size));
     if (!raw) return false;
 
     if (size != SIZE_35_TRACKS && size != SIZE_35_TRACKS_ERR &&
         size != SIZE_40_TRACKS && size != SIZE_40_TRACKS_ERR) {
-        free(raw);
         return false;
     }
 
-    data.assign(raw, raw + size);
-    free(raw);
+    data.assign(raw.get(), raw.get() + size);
 
     loaded    = true;
     filepath  = path;
