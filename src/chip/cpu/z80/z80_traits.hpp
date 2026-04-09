@@ -30,7 +30,9 @@ constexpr uint32_t UNDOCUMENTED_OPS  = 1 << 0;  // Undocumented opcodes (SLL, IX
 constexpr uint32_t Z180_EXTENDED     = 1 << 1;  // Z180/HD64180 extended instructions (TST, MLT, IN0/OUT0)
 constexpr uint32_t EZ80_EXTENDED     = 1 << 2;  // eZ80 24-bit extensions (ADL mode)
 constexpr uint32_t R800_EXTENDED     = 1 << 3;  // R800 (MSX turbo R) multiply instructions
-// Bits 4-7 reserved
+constexpr uint32_t SM83_SUBSET       = 1 << 4;  // Sharp SM83 (LR35902): no IX/IY, no I/R, no AF',
+                                                 // no IN/OUT, no ED prefix, unique SWAP/STOP opcodes
+// Bits 5-7 reserved
 
 // === Hardware Bugs / Quirks (bits 8-11) ===
 constexpr uint32_t NMOS_TIMING       = 1 << 8;  // Original NMOS Z80 timing (vs CMOS variants)
@@ -105,6 +107,10 @@ struct Z80Traits {
     constexpr bool has_block_int_bug()    const { return has(Z80CoreFlags::BLOCK_INT_BUG); }
     constexpr bool has_q_register()       const { return has(Z80CoreFlags::Q_REGISTER); }
     constexpr bool has_mmu()              const { return has(Z80CoreFlags::HAS_MMU); }
+    constexpr bool is_sm83()              const { return has(Z80CoreFlags::SM83_SUBSET); }
+    constexpr bool has_index_registers()  const { return !is_sm83(); }
+    constexpr bool has_io_instructions()  const { return !is_sm83(); }
+    constexpr bool has_ed_prefix()        const { return !is_sm83(); }
 
     constexpr uint32_t address_mask() const { return ~(~0u << address_bits); }
 
@@ -150,6 +156,13 @@ constexpr uint32_t Z180_BASE =
     Z80CoreFlags::HAS_PRT          |
     Z80CoreFlags::HAS_WAIT_STATES;
 
+// Sharp SM83 (LR35902) — Game Boy CPU
+// Z80-derived but heavily cut down: no IX/IY, no I/R, no second register
+// set (AF'/BC'/DE'/HL'), no ED prefix, no IN/OUT, unique SWAP/STOP opcodes.
+// Runs at 4.194 MHz (DMG) or 8.388 MHz (GBC double speed).
+constexpr uint32_t SM83_BASE =
+    Z80CoreFlags::SM83_SUBSET;
+
 } // namespace CoreFlags
 
 // ============================================================================
@@ -170,6 +183,14 @@ template <const Z80Traits& Traits> constexpr bool has_mmu() {
 
 template <const Z80Traits& Traits> constexpr bool is_nmos() {
     return Traits.is_nmos();
+}
+
+template <const Z80Traits& Traits> constexpr bool is_sm83() {
+    return Traits.is_sm83();
+}
+
+template <const Z80Traits& Traits> constexpr bool has_index_registers() {
+    return Traits.has_index_registers();
 }
 
 } // namespace detail
