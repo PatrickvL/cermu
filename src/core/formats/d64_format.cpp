@@ -15,22 +15,27 @@
 // ============================================================================
 
 static int d64_track_offset(int track) {
-    /* Sectors per track for 1541:
+    /* Sectors per track for 1541/1571:
      *   Tracks  1-17 : 21 sectors
      *   Tracks 18-24 : 19 sectors
      *   Tracks 25-30 : 18 sectors
      *   Tracks 31-35 : 17 sectors
-     *   Tracks 36-40 : 17 sectors (extended) */
+     *   Tracks 36-40 : 17 sectors (extended D64)
+     *   Tracks 36-70 : D71 second side (mirrors 1-35 pattern) */
     static const int sectors_per_track[] = {
         0,
         21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,
         19,19,19,19,19,19,19,
         18,18,18,18,18,18,
         17,17,17,17,17,
+        /* D71 side 2 — tracks 36-70 mirror 1-35 */
+        21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,
+        19,19,19,19,19,19,19,
+        18,18,18,18,18,18,
         17,17,17,17,17
     };
     int offset = 0;
-    for (int t = 1; t < track && t <= 40; t++)
+    for (int t = 1; t < track && t <= 70; t++)
         offset += sectors_per_track[t] * D64_SECTOR_SIZE;
     return offset;
 }
@@ -40,6 +45,8 @@ int d64_sector_offset(int track, int sector) {
 }
 
 int d64_max_sector(int track) {
+    // D71 second side: tracks 36-70 mirror the first-side geometry
+    if (track > 35) track -= 35;
     if (track <= 17) return 21;
     if (track <= 24) return 19;
     if (track <= 30) return 18;
@@ -64,6 +71,9 @@ bool commodore_d64_t::open_mem(const uint8_t* buf, size_t size) {
     } else if (size == D64_EXTENDED_SIZE || size == D64_EXTENDED_SIZE_ERR) {
         num_tracks = 40;
         has_errors = (size == D64_EXTENDED_SIZE_ERR);
+    } else if (size == D71_STANDARD_SIZE || size == D71_STANDARD_SIZE_ERR) {
+        num_tracks = 70;
+        has_errors = (size == D71_STANDARD_SIZE_ERR);
     } else {
         return false;
     }

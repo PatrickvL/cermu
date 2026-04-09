@@ -635,6 +635,10 @@ set(CORE_UTIL_SOURCES
     src/core/formats/uef_format.cpp
     src/core/formats/apple_dsk_format.cpp
     src/core/formats/kc_tap_format.cpp
+    src/core/formats/fds_format.cpp
+    src/core/formats/d71_format.cpp
+    src/core/formats/d81_format.cpp
+    src/core/formats/rom_format.cpp
     src/systems/commodore/commodore_load_helpers.cpp
     src/core/os/os_filesystem.cpp
     src/core/os/os_archive.cpp
