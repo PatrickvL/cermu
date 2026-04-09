@@ -202,8 +202,8 @@ private:
     uint8_t prg_bank_ = 0;
     Mirror mirror_mode_ = Mirror::VERTICAL;
 
-    // CPU-cycle countdown IRQ
-    mapper_helpers::CPUCycleIRQ irq_;
+    // CPU-cycle countdown IRQ (fires on underflow: 0→0xFFFF)
+    mapper_helpers::CPUCycleIRQ<> irq_;
 
     // I2C EEPROM
     EEPROM eeprom_;

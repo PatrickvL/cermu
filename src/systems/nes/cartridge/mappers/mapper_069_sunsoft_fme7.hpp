@@ -171,12 +171,7 @@ public:
                 case 0x0A: prg_bank_[2] = data & 0x3F; return true;
                 case 0x0B: prg_bank_[3] = data & 0x3F; return true;
                 case 0x0C:
-                    switch (data & 0x03) {
-                        case 0: mirror_mode_ = Mirror::VERTICAL;     break;
-                        case 1: mirror_mode_ = Mirror::HORIZONTAL;   break;
-                        case 2: mirror_mode_ = Mirror::ONESCREEN_LO; break;
-                        case 3: mirror_mode_ = Mirror::ONESCREEN_HI; break;
-                    }
+                    mirror_mode_ = mapper_helpers::mirror_from_2bit(data);
                     return true;
                 case 0x0D:
                     irq_enabled_ = (data & 0x01) != 0;

@@ -168,12 +168,8 @@ public:
     }
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
-        for (int slot = 0; slot < 4; slot++) {
-            uint32_t base = prg_bank_[slot] * 0x2000;
-            config.prg_pages[slot * 2]     = (base < prg_rom_size_) ? prg_rom_ + base : nullptr;
-            config.prg_pages[slot * 2 + 1] = (base + 0x1000 < prg_rom_size_) ? prg_rom_ + base + 0x1000 : nullptr;
-        }
-        config.prg_ram_enabled = false;
+        // prg_bank_[] values are pre-modulated by update_prg_banks()
+        mapper_helpers::set_prg_8k_banks(config, prg_rom_, prg_rom_size_, prg_bank_);
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {

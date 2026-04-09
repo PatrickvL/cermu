@@ -44,8 +44,7 @@ public:
     }
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
-        uint32_t num_8k = static_cast<uint32_t>(prg_rom_size_ / 0x2000);
-        if (num_8k == 0) num_8k = 1;
+        uint32_t num_8k = mapper_helpers::prg_8k_count(prg_rom_size_);
         uint32_t last = num_8k - 1;
         uint32_t second_last = (num_8k >= 2) ? num_8k - 2 : 0;
 
@@ -62,16 +61,8 @@ public:
             banks[3] = last;                     // $E000 = last
         }
 
-        for (int slot = 0; slot < 4; slot++) {
-            uint32_t base = banks[slot] * 0x2000;
-            for (int h = 0; h < 2; h++) {
-                uint32_t off = base + h * 0x1000;
-                config.prg_pages[slot * 2 + h] = (off < prg_rom_size_) ? prg_rom_ + off : nullptr;
-            }
-        }
-        config.prg_ram_enabled = (prg_ram_ != nullptr);
-        config.prg_ram_base = prg_ram_;
-        config.prg_ram_size = static_cast<uint32_t>(prg_ram_size_);
+        mapper_helpers::set_prg_8k_banks(config, prg_rom_, prg_rom_size_, banks);
+        mapper_helpers::set_prg_ram(config, prg_ram_, prg_ram_size_);
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {

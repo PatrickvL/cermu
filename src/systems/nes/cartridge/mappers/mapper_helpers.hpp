@@ -307,9 +307,18 @@ struct MMC3IRQ {
 // CPU-cycle countdown IRQ (composable utility)
 // ============================================================================
 
+/// IRQ fire condition for CPUCycleIRQ.
+enum class IRQFireCondition {
+    ON_UNDERFLOW,  ///< Fires when counter wraps from 0 to 0xFFFF
+    ON_ZERO        ///< Fires when counter decrements to 0
+};
+
 /// Generic CPU-clocked 16-bit countdown IRQ.
-/// Used by Jaleco SS88006 (mapper 18), Taito X1-005/017 (80/82), etc.
+/// Template parameter controls when the IRQ fires:
+///   ON_UNDERFLOW (default) — counter wraps 0→0xFFFF, used by Bandai FCG (016)
+///   ON_ZERO — counter reaches 0, used by Irem H3001 (065), Sunsoft-3 (067)
 /// Call tick() once per CPU cycle from notify_cpu_cycle().
+template <IRQFireCondition Fire = IRQFireCondition::ON_UNDERFLOW>
 struct CPUCycleIRQ {
     uint16_t counter = 0;
     uint16_t reload = 0;
@@ -324,13 +333,22 @@ struct CPUCycleIRQ {
     }
 
     /// Clock the IRQ counter once per CPU cycle.
-    /// Decrements first; fires on underflow (0 → 0xFFFF).
     void tick() {
         if (!enabled) return;
-        counter--;
-        if (counter == 0xFFFF) {
-            active = true;
-            enabled = false;
+        if constexpr (Fire == IRQFireCondition::ON_ZERO) {
+            if (counter > 0) {
+                counter--;
+                if (counter == 0) {
+                    active = true;
+                    enabled = false;
+                }
+            }
+        } else {
+            counter--;
+            if (counter == 0xFFFF) {
+                active = true;
+                enabled = false;
+            }
         }
     }
 };
