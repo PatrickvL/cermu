@@ -291,6 +291,11 @@ private:
     uint16_t active_nsf_subtune_ = 0;            ///< Current 0-based subtune index
     bool nsf_bankswitched_ = false;              ///< True if the loaded NSF uses bank switching
 
+    // =========================================================================
+    // FDS disk data — kept alive for the mapper's duration
+    // =========================================================================
+    std::vector<uint8_t> fds_disk_data_;
+
     /** Handle NSF player keyboard shortcuts (subtune selection).
      *  Returns true if the key was consumed (should not be forwarded). */
     bool handle_nsf_player_key(SDL_Keycode key);

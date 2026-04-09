@@ -19,6 +19,8 @@
 #define D64_STANDARD_SIZE_ERR   175531  /**< 35 tracks, with error bytes */
 #define D64_EXTENDED_SIZE       196608  /**< 40 tracks, no error bytes */
 #define D64_EXTENDED_SIZE_ERR   197376  /**< 40 tracks, with error bytes */
+#define D71_STANDARD_SIZE       349696  /**< 70 tracks (2×35), no error bytes */
+#define D71_STANDARD_SIZE_ERR   351062  /**< 70 tracks, with error bytes */
 #define D64_MAX_DIR_ENTRIES     144     /**< Maximum directory entries */
 #define D64_SECTOR_SIZE         256     /**< Bytes per sector */
 #define D64_DIR_TRACK           18      /**< Directory track */

@@ -11,8 +11,11 @@
 #include "chip/video/nes_ppu/nes_palette.hpp"
 #include "systems/nes/nsf/nes_nsf_player.hpp"
 #include "systems/nes/cartridge/mappers/mapper_nsf.hpp"
+#include "systems/nes/cartridge/mappers/mapper_020_fds.hpp"
 #include "core/formats/nsf_format.hpp"
 #include "core/formats/ines_format.hpp"
+#include "core/formats/fds_format.hpp"
+#include "core/config/path_discovery.hpp"
 #include "core/vfs/vfs.hpp"
 // CPU is now a native ChipBase (via fam65xx_t<Traits> inheritance)
 #include "core/chip.hpp"
@@ -633,6 +636,126 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
     }
 
     // =========================================================================
+    // FDS FILE — Famicom Disk System disk image
+    // =========================================================================
+    bool is_fds = (ext && cermu_strcasecmp(ext, ".fds") == 0);
+    if (!is_fds && file_size >= 4) {
+        if (file_data[0] == 'F' && file_data[1] == 'D' &&
+            file_data[2] == 'S' && file_data[3] == 0x1A) {
+            is_fds = true;
+        }
+        // Headerless FDS: first byte $01 + "*NINTENDO-HVC*" verification
+        if (!is_fds && file_size >= FDS_SIDE_SIZE && file_data[0] == 0x01 &&
+            file_size >= 15 && memcmp(file_data + 1, "*NINTENDO-HVC*", 14) == 0) {
+            is_fds = true;
+        }
+    }
+
+    if (is_fds) {
+        // Parse FDS disk image
+        const uint8_t* disk_data = file_data;
+        size_t disk_size = file_size;
+
+        // Strip fwNES header if present
+        if (file_size >= FDS_HEADER_SIZE &&
+            file_data[0] == 'F' && file_data[1] == 'D' &&
+            file_data[2] == 'S' && file_data[3] == 0x1A) {
+            disk_data = file_data + FDS_HEADER_SIZE;
+            disk_size = file_size - FDS_HEADER_SIZE;
+        }
+
+        uint8_t num_sides = static_cast<uint8_t>(disk_size / FDS_SIDE_SIZE);
+        if (num_sides == 0 || num_sides > FDS_MAX_SIDES) {
+            log_info("%s: Invalid FDS disk size %zu\n", Traits::name, disk_size);
+            free(file_data);
+            return false;
+        }
+
+        // Load FDS BIOS ROM (disksys.rom, 8KB)
+        char rom_root[1024];
+        if (!system_config_discover_rom_root(Traits::data_folder, rom_root, sizeof(rom_root))) {
+            log_info("%s: Cannot find ROM directory for FDS BIOS\n", Traits::name);
+            free(file_data);
+            return false;
+        }
+
+        std::string bios_path = std::string(rom_root) + "/disksys.rom";
+        size_t bios_size = 0;
+        uint8_t* bios_data = vfs_read_file(bios_path.c_str(), &bios_size);
+        if (!bios_data || bios_size != FDS_BIOS_SIZE) {
+            log_info("%s: FDS BIOS not found at %s (need 8KB disksys.rom)\n",
+                     Traits::name, bios_path.c_str());
+            free(bios_data);
+            free(file_data);
+            return false;
+        }
+
+        // ---- Build Cartridge ----
+        cartridge_ = std::make_unique<Cartridge>();
+        cartridge_->mapper_id = MapperFDS::FDS_MAPPER_ID;
+        cartridge_->mirror_mode = Mirror::VERTICAL;
+
+        // PRG-ROM = BIOS (8KB, mapped at $E000-$FFFF)
+        cartridge_->prg_memory.resize(FDS_BIOS_SIZE);
+        std::memcpy(cartridge_->prg_memory.data(), bios_data, FDS_BIOS_SIZE);
+        cartridge_->prg_banks = 1;
+        free(bios_data);
+
+        // CHR-RAM (8KB, loaded from disk)
+        cartridge_->chr_memory.clear();
+        cartridge_->chr_banks = 0;
+
+        // PRG-RAM: 32KB ($6000-$DFFF) for disk-loaded program data
+        cartridge_->prg_ram.resize(0x8000, 0);
+
+        // ---- Create FDS mapper ----
+        auto fds_mapper = std::make_unique<MapperFDS>();
+
+        // ---- Init flat mem ----
+        board_.ppu.connect_cartridge(cartridge_.get());
+        bus_.init_flat_mem(
+            cartridge_->prg_memory.data(), cartridge_->prg_memory.size(),
+            nullptr, 0,     // no CHR-ROM
+            true,           // CHR is RAM
+            cartridge_->prg_ram.data(), cartridge_->prg_ram.size());
+
+        // Give mapper pointers into flat mem
+        fds_mapper->set_memory_pointers(
+            bus_.prg_rom_ptr, bus_.prg_rom_size,
+            bus_.chr_data_ptr, bus_.chr_data_size,
+            true,
+            bus_.prg_ram, bus_.prg_ram_size);
+        fds_mapper->set_header_mirror(Mirror::VERTICAL);
+        fds_mapper->set_ciram(bus_.ciram);
+
+        // Provide disk data — mapper keeps a pointer; we'll store the data
+        // in fds_disk_data_ to keep it alive for the session.
+        size_t total_disk = static_cast<size_t>(num_sides) * FDS_SIDE_SIZE;
+        fds_disk_data_.assign(disk_data, disk_data + total_disk);
+        fds_mapper->set_disk_data(fds_disk_data_.data(), fds_disk_data_.size(), num_sides);
+
+        // Install mapper
+        cartridge_->install_mapper(std::move(fds_mapper));
+        board_.ppu.connect_bus(&bus_);
+        cartridge_->update_bank_map(&bus_, bus_.ciram);
+
+        // Reset and boot
+        reset();
+        system_ready_ = true;
+        boot_warp_ = true;
+        nsf_player_active_ = false;
+
+        // Set program title
+        std::string fname = vfs_filename(filepath);
+        program_title_ = fname.empty() ? filepath : fname;
+
+        log_info("%s: FDS loaded — %d side%s\n",
+                 Traits::name, num_sides, num_sides > 1 ? "s" : "");
+        free(file_data);
+        return true;
+    }
+
+    // =========================================================================
     // STANDARD PATH — iNES ROM cartridge (load from already-read buffer)
     // =========================================================================
     nsf_player_active_ = false;
@@ -1162,6 +1285,16 @@ void NintendoSystem<V>::tick() {
                     uint8_t open_bus = BUS_GET_DATA(pins_);
                     BUS_SET_DATA(pins_, (open_bus & 0xE0) | (result & 0x1F));
                 }
+                // FDS disk I/O reads ($4030-$4033) — forward to mapper
+                else if (addr >= 0x4020 && cartridge_) {
+                    if (auto* m = cartridge_->get_mapper()) {
+                        bool handled = false;
+                        uint8_t val = m->expansion_read(addr, handled);
+                        if (handled) {
+                            BUS_SET_DATA(pins_, val);
+                        }
+                    }
+                }
                 // Other APU reads ($4015 etc.) handled by CPU PHI1
             } else {
                 // Unmapped expansion or cartridge I/O — check mapper
@@ -1218,6 +1351,12 @@ void NintendoSystem<V>::tick() {
                     const uint32_t latch_val  = (data & 1) ? latch_mask : 0;
                     for (size_t cp = 0; cp < 2 && cp < get_ports().size(); cp++)
                         get_port(cp)->write_system_signals(latch_mask, latch_val);
+                }
+                // FDS disk I/O writes ($4020-$4026) — forward to mapper
+                else if (addr >= 0x4020 && cartridge_) {
+                    if (cartridge_->handle_mapper_write(addr, data)) {
+                        cartridge_->update_bank_map(&bus_, bus_.ciram);
+                    }
                 }
                 // Other APU writes ($4000-$4013, $4015, $4017) handled by CPU PHI1
             } else {

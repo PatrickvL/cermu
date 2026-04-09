@@ -265,11 +265,11 @@ for systematic coverage of banking, IRQ, and mirroring edge cases.
 
 ## 7 — File Format Gaps
 
-### 7.1 Supported Formats (26+)
-PRG, SID, CRT, D64, T64, TAP (Commodore), iNES, NSF, A26,
+### 7.1 Supported Formats (30+)
+PRG, SID, CRT, D64, D71, D81, T64, TAP (Commodore), iNES, FDS, NSF, A26,
 SNA, Z80 snapshot, Spectrum TAP, SCL, TRD, BIN, LNX,
 SSD/DSD, UEF, CPC DSK, CPR, Apple DSK/NIB/2MG, MSX CAS,
-Oric TAP, VZ, KC TAP.
+Oric TAP, VZ, KC TAP, BBC .rom.
 
 ### 7.2 ~~Missing Formats — High Value~~ — **[DONE]**
 All 9 high-value formats implemented with shared abstractions:
@@ -292,14 +292,14 @@ All 9 high-value formats implemented with shared abstractions:
 | **K7/TAP** | KC85 | ✅ `kc_tap_format` — block-structured, COM/BASIC |
 
 ### 7.3 Missing Formats — Lower Priority
-| Format | System | Impact |
+| Format | System | Status |
 |--------|--------|--------|
-| **FDS** | NES/Famicom | Famicom Disk System images |
+| ~~**FDS**~~ | ~~NES/Famicom~~ | ✅ `fds_format` — headered + headerless, mapper 020 (FDS RAM adapter) |
 | **GBS** | Game Boy | Game Boy Sound format (requires GB CPU) |
 | **ADF** | Amiga | Amiga Disk File (requires Amiga system) |
-| **.rom** | BBC Micro | Sideways ROM loading |
+| ~~**.rom**~~ | ~~BBC Micro~~ | ✅ `rom_format` — sideways ROM loading |
 | **G64** | C64 | Full GCR disk image (needs cycle-accurate drive) |
-| **D71/D81** | C128 | 1571/1581 disk images |
+| ~~**D71/D81**~~ | ~~C128~~ | ✅ `d71_format` / `d81_format` — 1571/1581 disk images |
 
 ---
 
@@ -325,7 +325,7 @@ All 9 high-value formats implemented with shared abstractions:
 ### 8.2 NES Mapper Expansion
 | Mapper | Name | Games | Effort |
 |--------|------|-------|--------|
-| **020** | FDS | Famicom Disk System (disk + wavetable sound) | **L** |
+| ~~**020**~~ | ~~FDS~~ | ✅ FDS RAM adapter: 32KB PRG-RAM, disk I/O, timer IRQ (no wavetable audio yet) | — |
 | **090** | JY Company | Pirate multicarts | **M** |
 | DPC | — | Atari 2600 Pitfall II data fetcher coprocessor | **M** |
 | DPC+ | — | Enhanced DPC with ARM coprocessor | **L** |

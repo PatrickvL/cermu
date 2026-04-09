@@ -26,6 +26,7 @@
 #include "systems/nes/cartridge/mappers/mapper_016_bandai_fcg.hpp"
 #include "systems/nes/cartridge/mappers/mapper_018_jaleco_ss88006.hpp"
 #include "systems/nes/cartridge/mappers/mapper_019_namco163.hpp"
+#include "systems/nes/cartridge/mappers/mapper_020_fds.hpp"
 #include "systems/nes/cartridge/mappers/mapper_vrc24.hpp"
 #include "systems/nes/cartridge/mappers/mapper_vrc6.hpp"
 #include "systems/nes/cartridge/mappers/mapper_028_action53.hpp"
@@ -125,7 +126,7 @@ struct MapperFactory {
             // missing: 17 — FFE F8xxx (rare, FFE copier mapper)
             case 18:  return std::make_unique<Mapper018>(prg_banks, chr_banks);
             case 19:  return std::make_unique<Mapper019>(prg_banks, chr_banks);
-            // missing: 20 — FDS (Famicom Disk System, special hardware)
+            case 20:  return std::make_unique<MapperFDS>();   // FDS (wired by system layer)
             case 21:  return std::make_unique<MapperVRC24<VRC4aTraits>>(prg_banks, chr_banks);
             case 22:  return std::make_unique<MapperVRC24<VRC2aTraits>>(prg_banks, chr_banks);
             case 23:  return std::make_unique<MapperVRC24<VRC24_023Traits>>(prg_banks, chr_banks);
