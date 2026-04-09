@@ -299,12 +299,11 @@ SNA, Z80 snapshot, Spectrum TAP, SCL, TRD, BIN, LNX.
 | Mapper | Name | Games | Effort |
 |--------|------|-------|--------|
 | **020** | FDS | Famicom Disk System (disk + wavetable sound) | **L** |
-| **080** | Taito X1-005 | Fudou Myouou Den, etc. | **S** |
-| **082** | Taito X1-017 | Taito compilation carts | **S** |
 | **090** | JY Company | Pirate multicarts | **M** |
-| **095** | Namco 3425 | Dragon Buster | **S** |
 | DPC | — | Atari 2600 Pitfall II data fetcher coprocessor | **M** |
 | DPC+ | — | Enhanced DPC with ARM coprocessor | **L** |
+
+Note: Mappers 080, 082, 095 were previously listed but are already implemented.
 
 ### 8.3 Atari 2600 Mapper Expansion
 Pitfall II DPC coprocessor is the most-requested missing mapper.
@@ -314,19 +313,23 @@ DPC+ (ARM-based homebrew) is a stretch goal.
 
 ## 9 — Infrastructure & Architecture
 
-### 9.1 Chip Registry Coverage — **[QUALITY] M**
-Not all chip categories have a `*_registry.cpp` file per the chip implementation instructions.
-Audit each category under `src/chip/` and create missing registries.
+### 9.1 ~~Chip Registry Coverage~~ — **[DONE]**
+All 8 chip categories have registry files. MOS6504 and MOS6509 were unregistered
+— added to `fam65xx_registry.cpp` + GUI instantiations. Fixed latent `UNLIKELY`
+macro bug. Three stub CPU types (CSG65CE02, CSG4510, HuC6280) have traits but
+no type alias yet — intentionally excluded until instantiated. Committed `a8b920e6`.
 
-### 9.2 NES Mapper Factory Completeness — **[QUALITY] S**
-Verify the mapper ID → class dispatch table in `nes_mapper_factory.hpp` covers all 60+ implemented
-mappers and doesn't have stale/orphaned entries.
+### 9.2 ~~NES Mapper Factory Completeness~~ — **[DONE]**
+88 mapper IDs across 80 files. Zero orphans, zero stale entries, zero duplicates.
+Mappers 080, 082, 095 were incorrectly listed as missing in §8.2 — corrected.
 
-### 9.3 Shared Mapper Helper Expansion — **[QUALITY] M**
-`mapper_helpers.hpp` provides `MMC3IRQ` and `CPUCycleIRQ` composables.
-Common patterns across 60+ mappers (bank register sets, address decode helpers, PRG/CHR
-bank update boilerplate) could be extracted into additional composable helpers
-(`BankRegisterSet<N>`, `PrgBankSwitcher<NumBanks>`).
+### 9.3 ~~Shared Mapper Helper Expansion~~ — **[DONE]**
+Analyzed boilerplate across 79 mapper files. Added `set_prg_ram()` (eliminates
+3-line PRG-RAM boilerplate from ~20 mappers) and `set_chr_2x2k_4x1k()` (2×2KB +
+4×1KB mixed CHR layout used by 7+ MMC3-family mappers). Removed dead helpers:
+`set_chr_4k_split` (0 callers), `set_chr_1k_pages_wide` (0 callers).
+Remaining opportunities (migrate ~10 mappers to `set_prg_8k_banks`, parameterize
+`CPUCycleIRQ` fire condition) noted as future cleanup.
 
 ### 9.4 ~~VFS File Read RAII Wrapper~~ — **[DONE]**
 `VfsData` (`std::unique_ptr<uint8_t[], VfsFreeDeleter>`) already exists in `vfs.hpp`.
