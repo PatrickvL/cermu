@@ -21,6 +21,7 @@
 
 #include "systems/nes/cartridge/mappers/mapper_helpers.hpp"
 #include <cstring>
+#include <type_traits>
 
 namespace nes_system {
 
@@ -191,13 +192,16 @@ private:
 enum class BandaiFCGVariant : uint8_t {
     FCG,      // 016: standard FCG-1/2 with 24C02 EEPROM
     LZ93D50,  // 159: 24C01 EEPROM variant
-    Datach    // 157: Datach barcode, fixed CHR-RAM
+    Datach,   // 157: Datach barcode, fixed CHR-RAM
+    SRAM      // 153: Famicom Jump II — standard 8KB SRAM, CHR-RAM,
+              //       CHR reg bit 0 → outer PRG bank (256KB select)
 };
 
 template<BandaiFCGVariant V>
 class MapperBandaiFCG : public Mapper {
 private:
-    // EEPROM type depends on variant
+    // EEPROM only for non-SRAM variants
+    static constexpr bool has_eeprom = (V != BandaiFCGVariant::SRAM);
     static constexpr uint16_t eeprom_size() {
         return (V == BandaiFCGVariant::LZ93D50) ? 128 : 256;
     }
@@ -211,16 +215,31 @@ private:
     // CPU-cycle countdown IRQ (fires on underflow: 0→0xFFFF)
     mapper_helpers::CPUCycleIRQ<> irq_;
 
-    // I2C EEPROM
-    EEPROM eeprom_;
+    // I2C EEPROM (not used by SRAM variant)
+    std::conditional_t<has_eeprom, EEPROM, uint8_t> eeprom_{};
+
+    // For SRAM variant: outer PRG bank computed from CHR reg bit 0
+    // OR of bit 0 across all 8 CHR regs → selects 256KB PRG bank
+    uint8_t compute_prg_outer() const {
+        if constexpr (V == BandaiFCGVariant::SRAM) {
+            uint8_t outer = 0;
+            for (int i = 0; i < 8; i++)
+                outer |= chr_bank_[i] & 1;
+            return outer;
+        } else {
+            return 0;
+        }
+    }
 
     // Update PRG-RAM area with EEPROM SDA output so CPU reads at
     // $6000-$7FFF see the correct data bit.  PRG-RAM lives in flat_mem
     // and is mapped via block dispatch.
     void update_eeprom_read_buf() {
-        if (prg_ram_) {
-            uint8_t val = eeprom_.sda_out ? 0x10 : 0x00;
-            std::memset(prg_ram_, val, prg_ram_size_ < 8192 ? 8192 : prg_ram_size_);
+        if constexpr (has_eeprom) {
+            if (prg_ram_) {
+                uint8_t val = eeprom_.sda_out ? 0x10 : 0x00;
+                std::memset(prg_ram_, val, prg_ram_size_ < 8192 ? 8192 : prg_ram_size_);
+            }
         }
     }
 
@@ -232,7 +251,9 @@ public:
         prg_bank_ = 0;
         mirror_mode_ = header_mirror_;
         irq_.reset();
-        eeprom_.reset();
+        if constexpr (has_eeprom) {
+            eeprom_.reset();
+        }
         update_eeprom_read_buf();
     }
 
@@ -243,27 +264,44 @@ public:
     void notify_cpu_cycle() override { irq_.tick(); }
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
-        if constexpr (V == BandaiFCGVariant::Datach) {
+        if constexpr (V == BandaiFCGVariant::SRAM) {
+            // SRAM variant: CHR reg bit 0 selects 256KB outer PRG bank,
+            // prg_bank_ selects 16KB within that window.
+            uint8_t outer = compute_prg_outer();
+            uint8_t effective = (outer << 4) | (prg_bank_ & 0x0F);
+            mapper_helpers::set_prg_16k_lo(config, prg_rom_, prg_rom_size_, effective);
+        } else if constexpr (V == BandaiFCGVariant::Datach) {
             // Datach: PRG low selectable, PRG high fixed
             mapper_helpers::set_prg_16k_lo(config, prg_rom_, prg_rom_size_, prg_bank_);
         } else {
             mapper_helpers::set_prg_16k_lo(config, prg_rom_, prg_rom_size_, prg_bank_);
         }
 
-        // EEPROM read-back via PRG-RAM bus dispatch.
-        // PRG-RAM is in flat_mem, so ptr_to_block() resolves correctly.
-        // The mapper fills this region with the EEPROM SDA output bit.
-        // Write-protect so CPU writes to $6000-$7FFF reach register_write()
-        // instead of being absorbed by the PRG-RAM block — FCG boards have
-        // mapper registers at $6000-$600F, not writable SRAM.
-        config.prg_ram_base = prg_ram_;
-        config.prg_ram_size = 8192;
-        config.prg_ram_enabled = true;
-        config.prg_ram_write_protected = true;
+        if constexpr (V == BandaiFCGVariant::SRAM) {
+            // SRAM variant: standard writable 8KB SRAM at $6000-$7FFF
+            config.prg_ram_base = prg_ram_;
+            config.prg_ram_size = 8192;
+            config.prg_ram_enabled = true;
+            config.prg_ram_write_protected = false;
+        } else {
+            // EEPROM read-back via PRG-RAM bus dispatch.
+            // PRG-RAM is in flat_mem, so ptr_to_block() resolves correctly.
+            // The mapper fills this region with the EEPROM SDA output bit.
+            // Write-protect so CPU writes to $6000-$7FFF reach register_write()
+            // instead of being absorbed by the PRG-RAM block — FCG boards have
+            // mapper registers at $6000-$600F, not writable SRAM.
+            config.prg_ram_base = prg_ram_;
+            config.prg_ram_size = 8192;
+            config.prg_ram_enabled = true;
+            config.prg_ram_write_protected = true;
+        }
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {
-        if constexpr (V == BandaiFCGVariant::Datach) {
+        if constexpr (V == BandaiFCGVariant::SRAM) {
+            // SRAM variant uses CHR-RAM fixed (CHR regs repurposed for PRG outer bank)
+            mapper_helpers::set_chr_8k_fixed(config, chr_mem_, chr_mem_size_, chr_is_ram_);
+        } else if constexpr (V == BandaiFCGVariant::Datach) {
             // Datach uses CHR-RAM fixed
             mapper_helpers::set_chr_8k_fixed(config, chr_mem_, chr_mem_size_, chr_is_ram_);
         } else {
@@ -272,17 +310,23 @@ public:
     }
 
     bool register_write(uint16_t addr, uint8_t data) override {
-        // FCG registers respond to $6000-$FFFF — real hardware decodes
-        // only A3-A0 (and sometimes A14/A15), so registers mirror across
-        // the full cartridge address space.  $6000-$7FFF and $8000-$FFFF
-        // writes both resolve to the same 16 register slots.
+        // SRAM variant: $6000-$7FFF is writable SRAM, not registers.
+        // Registers only at $8000-$FFFF.
+        // EEPROM variants: $6000-$FFFF — hardware decodes only A3-A0.
         uint8_t reg;
-        if (addr >= 0x6000) {
-            reg = addr & 0x0F;
+        if constexpr (V == BandaiFCGVariant::SRAM) {
+            if (addr >= 0x8000) {
+                reg = addr & 0x0F;
+            } else {
+                return false;
+            }
         } else {
-            return false;
+            if (addr >= 0x6000) {
+                reg = addr & 0x0F;
+            } else {
+                return false;
+            }
         }
-
 
         switch (reg) {
             case 0x00: case 0x01: case 0x02: case 0x03:
@@ -312,22 +356,24 @@ public:
                 irq_.reload = (irq_.reload & 0x00FF) | (static_cast<uint16_t>(data) << 8);
                 return false;
 
-            case 0x0D: {
-                // EEPROM I/O: D6=SDA output, D5=SCL
-                bool scl = (data & 0x20) != 0;
-                bool sda = (data & 0x40) != 0;
-                eeprom_.write(scl, sda);
-                update_eeprom_read_buf();
+            case 0x0D:
+                if constexpr (has_eeprom) {
+                    // EEPROM I/O: D6=SDA output, D5=SCL
+                    bool scl = (data & 0x20) != 0;
+                    bool sda = (data & 0x40) != 0;
+                    eeprom_.write(scl, sda);
+                    update_eeprom_read_buf();
+                }
                 return false;
-            }
         }
         return false;
     }
 };
 
-// Type aliases for the three variants
+// Type aliases for the four variants
 using Mapper016 = MapperBandaiFCG<BandaiFCGVariant::FCG>;
-using Mapper159 = MapperBandaiFCG<BandaiFCGVariant::LZ93D50>;
+using Mapper153 = MapperBandaiFCG<BandaiFCGVariant::SRAM>;
 using Mapper157 = MapperBandaiFCG<BandaiFCGVariant::Datach>;
+using Mapper159 = MapperBandaiFCG<BandaiFCGVariant::LZ93D50>;
 
 } // namespace nes_system

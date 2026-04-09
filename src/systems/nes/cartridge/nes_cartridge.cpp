@@ -273,17 +273,35 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
             crc = ~c;
         }
 
-        struct MapperOverride { uint32_t crc; uint16_t mapper; const char* name; };
+        struct MapperOverride {
+            uint32_t crc;
+            uint16_t mapper;
+            uint8_t  submapper;  // 0xFF = don't override submapper
+            const char* name;
+        };
         static constexpr MapperOverride overrides[] = {
             // PAL-ZZ multicart — header says mapper 4 but board is mapper 37
-            { 0xF46EF39A, 37, "Super Mario Bros + Tetris + Nintendo World Cup (Europe)" },
+            { 0xF46EF39A,  37, 0xFF, "Super Mario Bros + Tetris + Nintendo World Cup (Europe)" },
+            // Bandai SRAM variant — header says mapper 16 but board uses standard SRAM, not EEPROM
+            { 0x3F15D20D, 153, 0xFF, "Famicom Jump II - Saikyou no 7 Nin" },
+            // Namco 175 (hardwired mirror, no sound/IRQ) — header says mapper 19 (N163)
+            { 0x0C47946D, 210,    1, "Chibi Maruko-Chan - Uki Uki Shopping" },
+            // Taito TC0690 (has scanline IRQ) — header says mapper 33 (TC0190, no IRQ)
+            { 0xAEBD6549,  48, 0xFF, "Bakushou!! Jinsei Gekijou 3" },
         };
 
         for (const auto& ov : overrides) {
-            if (crc == ov.crc && mapper_id != ov.mapper) {
-                log_info("NES: ROM CRC %08X matches \"%s\" — correcting mapper %d → %d\n",
-                         crc, ov.name, mapper_id, ov.mapper);
-                mapper_id = ov.mapper;
+            if (crc == ov.crc) {
+                if (mapper_id != ov.mapper) {
+                    log_info("NES: ROM CRC %08X matches \"%s\" — correcting mapper %d → %d\n",
+                             crc, ov.name, mapper_id, ov.mapper);
+                    mapper_id = ov.mapper;
+                }
+                if (ov.submapper != 0xFF) {
+                    log_info("NES: ROM CRC %08X matches \"%s\" — setting submapper %d\n",
+                             crc, ov.name, ov.submapper);
+                    submapper = ov.submapper;
+                }
                 break;
             }
         }
