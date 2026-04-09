@@ -184,16 +184,16 @@ private:
                 return static_cast<const mc6883_sam_t*>(c)->display_offset();
             })
             .category("MC6883 — Config")
-            .flag("Page Select (P1)", +[](const ChipBase* c) -> bool {
+            .flag("Page Select (P1)", +[](const ChipBase* c) -> uint32_t {
                 return static_cast<const mc6883_sam_t*>(c)->page_select();
             })
             .value("RAM Size (R)", +[](const ChipBase* c) -> uint32_t {
                 return static_cast<const mc6883_sam_t*>(c)->ram_size();
             })
-            .flag("Map Type (TY)", +[](const ChipBase* c) -> bool {
+            .flag("Map Type (TY)", +[](const ChipBase* c) -> uint32_t {
                 return static_cast<const mc6883_sam_t*>(c)->map_type();
             })
-            .flag("MPU Rate (M0)", +[](const ChipBase* c) -> bool {
+            .flag("MPU Rate (M0)", +[](const ChipBase* c) -> uint32_t {
                 return static_cast<const mc6883_sam_t*>(c)->mpu_rate();
             });
     }

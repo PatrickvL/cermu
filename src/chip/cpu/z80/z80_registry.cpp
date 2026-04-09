@@ -16,8 +16,10 @@
 #include "chip/cpu/z80/zilog_z80a.hpp"
 #include "chip/cpu/z80/zilog_z80b.hpp"
 #include "chip/cpu/z80/u880.hpp"
+#include "chip/cpu/z80/sharp_sm83.hpp"
 
 REGISTER_CHIP_TYPE("Z80",  ZilogZ80)
 REGISTER_CHIP_TYPE("Z80A", ZilogZ80A)
 REGISTER_CHIP_TYPE("Z80B", ZilogZ80B)
 REGISTER_CHIP_TYPE("U880", U880)
+REGISTER_CHIP_TYPE("SM83", SharpSM83)

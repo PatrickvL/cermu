@@ -183,7 +183,7 @@ private:
             .value("VCOUNT", +[](const ChipBase* c) -> uint32_t {
                 return static_cast<const antic_t*>(c)->vcount_;
             })
-            .flag("WSYNC pending", +[](const ChipBase* c) -> bool {
+            .flag("WSYNC pending", +[](const ChipBase* c) -> uint32_t {
                 return static_cast<const antic_t*>(c)->wsync_pending_;
             });
     }
