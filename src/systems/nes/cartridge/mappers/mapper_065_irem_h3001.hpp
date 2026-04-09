@@ -21,11 +21,8 @@ private:
 
     Mirror mirror_mode_ = Mirror::VERTICAL;
 
-    // IRQ timer — 16-bit CPU-cycle countdown
-    bool irq_enabled_ = false;
-    bool irq_active_ = false;
-    uint16_t irq_counter_ = 0;
-    uint16_t irq_reload_ = 0;
+    // IRQ timer — 16-bit CPU-cycle countdown, fires at zero
+    mapper_helpers::CPUCycleIRQ<mapper_helpers::IRQFireCondition::ON_ZERO> irq_;
 
 public:
     Mapper065(uint8_t /*prgBanks*/, uint8_t /*chrBanks*/) {}
@@ -37,27 +34,15 @@ public:
             (prg_rom_size_ / 0x2000) - 2 : 0);
         for (int i = 0; i < 8; i++) chr_bank_[i] = i;
         mirror_mode_ = header_mirror_;
-        irq_enabled_ = false;
-        irq_active_ = false;
-        irq_counter_ = 0;
-        irq_reload_ = 0;
+        irq_.reset();
     }
 
     Mirror mirror() override { return mirror_mode_; }
-    bool irq_state() override { return irq_active_; }
-    void irq_clear() override { irq_active_ = false; }
+    bool irq_state() override { return irq_.active; }
+    void irq_clear() override { irq_.active = false; }
 
     // H3001 IRQ is a 16-bit CPU-cycle countdown counter.
-    void notify_cpu_cycle() override {
-        if (!irq_enabled_) return;
-        if (irq_counter_ > 0) {
-            irq_counter_--;
-            if (irq_counter_ == 0) {
-                irq_active_ = true;
-                irq_enabled_ = false;
-            }
-        }
-    }
+    void notify_cpu_cycle() override { irq_.tick(); }
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
         using namespace mapper_helpers;
@@ -89,18 +74,18 @@ public:
                 return true;
 
             case 0x9003:
-                irq_enabled_ = (data & 0x80) != 0;
-                irq_active_ = false;
+                irq_.enabled = (data & 0x80) != 0;
+                irq_.active = false;
                 return false;
             case 0x9004:
-                irq_counter_ = irq_reload_;
-                irq_active_ = false;
+                irq_.counter = irq_.reload;
+                irq_.active = false;
                 return false;
             case 0x9005:
-                irq_reload_ = (irq_reload_ & 0x00FF) | (static_cast<uint16_t>(data) << 8);
+                irq_.reload = (irq_.reload & 0x00FF) | (static_cast<uint16_t>(data) << 8);
                 return false;
             case 0x9006:
-                irq_reload_ = (irq_reload_ & 0xFF00) | data;
+                irq_.reload = (irq_.reload & 0xFF00) | data;
                 return false;
 
             case 0xB000: chr_bank_[0] = data; return true;

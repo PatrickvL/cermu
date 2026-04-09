@@ -29,10 +29,8 @@ private:
 
     Mirror mirror_mode_ = Mirror::VERTICAL;
 
-    // IRQ
-    bool irq_enabled_ = false;
-    bool irq_active_ = false;
-    uint16_t irq_counter_ = 0;
+    // IRQ — fire-at-zero countdown + alternating latch toggle for writes
+    mapper_helpers::CPUCycleIRQ<mapper_helpers::IRQFireCondition::ON_ZERO> irq_;
     bool irq_latch_toggle_ = false;  // Alternates high/low byte writes
 
 public:
@@ -42,27 +40,16 @@ public:
         prg_bank_select_ = 0;
         for (int i = 0; i < 4; i++) chr_bank_[i] = i;
         mirror_mode_ = header_mirror_;
-        irq_enabled_ = false;
-        irq_active_ = false;
-        irq_counter_ = 0;
+        irq_.reset();
         irq_latch_toggle_ = false;
     }
 
     Mirror mirror() override { return mirror_mode_; }
-    bool irq_state() override { return irq_active_; }
-    void irq_clear() override { irq_active_ = false; }
+    bool irq_state() override { return irq_.active; }
+    void irq_clear() override { irq_.active = false; }
 
     // Sunsoft-3 IRQ is a 16-bit CPU-cycle countdown counter.
-    void notify_cpu_cycle() override {
-        if (!irq_enabled_) return;
-        if (irq_counter_ > 0) {
-            irq_counter_--;
-            if (irq_counter_ == 0) {
-                irq_active_ = true;
-                irq_enabled_ = false;  // Auto-disable after firing
-            }
-        }
-    }
+    void notify_cpu_cycle() override { irq_.tick(); }
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
         mapper_helpers::set_prg_16k_lo(config, prg_rom_, prg_rom_size_, prg_bank_select_);
@@ -93,26 +80,21 @@ public:
 
             case 0xC800:
                 if (!irq_latch_toggle_) {
-                    irq_counter_ = (irq_counter_ & 0x00FF) | (static_cast<uint16_t>(data) << 8);
+                    irq_.counter = (irq_.counter & 0x00FF) | (static_cast<uint16_t>(data) << 8);
                 } else {
-                    irq_counter_ = (irq_counter_ & 0xFF00) | data;
+                    irq_.counter = (irq_.counter & 0xFF00) | data;
                 }
                 irq_latch_toggle_ = !irq_latch_toggle_;
                 return false;
 
             case 0xD800:
                 irq_latch_toggle_ = false;
-                irq_enabled_ = (data & 0x10) != 0;
-                irq_active_ = false;
+                irq_.enabled = (data & 0x10) != 0;
+                irq_.active = false;
                 return false;
 
             case 0xE800:
-                switch (data & 0x03) {
-                    case 0: mirror_mode_ = Mirror::VERTICAL;     break;
-                    case 1: mirror_mode_ = Mirror::HORIZONTAL;   break;
-                    case 2: mirror_mode_ = Mirror::ONESCREEN_LO; break;
-                    case 3: mirror_mode_ = Mirror::ONESCREEN_HI; break;
-                }
+                mirror_mode_ = mapper_helpers::mirror_from_2bit(data);
                 return true;
 
             case 0xF800:
