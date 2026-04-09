@@ -12,13 +12,14 @@
  *   set_prg_16k_lo      — 16KB switchable @ $8000, last 16KB fixed @ $C000
  *   set_prg_16k_hi      — first 16KB fixed @ $8000, 16KB switchable @ $C000
  *   set_prg_8k_banks    — N×8KB arbitrary banks → 8 page pointers
+ *   set_prg_ram         — configure PRG-RAM base/size/enable
  *
  * CHR helpers:
  *   set_chr_8k_fixed    — 8KB fixed (bank 0)
  *   set_chr_8k          — 8KB switchable
- *   set_chr_4k_split    — 2×4KB banks
  *   set_chr_2k_pages    — 4×2KB banks
  *   set_chr_1k_pages    — 8×1KB banks
+ *   set_chr_2x2k_4x1k  — 2×2KB + 4×1KB mixed layout (MMC3-family)
  *
  * IRQ composables:
  *   MMC3IRQ             — A12-based scanline counter with filter
@@ -101,6 +102,15 @@ inline void set_prg_8k_banks(MapperBankConfig& config,
     config.prg_ram_enabled = false;
 }
 
+/// Configure PRG-RAM mapping independently from PRG-ROM banking.
+/// Sets base pointer, size, and enable flag.  Pass nullptr to disable.
+inline void set_prg_ram(MapperBankConfig& config,
+                        uint8_t* ram, size_t size) {
+    config.prg_ram_base = ram;
+    config.prg_ram_size = static_cast<uint32_t>(size);
+    config.prg_ram_enabled = (ram != nullptr);
+}
+
 /// Compute the total number of 8KB PRG banks, with a floor of 1.
 inline uint32_t prg_8k_count(size_t prg_size) {
     uint32_t n = static_cast<uint32_t>(prg_size / 0x2000);
@@ -142,23 +152,6 @@ inline void set_chr_8k_fixed(MapperChrConfig& config,
     }
 }
 
-/// Set 2×4KB CHR banks.
-/// bank_lo → $0000-$0FFF (4 pages), bank_hi → $1000-$1FFF (4 pages).
-inline void set_chr_4k_split(MapperChrConfig& config,
-                              const uint8_t* chr_mem, size_t chr_size,
-                              bool is_ram, uint8_t bank_lo, uint8_t bank_hi) {
-    uint32_t num_4k = chr_size > 0 ? static_cast<uint32_t>(chr_size / 0x1000) : 1;
-    if (num_4k == 0) num_4k = 1;
-    uint32_t lo = (bank_lo % num_4k) * 0x1000;
-    uint32_t hi = (bank_hi % num_4k) * 0x1000;
-    for (int i = 0; i < 4; i++) {
-        config.chr_pages[i]     = chr_mem + lo + i * 0x0400;
-        config.chr_pages[4 + i] = chr_mem + hi + i * 0x0400;
-        config.chr_writable[i]     = is_ram;
-        config.chr_writable[4 + i] = is_ram;
-    }
-}
-
 /// Set 4×2KB CHR banks.
 /// banks[0] → $0000, banks[1] → $0800, banks[2] → $1000, banks[3] → $1800.
 inline void set_chr_2k_pages(MapperChrConfig& config,
@@ -187,16 +180,29 @@ inline void set_chr_1k_pages(MapperChrConfig& config,
     }
 }
 
-/// Set 8×1KB CHR pages from an array of wide (16-bit) bank numbers.
-/// Used by mappers with >256 1KB CHR banks (Namco 163, Bandai FCG, etc.).
-inline void set_chr_1k_pages_wide(MapperChrConfig& config,
-                                   const uint8_t* chr_mem, size_t chr_size,
-                                   bool is_ram, const uint16_t banks[8]) {
+/// Set 2×2KB + 4×1KB mixed CHR layout (MMC3-family convention).
+/// bank_2k[0] → $0000-$07FF, bank_2k[1] → $0800-$0FFF (2KB granularity),
+/// bank_1k[0–3] → $1000/$1400/$1800/$1C00 (1KB granularity).
+/// Bank values are in 1KB units for both arrays (2KB bank N covers N and N+1).
+inline void set_chr_2x2k_4x1k(MapperChrConfig& config,
+                               const uint8_t* chr_mem, size_t chr_size,
+                               bool is_ram,
+                               const uint8_t bank_2k[2],
+                               const uint8_t bank_1k[4]) {
     uint32_t num_1k = chr_1k_count(chr_size);
-    for (int i = 0; i < 8; i++) {
-        uint32_t offset = (banks[i] % num_1k) * 0x0400;
-        config.chr_pages[i] = (offset < chr_size) ? chr_mem + offset : chr_mem;
-        config.chr_writable[i] = is_ram;
+    // 2×2KB banks in lower half ($0000-$0FFF)
+    for (int i = 0; i < 2; i++) {
+        uint32_t b = static_cast<uint32_t>(bank_2k[i]) % num_1k;
+        config.chr_pages[i * 2]     = chr_mem + b * 0x0400;
+        config.chr_pages[i * 2 + 1] = chr_mem + ((b + 1) % num_1k) * 0x0400;
+        config.chr_writable[i * 2]     = is_ram;
+        config.chr_writable[i * 2 + 1] = is_ram;
+    }
+    // 4×1KB banks in upper half ($1000-$1FFF)
+    for (int i = 0; i < 4; i++) {
+        uint32_t offset = (bank_1k[i] % num_1k) * 0x0400;
+        config.chr_pages[4 + i] = (offset < chr_size) ? chr_mem + offset : chr_mem;
+        config.chr_writable[4 + i] = is_ram;
     }
 }
 
@@ -207,10 +213,16 @@ inline void set_chr_1k_pages_wide(MapperChrConfig& config,
 /// Apply bus conflict for discrete-logic mappers: AND the written data byte
 /// with the ROM byte at the same address.  Real hardware has the ROM output
 /// driver and CPU fighting on the data bus; the result is the AND of both.
-inline uint8_t apply_bus_conflict(uint8_t data, const uint8_t* prg_rom,
-                                  size_t prg_rom_size, uint16_t addr) {
-    uint32_t offset = addr % prg_rom_size;
-    return data & prg_rom[offset];
+///
+/// Resolves the CPU address through the mapper's current PRG bank config
+/// so the correct ROM byte is used — critical for ROMs > 32KB where
+/// addr % prg_rom_size reads from the wrong bank.
+inline uint8_t apply_bus_conflict(uint8_t data, const Mapper& mapper, uint16_t addr) {
+    MapperBankConfig config;
+    mapper.get_prg_bank_config(config);
+    int page = (addr >> 12) - 8;  // $8000→0, $9000→1, ..., $F000→7
+    if (page < 0 || page >= 8) return data;
+    return data & config.prg_pages[page][addr & 0x0FFF];
 }
 
 // ============================================================================
