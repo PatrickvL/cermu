@@ -73,24 +73,22 @@ void Datasette1530Device::on_signal_change(uint32_t signals) {
 
 bool Datasette1530Device::load_tap(const char* filepath) {
     size_t file_size = 0;
-    uint8_t* file_data = vfs_read_file(filepath, &file_size);
+    VfsData file_data(vfs_read_file(filepath, &file_size));
     if (!file_data) {
         log_info("Datasette: Cannot open '%s'\n", filepath);
         return false;
     }
 
     if (file_size < sizeof(TAPHeader)) {
-        free(file_data);
         log_info("Datasette: File too small for TAP header in '%s'\n", filepath);
         return false;
     }
 
     TAPHeader header;
-    memcpy(&header, file_data, sizeof(header));
+    memcpy(&header, file_data.get(), sizeof(header));
 
     // Verify signature
     if (memcmp(header.signature, "C64-TAPE-RAW", 12) != 0) {
-        free(file_data);
         log_info("Datasette: Invalid TAP signature in '%s'\n", filepath);
         return false;
     }
@@ -101,9 +99,8 @@ bool Datasette1530Device::load_tap(const char* filepath) {
     size_t pulse_available = file_size - sizeof(TAPHeader);
     size_t pulse_length = (pulse_available < header.data_length)
                           ? pulse_available : header.data_length;
-    tap_data_.assign(file_data + sizeof(TAPHeader),
-                     file_data + sizeof(TAPHeader) + pulse_length);
-    free(file_data);
+    tap_data_.assign(file_data.get() + sizeof(TAPHeader),
+                     file_data.get() + sizeof(TAPHeader) + pulse_length);
 
     if (pulse_length != header.data_length) {
         log_info("Datasette: Warning — read %zu of %u bytes from '%s'\n",
