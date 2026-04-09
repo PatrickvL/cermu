@@ -143,6 +143,17 @@ uint8_t* os_archive_extract_from_memory(const uint8_t* data, size_t data_size,
                                          size_t* out_size);
 
 /**
+ * Decompress a standalone compressed buffer (gzip, bzip2, xz, zstd, lz4).
+ * Uses libarchive's "raw" format mode — no container needed, just a stream.
+ * @param data       Compressed data
+ * @param data_size  Size of compressed data
+ * @param out_size   Receives the decompressed size
+ * @return           malloc'd buffer the caller must free(), or nullptr if
+ *                   the data is not recognised as compressed or on error.
+ */
+uint8_t* os_decompress(const uint8_t* data, size_t data_size, size_t* out_size);
+
+/**
  * Known archive file extensions supported by the archive backend.
  * Includes the leading dot.  The list is nullptr-terminated.
  * Example entries: ".zip", ".7z", ".tar", ".tar.gz", ".rar", ...
