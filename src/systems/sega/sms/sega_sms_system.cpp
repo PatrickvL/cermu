@@ -22,6 +22,7 @@
 #include "systems/sega/sms/sega_sms_system.hpp"
 #include "core/system_registry.hpp"
 #include "core/config/path_discovery.hpp"
+#include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -287,9 +288,61 @@ bus_state_t SegaSMSSystem::io_tick(bus_state_t pins) {
 
 bool SegaSMSSystem::load_file(const char* filepath) {
     if (!filepath || !system_ready_) return false;
-    // TODO: Load .sms ROM file
-    log_info("Sega Master System: File loading not yet implemented: %s\n", filepath);
-    return false;
+
+    log_info("Sega Master System: Loading file: %s\n", filepath);
+
+    size_t file_size = 0;
+    uint8_t* file_data = vfs_read_file(filepath, &file_size);
+    if (!file_data) {
+        log_info("SMS: Failed to open file: %s\n", filepath);
+        return false;
+    }
+
+    // Some SMS ROMs have a 512-byte header prepended (Barker Bill, etc.)
+    size_t rom_offset = 0;
+    if ((file_size % 16384) == 512) {
+        rom_offset = 512;
+        file_size -= 512;
+    }
+
+    if (file_size == 0 || file_size > sms_constants::MAX_CART_SIZE) {
+        log_info("SMS: Invalid ROM size: %zu bytes (max %u)\n",
+                 file_size, sms_constants::MAX_CART_SIZE);
+        free(file_data);
+        return false;
+    }
+
+    uint8_t* cart = board_.cart_rom.data();
+    if (!cart) { free(file_data); return false; }
+
+    // Clear cart ROM and copy the file data
+    memset(cart, 0xFF, board_.cart_rom.size_bytes());
+    memcpy(cart, file_data + rom_offset, file_size);
+
+    // Mirror smaller ROMs to fill power-of-2 bank space
+    size_t filled = file_size;
+    while (filled < board_.cart_rom.size_bytes()) {
+        size_t chunk = std::min(filled, board_.cart_rom.size_bytes() - filled);
+        memcpy(cart + filled, cart, chunk);
+        filled += chunk;
+    }
+    free(file_data);
+
+    // Compute number of 16KB banks (round up to power of 2)
+    uint8_t banks = static_cast<uint8_t>((file_size + 16383) / 16384);
+    if (banks == 0) banks = 1;
+    // Round up to power of 2 for mask-based wrapping
+    uint8_t p2 = 1;
+    while (p2 < banks) p2 <<= 1;
+    rom_banks_ = p2;
+
+    std::string name = vfs_filename(filepath);
+    program_title_ = name.empty() ? filepath : name;
+
+    log_info("SMS: Loaded %zu bytes (%u x 16KB banks)\n", file_size, rom_banks_);
+
+    reset();
+    return true;
 }
 
 // ============================================================================
