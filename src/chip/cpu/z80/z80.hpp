@@ -258,6 +258,9 @@ public:
         return pins;
     }
 
+    /// Set the program counter (CpuChipBase virtual override).
+    void set_pc(uint32_t addr) override { regs_[PC] = static_cast<uint16_t>(addr); }
+
     /// Execute one T-state.  External code must service the bus between calls.
     /// Returns bus state with address/data/control signals for the current T-state.
     bus_state_t tick(bus_state_t pins) {
