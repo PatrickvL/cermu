@@ -306,32 +306,30 @@ ChipLayout* ym_fm_t<Traits>::create_chip_layout() const {
 
 template <const YMTraits& Traits>
 std::vector<PinSignalState> ym_fm_t<Traits>::get_layout_pin_states(ChipLayout& layout) {
-    auto ps = populate_pin_states_from_bus(layout, bus_snapshot_);
+    return build_pin_states(layout, bus_snapshot_, [](auto& ps) {
+        // Find audio output pin and mark it as driven
+        auto mark_audio = [&](size_t side_offset, size_t pin_idx) {
+            size_t idx = side_offset + pin_idx;
+            if (idx < ps.size()) {
+                ps[idx].signal_level    = true;
+                ps[idx].drive_direction = true;
+                ps[idx].high_impedance  = false;
+                ps[idx].signal_valid    = true;
+            }
+        };
 
-    // Find audio output pin and mark it as driven
-    auto mark_audio = [&](size_t side_offset, size_t pin_idx) {
-        size_t idx = side_offset + pin_idx;
-        if (idx < ps.size()) {
-            ps[idx].signal_level    = true;
-            ps[idx].drive_direction = true;
-            ps[idx].high_impedance  = false;
-            ps[idx].signal_valid    = true;
+        if constexpr (Traits.pin_count == 24) {
+            // Audio out is pin 11 (left side idx 10)
+            mark_audio(0, 10);
+        } else if constexpr (Traits.pin_count == 40) {
+            // Audio out is pin 17 (left side idx 16)
+            mark_audio(0, 16);
+        } else if constexpr (Traits.pin_count == 18) {
+            // Audio out is pin 8 (left side idx 7)
+            mark_audio(0, 7);
         }
-    };
-
-    if constexpr (Traits.pin_count == 24) {
-        // Audio out is pin 11 (left side idx 10)
-        mark_audio(0, 10);
-    } else if constexpr (Traits.pin_count == 40) {
-        // Audio out is pin 17 (left side idx 16)
-        mark_audio(0, 16);
-    } else if constexpr (Traits.pin_count == 18) {
-        // Audio out is pin 8 (left side idx 7)
-        mark_audio(0, 7);
-    }
-    // QFP64: audio pin position varies — skip for now
-
-    return ps;
+        // QFP64: audio pin position varies — skip for now
+    });
 }
 
 // Explicit template instantiation — GUI methods

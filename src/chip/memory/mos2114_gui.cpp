@@ -55,32 +55,22 @@ ChipLayout* MOS2114::create_chip_layout() const {
     return &layout;
 }
 
-// Helper function to get MOS2114 pin states for visualization
-static std::vector<PinSignalState> get_mos2114_pin_states(MOS2114* mos2114, const ChipLayout* layout, bus_state_t bus_state) {
-    if (!mos2114 || !layout) return {};
-
-    // Generic bus-derived pin states (address, data, power, clock, control)
-    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
-
-    // MOS2114 specific: address pins are inputs (SRAM receives address)
-    // The generic function already sets signal_level from bus_state.
-    // Override drive_direction for address pins (input to SRAM).
-    for (const auto& pin : layout->left_pins) {
-        if (pin.get_pin_type() == PinType::ADDRESS && pin.pin_number > 0) {
-            pin_states[pin.pin_number - 1].drive_direction = false;
-        }
-    }
-    for (const auto& pin : layout->right_pins) {
-        if (pin.get_pin_type() == PinType::ADDRESS && pin.pin_number > 0) {
-            pin_states[pin.pin_number - 1].drive_direction = false;
-        }
-    }
-
-    return pin_states;
-}
-
 std::vector<PinSignalState> MOS2114::get_layout_pin_states(ChipLayout& layout) {
-    return get_mos2114_pin_states(this, &layout, this->bus_snapshot_);
+    return build_pin_states(layout, bus_snapshot_, [&layout](auto& ps) {
+        // MOS2114 specific: address pins are inputs (SRAM receives address)
+        // The generic function already sets signal_level from bus_state.
+        // Override drive_direction for address pins (input to SRAM).
+        for (const auto& pin : layout.left_pins) {
+            if (pin.get_pin_type() == PinType::ADDRESS && pin.pin_number > 0) {
+                ps[pin.pin_number - 1].drive_direction = false;
+            }
+        }
+        for (const auto& pin : layout.right_pins) {
+            if (pin.get_pin_type() == PinType::ADDRESS && pin.pin_number > 0) {
+                ps[pin.pin_number - 1].drive_direction = false;
+            }
+        }
+    });
 }
 
 // ============================================================================

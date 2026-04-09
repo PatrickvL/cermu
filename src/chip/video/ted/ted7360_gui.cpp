@@ -68,41 +68,32 @@ ChipLayout* ted7360_t::create_chip_layout() const {
 // TED PIN STATES
 // ============================================================================
 
-static std::vector<PinSignalState> get_ted_pin_states(ted7360_t* ted, const ChipLayout* layout, bus_state_t bus_state) {
-    if (!ted || !layout) return {};
-
-    // Generic bus-derived pin states (address, data, power, clock, control)
-    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
-
-    // TED specific: IRQ (pin 43, index 42) — driven by TED
-    pin_states[42].signal_level = !ted->irq_pending();
-    pin_states[42].drive_direction = true;
-    pin_states[42].high_impedance = false;
-
-    // BA pin (pin 44, index 43) — high when CPU has bus
-    pin_states[43].signal_level = !ted->bus.ba_low;
-    pin_states[43].drive_direction = true;
-    pin_states[43].high_impedance = false;
-
-    // Video output pins (always driven)
-    pin_states[21].signal_level = true; // LUMA (pin 22)
-    pin_states[21].drive_direction = true;
-    pin_states[21].high_impedance = false;
-    pin_states[22].signal_level = true; // CHROMA (pin 23)
-    pin_states[22].drive_direction = true;
-    pin_states[22].high_impedance = false;
-
-    // Sound output (pin 27, index 26) — active if any channel enabled
-    bool sound_active = ted->sound.ch1_enabled || ted->sound.ch2_enabled || ted->sound.noise_enabled;
-    pin_states[26].signal_level = sound_active;
-    pin_states[26].drive_direction = true;
-    pin_states[26].high_impedance = false;
-
-    return pin_states;
-}
-
 std::vector<PinSignalState> ted7360_t::get_layout_pin_states(ChipLayout& layout) {
-    return get_ted_pin_states(this, &layout, bus_snapshot_);
+    return build_pin_states(layout, bus_snapshot_, [this](auto& ps) {
+        // TED specific: IRQ (pin 43, index 42) — driven by TED
+        ps[42].signal_level = !irq_pending();
+        ps[42].drive_direction = true;
+        ps[42].high_impedance = false;
+
+        // BA pin (pin 44, index 43) — high when CPU has bus
+        ps[43].signal_level = !bus.ba_low;
+        ps[43].drive_direction = true;
+        ps[43].high_impedance = false;
+
+        // Video output pins (always driven)
+        ps[21].signal_level = true; // LUMA (pin 22)
+        ps[21].drive_direction = true;
+        ps[21].high_impedance = false;
+        ps[22].signal_level = true; // CHROMA (pin 23)
+        ps[22].drive_direction = true;
+        ps[22].high_impedance = false;
+
+        // Sound output (pin 27, index 26) — active if any channel enabled
+        bool sound_active = sound.ch1_enabled || sound.ch2_enabled || sound.noise_enabled;
+        ps[26].signal_level = sound_active;
+        ps[26].drive_direction = true;
+        ps[26].high_impedance = false;
+    });
 }
 
 // ============================================================================

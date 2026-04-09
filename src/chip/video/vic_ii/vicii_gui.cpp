@@ -72,36 +72,26 @@ static const char* get_video_standard(const vicii_base_t* vicii) {
 // VIC-II PIN STATES
 // ============================================================================
 
-// Helper function to get VIC-II pin states for visualization
-static std::vector<PinSignalState> get_vicii_pin_states(vicii_base_t* vicii, const ChipLayout* layout, bus_state_t bus_state) {
-    if (!vicii || !layout) return {};
-
-    // Generic bus-derived pin states (address, data, power, clock, control)
-    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
-
-    // VIC-II specific: IRQ driven by VIC-II (override direction from generic)
-    if (vicii->regs_[0x19] & 0x80) {
-        pin_states[5].signal_level = false; // IRQ (pin 6) - active low, asserted
-        pin_states[5].drive_direction = true;
-        pin_states[5].high_impedance = false;
-    }
-
-    // Video output pins (always driven by VIC-II)
-    pin_states[16].signal_level = true; // LUMA (pin 17)
-    pin_states[16].drive_direction = true;
-    pin_states[16].high_impedance = false;
-    pin_states[17].signal_level = true; // CHROMA (pin 18)
-    pin_states[17].drive_direction = true;
-    pin_states[17].high_impedance = false;
-    pin_states[18].signal_level = true; // CSYNC (pin 19)
-    pin_states[18].drive_direction = true;
-    pin_states[18].high_impedance = false;
-
-    return pin_states;
-}
-
 std::vector<PinSignalState> vicii_base_t::get_layout_pin_states(ChipLayout& layout) {
-    return get_vicii_pin_states(this, &layout, bus_snapshot_);
+    return build_pin_states(layout, bus_snapshot_, [this](auto& ps) {
+        // IRQ driven by VIC-II (override direction from generic)
+        if (regs_[0x19] & 0x80) {
+            ps[5].signal_level = false; // IRQ (pin 6) - active low, asserted
+            ps[5].drive_direction = true;
+            ps[5].high_impedance = false;
+        }
+
+        // Video output pins (always driven by VIC-II)
+        ps[16].signal_level = true; // LUMA (pin 17)
+        ps[16].drive_direction = true;
+        ps[16].high_impedance = false;
+        ps[17].signal_level = true; // CHROMA (pin 18)
+        ps[17].drive_direction = true;
+        ps[17].high_impedance = false;
+        ps[18].signal_level = true; // CSYNC (pin 19)
+        ps[18].drive_direction = true;
+        ps[18].high_impedance = false;
+    });
 }
 
 const char* vicii_base_t::get_layout_chip_name() const {

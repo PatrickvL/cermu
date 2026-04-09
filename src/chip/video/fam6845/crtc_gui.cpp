@@ -191,125 +191,109 @@ ChipLayout* crtc_base_t::create_chip_layout() const {
 // Pin state population
 // ============================================================================
 
-static std::vector<PinSignalState> get_crtc_pin_states_40(
-        crtc_base_t* crtc, const ChipLayout* layout, bus_state_t bus_state) {
-    if (!crtc || !layout) return {};
-
-    auto ps = populate_pin_states_from_bus(*layout, bus_state);
-
-    // LPSTB (pin 3, idx 2) — light pen strobe
-    ps[2].signal_level    = crtc->light_pen_latched;
-    ps[2].drive_direction = false;
-    ps[2].high_impedance  = false;
-    ps[2].signal_valid    = true;
-
-    // MA0-MA13 (pins 4-17, indices 3-16) — output addresses
-    for (int i = 0; i < 14; i++) {
-        ps[3 + i].signal_level    = (crtc->linear_address >> i) & 1;
-        ps[3 + i].drive_direction = true;
-        ps[3 + i].high_impedance  = false;
-        ps[3 + i].signal_valid    = true;
-    }
-
-    // RA0-RA4 (pins 18-22, indices 17-21)
-    for (int i = 0; i < 5; i++) {
-        int idx = 17 + i;
-        ps[idx].signal_level    = (crtc->v_scanline_counter >> i) & 1;
-        ps[idx].drive_direction = true;
-        ps[idx].high_impedance  = false;
-        ps[idx].signal_valid    = true;
-    }
-
-    // CURSOR (pin 31, idx 30)
-    ps[30].signal_level    = crtc->cursor_visible;
-    ps[30].drive_direction = true;
-    ps[30].high_impedance  = false;
-    ps[30].signal_valid    = true;
-
-    // DE (pin 32, idx 31)
-    ps[31].signal_level    = crtc->h_display_active && crtc->v_display_active;
-    ps[31].drive_direction = true;
-    ps[31].high_impedance  = false;
-    ps[31].signal_valid    = true;
-
-    // HSYNC (pin 33, idx 32)
-    ps[32].signal_level    = crtc->h_sync_active;
-    ps[32].drive_direction = true;
-    ps[32].high_impedance  = false;
-    ps[32].signal_valid    = true;
-
-    // VSYNC (pin 34, idx 33)
-    ps[33].signal_level    = crtc->v_sync_active;
-    ps[33].drive_direction = true;
-    ps[33].high_impedance  = false;
-    ps[33].signal_valid    = true;
-
-    // ENABLE (pin 36, idx 35)
-    ps[35].signal_level    = true;
-    ps[35].drive_direction = false;
-    ps[35].high_impedance  = false;
-    ps[35].signal_valid    = true;
-
-    // RS (pin 37, idx 36)
-    ps[36].signal_level    = BUS_GET_ADDR(bus_state) & 1;
-    ps[36].drive_direction = false;
-    ps[36].high_impedance  = false;
-    ps[36].signal_valid    = true;
-
-    // /CS (pin 38, idx 37)
-    ps[37].signal_level    = true;
-    ps[37].drive_direction = false;
-    ps[37].high_impedance  = false;
-    ps[37].signal_valid    = true;
-
-    return ps;
-}
-
-static std::vector<PinSignalState> get_vdc_pin_states_48(
-        crtc_base_t* vdc, const ChipLayout* layout, bus_state_t bus_state) {
-    if (!vdc || !layout) return {};
-
-    auto ps = populate_pin_states_from_bus(*layout, bus_state);
-
-    // MA0-MA12 (pins 5-17, indices 4-16) — DRAM addresses
-    for (int i = 0; i < 13; i++) {
-        ps[4 + i].signal_level    = (vdc->linear_address >> i) & 1;
-        ps[4 + i].drive_direction = true;
-        ps[4 + i].high_impedance  = false;
-        ps[4 + i].signal_valid    = true;
-    }
-
-    // CURSOR (pin 23, idx 22)
-    ps[22].signal_level    = vdc->cursor_visible && vdc->is_display_active();
-    ps[22].drive_direction = true;
-    ps[22].high_impedance  = false;
-    ps[22].signal_valid    = true;
-
-    // VIDEO (pin 24, idx 23) — analog luma (represent as on/off)
-    ps[23].signal_level    = vdc->is_display_active();
-    ps[23].drive_direction = true;
-    ps[23].high_impedance  = false;
-    ps[23].signal_valid    = true;
-
-    // VSYNC (pin 25, idx 24)
-    ps[24].signal_level    = vdc->v_sync_active;
-    ps[24].drive_direction = true;
-    ps[24].high_impedance  = false;
-    ps[24].signal_valid    = true;
-
-    // RS (pin 26, idx 25)
-    ps[25].signal_level    = BUS_GET_ADDR(bus_state) & 1;
-    ps[25].drive_direction = false;
-    ps[25].high_impedance  = false;
-    ps[25].signal_valid    = true;
-
-    return ps;
-}
-
 std::vector<PinSignalState> crtc_base_t::get_layout_pin_states(ChipLayout& layout) {
-    if (traits_ && traits_->pin_count == 48)
-        return get_vdc_pin_states_48(this, &layout, bus_snapshot_);
-    return get_crtc_pin_states_40(this, &layout, bus_snapshot_);
+    if (traits_ && traits_->pin_count == 48) {
+        return build_pin_states(layout, bus_snapshot_, [this](auto& ps) {
+            // MA0-MA12 (pins 5-17, indices 4-16) — DRAM addresses
+            for (int i = 0; i < 13; i++) {
+                ps[4 + i].signal_level    = (linear_address >> i) & 1;
+                ps[4 + i].drive_direction = true;
+                ps[4 + i].high_impedance  = false;
+                ps[4 + i].signal_valid    = true;
+            }
+
+            // CURSOR (pin 23, idx 22)
+            ps[22].signal_level    = cursor_visible && is_display_active();
+            ps[22].drive_direction = true;
+            ps[22].high_impedance  = false;
+            ps[22].signal_valid    = true;
+
+            // VIDEO (pin 24, idx 23) — analog luma (represent as on/off)
+            ps[23].signal_level    = is_display_active();
+            ps[23].drive_direction = true;
+            ps[23].high_impedance  = false;
+            ps[23].signal_valid    = true;
+
+            // VSYNC (pin 25, idx 24)
+            ps[24].signal_level    = v_sync_active;
+            ps[24].drive_direction = true;
+            ps[24].high_impedance  = false;
+            ps[24].signal_valid    = true;
+
+            // RS (pin 26, idx 25)
+            ps[25].signal_level    = BUS_GET_ADDR(bus_snapshot_) & 1;
+            ps[25].drive_direction = false;
+            ps[25].high_impedance  = false;
+            ps[25].signal_valid    = true;
+        });
+    }
+
+    return build_pin_states(layout, bus_snapshot_, [this](auto& ps) {
+        // LPSTB (pin 3, idx 2) — light pen strobe
+        ps[2].signal_level    = light_pen_latched;
+        ps[2].drive_direction = false;
+        ps[2].high_impedance  = false;
+        ps[2].signal_valid    = true;
+
+        // MA0-MA13 (pins 4-17, indices 3-16) — output addresses
+        for (int i = 0; i < 14; i++) {
+            ps[3 + i].signal_level    = (linear_address >> i) & 1;
+            ps[3 + i].drive_direction = true;
+            ps[3 + i].high_impedance  = false;
+            ps[3 + i].signal_valid    = true;
+        }
+
+        // RA0-RA4 (pins 18-22, indices 17-21)
+        for (int i = 0; i < 5; i++) {
+            int idx = 17 + i;
+            ps[idx].signal_level    = (v_scanline_counter >> i) & 1;
+            ps[idx].drive_direction = true;
+            ps[idx].high_impedance  = false;
+            ps[idx].signal_valid    = true;
+        }
+
+        // CURSOR (pin 31, idx 30)
+        ps[30].signal_level    = cursor_visible;
+        ps[30].drive_direction = true;
+        ps[30].high_impedance  = false;
+        ps[30].signal_valid    = true;
+
+        // DE (pin 32, idx 31)
+        ps[31].signal_level    = h_display_active && v_display_active;
+        ps[31].drive_direction = true;
+        ps[31].high_impedance  = false;
+        ps[31].signal_valid    = true;
+
+        // HSYNC (pin 33, idx 32)
+        ps[32].signal_level    = h_sync_active;
+        ps[32].drive_direction = true;
+        ps[32].high_impedance  = false;
+        ps[32].signal_valid    = true;
+
+        // VSYNC (pin 34, idx 33)
+        ps[33].signal_level    = v_sync_active;
+        ps[33].drive_direction = true;
+        ps[33].high_impedance  = false;
+        ps[33].signal_valid    = true;
+
+        // ENABLE (pin 36, idx 35)
+        ps[35].signal_level    = true;
+        ps[35].drive_direction = false;
+        ps[35].high_impedance  = false;
+        ps[35].signal_valid    = true;
+
+        // RS (pin 37, idx 36)
+        ps[36].signal_level    = BUS_GET_ADDR(bus_snapshot_) & 1;
+        ps[36].drive_direction = false;
+        ps[36].high_impedance  = false;
+        ps[36].signal_valid    = true;
+
+        // /CS (pin 38, idx 37)
+        ps[37].signal_level    = true;
+        ps[37].drive_direction = false;
+        ps[37].high_impedance  = false;
+        ps[37].signal_valid    = true;
+    });
 }
 
 #endif // CERMU_HAS_GUI

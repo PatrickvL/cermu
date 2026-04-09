@@ -71,28 +71,19 @@ ChipLayout* nes_system::PPU::create_chip_layout() const {
 // PPU PIN STATES
 // ============================================================================
 
-static std::vector<PinSignalState> get_ppu_pin_states(nes_system::PPU* ppu, const ChipLayout* layout, bus_state_t bus_state) {
-    if (!ppu || !layout) return {};
-
-    // Generic bus-derived pin states (address, data, power, clock, control)
-    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
-
-    // PPU specific: /INT (NMI) pin (pin 19, index 18) — PPU drives NMI
-    // Read directly from the PPU bus snapshot (active-low: bit HIGH = not asserted)
-    pin_states[18].signal_level = PPU_BUS_GET_BIT(ppu->bus_snapshot_, BUS_NMI_BIT);
-    pin_states[18].drive_direction = true;
-    pin_states[18].high_impedance = false;
-
-    // VOUT (pin 21, index 20) — composite video, always driven
-    pin_states[20].signal_level = true;
-    pin_states[20].drive_direction = true;
-    pin_states[20].high_impedance = false;
-
-    return pin_states;
-}
-
 std::vector<PinSignalState> nes_system::PPU::get_layout_pin_states(ChipLayout& layout) {
-    return get_ppu_pin_states(this, &layout, bus_snapshot_);
+    return build_pin_states(layout, bus_snapshot_, [this](auto& ps) {
+        // PPU specific: /INT (NMI) pin (pin 19, index 18) — PPU drives NMI
+        // Read directly from the PPU bus snapshot (active-low: bit HIGH = not asserted)
+        ps[18].signal_level = PPU_BUS_GET_BIT(bus_snapshot_, BUS_NMI_BIT);
+        ps[18].drive_direction = true;
+        ps[18].high_impedance = false;
+
+        // VOUT (pin 21, index 20) — composite video, always driven
+        ps[20].signal_level = true;
+        ps[20].drive_direction = true;
+        ps[20].high_impedance = false;
+    });
 }
 
 const char* nes_system::PPU::get_layout_chip_name() const {

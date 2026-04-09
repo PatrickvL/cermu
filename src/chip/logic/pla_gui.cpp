@@ -51,46 +51,44 @@ ChipLayout* PLA906114::create_chip_layout() const {
 }
 
 std::vector<PinSignalState> PLA906114::get_layout_pin_states(ChipLayout& layout) {
-    auto ps = populate_pin_states_from_bus(layout, bus_snapshot_);
+    return build_pin_states(layout, bus_snapshot_, [this, &layout](auto& ps) {
+        auto overlay = [&](const ChipPin& pin) {
+            if (pin.pin_number == 0 || pin.pin_number > ps.size()) return;
+            PinSignalState& s = ps[pin.pin_number - 1];
 
-    auto overlay = [&](const ChipPin& pin) {
-        if (pin.pin_number == 0 || pin.pin_number > ps.size()) return;
-        PinSignalState& s = ps[pin.pin_number - 1];
+            switch (pin.label) {
+                // Banking inputs — positive logic in PLA struct
+                case PinLabel::_CHAREN:     s.signal_level = inputs_.n_charen; s.high_impedance = false; break;
+                case PinLabel::_HIRAM:      s.signal_level = inputs_.n_hiram;  s.high_impedance = false; break;
+                case PinLabel::_LORAM:      s.signal_level = inputs_.n_loram;  s.high_impedance = false; break;
+                case PinLabel::_GAME:       s.signal_level = inputs_.n_game;   s.high_impedance = false; break;
+                case PinLabel::_EXROM:      s.signal_level = inputs_.n_exrom;  s.high_impedance = false; break;
 
-        switch (pin.label) {
-            // Banking inputs — positive logic in PLA struct
-            case PinLabel::_CHAREN:     s.signal_level = inputs_.n_charen; s.high_impedance = false; break;
-            case PinLabel::_HIRAM:      s.signal_level = inputs_.n_hiram;  s.high_impedance = false; break;
-            case PinLabel::_LORAM:      s.signal_level = inputs_.n_loram;  s.high_impedance = false; break;
-            case PinLabel::_GAME:       s.signal_level = inputs_.n_game;   s.high_impedance = false; break;
-            case PinLabel::_EXROM:      s.signal_level = inputs_.n_exrom;  s.high_impedance = false; break;
+                // Other inputs
+                case PinLabel::_VA14:       s.signal_level = !inputs_.n_va14;  s.high_impedance = false; break;
+                case PinLabel::_CAS:        s.signal_level = !inputs_.n_cas;   s.high_impedance = false; break;
+                case PinLabel::VA12:        s.signal_level = inputs_.va12;     s.high_impedance = false; break;
+                case PinLabel::VA13:        s.signal_level = inputs_.va13;     s.high_impedance = false; break;
+                case PinLabel::_CS:         s.signal_level = true;             s.high_impedance = false; break;
 
-            // Other inputs
-            case PinLabel::_VA14:       s.signal_level = !inputs_.n_va14;  s.high_impedance = false; break;
-            case PinLabel::_CAS:        s.signal_level = !inputs_.n_cas;   s.high_impedance = false; break;
-            case PinLabel::VA12:        s.signal_level = inputs_.va12;     s.high_impedance = false; break;
-            case PinLabel::VA13:        s.signal_level = inputs_.va13;     s.high_impedance = false; break;
-            case PinLabel::_CS:         s.signal_level = true;             s.high_impedance = false; break;
+                // Output pins — active-low
+                case PinLabel::_ROMH:       s.signal_level = !outputs_.n_romh;     s.drive_direction = true; s.high_impedance = false; break;
+                case PinLabel::_ROML:       s.signal_level = !outputs_.n_roml;     s.drive_direction = true; s.high_impedance = false; break;
+                case PinLabel::_IO:         s.signal_level = !outputs_.n_io;       s.drive_direction = true; s.high_impedance = false; break;
+                case PinLabel::GRW:         s.signal_level = !outputs_.n_grw;      s.drive_direction = true; s.high_impedance = false; break;
+                case PinLabel::_CHAROM:     s.signal_level = !outputs_.n_charrom;  s.drive_direction = true; s.high_impedance = false; break;
+                case PinLabel::_KERNAL:     s.signal_level = !outputs_.n_kernal;   s.drive_direction = true; s.high_impedance = false; break;
+                case PinLabel::_BASIC:      s.signal_level = !outputs_.n_basic;    s.drive_direction = true; s.high_impedance = false; break;
+                case PinLabel::_CASRAM_PLA: s.signal_level = !outputs_.n_casram;   s.drive_direction = true; s.high_impedance = false; break;
 
-            // Output pins — active-low
-            case PinLabel::_ROMH:       s.signal_level = !outputs_.n_romh;     s.drive_direction = true; s.high_impedance = false; break;
-            case PinLabel::_ROML:       s.signal_level = !outputs_.n_roml;     s.drive_direction = true; s.high_impedance = false; break;
-            case PinLabel::_IO:         s.signal_level = !outputs_.n_io;       s.drive_direction = true; s.high_impedance = false; break;
-            case PinLabel::GRW:         s.signal_level = !outputs_.n_grw;      s.drive_direction = true; s.high_impedance = false; break;
-            case PinLabel::_CHAROM:     s.signal_level = !outputs_.n_charrom;  s.drive_direction = true; s.high_impedance = false; break;
-            case PinLabel::_KERNAL:     s.signal_level = !outputs_.n_kernal;   s.drive_direction = true; s.high_impedance = false; break;
-            case PinLabel::_BASIC:      s.signal_level = !outputs_.n_basic;    s.drive_direction = true; s.high_impedance = false; break;
-            case PinLabel::_CASRAM_PLA: s.signal_level = !outputs_.n_casram;   s.drive_direction = true; s.high_impedance = false; break;
+                default: return;
+            }
+            s.signal_value = s.signal_level ? 1 : 0;
+        };
 
-            default: return;
-        }
-        s.signal_value = s.signal_level ? 1 : 0;
-    };
-
-    for (const auto& pin : layout.left_pins)  overlay(pin);
-    for (const auto& pin : layout.right_pins) overlay(pin);
-
-    return ps;
+        for (const auto& pin : layout.left_pins)  overlay(pin);
+        for (const auto& pin : layout.right_pins) overlay(pin);
+    });
 }
 
 #endif // CERMU_HAS_GUI

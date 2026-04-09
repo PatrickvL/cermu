@@ -102,31 +102,30 @@ ChipLayout* z80_ctc_t::create_chip_layout() const {
 }
 
 std::vector<PinSignalState> z80_ctc_t::get_layout_pin_states(ChipLayout& layout) {
-    auto ps = populate_pin_states_from_bus(layout, bus_snapshot_);
-    int total = static_cast<int>(ps.size());
+    return build_pin_states(layout, bus_snapshot_, [this](auto& ps) {
+        int total = static_cast<int>(ps.size());
 
-    auto set_pin = [&](int pin_idx, bool level, bool is_output) {
-        if (pin_idx >= 0 && pin_idx < total) {
-            ps[pin_idx].signal_level = level;
-            ps[pin_idx].drive_direction = is_output;
-            ps[pin_idx].high_impedance = !is_output;
+        auto set_pin = [&](int pin_idx, bool level, bool is_output) {
+            if (pin_idx >= 0 && pin_idx < total) {
+                ps[pin_idx].signal_level = level;
+                ps[pin_idx].drive_direction = is_output;
+                ps[pin_idx].high_impedance = !is_output;
+            }
+        };
+
+        // ZC/TO outputs: ZC/TO0=pin9(idx8), ZC/TO1=pin8(idx7), ZC/TO2=pin7(idx6)
+        set_pin(8, ch_[0].zero_count, true);
+        set_pin(7, ch_[1].zero_count, true);
+        set_pin(6, ch_[2].zero_count, true);
+        // Channel 3 has no ZC/TO output
+
+        // INT (pin11, idx10) — active-low, open-drain output
+        bool any_int = false;
+        for (const auto& ch : ch_) {
+            if (ch.int_pending) { any_int = true; break; }
         }
-    };
-
-    // ZC/TO outputs: ZC/TO0=pin9(idx8), ZC/TO1=pin8(idx7), ZC/TO2=pin7(idx6)
-    set_pin(8, ch_[0].zero_count, true);
-    set_pin(7, ch_[1].zero_count, true);
-    set_pin(6, ch_[2].zero_count, true);
-    // Channel 3 has no ZC/TO output
-
-    // INT (pin11, idx10) — active-low, open-drain output
-    bool any_int = false;
-    for (const auto& ch : ch_) {
-        if (ch.int_pending) { any_int = true; break; }
-    }
-    set_pin(10, !any_int, true);
-
-    return ps;
+        set_pin(10, !any_int, true);
+    });
 }
 
 #endif // CERMU_HAS_GUI

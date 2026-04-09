@@ -64,47 +64,37 @@ ChipLayout* nes6502_apu::APU::create_chip_layout() const {
 // PIN SIGNAL STATES
 // ============================================================================
 
-static std::vector<PinSignalState> get_apu_pin_states(
-        nes6502_apu::APU* apu, const ChipLayout* layout, bus_state_t bus_state) {
-    if (!apu || !layout) return {};
-
-    // Generic bus-derived pin states (address, data, power, clock, control)
-    auto states = populate_pin_states_from_bus(*layout, bus_state);
-
-    // APU specific: SND1 (pin 35, index 34) — pulse + triangle mix (analog, show PWM)
-    uint8_t p1   = apu->pulse1.output();
-    uint8_t p2   = apu->pulse2.output();
-    uint8_t tri  = apu->triangle.output();
-    float pulse_sum = (float)(p1 + p2);
-    float snd1_mix  = (pulse_sum > 0) ? (95.88f / ((8128.0f / pulse_sum) + 100.0f)) : 0.0f;
-    float tri_mix   = (tri > 0) ? (tri / 8227.0f) : 0.0f;
-    states[34].signal_level = (snd1_mix + tri_mix) > 0.01f;
-    states[34].drive_direction = true;
-    states[34].high_impedance = false;
-    states[34].is_pwm = true;
-    states[34].pwm_duty_cycle = snd1_mix + tri_mix * 0.5f;
-
-    // SND2 (pin 34, index 33) — noise + DMC mix (analog, show PWM)
-    uint8_t noi  = apu->noise.output();
-    uint8_t dmc  = apu->dmc.output();
-    float noi_f  = (float)noi / 12241.0f;
-    float dmc_f  = (float)dmc / 22638.0f;
-    states[33].signal_level = (noi_f + dmc_f) > 0.001f;
-    states[33].drive_direction = true;
-    states[33].high_impedance = false;
-    states[33].is_pwm = true;
-    states[33].pwm_duty_cycle = noi_f + dmc_f;
-
-    // IRQ (pin 37, index 36) — APU can assert IRQ via frame counter or DMC
-    states[36].signal_level = !apu->irq(); // active-low
-    states[36].drive_direction = true;
-    states[36].high_impedance = false;
-
-    return states;
-}
-
 std::vector<PinSignalState> nes6502_apu::APU::get_layout_pin_states(ChipLayout& layout) {
-    return get_apu_pin_states(this, &layout, bus_snapshot_);
+    return build_pin_states(layout, bus_snapshot_, [this](auto& ps) {
+        // APU specific: SND1 (pin 35, index 34) — pulse + triangle mix (analog, show PWM)
+        uint8_t p1   = pulse1.output();
+        uint8_t p2   = pulse2.output();
+        uint8_t tri  = triangle.output();
+        float pulse_sum = (float)(p1 + p2);
+        float snd1_mix  = (pulse_sum > 0) ? (95.88f / ((8128.0f / pulse_sum) + 100.0f)) : 0.0f;
+        float tri_mix   = (tri > 0) ? (tri / 8227.0f) : 0.0f;
+        ps[34].signal_level = (snd1_mix + tri_mix) > 0.01f;
+        ps[34].drive_direction = true;
+        ps[34].high_impedance = false;
+        ps[34].is_pwm = true;
+        ps[34].pwm_duty_cycle = snd1_mix + tri_mix * 0.5f;
+
+        // SND2 (pin 34, index 33) — noise + DMC mix (analog, show PWM)
+        uint8_t noi  = noise.output();
+        uint8_t dmc_out  = dmc.output();
+        float noi_f  = (float)noi / 12241.0f;
+        float dmc_f  = (float)dmc_out / 22638.0f;
+        ps[33].signal_level = (noi_f + dmc_f) > 0.001f;
+        ps[33].drive_direction = true;
+        ps[33].high_impedance = false;
+        ps[33].is_pwm = true;
+        ps[33].pwm_duty_cycle = noi_f + dmc_f;
+
+        // IRQ (pin 37, index 36) — APU can assert IRQ via frame counter or DMC
+        ps[36].signal_level = !irq(); // active-low
+        ps[36].drive_direction = true;
+        ps[36].high_impedance = false;
+    });
 }
 
 // ============================================================================

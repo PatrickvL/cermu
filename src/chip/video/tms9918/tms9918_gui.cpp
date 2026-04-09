@@ -170,7 +170,7 @@ ChipLayout* tms9918::tms9918_t<Traits>::create_chip_layout() const {
 template <const tms9918::VDPTraits& Traits>
 std::vector<PinSignalState> tms9918::tms9918_t<Traits>::get_layout_pin_states(ChipLayout& layout) {
     // TMS9918 does not use bus_snapshot_ — return default-initialised states
-    return populate_pin_states_from_bus(layout, 0);
+    return build_pin_states(layout, 0);
 }
 
 // ── Explicit template instantiation — GUI methods ──────────────────────────

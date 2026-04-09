@@ -107,50 +107,48 @@ std::vector<PinSignalState> z80_t<Traits>::get_layout_pin_states(ChipLayout& lay
     bus_state_t bus = this->bus_prev_;
     if (bus == 0) bus = Z80_GUI_DEFAULT_STATE;
 
-    auto ps = populate_pin_states_from_bus(layout, bus);
+    return build_pin_states(layout, bus, [&](auto& ps) {
+        // Z80-specific control signals — overlay from bus bits
+        // /MREQ (pin 19, idx 18)
+        ps[18].signal_level    = BUS_GET_BIT(bus, Z80_MREQ_BIT) != 0;
+        ps[18].drive_direction = true;
+        ps[18].signal_valid    = true;
 
-    // Z80-specific control signals — overlay from bus bits
-    // /MREQ (pin 19, idx 18)
-    ps[18].signal_level    = BUS_GET_BIT(bus, Z80_MREQ_BIT) != 0;
-    ps[18].drive_direction = true;
-    ps[18].signal_valid    = true;
+        // /IORQ (pin 20, idx 19)
+        ps[19].signal_level    = BUS_GET_BIT(bus, Z80_IORQ_BIT) != 0;
+        ps[19].drive_direction = true;
+        ps[19].signal_valid    = true;
 
-    // /IORQ (pin 20, idx 19)
-    ps[19].signal_level    = BUS_GET_BIT(bus, Z80_IORQ_BIT) != 0;
-    ps[19].drive_direction = true;
-    ps[19].signal_valid    = true;
+        // /RD (pin 21, idx 20)
+        ps[20].signal_level    = BUS_GET_BIT(bus, BUS_RW_BIT) != 0;  // RW=1 means read idle
+        ps[20].drive_direction = true;
+        ps[20].signal_valid    = true;
 
-    // /RD (pin 21, idx 20)
-    ps[20].signal_level    = BUS_GET_BIT(bus, BUS_RW_BIT) != 0;  // RW=1 means read idle
-    ps[20].drive_direction = true;
-    ps[20].signal_valid    = true;
+        // /WR (pin 22, idx 21)
+        ps[21].signal_level    = BUS_GET_BIT(bus, BUS_RW_BIT) != 0;  // Inverted: active when RW=0
+        ps[21].drive_direction = true;
+        ps[21].signal_valid    = true;
 
-    // /WR (pin 22, idx 21)
-    ps[21].signal_level    = BUS_GET_BIT(bus, BUS_RW_BIT) != 0;  // Inverted: active when RW=0
-    ps[21].drive_direction = true;
-    ps[21].signal_valid    = true;
+        // /BUSAK (pin 23, idx 22)
+        ps[22].signal_level    = BUS_GET_BIT(bus, Z80_BUSACK_BIT) != 0;
+        ps[22].drive_direction = true;
+        ps[22].signal_valid    = true;
 
-    // /BUSAK (pin 23, idx 22)
-    ps[22].signal_level    = BUS_GET_BIT(bus, Z80_BUSACK_BIT) != 0;
-    ps[22].drive_direction = true;
-    ps[22].signal_valid    = true;
+        // /M1 (pin 27, idx 26)
+        ps[26].signal_level    = BUS_GET_BIT(bus, Z80_M1_BIT) != 0;
+        ps[26].drive_direction = true;
+        ps[26].signal_valid    = true;
 
-    // /M1 (pin 27, idx 26)
-    ps[26].signal_level    = BUS_GET_BIT(bus, Z80_M1_BIT) != 0;
-    ps[26].drive_direction = true;
-    ps[26].signal_valid    = true;
+        // /RFSH (pin 28, idx 27)
+        ps[27].signal_level    = BUS_GET_BIT(bus, Z80_RFSH_BIT) != 0;
+        ps[27].drive_direction = true;
+        ps[27].signal_valid    = true;
 
-    // /RFSH (pin 28, idx 27)
-    ps[27].signal_level    = BUS_GET_BIT(bus, Z80_RFSH_BIT) != 0;
-    ps[27].drive_direction = true;
-    ps[27].signal_valid    = true;
-
-    // /HALT (pin 18, idx 17)
-    ps[17].signal_level    = BUS_GET_BIT(bus, Z80_HALT_BIT) != 0;
-    ps[17].drive_direction = true;
-    ps[17].signal_valid    = true;
-
-    return ps;
+        // /HALT (pin 18, idx 17)
+        ps[17].signal_level    = BUS_GET_BIT(bus, Z80_HALT_BIT) != 0;
+        ps[17].drive_direction = true;
+        ps[17].signal_valid    = true;
+    });
 }
 
 template <const Z80Traits& Traits>

@@ -62,45 +62,37 @@ ChipLayout* mos6522_t::create_chip_layout() const {
 // MOS6522 VIA PIN STATES
 // ============================================================================
 
-static std::vector<PinSignalState> get_via_pin_states(mos6522_t* via, const ChipLayout* layout, bus_state_t bus_state) {
-    if (!via || !layout) return {};
-
-    // Generic bus-derived pin states (address, data, power, clock, control)
-    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
-    int total_pins = static_cast<int>(pin_states.size());
-
-    // VIA specific: Port A pins (PA0-PA7, pins 2-9)
-    for (int i = 0; i < 8; i++) {
-        int pin_idx = i + 1; // PA0 is pin 2, index 1
-        if (pin_idx < total_pins) {
-            pin_states[pin_idx].signal_level = (via->port_a_pins_ & (1 << i)) != 0;
-            pin_states[pin_idx].drive_direction = (via->regs_[DDRA] & (1 << i)) != 0;
-            pin_states[pin_idx].high_impedance = !(via->regs_[DDRA] & (1 << i));
-        }
-    }
-
-    // Port B pins (PB0-PB7, pins 10-17)
-    for (int i = 0; i < 8; i++) {
-        int pin_idx = i + 9; // PB0 is pin 10, index 9
-        if (pin_idx < total_pins) {
-            pin_states[pin_idx].signal_level = (via->port_b_pins_ & (1 << i)) != 0;
-            pin_states[pin_idx].drive_direction = (via->regs_[DDRB] & (1 << i)) != 0;
-            pin_states[pin_idx].high_impedance = !(via->regs_[DDRB] & (1 << i));
-        }
-    }
-
-    // IRQ pin (pin 21, index 20) — VIA drives IRQ as output
-    if (20 < total_pins) {
-        pin_states[20].signal_level = !via->interrupt_active; // Active low
-        pin_states[20].drive_direction = true;
-        pin_states[20].high_impedance = false;
-    }
-
-    return pin_states;
-}
-
 std::vector<PinSignalState> mos6522_t::get_layout_pin_states(ChipLayout& layout) {
-    return get_via_pin_states(this, &layout, bus_snapshot_);
+    return build_pin_states(layout, bus_snapshot_, [this](auto& ps) {
+        int total_pins = static_cast<int>(ps.size());
+
+        // VIA specific: Port A pins (PA0-PA7, pins 2-9)
+        for (int i = 0; i < 8; i++) {
+            int pin_idx = i + 1; // PA0 is pin 2, index 1
+            if (pin_idx < total_pins) {
+                ps[pin_idx].signal_level = (port_a_pins_ & (1 << i)) != 0;
+                ps[pin_idx].drive_direction = (regs_[DDRA] & (1 << i)) != 0;
+                ps[pin_idx].high_impedance = !(regs_[DDRA] & (1 << i));
+            }
+        }
+
+        // Port B pins (PB0-PB7, pins 10-17)
+        for (int i = 0; i < 8; i++) {
+            int pin_idx = i + 9; // PB0 is pin 10, index 9
+            if (pin_idx < total_pins) {
+                ps[pin_idx].signal_level = (port_b_pins_ & (1 << i)) != 0;
+                ps[pin_idx].drive_direction = (regs_[DDRB] & (1 << i)) != 0;
+                ps[pin_idx].high_impedance = !(regs_[DDRB] & (1 << i));
+            }
+        }
+
+        // IRQ pin (pin 21, index 20) — VIA drives IRQ as output
+        if (20 < total_pins) {
+            ps[20].signal_level = !interrupt_active; // Active low
+            ps[20].drive_direction = true;
+            ps[20].high_impedance = false;
+        }
+    });
 }
 
 // ============================================================================

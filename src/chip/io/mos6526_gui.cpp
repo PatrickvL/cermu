@@ -53,51 +53,42 @@ ChipLayout* mos6526_t::create_chip_layout() const {
     return &layout;
 }
 
-// Helper function to get CIA pin states for visualization
-static std::vector<PinSignalState> get_cia_pin_states(mos6526_t* cia, const ChipLayout* layout, bus_state_t bus_state) {
-    if (!cia || !layout) return {};
-
-    // Generic bus-derived pin states (address, data, power, clock, control)
-    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
-    int total_pins = static_cast<int>(pin_states.size());
-
-    // CIA specific: Port A pins (PA0-PA7) from CIA registers
-    for (int i = 0; i < 8; i++) {
-        int pin_idx = i + 1; // PA0 is pin 2, so index 1
-        if (pin_idx < total_pins) {
-            bool pin_active = (cia->regs_[PRA] & (1 << i)) != 0;
-            bool drive_dir = (cia->regs_[DDRA] & (1 << i)) != 0;
-            pin_states[pin_idx].signal_level = pin_active;
-            pin_states[pin_idx].drive_direction = drive_dir;
-            pin_states[pin_idx].high_impedance = !drive_dir;
-        }
-    }
-
-    // Port B pins (PB0-PB7)
-    for (int i = 0; i < 8; i++) {
-        int pin_idx = i + 9; // PB0 is pin 10, so index 9
-        if (pin_idx < total_pins) {
-            bool pin_active = (cia->regs_[PRB] & (1 << i)) != 0;
-            bool drive_dir = (cia->regs_[DDRB] & (1 << i)) != 0;
-            pin_states[pin_idx].signal_level = pin_active;
-            pin_states[pin_idx].drive_direction = drive_dir;
-            pin_states[pin_idx].high_impedance = !drive_dir;
-        }
-    }
-
-    // IRQ pin (pin 21, index 20) — CIA drives IRQ as output
-    if (20 < total_pins) {
-        bool irq_active = (cia->regs_[ICR] & 0x80) != 0;
-        pin_states[20].signal_level = !irq_active; // Active low
-        pin_states[20].drive_direction = true;
-        pin_states[20].high_impedance = false;
-    }
-
-    return pin_states;
-}
-
 std::vector<PinSignalState> mos6526_t::get_layout_pin_states(ChipLayout& layout) {
-    return get_cia_pin_states(this, &layout, bus_snapshot_);
+    return build_pin_states(layout, bus_snapshot_, [this](auto& ps) {
+        int total_pins = static_cast<int>(ps.size());
+
+        // CIA specific: Port A pins (PA0-PA7) from CIA registers
+        for (int i = 0; i < 8; i++) {
+            int pin_idx = i + 1; // PA0 is pin 2, so index 1
+            if (pin_idx < total_pins) {
+                bool pin_active = (regs_[PRA] & (1 << i)) != 0;
+                bool drive_dir = (regs_[DDRA] & (1 << i)) != 0;
+                ps[pin_idx].signal_level = pin_active;
+                ps[pin_idx].drive_direction = drive_dir;
+                ps[pin_idx].high_impedance = !drive_dir;
+            }
+        }
+
+        // Port B pins (PB0-PB7)
+        for (int i = 0; i < 8; i++) {
+            int pin_idx = i + 9; // PB0 is pin 10, so index 9
+            if (pin_idx < total_pins) {
+                bool pin_active = (regs_[PRB] & (1 << i)) != 0;
+                bool drive_dir = (regs_[DDRB] & (1 << i)) != 0;
+                ps[pin_idx].signal_level = pin_active;
+                ps[pin_idx].drive_direction = drive_dir;
+                ps[pin_idx].high_impedance = !drive_dir;
+            }
+        }
+
+        // IRQ pin (pin 21, index 20) — CIA drives IRQ as output
+        if (20 < total_pins) {
+            bool irq_active = (regs_[ICR] & 0x80) != 0;
+            ps[20].signal_level = !irq_active; // Active low
+            ps[20].drive_direction = true;
+            ps[20].high_impedance = false;
+        }
+    });
 }
 
 // Helper function to determine CIA type based on interrupt line

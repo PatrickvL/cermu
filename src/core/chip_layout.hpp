@@ -125,3 +125,42 @@ ChipLayout create_sip9_layout();
 std::vector<PinSignalState> populate_pin_states_from_bus(
     const ChipLayout& layout, bus_state_t bus_state);
 
+// ============================================================================
+// PIN STATE HELPER — replaces per-chip static helper + virtual boilerplate
+// ============================================================================
+//
+// Each chip only needs to provide a lambda that overlays chip-specific pins
+// onto the generic bus-derived state vector.  The lambda receives a mutable
+// reference to the PinSignalState vector sized to the total pin count.
+//
+// Before (per chip, ~20-40 lines of boilerplate):
+//   static std::vector<PinSignalState> get_XXX_pin_states(XXX* chip,
+//       const ChipLayout* layout, bus_state_t bus) { ... }
+//   std::vector<PinSignalState> XXX::get_layout_pin_states(ChipLayout& layout) {
+//       return get_XXX_pin_states(this, &layout, bus_snapshot_);
+//   }
+//
+// After (single line in the virtual override):
+//   std::vector<PinSignalState> XXX::get_layout_pin_states(ChipLayout& layout) {
+//       return build_pin_states(layout, bus_snapshot_, [this](auto& ps) {
+//           ps[6].signal_level = true;  // AUDIO_OUT always driven
+//           ps[6].drive_direction = true;
+//       });
+//   }
+//
+// Chips with no custom overrides can pass no lambda:
+//   return build_pin_states(layout, bus_snapshot_);
+
+inline std::vector<PinSignalState> build_pin_states(
+        const ChipLayout& layout, bus_state_t bus_state) {
+    return populate_pin_states_from_bus(layout, bus_state);
+}
+
+template<typename OverrideFn>
+inline std::vector<PinSignalState> build_pin_states(
+        const ChipLayout& layout, bus_state_t bus_state, OverrideFn&& overrides) {
+    auto ps = populate_pin_states_from_bus(layout, bus_state);
+    overrides(ps);
+    return ps;
+}
+

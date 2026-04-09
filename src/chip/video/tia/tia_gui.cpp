@@ -85,114 +85,103 @@ ChipLayout* tia_t::create_chip_layout() const {
     return &layout;
 }
 
-// Helper: derive TIA pin states from bus snapshot + chip internals
-static std::vector<PinSignalState> get_tia_pin_states(
-        tia_t* tia, const ChipLayout* layout, bus_state_t bus_state) {
-    if (!tia || !layout) return {};
-
-    // Generic bus-derived states (address, data, power, clock, R/W, RDY)
-    auto ps = populate_pin_states_from_bus(*layout, bus_state);
-
-    // --- Chip select lines (directly from bus address decoding) ---
-    // _CS1 (pin 3, idx 2) — active low
-    ps[2].signal_level    = true;  // default: deselected
-    ps[2].drive_direction = false; // input to TIA
-    ps[2].high_impedance  = false;
-    ps[2].signal_valid    = true;
-    // CS0 (pin 4, idx 3)
-    ps[3].signal_level    = false;
-    ps[3].drive_direction = false;
-    ps[3].high_impedance  = false;
-    ps[3].signal_valid    = true;
-    // CS3 (pin 5, idx 4)
-    ps[4].signal_level    = false;
-    ps[4].drive_direction = false;
-    ps[4].high_impedance  = false;
-    ps[4].signal_valid    = true;
-
-    // --- RDY (pin 38, idx 37) — TIA drives this LOW during WSYNC ---
-    ps[37].signal_level    = !tia->wsync_pending; // low = halted
-    ps[37].drive_direction = true;                 // TIA drives RDY
-    ps[37].high_impedance  = false;
-    ps[37].signal_valid    = true;
-
-    // --- Audio outputs (pin 16 = AUD0, pin 17 = AUD1) ---
-    ps[15].signal_level    = tia->audio[0].output;
-    ps[15].drive_direction = true;
-    ps[15].high_impedance  = false;
-    ps[15].signal_valid    = true;
-    ps[15].is_pwm          = true;
-    ps[15].pwm_duty_cycle  = (tia->regs_[AUDV0] & 0x0F) / 15.0f;
-
-    ps[16].signal_level    = tia->audio[1].output;
-    ps[16].drive_direction = true;
-    ps[16].high_impedance  = false;
-    ps[16].signal_valid    = true;
-    ps[16].is_pwm          = true;
-    ps[16].pwm_duty_cycle  = (tia->regs_[AUDV1] & 0x0F) / 15.0f;
-
-    // --- Video outputs ---
-    // COLU (pin 18, idx 17) — color/luminance
-    ps[17].signal_level    = true;
-    ps[17].drive_direction = true;
-    ps[17].high_impedance  = false;
-    ps[17].signal_valid    = true;
-    ps[17].signal_value    = tia->regs_[COLUBK];
-
-    // LUMA (pin 19, idx 18)
-    ps[18].signal_level    = true;
-    ps[18].drive_direction = true;
-    ps[18].high_impedance  = false;
-    ps[18].signal_valid    = true;
-
-    // COMP_BLK (pin 20, idx 19) — blanking during VBLANK/HBLANK
-    bool blanking = (tia->regs_[VBLANK] & 0x02) || (tia->h_counter < 68);
-    ps[19].signal_level    = blanking;
-    ps[19].drive_direction = true;
-    ps[19].high_impedance  = false;
-    ps[19].signal_valid    = true;
-
-    // CSYNC (pin 21, idx 20) — composite sync
-    bool hsync = (tia->h_counter >= 4 && tia->h_counter < 8);
-    ps[20].signal_level    = (tia->regs_[VSYNC] & 0x02) || hsync;
-    ps[20].drive_direction = true;
-    ps[20].high_impedance  = false;
-    ps[20].signal_valid    = true;
-
-    // --- Input ports (active-high readback) ---
-    // INPT0 (pin 36, idx 35) through INPT5 (pin 31, idx 30)
-    // Pin numbering: pin 36=INPT0 .. pin 31=INPT5 → indices 35..30
-    ps[35].signal_level = (tia->read_regs_[INPT0] & 0x80) != 0; ps[35].drive_direction = false;
-    ps[35].high_impedance = false;    ps[35].signal_valid = true;
-    ps[34].signal_level = (tia->read_regs_[INPT1] & 0x80) != 0; ps[34].drive_direction = false;
-    ps[34].high_impedance = false;    ps[34].signal_valid = true;
-    ps[33].signal_level = (tia->read_regs_[INPT2] & 0x80) != 0; ps[33].drive_direction = false;
-    ps[33].high_impedance = false;    ps[33].signal_valid = true;
-    ps[32].signal_level = (tia->read_regs_[INPT3] & 0x80) != 0; ps[32].drive_direction = false;
-    ps[32].high_impedance = false;    ps[32].signal_valid = true;
-    ps[31].signal_level = (tia->read_regs_[INPT4] & 0x80) != 0; ps[31].drive_direction = false;
-    ps[31].high_impedance = false;    ps[31].signal_valid = true;
-    ps[30].signal_level = (tia->read_regs_[INPT5] & 0x80) != 0; ps[30].drive_direction = false;
-    ps[30].high_impedance = false;    ps[30].signal_valid = true;
-
-    // --- DUMP (pin 37, idx 36) — paddle discharge control ---
-    ps[36].signal_level    = (tia->regs_[VBLANK] & 0x02) != 0; // DUMP is gated by VBLANK bit 7
-    ps[36].drive_direction = true;
-    ps[36].high_impedance  = false;
-    ps[36].signal_valid    = true;
-
-    // --- VTIA (pin 40, idx 39) — analog supply, always driven ---
-    ps[39].signal_level    = true;
-    ps[39].drive_direction = true;
-    ps[39].high_impedance  = false;
-    ps[39].signal_valid    = true;
-    ps[39].analog_voltage  = 5.0f;
-
-    return ps;
-}
-
 std::vector<PinSignalState> tia_t::get_layout_pin_states(ChipLayout& layout) {
-    return get_tia_pin_states(this, &layout, bus_snapshot_);
+    return build_pin_states(layout, bus_snapshot_, [this](auto& ps) {
+        // --- Chip select lines (directly from bus address decoding) ---
+        // _CS1 (pin 3, idx 2) — active low
+        ps[2].signal_level    = true;  // default: deselected
+        ps[2].drive_direction = false; // input to TIA
+        ps[2].high_impedance  = false;
+        ps[2].signal_valid    = true;
+        // CS0 (pin 4, idx 3)
+        ps[3].signal_level    = false;
+        ps[3].drive_direction = false;
+        ps[3].high_impedance  = false;
+        ps[3].signal_valid    = true;
+        // CS3 (pin 5, idx 4)
+        ps[4].signal_level    = false;
+        ps[4].drive_direction = false;
+        ps[4].high_impedance  = false;
+        ps[4].signal_valid    = true;
+
+        // --- RDY (pin 38, idx 37) — TIA drives this LOW during WSYNC ---
+        ps[37].signal_level    = !wsync_pending; // low = halted
+        ps[37].drive_direction = true;                 // TIA drives RDY
+        ps[37].high_impedance  = false;
+        ps[37].signal_valid    = true;
+
+        // --- Audio outputs (pin 16 = AUD0, pin 17 = AUD1) ---
+        ps[15].signal_level    = audio[0].output;
+        ps[15].drive_direction = true;
+        ps[15].high_impedance  = false;
+        ps[15].signal_valid    = true;
+        ps[15].is_pwm          = true;
+        ps[15].pwm_duty_cycle  = (regs_[AUDV0] & 0x0F) / 15.0f;
+
+        ps[16].signal_level    = audio[1].output;
+        ps[16].drive_direction = true;
+        ps[16].high_impedance  = false;
+        ps[16].signal_valid    = true;
+        ps[16].is_pwm          = true;
+        ps[16].pwm_duty_cycle  = (regs_[AUDV1] & 0x0F) / 15.0f;
+
+        // --- Video outputs ---
+        // COLU (pin 18, idx 17) — color/luminance
+        ps[17].signal_level    = true;
+        ps[17].drive_direction = true;
+        ps[17].high_impedance  = false;
+        ps[17].signal_valid    = true;
+        ps[17].signal_value    = regs_[COLUBK];
+
+        // LUMA (pin 19, idx 18)
+        ps[18].signal_level    = true;
+        ps[18].drive_direction = true;
+        ps[18].high_impedance  = false;
+        ps[18].signal_valid    = true;
+
+        // COMP_BLK (pin 20, idx 19) — blanking during VBLANK/HBLANK
+        bool blanking = (regs_[VBLANK] & 0x02) || (h_counter < 68);
+        ps[19].signal_level    = blanking;
+        ps[19].drive_direction = true;
+        ps[19].high_impedance  = false;
+        ps[19].signal_valid    = true;
+
+        // CSYNC (pin 21, idx 20) — composite sync
+        bool hsync = (h_counter >= 4 && h_counter < 8);
+        ps[20].signal_level    = (regs_[VSYNC] & 0x02) || hsync;
+        ps[20].drive_direction = true;
+        ps[20].high_impedance  = false;
+        ps[20].signal_valid    = true;
+
+        // --- Input ports (active-high readback) ---
+        // INPT0 (pin 36, idx 35) through INPT5 (pin 31, idx 30)
+        // Pin numbering: pin 36=INPT0 .. pin 31=INPT5 → indices 35..30
+        ps[35].signal_level = (read_regs_[INPT0] & 0x80) != 0; ps[35].drive_direction = false;
+        ps[35].high_impedance = false;    ps[35].signal_valid = true;
+        ps[34].signal_level = (read_regs_[INPT1] & 0x80) != 0; ps[34].drive_direction = false;
+        ps[34].high_impedance = false;    ps[34].signal_valid = true;
+        ps[33].signal_level = (read_regs_[INPT2] & 0x80) != 0; ps[33].drive_direction = false;
+        ps[33].high_impedance = false;    ps[33].signal_valid = true;
+        ps[32].signal_level = (read_regs_[INPT3] & 0x80) != 0; ps[32].drive_direction = false;
+        ps[32].high_impedance = false;    ps[32].signal_valid = true;
+        ps[31].signal_level = (read_regs_[INPT4] & 0x80) != 0; ps[31].drive_direction = false;
+        ps[31].high_impedance = false;    ps[31].signal_valid = true;
+        ps[30].signal_level = (read_regs_[INPT5] & 0x80) != 0; ps[30].drive_direction = false;
+        ps[30].high_impedance = false;    ps[30].signal_valid = true;
+
+        // --- DUMP (pin 37, idx 36) — paddle discharge control ---
+        ps[36].signal_level    = (regs_[VBLANK] & 0x02) != 0; // DUMP is gated by VBLANK bit 7
+        ps[36].drive_direction = true;
+        ps[36].high_impedance  = false;
+        ps[36].signal_valid    = true;
+
+        // --- VTIA (pin 40, idx 39) — analog supply, always driven ---
+        ps[39].signal_level    = true;
+        ps[39].drive_direction = true;
+        ps[39].high_impedance  = false;
+        ps[39].signal_valid    = true;
+        ps[39].analog_voltage  = 5.0f;
+    });
 }
 
 #endif // CERMU_HAS_GUI

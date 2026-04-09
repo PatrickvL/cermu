@@ -43,36 +43,34 @@ ChipLayout* LS259::create_chip_layout() const {
 }
 
 std::vector<PinSignalState> LS259::get_layout_pin_states(ChipLayout& layout) {
-    auto ps = populate_pin_states_from_bus(layout, 0);
+    return build_pin_states(layout, 0, [this](auto& ps) {
+        uint8_t q = q_all();
 
-    uint8_t q = q_all();
-
-    // Q0 (pin 4, idx 3)
-    ps[3].signal_level = (q >> 0) & 1; ps[3].drive_direction = true;
-    ps[3].high_impedance = false;      ps[3].signal_valid = true;
-    // Q1 (pin 5, idx 4)
-    ps[4].signal_level = (q >> 1) & 1; ps[4].drive_direction = true;
-    ps[4].high_impedance = false;      ps[4].signal_valid = true;
-    // Q2 (pin 6, idx 5)
-    ps[5].signal_level = (q >> 2) & 1; ps[5].drive_direction = true;
-    ps[5].high_impedance = false;      ps[5].signal_valid = true;
-    // Q3 (pin 7, idx 6)
-    ps[6].signal_level = (q >> 3) & 1; ps[6].drive_direction = true;
-    ps[6].high_impedance = false;      ps[6].signal_valid = true;
-    // Q4 (pin 9, idx 8)
-    ps[8].signal_level = (q >> 4) & 1; ps[8].drive_direction = true;
-    ps[8].high_impedance = false;      ps[8].signal_valid = true;
-    // Q5 (pin 10, idx 9)
-    ps[9].signal_level = (q >> 5) & 1; ps[9].drive_direction = true;
-    ps[9].high_impedance = false;      ps[9].signal_valid = true;
-    // Q6 (pin 11, idx 10)
-    ps[10].signal_level = (q >> 6) & 1; ps[10].drive_direction = true;
-    ps[10].high_impedance = false;      ps[10].signal_valid = true;
-    // Q7 (pin 12, idx 11)
-    ps[11].signal_level = (q >> 7) & 1; ps[11].drive_direction = true;
-    ps[11].high_impedance = false;      ps[11].signal_valid = true;
-
-    return ps;
+        // Q0 (pin 4, idx 3)
+        ps[3].signal_level = (q >> 0) & 1; ps[3].drive_direction = true;
+        ps[3].high_impedance = false;      ps[3].signal_valid = true;
+        // Q1 (pin 5, idx 4)
+        ps[4].signal_level = (q >> 1) & 1; ps[4].drive_direction = true;
+        ps[4].high_impedance = false;      ps[4].signal_valid = true;
+        // Q2 (pin 6, idx 5)
+        ps[5].signal_level = (q >> 2) & 1; ps[5].drive_direction = true;
+        ps[5].high_impedance = false;      ps[5].signal_valid = true;
+        // Q3 (pin 7, idx 6)
+        ps[6].signal_level = (q >> 3) & 1; ps[6].drive_direction = true;
+        ps[6].high_impedance = false;      ps[6].signal_valid = true;
+        // Q4 (pin 9, idx 8)
+        ps[8].signal_level = (q >> 4) & 1; ps[8].drive_direction = true;
+        ps[8].high_impedance = false;      ps[8].signal_valid = true;
+        // Q5 (pin 10, idx 9)
+        ps[9].signal_level = (q >> 5) & 1; ps[9].drive_direction = true;
+        ps[9].high_impedance = false;      ps[9].signal_valid = true;
+        // Q6 (pin 11, idx 10)
+        ps[10].signal_level = (q >> 6) & 1; ps[10].drive_direction = true;
+        ps[10].high_impedance = false;      ps[10].signal_valid = true;
+        // Q7 (pin 12, idx 11)
+        ps[11].signal_level = (q >> 7) & 1; ps[11].drive_direction = true;
+        ps[11].high_impedance = false;      ps[11].signal_valid = true;
+    });
 }
 
 #endif // CERMU_HAS_GUI

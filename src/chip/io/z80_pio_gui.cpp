@@ -106,52 +106,51 @@ ChipLayout* z80_pio_t::create_chip_layout() const {
 }
 
 std::vector<PinSignalState> z80_pio_t::get_layout_pin_states(ChipLayout& layout) {
-    auto ps = populate_pin_states_from_bus(layout, bus_snapshot_);
-    int total = static_cast<int>(ps.size());
+    return build_pin_states(layout, bus_snapshot_, [this](auto& ps) {
+        int total = static_cast<int>(ps.size());
 
-    auto set_pin = [&](int pin_idx, bool level, bool is_output) {
-        if (pin_idx >= 0 && pin_idx < total) {
-            ps[pin_idx].signal_level = level;
-            ps[pin_idx].drive_direction = is_output;
-            ps[pin_idx].high_impedance = !is_output;
+        auto set_pin = [&](int pin_idx, bool level, bool is_output) {
+            if (pin_idx >= 0 && pin_idx < total) {
+                ps[pin_idx].signal_level = level;
+                ps[pin_idx].drive_direction = is_output;
+                ps[pin_idx].high_impedance = !is_output;
+            }
+        };
+
+        // Port A pins: PA7=pin7(idx6)..PA0=pin15(idx14)
+        bool pa_output = (port_[0].mode == PIOMode::OUTPUT || port_[0].mode == PIOMode::BIDIRECTIONAL);
+        uint8_t pa_val = pa_output ? port_[0].output : port_[0].input;
+        for (int i = 0; i < 8; ++i) {
+            // PA7 at idx 6, PA6 at 7, ..., PA0 at 14
+            bool is_out = pa_output;
+            if (port_[0].mode == PIOMode::BIT_CONTROL)
+                is_out = !(port_[0].io_select & (1 << (7 - i)));
+            int idx = 6 + (7 - i);  // PA7=idx6, PA6=idx7, ..., PA0=idx14
+            uint8_t bit_val = (pa_val >> (7 - i)) & 1;
+            set_pin(idx, bit_val, is_out);
         }
-    };
 
-    // Port A pins: PA7=pin7(idx6)..PA0=pin15(idx14)
-    bool pa_output = (port_[0].mode == PIOMode::OUTPUT || port_[0].mode == PIOMode::BIDIRECTIONAL);
-    uint8_t pa_val = pa_output ? port_[0].output : port_[0].input;
-    for (int i = 0; i < 8; ++i) {
-        // PA7 at idx 6, PA6 at 7, ..., PA0 at 14
-        bool is_out = pa_output;
-        if (port_[0].mode == PIOMode::BIT_CONTROL)
-            is_out = !(port_[0].io_select & (1 << (7 - i)));
-        int idx = 6 + (7 - i);  // PA7=idx6, PA6=idx7, ..., PA0=idx14
-        uint8_t bit_val = (pa_val >> (7 - i)) & 1;
-        set_pin(idx, bit_val, is_out);
-    }
+        // Port B pins: PB0=pin30(idx29)..PB7=pin23(idx22)
+        bool pb_output = (port_[1].mode == PIOMode::OUTPUT);
+        uint8_t pb_val = pb_output ? port_[1].output : port_[1].input;
+        for (int i = 0; i < 8; ++i) {
+            bool is_out = pb_output;
+            if (port_[1].mode == PIOMode::BIT_CONTROL)
+                is_out = !(port_[1].io_select & (1 << i));
+            int idx = 29 - i;  // PB0=idx29, PB1=idx28, ..., PB7=idx22
+            uint8_t bit_val = (pb_val >> i) & 1;
+            set_pin(idx, bit_val, is_out);
+        }
 
-    // Port B pins: PB0=pin30(idx29)..PB7=pin23(idx22)
-    bool pb_output = (port_[1].mode == PIOMode::OUTPUT);
-    uint8_t pb_val = pb_output ? port_[1].output : port_[1].input;
-    for (int i = 0; i < 8; ++i) {
-        bool is_out = pb_output;
-        if (port_[1].mode == PIOMode::BIT_CONTROL)
-            is_out = !(port_[1].io_select & (1 << i));
-        int idx = 29 - i;  // PB0=idx29, PB1=idx28, ..., PB7=idx22
-        uint8_t bit_val = (pb_val >> i) & 1;
-        set_pin(idx, bit_val, is_out);
-    }
+        // ARDY (pin18, idx17) — output from PIO
+        set_pin(17, port_[0].ready, true);
+        // BRDY (pin19, idx18) — output from PIO
+        set_pin(18, port_[1].ready, true);
 
-    // ARDY (pin18, idx17) — output from PIO
-    set_pin(17, port_[0].ready, true);
-    // BRDY (pin19, idx18) — output from PIO
-    set_pin(18, port_[1].ready, true);
-
-    // INT (pin35, idx34) — active-low, output
-    bool any_int = port_[0].int_pending || port_[1].int_pending;
-    set_pin(34, !any_int, true);
-
-    return ps;
+        // INT (pin35, idx34) — active-low, output
+        bool any_int = port_[0].int_pending || port_[1].int_pending;
+        set_pin(34, !any_int, true);
+    });
 }
 
 #endif // CERMU_HAS_GUI

@@ -43,8 +43,7 @@ ChipLayout* ER2055::create_chip_layout() const {
 // ============================================================================
 
 std::vector<PinSignalState> ER2055::get_layout_pin_states(ChipLayout& layout) {
-    auto pin_states = populate_pin_states_from_bus(layout, bus_snapshot_);
-    return pin_states;
+    return build_pin_states(layout, bus_snapshot_);
 }
 
 #endif // CERMU_HAS_GUI

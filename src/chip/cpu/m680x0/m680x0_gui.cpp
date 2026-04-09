@@ -132,103 +132,101 @@ std::vector<PinSignalState> m680x0_t<Traits>::get_layout_pin_states(ChipLayout& 
     bus_state_t bus = this->bus_prev_;
     if (bus == 0) bus = M68K_GUI_DEFAULT_STATE;
 
-    auto ps = populate_pin_states_from_bus(layout, bus);
+    return build_pin_states(layout, bus, [&](auto& ps) {
+        // M68K-specific signal overlays from bus bits.
+        // Left pins: indices 0..31, Right pins: indices 32..63
+        // Index = pin_number - 1 for left, index = 64 - pin_number + 32 for right
 
-    // M68K-specific signal overlays from bus bits.
-    // Left pins: indices 0..31, Right pins: indices 32..63
-    // Index = pin_number - 1 for left, index = 64 - pin_number + 32 for right
+        // /AS (pin 6, left idx 5)
+        ps[5].signal_level    = BUS_GET_BIT(bus, M68K_AS_BIT) != 0;
+        ps[5].drive_direction = true;
+        ps[5].signal_valid    = true;
 
-    // /AS (pin 6, left idx 5)
-    ps[5].signal_level    = BUS_GET_BIT(bus, M68K_AS_BIT) != 0;
-    ps[5].drive_direction = true;
-    ps[5].signal_valid    = true;
+        // /UDS (pin 7, left idx 6)
+        ps[6].signal_level    = BUS_GET_BIT(bus, M68K_UDS_BIT) != 0;
+        ps[6].drive_direction = true;
+        ps[6].signal_valid    = true;
 
-    // /UDS (pin 7, left idx 6)
-    ps[6].signal_level    = BUS_GET_BIT(bus, M68K_UDS_BIT) != 0;
-    ps[6].drive_direction = true;
-    ps[6].signal_valid    = true;
+        // /LDS (pin 8, left idx 7)
+        ps[7].signal_level    = BUS_GET_BIT(bus, M68K_LDS_BIT) != 0;
+        ps[7].drive_direction = true;
+        ps[7].signal_valid    = true;
 
-    // /LDS (pin 8, left idx 7)
-    ps[7].signal_level    = BUS_GET_BIT(bus, M68K_LDS_BIT) != 0;
-    ps[7].drive_direction = true;
-    ps[7].signal_valid    = true;
+        // /DTACK (pin 10, left idx 9) — input
+        ps[9].signal_level    = BUS_GET_BIT(bus, M68K_DTACK_BIT) != 0;
+        ps[9].drive_direction = false;
+        ps[9].signal_valid    = true;
 
-    // /DTACK (pin 10, left idx 9) — input
-    ps[9].signal_level    = BUS_GET_BIT(bus, M68K_DTACK_BIT) != 0;
-    ps[9].drive_direction = false;
-    ps[9].signal_valid    = true;
+        // /BG (pin 11, left idx 10)
+        ps[10].signal_level    = BUS_GET_BIT(bus, M68K_BG_BIT) != 0;
+        ps[10].drive_direction = true;
+        ps[10].signal_valid    = true;
 
-    // /BG (pin 11, left idx 10)
-    ps[10].signal_level    = BUS_GET_BIT(bus, M68K_BG_BIT) != 0;
-    ps[10].drive_direction = true;
-    ps[10].signal_valid    = true;
+        // /BGACK (pin 12, left idx 11) — input
+        ps[11].signal_level    = BUS_GET_BIT(bus, M68K_BGACK_BIT) != 0;
+        ps[11].drive_direction = false;
+        ps[11].signal_valid    = true;
 
-    // /BGACK (pin 12, left idx 11) — input
-    ps[11].signal_level    = BUS_GET_BIT(bus, M68K_BGACK_BIT) != 0;
-    ps[11].drive_direction = false;
-    ps[11].signal_valid    = true;
+        // /BR (pin 13, left idx 12) — input
+        ps[12].signal_level    = BUS_GET_BIT(bus, M68K_BR_BIT) != 0;
+        ps[12].drive_direction = false;
+        ps[12].signal_valid    = true;
 
-    // /BR (pin 13, left idx 12) — input
-    ps[12].signal_level    = BUS_GET_BIT(bus, M68K_BR_BIT) != 0;
-    ps[12].drive_direction = false;
-    ps[12].signal_valid    = true;
+        // /HALT (pin 17, left idx 16) — bidirectional
+        ps[16].signal_level    = BUS_GET_BIT(bus, M68K_HALT_BIT) != 0;
+        ps[16].drive_direction = true;
+        ps[16].signal_valid    = true;
 
-    // /HALT (pin 17, left idx 16) — bidirectional
-    ps[16].signal_level    = BUS_GET_BIT(bus, M68K_HALT_BIT) != 0;
-    ps[16].drive_direction = true;
-    ps[16].signal_valid    = true;
+        // /VMA (pin 19, left idx 18)
+        ps[18].signal_level    = BUS_GET_BIT(bus, M68K_VMA_BIT) != 0;
+        ps[18].drive_direction = true;
+        ps[18].signal_valid    = true;
 
-    // /VMA (pin 19, left idx 18)
-    ps[18].signal_level    = BUS_GET_BIT(bus, M68K_VMA_BIT) != 0;
-    ps[18].drive_direction = true;
-    ps[18].signal_valid    = true;
+        // E (pin 20, left idx 19) — clock output
+        ps[19].signal_level    = BUS_GET_BIT(bus, M68K_E_BIT) != 0;
+        ps[19].drive_direction = true;
+        ps[19].signal_valid    = true;
 
-    // E (pin 20, left idx 19) — clock output
-    ps[19].signal_level    = BUS_GET_BIT(bus, M68K_E_BIT) != 0;
-    ps[19].drive_direction = true;
-    ps[19].signal_valid    = true;
+        // /VPA (pin 21, left idx 20) — input
+        ps[20].signal_level    = BUS_GET_BIT(bus, M68K_VPA_BIT) != 0;
+        ps[20].drive_direction = false;
+        ps[20].signal_valid    = true;
 
-    // /VPA (pin 21, left idx 20) — input
-    ps[20].signal_level    = BUS_GET_BIT(bus, M68K_VPA_BIT) != 0;
-    ps[20].drive_direction = false;
-    ps[20].signal_valid    = true;
+        // /BERR (pin 22, left idx 21) — input
+        ps[21].signal_level    = BUS_GET_BIT(bus, M68K_BERR_BIT) != 0;
+        ps[21].drive_direction = false;
+        ps[21].signal_valid    = true;
 
-    // /BERR (pin 22, left idx 21) — input
-    ps[21].signal_level    = BUS_GET_BIT(bus, M68K_BERR_BIT) != 0;
-    ps[21].drive_direction = false;
-    ps[21].signal_valid    = true;
+        // /IPL2 (pin 23, left idx 22) — input
+        ps[22].signal_level    = BUS_GET_BIT(bus, M68K_IPL2_BIT) != 0;
+        ps[22].drive_direction = false;
+        ps[22].signal_valid    = true;
 
-    // /IPL2 (pin 23, left idx 22) — input
-    ps[22].signal_level    = BUS_GET_BIT(bus, M68K_IPL2_BIT) != 0;
-    ps[22].drive_direction = false;
-    ps[22].signal_valid    = true;
+        // /IPL1 (pin 24, left idx 23) — input
+        ps[23].signal_level    = BUS_GET_BIT(bus, M68K_IPL1_BIT) != 0;
+        ps[23].drive_direction = false;
+        ps[23].signal_valid    = true;
 
-    // /IPL1 (pin 24, left idx 23) — input
-    ps[23].signal_level    = BUS_GET_BIT(bus, M68K_IPL1_BIT) != 0;
-    ps[23].drive_direction = false;
-    ps[23].signal_valid    = true;
+        // /IPL0 (pin 25, left idx 24) — input
+        ps[24].signal_level    = BUS_GET_BIT(bus, M68K_IPL0_BIT) != 0;
+        ps[24].drive_direction = false;
+        ps[24].signal_valid    = true;
 
-    // /IPL0 (pin 25, left idx 24) — input
-    ps[24].signal_level    = BUS_GET_BIT(bus, M68K_IPL0_BIT) != 0;
-    ps[24].drive_direction = false;
-    ps[24].signal_valid    = true;
+        // FC2 (pin 26, left idx 25)
+        ps[25].signal_level    = BUS_GET_BIT(bus, M68K_FC2_BIT) != 0;
+        ps[25].drive_direction = true;
+        ps[25].signal_valid    = true;
 
-    // FC2 (pin 26, left idx 25)
-    ps[25].signal_level    = BUS_GET_BIT(bus, M68K_FC2_BIT) != 0;
-    ps[25].drive_direction = true;
-    ps[25].signal_valid    = true;
+        // FC1 (pin 27, left idx 26)
+        ps[26].signal_level    = BUS_GET_BIT(bus, M68K_FC1_BIT) != 0;
+        ps[26].drive_direction = true;
+        ps[26].signal_valid    = true;
 
-    // FC1 (pin 27, left idx 26)
-    ps[26].signal_level    = BUS_GET_BIT(bus, M68K_FC1_BIT) != 0;
-    ps[26].drive_direction = true;
-    ps[26].signal_valid    = true;
-
-    // FC0 (pin 28, left idx 27)
-    ps[27].signal_level    = BUS_GET_BIT(bus, M68K_FC0_BIT) != 0;
-    ps[27].drive_direction = true;
-    ps[27].signal_valid    = true;
-
-    return ps;
+        // FC0 (pin 28, left idx 27)
+        ps[27].signal_level    = BUS_GET_BIT(bus, M68K_FC0_BIT) != 0;
+        ps[27].drive_direction = true;
+        ps[27].signal_valid    = true;
+    });
 }
 
 template <const M680x0Traits& Traits>

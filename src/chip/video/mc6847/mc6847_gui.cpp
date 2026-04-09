@@ -54,37 +54,35 @@ ChipLayout* mc6847_t::create_chip_layout() const {
 }
 
 std::vector<PinSignalState> mc6847_t::get_layout_pin_states(ChipLayout& layout) {
-    auto ps = populate_pin_states_from_bus(layout, 0);
+    return build_pin_states(layout, 0, [this](auto& ps) {
+        // Mode input pins — reflect current mode settings
+        // AG (pin 38, idx 37)
+        ps[37].signal_level = mode_ag_; ps[37].signal_valid = true;
+        // AS (pin 37, idx 36)
+        ps[36].signal_level = mode_as_; ps[36].signal_valid = true;
+        // INTEXT (pin 36, idx 35)
+        ps[35].signal_level = mode_intext_; ps[35].signal_valid = true;
+        // INV (pin 35, idx 34)
+        ps[34].signal_level = mode_inv_; ps[34].signal_valid = true;
+        // GM2 (pin 34, idx 33)
+        ps[33].signal_level = (mode_gm_ >> 2) & 1; ps[33].signal_valid = true;
+        // GM1 (pin 33, idx 32)
+        ps[32].signal_level = (mode_gm_ >> 1) & 1; ps[32].signal_valid = true;
+        // GM0 (pin 32, idx 31)
+        ps[31].signal_level = (mode_gm_ >> 0) & 1; ps[31].signal_valid = true;
+        // CSS (pin 31, idx 30)
+        ps[30].signal_level = mode_css_; ps[30].signal_valid = true;
 
-    // Mode input pins — reflect current mode settings
-    // AG (pin 38, idx 37)
-    ps[37].signal_level = mode_ag_; ps[37].signal_valid = true;
-    // AS (pin 37, idx 36)
-    ps[36].signal_level = mode_as_; ps[36].signal_valid = true;
-    // INTEXT (pin 36, idx 35)
-    ps[35].signal_level = mode_intext_; ps[35].signal_valid = true;
-    // INV (pin 35, idx 34)
-    ps[34].signal_level = mode_inv_; ps[34].signal_valid = true;
-    // GM2 (pin 34, idx 33)
-    ps[33].signal_level = (mode_gm_ >> 2) & 1; ps[33].signal_valid = true;
-    // GM1 (pin 33, idx 32)
-    ps[32].signal_level = (mode_gm_ >> 1) & 1; ps[32].signal_valid = true;
-    // GM0 (pin 32, idx 31)
-    ps[31].signal_level = (mode_gm_ >> 0) & 1; ps[31].signal_valid = true;
-    // CSS (pin 31, idx 30)
-    ps[30].signal_level = mode_css_; ps[30].signal_valid = true;
-
-    // Sync outputs
-    // FS (pin 25, idx 24)
-    ps[24].signal_level    = fs_;
-    ps[24].drive_direction = true;
-    ps[24].signal_valid    = true;
-    // HS (pin 24, idx 23)
-    ps[23].signal_level    = hs_;
-    ps[23].drive_direction = true;
-    ps[23].signal_valid    = true;
-
-    return ps;
+        // Sync outputs
+        // FS (pin 25, idx 24)
+        ps[24].signal_level    = fs_;
+        ps[24].drive_direction = true;
+        ps[24].signal_valid    = true;
+        // HS (pin 24, idx 23)
+        ps[23].signal_level    = hs_;
+        ps[23].drive_direction = true;
+        ps[23].signal_valid    = true;
+    });
 }
 
 #endif // CERMU_HAS_GUI
