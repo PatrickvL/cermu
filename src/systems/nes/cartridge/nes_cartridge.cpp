@@ -242,6 +242,53 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
         memcpy(prg_ram.data() + 0x1000, trainer_data, 512);
     }
 
+    // ====================================================================
+    // ROM hash-based mapper correction
+    // ====================================================================
+    // Some common ROM dumps have incorrect mapper IDs in their iNES
+    // headers.  Correct them using a CRC32 over the PRG+CHR data.
+    // This runs once at load time — performance is not a concern.
+    {
+        // Minimal CRC32 (ISO 3309) — no external dependency.
+        auto rom_crc32 = [](const uint8_t* buf, size_t len) -> uint32_t {
+            uint32_t crc = 0xFFFFFFFF;
+            for (size_t i = 0; i < len; i++) {
+                crc ^= buf[i];
+                for (int b = 0; b < 8; b++)
+                    crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
+            }
+            return ~crc;
+        };
+
+        // CRC over concatenated PRG+CHR (matches standard "PRG+CHR CRC" in ROM databases)
+        uint32_t crc = rom_crc32(prg_memory.data(), prg_memory.size());
+        if (!chr_memory.empty() && chr_banks > 0) {
+            // Continue CRC from PRG into CHR
+            uint32_t c = ~crc;
+            for (size_t i = 0; i < chr_memory.size(); i++) {
+                c ^= chr_memory[i];
+                for (int b = 0; b < 8; b++)
+                    c = (c >> 1) ^ (0xEDB88320 & -(c & 1));
+            }
+            crc = ~c;
+        }
+
+        struct MapperOverride { uint32_t crc; uint16_t mapper; const char* name; };
+        static constexpr MapperOverride overrides[] = {
+            // PAL-ZZ multicart — header says mapper 4 but board is mapper 37
+            { 0xF46EF39A, 37, "Super Mario Bros + Tetris + Nintendo World Cup (Europe)" },
+        };
+
+        for (const auto& ov : overrides) {
+            if (crc == ov.crc && mapper_id != ov.mapper) {
+                log_info("NES: ROM CRC %08X matches \"%s\" — correcting mapper %d → %d\n",
+                         crc, ov.name, mapper_id, ov.mapper);
+                mapper_id = ov.mapper;
+                break;
+            }
+        }
+    }
+
     // Create appropriate mapper via factory
     mapper = MapperFactory::create(mapper_id, prg_banks, chr_banks);
 
