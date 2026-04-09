@@ -590,6 +590,26 @@ set(SYSTEM_SOURCES
 
     # Spectravideo SVI-318 / SVI-328
     src/systems/spectravideo/spectravideo_system.cpp
+
+    # MC6809E + MC6847 VDG family (CoCo 1/2, Dragon 32/64)
+    src/systems/mc6809_vdg/mc6809_vdg_system.cpp
+    src/systems/coco/coco_system.cpp
+    src/systems/dragon/dragon_system.cpp
+
+    # Atari 8-bit (800/800XL/130XE)
+    src/systems/atari8/atari8_system.cpp
+
+    # Sega Genesis / Mega Drive
+    src/systems/genesis/genesis_system.cpp
+
+    # Nintendo Game Boy
+    src/systems/gameboy/gameboy_system.cpp
+
+    # NEC PC Engine / TurboGrafx-16
+    src/systems/pce/pce_system.cpp
+
+    # Atari ST
+    src/systems/atari_st/atari_st_system.cpp
 )
 
 # Testing sources
@@ -639,6 +659,12 @@ set(CORE_UTIL_SOURCES
     src/core/formats/d71_format.cpp
     src/core/formats/d81_format.cpp
     src/core/formats/rom_format.cpp
+    src/core/formats/coco_cas_format.cpp
+    src/core/formats/atari_xex_format.cpp
+    src/core/formats/genesis_format.cpp
+    src/core/formats/gb_format.cpp
+    src/core/formats/pce_format.cpp
+    src/core/formats/atari_st_format.cpp
     src/systems/commodore/commodore_load_helpers.cpp
     src/core/os/os_filesystem.cpp
     src/core/os/os_archive.cpp
