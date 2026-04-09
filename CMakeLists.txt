@@ -609,6 +609,7 @@ set(CORE_UTIL_SOURCES
     src/core/archive_scanner.cpp
     src/core/formats/format_handler.cpp
     src/core/formats/format_registry.cpp
+    src/core/formats/format_load_helpers.cpp
     src/core/formats/prg_format.cpp
     src/core/formats/bin_format.cpp
     src/core/formats/d64_format.cpp
@@ -625,6 +626,15 @@ set(CORE_UTIL_SOURCES
     src/core/formats/z80_snapshot_format.cpp
     src/core/formats/scl_format.cpp
     src/core/formats/trd_format.cpp
+    src/core/formats/vz_format.cpp
+    src/core/formats/oric_tap_format.cpp
+    src/core/formats/cpr_format.cpp
+    src/core/formats/ssd_format.cpp
+    src/core/formats/cpc_dsk_format.cpp
+    src/core/formats/msx_cas_format.cpp
+    src/core/formats/uef_format.cpp
+    src/core/formats/apple_dsk_format.cpp
+    src/core/formats/kc_tap_format.cpp
     src/systems/commodore/commodore_load_helpers.cpp
     src/core/os/os_filesystem.cpp
     src/core/os/os_archive.cpp
