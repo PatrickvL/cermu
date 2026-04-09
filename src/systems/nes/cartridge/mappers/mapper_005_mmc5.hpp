@@ -566,9 +566,10 @@ public:
                 if (total_32k == 0) total_32k = 1;
                 uint32_t page = ((bank_val & 0x7F) >> 2) % total_32k;
                 uint32_t base = page * 0x8000;
+                const uint32_t prg_mask = static_cast<uint32_t>(prg_rom_size_) - 1;
                 for (int i = 0; i < 8; i++) {
-                    uint32_t offset = base + i * 0x1000;
-                    config.prg_pages[i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
+                    uint32_t offset = (base + i * 0x1000) & prg_mask;
+                    config.prg_pages[i] = prg_rom_ + offset;
                 }
                 break;
             }

@@ -173,13 +173,14 @@ public:
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {
+        const uint32_t chr_mask = static_cast<uint32_t>(chr_mem_size_) - 1;
         for (int i = 0; i < 8; i++) {
-            uint32_t offset = chr_bank_[i] * 0x0400;
+            uint32_t offset = (chr_bank_[i] * 0x0400) & chr_mask;
             if (chr_is_ram_) {
-                config.chr_pages[i] = (offset < chr_mem_size_) ? chr_mem_ + offset : chr_mem_;
+                config.chr_pages[i] = chr_mem_ + offset;
                 config.chr_writable[i] = true;
             } else {
-                config.chr_pages[i] = (offset < chr_mem_size_) ? chr_mem_ + offset : nullptr;
+                config.chr_pages[i] = chr_mem_ + offset;
                 config.chr_writable[i] = false;
             }
         }

@@ -106,20 +106,22 @@ public:
         uint32_t total_16k = static_cast<uint32_t>(prg_rom_size_ / 0x4000);
         if (total_16k == 0) total_16k = 1;
 
+        const uint32_t prg_mask = static_cast<uint32_t>(prg_rom_size_) - 1;
+
         // Lower 16KB ($8000-$BFFF)
         uint32_t bank_lo = get_prg_16k_bank(false) % total_16k;
         uint32_t base_lo = bank_lo * 0x4000;
         for (int i = 0; i < 4; i++) {
-            uint32_t offset = base_lo + i * 0x1000;
-            config.prg_pages[i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
+            uint32_t offset = (base_lo + i * 0x1000) & prg_mask;
+            config.prg_pages[i] = prg_rom_ + offset;
         }
 
         // Upper 16KB ($C000-$FFFF)
         uint32_t bank_hi = get_prg_16k_bank(true) % total_16k;
         uint32_t base_hi = bank_hi * 0x4000;
         for (int i = 0; i < 4; i++) {
-            uint32_t offset = base_hi + i * 0x1000;
-            config.prg_pages[4 + i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
+            uint32_t offset = (base_hi + i * 0x1000) & prg_mask;
+            config.prg_pages[4 + i] = prg_rom_ + offset;
         }
 
         config.prg_ram_enabled = false;
