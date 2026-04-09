@@ -1,6 +1,6 @@
 # Emulation Gaps, Quality Issues & Expansion Opportunities
 
-Audit date: 2026-04-09. Covers all systems under `src/systems/`, shared chips under `src/chip/`,
+Audit date: 2026-04-10. Covers all systems under `src/systems/`, shared chips under `src/chip/`,
 core infrastructure, devices, ports, utilities, formats, and rendering pipeline.
 
 ---
@@ -141,6 +141,66 @@ Needs QA testing with real CP/M software (WordStar, Turbo Pascal, etc.).
 Memory expansion code implemented. Needs testing against programs that
 depend on specific expansion configurations (3K, 8K, 16K, 24K+).
 
+### 2.10 CoCo 1/2 & Dragon 32/64 — **[STUB] L**
+Unified MC6809E+VDG system (`src/systems/mc6809_vdg/`) with four variant traits
+(CoCo 1, CoCo 2, Dragon 32, Dragon 64). Full chip manifest (MC6809E, MC6847 VDG,
+MC6883 SAM, 2×MC6821 PIA), ROM loading (BASIC, Extended BASIC, cart per variant),
+1-bit DAC audio via PIA, SAM display offset calculation. Missing:
+- MC6883 SAM hardware address translation (bit-mapping logic present, not wired)
+- MC6847 VDG rendering not producing output in system context
+- PIA keyboard matrix not mapped
+- No CoCo CAS tape loading integration yet
+
+### 2.11 Atari 800/800XL/130XE — **[STUB] L**
+Board with 6502C + ANTIC + GTIA + POKEY + PIA all instantiated. ROM loading wired
+(OS ROM, BASIC). POKEY audio configured. Two-phase CPU tick loop present.
+Missing:
+- ANTIC display list DMA and scanline rendering (register scaffold only)
+- GTIA player/missile composition and mode rendering (register scaffold only)
+- Keyboard matrix, joystick wiring
+- No visible or audible output yet
+
+### 2.12 Sega Genesis / Mega Drive — **[STUB] XL**
+Dual-CPU skeleton (M68000 main + Z80 sub) with Genesis VDP (315-5313),
+YM2612 FM, SN76489 PSG. Up to 4MB cartridge ROM loading. Audio chips configured.
+Missing:
+- Genesis VDP Mode 5 rendering, tile/sprite composition, DMA engine
+- Z80 sub-CPU bus arbitration and bank window
+- 68K/Z80 interrupt routing
+- Controller I/O
+- No visible output yet
+
+### 2.13 Game Boy — **[STUB] L**
+Z80A used as stand-in CPU (real hardware uses SM83 — no IX/IY, different flags).
+ROM bank switching, GB PPU and GB APU instantiated.
+Missing:
+- SM83 CPU core (Z80A is incorrect substitute)
+- PPU mode state machine (OAM search, pixel transfer, H-Blank, V-Blank)
+- APU channel synthesis (sweep, envelope, length counter, noise LFSR, wave)
+- MBC mapper variants (MBC1, MBC3, MBC5)
+- No visible or audible output yet
+
+### 2.14 PC Engine / TurboGrafx-16 — **[STUB] XL**
+WDC 65C02 used as stand-in CPU (real hardware uses HuC6280 — 8-bank MMU,
+block transfer instructions, integrated PSG). HuC6270 VDC + HuC6260 VCE instantiated.
+HuCard ROM loading.
+Missing:
+- HuC6280 CPU core (65C02 lacks MMU, CSH/CSL, TII/TDD/TIN/TIA/TAI)
+- VDC sprite/BG rendering, scrolling, raster interrupts
+- PSG 6-channel synthesis
+- No visible or audible output yet
+
+### 2.15 Atari ST — **[STUB] XL**
+M68000 CPU with ST Shifter (video), YM2149 PSG, MK68901 MFP, WD1772 FDC.
+TOS ROM + cartridge ROM loading. YM2149 audio wired.
+Missing:
+- ST Shifter DMA-driven framebuffer fetch and pixel output (palette present)
+- MK68901 timer countdown, interrupt logic, USART
+- WD1772 motor/seek/sector operations (command dispatch stub only)
+- GLUE chip (address decode, interrupt priority)
+- DMA controller
+- No visible output yet
+
 ---
 
 ## 3 — Arcade Systems
@@ -265,11 +325,12 @@ for systematic coverage of banking, IRQ, and mirroring edge cases.
 
 ## 7 — File Format Gaps
 
-### 7.1 Supported Formats (30+)
+### 7.1 Supported Formats (40+)
 PRG, SID, CRT, D64, D71, D81, T64, TAP (Commodore), iNES, FDS, NSF, A26,
 SNA, Z80 snapshot, Spectrum TAP, SCL, TRD, BIN, LNX,
 SSD/DSD, UEF, CPC DSK, CPR, Apple DSK/NIB/2MG, MSX CAS,
-Oric TAP, VZ, KC TAP, BBC .rom.
+Oric TAP, VZ, KC TAP, BBC .rom,
+CoCo CAS, Atari XEX, Genesis ROM, Game Boy ROM, PC Engine HuCard, Atari ST PRG.
 
 ### 7.2 ~~Missing Formats — High Value~~ — **[DONE]**
 All 9 high-value formats implemented with shared abstractions:
@@ -295,11 +356,13 @@ All 9 high-value formats implemented with shared abstractions:
 | Format | System | Status |
 |--------|--------|--------|
 | ~~**FDS**~~ | ~~NES/Famicom~~ | ✅ `fds_format` — headered + headerless, mapper 020 (FDS RAM adapter) |
-| **GBS** | Game Boy | Game Boy Sound format (requires GB CPU) |
+| **GBS** | Game Boy | Game Boy Sound format (requires GB CPU + APU) |
 | **ADF** | Amiga | Amiga Disk File (requires Amiga system) |
 | ~~**.rom**~~ | ~~BBC Micro~~ | ✅ `rom_format` — sideways ROM loading |
 | **G64** | C64 | Full GCR disk image (needs cycle-accurate drive) |
 | ~~**D71/D81**~~ | ~~C128~~ | ✅ `d71_format` / `d81_format` — 1571/1581 disk images |
+| **SGB** | Super Game Boy | SGB border + palette commands (requires SNES) |
+| **SMD** | Genesis | Interleaved Genesis ROM format (rare; `.gen`/`.bin` more common) |
 
 ---
 
@@ -309,17 +372,17 @@ All 9 high-value formats implemented with shared abstractions:
 
 | System | CPU | Video | Sound | Missing Pieces | Effort |
 |--------|-----|-------|-------|----------------|--------|
-| **CoCo 1/2** | MC6809 ✅ | MC6847 ✅ | DAC/1-bit | SAM chip, keyboard, ROM | **M** |
+| ~~**CoCo 1/2**~~ | ~~MC6809 ✅~~ | ~~MC6847 ✅~~ | ~~DAC/1-bit~~ | ✅ System created (§2.10) — chip rendering not wired yet | — |
 | **CoCo 3** | MC6809 ✅ | GIME (new) | — | GIME video chip, 512KB RAM | **L** |
-| **Dragon 32/64** | MC6809 ✅ | MC6847 ✅ | 1-bit | Same as CoCo; different ROM/keyboard | **M** |
-| **Game Boy** | Z80 variant | PPU (new) | APU (new) | Custom Z80 (no IX/IY), PPU, APU | **L** |
-| **Sega Genesis** | M68000 ✅ | VDP (new) | YM2612 ✅ + SN76489 ✅ | Genesis VDP, Z80 sub-CPU, I/O | **XL** |
+| ~~**Dragon 32/64**~~ | ~~MC6809 ✅~~ | ~~MC6847 ✅~~ | ~~1-bit~~ | ✅ System created (§2.10) — shares MC6809-VDG base with CoCo | — |
+| ~~**Game Boy**~~ | ~~Z80 variant~~ | ~~PPU (new)~~ | ~~APU (new)~~ | ✅ System created (§2.13) — SM83 CPU and chip logic needed | — |
+| ~~**Sega Genesis**~~ | ~~M68000 ✅~~ | ~~VDP (new)~~ | ~~YM2612 ✅ + SN76489 ✅~~ | ✅ System created (§2.12) — VDP rendering + Z80 glue needed | — |
 | **Neo Geo** | M68000 ✅ | LSPC (new) | YM2610 (partial ✅) | LSPC2 video, ADPCM-A/B | **XL** |
 | **Sharp X68000** | M68000 ✅ | CRTC (new) | YM2151 (stub) | OPM register map, DMA, custom video | **XL** |
-| **Atari 800/5200** | 6502 ✅ | ANTIC+GTIA (new) | POKEY ✅ | ANTIC display list, GTIA modes | **L** |
+| ~~**Atari 800/5200**~~ | ~~6502 ✅~~ | ~~ANTIC+GTIA (new)~~ | ~~POKEY ✅~~ | ✅ System created (§2.11) — ANTIC/GTIA rendering needed | — |
 | **MSX turboR** | Z80 ✅ + R800 (new) | V9958 ✅ | YM2413 ✅ + PCM | R800 CPU, PCM sound | **L** |
-| **Atari ST** | M68000 ✅ | Shifter (new) | YM2149 ✅ | Video shifter, GLUE, DMA, FDC | **XL** |
-| **PC Engine** | HuC6280 (new) | HuC6270 (new) | HuC6280 PSG | All three chips new | **XL** |
+| ~~**Atari ST**~~ | ~~M68000 ✅~~ | ~~Shifter (new)~~ | ~~YM2149 ✅~~ | ✅ System created (§2.15) — Shifter/MFP/FDC logic needed | — |
+| ~~**PC Engine**~~ | ~~HuC6280 (new)~~ | ~~HuC6270 (new)~~ | ~~HuC6280 PSG~~ | ✅ System created (§2.14) — HuC6280 CPU + all chip logic needed | — |
 | **SNES** | 65C816 (new) | PPU (new) | SPC700+DSP (new) | Everything new; massive scope | **XXL** |
 
 ### 8.2 NES Mapper Expansion
@@ -433,12 +496,12 @@ Committed `41e0ff44`.
 25. Namco/Atari vector arcade ROM loading + input (§3.1, §3.2)
 
 ### Expansion Goals (multi-week)
-26. NES FDS (mapper 020) — disk emulation + wavetable sound
+26. NES FDS (mapper 020) — ~~disk emulation~~ **DONE** + wavetable sound still needed
 27. Atari 2600 DPC (Pitfall II)
-28. CoCo / Dragon systems (MC6809 + MC6847 reuse)
-29. HuC6280 CPU → PC Engine
-30. Sega Genesis (M68000 + YM2612 + SN76489 reuse)
-31. Game Boy (Z80 variant + custom PPU/APU)
+28. ~~CoCo / Dragon systems (MC6809 + MC6847 reuse)~~ — **DONE** (stub; §2.10)
+29. HuC6280 CPU → ~~PC Engine~~ system created (§2.14), CPU core still needed
+30. ~~Sega Genesis (M68000 + YM2612 + SN76489 reuse)~~ — **DONE** (stub; §2.12)
+31. ~~Game Boy (Z80 variant + custom PPU/APU)~~ — **DONE** (stub; §2.13)
 32. WDC 65C816 → Apple IIGS / SNES foundation
 
 ---
@@ -452,9 +515,11 @@ Committed `41e0ff44`.
 | **Functional** | Spectrum 48K/128K, MSX1, Apple 1, Acorn Atom, CHIP-8 variants, KC85, Sega SMS/SG-1000, ColecoVision | Core runs, missing formats or chip features |
 | **Partial** | BBC Micro/Master, DDR (Z9001/Z1013/LC80), MSX2, Apple II, Namco arcade, Atari vector | Significant features missing; limited usability |
 | **Stub** | Oric, VTech VZ, SpectaVideo, Memotech MTX, Tatung Einstein | Framework only; not runnable |
+| **Stub (new)** | CoCo 1/2, Dragon 32/64, Atari 800/XL/XE, Genesis, Game Boy, PC Engine, Atari ST | Chips instantiated, ROM loading, tick loops — no rendering output yet |
 
-**Total: 30+ system variants across 20 board families.**
+**Total: 35+ system variants across 25+ board families.**
 
 ---
 
-*This document supersedes the previous emulation-gaps.md dated 2026-04-09 (pre-format-helper).*
+*This document supersedes the previous emulation-gaps.md dated 2026-04-09.*
+*Updated 2026-04-10: added 7 new stub systems (CoCo/Dragon, Atari 8-bit, Genesis, Game Boy, PC Engine, Atari ST), 11 new chip stubs, 6 new format handlers.*
