@@ -17,8 +17,10 @@ Usage:
   nes_rom_test.py                  # run full suite
   nes_rom_test.py --quick          # 60 frames, fast triage
   nes_rom_test.py --blanks-only    # re-test only previously blank ROMs
+  nes_rom_test.py --changed-only   # re-test only non-PASS ROMs (BLANK/CRASH/etc.)
   nes_rom_test.py --mapper 210     # test only a specific mapper
   nes_rom_test.py --folder "NES North America ROMs"  # test one subfolder
+  nes_rom_test.py --early-exit     # stop each ROM as soon as video output detected
 """
 
 import os
@@ -66,7 +68,7 @@ def read_mapper_from_header(rom_path: str) -> str:
         return ""
 
 
-def classify_rom(rom_path: str, frames: int = DEFAULT_FRAMES) -> dict:
+def classify_rom(rom_path: str, frames: int = DEFAULT_FRAMES, early_exit: bool = False) -> dict:
     """Run a single ROM and classify the result."""
     basename = os.path.basename(rom_path)
     result = {
@@ -87,8 +89,12 @@ def classify_rom(rom_path: str, frames: int = DEFAULT_FRAMES) -> dict:
         return result
 
     try:
+        cmd = [BINARY, "-q", "--frames", str(frames), "--gfx"]
+        if early_exit:
+            cmd.append("--early-exit")
+        cmd.append(rom_path)
         proc = subprocess.run(
-            [BINARY, "-q", "--frames", str(frames), "--gfx", rom_path],
+            cmd,
             capture_output=True, text=True,
             timeout=TIMEOUT_SEC,
             env={**os.environ, "TERM": "dumb"},
@@ -126,10 +132,14 @@ def classify_rom(rom_path: str, frames: int = DEFAULT_FRAMES) -> dict:
         # Check if completed successfully
         if "Test completed successfully" in out or proc.returncode == 0:
             # Parse graphics result
-            gfx_m = re.search(r'GFX_RESULT:\s*unique_colors=(\d+)', out)
+            gfx_m = re.search(r'GFX_RESULT:\s*unique_colors=(\d+)\s+visible_pixels=(\d+)\s+frames_ran=(\d+)', out)
+            if not gfx_m:
+                gfx_m = re.search(r'GFX_RESULT:\s*unique_colors=(\d+)', out)
             if gfx_m:
                 uc = int(gfx_m.group(1))
                 result["unique_colors"] = uc
+                if gfx_m.lastindex and gfx_m.lastindex >= 3:
+                    result["frames"] = int(gfx_m.group(3))
                 if uc <= 2:
                     result["status"] = "BLANK"
                     result["detail"] = f"{uc} unique colors"
@@ -172,12 +182,16 @@ def main():
                         help="Override frame count")
     parser.add_argument("--blanks-only", action="store_true",
                         help="Re-test only ROMs that were BLANK in previous run")
+    parser.add_argument("--changed-only", action="store_true",
+                        help="Re-test only non-PASS ROMs (BLANK, CRASH, TIMEOUT, etc.)")
     parser.add_argument("--mapper", type=str, default=None,
                         help="Test only ROMs using a specific mapper ID")
     parser.add_argument("--folder", type=str, default=None,
                         help="Test only ROMs in a specific subfolder")
     parser.add_argument("--workers", type=int, default=4,
                         help="Number of parallel workers (default: 4)")
+    parser.add_argument("--early-exit", action="store_true",
+                        help="Stop each ROM as soon as video output is detected")
     args = parser.parse_args()
 
     frames = args.frames or (60 if args.quick else DEFAULT_FRAMES)
@@ -210,6 +224,20 @@ def main():
             sys.exit(0)
         print(f"Re-testing {len(roms)} previously blank ROMs")
 
+    # Filter: changed-only — re-test everything that isn't PASS
+    if args.changed_only and os.path.isfile(OUTPUT_FILE):
+        non_pass = set()
+        with open(OUTPUT_FILE) as f:
+            for line in f:
+                parts = line.strip().split('\t')
+                if len(parts) >= 3 and parts[0] not in ("PASS", "status"):
+                    non_pass.add(parts[2])  # filename
+        roms = [r for r in roms if os.path.basename(r) in non_pass]
+        if not roms:
+            print("All ROMs already PASS — nothing to re-test")
+            sys.exit(0)
+        print(f"Re-testing {len(roms)} non-PASS ROMs")
+
     # Filter: specific mapper (requires previous results for mapper column)
     if args.mapper and os.path.isfile(OUTPUT_FILE):
         mapper_files = set()
@@ -231,8 +259,9 @@ def main():
     results = []
     start_time = time.time()
 
+    use_early_exit = args.early_exit
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = {pool.submit(classify_rom, rom, frames): rom for rom in roms}
+        futures = {pool.submit(classify_rom, rom, frames, use_early_exit): rom for rom in roms}
         done = 0
         for future in as_completed(futures):
             done += 1
@@ -259,7 +288,8 @@ def main():
     # Write TSV — merge into existing results if running a subset
     output_file = OUTPUT_FILE
     existing = {}
-    if (args.blanks_only or args.mapper or args.folder) and os.path.isfile(output_file):
+    is_subset = (args.blanks_only or args.changed_only or args.mapper or args.folder)
+    if is_subset and os.path.isfile(output_file):
         with open(output_file) as f:
             header_line = f.readline()
             for line in f:
