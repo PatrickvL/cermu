@@ -14,6 +14,8 @@
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
+#include "core/formats/format_registry.hpp"
+#include "core/formats/format_load_helpers.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -320,9 +322,16 @@ void BBCMasterSystem<V>::run_frame() {
 // ============================================================================
 
 template<BBCMasterVariant V>
-bool BBCMasterSystem<V>::load_file(const char* /*filepath*/) {
-    // TODO: support SSD, DSD, UEF formats
-    return false;
+bool BBCMasterSystem<V>::load_file(const char* filepath) {
+    if (!filepath) return false;
+
+    format_apply_config_t cfg{};
+    cfg.ram         = board_.ram.data();
+    cfg.ram_size    = 0x8000;  // 32 KB main RAM (same usable area as Model B)
+    cfg.cpu         = &board_.w65c02;
+    cfg.system_name = Traits::name;
+
+    return format_load_and_apply(filepath, cfg);
 }
 
 // ============================================================================
