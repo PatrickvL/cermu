@@ -194,9 +194,10 @@ Per coding guidelines, cross-system port definitions belong in `src/ports/`.
 ### 5.4 ~~ROM Loader MD5 Verification Stub~~ — **[DONE]**
 Dead `rom_loader_verify_md5()` function already removed (no callers existed).
 
-### 5.5 Performance Metrics Potential Duplication — **[QUALITY] S**
-Both `performance_metrics.hpp` and `performance_tracker.hpp` exist in `src/utils/`.
-Audit for functional overlap; consolidate if redundant.
+### 5.5 ~~Performance Metrics Potential Duplication~~ — **[DONE]**
+No duplication. `PerformanceTracker` is a generic circular-buffer time-series
+primitive; `PerformanceMetrics` is the application-level facade composing 5
+tracker instances + atomic audio counters. Clean composition hierarchy.
 
 ### 5.6 File Watcher Platform Coverage — **[QUALITY] S**
 `file_watcher.hpp` only implements Linux (`inotify`). macOS/Windows return no-op.
@@ -328,8 +329,9 @@ Analyzed boilerplate across 79 mapper files. Added `set_prg_ram()` (eliminates
 3-line PRG-RAM boilerplate from ~20 mappers) and `set_chr_2x2k_4x1k()` (2×2KB +
 4×1KB mixed CHR layout used by 7+ MMC3-family mappers). Removed dead helpers:
 `set_chr_4k_split` (0 callers), `set_chr_1k_pages_wide` (0 callers).
-Remaining opportunities (migrate ~10 mappers to `set_prg_8k_banks`, parameterize
-`CPUCycleIRQ` fire condition) noted as future cleanup.
+Migrated 7 mappers to `set_prg_8k_banks`, 2 to `mirror_from_2bit`.
+Parameterized `CPUCycleIRQ` with `IRQFireCondition` template (ON_UNDERFLOW/ON_ZERO);
+migrated mappers 065 and 067. Net −75 lines. Committed `760758e4`.
 
 ### 9.4 ~~VFS File Read RAII Wrapper~~ — **[DONE]**
 `VfsData` (`std::unique_ptr<uint8_t[], VfsFreeDeleter>`) already exists in `vfs.hpp`.
