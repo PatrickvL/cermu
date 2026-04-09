@@ -8,55 +8,57 @@
 
 ## Fixes Applied
 
-| Fix | Mapper(s) | ROMs Fixed | Status |
-|-----|-----------|------------|--------|
-| MMC1: PRG bank offset no longer hardcoded for 256KB | 1 | 241 | **VERIFIED** |
-| AxROM: removed spurious bus conflict (ANROM boards have none) | 7 | 16 | **VERIFIED** |
-| Taito X1-005/X1-017: PRG-RAM write-protect + A2 mirror decoding | 80, 82, 207 | 0 | Register writes reach mapper; games still blank (additional issue TBD) |
+| Fix | Mapper(s) | ROMs Fixed | Commit | Status |
+|-----|-----------|------------|--------|--------|
+| MMC1: PRG bank offset no longer hardcoded for 256KB | 1 | 241 | `8427a8c2` | **VERIFIED** |
+| AxROM: removed spurious bus conflict (ANROM boards have none) | 7 | 16 | `8427a8c2` | **VERIFIED** |
+| Taito X1-005/X1-017: PRG-RAM write-protect + A2 mirror decoding | 80, 82, 207 | 0 | `8427a8c2` | Register writes reach mapper; games still blank (additional issue TBD) |
+| Namco 175/340: rewrite register map, sub-mapper differentiation | 210 | 7 | `55beae28` | **VERIFIED** |
+| Bandai FCG: PRG-RAM write protection + address decode + I2C timing | 16 | 8 | `bc12abe1` | **VERIFIED** |
+| NES-QJ: PRG-RAM write protection for outer bank register | 47 | 1 | `bc12abe1` | **VERIFIED** |
 
 ---
 
-## Re-test Results (2026-04-09)
+## Re-test Results
 
-After applying fixes above, full 1430 ROM re-test:
+### Progression
 
-| Status | Before | After | Delta |
-|--------|-------:|------:|------:|
-| PASS   |    919 |  1210 | **+291** |
-| BLANK  |    509 |   217 | **-292** |
-| CRASH  |      2 |     2 | 0 |
-| TIMEOUT|      0 |     1 | +1 |
+| Status | Initial (60f) | +MMC1/AxROM | +210/016/047 | Total Delta |
+|--------|-------------:|------------:|-------------:|------------:|
+| PASS   |          919 |       1210  |         1226 | **+307** |
+| BLANK  |          509 |        217  |          201 | **-308** |
+| CRASH  |            2 |          2  |            2 | 0 |
+| TIMEOUT|            0 |          1  |            1 | +1 |
 
-**292 previously blank ROMs now show graphics (57% reduction).**
+**308 previously blank ROMs now show graphics (60% reduction).**
 
-### Remaining 217 Blanks by Mapper
+### Remaining 201 Blanks by Mapper
 
 | Mapper | Count | Description | Notes |
 |--------|------:|-------------|-------|
-| 1 | 64 | MMC1/SxROM | Likely 256KB+ PRG or other MMC1 features |
-| 4 | 48 | MMC3/TxROM | No fix attempted yet |
-| 2 | 19 | UxROM | Slow starters or other issue |
-| 16 | 19 | Bandai FCG | EEPROM or mapper variant issue |
+| 1 | 64 | MMC1/SxROM | Likely slow starters (256KB+ PRG already fixed) |
+| 4 | 48 | MMC3/TxROM | Mostly slow starters (need 300+ frames) |
+| 2 | 19 | UxROM | Slow starters likely |
+| 16 | 11 | Bandai FCG | 3 Datach (need barcode HW) + 1 mapper 153 misidentified + 7 remaining |
 | 5 | 11 | MMC5 | Complex mapper, incomplete impl |
 | 19 | 10 | Namco 163 | IRQ or sound RAM issue |
 | 3 | 7 | CNROM | Slow starters likely |
-| 210 | 7 | Namco 175/340 | Mapper variant issue |
 | 80 | 6 | Taito X1-005 | Register fix applied but deeper issue |
-| 69 | 4 | Sunsoft FME-7 | Not yet investigated |
+| 69 | 4 | Sunsoft FME-7 | IRQ logic verified correct; other issue |
 | 0 | 4 | NROM | Slow starters or ROM issues |
 | 96 | 2 | Oeka Kids | Special input device required |
-| Others | 16 | Various (9,10,15,26,33,40,47,75,76,82,85,88,120,140,206,207) | 1 each |
+| Others | 15 | Various (9,10,15,26,33,40,75,76,82,85,88,120,140,206,207) | 1 each |
 
 ---
 
-## Summary by Root Cause (Original Analysis)
+## Summary by Root Cause
 
 | # | Root Cause | Mapper(s) | Original | Remaining | Fix Difficulty |
 |---|-----------|-----------|--------:|----------:|----------------|
 | 1 | [MMC1 PRG bank offset hardcoded for 256KB](#1-mmc1-prg-bank-calculation-bug) | 1 | 305 | 64 | **DONE** (241 fixed) |
 | 2 | [Taito X1-005/X1-017 register shadowing](#2-taito-x1-005x1-017-register-shadowing) | 80, 82, 207 | 12 | 8 | Partial (deeper issue) |
-| 3 | [Bandai FCG mapper bug or variant issue](#3-bandai-fcg-mapper-16) | 16 | 19 | 19 | Medium |
-| 4 | [Namco 175/340 mapper bug](#4-namco-175340-mapper-210) | 210 | 7 | 7 | Medium |
+| 3 | [Bandai FCG mapper bugs](#3-bandai-fcg-mapper-16) | 16 | 19 | 11 | **PARTIAL** (8 fixed: PRG-RAM + address decode + I2C) |
+| 4 | [Namco 175/340 mapper bug](#4-namco-175340-mapper-210) | 210 | 7 | 0 | **DONE** (all 7 fixed) |
 | 5 | [AxROM partial failures](#5-axrom-mapper-7) | 7 | 16 | 0 | **DONE** (all 16 fixed) |
 | 6 | [MMC5 incomplete implementation](#6-mmc5-mapper-5) | 5 | 11 | 11 | Hard |
 | 7 | [Namco 163 issue](#7-namco-163-mapper-19) | 19 | 10 | 10 | Medium |
@@ -279,12 +281,19 @@ RAM reads/writes for $7F00–$7FFF alongside register writes in `register_write(
 
 ### 3. Bandai FCG (Mapper 16)
 
-**Impact:** 19 ROMs (79.2% blank rate)
-**Fix:** Medium — likely EEPROM or IRQ timing issue
+**Impact:** 19 ROMs → 11 remaining (8 fixed in `bc12abe1`)
+**Status:** Partially fixed
 
-All Datach-series ROMs (4) use CHR-RAM and need barcode reader hardware (expected blank).
-The remaining 15 ROMs need investigation — possibly EEPROM format issue or IRQ
-counter problems with the Bandai FCG variants (LZ93D50 vs FCG-1/2/3 vs Datach).
+**Three bugs found and fixed:**
+1. **PRG-RAM write interception:** Writes to $6000-$7FFF absorbed by PRG-RAM
+   instead of reaching `register_write()`. Fixed: `prg_ram_write_protected = true`.
+2. **Address decode too narrow:** Real FCG hardware only decodes A3-A0, so registers
+   mirror across $6000-$FFFF. Games wrote at $7Fxx but mapper only accepted $6xxx/$8xxx.
+3. **I2C EEPROM timing:** ACK sent on clock 8 (same cycle as last data bit) instead
+   of clock 9. Standard I2C: 8 data + 1 ACK clock per byte. Games hung waiting for ACK.
+
+**Remaining 11:** 4 Datach (need barcode reader HW), 1 Famicom Jump II (actually
+mapper 153, misidentified in iNES header), 6 others (likely additional variant issues).
 
 **Affected ROMs:**
 
@@ -314,14 +323,12 @@ counter problems with the Bandai FCG variants (LZ93D50 vs FCG-1/2/3 vs Datach).
 
 ### 4. Namco 175/340 (Mapper 210)
 
-**Impact:** 7 ROMs (100% blank)
-**Fix:** Medium — likely register address decoding issue
+**Impact:** 7 ROMs → 0 remaining (all fixed in `55beae28`)
+**Status:** **DONE**
 
-Implementation looks structurally correct but 100% failure across all ROM sizes
-suggests a fundamental problem. Possible issues:
-- Address mask mismatch ($E001 vs $0001 for even/odd decode)
-- Write-protect behavior on Namco 175 boards
-- Initial bank state issue
+**Root cause:** Register map was completely wrong. Rewrote with proper sub-mapper
+differentiation (Namco 175 vs 340), correct address decoding, and hardwired
+mirroring for Namco 175 boards.
 
 **Affected ROMs:**
 
@@ -479,12 +486,27 @@ slow starters were found in spot-checks.
 
 ---
 
-## Fix Priority
+## Test Infrastructure
 
-1. **MMC1 PRG bank fix** — 305 ROMs, trivial one-line fix
-2. **Taito register shadowing** — 12 ROMs, straightforward
-3. **AxROM investigation** — 16 ROMs, debug bus conflict behavior
-4. **Re-test at 300 frames** — eliminate false positives from slow starters (~115 ROMs)
-5. **Mapper 210/16 investigation** — 26 ROMs combined
-6. **Minor mappers** — triage individually
-7. **MMC5 completion** — 11 ROMs, significant effort
+- **Boot warp** (`41945105`): NES GUI runs at max speed until PPU enables rendering
+  (PPUMASK bits 3-4). Eliminates 2-5s blank-screen wait during game initialization.
+- **Early-exit testing**: `cermu_console --early-exit` checks GFX every 30 frames,
+  stops on first video output (>2 unique colors). Reduces PASS test time from 300→30-90 frames.
+- **Targeted re-testing**: `nes_rom_test.py --changed-only` re-tests only non-PASS ROMs,
+  `--blanks-only` for blanks only. Avoids full-collection runs after targeted fixes.
+
+---
+
+## Fix Priority (Updated)
+
+1. ~~MMC1 PRG bank fix~~ — **DONE** (241 ROMs)
+2. ~~AxROM bus conflict~~ — **DONE** (16 ROMs)
+3. ~~Namco 175/340 rewrite~~ — **DONE** (7 ROMs)
+4. ~~Bandai FCG I2C/register fixes~~ — **DONE** (8 ROMs)
+5. ~~NES-QJ PRG-RAM interception~~ — **DONE** (1 ROM)
+6. **Re-test at 300 frames** — eliminate false positives from slow starters (~78 ROMs: mappers 0,1,2,3,4)
+7. **Taito X1-005 deeper issue** — 6 ROMs, register writes reach mapper but still blank
+8. **Mapper 16 remaining** — 7 non-Datach ROMs still blank
+9. **Namco 163** — 10 ROMs, expansion audio or timing
+10. **MMC5 completion** — 11 ROMs, significant effort
+11. **Minor mappers** — triage individually
