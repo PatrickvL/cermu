@@ -20,6 +20,10 @@
 #include "chip/cpu/fam65xx/ricoh_2a03.hpp"
 #include "chip/cpu/fam65xx/csg8502.hpp"
 
+// 6502 family — NMOS (pin-reduced / banking variants)
+#include "chip/cpu/fam65xx/mos6504.hpp"
+#include "chip/cpu/fam65xx/mos6509.hpp"
+
 // 6502 family — CMOS
 #include "chip/cpu/fam65xx/wdc65c02.hpp"
 #include "chip/cpu/fam65xx/wdc_w65c02s.hpp"
@@ -39,7 +43,7 @@ REGISTER_CHIP_TYPE("WDC_65C816",     WDC_65C816)
 REGISTER_CHIP_TYPE("ROCKWELL_R65C02", ROCKWELL_R65C02)
 REGISTER_CHIP_TYPE("SYNERTEK_65C02", SYNERTEK_65C02)
 
-// NOTE: MOS6509 is omitted — its GUI virtual methods are not yet
-// instantiated in fam65xx_gui.cpp (no system uses it yet).
+REGISTER_CHIP_TYPE("MOS6504",        MOS6504)
+REGISTER_CHIP_TYPE("MOS6509",        MOS6509)
 REGISTER_CHIP_TYPE("RICOH_5A22",     RICOH_5A22)
 REGISTER_CHIP_TYPE("CSG8502",         CSG8502)

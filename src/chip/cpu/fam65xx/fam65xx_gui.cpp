@@ -21,7 +21,9 @@
 #include "chip/cpu/fam65xx/mos7501.hpp"
 #include "chip/cpu/fam65xx/ricoh_2a03.hpp"
 #include "chip/cpu/fam65xx/ricoh_5a22.hpp"
+#include "chip/cpu/fam65xx/mos6504.hpp"
 #include "chip/cpu/fam65xx/mos6507.hpp"
+#include "chip/cpu/fam65xx/mos6509.hpp"
 #include "chip/cpu/fam65xx/wdc65c02.hpp"
 #include "chip/cpu/fam65xx/synertek65c02.hpp"
 #include "chip/cpu/fam65xx/rockwell65c02.hpp"
@@ -232,10 +234,20 @@ template ChipLayout* fam65xx_t<RICOH_2A03Traits>::create_chip_layout() const;
 template std::vector<PinSignalState> fam65xx_t<RICOH_2A03Traits>::get_layout_pin_states(ChipLayout&);
 template const char* fam65xx_t<RICOH_2A03Traits>::get_layout_chip_name() const;
 
+template void fam65xx_t<MOS6504Traits>::render_settings_content();
+template ChipLayout* fam65xx_t<MOS6504Traits>::create_chip_layout() const;
+template std::vector<PinSignalState> fam65xx_t<MOS6504Traits>::get_layout_pin_states(ChipLayout&);
+template const char* fam65xx_t<MOS6504Traits>::get_layout_chip_name() const;
+
 template void fam65xx_t<MOS6507Traits>::render_settings_content();
 template ChipLayout* fam65xx_t<MOS6507Traits>::create_chip_layout() const;
 template std::vector<PinSignalState> fam65xx_t<MOS6507Traits>::get_layout_pin_states(ChipLayout&);
 template const char* fam65xx_t<MOS6507Traits>::get_layout_chip_name() const;
+
+template void fam65xx_t<MOS6509Traits>::render_settings_content();
+template ChipLayout* fam65xx_t<MOS6509Traits>::create_chip_layout() const;
+template std::vector<PinSignalState> fam65xx_t<MOS6509Traits>::get_layout_pin_states(ChipLayout&);
+template const char* fam65xx_t<MOS6509Traits>::get_layout_chip_name() const;
 
 template void fam65xx_t<SYNERTEK_65C02Traits>::render_settings_content();
 template ChipLayout* fam65xx_t<SYNERTEK_65C02Traits>::create_chip_layout() const;

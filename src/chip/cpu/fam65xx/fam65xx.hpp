@@ -465,7 +465,7 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
     // is guaranteed zero (no mid-instruction abort exists).
     // Single branch — common path (ind_remaining == 0) is predict-not-taken.
     if constexpr (has_mos6509_banking()) {
-      if (UNLIKELY(mos6509_.ind_remaining > 0)) {
+      if (unlikely(mos6509_.ind_remaining > 0)) {
         FAM65XX_SET_BANK(pins, mos6509_.ind_bank);
         --mos6509_.ind_remaining;
       } else {
