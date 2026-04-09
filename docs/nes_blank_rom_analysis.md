@@ -16,6 +16,7 @@
 | Namco 175/340: rewrite register map, sub-mapper differentiation | 210 | 7 | `55beae28` | **VERIFIED** |
 | Bandai FCG: PRG-RAM write protection + address decode + I2C timing | 16 | 8 | `bc12abe1` | **VERIFIED** |
 | NES-QJ: PRG-RAM write protection for outer bank register | 47 | 1 | `bc12abe1` | **VERIFIED** |
+| MMC1: PRG/CHR bank address mirroring for out-of-range banks | 1 | 6 | TBD | **VERIFIED** |
 
 ---
 
@@ -23,21 +24,20 @@
 
 ### Progression
 
-| Status | Initial (60f) | +MMC1/AxROM | +210/016/047 | Total Delta |
-|--------|-------------:|------------:|-------------:|------------:|
-| PASS   |          919 |       1210  |         1226 | **+307** |
-| BLANK  |          509 |        217  |          201 | **-308** |
-| CRASH  |            2 |          2  |            2 | 0 |
-| TIMEOUT|            0 |          1  |            1 | +1 |
+| Status | Initial (60f) | +MMC1/AxROM | +210/016/047 | +MMC1 wrap (300f) | Total Delta |
+|--------|-------------:|------------:|-------------:|-----------------:|------------:|
+| PASS   |          919 |       1210  |         1226 |             1290 | **+371** |
+| BLANK  |          509 |        217  |          201 |              137 | **-372** |
+| CRASH  |            2 |          2  |            2 |                2 | 0 |
+| TIMEOUT|            0 |          1  |            1 |                1 | +1 |
 
-**308 previously blank ROMs now show graphics (60% reduction).**
+**372 previously blank ROMs now show graphics (73% reduction).**
 
-### Remaining 201 Blanks by Mapper
+### Remaining 137 Blanks by Mapper
 
 | Mapper | Count | Description | Notes |
 |--------|------:|-------------|-------|
-| 1 | 64 | MMC1/SxROM | Likely slow starters (256KB+ PRG already fixed) |
-| 4 | 48 | MMC3/TxROM | Mostly slow starters (need 300+ frames) |
+| 4 | 48 | MMC3/TxROM | Same PRG wrapping bug likely; also slow starters |
 | 2 | 19 | UxROM | Slow starters likely |
 | 16 | 11 | Bandai FCG | 3 Datach (need barcode HW) + 1 mapper 153 misidentified + 7 remaining |
 | 5 | 11 | MMC5 | Complex mapper, incomplete impl |
@@ -49,13 +49,17 @@
 | 96 | 2 | Oeka Kids | Special input device required |
 | Others | 15 | Various (9,10,15,26,33,40,75,76,82,85,88,120,140,206,207) | 1 each |
 
+**Note:** The PRG bank wrapping bug (`offset >= size → nullptr` instead of mirroring)
+is systemic — also present in mappers 4, 5, 13, 28, 118, 119, 232. Fixing those
+mappers may resolve additional blanks.
+
 ---
 
 ## Summary by Root Cause
 
 | # | Root Cause | Mapper(s) | Original | Remaining | Fix Difficulty |
 |---|-----------|-----------|--------:|----------:|----------------|
-| 1 | [MMC1 PRG bank offset hardcoded for 256KB](#1-mmc1-prg-bank-calculation-bug) | 1 | 305 | 64 | **DONE** (241 fixed) |
+| 1 | [MMC1 PRG bank offset hardcoded for 256KB](#1-mmc1-prg-bank-calculation-bug) | 1 | 305 | 0 | **DONE** (241 bank offset + 58 slow starters + 6 bank wrapping) |
 | 2 | [Taito X1-005/X1-017 register shadowing](#2-taito-x1-005x1-017-register-shadowing) | 80, 82, 207 | 12 | 8 | Partial (deeper issue) |
 | 3 | [Bandai FCG mapper bugs](#3-bandai-fcg-mapper-16) | 16 | 19 | 11 | **PARTIAL** (8 fixed: PRG-RAM + address decode + I2C) |
 | 4 | [Namco 175/340 mapper bug](#4-namco-175340-mapper-210) | 210 | 7 | 0 | **DONE** (all 7 fixed) |
@@ -73,38 +77,54 @@
 
 ### 1. MMC1 PRG Bank Calculation Bug
 
-**Impact:** 305 ROMs (60% of all blanks)
-**Fix:** Easy — one-line change
+**Impact:** 305 ROMs (60% of all blanks) → **0 remaining**
+**Fix:** Two issues found and fixed
 **File:** `src/systems/nes/cartridge/mappers/mapper_001_mmc1.hpp`
 
-**Root cause:** In `get_prg_bank_config()`, PRG mode 3 (fix last bank at $C000) uses:
+#### Issue A: Fixed-bank offset hardcoded for 256KB (commit `8427a8c2`)
+
+In `get_prg_bank_config()`, PRG mode 3 (fix last bank at $C000) uses:
 ```cpp
 uint32_t last_base = prg_base + 0x3C000; // last 16KB of 256KB half
 ```
 This hardcodes 256KB as the PRG size. For ROMs ≤128KB, `0x3C000 >= prg_rom_size_`
 so the bounds check returns nullptr for pages 4–7 ($C000–$FFFF). The CPU's reset
-vector at $FFFC reads open bus → blank screen.
+vector at $FFFC reads open bus → blank screen. Fixed 241 ROMs.
 
-**Evidence:** MMC1 blank rate by PRG size:
-| PRG Size | Pass | Blank | Blank% |
-|----------|-----:|------:|-------:|
-| 32KB     |    0 |    15 | 100%   |
-| 64KB     |    0 |    10 | 100%   |
-| 128KB    |    0 |   280 | 100%   |
-| 256KB    |   77 |    25 | 25%    |
-| 512KB    |    6 |     2 | 25%    |
+#### Issue B: Out-of-range bank numbers not mirrored (NEW)
 
-PRG ≤128KB → 100% blank. PRG ≥256KB → 25% blank (slow starters).
+Games write PRG bank numbers that exceed the physical ROM capacity
+(e.g. bank 6 on a 64K/4-bank ROM). On real hardware, upper address lines
+beyond ROM capacity are unconnected, so the ROM mirrors naturally.
+Our code checked `(offset < prg_rom_size_) ? ptr : nullptr` which set
+page pointers to nullptr, crashing the game.
 
-**Fix:**
+**Fix:** Replace bounds-check-to-nullptr with bitmask wrapping:
 ```cpp
-// Before (BUG):
-uint32_t last_base = prg_base + 0x3C000;
-
-// After (FIX): use actual half-size
-uint32_t half_size = (prg_rom_size_ > 0x40000) ? 0x40000 : prg_rom_size_;
-uint32_t last_base = prg_base + half_size - 0x4000;
+const uint32_t prg_mask = static_cast<uint32_t>(prg_rom_size_) - 1;
+// ...
+uint32_t offset = (bank_base + i * 0x1000) & prg_mask;
+config.prg_pages[i] = prg_rom_ + offset;
 ```
+Same fix applied to CHR-ROM banking.
+
+**Affected ROMs (6):**
+| ROM | PRG | CHR | Out-of-range bank |
+|-----|----:|----:|-------------------|
+| Knight Rider | 64K | 128K | PRG bank 6 (max 3) |
+| Sesame Street Countdown | 128K | 128K | PRG bank 14 (max 7) |
+| Palamedes II - Star Twinkles | 32K | 32K | PRG bank 6 (max 1) |
+| Hyokkori Hyoutan Shima | 128K | 128K | PRG bank 14-15 (max 7) |
+| Barker Bill's Trick Shooting | 64K | 128K | PRG bank wrapping |
+| Family Trainer 03 - Dance Aerobics | 64K | 32K | PRG bank wrapping |
+
+#### Remaining 58 of original 64 (post-`8427a8c2` blanks)
+
+These were **slow starters** — games with long initialization sequences that
+needed 100-300+ frames to display graphics. The test initially ran at 60 frames.
+Re-testing at 300 frames with `--early-exit` confirmed all 58 produce >2 colors.
+
+**Overall MMC1 resolution: 305 → 0 blanks (100% fixed)**
 
 **Affected ROMs (305):**
 
@@ -478,7 +498,6 @@ slow starters were found in spot-checks.
 | 2 | UxROM | 19 | 157 | 12.1% |
 | 3 | CNROM | 7 | 98 | 7.1% |
 | 4 | MMC3 | 48 | 353 | 13.6% |
-| 1 (≥256KB) | MMC1 (large PRG) | 27 | 108 | 25.0% |
 | 33 | Taito TC0190 | 1 | 9 | 11.1% |
 | 206 | Namcot 108 | 1 | 11 | 9.1% |
 
@@ -504,9 +523,11 @@ slow starters were found in spot-checks.
 3. ~~Namco 175/340 rewrite~~ — **DONE** (7 ROMs)
 4. ~~Bandai FCG I2C/register fixes~~ — **DONE** (8 ROMs)
 5. ~~NES-QJ PRG-RAM interception~~ — **DONE** (1 ROM)
-6. **Re-test at 300 frames** — eliminate false positives from slow starters (~78 ROMs: mappers 0,1,2,3,4)
-7. **Taito X1-005 deeper issue** — 6 ROMs, register writes reach mapper but still blank
-8. **Mapper 16 remaining** — 7 non-Datach ROMs still blank
-9. **Namco 163** — 10 ROMs, expansion audio or timing
-10. **MMC5 completion** — 11 ROMs, significant effort
-11. **Minor mappers** — triage individually
+6. ~~MMC1 bank wrapping + slow-starter re-test~~ — **DONE** (64 ROMs: 58 slow starters + 6 wrapping fix)
+7. **PRG bank wrapping in other mappers** — same bug as #6, affects mappers 4, 5, 13, 28, 118, 119, 232 (~48+ ROMs)
+8. **Re-test at 300 frames** — eliminate slow-starter false positives in mappers 0, 2, 3, 4
+9. **Taito X1-005 deeper issue** — 6 ROMs, register writes reach mapper but still blank
+10. **Mapper 16 remaining** — 7 non-Datach ROMs still blank
+11. **Namco 163** — 10 ROMs, expansion audio or timing
+12. **MMC5 completion** — 11 ROMs, significant effort
+13. **Minor mappers** — triage individually

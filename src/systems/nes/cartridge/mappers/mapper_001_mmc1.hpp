@@ -78,38 +78,42 @@ public:
             prg_base = (reg_chr_bank0_ & 0x10) ? 0x40000 : 0;
         }
 
+        // PRG ROM size mask for address mirroring — real hardware ignores
+        // upper address lines that exceed the ROM capacity.
+        const uint32_t prg_mask = static_cast<uint32_t>(prg_rom_size_) - 1;
+
         if (prg_mode <= 1) {
             // 32KB mode: ignore low bit of bank number
             uint32_t bank = (reg_prg_bank_ & 0x0E) >> 1;
             uint32_t base = prg_base + bank * 0x8000;
             for (int i = 0; i < 8; i++) {
-                uint32_t offset = base + i * 0x1000;
-                config.prg_pages[i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
+                uint32_t offset = (base + i * 0x1000) & prg_mask;
+                config.prg_pages[i] = prg_rom_ + offset;
             }
         } else if (prg_mode == 2) {
             // Fix first bank at $8000, switch second at $C000
             for (int i = 0; i < 4; i++) {
-                uint32_t offset = prg_base + i * 0x1000;
-                config.prg_pages[i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
+                uint32_t offset = (prg_base + i * 0x1000) & prg_mask;
+                config.prg_pages[i] = prg_rom_ + offset;
             }
             uint32_t bank_base = prg_base + (reg_prg_bank_ & 0x0F) * 0x4000;
             for (int i = 0; i < 4; i++) {
-                uint32_t offset = bank_base + i * 0x1000;
-                config.prg_pages[4 + i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
+                uint32_t offset = (bank_base + i * 0x1000) & prg_mask;
+                config.prg_pages[4 + i] = prg_rom_ + offset;
             }
         } else {
             // Fix last bank at $C000, switch first at $8000
             uint32_t bank_base = prg_base + (reg_prg_bank_ & 0x0F) * 0x4000;
             for (int i = 0; i < 4; i++) {
-                uint32_t offset = bank_base + i * 0x1000;
-                config.prg_pages[i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
+                uint32_t offset = (bank_base + i * 0x1000) & prg_mask;
+                config.prg_pages[i] = prg_rom_ + offset;
             }
             // Fixed last 16KB within the current PRG half
             uint32_t half_size = (prg_rom_size_ > 0x40000) ? 0x40000 : static_cast<uint32_t>(prg_rom_size_);
             uint32_t last_base = prg_base + half_size - 0x4000;
             for (int i = 0; i < 4; i++) {
-                uint32_t offset = last_base + i * 0x1000;
-                config.prg_pages[4 + i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
+                uint32_t offset = (last_base + i * 0x1000) & prg_mask;
+                config.prg_pages[4 + i] = prg_rom_ + offset;
             }
         }
 
@@ -134,6 +138,8 @@ public:
                 config.chr_writable[i] = true;
             }
         } else {
+            // CHR ROM size mask for address mirroring
+            const uint32_t chr_mask = static_cast<uint32_t>(chr_mem_size_) - 1;
             bool chr_mode = (reg_control_ & 0x10) != 0;
 
             if (!chr_mode) {
@@ -141,22 +147,22 @@ public:
                 uint32_t bank = (reg_chr_bank0_ & 0x1E) >> 1;
                 uint32_t base = bank * 0x2000;
                 for (int i = 0; i < 8; i++) {
-                    uint32_t offset = base + i * 0x0400;
-                    config.chr_pages[i] = (offset < chr_mem_size_) ? chr_mem_ + offset : nullptr;
+                    uint32_t offset = (base + i * 0x0400) & chr_mask;
+                    config.chr_pages[i] = chr_mem_ + offset;
                     config.chr_writable[i] = false;
                 }
             } else {
                 // 4KB mode
                 uint32_t base0 = reg_chr_bank0_ * 0x1000;
                 for (int i = 0; i < 4; i++) {
-                    uint32_t offset = base0 + i * 0x0400;
-                    config.chr_pages[i] = (offset < chr_mem_size_) ? chr_mem_ + offset : nullptr;
+                    uint32_t offset = (base0 + i * 0x0400) & chr_mask;
+                    config.chr_pages[i] = chr_mem_ + offset;
                     config.chr_writable[i] = false;
                 }
                 uint32_t base1 = reg_chr_bank1_ * 0x1000;
                 for (int i = 0; i < 4; i++) {
-                    uint32_t offset = base1 + i * 0x0400;
-                    config.chr_pages[4 + i] = (offset < chr_mem_size_) ? chr_mem_ + offset : nullptr;
+                    uint32_t offset = (base1 + i * 0x0400) & chr_mask;
+                    config.chr_pages[4 + i] = chr_mem_ + offset;
                     config.chr_writable[i + 4] = false;
                 }
             }
