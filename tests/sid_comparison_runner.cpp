@@ -894,10 +894,12 @@ public:
             }
 
             // ── Collect decimated samples ───────────────────────────
-            // cermu: check ring buffer for new samples
-            while (!harness_->sid->sample_buffer.empty()) {
-                float s = harness_->sid->sample_buffer.read();
-                cermu_samples_.push_back(s);
+            // cermu: drain ring buffer for new samples
+            float rbuf[64];
+            size_t n;
+            while ((n = harness_->sid->sample_buffer.read(rbuf, 64)) > 0) {
+                for (size_t ri = 0; ri < n; ri++)
+                    cermu_samples_.push_back(rbuf[ri]);
             }
         }
     }
@@ -1305,8 +1307,11 @@ static int run_log_comparison(const char* log_path, bool verbose, bool no_filter
             harness->total_cycles++;
 
             // Drain cermu ring buffer
-            while (!harness->sid->sample_buffer.empty()) {
-                cermu_samples.push_back(harness->sid->sample_buffer.read());
+            float rbuf[64];
+            size_t nr;
+            while ((nr = harness->sid->sample_buffer.read(rbuf, 64)) > 0) {
+                for (size_t ri = 0; ri < nr; ri++)
+                    cermu_samples.push_back(rbuf[ri]);
             }
         }
 

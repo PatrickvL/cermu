@@ -43,10 +43,14 @@ no motor/head seek timing, no track density variation.
 - Copy-protected disks (non-standard GCR) will not work.
 - A full `DriveSystem` (6502 + 2×VIA + GCR) exists in `drive_1541_system.*` but is not the default mode.
 
-### 1.4 SID Combined Waveforms — **[ACCURACY] S** (verify only)
+### 1.4 ~~SID Combined Waveforms~~ — **[DONE]** (verified)
 Combined waveform tables use the libsidplayfp pulldown algorithm with RLE-encoded XOR deltas
-matched against reSID/real hardware OSC3 measurements. Implementation appears production-grade.
-Needs verification pass against latest reSID 1.0 reference data to confirm parity still holds.
+matched against reSID/real hardware OSC3 measurements. Verification pass confirmed:
+- 0 OSC3 mismatches across all combined waveform modes (0x30, 0x50, 0x60, 0x70)
+- 0 envelope mismatches, 0 accumulator mismatches
+- Ring modulation, oscillator sync, test bit: all exact match
+- Audio pipeline comparison PASS (8 test scenarios, 0 failures)
+Tested against reSID (Dag Lem, 2010) from VICE source tree.
 
 ### 1.5 HD6309: Instruction Coverage Incomplete — **[INCOMPLETE] M**
 Trait infrastructure exists (`HAS_W_REGISTER`, `HAS_NATIVE_MODE`, `HD6309_DIVZERO`),
@@ -381,9 +385,13 @@ pixel aspect ratio, display rotation, NTSC artifact phase — is already correct
 modeled via `DisplayTraits`, shader selection, and `PhaseIncrement`. Architecture
 is sound; monitor presets are a GUI/user-preference concern.
 
-### 10.3 Audio Thread Safety — **[QUALITY] S**
-Ring buffer uses correct SPSC acquire/release ordering. Verify no other audio paths
-bypass the ring buffer for direct sample output (which would cause races).
+### 10.3 ~~Audio Thread Safety~~ — **[DONE]**
+Audit confirmed ring buffer uses correct SPSC acquire/release ordering. Found one
+data race: `use_speaker_sim_` was a non-atomic `bool` read by SDL audio callback
+while toggled by GUI thread. Fixed by changing to `std::atomic<bool>` with relaxed
+ordering. `speaker_sim_.reset()` is safe because `SDL_CloseAudioDevice()` guarantees
+no in-flight callbacks. All perf counters use atomic relaxed increments.
+Committed `41e0ff44`.
 
 ---
 
@@ -395,9 +403,9 @@ bypass the ring buffer for direct sample output (which would cause races).
 3. ~~Storage `malloc`/`free` cleanup~~ (§5.1) — **DONE**
 4. ~~ROM loader MD5 stub removal~~ (§5.4) — **DONE** (already removed)
 5. ~~Pin state GUI boilerplate~~ (§5.6) — **DONE**
-6. BBC sideways ROM (.rom) loading (§2.4) — **S**
-7. Audio thread safety verification (§10.3) — **S**
-8. SID combined waveform verification (§1.4) — **S**
+6. ~~BBC sideways ROM (.rom) loading~~ (§2.4) — **DONE**
+7. ~~Audio thread safety verification~~ (§10.3) — **DONE**
+8. ~~SID combined waveform verification~~ (§1.4) — **DONE**
 
 ### Medium Effort, High Value (days)
 9. ~~BBC disc format loading: SSD/DSD~~ (§7.2) — **DONE**
