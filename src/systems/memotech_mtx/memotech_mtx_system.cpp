@@ -23,7 +23,7 @@
 #include <cstring>
 #include <cstdio>
 
-using namespace z80::reg;
+
 
 // ============================================================================
 // HARDWARE TRAITS
@@ -386,7 +386,7 @@ bool MemotechMTXSystem<V>::load_file(const char* filepath) {
     free(file_data);
 
     // Set Z80 PC to load address so execution starts there
-    board_.z80.set(PC, load_addr);
+    board_.z80.set_pc(load_addr);
 
     std::string name = vfs_filename(filepath);
     program_title_ = name.empty() ? filepath : name;

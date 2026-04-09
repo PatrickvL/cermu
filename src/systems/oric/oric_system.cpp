@@ -10,6 +10,8 @@
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
+#include "core/formats/format_registry.hpp"
+#include "core/formats/format_load_helpers.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -223,8 +225,27 @@ void OricSystem<V>::run_frame() {
 // ============================================================================
 
 template<OricVariant V>
-bool OricSystem<V>::load_file(const char* /*filepath*/) {
-    // TODO: support Oric TAP format
+bool OricSystem<V>::load_file(const char* filepath) {
+    if (!filepath) return false;
+
+    format_load_result_t result;
+    if (!format_load_file(filepath, &result)) {
+        log_info("%s: Failed to load file: %s\n", Traits::name, result.error_msg);
+        return false;
+    }
+
+    format_apply_config_t cfg{};
+    cfg.ram         = board_.ram.data();
+    cfg.ram_size    = 0xC000;  // RAM below ROM
+    cfg.ram_base    = 0x0000;
+    cfg.cpu         = &board_.cpu;
+    cfg.system_name = Traits::name;
+
+    bool ok = format_apply_program(result, cfg);
+    result.release();
+    if (ok) return true;
+
+    log_info("%s: Unsupported format for file: %s\n", Traits::name, filepath);
     return false;
 }
 
