@@ -59,9 +59,8 @@ ChipLayout* ferranti_ula_t::create_chip_layout() const {
 }
 
 std::vector<PinSignalState> ferranti_ula_t::get_layout_pin_states(ChipLayout& layout) {
-    auto ps = populate_pin_states_from_bus(layout, 0);
     // ULA is not on a standard bus — return bus-derived defaults
-    return ps;
+    return build_pin_states(layout, 0);
 }
 
 #endif // CERMU_HAS_GUI

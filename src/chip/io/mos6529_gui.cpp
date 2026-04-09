@@ -43,17 +43,15 @@ ChipLayout* mos6529_t::create_chip_layout() const {
 }
 
 std::vector<PinSignalState> mos6529_t::get_layout_pin_states(ChipLayout& layout) {
-    auto ps = populate_pin_states_from_bus(layout, 0);
-
-    // Mark port pins P0-P7 (left side pins 2-9, indices 1-8)
-    for (int i = 0; i < 8; ++i) {
-        ps[1 + i].signal_level    = (output_latch >> i) & 1;
-        ps[1 + i].drive_direction = true;
-        ps[1 + i].high_impedance  = false;
-        ps[1 + i].signal_valid    = true;
-    }
-
-    return ps;
+    return build_pin_states(layout, 0, [this](auto& ps) {
+        // Port pins P0-P7 (left side pins 2-9, indices 1-8)
+        for (int i = 0; i < 8; ++i) {
+            ps[1 + i].signal_level    = (output_latch >> i) & 1;
+            ps[1 + i].drive_direction = true;
+            ps[1 + i].high_impedance  = false;
+            ps[1 + i].signal_valid    = true;
+        }
+    });
 }
 
 #endif // CERMU_HAS_GUI

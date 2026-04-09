@@ -104,51 +104,49 @@ std::vector<PinSignalState> mc6809_t<Traits>::get_layout_pin_states(ChipLayout& 
     bus_state_t bus = this->bus_prev_;
     if (bus == 0) bus = MC6809_GUI_DEFAULT_STATE;
 
-    auto ps = populate_pin_states_from_bus(layout, bus);
+    return build_pin_states(layout, bus, [&](auto& ps) {
+        // MC6809-specific control signals
 
-    // MC6809-specific control signals
+        // BS (pin 5, idx 4)
+        ps[4].signal_level    = BUS_GET_BIT(bus, MC6809_BS_BIT) != 0;
+        ps[4].drive_direction = true;
+        ps[4].signal_valid    = true;
 
-    // BS (pin 5, idx 4)
-    ps[4].signal_level    = BUS_GET_BIT(bus, MC6809_BS_BIT) != 0;
-    ps[4].drive_direction = true;
-    ps[4].signal_valid    = true;
+        // BA (pin 6, idx 5)
+        ps[5].signal_level    = BUS_GET_BIT(bus, MC6809_BA_BIT) != 0;
+        ps[5].drive_direction = true;
+        ps[5].signal_valid    = true;
 
-    // BA (pin 6, idx 5)
-    ps[5].signal_level    = BUS_GET_BIT(bus, MC6809_BA_BIT) != 0;
-    ps[5].drive_direction = true;
-    ps[5].signal_valid    = true;
+        // R/W (pin 25, idx 24)
+        ps[24].signal_level    = BUS_GET_BIT(bus, BUS_RW_BIT) != 0;
+        ps[24].drive_direction = true;
+        ps[24].signal_valid    = true;
 
-    // R/W (pin 25, idx 24)
-    ps[24].signal_level    = BUS_GET_BIT(bus, BUS_RW_BIT) != 0;
-    ps[24].drive_direction = true;
-    ps[24].signal_valid    = true;
+        // BUSY (pin 24, idx 23)
+        ps[23].signal_level    = BUS_GET_BIT(bus, MC6809_BUSY_BIT) != 0;
+        ps[23].drive_direction = true;
+        ps[23].signal_valid    = true;
 
-    // BUSY (pin 24, idx 23)
-    ps[23].signal_level    = BUS_GET_BIT(bus, MC6809_BUSY_BIT) != 0;
-    ps[23].drive_direction = true;
-    ps[23].signal_valid    = true;
+        // AVMA (pin 23, idx 22)
+        ps[22].signal_level    = BUS_GET_BIT(bus, MC6809_AVMA_BIT) != 0;
+        ps[22].drive_direction = true;
+        ps[22].signal_valid    = true;
 
-    // AVMA (pin 23, idx 22)
-    ps[22].signal_level    = BUS_GET_BIT(bus, MC6809_AVMA_BIT) != 0;
-    ps[22].drive_direction = true;
-    ps[22].signal_valid    = true;
+        // LIC (pin 22, idx 21)
+        ps[21].signal_level    = BUS_GET_BIT(bus, MC6809_LIC_BIT) != 0;
+        ps[21].drive_direction = true;
+        ps[21].signal_valid    = true;
 
-    // LIC (pin 22, idx 21)
-    ps[21].signal_level    = BUS_GET_BIT(bus, MC6809_LIC_BIT) != 0;
-    ps[21].drive_direction = true;
-    ps[21].signal_valid    = true;
+        // E (pin 35, idx 34)
+        ps[34].signal_level    = BUS_GET_BIT(bus, MC6809_E_BIT) != 0;
+        ps[34].drive_direction = Traits.has_internal_clock();
+        ps[34].signal_valid    = true;
 
-    // E (pin 35, idx 34)
-    ps[34].signal_level    = BUS_GET_BIT(bus, MC6809_E_BIT) != 0;
-    ps[34].drive_direction = Traits.has_internal_clock();
-    ps[34].signal_valid    = true;
-
-    // Q (pin 34, idx 33)
-    ps[33].signal_level    = BUS_GET_BIT(bus, MC6809_Q_BIT) != 0;
-    ps[33].drive_direction = Traits.has_internal_clock();
-    ps[33].signal_valid    = true;
-
-    return ps;
+        // Q (pin 34, idx 33)
+        ps[33].signal_level    = BUS_GET_BIT(bus, MC6809_Q_BIT) != 0;
+        ps[33].drive_direction = Traits.has_internal_clock();
+        ps[33].signal_valid    = true;
+    });
 }
 
 template <const MC6809Traits& Traits>

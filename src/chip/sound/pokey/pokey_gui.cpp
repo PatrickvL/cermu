@@ -124,17 +124,15 @@ ChipLayout* pokey::pokey_t<Traits>::create_chip_layout() const {
 
 template <const pokey::POKEYTraits& Traits>
 std::vector<PinSignalState> pokey::pokey_t<Traits>::get_layout_pin_states(ChipLayout& layout) {
-    auto ps = populate_pin_states_from_bus(layout, bus_snapshot_);
-
-    // Audio output (pin 19, left side idx 18) — always driven
-    if (ps.size() > 18) {
-        ps[18].signal_level    = true;
-        ps[18].drive_direction = true;
-        ps[18].high_impedance  = false;
-        ps[18].signal_valid    = true;
-    }
-
-    return ps;
+    return build_pin_states(layout, bus_snapshot_, [](auto& ps) {
+        // Audio output (pin 19, left side idx 18) — always driven
+        if (ps.size() > 18) {
+            ps[18].signal_level    = true;
+            ps[18].drive_direction = true;
+            ps[18].high_impedance  = false;
+            ps[18].signal_valid    = true;
+        }
+    });
 }
 
 // Explicit template instantiation — GUI methods

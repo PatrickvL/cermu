@@ -42,15 +42,13 @@ ChipLayout* sn76489_t::create_chip_layout() const {
 }
 
 std::vector<PinSignalState> sn76489_t::get_layout_pin_states(ChipLayout& layout) {
-    auto ps = populate_pin_states_from_bus(layout, 0);
-
-    // Audio output (pin 7, idx 6) — always driven
-    ps[6].signal_level    = true;
-    ps[6].drive_direction = true;
-    ps[6].high_impedance  = false;
-    ps[6].signal_valid    = true;
-
-    return ps;
+    return build_pin_states(layout, 0, [](auto& ps) {
+        // Audio output (pin 7, idx 6) — always driven
+        ps[6].signal_level    = true;
+        ps[6].drive_direction = true;
+        ps[6].high_impedance  = false;
+        ps[6].signal_valid    = true;
+    });
 }
 
 #endif // CERMU_HAS_GUI

@@ -47,23 +47,13 @@ ChipLayout* mos6581_t::create_chip_layout() const {
     return &layout;
 }
 
-// Helper function to get SID pin states for visualization
-static std::vector<PinSignalState> get_sid_pin_states(mos6581_t* sid, const ChipLayout* layout, bus_state_t bus_state) {
-    if (!sid || !layout) return {};
-
-    // Generic bus-derived pin states (address, data, power, clock, control)
-    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
-
-    // SID specific: Audio output pin (always driven)
-    pin_states[26].signal_level = true;  // AUDIO_OUT (pin 27)
-    pin_states[26].drive_direction = true;
-    pin_states[26].high_impedance = false;
-
-    return pin_states;
-}
-
 std::vector<PinSignalState> mos6581_t::get_layout_pin_states(ChipLayout& layout) {
-    return get_sid_pin_states(this, &layout, bus_snapshot_);
+    return build_pin_states(layout, bus_snapshot_, [](auto& ps) {
+        // Audio output pin (always driven)
+        ps[26].signal_level = true;  // AUDIO_OUT (pin 27)
+        ps[26].drive_direction = true;
+        ps[26].high_impedance = false;
+    });
 }
 
 // ============================================================================

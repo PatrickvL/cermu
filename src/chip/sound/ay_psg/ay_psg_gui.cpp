@@ -172,9 +172,8 @@ ChipLayout* ay_psg_t<Traits>::create_chip_layout() const {
 
 template <const AYTraits& Traits>
 std::vector<PinSignalState> ay_psg_t<Traits>::get_layout_pin_states(ChipLayout& layout) {
-    auto ps = populate_pin_states_from_bus(layout, 0);
     // AY-3-8910 is not on main system bus — signals come from BDIR/BC1/BC2
-    return ps;
+    return build_pin_states(layout, 0);
 }
 
 // Explicit template instantiation — GUI methods

@@ -81,62 +81,61 @@ ChipLayout* i8255_t::create_chip_layout() const {
 }
 
 std::vector<PinSignalState> i8255_t::get_layout_pin_states(ChipLayout& layout) {
-    auto ps = populate_pin_states_from_bus(layout, bus_snapshot_);
-    int total = static_cast<int>(ps.size());
+    return build_pin_states(layout, bus_snapshot_, [this](auto& ps) {
+        int total = static_cast<int>(ps.size());
 
-    // Port A pins: PA3(1), PA2(2), PA1(3), PA0(4), PA4(40), PA5(39), PA6(38), PA7(37)
-    // Map output latch / input based on direction
-    auto set_port_pin = [&](int pin_idx, bool level, bool is_output) {
-        if (pin_idx >= 0 && pin_idx < total) {
-            ps[pin_idx].signal_level = level;
-            ps[pin_idx].drive_direction = is_output;
-            ps[pin_idx].high_impedance = !is_output;
-        }
-    };
+        // Port A pins: PA3(1), PA2(2), PA1(3), PA0(4), PA4(40), PA5(39), PA6(38), PA7(37)
+        // Map output latch / input based on direction
+        auto set_port_pin = [&](int pin_idx, bool level, bool is_output) {
+            if (pin_idx >= 0 && pin_idx < total) {
+                ps[pin_idx].signal_level = level;
+                ps[pin_idx].drive_direction = is_output;
+                ps[pin_idx].high_impedance = !is_output;
+            }
+        };
 
-    bool pa_out = !port_a_input();
-    uint8_t pa_val = pa_out ? regs_[i8255::reg::PORT_A] : port_a_in_;
-    // Left side: PA3=pin1(idx0), PA2=pin2(idx1), PA1=pin3(idx2), PA0=pin4(idx3)
-    set_port_pin(0, (pa_val >> 3) & 1, pa_out);
-    set_port_pin(1, (pa_val >> 2) & 1, pa_out);
-    set_port_pin(2, (pa_val >> 1) & 1, pa_out);
-    set_port_pin(3, (pa_val >> 0) & 1, pa_out);
-    // Right side: PA4=pin40(idx39), PA5=pin39(idx38), PA6=pin38(idx37), PA7=pin37(idx36)
-    set_port_pin(39, (pa_val >> 4) & 1, pa_out);
-    set_port_pin(38, (pa_val >> 5) & 1, pa_out);
-    set_port_pin(37, (pa_val >> 6) & 1, pa_out);
-    set_port_pin(36, (pa_val >> 7) & 1, pa_out);
+        bool pa_out = !port_a_input();
+        uint8_t pa_val = pa_out ? regs_[i8255::reg::PORT_A] : port_a_in_;
+        // Left side: PA3=pin1(idx0), PA2=pin2(idx1), PA1=pin3(idx2), PA0=pin4(idx3)
+        set_port_pin(0, (pa_val >> 3) & 1, pa_out);
+        set_port_pin(1, (pa_val >> 2) & 1, pa_out);
+        set_port_pin(2, (pa_val >> 1) & 1, pa_out);
+        set_port_pin(3, (pa_val >> 0) & 1, pa_out);
+        // Right side: PA4=pin40(idx39), PA5=pin39(idx38), PA6=pin38(idx37), PA7=pin37(idx36)
+        set_port_pin(39, (pa_val >> 4) & 1, pa_out);
+        set_port_pin(38, (pa_val >> 5) & 1, pa_out);
+        set_port_pin(37, (pa_val >> 6) & 1, pa_out);
+        set_port_pin(36, (pa_val >> 7) & 1, pa_out);
 
-    // Port B pins: PB0=pin18(idx17)..PB2=pin20(idx19), PB3=pin21(idx20)..PB7=pin25(idx24)
-    bool pb_out = !port_b_input();
-    uint8_t pb_val = pb_out ? regs_[i8255::reg::PORT_B] : port_b_in_;
-    // Left: PB0(17), PB1(18), PB2(19)
-    set_port_pin(17, (pb_val >> 0) & 1, pb_out);
-    set_port_pin(18, (pb_val >> 1) & 1, pb_out);
-    set_port_pin(19, (pb_val >> 2) & 1, pb_out);
-    // Right: PB3(20), PB4(21), PB5(22), PB6(23), PB7(24)
-    set_port_pin(20, (pb_val >> 3) & 1, pb_out);
-    set_port_pin(21, (pb_val >> 4) & 1, pb_out);
-    set_port_pin(22, (pb_val >> 5) & 1, pb_out);
-    set_port_pin(23, (pb_val >> 6) & 1, pb_out);
-    set_port_pin(24, (pb_val >> 7) & 1, pb_out);
+        // Port B pins: PB0=pin18(idx17)..PB2=pin20(idx19), PB3=pin21(idx20)..PB7=pin25(idx24)
+        bool pb_out = !port_b_input();
+        uint8_t pb_val = pb_out ? regs_[i8255::reg::PORT_B] : port_b_in_;
+        // Left: PB0(17), PB1(18), PB2(19)
+        set_port_pin(17, (pb_val >> 0) & 1, pb_out);
+        set_port_pin(18, (pb_val >> 1) & 1, pb_out);
+        set_port_pin(19, (pb_val >> 2) & 1, pb_out);
+        // Right: PB3(20), PB4(21), PB5(22), PB6(23), PB7(24)
+        set_port_pin(20, (pb_val >> 3) & 1, pb_out);
+        set_port_pin(21, (pb_val >> 4) & 1, pb_out);
+        set_port_pin(22, (pb_val >> 5) & 1, pb_out);
+        set_port_pin(23, (pb_val >> 6) & 1, pb_out);
+        set_port_pin(24, (pb_val >> 7) & 1, pb_out);
 
-    // Port C pins (split direction: upper C4-C7, lower C0-C3)
-    bool pc_upper_out = !port_c_upper_input();
-    bool pc_lower_out = !port_c_lower_input();
-    uint8_t pc_val = read_port_c();
-    // Left: PC7=pin10(idx9), PC6=pin11(idx10), PC5=pin12(idx11), PC4=pin13(idx12)
-    set_port_pin(9,  (pc_val >> 7) & 1, pc_upper_out);
-    set_port_pin(10, (pc_val >> 6) & 1, pc_upper_out);
-    set_port_pin(11, (pc_val >> 5) & 1, pc_upper_out);
-    set_port_pin(12, (pc_val >> 4) & 1, pc_upper_out);
-    // Left: PC0=pin14(idx13), PC1=pin15(idx14), PC2=pin16(idx15), PC3=pin17(idx16)
-    set_port_pin(13, (pc_val >> 0) & 1, pc_lower_out);
-    set_port_pin(14, (pc_val >> 1) & 1, pc_lower_out);
-    set_port_pin(15, (pc_val >> 2) & 1, pc_lower_out);
-    set_port_pin(16, (pc_val >> 3) & 1, pc_lower_out);
-
-    return ps;
+        // Port C pins (split direction: upper C4-C7, lower C0-C3)
+        bool pc_upper_out = !port_c_upper_input();
+        bool pc_lower_out = !port_c_lower_input();
+        uint8_t pc_val = read_port_c();
+        // Left: PC7=pin10(idx9), PC6=pin11(idx10), PC5=pin12(idx11), PC4=pin13(idx12)
+        set_port_pin(9,  (pc_val >> 7) & 1, pc_upper_out);
+        set_port_pin(10, (pc_val >> 6) & 1, pc_upper_out);
+        set_port_pin(11, (pc_val >> 5) & 1, pc_upper_out);
+        set_port_pin(12, (pc_val >> 4) & 1, pc_upper_out);
+        // Left: PC0=pin14(idx13), PC1=pin15(idx14), PC2=pin16(idx15), PC3=pin17(idx16)
+        set_port_pin(13, (pc_val >> 0) & 1, pc_lower_out);
+        set_port_pin(14, (pc_val >> 1) & 1, pc_lower_out);
+        set_port_pin(15, (pc_val >> 2) & 1, pc_lower_out);
+        set_port_pin(16, (pc_val >> 3) & 1, pc_lower_out);
+    });
 }
 
 #endif // CERMU_HAS_GUI

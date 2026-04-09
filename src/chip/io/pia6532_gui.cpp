@@ -82,66 +82,55 @@ ChipLayout* pia6532_t::create_chip_layout() const {
     return &layout;
 }
 
-// Helper: derive PIA6532 pin states from bus snapshot + chip internals
-static std::vector<PinSignalState> get_pia6532_pin_states(
-        pia6532_t* riot, const ChipLayout* layout, bus_state_t bus_state) {
-    if (!riot || !layout) return {};
-
-    // Generic bus-derived states (address, data, power, clock, R/W, /RES, /IRQ)
-    auto ps = populate_pin_states_from_bus(*layout, bus_state);
-
-    // --- RS (pin 4, idx 3) — RAM/IO select from address decoding ---
-    ps[3].signal_level    = (BUS_GET_ADDR(bus_state) >> 9) & 1;
-    ps[3].drive_direction = false;
-    ps[3].high_impedance  = false;
-    ps[3].signal_valid    = true;
-
-    // --- /IRQ (pin 7, idx 6) — RIOT drives this when timer interrupt fires ---
-    bool irq_asserted = riot->timer_underflow && riot->timer_interrupt_enabled;
-    ps[6].signal_level    = !irq_asserted; // active low
-    ps[6].drive_direction = true;
-    ps[6].high_impedance  = !irq_asserted; // open-drain: hi-Z when not asserted
-    ps[6].signal_valid    = true;
-
-    // --- PA0-PA7 (pins 22-29, indices 21-28) — Port A I/O ---
-    for (int i = 0; i < 8; i++) {
-        bool is_output = (riot->port_a_ddr >> i) & 1;
-        bool out_val   = (riot->port_a_data >> i) & 1;
-        bool in_val    = (riot->port_a_input >> i) & 1;
-        ps[21 + i].signal_level    = is_output ? out_val : in_val;
-        ps[21 + i].drive_direction = is_output;
-        ps[21 + i].high_impedance  = false;
-        ps[21 + i].signal_valid    = true;
-    }
-
-    // --- PB0-PB7 (pins 30-37, indices 29-36) — Port B I/O ---
-    for (int i = 0; i < 8; i++) {
-        bool is_output = (riot->port_b_ddr >> i) & 1;
-        bool out_val   = (riot->port_b_data >> i) & 1;
-        bool in_val    = (riot->port_b_input >> i) & 1;
-        ps[29 + i].signal_level    = is_output ? out_val : in_val;
-        ps[29 + i].drive_direction = is_output;
-        ps[29 + i].high_impedance  = false;
-        ps[29 + i].signal_valid    = true;
-    }
-
-    // --- CS1 (pin 38, idx 37) — chip select ---
-    ps[37].signal_level    = true;
-    ps[37].drive_direction = false;
-    ps[37].high_impedance  = false;
-    ps[37].signal_valid    = true;
-
-    // --- /CS2 (pin 39, idx 38) — chip select (active low) ---
-    ps[38].signal_level    = false; // asserted (selected) by default
-    ps[38].drive_direction = false;
-    ps[38].high_impedance  = false;
-    ps[38].signal_valid    = true;
-
-    return ps;
-}
-
 std::vector<PinSignalState> pia6532_t::get_layout_pin_states(ChipLayout& layout) {
-    return get_pia6532_pin_states(this, &layout, bus_snapshot_);
+    return build_pin_states(layout, bus_snapshot_, [this](auto& ps) {
+        // --- RS (pin 4, idx 3) — RAM/IO select from address decoding ---
+        ps[3].signal_level    = (BUS_GET_ADDR(bus_snapshot_) >> 9) & 1;
+        ps[3].drive_direction = false;
+        ps[3].high_impedance  = false;
+        ps[3].signal_valid    = true;
+
+        // --- /IRQ (pin 7, idx 6) — RIOT drives this when timer interrupt fires ---
+        bool irq_asserted = timer_underflow && timer_interrupt_enabled;
+        ps[6].signal_level    = !irq_asserted; // active low
+        ps[6].drive_direction = true;
+        ps[6].high_impedance  = !irq_asserted; // open-drain: hi-Z when not asserted
+        ps[6].signal_valid    = true;
+
+        // --- PA0-PA7 (pins 22-29, indices 21-28) — Port A I/O ---
+        for (int i = 0; i < 8; i++) {
+            bool is_output = (port_a_ddr >> i) & 1;
+            bool out_val   = (port_a_data >> i) & 1;
+            bool in_val    = (port_a_input >> i) & 1;
+            ps[21 + i].signal_level    = is_output ? out_val : in_val;
+            ps[21 + i].drive_direction = is_output;
+            ps[21 + i].high_impedance  = false;
+            ps[21 + i].signal_valid    = true;
+        }
+
+        // --- PB0-PB7 (pins 30-37, indices 29-36) — Port B I/O ---
+        for (int i = 0; i < 8; i++) {
+            bool is_output = (port_b_ddr >> i) & 1;
+            bool out_val   = (port_b_data >> i) & 1;
+            bool in_val    = (port_b_input >> i) & 1;
+            ps[29 + i].signal_level    = is_output ? out_val : in_val;
+            ps[29 + i].drive_direction = is_output;
+            ps[29 + i].high_impedance  = false;
+            ps[29 + i].signal_valid    = true;
+        }
+
+        // --- CS1 (pin 38, idx 37) — chip select ---
+        ps[37].signal_level    = true;
+        ps[37].drive_direction = false;
+        ps[37].high_impedance  = false;
+        ps[37].signal_valid    = true;
+
+        // --- /CS2 (pin 39, idx 38) — chip select (active low) ---
+        ps[38].signal_level    = false; // asserted (selected) by default
+        ps[38].drive_direction = false;
+        ps[38].high_impedance  = false;
+        ps[38].signal_valid    = true;
+    });
 }
 
 #endif // CERMU_HAS_GUI

@@ -71,40 +71,31 @@ ChipLayout* vic_base_t::create_chip_layout() const {
 // VIC PIN STATES
 // ============================================================================
 
-static std::vector<PinSignalState> get_vic_pin_states(vic_base_t* vic, const ChipLayout* layout, bus_state_t bus_state) {
-    if (!vic || !layout) return {};
-
-    // Generic bus-derived pin states (address, data, power, clock, control)
-    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
-
-    // VIC specific: Video output pins (always driven)
-    pin_states[37].signal_level = true; // LUMA (pin 38)
-    pin_states[37].drive_direction = true;
-    pin_states[37].high_impedance = false;
-    pin_states[36].signal_level = true; // CHROMA (pin 37)
-    pin_states[36].drive_direction = true;
-    pin_states[36].high_impedance = false;
-    pin_states[38].signal_level = true; // CSYNC (pin 39)
-    pin_states[38].drive_direction = true;
-    pin_states[38].high_impedance = false;
-
-    // Sound output (pin 26) — active if any voice is enabled
-    bool any_voice_on = false;
-    for (int v = BASS_FREQ; v <= NOISE_FREQ; v++) {
-        if (vic->regs_[v] & VIC_VOICE_ENABLE) {
-            any_voice_on = true;
-            break;
-        }
-    }
-    pin_states[25].signal_level = any_voice_on; // SOUND (pin 26)
-    pin_states[25].drive_direction = true;
-    pin_states[25].high_impedance = false;
-
-    return pin_states;
-}
-
 std::vector<PinSignalState> vic_base_t::get_layout_pin_states(ChipLayout& layout) {
-    return get_vic_pin_states(this, &layout, bus_snapshot_);
+    return build_pin_states(layout, bus_snapshot_, [this](auto& ps) {
+        // Video output pins (always driven)
+        ps[37].signal_level = true; // LUMA (pin 38)
+        ps[37].drive_direction = true;
+        ps[37].high_impedance = false;
+        ps[36].signal_level = true; // CHROMA (pin 37)
+        ps[36].drive_direction = true;
+        ps[36].high_impedance = false;
+        ps[38].signal_level = true; // CSYNC (pin 39)
+        ps[38].drive_direction = true;
+        ps[38].high_impedance = false;
+
+        // Sound output (pin 26) — active if any voice is enabled
+        bool any_voice_on = false;
+        for (int v = BASS_FREQ; v <= NOISE_FREQ; v++) {
+            if (regs_[v] & VIC_VOICE_ENABLE) {
+                any_voice_on = true;
+                break;
+            }
+        }
+        ps[25].signal_level = any_voice_on; // SOUND (pin 26)
+        ps[25].drive_direction = true;
+        ps[25].high_impedance = false;
+    });
 }
 
 static const char* get_vic_type_name(const vic_base_t* vic) {
