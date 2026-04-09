@@ -198,6 +198,12 @@ private:
     uint32_t audio_sample_counter_;
     uint32_t audio_sample_period_;      // cached: NTSC=37, PAL=33
 
+    // Boot warp — run at max speed until PPU rendering is enabled.
+    // Many NES games spend 2-5 seconds initializing RAM/VRAM before
+    // enabling BG/sprite rendering.  Warping through this period gives
+    // near-instant boot in the GUI and faster test runs.
+    bool boot_warp_ = false;
+
     // Audio thread separation — when active, synthesis runs off the emu thread.
     // In single-threaded mode both are null/stopped and the legacy path applies.
     AudioThread audio_thread_;
@@ -247,6 +253,9 @@ public:
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
 
     void* get_video_port_ptr() override { return video_port_.get(); }
+
+    // Boot warp — skip frame sync until PPU renders
+    bool is_warping() const override { return boot_warp_; }
 
     // NES-specific public methods
     void eject_cartridge();

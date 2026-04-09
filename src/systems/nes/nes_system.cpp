@@ -436,6 +436,9 @@ void NintendoSystem<V>::reset() {
     // separately when the emulation thread restarts.
     audio_ring_buf_.reset();
 
+    // Re-enter boot warp — skip frame sync until PPU enables rendering
+    boot_warp_ = (cartridge_ != nullptr);
+
     // Reset audio thread synthesis state
     if (apu_synth_engine_) {
         audio_thread_.stop();
@@ -454,6 +457,13 @@ void NintendoSystem<V>::run_frame() {
     }
 
     video_port_->swap_frame();
+
+    // End boot warp once the PPU has rendering enabled (BG or sprites).
+    // PPUMASK bits 3-4: show_bg | show_spr.  Once the game writes these,
+    // the initialization period is over and we resume normal frame pacing.
+    if (boot_warp_ && (board_.ppu.regs_[PPUMASK] & 0x18)) {
+        boot_warp_ = false;
+    }
 
     // Signal audio thread with accumulated CPU cycles
     if (apu_synth_engine_) {
@@ -668,6 +678,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         // Reset system with new cartridge
         reset();
         system_ready_ = true;
+        boot_warp_ = true;  // Warp through blank initialization frames
 
         // Set program title to bare filename (VFS-aware)
         std::string fname = vfs_filename(filepath);

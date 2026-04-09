@@ -15,6 +15,8 @@ int main(int argc, char** argv) {
     int requested_frames = 300;
     bool quiet = false;
     bool gfx_check = false;
+    bool early_exit = false;   // --early-exit: stop as soon as video output detected
+    int early_exit_interval = 30;  // check GFX every N frames during early-exit
     int first_positional = 1;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
@@ -25,6 +27,10 @@ int main(int argc, char** argv) {
             first_positional = i + 1;
         } else if (strcmp(argv[i], "--gfx") == 0) {
             gfx_check = true;
+            first_positional = i + 1;
+        } else if (strcmp(argv[i], "--early-exit") == 0) {
+            early_exit = true;
+            gfx_check = true;  // implies --gfx
             first_positional = i + 1;
         } else {
             first_positional = i;
@@ -108,16 +114,45 @@ int main(int argc, char** argv) {
         
         // Run enough frames for boot + program loading
         int total_frames = requested_frames;
-        log_info("Running %d frames...\n", total_frames);
+        log_info("Running %d frames%s...\n", total_frames,
+                 early_exit ? " (early-exit on video output)" : "");
         
         // Drain audio periodically to prevent ring-buffer overflow
         float drain_buf[8192];
+        int frames_ran = 0;
+        bool early_exited = false;
+
         for (int i = 0; i < total_frames; i++) {
             system->run_frame();
-            if ((i + 1) % 50 == 0) {
+            frames_ran = i + 1;
+
+            if (frames_ran % 50 == 0) {
                 uint32_t got = system->get_audio_samples(drain_buf, 8192);
-                log_info("  Frame %d - Cycles: %llu, audio: %u samples\n", i + 1,
+                log_info("  Frame %d - Cycles: %llu, audio: %u samples\n", frames_ran,
                        (unsigned long long)system->get_total_cycles(), got);
+            }
+
+            // Early exit: check for video output periodically
+            if (early_exit && frames_ran >= early_exit_interval &&
+                frames_ran % early_exit_interval == 0) {
+                const auto& fd = system->get_last_frame_data();
+                if (fd.signal_output && fd.signal_output_len > 0 &&
+                    fd.signal_type == VideoSignalType::Composite) {
+                    const auto* samples = static_cast<const CompositeVideoSample*>(fd.signal_output);
+                    std::unordered_set<uint8_t> colors;
+                    for (uint32_t j = 0; j < fd.signal_output_len; j++) {
+                        if (!has_flag(samples[j].flags, SyncFlag::Blank)) {
+                            colors.insert(samples[j].color_index);
+                            if (colors.size() > 2) break;  // fast path
+                        }
+                    }
+                    if (colors.size() > 2) {
+                        log_info("  Early exit at frame %d — %zu unique colors detected\n",
+                               frames_ran, colors.size());
+                        early_exited = true;
+                        break;
+                    }
+                }
             }
         }
         log_info("\n");
@@ -140,8 +175,8 @@ int main(int argc, char** argv) {
                 unique = static_cast<int>(colors.size());
             }
             // Machine-readable output (always printed, even in quiet mode)
-            fprintf(stdout, "GFX_RESULT: unique_colors=%d visible_pixels=%d\n",
-                    unique, visible_pixels);
+            fprintf(stdout, "GFX_RESULT: unique_colors=%d visible_pixels=%d frames_ran=%d\n",
+                    unique, visible_pixels, frames_ran);
         }
         
         // Shutdown
