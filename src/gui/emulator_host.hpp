@@ -232,7 +232,7 @@ protected:
 
     /// Speaker simulation filter chain (applied when display has built-in speakers).
     SpeakerSimulation speaker_sim_;
-    bool use_speaker_sim_            = true;  ///< Enable speaker simulation
+    std::atomic<bool> use_speaker_sim_{true};  ///< Enable speaker simulation
 
     /// Cached from display_device_->has_builtin_speakers() — safe for the
     /// audio callback to read without dereferencing display_device_.

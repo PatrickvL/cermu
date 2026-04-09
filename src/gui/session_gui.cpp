@@ -1988,8 +1988,10 @@ void SessionGUI::render_display_settings() {
     if (display_device_->has_builtin_speakers()) {
         ImGui::BulletText("Built-in speaker");
         ImGui::Separator();
-        ImGui::Checkbox("Speaker Simulation", &use_speaker_sim_);
-        if (use_speaker_sim_) {
+        bool speaker_sim = use_speaker_sim_.load(std::memory_order_relaxed);
+        if (ImGui::Checkbox("Speaker Simulation", &speaker_sim))
+            use_speaker_sim_.store(speaker_sim, std::memory_order_relaxed);
+        if (speaker_sim) {
             ImGui::TextDisabled("  LP 5 kHz / HP 150 Hz / resonance 1 kHz");
         }
     }

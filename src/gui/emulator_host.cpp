@@ -742,7 +742,7 @@ void EmulatorHost::sdl_audio_callback(void* userdata, uint8_t* stream, int len) 
         gui->perf_metrics_.audio_underruns.fetch_add(1, std::memory_order_relaxed);
 
     // Apply speaker simulation if enabled and display has built-in speakers
-    if (gui->use_speaker_sim_
+    if (gui->use_speaker_sim_.load(std::memory_order_relaxed)
         && gui->display_has_speakers_.load(std::memory_order_relaxed)
         && gui->speaker_sim_.is_initialized() && written > 0) {
         gui->speaker_sim_.process(out, written);
