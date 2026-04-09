@@ -31,12 +31,14 @@ enum class VDPSpriteModel : uint8_t {
     ORIGINAL,   // 4 sprites/line, 32 total, 8×8 or 16×16, zoom
     SEGA,       // SMS: 8 sprites/line, 64 total, 8×8 or 8×16
     V9938,      // V9938+: sprite mode 2 (16 colors/line, per-line color)
+    GENESIS,    // Genesis: 80 sprites, 20/sprite line, 16×16 base, link chain
 };
 
 enum class VDPPaletteModel : uint8_t {
     FIXED_15,   // TMS9918/A/28/29 — 15 fixed colors + transparent
     PALETTE_512,// V9938 — 16 entries from 512-color 9-bit RGB palette
     PALETTE_YJK,// V9958 — adds YJK/YAE colour encoding (MSX2+)
+    GENESIS_CRAM,// Genesis — 4 palettes × 16 entries, 9-bit RGB (512 colors)
 };
 
 enum class VDPScrollModel : uint8_t {
@@ -44,6 +46,7 @@ enum class VDPScrollModel : uint8_t {
     SEGA,       // SMS/GG — per-line horizontal + column vertical scroll
     V9938,      // V9938 — vertical scroll register only
     V9958,      // V9958 — vertical + horizontal scroll registers
+    GENESIS,    // Genesis — dual playfields with per-cell/per-line scroll
 };
 
 // ============================================================================
@@ -61,6 +64,10 @@ namespace VDPFeatureFlags {
     inline constexpr uint32_t STATUS_EXT       = 1u << 7;  // V9938+: extended status registers
     inline constexpr uint32_t WAIT_STATE       = 1u << 8;  // V9938+: CPU wait signal
     inline constexpr uint32_t SEGA_EXT_LINES   = 1u << 9;  // SMS2 315-5246: 224/240-line modes
+    inline constexpr uint32_t GENESIS_MODE5    = 1u << 10; // Genesis: Mode 5 (128KB VRAM, 2 planes)
+    inline constexpr uint32_t GENESIS_DMA      = 1u << 11; // Genesis: DMA engine (fill/copy/68K→VRAM)
+    inline constexpr uint32_t GENESIS_SHADOW_HL= 1u << 12; // Genesis: shadow/highlight mode
+    inline constexpr uint32_t GENESIS_H40      = 1u << 13; // Genesis: 40-cell (320px) mode
 }
 
 // ============================================================================
