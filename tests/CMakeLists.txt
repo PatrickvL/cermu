@@ -409,6 +409,7 @@ if(EXISTS "${RESID_SRC_DIR}/sid.cc")
         ${SOUND_DIR}/sid_waveform_tables.cpp
         ${CORE_DIR}/chip.cpp
         ${CORE_DIR}/chip_layout.cpp
+        ${CORE_DIR}/chip_registry.cpp
         ${CORE_DIR}/pin_labels.cpp
         ${CORE_DIR}/ioport.cpp
     )
