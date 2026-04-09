@@ -111,13 +111,15 @@ System emulation is functional (MC6845 + Video ULA + SN76489 + 2×VIA all workin
 - BBC Master ACCCON shadow screen RAM: not mapped
 - No file format support means no software can be loaded beyond built-in BASIC.
 
-### 2.5 Sega Master System: ROM Loading Gap — **[INCOMPLETE] S**
-Core emulation runs (Z80A + TMS9918A + SN76489 + mapper), but `load_file()` for .sms
-ROM images is incomplete. Cartridge ROM support exists via mapper infrastructure.
+### 2.5 ~~Sega Master System: ROM Loading~~ — **[DONE]**
+ROM loading implemented: raw `.sms` files with optional 512-byte header detection,
+Sega mapper banking (16KB pages), power-of-2 mirroring. Committed `8ad44293`.
 
-### 2.6 KC85/4: Module Memory Mapping — **[INCOMPLETE] S**
+### 2.6 KC85/4: Module Memory Mapping — **[INCOMPLETE] M** (blocked on module insertion)
 Code contains explicit TODO: "map/unmap module memory based on active bit" for port 0x80.
-Module expansion memory is not banked in/out based on the module control register.
+However, `insert_module()` is never called — module slots are always empty. The mapping
+code is dead until module insertion is exposed via UI or configuration. Reclassified
+from quick-win to medium; depends on a module-insertion mechanism being built first.
 
 ### 2.7 MSX2/MSX2+: Secondary Slot Expansion & Memory Mapper — **[INCOMPLETE] M**
 Primary slot banking with 256 precalculated ModeSnapshots works correctly.
@@ -174,10 +176,10 @@ Enables: Apple IIGS, SNES (Ricoh 5A22 is 65C816-based).
 
 ## 5 — Code Quality & Technical Debt
 
-### 5.1 Storage Devices: malloc/free Instead of RAII — **[QUALITY] S**
-`datasette_1530.cpp` and `drive_1541.cpp` use raw `malloc`/`free` for VFS file data
-(6+ call sites). Should use `std::unique_ptr<uint8_t[]>` with appropriate deleter
-for exception safety and consistency with project C++ style.
+### 5.1 ~~Storage Devices: malloc/free Instead of RAII~~ — **[DONE]**
+`datasette_1530.cpp` and `drive_1541.cpp` were already clean. Remaining `free()` in
+`drive_1541_system.cpp` and `sega_sms_system.cpp` converted to `VfsData` RAII wrapper.
+Committed `ac9156fe`.
 
 ### 5.2 Device GUI Rendering Duplication — **[QUALITY] M**
 ~10 input device `_gui.cpp` files contain near-identical `render_device_ui()` implementations
@@ -189,9 +191,8 @@ Only NES ports are defined in `src/ports/`. Commodore ports (DB-9, IEC, cassette
 Sega ports, Apple ports, etc. are defined system-locally or inline.
 Per coding guidelines, cross-system port definitions belong in `src/ports/`.
 
-### 5.4 ROM Loader MD5 Verification Stub — **[QUALITY] S**
-`rom_loader.cpp` has a TODO for MD5 verification that returns true unconditionally.
-Either implement or remove the dead check.
+### 5.4 ~~ROM Loader MD5 Verification Stub~~ — **[DONE]**
+Dead `rom_loader_verify_md5()` function already removed (no callers existed).
 
 ### 5.5 Performance Metrics Potential Duplication — **[QUALITY] S**
 Both `performance_metrics.hpp` and `performance_tracker.hpp` exist in `src/utils/`.
@@ -256,7 +257,6 @@ SNA, Z80 snapshot, Spectrum TAP, SCL, TRD, BIN, LNX.
 | **DSK** | Amstrad CPC, BBC Micro | Blocks all disc-based software | **M** |
 | **SSD/DSD** | BBC Micro | Standard disc images — no loading without this | **M** |
 | **UEF** | BBC Micro, Acorn Atom | Cassette format — alternative to disc | **M** |
-| **.sms** | Sega Master System | Standard ROM format (parser mostly done) | **S** |
 | **DSK/NIB/2MG** | Apple II | Disk formats — blocks most software | **L** |
 | **WAV/CAS** | MSX | Cassette audio format | **M** |
 | **TAP** | Oric | Standard tape format for Oric | **M** |
@@ -328,12 +328,10 @@ Common patterns across 60+ mappers (bank register sets, address decode helpers, 
 bank update boilerplate) could be extracted into additional composable helpers
 (`BankRegisterSet<N>`, `PrgBankSwitcher<NumBanks>`).
 
-### 9.4 VFS File Read RAII Wrapper — **[QUALITY] S**
-Create a thin RAII wrapper for `vfs_read_file()` results:
-```cpp
-using vfs_data_t = std::unique_ptr<uint8_t[], decltype(&vfs_free)>;
-```
-Eliminates scattered `free()` calls across storage devices and format handlers.
+### 9.4 ~~VFS File Read RAII Wrapper~~ — **[DONE]**
+`VfsData` (`std::unique_ptr<uint8_t[], VfsFreeDeleter>`) already exists in `vfs.hpp`.
+Storage devices converted to use it. Remaining system `load_file()` callers across
+~15 systems still use raw `free()` — low-priority incremental cleanup.
 
 ---
 
@@ -361,11 +359,10 @@ bypass the ring buffer for direct sample output (which would cause races).
 ## 11 — Priority Recommendations
 
 ### Quick Wins (hours, high impact)
-1. SMS `.sms` ROM loading completion (§2.5)
-2. KC85/4 module memory mapping (§2.6)
-3. VFS RAII wrapper (§9.4)
-4. Storage `malloc`/`free` cleanup (§5.1)
-5. ROM loader MD5 stub removal (§5.4)
+1. ~~SMS `.sms` ROM loading completion~~ (§2.5) — **DONE**
+2. ~~VFS RAII wrapper~~ (§9.4) — **DONE** (already existed)
+3. ~~Storage `malloc`/`free` cleanup~~ (§5.1) — **DONE**
+4. ~~ROM loader MD5 stub removal~~ (§5.4) — **DONE** (already removed)
 
 ### Medium Effort, High Value (days)
 6. BBC disc format loading: SSD/DSD (§7.2)
