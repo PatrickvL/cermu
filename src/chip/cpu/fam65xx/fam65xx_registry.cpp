@@ -20,6 +20,9 @@
 #include "chip/cpu/fam65xx/ricoh_2a03.hpp"
 #include "chip/cpu/fam65xx/csg8502.hpp"
 
+// 6502 family — CMOS (extended)
+#include "chip/cpu/fam65xx/hudson_huc6280.hpp"
+
 // 6502 family — NMOS (pin-reduced / banking variants)
 #include "chip/cpu/fam65xx/mos6504.hpp"
 #include "chip/cpu/fam65xx/mos6509.hpp"
@@ -47,3 +50,5 @@ REGISTER_CHIP_TYPE("MOS6504",        MOS6504)
 REGISTER_CHIP_TYPE("MOS6509",        MOS6509)
 REGISTER_CHIP_TYPE("RICOH_5A22",     RICOH_5A22)
 REGISTER_CHIP_TYPE("CSG8502",         CSG8502)
+
+REGISTER_CHIP_TYPE("HuC6280",         HUDSON_HUC6280)

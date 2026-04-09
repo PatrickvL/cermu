@@ -29,7 +29,7 @@
 #include "core/board.hpp"
 #include "core/signal/video_port.hpp"
 #include "core/signal/audio_port.hpp"
-#include "chip/cpu/z80/zilog_z80a.hpp"
+#include "chip/cpu/z80/sharp_sm83.hpp"
 #include "chip/video/gb_ppu/gb_ppu.hpp"
 #include "chip/sound/gb_apu/gb_apu.hpp"
 #include "chip/memory/memory_chip.hpp"
@@ -67,15 +67,15 @@ namespace gb_constants {
     inline constexpr uint8_t IO_IE                 = 0xFF;   // $FFFF Interrupt enable
 }
 
-#define GB_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
+#define GB_BUS_DEFAULT_STATE (SharpSM83::default_bus_state())
 
 // ============================================================================
-// Game Boy Manifest — using Z80A as CPU stand-in (SM83 trait needed later)
+// Game Boy Manifest
 // ============================================================================
 
 template<GameBoyVariant V>
 inline constexpr auto kGameBoyManifest = make_manifest(
-    Slot<ZilogZ80A>{.base_addr = 0x0000, .label = "SM83 (LR35902)"},
+    Slot<SharpSM83>{.base_addr = 0x0000, .label = "SM83 (LR35902)"},
 
     Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x8000,
                   .label = "ROM (bank 0 + switchable)"},
@@ -105,7 +105,7 @@ struct GameBoyBoard : Board<GameBoyBusSpec<V>> {
     using ComponentTuple = typename decltype(kGameBoyManifest<V>)::component_tuple;
     ComponentTuple components_;
 
-    ZilogZ80A& cpu    = std::get<0>(components_);
+    SharpSM83& cpu    = std::get<0>(components_);
     ROMChip&   rom    = std::get<1>(components_);
     RAMChip&   vram   = std::get<2>(components_);
     RAMChip&   extram = std::get<3>(components_);

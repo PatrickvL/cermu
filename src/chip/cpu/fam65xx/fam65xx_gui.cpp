@@ -30,6 +30,7 @@
 #include "chip/cpu/fam65xx/wdc_w65c02s.hpp"
 #include "chip/cpu/fam65xx/wdc65c816.hpp"
 #include "chip/cpu/fam65xx/csg8502.hpp"
+#include "chip/cpu/fam65xx/hudson_huc6280.hpp"
 
 // Include GUI interface first (defines CERMU_HAS_GUI)
 #include "core/chip_layout.hpp"
@@ -283,6 +284,11 @@ template void fam65xx_t<RICOH_5A22Traits>::render_settings_content();
 template ChipLayout* fam65xx_t<RICOH_5A22Traits>::create_chip_layout() const;
 template std::vector<PinSignalState> fam65xx_t<RICOH_5A22Traits>::get_layout_pin_states(ChipLayout&);
 template const char* fam65xx_t<RICOH_5A22Traits>::get_layout_chip_name() const;
+
+template void fam65xx_t<HUDSON_HUC6280Traits>::render_settings_content();
+template ChipLayout* fam65xx_t<HUDSON_HUC6280Traits>::create_chip_layout() const;
+template std::vector<PinSignalState> fam65xx_t<HUDSON_HUC6280Traits>::get_layout_pin_states(ChipLayout&);
+template const char* fam65xx_t<HUDSON_HUC6280Traits>::get_layout_chip_name() const;
 
 } // namespace fam65xx
 

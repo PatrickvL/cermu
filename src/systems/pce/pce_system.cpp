@@ -197,7 +197,7 @@ void PCEngineSystem<V>::tick() {
         irq_pending_ &= ~IRQ1_BIT;
 
     // CPU tick — HuC6280 is a WDC 65C02 derivative
-    pins_ = board_.cpu.template tick<WDC_65C02::Phase::PHI2>(pins_);
+    pins_ = board_.cpu.template tick<HUDSON_HUC6280::Phase::PHI2>(pins_);
 
     // Memory / I/O dispatch (65C02 always performs a bus cycle on PHI2)
     {
@@ -229,7 +229,7 @@ void PCEngineSystem<V>::tick() {
         }
     }
 
-    pins_ = board_.cpu.template tick<WDC_65C02::Phase::PHI1>(pins_);
+    pins_ = board_.cpu.template tick<HUDSON_HUC6280::Phase::PHI1>(pins_);
 
     // IRQ delivery to CPU (active-low on 65C02 IRQ line)
     uint8_t active_irqs = irq_pending_ & ~irq_disable_;
