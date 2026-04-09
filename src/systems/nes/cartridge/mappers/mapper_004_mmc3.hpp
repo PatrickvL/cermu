@@ -111,12 +111,12 @@ public:
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
         // 4 × 8KB PRG banks → 8 × 4KB page pointers
+        const uint32_t prg_mask = static_cast<uint32_t>(prg_rom_size_) - 1;
         for (int slot = 0; slot < 4; slot++) {
             uint32_t bank_base = prg_bank_[slot] * 0x2000;
             for (int half = 0; half < 2; half++) {
-                uint32_t offset = bank_base + half * 0x1000;
-                config.prg_pages[slot * 2 + half] =
-                    (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
+                uint32_t offset = (bank_base + half * 0x1000) & prg_mask;
+                config.prg_pages[slot * 2 + half] = prg_rom_ + offset;
             }
         }
 
@@ -128,13 +128,14 @@ public:
 
     void get_chr_bank_config(MapperChrConfig& config) const override {
         // 8 × 1KB CHR banks → 8 × 1KB page pointers
+        const uint32_t chr_mask = static_cast<uint32_t>(chr_mem_size_) - 1;
         for (int i = 0; i < 8; i++) {
-            uint32_t offset = chr_bank_[i] * 0x0400;
+            uint32_t offset = (chr_bank_[i] * 0x0400) & chr_mask;
             if (chr_is_ram_) {
-                config.chr_pages[i] = (offset < chr_mem_size_) ? chr_mem_ + offset : chr_mem_;
+                config.chr_pages[i] = chr_mem_ + offset;
                 config.chr_writable[i] = true;
             } else {
-                config.chr_pages[i] = (offset < chr_mem_size_) ? chr_mem_ + offset : nullptr;
+                config.chr_pages[i] = chr_mem_ + offset;
                 config.chr_writable[i] = false;
             }
         }

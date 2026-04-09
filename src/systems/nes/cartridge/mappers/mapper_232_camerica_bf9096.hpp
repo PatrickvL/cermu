@@ -36,20 +36,22 @@ public:
         // Each block has 4 × 16KB banks. Outer selects block, inner selects bank.
         uint32_t block_base = outer_block_ * 4;
 
+        const uint32_t prg_mask = static_cast<uint32_t>(prg_rom_size_) - 1;
+
         // $8000-$BFFF: selected inner bank within block
         uint32_t bank_lo = (block_base + inner_bank_) % total_16k;
         uint32_t base_lo = bank_lo * 0x4000;
         for (int i = 0; i < 4; i++) {
-            uint32_t offset = base_lo + i * 0x1000;
-            config.prg_pages[i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
+            uint32_t offset = (base_lo + i * 0x1000) & prg_mask;
+            config.prg_pages[i] = prg_rom_ + offset;
         }
 
         // $C000-$FFFF: fixed to last bank of the same block
         uint32_t bank_hi = (block_base + 3) % total_16k;
         uint32_t base_hi = bank_hi * 0x4000;
         for (int i = 0; i < 4; i++) {
-            uint32_t offset = base_hi + i * 0x1000;
-            config.prg_pages[4 + i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
+            uint32_t offset = (base_hi + i * 0x1000) & prg_mask;
+            config.prg_pages[4 + i] = prg_rom_ + offset;
         }
         config.prg_ram_enabled = false;
     }

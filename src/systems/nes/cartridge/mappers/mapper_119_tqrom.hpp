@@ -81,12 +81,12 @@ public:
     }
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
+        const uint32_t prg_mask = static_cast<uint32_t>(prg_rom_size_) - 1;
         for (int slot = 0; slot < 4; slot++) {
             uint32_t bank_base = prg_bank_[slot] * 0x2000;
             for (int half = 0; half < 2; half++) {
-                uint32_t offset = bank_base + half * 0x1000;
-                config.prg_pages[slot * 2 + half] =
-                    (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
+                uint32_t offset = (bank_base + half * 0x1000) & prg_mask;
+                config.prg_pages[slot * 2 + half] = prg_rom_ + offset;
             }
         }
         config.prg_ram_base = prg_ram_;

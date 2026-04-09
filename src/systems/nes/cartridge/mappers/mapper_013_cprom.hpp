@@ -26,9 +26,10 @@ public:
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
         // Fixed 32KB PRG-ROM
+        const uint32_t prg_mask = static_cast<uint32_t>(prg_rom_size_) - 1;
         for (int i = 0; i < 8; i++) {
-            uint32_t offset = i * 0x1000;
-            config.prg_pages[i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
+            uint32_t offset = (i * 0x1000) & prg_mask;
+            config.prg_pages[i] = prg_rom_ + offset;
         }
         config.prg_ram_enabled = false;
     }
