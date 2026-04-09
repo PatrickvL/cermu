@@ -18,6 +18,7 @@ std::vector<OsArchiveEntry> os_archive_list(const char*) { return {}; }
 std::vector<OsArchiveEntry> os_archive_list_from_memory(const uint8_t*, size_t) { return {}; }
 uint8_t* os_archive_extract(const char*, const char*, size_t*) { return nullptr; }
 uint8_t* os_archive_extract_from_memory(const uint8_t*, size_t, const char*, size_t*) { return nullptr; }
+uint8_t* os_decompress(const uint8_t*, size_t, size_t*) { return nullptr; }
 const char* const* os_archive_extensions() { static const char* e[] = { nullptr }; return e; }
 #else // !CERMU_NO_LIBARCHIVE
 #include <cstdio>
@@ -326,6 +327,37 @@ uint8_t* os_archive_extract_from_memory(const uint8_t* data, size_t data_size,
 
 const char* const* os_archive_extensions() {
     return s_archive_extensions;
+}
+
+// ============================================================================
+// Standalone Decompression — gzip, bzip2, xz, zstd, lz4
+// ============================================================================
+
+uint8_t* os_decompress(const uint8_t* data, size_t data_size, size_t* out_size) {
+    if (!data || data_size == 0 || !out_size) return nullptr;
+    *out_size = 0;
+
+    struct archive* a = archive_read_new();
+    if (!a) return nullptr;
+
+    archive_read_support_filter_all(a);
+    archive_read_support_format_raw(a);
+
+    if (archive_read_open_memory(a, data, data_size) != ARCHIVE_OK) {
+        archive_read_free(a);
+        return nullptr;
+    }
+
+    struct archive_entry* entry;
+    if (archive_read_next_header(a, &entry) != ARCHIVE_OK) {
+        archive_read_free(a);
+        return nullptr;
+    }
+
+    // Read decompressed data
+    uint8_t* result = read_current_entry(a, 0, out_size);
+    archive_read_free(a);
+    return result;
 }
 
 #endif // !CERMU_NO_LIBARCHIVE
