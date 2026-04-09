@@ -94,14 +94,20 @@ struct I2C_EEPROM {
             case State::WORD_ADDR:
             case State::WRITE_DATA:
                 if (bit_count < 8) {
+                    // Clocks 1-8: shift in data bits (MSB first)
                     shift_reg = static_cast<uint8_t>((shift_reg << 1) | (sda ? 1 : 0));
                     bit_count++;
                     sda_out = true;  // release SDA during data phase
-                }
-                if (bit_count == 8) {
-                    // Byte complete — process and send ACK next edge
-                    sda_out = false;  // ACK (pull SDA low)
+                } else if (bit_count == 8) {
+                    // Clock 9: ACK cycle — pull SDA low and process byte
+                    sda_out = false;  // ACK
                     process_byte();
+                    // READ_DATA: process_byte() already set bit_count = 0
+                    // for data output.  Write states: mark ACK sent so the
+                    // falling edge resets for the next byte.
+                    if (state != State::READ_DATA) {
+                        bit_count = 9;
+                    }
                 }
                 break;
 
@@ -130,9 +136,9 @@ struct I2C_EEPROM {
             }
         }
 
-        // --- SCL falling edge: advance after ACK ---
+        // --- SCL falling edge: release SDA after ACK cycle ---
         if (prev_scl && !scl) {
-            if (bit_count >= 8 && state != State::READ_DATA) {
+            if (bit_count == 9 && state != State::READ_DATA) {
                 bit_count = 0;
                 shift_reg = 0;
                 sda_out = true;  // release SDA after ACK cycle
@@ -247,9 +253,13 @@ public:
         // EEPROM read-back via PRG-RAM bus dispatch.
         // PRG-RAM is in flat_mem, so ptr_to_block() resolves correctly.
         // The mapper fills this region with the EEPROM SDA output bit.
+        // Write-protect so CPU writes to $6000-$7FFF reach register_write()
+        // instead of being absorbed by the PRG-RAM block — FCG boards have
+        // mapper registers at $6000-$600F, not writable SRAM.
         config.prg_ram_base = prg_ram_;
         config.prg_ram_size = 8192;
         config.prg_ram_enabled = true;
+        config.prg_ram_write_protected = true;
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {
@@ -262,15 +272,17 @@ public:
     }
 
     bool register_write(uint16_t addr, uint8_t data) override {
-        // FCG registers are at $6000-$600F or $8000-$800F depending on board
+        // FCG registers respond to $6000-$FFFF — real hardware decodes
+        // only A3-A0 (and sometimes A14/A15), so registers mirror across
+        // the full cartridge address space.  $6000-$7FFF and $8000-$FFFF
+        // writes both resolve to the same 16 register slots.
         uint8_t reg;
-        if (addr >= 0x8000 && addr <= 0x800F) {
-            reg = addr & 0x0F;
-        } else if (addr >= 0x6000 && addr <= 0x600F) {
+        if (addr >= 0x6000) {
             reg = addr & 0x0F;
         } else {
             return false;
         }
+
 
         switch (reg) {
             case 0x00: case 0x01: case 0x02: case 0x03:
