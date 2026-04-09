@@ -648,25 +648,13 @@ uint8_t BBCMicroSystem::scan_keyboard(uint8_t column) const {
 bool BBCMicroSystem::load_file(const char* filepath) {
     if (!filepath || !memory_) return false;
 
-    format_load_result_t result;
-    if (!format_load_file(filepath, &result)) {
-        log_info("BBC Micro: Failed to load file: %s\n", result.error_msg);
-        return false;
-    }
-
     format_apply_config_t cfg{};
     cfg.ram         = memory_;
     cfg.ram_size    = 0x8000;  // 32 KB RAM
-    cfg.ram_base    = 0x0000;
     cfg.cpu         = &board_.m6502;
-    cfg.system_name = "BBC Micro";
+    cfg.system_name = get_descriptor().name;
 
-    bool ok = format_apply_program(result, cfg);
-    result.release();
-    if (ok) return true;
-
-    log_info("BBC Micro: Unsupported format for file: %s\n", filepath);
-    return false;
+    return format_load_and_apply(filepath, cfg);
 }
 
 // ============================================================================

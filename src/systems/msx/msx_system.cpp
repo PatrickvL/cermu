@@ -27,6 +27,7 @@
 #include "core/config/path_discovery.hpp"
 #include "core/formats/format_registry.hpp"
 #include "core/formats/format_load_helpers.hpp"
+#include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <cstdio>
 #include <vector>
@@ -465,49 +466,39 @@ bool MSXSystem<V>::load_file(const char* filepath) {
 
     // Try format registry first (handles CAS tape files)
     {
+        format_apply_config_t cfg{};
+        cfg.ram         = board_.main_ram.data();
+        cfg.ram_size    = 0x10000;  // 64 KB
+        cfg.cpu         = &board_.z80;
+        cfg.system_name = Traits::name;
+
         format_load_result_t result;
         if (format_load_file(filepath, &result)) {
-            format_apply_config_t cfg{};
-            cfg.ram         = board_.main_ram.data();
-            cfg.ram_size    = 0x10000;  // 64 KB
-            cfg.ram_base    = 0x0000;
-            cfg.cpu         = &board_.z80;
-            cfg.system_name = Traits::name;
-
             bool ok = format_apply_program(result, cfg);
             result.release();
             if (ok) return true;
         }
     }
 
-    // Fall through to ROM cartridge loading (existing path)
+    // Fall through to ROM cartridge loading
 
-    // Read the ROM file
-    std::vector<uint8_t> rom_data;
-    {
-        FILE* f = fopen(filepath, "rb");
-        if (!f) {
-            log_info("%s: Cannot open file: %s\n", Traits::name, filepath);
-            return false;
-        }
-        fseek(f, 0, SEEK_END);
-        long size = ftell(f);
-        fseek(f, 0, SEEK_SET);
-        if (size <= 0 || size > 65536) {
-            log_info("%s: Invalid ROM size (%ld bytes): %s\n",
-                     Traits::name, size, filepath);
-            fclose(f);
-            return false;
-        }
-        rom_data.resize(static_cast<size_t>(size));
-        fread(rom_data.data(), 1, rom_data.size(), f);
-        fclose(f);
+    size_t file_size = 0;
+    VfsData file_data(vfs_read_file(filepath, &file_size));
+    if (!file_data) {
+        log_info("%s: Cannot open file: %s\n", Traits::name, filepath);
+        return false;
+    }
+
+    if (file_size == 0 || file_size > 65536) {
+        log_info("%s: Invalid ROM size (%zu bytes): %s\n",
+                 Traits::name, file_size, filepath);
+        return false;
     }
 
     // Determine cartridge page placement based on size:
     //   ≤32 KB ROMs → $4000 (pages 1-2)
     //   >32 KB ROMs → $0000 (pages 0-3)
-    cart_size_ = static_cast<uint32_t>(rom_data.size());
+    cart_size_ = static_cast<uint32_t>(file_size);
     if (cart_size_ <= 32768) {
         cart_start_page_ = 1;
     } else {
@@ -524,7 +515,7 @@ bool MSXSystem<V>::load_file(const char* filepath) {
         return false;
     }
     std::memset(cart_buf, 0xFF, 65536);  // fill unused space with $FF
-    std::memcpy(cart_buf, rom_data.data(), rom_data.size());
+    std::memcpy(cart_buf, file_data.get(), file_size);
     cart_loaded_ = true;
 
     // Regenerate snapshots with cartridge mapped, reload current config

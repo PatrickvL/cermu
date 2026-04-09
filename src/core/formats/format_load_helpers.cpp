@@ -6,8 +6,10 @@
 
 #include "core/cermu.hpp"
 #include "core/formats/format_load_helpers.hpp"
+#include "core/formats/format_registry.hpp"
 #include "core/formats/tape_common.hpp"
 #include "core/formats/disk_image_common.hpp"
+#include "core/vfs/vfs.hpp"
 #include "chip/cpu/cpu_chip_base.hpp"
 #include <cstring>
 
@@ -89,4 +91,60 @@ bool format_apply_program(const format_load_result_t& result,
     }
 
     return false;
+}
+
+// ============================================================================
+// format_load_and_apply
+// ============================================================================
+
+bool format_load_and_apply(const char* filepath, const format_apply_config_t& cfg) {
+    const char* name = cfg.system_name ? cfg.system_name : "System";
+
+    format_load_result_t result;
+    if (!format_load_file(filepath, &result)) {
+        log_info("%s: Failed to load file: %s\n", name, result.error_msg);
+        return false;
+    }
+
+    bool ok = format_apply_program(result, cfg);
+    result.release();
+    if (ok) return true;
+
+    log_info("%s: Unsupported format for file: %s\n", name, filepath);
+    return false;
+}
+
+// ============================================================================
+// load_raw_rom_mirrored
+// ============================================================================
+
+bool load_raw_rom_mirrored(const char* filepath, uint8_t* dest,
+                           size_t window_size, size_t max_rom_size,
+                           const char* system_name,
+                           std::string& program_title) {
+    if (!filepath || !dest) return false;
+
+    size_t file_size = 0;
+    VfsData file_data(vfs_read_file(filepath, &file_size));
+    if (!file_data) {
+        log_info("%s: Failed to open file: %s\n", system_name, filepath);
+        return false;
+    }
+
+    if (file_size == 0 || file_size > max_rom_size) {
+        log_info("%s: Invalid ROM size: %zu bytes (max %zu)\n",
+                 system_name, file_size, max_rom_size);
+        return false;
+    }
+
+    // Mirror smaller ROMs to fill the address window
+    for (size_t offset = 0; offset < window_size; offset += file_size)
+        std::memcpy(dest + offset, file_data.get(),
+                    std::min(file_size, window_size - offset));
+
+    std::string name = vfs_filename(filepath);
+    program_title = name.empty() ? filepath : name;
+
+    log_info("%s: Loaded %zu bytes\n", system_name, file_size);
+    return true;
 }

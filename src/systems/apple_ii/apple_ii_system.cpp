@@ -228,26 +228,14 @@ template<AppleIIVariant V>
 bool AppleIISystem<V>::load_file(const char* filepath) {
     if (!filepath) return false;
 
-    format_load_result_t result;
-    if (!format_load_file(filepath, &result)) {
-        log_info("%s: Failed to load file: %s\n", Traits::name, result.error_msg);
-        return false;
-    }
-
     format_apply_config_t cfg{};
     cfg.ram           = board_.ram.data();
     cfg.ram_size      = Traits::ram_size;
-    cfg.ram_base      = 0x0000;
     cfg.cpu           = &board_.cpu;
     cfg.system_name   = Traits::name;
     cfg.raw_load_addr = 0x0800;  // Raw disc images load at $0800
 
-    bool ok = format_apply_program(result, cfg);
-    result.release();
-    if (ok) return true;
-
-    log_info("%s: Unsupported format for file: %s\n", Traits::name, filepath);
-    return false;
+    return format_load_and_apply(filepath, cfg);
 }
 
 // ============================================================================

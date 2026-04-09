@@ -14,6 +14,7 @@
 #include "core/formats/format_handler.hpp"
 #include <cstdint>
 #include <cstddef>
+#include <string>
 
 class CpuChipBase;
 
@@ -50,3 +51,34 @@ struct format_apply_config_t {
  */
 bool format_apply_program(const format_load_result_t& result,
                           const format_apply_config_t& cfg);
+
+/**
+ * Full load-file pipeline: format_load_file → format_apply_program → release.
+ *
+ * Replaces the common 15-line boilerplate pattern found in most system
+ * load_file() implementations.  Calls format_load_file(), applies the result
+ * via format_apply_program(), releases resources, and logs on failure.
+ *
+ * @return true if a file was loaded and applied successfully
+ */
+bool format_load_and_apply(const char* filepath, const format_apply_config_t& cfg);
+
+/**
+ * Load a raw ROM image from disk, mirror it into a destination buffer, set
+ * program_title, and log the result.
+ *
+ * Used by cartridge-based systems (ColecoVision, SG-1000, SVI, etc.) where
+ * smaller ROMs are mirrored to fill a fixed-size address window.
+ *
+ * @param filepath        Path to the ROM file (supports VFS / archive paths)
+ * @param dest            Destination buffer (e.g. board_.cart.data())
+ * @param window_size     Address window to fill via mirroring (e.g. 0x8000)
+ * @param max_rom_size    Maximum acceptable ROM size (usually == window_size)
+ * @param system_name     Name string for log messages
+ * @param program_title   [out] Receives the bare filename
+ * @return true on success
+ */
+bool load_raw_rom_mirrored(const char* filepath, uint8_t* dest,
+                           size_t window_size, size_t max_rom_size,
+                           const char* system_name,
+                           std::string& program_title);
