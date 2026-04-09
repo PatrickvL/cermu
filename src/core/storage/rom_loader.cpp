@@ -229,12 +229,3 @@ bool rom_loader_load_from_root(const char* rom_root_path, const char* filenames,
 
     return rom_loader_load_to_buffer(path_buf, expected_size, dest_buffer, dest_size);
 }
-
-bool rom_loader_verify_md5(const uint8_t* buffer, size_t size, const char* expected_md5) {
-    // TODO: Implement MD5 verification
-    // For now, just return true to allow ROM loading without verification
-    (void)buffer;
-    (void)size;
-    (void)expected_md5;
-    return true;
-}
