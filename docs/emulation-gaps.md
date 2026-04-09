@@ -188,15 +188,19 @@ Enables: Apple IIGS, SNES (Ricoh 5A22 is 65C816-based).
 `drive_1541_system.cpp` and `sega_sms_system.cpp` converted to `VfsData` RAII wrapper.
 Committed `ac9156fe`.
 
-### 5.2 Device GUI Rendering Duplication — **[QUALITY] M**
-~10 input device `_gui.cpp` files contain near-identical `render_device_ui()` implementations
-(~60 lines each of keymap preset UI, autofire controls, analog stats).
-Extract common ImGui widget helpers into shared utility.
+### 5.2 Device GUI Rendering Duplication — **[QUALITY] S** (partially done)
+Extracted `render_autofire_rate_slider()` into `InputPeripheralDevice` base class,
+migrated `JoystickDevice` and `NesStandardController`. Committed `0b24d09f`.
+Remaining: keymap preset UI and analog stats still duplicated in some devices
+but less severe (~3–4 lines each, not the 9-line autofire block).
 
-### 5.3 Port Definitions Under-Populated — **[QUALITY] M**
-Only NES ports are defined in `src/ports/`. Commodore ports (DB-9, IEC, cassette, user, expansion),
-Sega ports, Apple ports, etc. are defined system-locally or inline.
-Per coding guidelines, cross-system port definitions belong in `src/ports/`.
+### 5.3 ~~Port Definitions Under-Populated~~ — **[CLOSED]**
+Audit shows ports are already well-structured: DB-9 joystick shared across 5 systems,
+IEC/cassette/user ports shared across Commodore family, NES ports in `src/ports/`.
+System-local expansion ports (NES 48-pin, VIC-20 44-pin, Apple 44-pin, MSX cartridge)
+are genuinely distinct connectors — consolidating them would be incorrect.
+Minor note: Apple 1 cassette (analog `CASS_IN`/`CASS_OUT`) shares `PortType::CASSETTE_PORT`
+with Commodore datasette (motor control) — harmless since devices never cross systems.
 
 ### 5.4 ~~ROM Loader MD5 Verification Stub~~ — **[DONE]**
 Dead `rom_loader_verify_md5()` function already removed (no callers existed).
@@ -412,8 +416,8 @@ Committed `41e0ff44`.
 10. ~~Amstrad CPC DSK format loading~~ (§7.2) — **DONE**
 11. Spectrum ULA memory contention (§1.1)
 12. MSX2 memory mapper + sub-slot expansion (§2.7)
-13. Device GUI deduplication (§5.2)
-14. Port definitions consolidation (§5.3)
+13. ~~Device GUI deduplication~~ (§5.2) — **DONE** (autofire slider extracted; residual minimal)
+14. ~~Port definitions consolidation~~ (§5.3) — **CLOSED** (already well-structured)
 15. NES mapper regression tests (§6.3)
 16. Missing system test runners (§6.1)
 
