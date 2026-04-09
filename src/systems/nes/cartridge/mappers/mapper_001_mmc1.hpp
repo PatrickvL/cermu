@@ -104,8 +104,9 @@ public:
                 uint32_t offset = bank_base + i * 0x1000;
                 config.prg_pages[i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
             }
-            // Fixed last 16KB within the 256KB half
-            uint32_t last_base = prg_base + 0x3C000; // last 16KB of 256KB half
+            // Fixed last 16KB within the current PRG half
+            uint32_t half_size = (prg_rom_size_ > 0x40000) ? 0x40000 : static_cast<uint32_t>(prg_rom_size_);
+            uint32_t last_base = prg_base + half_size - 0x4000;
             for (int i = 0; i < 4; i++) {
                 uint32_t offset = last_base + i * 0x1000;
                 config.prg_pages[4 + i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
