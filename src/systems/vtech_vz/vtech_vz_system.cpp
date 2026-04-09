@@ -10,8 +10,12 @@
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
+#include "core/formats/format_registry.hpp"
+#include "core/formats/format_load_helpers.hpp"
 #include <cstring>
 #include <cstdio>
+
+
 
 // ============================================================================
 // HARDWARE TRAITS
@@ -229,8 +233,27 @@ void VTechVZSystem<V>::run_frame() {
 // ============================================================================
 
 template<VZVariant V>
-bool VTechVZSystem<V>::load_file(const char* /*filepath*/) {
-    // TODO: support VZ tape format (.vz)
+bool VTechVZSystem<V>::load_file(const char* filepath) {
+    if (!filepath) return false;
+
+    format_load_result_t result;
+    if (!format_load_file(filepath, &result)) {
+        log_info("%s: Failed to load file: %s\n", Traits::name, result.error_msg);
+        return false;
+    }
+
+    format_apply_config_t cfg{};
+    cfg.ram         = board_.ram.data();
+    cfg.ram_size    = Traits::ram_size;
+    cfg.ram_base    = vtech_vz_constants::USER_RAM_START;  // $7800
+    cfg.cpu         = &board_.z80;
+    cfg.system_name = Traits::name;
+
+    bool ok = format_apply_program(result, cfg);
+    result.release();
+    if (ok) return true;
+
+    log_info("%s: Unsupported format for file: %s\n", Traits::name, filepath);
     return false;
 }
 

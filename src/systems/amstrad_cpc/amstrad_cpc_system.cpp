@@ -10,6 +10,9 @@
 #include "core/cermu.hpp"
 #include "systems/amstrad_cpc/amstrad_cpc_system.hpp"
 #include "core/system_registry.hpp"
+#include "core/formats/format_registry.hpp"
+#include "core/formats/format_load_helpers.hpp"
+#include "core/formats/cpr_format.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -406,6 +409,48 @@ bus_state_t AmstradCPCSystem<M>::io_tick(bus_state_t pins) {
     }
 
     return pins;
+}
+
+template<CPCModel M>
+bool AmstradCPCSystem<M>::load_file(const char* filepath) {
+    if (!filepath) return false;
+
+    format_load_result_t result;
+    if (!format_load_file(filepath, &result)) {
+        log_info("%s: Failed to load file: %s\n", Traits::name, result.error_msg);
+        return false;
+    }
+
+    uint8_t* ram = board_.ram.data();
+
+    // CPR cartridge — load ROM banks directly (CPC Plus specific)
+    if (result.format == &CPR_FORMAT_DESCRIPTOR && result.type == FORMAT_LOAD_RAW) {
+        size_t len = result.program.data_size;
+        if (len > 0x10000) len = 0x10000;
+        std::memcpy(ram, result.program.data, len);
+
+        const auto* hdr = reinterpret_cast<const cpr_header_t*>(result.metadata);
+        log_info("%s: CPR loaded %d ROM banks (%zu bytes)\n",
+                 Traits::name, hdr->num_banks, len);
+        reset();
+        result.release();
+        return true;
+    }
+
+    // Standard program / raw loading via shared helper
+    format_apply_config_t cfg{};
+    cfg.ram         = ram;
+    cfg.ram_size    = 0x10000;  // 64 KB
+    cfg.ram_base    = 0x0000;
+    cfg.cpu         = &board_.z80;
+    cfg.system_name = Traits::name;
+
+    bool ok = format_apply_program(result, cfg);
+    result.release();
+    if (ok) return true;
+
+    log_info("%s: Unsupported format for file: %s\n", Traits::name, filepath);
+    return false;
 }
 
 template<CPCModel M>

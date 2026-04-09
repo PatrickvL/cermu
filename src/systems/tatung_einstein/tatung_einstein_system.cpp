@@ -341,9 +341,8 @@ bool TatungEinsteinSystem::load_file(const char* filepath) {
     rom_enabled_ = false;
     configure_bus_memory_map();
 
-    // Set CPU entry point and reset
-    using namespace z80::reg;
-    board_.z80.set(PC, load_addr);
+    // Set CPU entry point
+    board_.z80.set_pc(load_addr);
 
     std::string name = vfs_filename(filepath);
     program_title_ = name.empty() ? filepath : name;

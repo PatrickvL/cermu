@@ -3,6 +3,8 @@
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
 #include "core/system_registry.hpp"
+#include "core/formats/format_registry.hpp"
+#include "core/formats/format_load_helpers.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -644,17 +646,26 @@ uint8_t BBCMicroSystem::scan_keyboard(uint8_t column) const {
 // ============================================================================
 
 bool BBCMicroSystem::load_file(const char* filepath) {
-    log_info("BBC Micro: Loading file: %s\n", filepath);
-    const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
-    if (!ext) {
-        log_info("BBC Micro: Unknown file type\n");
+    if (!filepath || !memory_) return false;
+
+    format_load_result_t result;
+    if (!format_load_file(filepath, &result)) {
+        log_info("BBC Micro: Failed to load file: %s\n", result.error_msg);
         return false;
     }
 
-    // TODO: Implement SSD/DSD disc image loading
-    // TODO: Implement UEF tape loading
-    // TODO: Implement sideways ROM loading (.rom)
-    log_info("BBC Micro: File format not yet supported: %s\n", ext);
+    format_apply_config_t cfg{};
+    cfg.ram         = memory_;
+    cfg.ram_size    = 0x8000;  // 32 KB RAM
+    cfg.ram_base    = 0x0000;
+    cfg.cpu         = &board_.m6502;
+    cfg.system_name = "BBC Micro";
+
+    bool ok = format_apply_program(result, cfg);
+    result.release();
+    if (ok) return true;
+
+    log_info("BBC Micro: Unsupported format for file: %s\n", filepath);
     return false;
 }
 

@@ -25,9 +25,13 @@
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
+#include "core/formats/format_registry.hpp"
+#include "core/formats/format_load_helpers.hpp"
 #include <cstring>
 #include <cstdio>
 #include <vector>
+
+
 
 // ============================================================================
 // HARDWARE TRAITS
@@ -458,6 +462,25 @@ bus_state_t MSXSystem<V>::io_tick(bus_state_t pins) {
 template<MSXVariant V>
 bool MSXSystem<V>::load_file(const char* filepath) {
     if (!filepath) return false;
+
+    // Try format registry first (handles CAS tape files)
+    {
+        format_load_result_t result;
+        if (format_load_file(filepath, &result)) {
+            format_apply_config_t cfg{};
+            cfg.ram         = board_.main_ram.data();
+            cfg.ram_size    = 0x10000;  // 64 KB
+            cfg.ram_base    = 0x0000;
+            cfg.cpu         = &board_.z80;
+            cfg.system_name = Traits::name;
+
+            bool ok = format_apply_program(result, cfg);
+            result.release();
+            if (ok) return true;
+        }
+    }
+
+    // Fall through to ROM cartridge loading (existing path)
 
     // Read the ROM file
     std::vector<uint8_t> rom_data;
