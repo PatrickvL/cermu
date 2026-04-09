@@ -101,7 +101,12 @@ public:
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
         mapper_helpers::set_prg_8k_banks(config, prg_rom_, prg_rom_size_, prg_bank_);
-        config.prg_ram_enabled = false;
+        // Write-protect $6000-$7FFF so outer bank register writes
+        // reach register_write() instead of going to PRG-RAM.
+        config.prg_ram_base = prg_ram_;
+        config.prg_ram_size = 8192;
+        config.prg_ram_enabled = (prg_ram_ != nullptr);
+        config.prg_ram_write_protected = true;
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {
