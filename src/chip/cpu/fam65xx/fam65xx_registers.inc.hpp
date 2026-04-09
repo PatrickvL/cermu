@@ -32,6 +32,9 @@ public:
 template <typename T> T get(RegIdx<T> idx) const { return regs_.get(idx); }
 template <typename T, typename U> void set(RegIdx<T> idx, U val) { regs_.set(idx, val); }
 
+/// CpuChipBase override — set program counter from uint32_t.
+void set_pc(uint32_t addr) override { regs_[PC] = static_cast<uint16_t>(addr); }
+
 // ========================================================================
 // WIDTH-AWARE NAMED ACCESSORS
 // ========================================================================

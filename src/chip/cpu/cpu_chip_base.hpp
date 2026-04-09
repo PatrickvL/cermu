@@ -27,4 +27,9 @@ public:
     /// Default pins = 0 is safe for callers that don't need to preserve
     /// existing bus signals (the next tick overwrites them anyway).
     virtual bus_state_t reset(bus_state_t pins = 0) = 0;
+
+    /// Set the program counter.  Default is a no-op; concrete CPU families
+    /// (fam65xx_t, z80_t, …) override to write their PC register.
+    /// Uses uint32_t so 32-bit CPUs (m680x0) work without a separate overload.
+    virtual void set_pc(uint32_t /*addr*/) {}
 };
