@@ -196,7 +196,7 @@ struct MapperFactory {
             // missing: 141–150 — misc rare/pirate mappers (148/149=Sachen)
             case 151: return std::make_unique<Mapper151>(prg_banks, chr_banks);
             case 152: return std::make_unique<Mapper152>(prg_banks, chr_banks);
-            // missing: 153 — Bandai (rare, SRAM variant)
+            case 153: return std::make_unique<Mapper153>(prg_banks, chr_banks);
             case 154: return std::make_unique<Mapper154>(prg_banks, chr_banks);
             // missing: 155 — MMC1A (rare)
             case 156: return std::make_unique<Mapper156>(prg_banks, chr_banks);
