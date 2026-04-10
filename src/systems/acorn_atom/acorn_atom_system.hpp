@@ -47,9 +47,9 @@ inline constexpr auto kAtomManifest = make_manifest(
     Slot<RAMChip>{.base_addr = 0x8000, .size_bytes = 0x2000, .label = "Video RAM"},
     Slot<i8255_t>{.base_addr = 0xB000, .addr_mask = 0xFFFC, .label = "i8255 PPI"},
     Slot<mos6522_t>{.base_addr = 0xB800, .addr_mask = 0xFFF0, .label = "VIA 6522"},
-    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 0x1000, .label = "BASIC", .rom = {"atom_basic.rom|BASIC.ROM|basic.rom"}},
-    Slot<ROMChip>{.base_addr = 0xD000, .size_bytes = 0x0800, .label = "FP ROM", .rom = {"atom_fp.rom|FP.ROM|fp.rom", true}},
-    Slot<ROMChip>{.base_addr = 0xF000, .size_bytes = 0x1000, .label = "OS ROM", .rom = {"atom_os.rom|ABASIC.ROM|os.rom"}},
+    Slot<ROMChip>{.base_addr = 0xC000, .size_bytes = 0x1000, .label = "BASIC", .rom = {"atom_basic.rom|abasic.rom|ABASIC.ROM|BASIC.ROM|basic.rom"}},
+    Slot<ROMChip>{.base_addr = 0xD000, .size_bytes = 0x0800, .label = "FP ROM", .rom = {"atom_fp.rom|afloat.rom|FP.ROM|fp.rom", true}},
+    Slot<ROMChip>{.base_addr = 0xF000, .size_bytes = 0x1000, .label = "OS ROM", .rom = {"atom_os.rom|akernel.rom|os.rom"}},
     Slot<mc6847_t>{.base_addr = 0x0000, .label = "MC6847 VDG"},
     // Ports
     Slot<PortCassette>{.name = "Cassette Port"},

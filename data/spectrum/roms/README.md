@@ -2,34 +2,19 @@
 
 Amstrad (successor to Sinclair Research) has given blanket permission for the
 non-commercial distribution of Sinclair ROM images for use with emulators.
-The 48K ROM is included in this repository.
+Both the 48K and 128K ROMs are included in this repository.
 
 ## Included ROMs
 
 | Filename | Size | Description |
 |----------|------|-------------|
 | `spectrum48k.rom` | 16 KB | ZX Spectrum 48K ROM (Sinclair BASIC + OS) |
-
-## Additional ROMs (not included)
-
-For 128K emulation the following ROM is also needed:
-
-| Filename | Size | Description |
-|----------|------|-------------|
-| `spectrum128k.rom` | 32 KB | ZX Spectrum 128K ROM (two 16 KB banks) |
-
-## Missing Files
-
-| Filename | Size | Description |
-|----------|------|-------------|
-| `spectrum128k.rom` | 32 KB | **MISSING** — ZX Spectrum 128K ROM (two 16 KB banks) |
-
-The 48K ROM is included. The 128K ROM must be obtained separately.
+| `spectrum128.rom` | 32 KB | ZX Spectrum 128K ROM (two 16 KB banks) |
 
 ## Alternative Filenames Accepted
 
 - **48K:** `spectrum48k.rom`, `48.rom`, `spectrum.rom`, `zx48.rom`
-- **128K:** `spectrum128k.rom`, `128.rom`, `128-0.rom`
+- **128K:** `spectrum128k.rom`, `spectrum128.rom`, `128.rom`, `128-0.rom`
 
 ## Sources
 
