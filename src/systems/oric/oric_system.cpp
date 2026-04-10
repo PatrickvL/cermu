@@ -13,6 +13,7 @@
 #include "core/formats/format_registry.hpp"
 #include "core/formats/format_load_helpers.hpp"
 #include "utils/keyboard_matrix.hpp"
+#include "utils/guest_key_chars.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -277,40 +278,53 @@ void OricSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     // Row 5:  J      U      (n/a)  (n/a)  LEFT   A      ;      -
     // Row 6:  H      I      (n/a)  (n/a)  RIGHT  CAPS   :      =
     // Row 7:  SPACE  O      DEL    (n/a)  DOWN   UP     /      FUNCT
-    static constexpr KeyMatrixMapping mappings[] = {
+    static const KeyMatrixEntry entries[] = {
         // Row 0
-        { SDLK_3, 0, 7 }, { SDLK_x, 0, 6 }, { SDLK_1, 0, 5 }, { SDLK_r, 0, 4 },
-        { SDLK_v, 0, 3 }, { SDLK_5, 0, 2 }, { SDLK_n, 0, 1 }, { SDLK_7, 0, 0 },
+        { 0, 7, '3', 0 }, { 0, 6, 'x', 0 }, { 0, 5, '1', 0 }, { 0, 4, 'r', 0 },
+        { 0, 3, 'v', 0 }, { 0, 2, '5', 0 }, { 0, 1, 'n', 0 }, { 0, 0, '7', 0 },
         // Row 1
-        { SDLK_d, 1, 7 }, { SDLK_q, 1, 6 }, { SDLK_ESCAPE, 1, 5 }, { SDLK_g, 1, 4 },
-        { SDLK_c, 1, 3 }, { SDLK_2, 1, 2 }, { SDLK_b, 1, 1 }, { SDLK_6, 1, 0 },
+        { 1, 7, 'd', 0 }, { 1, 6, 'q', 0 }, { 1, 5, '\x1B', 0 }, { 1, 4, 'g', 0 },
+        { 1, 3, 'c', 0 }, { 1, 2, '2', 0 }, { 1, 1, 'b', 0 }, { 1, 0, '6', 0 },
         // Row 2
-        { SDLK_t, 2, 7 }, { SDLK_w, 2, 6 }, { SDLK_l, 2, 5 }, { SDLK_p, 2, 4 },
-        { SDLK_z, 2, 3 }, { SDLK_s, 2, 2 }, { SDLK_m, 2, 1 }, { SDLK_9, 2, 0 },
+        { 2, 7, 't', 0 }, { 2, 6, 'w', 0 }, { 2, 5, 'l', 0 }, { 2, 4, 'p', 0 },
+        { 2, 3, 'z', 0 }, { 2, 2, 's', 0 }, { 2, 1, 'm', 0 }, { 2, 0, '9', 0 },
         // Row 3
-        { SDLK_f, 3, 7 }, { SDLK_e, 3, 6 },
-        { SDLK_LCTRL, 3, 3 }, { SDLK_RCTRL, 3, 3 },
-        { SDLK_4, 3, 2 }, { SDLK_COMMA, 3, 1 }, { SDLK_8, 3, 0 },
+        { 3, 7, 'f', 0 }, { 3, 6, 'e', 0 },
+        { 3, 3, UKEY_CTRL_L, 0 },
+        { 3, 2, '4', 0 }, { 3, 1, ',', 0 }, { 3, 0, '8', 0 },
         // Row 4
-        { SDLK_k, 4, 7 }, { SDLK_y, 4, 6 },
-        { SDLK_LSHIFT, 4, 2 }, { SDLK_RSHIFT, 4, 2 },
-        { SDLK_PERIOD, 4, 1 }, { SDLK_0, 4, 0 },
+        { 4, 7, 'k', 0 }, { 4, 6, 'y', 0 },
+        { 4, 2, UKEY_SHIFT_L, 0 },
+        { 4, 1, '.', 0 }, { 4, 0, '0', 0 },
         // Row 5
-        { SDLK_j, 5, 7 }, { SDLK_u, 5, 6 },
-        { SDLK_LEFT, 5, 3 }, { SDLK_a, 5, 2 },
-        { SDLK_SEMICOLON, 5, 1 }, { SDLK_MINUS, 5, 0 },
+        { 5, 7, 'j', 0 }, { 5, 6, 'u', 0 },
+        { 5, 3, UKEY_CURSOR_LEFT, 0 }, { 5, 2, 'a', 0 },
+        { 5, 1, ';', 0 }, { 5, 0, '-', 0 },
         // Row 6
-        { SDLK_h, 6, 7 }, { SDLK_i, 6, 6 },
-        { SDLK_RIGHT, 6, 3 }, { SDLK_CAPSLOCK, 6, 2 },
+        { 6, 7, 'h', 0 }, { 6, 6, 'i', 0 },
+        { 6, 3, UKEY_CURSOR_RIGHT, 0 }, { 6, 2, UKEY_CAPS_LOCK, 0 },
         // Row 7
-        { SDLK_SPACE, 7, 7 }, { SDLK_o, 7, 6 },
-        { SDLK_BACKSPACE, 7, 5 }, { SDLK_DELETE, 7, 5 },
-        { SDLK_DOWN, 7, 3 }, { SDLK_UP, 7, 2 },
-        { SDLK_SLASH, 7, 1 },
-        { SDLK_RETURN, 7, 0 },  // FUNCT key — mapped to RETURN for convenience
+        { 7, 7, ' ', 0 }, { 7, 6, 'o', 0 },
+        { 7, 5, '\b', 0 },
+        { 7, 3, UKEY_CURSOR_DOWN, 0 }, { 7, 2, UKEY_CURSOR_UP, 0 },
+        { 7, 1, '/', 0 },
+        { 7, 0, '\r', 0 },  // FUNCT key — mapped to RETURN for convenience
     };
 
-    keyboard_matrix_apply(mappings, keyboard_matrix_, key, pressed);
+    static const HostKeyBinding bindings[] = {
+        { SDLK_LCTRL,    UKEY_CTRL_L       },
+        { SDLK_RCTRL,    UKEY_CTRL_L       },
+        { SDLK_LSHIFT,   UKEY_SHIFT_L      },
+        { SDLK_RSHIFT,   UKEY_SHIFT_L      },
+        { SDLK_LEFT,     UKEY_CURSOR_LEFT  },
+        { SDLK_RIGHT,    UKEY_CURSOR_RIGHT },
+        { SDLK_DOWN,     UKEY_CURSOR_DOWN  },
+        { SDLK_UP,       UKEY_CURSOR_UP    },
+        { SDLK_CAPSLOCK, UKEY_CAPS_LOCK    },
+        { SDLK_DELETE,   '\b'              },  // DELETE → same as BACKSPACE
+    };
+
+    keyboard_matrix_apply(entries, bindings, keyboard_matrix_, key, pressed);
 }
 
 
