@@ -1,5 +1,6 @@
 #include "core/cermu.hpp"
 #include "chip/input/commodore_keyboard.hpp"
+#include "utils/guest_key_chars.hpp"
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -32,7 +33,7 @@ static const char* keyboard_scan_chip_names[] = {
 // ============================================================================
 
 bool commodore_keyboard_t::init(const keyboard_matrix_config_t* config) {
-    if (!config || !config->keys || !config->decode_tables || config->num_decode_tables == 0) return false;
+    if (!config || !config->entries || config->num_entries == 0) return false;
     if (config->rows == 0 || config->cols == 0) return false;
     if (config->rows > MAX_KEYBOARD_ROWS || config->cols > MAX_KEYBOARD_COLS) {
         log_info("ERROR: Keyboard matrix %dx%d exceeds maximum %dx%d\n",
@@ -46,10 +47,13 @@ bool commodore_keyboard_t::init(const keyboard_matrix_config_t* config) {
     matrix_rows = config->rows;
     matrix_cols = config->cols;
 
-    // Store active matrix pointers
-    active_keys = config->keys;
-    num_decode_tables = config->num_decode_tables;
-    decode_tables = config->decode_tables;
+    // Store active matrix entries and config tables
+    active_entries = config->entries;
+    num_entries = config->num_entries;
+    host_bindings = config->host_bindings;
+    num_host_bindings = config->num_host_bindings;
+    char_overrides = config->char_overrides;
+    num_char_overrides = config->num_char_overrides;
 
     // Initialize keyboard state
     reset();
@@ -74,28 +78,74 @@ void commodore_keyboard_t::reset() {
         col_open_contacts[c] = (c < cols) ? (uint16_t)((1 << rows) - 1) : 0x0000;
     }
 
-    // Build SDL_Keycode → {row, col} lookup from the keys[] table
+    // Build SDL_Keycode → {row, col} lookup.
+    //
+    // Two sources:
+    //   1. Auto-derive: for ASCII-range normal characters in the matrix,
+    //      the SDL_Keycode matches the character value.  For uppercase
+    //      letters, also map the lowercase SDLK (which is what keydown fires).
+    //   2. Explicit host bindings: for PUA keys and non-ASCII characters
+    //      that need a specific host key mapping.
     key_lookup_.clear();
 
-    if (!active_keys) {
-        log_info("ERROR: commodore_keyboard_t::reset called with no active keys set!\n");
+    if (!active_entries || num_entries == 0) {
+        log_info("ERROR: commodore_keyboard_t::reset called with no active entries!\n");
         return;
+    }
+
+    // Build char32_t → {row, col} index from matrix entries
+    std::unordered_map<char32_t, key_position_t> char_to_pos;
+    for (int i = 0; i < num_entries; i++) {
+        const KeyMatrixEntry& e = active_entries[i];
+        if (e.normal != UKEY_NONE) {
+            char_to_pos[e.normal] = { e.row, e.col };
+        }
+        // Also index shifted chars (needed for PET reversed digit/symbol convention).
+        // Normal takes priority — if there's a conflict, first-write-wins from normal pass above.
+        if (e.shifted != 0 && e.shifted != UKEY_NONE) {
+            if (char_to_pos.find(e.shifted) == char_to_pos.end()) {
+                char_to_pos[e.shifted] = { e.row, e.col };
+            }
+        }
     }
 
     int key_count = 0;
 
-    for (int row = 0; row < rows; row++) {
-        for (int col = 0; col < cols; col++) {
-            SDL_Keycode key = active_keys[row * cols + col];
+    // Auto-derive SDL_Keycode → {row, col} for ASCII-range characters
+    for (auto& [ch, pos] : char_to_pos) {
+        if (ch >= 'A' && ch <= 'Z') {
+            // Uppercase letter: map the lowercase SDLK (keydown fires SDLK_a for 'A')
+            SDL_Keycode sdl = (SDL_Keycode)(ch + 32);
+            if (key_lookup_.find(sdl) == key_lookup_.end()) {
+                key_lookup_[sdl] = pos;
+                key_count++;
+            }
+        } else if (ch >= 0x20 && ch <= 0x7E) {
+            // Other printable ASCII: SDLK == char value
+            SDL_Keycode sdl = (SDL_Keycode)ch;
+            if (key_lookup_.find(sdl) == key_lookup_.end()) {
+                key_lookup_[sdl] = pos;
+                key_count++;
+            }
+        }
+        // Non-ASCII and PUA keys require explicit host bindings (below)
+    }
 
-            // Skip markers and invalid entries
-            if (cermu_key_is_marker(key) || key == 0) continue;
+    // Special case: RETURN key.  SDLK_RETURN == '\r' == 0x0D, which is
+    // below the printable ASCII auto-derive range (0x20-0x7E).
+    if (char_to_pos.find('\r') != char_to_pos.end()) {
+        if (key_lookup_.find(SDLK_RETURN) == key_lookup_.end()) {
+            key_lookup_[SDLK_RETURN] = char_to_pos['\r'];
+            key_count++;
+        }
+    }
 
-            key_position_t pos = { (uint8_t)row, (uint8_t)col };
-
-            // First-write-wins: don't overwrite duplicate key positions
-            if (key_lookup_.find(key) == key_lookup_.end()) {
-                key_lookup_[key] = pos;
+    // Apply explicit host bindings
+    for (int i = 0; i < num_host_bindings; i++) {
+        auto it = char_to_pos.find(host_bindings[i].guest_key);
+        if (it != char_to_pos.end()) {
+            if (key_lookup_.find(host_bindings[i].sdl_key) == key_lookup_.end()) {
+                key_lookup_[host_bindings[i].sdl_key] = it->second;
                 key_count++;
             }
         }
@@ -195,16 +245,9 @@ void commodore_keyboard_t::key_down(SDL_Keycode key, bool shifted) {
     // Find the key position using optimised lookup
     uint8_t row, col;
     if (find_key(key, &row, &col)) {
-        uint8_t row_bit = (matrix_rows - 1) - row;
-        // All matrices use bit-reversed layout: array index 0 = highest
-        // hardware bit.  Undo the reversal to get the hardware bit position.
-        // Extended columns (8+, e.g. C128 numpad via VIC-IIe $D02F) are
-        // stored at their natural index and not reversed.
-        uint8_t col_bit = (col < 8) ? (7 - col) : col;
-
-        // Close the contact (key pressed)
-        row_open_contacts[row_bit] &= ~(1 << col_bit);
-        col_open_contacts[col_bit] &= ~(1 << row_bit);
+        // Row/col are hardware bit positions — use directly
+        row_open_contacts[row] &= ~(1 << col);
+        col_open_contacts[col] &= ~(1 << row);
     }
 }
 
@@ -257,12 +300,9 @@ void commodore_keyboard_t::key_up(SDL_Keycode key, bool shifted) {
     // Find the key position using optimised lookup
     uint8_t row, col;
     if (find_key(key, &row, &col)) {
-        uint8_t row_bit = (matrix_rows - 1) - row;
-        uint8_t col_bit = (col < 8) ? (7 - col) : col;
-
-        // Open the contact (key released)
-        row_open_contacts[row_bit] |= (1 << col_bit);
-        col_open_contacts[col_bit] |= (1 << row_bit);
+        // Row/col are hardware bit positions — use directly
+        row_open_contacts[row] |= (1 << col);
+        col_open_contacts[col] |= (1 << row);
     }
 }
 

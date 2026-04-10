@@ -14,101 +14,162 @@
  */
 
 #include "systems/commodore/pet/pet_keyboard_matrix.hpp"
+#include "utils/guest_key_chars.hpp"
 
 // ============================================================================
-// PET Keyboard Matrix — 10×8
+// PET Keyboard Matrix — 10 rows × 8 columns
 // ============================================================================
 // PIA1 Port A selects the row (active-low, bits 3:0 decoded)
 // PIA1 Port B reads the column (PB0–PB7, active-low)
 //
-// Array convention: array[9 - hw_row][7 - PB_bit]
-//   Row index 0 = hw row 9, Row index 9 = hw row 0
-//   Col index 0 = PB7,      Col index 7 = PB0
-//   Same bit-reversed layout as C64/VIC-20/C16/C128 matrices.
+// Row = PIA1 decoded row (0–9), Col = PB bit position (0–7).
+// These values are used directly by the scan callback:
+//   row_open_contacts[hw_row]
 //
-// PET "graphics keyboard" matrix (PET 2001-N, 3032, 4032):
+// PET "graphics keyboard" key assignments:
+//
+// IMPORTANT: On the PET graphics keyboard, digit keys have the SYMBOL
+// as the unshifted character and the DIGIT as the shifted character.
+// This is the reverse of modern keyboards.  For example:
+//   Key "2": unshifted = '"', shifted = '2'
+//   Key "8": unshifted = £ (PETSCII $5C), shifted = '8'
+//
+// Row 9 is the REPEAT key, connected directly to PIA1 CA1 (not scanned
+// through the matrix).  It has no matrix entries.
+//
+// Hardware matrix:
+//       PB0    PB1    PB2    PB3    PB4    PB5    PB6    PB7
+// row 0: !      #      %      &      (      ←      HOME   DEL
+// row 1: "      $      '      £      )      -      →      ↓
+// row 2: Q      E      T      U      O      ↑      STOP   —
+// row 3: W      R      Y      I      P      =      /      —
+// row 4: A      D      G      J      L      ;      RETURN —
+// row 5: S      F      H      K      :      ]      —      —
+// row 6: Z      C      B      M      .      LSHIFT —      —
+// row 7: X      V      N      ,      @      RSHIFT RVS    —
+// row 8: *      £(\)   +      >      ?      SPACE  [      —
+// row 9: (REPEAT key — not in matrix, wired to PIA1 CA1)
 
-static const SDL_Keycode pet_keys[PET_KEYBOARD_ROWS * PET_KEYBOARD_COLS] = {
-    // row 9: REPEAT key (directly connected to CA1 on PIA1)
-    CERMU_KEY_NONE,  CERMU_KEY_NONE,  CERMU_KEY_NONE,  CERMU_KEY_NONE,  CERMU_KEY_NONE,  CERMU_KEY_NONE,  CERMU_KEY_NONE,  CERMU_KEY_NONE,
-    // row 8 reversed: —(none), [, SPACE, ?, >, +, \, *
-    CERMU_KEY_NONE,  SDLK_LEFTBRACKET,  SDLK_SPACE,  SDLK_SLASH,  SDLK_PERIOD,  SDLK_BACKSLASH,  SDLK_BACKSLASH,  SDLK_RIGHTBRACKET,
-    // row 7 reversed: —(none), REVERSE, RSHIFT, @, ,, n, v, x
-    CERMU_KEY_NONE,  SDLK_LCTRL,  SDLK_RSHIFT,  SDLK_BACKQUOTE,  SDLK_COMMA,  SDLK_n,  SDLK_v,  SDLK_x,
-    // row 6 reversed: —(none), —(none), LSHIFT, ., m, b, c, z
-    CERMU_KEY_NONE,  CERMU_KEY_NONE,  SDLK_LSHIFT,  SDLK_PERIOD,  SDLK_m,  SDLK_b,  SDLK_c,  SDLK_z,
-    // row 5 reversed: —(none), —(none), ], :, k, h, f, s
-    CERMU_KEY_NONE,  CERMU_KEY_NONE,  SDLK_RIGHTBRACKET,  SDLK_LEFTBRACKET,  SDLK_k,  SDLK_h,  SDLK_f,  SDLK_s,
-    // row 4 reversed: —(none), RETURN, ;, l, j, g, d, a
-    CERMU_KEY_NONE,  SDLK_RETURN,  SDLK_SEMICOLON,  SDLK_l,  SDLK_j,  SDLK_g,  SDLK_d,  SDLK_a,
-    // row 3 reversed: —(none), /, =, p, i, y, r, w
-    CERMU_KEY_NONE,  SDLK_SLASH,  SDLK_EQUALS,  SDLK_p,  SDLK_i,  SDLK_y,  SDLK_r,  SDLK_w,
-    // row 2 reversed: —(none), STOP, ↑, o, u, t, e, q
-    CERMU_KEY_NONE,  CERMU_KEY_CBM_RUN_STOP,  CERMU_KEY_CBM_ARROW_UP,  SDLK_o,  SDLK_u,  SDLK_t,  SDLK_e,  SDLK_q,
-    // row 1 reversed: CRSR↓, CRSR→, —, ), \, ', $, "
-    SDLK_DOWN,  SDLK_RIGHT,  SDLK_MINUS,  SDLK_0,  SDLK_8,  SDLK_6,  SDLK_4,  SDLK_2,
-    // row 0 reversed: DEL, HOME, ←, (, &, %, #, !
-    CERMU_KEY_CBM_DEL,  SDLK_HOME,  CERMU_KEY_CBM_ARROW_LEFT,  SDLK_9,  SDLK_7,  SDLK_5,  SDLK_3,  SDLK_1,
+static const KeyMatrixEntry pet_matrix[] = {
+    // row 0: !, #, %, &, (, ←, HOME, DEL
+    // Keys "1","3","5","7","9" — unshifted = symbol, shifted = digit
+    { 0, 0, '!',               '1'  },
+    { 0, 1, '#',               '3'  },
+    { 0, 2, '%',               '5'  },
+    { 0, 3, '&',               '7'  },
+    { 0, 4, '(',               '9'  },
+    { 0, 5, UKEY_LEFT_ARROW,    0   },
+    { 0, 6, UKEY_CBM_HOME,      0   },
+    { 0, 7, UKEY_CBM_DEL,       0   },
+
+    // row 1: ", $, ', £, ), -, CRSR→, CRSR↓
+    // Keys "2","4","6","8","0" — unshifted = symbol, shifted = digit
+    { 1, 0, '"',               '2'  },
+    { 1, 1, '$',               '4'  },
+    { 1, 2, '\'',              '6'  },
+    { 1, 3, UKEY_POUND_SIGN,   '8'  },
+    { 1, 4, ')',               '0'  },
+    { 1, 5, '-',                0   },
+    { 1, 6, UKEY_CBM_CURSOR_RT, 0   },
+    { 1, 7, UKEY_CBM_CURSOR_DN, 0   },
+
+    // row 2: Q, E, T, U, O, ↑, RUN/STOP, (none)
+    { 2, 0, 'Q',               'q'  },
+    { 2, 1, 'E',               'e'  },
+    { 2, 2, 'T',               't'  },
+    { 2, 3, 'U',               'u'  },
+    { 2, 4, 'O',               'o'  },
+    { 2, 5, UKEY_UP_ARROW,    UKEY_PI },
+    { 2, 6, UKEY_CBM_RUN_STOP,  0   },
+
+    // row 3: W, R, Y, I, P, =, /, (none)
+    { 3, 0, 'W',               'w'  },
+    { 3, 1, 'R',               'r'  },
+    { 3, 2, 'Y',               'y'  },
+    { 3, 3, 'I',               'i'  },
+    { 3, 4, 'P',               'p'  },
+    { 3, 5, '=',                0   },
+    { 3, 6, '/',                0   },
+
+    // row 4: A, D, G, J, L, ;, RETURN, (none)
+    { 4, 0, 'A',               'a'  },
+    { 4, 1, 'D',               'd'  },
+    { 4, 2, 'G',               'g'  },
+    { 4, 3, 'J',               'j'  },
+    { 4, 4, 'L',               'l'  },
+    { 4, 5, ';',                0   },
+    { 4, 6, '\r',               0   },
+ 
+    // row 5: S, F, H, K, :, ], (none), (none)
+    { 5, 0, 'S',               's'  },
+    { 5, 1, 'F',               'f'  },
+    { 5, 2, 'H',               'h'  },
+    { 5, 3, 'K',               'k'  },
+    { 5, 4, ':',               '['  },
+    { 5, 5, ']',                0   },
+
+    // row 6: Z, C, B, M, ., LSHIFT, (none), (none)
+    { 6, 0, 'Z',               'z'  },
+    { 6, 1, 'C',               'c'  },
+    { 6, 2, 'B',               'b'  },
+    { 6, 3, 'M',               'm'  },
+    { 6, 4, '.',                0   },
+    { 6, 5, UKEY_CBM_SHIFT_L,   0   },
+
+    // row 7: X, V, N, ,, @, RSHIFT, RVS, (none)
+    { 7, 0, 'X',               'x'  },
+    { 7, 1, 'V',               'v'  },
+    { 7, 2, 'N',               'n'  },
+    { 7, 3, ',',               '<'  },
+    { 7, 4, '@',                0   },
+    { 7, 5, UKEY_CBM_SHIFT_R,   0   },
+    { 7, 6, UKEY_CBM_REVERSE,   0   },
+
+    // row 8: *, £, +, >, ?, SPACE, [, (none)
+    { 8, 0, '*',                0   },
+    { 8, 1, UKEY_POUND_SIGN,    0   },
+    { 8, 2, '+',                0   },
+    { 8, 3, '>',                0   },
+    { 8, 4, '?',                0   },
+    { 8, 5, ' ',                0   },
+    { 8, 6, '[',                0   },
+
+    // row 9: REPEAT key — wired to PIA1 CA1, not in the matrix scan path.
+    // No entries.
+};
+
+static const KeyCharOverride pet_char_overrides[] = {
+    { '\\', 0, 5, KEYMOD_NONE  },   // host backslash → guest ← key
+    { '|',  2, 5, KEYMOD_NONE  },   // host pipe → guest ↑ key
+    { '^',  1, 3, KEYMOD_NONE  },   // host caret → guest £ key (row 1, PB3)
+    { '~',  2, 5, KEYMOD_SHIFT },   // host tilde → guest π (Shift+↑)
+    { '{',  0, 4, KEYMOD_NONE  },   // no Commodore { → fall back to (
+    { '}',  1, 4, KEYMOD_NONE  },   // no Commodore } → fall back to )
 };
 
 // ============================================================================
-// PETSCII Decode Tables
+// Host key bindings — SDL_Keycode → guest char32_t
 // ============================================================================
 
-// Unshifted character decode table — PETSCII codes per matrix position.
-// Same bit-reversed layout as pet_keys[] above.
-// 0 = non-character key (modifier, function key, cursor key).
-static const petscii_t pet_unshifted_chars[PET_KEYBOARD_ROWS * PET_KEYBOARD_COLS] = {
-    // row 9: (REPEAT row — no characters)
-    0, 0, 0, 0, 0, 0, 0, 0,
-    // row 8 reversed: —, [, SPACE, ?, >, +, \, *
-    0, '[', ' ', '?', '>', '+', '\\', '*',
-    // row 7 reversed: —, RVS, RSHIFT, @, ,, N, V, X
-    0, 0, 0, '@', ',', 'N', 'V', 'X',
-    // row 6 reversed: —, —, LSHIFT, ., M, B, C, Z
-    0, 0, 0, '.', 'M', 'B', 'C', 'Z',
-    // row 5 reversed: —, —, ], :, K, H, F, S
-    0, 0, ']', ':', 'K', 'H', 'F', 'S',
-    // row 4 reversed: —, RETURN, ;, L, J, G, D, A
-    0, 0, ';', 'L', 'J', 'G', 'D', 'A',
-    // row 3 reversed: —, /, =, P, I, Y, R, W
-    0, '/', '=', 'P', 'I', 'Y', 'R', 'W',
-    // row 2 reversed: —, STOP, ↑($5E), O, U, T, E, Q
-    0, 0, 0x5E, 'O', 'U', 'T', 'E', 'Q',
-    // row 1 reversed: ↓, →, -, ), \, ', $, "
-    0, 0, '-', ')', '\\', '\'', '$', '"',
-    // row 0 reversed: DEL, HOME, ←($5F), (, &, %, #, !
-    0, 0, 0x5F, '(', '&', '%', '#', '!',
-};
+static const HostKeyBinding pet_host_bindings[] = {
+    // Modifiers
+    { SDLK_LSHIFT,    UKEY_CBM_SHIFT_L   },
+    { SDLK_RSHIFT,    UKEY_CBM_SHIFT_R   },
+    { SDLK_LCTRL,     UKEY_CBM_REVERSE   },   // PET: CTRL → RVS key
 
-// Shifted character decode table — PETSCII codes per matrix position.
-// Letters produce PETSCII lowercase ($C1–$DA).
-static const petscii_t pet_shifted_chars[PET_KEYBOARD_ROWS * PET_KEYBOARD_COLS] = {
-    // row 9: (REPEAT row)
-    0, 0, 0, 0, 0, 0, 0, 0,
-    // row 8 shifted reversed: (all 0 — no distinct shifted output)
-    0, 0, 0, 0, 0, 0, 0, 0,
-    // row 7 shifted reversed: —, RVS, RSHIFT, @, <, n($CE), v($D6), x($D8)
-    0, 0, 0, 0, '<', 0xCE, 0xD6, 0xD8,
-    // row 6 shifted reversed: —, —, LSHIFT, ., m($CD), b($C2), c($C3), z($DA)
-    0, 0, 0, 0, 0xCD, 0xC2, 0xC3, 0xDA,
-    // row 5 shifted reversed: —, —, [, :, k($CB), h($C8), f($C6), s($D3)
-    0, 0, 0, '[', 0xCB, 0xC8, 0xC6, 0xD3,
-    // row 4 shifted reversed: —, RETURN, ;, l($CC), j($CA), g($C7), d($C4), a($C1)
-    0, 0, 0, 0xCC, 0xCA, 0xC7, 0xC4, 0xC1,
-    // row 3 shifted reversed: —, /, =, p($D0), i($C9), y($D9), r($D2), w($D7)
-    0, 0, 0, 0xD0, 0xC9, 0xD9, 0xD2, 0xD7,
-    // row 2 shifted reversed: —, STOP, π($DE), o($CF), u($D5), t($D4), e($C5), q($D1)
-    0, 0, 0xDE, 0xCF, 0xD5, 0xD4, 0xC5, 0xD1,
-    // row 1 shifted reversed: ↑, ←, —, 0, 8, 6, 4, 2
-    0, 0, 0, '0', '8', '6', '4', '2',
-    // row 0 shifted reversed: INST, CLR, ←, 9, 7, 5, 3, 1
-    0, 0, 0, '9', '7', '5', '3', '1',
-};
+    // Action keys
+    { SDLK_TAB,       UKEY_CBM_RUN_STOP  },
+    { SDLK_BACKSPACE, UKEY_CBM_DEL       },
+    { SDLK_HOME,      UKEY_CBM_HOME      },
 
-static const keyboard_decode_table_t pet_decode_tables[] = {
-    { KEYMOD_NONE,  pet_unshifted_chars },
-    { KEYMOD_SHIFT, pet_shifted_chars },
+    // Navigation
+    { SDLK_DOWN,      UKEY_CBM_CURSOR_DN },
+    { SDLK_RIGHT,     UKEY_CBM_CURSOR_RT },
+
+    // Non-ASCII character keys
+    { SDLK_BACKSLASH, UKEY_LEFT_ARROW    },
+    { SDLK_PIPE,      UKEY_UP_ARROW      },
+    { SDLK_CARET,     UKEY_POUND_SIGN    },
 };
 
 const keyboard_matrix_config_t pet_keyboard_config = {
@@ -117,7 +178,10 @@ const keyboard_matrix_config_t pet_keyboard_config = {
     .rows = PET_KEYBOARD_ROWS,
     .cols = PET_KEYBOARD_COLS,
     .description = "PET 10x8 keyboard matrix (graphics keyboard)",
-    .keys = pet_keys,
-    .num_decode_tables = sizeof(pet_decode_tables) / sizeof(pet_decode_tables[0]),
-    .decode_tables = pet_decode_tables,
+    .entries = pet_matrix,
+    .num_entries = sizeof(pet_matrix) / sizeof(pet_matrix[0]),
+    .char_overrides = pet_char_overrides,
+    .num_char_overrides = sizeof(pet_char_overrides) / sizeof(pet_char_overrides[0]),
+    .host_bindings = pet_host_bindings,
+    .num_host_bindings = sizeof(pet_host_bindings) / sizeof(pet_host_bindings[0]),
 };
