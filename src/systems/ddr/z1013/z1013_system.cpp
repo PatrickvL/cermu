@@ -8,6 +8,7 @@
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
 #include "utils/keyboard_matrix.hpp"
+#include "utils/guest_key_chars.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -188,29 +189,37 @@ template<Z1013Variant V> void Z1013System<V>::run_frame() {
 template<Z1013Variant V>
 void Z1013System<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     // Z1013 keyboard matrix: 8 rows × 4 columns, active-low
-    static constexpr KeyMatrixMapping mappings[] = {
+    static const KeyMatrixEntry entries[] = {
         // Row 0: P O N
-        { SDLK_p, 0, 2 }, { SDLK_o, 0, 1 }, { SDLK_n, 0, 0 },
+        { 0, 2, 'p', 0 }, { 0, 1, 'o', 0 }, { 0, 0, 'n', 0 },
         // Row 1: M L K J
-        { SDLK_m, 1, 3 }, { SDLK_l, 1, 2 }, { SDLK_k, 1, 1 }, { SDLK_j, 1, 0 },
+        { 1, 3, 'm', 0 }, { 1, 2, 'l', 0 }, { 1, 1, 'k', 0 }, { 1, 0, 'j', 0 },
         // Row 2: I H G F
-        { SDLK_i, 2, 3 }, { SDLK_h, 2, 2 }, { SDLK_g, 2, 1 }, { SDLK_f, 2, 0 },
+        { 2, 3, 'i', 0 }, { 2, 2, 'h', 0 }, { 2, 1, 'g', 0 }, { 2, 0, 'f', 0 },
         // Row 3: E D C B
-        { SDLK_e, 3, 3 }, { SDLK_d, 3, 2 }, { SDLK_c, 3, 1 }, { SDLK_b, 3, 0 },
+        { 3, 3, 'e', 0 }, { 3, 2, 'd', 0 }, { 3, 1, 'c', 0 }, { 3, 0, 'b', 0 },
         // Row 4: A 9 8 7
-        { SDLK_a, 4, 3 }, { SDLK_9, 4, 2 }, { SDLK_8, 4, 1 }, { SDLK_7, 4, 0 },
+        { 4, 3, 'a', 0 }, { 4, 2, '9', 0 }, { 4, 1, '8', 0 }, { 4, 0, '7', 0 },
         // Row 5: 6 5 4 3
-        { SDLK_6, 5, 3 }, { SDLK_5, 5, 2 }, { SDLK_4, 5, 1 }, { SDLK_3, 5, 0 },
+        { 5, 3, '6', 0 }, { 5, 2, '5', 0 }, { 5, 1, '4', 0 }, { 5, 0, '3', 0 },
         // Row 6: 2 1 0 SPACE
-        { SDLK_2, 6, 3 }, { SDLK_1, 6, 2 }, { SDLK_0, 6, 1 }, { SDLK_SPACE, 6, 0 },
+        { 6, 3, '2', 0 }, { 6, 2, '1', 0 }, { 6, 1, '0', 0 }, { 6, 0, ' ', 0 },
         // Row 7: CTRL SHIFT ENTER BACK
-        { SDLK_LCTRL,  7, 3 }, { SDLK_RCTRL,  7, 3 },
-        { SDLK_LSHIFT, 7, 2 }, { SDLK_RSHIFT, 7, 2 },
-        { SDLK_RETURN, 7, 1 },
-        { SDLK_BACKSPACE, 7, 0 }, { SDLK_DELETE, 7, 0 },
+        { 7, 3, UKEY_CTRL_L, 0 },
+        { 7, 2, UKEY_SHIFT_L, 0 },
+        { 7, 1, '\r', 0 },
+        { 7, 0, '\b', 0 },
     };
 
-    keyboard_matrix_apply(mappings, keyboard_matrix_, key, pressed);
+    static const HostKeyBinding bindings[] = {
+        { SDLK_LCTRL,     UKEY_CTRL_L  },
+        { SDLK_RCTRL,     UKEY_CTRL_L  },
+        { SDLK_LSHIFT,    UKEY_SHIFT_L },
+        { SDLK_RSHIFT,    UKEY_SHIFT_L },
+        { SDLK_DELETE,    '\b'         },  // DELETE → same as BACKSPACE
+    };
+
+    keyboard_matrix_apply(entries, bindings, keyboard_matrix_, key, pressed);
 }
 
 // ============================================================================
