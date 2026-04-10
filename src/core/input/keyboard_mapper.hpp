@@ -76,10 +76,12 @@ struct ActiveInjection {
     uint8_t suppressed_modifiers;  // Modifiers we released that were physically held
     SDL_Scancode host_scancode;    // The physical host key that triggered this
     bool from_text_input;          // Was this triggered by SDL_TEXTINPUT?
+    bool is_restore;               // RESTORE (NMI) — no matrix contact, just a flag
 
     ActiveInjection()
         : forced_modifiers(0), suppressed_modifiers(0),
-          host_scancode(SDL_SCANCODE_UNKNOWN), from_text_input(false) {}
+          host_scancode(SDL_SCANCODE_UNKNOWN), from_text_input(false),
+          is_restore(false) {}
 };
 
 // ============================================================================

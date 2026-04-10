@@ -342,13 +342,15 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
         if (it != synthetic_map_.end()) {
             const SyntheticKeyMapping& mapping = it->second;
 
-            // Special case: RESTORE is not a matrix key
+            // Special case: RESTORE is not a matrix key — it sets a
+            // flag that the system polls for NMI.  No matrix contact.
             if (strcmp(mapping.description, "RESTORE (NMI)") == 0) {
                 keyboard_->restore_key_pressed = true;
                 ActiveInjection inj;
                 inj.action = mapping.action;
                 inj.host_scancode = scancode;
                 inj.from_text_input = false;
+                inj.is_restore = true;
                 active_injections_[scancode] = inj;
                 return true;
             }
@@ -390,7 +392,7 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
     }
 
     // ====================================================================
-    // Guest modifier pass-through: Shift, CBM, or CTRL + printable key
+    // Guest modifier pass-through: CBM, CTRL, or Shift+letter
     // ====================================================================
     // When the host user holds a guest-meaningful modifier and presses a
     // printable key, we bypass the TEXTINPUT path entirely.  The modifier
@@ -398,41 +400,56 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
     // We just close the printable key's contact and let the guest KERNAL
     // see the combined modifier + key state.
     //
-    // Shift is included because Commodore Shift+letter produces graphics
-    // characters (in uppercase charset) or uppercase letters (in lowercase
-    // charset), NOT the host notion of "shifted character".  The TEXTINPUT
-    // path would suppress the guest Shift contact, losing this behavior.
+    // CBM and CTRL always pass through — they enable graphics characters
+    // (C= + letter), colour codes (CTRL + digit), and other outputs that
+    // have no host TEXTINPUT equivalent.
     //
-    // This also enables graphics characters (C= + letter), colour codes
-    // (CTRL + digit), and other modifier-specific outputs that have no
-    // host TEXTINPUT equivalent.
-    if ((host_shift_held() || host_cbm_held_ || host_ctrl_held_) && is_printable_key(sym)) {
-        // Try char_map first: for remapped characters (e.g., host '\' → guest ←,
-        // host '|' → guest ↑) the char_map has the correct guest key position,
-        // while the scancode-based EmuKey lookup would hit the host's physical
-        // key position (which may be a different guest key entirely).
-        char c = 0;
-        if (sym >= 0 && sym < 128) c = static_cast<char>(sym);
-        if (c && char_map_[(unsigned char)c].valid) {
-            uint8_t mods = KEYMOD_NONE;
-            if (host_cbm_held_)    mods |= KEYMOD_CBM;
-            if (host_ctrl_held_)   mods |= KEYMOD_CTRL;
-            if (host_shift_held()) mods |= KEYMOD_SHIFT;
-            inject_press(GuestKeyAction(char_map_[(unsigned char)c].row,
-                                        char_map_[(unsigned char)c].col, mods),
-                         scancode, false);
-            return true;
-        }
-        // Fallback: direct key → matrix lookup (with redirect)
-        {
-            uint8_t row, col;
-            if (keyboard_->find_key(resolve_redirect(sym), &row, &col)) {
+    // Shift is included ONLY for letter keys: Commodore Shift+letter
+    // produces graphics characters (in uppercase charset) or uppercase
+    // letters (in lowercase charset), NOT the host notion of "shifted
+    // character".  The TEXTINPUT path would suppress the guest Shift
+    // contact, losing this behavior.
+    //
+    // Shift is NOT included for non-letter keys (digits, symbols) because
+    // the host's shifted character maps to a DIFFERENT guest key:
+    //   host Shift+= → '+' (a separate key on Commodore)
+    //   host Shift+; → ':' (a separate key on Commodore)
+    //   host Shift+' → '"' (Shift+2 on Commodore)
+    //   host Shift+\ → '|' (maps to ↑ on Commodore)
+    // These must go through the TEXTINPUT path so the mapper selects the
+    // correct guest key based on the resulting character, not the raw key.
+    if (is_printable_key(sym)) {
+        bool is_letter = (sym >= SDLK_a && sym <= SDLK_z);
+        bool want_passthrough = host_cbm_held_ || host_ctrl_held_
+                             || (host_shift_held() && is_letter);
+        if (want_passthrough) {
+            // Try char_map first: for remapped characters (e.g., host '\' → guest ←,
+            // host '|' → guest ↑) the char_map has the correct guest key position,
+            // while the scancode-based EmuKey lookup would hit the host's physical
+            // key position (which may be a different guest key entirely).
+            char c = 0;
+            if (sym >= 0 && sym < 128) c = static_cast<char>(sym);
+            if (c && char_map_[(unsigned char)c].valid) {
                 uint8_t mods = KEYMOD_NONE;
                 if (host_cbm_held_)    mods |= KEYMOD_CBM;
                 if (host_ctrl_held_)   mods |= KEYMOD_CTRL;
                 if (host_shift_held()) mods |= KEYMOD_SHIFT;
-                inject_press(GuestKeyAction(row, col, mods), scancode, false);
+                inject_press(GuestKeyAction(char_map_[(unsigned char)c].row,
+                                            char_map_[(unsigned char)c].col, mods),
+                             scancode, false);
                 return true;
+            }
+            // Fallback: direct key → matrix lookup (with redirect)
+            {
+                uint8_t row, col;
+                if (keyboard_->find_key(resolve_redirect(sym), &row, &col)) {
+                    uint8_t mods = KEYMOD_NONE;
+                    if (host_cbm_held_)    mods |= KEYMOD_CBM;
+                    if (host_ctrl_held_)   mods |= KEYMOD_CTRL;
+                    if (host_shift_held()) mods |= KEYMOD_SHIFT;
+                    inject_press(GuestKeyAction(row, col, mods), scancode, false);
+                    return true;
+                }
             }
         }
     }
@@ -460,19 +477,17 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
 bool KeyboardMapper::process_key_up(SDL_Keycode sym, SDL_Scancode scancode, uint16_t mod) {
     if (!keyboard_) return false;
 
-    // Track host modifier state
-    if (sym == SDLK_LSHIFT) {
-        host_lshift_held_ = (mod & KMOD_LSHIFT) != 0;
-    }
-    if (sym == SDLK_RSHIFT) {
-        host_rshift_held_ = (mod & KMOD_RSHIFT) != 0;
-    }
-    if (sym == SDLK_LCTRL || sym == SDLK_RCTRL) {
-        host_ctrl_held_ = (mod & (KMOD_LCTRL | KMOD_RCTRL)) != 0;
-    }
-    if (sym == SDLK_LALT || sym == SDLK_LGUI) {
-        host_cbm_held_ = (mod & (KMOD_LALT | KMOD_LGUI)) != 0;
-    }
+    // Track host modifier state.
+    // NOTE: We unconditionally clear the flag here.  SDL's `mod` field in
+    // key-up events contains the state BEFORE the release, so the previous
+    // approach of `flag = (mod & KMOD_FOO) != 0` left the flag TRUE after
+    // key-up (because `mod` still included the released modifier).  That
+    // caused the reconciliation in process_key_down to clean up one key
+    // late, producing stuck-modifier artifacts under rapid typing.
+    if (sym == SDLK_LSHIFT) host_lshift_held_ = false;
+    if (sym == SDLK_RSHIFT) host_rshift_held_ = false;
+    if (sym == SDLK_LCTRL || sym == SDLK_RCTRL) host_ctrl_held_ = false;
+    if (sym == SDLK_LALT || sym == SDLK_LGUI) host_cbm_held_ = false;
 
     // Emulator modifier release
     if (sym == emu_modifier_key_) {
@@ -483,28 +498,18 @@ bool KeyboardMapper::process_key_up(SDL_Keycode sym, SDL_Scancode scancode, uint
     // Check if we have an active injection for this scancode
     auto it = active_injections_.find(scancode);
     if (it != active_injections_.end()) {
-        // Special case: RESTORE
-        if (it->second.action.row == 0 && it->second.action.col == 0 &&
-            !it->second.action.valid) {
-            // This was a RESTORE injection via synthetic mapping
-        }
-        // Check if this was a RESTORE synthetic (we stored the injection)
-        // RESTORE is handled through keyboard_->restore_key_pressed
-        bool is_restore = false;
-        if (emu_modifier_held_ || it->second.from_text_input == false) {
-            // Check synthetic map
-            auto syn_it = synthetic_map_.find(sym);
-            if (syn_it != synthetic_map_.end() &&
-                strcmp(syn_it->second.description, "RESTORE (NMI)") == 0) {
-                keyboard_->restore_key_pressed = false;
-                is_restore = true;
-            }
-        }
-
-        if (!is_restore) {
-            release_injection(it->second);
-        }
+        // Copy and erase BEFORE releasing, so release_injection can scan
+        // the remaining active injections to avoid clobbering shared
+        // forced/suppressed modifiers.
+        ActiveInjection inj = it->second;
         active_injections_.erase(it);
+
+        if (inj.is_restore) {
+            // RESTORE is not a matrix key — just clear the NMI flag.
+            keyboard_->restore_key_pressed = false;
+        } else {
+            release_injection(inj);
+        }
         return true;
     }
 
@@ -664,53 +669,75 @@ void KeyboardMapper::inject_press(const GuestKeyAction& action, SDL_Scancode hos
 
     // Handle modifier state manipulation for each modifier type.
     // For each modifier bit in action.modifiers:
-    //   - If the action REQUIRES it and host doesn't have it held → force it (press)
-    //   - If the action does NOT require it and host DOES have it held → suppress it (release)
+    //   - If the action REQUIRES it → always close the contact (a previous
+    //     injection may have suppressed it). Mark as forced only if the host
+    //     doesn't hold it (so release_injection knows to open it).
+    //   - If the action does NOT require it and host DOES have it held →
+    //     suppress it (release), but only if no other active injection still
+    //     needs it.
+
+    // Collect which modifiers other active injections need, to avoid
+    // clobbering a modifier still in use by an overlapping injection.
+    uint16_t others_need = 0;
+    for (const auto& [_, other] : active_injections_) {
+        others_need |= other.action.modifiers;
+    }
 
     // SHIFT modifier
     if (action.modifiers & KEYMOD_SHIFT) {
-        // Guest needs shift — press it if not already held on host
+        // Guest needs shift — always ensure the contact is closed.
+        // A previous injection may have suppressed it even though the
+        // host physically holds the key.
+        close_contact(shift_left_pos_.row, shift_left_pos_.col);
         if (!host_shift_held()) {
-            close_contact(shift_left_pos_.row, shift_left_pos_.col);
             inj.forced_modifiers |= KEYMOD_SHIFT;
         }
     } else {
-        // Guest needs NO shift — suppress only the shift(s) actually held.
-        // Opening only the held contact(s) ensures release_injection can
-        // re-close the correct one(s) without creating stuck contacts.
-        if (host_lshift_held_ && shift_left_pos_.valid) {
-            open_contact(shift_left_pos_.row, shift_left_pos_.col);
-            inj.suppressed_modifiers |= KEYMOD_SHIFT;
-        }
-        if (host_rshift_held_ && shift_right_pos_.valid) {
-            open_contact(shift_right_pos_.row, shift_right_pos_.col);
-            inj.suppressed_modifiers |= KEYMOD_SHIFT;
+        // Guest needs NO shift — suppress only if no other active injection
+        // requires it, and only the shift(s) actually held by the host.
+        if (!(others_need & KEYMOD_SHIFT)) {
+            if (host_lshift_held_ && shift_left_pos_.valid) {
+                open_contact(shift_left_pos_.row, shift_left_pos_.col);
+                inj.suppressed_modifiers |= KEYMOD_SHIFT;
+            }
+            if (host_rshift_held_ && shift_right_pos_.valid) {
+                open_contact(shift_right_pos_.row, shift_right_pos_.col);
+                inj.suppressed_modifiers |= KEYMOD_SHIFT;
+            }
         }
     }
 
     // CBM modifier (Commodore key)
     if (action.modifiers & KEYMOD_CBM) {
-        if (!host_cbm_held_ && cbm_key_pos_.valid) {
+        if (cbm_key_pos_.valid) {
             close_contact(cbm_key_pos_.row, cbm_key_pos_.col);
+        }
+        if (!host_cbm_held_) {
             inj.forced_modifiers |= KEYMOD_CBM;
         }
     } else {
-        if (host_cbm_held_ && cbm_key_pos_.valid) {
-            open_contact(cbm_key_pos_.row, cbm_key_pos_.col);
-            inj.suppressed_modifiers |= KEYMOD_CBM;
+        if (!(others_need & KEYMOD_CBM)) {
+            if (host_cbm_held_ && cbm_key_pos_.valid) {
+                open_contact(cbm_key_pos_.row, cbm_key_pos_.col);
+                inj.suppressed_modifiers |= KEYMOD_CBM;
+            }
         }
     }
 
     // CTRL modifier
     if (action.modifiers & KEYMOD_CTRL) {
-        if (!host_ctrl_held_ && ctrl_key_pos_.valid) {
+        if (ctrl_key_pos_.valid) {
             close_contact(ctrl_key_pos_.row, ctrl_key_pos_.col);
+        }
+        if (!host_ctrl_held_) {
             inj.forced_modifiers |= KEYMOD_CTRL;
         }
     } else {
-        if (host_ctrl_held_ && ctrl_key_pos_.valid) {
-            open_contact(ctrl_key_pos_.row, ctrl_key_pos_.col);
-            inj.suppressed_modifiers |= KEYMOD_CTRL;
+        if (!(others_need & KEYMOD_CTRL)) {
+            if (host_ctrl_held_ && ctrl_key_pos_.valid) {
+                open_contact(ctrl_key_pos_.row, ctrl_key_pos_.col);
+                inj.suppressed_modifiers |= KEYMOD_CTRL;
+            }
         }
     }
 
@@ -729,19 +756,29 @@ void KeyboardMapper::release_injection(const ActiveInjection& injection) {
     // Open the main key contact
     open_contact(injection.action.row, injection.action.col);
 
-    // Restore forced modifiers — we pressed these for the injection, now release them
-    if (injection.forced_modifiers & KEYMOD_SHIFT) {
+    // Check which forced/suppressed modifiers are still needed by other
+    // active injections.  The caller has already erased *this* injection
+    // from the map, so we only see the remaining ones.
+    uint16_t still_forced     = 0;
+    uint16_t still_suppressed = 0;
+    for (const auto& [_, other] : active_injections_) {
+        still_forced     |= other.forced_modifiers;
+        still_suppressed |= other.suppressed_modifiers;
+    }
+
+    // Restore forced modifiers — only if no other injection still needs them
+    if ((injection.forced_modifiers & KEYMOD_SHIFT) && !(still_forced & KEYMOD_SHIFT)) {
         open_contact(shift_left_pos_.row, shift_left_pos_.col);
     }
-    if (injection.forced_modifiers & KEYMOD_CBM) {
+    if ((injection.forced_modifiers & KEYMOD_CBM) && !(still_forced & KEYMOD_CBM)) {
         if (cbm_key_pos_.valid) open_contact(cbm_key_pos_.row, cbm_key_pos_.col);
     }
-    if (injection.forced_modifiers & KEYMOD_CTRL) {
+    if ((injection.forced_modifiers & KEYMOD_CTRL) && !(still_forced & KEYMOD_CTRL)) {
         if (ctrl_key_pos_.valid) open_contact(ctrl_key_pos_.row, ctrl_key_pos_.col);
     }
 
-    // Restore suppressed modifiers — re-close them if the host key is still physically held
-    if (injection.suppressed_modifiers & KEYMOD_SHIFT) {
+    // Restore suppressed modifiers — only if no other injection still suppresses them
+    if ((injection.suppressed_modifiers & KEYMOD_SHIFT) && !(still_suppressed & KEYMOD_SHIFT)) {
         if (host_lshift_held_ && shift_left_pos_.valid) {
             close_contact(shift_left_pos_.row, shift_left_pos_.col);
         }
@@ -749,12 +786,12 @@ void KeyboardMapper::release_injection(const ActiveInjection& injection) {
             close_contact(shift_right_pos_.row, shift_right_pos_.col);
         }
     }
-    if (injection.suppressed_modifiers & KEYMOD_CBM) {
+    if ((injection.suppressed_modifiers & KEYMOD_CBM) && !(still_suppressed & KEYMOD_CBM)) {
         if (host_cbm_held_ && cbm_key_pos_.valid) {
             close_contact(cbm_key_pos_.row, cbm_key_pos_.col);
         }
     }
-    if (injection.suppressed_modifiers & KEYMOD_CTRL) {
+    if ((injection.suppressed_modifiers & KEYMOD_CTRL) && !(still_suppressed & KEYMOD_CTRL)) {
         if (host_ctrl_held_ && ctrl_key_pos_.valid) {
             close_contact(ctrl_key_pos_.row, ctrl_key_pos_.col);
         }
