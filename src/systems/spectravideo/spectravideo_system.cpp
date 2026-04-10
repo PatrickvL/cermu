@@ -26,6 +26,7 @@
 #include "core/formats/format_load_helpers.hpp"
 #include "core/vfs/vfs.hpp"
 #include "utils/keyboard_matrix.hpp"
+#include "utils/guest_key_chars.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -389,52 +390,74 @@ template<SVIVariant V>
 void SpectravideoSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     // SVI keyboard matrix: 11 rows × 8 columns, active-low
     // Row selected by PPI Port A bits 0-3
-    static constexpr KeyMatrixMapping mappings[] = {
+    static const KeyMatrixEntry entries[] = {
         // Row 0: 0-7
-        { SDLK_0, 0, 0 }, { SDLK_1, 0, 1 }, { SDLK_2, 0, 2 }, { SDLK_3, 0, 3 },
-        { SDLK_4, 0, 4 }, { SDLK_5, 0, 5 }, { SDLK_6, 0, 6 }, { SDLK_7, 0, 7 },
+        { 0, 0, '0', 0 }, { 0, 1, '1', 0 }, { 0, 2, '2', 0 }, { 0, 3, '3', 0 },
+        { 0, 4, '4', 0 }, { 0, 5, '5', 0 }, { 0, 6, '6', 0 }, { 0, 7, '7', 0 },
         // Row 1: 8-9, -, =, etc
-        { SDLK_8, 1, 0 }, { SDLK_9, 1, 1 }, { SDLK_MINUS, 1, 2 }, { SDLK_EQUALS, 1, 3 },
-        { SDLK_BACKSLASH, 1, 4 }, { SDLK_LEFTBRACKET, 1, 5 }, { SDLK_RIGHTBRACKET, 1, 6 },
-        { SDLK_SEMICOLON, 1, 7 },
+        { 1, 0, '8', 0 }, { 1, 1, '9', 0 }, { 1, 2, '-', 0 }, { 1, 3, '=', 0 },
+        { 1, 4, '\\', 0 }, { 1, 5, '[', 0 }, { 1, 6, ']', 0 },
+        { 1, 7, ';', 0 },
         // Row 2: A-H
-        { SDLK_a, 2, 0 }, { SDLK_b, 2, 1 }, { SDLK_c, 2, 2 }, { SDLK_d, 2, 3 },
-        { SDLK_e, 2, 4 }, { SDLK_f, 2, 5 }, { SDLK_g, 2, 6 }, { SDLK_h, 2, 7 },
+        { 2, 0, 'a', 0 }, { 2, 1, 'b', 0 }, { 2, 2, 'c', 0 }, { 2, 3, 'd', 0 },
+        { 2, 4, 'e', 0 }, { 2, 5, 'f', 0 }, { 2, 6, 'g', 0 }, { 2, 7, 'h', 0 },
         // Row 3: I-P
-        { SDLK_i, 3, 0 }, { SDLK_j, 3, 1 }, { SDLK_k, 3, 2 }, { SDLK_l, 3, 3 },
-        { SDLK_m, 3, 4 }, { SDLK_n, 3, 5 }, { SDLK_o, 3, 6 }, { SDLK_p, 3, 7 },
+        { 3, 0, 'i', 0 }, { 3, 1, 'j', 0 }, { 3, 2, 'k', 0 }, { 3, 3, 'l', 0 },
+        { 3, 4, 'm', 0 }, { 3, 5, 'n', 0 }, { 3, 6, 'o', 0 }, { 3, 7, 'p', 0 },
         // Row 4: Q-X
-        { SDLK_q, 4, 0 }, { SDLK_r, 4, 1 }, { SDLK_s, 4, 2 }, { SDLK_t, 4, 3 },
-        { SDLK_u, 4, 4 }, { SDLK_v, 4, 5 }, { SDLK_w, 4, 6 }, { SDLK_x, 4, 7 },
-        // Row 5: Y, Z, etc
-        { SDLK_y, 5, 0 }, { SDLK_z, 5, 1 },
-        // Row 6: SHIFT, CTRL, GRAPH, CAPS
-        { SDLK_LSHIFT, 6, 0 }, { SDLK_RSHIFT, 6, 0 },
-        { SDLK_LCTRL, 6, 1 }, { SDLK_RCTRL, 6, 1 },
-        { SDLK_LALT, 6, 2 },   // GRAPH
-        { SDLK_CAPSLOCK, 6, 3 },
-        { SDLK_F1, 6, 5 }, { SDLK_F2, 6, 6 }, { SDLK_F3, 6, 7 },
+        { 4, 0, 'q', 0 }, { 4, 1, 'r', 0 }, { 4, 2, 's', 0 }, { 4, 3, 't', 0 },
+        { 4, 4, 'u', 0 }, { 4, 5, 'v', 0 }, { 4, 6, 'w', 0 }, { 4, 7, 'x', 0 },
+        // Row 5: Y, Z
+        { 5, 0, 'y', 0 }, { 5, 1, 'z', 0 },
+        // Row 6: SHIFT, CTRL, GRAPH, CAPS, F1-F3
+        { 6, 0, UKEY_SHIFT_L, 0 },
+        { 6, 1, UKEY_CTRL_L, 0 },
+        { 6, 2, UKEY_ALT_L, 0 },     // GRAPH
+        { 6, 3, UKEY_CAPS_LOCK, 0 },
+        { 6, 5, UKEY_F1, 0 }, { 6, 6, UKEY_F2, 0 }, { 6, 7, UKEY_F3, 0 },
         // Row 7: F4-F5, ESC, TAB, STOP, BS, SELECT, ENTER
-        { SDLK_F4, 7, 0 }, { SDLK_F5, 7, 1 },
-        { SDLK_ESCAPE, 7, 2 }, { SDLK_TAB, 7, 3 },
-        { SDLK_END, 7, 4 },    // STOP
-        { SDLK_BACKSPACE, 7, 5 },
-        { SDLK_HOME, 7, 6 },   // SELECT
-        { SDLK_RETURN, 7, 7 },
+        { 7, 0, UKEY_F4, 0 }, { 7, 1, UKEY_F5, 0 },
+        { 7, 2, '\x1B', 0 }, { 7, 3, '\t', 0 },
+        { 7, 4, UKEY_END, 0 },       // STOP
+        { 7, 5, '\b', 0 },
+        { 7, 6, UKEY_HOME, 0 },      // SELECT
+        { 7, 7, '\r', 0 },
         // Row 8: SPACE, arrows
-        { SDLK_SPACE, 8, 0 },
-        { SDLK_UP, 8, 5 }, { SDLK_DOWN, 8, 6 },
-        { SDLK_LEFT, 8, 7 },
+        { 8, 0, ' ', 0 },
+        { 8, 5, UKEY_CURSOR_UP, 0 }, { 8, 6, UKEY_CURSOR_DOWN, 0 },
+        { 8, 7, UKEY_CURSOR_LEFT, 0 },
         // Row 9
-        { SDLK_RIGHT, 9, 0 },
-        { SDLK_DELETE, 9, 1 }, { SDLK_INSERT, 9, 2 },
+        { 9, 0, UKEY_CURSOR_RIGHT, 0 },
+        { 9, 1, UKEY_INSERT, 0 }, { 9, 2, '\x7F', 0 },
         // Row 10: period, comma, slash, quote, backquote
-        { SDLK_PERIOD, 10, 0 }, { SDLK_COMMA, 10, 1 },
-        { SDLK_SLASH, 10, 2 }, { SDLK_QUOTE, 10, 3 },
-        { SDLK_BACKQUOTE, 10, 4 },
+        { 10, 0, '.', 0 }, { 10, 1, ',', 0 },
+        { 10, 2, '/', 0 }, { 10, 3, '\'', 0 },
+        { 10, 4, '`', 0 },
     };
 
-    keyboard_matrix_apply(mappings, keyboard_matrix_, key, pressed);
+    static const HostKeyBinding bindings[] = {
+        { SDLK_LSHIFT,   UKEY_SHIFT_L      },
+        { SDLK_RSHIFT,   UKEY_SHIFT_L      },
+        { SDLK_LCTRL,    UKEY_CTRL_L       },
+        { SDLK_RCTRL,    UKEY_CTRL_L       },
+        { SDLK_LALT,     UKEY_ALT_L        },  // GRAPH
+        { SDLK_CAPSLOCK, UKEY_CAPS_LOCK    },
+        { SDLK_F1,       UKEY_F1           },
+        { SDLK_F2,       UKEY_F2           },
+        { SDLK_F3,       UKEY_F3           },
+        { SDLK_F4,       UKEY_F4           },
+        { SDLK_F5,       UKEY_F5           },
+        { SDLK_END,      UKEY_END          },  // STOP
+        { SDLK_HOME,     UKEY_HOME         },  // SELECT
+        { SDLK_UP,       UKEY_CURSOR_UP    },
+        { SDLK_DOWN,     UKEY_CURSOR_DOWN  },
+        { SDLK_LEFT,     UKEY_CURSOR_LEFT  },
+        { SDLK_RIGHT,    UKEY_CURSOR_RIGHT },
+        { SDLK_DELETE,   '\x7F'            },
+        { SDLK_INSERT,   UKEY_INSERT       },
+    };
+
+    keyboard_matrix_apply(entries, bindings, keyboard_matrix_, key, pressed);
 }
 
 // ============================================================================
