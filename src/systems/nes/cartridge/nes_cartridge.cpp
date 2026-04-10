@@ -288,6 +288,12 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
             { 0x0C47946D, 210,    1, "Chibi Maruko-Chan - Uki Uki Shopping" },
             // Taito TC0690 (has scanline IRQ) — header says mapper 33 (TC0190, no IRQ)
             { 0xAEBD6549,  48, 0xFF, "Bakushou!! Jinsei Gekijou 3" },
+            // MMC3 Rev A (Crystalis/MMC6 variant) — submapper 4 selects Rev A IRQ behavior
+            { 0xBF0E2645,   4,    4, "God Slayer - Haruka Tenkuu no Sonata (Translated)" },
+            // Blargg MMC3 Rev A test ROMs — these test Rev A-specific IRQ counter behavior
+            { 0xA512BDF6,   4,    4, "blargg mmc3_test1_6-MMC6" },
+            { 0x633AFE6F,   4,    4, "blargg mmc3_test2_6-MMC3_alt" },
+            { 0xF312D1DE,   4,    4, "blargg mmc3_irq_5-MMC3_rev_A" },
         };
 
         for (const auto& ov : overrides) {

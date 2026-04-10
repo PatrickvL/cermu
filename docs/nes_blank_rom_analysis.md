@@ -25,6 +25,7 @@
 | Mapper 153 (Bandai SRAM) + 3 CRC overrides (M16→153, M19→210s1, M33→48) | 16,19,33 | 3 | `f1a0c357` | **VERIFIED** |
 | Taito X1-005: fix PRG bank register decode + security latch | 80, 207 | 7 | `a7dbc97a` | **VERIFIED** |
 | MMC3: pre-render scanline A12 for correct 241-clock IRQ count | 4 (all MMC3-derived) | 0 | `6b68d7f3` | **VERIFIED** (blargg test accuracy fix, no blank-screen impact) |
+| MMC3: Rev A per-game CRC detection (Crystalis/MMC6 IRQ variant) | 4 | 0 | `4b3c6adb` | **VERIFIED** (blargg Rev A tests now pass via submapper 4) |
 
 ---
 
@@ -633,29 +634,35 @@ matching real hardware bus activity.
 | mmc3_test1_3-A12_clocking | **PASS** | |
 | mmc3_test1_4-scanline_timing | **PASS** | Exact PPU dot timing |
 | mmc3_test1_5-MMC3 | **PASS** | Rev B banking/IRQ |
-| mmc3_test1_6-MMC6 | FAIL | Rev A only (conflicts with Rev B) |
+| mmc3_test1_6-MMC6 | **PASS** | Rev A via CRC → submapper 4 |
 | mmc3_test2_1-clocking | **PASS** | |
 | mmc3_test2_2-details | **PASS** | 241 clock count |
 | mmc3_test2_3-A12_clocking | **PASS** | |
 | mmc3_test2_4-scanline_timing | **PASS** | Exact PPU dot timing |
 | mmc3_test2_5-MMC3 | **PASS** | Rev B reload-to-0 |
-| mmc3_test2_6-MMC3_alt | FAIL | Rev A only (conflicts with Rev B) |
+| mmc3_test2_6-MMC3_alt | **PASS** | Rev A via CRC → submapper 4 |
 | mmc3_irq_1-Clocking | **PASS** | |
 | mmc3_irq_2-Details | **PASS** | |
 | mmc3_irq_3-A12_clocking | **PASS** | |
 | mmc3_irq_4-Scanline_timing | **PASS** | |
-| mmc3_irq_5-MMC3_rev_A | FAIL | Rev A only (conflicts with Rev B) |
+| mmc3_irq_5-MMC3_rev_A | **PASS** | Rev A via CRC → submapper 4 |
 | mmc3_irq_6-MMC3_rev_B | **PASS** | |
 | mmc5exram | **PASS** | Generic protocol |
-| mmc5test_v2 | TIMEOUT | Generic protocol (no $6000) |
-| mmc1_a12 | TIMEOUT | Generic protocol (no $6000) |
-| m22_chr_banking | TIMEOUT | Generic protocol (no $6000) |
+| mmc5test_v2 | TIMEOUT | Interactive UI (joypad input, no $6000) |
+| mmc1_a12 | TIMEOUT | Interactive test (joypad adjustment, no $6000) |
+| m22_chr_banking | TIMEOUT | Visual cycling test (no pass/fail signal) |
 
-**16 PASS, 3 FAIL (Rev A/Crystalis variant), 3 TIMEOUT (generic protocol).**
+**19 PASS, 0 FAIL, 3 TIMEOUT (interactive/visual tests).**
 
-The 3 FAILs are expected: Rev A and Rev B have mutually exclusive reload-to-0
-behavior. We implement Rev B (SMB3, Mega Man 3) which is used by the vast
-majority of MMC3 games. Rev A (Crystalis) would require per-game detection.
+The 3 TIMEOUTs are interactive/visual test ROMs with no automated pass/fail
+signaling. They require joypad input (mmc5test_v2, mmc1_a12) or cycle through
+visual patterns forever (m22_chr_banking). These cannot be resolved without
+manual inspection or marking them as interactive in meta-data.
+
+Rev A/B detection: MMC3 Rev A (Crystalis/MMC6 variant) uses CRC-based
+overrides to set submapper 4, selecting Rev A IRQ behavior. Rev A does
+not fire IRQ on reload-to-0 when counter was already 0 naturally; Rev B
+(default) fires on any zero. Both behaviors are now supported.
 
 ---
 
@@ -669,7 +676,7 @@ majority of MMC3 games. Rev A (Crystalis) would require per-game detection.
   `--blanks-only` for blanks only. Avoids full-collection runs after targeted fixes.
 - **Blargg mapper test suite**: 22 mapper-specific test ROMs in `data/nes/test_roms/mapper_tests/`
   (MMC3 test v1/v2, MMC3 IRQ, MMC5, MMC1 A12, VRC2 CHR). Run via `nes_test_runner --full --all`.
-  Uses $6000 protocol for pass/fail detection. 16/22 passing (3 expected Rev A fails, 3 generic timeouts).
+  Uses $6000 protocol for pass/fail detection. 19/22 passing (3 interactive/visual timeouts).
 
 ---
 
