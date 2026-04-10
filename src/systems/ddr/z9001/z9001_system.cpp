@@ -8,6 +8,7 @@
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
 #include "utils/keyboard_matrix.hpp"
+#include "utils/guest_key_chars.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -198,38 +199,52 @@ template<Z9001Variant V> void Z9001System<V>::run_frame() {
 template<Z9001Variant V>
 void Z9001System<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     // Z9001/KC87 keyboard matrix: 8 rows × 8 columns, active-low
-    static constexpr KeyMatrixMapping mappings[] = {
+    static const KeyMatrixEntry entries[] = {
         // Row 0: digits 0–7
-        { SDLK_0, 0, 7 }, { SDLK_1, 0, 6 }, { SDLK_2, 0, 5 }, { SDLK_3, 0, 4 },
-        { SDLK_4, 0, 3 }, { SDLK_5, 0, 2 }, { SDLK_6, 0, 1 }, { SDLK_7, 0, 0 },
+        { 0, 7, '0', 0 }, { 0, 6, '1', 0 }, { 0, 5, '2', 0 }, { 0, 4, '3', 0 },
+        { 0, 3, '4', 0 }, { 0, 2, '5', 0 }, { 0, 1, '6', 0 }, { 0, 0, '7', 0 },
         // Row 1: digits 8–9, punctuation
-        { SDLK_8, 1, 7 }, { SDLK_9, 1, 6 },
-        { SDLK_SEMICOLON, 1, 5 }, { SDLK_COMMA, 1, 3 },
-        { SDLK_EQUALS, 1, 2 }, { SDLK_PERIOD, 1, 1 },
+        { 1, 7, '8', 0 }, { 1, 6, '9', 0 },
+        { 1, 5, ';', 0 }, { 1, 3, ',', 0 },
+        { 1, 2, '=', 0 }, { 1, 1, '.', 0 },
         // Row 2: A–G + Space
-        { SDLK_SPACE, 2, 7 },
-        { SDLK_a, 2, 6 }, { SDLK_b, 2, 5 }, { SDLK_c, 2, 4 }, { SDLK_d, 2, 3 },
-        { SDLK_e, 2, 2 }, { SDLK_f, 2, 1 }, { SDLK_g, 2, 0 },
+        { 2, 7, ' ', 0 },
+        { 2, 6, 'a', 0 }, { 2, 5, 'b', 0 }, { 2, 4, 'c', 0 }, { 2, 3, 'd', 0 },
+        { 2, 2, 'e', 0 }, { 2, 1, 'f', 0 }, { 2, 0, 'g', 0 },
         // Row 3: H–O
-        { SDLK_h, 3, 7 }, { SDLK_i, 3, 6 }, { SDLK_j, 3, 5 }, { SDLK_k, 3, 4 },
-        { SDLK_l, 3, 3 }, { SDLK_m, 3, 2 }, { SDLK_n, 3, 1 }, { SDLK_o, 3, 0 },
+        { 3, 7, 'h', 0 }, { 3, 6, 'i', 0 }, { 3, 5, 'j', 0 }, { 3, 4, 'k', 0 },
+        { 3, 3, 'l', 0 }, { 3, 2, 'm', 0 }, { 3, 1, 'n', 0 }, { 3, 0, 'o', 0 },
         // Row 4: P–W
-        { SDLK_p, 4, 7 }, { SDLK_q, 4, 6 }, { SDLK_r, 4, 5 }, { SDLK_s, 4, 4 },
-        { SDLK_t, 4, 3 }, { SDLK_u, 4, 2 }, { SDLK_v, 4, 1 }, { SDLK_w, 4, 0 },
+        { 4, 7, 'p', 0 }, { 4, 6, 'q', 0 }, { 4, 5, 'r', 0 }, { 4, 4, 's', 0 },
+        { 4, 3, 't', 0 }, { 4, 2, 'u', 0 }, { 4, 1, 'v', 0 }, { 4, 0, 'w', 0 },
         // Row 5: X–Z, punctuation
-        { SDLK_x, 5, 7 }, { SDLK_y, 5, 6 }, { SDLK_z, 5, 5 },
+        { 5, 7, 'x', 0 }, { 5, 6, 'y', 0 }, { 5, 5, 'z', 0 },
         // Row 6: cursor and editing
-        { SDLK_INSERT, 6, 5 }, { SDLK_DELETE, 6, 4 },
-        { SDLK_LEFT, 6, 3 }, { SDLK_RIGHT, 6, 2 },
-        { SDLK_UP, 6, 1 }, { SDLK_DOWN, 6, 0 },
+        { 6, 5, UKEY_INSERT, 0 }, { 6, 4, '\x7F', 0 },
+        { 6, 3, UKEY_CURSOR_LEFT, 0 }, { 6, 2, UKEY_CURSOR_RIGHT, 0 },
+        { 6, 1, UKEY_CURSOR_UP, 0 }, { 6, 0, UKEY_CURSOR_DOWN, 0 },
         // Row 7: modifiers
-        { SDLK_TAB, 7, 5 }, { SDLK_CAPSLOCK, 7, 4 },
-        { SDLK_LCTRL, 7, 3 }, { SDLK_RCTRL, 7, 3 },
-        { SDLK_LSHIFT, 7, 2 }, { SDLK_RSHIFT, 7, 2 },
-        { SDLK_RETURN, 7, 0 },
+        { 7, 5, '\t', 0 }, { 7, 4, UKEY_CAPS_LOCK, 0 },
+        { 7, 3, UKEY_CTRL_L, 0 },
+        { 7, 2, UKEY_SHIFT_L, 0 },
+        { 7, 0, '\r', 0 },
     };
 
-    keyboard_matrix_apply(mappings, keyboard_matrix_, key, pressed);
+    static const HostKeyBinding bindings[] = {
+        { SDLK_INSERT,   UKEY_INSERT       },
+        { SDLK_DELETE,   '\x7F'            },
+        { SDLK_LEFT,     UKEY_CURSOR_LEFT  },
+        { SDLK_RIGHT,    UKEY_CURSOR_RIGHT },
+        { SDLK_UP,       UKEY_CURSOR_UP    },
+        { SDLK_DOWN,     UKEY_CURSOR_DOWN  },
+        { SDLK_CAPSLOCK, UKEY_CAPS_LOCK    },
+        { SDLK_LCTRL,    UKEY_CTRL_L       },
+        { SDLK_RCTRL,    UKEY_CTRL_L       },
+        { SDLK_LSHIFT,   UKEY_SHIFT_L      },
+        { SDLK_RSHIFT,   UKEY_SHIFT_L      },
+    };
+
+    keyboard_matrix_apply(entries, bindings, keyboard_matrix_, key, pressed);
 }
 
 // ============================================================================
