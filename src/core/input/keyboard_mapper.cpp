@@ -1,5 +1,6 @@
 #include "core/cermu.hpp"
 #include "core/input/keyboard_mapper.hpp"
+#include "utils/guest_key_chars.hpp"
 #include <SDL.h>
 #include <cstdio>
 #include <cstring>
@@ -49,7 +50,7 @@ void KeyboardMapper::set_guest_keyboard(commodore_keyboard_t* keyboard) {
 }
 
 void KeyboardMapper::build_character_map_from_matrix(const keyboard_matrix_config_t* config) {
-    if (!config || !config->keys || !config->decode_tables || config->num_decode_tables == 0) return;
+    if (!config || !config->entries || config->num_entries == 0) return;
 
     model_ = config->model;
     matrix_rows_ = config->rows;
@@ -60,120 +61,107 @@ void KeyboardMapper::build_character_map_from_matrix(const keyboard_matrix_confi
         char_map_[i] = GuestKeyAction();
     }
 
-    uint8_t rows = config->rows;
-    uint8_t cols = config->cols;
-
-    // Build the character map from PETSCII decode tables.
+    // ────────────────────────────────────────────────────────────────────
+    // Step 1: Auto-derive char_map_ from matrix entry normal/shifted chars.
     //
-    // Each decode table maps every matrix position to a PETSCII code for
-    // a specific modifier combination (KEYMOD_NONE, KEYMOD_SHIFT, etc.).
-    // We convert each PETSCII code to a host character via
-    // petscii_to_host_char(), then store the reverse mapping:
-    //   char_map_[host_char] = { row, col, table.modifiers }
+    // Each KeyMatrixEntry declares the Unicode character(s) the key
+    // produces:  normal (unshifted) and shifted.  For ASCII-range chars,
+    // populate char_map_[] directly.
     //
-    // Tables are processed in order.  First-write-wins: the first table
-    // that maps a host character claims that char_map_ slot.  This means
-    // the KEYMOD_NONE (unshifted) table should come first, followed by
-    // KEYMOD_SHIFT, then KEYMOD_CBM, etc.
+    // Letters: both 'A' and 'a' map with KEYMOD_NONE because Commodore's
+    // default charset shows uppercase for unshifted keys.
     //
-    // After the decode table loop, a position-accurate letter fixup copies
-    // the unshifted 'A'-'Z' mappings to 'a'-'z'.  This is necessary
-    // because the Commodore default character set shows UPPERCASE for
-    // unshifted keys.  Without the fixup, typing 'a' would force SHIFT
-    // (from the PETSCII $C1 shifted-table entry), and the VIC-20/C64
-    // KERNAL would produce a graphics character instead of a letter.
-    //
-    // Commodore-specific characters are handled automatically:
-    //   £ ($5C) → petscii_to_host_char → '^' → char_map_['^'] = KEYMOD_NONE
-    //   ↑ ($5E) → petscii_to_host_char → '|' → char_map_['|'] = KEYMOD_NONE
-    //   ← ($5F) → petscii_to_host_char → '\\' → char_map_['\\'] = KEYMOD_NONE
-    //   π ($DE) → petscii_to_host_char → '~' → char_map_['~'] = KEYMOD_SHIFT
+    // Shifted chars: populate with KEYMOD_SHIFT so that TEXTINPUT of the
+    // shifted character presses the key + SHIFT on the guest.
+    // ────────────────────────────────────────────────────────────────────
+    for (int i = 0; i < config->num_entries; i++) {
+        const KeyMatrixEntry& e = config->entries[i];
 
-    for (int t = 0; t < config->num_decode_tables; t++) {
-        const keyboard_decode_table_t& table = config->decode_tables[t];
-        if (!table.petscii) continue;
+        // Map normal (unshifted) character
+        if (e.normal > 0 && e.normal < 0x80) {
+            char c = static_cast<char>(e.normal);
 
-        for (int row = 0; row < rows; row++) {
-            for (int col = 0; col < cols; col++) {
-                petscii_t p = table.petscii[row * cols + col];
-                if (p == 0) continue;
+            if (c >= 'A' && c <= 'Z') {
+                // Uppercase letter: map both cases to KEYMOD_NONE.
+                // Commodore letter fixup — unshifted = uppercase on screen.
+                if (!char_map_[(unsigned char)c].valid)
+                    char_map_[(unsigned char)c] = GuestKeyAction(e.row, e.col, KEYMOD_NONE);
+                char lower = c + 32;
+                if (!char_map_[(unsigned char)lower].valid)
+                    char_map_[(unsigned char)lower] = GuestKeyAction(e.row, e.col, KEYMOD_NONE);
+            } else if (c >= 0x20) {
+                // Printable non-letter: map with KEYMOD_NONE.
+                if (!char_map_[(unsigned char)c].valid)
+                    char_map_[(unsigned char)c] = GuestKeyAction(e.row, e.col, KEYMOD_NONE);
+            }
+        }
 
-                char host_char = petscii_to_host_char(p);
-                if (host_char == 0) continue;
+        // Map shifted character — KEYMOD_SHIFT so the mapper presses SHIFT
+        if (e.shifted > 0 && e.shifted < 0x80) {
+            char sc = static_cast<char>(e.shifted);
 
-                unsigned char uc = (unsigned char)host_char;
-                if (uc >= 128) continue;
-
-                // First-write-wins: don't overwrite existing mappings
-                if (!char_map_[uc].valid) {
-                    char_map_[uc] = GuestKeyAction(row, col, table.modifiers);
-                }
+            if (sc >= 'a' && sc <= 'z') {
+                // Lowercase shifted letter: already mapped above via the
+                // uppercase normal letter path.  Skip to avoid overwriting
+                // the KEYMOD_NONE mapping with KEYMOD_SHIFT.
+            } else if (sc >= 0x20) {
+                if (!char_map_[(unsigned char)sc].valid)
+                    char_map_[(unsigned char)sc] = GuestKeyAction(e.row, e.col, KEYMOD_SHIFT);
             }
         }
     }
 
-    // Position-accurate letter fixup: map both 'a' and 'A' to KEYMOD_NONE.
+    // ────────────────────────────────────────────────────────────────────
+    // Step 2: Apply character overrides.
     //
-    // The Commodore default character set (uppercase/graphics) shows uppercase
-    // letters for unshifted keypresses.  Shift+letter produces a graphics
-    // character, NOT a lowercase letter.  Lowercase letters only appear after
-    // toggling to the alternate charset via C=+SHIFT.
+    // These handle host characters that need explicit TEXTINPUT mapping:
+    //   Host '\' → guest ← key (non-ASCII, not auto-derived)
+    //   Host '~' → guest π (Shift+↑)
+    //   Host '{' → guest ( (no Commodore equivalent → fallback)
     //
-    // The decode table loop above creates:
-    //   char_map_['A'] = { A-pos, KEYMOD_NONE }   ← from unshifted table ($41)
-    //   char_map_['a'] = { A-pos, KEYMOD_SHIFT }   ← from shifted table ($C1)
-    //
-    // The 'a' → KEYMOD_SHIFT mapping is character-accurate PETSCII but causes
-    // inject_press to FORCE SHIFT for every unshifted host letter, producing
-    // graphics characters instead of letters.  Override 'a'-'z' with the
-    // position-accurate KEYMOD_NONE mapping from 'A'-'Z':
-    for (int i = 0; i < 26; i++) {
-        if (char_map_['A' + i].valid) {
-            char_map_['a' + i] = char_map_['A' + i];
+    // Overrides always win (write over any auto-derived mapping).
+    // ────────────────────────────────────────────────────────────────────
+    if (config->char_overrides) {
+        for (int i = 0; i < config->num_char_overrides; i++) {
+            const KeyCharOverride& ov = config->char_overrides[i];
+            if (ov.character == 0 || ov.character >= 128) continue;
+            char_map_[ov.character] = GuestKeyAction(ov.row, ov.col, ov.modifier);
         }
     }
 
-    // Underscore fixup: host '_' (Shift+minus) → PETSCII $A4 (▁).
-    //
-    // The Commodore graphics character $A4 (LOWER ONE EIGHTH BLOCK) is the
-    // closest visual match to an underscore.  It's produced by C= + @, i.e.
-    // the '@' key position with KEYMOD_CBM.  Since $A4 lives in the $A0–$BF
-    // graphics range, it doesn't appear in the standard KEYMOD_NONE/SHIFT
-    // decode tables and can't be picked up by the loop above.
-    //
-    // We derive the position from char_map_['@'] (already populated by the
-    // unshifted decode table) and override the modifier to KEYMOD_CBM.
+    // Underscore fixup: host '_' (Shift+minus) → C= + @ position.
+    // The Commodore graphics character $A4 (▁) is the closest visual match.
     if (!char_map_['_'].valid && char_map_['@'].valid) {
         char_map_['_'] = GuestKeyAction(char_map_['@'].row, char_map_['@'].col, KEYMOD_CBM);
     }
 
-    // Cache modifier key positions using the keys[] table
+    // ────────────────────────────────────────────────────────────────────
+    // Step 3: Cache modifier key positions from matrix entries.
+    //
+    // Search the matrix for entries whose normal char32_t matches the
+    // PUA identities of modifier keys.
+    // ────────────────────────────────────────────────────────────────────
     shift_left_pos_ = GuestKeyAction();
     shift_right_pos_ = GuestKeyAction();
     cbm_key_pos_ = GuestKeyAction();
     ctrl_key_pos_ = GuestKeyAction();
 
-    for (int row = 0; row < rows; row++) {
-        for (int col = 0; col < cols; col++) {
-            SDL_Keycode key = config->keys[row * cols + col];
-            if (key == SDLK_LSHIFT) {
-                shift_left_pos_ = GuestKeyAction(row, col, KEYMOD_NONE);
-            }
-            if (key == SDLK_RSHIFT) {
-                shift_right_pos_ = GuestKeyAction(row, col, KEYMOD_NONE);
-            }
-            if (key == CERMU_KEY_CBM_COMMODORE) {
-                cbm_key_pos_ = GuestKeyAction(row, col, KEYMOD_NONE);
-            }
-            if (key == SDLK_LCTRL) {
-                ctrl_key_pos_ = GuestKeyAction(row, col, KEYMOD_NONE);
-            }
+    for (int i = 0; i < config->num_entries; i++) {
+        const KeyMatrixEntry& e = config->entries[i];
+        if (e.normal == UKEY_CBM_SHIFT_L) {
+            shift_left_pos_ = GuestKeyAction(e.row, e.col, KEYMOD_NONE);
+        } else if (e.normal == UKEY_CBM_SHIFT_R) {
+            shift_right_pos_ = GuestKeyAction(e.row, e.col, KEYMOD_NONE);
+        } else if (e.normal == UKEY_CBM_COMMODORE) {
+            cbm_key_pos_ = GuestKeyAction(e.row, e.col, KEYMOD_NONE);
+        } else if (e.normal == UKEY_CBM_CTRL) {
+            ctrl_key_pos_ = GuestKeyAction(e.row, e.col, KEYMOD_NONE);
         }
     }
 
     log_info("KeyboardMapper: Built character map for %s (%d×%d matrix)\n",
            config->description ? config->description : "unknown",
-           rows, cols);
+           config->rows, config->cols);
 
     // Count valid mappings for debug
     int count = 0;
@@ -806,26 +794,18 @@ void KeyboardMapper::close_contact(uint8_t row, uint8_t col) {
     if (!keyboard_) return;
     if (row >= matrix_rows_ || col >= matrix_cols_) return;
 
-    // Convert from array indices to hardware port bit numbers.
-    // Same convention as commodore_keyboard_t::key_down:
-    //   row_bit = (matrix_rows - 1) - row
-    //   col_bit = (7 - col) for standard cols 0-7, col for extended cols 8+
-    uint8_t row_bit = (matrix_rows_ - 1) - row;
-    uint8_t col_bit = (col < 8) ? (7 - col) : col;
-
-    keyboard_->row_open_contacts[row_bit] &= ~(1 << col_bit);
-    keyboard_->col_open_contacts[col_bit] &= ~(1 << row_bit);
+    // Row/col are hardware bit positions — same convention as
+    // commodore_keyboard_t::key_down().
+    keyboard_->row_open_contacts[row] &= ~(1 << col);
+    keyboard_->col_open_contacts[col] &= ~(1 << row);
 }
 
 void KeyboardMapper::open_contact(uint8_t row, uint8_t col) {
     if (!keyboard_) return;
     if (row >= matrix_rows_ || col >= matrix_cols_) return;
 
-    uint8_t row_bit = (matrix_rows_ - 1) - row;
-    uint8_t col_bit = (col < 8) ? (7 - col) : col;
-
-    keyboard_->row_open_contacts[row_bit] |= (1 << col_bit);
-    keyboard_->col_open_contacts[col_bit] |= (1 << row_bit);
+    keyboard_->row_open_contacts[row] |= (1 << col);
+    keyboard_->col_open_contacts[col] |= (1 << row);
 }
 
 bool KeyboardMapper::is_printable_key(SDL_Keycode sym) const {

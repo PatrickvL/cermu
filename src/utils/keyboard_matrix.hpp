@@ -78,3 +78,55 @@ inline bool keyboard_matrix_apply(const KeyMatrixMapping (&mappings)[N],
                                   bool pressed) {
     return keyboard_matrix_apply(mappings, N, matrix, key, pressed);
 }
+
+// ── Guest Matrix Entry ───────────────────────────────────────────────
+
+/// A single key position in a guest keyboard matrix, identified by
+/// Unicode codepoint rather than SDL keycode.
+///
+/// Row and col are hardware bit positions that map directly to the
+/// scan callback's array indices — no conversion or bit-reversal needed:
+///   key_down:  row_open_contacts[row] &= ~(1 << col)
+///   key_up:    row_open_contacts[row] |=  (1 << col)
+///
+/// `normal` is the character the key produces unshifted (or a PUA value
+/// from guest_key_chars.hpp for non-character keys).
+/// `shifted` is the character produced with Shift held, or 0 if the
+/// shifted output is not a distinct printable character.
+struct KeyMatrixEntry {
+    uint8_t  row;       // hardware scan line (row_open_contacts index)
+    uint8_t  col;       // hardware data line (bit position within row)
+    char32_t normal;    // unshifted character (Unicode or PUA)
+    char32_t shifted;   // shifted character (0 = no shifted output)
+};
+
+// ── Character Override ───────────────────────────────────────────────
+
+/// A character override entry for keyboard matrices where the guest
+/// character differs from the host SDL_Keycode identity.
+///
+/// Most keys on most systems produce the character implied by their
+/// SDL_Keycode (SDLK_a → 'A'/'a', SDLK_2 → '2'/'"', etc.).  Only
+/// the ~10-15 keys per system where guest and host disagree need an
+/// explicit override.
+///
+/// The `modifier` field tells the mapper which guest modifier state
+/// is required to produce this character (KEYMOD_NONE, KEYMOD_SHIFT).
+struct KeyCharOverride {
+    char32_t    character;   // Unicode codepoint the host user types
+    uint8_t     row;         // Guest matrix row
+    uint8_t     col;         // Guest matrix column
+    uint8_t     modifier;    // Required guest modifier (KEYMOD_NONE, KEYMOD_SHIFT)
+};
+
+/// Maps a host SDL_Keycode to a guest char32_t key identity.
+///
+/// For most keys (letters, digits, RETURN, SPACE) the SDL_Keycode value
+/// equals the char32_t value and no explicit binding is needed.  This
+/// table only covers keys where the mapping is non-trivial:
+///   - PUA keys:  SDLK_TAB → UKEY_CBM_RUN_STOP, SDLK_LGUI → UKEY_CBM_COMMODORE
+///   - Non-ASCII: SDLK_BACKSLASH → UKEY_LEFT_ARROW (guest ← key)
+struct HostKeyBinding {
+    SDL_Keycode sdl_key;    // host key that fires from SDL_KEYDOWN
+    char32_t    guest_key;  // guest char32_t identity from the matrix
+};

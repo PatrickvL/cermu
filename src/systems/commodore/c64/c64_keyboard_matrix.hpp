@@ -16,6 +16,6 @@
 #define C64_KEYBOARD_COLS 8
 
 // Pre-built configuration struct for commodore_keyboard_t::init()
-// Contains keys[] (SDL_Keycode values) and decode tables.
+// Contains KeyMatrixMapping entries and character overrides.
 extern const keyboard_matrix_config_t c64_keyboard_config;
 

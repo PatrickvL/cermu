@@ -110,11 +110,10 @@ public:
     // Set the guest keyboard this mapper controls
     void set_guest_keyboard(commodore_keyboard_t* keyboard);
 
-    // Build character map from the system's PETSCII decode tables.
-    // Iterates each decode table (KEYMOD_NONE, KEYMOD_SHIFT, etc.),
-    // converts PETSCII codes to host characters via petscii_to_host_char(),
-    // and builds the reverse lookup:
-    //   host_character → { row, col, modifier_bitmask }
+    // Build character map from the keyboard matrix configuration.
+    // Auto-derives character mappings from SDL_Keycode identity for
+    // printable keys, then applies character overrides for keys where
+    // the guest output differs from the host.
     void build_character_map_from_matrix(const keyboard_matrix_config_t* config);
 
     // Set the emulator modifier key (default: Right Alt)

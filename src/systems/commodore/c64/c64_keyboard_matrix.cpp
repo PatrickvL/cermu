@@ -1,99 +1,160 @@
 #include "systems/commodore/c64/c64_keyboard_matrix.hpp"
+#include "utils/guest_key_chars.hpp"
 
 // ============================================================================
 // C64 Keyboard Matrix — 8×8
 // ============================================================================
-// CIA Port A ($DC00) = column select (output)
-// CIA Port B ($DC01) = row read (input)
-// Array convention: array[7 - row_bit][7 - col_bit]
-//   row_bit = PB bit position, col_bit = PA bit position
+// CIA1 Port A ($DC00) = column select (output, active-low)
+// CIA1 Port B ($DC01) = row read (input, active-low)
 //
-// The keys[] table stores SDL_Keycode values identifying each physical key.
-// The decode tables store the PETSCII character produced when the key is
-// pressed with a specific modifier (SHIFT, C=, CTRL), or 0 if no
-// distinct character is produced (the KERNAL ROM handles it at runtime).
+// Row = PB bit position (0–7), Col = PA bit position (0–7).
+// These values are used directly by the scan callbacks:
+//   row_open_contacts[row] indexed by PB, containing PA bit data
+//   col_open_contacts[col] indexed by PA, containing PB bit data
 //
-// NOTE on cursor keys: CRSR→ and CRSR↓ are the only physical cursor keys.
-//   Host LEFT/UP are handled via auto-shift in key_down/key_up.
+// KERNAL keyboard decode table index = PA * 8 + PB (PA-major).
+// The KERNAL scans PA columns (outer loop via $DC00 writes) and reads
+// PB rows (inner loop via LSR on $DC01 data).
+//
+// Hardware matrix (C64 PRG, Table of Keyboard Matrix Values):
+//          PA0      PA1     PA2    PA3    PA4    PA5    PA6      PA7
+// PB0:     DEL      3       5      7      9      +      £        1
+// PB1:     RETURN   W       R      Y      I      P      *        ←
+// PB2:     CRSR→    A       D      G      J      L      ;        CTRL
+// PB3:     F7       4       6      8      0      -      HOME     2
+// PB4:     F1       Z       C      B      M      .      RSHIFT   SPACE
+// PB5:     F3       S       F      H      K      :      =        C=
+// PB6:     F5       E       T      U      O      @      ↑        Q
+// PB7:     CRSR↓    LSHIFT  X      V      N      ,      /        RUNSTOP
 
-static const SDL_Keycode c64_keys[C64_KEYBOARD_ROWS * C64_KEYBOARD_COLS] = {
-    // row 7: RUN/STOP, /, ,, N, V, X, LSHIFT, CRSR↓
-    CERMU_KEY_CBM_RUN_STOP,  SDLK_SLASH,  SDLK_COMMA,  SDLK_n,  SDLK_v,  SDLK_x,  SDLK_LSHIFT,  SDLK_DOWN,
-    // row 6: Q, ↑(char), @, O, U, T, E, F5
-    SDLK_q,  CERMU_KEY_CBM_ARROW_UP,  SDLK_LEFTBRACKET,  SDLK_o,  SDLK_u,  SDLK_t,  SDLK_e,  SDLK_F5,
-    // row 5: C=, =, :, K, H, F, S, F3
-    CERMU_KEY_CBM_COMMODORE,  SDLK_EQUALS,  SDLK_SEMICOLON,  SDLK_k,  SDLK_h,  SDLK_f,  SDLK_s,  SDLK_F3,
-    // row 4: SPACE, RSHIFT, ., M, B, C, Z, F1
-    SDLK_SPACE,  SDLK_RSHIFT,  SDLK_PERIOD,  SDLK_m,  SDLK_b,  SDLK_c,  SDLK_z,  SDLK_F1,
-    // row 3: 2, HOME, -, 0, 8, 6, 4, F7
-    SDLK_2,  SDLK_HOME,  SDLK_MINUS,  SDLK_0,  SDLK_8,  SDLK_6,  SDLK_4,  SDLK_F7,
-    // row 2: CTRL, ;, L, J, G, D, A, CRSR→
-    SDLK_LCTRL,  SDLK_QUOTE,  SDLK_l,  SDLK_j,  SDLK_g,  SDLK_d,  SDLK_a,  SDLK_RIGHT,
-    // row 1: ←(char), *, P, I, Y, R, W, RETURN
-    CERMU_KEY_CBM_ARROW_LEFT,  SDLK_RIGHTBRACKET,  SDLK_p,  SDLK_i,  SDLK_y,  SDLK_r,  SDLK_w,  SDLK_RETURN,
-    // row 0: 1, £, +, 9, 7, 5, 3, DEL
-    SDLK_1,  CERMU_KEY_CBM_POUND,  SDLK_BACKSLASH,  SDLK_9,  SDLK_7,  SDLK_5,  SDLK_3,  CERMU_KEY_CBM_DEL,
+static const KeyMatrixEntry c64_matrix[] = {
+    // row 0 (PB0): DEL, 3, 5, 7, 9, +, £, 1
+    //              PA0  PA1  PA2  PA3  PA4  PA5  PA6  PA7
+    { 0, 0, UKEY_CBM_DEL,       0   },
+    { 0, 1, '3',               '#'  },
+    { 0, 2, '5',               '%'  },
+    { 0, 3, '7',              '\''  },
+    { 0, 4, '9',               ')'  },
+    { 0, 5, '+',                0   },
+    { 0, 6, UKEY_POUND_SIGN,    0   },
+    { 0, 7, '1',               '!'  },
+
+    // row 1 (PB1): RETURN, W, R, Y, I, P, *, ←
+    { 1, 0, '\r',               0   },
+    { 1, 1, 'W',               'w'  },
+    { 1, 2, 'R',               'r'  },
+    { 1, 3, 'Y',               'y'  },
+    { 1, 4, 'I',               'i'  },
+    { 1, 5, 'P',               'p'  },
+    { 1, 6, '*',                0   },
+    { 1, 7, UKEY_LEFT_ARROW,    0   },
+
+    // row 2 (PB2): CRSR→, A, D, G, J, L, ;, CTRL
+    { 2, 0, UKEY_CBM_CURSOR_RT, 0   },
+    { 2, 1, 'A',               'a'  },
+    { 2, 2, 'D',               'd'  },
+    { 2, 3, 'G',               'g'  },
+    { 2, 4, 'J',               'j'  },
+    { 2, 5, 'L',               'l'  },
+    { 2, 6, ';',               ']'  },
+    { 2, 7, UKEY_CBM_CTRL,      0   },
+
+    // row 3 (PB3): F7, 4, 6, 8, 0, -, HOME, 2
+    { 3, 0, UKEY_CBM_F7,        0   },
+    { 3, 1, '4',               '$'  },
+    { 3, 2, '6',               '&'  },
+    { 3, 3, '8',               '('  },
+    { 3, 4, '0',                0   },
+    { 3, 5, '-',                0   },
+    { 3, 6, UKEY_CBM_HOME,      0   },
+    { 3, 7, '2',               '"'  },
+
+    // row 4 (PB4): F1, Z, C, B, M, ., RSHIFT, SPACE
+    { 4, 0, UKEY_CBM_F1,        0   },
+    { 4, 1, 'Z',               'z'  },
+    { 4, 2, 'C',               'c'  },
+    { 4, 3, 'B',               'b'  },
+    { 4, 4, 'M',               'm'  },
+    { 4, 5, '.',               '>'  },
+    { 4, 6, UKEY_CBM_SHIFT_R,   0   },
+    { 4, 7, ' ',                0   },
+
+    // row 5 (PB5): F3, S, F, H, K, :, =, C=
+    { 5, 0, UKEY_CBM_F3,        0   },
+    { 5, 1, 'S',               's'  },
+    { 5, 2, 'F',               'f'  },
+    { 5, 3, 'H',               'h'  },
+    { 5, 4, 'K',               'k'  },
+    { 5, 5, ':',               '['  },
+    { 5, 6, '=',                0   },
+    { 5, 7, UKEY_CBM_COMMODORE, 0   },
+
+    // row 6 (PB6): F5, E, T, U, O, @, ↑, Q
+    { 6, 0, UKEY_CBM_F5,        0   },
+    { 6, 1, 'E',               'e'  },
+    { 6, 2, 'T',               't'  },
+    { 6, 3, 'U',               'u'  },
+    { 6, 4, 'O',               'o'  },
+    { 6, 5, '@',                0   },
+    { 6, 6, UKEY_UP_ARROW, UKEY_PI  },
+    { 6, 7, 'Q',               'q'  },
+
+    // row 7 (PB7): CRSR↓, LSHIFT, X, V, N, comma, /, RUNSTOP
+    { 7, 0, UKEY_CBM_CURSOR_DN, 0   },
+    { 7, 1, UKEY_CBM_SHIFT_L,   0   },
+    { 7, 2, 'X',               'x'  },
+    { 7, 3, 'V',               'v'  },
+    { 7, 4, 'N',               'n'  },
+    { 7, 5, ',',               '<'  },
+    { 7, 6, '/',               '?'  },
+    { 7, 7, UKEY_CBM_RUN_STOP,  0   },
 };
 
-// Unshifted character decode table — PETSCII codes per matrix position.
-// Mirrors the C64 KERNAL's normal (unshifted) decode table at $EB81.
-// Values match the PETSCII code the KERNAL puts in the keyboard buffer
-// when a key is pressed with no modifiers.
-// 0 = non-character key (modifier, function key, cursor key, RETURN, DEL).
-//
-// Commodore-specific characters use their PETSCII codes:
-//   ← (left arrow) = $5F,  ↑ (up arrow) = $5E,  £ (pound) = $5C
-// These diverge from ASCII ($5F=_, $5E=^, $5C=\) — petscii_to_host_char()
-// bridges the mapping.
-static const petscii_t c64_unshifted_chars[C64_KEYBOARD_ROWS * C64_KEYBOARD_COLS] = {
-    // row 7: (RUN/STOP), /, ,, N, V, X, (LSHIFT), (CRSR↓)
-    0, '/', ',', 'N', 'V', 'X', 0, 0,
-    // row 6: Q, ↑($5E), @, O, U, T, E, (F5)
-    'Q', 0x5E, '@', 'O', 'U', 'T', 'E', 0,
-    // row 5: (C=), =, :, K, H, F, S, (F3)
-    0, '=', ':', 'K', 'H', 'F', 'S', 0,
-    // row 4: SPACE, (RSHIFT), ., M, B, C, Z, (F1)
-    ' ', 0, '.', 'M', 'B', 'C', 'Z', 0,
-    // row 3: 2, (HOME), -, 0, 8, 6, 4, (F7)
-    '2', 0, '-', '0', '8', '6', '4', 0,
-    // row 2: (CTRL), ;, L, J, G, D, A, (CRSR→)
-    0, ';', 'L', 'J', 'G', 'D', 'A', 0,
-    // row 1: ←($5F), *, P, I, Y, R, W, (RETURN)
-    0x5F, '*', 'P', 'I', 'Y', 'R', 'W', 0,
-    // row 0: 1, £($5C), +, 9, 7, 5, 3, (DEL)
-    '1', 0x5C, '+', '9', '7', '5', '3', 0,
+// ============================================================================
+// Host key bindings — SDL_Keycode → guest char32_t
+// ============================================================================
+
+static const HostKeyBinding c64_host_bindings[] = {
+    // Modifiers
+    { SDLK_LSHIFT,    UKEY_CBM_SHIFT_L   },
+    { SDLK_RSHIFT,    UKEY_CBM_SHIFT_R   },
+    { SDLK_LCTRL,     UKEY_CBM_CTRL      },
+    { SDLK_LGUI,      UKEY_CBM_COMMODORE },
+
+    // Action keys
+    { SDLK_TAB,        UKEY_CBM_RUN_STOP },
+    { SDLK_BACKSPACE,  UKEY_CBM_DEL      },
+    { SDLK_HOME,       UKEY_CBM_HOME     },
+
+    // Navigation
+    { SDLK_DOWN,       UKEY_CBM_CURSOR_DN },
+    { SDLK_RIGHT,      UKEY_CBM_CURSOR_RT },
+
+    // Function keys
+    { SDLK_F1,         UKEY_CBM_F1       },
+    { SDLK_F3,         UKEY_CBM_F3       },
+    { SDLK_F5,         UKEY_CBM_F5       },
+    { SDLK_F7,         UKEY_CBM_F7       },
+
+    // Non-ASCII character keys
+    { SDLK_BACKSLASH,  UKEY_LEFT_ARROW   },
+    { SDLK_PIPE,       UKEY_UP_ARROW     },
+    { SDLK_CARET,      UKEY_POUND_SIGN   },
 };
 
-// Shifted character decode table — PETSCII codes per matrix position.
-// Mirrors the C64 KERNAL's shifted decode table at $EBC2.
-// Letters use PETSCII lowercase ($C1–$DA), enabling character-accurate
-// mapping: host lowercase 'a' → guest Shift+A → C64 lowercase 'a'.
-// 0 = no distinct character (modifier key, function key, cursor key,
-//     or same character as unshifted — handled by KERNAL ROM at runtime).
-static const petscii_t c64_shifted_chars[C64_KEYBOARD_ROWS * C64_KEYBOARD_COLS] = {
-    // row 7: (RUN/STOP), ?, <, n($CE), v($D6), x($D8), (LSHIFT), (CRSR↑ via auto-shift)
-    0, '?', '<', 0xCE, 0xD6, 0xD8, 0, 0,
-    // row 6: q($D1), π($DE), (@), o($CF), u($D5), t($D4), e($C5), (F6)
-    0xD1, 0xDE, 0, 0xCF, 0xD5, 0xD4, 0xC5, 0,
-    // row 5: (C=), (=), [, k($CB), h($C8), f($C6), s($D3), (F4)
-    0, 0, '[', 0xCB, 0xC8, 0xC6, 0xD3, 0,
-    // row 4: (SPACE), (RSHIFT), >, m($CD), b($C2), c($C3), z($DA), (F2)
-    0, 0, '>', 0xCD, 0xC2, 0xC3, 0xDA, 0,
-    // row 3: ", (CLR), (-), (0), (, &, $, (F8)
-    '"', 0, 0, 0, '(', '&', '$', 0,
-    // row 2: (CTRL), ], l($CC), j($CA), g($C7), d($C4), a($C1), (CRSR← via auto-shift)
-    0, ']', 0xCC, 0xCA, 0xC7, 0xC4, 0xC1, 0,
-    // row 1: (←), (*), p($D0), i($C9), y($D9), r($D2), w($D7), (RETURN)
-    0, 0, 0xD0, 0xC9, 0xD9, 0xD2, 0xD7, 0,
-    // row 0: !, (£), (+), ), ', %, #, (INST)
-    '!', 0, 0, ')', '\'', '%', '#', 0,
-};
+// ============================================================================
+// Character overrides
+// ============================================================================
 
-static const keyboard_decode_table_t c64_decode_tables[] = {
-    { KEYMOD_NONE,  c64_unshifted_chars },
-    { KEYMOD_SHIFT, c64_shifted_chars },
-    // Future: { KEYMOD_CBM,  c64_cbm_chars },   — C= key graphics characters
-    // Future: { KEYMOD_CTRL, c64_ctrl_chars },   — CTRL key colour codes
+static const KeyCharOverride c64_char_overrides[] = {
+    { '\\', 1, 7, KEYMOD_NONE  },   // host backslash → guest ← key (PB1/PA7)
+    { '|',  6, 6, KEYMOD_NONE  },   // host pipe → guest ↑ key (PB6/PA6)
+    { '^',  0, 6, KEYMOD_NONE  },   // host caret → guest £ key (PB0/PA6)
+    { '~',  6, 6, KEYMOD_SHIFT },   // host tilde → guest π (Shift+↑, PB6/PA6)
+
+    // Host chars with no Commodore equivalent → fall back
+    { '{',  3, 3, KEYMOD_SHIFT },   // no Commodore { → fall back to ( (PB3/PA3)
+    { '}',  0, 4, KEYMOD_SHIFT },   // no Commodore } → fall back to ) (PB0/PA4)
 };
 
 const keyboard_matrix_config_t c64_keyboard_config = {
@@ -102,7 +163,10 @@ const keyboard_matrix_config_t c64_keyboard_config = {
     .rows = C64_KEYBOARD_ROWS,
     .cols = C64_KEYBOARD_COLS,
     .description = "C64 8x8 keyboard matrix",
-    .keys = c64_keys,
-    .num_decode_tables = sizeof(c64_decode_tables) / sizeof(c64_decode_tables[0]),
-    .decode_tables = c64_decode_tables,
+    .entries = c64_matrix,
+    .num_entries = sizeof(c64_matrix) / sizeof(c64_matrix[0]),
+    .char_overrides = c64_char_overrides,
+    .num_char_overrides = sizeof(c64_char_overrides) / sizeof(c64_char_overrides[0]),
+    .host_bindings = c64_host_bindings,
+    .num_host_bindings = sizeof(c64_host_bindings) / sizeof(c64_host_bindings[0]),
 };

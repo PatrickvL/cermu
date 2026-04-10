@@ -7,6 +7,7 @@
 #include "core/input/cermu_keys.hpp"
 #include "core/chip.hpp"
 #include "core/system_lines.hpp"
+#include "utils/keyboard_matrix.hpp"
 
 // ============================================================================
 // Commodore Keyboard Matrix Emulation — Multi-System Architecture
@@ -203,27 +204,24 @@ struct keyboard_matrix_config_t {
     uint8_t cols;
     const char* description;
 
-    // Key identity table — row-major flat array of size [rows * cols].
-    // Index a key at (row, col) as: keys[row * cols + col]
-    // Values are SDL_Keycode (SDLK_*) or CERMU_KEY_* constants.
-    const SDL_Keycode* keys;
+    // Guest keyboard matrix — Unicode codepoints with hardware positions.
+    // Row/col values are hardware bit positions used directly by the
+    // scan callbacks (no bit-reversal needed).
+    const KeyMatrixEntry* entries;
+    int num_entries;
 
-    // Character decode tables — one per modifier combination.
-    // Each table maps every matrix position to the PETSCII code it
-    // produces when that modifier combination is active.  Mirrors the
-    // KERNAL ROM's decode table structure.
-    //
-    // The tables are searched in order when building the keyboard mapper's
-    // character map.  First-write-wins: the first table that maps a
-    // PETSCII code to a host character claims that char_map_ entry.
-    //
-    // Ordering:
-    //   [0] = KEYMOD_NONE  (unshifted characters — from KERNAL $EB81 etc.)
-    //   [1] = KEYMOD_SHIFT (shifted characters   — from KERNAL $EBC2 etc.)
-    //   [2] = KEYMOD_CBM   (Commodore key chars)  — optional
-    //   [3] = KEYMOD_CTRL  (control key chars)    — optional
-    int num_decode_tables;
-    const keyboard_decode_table_t* decode_tables;
+    // Character override table — sparse entries for host characters
+    // that don't exist on the guest (e.g., '{' → '(' fallback) or
+    // host-specific mappings for Commodore-unique characters
+    // (e.g., host '\' → guest ← position, host '|' → guest ↑).
+    const KeyCharOverride* char_overrides;
+    int num_char_overrides;
+
+    // Host key bindings — maps SDL_Keycode to guest char32_t for keys
+    // where the mapping is non-trivial (PUA keys, non-ASCII characters).
+    // ASCII-range keys are auto-derived and don't need explicit bindings.
+    const HostKeyBinding* host_bindings;
+    int num_host_bindings;
 };
 
 // ============================================================================
@@ -247,14 +245,13 @@ struct commodore_keyboard_t {
     uint8_t matrix_cols;
 
     // Keyboard matrix contact state
-    // All matrices use a bit-reversed layout: array[N-1 - hw_bit][7 - hw_bit].
-    // key_down/key_up convert array indices to hardware bit positions:
-    //   row_bit = (matrix_rows - 1) - array_row
-    //   col_bit = (col < 8) ? (7 - array_col) : array_col
+    // Row/col are hardware bit positions — key_down/key_up use them directly:
+    //   row_open_contacts[row] &= ~(1 << col)   (close contact)
+    //   row_open_contacts[row] |=  (1 << col)   (open contact)
     //
-    // row_open_contacts[row_bit] = bitmask of column contacts for that row
-    // col_open_contacts[col_bit] = bitmask of row contacts for that column
-    // 0xFF/0xFFFF = all contacts open (no keys pressed)
+    // row_open_contacts[hw_row] = bitmask of column contacts for that row
+    // col_open_contacts[hw_col] = bitmask of row contacts for that column
+    // All bits set = all contacts open (no keys pressed)
     // Bit cleared = contact closed (key pressed)
     //
     // Each system's scan callback reads from the appropriate array:
@@ -274,11 +271,17 @@ struct commodore_keyboard_t {
     bool restore_key_pressed;
     bool caps_lock_active;
 
-    // Active matrix pointer — keys[] table from the config
-    const SDL_Keycode* active_keys;
-    // Decode tables from config (for mapper / runtime use)
-    int num_decode_tables;
-    const keyboard_decode_table_t* decode_tables;
+    // Active matrix entries (from config, for rebuild on reset)
+    const KeyMatrixEntry* active_entries;
+    int num_entries;
+
+    // Character override table (from config)
+    const KeyCharOverride* char_overrides;
+    int num_char_overrides;
+
+    // Host key bindings (from config)
+    const HostKeyBinding* host_bindings;
+    int num_host_bindings;
 
     // Auto-shift tracking: cursor left/up require SHIFT + physical cursor key
     bool auto_shift_left_active;
@@ -331,6 +334,4 @@ struct commodore_keyboard_t {
     // Debug functions
     void print_matrix();
     void print_state();
-
 };
-

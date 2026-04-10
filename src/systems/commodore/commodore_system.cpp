@@ -1,5 +1,6 @@
 #include "core/cermu.hpp"
 #include "systems/commodore/commodore_system.hpp"
+#include "utils/guest_key_chars.hpp"
 #include "devices/storage/drive_1541.hpp"
 #include "devices/storage/datasette_1530.hpp"
 #include "core/formats/format_registry.hpp"
@@ -503,51 +504,85 @@ void CommodoreSystem::build_petscii_map() {
     for (int i = 0; i < 256; i++)
         petscii_map_[i] = {0, 0, 0, false};
 
-    if (!keyboard_ || !keyboard_->decode_tables) return;
+    if (!keyboard_ || !keyboard_->active_entries) return;
 
-    uint8_t rows = keyboard_->matrix_rows;
-    uint8_t cols = keyboard_->matrix_cols;
+    // Build a temporary host-character → {row, col, modifier} map.
+    // This mirrors what KeyboardMapper::build_character_map_from_matrix()
+    // does, but locally — the PETSCII map is then built by bridging each
+    // PETSCII code to its host character via petscii_to_host_char().
 
-    // Reverse-map the decode tables: for each PETSCII code, record the
-    // first (row, col, modifier) that produces it.  KEYMOD_NONE first,
-    // then KEYMOD_SHIFT, so unshifted mappings win for duplicates.
-    for (int t = 0; t < keyboard_->num_decode_tables; t++) {
-        const keyboard_decode_table_t& table = keyboard_->decode_tables[t];
-        if (!table.petscii) continue;
+    struct HostEntry { uint8_t row, col, modifier; bool valid; };
+    HostEntry host_map[128] = {};
 
-        for (int row = 0; row < rows; row++) {
-            for (int col = 0; col < cols; col++) {
-                petscii_t p = table.petscii[row * cols + col];
-                if (p == 0) continue;
+    // Step 1: Auto-derive from matrix entry normal/shifted characters.
+    for (int i = 0; i < keyboard_->num_entries; i++) {
+        const KeyMatrixEntry& e = keyboard_->active_entries[i];
 
-                // First-write-wins: don't overwrite existing mappings
-                if (!petscii_map_[p].valid) {
-                    petscii_map_[p] = {
-                        static_cast<uint8_t>(row),
-                        static_cast<uint8_t>(col),
-                        table.modifiers, true
-                    };
-                }
+        // Map normal (unshifted) character
+        if (e.normal > 0 && e.normal < 0x80) {
+            char c = static_cast<char>(e.normal);
+            if (c >= 'A' && c <= 'Z') {
+                char upper = c;
+                char lower = c + 32;
+                if (!host_map[(unsigned char)upper].valid)
+                    host_map[(unsigned char)upper] = {e.row, e.col, KEYMOD_NONE, true};
+                if (!host_map[(unsigned char)lower].valid)
+                    host_map[(unsigned char)lower] = {e.row, e.col, KEYMOD_NONE, true};
+            } else if (c >= 0x20) {
+                if (!host_map[(unsigned char)c].valid)
+                    host_map[(unsigned char)c] = {e.row, e.col, KEYMOD_NONE, true};
+            }
+        }
+
+        // Map shifted character — KEYMOD_SHIFT
+        if (e.shifted > 0 && e.shifted < 0x80) {
+            char sc = static_cast<char>(e.shifted);
+            if (sc >= 'a' && sc <= 'z') {
+                // Already mapped via the uppercase normal path — skip
+            } else if (sc >= 0x20) {
+                if (!host_map[(unsigned char)sc].valid)
+                    host_map[(unsigned char)sc] = {e.row, e.col, KEYMOD_SHIFT, true};
             }
         }
     }
 
-    // Map RETURN ($0D) — not in decode tables (listed as 0).
-    // Find SDLK_RETURN in the key identity table.
-    if (!petscii_map_[0x0D].valid && keyboard_->active_keys) {
-        for (int row = 0; row < rows; row++) {
-            for (int col = 0; col < cols; col++) {
-                if (keyboard_->active_keys[row * cols + col] == SDLK_RETURN) {
-                    petscii_map_[0x0D] = {
-                        static_cast<uint8_t>(row),
-                        static_cast<uint8_t>(col),
-                        KEYMOD_NONE, true
-                    };
-                    goto found_return;
-                }
+    // Step 2: Apply character overrides (always win over auto-derived).
+    for (int i = 0; i < keyboard_->num_char_overrides; i++) {
+        const KeyCharOverride& ov = keyboard_->char_overrides[i];
+        if (ov.character > 0 && ov.character < 128)
+            host_map[ov.character] = {ov.row, ov.col, ov.modifier, true};
+    }
+
+    // Step 3: Map PETSCII codes via petscii_to_host_char() bridge.
+    // For each PETSCII code, convert to the host character that produces
+    // it, then look up the matrix position in the host map.
+    for (int p = 0; p < 256; p++) {
+        char h = petscii_to_host_char(p);
+        if (h == 0) continue;
+        unsigned char uc = (unsigned char)h;
+        if (uc >= 128 || !host_map[uc].valid) continue;
+
+        // PETSCII lowercase letters ($C1-$DA) require SHIFT modifier,
+        // even though the host_map entry is KEYMOD_NONE.
+        uint8_t mod = host_map[uc].modifier;
+        if (p >= 0xC1 && p <= 0xDA) mod = KEYMOD_SHIFT;
+
+        if (!petscii_map_[p].valid) {
+            petscii_map_[p] = {host_map[uc].row, host_map[uc].col, mod, true};
+        }
+    }
+
+    // Step 4: Map RETURN ($0D) directly from the matrix.
+    // petscii_to_host_char() returns 0 for $0D, so it won't be caught above.
+    if (!petscii_map_[0x0D].valid) {
+        for (int i = 0; i < keyboard_->num_entries; i++) {
+            if (keyboard_->active_entries[i].normal == '\r') {
+                petscii_map_[0x0D] = {keyboard_->active_entries[i].row,
+                                       keyboard_->active_entries[i].col,
+                                       KEYMOD_NONE, true};
+                break;
             }
         }
-        found_return:;
     }
 
     int count = 0;
@@ -563,26 +598,22 @@ void CommodoreSystem::press_petscii_action(const PetsciiKeyAction& action) {
     uint8_t cols = keyboard_->matrix_cols;
     if (action.row >= rows || action.col >= cols) return;
 
-    // Convert array indices to hardware port bit numbers (same as KeyboardMapper)
+    // Row/col are hardware bit positions — use directly, no conversion needed
     auto close_contact = [&](uint8_t row, uint8_t col) {
-        uint8_t row_bit = (rows - 1) - row;
-        uint8_t col_bit = (col < 8) ? (7 - col) : col;
-        keyboard_->row_open_contacts[row_bit] &= ~(1 << col_bit);
-        keyboard_->col_open_contacts[col_bit] &= ~(1 << row_bit);
+        keyboard_->row_open_contacts[row] &= ~(1 << col);
+        keyboard_->col_open_contacts[col] &= ~(1 << row);
     };
 
     // Press modifier(s) if required
     if (action.modifiers & KEYMOD_SHIFT) {
-        // Find left shift position
-        for (int r = 0; r < rows; r++) {
-            for (int c = 0; c < cols; c++) {
-                if (keyboard_->active_keys[r * cols + c] == SDLK_LSHIFT) {
-                    close_contact(r, c);
-                    goto shift_done;
-                }
+        // Find left shift position in the matrix entries
+        for (int i = 0; i < keyboard_->num_entries; i++) {
+            if (keyboard_->active_entries[i].normal == UKEY_CBM_SHIFT_L) {
+                close_contact(keyboard_->active_entries[i].row,
+                              keyboard_->active_entries[i].col);
+                break;
             }
         }
-        shift_done:;
     }
 
     // Press the main key
@@ -596,11 +627,10 @@ void CommodoreSystem::release_petscii_action(const PetsciiKeyAction& action) {
     uint8_t cols = keyboard_->matrix_cols;
     if (action.row >= rows || action.col >= cols) return;
 
+    // Row/col are hardware bit positions — use directly, no conversion needed
     auto open_contact = [&](uint8_t row, uint8_t col) {
-        uint8_t row_bit = (rows - 1) - row;
-        uint8_t col_bit = (col < 8) ? (7 - col) : col;
-        keyboard_->row_open_contacts[row_bit] |= (1 << col_bit);
-        keyboard_->col_open_contacts[col_bit] |= (1 << row_bit);
+        keyboard_->row_open_contacts[row] |= (1 << col);
+        keyboard_->col_open_contacts[col] |= (1 << row);
     };
 
     // Release the main key
@@ -608,15 +638,13 @@ void CommodoreSystem::release_petscii_action(const PetsciiKeyAction& action) {
 
     // Release modifier(s)
     if (action.modifiers & KEYMOD_SHIFT) {
-        for (int r = 0; r < rows; r++) {
-            for (int c = 0; c < cols; c++) {
-                if (keyboard_->active_keys[r * cols + c] == SDLK_LSHIFT) {
-                    open_contact(r, c);
-                    goto shift_released;
-                }
+        for (int i = 0; i < keyboard_->num_entries; i++) {
+            if (keyboard_->active_entries[i].normal == UKEY_CBM_SHIFT_L) {
+                open_contact(keyboard_->active_entries[i].row,
+                             keyboard_->active_entries[i].col);
+                break;
             }
         }
-        shift_released:;
     }
 }
 
