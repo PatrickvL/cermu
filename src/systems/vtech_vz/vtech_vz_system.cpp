@@ -13,6 +13,7 @@
 #include "core/formats/format_registry.hpp"
 #include "core/formats/format_load_helpers.hpp"
 #include "utils/keyboard_matrix.hpp"
+#include "utils/guest_key_chars.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -284,42 +285,50 @@ void VTechVZSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     // Row 5: H  Y  U  I  O
     // Row 6: P  @  ↑  [  RETURN
     // Row 7: 0  6  8  7  9
-    static constexpr KeyMatrixMapping mappings[] = {
+    static const KeyMatrixEntry entries[] = {
         // Row 0: T Q E W R
-        { SDLK_t, 0, 4 }, { SDLK_q, 0, 3 }, { SDLK_e, 0, 2 },
-        { SDLK_w, 0, 1 }, { SDLK_r, 0, 0 },
+        { 0, 4, 't', 0 }, { 0, 3, 'q', 0 }, { 0, 2, 'e', 0 },
+        { 0, 1, 'w', 0 }, { 0, 0, 'r', 0 },
         // Row 1: G A S D F
-        { SDLK_g, 1, 4 }, { SDLK_a, 1, 3 }, { SDLK_s, 1, 2 },
-        { SDLK_d, 1, 1 }, { SDLK_f, 1, 0 },
+        { 1, 4, 'g', 0 }, { 1, 3, 'a', 0 }, { 1, 2, 's', 0 },
+        { 1, 1, 'd', 0 }, { 1, 0, 'f', 0 },
         // Row 2: B CTRL C X Z
-        { SDLK_b, 2, 4 }, { SDLK_LCTRL, 2, 3 }, { SDLK_RCTRL, 2, 3 },
-        { SDLK_c, 2, 2 }, { SDLK_x, 2, 1 }, { SDLK_z, 2, 0 },
+        { 2, 4, 'b', 0 }, { 2, 3, UKEY_CTRL_L, 0 },
+        { 2, 2, 'c', 0 }, { 2, 1, 'x', 0 }, { 2, 0, 'z', 0 },
         // Row 3: SPACE SHIFT M N V
-        { SDLK_SPACE, 3, 4 }, { SDLK_LSHIFT, 3, 3 }, { SDLK_RSHIFT, 3, 3 },
-        { SDLK_m, 3, 2 }, { SDLK_n, 3, 1 }, { SDLK_v, 3, 0 },
+        { 3, 4, ' ', 0 }, { 3, 3, UKEY_SHIFT_L, 0 },
+        { 3, 2, 'm', 0 }, { 3, 1, 'n', 0 }, { 3, 0, 'v', 0 },
         // Row 4: 5 1 3 2 4
-        { SDLK_5, 4, 4 }, { SDLK_1, 4, 3 }, { SDLK_3, 4, 2 },
-        { SDLK_2, 4, 1 }, { SDLK_4, 4, 0 },
+        { 4, 4, '5', 0 }, { 4, 3, '1', 0 }, { 4, 2, '3', 0 },
+        { 4, 1, '2', 0 }, { 4, 0, '4', 0 },
         // Row 5: H Y U I O
-        { SDLK_h, 5, 4 }, { SDLK_y, 5, 3 }, { SDLK_u, 5, 2 },
-        { SDLK_i, 5, 1 }, { SDLK_o, 5, 0 },
+        { 5, 4, 'h', 0 }, { 5, 3, 'y', 0 }, { 5, 2, 'u', 0 },
+        { 5, 1, 'i', 0 }, { 5, 0, 'o', 0 },
         // Row 6: P @ ↑ [ RETURN
-        { SDLK_p, 6, 4 }, { SDLK_AT, 6, 3 },
-        { SDLK_UP, 6, 2 }, { SDLK_LEFTBRACKET, 6, 1 },
-        { SDLK_RETURN, 6, 0 },
+        { 6, 4, 'p', 0 }, { 6, 3, '@', 0 },
+        { 6, 2, UKEY_CURSOR_UP, 0 }, { 6, 1, '[', 0 },
+        { 6, 0, '\r', 0 },
         // Row 7: 0 6 8 7 9
-        { SDLK_0, 7, 4 }, { SDLK_6, 7, 3 }, { SDLK_8, 7, 2 },
-        { SDLK_7, 7, 1 }, { SDLK_9, 7, 0 },
-        // Convenience mappings
-        { SDLK_BACKSPACE, 6, 2 },  // Use UP arrow for backspace
-        { SDLK_DOWN,  6, 2 },  // DOWN not separate — map to UP (SHIFT+UP = DOWN in BASIC)
-        { SDLK_LEFT,  6, 1 },  // LEFT → [ key
-        { SDLK_RIGHT, 6, 0 },  // RIGHT → RETURN area (convenience)
-        { SDLK_SEMICOLON, 6, 3 },  // ; → @
-        { SDLK_MINUS, 6, 3 },  // - → @
+        { 7, 4, '0', 0 }, { 7, 3, '6', 0 }, { 7, 2, '8', 0 },
+        { 7, 1, '7', 0 }, { 7, 0, '9', 0 },
     };
 
-    keyboard_matrix_apply(mappings, keyboard_matrix_, key, pressed);
+    static const HostKeyBinding bindings[] = {
+        { SDLK_LCTRL,     UKEY_CTRL_L      },
+        { SDLK_RCTRL,     UKEY_CTRL_L      },
+        { SDLK_LSHIFT,    UKEY_SHIFT_L     },
+        { SDLK_RSHIFT,    UKEY_SHIFT_L     },
+        { SDLK_UP,        UKEY_CURSOR_UP   },
+        // Convenience mappings
+        { SDLK_BACKSPACE, UKEY_CURSOR_UP   },  // Use UP arrow for backspace
+        { SDLK_DOWN,      UKEY_CURSOR_UP   },  // DOWN not separate — map to UP (SHIFT+UP = DOWN in BASIC)
+        { SDLK_LEFT,      '['              },  // LEFT → [ key
+        { SDLK_RIGHT,     '\r'             },  // RIGHT → RETURN area (convenience)
+        { SDLK_SEMICOLON, '@'              },  // ; → @
+        { SDLK_MINUS,     '@'              },  // - → @
+    };
+
+    keyboard_matrix_apply(entries, bindings, keyboard_matrix_, key, pressed);
 }
 
 
