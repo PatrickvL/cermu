@@ -21,6 +21,7 @@
 #include "core/config/path_discovery.hpp"
 #include "core/vfs/vfs.hpp"
 #include "utils/keyboard_matrix.hpp"
+#include "utils/guest_key_chars.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -427,31 +428,42 @@ void MemotechMTXSystem<V>::set_audio_sample_rate(int sample_rate_hz) {
 template<MTXVariant V>
 void MemotechMTXSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     // MTX keyboard matrix: 8 rows × 8 columns, active-low
-    static constexpr KeyMatrixMapping mappings[] = {
+    static const KeyMatrixEntry entries[] = {
         // Row 0
-        { SDLK_1, 0, 0 }, { SDLK_2, 0, 1 }, { SDLK_3, 0, 2 }, { SDLK_4, 0, 3 },
-        { SDLK_5, 0, 4 }, { SDLK_6, 0, 5 }, { SDLK_7, 0, 6 }, { SDLK_8, 0, 7 },
+        { 0, 0, '1', 0 }, { 0, 1, '2', 0 }, { 0, 2, '3', 0 }, { 0, 3, '4', 0 },
+        { 0, 4, '5', 0 }, { 0, 5, '6', 0 }, { 0, 6, '7', 0 }, { 0, 7, '8', 0 },
         // Row 1
-        { SDLK_q, 1, 0 }, { SDLK_w, 1, 1 }, { SDLK_e, 1, 2 }, { SDLK_r, 1, 3 },
-        { SDLK_t, 1, 4 }, { SDLK_y, 1, 5 }, { SDLK_u, 1, 6 }, { SDLK_i, 1, 7 },
+        { 1, 0, 'q', 0 }, { 1, 1, 'w', 0 }, { 1, 2, 'e', 0 }, { 1, 3, 'r', 0 },
+        { 1, 4, 't', 0 }, { 1, 5, 'y', 0 }, { 1, 6, 'u', 0 }, { 1, 7, 'i', 0 },
         // Row 2
-        { SDLK_a, 2, 0 }, { SDLK_s, 2, 1 }, { SDLK_d, 2, 2 }, { SDLK_f, 2, 3 },
-        { SDLK_g, 2, 4 }, { SDLK_h, 2, 5 }, { SDLK_j, 2, 6 }, { SDLK_k, 2, 7 },
+        { 2, 0, 'a', 0 }, { 2, 1, 's', 0 }, { 2, 2, 'd', 0 }, { 2, 3, 'f', 0 },
+        { 2, 4, 'g', 0 }, { 2, 5, 'h', 0 }, { 2, 6, 'j', 0 }, { 2, 7, 'k', 0 },
         // Row 3
-        { SDLK_z, 3, 0 }, { SDLK_x, 3, 1 }, { SDLK_c, 3, 2 }, { SDLK_v, 3, 3 },
-        { SDLK_b, 3, 4 }, { SDLK_n, 3, 5 }, { SDLK_m, 3, 6 }, { SDLK_COMMA, 3, 7 },
+        { 3, 0, 'z', 0 }, { 3, 1, 'x', 0 }, { 3, 2, 'c', 0 }, { 3, 3, 'v', 0 },
+        { 3, 4, 'b', 0 }, { 3, 5, 'n', 0 }, { 3, 6, 'm', 0 }, { 3, 7, ',', 0 },
         // Row 4
-        { SDLK_9, 4, 0 }, { SDLK_0, 4, 1 }, { SDLK_MINUS, 4, 2 },
-        { SDLK_o, 4, 3 }, { SDLK_p, 4, 4 }, { SDLK_l, 4, 5 },
+        { 4, 0, '9', 0 }, { 4, 1, '0', 0 }, { 4, 2, '-', 0 },
+        { 4, 3, 'o', 0 }, { 4, 4, 'p', 0 }, { 4, 5, 'l', 0 },
         // Row 5
-        { SDLK_RETURN, 5, 0 }, { SDLK_SPACE, 5, 1 }, { SDLK_BACKSPACE, 5, 2 },
+        { 5, 0, '\r', 0 }, { 5, 1, ' ', 0 }, { 5, 2, '\b', 0 },
         // Row 6
-        { SDLK_LSHIFT, 6, 0 }, { SDLK_RSHIFT, 6, 0 }, { SDLK_LCTRL, 6, 1 },
+        { 6, 0, UKEY_SHIFT_L, 0 }, { 6, 1, UKEY_CTRL_L, 0 },
         // Row 7
-        { SDLK_UP, 7, 0 }, { SDLK_DOWN, 7, 1 }, { SDLK_LEFT, 7, 2 }, { SDLK_RIGHT, 7, 3 },
+        { 7, 0, UKEY_CURSOR_UP, 0 }, { 7, 1, UKEY_CURSOR_DOWN, 0 },
+        { 7, 2, UKEY_CURSOR_LEFT, 0 }, { 7, 3, UKEY_CURSOR_RIGHT, 0 },
     };
 
-    keyboard_matrix_apply(mappings, keyboard_matrix_, key, pressed);
+    static const HostKeyBinding bindings[] = {
+        { SDLK_LSHIFT, UKEY_SHIFT_L      },
+        { SDLK_RSHIFT, UKEY_SHIFT_L      },
+        { SDLK_LCTRL,  UKEY_CTRL_L       },
+        { SDLK_UP,     UKEY_CURSOR_UP    },
+        { SDLK_DOWN,   UKEY_CURSOR_DOWN  },
+        { SDLK_LEFT,   UKEY_CURSOR_LEFT  },
+        { SDLK_RIGHT,  UKEY_CURSOR_RIGHT },
+    };
+
+    keyboard_matrix_apply(entries, bindings, keyboard_matrix_, key, pressed);
 }
 
 // ============================================================================
