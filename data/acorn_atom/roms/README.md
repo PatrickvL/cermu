@@ -18,9 +18,9 @@ by Acorn Computers and are **not** included in this repository.
 
 ## Alternative Filenames Accepted
 
-- **OS ROM:** `atom_os.rom`, `ABASIC.ROM`, `os.rom`
-- **BASIC ROM:** `atom_basic.rom`, `BASIC.ROM`, `basic.rom`
-- **FP ROM:** `atom_fp.rom`, `FP.ROM`, `fp.rom`
+- **OS ROM:** `atom_os.rom`, `akernel.rom`, `os.rom`
+- **BASIC ROM:** `atom_basic.rom`, `abasic.rom`, `ABASIC.ROM`, `BASIC.ROM`, `basic.rom`
+- **FP ROM:** `atom_fp.rom`, `afloat.rom`, `FP.ROM`, `fp.rom`
 
 ## Where to Obtain
 

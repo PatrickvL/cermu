@@ -105,6 +105,9 @@ data/**/*.zip
 # Atari ST — EmuTOS (GPL), free TOS replacement.
 !data/atari_st/roms/*.img
 
+# ZX Spectrum — Amstrad blanket permission for free distribution (1999 open letter).
+!data/spectrum/roms/*.rom
+
 # External dependencies - ignore by default, unignore committed items
 # Submodules (ImGuiFileDialog, tomlplusplus, toonplusplus, LJON) are
 # handled by .gitmodules and unaffected by this rule.

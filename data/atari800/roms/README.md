@@ -28,7 +28,8 @@ ROMs required by the Atari 800, 800XL, and 130XE emulation.
 
 ## Where to Obtain
 
-- **Atari800 emulator** — ships OS ROMs with permission from Atari
-  - https://atari800.github.io/
 - **MAME ROM set** — `a800xl.zip` or `a800.zip` contain the OS ROMs
 - **Dump from original hardware** — if you own an Atari 8-bit computer
+
+Note: AltirraOS (GPL) is a free OS replacement but is embedded in the Altirra
+emulator binary and not available as a standalone ROM file.

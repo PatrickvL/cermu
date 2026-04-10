@@ -96,8 +96,8 @@ inline constexpr auto kSpectrum48KManifest = make_manifest(
 inline constexpr auto kSpectrum128KManifest = make_manifest(
     // Chips
     Slot<ZilogZ80A>{.base_addr = 0x0000, .label = "Z80A"},
-    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 0x00020000, .label = "RAM"},
-    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x8000, .label = "ROM", .overlay_group = 1, .rom = {"spectrum128k.rom|128.rom|128-0.rom"}},
+    Slot<RAMChip>{.base_addr = 0x0000, .size_bytes = 0x00020000, .label = "RAM", .bank_size = 0x4000},
+    Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x8000, .label = "ROM", .bank_size = 0x4000, .overlay_group = 1, .rom = {"spectrum128k.rom|spectrum128.rom|128.rom|128-0.rom"}},
     Slot<ferranti_ula_t>{.base_addr = 0x00FE, .addr_mask = 0x0001, .label = "Ferranti ULA"},
     Slot<AY_3_8912>{.base_addr = 0xFFFD, .addr_mask = 0xC002, .label = "AY-3-8912"},
     // Ports
