@@ -130,3 +130,59 @@ struct HostKeyBinding {
     SDL_Keycode sdl_key;    // host key that fires from SDL_KEYDOWN
     char32_t    guest_key;  // guest char32_t identity from the matrix
 };
+
+// ── KeyMatrixEntry apply ─────────────────────────────────────────────
+
+/// Apply a key press/release event to a keyboard matrix using
+/// KeyMatrixEntry tables and HostKeyBinding lookup.
+///
+/// For most keys (letters, digits, punctuation) the SDL_Keycode value
+/// maps directly to the char32_t identity used in KeyMatrixEntry::normal
+/// (e.g. SDLK_a == 'a').  Non-ASCII keys (modifiers, arrows, F-keys)
+/// require explicit HostKeyBinding entries to translate SDL_Keycode
+/// values (which carry a scancode mask ≥ 0x40000000) to PUA constants.
+///
+/// Handles multi-position keys naturally: if the same char32_t identity
+/// appears in multiple entries, all positions are updated (e.g. Spectrum
+/// BACKSPACE → CAPS_SHIFT + 0).
+inline bool keyboard_matrix_apply(const KeyMatrixEntry* entries,
+                                  int num_entries,
+                                  const HostKeyBinding* bindings,
+                                  int num_bindings,
+                                  uint8_t* matrix,
+                                  SDL_Keycode key,
+                                  bool pressed) {
+    // Resolve SDL keycode to guest key identity
+    char32_t guest = static_cast<char32_t>(key);
+    for (int i = 0; i < num_bindings; ++i) {
+        if (bindings[i].sdl_key == key) {
+            guest = bindings[i].guest_key;
+            break;
+        }
+    }
+
+    // Search entries for matching key identity
+    bool matched = false;
+    for (int i = 0; i < num_entries; ++i) {
+        if (entries[i].normal == guest) {
+            uint8_t row = entries[i].row;
+            uint8_t bit = static_cast<uint8_t>(1u << entries[i].col);
+            if (pressed)
+                matrix[row] &= ~bit;   // active-low: clear = pressed
+            else
+                matrix[row] |= bit;    // active-low: set   = released
+            matched = true;
+        }
+    }
+    return matched;
+}
+
+/// Convenience overload for statically-sized KeyMatrixEntry + HostKeyBinding arrays.
+template<int NE, int NB>
+inline bool keyboard_matrix_apply(const KeyMatrixEntry (&entries)[NE],
+                                  const HostKeyBinding (&bindings)[NB],
+                                  uint8_t* matrix,
+                                  SDL_Keycode key,
+                                  bool pressed) {
+    return keyboard_matrix_apply(entries, NE, bindings, NB, matrix, key, pressed);
+}
