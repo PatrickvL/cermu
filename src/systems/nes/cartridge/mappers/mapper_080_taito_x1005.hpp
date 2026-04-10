@@ -3,12 +3,12 @@
  * mapper_080_taito_x1005.h — iNES Mappers 080/207 (Taito X1-005)
  *
  * 3×8KB switchable PRG + 8KB fixed + 6×CHR banks (2×2KB + 4×1KB).
- * PRG-RAM at $7F00-$7FFF (128 bytes) protected by security value.
+ * 128 bytes on-chip RAM at $7F00-$7FFF, gated by security latch.
  *
  * Mapper 207 variant: CHR D7 bit used as a one-screen nametable selector
  * per 2KB/1KB bank (similar to mapper 095).
  *
- * Register map:
+ * Register map ($7EF0-$7EFF):
  *   $7EF0: CHR bank 0 (2KB at $0000)
  *   $7EF1: CHR bank 1 (2KB at $0800)
  *   $7EF2: CHR bank 2 (1KB at $1000)
@@ -16,14 +16,11 @@
  *   $7EF4: CHR bank 4 (1KB at $1800)
  *   $7EF5: CHR bank 5 (1KB at $1C00)
  *   $7EF6: mirroring (D0: 0=vertical, 1=horizontal) [mapper 080]
- *          or: NT from CHR D7 for 2KB banks [mapper 207]
  *   $7EF7: same as $7EF6
- *   $7EF8: PRG bank 0 (8KB at $8000)
- *   $7EF9: PRG bank 1 (8KB at $A000)
- *   $7EFA: PRG bank 2 (8KB at $C000)
- *   $7EFB-$7EFF: unused / mirrors
- *
- * PRG-RAM enable: write $A3 to $7EF0-$7EF5 area enables $7F00 RAM access.
+ *   $7EF8-$7EF9: security latch — write $A3 to enable RAM at $7F00
+ *   $7EFA-$7EFB: PRG bank 0 (8KB at $8000)
+ *   $7EFC-$7EFD: PRG bank 1 (8KB at $A000)
+ *   $7EFE-$7EFF: PRG bank 2 (8KB at $C000)
  *
  * Games: Fudou Myouou Den, Kyonshiizu 2, Minelvaton Saga, Taito Grand Prix.
  * Mapper 207: Fudou Myouou Den (alternate board).
@@ -40,6 +37,7 @@ private:
     uint8_t prg_bank_[3] = {};
     uint8_t chr_bank_[6] = {};
     Mirror mirror_mode_ = Mirror::VERTICAL;
+    bool ram_enabled_ = false;  // security latch: $A3 written to $7EF8/$7EF9
 
     // Mapper 207 nametable map
     uint8_t nt_map_[4] = {};
@@ -59,6 +57,7 @@ public:
         for (int i = 0; i < 3; i++) prg_bank_[i] = 0;
         for (int i = 0; i < 6; i++) chr_bank_[i] = 0;
         mirror_mode_ = header_mirror_;
+        ram_enabled_ = false;
         for (int i = 0; i < 4; i++) nt_map_[i] = 0;
     }
 
@@ -118,11 +117,8 @@ public:
         if (addr >= 0x7EF0 && addr <= 0x7EFF) {
             uint8_t reg = addr & 0x0F;
 
-            // A2 is not decoded for the PRG bank group (A3=1):
-            // $7EFC-$7EFE mirror $7EF8-$7EFA.
-            if (reg >= 0x0C) reg &= ~0x04;
-
             switch (reg) {
+                // $7EF0-$7EF5: CHR bank select
                 case 0x00: case 0x01: case 0x02: case 0x03: case 0x04: case 0x05:
                     chr_bank_[reg] = data;
                     if constexpr (NtFromChr) {
@@ -130,22 +126,40 @@ public:
                     }
                     return true;
 
+                // $7EF6-$7EF7: mirroring (mapper 080) or NT from CHR D7 (mapper 207)
                 case 0x06: case 0x07:
                     if constexpr (!NtFromChr) {
                         mirror_mode_ = (data & 0x01) ? Mirror::HORIZONTAL : Mirror::VERTICAL;
                     }
                     return true;
 
-                case 0x08: prg_bank_[0] = data; return true;
-                case 0x09: prg_bank_[1] = data; return true;
-                case 0x0A: prg_bank_[2] = data; return true;
+                // $7EF8-$7EF9: security latch — $A3 enables RAM at $7F00
+                case 0x08: case 0x09:
+                    ram_enabled_ = (data == 0xA3);
+                    return false;
+
+                // $7EFA-$7EFB: PRG bank 0 (8KB at $8000)
+                case 0x0A: case 0x0B:
+                    prg_bank_[0] = data;
+                    return true;
+
+                // $7EFC-$7EFD: PRG bank 1 (8KB at $A000)
+                case 0x0C: case 0x0D:
+                    prg_bank_[1] = data;
+                    return true;
+
+                // $7EFE-$7EFF: PRG bank 2 (8KB at $C000)
+                case 0x0E: case 0x0F:
+                    prg_bank_[2] = data;
+                    return true;
             }
             return false;
         }
 
-        // Write-through to PRG-RAM for non-register addresses ($6000-$7EEF, $7F00-$7FFF)
-        if (addr >= 0x6000 && addr <= 0x7FFF && prg_ram_ != nullptr) {
-            uint16_t offset = addr - 0x6000;
+        // Write-through to PRG-RAM for non-register addresses
+        // Only $7F00-$7FFF (128 bytes, mirrored) when security latch is enabled
+        if (addr >= 0x7F00 && addr <= 0x7FFF && prg_ram_ != nullptr && ram_enabled_) {
+            uint16_t offset = (addr - 0x6000);
             if (offset < prg_ram_size_)
                 prg_ram_[offset] = data;
             return false;
