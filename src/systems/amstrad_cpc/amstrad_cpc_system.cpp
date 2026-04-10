@@ -14,6 +14,7 @@
 #include "core/formats/format_load_helpers.hpp"
 #include "core/formats/cpr_format.hpp"
 #include "utils/keyboard_matrix.hpp"
+#include "utils/guest_key_chars.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -487,73 +488,98 @@ void AmstradCPCSystem<M>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     // Row 7:  4        3        E        W        S        D        C        X
     // Row 8:  1        2        ESC      Q        TAB      A        CAPSLOCK Z
     // Row 9:  DEL      (joy)    (joy)    (joy)    (joy)    (joy)    (joy)    (joy)
-    static constexpr KeyMatrixMapping mappings[] = {
+    static const KeyMatrixEntry entries[] = {
         // Row 0: function keys + cursors
-        { SDLK_PERIOD,    0, 7 },
-        { SDLK_RETURN,    0, 6 },  // Num ENTER
-        { SDLK_F3,        0, 5 },
-        { SDLK_F6,        0, 4 },
-        { SDLK_F9,        0, 3 },
-        { SDLK_DOWN,      0, 2 },
-        { SDLK_RIGHT,     0, 1 },
-        { SDLK_UP,        0, 0 },
+        // ENTER mapped to both row 0 col 6 and row 2 col 5
+        { 0, 6, '\r', 0 },
+        { 0, 5, UKEY_F3, 0 },
+        { 0, 4, UKEY_F6, 0 },
+        { 0, 3, UKEY_F9, 0 },
+        { 0, 2, UKEY_CURSOR_DOWN, 0 },
+        { 0, 1, UKEY_CURSOR_RIGHT, 0 },
+        { 0, 0, UKEY_CURSOR_UP, 0 },
         // Row 1: COPY, function keys, cursor left
-        { SDLK_END,       1, 6 },  // COPY
-        { SDLK_F2,        1, 5 },
-        { SDLK_F5,        1, 4 },
-        { SDLK_F8,        1, 3 },
-        { SDLK_F10,       1, 2 },  // f0 → F10
-        { SDLK_LEFT,      1, 1 },
+        { 1, 6, UKEY_END, 0 },       // COPY
+        { 1, 5, UKEY_F2, 0 },
+        { 1, 4, UKEY_F5, 0 },
+        { 1, 3, UKEY_F8, 0 },
+        { 1, 2, UKEY_F10, 0 },       // f0 → F10
+        { 1, 1, UKEY_CURSOR_LEFT, 0 },
         // Row 2: CLR, [ ] \ SHIFT CTRL RETURN f4
-        { SDLK_HOME,      2, 7 },  // CLR
-        { SDLK_LEFTBRACKET,  2, 6 },
-        { SDLK_RETURN,    2, 5 },
-        { SDLK_RIGHTBRACKET, 2, 4 },
-        { SDLK_F4,        2, 3 },
-        { SDLK_LSHIFT,    2, 2 }, { SDLK_RSHIFT, 2, 2 },
-        { SDLK_BACKSLASH, 2, 1 },
-        { SDLK_LCTRL,     2, 0 }, { SDLK_RCTRL, 2, 0 },
+        { 2, 7, UKEY_HOME, 0 },      // CLR
+        { 2, 6, '[', 0 },
+        { 2, 5, '\r', 0 },           // RETURN (second position)
+        { 2, 4, ']', 0 },
+        { 2, 3, UKEY_F4, 0 },
+        { 2, 2, UKEY_SHIFT_L, 0 },
+        { 2, 1, '\\', 0 },
+        { 2, 0, UKEY_CTRL_L, 0 },
         // Row 3: - @ P ; : / .
-        { SDLK_MINUS,        3, 6 },
-        { SDLK_BACKQUOTE,    3, 5 },  // @ → ` (backtick)
-        { SDLK_p,            3, 4 },
-        { SDLK_SEMICOLON,    3, 3 },
-        { SDLK_QUOTE,        3, 2 },  // : → ' (apostrophe)
-        { SDLK_SLASH,        3, 1 },
+        { 3, 6, '-', 0 },
+        { 3, 5, '`', 0 },            // @ → ` (backtick)
+        { 3, 4, 'p', 0 },
+        { 3, 3, ';', 0 },
+        { 3, 2, '\'', 0 },           // : → ' (apostrophe)
+        { 3, 1, '/', 0 },
         // Row 4: 0 9 O I L K M ,
-        { SDLK_0, 4, 7 }, { SDLK_9, 4, 6 },
-        { SDLK_o, 4, 5 }, { SDLK_i, 4, 4 },
-        { SDLK_l, 4, 3 }, { SDLK_k, 4, 2 },
-        { SDLK_m, 4, 1 }, { SDLK_COMMA, 4, 0 },
+        { 4, 7, '0', 0 }, { 4, 6, '9', 0 },
+        { 4, 5, 'o', 0 }, { 4, 4, 'i', 0 },
+        { 4, 3, 'l', 0 }, { 4, 2, 'k', 0 },
+        { 4, 1, 'm', 0 }, { 4, 0, ',', 0 },
         // Row 5: 8 7 U Y H J N SPACE
-        { SDLK_8, 5, 7 }, { SDLK_7, 5, 6 },
-        { SDLK_u, 5, 5 }, { SDLK_y, 5, 4 },
-        { SDLK_h, 5, 3 }, { SDLK_j, 5, 2 },
-        { SDLK_n, 5, 1 }, { SDLK_SPACE, 5, 0 },
+        { 5, 7, '8', 0 }, { 5, 6, '7', 0 },
+        { 5, 5, 'u', 0 }, { 5, 4, 'y', 0 },
+        { 5, 3, 'h', 0 }, { 5, 2, 'j', 0 },
+        { 5, 1, 'n', 0 }, { 5, 0, ' ', 0 },
         // Row 6: 6 5 R T G F B V
-        { SDLK_6, 6, 7 }, { SDLK_5, 6, 6 },
-        { SDLK_r, 6, 5 }, { SDLK_t, 6, 4 },
-        { SDLK_g, 6, 3 }, { SDLK_f, 6, 2 },
-        { SDLK_b, 6, 1 }, { SDLK_v, 6, 0 },
+        { 6, 7, '6', 0 }, { 6, 6, '5', 0 },
+        { 6, 5, 'r', 0 }, { 6, 4, 't', 0 },
+        { 6, 3, 'g', 0 }, { 6, 2, 'f', 0 },
+        { 6, 1, 'b', 0 }, { 6, 0, 'v', 0 },
         // Row 7: 4 3 E W S D C X
-        { SDLK_4, 7, 7 }, { SDLK_3, 7, 6 },
-        { SDLK_e, 7, 5 }, { SDLK_w, 7, 4 },
-        { SDLK_s, 7, 3 }, { SDLK_d, 7, 2 },
-        { SDLK_c, 7, 1 }, { SDLK_x, 7, 0 },
+        { 7, 7, '4', 0 }, { 7, 6, '3', 0 },
+        { 7, 5, 'e', 0 }, { 7, 4, 'w', 0 },
+        { 7, 3, 's', 0 }, { 7, 2, 'd', 0 },
+        { 7, 1, 'c', 0 }, { 7, 0, 'x', 0 },
         // Row 8: 1 2 ESC Q TAB A CAPSLOCK Z
-        { SDLK_1, 8, 7 }, { SDLK_2, 8, 6 },
-        { SDLK_ESCAPE, 8, 5 }, { SDLK_q, 8, 4 },
-        { SDLK_TAB, 8, 3 }, { SDLK_a, 8, 2 },
-        { SDLK_CAPSLOCK, 8, 1 }, { SDLK_z, 8, 0 },
+        { 8, 7, '1', 0 }, { 8, 6, '2', 0 },
+        { 8, 5, '\x1B', 0 }, { 8, 4, 'q', 0 },
+        { 8, 3, '\t', 0 }, { 8, 2, 'a', 0 },
+        { 8, 1, UKEY_CAPS_LOCK, 0 }, { 8, 0, 'z', 0 },
         // Row 9: DEL (joystick bits not keyboard)
-        { SDLK_BACKSPACE, 9, 7 }, { SDLK_DELETE, 9, 7 },
-        // F1 and F7 convenience mappings
-        { SDLK_F1, 1, 2 },  // f0
-        { SDLK_F7, 0, 3 },  // f9 alias
-        { SDLK_EQUALS, 3, 6 },  // = → -/= on CPC
+        { 9, 7, '\b', 0 },
+        // . (row 0, bit 7) — separate period on numpad/main
+        { 0, 7, '.', 0 },
     };
 
-    keyboard_matrix_apply(mappings, keyboard_matrix_, key, pressed);
+    static const HostKeyBinding bindings[] = {
+        { SDLK_F2,       UKEY_F2           },
+        { SDLK_F3,       UKEY_F3           },
+        { SDLK_F4,       UKEY_F4           },
+        { SDLK_F5,       UKEY_F5           },
+        { SDLK_F6,       UKEY_F6           },
+        { SDLK_F8,       UKEY_F8           },
+        { SDLK_F9,       UKEY_F9           },
+        { SDLK_F10,      UKEY_F10          },  // f0
+        { SDLK_DOWN,     UKEY_CURSOR_DOWN  },
+        { SDLK_RIGHT,    UKEY_CURSOR_RIGHT },
+        { SDLK_UP,       UKEY_CURSOR_UP    },
+        { SDLK_LEFT,     UKEY_CURSOR_LEFT  },
+        { SDLK_END,      UKEY_END          },  // COPY
+        { SDLK_HOME,     UKEY_HOME         },  // CLR
+        { SDLK_LSHIFT,   UKEY_SHIFT_L      },
+        { SDLK_RSHIFT,   UKEY_SHIFT_L      },
+        { SDLK_LCTRL,    UKEY_CTRL_L       },
+        { SDLK_RCTRL,    UKEY_CTRL_L       },
+        { SDLK_CAPSLOCK, UKEY_CAPS_LOCK    },
+        { SDLK_DELETE,   '\b'              },  // DELETE → same as BACKSPACE
+        // Convenience mappings
+        { SDLK_F1,       UKEY_F10          },  // F1 → f0
+        { SDLK_F7,       UKEY_F9           },  // F7 → f9 alias
+        { SDLK_EQUALS,   '-'               },  // = → -/= on CPC
+    };
+
+    keyboard_matrix_apply(entries, bindings, keyboard_matrix_, key, pressed);
 }
 
 // ============================================================================
