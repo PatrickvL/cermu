@@ -182,31 +182,35 @@ void AcornAtomSystem::run_frame() {
 
 void AcornAtomSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     // Acorn Atom keyboard matrix: 10 rows × 8 columns, active-low
-    static constexpr KeyMatrixMapping mappings[] = {
+    static const KeyMatrixEntry entries[] = {
         // Row 0: RETURN, DEL/BS, ESC
-        { SDLK_RETURN,    0, 3 },
-        { SDLK_BACKSPACE, 0, 5 }, { SDLK_DELETE, 0, 5 },
-        { SDLK_ESCAPE,    0, 7 },
+        { 0, 3, '\r', 0 },
+        { 0, 5, '\b', 0 },
+        { 0, 7, '\x1B', 0 },
         // Row 1: SPACE
-        { SDLK_SPACE,     1, 3 },
+        { 1, 3, ' ', 0 },
         // Row 3: A S D F G H J K
-        { SDLK_a, 3, 7 }, { SDLK_s, 3, 6 }, { SDLK_d, 3, 5 }, { SDLK_f, 3, 4 },
-        { SDLK_g, 3, 3 }, { SDLK_h, 3, 2 }, { SDLK_j, 3, 1 }, { SDLK_k, 3, 0 },
+        { 3, 7, 'a', 0 }, { 3, 6, 's', 0 }, { 3, 5, 'd', 0 }, { 3, 4, 'f', 0 },
+        { 3, 3, 'g', 0 }, { 3, 2, 'h', 0 }, { 3, 1, 'j', 0 }, { 3, 0, 'k', 0 },
         // Row 4: L ; @ . ,
-        { SDLK_l,         4, 7 }, { SDLK_SEMICOLON, 4, 6 },
-        { SDLK_AT,        4, 4 },
-        { SDLK_PERIOD,    4, 2 }, { SDLK_COMMA,     4, 1 },
+        { 4, 7, 'l', 0 }, { 4, 6, ';', 0 },
+        { 4, 4, '@', 0 },
+        { 4, 2, '.', 0 }, { 4, 1, ',', 0 },
         // Row 5: P O I U Y T R
-        { SDLK_p, 5, 7 }, { SDLK_o, 5, 6 }, { SDLK_i, 5, 5 }, { SDLK_u, 5, 4 },
-        { SDLK_y, 5, 3 }, { SDLK_t, 5, 2 }, { SDLK_r, 5, 1 },
+        { 5, 7, 'p', 0 }, { 5, 6, 'o', 0 }, { 5, 5, 'i', 0 }, { 5, 4, 'u', 0 },
+        { 5, 3, 'y', 0 }, { 5, 2, 't', 0 }, { 5, 1, 'r', 0 },
         // Row 6: Q W E
-        { SDLK_q, 6, 7 }, { SDLK_w, 6, 6 }, { SDLK_e, 6, 5 },
+        { 6, 7, 'q', 0 }, { 6, 6, 'w', 0 }, { 6, 5, 'e', 0 },
         // Row 7: 0-3 (digits)
-        { SDLK_0, 7, 7 }, { SDLK_9, 7, 6 }, { SDLK_8, 7, 5 }, { SDLK_7, 7, 4 },
-        { SDLK_6, 7, 3 }, { SDLK_5, 7, 2 }, { SDLK_4, 7, 1 }, { SDLK_3, 7, 0 },
+        { 7, 7, '0', 0 }, { 7, 6, '9', 0 }, { 7, 5, '8', 0 }, { 7, 4, '7', 0 },
+        { 7, 3, '6', 0 }, { 7, 2, '5', 0 }, { 7, 1, '4', 0 }, { 7, 0, '3', 0 },
     };
 
-    keyboard_matrix_apply(mappings, keyboard_matrix_, key, pressed);
+    static const HostKeyBinding bindings[] = {
+        { SDLK_DELETE,   '\b' },  // DELETE → same as BACKSPACE
+    };
+
+    keyboard_matrix_apply(entries, bindings, keyboard_matrix_, key, pressed);
 }
 
 // ============================================================================
