@@ -14,6 +14,7 @@
 #include "core/audio_thread.hpp"
 #include "utils/write_only_synth_adapter.hpp"
 #include "systems/bbc/bbc_micro_constants.hpp"
+#include "utils/keyboard_matrix.hpp"
 #include <cstdint>
 #include <memory>
 
@@ -154,9 +155,9 @@ private:
 
     std::unique_ptr<CompositeVideoPort> video_port_;  // Video output
 
-    // Keyboard matrix (10 columns × 8 rows)
-    // Each element: true = key pressed
-    bool        key_matrix_[10][8]{};
+    // Keyboard matrix (10 columns × 8 rows, active-low)
+    // Array index = column (0-9), bit position = row (0-7)
+    uint8_t     keyboard_matrix_[10]{};
     bool        any_key_pressed_ = false;
 
     // Addressable latch (accent accent accent accent accent accent accent)
