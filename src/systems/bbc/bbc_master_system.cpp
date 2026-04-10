@@ -17,6 +17,7 @@
 #include "core/formats/format_registry.hpp"
 #include "core/formats/format_load_helpers.hpp"
 #include "core/vfs/vfs.hpp"
+#include "utils/guest_key_chars.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -225,7 +226,7 @@ void BBCMasterSystem<V>::reset() {
     rom_select_ = 0;
     acccon_ = 0;
     shadow_active_ = false;
-    std::memset(key_matrix_, 0, sizeof(key_matrix_));
+    keyboard_matrix_reset(keyboard_matrix_, 10);
     any_key_pressed_ = false;
     addressable_latch_ = 0;
 }
@@ -439,74 +440,61 @@ bool BBCMasterSystem<V>::load_roms() {
 template<BBCMasterVariant V>
 void BBCMasterSystem<V>::update_key_matrix(SDL_Keycode key, bool pressed) {
     // BBC keyboard matrix: 10 columns × 8 rows (same layout as Model B)
-    int col = -1, row = -1;
+    // KeyMatrixEntry: row = BBC column (array index 0-9),
+    //                 col = BBC row   (bit position 0-7)
+    // NOTE: entries with col >= 8 are dead — preserved for 1:1 fidelity.
+    static const KeyMatrixEntry entries[] = {
+        // Modifier
+        {0, 0, UKEY_SHIFT_L, 0},
 
-    switch (key) {
-        // Row 0
-        case SDLK_LSHIFT: case SDLK_RSHIFT: col = 0; row = 0; break;
-        case SDLK_q:      col = 1; row = 0; break;
-        case SDLK_3:      col = 2; row = 0; break;
-        case SDLK_4:      col = 3; row = 0; break;
-        case SDLK_5:      col = 4; row = 0; break;
-        // Alphanumeric keys
-        case SDLK_a:      col = 4; row = 1; break;
-        case SDLK_s:      col = 5; row = 1; break;
-        case SDLK_d:      col = 3; row = 2; break;
-        case SDLK_f:      col = 4; row = 3; break;
-        case SDLK_g:      col = 5; row = 3; break;
-        case SDLK_h:      col = 5; row = 4; break;
-        case SDLK_j:      col = 4; row = 5; break;
-        case SDLK_k:      col = 4; row = 6; break;
-        case SDLK_l:      col = 5; row = 6; break;
-        case SDLK_z:      col = 6; row = 1; break;
-        case SDLK_x:      col = 4; row = 2; break;
-        case SDLK_c:      col = 5; row = 2; break;
-        case SDLK_v:      col = 6; row = 3; break;
-        case SDLK_b:      col = 6; row = 4; break;
-        case SDLK_n:      col = 5; row = 5; break;
-        case SDLK_m:      col = 6; row = 5; break;
-        case SDLK_w:      col = 2; row = 1; break;
-        case SDLK_e:      col = 2; row = 2; break;
-        case SDLK_r:      col = 3; row = 3; break;
-        case SDLK_t:      col = 2; row = 3; break;
-        case SDLK_y:      col = 4; row = 4; break;
-        case SDLK_u:      col = 3; row = 5; break;
-        case SDLK_i:      col = 2; row = 5; break;
-        case SDLK_o:      col = 3; row = 6; break;
-        case SDLK_p:      col = 3; row = 7; break;
+        // Letters
+        {1, 0, 'q', 0},
+        {4, 1, 'a', 0},  {5, 1, 's', 0},  {3, 2, 'd', 0},
+        {4, 3, 'f', 0},  {5, 3, 'g', 0},  {5, 4, 'h', 0},
+        {4, 5, 'j', 0},  {4, 6, 'k', 0},  {5, 6, 'l', 0},
+        {6, 1, 'z', 0},  {4, 2, 'x', 0},  {5, 2, 'c', 0},
+        {6, 3, 'v', 0},  {6, 4, 'b', 0},  {5, 5, 'n', 0},
+        {6, 5, 'm', 0},  {2, 1, 'w', 0},  {2, 2, 'e', 0},
+        {3, 3, 'r', 0},  {2, 3, 't', 0},  {4, 4, 'y', 0},
+        {3, 5, 'u', 0},  {2, 5, 'i', 0},  {3, 6, 'o', 0},
+        {3, 7, 'p', 0},
+
         // Number row
-        case SDLK_1:      col = 3; row = 0; break;
-        case SDLK_2:      col = 3; row = 1; break;
-        case SDLK_0:      col = 2; row = 7; break;
-        case SDLK_6:      col = 3; row = 4; break;
-        case SDLK_7:      col = 2; row = 4; break;
-        case SDLK_8:      col = 1; row = 5; break;
-        case SDLK_9:      col = 2; row = 6; break;
-        // Special keys
-        case SDLK_RETURN:    col = 4; row = 9; break;
-        case SDLK_SPACE:     col = 6; row = 2; break;
-        case SDLK_BACKSPACE: col = 5; row = 9; break;
-        case SDLK_TAB:       col = 6; row = 0; break;
-        case SDLK_ESCAPE:    col = 7; row = 0; break;
-        // Cursor keys
-        case SDLK_LEFT:   col = 1; row = 9; break;
-        case SDLK_RIGHT:  col = 7; row = 9; break;
-        case SDLK_UP:     col = 3; row = 9; break;
-        case SDLK_DOWN:   col = 2; row = 9; break;
-        default: break;
-    }
+        {3, 0, '1', 0},  {3, 1, '2', 0},  {2, 0, '3', 0},
+        {3, 0, '4', 0},  {4, 0, '5', 0},  {3, 4, '6', 0},
+        {2, 4, '7', 0},  {1, 5, '8', 0},  {2, 6, '9', 0},
+        {2, 7, '0', 0},
 
-    if (col >= 0 && row >= 0 && col < 10 && row < 8) {
-        key_matrix_[col][row] = pressed;
-    }
+        // Special keys
+        {4, 9, '\r', 0},             // RETURN  (dead — bit 9)
+        {6, 2, ' ',  0},             // SPACE
+        {5, 9, '\b', 0},             // DELETE  (dead — bit 9)
+        {6, 0, '\t', 0},             // TAB
+        {7, 0, 0x1B, 0},             // ESCAPE
+
+        // Cursor keys (dead — bit 9)
+        {1, 9, UKEY_CURSOR_LEFT,  0},
+        {7, 9, UKEY_CURSOR_RIGHT, 0},
+        {3, 9, UKEY_CURSOR_UP,    0},
+        {2, 9, UKEY_CURSOR_DOWN,  0},
+    };
+
+    static const HostKeyBinding bindings[] = {
+        {SDLK_LSHIFT, UKEY_SHIFT_L},
+        {SDLK_RSHIFT, UKEY_SHIFT_L},
+        {SDLK_LEFT,   UKEY_CURSOR_LEFT},
+        {SDLK_RIGHT,  UKEY_CURSOR_RIGHT},
+        {SDLK_UP,     UKEY_CURSOR_UP},
+        {SDLK_DOWN,   UKEY_CURSOR_DOWN},
+    };
+
+    keyboard_matrix_apply(entries, bindings, keyboard_matrix_, key, pressed);
 
     any_key_pressed_ = false;
     for (int c = 0; c < 10; c++) {
-        for (int r = 0; r < 8; r++) {
-            if (key_matrix_[c][r]) {
-                any_key_pressed_ = true;
-                return;
-            }
+        if (keyboard_matrix_[c] != 0xFF) {
+            any_key_pressed_ = true;
+            break;
         }
     }
 }
@@ -514,13 +502,7 @@ void BBCMasterSystem<V>::update_key_matrix(SDL_Keycode key, bool pressed) {
 template<BBCMasterVariant V>
 uint8_t BBCMasterSystem<V>::scan_keyboard(uint8_t column) const {
     if (column >= 10) return 0xFF;
-    uint8_t result = 0xFF;
-    for (uint32_t row = 0; row < 8; row++) {
-        if (key_matrix_[column][row]) {
-            result &= ~(1 << row);
-        }
-    }
-    return result;
+    return keyboard_matrix_[column];
 }
 
 template<BBCMasterVariant V>
