@@ -575,13 +575,13 @@ uint8_t PETSystem::pia1_port_b_read(void* user_data) {
 
     // The PET uses a 4-to-16 decoder on PIA1 Port A bits[3:0] to select
     // one of 10 keyboard rows.  PIA1 Port B reads the column contacts for
-    // that row.  col_open_contacts[row] holds the 8-bit column mask
+    // that row.  row_open_contacts[row] holds the 8-bit column mask
     // (active-LOW: 0 = key pressed, 1 = open).
     uint8_t row = sys->keyboard_row_select_ & 0x0F;
 
     if (row < PET_KEYBOARD_ROWS) {
-        // col_open_contacts is uint16_t, but PET only has 8 columns
-        return static_cast<uint8_t>(sys->keyboard_->col_open_contacts[row]);
+        // row_open_contacts is uint16_t, but PET only has 8 columns
+        return static_cast<uint8_t>(sys->keyboard_->row_open_contacts[row]);
     }
 
     return 0xFF;  // No row selected or invalid row

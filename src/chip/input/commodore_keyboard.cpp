@@ -196,9 +196,10 @@ void commodore_keyboard_t::key_down(SDL_Keycode key, bool shifted) {
     uint8_t row, col;
     if (find_key(key, &row, &col)) {
         uint8_t row_bit = (matrix_rows - 1) - row;
-        // Standard columns 0-7 are bit-reversed within the 8-bit CIA range
-        // so that code column order matches the hardware convention.  Extended
-        // columns (8+, e.g. C128 numpad via VIC-IIe $D02F) map directly.
+        // All matrices use bit-reversed layout: array index 0 = highest
+        // hardware bit.  Undo the reversal to get the hardware bit position.
+        // Extended columns (8+, e.g. C128 numpad via VIC-IIe $D02F) are
+        // stored at their natural index and not reversed.
         uint8_t col_bit = (col < 8) ? (7 - col) : col;
 
         // Close the contact (key pressed)
