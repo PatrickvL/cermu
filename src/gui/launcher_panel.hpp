@@ -563,30 +563,9 @@ inline void LauncherPanel::render_top_bar(bool allow_cancel) {
         type_filter_all_ = false; type_filter_ = SystemType::Other; apply_filters();
     }
 
-    // Maker filter combo with label prefix
-    ImGui::SameLine(ImGui::GetWindowWidth() - 210);
+    // System count (right-aligned in top bar)
+    ImGui::SameLine(ImGui::GetWindowWidth() - 80);
     ImGui::SetCursorPosY(6);
-    ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextDimmed);
-    ImGui::TextUnformatted("Maker");
-    ImGui::PopStyleColor();
-    ImGui::SameLine(0, 4);
-    ImGui::PushItemWidth(100);
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, launcher_theme::kSearchInputBg);
-    if (ImGui::BeginCombo("##Maker", maker_list_[maker_filter_index_].c_str(), ImGuiComboFlags_NoArrowButton)) {
-        for (int i = 0; i < static_cast<int>(maker_list_.size()); ++i) {
-            bool selected = (i == maker_filter_index_);
-            if (ImGui::Selectable(maker_list_[i].c_str(), selected)) {
-                maker_filter_index_ = i;
-                apply_filters();
-            }
-        }
-        ImGui::EndCombo();
-    }
-    ImGui::PopStyleColor();
-    ImGui::PopItemWidth();
-
-    // System count
-    ImGui::SameLine();
     ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextDimmed);
     ImGui::Text("%d/%d", static_cast<int>(filtered_systems_.size()),
                 static_cast<int>(sorted_systems_.size()));
@@ -651,6 +630,26 @@ inline void LauncherPanel::render_left_panel() {
     ImGui::PopItemWidth();
     ImGui::PopStyleColor();
 
+    // Maker filter — directly above the system list for proximity
+    ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextDimmed);
+    ImGui::TextUnformatted("Maker");
+    ImGui::PopStyleColor();
+    ImGui::SameLine(0, 4);
+    ImGui::PushItemWidth(-1);
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, launcher_theme::kSearchInputBg);
+    if (ImGui::BeginCombo("##Maker", maker_list_[maker_filter_index_].c_str(), ImGuiComboFlags_NoArrowButton)) {
+        for (int i = 0; i < static_cast<int>(maker_list_.size()); ++i) {
+            bool selected = (i == maker_filter_index_);
+            if (ImGui::Selectable(maker_list_[i].c_str(), selected)) {
+                maker_filter_index_ = i;
+                apply_filters();
+            }
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::PopStyleColor();
+    ImGui::PopItemWidth();
+
     ImGui::Spacing();
 
     // System list
@@ -676,8 +675,8 @@ inline void LauncherPanel::render_left_panel() {
             select_system(i);
 
             if (ImGui::IsMouseDoubleClicked(0)) {
-                // Double-click: select and move focus to file browser
-                focus_panel_ = FocusPanel::FileBrowser;
+                // Double-click: launch the selected system immediately
+                launch_selected_system();
             }
         }
 

@@ -137,7 +137,13 @@ void MC6809VDGSystem<V>::tick() {
 
     // Copy VDG IRQ (FS — frame sync) → PIA0 CA1 for VSYNC interrupt
     bool fs = board_.vdg.check_fs();
-    if (fs) board_.pia0.set_ca1(true);
+    if (fs) {
+        board_.pia0.set_ca1(true);
+        // Render frame at field sync — the VDG reads from RAM at the
+        // SAM-controlled display offset and drives the video output.
+        uint16_t offset = board_.sam.display_offset();
+        board_.vdg.render_frame(board_.ram.data() + offset);
+    }
 
     // CPU tick
     pins_ = board_.cpu.tick(pins_);

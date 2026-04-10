@@ -122,11 +122,34 @@ template<> struct Z9001BusTraits<Z9001Variant::KC87> {
     using Spec = ManifestBusSpec<kKC87Manifest, 16, 8>;
 };
 
-// ── Board ──────────────────────────────────────────────────────────────
-// Uses KC87 manifest component tuple (superset) for field declarations.
-// Z9001 leaves unused fields (basic_rom_lo, basic_rom_hi, color_ram) unbound.
+// ── Board (Z9001 — no BASIC ROM, no color RAM) ────────────────────────
+// Z9001 manifest: U880, RAM(16K), VRAM(1K), OS ROM, PIO#1, PIO#2, CTC, 2 ports
 template<typename BSpec>
-struct Z9001Board : Board<BSpec> {
+struct Z9001BoardBase : Board<BSpec> {
+    using ComponentTuple = decltype(kZ9001Manifest)::component_tuple;
+    ComponentTuple components_;
+
+    // Chip aliases
+    U880&       z80       = std::get<0>(components_);
+    RAMChip&    ram       = std::get<1>(components_);
+    RAMChip&    video_ram = std::get<2>(components_);
+    ROMChip&    os_rom    = std::get<3>(components_);
+    z80_pio_t&  pio1      = std::get<4>(components_);
+    z80_pio_t&  pio2      = std::get<5>(components_);
+    z80_ctc_t&  ctc       = std::get<6>(components_);
+
+    // Port aliases
+    PortCassette&       cassette_port = std::get<7>(components_);
+    PortCompositeVideo& video_port    = std::get<8>(components_);
+
+    template<size_t N>
+    Z9001BoardBase(const ChipManifest<N>& m) : Board<BSpec>(m) {}
+};
+
+// ── Board (KC87 — with BASIC ROM + color RAM) ─────────────────────────
+// KC87 manifest: U880, RAM(64K), BASIC lo, BASIC hi, Color RAM, VRAM, OS ROM, PIO#1, PIO#2, CTC, 2 ports
+template<typename BSpec>
+struct Z9001BoardKC87 : Board<BSpec> {
     using ComponentTuple = decltype(kKC87Manifest)::component_tuple;
     ComponentTuple components_;
 
@@ -147,8 +170,16 @@ struct Z9001Board : Board<BSpec> {
     PortCompositeVideo& video_port    = std::get<11>(components_);
 
     template<size_t N>
-    Z9001Board(const ChipManifest<N>& m) : Board<BSpec>(m) {}
+    Z9001BoardKC87(const ChipManifest<N>& m) : Board<BSpec>(m) {}
 };
+
+// Board type selector per variant
+template<Z9001Variant V, typename BSpec>
+using Z9001BoardFor = std::conditional_t<
+    Z9001VariantTraits<V>::has_basic_rom,
+    Z9001BoardKC87<BSpec>,
+    Z9001BoardBase<BSpec>
+>;
 
 // ── System ───────────────────────────────────────────────────────────────
 template<Z9001Variant V>
@@ -181,7 +212,7 @@ private:
     using BT  = Z9001BusTraits<V>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using MainBoard = Z9001Board<typename BT::Spec>;
+    using MainBoard = Z9001BoardFor<V, typename BT::Spec>;
     Bus bus_;
     MainBoard board_{BT::kManifest};
 

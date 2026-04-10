@@ -17,10 +17,18 @@ int main(int argc, char** argv) {
     bool gfx_check = false;
     bool early_exit = false;   // --early-exit: stop as soon as video output detected
     int early_exit_interval = 30;  // check GFX every N frames during early-exit
+    const char* system_name = nullptr;   // --system <name>: boot a system bare (no file)
+    bool boot_all = false;               // --boot-all: boot every registered system
     int first_positional = 1;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
             requested_frames = atoi(argv[++i]);
+            first_positional = i + 1;
+        } else if (strcmp(argv[i], "--system") == 0 && i + 1 < argc) {
+            system_name = argv[++i];
+            first_positional = i + 1;
+        } else if (strcmp(argv[i], "--boot-all") == 0) {
+            boot_all = true;
             first_positional = i + 1;
         } else if (strcmp(argv[i], "--quiet") == 0 || strcmp(argv[i], "-q") == 0) {
             quiet = true;
@@ -61,7 +69,56 @@ int main(int argc, char** argv) {
     }
     
     // Test file detection if file provided
-    if (first_positional < argc) {
+    if (boot_all || system_name) {
+        // --boot-all or --system: boot system(s) bare (no file)
+        auto boot_system = [&](const char* sname) -> bool {
+            auto sys = registry.create_system_by_name(sname);
+            if (!sys) {
+                fprintf(stderr, "FAIL  %-16s  (not found)\n", sname);
+                return false;
+            }
+            const auto& desc = sys->get_descriptor();
+            if (!sys->initialize()) {
+                fprintf(stderr, "FAIL  %-16s  initialize() failed\n", desc.short_name);
+                return false;
+            }
+            sys->attach_default_peripherals();
+
+            int width, height;
+            sys->get_display_dimensions(&width, &height);
+            uint32_t* fb = (uint32_t*)calloc(width * height, sizeof(uint32_t));
+            if (fb) sys->set_framebuffer(fb, width, height);
+
+            float drain_buf[8192];
+            bool crashed = false;
+            for (int f = 0; f < requested_frames; f++) {
+                sys->run_frame();
+                if (f % 50 == 0) sys->get_audio_samples(drain_buf, 8192);
+            }
+
+            sys->shutdown();
+            free(fb);
+            fprintf(stdout, "OK    %-16s  %d frames\n", desc.short_name, requested_frames);
+            fflush(stdout);
+            return true;
+        };
+
+        if (boot_all) {
+            int pass = 0, fail = 0;
+            for (const auto& [desc, factory] : systems) {
+                fprintf(stderr, "BOOT  %-16s  ...\r", desc.short_name);
+                fflush(stderr);
+                if (boot_system(desc.short_name))
+                    ++pass;
+                else
+                    ++fail;
+            }
+            fprintf(stdout, "\n%d/%d systems booted successfully\n", pass, pass + fail);
+            return fail > 0 ? 1 : 0;
+        } else {
+            return boot_system(system_name) ? 0 : 1;
+        }
+    } else if (first_positional < argc) {
         const char* filepath = argv[first_positional];
         log_info("Testing file: %s\n", filepath);
         log_info("-------------------------------------------------\n");
