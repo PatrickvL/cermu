@@ -175,15 +175,62 @@ template<> struct KC85BusTraits<KC85Variant::KC85_4> {
     using Spec = ManifestBusSpec<kKC854Manifest, 16, 8>;
 };
 
-// ── Board ──────────────────────────────────────────────────────────────
-// Uses KC85/4 manifest component tuple (superset) for field declarations.
-// KC85/2 and /3 leave unused fields (basic_rom, caos_c_rom) unbound.
+// ── Board (KC85/2 — no BASIC, no CAOS-C) ──────────────────────────────
+// 8 chips: U880, RAM(16K), IRM(16K), CAOS ROM, PIO#1, PIO#2, CTC, ModSys + 3 ports
 template<typename BSpec>
-struct KC85Board : Board<BSpec> {
+struct KC85Board2 : Board<BSpec> {
+    using ComponentTuple = decltype(kKC852Manifest)::component_tuple;
+    ComponentTuple components_;
+
+    U880&                 z80       = std::get<0>(components_);
+    RAMChip&              ram       = std::get<1>(components_);
+    RAMChip&              irm       = std::get<2>(components_);
+    ROMChip&              caos_rom  = std::get<3>(components_);
+    z80_pio_t&            pio1      = std::get<4>(components_);
+    z80_pio_t&            pio2      = std::get<5>(components_);
+    z80_ctc_t&            ctc       = std::get<6>(components_);
+    kc85_module_system_t& modules   = std::get<7>(components_);
+
+    PortCassette&       cassette_port  = std::get<8>(components_);
+    PortExpansion&      expansion_port = std::get<9>(components_);
+    PortCompositeVideo& video_port     = std::get<10>(components_);
+
+    template<size_t N>
+    KC85Board2(const ChipManifest<N>& m) : Board<BSpec>(m) {}
+};
+
+// ── Board (KC85/3 — BASIC ROM, no CAOS-C) ─────────────────────────────
+// 9 chips: U880, RAM(16K), IRM(16K), BASIC, CAOS ROM, PIO#1, PIO#2, CTC, ModSys + 3 ports
+template<typename BSpec>
+struct KC85Board3 : Board<BSpec> {
+    using ComponentTuple = decltype(kKC853Manifest)::component_tuple;
+    ComponentTuple components_;
+
+    U880&                 z80        = std::get<0>(components_);
+    RAMChip&              ram        = std::get<1>(components_);
+    RAMChip&              irm        = std::get<2>(components_);
+    ROMChip&              basic_rom  = std::get<3>(components_);
+    ROMChip&              caos_rom   = std::get<4>(components_);
+    z80_pio_t&            pio1       = std::get<5>(components_);
+    z80_pio_t&            pio2       = std::get<6>(components_);
+    z80_ctc_t&            ctc        = std::get<7>(components_);
+    kc85_module_system_t& modules    = std::get<8>(components_);
+
+    PortCassette&       cassette_port  = std::get<9>(components_);
+    PortExpansion&      expansion_port = std::get<10>(components_);
+    PortCompositeVideo& video_port     = std::get<11>(components_);
+
+    template<size_t N>
+    KC85Board3(const ChipManifest<N>& m) : Board<BSpec>(m) {}
+};
+
+// ── Board (KC85/4 — BASIC + CAOS-C + dual-plane IRM) ──────────────────
+// 10 chips: U880, RAM(32K), IRM(64K), BASIC, CAOS-C, CAOS ROM, PIO#1, PIO#2, CTC, ModSys + 3 ports
+template<typename BSpec>
+struct KC85Board4 : Board<BSpec> {
     using ComponentTuple = decltype(kKC854Manifest)::component_tuple;
     ComponentTuple components_;
 
-    // Chip aliases
     U880&                 z80        = std::get<0>(components_);
     RAMChip&              ram        = std::get<1>(components_);
     RAMChip&              irm        = std::get<2>(components_);
@@ -195,14 +242,24 @@ struct KC85Board : Board<BSpec> {
     z80_ctc_t&            ctc        = std::get<8>(components_);
     kc85_module_system_t& modules    = std::get<9>(components_);
 
-    // Port aliases
     PortCassette&       cassette_port  = std::get<10>(components_);
     PortExpansion&      expansion_port = std::get<11>(components_);
     PortCompositeVideo& video_port     = std::get<12>(components_);
 
     template<size_t N>
-    KC85Board(const ChipManifest<N>& m) : Board<BSpec>(m) {}
+    KC85Board4(const ChipManifest<N>& m) : Board<BSpec>(m) {}
 };
+
+// Board type selector per variant
+template<KC85Variant V, typename BSpec>
+struct KC85BoardSelector;
+
+template<typename BSpec> struct KC85BoardSelector<KC85Variant::KC85_2, BSpec> { using type = KC85Board2<BSpec>; };
+template<typename BSpec> struct KC85BoardSelector<KC85Variant::KC85_3, BSpec> { using type = KC85Board3<BSpec>; };
+template<typename BSpec> struct KC85BoardSelector<KC85Variant::KC85_4, BSpec> { using type = KC85Board4<BSpec>; };
+
+template<KC85Variant V, typename BSpec>
+using KC85BoardFor = typename KC85BoardSelector<V, BSpec>::type;
 
 // ── Keyboard emulation modes ─────────────────────────────────────────────────
 enum class KC85KeyboardMode {
@@ -250,7 +307,7 @@ private:
     using BT  = KC85BusTraits<V>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using MainBoard = KC85Board<typename BT::Spec>;
+    using MainBoard = KC85BoardFor<V, typename BT::Spec>;
     Bus bus_;
     MainBoard board_{BT::kManifest};
 

@@ -120,11 +120,32 @@ template<> struct Z1013BusTraits<Z1013Variant::Z1013_64> {
     using Spec = ManifestBusSpec<kZ1013_64K_Manifest, 16, 8>;
 };
 
-// ── Board ──────────────────────────────────────────────────────────────
-// Uses the 64K manifest component tuple (superset) — 16K variants
-// simply leave the basic_lo/basic_hi fields unused.
+// ── Board (16K variants: Z1013.01, Z1013.16) ──────────────────────────
+// 16K manifest has: U880, RAM(16K), VRAM(1K), Monitor ROM, PIO, 2 ports
 template<typename BSpec>
-struct Z1013Board : Board<BSpec> {
+struct Z1013Board16K : Board<BSpec> {
+    using ComponentTuple = decltype(kZ1013_16K_Manifest)::component_tuple;
+    ComponentTuple components_;
+
+    // Chip aliases
+    U880&       z80      = std::get<0>(components_);
+    RAMChip&    ram      = std::get<1>(components_);
+    RAMChip&    vram     = std::get<2>(components_);
+    ROMChip&    monitor  = std::get<3>(components_);
+    z80_pio_t&  pio      = std::get<4>(components_);
+
+    // Port aliases
+    PortCassette&       cassette_port = std::get<5>(components_);
+    PortCompositeVideo& video_port    = std::get<6>(components_);
+
+    template<size_t N>
+    Z1013Board16K(const ChipManifest<N>& m) : Board<BSpec>(m) {}
+};
+
+// ── Board (64K variant: Z1013.64) ──────────────────────────────────────
+// 64K manifest has: U880, RAM(64K), BASIC lo, BASIC hi, VRAM(1K), Monitor ROM, PIO, 2 ports
+template<typename BSpec>
+struct Z1013Board64K : Board<BSpec> {
     using ComponentTuple = decltype(kZ1013_64K_Manifest)::component_tuple;
     ComponentTuple components_;
 
@@ -142,8 +163,16 @@ struct Z1013Board : Board<BSpec> {
     PortCompositeVideo& video_port    = std::get<8>(components_);
 
     template<size_t N>
-    Z1013Board(const ChipManifest<N>& m) : Board<BSpec>(m) {}
+    Z1013Board64K(const ChipManifest<N>& m) : Board<BSpec>(m) {}
 };
+
+// Board type selector per variant
+template<Z1013Variant V, typename BSpec>
+using Z1013BoardFor = std::conditional_t<
+    Z1013VariantTraits<V>::has_basic_rom,
+    Z1013Board64K<BSpec>,
+    Z1013Board16K<BSpec>
+>;
 
 // ── System ───────────────────────────────────────────────────────────────
 template<Z1013Variant V>
@@ -178,7 +207,7 @@ private:
     using BT  = Z1013BusTraits<V>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using MainBoard = Z1013Board<typename BT::Spec>;
+    using MainBoard = Z1013BoardFor<V, typename BT::Spec>;
     Bus bus_;
     MainBoard board_{BT::kManifest};
 
