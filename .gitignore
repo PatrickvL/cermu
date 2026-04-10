@@ -99,6 +99,12 @@ data/**/*.zip
 !data/z9001/roms/*.rom
 !data/lc80/roms/*.rom
 
+# MSX — C-BIOS (BSD 2-clause license), free MSX BIOS replacement.
+!data/msx/roms/*.rom
+
+# Atari ST — EmuTOS (GPL), free TOS replacement.
+!data/atari_st/roms/*.img
+
 # External dependencies - ignore by default, unignore committed items
 # Submodules (ImGuiFileDialog, tomlplusplus, toonplusplus, LJON) are
 # handled by .gitmodules and unaffected by this rule.

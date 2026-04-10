@@ -1,8 +1,20 @@
 # MSX ROM Files
 
-MSX systems require a BIOS+BASIC ROM to boot. These ROMs are copyrighted
-by Microsoft (BASIC) and the respective hardware manufacturers (BIOS),
-and are **not** included in this repository.
+MSX systems require a BIOS+BASIC ROM to boot.
+
+## Included ROMs (C-BIOS — Free Alternative)
+
+This directory includes **C-BIOS** (v0.29a), a free open-source MSX BIOS
+replacement licensed under the 2-clause BSD license. C-BIOS supports most
+ROM-based games but does **not** include BASIC or cassette/disk support.
+
+| Filename | Size | Source | Description |
+|----------|------|--------|-------------|
+| `msx.rom` | 32 KB | C-BIOS 0.29a | MSX1 BIOS (international) |
+| `msx2.rom` | 32 KB | C-BIOS 0.29a | MSX2 BIOS (international) |
+| `msx2p.rom` | 32 KB | C-BIOS 0.29a | MSX2+ BIOS (international) |
+
+C-BIOS project: http://cbios.sourceforge.net/
 
 ## Required ROMs
 
@@ -33,16 +45,10 @@ and are **not** included in this repository.
 All variants share this directory. The emulator selects the correct ROM
 based on the system variant chosen at startup.
 
-## Missing Files
+## Original ROMs (Not Included)
 
-| Filename | Size | Description |
-|----------|------|-------------|
-| `msx.rom` | 32 KB | **MISSING** — MSX1 BIOS + BASIC |
-| `msx2.rom` | 32 KB | **MISSING** — MSX2 BIOS + BASIC |
-| `msx2p.rom` | 32 KB | **MISSING** — MSX2+ BIOS + BASIC |
-
-All ROM files must be obtained from the sources below. C-BIOS is a
-free open-source alternative for MSX1.
+For full BASIC and disk/cassette support, replace the C-BIOS files with
+original MSX BIOS+BASIC ROMs from your hardware or licensed sources:
 
 ## Where to Obtain
 
