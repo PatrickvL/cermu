@@ -24,6 +24,7 @@
 #include "core/formats/format_load_helpers.hpp"
 #include "core/vfs/vfs.hpp"
 #include "utils/keyboard_matrix.hpp"
+#include "utils/guest_key_chars.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -262,72 +263,89 @@ template<MC6809VDGVariant V>
 void MC6809VDGSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     if constexpr (is_coco_variant<V>) {
         // CoCo keyboard: 51 keys
-        static constexpr KeyMatrixMapping mappings[] = {
+        static const KeyMatrixEntry entries[] = {
             // Row 0
-            { SDLK_AT,       0, 0 }, { SDLK_a,        0, 1 }, { SDLK_b,        0, 2 },
-            { SDLK_c,        0, 3 }, { SDLK_d,        0, 4 }, { SDLK_e,        0, 5 },
-            { SDLK_f,        0, 6 },
+            { 0, 0, '@', 0 }, { 0, 1, 'a', 0 }, { 0, 2, 'b', 0 },
+            { 0, 3, 'c', 0 }, { 0, 4, 'd', 0 }, { 0, 5, 'e', 0 },
+            { 0, 6, 'f', 0 },
             // Row 1
-            { SDLK_g,        1, 0 }, { SDLK_h,        1, 1 }, { SDLK_i,        1, 2 },
-            { SDLK_j,        1, 3 }, { SDLK_k,        1, 4 }, { SDLK_l,        1, 5 },
-            { SDLK_m,        1, 6 },
+            { 1, 0, 'g', 0 }, { 1, 1, 'h', 0 }, { 1, 2, 'i', 0 },
+            { 1, 3, 'j', 0 }, { 1, 4, 'k', 0 }, { 1, 5, 'l', 0 },
+            { 1, 6, 'm', 0 },
             // Row 2
-            { SDLK_n,        2, 0 }, { SDLK_o,        2, 1 }, { SDLK_p,        2, 2 },
-            { SDLK_q,        2, 3 }, { SDLK_r,        2, 4 }, { SDLK_s,        2, 5 },
-            { SDLK_t,        2, 6 },
+            { 2, 0, 'n', 0 }, { 2, 1, 'o', 0 }, { 2, 2, 'p', 0 },
+            { 2, 3, 'q', 0 }, { 2, 4, 'r', 0 }, { 2, 5, 's', 0 },
+            { 2, 6, 't', 0 },
             // Row 3
-            { SDLK_u,        3, 0 }, { SDLK_v,        3, 1 }, { SDLK_w,        3, 2 },
-            { SDLK_x,        3, 3 }, { SDLK_y,        3, 4 }, { SDLK_z,        3, 5 },
+            { 3, 0, 'u', 0 }, { 3, 1, 'v', 0 }, { 3, 2, 'w', 0 },
+            { 3, 3, 'x', 0 }, { 3, 4, 'y', 0 }, { 3, 5, 'z', 0 },
             // Row 4
-            { SDLK_UP,       4, 3 }, { SDLK_DOWN,     4, 4 }, { SDLK_LEFT,     4, 5 },
-            { SDLK_RIGHT,    4, 6 },
+            { 4, 3, UKEY_CURSOR_UP, 0 }, { 4, 4, UKEY_CURSOR_DOWN, 0 },
+            { 4, 5, UKEY_CURSOR_LEFT, 0 }, { 4, 6, UKEY_CURSOR_RIGHT, 0 },
             // Row 5
-            { SDLK_SPACE,    5, 0 }, { SDLK_0,        5, 1 }, { SDLK_1,        5, 2 },
-            { SDLK_2,        5, 3 }, { SDLK_3,        5, 4 }, { SDLK_4,        5, 5 },
-            { SDLK_5,        5, 6 },
+            { 5, 0, ' ', 0 }, { 5, 1, '0', 0 }, { 5, 2, '1', 0 },
+            { 5, 3, '2', 0 }, { 5, 4, '3', 0 }, { 5, 5, '4', 0 },
+            { 5, 6, '5', 0 },
             // Row 6
-            { SDLK_6,        6, 0 }, { SDLK_7,        6, 1 }, { SDLK_8,        6, 2 },
-            { SDLK_9,        6, 3 }, { SDLK_COLON,    6, 4 }, { SDLK_SEMICOLON,6, 5 },
+            { 6, 0, '6', 0 }, { 6, 1, '7', 0 }, { 6, 2, '8', 0 },
+            { 6, 3, '9', 0 }, { 6, 4, ':', 0 }, { 6, 5, ';', 0 },
             // Row 7
-            { SDLK_RETURN,   7, 0 }, { SDLK_BACKSPACE,7, 1 },
-            { SDLK_LSHIFT,   7, 3 }, { SDLK_RSHIFT,   7, 3 },
+            { 7, 0, '\r', 0 }, { 7, 1, '\b', 0 },
+            { 7, 3, UKEY_SHIFT_L, 0 },
         };
-        keyboard_matrix_apply(mappings, keyboard_matrix_, key, pressed);
+        static const HostKeyBinding bindings[] = {
+            { SDLK_UP,        UKEY_CURSOR_UP    },
+            { SDLK_DOWN,      UKEY_CURSOR_DOWN  },
+            { SDLK_LEFT,      UKEY_CURSOR_LEFT  },
+            { SDLK_RIGHT,     UKEY_CURSOR_RIGHT },
+            { SDLK_LSHIFT,    UKEY_SHIFT_L      },
+            { SDLK_RSHIFT,    UKEY_SHIFT_L      },
+        };
+        keyboard_matrix_apply(entries, bindings, keyboard_matrix_, key, pressed);
     } else {
         // Dragon keyboard: 53 keys (different scan code layout)
-        static constexpr KeyMatrixMapping mappings[] = {
+        static const KeyMatrixEntry entries[] = {
             // Row 0
-            { SDLK_0,        0, 0 }, { SDLK_1,        0, 1 }, { SDLK_2,        0, 2 },
-            { SDLK_3,        0, 3 }, { SDLK_4,        0, 4 }, { SDLK_5,        0, 5 },
-            { SDLK_6,        0, 6 },
+            { 0, 0, '0', 0 }, { 0, 1, '1', 0 }, { 0, 2, '2', 0 },
+            { 0, 3, '3', 0 }, { 0, 4, '4', 0 }, { 0, 5, '5', 0 },
+            { 0, 6, '6', 0 },
             // Row 1
-            { SDLK_7,        1, 0 }, { SDLK_8,        1, 1 }, { SDLK_9,        1, 2 },
-            { SDLK_COLON,    1, 3 }, { SDLK_SEMICOLON,1, 4 }, { SDLK_COMMA,    1, 5 },
-            { SDLK_MINUS,    1, 6 },
+            { 1, 0, '7', 0 }, { 1, 1, '8', 0 }, { 1, 2, '9', 0 },
+            { 1, 3, ':', 0 }, { 1, 4, ';', 0 }, { 1, 5, ',', 0 },
+            { 1, 6, '-', 0 },
             // Row 2
-            { SDLK_PERIOD,   2, 0 }, { SDLK_SLASH,    2, 1 }, { SDLK_AT,       2, 2 },
-            { SDLK_a,        2, 3 }, { SDLK_b,        2, 4 }, { SDLK_c,        2, 5 },
-            { SDLK_d,        2, 6 },
+            { 2, 0, '.', 0 }, { 2, 1, '/', 0 }, { 2, 2, '@', 0 },
+            { 2, 3, 'a', 0 }, { 2, 4, 'b', 0 }, { 2, 5, 'c', 0 },
+            { 2, 6, 'd', 0 },
             // Row 3
-            { SDLK_e,        3, 0 }, { SDLK_f,        3, 1 }, { SDLK_g,        3, 2 },
-            { SDLK_h,        3, 3 }, { SDLK_i,        3, 4 }, { SDLK_j,        3, 5 },
-            { SDLK_k,        3, 6 },
+            { 3, 0, 'e', 0 }, { 3, 1, 'f', 0 }, { 3, 2, 'g', 0 },
+            { 3, 3, 'h', 0 }, { 3, 4, 'i', 0 }, { 3, 5, 'j', 0 },
+            { 3, 6, 'k', 0 },
             // Row 4
-            { SDLK_l,        4, 0 }, { SDLK_m,        4, 1 }, { SDLK_n,        4, 2 },
-            { SDLK_o,        4, 3 }, { SDLK_p,        4, 4 }, { SDLK_q,        4, 5 },
-            { SDLK_r,        4, 6 },
+            { 4, 0, 'l', 0 }, { 4, 1, 'm', 0 }, { 4, 2, 'n', 0 },
+            { 4, 3, 'o', 0 }, { 4, 4, 'p', 0 }, { 4, 5, 'q', 0 },
+            { 4, 6, 'r', 0 },
             // Row 5
-            { SDLK_s,        5, 0 }, { SDLK_t,        5, 1 }, { SDLK_u,        5, 2 },
-            { SDLK_v,        5, 3 }, { SDLK_w,        5, 4 }, { SDLK_x,        5, 5 },
-            { SDLK_y,        5, 6 },
+            { 5, 0, 's', 0 }, { 5, 1, 't', 0 }, { 5, 2, 'u', 0 },
+            { 5, 3, 'v', 0 }, { 5, 4, 'w', 0 }, { 5, 5, 'x', 0 },
+            { 5, 6, 'y', 0 },
             // Row 6
-            { SDLK_z,        6, 0 }, { SDLK_UP,       6, 3 }, { SDLK_DOWN,     6, 4 },
-            { SDLK_LEFT,     6, 5 }, { SDLK_RIGHT,    6, 6 },
+            { 6, 0, 'z', 0 }, { 6, 3, UKEY_CURSOR_UP, 0 },
+            { 6, 4, UKEY_CURSOR_DOWN, 0 }, { 6, 5, UKEY_CURSOR_LEFT, 0 },
+            { 6, 6, UKEY_CURSOR_RIGHT, 0 },
             // Row 7
-            { SDLK_SPACE,    7, 0 }, { SDLK_RETURN,   7, 1 }, { SDLK_ESCAPE,   7, 2 },
-            { SDLK_LSHIFT,   7, 6 }, { SDLK_RSHIFT,   7, 6 },
+            { 7, 0, ' ', 0 }, { 7, 1, '\r', 0 }, { 7, 2, '\x1B', 0 },
+            { 7, 6, UKEY_SHIFT_L, 0 },
         };
-        keyboard_matrix_apply(mappings, keyboard_matrix_, key, pressed);
+        static const HostKeyBinding bindings[] = {
+            { SDLK_UP,        UKEY_CURSOR_UP    },
+            { SDLK_DOWN,      UKEY_CURSOR_DOWN  },
+            { SDLK_LEFT,      UKEY_CURSOR_LEFT  },
+            { SDLK_RIGHT,     UKEY_CURSOR_RIGHT },
+            { SDLK_LSHIFT,    UKEY_SHIFT_L      },
+            { SDLK_RSHIFT,    UKEY_SHIFT_L      },
+        };
+        keyboard_matrix_apply(entries, bindings, keyboard_matrix_, key, pressed);
     }
 }
 
