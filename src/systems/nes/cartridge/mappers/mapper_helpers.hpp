@@ -267,21 +267,30 @@ struct MMC3IRQ {
     }
 
     /// Process A12 signal transition (call from mapper's notify_a12).
+    ///
     /// Rev B behavior (standard MMC3B — SMB3, Mega Man 3): IRQ fires
-    /// whenever counter is 0 after clocking, including reload-to-0.
-    /// Rev A (Crystalis) differs: no IRQ on reload-to-0 after natural
-    /// zero — but Rev A is rare and most games expect Rev B.
-    void notify_a12(bool a12_high, uint64_t ppu_cycle) {
+    /// whenever counter reaches 0, including reload-to-0.
+    ///
+    /// Rev A (Crystalis/MMC6 variant): IRQ fires on natural decrement
+    /// to 0 and on forced reload-to-0 (via $C001 reload_flag), but
+    /// does NOT fire on reload-to-0 when counter was already 0 from
+    /// a previous clock (no explicit clear).
+    void notify_a12(bool a12_high, uint64_t ppu_cycle, bool rev_a = false) {
         if (!a12_high) { a12_low_since = ppu_cycle; return; }
         if (ppu_cycle - a12_low_since < A12_FILTER_DELAY) return;
 
         if (counter == 0 || reload_flag) {
+            bool forced = reload_flag;  // true = explicit $C001 clear
             counter = reload_value;
             reload_flag = false;
+            // Rev A: only fire on forced reload (from $C001), not on
+            // reload-to-0 because counter was already 0 naturally.
+            if (counter == 0 && enabled && (!rev_a || forced))
+                active = true;
         } else {
             counter--;
+            if (counter == 0 && enabled) active = true;
         }
-        if (counter == 0 && enabled) active = true;
     }
 
     /// Handle writes to $C000-$FFFF IRQ registers.

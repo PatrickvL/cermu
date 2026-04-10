@@ -89,7 +89,8 @@ public:
     void irq_clear() override { irq_.active = false; }
 
     void notify_a12(bool a12_high, uint64_t ppu_cycle) override {
-        irq_.notify_a12(a12_high, ppu_cycle);
+        // Submapper 4 = MMC3A / Rev A (Crystalis) variant IRQ behavior
+        irq_.notify_a12(a12_high, ppu_cycle, submapper_ == 4);
     }
 
     void reset() override {
