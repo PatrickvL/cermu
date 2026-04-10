@@ -12,6 +12,7 @@
 #include "core/config/path_discovery.hpp"
 #include "core/formats/format_registry.hpp"
 #include "core/formats/format_load_helpers.hpp"
+#include "utils/keyboard_matrix.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -262,8 +263,54 @@ void OricSystem<V>::set_audio_sample_rate(int rate) {
 // ============================================================================
 
 template<OricVariant V>
-void OricSystem<V>::handle_keyboard_event(SDL_Keycode /*key*/, bool /*pressed*/) {
-    // TODO: Oric keyboard matrix mapping (accent via VIA)
+void OricSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
+    // Oric keyboard matrix: 8 rows × 8 columns, active-low
+    // VIA Port B bits [2:0] select row; Port A returns column data.
+    //
+    // Matrix layout (from Oric Technical Manual / Oricutron):
+    //         Col7   Col6   Col5   Col4   Col3   Col2   Col1   Col0
+    // Row 0:  3      X      1      R      V      5      N      7
+    // Row 1:  D      Q      ESC    G      C      2      B      6
+    // Row 2:  T      W      L      P      Z      S      M      9
+    // Row 3:  F      E      (n/a)  (n/a)  CTRL   4      ,      8
+    // Row 4:  K      Y      (n/a)  (n/a)  (n/a)  SHIFT  .      0
+    // Row 5:  J      U      (n/a)  (n/a)  LEFT   A      ;      -
+    // Row 6:  H      I      (n/a)  (n/a)  RIGHT  CAPS   :      =
+    // Row 7:  SPACE  O      DEL    (n/a)  DOWN   UP     /      FUNCT
+    static constexpr KeyMatrixMapping mappings[] = {
+        // Row 0
+        { SDLK_3, 0, 7 }, { SDLK_x, 0, 6 }, { SDLK_1, 0, 5 }, { SDLK_r, 0, 4 },
+        { SDLK_v, 0, 3 }, { SDLK_5, 0, 2 }, { SDLK_n, 0, 1 }, { SDLK_7, 0, 0 },
+        // Row 1
+        { SDLK_d, 1, 7 }, { SDLK_q, 1, 6 }, { SDLK_ESCAPE, 1, 5 }, { SDLK_g, 1, 4 },
+        { SDLK_c, 1, 3 }, { SDLK_2, 1, 2 }, { SDLK_b, 1, 1 }, { SDLK_6, 1, 0 },
+        // Row 2
+        { SDLK_t, 2, 7 }, { SDLK_w, 2, 6 }, { SDLK_l, 2, 5 }, { SDLK_p, 2, 4 },
+        { SDLK_z, 2, 3 }, { SDLK_s, 2, 2 }, { SDLK_m, 2, 1 }, { SDLK_9, 2, 0 },
+        // Row 3
+        { SDLK_f, 3, 7 }, { SDLK_e, 3, 6 },
+        { SDLK_LCTRL, 3, 3 }, { SDLK_RCTRL, 3, 3 },
+        { SDLK_4, 3, 2 }, { SDLK_COMMA, 3, 1 }, { SDLK_8, 3, 0 },
+        // Row 4
+        { SDLK_k, 4, 7 }, { SDLK_y, 4, 6 },
+        { SDLK_LSHIFT, 4, 2 }, { SDLK_RSHIFT, 4, 2 },
+        { SDLK_PERIOD, 4, 1 }, { SDLK_0, 4, 0 },
+        // Row 5
+        { SDLK_j, 5, 7 }, { SDLK_u, 5, 6 },
+        { SDLK_LEFT, 5, 3 }, { SDLK_a, 5, 2 },
+        { SDLK_SEMICOLON, 5, 1 }, { SDLK_MINUS, 5, 0 },
+        // Row 6
+        { SDLK_h, 6, 7 }, { SDLK_i, 6, 6 },
+        { SDLK_RIGHT, 6, 3 }, { SDLK_CAPSLOCK, 6, 2 },
+        // Row 7
+        { SDLK_SPACE, 7, 7 }, { SDLK_o, 7, 6 },
+        { SDLK_BACKSPACE, 7, 5 }, { SDLK_DELETE, 7, 5 },
+        { SDLK_DOWN, 7, 3 }, { SDLK_UP, 7, 2 },
+        { SDLK_SLASH, 7, 1 },
+        { SDLK_RETURN, 7, 0 },  // FUNCT key — mapped to RETURN for convenience
+    };
+
+    keyboard_matrix_apply(mappings, keyboard_matrix_, key, pressed);
 }
 
 
@@ -297,9 +344,12 @@ void OricSystem<V>::via_port_a_write(void* /*context*/, uint8_t /*data*/) {
 }
 
 template<OricVariant V>
-uint8_t OricSystem<V>::via_port_b_read(void* /*context*/, uint8_t /*output*/) {
-    // TODO: keyboard matrix scan + AY control
-    return 0xFF;
+uint8_t OricSystem<V>::via_port_b_read(void* context, uint8_t output) {
+    // VIA Port B bits [2:0] select the keyboard matrix row.
+    // Return the column data from keyboard_matrix_ for that row.
+    auto* sys = static_cast<OricSystem<V>*>(context);
+    uint8_t row = output & 0x07;
+    return sys->keyboard_matrix_[row];
 }
 
 // ============================================================================

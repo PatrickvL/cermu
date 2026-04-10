@@ -209,6 +209,7 @@ public:
     void set_audio_sample_rate(int sample_rate_hz) override;
 
     bool load_file(const char* filepath) override;
+    void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
 
     void* get_video_port_ptr() override { return video_port_.get(); }
 
@@ -253,6 +254,12 @@ private:
     std::unique_ptr<WriteOnlySynthAdapter<AY_3_8912, true>> ay_adapter_;
     std::unique_ptr<AudioPort> audio_port_;  // Audio signal output
     uint8_t ay_latch_ = 0;              // Cached latched register (emu thread)
+
+    // ========================================================================
+    // KEYBOARD — 10 rows × 8 columns, active-low, scanned via PPI Port B
+    // ========================================================================
+
+    uint8_t keyboard_matrix_[10]{};  // 10 rows, active-low (0xFF = no keys)
 
     // ========================================================================
     // HELPERS

@@ -382,8 +382,8 @@ void BBCMasterSystem<V>::set_audio_sample_rate(int /*sample_rate_hz*/) {
 // ============================================================================
 
 template<BBCMasterVariant V>
-void BBCMasterSystem<V>::handle_keyboard_event(SDL_Keycode /*key*/, bool /*pressed*/) {
-    // TODO: BBC keyboard matrix mapping (same layout as Model B)
+void BBCMasterSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
+    update_key_matrix(key, pressed);
 }
 
 
@@ -437,13 +437,90 @@ bool BBCMasterSystem<V>::load_roms() {
 }
 
 template<BBCMasterVariant V>
-void BBCMasterSystem<V>::update_key_matrix(SDL_Keycode /*key*/, bool /*pressed*/) {
-    // TODO: same keyboard matrix as Model B
+void BBCMasterSystem<V>::update_key_matrix(SDL_Keycode key, bool pressed) {
+    // BBC keyboard matrix: 10 columns × 8 rows (same layout as Model B)
+    int col = -1, row = -1;
+
+    switch (key) {
+        // Row 0
+        case SDLK_LSHIFT: case SDLK_RSHIFT: col = 0; row = 0; break;
+        case SDLK_q:      col = 1; row = 0; break;
+        case SDLK_3:      col = 2; row = 0; break;
+        case SDLK_4:      col = 3; row = 0; break;
+        case SDLK_5:      col = 4; row = 0; break;
+        // Alphanumeric keys
+        case SDLK_a:      col = 4; row = 1; break;
+        case SDLK_s:      col = 5; row = 1; break;
+        case SDLK_d:      col = 3; row = 2; break;
+        case SDLK_f:      col = 4; row = 3; break;
+        case SDLK_g:      col = 5; row = 3; break;
+        case SDLK_h:      col = 5; row = 4; break;
+        case SDLK_j:      col = 4; row = 5; break;
+        case SDLK_k:      col = 4; row = 6; break;
+        case SDLK_l:      col = 5; row = 6; break;
+        case SDLK_z:      col = 6; row = 1; break;
+        case SDLK_x:      col = 4; row = 2; break;
+        case SDLK_c:      col = 5; row = 2; break;
+        case SDLK_v:      col = 6; row = 3; break;
+        case SDLK_b:      col = 6; row = 4; break;
+        case SDLK_n:      col = 5; row = 5; break;
+        case SDLK_m:      col = 6; row = 5; break;
+        case SDLK_w:      col = 2; row = 1; break;
+        case SDLK_e:      col = 2; row = 2; break;
+        case SDLK_r:      col = 3; row = 3; break;
+        case SDLK_t:      col = 2; row = 3; break;
+        case SDLK_y:      col = 4; row = 4; break;
+        case SDLK_u:      col = 3; row = 5; break;
+        case SDLK_i:      col = 2; row = 5; break;
+        case SDLK_o:      col = 3; row = 6; break;
+        case SDLK_p:      col = 3; row = 7; break;
+        // Number row
+        case SDLK_1:      col = 3; row = 0; break;
+        case SDLK_2:      col = 3; row = 1; break;
+        case SDLK_0:      col = 2; row = 7; break;
+        case SDLK_6:      col = 3; row = 4; break;
+        case SDLK_7:      col = 2; row = 4; break;
+        case SDLK_8:      col = 1; row = 5; break;
+        case SDLK_9:      col = 2; row = 6; break;
+        // Special keys
+        case SDLK_RETURN:    col = 4; row = 9; break;
+        case SDLK_SPACE:     col = 6; row = 2; break;
+        case SDLK_BACKSPACE: col = 5; row = 9; break;
+        case SDLK_TAB:       col = 6; row = 0; break;
+        case SDLK_ESCAPE:    col = 7; row = 0; break;
+        // Cursor keys
+        case SDLK_LEFT:   col = 1; row = 9; break;
+        case SDLK_RIGHT:  col = 7; row = 9; break;
+        case SDLK_UP:     col = 3; row = 9; break;
+        case SDLK_DOWN:   col = 2; row = 9; break;
+        default: break;
+    }
+
+    if (col >= 0 && row >= 0 && col < 10 && row < 8) {
+        key_matrix_[col][row] = pressed;
+    }
+
+    any_key_pressed_ = false;
+    for (int c = 0; c < 10; c++) {
+        for (int r = 0; r < 8; r++) {
+            if (key_matrix_[c][r]) {
+                any_key_pressed_ = true;
+                return;
+            }
+        }
+    }
 }
 
 template<BBCMasterVariant V>
-uint8_t BBCMasterSystem<V>::scan_keyboard(uint8_t /*column*/) const {
-    return 0xFF;
+uint8_t BBCMasterSystem<V>::scan_keyboard(uint8_t column) const {
+    if (column >= 10) return 0xFF;
+    uint8_t result = 0xFF;
+    for (uint32_t row = 0; row < 8; row++) {
+        if (key_matrix_[column][row]) {
+            result &= ~(1 << row);
+        }
+    }
+    return result;
 }
 
 template<BBCMasterVariant V>

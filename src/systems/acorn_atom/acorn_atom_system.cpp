@@ -7,6 +7,7 @@
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
+#include "utils/keyboard_matrix.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -180,64 +181,32 @@ void AcornAtomSystem::run_frame() {
 // ============================================================================
 
 void AcornAtomSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
-    // Helper: set or clear a bit in keyboard_matrix_ (active-low)
-    auto set_key = [&](int row, int col) {
-        if (row < 0 || row >= acorn_atom_constants::KEYBOARD_ROWS) return;
-        if (pressed)
-            keyboard_matrix_[row] &= ~(uint8_t)(1 << col); // press: pull low
-        else
-            keyboard_matrix_[row] |=  (uint8_t)(1 << col); // release: pull high
+    // Acorn Atom keyboard matrix: 10 rows × 8 columns, active-low
+    static constexpr KeyMatrixMapping mappings[] = {
+        // Row 0: RETURN, DEL/BS, ESC
+        { SDLK_RETURN,    0, 3 },
+        { SDLK_BACKSPACE, 0, 5 }, { SDLK_DELETE, 0, 5 },
+        { SDLK_ESCAPE,    0, 7 },
+        // Row 1: SPACE
+        { SDLK_SPACE,     1, 3 },
+        // Row 3: A S D F G H J K
+        { SDLK_a, 3, 7 }, { SDLK_s, 3, 6 }, { SDLK_d, 3, 5 }, { SDLK_f, 3, 4 },
+        { SDLK_g, 3, 3 }, { SDLK_h, 3, 2 }, { SDLK_j, 3, 1 }, { SDLK_k, 3, 0 },
+        // Row 4: L ; @ . ,
+        { SDLK_l,         4, 7 }, { SDLK_SEMICOLON, 4, 6 },
+        { SDLK_AT,        4, 4 },
+        { SDLK_PERIOD,    4, 2 }, { SDLK_COMMA,     4, 1 },
+        // Row 5: P O I U Y T R
+        { SDLK_p, 5, 7 }, { SDLK_o, 5, 6 }, { SDLK_i, 5, 5 }, { SDLK_u, 5, 4 },
+        { SDLK_y, 5, 3 }, { SDLK_t, 5, 2 }, { SDLK_r, 5, 1 },
+        // Row 6: Q W E
+        { SDLK_q, 6, 7 }, { SDLK_w, 6, 6 }, { SDLK_e, 6, 5 },
+        // Row 7: 0-3 (digits)
+        { SDLK_0, 7, 7 }, { SDLK_9, 7, 6 }, { SDLK_8, 7, 5 }, { SDLK_7, 7, 4 },
+        { SDLK_6, 7, 3 }, { SDLK_5, 7, 2 }, { SDLK_4, 7, 1 }, { SDLK_3, 7, 0 },
     };
 
-    // Map SDL key to (row, col) in the Atom keyboard matrix
-    switch (key) {
-    // Row 3: A S D F G H J K
-    case SDLK_a: set_key(3,7); break;
-    case SDLK_s: set_key(3,6); break;
-    case SDLK_d: set_key(3,5); break;
-    case SDLK_f: set_key(3,4); break;
-    case SDLK_g: set_key(3,3); break;
-    case SDLK_h: set_key(3,2); break;
-    case SDLK_j: set_key(3,1); break;
-    case SDLK_k: set_key(3,0); break;
-    // Row 4: L ;/: @/^ . ,
-    case SDLK_l:         set_key(4,7); break;
-    case SDLK_SEMICOLON: set_key(4,6); break;
-    case SDLK_AT:        set_key(4,4); break;
-    case SDLK_PERIOD:    set_key(4,2); break;
-    case SDLK_COMMA:     set_key(4,1); break;
-    // Row 5: P O I U Y T R
-    case SDLK_p: set_key(5,7); break;
-    case SDLK_o: set_key(5,6); break;
-    case SDLK_i: set_key(5,5); break;
-    case SDLK_u: set_key(5,4); break;
-    case SDLK_y: set_key(5,3); break;
-    case SDLK_t: set_key(5,2); break;
-    case SDLK_r: set_key(5,1); break;
-    // Row 6: Q W E
-    case SDLK_q: set_key(6,7); break;
-    case SDLK_w: set_key(6,6); break;
-    case SDLK_e: set_key(6,5); break;
-    // Row 7: 0-9 (digits on main keyboard row)
-    case SDLK_0: set_key(7,7); break;
-    case SDLK_9: set_key(7,6); break;
-    case SDLK_8: set_key(7,5); break;
-    case SDLK_7: set_key(7,4); break;
-    case SDLK_6: set_key(7,3); break;
-    case SDLK_5: set_key(7,2); break;
-    case SDLK_4: set_key(7,1); break;
-    case SDLK_3: set_key(7,0); break;
-    // Row 1: SPACE
-    case SDLK_SPACE: set_key(1,3); break;
-    // Row 0: RETURN
-    case SDLK_RETURN: set_key(0,3); break;
-    // Row 0: DEL / BACKSPACE
-    case SDLK_BACKSPACE: set_key(0,5); break;
-    case SDLK_DELETE:    set_key(0,5); break;
-    // Row 0: ESC
-    case SDLK_ESCAPE: set_key(0,7); break;
-    default: break;
-    }
+    keyboard_matrix_apply(mappings, keyboard_matrix_, key, pressed);
 }
 
 // ============================================================================

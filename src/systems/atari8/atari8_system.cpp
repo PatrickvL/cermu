@@ -147,6 +147,18 @@ bool Atari8System<V>::initialize() {
     board_.pokey.set_clock_frequency(atari8_constants::CPU_FREQ_NTSC);
     board_.pokey.set_audio_sample_rate(audio_sample_rate_);
 
+    // Wire POKEY keyboard callbacks
+    board_.pokey.keyboard_read_callback = [](void* ctx) -> uint8_t {
+        auto* sys = static_cast<Atari8System*>(ctx);
+        return sys->pokey_key_code_;
+    };
+    board_.pokey.keyboard_read_context = this;
+    board_.pokey.keyboard_pressed_callback = [](void* ctx) -> bool {
+        auto* sys = static_cast<Atari8System*>(ctx);
+        return sys->pokey_key_pressed_;
+    };
+    board_.pokey.keyboard_pressed_context = this;
+
     if (!load_roms()) {
         log_info("Atari8: Warning — ROM(s) not loaded\n");
     }
@@ -284,8 +296,73 @@ void Atari8System<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
         default: break;
     }
 
-    // POKEY keyboard matrix is scan-code based (not directly mapped here)
-    // Full implementation requires POKEY keyboard scanning
+    // POKEY keyboard: SDL keycode → Atari scancode (KBCODE register)
+    // Atari scancodes: bits [5:0] = key, bit 6 = CTRL, bit 7 = SHIFT
+    // We map the base key; CTRL/SHIFT modify the code.
+    uint8_t scancode = 0xFF;
+    switch (key) {
+        case SDLK_l:         scancode = 0x00; break;
+        case SDLK_j:         scancode = 0x01; break;
+        case SDLK_SEMICOLON: scancode = 0x02; break;
+        case SDLK_k:         scancode = 0x05; break;
+        case SDLK_EQUALS:    scancode = 0x06; break;  // +/= key
+        case SDLK_BACKQUOTE: scancode = 0x07; break;  // * key
+        case SDLK_o:         scancode = 0x08; break;
+        case SDLK_p:         scancode = 0x0A; break;
+        case SDLK_u:         scancode = 0x0B; break;
+        case SDLK_RETURN:    scancode = 0x0C; break;
+        case SDLK_i:         scancode = 0x0D; break;
+        case SDLK_MINUS:     scancode = 0x0E; break;
+        case SDLK_v:         scancode = 0x10; break;
+        case SDLK_c:         scancode = 0x12; break;
+        case SDLK_b:         scancode = 0x15; break;
+        case SDLK_x:         scancode = 0x16; break;
+        case SDLK_z:         scancode = 0x17; break;
+        case SDLK_4:         scancode = 0x18; break;
+        case SDLK_3:         scancode = 0x1A; break;
+        case SDLK_6:         scancode = 0x1B; break;
+        case SDLK_ESCAPE:    scancode = 0x1C; break;
+        case SDLK_5:         scancode = 0x1D; break;
+        case SDLK_2:         scancode = 0x1E; break;
+        case SDLK_1:         scancode = 0x1F; break;
+        case SDLK_COMMA:     scancode = 0x20; break;
+        case SDLK_SPACE:     scancode = 0x21; break;
+        case SDLK_PERIOD:    scancode = 0x22; break;
+        case SDLK_n:         scancode = 0x23; break;
+        case SDLK_m:         scancode = 0x25; break;
+        case SDLK_SLASH:     scancode = 0x26; break;
+        case SDLK_r:         scancode = 0x28; break;
+        case SDLK_e:         scancode = 0x2A; break;
+        case SDLK_y:         scancode = 0x2B; break;
+        case SDLK_TAB:       scancode = 0x2C; break;
+        case SDLK_t:         scancode = 0x2D; break;
+        case SDLK_w:         scancode = 0x2E; break;
+        case SDLK_q:         scancode = 0x2F; break;
+        case SDLK_9:         scancode = 0x30; break;
+        case SDLK_0:         scancode = 0x32; break;
+        case SDLK_7:         scancode = 0x33; break;
+        case SDLK_BACKSPACE: scancode = 0x34; break;  // DELETE key
+        case SDLK_8:         scancode = 0x35; break;
+        case SDLK_LESS:      scancode = 0x36; break;  // < key
+        case SDLK_GREATER:   scancode = 0x37; break;  // > key
+        case SDLK_f:         scancode = 0x38; break;
+        case SDLK_h:         scancode = 0x39; break;
+        case SDLK_d:         scancode = 0x3A; break;
+        case SDLK_g:         scancode = 0x3D; break;
+        case SDLK_s:         scancode = 0x3E; break;
+        case SDLK_a:         scancode = 0x3F; break;
+        case SDLK_CAPSLOCK:  scancode = 0x3C; break;
+        default: break;
+    }
+
+    if (scancode != 0xFF) {
+        if (pressed) {
+            pokey_key_code_ = scancode;
+            pokey_key_pressed_ = true;
+        } else {
+            pokey_key_pressed_ = false;
+        }
+    }
 }
 
 // ============================================================================

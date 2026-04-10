@@ -179,6 +179,13 @@ void BombJackSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
         case SDLK_DOWN:  set_clear(input_p1_, bc::INPUT_DOWN,    pressed); break;
         case SDLK_z:     set_clear(input_p1_, bc::INPUT_BUTTON1, pressed); break;
 
+        // Player 2 — WASD + X
+        case SDLK_d:     set_clear(input_p2_, bc::INPUT_RIGHT,   pressed); break;
+        case SDLK_a:     set_clear(input_p2_, bc::INPUT_LEFT,    pressed); break;
+        case SDLK_w:     set_clear(input_p2_, bc::INPUT_UP,      pressed); break;
+        case SDLK_s:     set_clear(input_p2_, bc::INPUT_DOWN,    pressed); break;
+        case SDLK_x:     set_clear(input_p2_, bc::INPUT_BUTTON1, pressed); break;
+
         // System — coins and start
         case SDLK_5:     set_clear(input_system_, bc::SYSTEM_COIN1,  pressed); break;
         case SDLK_6:     set_clear(input_system_, bc::SYSTEM_COIN2,  pressed); break;
