@@ -134,6 +134,12 @@ public:
     // Call after build_character_map_from_matrix().
     void register_default_synthetic_mappings();
 
+    // Register a key redirect: when host_key arrives from SDL, the mapper
+    // treats it as guest_key for matrix lookup.  Used for keys that exist
+    // on the guest but map to different host keys (e.g., SDLK_BACKQUOTE
+    // → CERMU_KEY_CBM_ARROW_LEFT on C64).
+    void register_key_redirect(SDL_Keycode host_key, SDL_Keycode guest_key);
+
     // ========================================================================
     // Event processing — called from the GUI event loop
     // ========================================================================
@@ -215,6 +221,13 @@ private:
     // Check if a key has a direct mapping
     bool has_direct_mapping(SDL_Keycode sym) const;
 
+    // Resolve a key through the redirect map.  Returns the guest key if
+    // a redirect is registered, otherwise returns the key unchanged.
+    SDL_Keycode resolve_redirect(SDL_Keycode key) const {
+        auto it = key_redirects_.find(key);
+        return (it != key_redirects_.end()) ? it->second : key;
+    }
+
     // ========================================================================
     // State
     // ========================================================================
@@ -228,6 +241,10 @@ private:
 
     // Layer 2: Direct key mappings (host keycode → guest action)
     std::unordered_map<SDL_Keycode, GuestKeyAction> direct_map_;
+
+    // Key redirects: host SDLK_ → guest key code (SDL_Keycode or CERMU_KEY_*).
+    // Applied before matrix lookup for keys with no direct host equivalent.
+    std::unordered_map<SDL_Keycode, SDL_Keycode> key_redirects_;
 
     // Layer 3: Emulator modifier
     SDL_Keycode emu_modifier_key_;             // The emulator modifier key (default: SDLK_RALT)

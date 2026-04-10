@@ -5,7 +5,6 @@
 #include "core/formats/format_registry.hpp"
 #include "core/config/path_discovery.hpp"
 #include "core/vfs/vfs.hpp"
-#include "core/input/emu_key_sdl_map.hpp"
 #include <cstring>
 #include <cstdio>
 #ifdef CERMU_HAS_GUI
@@ -139,13 +138,11 @@ void CommodoreSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
             keyboard_mapper_->process_key_up(key, SDL_SCANCODE_UNKNOWN, 0);
         }
     } else if (keyboard_) {
-        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(key);
-        if (ek != EMUKEY_NONE) {
-            if (pressed) {
-                keyboard_->key_down(ek, false);
-            } else {
-                keyboard_->key_up(ek, false);
-            }
+        // No mapper — pass SDLK directly to keyboard
+        if (pressed) {
+            keyboard_->key_down(key, false);
+        } else {
+            keyboard_->key_up(key, false);
         }
     }
 }
@@ -536,11 +533,11 @@ void CommodoreSystem::build_petscii_map() {
     }
 
     // Map RETURN ($0D) — not in decode tables (listed as 0).
-    // Find EMUKEY_RETURN in the key identity table.
+    // Find SDLK_RETURN in the key identity table.
     if (!petscii_map_[0x0D].valid && keyboard_->active_keys) {
         for (int row = 0; row < rows; row++) {
             for (int col = 0; col < cols; col++) {
-                if (keyboard_->active_keys[row * cols + col] == EMUKEY_RETURN) {
+                if (keyboard_->active_keys[row * cols + col] == SDLK_RETURN) {
                     petscii_map_[0x0D] = {
                         static_cast<uint8_t>(row),
                         static_cast<uint8_t>(col),
@@ -579,7 +576,7 @@ void CommodoreSystem::press_petscii_action(const PetsciiKeyAction& action) {
         // Find left shift position
         for (int r = 0; r < rows; r++) {
             for (int c = 0; c < cols; c++) {
-                if (keyboard_->active_keys[r * cols + c] == EMUKEY_LSHIFT) {
+                if (keyboard_->active_keys[r * cols + c] == SDLK_LSHIFT) {
                     close_contact(r, c);
                     goto shift_done;
                 }
@@ -613,7 +610,7 @@ void CommodoreSystem::release_petscii_action(const PetsciiKeyAction& action) {
     if (action.modifiers & KEYMOD_SHIFT) {
         for (int r = 0; r < rows; r++) {
             for (int c = 0; c < cols; c++) {
-                if (keyboard_->active_keys[r * cols + c] == EMUKEY_LSHIFT) {
+                if (keyboard_->active_keys[r * cols + c] == SDLK_LSHIFT) {
                     open_contact(r, c);
                     goto shift_released;
                 }
@@ -749,7 +746,7 @@ bool CommodoreSystem::attach_media(const char* filepath) {
 // Unmapped input — virtual key menu for keys without host mapping
 // ============================================================================
 
-void CommodoreSystem::register_unmapped_input(const char* label, emu_key_t key, bool toggle, bool initial_state) {
+void CommodoreSystem::register_unmapped_input(const char* label, SDL_Keycode key, bool toggle, bool initial_state) {
     unmapped_inputs_.emplace_back(label, key, toggle, initial_state);
 }
 
@@ -805,7 +802,7 @@ void CommodoreSystem::tick_unmapped_inputs() {
     }
 }
 
-void CommodoreSystem::set_unmapped_toggle_state(emu_key_t key, bool pressed) {
+void CommodoreSystem::set_unmapped_toggle_state(SDL_Keycode key, bool pressed) {
     for (auto& input : unmapped_inputs_) {
         if (input.toggle && input.key == key) {
             input.pressed = pressed;

@@ -216,7 +216,7 @@ public:
     int get_video_port_count() const override { return 2; }
 
     void render_system_menu_items() override;
-    void on_unmapped_toggle_changed(emu_key_t key, bool pressed) override;
+    void on_unmapped_toggle_changed(SDL_Keycode key, bool pressed) override;
     const char* get_mode_label() const override;
 
     // ── Port index constants (declaration order in port manifest) ────

@@ -1,6 +1,5 @@
 #include "core/cermu.hpp"
 #include "core/input/keyboard_mapper.hpp"
-#include "core/input/emu_key_sdl_map.hpp"
 #include <SDL.h>
 #include <cstdio>
 #include <cstring>
@@ -156,17 +155,17 @@ void KeyboardMapper::build_character_map_from_matrix(const keyboard_matrix_confi
 
     for (int row = 0; row < rows; row++) {
         for (int col = 0; col < cols; col++) {
-            emu_key_t key = config->keys[row * cols + col];
-            if (key == EMUKEY_LSHIFT) {
+            SDL_Keycode key = config->keys[row * cols + col];
+            if (key == SDLK_LSHIFT) {
                 shift_left_pos_ = GuestKeyAction(row, col, KEYMOD_NONE);
             }
-            if (key == EMUKEY_RSHIFT) {
+            if (key == SDLK_RSHIFT) {
                 shift_right_pos_ = GuestKeyAction(row, col, KEYMOD_NONE);
             }
-            if (key == EMUKEY_LGUI) {
+            if (key == CERMU_KEY_CBM_COMMODORE) {
                 cbm_key_pos_ = GuestKeyAction(row, col, KEYMOD_NONE);
             }
-            if (key == EMUKEY_LCTRL) {
+            if (key == SDLK_LCTRL) {
                 ctrl_key_pos_ = GuestKeyAction(row, col, KEYMOD_NONE);
             }
         }
@@ -209,11 +208,15 @@ void KeyboardMapper::add_char_mapping(char c, GuestKeyAction action) {
     }
 }
 
+void KeyboardMapper::register_key_redirect(SDL_Keycode host_key, SDL_Keycode guest_key) {
+    key_redirects_[host_key] = guest_key;
+}
+
 void KeyboardMapper::register_default_synthetic_mappings() {
     if (!keyboard_) return;
 
     // Use the optimised lookup to find matrix positions for guest-specific keys
-    auto find_in_matrix = [this](emu_key_t target_key) -> GuestKeyAction {
+    auto find_in_matrix = [this](SDL_Keycode target_key) -> GuestKeyAction {
         if (!keyboard_) return GuestKeyAction();
         uint8_t row, col;
         if (keyboard_->find_key(target_key, &row, &col)) {
@@ -228,7 +231,7 @@ void KeyboardMapper::register_default_synthetic_mappings() {
     // RUN/STOP — Escape is intuitive (Escape → stop)
     // But Escape is already used for C128 ESC key, so we also provide
     // the synthetic mapping for systems where Tab = RUN/STOP
-    GuestKeyAction run_stop = find_in_matrix(EMUKEY_CBM_RUN_STOP);
+    GuestKeyAction run_stop = find_in_matrix(CERMU_KEY_CBM_RUN_STOP);
     if (run_stop.valid) {
         add_synthetic_mapping(SDLK_ESCAPE, run_stop, "RUN/STOP");
     }
@@ -243,25 +246,25 @@ void KeyboardMapper::register_default_synthetic_mappings() {
     add_synthetic_mapping(SDLK_r, restore_action, "RESTORE (NMI)");
 
     // Commodore key (C= key)
-    GuestKeyAction c_key = find_in_matrix(EMUKEY_CBM_COMMODORE);
+    GuestKeyAction c_key = find_in_matrix(CERMU_KEY_CBM_COMMODORE);
     if (c_key.valid) {
         add_synthetic_mapping(SDLK_c, c_key, "Commodore (C=) key");
     }
 
     // CTRL key (in its C64 role — color selection etc.)
-    GuestKeyAction ctrl = find_in_matrix(EMUKEY_LCTRL);
+    GuestKeyAction ctrl = find_in_matrix(SDLK_LCTRL);
     if (ctrl.valid) {
         add_synthetic_mapping(SDLK_x, ctrl, "CTRL (C64)");
     }
 
     // CLR/HOME
-    GuestKeyAction home = find_in_matrix(EMUKEY_HOME);
+    GuestKeyAction home = find_in_matrix(SDLK_HOME);
     if (home.valid) {
         add_synthetic_mapping(SDLK_h, home, "CLR/HOME");
     }
 
     // INST/DEL
-    GuestKeyAction del = find_in_matrix(EMUKEY_CBM_DEL);
+    GuestKeyAction del = find_in_matrix(CERMU_KEY_CBM_DEL);
     if (del.valid) {
         add_synthetic_mapping(SDLK_d, del, "INST/DEL");
     }
@@ -367,16 +370,13 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
         return true;
     }
 
-    // Modifier keys — convert to EmuKey and pass to commodore_keyboard
+    // Modifier keys — pass to commodore_keyboard (with redirect)
     if (is_modifier_key(sym)) {
-        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
-        if (ek != EMUKEY_NONE) {
-            keyboard_->key_down(ek, false);
-        }
+        keyboard_->key_down(resolve_redirect(sym), false);
         return true;
     }
 
-    // Non-printable keys — convert to EmuKey and pass through
+    // Non-printable keys — pass through (with redirect)
     if (!is_printable_key(sym)) {
         // Special case: backtick with shift → treat as printable so TEXTINPUT "~"
         // can be mapped (e.g., to π on C64/VIC-20). Without shift, backtick
@@ -384,10 +384,7 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
         if (sym == SDLK_BACKQUOTE && (mod & (KMOD_LSHIFT | KMOD_RSHIFT))) {
             // Fall through to the printable key / text input path below
         } else {
-            emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
-            if (ek != EMUKEY_NONE) {
-                keyboard_->key_down(ek, false);
-            }
+            keyboard_->key_down(resolve_redirect(sym), false);
             return true;
         }
     }
@@ -426,11 +423,10 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
                          scancode, false);
             return true;
         }
-        // Fallback: use scancode → EmuKey → matrix lookup
-        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
-        if (ek != EMUKEY_NONE) {
+        // Fallback: direct key → matrix lookup (with redirect)
+        {
             uint8_t row, col;
-            if (keyboard_->find_key(ek, &row, &col)) {
+            if (keyboard_->find_key(resolve_redirect(sym), &row, &col)) {
                 uint8_t mods = KEYMOD_NONE;
                 if (host_cbm_held_)    mods |= KEYMOD_CBM;
                 if (host_ctrl_held_)   mods |= KEYMOD_CTRL;
@@ -456,11 +452,8 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
         return true;
     }
 
-    // Fallback: text input disabled, use direct SDL keycode → EmuKey mapping
-    emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
-    if (ek != EMUKEY_NONE) {
-        keyboard_->key_down(ek, false);
-    }
+    // Fallback: text input disabled, use direct SDL keycode mapping
+    keyboard_->key_down(resolve_redirect(sym), false);
     return true;
 }
 
@@ -520,30 +513,21 @@ bool KeyboardMapper::process_key_up(SDL_Keycode sym, SDL_Scancode scancode, uint
         has_pending_key_ = false;
     }
 
-    // Modifier keys — convert to EmuKey and pass through
+    // Modifier keys — pass through (with redirect)
     if (is_modifier_key(sym)) {
-        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
-        if (ek != EMUKEY_NONE) {
-            keyboard_->key_up(ek, false);
-        }
+        keyboard_->key_up(resolve_redirect(sym), false);
         return true;
     }
 
-    // Non-printable keys — convert to EmuKey and pass through
+    // Non-printable keys — pass through (with redirect)
     if (!is_printable_key(sym)) {
-        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
-        if (ek != EMUKEY_NONE) {
-            keyboard_->key_up(ek, false);
-        }
+        keyboard_->key_up(resolve_redirect(sym), false);
         return true;
     }
 
     // Fallback: direct release if text input is disabled
     if (!text_input_enabled_) {
-        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
-        if (ek != EMUKEY_NONE) {
-            keyboard_->key_up(ek, false);
-        }
+        keyboard_->key_up(resolve_redirect(sym), false);
     }
 
     return true;

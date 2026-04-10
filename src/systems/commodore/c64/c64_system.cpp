@@ -4,7 +4,6 @@
 #include "systems/commodore/c64/c64_sid_player.hpp"
 #include "systems/commodore/pla_banking.hpp"
 #include "chip/input/commodore_keyboard.hpp"
-#include "core/input/emu_key_sdl_map.hpp"
 // gui_state_t dependency eliminated — chip debug uses base class,
 // system menu items are inlined, test binary dialog removed.
 #ifdef CERMU_HAS_GUI
@@ -1147,14 +1146,11 @@ void C64System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
                 key, SDL_SCANCODE_UNKNOWN, 0);
         }
     } else if (initialized_ && this->keyboard) {
-        // No mapper â€” convert SDL keycode to EmuKey and pass through
-        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(key);
-        if (ek != EMUKEY_NONE) {
-            if (pressed) {
-                this->keyboard->key_down(ek, false);
-            } else {
-                this->keyboard->key_up(ek, false);
-            }
+        // No mapper -- pass SDLK directly to keyboard
+        if (pressed) {
+            this->keyboard->key_down(key, false);
+        } else {
+            this->keyboard->key_up(key, false);
         }
     }
 }
@@ -1855,19 +1851,12 @@ KeyboardMapper* create_c64_keyboard_mapper(commodore_keyboard_t* keyboard) {
     // Register default emulator modifier mappings
     mapper->register_default_synthetic_mappings();
 
-    // Commodore-specific character mappings (£, ↑, ←, π) are now handled
-    // automatically by the PETSCII decode tables + petscii_to_host_char().
-    // No manual add_char_mapping calls needed.
-
-    // Register emu-specific key candidates for this system.
-    // RESTORE: prefer SysRq (thematic NMI match), fall back to Grave.
-    // POUND: prefer ISO # key (produces £ on UK keyboards).
-    auto& sdl_map = EmuKeySDLMap::instance();
-    sdl_map.clear_system_mappings();
-    sdl_map.register_candidates(EMUKEY_CBM_RESTORE, {SDL_SCANCODE_SYSREQ, SDL_SCANCODE_GRAVE});
-    sdl_map.register_candidates(EMUKEY_CBM_POUND,   {SDL_SCANCODE_NONUSHASH});
-    // Both host ALTs → CBM key (more accessible than Super/LGUI on Linux)
-    sdl_map.register_candidates(EMUKEY_CBM_COMMODORE, {SDL_SCANCODE_LALT, SDL_SCANCODE_RALT}, true);
+    // Register host-key redirects for Commodore-specific keys.
+    // RESTORE: backtick (` key) triggers NMI.
+    mapper->register_key_redirect(SDLK_BACKQUOTE, CERMU_KEY_CBM_RESTORE);
+    mapper->register_key_redirect(SDLK_SYSREQ, CERMU_KEY_CBM_RESTORE);
+    // Both host ALTs → C= key (more accessible than Super/LGUI on Linux)
+    mapper->register_key_redirect(SDLK_LALT, CERMU_KEY_CBM_COMMODORE);
 
     return mapper;
 }

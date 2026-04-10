@@ -3,7 +3,6 @@
 #include "systems/commodore/vic20/vic20_chips.hpp"
 #include "core/cermu.hpp"
 #include "chip/input/commodore_keyboard.hpp"
-#include "core/input/emu_key_sdl_map.hpp"
 #include "systems/commodore/vic20/vic20_keyboard_matrix.hpp" // VIC-20 keyboard matrix data
 #include "systems/commodore/prg_content_analysis.hpp"
 #include "devices/storage/datasette_1530.hpp"
@@ -1351,15 +1350,10 @@ static KeyboardMapper* create_vic20_keyboard_mapper(commodore_keyboard_t* keyboa
 
     mapper->register_default_synthetic_mappings();
 
-    // Commodore-specific character mappings (£, ↑, ←, π) are now handled
-    // automatically by the PETSCII decode tables + petscii_to_host_char().
-
-    auto& sdl_map = EmuKeySDLMap::instance();
-    sdl_map.clear_system_mappings();
-    sdl_map.register_candidates(EMUKEY_CBM_RESTORE, {SDL_SCANCODE_SYSREQ, SDL_SCANCODE_GRAVE});
-    sdl_map.register_candidates(EMUKEY_CBM_POUND,   {SDL_SCANCODE_NONUSHASH});
-    // Both host ALTs → CBM key (more accessible than Super/LGUI on Linux)
-    sdl_map.register_candidates(EMUKEY_CBM_COMMODORE, {SDL_SCANCODE_LALT, SDL_SCANCODE_RALT}, true);
+    // Register host-key redirects for Commodore-specific keys.
+    mapper->register_key_redirect(SDLK_BACKQUOTE, CERMU_KEY_CBM_RESTORE);
+    mapper->register_key_redirect(SDLK_SYSREQ, CERMU_KEY_CBM_RESTORE);
+    mapper->register_key_redirect(SDLK_LALT, CERMU_KEY_CBM_COMMODORE);
 
     return mapper;
 }
