@@ -24,6 +24,7 @@
 | Mapper 037 (PAL-ZZ multicart) + CRC-based mapper override table | 4→37 | 1 | `42280be5` | **VERIFIED** |
 | Mapper 153 (Bandai SRAM) + 3 CRC overrides (M16→153, M19→210s1, M33→48) | 16,19,33 | 3 | `f1a0c357` | **VERIFIED** |
 | Taito X1-005: fix PRG bank register decode + security latch | 80, 207 | 7 | `a7dbc97a` | **VERIFIED** |
+| MMC3: pre-render scanline A12 for correct 241-clock IRQ count | 4 (all MMC3-derived) | 0 | `6b68d7f3` | **VERIFIED** (blargg test accuracy fix, no blank-screen impact) |
 
 ---
 
@@ -71,6 +72,7 @@
 | 12 | [FME-7 $6000 mapping](#12-fme-7-6000-prg-rom-mapping) | 69 | 2 | 0 | **DONE** |
 | 13 | [CRC-based mapper correction](#13-crc-based-mapper-correction) | 4→37, 16→153, 19→210s1, 33→48 | 4 | 0 | **DONE** |
 | 14 | [X1-005 PRG bank decode](#14-taito-x1-005-prg-bank-register-decode) | 80, 207 | 7 | 0 | **DONE** (register addresses + security latch) |
+| 15 | [MMC3 pre-render A12](#15-mmc3-pre-render-a12-blargg-mapper-tests) | 4 | 0 | 0 | **DONE** (accuracy fix — blargg test suite, no blank-screen impact) |
 
 **New TIMEOUT:** Days of Thunder (North America) — mapper 0, likely infinite loop or timing issue
 
@@ -605,6 +607,58 @@ at $7F00-$7FFF. Confirmed against Mesen2, FCEUX, and Nestopia implementations.
 
 ---
 
+### 15. MMC3 Pre-Render A12 (Blargg Mapper Tests)
+
+**Impact:** 0 blank-screen ROMs (accuracy fix only)
+**Status:** **DONE** (commit `6b68d7f3`)
+
+Ran the blargg MMC3 mapper test suite (22 test ROMs from `nes-test-roms`:
+mmc3_test v1/v2, mmc3_irq_tests, MMC5 test, MMC1 A12, VRC2 CHR banking).
+Found the PPU pre-render scanline (line -1) was not computing sprite
+pattern addresses at cycle 257, leaving stale/zero values in
+`sprite_pattern_addr[]`. This prevented A12 from toggling during the
+sprite fetch window (258-320), causing only 240 IRQ counter clocks per
+frame instead of the expected 241 (240 visible + pre-render).
+
+**Fix:** Compute `sprite_pattern_addr[]` from current `sec_oam_` and
+`PPUCTRL` at cycle 257 of the pre-render scanline in `nes_ppu_clock.inl`,
+matching real hardware bus activity.
+
+**Blargg mapper test results (22 ROMs):**
+
+| Test | Status | Notes |
+|------|--------|-------|
+| mmc3_test1_1-clocking | **PASS** | |
+| mmc3_test1_2-details | **PASS** | 241 clock count |
+| mmc3_test1_3-A12_clocking | **PASS** | |
+| mmc3_test1_4-scanline_timing | **PASS** | Exact PPU dot timing |
+| mmc3_test1_5-MMC3 | **PASS** | Rev B banking/IRQ |
+| mmc3_test1_6-MMC6 | FAIL | Rev A only (conflicts with Rev B) |
+| mmc3_test2_1-clocking | **PASS** | |
+| mmc3_test2_2-details | **PASS** | 241 clock count |
+| mmc3_test2_3-A12_clocking | **PASS** | |
+| mmc3_test2_4-scanline_timing | **PASS** | Exact PPU dot timing |
+| mmc3_test2_5-MMC3 | **PASS** | Rev B reload-to-0 |
+| mmc3_test2_6-MMC3_alt | FAIL | Rev A only (conflicts with Rev B) |
+| mmc3_irq_1-Clocking | **PASS** | |
+| mmc3_irq_2-Details | **PASS** | |
+| mmc3_irq_3-A12_clocking | **PASS** | |
+| mmc3_irq_4-Scanline_timing | **PASS** | |
+| mmc3_irq_5-MMC3_rev_A | FAIL | Rev A only (conflicts with Rev B) |
+| mmc3_irq_6-MMC3_rev_B | **PASS** | |
+| mmc5exram | **PASS** | Generic protocol |
+| mmc5test_v2 | TIMEOUT | Generic protocol (no $6000) |
+| mmc1_a12 | TIMEOUT | Generic protocol (no $6000) |
+| m22_chr_banking | TIMEOUT | Generic protocol (no $6000) |
+
+**16 PASS, 3 FAIL (Rev A/Crystalis variant), 3 TIMEOUT (generic protocol).**
+
+The 3 FAILs are expected: Rev A and Rev B have mutually exclusive reload-to-0
+behavior. We implement Rev B (SMB3, Mega Man 3) which is used by the vast
+majority of MMC3 games. Rev A (Crystalis) would require per-game detection.
+
+---
+
 ## Test Infrastructure
 
 - **Boot warp** (`41945105`): NES GUI runs at max speed until PPU enables rendering
@@ -613,6 +667,9 @@ at $7F00-$7FFF. Confirmed against Mesen2, FCEUX, and Nestopia implementations.
   stops on first video output (>2 unique colors). Reduces PASS test time from 300→30-90 frames.
 - **Targeted re-testing**: `nes_rom_test.py --changed-only` re-tests only non-PASS ROMs,
   `--blanks-only` for blanks only. Avoids full-collection runs after targeted fixes.
+- **Blargg mapper test suite**: 22 mapper-specific test ROMs in `data/nes/test_roms/mapper_tests/`
+  (MMC3 test v1/v2, MMC3 IRQ, MMC5, MMC1 A12, VRC2 CHR). Run via `nes_test_runner --full --all`.
+  Uses $6000 protocol for pass/fail detection. 16/22 passing (3 expected Rev A fails, 3 generic timeouts).
 
 ---
 
