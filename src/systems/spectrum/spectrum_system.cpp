@@ -34,6 +34,7 @@
 #include "core/formats/spectrum_tap_format.hpp"
 #include "core/formats/scl_format.hpp"
 #include "core/formats/trd_format.hpp"
+#include "utils/keyboard_matrix.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -753,8 +754,7 @@ void SpectrumSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     // Row 6 (port $BFFE): ENTER, L, K, J, H
     // Row 7 (port $7FFE): SPACE, SYMBOL SHIFT, M, N, B
 
-    struct KeyMapping { SDL_Keycode sdl_key; int row; int bit; };
-    static constexpr KeyMapping mappings[] = {
+    static constexpr KeyMatrixMapping mappings[] = {
         // Row 0: CAPS SHIFT, Z, X, C, V
         { SDLK_LSHIFT,  0, 0 }, { SDLK_RSHIFT,  0, 0 },
         { SDLK_z,        0, 1 }, { SDLK_x,        0, 2 },
@@ -791,16 +791,10 @@ void SpectrumSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
         { SDLK_BACKSPACE, 0, 0 }, { SDLK_BACKSPACE, 4, 0 },
     };
 
-    for (const auto& m : mappings) {
-        if (m.sdl_key == key) {
-            uint8_t row_state = keyboard_rows_[m.row];
-            if (pressed)
-                row_state &= ~(1 << m.bit);  // Active-low: clear bit
-            else
-                row_state |= (1 << m.bit);   // Release: set bit
-            keyboard_rows_[m.row] = row_state;
-            board_.ula.set_keyboard_row(m.row, row_state);
-        }
+    if (keyboard_matrix_apply(mappings, keyboard_rows_, key, pressed)) {
+        // Sync changed rows to ULA's internal keyboard state
+        for (int r = 0; r < 8; ++r)
+            board_.ula.set_keyboard_row(r, keyboard_rows_[r]);
     }
 }
 

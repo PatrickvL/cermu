@@ -263,8 +263,28 @@ void AppleIISystem<V>::set_audio_sample_rate(int rate) {
 // ============================================================================
 
 template<AppleIIVariant V>
-void AppleIISystem<V>::handle_keyboard_event(SDL_Keycode /*key*/, bool /*pressed*/) {
-    // TODO: map SDL keys to Apple II keyboard codes
+void AppleIISystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
+    // Apple II keyboard is character-based (not a matrix).
+    // handle_text_input() covers printable ASCII from SDL text events.
+    // Here we map non-printable keys that SDL doesn't send as text input.
+    if (!pressed) return;  // Apple II only cares about key-down
+
+    uint8_t code = 0;
+    switch (key) {
+        case SDLK_RETURN:    code = 0x0D; break;
+        case SDLK_ESCAPE:    code = 0x1B; break;
+        case SDLK_BACKSPACE: code = 0x08; break;
+        case SDLK_DELETE:    code = 0x7F; break;
+        case SDLK_LEFT:      code = 0x08; break;  // Backspace = left on Apple II
+        case SDLK_RIGHT:     code = 0x15; break;  // NAK = right on Apple II
+        case SDLK_UP:        code = 0x0B; break;  // VT = up (AppleSoft BASIC)
+        case SDLK_DOWN:      code = 0x0A; break;  // LF = down
+        case SDLK_TAB:       code = 0x09; break;
+        default: return;
+    }
+
+    kbd_data_ = code | 0x80;
+    kbd_strobe_ = true;
 }
 
 template<AppleIIVariant V>

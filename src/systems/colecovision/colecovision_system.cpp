@@ -308,20 +308,43 @@ void ColecoVisionSystem::set_audio_sample_rate(int sample_rate_hz) {
 void ColecoVisionSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     // ColecoVision controller: joystick + 2 fire buttons + 12-key keypad
     // Joystick mode (ctrl_mode_=0): 
-    //   bit 0=Up, 1=Right, 2=Down, 3=Left, 6=Fire1(L), 7(inverted)=Fire2(R)
-    struct JoyMapping { SDL_Keycode sdl_key; int bit; bool active_high; };
+    //   bit 0=Up, 1=Right, 2=Down, 3=Left, 6=Fire1(L), ~bit6=Fire2(R) via separate pin
+    struct JoyMapping { SDL_Keycode sdl_key; int bit; };
     static constexpr JoyMapping joy_mappings[] = {
-        { SDLK_UP,    0, false }, { SDLK_RIGHT, 1, false },
-        { SDLK_DOWN,  2, false }, { SDLK_LEFT,  3, false },
-        { SDLK_z,     6, false }, // Fire 1 (left side button)
+        { SDLK_UP,    0 }, { SDLK_RIGHT, 1 },
+        { SDLK_DOWN,  2 }, { SDLK_LEFT,  3 },
+        { SDLK_z,     6 }, // Fire 1 (left side button)
     };
 
     for (const auto& m : joy_mappings) {
         if (m.sdl_key == key) {
-            if (pressed)
-                ctrl1_joystick_ &= ~(1 << m.bit);
-            else
-                ctrl1_joystick_ |= (1 << m.bit);
+            if (pressed) ctrl1_joystick_ &= ~(1 << m.bit);
+            else         ctrl1_joystick_ |= (1 << m.bit);
+        }
+    }
+
+    // Fire 2 (right side button) — active-low on bit 7
+    if (key == SDLK_x) {
+        if (pressed) ctrl1_joystick_ &= ~(1 << 7);
+        else         ctrl1_joystick_ |= (1 << 7);
+    }
+
+    // 12-key keypad (active when ctrl_mode_=1, active-low)
+    // Keypad encoding in bits [3:0] of ctrl1_keypad_
+    //   0=$0E, 1=$0D, 2=$07, 3=$0C, 4=$02, 5=$03, 6=$0E (dup), 7=$05,
+    //   8=$01, 9=$0B, *=$09, #=$06
+    struct KeypadMapping { SDL_Keycode sdl_key; uint8_t code; };
+    static constexpr KeypadMapping kp_mappings[] = {
+        { SDLK_KP_0, 0x05 }, { SDLK_KP_1, 0x02 }, { SDLK_KP_2, 0x08 },
+        { SDLK_KP_3, 0x03 }, { SDLK_KP_4, 0x0D }, { SDLK_KP_5, 0x0C },
+        { SDLK_KP_6, 0x01 }, { SDLK_KP_7, 0x0A }, { SDLK_KP_8, 0x0E },
+        { SDLK_KP_9, 0x09 }, { SDLK_KP_MULTIPLY, 0x06 }, { SDLK_KP_ENTER, 0x0B },
+    };
+
+    for (const auto& m : kp_mappings) {
+        if (m.sdl_key == key) {
+            if (pressed) ctrl1_keypad_ = m.code;
+            else         ctrl1_keypad_ = 0x0F;  // No key
         }
     }
 }

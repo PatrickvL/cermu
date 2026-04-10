@@ -23,6 +23,7 @@
 #include "core/config/path_discovery.hpp"
 #include "core/formats/format_load_helpers.hpp"
 #include "core/vfs/vfs.hpp"
+#include "utils/keyboard_matrix.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -259,11 +260,9 @@ void MC6809VDGSystem<V>::set_audio_sample_rate(int sample_rate_hz) {
 
 template<MC6809VDGVariant V>
 void MC6809VDGSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
-    struct KeyMapping { SDL_Keycode sdl_key; int row; int col; };
-
     if constexpr (is_coco_variant<V>) {
         // CoCo keyboard: 51 keys
-        static constexpr KeyMapping mappings[] = {
+        static constexpr KeyMatrixMapping mappings[] = {
             // Row 0
             { SDLK_AT,       0, 0 }, { SDLK_a,        0, 1 }, { SDLK_b,        0, 2 },
             { SDLK_c,        0, 3 }, { SDLK_d,        0, 4 }, { SDLK_e,        0, 5 },
@@ -293,18 +292,10 @@ void MC6809VDGSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
             { SDLK_RETURN,   7, 0 }, { SDLK_BACKSPACE,7, 1 },
             { SDLK_LSHIFT,   7, 3 }, { SDLK_RSHIFT,   7, 3 },
         };
-
-        for (const auto& m : mappings) {
-            if (m.sdl_key == key) {
-                if (pressed)
-                    keyboard_matrix_[m.row] &= ~(1 << m.col);
-                else
-                    keyboard_matrix_[m.row] |= (1 << m.col);
-            }
-        }
+        keyboard_matrix_apply(mappings, keyboard_matrix_, key, pressed);
     } else {
         // Dragon keyboard: 53 keys (different scan code layout)
-        static constexpr KeyMapping mappings[] = {
+        static constexpr KeyMatrixMapping mappings[] = {
             // Row 0
             { SDLK_0,        0, 0 }, { SDLK_1,        0, 1 }, { SDLK_2,        0, 2 },
             { SDLK_3,        0, 3 }, { SDLK_4,        0, 4 }, { SDLK_5,        0, 5 },
@@ -336,15 +327,7 @@ void MC6809VDGSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
             { SDLK_SPACE,    7, 0 }, { SDLK_RETURN,   7, 1 }, { SDLK_ESCAPE,   7, 2 },
             { SDLK_LSHIFT,   7, 6 }, { SDLK_RSHIFT,   7, 6 },
         };
-
-        for (const auto& m : mappings) {
-            if (m.sdl_key == key) {
-                if (pressed)
-                    keyboard_matrix_[m.row] &= ~(1 << m.col);
-                else
-                    keyboard_matrix_[m.row] |= (1 << m.col);
-            }
-        }
+        keyboard_matrix_apply(mappings, keyboard_matrix_, key, pressed);
     }
 }
 

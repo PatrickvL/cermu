@@ -314,7 +314,10 @@ uint8_t AtariSTSystem<V>::read_byte(uint32_t addr) noexcept {
 
     // ACIA keyboard: $FFFC00–$FFFC02
     if (addr >= atari_st_constants::ACIA_KBD_BASE && addr < atari_st_constants::ACIA_KBD_BASE + 4) {
-        if (addr & 1) return acia_kbd_data_;
+        if (addr & 1) {
+            acia_kbd_status_ &= ~0x01;  // Clear RX full on data read
+            return acia_kbd_data_;
+        }
         return acia_kbd_status_;
     }
 
@@ -426,11 +429,90 @@ void AtariSTSystem<V>::set_audio_sample_rate(int sample_rate_hz) {
 
 template<AtariSTVariant V>
 void AtariSTSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
-    // Map SDL keycodes to Atari ST scancodes for ACIA keyboard
-    // The ACIA sends make/break codes: make = scancode, break = scancode | 0x80
-    // TODO: Full scancode table mapping
-    (void)key;
-    (void)pressed;
+    // Atari ST keyboard: ACIA sends make (scancode) / break (scancode | 0x80)
+    // Map SDL keycodes to Atari ST hardware scancodes
+    uint8_t scancode = 0;
+    switch (key) {
+        case SDLK_ESCAPE:    scancode = 0x01; break;
+        case SDLK_1:         scancode = 0x02; break;
+        case SDLK_2:         scancode = 0x03; break;
+        case SDLK_3:         scancode = 0x04; break;
+        case SDLK_4:         scancode = 0x05; break;
+        case SDLK_5:         scancode = 0x06; break;
+        case SDLK_6:         scancode = 0x07; break;
+        case SDLK_7:         scancode = 0x08; break;
+        case SDLK_8:         scancode = 0x09; break;
+        case SDLK_9:         scancode = 0x0A; break;
+        case SDLK_0:         scancode = 0x0B; break;
+        case SDLK_MINUS:     scancode = 0x0C; break;
+        case SDLK_EQUALS:    scancode = 0x0D; break;
+        case SDLK_BACKSPACE: scancode = 0x0E; break;
+        case SDLK_TAB:       scancode = 0x0F; break;
+        case SDLK_q:         scancode = 0x10; break;
+        case SDLK_w:         scancode = 0x11; break;
+        case SDLK_e:         scancode = 0x12; break;
+        case SDLK_r:         scancode = 0x13; break;
+        case SDLK_t:         scancode = 0x14; break;
+        case SDLK_y:         scancode = 0x15; break;
+        case SDLK_u:         scancode = 0x16; break;
+        case SDLK_i:         scancode = 0x17; break;
+        case SDLK_o:         scancode = 0x18; break;
+        case SDLK_p:         scancode = 0x19; break;
+        case SDLK_LEFTBRACKET:  scancode = 0x1A; break;
+        case SDLK_RIGHTBRACKET: scancode = 0x1B; break;
+        case SDLK_RETURN:    scancode = 0x1C; break;
+        case SDLK_LCTRL:     scancode = 0x1D; break;
+        case SDLK_a:         scancode = 0x1E; break;
+        case SDLK_s:         scancode = 0x1F; break;
+        case SDLK_d:         scancode = 0x20; break;
+        case SDLK_f:         scancode = 0x21; break;
+        case SDLK_g:         scancode = 0x22; break;
+        case SDLK_h:         scancode = 0x23; break;
+        case SDLK_j:         scancode = 0x24; break;
+        case SDLK_k:         scancode = 0x25; break;
+        case SDLK_l:         scancode = 0x26; break;
+        case SDLK_SEMICOLON: scancode = 0x27; break;
+        case SDLK_QUOTE:     scancode = 0x28; break;
+        case SDLK_BACKQUOTE: scancode = 0x29; break;
+        case SDLK_LSHIFT:    scancode = 0x2A; break;
+        case SDLK_BACKSLASH: scancode = 0x2B; break;
+        case SDLK_z:         scancode = 0x2C; break;
+        case SDLK_x:         scancode = 0x2D; break;
+        case SDLK_c:         scancode = 0x2E; break;
+        case SDLK_v:         scancode = 0x2F; break;
+        case SDLK_b:         scancode = 0x30; break;
+        case SDLK_n:         scancode = 0x31; break;
+        case SDLK_m:         scancode = 0x32; break;
+        case SDLK_COMMA:     scancode = 0x33; break;
+        case SDLK_PERIOD:    scancode = 0x34; break;
+        case SDLK_SLASH:     scancode = 0x35; break;
+        case SDLK_RSHIFT:    scancode = 0x36; break;
+        case SDLK_SPACE:     scancode = 0x39; break;
+        case SDLK_CAPSLOCK:  scancode = 0x3A; break;
+        case SDLK_F1:        scancode = 0x3B; break;
+        case SDLK_F2:        scancode = 0x3C; break;
+        case SDLK_F3:        scancode = 0x3D; break;
+        case SDLK_F4:        scancode = 0x3E; break;
+        case SDLK_F5:        scancode = 0x3F; break;
+        case SDLK_F6:        scancode = 0x40; break;
+        case SDLK_F7:        scancode = 0x41; break;
+        case SDLK_F8:        scancode = 0x42; break;
+        case SDLK_F9:        scancode = 0x43; break;
+        case SDLK_F10:       scancode = 0x44; break;
+        case SDLK_HOME:      scancode = 0x47; break;  // CLR/HOME
+        case SDLK_UP:        scancode = 0x48; break;
+        case SDLK_LEFT:      scancode = 0x4B; break;
+        case SDLK_RIGHT:     scancode = 0x4D; break;
+        case SDLK_DOWN:      scancode = 0x50; break;
+        case SDLK_INSERT:    scancode = 0x52; break;
+        case SDLK_DELETE:    scancode = 0x53; break;
+        case SDLK_LALT:      scancode = 0x38; break;  // ALTERNATE
+        default: return;
+    }
+
+    // ACIA make/break protocol: make = scancode, break = scancode | 0x80
+    acia_kbd_data_ = pressed ? scancode : (scancode | 0x80);
+    acia_kbd_status_ |= 0x01;  // Set RX full
 }
 
 template<AtariSTVariant V>

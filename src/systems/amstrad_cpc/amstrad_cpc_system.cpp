@@ -13,6 +13,7 @@
 #include "core/formats/format_registry.hpp"
 #include "core/formats/format_load_helpers.hpp"
 #include "core/formats/cpr_format.hpp"
+#include "utils/keyboard_matrix.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -134,6 +135,17 @@ bool AmstradCPCSystem<M>::initialize() {
         }
     };
     board_.ppi.init();
+
+    // PPI Port B read callback — returns keyboard row data
+    std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
+    board_.ppi.set_port_b_read_callback(
+        [](void* ctx, uint8_t /*port_a*/) -> uint8_t {
+            auto* sys = static_cast<AmstradCPCSystem*>(ctx);
+            uint8_t row = sys->board_.ppi.get_port_c_output() & 0x0F;
+            if (row < 10) return sys->keyboard_matrix_[row];
+            return 0xFF;
+        }, this);
+
     board_.psg.init();
     // AY clock = CPU / 4 = 1 MHz
     board_.psg.set_clock_frequency(amstrad_cpc_constants::CPU_FREQ_HZ / 4);
@@ -174,6 +186,7 @@ void AmstradCPCSystem<M>::reset() {
     audio_thread_.stop();
     // Reset all manifest chips (CRTC, PPI, AY, Gate Array; RAM/ROM are no-op)
     board_.reset_chips();
+    std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
     if (ay_adapter_) ay_adapter_->reset();
     pins_ = board_.z80.reset(pins_);
     configure_bus_memory_map();
@@ -455,6 +468,93 @@ bool AmstradCPCSystem<M>::load_file(const char* filepath) {
 
 template<CPCModel M>
 bool AmstradCPCSystem<M>::load_roms() { return false; }
+
+// ============================================================================
+// INPUT — Amstrad CPC keyboard (10 rows × 8 columns, active-low via PPI Port B)
+// ============================================================================
+
+template<CPCModel M>
+void AmstradCPCSystem<M>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
+    // Amstrad CPC keyboard matrix (active-low, Port C[3:0] selects row):
+    //         Bit7     Bit6     Bit5     Bit4     Bit3     Bit2     Bit1     Bit0
+    // Row 0:  .        ENTER    f3       f6       f9       CURDN    CURRT    CURUP
+    // Row 1:  (n/a)    COPY     f2       f5       f8       f0       CURL     HOLD
+    // Row 2:  CLR      [        RETURN   ]        f4       SHIFT    \        CTRL
+    // Row 3:  (n/a)    -        @        P        ;        :        /        .
+    // Row 4:  0        9        O        I        L        K        M        ,
+    // Row 5:  8        7        U        Y        H        J        N        SPACE
+    // Row 6:  6        5        R        T        G        F        B        V
+    // Row 7:  4        3        E        W        S        D        C        X
+    // Row 8:  1        2        ESC      Q        TAB      A        CAPSLOCK Z
+    // Row 9:  DEL      (joy)    (joy)    (joy)    (joy)    (joy)    (joy)    (joy)
+    static constexpr KeyMatrixMapping mappings[] = {
+        // Row 0: function keys + cursors
+        { SDLK_PERIOD,    0, 7 },
+        { SDLK_RETURN,    0, 6 },  // Num ENTER
+        { SDLK_F3,        0, 5 },
+        { SDLK_F6,        0, 4 },
+        { SDLK_F9,        0, 3 },
+        { SDLK_DOWN,      0, 2 },
+        { SDLK_RIGHT,     0, 1 },
+        { SDLK_UP,        0, 0 },
+        // Row 1: COPY, function keys, cursor left
+        { SDLK_END,       1, 6 },  // COPY
+        { SDLK_F2,        1, 5 },
+        { SDLK_F5,        1, 4 },
+        { SDLK_F8,        1, 3 },
+        { SDLK_F10,       1, 2 },  // f0 → F10
+        { SDLK_LEFT,      1, 1 },
+        // Row 2: CLR, [ ] \ SHIFT CTRL RETURN f4
+        { SDLK_HOME,      2, 7 },  // CLR
+        { SDLK_LEFTBRACKET,  2, 6 },
+        { SDLK_RETURN,    2, 5 },
+        { SDLK_RIGHTBRACKET, 2, 4 },
+        { SDLK_F4,        2, 3 },
+        { SDLK_LSHIFT,    2, 2 }, { SDLK_RSHIFT, 2, 2 },
+        { SDLK_BACKSLASH, 2, 1 },
+        { SDLK_LCTRL,     2, 0 }, { SDLK_RCTRL, 2, 0 },
+        // Row 3: - @ P ; : / .
+        { SDLK_MINUS,        3, 6 },
+        { SDLK_BACKQUOTE,    3, 5 },  // @ → ` (backtick)
+        { SDLK_p,            3, 4 },
+        { SDLK_SEMICOLON,    3, 3 },
+        { SDLK_QUOTE,        3, 2 },  // : → ' (apostrophe)
+        { SDLK_SLASH,        3, 1 },
+        // Row 4: 0 9 O I L K M ,
+        { SDLK_0, 4, 7 }, { SDLK_9, 4, 6 },
+        { SDLK_o, 4, 5 }, { SDLK_i, 4, 4 },
+        { SDLK_l, 4, 3 }, { SDLK_k, 4, 2 },
+        { SDLK_m, 4, 1 }, { SDLK_COMMA, 4, 0 },
+        // Row 5: 8 7 U Y H J N SPACE
+        { SDLK_8, 5, 7 }, { SDLK_7, 5, 6 },
+        { SDLK_u, 5, 5 }, { SDLK_y, 5, 4 },
+        { SDLK_h, 5, 3 }, { SDLK_j, 5, 2 },
+        { SDLK_n, 5, 1 }, { SDLK_SPACE, 5, 0 },
+        // Row 6: 6 5 R T G F B V
+        { SDLK_6, 6, 7 }, { SDLK_5, 6, 6 },
+        { SDLK_r, 6, 5 }, { SDLK_t, 6, 4 },
+        { SDLK_g, 6, 3 }, { SDLK_f, 6, 2 },
+        { SDLK_b, 6, 1 }, { SDLK_v, 6, 0 },
+        // Row 7: 4 3 E W S D C X
+        { SDLK_4, 7, 7 }, { SDLK_3, 7, 6 },
+        { SDLK_e, 7, 5 }, { SDLK_w, 7, 4 },
+        { SDLK_s, 7, 3 }, { SDLK_d, 7, 2 },
+        { SDLK_c, 7, 1 }, { SDLK_x, 7, 0 },
+        // Row 8: 1 2 ESC Q TAB A CAPSLOCK Z
+        { SDLK_1, 8, 7 }, { SDLK_2, 8, 6 },
+        { SDLK_ESCAPE, 8, 5 }, { SDLK_q, 8, 4 },
+        { SDLK_TAB, 8, 3 }, { SDLK_a, 8, 2 },
+        { SDLK_CAPSLOCK, 8, 1 }, { SDLK_z, 8, 0 },
+        // Row 9: DEL (joystick bits not keyboard)
+        { SDLK_BACKSPACE, 9, 7 }, { SDLK_DELETE, 9, 7 },
+        // F1 and F7 convenience mappings
+        { SDLK_F1, 1, 2 },  // f0
+        { SDLK_F7, 0, 3 },  // f9 alias
+        { SDLK_EQUALS, 3, 6 },  // = → -/= on CPC
+    };
+
+    keyboard_matrix_apply(mappings, keyboard_matrix_, key, pressed);
+}
 
 // ============================================================================
 // EXPLICIT INSTANTIATIONS

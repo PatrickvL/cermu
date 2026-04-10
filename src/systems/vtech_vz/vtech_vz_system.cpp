@@ -12,6 +12,7 @@
 #include "core/config/path_discovery.hpp"
 #include "core/formats/format_registry.hpp"
 #include "core/formats/format_load_helpers.hpp"
+#include "utils/keyboard_matrix.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -271,8 +272,54 @@ void VTechVZSystem<V>::set_audio_sample_rate(int rate) {
 // ============================================================================
 
 template<VZVariant V>
-void VTechVZSystem<V>::handle_keyboard_event(SDL_Keycode /*key*/, bool /*pressed*/) {
-    // TODO: VZ keyboard matrix mapping
+void VTechVZSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
+    // VZ-200/300 keyboard matrix: 8 rows × 6 columns, active-low
+    // I/O ports 0–7 return one row each (bits 0–5 = columns)
+    //
+    // Row 0: T  Q  E  W  R  (bit5..bit0 in T Q E W R order)
+    // Row 1: G  A  S  D  F
+    // Row 2: B  CTRL  C  X  Z
+    // Row 3: SPACE  SHIFT  M  N  V
+    // Row 4: 5  1  3  2  4
+    // Row 5: H  Y  U  I  O
+    // Row 6: P  @  ↑  [  RETURN
+    // Row 7: 0  6  8  7  9
+    static constexpr KeyMatrixMapping mappings[] = {
+        // Row 0: T Q E W R
+        { SDLK_t, 0, 4 }, { SDLK_q, 0, 3 }, { SDLK_e, 0, 2 },
+        { SDLK_w, 0, 1 }, { SDLK_r, 0, 0 },
+        // Row 1: G A S D F
+        { SDLK_g, 1, 4 }, { SDLK_a, 1, 3 }, { SDLK_s, 1, 2 },
+        { SDLK_d, 1, 1 }, { SDLK_f, 1, 0 },
+        // Row 2: B CTRL C X Z
+        { SDLK_b, 2, 4 }, { SDLK_LCTRL, 2, 3 }, { SDLK_RCTRL, 2, 3 },
+        { SDLK_c, 2, 2 }, { SDLK_x, 2, 1 }, { SDLK_z, 2, 0 },
+        // Row 3: SPACE SHIFT M N V
+        { SDLK_SPACE, 3, 4 }, { SDLK_LSHIFT, 3, 3 }, { SDLK_RSHIFT, 3, 3 },
+        { SDLK_m, 3, 2 }, { SDLK_n, 3, 1 }, { SDLK_v, 3, 0 },
+        // Row 4: 5 1 3 2 4
+        { SDLK_5, 4, 4 }, { SDLK_1, 4, 3 }, { SDLK_3, 4, 2 },
+        { SDLK_2, 4, 1 }, { SDLK_4, 4, 0 },
+        // Row 5: H Y U I O
+        { SDLK_h, 5, 4 }, { SDLK_y, 5, 3 }, { SDLK_u, 5, 2 },
+        { SDLK_i, 5, 1 }, { SDLK_o, 5, 0 },
+        // Row 6: P @ ↑ [ RETURN
+        { SDLK_p, 6, 4 }, { SDLK_AT, 6, 3 },
+        { SDLK_UP, 6, 2 }, { SDLK_LEFTBRACKET, 6, 1 },
+        { SDLK_RETURN, 6, 0 },
+        // Row 7: 0 6 8 7 9
+        { SDLK_0, 7, 4 }, { SDLK_6, 7, 3 }, { SDLK_8, 7, 2 },
+        { SDLK_7, 7, 1 }, { SDLK_9, 7, 0 },
+        // Convenience mappings
+        { SDLK_BACKSPACE, 6, 2 },  // Use UP arrow for backspace
+        { SDLK_DOWN,  6, 2 },  // DOWN not separate — map to UP (SHIFT+UP = DOWN in BASIC)
+        { SDLK_LEFT,  6, 1 },  // LEFT → [ key
+        { SDLK_RIGHT, 6, 0 },  // RIGHT → RETURN area (convenience)
+        { SDLK_SEMICOLON, 6, 3 },  // ; → @
+        { SDLK_MINUS, 6, 3 },  // - → @
+    };
+
+    keyboard_matrix_apply(mappings, keyboard_matrix_, key, pressed);
 }
 
 

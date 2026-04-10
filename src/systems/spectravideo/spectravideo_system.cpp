@@ -25,6 +25,7 @@
 #include "core/config/path_discovery.hpp"
 #include "core/formats/format_load_helpers.hpp"
 #include "core/vfs/vfs.hpp"
+#include "utils/keyboard_matrix.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -388,8 +389,7 @@ template<SVIVariant V>
 void SpectravideoSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     // SVI keyboard matrix: 11 rows × 8 columns, active-low
     // Row selected by PPI Port A bits 0-3
-    struct KeyMapping { SDL_Keycode sdl_key; int row; int bit; };
-    static constexpr KeyMapping mappings[] = {
+    static constexpr KeyMatrixMapping mappings[] = {
         // Row 0: 0-7
         { SDLK_0, 0, 0 }, { SDLK_1, 0, 1 }, { SDLK_2, 0, 2 }, { SDLK_3, 0, 3 },
         { SDLK_4, 0, 4 }, { SDLK_5, 0, 5 }, { SDLK_6, 0, 6 }, { SDLK_7, 0, 7 },
@@ -434,14 +434,7 @@ void SpectravideoSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed)
         { SDLK_BACKQUOTE, 10, 4 },
     };
 
-    for (const auto& m : mappings) {
-        if (m.sdl_key == key) {
-            if (pressed)
-                keyboard_matrix_[m.row] &= ~(1 << m.bit);
-            else
-                keyboard_matrix_[m.row] |= (1 << m.bit);
-        }
-    }
+    keyboard_matrix_apply(mappings, keyboard_matrix_, key, pressed);
 }
 
 // ============================================================================

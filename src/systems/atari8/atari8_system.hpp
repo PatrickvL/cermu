@@ -156,6 +156,10 @@ private:
     bus_state_t pins_                = ATARI8_BUS_DEFAULT_STATE;
     uint32_t    frame_cycle_counter_ = 0;
 
+    // POKEY keyboard state — scancode-based (not a matrix)
+    uint8_t pokey_key_code_ = 0xFF;     // Current POKEY KBCODE value
+    bool    pokey_key_pressed_ = false; // Any key currently held
+
     void configure_bus_memory_map();
     bool load_roms();
 };

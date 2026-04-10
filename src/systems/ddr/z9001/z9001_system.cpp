@@ -7,6 +7,7 @@
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
+#include "utils/keyboard_matrix.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -196,79 +197,39 @@ template<Z9001Variant V> void Z9001System<V>::run_frame() {
 
 template<Z9001Variant V>
 void Z9001System<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
-    auto set_key = [&](int row, int col) {
-        if (row < 0 || row >= z9001_constants::KEYBOARD_ROWS) return;
-        if (pressed)
-            keyboard_matrix_[row] &= ~(uint8_t)(1 << col);
-        else
-            keyboard_matrix_[row] |=  (uint8_t)(1 << col);
+    // Z9001/KC87 keyboard matrix: 8 rows × 8 columns, active-low
+    static constexpr KeyMatrixMapping mappings[] = {
+        // Row 0: digits 0–7
+        { SDLK_0, 0, 7 }, { SDLK_1, 0, 6 }, { SDLK_2, 0, 5 }, { SDLK_3, 0, 4 },
+        { SDLK_4, 0, 3 }, { SDLK_5, 0, 2 }, { SDLK_6, 0, 1 }, { SDLK_7, 0, 0 },
+        // Row 1: digits 8–9, punctuation
+        { SDLK_8, 1, 7 }, { SDLK_9, 1, 6 },
+        { SDLK_SEMICOLON, 1, 5 }, { SDLK_COMMA, 1, 3 },
+        { SDLK_EQUALS, 1, 2 }, { SDLK_PERIOD, 1, 1 },
+        // Row 2: A–G + Space
+        { SDLK_SPACE, 2, 7 },
+        { SDLK_a, 2, 6 }, { SDLK_b, 2, 5 }, { SDLK_c, 2, 4 }, { SDLK_d, 2, 3 },
+        { SDLK_e, 2, 2 }, { SDLK_f, 2, 1 }, { SDLK_g, 2, 0 },
+        // Row 3: H–O
+        { SDLK_h, 3, 7 }, { SDLK_i, 3, 6 }, { SDLK_j, 3, 5 }, { SDLK_k, 3, 4 },
+        { SDLK_l, 3, 3 }, { SDLK_m, 3, 2 }, { SDLK_n, 3, 1 }, { SDLK_o, 3, 0 },
+        // Row 4: P–W
+        { SDLK_p, 4, 7 }, { SDLK_q, 4, 6 }, { SDLK_r, 4, 5 }, { SDLK_s, 4, 4 },
+        { SDLK_t, 4, 3 }, { SDLK_u, 4, 2 }, { SDLK_v, 4, 1 }, { SDLK_w, 4, 0 },
+        // Row 5: X–Z, punctuation
+        { SDLK_x, 5, 7 }, { SDLK_y, 5, 6 }, { SDLK_z, 5, 5 },
+        // Row 6: cursor and editing
+        { SDLK_INSERT, 6, 5 }, { SDLK_DELETE, 6, 4 },
+        { SDLK_LEFT, 6, 3 }, { SDLK_RIGHT, 6, 2 },
+        { SDLK_UP, 6, 1 }, { SDLK_DOWN, 6, 0 },
+        // Row 7: modifiers
+        { SDLK_TAB, 7, 5 }, { SDLK_CAPSLOCK, 7, 4 },
+        { SDLK_LCTRL, 7, 3 }, { SDLK_RCTRL, 7, 3 },
+        { SDLK_LSHIFT, 7, 2 }, { SDLK_RSHIFT, 7, 2 },
+        { SDLK_RETURN, 7, 0 },
     };
 
-    switch (key) {
-    // Row 0: digits 0–7
-    case SDLK_0: set_key(0,7); break;
-    case SDLK_1: set_key(0,6); break;
-    case SDLK_2: set_key(0,5); break;
-    case SDLK_3: set_key(0,4); break;
-    case SDLK_4: set_key(0,3); break;
-    case SDLK_5: set_key(0,2); break;
-    case SDLK_6: set_key(0,1); break;
-    case SDLK_7: set_key(0,0); break;
-    // Row 1: digits 8–9, punctuation
-    case SDLK_8:         set_key(1,7); break;
-    case SDLK_9:         set_key(1,6); break;
-    case SDLK_SEMICOLON: set_key(1,5); break;
-    case SDLK_COMMA:     set_key(1,3); break;
-    case SDLK_EQUALS:    set_key(1,2); break;
-    case SDLK_PERIOD:    set_key(1,1); break;
-    // Row 2: A–G
-    case SDLK_a: set_key(2,6); break;
-    case SDLK_b: set_key(2,5); break;
-    case SDLK_c: set_key(2,4); break;
-    case SDLK_d: set_key(2,3); break;
-    case SDLK_e: set_key(2,2); break;
-    case SDLK_f: set_key(2,1); break;
-    case SDLK_g: set_key(2,0); break;
-    // Row 3: H–O
-    case SDLK_h: set_key(3,7); break;
-    case SDLK_i: set_key(3,6); break;
-    case SDLK_j: set_key(3,5); break;
-    case SDLK_k: set_key(3,4); break;
-    case SDLK_l: set_key(3,3); break;
-    case SDLK_m: set_key(3,2); break;
-    case SDLK_n: set_key(3,1); break;
-    case SDLK_o: set_key(3,0); break;
-    // Row 4: P–W
-    case SDLK_p: set_key(4,7); break;
-    case SDLK_q: set_key(4,6); break;
-    case SDLK_r: set_key(4,5); break;
-    case SDLK_s: set_key(4,4); break;
-    case SDLK_t: set_key(4,3); break;
-    case SDLK_u: set_key(4,2); break;
-    case SDLK_v: set_key(4,1); break;
-    case SDLK_w: set_key(4,0); break;
-    // Row 5: X–Z, punctuation
-    case SDLK_x: set_key(5,7); break;
-    case SDLK_y: set_key(5,6); break;
-    case SDLK_z: set_key(5,5); break;
-    // Row 6: cursor and editing
-    case SDLK_INSERT:    set_key(6,5); break;
-    case SDLK_DELETE:    set_key(6,4); break;
-    case SDLK_LEFT:      set_key(6,3); break;
-    case SDLK_RIGHT:     set_key(6,2); break;
-    case SDLK_UP:        set_key(6,1); break;
-    case SDLK_DOWN:      set_key(6,0); break;
-    // Row 7: modifiers
-    case SDLK_TAB:        set_key(7,5); break;
-    case SDLK_CAPSLOCK:   set_key(7,4); break;
-    case SDLK_LCTRL:
-    case SDLK_RCTRL:      set_key(7,3); break;
-    case SDLK_LSHIFT:
-    case SDLK_RSHIFT:     set_key(7,2); break;
-    case SDLK_RETURN:     set_key(7,0); break;
-    case SDLK_SPACE:      set_key(2,7); break;  // row 2, col 7 = Space/NL key position
-    default: break;
-    }
+    keyboard_matrix_apply(mappings, keyboard_matrix_, key, pressed);
 }
 
 // ============================================================================

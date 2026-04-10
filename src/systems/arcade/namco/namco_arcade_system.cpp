@@ -313,6 +313,45 @@ bool NamcoArcadeSystem<G>::load_roms() {
 }
 
 // ============================================================================
+// INPUT — Namco arcade cabinet (joystick, coins, start buttons)
+// ============================================================================
+//
+// IN0 (active-low): bit0=Up, 1=Left, 2=Right, 3=Down, 5=Coin1, 6=Coin2, 7=Credit
+// IN1 (active-low): bit0=Up, 1=Left, 2=Right, 3=Down, 5=1P Start, 6=2P Start
+//
+template<NamcoGame G>
+void NamcoArcadeSystem<G>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
+    auto set_bit = [](uint8_t& reg, uint8_t bit, bool active) {
+        if (active) reg &= ~(1 << bit); else reg |= (1 << bit);
+    };
+
+    switch (key) {
+        // Player 1 (IN0) — arrow keys
+        case SDLK_UP:    set_bit(in0_, 0, pressed); break;
+        case SDLK_LEFT:  set_bit(in0_, 1, pressed); break;
+        case SDLK_RIGHT: set_bit(in0_, 2, pressed); break;
+        case SDLK_DOWN:  set_bit(in0_, 3, pressed); break;
+        // Coins and credit
+        case SDLK_5:     set_bit(in0_, 5, pressed); break;  // Coin 1
+        case SDLK_6:     set_bit(in0_, 6, pressed); break;  // Coin 2
+
+        // Player 2 (IN1) — WASD
+        case SDLK_w:     set_bit(in1_, 0, pressed); break;
+        case SDLK_a:     set_bit(in1_, 1, pressed); break;
+        case SDLK_d:     set_bit(in1_, 2, pressed); break;
+        case SDLK_s:     set_bit(in1_, 3, pressed); break;
+        // Start buttons
+        case SDLK_1:     set_bit(in1_, 5, pressed); break;  // 1P Start
+        case SDLK_2:     set_bit(in1_, 6, pressed); break;  // 2P Start
+
+        // Pengo-specific: push button (active-low, bit 4 of IN0)
+        case SDLK_z:     set_bit(in0_, 4, pressed); break;
+        case SDLK_x:     set_bit(in1_, 4, pressed); break;  // P2 push
+        default: break;
+    }
+}
+
+// ============================================================================
 // EXPLICIT INSTANTIATIONS
 // ============================================================================
 

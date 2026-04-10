@@ -22,6 +22,7 @@
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
 #include "core/vfs/vfs.hpp"
+#include "utils/keyboard_matrix.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -379,8 +380,7 @@ void TatungEinsteinSystem::set_audio_sample_rate(int sample_rate_hz) {
 
 void TatungEinsteinSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     // Einstein keyboard matrix via AY-3-8910 I/O ports
-    struct KeyMapping { SDL_Keycode sdl_key; int row; int bit; };
-    static constexpr KeyMapping mappings[] = {
+    static constexpr KeyMatrixMapping mappings[] = {
         // Row 0
         { SDLK_1, 0, 0 }, { SDLK_2, 0, 1 }, { SDLK_3, 0, 2 }, { SDLK_4, 0, 3 },
         { SDLK_5, 0, 4 }, { SDLK_6, 0, 5 }, { SDLK_7, 0, 6 }, { SDLK_8, 0, 7 },
@@ -405,14 +405,7 @@ void TatungEinsteinSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) 
         { SDLK_UP, 7, 0 }, { SDLK_DOWN, 7, 1 }, { SDLK_LEFT, 7, 2 }, { SDLK_RIGHT, 7, 3 },
     };
 
-    for (const auto& m : mappings) {
-        if (m.sdl_key == key) {
-            if (pressed)
-                keyboard_matrix_[m.row] &= ~(1 << m.bit);
-            else
-                keyboard_matrix_[m.row] |= (1 << m.bit);
-        }
-    }
+    keyboard_matrix_apply(mappings, keyboard_matrix_, key, pressed);
 }
 
 // ============================================================================
