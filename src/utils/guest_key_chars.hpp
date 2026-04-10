@@ -90,6 +90,40 @@ inline constexpr char32_t UKEY_CBM_KP_MINUS   = U'\uE03B';  // Numpad −
 inline constexpr char32_t UKEY_CBM_KP_PERIOD  = U'\uE03C';  // Numpad .
 inline constexpr char32_t UKEY_CBM_KP_ENTER   = U'\uE03D';  // Numpad ENTER
 
+// --- Generic keyboard keys (U+E080–U+E0FF) ---
+// System-independent key identities for keyboards outside the
+// Commodore family.  Used as the `normal` field in KeyMatrixEntry
+// for keys that have no direct Unicode codepoint.
+
+// Modifiers
+inline constexpr char32_t UKEY_SHIFT_L      = U'\uE080';
+inline constexpr char32_t UKEY_SHIFT_R      = U'\uE081';
+inline constexpr char32_t UKEY_CTRL_L       = U'\uE082';
+inline constexpr char32_t UKEY_CTRL_R       = U'\uE083';
+inline constexpr char32_t UKEY_ALT_L        = U'\uE084';  // also GRAPH (MSX/SVI)
+inline constexpr char32_t UKEY_CAPS_LOCK    = U'\uE086';
+
+// Function keys
+inline constexpr char32_t UKEY_F1           = U'\uE090';
+inline constexpr char32_t UKEY_F2           = U'\uE091';
+inline constexpr char32_t UKEY_F3           = U'\uE092';
+inline constexpr char32_t UKEY_F4           = U'\uE093';
+inline constexpr char32_t UKEY_F5           = U'\uE094';
+inline constexpr char32_t UKEY_F6           = U'\uE095';
+inline constexpr char32_t UKEY_F7           = U'\uE096';
+inline constexpr char32_t UKEY_F8           = U'\uE097';
+inline constexpr char32_t UKEY_F9           = U'\uE098';
+inline constexpr char32_t UKEY_F10          = U'\uE099';
+
+// Navigation
+inline constexpr char32_t UKEY_CURSOR_UP    = U'\uE0A0';
+inline constexpr char32_t UKEY_CURSOR_DOWN  = U'\uE0A1';
+inline constexpr char32_t UKEY_CURSOR_LEFT  = U'\uE0A2';
+inline constexpr char32_t UKEY_CURSOR_RIGHT = U'\uE0A3';
+inline constexpr char32_t UKEY_HOME         = U'\uE0A4';
+inline constexpr char32_t UKEY_END          = U'\uE0A5';  // also STOP (MSX/SVI)
+inline constexpr char32_t UKEY_INSERT       = U'\uE0A6';
+
 // ============================================================================
 // Convenience tests
 // ============================================================================
