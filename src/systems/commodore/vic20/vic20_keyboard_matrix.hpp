@@ -5,8 +5,14 @@
 // VIC-20 Keyboard Matrix — 8×8
 // VIA Port B ($9120) = column select (output)
 // VIA Port A ($9121) = row read (input)
-// Array convention: array[7-PB_col][7-PA_row]
-// Transform from C64: swap array rows 0↔4, swap columns 0↔7 within each row.
+//
+// Array convention: array[7 - row_bit][7 - col_bit]
+//   row_bit = VIA Port B bit (column select port on VIC-20 hardware)
+//   col_bit = VIA Port A bit (row read port on VIC-20 hardware)
+//   Same bit-reversed layout as all other Commodore matrices.
+//   NOTE: VIC-20 Port B/A roles are swapped vs C64 — the array
+//   labels "row"/"col" refer to the code convention (first/second
+//   dimension), not the hardware port semantics.
 
 #define VIC20_KEYBOARD_ROWS 8
 #define VIC20_KEYBOARD_COLS 8

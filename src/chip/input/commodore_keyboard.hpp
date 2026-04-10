@@ -247,10 +247,23 @@ struct commodore_keyboard_t {
     uint8_t matrix_cols;
 
     // Keyboard matrix contact state
-    // row_open_contacts[row_bit] = bitmask of column contacts
-    // col_open_contacts[col_bit] = bitmask of row contacts
+    // All matrices use a bit-reversed layout: array[N-1 - hw_bit][7 - hw_bit].
+    // key_down/key_up convert array indices to hardware bit positions:
+    //   row_bit = (matrix_rows - 1) - array_row
+    //   col_bit = (col < 8) ? (7 - array_col) : array_col
+    //
+    // row_open_contacts[row_bit] = bitmask of column contacts for that row
+    // col_open_contacts[col_bit] = bitmask of row contacts for that column
     // 0xFF/0xFFFF = all contacts open (no keys pressed)
     // Bit cleared = contact closed (key pressed)
+    //
+    // Each system's scan callback reads from the appropriate array:
+    //   C64/C128: row_open_contacts[PB_bit] (reverse scan),
+    //             col_open_contacts[PA_bit] (forward scan)
+    //   VIC-20:   row_open_contacts[PB_bit] (forward scan — PB is column select!),
+    //             col_open_contacts[PA_bit] (reverse scan — PA is row read!)
+    //   C16:      row_open_contacts[PIO2_bit] (forward scan only)
+    //   PET:      row_open_contacts[hw_row] (forward scan only)
     uint16_t row_open_contacts[MAX_KEYBOARD_ROWS];
     uint16_t col_open_contacts[MAX_KEYBOARD_COLS];
 
