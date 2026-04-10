@@ -398,6 +398,14 @@ inline ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                     // Last sprite evaluation step at cycle 257
                     sprite_eval_step();
                     commit_sprite_eval();
+                } else if (scanline == -1 && (mask & 0x18)) {
+                    // Pre-render: recompute sprite pattern addresses for the
+                    // sprite fetch window (258-320).  No evaluation runs on
+                    // line -1, but the PPU still performs sprite pattern bus
+                    // accesses using stale secondary OAM — A12 must toggle
+                    // correctly for MMC3 scanline counter (241 clocks/frame).
+                    for (uint8_t i = 0; i < 8; i++)
+                        internal.sprite_pattern_addr[i] = compute_sprite_pattern_addr(i);
                 }
                 // Sprite 0, sub-cycle 0: output garbage nametable address (A12 = 0).
                 // Starts the 64-cycle sprite fetch window (257-320).

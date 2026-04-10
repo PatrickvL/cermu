@@ -267,6 +267,10 @@ struct MMC3IRQ {
     }
 
     /// Process A12 signal transition (call from mapper's notify_a12).
+    /// Rev B behavior (standard MMC3B — SMB3, Mega Man 3): IRQ fires
+    /// whenever counter is 0 after clocking, including reload-to-0.
+    /// Rev A (Crystalis) differs: no IRQ on reload-to-0 after natural
+    /// zero — but Rev A is rare and most games expect Rev B.
     void notify_a12(bool a12_high, uint64_t ppu_cycle) {
         if (!a12_high) { a12_low_since = ppu_cycle; return; }
         if (ppu_cycle - a12_low_since < A12_FILTER_DELAY) return;
