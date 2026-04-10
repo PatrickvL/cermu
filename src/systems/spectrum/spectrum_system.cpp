@@ -35,6 +35,7 @@
 #include "core/formats/scl_format.hpp"
 #include "core/formats/trd_format.hpp"
 #include "utils/keyboard_matrix.hpp"
+#include "utils/guest_key_chars.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -754,44 +755,51 @@ void SpectrumSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     // Row 6 (port $BFFE): ENTER, L, K, J, H
     // Row 7 (port $7FFE): SPACE, SYMBOL SHIFT, M, N, B
 
-    static constexpr KeyMatrixMapping mappings[] = {
+    static const KeyMatrixEntry entries[] = {
         // Row 0: CAPS SHIFT, Z, X, C, V
-        { SDLK_LSHIFT,  0, 0 }, { SDLK_RSHIFT,  0, 0 },
-        { SDLK_z,        0, 1 }, { SDLK_x,        0, 2 },
-        { SDLK_c,        0, 3 }, { SDLK_v,        0, 4 },
+        { 0, 0, UKEY_SHIFT_L, 0 },
+        { 0, 1, 'z', 0 }, { 0, 2, 'x', 0 },
+        { 0, 3, 'c', 0 }, { 0, 4, 'v', 0 },
         // Row 1: A, S, D, F, G
-        { SDLK_a,        1, 0 }, { SDLK_s,        1, 1 },
-        { SDLK_d,        1, 2 }, { SDLK_f,        1, 3 },
-        { SDLK_g,        1, 4 },
+        { 1, 0, 'a', 0 }, { 1, 1, 's', 0 },
+        { 1, 2, 'd', 0 }, { 1, 3, 'f', 0 },
+        { 1, 4, 'g', 0 },
         // Row 2: Q, W, E, R, T
-        { SDLK_q,        2, 0 }, { SDLK_w,        2, 1 },
-        { SDLK_e,        2, 2 }, { SDLK_r,        2, 3 },
-        { SDLK_t,        2, 4 },
+        { 2, 0, 'q', 0 }, { 2, 1, 'w', 0 },
+        { 2, 2, 'e', 0 }, { 2, 3, 'r', 0 },
+        { 2, 4, 't', 0 },
         // Row 3: 1, 2, 3, 4, 5
-        { SDLK_1,        3, 0 }, { SDLK_2,        3, 1 },
-        { SDLK_3,        3, 2 }, { SDLK_4,        3, 3 },
-        { SDLK_5,        3, 4 },
+        { 3, 0, '1', 0 }, { 3, 1, '2', 0 },
+        { 3, 2, '3', 0 }, { 3, 3, '4', 0 },
+        { 3, 4, '5', 0 },
         // Row 4: 0, 9, 8, 7, 6
-        { SDLK_0,        4, 0 }, { SDLK_9,        4, 1 },
-        { SDLK_8,        4, 2 }, { SDLK_7,        4, 3 },
-        { SDLK_6,        4, 4 },
+        { 4, 0, '0', 0 }, { 4, 1, '9', 0 },
+        { 4, 2, '8', 0 }, { 4, 3, '7', 0 },
+        { 4, 4, '6', 0 },
         // Row 5: P, O, I, U, Y
-        { SDLK_p,        5, 0 }, { SDLK_o,        5, 1 },
-        { SDLK_i,        5, 2 }, { SDLK_u,        5, 3 },
-        { SDLK_y,        5, 4 },
+        { 5, 0, 'p', 0 }, { 5, 1, 'o', 0 },
+        { 5, 2, 'i', 0 }, { 5, 3, 'u', 0 },
+        { 5, 4, 'y', 0 },
         // Row 6: ENTER, L, K, J, H
-        { SDLK_RETURN,  6, 0 }, { SDLK_l,        6, 1 },
-        { SDLK_k,        6, 2 }, { SDLK_j,        6, 3 },
-        { SDLK_h,        6, 4 },
+        { 6, 0, '\r', 0 }, { 6, 1, 'l', 0 },
+        { 6, 2, 'k', 0 }, { 6, 3, 'j', 0 },
+        { 6, 4, 'h', 0 },
         // Row 7: SPACE, SYMBOL SHIFT, M, N, B
-        { SDLK_SPACE,   7, 0 }, { SDLK_LCTRL,   7, 1 }, { SDLK_RCTRL, 7, 1 },
-        { SDLK_m,        7, 2 }, { SDLK_n,        7, 3 },
-        { SDLK_b,        7, 4 },
+        { 7, 0, ' ', 0 }, { 7, 1, UKEY_CTRL_L, 0 },
+        { 7, 2, 'm', 0 }, { 7, 3, 'n', 0 },
+        { 7, 4, 'b', 0 },
         // Convenience: Backspace → CAPS SHIFT + 0 (DELETE)
-        { SDLK_BACKSPACE, 0, 0 }, { SDLK_BACKSPACE, 4, 0 },
+        { 0, 0, '\b', 0 }, { 4, 0, '\b', 0 },
     };
 
-    if (keyboard_matrix_apply(mappings, keyboard_rows_, key, pressed)) {
+    static const HostKeyBinding bindings[] = {
+        { SDLK_LSHIFT, UKEY_SHIFT_L },
+        { SDLK_RSHIFT, UKEY_SHIFT_L },
+        { SDLK_LCTRL,  UKEY_CTRL_L  },
+        { SDLK_RCTRL,  UKEY_CTRL_L  },
+    };
+
+    if (keyboard_matrix_apply(entries, bindings, keyboard_rows_, key, pressed)) {
         // Sync changed rows to ULA's internal keyboard state
         for (int r = 0; r < 8; ++r)
             board_.ula.set_keyboard_row(r, keyboard_rows_[r]);
