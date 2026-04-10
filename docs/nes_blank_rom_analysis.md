@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-10
 **Test:** 1430 ROMs, 300 frames headless (early-exit), composite-signal color detection
-**Current Results:** 1396 PASS (97.6%), 17 BLANK (1.2%), 17 OTHER
+**Current Results:** 1403 PASS (98.1%), 10 BLANK (0.7%), 17 OTHER
 **Initial Results:** 919 PASS (64.3%), 509 BLANK (35.6%), 2 CRASH
 
 ---
@@ -13,7 +13,7 @@
 |-----|-----------|------------|--------|--------|
 | MMC1: PRG bank offset no longer hardcoded for 256KB | 1 | 241 | `8427a8c2` | **VERIFIED** |
 | AxROM: removed spurious bus conflict (ANROM boards have none) | 7 | 16 | `8427a8c2` | **VERIFIED** |
-| Taito X1-005/X1-017: PRG-RAM write-protect + A2 mirror decoding | 80, 82, 207 | 0 | `8427a8c2` | Register writes reach mapper; games still blank (additional issue TBD) |
+| Taito X1-005/X1-017: PRG-RAM write-protect + A2 mirror decoding | 80, 82, 207 | 0 | `8427a8c2` | Prerequisite for `a7dbc97a` — register writes now reach mapper |
 | Namco 175/340: rewrite register map, sub-mapper differentiation | 210 | 7 | `55beae28` | **VERIFIED** |
 | Bandai FCG: PRG-RAM write protection + address decode + I2C timing | 16 | 8 | `bc12abe1` | **VERIFIED** |
 | NES-QJ: PRG-RAM write protection for outer bank register | 47 | 1 | `bc12abe1` | **VERIFIED** |
@@ -23,6 +23,7 @@
 | FME-7: $6000 PRG-ROM mapping (was reading open bus) | 69 | 2 | `344b95a5` | **VERIFIED** |
 | Mapper 037 (PAL-ZZ multicart) + CRC-based mapper override table | 4→37 | 1 | `42280be5` | **VERIFIED** |
 | Mapper 153 (Bandai SRAM) + 3 CRC overrides (M16→153, M19→210s1, M33→48) | 16,19,33 | 3 | `f1a0c357` | **VERIFIED** |
+| Taito X1-005: fix PRG bank register decode + security latch | 80, 207 | 7 | `a7dbc97a` | **VERIFIED** |
 
 ---
 
@@ -30,27 +31,25 @@
 
 ### Progression
 
-| Status | Initial (60f) | +MMC1/AxROM | +210/016/047 | +MMC1 wrap (300f) | +Systemic wrap (300f) | +DMA/FME-7/037 | +CRC overrides | Total Delta |
-|--------|-------------:|------------:|-------------:|-----------------:|---------------------:|---------------:|---------------:|------------:|
-| PASS   |          919 |       1210  |         1226 |             1290 |                 1390 |           1393 |           1396 | **+477** |
-| BLANK  |          509 |        217  |          201 |              137 |                   37 |             20 |             17 | **-492** |
-| CRASH  |            2 |          2  |            2 |                2 |                    2 |              2 |              2 | 0 |
-| TIMEOUT|            0 |          1  |            1 |                1 |                    1 |              1 |              1 | +1 |
+| Status | Initial (60f) | +MMC1/AxROM | +210/016/047 | +MMC1 wrap (300f) | +Systemic wrap (300f) | +DMA/FME-7/037 | +CRC overrides | +X1-005 | Total Delta |
+|--------|-------------:|------------:|-------------:|-----------------:|---------------------:|---------------:|---------------:|--------:|------------:|
+| PASS   |          919 |       1210  |         1226 |             1290 |                 1390 |           1393 |           1396 |    1403 | **+484** |
+| BLANK  |          509 |        217  |          201 |              137 |                   37 |             20 |             17 |      10 | **-499** |
+| CRASH  |            2 |          2  |            2 |                2 |                    2 |              2 |              2 |       2 | 0 |
+| TIMEOUT|            0 |          1  |            1 |                1 |                    1 |              1 |              1 |       1 | +1 |
 
-**492 previously blank ROMs now show graphics (97% reduction).**
+**499 previously blank ROMs now show graphics (98% reduction).**
 
-### Remaining 17 Blanks by Mapper
+### Remaining 10 Blanks by Mapper
 
 | Mapper | Count | Description | Notes |
 |--------|------:|-------------|-------|
-| 80 | 6 | Taito X1-005 | Register fix applied but deeper issue (security latch?) |
 | 5 | 3 | MMC5 | Complex mapper, incomplete impl |
 | 19 | 2 | Namco 163 | Expansion audio or IRQ timing |
 | 96 | 2 | Oeka Kids | Special input device required |
 | 40 | 1 | FDS SMB2J Hack | Super Mario Bros 2 (J) FDS hack |
 | 75 | 1 | VRC1 | Ninja Jajamaru |
 | 120 | 1 | FDS Hack | Tobidase Daisakusen |
-| 207 | 1 | Taito X1-017 | Fudou Myouou Den |
 
 ---
 
@@ -59,18 +58,19 @@
 | # | Root Cause | Mapper(s) | Original | Remaining | Fix Difficulty |
 |---|-----------|-----------|--------:|----------:|----------------|
 | 1 | [MMC1 PRG bank bugs](#1-mmc1-prg-bank-calculation-bug) | 1 | 305 | 0 | **DONE** (241 bank offset + 58 slow starters + 6 bank wrapping) |
-| 2 | [Taito X1-005/X1-017 register shadowing](#2-taito-x1-005x1-017-register-shadowing) | 80, 82, 207 | 12 | 7 | Partial (deeper issue; mapper 82 now passes) |
+| 2 | [Taito X1-005/X1-017 register decode](#2-taito-x1-005x1-017-register-shadowing) | 80, 82, 207 | 12 | 0 | **DONE** (PRG-RAM write-protect + PRG bank register remap + security latch) |
 | 3 | [Bandai FCG mapper bugs](#3-bandai-fcg-mapper-16) | 16, 153 | 19 | 0 | **DONE** (8 I2C, 10 slow starters, 1 mapper 153 CRC override) |
 | 4 | [Namco 175/340 mapper bug](#4-namco-175340-mapper-210) | 210 | 7 | 0 | **DONE** (all 7 fixed) |
 | 5 | [AxROM partial failures](#5-axrom-mapper-7) | 7 | 16 | 0 | **DONE** (all 16 fixed) |
 | 6 | [MMC5 incomplete implementation](#6-mmc5-mapper-5) | 5 | 11 | 3 | Hard (8 fixed by bank wrapping + DMA tick) |
 | 7 | [Namco 163 issue](#7-namco-163-mapper-19) | 19 | 10 | 2 | Medium (5 fixed by DMA tick + CRC override to mapper 210) |
 | 8 | [Systemic bank wrapping](#8-systemic-bank-wrapping) | multiple | ~100 | 0 | **DONE** (bank mirroring + slow starters) |
-| 9 | [Minor mappers](#9-minor-mapper-issues) | various | ~15 | 4 | Varies |
+| 9 | [Minor mappers](#9-minor-mapper-issues) | various | ~15 | 3 | Varies |
 | 10 | [Slow starters (need >60 frames)](#10-slow-starters) | 0,2,3,4,etc. | ~115 | 0 | **DONE** (all resolved at 300 frames) |
 | 11 | [DMA mapper tick](#11-dma-mapper-tick) | all | ~10 | 0 | **DONE** (IRQ + exp. audio during OAM DMA) |
 | 12 | [FME-7 $6000 mapping](#12-fme-7-6000-prg-rom-mapping) | 69 | 2 | 0 | **DONE** |
 | 13 | [CRC-based mapper correction](#13-crc-based-mapper-correction) | 4→37, 16→153, 19→210s1, 33→48 | 4 | 0 | **DONE** |
+| 14 | [X1-005 PRG bank decode](#14-taito-x1-005-prg-bank-register-decode) | 80, 207 | 7 | 0 | **DONE** (register addresses + security latch) |
 
 **New TIMEOUT:** Days of Thunder (North America) — mapper 0, likely infinite loop or timing issue
 
@@ -269,31 +269,42 @@ Re-testing at 300 frames with `--early-exit` confirmed all 58 produce >2 colors.
 
 ---
 
-### 2. Taito X1-005/X1-017 Register Shadowing
+### 2. Taito X1-005/X1-017 Register Decode
 
-**Impact:** 12 ROMs → **7 remaining** (mapper 82 now passes at 300 frames; Kyonshiizu 2 now passes)
-**Fix:** Easy
-**Files:** `mapper_080_taito_x1005.hpp`, `mapper_082_taito_x1017.hpp`
+**Impact:** 12 ROMs → **0 remaining**
+**Status:** **DONE** (commits `8427a8c2`, `a7dbc97a`)
+**File:** `mapper_080_taito_x1005.hpp`
 
-**Root cause:** Registers at $7EF0–$7EFF are in the $6000–$7FFF PRG-RAM region.
+#### Issue A: PRG-RAM write interception (commit `8427a8c2`)
+
+Registers at $7EF0–$7EFF are in the $6000–$7FFF PRG-RAM region.
 When bank map is built, pages 6–7 get writable PRG-RAM pointers, so CPU writes
 at $7EFx go to RAM (block dispatch) and never reach `Mapper::register_write()`.
 Banks never change from their initial zero state.
 
 **Fix:** Set `prg_ram_write_protected = true` in `get_prg_bank_config()`, then handle
 RAM reads/writes for $7F00–$7FFF alongside register writes in `register_write()`.
+This was a prerequisite — register writes now reach the mapper, but the register
+decode itself was still wrong.
 
-**Remaining blank ROMs (7):**
+#### Issue B: PRG bank register addresses wrong + missing security latch (commit `a7dbc97a`)
 
-| Mapper | ROM |
-|-------:|-----|
-| 80 | NES Japan ROMs/Kyuukyoku Harikiri Stadium (Japan).nes |
-| 80 | NES Japan ROMs/Kyuukyoku Harikiri Stadium - '88 Senshu Shin Data Version (Japan).nes |
-| 80 | NES Japan ROMs/Yamamura Misa Suspense - Kyouto Ryuu no Tera Satsujin Jiken (Japan).nes |
-| 80 | NES Translated Japan ROMs/Distant Legend of Jarvas (Translated) (Japan).nes |
-| 80 | NES Translated Japan ROMs/Minelvaton Saga (Translated) (Japan).nes |
-| 80 | NES Translated Japan ROMs/Taito Grand Prix (Translated) (Japan).nes |
-| 207 | NES Translated Japan ROMs/The Acala Legend (Translated) (Japan).nes |
+The register decode had PRG banks at $7EF8/$7EF9/$7EFA with an A2 mirror
+mapping $7EFC-$7EFE → $7EF8-$7EFA. Real hardware (confirmed by Mesen2, FCEUX,
+Nestopia):
+- $7EF8-$7EF9: security latch (write $A3 to enable 128-byte RAM at $7F00)
+- $7EFA-$7EFB: PRG bank 0 ($8000)
+- $7EFC-$7EFD: PRG bank 1 ($A000)
+- $7EFE-$7EFF: PRG bank 2 ($C000)
+
+The wrong decode garbled all PRG bank writes: games writing $A3 (security enable)
+to $7EF8 corrupted PRG bank 0 with 0xA3, and the paired-address A2 mirror further
+scrambled $7EFC/$7EFE writes into wrong bank slots.
+
+**Fix:** Correct register addresses (paired), implement security latch gating RAM
+writes at $7F00-$7FFF.
+
+**Overall Taito resolution: 12 → 0 blanks (100% fixed)**
 
 ---
 
@@ -467,7 +478,6 @@ Small-count mappers still blank after all fixes:
 | 120 | FDS Hack | 1 | 1 | Tobidase Daisakusen |
 | 40 | FDS SMB2J Hack | 1 | 1 | Super Mario Bros 2 (J) FDS hack |
 | 75 | VRC1 | 1 | 6 | Ninja Jajamaru |
-| 207 | Taito X1-017 | 1 | 1 | Fudou Myouou Den |
 
 **Resolved since last update:**
 
@@ -478,9 +488,10 @@ Small-count mappers still blank after all fixes:
 | 33→48 | TC0190→TC0690 | CRC-based mapper correction (needs scanline IRQ) | `f1a0c357` |
 | 140 | Jaleco JF-11 | Fixed by DMA mapper tick | `cc1e2ce3` |
 | 16→153 | Bandai FCG→SRAM | CRC override + new mapper 153 impl | `f1a0c357` |
+| 80/207 | Taito X1-005/X1-017 | PRG bank register decode + security latch | `a7dbc97a` |
 
-**Previously blank, now passing:** mappers 9, 10, 15, 26, 47, 65, 69, 76, 82, 85, 88, 140, 206
-(all resolved by bank wrapping fix + 300-frame re-test + DMA tick + FME-7 fix).
+**Previously blank, now passing:** mappers 9, 10, 15, 26, 47, 65, 69, 76, 80, 82, 85, 88, 140, 206, 207
+(all resolved by bank wrapping fix + 300-frame re-test + DMA tick + FME-7 fix + register decode fixes).
 
 ---
 
@@ -561,6 +572,39 @@ with support for both mapper and submapper correction.
 
 ---
 
+### 14. Taito X1-005 PRG Bank Register Decode
+
+**Impact:** 7 ROMs → 0 remaining
+**Status:** **DONE** (commit `a7dbc97a`)
+
+After the PRG-RAM write-protect fix (`8427a8c2`) routed register writes to the
+mapper, games were still blank because the register decode itself was wrong.
+PRG bank registers were mapped to $7EF8/$7EF9/$7EFA, but real hardware uses:
+- $7EF8-$7EF9: security latch (write $A3 to enable 128-byte RAM at $7F00)
+- $7EFA-$7EFB: PRG bank 0 ($8000)
+- $7EFC-$7EFD: PRG bank 1 ($A000)
+- $7EFE-$7EFF: PRG bank 2 ($C000)
+
+Games writing security enable $A3 to $7EF8 corrupted PRG bank 0 with 0xA3.
+The A2 mirror (`reg &= ~0x04`) further scrambled $7EFC/$7EFE writes.
+
+**Fix:** Correct paired register addresses, implement security latch gating RAM
+at $7F00-$7FFF. Confirmed against Mesen2, FCEUX, and Nestopia implementations.
+
+**Affected ROMs (7):**
+
+| Mapper | ROM |
+|-------:|-----|
+| 80 | Kyuukyoku Harikiri Stadium (Japan) |
+| 80 | Kyuukyoku Harikiri Stadium - '88 Senshu Shin Data Version (Japan) |
+| 80 | Yamamura Misa Suspense - Kyouto Ryuu no Tera Satsujin Jiken (Japan) |
+| 80 | Distant Legend of Jarvas (Translated) (Japan) |
+| 80 | Minelvaton Saga (Translated) (Japan) |
+| 80 | Taito Grand Prix (Translated) (Japan) |
+| 207 | The Acala Legend (Translated) (Japan) |
+
+---
+
 ## Test Infrastructure
 
 - **Boot warp** (`41945105`): NES GUI runs at max speed until PPU enables rendering
@@ -584,7 +628,7 @@ with support for both mapper and submapper correction.
 8. ~~DMA mapper tick~~ — **DONE** (~10 ROMs across MMC5, Namco 163, Jaleco)
 9. ~~FME-7 $6000 PRG-ROM mapping~~ — **DONE** (2 ROMs)
 10. ~~CRC-based mapper correction~~ — **DONE** (4 ROMs: mapper 037, 153, 210s1, 48)
-11. **Taito X1-005 deeper issue** — 6 ROMs, likely security latch or specific register behavior
+11. ~~Taito X1-005 PRG bank decode + security latch~~ — **DONE** (7 ROMs)
 12. **MMC5 completion** — 3 ROMs, significant effort (extended attributes, fill mode)
 13. **Namco 163** — 2 ROMs, expansion audio or timing
-14. **Minor mappers** — 4 ROMs across 4 mappers (96, 40, 75, 120), triage individually
+14. **Minor mappers** — 3 ROMs across 3 mappers (96, 40, 75, 120), triage individually
