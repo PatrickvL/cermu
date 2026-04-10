@@ -53,6 +53,7 @@
 #include "chip/memory/memory_chip.hpp"
 #include "core/audio_thread.hpp"
 #include "utils/write_only_synth_adapter.hpp"
+#include "utils/keyboard_matrix.hpp"
 #include <cstdint>
 #include <memory>
 
@@ -247,7 +248,8 @@ private:
     bool    shadow_active_  = false;     // Shadow screen RAM active
 
     // ── Keyboard ─────────────────────────────────────────────────────────
-    bool    key_matrix_[10][8]{};
+    // Array index = column (0-9), bit position = row (0-7), active-low
+    uint8_t keyboard_matrix_[10]{};
     bool    any_key_pressed_ = false;
     uint8_t addressable_latch_ = 0;
 
