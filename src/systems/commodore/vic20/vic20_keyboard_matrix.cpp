@@ -1,39 +1,38 @@
 #include "systems/commodore/vic20/vic20_keyboard_matrix.hpp"
 
 // ============================================================================
-// VIC-20 Keyboard Matrix — 8×8 (EmuKey-based)
+// VIC-20 Keyboard Matrix — 8×8
 // ============================================================================
 // VIA Port B ($9120) = column select (output)
 // VIA Port A ($9121) = row read (input)
 // Array convention: array[7-PB_col][7-PA_row]
 //
-// keys[] stores EmuKey values.  Shifted characters stored in decode tables.
-// Unshifted characters derived from emu_key_to_char(key).
+// keys[] stores SDL_Keycode values.  Shifted characters stored in decode tables.
 
 // Key positions note:
-//   C64 '@' key → EMUKEY_LEFTBRACKET  (physical position of @ on Commodore)
-//   C64 '*' key → EMUKEY_RIGHTBRACKET (physical position of * on Commodore)
-//   C64 ':' key → EMUKEY_SEMICOLON    (Commodore : is on the ; key position)
-//   C64 ';' key → EMUKEY_APOSTROPHE   (Commodore ; is on the ' key position)
-//   C64 '+' key → EMUKEY_BACKSLASH    (Commodore + key, no direct ASCII match)
+//   '@' key → SDLK_LEFTBRACKET  (physical position of @ on Commodore)
+//   '*' key → SDLK_RIGHTBRACKET (physical position of * on Commodore)
+//   ':' key → SDLK_SEMICOLON    (Commodore : is on the ; key position)
+//   ';' key → SDLK_QUOTE        (Commodore ; is on the ' key position)
+//   '+' key → SDLK_BACKSLASH    (Commodore + key, no direct ASCII match)
 
-static const emu_key_t vic20_keys[VIC20_KEYBOARD_ROWS * VIC20_KEYBOARD_COLS] = {
+static const SDL_Keycode vic20_keys[VIC20_KEYBOARD_ROWS * VIC20_KEYBOARD_COLS] = {
     // PB7: F7, HOME, -, 0, 8, 6, 4, 2
-    EMUKEY_F7,  EMUKEY_HOME,  EMUKEY_MINUS,  EMUKEY_0,  EMUKEY_8,  EMUKEY_6,  EMUKEY_4,  EMUKEY_2,
+    SDLK_F7,  SDLK_HOME,  SDLK_MINUS,  SDLK_0,  SDLK_8,  SDLK_6,  SDLK_4,  SDLK_2,
     // PB6: F5, ↑(char), @, O, U, T, E, Q
-    EMUKEY_F5,  EMUKEY_CBM_ARROW_UP,  EMUKEY_LEFTBRACKET,  EMUKEY_O,  EMUKEY_U,  EMUKEY_T,  EMUKEY_E,  EMUKEY_Q,
+    SDLK_F5,  CERMU_KEY_CBM_ARROW_UP,  SDLK_LEFTBRACKET,  SDLK_o,  SDLK_u,  SDLK_t,  SDLK_e,  SDLK_q,
     // PB5: F3, =, :, K, H, F, S, C=
-    EMUKEY_F3,  EMUKEY_EQUALS,  EMUKEY_SEMICOLON,  EMUKEY_K,  EMUKEY_H,  EMUKEY_F,  EMUKEY_S,  EMUKEY_LGUI,
+    SDLK_F3,  SDLK_EQUALS,  SDLK_SEMICOLON,  SDLK_k,  SDLK_h,  SDLK_f,  SDLK_s,  CERMU_KEY_CBM_COMMODORE,
     // PB4: F1, RSHIFT, ., M, B, C, Z, SPACE
-    EMUKEY_F1,  EMUKEY_RSHIFT,  EMUKEY_PERIOD,  EMUKEY_M,  EMUKEY_B,  EMUKEY_C,  EMUKEY_Z,  EMUKEY_SPACE,
+    SDLK_F1,  SDLK_RSHIFT,  SDLK_PERIOD,  SDLK_m,  SDLK_b,  SDLK_c,  SDLK_z,  SDLK_SPACE,
     // PB3: CRSR↓, /, ,, N, V, X, LSHIFT, RUN/STOP
-    EMUKEY_DOWN,  EMUKEY_SLASH,  EMUKEY_COMMA,  EMUKEY_N,  EMUKEY_V,  EMUKEY_X,  EMUKEY_LSHIFT,  EMUKEY_TAB,
+    SDLK_DOWN,  SDLK_SLASH,  SDLK_COMMA,  SDLK_n,  SDLK_v,  SDLK_x,  SDLK_LSHIFT,  CERMU_KEY_CBM_RUN_STOP,
     // PB2: CRSR→, ;, L, J, G, D, A, CTRL
-    EMUKEY_RIGHT,  EMUKEY_APOSTROPHE,  EMUKEY_L,  EMUKEY_J,  EMUKEY_G,  EMUKEY_D,  EMUKEY_A,  EMUKEY_LCTRL,
+    SDLK_RIGHT,  SDLK_QUOTE,  SDLK_l,  SDLK_j,  SDLK_g,  SDLK_d,  SDLK_a,  SDLK_LCTRL,
     // PB1: RETURN, *, P, I, Y, R, W, ←(char)
-    EMUKEY_RETURN,  EMUKEY_RIGHTBRACKET,  EMUKEY_P,  EMUKEY_I,  EMUKEY_Y,  EMUKEY_R,  EMUKEY_W,  EMUKEY_CBM_ARROW_LEFT,
+    SDLK_RETURN,  SDLK_RIGHTBRACKET,  SDLK_p,  SDLK_i,  SDLK_y,  SDLK_r,  SDLK_w,  CERMU_KEY_CBM_ARROW_LEFT,
     // PB0: DEL, £, +, 9, 7, 5, 3, 1
-    EMUKEY_BACKSPACE,  EMUKEY_CBM_POUND,  EMUKEY_BACKSLASH,  EMUKEY_9,  EMUKEY_7,  EMUKEY_5,  EMUKEY_3,  EMUKEY_1,
+    CERMU_KEY_CBM_DEL,  CERMU_KEY_CBM_POUND,  SDLK_BACKSLASH,  SDLK_9,  SDLK_7,  SDLK_5,  SDLK_3,  SDLK_1,
 };
 
 // Unshifted character decode table — PETSCII codes per matrix position.

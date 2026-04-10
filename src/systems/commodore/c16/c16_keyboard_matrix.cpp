@@ -1,7 +1,7 @@
 #include "systems/commodore/c16/c16_keyboard_matrix.hpp"
 
 // ============================================================================
-// C16 / Plus/4 Keyboard Matrix — 8×8 (EmuKey-based)
+// C16 / Plus/4 Keyboard Matrix — 8×8
 // ============================================================================
 // TED PIO2 ($FD30) selects which row(s) to scan (active-low output).
 // TED register $FF08 reads the column result (active-low input).
@@ -31,29 +31,29 @@
 //   - No separate RESTORE key in matrix (wired directly to NMI)
 
 // Key positions note (same Commodore physical layout conventions):
-//   '@' key → EMUKEY_LEFTBRACKET
-//   '*' key → EMUKEY_RIGHTBRACKET
-//   ':' key → EMUKEY_SEMICOLON
-//   ';' key → EMUKEY_APOSTROPHE
-//   '+' key → EMUKEY_BACKSLASH
+//   '@' key → SDLK_LEFTBRACKET
+//   '*' key → SDLK_RIGHTBRACKET
+//   ':' key → SDLK_SEMICOLON
+//   ';' key → SDLK_QUOTE
+//   '+' key → SDLK_BACKSLASH
 
-static const emu_key_t c16_keys[C16_KEYBOARD_ROWS * C16_KEYBOARD_COLS] = {
+static const SDL_Keycode c16_keys[C16_KEYBOARD_ROWS * C16_KEYBOARD_COLS] = {
     // array[0] = row 7 reversed: RUN/STOP, Q, C=, SPACE, 2, CTRL, HOME, 1
-    EMUKEY_TAB,  EMUKEY_Q,  EMUKEY_LGUI,  EMUKEY_SPACE,  EMUKEY_2,  EMUKEY_LCTRL,  EMUKEY_HOME,  EMUKEY_1,
+    CERMU_KEY_CBM_RUN_STOP,  SDLK_q,  CERMU_KEY_CBM_COMMODORE,  SDLK_SPACE,  SDLK_2,  SDLK_LCTRL,  SDLK_HOME,  SDLK_1,
     // array[1] = row 6 reversed: /, +, =, ESC, CRSR→, ;, *, CRSR←
-    EMUKEY_SLASH,  EMUKEY_BACKSLASH,  EMUKEY_EQUALS,  EMUKEY_ESCAPE,  EMUKEY_RIGHT,  EMUKEY_APOSTROPHE,  EMUKEY_RIGHTBRACKET,  EMUKEY_LEFT,
+    SDLK_SLASH,  SDLK_BACKSLASH,  SDLK_EQUALS,  SDLK_ESCAPE,  SDLK_RIGHT,  SDLK_QUOTE,  SDLK_RIGHTBRACKET,  SDLK_LEFT,
     // array[2] = row 5 reversed: ,, -, :, ., CRSR↑, L, P, CRSR↓
-    EMUKEY_COMMA,  EMUKEY_MINUS,  EMUKEY_SEMICOLON,  EMUKEY_PERIOD,  EMUKEY_UP,  EMUKEY_L,  EMUKEY_P,  EMUKEY_DOWN,
+    SDLK_COMMA,  SDLK_MINUS,  SDLK_SEMICOLON,  SDLK_PERIOD,  SDLK_UP,  SDLK_l,  SDLK_p,  SDLK_DOWN,
     // array[3] = row 4 reversed: N, O, K, M, 0, J, I, 9
-    EMUKEY_N,  EMUKEY_O,  EMUKEY_K,  EMUKEY_M,  EMUKEY_0,  EMUKEY_J,  EMUKEY_I,  EMUKEY_9,
+    SDLK_n,  SDLK_o,  SDLK_k,  SDLK_m,  SDLK_0,  SDLK_j,  SDLK_i,  SDLK_9,
     // array[4] = row 3 reversed: V, U, H, B, 8, G, Y, 7
-    EMUKEY_V,  EMUKEY_U,  EMUKEY_H,  EMUKEY_B,  EMUKEY_8,  EMUKEY_G,  EMUKEY_Y,  EMUKEY_7,
+    SDLK_v,  SDLK_u,  SDLK_h,  SDLK_b,  SDLK_8,  SDLK_g,  SDLK_y,  SDLK_7,
     // array[5] = row 2 reversed: X, T, F, C, 6, D, R, 5
-    EMUKEY_X,  EMUKEY_T,  EMUKEY_F,  EMUKEY_C,  EMUKEY_6,  EMUKEY_D,  EMUKEY_R,  EMUKEY_5,
+    SDLK_x,  SDLK_t,  SDLK_f,  SDLK_c,  SDLK_6,  SDLK_d,  SDLK_r,  SDLK_5,
     // array[6] = row 1 reversed: SHIFT, E, S, Z, 4, A, W, 3
-    EMUKEY_LSHIFT,  EMUKEY_E,  EMUKEY_S,  EMUKEY_Z,  EMUKEY_4,  EMUKEY_A,  EMUKEY_W,  EMUKEY_3,
+    SDLK_LSHIFT,  SDLK_e,  SDLK_s,  SDLK_z,  SDLK_4,  SDLK_a,  SDLK_w,  SDLK_3,
     // array[7] = row 0 reversed: @, F3, F2, F1, HELP(F7), POUND, RETURN, DEL
-    EMUKEY_LEFTBRACKET,  EMUKEY_F3,  EMUKEY_F2,  EMUKEY_F1,  EMUKEY_F7,  EMUKEY_CBM_POUND,  EMUKEY_RETURN,  EMUKEY_BACKSPACE,
+    SDLK_LEFTBRACKET,  SDLK_F3,  SDLK_F2,  SDLK_F1,  SDLK_F7,  CERMU_KEY_CBM_POUND,  SDLK_RETURN,  CERMU_KEY_CBM_DEL,
 };
 
 // Unshifted character decode table — PETSCII codes per matrix position.

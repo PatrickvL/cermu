@@ -74,43 +74,29 @@ void commodore_keyboard_t::reset() {
         col_open_contacts[c] = (c < cols) ? (uint16_t)((1 << rows) - 1) : 0x0000;
     }
 
-    // ========================================================================
-    // Build optimised EmuKey → {row, col} lookup from the keys[] table
-    // ========================================================================
-    memset(key_direct_valid, 0, sizeof(key_direct_valid));
-    memset(key_direct_lookup, 0, sizeof(key_direct_lookup));
-    key_ext_lookup.clear();
+    // Build SDL_Keycode → {row, col} lookup from the keys[] table
+    key_lookup_.clear();
 
     if (!active_keys) {
         log_info("ERROR: commodore_keyboard_t::reset called with no active keys set!\n");
         return;
     }
 
-    int identity_count = 0;
-    int ext_count = 0;
+    int key_count = 0;
 
     for (int row = 0; row < rows; row++) {
         for (int col = 0; col < cols; col++) {
-            emu_key_t key = active_keys[row * cols + col];
+            SDL_Keycode key = active_keys[row * cols + col];
 
             // Skip markers and invalid entries
-            if (emu_key_is_marker(key) || key == 0) continue;
+            if (cermu_key_is_marker(key) || key == 0) continue;
 
             key_position_t pos = { (uint8_t)row, (uint8_t)col };
 
-            if (emu_key_is_identity(key)) {
-                // Identity-mapped key (0–511): direct array lookup
-                if (!key_direct_valid[key]) {
-                    key_direct_lookup[key] = pos;
-                    key_direct_valid[key] = true;
-                    identity_count++;
-                }
-            } else {
-                // Emulator-specific key (EMUKEY_EMU_BASE+): hash map lookup
-                if (key_ext_lookup.find(key) == key_ext_lookup.end()) {
-                    key_ext_lookup[key] = pos;
-                    ext_count++;
-                }
+            // First-write-wins: don't overwrite duplicate key positions
+            if (key_lookup_.find(key) == key_lookup_.end()) {
+                key_lookup_[key] = pos;
+                key_count++;
             }
         }
     }
@@ -124,28 +110,19 @@ void commodore_keyboard_t::reset() {
     scan_port_a_reference = NULL;
     scan_port_b_reference = NULL;
 
-    log_info("Keyboard: Built lookup (%d identity + %d extended keys)\n",
-           identity_count, ext_count);
+    log_info("Keyboard: Built lookup (%d keys)\n", key_count);
 }
 
 // ============================================================================
 // O(1) key position lookup
 // ============================================================================
 
-bool commodore_keyboard_t::find_key(emu_key_t key, uint8_t* out_row, uint8_t* out_col) const {
-    if (emu_key_is_identity(key)) {
-        if (key_direct_valid[key]) {
-            *out_row = key_direct_lookup[key].row;
-            *out_col = key_direct_lookup[key].col;
-            return true;
-        }
-    } else {
-        auto it = key_ext_lookup.find(key);
-        if (it != key_ext_lookup.end()) {
-            *out_row = it->second.row;
-            *out_col = it->second.col;
-            return true;
-        }
+bool commodore_keyboard_t::find_key(SDL_Keycode key, uint8_t* out_row, uint8_t* out_col) const {
+    auto it = key_lookup_.find(key);
+    if (it != key_lookup_.end()) {
+        *out_row = it->second.row;
+        *out_col = it->second.col;
+        return true;
     }
     return false;
 }
@@ -154,62 +131,62 @@ bool commodore_keyboard_t::find_key(emu_key_t key, uint8_t* out_row, uint8_t* ou
 // Auto-shift helpers
 // ============================================================================
 
-emu_key_t commodore_keyboard_t::resolve_fkey_physical(emu_key_t key) const {
+SDL_Keycode commodore_keyboard_t::resolve_fkey_physical(SDL_Keycode key) const {
     // Even F-keys → physical odd F-key that needs SHIFT.
     // Mapping varies by system: C64/VIC-20/C128 have F1/F3/F5/F7 in matrix;
     // C16/Plus4 has F1/F2/F3/F7 (HELP).
     switch (key) {
-        case EMUKEY_F2:
-            return EMUKEY_F1;  // Same on all systems
-        case EMUKEY_F4:
-            return (model == KEYBOARD_MODEL_PLUS4_C16) ? EMUKEY_F1 : EMUKEY_F3;
-        case EMUKEY_F5:
+        case SDLK_F2:
+            return SDLK_F1;  // Same on all systems
+        case SDLK_F4:
+            return (model == KEYBOARD_MODEL_PLUS4_C16) ? SDLK_F1 : SDLK_F3;
+        case SDLK_F5:
             // C16/Plus4: F5 = SHIFT + F2 (F2 is in its matrix).
             // Others: F5 is a physical key — no auto-shift needed.
-            return (model == KEYBOARD_MODEL_PLUS4_C16) ? EMUKEY_F2 : EMUKEY_NONE;
-        case EMUKEY_F6:
-            return (model == KEYBOARD_MODEL_PLUS4_C16) ? EMUKEY_F3 : EMUKEY_F5;
-        case EMUKEY_F8:
-            return EMUKEY_F7;  // Same on all systems
+            return (model == KEYBOARD_MODEL_PLUS4_C16) ? SDLK_F2 : CERMU_KEY_NONE;
+        case SDLK_F6:
+            return (model == KEYBOARD_MODEL_PLUS4_C16) ? SDLK_F3 : SDLK_F5;
+        case SDLK_F8:
+            return SDLK_F7;  // Same on all systems
         default:
-            return EMUKEY_NONE;
+            return CERMU_KEY_NONE;
     }
 }
 
 // ============================================================================
-// Key down / up — EmuKey based
+// Key down / up
 // ============================================================================
 
-void commodore_keyboard_t::key_down(emu_key_t key, bool shifted) {
+void commodore_keyboard_t::key_down(SDL_Keycode key, bool shifted) {
     // Handle RESTORE key (special case — connects to NMI, not in matrix)
-    if (key == EMUKEY_CBM_RESTORE) {
+    if (key == CERMU_KEY_CBM_RESTORE) {
         restore_key_pressed = true;
         return;
     }
 
     // Handle cursor LEFT: on C64/VIC-20 this is SHIFT + CRSR→ (no dedicated key).
     // Plus/4 and C128 have real CRSR← keys in the matrix.
-    if (key == EMUKEY_LEFT && needs_cursor_auto_shift()) {
+    if (key == SDLK_LEFT && needs_cursor_auto_shift()) {
         auto_shift_left_active = true;
-        key_down(EMUKEY_LSHIFT, false);
-        key_down(EMUKEY_RIGHT, false);
+        key_down(SDLK_LSHIFT, false);
+        key_down(SDLK_RIGHT, false);
         return;
     }
 
     // Handle cursor UP: on C64/VIC-20 this is SHIFT + CRSR↓ (no dedicated key).
-    if (key == EMUKEY_UP && needs_cursor_auto_shift()) {
+    if (key == SDLK_UP && needs_cursor_auto_shift()) {
         auto_shift_up_active = true;
-        key_down(EMUKEY_LSHIFT, false);
-        key_down(EMUKEY_DOWN, false);
+        key_down(SDLK_LSHIFT, false);
+        key_down(SDLK_DOWN, false);
         return;
     }
 
     // Even F-keys → SHIFT + physical odd F-key.
     {
-        emu_key_t physical = resolve_fkey_physical(key);
-        if (physical != EMUKEY_NONE) {
+        SDL_Keycode physical = resolve_fkey_physical(key);
+        if (physical != CERMU_KEY_NONE) {
             auto_shift_fkey_count++;
-            key_down(EMUKEY_LSHIFT, false);
+            key_down(SDLK_LSHIFT, false);
             key_down(physical, false);
             return;
         }
@@ -230,32 +207,32 @@ void commodore_keyboard_t::key_down(emu_key_t key, bool shifted) {
     }
 }
 
-void commodore_keyboard_t::key_up(emu_key_t key, bool shifted) {
+void commodore_keyboard_t::key_up(SDL_Keycode key, bool shifted) {
     // Handle RESTORE key
-    if (key == EMUKEY_CBM_RESTORE) {
+    if (key == CERMU_KEY_CBM_RESTORE) {
         restore_key_pressed = false;
         return;
     }
 
     // Handle cursor LEFT release
-    if (key == EMUKEY_LEFT && needs_cursor_auto_shift()) {
-        key_up(EMUKEY_RIGHT, false);
+    if (key == SDLK_LEFT && needs_cursor_auto_shift()) {
+        key_up(SDLK_RIGHT, false);
         if (auto_shift_left_active) {
             auto_shift_left_active = false;
             if (!any_auto_shift_active()) {
-                key_up(EMUKEY_LSHIFT, false);
+                key_up(SDLK_LSHIFT, false);
             }
         }
         return;
     }
 
     // Handle cursor UP release
-    if (key == EMUKEY_UP && needs_cursor_auto_shift()) {
-        key_up(EMUKEY_DOWN, false);
+    if (key == SDLK_UP && needs_cursor_auto_shift()) {
+        key_up(SDLK_DOWN, false);
         if (auto_shift_up_active) {
             auto_shift_up_active = false;
             if (!any_auto_shift_active()) {
-                key_up(EMUKEY_LSHIFT, false);
+                key_up(SDLK_LSHIFT, false);
             }
         }
         return;
@@ -263,13 +240,13 @@ void commodore_keyboard_t::key_up(emu_key_t key, bool shifted) {
 
     // Even F-key release — uses same mapping as key_down
     {
-        emu_key_t physical = resolve_fkey_physical(key);
-        if (physical != EMUKEY_NONE) {
+        SDL_Keycode physical = resolve_fkey_physical(key);
+        if (physical != CERMU_KEY_NONE) {
             key_up(physical, false);
             if (auto_shift_fkey_count > 0) {
                 auto_shift_fkey_count--;
                 if (!any_auto_shift_active()) {
-                    key_up(EMUKEY_LSHIFT, false);
+                    key_up(SDLK_LSHIFT, false);
                 }
             }
             return;
@@ -292,27 +269,27 @@ void commodore_keyboard_t::key_up(emu_key_t key, bool shifted) {
 // Utility
 // ============================================================================
 
-bool commodore_keyboard_t::is_special_key(emu_key_t key) {
+bool commodore_keyboard_t::is_special_key(SDL_Keycode key) {
     switch (key) {
-        case EMUKEY_CBM_DEL:
-        case EMUKEY_HOME:
-        case EMUKEY_CBM_RUN_STOP:
-        case EMUKEY_DOWN:
-        case EMUKEY_RIGHT:
-        case EMUKEY_LSHIFT:
-        case EMUKEY_RSHIFT:
-        case EMUKEY_LCTRL:
-        case EMUKEY_RETURN:
-        case EMUKEY_SPACE:
-        case EMUKEY_CBM_COMMODORE:
-        case EMUKEY_CBM_RESTORE:
-        case EMUKEY_F1: case EMUKEY_F2: case EMUKEY_F3: case EMUKEY_F4:
-        case EMUKEY_F5: case EMUKEY_F6: case EMUKEY_F7: case EMUKEY_F8:
-        case EMUKEY_F9:            // HELP (C128)
-        case EMUKEY_RALT:          // ALT (C128)
-        case EMUKEY_ESCAPE:        // ESC (C128)
-        case EMUKEY_CAPSLOCK:
-        case EMUKEY_KP_ENTER:      // LINE FEED (C128)
+        case CERMU_KEY_CBM_DEL:
+        case SDLK_HOME:
+        case CERMU_KEY_CBM_RUN_STOP:
+        case SDLK_DOWN:
+        case SDLK_RIGHT:
+        case SDLK_LSHIFT:
+        case SDLK_RSHIFT:
+        case SDLK_LCTRL:
+        case SDLK_RETURN:
+        case SDLK_SPACE:
+        case CERMU_KEY_CBM_COMMODORE:
+        case CERMU_KEY_CBM_RESTORE:
+        case SDLK_F1: case SDLK_F2: case SDLK_F3: case SDLK_F4:
+        case SDLK_F5: case SDLK_F6: case SDLK_F7: case SDLK_F8:
+        case SDLK_F9:            // HELP (C128)
+        case SDLK_RALT:          // ALT (C128)
+        case SDLK_ESCAPE:        // ESC (C128)
+        case SDLK_CAPSLOCK:
+        case SDLK_KP_ENTER:      // LINE FEED (C128)
             return true;
         default:
             return false;
@@ -390,7 +367,5 @@ void commodore_keyboard_t::print_state() {
            keyboard_scan_chip_names[scan_chip]);
     log_info("  RESTORE Key: %s\n", restore_key_pressed ? "PRESSED" : "RELEASED");
     log_info("  CAPS LOCK: %s\n", caps_lock_active ? "ACTIVE" : "INACTIVE");
-    log_info("  Lookup: %d direct + %zu extended keys\n",
-           [&]{ int c=0; for(int i=0;i<EMUKEY_EMU_BASE;i++) if(key_direct_valid[i]) c++; return c; }(),
-           key_ext_lookup.size());
+    log_info("  Lookup: %zu keys\n", key_lookup_.size());
 }

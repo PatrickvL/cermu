@@ -1,7 +1,7 @@
 #include "systems/commodore/c128/c128_keyboard_matrix.hpp"
 
 // ============================================================================
-// C128 Keyboard Matrix — 11 columns × 8 rows (EmuKey-based)
+// C128 Keyboard Matrix — 11 columns × 8 rows
 // ============================================================================
 // CIA Port A ($DC00) = column select (output, active-low)
 // CIA Port B ($DC01) = row read (input, active-low)
@@ -13,25 +13,25 @@
 // (MCR bit 5) and is not part of the keyboard matrix.
 // CAPS LOCK is shift-lock on the LSHIFT position (row 4, col 6).
 
-static const emu_key_t c128_keys[C128_KEYBOARD_ROWS * C128_KEYBOARD_COLS] = {
+static const SDL_Keycode c128_keys[C128_KEYBOARD_ROWS * C128_KEYBOARD_COLS] = {
     // ── Columns 0–7: identical to C64.  Columns 8–10: C128 extended. ──
     //                 col 0                col 1                col 2              col 3      col 4      col 5      col 6          col 7             col 8                col 9                col 10
     // row 7 (PB7): RUN/STOP, /, ,, N, V, X, LSHIFT, CRSR↓,   KP1, KP3, NO SCROLL
-    EMUKEY_TAB,  EMUKEY_SLASH,           EMUKEY_COMMA,       EMUKEY_N,  EMUKEY_V,  EMUKEY_X,  EMUKEY_LSHIFT,  EMUKEY_DOWN,      EMUKEY_KP_1,         EMUKEY_KP_3,         EMUKEY_CBM_NO_SCROLL,
+    CERMU_KEY_CBM_RUN_STOP,  SDLK_SLASH,           SDLK_COMMA,       SDLK_n,  SDLK_v,  SDLK_x,  SDLK_LSHIFT,  SDLK_DOWN,      SDLK_KP_1,         SDLK_KP_3,         CERMU_KEY_CBM_NO_SCROLL,
     // row 6 (PB6): Q, ↑(char), @, O, U, T, E, F5,            KP7, KP9, →
-    EMUKEY_Q,    EMUKEY_CBM_ARROW_UP,    EMUKEY_LEFTBRACKET, EMUKEY_O,  EMUKEY_U,  EMUKEY_T,  EMUKEY_E,       EMUKEY_F5,        EMUKEY_KP_7,         EMUKEY_KP_9,         EMUKEY_RIGHT,
+    SDLK_q,    CERMU_KEY_CBM_ARROW_UP,    SDLK_LEFTBRACKET, SDLK_o,  SDLK_u,  SDLK_t,  SDLK_e,       SDLK_F5,        SDLK_KP_7,         SDLK_KP_9,         SDLK_RIGHT,
     // row 5 (PB5): C=, =, :, K, H, F, S, F3,                  KP4, KP6, ←
-    EMUKEY_LGUI, EMUKEY_EQUALS,          EMUKEY_SEMICOLON,   EMUKEY_K,  EMUKEY_H,  EMUKEY_F,  EMUKEY_S,       EMUKEY_F3,        EMUKEY_KP_4,         EMUKEY_KP_6,         EMUKEY_LEFT,
+    CERMU_KEY_CBM_COMMODORE, SDLK_EQUALS,          SDLK_SEMICOLON,   SDLK_k,  SDLK_h,  SDLK_f,  SDLK_s,       SDLK_F3,        SDLK_KP_4,         SDLK_KP_6,         SDLK_LEFT,
     // row 4 (PB4): SPACE, RSHIFT, ., M, B, C, Z, F1,          KP2, KP ENTER, ↓
-    EMUKEY_SPACE,EMUKEY_RSHIFT,          EMUKEY_PERIOD,      EMUKEY_M,  EMUKEY_B,  EMUKEY_C,  EMUKEY_Z,       EMUKEY_F1,        EMUKEY_KP_2,         EMUKEY_KP_ENTER,     EMUKEY_DOWN,
+    SDLK_SPACE,SDLK_RSHIFT,          SDLK_PERIOD,      SDLK_m,  SDLK_b,  SDLK_c,  SDLK_z,       SDLK_F1,        SDLK_KP_2,         SDLK_KP_ENTER,     SDLK_DOWN,
     // row 3 (PB3): 2, HOME, -, 0, 8, 6, 4, F7,                TAB, LINE FEED, ↑
-    EMUKEY_2,    EMUKEY_HOME,            EMUKEY_MINUS,       EMUKEY_0,  EMUKEY_8,  EMUKEY_6,  EMUKEY_4,       EMUKEY_F7,        EMUKEY_TAB,          EMUKEY_CBM_LINE_FEED,EMUKEY_UP,
+    SDLK_2,    SDLK_HOME,            SDLK_MINUS,       SDLK_0,  SDLK_8,  SDLK_6,  SDLK_4,       SDLK_F7,        SDLK_TAB,          CERMU_KEY_CBM_LINE_FEED,SDLK_UP,
     // row 2 (PB2): CTRL, ;, L, J, G, D, A, CRSR→,             KP5, KP−, KP.
-    EMUKEY_LCTRL,EMUKEY_APOSTROPHE,      EMUKEY_L,           EMUKEY_J,  EMUKEY_G,  EMUKEY_D,  EMUKEY_A,       EMUKEY_RIGHT,     EMUKEY_KP_5,         EMUKEY_KP_MINUS,     EMUKEY_KP_PERIOD,
+    SDLK_LCTRL,SDLK_QUOTE,      SDLK_l,           SDLK_j,  SDLK_g,  SDLK_d,  SDLK_a,       SDLK_RIGHT,     SDLK_KP_5,         SDLK_KP_MINUS,     SDLK_KP_PERIOD,
     // row 1 (PB1): ←(char), *, P, I, Y, R, W, RETURN,         KP8, KP+, KP0
-    EMUKEY_CBM_ARROW_LEFT, EMUKEY_RIGHTBRACKET, EMUKEY_P,    EMUKEY_I,  EMUKEY_Y,  EMUKEY_R,  EMUKEY_W,       EMUKEY_RETURN,    EMUKEY_KP_8,         EMUKEY_KP_PLUS,      EMUKEY_KP_0,
+    CERMU_KEY_CBM_ARROW_LEFT, SDLK_RIGHTBRACKET, SDLK_p,    SDLK_i,  SDLK_y,  SDLK_r,  SDLK_w,       SDLK_RETURN,    SDLK_KP_8,         SDLK_KP_PLUS,      SDLK_KP_0,
     // row 0 (PB0): 1, £, +, 9, 7, 5, 3, DEL,                  HELP, ESC, ALT
-    EMUKEY_1,    EMUKEY_CBM_POUND,       EMUKEY_BACKSLASH,   EMUKEY_9,  EMUKEY_7,  EMUKEY_5,  EMUKEY_3,       EMUKEY_BACKSPACE, EMUKEY_CBM_HELP,     EMUKEY_ESCAPE,       EMUKEY_CBM_ALT,
+    SDLK_1,    CERMU_KEY_CBM_POUND,       SDLK_BACKSLASH,   SDLK_9,  SDLK_7,  SDLK_5,  SDLK_3,       CERMU_KEY_CBM_DEL, CERMU_KEY_CBM_HELP,     SDLK_ESCAPE,       CERMU_KEY_CBM_ALT,
 };
 
 // ── PETSCII decode tables ───────────────────────────────────────────

@@ -424,7 +424,6 @@ list(APPEND CHIP_SOURCES
 
     # Input pipeline (host input abstractions)
     src/core/input/keyboard_mapper.cpp
-    src/core/input/emu_key_sdl_map.cpp
 
     # I/O
     src/chip/io/mos6526.cpp

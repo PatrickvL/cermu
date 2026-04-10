@@ -17,7 +17,6 @@
 #include "systems/commodore/pet/pet_keyboard_matrix.hpp"
 #include "core/cermu.hpp"
 #include "chip/input/commodore_keyboard.hpp"
-#include "core/input/emu_key_sdl_map.hpp"
 #include "core/input/keyboard_mapper.hpp"
 #include "systems/commodore/basic_parser.hpp"
 #include <cstring>
@@ -644,13 +643,11 @@ void PETSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
             keyboard_mapper_->process_key_up(key, SDL_SCANCODE_UNKNOWN, 0);
         }
     } else if (keyboard_) {
-        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(key);
-        if (ek != EMUKEY_NONE) {
-            if (pressed) {
-                keyboard_->key_down(ek, false);
-            } else {
-                keyboard_->key_up(ek, false);
-            }
+        // No mapper — pass SDLK directly to keyboard
+        if (pressed) {
+            keyboard_->key_down(key, false);
+        } else {
+            keyboard_->key_up(key, false);
         }
     }
 }

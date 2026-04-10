@@ -5,7 +5,7 @@
 #include "systems/commodore/commodore_load_helpers.hpp"
 #include "chip/input/commodore_keyboard.hpp"
 #include "core/input/keyboard_mapper.hpp"
-#include "core/input/emu_keys.hpp"
+#include "core/input/cermu_keys.hpp"
 #include "devices/storage/drive_subsystem.hpp"
 #include "chip/cpu/fam65xx/fam65xx_types.hpp"
 #include <memory>
@@ -350,16 +350,16 @@ protected:
     /// Descriptor for a guest key that has no host keyboard mapping.
     struct UnmappedInput {
         const char* label;      // Menu label (e.g., "HELP", "LINE FEED")
-        emu_key_t key;          // EmuKey to inject
+        SDL_Keycode key;        // Key code to inject
         bool toggle;            // true = toggle (press/release on alternate clicks)
         bool pressed;           // Current state for toggles
 
-        UnmappedInput(const char* l, emu_key_t k, bool t = false, bool initial = false)
+        UnmappedInput(const char* l, SDL_Keycode k, bool t = false, bool initial = false)
             : label(l), key(k), toggle(t), pressed(initial) {}
     };
 
     /// Register a guest key as unmapped (call from derived initialize()).
-    void register_unmapped_input(const char* label, emu_key_t key, bool toggle = false, bool initial_state = false);
+    void register_unmapped_input(const char* label, SDL_Keycode key, bool toggle = false, bool initial_state = false);
 
     /// Render the "Virtual Keys" sub-menu.  Call from render_system_menu_items().
     void render_unmapped_inputs_menu();
@@ -371,12 +371,12 @@ protected:
     /// Called when a toggle-type virtual key changes state.
     /// Override in derived systems to wire keys that bypass the matrix
     /// (e.g., C128 40/80 DISPLAY → MMU sense line).
-    virtual void on_unmapped_toggle_changed(emu_key_t /*key*/, bool /*pressed*/) {}
+    virtual void on_unmapped_toggle_changed(SDL_Keycode /*key*/, bool /*pressed*/) {}
 
     /// Programmatically set a toggle-type virtual key's UI state.
     /// Use when hardware changes the latch without a menu click
     /// (e.g., enter_c64_mode forcing 40-col, or reset syncing state).
-    void set_unmapped_toggle_state(emu_key_t key, bool pressed);
+    void set_unmapped_toggle_state(SDL_Keycode key, bool pressed);
 
     std::vector<UnmappedInput> unmapped_inputs_;
     int unmapped_release_countdown_ = 0;    // Frames until pending release

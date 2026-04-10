@@ -18,10 +18,9 @@
  */
 
 #include "systems/commodore/pet/pet_keyboard_matrix.hpp"
-#include "core/input/emu_keys.hpp"
 
 // ============================================================================
-// PET Keyboard Matrix — 10×8 (EmuKey-based)
+// PET Keyboard Matrix — 10×8
 // ============================================================================
 // PIA1 Port A selects the row (active-low, bits 3:0)
 // PIA1 Port B reads the column (PB0–PB7, active-low)
@@ -29,27 +28,27 @@
 //
 // PET "graphics keyboard" matrix (PET 2001-N, 3032, 4032):
 
-static const emu_key_t pet_keys[PET_KEYBOARD_ROWS * PET_KEYBOARD_COLS] = {
+static const SDL_Keycode pet_keys[PET_KEYBOARD_ROWS * PET_KEYBOARD_COLS] = {
     // Row 0:  !   #   %   &   (   ←   HOME  DEL
-    EMUKEY_1,  EMUKEY_3,  EMUKEY_5,  EMUKEY_7,  EMUKEY_9,  EMUKEY_CBM_ARROW_LEFT,  EMUKEY_HOME,  EMUKEY_BACKSPACE,
+    SDLK_1,  SDLK_3,  SDLK_5,  SDLK_7,  SDLK_9,  CERMU_KEY_CBM_ARROW_LEFT,  SDLK_HOME,  CERMU_KEY_CBM_DEL,
     // Row 1:  "   $   '   \   )   —   CRSR→  CRSR↓
-    EMUKEY_2,  EMUKEY_4,  EMUKEY_6,  EMUKEY_8,  EMUKEY_0,  EMUKEY_MINUS,  EMUKEY_RIGHT,  EMUKEY_DOWN,
+    SDLK_2,  SDLK_4,  SDLK_6,  SDLK_8,  SDLK_0,  SDLK_MINUS,  SDLK_RIGHT,  SDLK_DOWN,
     // Row 2:  q   e   t   u   o   ↑   STOP   —(none)
-    EMUKEY_Q,  EMUKEY_E,  EMUKEY_T,  EMUKEY_U,  EMUKEY_O,  EMUKEY_CBM_ARROW_UP,  EMUKEY_TAB,  EMUKEY_NONE,
+    SDLK_q,  SDLK_e,  SDLK_t,  SDLK_u,  SDLK_o,  CERMU_KEY_CBM_ARROW_UP,  CERMU_KEY_CBM_RUN_STOP,  CERMU_KEY_NONE,
     // Row 3:  w   r   y   i   p   =   /   —(none)
-    EMUKEY_W,  EMUKEY_R,  EMUKEY_Y,  EMUKEY_I,  EMUKEY_P,  EMUKEY_EQUALS,  EMUKEY_SLASH,  EMUKEY_NONE,
+    SDLK_w,  SDLK_r,  SDLK_y,  SDLK_i,  SDLK_p,  SDLK_EQUALS,  SDLK_SLASH,  CERMU_KEY_NONE,
     // Row 4:  a   d   g   j   l   ;   RETURN  —(none)
-    EMUKEY_A,  EMUKEY_D,  EMUKEY_G,  EMUKEY_J,  EMUKEY_L,  EMUKEY_SEMICOLON,  EMUKEY_RETURN,  EMUKEY_NONE,
+    SDLK_a,  SDLK_d,  SDLK_g,  SDLK_j,  SDLK_l,  SDLK_SEMICOLON,  SDLK_RETURN,  CERMU_KEY_NONE,
     // Row 5:  s   f   h   k   :   ]   —(none)  —(none)
-    EMUKEY_S,  EMUKEY_F,  EMUKEY_H,  EMUKEY_K,  EMUKEY_LEFTBRACKET,  EMUKEY_RIGHTBRACKET,  EMUKEY_NONE,  EMUKEY_NONE,
+    SDLK_s,  SDLK_f,  SDLK_h,  SDLK_k,  SDLK_LEFTBRACKET,  SDLK_RIGHTBRACKET,  CERMU_KEY_NONE,  CERMU_KEY_NONE,
     // Row 6:  z   c   b   m   .   LSHIFT  —(none)  —(none)
-    EMUKEY_Z,  EMUKEY_C,  EMUKEY_B,  EMUKEY_M,  EMUKEY_PERIOD,  EMUKEY_LSHIFT,  EMUKEY_NONE,  EMUKEY_NONE,
+    SDLK_z,  SDLK_c,  SDLK_b,  SDLK_m,  SDLK_PERIOD,  SDLK_LSHIFT,  CERMU_KEY_NONE,  CERMU_KEY_NONE,
     // Row 7:  x   v   n   ,   @   RSHIFT  REVERSE  —(none)
-    EMUKEY_X,  EMUKEY_V,  EMUKEY_N,  EMUKEY_COMMA,  EMUKEY_GRAVE,  EMUKEY_RSHIFT,  EMUKEY_LCTRL,  EMUKEY_NONE,
+    SDLK_x,  SDLK_v,  SDLK_n,  SDLK_COMMA,  SDLK_BACKQUOTE,  SDLK_RSHIFT,  SDLK_LCTRL,  CERMU_KEY_NONE,
     // Row 8:  *   \   +   >   ?   SPACE   [   —(none)
-    EMUKEY_RIGHTBRACKET,  EMUKEY_BACKSLASH,  EMUKEY_BACKSLASH,  EMUKEY_PERIOD,  EMUKEY_SLASH,  EMUKEY_SPACE,  EMUKEY_LEFTBRACKET,  EMUKEY_NONE,
+    SDLK_RIGHTBRACKET,  SDLK_BACKSLASH,  SDLK_BACKSLASH,  SDLK_PERIOD,  SDLK_SLASH,  SDLK_SPACE,  SDLK_LEFTBRACKET,  CERMU_KEY_NONE,
     // Row 9: REPEAT key (directly connected to CA1 on PIA1)
-    EMUKEY_NONE,  EMUKEY_NONE,  EMUKEY_NONE,  EMUKEY_NONE,  EMUKEY_NONE,  EMUKEY_NONE,  EMUKEY_NONE,  EMUKEY_NONE,
+    CERMU_KEY_NONE,  CERMU_KEY_NONE,  CERMU_KEY_NONE,  CERMU_KEY_NONE,  CERMU_KEY_NONE,  CERMU_KEY_NONE,  CERMU_KEY_NONE,  CERMU_KEY_NONE,
 };
 
 // ============================================================================

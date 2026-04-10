@@ -11,7 +11,6 @@
 #include "core/system_registry.hpp"
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
-#include "core/input/emu_key_sdl_map.hpp"
 #include "devices/keyboard/commodore_keyboard_device.hpp"
 #include "devices/storage/drive_1541.hpp"
 #include "systems/commodore/commodore_serial_traps.inl"
@@ -491,11 +490,11 @@ bool C128System::initialize() {
     // Always registered: SDL may report rare scancodes as "available" even
     // when no physical key produces them, leaving the menu empty.
     {
-        struct { const char* label; emu_key_t key; bool toggle; bool initial; } c128_extra_keys[] = {
-            {"HELP",           EMUKEY_CBM_HELP,          false, false},
-            {"LINE FEED",      EMUKEY_CBM_LINE_FEED,     false, false},
-            {"40/80 DISPLAY",  EMUKEY_CBM_40_80_DISPLAY, true,  true},   // MMU defaults to 80-col (pressed)
-            {"NO SCROLL",      EMUKEY_CBM_NO_SCROLL,     true,  false},
+        struct { const char* label; SDL_Keycode key; bool toggle; bool initial; } c128_extra_keys[] = {
+            {"HELP",           CERMU_KEY_CBM_HELP,          false, false},
+            {"LINE FEED",      CERMU_KEY_CBM_LINE_FEED,     false, false},
+            {"40/80 DISPLAY",  CERMU_KEY_CBM_40_80_DISPLAY, true,  true},   // MMU defaults to 80-col (pressed)
+            {"NO SCROLL",      CERMU_KEY_CBM_NO_SCROLL,     true,  false},
         };
         for (auto& k : c128_extra_keys) {
             register_unmapped_input(k.label, k.key, k.toggle, k.initial);
@@ -554,7 +553,7 @@ void C128System::reset() {
     // real hardware where the 40/80 DISPLAY key is a physical switch).
     // Also rebind the video output so the display pipeline picks up the
     // correct port after leaving C64 mode.
-    set_unmapped_toggle_state(EMUKEY_CBM_40_80_DISPLAY, board_.mmu.key_40_80_pressed);
+    set_unmapped_toggle_state(CERMU_KEY_CBM_40_80_DISPLAY, board_.mmu.key_40_80_pressed);
     rebind_active_video_output();
 
     reset_load_state();
@@ -1300,7 +1299,7 @@ void C128System::enter_c64_mode() {
     // Setting the latch triggers the GUI signal-pipeline rebuild on the
     // next frame (SessionGUI polls get_video_signal_type() every frame).
     board_.mmu.key_40_80_pressed = false;
-    set_unmapped_toggle_state(EMUKEY_CBM_40_80_DISPLAY, false);
+    set_unmapped_toggle_state(CERMU_KEY_CBM_40_80_DISPLAY, false);
 
     log_info("C128: Entered C64 compatibility mode\n");
 }
@@ -1539,8 +1538,8 @@ void C128System::render_system_menu_items() {
 #endif
 }
 
-void C128System::on_unmapped_toggle_changed(emu_key_t key, bool pressed) {
-    if (key == EMUKEY_CBM_40_80_DISPLAY) {
+void C128System::on_unmapped_toggle_changed(SDL_Keycode key, bool pressed) {
+    if (key == CERMU_KEY_CBM_40_80_DISPLAY) {
         // 40/80 DISPLAY is a hardware latch key wired to MMU MCR bit 7,
         // not a keyboard matrix key.  Update the MMU sense line directly.
         // Pressed/latched = 80-col (VDC), released = 40-col (VIC-IIe).
@@ -1618,26 +1617,18 @@ static KeyboardMapper* create_c128_keyboard_mapper(commodore_keyboard_t* keyboar
 
     mapper->register_default_synthetic_mappings();
 
-    // Register emu-specific key candidates for C128.
-    // Shared Commodore keys first, then C128-specific extras.
-    auto& sdl_map = EmuKeySDLMap::instance();
-    sdl_map.clear_system_mappings();
-    sdl_map.register_candidates(EMUKEY_CBM_RESTORE,       {SDL_SCANCODE_SYSREQ, SDL_SCANCODE_GRAVE});
-    sdl_map.register_candidates(EMUKEY_CBM_POUND,         {SDL_SCANCODE_NONUSHASH});
-
-    // C128-specific keys:
-    // Host LAlt → CBM key (Commodore key, more accessible than Super/LGUI
-    // which Linux WMs intercept).  Host RAlt → C128 ALT key.
-    sdl_map.register_candidates(EMUKEY_CBM_COMMODORE,     {SDL_SCANCODE_LALT});
-    sdl_map.register_candidates(EMUKEY_CBM_ALT,           {SDL_SCANCODE_RALT});
-    // HELP: prefer the rare HELP scancode (117), no common fallback.
-    sdl_map.register_candidates(EMUKEY_CBM_HELP,          {SDL_SCANCODE_HELP});
-    // LINE FEED: prefer RETURN2 (second Return on ISO/terminal keyboards).
-    sdl_map.register_candidates(EMUKEY_CBM_LINE_FEED,     {SDL_SCANCODE_RETURN2});
-    // 40/80 DISPLAY: MODE key (rare international keyboards).
-    sdl_map.register_candidates(EMUKEY_CBM_40_80_DISPLAY, {SDL_SCANCODE_MODE});
-    // NO SCROLL: Scroll Lock (present on most full-size keyboards).
-    sdl_map.register_candidates(EMUKEY_CBM_NO_SCROLL,     {SDL_SCANCODE_SCROLLLOCK});
+    // Register host-key redirects for C128.
+    // Shared Commodore keys:
+    mapper->register_key_redirect(SDLK_BACKQUOTE, CERMU_KEY_CBM_RESTORE);
+    mapper->register_key_redirect(SDLK_SYSREQ, CERMU_KEY_CBM_RESTORE);
+    // Host LAlt → C= key (Commodore key, more accessible than Super/LGUI
+    // which Linux WMs intercept).
+    mapper->register_key_redirect(SDLK_LALT, CERMU_KEY_CBM_COMMODORE);
+    // C128-specific redirects:
+    mapper->register_key_redirect(SDLK_SCROLLLOCK, CERMU_KEY_CBM_NO_SCROLL);
+    // NOTE: No redirect for CERMU_KEY_CBM_ALT — host Right Alt is reserved
+    // as the emulator modifier (consumed by KeyboardMapper for synthetic
+    // combos).  C128 ALT is accessible via the Virtual Keys menu.
 
     return mapper;
 }

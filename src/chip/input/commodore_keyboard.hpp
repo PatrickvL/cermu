@@ -4,7 +4,7 @@
 
 #include <unordered_map>
 
-#include "core/input/emu_keys.hpp"
+#include "core/input/cermu_keys.hpp"
 #include "core/chip.hpp"
 #include "core/system_lines.hpp"
 
@@ -25,9 +25,8 @@
 //
 // All models use an N×8 matrix: N scan lines (rows) × 8 data lines (columns).
 //
-// Uses EmuKey codes (emu_keys.h) for key representation, fully decoupled
-// from any host input library.  SDL conversion is handled at the boundary
-// by EmuKeySDLMap (emu_key_sdl_map.h).
+// Uses SDL_Keycode (SDLK_*) for standard keys and CERMU_KEY_* defines
+// (cermu_keys.hpp) for emulator-specific keys with no host equivalent.
 
 // ============================================================================
 // Keyboard modifier flags
@@ -206,8 +205,8 @@ struct keyboard_matrix_config_t {
 
     // Key identity table — row-major flat array of size [rows * cols].
     // Index a key at (row, col) as: keys[row * cols + col]
-    // Values are emu_key_t constants (EmuKey codes from emu_keys.h).
-    const emu_key_t* keys;
+    // Values are SDL_Keycode (SDLK_*) or CERMU_KEY_* constants.
+    const SDL_Keycode* keys;
 
     // Character decode tables — one per modifier combination.
     // Each table maps every matrix position to the PETSCII code it
@@ -255,19 +254,15 @@ struct commodore_keyboard_t {
     uint16_t row_open_contacts[MAX_KEYBOARD_ROWS];
     uint16_t col_open_contacts[MAX_KEYBOARD_COLS];
 
-    // Optimised EmuKey → {row, col} lookup
-    // Direct array for identity-mapped keys (0–EMUKEY_EMU_BASE-1): constant-time lookup
-    key_position_t key_direct_lookup[EMUKEY_EMU_BASE];
-    bool           key_direct_valid[EMUKEY_EMU_BASE];
-    // Hash map for emulator-specific keys (EMUKEY_EMU_BASE+): O(1) amortised
-    std::unordered_map<emu_key_t, key_position_t> key_ext_lookup;
+    // SDL_Keycode → {row, col} lookup (hash map — matrix is <100 entries)
+    std::unordered_map<SDL_Keycode, key_position_t> key_lookup_;
 
     // Current keyboard state
     bool restore_key_pressed;
     bool caps_lock_active;
 
     // Active matrix pointer — keys[] table from the config
-    const emu_key_t* active_keys;
+    const SDL_Keycode* active_keys;
     // Decode tables from config (for mapper / runtime use)
     int num_decode_tables;
     const keyboard_decode_table_t* decode_tables;
@@ -292,15 +287,15 @@ struct commodore_keyboard_t {
     bool init(const keyboard_matrix_config_t* config);
     void reset();
 
-    // EmuKey-based keyboard input handling
-    void key_down(emu_key_t key, bool shifted);
-    void key_up(emu_key_t key, bool shifted);
+    // Keyboard input handling (accepts SDL_Keycode or CERMU_KEY_* values)
+    void key_down(SDL_Keycode key, bool shifted);
+    void key_up(SDL_Keycode key, bool shifted);
 
-    // Key position lookup (O(1) via the optimised structures)
-    bool find_key(emu_key_t key, uint8_t* out_row, uint8_t* out_col) const;
+    // Key position lookup (O(1) amortized via hash map)
+    bool find_key(SDL_Keycode key, uint8_t* out_row, uint8_t* out_col) const;
 
     // Utility
-    static bool is_special_key(emu_key_t key);
+    static bool is_special_key(SDL_Keycode key);
     void toggle_caps_lock();
     bool any_auto_shift_active() const {
         return auto_shift_left_active || auto_shift_up_active || auto_shift_fkey_count > 0;
@@ -309,8 +304,8 @@ struct commodore_keyboard_t {
     bool needs_cursor_auto_shift() const {
         return model != KEYBOARD_MODEL_PLUS4_C16 && model != KEYBOARD_MODEL_C128;
     }
-    // Map an even F-key to its physical odd F-key, or EMUKEY_NONE if no auto-shift needed
-    emu_key_t resolve_fkey_physical(emu_key_t key) const;
+    // Map an even F-key to its physical odd F-key, or CERMU_KEY_NONE if no auto-shift needed
+    SDL_Keycode resolve_fkey_physical(SDL_Keycode key) const;
 
     // Keyboard scanning and I/O chip integration
     void update_matrix();
