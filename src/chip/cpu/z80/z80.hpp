@@ -190,6 +190,15 @@ public:
     static constexpr bool has_q_register()       { return Traits.has_q_register(); }
     static constexpr bool has_mmu()              { return Traits.has_mmu(); }
     static constexpr bool is_nmos()              { return Traits.is_nmos(); }
+    static constexpr bool is_sm83()              { return Traits.is_sm83(); }
+    static constexpr bool has_index_registers()  { return Traits.has_index_registers(); }
+    static constexpr bool has_io_instructions()  { return Traits.has_io_instructions(); }
+    static constexpr bool has_ed_prefix()        { return Traits.has_ed_prefix(); }
+    static constexpr bool has_shadow_registers() { return Traits.has_shadow_registers(); }
+    static constexpr bool has_refresh_cycle()    { return Traits.has_refresh_cycle(); }
+    static constexpr bool has_ir_registers()     { return Traits.has_ir_registers(); }
+    static constexpr bool has_pv_flag()          { return Traits.has_pv_flag(); }
+    static constexpr bool has_xy_flags()         { return Traits.has_xy_flags(); }
 
     // === Default bus state with Z80 pull-ups ===
     static constexpr bus_state_t default_bus_state() {
@@ -219,6 +228,7 @@ public:
     // === Lifecycle ===
 
     /// Initialize CPU state. Returns default bus state.
+    /// Systems should set application-specific register values after calling this.
     bus_state_t init() override {
         regs_.clear();
         regs_[SP] = 0xFFFF;
@@ -242,8 +252,10 @@ public:
         regs_[PC] = 0x0000;
         regs_[SP] = 0xFFFF;
         regs_[AF] = 0xFFFF;
-        regs_[I]  = 0;
-        regs_[R]  = 0;
+        if constexpr (has_ir_registers()) {
+            regs_[I]  = 0;
+            regs_[R]  = 0;
+        }
         im_ = 0;
         iff1_ = false;
         iff2_ = false;
@@ -271,22 +283,26 @@ public:
             return pins;
         }
 
-        // BUSREQ check (active-low) — DMA controller requests bus
-        if (unlikely(!BUS_GET_BIT(pins, Z80_BUSREQ_BIT))) {
-            BUS_CLR_BIT(pins, Z80_BUSACK_BIT); // Acknowledge
-            bus_prev_ = pins;
-            return pins; // CPU tri-states, doesn't process
-        }
-        BUS_SET_BIT(pins, Z80_BUSACK_BIT); // Release BUSACK
+        if constexpr (!is_sm83()) {
+            // BUSREQ check (active-low) — DMA controller requests bus
+            if (unlikely(!BUS_GET_BIT(pins, Z80_BUSREQ_BIT))) {
+                BUS_CLR_BIT(pins, Z80_BUSACK_BIT); // Acknowledge
+                bus_prev_ = pins;
+                return pins; // CPU tri-states, doesn't process
+            }
+            BUS_SET_BIT(pins, Z80_BUSACK_BIT); // Release BUSACK
 
-        // NMI edge detection — asynchronous (real Z80 has an edge-triggered
-        // flip-flop that latches the falling edge of /NMI at any point in the
-        // instruction cycle, not just at instruction boundaries)
-        bool nmi_active = !BUS_GET_BIT(pins, Z80_NMI_BIT);
-        bool nmi_was    = !BUS_GET_BIT(bus_prev_, Z80_NMI_BIT);
-        if (nmi_active && !nmi_was) {
-            nmi_pending_ = true;
+            // NMI edge detection — asynchronous (real Z80 has an edge-triggered
+            // flip-flop that latches the falling edge of /NMI at any point in the
+            // instruction cycle, not just at instruction boundaries)
+            bool nmi_active = !BUS_GET_BIT(pins, Z80_NMI_BIT);
+            bool nmi_was    = !BUS_GET_BIT(bus_prev_, Z80_NMI_BIT);
+            if (nmi_active && !nmi_was) {
+                nmi_pending_ = true;
+            }
         }
+        // SM83 has no BUSREQ/BUSACK and no NMI — interrupt model is simpler
+        // (level-triggered only, handled in m1_fetch via IF & IE registers)
 
         // Normal execution — dispatch to current handler
         pins = (this->*current_handler_)(pins);
@@ -450,6 +466,75 @@ private:
     // T4: Deassert signals, decode opcode and dispatch
 
     bus_state_t m1_fetch(bus_state_t pins) {
+        if constexpr (is_sm83()) {
+            return sm83_m1_fetch(pins);
+        } else {
+            return z80_m1_fetch(pins);
+        }
+    }
+
+    // ========================================================================
+    // SM83 M1 FETCH CYCLE (4 T-states, no refresh)
+    // ========================================================================
+    //
+    // T1: Interrupt check, place PC on address bus, assert /MREQ
+    // T2: Sample opcode, check /WAIT, increment PC
+    // T3: Internal decode (no refresh cycle)
+    // T4: Execute / dispatch
+
+    bus_state_t sm83_m1_fetch(bus_state_t pins) {
+        switch (step_++) {
+        case 0: { // T1: interrupt check + address setup
+            // EI suppresses interrupt checking for one instruction
+            bool suppress_int = ei_pending_;
+            if (ei_pending_) {
+                ei_pending_ = false;
+            }
+
+            // SM83 interrupt check: IME (=iff1_) && (IF & IE) != 0
+            // INT is level-triggered, active-low on the bus pin
+            if (!suppress_int && iff1_ && !BUS_GET_BIT(pins, Z80_INT_BIT)) {
+                if (halted_) {
+                    halted_ = false;
+                    BUS_SET_BIT(pins, Z80_HALT_BIT);
+                }
+                iff1_ = false;
+                transition_to(&z80_t::op_sm83_int);
+                return pins;
+            }
+
+            // HALT: re-fetch NOP at PC-1 (PC doesn't advance)
+            if (halted_) {
+                regs_[PC]--;
+            }
+
+            // Place PC on bus, assert MREQ
+            BUS_SET_ADDR(pins, regs_[PC]);
+            BUS_CLR_BIT(pins, Z80_MREQ_BIT);
+            BUS_SET_BIT(pins, BUS_RW_BIT);
+            return pins;
+        }
+
+        case 1: // T2: sample opcode
+            opcode_ = BUS_GET_DATA(pins);
+            regs_[PC]++;
+            BUS_SET_BIT(pins, Z80_MREQ_BIT);
+            return pins;
+
+        case 2: // T3: internal (no refresh on SM83)
+            return pins;
+
+        case 3: // T4: decode and execute
+            return sm83_decode_and_execute(pins, opcode_);
+        }
+        return pins;
+    }
+
+    // ========================================================================
+    // Z80 M1 OPCODE FETCH CYCLE (4 T-states) — original Z80 fetch with refresh
+    // ========================================================================
+
+    bus_state_t z80_m1_fetch(bus_state_t pins) {
         switch (step_++) {
         case 0: { // T1: interrupt check + address setup
             // Save Q from previous instruction for SCF/CCF, then snapshot F
@@ -542,6 +627,303 @@ private:
 
             return decode_and_execute(pins, opcode_);
         }
+        return pins;
+    }
+
+    // ========================================================================
+    // SM83 OPCODE DECODE — SM83 instruction set
+    // ========================================================================
+    //
+    // The SM83 shares most of the Z80 base opcode map but has key differences:
+    //   - 0x08: LD (nn),SP  (Z80: EX AF,AF')
+    //   - 0x10: STOP        (Z80: DJNZ d)
+    //   - 0x22: LD (HL+),A  (Z80: LD (nn),HL)
+    //   - 0x2A: LD A,(HL+)  (Z80: LD HL,(nn))
+    //   - 0x32: LD (HL-),A  (Z80: LD (nn),A)
+    //   - 0x3A: LD A,(HL-)  (Z80: LD A,(nn))
+    //   - 0xD3: (invalid)   (Z80: OUT (n),A)
+    //   - 0xD9: RETI        (Z80: EXX)
+    //   - 0xDB: (invalid)   (Z80: IN A,(n))
+    //   - 0xDD: (invalid)   (Z80: DD prefix IX)
+    //   - 0xE0: LD ($FF00+n),A (Z80: RET PO)
+    //   - 0xE2: LD ($FF00+C),A (Z80: JP PO,nn)
+    //   - 0xE8: ADD SP,e    (Z80: RET PE)
+    //   - 0xEA: LD (nn),A   (Z80: JP PE,nn)
+    //   - 0xED: (invalid)   (Z80: ED prefix)
+    //   - 0xF0: LD A,($FF00+n) (Z80: RET P)
+    //   - 0xF2: LD A,($FF00+C) (Z80: JP P,nn)
+    //   - 0xF8: LD HL,SP+e  (Z80: RET M)
+    //   - 0xFA: LD A,(nn)   (Z80: JP M,nn)
+    //   - 0xFD: (invalid)   (Z80: FD prefix IY)
+    //   - No JP cc for PO/PE/P/M, no CALL cc for PO/PE/P/M, no RET cc for PO/PE/P/M
+    //   - CB prefix: operation 6 (SLL) replaced by SWAP
+
+    bus_state_t sm83_decode_and_execute(bus_state_t pins, uint8_t op) {
+        const uint8_t x = (op >> 6) & 3;
+        const uint8_t y = (op >> 3) & 7;
+        const uint8_t z = op & 7;
+        const uint8_t p = y >> 1;
+        const uint8_t q = y & 1;
+
+        switch (x) {
+        case 0:
+            switch (z) {
+            case 0:
+                switch (y) {
+                case 0: // NOP
+                    transition_to_fetch();
+                    return pins;
+                case 1: // LD (nn),SP — SM83-unique
+                    transition_to(&z80_t::op_sm83_ld_nn_sp);
+                    return pins;
+                case 2: // STOP — SM83-unique
+                    transition_to(&z80_t::op_sm83_stop);
+                    return pins;
+                case 3: // JR d
+                    transition_to(&z80_t::op_jr_e);
+                    return pins;
+                default: // y=4..7: JR cc,d (cc = y-4, only NZ/Z/NC/C on SM83)
+                    transition_to(&z80_t::op_jr_cc_e);
+                    return pins;
+                }
+
+            case 1:
+                if (q == 0) {
+                    transition_to(&z80_t::op_ld_rr_nn);
+                } else {
+                    transition_to(&z80_t::op_add_hl_rr);
+                }
+                return pins;
+
+            case 2:
+                // SM83 indirect loads are different from Z80:
+                // p=0,q=0: LD (BC),A     p=0,q=1: LD A,(BC)
+                // p=1,q=0: LD (DE),A     p=1,q=1: LD A,(DE)
+                // p=2,q=0: LD (HL+),A    p=2,q=1: LD A,(HL+)
+                // p=3,q=0: LD (HL-),A    p=3,q=1: LD A,(HL-)
+                if (q == 0) {
+                    switch (p) {
+                    case 0: case 1:
+                        transition_to(&z80_t::op_ld_indirect_a);
+                        break;
+                    case 2: // LD (HL+),A
+                        transition_to(&z80_t::op_sm83_ld_hli_a);
+                        break;
+                    case 3: // LD (HL-),A
+                        transition_to(&z80_t::op_sm83_ld_hld_a);
+                        break;
+                    }
+                } else {
+                    switch (p) {
+                    case 0: case 1:
+                        transition_to(&z80_t::op_ld_a_indirect);
+                        break;
+                    case 2: // LD A,(HL+)
+                        transition_to(&z80_t::op_sm83_ld_a_hli);
+                        break;
+                    case 3: // LD A,(HL-)
+                        transition_to(&z80_t::op_sm83_ld_a_hld);
+                        break;
+                    }
+                }
+                return pins;
+
+            case 3:
+                if (q == 0) {
+                    transition_to(&z80_t::op_inc_rr);
+                } else {
+                    transition_to(&z80_t::op_dec_rr);
+                }
+                return pins;
+
+            case 4: // INC r / INC (HL)
+                if (y == 6) {
+                    transition_to(&z80_t::op_inc_hl);
+                } else {
+                    set_reg8(y, alu_inc(get_reg8(y)));
+                    transition_to_fetch();
+                }
+                return pins;
+
+            case 5: // DEC r / DEC (HL)
+                if (y == 6) {
+                    transition_to(&z80_t::op_dec_hl);
+                } else {
+                    set_reg8(y, alu_dec(get_reg8(y)));
+                    transition_to_fetch();
+                }
+                return pins;
+
+            case 6: // LD r,n / LD (HL),n
+                if (y == 6) {
+                    transition_to(&z80_t::op_ld_hl_n);
+                } else {
+                    transition_to(&z80_t::op_ld_r_n);
+                }
+                return pins;
+
+            case 7: // Accumulator operations (same as Z80)
+                switch (y) {
+                case 0: alu_rlca(); break;
+                case 1: alu_rrca(); break;
+                case 2: alu_rla();  break;
+                case 3: alu_rra();  break;
+                case 4: alu_daa();  break;
+                case 5: alu_cpl();  break;
+                case 6: alu_scf();  break;
+                case 7: alu_ccf();  break;
+                }
+                transition_to_fetch();
+                return pins;
+            }
+            break;
+
+        case 1: // LD block (same as Z80)
+            if (z == 6 && y == 6) {
+                halted_ = true;
+                BUS_CLR_BIT(pins, Z80_HALT_BIT);
+                transition_to_fetch();
+            } else if (z == 6) {
+                transition_to(&z80_t::op_ld_r_hl);
+            } else if (y == 6) {
+                transition_to(&z80_t::op_ld_hl_r);
+            } else {
+                set_reg8(y, get_reg8(z));
+                transition_to_fetch();
+            }
+            return pins;
+
+        case 2: // ALU A,r block (same as Z80)
+            if (z == 6) {
+                transition_to(&z80_t::op_alu_hl);
+            } else {
+                alu_op(y, get_reg8(z));
+                transition_to_fetch();
+            }
+            return pins;
+
+        case 3: // Control block — many SM83 differences
+            switch (z) {
+            case 0: // RET cc / LD ($FF00+n),A / LD A,($FF00+n)
+                switch (y) {
+                case 0: case 1: case 2: case 3: // RET NZ/Z/NC/C (only 4 conditions on SM83)
+                    transition_to(&z80_t::op_ret_cc);
+                    return pins;
+                case 4: // 0xE0: LD ($FF00+n),A
+                    transition_to(&z80_t::op_sm83_ldh_n_a);
+                    return pins;
+                case 5: // 0xE8: ADD SP,e
+                    transition_to(&z80_t::op_sm83_add_sp_e);
+                    return pins;
+                case 6: // 0xF0: LD A,($FF00+n)
+                    transition_to(&z80_t::op_sm83_ldh_a_n);
+                    return pins;
+                case 7: // 0xF8: LD HL,SP+e
+                    transition_to(&z80_t::op_sm83_ld_hl_sp_e);
+                    return pins;
+                }
+                return pins;
+
+            case 1:
+                if (q == 0) {
+                    transition_to(&z80_t::op_pop);
+                } else {
+                    switch (p) {
+                    case 0: // RET
+                        transition_to(&z80_t::op_ret);
+                        break;
+                    case 1: // 0xD9: RETI on SM83 (not EXX)
+                        transition_to(&z80_t::op_sm83_reti);
+                        break;
+                    case 2: // JP (HL) — same as Z80
+                        regs_[PC] = regs_[HL];
+                        transition_to_fetch();
+                        break;
+                    case 3: // LD SP,HL
+                        transition_to(&z80_t::op_ld_sp_hl);
+                        break;
+                    }
+                }
+                return pins;
+
+            case 2: // JP cc,nn / LD ($FF00+C),A / LD A,($FF00+C) / LD (nn),A / LD A,(nn)
+                switch (y) {
+                case 0: case 1: case 2: case 3: // JP NZ/Z/NC/C,nn
+                    transition_to(&z80_t::op_jp_cc_nn);
+                    return pins;
+                case 4: // 0xE2: LD ($FF00+C),A
+                    transition_to(&z80_t::op_sm83_ldh_c_a);
+                    return pins;
+                case 5: // 0xEA: LD (nn),A
+                    transition_to(&z80_t::op_sm83_ld_nn_a);
+                    return pins;
+                case 6: // 0xF2: LD A,($FF00+C)
+                    transition_to(&z80_t::op_sm83_ldh_a_c);
+                    return pins;
+                case 7: // 0xFA: LD A,(nn)
+                    transition_to(&z80_t::op_sm83_ld_a_nn);
+                    return pins;
+                }
+                return pins;
+
+            case 3:
+                switch (y) {
+                case 0: // JP nn
+                    transition_to(&z80_t::op_jp_nn);
+                    break;
+                case 1: // CB prefix
+                    prefix_state_ = PREFIX_CB;
+                    transition_to_fetch_prefix();
+                    break;
+                case 6: // DI
+                    iff1_ = false;
+                    iff2_ = false;
+                    transition_to_fetch();
+                    break;
+                case 7: // EI
+                    iff1_ = true;
+                    iff2_ = true;
+                    ei_pending_ = true;
+                    transition_to_fetch();
+                    break;
+                default: // y=2,3,4,5: invalid on SM83 (0xD3,0xDB,0xDD,0xED)
+                    transition_to_fetch(); // NOP
+                    break;
+                }
+                return pins;
+
+            case 4: // CALL cc,nn (only NZ/Z/NC/C on SM83)
+                if (y <= 3) {
+                    transition_to(&z80_t::op_call_cc_nn);
+                } else {
+                    transition_to_fetch(); // Invalid: 0xE4,0xEC,0xF4,0xFC
+                }
+                return pins;
+
+            case 5:
+                if (q == 0) {
+                    transition_to(&z80_t::op_push);
+                } else {
+                    if (p == 0) {
+                        transition_to(&z80_t::op_call_nn);
+                    } else {
+                        transition_to_fetch(); // Invalid: 0xDD,0xED,0xFD
+                    }
+                }
+                return pins;
+
+            case 6: // ALU A,n (same as Z80)
+                transition_to(&z80_t::op_alu_n);
+                return pins;
+
+            case 7: // RST p*8 (same as Z80)
+                transition_to(&z80_t::op_rst);
+                return pins;
+            }
+            break;
+        }
+
+        transition_to_fetch();
         return pins;
     }
 

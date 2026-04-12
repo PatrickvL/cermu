@@ -341,23 +341,43 @@ void alu_bit_hl(uint8_t bit, uint8_t val) {
 // ========================================================================
 
 void alu_daa() {
-    uint8_t a = regs_[A];
-    uint8_t correction = 0;
-    uint8_t c = 0;
-
-    if ((regs_[F] & Flags::H) || (a & 0x0F) > 0x09) correction |= 0x06;
-    if ((regs_[F] & Flags::C) || a > 0x99) { correction |= 0x60; c = Flags::C; }
-
-    if (regs_[F] & Flags::N) {
-        regs_[A] -= correction;
+    if constexpr (is_sm83()) {
+        // SM83 DAA: same correction logic, but flags are simpler
+        // Only Z, N (preserved), H=0, C (set if correction overflows)
+        uint8_t a = regs_[A];
+        uint8_t c = regs_[F] & Flags::C;
+        if (regs_[F] & Flags::N) {
+            // After subtraction
+            if (c) a -= 0x60;
+            if (regs_[F] & Flags::H) a -= 0x06;
+        } else {
+            // After addition
+            if (c || a > 0x99) { a += 0x60; c = Flags::C; }
+            if ((regs_[F] & Flags::H) || (a & 0x0F) > 0x09) a += 0x06;
+        }
+        regs_[A] = a;
+        regs_[F] = (regs_[F] & Flags::N)
+                | c
+                | (a == 0 ? Flags::Z : 0);
     } else {
-        regs_[A] += correction;
-    }
+        uint8_t a = regs_[A];
+        uint8_t correction = 0;
+        uint8_t c = 0;
 
-    regs_[F] = sz53p_table[regs_[A]]
-            | (regs_[F] & Flags::N)
-            | ((regs_[A] ^ a) & Flags::H)
-            | c;
+        if ((regs_[F] & Flags::H) || (a & 0x0F) > 0x09) correction |= 0x06;
+        if ((regs_[F] & Flags::C) || a > 0x99) { correction |= 0x60; c = Flags::C; }
+
+        if (regs_[F] & Flags::N) {
+            regs_[A] -= correction;
+        } else {
+            regs_[A] += correction;
+        }
+
+        regs_[F] = sz53p_table[regs_[A]]
+                | (regs_[F] & Flags::N)
+                | ((regs_[A] ^ a) & Flags::H)
+                | c;
+    }
 }
 
 void alu_cpl() {
@@ -419,8 +439,26 @@ uint8_t cb_shift_op(uint8_t op, uint8_t val) {
     case 3: return alu_rr(val);
     case 4: return alu_sla(val);
     case 5: return alu_sra(val);
-    case 6: return alu_sll(val);
+    case 6:
+        // SM83: SWAP (swap upper and lower nybbles)
+        // Z80: SLL (undocumented shift left with bit 0 set)
+        if constexpr (is_sm83()) {
+            return alu_swap(val);
+        } else {
+            return alu_sll(val);
+        }
     case 7: return alu_srl(val);
     default: return val;
     }
+}
+
+// ========================================================================
+// SM83 SWAP — Swap upper and lower nybbles (CB 30-37)
+// Flags: Z set if result is 0, N=0, H=0, C=0
+// ========================================================================
+
+uint8_t alu_swap(uint8_t val) {
+    val = static_cast<uint8_t>((val >> 4) | (val << 4));
+    regs_[F] = (val == 0) ? Flags::Z : 0;
+    return val;
 }

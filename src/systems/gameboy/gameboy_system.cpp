@@ -131,6 +131,16 @@ bool GameBoySystem<V>::initialize() {
     configure_bus_memory_map();
 
     pins_ = board_.cpu.init();
+
+    // Post-boot ROM register state (DMG/GBC)
+    // When no boot ROM is present, the system initializes CPU registers
+    // to match the state left by the boot ROM after completion.
+    board_.cpu.set(z80::reg::AF, static_cast<uint16_t>(0x01B0));
+    board_.cpu.set(z80::reg::BC, static_cast<uint16_t>(0x0013));
+    board_.cpu.set(z80::reg::DE, static_cast<uint16_t>(0x00D8));
+    board_.cpu.set(z80::reg::HL, static_cast<uint16_t>(0x014D));
+    board_.cpu.set(z80::reg::SP, static_cast<uint16_t>(0xFFFE));
+    board_.cpu.set_pc(0x0100);  // Entry point after boot ROM
     board_.ppu.reset();
     board_.apu.reset();
 
@@ -177,20 +187,45 @@ void GameBoySystem<V>::tick() {
     bus_state_t ppu_bus = 0;
     ppu_bus = board_.ppu.tick(ppu_bus);
 
+    // SM83 interrupt model: drive INT pin based on IF & IE
+    // Active-low: assert INT (clear bit) when any enabled interrupt is pending
+    uint8_t if_reg = io_regs_[gb_constants::IO_IF];
+    uint8_t pending = if_reg & ie_;
+    if (pending) {
+        BUS_CLR_BIT(pins_, Z80_INT_BIT);  // Assert INT (active-low)
+        // Provide interrupt vector on data bus for CPU to read during INT ack.
+        // Priority: bit 0 (VBlank) highest → bit 4 (Joypad) lowest.
+        // Vectors: VBlank=$0040, LCD STAT=$0048, Timer=$0050, Serial=$0058, Joypad=$0060
+        static constexpr uint8_t vectors[5] = { 0x40, 0x48, 0x50, 0x58, 0x60 };
+        for (int i = 0; i < 5; i++) {
+            if (pending & (1 << i)) {
+                BUS_SET_DATA(pins_, vectors[i]);
+                // Clear the serviced IF bit when INT is acknowledged
+                io_regs_[gb_constants::IO_IF] &= ~(1 << i);
+                break;
+            }
+        }
+    } else {
+        BUS_SET_BIT(pins_, Z80_INT_BIT);  // Deassert INT
+    }
+
     // CPU tick
     pins_ = board_.cpu.tick(pins_);
 
+    // SM83 memory bus dispatch (no IORQ — all I/O is memory-mapped via MREQ)
     bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);
-    bool iorq = !BUS_GET_BIT(pins_, Z80_IORQ_BIT);
 
     if (mreq) {
         uint16_t addr = BUS_GET_ADDR(pins_);
-        bool is_read = BUS_GET_BIT(pins_, BUS_RW_BIT);
 
         if (addr >= 0xFF00) {
             // High page: I/O, HRAM, IE
             pins_ = io_tick(pins_);
         } else {
+            // Echo RAM ($E000–$FDFF): mirror of $C000–$DDFF
+            if (addr >= 0xE000 && addr < 0xFE00) {
+                BUS_SET_ADDR(pins_, addr - 0x2000);
+            }
             pins_ = bus_.tick(pins_);
         }
     }
