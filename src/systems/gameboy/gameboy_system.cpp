@@ -131,6 +131,16 @@ bool GameBoySystem<V>::initialize() {
     configure_bus_memory_map();
 
     pins_ = board_.cpu.init();
+
+    // Post-boot ROM register state (DMG/GBC)
+    // When no boot ROM is present, the system initializes CPU registers
+    // to match the state left by the boot ROM after completion.
+    board_.cpu.set(z80::reg::AF, static_cast<uint16_t>(0x01B0));
+    board_.cpu.set(z80::reg::BC, static_cast<uint16_t>(0x0013));
+    board_.cpu.set(z80::reg::DE, static_cast<uint16_t>(0x00D8));
+    board_.cpu.set(z80::reg::HL, static_cast<uint16_t>(0x014D));
+    board_.cpu.set(z80::reg::SP, static_cast<uint16_t>(0xFFFE));
+    board_.cpu.set_pc(0x0100);  // Entry point after boot ROM
     board_.ppu.reset();
     board_.apu.reset();
 
@@ -211,14 +221,11 @@ void GameBoySystem<V>::tick() {
         if (addr >= 0xFF00) {
             // High page: I/O, HRAM, IE
             pins_ = io_tick(pins_);
-        } else if (addr >= 0xFE00 && addr <= 0xFE9F) {
-            // OAM (sprite attributes) — handled by PPU
-            pins_ = bus_.tick(pins_);
-        } else if (addr >= 0xE000 && addr < 0xFE00) {
-            // Echo RAM: mirror of $C000–$DDFF
-            BUS_SET_ADDR(pins_, addr - 0x2000);
-            pins_ = bus_.tick(pins_);
         } else {
+            // Echo RAM ($E000–$FDFF): mirror of $C000–$DDFF
+            if (addr >= 0xE000 && addr < 0xFE00) {
+                BUS_SET_ADDR(pins_, addr - 0x2000);
+            }
             pins_ = bus_.tick(pins_);
         }
     }
