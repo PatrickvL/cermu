@@ -171,10 +171,18 @@ Missing:
 - No visible output yet
 
 ### 2.13 Game Boy — **[STUB] L**
-Z80A used as stand-in CPU (real hardware uses SM83 — no IX/IY, different flags).
+SM83 CPU core fully implemented via Z80 trait system (`if constexpr` gating):
+- ✅ SM83-specific M1 fetch cycle (no refresh T-states)
+- ✅ SM83-unique opcodes: STOP, LD (HL+/HL-), LDH ($FF00+n/C), ADD SP,e, LD HL,SP+e, LD (nn),SP, RETI
+- ✅ SWAP instruction (CB prefix, replaces Z80 undocumented SLL)
+- ✅ SM83 DAA (simplified flag output — no X/Y/PV flags)
+- ✅ SM83 interrupt model (level-triggered, IF & IE registers → INT pin, fixed vectors)
+- ✅ Game Boy post-boot register initialization (AF=$01B0, BC=$0013, etc.)
+- ✅ Echo RAM mirroring ($E000–$FDFF → $C000–$DDFF)
+- ✅ No IX/IY registers, no shadow registers, no ED prefix, no I/O instructions
+
 ROM bank switching, GB PPU and GB APU instantiated.
 Missing:
-- SM83 CPU core (Z80A is incorrect substitute)
 - PPU mode state machine (OAM search, pixel transfer, H-Blank, V-Blank)
 - APU channel synthesis (sweep, envelope, length counter, noise LFSR, wave)
 - MBC mapper variants (MBC1, MBC3, MBC5)
@@ -375,7 +383,7 @@ All 9 high-value formats implemented with shared abstractions:
 | ~~**CoCo 1/2**~~ | ~~MC6809 ✅~~ | ~~MC6847 ✅~~ | ~~DAC/1-bit~~ | ✅ System created (§2.10) — chip rendering not wired yet | — |
 | **CoCo 3** | MC6809 ✅ | GIME (new) | — | GIME video chip, 512KB RAM | **L** |
 | ~~**Dragon 32/64**~~ | ~~MC6809 ✅~~ | ~~MC6847 ✅~~ | ~~1-bit~~ | ✅ System created (§2.10) — shares MC6809-VDG base with CoCo | — |
-| ~~**Game Boy**~~ | ~~Z80 variant~~ | ~~PPU (new)~~ | ~~APU (new)~~ | ✅ System created (§2.13) — SM83 CPU and chip logic needed | — |
+| ~~**Game Boy**~~ | ~~Z80 variant~~ | ~~PPU (new)~~ | ~~APU (new)~~ | ✅ System created (§2.13) — SM83 CPU core implemented, PPU/APU rendering needed | — |
 | ~~**Sega Genesis**~~ | ~~M68000 ✅~~ | ~~VDP (new)~~ | ~~YM2612 ✅ + SN76489 ✅~~ | ✅ System created (§2.12) — VDP rendering + Z80 glue needed | — |
 | **Neo Geo** | M68000 ✅ | LSPC (new) | YM2610 (partial ✅) | LSPC2 video, ADPCM-A/B | **XL** |
 | **Sharp X68000** | M68000 ✅ | CRTC (new) | YM2151 (stub) | OPM register map, DMA, custom video | **XL** |
@@ -501,7 +509,7 @@ Committed `41e0ff44`.
 28. ~~CoCo / Dragon systems (MC6809 + MC6847 reuse)~~ — **DONE** (stub; §2.10)
 29. HuC6280 CPU → ~~PC Engine~~ system created (§2.14), CPU core still needed
 30. ~~Sega Genesis (M68000 + YM2612 + SN76489 reuse)~~ — **DONE** (stub; §2.12)
-31. ~~Game Boy (Z80 variant + custom PPU/APU)~~ — **DONE** (stub; §2.13)
+31. ~~Game Boy (Z80 variant + custom PPU/APU)~~ — **DONE** (stub; §2.13, SM83 CPU core implemented)
 32. WDC 65C816 → Apple IIGS / SNES foundation
 
 ---
@@ -523,3 +531,4 @@ Committed `41e0ff44`.
 
 *This document supersedes the previous emulation-gaps.md dated 2026-04-09.*
 *Updated 2026-04-10: added 7 new stub systems (CoCo/Dragon, Atari 8-bit, Genesis, Game Boy, PC Engine, Atari ST), 11 new chip stubs, 6 new format handlers.*
+*Updated 2026-04-12: SM83 CPU core implemented for Game Boy — full trait-based `if constexpr` gating, 15 SM83-unique instruction handlers, SWAP, SM83 DAA, SM83 interrupt model.*
