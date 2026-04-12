@@ -111,6 +111,11 @@ struct Z80Traits {
     constexpr bool has_index_registers()  const { return !is_sm83(); }
     constexpr bool has_io_instructions()  const { return !is_sm83(); }
     constexpr bool has_ed_prefix()        const { return !is_sm83(); }
+    constexpr bool has_shadow_registers() const { return !is_sm83(); }
+    constexpr bool has_refresh_cycle()    const { return !is_sm83(); }
+    constexpr bool has_ir_registers()     const { return !is_sm83(); }
+    constexpr bool has_pv_flag()          const { return !is_sm83(); }
+    constexpr bool has_xy_flags()         const { return !is_sm83(); }
 
     constexpr uint32_t address_mask() const { return ~(~0u << address_bits); }
 
