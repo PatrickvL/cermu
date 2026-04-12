@@ -1311,17 +1311,18 @@ bus_state_t op_sm83_add_sp_e(bus_state_t pins) {
         bus_finish_mem(pins);
         uint16_t sp = regs_[SP];
         uint32_t result = sp + e;
-        // H and C flags based on unsigned addition of low byte of SP and unsigned e
+        // H and C flags: computed on low byte of SP + unsigned offset byte
         uint8_t u = static_cast<uint8_t>(e);
-        regs_[F] = (((sp ^ u ^ result) & 0x10) ? Flags::H : 0)
-                 | (((sp ^ u ^ result) & 0x100) ? Flags::C : 0);
+        uint16_t lo_result = (sp & 0xFF) + u;
+        regs_[F] = (((sp & 0x0F) + (u & 0x0F) > 0x0F) ? Flags::H : 0)
+                 | ((lo_result > 0xFF) ? Flags::C : 0);
         regs_[SP] = static_cast<uint16_t>(result);
         return pins;
     }
-    case 3: case 4: case 5: // Internal delay (16T total)
-        if (step_ == 6) {
-            transition_to_fetch();
-        }
+    case 3: case 4: // Internal delay
+        return pins;
+    case 5: // Final internal delay — transition to next instruction
+        transition_to_fetch();
         return pins;
     }
     return pins;
@@ -1339,9 +1340,11 @@ bus_state_t op_sm83_ld_hl_sp_e(bus_state_t pins) {
         bus_finish_mem(pins);
         uint16_t sp = regs_[SP];
         uint32_t result = sp + e;
+        // H and C flags: computed on low byte of SP + unsigned offset byte
         uint8_t u = static_cast<uint8_t>(e);
-        regs_[F] = (((sp ^ u ^ result) & 0x10) ? Flags::H : 0)
-                 | (((sp ^ u ^ result) & 0x100) ? Flags::C : 0);
+        uint16_t lo_result = (sp & 0xFF) + u;
+        regs_[F] = (((sp & 0x0F) + (u & 0x0F) > 0x0F) ? Flags::H : 0)
+                 | ((lo_result > 0xFF) ? Flags::C : 0);
         regs_[HL] = static_cast<uint16_t>(result);
         return pins;
     }
@@ -1405,13 +1408,11 @@ bus_state_t op_sm83_int(bus_state_t pins) {
     case 7:
         bus_finish_mem(pins);
         return pins;
-    case 8: // Read interrupt vector from system
-        // The system should place the vector address on the data bus
-        // For now, we read the vector byte that the system provides
-        // The Game Boy system tick loop determines which interrupt fires
-        // and places the appropriate vector on the bus.
-        // Default: RST $0040 (VBlank) — the system overrides via int_data_latch_
-        regs_[PC] = 0x0040;  // Default vector, system overrides
+    case 8: // Read interrupt vector address from bus
+        // The system places the vector on the data bus during the interrupt
+        // acknowledge cycle. The SM83 reads a single byte containing the
+        // vector address low byte (vectors are $0040,$0048,$0050,$0058,$0060).
+        regs_[PC] = BUS_GET_DATA(pins);
         transition_to_fetch();
         return pins;
     }

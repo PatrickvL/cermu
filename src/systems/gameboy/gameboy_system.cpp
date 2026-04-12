@@ -180,8 +180,21 @@ void GameBoySystem<V>::tick() {
     // SM83 interrupt model: drive INT pin based on IF & IE
     // Active-low: assert INT (clear bit) when any enabled interrupt is pending
     uint8_t if_reg = io_regs_[gb_constants::IO_IF];
-    if (if_reg & ie_) {
+    uint8_t pending = if_reg & ie_;
+    if (pending) {
         BUS_CLR_BIT(pins_, Z80_INT_BIT);  // Assert INT (active-low)
+        // Provide interrupt vector on data bus for CPU to read during INT ack.
+        // Priority: bit 0 (VBlank) highest → bit 4 (Joypad) lowest.
+        // Vectors: VBlank=$0040, LCD STAT=$0048, Timer=$0050, Serial=$0058, Joypad=$0060
+        static constexpr uint8_t vectors[5] = { 0x40, 0x48, 0x50, 0x58, 0x60 };
+        for (int i = 0; i < 5; i++) {
+            if (pending & (1 << i)) {
+                BUS_SET_DATA(pins_, vectors[i]);
+                // Clear the serviced IF bit when INT is acknowledged
+                io_regs_[gb_constants::IO_IF] &= ~(1 << i);
+                break;
+            }
+        }
     } else {
         BUS_SET_BIT(pins_, Z80_INT_BIT);  // Deassert INT
     }
