@@ -177,19 +177,34 @@ void GameBoySystem<V>::tick() {
     bus_state_t ppu_bus = 0;
     ppu_bus = board_.ppu.tick(ppu_bus);
 
+    // SM83 interrupt model: drive INT pin based on IF & IE
+    // Active-low: assert INT (clear bit) when any enabled interrupt is pending
+    uint8_t if_reg = io_regs_[gb_constants::IO_IF];
+    if (if_reg & ie_) {
+        BUS_CLR_BIT(pins_, Z80_INT_BIT);  // Assert INT (active-low)
+    } else {
+        BUS_SET_BIT(pins_, Z80_INT_BIT);  // Deassert INT
+    }
+
     // CPU tick
     pins_ = board_.cpu.tick(pins_);
 
+    // SM83 memory bus dispatch (no IORQ — all I/O is memory-mapped via MREQ)
     bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);
-    bool iorq = !BUS_GET_BIT(pins_, Z80_IORQ_BIT);
 
     if (mreq) {
         uint16_t addr = BUS_GET_ADDR(pins_);
-        bool is_read = BUS_GET_BIT(pins_, BUS_RW_BIT);
 
         if (addr >= 0xFF00) {
             // High page: I/O, HRAM, IE
             pins_ = io_tick(pins_);
+        } else if (addr >= 0xFE00 && addr <= 0xFE9F) {
+            // OAM (sprite attributes) — handled by PPU
+            pins_ = bus_.tick(pins_);
+        } else if (addr >= 0xE000 && addr < 0xFE00) {
+            // Echo RAM: mirror of $C000–$DDFF
+            BUS_SET_ADDR(pins_, addr - 0x2000);
+            pins_ = bus_.tick(pins_);
         } else {
             pins_ = bus_.tick(pins_);
         }

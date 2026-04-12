@@ -1060,6 +1060,364 @@ bus_state_t op_halt(bus_state_t pins) {
     return pins;
 }
 
+// ========================================================================
+// SM83-SPECIFIC INSTRUCTION HANDLERS
+// ========================================================================
+// These are only called when the SM83 trait is active (Game Boy CPU).
+// They implement instructions unique to the SM83 that don't exist on Z80.
+
+// STOP — 0x10: Enter low-power mode (also triggers GBC speed switch)
+// Reads and discards the next byte (like a 2-byte NOP)
+bus_state_t op_sm83_stop(bus_state_t pins) {
+    switch (step_++) {
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
+    case 1: if (!wait_check(pins)) return pins; return pins;
+    case 2:
+        regs_[PC]++;  // Skip the byte after STOP
+        bus_finish_mem(pins);
+        // TODO: actual low-power mode / GBC speed switch
+        halted_ = true;
+        BUS_CLR_BIT(pins, Z80_HALT_BIT);
+        transition_to_fetch();
+        return pins;
+    }
+    return pins;
+}
+
+// LD (nn),SP — 0x08: Store SP at address nn (SM83 unique, 20T)
+bus_state_t op_sm83_ld_nn_sp(bus_state_t pins) {
+    switch (step_++) {
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);    // Read low byte of address
+    case 1: if (!wait_check(pins)) return pins; return pins;
+    case 2:
+        addr_latch_ = BUS_GET_DATA(pins);
+        regs_[PC]++;
+        bus_finish_mem(pins);
+        return pins;
+    case 3: return bus_setup_mem_read(pins, regs_[PC]);    // Read high byte of address
+    case 4: if (!wait_check(pins)) return pins; return pins;
+    case 5:
+        addr_latch_ |= static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8;
+        regs_[PC]++;
+        bus_finish_mem(pins);
+        return pins;
+    case 6: return bus_setup_mem_write(pins, addr_latch_,  // Write SP low
+                static_cast<uint8_t>(regs_[SP] & 0xFF));
+    case 7: if (!wait_check(pins)) return pins; return pins;
+    case 8:
+        bus_finish_mem(pins);
+        return pins;
+    case 9: return bus_setup_mem_write(pins, addr_latch_ + 1,  // Write SP high
+                static_cast<uint8_t>(regs_[SP] >> 8));
+    case 10: if (!wait_check(pins)) return pins; return pins;
+    case 11:
+        bus_finish_mem(pins);
+        transition_to_fetch();
+        return pins;
+    }
+    return pins;
+}
+
+// LD (HL+),A — 0x22: Store A at (HL) then increment HL (8T)
+bus_state_t op_sm83_ld_hli_a(bus_state_t pins) {
+    switch (step_++) {
+    case 0: return bus_setup_mem_write(pins, regs_[HL], regs_[A]);
+    case 1: if (!wait_check(pins)) return pins; return pins;
+    case 2:
+        bus_finish_mem(pins);
+        regs_[HL]++;
+        transition_to_fetch();
+        return pins;
+    }
+    return pins;
+}
+
+// LD (HL-),A — 0x32: Store A at (HL) then decrement HL (8T)
+bus_state_t op_sm83_ld_hld_a(bus_state_t pins) {
+    switch (step_++) {
+    case 0: return bus_setup_mem_write(pins, regs_[HL], regs_[A]);
+    case 1: if (!wait_check(pins)) return pins; return pins;
+    case 2:
+        bus_finish_mem(pins);
+        regs_[HL]--;
+        transition_to_fetch();
+        return pins;
+    }
+    return pins;
+}
+
+// LD A,(HL+) — 0x2A: Load A from (HL) then increment HL (8T)
+bus_state_t op_sm83_ld_a_hli(bus_state_t pins) {
+    switch (step_++) {
+    case 0: return bus_setup_mem_read(pins, regs_[HL]);
+    case 1: if (!wait_check(pins)) return pins; return pins;
+    case 2:
+        regs_[A] = BUS_GET_DATA(pins);
+        bus_finish_mem(pins);
+        regs_[HL]++;
+        transition_to_fetch();
+        return pins;
+    }
+    return pins;
+}
+
+// LD A,(HL-) — 0x3A: Load A from (HL) then decrement HL (8T)
+bus_state_t op_sm83_ld_a_hld(bus_state_t pins) {
+    switch (step_++) {
+    case 0: return bus_setup_mem_read(pins, regs_[HL]);
+    case 1: if (!wait_check(pins)) return pins; return pins;
+    case 2:
+        regs_[A] = BUS_GET_DATA(pins);
+        bus_finish_mem(pins);
+        regs_[HL]--;
+        transition_to_fetch();
+        return pins;
+    }
+    return pins;
+}
+
+// LD ($FF00+n),A — 0xE0: Write A to high page I/O (12T)
+bus_state_t op_sm83_ldh_n_a(bus_state_t pins) {
+    switch (step_++) {
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
+    case 1: if (!wait_check(pins)) return pins; return pins;
+    case 2:
+        addr_latch_ = 0xFF00 | BUS_GET_DATA(pins);
+        regs_[PC]++;
+        bus_finish_mem(pins);
+        return pins;
+    case 3: return bus_setup_mem_write(pins, addr_latch_, regs_[A]);
+    case 4: if (!wait_check(pins)) return pins; return pins;
+    case 5:
+        bus_finish_mem(pins);
+        transition_to_fetch();
+        return pins;
+    }
+    return pins;
+}
+
+// LD A,($FF00+n) — 0xF0: Read A from high page I/O (12T)
+bus_state_t op_sm83_ldh_a_n(bus_state_t pins) {
+    switch (step_++) {
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
+    case 1: if (!wait_check(pins)) return pins; return pins;
+    case 2:
+        addr_latch_ = 0xFF00 | BUS_GET_DATA(pins);
+        regs_[PC]++;
+        bus_finish_mem(pins);
+        return pins;
+    case 3: return bus_setup_mem_read(pins, addr_latch_);
+    case 4: if (!wait_check(pins)) return pins; return pins;
+    case 5:
+        regs_[A] = BUS_GET_DATA(pins);
+        bus_finish_mem(pins);
+        transition_to_fetch();
+        return pins;
+    }
+    return pins;
+}
+
+// LD ($FF00+C),A — 0xE2: Write A to ($FF00+C) (8T)
+bus_state_t op_sm83_ldh_c_a(bus_state_t pins) {
+    switch (step_++) {
+    case 0: return bus_setup_mem_write(pins, 0xFF00 | regs_[C], regs_[A]);
+    case 1: if (!wait_check(pins)) return pins; return pins;
+    case 2:
+        bus_finish_mem(pins);
+        transition_to_fetch();
+        return pins;
+    }
+    return pins;
+}
+
+// LD A,($FF00+C) — 0xF2: Read A from ($FF00+C) (8T)
+bus_state_t op_sm83_ldh_a_c(bus_state_t pins) {
+    switch (step_++) {
+    case 0: return bus_setup_mem_read(pins, 0xFF00 | regs_[C]);
+    case 1: if (!wait_check(pins)) return pins; return pins;
+    case 2:
+        regs_[A] = BUS_GET_DATA(pins);
+        bus_finish_mem(pins);
+        transition_to_fetch();
+        return pins;
+    }
+    return pins;
+}
+
+// LD (nn),A — 0xEA: Store A at 16-bit address (16T)
+bus_state_t op_sm83_ld_nn_a(bus_state_t pins) {
+    switch (step_++) {
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
+    case 1: if (!wait_check(pins)) return pins; return pins;
+    case 2:
+        addr_latch_ = BUS_GET_DATA(pins);
+        regs_[PC]++;
+        bus_finish_mem(pins);
+        return pins;
+    case 3: return bus_setup_mem_read(pins, regs_[PC]);
+    case 4: if (!wait_check(pins)) return pins; return pins;
+    case 5:
+        addr_latch_ |= static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8;
+        regs_[PC]++;
+        bus_finish_mem(pins);
+        return pins;
+    case 6: return bus_setup_mem_write(pins, addr_latch_, regs_[A]);
+    case 7: if (!wait_check(pins)) return pins; return pins;
+    case 8:
+        bus_finish_mem(pins);
+        transition_to_fetch();
+        return pins;
+    }
+    return pins;
+}
+
+// LD A,(nn) — 0xFA: Load A from 16-bit address (16T)
+bus_state_t op_sm83_ld_a_nn(bus_state_t pins) {
+    switch (step_++) {
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
+    case 1: if (!wait_check(pins)) return pins; return pins;
+    case 2:
+        addr_latch_ = BUS_GET_DATA(pins);
+        regs_[PC]++;
+        bus_finish_mem(pins);
+        return pins;
+    case 3: return bus_setup_mem_read(pins, regs_[PC]);
+    case 4: if (!wait_check(pins)) return pins; return pins;
+    case 5:
+        addr_latch_ |= static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8;
+        regs_[PC]++;
+        bus_finish_mem(pins);
+        return pins;
+    case 6: return bus_setup_mem_read(pins, addr_latch_);
+    case 7: if (!wait_check(pins)) return pins; return pins;
+    case 8:
+        regs_[A] = BUS_GET_DATA(pins);
+        bus_finish_mem(pins);
+        transition_to_fetch();
+        return pins;
+    }
+    return pins;
+}
+
+// ADD SP,e — 0xE8: Add signed 8-bit immediate to SP (16T)
+// Flags: Z=0, N=0, H from bit 3, C from bit 7 (computed on low byte!)
+bus_state_t op_sm83_add_sp_e(bus_state_t pins) {
+    switch (step_++) {
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
+    case 1: if (!wait_check(pins)) return pins; return pins;
+    case 2: {
+        int8_t e = static_cast<int8_t>(BUS_GET_DATA(pins));
+        regs_[PC]++;
+        bus_finish_mem(pins);
+        uint16_t sp = regs_[SP];
+        uint32_t result = sp + e;
+        // H and C flags based on unsigned addition of low byte of SP and unsigned e
+        uint8_t u = static_cast<uint8_t>(e);
+        regs_[F] = (((sp ^ u ^ result) & 0x10) ? Flags::H : 0)
+                 | (((sp ^ u ^ result) & 0x100) ? Flags::C : 0);
+        regs_[SP] = static_cast<uint16_t>(result);
+        return pins;
+    }
+    case 3: case 4: case 5: // Internal delay (16T total)
+        if (step_ == 6) {
+            transition_to_fetch();
+        }
+        return pins;
+    }
+    return pins;
+}
+
+// LD HL,SP+e — 0xF8: Load HL with SP + signed 8-bit immediate (12T)
+// Flags same as ADD SP,e: Z=0, N=0, H from bit 3, C from bit 7
+bus_state_t op_sm83_ld_hl_sp_e(bus_state_t pins) {
+    switch (step_++) {
+    case 0: return bus_setup_mem_read(pins, regs_[PC]);
+    case 1: if (!wait_check(pins)) return pins; return pins;
+    case 2: {
+        int8_t e = static_cast<int8_t>(BUS_GET_DATA(pins));
+        regs_[PC]++;
+        bus_finish_mem(pins);
+        uint16_t sp = regs_[SP];
+        uint32_t result = sp + e;
+        uint8_t u = static_cast<uint8_t>(e);
+        regs_[F] = (((sp ^ u ^ result) & 0x10) ? Flags::H : 0)
+                 | (((sp ^ u ^ result) & 0x100) ? Flags::C : 0);
+        regs_[HL] = static_cast<uint16_t>(result);
+        return pins;
+    }
+    case 3: // Internal delay (12T total)
+        transition_to_fetch();
+        return pins;
+    }
+    return pins;
+}
+
+// RETI — 0xD9 on SM83: Return from interrupt (enables interrupts)
+// Pops PC from stack and sets IME=1 (unlike Z80 RETI which doesn't re-enable)
+bus_state_t op_sm83_reti(bus_state_t pins) {
+    switch (step_++) {
+    case 0: return bus_setup_mem_read(pins, regs_[SP]);   // Pop PC low
+    case 1: if (!wait_check(pins)) return pins; return pins;
+    case 2:
+        addr_latch_ = BUS_GET_DATA(pins);
+        regs_[SP]++;
+        bus_finish_mem(pins);
+        return pins;
+    case 3: return bus_setup_mem_read(pins, regs_[SP]);   // Pop PC high
+    case 4: if (!wait_check(pins)) return pins; return pins;
+    case 5:
+        regs_[PC] = addr_latch_ | (static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8);
+        regs_[SP]++;
+        bus_finish_mem(pins);
+        return pins;
+    case 6: // Internal delay
+        iff1_ = true;  // Re-enable interrupts (IME=1)
+        iff2_ = true;
+        transition_to_fetch();
+        return pins;
+    }
+    return pins;
+}
+
+// SM83 interrupt handler — 20T (5 internal + push PCH:4 + push PCL:4 + jump:4)
+// The SM83 uses a simpler interrupt model than Z80:
+// - Single interrupt level, level-triggered
+// - The system provides the vector via IF & IE registers
+// - Vectors are fixed: $0040 (VBlank), $0048 (LCD STAT), $0050 (Timer),
+//                       $0058 (Serial), $0060 (Joypad)
+// - The CPU pushes PC and jumps to the vector address
+// - The system must clear the appropriate IF bit
+bus_state_t op_sm83_int(bus_state_t pins) {
+    switch (step_++) {
+    case 0: case 1: // 2 internal T-states (interrupt response delay)
+        return pins;
+    case 2: // Push PC high
+        regs_[SP]--;
+        return bus_setup_mem_write(pins, regs_[SP], static_cast<uint8_t>(regs_[PC] >> 8));
+    case 3: if (!wait_check(pins)) return pins; return pins;
+    case 4:
+        bus_finish_mem(pins);
+        return pins;
+    case 5: // Push PC low
+        regs_[SP]--;
+        return bus_setup_mem_write(pins, regs_[SP], static_cast<uint8_t>(regs_[PC] & 0xFF));
+    case 6: if (!wait_check(pins)) return pins; return pins;
+    case 7:
+        bus_finish_mem(pins);
+        return pins;
+    case 8: // Read interrupt vector from system
+        // The system should place the vector address on the data bus
+        // For now, we read the vector byte that the system provides
+        // The Game Boy system tick loop determines which interrupt fires
+        // and places the appropriate vector on the bus.
+        // Default: RST $0040 (VBlank) — the system overrides via int_data_latch_
+        regs_[PC] = 0x0040;  // Default vector, system overrides
+        transition_to_fetch();
+        return pins;
+    }
+    return pins;
+}
+
 #endif // Z80_SKIP_IMPLEMENTATION
 
 #include "chip/cpu/z80/operations/inc_lint_prevention_footer.hpp"
