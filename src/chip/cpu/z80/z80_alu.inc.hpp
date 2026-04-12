@@ -345,17 +345,19 @@ void alu_daa() {
         // SM83 DAA: same correction logic, but flags are simpler
         // Only Z, N (preserved), H=0, C (set if correction overflows)
         uint8_t a = regs_[A];
+        uint8_t c = regs_[F] & Flags::C;
         if (regs_[F] & Flags::N) {
             // After subtraction
-            if (regs_[F] & Flags::C) a -= 0x60;
+            if (c) a -= 0x60;
             if (regs_[F] & Flags::H) a -= 0x06;
         } else {
             // After addition
-            if ((regs_[F] & Flags::C) || a > 0x99) { a += 0x60; regs_[F] |= Flags::C; }
+            if (c || a > 0x99) { a += 0x60; c = Flags::C; }
             if ((regs_[F] & Flags::H) || (a & 0x0F) > 0x09) a += 0x06;
         }
         regs_[A] = a;
-        regs_[F] = (regs_[F] & (Flags::N | Flags::C))
+        regs_[F] = (regs_[F] & Flags::N)
+                | c
                 | (a == 0 ? Flags::Z : 0);
     } else {
         uint8_t a = regs_[A];
