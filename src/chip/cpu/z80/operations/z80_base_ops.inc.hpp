@@ -1063,7 +1063,7 @@ bus_state_t op_halt(bus_state_t pins) {
 // ========================================================================
 // SM83-SPECIFIC INSTRUCTION HANDLERS
 // ========================================================================
-// These are only called when the SM83 trait is active (Game Boy CPU).
+// These are only called when the SM83 trait is active.
 // They implement instructions unique to the SM83 that don't exist on Z80.
 
 // STOP — 0x10: Enter low-power mode (also triggers GBC speed switch)

@@ -228,21 +228,11 @@ public:
     // === Lifecycle ===
 
     /// Initialize CPU state. Returns default bus state.
+    /// Systems should set application-specific register values after calling this.
     bus_state_t init() override {
         regs_.clear();
-        if constexpr (is_sm83()) {
-            // SM83 (Game Boy) post-boot ROM values (DMG):
-            // These match the state after the boot ROM has run.
-            regs_[AF] = 0x01B0;
-            regs_[BC] = 0x0013;
-            regs_[DE] = 0x00D8;
-            regs_[HL] = 0x014D;
-            regs_[SP] = 0xFFFE;
-            regs_[PC] = 0x0100;  // Entry point after boot ROM
-        } else {
-            regs_[SP] = 0xFFFF;
-            regs_[AF] = 0xFFFF;  // Documented power-on state
-        }
+        regs_[SP] = 0xFFFF;
+        regs_[AF] = 0xFFFF;  // Documented power-on state
         im_ = 0;
         iff1_ = false;
         iff2_ = false;
@@ -254,11 +244,6 @@ public:
         step_ = 0;
         current_handler_ = &z80_t::m1_fetch;
         bus_prev_ = default_bus_state();
-        if constexpr (is_sm83()) {
-            // SM83 starts with interrupts disabled (IME=0)
-            // but the Game Boy has a simpler interrupt model
-            iff1_ = false;
-        }
         return default_bus_state();
     }
 
@@ -646,7 +631,7 @@ private:
     }
 
     // ========================================================================
-    // SM83 OPCODE DECODE — Game Boy SM83 instruction set
+    // SM83 OPCODE DECODE — SM83 instruction set
     // ========================================================================
     //
     // The SM83 shares most of the Z80 base opcode map but has key differences:
