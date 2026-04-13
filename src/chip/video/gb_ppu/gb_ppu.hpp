@@ -256,6 +256,9 @@ struct gb_ppu_t : public VideoChipBase {
         if (video_out_) {
             SyncFlag flags = SyncFlag::None;
 
+            // HSync pulse: active at dot 0, cleared at dot 1 to create
+            // the falling edge that the signal shader uses for scanline
+            // detection.
             if (dot_counter_ == 0) {
                 flags = flags | SyncFlag::HSync;
             }

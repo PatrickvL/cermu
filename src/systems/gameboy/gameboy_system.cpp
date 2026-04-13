@@ -144,8 +144,6 @@ bool GameBoySystem<V>::initialize() {
         // the boot ROM overlay).
         boot_rom_active_ = true;
         board_.cpu.set_pc(0x0000);
-        // PPU starts with LCD off during boot sequence
-        board_.ppu.regs_.data[gb_ppu::LCDC] = 0x00;
     } else {
         // No boot ROM — set post-boot register state matching the state
         // left by the DMG/GBC boot ROM after completion.
@@ -159,6 +157,12 @@ bool GameBoySystem<V>::initialize() {
     }
     board_.ppu.reset();
     board_.apu.reset();
+
+    // Override LCDC after reset if boot ROM is present (boot ROM expects
+    // LCD off, will enable it itself at $0040).
+    if (boot_rom_active_) {
+        board_.ppu.regs_.data[gb_ppu::LCDC] = 0x00;
+    }
 
     register_bus_chips(board_);
 
