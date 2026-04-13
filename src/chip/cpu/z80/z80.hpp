@@ -273,6 +273,13 @@ public:
     /// Set the program counter (CpuChipBase virtual override).
     void set_pc(uint32_t addr) override { regs_[PC] = static_cast<uint16_t>(addr); }
 
+    /// SM83: provide direct pointers to IF ($FF0F) and IE ($FFFF) registers.
+    /// Must be called before first tick on Game Boy systems.
+    void set_sm83_interrupt_regs(uint8_t* if_reg, uint8_t* ie_reg) {
+        sm83_if_reg_ = if_reg;
+        sm83_ie_reg_ = ie_reg;
+    }
+
     /// Execute one T-state.  External code must service the bus between calls.
     /// Returns bus state with address/data/control signals for the current T-state.
     bus_state_t tick(bus_state_t pins) {
@@ -492,7 +499,8 @@ private:
             }
 
             // SM83 interrupt check: IME (=iff1_) && (IF & IE) != 0
-            // INT is level-triggered, active-low on the bus pin
+            // The INT pin is driven by the system whenever IF & IE has
+            // pending bits.  The CPU checks it at instruction boundaries.
             if (!suppress_int && iff1_ && !BUS_GET_BIT(pins, Z80_INT_BIT)) {
                 if (halted_) {
                     halted_ = false;
@@ -501,6 +509,16 @@ private:
                 iff1_ = false;
                 transition_to(&z80_t::op_sm83_int);
                 return pins;
+            }
+
+            // HALT wake-up: even with IME=0, HALT exits when IF & IE != 0.
+            // The CPU does NOT service the interrupt — it just continues to
+            // the next instruction.  (The DMG "HALT bug" skips the PC
+            // increment of the next instruction, but we don't emulate that
+            // edge case yet.)
+            if (halted_ && !BUS_GET_BIT(pins, Z80_INT_BIT)) {
+                halted_ = false;
+                BUS_SET_BIT(pins, Z80_HALT_BIT);
             }
 
             // HALT: re-fetch NOP at PC-1 (PC doesn't advance)
@@ -1516,6 +1534,13 @@ private:
     bool halted_ = false;
     bool ei_pending_ = false;   // EI delays interrupt enable by one instruction
     bool nmi_pending_ = false;  // NMI edge detected, waiting to be serviced
+
+    // SM83 interrupt register pointers — IF and IE are internal to the
+    // SM83 die, exposed on the memory bus for software access.  Direct
+    // pointers let the CPU read IF & IE during interrupt dispatch and
+    // clear the serviced IF flag atomically.
+    uint8_t* sm83_if_reg_ = nullptr;  // $FF0F — Interrupt Flag
+    uint8_t* sm83_ie_reg_ = nullptr;  // $FFFF — Interrupt Enable
 
     // Temporary latches for multi-cycle operations
     int8_t   displacement_ = 0;    // IX/IY+d displacement byte

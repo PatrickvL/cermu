@@ -133,6 +133,11 @@ bool GameBoySystem<V>::initialize() {
 
     pins_ = board_.cpu.init();
 
+    // SM83: IF and IE are internal to the CPU die — provide direct
+    // register pointers so the CPU can dispatch interrupts correctly.
+    board_.cpu.set_sm83_interrupt_regs(
+        &io_regs_[gb_constants::IO_IF], &ie_);
+
     // Try loading boot ROM from data/gameboy/roms/
     load_roms();
 
@@ -169,8 +174,10 @@ bool GameBoySystem<V>::initialize() {
     video_port_ = std::make_unique<CompositeVideoPort>();
     video_port_->set_palette(board_.ppu.system_palette(),
                              board_.ppu.palette_size());
+    // back_porch = 79: HSync falls at dot 1 (1-dot pulse at dot 0),
+    // first visible pixel at dot 80 → gap of 79 samples.
     video_port_->bind_display(nullptr, board_.ppu.system_palette(),
-                              gb_ppu::SCREEN_WIDTH, gb_ppu::OAM_SEARCH_DOTS);
+                              gb_ppu::SCREEN_WIDTH, gb_ppu::OAM_SEARCH_DOTS - 1);
     video_port_->bind_frame_output(&last_frame_data_);
 
     // Wire PPU video output to the composite video port
@@ -237,24 +244,14 @@ void GameBoySystem<V>::tick() {
     float apu_sample = board_.apu.tick();
     if (audio_port_) audio_port_->drive(apu_sample);
 
-    // SM83 interrupt model: drive INT pin based on IF & IE
-    // Active-low: assert INT (clear bit) when any enabled interrupt is pending
-    uint8_t if_reg = io_regs_[gb_constants::IO_IF];
-    uint8_t pending = if_reg & ie_;
+    // SM83 interrupt model: drive INT pin based on IF & IE.
+    // Level-triggered, active-low.  The CPU reads IF & IE directly (internal
+    // registers) when it actually services the interrupt and clears the IF
+    // bit at that point.  The system's only job is to hold INT asserted
+    // while any enabled interrupt is pending.
+    uint8_t pending = io_regs_[gb_constants::IO_IF] & ie_;
     if (pending) {
         BUS_CLR_BIT(pins_, Z80_INT_BIT);  // Assert INT (active-low)
-        // Provide interrupt vector on data bus for CPU to read during INT ack.
-        // Priority: bit 0 (VBlank) highest → bit 4 (Joypad) lowest.
-        // Vectors: VBlank=$0040, LCD STAT=$0048, Timer=$0050, Serial=$0058, Joypad=$0060
-        static constexpr uint8_t vectors[5] = { 0x40, 0x48, 0x50, 0x58, 0x60 };
-        for (int i = 0; i < 5; i++) {
-            if (pending & (1 << i)) {
-                BUS_SET_DATA(pins_, vectors[i]);
-                // Clear the serviced IF bit when INT is acknowledged
-                io_regs_[gb_constants::IO_IF] &= ~(1 << i);
-                break;
-            }
-        }
     } else {
         BUS_SET_BIT(pins_, Z80_INT_BIT);  // Deassert INT
     }

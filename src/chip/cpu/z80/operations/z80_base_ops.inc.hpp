@@ -1408,13 +1408,28 @@ bus_state_t op_sm83_int(bus_state_t pins) {
     case 7:
         bus_finish_mem(pins);
         return pins;
-    case 8: // Read interrupt vector address from bus
-        // The system places the vector on the data bus during the interrupt
-        // acknowledge cycle. The SM83 reads a single byte containing the
-        // vector address low byte (vectors are $0040,$0048,$0050,$0058,$0060).
-        regs_[PC] = BUS_GET_DATA(pins);
+    case 8: { // Dispatch to interrupt vector
+        // SM83: IF and IE are internal — read them directly to determine
+        // the highest-priority pending interrupt, clear the serviced IF
+        // flag, and jump to the fixed vector.
+        static constexpr uint16_t vectors[5] = {
+            0x0040, 0x0048, 0x0050, 0x0058, 0x0060
+        };
+        uint16_t vec = 0x0000;
+        if (sm83_if_reg_ && sm83_ie_reg_) {
+            uint8_t pending = *sm83_if_reg_ & *sm83_ie_reg_;
+            for (int i = 0; i < 5; i++) {
+                if (pending & (1 << i)) {
+                    vec = vectors[i];
+                    *sm83_if_reg_ &= ~(1 << i);
+                    break;
+                }
+            }
+        }
+        regs_[PC] = vec;
         transition_to_fetch();
         return pins;
+    }
     }
     return pins;
 }
