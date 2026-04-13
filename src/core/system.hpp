@@ -436,6 +436,11 @@ public:
     uint64_t get_total_cycles() const;
     float get_speed_multiplier() const;
     bool is_quit_requested() const { return quit_requested_; }
+
+    /// Retrieve accumulated debug text output (e.g. serial port bytes).
+    /// Returns the text gathered since the last call and clears the buffer.
+    /// Default: returns empty string.
+    virtual std::string drain_debug_text() { return {}; }
     void request_quit() { quit_requested_ = true; }
 
     /// Whether the system is ready to execute (e.g. has ROM loaded).

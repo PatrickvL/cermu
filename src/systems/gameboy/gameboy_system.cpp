@@ -24,6 +24,7 @@
 #include "core/storage/rom_loader.hpp"
 #include "core/config/path_discovery.hpp"
 #include "core/formats/format_load_helpers.hpp"
+#include "core/formats/gb_format.hpp"
 #include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <cstdio>
@@ -61,13 +62,37 @@ static HardwareTraits create_gb_hardware_traits() {
 // SYSTEM DESCRIPTORS
 // ============================================================================
 
+static const format_descriptor_t* const gb_formats[] = {
+    &GB_FORMAT_DESCRIPTOR, nullptr
+};
+
+static SystemProbeResult gb_probe_file(
+    const format_descriptor_t* matched_format,
+    const char* /*filepath*/,
+    const uint8_t* data, size_t size)
+{
+    SystemProbeResult result;
+    if (!matched_format || matched_format != &GB_FORMAT_DESCRIPTOR) return result;
+    if (size < 0x150) return result;
+
+    // CGB flag at $143: $80 = GBC compatible, $C0 = GBC only
+    uint8_t cgb_flag = data[0x143];
+    if (cgb_flag == 0xC0) {
+        // GBC-only ROM — prefer GBC system (lower confidence for DMG)
+        result.confidence = 0.50f;
+    } else {
+        result.confidence = 1.0f;
+    }
+    return result;
+}
+
 static SystemDescriptor dmg_descriptor = {
     "Game Boy", "DMG",
     "Nintendo Game Boy — Sharp SM83, 4 shades of green (1989)",
     "gameboy", {"Game Boy", "DMG", "GB", "GameBoy"},
-    nullptr,
+    gb_formats,
     create_gb_hardware_traits<GameBoyVariant::DMG>(),
-    nullptr,
+    gb_probe_file,
     "Nintendo", 1989, "Sharp SM83 (LR35902)", SystemType::Console
 };
 
@@ -75,9 +100,9 @@ static SystemDescriptor gbc_descriptor = {
     "Game Boy Color", "GBC",
     "Nintendo Game Boy Color — Sharp SM83, 32768 colors (1998)",
     "gameboy", {"Game Boy Color", "GBC", "CGB", "GameBoyColor"},
-    nullptr,
+    gb_formats,
     create_gb_hardware_traits<GameBoyVariant::GBC>(),
-    nullptr,
+    gb_probe_file,  // DMG wins for non-CGB-only ROMs (higher confidence)
     "Nintendo", 1998, "Sharp SM83 (LR35902)", SystemType::Console
 };
 
@@ -447,6 +472,19 @@ bus_state_t GameBoySystem<V>::io_tick(bus_state_t pins) {
     } else {
         io_regs_[offset] = BUS_GET_DATA(pins);
 
+        // $FF02 — Serial control: bit 7 = transfer start, bit 0 = internal clock
+        // When a transfer is initiated with internal clock ($81), capture the
+        // byte in SB ($FF01) as debug text output (used by Blargg's tests).
+        // Immediately complete the transfer: clear bit 7, set SB to $FF
+        // (no external device connected), and flag serial interrupt.
+        if (offset == gb_constants::IO_SC && (BUS_GET_DATA(pins) & 0x81) == 0x81) {
+            uint8_t sb = io_regs_[gb_constants::IO_SB];
+            if (sb != 0 && sb != 0xFF) serial_output_ += static_cast<char>(sb);
+            io_regs_[gb_constants::IO_SB] = 0xFF;  // No link partner
+            io_regs_[gb_constants::IO_SC] &= 0x7F;  // Transfer complete
+            io_regs_[gb_constants::IO_IF] |= 0x08;  // Serial interrupt (IF bit 3)
+        }
+
         // $FF50 — Boot ROM disable: any non-zero write unmaps the boot ROM
         if (offset == 0x50 && BUS_GET_DATA(pins) != 0) {
             boot_rom_active_ = false;
@@ -576,6 +614,13 @@ bool GameBoySystem<V>::load_roms() {
     if (!system_config_discover_rom_root("gameboy", rom_root, sizeof(rom_root)))
         return false;
     return board_.load_roms(rom_root, "Game Boy");
+}
+
+template<GameBoyVariant V>
+std::string GameBoySystem<V>::drain_debug_text() {
+    std::string out;
+    out.swap(serial_output_);
+    return out;
 }
 
 // ============================================================================

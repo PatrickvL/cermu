@@ -193,6 +193,13 @@ private:
     // mapped over cartridge ROM until the boot sequence writes to $FF50.
     bool boot_rom_active_     = false;
 
+    // Serial output capture — accumulates bytes sent via $FF01/$FF02
+    // for test ROM serial link output (Blargg's tests, etc.).
+    std::string serial_output_;
+    uint16_t serial_cycles_    = 0;  // Transfer clock counter
+    bool     serial_active_    = false;
+    std::string drain_debug_text() override;
+
     bus_state_t pins_ = GB_BUS_DEFAULT_STATE;
     uint32_t frame_counter_ = 0;
 

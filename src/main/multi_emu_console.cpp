@@ -15,6 +15,7 @@ int main(int argc, char** argv) {
     int requested_frames = 300;
     bool quiet = false;
     bool gfx_check = false;
+    bool serial_mode = false;  // --serial: capture serial/debug text output
     bool early_exit = false;   // --early-exit: stop as soon as video output detected
     int early_exit_interval = 30;  // check GFX every N frames during early-exit
     const char* system_name = nullptr;   // --system <name>: boot a system bare (no file)
@@ -35,6 +36,9 @@ int main(int argc, char** argv) {
             first_positional = i + 1;
         } else if (strcmp(argv[i], "--gfx") == 0) {
             gfx_check = true;
+            first_positional = i + 1;
+        } else if (strcmp(argv[i], "--serial") == 0) {
+            serial_mode = true;
             first_positional = i + 1;
         } else if (strcmp(argv[i], "--early-exit") == 0) {
             early_exit = true;
@@ -178,10 +182,24 @@ int main(int argc, char** argv) {
         float drain_buf[8192];
         int frames_ran = 0;
         bool early_exited = false;
+        std::string serial_accum;   // Accumulated serial/debug text output
 
         for (int i = 0; i < total_frames; i++) {
             system->run_frame();
             frames_ran = i + 1;
+
+            // Capture serial output every frame
+            if (serial_mode) {
+                std::string chunk = system->drain_debug_text();
+                if (!chunk.empty()) {
+                    serial_accum += chunk;
+                    // Early exit on pass/fail detection
+                    if (serial_accum.find("Passed") != std::string::npos ||
+                        serial_accum.find("Failed") != std::string::npos) {
+                        break;
+                    }
+                }
+            }
 
             if (frames_ran % 50 == 0) {
                 uint32_t got = system->get_audio_samples(drain_buf, 8192);
@@ -213,6 +231,23 @@ int main(int argc, char** argv) {
             }
         }
         log_info("\n");
+
+        // Serial/debug text output
+        if (serial_mode) {
+            // Drain any remaining output after the loop
+            std::string tail = system->drain_debug_text();
+            if (!tail.empty()) serial_accum += tail;
+
+            if (!serial_accum.empty()) {
+                fprintf(stdout, "SERIAL_OUTPUT:\n%s\n", serial_accum.c_str());
+            }
+            // Machine-readable pass/fail
+            bool passed = serial_accum.find("Passed") != std::string::npos;
+            bool failed = serial_accum.find("Failed") != std::string::npos;
+            fprintf(stdout, "SERIAL_RESULT: %s (frames=%d)\n",
+                    passed ? "PASSED" : (failed ? "FAILED" : "TIMEOUT"),
+                    frames_ran);
+        }
         
         // Graphics detection — analyze signal data for non-blank content
         if (gfx_check) {
