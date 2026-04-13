@@ -311,6 +311,17 @@ public:
         // SM83 has no BUSREQ/BUSACK and no NMI — interrupt model is simpler
         // (level-triggered only, handled in m1_fetch via IF & IE registers)
 
+        // SM83 M-cycle padding: each memory operation on the Z80 takes 3 T-states,
+        // but SM83 uses 4 T-states per M-cycle.  bus_finish_mem() sets
+        // mem_cycle_pad_ to inject this extra idle T-state automatically.
+        if constexpr (is_sm83()) {
+            if (mem_cycle_pad_) {
+                mem_cycle_pad_ = false;
+                bus_prev_ = pins;
+                return pins;
+            }
+        }
+
         // Normal execution — dispatch to current handler
         pins = (this->*current_handler_)(pins);
         bus_prev_ = pins;
@@ -360,6 +371,7 @@ private:
     bool     iff1_ = false; // Interrupt flip-flop 1 (master enable)
     bool     iff2_ = false; // Interrupt flip-flop 2 (saved during NMI)
     bool     q_ = false;    // Q flag (tracks F modification for SCF/CCF)
+    bool     mem_cycle_pad_ = false; // SM83: extra T-state after memory ops (4T per M-cycle)
 
     // ========================================================================
     // FLAG LAYOUT — compile-time selection of flag bit positions
@@ -403,9 +415,12 @@ private:
     }
 
     /// Finish a memory access cycle (T3: deassert MREQ)
+    /// SM83: sets mem_cycle_pad_ to inject an extra T-state, making each
+    /// memory M-cycle 4 T-states (vs Z80's 3).
     inline void bus_finish_mem(bus_state_t& pins) {
         BUS_SET_BIT(pins, Z80_MREQ_BIT);  // Deassert MREQ
         BUS_SET_BIT(pins, BUS_RW_BIT);    // Back to read idle
+        if constexpr (is_sm83()) mem_cycle_pad_ = true;
     }
 
     /// Set up an I/O read cycle (T1 of an I/O read M-cycle)
