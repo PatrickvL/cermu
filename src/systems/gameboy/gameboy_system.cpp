@@ -27,6 +27,7 @@
 #include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <cstdio>
+#include <algorithm>
 
 // ============================================================================
 // HARDWARE TRAITS
@@ -148,10 +149,18 @@ bool GameBoySystem<V>::initialize() {
 
     video_port_ = std::make_unique<CompositeVideoPort>();
     video_port_->bind_frame_output(&last_frame_data_);
+    video_port_->set_palette(board_.ppu.system_palette(),
+                             board_.ppu.palette_size());
+
+    // Wire PPU video output to the composite video port
+    board_.ppu.set_video_out(&video_port_->output());
 
     audio_port_ = std::make_unique<AudioPort>();
-    audio_port_->configure(gb_constants::DEFAULT_SAMPLE_RATE,
+    audio_port_->configure(gb_constants::CPU_FREQ_HZ,
                            gb_constants::DEFAULT_SAMPLE_RATE);
+
+    // Default MBC (ROM only) — replaced when a cartridge is loaded
+    mbc_ = std::make_unique<GbMbcNone>();
 
     system_ready_ = true;
     log_info("Game Boy: Initialized\n");
@@ -169,12 +178,12 @@ void GameBoySystem<V>::reset() {
     pins_ = board_.cpu.reset(pins_);
     frame_counter_ = 0;
     div_counter_ = 0;
-    timer_counter_ = 0;
     ie_ = 0;
     joypad_buttons_ = 0x0F;
     joypad_dpad_ = 0x0F;
     std::memset(io_regs_, 0, sizeof(io_regs_));
     std::memset(hram_, 0, sizeof(hram_));
+    if (mbc_) mbc_->reset();
 }
 
 // ============================================================================
@@ -183,9 +192,13 @@ void GameBoySystem<V>::reset() {
 
 template<GameBoyVariant V>
 void GameBoySystem<V>::tick() {
-    // PPU dot tick
-    bus_state_t ppu_bus = 0;
-    ppu_bus = board_.ppu.tick(ppu_bus);
+    // PPU dot tick — returns interrupt request bits
+    uint8_t ppu_irq = board_.ppu.tick();
+    io_regs_[gb_constants::IO_IF] |= ppu_irq;
+
+    // APU tick — generate audio sample
+    float apu_sample = board_.apu.tick();
+    if (audio_port_) audio_port_->drive(apu_sample);
 
     // SM83 interrupt model: drive INT pin based on IF & IE
     // Active-low: assert INT (clear bit) when any enabled interrupt is pending
@@ -218,20 +231,111 @@ void GameBoySystem<V>::tick() {
     if (mreq) {
         uint16_t addr = BUS_GET_ADDR(pins_);
 
-        if (addr >= 0xFF00) {
-            // High page: I/O, HRAM, IE
-            pins_ = io_tick(pins_);
-        } else {
-            // Echo RAM ($E000–$FDFF): mirror of $C000–$DDFF
-            if (addr >= 0xE000 && addr < 0xFE00) {
-                BUS_SET_ADDR(pins_, addr - 0x2000);
+        if (addr < 0x8000) {
+            // ROM area ($0000–$7FFF): MBC handles banking
+            if (BUS_GET_BIT(pins_, BUS_RW_BIT)) {
+                BUS_SET_DATA(pins_, mbc_->rom_read(addr));
+            } else {
+                mbc_->rom_write(addr, BUS_GET_DATA(pins_));
             }
-            pins_ = bus_.tick(pins_);
+        } else if (addr < 0xA000) {
+            // VRAM ($8000–$9FFF): also accessible by PPU
+            uint16_t vram_addr = addr - 0x8000;
+            if (BUS_GET_BIT(pins_, BUS_RW_BIT)) {
+                BUS_SET_DATA(pins_, board_.ppu.vram_[vram_addr]);
+            } else {
+                board_.ppu.vram_[vram_addr] = BUS_GET_DATA(pins_);
+            }
+        } else if (addr < 0xC000) {
+            // External RAM ($A000–$BFFF): MBC handles banking
+            if (BUS_GET_BIT(pins_, BUS_RW_BIT)) {
+                BUS_SET_DATA(pins_, mbc_->ram_read(addr));
+            } else {
+                mbc_->ram_write(addr, BUS_GET_DATA(pins_));
+            }
+        } else if (addr < 0xFE00) {
+            // WRAM ($C000–$DFFF) + Echo RAM ($E000–$FDFF)
+            uint16_t wram_addr = addr;
+            if (addr >= 0xE000) wram_addr -= 0x2000;  // Echo mirror
+            wram_addr -= 0xC000;
+            if (wram_addr < gb_constants::WRAM_SIZE) {
+                uint8_t* wram = board_.wram.data();
+                if (BUS_GET_BIT(pins_, BUS_RW_BIT)) {
+                    BUS_SET_DATA(pins_, wram[wram_addr]);
+                } else {
+                    wram[wram_addr] = BUS_GET_DATA(pins_);
+                }
+            }
+        } else if (addr < 0xFEA0) {
+            // OAM ($FE00–$FE9F)
+            uint8_t oam_offset = addr - 0xFE00;
+            if (BUS_GET_BIT(pins_, BUS_RW_BIT)) {
+                BUS_SET_DATA(pins_, board_.ppu.oam_[oam_offset]);
+            } else {
+                board_.ppu.oam_[oam_offset] = BUS_GET_DATA(pins_);
+            }
+        } else if (addr < 0xFF00) {
+            // Unusable area ($FEA0–$FEFF)
+            if (BUS_GET_BIT(pins_, BUS_RW_BIT))
+                BUS_SET_DATA(pins_, 0xFF);
+        } else {
+            // High page: I/O, HRAM, IE ($FF00–$FFFF)
+            // Resolve address → chip-select, then let chips self-dispatch
+            pins_ = bus_.resolve(pins_);
+            pins_ = bus_.service(pins_);
+            pins_ = board_.ppu.tick_mmio(pins_);
+            pins_ = board_.apu.tick_mmio(pins_);
+            if (!ChipBase::is_cs_serviced(pins_))
+                pins_ = io_tick(pins_);
         }
     }
 
-    // Timer / divider
+    // Timer: 16-bit internal divider, TIMA counter
+    uint16_t old_div = div_counter_;
     div_counter_++;
+    io_regs_[gb_constants::IO_DIV] = static_cast<uint8_t>(div_counter_ >> 8);
+
+    // TIMA increment: TAC selects which bit of the divider falling edge clocks TIMA
+    uint8_t tac = io_regs_[gb_constants::IO_TAC];
+    if (tac & 0x04) {  // Timer enable
+        // TAC bits 0-1 select divider bit: 0=bit9(4096Hz), 1=bit3(262144Hz),
+        //                                   2=bit5(65536Hz), 3=bit7(16384Hz)
+        static constexpr uint8_t tac_bits[4] = { 9, 3, 5, 7 };
+        uint8_t bit = tac_bits[tac & 0x03];
+        // Falling edge detection on the selected divider bit
+        bool old_bit = (old_div >> bit) & 1;
+        bool new_bit = (div_counter_ >> bit) & 1;
+        if (old_bit && !new_bit) {
+            io_regs_[gb_constants::IO_TIMA]++;
+            if (io_regs_[gb_constants::IO_TIMA] == 0) {
+                // TIMA overflow: reload from TMA and request timer interrupt
+                io_regs_[gb_constants::IO_TIMA] = io_regs_[gb_constants::IO_TMA];
+                io_regs_[gb_constants::IO_IF] |= 0x04;  // Timer interrupt (IF bit 2)
+            }
+        }
+    }
+
+    // OAM DMA transfer (160 bytes, takes 160 M-cycles = 640 T-states)
+    // Simplified: instant transfer on write to DMA register
+    if (board_.ppu.dma_pending_) {
+        board_.ppu.dma_pending_ = false;
+        uint16_t src = board_.ppu.dma_source_;
+        for (int i = 0; i < 160; i++) {
+            uint16_t addr = src + i;
+            uint8_t val = 0xFF;
+            if (addr < 0x8000) {
+                val = mbc_->rom_read(addr);
+            } else if (addr < 0xA000) {
+                val = board_.ppu.vram_[addr - 0x8000];
+            } else if (addr < 0xC000) {
+                val = mbc_->ram_read(addr);
+            } else if (addr < 0xE000) {
+                uint8_t* wram = board_.wram.data();
+                val = wram[addr - 0xC000];
+            }
+            board_.ppu.oam_[i] = val;
+        }
+    }
 
     frame_counter_++;
     total_cycles_++;
@@ -284,30 +388,12 @@ bus_state_t GameBoySystem<V>::io_tick(bus_state_t pins) {
         return pins;
     }
 
-    // $FF10–$FF3F — APU (delegated)
-    if (offset >= 0x10 && offset <= 0x3F) {
-        bus_state_t apu_bus = 0;
-        BUS_SET_ADDR(apu_bus, offset);
-        BUS_SET_DATA(apu_bus, BUS_GET_DATA(pins));
+    // $FF04 — DIV: any write resets the 16-bit divider to 0
+    if (offset == gb_constants::IO_DIV) {
         if (is_read) {
-            apu_bus = board_.apu.on_bus_read(apu_bus);
-            BUS_SET_DATA(pins, BUS_GET_DATA(apu_bus));
+            BUS_SET_DATA(pins, static_cast<uint8_t>(div_counter_ >> 8));
         } else {
-            board_.apu.on_bus_write(apu_bus);
-        }
-        return pins;
-    }
-
-    // $FF40–$FF4B — PPU (delegated)
-    if (offset >= 0x40 && offset <= 0x4B) {
-        bus_state_t ppu_bus = 0;
-        BUS_SET_ADDR(ppu_bus, offset - 0x40);
-        BUS_SET_DATA(ppu_bus, BUS_GET_DATA(pins));
-        if (is_read) {
-            ppu_bus = board_.ppu.on_bus_read(ppu_bus);
-            BUS_SET_DATA(pins, BUS_GET_DATA(ppu_bus));
-        } else {
-            board_.ppu.on_bus_write(ppu_bus);
+            div_counter_ = 0;
         }
         return pins;
     }

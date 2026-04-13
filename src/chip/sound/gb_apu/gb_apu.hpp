@@ -127,6 +127,16 @@ struct gb_apu_t : public SoundChipBase {
 
     bool has_mmio() const override { return true; }
 
+    // ── CS-tick: self-dispatch register access when chip-selected ────
+    bus_state_t tick_mmio(bus_state_t bus) noexcept {
+        if (is_cs_selected(bus)) {
+            bus = BUS_GET_BIT(bus, BUS_RW_BIT)
+                ? on_bus_read(bus) : on_bus_write(bus);
+            mark_cs_serviced(bus);
+        }
+        return bus;
+    }
+
     // ── Read mask table: many APU registers have bits that read back as 1 ──
     bus_state_t on_bus_read(bus_state_t bus) noexcept override {
         uint8_t addr = BUS_GET_ADDR(bus) & 0x3F;

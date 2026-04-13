@@ -37,6 +37,7 @@
 #include "utils/ring_buffer.hpp"
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 enum class GameBoyVariant { DMG, GBC };
 
@@ -78,8 +79,17 @@ template<GameBoyVariant V>
 inline constexpr auto kGameBoyManifest = make_manifest(
     Slot<SharpSM83>{.base_addr = 0x0000, .label = "SM83 (LR35902)"},
 
+    // Boot ROM ($0000–$00FF on DMG, $0000–$08FF on GBC) — optional system ROM
+    Slot<ROMChip>{.base_addr = 0x0000,
+                  .size_bytes = (V == GameBoyVariant::GBC) ? size_t(0x0900) : size_t(0x0100),
+                  .label = "Boot ROM",
+                  .rom = {.filenames = (V == GameBoyVariant::DMG)
+                      ? "dmg_boot.bin|mgb_boot.bin|sgb_boot.bin|sgb2_boot.bin"
+                      : "cgb_boot.bin|cgb0_boot.bin",
+                      .optional = true}},
+
     Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x8000,
-                  .label = "ROM (bank 0 + switchable)"},
+                  .label = "Cartridge ROM"},
     Slot<RAMChip>{.base_addr = 0x8000, .size_bytes = gb_constants::VRAM_SIZE,
                   .label = "VRAM"},
     Slot<RAMChip>{.base_addr = 0xA000, .size_bytes = 0x2000,
@@ -87,10 +97,11 @@ inline constexpr auto kGameBoyManifest = make_manifest(
     Slot<RAMChip>{.base_addr = 0xC000, .size_bytes = gb_constants::WRAM_SIZE,
                   .label = "WRAM"},
 
-    Slot<gb_ppu_t>{.base_addr = 0xFF40, .addr_mask = 0x000F,
-                   .label = "PPU"},
+    // APU before PPU so PPU overrides APU's sub-page for $FF40–$FF4F
     Slot<gb_apu_t>{.base_addr = 0xFF10, .addr_mask = 0x003F,
                    .label = "APU"},
+    Slot<gb_ppu_t>{.base_addr = 0xFF40, .addr_mask = 0x000F,
+                   .label = "PPU"},
 
     // Ports
     Slot<PortExpansion>{.name = "Cartridge Slot"},
@@ -99,24 +110,25 @@ inline constexpr auto kGameBoyManifest = make_manifest(
 );
 
 template<GameBoyVariant V>
-using GameBoyBusSpec = ManifestBusSpec<kGameBoyManifest<V>, 16, 8>;
+using GameBoyBusSpec = ManifestBusSpec<kGameBoyManifest<V>, 16, 8, 1, true>;
 
 template<GameBoyVariant V>
 struct GameBoyBoard : Board<GameBoyBusSpec<V>> {
     using ComponentTuple = typename decltype(kGameBoyManifest<V>)::component_tuple;
     ComponentTuple components_;
 
-    SharpSM83& cpu    = std::get<0>(components_);
-    ROMChip&   rom    = std::get<1>(components_);
-    RAMChip&   vram   = std::get<2>(components_);
-    RAMChip&   extram = std::get<3>(components_);
-    RAMChip&   wram   = std::get<4>(components_);
-    gb_ppu_t&  ppu    = std::get<5>(components_);
-    gb_apu_t&  apu    = std::get<6>(components_);
+    SharpSM83& cpu     = std::get<0>(components_);
+    ROMChip&   bootrom = std::get<1>(components_);
+    ROMChip&   rom     = std::get<2>(components_);
+    RAMChip&   vram    = std::get<3>(components_);
+    RAMChip&   extram  = std::get<4>(components_);
+    RAMChip&   wram    = std::get<5>(components_);
+    gb_apu_t&  apu     = std::get<6>(components_);
+    gb_ppu_t&  ppu     = std::get<7>(components_);
 
-    PortExpansion&      cart_port  = std::get<7>(components_);
-    PortCompositeVideo& video_port = std::get<8>(components_);
-    PortAudioStereo&    audio_port = std::get<9>(components_);
+    PortExpansion&      cart_port  = std::get<8>(components_);
+    PortCompositeVideo& video_port = std::get<9>(components_);
+    PortAudioStereo&    audio_port = std::get<10>(components_);
 
     GameBoyBoard() : Board<GameBoyBusSpec<V>>(kGameBoyManifest<V>) {}
 };
@@ -171,9 +183,8 @@ private:
     uint8_t joypad_dpad_      = 0x0F;  // Right, Left, Up, Down
     uint8_t joypad_select_    = 0;     // Which half to read ($FF00 bits 4-5)
 
-    // Timer
-    uint16_t div_counter_     = 0;   // Internal divider
-    uint16_t timer_counter_   = 0;
+    // Timer — internal 16-bit divider, TIMA counter, TMA modulo, TAC control
+    uint16_t div_counter_     = 0;   // Internal 16-bit divider (incremented every T-state)
     uint8_t  io_regs_[128]    = {};  // $FF00–$FF7F shadow
     uint8_t  hram_[127]       = {};  // $FF80–$FFFE
     uint8_t  ie_              = 0;   // $FFFF interrupt enable

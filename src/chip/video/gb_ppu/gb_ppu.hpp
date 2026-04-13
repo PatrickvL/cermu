@@ -138,6 +138,16 @@ struct gb_ppu_t : public VideoChipBase {
 
     bool has_mmio() const override { return true; }
 
+    // ── CS-tick: self-dispatch register access when chip-selected ────
+    bus_state_t tick_mmio(bus_state_t bus) noexcept {
+        if (is_cs_selected(bus)) {
+            bus = BUS_GET_BIT(bus, BUS_RW_BIT)
+                ? on_bus_read(bus) : on_bus_write(bus);
+            mark_cs_serviced(bus);
+        }
+        return bus;
+    }
+
     bus_state_t on_bus_read(bus_state_t bus) noexcept override {
         uint8_t addr = BUS_GET_ADDR(bus) & 0x0F;
         if (addr < gb_ppu::reg::REG_COUNT) {
