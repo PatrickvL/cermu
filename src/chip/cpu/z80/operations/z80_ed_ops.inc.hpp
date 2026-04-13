@@ -28,7 +28,7 @@ bus_state_t op_in_r_c(bus_state_t pins) {
         regs_[WZ] = regs_[BC] + 1; // WZ = BC + 1 (before register write modifies BC)
         uint8_t y = (ed_opcode_ >> 3) & 7;
         if (y != 6) set_reg8_direct(y, val); // IN (C) just sets flags, discards value
-        regs_[F] = (regs_[F] & Flags::C) | sz53p_table[val];
+        regs_[F] = (regs_[F] & Fl::C) | sz53p_table[val];
         transition_to_fetch();
         return pins;
     }
@@ -170,9 +170,9 @@ bus_state_t op_ld_a_ir(bus_state_t pins) {
         } else {
             regs_[A] = (regs_[R] & 0x80) | (regs_[R] & 0x7F);
         }
-        regs_[F] = (regs_[F] & Flags::C)
+        regs_[F] = (regs_[F] & Fl::C)
                 | sz53_table[regs_[A]]
-                | (iff2_ ? Flags::PV : 0);
+                | (iff2_ ? Fl::PV : 0);
         transition_to_fetch();
         return pins;
     }
@@ -309,10 +309,10 @@ bus_state_t op_ldi_ldd(bus_state_t pins) {
         regs_[DE] += dir;
         regs_[BC]--;
         uint8_t n = data_latch_ + regs_[A];
-        regs_[F] = (regs_[F] & (Flags::S | Flags::Z | Flags::C))
-                | (regs_[BC] ? Flags::PV : 0)
-                | (n & Flags::X)
-                | ((n << 4) & Flags::Y);
+        regs_[F] = (regs_[F] & (Fl::S | Fl::Z | Fl::C))
+                | (regs_[BC] ? Fl::PV : 0)
+                | (n & Fl::X)
+                | ((n << 4) & Fl::Y);
         transition_to_fetch();
         return pins;
     }
@@ -343,10 +343,10 @@ bus_state_t op_ldir_lddr(bus_state_t pins) {
         regs_[DE] += dir;
         regs_[BC]--;
         uint8_t n = data_latch_ + regs_[A];
-        regs_[F] = (regs_[F] & (Flags::S | Flags::Z | Flags::C))
-                | (regs_[BC] ? Flags::PV : 0)
-                | (n & Flags::X)
-                | ((n << 4) & Flags::Y);
+        regs_[F] = (regs_[F] & (Fl::S | Fl::Z | Fl::C))
+                | (regs_[BC] ? Fl::PV : 0)
+                | (n & Fl::X)
+                | ((n << 4) & Fl::Y);
         if (regs_[BC] == 0) {
             transition_to_fetch(); // 16T total
             return pins;
@@ -361,7 +361,7 @@ bus_state_t op_ldir_lddr(bus_state_t pins) {
         regs_[WZ] = regs_[PC] + 1;
         // In repeat path, Y/X come from PCi high byte (David Banks)
         uint8_t pch = static_cast<uint8_t>(regs_[PC] >> 8);
-        regs_[F] = (regs_[F] & ~(Flags::Y | Flags::X)) | (pch & (Flags::Y | Flags::X));
+        regs_[F] = (regs_[F] & ~(Fl::Y | Fl::X)) | (pch & (Fl::Y | Fl::X));
         transition_to_fetch();
         return pins;
     }
@@ -386,18 +386,18 @@ bus_state_t op_cpi_cpd(bus_state_t pins) {
         int16_t dir = (ed_opcode_ & 0x08) ? -1 : 1;
         uint8_t val = data_latch_;
         uint8_t result = regs_[A] - val;
-        uint8_t hc = (regs_[A] ^ val ^ result) & Flags::H;
+        uint8_t hc = (regs_[A] ^ val ^ result) & Fl::H;
         uint8_t n = result - (hc ? 1 : 0);
         regs_[HL] += dir;
         regs_[BC]--;
-        regs_[F] = (regs_[F] & Flags::C)
-                | Flags::N
-                | (result ? 0 : Flags::Z)
-                | (result & Flags::S)
+        regs_[F] = (regs_[F] & Fl::C)
+                | Fl::N
+                | (result ? 0 : Fl::Z)
+                | (result & Fl::S)
                 | hc
-                | (regs_[BC] ? Flags::PV : 0)
-                | (n & Flags::X)
-                | ((n << 4) & Flags::Y);
+                | (regs_[BC] ? Fl::PV : 0)
+                | (n & Fl::X)
+                | ((n << 4) & Fl::Y);
         regs_[WZ] += dir;
         transition_to_fetch();
         return pins;
@@ -423,18 +423,18 @@ bus_state_t op_cpir_cpdr(bus_state_t pins) {
         int16_t dir = (ed_opcode_ & 0x08) ? -1 : 1;
         uint8_t val = data_latch_;
         uint8_t result = regs_[A] - val;
-        uint8_t hc = (regs_[A] ^ val ^ result) & Flags::H;
+        uint8_t hc = (regs_[A] ^ val ^ result) & Fl::H;
         uint8_t n = result - (hc ? 1 : 0);
         regs_[HL] += dir;
         regs_[BC]--;
-        regs_[F] = (regs_[F] & Flags::C)
-                | Flags::N
-                | (result ? 0 : Flags::Z)
-                | (result & Flags::S)
+        regs_[F] = (regs_[F] & Fl::C)
+                | Fl::N
+                | (result ? 0 : Fl::Z)
+                | (result & Fl::S)
                 | hc
-                | (regs_[BC] ? Flags::PV : 0)
-                | (n & Flags::X)
-                | ((n << 4) & Flags::Y);
+                | (regs_[BC] ? Fl::PV : 0)
+                | (n & Fl::X)
+                | ((n << 4) & Fl::Y);
         regs_[WZ] += dir;
         if (regs_[BC] == 0 || result == 0) {
             transition_to_fetch();
@@ -449,7 +449,7 @@ bus_state_t op_cpir_cpdr(bus_state_t pins) {
         regs_[WZ] = regs_[PC] + 1;
         // In repeat path, Y/X come from PCi high byte (David Banks)
         uint8_t pch = static_cast<uint8_t>(regs_[PC] >> 8);
-        regs_[F] = (regs_[F] & ~(Flags::Y | Flags::X)) | (pch & (Flags::Y | Flags::X));
+        regs_[F] = (regs_[F] & ~(Fl::Y | Fl::X)) | (pch & (Fl::Y | Fl::X));
         transition_to_fetch();
         return pins;
     }
@@ -482,8 +482,8 @@ bus_state_t op_ini_ind(bus_state_t pins) {
         // Undocumented flags for block I/O input
         uint16_t k = static_cast<uint16_t>(data_latch_) + ((regs_[C] + dir) & 0xFF);
         regs_[F] = sz53_table[regs_[B]]
-                | ((data_latch_ & 0x80) ? Flags::N : 0)
-                | ((k > 0xFF) ? (Flags::H | Flags::C) : 0)
+                | ((data_latch_ & 0x80) ? Fl::N : 0)
+                | ((k > 0xFF) ? (Fl::H | Fl::C) : 0)
                 | parity_table[(k & 7) ^ regs_[B]];
         transition_to_fetch();
         return pins;
@@ -516,8 +516,8 @@ bus_state_t op_inir_indr(bus_state_t pins) {
         regs_[B]--;
         uint16_t k = static_cast<uint16_t>(data_latch_) + ((regs_[C] + dir) & 0xFF);
         bool hc = k > 0xFF;
-        uint8_t nf = (data_latch_ & 0x80) ? Flags::N : 0;
-        uint8_t hcf = hc ? (Flags::H | Flags::C) : 0;
+        uint8_t nf = (data_latch_ & 0x80) ? Fl::N : 0;
+        uint8_t hcf = hc ? (Fl::H | Fl::C) : 0;
         if (regs_[B] == 0) {
             // Non-repeat: standard flags (same as INI/IND)
             regs_[F] = sz53_table[regs_[B]] | nf | hcf
@@ -533,18 +533,18 @@ bus_state_t op_inir_indr(bus_state_t pins) {
             uint8_t pv_hf;
             if (hc) {
                 if (nf) {
-                    pv_hf = (!(regs_[B] & 0x0F) ? Flags::H : 0)
+                    pv_hf = (!(regs_[B] & 0x0F) ? Fl::H : 0)
                           | parity_table[p ^ ((regs_[B] - 1) & 7)];
                 } else {
-                    pv_hf = ((regs_[B] & 0x0F) == 0x0F ? Flags::H : 0)
+                    pv_hf = ((regs_[B] & 0x0F) == 0x0F ? Fl::H : 0)
                           | parity_table[p ^ ((regs_[B] + 1) & 7)];
                 }
             } else {
                 pv_hf = parity_table[p ^ (regs_[B] & 7)];
             }
-            regs_[F] = (regs_[B] & Flags::S)
-                    | (pch & (Flags::Y | Flags::X))
-                    | nf | (hc ? Flags::C : 0)
+            regs_[F] = (regs_[B] & Fl::S)
+                    | (pch & (Fl::Y | Fl::X))
+                    | nf | (hc ? Fl::C : 0)
                     | pv_hf;
         }
         return pins;
@@ -586,8 +586,8 @@ bus_state_t op_outi_outd(bus_state_t pins) {
         // Undocumented flags for block I/O output: k = data + L (L after HL change)
         uint16_t k = static_cast<uint16_t>(data_latch_) + regs_[L];
         regs_[F] = sz53_table[regs_[B]]
-                | ((data_latch_ & 0x80) ? Flags::N : 0)
-                | ((k > 0xFF) ? (Flags::H | Flags::C) : 0)
+                | ((data_latch_ & 0x80) ? Fl::N : 0)
+                | ((k > 0xFF) ? (Fl::H | Fl::C) : 0)
                 | parity_table[(k & 7) ^ regs_[B]];
         transition_to_fetch();
         return pins;
@@ -621,8 +621,8 @@ bus_state_t op_otir_otdr(bus_state_t pins) {
         regs_[WZ] = regs_[BC] + dir;
         uint16_t k = static_cast<uint16_t>(data_latch_) + regs_[L];
         bool hc = k > 0xFF;
-        uint8_t nf = (data_latch_ & 0x80) ? Flags::N : 0;
-        uint8_t hcf = hc ? (Flags::H | Flags::C) : 0;
+        uint8_t nf = (data_latch_ & 0x80) ? Fl::N : 0;
+        uint8_t hcf = hc ? (Fl::H | Fl::C) : 0;
         if (regs_[B] == 0) {
             // Non-repeat: standard flags (same as OUTI/OUTD)
             regs_[F] = sz53_table[regs_[B]] | nf | hcf
@@ -638,18 +638,18 @@ bus_state_t op_otir_otdr(bus_state_t pins) {
             uint8_t pv_hf;
             if (hc) {
                 if (nf) {
-                    pv_hf = (!(regs_[B] & 0x0F) ? Flags::H : 0)
+                    pv_hf = (!(regs_[B] & 0x0F) ? Fl::H : 0)
                           | parity_table[p ^ ((regs_[B] - 1) & 7)];
                 } else {
-                    pv_hf = ((regs_[B] & 0x0F) == 0x0F ? Flags::H : 0)
+                    pv_hf = ((regs_[B] & 0x0F) == 0x0F ? Fl::H : 0)
                           | parity_table[p ^ ((regs_[B] + 1) & 7)];
                 }
             } else {
                 pv_hf = parity_table[p ^ (regs_[B] & 7)];
             }
-            regs_[F] = (regs_[B] & Flags::S)
-                    | (pch & (Flags::Y | Flags::X))
-                    | nf | (hc ? Flags::C : 0)
+            regs_[F] = (regs_[B] & Fl::S)
+                    | (pch & (Fl::Y | Fl::X))
+                    | nf | (hc ? Fl::C : 0)
                     | pv_hf;
         }
         return pins;

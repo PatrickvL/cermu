@@ -150,7 +150,11 @@ void set_reg16_af(uint8_t idx, uint16_t val) {
     case 0: regs_[BC] = val; return;
     case 1: regs_[DE] = val; return;
     case 2: set_hl(val); return;
-    case 3: regs_[AF] = val; return;
+    case 3:
+        // SM83: lower nibble of F is always 0 (bits 0-3 not connected)
+        if constexpr (is_sm83()) val &= 0xFFF0;
+        regs_[AF] = val;
+        return;
     }
 }
 
@@ -161,14 +165,14 @@ void set_reg16_af(uint8_t idx, uint16_t val) {
 
 bool test_cc(uint8_t cc) const {
     switch (cc) {
-    case 0: return !(regs_[F] & Flags::Z);   // NZ
-    case 1: return  (regs_[F] & Flags::Z);   // Z
-    case 2: return !(regs_[F] & Flags::C);   // NC
-    case 3: return  (regs_[F] & Flags::C);   // C
-    case 4: return !(regs_[F] & Flags::PV);  // PO (Parity Odd / no overflow)
-    case 5: return  (regs_[F] & Flags::PV);  // PE (Parity Even / overflow)
-    case 6: return !(regs_[F] & Flags::S);   // P  (Sign positive)
-    case 7: return  (regs_[F] & Flags::S);   // M  (Sign minus)
+    case 0: return !(regs_[F] & Fl::Z);   // NZ
+    case 1: return  (regs_[F] & Fl::Z);   // Z
+    case 2: return !(regs_[F] & Fl::C);   // NC
+    case 3: return  (regs_[F] & Fl::C);   // C
+    case 4: return !(regs_[F] & Fl::PV);  // PO (Parity Odd / no overflow)
+    case 5: return  (regs_[F] & Fl::PV);  // PE (Parity Even / overflow)
+    case 6: return !(regs_[F] & Fl::S);   // P  (Sign positive)
+    case 7: return  (regs_[F] & Fl::S);   // M  (Sign minus)
     default: return false;
     }
 }

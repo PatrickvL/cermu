@@ -26,6 +26,38 @@ namespace Flags {
 } // namespace Flags
 
 // ============================================================================
+// Flag Layout Structs — compile-time flag bit positions per CPU variant
+// ============================================================================
+// Used via `using Fl = std::conditional_t<is_sm83(), SM83FlagLayout, Z80FlagLayout>`
+// inside z80_t. ALU code uses Fl::C, Fl::Z, etc. — flag-position-agnostic.
+// Absent flags (S, PV, X, Y on SM83) are zero, making OR-expressions no-ops.
+
+struct Z80FlagLayout {
+    static constexpr uint8_t C  = 0x01;  // Carry
+    static constexpr uint8_t N  = 0x02;  // Add/Subtract
+    static constexpr uint8_t PV = 0x04;  // Parity/Overflow
+    static constexpr uint8_t X  = 0x08;  // Undocumented (copy of bit 3)
+    static constexpr uint8_t H  = 0x10;  // Half carry
+    static constexpr uint8_t Y  = 0x20;  // Undocumented (copy of bit 5)
+    static constexpr uint8_t Z  = 0x40;  // Zero
+    static constexpr uint8_t S  = 0x80;  // Sign
+    static constexpr uint8_t VALID = 0xFF;
+};
+
+struct SM83FlagLayout {
+    static constexpr uint8_t C  = 0x10;  // Carry (bit 4)
+    static constexpr uint8_t H  = 0x20;  // Half carry (bit 5)
+    static constexpr uint8_t N  = 0x40;  // Add/Subtract (bit 6)
+    static constexpr uint8_t Z  = 0x80;  // Zero (bit 7)
+    // SM83 lacks these — zero constants make OR expressions no-ops
+    static constexpr uint8_t S  = 0;
+    static constexpr uint8_t PV = 0;
+    static constexpr uint8_t X  = 0;
+    static constexpr uint8_t Y  = 0;
+    static constexpr uint8_t VALID = 0xF0;
+};
+
+// ============================================================================
 // Z80 Condition Codes (for JR/JP/CALL/RET cc)
 // ============================================================================
 
