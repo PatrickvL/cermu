@@ -196,16 +196,25 @@ struct gb_ppu_t : public VideoChipBase {
         uint8_t lcdc = regs_.data[gb_ppu::LCDC];
 
         // LCD disabled — blank output, stay in mode 0, LY=0
+        // Must still track dot timing to emit periodic FrameEnd and prevent
+        // signal buffer overrun.
         if (!(lcdc & 0x80)) {
             if (video_out_) {
-                video_out_->drive({0, SyncFlag::Blank});
+                SyncFlag flags = SyncFlag::Blank;
+                if (lcd_off_counter_ == 0)
+                    flags = flags | SyncFlag::FrameEnd;
+                video_out_->drive({0, flags});
             }
+            lcd_off_counter_++;
+            if (lcd_off_counter_ >= gb_ppu::DOTS_PER_LINE * gb_ppu::TOTAL_LINES)
+                lcd_off_counter_ = 0;
             dot_counter_ = 0;
             ly_ = 0;
             mode_ = gb_ppu::MODE_HBLANK;
             window_line_counter_ = 0;
             return 0;
         }
+        lcd_off_counter_ = 0;
 
         uint8_t prev_mode = mode_;
 
@@ -300,6 +309,7 @@ struct gb_ppu_t : public VideoChipBase {
         dma_pending_ = false;
         dma_source_ = 0;
         sprite_count_ = 0;
+        lcd_off_counter_ = 0;
         std::memset(vram_, 0, sizeof(vram_));
         std::memset(oam_, 0, sizeof(oam_));
         std::memset(scanline_buffer_, 0, sizeof(scanline_buffer_));
@@ -315,6 +325,7 @@ struct gb_ppu_t : public VideoChipBase {
     uint8_t  mode_ = gb_ppu::MODE_OAM;
     bool     dma_pending_ = false;
     uint16_t dma_source_ = 0;
+    uint32_t lcd_off_counter_ = 0;  // FrameEnd timing when LCD is off
 
 #ifdef CERMU_HAS_GUI
     ChipLayout* create_chip_layout() const override;
