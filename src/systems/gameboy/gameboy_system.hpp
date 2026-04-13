@@ -33,6 +33,7 @@
 #include "chip/video/gb_ppu/gb_ppu.hpp"
 #include "chip/sound/gb_apu/gb_apu.hpp"
 #include "chip/memory/memory_chip.hpp"
+#include "chip/mmu/gb_mbc/gb_mbc.hpp"
 #include "utils/ring_buffer.hpp"
 #include <cstdint>
 #include <memory>
@@ -159,6 +160,11 @@ private:
     std::unique_ptr<CompositeVideoPort> video_port_;
     uint32_t audio_sample_rate_ = gb_constants::DEFAULT_SAMPLE_RATE;
     std::unique_ptr<AudioPort> audio_port_;
+
+    // MBC (Memory Bank Controller) — handles ROM/RAM banking
+    std::unique_ptr<GbMbcBase> mbc_;
+    std::vector<uint8_t> cart_rom_;     // Full cartridge ROM (up to 8MB)
+    std::vector<uint8_t> cart_ram_;     // External cartridge RAM (up to 128KB)
 
     // Joypad state (active-low)
     uint8_t joypad_buttons_   = 0x0F;  // A, B, Select, Start

@@ -332,14 +332,67 @@ template<GameBoyVariant V>
 bool GameBoySystem<V>::load_file(const char* filepath) {
     if (!filepath || !system_ready_) return false;
 
-    uint8_t* rom = board_.rom.data();
-    if (!rom) return false;
-
-    // Game Boy ROMs: 32KB minimum (bank 0 + bank 1)
-    // Larger ROMs use MBC banking (not yet implemented)
-    if (!load_raw_rom_mirrored(filepath, rom, 0x8000, 0x0000,
-                               get_descriptor().name, program_title_))
+    // Load the entire ROM file
+    size_t file_size = 0;
+    VfsData file_data(vfs_read_file(filepath, &file_size));
+    if (!file_data || file_size < 0x150) {
+        log_info("Game Boy: Failed to open or file too small: %s\n", filepath);
         return false;
+    }
+
+    const uint8_t* raw = reinterpret_cast<const uint8_t*>(file_data.get());
+
+    // Parse cartridge header
+    uint8_t cart_type = raw[0x0147];
+    uint8_t rom_code  = raw[0x0148];
+    uint8_t ram_code  = raw[0x0149];
+
+    uint32_t expected_rom_size = rom_size_from_header(rom_code);
+    uint32_t expected_ram_size = ram_size_from_header(ram_code);
+
+    // Use actual file size if larger than expected (some ROMs have padding)
+    uint32_t actual_rom_size = static_cast<uint32_t>(std::max(file_size,
+                                                     static_cast<size_t>(expected_rom_size)));
+
+    // Allocate ROM buffer (round up to power of 2 for clean masking)
+    uint32_t rom_alloc = 32768;  // Minimum 32KB
+    while (rom_alloc < actual_rom_size) rom_alloc <<= 1;
+    cart_rom_.resize(rom_alloc, 0xFF);
+    std::memcpy(cart_rom_.data(), raw, file_size);
+
+    // Mirror if file is smaller than allocation
+    if (file_size < rom_alloc) {
+        for (size_t offset = file_size; offset < rom_alloc; offset += file_size)
+            std::memcpy(cart_rom_.data() + offset, raw,
+                        std::min(file_size, static_cast<size_t>(rom_alloc) - offset));
+    }
+
+    // Allocate external RAM
+    cart_ram_.resize(expected_ram_size, 0);
+
+    // Create MBC from cartridge type
+    mbc_ = create_mbc(cart_type);
+    mbc_->bind_cartridge(cart_rom_.data(), rom_alloc,
+                         cart_ram_.empty() ? nullptr : cart_ram_.data(),
+                         static_cast<uint32_t>(cart_ram_.size()));
+
+    // Extract title from header ($0134–$0143)
+    char title[17] = {};
+    std::memcpy(title, raw + 0x0134, 16);
+    title[16] = '\0';
+    // Trim trailing nulls/spaces
+    for (int i = 15; i >= 0; i--) {
+        if (title[i] == '\0' || title[i] == ' ') title[i] = '\0';
+        else break;
+    }
+    program_title_ = title;
+
+    log_info("Game Boy: Loaded \"%s\" — type=$%02X, ROM=%uKB, RAM=%uKB, MBC=%s\n",
+             title, cart_type, rom_alloc / 1024, expected_ram_size / 1024,
+             cart_type == 0 ? "None" :
+             cart_type <= 3 ? "MBC1" :
+             cart_type <= 6 ? "MBC2" :
+             cart_type <= 0x13 ? "MBC3" : "MBC5");
 
     reset();
     return true;
