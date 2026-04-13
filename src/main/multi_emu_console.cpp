@@ -177,6 +177,9 @@ int main(int argc, char** argv) {
         int total_frames = requested_frames;
         log_info("Running %d frames%s...\n", total_frames,
                  early_exit ? " (early-exit on video output)" : "");
+
+        // Headless mode: skip rendering/audio for maximum throughput
+        if (serial_mode) system->set_headless(true);
         
         // Drain audio periodically to prevent ring-buffer overflow
         float drain_buf[8192];

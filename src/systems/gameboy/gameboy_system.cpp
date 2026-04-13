@@ -266,8 +266,10 @@ void GameBoySystem<V>::tick() {
     io_regs_[gb_constants::IO_IF] |= ppu_irq;
 
     // APU tick — generate audio sample
-    float apu_sample = board_.apu.tick();
-    if (audio_port_) audio_port_->drive(apu_sample);
+    if (unlikely(!headless_)) {
+        float apu_sample = board_.apu.tick();
+        if (audio_port_) audio_port_->drive(apu_sample);
+    }
 
     // SM83 interrupt model: drive INT pin based on IF & IE.
     // Level-triggered, active-low.  The CPU reads IF & IE directly (internal
@@ -346,12 +348,29 @@ void GameBoySystem<V>::tick() {
                 BUS_SET_DATA(pins_, 0xFF);
         } else {
             // High page: I/O, HRAM, IE ($FF00–$FFFF)
-            // Resolve address → chip-select, then let chips self-dispatch
-            pins_ = bus_.resolve(pins_);
-            pins_ = bus_.service(pins_);
-            pins_ = board_.ppu.tick_mmio(pins_);
-            pins_ = board_.apu.tick_mmio(pins_);
-            if (!ChipBase::is_cs_serviced(pins_))
+            //
+            // Dispatch directly by address offset — bypass bus_.resolve()
+            // because the page-table granularity (256 bytes) is coarser than
+            // the chip address ranges, causing incorrect chip-select matches
+            // for unrelated addresses.
+            uint8_t offset = addr & 0xFF;
+            bool serviced = false;
+
+            if (offset >= 0x40 && offset <= 0x4B) {
+                // PPU registers ($FF40–$FF4B)
+                pins_ = BUS_GET_BIT(pins_, BUS_RW_BIT)
+                    ? board_.ppu.on_bus_read(pins_)
+                    : board_.ppu.on_bus_write(pins_);
+                serviced = true;
+            } else if (offset >= 0x10 && offset <= 0x3F) {
+                // APU registers ($FF10–$FF3F)
+                pins_ = BUS_GET_BIT(pins_, BUS_RW_BIT)
+                    ? board_.apu.on_bus_read(pins_)
+                    : board_.apu.on_bus_write(pins_);
+                serviced = true;
+            }
+
+            if (!serviced)
                 pins_ = io_tick(pins_);
         }
     }
@@ -409,12 +428,26 @@ void GameBoySystem<V>::tick() {
 
 template<GameBoyVariant V>
 void GameBoySystem<V>::run_frame() {
+    if (unlikely(headless_)) {
+        // Headless: count exactly one frame's worth of dots
+        constexpr int DOTS_PER_FRAME = gb_ppu::DOTS_PER_LINE * gb_ppu::TOTAL_LINES;
+        for (int i = 0; i < DOTS_PER_FRAME; i++)
+            tick();
+        return;
+    }
+
     auto& output = video_port_->output();
     while (!output.frame_ended()) {
         tick();
     }
 
     video_port_->swap_frame();
+}
+
+template<GameBoyVariant V>
+void GameBoySystem<V>::set_headless(bool headless) {
+    headless_ = headless;
+    board_.ppu.headless_ = headless;
 }
 
 // ============================================================================

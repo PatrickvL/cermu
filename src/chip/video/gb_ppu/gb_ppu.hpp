@@ -136,6 +136,8 @@ struct gb_ppu_t : public VideoChipBase {
     CompositeVideoOut* video_out_ = nullptr;
     void set_video_out(CompositeVideoOut* s) { video_out_ = s; }
 
+    bool headless_ = false;  // Skip rendering/video output for maximum throughput
+
     bool has_mmio() const override { return true; }
 
     // ── CS-tick: self-dispatch register access when chip-selected ────
@@ -199,7 +201,7 @@ struct gb_ppu_t : public VideoChipBase {
         // Must still track dot timing to emit periodic FrameEnd and prevent
         // signal buffer overrun.
         if (!(lcdc & 0x80)) {
-            if (video_out_) {
+            if (unlikely(!headless_) && video_out_) {
                 SyncFlag flags = SyncFlag::Blank;
                 if (lcd_off_counter_ == 0)
                     flags = flags | SyncFlag::FrameEnd;
@@ -234,12 +236,12 @@ struct gb_ppu_t : public VideoChipBase {
             switch (mode_) {
                 case gb_ppu::MODE_OAM:
                     // OAM search start: evaluate sprites for this scanline
-                    oam_search();
+                    if (unlikely(!headless_)) oam_search();
                     if (regs_.data[gb_ppu::STAT] & 0x20) irq |= 0x02;  // STAT OAM interrupt
                     break;
                 case gb_ppu::MODE_XFER:
                     // Pixel transfer start: render the scanline
-                    render_scanline();
+                    if (unlikely(!headless_)) render_scanline();
                     scanline_pixel_ = 0;
                     break;
                 case gb_ppu::MODE_HBLANK:
@@ -252,8 +254,8 @@ struct gb_ppu_t : public VideoChipBase {
             }
         }
 
-        // Drive video output
-        if (video_out_) {
+        // Drive video output (skip in headless mode)
+        if (unlikely(!headless_) && video_out_) {
             SyncFlag flags = SyncFlag::None;
 
             // HSync pulse: active at dot 0, cleared at dot 1 to create

@@ -153,6 +153,7 @@ public:
 
     void tick() override;
     void run_frame() override;
+    void set_headless(bool headless) override;
 
     bool load_file(const char* filepath) override;
 

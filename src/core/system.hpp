@@ -218,6 +218,7 @@ protected:
     uint32_t cached_target_fps_ = 60;  // Cached to avoid per-frame virtual dispatch + vector lookup
     bool quit_requested_;
     bool system_ready_ = true;  // False until ROMs loaded / media inserted
+    bool headless_ = false;     // Skip rendering/audio for maximum throughput
 
     // Loaded program title — set by load_file() implementations.
     // For SID/NSF: song name + author.  For PRG/NES: bare filename.
@@ -638,6 +639,11 @@ public:
     virtual void set_speed_multiplier(float multiplier) {
         speed_multiplier_ = multiplier;
     }
+
+    /// Enable headless mode: skip rendering and audio for maximum throughput.
+    /// Systems override to propagate to subsystems (PPU, APU).
+    virtual void set_headless(bool headless) { headless_ = headless; }
+    bool is_headless() const { return headless_; }
 
     // Extended keyboard event handler with full SDL event information.
     // Receives keycode, scancode, modifier state, and repeat flag.
