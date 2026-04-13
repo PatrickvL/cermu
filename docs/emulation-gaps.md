@@ -170,7 +170,7 @@ Missing:
 - Controller I/O
 - No visible output yet
 
-### 2.13 Game Boy — **[STUB] L**
+### 2.13 Game Boy — **[INCOMPLETE] M**
 SM83 CPU core fully implemented via Z80 trait system (`if constexpr` gating):
 - ✅ SM83-specific M1 fetch cycle (no refresh T-states)
 - ✅ SM83-unique opcodes: STOP, LD (HL+/HL-), LDH ($FF00+n/C), ADD SP,e, LD HL,SP+e, LD (nn),SP, RETI
@@ -180,13 +180,23 @@ SM83 CPU core fully implemented via Z80 trait system (`if constexpr` gating):
 - ✅ Game Boy post-boot register initialization (AF=$01B0, BC=$0013, etc.)
 - ✅ Echo RAM mirroring ($E000–$FDFF → $C000–$DDFF)
 - ✅ No IX/IY registers, no shadow registers, no ED prefix, no I/O instructions
+- ✅ PPU mode state machine (OAM search → pixel transfer → H-Blank → V-Blank)
+- ✅ Scanline rendering: BG tiles, window, sprites (8×8 and 8×16)
+- ✅ STAT interrupts (mode transitions, LYC compare)
+- ✅ VBlank interrupt, OAM DMA transfer
+- ✅ DMG 4-shade palette (BGP, OBP0, OBP1)
+- ✅ APU: 4-channel synthesis (square+sweep, square, wave, noise)
+- ✅ APU: frame sequencer (512 Hz), length counters, volume envelopes, frequency sweep
+- ✅ APU: mixer with master volume and L/R panning (NR50/NR51)
+- ✅ MBC1, MBC2, MBC3 (with RTC), MBC5 bank controllers
+- ✅ Timer: DIV divider, TIMA/TMA/TAC with falling-edge detection
+- ✅ Video output wired to composite signal pipeline
+- ✅ Audio output wired to AudioPort with decimation
 
-ROM bank switching, GB PPU and GB APU instantiated.
-Missing:
-- PPU mode state machine (OAM search, pixel transfer, H-Blank, V-Blank)
-- APU channel synthesis (sweep, envelope, length counter, noise LFSR, wave)
-- MBC mapper variants (MBC1, MBC3, MBC5)
-- No visible or audible output yet
+ROM bank switching, GB PPU and GB APU fully functional.
+Remaining:
+- GBC extensions: VRAM banking, WRAM banking, double-speed mode, CGB palettes
+- Serial link cable: stub (register shadow only, no transfer logic)
 
 ### 2.14 PC Engine / TurboGrafx-16 — **[STUB] XL**
 WDC 65C02 used as stand-in CPU (real hardware uses HuC6280 — 8-bank MMU,
