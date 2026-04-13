@@ -108,6 +108,9 @@ data/**/*.zip
 # ZX Spectrum — Amstrad blanket permission for free distribution (1999 open letter).
 !data/spectrum/roms/*.rom
 
+# Game Boy — MiSTer open-source boot ROM replacements.
+!data/gameboy/roms/*.bin
+
 # External dependencies - ignore by default, unignore committed items
 # Submodules (ImGuiFileDialog, tomlplusplus, toonplusplus, LJON) are
 # handled by .gitmodules and unaffected by this rule.

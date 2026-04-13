@@ -26,3 +26,5 @@ Boot ROMs are copyrighted by Nintendo and are **not** included.
 - **Dump from original hardware** — Game Boy Dumper tools
 - **SameBoy** — open-source boot ROM replacements available
   - https://sameboy.github.io/
+- **MiSTer FPGA** — open-source boot ROM replacements (included)
+  - https://github.com/MiSTer-devel/Gameboy_MiSTer/tree/master/BootROMs
