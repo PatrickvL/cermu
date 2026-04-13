@@ -525,6 +525,10 @@ private:
             return pins;
 
         case 3: // T4: decode and execute
+            if (prefix_state_ == PREFIX_CB) {
+                prefix_state_ = PREFIX_NONE;
+                return decode_cb(pins, opcode_);
+            }
             return sm83_decode_and_execute(pins, opcode_);
         }
         return pins;
