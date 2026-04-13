@@ -270,7 +270,7 @@ struct gb_ppu_t : public VideoChipBase {
             uint8_t color = 0;
             if (mode_ == gb_ppu::MODE_XFER && scanline_pixel_ < gb_ppu::SCREEN_WIDTH) {
                 color = scanline_buffer_[scanline_pixel_++];
-            } else if (mode_ != gb_ppu::MODE_XFER || ly_ >= gb_ppu::SCREEN_HEIGHT) {
+            } else {
                 flags = flags | SyncFlag::Blank;
             }
 

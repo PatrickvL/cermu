@@ -133,24 +133,41 @@ bool GameBoySystem<V>::initialize() {
 
     pins_ = board_.cpu.init();
 
-    // Post-boot ROM register state (DMG/GBC)
-    // When no boot ROM is present, the system initializes CPU registers
-    // to match the state left by the boot ROM after completion.
-    board_.cpu.set(z80::reg::AF, static_cast<uint16_t>(0x01B0));
-    board_.cpu.set(z80::reg::BC, static_cast<uint16_t>(0x0013));
-    board_.cpu.set(z80::reg::DE, static_cast<uint16_t>(0x00D8));
-    board_.cpu.set(z80::reg::HL, static_cast<uint16_t>(0x014D));
-    board_.cpu.set(z80::reg::SP, static_cast<uint16_t>(0xFFFE));
-    board_.cpu.set_pc(0x0100);  // Entry point after boot ROM
+    // Try loading boot ROM from data/gameboy/roms/
+    load_roms();
+
+    if (board_.bootrom.size_bytes() > 0 && board_.bootrom.data() &&
+        board_.bootrom.data()[0] != 0x00) {
+        // Boot ROM found — start execution from $0000.
+        // The boot ROM initializes registers, scrolls the Nintendo logo,
+        // and jumps to $0100 after writing $01 to $FF50 (which unmaps
+        // the boot ROM overlay).
+        boot_rom_active_ = true;
+        board_.cpu.set_pc(0x0000);
+        // PPU starts with LCD off during boot sequence
+        board_.ppu.regs_.data[gb_ppu::LCDC] = 0x00;
+    } else {
+        // No boot ROM — set post-boot register state matching the state
+        // left by the DMG/GBC boot ROM after completion.
+        boot_rom_active_ = false;
+        board_.cpu.set(z80::reg::AF, static_cast<uint16_t>(0x01B0));
+        board_.cpu.set(z80::reg::BC, static_cast<uint16_t>(0x0013));
+        board_.cpu.set(z80::reg::DE, static_cast<uint16_t>(0x00D8));
+        board_.cpu.set(z80::reg::HL, static_cast<uint16_t>(0x014D));
+        board_.cpu.set(z80::reg::SP, static_cast<uint16_t>(0xFFFE));
+        board_.cpu.set_pc(0x0100);
+    }
     board_.ppu.reset();
     board_.apu.reset();
 
     register_bus_chips(board_);
 
     video_port_ = std::make_unique<CompositeVideoPort>();
-    video_port_->bind_frame_output(&last_frame_data_);
     video_port_->set_palette(board_.ppu.system_palette(),
                              board_.ppu.palette_size());
+    video_port_->bind_display(nullptr, board_.ppu.system_palette(),
+                              gb_ppu::SCREEN_WIDTH, gb_ppu::OAM_SEARCH_DOTS);
+    video_port_->bind_frame_output(&last_frame_data_);
 
     // Wire PPU video output to the composite video port
     board_.ppu.set_video_out(&video_port_->output());
@@ -184,6 +201,22 @@ void GameBoySystem<V>::reset() {
     std::memset(io_regs_, 0, sizeof(io_regs_));
     std::memset(hram_, 0, sizeof(hram_));
     if (mbc_) mbc_->reset();
+
+    // Re-activate boot ROM overlay if boot ROM is present
+    if (board_.bootrom.size_bytes() > 0 && board_.bootrom.data() &&
+        board_.bootrom.data()[0] != 0x00) {
+        boot_rom_active_ = true;
+        board_.cpu.set_pc(0x0000);
+        board_.ppu.regs_.data[gb_ppu::LCDC] = 0x00;
+    } else {
+        boot_rom_active_ = false;
+        board_.cpu.set(z80::reg::AF, static_cast<uint16_t>(0x01B0));
+        board_.cpu.set(z80::reg::BC, static_cast<uint16_t>(0x0013));
+        board_.cpu.set(z80::reg::DE, static_cast<uint16_t>(0x00D8));
+        board_.cpu.set(z80::reg::HL, static_cast<uint16_t>(0x014D));
+        board_.cpu.set(z80::reg::SP, static_cast<uint16_t>(0xFFFE));
+        board_.cpu.set_pc(0x0100);
+    }
 }
 
 // ============================================================================
@@ -232,9 +265,16 @@ void GameBoySystem<V>::tick() {
         uint16_t addr = BUS_GET_ADDR(pins_);
 
         if (addr < 0x8000) {
-            // ROM area ($0000–$7FFF): MBC handles banking
+            // ROM area ($0000–$7FFF): MBC handles banking.
+            // Boot ROM overlay: when active, reads from $0000–$00FF
+            // (DMG) or $0000–$08FF (GBC) are redirected to the boot ROM.
             if (BUS_GET_BIT(pins_, BUS_RW_BIT)) {
-                BUS_SET_DATA(pins_, mbc_->rom_read(addr));
+                uint16_t boot_end = (V == GameBoyVariant::GBC) ? 0x0900 : 0x0100;
+                if (boot_rom_active_ && addr < boot_end) {
+                    BUS_SET_DATA(pins_, board_.bootrom.data()[addr]);
+                } else {
+                    BUS_SET_DATA(pins_, mbc_->rom_read(addr));
+                }
             } else {
                 mbc_->rom_write(addr, BUS_GET_DATA(pins_));
             }
@@ -343,10 +383,12 @@ void GameBoySystem<V>::tick() {
 
 template<GameBoyVariant V>
 void GameBoySystem<V>::run_frame() {
-    uint32_t start = total_cycles_;
-    while (total_cycles_ - start < gb_constants::CYCLES_PER_FRAME) {
+    auto& output = video_port_->output();
+    while (!output.frame_ended()) {
         tick();
     }
+
+    video_port_->swap_frame();
 }
 
 // ============================================================================
@@ -399,8 +441,16 @@ bus_state_t GameBoySystem<V>::io_tick(bus_state_t pins) {
     }
 
     // Generic I/O register shadow
-    if (is_read) BUS_SET_DATA(pins, io_regs_[offset]);
-    else         io_regs_[offset] = BUS_GET_DATA(pins);
+    if (is_read) {
+        BUS_SET_DATA(pins, io_regs_[offset]);
+    } else {
+        io_regs_[offset] = BUS_GET_DATA(pins);
+
+        // $FF50 — Boot ROM disable: any non-zero write unmaps the boot ROM
+        if (offset == 0x50 && BUS_GET_DATA(pins) != 0) {
+            boot_rom_active_ = false;
+        }
+    }
 
     return pins;
 }

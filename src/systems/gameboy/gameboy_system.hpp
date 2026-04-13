@@ -189,6 +189,10 @@ private:
     uint8_t  hram_[127]       = {};  // $FF80–$FFFE
     uint8_t  ie_              = 0;   // $FFFF interrupt enable
 
+    // Boot ROM overlay — $0000–$00FF (DMG) or $0000–$08FF (GBC)
+    // mapped over cartridge ROM until the boot sequence writes to $FF50.
+    bool boot_rom_active_     = false;
+
     bus_state_t pins_ = GB_BUS_DEFAULT_STATE;
     uint32_t frame_counter_ = 0;
 
