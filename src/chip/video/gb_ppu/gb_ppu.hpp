@@ -84,8 +84,10 @@ namespace gb_ppu {
     inline constexpr int VBLANK_LINES  = 10;
     inline constexpr int TOTAL_LINES   = SCREEN_HEIGHT + VBLANK_LINES;
     inline constexpr int DOTS_PER_LINE = 456;
-    inline constexpr int VRAM_SIZE     = 8192;
-    inline constexpr int OAM_SIZE      = 160;   // 40 sprites × 4 bytes
+    inline constexpr int VRAM_SIZE      = 8192;
+    inline constexpr int VRAM_BANK_SIZE = 8192;
+    inline constexpr int VRAM_TOTAL     = 16384;  // 2 banks (CGB)
+    inline constexpr int OAM_SIZE       = 160;    // 40 sprites × 4 bytes
 
     // Mode durations (in dots)
     inline constexpr int OAM_SEARCH_DOTS    = 80;    // Mode 2
@@ -137,6 +139,46 @@ struct gb_ppu_t : public VideoChipBase {
     void set_video_out(CompositeVideoOut* s) { video_out_ = s; }
 
     bool headless_ = false;  // Skip rendering/video output for maximum throughput
+
+    // ── CGB mode ─────────────────────────────────────────────────────
+    void set_cgb_mode(bool enabled) {
+        cgb_mode_ = enabled;
+        if (enabled) {
+            system_palette_ = cgb_palette_rgba_;
+            palette_size_ = 64;
+        }
+    }
+
+    static inline uint32_t rgb555_to_rgba(uint16_t c) {
+        uint8_t r = (c & 0x1F); r = (r << 3) | (r >> 2);
+        uint8_t g = ((c >> 5) & 0x1F); g = (g << 3) | (g >> 2);
+        uint8_t b = ((c >> 10) & 0x1F); b = (b << 3) | (b >> 2);
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
+    }
+
+    // CGB palette register access ($FF68–$FF6B) — called by system I/O dispatch
+    void write_bgpi(uint8_t data) { bgpi_ = data; }
+    uint8_t read_bgpi() const { return bgpi_; }
+    void write_bgpd(uint8_t data) {
+        uint8_t idx = bgpi_ & 0x3F;
+        cgb_bg_pal_[idx] = data;
+        int pair = idx & ~1;
+        uint16_t rgb = cgb_bg_pal_[pair] | (cgb_bg_pal_[pair + 1] << 8);
+        cgb_palette_rgba_[pair / 2] = rgb555_to_rgba(rgb);
+        if (bgpi_ & 0x80) bgpi_ = 0x80 | ((idx + 1) & 0x3F);
+    }
+    uint8_t read_bgpd() const { return cgb_bg_pal_[bgpi_ & 0x3F]; }
+    void write_obpi(uint8_t data) { obpi_ = data; }
+    uint8_t read_obpi() const { return obpi_; }
+    void write_obpd(uint8_t data) {
+        uint8_t idx = obpi_ & 0x3F;
+        cgb_obj_pal_[idx] = data;
+        int pair = idx & ~1;
+        uint16_t rgb = cgb_obj_pal_[pair] | (cgb_obj_pal_[pair + 1] << 8);
+        cgb_palette_rgba_[32 + pair / 2] = rgb555_to_rgba(rgb);
+        if (obpi_ & 0x80) obpi_ = 0x80 | ((idx + 1) & 0x3F);
+    }
+    uint8_t read_obpd() const { return cgb_obj_pal_[obpi_ & 0x3F]; }
 
     bool has_mmio() const override { return true; }
 
@@ -319,11 +361,28 @@ struct gb_ppu_t : public VideoChipBase {
         std::memset(oam_, 0, sizeof(oam_));
         std::memset(scanline_buffer_, 0, sizeof(scanline_buffer_));
         std::memset(bg_priority_, 0, sizeof(bg_priority_));
+        std::memset(bg_color_index_, 0, sizeof(bg_color_index_));
+        // CGB state
+        vram_bank_ = 0;
+        bgpi_ = 0;
+        obpi_ = 0;
+        std::memset(cgb_bg_pal_, 0, sizeof(cgb_bg_pal_));
+        std::memset(cgb_obj_pal_, 0, sizeof(cgb_obj_pal_));
+        std::memset(cgb_palette_rgba_, 0, sizeof(cgb_palette_rgba_));
     }
 
     // ── VRAM / OAM ──────────────────────────────────────────────────
-    uint8_t vram_[gb_ppu::VRAM_SIZE] = {};
+    uint8_t vram_[gb_ppu::VRAM_TOTAL] = {};  // 16KB: 2 banks (CGB), DMG uses bank 0 only
     uint8_t oam_[gb_ppu::OAM_SIZE] = {};
+
+    // CGB extensions
+    bool cgb_mode_ = false;
+    uint8_t vram_bank_ = 0;              // CPU VRAM bank select (0 or 1)
+    uint8_t cgb_bg_pal_[64] = {};        // BG palette RAM (8 pal × 4 colors × 2 bytes)
+    uint8_t cgb_obj_pal_[64] = {};       // OBJ palette RAM
+    uint8_t bgpi_ = 0;                   // BG Palette Index ($FF68)
+    uint8_t obpi_ = 0;                   // OBJ Palette Index ($FF6A)
+    uint32_t cgb_palette_rgba_[64] = {};  // Computed RGBA (0–31=BG, 32–63=OBJ)
 
     uint8_t  ly_ = 0;
     uint16_t dot_counter_ = 0;
@@ -339,8 +398,9 @@ struct gb_ppu_t : public VideoChipBase {
 
 private:
     // Scanline rendering state
-    uint8_t scanline_buffer_[gb_ppu::SCREEN_WIDTH] = {};  // Color indices (0-3) for current line
+    uint8_t scanline_buffer_[gb_ppu::SCREEN_WIDTH] = {};  // Color indices for current line
     bool    bg_priority_[gb_ppu::SCREEN_WIDTH] = {};      // BG-to-OAM priority per pixel
+    uint8_t bg_color_index_[gb_ppu::SCREEN_WIDTH] = {};   // CGB: raw BG color ID for priority
     uint8_t scanline_pixel_ = 0;                          // Current pixel being output
     uint8_t window_line_counter_ = 0;                     // Window internal line counter
 
@@ -380,17 +440,20 @@ private:
 
         std::memset(scanline_buffer_, 0, gb_ppu::SCREEN_WIDTH);
         std::memset(bg_priority_, 0, gb_ppu::SCREEN_WIDTH);
+        if (cgb_mode_) std::memset(bg_color_index_, 0, gb_ppu::SCREEN_WIDTH);
 
         // Background and window
-        if (lcdc & 0x01) {  // BG/Window enable (DMG)
+        // CGB: BG/Win always rendered (LCDC.0 only affects sprite priority)
+        // DMG: BG/Win rendered only when LCDC.0=1
+        if (cgb_mode_ || (lcdc & 0x01)) {
             render_bg_line(lcdc, bgp);
-            if (lcdc & 0x20) {  // Window enable
+            if (lcdc & 0x20) {
                 render_window_line(lcdc, bgp);
             }
         }
 
         // Sprites
-        if (lcdc & 0x02) {  // OBJ enable
+        if (lcdc & 0x02) {
             render_sprites(lcdc);
         }
     }
@@ -415,7 +478,7 @@ private:
             uint8_t tile_col = x >> 3;
             uint8_t fine_x = x & 0x07;
 
-            // Fetch tile index from tile map
+            // Fetch tile index from tile map (always VRAM bank 0)
             uint16_t map_addr = map_base + tile_row * 32 + tile_col;
             uint8_t tile_idx = vram_[map_addr];
 
@@ -428,18 +491,35 @@ private:
                 tile_addr = static_cast<uint16_t>(0x1000 + static_cast<int8_t>(tile_idx) * 16);
             }
 
-            // Each tile row is 2 bytes: low byte + high byte
-            uint8_t lo = vram_[tile_addr + fine_y * 2];
-            uint8_t hi = vram_[tile_addr + fine_y * 2 + 1];
+            if (cgb_mode_) {
+                // CGB: read tile attributes from VRAM bank 1
+                uint8_t attr = vram_[gb_ppu::VRAM_BANK_SIZE + map_addr];
+                uint8_t pal = attr & 0x07;
+                uint16_t bank_off = (attr & 0x08) ? gb_ppu::VRAM_BANK_SIZE : 0;
+                uint8_t eff_y = (attr & 0x40) ? (7 - fine_y) : fine_y;
 
-            // Extract 2-bit color (bit 7 = leftmost pixel)
-            uint8_t bit = 7 - fine_x;
-            uint8_t color_id = ((hi >> bit) & 1) << 1 | ((lo >> bit) & 1);
+                uint8_t lo = vram_[bank_off + tile_addr + eff_y * 2];
+                uint8_t hi = vram_[bank_off + tile_addr + eff_y * 2 + 1];
+                uint8_t bit = (attr & 0x20) ? fine_x : (7 - fine_x);
+                uint8_t color_id = ((hi >> bit) & 1) << 1 | ((lo >> bit) & 1);
 
-            // Apply BGP palette mapping
-            uint8_t color = (bgp >> (color_id * 2)) & 0x03;
-            scanline_buffer_[px] = color;
-            bg_priority_[px] = (color_id != 0);  // Non-zero BG has priority in BG-to-OBJ
+                scanline_buffer_[px] = pal * 4 + color_id;
+                bg_color_index_[px] = color_id;
+                bg_priority_[px] = (attr & 0x80) != 0;
+            } else {
+                // Each tile row is 2 bytes: low byte + high byte
+                uint8_t lo = vram_[tile_addr + fine_y * 2];
+                uint8_t hi = vram_[tile_addr + fine_y * 2 + 1];
+
+                // Extract 2-bit color (bit 7 = leftmost pixel)
+                uint8_t bit = 7 - fine_x;
+                uint8_t color_id = ((hi >> bit) & 1) << 1 | ((lo >> bit) & 1);
+
+                // Apply BGP palette mapping
+                uint8_t color = (bgp >> (color_id * 2)) & 0x03;
+                scanline_buffer_[px] = color;
+                bg_priority_[px] = (color_id != 0);  // Non-zero BG has priority in BG-to-OBJ
+            }
         }
     }
 
@@ -477,14 +557,30 @@ private:
                 tile_addr = static_cast<uint16_t>(0x1000 + static_cast<int8_t>(tile_idx) * 16);
             }
 
-            uint8_t lo = vram_[tile_addr + fine_y * 2];
-            uint8_t hi = vram_[tile_addr + fine_y * 2 + 1];
-            uint8_t bit = 7 - fine_x;
-            uint8_t color_id = ((hi >> bit) & 1) << 1 | ((lo >> bit) & 1);
-            uint8_t color = (bgp >> (color_id * 2)) & 0x03;
+            if (cgb_mode_) {
+                uint8_t attr = vram_[gb_ppu::VRAM_BANK_SIZE + map_addr];
+                uint8_t pal = attr & 0x07;
+                uint16_t bank_off = (attr & 0x08) ? gb_ppu::VRAM_BANK_SIZE : 0;
+                uint8_t eff_y = (attr & 0x40) ? (7 - fine_y) : fine_y;
 
-            scanline_buffer_[px] = color;
-            bg_priority_[px] = (color_id != 0);
+                uint8_t lo = vram_[bank_off + tile_addr + eff_y * 2];
+                uint8_t hi = vram_[bank_off + tile_addr + eff_y * 2 + 1];
+                uint8_t bit = (attr & 0x20) ? fine_x : (7 - fine_x);
+                uint8_t color_id = ((hi >> bit) & 1) << 1 | ((lo >> bit) & 1);
+
+                scanline_buffer_[px] = pal * 4 + color_id;
+                bg_color_index_[px] = color_id;
+                bg_priority_[px] = (attr & 0x80) != 0;
+            } else {
+                uint8_t lo = vram_[tile_addr + fine_y * 2];
+                uint8_t hi = vram_[tile_addr + fine_y * 2 + 1];
+                uint8_t bit = 7 - fine_x;
+                uint8_t color_id = ((hi >> bit) & 1) << 1 | ((lo >> bit) & 1);
+                uint8_t color = (bgp >> (color_id * 2)) & 0x03;
+
+                scanline_buffer_[px] = color;
+                bg_priority_[px] = (color_id != 0);
+            }
             rendered = true;
         }
 
@@ -512,17 +608,13 @@ private:
             bool flip_x = (attr & 0x20) != 0;
             bool bg_over_obj = (attr & 0x80) != 0;
 
-            // Palette: OBP0 (attr bit 4 = 0) or OBP1 (attr bit 4 = 1)
-            uint8_t palette = regs_.data[(attr & 0x10) ? gb_ppu::OBP1 : gb_ppu::OBP0];
-
             // Which row of the sprite are we on?
             int row = ly_ - screen_y;
             if (flip_y) row = sprite_height - 1 - row;
 
-            // Tile data always at $8000 (unsigned) for sprites
+            // Tile data address calculation
             uint16_t tile_addr;
             if (sprite_height == 16) {
-                // 8×16: top tile = tile & 0xFE, bottom tile = tile | 0x01
                 if (row < 8)
                     tile_addr = tile * 16 + row * 2;
                 else
@@ -531,24 +623,55 @@ private:
                 tile_addr = tile * 16 + row * 2;
             }
 
-            uint8_t lo = vram_[tile_addr];
-            uint8_t hi = vram_[tile_addr + 1];
+            if (cgb_mode_) {
+                // CGB: VRAM bank from attribute bit 3, CGB palette from bits 0-2
+                uint8_t cgb_pal = attr & 0x07;
+                uint16_t bank_off = (attr & 0x08) ? gb_ppu::VRAM_BANK_SIZE : 0;
 
-            for (int bit_pos = 0; bit_pos < 8; bit_pos++) {
-                int px = screen_x + bit_pos;
-                if (px < 0 || px >= gb_ppu::SCREEN_WIDTH) continue;
+                uint8_t lo = vram_[bank_off + tile_addr];
+                uint8_t hi = vram_[bank_off + tile_addr + 1];
 
-                uint8_t bit = flip_x ? bit_pos : (7 - bit_pos);
-                uint8_t color_id = ((hi >> bit) & 1) << 1 | ((lo >> bit) & 1);
+                bool lcdc_bg_en = (lcdc & 0x01) != 0;
 
-                // Color 0 is transparent for sprites
-                if (color_id == 0) continue;
+                for (int bit_pos = 0; bit_pos < 8; bit_pos++) {
+                    int px = screen_x + bit_pos;
+                    if (px < 0 || px >= gb_ppu::SCREEN_WIDTH) continue;
 
-                // BG-to-OBJ priority: if bg_over_obj is set and BG pixel is non-zero, BG wins
-                if (bg_over_obj && bg_priority_[px]) continue;
+                    uint8_t bit = flip_x ? bit_pos : (7 - bit_pos);
+                    uint8_t color_id = ((hi >> bit) & 1) << 1 | ((lo >> bit) & 1);
+                    if (color_id == 0) continue;  // Transparent
 
-                uint8_t color = (palette >> (color_id * 2)) & 0x03;
-                scanline_buffer_[px] = color;
+                    // CGB priority: if LCDC.0=1, BG attr priority or OAM priority
+                    // can cause BG to win over sprite (when BG color != 0)
+                    if (lcdc_bg_en && (bg_priority_[px] || bg_over_obj) &&
+                        bg_color_index_[px] != 0)
+                        continue;
+
+                    scanline_buffer_[px] = 32 + cgb_pal * 4 + color_id;
+                }
+            } else {
+                // DMG: palette from OBP0/OBP1 via attribute bit 4
+                uint8_t palette = regs_.data[(attr & 0x10) ? gb_ppu::OBP1 : gb_ppu::OBP0];
+
+                uint8_t lo = vram_[tile_addr];
+                uint8_t hi = vram_[tile_addr + 1];
+
+                for (int bit_pos = 0; bit_pos < 8; bit_pos++) {
+                    int px = screen_x + bit_pos;
+                    if (px < 0 || px >= gb_ppu::SCREEN_WIDTH) continue;
+
+                    uint8_t bit = flip_x ? bit_pos : (7 - bit_pos);
+                    uint8_t color_id = ((hi >> bit) & 1) << 1 | ((lo >> bit) & 1);
+
+                    // Color 0 is transparent for sprites
+                    if (color_id == 0) continue;
+
+                    // BG-to-OBJ priority: if bg_over_obj is set and BG pixel is non-zero, BG wins
+                    if (bg_over_obj && bg_priority_[px]) continue;
+
+                    uint8_t color = (palette >> (color_id * 2)) & 0x03;
+                    scanline_buffer_[px] = color;
+                }
             }
         }
     }

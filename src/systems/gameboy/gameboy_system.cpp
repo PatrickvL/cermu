@@ -66,7 +66,7 @@ static const format_descriptor_t* const gb_formats[] = {
     &GB_FORMAT_DESCRIPTOR, nullptr
 };
 
-static SystemProbeResult gb_probe_file(
+static SystemProbeResult dmg_probe_file(
     const format_descriptor_t* matched_format,
     const char* /*filepath*/,
     const uint8_t* data, size_t size)
@@ -78,10 +78,31 @@ static SystemProbeResult gb_probe_file(
     // CGB flag at $143: $80 = GBC compatible, $C0 = GBC only
     uint8_t cgb_flag = data[0x143];
     if (cgb_flag == 0xC0) {
-        // GBC-only ROM — prefer GBC system (lower confidence for DMG)
-        result.confidence = 0.50f;
+        result.confidence = 0.30f;   // GBC-only ROM — DMG shouldn't load
+    } else if (cgb_flag == 0x80) {
+        result.confidence = 0.85f;   // CGB-compatible — prefer GBC
     } else {
-        result.confidence = 1.0f;
+        result.confidence = 1.0f;    // Pure DMG — DMG wins
+    }
+    return result;
+}
+
+static SystemProbeResult gbc_probe_file(
+    const format_descriptor_t* matched_format,
+    const char* /*filepath*/,
+    const uint8_t* data, size_t size)
+{
+    SystemProbeResult result;
+    if (!matched_format || matched_format != &GB_FORMAT_DESCRIPTOR) return result;
+    if (size < 0x150) return result;
+
+    uint8_t cgb_flag = data[0x143];
+    if (cgb_flag == 0xC0) {
+        result.confidence = 1.0f;    // GBC-only — GBC wins
+    } else if (cgb_flag == 0x80) {
+        result.confidence = 0.95f;   // CGB-compatible — GBC preferred
+    } else {
+        result.confidence = 0.70f;   // Pure DMG — DMG preferred, but GBC can run it
     }
     return result;
 }
@@ -92,7 +113,7 @@ static SystemDescriptor dmg_descriptor = {
     "gameboy", {"Game Boy", "DMG", "GB", "GameBoy"},
     gb_formats,
     create_gb_hardware_traits<GameBoyVariant::DMG>(),
-    gb_probe_file,
+    dmg_probe_file,
     "Nintendo", 1989, "Sharp SM83 (LR35902)", SystemType::Console
 };
 
@@ -102,7 +123,7 @@ static SystemDescriptor gbc_descriptor = {
     "gameboy", {"Game Boy Color", "GBC", "CGB", "GameBoyColor"},
     gb_formats,
     create_gb_hardware_traits<GameBoyVariant::GBC>(),
-    gb_probe_file,  // DMG wins for non-CGB-only ROMs (higher confidence)
+    gbc_probe_file,
     "Nintendo", 1998, "Sharp SM83 (LR35902)", SystemType::Console
 };
 
@@ -178,15 +199,28 @@ bool GameBoySystem<V>::initialize() {
         // No boot ROM — set post-boot register state matching the state
         // left by the DMG/GBC boot ROM after completion.
         boot_rom_active_ = false;
-        board_.cpu.set(z80::reg::AF, static_cast<uint16_t>(0x01B0));
-        board_.cpu.set(z80::reg::BC, static_cast<uint16_t>(0x0013));
-        board_.cpu.set(z80::reg::DE, static_cast<uint16_t>(0x00D8));
-        board_.cpu.set(z80::reg::HL, static_cast<uint16_t>(0x014D));
+        if constexpr (V == GameBoyVariant::GBC) {
+            // GBC post-boot: A=$11 signals CGB mode to the game
+            board_.cpu.set(z80::reg::AF, static_cast<uint16_t>(0x11B0));
+            board_.cpu.set(z80::reg::BC, static_cast<uint16_t>(0x0000));
+            board_.cpu.set(z80::reg::DE, static_cast<uint16_t>(0xFF56));
+            board_.cpu.set(z80::reg::HL, static_cast<uint16_t>(0x000D));
+        } else {
+            board_.cpu.set(z80::reg::AF, static_cast<uint16_t>(0x01B0));
+            board_.cpu.set(z80::reg::BC, static_cast<uint16_t>(0x0013));
+            board_.cpu.set(z80::reg::DE, static_cast<uint16_t>(0x00D8));
+            board_.cpu.set(z80::reg::HL, static_cast<uint16_t>(0x014D));
+        }
         board_.cpu.set(z80::reg::SP, static_cast<uint16_t>(0xFFFE));
         board_.cpu.set_pc(0x0100);
     }
     board_.ppu.reset();
     board_.apu.reset();
+
+    // Enable CGB mode on PPU for GBC variant
+    if constexpr (V == GameBoyVariant::GBC) {
+        board_.ppu.set_cgb_mode(true);
+    }
 
     // Override LCDC after reset if boot ROM is present (boot ROM expects
     // LCD off, will enable it itself at $0040).
@@ -238,6 +272,17 @@ void GameBoySystem<V>::reset() {
     std::memset(hram_, 0, sizeof(hram_));
     if (mbc_) mbc_->reset();
 
+    // GBC state
+    if constexpr (V == GameBoyVariant::GBC) {
+        wram_bank_ = 1;
+        key1_ = 0;
+        speed_double_ = false;
+        hdma_src_ = 0;
+        hdma_dst_ = 0;
+        hdma_len_ = 0xFF;
+        hdma_hblank_ = false;
+    }
+
     // Re-activate boot ROM overlay if boot ROM is present
     if (board_.bootrom.size_bytes() > 0 && board_.bootrom.data() &&
         board_.bootrom.data()[0] != 0x00) {
@@ -246,10 +291,17 @@ void GameBoySystem<V>::reset() {
         board_.ppu.regs_.data[gb_ppu::LCDC] = 0x00;
     } else {
         boot_rom_active_ = false;
-        board_.cpu.set(z80::reg::AF, static_cast<uint16_t>(0x01B0));
-        board_.cpu.set(z80::reg::BC, static_cast<uint16_t>(0x0013));
-        board_.cpu.set(z80::reg::DE, static_cast<uint16_t>(0x00D8));
-        board_.cpu.set(z80::reg::HL, static_cast<uint16_t>(0x014D));
+        if constexpr (V == GameBoyVariant::GBC) {
+            board_.cpu.set(z80::reg::AF, static_cast<uint16_t>(0x11B0));
+            board_.cpu.set(z80::reg::BC, static_cast<uint16_t>(0x0000));
+            board_.cpu.set(z80::reg::DE, static_cast<uint16_t>(0xFF56));
+            board_.cpu.set(z80::reg::HL, static_cast<uint16_t>(0x000D));
+        } else {
+            board_.cpu.set(z80::reg::AF, static_cast<uint16_t>(0x01B0));
+            board_.cpu.set(z80::reg::BC, static_cast<uint16_t>(0x0013));
+            board_.cpu.set(z80::reg::DE, static_cast<uint16_t>(0x00D8));
+            board_.cpu.set(z80::reg::HL, static_cast<uint16_t>(0x014D));
+        }
         board_.cpu.set(z80::reg::SP, static_cast<uint16_t>(0xFFFE));
         board_.cpu.set_pc(0x0100);
     }
@@ -313,12 +365,15 @@ void GameBoySystem<V>::tick() {
                 mbc_->rom_write(addr, BUS_GET_DATA(pins_));
             }
         } else if (addr < 0xA000) {
-            // VRAM ($8000–$9FFF): also accessible by PPU
+            // VRAM ($8000–$9FFF): banked on GBC ($FF4F selects bank 0/1)
             uint16_t vram_addr = addr - 0x8000;
+            uint16_t bank_off = 0;
+            if constexpr (V == GameBoyVariant::GBC)
+                bank_off = board_.ppu.vram_bank_ * gb_ppu::VRAM_BANK_SIZE;
             if (BUS_GET_BIT(pins_, BUS_RW_BIT)) {
-                BUS_SET_DATA(pins_, board_.ppu.vram_[vram_addr]);
+                BUS_SET_DATA(pins_, board_.ppu.vram_[bank_off + vram_addr]);
             } else {
-                board_.ppu.vram_[vram_addr] = BUS_GET_DATA(pins_);
+                board_.ppu.vram_[bank_off + vram_addr] = BUS_GET_DATA(pins_);
             }
         } else if (addr < 0xC000) {
             // External RAM ($A000–$BFFF): MBC handles banking
@@ -329,15 +384,28 @@ void GameBoySystem<V>::tick() {
             }
         } else if (addr < 0xFE00) {
             // WRAM ($C000–$DFFF) + Echo RAM ($E000–$FDFF)
+            // GBC: $C000–$CFFF = bank 0, $D000–$DFFF = switchable bank (1–7)
             uint16_t wram_addr = addr;
             if (addr >= 0xE000) wram_addr -= 0x2000;  // Echo mirror
-            wram_addr -= 0xC000;
-            if (wram_addr < gb_constants::WRAM_SIZE) {
+
+            uint16_t offset;
+            if constexpr (V == GameBoyVariant::GBC) {
+                if (wram_addr >= 0xD000)
+                    offset = wram_bank_ * 0x1000 + (wram_addr - 0xD000);
+                else
+                    offset = wram_addr - 0xC000;
+            } else {
+                offset = wram_addr - 0xC000;
+            }
+
+            uint32_t wram_size = (V == GameBoyVariant::GBC)
+                ? gb_constants::WRAM_GBC_SIZE : gb_constants::WRAM_SIZE;
+            if (offset < wram_size) {
                 uint8_t* wram = board_.wram.data();
                 if (BUS_GET_BIT(pins_, BUS_RW_BIT)) {
-                    BUS_SET_DATA(pins_, wram[wram_addr]);
+                    BUS_SET_DATA(pins_, wram[offset]);
                 } else {
-                    wram[wram_addr] = BUS_GET_DATA(pins_);
+                    wram[offset] = BUS_GET_DATA(pins_);
                 }
             }
         } else if (addr < 0xFEA0) {
@@ -417,14 +485,54 @@ void GameBoySystem<V>::tick() {
             if (addr < 0x8000) {
                 val = mbc_->rom_read(addr);
             } else if (addr < 0xA000) {
-                val = board_.ppu.vram_[addr - 0x8000];
+                uint16_t voff = addr - 0x8000;
+                if constexpr (V == GameBoyVariant::GBC)
+                    voff += board_.ppu.vram_bank_ * gb_ppu::VRAM_BANK_SIZE;
+                val = board_.ppu.vram_[voff];
             } else if (addr < 0xC000) {
                 val = mbc_->ram_read(addr);
             } else if (addr < 0xE000) {
-                uint8_t* wram = board_.wram.data();
-                val = wram[addr - 0xC000];
+                uint16_t wo = addr - 0xC000;
+                if constexpr (V == GameBoyVariant::GBC) {
+                    if (wo >= 0x1000) wo = wram_bank_ * 0x1000 + (wo - 0x1000);
+                }
+                val = board_.wram.data()[wo];
             }
             board_.ppu.oam_[i] = val;
+        }
+    }
+
+    // GBC H-Blank DMA: transfer 16 bytes per H-Blank transition
+    if constexpr (V == GameBoyVariant::GBC) {
+        if (hdma_hblank_ && hdma_len_ != 0xFF &&
+            board_.ppu.mode_ == gb_ppu::MODE_HBLANK &&
+            board_.ppu.dot_counter_ == 0) {
+            // Transfer 16 bytes
+            uint16_t src = hdma_src_;
+            uint16_t dst = hdma_dst_ | 0x8000;
+            for (int i = 0; i < 16; i++) {
+                uint8_t byte = 0xFF;
+                uint16_t sa = src + i;
+                if (sa < 0x8000) byte = mbc_->rom_read(sa);
+                else if (sa < 0xA000) byte = board_.ppu.vram_[(sa - 0x8000)];
+                else if (sa < 0xC000) byte = mbc_->ram_read(sa);
+                else if (sa < 0xE000) {
+                    uint16_t wo = sa - 0xC000;
+                    if (wo >= 0x1000) wo = wram_bank_ * 0x1000 + (wo - 0x1000);
+                    byte = board_.wram.data()[wo];
+                }
+                uint16_t da = (dst + i) & 0x9FFF;
+                uint16_t voff = (da - 0x8000) + board_.ppu.vram_bank_ * gb_ppu::VRAM_BANK_SIZE;
+                board_.ppu.vram_[voff] = byte;
+            }
+            hdma_src_ += 16;
+            hdma_dst_ = (hdma_dst_ + 16) & 0x1FF0;
+            if (hdma_len_ == 0) {
+                hdma_len_ = 0xFF;  // Transfer complete
+                hdma_hblank_ = false;
+            } else {
+                hdma_len_--;
+            }
         }
     }
 
@@ -503,6 +611,111 @@ bus_state_t GameBoySystem<V>::io_tick(bus_state_t pins) {
             div_counter_ = 0;
         }
         return pins;
+    }
+
+    // ── GBC-only I/O registers ──────────────────────────────────────
+    if constexpr (V == GameBoyVariant::GBC) {
+        // $FF4D — KEY1: CPU speed switch (bit 7=current speed, bit 0=prepare)
+        if (offset == 0x4D) {
+            if (is_read) {
+                BUS_SET_DATA(pins, (speed_double_ ? 0x80 : 0x00) | (key1_ & 0x01));
+            } else {
+                key1_ = (key1_ & 0xFE) | (BUS_GET_DATA(pins) & 0x01);
+            }
+            return pins;
+        }
+        // $FF4F — VBK: VRAM bank select (bit 0)
+        if (offset == 0x4F) {
+            if (is_read) {
+                BUS_SET_DATA(pins, board_.ppu.vram_bank_ | 0xFE);
+            } else {
+                board_.ppu.vram_bank_ = BUS_GET_DATA(pins) & 0x01;
+            }
+            return pins;
+        }
+        // $FF51–$FF55 — HDMA
+        if (offset >= 0x51 && offset <= 0x55) {
+            if (offset == 0x51) {
+                if (!is_read) hdma_src_ = (hdma_src_ & 0x00F0) | (static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8);
+                else BUS_SET_DATA(pins, hdma_src_ >> 8);
+            } else if (offset == 0x52) {
+                if (!is_read) hdma_src_ = (hdma_src_ & 0xFF00) | (BUS_GET_DATA(pins) & 0xF0);
+                else BUS_SET_DATA(pins, hdma_src_ & 0xFF);
+            } else if (offset == 0x53) {
+                if (!is_read) hdma_dst_ = (hdma_dst_ & 0x00F0) | (static_cast<uint16_t>(BUS_GET_DATA(pins) & 0x1F) << 8);
+                else BUS_SET_DATA(pins, (hdma_dst_ >> 8) & 0x1F);
+            } else if (offset == 0x54) {
+                if (!is_read) hdma_dst_ = (hdma_dst_ & 0xFF00) | (BUS_GET_DATA(pins) & 0xF0);
+                else BUS_SET_DATA(pins, hdma_dst_ & 0xFF);
+            } else { // 0x55 — HDMA5: length/mode/start
+                if (is_read) {
+                    BUS_SET_DATA(pins, hdma_len_);
+                } else {
+                    uint8_t val = BUS_GET_DATA(pins);
+                    uint16_t length = (static_cast<uint16_t>(val & 0x7F) + 1) * 16;
+                    if (val & 0x80) {
+                        // H-Blank DMA: transfer 16 bytes per H-Blank
+                        hdma_hblank_ = true;
+                        hdma_len_ = val & 0x7F;
+                    } else {
+                        // General Purpose DMA: immediate transfer
+                        hdma_hblank_ = false;
+                        uint16_t src = hdma_src_;
+                        uint16_t dst = hdma_dst_ | 0x8000;
+                        for (uint16_t i = 0; i < length; i++) {
+                            uint8_t byte = 0xFF;
+                            uint16_t sa = src + i;
+                            if (sa < 0x8000) byte = mbc_->rom_read(sa);
+                            else if (sa < 0xA000) byte = board_.ppu.vram_[(sa - 0x8000)];
+                            else if (sa < 0xC000) byte = mbc_->ram_read(sa);
+                            else if (sa < 0xE000) {
+                                uint16_t wo = sa - 0xC000;
+                                if (wo >= 0x1000) wo = wram_bank_ * 0x1000 + (wo - 0x1000);
+                                byte = board_.wram.data()[wo];
+                            }
+                            uint16_t da = (dst + i) & 0x9FFF;
+                            uint16_t vram_off = (da - 0x8000) + board_.ppu.vram_bank_ * gb_ppu::VRAM_BANK_SIZE;
+                            board_.ppu.vram_[vram_off] = byte;
+                        }
+                        hdma_src_ += length;
+                        hdma_dst_ = (hdma_dst_ + length) & 0x1FF0;
+                        hdma_len_ = 0xFF;  // Transfer complete
+                    }
+                }
+            }
+            return pins;
+        }
+        // $FF68–$FF6B — CGB palette registers
+        if (offset == 0x68) {
+            if (is_read) BUS_SET_DATA(pins, board_.ppu.read_bgpi());
+            else board_.ppu.write_bgpi(BUS_GET_DATA(pins));
+            return pins;
+        }
+        if (offset == 0x69) {
+            if (is_read) BUS_SET_DATA(pins, board_.ppu.read_bgpd());
+            else board_.ppu.write_bgpd(BUS_GET_DATA(pins));
+            return pins;
+        }
+        if (offset == 0x6A) {
+            if (is_read) BUS_SET_DATA(pins, board_.ppu.read_obpi());
+            else board_.ppu.write_obpi(BUS_GET_DATA(pins));
+            return pins;
+        }
+        if (offset == 0x6B) {
+            if (is_read) BUS_SET_DATA(pins, board_.ppu.read_obpd());
+            else board_.ppu.write_obpd(BUS_GET_DATA(pins));
+            return pins;
+        }
+        // $FF70 — SVBK: WRAM bank select (bits 0–2, bank 0 maps to 1)
+        if (offset == 0x70) {
+            if (is_read) {
+                BUS_SET_DATA(pins, wram_bank_ | 0xF8);
+            } else {
+                wram_bank_ = BUS_GET_DATA(pins) & 0x07;
+                if (wram_bank_ == 0) wram_bank_ = 1;
+            }
+            return pins;
+        }
     }
 
     // Generic I/O register shadow

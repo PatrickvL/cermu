@@ -53,6 +53,7 @@ namespace gb_constants {
     inline constexpr uint32_t ROM_BANK_SIZE        = 16384;     // 16KB
     inline constexpr uint32_t VRAM_SIZE            = 8192;
     inline constexpr uint32_t WRAM_SIZE            = 8192;
+    inline constexpr uint32_t WRAM_GBC_SIZE        = 32768;    // 8 banks × 4KB
     inline constexpr uint32_t HRAM_SIZE            = 127;
     inline constexpr uint32_t OAM_SIZE             = 160;
 
@@ -90,11 +91,13 @@ inline constexpr auto kGameBoyManifest = make_manifest(
 
     Slot<ROMChip>{.base_addr = 0x0000, .size_bytes = 0x8000,
                   .label = "Cartridge ROM"},
-    Slot<RAMChip>{.base_addr = 0x8000, .size_bytes = gb_constants::VRAM_SIZE,
+    Slot<RAMChip>{.base_addr = 0x8000,
+                  .size_bytes = (V == GameBoyVariant::GBC) ? size_t(gb_ppu::VRAM_TOTAL) : size_t(gb_constants::VRAM_SIZE),
                   .label = "VRAM"},
     Slot<RAMChip>{.base_addr = 0xA000, .size_bytes = 0x2000,
                   .label = "External RAM"},
-    Slot<RAMChip>{.base_addr = 0xC000, .size_bytes = gb_constants::WRAM_SIZE,
+    Slot<RAMChip>{.base_addr = 0xC000,
+                  .size_bytes = (V == GameBoyVariant::GBC) ? size_t(gb_constants::WRAM_GBC_SIZE) : size_t(gb_constants::WRAM_SIZE),
                   .label = "WRAM"},
 
     // APU before PPU so PPU overrides APU's sub-page for $FF40–$FF4F
@@ -204,6 +207,16 @@ private:
     bus_state_t pins_ = GB_BUS_DEFAULT_STATE;
     bool mreq_prev_ = false;   // MREQ edge detection for single-dispatch
     uint32_t frame_counter_ = 0;
+
+    // GBC extensions
+    uint8_t wram_bank_ = 1;        // WRAM bank at $D000–$DFFF (1–7, GBC only)
+    uint8_t key1_ = 0;             // $FF4D: speed switch (bit 7 = current, bit 0 = prepare)
+    bool    speed_double_ = false; // Currently in double-speed mode
+    // HDMA ($FF51–$FF55)
+    uint16_t hdma_src_ = 0;
+    uint16_t hdma_dst_ = 0;
+    uint8_t  hdma_len_ = 0xFF;     // $FF = inactive
+    bool     hdma_hblank_ = false; // H-Blank DMA mode
 
     void configure_bus_memory_map();
     bus_state_t io_tick(bus_state_t pins);
