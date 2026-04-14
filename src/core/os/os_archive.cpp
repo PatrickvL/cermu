@@ -238,6 +238,103 @@ static void drain_entry(struct archive* a) {
 }
 
 // ============================================================================
+// Archive Listing — 7z CLI fallback
+// ============================================================================
+
+/**
+ * List archive entries using the 7z command-line tool.
+ *
+ * Used as a fallback when libarchive truncates solid 7z archives.
+ * Parses the output of: 7z l -slt -- <archive>
+ */
+static std::vector<OsArchiveEntry> list_via_7z_cli(const char* archive_path) {
+    std::vector<OsArchiveEntry> result;
+
+    auto shell_escape = [](const char* s) -> std::string {
+        std::string r = "'";
+        for (const char* p = s; *p; ++p) {
+            if (*p == '\'')
+                r += "'\\''";
+            else
+                r += *p;
+        }
+        r += "'";
+        return r;
+    };
+
+    std::string cmd = "7z l -slt -- ";
+    cmd += shell_escape(archive_path);
+    cmd += " 2>/dev/null";
+
+    FILE* pipe = popen(cmd.c_str(), "r");
+    if (!pipe) return result;
+
+    // Parse -slt (show technical info) output.  Each entry is a block of
+    // key = value lines separated by blank lines.  We look for:
+    //   Path = <name>
+    //   Size = <bytes>
+    //   Folder = +   (if directory)
+    // The first block before "----------" is the archive header (contains
+    // the archive path itself, Type, Method, etc.) — skip it.
+    char line[4096];
+    std::string cur_path;
+    size_t      cur_size  = 0;
+    bool        cur_is_dir = false;
+    bool        in_entry   = false;
+    bool        past_header = false;
+
+    while (fgets(line, sizeof(line), pipe)) {
+        // Strip trailing newline/carriage return
+        size_t len = strlen(line);
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
+            line[--len] = '\0';
+
+        if (len == 0) {
+            // Blank line — flush current entry
+            if (past_header && in_entry && !cur_path.empty()) {
+                OsArchiveEntry e;
+                e.name   = std::move(cur_path);
+                e.size   = cur_size;
+                e.is_dir = cur_is_dir;
+                result.push_back(std::move(e));
+            }
+            cur_path.clear();
+            cur_size   = 0;
+            cur_is_dir = false;
+            in_entry   = false;
+            continue;
+        }
+
+        // The "----------" line separates the archive header from entries.
+        if (!past_header && strncmp(line, "----------", 10) == 0) {
+            past_header = true;
+            continue;
+        }
+
+        if (strncmp(line, "Path = ", 7) == 0) {
+            cur_path = line + 7;
+            in_entry = true;
+        } else if (strncmp(line, "Size = ", 7) == 0) {
+            cur_size = static_cast<size_t>(strtoull(line + 7, nullptr, 10));
+        } else if (strncmp(line, "Folder = +", 10) == 0) {
+            cur_is_dir = true;
+        }
+    }
+
+    // Flush last entry (file may not end with blank line)
+    if (past_header && in_entry && !cur_path.empty()) {
+        OsArchiveEntry e;
+        e.name   = std::move(cur_path);
+        e.size   = cur_size;
+        e.is_dir = cur_is_dir;
+        result.push_back(std::move(e));
+    }
+
+    pclose(pipe);
+    return result;
+}
+
+// ============================================================================
 // Archive Listing — from disk
 // ============================================================================
 
@@ -269,7 +366,21 @@ std::vector<OsArchiveEntry> os_archive_list(const char* archive_path) {
         if (!e.name.empty())
             result.push_back(std::move(e));
 
-        archive_read_data_skip(reader.a);
+        // Use drain_entry instead of archive_read_data_skip to correctly
+        // advance the decompressor in solid 7z archives.
+        drain_entry(reader.a);
+    }
+
+    // libarchive may truncate solid 7z archives (stops at LZMA2 solid
+    // block boundaries).  For .7z files, try the 7z CLI and prefer
+    // whichever listing has more entries.
+    {
+        const char* ext = strrchr(archive_path, '.');
+        if (ext && strcasecmp(ext, ".7z") == 0) {
+            auto cli_result = list_via_7z_cli(archive_path);
+            if (cli_result.size() > result.size())
+                return cli_result;
+        }
     }
 
     return result;
@@ -306,7 +417,9 @@ std::vector<OsArchiveEntry> os_archive_list_from_memory(
         if (!e.name.empty())
             result.push_back(std::move(e));
 
-        archive_read_data_skip(reader.a);
+        // Use drain_entry instead of archive_read_data_skip to correctly
+        // advance the decompressor in solid 7z archives.
+        drain_entry(reader.a);
     }
 
     return result;

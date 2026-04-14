@@ -170,6 +170,14 @@ struct ArchiveCache {
         if (!entries_valid && !raw_data.empty()) {
             entries = os_archive_list_from_memory(raw_data.data(),
                                                    raw_data.size());
+            // libarchive truncates solid 7z archives when reading from
+            // memory.  Fall back to the disk-based listing which can
+            // shell out to the 7z CLI for a complete result.
+            if (!archive_path.empty()) {
+                auto disk = os_archive_list(archive_path.c_str());
+                if (disk.size() > entries.size())
+                    entries = std::move(disk);
+            }
             entries_valid = true;
         }
         return entries;
