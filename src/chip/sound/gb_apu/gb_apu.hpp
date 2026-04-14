@@ -139,7 +139,7 @@ struct gb_apu_t : public SoundChipBase {
 
     // ── Read mask table: many APU registers have bits that read back as 1 ──
     bus_state_t on_bus_read(bus_state_t bus) noexcept override {
-        uint8_t addr = BUS_GET_ADDR(bus) & 0x3F;
+        uint8_t addr = (BUS_GET_ADDR(bus) & 0x3F) - 0x10;
         if (addr < gb_apu::reg::REG_COUNT) {
             // NR52 returns power bit + channel active flags
             if (addr == gb_apu::NR52) {
@@ -163,7 +163,7 @@ struct gb_apu_t : public SoundChipBase {
     }
 
     bus_state_t on_bus_write(bus_state_t bus) noexcept override {
-        uint8_t addr = BUS_GET_ADDR(bus) & 0x3F;
+        uint8_t addr = (BUS_GET_ADDR(bus) & 0x3F) - 0x10;
         uint8_t data = BUS_GET_DATA(bus);
 
         if (addr >= 0x20 && addr < 0x30) {
@@ -251,6 +251,17 @@ struct gb_apu_t : public SoundChipBase {
         frame_seq_counter_ = 0;
         frame_seq_step_ = 0;
         ch1_ = {}; ch2_ = {}; ch3_ = {}; ch4_ = {};
+    }
+
+    /// Set post-boot APU state matching the real boot ROM's final state.
+    /// Call after reset() when skipping the boot ROM.
+    void set_post_boot_state() noexcept {
+        power_on_ = true;
+        regs_.data[gb_apu::NR50] = 0x77;  // Master volume: 7 left, 7 right
+        regs_.data[gb_apu::NR51] = 0xF3;  // Ch1+Ch2 to both L+R
+        regs_.data[gb_apu::NR10] = 0x80;  // Sweep period 4
+        regs_.data[gb_apu::NR11] = 0xBF;  // Duty 50%, length $3F
+        regs_.data[gb_apu::NR12] = 0xF3;  // Vol 15, decrease, period 3
     }
 
     uint8_t wave_ram_[gb_apu::WAVE_RAM_SIZE] = {};
@@ -470,7 +481,7 @@ private:
         ch1_.dac_on = (nr12 & 0xF8) != 0;
         ch1_.enabled = ch1_.dac_on;
         ch1_.duty = (nr11 >> 6) & 0x03;
-        ch1_.length_counter = ch1_.length_counter ? ch1_.length_counter : (64 - (nr11 & 0x3F));
+        if (ch1_.length_counter == 0) ch1_.length_counter = 64;
         ch1_.length_en = (regs_.data[gb_apu::NR14] & 0x40) != 0;
         ch1_.volume = (nr12 >> 4) & 0x0F;
         ch1_.env_period = nr12 & 0x07;
@@ -501,7 +512,7 @@ private:
         ch2_.dac_on = (nr22 & 0xF8) != 0;
         ch2_.enabled = ch2_.dac_on;
         ch2_.duty = (nr21 >> 6) & 0x03;
-        ch2_.length_counter = ch2_.length_counter ? ch2_.length_counter : (64 - (nr21 & 0x3F));
+        if (ch2_.length_counter == 0) ch2_.length_counter = 64;
         ch2_.length_en = (regs_.data[gb_apu::NR24] & 0x40) != 0;
         ch2_.volume = (nr22 >> 4) & 0x0F;
         ch2_.env_period = nr22 & 0x07;
@@ -520,7 +531,7 @@ private:
 
         ch3_.dac_on = (nr30 & 0x80) != 0;
         ch3_.enabled = ch3_.dac_on;
-        ch3_.length_counter = ch3_.length_counter ? ch3_.length_counter : (256 - nr31);
+        if (ch3_.length_counter == 0) ch3_.length_counter = 256;
         ch3_.length_en = (regs_.data[gb_apu::NR34] & 0x40) != 0;
         ch3_.output_level = (nr32 >> 5) & 0x03;
         ch3_.freq_period = (2048 - freq) * 2;
@@ -535,7 +546,7 @@ private:
 
         ch4_.dac_on = (nr42 & 0xF8) != 0;
         ch4_.enabled = ch4_.dac_on;
-        ch4_.length_counter = ch4_.length_counter ? ch4_.length_counter : (64 - (nr41 & 0x3F));
+        if (ch4_.length_counter == 0) ch4_.length_counter = 64;
         ch4_.length_en = (regs_.data[gb_apu::NR44] & 0x40) != 0;
         ch4_.volume = (nr42 >> 4) & 0x0F;
         ch4_.env_period = nr42 & 0x07;

@@ -226,6 +226,9 @@ bool GameBoySystem<V>::initialize() {
     // LCD off, will enable it itself at $0040).
     if (boot_rom_active_) {
         board_.ppu.regs_.data[gb_ppu::LCDC] = 0x00;
+    } else {
+        // No boot ROM — set APU post-boot state (power on, default volumes)
+        board_.apu.set_post_boot_state();
     }
 
     register_bus_chips(board_);
@@ -291,6 +294,8 @@ void GameBoySystem<V>::reset() {
         board_.ppu.regs_.data[gb_ppu::LCDC] = 0x00;
     } else {
         boot_rom_active_ = false;
+        // No boot ROM — set APU post-boot state (power on, default volumes)
+        board_.apu.set_post_boot_state();
         if constexpr (V == GameBoyVariant::GBC) {
             board_.cpu.set(z80::reg::AF, static_cast<uint16_t>(0x11B0));
             board_.cpu.set(z80::reg::BC, static_cast<uint16_t>(0x0000));
