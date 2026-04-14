@@ -1005,6 +1005,36 @@ set_target_properties(c16_test_runner PROPERTIES
 
 message(STATUS "Test runner c16_test_runner will be built")
 
+# Game Boy compatibility test runner (tricky-to-emulate titles)
+add_executable(gb_test_runner
+    tests/gb_test_runner.cpp
+    ${CORE_SOURCES}
+    ${CHIP_SOURCES}
+    ${SYSTEM_SOURCES}
+    ${TESTING_SOURCES}
+    ${CORE_UTIL_SOURCES}
+    ${GUI_STUB_SOURCES}
+)
+
+target_link_libraries(gb_test_runner
+    fam65xx_decoder
+    z80_decoder
+    m680x0_decoder
+    mc6809_decoder
+    ${LIBARCHIVE_LIBRARIES}
+    ${SDL2_LIBRARIES}
+)
+
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(gb_test_runner m)
+endif()
+
+set_target_properties(gb_test_runner PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+message(STATUS "Test runner gb_test_runner will be built")
+
 # VFS smoke test tool
 add_executable(vfs_smoke_test
     tests/vfs_smoke_test.cpp

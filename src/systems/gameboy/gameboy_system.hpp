@@ -167,6 +167,8 @@ public:
 
     void* get_video_port_ptr() override { return video_port_.get(); }
 
+    uint16_t get_cpu_pc() const;
+
 private:
     using Bus       = MemoryBus<GameBoyBusSpec<V>>;
     using MainBoard = GameBoyBoard<V>;

@@ -151,6 +151,11 @@ const SystemDescriptor& GameBoySystem<V>::get_descriptor() const {
 }
 
 template<GameBoyVariant V>
+uint16_t GameBoySystem<V>::get_cpu_pc() const {
+    return static_cast<uint16_t>(board_.cpu.get(z80::PC));
+}
+
+template<GameBoyVariant V>
 bool GameBoySystem<V>::set_configuration(const SystemConfiguration& config) {
     config_ = config;
     return true;
