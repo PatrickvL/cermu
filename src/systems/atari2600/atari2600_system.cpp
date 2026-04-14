@@ -167,6 +167,7 @@ bool Atari2600System::apply_configuration() {
 
 bool Atari2600System::initialize() {
     log_info("Atari2600: Initializing system\n");
+    system_ready_ = false;  // No cartridge loaded yet — run_frame() is a no-op
     register_board(&board_);
 
     // ── Bind all value-typed chips to manifest slots ──────────────────
