@@ -101,6 +101,12 @@ VfsFileSystem::PathSplit VfsFileSystem::split_at_archive(const std::string& path
 
         std::string prefix = clean.substr(0, next);
 
+        // If the segment ends with '!' (from "archive.7z!/subpath"), the
+        // '!' is the VFS delimiter marker, not part of the real filename.
+        // Strip it before stat()ing so we find the actual archive file.
+        if (prefix.size() >= 2 && prefix.back() == '!')
+            prefix.pop_back();
+
         struct stat sb;
         if (stat(prefix.c_str(), &sb) == 0 && S_ISREG(sb.st_mode)) {
             if (is_browsable(prefix)) {
