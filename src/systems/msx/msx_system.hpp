@@ -77,7 +77,7 @@ template<> struct MSXVariantTraits<MSXVariant::MSX2> {
 
 template<> struct MSXVariantTraits<MSXVariant::MSX2P> {
     static constexpr const char* name         = "MSX2+";
-    static constexpr const char* short_name   = "MSX2+";
+    static constexpr const char* short_name   = "MSX2Plus";
     static constexpr const char* description  = "MSX2+ — Z80A, V9958, AY-3-8910 (1988)";
     static constexpr const char* data_folder  = "msx";
     static constexpr uint32_t    ram_size     = msx_constants::RAM_SIZE_MSX2P;

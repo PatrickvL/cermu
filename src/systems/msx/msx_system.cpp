@@ -93,9 +93,9 @@ static SystemDescriptor msx2_descriptor = {
 };
 
 static SystemDescriptor msx2p_descriptor = {
-    "MSX2+", "MSX2+",
+    "MSX2+", "MSX2Plus",
     "MSX2+ — Z80A, V9958, AY-3-8910, i8255 PPI (1988)",
-    "msx", {"MSX2+", "MSX2Plus"},
+    "msx", {"MSX2Plus", "MSX2+"},
     nullptr,
     create_msx_hardware_traits<MSXVariant::MSX2P>(),
     nullptr,

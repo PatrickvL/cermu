@@ -42,7 +42,7 @@ struct SystemProbeResult {
 /**
  * Broad system category — used by the launcher for tab-based filtering.
  */
-enum class SystemType : uint8_t { Home, Console, Arcade, Other };
+enum class SystemType : uint8_t { Home, Console, Handheld, Arcade, Other };
 
 /**
  * System descriptor - provides metadata about an emulated system

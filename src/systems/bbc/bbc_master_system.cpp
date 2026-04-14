@@ -86,9 +86,9 @@ static HardwareTraits create_bbc_master_hardware_traits() {
 // ============================================================================
 
 static SystemDescriptor bbc_bplus_descriptor = {
-    "BBC Micro Model B+", "BBCB+",
+    "BBC Micro Model B+", "BBCBPlus",
     "Acorn BBC Micro Model B+ (1985) — 65C02, 64KB RAM, OS 2.0",
-    "bbc", {"BBCB+", "BBC B+", "BBCBPlus"},
+    "bbc", {"BBCBPlus", "BBCB+", "BBC B+"},
     nullptr,
     create_bbc_master_hardware_traits<BBCMasterVariant::MODEL_B_PLUS>(),
     nullptr,

@@ -58,9 +58,9 @@ static HardwareTraits create_atari8_hardware_traits() {
 // ============================================================================
 
 static SystemDescriptor a800_descriptor = {
-    "Atari 800", "Atari 800",
+    "Atari 800", "A800",
     "Atari 800 — 6502C, ANTIC, GTIA, POKEY (1979)",
-    "atari800", {"Atari 800", "Atari800", "A800"},
+    "atari800", {"A800", "Atari 800", "Atari800"},
     nullptr,
     create_atari8_hardware_traits<Atari8Variant::A800>(),
     nullptr,

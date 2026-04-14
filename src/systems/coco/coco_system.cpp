@@ -23,7 +23,7 @@ static SystemDescriptor coco1_descriptor = {
 };
 
 static SystemDescriptor coco2_descriptor = {
-    "TRS-80 CoCo 2", "CoCo 2",
+    "TRS-80 CoCo 2", "CoCo2",
     "TRS-80 Color Computer 2 — MC6809E, MC6847, 2×PIA, Extended BASIC (1983)",
     "coco", {"CoCo2", "CoCo 2", "Color Computer 2"},
     nullptr,

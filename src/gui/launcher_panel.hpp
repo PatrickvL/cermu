@@ -561,6 +561,10 @@ inline void LauncherPanel::render_top_bar(bool allow_cancel) {
         type_filter_all_ = false; type_filter_ = SystemType::Console; apply_filters();
     }
     ImGui::SameLine();
+    if (tab_button("Handheld", !type_filter_all_ && type_filter_ == SystemType::Handheld)) {
+        type_filter_all_ = false; type_filter_ = SystemType::Handheld; apply_filters();
+    }
+    ImGui::SameLine();
     if (tab_button("Arcade", !type_filter_all_ && type_filter_ == SystemType::Arcade)) {
         type_filter_all_ = false; type_filter_ = SystemType::Arcade; apply_filters();
     }
@@ -896,9 +900,10 @@ inline void LauncherPanel::render_system_header() {
     {
         const char* type_str = "Other";
         switch (desc->type) {
-            case SystemType::Home:    type_str = "home"; break;
-            case SystemType::Console: type_str = "console"; break;
-            case SystemType::Arcade:  type_str = "arcade"; break;
+            case SystemType::Home:     type_str = "home"; break;
+            case SystemType::Console:  type_str = "console"; break;
+            case SystemType::Handheld: type_str = "handheld"; break;
+            case SystemType::Arcade:   type_str = "arcade"; break;
             default: type_str = "other"; break;
         }
         ImGui::SameLine();

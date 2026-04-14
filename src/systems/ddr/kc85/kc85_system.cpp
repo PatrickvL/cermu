@@ -21,25 +21,25 @@ using namespace z80::reg;  // PC, IX, etc.
 // ============================================================================
 
 static SystemDescriptor kc85_2_descriptor = {
-    "KC 85/2", "KC85/2",
+    "KC 85/2", "KC85-2",
     "VEB Mühlhausen KC 85/2 (HC 900) — U880 @ 1.77MHz, 16KB RAM, CAOS 2.2 (1984)",
-    "kc85", {"KC85/2", "HC900", "HC-900"},
+    "kc85", {"KC85-2", "KC85/2", "HC900", "HC-900"},
     nullptr, {}, nullptr,
     "Robotron", 1984, z80::U880Traits.display_name, SystemType::Home
 };
 
 static SystemDescriptor kc85_3_descriptor = {
-    "KC 85/3", "KC85/3",
+    "KC 85/3", "KC85-3",
     "VEB Mühlhausen KC 85/3 — U880 @ 1.77MHz, 16KB RAM, BASIC, CAOS 3.1 (1986)",
-    "kc85", {"KC85/3"},
+    "kc85", {"KC85-3", "KC85/3"},
     nullptr, {}, nullptr,
     "Robotron", 1986, z80::U880Traits.display_name, SystemType::Home
 };
 
 static SystemDescriptor kc85_4_descriptor = {
-    "KC 85/4", "KC85/4",
+    "KC 85/4", "KC85-4",
     "VEB Mühlhausen KC 85/4 — U880 @ 1.77MHz, 64KB RAM, dual-plane video, CAOS 4.2 (1989)",
-    "kc85", {"KC85/4"},
+    "kc85", {"KC85-4", "KC85/4"},
     nullptr, {}, nullptr,
     "Robotron", 1989, z80::U880Traits.display_name, SystemType::Home
 };

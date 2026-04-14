@@ -62,9 +62,9 @@ static HardwareTraits create_atari_st_hardware_traits() {
 // ============================================================================
 
 static SystemDescriptor atari_st_descriptor = {
-    "Atari ST", "Atari ST",
+    "Atari ST", "AtariST",
     "Atari ST — MC68000 8 MHz, Shifter, YM2149 (1985)",
-    "atari_st", {"Atari ST", "ST", "520ST", "1040ST"},
+    "atari_st", {"AtariST", "Atari ST", "ST", "520ST", "1040ST"},
     nullptr,
     create_atari_st_hardware_traits<AtariSTVariant::ST>(),
     nullptr,
@@ -72,9 +72,9 @@ static SystemDescriptor atari_st_descriptor = {
 };
 
 static SystemDescriptor atari_ste_descriptor = {
-    "Atari STe", "Atari STe",
+    "Atari STe", "AtariSTe",
     "Atari STe — MC68000 8 MHz, Enhanced Shifter, DMA Sound (1989)",
-    "atari_st", {"Atari STe", "STe", "1040STe"},
+    "atari_st", {"AtariSTe", "Atari STe", "STe", "1040STe"},
     nullptr,
     create_atari_st_hardware_traits<AtariSTVariant::STE>(),
     nullptr,
@@ -82,9 +82,9 @@ static SystemDescriptor atari_ste_descriptor = {
 };
 
 static SystemDescriptor atari_mega_st_descriptor = {
-    "Atari Mega ST", "Mega ST",
+    "Atari Mega ST", "MegaST",
     "Atari Mega ST — MC68000 8 MHz, Blitter, RTC (1987)",
-    "atari_st", {"Atari Mega ST", "Mega ST"},
+    "atari_st", {"MegaST", "Atari Mega ST", "Mega ST"},
     nullptr,
     create_atari_st_hardware_traits<AtariSTVariant::MEGA_ST>(),
     nullptr,

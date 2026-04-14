@@ -114,7 +114,7 @@ static SystemDescriptor dmg_descriptor = {
     gb_formats,
     create_gb_hardware_traits<GameBoyVariant::DMG>(),
     dmg_probe_file,
-    "Nintendo", 1989, "Sharp SM83 (LR35902)", SystemType::Console
+    "Nintendo", 1989, "Sharp SM83 (LR35902)", SystemType::Handheld
 };
 
 static SystemDescriptor gbc_descriptor = {
@@ -124,7 +124,7 @@ static SystemDescriptor gbc_descriptor = {
     gb_formats,
     create_gb_hardware_traits<GameBoyVariant::GBC>(),
     gbc_probe_file,
-    "Nintendo", 1998, "Sharp SM83 (LR35902)", SystemType::Console
+    "Nintendo", 1998, "Sharp SM83 (LR35902)", SystemType::Handheld
 };
 
 // ============================================================================

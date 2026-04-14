@@ -13,9 +13,9 @@
 // ============================================================================
 
 static SystemDescriptor dragon32_descriptor = {
-    "Dragon 32", "Dragon 32",
+    "Dragon 32", "Dragon32",
     "Dragon 32 — MC6809E, MC6847, 2×PIA, 32KB RAM (1982)",
-    "dragon", {"Dragon 32", "Dragon32", "Dragon"},
+    "dragon", {"Dragon32", "Dragon 32", "Dragon"},
     nullptr,
     create_mc6809_vdg_hardware_traits<MC6809VDGVariant::DRAGON32>(),
     nullptr,
@@ -23,9 +23,9 @@ static SystemDescriptor dragon32_descriptor = {
 };
 
 static SystemDescriptor dragon64_descriptor = {
-    "Dragon 64", "Dragon 64",
+    "Dragon 64", "Dragon64",
     "Dragon 64 — MC6809E, MC6847, 2×PIA, 64KB RAM (1983)",
-    "dragon", {"Dragon 64", "Dragon64"},
+    "dragon", {"Dragon64", "Dragon 64"},
     nullptr,
     create_mc6809_vdg_hardware_traits<MC6809VDGVariant::DRAGON64>(),
     nullptr,

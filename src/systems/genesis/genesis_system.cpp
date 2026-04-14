@@ -72,9 +72,9 @@ static SystemDescriptor genesis_descriptor = {
 };
 
 static SystemDescriptor megadrive_descriptor = {
-    "Sega Mega Drive", "Mega Drive",
+    "Sega Mega Drive", "MegaDrive",
     "Sega Mega Drive — MC68000 + Z80, YM2612, VDP (1988, PAL)",
-    "genesis", {"Mega Drive", "MegaDrive", "MD"},
+    "genesis", {"MegaDrive", "Mega Drive", "MD"},
     nullptr,
     create_genesis_hardware_traits<GenesisVariant::MEGADRIVE>(),
     nullptr,

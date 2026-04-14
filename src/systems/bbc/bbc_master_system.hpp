@@ -67,7 +67,7 @@ template<BBCMasterVariant V> struct BBCMasterVariantTraits;
 
 template<> struct BBCMasterVariantTraits<BBCMasterVariant::MODEL_B_PLUS> {
     static constexpr const char* name         = "BBC Micro Model B+";
-    static constexpr const char* short_name   = "BBCB+";
+    static constexpr const char* short_name   = "BBCBPlus";
     static constexpr const char* description  = "Acorn BBC Micro Model B+ (1985) — 65C02, 64KB RAM, OS 2.0";
     static constexpr const char* data_folder  = "bbc";
     static constexpr uint32_t    ram_size     = 65536;   // 64KB

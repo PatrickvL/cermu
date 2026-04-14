@@ -129,7 +129,7 @@ template<KC85Variant V> struct KC85VariantTraits;
 
 template<> struct KC85VariantTraits<KC85Variant::KC85_2> {
     static constexpr const char* name            = "KC 85/2";
-    static constexpr const char* short_name      = "KC85/2";
+    static constexpr const char* short_name      = "KC85-2";
     static constexpr const char* description     = "VEB Mühlhausen KC 85/2 (HC 900) — U880 @ 1.77MHz, 16KB RAM, CAOS 2.2 (1984)";
     static constexpr uint32_t    ram_size        = kc85_constants::RAM_SIZE_16K;
     static constexpr bool        has_basic_rom   = false;
@@ -139,7 +139,7 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_2> {
 
 template<> struct KC85VariantTraits<KC85Variant::KC85_3> {
     static constexpr const char* name            = "KC 85/3";
-    static constexpr const char* short_name      = "KC85/3";
+    static constexpr const char* short_name      = "KC85-3";
     static constexpr const char* description     = "VEB Mühlhausen KC 85/3 — U880 @ 1.77MHz, 16KB RAM, BASIC, CAOS 3.1 (1986)";
     static constexpr uint32_t    ram_size        = kc85_constants::RAM_SIZE_16K;
     static constexpr bool        has_basic_rom   = true;
@@ -149,7 +149,7 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_3> {
 
 template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
     static constexpr const char* name            = "KC 85/4";
-    static constexpr const char* short_name      = "KC85/4";
+    static constexpr const char* short_name      = "KC85-4";
     static constexpr const char* description     = "VEB Mühlhausen KC 85/4 — U880 @ 1.77MHz, 64KB RAM, dual-plane video, CAOS 4.2 (1989)";
     static constexpr uint32_t    ram_size        = kc85_constants::RAM_SIZE_64K;
     static constexpr bool        has_basic_rom   = true;
