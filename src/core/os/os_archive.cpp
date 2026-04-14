@@ -26,6 +26,7 @@ const char* const* os_archive_extensions() { static const char* e[] = { nullptr 
 #include <cstring>
 #include <cctype>
 #include <algorithm>
+#include <string>
 #include <vector>
 
 #include <archive.h>
@@ -150,6 +151,92 @@ static const char* s_archive_extensions[] = {
 
 } // anonymous namespace
 
+/**
+ * Fallback extraction using the 7z command-line tool.
+ *
+ * libarchive cannot reliably iterate large solid 7z archives (it stops
+ * after ~200 entries when the LZMA2 solid block ends).  The 7z CLI
+ * handles this correctly, so we shell out as a last resort.
+ *
+ * Uses: 7z e -so <archive> <entry>   →   extracted bytes on stdout.
+ */
+static uint8_t* extract_via_7z_cli(const char* archive_path,
+                                    const char* entry_name,
+                                    size_t* out_size) {
+    // Build command: 7z e -so -- 'archive' 'entry' 2>/dev/null
+    // We need to escape single quotes in paths for the shell.
+    auto shell_escape = [](const char* s) -> std::string {
+        std::string result = "'";
+        for (const char* p = s; *p; ++p) {
+            if (*p == '\'')
+                result += "'\\''";
+            else
+                result += *p;
+        }
+        result += "'";
+        return result;
+    };
+
+    std::string cmd = "7z e -so -- ";
+    cmd += shell_escape(archive_path);
+    cmd += " ";
+    cmd += shell_escape(entry_name);
+    cmd += " 2>/dev/null";
+
+    FILE* pipe = popen(cmd.c_str(), "r");
+    if (!pipe) return nullptr;
+
+    size_t capacity = 65536;
+    auto* buf = static_cast<uint8_t*>(malloc(capacity));
+    if (!buf) { pclose(pipe); return nullptr; }
+
+    size_t total = 0;
+    while (true) {
+        size_t n = fread(buf + total, 1, capacity - total, pipe);
+        if (n == 0) break;
+        total += n;
+        if (total == capacity) {
+            capacity *= 2;
+            auto* tmp = static_cast<uint8_t*>(realloc(buf, capacity));
+            if (!tmp) { free(buf); pclose(pipe); return nullptr; }
+            buf = tmp;
+        }
+    }
+
+    int status = pclose(pipe);
+    if (status != 0 || total == 0) {
+        free(buf);
+        return nullptr;
+    }
+
+    *out_size = total;
+    return buf;
+}
+
+// ============================================================================
+// Common — Entry Drain Helper
+// ============================================================================
+
+/**
+ * Drain (read and discard) the current archive entry's data.
+ *
+ * For most archive formats archive_read_data_skip() is sufficient, but
+ * 7-Zip solid archives use a single LZMA2 stream across many entries.
+ * libarchive's skip path may not advance the decompression cursor,
+ * causing later reads to fail with "Truncated 7-Zip file body".
+ *
+ * The workaround: consume all data blocks before advancing to the next
+ * header.  The cost is negligible (a few memcpy's that get discarded)
+ * and it ensures correct behavior for all archive formats.
+ */
+static void drain_entry(struct archive* a) {
+    const void* block;
+    size_t      block_size;
+    la_int64_t  offset;
+    while (archive_read_data_block(a, &block, &block_size, &offset) == ARCHIVE_OK)
+        ;  // discard
+}
+
 // ============================================================================
 // Archive Listing — from disk
 // ============================================================================
@@ -266,14 +353,38 @@ uint8_t* os_archive_extract(const char* archive_path,
 
             if (match) {
                 size_t expected = static_cast<size_t>(archive_entry_size(entry));
-                return read_current_entry(reader.a, expected, out_size);
+                uint8_t* result = read_current_entry(reader.a, expected, out_size);
+                if (result) return result;
+
+                // read_current_entry failed — solid archive where skip
+                // left the decompressor out of sync.  Retry with full
+                // drain from the start.
+                ArchiveReader r2;
+                if (!r2) return nullptr;
+                if (archive_read_open_filename(r2.a, archive_path, 16384) != ARCHIVE_OK)
+                    return nullptr;
+
+                struct archive_entry* e2;
+                while (archive_read_next_header(r2.a, &e2) == ARCHIVE_OK) {
+                    const char* p2 = archive_entry_pathname(e2);
+                    std::string n2 = p2 ? p2 : "";
+                    if (!n2.empty() && n2.back() == '/') n2.pop_back();
+                    if (n2 == name_clean) {
+                        expected = static_cast<size_t>(archive_entry_size(e2));
+                        return read_current_entry(r2.a, expected, out_size);
+                    }
+                    drain_entry(r2.a);
+                }
+                return nullptr;
             }
 
             archive_read_data_skip(reader.a);
         }
     }
 
-    return nullptr;
+    // libarchive failed to find or extract the entry — fall back to
+    // the 7z command-line tool (handles large solid archives correctly).
+    return extract_via_7z_cli(archive_path, entry_name, out_size);
 }
 
 // ============================================================================
@@ -287,6 +398,8 @@ uint8_t* os_archive_extract_from_memory(const uint8_t* data, size_t data_size,
     *out_size = 0;
 
     for (int pass = 0; pass < 2; ++pass) {
+        // pass 0: exact match, skip-based scan
+        // pass 1: case-insensitive match, skip-based scan
         ArchiveReader reader;
         if (!reader) return nullptr;
 
@@ -311,7 +424,29 @@ uint8_t* os_archive_extract_from_memory(const uint8_t* data, size_t data_size,
 
             if (match) {
                 size_t expected = static_cast<size_t>(archive_entry_size(entry));
-                return read_current_entry(reader.a, expected, out_size);
+                uint8_t* result = read_current_entry(reader.a, expected, out_size);
+                if (result) return result;
+
+                // read_current_entry failed — solid 7z archive where
+                // data_skip left the decompressor out of sync.
+                // Retry with full drain from the start.
+                ArchiveReader r2;
+                if (!r2) return nullptr;
+                if (archive_read_open_memory(r2.a, data, data_size) != ARCHIVE_OK)
+                    return nullptr;
+
+                struct archive_entry* e2;
+                while (archive_read_next_header(r2.a, &e2) == ARCHIVE_OK) {
+                    const char* p2 = archive_entry_pathname(e2);
+                    std::string n2 = p2 ? p2 : "";
+                    if (!n2.empty() && n2.back() == '/') n2.pop_back();
+                    if (n2 == name_clean) {
+                        expected = static_cast<size_t>(archive_entry_size(e2));
+                        return read_current_entry(r2.a, expected, out_size);
+                    }
+                    drain_entry(r2.a);
+                }
+                return nullptr;
             }
 
             archive_read_data_skip(reader.a);

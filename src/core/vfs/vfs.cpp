@@ -295,11 +295,14 @@ uint8_t* vfs_read_file(const char* path, size_t* out_size) {
     {
         std::lock_guard<std::mutex> lock(s_cache.mutex);
         if (s_cache.ensure(parts.real_path.c_str())) {
-            return s_cache.extract(parts.archive_path.c_str(), out_size);
+            uint8_t* result = s_cache.extract(parts.archive_path.c_str(), out_size);
+            if (result) return result;
+            // Cache extract failed (e.g. large solid 7z) — fall through
+            // to disk-based extraction which may use external tools.
         }
     }
 
-    // Fallback: direct disk extraction
+    // Fallback: direct disk extraction (may use 7z CLI for solid archives)
     return os_archive_extract(parts.real_path.c_str(),
                                parts.archive_path.c_str(),
                                out_size);
