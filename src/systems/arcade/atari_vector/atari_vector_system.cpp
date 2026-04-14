@@ -1487,8 +1487,8 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
         if (port_base == 0x2000 && (addr & 0x03FF) == 0x0000) {
             // IN0: direct read (non-multiplexed), full byte.
             // XOR converts internal active-HIGH state → hardware active-LOW
-            // for IP_ACTIVE_LOW bits (self-test, tilt, diag step, etc.).
-            // HALT (bit 0) and CLOCK (bit 6) are active-HIGH → unaffected.
+            // for IP_ACTIVE_LOW bits (bits 1-7).  Bit 0 (HALT) is active-HIGH.
+            // No 3 KHz clock in IN0 — clock is in IN1 bit 4.
             data = in0_ ^ atv::LL_IN0_ACTIVE_LOW_MASK;
 
             // bit 0: DVG HALT (IP_ACTIVE_HIGH in LL: done_r → bit set when halted)
@@ -1497,16 +1497,17 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
             else
                 data &= ~atv::LL_IN0_HALT;
 
-            // bit 6: 3 KHz clock
-            if (total_cycles_ & 0x100)
-                data |= atv::LL_IN0_CLOCK;
-            else
-                data &= ~atv::LL_IN0_CLOCK;
-
         } else if (port_base == 0x2400) {
             // IN1: multiplexed. XOR for active-LOW polarity before bit extract.
             uint8_t offset = addr & 0x07;
             uint8_t port_val = in1_ ^ atv::LL_IN1_ACTIVE_LOW_MASK;
+
+            // bit 4: 3 KHz clock (IP_ACTIVE_HIGH, toggles every 256 CPU cycles)
+            if (total_cycles_ & 0x100)
+                port_val |= 0x10;
+            else
+                port_val &= ~0x10;
+
             data = (port_val & (1 << offset)) ? 0x80 : 0x7F;
 
         } else if (port_base == 0x2800) {
@@ -1575,18 +1576,26 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
         // (POKEY reads handled in unified section above)
         //   $7800: IN0, $8000: IN3, $8800: IN4
         //
-        // IN0 bit layout (all IP_ACTIVE_LOW — idle = 0xFF):
-        //   0: Coin 2       1: Coin 1       2-3: Unused
-        //   4: Service 1    5: Tilt         6: Test/Service switch
-        //   7: AVG done_r   (0 = halted/done, 1 = running)
+        // IN0 bit layout (MAME bwidow.cpp):
+        //   0: Coin 2       1: Coin 1       2-3: Unused  (IP_ACTIVE_LOW)
+        //   4: Self-test     5: Diag step                (IP_ACTIVE_LOW)
+        //   6: AVG done_r   (IP_ACTIVE_HIGH: halted → 1, running → 0)
+        //   7: 3 KHz clock  (IP_ACTIVE_HIGH)
         if (addr == 0x7800) {
-            // IN0: all IP_ACTIVE_LOW — XOR converts active-HIGH state to active-LOW
-            data = in0_ ^ 0xFF;
-            // Bit 7: AVG done_r (IP_ACTIVE_LOW) — 0 when halted, 1 when running
+            // IN0: bits 0-5 are IP_ACTIVE_LOW — XOR converts active-HIGH → active-LOW
+            data = in0_ ^ atv::GBW_IN0_ACTIVE_LOW_MASK;
+
+            // bit 6: AVG done_r (IP_ACTIVE_HIGH: halted/done → 1, running → 0)
             if (vg().is_halted())
-                data &= ~0x80;
+                data |= atv::GBW_IN0_HALT;
             else
-                data |= 0x80;
+                data &= ~atv::GBW_IN0_HALT;
+
+            // bit 7: 3 KHz clock (toggles every 256 CPU cycles)
+            if (total_cycles_ & 0x100)
+                data |= atv::GBW_IN0_CLOCK;
+            else
+                data &= ~atv::GBW_IN0_CLOCK;
         } else if (addr == 0x8000) {
             // IN3: player inputs (IP_ACTIVE_LOW — idle = 0xFF, pressed = bit cleared)
             data = in1_ ^ 0xFF;
@@ -1599,24 +1608,40 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
     } else if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
         // ── Space Duel input port reads ──────────────────────────────
         // (POKEY reads handled in unified section above)
-        //   $0800: IN0, $0900: IN3
         //
-        // IN0 bit layout (all IP_ACTIVE_LOW — idle = 0xFF):
-        //   0: Coin 2       1: Coin 1       2: Coin 3     3: Unused
-        //   4: Tilt          5: Service 1    6: Test/Service switch
-        //   7: AVG done_r   (0 = halted/done, 1 = running)
+        // Memory map (MAME bwidow.cpp spacduel_map):
+        //   $0800: IN0 — coins, VG done, clock (same layout as BW/Gravitar)
+        //   $0900-$0907: spacduel_IN3_r — multiplexed player controls
+        //   $0A00: EAROM data read
+        //
+        // IN0 bit layout (MAME bwidow.cpp):
+        //   0: Coin 2       1: Coin 1       2-3: Unused  (IP_ACTIVE_LOW)
+        //   4: Self-test     5: Diag step                (IP_ACTIVE_LOW)
+        //   6: AVG done_r   (IP_ACTIVE_HIGH: halted → 1, running → 0)
+        //   7: 3 KHz clock  (IP_ACTIVE_HIGH)
         if (addr == 0x0800) {
-            // IN0: all IP_ACTIVE_LOW — XOR converts active-HIGH state to active-LOW
-            data = in0_ ^ 0xFF;
-            // Bit 7: AVG done_r (IP_ACTIVE_LOW) — 0 when halted, 1 when running
+            // IN0: bits 0-5 are IP_ACTIVE_LOW — XOR converts active-HIGH → active-LOW
+            data = in0_ ^ atv::GBW_IN0_ACTIVE_LOW_MASK;
+
+            // bit 6: AVG done_r (IP_ACTIVE_HIGH: halted/done → 1, running → 0)
             if (vg().is_halted())
-                data &= ~0x80;
+                data |= atv::GBW_IN0_HALT;
             else
-                data |= 0x80;
+                data &= ~atv::GBW_IN0_HALT;
+
+            // bit 7: 3 KHz clock (toggles every 256 CPU cycles)
+            if (total_cycles_ & 0x100)
+                data |= atv::GBW_IN0_CLOCK;
+            else
+                data &= ~atv::GBW_IN0_CLOCK;
         } else if (addr >= 0x0900 && addr < 0x0A00) {
-            // IN3: DIP switches (multiplexed — $090X returns bit X at D7)
-            uint8_t offset = addr & 0x07;
-            data = (dip_bank_[0].value & (1 << offset)) ? 0x80 : 0x7F;
+            // Multiplexed player controls (MAME spacduel_IN3_r).
+            // Returns two control bits at D7/D6 based on offset.
+            // For now: no buttons pressed → 0x00.
+            data = 0x00;
+        } else if (addr == 0x0A00) {
+            // EAROM data read — no EAROM implemented, return 0
+            data = 0x00;
         } else {
             data = 0xFF;
         }

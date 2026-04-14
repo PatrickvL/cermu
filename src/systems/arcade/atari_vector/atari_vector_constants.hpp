@@ -118,16 +118,20 @@ namespace atari_vector_constants {
 
     // ── Lunar Lander IN0 (active-HIGH unless noted) ─────────────────────
     // Direct (non-multiplexed) full-byte read at $2000.
+    //   bit 0: DVG HALT (IP_ACTIVE_HIGH)
+    //   bits 1-4,6: unused (IP_ACTIVE_LOW → default high)
+    //   bit 5: tilt (IP_ACTIVE_LOW)
+    //   bit 7: diagnostic step (IP_ACTIVE_LOW)
+    // Note: NO 3 KHz clock in IN0.  Clock is in IN1 bit 4.
 
     inline constexpr uint8_t LL_IN0_HALT           = 0x01;  // bit 0: DVG HALT (active-HIGH: done_r)
-    inline constexpr uint8_t LL_IN0_CLOCK          = 0x40;  // bit 6: 3 KHz clock
 
     // Polarity masks for IP_ACTIVE_LOW bits.
     // Internal state uses active-HIGH convention (1=pressed). These masks are
     // XORed in io_read to produce the hardware-expected active-LOW signals
     // (idle=1, active=0) for the bits that the real hardware active-pulls.
-    inline constexpr uint8_t LL_IN0_ACTIVE_LOW_MASK = 0xBE;  // bits 1,2,3,4,5,7
-    inline constexpr uint8_t LL_IN1_ACTIVE_LOW_MASK = 0xCE;  // bits 1,2,3,6,7
+    inline constexpr uint8_t LL_IN0_ACTIVE_LOW_MASK = 0xFE;  // bits 1,2,3,4,5,6,7 (all except bit 0)
+    inline constexpr uint8_t LL_IN1_ACTIVE_LOW_MASK = 0x0E;  // bits 1,2,3 only (coins)
 
     // ── Battlezone / Red Baron IN0 ──────────────────────────────────────
     // bits 0(coin1), 1(coin2), 2-3(unused), 4(self-test), 5(diag step) are IP_ACTIVE_LOW.
@@ -136,5 +140,14 @@ namespace atari_vector_constants {
     inline constexpr uint8_t BZ_IN0_COIN1          = 0x01;  // bit 0: Coin 1 (active-LOW)
     inline constexpr uint8_t BZ_IN0_HALT           = 0x40;  // bit 6: VG HALT (IP_ACTIVE_HIGH)
     inline constexpr uint8_t BZ_IN0_CLOCK          = 0x80;  // bit 7: 3 KHz clock
+
+    // ── Gravitar / Black Widow / Space Duel IN0 ─────────────────────────
+    // bits 0(coin2), 1(coin1), 2-3(unused), 4(self-test), 5(diag step) are IP_ACTIVE_LOW.
+    // bit 6: AVG HALT (IP_ACTIVE_HIGH: halted/done → 1, running → 0)
+    // bit 7: 3 KHz clock (IP_ACTIVE_HIGH)
+
+    inline constexpr uint8_t GBW_IN0_ACTIVE_LOW_MASK = 0x3F;  // bits 0-5
+    inline constexpr uint8_t GBW_IN0_HALT            = 0x40;  // bit 6: AVG done_r
+    inline constexpr uint8_t GBW_IN0_CLOCK           = 0x80;  // bit 7: 3 KHz clock
 
 }  // namespace atari_vector_constants
