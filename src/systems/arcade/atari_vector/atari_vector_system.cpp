@@ -1176,7 +1176,7 @@ void AtariVectorSystem<V>::tick() {
     //
     // Interrupt type per game (confirmed via ROM vector analysis + MAME):
     //   Asteroids / Lunar Lander : Pulsed NMI, unconditional.
-    //   Asteroids Deluxe         : Pulsed NMI, gated by 74LS259 Q4 ($3C04).
+    //   Asteroids Deluxe         : Pulsed NMI, unconditional (same as Asteroids).
     //   Battlezone / Red Baron   : Pulsed NMI, gated by 74LS259 Q5 ($1005).
     //   Tempest                  : Level IRQ, cleared by $5000 write.
     //   Gravitar / Black Widow   : Level IRQ, cleared by $88C0 write.
@@ -1200,22 +1200,17 @@ void AtariVectorSystem<V>::tick() {
         nmi_counter_ = atv::NMI_PERIOD_CYCLES;
 
         if constexpr (V == AtariVectorVariant::ASTEROIDS ||
+                      V == AtariVectorVariant::ASTEROIDS_DELUXE ||
                       V == AtariVectorVariant::LUNAR_LANDER) {
-            // Unconditional NMI pulse
+            // Unconditional NMI pulse (AD confirmed unconditional per MAME asteroid_base)
             BUS_CLR_BIT(pins_, BUS_NMI_BIT);
 
-        } else if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE ||
-                             V == AtariVectorVariant::BATTLEZONE ||
+        } else if constexpr (V == AtariVectorVariant::BATTLEZONE ||
                              V == AtariVectorVariant::RED_BARON) {
             // Gated NMI: only fires when enabled via 74LS259 latch output.
-            // AD: Q4 ($3C04), BZ/RB: Q5 ($1005).
-            if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
-                if (board_.latch.q(4))
-                    BUS_CLR_BIT(pins_, BUS_NMI_BIT);
-            } else {
-                if (board_.latch.q(5))
-                    BUS_CLR_BIT(pins_, BUS_NMI_BIT);
-            }
+            // BZ/RB: Q5 ($1005).
+            if (board_.latch.q(5))
+                BUS_CLR_BIT(pins_, BUS_NMI_BIT);
 
         } else if constexpr (V == AtariVectorVariant::TEMPEST ||
                              V == AtariVectorVariant::GRAVITAR ||
@@ -1346,13 +1341,6 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
             BUS_SET_DATA(pins, board_.pokey1().read(static_cast<uint8_t>(addr & 0x0F)));
             return pins;
         }
-        // Tempest mirrors POKEY1 at $0800 and POKEY2 at $0900
-        if constexpr (V == AtariVectorVariant::TEMPEST) {
-            if (addr >= 0x0800 && addr < 0x0810) {
-                BUS_SET_DATA(pins, board_.pokey1().read(static_cast<uint8_t>(addr & 0x0F)));
-                return pins;
-            }
-        }
     }
 
     // ── POKEY2 read ─────────────────────────────────────────────────
@@ -1361,13 +1349,6 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
             // TODO: second POKEY instance; return open-bus for now.
             BUS_SET_DATA(pins, 0xFF);
             return pins;
-        }
-        // Tempest POKEY2 mirror at $0900
-        if constexpr (V == AtariVectorVariant::TEMPEST) {
-            if (addr >= 0x0900 && addr < 0x0910) {
-                BUS_SET_DATA(pins, 0xFF);
-                return pins;
-            }
         }
     }
 
@@ -1404,7 +1385,8 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
         // I/O at $0800-$1FFF (MAME bzone.cpp / redbaron_map):
         //   $0800   IN0  (direct, full byte — HALT, clock, coins, start)
         //   $0A00   DSW0 (DIP switches)
-        //   $0C00   DSW1 (DIP switches)
+        //   $0C00   IN3  (joystick inputs — IP_ACTIVE_HIGH)
+        //   $0E00   DSW1 (DIP switches)
 
         if (addr >= 0x0800 && addr < 0x0A00) {
             // IN0 — full byte with live HW signals
@@ -1426,6 +1408,10 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
             data = dip_bank_[0].value;
 
         } else if (addr >= 0x0C00 && addr < 0x0E00) {
+            // IN3: joystick inputs (IP_ACTIVE_HIGH — pressed = 1)
+            data = in1_;
+
+        } else if (addr >= 0x0E00 && addr < 0x1000) {
             data = dip_bank_[1].value;
 
         } else {
@@ -1539,28 +1525,42 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
     } else if constexpr (V == AtariVectorVariant::TEMPEST) {
         // ── Tempest input port reads ─────────────────────────────────
         // (POKEY and EAROM reads handled in unified sections above)
+        //
+        // Memory map (MAME tempest.cpp main_map):
+        //   $0C00  IN0  — coins/tilt/self-test (IP_ACTIVE_LOW), VG done (bit6, IP_ACTIVE_HIGH), 3KHz clock (bit7)
+        //   $0D00  DSW1 — coinage DIP switches (N13 PCB), direct 8-bit read
+        //   $0E00  DSW2 — game settings DIP switches (L12 PCB), direct 8-bit read
+        //   $6040  Mathbox status (bit 7 = idle) — handled in unified EAROM section above
+        //   $6050  EAROM data read — handled in unified EAROM section above
+        //   $6060  Mathbox result lo
+        //   $6070  Mathbox result hi
+        //
+        // Player inputs (spinner, buttons, start) are read via POKEY analog pot inputs,
+        // not via memory-mapped I/O.
         if (addr >= 0x0C00 && addr < 0x0D00) {
-            // IN0 at $0C00 (MAME tempest.cpp):
-            //   bits 0-5: coins, tilt, self-test, slam (IP_ACTIVE_LOW → idle high)
-            //   bit 6 (0x40): VG done_r (IP_ACTIVE_HIGH: 1=halted, 0=running)
-            //   bit 7 (0x80): VBLANK (IP_ACTIVE_HIGH: 1=vblank, 0=active)
-            data = 0xFF;  // all idle (active-low buttons = high)
-            if (vg().is_halted()) data &= ~0x40;  // halted → clear bit 6 (IP_ACTIVE_LOW)
-            // VBLANK (IP_ACTIVE_LOW): bit low during VBLANK, high during active display
-            if ((total_cycles_ % atv::CYCLES_PER_FRAME) > (atv::CYCLES_PER_FRAME * 4 / 5))
-                data &= ~0x80;  // VBLANK → clear bit 7
-        } else if (addr >= 0x0D00 && addr < 0x0E00) {
-            // IN1 at $0D00 (MAME tempest.cpp: portr("IN1"))
-            // All bits are IP_ACTIVE_LOW: idle = 0xFF, pressed = bit cleared.
-            data = 0xFF;  // TODO: wire host inputs
-        } else if (addr >= 0x0E00 && addr < 0x0F00) {
-            // IN2 at $0E00 (MAME tempest.cpp: portr("IN2") — DIP switches + VBLANK)
-            // Bits 0-6: DIP switches (from DIP bank)
-            // Bit 7: VBLANK (IP_ACTIVE_HIGH) — 1 during vertical blank
-            data = dip_bank_[0].value & 0x7F;
-            // Simulate VBLANK: high during last ~20% of each frame
-            if ((total_cycles_ % atv::CYCLES_PER_FRAME) > (atv::CYCLES_PER_FRAME * 4 / 5))
+            // IN0: bits 0-5 = coins/tilt/self-test (IP_ACTIVE_LOW: idle = high)
+            data = ~in0_ & 0x3F;  // active-HIGH internal → active-LOW for bits 0-5
+
+            // bit 6: VG done_r (IP_ACTIVE_HIGH: halted/done → 1, running → 0)
+            if (vg().is_halted())
+                data |= 0x40;
+            else
+                data &= ~0x40;
+
+            // bit 7: 3KHz clock — toggles every 256 CPU cycles (MAME clock_r)
+            if (total_cycles_ & 0x100)
                 data |= 0x80;
+            else
+                data &= ~0x80;
+
+        } else if (addr >= 0x0D00 && addr < 0x0E00) {
+            // DSW1: coinage DIP switches (direct 8-bit read, active-LOW defaults ~$00)
+            data = dip_bank_[0].value;
+
+        } else if (addr >= 0x0E00 && addr < 0x0F00) {
+            // DSW2: game settings DIP switches (direct 8-bit read)
+            data = dip_bank_[1].value;
+
         } else if (addr == 0x6060) {
             data = 0x00;  // Mathbox lo result (stub)
         } else if (addr == 0x6070) {
@@ -1580,11 +1580,16 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
         //   4: Service 1    5: Tilt         6: Test/Service switch
         //   7: AVG done_r   (0 = halted/done, 1 = running)
         if (addr == 0x7800) {
-            data = 0xFF;  // all idle (active-low buttons = high)
+            // IN0: all IP_ACTIVE_LOW — XOR converts active-HIGH state to active-LOW
+            data = in0_ ^ 0xFF;
             // Bit 7: AVG done_r (IP_ACTIVE_LOW) — 0 when halted, 1 when running
-            if (vg().is_halted()) data &= ~0x80;
+            if (vg().is_halted())
+                data &= ~0x80;
+            else
+                data |= 0x80;
         } else if (addr == 0x8000) {
-            data = in1_;
+            // IN3: player inputs (IP_ACTIVE_LOW — idle = 0xFF, pressed = bit cleared)
+            data = in1_ ^ 0xFF;
         } else if (addr == 0x8800) {
             data = dip_bank_[0].value;
         } else {
@@ -1601,9 +1606,13 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
         //   4: Tilt          5: Service 1    6: Test/Service switch
         //   7: AVG done_r   (0 = halted/done, 1 = running)
         if (addr == 0x0800) {
-            data = 0xFF;  // all idle (active-low buttons = high)
+            // IN0: all IP_ACTIVE_LOW — XOR converts active-HIGH state to active-LOW
+            data = in0_ ^ 0xFF;
             // Bit 7: AVG done_r (IP_ACTIVE_LOW) — 0 when halted, 1 when running
-            if (vg().is_halted()) data &= ~0x80;
+            if (vg().is_halted())
+                data &= ~0x80;
+            else
+                data |= 0x80;
         } else if (addr >= 0x0900 && addr < 0x0A00) {
             // IN3: DIP switches (multiplexed — $090X returns bit X at D7)
             uint8_t offset = addr & 0x07;
@@ -1643,13 +1652,6 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
             board_.pokey1().write(static_cast<uint8_t>(addr & 0x0F), data);
             return pins;
         }
-        // Tempest mirrors POKEY1 at $0800
-        if constexpr (V == AtariVectorVariant::TEMPEST) {
-            if (addr >= 0x0800 && addr < 0x0810) {
-                board_.pokey1().write(static_cast<uint8_t>(addr & 0x0F), data);
-                return pins;
-            }
-        }
     }
 
     // ── POKEY2 write ────────────────────────────────────────────────
@@ -1657,12 +1659,6 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
         if (addr >= Traits::POKEY2_BASE && addr < Traits::POKEY2_BASE + Traits::POKEY2_SIZE) {
             // TODO: second POKEY instance
             return pins;
-        }
-        // Tempest POKEY2 mirror at $0900
-        if constexpr (V == AtariVectorVariant::TEMPEST) {
-            if (addr >= 0x0900 && addr < 0x0910) {
-                return pins;
-            }
         }
     }
 
@@ -1724,11 +1720,20 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
                 snd_latch_ = data;
                 break;
 
-            case 0x3800:
+            case 0x3200:
+                // EAROM data write ($3200-$323F) — sets address from low bits, data from bus
+                if constexpr (Traits::HAS_EAROM) {
+                    bus_state_t eb = 0;
+                    BUS_SET_ADDR(eb, addr & 0x3F);
+                    BUS_SET_DATA(eb, data);
+                    board_.earom().tick(eb);
+                }
+                break;
+
             case 0x3A00:
                 if constexpr (Traits::HAS_EAROM) {
-                    // AD EAROM control write: CS1=bit3, CS2=tied high,
-                    // C1=bit2, C2=bit1, CK=bit0
+                    // AD EAROM control write ($3A00): CS1=bit3, CS2=tied high,
+                    // C1=/bit2, C2=bit1, CK=bit0
                     bus_state_t eb = 0;
                     BUS_SET_ADDR(eb, board_.earom().regs_.data[er2055::reg::ADDR_LATCH]);
                     BUS_SET_DATA(eb, board_.earom().regs_.data[er2055::reg::DATA_IN]);
@@ -1759,14 +1764,15 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
         // MAME bzone.cpp:
         //   $1000: coin counters   $1200: VGGO
         //   $1400: WD clear        $1600: VGRST
-        //   $1840: sound latch
+        //   $1800: sound latch (BZ discrete), $1810: POKEY (RB — unified above)
 
         if (addr >= 0x1000 && addr < 0x1008) {
             // 74LS259 addressable latch (MAME: ls259_device::write_a0)
             //   Q0 = coin counter 1, Q1 = coin counter 2, Q2 = start LED
             //   Q5 = NMI enable (game writes $1005 D0=1 to enable periodic NMI)
             board_.latch.write(addr, data);
-        } else if (addr >= 0x1840 && addr < 0x1A40) {
+        } else if (addr >= 0x1800 && addr < 0x1810) {
+            // BZ discrete sound latch / RB sound (POKEY handled above)
             snd_latch_ = data;
         } else if (addr >= Traits::VGGO_ADDR && addr < Traits::VGGO_ADDR + 0x0200) {
             vg().trigger_go();
@@ -1780,15 +1786,28 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
         // ── AVG-based game I/O writes (exact address match) ─────────
 
         if (addr == Traits::VGGO_ADDR) { vg().trigger_go(); return pins; }
-        // Gravitar/BW: alternate VGGO at $8940 (partial decode — bit 8 not decoded)
-        if constexpr (V == AtariVectorVariant::GRAVITAR || V == AtariVectorVariant::BLACK_WIDOW) {
-            if (addr == 0x8940) { vg().trigger_go(); return pins; }
-        }
         if (addr == Traits::VGRST_ADDR) { vg().trigger_reset(); return pins; }
         if (addr == Traits::WDCLR_ADDR) {
             // Tempest: wdclr also clears IRQ (MAME wdclr_w)
             if constexpr (V == AtariVectorVariant::TEMPEST) irq_asserted_ = false;
             return pins;
+        }
+
+        // LS259 addressable latch (coin counters, LEDs) — game-family decode
+        if constexpr (V == AtariVectorVariant::TEMPEST) {
+            // Tempest: $4000-$400F (MAME ls259 write_a0)
+            if (addr >= 0x4000 && addr < 0x4010) {
+                board_.latch.write(addr, data);
+                return pins;
+            }
+        }
+        if constexpr (V == AtariVectorVariant::GRAVITAR ||
+                      V == AtariVectorVariant::BLACK_WIDOW) {
+            // Gravitar/BW: $8800-$8807 (MAME ls259 write_a0)
+            if (addr >= 0x8800 && addr < 0x8808) {
+                board_.latch.write(addr, data);
+                return pins;
+            }
         }
     }
 
@@ -1924,7 +1943,7 @@ std::vector<const RomSetDescriptor*> AtariVectorSystem<V>::get_rom_set_descripto
     if constexpr (V == AtariVectorVariant::ASTEROIDS) {
         return { &ast_v1_romset, &ast_v2_romset };
     } else if constexpr (V == AtariVectorVariant::ASTEROIDS_DELUXE) {
-        return { &ad_v1_romset, &ad_v2_romset };
+        return { &ad_v2_romset, &ad_v1_romset };
     } else if constexpr (V == AtariVectorVariant::LUNAR_LANDER) {
         return { &ll_v1_romset, &ll_v2_romset };
     } else if constexpr (V == AtariVectorVariant::BATTLEZONE) {
@@ -1935,7 +1954,7 @@ std::vector<const RomSetDescriptor*> AtariVectorSystem<V>::get_rom_set_descripto
         return { &tempest_v3_romset, &tempest_v3_2716_romset,
                  &tempest_v2_romset, &tempest_v1_romset };
     } else if constexpr (V == AtariVectorVariant::GRAVITAR) {
-        return { &gravitar_v2_romset, &gravitar_v3_romset };
+        return { &gravitar_v3_romset, &gravitar_v2_romset };
     } else if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
         return { &spaceduel_romset };
     } else if constexpr (V == AtariVectorVariant::BLACK_WIDOW) {
@@ -2284,37 +2303,40 @@ void AtariVectorSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) 
         }
 
     } else if constexpr (V == AtariVectorVariant::BATTLEZONE) {
-        // Battlezone — twin-stick tank controls
+        // Battlezone — twin-stick tank controls (IN3 at $0C00, IP_ACTIVE_HIGH)
+        //   MAME bit layout: 0=right-down, 1=right-up, 2=left-down, 3=left-up,
+        //                    4=fire, 5=start1, 6=start2, 7=unused
         //   W/S = left stick forward/reverse
         //   I/K = right stick forward/reverse
-        //   Space = fire
-        //   1 = start
-        //   5 = coin
+        //   Space = fire, 1/2 = start, 5 = coin
         switch (key) {
             case SDLK_w:
-                if (pressed) in1_ |=  0x01;  // left forward
-                else         in1_ &= ~0x01;
-                break;
-            case SDLK_s:
-                if (pressed) in1_ |=  0x02;  // left reverse
-                else         in1_ &= ~0x02;
-                break;
-            case SDLK_i:
-                if (pressed) in1_ |=  0x04;  // right forward
-                else         in1_ &= ~0x04;
-                break;
-            case SDLK_k:
-                if (pressed) in1_ |=  0x08;  // right reverse
+                if (pressed) in1_ |=  0x08;  // left stick up (bit 3)
                 else         in1_ &= ~0x08;
                 break;
+            case SDLK_s:
+                if (pressed) in1_ |=  0x04;  // left stick down (bit 2)
+                else         in1_ &= ~0x04;
+                break;
+            case SDLK_i:
+                if (pressed) in1_ |=  0x02;  // right stick up (bit 1)
+                else         in1_ &= ~0x02;
+                break;
+            case SDLK_k:
+                if (pressed) in1_ |=  0x01;  // right stick down (bit 0)
+                else         in1_ &= ~0x01;
+                break;
             case SDLK_SPACE:
-                if (pressed) in1_ |=  0x10;  // fire
+                if (pressed) in1_ |=  0x10;  // fire (bit 4)
                 else         in1_ &= ~0x10;
                 break;
             case SDLK_1:
-                // Start is IN3 bit 5 in MAME (joystick register, not IN0)
-                if (pressed) in1_ |=  0x20;
+                if (pressed) in1_ |=  0x20;  // start 1 (bit 5)
                 else         in1_ &= ~0x20;
+                break;
+            case SDLK_2:
+                if (pressed) in1_ |=  0x40;  // start 2 (bit 6)
+                else         in1_ &= ~0x40;
                 break;
             case SDLK_5:
                 if (pressed) in0_ |=  atv::BZ_IN0_COIN1;
@@ -2325,35 +2347,32 @@ void AtariVectorSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) 
         }
 
     } else if constexpr (V == AtariVectorVariant::RED_BARON) {
-        // Red Baron — yoke controls
-        //   Arrow keys = up/down/left/right
-        //   Space = fire
-        //   1 = start
-        //   5 = coin
+        // Red Baron — yoke controls (IN3 at $0C00, IP_ACTIVE_HIGH)
+        //   MAME bit layout: same as Battlezone (twin-stick mapped to yoke)
+        //   Arrow keys = pitch/roll, Space = fire, 1 = start, 5 = coin
         switch (key) {
             case SDLK_UP:
-                if (pressed) in1_ |=  0x01;
-                else         in1_ &= ~0x01;
-                break;
-            case SDLK_DOWN:
-                if (pressed) in1_ |=  0x02;
-                else         in1_ &= ~0x02;
-                break;
-            case SDLK_LEFT:
-                if (pressed) in1_ |=  0x04;
-                else         in1_ &= ~0x04;
-                break;
-            case SDLK_RIGHT:
-                if (pressed) in1_ |=  0x08;
+                if (pressed) in1_ |=  0x08;  // left/up (bit 3)
                 else         in1_ &= ~0x08;
                 break;
+            case SDLK_DOWN:
+                if (pressed) in1_ |=  0x04;  // left/down (bit 2)
+                else         in1_ &= ~0x04;
+                break;
+            case SDLK_LEFT:
+                if (pressed) in1_ |=  0x01;  // right/down = roll left (bit 0)
+                else         in1_ &= ~0x01;
+                break;
+            case SDLK_RIGHT:
+                if (pressed) in1_ |=  0x02;  // right/up = roll right (bit 1)
+                else         in1_ &= ~0x02;
+                break;
             case SDLK_SPACE:
-                if (pressed) in1_ |=  0x10;  // fire
+                if (pressed) in1_ |=  0x10;  // fire (bit 4)
                 else         in1_ &= ~0x10;
                 break;
             case SDLK_1:
-                // Start is IN3 bit 5 in MAME (joystick register, not IN0)
-                if (pressed) in1_ |=  0x20;
+                if (pressed) in1_ |=  0x20;  // start 1 (bit 5)
                 else         in1_ &= ~0x20;
                 break;
             case SDLK_5:
@@ -2364,12 +2383,149 @@ void AtariVectorSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) 
                 break;
         }
 
+    } else if constexpr (V == AtariVectorVariant::GRAVITAR) {
+        // Gravitar — single joystick + fire/shield (IN3 at $8000, IP_ACTIVE_LOW)
+        //   in1_ stores active-HIGH; io_read XORs to active-LOW before returning.
+        //   MAME bit layout: 0=shield, 1=fire, 2=right, 3=left,
+        //                    4=down, 5=up, 6=start2, 7=start1
+        switch (key) {
+            case SDLK_LEFT:
+                if (pressed) in1_ |=  0x08;  // left (bit 3)
+                else         in1_ &= ~0x08;
+                break;
+            case SDLK_RIGHT:
+                if (pressed) in1_ |=  0x04;  // right (bit 2)
+                else         in1_ &= ~0x04;
+                break;
+            case SDLK_UP:
+                if (pressed) in1_ |=  0x20;  // up (bit 5)
+                else         in1_ &= ~0x20;
+                break;
+            case SDLK_DOWN:
+                if (pressed) in1_ |=  0x10;  // down (bit 4)
+                else         in1_ &= ~0x10;
+                break;
+            case SDLK_SPACE:
+                if (pressed) in1_ |=  0x02;  // fire (bit 1)
+                else         in1_ &= ~0x02;
+                break;
+            case SDLK_h:
+                if (pressed) in1_ |=  0x01;  // shield (bit 0)
+                else         in1_ &= ~0x01;
+                break;
+            case SDLK_1:
+                if (pressed) in1_ |=  0x80;  // start 1 (bit 7)
+                else         in1_ &= ~0x80;
+                break;
+            case SDLK_2:
+                if (pressed) in1_ |=  0x40;  // start 2 (bit 6)
+                else         in1_ &= ~0x40;
+                break;
+            case SDLK_5:
+                // Coin is on IN0 (handled at $7800 via in0_)
+                if (pressed) in0_ |=  0x02;  // coin 1 (bit 1, IP_ACTIVE_LOW)
+                else         in0_ &= ~0x02;
+                break;
+            default:
+                break;
+        }
+
+    } else if constexpr (V == AtariVectorVariant::BLACK_WIDOW) {
+        // Black Widow — twin 8-way joystick (IN3 at $8000, IP_ACTIVE_LOW)
+        //   in1_ stores active-HIGH; io_read XORs to active-LOW before returning.
+        //   MAME bit layout: 0=up, 1=down, 2=left, 3=right (move stick),
+        //                    4=up2, 5=down2, 6=left2, 7=right2 (fire stick)
+        //   Left joystick = move, Right joystick = fire direction
+        //   Fire buttons + start on IN4 (DIP bank area)
+        switch (key) {
+            case SDLK_w:
+                if (pressed) in1_ |=  0x01;  // move up (bit 0)
+                else         in1_ &= ~0x01;
+                break;
+            case SDLK_s:
+                if (pressed) in1_ |=  0x02;  // move down (bit 1)
+                else         in1_ &= ~0x02;
+                break;
+            case SDLK_a:
+                if (pressed) in1_ |=  0x04;  // move left (bit 2)
+                else         in1_ &= ~0x04;
+                break;
+            case SDLK_d:
+                if (pressed) in1_ |=  0x08;  // move right (bit 3)
+                else         in1_ &= ~0x08;
+                break;
+            case SDLK_UP:
+                if (pressed) in1_ |=  0x10;  // fire up (bit 4)
+                else         in1_ &= ~0x10;
+                break;
+            case SDLK_DOWN:
+                if (pressed) in1_ |=  0x20;  // fire down (bit 5)
+                else         in1_ &= ~0x20;
+                break;
+            case SDLK_LEFT:
+                if (pressed) in1_ |=  0x40;  // fire left (bit 6)
+                else         in1_ &= ~0x40;
+                break;
+            case SDLK_RIGHT:
+                if (pressed) in1_ |=  0x80;  // fire right (bit 7)
+                else         in1_ &= ~0x80;
+                break;
+            case SDLK_5:
+                if (pressed) in0_ |=  0x02;  // coin 1 (bit 1)
+                else         in0_ &= ~0x02;
+                break;
+            default:
+                break;
+        }
+
+    } else if constexpr (V == AtariVectorVariant::SPACE_DUEL) {
+        // Space Duel — twin rotary sticks (IN0 at $0800, IP_ACTIVE_LOW)
+        //   Player inputs routed through POKEY2 (TODO: not yet wired).
+        //   Coin on IN0 bit 1. Start buttons via POKEY port (TODO).
+        switch (key) {
+            case SDLK_5:
+                if (pressed) in0_ |=  0x02;  // coin 1 (bit 1)
+                else         in0_ &= ~0x02;
+                break;
+            default:
+                break;
+        }
+
+    } else if constexpr (V == AtariVectorVariant::TEMPEST) {
+        // Tempest — spinner + fire/zap (IN1 at $0D00, IP_ACTIVE_LOW)
+        //   Spinner read through $6080 (TODO: not yet wired).
+        //   Fire/Zap on IN1.
+        //   Coin on IN0 bits 0-2.
+        switch (key) {
+            case SDLK_SPACE:
+                if (pressed) in1_ |=  0x04;  // fire (IN1 bit 2)
+                else         in1_ &= ~0x04;
+                break;
+            case SDLK_z:
+                if (pressed) in1_ |=  0x01;  // zap/superzapper (IN1 bit 0)
+                else         in1_ &= ~0x01;
+                break;
+            case SDLK_1:
+                if (pressed) in1_ |=  0x10;  // start 1 (IN1 bit 4)
+                else         in1_ &= ~0x10;
+                break;
+            case SDLK_2:
+                if (pressed) in1_ |=  0x08;  // start 2 (IN1 bit 3)
+                else         in1_ &= ~0x08;
+                break;
+            case SDLK_5:
+                if (pressed) in0_ |=  0x01;  // coin 1 (IN0 bit 0)
+                else         in0_ &= ~0x01;
+                break;
+            default:
+                break;
+        }
+
     } else {
-        // ── AVG-based games — generic controls ──────────────────────────
+        // ── AVG-based games — generic controls (Major Havoc) ──
         //   Arrow keys = directional
         //   Space = fire / primary action
-        //   1 = start
-        //   5 = coin
+        //   1 = start, 5 = coin
         switch (key) {
             case SDLK_LEFT:
                 if (pressed) in1_ |=  0x01;

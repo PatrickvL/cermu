@@ -158,13 +158,13 @@ struct AtariVectorTraits<AtariVectorVariant::ASTEROIDS_DELUXE> {
     static constexpr uint16_t VGGO_ADDR        = 0x3000;
     static constexpr uint16_t VGRST_ADDR       = 0;
     static constexpr uint16_t WDCLR_ADDR       = 0x3400;
-    static constexpr uint16_t POKEY1_BASE      = 0x2600;
+    static constexpr uint16_t POKEY1_BASE      = 0x2C00;    // MAME: $2C00-$2C0F
     static constexpr uint16_t POKEY1_SIZE      = 0x10;
     static constexpr uint16_t POKEY2_BASE      = 0;
     static constexpr uint16_t POKEY2_SIZE      = 0;
-    static constexpr uint16_t EAROM_BASE       = 0x2C00;
+    static constexpr uint16_t EAROM_BASE       = 0x2C40;    // MAME: read $2C40-$2C7F
     static constexpr uint16_t EAROM_SIZE       = 0x40;
-    static constexpr uint16_t EAROM_CTRL_ADDR  = 0;        // handled via DVG switch ($3800/$3A00)
+    static constexpr uint16_t EAROM_CTRL_ADDR  = 0;         // handled via DVG switch ($3A00)
     static constexpr uint16_t EAROM_READ_ADDR  = 0;
     static constexpr uint16_t IRQACK_ADDR      = 0;
 
