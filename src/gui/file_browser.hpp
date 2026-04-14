@@ -77,6 +77,12 @@ public:
     /// Navigate to the system's default data folder.
     void navigate_to_system_data(const char* data_folder, const char* const* aliases);
 
+    /// Set external search paths (e.g. scan roots) to check when the
+    /// system data folder isn't found via path discovery.  The browser
+    /// searches these roots recursively (up to 3 levels) for a directory
+    /// whose name matches one of the system aliases.
+    void set_external_search_paths(const std::vector<std::string>& paths);
+
     /// Navigate to parent directory.
     void navigate_up();
 
@@ -146,6 +152,9 @@ private:
     // True when browsing inside a container (D64/T64/LNX directory)
     bool inside_container_ = false;
 
+    // External search paths (scan roots / TOSEC collections)
+    std::vector<std::string> external_search_paths_;
+
     // Filesystem watch — auto-rescan when directory contents change on disk
     file_watcher::FileWatcher dir_watcher_;
     uint32_t watcher_cooldown_ = 0;  // frames to skip after rescan (debounce)
@@ -206,7 +215,72 @@ inline void FileBrowser::navigate_to_system_data(const char* data_folder,
 
     if (found) {
         navigate_to(std::string(path_buf));
+        return;
     }
+
+    // Fallback: search external paths (scan roots / TOSEC collections) for
+    // a directory whose name case-insensitively matches one of the aliases.
+    if (aliases) {
+        namespace fs = std::filesystem;
+        std::error_code ec;
+
+        // Collect alias names for case-insensitive matching
+        std::vector<std::string> alias_lower;
+        for (const char* const* p = aliases; *p; ++p) {
+            std::string a(*p);
+            std::transform(a.begin(), a.end(), a.begin(), ::tolower);
+            alias_lower.push_back(std::move(a));
+        }
+        // Also try the data_folder name
+        {
+            std::string df(data_folder);
+            std::transform(df.begin(), df.end(), df.begin(), ::tolower);
+            alias_lower.push_back(std::move(df));
+        }
+
+        // BFS through external roots up to 3 levels deep
+        for (const auto& root : external_search_paths_) {
+            if (!fs::is_directory(root, ec)) continue;
+
+            // Queue: (path, depth)
+            std::vector<std::pair<std::string, int>> queue;
+            queue.push_back({root, 0});
+
+            for (size_t qi = 0; qi < queue.size(); ++qi) {
+                const auto& [dir, depth] = queue[qi];
+                if (depth > 3) continue;
+
+                try {
+                for (const auto& entry : fs::directory_iterator(dir, ec)) {
+                    if (!entry.is_directory(ec)) continue;
+                    std::string name = entry.path().filename().string();
+                    std::string name_lower = name;
+                    std::transform(name_lower.begin(), name_lower.end(),
+                                   name_lower.begin(), ::tolower);
+
+                    // Check if this directory name matches any alias
+                    for (const auto& alias : alias_lower) {
+                        if (name_lower == alias) {
+                            navigate_to(entry.path().string());
+                            return;
+                        }
+                    }
+
+                    // Enqueue subdirectories for deeper search
+                    if (depth < 3) {
+                        queue.push_back({entry.path().string(), depth + 1});
+                    }
+                }
+                } catch (const fs::filesystem_error&) {
+                    // Skip inaccessible directories
+                }
+            }
+        }
+    }
+}
+
+inline void FileBrowser::set_external_search_paths(const std::vector<std::string>& paths) {
+    external_search_paths_ = paths;
 }
 
 inline void FileBrowser::navigate_up() {

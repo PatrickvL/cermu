@@ -260,6 +260,13 @@ public:
             try_path(std::string(home) + "/.local/share/retroarch/roms");
             try_path(std::string(home) + "/.vice/disks");
             try_path(std::string(home) + "/.mame/roms");
+
+            // TOSEC collections: search ~/Downloads/tosec*/*/
+            // TOSEC archives are typically structured as:
+            //   <tosec_root>/<Manufacturer>/<System>/<Category>/<archive>.7z
+            // We add the TOSEC root so the file browser can search
+            // manufacturer/system subfolders for matching system names.
+            discover_tosec_roots(std::string(home) + "/Downloads", candidates, tried);
         }
         const char* xdg = std::getenv("XDG_DATA_HOME");
         if (xdg) {
@@ -545,6 +552,69 @@ private:
                 }
             }
         }
+    }
+
+    /// Discover TOSEC collection roots inside a directory.
+    /// Scans for directories matching "tosec*" (case-insensitive), then
+    /// descends one level to find the versioned release folder (e.g.
+    /// "tosec-full-2022-07-10").  Each such folder is added as a candidate.
+    void discover_tosec_roots(const std::string& search_dir,
+                              std::vector<ScanRootEntry>& candidates,
+                              std::vector<std::string>& tried) const {
+        namespace fs = std::filesystem;
+        std::error_code ec;
+        if (!fs::is_directory(search_dir, ec)) return;
+
+        auto try_candidate = [&](const std::string& p) {
+            std::string norm = p;
+            while (norm.size() > 1 && norm.back() == '/') norm.pop_back();
+            for (const auto& t : tried)
+                if (t == norm) return;
+            tried.push_back(norm);
+            for (const auto& r : roots_)
+                if (r.path == norm) return;
+            ScanRootEntry e;
+            e.path = norm;
+            check_entry(e);
+            e.selected = e.exists && e.has_files;
+            candidates.push_back(std::move(e));
+        };
+
+        try {
+        for (const auto& entry : fs::directory_iterator(search_dir, ec)) {
+            if (!entry.is_directory(ec)) continue;
+            std::string name = entry.path().filename().string();
+            std::string name_lower = name;
+            std::transform(name_lower.begin(), name_lower.end(),
+                           name_lower.begin(), ::tolower);
+
+            if (name_lower.substr(0, 5) == "tosec") {
+                // This could be the root itself (if it contains manufacturer folders)
+                // or a container for versioned releases — check one level deeper.
+                bool has_subdirs = false;
+                for (const auto& sub : fs::directory_iterator(entry.path(), ec)) {
+                    if (sub.is_directory(ec)) {
+                        has_subdirs = true;
+                        // Check if subdirectory looks like a versioned release
+                        // (contains manufacturer folders like "Nintendo", "Commodore")
+                        std::string sub_name = sub.path().filename().string();
+                        std::string sub_lower = sub_name;
+                        std::transform(sub_lower.begin(), sub_lower.end(),
+                                       sub_lower.begin(), ::tolower);
+                        if (sub_lower.substr(0, 5) == "tosec") {
+                            // Versioned release folder — add it
+                            try_candidate(sub.path().string());
+                        }
+                    }
+                }
+                // If the tosec dir itself contains non-tosec subdirs,
+                // it's likely the root with manufacturer folders inside.
+                if (has_subdirs) {
+                    try_candidate(entry.path().string());
+                }
+            }
+        }
+        } catch (const fs::filesystem_error&) {}
     }
 };
 

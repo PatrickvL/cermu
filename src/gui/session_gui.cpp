@@ -86,6 +86,22 @@ SessionGUI::SessionGUI(std::unique_ptr<System> system, const char* pending_file)
     // Load scan root configuration (§12)
     scan_root_manager_.load(scan_roots::ScanRootManager::default_config_path());
 
+    // Pass scan root paths + auto-discovered candidates to the launcher's
+    // file browser so it can navigate to TOSEC collections and other
+    // external ROM directories when a system is selected.
+    {
+        std::vector<std::string> search_paths;
+        for (const auto& r : scan_root_manager_.get_roots())
+            search_paths.push_back(r.path);
+        // Also include auto-discovered candidates (e.g. TOSEC download dirs)
+        auto candidates = scan_root_manager_.discover_candidates();
+        for (const auto& c : candidates) {
+            if (c.exists)
+                search_paths.push_back(c.path);
+        }
+        launcher_panel_.set_external_search_paths(search_paths);
+    }
+
     if (system_) {
         // System already initialised + file loaded before entering the GUI,
         // so clear the pending file path — it must not survive into a later

@@ -86,6 +86,12 @@ public:
     /// Handle a file dropped onto the launcher (navigate + probe)
     void handle_drop(const std::string& path);
 
+    /// Set external search paths for the file browser (scan roots, TOSEC paths).
+    /// Called by SessionGUI after loading scan root configuration.
+    void set_external_search_paths(const std::vector<std::string>& paths) {
+        file_browser_.set_external_search_paths(paths);
+    }
+
     /// Current UI scale factor
     float get_ui_scale() const { return ui_scale_; }
 
