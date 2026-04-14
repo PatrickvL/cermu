@@ -376,14 +376,25 @@ void GameBoySystem<V>::tick() {
             }
         } else if (addr < 0xA000) {
             // VRAM ($8000–$9FFF): banked on GBC ($FF4F selects bank 0/1)
-            uint16_t vram_addr = addr - 0x8000;
-            uint16_t bank_off = 0;
-            if constexpr (V == GameBoyVariant::GBC)
-                bank_off = board_.ppu.vram_bank_ * gb_ppu::VRAM_BANK_SIZE;
-            if (BUS_GET_BIT(pins_, BUS_RW_BIT)) {
-                BUS_SET_DATA(pins_, board_.ppu.vram_[bank_off + vram_addr]);
+            // CPU cannot access VRAM during Mode 3 (pixel transfer) —
+            // reads return 0xFF, writes are dropped.  This is critical for
+            // games like Altered Space that use tight STAT-timed VRAM
+            // transfers and rely on writes being blocked outside safe modes.
+            bool lcd_on = (board_.ppu.regs_.data[gb_ppu::LCDC] & 0x80) != 0;
+            if (lcd_on && board_.ppu.mode_ == gb_ppu::MODE_XFER) {
+                if (BUS_GET_BIT(pins_, BUS_RW_BIT))
+                    BUS_SET_DATA(pins_, 0xFF);
+                // else: write silently dropped
             } else {
-                board_.ppu.vram_[bank_off + vram_addr] = BUS_GET_DATA(pins_);
+                uint16_t vram_addr = addr - 0x8000;
+                uint16_t bank_off = 0;
+                if constexpr (V == GameBoyVariant::GBC)
+                    bank_off = board_.ppu.vram_bank_ * gb_ppu::VRAM_BANK_SIZE;
+                if (BUS_GET_BIT(pins_, BUS_RW_BIT)) {
+                    BUS_SET_DATA(pins_, board_.ppu.vram_[bank_off + vram_addr]);
+                } else {
+                    board_.ppu.vram_[bank_off + vram_addr] = BUS_GET_DATA(pins_);
+                }
             }
         } else if (addr < 0xC000) {
             // External RAM ($A000–$BFFF): MBC handles banking
@@ -420,11 +431,21 @@ void GameBoySystem<V>::tick() {
             }
         } else if (addr < 0xFEA0) {
             // OAM ($FE00–$FE9F)
-            uint8_t oam_offset = addr - 0xFE00;
-            if (BUS_GET_BIT(pins_, BUS_RW_BIT)) {
-                BUS_SET_DATA(pins_, board_.ppu.oam_[oam_offset]);
+            // CPU cannot access OAM during Mode 2 (OAM search) or Mode 3
+            // (pixel transfer) — reads return 0xFF, writes are dropped.
+            bool lcd_on = (board_.ppu.regs_.data[gb_ppu::LCDC] & 0x80) != 0;
+            uint8_t ppu_mode = board_.ppu.mode_;
+            if (lcd_on && (ppu_mode == gb_ppu::MODE_OAM || ppu_mode == gb_ppu::MODE_XFER)) {
+                if (BUS_GET_BIT(pins_, BUS_RW_BIT))
+                    BUS_SET_DATA(pins_, 0xFF);
+                // else: write silently dropped
             } else {
-                board_.ppu.oam_[oam_offset] = BUS_GET_DATA(pins_);
+                uint8_t oam_offset = addr - 0xFE00;
+                if (BUS_GET_BIT(pins_, BUS_RW_BIT)) {
+                    BUS_SET_DATA(pins_, board_.ppu.oam_[oam_offset]);
+                } else {
+                    board_.ppu.oam_[oam_offset] = BUS_GET_DATA(pins_);
+                }
             }
         } else if (addr < 0xFF00) {
             // Unusable area ($FEA0–$FEFF)
