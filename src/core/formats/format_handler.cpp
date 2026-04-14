@@ -192,6 +192,10 @@ std::string format_effective_extension(const char* filepath) {
 
 bool format_ext_match(const char* ext, const char* target) {
     if (!ext || !target) return false;
+    // Skip leading dot on either side for consistent matching.
+    // vfs_extension() returns ".gb" while callers may pass ".gb" or "gb".
+    if (*ext == '.') ++ext;
+    if (*target == '.') ++target;
     while (*ext && *target) {
         if (tolower((unsigned char)*ext) != tolower((unsigned char)*target)) return false;
         ext++; target++;
