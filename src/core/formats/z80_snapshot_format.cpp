@@ -195,8 +195,21 @@ static float z80_snapshot_identify(const uint8_t* data, size_t file_size,
 
         if (ext_match && valid_im && valid_border && valid_ext)
             return 0.92f;
-        if (valid_im && valid_ext && file_size > 100)
-            return 0.3f;
+
+        // Without extension match, require much stronger evidence to
+        // avoid false positives on unrelated binary files (.gb, .nes, etc.).
+        // Check SP (bytes 8-9) is in a plausible Spectrum RAM range
+        // ($4000–$FFFF) and that at least one compressed data marker or
+        // v2/v3 extended header is present.
+        if (!ext_match && valid_im && valid_ext && file_size > 100) {
+            uint16_t sp = format_read_le16(data + 8);
+            bool plausible_sp = (sp >= 0x4000);
+            // v2/v3 snapshots have PC==0 + known ext_len (already checked)
+            bool has_ext_header = (pc == 0 && valid_ext);
+            if (plausible_sp && has_ext_header)
+                return 0.3f;
+            // v1 snapshot without extension — don't claim it
+        }
     }
 
     if (ext_match) return 0.6f;
