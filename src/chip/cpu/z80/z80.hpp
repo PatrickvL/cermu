@@ -232,7 +232,10 @@ public:
     bus_state_t init() override {
         regs_.clear();
         regs_[SP] = 0xFFFF;
-        regs_[AF] = 0xFFFF;  // Documented power-on state
+        // Z80: AF=$FFFF at power-on (documented).  SM83: AF=$0000 —
+        // the DMG boot ROM's VRAM clear loop uses A without first loading
+        // it, so A must be 0 for that loop to zero the 8 KB tile/map area.
+        if constexpr (!is_sm83()) regs_[AF] = 0xFFFF;
         im_ = 0;
         iff1_ = false;
         iff2_ = false;
@@ -251,7 +254,7 @@ public:
     bus_state_t reset(bus_state_t pins = 0) override {
         regs_[PC] = 0x0000;
         regs_[SP] = 0xFFFF;
-        regs_[AF] = 0xFFFF;
+        if constexpr (!is_sm83()) regs_[AF] = 0xFFFF;
         if constexpr (has_ir_registers()) {
             regs_[I]  = 0;
             regs_[R]  = 0;
