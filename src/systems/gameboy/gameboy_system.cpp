@@ -287,9 +287,15 @@ void GameBoySystem<V>::tick() {
     pins_ = board_.cpu.tick(pins_);
 
     // SM83 memory bus dispatch (no IORQ — all I/O is memory-mapped via MREQ)
+    // Edge-detect: only service the FIRST T-state of each MREQ assertion.
+    // MREQ stays active for 2 T-states per memory cycle — dispatching on
+    // every asserted tick would double-service reads (harmless but wasteful)
+    // and double-service writes (could misfire side-effect I/O registers).
     bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);
+    bool mreq_edge = mreq && !mreq_prev_;
+    mreq_prev_ = mreq;
 
-    if (mreq) {
+    if (mreq_edge) {
         uint16_t addr = BUS_GET_ADDR(pins_);
 
         if (addr < 0x8000) {

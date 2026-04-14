@@ -202,6 +202,7 @@ private:
     std::string drain_debug_text() override;
 
     bus_state_t pins_ = GB_BUS_DEFAULT_STATE;
+    bool mreq_prev_ = false;   // MREQ edge detection for single-dispatch
     uint32_t frame_counter_ = 0;
 
     void configure_bus_memory_map();
