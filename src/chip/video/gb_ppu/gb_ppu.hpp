@@ -255,6 +255,7 @@ struct gb_ppu_t : public VideoChipBase {
             dot_counter_ = 0;
             ly_ = 0;
             mode_ = gb_ppu::MODE_HBLANK;
+            stat_irq_line_ = false;
             window_line_counter_ = 0;
             return 0;
         }
@@ -279,7 +280,6 @@ struct gb_ppu_t : public VideoChipBase {
                 case gb_ppu::MODE_OAM:
                     // OAM search start: evaluate sprites for this scanline
                     if (unlikely(!headless_)) oam_search();
-                    if (regs_.data[gb_ppu::STAT] & 0x20) irq |= 0x02;  // STAT OAM interrupt
                     break;
                 case gb_ppu::MODE_XFER:
                     // Pixel transfer start: render the scanline
@@ -287,11 +287,9 @@ struct gb_ppu_t : public VideoChipBase {
                     scanline_pixel_ = 0;
                     break;
                 case gb_ppu::MODE_HBLANK:
-                    if (regs_.data[gb_ppu::STAT] & 0x08) irq |= 0x02;  // STAT H-Blank interrupt
                     break;
                 case gb_ppu::MODE_VBLANK:
-                    irq |= 0x01;  // VBlank interrupt (IF bit 0)
-                    if (regs_.data[gb_ppu::STAT] & 0x10) irq |= 0x02;  // STAT V-Blank interrupt
+                    irq |= 0x01;  // VBlank interrupt (IF bit 0) — always fires
                     break;
             }
         }
@@ -324,11 +322,26 @@ struct gb_ppu_t : public VideoChipBase {
             video_out_->drive({color, flags});
         }
 
-        // LYC compare check
-        if (ly_ == regs_.data[gb_ppu::LYC]) {
-            if (dot_counter_ == 0 && (regs_.data[gb_ppu::STAT] & 0x40))
-                irq |= 0x02;  // STAT LYC interrupt
+        // STAT IRQ line — active when ANY enabled condition holds.
+        // Real hardware uses a single wired-OR line; the interrupt only fires
+        // on the rising edge (0→1).  Without this, games like Pinball Fantasies
+        // and Pinball Deluxe misfire because a mode-change that keeps the line
+        // high (e.g. OAM→HBlank when both are enabled) would spuriously re-assert IF.
+        uint8_t stat = regs_.data[gb_ppu::STAT];
+        bool stat_line = false;
+        if ((stat & 0x20) && mode_ == gb_ppu::MODE_OAM)    stat_line = true;
+        if ((stat & 0x08) && mode_ == gb_ppu::MODE_HBLANK) stat_line = true;
+        if ((stat & 0x10) && mode_ == gb_ppu::MODE_VBLANK) stat_line = true;
+
+        // LYC compare check (coincidence) — active the entire scanline
+        bool lyc_match = (ly_ == regs_.data[gb_ppu::LYC]);
+        if ((stat & 0x40) && lyc_match) stat_line = true;
+
+        // Rising edge → set STAT interrupt in IF
+        if (stat_line && !stat_irq_line_) {
+            irq |= 0x02;
         }
+        stat_irq_line_ = stat_line;
 
         // Advance dot counter and scanline
         dot_counter_++;
@@ -351,6 +364,7 @@ struct gb_ppu_t : public VideoChipBase {
         ly_ = 0;
         dot_counter_ = 0;
         mode_ = gb_ppu::MODE_OAM;
+        stat_irq_line_ = false;
         scanline_pixel_ = 0;
         window_line_counter_ = 0;
         dma_pending_ = false;
@@ -387,6 +401,7 @@ struct gb_ppu_t : public VideoChipBase {
     uint8_t  ly_ = 0;
     uint16_t dot_counter_ = 0;
     uint8_t  mode_ = gb_ppu::MODE_OAM;
+    bool     stat_irq_line_ = false;  // Previous state of combined STAT IRQ line (for edge detection)
     bool     dma_pending_ = false;
     uint16_t dma_source_ = 0;
     uint32_t lcd_off_counter_ = 0;  // FrameEnd timing when LCD is off
