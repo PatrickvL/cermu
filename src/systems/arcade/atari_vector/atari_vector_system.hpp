@@ -744,6 +744,7 @@ private:
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t pins_ = MOS6502::default_bus_state();
     bool system_ready_    = false;
+    bool initializing_    = false;  ///< Guard against reentrant initialize()
     uint32_t nmi_counter_ = 0;
 
     // ── Inputs ──────────────────────────────────────────────────────────

@@ -28,6 +28,7 @@
 #include "core/rom_set.hpp"
 #include "core/system_registry.hpp"
 #include "core/vfs/vfs.hpp"
+#include "core/config/path_discovery.hpp"
 #include <cstring>
 #include <cstdio>
 #include <algorithm>
@@ -991,6 +992,10 @@ bool AtariVectorSystem<V>::apply_configuration() {
 template<AtariVectorVariant V>
 bool AtariVectorSystem<V>::initialize() {
     using Traits = AtariVectorTraits<V>;
+
+    if (initializing_) return true;  // Guard against reentrant calls
+    initializing_ = true;
+
     log_info("%s: Initializing system\n", Traits::NAME);
 
     register_board(&board_);
@@ -1117,6 +1122,29 @@ bool AtariVectorSystem<V>::initialize() {
     }
 
     log_info("%s: System initialized\n", Traits::NAME);
+
+    // Auto-load ROM set from data/atari_vector/roms/ (all variants share
+    // one ROM directory).  Scan for the first archive that matches this
+    // variant's ROM set descriptors — same pattern as Bomb Jack.
+    auto descriptors = get_rom_set_descriptors();
+    if (!descriptors.empty()) {
+        char rom_root[1024];
+        if (system_config_discover_rom_root("atari_vector", rom_root, sizeof(rom_root))) {
+            auto entries = vfs_list_entries(rom_root);
+            for (const auto& entry : entries) {
+                if (entry.type != VfsEntryType::Archive) continue;
+                auto match = rom_set_scan_and_match(
+                    entry.full_path.c_str(), descriptors.data(),
+                    static_cast<int>(descriptors.size()));
+                if (match.matched) {
+                    load_rom_set(match);
+                    break;
+                }
+            }
+        }
+    }
+
+    initializing_ = false;
     return true;
 }
 
@@ -1997,7 +2025,7 @@ bool AtariVectorSystem<V>::load_rom_set(const RomSetMatch& match) {
 
     if (!match.matched) return false;
 
-    if (!system_ready_) {
+    if (!system_ready_ && !initializing_) {
         if (!initialize()) return false;
     }
 

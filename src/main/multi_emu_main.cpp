@@ -6,6 +6,7 @@
 #include "core/port_registry.hpp"
 #include "core/formats/format_registry.hpp"
 #include "core/archive_scanner.hpp"
+#include "core/rom_set.hpp"
 #include "core/vfs/vfs.hpp"
 #include "gui/session_gui.hpp"
 #include "testing/vicii_test_harness.hpp"
@@ -858,10 +859,24 @@ int main(int argc, char** argv) {
     if (file_path) {
         std::string ext = vfs_extension(file_path);
         if (vfs_is_archive_extension(ext.c_str()) && system_name == nullptr) {
-            auto scan = scan_archive(file_path);
-            if (!scan.loadable_files.empty()) {
-                resolved_file = scan.loadable_files[0].full_path;
-                log_info("Archive resolved to: %s\n", resolved_file.c_str());
+            // Try ROM set probing on the raw archive first — arcade ROM
+            // archives contain multiple chip dumps that can't be identified
+            // individually.  Pass the raw path so create_system_for_file()
+            // can match the full set.
+            auto probe = rom_set_probe(file_path);
+            if (probe.confidence >= 0.5f) {
+                // ROM set identified — keep the raw archive path so
+                // create_system_for_file() will handle it.
+                resolved_file = file_path;
+                log_info("Archive is a ROM set (%s, confidence %.2f)\n",
+                       probe.system_name.c_str(), probe.confidence);
+            } else {
+                // Not a ROM set — resolve to the first loadable inner file
+                auto scan = scan_archive(file_path);
+                if (!scan.loadable_files.empty()) {
+                    resolved_file = scan.loadable_files[0].full_path;
+                    log_info("Archive resolved to: %s\n", resolved_file.c_str());
+                }
             }
         }
         if (resolved_file.empty()) resolved_file = file_path;
