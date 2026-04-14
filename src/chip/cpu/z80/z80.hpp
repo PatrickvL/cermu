@@ -377,9 +377,9 @@ private:
     // FLAG LAYOUT — compile-time selection of flag bit positions
     // ========================================================================
     // SM83 uses different flag positions than Z80 (Z=0x80 N=0x40 H=0x20 C=0x10
-    // vs Z80's Z=0x40 N=0x02 H=0x10 C=0x01). All ALU code uses Fl:: so it is
+    // vs Z80's Z=0x40 N=0x02 H=0x10 C=0x01). All ALU code uses Flags:: so it is
     // flag-position-agnostic. Absent flags (S, PV, X, Y on SM83) are zero.
-    using Fl = std::conditional_t<Traits.is_sm83(), SM83FlagLayout, Z80FlagLayout>;
+    using Flags = std::conditional_t<Traits.is_sm83(), SM83FlagLayout, Z80FlagLayout>;
 
     // ========================================================================
     // REGISTER ACCESS HELPERS (included mid-class)

@@ -14,22 +14,11 @@ namespace z80 {
 // Z80 Flag Bits (F register)
 // ============================================================================
 
-namespace Flags {
-    constexpr uint8_t C  = 0x01;  // Carry
-    constexpr uint8_t N  = 0x02;  // Add/Subtract
-    constexpr uint8_t PV = 0x04;  // Parity/Overflow
-    constexpr uint8_t X  = 0x08;  // Undocumented (copy of bit 3)
-    constexpr uint8_t H  = 0x10;  // Half carry
-    constexpr uint8_t Y  = 0x20;  // Undocumented (copy of bit 5)
-    constexpr uint8_t Z  = 0x40;  // Zero
-    constexpr uint8_t S  = 0x80;  // Sign
-} // namespace Flags
-
 // ============================================================================
 // Flag Layout Structs — compile-time flag bit positions per CPU variant
 // ============================================================================
-// Used via `using Fl = std::conditional_t<is_sm83(), SM83FlagLayout, Z80FlagLayout>`
-// inside z80_t. ALU code uses Fl::C, Fl::Z, etc. — flag-position-agnostic.
+// Used via `using Flags = std::conditional_t<is_sm83(), SM83FlagLayout, Z80FlagLayout>`
+// inside z80_t. ALU code uses Flags::C, Flags::Z, etc. — flag-position-agnostic.
 // Absent flags (S, PV, X, Y on SM83) are zero, making OR-expressions no-ops.
 
 struct Z80FlagLayout {

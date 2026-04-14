@@ -1314,8 +1314,8 @@ bus_state_t op_sm83_add_sp_e(bus_state_t pins) {
         // H and C flags: computed on low byte of SP + unsigned offset byte
         uint8_t u = static_cast<uint8_t>(e);
         uint16_t lo_result = (sp & 0xFF) + u;
-        regs_[F] = (((sp & 0x0F) + (u & 0x0F) > 0x0F) ? Fl::H : 0)
-                 | ((lo_result > 0xFF) ? Fl::C : 0);
+        regs_[F] = (((sp & 0x0F) + (u & 0x0F) > 0x0F) ? Flags::H : 0)
+                 | ((lo_result > 0xFF) ? Flags::C : 0);
         regs_[SP] = static_cast<uint16_t>(result);
         return pins;
     }
@@ -1343,8 +1343,8 @@ bus_state_t op_sm83_ld_hl_sp_e(bus_state_t pins) {
         // H and C flags: computed on low byte of SP + unsigned offset byte
         uint8_t u = static_cast<uint8_t>(e);
         uint16_t lo_result = (sp & 0xFF) + u;
-        regs_[F] = (((sp & 0x0F) + (u & 0x0F) > 0x0F) ? Fl::H : 0)
-                 | ((lo_result > 0xFF) ? Fl::C : 0);
+        regs_[F] = (((sp & 0x0F) + (u & 0x0F) > 0x0F) ? Flags::H : 0)
+                 | ((lo_result > 0xFF) ? Flags::C : 0);
         regs_[HL] = static_cast<uint16_t>(result);
         return pins;
     }
