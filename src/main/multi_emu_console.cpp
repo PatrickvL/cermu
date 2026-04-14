@@ -184,7 +184,7 @@ int main(int argc, char** argv) {
         // Drain audio periodically to prevent ring-buffer overflow
         float drain_buf[8192];
         int frames_ran = 0;
-        bool early_exited = false;
+        int max_colors_seen = 0;   // Peak unique colors across the entire run
         std::string serial_accum;   // Accumulated serial/debug text output
 
         for (int i = 0; i < total_frames; i++) {
@@ -210,8 +210,10 @@ int main(int argc, char** argv) {
                        (unsigned long long)system->get_total_cycles(), got);
             }
 
-            // Early exit: check for video output periodically
-            if (early_exit && frames_ran >= early_exit_interval &&
+            // Periodic GFX sampling: track peak unique colors across the
+            // entire run so fade/transition cycles don't hide real content.
+            // Also handles early exit when enough colors are detected.
+            if (gfx_check && frames_ran >= early_exit_interval &&
                 frames_ran % early_exit_interval == 0) {
                 const auto& fd = system->get_last_frame_data();
                 if (fd.signal_output && fd.signal_output_len > 0 &&
@@ -221,13 +223,13 @@ int main(int argc, char** argv) {
                     for (uint32_t j = 0; j < fd.signal_output_len; j++) {
                         if (!has_flag(samples[j].flags, SyncFlag::Blank)) {
                             colors.insert(samples[j].color_index);
-                            if (colors.size() > 2) break;  // fast path
                         }
                     }
-                    if (colors.size() > 2) {
-                        log_info("  Early exit at frame %d — %zu unique colors detected\n",
-                               frames_ran, colors.size());
-                        early_exited = true;
+                    int n = static_cast<int>(colors.size());
+                    if (n > max_colors_seen) max_colors_seen = n;
+                    if (early_exit && max_colors_seen > 2) {
+                        log_info("  Early exit at frame %d — %d unique colors detected\n",
+                               frames_ran, max_colors_seen);
                         break;
                     }
                 }
@@ -252,7 +254,7 @@ int main(int argc, char** argv) {
                     frames_ran);
         }
         
-        // Graphics detection — analyze signal data for non-blank content
+        // Graphics detection — analyze last frame + report peak colors
         if (gfx_check) {
             const auto& fd = system->get_last_frame_data();
             int unique = 0;
@@ -269,9 +271,12 @@ int main(int argc, char** argv) {
                 }
                 unique = static_cast<int>(colors.size());
             }
+            // Use the peak colors observed across the entire run, so
+            // fade/transition cycles don't cause false blanks.
+            if (unique > max_colors_seen) max_colors_seen = unique;
             // Machine-readable output (always printed, even in quiet mode)
             fprintf(stdout, "GFX_RESULT: unique_colors=%d visible_pixels=%d frames_ran=%d\n",
-                    unique, visible_pixels, frames_ran);
+                    max_colors_seen, visible_pixels, frames_ran);
         }
         
         // Shutdown
