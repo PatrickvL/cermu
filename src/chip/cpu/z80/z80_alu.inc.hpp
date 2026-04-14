@@ -13,47 +13,35 @@
 // ========================================================================
 
 // Sign, Zero, and undocumented flags for all byte values.
-// Z80: S from bit 7, Z if zero, copies bits 5(Y) and 3(X)
-// SM83: Z if zero only (S, Y, X are absent → zero constants)
+// Z80 flag positions coincide with the data bits they copy (S=0x80, Y=0x20, X=0x08),
+// so a single mask extracts all three. SM83: S=Y=X=0 → mask is zero naturally.
 static constexpr std::array<uint8_t, 256> sz53_table = [] {
     std::array<uint8_t, 256> t{};
     for (int i = 0; i < 256; i++) {
-        if (Flags::S && (i & 0x80)) t[i] |= Flags::S;
-        if (Flags::Y && (i & 0x20)) t[i] |= Flags::Y;
-        if (Flags::X && (i & 0x08)) t[i] |= Flags::X;
-        if (i == 0) t[i] |= Flags::Z;
+        t[i] = (i & (Flags::S | Flags::Y | Flags::X)) | (i == 0 ? Flags::Z : 0);
     }
     return t;
 }();
 
-// Parity table: 1 if even parity (set PV), 0 if odd parity
-// SM83: PV=0, so all entries are zero (table exists but is unused)
+// Parity table: even parity sets PV. SM83: PV=0, so |= 0 is a no-op.
 static constexpr std::array<uint8_t, 256> parity_table = [] {
     std::array<uint8_t, 256> t{};
     for (int i = 0; i < 256; i++) {
-        if (Flags::PV) {
-            int bits = 0;
-            for (int b = 0; b < 8; b++) bits += (i >> b) & 1;
-            if (!(bits & 1)) t[i] |= Flags::PV;
-        }
+        int bits = 0;
+        for (int b = 0; b < 8; b++) bits += (i >> b) & 1;
+        if (!(bits & 1)) t[i] |= Flags::PV;
     }
     return t;
 }();
 
 // Combined SZ53P table: Sign, Zero, undocumented (3,5), Parity
-// SM83: only Z flag (S, Y, X, PV all absent → zero)
 static constexpr std::array<uint8_t, 256> sz53p_table = [] {
     std::array<uint8_t, 256> t{};
     for (int i = 0; i < 256; i++) {
-        if (Flags::S && (i & 0x80)) t[i] |= Flags::S;
-        if (Flags::Y && (i & 0x20)) t[i] |= Flags::Y;
-        if (Flags::X && (i & 0x08)) t[i] |= Flags::X;
-        if (i == 0) t[i] |= Flags::Z;
-        if (Flags::PV) {
-            int bits = 0;
-            for (int b = 0; b < 8; b++) bits += (i >> b) & 1;
-            if (!(bits & 1)) t[i] |= Flags::PV;
-        }
+        t[i] = (i & (Flags::S | Flags::Y | Flags::X)) | (i == 0 ? Flags::Z : 0);
+        int bits = 0;
+        for (int b = 0; b < 8; b++) bits += (i >> b) & 1;
+        if (!(bits & 1)) t[i] |= Flags::PV;
     }
     return t;
 }();
