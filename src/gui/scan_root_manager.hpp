@@ -33,6 +33,13 @@
 #include <cstring>
 #include <filesystem>
 
+#ifdef __has_include
+#if __has_include("ImGuiFileDialog.h")
+#include "gui/cermu_file_dialog.hpp"
+#define SCANROOT_HAS_IGFD 1
+#endif
+#endif
+
 namespace scan_roots {
 
 // =============================================================================
@@ -359,24 +366,20 @@ public:
 
         // Action buttons
         if (ImGui::Button("Add folder...")) {
-            // TODO: native folder picker (SDL2 doesn't have one; use ImGuiFileDialog or tinyfd)
-            // For now, a text input:
-            show_add_input_ = true;
+            open_folder_picker();
         }
 
-        if (show_add_input_) {
-            ImGui::SameLine();
-            ImGui::PushItemWidth(300);
-            if (ImGui::InputText("##addpath", add_path_buf_, sizeof(add_path_buf_),
-                                 ImGuiInputTextFlags_EnterReturnsTrue)) {
-                if (add_path_buf_[0] != '\0') {
-                    add_root(add_path_buf_);
-                    add_path_buf_[0] = '\0';
-                    show_add_input_ = false;
-                }
+        // Text input fallback (always available for manual entry)
+        ImGui::SameLine();
+        ImGui::PushItemWidth(300);
+        if (ImGui::InputText("##addpath", add_path_buf_, sizeof(add_path_buf_),
+                             ImGuiInputTextFlags_EnterReturnsTrue)) {
+            if (add_path_buf_[0] != '\0') {
+                add_root(add_path_buf_);
+                add_path_buf_[0] = '\0';
             }
-            ImGui::PopItemWidth();
         }
+        ImGui::PopItemWidth();
 
         ImGui::SameLine();
         if (ImGui::Button("Skip for now")) {
@@ -439,7 +442,11 @@ public:
 
         ImGui::Spacing();
 
-        // Add folder
+        // Add folder (IGFD picker + text input)
+        if (ImGui::Button("Add folder...")) {
+            open_folder_picker();
+        }
+        ImGui::SameLine();
         ImGui::PushItemWidth(300);
         if (ImGui::InputText("##addroot", add_path_buf_, sizeof(add_path_buf_),
                              ImGuiInputTextFlags_EnterReturnsTrue)) {
@@ -501,8 +508,58 @@ private:
     // Setup UI state
     bool show_setup_ = false;
     std::vector<ScanRootEntry> setup_candidates_;
-    bool show_add_input_ = false;
     char add_path_buf_[1024] = {};
+
+    /// Open the IGFD folder picker for adding a scan root.
+    void open_folder_picker() {
+#ifdef SCANROOT_HAS_IGFD
+        IGFD::FileDialogConfig config;
+        // Start in home directory
+        const char* home = std::getenv("HOME");
+        if (home) config.path = home;
+        config.flags = ImGuiFileDialogFlags_CaseInsensitiveExtentionFiltering;
+        cermu::FileDialogInstance()->OpenDialog(
+            "ScanRootFolderPicker", "Select ROM folder",
+            nullptr,   // nullptr filter = directory-only mode
+            config);
+#endif
+        // Text input is always visible alongside the button as fallback
+    }
+
+public:
+    /// Poll the IGFD folder picker for a result.  Call each frame from the
+    /// host (SessionGUI) while the dialog is open.  Returns true if the
+    /// picker just closed (so the host can stop rendering it).
+    bool poll_folder_picker() {
+#ifdef SCANROOT_HAS_IGFD
+        auto* fd = cermu::FileDialogInstance();
+        if (!fd->IsOpened("ScanRootFolderPicker")) return false;
+
+        bool closed = false;
+        ImGui::SetNextWindowSizeConstraints(ImVec2(600, 400), ImVec2(FLT_MAX, FLT_MAX));
+        ImGui::Begin("Select ROM folder##ScanRootFolderPicker", nullptr,
+                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
+        bool result = fd->Display("ScanRootFolderPicker",
+                                  ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar,
+                                  ImVec2(600, 400));
+        if (result) {
+            if (fd->IsOk()) {
+                std::string selected = fd->GetCurrentPath();
+                if (!selected.empty()) {
+                    add_root(selected);
+                }
+            }
+            fd->Close();
+            closed = true;
+        }
+        ImGui::End();
+        return closed;
+#else
+        return false;
+#endif
+    }
+
+private:
 
     void parse_array_entries(const std::string& s) {
         // Extract quoted strings from a TOML array fragment

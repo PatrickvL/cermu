@@ -95,6 +95,12 @@ public:
     /// Current UI scale factor
     float get_ui_scale() const { return ui_scale_; }
 
+#ifndef CERMU_NO_SQLITE
+    /// Access catalog infrastructure for external wiring (pipeline start, etc.)
+    catalog::CatalogStore&    catalog_store()    { ensure_catalog_open(); return catalog_store_; }
+    catalog::CatalogPipeline& catalog_pipeline() { return catalog_pipeline_; }
+#endif
+
     /// Reset selection state after processing
     void reset();
 
@@ -1465,6 +1471,12 @@ inline void LauncherPanel::render_title_browser() {
     if (!catalog_opened_) {
         ImGui::TextDisabled("Catalog not available.");
         return;
+    }
+
+    // Auto-refresh when pipeline finishes a run
+    auto progress = catalog_pipeline_.get_progress();
+    if (progress.phase == catalog::PipelinePhase::Done && !catalog_pipeline_.is_running()) {
+        title_browser_.refresh(catalog_store_);
     }
 
     // Render the title browser (handles progress, empty state, and card grid)
