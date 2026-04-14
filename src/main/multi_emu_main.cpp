@@ -153,10 +153,11 @@ static const char* video_standard_name(VideoStandard s) {
 
 static const char* system_type_name(SystemType t) {
     switch (t) {
-        case SystemType::Home:    return "Home Computer";
-        case SystemType::Console: return "Console";
-        case SystemType::Arcade:  return "Arcade";
-        case SystemType::Other:   return "Other";
+        case SystemType::Home:     return "Home Computer";
+        case SystemType::Console:  return "Console";
+        case SystemType::Handheld: return "Handheld";
+        case SystemType::Arcade:   return "Arcade";
+        case SystemType::Other:    return "Other";
     }
     return "Unknown";
 }
@@ -167,7 +168,23 @@ static int dump_systems() {
     std::vector<const SystemDescriptor*> sorted;
     sorted.reserve(systems.size());
     for (const auto& [desc, factory] : systems) sorted.push_back(&desc);
-    std::sort(sorted.begin(), sorted.end(), [](auto* a, auto* b) {
+    // Sort by: category → maker → system ID
+    auto type_order = [](SystemType t) -> int {
+        switch (t) {
+            case SystemType::Arcade:   return 0;
+            case SystemType::Console:  return 1;
+            case SystemType::Handheld: return 2;
+            case SystemType::Home:     return 3;
+            case SystemType::Other:    return 4;
+        }
+        return 5;
+    };
+    std::sort(sorted.begin(), sorted.end(), [&type_order](auto* a, auto* b) {
+        int ta = type_order(a->type), tb = type_order(b->type);
+        if (ta != tb) return ta < tb;
+        int mk = (a->maker && b->maker) ? strcasecmp(a->maker, b->maker)
+               : (a->maker ? -1 : (b->maker ? 1 : 0));
+        if (mk != 0) return mk < 0;
         return strcasecmp(a->short_name, b->short_name) < 0;
     });
     printf("Registered systems (%zu):\n", sorted.size());
@@ -191,41 +208,55 @@ static int dump_systems() {
 /// --list chips
 static int dump_chips() {
     const auto& entries = ChipRegistry::instance().entries();
-    std::vector<const ChipRegistry::Entry*> sorted;
-    sorted.reserve(entries.size());
-    for (const auto& entry : entries) sorted.push_back(&entry);
-    std::sort(sorted.begin(), sorted.end(), [](auto* a, auto* b) {
-        return a->name < b->name;
-    });
-    printf("Registered chip types (%zu):\n", sorted.size());
+
+    // Collect chip info by instantiating each chip, then sort.
+    struct ChipRow {
+        std::string id;
+        std::string category;
+        std::string manufacturer;
+        std::string display_name;
+        std::string package;
+    };
+    std::vector<ChipRow> rows;
+    rows.reserve(entries.size());
 
     ChipSlot dummy_slot{};
-    for (const auto* entry : sorted) {
-        std::unique_ptr<ChipBase> chip;
-        if (entry->factory)
-            chip.reset(entry->factory(dummy_slot, nullptr, nullptr));
+    for (const auto& entry : entries) {
+        ChipRow row;
+        row.id = std::string(entry.name);
 
-        const char* cat = "";
-        const char* mfr = "";
-        const char* disp = "";
-        std::string pkg;
+        std::unique_ptr<ChipBase> chip;
+        if (entry.factory)
+            chip.reset(entry.factory(dummy_slot, nullptr, nullptr));
         if (chip) {
-            cat = chip->category();
+            row.category = chip->category();
             const auto& ci = chip->chip_info();
-            if (!ci.manufacturer.empty()) mfr = ci.manufacturer.data();
-            if (!ci.display_name.empty()) disp = ci.display_name.data();
+            if (!ci.manufacturer.empty()) row.manufacturer = std::string(ci.manufacturer);
+            if (!ci.display_name.empty()) row.display_name = std::string(ci.display_name);
 #ifdef CERMU_HAS_GUI
             if (auto* layout = chip->get_chip_layout())
-                pkg = layout->get_package_name();
+                row.package = layout->get_package_name();
 #endif
         }
+        rows.push_back(std::move(row));
+    }
 
-        printf("  %-20.*s  %-8s",
-               static_cast<int>(entry->name.size()), entry->name.data(),
-               cat);
-        if (*disp) printf("  %-24s", disp);
-        if (*mfr)  printf("  [%s]", mfr);
-        if (!pkg.empty()) printf("  %s", pkg.c_str());
+    // Sort by type (category), then manufacturer, then id
+    std::sort(rows.begin(), rows.end(), [](const ChipRow& a, const ChipRow& b) {
+        int cmp = strcasecmp(a.category.c_str(), b.category.c_str());
+        if (cmp != 0) return cmp < 0;
+        cmp = strcasecmp(a.manufacturer.c_str(), b.manufacturer.c_str());
+        if (cmp != 0) return cmp < 0;
+        return strcasecmp(a.id.c_str(), b.id.c_str()) < 0;
+    });
+
+    printf("Registered chip types (%zu):\n", rows.size());
+    for (const auto& row : rows) {
+        printf("  %-20s  %-8s",
+               row.id.c_str(), row.category.c_str());
+        if (!row.display_name.empty()) printf("  %-24s", row.display_name.c_str());
+        if (!row.manufacturer.empty()) printf("  [%s]", row.manufacturer.c_str());
+        if (!row.package.empty())      printf("  %s", row.package.c_str());
         printf("\n");
     }
     return 0;
