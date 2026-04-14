@@ -13,10 +13,12 @@
 //
 // Concrete panels:
 //   CRTPanel    — barrel distortion, scanlines, shadow mask, phosphor tint
-//   DirectPanel — identity pass-through (LCD / Direct Output)
+//   LCDPanel    — pixel grid, subpixels, ghosting, backlight effects
+//   DirectPanel — identity pass-through (no post-processing)
 // ============================================================================
 
 #include "gui/shader/crt_shader.hpp"
+#include "gui/shader/lcd_shader.hpp"
 #include "devices/display/display_device.hpp"  // DisplayCharacteristics, DisplayTechnology
 
 #include <cstdint>
@@ -88,6 +90,47 @@ public:
 
 private:
     crt_shader::CRTPostProcess state_{};
+};
+
+
+// ============================================================================
+// LCDPanel — LCD post-processing (pixel grid, ghosting, backlight)
+// ============================================================================
+
+class LCDPanel : public DisplayPanel {
+public:
+    LCDPanel() = default;
+    ~LCDPanel() override { destroy(); }
+
+    // Non-copyable, non-movable (owns GPU resources)
+    LCDPanel(const LCDPanel&) = delete;
+    LCDPanel& operator=(const LCDPanel&) = delete;
+
+    bool create(int initial_w, int initial_h) override {
+        return lcd_shader::create(&state_, initial_w, initial_h);
+    }
+
+    void destroy() override {
+        lcd_shader::destroy(&state_);
+    }
+
+    GLuint render(GLuint input_tex,
+                  float input_w, float input_h,
+                  float output_w, float output_h,
+                  const DisplayCharacteristics& dc,
+                  int /*rotation*/ = 0) override {
+        if (!state_.shader) return input_tex;
+        lcd_shader::render(&state_, input_tex,
+                           input_w, input_h,
+                           output_w, output_h,
+                           dc);
+        return state_.texture;
+    }
+
+    bool ready() const override { return state_.shader != 0; }
+
+private:
+    lcd_shader::LCDPostProcess state_{};
 };
 
 
