@@ -194,14 +194,16 @@ Unlocks the entire SNES library. The SPC700 is the hardest part — it's a novel
 
 ---
 
-### 4. Sharp LR35902 — ⬚ NOT STARTED (Z80 Trait Extension)
-The Game Boy CPU is close enough to Z80 to model as a trait variant: `HasIndexRegs=false`, `HasUndocumented=false`, `HasGameBoyExtensions=true` (STOP, SWAP, relative bit ops, etc.).
+### 4. Sharp LR35902 — 🟢 DONE (Z80 Trait Extension)
+The Game Boy CPU is modeled as a Z80 trait variant: SM83 via `if constexpr` gating
+in `z80_t<Traits>`, with 15 SM83-unique instruction handlers, SWAP, SM83 DAA, and
+SM83 interrupt model. PPU and APU fully functional. 200/200 TOSEC sample pass rate.
 
 | System | Additional chips |
 |---|---|
-| Game Boy (DMG) | LR35902 + custom LCD PPU (simple tile/sprite, 4-shade) |
+| Game Boy (DMG) | LR35902 + custom LCD PPU (simple tile/sprite, 4-shade) — 🟢 DONE |
 | Game Boy Pocket | Same silicon |
-| Game Boy Color | Same CPU + GBC PPU extensions (colour palettes) |
+| Game Boy Color | Same CPU + GBC PPU extensions (colour palettes) — ⬜ not yet |
 
 ---
 
@@ -241,7 +243,7 @@ Small ISA, simpler than Z80, but historically important.
 | MC68000 family | Medium | 🟢 **DONE** | Atari ST*, Genesis*, Amiga*, Mac* | *Each needs custom chips |
 | TMS9918 family | Medium | 🟢 **DONE** | MSX, Sega SG/SMS, ColecoVision, Memotech, Tatung | 10 systems now READY |
 | YM2413 alone | Low | ⬚ | MSX-Music on all MSX | Zero other new chips needed |
-| Game Boy LR35902 | Low-Medium | ⬚ | GB, GBC, GB Pocket | Z80 trait extension |
+| Game Boy LR35902 | Low-Medium | 🟢 **DONE** | GB, GBC, GB Pocket | Z80 trait extension; DMG fully functional |
 | SNES PPU pair + SPC700 | High | ⬚ | Entire SNES library | 65C816 already present |
 | YM FM family | Medium | ⬚ | Fills Genesis, NeoGeo, arcade, PC-88 | Pairs with MC68000 🟢 for most targets |
 | ANTIC + GTIA + POKEY | Medium | ⬚ | Entire Atari 8-bit line | Three chips but tightly coupled |

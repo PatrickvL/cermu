@@ -170,7 +170,7 @@ Missing:
 - Controller I/O
 - No visible output yet
 
-### 2.13 Game Boy — **[INCOMPLETE] M**
+### 2.13 Game Boy — **[FUNCTIONAL]**
 SM83 CPU core fully implemented via Z80 trait system (`if constexpr` gating):
 - ✅ SM83-specific M1 fetch cycle (no refresh T-states)
 - ✅ SM83-unique opcodes: STOP, LD (HL+/HL-), LDH ($FF00+n/C), ADD SP,e, LD HL,SP+e, LD (nn),SP, RETI
@@ -192,11 +192,16 @@ SM83 CPU core fully implemented via Z80 trait system (`if constexpr` gating):
 - ✅ Timer: DIV divider, TIMA/TMA/TAC with falling-edge detection
 - ✅ Video output wired to composite signal pipeline
 - ✅ Audio output wired to AudioPort with decimation
+- ✅ DMG boot ROM execution (256 bytes, Nintendo logo scroll + chime)
+- ✅ SM83 AF register init fixed (A=$00, not $FF — critical for boot ROM VRAM clear)
+- ✅ MREQ edge detection (single-dispatch per memory cycle, not per T-state)
 
 ROM bank switching, GB PPU and GB APU fully functional.
+TOSEC compatibility: 200/200 sample pass rate (100%) at 600 frames.
 Remaining:
 - GBC extensions: VRAM banking, WRAM banking, double-speed mode, CGB palettes
 - Serial link cable: stub (register shadow only, no transfer logic)
+- A few games need external-clock serial completion to progress past init (e.g. Captain Tsubasa J)
 
 ### 2.14 PC Engine / TurboGrafx-16 — **[STUB] XL**
 WDC 65C02 used as stand-in CPU (real hardware uses HuC6280 — 8-bank MMU,
@@ -393,7 +398,7 @@ All 9 high-value formats implemented with shared abstractions:
 | ~~**CoCo 1/2**~~ | ~~MC6809 ✅~~ | ~~MC6847 ✅~~ | ~~DAC/1-bit~~ | ✅ System created (§2.10) — chip rendering not wired yet | — |
 | **CoCo 3** | MC6809 ✅ | GIME (new) | — | GIME video chip, 512KB RAM | **L** |
 | ~~**Dragon 32/64**~~ | ~~MC6809 ✅~~ | ~~MC6847 ✅~~ | ~~1-bit~~ | ✅ System created (§2.10) — shares MC6809-VDG base with CoCo | — |
-| ~~**Game Boy**~~ | ~~Z80 variant~~ | ~~PPU (new)~~ | ~~APU (new)~~ | ✅ System created (§2.13) — SM83 CPU core implemented, PPU/APU rendering needed | — |
+| ~~**Game Boy**~~ | ~~Z80 variant~~ | ~~PPU (new)~~ | ~~APU (new)~~ | ✅ Functional (§2.13) — SM83 CPU, PPU, APU all working; 100% TOSEC sample pass rate | — |
 | ~~**Sega Genesis**~~ | ~~M68000 ✅~~ | ~~VDP (new)~~ | ~~YM2612 ✅ + SN76489 ✅~~ | ✅ System created (§2.12) — VDP rendering + Z80 glue needed | — |
 | **Neo Geo** | M68000 ✅ | LSPC (new) | YM2610 (partial ✅) | LSPC2 video, ADPCM-A/B | **XL** |
 | **Sharp X68000** | M68000 ✅ | CRTC (new) | YM2151 (stub) | OPM register map, DMA, custom video | **XL** |
@@ -470,6 +475,13 @@ pixel aspect ratio, display rotation, NTSC artifact phase — is already correct
 modeled via `DisplayTraits`, shader selection, and `PhaseIncrement`. Architecture
 is sound; monitor presets are a GUI/user-preference concern.
 
+### 10.4 LCD Post-Processing — **[DONE]**
+GenericLCD display device with LCDPanel rendering and hardware presets.
+LCD shader (`lcd_shader.hpp`) implements subpixel geometry, response time blur,
+backlight bleed, and viewing angle effects. CRT and LCD type definitions extracted
+into dedicated headers (`crt_types.hpp`, `lcd_types.hpp`). Display settings wired
+into session GUI with per-display-type controls.
+
 ### 10.3 ~~Audio Thread Safety~~ — **[DONE]**
 Audit confirmed ring buffer uses correct SPSC acquire/release ordering. Found one
 data race: `use_speaker_sim_` was a non-atomic `bool` read by SDL audio callback
@@ -519,7 +531,7 @@ Committed `41e0ff44`.
 28. ~~CoCo / Dragon systems (MC6809 + MC6847 reuse)~~ — **DONE** (stub; §2.10)
 29. HuC6280 CPU → ~~PC Engine~~ system created (§2.14), CPU core still needed
 30. ~~Sega Genesis (M68000 + YM2612 + SN76489 reuse)~~ — **DONE** (stub; §2.12)
-31. ~~Game Boy (Z80 variant + custom PPU/APU)~~ — **DONE** (stub; §2.13, SM83 CPU core implemented)
+31. ~~Game Boy (Z80 variant + custom PPU/APU)~~ — **DONE** (functional; §2.13, 200/200 TOSEC sample pass)
 32. WDC 65C816 → Apple IIGS / SNES foundation
 
 ---
@@ -530,10 +542,10 @@ Committed `41e0ff44`.
 |------|---------|-------|
 | **Production** | C64, NES/Famicom, VIC-20, PET | Full chip accuracy, tested, polished |
 | **Near-Complete** | C16/Plus4, C128, Atari 2600, Amstrad CPC, Bomb Jack | Minor gaps or testing needed |
-| **Functional** | Spectrum 48K/128K, MSX1, Apple 1, Acorn Atom, CHIP-8 variants, KC85, Sega SMS/SG-1000, ColecoVision | Core runs, missing formats or chip features |
+| **Functional** | Spectrum 48K/128K, MSX1, Apple 1, Acorn Atom, CHIP-8 variants, KC85, Sega SMS/SG-1000, ColecoVision, Game Boy | Core runs, missing formats or chip features |
 | **Partial** | BBC Micro/Master, DDR (Z9001/Z1013/LC80), MSX2, Apple II, Namco arcade, Atari vector | Significant features missing; limited usability |
 | **Stub** | Oric, VTech VZ, SpectaVideo, Memotech MTX, Tatung Einstein | Framework only; not runnable |
-| **Stub (new)** | CoCo 1/2, Dragon 32/64, Atari 800/XL/XE, Genesis, Game Boy, PC Engine, Atari ST | Chips instantiated, ROM loading, tick loops — no rendering output yet |
+| **Stub (new)** | CoCo 1/2, Dragon 32/64, Atari 800/XL/XE, Genesis, PC Engine, Atari ST | Chips instantiated, ROM loading, tick loops — no rendering output yet |
 
 **Total: 35+ system variants across 25+ board families.**
 
@@ -542,3 +554,4 @@ Committed `41e0ff44`.
 *This document supersedes the previous emulation-gaps.md dated 2026-04-09.*
 *Updated 2026-04-10: added 7 new stub systems (CoCo/Dragon, Atari 8-bit, Genesis, Game Boy, PC Engine, Atari ST), 11 new chip stubs, 6 new format handlers.*
 *Updated 2026-04-12: SM83 CPU core implemented for Game Boy — full trait-based `if constexpr` gating, 15 SM83-unique instruction handlers, SWAP, SM83 DAA, SM83 interrupt model.*
+*Updated 2026-04-14: Game Boy promoted from Stub to Functional — two critical bugs fixed (SM83 AF init, MREQ double-dispatch), 200/200 TOSEC sample pass rate. LCD post-processing shader and GenericLCD display device added.*
