@@ -24,6 +24,7 @@
 #include "devices/storage/drive_1541.hpp"
 #include "devices/display/display_device.hpp"
 #include "devices/display/generic_crt.hpp"
+#include "devices/display/generic_lcd.hpp"
 #include "core/device_registry.hpp"
 #include <cstdio>
 #include <cstring>
@@ -1445,8 +1446,8 @@ void SessionGUI::render_screen() {
         // Determine rendering path:
         //   - Signal decoder with CRT → render_to_texture() (decoder owns FBO)
         //   - Signal decoder without CRT → bind_for_imgui() (inline in ImGui draw list)
-        bool use_crt = use_crt_shader_;
-        bool decoder_fbo_path = use_crt && signal_decoder_ &&
+        bool use_postprocess = use_crt_shader_ || use_lcd_shader_;
+        bool decoder_fbo_path = use_postprocess && signal_decoder_ &&
                                 (use_signal || use_indexed_shader);
 
         if (decoder_fbo_path && signal_decoder_->ready()) {
@@ -1466,7 +1467,7 @@ void SessionGUI::render_screen() {
         }
 
         // Non-FBO path: bind custom shader via ImGui draw callback
-        bool inline_path = !decoder_fbo_path && !use_crt;
+        bool inline_path = !decoder_fbo_path && !use_postprocess;
         if (inline_path && signal_decoder_ && (use_signal || use_indexed_shader)) {
             ImDrawList* draw_list = ImGui::GetWindowDrawList();
             signal_decoder_->bind_for_imgui(draw_list);
@@ -1579,6 +1580,36 @@ static const char* phosphor_type_name(PhosphorType p) {
         case PhosphorType::P39:    return "P39 (Green, long)";
         case PhosphorType::P43:    return "P43 (Green, military)";
         case PhosphorType::Custom: return "Custom";
+        default: return "Unknown";
+    }
+}
+
+static const char* lcd_panel_type_name(LCDPanelType t) {
+    switch (t) {
+        case LCDPanelType::STN:  return "STN";
+        case LCDPanelType::DSTN: return "DSTN";
+        case LCDPanelType::TN:   return "TN";
+        case LCDPanelType::IPS:  return "IPS";
+        default: return "Unknown";
+    }
+}
+
+static const char* lcd_backlight_type_name(LCDBacklightType t) {
+    switch (t) {
+        case LCDBacklightType::None:               return "None (reflective)";
+        case LCDBacklightType::Frontlight:         return "Frontlight";
+        case LCDBacklightType::Electroluminescent: return "Electroluminescent";
+        case LCDBacklightType::LED:                return "LED";
+        case LCDBacklightType::CCFL:               return "CCFL";
+        default: return "Unknown";
+    }
+}
+
+static const char* lcd_subpixel_layout_name(LCDSubpixelLayout l) {
+    switch (l) {
+        case LCDSubpixelLayout::RGBStripe:  return "RGB Stripe";
+        case LCDSubpixelLayout::BGRStripe:  return "BGR Stripe";
+        case LCDSubpixelLayout::Monochrome: return "Monochrome";
         default: return "Unknown";
     }
 }
@@ -1799,7 +1830,12 @@ void SessionGUI::render_display_settings() {
     // --- Display characteristics (read-only info) ---
     auto& dc = display_characteristics_;
     ImGui::Text("Technology: %s", display_technology_name(dc.technology));
-    ImGui::Text("Phosphor: %s", phosphor_type_name(dc.phosphor.type));
+    if (dc.technology == DisplayTechnology::LCD) {
+        ImGui::Text("Panel: %s, %s", lcd_panel_type_name(dc.lcd.panel_type),
+                     lcd_backlight_type_name(dc.lcd.backlight_type));
+    } else {
+        ImGui::Text("Phosphor: %s", phosphor_type_name(dc.phosphor.type));
+    }
     ImGui::Text("Screen: %.0f\" diagonal, %.0f:%.0f",
                 dc.diagonal,
                 dc.aspect > 1.0f ? dc.aspect : 1.0f,
@@ -1810,23 +1846,47 @@ void SessionGUI::render_display_settings() {
     // --- Adjustable parameters ---
     bool is_crt = (dc.technology != DisplayTechnology::LCD
                 && dc.technology != DisplayTechnology::LED);
+    bool is_lcd = (dc.technology == DisplayTechnology::LCD);
 
-    // CRT post-processing toggle — swap display panel when changed
-    bool prev_crt = use_crt_shader_;
-    ImGui::Checkbox("CRT Post-Processing", &use_crt_shader_);
-    if (use_crt_shader_ != prev_crt) {
-        if (use_crt_shader_) {
-            auto panel = std::make_unique<CRTPanel>();
-            if (panel->create(fb_width_, fb_height_)) {
+    // CRT post-processing toggle — swap display panel when changed (CRT only)
+    if (is_crt) {
+        bool prev_crt = use_crt_shader_;
+        ImGui::Checkbox("CRT Post-Processing", &use_crt_shader_);
+        if (use_crt_shader_ != prev_crt) {
+            if (use_crt_shader_) {
+                auto panel = std::make_unique<CRTPanel>();
+                if (panel->create(fb_width_, fb_height_)) {
+                    display_panel_ = std::move(panel);
+                } else {
+                    use_crt_shader_ = false;  // fallback
+                }
+            }
+            if (!use_crt_shader_) {
+                auto panel = std::make_unique<DirectPanel>();
+                panel->create(fb_width_, fb_height_);
                 display_panel_ = std::move(panel);
-            } else {
-                use_crt_shader_ = false;  // fallback
             }
         }
-        if (!use_crt_shader_) {
-            auto panel = std::make_unique<DirectPanel>();
-            panel->create(fb_width_, fb_height_);
-            display_panel_ = std::move(panel);
+    }
+
+    // LCD post-processing toggle (LCD only)
+    if (is_lcd) {
+        bool prev_lcd = use_lcd_shader_;
+        ImGui::Checkbox("LCD Post-Processing", &use_lcd_shader_);
+        if (use_lcd_shader_ != prev_lcd) {
+            if (use_lcd_shader_) {
+                auto panel = std::make_unique<LCDPanel>();
+                if (panel->create(fb_width_, fb_height_)) {
+                    display_panel_ = std::move(panel);
+                } else {
+                    use_lcd_shader_ = false;
+                }
+            }
+            if (!use_lcd_shader_) {
+                auto panel = std::make_unique<DirectPanel>();
+                panel->create(fb_width_, fb_height_);
+                display_panel_ = std::move(panel);
+            }
         }
     }
 
@@ -1839,12 +1899,17 @@ void SessionGUI::render_display_settings() {
     ImGui::SameLine();
     if (ImGui::Button("Reset to Preset Defaults")) {
         auto* crt = dynamic_cast<GenericCRT*>(display_device_);
+        auto* lcd = dynamic_cast<GenericLCD*>(display_device_);
         if (crt) {
             GenericCRT fresh(crt->get_preset());
             crt->mutable_characteristics() = fresh.get_display_characteristics();
             dc = crt->get_display_characteristics();
-            // Clear cached settings so fresh defaults stick
             device_settings_cache_.erase(crt->get_id());
+        } else if (lcd) {
+            GenericLCD fresh(lcd->get_preset());
+            lcd->mutable_characteristics() = fresh.get_display_characteristics();
+            dc = lcd->get_display_characteristics();
+            device_settings_cache_.erase(lcd->get_id());
         }
     }
 
@@ -1967,11 +2032,60 @@ void SessionGUI::render_display_settings() {
         }
     }
 
+    // LCD-only groups
+    if (is_lcd) {
+        // --- Pixel Grid ---
+        if (ImGui::TreeNode("Pixel Grid")) {
+            changed |= ImGui::SliderFloat("Grid Opacity",    &dc.lcd.pixel_grid_opacity, 0.0f, 1.0f, "%.2f");
+            changed |= ImGui::SliderFloat("Grid Line Width", &dc.lcd.pixel_grid_width,   0.01f, 0.5f, "%.2f");
+            changed |= ImGui::SliderFloat("Subpixel Opacity", &dc.lcd.subpixel_opacity,  0.0f, 1.0f, "%.2f");
+            ImGui::Text("Layout: %s", lcd_subpixel_layout_name(dc.lcd.subpixel_layout));
+            if (dc.lcd.pixel_pitch_mm > 0.0f)
+                ImGui::Text("Pixel Pitch: %.2f mm", dc.lcd.pixel_pitch_mm);
+            ImGui::TreePop();
+        }
+
+        // --- Backlight ---
+        if (dc.lcd.backlight_type != LCDBacklightType::None) {
+            if (ImGui::TreeNode("Backlight")) {
+                changed |= ImGui::SliderFloat("Brightness",  &dc.lcd.backlight_brightness, 0.0f, 1.0f, "%.2f");
+                changed |= ImGui::SliderFloat("Bleed",       &dc.lcd.backlight_bleed,      0.0f, 1.0f, "%.2f");
+                changed |= ImGui::SliderFloat("Uniformity",  &dc.lcd.backlight_uniformity, 0.0f, 1.0f, "%.2f");
+                ImGui::TreePop();
+            }
+        }
+
+        // --- Response / Ghosting ---
+        if (ImGui::TreeNode("Response")) {
+            ImGui::Text("Response Time: %.1f ms (GtG)", dc.lcd.response_time_ms);
+            changed |= ImGui::SliderFloat("Ghosting", &dc.lcd.ghosting_strength, 0.0f, 1.0f, "%.2f");
+            ImGui::TreePop();
+        }
+
+        // --- Color ---
+        if (ImGui::TreeNode("Color")) {
+            changed |= ImGui::ColorEdit3("Panel Tint", dc.lcd.color_tint);
+            changed |= ImGui::SliderFloat("Saturation", &dc.lcd.color_saturation, 0.0f, 2.0f, "%.2f");
+            ImGui::TreePop();
+        }
+
+        // --- Optical Properties ---
+        if (ImGui::TreeNode("Optics##lcd")) {
+            changed |= ImGui::SliderFloat("Viewing Angle Falloff", &dc.lcd.viewing_angle_falloff, 0.0f, 1.0f, "%.2f");
+            changed |= ImGui::SliderFloat("Black Level",           &dc.lcd.black_level,           0.0f, 0.1f, "%.3f");
+            changed |= ImGui::SliderFloat("Reflection",            &dc.lcd.reflection_strength,   0.0f, 1.0f, "%.2f");
+            ImGui::TreePop();
+        }
+    }
+
     if (changed) {
-        // Push adjustments back to the device if it's a GenericCRT
+        // Push adjustments back to the device
         auto* crt = dynamic_cast<GenericCRT*>(display_device_);
+        auto* lcd = dynamic_cast<GenericLCD*>(display_device_);
         if (crt) {
             crt->mutable_characteristics() = dc;
+        } else if (lcd) {
+            lcd->mutable_characteristics() = dc;
         }
     }
 
@@ -2036,7 +2150,9 @@ void SessionGUI::refresh_display_device() {
         display_characteristics_ = it->second;
         // Push cached settings back to the device
         auto* crt = dynamic_cast<GenericCRT*>(found);
+        auto* lcd = dynamic_cast<GenericLCD*>(found);
         if (crt) crt->mutable_characteristics() = display_characteristics_;
+        else if (lcd) lcd->mutable_characteristics() = display_characteristics_;
     } else {
         display_characteristics_ = found
             ? found->get_display_characteristics()
@@ -2047,14 +2163,16 @@ void SessionGUI::refresh_display_device() {
         found ? found->has_builtin_speakers() : false,
         std::memory_order_relaxed);
 
-    // Auto-toggle CRT post-processing based on display technology
+    // Auto-toggle post-processing based on display technology
     auto tech = display_characteristics_.technology;
     bool want_crt = (tech != DisplayTechnology::LCD
                   && tech != DisplayTechnology::LED);
+    bool want_lcd = (tech == DisplayTechnology::LCD);
 
-    // Re-create display panel if CRT mode changed
-    if (want_crt != use_crt_shader_) {
+    // Re-create display panel if mode changed
+    if (want_crt != use_crt_shader_ || want_lcd != use_lcd_shader_) {
         use_crt_shader_ = want_crt;
+        use_lcd_shader_ = want_lcd;
         if (use_crt_shader_) {
             auto panel = std::make_unique<CRTPanel>();
             if (panel->create(fb_width_, fb_height_)) {
@@ -2062,8 +2180,15 @@ void SessionGUI::refresh_display_device() {
             } else {
                 use_crt_shader_ = false;
             }
+        } else if (use_lcd_shader_) {
+            auto panel = std::make_unique<LCDPanel>();
+            if (panel->create(fb_width_, fb_height_)) {
+                display_panel_ = std::move(panel);
+            } else {
+                use_lcd_shader_ = false;
+            }
         }
-        if (!use_crt_shader_) {
+        if (!use_crt_shader_ && !use_lcd_shader_) {
             auto panel = std::make_unique<DirectPanel>();
             panel->create(fb_width_, fb_height_);
             display_panel_ = std::move(panel);
@@ -2359,11 +2484,12 @@ void SessionGUI::allocate_framebuffer() {
         std::memory_order_relaxed);
     cached_display_id_ = display_device_ ? display_device_->get_id() : "";
 
-    // Auto-set CRT post-processing based on initial display technology
+    // Auto-set post-processing mode based on initial display technology
     {
         auto tech = display_characteristics_.technology;
         use_crt_shader_ = (tech != DisplayTechnology::LCD
                         && tech != DisplayTechnology::LED);
+        use_lcd_shader_ = (tech == DisplayTechnology::LCD);
     }
 
     if (window_) {
@@ -2442,23 +2568,33 @@ void SessionGUI::allocate_framebuffer() {
         }
 
         // Create display panel based on initial display technology.
-        // CRTPanel owns its CRT post-processing resources (FBO, shader).
-        // DirectPanel is a pass-through for LCD/LED/Direct Output.
+        // CRTPanel owns CRT post-processing (FBO, shader).
+        // LCDPanel owns LCD post-processing (pixel grid, ghosting, backlight).
+        // DirectPanel is a pass-through for LED/Direct Output.
         // The panel can be swapped at runtime when the user changes
         // monitor presets.
+        int panel_w = fb_width_  > 0 ? fb_width_  : 1024;
+        int panel_h = fb_height_ > 0 ? fb_height_ : 1024;
         if (use_crt_shader_) {
-            int crt_w = fb_width_  > 0 ? fb_width_  : 1024;
-            int crt_h = fb_height_ > 0 ? fb_height_ : 1024;
             auto panel = std::make_unique<CRTPanel>();
-            if (panel->create(crt_w, crt_h)) {
+            if (panel->create(panel_w, panel_h)) {
                 display_panel_ = std::move(panel);
                 log_info("Display panel: CRT (shader compiled)\n");
             } else {
                 use_crt_shader_ = false;
                 log_info("CRT post-processing shader failed — disabled\n");
             }
+        } else if (use_lcd_shader_) {
+            auto panel = std::make_unique<LCDPanel>();
+            if (panel->create(panel_w, panel_h)) {
+                display_panel_ = std::move(panel);
+                log_info("Display panel: LCD (shader compiled)\n");
+            } else {
+                use_lcd_shader_ = false;
+                log_info("LCD post-processing shader failed — disabled\n");
+            }
         }
-        if (!use_crt_shader_) {
+        if (!use_crt_shader_ && !use_lcd_shader_) {
             display_panel_ = std::make_unique<DirectPanel>();
             display_panel_->create(fb_width_, fb_height_);
             log_info("Display panel: Direct\n");

@@ -157,6 +157,7 @@ protected:
     int       gpu_palette_size_      = 0;
 
     bool      use_crt_shader_           = true;  ///< Enable CRT post-processing
+    bool      use_lcd_shader_           = false; ///< Enable LCD post-processing
 
     /// Display panel — type-erased post-processing stage (CRT, Direct, etc.).
     /// Created in allocate_framebuffer(), destroyed in free_framebuffer().
