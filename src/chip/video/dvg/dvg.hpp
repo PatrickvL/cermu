@@ -125,10 +125,11 @@ struct dvg_t : public VideoChipBase {
     /// The DVG accesses a 12-bit (4096-word) address space.  The board
     /// determines how RAM and ROM chips are mapped into that space:
     ///
-    ///   Asteroids/LL:  RAM at word 0x000-0x3FF, gap 0x400-0x7FF,
+    ///   Asteroids:     RAM at word 0x000-0x3FF, gap 0x400-0x7FF,
     ///                  ROM at word 0x800-0xBFF  (rom_word_offset=0x800)
     ///
-    ///   Asteroids DX:  RAM at word 0x000-0x3FF,
+    ///   Asteroids DX / Lunar Lander:
+    ///                  RAM at word 0x000-0x3FF,
     ///                  ROM at word 0x400-0xBFF  (rom_word_offset=0x400)
     ///
     /// @param ram            Pointer to vector RAM (CPU-writable)
@@ -163,16 +164,6 @@ struct dvg_t : public VideoChipBase {
         running_   = true;
         halt_      = false;
         clocks_remaining_ = 0;
-
-        // DEBUG: trace first words of display list on VGGO
-        if (vec_ram_) {
-            log_info("DVG GO: first 8 words:");
-            for (int i = 0; i < 16; i += 2) {
-                uint16_t w = vec_ram_[i] | (vec_ram_[i+1] << 8);
-                log_info(" %04X", w);
-            }
-            log_info("\n");
-        }
     }
 
     /// Trigger VGRST: reset the state machine.
@@ -243,8 +234,9 @@ private:
     /// indexes linearly.  We use separate RAM/ROM pointers with a
     /// configurable ROM word offset to handle different board layouts:
     ///
-    ///   Asteroids/LL:  RAM 0x000-0x3FF, ROM 0x800-0xBFF (gap at 0x400-0x7FF)
-    ///   Asteroids DX:  RAM 0x000-0x3FF, ROM 0x400-0xBFF (no gap)
+    ///   Asteroids:     RAM 0x000-0x3FF, ROM 0x800-0xBFF (gap at 0x400-0x7FF)
+    ///   Asteroids DX / Lunar Lander:
+    ///                  RAM 0x000-0x3FF, ROM 0x400-0xBFF (no gap)
     uint16_t read_word(uint16_t word_addr) const {
         uint16_t w = word_addr & 0xFFF;
 

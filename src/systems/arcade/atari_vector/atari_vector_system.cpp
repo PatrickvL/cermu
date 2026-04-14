@@ -1716,10 +1716,6 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
                 vg().trigger_go();
                 break;
 
-            case Traits::VGRST_ADDR:
-                vg().trigger_reset();
-                break;
-
             case Traits::WDCLR_ADDR:
                 // Watchdog clear — no-op in emulation
                 break;

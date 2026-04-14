@@ -107,8 +107,10 @@ struct AtariVectorTraits<AtariVectorVariant::ASTEROIDS> {
     static constexpr const char* VIDEO_CHIP_NAME = "DVG";
 
     // I/O addresses (0 = not present on this board)
+    // DVG boards have no software-accessible VGRST; $3200 is the LS174
+    // output latch (player start LEDs, RAM bank select, coin counters).
     static constexpr uint16_t VGGO_ADDR        = 0x3000;
-    static constexpr uint16_t VGRST_ADDR       = 0x3200;
+    static constexpr uint16_t VGRST_ADDR       = 0;
     static constexpr uint16_t WDCLR_ADDR       = 0x3400;
     static constexpr uint16_t POKEY1_BASE      = 0;
     static constexpr uint16_t POKEY2_BASE      = 0;
@@ -152,8 +154,9 @@ struct AtariVectorTraits<AtariVectorVariant::ASTEROIDS_DELUXE> {
     static constexpr const char* VIDEO_CHIP_NAME = "DVG";
 
     // I/O addresses (0 = not present on this board)
+    // DVG boards have no software-accessible VGRST; $3200 is EAROM write.
     static constexpr uint16_t VGGO_ADDR        = 0x3000;
-    static constexpr uint16_t VGRST_ADDR       = 0x3200;
+    static constexpr uint16_t VGRST_ADDR       = 0;
     static constexpr uint16_t WDCLR_ADDR       = 0x3400;
     static constexpr uint16_t POKEY1_BASE      = 0x2600;
     static constexpr uint16_t POKEY1_SIZE      = 0x10;
@@ -199,8 +202,10 @@ struct AtariVectorTraits<AtariVectorVariant::LUNAR_LANDER> {
     static constexpr const char* VIDEO_CHIP_NAME = "DVG";
 
     // I/O addresses (0 = not present on this board)
+    // DVG boards have no software-accessible VGRST; $3200 is the LS174
+    // output latch (mission lamps, start/select LED).
     static constexpr uint16_t VGGO_ADDR        = 0x3000;
-    static constexpr uint16_t VGRST_ADDR       = 0x3200;
+    static constexpr uint16_t VGRST_ADDR       = 0;
     static constexpr uint16_t WDCLR_ADDR       = 0x3400;
     static constexpr uint16_t POKEY1_BASE      = 0;
     static constexpr uint16_t POKEY2_BASE      = 0;
