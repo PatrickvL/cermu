@@ -1058,6 +1058,11 @@ bool AtariVectorSystem<V>::initialize() {
     // Register vector generator for the Hardware menu
     register_chip(&vg(), Traits::VIDEO_CHIP_NAME, Traits::VIDEO_CHIP_NAME, "Video");
 
+    // Register mathbox for games that have one
+    if constexpr (Traits::HAS_MATHBOX) {
+        register_chip(&mathbox_, "Math Box", "Math Box", "Logic");
+    }
+
     // Initialize POKEY (for games that have it)
     if constexpr (Traits::HAS_POKEY) {
         board_.pokey1().init();
@@ -1178,6 +1183,11 @@ void AtariVectorSystem<V>::reset() {
     snd_latch_ = 0x00;
     board_.latch.reset();    // All Q outputs LOW (NMI gated off)
     irq_asserted_ = false; // IRQ starts inactive
+
+    // Reset mathbox (BZ, RB, Tempest)
+    if constexpr (Traits::HAS_MATHBOX) {
+        mathbox_.reset();
+    }
 }
 
 // ============================================================================
@@ -1395,10 +1405,31 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
             }
         }
         // EAROM control / mathbox status register read (Tempest $6040)
-        // bit 7 = 1 when mathbox idle/done. We have no mathbox — always done.
+        // MAME: mathbox status (bit 7 = 0 when done) OR'd with EAROM data bits [5:0].
+        // Our mathbox is instantaneous, so status is always "done" (0x00).
         if constexpr (Traits::EAROM_CTRL_ADDR != 0) {
             if (addr == Traits::EAROM_CTRL_ADDR) {
-                BUS_SET_DATA(pins, 0x80);
+                uint8_t val = mathbox_.status_r();
+                BUS_SET_DATA(pins, val);
+                return pins;
+            }
+        }
+    }
+
+    // ── Mathbox reads (unified for BZ, RB, Tempest) ─────────────────
+    if constexpr (Traits::HAS_MATHBOX) {
+        if (addr == Traits::MATHBOX_LO) {
+            BUS_SET_DATA(pins, mathbox_.lo_r());
+            return pins;
+        }
+        if (addr == Traits::MATHBOX_HI) {
+            BUS_SET_DATA(pins, mathbox_.hi_r());
+            return pins;
+        }
+        // BZ/RB: status at separate address from EAROM
+        if constexpr (!Traits::HAS_EAROM) {
+            if (addr == Traits::MATHBOX_STATUS) {
+                BUS_SET_DATA(pins, mathbox_.status_r());
                 return pins;
             }
         }
@@ -1591,9 +1622,9 @@ bus_state_t AtariVectorSystem<V>::io_read(uint16_t addr, bus_state_t pins) {
             data = dip_bank_[1].value;
 
         } else if (addr == 0x6060) {
-            data = 0x00;  // Mathbox lo result (stub)
+            data = mathbox_.lo_r();  // Mathbox result lo
         } else if (addr == 0x6070) {
-            data = 0x00;  // Mathbox hi result (stub)
+            data = mathbox_.hi_r();  // Mathbox result hi
         } else {
             data = 0xFF;
         }
@@ -1827,6 +1858,10 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
         } else if (addr >= 0x1800 && addr < 0x1810) {
             // BZ discrete sound latch / RB sound (POKEY handled above)
             snd_latch_ = data;
+        } else if (addr >= Traits::MATHBOX_GO_BASE &&
+                   addr < Traits::MATHBOX_GO_BASE + Traits::MATHBOX_GO_SIZE) {
+            // Mathbox computation trigger
+            mathbox_.go_w(static_cast<uint8_t>(addr & 0x1F), data);
         } else if (addr >= Traits::VGGO_ADDR && addr < Traits::VGGO_ADDR + 0x0200) {
             vg().trigger_go();
         } else if (addr >= Traits::VGRST_ADDR && addr < Traits::VGRST_ADDR + 0x0200) {
@@ -1848,9 +1883,15 @@ bus_state_t AtariVectorSystem<V>::io_write(uint16_t addr, uint8_t data, bus_stat
 
         // LS259 addressable latch (coin counters, LEDs) — game-family decode
         if constexpr (V == AtariVectorVariant::TEMPEST) {
-            // Tempest: $4000-$400F (MAME ls259 write_a0)
+            // Tempest: $4000-$400F (MAME tempest_coin_w — coin counters and AVG flip)
             if (addr >= 0x4000 && addr < 0x4010) {
                 board_.latch.write(addr, data);
+                return pins;
+            }
+            // Tempest: mathbox go ($6080-$609F)
+            if (addr >= Traits::MATHBOX_GO_BASE &&
+                addr < Traits::MATHBOX_GO_BASE + Traits::MATHBOX_GO_SIZE) {
+                mathbox_.go_w(static_cast<uint8_t>(addr & 0x1F), data);
                 return pins;
             }
         }

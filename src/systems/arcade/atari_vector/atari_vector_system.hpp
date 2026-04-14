@@ -41,6 +41,7 @@
 #include "chip/memory/ram_chip.hpp"
 #include "chip/memory/rom_chip.hpp"
 #include "chip/logic/ls259.hpp"
+#include "chip/logic/mathbox.hpp"
 #include "chip/memory/er2055.hpp"
 #include <cstdint>
 #include <memory>
@@ -102,6 +103,7 @@ struct AtariVectorTraits<AtariVectorVariant::ASTEROIDS> {
 
     static constexpr bool HAS_POKEY       = false;
     static constexpr bool HAS_EAROM       = false;
+    static constexpr bool HAS_MATHBOX     = false;
     static constexpr bool USES_15BIT_ADDR = true;
     static constexpr const char* PALETTE_ID = "green";
     static constexpr const char* VIDEO_CHIP_NAME = "DVG";
@@ -149,6 +151,7 @@ struct AtariVectorTraits<AtariVectorVariant::ASTEROIDS_DELUXE> {
 
     static constexpr bool HAS_POKEY       = true;
     static constexpr bool HAS_EAROM       = true;
+    static constexpr bool HAS_MATHBOX     = false;
     static constexpr bool USES_15BIT_ADDR = true;
     static constexpr const char* PALETTE_ID = "blue";
     static constexpr const char* VIDEO_CHIP_NAME = "DVG";
@@ -197,6 +200,7 @@ struct AtariVectorTraits<AtariVectorVariant::LUNAR_LANDER> {
 
     static constexpr bool HAS_POKEY       = false;
     static constexpr bool HAS_EAROM       = false;
+    static constexpr bool HAS_MATHBOX     = false;
     static constexpr bool USES_15BIT_ADDR = true;
     static constexpr const char* PALETTE_ID = "white";
     static constexpr const char* VIDEO_CHIP_NAME = "DVG";
@@ -244,6 +248,7 @@ struct AtariVectorTraits<AtariVectorVariant::BATTLEZONE> {
 
     static constexpr bool HAS_POKEY       = false;
     static constexpr bool HAS_EAROM       = false;
+    static constexpr bool HAS_MATHBOX     = true;
     static constexpr bool USES_15BIT_ADDR = true;
     static constexpr const char* PALETTE_ID = "green";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
@@ -259,6 +264,12 @@ struct AtariVectorTraits<AtariVectorVariant::BATTLEZONE> {
     static constexpr uint16_t EAROM_CTRL_ADDR  = 0;
     static constexpr uint16_t EAROM_READ_ADDR  = 0;
     static constexpr uint16_t IRQACK_ADDR      = 0;
+    // Mathbox addresses
+    static constexpr uint16_t MATHBOX_STATUS   = 0x1800;
+    static constexpr uint16_t MATHBOX_LO       = 0x1810;
+    static constexpr uint16_t MATHBOX_HI       = 0x1818;
+    static constexpr uint16_t MATHBOX_GO_BASE  = 0x1860;
+    static constexpr uint16_t MATHBOX_GO_SIZE  = 0x20;
 
     static constexpr const char* ALIASES[] = { "Battlezone", "BATTLEZONE", "BZone" };
     static constexpr size_t PROBE_ROM_SIZES[] = { 12288, 16384 };
@@ -289,6 +300,7 @@ struct AtariVectorTraits<AtariVectorVariant::RED_BARON> {
 
     static constexpr bool HAS_POKEY       = true;
     static constexpr bool HAS_EAROM       = false;
+    static constexpr bool HAS_MATHBOX     = true;
     static constexpr bool USES_15BIT_ADDR = true;
     static constexpr const char* PALETTE_ID = "green";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
@@ -306,6 +318,12 @@ struct AtariVectorTraits<AtariVectorVariant::RED_BARON> {
     static constexpr uint16_t EAROM_CTRL_ADDR  = 0;
     static constexpr uint16_t EAROM_READ_ADDR  = 0;
     static constexpr uint16_t IRQACK_ADDR      = 0;
+    // Mathbox addresses (same as BZ; POKEY overlaps at $1810 — POKEY checked first)
+    static constexpr uint16_t MATHBOX_STATUS   = 0x1800;
+    static constexpr uint16_t MATHBOX_LO       = 0x1804;
+    static constexpr uint16_t MATHBOX_HI       = 0x1806;
+    static constexpr uint16_t MATHBOX_GO_BASE  = 0x1860;
+    static constexpr uint16_t MATHBOX_GO_SIZE  = 0x20;
 
     static constexpr const char* ALIASES[] = { "RedBaron", "Red Baron", "REDBARON" };
     static constexpr size_t PROBE_ROM_SIZES[] = { 12288, 16384 };
@@ -338,6 +356,7 @@ struct AtariVectorTraits<AtariVectorVariant::TEMPEST> {
 
     static constexpr bool HAS_POKEY       = true;
     static constexpr bool HAS_EAROM       = true;
+    static constexpr bool HAS_MATHBOX     = true;
     static constexpr bool USES_15BIT_ADDR = false;
     static constexpr const char* PALETTE_ID = "color";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
@@ -355,6 +374,12 @@ struct AtariVectorTraits<AtariVectorVariant::TEMPEST> {
     static constexpr uint16_t EAROM_CTRL_ADDR  = 0x6040;
     static constexpr uint16_t EAROM_READ_ADDR  = 0x6050;
     static constexpr uint16_t IRQACK_ADDR      = 0;
+    // Mathbox addresses
+    static constexpr uint16_t MATHBOX_STATUS   = 0x6040;   // shared with EAROM_CTRL read
+    static constexpr uint16_t MATHBOX_LO       = 0x6060;
+    static constexpr uint16_t MATHBOX_HI       = 0x6070;
+    static constexpr uint16_t MATHBOX_GO_BASE  = 0x6080;
+    static constexpr uint16_t MATHBOX_GO_SIZE  = 0x20;
 
     static constexpr const char* ALIASES[] = { "Tempest", "TEMPEST" };
     static constexpr size_t PROBE_ROM_SIZES[] = { 16384, 24576 };
@@ -385,6 +410,7 @@ struct AtariVectorTraits<AtariVectorVariant::GRAVITAR> {
 
     static constexpr bool HAS_POKEY       = true;
     static constexpr bool HAS_EAROM       = false;
+    static constexpr bool HAS_MATHBOX     = false;
     static constexpr bool USES_15BIT_ADDR = false;
     static constexpr const char* PALETTE_ID = "green";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
@@ -437,6 +463,7 @@ struct AtariVectorTraits<AtariVectorVariant::SPACE_DUEL> {
 
     static constexpr bool HAS_POKEY       = true;
     static constexpr bool HAS_EAROM       = false;
+    static constexpr bool HAS_MATHBOX     = false;
     static constexpr bool USES_15BIT_ADDR = false;
     static constexpr const char* PALETTE_ID = "color";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
@@ -484,6 +511,7 @@ struct AtariVectorTraits<AtariVectorVariant::BLACK_WIDOW> {
 
     static constexpr bool HAS_POKEY       = true;
     static constexpr bool HAS_EAROM       = false;
+    static constexpr bool HAS_MATHBOX     = false;
     static constexpr bool USES_15BIT_ADDR = false;
     static constexpr const char* PALETTE_ID = "color";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
@@ -531,6 +559,7 @@ struct AtariVectorTraits<AtariVectorVariant::MAJOR_HAVOC> {
 
     static constexpr bool HAS_POKEY       = true;
     static constexpr bool HAS_EAROM       = false;
+    static constexpr bool HAS_MATHBOX     = false;
     static constexpr bool USES_15BIT_ADDR = true;  // TODO: MH needs 16-bit + bank switching, deferred
     static constexpr const char* PALETTE_ID = "color";
     static constexpr const char* VIDEO_CHIP_NAME = "AVG";
@@ -763,6 +792,9 @@ private:
 
     // ── Sound output latches ────────────────────────────────────────────
     uint8_t snd_latch_ = 0x00;
+
+    // ── Math Box (BZ, RB, Tempest) ──────────────────────────────────────
+    MathBox mathbox_;
 
     // ── Internal helpers ────────────────────────────────────────────────
     void tick_cpu();
