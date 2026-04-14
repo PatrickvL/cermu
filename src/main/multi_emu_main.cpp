@@ -852,10 +852,12 @@ int main(int argc, char** argv) {
 
     // Resolve archive paths (ZIP, 7z, etc.) to inner loadable files
     // so that "cermu -s c64 game.zip" finds and loads the D64/PRG inside.
+    // Skip resolution when a system is specified — let the system's load_file()
+    // handle ROM set matching on the raw archive path first.
     std::string resolved_file;
     if (file_path) {
         std::string ext = vfs_extension(file_path);
-        if (vfs_is_archive_extension(ext.c_str())) {
+        if (vfs_is_archive_extension(ext.c_str()) && system_name == nullptr) {
             auto scan = scan_archive(file_path);
             if (!scan.loadable_files.empty()) {
                 resolved_file = scan.loadable_files[0].full_path;

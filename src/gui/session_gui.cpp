@@ -2780,10 +2780,15 @@ void SessionGUI::switch_system(const char* system_name, int memory_option, int r
         resolved_pending = pending_file;
         std::string pext = vfs_extension(pending_file);
         if (vfs_is_archive_extension(pext.c_str())) {
-            auto scan = scan_archive(pending_file);
-            if (!scan.loadable_files.empty()) {
-                resolved_pending = scan.loadable_files[0].full_path;
-                log_info("Archive resolved to: %s\n", resolved_pending.c_str());
+            // Check if the system has ROM set descriptors — if so, let it
+            // handle ROM set matching on the raw archive path directly.
+            bool has_rom_sets = !system_->get_rom_set_descriptors().empty();
+            if (!has_rom_sets) {
+                auto scan = scan_archive(pending_file);
+                if (!scan.loadable_files.empty()) {
+                    resolved_pending = scan.loadable_files[0].full_path;
+                    log_info("Archive resolved to: %s\n", resolved_pending.c_str());
+                }
             }
         }
         system_->apply_file_configuration(resolved_pending.c_str());
