@@ -24,6 +24,8 @@
 #include "core/formats/format_handler.hpp"
 #include "core/system_registry.hpp"
 #include "core/system.hpp"
+#include "core/vfs/vfs.hpp"
+#include "core/os/os.hpp"
 #include "utils/rom_filename_parser.hpp"
 
 #include <atomic>
@@ -223,9 +225,9 @@ private:
 
             const auto& path = it->path();
             std::string ext = path.extension().string();
-
-            // Only consider files with known ROM/image extensions
-            if (!is_rom_extension(ext)) continue;
+            std::string ext_lower = ext;
+            for (auto& c : ext_lower)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 
             auto ftime = fs::last_write_time(path, ec);
             int64_t mtime = 0;
@@ -233,6 +235,15 @@ private:
                 mtime = std::chrono::duration_cast<std::chrono::seconds>(
                     ftime.time_since_epoch()).count();
             }
+
+            // Archives: enumerate inner files and emit each as a VFS path
+            if (is_archive_extension(ext_lower)) {
+                discover_archive_contents(path.string(), mtime, root, out);
+                continue;
+            }
+
+            // Only consider files with known ROM/image extensions
+            if (!is_rom_extension(ext_lower)) continue;
 
             int64_t fsize = static_cast<int64_t>(it->file_size(ec));
 
@@ -248,12 +259,56 @@ private:
         }
     }
 
+    /// Enumerate ROM files inside an archive and add them as VFS-path discoveries.
+    void discover_archive_contents(const std::string& archive_path, int64_t mtime,
+                                   const std::string& root,
+                                   std::vector<DiscoveredFile>& out) {
+        auto entries = os_archive_list(archive_path.c_str());
+        for (const auto& ae : entries) {
+            if (cancel_.load()) return;
+            if (ae.is_dir) continue;
+
+            // Check extension of inner file
+            std::string inner_ext;
+            auto dot = ae.name.rfind('.');
+            if (dot != std::string::npos)
+                inner_ext = ae.name.substr(dot);
+            for (auto& c : inner_ext)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+            if (!is_rom_extension(inner_ext)) continue;
+
+            // Build VFS path: archive.zip!/inner/file.nes
+            std::string vfs_path = archive_path + VFS_ARCHIVE_DELIMITER + ae.name;
+
+            // Use inner filename for display
+            std::string filename = ae.name;
+            auto slash = filename.rfind('/');
+            if (slash != std::string::npos)
+                filename = filename.substr(slash + 1);
+
+            DiscoveredFile df;
+            df.vfs_path    = vfs_path;
+            df.filename    = filename;
+            df.file_size   = static_cast<int64_t>(ae.size);
+            df.mtime       = mtime;  // Use archive's mtime
+            df.source_root = root;
+
+            out.push_back(std::move(df));
+            files_found_.fetch_add(1);
+        }
+    }
+
     /// Check if a file extension is a known ROM/disk image format.
-    static bool is_rom_extension(const std::string& ext) {
-        if (ext.empty()) return false;
-        // Convert to lowercase
-        std::string lext = ext;
-        for (auto& c : lext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    /// Check if extension is an archive (for recursive enumeration).
+    static bool is_archive_extension(const std::string& ext_lower) {
+        return ext_lower == ".zip" || ext_lower == ".7z" || ext_lower == ".gz";
+    }
+
+    /// Check if a file extension is a known ROM/disk image format.
+    /// Expects lowercase input.
+    static bool is_rom_extension(const std::string& ext_lower) {
+        if (ext_lower.empty()) return false;
 
         // Common ROM/image extensions across all supported systems
         static const char* known_exts[] = {
@@ -268,12 +323,11 @@ private:
             ".z80", ".sna", ".tzx",
             ".atr", ".xex", ".atx",
             ".dsk", ".nib", ".do", ".po",
-            ".zip", ".7z", ".gz",
             nullptr
         };
 
         for (const char** p = known_exts; *p; ++p) {
-            if (lext == *p) return true;
+            if (ext_lower == *p) return true;
         }
         return false;
     }
@@ -428,37 +482,35 @@ private:
     }
 
     /// Compute content fingerprint (§14.2).
+    /// Uses VFS to support files inside archives.
     static Fingerprint compute_fingerprint(const std::string& path, int64_t file_size) {
         Fingerprint fp;
         fp.file_size = file_size;
 
-        constexpr int64_t HEAD_BYTES = 64 * 1024;  // 64 KB
-        constexpr int64_t TAIL_BYTES = 64 * 1024;
-
-        FILE* f = fopen(path.c_str(), "rb");
-        if (!f) return fp;
-
-        // Head CRC32
-        {
-            int64_t head_len = std::min(file_size, HEAD_BYTES);
-            std::vector<uint8_t> buf(static_cast<size_t>(head_len));
-            size_t read = fread(buf.data(), 1, buf.size(), f);
-            fp.head_crc32 = crc32_compute(buf.data(), read);
+        // Read via VFS (handles both real files and archive paths)
+        size_t data_size = 0;
+        uint8_t* data = vfs_read_file(path.c_str(), &data_size);
+        if (!data || data_size == 0) {
+            if (data) free(data);
+            return fp;
         }
 
+        constexpr size_t HEAD_BYTES = 64 * 1024;
+        constexpr size_t TAIL_BYTES = 64 * 1024;
+
+        // Head CRC32
+        size_t head_len = std::min(data_size, HEAD_BYTES);
+        fp.head_crc32 = crc32_compute(data, head_len);
+
         // Tail CRC32
-        if (file_size > HEAD_BYTES) {
-            int64_t tail_start = file_size - std::min(file_size, TAIL_BYTES);
-            fseek(f, static_cast<long>(tail_start), SEEK_SET);
-            int64_t tail_len = file_size - tail_start;
-            std::vector<uint8_t> buf(static_cast<size_t>(tail_len));
-            size_t read = fread(buf.data(), 1, buf.size(), f);
-            fp.tail_crc32 = crc32_compute(buf.data(), read);
+        if (data_size > HEAD_BYTES) {
+            size_t tail_len = std::min(data_size, TAIL_BYTES);
+            fp.tail_crc32 = crc32_compute(data + data_size - tail_len, tail_len);
         } else {
             fp.tail_crc32 = fp.head_crc32;
         }
 
-        fclose(f);
+        free(data);
         return fp;
     }
 
