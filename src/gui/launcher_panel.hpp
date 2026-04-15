@@ -95,10 +95,28 @@ public:
     /// Current UI scale factor
     float get_ui_scale() const { return ui_scale_; }
 
+    /// Switch between file browser and title browser modes
+    enum class ViewMode { FileBrowser, TitleBrowser };
+    void set_view_mode(ViewMode mode) { view_mode_ = mode; }
+
 #ifndef CERMU_NO_SQLITE
     /// Access catalog infrastructure for external wiring (pipeline start, etc.)
     catalog::CatalogStore&    catalog_store()    { ensure_catalog_open(); return catalog_store_; }
     catalog::CatalogPipeline& catalog_pipeline() { return catalog_pipeline_; }
+
+    /// Check and consume the "Set up scan roots" button click from the title browser.
+    bool consume_scan_roots_request() {
+        bool r = title_browser_.show_setup_requested_;
+        title_browser_.show_setup_requested_ = false;
+        return r;
+    }
+
+    /// Check and consume the "Rescan" button click from the title browser.
+    bool consume_rescan_request() {
+        bool r = title_browser_.rescan_requested_;
+        title_browser_.rescan_requested_ = false;
+        return r;
+    }
 #endif
 
     /// Reset selection state after processing
@@ -157,7 +175,6 @@ private:
     static constexpr float kUiScaleStep = 0.1f;
 
     // View mode — file browser vs. title browser
-    enum class ViewMode { FileBrowser, TitleBrowser };
     ViewMode view_mode_ = ViewMode::FileBrowser;
 
 #ifndef CERMU_NO_SQLITE
@@ -579,16 +596,16 @@ inline void LauncherPanel::render_top_bar(bool allow_cancel) {
         type_filter_all_ = false; type_filter_ = SystemType::Other; apply_filters();
     }
 
-    // System count (right-aligned in top bar)
-    ImGui::SameLine(ImGui::GetWindowWidth() - 80);
-    ImGui::SetCursorPosY(6);
-    ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextDimmed);
-    ImGui::Text("%d/%d", static_cast<int>(filtered_systems_.size()),
-                static_cast<int>(sorted_systems_.size()));
-    ImGui::PopStyleColor();
+    // Right-aligned group: view toggle, system count, close button.
+    // Lay out from right to left to compute positions, then render left to right.
+    float win_w = ImGui::GetWindowWidth();
+    float close_w = allow_cancel ? 30.0f : 0.0f;
+    float count_w = 60.0f;
+    float toggle_w = 80.0f;  // "File" + "Title" buttons
+    float right_x = win_w - close_w - count_w - toggle_w - 16.0f;
 
     // View mode toggle (File / Title)
-    ImGui::SameLine();
+    ImGui::SameLine(right_x);
     ImGui::SetCursorPosY(6);
     {
         bool is_file = (view_mode_ == ViewMode::FileBrowser);
@@ -621,9 +638,17 @@ inline void LauncherPanel::render_top_bar(bool allow_cancel) {
         ImGui::PopStyleColor(2);
     }
 
+    // System count
+    ImGui::SameLine();
+    ImGui::SetCursorPosY(6);
+    ImGui::PushStyleColor(ImGuiCol_Text, launcher_theme::kTextDimmed);
+    ImGui::Text("%d/%d", static_cast<int>(filtered_systems_.size()),
+                static_cast<int>(sorted_systems_.size()));
+    ImGui::PopStyleColor();
+
     // Close button (if running system)
     if (allow_cancel) {
-        ImGui::SameLine(ImGui::GetWindowWidth() - 40);
+        ImGui::SameLine(win_w - 40);
         ImGui::SetCursorPosY(6);
         if (ImGui::SmallButton("X")) {
             close();
@@ -1481,6 +1506,23 @@ inline void LauncherPanel::render_title_browser() {
 
     // Render the title browser (handles progress, empty state, and card grid)
     title_browser_.render(catalog_store_, catalog_pipeline_);
+
+    // Handle title activation (double-click on card or variant)
+    if (title_browser_.title_activated()) {
+        const auto& entries = title_browser_.activated_entries();
+        if (!entries.empty()) {
+            const auto& entry = entries.front();
+            // Select the matching system if not already selected
+            if (!entry.system_id.empty()) {
+                select_system_by_name(entry.system_id.c_str());
+            }
+            pending_file_path_ = entry.vfs_path;
+            if (selected_system_name_) {
+                launch_selected_system();
+            }
+        }
+        title_browser_.clear_activation();
+    }
 }
 
 #endif // CERMU_NO_SQLITE

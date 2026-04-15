@@ -481,7 +481,7 @@ public:
     }
 
     /// Whether the setup panel should be shown
-    bool should_show_setup() const { return show_setup_ && roots_.empty(); }
+    bool should_show_setup() const { return show_setup_; }
 
     /// Get the config file path
     const std::string& config_path() const { return config_path_; }
@@ -537,12 +537,9 @@ public:
 
         bool closed = false;
         ImGui::SetNextWindowSizeConstraints(ImVec2(600, 400), ImVec2(FLT_MAX, FLT_MAX));
-        ImGui::Begin("Select ROM folder##ScanRootFolderPicker", nullptr,
-                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
-        bool result = fd->Display("ScanRootFolderPicker",
-                                  ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar,
-                                  ImVec2(600, 400));
-        if (result) {
+        if (fd->Display("ScanRootFolderPicker",
+                        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar,
+                        ImVec2(600, 400))) {
             if (fd->IsOk()) {
                 std::string selected = fd->GetCurrentPath();
                 if (!selected.empty()) {
@@ -552,7 +549,6 @@ public:
             fd->Close();
             closed = true;
         }
-        ImGui::End();
         return closed;
 #else
         return false;

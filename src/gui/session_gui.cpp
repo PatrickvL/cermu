@@ -699,6 +699,22 @@ void SessionGUI::render_frame() {
         render_display_settings();
     }
 
+    // Title browser "Set up scan roots" button → open scan roots dialog
+#ifndef CERMU_NO_SQLITE
+    if (launcher_panel_.consume_scan_roots_request()) {
+        scan_root_manager_.prepare_setup();
+        show_scan_roots_dialog_ = true;
+    }
+    // Title browser "Rescan" button → re-run the catalog pipeline
+    if (launcher_panel_.consume_rescan_request()) {
+        auto& store = launcher_panel_.catalog_store();
+        auto& pipeline = launcher_panel_.catalog_pipeline();
+        if (!pipeline.is_running()) {
+            pipeline.start(scan_root_manager_, store);
+        }
+    }
+#endif
+
     // Scan roots dialog (§12)
     if (show_scan_roots_dialog_) {
         ImGui::SetNextWindowSize(ImVec2(500, 400), ImGuiCond_FirstUseEver);
@@ -827,14 +843,12 @@ void SessionGUI::render_menu_bar() {
         ImGui::EndDisabled();
         ImGui::Separator();
         if (ImGui::MenuItem("Switch to file browser")) {
+            launcher_panel_.set_view_mode(LauncherPanel::ViewMode::FileBrowser);
             launcher_panel_.open();
         }
         if (ImGui::MenuItem("Switch to title browser")) {
+            launcher_panel_.set_view_mode(LauncherPanel::ViewMode::TitleBrowser);
             launcher_panel_.open();
-            // The launcher will open in file browser mode; user can toggle
-            // to title view via the tab bar.  Force title mode here.
-            // (view_mode_ is private, but we can accomplish this by ensuring
-            // the catalog is open — the title tab click handles the rest)
         }
         ImGui::EndMenu();
     }

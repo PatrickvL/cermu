@@ -639,10 +639,17 @@ bool VfsFileSystem::is_active_format_ext(const std::string& ext) {
     if (!s_active_formats_ || !s_active_formats_[0]) return true;  // no filter
     if (ext.empty()) return false;
 
+    // ext comes from get_extension() and always has a leading dot.
+    // Format descriptors may store extensions with or without a dot.
+    const char* ext_no_dot = ext.c_str();
+    if (ext_no_dot[0] == '.') ++ext_no_dot;
+
     for (const format_descriptor_t* const* p = s_active_formats_; *p; ++p) {
         const format_descriptor_t* fmt = *p;
         for (const char* const* e = fmt->extensions; e && *e; ++e) {
-            if (cermu_strcasecmp(ext.c_str(), *e) == 0)
+            const char* fe = *e;
+            if (fe[0] == '.') ++fe;
+            if (cermu_strcasecmp(ext_no_dot, fe) == 0)
                 return true;
         }
     }

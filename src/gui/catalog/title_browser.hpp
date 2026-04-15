@@ -193,13 +193,23 @@ private:
 
     void render_search_bar() {
         ImGui::PushStyleColor(ImGuiCol_FrameBg, launcher_theme::kSearchInputBg);
-        ImGui::PushItemWidth(-1);
+        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x - 90);
         bool changed = ImGui::InputTextWithHint("##TitleSearch", "Search titles...",
                                                  search_buf_, sizeof(search_buf_));
         ImGui::PopItemWidth();
         ImGui::PopStyleColor();
 
         if (changed) apply_filter();
+
+        // Scan roots / Rescan buttons
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Scan roots")) {
+            show_setup_requested_ = true;
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Rescan")) {
+            rescan_requested_ = true;
+        }
     }
 
     void render_card_grid(CatalogStore& store) {
@@ -375,7 +385,8 @@ private:
 
     // ---- Public flags for parent to check ---------------------------------
 public:
-    bool show_setup_requested_ = false;  // "Set up scan roots" was clicked
+    bool show_setup_requested_ = false;  // "Set up scan roots" / "Scan roots" was clicked
+    bool rescan_requested_ = false;      // "Rescan" was clicked
 };
 
 } // namespace catalog
