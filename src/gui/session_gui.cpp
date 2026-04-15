@@ -1995,8 +1995,11 @@ void SessionGUI::render_display_settings() {
                 changed = true;
             }
             changed |= ImGui::ColorEdit3("Glow Color", dc.phosphor.glow_color);
+            changed |= ImGui::SliderFloat("Persistence (ms)", &dc.phosphor.persistence, 0.0f, 100.0f, "%.1f");
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+                ImGui::SetTooltip("Phosphor decay time — higher values blend consecutive frames\n"
+                                  "(useful for demos with intentional sprite flicker)");
             ImGui::BeginDisabled();
-            ImGui::SliderFloat("Persistence (ms)", &dc.phosphor.persistence, 0.1f, 20.0f, "%.1f");
             ImGui::SliderFloat("Bloom Radius", &dc.phosphor.bloom_radius, 0.0f, 5.0f, "%.2f");
             ImGui::SliderFloat("Bloom Threshold", &dc.phosphor.bloom_threshold, 0.0f, 1.0f, "%.2f");
             const char* decay_names[] = { "Exponential", "Linear" };

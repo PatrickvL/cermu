@@ -21,6 +21,7 @@
 #include "devices/display/display_device.hpp"
 #include "gui/gl_api.hpp"
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 namespace crt_shader {
@@ -56,6 +57,7 @@ static constexpr const char* fragment_src = R"glsl(
 #version 130
 in vec2 v_uv;
 uniform sampler2D InputTexture;
+uniform sampler2D PrevFrameTexture; // Previous frame (for phosphor persistence)
 uniform vec2  InputSize;      // emulated framebuffer size in pixels
 uniform vec2  OutputSize;     // display output size in pixels
 uniform float Curvature;      // 0 = flat, 1 = max barrel distortion
@@ -82,6 +84,7 @@ uniform float GhostingStrength; // Composite echo/ghosting (SignalParams)
 uniform float ChromaPhaseError; // Chroma hue rotation in degrees (SignalParams)
 uniform float SyncStability;   // Horizontal sync jitter (SignalParams, 1.0 = perfect)
 uniform int   FrameCount;      // Monotonic frame counter for temporal effects
+uniform float Persistence;     // Phosphor decay factor per frame (0=none, ~0.5=moderate)
 // TODO: Add uniforms for remaining DisplayCharacteristics fields:
 //   PhosphorParams  — float Persistence, float BloomRadius,
 //                     float BloomThreshold, int DecayCurve
@@ -223,9 +226,6 @@ void main() {
     }
 
     // Monochrome phosphor — convert to luminance and apply glow color
-    // TODO: Apply PhosphorParams.persistence — temporal blend with previous frame
-    // TODO: Apply PhosphorParams.bloom_radius / bloom_threshold — bright-pixel bloom
-    // TODO: Use PhosphorParams.decay_curve to select exponential vs linear decay
     if (MaskType == 3) {
         float luma = dot(color, vec3(0.299, 0.587, 0.114));
         color = vec3(luma) * PhosphorTint;
@@ -249,6 +249,14 @@ void main() {
 
     // Glass tint — CRT faceplate color filter
     color *= GlassTint;
+
+    // Phosphor persistence — blend with decayed previous frame.
+    // CRT phosphors continue to glow after the beam passes, creating
+    // temporal smoothing that makes sprite flicker invisible on real TVs.
+    if (Persistence > 0.001) {
+        vec3 prev = texture(PrevFrameTexture, v_uv).rgb;
+        color = max(color, prev * Persistence);
+    }
 
     // Analogue noise — per-pixel random intensity variation
     if (NoiseLevel > 0.001) {
@@ -276,6 +284,7 @@ void main() {
 struct CRTPostProcess {
     GLuint fbo      = 0;    ///< Framebuffer object for capturing display output
     GLuint texture  = 0;    ///< Color attachment (RGBA8)
+    GLuint prev_frame_tex = 0; ///< Previous frame texture (for phosphor persistence)
     GLuint shader   = 0;    ///< CRT shader program
     GLuint dummy_vao = 0;   ///< Empty VAO for gl_VertexID fullscreen triangle
     int    width    = 0;
@@ -283,6 +292,7 @@ struct CRTPostProcess {
 
     // Uniform locations
     GLint loc_input_texture  = -1;
+    GLint loc_prev_frame_texture = -1;
     GLint loc_input_size     = -1;
     GLint loc_output_size    = -1;
     GLint loc_curvature      = -1;
@@ -310,6 +320,7 @@ struct CRTPostProcess {
     GLint loc_sync_stability     = -1;
     GLint loc_frame_count        = -1;
     GLint loc_rotation           = -1;
+    GLint loc_persistence        = -1;
     // TODO: Add uniform locations for remaining fields when implemented:
     //   PhosphorParams:  loc_persistence, loc_bloom_radius,
     //                    loc_bloom_threshold, loc_decay_curve
@@ -334,6 +345,16 @@ inline bool create(CRTPostProcess* p, int w, int h) {
     // --- FBO texture ---
     glGenTextures(1, &p->texture);
     glBindTexture(GL_TEXTURE_2D, p->texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    // --- Previous frame texture (for phosphor persistence) ---
+    glGenTextures(1, &p->prev_frame_tex);
+    glBindTexture(GL_TEXTURE_2D, p->prev_frame_tex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -378,6 +399,7 @@ inline bool create(CRTPostProcess* p, int w, int h) {
 
     // --- Uniform locations ---
     p->loc_input_texture = gl_api::glGetUniformLocation(p->shader, "InputTexture");
+    p->loc_prev_frame_texture = gl_api::glGetUniformLocation(p->shader, "PrevFrameTexture");
     p->loc_input_size    = gl_api::glGetUniformLocation(p->shader, "InputSize");
     p->loc_output_size   = gl_api::glGetUniformLocation(p->shader, "OutputSize");
     p->loc_curvature     = gl_api::glGetUniformLocation(p->shader, "Curvature");
@@ -405,10 +427,12 @@ inline bool create(CRTPostProcess* p, int w, int h) {
     p->loc_sync_stability    = gl_api::glGetUniformLocation(p->shader, "SyncStability");
     p->loc_frame_count       = gl_api::glGetUniformLocation(p->shader, "FrameCount");
     p->loc_rotation          = gl_api::glGetUniformLocation(p->shader, "Rotation");
+    p->loc_persistence       = gl_api::glGetUniformLocation(p->shader, "Persistence");
 
-    // Set texture unit (always 0)
+    // Set texture units (InputTexture=0, PrevFrameTexture=1)
     gl_api::glUseProgram(p->shader);
     gl_api::glUniform1i(p->loc_input_texture, 0);
+    gl_api::glUniform1i(p->loc_prev_frame_texture, 1);
     gl_api::glUseProgram(0);
 
     // --- Empty VAO for gl_VertexID rendering ---
@@ -424,15 +448,18 @@ inline void resize(CRTPostProcess* p, int w, int h) {
     p->height = h;
     glBindTexture(GL_TEXTURE_2D, p->texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glBindTexture(GL_TEXTURE_2D, p->prev_frame_tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 /// Destroy CRT post-processing resources.
 inline void destroy(CRTPostProcess* p) {
-    if (p->fbo)       { gl_api::glDeleteFramebuffers(1, &p->fbo); p->fbo = 0; }
-    if (p->texture)   { glDeleteTextures(1, &p->texture); p->texture = 0; }
-    if (p->shader)    { gl_api::glDeleteProgram(p->shader); p->shader = 0; }
-    if (p->dummy_vao) { gl_api::glDeleteVertexArrays(1, &p->dummy_vao); p->dummy_vao = 0; }
+    if (p->fbo)            { gl_api::glDeleteFramebuffers(1, &p->fbo); p->fbo = 0; }
+    if (p->texture)        { glDeleteTextures(1, &p->texture); p->texture = 0; }
+    if (p->prev_frame_tex) { glDeleteTextures(1, &p->prev_frame_tex); p->prev_frame_tex = 0; }
+    if (p->shader)         { gl_api::glDeleteProgram(p->shader); p->shader = 0; }
+    if (p->dummy_vao)      { gl_api::glDeleteVertexArrays(1, &p->dummy_vao); p->dummy_vao = 0; }
 }
 
 /// Map DisplayTechnology enum to mask type int for the shader.
@@ -523,10 +550,23 @@ inline void render(CRTPostProcess* p,
     float color_temp_k = dc.color_temp;
 
     // TODO: Wire remaining DisplayCharacteristics sub-struct fields to uniforms:
-    //   dc.phosphor  — persistence, bloom_radius, bloom_threshold, decay_curve
     //   dc.beam      — width, softness, pincushion, h/v_linearity, corner_pin
     //   dc.optics    — reflection_strength, edge_glow
     //   dc.signal    — bandwidth
+
+    // Compute phosphor persistence as a per-frame blend factor.
+    // Maps the slider (0–100 ms) to a decay factor per frame.
+    // Uses τ=3 ms so the usable range is within the first ~20 ms:
+    //    0 ms → 0.000  (no persistence)
+    //    3 ms → 0.632  (subtle)
+    //   10 ms → 0.964  (strong — 3.6% oscillation on sprite flicker)
+    //   17 ms → 0.997  (one frame time — nearly invisible)
+    //   25 ms → 0.9998 (effectively zero flicker)
+    float persistence_ms = dc.phosphor.persistence;
+    float decay_factor = 0.0f;
+    if (persistence_ms > 0.01f) {
+        decay_factor = 1.0f - std::exp(-persistence_ms / 3.0f);
+    }
 
     // Ensure FBO size matches output
     resize(p, static_cast<int>(output_w), static_cast<int>(output_h));
@@ -589,6 +629,7 @@ inline void render(CRTPostProcess* p,
     gl_api::glUniform1f(p->loc_sync_stability, dc.signal.sync_stability);
     gl_api::glUniform1i(p->loc_frame_count, static_cast<GLint>(p->frame_count++));
     gl_api::glUniform1i(p->loc_rotation, rotation);
+    gl_api::glUniform1f(p->loc_persistence, decay_factor);
 
     // Compute and set color temperature tint
     float ct_r, ct_g, ct_b;
@@ -599,15 +640,27 @@ inline void render(CRTPostProcess* p,
     gl_api::glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, input_tex);
 
+    // Bind previous frame texture to unit 1 (for phosphor persistence)
+    gl_api::glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, p->prev_frame_tex);
+
     // Draw fullscreen triangle
     gl_api::glBindVertexArray(p->dummy_vao);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     gl_api::glBindVertexArray(0);
 
+    // Copy current output to prev_frame_tex for next frame's persistence
+    if (decay_factor > 0.001f) {
+        gl_api::glBindFramebuffer(GL_READ_FRAMEBUFFER, p->fbo);
+        glBindTexture(GL_TEXTURE_2D, p->prev_frame_tex);
+        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, p->width, p->height);
+    }
+
     // Restore state
     gl_api::glUseProgram(0);
     gl_api::glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
     glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
+    gl_api::glActiveTexture(GL_TEXTURE0);
 }
 
 } // namespace crt_shader
