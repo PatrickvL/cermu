@@ -544,6 +544,7 @@ inline void FileBrowser::rebuild_extension_cache() {
             for (const char** ext = fmt->extensions; *ext; ++ext) {
                 std::string e(*ext);
                 std::transform(e.begin(), e.end(), e.begin(), ::tolower);
+                if (e[0] != '.') e.insert(0, 1, '.');
                 active_extensions_.push_back(e);
             }
         }
