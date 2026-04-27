@@ -423,6 +423,13 @@ enum class WidthMode : uint8_t { ACC, IDX, MEM };
 } // namespace reg
 using namespace reg;
 
+#ifdef _WIN32
+// winnt.h defines 'typedef CHAR *PCH;' at global scope, which clashes with
+// reg::PCH (a constexpr r8) when 'using namespace reg;' is applied.
+// Force unambiguous resolution via a macro redirect.
+#define PCH reg::PCH
+#endif
+
 // Addr enum class for template parameters — values ARE byte offsets
 enum class Addr : uint8_t {
   AB = 2,  // Address Bus  (byte offset of r16 AB)

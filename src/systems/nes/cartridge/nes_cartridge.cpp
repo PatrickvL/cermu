@@ -255,7 +255,7 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
             for (size_t i = 0; i < len; i++) {
                 crc ^= buf[i];
                 for (int b = 0; b < 8; b++)
-                    crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
+                    crc = (crc >> 1) ^ (0xEDB88320 & (0u - (crc & 1)));
             }
             return ~crc;
         };
@@ -268,7 +268,7 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
             for (size_t i = 0; i < chr_memory.size(); i++) {
                 c ^= chr_memory[i];
                 for (int b = 0; b < 8; b++)
-                    c = (c >> 1) ^ (0xEDB88320 & -(c & 1));
+                    c = (c >> 1) ^ (0xEDB88320 & (0u - (c & 1)));
             }
             crc = ~c;
         }

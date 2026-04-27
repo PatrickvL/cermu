@@ -11,16 +11,7 @@
  */
 
 #include "core/os/os.hpp"
-
-#ifdef CERMU_NO_LIBARCHIVE
-// Stub implementations when libarchive is not available
-std::vector<OsArchiveEntry> os_archive_list(const char*) { return {}; }
-std::vector<OsArchiveEntry> os_archive_list_from_memory(const uint8_t*, size_t) { return {}; }
-uint8_t* os_archive_extract(const char*, const char*, size_t*) { return nullptr; }
-uint8_t* os_archive_extract_from_memory(const uint8_t*, size_t, const char*, size_t*) { return nullptr; }
-uint8_t* os_decompress(const uint8_t*, size_t, size_t*) { return nullptr; }
-const char* const* os_archive_extensions() { static const char* e[] = { nullptr }; return e; }
-#else // !CERMU_NO_LIBARCHIVE
+#include "core/cermu.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -183,6 +174,10 @@ static uint8_t* extract_via_7z_cli(const char* archive_path,
     cmd += shell_escape(entry_name);
     cmd += " 2>/dev/null";
 
+#ifdef _MSC_VER
+#define popen  _popen
+#define pclose _pclose
+#endif
     FILE* pipe = popen(cmd.c_str(), "r");
     if (!pipe) return nullptr;
 
@@ -607,5 +602,3 @@ uint8_t* os_decompress(const uint8_t* data, size_t data_size, size_t* out_size) 
     archive_read_free(a);
     return result;
 }
-
-#endif // !CERMU_NO_LIBARCHIVE

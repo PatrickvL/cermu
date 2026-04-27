@@ -1,5 +1,5 @@
 /**
- * generic_lcd.cpp — LCD panel presets and device registration
+ * generic_lcd.cpp â€” LCD panel presets and device registration
  *
  * Hardware-accurate LCD display characteristics for each preset.
  * Values are based on panel datasheets, teardown measurements, and
@@ -10,15 +10,15 @@
 #include "core/device_registry.hpp"
 
 // ============================================================================
-// CONSTRUCTOR — preset switch
+// CONSTRUCTOR â€” preset switch
 // ============================================================================
 
 GenericLCD::GenericLCD(LCDPreset preset) : preset_(preset) {
     switch (preset) {
 
     // ========================================================================
-    // GAME BOY DMG — Original Game Boy (DOT MATRIX GAME)
-    // Sharp 160×144 STN reflective LCD, no backlight, 4 shades of green
+    // GAME BOY DMG â€” Original Game Boy (DOT MATRIX GAME)
+    // Sharp 160Ã—144 STN reflective LCD, no backlight, 4 shades of green
     // ========================================================================
     case LCDPreset::GameBoyDMG:
         name_             = "Game Boy DMG LCD";
@@ -30,7 +30,7 @@ GenericLCD::GenericLCD(LCDPreset preset) : preset_(preset) {
             .diagonal    = 2.6f,
             .aspect      = 10.0f / 9.0f,
             .dot_pitch   = 0.36f,
-            .brightness  = 0.60f,  // reflective, no backlight — dimmer
+            .brightness  = 0.60f,  // reflective, no backlight â€” dimmer
             .contrast    = 0.80f,
             .gamma       = 2.20f,
             .color_temp  = 5500.0f,
@@ -41,7 +41,7 @@ GenericLCD::GenericLCD(LCDPreset preset) : preset_(preset) {
 
                 .pixel_grid_opacity  = 0.45f,  // very visible grid on DMG
                 .pixel_grid_width    = 0.18f,
-                .subpixel_opacity    = 0.0f,   // monochrome — no subpixels
+                .subpixel_opacity    = 0.0f,   // monochrome â€” no subpixels
 
                 .response_time_ms    = 80.0f,  // STN is very slow
                 .ghosting_strength   = 0.35f,  // significant ghosting
@@ -62,8 +62,8 @@ GenericLCD::GenericLCD(LCDPreset preset) : preset_(preset) {
         break;
 
     // ========================================================================
-    // GAME BOY POCKET — MGB-001
-    // Sharp 160×144 STN reflective, improved contrast, grey-scale
+    // GAME BOY POCKET â€” MGB-001
+    // Sharp 160Ã—144 STN reflective, improved contrast, grey-scale
     // ========================================================================
     case LCDPreset::GameBoyPocket:
         name_             = "Game Boy Pocket LCD";
@@ -107,7 +107,7 @@ GenericLCD::GenericLCD(LCDPreset preset) : preset_(preset) {
         break;
 
     // ========================================================================
-    // GAME BOY LIGHT — MGL-001 (Japan only)
+    // GAME BOY LIGHT â€” MGL-001 (Japan only)
     // STN with electroluminescent backlight, monochrome green
     // ========================================================================
     case LCDPreset::GameBoyLight:
@@ -136,7 +136,7 @@ GenericLCD::GenericLCD(LCDPreset preset) : preset_(preset) {
                 .response_time_ms    = 60.0f,
                 .ghosting_strength   = 0.25f,
 
-                .backlight_brightness = 0.70f,  // EL panel — softer than LED
+                .backlight_brightness = 0.70f,  // EL panel â€” softer than LED
                 .backlight_bleed      = 0.10f,
                 .backlight_uniformity = 0.85f,  // EL not perfectly even
 
@@ -152,8 +152,8 @@ GenericLCD::GenericLCD(LCDPreset preset) : preset_(preset) {
         break;
 
     // ========================================================================
-    // GAME BOY COLOR — CGB-001
-    // Sharp 160×144 TN reflective, color (32768 colors, ~56 on screen)
+    // GAME BOY COLOR â€” CGB-001
+    // Sharp 160Ã—144 TN reflective, color (32768 colors, ~56 on screen)
     // ========================================================================
     case LCDPreset::GameBoyColor:
         name_             = "Game Boy Color LCD";
@@ -165,7 +165,7 @@ GenericLCD::GenericLCD(LCDPreset preset) : preset_(preset) {
             .diagonal    = 2.6f,
             .aspect      = 10.0f / 9.0f,
             .dot_pitch   = 0.30f,
-            .brightness  = 0.55f,  // reflective color — dimmer than mono
+            .brightness  = 0.55f,  // reflective color â€” dimmer than mono
             .contrast    = 0.70f,
             .gamma       = 2.20f,
             .color_temp  = 5800.0f,
@@ -188,7 +188,7 @@ GenericLCD::GenericLCD(LCDPreset preset) : preset_(preset) {
                 .color_tint       = {1.0f, 1.0f, 1.0f},
                 .color_saturation = 0.75f,  // limited color gamut
 
-                .viewing_angle_falloff = 0.35f,  // TN — significant
+                .viewing_angle_falloff = 0.35f,  // TN â€” significant
                 .black_level           = 0.06f,
                 .reflection_strength   = 0.15f,
                 .pixel_pitch_mm        = 0.30f,
@@ -197,8 +197,8 @@ GenericLCD::GenericLCD(LCDPreset preset) : preset_(preset) {
         break;
 
     // ========================================================================
-    // GAME BOY ADVANCE — AGB-001
-    // Sharp 240×160 TN reflective, 32768 colors
+    // GAME BOY ADVANCE â€” AGB-001
+    // Sharp 240Ã—160 TN reflective, 32768 colors
     // ========================================================================
     case LCDPreset::GameBoyAdvance:
         name_             = "Game Boy Advance LCD";
@@ -242,7 +242,7 @@ GenericLCD::GenericLCD(LCDPreset preset) : preset_(preset) {
         break;
 
     // ========================================================================
-    // GBA SP AGS-001 — frontlit
+    // GBA SP AGS-001 â€” frontlit
     // ========================================================================
     case LCDPreset::GBASP_AGS001:
         name_             = "GBA SP AGS-001 LCD";
@@ -286,7 +286,7 @@ GenericLCD::GenericLCD(LCDPreset preset) : preset_(preset) {
         break;
 
     // ========================================================================
-    // GBA SP AGS-101 — LED backlit, best GBA screen
+    // GBA SP AGS-101 â€” LED backlit, best GBA screen
     // ========================================================================
     case LCDPreset::GBASP_AGS101:
         name_             = "GBA SP AGS-101 LCD";
@@ -330,7 +330,7 @@ GenericLCD::GenericLCD(LCDPreset preset) : preset_(preset) {
         break;
 
     // ========================================================================
-    // NINTENDO DS — top screen
+    // NINTENDO DS â€” top screen
     // ========================================================================
     case LCDPreset::NintendoDS:
         name_             = "Nintendo DS LCD";
@@ -375,7 +375,7 @@ GenericLCD::GenericLCD(LCDPreset preset) : preset_(preset) {
 
     // ========================================================================
     // SEGA GAME GEAR
-    // Asahi 160×144 STN with CCFL backlight, 4096 colors
+    // Asahi 160Ã—144 STN with CCFL backlight, 4096 colors
     // ========================================================================
     case LCDPreset::GameGear:
         name_             = "Game Gear LCD";
@@ -420,7 +420,7 @@ GenericLCD::GenericLCD(LCDPreset preset) : preset_(preset) {
 
     // ========================================================================
     // ATARI LYNX
-    // STN with CCFL backlight, 4096 colors, 160×102
+    // STN with CCFL backlight, 4096 colors, 160Ã—102
     // ========================================================================
     case LCDPreset::AtariLynx:
         name_             = "Atari Lynx LCD";
@@ -465,7 +465,7 @@ GenericLCD::GenericLCD(LCDPreset preset) : preset_(preset) {
 
     // ========================================================================
     // PSP 1000
-    // Sharp 480×272 TN with CCFL backlight, 16.77M colors
+    // Sharp 480Ã—272 TN with CCFL backlight, 16.77M colors
     // ========================================================================
     case LCDPreset::PSP1000:
         name_             = "PSP 1000 LCD";
@@ -510,7 +510,7 @@ GenericLCD::GenericLCD(LCDPreset preset) : preset_(preset) {
 
     // ========================================================================
     // NINTENDO SWITCH
-    // 6.2" IPS with LED backlight, 1280×720
+    // 6.2" IPS with LED backlight, 1280Ã—720
     // ========================================================================
     case LCDPreset::NintendoSwitch:
         name_             = "Nintendo Switch LCD";
@@ -545,7 +545,7 @@ GenericLCD::GenericLCD(LCDPreset preset) : preset_(preset) {
                 .color_tint       = {1.0f, 1.0f, 1.0f},
                 .color_saturation = 0.95f,
 
-                .viewing_angle_falloff = 0.05f,  // IPS — excellent viewing angles
+                .viewing_angle_falloff = 0.05f,  // IPS â€” excellent viewing angles
                 .black_level           = 0.015f,
                 .reflection_strength   = 0.03f,
                 .pixel_pitch_mm        = 0.10f,
@@ -562,7 +562,7 @@ GenericLCD::GenericLCD(LCDPreset preset) : preset_(preset) {
 // --- Game Boy DMG LCD (default "lcd_panel" ID for gameboy manifest) ---
 static const DeviceDescriptor lcd_dmg_desc{
     "lcd_panel", "Game Boy DMG LCD",
-    "Sharp STN reflective LCD — 160\xC3\x97144, 4 shades of green, 80 ms response",
+    "Sharp STN reflective LCD â€” 160×144, 4 shades of green, 80 ms response",
     PortType::VIDEO_COMPOSITE, false
 };
 REGISTER_DEVICE(lcd_dmg_desc,
@@ -572,7 +572,7 @@ REGISTER_DEVICE(lcd_dmg_desc,
 // --- Game Boy Pocket ---
 static const DeviceDescriptor lcd_gbp_desc{
     "lcd_gbp", "Game Boy Pocket LCD",
-    "Sharp STN reflective LCD — 160\xC3\x97144, grey-scale, improved contrast",
+    "Sharp STN reflective LCD â€” 160×144, grey-scale, improved contrast",
     PortType::VIDEO_COMPOSITE, false
 };
 REGISTER_DEVICE(lcd_gbp_desc,
@@ -582,7 +582,7 @@ REGISTER_DEVICE(lcd_gbp_desc,
 // --- Game Boy Light ---
 static const DeviceDescriptor lcd_gbl_desc{
     "lcd_gbl", "Game Boy Light LCD",
-    "STN LCD with EL backlight — 160\xC3\x97144, monochrome green (Japan only)",
+    "STN LCD with EL backlight â€” 160×144, monochrome green (Japan only)",
     PortType::VIDEO_COMPOSITE, false
 };
 REGISTER_DEVICE(lcd_gbl_desc,
@@ -592,7 +592,7 @@ REGISTER_DEVICE(lcd_gbl_desc,
 // --- Game Boy Color ---
 static const DeviceDescriptor lcd_gbc_desc{
     "lcd_gbc", "Game Boy Color LCD",
-    "Sharp TN reflective LCD — 160\xC3\x97144, 32768 colors",
+    "Sharp TN reflective LCD â€” 160×144, 32768 colors",
     PortType::VIDEO_COMPOSITE, false
 };
 REGISTER_DEVICE(lcd_gbc_desc,
@@ -602,7 +602,7 @@ REGISTER_DEVICE(lcd_gbc_desc,
 // --- Game Boy Advance ---
 static const DeviceDescriptor lcd_gba_desc{
     "lcd_gba", "Game Boy Advance LCD",
-    "Sharp TN reflective LCD — 240\xC3\x97160, 32768 colors",
+    "Sharp TN reflective LCD â€” 240×160, 32768 colors",
     PortType::VIDEO_COMPOSITE, false
 };
 REGISTER_DEVICE(lcd_gba_desc,
@@ -612,7 +612,7 @@ REGISTER_DEVICE(lcd_gba_desc,
 // --- GBA SP AGS-001 ---
 static const DeviceDescriptor lcd_gbasp001_desc{
     "lcd_gbasp001", "GBA SP AGS-001 LCD",
-    "TN LCD with frontlight — 240\xC3\x97160, first clamshell GBA",
+    "TN LCD with frontlight â€” 240×160, first clamshell GBA",
     PortType::VIDEO_COMPOSITE, false
 };
 REGISTER_DEVICE(lcd_gbasp001_desc,
@@ -622,7 +622,7 @@ REGISTER_DEVICE(lcd_gbasp001_desc,
 // --- GBA SP AGS-101 ---
 static const DeviceDescriptor lcd_gbasp101_desc{
     "lcd_gbasp101", "GBA SP AGS-101 LCD",
-    "TN LCD with LED backlight — 240\xC3\x97160, best GBA screen",
+    "TN LCD with LED backlight â€” 240×160, best GBA screen",
     PortType::VIDEO_COMPOSITE, false
 };
 REGISTER_DEVICE(lcd_gbasp101_desc,
@@ -632,7 +632,7 @@ REGISTER_DEVICE(lcd_gbasp101_desc,
 // --- Nintendo DS ---
 static const DeviceDescriptor lcd_ds_desc{
     "lcd_ds", "Nintendo DS LCD",
-    "TN LCD with LED backlight — 256\xC3\x97192",
+    "TN LCD with LED backlight â€” 256×192",
     PortType::VIDEO_COMPOSITE, false
 };
 REGISTER_DEVICE(lcd_ds_desc,
@@ -642,7 +642,7 @@ REGISTER_DEVICE(lcd_ds_desc,
 // --- Game Gear ---
 static const DeviceDescriptor lcd_gamegear_desc{
     "lcd_gamegear", "Game Gear LCD",
-    "Asahi STN LCD with CCFL backlight — 160\xC3\x97144, 4096 colors",
+    "Asahi STN LCD with CCFL backlight â€” 160×144, 4096 colors",
     PortType::VIDEO_COMPOSITE, false
 };
 REGISTER_DEVICE(lcd_gamegear_desc,
@@ -652,7 +652,7 @@ REGISTER_DEVICE(lcd_gamegear_desc,
 // --- Atari Lynx ---
 static const DeviceDescriptor lcd_lynx_desc{
     "lcd_lynx", "Atari Lynx LCD",
-    "STN LCD with CCFL backlight — 160\xC3\x97102, 4096 colors",
+    "STN LCD with CCFL backlight â€” 160×102, 4096 colors",
     PortType::VIDEO_COMPOSITE, false
 };
 REGISTER_DEVICE(lcd_lynx_desc,
@@ -662,7 +662,7 @@ REGISTER_DEVICE(lcd_lynx_desc,
 // --- PSP 1000 ---
 static const DeviceDescriptor lcd_psp1000_desc{
     "lcd_psp1000", "PSP 1000 LCD",
-    "Sharp TN LCD with CCFL backlight — 480\xC3\x97272, 16.77M colors",
+    "Sharp TN LCD with CCFL backlight â€” 480×272, 16.77M colors",
     PortType::VIDEO_COMPOSITE, false
 };
 REGISTER_DEVICE(lcd_psp1000_desc,
@@ -672,7 +672,7 @@ REGISTER_DEVICE(lcd_psp1000_desc,
 // --- Nintendo Switch ---
 static const DeviceDescriptor lcd_switch_desc{
     "lcd_switch", "Nintendo Switch LCD",
-    "IPS LCD with LED backlight — 1280\xC3\x97720, wide color gamut",
+    "IPS LCD with LED backlight â€” 1280×720, wide color gamut",
     PortType::VIDEO_COMPOSITE, false
 };
 REGISTER_DEVICE(lcd_switch_desc,

@@ -172,11 +172,19 @@ struct RegRef {
     }
 
     // Compound assignment
+    // Accept int overloads so that expressions like `reg &= ~0xE0` (where ~0xE0
+    // is promoted to int) don't trigger MSVC C4245 signed/unsigned warnings.
     inline RegRef& operator|=(T v)  { *this = T(*this) | v; return *this; }
     inline RegRef& operator&=(T v)  { *this = T(*this) & v; return *this; }
     inline RegRef& operator^=(T v)  { *this = T(*this) ^ v; return *this; }
     inline RegRef& operator+=(T v)  { *this = T(*this) + v; return *this; }
     inline RegRef& operator-=(T v)  { *this = T(*this) - v; return *this; }
+    template <typename U, typename = std::enable_if_t<!std::is_same_v<U, T> && std::is_integral_v<U>>>
+    inline RegRef& operator|=(U v)  { return *this |= static_cast<T>(v); }
+    template <typename U, typename = std::enable_if_t<!std::is_same_v<U, T> && std::is_integral_v<U>>>
+    inline RegRef& operator&=(U v)  { return *this &= static_cast<T>(v); }
+    template <typename U, typename = std::enable_if_t<!std::is_same_v<U, T> && std::is_integral_v<U>>>
+    inline RegRef& operator^=(U v)  { return *this ^= static_cast<T>(v); }
 
     // Increment / decrement
     inline T operator++()     { T v = T(*this) + 1; *this = v; return v; }

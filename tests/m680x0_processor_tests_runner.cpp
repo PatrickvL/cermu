@@ -37,7 +37,8 @@
 #include <sstream>
 #include <unordered_map>
 
-#include <zlib.h>
+#include <archive.h>
+#include <archive_entry.h>
 
 // Low-level JSON utilities (shared with fam65xx/Z80 runners)
 #include "json_parser.hpp"
@@ -888,19 +889,35 @@ private:
 // File collection
 // ============================================================================
 
-// Decompress a gzip file into a string
+// Decompress a gzip (or any libarchive-supported) file into a string
 static bool decompress_gz(const std::string& filepath, std::string& output) {
-    gzFile gz = gzopen(filepath.c_str(), "rb");
-    if (!gz) return false;
+    struct archive* a = archive_read_new();
+    if (!a) return false;
+
+    archive_read_support_filter_all(a);
+    archive_read_support_format_raw(a);  // raw = single-stream (gz, bz2, xz, …)
+
+    if (archive_read_open_filename(a, filepath.c_str(), 65536) != ARCHIVE_OK) {
+        archive_read_free(a);
+        return false;
+    }
+
+    struct archive_entry* entry;
+    if (archive_read_next_header(a, &entry) != ARCHIVE_OK) {
+        archive_read_free(a);
+        return false;
+    }
 
     output.clear();
-    char buf[65536];
-    int bytes_read;
-    while ((bytes_read = gzread(gz, buf, sizeof(buf))) > 0) {
-        output.append(buf, static_cast<size_t>(bytes_read));
+    const void* block;
+    size_t block_size;
+    la_int64_t offset;
+    while (archive_read_data_block(a, &block, &block_size, &offset) == ARCHIVE_OK) {
+        output.append(static_cast<const char*>(block), block_size);
     }
-    gzclose(gz);
-    return bytes_read == 0;  // 0 = EOF (success), <0 = error
+
+    archive_read_free(a);
+    return true;
 }
 
 static void collect_tests_from_file(const std::string& filepath, std::vector<TestItem>& tests) {

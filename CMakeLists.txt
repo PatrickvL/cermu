@@ -4,16 +4,19 @@ cmake_minimum_required(VERSION 3.16)
 # When the vcpkg toolchain is active (passed via -DCMAKE_TOOLCHAIN_FILE or the
 # VCPKG_ROOT environment variable), use our custom triplet overlay so that
 # Windows gets static libs with dynamic CRT (x64-windows-static-md).
+# vcpkg is NOT required — all mandatory deps have FetchContent fallbacks.
 if(DEFINED ENV{VCPKG_ROOT} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
         CACHE STRING "vcpkg toolchain file")
 endif()
-if(WIN32 OR MSVC)
-    set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/triplets"
-        CACHE STRING "vcpkg triplet overlay")
-    if(NOT DEFINED VCPKG_TARGET_TRIPLET)
-        set(VCPKG_TARGET_TRIPLET "x64-windows-static-md"
-            CACHE STRING "vcpkg target triplet")
+if(DEFINED VCPKG_TARGET_TRIPLET OR DEFINED CMAKE_TOOLCHAIN_FILE)
+    if(WIN32 OR MSVC)
+        set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/triplets"
+            CACHE STRING "vcpkg triplet overlay")
+        if(NOT DEFINED VCPKG_TARGET_TRIPLET)
+            set(VCPKG_TARGET_TRIPLET "x64-windows-static-md"
+                CACHE STRING "vcpkg target triplet")
+        endif()
     endif()
 endif()
 
@@ -42,55 +45,20 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(tomlplusplus)
 
 # Find libarchive (archive reading — ZIP, 7z, RAR, tar, etc.)
-# Strategy: CMake find_package first (works with vcpkg and system installs),
-# then PkgConfig (Linux), then fall back to stubs.
-#
-# When building with vcpkg static linkage, libarchive's vcpkg wrapper
-# injects transitive dependencies (lz4, zstd, …) via set_property on
-# LibArchive::LibArchive.  With CMake 4.x this becomes a hard error if
-# those targets don't exist yet.  Work around by pre-loading them.
-# The QUIET flag ensures this is harmless on systems without vcpkg.
-if(DEFINED VCPKG_TARGET_TRIPLET)
-    find_package(lz4 CONFIG QUIET)
-    find_package(zstd CONFIG QUIET)
-    find_package(ZLIB QUIET)
-    find_package(BZip2 QUIET)
-    find_package(LibLZMA QUIET)
-    find_package(OpenSSL QUIET)
-endif()
-
+# Strategy: try system-installed first (apt, brew, vcpkg, manual),
+# then fall back to building from source via FetchContent.
 set(LIBARCHIVE_FOUND FALSE)
 find_package(LibArchive QUIET)
 if(LibArchive_FOUND)
     set(LIBARCHIVE_FOUND TRUE)
-    # Prefer the imported target when available (vcpkg, modern CMake).
-    # Set LIBARCHIVE_LIBRARIES so every target_link_libraries() call works
-    # whether we got the imported target or the raw .lib path.
     if(TARGET LibArchive::LibArchive)
-        # Fix multi-config (MSVC) debug/release selection.  CMake's built-in
-        # FindLibArchive sets a single IMPORTED_LOCATION from find_library(),
-        # which may pick the debug lib.  When vcpkg provides both debug and
-        # release static libs, patch the target with per-config locations so
-        # the linker gets the right CRT flavour.
-        get_target_property(_la_loc LibArchive::LibArchive IMPORTED_LOCATION)
-        if(_la_loc MATCHES "/debug/")
-            string(REPLACE "/debug/" "/" _la_release "${_la_loc}")
-            if(EXISTS "${_la_release}")
-                set_target_properties(LibArchive::LibArchive PROPERTIES
-                    IMPORTED_LOCATION                 "${_la_release}"
-                    IMPORTED_LOCATION_RELEASE         "${_la_release}"
-                    IMPORTED_LOCATION_RELWITHDEBINFO  "${_la_release}"
-                    IMPORTED_LOCATION_MINSIZEREL      "${_la_release}"
-                    IMPORTED_LOCATION_DEBUG            "${_la_loc}")
-            endif()
-        endif()
         set(LIBARCHIVE_LIBRARIES LibArchive::LibArchive)
-        set(LIBARCHIVE_INCLUDE_DIRS "")  # target carries its own includes
+        set(LIBARCHIVE_INCLUDE_DIRS "")
     else()
         set(LIBARCHIVE_INCLUDE_DIRS ${LibArchive_INCLUDE_DIRS})
         set(LIBARCHIVE_LIBRARIES ${LibArchive_LIBRARIES})
     endif()
-    message(STATUS "Found libarchive via CMake find_package")
+    message(STATUS "Found libarchive via find_package")
 endif()
 if(NOT LIBARCHIVE_FOUND)
     find_package(PkgConfig QUIET)
@@ -102,10 +70,49 @@ if(NOT LIBARCHIVE_FOUND)
     endif()
 endif()
 if(NOT LIBARCHIVE_FOUND)
-    message(STATUS "libarchive not found — archive support disabled (using stubs)")
-    set(LIBARCHIVE_INCLUDE_DIRS "")
-    set(LIBARCHIVE_LIBRARIES "")
-    add_compile_definitions(CERMU_NO_LIBARCHIVE)
+    message(STATUS "libarchive not found on system — building from source via FetchContent")
+    # Minimal build: read-only archive support, no optional compression deps,
+    # no CLI tools, no tests.  This avoids pulling in zlib/bzip2/lzma/openssl.
+    set(ENABLE_TEST       OFF CACHE BOOL "" FORCE)
+    set(ENABLE_TAR        OFF CACHE BOOL "" FORCE)
+    set(ENABLE_CPIO       OFF CACHE BOOL "" FORCE)
+    set(ENABLE_CAT        OFF CACHE BOOL "" FORCE)
+    set(ENABLE_UNZIP      OFF CACHE BOOL "" FORCE)
+    set(ENABLE_INSTALL    OFF CACHE BOOL "" FORCE)
+    set(ENABLE_OPENSSL    OFF CACHE BOOL "" FORCE)
+    set(ENABLE_LIBB2      OFF CACHE BOOL "" FORCE)
+    set(ENABLE_LZ4        OFF CACHE BOOL "" FORCE)
+    set(ENABLE_LZMA       OFF CACHE BOOL "" FORCE)
+    set(ENABLE_ZSTD       OFF CACHE BOOL "" FORCE)
+    set(ENABLE_ZLIB       OFF CACHE BOOL "" FORCE)
+    set(ENABLE_BZip2      OFF CACHE BOOL "" FORCE)
+    set(ENABLE_LIBXML2    OFF CACHE BOOL "" FORCE)
+    set(ENABLE_EXPAT      OFF CACHE BOOL "" FORCE)
+    set(ENABLE_PCRE2POSIX OFF CACHE BOOL "" FORCE)
+    set(ENABLE_PCREPOSIX  OFF CACHE BOOL "" FORCE)
+    set(ENABLE_LIBGCC     OFF CACHE BOOL "" FORCE)
+    set(ENABLE_CNG        OFF CACHE BOOL "" FORCE)
+    set(ENABLE_MBEDTLS    OFF CACHE BOOL "" FORCE)
+    set(ENABLE_XATTR      OFF CACHE BOOL "" FORCE)
+    set(ENABLE_ACL        OFF CACHE BOOL "" FORCE)
+    set(ENABLE_ICONV      OFF CACHE BOOL "" FORCE)
+    set(POSIX_REGEX_LIB   "NONE" CACHE STRING "" FORCE)
+    FetchContent_Declare(
+        libarchive
+        GIT_REPOSITORY https://github.com/libarchive/libarchive.git
+        GIT_TAG        v3.8.7
+        GIT_SHALLOW    TRUE
+        OVERRIDE_FIND_PACKAGE
+    )
+    FetchContent_MakeAvailable(libarchive)
+    # The libarchive CMake build creates the 'archive' target (static lib).
+    # Expose it through the same variables the rest of our CMakeLists uses.
+    set(LIBARCHIVE_LIBRARIES archive)
+    set(LIBARCHIVE_INCLUDE_DIRS
+        "${libarchive_SOURCE_DIR}/libarchive"
+        "${libarchive_BINARY_DIR}"          # config.h generated here
+    )
+    set(LIBARCHIVE_FOUND TRUE)
 endif()
 
 # Find SQLite3 (catalog database for ROM library)

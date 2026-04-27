@@ -132,6 +132,9 @@
     #include <cstring>
     #define cermu_strcasecmp   _stricmp
     #define cermu_strncasecmp  _strnicmp
+    /* Map POSIX names so existing code using strcasecmp compiles on MSVC */
+    #define strcasecmp   _stricmp
+    #define strncasecmp  _strnicmp
 #else
     #include <strings.h>
     #define cermu_strcasecmp   strcasecmp
