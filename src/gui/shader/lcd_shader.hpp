@@ -118,7 +118,7 @@ float pixel_grid(vec2 uv, vec2 input_size, float grid_opacity, float grid_width)
 // subpixel columns (R, G, B or B, G, R).  Monochrome panels have
 // uniform illumination across the pixel.
 vec3 subpixel_mask(vec2 frag_coord, vec2 output_size, vec2 input_size,
-                   int layout, float opacity) {
+                   int sp_layout, float opacity) {
     if (opacity < 0.001) return vec3(1.0);
 
     // Scale to match emulated pixels on screen
@@ -127,7 +127,7 @@ vec3 subpixel_mask(vec2 frag_coord, vec2 output_size, vec2 input_size,
     int phase = int(floor(fract(subpixel_x) * 3.0));
 
     vec3 mask;
-    if (layout == 2) {
+    if (sp_layout == 2) {
         // Monochrome — no subpixel coloring
         mask = vec3(1.0);
     } else {
@@ -135,7 +135,7 @@ vec3 subpixel_mask(vec2 frag_coord, vec2 output_size, vec2 input_size,
         float bright = 1.0;
         float dim    = 1.0 - opacity * 0.7;
 
-        if (layout == 1) phase = 2 - phase;  // BGR swap
+        if (sp_layout == 1) phase = 2 - phase;  // BGR swap
 
         if (phase == 0)      mask = vec3(bright, dim, dim);
         else if (phase == 1) mask = vec3(dim, bright, dim);
