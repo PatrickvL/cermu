@@ -1,7 +1,11 @@
 # Emulation Gaps, Quality Issues & Expansion Opportunities
 
-Audit date: 2026-04-10. Covers all systems under `src/systems/`, shared chips under `src/chip/`,
+Audit date: 2026-04-15. Covers all systems under `src/systems/`, shared chips under `src/chip/`,
 core infrastructure, devices, ports, utilities, formats, and rendering pipeline.
+
+> **2026-09-20 verification pass.** Every claim below was re-checked against source. Entries that no
+> longer matched the code (VTech VZ video output, MC6847 rendering, CoCo keyboard, Atari vector input
+> and Mathbox, Game Boy CGB palettes/banking, 65C816 core) were corrected. See the changelog footer.
 
 ---
 
@@ -85,27 +89,35 @@ Requires physical chip read for verification. Only affects Japanese Apple I rend
 
 ### 2.1 Oric (Atmos) — **[STUB] L**
 Framework exists (6502, AY-3-8912, MOS 6522 VIA instantiated) but functionally non-runnable:
-- ULA text/hi-res rendering: not implemented
-- AY-3-8912 audio output routing through VIA: not wired
-- Keyboard matrix mapping: stub
-- ~~TAP tape format loading: unimplemented~~ — **DONE** (`oric_tap_format`)
+- `render_frame()` is empty (TODO at line 346) — no ULA text/hi-res output, and
+  `run_frame()` does not call it
+- AY-3-8912 audio output routing through VIA Port A: not wired (`via_port_a_write()` TODO)
+- ~~Keyboard matrix mapping~~ — **DONE** (VIA Port B row-select → `keyboard_matrix_[row]`
+  column read, full key map applied via `keyboard_matrix_apply`)
+- ~~TAP tape format loading~~ — **DONE** (`oric_tap_format`)
 
-Remaining three items must be addressed together to produce any visible/audible output.
+Remaining two items (video + audio) must be addressed together to produce any
+visible/audible output.
 
-### 2.2 VTech VZ (VZ200/VZ300) — **[STUB] L**
-Z80A instantiated with basic memory map, but:
-- Video rendering: stub (no pixel output)
-- Speaker synthesis: not wired
-- Keyboard mapping: stub
-- ~~VZ tape format: unimplemented~~ — **DONE** (`vz_format`)
+### 2.2 VTech VZ (VZ200/VZ300) — **[INCOMPLETE] M**
+Z80A instantiated with correct memory map (video RAM at $7000, user RAM at $7800).
+`run_frame()` renders via MC6847 (`board_.vdg.render_frame(video_ram_ptr_)`) — text,
+semigraphics, and CG/RG graphics modes all produce pixel output.
+- ~~Video rendering~~ — **DONE** (MC6847 renders text + graphics to composite output)
+- ~~Keyboard mapping~~ — **DONE** (full 8×6 active-low matrix via `keyboard_matrix_apply`)
+- ~~VZ tape format~~ — **DONE** (`vz_format`)
+Remaining:
+- 1-bit speaker synthesis: `get_audio_samples()` returns 0 (still a TODO)
+- Cassette motor/read/sense signal wiring
 
 ### 2.3 Apple II: Video Rendering Incomplete — **[INCOMPLETE] L**
-3-variant template exists (II/IIe/IIc) with correct soft-switch memory map, but:
-- Hi-res (280×192): rendering logic not producing correct output
-- Double hi-res (560×192, IIe/IIc): unimplemented
+3-variant template exists (II/IIe/IIc) with correct soft-switch memory map, but
+`render_frame()` is still a TODO (line 313) — no pixel output:
+- Text (40/80-col), lo-res, hi-res (280×192), double hi-res (560×192): `render_frame()` empty
 - Artifact color generation: shader infrastructure exists (`artifact_signal_shader.hpp`) but not wired to Apple II
 - Disk controller (Disk II): not implemented — blocks most software
-- Speaker toggle: not connected to audio output
+- Speaker toggle: `spkr_state_` flips at the `SPKR_TOGGLE` soft switch but is not
+  connected to audio output (`get_audio_samples()` is a TODO)
 - ~~DSK/NIB/2MG format loading~~ — **DONE** (`apple_dsk_format`)
 
 ### 2.4 BBC Micro/Master: Remaining Gaps — **[INCOMPLETE] M**
@@ -115,8 +127,10 @@ Remaining:
 - ~~SSD/DSD disc image loading~~ — **DONE** (`ssd_format`)
 - ~~UEF tape loading~~ — **DONE** (`uef_format`, gzip via `os_decompress`)
 - ~~BBC Master `load_file()`~~ — **DONE** (wired via `format_load_and_apply`, commit `59acaa1b`)
-- Sideways ROM (.rom) loading: unimplemented
-- BBC Master ACCCON shadow screen RAM: not mapped
+- ~~Sideways ROM (.rom) loading~~ — **DONE** (`.rom` files ≤16KB loaded into paged ROM
+  slot 4 and selected; `bbc_micro_system.cpp:619`)
+- BBC Master ACCCON shadow screen RAM: not mapped (`update_shadow_mapping()` is a TODO
+  at `bbc_master_system.cpp:432`)
 
 ### 2.5 ~~Sega Master System: ROM Loading~~ — **[DONE]**
 ROM loading implemented: raw `.sms` files with optional 512-byte header detection,
@@ -141,32 +155,43 @@ Needs QA testing with real CP/M software (WordStar, Turbo Pascal, etc.).
 Memory expansion code implemented. Needs testing against programs that
 depend on specific expansion configurations (3K, 8K, 16K, 24K+).
 
-### 2.10 CoCo 1/2 & Dragon 32/64 — **[STUB] L**
+### 2.10 CoCo 1/2 & Dragon 32/64 — **[INCOMPLETE] M**
 Unified MC6809E+VDG system (`src/systems/mc6809_vdg/`) with four variant traits
 (CoCo 1, CoCo 2, Dragon 32, Dragon 64). Full chip manifest (MC6809E, MC6847 VDG,
-MC6883 SAM, 2×MC6821 PIA), ROM loading (BASIC, Extended BASIC, cart per variant),
-1-bit DAC audio via PIA, SAM display offset calculation. Missing:
-- MC6883 SAM hardware address translation (bit-mapping logic present, not wired)
-- MC6847 VDG rendering not producing output in system context
-- PIA keyboard matrix not mapped
-- No CoCo CAS tape loading integration yet
+MC6883 SAM, 2×MC6821 PIA), ROM loading (BASIC, Extended BASIC, cart per variant).
+- ~~MC6847 VDG rendering~~ — **DONE** (renders text + CG/RG graphics via `render_frame`,
+  driven from RAM at the SAM display offset; `run_frame()` swaps the composite frame)
+- ~~PIA keyboard matrix~~ — **DONE** (full 51-key CoCo / 53-key Dragon matrices wired
+  through PIA0 scanning callbacks)
+- ~~SAM display offset~~ — **DONE** (`display_offset()` drives the VDG fetch base)
+Remaining:
+- MC6883 SAM hardware memory-config address translation (`map_type()` latch is read
+  but the 64K/32K-all-RAM/ROM map is not applied to the bus)
+- CoCo/Dragon CAS cassette tape loading not wired into `load_file()` (format handler
+  `coco_cas_format` exists but is not integrated); cassette signal lines not modeled
+- Dragon 64 ACIA/RS-232 not modeled
 
 ### 2.11 Atari 800/800XL/130XE — **[STUB] L**
 Board with 6502C + ANTIC + GTIA + POKEY + PIA all instantiated. ROM loading wired
 (OS ROM, BASIC). POKEY audio configured. Two-phase CPU tick loop present.
+Composite video port bound.
 Missing:
-- ANTIC display list DMA and scanline rendering (register scaffold only)
-- GTIA player/missile composition and mode rendering (register scaffold only)
-- Keyboard matrix, joystick wiring
-- No visible or audible output yet
+- ANTIC display list DMA and scanline rendering (`antic.hpp` scaffold only — TODO at line 130)
+- GTIA player/missile composition and mode rendering (`gtia.hpp` scaffold only — TODO at line 167)
+- Keyboard matrix is wired (POKEY KBCODE scancodes + GTIA console keys); joystick
+  DB-9 ports are declared (`joy1_port`/`joy2_port`) but not read into PIA/GTIA
+- No visible output yet (POKEY audio is configured)
 
 ### 2.12 Sega Genesis / Mega Drive — **[STUB] XL**
 Dual-CPU skeleton (M68000 main + Z80 sub) with Genesis VDP (315-5313),
 YM2612 FM, SN76489 PSG. Up to 4MB cartridge ROM loading. Audio chips configured.
+Composite video port bound.
 Missing:
 - Genesis VDP Mode 5 rendering, tile/sprite composition, DMA engine
-- Z80 sub-CPU bus arbitration and bank window
-- 68K/Z80 interrupt routing
+  (`genesis_315_5313.hpp` is a register/feature scaffold — no pixel output)
+- Z80 sub-CPU bus arbitration and bank window (Z80 ticks ~7 cycles per 15 M68K cycles;
+  bus request/reset registers present but no bank window)
+- 68K/Z80 interrupt routing (no VINT/HINT wiring found)
 - Controller I/O
 - No visible output yet
 
@@ -198,8 +223,13 @@ SM83 CPU core fully implemented via Z80 trait system (`if constexpr` gating):
 
 ROM bank switching, GB PPU and GB APU fully functional.
 TOSEC compatibility: 200/200 sample pass rate (100%) at 600 frames.
+GBC extensions (commit `3e6e35527`) largely implemented:
+- ✅ VRAM banking (VBK $FF4F), WRAM banking (SVBK), CGB BG/OBJ palettes
+  (BCPS/BCPD/OCPS/OCPD $FF68–$FF6B → `cgb_palette_rgba_`), HDMA ($FF51–$FF55)
+- ⚠ Double-speed mode: KEY1 ($FF4D) register is read/written but `speed_double_`
+  is never set true — no actual clock switch (games that require it will misbehave)
 Remaining:
-- GBC extensions: VRAM banking, WRAM banking, double-speed mode, CGB palettes
+- Double-speed CPU clock switching (KEY1 prepare/switch handshake)
 - Serial link cable: stub (register shadow only, no transfer logic)
 - A few games need external-clock serial completion to progress past init (e.g. Captain Tsubasa J)
 
@@ -233,10 +263,15 @@ Board emulation works (Z80A + Namco Video + WSG3), Pac-Man/Pengo traits defined.
 Missing: proper ROM set loading from MAME-style zip archives.
 Encrypted ROM support for Pengo exists but untested without loadable ROM sets.
 
-### 3.2 Atari Vector Arcade: Input Wiring — **[INCOMPLETE] M**
+### 3.2 Atari Vector Arcade: Input Wiring — **[INCOMPLETE] S**
 DVG/AVG vector processors, 6502 CPU, and optional POKEY all instantiated.
-Host input (coin, start, joystick/spinner) not wired. Second POKEY for stereo not connected.
-Mathbox coprocessor (for Battlezone, Tempest) not implemented.
+- ~~Host input wiring~~ — **DONE** (`handle_keyboard_event` per-variant for Asteroids,
+  Battlezone, Lunar Lander, Space Duel, Black Widow; 14e0f07aa)
+- ~~Mathbox coprocessor~~ — **DONE** (registered as a chip, instant-resolve status,
+  handles BZ/RB/Tempest range ops; 05f3aae44)
+Remaining:
+- Second POKEY stereo: POKEY2 read/write handlers exist (`POKEY2_BASE`), but player
+  inputs routed through POKEY2 are a TODO (`atari_vector_system.cpp:2577`)
 
 ### 3.3 Bomb Jack: Complete — no gaps identified.
 Dual Z80 board with 3×AY-3-8910, background/sprite/foreground layers all implemented.
@@ -258,8 +293,13 @@ Enables: Commodore 65 prototype, MEGA65 compatibility testing.
 Z register, PHZ/PLZ, TAZ/TZA, BASE page extensions, branch-always (BRA) without offset limit.
 Prerequisite for CSG 4510.
 
-### 4.4 WDC 65C816 — **[EXPANSION] XL**
-16-bit accumulator/index modes, 24-bit addressing, bank registers, emulation/native mode switching.
+### 4.4 WDC 65C816 — **[IMPLEMENTED]** (core) — **[EXPANSION] XL** (systems)
+CPU core is **implemented** and registered as chip `WDC_65C816` (`wdc65c816.hpp`,
+commit range covering `C816_16BIT`). `wide.inc.hpp` contains 18 opcode handlers:
+REP/SEP/XCE (native/emulation mode), PEA/PEI/PER, PHB/PHD/PHK/PLB/PLD,
+JSL/RTL, MVN/MVP, XBA, COP/WDM. Trait comment marks `C816_16BIT` as ✓ IMPLEMENTED
+("native mode, M/X flags, 24-bit addressing"). Not yet built: an emulation test/QA
+pass and any consumer system.
 Enables: Apple IIGS, SNES (Ricoh 5A22 is 65C816-based).
 
 ---
@@ -395,7 +435,7 @@ All 9 high-value formats implemented with shared abstractions:
 
 | System | CPU | Video | Sound | Missing Pieces | Effort |
 |--------|-----|-------|-------|----------------|--------|
-| ~~**CoCo 1/2**~~ | ~~MC6809 ✅~~ | ~~MC6847 ✅~~ | ~~DAC/1-bit~~ | ✅ System created (§2.10) — chip rendering not wired yet | — |
+| ~~**CoCo 1/2**~~ | ~~MC6809 ✅~~ | ~~MC6847 ✅~~ | ~~DAC/1-bit~~ | ✅ System created (§2.10) — VDG rendering + keyboard working; SAM memory map + CAS loading remain | — |
 | **CoCo 3** | MC6809 ✅ | GIME (new) | — | GIME video chip, 512KB RAM | **L** |
 | ~~**Dragon 32/64**~~ | ~~MC6809 ✅~~ | ~~MC6847 ✅~~ | ~~1-bit~~ | ✅ System created (§2.10) — shares MC6809-VDG base with CoCo | — |
 | ~~**Game Boy**~~ | ~~Z80 variant~~ | ~~PPU (new)~~ | ~~APU (new)~~ | ✅ Functional (§2.13) — SM83 CPU, PPU, APU all working; 100% TOSEC sample pass rate | — |
@@ -543,9 +583,9 @@ Committed `41e0ff44`.
 | **Production** | C64, NES/Famicom, VIC-20, PET | Full chip accuracy, tested, polished |
 | **Near-Complete** | C16/Plus4, C128, Atari 2600, Amstrad CPC, Bomb Jack | Minor gaps or testing needed |
 | **Functional** | Spectrum 48K/128K, MSX1, Apple 1, Acorn Atom, CHIP-8 variants, KC85, Sega SMS/SG-1000, ColecoVision, Game Boy | Core runs, missing formats or chip features |
-| **Partial** | BBC Micro/Master, DDR (Z9001/Z1013/LC80), MSX2, Apple II, Namco arcade, Atari vector | Significant features missing; limited usability |
-| **Stub** | Oric, VTech VZ, SpectaVideo, Memotech MTX, Tatung Einstein | Framework only; not runnable |
-| **Stub (new)** | CoCo 1/2, Dragon 32/64, Atari 800/XL/XE, Genesis, PC Engine, Atari ST | Chips instantiated, ROM loading, tick loops — no rendering output yet |
+| **Partial** | BBC Micro/Master, DDR (Z9001/Z1013/LC80), MSX2, Apple II, Namco arcade, Atari vector, VTech VZ, CoCo/Dragon | Significant features missing; limited usability |
+| **Stub** | Oric, SpectaVideo, Memotech MTX, Tatung Einstein | Framework only; not runnable |
+| **Stub (new)** | Atari 800/XL/XE, Genesis, PC Engine, Atari ST | Chips instantiated, ROM loading, tick loops — no rendering output yet |
 
 **Total: 35+ system variants across 25+ board families.**
 
@@ -555,3 +595,4 @@ Committed `41e0ff44`.
 *Updated 2026-04-10: added 7 new stub systems (CoCo/Dragon, Atari 8-bit, Genesis, Game Boy, PC Engine, Atari ST), 11 new chip stubs, 6 new format handlers.*
 *Updated 2026-04-12: SM83 CPU core implemented for Game Boy — full trait-based `if constexpr` gating, 15 SM83-unique instruction handlers, SWAP, SM83 DAA, SM83 interrupt model.*
 *Updated 2026-04-14: Game Boy promoted from Stub to Functional — two critical bugs fixed (SM83 AF init, MREQ double-dispatch), 200/200 TOSEC sample pass rate. LCD post-processing shader and GenericLCD display device added.*
+*Updated 2026-09-20: source-verification pass. Corrected stale entries: VTech VZ → INCOMPLETE (video + keyboard working, audio remains); CoCo/Dragon → INCOMPLETE (VDG rendering + keyboard working, SAM memory map + CAS loading remain); BBC sideways ROM loading marked DONE; Oric keyboard matrix marked DONE; Apple II `render_frame()` confirmed still empty; Atari vector input + Mathbox marked DONE; Game Boy GBC palettes/banking marked DONE (double-speed still pending); WDC 65C816 core marked IMPLEMENTED. Both systems moved from Stub(new) to Partial.*
